@@ -428,7 +428,9 @@ class WebNode(Node):
         self.create_subscription(Bool, 'robot/ok', self.on_ok, 10)
         self.create_subscription(String, 'robot/health', self.on_health, 10)
         self.create_subscription(String, 'robot/evidence_scope', self.on_evidence_scope, latched)
-        self.create_subscription(Twist, 'cmd_vel', self.on_vel, 10)
+        # Dashboard velocity readout follows the control-owned raw stage.
+        # The final cmd_vel belongs to CORE (D-38); control never names it.
+        self.create_subscription(Twist, 'cmd_vel_raw', self.on_vel, 10)
 
         html_path = self.html_path()
         with open(html_path, 'rb') as f:

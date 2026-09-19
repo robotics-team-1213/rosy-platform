@@ -14,6 +14,9 @@
 
   <!-- scripts/swarm_bench.py 가 fleet 를 import 한다. 런타임 의존이지 빌드 의존이 아니다. -->
   <exec_depend>fleet</exec_depend>
+  <!-- launch/gz_multi.launch.py 가 navigation.frame_prefix 를 import 한다 (D-126 S4).
+       시뮬 런치가 내비 헬퍼를 쓰는 것은 하향 의존이라 허용, 선언으로 고정한다. -->
+  <exec_depend>navigation</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

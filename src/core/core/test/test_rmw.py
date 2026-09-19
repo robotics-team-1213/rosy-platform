@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from core.system.rmw import REQUIRED_RMW, apply_cyclone_rmw, cyclone_overlay_patch
+from core_common.rmw import REQUIRED_RMW, apply_cyclone_rmw, cyclone_overlay_patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +35,7 @@ def test_foreign_rmw_is_corrected_to_cyclone_for_the_next_init():
 
 def test_core_does_not_reboot_the_host_to_apply_rmw():
     main = (ROOT / "core" / "main.py").read_text(encoding="utf-8")
-    rmw = (ROOT / "core" / "system" / "rmw.py").read_text(encoding="utf-8")
+    rmw = (ROOT.parent / "core_common" / "core_common" / "rmw.py").read_text(encoding="utf-8")
     assert "system.reboot" not in main
     assert "system.reboot" not in rmw
     assert "reboot" not in rmw

@@ -84,8 +84,8 @@
 
 ## 최근 기록
 
+- 2026-09-19 · uncommitted · docs(adr): accept D-126 after the five guards and affected suites go green
+- 2026-09-19 · uncommitted · docs(adr): propose full module separation (D-126)
 - 2026-09-18 · uncommitted · feat(core): dashboard AP toggle and Wi-Fi connect via Host Agent (D-124)
 - 2026-09-18 · uncommitted · feat(core): persist Cyclone then Host Agent reboot from dashboard (D-123)
 - 2026-09-18 · uncommitted · feat(core): correct foreign RMW on next CORE start (D-122)
-- 2026-09-18 · uncommitted · feat(core): apply Cyclone before rclpy.init; web reports only (D-121)
-- 2026-09-18 · uncommitted · feat(dds): Cyclone, no raw Image on bridges, sensor QoS (D-117–D-120)

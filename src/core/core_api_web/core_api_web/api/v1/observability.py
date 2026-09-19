@@ -5,10 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from core_api_web.api.v1.common import admin, viewer
-from core_api_web.api.deps import AuthContext, get_services
+from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_features.diagnostics.collector import worst
-from core.services import CoreServices
 
 
 events_router = APIRouter(prefix="/api/v1/events", tags=["events"])
@@ -17,7 +16,7 @@ logs_router = APIRouter(prefix="/api/v1/logs", tags=["logs"])
 
 @events_router.get("")
 def list_events(since_seq: int | None = None, limit: int = 100,
-                _: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+                _: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     events = svc.events.history(since_seq=since_seq, limit=limit)
     return {"events": [e.model_dump() for e in events], "last_seq": svc.events.last_seq}
 
@@ -27,7 +26,7 @@ def list_audit_logs(
     since_seq: int | None = None,
     limit: int = 500,
     _: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     events = svc.audit.history(since_seq=since_seq, limit=min(limit, 2000))
     return {"events": [e.model_dump() for e in events]}
@@ -35,7 +34,7 @@ def list_audit_logs(
 diagnostics_router = APIRouter(prefix="/api/v1/diagnostics", tags=["diagnostics"])
 
 
-def _components(svc: CoreServices) -> dict:
+def _components(svc: CoreServicesLike) -> dict:
     """DIAG-001. `/metrics` 와 같은 출처를 읽는다 — 두 화면이 다른 값을 보이면
     운영자는 어느 쪽을 믿을지 알 수 없다."""
     return svc.state.snapshot().diagnostics_summary
@@ -43,7 +42,7 @@ def _components(svc: CoreServices) -> dict:
 
 @diagnostics_router.get("")
 def list_diagnostics(_: AuthContext = Depends(viewer),
-                     svc: CoreServices = Depends(get_services)):
+                     svc: CoreServicesLike = Depends(get_services)):
     components = _components(svc)
     return {
         "health": worst(list(components.values())).value,
@@ -53,7 +52,7 @@ def list_diagnostics(_: AuthContext = Depends(viewer),
 
 @diagnostics_router.get("/control-adapter")
 def control_adapter_diagnostic(_: AuthContext = Depends(admin),
-                               svc: CoreServices = Depends(get_services)):
+                               svc: CoreServicesLike = Depends(get_services)):
     """Return calibration binding metadata without exposing parameters or secrets."""
     adapter = svc.control_adapter
     if adapter is None:
@@ -73,7 +72,7 @@ def control_adapter_diagnostic(_: AuthContext = Depends(admin),
 
 @diagnostics_router.get("/{component}")
 def diagnostic_detail(component: str, _: AuthContext = Depends(viewer),
-                      svc: CoreServices = Depends(get_services)):
+                      svc: CoreServicesLike = Depends(get_services)):
     components = _components(svc)
     if component not in components:
         raise ApiError("NOT_FOUND", 404, f"unknown diagnostics component: {component}")
@@ -86,7 +85,7 @@ _HEALTH_VALUE = {"OK": 0, "UNKNOWN": 1, "WARNING": 2, "ERROR": 3}
 
 
 @metrics_router.get("/metrics")
-def metrics(svc: CoreServices = Depends(get_services)):
+def metrics(svc: CoreServicesLike = Depends(get_services)):
     import time as _time
 
     snap = svc.state.snapshot()

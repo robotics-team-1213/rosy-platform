@@ -11,6 +11,18 @@ from core.bridge.control_sensor_adapter import (
     ControlSensorConfig,
 )
 from control.calibration_storage import merge_calibration
+from control.sensor_provider import PROVIDER
+
+
+def _provider_factories(**extra):
+    """Real control-slice factories; production resolves the same object
+    through the rosy.sensor_provider entry point (D-126 S1)."""
+    factories = {
+        "policy_factory": PROVIDER.make_policy,
+        "calibration_loader": PROVIDER.load_snapshot,
+    }
+    factories.update(extra)
+    return factories
 
 
 class FakeSensorNode:
@@ -60,6 +72,7 @@ def test_enabled_configuration_constructs_sensor_only_node_and_binds_applied_rev
             "parameters": {"sensor_timeout": 0.8},
         },
         sensor_node_factory=factory,
+        **_provider_factories(),
     )
 
     assert adapter.enabled is True
@@ -85,7 +98,7 @@ def test_namespaced_worker_receives_the_core_namespace():
         return FakeSensorNode(**kwargs)
 
     ControlSensorAdapter({"enabled": True}, sensor_node_factory=factory,
-                         namespace="/rosy_01")
+                         namespace="/rosy_01", **_provider_factories())
 
     assert received == [{
         "parameter_overrides": {},
@@ -97,7 +110,8 @@ def test_namespaced_worker_receives_the_core_namespace():
 def test_adapter_can_bind_the_same_policy_to_core_safety_manager():
     sensor = FakeSensorNode()
     adapter = ControlSensorAdapter(
-        {"enabled": True}, sensor_node_factory=lambda **kwargs: sensor
+        {"enabled": True}, sensor_node_factory=lambda **kwargs: sensor,
+        **_provider_factories()
     )
 
     class Safety:
@@ -119,13 +133,15 @@ def test_adapter_refuses_a_sensor_node_with_any_command_authority():
         return node
 
     with pytest.raises(ValueError, match="command authority"):
-        ControlSensorAdapter({"enabled": True}, sensor_node_factory=factory)
+        ControlSensorAdapter({"enabled": True}, sensor_node_factory=factory,
+                             **_provider_factories())
 
 
 def test_adapter_attach_and_close_are_idempotent():
     sensor = FakeSensorNode()
     adapter = ControlSensorAdapter(
-        {"enabled": True}, sensor_node_factory=lambda **kwargs: sensor
+        {"enabled": True}, sensor_node_factory=lambda **kwargs: sensor,
+        **_provider_factories()
     )
 
     class Executor:
@@ -234,7 +250,8 @@ def test_required_calibration_is_loaded_before_sensor_worker_creation(tmp_path):
         created.append(node)
         return node
 
-    adapter = ControlSensorAdapter(_calibrated_adapter_config(tmp_path), sensor_node_factory=factory)
+    adapter = ControlSensorAdapter(_calibrated_adapter_config(tmp_path), sensor_node_factory=factory,
+                                     **_provider_factories())
 
     assert created[0].factory_kwargs["parameter_overrides"] == {
         "imu_roll0": 1.0,
@@ -250,7 +267,8 @@ def test_calibration_parameter_conflict_is_rejected_before_worker_creation(tmp_p
     calls = []
 
     with pytest.raises(ValueError, match="conflict"):
-        ControlSensorAdapter(config, sensor_node_factory=lambda **kwargs: calls.append(kwargs))
+        ControlSensorAdapter(config, sensor_node_factory=lambda **kwargs: calls.append(kwargs),
+                             **_provider_factories())
 
     assert calls == []
 
@@ -261,7 +279,8 @@ def test_invalid_required_calibration_fails_closed_before_worker_creation(tmp_pa
     calls = []
 
     with pytest.raises(ValueError, match="generation"):
-        ControlSensorAdapter(config, sensor_node_factory=lambda **kwargs: calls.append(kwargs))
+        ControlSensorAdapter(config, sensor_node_factory=lambda **kwargs: calls.append(kwargs),
+                             **_provider_factories())
 
     assert calls == []
 
@@ -278,7 +297,8 @@ def test_calibration_rejects_parameters_outside_the_measured_safety_set(tmp_path
     calls = []
 
     with pytest.raises(ValueError, match="measured set"):
-        ControlSensorAdapter(config, sensor_node_factory=lambda **kwargs: calls.append(kwargs))
+        ControlSensorAdapter(config, sensor_node_factory=lambda **kwargs: calls.append(kwargs),
+                             **_provider_factories())
 
     assert calls == []
 
@@ -297,3 +317,40 @@ def test_disabled_adapter_does_not_touch_an_invalid_calibration_path():
 
     assert adapter.enabled is False
     assert adapter.calibration_revision is None
+
+
+def test_control_registers_the_sensor_provider_entry_point():
+    """D-126 S1 wiring: the provider CORE resolves must be declared.
+
+    Mutation-proven: delete the entry point line from control/setup.py and
+    this test goes red while production silently loses its default worker.
+    """
+    setup_path = Path(__file__).parents[3] / "apps" / "control" / "setup.py"
+    tree = ast.parse(setup_path.read_text(encoding="utf-8"))
+    setup_call = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "setup"
+    )
+    entry_points = next(
+        kw.value for kw in setup_call.keywords if kw.arg == "entry_points"
+    )
+    groups = {
+        key.value: [entry.value for entry in value.elts]
+        for key, value in zip(entry_points.keys, entry_points.values)
+        if isinstance(key, ast.Constant)
+    }
+    assert "rosy.sensor_provider" in groups
+    assert "control = control.sensor_provider:PROVIDER" in groups["rosy.sensor_provider"]
+
+
+def test_sensor_provider_surface_is_host_importable():
+    """The provider object exposes the three factories without ROS."""
+    assert callable(PROVIDER.make_node)
+    assert callable(PROVIDER.make_policy)
+    assert callable(PROVIDER.load_snapshot)
+    assert PROVIDER.make_policy("probe-revision").revision == "probe-revision"
+
+
+def test_enabled_adapter_without_provider_fails_closed_with_install_hint():
+    with pytest.raises(ValueError, match="control slice"):
+        ControlSensorAdapter({"enabled": True})

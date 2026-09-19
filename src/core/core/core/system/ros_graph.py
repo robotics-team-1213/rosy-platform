@@ -10,7 +10,7 @@ import time
 from typing import Any, Callable, Mapping, Optional
 from xml.etree import ElementTree
 
-from core.system.rmw import REQUIRED_RMW
+from core_common.rmw import REQUIRED_RMW
 
 
 MAX_NODES = 64

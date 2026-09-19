@@ -19,7 +19,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_python; `core` is an `exec_depend` for colcon build order only — this package's code has no ROS import (D-18) |
+| `package.xml` | ament_python; `core_common` is an `exec_depend` for colcon build order only — this package's code has no ROS import (D-18, D-126) |
 | `setup.py` | Console script `fleet=fleet.cli:main` |
 | `fleet/formation/geometry.py` | `Formation`, `SlotOffset`, `slots()` — FOR-001, pure functions |
 | `fleet/formation/assignment.py` | `SlotAssigner` protocol, `GreedyDistanceAssigner` — FOR-002, pure functions |
@@ -82,7 +82,7 @@ No ROS required — `conftest.py` puts `src/core` on `sys.path` for the schema i
 
 ### Internal
 
-- `core` — schema reuse only (`core.protocol.schemas`, D-18); colcon build order via `exec_depend`
+- `core_common` — schema reuse only (`core_common.protocol.schemas`, D-18); colcon build order via `exec_depend` (D-126)
 
 ### External
 

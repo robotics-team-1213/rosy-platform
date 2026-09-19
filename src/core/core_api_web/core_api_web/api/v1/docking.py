@@ -6,11 +6,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from core_api_web.api.v1.common import admin, operator, viewer
-from core_api_web.api.deps import AuthContext, get_services
+from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_features.docking.database import DockError, DockInstance, DockType
 from core_common.domain.tasks import TaskKind
-from core.services import CoreServices
 
 
 docking_router = APIRouter(prefix="/api/v1/docking", tags=["docking"])
@@ -58,7 +57,7 @@ class DockCommand(BaseModel):
 
 @docking_router.get("/status")
 def docking_status(_: AuthContext = Depends(viewer),
-                   svc: CoreServices = Depends(get_services)):
+                   svc: CoreServicesLike = Depends(get_services)):
     """상태 조회는 capability 로 막지 않는다 — 막으면 대시보드가 "도킹 없음"
     조차 표시할 수 없다."""
     body = svc.docking.status().model_dump()
@@ -68,13 +67,13 @@ def docking_status(_: AuthContext = Depends(viewer),
 
 @docking_router.get("/docks")
 def list_docks(_: AuthContext = Depends(viewer),
-               svc: CoreServices = Depends(get_services)):
+               svc: CoreServicesLike = Depends(get_services)):
     return {"docks": [d.model_dump() for d in svc.docking.database.list()]}
 
 
 @docking_router.post("/types")
 def create_dock_type(body: DockTypeRequest, _: AuthContext = Depends(admin),
-                     svc: CoreServices = Depends(get_services)):
+                     svc: CoreServicesLike = Depends(get_services)):
     try:
         return svc.docking.database.add_type(DockType(**body.model_dump())).model_dump()
     except (DockError, ValueError) as exc:
@@ -84,7 +83,7 @@ def create_dock_type(body: DockTypeRequest, _: AuthContext = Depends(admin),
 
 @docking_router.post("/docks")
 def create_dock(body: DockRequest, _: AuthContext = Depends(admin),
-                svc: CoreServices = Depends(get_services)):
+                svc: CoreServicesLike = Depends(get_services)):
     try:
         return svc.docking.database.add(DockInstance(**body.model_dump())).model_dump()
     except DockError as exc:
@@ -93,7 +92,7 @@ def create_dock(body: DockRequest, _: AuthContext = Depends(admin),
 
 @docking_router.delete("/docks/{dock_id}")
 def delete_dock(dock_id: str, _: AuthContext = Depends(admin),
-                svc: CoreServices = Depends(get_services)):
+                svc: CoreServicesLike = Depends(get_services)):
     try:
         svc.docking.database.remove(dock_id)
     except DockError as exc:
@@ -103,7 +102,7 @@ def delete_dock(dock_id: str, _: AuthContext = Depends(admin),
 
 @docking_router.post("/docks/{dock_id}/teach")
 def teach_dock(dock_id: str, auth: AuthContext = Depends(operator),
-               svc: CoreServices = Depends(get_services)):
+               svc: CoreServicesLike = Depends(get_services)):
     """teach-by-docking — 지금 로봇이 선 자리를 도크 포즈로 기록한다.
 
     줄자로 SLAM 맵 좌표를 재서 쓸 만한 값이 나오지 않는다. 이렇게 기록해야
@@ -121,7 +120,7 @@ def teach_dock(dock_id: str, auth: AuthContext = Depends(operator),
 
 @docking_router.post("/dock")
 def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
-                 svc: CoreServices = Depends(get_services)):
+                 svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)              # DNC-003 — 미지원이면 501
     try:
         svc.docking.dock(body.dock)
@@ -132,7 +131,7 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
 
 @docking_router.post("/undock")
 def docking_undock(auth: AuthContext = Depends(operator),
-                   svc: CoreServices = Depends(get_services)):
+                   svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)
     try:
         svc.docking.undock()
@@ -143,7 +142,7 @@ def docking_undock(auth: AuthContext = Depends(operator),
 
 @docking_router.post("/cancel")
 def docking_cancel(auth: AuthContext = Depends(operator),
-                   svc: CoreServices = Depends(get_services)):
+                   svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)
     svc.docking.cancel()
     return svc.docking.status().model_dump()

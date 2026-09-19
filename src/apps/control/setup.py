@@ -37,5 +37,10 @@ setup(
             'localization_node = control.localization_node:main',
             'web_node = control.web_node:main',
         ],
+        'rosy.sensor_provider': [
+            # D-126 S1: CORE resolves the sensor worker through this entry
+            # point and never imports control statically.
+            'control = control.sensor_provider:PROVIDER',
+        ],
     },
 )

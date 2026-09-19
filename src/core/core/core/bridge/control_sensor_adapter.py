@@ -1,10 +1,15 @@
 """Optional Rosy Control sensor-only worker owned by CORE.
 
-The adapter is deliberately small: ``control`` owns sensor classification
-and policy evidence, while CORE owns the policy consumer and the only final
-``cmd_vel`` publisher.  Imports that require ROS or the absorbed package stay
-inside the enabled path so the default CORE profile remains inert and cheap to
-test on a host.
+The adapter is deliberately small: ``control`` owns sensor classification,
+policy evidence, calibration file formats and the ROS worker, while CORE owns
+the policy consumer and the only final ``cmd_vel`` publisher.  CORE never
+imports ``control`` statically (D-126 S1): the worker, policy and calibration
+loader arrive through the ``rosy.sensor_provider`` entry point
+(``control.sensor_provider:PROVIDER``) or through explicit constructor
+injection, which is what host tests use.  All validation — profile revision,
+sensor-only mode, command-authority deny-list, calibration context/generation
+binding and the measured-parameter allow-list — stays here and operates on
+duck-typed provider data, so a missing or wrong-shaped provider fails closed.
 """
 
 from __future__ import annotations
@@ -111,13 +116,44 @@ class ControlSensorConfig:
         return dict(self.calibration)
 
 
-def _load_required_calibration(config: ControlSensorConfig):
+_PROVIDER_GROUP = "rosy.sensor_provider"
+_PROVIDER_NAME = "control"
+
+
+def _resolve_provider_factory(attr: str):
+    """Load one control-slice factory without statically importing control.
+
+    Raises a fail-closed ValueError when the control slice is not installed.
+    Host tests bypass this entirely through constructor injection.
+    """
+    from importlib import metadata
+
+    try:
+        entry_points = metadata.entry_points(group=_PROVIDER_GROUP)
+    except Exception as exc:
+        raise ValueError(
+            "enabled sensor adapter cannot discover the sensor provider "
+            f"({_PROVIDER_GROUP} lookup failed)"
+        ) from exc
+    matches = [ep for ep in entry_points if ep.name == _PROVIDER_NAME]
+    if not matches:
+        raise ValueError(
+            "enabled sensor adapter needs the control slice installed "
+            f"(entry point {_PROVIDER_GROUP} [{_PROVIDER_NAME}] not found)"
+        )
+    provider = matches[0].load()
+    factory = getattr(provider, attr, None)
+    if not callable(factory):
+        raise ValueError(f"sensor provider has no {attr!r} factory")
+    return factory
+
+
+def _load_required_calibration(config: ControlSensorConfig, loader):
     """Load only a context-bound, generation-bound calibration snapshot."""
 
     calibration = config.calibration_config
-    from control.calibration_snapshot import load_calibration_snapshot
 
-    snapshot = load_calibration_snapshot(
+    snapshot = loader(
         calibration["path"],
         calibration["context"],
         calibration["active_generation"],
@@ -133,20 +169,6 @@ def _load_required_calibration(config: ControlSensorConfig):
     return snapshot, parameters
 
 
-def _default_sensor_node_factory(*, parameter_overrides: Mapping[str, Any], sensor_only: bool,
-                                 namespace: str | None = None):
-    """Create the absorbed ROS worker only after the profile opts in."""
-    from rclpy.parameter import Parameter
-    from control.safety.node import SafetyNode
-
-    overrides = [Parameter(name, value=value)
-                 for name, value in parameter_overrides.items()]
-    kwargs = {"parameter_overrides": overrides, "sensor_only": sensor_only}
-    if namespace is not None:
-        kwargs["namespace"] = namespace
-    return SafetyNode(**kwargs)
-
-
 class ControlSensorAdapter:
     """Lifecycle owner for the optional ``SafetyNode(sensor_only=True)``.
 
@@ -159,6 +181,8 @@ class ControlSensorAdapter:
 
     def __init__(self, raw_config: Mapping[str, Any] | None = None, *,
                  sensor_node_factory: Optional[Callable[..., Any]] = None,
+                 policy_factory: Optional[Callable[..., Any]] = None,
+                 calibration_loader: Optional[Callable[..., Any]] = None,
                  namespace: str | None = None) -> None:
         self.config = ControlSensorConfig.from_mapping(raw_config)
         self.node = None
@@ -170,10 +194,12 @@ class ControlSensorAdapter:
         if not self.config.enabled:
             return
 
-        factory = sensor_node_factory or _default_sensor_node_factory
+        factory = sensor_node_factory or _resolve_provider_factory("make_node")
+        make_policy = policy_factory or _resolve_provider_factory("make_policy")
         parameters = self.config.parameter_overrides
         if self.config.calibration_config.get("required", False):
-            snapshot, calibrated = _load_required_calibration(self.config)
+            load_snapshot = calibration_loader or _resolve_provider_factory("load_snapshot")
+            snapshot, calibrated = _load_required_calibration(self.config, load_snapshot)
             conflicts = {
                 key for key in calibrated.keys() & parameters.keys()
                 if calibrated[key] != parameters[key]
@@ -210,13 +236,11 @@ class ControlSensorAdapter:
             if not callable(getattr(node, "bind_policy_handoff", None)):
                 raise ValueError("sensor worker has no policy handoff")
 
-            from control.control.command_gate import CommandPolicy
-
             observations = getattr(node, "observations", None)
             if observations is not None and hasattr(observations, "max_age"):
                 observations.max_age = self.config.max_age
 
-            policy = CommandPolicy(revision)
+            policy = make_policy(revision)
             node.bind_policy_handoff(policy, self.config.required,
                                      applied_revision=revision)
         except Exception:

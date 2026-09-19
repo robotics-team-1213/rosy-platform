@@ -7,10 +7,11 @@
   <maintainer email="dev@rosy.local">rosy</maintainer>
   <license>Apache-2.0</license>
 
-  <!-- D-18: core 는 스키마 소스로만 쓴다 — 이 패키지의 코드에 ROS import 는 없다.
+  <!-- D-18/D-126: core_common 은 스키마 소스로만 쓴다 — 이 패키지의 생산 코드에
+       ROS import 는 없고 core_common.protocol.schemas 만 참조한다.
        이 exec_depend 는 colcon 워크스페이스의 빌드 순서용이다. ROS 없는 Fleet 배포에서는
        core 를 rosdep 으로 끌어오지 않고 소스 트리를 sys.path 에 얹는다(test/conftest.py). -->
-  <exec_depend>core</exec_depend>
+  <exec_depend>core_common</exec_depend>
   <exec_depend>python3-httpx</exec_depend>
   <!-- 14 이상이어야 한다: transport.py 가 `websockets.exceptions.InvalidStatus` 와
        새 asyncio 클라이언트(`connection.respond`)를 쓴다 — 13 에는 둘 다 없다. -->
@@ -21,6 +22,8 @@
   <exec_depend>python3-uvicorn</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
+  <!-- 시험만 core_features 를 참조한다 (test_geometry.py 의 follow_goal 대조, D-60). -->
+  <test_depend>core_features</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

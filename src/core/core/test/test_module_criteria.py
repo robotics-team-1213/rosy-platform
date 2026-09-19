@@ -39,27 +39,13 @@ REACH = re.compile(
 #: Adding a reach fails this test. That is the point: the next one gets a
 #: verdict before it lands, not after someone notices it in review.
 ALLOWED = Counter({
-    # Seam lie — a real finding, with an owner in the criteria doc.
-    # Reaches a *private* field across a package boundary because
-    # BatteryMonitor (power/) exposes no public accessor to safety/.
-    ("api/v1/safety.py", "getattr", "svc.battery", '"_cfg"'): 2,
-
-    # Accepted — None-tolerance for optional injections whose attribute is part
-    # of the injected type's public surface.
-    ("docking/manager.py", "getattr", "self._safety", '"estop"'): 4,
-    ("docking/manager.py", "getattr", "self._battery", '"voltage"'): 1,
-    # Accepted — mode->attribute dispatch over the module's own config object.
-    ("power/manager.py", "getattr", "self._cfg", "_RATE_ATTR[mode]"): 1,
-
-    # Platform guard, not a seam — AF_UNIX is absent on the Windows dev host.
-    ("system/host_agent_client.py", "hasattr", "socket", '"AF_UNIX"'): 1,
+    # NOTE (D-125/D-126): this test scans only the `core` entry package.
+    # Reaches that moved out with their files (api/v1/*, docking/, power/,
+    # safety/) keep their verdicts in the criteria doc, but no per-package
+    # C6 scan covers them yet — recorded gap, not a verdict.
 
     # Accepted: optional ControlSensorAdapter diagnostics/lifecycle probes on
     # injected ROS/test doubles. These do not cross into private ownership.
-    ("api/v1/observability.py", "getattr", "adapter", '"calibration_digest"'): 1,
-    ("api/v1/observability.py", "getattr", "adapter", '"calibration_revision"'): 1,
-    ("api/v1/observability.py", "getattr", "adapter", '"enabled"'): 1,
-    ("api/v1/observability.py", "getattr", "adapter", '"revision"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"_sensor_only"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"bind_policy_handoff"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"destroy_node"'): 1,
@@ -67,6 +53,11 @@ ALLOWED = Counter({
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"profile"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", '"refresh_profile"'): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "node", "name"): 1,
+    # Accepted (D-126 S1): entry-point provider dispatch. The attribute name
+    # selects which of the provider's three factories (make_node, make_policy,
+    # load_snapshot) to load; a missing provider or factory fails closed with
+    # an install hint instead of an ImportError. No private field is reached.
+    ("bridge/control_sensor_adapter.py", "getattr", "provider", "attr"): 1,
     ("bridge/control_sensor_adapter.py", "getattr", "safety", '"bind_control_policy"'): 1,
     ("bridge/control_sensor_adapter.py", "hasattr", "observations", '"max_age"'): 1,
     ("node.py", "getattr", "self", '"get_namespace"'): 1,
@@ -76,11 +67,6 @@ ALLOWED = Counter({
     ("bridge/ros_bridge.py", "getattr", "msg", '"goal_state"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"id"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"label"'): 1,
-    # Accepted: D-64 duck-type of Control policy/actuation without importing
-    # control into safety/.
-    ("safety/manager.py", "getattr", "policy", '"evaluate"'): 1,
-    ("safety/manager.py", "getattr", "policy", '"revision"'): 1,
-    ("safety/manager.py", "getattr", "calibration", '"revision"'): 1,
 })
 
 

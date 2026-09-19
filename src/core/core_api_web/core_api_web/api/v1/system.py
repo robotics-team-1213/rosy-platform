@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from core_api_web.api.v1.common import admin, viewer
 from core_api_web.api.deps import (
     AuthContext,
+    CoreServicesLike,
     MAX_TOKEN_LENGTH,
     MIN_TOKEN_LENGTH,
     ROLE_RANK,
@@ -27,7 +28,6 @@ from core_api_web.api.deps import (
 from core_api_web.api.errors import ApiError
 from core_common.config import ConfigError, patch_local_config
 from core_common.identity import validate_robot_id, validate_robot_name
-from core.services import CoreServices
 
 
 system_router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -186,7 +186,7 @@ def apply_cyclone_and_reboot(
     """Persist Cyclone intent then ask Host Agent to reboot (D-123)."""
     if not body.confirmed:
         raise ApiError("CONFIRMATION_REQUIRED", 400, "재부팅 확인이 필요합니다")
-    from core.system.rmw import REQUIRED_RMW, cyclone_overlay_patch
+    from core_common.rmw import REQUIRED_RMW, cyclone_overlay_patch
 
     try:
         patch_local_config(cyclone_overlay_patch())

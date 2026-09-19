@@ -29,11 +29,13 @@ class WanderNode(Node, Senses, Judge, Contact, Motion, Navigator):
     def __init__(self):
         super().__init__('wander_node')
         self.navigation_session = NavigationSession()
-        self.session_final_v = 0.
-        self.session_final_received = None
+        self.session_raw_v = 0.
+        self.session_raw_received = None
         self.session_pub = self.create_publisher(String, 'navigation/session', 10)
         self.session_clock = Clock(clock_type=ClockType.STEADY_TIME)
-        self.create_subscription(Twist, 'cmd_vel', self._on_session_velocity, 10)
+        # Pre-safety request stream (control-owned). The final cmd_vel belongs
+        # to CORE (D-38) and must not be named here (D-126).
+        self.create_subscription(Twist, 'cmd_vel_raw', self._on_session_velocity, 10)
         self.session_timer = self.create_timer(.1, self._tick_session, clock=self.session_clock)
         self.declare_parameter('cmd_topic', 'cmd_vel_raw')
         self.declare_parameter('odom_topic', 'odom')
@@ -262,9 +264,14 @@ class WanderNode(Node, Senses, Judge, Contact, Motion, Navigator):
             else:
                 pose = (self.odom_x, self.odom_y) if self._odom_fresh() else None
                 now = self._session_now()
-                translating = (self.session_final_received is not None and
-                    0 <= now-self.session_final_received <= .2 and
-                    math.isfinite(self.session_final_v) and abs(self.session_final_v) > .0001)
+                # Progress means the base really moves: measured odom velocity,
+                # not a command stream. odom_received and _session_now() share
+                # the monotonic clock, so the 0.2 s window is comparable.
+                odom_rx = getattr(self, 'odom_received', None)
+                odom_vx = abs(getattr(self, 'odom_vx', 0.0) or 0.0)
+                translating = (bool(getattr(self, 'have_odom', False))
+                    and odom_rx is not None and 0 <= now-odom_rx <= .2
+                    and math.isfinite(odom_vx) and odom_vx > .0001)
                 reason = session.tick(now, pose, translating)
                 if reason:
                     self._set_enabled(False)
@@ -280,10 +287,10 @@ class WanderNode(Node, Senses, Judge, Contact, Motion, Navigator):
         return self.session_clock.now().nanoseconds * 1e-9
 
     def _on_session_velocity(self, msg):
-        # Read-only final safety output: offset-pivot spin can move base_link
-        # without any requested translation, so XY alone is not progress.
-        self.session_final_v = msg.linear.x
-        self.session_final_received = self._session_now()
+        # Read-only pre-safety request: the closest control-owned signal to
+        # what the motors are asked. Used only to cap the stuck expectation.
+        self.session_raw_v = msg.linear.x
+        self.session_raw_received = self._session_now()
 
     def on_cmd(self, msg: String):
         cmd = msg.data.strip().lower()

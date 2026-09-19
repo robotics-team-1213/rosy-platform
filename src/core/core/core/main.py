@@ -11,7 +11,7 @@ from __future__ import annotations
 def main() -> None:
     import os
 
-    from core.system.rmw import apply_cyclone_rmw
+    from core_common.rmw import apply_cyclone_rmw
 
     apply_cyclone_rmw(os.environ)
 

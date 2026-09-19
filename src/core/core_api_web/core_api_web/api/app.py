@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
+from core_api_web.api.deps import CoreServicesLike
 from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.routes import (
     control_router,
@@ -30,10 +31,9 @@ from core_api_web.api.v1.routes import (
     docking_router,
 )
 from core_api_web.api.ws import ws_router
-from core.services import CoreServices
 
 
-def create_app(config: dict[str, Any], services: CoreServices) -> FastAPI:
+def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.0.0",

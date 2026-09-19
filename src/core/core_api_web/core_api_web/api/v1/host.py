@@ -6,9 +6,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from core_api_web.api.v1.common import admin, viewer
-from core_api_web.api.deps import AuthContext, get_services
-from core.services import CoreServices
-from core.system.host_agent_client import HostAgentClient
+from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
+from core_api_web.api.host_agent_client import HostAgentClient
 
 
 # --- Network / Release / Commissioning (WP-5, 설계 §10.2/§10.3) --------------
@@ -21,7 +20,7 @@ from core.system.host_agent_client import HostAgentClient
 host_router = APIRouter(prefix="/api/v1/host", tags=["host"])
 
 
-def _agent(svc: CoreServices) -> HostAgentClient:
+def _agent(svc: CoreServicesLike) -> HostAgentClient:
     host_cfg = (svc.config or {}).get("host_agent", {})
     return HostAgentClient(
         socket_path=host_cfg.get("socket_path", "/run/rosy/host-agent.sock"),
@@ -55,7 +54,7 @@ def _relay(reply, *, absent_detail: str) -> dict:
 
 
 @host_router.get("/network")
-def host_network(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def host_network(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """현재 네트워크 모드와 도달성. SSID 는 표시하되 secret 은 절대 싣지 않는다."""
     reply = _agent(svc).request("network.status", role="viewer")
     return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 상태를 알 수 없습니다.")
@@ -84,7 +83,7 @@ class NetworkConnectRequest(BaseModel):
 def host_network_apply(
     body: NetworkApplyRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     """Switch to a registered NetworkManager profile. PSK never enters CORE."""
     reply = _agent(svc).request(
@@ -102,7 +101,7 @@ def host_network_apply(
 def host_network_mode(
     body: NetworkModeRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     """SITE_STA (AP off) or RELAY_AP_STA (AP on). CORE never calls nmcli (D-22)."""
     reply = _agent(svc).request(
@@ -132,7 +131,7 @@ def _without_secrets(payload: dict) -> dict:
 def host_network_connect(
     body: NetworkConnectRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     """Join a site SSID. PSK transits once and is never returned or stored."""
     reply = _agent(svc).request(
@@ -149,7 +148,7 @@ def host_network_connect(
 
 
 @host_router.get("/release")
-def host_release(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def host_release(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """current / previous / staged 와 마지막 실패 사유."""
     reply = _agent(svc).request("release.status", role="viewer")
     return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 릴리스 상태를 알 수 없습니다.")
@@ -174,7 +173,7 @@ class ReleaseInstallRequest(HostActionRequest):
 def host_release_install(
     body: ReleaseInstallRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     reply = _agent(svc).request(
         "release.install",
@@ -191,7 +190,7 @@ def host_release_install(
 def host_release_rollback(
     body: HostActionRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     reply = _agent(svc).request(
         "release.rollback",
@@ -207,7 +206,7 @@ def host_release_rollback(
 def host_release_clear_hold(
     body: HostActionRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     """RECOVERY HOLD 해제. 홀드 중에는 install 이 거부되므로 별도의 의도적 행위다."""
     reply = _agent(svc).request(
@@ -224,7 +223,7 @@ def host_release_clear_hold(
 def host_reboot(
     body: HostActionRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     """Relay Host Agent system.reboot. CORE does not call reboot itself (D-22)."""
     reply = _agent(svc).request(
@@ -238,7 +237,7 @@ def host_reboot(
 
 
 @host_router.get("/commissioning")
-def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """runtime mode 와 hardware 재승인 사유.
 
     runtime mode 는 CORE 가 스스로 안다 — 자기가 무엇으로 기동했는지는 호스트에

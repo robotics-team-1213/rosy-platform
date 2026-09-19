@@ -200,12 +200,14 @@ class Motion:
         dt = (self.now() - self.motion_t).nanoseconds * 1e-9
         moved = math.hypot(self.odom_x - self.motion_x, self.odom_y - self.motion_y)
         speed = abs(self._fwd_speed())
-        received = getattr(self, 'session_final_received', None)
+        received = getattr(self, 'session_raw_received', None)
         if received is not None and 0 <= self._session_now()-received <= .2:
-            final_speed = abs(self.session_final_v)
-            if math.isfinite(final_speed):
-                # The motor receives the capped safety output, not the request.
-                speed = min(speed, final_speed)
+            raw_speed = abs(self.session_raw_v)
+            if math.isfinite(raw_speed):
+                # The motor receives the capped safety output, not the request:
+                # cap the expectation with the pre-safety request stream, the
+                # closest control-owned signal (D-126; the final topic is CORE's).
+                speed = min(speed, raw_speed)
         return is_stuck_motion(
             moved,
             dt,

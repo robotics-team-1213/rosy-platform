@@ -8,18 +8,17 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
 from core_api_web.api.v1.common import admin, viewer
-from core_api_web.api.deps import AuthContext, get_services
+from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_features.command.arbitration import Mode
 from core_common.config import ConfigError, patch_local_config
-from core.services import CoreServices
 
 
 safety_router = APIRouter(prefix="/api/v1/safety", tags=["safety"])
 
 
 @safety_router.post("/stop")
-def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     svc.modes.transition(Mode.EMERGENCY)
     svc.safety.trigger_estop(f"api:{auth.role}")
     svc.state.set_estop(True)
@@ -27,7 +26,7 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServices = Depends
 
 
 @safety_router.post("/release")
-def safety_release(auth: AuthContext = Depends(admin), svc: CoreServices = Depends(get_services)):
+def safety_release(auth: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
     ok_mode, reason = svc.modes.release_emergency()
     if not ok_mode:
         raise ApiError("MODE_CONFLICT", 409, reason)
@@ -40,7 +39,7 @@ _FLEET_LOSS_POLICIES = {"STOP", "HOLD", "RETURN_HOME", "CONTINUE"}
 _CRITICAL_POLICIES = {"RETURN_HOME", "STOP"}
 
 
-def _safety_payload(svc: CoreServices) -> dict:
+def _safety_payload(svc: CoreServicesLike) -> dict:
     battery = svc.safety.battery_policy
     deep = getattr(getattr(svc.battery, "_cfg", None), "deep_percent", 5.0)
     return {
@@ -65,7 +64,7 @@ def _safety_payload(svc: CoreServices) -> dict:
 
 
 @safety_router.get("/state")
-def safety_state(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def safety_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return _safety_payload(svc)
 
 
@@ -89,7 +88,7 @@ class LimitsRequest(BaseModel):
         return value
 
 
-def _apply_safety_patch(svc: CoreServices, patch: dict) -> None:
+def _apply_safety_patch(svc: CoreServicesLike, patch: dict) -> None:
     if "manual_linear" in patch:
         svc.safety.limits.manual_linear = patch["manual_linear"]
     if "manual_angular" in patch:
@@ -112,7 +111,7 @@ def _apply_safety_patch(svc: CoreServices, patch: dict) -> None:
 
 @safety_router.put("/limits")
 def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(admin),
-                  svc: CoreServices = Depends(get_services)):
+                  svc: CoreServicesLike = Depends(get_services)):
     patch_safety: dict = {}
     if body.manual_linear is not None:
         patch_safety["manual_linear"] = min(body.manual_linear, svc.safety.limits.max_linear)

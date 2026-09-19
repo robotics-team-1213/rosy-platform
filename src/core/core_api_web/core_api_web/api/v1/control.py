@@ -6,12 +6,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from core_api_web.api.v1.common import operator
-from core_api_web.api.deps import AuthContext, get_services
+from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_features.command.arbitration import Mode
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import RobotMode
-from core.services import CoreServices
 
 
 control_router = APIRouter(prefix="/api/v1", tags=["control"])
@@ -28,7 +27,7 @@ class TeleopRequest(BaseModel):
 
 @control_router.post("/mode")
 def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
-             svc: CoreServices = Depends(get_services)):
+             svc: CoreServicesLike = Depends(get_services)):
     new_mode = Mode(body.mode)
     if new_mode is Mode.NAVIGATION:
         TaskKind.NAVIGATE.require(svc.capability)
@@ -50,7 +49,7 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 
 @control_router.post("/teleop")
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
-           svc: CoreServices = Depends(get_services)):
+           svc: CoreServicesLike = Depends(get_services)):
     TaskKind.MOVE.require(svc.capability)
     accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
     if not accepted:

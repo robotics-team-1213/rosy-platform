@@ -6,19 +6,18 @@
 
 from __future__ import annotations
 
-from core_api_web.api.deps import AuthContext, require_role
+from core_api_web.api.deps import AuthContext, require_role, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_features.command.arbitration import Mode
 from core_features.navigation.manager import NavigationError
 from core_common.protocol.schemas import RobotMode
-from core.services import CoreServices
 
 viewer = require_role("viewer")
 operator = require_role("operator")
 admin = require_role("administrator")
 
 
-def enter_navigation_mode(svc: CoreServices, auth: AuthContext) -> None:
+def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
     """D-2: Nav2 velocity only reaches the wheels in NAVIGATION."""
     try:
         svc.nav.require_ready()

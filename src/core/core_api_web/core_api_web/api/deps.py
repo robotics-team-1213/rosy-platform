@@ -17,7 +17,39 @@ from typing import Any, Optional
 from fastapi import Depends, Header, Request
 
 from core_api_web.api.errors import ApiError
-from core.services import CoreServices
+from typing import Protocol
+
+
+class CoreServicesLike(Protocol):
+    """Structural port for the DI container (D-126 S5).
+
+    Routers annotate ``svc`` with this instead of importing ``core.services``,
+    so the web slice no longer depends on the entry-point package.  Members
+    are ``Any`` on purpose: the Protocol pins *which* services a router may
+    touch, not their types — behavior is unchanged.
+    """
+
+    audit: Any
+    battery: Any
+    capability: Any
+    command: Any
+    config: Any
+    control_adapter: Any
+    docking: Any
+    events: Any
+    identity: Any
+    inventory: Any
+    maps: Any
+    modes: Any
+    nav: Any
+    power: Any
+    readiness: Any
+    runtime_probe: Any
+    safety: Any
+    started_at: Any
+    state: Any
+    swarm: Any
+    waypoints: Any
 
 ROLE_RANK = {"viewer": 0, "operator": 1, "administrator": 2}
 
@@ -131,7 +163,7 @@ class AuthContext:
         return ROLE_RANK.get(self.role, -1)
 
 
-def get_services(request: Request) -> CoreServices:
+def get_services(request: Request) -> CoreServicesLike:
     return request.app.state.core
 
 
@@ -148,7 +180,7 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
 
 def auth_dependency(request: Request,
                     authorization: Optional[str] = Header(default=None)) -> AuthContext:
-    return authenticate(request.app.state.core_common.config, authorization, None)
+    return authenticate(request.app.state.core.config, authorization, None)
 
 
 def require_role(min_role: str):

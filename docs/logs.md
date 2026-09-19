@@ -314,3 +314,19 @@
 ## 2026-09-19: Fleet 도메인 폴더명 변경 (site)
 
 - 결정: 다중 로봇 관제를 담당하는 도메인 폴더명을 중복되는 `fleet/fleet` 구조에서 내부 용어와 일치하는 `site/fleet`으로 변경 (SiteHub, site-fabric 등)
+
+## 2026-09-19 · uncommitted · docs(adr): propose full module separation (D-126)
+
+- 변경: ADR D-126 색인·본문(Proposed). D-125 색인 행 누락 보충. 설계 `docs/plans/2026-09-19-full-module-separation-design.md` 신규, 실행 `docs/plans/2026-09-19-full-module-separation.md` 신규(이음새 S0~S5, Task 0~6)
+- 증거: 2026-09-19 작업 트리 실측 — `package.xml` 19개 선언 의존 파싱, 비테스트 import sweep(임시 스크립트, 저장소 미포함), `cmd_vel` 발행/구독 grep, launch 포함 추출. S1 어댑터 `control.*` 3건(`control_sensor_adapter.py:118,140,213`)·S2 구독 잔재 2곳(`web_node.py:431`, `wander/node.py:36`)·S3 fleet 생산 코드 `core_common` 5파일·S4 `swarm_bench.py`의 `fleet.*` 직접 참조·S5 v1 12모듈의 features 7영역 참조. D-64 구 가드(`test_runtime_slices.py`)는 구 경로 `src/rosy_core`를 가리켜 신 구조 미검사 확인
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. ARTIFACT/DEVICE/FIELD HOLD·PARKED
+- 결정: D-126 Proposed. Accepted 조건은 가드 5개 초록 + 관련 회귀 PASS. `core_features` 추가 분할·멀티 프로세스·mapping 분리는 비목표
+- 교훈: 없음
+
+## 2026-09-19 · uncommitted · docs(adr): accept D-126 after the five guards and affected suites go green
+
+- 변경: D-126 Status Proposed→Accepted(색인 포함). S1 provider 역전·S5 Protocol+모듈 이동·C6 ALLOWED 재건·auth_dependency 구 경로 복원·host_cards/rmw 구 경로 수정. 설계·실행 계획에 실제 메커니즘 반영(토픽 경계→provider 역전, 파사드→Protocol, 가드 6 삭제)
+- 증거: `test/test_module_separation.py` 5 passed; adapter 23 passed; api/host/rmw/criteria/policy_link 158 passed 1 failed(실패 1건은 D-126 미접촉 `rosy_default.yaml` 구 경로 — 9b77daa 잔재); control 996 passed 26 skipped + 환경성 2건(패키지 디렉터리 실행 시 PASS); fleet 312·omx 10·games 101·gz_sim 14 passed. core 나머지 실패(web 자산·swarm 경로·triage/palette 등)는 D-126 미접촉 파일의 구 경로 참조로 별도 백로그
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. ARTIFACT/DEVICE/FIELD HOLD·PARKED
+- 결정: D-126 Accepted (분리 계약 범위). Level-3 구 경로 잔재 백로그는 수용을 막지 않는다
+- 교훈: 구조 개편 커밋이 시험의 경로 상수를 함께 옮기지 않으면, 다음 작업의 회귀가 개편 잔재와 자기 결함을 구분하는 데 반나절이 든다 — 이동과 경로 갱신은 같은 커밋에
