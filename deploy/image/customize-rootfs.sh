@@ -53,7 +53,7 @@ WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
 [[ ! -e "$RELEASE" ]] || fail "release already exists in image"
-for command in curl sha256sum chroot mount umount cp rm mkdir ln systemctl; do
+for command in curl sha256sum chroot mount umount cp rm mkdir ln systemctl python3; do
     command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
 done
 
@@ -95,6 +95,26 @@ curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
 ACTUAL_WIRINGPI_SHA="$(sha256sum "$WIRINGPI_TMP" | awk '{print $1}')"
 [[ "$ACTUAL_WIRINGPI_SHA" == "$WIRINGPI_SHA" ]] || fail "WiringPi package checksum mismatch"
 cp "$WIRINGPI_TMP" "$ROOT/tmp/wiringpi-arm64.deb"
+
+mkdir -p "$ROOT/etc/apt/sources.list.d"
+python3 - "$LOCK" "$ROOT/etc/apt/sources.list.d/rosy-ubuntu.list" <<'PY'
+from pathlib import Path
+import sys
+
+import yaml
+
+lock_path, output_path = map(Path, sys.argv[1:])
+lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+sources = lock["os"]["apt_sources"]
+if not isinstance(sources, list) or not sources:
+    raise SystemExit("locked Ubuntu apt_sources must be a non-empty list")
+for source in sources:
+    if not isinstance(source, str) or not source.startswith(
+        "deb http://ports.ubuntu.com/ubuntu-ports noble"
+    ):
+        raise SystemExit(f"refusing unexpected Ubuntu apt source: {source!r}")
+output_path.write_text("\n".join(sources) + "\n", encoding="utf-8")
+PY
 
 chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb

@@ -253,3 +253,14 @@
   boot mountpoint 부재를 재현했다. mount-order 회귀 계약을 추가했다.
 - gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
 - 결정: D-164 workspace mount 순서 보강.
+
+## 2026-09-22 · uncommitted · fix(image): materialize locked Ubuntu apt suites
+
+- 변경: `inputs.lock.yaml`의 Ubuntu `apt_sources` 전체를 target rootfs의
+  `rosy-ubuntu.list`로 만든 뒤 apt update를 실행한다. `noble-updates`를 포함해 base image에
+  이미 설치된 라이브러리와 개발 패키지 버전을 일치시킨다.
+- 증거: ARM64 run 35650918492가 chroot/WiringPi 설치까지 통과한 뒤 누락된
+  `noble-updates` 때문에 exact-version 의존성에서 실패했다. source materialization 계약을
+  추가했다.
+- gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
+- 결정: D-161/D-164의 고정 apt 입력을 실행 경로에 연결.

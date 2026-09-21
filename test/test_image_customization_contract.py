@@ -39,6 +39,16 @@ def test_customizer_installs_native_ros_and_never_product_docker():
     assert "motion_profiles.yaml" in payload and "cyclonedds.xml" in payload
 
 
+def test_customizer_materializes_all_locked_ubuntu_apt_sources_before_update():
+    lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    assert any("noble-updates" in item for item in lock["os"]["apt_sources"])
+    assert 'lock["os"]["apt_sources"]' in source
+    assert "rosy-ubuntu.list" in source
+    assert source.index("rosy-ubuntu.list") < source.index('chroot "$ROOT" apt-get update')
+
+
 def test_customizer_installs_wiringpi_runtime_from_the_verified_lock():
     source = CUSTOMIZER.read_text(encoding="utf-8")
 
