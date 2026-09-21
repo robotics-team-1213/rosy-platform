@@ -39,6 +39,17 @@ def test_customizer_installs_native_ros_and_never_product_docker():
     assert "motion_profiles.yaml" in payload and "cyclonedds.xml" in payload
 
 
+def test_customizer_installs_wiringpi_runtime_from_the_verified_lock():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    for fragment in (
+        "hardware_dependencies", "wiringpi_url", "wiringpi_sha256",
+        "sha256sum", "dpkg -i /tmp/wiringpi-arm64.deb",
+    ):
+        assert fragment in source
+    assert source.index("sha256sum") < source.index("dpkg -i /tmp/wiringpi-arm64.deb")
+
+
 def _valid_root(tmp_path: Path) -> Path:
     root = tmp_path / "root"
     release = root / "opt/rosy/releases/2026.09.22-001"

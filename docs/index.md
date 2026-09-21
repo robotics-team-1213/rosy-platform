@@ -81,6 +81,7 @@
 | D-158 | UI Component Consistency: Strict Outline Borders (Law 2) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-164 | Pinky Pro 제품 산출물은 ISO가 아니라 서명된 Raspberry Pi 디스크 이미지다 |
+| D-165 | Pinky Pro 네이티브 ROS 패키지의 하드웨어 의존성도 이미지 입력으로 고정한다 |
 
 ## 계획·결과 문서
 
@@ -115,8 +116,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · docs(image): pin Pinky Pro hardware build inputs (D-165)
 - 2026-09-22 · uncommitted · docs(image): choose a flashable Pinky Pro disk image (D-164)
 - 2026-09-22 · uncommitted · feat(fleet): Implement Pinky-to-Fleet WebSocket communication path
 - 2026-09-22 · uncommitted · test(control): D-162 노드 그래프 검증 PASS — scene context 슬라이스
 - 2026-09-22 · uncommitted · test(core): ROS-SIM 재실행 PASS — D-162 T5 이후 트리 복원
-- 2026-09-22 · uncommitted · fix(core)+docs(validation): import json 결함 수정, ROS-SIM 재실행 절차문

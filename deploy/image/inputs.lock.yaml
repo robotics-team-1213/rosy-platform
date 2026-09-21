@@ -103,6 +103,19 @@ ros:
   apt_key_fingerprint: embedded-in-sha256-pinned-ros2-apt-source-package
   verified: false
 
+hardware_dependencies:
+  wiringpi_version: "3.20"
+  wiringpi_url: https://github.com/WiringPi/WiringPi/releases/download/v3.20/wiringpi_3.20_arm64.deb
+  wiringpi_sha256: 85f5965d57adb895b97b3f8b04083613d00964f930cb86822459eae5a97dc804
+  rpi_ws281x_commit: 1396df4f35a86de0f7e5eda91d94d4539eef1727
+  rpi_ws281x_url: https://codeload.github.com/jgarff/rpi_ws281x/tar.gz/1396df4f35a86de0f7e5eda91d94d4539eef1727
+  rpi_ws281x_sha256: 18896f9576848944a7f53834b4e329aaeb1961d2cadf7bf67aecf1f9df91aaa6
+  verified: true
+  note: >-
+    Pinky Pro native ARM64 build inputs. WiringPi is installed both on the
+    build host and in the target rootfs; rpi_ws281x is linked statically into
+    lamp_control from the pinned Pi 5 branch snapshot.
+
 containers:
   role: development-and-ci-only
   excluded_from_product_artifact: true

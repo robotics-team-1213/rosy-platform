@@ -1312,3 +1312,13 @@
 - 결정: D-164.
 - 교훈: 운영자가 말하는 “ISO”는 단일 설치 파일이라는 UX 요구일 수 있지만, Pi 제품
   계약은 installer media가 아니라 직접 기록 가능한 전체 disk image로 번역해야 한다.
+
+## 2026-09-22 · uncommitted · docs(image): pin Pinky Pro hardware build inputs (D-165)
+
+- 변경: Ubuntu/Jazzy 제품 이미지가 Pinky Pro의 `sensor_adc`, `imu_bno055`,
+  `lamp_control`까지 실제로 빌드하도록 WiringPi와 Pi 5 `rpi_ws281x` 입력 고정 결정을
+  D-165로 기록했다.
+- 증거: 고정 URL/commit/SHA-256과 checksum-before-install 계약 `74 passed`.
+- gate 변화: 없음. 패키지 포함은 SOURCE/ARTIFACT 증거이며 실제 I2C/LED/모터와 군집
+  통신은 DEVICE/FLEET에서 별도 검증한다.
+- 결정: D-165.

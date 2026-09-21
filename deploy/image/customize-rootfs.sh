@@ -43,8 +43,12 @@ lock_value() {
 
 ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
+WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
+WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
+[[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
+[[ "$WIRINGPI_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "WiringPi package SHA-256 is invalid"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
@@ -55,6 +59,7 @@ done
 
 MOUNTS=()
 ROS_SOURCE_TMP=""
+WIRINGPI_TMP=""
 cleanup() {
     local index
     set +e
@@ -62,8 +67,10 @@ cleanup() {
         umount -- "${MOUNTS[$index]}"
     done
     rm -f -- "$ROOT/tmp/ros2-apt-source.deb"
+    rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
     rm -rf -- "$ROOT/tmp/rosy-src"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
+    [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
 }
 trap cleanup EXIT
 
@@ -82,8 +89,15 @@ curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
 ACTUAL_ROS_SOURCE_SHA="$(sha256sum "$ROS_SOURCE_TMP" | awk '{print $1}')"
 [[ "$ACTUAL_ROS_SOURCE_SHA" == "$ROS_SOURCE_SHA" ]] || fail "ROS apt source package checksum mismatch"
 cp "$ROS_SOURCE_TMP" "$ROOT/tmp/ros2-apt-source.deb"
+WIRINGPI_TMP="$(mktemp)"
+curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
+    --output "$WIRINGPI_TMP" "$WIRINGPI_URL"
+ACTUAL_WIRINGPI_SHA="$(sha256sum "$WIRINGPI_TMP" | awk '{print $1}')"
+[[ "$ACTUAL_WIRINGPI_SHA" == "$WIRINGPI_SHA" ]] || fail "WiringPi package checksum mismatch"
+cp "$WIRINGPI_TMP" "$ROOT/tmp/wiringpi-arm64.deb"
 
 chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
+chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates locales network-manager openssh-server openssl python3 python3-yaml \
