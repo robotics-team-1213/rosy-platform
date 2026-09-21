@@ -128,7 +128,17 @@ if [[ ! -f "$ROOT/etc/ros/rosdep/sources.list.d/20-default.list" ]]; then
     chroot "$ROOT" rosdep init
 fi
 chroot "$ROOT" rosdep update --rosdistro jazzy
-chroot "$ROOT" rosdep install --from-paths /tmp/rosy-src --ignore-src -r -y --rosdistro jazzy
+ROSDEP_PATH_OUTPUT="$(
+    python3 "$(dirname "$0")/resolve-required-source-paths.py" \
+        --source-root "$ROOT/tmp/rosy-src/src" \
+        --required "$PAYLOAD/required-ros-packages.txt" \
+        --chroot-prefix /tmp/rosy-src/src
+)" || fail "could not resolve required ROSY package dependency closure"
+[[ -n "$ROSDEP_PATH_OUTPUT" ]] || fail "required ROSY package dependency closure is empty"
+mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
+chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
+    --ignore-src -r -y --rosdistro jazzy
+chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core
 chroot "$ROOT" getent passwd rosy-core >/dev/null 2>&1 || \
