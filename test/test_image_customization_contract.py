@@ -54,6 +54,9 @@ def test_customizer_installs_only_required_product_package_dependency_closure():
 
     assert "resolve-required-source-paths.py" in source
     assert "ROSDEP_SOURCE_PATHS" in source
+    assert '--source-root "$ROOT/tmp/rosy-src"' in source
+    assert "--chroot-prefix /tmp/rosy-src" in source
+    assert '"$ROOT/tmp/rosy-src/src"' not in source
     assert 'rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}"' in source
     assert "rosdep install --from-paths /tmp/rosy-src" not in source
     assert 'chroot "$ROOT" apt-get clean' in source
