@@ -33,7 +33,7 @@ ARCH="$(uname -m)"
 [[ "$ARCH" == "aarch64" ]] \
     || fail "release image workspace requires native arm64; this host is $ARCH"
 
-for command in xz truncate losetup lsblk growpart partprobe resize2fs mount umount \
+for command in xz truncate losetup lsblk blkid udevadm growpart partprobe resize2fs mount umount \
         mktemp realpath cp mv rm mkdir awk wc; do
     command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
 done
@@ -122,16 +122,26 @@ truncate -s "+${EXPAND_MIB}M" "$IMAGE_FILE"
 LOOP_DEVICE="$(losetup --find --show --partscan "$IMAGE_FILE")"
 [[ "$LOOP_DEVICE" == /dev/loop* ]] || fail "losetup returned an unexpected device: $LOOP_DEVICE"
 
-PARTITIONS="$(lsblk -nrpo NAME,PARTN,FSTYPE "$LOOP_DEVICE")"
-BOOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "1" && tolower($3) ~ /^(vfat|fat)/ { print $1 }')"
-ROOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "2" && tolower($3) ~ /^ext/ { print $1 }')"
+partprobe "$LOOP_DEVICE"
+udevadm settle
+PARTITIONS="$(lsblk -nrpo NAME,PARTN "$LOOP_DEVICE")"
+BOOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "1" { print $1 }')"
+ROOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "2" { print $1 }')"
 [[ -n "$BOOT_DEVICE" && "$(printf '%s\n' "$BOOT_DEVICE" | wc -l)" -eq 1 ]] \
-    || fail "expected exactly one FAT boot partition 1 on $LOOP_DEVICE"
+    || fail "expected exactly one boot partition 1 on $LOOP_DEVICE"
 [[ -n "$ROOT_DEVICE" && "$(printf '%s\n' "$ROOT_DEVICE" | wc -l)" -eq 1 ]] \
-    || fail "expected exactly one ext root partition 2 on $LOOP_DEVICE"
+    || fail "expected exactly one root partition 2 on $LOOP_DEVICE"
+
+BOOT_FSTYPE="$(blkid -p -s TYPE -o value -- "$BOOT_DEVICE" || true)"
+ROOT_FSTYPE="$(blkid -p -s TYPE -o value -- "$ROOT_DEVICE" || true)"
+[[ "${BOOT_FSTYPE,,}" =~ ^(vfat|fat|fat16|fat32)$ ]] \
+    || fail "expected a FAT filesystem on $BOOT_DEVICE; found ${BOOT_FSTYPE:-unknown}"
+[[ "${ROOT_FSTYPE,,}" =~ ^ext[234]$ ]] \
+    || fail "expected an ext filesystem on $ROOT_DEVICE; found ${ROOT_FSTYPE:-unknown}"
 
 growpart "$LOOP_DEVICE" 2
 partprobe "$LOOP_DEVICE"
+udevadm settle
 resize2fs "$ROOT_DEVICE"
 
 mount "$ROOT_DEVICE" "$ROSY_IMAGE_ROOT"

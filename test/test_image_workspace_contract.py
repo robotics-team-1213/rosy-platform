@@ -61,8 +61,19 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         fake_bin,
         "lsblk",
         "printf 'lsblk %s\\n' \"$*\" >> events.log\n"
-        "printf '/dev/loop-test1 1 vfat\\n/dev/loop-test2 2 ext4\\n'",
+        "printf '/dev/loop-test1 1\\n/dev/loop-test2 2\\n'",
     )
+    _write_tool(
+        fake_bin,
+        "blkid",
+        "printf 'blkid %s\\n' \"$*\" >> events.log\n"
+        "case \"${@: -1}\" in\n"
+        "  /dev/loop-test1) printf 'vfat\\n' ;;\n"
+        "  /dev/loop-test2) printf 'ext4\\n' ;;\n"
+        "  *) exit 2 ;;\n"
+        "esac",
+    )
+    _write_tool(fake_bin, "udevadm", "printf 'udevadm %s\\n' \"$*\" >> events.log")
     _write_tool(fake_bin, "growpart", "printf 'growpart %s\\n' \"$*\" >> events.log")
     _write_tool(fake_bin, "partprobe", "printf 'partprobe %s\\n' \"$*\" >> events.log")
     _write_tool(fake_bin, "resize2fs", "printf 'resize2fs %s\\n' \"$*\" >> events.log")
@@ -127,7 +138,7 @@ def test_workspace_script_and_build_integration_exist():
     build = BUILD_SCRIPT.read_text(encoding="utf-8")
 
     for command in (
-        "xz", "truncate", "losetup", "lsblk", "growpart", "partprobe",
+        "xz", "truncate", "losetup", "lsblk", "blkid", "udevadm", "growpart", "partprobe",
         "resize2fs", "mount", "umount",
     ):
         assert f'command -v "$command"' in source
@@ -190,6 +201,17 @@ def test_workspace_discovers_pi_partitions_and_cleans_up_in_reverse(tmp_path):
 
     assert result.returncode == 0, result.stderr
     events = (tmp_path / "events.log").read_text(encoding="utf-8").splitlines()
+    settle = next(i for i, line in enumerate(events) if line == "udevadm settle")
+    scan = next(i for i, line in enumerate(events) if line.startswith("lsblk "))
+    boot_probe = next(
+        i for i, line in enumerate(events)
+        if line.startswith("blkid ") and line.endswith("/dev/loop-test1")
+    )
+    root_probe = next(
+        i for i, line in enumerate(events)
+        if line.startswith("blkid ") and line.endswith("/dev/loop-test2")
+    )
+    assert settle < scan < boot_probe < root_probe
     assert any(line.startswith("growpart /dev/loop-test 2") for line in events)
     assert any(line.startswith("resize2fs /dev/loop-test2") for line in events)
     root_mount = next(i for i, line in enumerate(events) if line.startswith("mount /dev/loop-test2 "))
