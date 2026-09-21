@@ -60,6 +60,8 @@ def test_native_builder_is_arm64_only_and_builds_a_merged_offline_install():
     ):
         assert fragment in script
     assert "curl" not in script and "wget" not in script
+    assert "set +u\nsource /opt/ros/jazzy/setup.bash\nset -u" in script
+    assert 'set +u\nsource "$INSTALL_ROOT/setup.bash"\nset -u' in script
 
 
 def test_native_builder_embeds_the_selected_release_public_key():
