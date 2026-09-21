@@ -115,7 +115,7 @@ WORK_DIR="$(mktemp -d "$WORK_ROOT_REAL/rosy-image.XXXXXX")"
 IMAGE_FILE="$WORK_DIR/rosy-working.img"
 ROSY_IMAGE_ROOT="$WORK_DIR/root"
 ROSY_IMAGE_BOOT="$ROSY_IMAGE_ROOT/boot/firmware"
-mkdir -p -- "$ROSY_IMAGE_ROOT" "$ROSY_IMAGE_BOOT"
+mkdir -p -- "$ROSY_IMAGE_ROOT"
 
 xz --decompress --stdout -- "$BASE_IMAGE_REAL" > "$IMAGE_FILE"
 truncate -s "+${EXPAND_MIB}M" "$IMAGE_FILE"
@@ -146,6 +146,7 @@ resize2fs "$ROOT_DEVICE"
 
 mount "$ROOT_DEVICE" "$ROSY_IMAGE_ROOT"
 ROOT_MOUNTED=1
+mkdir -p -- "$ROSY_IMAGE_BOOT"
 mount "$BOOT_DEVICE" "$ROSY_IMAGE_BOOT"
 BOOT_MOUNTED=1
 
