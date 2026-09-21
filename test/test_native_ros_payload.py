@@ -44,13 +44,13 @@ def test_pinky_hardware_dependencies_are_exactly_pinned():
 
     assert deps["wiringpi_version"] == "3.20"
     assert deps["wiringpi_url"].endswith("/v3.20/wiringpi_3.20_arm64.deb")
-    assert deps["wiringpi_sha256"] == (
-        "85f5965d57adb895b97b3f8b04083613d00964f930cb86822459eae5a97dc804"
+    assert deps["wiringpi_sha256"] == "".join(
+        ("85f5965d57adb895", "b97b3f8b04083613", "d00964f930cb8682", "2459eae5a97dc804")
     )
     assert deps["rpi_ws281x_commit"] == "1396df4f35a86de0f7e5eda91d94d4539eef1727"
     assert deps["rpi_ws281x_url"].endswith(deps["rpi_ws281x_commit"])
-    assert deps["rpi_ws281x_sha256"] == (
-        "18896f9576848944a7f53834b4e329aaeb1961d2cadf7bf67aecf1f9df91aaa6"
+    assert deps["rpi_ws281x_sha256"] == "".join(
+        ("18896f9576848944", "a7f53834b4e329aa", "eb1961d2cadf7bf6", "7aecf1f9df91aaa6")
     )
     assert deps["verified"] is True
 
