@@ -62,7 +62,9 @@ RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.p
     || fail "selected release public key is missing"
 
 # shellcheck disable=SC1091
+set +u
 source /opt/ros/jazzy/setup.bash
+set -u
 
 rosdep install --from-paths "$WORKSPACE/src" --ignore-src -r -y \
     --rosdistro "$ROS_DISTRO"
@@ -103,7 +105,9 @@ cp "$RELEASE_PUBLIC_KEY" \
     "$OVERLAY/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 
 # shellcheck disable=SC1090
+set +u
 source "$INSTALL_ROOT/setup.bash"
+set -u
 "$SCRIPT_DIR/verify-package-inventory.sh" \
     --required "$SCRIPT_DIR/required-ros-packages.txt" \
     --inventory "$INVENTORY" \
