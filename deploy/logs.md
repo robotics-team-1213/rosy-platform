@@ -235,3 +235,12 @@
 - gate 변화: SOURCE만 갱신. ARM64 image workflow와 실제 장치 주변장치 검증 전
   ARTIFACT/DEVICE는 HOLD다.
 - 결정: D-165.
+
+## 2026-09-22 · uncommitted · fix(image): probe Pi image filesystems after udev settles
+
+- 변경: loop partition 번호 탐색을 `lsblk`로, 실제 filesystem type 검증을 `blkid`로
+  분리하고 partition scan 뒤 `udevadm settle`을 기다린다.
+- 증거: 실제 ARM64 run 35648329385에서 Pinky ROS package 12개는 모두 빌드됐고,
+  이후 `lsblk` FAT 감지 타이밍에서만 실패했다. workspace/image 집중 계약 `70 passed`.
+- gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
+- 결정: D-164 workspace 구현 보강.
