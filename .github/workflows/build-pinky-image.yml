@@ -59,6 +59,10 @@ jobs:
           sudo apt-get install -y -qq \
             python3-colcon-common-extensions python3-rosdep \
             ros-jazzy-ros-base ros-dev-tools
+          if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
+            sudo rosdep init
+          fi
+          sudo rosdep update --rosdistro jazzy
 
       - name: Resolve and verify run-specific lock
         shell: bash
