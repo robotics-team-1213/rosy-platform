@@ -62,6 +62,16 @@ def test_native_builder_is_arm64_only_and_builds_a_merged_offline_install():
     assert "curl" not in script and "wget" not in script
 
 
+def test_native_builder_embeds_the_selected_release_public_key():
+    script = BUILD.read_text(encoding="utf-8")
+    public_key = ROOT / "deploy" / "release" / "public-keys" / "rosy-release-2026-01.pem"
+
+    assert public_key.is_file()
+    assert "BEGIN PUBLIC KEY" in public_key.read_text(encoding="utf-8")
+    assert "deploy/release/public-keys/rosy-release-2026-01.pem" in script
+    assert "trusted-release-keys/rosy-release-2026-01.pem" in script
+
+
 def test_product_image_pipeline_invokes_the_pinned_base_and_native_payload_stages():
     script = (IMAGE / "build-image.sh").read_text(encoding="utf-8")
 

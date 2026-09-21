@@ -49,6 +49,7 @@ FIRST_BOOT_SOURCE="$WORKSPACE/deploy/image/first-boot"
 SD_TOOLS_SOURCE="$WORKSPACE/deploy/sd"
 ROBOT_CONFIG_SOURCE="$WORKSPACE/deploy/robot/config"
 CYCLONEDDS_SOURCE="$WORKSPACE/src/hardware/bringup/config/cyclonedds_localhost.xml"
+RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.pem"
 [[ -d "$NATIVE_RUNTIME_SOURCE" ]] \
     || fail "native runtime support is missing: deploy/robot/native"
 [[ -d "$FIRST_BOOT_SOURCE" ]] \
@@ -57,6 +58,8 @@ CYCLONEDDS_SOURCE="$WORKSPACE/src/hardware/bringup/config/cyclonedds_localhost.x
     || fail "SD personalization support is missing: deploy/sd"
 [[ ! -e "$RELEASE_ROOT/deploy/robot/native" ]] \
     || fail "release root already contains native runtime support"
+[[ -f "$RELEASE_PUBLIC_KEY" ]] \
+    || fail "selected release public key is missing"
 
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
@@ -84,7 +87,7 @@ cp -a "$NATIVE_RUNTIME_SOURCE" "$RELEASE_ROOT/deploy/robot/native"
 # it must run precisely when that link was interrupted.
 OVERLAY="$RELEASE_ROOT/image-overlay"
 mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
-    "$OVERLAY/etc/systemd/system" "$OVERLAY/etc/rosy"
+    "$OVERLAY/etc/systemd/system" "$OVERLAY/etc/rosy/trusted-release-keys"
 cp -a "$NATIVE_RUNTIME_SOURCE" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
@@ -96,6 +99,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.target" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.env" "$OVERLAY/etc/rosy/runtime.env.template"
 cp "$ROBOT_CONFIG_SOURCE/motion_profiles.yaml" "$OVERLAY/etc/rosy/motion_profiles.yaml"
 cp "$CYCLONEDDS_SOURCE" "$OVERLAY/etc/rosy/cyclonedds.xml"
+cp "$RELEASE_PUBLIC_KEY" \
+    "$OVERLAY/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 
 # shellcheck disable=SC1090
 source "$INSTALL_ROOT/setup.bash"

@@ -34,14 +34,14 @@ jobs:
           apt-get update -qq
           # openssl: the release signing contract requires OpenSSL 3 raw Ed25519.
           # Installed explicitly so a slimmer base image cannot silently remove it.
-          apt-get install -y -qq python3-colcon-common-extensions python3-pip openssl zstd ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip openssl zstd ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
           # 부팅 스모크까지 모든 ROS 검증이 한 번도 실행되지 않았다. venv 는 답이 아니다 —
           # --system-site-packages 없이는 rclpy 를 잃고, 그러면 이 워크플로가 검증하려는
           # 대상 자체가 사라진다. 컨테이너는 job 마다 버려지므로 시스템에 직접 깐다.
-          pip3 install --no-cache-dir --break-system-packages flake8 pydantic fastapi uvicorn httpx websockets pyyaml
+          pip3 install --no-cache-dir --break-system-packages flake8 pydantic fastapi uvicorn httpx websockets pyyaml jsonschema
 
       - name: Build (colcon)
         run: |
@@ -94,6 +94,8 @@ jobs:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
+          . /opt/ros/jazzy/setup.sh
+          . src/install/setup.sh
           python3 -m pytest test/ -v
 
       # 호스트 테스트는 ros_bridge 를 임포트하지 않으므로, 모듈 최상단의 ROS

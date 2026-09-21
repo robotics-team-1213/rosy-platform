@@ -9,6 +9,12 @@ from pathlib import Path
 
 
 WEB_COMMON = Path(__file__).resolve().parents[2] / "web_common"
+CI_WORKFLOW = Path(__file__).resolve().parents[4] / ".github" / "workflows" / "ci.yml"
+
+
+def test_ci_installs_the_node_runtime_used_by_headless_contracts():
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    assert "nodejs" in workflow
 
 
 def _run(expression: str):

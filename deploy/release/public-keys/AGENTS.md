@@ -11,7 +11,8 @@ Committed Ed25519 **public** trust anchors for signed releases. No production ke
 
 | File | Description |
 |------|-------------|
-| `README.md` | How a `<signing-key-id>.pem` public key gets committed; private key stays offline |
+| `README.md` | Pilot trust-anchor status and offline private-key boundary |
+| `rosy-release-2026-01.pem` | Ed25519 public key embedded in Pinky Pro pilot images |
 
 ## Subdirectories
 
@@ -21,7 +22,8 @@ None.
 
 ### Working In This Directory
 
-- Commit only the selected public key as `<signing-key-id>.pem` after ownership is decided.
+- The selected pilot public key is `rosy-release-2026-01.pem`; production ownership
+  and rotation still require a separate release decision.
 - Never generate a shared signing key in CI or on a robot. Never commit a private key.
 - `ROSY_RELEASE_KEY_ID` lives in the GitHub `release` environment (approval required).
 

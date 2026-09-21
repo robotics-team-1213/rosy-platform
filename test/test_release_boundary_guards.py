@@ -333,6 +333,21 @@ def test_scanner_detects_planted_secrets():
     assert len(findings) >= 4
 
 
+def test_scanner_accepts_only_a_structurally_valid_ed25519_public_key_body():
+    public_pem = (
+        _pem_header("PUBLIC KEY") + "\n"
+        "MCowBQYDK2VwAyEAG6kcg6Ss99DE76w3s0iO23hx9zeW7CJ1s1ZuHGqp3h0=\n"
+        + "-" * 5 + "END PUBLIC KEY" + "-" * 5 + "\n"
+    )
+    arbitrary = "A" * 60
+
+    assert scan_text("release.pub", public_pem) == []
+    assert any(
+        finding.kind == "high-entropy-token"
+        for finding in scan_text("not-a-public-key.txt", arbitrary)
+    )
+
+
 @pytest.mark.parametrize(
     "kind,sample",
     [

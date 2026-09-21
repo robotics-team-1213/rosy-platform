@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import lzma
 import os
 from pathlib import Path
 import shutil
@@ -39,7 +40,9 @@ def writer_case(tmp_path: Path):
     release = tmp_path / "release"
     release.mkdir()
     image = release / "rosy-os-pinky-pro-2026.09.21-001-arm64.img.xz"
-    image.write_bytes(b"fixture rosy image\n")
+    raw_image = tmp_path / "raw-image.bin"
+    raw_image.write_bytes(b"fixture rosy image\n" * 4096)
+    image.write_bytes(lzma.compress(raw_image.read_bytes()))
     manifest = release / "manifest.json"
     manifest.write_text(json.dumps({
         "schema_version": 1,
@@ -99,6 +102,7 @@ def writer_case(tmp_path: Path):
         "marker": marker,
         "writer": fake_writer,
         "receipt": tmp_path / "receipt.json",
+        "readback": raw_image,
         "env": {**os.environ, "LOCALAPPDATA": str(local_app_data)},
     }
 
@@ -125,6 +129,7 @@ def _run(case, *extra, plan_only=True):
         "-RegistryJson", str(case["registry"]),
         "-ReceiptPath", str(case["receipt"]),
         "-RpiImager", str(case["writer"]),
+        "-ReadbackDevice", str(case["readback"]),
         "-DeviceName", "rosy-pinky-k7m4",
         "-DeviceUid", "9d40feaa-871f-4fd3-975a-a704e82d3af9",
     ]
@@ -295,9 +300,32 @@ def test_successful_write_stages_one_time_bundle_and_updates_registry(writer_cas
     rendered = completed.stdout + completed.stderr + json.dumps(receipt)
     assert "fixture-writer-pass" not in rendered
     assert "wpa_psk" not in json.dumps(receipt)
+    assert receipt["media_readback"]["verified"] is True
+    assert receipt["media_readback"]["bytes_verified"] == writer_case["readback"].stat().st_size
     assert registry["robot_numbers"] == [1]
     assert registry["device_names"] == ["rosy-pinky-k7m4"]
     assert registry["device_uids"] == ["9d40feaa-871f-4fd3-975a-a704e82d3af9"]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case, tmp_path):
+    writer_case["readback"].write_bytes(b"wrong media contents")
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-BootMountPath", boot,
+        plan_only=False,
+    )
+
+    assert completed.returncode != 0
+    assert writer_case["marker"].exists()
+    assert not (boot / "rosy-provision" / "provision.json").exists()
+    assert not writer_case["receipt"].exists()
+    registry = json.loads(writer_case["registry"].read_text(encoding="utf-8"))
+    assert registry == {"robot_numbers": [], "device_names": [], "device_uids": []}
 
 
 def test_script_has_no_plain_password_or_shell_string_escape_hatch():
@@ -318,3 +346,5 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     disk_probe = text.index("$firstDisk = Select-SafeDisk")
     assert verify_call < disk_probe
     assert "ReleasePublicKey" in text
+    assert "verify-media-readback.py" in text
+    assert text.index("verify-media-readback.py") < text.index("create-provision-bundle.py")

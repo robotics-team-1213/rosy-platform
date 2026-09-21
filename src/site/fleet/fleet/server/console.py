@@ -454,17 +454,18 @@ class FleetConsole:
             waiting_for = self._yielding[robot_id]["for"]
             if waiting_for not in self._claims and waiting_for not in self._queued:
                 self._yielding.pop(robot_id, None)
+        release_candidates = []
         for robot_id in sorted(self._queued):
             mission = self._queued[robot_id]
             if self._still_blocked(mission):
                 if mission.get("reason") == "YIELDING":
                     self._check_yield_worked(mission)
                 continue
-            self._release_candidates.append(robot_id)
+            release_candidates.append(robot_id)
         # 한 번에 여러 대가 풀리면 순서를 정한다 — 로터리 선착. 점유 클레임은 상한선으로
         # 남는다(달리는 로봇은 이 순서와 무관하게 이긴다. 여기서 고르는 것은 대기자
         # 사이의 순서다).
-        for robot_id in self._release_order(self._release_candidates):
+        for robot_id in self._release_order(release_candidates):
             mission = self._queued[robot_id]
             self._queued.pop(robot_id, None)
             try:

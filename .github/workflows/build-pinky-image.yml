@@ -52,7 +52,8 @@ jobs:
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --output "$ros_source" \
             https://github.com/ros-infrastructure/ros-apt-source/releases/download/1.2.0/ros2-apt-source_1.2.0.noble_all.deb
-          echo '0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5  /tmp/ros2-apt-source.deb' \
+          ros_apt_source_sha256='0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5'
+          printf '%s  %s\n' "$ros_apt_source_sha256" "$ros_source" \
             | sha256sum --check --strict
           sudo dpkg -i "$ros_source"
           sudo apt-get update -qq
@@ -73,6 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
           sudo env \
             GITHUB_ACTIONS=true \
             ROSY_IMAGE_CACHE="$IMAGE_CACHE" \

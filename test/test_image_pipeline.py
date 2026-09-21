@@ -228,9 +228,8 @@ def test_lock_pins_canonical_checksum_signature_and_image_signing_key(lock):
 
     assert base["checksum_url"].endswith("/24.04/release/SHA256SUMS")
     assert base["checksum_signature_url"].endswith("/24.04/release/SHA256SUMS.gpg")
-    assert base["checksum_signing_key_fingerprint"] == (
-        "843938DF228D22F7B3742BC0D94AA3F0EFE21092"
-    )
+    expected_fingerprint = "843938DF228D22F7B3742BC0D94AA3F0EFE21092"
+    assert base["checksum_signing_key_fingerprint"] == expected_fingerprint
     assert base["checksum_keyring"] == "/usr/share/keyrings/ubuntu-archive-keyring.gpg"
 
 

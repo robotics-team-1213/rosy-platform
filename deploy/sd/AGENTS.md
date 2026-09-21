@@ -20,7 +20,8 @@ one-time per-card provisioning bundle.
   listed file, manifest identity and the exact `.img.xz` filename/hash with
   `verify-image-release.py`. Signature-file presence alone is never enough.
 - Tests and `-PlanOnly` must not invoke an image writer or alter physical media.
-- After a verified writer exit, `prepare-rosy-sd.ps1` creates the one-time bundle
+- After a verified writer exit, compare every decompressed image byte with the
+  selected physical disk before `prepare-rosy-sd.ps1` creates the one-time bundle
   through stdin and copies it atomically to `rosy-provision/provision.json` on the
   selected disk's FAT32 boot partition. Registry and receipt are updated only then.
 - An image write is MEDIA evidence only; it is not BOOT, DEVICE, or FLEET proof.
@@ -28,5 +29,5 @@ one-time per-card provisioning bundle.
 ## Testing
 
 ```powershell
-python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py -q
+python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_media_readback.py -q
 ```

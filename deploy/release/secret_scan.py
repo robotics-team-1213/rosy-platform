@@ -18,6 +18,8 @@ the scanner.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import csv
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -98,6 +100,20 @@ _WPA_PSK = re.compile(r"^\s*psk\s*=\s*(?P<value>\S+)", re.IGNORECASE | re.MULTIL
 
 # A bare high-entropy token on its own, e.g. a leaked hex API token.
 _BARE_TOKEN = re.compile(r"\b(?P<value>[A-Fa-f0-9]{40,}|[A-Za-z0-9+/]{50,}={0,2})\b")
+
+# SubjectPublicKeyInfo for Ed25519 is public integrity material, not a secret.
+# Validate the complete DER shape rather than ignoring arbitrary base64 between
+# PEM-looking markers.
+_ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
+
+
+def _is_ed25519_public_key_body(value: str) -> bool:
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        decoded = base64.b64decode(padded, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return len(decoded) == 44 and decoded.startswith(_ED25519_SPKI_PREFIX)
 
 # Public references, stripped before entropy matching: a long documentation URL
 # is indistinguishable from base64 to a character-class matcher.
@@ -354,6 +370,8 @@ def scan_text(path: str, text: str) -> list[Finding]:
         for match in _BARE_TOKEN.finditer(entropy_line):
             value = match.group("value")
             if _PUBLIC_PATH_TOKEN.fullmatch(value):
+                continue
+            if _is_ed25519_public_key_body(value):
                 continue
             # sha256 digests and git revisions are public integrity data, not
             # secrets, and the release manifest is full of them. Word-bounded:

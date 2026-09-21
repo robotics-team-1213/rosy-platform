@@ -329,18 +329,26 @@ def test_payload_is_not_hashed_against_an_untrusted_checksum_list(release, tmp_p
 # --- no key material ships ------------------------------------------------
 
 
-def test_no_private_key_is_tracked_in_the_repository():
-    """Belt and braces alongside the secret scanner: no key files at all."""
+def test_only_public_release_key_pems_are_tracked_in_the_repository():
+    """Key-shaped tracked files are public release anchors, never private keys."""
     result = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files"], capture_output=True, check=True
     )
     tracked = result.stdout.decode("utf-8").splitlines()
-    suspicious = [
-        name
-        for name in tracked
-        if Path(name).suffix in {".key", ".pem", ".p12", ".pfx"}
-        or Path(name).name in {"id_rsa", "id_ed25519", "id_ecdsa"}
-    ]
+    suspicious = []
+    for name in tracked:
+        path = Path(name)
+        key_shaped = (
+            path.suffix in {".key", ".pem", ".p12", ".pfx"}
+            or path.name in {"id_rsa", "id_ed25519", "id_ecdsa"}
+        )
+        if not key_shaped:
+            continue
+        if path.parent.as_posix() == "deploy/release/public-keys" and path.suffix == ".pem":
+            content = (ROOT / path).read_text(encoding="utf-8")
+            if "BEGIN PUBLIC KEY" in content and "PRIVATE KEY" not in content:
+                continue
+        suspicious.append(name)
     assert not suspicious, f"key-shaped files are tracked: {suspicious}"
 
 

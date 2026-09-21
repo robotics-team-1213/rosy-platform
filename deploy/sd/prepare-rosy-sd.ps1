@@ -19,6 +19,7 @@ param(
     [string]$RegistryJson,
     [string]$ReceiptPath,
     [string]$RpiImager = "rpi-imager.exe",
+    [string]$ReadbackDevice,
     [string]$PythonExe = "python",
     [string]$DiskInventoryJson,
     [string]$SecondDiskInventoryJson,
@@ -267,6 +268,19 @@ if (-not $DiskInventoryJson) {
 $writerExitCode = $LASTEXITCODE
 if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
 
+$readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
+if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
+$readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
+$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
+if ($LASTEXITCODE -ne 0) { Fail "full media readback verification failed" }
+try {
+    $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json
+}
+catch {
+    Fail "media readback evidence is invalid"
+}
+if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $bundleTool = Join-Path $PSScriptRoot "create-provision-bundle.py"
 if (-not (Test-Path -LiteralPath $bundleTool -PathType Leaf)) { Fail "bundle creator is missing" }
@@ -344,6 +358,7 @@ $receipt = [ordered]@{
     image_sha256 = $actualHash
     writer = [IO.Path]::GetFileName($RpiImager)
     writer_exit_code = $writerExitCode
+    media_readback = $mediaReadback
     personalization = $bundleReceipt
     created_at = [DateTimeOffset]::UtcNow.ToString("o")
 }

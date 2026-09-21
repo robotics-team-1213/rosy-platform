@@ -29,6 +29,7 @@ def inspect(root: Path, release_id: str) -> list[str]:
         root / "etc/rosy/motion_profiles.yaml",
         root / "etc/rosy/cyclonedds.xml",
         root / "opt/rosy/first-boot/rosy-first-boot.py",
+        root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
     )
     for path in required_paths:
         if not path.is_file():

@@ -1,7 +1,7 @@
 # Release trust anchors
 
-No production key exists yet. Commit only the selected Ed25519 **public** key as
-`<signing-key-id>.pem` after repository/release ownership is decided. Configure
-`ROSY_RELEASE_KEY_ID` in the GitHub `release` environment and require approval on
-that environment. The signing private key stays in the offline signing environment.
-Do not generate a shared key automatically in CI or on a robot.
+`rosy-release-2026-01.pem` is the Ed25519 public trust anchor selected for the
+2026 Pinky Pro pilot. Its private key exists only in the operator's protected
+offline signing directory; it is not available to CI, this repository, or a
+robot. Production ownership and any rotation ceremony still require an explicit
+release decision. Never generate a shared key automatically in CI or on a robot.
