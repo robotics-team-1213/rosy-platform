@@ -244,3 +244,12 @@
   이후 `lsblk` FAT 감지 타이밍에서만 실패했다. workspace/image 집중 계약 `70 passed`.
 - gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
 - 결정: D-164 workspace 구현 보강.
+
+## 2026-09-22 · uncommitted · fix(image): create the boot mountpoint inside rootfs
+
+- 변경: Ubuntu root partition을 먼저 mount한 뒤 그 안에 `/boot/firmware`를 만들고 boot
+  partition을 mount한다. root mount 이전의 host-side 디렉터리가 가려지지 않게 했다.
+- 증거: ARM64 run 35649803996에서 partition 탐색·`growpart`·`resize2fs`까지 통과한 뒤
+  boot mountpoint 부재를 재현했다. mount-order 회귀 계약을 추가했다.
+- gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
+- 결정: D-164 workspace mount 순서 보강.

@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · fix(image): create the boot mountpoint inside rootfs
 - 2026-09-22 · uncommitted · fix(image): probe Pi image filesystems after udev settles
 - 2026-09-22 · uncommitted · fix(image): pin Pinky Pro native hardware dependencies
 - 2026-09-22 · uncommitted · ci(image): build Pinky image on native ARM64
 - 2026-09-22 · uncommitted · feat(image): emit verifiable Pinky image handoff
-- 2026-09-22 · uncommitted · feat(image): install native ROSY into Ubuntu Pi image

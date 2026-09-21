@@ -147,6 +147,15 @@ def test_workspace_script_and_build_integration_exist():
     assert "image-workspace.sh" in build
 
 
+def test_boot_mountpoint_is_created_inside_the_mounted_root_filesystem():
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    root_mount = source.index('mount "$ROOT_DEVICE" "$ROSY_IMAGE_ROOT"')
+    boot_directory = source.index('mkdir -p -- "$ROSY_IMAGE_BOOT"')
+    boot_mount = source.index('mount "$BOOT_DEVICE" "$ROSY_IMAGE_BOOT"')
+    assert root_mount < boot_directory < boot_mount
+
+
 @bash_only
 def test_workspace_rejects_a_non_native_host_before_mutation(tmp_path):
     work_root, _ = _fixture(tmp_path)
