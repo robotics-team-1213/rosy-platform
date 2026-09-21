@@ -46,8 +46,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            bmap-tools cloud-guest-utils curl gpg xz-utils \
-            python3-colcon-common-extensions python3-rosdep python3-yaml
+            bmap-tools cloud-guest-utils curl gpg python3-yaml xz-utils
           ros_source=/tmp/ros2-apt-source.deb
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --output "$ros_source" \
@@ -57,7 +56,9 @@ jobs:
             | sha256sum --check --strict
           sudo dpkg -i "$ros_source"
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ros-jazzy-ros-base ros-dev-tools
+          sudo apt-get install -y -qq \
+            python3-colcon-common-extensions python3-rosdep \
+            ros-jazzy-ros-base ros-dev-tools
 
       - name: Resolve and verify run-specific lock
         shell: bash

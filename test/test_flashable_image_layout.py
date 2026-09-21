@@ -81,3 +81,6 @@ def test_native_arm64_workflow_builds_only_an_unsigned_handoff():
     assert "private" not in text.lower()
     assert "actions/upload-artifact@v4" in text
     assert 'sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"' in text
+    assert text.index('sudo dpkg -i "$ros_source"') < text.index(
+        "python3-colcon-common-extensions"
+    )
