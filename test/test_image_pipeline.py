@@ -237,6 +237,18 @@ def test_fetch_base_image_script_exists():
     assert (IMAGE_DIR / "fetch-base-image.sh").is_file()
 
 
+def test_image_shell_entrypoints_are_tracked_as_executable():
+    for script in IMAGE_DIR.glob("*.sh"):
+        relative = script.relative_to(ROOT).as_posix()
+        mode = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-s", "--", relative],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split(maxsplit=1)[0]
+        assert mode == "100755", f"{relative} is tracked as {mode}"
+
+
 @bash_only
 def test_fetch_base_image_reuses_a_verified_offline_cache(tmp_path):
     _fetch_fixture(tmp_path)
