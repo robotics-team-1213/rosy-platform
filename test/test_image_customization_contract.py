@@ -88,7 +88,10 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "opt/ros/jazzy/setup.bash").write_text("# fixture\n", encoding="utf-8")
     (release / "install/setup.bash").write_text("# fixture\n", encoding="utf-8")
     (root / "opt/rosy/first-boot/rosy-first-boot.py").write_text("# fixture\n", encoding="utf-8")
-    (release / "required-ros-packages.txt").write_text("core\ncontrol\n", encoding="utf-8")
+    (release / "required-ros-packages.txt").write_text(
+        "# Mandatory product packages in every image.\ncore\ncontrol\n",
+        encoding="utf-8",
+    )
     (release / "rosy-packages.txt").write_text("control\ncore\n", encoding="utf-8")
     (root / "etc/rosy/motion_profiles.yaml").write_text("profiles: {}\n", encoding="utf-8")
     (root / "etc/rosy/cyclonedds.xml").write_text("<CycloneDDS/>\n", encoding="utf-8")

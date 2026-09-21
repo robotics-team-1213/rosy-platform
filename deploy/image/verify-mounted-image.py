@@ -19,6 +19,16 @@ REQUIRED_UNITS = (
 )
 
 
+def package_names(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
 def inspect(root: Path, release_id: str) -> list[str]:
     root = root.resolve()
     findings: list[str] = []
@@ -40,8 +50,8 @@ def inspect(root: Path, release_id: str) -> list[str]:
 
     required_file = release / "required-ros-packages.txt"
     inventory_file = release / "rosy-packages.txt"
-    required = set(required_file.read_text(encoding="utf-8").split()) if required_file.is_file() else set()
-    inventory = set(inventory_file.read_text(encoding="utf-8").split()) if inventory_file.is_file() else set()
+    required = package_names(required_file)
+    inventory = package_names(inventory_file)
     for package in sorted(required - inventory):
         findings.append(f"required ROS package missing from inventory: {package}")
 
