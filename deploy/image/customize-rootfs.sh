@@ -130,9 +130,9 @@ fi
 chroot "$ROOT" rosdep update --rosdistro jazzy
 ROSDEP_PATH_OUTPUT="$(
     python3 "$(dirname "$0")/resolve-required-source-paths.py" \
-        --source-root "$ROOT/tmp/rosy-src/src" \
+        --source-root "$ROOT/tmp/rosy-src" \
         --required "$PAYLOAD/required-ros-packages.txt" \
-        --chroot-prefix /tmp/rosy-src/src
+        --chroot-prefix /tmp/rosy-src
 )" || fail "could not resolve required ROSY package dependency closure"
 [[ -n "$ROSDEP_PATH_OUTPUT" ]] || fail "required ROSY package dependency closure is empty"
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
