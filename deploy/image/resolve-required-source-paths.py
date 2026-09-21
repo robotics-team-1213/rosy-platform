@@ -16,11 +16,15 @@ DEPENDENCY_TAGS = {
     "buildtool_export_depend",
     "exec_depend",
 }
+COLCON_OUTPUT_ROOTS = {"build", "install", "log"}
 
 
 def package_catalog(source_root: Path) -> dict[str, tuple[Path, set[str]]]:
     catalog: dict[str, tuple[Path, set[str]]] = {}
     for manifest in sorted(source_root.rglob("package.xml")):
+        relative = manifest.relative_to(source_root)
+        if relative.parts[0] in COLCON_OUTPUT_ROOTS:
+            continue
         root = ET.parse(manifest).getroot()
         name_node = root.find("name")
         if name_node is None or not (name_node.text or "").strip():

@@ -111,6 +111,42 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     assert not any(path.endswith("/site/fleet") for path in paths)
 
 
+def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
+    source_root = tmp_path / "src"
+    real_package = source_root / "apps" / "control"
+    generated_package = source_root / "build" / "control"
+    real_package.mkdir(parents=True)
+    generated_package.mkdir(parents=True)
+    manifest = (
+        '<package format="3"><name>control</name><version>0.1.0</version>'
+        '<description>x</description><maintainer email="x@example.com">x</maintainer>'
+        "<license>MIT</license></package>"
+    )
+    (real_package / "package.xml").write_text(manifest, encoding="utf-8")
+    (generated_package / "package.xml").write_text(manifest, encoding="utf-8")
+    required = tmp_path / "required.txt"
+    required.write_text("control\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RESOLVE_SOURCE_PATHS),
+            "--source-root",
+            str(source_root),
+            "--required",
+            str(required),
+            "--chroot-prefix",
+            "/tmp/rosy-src/src",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/apps/control"]
+
+
 def test_required_package_file_matches_the_locked_offline_payload():
     lock = yaml.safe_load(LOCK.read_text(encoding="utf-8"))
     packages = [
