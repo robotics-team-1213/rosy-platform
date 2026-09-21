@@ -22,6 +22,7 @@
 | D-146 | unsigned ARM64 handoff는 검증 후에만 오프라인 서명 입력이 된다 |
 | D-161 | Ubuntu Server 24.04 + ROS 2 Jazzy 네이티브 제품 런타임으로 즉시 전환 |
 | D-164 | Pinky Pro 제품 산출물은 ISO가 아니라 서명된 Raspberry Pi 디스크 이미지다 |
+| D-165 | Pinky Pro 네이티브 ROS 패키지의 하드웨어 의존성도 이미지 입력으로 고정한다 |
 
 ## 계획·결과 문서
 
@@ -53,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · fix(image): pin Pinky Pro native hardware dependencies
 - 2026-09-22 · uncommitted · ci(image): build Pinky image on native ARM64
 - 2026-09-22 · uncommitted · feat(image): emit verifiable Pinky image handoff
 - 2026-09-22 · uncommitted · feat(image): install native ROSY into Ubuntu Pi image
 - 2026-09-22 · uncommitted · feat(sd): verify signed image before media selection
-- 2026-09-22 · uncommitted · feat(image): add fail-closed Pi image workspace

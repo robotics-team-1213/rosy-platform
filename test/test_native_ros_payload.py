@@ -15,6 +15,7 @@ IMAGE = ROOT / "deploy" / "image"
 REQUIRED = IMAGE / "required-ros-packages.txt"
 BUILD = IMAGE / "build-native-payload.sh"
 VERIFY = IMAGE / "verify-package-inventory.sh"
+HARDWARE_DEPS = IMAGE / "install-pinky-hardware-deps.sh"
 LOCK = IMAGE / "inputs.lock.yaml"
 
 
@@ -34,6 +35,47 @@ def test_native_payload_tools_exist():
     assert REQUIRED.is_file()
     assert BUILD.is_file()
     assert VERIFY.is_file()
+    assert HARDWARE_DEPS.is_file()
+
+
+def test_pinky_hardware_dependencies_are_exactly_pinned():
+    lock = yaml.safe_load(LOCK.read_text(encoding="utf-8"))
+    deps = lock["hardware_dependencies"]
+
+    assert deps["wiringpi_version"] == "3.20"
+    assert deps["wiringpi_url"].endswith("/v3.20/wiringpi_3.20_arm64.deb")
+    assert deps["wiringpi_sha256"] == "".join(
+        ("85f5965d57adb895", "b97b3f8b04083613", "d00964f930cb8682", "2459eae5a97dc804")
+    )
+    assert deps["rpi_ws281x_commit"] == "1396df4f35a86de0f7e5eda91d94d4539eef1727"
+    assert deps["rpi_ws281x_url"].endswith(deps["rpi_ws281x_commit"])
+    assert deps["rpi_ws281x_sha256"] == "".join(
+        ("18896f9576848944", "a7f53834b4e329aa", "eb1961d2cadf7bf6", "7aecf1f9df91aaa6")
+    )
+    assert deps["verified"] is True
+
+
+def test_hardware_dependency_installer_verifies_inputs_before_installing():
+    script = HARDWARE_DEPS.read_text(encoding="utf-8")
+
+    for fragment in (
+        "uname -m", "aarch64", "wiringpi_url", "wiringpi_sha256",
+        "rpi_ws281x_url", "rpi_ws281x_sha256", "sha256sum",
+        "dpkg -i", "cmake", "BUILD_SHARED=OFF", "BUILD_TEST=OFF",
+    ):
+        assert fragment in script
+    assert script.index("sha256sum") < script.index("dpkg -i")
+
+
+def test_image_workflow_installs_pinky_hardware_dependencies_before_payload_build():
+    workflow = (ROOT / ".github/workflows/build-pinky-image.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "install-pinky-hardware-deps.sh" in workflow
+    assert workflow.index("install-pinky-hardware-deps.sh") < workflow.index(
+        "build-image.sh"
+    )
 
 
 def test_required_package_file_matches_the_locked_offline_payload():

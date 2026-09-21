@@ -225,3 +225,13 @@
   YAML parse와 `git diff --check` 통과.
 - gate 변화: SOURCE만 갱신. workflow 실실행 전 ARTIFACT HOLD.
 - 결정: D-164 Task 8 실행 경로 준비 완료.
+
+## 2026-09-22 · uncommitted · fix(image): pin Pinky Pro native hardware dependencies
+
+- 변경: WiringPi 3.20 ARM64 deb와 Raspberry Pi 5 `rpi_ws281x` source commit을 URL과
+  SHA-256으로 고정하고, native ARM64 빌드 전에 검증·설치한다. WiringPi runtime도 같은
+  검증 입력으로 Ubuntu rootfs에 설치한다.
+- 증거: dependency/customization/image-pipeline 집중 계약 `74 passed`.
+- gate 변화: SOURCE만 갱신. ARM64 image workflow와 실제 장치 주변장치 검증 전
+  ARTIFACT/DEVICE는 HOLD다.
+- 결정: D-165.

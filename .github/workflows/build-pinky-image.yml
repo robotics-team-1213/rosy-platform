@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            bmap-tools cloud-guest-utils curl gpg python3-yaml xz-utils
+            bmap-tools build-essential cloud-guest-utils cmake curl gpg python3-yaml xz-utils
           ros_source=/tmp/ros2-apt-source.deb
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --output "$ros_source" \
@@ -73,6 +73,12 @@ jobs:
             --output "$RESOLVED_LOCK" \
             --revision "$GITHUB_SHA"
           deploy/image/verify-inputs.sh "$RESOLVED_LOCK"
+
+      - name: Install checksum-pinned Pinky Pro hardware build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo deploy/image/install-pinky-hardware-deps.sh --lock "$RESOLVED_LOCK"
 
       - name: Build unsigned flashable image
         shell: bash
