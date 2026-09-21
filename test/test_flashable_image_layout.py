@@ -84,3 +84,6 @@ def test_native_arm64_workflow_builds_only_an_unsigned_handoff():
     assert text.index('sudo dpkg -i "$ros_source"') < text.index(
         "python3-colcon-common-extensions"
     )
+    assert "sudo rosdep init" in text
+    assert "sudo rosdep update --rosdistro jazzy" in text
+    assert text.index("sudo rosdep update") < text.index("deploy/image/build-image.sh")
