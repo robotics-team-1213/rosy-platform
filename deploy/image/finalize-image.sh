@@ -15,7 +15,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || fail "image finalization requires root"
 [[ -f "$RAW" && "$RAW" == *.img ]] || fail "--raw-image must name an existing .img"
 [[ "$OUTPUT" == *.img.xz && ! -e "$OUTPUT" ]] || fail "--output must be a new .img.xz"
-for command in losetup lsblk e2fsck bmaptool xz sync; do
+for command in losetup lsblk blkid partprobe udevadm e2fsck bmaptool xz sync; do
     command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
 done
 
@@ -29,9 +29,15 @@ trap cleanup EXIT
 
 sync
 LOOP="$(losetup --find --show --partscan --read-only "$RAW")"
-PARTITIONS="$(lsblk -nrpo NAME,PARTN,FSTYPE "$LOOP")"
-ROOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "2" && tolower($3) ~ /^ext/ {print $1}')"
-[[ -n "$ROOT_DEVICE" ]] || fail "root partition 2 was not found"
+partprobe "$LOOP"
+udevadm settle
+PARTITIONS="$(lsblk -nrpo NAME,PARTN "$LOOP")"
+ROOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "2" {print $1}')"
+[[ -n "$ROOT_DEVICE" && "$(printf '%s\n' "$ROOT_DEVICE" | wc -l)" -eq 1 ]] \
+    || fail "expected exactly one root partition 2 on $LOOP"
+ROOT_FSTYPE="$(blkid -p -s TYPE -o value -- "$ROOT_DEVICE" || true)"
+[[ "${ROOT_FSTYPE,,}" =~ ^ext[234]$ ]] \
+    || fail "expected an ext filesystem on $ROOT_DEVICE; found ${ROOT_FSTYPE:-unknown}"
 e2fsck -fn "$ROOT_DEVICE"
 losetup --detach "$LOOP"
 LOOP=""

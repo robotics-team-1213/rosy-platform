@@ -19,6 +19,11 @@ WORKFLOW = ROOT / ".github/workflows/build-pinky-image.yml"
 def test_finalizer_checks_filesystem_before_deterministic_compression():
     text = FINALIZE.read_text(encoding="utf-8")
     assert "e2fsck -fn" in text
+    for command in ("partprobe", "udevadm", "lsblk", "blkid"):
+        assert f'command -v "$command"' in text
+    assert text.index('partprobe "$LOOP"') < text.index("udevadm settle")
+    assert text.index("udevadm settle") < text.index('lsblk -nrpo NAME,PARTN "$LOOP"')
+    assert 'blkid -p -s TYPE -o value -- "$ROOT_DEVICE"' in text
     assert "losetup --detach" in text
     assert text.index("losetup --detach") < text.index("xz --threads=0")
     assert "--check=crc64" in text and "-9e" in text
