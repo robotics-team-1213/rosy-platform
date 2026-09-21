@@ -264,3 +264,13 @@
   추가했다.
 - gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
 - 결정: D-161/D-164의 고정 apt 입력을 실행 경로에 연결.
+
+## 2026-09-22 · uncommitted · fix(image): scope target rosdep to the product closure
+
+- 변경: 필수 Pinky Pro ROS package 12개에서 시작해 in-tree 의존성 전이 폐쇄를 계산하고,
+  target rootfs의 rosdep은 그 경로만 설치한다. `gz_sim`, games, Fleet처럼 제품 CORE
+  이미지에 필요 없는 source package는 제외하고 설치 후 apt cache를 비운다.
+- 증거: ARM64 run 35652400962는 `noble-updates` 문제를 통과했으나 전체 source tree
+  rosdep이 Gazebo/GUI를 설치해 rootfs 공간을 소진했다. resolver 회귀 계약을 추가했다.
+- gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
+- 결정: D-161 native product payload와 D-164 image 용량 경계 보강.

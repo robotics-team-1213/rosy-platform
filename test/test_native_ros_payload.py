@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ BUILD = IMAGE / "build-native-payload.sh"
 VERIFY = IMAGE / "verify-package-inventory.sh"
 HARDWARE_DEPS = IMAGE / "install-pinky-hardware-deps.sh"
 LOCK = IMAGE / "inputs.lock.yaml"
+RESOLVE_SOURCE_PATHS = IMAGE / "resolve-required-source-paths.py"
 
 
 def _bash_is_usable() -> bool:
@@ -36,6 +38,7 @@ def test_native_payload_tools_exist():
     assert BUILD.is_file()
     assert VERIFY.is_file()
     assert HARDWARE_DEPS.is_file()
+    assert RESOLVE_SOURCE_PATHS.is_file()
 
 
 def test_pinky_hardware_dependencies_are_exactly_pinned():
@@ -76,6 +79,72 @@ def test_image_workflow_installs_pinky_hardware_dependencies_before_payload_buil
     assert workflow.index("install-pinky-hardware-deps.sh") < workflow.index(
         "build-image.sh"
     )
+
+
+def test_required_source_resolver_includes_transitive_product_deps_not_non_product_apps():
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RESOLVE_SOURCE_PATHS),
+            "--source-root",
+            str(ROOT / "src"),
+            "--required",
+            str(REQUIRED),
+            "--chroot-prefix",
+            "/tmp/rosy-src/src",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    paths = set(result.stdout.splitlines())
+    for suffix in (
+        "/core/core", "/core/core_common", "/core/core_events",
+        "/core/core_features", "/core/core_api_web", "/core/interfaces",
+        "/hardware/sensor_adc", "/hardware/imu_bno055", "/hardware/lamp_control",
+    ):
+        assert any(path.endswith(suffix) for path in paths)
+    assert not any(path.endswith("/sim/gz_sim") for path in paths)
+    assert not any(path.endswith("/apps/games") for path in paths)
+    assert not any(path.endswith("/site/fleet") for path in paths)
+
+
+def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
+    source_root = tmp_path / "src"
+    real_package = source_root / "apps" / "control"
+    generated_package = source_root / "build" / "control"
+    real_package.mkdir(parents=True)
+    generated_package.mkdir(parents=True)
+    manifest = (
+        '<package format="3"><name>control</name><version>0.1.0</version>'
+        '<description>x</description><maintainer email="x@example.com">x</maintainer>'
+        "<license>MIT</license></package>"
+    )
+    (real_package / "package.xml").write_text(manifest, encoding="utf-8")
+    (generated_package / "package.xml").write_text(manifest, encoding="utf-8")
+    required = tmp_path / "required.txt"
+    required.write_text("control\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RESOLVE_SOURCE_PATHS),
+            "--source-root",
+            str(source_root),
+            "--required",
+            str(required),
+            "--chroot-prefix",
+            "/tmp/rosy-src/src",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/apps/control"]
 
 
 def test_required_package_file_matches_the_locked_offline_payload():

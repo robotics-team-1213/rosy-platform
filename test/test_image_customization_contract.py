@@ -49,6 +49,16 @@ def test_customizer_materializes_all_locked_ubuntu_apt_sources_before_update():
     assert source.index("rosy-ubuntu.list") < source.index('chroot "$ROOT" apt-get update')
 
 
+def test_customizer_installs_only_required_product_package_dependency_closure():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    assert "resolve-required-source-paths.py" in source
+    assert "ROSDEP_SOURCE_PATHS" in source
+    assert 'rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}"' in source
+    assert "rosdep install --from-paths /tmp/rosy-src" not in source
+    assert 'chroot "$ROOT" apt-get clean' in source
+
+
 def test_customizer_installs_wiringpi_runtime_from_the_verified_lock():
     source = CUSTOMIZER.read_text(encoding="utf-8")
 
