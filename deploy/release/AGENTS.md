@@ -16,6 +16,7 @@ Release packaging and the privileged Host Agent. Modules are scripts (not an ins
 | `manifest.py` | Release manifest read/write |
 | `manifest.schema.json` | Manifest JSON schema |
 | `signing.py` | OpenSSL 3 raw Ed25519 sign/verify |
+| `sign_image_release.py` | Offline image checksum verification and fail-closed Ed25519 signing CLI |
 | `storage.py` | On-disk release store |
 | `updater.py` | Activate / rollback a signed release |
 | `layout.py` | Directory layout for releases |
