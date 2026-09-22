@@ -220,3 +220,10 @@
 - gate 변화: 없음.
 - 결정: 없음 — D-4 준수. D-149 예외 목록에서 벤치 드라이버의 /cmd_vel 발행 제거.
 - 교훈: Windows PowerShell 5 의 Set-Content -Encoding utf8 은 BOM 을 붙인다 — 파이썬 소스를 고칠 때는 [IO.File]::WriteAllText + UTF8Encoding($false) 를 쓰거나 편집 도구를 쓸 것.
+
+## 2026-09-22 · uncommitted · control(qos): 센서 토픽 소비자 QoS SENSOR 통일 (T13)
+- 변경: startup_calibration_node 의 ir_sensor/range·us_sensor/range·imu_raw 구독과 safety 노드의 us_topic·ir_topic 구독을 depth10(RELIABLE)에서 qos_profile_sensor_data 로 통일 — BEST_EFFORT 구독은 RELIABLE/BEST_EFFORT 발행 모두와 매칭되므로 호환성은 확대만 있다(D-119 소비자 측 완성). STEPS.txt 에 운영자 /estop 발행 시 transient_local QoS 예시 추가(latched 구독과 기본 발행은 영구 비매칭). 신규 가드 test_sensor_qos_unification.py 3건.
+- 증거: `python -m pytest src/apps/control/test/test_sensor_qos_unification.py test_configured_operation.py test_os_calibration_graph.py -q` 25 passed, 1 skipped (2026-09-22 Windows, 적색→초록). map 소비자 3정책 분할은 의도로 bridge/AGENTS.md 에 기록(T11).
+- gate 변화: 없음.
+- 결정: 없음 — D-119 완성.
+- 교훈: 없음.

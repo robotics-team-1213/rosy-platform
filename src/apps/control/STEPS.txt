@@ -39,3 +39,12 @@ Promotion order:
 A passing source test or image build does not promote a Device or FIELD gate.
 Legacy nodes remain available for parity tests only; never run their final
 publisher beside core.
+
+E-stop from the operator CLI (bench): the safety gate subscribes `/estop`
+(Bool) with a TRANSIENT_LOCAL latch, so a default-QoS `ros2 topic pub`
+never matches. Publish with matching QoS:
+
+  ros2 topic pub /estop std_msgs/msg/Bool "data: true" \
+    --qos-durability transient_local --qos-reliability reliable -1
+
+The friendly path is the plain `estop/cmd` (String) topic or the web UI.
