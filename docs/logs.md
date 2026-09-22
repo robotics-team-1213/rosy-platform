@@ -1540,3 +1540,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-23 · uncommitted · fix(test): strip the UTF-8 BOM that turned the catalogue and vision guards red, and guard against it
+
+- 변경: `10ceb53`가 `src/core/core_api_web/core_api_web/api/v1/system.py` 앞에 UTF-8 BOM을 넣었다. `ast.parse(read_text())`로 소스를 읽는 가드(`test_event_catalogue.py` 13건, `test_vision_boundaries.py` 2건)가 U+FEFF에서 전부 SyntaxError가 났다. BOM을 제거하고 `test/test_fleet_enrollment_contracts.py`의 BOM도 제거했다. 신규 `test/test_source_encoding.py`는 추적 중인 모든 `.py`가 BOM으로 시작하지 않음을 고정한다.
+- 증거: `python -m pytest test/test_source_encoding.py src/core/core/test/test_event_catalogue.py src/core/core/test/test_vision_boundaries.py test/test_fleet_enrollment_contracts.py -q` 78 passed.
+- gate 변화: 없음(회귀 복구).
+- 결정: 없음(D-172 후속 정리 중 발견).
+- 교훈: Windows 편집기의 BOM 하나가 무관한 AST 가드 15건을 한꺼번에 깬다. 원인이 보이도록 이름 있는 가드로 따로 잡는다.
