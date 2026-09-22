@@ -42,24 +42,42 @@ def test_core_runs_as_a_device_free_hardened_service():
 
 
 def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
-    """A stop signal before core.main installs its handlers kills the interpreter.
+    """The node itself is the unit's main process: systemd sees the real stop signal.
 
-    Under `ros2 run` that death came back as exit 241 (SIGTERM) / 254 (SIGINT) -> unit
-    `failed`, and a restart 2 s later when the signal came from outside systemctl. With the
-    entry script as the main process systemd sees SIGINT/SIGTERM, which it treats as a
-    clean exit, so no SuccessExitStatus remap is needed (and none may hide 241/254).
+    Under `ros2 run` the wrapper re-encoded a signal death of the node as exit 241
+    (SIGTERM) / 254 (SIGINT), so an ordinary stop in the window before core.main installs
+    its handlers left the unit `failed` and, when the signal came from outside systemctl,
+    restarted it 2 s later. Exec'ing the entry script removes that re-encoding (and the
+    ros2 CLI's own startup window, and one Python process). Because systemd then counts a
+    SIGINT/SIGTERM death of the main process as clean, core must not escalate a stuck
+    shutdown by re-signalling itself — `core.main` exits with
+    STUCK_SHUTDOWN_EXIT_CODE=2 so that stays visible as `Result=exit-code`.
+    No SuccessExitStatus is added: nothing here needs remapping, and a remap would also
+    whitewash that escalation.
     """
     unit = _read("rosy-core.service")
     exec_start = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
 
     assert "ros2 run" not in exec_start
     assert "SuccessExitStatus" not in unit
+    # the other half of the contract lives in core.main: the escalation must not be a
+    # signal death, or systemd would count it as a clean stop like any other
+    core_main = (ROOT / "src" / "core" / "core" / "core" / "main.py").read_text(
+        encoding="utf-8")
+    assert "STUCK_SHUTDOWN_EXIT_CODE = 2" in core_main
+    assert "os._exit(STUCK_SHUTDOWN_EXIT_CODE)" in core_main
+    assert "os.kill(os.getpid()" not in core_main
     # the hard-coded entry-script path only exists in a --merge-install payload
     payload = (ROOT / "deploy" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
     assert "--merge-install" in payload
     assert '--install-base "$INSTALL_ROOT"' in payload
+    assert 'INSTALL_ROOT="$RELEASE_ROOT/install"' in payload
     setup_cfg = (ROOT / "src" / "core" / "core" / "setup.cfg").read_text(encoding="utf-8")
     assert "install_scripts=$base/lib/core" in setup_cfg
+    # the script itself is generated from this entry point; a rename would leave a unit
+    # pointing at a file nobody builds any more
+    setup_py = (ROOT / "src" / "core" / "core" / "setup.py").read_text(encoding="utf-8")
+    assert "'core=core.main:main'" in setup_py
 
 
 def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():

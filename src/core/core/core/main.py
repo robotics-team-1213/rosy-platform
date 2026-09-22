@@ -19,6 +19,9 @@ import sys
 import threading
 
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+# 두 번째 종료 신호(멈춘 종료를 운영자가 끊음)로 죽을 때의 종료 코드. systemd 가 이것을
+# 실패(`Result=exit-code`, `ExecMainStatus=2`)로 보아야 정상 정지(exit 0)와 구별된다.
+STUCK_SHUTDOWN_EXIT_CODE = 2
 
 
 def is_orderly_shutdown(exc: BaseException, *, stop_requested: bool,
@@ -46,10 +49,18 @@ def install_stop_handlers(stop: threading.Event) -> None:
     기본 SIGTERM(SIG_DFL)은 rclpy 가 처리기를 깔기 전 기동 창에서 프로세스를 죽이고,
     기본 SIGINT 는 `KeyboardInterrupt` 를 아무 바이트코드에서나 던져 종료 훅
     (`system.shutdown` 감사 기록, API 포트 해제) 도중에도 끊을 수 있다.
-    두 번째 신호는 종료가 멈췄다는 운영자 의사다 — 기본 동작을 되돌리고 같은 신호로
-    자기 종료한다(SIGINT·SIGTERM 동일). SIGINT 도 `KeyboardInterrupt` 로 올리지 않는다:
-    예외가 잡혀 finally 의 `rclpy.shutdown()` 까지 가면 rclpy 가 OS 처리기를 CPython 의
-    처리기로 되돌리는데, Python 쪽 표가 SIG_DFL 이라 세 번째 SIGINT 부터는 아무 일도 하지 않는다.
+    두 번째 신호는 종료가 멈췄다는 운영자 의사다 — 종료 훅도 스레드 join 도 기다리지 않고
+    `os._exit(STUCK_SHUTDOWN_EXIT_CODE)` 로 끊는다(SIGINT·SIGTERM 동일).
+    - `KeyboardInterrupt` 로 올리지 않는 이유: 예외가 잡혀 finally 의 `rclpy.shutdown()` 까지
+      가면 rclpy 가 OS 처리기를 CPython 의 처리기로 되돌리는데, Python 쪽 표가 SIG_DFL 이라
+      세 번째 SIGINT 부터는 아무 일도 하지 않는다.
+    - 같은 신호로 자기 종료(`os.kill`)하지 않는 이유: `rosy-core.service` 가 `ros2 run` 래퍼
+      없이 entry script 를 exec 하므로 노드가 유닛의 주 프로세스다. systemd 는 주 프로세스의
+      SIGINT/SIGTERM 사망을 **깨끗한 종료**로 치므로(`is_clean_exit`), 멈춘 종료를 운영자가
+      끊은 것이 정상 정지와 구별되지 않는다. 0 아닌 종료 코드만 `Result=exit-code` 로 남는다.
+    - `os._exit` 인 이유: 격상의 목적이 멈춘 훅/join 을 건너뛰는 것이다 — atexit 와
+      스레드 join 을 타면 다시 같은 자리에 걸린다.
+    - `SIG_DFL` 복원은 `os._exit` 직전에 또 신호가 와도 이 처리기로 돌아오지 않게 한다.
     """
 
     def _request_stop(signum, frame) -> None:
@@ -57,7 +68,9 @@ def install_stop_handlers(stop: threading.Event) -> None:
             stop.set()
             return
         signal.signal(signum, signal.SIG_DFL)
-        os.kill(os.getpid(), signum)
+        print(f"core: second stop signal ({signum}) — shutdown looked stuck; exiting "
+              f"{STUCK_SHUTDOWN_EXIT_CODE}", file=sys.stderr, flush=True)
+        os._exit(STUCK_SHUTDOWN_EXIT_CODE)
 
     for signum in STOP_SIGNALS:
         signal.signal(signum, _request_stop)
@@ -100,19 +113,18 @@ def main() -> None:
             raise
         print(f"core: suppressed during shutdown: {exc!r}", file=sys.stderr, flush=True)
     finally:
-        # 순서: 종료 훅(감사 system.shutdown, API 스레드 join → 포트 해제) → destroy_node
-        # (타이머·publisher 해제; executor 작업 스레드는 node.run() 이 이미 비웠다) →
-        # rclpy.shutdown. 노드가 context 보다 먼저 내려가야 인터프리터 종료 때 rclpy 객체가
-        # 무효 context 위에서 해제되지 않는다.
+        # 순서: 종료 훅(감사 system.shutdown, API 스레드 join — 상한 안에서 끝나면 포트도
+        # 해제된다) → destroy_node(타이머·publisher 해제; executor 작업 스레드는 node.run()
+        # 이 이미 비웠다) → rclpy.shutdown. 노드가 context 보다 먼저 내려가야 인터프리터
+        # 종료 때 rclpy 객체가 무효 context 위에서 해제되지 않는다. 상한을 넘긴 스레드는
+        # 여기서 막을 수 없다 — 최종 방어선은 systemd 의 TimeoutStopSec SIGKILL 이다.
         if node is not None:
-            try:
-                node.shutdown()
-            except Exception:
-                pass
-            try:
-                node.destroy_node()
-            except Exception:
-                pass
+            for step in (node.shutdown, node.destroy_node):
+                try:
+                    step()
+                except Exception as exc:
+                    print(f"core: suppressed during shutdown: {exc!r}", file=sys.stderr,
+                          flush=True)
         try:
             rclpy.shutdown()
         except Exception:

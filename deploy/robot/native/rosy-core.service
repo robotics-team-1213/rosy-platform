@@ -11,10 +11,13 @@ User=rosy-core
 Group=rosy-core
 EnvironmentFile=/etc/rosy/runtime.env
 WorkingDirectory=/opt/rosy/current
-# Exec the core entry script itself, not `ros2 run`: the wrapper turns a signal death of
-# the node into exit status 256-N (241/254), which systemd counts as failure. Run
-# directly, a SIGINT/SIGTERM that lands before core installs its handlers is a clean
-# signal exit for systemd. Path follows the --merge-install payload layout.
+# Exec the core entry script itself, not `ros2 run`: systemd then supervises the node
+# directly. The wrapper re-encoded a signal death of the node as exit 241/254, added its
+# own startup window (a stop there failed the unit), and cost one more Python process.
+# Because systemd counts a SIGINT/SIGTERM death of the main process as a clean stop,
+# core.main escalates a stuck shutdown with exit code 2 instead of re-signalling itself,
+# so `systemctl stop` stays success and an operator cutting a wedged shutdown stays a
+# failure. Path follows the --merge-install payload layout.
 ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /opt/rosy/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
 ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py
 Restart=on-failure

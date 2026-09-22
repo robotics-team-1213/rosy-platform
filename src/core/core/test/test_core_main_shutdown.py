@@ -182,24 +182,38 @@ def test_first_signal_records_without_raising(saved_handlers, signum):
 
 
 @pytest.mark.parametrize("signum", core_main.STOP_SIGNALS)
-def test_second_signal_restores_default_and_rekills_self(saved_handlers, monkeypatch, signum):
-    """두 번째 신호는 예외 없이 같은 신호로 자기 종료한다 — SIGINT 도 KeyboardInterrupt 가 아니다.
+def test_second_signal_exits_non_zero_without_raising(saved_handlers, monkeypatch, capsys,
+                                                      signum):
+    """두 번째 신호는 예외 없이 `os._exit(2)` 로 끊는다 — 정상 정지(exit 0)와 구별돼야 한다.
 
-    예전에는 두 번째 SIGINT 가 KeyboardInterrupt 로 올라가 main 이 잡고 finally 의
-    rclpy.shutdown() 까지 갔고, rclpy 가 OS 처리기를 CPython 처리기로 되돌리면
-    (Python 표는 SIG_DFL) 세 번째 SIGINT 는 무시됐다.
+    - `KeyboardInterrupt` 로 올리면(예전 SIGINT 경로) main 이 잡고 finally 의
+      `rclpy.shutdown()` 까지 가며, rclpy 가 CPython 트램폴린을 되돌려 세 번째 SIGINT 가
+      무시된다.
+    - 같은 신호로 자기 종료하면(`os.kill`) 노드가 유닛의 주 프로세스라 systemd 가
+      SIGINT/SIGTERM 사망을 깨끗한 종료로 쳐서, 멈춘 종료를 끊은 것이 정상 정지와
+      같아 보인다.
     """
     import threading
-    killed = []
-    monkeypatch.setattr(core_main.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    exits = []
+    monkeypatch.setattr(core_main.os, "_exit", lambda code: exits.append(code))
+    monkeypatch.setattr(core_main.os, "kill",
+                        lambda pid, sig: pytest.fail("escalation must not re-signal itself"))
     stop = threading.Event()
     core_main.install_stop_handlers(stop)
     handler = signal.getsignal(signum)
     handler(signum, None)
-    assert killed == []
+    assert exits == []
     handler(signum, None)  # KeyboardInterrupt 를 던지면 실패
-    assert killed == [(core_main.os.getpid(), signum)]
+    assert exits == [core_main.STUCK_SHUTDOWN_EXIT_CODE]
+    assert core_main.STUCK_SHUTDOWN_EXIT_CODE != 0
     assert signal.getsignal(signum) is signal.SIG_DFL
+    assert "second stop signal" in capsys.readouterr().err
+
+
+def test_stuck_shutdown_exit_code_is_not_a_signal_death():
+    """systemd 는 주 프로세스의 SIGINT/SIGTERM 사망을 성공으로 친다 — 격상은 종료 코드여야 한다."""
+    assert core_main.STUCK_SHUTDOWN_EXIT_CODE not in (0, 128 + signal.SIGINT,
+                                                      128 + signal.SIGTERM)
 
 
 def test_suppressed_exception_is_logged(harness, capsys):
