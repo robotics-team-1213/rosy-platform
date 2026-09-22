@@ -119,8 +119,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · merge(core): land the audit-log port after the event-catalogue port — API reference v1.14
+- 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
+- 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로
+- 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
 - 2026-09-22 · uncommitted · docs(api): §8 이벤트 카탈로그를 실제 발행과 맞춘다 (v1.13 Corrective + Additive)
-- 2026-09-22 · 8088533 · docs(plans): Phase 1(T1~T4) 전체 호스트 회귀 PASS
-- 2026-09-22 · uncommitted · docs(plans): 통신·프로토콜 정합 계획 Phase 1(T1~T4) 이행 기록
-- 2026-09-22 · uncommitted · docs(plans): 통신·프로토콜 정합 개선 실행 계획 신규
-- 2026-09-22 · uncommitted · docs(dock): triage the archived dock-detector measurement rig — carry glossary + lesson only

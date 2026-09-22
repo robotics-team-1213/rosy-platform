@@ -66,8 +66,8 @@
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · fix(core): 만료 뒤 끼어든 teleop 이 옛 명령을 한 틱 되살리지 않게 한다
-- 2026-09-22 · uncommitted · fix(core): 리뷰 반영 — 버전 무관 중계 지문, MANUAL 이탈 시 teleop 폐기, 만료 기록의 세션 경합
-- 2026-09-22 · uncommitted · test(core): §8 이벤트 카탈로그 드리프트 가드 — 발행 지점에서 읽는다
-- 2026-09-22 · uncommitted · fix(core): config.changed·swarm.aborted 가 계약대로 warning 을 싣는다
-- 2026-09-22 · uncommitted · feat(core): SAF-002 워치독 만료를 safety.watchdog 로 알린다 — 정지가 바퀴에 닿은 뒤에
+- 2026-09-22 · uncommitted · test(structure): audit.py 에 D-168 P6 크기 판정(accept, X5) 기록
+- 2026-09-22 · uncommitted · refactor(core_api_web): audit metrics 블록을 따로 만들어 잇고 `rosy_audit_serialize_failures_total` 추가
+- 2026-09-22 · uncommitted · fix(core_events): 감사 로그 정리·조회를 이벤트를 낸 스레드 밖으로 (리뷰 REQUEST CHANGES 반영)
+- 2026-09-22 · uncommitted · feat(core_api_web): 감사 로그 기록 상태를 `logs/audit` 와 `/metrics` 로 노출
+- 2026-09-22 · uncommitted · fix(core_events): 감사 로그 쓰기 비용·정전 손실·정리 실패 집계 (archive 브랜치 이식)

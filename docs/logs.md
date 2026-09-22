@@ -1482,3 +1482,32 @@
 - 증거: `src/core/core/test/test_event_catalogue.py` 가 카탈로그↔발행 지점(이름·키·심각도·발신)을 양방향으로 고정한다 — 문서 수정 전 7 failed, 후 전부 통과.
 - gate 변화: 없음.
 - 결정: 이미 발행되는 값이 사실이다. 심각도는 `config.changed`·`swarm.aborted` 만 코드를 고쳤고(core 로그 참조) 나머지는 문서를 코드에 맞췄다. 정정은 버전 노트에 양쪽 값을 `A(≠B)` 로 남긴다.
+
+## 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
+
+- 변경: `docs/reference/ROSY API & Protocol Reference.md` v1.12→v1.13. `GET /api/v1/logs/audit` 행에 `{events, log}` 와 `log` 필드 의미, `/metrics` 행에 `rosy_audit_write_failures_consecutive` 경보 기준, 개정 이력 v1.13 추가(additive).
+- 증거: `src/core/core/test/test_diagnostics_api.py::test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_alert_on` 가 노출 metric 이름과 이 문서를 묶는다 — passed.
+- gate 변화: 없음.
+- 결정: 원본 브랜치(2026-09-07)는 v1.8 로 올렸으나 main 은 이미 v1.12 라 v1.13 으로 이식했다.
+
+## 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로
+
+- 변경: `test/test_line_follow_contract_docs.py` 의 `**Version:** v1.12` 고정을 v1.13 으로 올린다 — 직전 항목의 v1.13 개정이 이 고정을 깨뜨렸다. v1.11·v1.12 개정 때와 같은 처리다.
+- 증거: `test/test_line_follow_contract_docs.py` 1 passed.
+- gate 변화: 없음.
+- 결정: 시험의 의도(line-follow 계약 문서화)는 그대로다. 버전 고정 자체를 없애는 것은 이 이식의 범위 밖이다.
+
+## 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
+
+- 변경: `logs/audit` 행의 `log` 필드에 `serialize_failures`·`last_serialize_error` 와 의미, 스키마로도 JSON 으로도 못 읽는 줄은 `audit.jsonl.quarantine` 으로 옮긴다는 것을 추가. v1.13 개정 이력에 `rosy_audit_serialize_failures_total` 추가.
+- 증거: `test_diagnostics_api.py::test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_alert_on` passed.
+- gate 변화: 없음.
+- 결정: v1.13 은 아직 main 에 없으므로 버전을 올리지 않는다.
+
+## 2026-09-22 · uncommitted · merge(core): land the audit-log port after the event-catalogue port — API reference v1.14
+
+- 변경: `port/event-catalogue-drift`와 `port/audit-log-write-cost`가 둘 다 API 레퍼런스를 v1.12→v1.13으로 올렸다. 이벤트 카탈로그 쪽을 먼저 병합해 v1.13으로 두고, audit 쪽 변경 이력 행을 v1.14로 옮겼다. 문서 머리 `**Version:**`과 `test/test_line_follow_contract_docs.py` 고정값도 v1.14. audit 브랜치 로그 항목이 말하는 "v1.13"은 이 병합에서 v1.14가 됐다.
+- 증거: 병합 후 호스트 회귀(아래 커밋 메시지), `rosy_harness.py lint` 0 error.
+- gate 변화: 없음. core ROS-SIM은 cmd_vel 경로 변경으로 HOLD 유지(부트 스모크 재실행 필요).
+- 결정: 없음
+- 교훈: 버전 고정 문서를 여러 브랜치가 동시에 올리면 병합 순서대로 번호를 다시 매긴다.

@@ -29,7 +29,9 @@ def list_audit_logs(
     svc: CoreServicesLike = Depends(get_services),
 ):
     events = svc.audit.history(since_seq=since_seq, limit=min(limit, 2000))
-    return {"events": [e.model_dump() for e in events]}
+    # 기록이 멈춰 있으면 목록이 짧은 것과 구분되지 않는다. 감사 로그를 묻는
+    # 자리가 "이 로그를 믿어도 되는가"를 함께 답할 유일한 자리다.
+    return {"events": [e.model_dump() for e in events], "log": svc.audit.health()}
 
 
 diagnostics_router = APIRouter(prefix="/api/v1/diagnostics", tags=["diagnostics"])
@@ -103,9 +105,41 @@ def metrics(svc: CoreServicesLike = Depends(get_services)):
         "# HELP rosy_battery_percent battery percent estimate",
         "# TYPE rosy_battery_percent gauge",
         f"rosy_battery_percent {snap.battery.percent if snap.battery.percent is not None else -1}",
+    ]
+    audit = svc.audit.health()
+    audit_lines = [
+        # 이름이 `rosy_audit_write_failures` 였다면 아래 `_total` 카운터와 같은
+        # 계열(family)이 되어, OpenMetrics 로 읽는 쪽에서 gauge 와 counter 가
+        # 한 이름으로 충돌한다.
+        "# HELP rosy_audit_write_failures_consecutive consecutive audit log write failures (LOG-001)",
+        "# TYPE rosy_audit_write_failures_consecutive gauge",
+        f"rosy_audit_write_failures_consecutive {audit['write_failures']}",
+        # 게이지만 있으면 스크레이프 사이에서 실패했다 복구한 로봇은 늘 0 이다.
+        # 누적 카운터는 되돌아가지 않으므로 `increase()` 로 그것이 보인다.
+        "# HELP rosy_audit_write_failures_total audit log write failures since boot (LOG-001)",
+        "# TYPE rosy_audit_write_failures_total counter",
+        f"rosy_audit_write_failures_total {audit['write_failures_total']}",
+        # 정리 실패는 기록 실패가 아니다. 감사 기록은 남고 있는데 파일이 30 일보다
+        # 길게 자라는 중이라는 뜻이라, 경보 기준이 다르다.
+        "# HELP rosy_audit_prune_failures_total audit log prune failures since boot",
+        "# TYPE rosy_audit_prune_failures_total counter",
+        f"rosy_audit_prune_failures_total {audit['prune_failures']}",
+        # 실패가 아니라 "전제가 깨졌다"이다. 오르고 있으면 이 파일을 우리 말고
+        # 누가 자르거나 갈아 끼우고 있다는 뜻이고, 그동안 정리는 무동작이다.
+        "# HELP rosy_audit_prune_skipped_total prunes skipped because the file changed underneath",
+        "# TYPE rosy_audit_prune_skipped_total counter",
+        f"rosy_audit_prune_skipped_total {audit['prune_skipped']}",
+        # 디스크가 아니라 발행한 쪽의 결함이다. 기록은 `repr` 로 바꿔 남았지만,
+        # 오르고 있으면 어떤 이벤트의 `data` 가 JSON 이 될 수 없는 값을 싣고 있다.
+        "# HELP rosy_audit_serialize_failures_total audit events whose data had to be repr()-ed",
+        "# TYPE rosy_audit_serialize_failures_total counter",
+        f"rosy_audit_serialize_failures_total {audit['serialize_failures']}",
+    ]
+    diagnostics_lines = [
         "# HELP rosy_diagnostics_health component health (0=OK,1=UNKNOWN,2=WARNING,3=ERROR)",
         "# TYPE rosy_diagnostics_health gauge",
     ]
+    lines += audit_lines + diagnostics_lines
     for component, health in snap.diagnostics_summary.items():
         lines.append(f'rosy_diagnostics_health{{component="{component}"}} {_HEALTH_VALUE[health.value]}')
     from fastapi.responses import PlainTextResponse

@@ -301,3 +301,38 @@
 - 증거: 결정적 끼어들기 시험 2건(`expired`/`refresh` 가로채기로 teleop(0,0) 삽입)이 8820ce2 manager 에서 2 failed, 수정 후 통과. 재현 스크립트(race.py) 두 경우 모두 0 송신. 전체 수치는 커밋 메시지.
 - gate 변화: 없음(ROS-SIM HOLD 유지).
 - 결정: 세션 번호(알림 귀속)와 명령(바퀴 출력)은 읽는 시점이 다르다 — 번호는 판정 전, 명령은 판정 후.
+
+## 2026-09-22 · uncommitted · fix(core_events): 감사 로그 쓰기 비용·정전 손실·정리 실패 집계 (archive 브랜치 이식)
+
+- 변경: `core_events/events/audit.py` `FileAuditLog` — 이벤트마다 파일 전체를 읽고 재작성하던 것을 덧붙이기 전용으로 바꾸고, 정리는 쓰기 경로에서 최대 한 시간에 한 번 락 밖에서 파싱해 원본 바이트를 그대로 남긴다(스냅샷 이후 덧붙은 꼬리는 `st_dev`/`st_ino` 신원을 확인한 뒤 이어 붙임, 임시 파일 + `os.replace`). `history()` 는 더 이상 파일을 재작성하지 않고 메모리에서 보존 기간을 거른다. 정전으로 잘린 마지막 줄 뒤 첫 이벤트를 삼키지 않도록 개행 종결 여부를 프로세스당 한 번 확인(쓰기 실패 시 캐시 무효화), 잘린 UTF-8 꼬리는 `errors="replace"` 로 읽어 `/logs/audit` 500 을 막는다. 읽기와 정리가 같은 규칙(`_raw_lines`, 바이트 `strip`)으로 줄을 나눈다. Windows CRLF 변환을 막는 `newline=""`. 새 `health()` — 연속/누적 쓰기 실패, 정리 실패, 정리 건너뜀과 채널별 마지막 사유. 원본: `archive/2026-09-22/fix/audit-log-write-cost` (470ce7b..f04e430, 2026-09-07), 재구조화(D-125/D-126) 이후 경로로 재구현.
+- 증거: 이식한 `test_audit.py` 47 시험 중 30 건이 수정 전 main 코드에서 실패, 수정 후 47 passed (2026-09-22 Windows).
+- gate 변화: 없음(LOCAL). 쓰기 경로는 50 Hz cmd_vel 타이머 위에서 불리므로 ROS-SIM/DEVICE 증거는 아니다.
+- 결정: fsync 하지 않는다(매 이벤트 SD 카드 fsync 비용이 원래 문제를 되살린다). 다중 프로세스 쓰기는 D-1 전제로 막지 않는다 — 필요해지면 ADR.
+
+## 2026-09-22 · uncommitted · feat(core_api_web): 감사 로그 기록 상태를 `logs/audit` 와 `/metrics` 로 노출
+
+- 변경: `core_api_web/api/v1/observability.py` — `GET /api/v1/logs/audit` 응답에 `log`(= `FileAuditLog.health()`)를 더하고, `/metrics` 에 `rosy_audit_write_failures_consecutive`(gauge)·`rosy_audit_write_failures_total`·`rosy_audit_prune_failures_total`·`rosy_audit_prune_skipped_total`(counter)을 더한다. EventBus 가 구독자 예외를 삼키므로 감사 기록이 멈춰도 어디에도 남지 않던 상태를 닫는다. API ref v1.13. `test_diagnostics_api.py` 에 계약 문서와 metric 이름을 묶는 시험 추가. 원본: `archive/2026-09-22/fix/audit-log-write-cost` 848a934.
+- 증거: 새 시험은 수정 전 observability 에서 실패, 수정 후 `test_diagnostics_api.py` 9 passed (2026-09-22 Windows).
+- gate 변화: 없음(LOCAL).
+- 결정: 게이지 이름을 `_consecutive` 로 둔다 — `rosy_audit_write_failures` 는 `_total` 카운터와 같은 OpenMetrics family 가 되어 충돌한다. `events` 목록 모양은 그대로(additive).
+
+## 2026-09-22 · uncommitted · fix(core_events): 감사 로그 정리·조회를 이벤트를 낸 스레드 밖으로 (리뷰 REQUEST CHANGES 반영)
+
+- 변경: `core_events/events/audit.py` — (1) `record()` 는 덧붙이기만 하고, 정리 시각이면 전용 데몬 스레드(`audit-compactor`, 한 번에 하나, 할 일이 없으면 종료)에 넘긴다. 정리는 락을 크기·신원을 뜰 때와 꼬리 이어 붙이기+`os.replace` 때만 잡고, 읽기·파싱·임시 파일 쓰기는 락 밖에서 256 KB 조각과 128 줄마다 1 ms 잠들며 한다(GIL 때문에 같은 프로세스의 CPU 일이 50 Hz 스레드를 세운다). 새 `settle()` 로 정리 완료를 기다린다. (2) `history()` 는 여는 순간만 락을 잡고(바꿔 끼우기와 겹치면 Windows 에서 `PermissionError`), 끝에서부터 필요한 만큼만 파싱한다. (3) 직렬화 실패(`PydanticSerializationError`)를 `serialize_failures`/`last_serialize_error` 로 세고 값을 `repr` 로 바꿔 기록은 남긴다. (4) 정리의 새 파일을 `fsync` 한 뒤 바꿔 끼우고 POSIX 에서는 디렉터리도 `fsync` 한다(덧붙이기와 정리 도중 덧붙은 꼬리는 그대로 fsync 없음). (5) 스키마로 못 읽는 줄은 지우지 않는다 — JSON `ts` 가 있으면 그 `ts` 로 보존 규칙을, 없으면 바이트 그대로 `audit.jsonl.quarantine` 으로 옮긴다. (7) `record()` 는 `OSError` 를 다시 던지지 않고 센다.
+- 증거: `test_audit.py` 60 passed (Python 3.14), `test_audit.py`+`test_diagnostics_api.py` 69 passed (Python 3.12, uv). 새 시험 11 개는 이전 구현에서 모두 실패. 리뷰어 측정(10 만 줄 19.4 MB, Windows x86): 첫 기록 626→2.0 ms, 매시 기록 797→1.0 ms, `history(limit=1)` 1412→0.4 ms, 20 ms 티커의 최악 `record()` 263→1.5 ms(최악 주기 302→22 ms). 재작성하는 정리와 동시에 도는 티커의 `record()` p99 약 2 ms, 최대 2.5–10 ms(`os.replace` 창).
+- gate 변화: 없음(LOCAL). Pi SD 카드의 fsync·replace 시간은 측정하지 않았다 — DEVICE 증거가 아니다.
+- 결정: 정리 스레드는 상주하지 않는다(한 시간에 한 번 열고 끝낸다). 격리 파일은 정리하지 않는다 — 손상은 드물고 그 바이트가 조사 증거일 수 있다.
+
+## 2026-09-22 · uncommitted · refactor(core_api_web): audit metrics 블록을 따로 만들어 잇고 `rosy_audit_serialize_failures_total` 추가
+
+- 변경: `observability.py` `/metrics` — `lines[-2:-2]` 끼워 넣기 대신 audit 블록과 diagnostics 머리를 각각 목록으로 만들어 잇는다(출력 순서 동일). `rosy_audit_serialize_failures_total`(counter) 추가. `test_diagnostics_api.py` 의 계약 이름 목록에 추가.
+- 증거: `test_diagnostics_api.py` 9 passed.
+- gate 변화: 없음.
+- 결정: API ref v1.13 은 이 브랜치에서만 존재하므로 버전을 올리지 않고 v1.13 항목을 넓힌다.
+
+## 2026-09-22 · uncommitted · test(structure): audit.py 에 D-168 P6 크기 판정(accept, X5) 기록
+
+- 변경: `test/test_module_structure.py` `SIZE_VERDICTS` 에 `core/core_events/core_events/events/audit.py` (675 줄) 를 `accept` 로 추가. main 에서 합쳐 온 D-168 P6(파일 600 줄 예산)이 리뷰 반영으로 늘어난 이 파일을 잡았다.
+- 증거: `test/test_module_structure.py` passed.
+- gate 변화: 없음.
+- 결정: 09-06 X5 — 소유자 하나(`svc.audit`), ROS 없음, `test_audit.py` 가 덮는다. 길이의 절반가량은 덧붙이기·정리·격리 규칙이 기대는 근거 주석이다. 나누면 생기는 이음매가 떠받치는 것이 없다.
