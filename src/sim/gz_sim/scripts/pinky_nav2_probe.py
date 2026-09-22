@@ -11,6 +11,8 @@ import time
 
 import rclpy
 from action_msgs.msg import GoalStatus
+from lifecycle_msgs.msg import State
+from lifecycle_msgs.srv import GetState
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
@@ -79,6 +81,7 @@ class PinkyNav2Probe(Node):
         )
         self.create_subscription(Odometry, "odom", self._on_odom, 10)
         self.client = ActionClient(self, NavigateToPose, "navigate_to_pose")
+        self.lifecycle_client = self.create_client(GetState, "bt_navigator/get_state")
 
     def _on_odom(self, msg: Odometry) -> None:
         self.pose_xy = (
@@ -99,11 +102,36 @@ class PinkyNav2Probe(Node):
             rclpy.spin_once(self, timeout_sec=0.1)
         return future.done()
 
+    def wait_for_nav2_active(self, timeout_s: float) -> bool:
+        """Wait for lifecycle activation, not merely action-server discovery."""
+        deadline = time.monotonic() + timeout_s
+        self.publish("waiting_for_active")
+        remaining = max(0.0, deadline - time.monotonic())
+        if not self.lifecycle_client.wait_for_service(timeout_sec=remaining):
+            return False
+        while rclpy.ok() and time.monotonic() < deadline:
+            future = self.lifecycle_client.call_async(GetState.Request())
+            remaining = max(0.0, deadline - time.monotonic())
+            if not self.wait_future(future, min(2.0, remaining)):
+                continue
+            response = future.result()
+            if (
+                response is not None
+                and response.current_state.id == State.PRIMARY_STATE_ACTIVE
+            ):
+                self.publish("nav2_active")
+                return True
+            rclpy.spin_once(self, timeout_sec=0.1)
+        return False
+
     def run(self) -> bool:
         server_timeout = float(self.get_parameter("server_timeout_s").value)
         self.publish("waiting_for_server")
         if not self.client.wait_for_server(timeout_sec=server_timeout):
             self.publish("failed", reason="nav2_server_timeout")
+            return False
+        if not self.wait_for_nav2_active(server_timeout):
+            self.publish("failed", reason="nav2_activation_timeout")
             return False
         while rclpy.ok() and self.pose_xy is None:
             rclpy.spin_once(self, timeout_sec=0.1)

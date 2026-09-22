@@ -276,6 +276,16 @@ def map_fidelity_metrics(
     }
 
 
+def road_observation_score(observation: dict) -> int:
+    """Count semantic road features visible in one camera observation."""
+    if not isinstance(observation, dict):
+        return 0
+    return sum(
+        observation.get(name, {}).get("visible") is True
+        for name in ("lane", "stop_line", "crosswalk")
+    )
+
+
 def evaluate_acceptance(evidence: dict, *, clearance_margin_m: float) -> dict:
     if not math.isfinite(clearance_margin_m) or clearance_margin_m < 0.0:
         raise ValueError("clearance margin must be finite and nonnegative")

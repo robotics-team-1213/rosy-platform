@@ -40,6 +40,7 @@ from pinky_acceptance_policy import (  # noqa: E402
     evaluate_acceptance,
     map_fidelity_metrics,
     reachable_map_metrics,
+    road_observation_score,
     trajectory_clearance,
 )
 
@@ -102,7 +103,7 @@ class PinkyAcceptance(Node):
         self.command_seen = False
         self.motion_seen = False
         self.last_nonzero_wall = self.started_wall
-        self.publishers = []
+        self.cmd_vel_publisher_names = []
 
         latched = QoSProfile(
             depth=1,
@@ -188,13 +189,9 @@ class PinkyAcceptance(Node):
         self.road["crosswalk_visible"] |= (
             value.get("crosswalk", {}).get("visible") is True
         )
-        score = sum((
-            self.road["lane_visible"],
-            self.road["stop_line_visible"],
-            self.road["crosswalk_visible"],
-        ))
+        score = road_observation_score(value)
         previous = self.road.get("best_score", -1)
-        if score >= previous:
+        if score > previous:
             self.road["best"] = value
             self.road["best_score"] = score
 
@@ -226,7 +223,7 @@ class PinkyAcceptance(Node):
     def tick(self) -> None:
         if self.finished:
             return
-        self.publishers = self._publisher_names()
+        self.cmd_vel_publisher_names = self._publisher_names()
         now = time.monotonic()
         terminal_nav = (
             self.navigation is not None
@@ -314,7 +311,7 @@ class PinkyAcceptance(Node):
             "nav2_passed": bool(
                 self.navigation and self.navigation.get("passed") is True
             ),
-            "cmd_vel_publishers": self.publishers,
+            "cmd_vel_publishers": self.cmd_vel_publisher_names,
             "final_zero_stable": final_zero,
         }
         verdict = evaluate_acceptance(
@@ -343,7 +340,7 @@ class PinkyAcceptance(Node):
             "navigation": self.navigation,
             "command": {
                 "final": list(self.command),
-                "publishers": self.publishers,
+                "publishers": self.cmd_vel_publisher_names,
                 "final_zero_stable": final_zero,
             },
             **verdict,
