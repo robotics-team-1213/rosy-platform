@@ -11,7 +11,11 @@ User=rosy-core
 Group=rosy-core
 EnvironmentFile=/etc/rosy/runtime.env
 WorkingDirectory=/opt/rosy/current
-ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 run core core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+# Exec the core entry script itself, not `ros2 run`: the wrapper turns a signal death of
+# the node into exit status 256-N (241/254), which systemd counts as failure. Run
+# directly, a SIGINT/SIGTERM that lands before core installs its handlers is a clean
+# signal exit for systemd. Path follows the --merge-install payload layout.
+ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /opt/rosy/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
 ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py
 Restart=on-failure
 RestartSec=2

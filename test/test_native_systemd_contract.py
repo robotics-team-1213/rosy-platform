@@ -33,11 +33,33 @@ def test_core_runs_as_a_device_free_hardened_service():
         "DevicePolicy=closed", "PrivateDevices=true",
         "NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",
         "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py",
-        "ros2 run core core", "Restart=on-failure",
+        "exec /opt/rosy/current/install/lib/core/core --ros-args", "Restart=on-failure",
+        "KillSignal=SIGINT",
     ):
         assert directive in unit
     assert "DeviceAllow=" not in unit
     assert "docker" not in unit.lower()
+
+
+def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
+    """A stop signal before core.main installs its handlers kills the interpreter.
+
+    Under `ros2 run` that death came back as exit 241 (SIGTERM) / 254 (SIGINT) -> unit
+    `failed`, and a restart 2 s later when the signal came from outside systemctl. With the
+    entry script as the main process systemd sees SIGINT/SIGTERM, which it treats as a
+    clean exit, so no SuccessExitStatus remap is needed (and none may hide 241/254).
+    """
+    unit = _read("rosy-core.service")
+    exec_start = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+
+    assert "ros2 run" not in exec_start
+    assert "SuccessExitStatus" not in unit
+    # the hard-coded entry-script path only exists in a --merge-install payload
+    payload = (ROOT / "deploy" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
+    assert "--merge-install" in payload
+    assert '--install-base "$INSTALL_ROOT"' in payload
+    setup_cfg = (ROOT / "src" / "core" / "core" / "setup.cfg").read_text(encoding="utf-8")
+    assert "install_scripts=$base/lib/core" in setup_cfg
 
 
 def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():

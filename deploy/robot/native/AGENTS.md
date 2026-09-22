@@ -13,6 +13,8 @@ Jazzy. This directory is copied into every offline ROSY release payload.
 - `rosy-runtime.target` starts CORE only. Hardware services require explicit
   commissioning and must never be added to the default target.
 - `rosy-core.service` has no `DeviceAllow`; keep `PrivateDevices=true`.
+- `rosy-core.service` execs the core entry script (`install/lib/core/core`), not
+  `ros2 run`, so systemd sees stop signals directly; do not add `SuccessExitStatus`.
 - I/O/navigation share the `rosy-io` account and are mutually exclusive.
 - Every device node must be named by an explicit `DeviceAllow` entry.
 - Navigation requires both hardware and navigation approval markers.
