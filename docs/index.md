@@ -121,8 +121,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · docs(adr): D-169 제품 장치 표면 고정 · D-170 PRT-004 유예
 - 2026-09-22 · uncommitted · merge(core): land the audit-log port after the event-catalogue port — API reference v1.14
 - 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
 - 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로
 - 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
-- 2026-09-22 · uncommitted · docs(api): §8 이벤트 카탈로그를 실제 발행과 맞춘다 (v1.13 Corrective + Additive)

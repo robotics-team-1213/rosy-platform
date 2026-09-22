@@ -31,4 +31,5 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · core_features(fleet_agent): 재접속 backoff 상한 30s (T5)
 - 2026-09-22 · uncommitted · docs(harness): register core_features under D-168
