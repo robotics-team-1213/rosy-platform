@@ -1,10 +1,3 @@
-## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-
-- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
-- 증거: D-161, D-164
-- gate 변화: 없음
-
-
 # description logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
@@ -38,3 +31,15 @@
 - gate 변화: ROS-SIM HOLD→GO(단일 로봇 exact-map collision/odom 범위). ARTIFACT/DEVICE/FIELD는 변동 없음.
 - 결정: 시뮬레이션 정답 odom과 바퀴 적분 odom을 한 토픽에 경쟁시키지 않는다.
 - 교훈: 구형 mesh collision과 과도한 등방 마찰은 로드 성공 여부뿐 아니라 좁은 공간 회전과 SLAM 궤적까지 왜곡한다.
+
+## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
+
+- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
+- 증거: D-161, D-164
+- gate 변화: 없음
+
+
+# description logs
+
+추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
+2026-09-15 이전 이력은 `git log -- src/description`를 본다.

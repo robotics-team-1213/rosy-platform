@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-20 · uncommitted · feat(imu): publish raw calibration and health evidence
 - 2026-09-16 · uncommitted · docs(harness): back imu source with its package contract
 - 2026-09-15 · uncommitted · docs(harness): start the imu_bno055 harness record

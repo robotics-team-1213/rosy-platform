@@ -1,10 +1,3 @@
-## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-
-- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
-- 증거: D-161, D-164
-- gate 변화: 없음
-
-
 # emotion logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
@@ -77,3 +70,15 @@
 - 증거: `test_info_screen.py` 19 passed; normal/HITL 이미지 차이와 E-STOP 우선순위를 픽셀 비교로 검증했다.
 - gate 변화: SOURCE/LOCAL GO 유지. 실제 LCD DEVICE 증거는 PARKED다.
 - 결정: D-999.
+
+## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
+
+- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
+- 증거: D-161, D-164
+- gate 변화: 없음
+
+
+# emotion logs
+
+추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
+2026-09-15 이전 이력은 `git log -- src/emotion`를 본다.

@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-21 · uncommitted · fix(sim): use stable primitive drive collisions
 - 2026-09-16 · uncommitted · docs(harness): stop counting the meshes dockerignore check as source evidence
 - 2026-09-16 · uncommitted · docs(harness): hold unrendered description in ROS-SIM

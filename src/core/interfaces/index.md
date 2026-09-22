@@ -26,5 +26,6 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-16 · uncommitted · docs(harness): park interfaces field gate and point at the CI build
 - 2026-09-15 · uncommitted · docs(harness): start the interfaces harness record

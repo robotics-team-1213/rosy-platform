@@ -84,6 +84,7 @@
 | D-164 | Pinky Pro 제품 산출물은 ISO가 아니라 서명된 Raspberry Pi 디스크 이미지다 |
 | D-165 | Pinky Pro 네이티브 ROS 패키지의 하드웨어 의존성도 이미지 입력으로 고정한다 |
 | D-166 | 과속 반응은 기록 전용이며, 자동 감속은 로봇 계약 확인과 판정 검증 후에만 상향한다 |
+| D-167 | 미들웨어 목표는 평가표로 측정한다 — 8개 판정 축과 기준선 |
 
 ## 계획·결과 문서
 
@@ -118,8 +119,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · docs(harness): move the prepended D-164 entry to file end — order gate restored (8 logs)
+- 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
+- 2026-09-22 · uncommitted · docs(adr): 미들웨어 목표를 8축 평가표로 고정 (D-167)
 - 2026-09-22 · uncommitted · docs(plans): D-166 상향 조건 ① 확인 — 로봇 계약에 공식 자율 감속 경로 없음
 - 2026-09-22 · uncommitted · docs(plans): 감사 착지 — v2 §3, AC-23 수치화·AC-24~26 승격, B0 시트 3항목
-- 2026-09-22 · uncommitted · docs(adr): 과속 반응 기록 전용 결정 (D-166)
-- 2026-09-22 · uncommitted · docs(image): pin Pinky Pro hardware build inputs (D-165)
-- 2026-09-22 · uncommitted · docs(image): choose a flashable Pinky Pro disk image (D-164)

@@ -1,10 +1,3 @@
-## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-
-- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
-- 증거: D-161, D-164
-- gate 변화: 없음
-
-
 # sensor_adc logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
@@ -23,3 +16,15 @@
 - gate 변화: SOURCE GO→HOLD, ARTIFACT N/A→HOLD, DEVICE N/A→PARKED, FIELD N/A→PARKED
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
+
+- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
+- 증거: D-161, D-164
+- gate 변화: 없음
+
+
+# sensor_adc logs
+
+추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
+2026-09-15 이전 이력은 `git log -- src/sensor_adc`를 본다.

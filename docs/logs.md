@@ -1,10 +1,3 @@
-## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-
-- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
-- 증거: D-161, D-164
-- gate 변화: 없음
-
-
 # docs logs
 
 추가만 한다. 형식: [module harness 설계](plans/2026-09-15-module-harness-design.md) §4.2.
@@ -1375,3 +1368,54 @@
   v1 기록 전용(D-166)은 불변이고 AC-25(±10%)는 그대로 진행 대기다.
 - 결정: 새 ADR 없음 — 이것은 D-166 조건의 확인 결과이지 새 결정이 아니다. 일시
   상한 경로를 계약에 신설하는 것이 결정되면 그때 ADR(다음 번호)로 남긴다.
+
+## 2026-09-22 · uncommitted · docs(adr): 미들웨어 목표를 8축 평가표로 고정 (D-167)
+
+- 변경: 신규 `docs/adr/D-167-middleware-goal-scorecard.md` — 목표 진술 + G-1~G-8
+  판정 축 표(축/판정 질문/측정 수단/기준선 2026-09-22/판정), 판정·승격 규칙,
+  재평가 트리거. `docs/reference/ROSY ADR Log.md`에 D-167 색인 행 추가,
+  `docs/progress.md` adrs 목록 갱신, `docs/reference/AGENTS.md` 색인 범위 D-167로 표기.
+- 증거: 기준선은 기존 실측 재인용 — `docs/validation/ros-sim-core-2026-09-22`
+  (부트 PASS, `cmdvel-info.txt` Publisher count: 1), `test/test_runtime_slices.py`
+  (FORBIDDEN 가드), `test/test_module_separation.py` (D-155),
+  `src/core/core/test/test_v1_import_boundary.py`. 새 확인: G-6 근거로
+  `core_features/safety/manager.py`에 `pinky_calmap227` 파티션 리터럴 잔존.
+- gate 변화: 없음 (문서 전용). D-167 판정 — G-1·G-8 GO(LOCAL), G-2·G-3 GO(ROS-SIM),
+  G-4·G-5 GO(SOURCE/ARTIFACT·DEVICE HOLD), G-6 HOLD(안전 코드의 벤더명 잔존),
+  G-7 HOLD(fleet ROS-SIM blocker D-87) → 8축 전부 GO 아님 = 목표 미달,
+  DEVICE 증거 0건이라 실기 판정 전무.
+- 결정: D-167 Proposed. 첫 평가 회차(`docs/validation/middleware-goal-<date>/`)
+  8축 실측 후 Accepted로 뒤집기.
+- 교훈: 없음
+
+## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
+
+- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
+- 증거: D-161, D-164
+- gate 변화: 없음
+
+
+# docs logs
+
+추가만 한다. 형식: [module harness 설계](plans/2026-09-15-module-harness-design.md) §4.2.
+2026-09-15 이전 이력은 `docs/reference/ROSY ADR Log.md`, `docs/plans/`의 날짜별 문서, `git log -- docs`를 본다.
+
+## 2026-09-22 · uncommitted · docs(harness): move the prepended D-164 entry to file end — order gate restored (8 logs)
+
+- 변경: 61b6e51가 `update_logs.py`로 8개 logs.md(docs, emotion, interfaces,
+  imu_bno055, lamp_control, led, sensor_adc, description)의 **H1 제목 앞에**
+  삽입한 `2026-09-22 · chore: update ARTIFACT blocker (D-164)` 항목을 각 파일
+  **끝으로 이동**하고 상단에 H1 제목·서문 복원. 항목 본문은 원문 그대로
+  (블록 단위 이동, 무변경).
+- 증거: 이동 전 lint 155 errors 전부 이 삽입 때문(`61b6e51~1`에서 로그 오류
+  0개, HEAD에서 155개); 이동 후 `rosy_harness.py lint` **0 error(s),
+  9 warning(uncommitted last_verified)**, `pytest test/test_network_topology_contracts.py
+  test/test_harness_contracts.py -q` **70 passed**. 이동 블록은 `is_append_only(HEAD,
+  신규)` 시뮬레이션으로 8/8 통과 후 적용.
+- gate 변화: 없음 (docs·emotion 등 게이트 상태 불변). 다만 lint/계약 시험이
+  155 red → 0 red로 복구.
+- 결정: append-only 게이트는 항목 단위 보존이라 **위치 이동은 허용, 본문 개조는
+  금지**임을 재확인. D-164 항목은 파일 끝에 남고, 그 안의 H1/서문은 상단에도
+  복제되어 있어 본문 블록은 커밋본과 바이트 동일하다.
+- 교훈: 로그 스크립트는 새 항목을 파일 끝에 append해야 한다. prepend하면 이후
+  모든 과거 항목이 "out of order"로 한꺼번에 빨갛게 된다(155 errors 유발).

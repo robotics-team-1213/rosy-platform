@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-21 · uncommitted · feat(emotion): render operator-assistance request on the robot face
 - 2026-09-21 · uncommitted · test(emotion): face captures are reproducible from the repo (D-153 session 6)
 - 2026-09-21 · uncommitted · fix(emotion): missing battery is '--', not a fake 0% alarm (D-153 session 4, F-04)
 - 2026-09-21 · uncommitted · fix(emotion): flatten the package to complete the regroup — F-01 closed (D-153 session 2)
-- 2026-09-21 · uncommitted · docs(uiux): emotion G1 fails on the current tree — regroup import mismatch (D-153 session 1, F-01)
