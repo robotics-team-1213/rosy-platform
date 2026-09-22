@@ -1,0 +1,10 @@
+# review mode=startup signal=SIGTERM count=6; startup window=1.5-8s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: a545d55 (fix/core-sigterm-exit, review follow-ups)  started 2026-09-23T01:13:32+09:00  loadavg: 19.79 15.47 14.91 29/1256 68764
+run  1: node 68816 sig@+2.85s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=1 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  2: node 68921 sig@+5.13s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  3: node 69018 sig@+6.03s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  4: node 69130 sig@+7.0s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  5: node 69271 sig@+3.21s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  6: node 69395 sig@+6.6s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+# leftover core processes: 0  finished 2026-09-23T01:14:22+09:00
+# exit-code tally:       6 exit=0 

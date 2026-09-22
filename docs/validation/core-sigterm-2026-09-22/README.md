@@ -109,3 +109,24 @@
   동시 전달)는 DEVICE 에서 따로 확인해야 한다.
 - 호스트 시험: `src/core/core/test/test_core_main_shutdown.py` — 판정 함수, 가짜 rclpy 로 main 의
   종료 경합·기동 창·진짜 오류 전파·훅 순서, 처리기가 예외를 던지지 않음, rclpy import 전 설치.
+
+## 리뷰 반영 재확인 (`a545d55`, main `e8b2976` 병합 후)
+
+변경: 두 번째 SIGINT/SIGTERM 은 기본 동작을 되돌리고 격상(SIGINT → `KeyboardInterrupt`,
+SIGTERM → 같은 신호로 자기 종료), 종료로 삼킨 예외는 stderr 에
+`core: suppressed during shutdown: ...` 로 남김, "core 프로세스에서 rclpy context 를 내리는 것은
+main() 뿐" 불변식 주석 + src/core 전수 grep 시험. teardown 명시화(`executor.shutdown()`/
+`destroy_node()`)는 executor 가 `node.run()` 지역이라 main 의 finally 에서 닿지 않고, 1/105 사건을
+검증할 수단이 없어 하지 않았다 — "남은 것" 2 그대로.
+
+| 조건 | 결과 | 근거 |
+|---|---|---|
+| steady SIGTERM ×10 | **10×0**, 모두 `system.shutdown`, 8080 해제 | `review-steady-TERM.txt` |
+| startup 1.5–8 s SIGTERM ×6 | **6×0** (`__del__` 경고 1건, 종료 코드 무관) | `review-startup-TERM-1.5-8.txt` |
+| 이중 SIGINT, 느린 종료 ×3 | 첫 신호 뒤 종료 훅 안에서 살아 있음 → 두 번째 신호 뒤 즉시 종료, **exit 254**(`[ros2run]: Interrupt`), 첫 신호→종료 1.7–2.0 s | `review-double-signal.txt` |
+| 이중 SIGTERM, 느린 종료 ×3 | 같은 형태, **exit 241**(`[ros2run]: Terminated`), 1.1 s | 같은 파일 |
+
+느린 종료는 WSL 작업 공간의 `node.py` 에만 `shutdown()` 끝 20 s sleep 을 넣어 흉내 냈고 실행 뒤
+원복했다(`evidence/double-signal.sh`, 패치 잔존 0). 이중 신호 실행에서도 마지막 감사 이벤트는
+`system.shutdown`(sleep 전에 기록됨). 격상 종료 코드(241/254)는 의도한 것이다 — 멈춘 종료를
+운영자가 끊은 경우이므로 실패로 남는 것이 맞다.
