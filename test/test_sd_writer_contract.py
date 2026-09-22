@@ -77,9 +77,9 @@ def writer_case(tmp_path: Path):
         encoding="utf-8",
     )
     marker = tmp_path / "writer-called.txt"
-    fake_writer = tmp_path / "fake-writer.ps1"
+    fake_writer = tmp_path / "fake-writer.cmd"
     fake_writer.write_text(
-        f"Set-Content -LiteralPath '{marker}' -Value called\nexit 0\n",
+        f'@echo off\n> "{marker}" echo called\nexit /b 0\n',
         encoding="utf-8",
     )
     local_app_data = tmp_path / "local-app-data"
@@ -338,7 +338,10 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "--disable-verify" not in text
     assert "cmd /c" not in text.lower()
     assert '"ERASE DISK $DiskNumber $DeviceName"' in text
-    assert "& $RpiImager" in text
+    assert "Start-Process" in text
+    assert "-Wait" in text
+    assert "-PassThru" in text
+    assert "& $RpiImager" not in text
     assert "create-provision-bundle.py" in text
     assert "BootMountPath" in text
     assert "GetNetworkCredential().Password" in text
