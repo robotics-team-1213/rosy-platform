@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · deploy(image+native): T14 — wait-core-ready 포트 파라미터화 + chrony 이미지 계약
 - 2026-09-22 · uncommitted · deploy(udev): /dev/rosy-motor 별칭을 실제로 만드는 규칙
 - 2026-09-22 · uncommitted · fix(image): scope target rosdep to the product closure
 - 2026-09-22 · uncommitted · fix(image): materialize locked Ubuntu apt suites
 - 2026-09-22 · uncommitted · fix(image): create the boot mountpoint inside rootfs
-- 2026-09-22 · uncommitted · fix(image): probe Pi image filesystems after udev settles

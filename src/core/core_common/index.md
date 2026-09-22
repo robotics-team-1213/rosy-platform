@@ -28,5 +28,6 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · core_common+api_web(protocol): 버전 표기 3원 정렬 + API Ref v1.16 (T10)
 - 2026-09-22 · uncommitted · core_common+fleet_agent(identity): hello 신원 실값 공급 (T6)
 - 2026-09-22 · uncommitted · docs(harness): register core_common under D-168
