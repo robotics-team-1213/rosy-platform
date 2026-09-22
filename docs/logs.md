@@ -1548,3 +1548,10 @@
 - gate 변화: 없음(회귀 복구).
 - 결정: 없음(D-172 후속 정리 중 발견).
 - 교훈: Windows 편집기의 BOM 하나가 무관한 AST 가드 15건을 한꺼번에 깬다. 원인이 보이도록 이름 있는 가드로 따로 잡는다.
+
+## 2026-09-23 · 3ec8672 · docs(plans): T15 — 통신 정합 계획 전 페이즈 마감, 최종 회귀 PASS
+- 변경: 없음(검증 기록만).
+- 증거: `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4350 passed, 82 skipped, 0 failed** in 1746s (2026-09-23 Windows, 커밋 3ec8672 트리 — T1~T14 + D-169/D-170 전체 반영). 직전 실행의 19 failed 는 본 세션과 동시 진행 중이던 파일 편집과의 경합 아티팩트로, 동일 트리에서 모두 소멸 확인.
+- gate 변화: 없음 — 코드·문서 모듈 게이트는 각 progress.md 절차대로. 남은 미결: ARM64/DEVICE 게이트(sensor_adc 빌드·실측, udev 심링크 readback, chrony 동기화 품질)와 G1 후속 ADR 조건(하드웨어 프로필 D-84 + 실기 수요), 중앙 Fleet 착수 시 D-170 확장.
+- 결정: 없음.
+- 교훈: 없음.
