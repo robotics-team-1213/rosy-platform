@@ -40,7 +40,6 @@ EDGE_ADAPTERS = {
 #: Ratchet: library modules that build ROS messages themselves (D-171 track 1).
 KNOWN_ROS_LEAKS = {
     "control.wander.navigator": "Twist/String/Path, TF lookups",
-    "control.calibration_rotation": "one Twist",
     "control.wander.motion": "Twist, rclpy Parameter",
     "control.wander.judge": "Twist",
     "control.wander.senses": "Bool/Float32/Odometry/UInt16MultiArray",
@@ -59,7 +58,8 @@ KNOWN_ROS_LEAKS = {
 
 def _modules():
     for path in sorted(LIB.rglob("*.py")):
-        if any(p.startswith(".") or p == "__pycache__" for p in path.parts):
+        # Relative parts only: the checkout itself may live under a dot folder (.worktrees/).
+        if any(p.startswith(".") or p == "__pycache__" for p in path.relative_to(LIB).parts):
             continue
         rel = path.relative_to(PKG).with_suffix("")
         parts = list(rel.parts)
