@@ -185,3 +185,10 @@
 - gate 변화: 없음. 배포 폐쇄의 control 실행 파일은 4개(ir_adc·camera_detect·line_observer·road_observer)이며 전부 증거 생산자다.
 - 결정: D-149 정정(결정 불변), D-168 control 분리 설계 0단계.
 - 교훈: 승격 근거로 쓴 "실행 파일 목록"을 사람이 적으면 한 개가 빠진다. 폐쇄는 include 사슬에서 도출해야 한다.
+
+## 2026-09-22 · uncommitted · refactor(control): split web_node into ROS wiring and ROS-free web modules
+- 변경: `web_node.py`(1,091줄)를 노드 배선(558)과 `web_state.py`(STATE·키·한계·/state.json 신선도, 82), `web_http.py`(라우팅·검증·중계 게이트, 304), `web_render.py`(지도 PNG·카메라 JPEG, 78), `web_map_control.py`(slam_toolbox 조작, 147)로 나눴다. 발행만 `WebNode.publish_text`/`publish_teleop`로 위임했고 나머지 코드는 원본과 동일하다(diff 확인). `test_web_http.py`가 실제 HTTP 요청으로 게이트·클램프·경계를 검사한다. 소스를 AST로 떼어 실행하던 `test_calibration_receiver.py`는 직접 import로 바꿨다.
+- 증거: `python -m pytest src/apps/control/test -q` 1284 passed, 28 skipped (2026-09-22 Windows). `test/test_module_structure.py` 등 구조 가드 27 passed — P6가 600줄 아래로 내려간 web_node 판정 삭제를 강제했다.
+- gate 변화: 없음. ROS-SIM 스모크(WSL에서 web_node 기동·요청·토픽 확인)는 WSL 서비스 오류(E_UNEXPECTED)로 미실행.
+- 결정: D-168 P6 `split` 판정 이행, control 분리 설계 1단계 중 web_node.
+- 교훈: `/state.json` 신선도 판정은 이제 요청마다 시각을 한 번만 읽는다. 원본은 판정마다 `time.monotonic()`을 새로 불렀다(마이크로초 차이, 한 응답 안의 판정이 같은 시각 기준이 됨).

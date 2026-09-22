@@ -68,10 +68,6 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "apps/control/control/web_node.py": (
-        1091,
-        f"split: HTTP handler, PNG/camera rendering and the ROS node are three roles (C1); {CONTROL_SPLIT}",
-    ),
     "apps/control/control/startup_calibration_node.py": (
         954,
         f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",

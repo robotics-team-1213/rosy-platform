@@ -1,10 +1,11 @@
 # control 패키지 분리 설계
 
-**상태:** Proposed (2026-09-22). 설계만 담고 실행은 하지 않았다. 실행은 단계별 커밋으로 하며,
-각 단계는 host pytest와 D-168 구조 시험이 초록인 상태로 끝난다.
+**상태:** Proposed (2026-09-22). 0단계와 1단계의 `web_node.py`까지 실행했다(§6). 실행은 단계별
+커밋으로 하며, 각 단계는 host pytest와 D-168 구조 시험이 초록인 상태로 끝난다.
 **근거 기준:** D-168 P1(패키지 인정)·P6(줄 수 예산), `2026-09-06-module-split-criteria.md` C1/X6.
 **소유:** `test/test_module_structure.py`의 `SIZE_VERDICTS`에서 `control`,
-`web_node.py`, `startup_calibration_node.py`, `calib_node.py`가 이 문서를 가리킨다.
+`startup_calibration_node.py`, `calib_node.py`가 이 문서를 가리킨다(`web_node.py`는 600줄 아래로
+내려가 판정이 삭제됐다).
 
 ## 1. 왜 분리하는가 — P1 판정
 
@@ -67,7 +68,7 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
 
 | 파일 | 현재 | 뽑을 것 |
 |---|---|---|
-| `web_node.py` (1,091) | `WebNode` 30메서드 430줄, 중첩 HTTP `_handler` 243줄, `MapControl`, PNG/카메라 렌더 | `web_render.py`(렌더, 순수 함수), `web_http.py`(요청 라우팅·파싱). 노드에는 ROS 구독과 배선만 남긴다 |
+| `web_node.py` (1,091 → 558, **완료 2026-09-22**) | `WebNode` 30메서드 430줄, 중첩 HTTP `_handler` 243줄, `MapControl`, PNG/카메라 렌더 | `web_render.py`(렌더, 순수 함수), `web_http.py`(요청 라우팅·파싱). 노드에는 ROS 구독과 배선만 남긴다 |
 | `startup_calibration_node.py` (954) | `StartupCalibrationNode` 36메서드 890줄 | 교정 상태기계(단계 전이·판정 임계)를 `calibration_sequence.py`로. 노드는 타이머와 토픽 I/O만 |
 | `calib_node.py` (640) | `CalibNode` 28메서드 516줄 + 순수 함수 7개 | 모듈 수준 순수 함수(`approach_heading`, `snap_lidar_yaw` 등)를 위와 같은 교정 모듈로 합친다 |
 
@@ -103,7 +104,7 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
    따라 배포 실행 파일을 도출해 네 개와 집합 동일성으로 고정하고, `rosy.sensor_provider:control`
    등록자가 정확히 1개임을 검사한다(변이 증명 3건). 3단계에서 진입점을 옮길 때 이 시험의
    기대 경로(`apps/control/setup.py`)를 같은 커밋에서 바꾼다.
-1. **파일 단위 분리(§4).** 패키지 경계를 바꾸지 않으므로 먼저 해도 되며, 이후 이동할 모듈 크기가
+1. **파일 단위 분리(§4)** — `web_node.py` 완료(`web_state`/`web_http`/`web_render`/`web_map_control`, `test_web_http.py`). 교정 파일 2개는 남음. 패키지 경계를 바꾸지 않으므로 먼저 해도 되며, 이후 이동할 모듈 크기가
    줄어든다. `SIZE_VERDICTS`의 해당 항목은 파일이 600줄 아래로 내려가면 삭제한다(시험이 삭제를
    강제한다).
 2. **`control_sensing` 신설** — 착수 전 X6 재확인. `sensing`·`tf_buffer`를 옮기고 `control/sensing/__init__`에
