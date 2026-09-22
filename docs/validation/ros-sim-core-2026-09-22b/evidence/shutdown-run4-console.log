@@ -1,0 +1,8 @@
+[WARN] [1790088215.280668545] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1790088215.280752568] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1790088216.193904176] [core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+[INFO] [1790088216.195235916] [core]: core up: robot_id=rosy_01 model=Pinky Pro
+[INFO] [1790088218.203038519] [core]: api server on 0.0.0.0:8080
+[INFO] [1790088224.488233880] [core]: core shutting down
+Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+The following exception was never retrieved: Failed to publish: publisher's context is invalid, at ./src/rcl/publisher.c:423
