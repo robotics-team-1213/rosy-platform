@@ -94,7 +94,7 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
     assert "LaneEdgeFollower" in source
     assert "mode == 'edge_left'" in source
     assert "self._edge_follower.update(" in source
-    assert "mode in ('lane', 'edge_left')" in source   # odom subscription
+    assert "mode in ('lane', 'edge_left', 'centre')" in source   # odom subscription
     # 'line' and 'lane' branches are untouched and the default stays 'line'.
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
@@ -121,4 +121,12 @@ def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
     """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._odom_pose, frame, ground" not in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 2
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 3
+
+
+def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "LaneBoundaryTracker" in source
+    assert "mode in ('lane', 'edge_left', 'centre')" in source
+    assert "self._centre_tracker.update(" in source
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 3

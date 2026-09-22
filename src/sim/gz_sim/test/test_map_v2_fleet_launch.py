@@ -10,8 +10,8 @@ LAUNCH_SIM = Path(__file__).resolve().parents[1] / "launch" / "launch_sim.launch
 def test_launch_uses_the_catalogued_world_and_spawn():
     source = LAUNCH.read_text(encoding="utf-8")
     assert '"map_v2_fleet", "worlds", "map_v2_fleet.world"' in source
-    assert '"spawn_x": "-1.26955"' in source
-    assert '"spawn_y": "0.24255"' in source
+    assert 'DeclareLaunchArgument("spawn_x", default_value="-1.26955")' in source
+    assert 'DeclareLaunchArgument("spawn_y", default_value="0.24255")' in source
     assert '"bridge_image": "true"' in source
 
 
@@ -22,7 +22,7 @@ def test_line_observer_threshold_sits_between_floor_and_far_paint():
     0.083 m), and run 193728 showed paint dimming to 214 at 0.44 m, so at 220
     the left line was 0.14 m long and never seeded. 180 sits midway."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "edge_left"' in source
+    assert 'DeclareLaunchArgument("camera_lane_mode", default_value="edge_left")' in source
     assert '"camera_bright_threshold": 180' in source
 
 
@@ -73,7 +73,7 @@ def test_line_observer_runs_two_line_lane_mode_on_declared_gazebo_ground():
     """The 260919 track bounds each lane with two lines; single-line centroid
     latched onto one boundary in Gazebo. Lane mode needs the metric ground."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "edge_left"' in source
+    assert 'DeclareLaunchArgument("camera_lane_mode", default_value="edge_left")' in source
     assert '"camera_ground_source": "GAZEBO"' in source
     assert '"allow_simulation_ground": True' in source
     assert '"gazebo_camera_height_m": 0.060194' in source
@@ -105,5 +105,11 @@ def test_lap_runs_left_edge_following():
     """Run 184434 stopped where both lines bend 65 deg: the lap holds the inner
     block's outline on the left instead of pairing lines row by row."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "edge_left"' in source
+    assert 'DeclareLaunchArgument("camera_lane_mode", default_value="edge_left")' in source
     assert '"lane_corner_turning": True' in source
+
+
+def test_launch_exposes_mode_and_spawn_for_the_junction_harness():
+    source = LAUNCH.read_text(encoding="utf-8")
+    for arg in ('"camera_lane_mode"', '"spawn_x"', '"spawn_y"', '"spawn_yaw"', '"debug_overlay"'):
+        assert f"DeclareLaunchArgument({arg}" in source

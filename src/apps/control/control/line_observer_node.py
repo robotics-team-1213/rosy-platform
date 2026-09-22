@@ -27,6 +27,7 @@ from .sensing.lane import (
     line_observation_payload,
 )
 from .sensing.lane_bev import LaneEdgeFollower, pose_if_fresh
+from .sensing.lane_boundaries import LaneBoundaryTracker
 
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.
@@ -51,6 +52,7 @@ class LineObserverNode(Node):
         # boundary lines; 'edge_left' holds the lane's left boundary a
         # half-width off in bird's-eye view (bends, arcs). Both lane modes need
         # a metric ground plane, edge_left also odometry (fail-closed without).
+        # 'centre' follows the centre line between both boundaries (fallback ladder).
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
@@ -76,6 +78,8 @@ class LineObserverNode(Node):
         self._edge_follower = LaneEdgeFollower(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
+        self._centre_tracker = LaneBoundaryTracker(
+            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         if bool(self.get_parameter('ir_calibration_enabled').value):
             self._ir_calibration = IRLineCalibration(
                 black=tuple(self.get_parameter('ir_black').value),
@@ -94,7 +98,7 @@ class LineObserverNode(Node):
         self.create_subscription(
             String, 'camera/controls', self._on_camera_controls, controls_qos)
         mode = str(self.get_parameter('camera_lane_mode').value)
-        if mode in ('lane', 'edge_left'):
+        if mode in ('lane', 'edge_left', 'centre'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if self._ir_calibration is None:
@@ -151,6 +155,7 @@ class LineObserverNode(Node):
 
     def _on_camera(self, msg: Image) -> None:
         observation = None
+        frame = None
         if (bool(self.get_parameter(
                 'require_camera_controls_stable').value)
                 and not self._camera_controls_stable):
@@ -179,7 +184,7 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                     min_pixels=int(self.get_parameter('camera_min_pixels').value),
                 )
-            elif mode in ('lane', 'edge_left'):
+            elif mode in ('lane', 'edge_left', 'centre'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
@@ -189,7 +194,14 @@ class LineObserverNode(Node):
                         self.get_parameter('camera_roi_bottom_fraction').value),
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
-                if mode == 'edge_left':
+                if mode == 'centre':
+                    image_stamp = (float(msg.header.stamp.sec)
+                                   + float(msg.header.stamp.nanosec) * 1e-9)
+                    observation = self._centre_tracker.update(
+                        image_stamp,
+                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        frame, ground, **lane_kwargs)
+                elif mode == 'edge_left':
                     image_stamp = (float(msg.header.stamp.sec)
                                    + float(msg.header.stamp.nanosec) * 1e-9)
                     observation = self._edge_follower.update(

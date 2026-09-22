@@ -38,6 +38,9 @@
     # opts in with the camera's measured offset ahead of base_link.
     lane_corner_turning: false
     camera_x_offset_m: 0.0
+    debug_overlay: false            # line/debug/compressed (observation only)
+    debug_overlay_max_hz: 5.0
+    debug_lane_graph: ""            # optional lane_graph.yaml for the map panel
 
 /**/road_observer_node:
   ros__parameters:

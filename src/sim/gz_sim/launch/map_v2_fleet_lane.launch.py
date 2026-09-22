@@ -10,6 +10,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogI
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -31,8 +32,8 @@ def generate_launch_description():
             "camera_width": LaunchConfiguration("camera_width"),
             "camera_height": LaunchConfiguration("camera_height"),
             "camera_update_rate": LaunchConfiguration("camera_update_rate"),
-            "spawn_x": "-1.26955",
-            "spawn_y": "0.24255",
+            "spawn_x": LaunchConfiguration("spawn_x"),
+            "spawn_y": LaunchConfiguration("spawn_y"),
             "spawn_yaw": LaunchConfiguration("spawn_yaw"),
             "gui": LaunchConfiguration("gazebo_gui"),
             # The world's model://control/map/map_v2_fleet/meshes/road_lines.stl
@@ -49,8 +50,12 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_width", default_value="320"),
         DeclareLaunchArgument("camera_height", default_value="180"),
         DeclareLaunchArgument("camera_update_rate", default_value="5"),
+        DeclareLaunchArgument("spawn_x", default_value="-1.26955"),
+        DeclareLaunchArgument("spawn_y", default_value="0.24255"),
         # -pi/2 faces ROS -y along the left lane (toward the crosswalk).
         DeclareLaunchArgument("spawn_yaw", default_value="-1.5708"),
+        DeclareLaunchArgument("camera_lane_mode", default_value="edge_left"),
+        DeclareLaunchArgument("debug_overlay", default_value="false"),
         DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
         simulation,
         Node(
@@ -70,7 +75,9 @@ def generate_launch_description():
                 # half-width off in bird's-eye view: row-wise pairing stopped
                 # at the 65 deg bends (run 184434). Declared Gazebo camera
                 # geometry (tilt 25 deg, 320x180).
-                "camera_lane_mode": "edge_left",
+                "camera_lane_mode": LaunchConfiguration("camera_lane_mode"),
+                "debug_overlay": ParameterValue(
+                    LaunchConfiguration("debug_overlay"), value_type=bool),
                 "camera_ground_source": "GAZEBO",
                 "allow_simulation_ground": True,
                 "gazebo_camera_height_m": 0.060194,
