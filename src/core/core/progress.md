@@ -13,8 +13,8 @@ gates:
     evidence: "1054 passed, 12 skipped (2026-09-22 Windows). D-162 scene context additive 수용(translate road_evidence, RoadEvidence 선택 필드, ros_bridge sensor snapshot) 포함 — D-137/D-151/D-152 회귀 없음"
     cmd: "PYTHONPATH=src/core:src python3 -m pytest src/core/test -q"
   ROS-SIM:
-    state: GO
-    evidence: "2026-09-22 WSL2 Jazzy 부트 스모크 + road/observation 회귀 프로브(유효 context payload·malformed JSON) — NameError 없음, /cmd_vel 단일 발행자, API 200, 정상 종료. docs/validation/ros-sim-core-2026-09-22/ (스냅샷 = commit 89c1d11 git archive)"
+    state: HOLD
+    blocker: "2026-09-22 SAF-002 워치독 알림 이식이 ros_bridge cmd_vel 경로(cmd_vel_cycle)를 바꿨다. 직전 부트 스모크(89c1d11)는 현재 트리 증거가 아니다 — 동일 절차 재실행 필요"
     cmd: "docs/validation/ros-sim-core-2026-09-22/README.md 절차 — colcon build --packages-up-to core && ros2 run core core + road/observation 유효/malformed 프로브"
   ARTIFACT:
     state: HOLD

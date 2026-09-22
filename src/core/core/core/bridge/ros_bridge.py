@@ -42,6 +42,7 @@ from core.bridge import (
     traffic_gate,
     translate,
 )
+from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.goal_tracker import GoalTracker
 from core.bridge.hitl import parse_hitl_request
 from core_features.maps import occupancy_map_id
@@ -380,15 +381,12 @@ class RosBridge:
             self._readiness.observe("motor_adapter", bool(msg.data), lease=True)
 
     def _publish_cmd_vel(self) -> None:
-        out = self._svc.command.select_output()
-        if self._readiness is not None and not self._readiness.is_ready():
-            # Keep the final publisher alive at 50 Hz, but never pass a stale
-            # Nav2/manual candidate through while the hardware graph is HOLD.
-            out = CoreTwist()
-        if out.linear != 0.0 or out.angular != 0.0:
-            # 절전 정책은 모터 경로에 개입하지 않는다. 명령이 나가는 것을
-            # 관측만 하고 센서·화면을 즉시 ACTIVE로 되돌린다 (안전 인터록).
-            self._svc.power.on_activity("cmd_vel")
+        # 순서(고르기 → HOLD 면 0 → 바퀴 → 절전 관측·SAF-002 알림)는
+        # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
+        cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
+                      self._readiness)
+
+    def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
         msg.linear.x = out.linear
         msg.angular.z = out.angular

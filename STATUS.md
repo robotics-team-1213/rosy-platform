@@ -5,7 +5,7 @@
 
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
-| [core](src/core/core/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [core](src/core/core/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | uncommitted (2026-09-22) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](src/apps/control/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | uncommitted (2026-09-22) | GO | GO | HOLD | PARKED | PARKED | PARKED |
@@ -32,6 +32,7 @@
 
 ## HOLD blockers
 
+- core ROS-SIM: 2026-09-22 SAF-002 워치독 알림 이식이 ros_bridge cmd_vel 경로(cmd_vel_cycle)를 바꿨다. 직전 부트 스모크(89c1d11)는 현재 트리 증거가 아니다 — 동일 절차 재실행 필요
 - core ARTIFACT: ARM64 개발 후보만 존재. 서명 manifest와 immutable digest 발행 전
 - core DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. G4 viewport·보정 상태기계 미실행
 - deploy ARTIFACT: Ubuntu 24.04.5 raspi base URL/SHA는 고정했으나 native ARM64 host 다운로드 검증, native Jazzy/ROSY payload 실행, 완성 이미지·SBOM·서명 전

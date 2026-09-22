@@ -233,7 +233,7 @@ class SwarmManager:
         self.nav.cancel(source="swarm", session=session)
         self._state.set_swarm(SwarmStatus())
         self._events.publish(
-            "swarm.aborted", source="swarm_manager",
+            "swarm.aborted", severity="warning", source="swarm_manager",
             data={"formation": formation, "reason": reason, "by": source,
                   "robots": [target] if target else []})
         return SwarmStatus()

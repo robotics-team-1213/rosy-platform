@@ -54,6 +54,8 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 #: 이 이벤트 중 하나가 어느 로봇에서든 오면 정책을 적용한다 (FOR-004).
+#: `nav.blocked` 는 현재 CORE 가 발행하지 않는다(API 참조 §8 "미구현") — 막힌 주행은
+#: NAV-006 `nav.stuck` 으로 온다. 구현되면 그대로 트리거가 되도록 남겨 둔다.
 TRIGGERS = frozenset({"nav.stuck", "nav.failed", "nav.blocked", "swarm.aborted", "safety.estop"})
 #: 구독 필터. `swarm.hold` 는 정보이고 트리거가 아니지만 로그에 남기기 위해 받는다.
 EVENT_TYPES = ("nav.*", "swarm.*", "safety.estop")
