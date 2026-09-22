@@ -119,8 +119,11 @@ class RosySensorADC : public rclcpp::Node
         {
             static constexpr uint8_t registers[CH_COUNT] = {0x88, 0xC8, 0x98, 0xD8, 0xF8};
             uint8_t data[2] = {0, };
+            // wiringPiI2CRawWrite 가 const 를 받는 시그니처와 아닌 시그니처가
+            // 공존한다 — 로컬 사본을 넘겨 어느 쪽에서도 컴파일되게 한다.
+            uint8_t reg = registers[channel];
 
-            const int written = wiringPiI2CRawWrite(fd_, &registers[channel], 1);
+            const int written = wiringPiI2CRawWrite(fd_, &reg, 1);
             if (written < 1) {
                 last_error_ = "ch" + std::to_string(channel) + ": write " + std::to_string(written);
                 return false;
