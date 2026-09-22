@@ -35,6 +35,19 @@ class RobotRegistry:
     def online_ids(self) -> list[str]:
         return sorted(r.robot_id for r in self._robots.values() if r.online)
 
+    def snapshot(self) -> dict:
+        """읽기 전용 전체 조회 — 서버가 private `_robots` 를 직접 건드리지
+        않는다. 모양은 hub `/registry` 응답 그대로다."""
+        return {
+            rid: {
+                "online": row.online,
+                "snapshot": (row.snapshot.model_dump(mode="json")
+                             if row.snapshot else None),
+                "events": [e.model_dump(mode="json") for e in row.events],
+            }
+            for rid, row in self._robots.items()
+        }
+
     def events_since(self, robot_id: str, since_seq: int) -> list[EventMessage]:
         row = self._robots.get(robot_id)
         if row is None:

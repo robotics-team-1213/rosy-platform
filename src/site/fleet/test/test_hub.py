@@ -73,6 +73,45 @@ def test_changed_hardware_serial_for_same_robot_is_identity_drift():
     assert drifted.payload["code"] == "IDENTITY_DRIFT"
 
 
+def _hub_client(hub_token=None):
+    from fastapi.testclient import TestClient
+
+    from fleet.hub.server import create_hub_app
+
+    hub = SiteHub([_ep()])
+    hub.handle(_hello())
+    return TestClient(create_hub_app(hub, hub_token=hub_token))
+
+
+def test_registry_is_open_when_no_token_is_configured():
+    response = _hub_client().get("/registry")
+    assert response.status_code == 200
+    assert response.json()["rosy_01"]["online"] is True
+
+
+def test_registry_requires_bearer_when_a_hub_token_is_set():
+    """이 조회는 등록 로봇 전원의 상태·이벤트를 내놓는다 — 토큰을 설정하면
+    잠기는 것이 기본 동작이어야 한다(통신 보고서 §5)."""
+    client = _hub_client(hub_token="hub-secret")
+    assert client.get("/registry").status_code == 401
+    denied = client.get("/registry", headers={"Authorization": "Bearer wrong"})
+    assert denied.status_code == 401
+    ok = client.get("/registry", headers={"Authorization": "Bearer hub-secret"})
+    assert ok.status_code == 200
+    assert ok.json()["rosy_01"]["online"] is True
+
+
+def test_registry_body_comes_from_the_public_registry_snapshot():
+    """서버는 registry 의 private dict 를 직접 열지 않는다."""
+    from pathlib import Path
+
+    import fleet.hub.server as hub_server
+
+    source = Path(hub_server.__file__).read_text(encoding="utf-8")
+    assert "registry._robots" not in source
+    assert "registry.snapshot()" in source
+
+
 def test_heartbeat_before_hello_is_rejected():
     hub = SiteHub([_ep()])
     snap = StateSnapshot(robot_id="rosy_01")
