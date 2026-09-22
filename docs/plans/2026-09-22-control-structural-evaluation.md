@@ -157,3 +157,20 @@ pytest가 import할 수 없다. 그 모듈 안의 판단은 09-06 C1의 정의 �
 | 비상정지 음성 | — | `failed` "Emergency stop engaged" (`validating_motion`에서 누름) |
 | 한 프로세스 모드 | `failed` 게이트 신선도 (sim 19.0 s) | `failed` 같은 메시지 (sim 28.5 s) |
 | `/cmd_vel` 발행자 | `safety_node` | `safety_node` |
+
+### 8.1 교정 묶음 (2026-09-23): `calibration_rotation`·`calibration_relocation`
+
+main `e8b2976` 대비 브랜치 `refactor/d171-track1`. 두 트리는 교정 파일 3개만 다르고 rig는 같다.
+
+| 검증 | main | 브랜치 |
+|---|---|---|
+| 분리 모드 | `ready` (sim 179.9 s) | `ready` (sim 179.8 s) |
+| 비상정지 음성 | — | `failed` "Emergency stop engaged" (`validating_motion`에서 누름) |
+| 한 프로세스 모드 4회 | 게이트 신선도 실패 3, 지도 TF 재획득 초과 1 | 게이트 신선도 실패 3, 지도 TF 재획득 초과 1 |
+
+한 프로세스 모드는 한 번 돌리면 실패 이유가 달라 보일 수 있다. 첫 비교에서 main은 게이트 신선도, 브랜치는
+지도 TF로 실패했다. 그래서 A/B 동등은 반복 실행의 분포로 판정한다.
+
+**한 프로세스 모드 원인 가설 두 개는 기각됐다.** (A) `time.monotonic()`을 교정 노드 시계로 맞추기,
+(B) `MultiThreadedExecutor`. 둘 다 패치하지 않은 main보다 나빴다. 교정이 시뮬 180 s 내내 `collecting`에
+머물렀다. 원인은 아직 모른다.

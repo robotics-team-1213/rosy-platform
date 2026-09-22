@@ -234,3 +234,10 @@
 - gate 변화: 없음(control ROS-SIM은 전체 그래프 기준 HOLD 유지).
 - 결정: D-171 트랙 1 첫 모듈, D-171 규칙 (d) 개정(사용자 승인 2026-09-23).
 - 교훈: 검증 규칙은 그 검증 경로가 실제로 돌아가는지 먼저 확인하고 세운다. 규칙을 쓴 뒤 첫 적용에서야 rig 스크립트가 없다는 것을 알았다.
+
+## 2026-09-23 · uncommitted · test(control): calibration batch rig A/B before merging D-171 track 1
+- 변경: 없음(검증과 기록만). 이번 묶음은 5c3dfc4(가드 경로), 4d0d2ee(`calibration_rotation`), 6e08de6(`calibration_relocation`)이다.
+- 증거: WSL Jazzy + Gazebo 8.11, ext4 복사본, main `e8b2976` 대 브랜치. 분리 모드는 양쪽 모두 `ready`. 비상정지 음성은 브랜치 `failed`. 한 프로세스 모드 4회씩 돌린 실패 분포가 같다(게이트 신선도 3, 지도 TF 1). 최종 `/cmd_vel` 발행자는 항상 `safety_node`.
+- gate 변화: 없음.
+- 결정: D-171 (d) 충족, main 병합.
+- 교훈: 타이밍에 흔들리는 모드의 A/B는 한 번이 아니라 분포로 본다. 시계 통일과 다중 스레드 실행기는 둘 다 한 프로세스 모드를 더 나쁘게 했다.
