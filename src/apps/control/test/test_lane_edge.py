@@ -461,6 +461,8 @@ def test_stale_odometry_stamp_is_no_pose_and_no_output():
     assert pose_if_fresh((1.0, 2.0, 0.3), 10.0, 10.0 + lane_bev.ODOM_MAX_SKEW_S + 0.01) is None
     assert pose_if_fresh((1.0, 2.0, 0.3), 10.5, 10.0) is None   # odom from the future
     assert pose_if_fresh(None, None, 10.0) is None
+    assert pose_if_fresh((1.0, 2.0, 0.3), float("nan"), 10.0) is None
+    assert pose_if_fresh((1.0, 2.0, 0.3), 10.0, float("inf")) is None
     world = lane([(-1.0, 0.0), (2.0, 0.0)])
     follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
     pose = (0.0, 0.0, 0.0)

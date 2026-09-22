@@ -95,4 +95,8 @@ The 2.9 mm closure was re-measured independently from `odom_drive.csv`: the mini
 | Other routes (east S-curve loop, circling the island) | NOT SUPPORTED: left-edge following has no junction choice |
 | Real Pinky: wheel-odom memory, lighting, camera calibration | NOT RUN (edge_left needs a ground model; only the Gazebo one exists) |
 
+Re-review of `4d3d811`: APPROVED. It raised two items that must be resolved before edge_left runs on a Device:
+- `MEMORY_MAX_AGE_S` = 16.5 s allows about 0.51 m of memory-only driving if odometry freezes while its stamps stay fresh. The longest honest memory-only stretch on this lap is about 0.30 m, so tighten the cap from measured memory-only spans.
+- Odometry that is frozen but freshly stamped, with paint in view, keeps refreshing memory without travel pruning. Age each memory cell by the clock, not only the whole memory.
+
 Raw logs (`odom_drive.csv`, `line_obs.txt`, `cmd_vel.csv`) are outside Git, in WSL `/rosy_mapv2_ws/evidence/20260922T_map_v2_fleet_<run>/`.
