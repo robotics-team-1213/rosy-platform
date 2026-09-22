@@ -70,7 +70,7 @@ def test_line_observer_runs_two_line_lane_mode_on_declared_gazebo_ground():
     """The 260919 track bounds each lane with two lines; single-line centroid
     latched onto one boundary in Gazebo. Lane mode needs the metric ground."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "lane"' in source
+    assert '"camera_lane_mode": "edge_left"' in source
     assert '"camera_ground_source": "GAZEBO"' in source
     assert '"allow_simulation_ground": True' in source
     assert '"gazebo_camera_height_m": 0.060194' in source
@@ -96,3 +96,11 @@ def test_line_observer_turns_corners_with_the_measured_camera_offset():
     source = LAUNCH.read_text(encoding="utf-8")
     assert '"lane_corner_turning": True' in source
     assert '"camera_x_offset_m": 0.034' in source
+
+
+def test_lap_runs_left_edge_following():
+    """Run 184434 stopped where both lines bend 65 deg: the lap holds the inner
+    block's outline on the left instead of pairing lines row by row."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"camera_lane_mode": "edge_left"' in source
+    assert '"lane_corner_turning": True' in source

@@ -64,9 +64,11 @@ def generate_launch_description():
                 # Rendered grey: floor ~109, robot body in the bottom rows ~218,
                 # lane paint ~224-228. 220 keeps the body out of the line mask.
                 "camera_bright_threshold": 220,
-                # Two boundary lines per lane: steer to their midpoint on the
-                # declared Gazebo camera geometry (tilt 25 deg, 320x180).
-                "camera_lane_mode": "lane",
+                # Hold the inner block's outline (the lap's left boundary) a
+                # half-width off in bird's-eye view: row-wise pairing stopped
+                # at the 65 deg bends (run 184434). Declared Gazebo camera
+                # geometry (tilt 25 deg, 320x180).
+                "camera_lane_mode": "edge_left",
                 "camera_ground_source": "GAZEBO",
                 "allow_simulation_ground": True,
                 "gazebo_camera_height_m": 0.060194,

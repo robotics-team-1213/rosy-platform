@@ -86,3 +86,14 @@ def test_lane_corner_turning_is_off_by_default_and_needs_odometry():
     # Turning is still evidence: no motion output from this node.
     assert "Twist" not in source
     assert "'cmd_vel'" not in source
+
+
+def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "LaneEdgeFollower" in source
+    assert "mode == 'edge_left'" in source
+    assert "self._edge_follower.update(" in source
+    assert "mode in ('lane', 'edge_left')" in source   # odom subscription
+    # 'line' and 'lane' branches are untouched and the default stays 'line'.
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
