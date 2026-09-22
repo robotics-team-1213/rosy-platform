@@ -1,4 +1,3 @@
-import ast
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -6,15 +5,12 @@ from types import SimpleNamespace as NS
 import unittest
 
 from control.calibration_atomic import CalibrationAtomic
+from test.mixin_method import mixin_method
 
 
 def adapter_method(filename, name):
-    path = Path(__file__).parents[1]/'control'/filename
-    cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
-    function = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    scope={'Path':Path,'json':json,'time':NS(time=lambda:100.)}
-    exec(compile(ast.Module(body=[function], type_ignores=[]),str(path),'exec'),scope)
-    return scope[name]
+    # D-171: the mixins are ROS-free; run the real method with a fixed wall clock.
+    return mixin_method('control.'+filename.removesuffix('.py'), name, time=NS(time=lambda:100.))
 
 
 class RegistrationFailureCaptureTest(unittest.TestCase):

@@ -1,9 +1,13 @@
-"""ROS adapter for bounded rotation trials; all estimates remain pure subjects."""
+"""Bounded rotation trials for the startup calibration node; all estimates remain pure subjects.
+
+ROS-free mixin (D-171): trial commands go through the node's ``drive_trial``.
+Keep ``import time`` and ``time.monotonic()`` as written — the sim rig swaps
+this module's ``time``.
+"""
 import math
 import time
 import json
 from pathlib import Path
-from geometry_msgs.msg import Twist
 from .control.calibration import wrap
 from .control.rotation_trial import RotationTrial
 from .sensing.scan_rotation import scan_rotation
@@ -346,9 +350,7 @@ class CalibrationRotation:
             self.complete_rotation(valid, self.rotation_trial.error or (
                 'Translation and bounded bilateral rotation response verified; swept envelope estimated; angular compensation not applied' if valid else 'Insufficient bilateral rotation-center evidence'), now)
             return
-        command = Twist()
-        command.angular.z = speed
-        self.publish_trial(command)
+        self.drive_trial(angular=speed)
         self.message = f'Rotation leg {self.rotation_trial.index+1}/{len(self.rotation_trial.targets)}'
         if now-self.last_report >= .5:
             self.publish()

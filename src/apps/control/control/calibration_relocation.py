@@ -1,13 +1,14 @@
-"""ROS adapter for post-translation, pre-rotation calibration relocation."""
+"""Post-translation, pre-rotation calibration relocation for the startup calibration node.
+
+ROS-free mixin (D-171): commands go through the node's ``drive_trial`` and ``stop_wander``.
+"""
 import math
 import os
-from geometry_msgs.msg import Twist
 from .control.calibration_relocation import CalibrationRelocation
 from .control.rotation_trial import MAX_TRANSLATION_M
 from .control.calibration import StationaryBaseline
 from .sensing.wall_tracker import WallTracker
 from .sensing.range_filter import CalibrationRangeFilter
-from std_msgs.msg import String
 
 
 class CalibrationRelocationAdapter:
@@ -33,7 +34,7 @@ class CalibrationRelocationAdapter:
             self.calibration_origin = tuple(odom[:3])
         self.relocation_before_translation = before_translation
         self.trial_geometry_revision = self.geometry_revision
-        self.wander_pub.publish(String(data='stop'))
+        self.stop_wander()
         self.requested = now
         self.zero()
         self.relocation = CalibrationRelocation()
@@ -115,9 +116,7 @@ class CalibrationRelocationAdapter:
             self.message = 'Suitable observed space reached; settling before rotation calibration'
             self.publish()
             return
-        command = Twist()
-        command.linear.x = speed
-        self.publish_trial(command)
+        self.drive_trial(linear=speed)
         self.message = 'Calibration relocation: '+result
         if now-self.last_report >= .5:
             self.publish()
@@ -166,9 +165,7 @@ class CalibrationRelocationAdapter:
         if report['done']:
             self.finish(True, 'Calibration verified and recorded origin reached')
             return
-        command = Twist()
-        command.linear.x = speed
-        self.publish_trial(command)
+        self.drive_trial(linear=speed)
         self.message = 'Returning to calibration origin: '+result
         if now-self.last_report >= .5:
             self.publish()

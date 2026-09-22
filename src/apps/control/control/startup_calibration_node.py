@@ -178,6 +178,13 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         """Message edge for the ROS-free mixins (D-171): tell wander to stop."""
         self.wander_pub.publish(String(data='stop'))
 
+    def drive_trial(self, linear=0., angular=0.):
+        """Message edge for the ROS-free mixins (D-171): one bounded trial command."""
+        command = Twist()
+        command.linear.x = linear
+        command.angular.z = angular
+        self.publish_trial(command)
+
     def stamped(self, msg, max_age=1.):
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         age = self.get_clock().now().nanoseconds * 1e-9 - stamp

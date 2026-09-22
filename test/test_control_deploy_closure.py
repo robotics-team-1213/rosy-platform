@@ -43,7 +43,7 @@ XML_ATTR = re.compile(r"\b(pkg|exec)\s*=\s*['\"](\w+)['\"]")
 def _launch_index():
     index = {}
     for path in SRC.rglob("*"):
-        if not path.is_file() or any(p.startswith(".") or p == "test" for p in path.parts):
+        if not path.is_file() or any(p.startswith(".") or p == "test" for p in path.relative_to(SRC).parts):
             continue
         if LAUNCH_REFERENCE.fullmatch(path.name):
             index.setdefault(path.name, []).append(path)
@@ -135,7 +135,7 @@ def test_exactly_one_package_provides_core_sensors():
     """
     registrants = []
     for path in sorted(SRC.rglob("setup.py")) + sorted(SRC.rglob("setup.cfg")):
-        if any(p.startswith(".") for p in path.parts):
+        if any(p.startswith(".") for p in path.relative_to(SRC).parts):
             continue
         text = path.read_text(encoding="utf-8")
         block = re.search(re.escape(PROVIDER_GROUP) + r"['\"]?\s*[:=]\s*\[?(.*?)(\]|\n\S)", text, re.S)
