@@ -34,6 +34,10 @@
     gazebo_camera_pitch_rad: 0.0
     gazebo_camera_hfov_rad: 0.0
     gazebo_camera_max_range_m: 0.6
+    # Lane mode corner turning needs odometry and is off unless a launch
+    # opts in with the camera's measured offset ahead of base_link.
+    lane_corner_turning: false
+    camera_x_offset_m: 0.0
 
 /**/road_observer_node:
   ros__parameters:

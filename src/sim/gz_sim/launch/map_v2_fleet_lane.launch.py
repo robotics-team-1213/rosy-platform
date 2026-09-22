@@ -78,6 +78,10 @@ def generate_launch_description():
                 # Crosswalk bars light ~50% of the band (run 164241); 0.75 still
                 # rejects a washed-out frame.
                 "camera_washed_fraction": 0.75,
+                # 90 deg corners: odometry-bounded turn; the URDF camera sits
+                # 0.020 + 0.015*cos(25 deg) = 0.034 m ahead of base_link.
+                "lane_corner_turning": True,
+                "camera_x_offset_m": 0.034,
             }],
         ),
         Node(

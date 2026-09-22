@@ -72,3 +72,17 @@ def test_lane_mode_uses_the_guarded_simulation_ground():
     assert "simulation_ground_plane" in source
     assert "'camera_ground_source'" in source
     assert "'camera_lane_mode'" in source
+
+
+def test_lane_corner_turning_is_off_by_default_and_needs_odometry():
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["lane_corner_turning"] is False
+    assert params["camera_x_offset_m"] == 0.0
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "Odometry, 'odom'" in source
+    assert "LaneCornerTracker" in source
+    assert "self._odom_pose, frame, ground" in source
+    # Turning is still evidence: no motion output from this node.
+    assert "Twist" not in source
+    assert "'cmd_vel'" not in source

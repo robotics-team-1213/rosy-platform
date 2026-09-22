@@ -88,3 +88,11 @@ def test_crosswalk_paint_is_not_mistaken_for_overexposure():
     A crosswalk is legitimate paint; only a near-white frame is overexposure."""
     source = LAUNCH.read_text(encoding="utf-8")
     assert '"camera_washed_fraction": 0.75' in source
+
+
+def test_line_observer_turns_corners_with_the_measured_camera_offset():
+    """Run 164757 stopped fail-closed at the first 90 deg corner. The camera
+    optical centre is 0.020 + 0.015*cos(25 deg) = 0.034 m ahead of base_link."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"lane_corner_turning": True' in source
+    assert '"camera_x_offset_m": 0.034' in source

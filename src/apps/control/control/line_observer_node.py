@@ -6,17 +6,20 @@ the sole final ``cmd_vel`` publisher (D-143).
 """
 
 import json
+import math
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from .sensing.camera_ground import simulation_ground_plane
 from .sensing.lane import (
     IRLineCalibration,
+    LaneCornerTracker,
     detect_ir_line,
     detect_lane_centre,
     detect_lane_error,
@@ -49,11 +52,18 @@ class LineObserverNode(Node):
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
         self.declare_parameter('gazebo_camera_max_range_m', 0.6)
+        # Lane mode only: odometry-bounded 90 deg corner turning. Off by
+        # default; without odometry the tracker never leaves FOLLOW.
+        self.declare_parameter('lane_corner_turning', False)
+        self.declare_parameter('camera_x_offset_m', 0.0)
 
         self._ir_calibration = None
         self._camera_controls_stable = False
         self._simulation_ground_key = None
         self._simulation_ground = None
+        self._odom_pose = None
+        self._corner_tracker = LaneCornerTracker(
+            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         if bool(self.get_parameter('ir_calibration_enabled').value):
             self._ir_calibration = IRLineCalibration(
                 black=tuple(self.get_parameter('ir_black').value),
@@ -71,6 +81,9 @@ class LineObserverNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(
             String, 'camera/controls', self._on_camera_controls, controls_qos)
+        if str(self.get_parameter('camera_lane_mode').value) == 'lane':
+            self.create_subscription(
+                Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if self._ir_calibration is None:
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
@@ -154,9 +167,8 @@ class LineObserverNode(Node):
                     min_pixels=int(self.get_parameter('camera_min_pixels').value),
                 )
             elif mode == 'lane':
-                observation = detect_lane_centre(
-                    frame,
-                    self._ground(frame.shape[1], frame.shape[0]),
+                ground = self._ground(frame.shape[1], frame.shape[0])
+                lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
@@ -164,6 +176,12 @@ class LineObserverNode(Node):
                         self.get_parameter('camera_roi_bottom_fraction').value),
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
+                if bool(self.get_parameter('lane_corner_turning').value):
+                    observation = self._corner_tracker.update(
+                        float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9,
+                        self._odom_pose, frame, ground, **lane_kwargs)
+                else:
+                    observation = detect_lane_centre(frame, ground, **lane_kwargs)
             else:
                 raise ValueError(f'unsupported camera_lane_mode {mode!r}')
         except ValueError as exc:
@@ -171,6 +189,13 @@ class LineObserverNode(Node):
         source_stamp = (float(msg.header.stamp.sec)
                         + float(msg.header.stamp.nanosec) * 1e-9)
         self._publish('CAMERA_LINE', observation, stamp=source_stamp)
+
+    def _on_odom(self, msg: Odometry) -> None:
+        pose = msg.pose.pose
+        q = pose.orientation
+        yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                         1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
 
     def _on_camera_controls(self, msg: String) -> None:
         summary = str(msg.data)
