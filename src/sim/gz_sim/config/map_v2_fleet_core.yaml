@@ -1,0 +1,18 @@
+runtime:
+  mode: simulation
+
+network:
+  api_host: 127.0.0.1
+  api_port: 8080
+
+# map_v2_fleet has no road scene or road observer yet, so an ENFORCED policy
+# would hold every line command at zero (no_road_evidence). Keep it off until
+# a map_v2_fleet road scene exists; lane loss still stops through line_follow.
+traffic_policy:
+  mode: DISABLED
+  map_id: map_v2_fleet
+
+vision:
+  preview_max_bytes: 512000
+  preview_stale_after_s: 2.0
+  preview_min_pull_interval_s: 0.4

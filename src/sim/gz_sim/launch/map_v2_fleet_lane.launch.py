@@ -18,7 +18,7 @@ def generate_launch_description():
         control_share, "map", "map_v2_fleet", "worlds", "map_v2_fleet.world")
     line_config = os.path.join(control_share, "config", "line_follow.yaml")
     default_core_overlay = os.path.join(
-        gz_share, "config", "semantic_road_core.yaml")
+        gz_share, "config", "map_v2_fleet_core.yaml")
 
     simulation = IncludeLaunchDescription(
         AnyLaunchDescriptionSource(
@@ -60,8 +60,9 @@ def generate_launch_description():
             parameters=[line_config, {
                 "use_sim_time": True,
                 "require_camera_controls_stable": False,
-                # Floor 0.2 grey (~51) vs paint 1.0 (~255): 180 sits well between.
-                "camera_bright_threshold": 180,
+                # Rendered grey: floor ~109, robot body in the bottom rows ~218,
+                # lane paint ~224-228. 220 keeps the body out of the line mask.
+                "camera_bright_threshold": 220,
             }],
         ),
         Node(

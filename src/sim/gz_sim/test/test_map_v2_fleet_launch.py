@@ -15,9 +15,12 @@ def test_launch_uses_the_catalogued_world_and_spawn():
     assert '"bridge_image": "true"' in source
 
 
-def test_line_observer_uses_the_bright_line_threshold():
+def test_line_observer_threshold_sits_between_body_and_paint():
+    """Gazebo run 20260922T_map_v2_fleet_161132 measured grey levels: floor 109,
+    the robot's own body filling the bottom rows 218, lane paint 224-228.
+    At 180 the body read as line and the frame was rejected as washed out."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_bright_threshold": 180' in source
+    assert '"camera_bright_threshold": 220' in source
 
 
 def test_only_core_can_command_motion():
@@ -45,3 +48,19 @@ def test_lane_mesh_resource_path_reaches_the_control_share():
     source = LAUNCH.read_text(encoding="utf-8")
     assert '"extra_resource_path"' in source
     assert "os.path.dirname(control_share)" in source
+
+
+def test_core_overlay_does_not_wait_for_a_road_scene_this_map_lacks():
+    """ENFORCED traffic policy holds at zero until road evidence arrives
+    (traffic_policy/manager.py set_mode -> HOLD no_road_evidence). This launch
+    runs no road observer, so the map's own overlay must keep the policy off
+    instead of borrowing map_260905's ENFORCED scene."""
+    import yaml
+
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"map_v2_fleet_core.yaml"' in source
+    overlay = yaml.safe_load(
+        (LAUNCH.parents[1] / "config" / "map_v2_fleet_core.yaml").read_text(encoding="utf-8"))
+    assert overlay["runtime"]["mode"] == "simulation"
+    assert overlay["traffic_policy"]["mode"] == "DISABLED"
+    assert overlay["traffic_policy"]["map_id"] == "map_v2_fleet"
