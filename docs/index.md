@@ -122,8 +122,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs: Linux 측 검증 3건 — colcon 빌드·sensor_adc 구문 검사·CI 동등 부트 스모크
 - 2026-09-23 · uncommitted · docs(adr): D-172 후속 F1~F6 처리 결과
 - 2026-09-23 · uncommitted · docs(api): API ref v1.17 — `logs/audit` 의 `dir_sync_failures`·`last_dir_sync_error`, `rosy_audit_dir_sync_failures_total`
 - 2026-09-23 · 3ec8672 · docs(plans): T15 — 통신 정합 계획 전 페이즈 마감, 최종 회귀 PASS
 - 2026-09-23 · uncommitted · fix(test): strip the UTF-8 BOM that turned the catalogue and vision guards red, and guard against it
-- 2026-09-23 · uncommitted · docs(plans): Phase 4(T12~T14) 이행 기록 — 계획 전 페이즈 완료

@@ -1581,3 +1581,11 @@
   - 실기 `systemctl stop`으로 재확인한다.
   - 두 번째 SIGINT를 `KeyboardInterrupt`로 올린 뒤에는 세 번째 SIGINT가 무시된다(LOW). SIGTERM은 계속 강제 종료된다.
 - 교훈: 짧은 ROS-SIM 재확인이 종료 경합을 드러냈다. 부팅뿐 아니라 종료도 스모크 절차에 포함한다.
+
+## 2026-09-23 · uncommitted · docs: Linux 측 검증 3건 — colcon 빌드·sensor_adc 구문 검사·CI 동등 부트 스모크
+- 변경: 계획 Status 갱신(T15 완료 표기 + WSL 검증 기록, `docs/plans/2026-09-22-communication-protocol-remediation-plan.md`).
+- 증거: WSL x86_64 ROS 2 Jazzy — ① sensor_adc `g++ -fsyntax-only`(ROS Jazzy 헤더+wiringPi 스텁): 원본 적색(const uint8_t* 시그니처) → 16811e5 수정 → `ADC_SYNTAX_OK`, ADC 계약 시험 5 passed ② `colcon build --base-paths src` **20 packages finished, COLCON_EXIT=0**(HEAD 재빌드 포함, 설치 main.py 체크섬 갱신 확인) ③ CI 동등 부트 스모크(ci.yml 절차 복제, 60s poll): `ros_bridge ready (cmd_vel sole publisher @50Hz)` + `core up: robot_id=rosy_01 model=Pinky Pro` + `api server on 0.0.0.0:8080` + kill 후 `core shutting down` 우아한 종료, core_up=1. `slam_toolbox unavailable` 라인 부재는 WSL에 slam_toolbox 설치 상태(/opt/ros/jazzy/share/slam_toolbox 확인)로 예상된 환경 차이 — 해당 라인은 CI ros-base 컨테이너에서만 발생.
+- 부수(디버깅 기록): 최초 스모크 실패("context is invalid") 원인 = Windows drvfs 느린 I/O(스 tats 15~27초 D-상태 반복)로 시작이 ~28초 걸려 **25초 timeout 의 SIGTERM 이 초기화 중간에 진입** + 구(9/19) 설치본 main.py 의 기본 rclpy 핸들러가 context 를 내림. 재빌드 후 신 main.py(a545d55: 첫 신호=이벤트 기록, rclpy C 핸들러 유지)에서는 60s 창에서 재현 없음 — 코드 결함 아님.
+- gate 변화: 없음 — ARM64/DEVICE 게이트는 네이티브 ARM64 빌드·실기 측정이 필요하다.
+- 결정: 없음.
+- 교훈: WSL drvfs 부트 스모크 타임아웃은 CI 와 동일하게 60s 이상 — 25s 는 Windows 파일시스템 I/O 지연에 걸려 신호 경합을 만든다.

@@ -3,7 +3,7 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 - Date: 2026-09-22
-- Status: **전 페이즈 실행 완료.** Phase 1(T1~T4) — 998b9f9·545cb0b·2d47b5a·56355f9. Phase 2(T5~T9) — 4ee66a7·e23ca18·745bb80·7b09b0d·455f48f. Phase 3(T10~T11) — a29caee·10ceb53. Phase 4(T12~T14) — e65a5a0·f9d6f09·9742084(+d927cea 정정분). 결정 게이트 G1·G2 — D-169·D-170 Accepted(451223c). T15(하네스 마감·전체 회귀) 진행 중. 남은 것: ARM64/DEVICE 게이트(sensor_adc 빌드·udev 심링크·chrony 실측)와 후속 ADR 조건들.
+- Status: **전 페이즈·전 태스크 완료(T1~T15).** Phase 1(T1~T4) — 998b9f9·545cb0b·2d47b5a·56355f9. Phase 2(T5~T9) — 4ee66a7·e23ca18·745bb80·7b09b0d·455f48f. Phase 3(T10~T11) — a29caee·10ceb53. Phase 4(T12~T14) — e65a5a0·f9d6f09·9742084(+d927cea 정정분). T15 — 8e88de4(최종 전체 회귀 **4350 passed·0 failed**). 결정 게이트 G1·G2 — D-169·D-170 Accepted(451223c). Linux 측 추가 검증(2026-09-23, WSL x86_64 ROS 2 Jazzy) — colcon 20패키지 빌드 성공, sensor_adc `g++ -fsyntax-only` 적색→초록(16811e5), CI 동등 부트 스모크에서 `ros_bridge ready`·`core up`·우아한 종료 확인. 남은 것: ARM64/DEVICE 게이트(native ARM64 빌드·udev 심링크 실측·chrony 동기화 품질)와 후속 ADR 조건(D-84 실기 수요, 중앙 Fleet 착수).
 - Goal: `communication-protocol-report.md`(2026-09-22, Rosy 폴더 — git 루트 밖)의 §9 조치 14건을 test-first로 실행한다.
 - Architecture: 4개 페이즈(안전·차단 해소 → Fleet 정합 → 계약·문서 정합 → 잔여 위생). 모든 태스크는 **Windows host pytest로 검증 가능**하며, C++ 빌드·실측이 필요한 것만 "ARM64 게이트"로 표시한다. 계약 결정이 필요한 2건은 태스크가 아니라 결정 게이트로 분리했다.
 - Tech Stack: pytest(host), colcon/ament(Linux), udev, systemd, FastAPI/websockets, pydantic
