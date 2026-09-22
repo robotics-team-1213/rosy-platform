@@ -20,6 +20,20 @@
     camera_washed_fraction: 0.40
     camera_min_pixels: 80
     require_camera_controls_stable: true
+    # 'line' = single bright line (centroid); 'lane' = centre between two
+    # boundary lines, which needs a metric ground plane and fails closed
+    # without one.
+    camera_lane_mode: line
+    lane_half_width_m: 0.0925
+    camera_roi_bottom_fraction: 1.0
+    camera_ground_source: PINKY
+    allow_simulation_ground: false
+    # Gazebo-only declared projection. Zero geometry keeps it fail-closed in
+    # every physical/default launch; the lane simulation overrides it.
+    gazebo_camera_height_m: 0.0
+    gazebo_camera_pitch_rad: 0.0
+    gazebo_camera_hfov_rad: 0.0
+    gazebo_camera_max_range_m: 0.6
 
 /**/road_observer_node:
   ros__parameters:

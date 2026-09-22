@@ -122,3 +122,128 @@ class TestLaneTracker:
         tracker = LaneTracker()
         assert tracker.state == "IDLE"
         assert not tracker.stop_demanded(at=9999.0)
+
+
+# --- Two-line lane-centre mode (260919 road track, map_v2_fleet) -----------
+#
+# Each lane is bounded by two ~25 mm white lines, centre-to-centre 185 mm.
+# Frames are built by inverse projection through the same declared Gazebo
+# geometry the launch uses, so the detector is tested against the metric
+# model it trusts rather than against hand-placed pixel columns.
+
+import math
+
+from control.sensing.camera_ground import simulation_ground_plane
+from control.sensing.lane import detect_lane_centre
+
+_HALF = 0.0925
+_W, _H = 320, 180
+_FLOOR, _PAINT, _BODY = 109, 225, 218
+_BODY_TOP_ROW = 139
+
+
+def _gazebo_ground():
+    ground = simulation_ground_plane(
+        source="GAZEBO", simulation_enabled=True, use_sim_time=True,
+        width_px=_W, height_px=_H, height_m=0.060194,
+        pitch_rad=math.radians(25.0), hfov_rad=1.1519, max_range_m=0.6)
+    assert ground is not None
+    return ground
+
+
+def _track_frame(ground, line_ys, *, paint_half_width=0.0125):
+    frame = np.full((_H, _W), _FLOOR, dtype=np.uint8)
+    for row in range(_H):
+        if ground.distance(row) is None:
+            continue
+        for col in range(_W):
+            lateral = ground.lateral(col, row)
+            if any(abs(lateral - y) < paint_half_width for y in line_ys):
+                frame[row, col] = _PAINT
+    frame[_BODY_TOP_ROW:, :] = _BODY
+    return frame
+
+
+def _centre(frame, ground, **overrides):
+    kwargs = dict(bright_threshold=220, lane_half_width_m=_HALF,
+                  roi_top_fraction=0.25, roi_bottom_fraction=0.75)
+    kwargs.update(overrides)
+    return detect_lane_centre(frame, ground, **kwargs)
+
+
+class TestLaneCentre:
+    def test_centred_between_two_lines_reads_near_zero(self):
+        ground = _gazebo_ground()
+        obs = _centre(_track_frame(ground, (-_HALF, _HALF)), ground)
+        assert isinstance(obs, LaneObservation)
+        assert abs(obs.error) < 0.1
+        assert 0.0 < obs.confidence <= 1.0
+
+    def test_lane_shifted_right_steers_right(self):
+        ground = _gazebo_ground()
+        obs = _centre(_track_frame(ground, (-0.0425, 0.1425)), ground)
+        assert obs is not None
+        assert obs.error > 0.2
+
+    def test_sitting_on_the_right_line_steers_left_back_into_the_lane(self):
+        """The failure seen in Gazebo: latched onto one boundary. The next
+        lane's far line at +0.185 may also be in view."""
+        ground = _gazebo_ground()
+        obs = _centre(_track_frame(ground, (-0.185, 0.0, 0.185)), ground)
+        assert obs is not None
+        assert obs.error < -0.3
+
+    def test_only_the_right_line_visible_infers_the_centre(self):
+        ground = _gazebo_ground()
+        obs = _centre(_track_frame(ground, (_HALF,)), ground)
+        assert obs is not None
+        assert obs.error == pytest.approx(0.0, abs=0.1)
+
+    def test_uncalibrated_camera_never_drives_lane_mode(self):
+        ground = _gazebo_ground()
+        frame = _track_frame(ground, (-_HALF, _HALF))
+        assert _centre(frame, None) is None
+
+    def test_washed_out_frame_is_no_lane(self):
+        ground = _gazebo_ground()
+        frame = np.full((_H, _W), 250, dtype=np.uint8)
+        assert _centre(frame, ground) is None
+
+    def test_robot_body_rows_are_not_a_line(self):
+        ground = _gazebo_ground()
+        frame = _track_frame(ground, ())
+        assert _centre(frame, ground) is None
+        # Threshold alone also keeps the 218 body out, even with the full band.
+        assert _centre(frame, ground, roi_bottom_fraction=1.0) is None
+
+    def test_wide_crossing_bar_is_not_a_boundary_line(self):
+        """A stop line seen across the lane is far wider than a lane line."""
+        ground = _gazebo_ground()
+        frame = _track_frame(ground, ())
+        frame[70:80, :] = _PAINT
+        assert _centre(frame, ground) is None
+
+    def test_bgr_frames_are_accepted(self):
+        ground = _gazebo_ground()
+        gray = _track_frame(ground, (-_HALF, _HALF))
+        obs = _centre(np.dstack([gray, gray, gray]), ground)
+        assert obs is not None
+        assert abs(obs.error) < 0.1
+
+    @pytest.mark.parametrize("overrides", [
+        {"lane_half_width_m": 0.0},
+        {"lane_half_width_m": float("nan")},
+        {"roi_top_fraction": 1.0},
+        {"roi_bottom_fraction": 0.2},
+        {"roi_bottom_fraction": 1.5},
+        {"bright_threshold": 255},
+        {"washed_fraction": 0.0},
+        {"max_line_width_m": 0.0},
+        {"row_step": 0},
+        {"row_step": True},
+    ])
+    def test_bad_arguments_fail_loudly(self, overrides):
+        ground = _gazebo_ground()
+        frame = _track_frame(ground, (-_HALF, _HALF))
+        with pytest.raises(ValueError):
+            _centre(frame, ground, **overrides)

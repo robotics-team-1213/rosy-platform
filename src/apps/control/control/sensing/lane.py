@@ -1,9 +1,17 @@
 """Subject: lane following — floor line to lateral error plus loss tracking.
 
-A lane is a bright line on a dark floor. Detection is threshold plus column
-centroid — no model, no YOLO (SRS NAV-007). The tracker turns the observation
-stream into TRACKING/LOST: loss beyond the grace period demands stop, never a
-blind search drive. ROS-free, same contract onboard and in fixtures.
+Two camera modes share one LaneObservation contract, both classical CV with
+no model and no YOLO (SRS NAV-007):
+
+  single line   one bright line on a dark floor; threshold plus column centroid
+                (`detect_lane_error`)
+  two-line lane a lane bounded by two white lines; per-row line runs projected
+                to metres on a calibrated ground plane, steering to the midpoint
+                (`detect_lane_centre`). No ground plane, no lane mode.
+
+The tracker turns the observation stream into TRACKING/LOST: loss beyond the
+grace period demands stop, never a blind search drive. ROS-free, same contract
+onboard and in fixtures.
 """
 
 from __future__ import annotations
@@ -130,6 +138,96 @@ def detect_lane_error(bgr: np.ndarray, *, bright_threshold: int = _BRIGHT,
     if confidence <= 0.0:
         return None
     return LaneObservation(error=error, confidence=confidence)
+
+
+def detect_lane_centre(bgr: np.ndarray, ground, *,
+                       bright_threshold: int = _BRIGHT,
+                       lane_half_width_m: float,
+                       roi_top_fraction: float,
+                       roi_bottom_fraction: float,
+                       washed_fraction: float = _WASHED_FRACTION,
+                       max_line_width_m: float = 0.06,
+                       row_step: int = 2) -> LaneObservation | None:
+    """Steer to the midpoint between the two boundary lines of a lane.
+
+    Each sampled row is split into horizontal runs of bright pixels, projected
+    to metres on `ground` (+ right of the optical axis). The nearest run on each
+    side is a boundary line; runs wider than `max_line_width_m` are stop lines
+    or crosswalk bars seen across and are dropped. With one line in view the
+    centre is inferred from the lane half-width. `ground is None` returns None:
+    an uncalibrated camera never drives in lane mode.
+    """
+    if (isinstance(bright_threshold, bool) or not isinstance(bright_threshold, int)
+            or not 1 <= bright_threshold <= 254):
+        raise ValueError("bright_threshold must be an integer from 1 through 254")
+    if (isinstance(lane_half_width_m, bool)
+            or not isinstance(lane_half_width_m, (int, float))
+            or not math.isfinite(lane_half_width_m) or not lane_half_width_m > 0.0):
+        raise ValueError("lane_half_width_m must be a positive finite number")
+    if not isinstance(roi_top_fraction, (int, float)) or not math.isfinite(roi_top_fraction)             or not 0.0 <= roi_top_fraction < 1.0:
+        raise ValueError("roi_top_fraction must be in [0, 1)")
+    if not isinstance(roi_bottom_fraction, (int, float))             or not math.isfinite(roi_bottom_fraction)             or not roi_top_fraction < roi_bottom_fraction <= 1.0:
+        raise ValueError("roi_bottom_fraction must be in (roi_top_fraction, 1]")
+    if not isinstance(washed_fraction, (int, float)) or not math.isfinite(washed_fraction)             or not 0.0 < washed_fraction <= 1.0:
+        raise ValueError("washed_fraction must be in (0, 1]")
+    if (isinstance(max_line_width_m, bool)
+            or not isinstance(max_line_width_m, (int, float))
+            or not math.isfinite(max_line_width_m) or not max_line_width_m > 0.0):
+        raise ValueError("max_line_width_m must be a positive finite number")
+    if isinstance(row_step, bool) or not isinstance(row_step, int) or row_step < 1:
+        raise ValueError("row_step must be a positive integer")
+    if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
+        raise ValueError("camera frame must be a non-empty grayscale or BGR array")
+    if ground is None:
+        return None
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
+    top = int(gray.shape[0] * roi_top_fraction)
+    bottom = int(gray.shape[0] * roi_bottom_fraction)
+    band = gray[top:bottom, :]
+    if band.size == 0:
+        return None
+    _, bright = cv2.threshold(band, bright_threshold, 255, cv2.THRESH_BINARY)
+    if (bright > 0).sum() > washed_fraction * band.size:
+        return None
+
+    half = float(lane_half_width_m)
+    sampled = 0
+    centres = []
+    for offset in range(0, band.shape[0], row_step):
+        sampled += 1
+        row = top + offset
+        if ground.distance(row) is None:
+            continue
+        lit = np.concatenate(([0], (bright[offset] > 0).astype(np.int8), [0]))
+        edges = np.flatnonzero(np.diff(lit))
+        left = right = None
+        for start, stop in zip(edges[0::2], edges[1::2]):
+            # Pixel centres sit on integer columns; the run spans half a pixel
+            # beyond its first and last lit column.
+            near = ground.lateral(start - 0.5, row)
+            far = ground.lateral(stop - 0.5, row)
+            middle = ground.lateral((start + stop - 1) / 2.0, row)
+            if near is None or far is None or middle is None:
+                continue
+            if far - near > max_line_width_m:
+                continue
+            if middle < 0.0:
+                if left is None or middle > left:
+                    left = middle
+            elif right is None or middle < right:
+                right = middle
+        if left is not None and right is not None:
+            if not 1.2 * half <= right - left <= 2.8 * half:
+                continue
+            centres.append((left + right) / 2.0)
+        elif left is not None:
+            centres.append(left + half)
+        elif right is not None:
+            centres.append(right - half)
+    if not centres or sampled == 0:
+        return None
+    error = max(-1.0, min(1.0, float(np.median(centres)) / half))
+    return LaneObservation(error=error, confidence=len(centres) / sampled)
 
 
 def line_observation_payload(source: str, stamp: float,

@@ -64,3 +64,19 @@ def test_core_overlay_does_not_wait_for_a_road_scene_this_map_lacks():
     assert overlay["runtime"]["mode"] == "simulation"
     assert overlay["traffic_policy"]["mode"] == "DISABLED"
     assert overlay["traffic_policy"]["map_id"] == "map_v2_fleet"
+
+
+def test_line_observer_runs_two_line_lane_mode_on_declared_gazebo_ground():
+    """The 260919 track bounds each lane with two lines; single-line centroid
+    latched onto one boundary in Gazebo. Lane mode needs the metric ground."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"camera_lane_mode": "lane"' in source
+    assert '"camera_ground_source": "GAZEBO"' in source
+    assert '"allow_simulation_ground": True' in source
+    assert '"gazebo_camera_height_m": 0.060194' in source
+    assert '"gazebo_camera_pitch_rad": math.radians(25.0)' in source
+    assert '"gazebo_camera_hfov_rad": 1.1519' in source
+    assert '"gazebo_camera_max_range_m": 0.6' in source
+    assert '"camera_roi_top_fraction": 0.25' in source
+    assert '"camera_roi_bottom_fraction": 0.75' in source
+    assert '"use_sim_time": True' in source

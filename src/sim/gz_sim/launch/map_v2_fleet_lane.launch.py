@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One Pinky on the 260919 road track: camera lane evidence into CORE."""
 
+import math
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -63,6 +64,17 @@ def generate_launch_description():
                 # Rendered grey: floor ~109, robot body in the bottom rows ~218,
                 # lane paint ~224-228. 220 keeps the body out of the line mask.
                 "camera_bright_threshold": 220,
+                # Two boundary lines per lane: steer to their midpoint on the
+                # declared Gazebo camera geometry (tilt 25 deg, 320x180).
+                "camera_lane_mode": "lane",
+                "camera_ground_source": "GAZEBO",
+                "allow_simulation_ground": True,
+                "gazebo_camera_height_m": 0.060194,
+                "gazebo_camera_pitch_rad": math.radians(25.0),
+                "gazebo_camera_hfov_rad": 1.1519,
+                "gazebo_camera_max_range_m": 0.6,
+                "camera_roi_top_fraction": 0.25,
+                "camera_roi_bottom_fraction": 0.75,
             }],
         ),
         Node(

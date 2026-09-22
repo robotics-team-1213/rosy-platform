@@ -14,9 +14,11 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt16MultiArray
 
+from .sensing.camera_ground import simulation_ground_plane
 from .sensing.lane import (
     IRLineCalibration,
     detect_ir_line,
+    detect_lane_centre,
     detect_lane_error,
     line_observation_payload,
 )
@@ -36,9 +38,22 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_washed_fraction', 0.4)
         self.declare_parameter('camera_min_pixels', 80)
         self.declare_parameter('require_camera_controls_stable', True)
+        # 'line' follows one bright line; 'lane' keeps the centre between two
+        # boundary lines and needs a metric ground plane (fail-closed without).
+        self.declare_parameter('camera_lane_mode', 'line')
+        self.declare_parameter('lane_half_width_m', 0.0925)
+        self.declare_parameter('camera_roi_bottom_fraction', 1.0)
+        self.declare_parameter('camera_ground_source', 'PINKY')
+        self.declare_parameter('allow_simulation_ground', False)
+        self.declare_parameter('gazebo_camera_height_m', 0.0)
+        self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
+        self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
+        self.declare_parameter('gazebo_camera_max_range_m', 0.6)
 
         self._ir_calibration = None
         self._camera_controls_stable = False
+        self._simulation_ground_key = None
+        self._simulation_ground = None
         if bool(self.get_parameter('ir_calibration_enabled').value):
             self._ir_calibration = IRLineCalibration(
                 black=tuple(self.get_parameter('ir_black').value),
@@ -59,6 +74,33 @@ class LineObserverNode(Node):
         if self._ir_calibration is None:
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
+
+    def _ground(self, width: int, height: int):
+        source = str(self.get_parameter('camera_ground_source').value)
+        simulation_enabled = bool(
+            self.get_parameter('allow_simulation_ground').value)
+        use_sim_time = bool(self.get_parameter('use_sim_time').value)
+        height_m = float(self.get_parameter('gazebo_camera_height_m').value)
+        pitch_rad = float(self.get_parameter('gazebo_camera_pitch_rad').value)
+        hfov_rad = float(self.get_parameter('gazebo_camera_hfov_rad').value)
+        max_range_m = float(self.get_parameter(
+            'gazebo_camera_max_range_m').value)
+        key = (source, simulation_enabled, use_sim_time, int(width),
+               int(height), height_m, pitch_rad, hfov_rad, max_range_m)
+        if key != self._simulation_ground_key:
+            self._simulation_ground = simulation_ground_plane(
+                source=source,
+                simulation_enabled=simulation_enabled,
+                use_sim_time=use_sim_time,
+                width_px=width,
+                height_px=height,
+                height_m=height_m,
+                pitch_rad=pitch_rad,
+                hfov_rad=hfov_rad,
+                max_range_m=max_range_m,
+            )
+            self._simulation_ground_key = key
+        return self._simulation_ground
 
     def _stamp(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
@@ -102,13 +144,28 @@ class LineObserverNode(Node):
                 frame = frame[:, :, 0]
             elif msg.encoding == 'rgb8':
                 frame = frame[:, :, ::-1]
-            observation = detect_lane_error(
-                frame,
-                bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
-                roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
-                washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
-                min_pixels=int(self.get_parameter('camera_min_pixels').value),
-            )
+            mode = str(self.get_parameter('camera_lane_mode').value)
+            if mode == 'line':
+                observation = detect_lane_error(
+                    frame,
+                    bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
+                    roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
+                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
+                    min_pixels=int(self.get_parameter('camera_min_pixels').value),
+                )
+            elif mode == 'lane':
+                observation = detect_lane_centre(
+                    frame,
+                    self._ground(frame.shape[1], frame.shape[0]),
+                    bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
+                    lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
+                    roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
+                    roi_bottom_fraction=float(
+                        self.get_parameter('camera_roi_bottom_fraction').value),
+                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
+                )
+            else:
+                raise ValueError(f'unsupported camera_lane_mode {mode!r}')
         except ValueError as exc:
             self.get_logger().warning(f'invalid camera line frame: {exc}')
         source_stamp = (float(msg.header.stamp.sec)
