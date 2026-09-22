@@ -1518,3 +1518,11 @@
 - gate 변화: 없음 — docs SOURCE/LOCAL GO 유지.
 - 결정: D-169 Accepted(소급 공식화, D-147 선례), D-170 Accepted.
 - 교훈: ADR 로그는 인덱스 표만이 아니라 본문이 docs/adr/ 개별 파일과 1:1 이어야 harness 계약을 통과한다 — 새 ADR은 행+본문 파일을 한 변경에.
+
+## 2026-09-22 · uncommitted · docs(adr): 미병합 옛 브랜치의 보존·이관 규칙과 후속 항목 (D-172)
+
+- 변경: 신규 `docs/adr/D-172-archived-branch-port-closure.md`. 구조 개편 이전 미병합 브랜치는 `archive/<date>/<branch>` 태그로 보존한다. 이관은 `port/*`에서 재구현하고 독립 리뷰 APPROVE 후에만 병합한다. Python 3.12가 기준이고, API Ref 버전 동시 상향은 병합 순서대로 다시 매긴다. worktree 정리 조건도 정했다. 2026-09-22 판정 결과 5건과 후속 F1~F5를 기록했다(F5는 `581741e`로 닫힘). ADR Log 색인 행, `docs/reference/AGENTS.md` 범위(D-172), `docs/progress.md` adrs를 갱신했다.
+- 증거: 병합 `2ee9a9a`·`0adbe50`·`11f1164`, `bbd14a6`. 태그 `archive/2026-09-22/*` 5개. 병합 후 3.12 core 1214 passed.
+- gate 변화: 없음(문서). core ROS-SIM HOLD는 F1이 닫는다.
+- 결정: D-172 Accepted.
+- 교훈: 공유 트리에서 `git add -A`를 쓰면 남의 미완성 색인 행이 섞여 들어간다(`451223c`). 경로를 지정해 스테이징한다.
