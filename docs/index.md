@@ -121,4 +121,3 @@
 - 2026-09-22 · uncommitted · feat(fleet): Implement Pinky-to-Fleet WebSocket communication path
 - 2026-09-22 · uncommitted · test(control): D-162 노드 그래프 검증 PASS — scene context 슬라이스
 - 2026-09-22 · uncommitted · test(control): D-162 Gazebo 실렌더링 검증 PASS
-- 2026-09-22 · uncommitted · test(core): ROS-SIM 재실행 PASS — D-162 T5 이후 트리 복원
