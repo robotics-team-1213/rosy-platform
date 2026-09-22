@@ -371,3 +371,15 @@
 - 결정: D-174
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · fix(native): keep bytecode out of signed releases; require the installed runtime (D-174 review)
+
+- 변경: code-reviewer 지적 반영. `native_release.py`는 `sys.dont_write_bytecode`를 켜고 release 래퍼 3개와 이미지 chroot
+  probe는 `python3 -B`로 돈다(서명 release 안 `__pycache__`는 unlisted 파일이라 `verify(old_current)`가 복구를 HOLD시킨다).
+  `verify-mounted-image.py`는 두 런타임 사본의 `native_release.py`·`signing.py`·`recover-release.sh`를 필수로 요구하고
+  release 안 `__pycache__`를 거부한다. 설치기는 자기 자신을 배포하지 않는다. `device_readback.py`는
+  `/opt/rosy/native-runtime/signing.py`를 먼저 찾는다. probe 주석을 "import smoke test"로 정정하고 실패 시 정리한다.
+- 증거: native/image/first-boot/readback 스위트 61 passed (2026-09-23 Windows)
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 설치 배치에서 import가 되게 만들면, 그 import가 남기는 부산물(bytecode)도 서명 경계를 넘는다.
+

@@ -72,8 +72,28 @@ def test_installed_runtime_does_not_reach_back_into_a_repository(tmp_path):
     runtime = tmp_path / "device/opt/rosy/native-runtime"
     _install(runtime)
 
-    assert (runtime / "signing.py").is_file()
-    assert not (tmp_path / "device/opt/release").exists()
+    assert (runtime / "signing.py").read_bytes() == (ROOT / "deploy/release/signing.py").read_bytes()
+    assert not (runtime / "install-native-runtime.sh").exists()
+    assert not (runtime.parents[1] / "release").exists()
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+def test_recovery_writes_no_bytecode_into_the_installed_tree(tmp_path):
+    # Bytecode beside a signed release is an unlisted file that fails verify().
+    device_root = tmp_path / "device"
+    runtime = device_root / "opt/rosy/releases/2026.09.22-003/deploy/robot/native"
+    _install(runtime)
+
+    completed = _run_recover(runtime, device_root)
+
+    assert completed.returncode == 0, completed.stderr
+    assert not list(runtime.rglob("__pycache__"))
+
+
+def test_release_wrappers_run_python_without_bytecode():
+    for wrapper in ("activate-release.sh", "rollback-release.sh", "recover-release.sh"):
+        text = (ROOT / "deploy/robot/native" / wrapper).read_text(encoding="utf-8")
+        assert 'exec python3 -B "$SCRIPT_DIR/native_release.py"' in text, wrapper
 
 
 def test_image_build_installs_both_copies_with_the_shared_installer():

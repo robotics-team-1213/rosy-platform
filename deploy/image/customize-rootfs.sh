@@ -69,6 +69,7 @@ cleanup() {
     rm -f -- "$ROOT/tmp/ros2-apt-source.deb"
     rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
     rm -rf -- "$ROOT/tmp/rosy-src"
+    rm -rf -- "$ROOT/tmp/rosy-native-probe"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
 }
@@ -171,15 +172,22 @@ while IFS= read -r package; do
         "source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 pkg prefix '$package' >/dev/null"
 done < "$PAYLOAD/required-ros-packages.txt"
 
-# D-174 F5: execute the installed native entrypoints, not only check that they
-# exist. Recovery runs against an empty probe root so it touches no image state.
+# D-174 F5: import smoke test of the installed native entrypoints, run where the
+# image installs them. Recovery runs against an empty probe root, so it touches
+# no image state and does not exercise the key or openssl; -B keeps bytecode out
+# of the signed release tree.
 NATIVE_PROBE=/tmp/rosy-native-probe
 rm -rf -- "$ROOT$NATIVE_PROBE"
 mkdir -p "$ROOT$NATIVE_PROBE"
 RELEASE_KEY=/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem
-chroot "$ROOT" python3 /opt/rosy/native-runtime/native_release.py     --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover     || fail "installed native-runtime recovery entrypoint does not run"
-chroot "$ROOT" python3 /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py     --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover     || fail "installed release native entrypoint does not run"
-chroot "$ROOT" python3 /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null     || fail "installed first-boot entrypoint does not run"
+chroot "$ROOT" python3 -B /opt/rosy/native-runtime/native_release.py \
+    --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
+    || fail "installed native-runtime recovery entrypoint does not run"
+chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py \
+    --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
+    || fail "installed release native entrypoint does not run"
+chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \
+    || fail "installed first-boot entrypoint does not run"
 rm -rf -- "$ROOT$NATIVE_PROBE"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"

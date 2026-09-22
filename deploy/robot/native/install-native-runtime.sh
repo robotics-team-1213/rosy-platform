@@ -14,5 +14,7 @@ RELEASE_TOOLS="$(cd "$SCRIPT_DIR/../../release" && pwd)"
 mkdir -p "$(dirname "$DESTINATION")"
 cp -a "$SCRIPT_DIR" "$DESTINATION"
 find "$DESTINATION" -name '__pycache__' -type d -prune -exec rm -rf {} +
+# Build-time only: it resolves ../../release, which does not exist on a device.
+rm -f -- "$DESTINATION/install-native-runtime.sh"
 # native_release.py imports signing; it is standard-library only.
 cp "$RELEASE_TOOLS/signing.py" "$DESTINATION/signing.py"

@@ -23,6 +23,9 @@ from typing import Callable, Protocol
 # and the script directory is already first on sys.path. The repository path is
 # only a fallback for running from a checkout, so it must never shadow the
 # installed module (D-174 F1).
+# Bytecode written beside an installed release would be an unlisted file that
+# fails signature verification, including verify(old_current) during recovery.
+sys.dont_write_bytecode = True
 RELEASE_TOOLS = Path(__file__).resolve().parents[2] / "release"
 if RELEASE_TOOLS.is_dir() and str(RELEASE_TOOLS) not in sys.path:
     sys.path.append(str(RELEASE_TOOLS))
