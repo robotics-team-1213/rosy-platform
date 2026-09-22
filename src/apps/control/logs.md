@@ -206,3 +206,10 @@
 - gate 변화: 없음. watch.py 순수 모듈 LOCAL GO 유지.
 - 결정: 없음 — D-2/D-38/D-149 기존 결정을 감시 장치에 반영한 것.
 - 교훈: 감시장치 테이블이 정책을 배반하면 오탐이 상수가 된다. 리네임(D-16) 시기에 감시 테이블이 함께 갱신되지 않아 6개월간 watch_node 가 현행 그래프에서 항상 인터럽트를 보고했다.
+
+## 2026-09-22 · uncommitted · control(ir): ir_sensor/range 단일 발행 계약 고정
+- 변경: `launch/line_follow.launch.py` 헤더에 ir_sensor/range 단일 발행 규칙 주석(ir_adc_node 가 이 launch 의 유일 IR 발행자, C++ sensor_adc 는 같은 버스의 레거시 벤치 판독기 — 병행 금지). `control/calib_node.py` 운영자 메시지 2건에서 구 패키지명 pinky_sensor_adc 제거 및 병행 금지 안내 추가. 계약 시험은 repo `test/test_ir_source_exclusivity.py`(T2).
+- 증거: `python -m pytest test/test_ir_source_exclusivity.py -q` 4 passed(적색 3건 확인 후 초록). `python -m pytest src/apps/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거: communication-protocol-report.md §3.2.1 이중 발행 항.
+- gate 변화: 없음.
+- 결정: 없음 — 문서화+계약 시험으로 마는 최소 조치. launch 상호배제 강제(한 노드가 다른 쪽 검사)는 필요 시 별도.
+- 교훈: 없음.

@@ -199,6 +199,10 @@ def generate_launch_description():
             ),
             launch_arguments=robot_args.items(),
         ),
+        # ir_sensor/range single-publisher rule: in this OS hardware graph the
+        # IR source is control's ir_adc_node (via line_follow). The C++
+        # sensor_adc node is a legacy-bench reader of the same bus and must
+        # never run beside it — two readers interleave ir_sensor/range arrays.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(control_share, "launch", "line_follow.launch.py")

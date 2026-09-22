@@ -1,4 +1,8 @@
 """Sensing-only D-143 line observer; CORE retains all command authority."""
+# ir_sensor/range single-publisher rule: this launch starts the Python
+# ir_adc_node as the only IR publisher on the bus. The C++ sensor_adc node
+# (legacy bench) speaks the same register protocol on the same bus — running
+# both interleaves arrays from two readers. Never start them together.
 
 import os
 

@@ -186,7 +186,8 @@ class CalibNode(Node):
 
     def _heartbeat(self):
         if self.last_ir is None:
-            self.get_logger().warn('IR 없음 — ros2 run pinky_sensor_adc main_node')
+            self.get_logger().warn('IR 없음 — ros2 run sensor_adc main_node '
+                                   '(ir_adc_node 와 병행 금지)')
             return
         extra = f' phase={self.phase}' if self.phase != 'idle' else ''
         self.get_logger().info(f'IR now={self.last_ir}{extra}')
@@ -323,7 +324,7 @@ class CalibNode(Node):
             return
         if step in self.sets:
             if self.last_ir is None:
-                self._status('IR 없음 — pinky_sensor_adc 를 먼저')
+                self._status('IR 없음 — sensor_adc 를 먼저')
                 return
             self.collecting = step
             self.buf = []

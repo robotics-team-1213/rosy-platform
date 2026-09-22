@@ -62,3 +62,10 @@
 - 증거: 맵 덩어리 수 1(방/통로/링 전부 연결), `world_to_map.py` 출력 free=7199 occupied=1663. 플로우 검증 이미지로 도면과 대조.
 - 한계: 외곽 프레임 밖 누수 free 152 셀(0.06 m2), 벽 관절 핀홀 — inflation 이 흡수하지만 SLAM 정합 비교용으로는 보강 필요. 차로 0.10~0.20 m 는 nav2 footprint QA 전에는 미션 보증 못 한다.
 - gate 변화: ROS-SIM 새 맵 입력으로는 HOLD 유지(실측 런치 전). 시나리오 문서 `docs/plans/2026-09-22-rosy-road-yield-scenarios.md`.
+
+## 2026-09-22 · uncommitted · navigation(launch): hardware 그래프의 IR 출처 명시
+- 변경: `launch/hardware.launch.py` 의 line_follow include 위에 ir_sensor/range 단일 발행 주석 추가 — 이 그래프의 IR 출처는 control ir_adc_node 뿐이며 C++ sensor_adc 노드를 본 트리에서 시작하지 않는다. 코드 변경 없음(주석).
+- 증거: `test/test_ir_source_exclusivity.py` 의 hardware 케이스 포함 4 passed (2026-09-22 Windows).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
