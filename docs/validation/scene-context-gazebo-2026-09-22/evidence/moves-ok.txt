@@ -1,0 +1,3 @@
+moved to 0.10
+moved to 0.45
+moved to 0.80

@@ -17,6 +17,14 @@
 - 결정: 없음
 - 교훈: 없음
 
+## 2026-09-22 · uncommitted · test(control): D-162 Gazebo 실렌더링 검증 PASS — scene context 폴백 확인
+
+- 변경: 없음(검증과 기록만). WSL2 Gazebo Sim 8.15에서 semantic_road_dashboard 헤드리스 실행, road_observer만 scene_context_enabled로 스냅샷 변경. 스폰→텔레포트 3회(x 0.10/0.45/0.80)로 시야를 바꾸며 관측 수집.
+- 증거: `docs/validation/scene-context-gazebo-2026-09-22/` — 정지선 구간 stop_line 20/20·22/22, 표식 통과 후 generic 18/18·18/18(보수 폴백), 단일 옵저버 가드(publisher 1), payload context 필드 상시. phase0에서 정지선 conf 0.986·거리 0.167m — 2026-09-21 증거와 일치.
+- gate 변화: 없음(ROS-SIM HOLD 유지 — 전체 그래프 주행은 기존 과제). D-162 슬라이스의 실렌더링 증거 추가.
+- 결정: 텔레포트 기반 검증으로 주행 동역학은 미반영 — 주행 폐루프는 2026-09-21 증거가 커버.
+- 교훈: 1차 실행에서 잔존 옵저버가 /road/observation을 오염시켰다(publisher 2). 그래프 검증 스크립트는 publisher 수 단정을 먼저 하라.
+
 ## 2026-09-17 · uncommitted · fix(sensing): stop writing RGB tuples into the BGR map raster
 - 변경: S2 — `sensing/map_raster.py`가 계약을 `OCCUPANCY_RGB`로 선언하고 `OCCUPANCY_BGR`을 뒤집어 파생하도록. `WALL_THRESHOLD` 상수화. `web_node.py:render_png` docstring이 색 값을 되풀이하지 않고 출처를 가리키도록. `test_map_raster.py`가 하드코딩 튜플 5곳 대신 상수를 참조. 신규 `test/test_map_raster_color_contract.py` 3건
 - 증거: `PYTHONPATH=src/control;src python -m pytest src/control/test -q` 998 passed, 26 skipped (2026-09-17 Windows, 미커밋 WIP 포함 작업 트리)

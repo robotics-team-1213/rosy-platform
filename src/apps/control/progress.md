@@ -71,6 +71,7 @@ plans:
 
 - D-162(Proposed): 학습된 장면은 설정이지 권한이 아니다. `sensing/scene_context.py`(프로파일/스토어/매처)와 `road_observer_node` wiring(T3)이 착지했다. 비활성이 기본이며, 활성 시 payload에 additive `context` 필드를 실고 보정 명령 시 matcher 세션을 폐기한다. CORE 수용(T5)은 `core` 모듈 게이트 참조.
 - **2026-09-22 노드 그래프 검증 PASS**: WSL2 Jazzy에서 road_observer_node를 scene_context_enabled로 기동, 합성 카메라 3페이스에서 generic→lane_follow→stop_line→crosswalk 순서 전환·리비전 결합·twist 토픽 0을 확인했다(docs/validation/scene-context-control-node-2026-09-22). D-162 슬라이스의 ROS-SIM 증거는 담겼고, 전체 그래프·물리 센서는 기존 HOLD 유지다.
+- **2026-09-22 Gazebo 실렌더링 검증 PASS**: semantic_road_dashboard 헤드리스 실행에서 실제 렌더링 프레임으로 정지선 구간 stop_line 100% 분류, 표식 통과 후 generic 보수 폴백 확인(docs/validation/scene-context-gazebo-2026-09-22). crosswalk 배치 미검출로 crosswalk 컨텍스트는 호스트 시험만 존재.
 - context는 인지 파라미터만 바꾼다. 정지·명령 결정은 여전히 LiDAR/IR 메트릭과 CORE가 소유하며(D-137/D-151), 프로파일 값 튜닝은 DEVICE gate 전까지 제네릭과 동일하게 둔다.
 - LOCAL: `1179 passed, 28 skipped` (2026-09-22).
 

@@ -1,0 +1,1 @@
+WORLD=map_260905 MODEL=rosy

@@ -1282,6 +1282,14 @@
 - 결정: B-1 갭(모드 전환 시 매처 리셋 미와이어링)은 설계 문서에 명시된 대로 히스테리시스 자기 교정+CORE 정책 리셋으로 커버하고, 모드 구독 와이어링은 DEVICE 튜닝 게이트에서 재판정하기로 확정했다
 - 교훈: 같은 WSL에서 타 세션 빌드가 동시 도는 경우 종료 후 그래프 재조회는 오염될 수 있다 — 판정 근거는 실행 중 캡처로 한정하라
 
+## 2026-09-22 · uncommitted · test(control): D-162 Gazebo 실렌더링 검증 PASS
+
+- 변경: `docs/validation/scene-context-gazebo-2026-09-22/`(README+evidence 18파일) 추가 — Gazebo 8.15 실렌더링 프레임에서 정지선 stop_line 분류·표식 소실 시 generic 폴백 확인. control ROS-SIM blocker의 D-162 슬라이스 상태 갱신
+- 증거: phase0 stop_line 20/20(정지선 conf 0.986·0.167m — 09-21 증거 일치), phase2/3 generic 18/18. 단일 옵저버 가드 통과
+- gate 변화: 없음(control ROS-SIM HOLD 유지, D-162 슬라이스 증거 추가)
+- 결정: 없음
+- 교훈: 없음
+
 ## 2026-09-22 · uncommitted · test(control): D-162 노드 그래프 검증 PASS — scene context 슬라이스
 
 - 변경: `docs/validation/scene-context-control-node-2026-09-22/`(README+evidence) 추가 — road_observer_node를 scene_context_enabled로 WSL2 Jazzy에서 기동, 합성 카메라 3페이스에서 110 observation 수집, 전환 순서·리비전 결합·twist 0 검증. control ROS-SIM blocker에 D-162 슬라이스 통과 명시
