@@ -477,3 +477,13 @@
 - 결정: D-174
 - 교훈: 거부 규칙은 위험이 생기는 경로에 정확히 맞춘다. 넓은 규칙은 정상 산출물을 막고, 그 실패는 비싼 ARM64 빌드 끝에서야 보인다.
 
+## 2026-09-23 · uncommitted · docs(adr): D-176 boot config file and per-card fallback AP
+
+- 변경: D-176과 실행 계획 `docs/plans/2026-09-23-boot-config-and-fallback-ap.md`를 추가했다. 코드 변경 없음.
+  운영자가 카드 boot 파티션의 `rosy-config.yaml`로 Wi-Fi·Fleet·AP 정책을 바꾸고, 비밀번호는 적용 직후 카드에서 지운다.
+  업링크가 없으면 카드별 랜덤 비밀번호의 `rosy-pinky-xxxx` AP를 연다(D-154 결정 5·6 부분 대체, D-26 유지).
+- 증거: `network.py` 상태 기계(D-26/D-124/D-154)가 네이티브 이미지에 연결되지 않았고, 첫 부팅은 `PROVISIONING_AP`를 기록만 한다.
+- gate 변화: 없음
+- 결정: D-176
+- 교훈: 없음
+
