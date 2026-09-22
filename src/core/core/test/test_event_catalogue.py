@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import re
 from pathlib import Path
@@ -287,22 +288,35 @@ def _functions_in(tree: ast.AST):
 
 
 def fingerprint(node: ast.AST) -> str:
-    """주석·공백에는 둔감하고 코드에는 민감한 지문."""
-    dumped = ast.dump(node, annotate_fields=False, include_attributes=False)
-    return hashlib.sha256(dumped.encode("utf-8")).hexdigest()[:16]
+    """주석·공백·docstring 에는 둔감하고 코드에는 민감한 지문.
+
+    `ast.dump` 를 해시하지 않는다. 그 출력은 파이썬 버전마다 다르다(3.13 에서
+    빈 필드를 생략하기 시작했다) — 개발 호스트(3.14)에서 고정한 값이 CI·Pi
+    (3.12)에서 틀려져, 가드가 멀쩡한 중계를 두고 빨개진다. 정규화한 소스
+    (`ast.unparse`)는 버전을 타지 않는다. docstring 은 설명이지 흐름이 아니므로
+    뺀다.
+    """
+    node = copy.deepcopy(node)
+    body = getattr(node, "body", None)
+    if (isinstance(body, list) and body and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        node.body = body[1:] or [ast.Pass()]
+    normalised = ast.unparse(node)
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:16]
 
 
 #: 몸통이 이 지문과 같을 때에만 중계로 인정한다. 값을 손으로 고치는 것이
 #: 곧 "이 함수를 다시 읽었다"는 서명이다 — 그러라고 있는 목록이다.
 PINNED_RELAYS = {
     ("core_features/core_features/docking/manager.py", "DockingManager._emit"):
-        "f4feef4e5c93e7da",
+        "15ae9dd72fa20f0b",
     ("core_features/core_features/safety/manager.py", "SafetyManager._emit"):
-        "4126b877798f6431",
+        "e0aca301e45601ff",
     ("core_features/core_features/power/battery.py", "BatteryMonitor._emit_all"):
-        "6ce47629a32f58a2",
+        "fdb020d71a91a47a",
     ("core_features/core_features/power/manager.py", "PowerManager._emit_all"):
-        "a308c2783ff9d12d",
+        "da516d1499355bc6",
 }
 
 
@@ -1147,3 +1161,20 @@ def test_a_changed_pinned_body_says_what_to_do_about_it():
         origin)
 
     assert any("PINNED_RELAYS" in message for message in blind), blind
+
+
+def test_the_fingerprint_does_not_depend_on_the_python_version():
+    """개발 호스트(3.14)와 CI·Pi(3.12)가 같은 값을 내야 고정 목록이 의미가 있다.
+
+    `ast.dump` 는 3.13 에서 출력이 바뀌었고, 그 해시로 고정한 값은 3.12 에서
+    네 중계를 모두 "몸통이 바뀌었다"고 빨갛게 만들었다. 고정 스니펫의 지문을
+    상수와 비교해, 버전을 타는 정규화로 돌아가면 어느 쪽에서든 여기서 걸린다.
+    주석과 docstring 은 지문에 들어가지 않는다.
+    """
+    source = ("def _emit(self, a):\n"
+              "    \"\"\"doc\"\"\"\n"
+              "    self._events.publish(a, data={})  # comment\n")
+    bare = "def _emit(self, a):\n    self._events.publish(a, data={})\n"
+
+    assert fingerprint(ast.parse(source).body[0]) == "0a2aebee7eb5a74a"
+    assert fingerprint(ast.parse(bare).body[0]) == "0a2aebee7eb5a74a"

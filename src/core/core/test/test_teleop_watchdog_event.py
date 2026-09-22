@@ -236,3 +236,65 @@ def test_the_expiry_reaches_the_audit_log(tmp_path):
 
     recorded = (tmp_path / "audit.jsonl").read_text(encoding="utf-8")
     assert "safety.watchdog" in recorded
+
+
+def test_leaving_manual_and_coming_back_neither_replays_nor_blames_the_link():
+    """MANUAL→IDLE→MANUAL 을 500 ms 안에 오가면, 쥐고 있던 teleop 이 남아
+    옛 명령을 다시 바퀴로 보냈다. 늦게 돌아오면 첫 틱이 만료를 발견해
+    `safety.watchdog` 을 냈다 — 링크는 멀쩡했고 모드를 바꾼 것뿐이다."""
+    command, events, _safety = build()
+    drive(command, 100.0)
+    modes = command._modes
+
+    modes.transition(Mode.IDLE)
+    assert cycle(command, 100.1) == Twist(0.0, 0.0)
+    modes.transition(Mode.MANUAL)
+
+    assert cycle(command, 100.2) == Twist(0.0, 0.0), "stale teleop replayed"
+    for step in range(5):
+        cycle(command, 101.0 + step)
+
+    assert "safety.watchdog" not in events.types()
+
+
+def test_a_readiness_hold_mid_session_is_not_a_lapsed_link():
+    class Gate:
+        ready = True
+
+        def is_ready(self):
+            return self.ready
+
+    command, events, _safety = build()
+    gate = Gate()
+    command.set_readiness_gate(gate)
+    drive(command, 100.0)
+
+    gate.ready = False
+    cycle(command, 100.1)
+    gate.ready = True
+    for step in range(5):
+        cycle(command, 101.0 + step)
+
+    assert "safety.watchdog" not in events.types()
+
+
+def test_a_teleop_between_the_expiry_check_and_the_note_keeps_its_own_lapse():
+    """만료 판정과 기록 사이에 새 teleop 이 들어오면, 기록이 `self._session` 을
+    다시 읽어 **새** 세션을 "이미 알림"으로 만들었다 — 그 세션의 진짜 끊김은
+    영영 조용해진다. 판정 전에 읽은 번호를 기록해야 한다."""
+    command, events, _safety = build()
+    drive(command, 100.0)
+    watchdog = command.watchdog
+    real_expired = watchdog.expired
+
+    def expired_while_a_new_command_arrives(now=None):
+        result = real_expired(now)
+        watchdog.expired = real_expired
+        drive(command, 100.9)          # 판정 직후, 기록 직전에 새 세션
+        return result
+
+    watchdog.expired = expired_while_a_new_command_arrives
+    cycle(command, 100.9)              # 첫 세션의 끊김
+    cycle(command, 102.0)              # 새 세션의 끊김
+
+    assert events.types().count("safety.watchdog") == 2

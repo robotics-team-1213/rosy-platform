@@ -87,10 +87,12 @@ class CommandManager:
             self._reject(source, "invalid velocity")
             return False, "VALIDATION_ERROR"
         linear, angular = self._safety.clip(linear, angular, scope="manual")
+        # 워치독을 먼저 되살린다. 50 Hz 틱이 새 명령과 옛 워치독을 함께 읽으면
+        # 새 세션의 첫 순간을 만료로 적는다.
+        self.watchdog.refresh()
         self._manual_twist = Twist(linear, angular)
         self._manual_source = source
         self._input_epoch += 1
-        self.watchdog.refresh()
         # 새 명령이 왔으니 다음 끊김은 다시 알릴 일이다.
         self._session += 1
         return True, ""
@@ -125,15 +127,23 @@ class CommandManager:
         self._input_epoch += 1
         self.watchdog.refresh(0.0)
 
-    def _clear_for_stop(self) -> None:
-        # E-Stop·정책 정지는 이미 알려진 정지 사유다. 쥐고 있던 teleop 을
-        # 워치독 만료로 다시 적으면 감사 로그가 멀쩡했던 링크를 끊겼다고 적는다.
+    def _drop_manual_session(self) -> None:
+        """쥐고 있던 teleop 을 버리고, 그 세션의 끊김은 알리지 않는다.
+
+        E-Stop·정책 정지·readiness HOLD·MANUAL 이탈은 이미 알려진 정지
+        사유다. 쥐고 있던 teleop 을 남겨두면 MANUAL 로 돌아온 첫 틱이 (500 ms
+        안이면) 옛 명령을 다시 내보내거나, 만료를 발견해 `safety.watchdog` 을
+        낸다 — 감사 로그가 멀쩡했던 링크를 끊겼다고 적는 셈이다.
+        """
         self._pending_watchdog = None
         self._announced_session = self._session
         self.clear_manual()
+
+    def _clear_for_stop(self) -> None:
+        self._drop_manual_session()
         self.clear_navigation()
 
-    def _note_watchdog_lapse(self) -> None:
+    def _note_watchdog_lapse(self, session: int) -> None:
         """SAF-002 만료를 기록해 둔다. 내보내는 것은 `announce_pending` 이다.
 
         `select_output` 은 50 Hz cmd_vel 경로의 첫 줄이고, 그 반환값이 바퀴로
@@ -142,10 +152,15 @@ class CommandManager:
         감사 로그 파일 싱크다. 그동안 드라이버는 끊기기 직전의 0 아닌 명령을
         그대로 쥐고 있다. 그래서 여기서는 기록만 하고, 정지가 나간 뒤
         호출자(`core.bridge.cmd_vel.cmd_vel_cycle`)가 알린다.
+
+        `session` 은 호출자가 만료를 **판정하기 전에** 읽은 번호다. 여기서
+        `self._session` 을 다시 읽으면, 판정과 기록 사이에 들어온 새 teleop 의
+        번호가 기록되어 그 새 세션이 "이미 알림"이 되고 그 세션의 진짜 끊김이
+        조용해진다.
         """
-        if self._manual_twist is None or self._announced_session == self._session:
+        if self._announced_session == session:
             return
-        self._pending_watchdog = self._session
+        self._pending_watchdog = session
 
     def announce_pending(self) -> None:
         """밀린 알림을 낸다. 브리지가 cmd_vel 을 내보낸 **뒤** 부른다."""
@@ -177,15 +192,21 @@ class CommandManager:
 
     def select_output(self, now: Optional[float] = None) -> Twist:
         current = now if now is not None else time.monotonic()
-        if self._safety.estop or self._modes.is_emergency:
-            return ZERO
-        if not self._motion_ready():
+        stopped = self._safety.estop or self._modes.is_emergency
+        ready = self._motion_ready()
+        leaving_manual = stopped or not ready or self._modes.mode is not Mode.MANUAL
+        if leaving_manual and self._manual_twist is not None:
+            self._drop_manual_session()
+        if stopped or not ready:
             return ZERO
         if self._modes.mode is Mode.MANUAL:
-            if self._manual_twist is not None and not self.watchdog.expired(current):
-                l, a = self._safety.clip(self._manual_twist.linear, self._manual_twist.angular, "manual")
+            # 번호와 명령을 만료 판정 **전에** 읽는다 (`_note_watchdog_lapse`).
+            session, held = self._session, self._manual_twist
+            if held is not None and not self.watchdog.expired(current):
+                l, a = self._safety.clip(held.linear, held.angular, "manual")
                 return self._policy_output(l, a, self._manual_source, current)
-            self._note_watchdog_lapse()
+            if held is not None:
+                self._note_watchdog_lapse(session)
             return ZERO
         nav_age = current - self._nav_updated_at if self._nav_updated_at is not None else None
         if (

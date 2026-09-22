@@ -71,7 +71,7 @@ def test_the_chosen_output_reaches_the_wheels():
     assert rec.sent == [(0.2, -0.1)]
 
 
-def test_the_lapse_is_announced_every_cycle():
+def test_announce_pending_is_called_every_cycle():
     """지워지면 여기서 걸린다 — 이 파일이 존재하는 이유다."""
     assert "announce" in run().log
 

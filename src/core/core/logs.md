@@ -287,3 +287,10 @@
 - 증거: 문서 정정 전 7 failed(미문서 19종, 키 8건, 심각도 7건, `safety.watchdog`·`nav.blocked` 미발행), 정정 후 73 passed. `src/core/core/test` 전체 통과(커밋 메시지 참조).
 - gate 변화: 없음.
 - 결정: 손으로 관리하는 이벤트 목록을 두지 않는다. 예외 목록(`not_events`)은 발행 이름과 겹치면 실패한다.
+
+## 2026-09-22 · uncommitted · fix(core): 리뷰 반영 — 버전 무관 중계 지문, MANUAL 이탈 시 teleop 폐기, 만료 기록의 세션 경합
+
+- 변경: (1) `test_event_catalogue.py` 의 `fingerprint()` 가 `ast.dump`(3.13 에서 출력이 바뀜) 대신 docstring 을 뺀 `ast.unparse` 를 해시한다 — 3.14 에서 고정한 값이 CI·Pi(3.12)에서 네 중계를 모두 "바뀜"으로 빨갛게 만들던 결함. `PINNED_RELAYS` 재고정(docking `15ae9dd72fa20f0b`, safety `e0aca301e45601ff`, battery `fdb020d71a91a47a`, power `da516d1499355bc6`) + 고정 스니펫 지문 시험. (2) `CommandManager.select_output` 이 E-Stop·EMERGENCY·readiness HOLD·MANUAL 이탈에서 쥐고 있던 teleop 을 버리고 그 세션을 알림 완료로 적는다(`_drop_manual_session`, `_clear_for_stop` 도 이것을 쓴다). MANUAL→IDLE→MANUAL 에서 나던 거짓 `safety.watchdog` 을 없애고, **기존 결함이던 500 ms 안 복귀 시 옛 teleop 명령 재생(stale replay)도 함께 없앤다**. (3) 만료 기록은 판정 **전에** 읽은 세션 번호를 쓴다(`_note_watchdog_lapse(session)`); `teleop()` 은 워치독을 명령보다 먼저 되살린다. (4) `test_cmd_vel_cycle.py` 시험 이름 정리.
+- 증거: 신규 3 시험(모드 왕복, HOLD, 판정↔기록 사이 teleop)은 수정 전 manager 에서 3 failed, 수정 후 통과. `src/core/core/test`: Python 3.14 와 `uv run --python 3.12` 양쪽 통과(수치는 커밋 메시지). 앞 항목의 catalogue "73 passed" 는 오기다 — 당시 실제 71 passed, 지문 시험 추가 후 72.
+- gate 변화: 없음(ROS-SIM HOLD 유지 — cmd_vel 경로 재검증 필요는 그대로).
+- 결정: MANUAL 을 벗어난 teleop 은 조종이 아니다. `manual_active` 도 이탈 후 첫 틱부터 거짓이 된다(도킹 복귀 정책은 이제 IDLE 로 빠진 로봇을 운영자 조종 중으로 보지 않는다).
