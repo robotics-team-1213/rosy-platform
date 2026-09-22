@@ -155,6 +155,53 @@ def test_readiness_probe_has_a_bounded_failure():
     assert "sys.exit(main())" in probe
 
 
+def _load_probe(name="wait_core_ready_stop"):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, NATIVE / "wait-core-ready.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_readiness_probe_treats_a_stop_signal_as_a_clean_exit():
+    """`systemctl stop` during activation signals ExecStartPost as well.
+
+    WSL systemd 2026-09-23: the probe died of SIGINT (KeyboardInterrupt) and the unit
+    ended `failed` with Result=signal on every stop during startup, whatever core did.
+    """
+    import pytest
+
+    probe = _read("wait-core-ready.py")
+    main_block = probe[probe.index('if __name__ == "__main__":'):]
+    assert "signal.SIGINT, signal.SIGTERM" in main_block
+    assert main_block.index("signal.signal(") < main_block.index("sys.exit(main())")
+    with pytest.raises(SystemExit) as exc:
+        _load_probe()._stop_requested(2, None)
+    assert exc.value.code == 0
+
+
+def test_readiness_probe_process_exits_zero_on_sigint_and_sigterm():
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    import pytest
+
+    if os.name != "posix":
+        pytest.skip("POSIX signal delivery; covered by the handler test on Windows")
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        env = dict(os.environ, ROSY_API_PORT="9", ROSY_CORE_READY_TIMEOUT_S="30")
+        proc = subprocess.Popen([sys.executable, str(NATIVE / "wait-core-ready.py")], env=env,
+                                stderr=subprocess.PIPE, text=True)
+        time.sleep(1.0)
+        proc.send_signal(signum)
+        _, err = proc.communicate(timeout=10)
+        assert proc.returncode == 0, (signum, err)
+        assert "stop requested" in err
+
+
 def test_readiness_probe_honors_rosy_api_port():
     import importlib.util
 

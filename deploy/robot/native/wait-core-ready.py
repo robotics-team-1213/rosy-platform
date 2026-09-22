@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import sys
 import time
 import urllib.error
@@ -29,5 +30,15 @@ def main() -> int:
     return 1
 
 
+def _stop_requested(signum, frame) -> None:
+    # `systemctl stop` while the unit is still activating signals this probe too. A
+    # control process killed by SIGINT/SIGTERM leaves the unit failed (Result=signal),
+    # although the stop was requested. Abandon the wait cleanly instead.
+    print("CORE readiness wait abandoned: stop requested", file=sys.stderr)
+    sys.exit(0)
+
+
 if __name__ == "__main__":
+    for _signum in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(_signum, _stop_requested)
     sys.exit(main())
