@@ -134,6 +134,10 @@ def metrics(svc: CoreServicesLike = Depends(get_services)):
         "# HELP rosy_audit_serialize_failures_total audit events whose data had to be repr()-ed",
         "# TYPE rosy_audit_serialize_failures_total counter",
         f"rosy_audit_serialize_failures_total {audit['serialize_failures']}",
+        # 정리 실패가 아니다. 바꿔 끼우기는 끝났고, 정전이 그것을 되돌릴 수 있을 뿐이다.
+        "# HELP rosy_audit_dir_sync_failures_total directory fsyncs that failed after an audit prune replace",
+        "# TYPE rosy_audit_dir_sync_failures_total counter",
+        f"rosy_audit_dir_sync_failures_total {audit['dir_sync_failures']}",
     ]
     diagnostics_lines = [
         "# HELP rosy_diagnostics_health component health (0=OK,1=UNKNOWN,2=WARNING,3=ERROR)",

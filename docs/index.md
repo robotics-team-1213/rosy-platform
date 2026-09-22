@@ -122,8 +122,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs(api): API ref v1.17 — `logs/audit` 의 `dir_sync_failures`·`last_dir_sync_error`, `rosy_audit_dir_sync_failures_total`
 - 2026-09-23 · 3ec8672 · docs(plans): T15 — 통신 정합 계획 전 페이즈 마감, 최종 회귀 PASS
 - 2026-09-23 · uncommitted · fix(test): strip the UTF-8 BOM that turned the catalogue and vision guards red, and guard against it
 - 2026-09-23 · uncommitted · docs(plans): Phase 4(T12~T14) 이행 기록 — 계획 전 페이즈 완료
 - 2026-09-22 · uncommitted · docs(agents): T11 — fleet_agent/bridge AGENTS 현행화 + 소소 수정 팩
-- 2026-09-22 · uncommitted · docs(adr): 미병합 옛 브랜치의 보존·이관 규칙과 후속 항목 (D-172)

@@ -1555,3 +1555,10 @@
 - gate 변화: 없음 — 코드·문서 모듈 게이트는 각 progress.md 절차대로. 남은 미결: ARM64/DEVICE 게이트(sensor_adc 빌드·실측, udev 심링크 readback, chrony 동기화 품질)와 G1 후속 ADR 조건(하드웨어 프로필 D-84 + 실기 수요), 중앙 Fleet 착수 시 D-170 확장.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-23 · uncommitted · docs(api): API ref v1.17 — `logs/audit` 의 `dir_sync_failures`·`last_dir_sync_error`, `rosy_audit_dir_sync_failures_total`
+- 변경: 헤더 v1.16→v1.17, 변경 이력 v1.17 행(Additive), `/api/v1/logs/audit` 행의 `log` 필드 목록과 의미. 앞선 커밋이 D-170 의 v1.15 행에 덧붙였던 노트는 병합에서 main 쪽으로 되돌리고 자기 행으로 옮겼다. `test/test_line_follow_contract_docs.py` 버전 고정을 v1.17 로
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_diagnostics_api.py` 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 남의 변경 이력 행에 덧붙이지 않는다 — Additive 라도 자기 행을 연다.
