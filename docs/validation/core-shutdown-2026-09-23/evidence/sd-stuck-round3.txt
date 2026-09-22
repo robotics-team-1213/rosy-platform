@@ -1,0 +1,7 @@
+# rosy-core-sdtest.service stuck-shutdown case, escalation=exit2, commit=861386e + round-3 main.py (SIG_IGN + os.write)
+861386e-round3 main.py in place  2026-09-23T04:13:59+09:00
+# ExecStart: ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy_sdtest/current/install/setup.bash && exec /opt/rosy_sdtest/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+# node.shutdown patched with a 60 s sleep (> TimeoutStopSec=15) to wedge the stop
+run 1 (start rc=0, MainPID 26692, stuck at stop=yes): Result=exit-code NRestarts=0 ExecMainCode=1 ExecMainStatus=2 ActiveState=failed  stop_s=1.17 audit_last="type":"system.shutdown"
+run 2 (start rc=0, MainPID 27213, stuck at stop=yes): Result=exit-code NRestarts=0 ExecMainCode=1 ExecMainStatus=2 ActiveState=failed  stop_s=1.19 audit_last="type":"system.shutdown"
+# patches reverted: SLOW lines=0 selfkill lines=0

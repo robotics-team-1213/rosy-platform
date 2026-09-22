@@ -33,11 +33,51 @@ def test_core_runs_as_a_device_free_hardened_service():
         "DevicePolicy=closed", "PrivateDevices=true",
         "NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",
         "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py",
-        "ros2 run core core", "Restart=on-failure",
+        "exec /opt/rosy/current/install/lib/core/core --ros-args", "Restart=on-failure",
+        "KillSignal=SIGINT",
     ):
         assert directive in unit
     assert "DeviceAllow=" not in unit
     assert "docker" not in unit.lower()
+
+
+def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
+    """The node itself is the unit's main process: systemd sees the real stop signal.
+
+    Under `ros2 run` the wrapper re-encoded a signal death of the node as exit 241
+    (SIGTERM) / 254 (SIGINT), so an ordinary stop in the window before core.main installs
+    its handlers left the unit `failed` and, when the signal came from outside systemctl,
+    restarted it 2 s later. Exec'ing the entry script removes that re-encoding (and the
+    ros2 CLI's own startup window, and one Python process). Because systemd then counts a
+    SIGINT/SIGTERM death of the main process as clean, core must not escalate a stuck
+    shutdown by re-signalling itself — `core.main` exits with
+    STUCK_SHUTDOWN_EXIT_CODE=2 so that stays visible as `Result=exit-code`.
+    No SuccessExitStatus is added: nothing here needs remapping, and a remap would also
+    whitewash that escalation.
+    """
+    unit = _read("rosy-core.service")
+    exec_start = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+
+    assert "ros2 run" not in exec_start
+    assert "SuccessExitStatus" not in unit
+    # the other half of the contract lives in core.main: the escalation must not be a
+    # signal death, or systemd would count it as a clean stop like any other
+    core_main = (ROOT / "src" / "core" / "core" / "core" / "main.py").read_text(
+        encoding="utf-8")
+    assert "STUCK_SHUTDOWN_EXIT_CODE = 2" in core_main
+    assert "os._exit(STUCK_SHUTDOWN_EXIT_CODE)" in core_main
+    assert "os.kill(os.getpid()" not in core_main
+    # the hard-coded entry-script path only exists in a --merge-install payload
+    payload = (ROOT / "deploy" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
+    assert "--merge-install" in payload
+    assert '--install-base "$INSTALL_ROOT"' in payload
+    assert 'INSTALL_ROOT="$RELEASE_ROOT/install"' in payload
+    setup_cfg = (ROOT / "src" / "core" / "core" / "setup.cfg").read_text(encoding="utf-8")
+    assert "install_scripts=$base/lib/core" in setup_cfg
+    # the script itself is generated from this entry point; a rename would leave a unit
+    # pointing at a file nobody builds any more
+    setup_py = (ROOT / "src" / "core" / "core" / "setup.py").read_text(encoding="utf-8")
+    assert "'core=core.main:main'" in setup_py
 
 
 def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
@@ -131,6 +171,53 @@ def test_readiness_probe_has_a_bounded_failure():
     assert "time.monotonic()" in probe
     assert "return 1" in probe
     assert "sys.exit(main())" in probe
+
+
+def _load_probe(name="wait_core_ready_stop"):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, NATIVE / "wait-core-ready.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_readiness_probe_treats_a_stop_signal_as_a_clean_exit():
+    """`systemctl stop` during activation signals ExecStartPost as well.
+
+    WSL systemd 2026-09-23: the probe died of SIGINT (KeyboardInterrupt) and the unit
+    ended `failed` with Result=signal on every stop during startup, whatever core did.
+    """
+    import pytest
+
+    probe = _read("wait-core-ready.py")
+    main_block = probe[probe.index('if __name__ == "__main__":'):]
+    assert "signal.SIGINT, signal.SIGTERM" in main_block
+    assert main_block.index("signal.signal(") < main_block.index("sys.exit(main())")
+    with pytest.raises(SystemExit) as exc:
+        _load_probe()._stop_requested(2, None)
+    assert exc.value.code == 0
+
+
+def test_readiness_probe_process_exits_zero_on_sigint_and_sigterm():
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    import pytest
+
+    if os.name != "posix":
+        pytest.skip("POSIX signal delivery; covered by the handler test on Windows")
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        env = dict(os.environ, ROSY_API_PORT="9", ROSY_CORE_READY_TIMEOUT_S="30")
+        proc = subprocess.Popen([sys.executable, str(NATIVE / "wait-core-ready.py")], env=env,
+                                stderr=subprocess.PIPE, text=True)
+        time.sleep(1.0)
+        proc.send_signal(signum)
+        _, err = proc.communicate(timeout=10)
+        assert proc.returncode == 0, (signum, err)
+        assert "stop requested" in err
 
 
 def test_readiness_probe_honors_rosy_api_port():

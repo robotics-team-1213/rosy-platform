@@ -288,3 +288,17 @@
 - gate 변화: 없음.
 - 결정: 없음 — SRS §25 전제의 이미지 계약화.
 - 교훈: 문서 버전을 리터럴로 고정한 시험은 버전이 오를 때마다 깨진다 — 헤더를 읽어 판정하도록 쓰는 편이 유지된다(단, 고정 의도라면 리터럴이 맞을 수도 있다. 이번엔 D-143 표기 존재 확인이 본래 목적이므로 헤더 판독형으로).
+
+## 2026-09-23 · uncommitted · fix(native): rosy-core 가 entry script 를 직접 exec + 준비 프로브가 정지 신호를 깨끗이 끝냄
+- 변경: ① `rosy-core.service` `ExecStart` 가 `ros2 run core core` 대신 `/opt/rosy/current/install/lib/core/core` 를 exec 한다 — `ros2 run` 은 자식의 신호 사망을 `sys.exit(-N)`(241/254)로 바꿔 systemd 가 실패로 보게 만들었다. 노드가 주 프로세스면 SIGINT/SIGTERM 사망이 systemd 기본으로 깨끗한 종료이므로 `SuccessExitStatus=241 254` 는 두지 않는다(둘 경우 이중 신호 격상까지 성공으로 덮는다). ② `wait-core-ready.py` 가 SIGINT/SIGTERM 에 exit 0 — 기동 중 `systemctl stop` 은 cgroup 의 `ExecStartPost` 도 때리고, 프로브가 신호로 죽으면 ExecStart 와 무관하게 유닛이 `Failed with result 'signal'` 로 남았다. ③ 계약 시험: ExecStart 에 `ros2 run` 없음·`SuccessExitStatus` 없음·하드코딩 경로가 `--merge-install`+`install_scripts=$base/lib/core` 와 일치, 프로브 신호 처리(POSIX 서브프로세스 시험 포함, Windows 는 skip).
+- 증거: `docs/validation/core-shutdown-2026-09-23` D절 — WSL systemd(`is-system-running=degraded`, 유닛 사본 `/run/systemd/system/rosy-core-sdtest.service`, 개인 workspace `/opt/rosy_sdtest`, ROS_DOMAIN_ID=44). 신규 ExecStart: steady start/stop **12/12 `Result=success`, NRestarts=0**, 매회 감사 `system.boot`+`system.shutdown`·포트 해제; 기동 중 stop 1.3–3.0 s 12점 **12/12 success**(기존 ExecStart 는 같은 창에서 2건 실패, 0.1–8 s 창에서 `ExecMainStatus=254` 1건). 프로브 수정 전에는 기동 중 stop 12점 중 7건이 `Result=signal`. 시험 유닛·상태는 실행 뒤 제거(`LoadState=not-found`). 호스트 `test/test_native_systemd_contract.py` 12 passed·1 skipped(Windows), WSL 에서 프로브 시험 4 passed.
+- gate 변화: 없음. 실기 `systemctl stop` 과 페이로드의 entry script 경로 확인은 DEVICE 몫으로 남는다.
+- 결정: 정지 경로의 판정은 "주 프로세스 종료 코드"만이 아니다 — `ExecStartPost` 같은 control process 도 유닛을 failed 로 만들고, `SuccessExitStatus=` 는 거기에 적용되지 않는다.
+- 교훈: 유닛의 정지 의미를 바꾸고 싶을 때 성공 코드 목록을 덧대는 것보다 래퍼를 걷어 신호가 systemd 에 그대로 보이게 하는 쪽이 덮는 범위가 좁고 정확하다.
+
+## 2026-09-23 · uncommitted · docs(native): 래퍼 제거의 근거를 실측에 맞게 정정 + 멈춘 종료 계약을 유닛 쪽에서 고정
+- 변경: `rosy-core.service` 주석과 `native/AGENTS.md` 를 다시 썼다 — 래퍼를 걷어낸 이유는 "systemd 가 노드를 직접 감독한다"(신호 재인코딩 241/254 제거, ros2 CLI 기동 창 제거, 파이썬 프로세스 하나 감소)이고, 그 대가로 **주 프로세스의 신호 사망이 깨끗한 종료**가 되므로 core 는 멈춘 종료를 `os._exit(2)` 로 끊는다는 것을 유닛 옆에 적었다. `test/test_native_systemd_contract.py` 는 ExecStart 에 `ros2 run` 없음·`SuccessExitStatus` 없음에 더해 `core/main.py` 의 `STUCK_SHUTDOWN_EXIT_CODE = 2`·`os._exit(...)`·`os.kill(os.getpid()` 부재를 함께 고정하고, 하드코딩 경로가 죽지 않도록 `INSTALL_ROOT="$RELEASE_ROOT/install"`(build-native-payload.sh)과 `'core=core.main:main'`(setup.py) 도 핀으로 잡는다.
+- 증거: `docs/validation/core-shutdown-2026-09-23` D절 "멈춘 종료" 표 — 같은 유닛·같은 상황에서 `os._exit(2)` 는 `Result=exit-code`/`ExecMainStatus=2`/`failed`, 이전 `os.kill` 격상은 `Result=success`. 평범한 `systemctl stop` 은 steady 12/12 + 기동 중 5/5 success. 저널 `evidence/logs/sd-stuck-*-journal.txt`. 호스트 `test/test_native_systemd_contract.py` 12 passed·1 skipped.
+- gate 변화: 없음. 실기 `systemctl stop` 과 페이로드의 `test -x /opt/rosy/current/install/lib/core/core` 는 DEVICE 몫. "ExecStartPost 중 core 사망" 사례도 DEVICE/후속.
+- 결정: 위쪽 2026-09-23 항목이 적은 "성공 코드 목록을 두면 이중 신호 격상까지 덮는다"는 근거는 무효다 — 래퍼가 없으면 격상의 신호 사망도 systemd 가 성공으로 친다. 래퍼를 걷어낸 근거는 systemd 가 노드를 직접 감독한다는 것이고, 격상은 `os._exit(2)` 가 맡는다. 유닛의 정지 의미는 유닛 파일만으로 정해지지 않는다 — 주 프로세스가 무엇으로 죽는지까지가 계약이라, 두 파일을 한 시험이 함께 붙든다.
+- 교훈: `SuccessExitStatus` 를 쓰지 않기로 한 판단의 근거가 "격상을 덮는다"였는데, 래퍼를 뺀 순간 그 근거가 무효가 됐다. 선택의 이유가 다른 변경에 의해 사라질 수 있다면 근거를 시험으로 고정해 두는 편이 낫다.

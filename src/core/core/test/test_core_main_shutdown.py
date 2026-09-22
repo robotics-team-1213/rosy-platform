@@ -91,8 +91,12 @@ def harness(monkeypatch):
                 state["run"]()
 
         def shutdown(self) -> None:
-            # 종료 훅 순서: 노드 shutdown(감사 system.shutdown, 포트 해제) 뒤 rclpy.shutdown
+            # 종료 훅 순서: 노드 shutdown(감사 system.shutdown, 포트 해제) → destroy_node
+            # → rclpy.shutdown
             rclpy.calls.append("node.shutdown")
+
+        def destroy_node(self) -> None:
+            rclpy.calls.append("node.destroy")
 
     node_mod = types.ModuleType("core.node")
     node_mod.RosyCoreNode = FakeNode
@@ -116,7 +120,8 @@ def test_rclerror_after_signal_returns_cleanly_after_shutdown_hook(harness, sign
     rclpy, state = harness
     state["run"] = _signal_then_race(rclpy, signum)
     core_main.main()  # 예외 없음 → console_scripts exit 0
-    assert rclpy.calls == ["init", "node", "run", "node.shutdown", "rclpy.shutdown"]
+    assert rclpy.calls == ["init", "node", "run", "node.shutdown", "node.destroy",
+                           "rclpy.shutdown"]
 
 
 def test_rclerror_when_context_down_before_python_handler_ran(harness):
@@ -128,7 +133,32 @@ def test_rclerror_when_context_down_before_python_handler_ran(harness):
 
     state["run"] = run
     core_main.main()
-    assert rclpy.calls[-2:] == ["node.shutdown", "rclpy.shutdown"]
+    assert rclpy.calls[-3:] == ["node.shutdown", "node.destroy", "rclpy.shutdown"]
+
+
+def test_suppressed_hook_exception_names_the_step(harness, capsys):
+    rclpy, state = harness
+
+    def run():
+        rclpy.valid = False
+
+    state["run"] = run
+    import sys as _sys
+    node_mod = _sys.modules["core.node"]
+    original = node_mod.RosyCoreNode.shutdown
+
+    def shutdown(self):  # 이름이 곧 메시지에 실린다
+        original(self)
+        raise RuntimeError("hook blew up")
+
+    node_mod.RosyCoreNode.shutdown = shutdown
+    try:
+        core_main.main()
+    finally:
+        node_mod.RosyCoreNode.shutdown = original
+    err = capsys.readouterr().err
+    assert "suppressed during shutdown (shutdown): RuntimeError('hook blew up')" in err
+    assert rclpy.calls[-2:] == ["node.destroy", "rclpy.shutdown"]
 
 
 def test_genuine_error_before_shutdown_still_propagates(harness):
@@ -140,7 +170,7 @@ def test_genuine_error_before_shutdown_still_propagates(harness):
     state["run"] = run
     with pytest.raises(RuntimeError, match="genuine failure"):
         core_main.main()
-    assert rclpy.calls[-2:] == ["node.shutdown", "rclpy.shutdown"]
+    assert rclpy.calls[-3:] == ["node.shutdown", "node.destroy", "rclpy.shutdown"]
 
 
 @pytest.mark.parametrize("signum", core_main.STOP_SIGNALS)
@@ -176,29 +206,55 @@ def test_first_signal_records_without_raising(saved_handlers, signum):
     assert stop.is_set()
 
 
-def test_second_sigint_restores_default_and_raises(saved_handlers):
+@pytest.mark.parametrize("signum", core_main.STOP_SIGNALS)
+def test_second_signal_exits_non_zero_without_raising(saved_handlers, monkeypatch, signum):
+    """두 번째 신호는 예외 없이 `os._exit(2)` 로 끊는다 — 정상 정지(exit 0)와 구별돼야 한다.
+
+    - `KeyboardInterrupt` 로 올리면(예전 SIGINT 경로) main 이 잡고 finally 의
+      `rclpy.shutdown()` 까지 가며, rclpy 가 CPython 트램폴린을 되돌려 세 번째 SIGINT 가
+      무시된다.
+    - 같은 신호로 자기 종료하면(`os.kill`) 노드가 유닛의 주 프로세스라 systemd 가
+      SIGINT/SIGTERM 사망을 깨끗한 종료로 쳐서, 멈춘 종료를 끊은 것이 정상 정지와
+      같아 보인다.
+    """
     import threading
+    exits = []
+    written = []
+    monkeypatch.setattr(core_main.os, "_exit", lambda code: exits.append(code))
+    monkeypatch.setattr(core_main.os, "kill",
+                        lambda pid, sig: pytest.fail("escalation must not re-signal itself"))
+    monkeypatch.setattr(core_main.os, "write",
+                        lambda fd, data: written.append((fd, data)) or len(data))
     stop = threading.Event()
     core_main.install_stop_handlers(stop)
-    handler = signal.getsignal(signal.SIGINT)
-    handler(signal.SIGINT, None)
-    with pytest.raises(KeyboardInterrupt):
-        handler(signal.SIGINT, None)
-    assert signal.getsignal(signal.SIGINT) is signal.SIG_DFL
+    handler = signal.getsignal(signum)
+    handler(signum, None)
+    assert exits == []
+    handler(signum, None)  # KeyboardInterrupt 를 던지면 실패
+    assert exits == [core_main.STUCK_SHUTDOWN_EXIT_CODE]
+    assert core_main.STUCK_SHUTDOWN_EXIT_CODE != 0
+    # 세 번째 신호가 이 몇 줄 사이에 와도 기본 동작(신호 사망 = systemd 가 보기에 정상 정지)으로
+    # 빠지지 않는다.
+    assert signal.getsignal(signum) is signal.SIG_IGN
+    assert written == [(2, core_main.STUCK_SHUTDOWN_MESSAGE)]
 
 
-def test_second_sigterm_restores_default_and_rekills_self(saved_handlers, monkeypatch):
-    import threading
-    killed = []
-    monkeypatch.setattr(core_main.os, "kill", lambda pid, sig: killed.append((pid, sig)))
-    stop = threading.Event()
-    core_main.install_stop_handlers(stop)
-    handler = signal.getsignal(signal.SIGTERM)
-    handler(signal.SIGTERM, None)
-    assert killed == []
-    handler(signal.SIGTERM, None)
-    assert killed == [(core_main.os.getpid(), signal.SIGTERM)]
-    assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+def test_escalation_message_is_preformatted_bytes_for_os_write():
+    """신호 처리기 안에서는 버퍼 잠금을 기다릴 수 없다 — 문자열 포매팅도 미리 해 둔다."""
+    import inspect
+    assert isinstance(core_main.STUCK_SHUTDOWN_MESSAGE, bytes)
+    assert core_main.STUCK_SHUTDOWN_MESSAGE.endswith(b"\n")
+    assert str(core_main.STUCK_SHUTDOWN_EXIT_CODE).encode() in core_main.STUCK_SHUTDOWN_MESSAGE
+    handler_src = inspect.getsource(core_main.install_stop_handlers)
+    body = handler_src[handler_src.index("def _request_stop"):]
+    assert "print(" not in body
+    assert "os.write(2, STUCK_SHUTDOWN_MESSAGE)" in body
+
+
+def test_stuck_shutdown_exit_code_is_not_a_signal_death():
+    """systemd 는 주 프로세스의 SIGINT/SIGTERM 사망을 성공으로 친다 — 격상은 종료 코드여야 한다."""
+    assert core_main.STUCK_SHUTDOWN_EXIT_CODE not in (0, 128 + signal.SIGINT,
+                                                      128 + signal.SIGTERM)
 
 
 def test_suppressed_exception_is_logged(harness, capsys):

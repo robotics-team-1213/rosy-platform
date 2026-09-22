@@ -1,0 +1,18 @@
+# variant=old unit=/run/systemd/system/rosy-core-sdtest.service commit=7614627 (fix/core-shutdown-followups) started 2026-09-23T02:54:13+09:00 loadavg 19.32 24.46 25.37 11/1241 290401
+# ExecStart: ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy_sdtest/current/install/setup.bash && exec ros2 run core core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+# Restart=on-failure RestartSec=2 TimeoutStopSec=15 KillSignal=SIGINT 
+# MainPID 290416: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros-args -r __ns:=/rosy_01
+steady 1 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.9
+steady 2 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.7
+steady 3 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.73
+steady 4 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=1.0
+startup stop @0.1s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=exit-code NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.17
+startup stop @0.3s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.28
+startup stop @0.5s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.14
+startup stop @0.8s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.16
+startup stop @1.2s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.14
+startup stop @2s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.27
+startup stop @4s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.87
+startup stop @8s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=1.2
+# finished 2026-09-23T02:55:07+09:00
+# Result tally:       1 Result=exit-code       5 Result=signal       6 Result=success 
