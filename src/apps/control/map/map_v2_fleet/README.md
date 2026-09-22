@@ -30,6 +30,6 @@ curl -X PUT http://127.0.0.1:8080/api/v1/line-follow/mode -H "Authorization: Bea
 ## Limits
 
 - Lane paint is visual-only. Nav2 and LiDAR see only the rectangle, which looks the same after a 180 deg turn, so AMCL is ambiguous here.
-- The camera detector follows a single line, not the lane between two lines. See `docs/validation/map-v2-fleet-gazebo-2026-09-22/result.md`.
+- The launch uses two-line lane mode (Gazebo ground only). Straight lanes and the crosswalk pass; 90 deg corners stop safely (not handled). See `docs/validation/map-v2-fleet-gazebo-2026-09-22/result.md`.
 - Orientation vs the physical mat: the Gazebo top view matches the STL under a proper rotation (no mirror). Not yet compared against a photo of the physical mat.
 - The traffic policy is DISABLED in `gz_sim/config/map_v2_fleet_core.yaml` until a road scene for this map exists.

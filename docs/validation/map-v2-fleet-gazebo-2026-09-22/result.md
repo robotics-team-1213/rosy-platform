@@ -36,7 +36,24 @@ The cause is structural. `detect_lane_error` (`control/sensing/lane.py`) steers 
 | Line evidence -> CORE -> sole final `/cmd_vel` publisher | PASS |
 | No evidence -> zero command (fail-closed) | PASS (run 161132) |
 | Mode OFF -> final zero | PASS |
-| Stays in the lane centre | **FAIL: follows a single boundary line** |
+| Stays in the lane centre (single-line mode) | **FAIL: follows a single boundary line**. Replaced by lane mode below |
 | Roundabout, S-curve, crosswalk semantics | NOT RUN |
+
+## Two-line lane mode (the user chose lane-centre keeping)
+
+`detect_lane_centre` (`f96320f`, `052f2fa`) projects bright runs to floor metres with the declared Gazebo `GroundPlane`. In each row it pairs the two runs whose spacing is closest to the lane width (2 x 0.0925 m) and steers to their midpoint. With no ground model it returns None, so an uncalibrated Device camera never drives in this mode.
+
+| Run | Change | Result |
+|---|---|---|
+| `163244` / `163611` | first lane detector | error 0.0 at the lane centre. Confidence fell 0.67 -> 0.33 near the crosswalk and CORE went LOST (min 0.35) after 7 cm. Causes: rows that cannot see a centred lane were counted, and crosswalk bars (parallel to travel) were paired as lane lines. |
+| `164241` | width pairing + observable rows only | All 26 captured frames read conf 1.0 offline. Live, the crosswalk lit 48-54% of the band, above the 0.40 washed-out cut, so it went LOST. |
+| `164757` | washed-out cut 0.75 (map_v2_fleet launch only) | **0.556 m along the lane centre through the crosswalk; x stayed within 1.0 mm of the centre** (-1.27057..-1.26955). Stopped fail-closed at y -0.41, where the inner block ends and the lane turns 90 deg (`trajectory_164757_lane.png`, `camera_corner_164757.png`). |
+
+| Lane-mode gate | Verdict |
+|---|---|
+| Straight lane centre keeping | PASS (1 mm, run 164757) |
+| Crosswalk bars inside the lane | PASS |
+| 90 deg corner | **HOLD**: stops safely. The lane turns out of the 0.08-0.23 m observable look-ahead, so corner handling (junction detection plus turn manoeuvre) is not implemented. |
+| Sitting on a shared boundary line | HOLD: single frame ambiguous, needs lane memory across frames |
 
 Raw logs (`odom_drive.csv`, `line_obs.txt`, `cmd_vel.csv`) are outside Git, in WSL `/rosy_mapv2_ws/evidence/20260922T_map_v2_fleet_<run>/`.
