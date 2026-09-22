@@ -324,3 +324,15 @@
   거부한다. 서명·검증은 릴리스 폴더 밖에서 실행한다. PowerShell PATH에는 openssl이 없으니
   Git의 `usr\bin`을 앞에 둔다.
 
+## 2026-09-22 · uncommitted · docs(adr): D-173 first-boot defects and boot indicator plan
+
+- 변경: 첫 실기 부팅 결과를 D-173과 실행 계획(`docs/plans/2026-09-22-pinky-first-boot-fixes.md`)으로 기록했다.
+  코드 변경 없음.
+- 증거: 회수한 카드의 ext4 루트를 읽기 전용으로 추출해 journal 확인. `rosy-release-recover.service`가
+  `ModuleNotFoundError: No module named 'signing'`(+7.96s)로 실패해 `rosy-core`/`rosy-runtime.target`이
+  dependency 실패. `rosy-first-boot`은 +26.3s에 `PROVISIONED`, Wi-Fi `192.168.1.201`, avahi 이름은 `ubuntu.local`.
+- gate 변화: DEVICE HOLD 유지(부팅은 했으나 CORE 미기동).
+- 결정: D-173
+- 교훈: 저장소 경로로 통과하는 import는 설치 배치에서 깨질 수 있다. 이미지 검증은 파일 존재가 아니라
+  설치 위치에서 진입점을 실행해야 한다. 사람이 볼 수 있는 부팅 신호가 없으면 매 실패마다 카드를 회수해야 한다.
+
