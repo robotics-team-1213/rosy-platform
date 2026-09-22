@@ -1419,3 +1419,20 @@
   복제되어 있어 본문 블록은 커밋본과 바이트 동일하다.
 - 교훈: 로그 스크립트는 새 항목을 파일 끝에 append해야 한다. prepend하면 이후
   모든 과거 항목이 "out of order"로 한꺼번에 빨갛게 된다(155 errors 유발).
+
+## 2026-09-22 · uncommitted · docs(dock): triage the archived dock-detector measurement rig — carry glossary + lesson only
+
+- 변경: 태그 `archive/2026-09-22/feat/dock-detector-measurement-rig`(32커밋,
+  +6804줄)를 main 새 배치(D-125/D-126) 기준으로 분류했다. 리그 코드(probe.py·
+  profile.py·dock_probe.py·dock_sweep.py·sim dock 모델·measure-dock-baseline.sh·
+  형상 계약 시험)와 그 계획 2건·pi5 체크리스트 §7.6.1은 **대체됨**으로 두고
+  이식하지 않았다. CONCEPTS.md 에 Docking 용어 4개(Dock·Docking·Charging
+  confirmation·Dock detector)를, docs/solutions/workflow-issues 에 교훈 1건을 옮겼다.
+- 증거: 리그의 목적은 LiDAR 기하·intensity·IR 중 검출 방식을 숫자로 고르는
+  것이었고 카메라는 명시적으로 배제했다(설계 §Background). main 은 SRS v1.1
+  DNC-007 + D-138/D-139 로 ArUco 카메라 태그를 택했고 `select_detector`·
+  `ArucoDockDetector`(038ec3a)·도크 조립 설계(2026-09-20) 가 그 위에 서 있다.
+  Dock detector 용어는 DNC-004(무관측은 재시도 아닌 `DOCK_FAILED`)에 맞춰 고쳤다.
+- gate 변화: 없음 (문서만).
+- 결정: 교훈의 SHA·경로는 main 이 아니라 아카이브 태그 기준으로 해석한다고
+  본문 머리에 적었다. 브랜치 `port/dock-detector-measurement-rig`, main 미병합.
