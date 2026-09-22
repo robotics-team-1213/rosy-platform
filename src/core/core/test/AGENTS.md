@@ -33,6 +33,8 @@ pytest for core policy, API, dashboard, and protocol. Most tests import Python m
 | `test_diagnostics_api.py` | DIAG-001 rollup, unknown component, agreement with `/metrics` |
 | `conftest.py` | `core_client` fixture: the one place a test stands a robot up |
 | `test_goal_tracker.py` | Nav2 goal generations: stale results, the cancel-before-accept window |
+| `test_teleop_watchdog_event.py` | SAF-002 expiry announces `safety.watchdog` once per lapse, after the stop reaches the wheels |
+| `test_cmd_vel_cycle.py` | `bridge/cmd_vel.py` order: select → readiness HOLD → wheels → power/announce; the bridge calls it once |
 | `test_swarm_integration.py` | Real `NavigationManager` + replayed bridge callbacks — the seam a `FakeNav` hides |
 | `test_navigation_swarm_boundary.py` | D-60: navigation tree does not import swarm |
 

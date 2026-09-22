@@ -39,6 +39,16 @@ class CommandManager:
         self.watchdog = TeleopWatchdog(timeout_ms=500)
         self._manual_twist: Optional[Twist] = None
         self._manual_source = 'manual'
+        #: teleop 세션 번호. 만료 알림(SAF-002)은 세션당 한 번이다.
+        #:
+        #: 불리언이면 경합에서 사라진다: 타이머가 "아직 안 알림"을 읽고 멈춘
+        #: 사이 새 명령이 들어와 초기화하면, 타이머가 깨어나 그 새 세션을
+        #: "이미 알림"으로 덮어써 그 세션의 끊김은 영영 조용해진다. 번호를
+        #: 비교하면 뒤늦은 쓰기가 옛 값을 실어 무해하다.
+        self._session = 0
+        self._announced_session = -1
+        #: 알릴 것이 밀려 있는가. 알림은 정지가 바퀴에 닿은 뒤에 낸다.
+        self._pending_watchdog: Optional[int] = None
         self._nav_twist: Optional[Twist] = None
         self._nav_updated_at: Optional[float] = None
         self._nav_timeout_s = 0.5
@@ -81,6 +91,8 @@ class CommandManager:
         self._manual_source = source
         self._input_epoch += 1
         self.watchdog.refresh()
+        # 새 명령이 왔으니 다음 끊김은 다시 알릴 일이다.
+        self._session += 1
         return True, ""
 
     @property
@@ -114,8 +126,40 @@ class CommandManager:
         self.watchdog.refresh(0.0)
 
     def _clear_for_stop(self) -> None:
+        # E-Stop·정책 정지는 이미 알려진 정지 사유다. 쥐고 있던 teleop 을
+        # 워치독 만료로 다시 적으면 감사 로그가 멀쩡했던 링크를 끊겼다고 적는다.
+        self._pending_watchdog = None
+        self._announced_session = self._session
         self.clear_manual()
         self.clear_navigation()
+
+    def _note_watchdog_lapse(self) -> None:
+        """SAF-002 만료를 기록해 둔다. 내보내는 것은 `announce_pending` 이다.
+
+        `select_output` 은 50 Hz cmd_vel 경로의 첫 줄이고, 그 반환값이 바퀴로
+        나간다. 여기서 바로 발행하면 정지를 **알리는 일이 정지를 내보내는
+        일보다 먼저** 온다: EventBus 는 구독자를 동기로 부르고 그중 하나가
+        감사 로그 파일 싱크다. 그동안 드라이버는 끊기기 직전의 0 아닌 명령을
+        그대로 쥐고 있다. 그래서 여기서는 기록만 하고, 정지가 나간 뒤
+        호출자(`core.bridge.cmd_vel.cmd_vel_cycle`)가 알린다.
+        """
+        if self._manual_twist is None or self._announced_session == self._session:
+            return
+        self._pending_watchdog = self._session
+
+    def announce_pending(self) -> None:
+        """밀린 알림을 낸다. 브리지가 cmd_vel 을 내보낸 **뒤** 부른다."""
+        session = self._pending_watchdog
+        if session is None:
+            return
+        self._pending_watchdog = None
+        if session == self._announced_session:
+            return
+        self._announced_session = session
+        if self._events is not None:
+            self._events.publish(
+                "safety.watchdog", severity="warning", source="command_manager",
+                data={"timeout_ms": self.watchdog.timeout_ms})
 
     def _policy_output(self, linear: float, angular: float, source: str, now: float) -> Twist:
         if linear == 0. and angular == 0.:
@@ -141,6 +185,7 @@ class CommandManager:
             if self._manual_twist is not None and not self.watchdog.expired(current):
                 l, a = self._safety.clip(self._manual_twist.linear, self._manual_twist.angular, "manual")
                 return self._policy_output(l, a, self._manual_source, current)
+            self._note_watchdog_lapse()
             return ZERO
         nav_age = current - self._nav_updated_at if self._nav_updated_at is not None else None
         if (

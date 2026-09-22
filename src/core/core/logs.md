@@ -266,3 +266,10 @@
 - 증거: `/core` 기동, `/cmd_vel` publisher 1(단일 발행자), API 200·대시보드 200·/robot/state 401, **유효 context payload와 malformed JSON 모두 NameError 없이 수신**(구독 확인 Subscription count 1, `import json` 수정 검증), SIGTERM 후 `core shutting down`. evidence 13파일.
 - gate 변화: ROS-SIM HOLD→GO. ARTIFACT/DEVICE는 HOLD 유지.
 - 결정: malformed payload 프로브를 표준 절차에 포함한다 — except 절 평가 경로를 ROS-SIM에서 직접 검증하는 유일한 방법이다.
+
+## 2026-09-22 · uncommitted · feat(core): SAF-002 워치독 만료를 safety.watchdog 로 알린다 — 정지가 바퀴에 닿은 뒤에
+
+- 변경: `CommandManager`가 MANUAL teleop 세션의 워치독 만료를 `select_output`에서 기록만 하고(`_note_watchdog_lapse`), `announce_pending`이 `safety.watchdog`(warning, `{timeout_ms}`)을 세션당 한 번 낸다. 세션은 번호로 센다(불리언 래치는 뒤늦은 쓰기가 새 세션을 삼킨다). E-Stop·정책 정지(`_clear_for_stop`)는 이미 알려진 사유라 밀린 알림을 버린다. 50 Hz 한 주기의 순서(고르기 → readiness HOLD면 0 → 바퀴 → 절전 관측·알림)는 ROS 없는 `bridge/cmd_vel.py::cmd_vel_cycle`로 떼어냈고 `ros_bridge._publish_cmd_vel`은 그것을 한 번 부른다(`_send_twist`가 유일한 `cmd_vel_pub.publish`). 보관 브랜치 `archive/2026-09-22/fix/event-catalogue-drift`(d73606d·4c1ea99)를 D-125/D-126 트리로 이식한 것이다.
+- 증거: `test_teleop_watchdog_event.py`(12)·`test_cmd_vel_cycle.py`(13) 25 passed; manager 변경을 되돌리면 워치독 시험 12 failed. `src/core/core/test` 1081 passed, 12 skipped (2026-09-22 Windows, catalogue 시험 제외).
+- gate 변화: ROS-SIM GO→HOLD — `ros_bridge.py`의 cmd_vel 경로를 만졌으므로 2026-09-22 부트 스모크는 현재 트리 증거가 아니다. 동일 절차 재실행 필요.
+- 결정: 알림은 바퀴 뒤에 온다. EventBus는 구독자를 동기로 부르고 감사 로그 싱크가 그중 하나라, 앞에 두면 SAF-002 정지가 그만큼 늦게 나간다. readiness HOLD 판정은 기존대로 브리지가 주입한 게이트를 쓴다(동작 변경 없음).
