@@ -1,46 +1,76 @@
-# colcon / ROS
+# Rosy OS .gitignore policy
+#
+# - Ignore what a tool regenerates (build output, caches, per-machine agent
+#   state) and what must never be published (local overrides with robot URLs,
+#   tokens, private keys). Everything else is reviewed and committed.
+# - Evidence logs under docs/validation/**/evidence are intentional records and
+#   stay tracked; do not add a blanket *.log rule.
+# - deploy/robot/native/rosy-runtime.env is a non-secret template and stays
+#   tracked. Real device copies live on the robot under /etc/rosy.
+# - gitignore has no end-of-line comments: a trailing "# ..." becomes part of
+#   the pattern, so every comment sits on its own line.
+# - Package-local .gitignore files (e.g. src/apps/control) only add rules for
+#   that package; shared rules belong here.
+
+# colcon / ROS workspace output, at any depth
 build/
 install/
 log/
-src/*/build/
-src/*/install/
+.colcon/
 
-# Python
+# Python bytecode, packaging and virtualenvs
 __pycache__/
 *.py[cod]
 *.egg-info/
-.pytest_cache/
 .venv/
+.venv-*/
 
-# Frontend (rosy_web 예정)
+# Test, lint and type-check caches
+.pytest_cache/
+.pytest-tmp*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Frontend build output
 node_modules/
 dist/
 
-# rosy_games 실기 URL/토큰
-src/rosy_games/config/match.local.yaml
+# Local overrides that carry robot URLs or tokens (see robots.py load path)
+src/apps/games/config/match.local.yaml
+*.local.env
 
-# Fleet 로컬 DB
+# Private key material. Public release keys under deploy/release/public-keys
+# are .pem and stay tracked; private keys are never committed.
+*.key
+*.p12
+*.pfx
+
+# Fleet local databases
 *.sqlite3
 *.db
 
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store/
+# One-off helper scripts at the repository root. Durable root helpers
+# (env.sh, fix.sh, run_fleet_sim.sh) are tracked explicitly; new throwaway
+# scripts belong in tools/ or outside the repo.
+/*.py
 
-# 대형 바이너리 참조 (upstream 원본 zip — 리포에 반입하지 않음)
+# Upstream reference archives (never vendored)
 reference/src/*.zip
 
-# 도구 캐시
-.codegraph/
-.omo/
-
-# OMC 운영 산출물 (.omc/skills 제외)
+# Agent and tool state, per-machine (.omc/skills is committable)
 .omc/
 !.omc/skills/
+.omo/
+.codegraph/
+.claude/settings.local.json
 
-# rosy_control 테스트 basetemp (Windows 호스트에서 --basetemp 로 지정)
-.pytest-tmp-control/
-
-# rosy_games local match override (device URLs / tokens)
-src/rosy_games/config/match.local.yaml
+# IDE / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
