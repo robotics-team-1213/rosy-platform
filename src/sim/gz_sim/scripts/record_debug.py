@@ -36,12 +36,17 @@ def main(argv=None) -> int:
         if image is None:
             return
         if state["writer"] is None:
-            state["writer"] = cv2.VideoWriter(
-                str(args.out / "overlay.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), args.fps,
+            path = args.out / "overlay.mp4"
+            writer = cv2.VideoWriter(
+                str(path), cv2.VideoWriter_fourcc(*"mp4v"), args.fps,
                 (image.shape[1], image.shape[0]))
+            if not writer.isOpened():
+                raise RuntimeError(f"could not open a video writer for {path}")
+            state["writer"] = writer
         state["writer"].write(image)
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         log.write(json.dumps({"index": state["count"], "stamp": stamp}) + "\n")
+        log.flush()
         state["count"] += 1
 
     node.create_subscription(CompressedImage, args.topic, on_image, qos_profile_sensor_data)
@@ -49,12 +54,15 @@ def main(argv=None) -> int:
     try:
         while rclpy.ok() and time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.1)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
     finally:
         if state["writer"] is not None:
             state["writer"].release()
         log.close()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
     print(f"recorded {state['count']} frames to {args.out / 'overlay.mp4'}")
     return 0 if state["count"] else 1
 

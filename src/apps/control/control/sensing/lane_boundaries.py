@@ -125,38 +125,44 @@ class LaneBoundaryTracker(LaneEdgeFollower):
         left_seen, right_seen = found["left"] is not None, found["right"] is not None
         left_grid, right_grid = found["left_grid"], found["right_grid"]
         self.last["junction"] = self._junction(view, found, left_seen, right_seen, half)
-        target, supported = None, False
+        target, supported, source = None, False, None
         if left_seen and right_seen:
             target, supported = self._centre(view, left_grid, right_grid, half)
             if supported:
                 self.tier = "BOTH"
+                source = "CENTRE"
         if not supported:
-            for seen, grid in ((left_seen, left_grid), (right_seen, right_grid)):
+            for seen, grid, name in ((left_seen, left_grid, "LEFT"),
+                                     (right_seen, right_grid, "RIGHT")):
                 if seen and grid.any():
                     target, supported = self._lookahead(view, grid, half)
                     if supported:
                         self.tier = "ONE"
+                        source = name
                         break
         if not supported:
             # Only what the fresh tiers did not already try: the centre
             # unless both were seen, a side unless it was seen.
             tries = []
             if left_grid.any() and right_grid.any() and not (left_seen and right_seen):
-                tries.append(lambda: self._centre(view, left_grid, right_grid, half))
-            tries += [lambda grid=grid: self._lookahead(view, grid, half)
-                      for seen, grid in ((left_seen, left_grid), (right_seen, right_grid))
+                tries.append(("CENTRE", lambda: self._centre(view, left_grid, right_grid, half)))
+            tries += [(name, lambda grid=grid: self._lookahead(view, grid, half))
+                      for seen, grid, name in ((left_seen, left_grid, "LEFT"),
+                                               (right_seen, right_grid, "RIGHT"))
                       if not seen and grid.any()]
-            for find in tries:
+            for name, find in tries:
                 target, supported = find()
                 if supported and (abs(math.atan2(target[1], target[0]))
                                   <= MEMORY_MAX_BEARING_RAD):
                     self.tier = "MEMORY"
+                    source = name
                     break
                 supported = False
-        self.last.update(target=target, supported=supported, tier=self.tier)
+        self.last.update(target=target, supported=supported, tier=self.tier, source=source)
         if target is None or not supported:
             self.tier = "STOP"
             self.last["tier"] = "STOP"
+            self.last["source"] = None
             return None
         if self.tier == "MEMORY":
             confidence = MEMORY_CONFIDENCE
@@ -268,5 +274,6 @@ class LaneBoundaryTracker(LaneEdgeFollower):
             lane_axis = self._lane_axis(view, found, near_end)
             cosine = min(1.0, abs(float(np.dot(_axis(leaving), lane_axis))))
             if math.acos(cosine) >= BRANCH_MIN_ANGLE_RAD:
+                self.last["branch_mask"] = cells
                 return "BRANCH"
         return None

@@ -30,7 +30,7 @@ from .sensing.lane import (
 )
 from .sensing.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.lane_boundaries import LaneBoundaryTracker
-from .sensing.lane_debug import render_debug
+from .sensing.lane_debug import next_publish_due, render_debug
 
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.
@@ -94,8 +94,17 @@ class LineObserverNode(Node):
                 CompressedImage, 'line/debug/compressed', 2)
             path = str(self.get_parameter('debug_lane_graph').value)
             if path:
-                with open(path, encoding='utf-8') as handle:
-                    self._debug_graph = yaml.safe_load(handle)
+                # A missing or malformed graph must never fail startup
+                # (D-143: this node still owes CORE line/observation); the
+                # map panel just goes without a route overlay.
+                try:
+                    with open(path, encoding='utf-8') as handle:
+                        self._debug_graph = yaml.safe_load(handle)
+                except (OSError, yaml.YAMLError) as exc:
+                    self.get_logger().warning(
+                        f'debug_lane_graph {path!r} could not be loaded, '
+                        f'map panel will show no route: {exc}')
+                    self._debug_graph = None
         if bool(self.get_parameter('ir_calibration_enabled').value):
             self._ir_calibration = IRLineCalibration(
                 black=tuple(self.get_parameter('ir_black').value),
@@ -243,31 +252,40 @@ class LineObserverNode(Node):
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:
-        """Observation only: a picture of the decision just published."""
+        """Observation only: a picture of the decision just published.
+
+        Never allowed to take line/observation down with it (D-143): any
+        render or encode failure here is caught, logged (throttled), and
+        skipped, so this frame's overlay is lost but every later
+        line/observation still publishes."""
         if self._debug_pub is None or frame is None:
             return
         stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
-        period = 1.0 / max(0.1, float(self.get_parameter('debug_overlay_max_hz').value))
-        if self._debug_last_s is not None and 0.0 <= stamp - self._debug_last_s < period:
+        max_hz = float(self.get_parameter('debug_overlay_max_hz').value)
+        if not next_publish_due(self._debug_last_s, stamp, max_hz):
             return
         self._debug_last_s = stamp
         mode = str(self.get_parameter('camera_lane_mode').value)
         follower = {'centre': self._centre_tracker, 'edge_left': self._edge_follower}.get(mode)
         if follower is None:
             return
-        image = render_debug(
-            frame, follower, observation, mode=mode,
-            pose=pose_if_fresh(self._odom_pose, self._odom_stamp, stamp),
-            graph=self._debug_graph,
-            bright_threshold=int(self.get_parameter('camera_bright_threshold').value))
-        ok, data = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-        if not ok:
-            return
-        out = CompressedImage()
-        out.header = msg.header
-        out.format = 'jpeg; overlay=lane-debug-v1'
-        out.data = data.tobytes()
-        self._debug_pub.publish(out)
+        try:
+            image = render_debug(
+                frame, follower, observation, mode=mode,
+                pose=pose_if_fresh(self._odom_pose, self._odom_stamp, stamp),
+                graph=self._debug_graph,
+                bright_threshold=int(self.get_parameter('camera_bright_threshold').value))
+            ok, data = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ok:
+                return
+            out = CompressedImage()
+            out.header = msg.header
+            out.format = 'jpeg; overlay=lane-debug-v1'
+            out.data = data.tobytes()
+            self._debug_pub.publish(out)
+        except Exception as exc:  # noqa: BLE001 - the overlay must never be fatal.
+            self.get_logger().warning(
+                f'debug overlay render/publish failed: {exc}', throttle_duration_sec=5.0)
 
     def _on_odom(self, msg: Odometry) -> None:
         pose = msg.pose.pose

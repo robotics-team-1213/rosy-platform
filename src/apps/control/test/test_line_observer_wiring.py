@@ -140,3 +140,18 @@ def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
     assert "CompressedImage, 'line/debug/compressed'" in source
     assert "render_debug(" in source
     assert "Twist" not in source and "'cmd_vel'" not in source
+
+
+def test_debug_overlay_failures_never_stop_line_observation():
+    """A render/encode bug in the overlay, or a missing/broken
+    debug_lane_graph at startup, must not lose line/observation (D-143):
+    rclpy re-raises an uncaught callback exception out of spin, and main()
+    only catches KeyboardInterrupt."""
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    publish_debug = source.split("def _publish_debug", 1)[1].split("\n    def _on_odom", 1)[0]
+    assert "try:" in publish_debug
+    assert "except Exception" in publish_debug
+    assert "throttle_duration_sec=5.0" in publish_debug
+    init_body = source.split("def __init__", 1)[1].split("\n    def _ground", 1)[0]
+    assert "except (OSError, yaml.YAMLError)" in init_body
+    assert "self._debug_graph = None" in init_body

@@ -4,10 +4,10 @@ Observation only: it reads a follower's `last` intermediate results and
 never feeds back into perception or motion.
   camera   the frame with the paint threshold tinted red
   bev      bird's-eye grid, forward up: paint grey, left boundary green,
-           right boundary blue, centre band yellow, target magenta
+           right boundary blue, a branch candidate orange, centre band
+           yellow, target magenta, the robot a white triangle at the origin
   status   mode, ladder tier, junction signal, error and confidence
-  map      lane graph with the odometry pose (in Gazebo odom is ground truth;
-           on a Device it is only the robot's own estimate -- labelled)
+  map      lane graph (route grey, parking bays teal) with the odom pose
 """
 
 import math
@@ -18,6 +18,27 @@ import numpy as np
 PANEL_W, PANEL_H = 320, 180
 _GREEN, _BLUE, _YELLOW, _MAGENTA, _GREY = (60, 220, 60), (230, 120, 40), (40, 220, 240), \
     (230, 60, 230), (120, 120, 120)
+_ORANGE = (0, 140, 255)
+_WHITE = (255, 255, 255)
+_PARKING = (200, 180, 60)
+
+#: A camera stamp shortfall this small against the requested period is
+#: float jitter in the sec/nanosec -> float conversion, not a genuinely
+#: early frame; treating it as "not yet due" silently drops every other
+#: frame at a matching publish rate (measured: 1.2 - 1.0 ==
+#: 0.19999999999999996 < 0.2 at 5 Hz camera / 5 Hz max_hz).
+_RATE_TOLERANCE_S = 1e-3
+
+
+def next_publish_due(last_published_s, stamp_s, max_hz):
+    """True if a sample at `stamp_s` should publish, given the last publish
+    at `last_published_s` and a `max_hz` cap. Pure and ROS-free so the rate
+    limiter is unit-testable without a node."""
+    if last_published_s is None:
+        return True
+    period = 1.0 / max(0.1, float(max_hz))
+    elapsed = float(stamp_s) - float(last_published_s)
+    return elapsed < 0.0 or elapsed >= period - _RATE_TOLERANCE_S
 
 
 def _fit(img):
@@ -42,6 +63,9 @@ def _bev(last):
         grid = last.get(key)
         if grid is not None:
             img[grid > 0] = colour
+    branch = last.get("branch_mask")
+    if branch is not None:
+        img[branch] = _ORANGE
     band = last.get("centre_band")
     if band is None:
         band = last.get("path")
@@ -57,15 +81,39 @@ def _bev(last):
     return out, size
 
 
+def _bev_pixel(view, size, x, y):
+    """Panel pixel centre for a robot-frame point, matching the exact
+    integer offset `_bev` used to square and scale the grid (a plain `/ 2`
+    here would drift half a cell from the image whenever `size - cols` is
+    odd), and using the cell centre (`+0.5`) rather than its floor corner."""
+    i, j = view.cell(x, y)
+    offset = (size - view.cols) // 2
+    row = ((view.rows - 1 - i) + 0.5) * PANEL_H / size
+    col = (PANEL_W - PANEL_H) / 2 + (offset + j + 0.5) * PANEL_H / size
+    return int(round(col)), int(round(row))
+
+
 def _mark_target(panel_and_size, last, view):
     panel, size = panel_and_size
     target = last.get("target")
     if target is None or view is None:
         return panel
-    i, j = view.cell(*target)
-    row = (view.rows - 1 - i) * PANEL_H / size
-    col = (PANEL_W - PANEL_H) / 2 + (j + (size - view.cols) / 2) * PANEL_H / size
-    cv2.circle(panel, (int(col), int(row)), 5, _MAGENTA, -1)
+    col, row = _bev_pixel(view, size, *target)
+    cv2.circle(panel, (col, row), 5, _MAGENTA, -1)
+    return panel
+
+
+def _mark_robot(panel_and_size, view):
+    """The robot itself, a white triangle pointing forward (+x) at the
+    bird's-eye origin -- so the panel reads as "what's around me", not just
+    "what's ahead of me"."""
+    panel, size = panel_and_size
+    if view is None:
+        return panel
+    col, row = _bev_pixel(view, size, 0.0, 0.0)
+    triangle = np.array(
+        [[col, row - 6], [col - 5, row + 5], [col + 5, row + 5]], np.int32)
+    cv2.fillPoly(panel, [triangle], _WHITE)
     return panel
 
 
@@ -84,6 +132,9 @@ def _status(mode, tier, junction, observation, source):
 
 
 def _map(graph, pose, pose_label):
+    """Never raises: a malformed or partial `graph` (a hand-edited yaml, or
+    one mid-write) must still leave the other three panels legible, so a
+    bad segment or bay is skipped rather than crashing the whole overlay."""
     panel = np.full((PANEL_H, PANEL_W, 3), 30, np.uint8)
     sx, sy = PANEL_W / 2.9, PANEL_H / 1.35
     scale = min(sx, sy)
@@ -91,9 +142,25 @@ def _map(graph, pose, pose_label):
     def px(x, y):
         return int(PANEL_W / 2 + x * scale), int(PANEL_H / 2 - y * scale)
 
-    for seg in (graph or {}).get("segments", {}).values():
-        pts = np.array([px(x, y) for x, y in seg["points"]], np.int32)
-        cv2.polylines(panel, [pts], False, (170, 170, 170), 1, cv2.LINE_AA)
+    segments = graph.get("segments") if isinstance(graph, dict) else None
+    for seg in (segments.values() if isinstance(segments, dict) else []):
+        try:
+            pts = np.array([px(float(x), float(y)) for x, y in seg["points"]], np.int32)
+            if len(pts) >= 2:
+                cv2.polylines(panel, [pts], False, (170, 170, 170), 1, cv2.LINE_AA)
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    parking = graph.get("parking") if isinstance(graph, dict) else None
+    bays = parking.get("points") if isinstance(parking, dict) else None
+    for bay in (bays or []):
+        try:
+            x, y = bay
+            cv2.drawMarker(panel, px(float(x), float(y)), _PARKING,
+                           cv2.MARKER_SQUARE, 6, 1, cv2.LINE_AA)
+        except (TypeError, ValueError):
+            continue
+
     if pose is not None:
         x, y, yaw = pose
         tip = px(x + 0.06 * math.cos(yaw), y + 0.06 * math.sin(yaw))
@@ -109,9 +176,12 @@ def render_debug(frame, follower, observation, *, mode, pose=None, graph=None,
     last = dict(getattr(follower, "last", {}) or {})
     view = getattr(follower, "_view", None)
     bev_panel_and_size = _bev(last)
-    top = np.hstack([_camera(frame, bright_threshold),
-                     _mark_target(bev_panel_and_size, last, view) if last.get("paint") is not None
-                     else np.zeros((PANEL_H, PANEL_W, 3), np.uint8)])
+    if last.get("paint") is not None:
+        bev_img = _mark_target(bev_panel_and_size, last, view)
+        bev_img = _mark_robot((bev_img, bev_panel_and_size[1]), view)
+    else:
+        bev_img = np.zeros((PANEL_H, PANEL_W, 3), np.uint8)
+    top = np.hstack([_camera(frame, bright_threshold), bev_img])
     tier = last.get("tier") or getattr(follower, "state", "-")
     bottom = np.hstack([_status(mode, tier, last.get("junction"), observation, last.get("source")),
                         _map(graph, pose, pose_label)])

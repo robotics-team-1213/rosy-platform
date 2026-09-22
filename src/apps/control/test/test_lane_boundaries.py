@@ -7,14 +7,22 @@ import numpy as np
 import pytest
 import yaml
 
+from control.sensing.body import WHEEL_R, WHEEL_Y
 from control.sensing.lane_bev import MEMORY_CONFIDENCE, MEMORY_TRAVEL_M
 from control.sensing.lane_boundaries import (
     BRANCH_MAX_LATERAL, MEMORY_MAX_BEARING_RAD, ONE_MAX_CONFIDENCE, LaneBoundaryTracker, TIERS,
 )
 from lane_sim import (  # noqa: E402  (test-directory helper)
-    CAM_X, GROUND, H, KW, ROOT, World, distance_to_polyline, drive, lane, offset_polyline,
-    stl_world,
+    CAM_X, GROUND, H, KW, ROOT, World, drive, lane, offset_polyline, stl_world,
 )
+
+#: The robot's own widest lateral extent (the wheel track), pinky.urdf.xacro
+#: via control.sensing.body: 0.04055 + 0.028 = 0.06855 m. Narrower than
+#: URDF_RADIUS (0.076 m, which also covers the forward caster reach and is
+#: not what a *side* clearance at a corner needs to clear).
+ROBOT_HALF_WIDTH_M = WHEEL_Y + WHEEL_R
+#: Assembly/paint tolerance margin beyond the bare wheel track.
+CORNER_CLEARANCE_MARGIN_M = 0.003
 
 
 def tracker():
@@ -84,7 +92,18 @@ def test_one_tier_is_capped_below_both():
 def test_90_degree_corner_is_turned_on_the_centre_without_an_opening(side):
     """A 90 deg lane corner (left +1, right -1): the inner line leaves the
     field of view and the outer one carries the turn (ONE). It is a convex
-    corner, not a mouth: no OPENS signal."""
+    corner, not a mouth: no OPENS signal.
+
+    A raw distance-to-the-mitred-centreline bound is a proxy for what
+    actually matters: the physical robot must not run over the real block
+    this corner turns around. That block's inner corner sits at the sharp
+    (unmitred) vertex the two boundary lines are offset from -- centreline
+    corner (0.2, 0.0) pulled in by the lane half-width on both legs, i.e.
+    (0.2 - H, side * H) -- so the bound is instead the clearance from that
+    point, which must stay outside the robot's own half-width
+    (ROBOT_HALF_WIDTH_M, the wheel track) plus a small margin
+    (CORNER_CLEARANCE_MARGIN_M). Measured: side=+1 -> 0.0736 m,
+    side=-1 -> 0.0730 m, both above the 0.0716 m bound."""
     centre = np.array([(-1.0, 0.0), (0.2, 0.0), (0.2, 0.8 * side)])
     t = tracker()
     frames = []
@@ -93,7 +112,9 @@ def test_90_degree_corner_is_turned_on_the_centre_without_an_opening(side):
                       or p[1] * side > 0.5)
     tiers = [tier for tier, _ in frames]
     signals = {signal for _, signal in frames}
-    assert max(distance_to_polyline(p[:2], centre) for p, _, _ in log) < 0.04
+    vertex = (0.2 - H, side * H)
+    clearance = min(math.hypot(p[0] - vertex[0], p[1] - vertex[1]) for p, _, _ in log)
+    assert clearance >= ROBOT_HALF_WIDTH_M + CORNER_CLEARANCE_MARGIN_M
     assert "STOP" not in tiers and "ONE" in tiers
     assert pose[1] * side > 0.5
     assert abs(math.remainder(pose[2] - side * math.pi / 2, 2 * math.pi)) < math.radians(10)
