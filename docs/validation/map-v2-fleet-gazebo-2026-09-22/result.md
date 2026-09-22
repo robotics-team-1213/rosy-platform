@@ -53,7 +53,17 @@ The cause is structural. `detect_lane_error` (`control/sensing/lane.py`) steers 
 |---|---|
 | Straight lane centre keeping | PASS (1 mm, run 164757) |
 | Crosswalk bars inside the lane | PASS |
-| 90 deg corner | **HOLD**: stops safely. The lane turns out of the 0.08-0.23 m observable look-ahead, so corner handling (junction detection plus turn manoeuvre) is not implemented. |
+| 90 deg corner | **PASS** (run 184434, corner turning `e3b5eff`) |
+| 45 deg bend toward the roundabout | **HOLD**: stops fail-closed (`camera_bend_184434.png`) |
 | Sitting on a shared boundary line | HOLD: single frame ambiguous, needs lane memory across frames |
+
+## Corner turning (the user chose to implement it)
+
+`LaneCornerTracker` (`e3b5eff`) confirms an L-corner over 2 frames: a transverse line ahead plus one side line that ends, which marks the open side. The line observer then drives the odometry-measured distance to the junction centre and emits a full-lock error until the odom yaw has turned 75-105 deg and the new lane has been reacquired. Without odometry, or on a timeout or overshoot, it emits no lane, so CORE stops. CORE and its command law are unchanged, and CORE remains the only `/cmd_vel` publisher.
+
+Run `184434` (`trajectory_184434_corner.png`):
+- 1.142 m in total. Down the left lane and through the crosswalk, then a left turn at the bottom-left corner, then about 0.57 m east along the bottom corridor.
+- In the turn it overshot 2.7 cm toward the outer line (y min -0.538). It then settled within 8 mm of the corridor centre (mean y -0.5037 vs -0.511).
+- It stopped fail-closed at x -0.69, where both lines bend 45 deg toward the roundabout. That geometry is neither a straight lane nor an L-corner.
 
 Raw logs (`odom_drive.csv`, `line_obs.txt`, `cmd_vel.csv`) are outside Git, in WSL `/rosy_mapv2_ws/evidence/20260922T_map_v2_fleet_<run>/`.
