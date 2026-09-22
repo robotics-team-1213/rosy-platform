@@ -85,7 +85,7 @@ printf '%s\n' "$SOURCE_REVISION" > "$RELEASE_ROOT/source-revision.txt"
 printf '%s\n' "$RELEASE_ID" > "$INSTALL_ROOT/.rosy-release"
 cp "$SCRIPT_DIR/required-ros-packages.txt" "$RELEASE_ROOT/required-ros-packages.txt"
 mkdir -p "$RELEASE_ROOT/deploy/robot"
-cp -a "$NATIVE_RUNTIME_SOURCE" "$RELEASE_ROOT/deploy/robot/native"
+"$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$RELEASE_ROOT/deploy/robot/native"
 
 # Stage the immutable image-owned bootstrap tools separately from the
 # switchable release.  Recovery cannot live below /opt/rosy/current because
@@ -94,7 +94,7 @@ OVERLAY="$RELEASE_ROOT/image-overlay"
 mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
     "$OVERLAY/etc/systemd/system" "$OVERLAY/etc/udev/rules.d" \
     "$OVERLAY/etc/rosy/trusted-release-keys"
-cp -a "$NATIVE_RUNTIME_SOURCE" "$OVERLAY/opt/rosy/native-runtime"
+"$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
 # The native units address the motor bus as /dev/rosy-motor; the image must
@@ -105,6 +105,12 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/s
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.target" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
+mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
+cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"
+mkdir -p "$OVERLAY/etc/tmpfiles.d"
+cp "$NATIVE_RUNTIME_SOURCE/tmpfiles-rosy-logs.conf" "$OVERLAY/etc/tmpfiles.d/rosy-logs.conf"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.env" "$OVERLAY/etc/rosy/runtime.env.template"
 cp "$ROBOT_CONFIG_SOURCE/motion_profiles.yaml" "$OVERLAY/etc/rosy/motion_profiles.yaml"
 cp "$CYCLONEDDS_SOURCE" "$OVERLAY/etc/rosy/cyclonedds.xml"

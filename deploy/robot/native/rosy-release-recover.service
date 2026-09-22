@@ -1,5 +1,6 @@
 [Unit]
 Description=ROSY native release recovery gate
+OnFailure=rosy-boot-status.service
 DefaultDependencies=no
 Requires=local-fs.target
 After=local-fs.target

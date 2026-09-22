@@ -40,10 +40,22 @@ def inspect(root: Path, release_id: str) -> list[str]:
         root / "etc/rosy/cyclonedds.xml",
         root / "opt/rosy/first-boot/rosy-first-boot.py",
         root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
+        root / "opt/rosy/native-runtime/native_release.py",
+        root / "opt/rosy/native-runtime/recover-release.sh",
+        root / "opt/rosy/native-runtime/signing.py",
+        release / "deploy/robot/native/native_release.py",
+        release / "deploy/robot/native/signing.py",
     )
     for path in required_paths:
         if not path.is_file():
             findings.append(f"missing required image path: {path.relative_to(root)}")
+    # D-174 F1: the native runtime runs from the image and must never leave bytecode
+    # behind (it would be unlisted and fail verify()). colcon's install/ tree ships
+    # its own __pycache__ as part of the built payload, so it is not checked here.
+    for runtime in (root / "opt/rosy/native-runtime", release / "deploy/robot/native"):
+        if runtime.is_dir():
+            for cache in sorted(runtime.rglob("__pycache__")):
+                findings.append(f"bytecode cache in native runtime: {cache.relative_to(root).as_posix()}")
     for unit in REQUIRED_UNITS:
         if not (root / "etc/systemd/system" / unit).is_file():
             findings.append(f"missing systemd unit: {unit}")

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy" / "robot" / "native"
@@ -242,3 +244,38 @@ def test_readiness_probe_honors_rosy_api_port():
 
     assert _url_with_env("8123") == "http://127.0.0.1:8123/api/v1"
     assert _url_with_env(None) == "http://127.0.0.1:8080/api/v1"
+
+
+@pytest.mark.parametrize(
+    ("unit_name", "log_dir"),
+    [("rosy-core.service", "rosy-core"), ("rosy-io.service", "rosy-io"),
+     ("rosy-navigation.service", "rosy-navigation")],
+)
+def test_ros_services_get_a_writable_ros_home_under_protect_home(unit_name, log_dir):
+    # D-174 F6: service users have no home and ProtectHome=true; rclpy would try
+    # $HOME/.ros/log and fail to initialize logging.
+    unit = _read(unit_name)
+
+    assert f"LogsDirectory={log_dir}" in unit
+    assert f"Environment=ROS_HOME=/var/log/{log_dir} ROS_LOG_DIR=/var/log/{log_dir}" in unit
+    assert "ProtectHome=true" in unit
+
+
+def test_journald_keeps_a_bounded_persistent_ledger():
+    # D-175 L0: the journal is the ledger every other diagnostic layer reads.
+    conf = (ROOT / "deploy/robot/native/journald-60-rosy.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+
+    for directive in ("[Journal]", "Storage=persistent", "SystemMaxUse=200M", "RuntimeMaxUse=32M"):
+        assert directive in conf
+    assert 'journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"' in payload
+
+
+def test_ros_log_directories_are_aged_out():
+    # Review M9: ROS writes new files on every start, outside journald's cap.
+    rules = (ROOT / "deploy/robot/native/tmpfiles-rosy-logs.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+
+    for name in ("rosy-core", "rosy-io", "rosy-navigation"):
+        assert f"e /var/log/{name} - - - 7d" in rules
+    assert 'tmpfiles-rosy-logs.conf" "$OVERLAY/etc/tmpfiles.d/rosy-logs.conf"' in payload

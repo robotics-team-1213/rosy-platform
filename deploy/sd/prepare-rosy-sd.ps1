@@ -25,6 +25,9 @@ param(
     [string]$SecondDiskInventoryJson,
     [string]$BootMountPath,
     [string]$Confirmation,
+    [string]$PlanPath,
+    [string]$OperatorPublicKey,
+    [string]$ReprovisionReceipt,
     [switch]$SetWifiCredential,
     [switch]$PlanOnly
 )
@@ -157,12 +160,115 @@ if ($SetWifiCredential) {
     if (-not $PSBoundParameters.ContainsKey("DiskNumber")) { exit 0 }
 }
 
-foreach ($required in @("DiskNumber", "RobotNumber", "WifiProfile", "ImagePath", "ImageSha256", "ImageSignaturePath", "ReleasePublicKey", "ReleaseId", "FleetEndpoint", "FleetTrustProfile", "RegistryJson", "ReceiptPath")) {
+foreach ($required in @("DiskNumber", "WifiProfile", "ImagePath", "ImageSha256", "ImageSignaturePath", "ReleasePublicKey", "ReleaseId", "RegistryJson", "ReceiptPath")) {
     if (-not $PSBoundParameters.ContainsKey($required)) { Fail "-$required is required" }
 }
+
+# A write may pin its identity to a plan the operator already reviewed, so the
+# card receives exactly the robot number, name and Fleet values that were shown.
+$reviewedPlan = $null
+$robotNumberSource = $(if ($PSBoundParameters.ContainsKey("RobotNumber")) { "operator" } else { "auto" })
+
+# D-174 F7: rewriting a card for an already registered robot is allowed only with
+# the receipt of a verified earlier write of exactly that identity.
+$reprovision = $null
+if ($ReprovisionReceipt) {
+    if (-not (Test-Path -LiteralPath $ReprovisionReceipt -PathType Leaf)) { Fail "reprovision receipt is missing" }
+    try {
+        $reprovision = Get-Content -LiteralPath $ReprovisionReceipt -Raw | ConvertFrom-Json
+    }
+    catch {
+        Fail "reprovision receipt is not valid JSON"
+    }
+    $receiptKeys = @($reprovision.PSObject.Properties.Name)
+    foreach ($key in @("device_uid", "device_name", "robot_number", "release_id", "image_sha256", "writer_exit_code", "media_readback", "created_at")) {
+        if ($receiptKeys -cnotcontains $key) { Fail "reprovision receipt has no $key" }
+    }
+    # Typed checks: in PowerShell 5.1 [bool]"false" is True and [int]$null is 0.
+    $exitCode = $reprovision.writer_exit_code
+    $verified = $reprovision.media_readback.verified
+    if (-not ($exitCode -is [int] -or $exitCode -is [long]) -or $exitCode -ne 0 -or -not ($verified -is [bool]) -or -not $verified) {
+        Fail "reprovision receipt does not prove a verified earlier write"
+    }
+    $fromReceipt = [ordered]@{ RobotNumber = "robot_number"; DeviceName = "device_name"; DeviceUid = "device_uid" }
+    foreach ($name in $fromReceipt.Keys) {
+        $recorded = $reprovision.($fromReceipt[$name])
+        if ($PSBoundParameters.ContainsKey($name) -and [string](Get-Variable -Name $name -ValueOnly) -cne [string]$recorded) {
+            Fail "-$name does not match the reprovision receipt"
+        }
+        Set-Variable -Name $name -Value $recorded
+    }
+    $robotNumberSource = "reprovision"
+}
+$fleetSource = "operator"
+if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
+    Fail "plan already exists and will not be overwritten"
+}
+if ($PlanPath -and -not $PlanOnly) {
+    if (-not (Test-Path -LiteralPath $PlanPath -PathType Leaf)) { Fail "reviewed plan is missing" }
+    try {
+        $reviewedPlan = Get-Content -LiteralPath $PlanPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        Fail "reviewed plan is not valid JSON"
+    }
+    $planKeys = @($reviewedPlan.PSObject.Properties.Name)
+    foreach ($key in @("mode", "robot_number_source", "fleet_source", "registry_path")) {
+        if ($planKeys -cnotcontains $key) { Fail "reviewed plan has no $key" }
+    }
+    if ([string]$reviewedPlan.mode -cne "PLAN_ONLY") { Fail "reviewed plan is not a PLAN_ONLY plan" }
+    $pinned = [ordered]@{
+        RobotNumber = "robot_number"
+        DeviceName = "device_name"
+        DeviceUid = "device_uid"
+        FleetEndpoint = "fleet_endpoint"
+        FleetTrustProfile = "fleet_trust_profile"
+        Model = "model"
+        Preset = "requested_preset"
+        CountryCode = "country_code"
+    }
+    foreach ($name in $pinned.Keys) {
+        $key = $pinned[$name]
+        if ($planKeys -cnotcontains $key -or [string]::IsNullOrWhiteSpace([string]$reviewedPlan.$key)) {
+            Fail "reviewed plan has no $key"
+        }
+        $planned = $reviewedPlan.$key
+        # Values on the card are case-sensitive; an argument that differs only in
+        # case is a different value, and the plan value always wins.
+        if ($PSBoundParameters.ContainsKey($name) -and [string](Get-Variable -Name $name -ValueOnly) -cne [string]$planned) {
+            Fail "-$name contradicts the reviewed plan"
+        }
+        Set-Variable -Name $name -Value $planned
+    }
+    $robotNumberSource = [string]$reviewedPlan.robot_number_source
+    $fleetSource = [string]$reviewedPlan.fleet_source
+}
+elseif (-not $PlanOnly -and $robotNumberSource -eq "auto") {
+    # A number drawn inside a write would never be shown before the erase.
+    Fail "an automatic robot number needs a reviewed plan: run -PlanOnly -PlanPath first, then write with -PlanPath"
+}
+
+# Fleet values are only recorded on the robot until a central Fleet server
+# exists; default them to this console host rather than inventing a site URL.
+if (-not $FleetEndpoint -and -not $FleetTrustProfile) {
+    $consoleHost = ([string]$env:COMPUTERNAME).ToLowerInvariant()
+    if ($consoleHost -notmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+        Fail "console host name cannot form a default Fleet endpoint; pass -FleetEndpoint"
+    }
+    $FleetEndpoint = "https://$consoleHost.local"
+    $FleetTrustProfile = "rosy-pilot-lan"
+    $fleetSource = "default"
+}
+elseif (-not $FleetEndpoint -or -not $FleetTrustProfile) {
+    Fail "FleetEndpoint and FleetTrustProfile must be supplied together"
+}
+
 if ($Model -ne "pinky_pro") { Fail "only pinky_pro is supported" }
-if ($RobotNumber -lt 1 -or $RobotNumber -gt 61) { Fail "RobotNumber must be between 1 and 61" }
+if ($PSBoundParameters.ContainsKey("RobotNumber") -and ($RobotNumber -lt 1 -or $RobotNumber -gt 61)) {
+    Fail "RobotNumber must be between 1 and 61"
+}
 if ($Preset -notin @("core", "motor", "hardware")) { Fail "Preset is invalid" }
+if ($CountryCode -cnotmatch '^[A-Z]{2}$') { Fail "CountryCode must be two uppercase letters" }
 if ($ReleaseId -notmatch '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$') { Fail "ReleaseId is invalid" }
 if ($FleetEndpoint -notmatch '^https://') { Fail "FleetEndpoint must use HTTPS" }
 if ([string]::IsNullOrWhiteSpace($FleetTrustProfile)) { Fail "FleetTrustProfile is required" }
@@ -174,6 +280,28 @@ if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
 $wifiCredential = Import-Clixml -LiteralPath $credentialPath
 if ($wifiCredential -isnot [System.Management.Automation.PSCredential] -or [string]::IsNullOrWhiteSpace($wifiCredential.UserName)) {
     Fail "Wi-Fi credential profile is invalid"
+}
+
+# D-174 F3: an optional operator public key opens a key-only `rosy` login on the
+# card. Only the key file's public line is read; the plan records its fingerprint.
+$operatorKey = $null
+$operatorFingerprint = ""
+if ($OperatorPublicKey) {
+    if (-not (Test-Path -LiteralPath $OperatorPublicKey -PathType Leaf)) { Fail "operator public key file is missing" }
+    $operatorLines = @(Get-Content -LiteralPath $OperatorPublicKey | Where-Object { $_.Trim() })
+    if ($operatorLines.Count -ne 1) { Fail "operator public key file must hold exactly one key" }
+    $operatorKey = $operatorLines[0].Trim()
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+    $fingerprintCode = "import sys; from deploy.sd.personalization import operator_key_fingerprint; print(operator_key_fingerprint(sys.stdin.read()))"
+    Push-Location $repoRoot
+    try {
+        $operatorFingerprint = ($operatorKey | & $PythonExe -c $fingerprintCode)
+        if ($LASTEXITCODE -ne 0) { Fail "operator public key is not an allowed public key" }
+    }
+    finally {
+        Pop-Location
+    }
+    $operatorFingerprint = ([string]$operatorFingerprint).Trim()
 }
 
 if (-not (Test-Path -LiteralPath $ImagePath -PathType Leaf)) { Fail "image file is missing" }
@@ -214,11 +342,40 @@ else {
     }
     if (-not $DeviceName) { Fail "could not allocate a unique Pinky device name after 32 attempts" }
 }
-if ($DeviceName -notmatch '^rosy-pinky-[a-hj-km-np-z2-9]{4}$') { Fail "DeviceName is invalid" }
+if ($robotNumberSource -eq "auto" -and -not $reviewedPlan) {
+    # Draw from the free slots instead of taking the lowest one so two operator
+    # PCs with separate registries are less likely to hand out the same DDS domain.
+    $freeNumbers = @(1..61 | Where-Object { @($registry.robot_numbers) -notcontains $_ })
+    if ($freeNumbers.Count -eq 0) { Fail "no free robot number remains in the registry (1-61)" }
+    $RobotNumber = [int]($freeNumbers | Get-Random)
+}
+# Checked again after drawing or loading a plan: a tampered plan must never
+# reach the writer with an identity the bundle validator would later refuse.
+if ($RobotNumber -lt 1 -or $RobotNumber -gt 61) { Fail "RobotNumber must be between 1 and 61" }
+if ($reprovision) {
+    # A reviewed plan may not swap in another identity under this receipt, and the
+    # receipt's identity must be the one the registry already holds.
+    foreach ($pair in @(@("RobotNumber", "robot_number"), @("DeviceName", "device_name"), @("DeviceUid", "device_uid"))) {
+        if ([string](Get-Variable -Name $pair[0] -ValueOnly) -cne [string]$reprovision.($pair[1])) {
+            Fail "the plan identity does not match the reprovision receipt: $($pair[1])"
+        }
+    }
+    if ($reviewedPlan -and [string]$reviewedPlan.robot_number_source -cne "reprovision") {
+        Fail "the reviewed plan was not made for this reprovision receipt"
+    }
+    if (@($registry.robot_numbers) -notcontains $RobotNumber -or
+        @($registry.device_names) -cnotcontains $DeviceName -or
+        @($registry.device_uids) -cnotcontains $DeviceUid) {
+        Fail "the reprovision receipt identity is not registered here"
+    }
+}
+if ($DeviceName -cnotmatch '^rosy-pinky-[a-hj-km-np-z2-9]{4}$') { Fail "DeviceName is invalid" }
 try { $parsedUid = [guid]$DeviceUid } catch { Fail "DeviceUid is invalid" }
-if (@($registry.robot_numbers) -contains $RobotNumber) { Fail "robot number is already registered" }
-if (@($registry.device_names) -contains $DeviceName) { Fail "device name is already registered" }
-if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
+if (-not $reprovision) {
+    if (@($registry.robot_numbers) -contains $RobotNumber) { Fail "robot number is already registered" }
+    if (@($registry.device_names) -contains $DeviceName) { Fail "device name is already registered" }
+    if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
+}
 
 $firstDisk = Select-SafeDisk (Read-DiskInventory $DiskInventoryJson) $DiskNumber
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
@@ -232,12 +389,20 @@ $plan = [ordered]@{
     device_uid = $DeviceUid
     device_name = $DeviceName
     robot_number = $RobotNumber
+    robot_number_source = $robotNumberSource
+    model = $Model
+    requested_preset = $Preset
+    country_code = $CountryCode
     ros_domain_id = 40 + $RobotNumber
     namespace = "rosy_{0:d2}" -f $RobotNumber
     release_id = $ReleaseId
     image_sha256 = $actualHash
     wifi_ssid = $wifiCredential.UserName
     fleet_endpoint = $FleetEndpoint
+    fleet_trust_profile = $FleetTrustProfile
+    fleet_source = $fleetSource
+    operator_key_fingerprint = $operatorFingerprint
+    registry_path = (Resolve-Path -LiteralPath $RegistryJson).ProviderPath
 }
 
 $secondSource = $(if ($SecondDiskInventoryJson) { $SecondDiskInventoryJson } else { $DiskInventoryJson })
@@ -246,8 +411,32 @@ if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $secondDisk)) {
     Fail "target disk changed between safety probes"
 }
 
+if ($reviewedPlan) {
+    foreach ($field in @("physical_drive", "disk_number", "disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
+        if ($planKeys -cnotcontains $field -or [string]$plan[$field] -cne [string]$reviewedPlan.$field) {
+            Fail "target no longer matches the reviewed plan: $field"
+        }
+    }
+    # Windows paths are case-insensitive; a different registry would let one
+    # plan provision two cards with the same identity.
+    if ([string]$plan["registry_path"] -ne [string]$reviewedPlan.registry_path) {
+        Fail "target no longer matches the reviewed plan: registry_path"
+    }
+}
+
+$planJson = $plan | ConvertTo-Json -Compress
 if ($PlanOnly) {
-    $plan | ConvertTo-Json -Compress
+    if ($PlanPath) {
+        $planTemp = "$PlanPath.tmp-$([guid]::NewGuid().ToString('N'))"
+        try {
+            Set-Content -LiteralPath $planTemp -Value $planJson -Encoding UTF8
+            Move-Item -LiteralPath $planTemp -Destination $PlanPath
+        }
+        finally {
+            if (Test-Path -LiteralPath $planTemp) { Remove-Item -LiteralPath $planTemp -Force }
+        }
+    }
+    $planJson
     exit 0
 }
 
@@ -325,6 +514,7 @@ try {
             fleet_trust_profile = $FleetTrustProfile
             pairing_required = $false
         }
+        if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
         $previousOutputEncoding = $OutputEncoding
         $previousPythonUtf8 = $env:PYTHONUTF8
         try {
@@ -381,5 +571,13 @@ $receipt = [ordered]@{
     personalization = $bundleReceipt
     created_at = [DateTimeOffset]::UtcNow.ToString("o")
 }
-$receipt | ConvertTo-Json | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
-$receipt | ConvertTo-Json -Compress
+if ($reprovision) {
+    $receipt["supersedes"] = [ordered]@{
+        release_id = [string]$reprovision.release_id
+        image_sha256 = [string]$reprovision.image_sha256
+        created_at = [string]$reprovision.created_at
+    }
+}
+# -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
+$receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
+$receipt | ConvertTo-Json -Depth 10 -Compress

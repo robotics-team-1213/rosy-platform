@@ -14,10 +14,10 @@ from typing import Callable
 
 
 try:
-    from deploy.sd.personalization import validate_provision_bundle
+    from deploy.sd.personalization import operator_key_fingerprint, validate_provision_bundle
 except ModuleNotFoundError:  # Installed image layout.
     sys.path.insert(0, "/opt/rosy")
-    from deploy.sd.personalization import validate_provision_bundle
+    from deploy.sd.personalization import operator_key_fingerprint, validate_provision_bundle
 
 
 SERIAL = re.compile(r"^[0-9a-f]{8,32}$")
@@ -60,15 +60,67 @@ def _default_network_activate(profile: str) -> bool:
     return True
 
 
+def _default_hostname_apply(hostname: str) -> None:
+    """Rename the running system and let avahi announce the new name (D-174 F2)."""
+    quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+             "stderr": subprocess.DEVNULL, "check": False, "timeout": 20}
+    if subprocess.run(["hostnamectl", "set-hostname", hostname], **quiet).returncode != 0:
+        if subprocess.run(["hostname", hostname], **quiet).returncode != 0:
+            raise OSError("could not set the live hostname")
+    subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], **quiet)
+
+
+OPERATOR_USER = "rosy"
+
+
+def _default_operator_account(name: str) -> None:
+    """Create the key-only operator login if it does not exist (D-174 F3)."""
+    quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+             "stderr": subprocess.DEVNULL, "check": False, "timeout": 30}
+    if subprocess.run(["id", "-u", name], **quiet).returncode == 0:
+        return
+    # No password is set, so the account is locked for password logins.
+    created = subprocess.run(
+        ["useradd", "--create-home", "--shell", "/bin/bash",
+         "--groups", "systemd-journal,adm", name], **quiet)
+    if created.returncode != 0:
+        raise OSError("could not create the operator account")
+
+
+def _system_account(name: str) -> dict | None:
+    import pwd
+
+    try:
+        entry = pwd.getpwnam(name)
+    except KeyError:
+        return None
+    return {"home": entry.pw_dir, "shell": entry.pw_shell, "uid": entry.pw_uid, "gid": entry.pw_gid}
+
+
 class FirstBootProvisioner:
     def __init__(
         self,
         *,
         root: Path = Path("/"),
         network_activate: Callable[[str], bool] = _default_network_activate,
+        hostname_apply: Callable[[str], None] | None = None,
+        operator_account: Callable[[str], None] | None = None,
+        operator_lookup: Callable[[str], dict | None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.network_activate = network_activate
+        # Only the real root may rename the running host; a fixture or chroot
+        # root must never rename the machine running the tool.
+        if hostname_apply is None and self.root == Path("/").resolve():
+            hostname_apply = _default_hostname_apply
+        self.hostname_apply = hostname_apply
+        if operator_account is None and self.root == Path("/").resolve():
+            operator_account = _default_operator_account
+        self.operator_account = operator_account
+        if operator_lookup is None:
+            operator_lookup = (_system_account if self.root == Path("/").resolve()
+                               else lambda name: {"home": f"/home/{name}", "shell": "/bin/bash"})
+        self.operator_lookup = operator_lookup
         self.state_dir = self.root / "var/lib/rosy/provisioning"
         self.complete = self.state_dir / "complete.json"
         self.state = self.state_dir / "state.json"
@@ -102,6 +154,38 @@ class FirstBootProvisioner:
         lines = [line for line in lines if not line.startswith("127.0.1.1")]
         lines.append(f"127.0.1.1 {hostname}")
         _write_atomic(hosts, "\n".join(lines) + "\n", 0o644)
+
+    def _operator(self, operator: dict | None) -> list[str]:
+        """Install per-card operator keys for a key-only login (D-174 F3)."""
+        if not operator:
+            return []
+        keys = operator["ssh_authorized_keys"]
+        if self.operator_account is not None:
+            try:
+                self.operator_account(OPERATOR_USER)
+            except (OSError, subprocess.SubprocessError) as exc:
+                print(f"rosy-first-boot: operator account not created: {exc}", file=sys.stderr)
+        # Operator access is optional: without a usable account the robot still
+        # provisions, and nothing is installed that sshd would silently ignore.
+        account = self.operator_lookup(OPERATOR_USER)
+        expected_home = f"/home/{OPERATOR_USER}"
+        if account is None:
+            print("rosy-first-boot: operator account is missing; operator access skipped", file=sys.stderr)
+            return []
+        if account["home"] != expected_home or account["shell"].endswith(("nologin", "false")):
+            print(f"rosy-first-boot: existing operator account has home {account['home']} and shell "
+                  f"{account['shell']}; operator access skipped", file=sys.stderr)
+            return []
+        ssh_dir = self._inside(f"{expected_home.lstrip('/')}/.ssh")
+        ssh_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(ssh_dir, 0o700)
+        _write_atomic(ssh_dir / "authorized_keys", "".join(f"{key}\n" for key in keys), 0o600)
+        if account.get("uid") is not None:
+            for path in (ssh_dir, ssh_dir / "authorized_keys"):
+                os.chown(path, account["uid"], account["gid"])
+        _write_atomic(self._inside("etc/sudoers.d/60-rosy-operator"),
+                      f"{OPERATOR_USER} ALL=(ALL) NOPASSWD:ALL\n", 0o440)
+        return [operator_key_fingerprint(key) for key in keys]
 
     def _claim_hardware(self, *, hardware_serial: str, device_uid: str) -> None:
         expected = {
@@ -190,6 +274,12 @@ class FirstBootProvisioner:
         else:
             _json_atomic(identity_path, identity, 0o644)
         self._hostname(identity["hostname"])
+        if self.hostname_apply is not None:
+            try:
+                self.hostname_apply(identity["hostname"])
+            except (OSError, subprocess.SubprocessError) as exc:
+                # /etc/hostname is already correct; the next boot picks it up.
+                print(f"rosy-first-boot: live hostname not applied: {exc}", file=sys.stderr)
         _write_atomic(
             self._inside("etc/rosy/runtime.env"), self._runtime_env(payload), 0o640
         )
@@ -198,6 +288,7 @@ class FirstBootProvisioner:
         )
         _write_atomic(network_path, self._network_profile(payload), 0o600)
         _json_atomic(self._inside("etc/rosy/fleet-bootstrap.json"), payload["fleet"], 0o600)
+        operator_fingerprints = self._operator(payload.get("operator"))
 
         if not self.network_activate("rosy-site-sta"):
             network_path.unlink(missing_ok=True)
@@ -225,6 +316,8 @@ class FirstBootProvisioner:
             },
             "payload_checksum": payload["payload_checksum"],
         }
+        if operator_fingerprints:
+            complete["operator"] = {"ssh_key_fingerprints": operator_fingerprints}
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         bundle.unlink()

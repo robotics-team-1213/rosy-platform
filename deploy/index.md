@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
-- 2026-09-23 · uncommitted · docs(native): 래퍼 제거의 근거를 실측에 맞게 정정 + 멈춘 종료 계약을 유닛 쪽에서 고정
-- 2026-09-23 · uncommitted · fix(native): rosy-core 가 entry script 를 직접 exec + 준비 프로브가 정지 신호를 깨끗이 끝냄
-- 2026-09-23 · uncommitted · deploy(image+native): T14 — wait-core-ready 포트 파라미터화 + chrony 이미지 계약
-- 2026-09-22 · uncommitted · deploy(udev): /dev/rosy-motor 별칭을 실제로 만드는 규칙
-- 2026-09-22 · uncommitted · fix(image): scope target rosdep to the product closure
+- 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — RestartMode=direct와 정지 계약의 관계
+- 2026-09-23 · uncommitted · fix(image): check bytecode only in the native runtime, not colcon's install tree
+- 2026-09-23 · uncommitted · fix(native,sd): review of the boot indicator, black box and operator access (D-174, D-175)
+- 2026-09-23 · uncommitted · feat(sd): rewrite a card for an existing device identity (D-174 F7)
+- 2026-09-23 · uncommitted · feat(sd): per-card operator SSH key and key-only `rosy` login (D-174 F3)

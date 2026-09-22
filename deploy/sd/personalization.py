@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
@@ -17,6 +18,36 @@ DEVICE_NAME_PATTERN = re.compile(r"^rosy-pinky-[a-hj-km-np-z2-9]{4}$")
 RELEASE_ID_PATTERN = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
 RAW_64_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 VALID_PRESETS = frozenset({"core", "motor", "hardware"})
+# D-174 F3: operator access is public-key only; these are the accepted key types.
+OPERATOR_KEY_TYPES = frozenset({
+    "ssh-ed25519", "sk-ssh-ed25519@openssh.com",
+    "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+})
+MAX_OPERATOR_KEYS = 8
+_OPERATOR_KEY = re.compile(r"^(?P<type>[a-z0-9@.-]+) (?P<blob>[A-Za-z0-9+/]+={0,2})(?: (?P<comment>[!-~ ]{1,100}))?$")
+
+
+def validate_operator_key(key: str) -> str:
+    """Return a single-line OpenSSH public key of an allowed type, or raise."""
+    if not isinstance(key, str):
+        raise ValueError("operator key must be text")
+    key = key.strip()
+    match = _OPERATOR_KEY.fullmatch(key)
+    if match is None or match["type"] not in OPERATOR_KEY_TYPES:
+        raise ValueError("operator key is not an allowed single-line public key")
+    try:
+        blob = base64.b64decode(match["blob"], validate=True)
+    except ValueError as exc:
+        raise ValueError("operator key body is not base64") from exc
+    declared = match["type"].encode("ascii")
+    if blob[:4] != len(declared).to_bytes(4, "big") or blob[4:4 + len(declared)] != declared:
+        raise ValueError("operator key body does not match its type")
+    return key
+
+
+def operator_key_fingerprint(key: str) -> str:
+    blob = base64.b64decode(validate_operator_key(key).split()[1])
+    return "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode("ascii").rstrip("=")
 
 
 class ChoiceSource(Protocol):
@@ -112,6 +143,7 @@ def create_provision_bundle(
     fleet_trust_profile: str,
     pairing_required: bool,
     pairing_credential: str | None = None,
+    operator_ssh_keys: Collection[str] | None = None,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -171,6 +203,8 @@ def create_provision_bundle(
         "created_at": created_text,
         "nonce": generated_nonce,
     }
+    if operator_ssh_keys:
+        bundle["operator"] = {"ssh_authorized_keys": [validate_operator_key(key) for key in operator_ssh_keys]}
     bundle["payload_checksum"] = _checksum(bundle)
     return validate_provision_bundle(bundle)
 
@@ -180,8 +214,19 @@ def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "schema_version", "device_identity", "release", "dds", "runtime",
         "network", "fleet", "created_at", "nonce", "payload_checksum",
     }
-    if set(bundle) != expected_top:
+    if set(bundle) - {"operator"} != expected_top:
         raise ValueError("provision bundle keys are invalid")
+    if "operator" in bundle:
+        operator = bundle["operator"]
+        if not isinstance(operator, dict) or set(operator) != {"ssh_authorized_keys"}:
+            raise ValueError("operator keys are invalid")
+        keys = operator["ssh_authorized_keys"]
+        if (not isinstance(keys, list) or not all(isinstance(key, str) for key in keys)
+                or not 1 <= len(keys) <= MAX_OPERATOR_KEYS or len(set(keys)) != len(keys)):
+            raise ValueError("operator keys are invalid")
+        for key in keys:
+            if validate_operator_key(key) != key:
+                raise ValueError("operator keys are invalid")
     expected_nested = {
         "device_identity": {"device_uid", "device_name", "hostname", "model"},
         "release": {"release_id"},
@@ -253,4 +298,7 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
         "created_at": bundle["created_at"],
         "nonce": bundle["nonce"],
         "payload_checksum": bundle["payload_checksum"],
+        **({"operator": {"ssh_key_fingerprints": [
+            operator_key_fingerprint(key) for key in bundle["operator"]["ssh_authorized_keys"]
+        ]}} if "operator" in bundle else {}),
     }
