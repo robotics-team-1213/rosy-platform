@@ -1330,3 +1330,41 @@
 - gate 변화: 없음. 패키지 포함은 SOURCE/ARTIFACT 증거이며 실제 I2C/LED/모터와 군집
   통신은 DEVICE/FLEET에서 별도 검증한다.
 - 결정: D-165.
+
+## 2026-09-22 · uncommitted · docs(adr): 과속 반응 기록 전용 결정 (D-166)
+
+- 변경: `docs/adr/D-166-speeding-response-record-only.md` 신설 — 과속 확정의 1차 반응을 기록 전용(로그·콘솔 표시)으로 고정하고, 자동 감속은 "로봇 계약 경로 확인(D-18) + AC-25(±10%) 통과"의 2-확인 상향 조건으로 닫았다. ADR 로그 색인에 D-166 Accepted 등록, `docs/progress.md` adrs 갱신(D-163 복원 + D-166), 속도 평면 설계 Status·§6·§8에 D-166 연결, `docs/plans/AGENTS.md` 신호등 행 정리(AC-01~23 반영, 중복 2행 제거), `docs/reference/AGENTS.md` ADR 범위 D-150 → D-166, `docs/index.md` 재생성.
+- 증거: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` → 70 passed, `python tools/harness/rosy_harness.py lint` → 0 error (2026-09-22 Windows; 기준선의 stale index 기준 2 failed·1 error 해소 포함).
+- gate 변화: 없음 — DEVICE/FIELD는 신호등 벤치(B0–B7)와 속도 AC-25 진행에 그대로 의존하고, "자동 감속 미연결"이 이제 문서가 아닌 결정(D-166)으로 고정됐다.
+- 결정: D-166 (Accepted) — 과속 반응 기록 전용, 자동 감속은 계약 경로·AC-25 확인 후 재결정.
+- 교훈: 과속 "감지→제동" 직결 대신 기록으로 닫으면 미검증 판정이 구동에 닿지 않는다. 단속 컨셉(확인하고 기록)과도 결이 같다.
+
+## 2026-09-22 · uncommitted · docs(plans): 감사 착지 — v2 §3, AC-23 수치화·AC-24~26 승격, B0 시트 3항목
+
+- 변경: `2026-09-22-signals-button-contract-v2-proposal.md` 신규 §3 "상태 재구성 + 명령 의미론" — 펄스=비멱등 상대명령, Fleet 이 set(목표)로 presses 계산·멱등성 복구, 강등 사다리 CONFIRMED→ASSUMED→UNKNOWN(후보 0개 = desync fault), 확인 지연 예산 T=5 s(observer v0.3 frozen/age_s 가 측정값). 기존 §3~§6 → §4~§7 재번호(외부 참조는 §2.1 뿐 — 재번호 전 확인). §5 영향 목록에 v1 verify 착지 참고 추가.
+- 변경: `2026-09-22-signals-acceptance-plan.md` — AC-23 수치화(d=1.0 m, 640×480 ROI≥15×15 px, 판정 지연 ≤3 s, frozen 오보 0회), 신규 소절 "속도·Pi 관측 (E2→E3)" 에 AC-24~26 승격(AC-25 수치 d=1.0 m·30 fps·1.5 m/s±10% 동기화), §8.1 B0 시트 3항목 추가(배터리 방전 조건 병기, 버튼 cross-talk 측정·판정 ≤10 mA + 오작동 0회, 전원 여유 분리비 ≥3배 — GPIO 절대최대 3.6 V ÷3 = 1.2 V, 3×AA 4.5 V 직결 불가 명시), §0 fleet 시험 수 360→392.
+- 변경: 속도 설계 §7 표제에 승격 완료 표시(판정의 기록 위치는 수용 계획 — 양쪽 숫자 동기화 규칙), 관측 설계 §3 에 verify 착지 기록(상태값 전부), `docs/plans/AGENTS.md` 행 갱신.
+- 증거: 문서 편집만 — 코드 검증은 동시 착지 시험(observer 32 passed, fleet 392 passed)으로 대체. harness `generate` 재실행으로 index 갱신.
+- gate 변화: 없음 — 수용 판정 자체는 벤치(B0~B7)에서.
+- 교훈: 승격(AC-24~26)은 복사가 아니라 "기록 위치의 이전"이다 — 원본 표에 승격 표시를 남겨 두 문서가 갈라지는 것을 막았다.
+
+## 2026-09-22 · uncommitted · docs(plans): D-166 상향 조건 ① 확인 — 로봇 계약에 공식 자율 감속 경로 없음
+
+- 변경: `2026-09-22-signal-speed-pi-design.md` §6 에 API Ref 확인 결과 기록 —
+  `PUT /safety/limits`(SAF-004)는 `manual_*` 만 받아 자율 주행(`scope="nav"`)
+  클리핑에 영향 없고 오버레이에 영구 저장되며, SRS 의 "Fleet Velocity Limit"
+  (`fleet_linear`)은 설정에만 있고 API 필드가 없고, nav 포함 전 스코프를 낮추는
+  유일한 API `POST /swarm/follow` `max_speed`(`session_linear`)는 추종 세션
+  전용이라 과속 반응 경로로 쓸 수 없다 → **공식 자율 감속 경로 없음**. ② 는
+  v1 에서 "신호등 적색 + 운영자 개입"까지 확정, 자동 감속은 로봇 계약 개정 과제.
+  §8 열린 질문 3 을 닫았다.
+- 증거: API Ref §5 `PUT /safety/limits` 행, `core_api_web/api/v1/safety.py`
+  `LimitsRequest`(manual 필드만 · `patch_local_config` 영구 저장),
+  `core_features/safety/manager.py` `clip()` 스코프 분기 + `set_session_speed`,
+  `core_features/command/manager.py` nav/manual 클리핑 호출부,
+  `core_features/swarm/manager.py` 추종 세션 시작/해제 — 코드 대조(호스트, 문서 편집만).
+- gate 변화: 없음 — D-166 의 2-확인 중 (1) 이 "없음"으로 닫혀, 자동 감속 재논의의
+  선행 조건이 "계약 경로 확인"에서 "계약 개정(일시 상한 경로 신설)"으로 바뀌었다.
+  v1 기록 전용(D-166)은 불변이고 AC-25(±10%)는 그대로 진행 대기다.
+- 결정: 새 ADR 없음 — 이것은 D-166 조건의 확인 결과이지 새 결정이 아니다. 일시
+  상한 경로를 계약에 신설하는 것이 결정되면 그때 ADR(다음 번호)로 남긴다.

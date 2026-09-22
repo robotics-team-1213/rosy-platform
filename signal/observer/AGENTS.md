@@ -14,9 +14,9 @@ so it cannot become a control surface. Design:
 
 | File | Description |
 |------|-------------|
-| `observer.py` | HSV 분할 분류기(`classify_frame`), 설정 로더, FastAPI 표면(`GET /observed`), cv2 프레임 소스 |
-| `config.example.json` | 카메라 인덱스·ROI·문턱 예시 (좌표는 설치 후 캘리브레이션) |
-| `test/` | 합성 프레임 시험 14건 — 분류·설정 검증·명령 경로 부재 |
+| `observer.py` | HSV 분할 분류기(`classify_frame`), 설정 로더, FastAPI 표면(`GET /observed`·`/preview.jpeg`), cv2 프레임 소스, 프레임 동결(`freeze_after_s` → `frozen`/`age_s` 강등) |
+| `config.example.json` | 카메라 인덱스·ROI·문턱·debounce·동결 예산 예시 (좌표는 설치 후 캘리브레이션) |
+| `test/` | 합성 프레임 시험 32건 — 분류·설정 검증·명령 경로 부재·동결 강등·preview 자체 캡처 |
 
 ## Subdirectories
 

@@ -14,8 +14,8 @@ session, CLI, hub, and the import-boundary check. No ROS. Fakes only — no netw
 |------|-------------|
 | `conftest.py` | Puts `src/site/fleet`, `src/core/core_common`, `src/core/core_features` on `sys.path` so pytest runs without colcon install |
 | `fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session/hub tests — no network |
-| `fake_signals.py` | Fake `SignalClient` — 단조 seq(409 stale_seq), 인증, 충돌 가드 응답을 흉내 낸다 |
-| `test_server_signals.py` | signals.yaml 로더·상태 파서·`SignalConsole`(재단언·부분 실패)·`/api/fleet/signals*` 엔드포인트 |
+| `fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양 고정 + `FakeObserver`/`observed_body()` (관측 `/observed` v0.3 본문) |
+| `test_server_signals.py` | signals.yaml 로더·상태 파서·`SignalConsole`(재단언·부분 실패·**3자 교차 검증 verify**)·`cross_check` 판정군·`/api/fleet/signals*` 엔드포인트 |
 | `test_package.py` | Package import and D-18 schema reuse |
 | `test_geometry.py` | FOR-001 formation slot offsets |
 | `test_assignment.py` | FOR-002 greedy slot assignment |

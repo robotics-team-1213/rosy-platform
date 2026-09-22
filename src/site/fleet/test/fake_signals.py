@@ -67,3 +67,41 @@ class FakeSignal:
 
     async def aclose(self) -> None:
         return None
+
+
+class FakeObserver:
+    """관측 서비스 가짜 — `/observed` 본문 모양(2026-09-22 v0.3)을 고정한다.
+
+    관측은 읽기 전용이라 명령이 없다 — 성공 응답 한 가지와 오류 한 가지면 충분하다.
+    """
+
+    def __init__(self, body: Optional[dict] = None, *,
+                 error: Optional[Exception] = None) -> None:
+        self.body = body if body is not None else observed_body()
+        self.error = error
+        self.calls = 0
+
+    async def observed(self) -> dict:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return dict(self.body)
+
+    async def aclose(self) -> None:
+        return None
+
+
+def observed_body(*, lamps: Optional[dict] = None, pending: bool = False,
+                  frozen: bool = False, frame_id: int = 1,
+                  age_s: float = 0.0) -> dict:
+    """관측 `/observed` 본문 — `lamps`(날 판정)와 `stable`(debounce) 두 층 고정."""
+    if lamps is None:
+        # 기본: red 램프 ROI("left") 하나만 켜져 있고 확정까지 끝났다.
+        lamps = {"left": {"lit": True, "group": "red", "confidence": 1.0}}
+    stable = {name: {"lit": row["lit"], "group": row["group"], "pending": pending}
+              for name, row in lamps.items()}
+    if frozen:
+        stable = {name: {"lit": None, "group": None, "pending": True, "stale": True}
+                  for name in lamps}
+    return {"ts": 1000.0, "frame_id": frame_id, "captured_at": 1000.0,
+            "age_s": age_s, "frozen": frozen, "lamps": lamps, "stable": stable}

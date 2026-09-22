@@ -13,7 +13,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | File | Description |
 |---|---|
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
-| `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — signals.yaml, `SignalConsole`, `HttpSignalClient`. `swarm/` 로봇 계약과 섞지 않는다 |
+| `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — signals.yaml, `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |

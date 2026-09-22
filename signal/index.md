@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · feat(signal/observer): 프레임 동결 강등 + preview 자체 캡처 + ROI 경계 검증 (v0.3)
 - 2026-09-22 · uncommitted · docs(signal): D-163 — 관측은 읽기 전용 분리 평면, 카메라 역할 셋 (ADR)
 - 2026-09-22 · uncommitted · feat(observer): 프레임 소스 추상화 + Pi 속도 평면 설계
 - 2026-09-22 · uncommitted · feat(observer): 신호등 관측 서비스 — 읽기 전용 실측 평면
 - 2026-09-22 · uncommitted · docs(signal): 실물 수용 계획 — 평가 방법 고정
-- 2026-09-22 · uncommitted · feat(signal): Fleet G-S3 클라이언트·관제 연동

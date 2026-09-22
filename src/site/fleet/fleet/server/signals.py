@@ -22,7 +22,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Protocol, Sequence
+from typing import Any, Mapping, Optional, Protocol, Sequence
 
 import httpx
 import yaml
@@ -32,6 +32,13 @@ from fleet.hub.hub import HubError
 POLL_INTERVAL_S = 2.0     # 장치 하트비트 타임아웃(10 s)의 5 배 밀도
 HTTP_TIMEOUT_S = 1.5      # 폴링이 로봇 gather 를 지연시키지 않게 짧게
 REASSERT_LIMIT = 1        # failsafe 재단언은 실패해도 한 번 — 나머지는 운영자 몫
+#: 장치 램프 이름 → 관측 색상군 기대치. 노란 램프는 관측에서 orange 군으로, 청록
+#: 계열 녹색은 green/blue 경계로 온다 — 3자 교차 검증(관측 설계 §3)의 대조표다.
+EXPECTED_GROUPS: dict[str, tuple[str, ...]] = {
+    "red": ("red",),
+    "yellow": ("orange",),
+    "green": ("green", "blue"),
+}
 
 
 class SignalsFileError(ValueError):
@@ -43,12 +50,18 @@ class SignalEndpoint:
     signal_id: str
     base_url: str   # 끝 슬래시 없음
     token: str
+    #: 관측 서비스의 `/observed` — 없으면 3자 교차 검증은 꺼진다(verify=absent).
+    observer_url: Optional[str] = None
+    #: 장치 램프 이름 → 관측 ROI 이름. B0 사이클 지도(운영자)가 채운다.
+    observer_map: Optional[dict] = None
 
 
 _REQUIRED = ("signal_id", "base_url", "token")
 
 
-def _endpoint(signal_id, base_url, token, where: str) -> SignalEndpoint:
+def _endpoint(signal_id, base_url, token, where: str, *,
+              observer_url: Optional[str] = None,
+              observer_map: Optional[dict] = None) -> SignalEndpoint:
     """`swarm.robots._endpoint` 와 같은 규칙 — 두 로더가 갈라지면 배포가 갈라진다.
 
     토큰은 따옴표 문자열이어야 한다(YAML 1.1 이 `01234567` 을 8진으로, `yes` 를
@@ -63,7 +76,22 @@ def _endpoint(signal_id, base_url, token, where: str) -> SignalEndpoint:
     base_url = base_url.rstrip("/")
     if not base_url.lower().startswith(("http://", "https://")):
         raise SignalsFileError(f"{where}: base_url needs an http:// or https:// scheme")
-    return SignalEndpoint(str(signal_id), base_url, token)
+    if observer_url is not None:
+        if not isinstance(observer_url, str) or not observer_url.lower().startswith(
+                ("http://", "https://")):
+            raise SignalsFileError(f"{where}: observer_url needs an http(s) scheme")
+        observer_url = observer_url.rstrip("/")
+    if observer_map is not None:
+        if not isinstance(observer_map, dict) or not observer_map:
+            raise SignalsFileError(f"{where}: observer_map must be a non-empty mapping")
+        bad_keys = [k for k in observer_map if k not in EXPECTED_GROUPS]
+        bad_vals = [v for v in observer_map.values()
+                    if not isinstance(v, str) or not v]
+        if bad_keys or bad_vals:
+            raise SignalsFileError(
+                f"{where}: observer_map maps device lamps red/yellow/green to ROI names")
+        observer_map = dict(observer_map)
+    return SignalEndpoint(str(signal_id), base_url, token, observer_url, observer_map)
 
 
 def load_signals(path: Path) -> list[SignalEndpoint]:
@@ -87,7 +115,9 @@ def load_signals(path: Path) -> list[SignalEndpoint]:
             if not row.get(key):
                 raise SignalsFileError(f"{path}: signals[{i}] is missing '{key}'")
         endpoint = _endpoint(row["signal_id"], row["base_url"], row["token"],
-                             f"{path}: signals[{i}]")
+                             f"{path}: signals[{i}]",
+                             observer_url=row.get("observer_url"),
+                             observer_map=row.get("observer_map"))
         if endpoint.signal_id in seen:
             raise SignalsFileError(f"{path}: duplicate signal_id {endpoint.signal_id!r}")
         seen.add(endpoint.signal_id)
@@ -99,13 +129,21 @@ def write_signals(path: Path, signals: list[SignalEndpoint]) -> None:
     """로더가 받아들이는 signals.yaml 을 쓴다. 쓰기 전에 로더 규칙을 통과시킨다."""
     if not signals:
         raise SignalsFileError("every signal needs signal_id, base_url and token")
-    normalized = [_endpoint(s.signal_id, s.base_url, s.token, f"signals[{i}]")
+    normalized = [_endpoint(s.signal_id, s.base_url, s.token, f"signals[{i}]",
+                            observer_url=s.observer_url, observer_map=s.observer_map)
                   for i, s in enumerate(signals)]
     ids = [s.signal_id for s in normalized]
     if len(set(ids)) != len(ids):
         raise SignalsFileError(f"duplicate signal_id in {ids}")
-    rows = [{"signal_id": s.signal_id, "base_url": s.base_url, "token": s.token}
-            for s in normalized]
+    rows: list[dict[str, Any]] = []
+    for s in normalized:
+        row: dict[str, Any] = {"signal_id": s.signal_id, "base_url": s.base_url,
+                               "token": s.token}
+        if s.observer_url is not None:
+            row["observer_url"] = s.observer_url
+        if s.observer_map is not None:
+            row["observer_map"] = dict(s.observer_map)
+        rows.append(row)
     target = Path(path)
     text = yaml.safe_dump({"signals": rows}, sort_keys=False)
     # robots.yaml 과 같은 등급의 비밀 파일이다 — 소유자만 읽게 연다(POSIX).
@@ -179,6 +217,58 @@ def parse_status(signal_id: str, payload: Any) -> SignalStatus:
     )
 
 
+def cross_check(intent_lamps: Optional[dict], status_lamps: dict,
+                observed: Optional[dict] = None, *,
+                lamp_to_roi: Optional[Mapping[str, str]] = None) -> tuple[str, list[str]]:
+    """3자 교차 검증(관측 설계 §3)의 순수 판정 — 소비자(폴링·UI)가 붙여 쓴다.
+
+    (1) 의도 vs (2) 장치 보고 → `controller_mismatch`, (2) vs (3) 관측 실측 →
+    `display_mismatch`. `intent_lamps` 는 아직 없을 수 있다(None 이면 1≠2 를
+    건너뛴다 — "의도 없음"과 "의도 전부 꺼짐"은 같지 않다). `observed` 는 관측
+    `/observed` 본문이고, ROI 이름은 `lamp_to_roi`(램프→ROI)로 옮긴다 — 매핑은
+    사이클 지도(운영자)의 것이며 여기서 지어내지 않는다. 관측이 `frozen` 이면
+    오래된 증거라 불일치를 말할 수 없다(`stale` 로 답한다).
+    """
+
+    def _on(lamps: dict, key: str) -> bool:
+        return bool(lamps.get(key))
+
+    if intent_lamps is not None:
+        disagree = [lamp for lamp in EXPECTED_GROUPS
+                    if _on(intent_lamps, lamp) != _on(status_lamps, lamp)]
+        if disagree:
+            return "controller_mismatch", [f"cmd_vs_device:{lamp}" for lamp in disagree]
+    if observed is None:
+        return "agree", []
+    if not isinstance(observed, dict) or not isinstance(observed.get("stable"), dict):
+        return "bad_response", ["obs_shape"]
+    if observed.get("frozen"):
+        return "stale", ["obs_stale"]
+    mapping = dict(lamp_to_roi or {})
+    if not mapping:
+        return "unmapped", []
+    stable = observed["stable"]
+    faults: list[str] = []
+    for lamp, roi in mapping.items():
+        expected = EXPECTED_GROUPS.get(lamp)
+        if expected is None:
+            continue                    # 지도의 오타는 여기서 새 판정을 만들지 않는다
+        row = stable.get(roi)
+        if not isinstance(row, dict):
+            faults.append(f"obs_missing:{lamp}")
+            continue
+        if row.get("pending"):
+            continue                     # debounce 확정 전 — 불일치를 말할 수 없다
+        lit = bool(row.get("lit"))
+        if _on(status_lamps, lamp) and not lit:
+            faults.append(f"obs_dark:{lamp}")
+        elif not _on(status_lamps, lamp) and lit:
+            faults.append(f"obs_ghost:{lamp}")
+        elif lit and row.get("group") not in expected:
+            faults.append(f"obs_color:{lamp}:{row.get('group')}")
+    return ("display_mismatch", faults) if faults else ("agree", [])
+
+
 class SignalClient(Protocol):
     signal_id: str
 
@@ -240,6 +330,54 @@ class HttpSignalClient:
             await self._http.aclose()
 
 
+class SignalObserver(Protocol):
+    """관측 서비스(`/observed`) 클라이언트 — 읽기 전용 증거 공급자."""
+
+    async def observed(self) -> dict: ...
+    async def aclose(self) -> None: ...
+
+
+class ObserverError(Exception):
+    """관측 서버에 못 다가갔다(또는 엉망인 응답). 교차 검증은 이를 '모른다'로 둔다."""
+
+    def __init__(self, code: str, message: str, *, reachable: bool = False) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
+        self.reachable = reachable      # 서버가 대답했으면(4xx/5xx) 다가간 것은 맞다
+
+
+class HttpSignalObserver:
+    """관측 서비스의 `/observed` 클라이언트. 토큰도 명령 경로도 없다 — 읽기 하나."""
+
+    def __init__(self, base_url: str, *, http: Optional[httpx.AsyncClient] = None,
+                 timeout_s: float = HTTP_TIMEOUT_S) -> None:
+        self._owns_http = http is None
+        self._http = http or httpx.AsyncClient(base_url=base_url.rstrip("/"),
+                                               timeout=timeout_s)
+
+    async def observed(self) -> dict:
+        try:
+            resp = await self._http.get("/observed")
+        except httpx.HTTPError as exc:
+            raise ObserverError("OBSERVER_UNREACHABLE", str(exc)) from exc
+        if resp.status_code >= 400:
+            raise ObserverError(f"HTTP_{resp.status_code}", resp.text[:120],
+                                reachable=True)
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise ObserverError("BAD_RESPONSE", "observer did not answer JSON") from exc
+        if not isinstance(data, dict):
+            raise ObserverError("BAD_RESPONSE",
+                                f"expected object, got {type(data).__name__}")
+        return data
+
+    async def aclose(self) -> None:
+        if self._owns_http:
+            await self._http.aclose()
+
+
 class SignalConsole:
     """신호등 N기의 상태 캐시 + 운영자 의도 기억 + failsafe 재단언.
 
@@ -249,13 +387,27 @@ class SignalConsole:
     """
 
     def __init__(self, endpoints: Sequence[SignalEndpoint], clients: Sequence[SignalClient],
-                 *, clock=time.monotonic, poll_interval_s: float = POLL_INTERVAL_S) -> None:
+                 *, clock=time.monotonic, poll_interval_s: float = POLL_INTERVAL_S,
+                 observers: Optional[Mapping[str, SignalObserver]] = None) -> None:
         if len(endpoints) != len(clients):
             raise ValueError("endpoints and clients must line up one for one")
         self._clients: dict[str, SignalClient] = {
             ep.signal_id: client for ep, client in zip(endpoints, clients)
         }
         self._order = [ep.signal_id for ep in endpoints]
+        #: 관측 클라이언트 — endpoint.observer_url 이 있으면 자동으로 붙는다(없으면
+        #: 교차 검증은 꺼진다). 시험은 `observers` 로 가짜를 주입한다.
+        self._observers: dict[str, Optional[SignalObserver]] = {}
+        self._observer_map: dict[str, Optional[dict]] = {}
+        for ep in endpoints:
+            observer = (observers or {}).get(ep.signal_id)
+            if observer is None and ep.observer_url:
+                observer = HttpSignalObserver(ep.observer_url)
+            self._observers[ep.signal_id] = observer
+            self._observer_map[ep.signal_id] = (
+                dict(ep.observer_map) if ep.observer_map else None)
+        self._observed: dict[str, Optional[dict]] = {sid: None for sid in self._order}
+        self._observer_error: dict[str, Optional[dict]] = {sid: None for sid in self._order}
         self._clock = clock
         self._poll_interval_s = poll_interval_s
         self._status: dict[str, Optional[SignalStatus]] = {sid: None for sid in self._order}
@@ -344,7 +496,23 @@ class SignalConsole:
                 self._error[signal_id] = _error_of(result)
             else:
                 self._record(signal_id, result)
+        await self._observe_all()          # 3자 교차 검증의 3 번째 증거(관측 실측)
         await self._reassert_failsafes()
+
+    async def _observe_all(self) -> None:
+        """관측 폴링 — 한 기의 침묵이 다른 기의 실측을 지우지 않게 개별 실패를 흡수한다."""
+        sids = [sid for sid in self._order if self._observers.get(sid) is not None]
+        if not sids:
+            return
+        results = await asyncio.gather(
+            *(self._observers[sid].observed() for sid in sids), return_exceptions=True)
+        for sid, result in zip(sids, results):
+            if isinstance(result, BaseException):
+                self._observed[sid] = None
+                self._observer_error[sid] = _observer_error_of(result)
+            else:
+                self._observed[sid] = result
+                self._observer_error[sid] = None
 
     async def refresh(self) -> None:
         """주기 제한이 걸린 폴링. UI 의 `/api/fleet/state` 가 이 주기를 만든다."""
@@ -378,6 +546,42 @@ class SignalConsole:
         self._status[signal_id] = status
         self._online[signal_id] = True
         self._error[signal_id] = None
+        self._recompute_mismatch(signal_id, status)
+
+    def _recompute_mismatch(self, signal_id: str, status: SignalStatus) -> None:
+        """의도 vs 장치 보고를 다시 본다 — 단, `stale_seq` 장부는 `command()` 가 쥔다.
+        여기서 덮으면 운영자가 추적할 단서(다른 클라이언트의 흔적)가 사라진다."""
+        if self._mismatch.get(signal_id) == "stale_seq":
+            return
+        intent = self._intent.get(signal_id) or {}
+        lamps = intent.get("lamps")
+        if not isinstance(lamps, dict) or intent.get("mode") != status.mode:
+            self._mismatch[signal_id] = None
+            return
+        state, _ = cross_check(lamps, status.lamps)
+        self._mismatch[signal_id] = state if state != "agree" else None
+
+    def _verify_row(self, signal_id: str) -> dict:
+        """3자 교차 검증의 현재 상태. 관측이 없으면 `absent` — 지어낸 답은 없다."""
+        if self._observers.get(signal_id) is None:
+            return {"state": "absent", "faults": []}
+        error = self._observer_error.get(signal_id)
+        if error is not None:
+            return {"state": "unreachable", "faults": [], "error": error}
+        observed = self._observed.get(signal_id)
+        if observed is None:
+            return {"state": "absent", "faults": []}
+        summary = {"frame_id": observed.get("frame_id"),
+                   "content_age_s": observed.get("age_s"),
+                   "frozen": bool(observed.get("frozen"))}
+        status = self._status.get(signal_id)
+        if status is None:
+            return {"state": "unknown", "faults": [], "observer": summary}
+        intent = self._intent.get(signal_id) or {}
+        intent_lamps = intent.get("lamps") if isinstance(intent.get("lamps"), dict) else None
+        state, faults = cross_check(intent_lamps, status.lamps, observed,
+                                    lamp_to_roi=self._observer_map.get(signal_id))
+        return {"state": state, "faults": faults, "observer": summary}
 
     def _row(self, signal_id: str) -> dict:
         status = self._status.get(signal_id)
@@ -386,6 +590,7 @@ class SignalConsole:
             "online": self._online[signal_id],
             "intent": self._intent.get(signal_id),
             "mismatch": self._mismatch[signal_id],
+            "verify": self._verify_row(signal_id),
         }
         if status is not None:
             row.update(status.as_row())
@@ -398,14 +603,19 @@ class SignalConsole:
         return {sid: self._row(sid) for sid in self._order}
 
     async def aclose(self) -> None:
-        await asyncio.gather(
-            *(c.aclose() for c in self._clients.values()),
-            return_exceptions=True,
-        )
+        targets: list[Any] = list(self._clients.values())
+        targets += [o for o in self._observers.values() if o is not None]
+        await asyncio.gather(*(t.aclose() for t in targets), return_exceptions=True)
 
 
 def _error_of(exc: BaseException) -> dict:
     if isinstance(exc, SignalApiError):
         return {"code": exc.code, "message": str(exc), "reachable": True,
                 "signal_id": exc.signal_id}
+    return {"code": type(exc).__name__, "message": str(exc), "reachable": False}
+
+
+def _observer_error_of(exc: BaseException) -> dict:
+    if isinstance(exc, ObserverError):
+        return {"code": exc.code, "message": exc.message, "reachable": exc.reachable}
     return {"code": type(exc).__name__, "message": str(exc), "reachable": False}

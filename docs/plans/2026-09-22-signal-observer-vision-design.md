@@ -69,6 +69,13 @@ Fleet 콘솔은 세 개의 말을 모은다:
 원인이 다른 두 고장이 처음으로 구별된다. 둘 다 화면 faults 로 올라가고, 이것이
 S-02/S-11 맹점의 해소다.
 
+**착지 (2026-09-22):** `SignalConsole` 의 `verify` 행 — `cross_check()` 순수 판정 +
+`poll_once()` 안의 관측 폴링. 상태값: `absent`(관측 없음)/`unreachable`(도달
+실패)/`agree`/`controller_mismatch`(1≠2)/`display_mismatch`(2≠3)/`stale`(관측
+`frozen` — 오래된 증거라 말할 수 없음)/`unmapped`(사이클 지도 없음 — 합격으로
+그리지 않음)/`bad_response`. 램프→ROI 지도는 `signals.yaml` 의 `observer_map`
+(운영자 기입 — 여기서 지어내지 않는다). 관측 `pending`(debounce 확정 전)은 침묵이다.
+
 ## 4. 배치와 경계
 
 - **배치**: `signal/observer/` — signal 모듈의 증거 컴포넌트다. 독이

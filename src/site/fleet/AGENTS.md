@@ -32,11 +32,11 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/hub/hub.py` | Envelope handle + scatter_estop |
 | `fleet/cli.py` | `fleet relay ...` / `formation ...` / `console ...` |
 | `fleet/server/console.py` | `FleetConsole`: N대 상태 gather + goal/cancel/e-stop scatter. 하달한 목표를 기억하는 곳(D-12) |
-| `fleet/server/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: signals.yaml 로더, `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter) — `swarm/` 과 별개 계약이라 별도 파일 |
+| `fleet/server/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: signals.yaml 로더(`observer_url`·`observer_map` 포함), `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
 | `fleet/server/app.py` | FastAPI 표면 — `/api/fleet/*` 와 `/console` UI |
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
 | `test/fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session tests — no network |
-| `test/fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양을 고정 |
+| `test/fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양을 고정 + `FakeObserver`/`observed_body()` (관측 v0.3 본문) |
 | `test/conftest.py` | Puts `src/site/fleet`, `src/core/core_common`, and `src/core/core_features` on `sys.path` so pytest runs without colcon install |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |

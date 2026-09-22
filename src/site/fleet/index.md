@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · feat(fleet/signals): 3자 교차 검증 (의도 vs 접점 vs 실측) verify 행 착지
 - 2026-09-22 · uncommitted · feat(fleet): traffic priority, ETA ordering, and route-conflict guard
 - 2026-09-22 · uncommitted · feat(server): G-S3 signals — 관제가 ROSY-SIGNAL-001 장치를 모으고 흩뿌린다
 - 2026-09-21 · uncommitted · refactor(fleet): serve installable shared web assets
 - 2026-09-21 · uncommitted · chore(tools): drop automatic firewall rule from tower runbook
-- 2026-09-21 · uncommitted · chore(server): tower runbook follow-up

@@ -61,3 +61,11 @@
 - gate 변화: 없음
 - 결정: ADR로 승격한 것은 위 5 항목뿐이다. Pi 배치·속도 계층·감속 루프·F1/F2 는 여전히 검토 중(수용 계획 AC-23~26 이 판정 절차)
 - 교훈: 미결정 논의를 ADR 로 승격할 때는 "결정된 것"과 "검토 중인 것"을 ADR 안에서 분리해 적어야 한다 — 안 그러면 Proposed 로 두고 싶지도, Accepted 로 거짓말할 수도 없는 애매한 문서가 된다
+
+## 2026-09-22 · uncommitted · feat(signal/observer): 프레임 동결 강등 + preview 자체 캡처 + ROI 경계 검증 (v0.3)
+
+- 변경: `observer.py` — 응답에 `frame_id`·`captured_at`·`age_s`·`frozen` 추가. 내용이 `freeze_after_s`(기본 5.0 s, v2 예산 T 와 동일) 동안 안 바뀌면 frozen → `stable` 강등(`lit:null, pending, stale`) + debounce 이력 소거(동결에서 깨어나면 새로 시작). `/preview.jpeg` 가 자기 프레임을 직접 캡처(`/observed` 선행 불필요, 소스 실패 시 마지막 캡처 → 없으면 503). 설정 로더: ROI 프레임 경계 검증·frame_width/height 양수·freeze_after_s>0 거절. 버전 0.2.0 → 0.3.0.
+- 변경: `config.example.json` 에 stable_after/freeze_after_s 노출, `README.md` 응답 스키마·preview·설정 문서 갱신, `AGENTS.md` 시험 수 14→32.
+- 증거: `python -m pytest signal/observer/test -q` → 32 passed (신규 9건: 동결 강등·해제 debounce 재시작·frame_id/age·preview 자체 캡처·설정 거절 5종). flake8 대상 파일 무결 (2026-09-22 Windows).
+- gate 변화: 없음 — 합성 ≠ DEVICE, 실촬 회귀·AC-23/24 는 벤치(B0~B7) 몫.
+- 교훈: 멈춘 프레임의 CONFIRMED 는 가장 비싼 거짓말이다 — 정보의 나이(frame_id/age)를 응답에 실어 소비자가 스스로 강등하게 하는 편이, 서버가 "지금 켜짐"을 조작하는 것보다 낫다.

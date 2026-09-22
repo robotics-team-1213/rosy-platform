@@ -111,6 +111,7 @@ def test_config_roundtrip(tmp_path):
     assert cfg.camera == 1
     assert cfg.rois == (Roi("left", 10, 20, 30, 40),)
     assert cfg.lit_value_min == 80
+    assert cfg.freeze_after_s == 5.0
 
 
 @pytest.mark.parametrize("bad", [
@@ -119,6 +120,16 @@ def test_config_roundtrip(tmp_path):
     {"camera": 0, "rois": [{"name": "a", "x": -5, "y": 1, "w": 1, "h": 1}]},
     {"camera": 0, "rois": [{"name": "a", "x": 1, "y": 1, "w": 1, "h": 1},
                            {"name": "a", "x": 2, "y": 2, "w": 1, "h": 1}]},
+    # 프레임 경계 밖 ROI — 로더에서 거절한다(자르기 실패를 판정으로 위장하지 않는다)
+    {"camera": 0, "rois": [{"name": "a", "x": 640, "y": 1, "w": 40, "h": 1}]},
+    {"camera": 0, "rois": [{"name": "a", "x": 1, "y": 470, "w": 1, "h": 40}]},
+    {"camera": 0, "frame_width": 0,
+     "rois": [{"name": "a", "x": 1, "y": 1, "w": 1, "h": 1}]},
+    # 동결 예산 — 0 이하면 언제나(또는 절대) 동결이 되어 관측이 쓸모없다
+    {"camera": 0, "freeze_after_s": -1,
+     "rois": [{"name": "a", "x": 1, "y": 1, "w": 1, "h": 1}]},
+    {"camera": 0, "freeze_after_s": "five",
+     "rois": [{"name": "a", "x": 1, "y": 1, "w": 1, "h": 1}]},
 ])
 def test_bad_configs_are_refused(tmp_path, bad):
     import json
@@ -225,6 +236,66 @@ def test_preview_is_503_before_any_frame():
     assert _client([]).get("/preview.jpeg").status_code == 503
 
 
+def test_preview_captures_its_own_frame():
+    """/observed 없이도 자기 프레임을 캡처한다 — 캘리브레이션이 관측 호출을 안 타게."""
+    resp = _client([make_frame({"left": RED_BGR})]).get("/preview.jpeg")
+    assert resp.status_code == 200
+    assert resp.content[:2] == b"\xff\xd8"
+
+
+# --- 프레임 동결 (낡은 증거로 확정 만들지 않기) --------------------------------------
+
+def test_observed_carries_frame_identity_and_age():
+    """frame_id/captured_at/age_s/frozen — 소비자가 '몇 초 전 증거'를 가릴 수 있게."""
+    now = [1000.0]
+    client = _client([make_frame({"left": RED_BGR}), make_frame({"left": GREEN_BGR})],
+                     clock=lambda: now[0])
+    first = client.get("/observed").json()
+    assert first["frame_id"] == 1
+    assert first["frozen"] is False
+    assert first["age_s"] == 0.0
+    now[0] += 6.0                      # 내용이 바뀌었다 — 캡처는 새로이다, 동결 없음
+    second = client.get("/observed").json()
+    assert second["frame_id"] == 2
+    assert second["frozen"] is False
+
+
+def test_a_frozen_frame_demotes_stable_to_unknown():
+    """같은 내용이 계속되면 정보는 낡은 것이다 — CONFIRMED 를 만들지 말 것."""
+    cfg = ObserverConfig(rois=tuple(ROIS), stable_after=2, freeze_after_s=5.0)
+    now = [1000.0]
+    frame = make_frame({"left": RED_BGR})
+    client = _client([frame, frame], config=cfg, clock=lambda: now[0])
+    first = client.get("/observed").json()
+    assert first["frozen"] is False
+    now[0] += 6.0                      # 내용 변화 없음 — 프레임이 멈춘 셈이다
+    second = client.get("/observed").json()
+    assert second["frozen"] is True
+    assert second["frame_id"] == first["frame_id"]      # 내용이 안 오른다
+    assert second["stable"]["left"] == {"lit": None, "group": None,
+                                        "pending": True, "stale": True}
+    assert second["lamps"]["left"]["lit"] is True       # 그 프레임의 사실 자체는 남긴다
+
+
+def test_unfreezing_restarts_the_debounce():
+    """동결에서 깨어나면 멈춘 구간을 이어 붙이지 않는다 — debounce 를 새로 돈다."""
+    cfg = ObserverConfig(rois=tuple(ROIS), stable_after=2, freeze_after_s=5.0)
+    now = [1000.0]
+    client = _client([make_frame({"left": RED_BGR}), make_frame({"left": RED_BGR}),
+                      make_frame({"left": GREEN_BGR})],
+                     config=cfg, clock=lambda: now[0])
+    first = client.get("/observed").json()          # 아직 안정화 전
+    assert first["stable"]["left"]["pending"] is True
+    now[0] += 6.0
+    frozen = client.get("/observed").json()         # 동결 → 강등 + 이력 소거
+    assert frozen["frozen"] is True
+    now[0] += 6.0
+    fresh = client.get("/observed").json()          # 내용이 바뀜 → 동결 해제
+    assert fresh["frozen"] is False
+    assert fresh["stable"]["left"]["pending"] is True
+    assert fresh["stable"]["left"]["lit"] is None
+
+
 def test_config_rejects_non_positive_stable_after(tmp_path):
     import json
     path = tmp_path / "observer.json"
@@ -237,7 +308,7 @@ def test_config_rejects_non_positive_stable_after(tmp_path):
 
 # --- HTTP 경계 -------------------------------------------------------------------
 
-def _client(frames, config: "ObserverConfig | None" = None):
+def _client(frames, config: "ObserverConfig | None" = None, *, clock=None):
     source = iter(frames)
 
     def grab():
@@ -247,7 +318,8 @@ def _client(frames, config: "ObserverConfig | None" = None):
             return None
 
     cfg = config or ObserverConfig(camera=0, rois=tuple(ROIS))
-    return TestClient(create_app(grab, cfg))
+    app = create_app(grab, cfg) if clock is None else create_app(grab, cfg, clock=clock)
+    return TestClient(app)
 
 
 def test_observed_answers_the_classified_frame():

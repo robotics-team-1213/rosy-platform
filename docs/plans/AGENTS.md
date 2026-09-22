@@ -65,12 +65,10 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-21-traffic-light-controller-research.md` | 알리 신호등(접점 스위치)을 ESP32+릴레이로 관제 제어하는 조사 보고서 — 제품/릴레이/보드/펌웨어/통신/안전 비교와 ROSY-SIGNAL-001 근거 |
 | `2026-09-21-fleet-signals-integration-design.md` | G-S3 설계: Fleet 콘솔이 ROSY-SIGNAL-001 장치를 gather/scatter — signals.yaml, SignalConsole(재단언·all_red scatter), snapshot/UI 통합 |
 | `2026-09-22-fleet-signals-integration.md` | G-S3 실행 계획: T-S3-1~6. 상시 폴링 루프를 throttled refresh 로 바꾼 변경 기록 |
-| `2026-09-22-signals-acceptance-plan.md` | 신호등 실물 수용 계획 — 증거 등급(E1–E3), 수용 기준 AC-01~22(정량 합격선), 고장 주입 S-01~12, 벤치 절차 B0–B7, 구조적 약점 W1–W9, 버튼 맵핑 갈래·특성화 시트 |
+| `2026-09-22-signals-acceptance-plan.md` | 신호등 실물 수용 계획 — 증거 등급(E1–E3), 수용 기준 AC-01~26(정량 합격선, AC-24~26은 속도 설계에서 승격), 고장 주입 S-01~12, 벤치 절차 B0–B7, 구조적 약점 W1–W9, 버튼 맵핑 갈래·특성화 시트(방전 조건·cross-talk·분리비 ≥3배 포함) |
 | `2026-09-22-signals-button-contract-v2-proposal.md` | ROSY-SIGNAL-001 v2 제안 — 모드 사이클 버튼용 펄스 프리미티브, 피드백 등급 F0/F1/F2/F-EXT 결정 대기, 페일세이프 재정의 |
 | `2026-09-22-signal-observer-vision-design.md` | 신호등 관측 평면 설계 — 카메라+OpenCV(고전 분할 v1)/YOLO(선택 v2)를 제어와 분리한 읽기 전용 관측 서비스, 명령↔컨트롤러↔실측 3자 교차 검증 |
-| `2026-09-22-signal-speed-pi-design.md` | 속도 평면 설계 — 라즈베리파이 배치(picamera2 소스), 오도메트리 1차+카메라 검증의 과속 판정, 감속 루프(Fleet 판정·신호 표시), AC-24~26 |
-| `2026-09-22-signals-acceptance-plan.md` | 신호등 실물 수용 계획 — 증거 등급(E1–E3), 수용 기준 매트릭스(AC-01~22, 정량 합격선), 고장 주입 S-01~12, 벤치 절차 B0–B7, 구조적 약점 W1–W9, 버튼 맵핑 갈래 |
-| `2026-09-22-signals-button-contract-v2-proposal.md` | ROSY-SIGNAL-001 v2 제안 — 모드 사이클 버튼용 펄스 프리미티브, 피드백 등급 F0/F1/F2 결정 대기, 페일세이프 재정의 |
+| `2026-09-22-signal-speed-pi-design.md` | 속도 평면 설계 — 라즈베리파이 배치(picamera2 소스), 오도메트리 1차+카메라 검증의 과속 판정, 감속 루프(Fleet 판정·신호 표시), AC-24~26(2026-09-22 수용 계획 §3 으로 승격 완료 — 판정의 기록 위치는 거기), D-166(과속 반응 기록 전용) |
 | `2026-09-22-scene-context-road-design.md` | D-162 장면 상황 프로파일 설계 — 닫힌 context 집합, 오프라인 리비전 프로파일, 제네릭 보수 폴백, 첫 소비자는 도로 인식 파라미터 |
 | `2026-09-22-scene-context-road.md` | D-162 실행 플랜 T1–T5 — 순수 로직(T1/T2 착지), 노드 wiring(T3), CORE 수용(T5) |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |

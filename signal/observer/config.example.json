@@ -3,6 +3,8 @@
   "frame_width": 640,
   "frame_height": 480,
   "thresholds": { "lit_value_min": 90, "lit_sat_min": 60 },
+  "stable_after": 2,
+  "freeze_after_s": 5.0,
   "rois": [
     { "name": "left",   "x": 100, "y": 200, "w": 60, "h": 60 },
     { "name": "mid",    "x": 290, "y": 200, "w": 60, "h": 60 },
