@@ -103,3 +103,18 @@ def test_image_build_installs_both_copies_with_the_shared_installer():
     assert 'install-native-runtime.sh" "$OVERLAY/opt/rosy/native-runtime"' in text
     assert 'cp -a "$NATIVE_RUNTIME_SOURCE" "$OVERLAY/opt/rosy/native-runtime"' not in text
     assert 'cp -a "$NATIVE_RUNTIME_SOURCE" "$RELEASE_ROOT/deploy/robot/native"' not in text
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+def test_boot_status_indicator_imports_from_the_installed_layout(tmp_path):
+    # D-174 T0 / D-175 L1 helpers must be importable exactly where the unit runs them.
+    runtime = tmp_path / "device/opt/rosy/native-runtime"
+    _install(runtime)
+
+    completed = subprocess.run(
+        [sys.executable, "-B", str(runtime / "rosy-boot-status.py"), "--help"],
+        capture_output=True, text=True, cwd=tmp_path, env=_isolated_env(),
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert not list(runtime.rglob("__pycache__"))

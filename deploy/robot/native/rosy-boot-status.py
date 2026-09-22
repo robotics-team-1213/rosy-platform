@@ -23,6 +23,7 @@ from xml.sax.saxutils import escape, quoteattr
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from rosy_boot_state import BOOT_UNITS, Stage, classify  # noqa: E402
+import rosy_blackbox  # noqa: E402
 
 
 Runner = Callable[[list[str]], str]
@@ -168,6 +169,20 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
 
     sink("issue", issue)
     sink("avahi", lambda: _write_atomic(root / "etc/avahi/services/rosy.service", render_avahi(record)))
+
+    def black_box() -> None:
+        # D-175 L1: readable from the card alone; written only on a stage change.
+        boot_partition = root / "boot/firmware"
+        if not boot_partition.is_dir() or not rosy_blackbox.needs_write(boot_partition, record):
+            return
+        tails = {}
+        if stage.failed_unit:
+            output = run(["journalctl", "-b", "-u", stage.failed_unit, "-n", str(rosy_blackbox.TAIL_LINES),
+                          "--no-pager", "-o", "short-monotonic"])
+            tails[stage.failed_unit] = output.splitlines()
+        rosy_blackbox.write(boot_partition, record, tails)
+
+    sink("blackbox", black_box)
     return errors
 
 

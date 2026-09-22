@@ -397,3 +397,16 @@
 - 결정: D-174
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · feat(native): boot black box on the FAT32 boot partition (D-175 L1)
+
+- 변경: `rosy_diag_redact.py`(비밀 제거·금지 경로)와 `rosy_blackbox.py`를 추가하고 `rosy-boot-status.py`의 독립 출력으로
+  연결했다. `/boot/firmware/rosy-diag/`에 부팅당 한 개의 `boot-NNNN-<boot_id8>.json`과 사람이 읽는 `latest.txt`를 쓴다.
+  단계가 바뀔 때만 쓰고(30초 timer에도 재기록 없음), 최근 5회 부팅·총 2 MiB로 제한하며, 실패 unit의 journal 마지막
+  60줄을 비밀 제거 후 담는다. 치환 문자열 `<redacted>`는 저장소 secret scanner가 자리표시자로 인정한다.
+- 증거: `test_diag_redaction.py` 25, `test_boot_blackbox.py` 7(첫 카드 상태로 `latest.txt`에 `FAILED:rosy-release-recover`와
+  `No module named 'signing'`, 토큰 제거·scanner 통과, 같은 단계 재기록 없음, 5회 회전, 용량 상한), installed-layout 7 passed
+  (2026-09-23 Windows). 실기 FAT32 쓰기는 release 003 부팅 전까지 미검증.
+- gate 변화: 없음
+- 결정: D-175
+- 교훈: 없음
+

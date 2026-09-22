@@ -92,3 +92,11 @@ pass `deploy/release/secret_scan.py`.
 ## Deferred
 
 - L4 central aggregation with the central Fleet (D-170 timing), separate ADR.
+
+## Current checkpoint
+
+- Task 1 (redaction): done. `deploy/robot/native/rosy_diag_redact.py`; output checked against `secret_scan.py`.
+- Task 3 (L1 black box): done in source. `rosy_blackbox.py` wired as a sink of `rosy-boot-status.py`
+  (D-174 T0), sharing the stage model. FAT32 write on hardware unproven until release 003 boots.
+- Tasks 2, 4-8: pending.
+
