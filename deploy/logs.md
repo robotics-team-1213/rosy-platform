@@ -309,7 +309,7 @@
 - 교훈: PlanOnly와 WRITE가 각자 신원을 새로 뽑으면 검토한 계획과 기록한 카드가 달라진다.
   자동 배정을 도입하면 검토 결과를 고정하는 경로가 같이 필요하다.
 
-## 2026-09-22 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-168)
+## 2026-09-22 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-172)
 
 - 변경: 없음(실행과 기록). `9aee918` 기준 ARM64 run 35717277503의 unsigned handoff를 받아
   기존 파일럿 키로 서명하고 `-PlanOnly -PlanPath`로 검토한 plan에 고정해 관리자 권한으로 기록했다.
@@ -319,7 +319,7 @@
   boot `rosy-provision/provision.json` 726 B; registry 18/`rosy-pinky-e4us`. plan·receipt·log는
   운영 PC `F:\tmp\rosy-release\cards\`에 보관(비밀번호·PSK 없음).
 - gate 변화: 없음. MEDIA 증거일 뿐 BOOT/DEVICE는 HOLD — 부팅과 runbook G0-G2가 다음이다.
-- 결정: D-168
+- 결정: D-172
 - 교훈: 릴리스 폴더를 셸 작업 디렉터리로 두면 도구 hook이 `.omc/`를 만들어 서명기가 미등재 파일로
   거부한다. 서명·검증은 릴리스 폴더 밖에서 실행한다. PowerShell PATH에는 openssl이 없으니
   Git의 `usr\bin`을 앞에 둔다.
