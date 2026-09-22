@@ -1533,3 +1533,32 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-23 · uncommitted · docs(plans): Phase 4(T12~T14) 이행 기록 — 계획 전 페이즈 완료
+- 변경: `docs/plans/2026-09-22-communication-protocol-remediation-plan.md` Status 를 전 페이즈 실행 완료로 갱신하고 Phase 4 이행 요약 추가(T12 e65a5a0 · T13 f9d6f09 · T14 9742084, T15 하네스 마감 진행 중). 원본 단계 문단은 유지.
+- 증거: 각 커밋·모듈 logs.md(control·deploy). 최종 전체 호스트 회귀는 별도 기록으로 이어 붙인다.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-23 · uncommitted · fix(test): strip the UTF-8 BOM that turned the catalogue and vision guards red, and guard against it
+
+- 변경: `10ceb53`가 `src/core/core_api_web/core_api_web/api/v1/system.py` 앞에 UTF-8 BOM을 넣었다. `ast.parse(read_text())`로 소스를 읽는 가드(`test_event_catalogue.py` 13건, `test_vision_boundaries.py` 2건)가 U+FEFF에서 전부 SyntaxError가 났다. BOM을 제거하고 `test/test_fleet_enrollment_contracts.py`의 BOM도 제거했다. 신규 `test/test_source_encoding.py`는 추적 중인 모든 `.py`가 BOM으로 시작하지 않음을 고정한다.
+- 증거: `python -m pytest test/test_source_encoding.py src/core/core/test/test_event_catalogue.py src/core/core/test/test_vision_boundaries.py test/test_fleet_enrollment_contracts.py -q` 78 passed.
+- gate 변화: 없음(회귀 복구).
+- 결정: 없음(D-172 후속 정리 중 발견).
+- 교훈: Windows 편집기의 BOM 하나가 무관한 AST 가드 15건을 한꺼번에 깬다. 원인이 보이도록 이름 있는 가드로 따로 잡는다.
+
+## 2026-09-23 · 3ec8672 · docs(plans): T15 — 통신 정합 계획 전 페이즈 마감, 최종 회귀 PASS
+- 변경: 없음(검증 기록만).
+- 증거: `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4350 passed, 82 skipped, 0 failed** in 1746s (2026-09-23 Windows, 커밋 3ec8672 트리 — T1~T14 + D-169/D-170 전체 반영). 직전 실행의 19 failed 는 본 세션과 동시 진행 중이던 파일 편집과의 경합 아티팩트로, 동일 트리에서 모두 소멸 확인.
+- gate 변화: 없음 — 코드·문서 모듈 게이트는 각 progress.md 절차대로. 남은 미결: ARM64/DEVICE 게이트(sensor_adc 빌드·실측, udev 심링크 readback, chrony 동기화 품질)와 G1 후속 ADR 조건(하드웨어 프로필 D-84 + 실기 수요), 중앙 Fleet 착수 시 D-170 확장.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-23 · uncommitted · docs(api): API ref v1.17 — `logs/audit` 의 `dir_sync_failures`·`last_dir_sync_error`, `rosy_audit_dir_sync_failures_total`
+- 변경: 헤더 v1.16→v1.17, 변경 이력 v1.17 행(Additive), `/api/v1/logs/audit` 행의 `log` 필드 목록과 의미. 앞선 커밋이 D-170 의 v1.15 행에 덧붙였던 노트는 병합에서 main 쪽으로 되돌리고 자기 행으로 옮겼다. `test/test_line_follow_contract_docs.py` 버전 고정을 v1.17 로
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_diagnostics_api.py` 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 남의 변경 이력 행에 덧붙이지 않는다 — Additive 라도 자기 행을 연다.

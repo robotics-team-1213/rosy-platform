@@ -123,7 +123,35 @@ def test_runtime_environment_contains_no_secret_and_preserves_dds_isolation():
 def test_readiness_probe_has_a_bounded_failure():
     probe = _read("wait-core-ready.py")
 
-    assert "127.0.0.1:8080/api/v1" in probe
+    # The port comes from ROSY_API_PORT (falls back to 8080) — a hardcoded
+    # URL would fight a robot whose api_port overlay is not 8080.
+    assert "ROSY_API_PORT" in probe
+    assert '"8080"' in probe
+    assert '"http://127.0.0.1:8080/api/v1"' not in probe
     assert "time.monotonic()" in probe
     assert "return 1" in probe
     assert "sys.exit(main())" in probe
+
+
+def test_readiness_probe_honors_rosy_api_port():
+    import importlib.util
+
+    def _url_with_env(env_port):
+        spec = importlib.util.spec_from_file_location(
+            f"wait_core_ready_{env_port}", NATIVE / "wait-core-ready.py")
+        module = importlib.util.module_from_spec(spec)
+        import os
+        old = os.environ.pop("ROSY_API_PORT", None)
+        if env_port is not None:
+            os.environ["ROSY_API_PORT"] = env_port
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            if env_port is not None:
+                os.environ.pop("ROSY_API_PORT", None)
+            if old is not None:
+                os.environ["ROSY_API_PORT"] = old
+        return module.URL
+
+    assert _url_with_env("8123") == "http://127.0.0.1:8123/api/v1"
+    assert _url_with_env(None) == "http://127.0.0.1:8080/api/v1"

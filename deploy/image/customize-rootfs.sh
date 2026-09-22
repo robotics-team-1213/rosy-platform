@@ -120,7 +120,7 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates locales network-manager openssh-server openssl python3 python3-yaml \
+    ca-certificates chrony locales network-manager openssh-server openssl python3 python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 
 cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"
@@ -160,7 +160,9 @@ printf 'network: {config: disabled}\n' > "$ROOT/etc/cloud/cloud.cfg.d/99-rosy-ne
 rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/ssh_host_"*
 : > "$ROOT/etc/machine-id"
 
-systemctl --root "$ROOT" enable NetworkManager.service ssh.service \
+# chrony: CORE SRS §25 — UTC ISO 8601 timestamps and evidence freshness are
+# cross-module premises; NTP reachability is a runtime concern, not an image one.
+systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
     rosy-first-boot.service rosy-release-recover.service rosy-runtime.target
 
 while IFS= read -r package; do

@@ -58,8 +58,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · refactor(control): calibration_atomic builds no ROS messages (D-171 track 1)
+- 2026-09-22 · uncommitted · control(qos): 센서 토픽 소비자 QoS SENSOR 통일 (T13)
+- 2026-09-22 · uncommitted · control(tools): gz 벤치 도구 절대 토픽 발행 금지 (T12)
 - 2026-09-22 · uncommitted · control(ir): ir_sensor/range 단일 발행 계약 고정
 - 2026-09-22 · uncommitted · control(watch): graph guard matches the OS node names and cmd_vel ownership
-- 2026-09-22 · 4933fe0 · test(control): ROS smoke of the split web_node in WSL Jazzy
-- 2026-09-22 · uncommitted · refactor(control): split web_node into ROS wiring and ROS-free web modules
-- 2026-09-22 · uncommitted · test(control): derive the deployed control closure and pin one sensor provider

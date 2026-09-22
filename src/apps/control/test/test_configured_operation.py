@@ -2,9 +2,11 @@ import unittest
 import ast
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
+
+from control import calibration_atomic
 
 from control.control.configured_operation import configured_waiting_reasons, configured_status
-from control.control.calibration_profile import make_profile
 
 
 def node_method(name, **bindings):
@@ -203,11 +205,11 @@ class ConfiguredAdapterTests(unittest.TestCase):
         self.assertEqual(calls, ['publish'])
 
     def test_existing_parameters_lease_has_identity_gains_and_no_rotation_certificate(self):
-        path = Path(__file__).parents[1] / 'control/calibration_atomic.py'
-        cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
-        method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'profile_packet')
-        namespace = {'make_profile': make_profile, 'time': SimpleNamespace(monotonic=lambda: 10.)}
-        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), namespace)
+        # D-171: the mixin is ROS-free, so call it directly; swap its clock like the sim rig does.
+        clock = mock.patch.object(calibration_atomic, 'time', SimpleNamespace(monotonic=lambda: 10.))
+        clock.start()
+        self.addCleanup(clock.stop)
+        namespace = {'profile_packet': calibration_atomic.CalibrationAtomic.profile_packet}
         node = SimpleNamespace(phase='existing_settings', runtime_ready=True, geometry_fresh=lambda now: True,
             round_trip=None, profile_session='session', profile_sequence=0, trial_geometry_revision=None,
             geometry_revision='geometry', rotation_report=lambda: None,

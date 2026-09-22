@@ -27,4 +27,5 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · feat(api): `/metrics` 에 `rosy_audit_dir_sync_failures_total`, 계약 v1.17
 - 2026-09-22 · uncommitted · docs(harness): register core_api_web under D-168

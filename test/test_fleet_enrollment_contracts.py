@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from core_common.protocol.schemas import HelloPayload, Envelope, EnvelopeType
 from fleet.hub.hub import SiteHub
 from fleet.swarm.robots import RobotEndpoint

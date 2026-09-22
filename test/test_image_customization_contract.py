@@ -73,6 +73,17 @@ def test_customizer_installs_wiringpi_runtime_from_the_verified_lock():
     assert source.index("sha256sum") < source.index("dpkg -i /tmp/wiringpi-arm64.deb")
 
 
+def test_customizer_installs_and_enables_chrony():
+    """CORE SRS §25: UTC ISO 8601 타임스탬프는 동기된 시계를 전제로 한다."""
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    verifier = VERIFY.read_text(encoding="utf-8")
+
+    assert " chrony" in source  # apt install list
+    assert "chrony.service" in source
+    assert source.index("chrony.service") > source.index("enable")  # enabled, not just installed
+    assert "chronyd" in verifier  # the mounted-image check exists too
+
+
 def _valid_root(tmp_path: Path) -> Path:
     root = tmp_path / "root"
     release = root / "opt/rosy/releases/2026.09.22-001"
@@ -107,6 +118,12 @@ def _valid_root(tmp_path: Path) -> Path:
         "rosy-runtime.target",
     ):
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
+    # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
+    (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/sbin/chronyd").write_text("# fixture\n", encoding="utf-8")
+    wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
+    wants.parent.mkdir(parents=True, exist_ok=True)
+    wants.write_text("[Unit]\n", encoding="utf-8")
     return root
 
 
@@ -149,3 +166,18 @@ def test_mounted_image_verifier_rejects_product_docker_or_device_secrets(tmp_pat
     assert completed.returncode != 0
     assert "docker" in completed.stderr.lower()
     assert "device-neutral" in completed.stderr.lower()
+
+
+def test_mounted_image_verifier_rejects_missing_or_disabled_chrony(tmp_path):
+    """CORE SRS §25: 타임스탬프 상관의 전제인 chrony 가 빠지거나 꺼진 이미지."""
+    disabled = _valid_root(tmp_path)
+    (disabled / "etc/systemd/system/multi-user.target.wants/chrony.service").unlink()
+    completed = _verify(disabled)
+    assert completed.returncode != 0
+    assert "chrony" in completed.stderr.lower()
+
+    absent = _valid_root(tmp_path)
+    (absent / "usr/sbin/chronyd").unlink()
+    completed = _verify(absent)
+    assert completed.returncode != 0
+    assert "chrony" in completed.stderr.lower()

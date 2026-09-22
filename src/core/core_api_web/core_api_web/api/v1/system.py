@@ -1,4 +1,4 @@
-﻿"""core_api_web.api.v1.system — IDN-003 신원, CAP-001 capability, SEC-101 토큰, 호스트 런타임, inventory."""
+"""core_api_web.api.v1.system — IDN-003 신원, CAP-001 capability, SEC-101 토큰, 호스트 런타임, inventory."""
 
 from __future__ import annotations
 

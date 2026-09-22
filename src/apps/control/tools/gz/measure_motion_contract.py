@@ -85,8 +85,8 @@ def main():
     from std_msgs.msg import String, Bool
     rclpy.init()
     node = Node('motion_contract_measurement', parameter_overrides=[Parameter('use_sim_time', value=True)])
-    raw = node.create_publisher(Twist, '/cmd_vel_raw', 10)
-    stop = node.create_publisher(String, '/estop/cmd', 10)
+    raw = node.create_publisher(Twist, 'cmd_vel_raw', 10)
+    stop = node.create_publisher(String, 'estop/cmd', 10)
     data, received, trace = {}, {}, []
     def now():
         return node.get_clock().now().nanoseconds*1e-9

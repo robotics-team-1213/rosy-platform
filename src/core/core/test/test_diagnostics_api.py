@@ -144,7 +144,8 @@ def test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_ale
                  "rosy_audit_write_failures_total",
                  "rosy_audit_prune_failures_total",
                  "rosy_audit_prune_skipped_total",
-                 "rosy_audit_serialize_failures_total"):
+                 "rosy_audit_serialize_failures_total",
+                 "rosy_audit_dir_sync_failures_total"):
         assert f"\n{name} " in body, f"{name} is not exposed"
         assert name in reference, f"{name} is exposed but the contract does not name it"
 
