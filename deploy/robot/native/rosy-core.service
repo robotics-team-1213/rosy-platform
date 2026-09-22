@@ -1,5 +1,6 @@
 [Unit]
 Description=ROSY native CORE runtime
+OnFailure=rosy-boot-status.service
 Requires=rosy-release-recover.service rosy-sd-provision.service
 After=network-online.target rosy-release-recover.service rosy-sd-provision.service
 Wants=network-online.target

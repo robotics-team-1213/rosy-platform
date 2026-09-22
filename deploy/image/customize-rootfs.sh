@@ -164,7 +164,11 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # chrony: CORE SRS §25 — UTC ISO 8601 timestamps and evidence freshness are
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
-    rosy-first-boot.service rosy-release-recover.service rosy-runtime.target
+    rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
+    rosy-boot-status.service rosy-boot-status.timer
+# D-174 T0: the console banner is rendered at runtime into /run/rosy/issue.
+mkdir -p "$ROOT/etc/issue.d"
+ln -sfn /run/rosy/issue "$ROOT/etc/issue.d/rosy.issue"
 
 while IFS= read -r package; do
     [[ -z "$package" || "$package" == \#* ]] && continue

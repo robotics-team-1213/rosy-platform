@@ -130,5 +130,8 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
   by contract tests until the next ARM64 image run.
 - Task 3 (F2): done in source. First boot applies the hostname live before the network and
   restarts avahi; host commands never run for a non-`/` root.
-- Tasks 4-9: pending.
+- Task 5 (T0 indicator): done in source. Shared stage model `rosy_boot_state.py`; indicator sinks
+  (status json, ACT LED, console banner, avahi) refreshed by a 30 s timer and `OnFailure=` hooks.
+  Hardware facts (LED name, agetty reload, avahi reload) unproven until release 003 boots.
+- Tasks 4, 6-9: pending.
 

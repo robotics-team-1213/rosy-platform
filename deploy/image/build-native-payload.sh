@@ -105,6 +105,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/s
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.target" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.env" "$OVERLAY/etc/rosy/runtime.env.template"
 cp "$ROBOT_CONFIG_SOURCE/motion_profiles.yaml" "$OVERLAY/etc/rosy/motion_profiles.yaml"
 cp "$CYCLONEDDS_SOURCE" "$OVERLAY/etc/rosy/cyclonedds.xml"

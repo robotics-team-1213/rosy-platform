@@ -383,3 +383,17 @@
 - 결정: D-174
 - 교훈: 설치 배치에서 import가 되게 만들면, 그 import가 남기는 부산물(bytecode)도 서명 경계를 넘는다.
 
+## 2026-09-23 · uncommitted · feat(native): boot status indicator outside CORE (D-174 T0)
+
+- 변경: `rosy_boot_state.py`(단계 모델: BOOTING·PROVISIONED·CORE_READY·FAILED:<가장 이른 실패 unit>)와
+  `rosy-boot-status.py`(root oneshot)를 추가했다. 출력은 서로 독립인 네 곳이다: `/run/rosy/boot-status.json`,
+  보드 ACT LED(준비 heartbeat, 실패 100ms 점멸, 그 외 SD 활동), 콘솔 배너(`/run/rosy/issue` ← `/etc/issue.d/rosy.issue`),
+  avahi `_rosy._tcp`(TXT `stage`, `release`, `name`). 30초 timer와 네 부팅 unit의 `OnFailure=`로 갱신하며
+  runtime target·CORE를 막지 않는다. 한 출력의 실패가 다른 출력을 멈추지 않고, 도구는 부팅을 실패시키지 않는다.
+- 증거: `test/test_boot_state.py` 10 passed, `test/test_boot_status_indicator.py` 12 passed — 첫 카드와 같은
+  unit 상태를 넣으면 네 출력 모두 `FAILED:rosy-release-recover`를 보인다. native/image/first-boot 스위트 55 passed
+  (2026-09-23 Windows). 실기(LED 이름 `ACT`, agetty `--reload`, avahi 서비스 재적재)는 release 003 부팅 전까지 미검증.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+
