@@ -1,5 +1,6 @@
 """map_v2_fleet lane launch keeps CORE the only final cmd_vel publisher."""
 
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 LAUNCH = Path(__file__).resolve().parents[1] / "launch" / "map_v2_fleet_lane.launch.py"
@@ -24,6 +25,11 @@ def test_only_core_can_command_motion():
     assert 'executable="core"' in source
     assert "cmd_vel" not in source
     assert "road_observer_node" not in source  # needs a map_v2_fleet road scene first
+
+
+def test_launch_sim_is_well_formed_xml():
+    """ros2 launch rejects the file outright if it is not XML (e.g. "--" in a comment)."""
+    ET.parse(LAUNCH_SIM)
 
 
 def test_lane_mesh_resource_path_reaches_the_control_share():
