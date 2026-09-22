@@ -1426,3 +1426,10 @@
 - 증거: `src/core/core/test/test_diagnostics_api.py::test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_alert_on` 가 노출 metric 이름과 이 문서를 묶는다 — passed.
 - gate 변화: 없음.
 - 결정: 원본 브랜치(2026-09-07)는 v1.8 로 올렸으나 main 은 이미 v1.12 라 v1.13 으로 이식했다.
+
+## 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로
+
+- 변경: `test/test_line_follow_contract_docs.py` 의 `**Version:** v1.12` 고정을 v1.13 으로 올린다 — 직전 항목의 v1.13 개정이 이 고정을 깨뜨렸다. v1.11·v1.12 개정 때와 같은 처리다.
+- 증거: `test/test_line_follow_contract_docs.py` 1 passed.
+- gate 변화: 없음.
+- 결정: 시험의 의도(line-follow 계약 문서화)는 그대로다. 버전 고정 자체를 없애는 것은 이 이식의 범위 밖이다.
