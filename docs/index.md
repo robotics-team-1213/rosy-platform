@@ -120,7 +120,7 @@
 ## 최근 기록
 
 - 2026-09-22 · uncommitted · docs(api): §8 이벤트 카탈로그를 실제 발행과 맞춘다 (v1.13 Corrective + Additive)
+- 2026-09-22 · uncommitted · docs(dock): triage the archived dock-detector measurement rig — carry glossary + lesson only
+- 2026-09-22 · uncommitted · docs(adr): correct the D-149 deployed-closure list (3 → 4 executables)
 - 2026-09-22 · uncommitted · docs(harness): move the prepended D-164 entry to file end — order gate restored (8 logs)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-- 2026-09-22 · uncommitted · docs(adr): 미들웨어 목표를 8축 평가표로 고정 (D-167)
-- 2026-09-22 · uncommitted · docs(plans): D-166 상향 조건 ① 확인 — 로봇 계약에 공식 자율 감속 경로 없음

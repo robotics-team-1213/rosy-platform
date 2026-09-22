@@ -14,6 +14,9 @@ ROS-native OMX profile boundary. Validates a model-neutral YAML profile and emit
 | `package.xml` | ament_python; `exec_depend` on PyYAML |
 | `setup.py` / `setup.cfg` | Package install; console script `omx_adapter` |
 | `README.md` | Disabled-by-default contract; empty JSON from the disabled profile is expected |
+| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
+| `logs.md` | Append-only work journal, one entry per change |
+| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -28,6 +31,7 @@ ROS-native OMX profile boundary. Validates a model-neutral YAML profile and emit
 
 ### Working In This Directory
 
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Keep vendor transport behind this profile. Do not add a fake hardware plugin or joint-state publisher "so MoveIt has something to talk to."
 - Model aliases in `profile.py` (`omx-f` / `omx-ai` / `openmanipulator-x`) are names only until a measured driver is selected.
 - A non-empty `ros2_control_contract()` is not physical acceptance.

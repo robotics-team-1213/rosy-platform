@@ -34,12 +34,13 @@ def test_camera_node_has_tunable_fail_closed_homography_contract():
 
 def test_web_only_relays_bounded_enable_disable_and_renders_node_checks():
     node = source('control/web_node.py')
+    http = source('control/web_http.py')
     page = source('web/dashboard.html')
 
     assert "'camera/calibration/status'" in node
     assert "'camera/calibration/cmd'" in node
-    assert "self.path == '/camera/calibration'" in node
-    assert "body not in ('enable', 'disable')" in node
+    assert "self.path == '/camera/calibration'" in http
+    assert "body not in ('enable', 'disable')" in http
     assert 'camera_ground_toggle' in page
     assert "post('/camera/calibration'" in page
     for check in ('profile_loaded', 'image_contract', 'intrinsic_calibration', 'reference_fit',

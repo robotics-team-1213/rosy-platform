@@ -16,6 +16,8 @@
 
 **Validation / Transition:** 승격 근거(2026-09-21, 기기 부재 상태에서 대체한 구성 증거): (1) **이미지 분리** — core 이미지는 `control`을 복사하지 않는다(Dockerfile "optional slices" 단계 주석). (2) **배포 launch 폐쇄** — compose가 도달하는 launch 폐쇄(`bringup_robot.launch.py` / `hardware.launch.py` → `line_follow.launch.py`)에서 control 실행파일은 `ir_adc_node`·`camera_detect_node`·`line_observer_node`뿐이며 전부 D-143 증거 생산자다. 최종 발행자 `safety_node`는 deploy가 참조하지 않는 레거시 launch 3개(`robot`·`wander`·`dashboard_control`)에만 존재한다. (3) **계약 테스트** — launch 마커(`test_launch_contracts.py`), 코어 launch 배제·compose·deploy 스캔(`test_control_launch_boundary.py`)이 변이 증명돼 있다. 잔여 위험은 io 컨테이너에서의 수동 레거시 실행뿐이며 launch 마커가 첫 방어선이다. 최초 기기 가동 시 `device_readback.py`의 ROS 그래프가 이 격리의 실물 확인을 DEVICE 게이트 증거로 기록한다(승격 조건이 아니라 상시 게이트의 확인 항목).
 
+**정정 (2026-09-22, D-168):** 위 (2)의 실행 파일 목록은 셋이 아니라 넷이다. `line_follow.launch.py`는 `road_observer_node`를 조건 없이 띄운다. 이 노드도 `road/observation`과 `camera/preview/compressed`만 발행하는 D-143 증거 생산자라서 결정과 승격 판단은 바뀌지 않는다. 목록은 이제 기억이 아니라 `test/test_control_deploy_closure.py`가 systemd 유닛과 compose에서 include 사슬을 따라가 도출하고, 이 네 개와의 집합 동일성과 `safety_node` 부재를 검사한다.
+
 **References:** D-2 (자체 cmd_vel 멀렉서), D-38 (CORE의 최종 cmd_vel 소유), D-126 (센서 전용 주입), D-143.
 
 ---
