@@ -150,12 +150,22 @@ def detect_lane_centre(bgr: np.ndarray, ground, *,
                        row_step: int = 2) -> LaneObservation | None:
     """Steer to the midpoint between the two boundary lines of a lane.
 
-    Each sampled row is split into horizontal runs of bright pixels, projected
-    to metres on `ground` (+ right of the optical axis). The nearest run on each
-    side is a boundary line; runs wider than `max_line_width_m` are stop lines
-    or crosswalk bars seen across and are dropped. With one line in view the
-    centre is inferred from the lane half-width. `ground is None` returns None:
-    an uncalibrated camera never drives in lane mode.
+    Only observable rows are scored: rows on the ground plane whose frame
+    width spans the whole lane (+/- half-width), so a centred lane could be
+    seen there at all. Each is split into horizontal runs of bright pixels,
+    projected to metres on `ground` (+ right of the optical axis). Runs wider
+    than `max_line_width_m` are stop lines or crosswalk bars seen across and
+    are dropped. Of the rest, the pair whose separation is closest to the lane
+    width is the lane (ties: midpoint nearest the axis); crosswalk bars that
+    run parallel to travel therefore lose to the real boundaries. With no
+    valid pair, a lone run is one boundary and the centre is inferred from the
+    half-width; several unpaired runs are never guessed between.
+
+    Limitation: sitting on a shared boundary with both lanes in view, the two
+    candidate pairs tie exactly and one frame cannot say which lane is ours.
+
+    `ground is None` returns None: an uncalibrated camera never drives in
+    lane mode.
     """
     if (isinstance(bright_threshold, bool) or not isinstance(bright_threshold, int)
             or not 1 <= bright_threshold <= 254):
@@ -191,16 +201,20 @@ def detect_lane_centre(bgr: np.ndarray, ground, *,
         return None
 
     half = float(lane_half_width_m)
-    sampled = 0
+    observable = 0
     centres = []
     for offset in range(0, band.shape[0], row_step):
-        sampled += 1
         row = top + offset
         if ground.distance(row) is None:
             continue
+        frame_left = ground.lateral(0, row)
+        frame_right = ground.lateral(gray.shape[1] - 1, row)
+        if frame_left is None or frame_right is None                 or frame_left > -half or frame_right < half:
+            continue
+        observable += 1
         lit = np.concatenate(([0], (bright[offset] > 0).astype(np.int8), [0]))
         edges = np.flatnonzero(np.diff(lit))
-        left = right = None
+        runs = []
         for start, stop in zip(edges[0::2], edges[1::2]):
             # Pixel centres sit on integer columns; the run spans half a pixel
             # beyond its first and last lit column.
@@ -211,23 +225,25 @@ def detect_lane_centre(bgr: np.ndarray, ground, *,
                 continue
             if far - near > max_line_width_m:
                 continue
-            if middle < 0.0:
-                if left is None or middle > left:
-                    left = middle
-            elif right is None or middle < right:
-                right = middle
-        if left is not None and right is not None:
-            if not 1.2 * half <= right - left <= 2.8 * half:
-                continue
-            centres.append((left + right) / 2.0)
-        elif left is not None:
-            centres.append(left + half)
-        elif right is not None:
-            centres.append(right - half)
-    if not centres or sampled == 0:
+            runs.append(middle)
+        best = None
+        for i, a in enumerate(runs):
+            for b in runs[i + 1:]:
+                separation = b - a
+                if not 1.2 * half <= separation <= 2.8 * half:
+                    continue
+                midpoint = (a + b) / 2.0
+                score = (abs(separation - 2.0 * half), abs(midpoint))
+                if best is None or score < best[0]:
+                    best = (score, midpoint)
+        if best is not None:
+            centres.append(best[1])
+        elif len(runs) == 1:
+            centres.append(runs[0] + half if runs[0] < 0.0 else runs[0] - half)
+    if observable == 0 or not centres:
         return None
     error = max(-1.0, min(1.0, float(np.median(centres)) / half))
-    return LaneObservation(error=error, confidence=len(centres) / sampled)
+    return LaneObservation(error=error, confidence=len(centres) / observable)
 
 
 def line_observation_payload(source: str, stamp: float,

@@ -151,14 +151,21 @@ def _gazebo_ground():
     return ground
 
 
-def _track_frame(ground, line_ys, *, paint_half_width=0.0125):
+def _track_frame(ground, line_ys, *, paint_half_width=0.0125, bars=(),
+                 bar_half_width=0.010, bar_range=(0.15, 0.25)):
+    """Lines run the whole visible floor; `bars` are crosswalk bars parallel
+    to travel, painted only between the `bar_range` distances."""
     frame = np.full((_H, _W), _FLOOR, dtype=np.uint8)
     for row in range(_H):
-        if ground.distance(row) is None:
+        distance = ground.distance(row)
+        if distance is None:
             continue
+        in_bar_range = bar_range[0] <= distance <= bar_range[1]
         for col in range(_W):
             lateral = ground.lateral(col, row)
-            if any(abs(lateral - y) < paint_half_width for y in line_ys):
+            if any(abs(lateral - y) < paint_half_width for y in line_ys) or (
+                    in_bar_range
+                    and any(abs(lateral - y) < bar_half_width for y in bars)):
                 frame[row, col] = _PAINT
     frame[_BODY_TOP_ROW:, :] = _BODY
     return frame
@@ -179,6 +186,31 @@ class TestLaneCentre:
         assert abs(obs.error) < 0.1
         assert 0.0 < obs.confidence <= 1.0
 
+    def test_centred_straight_lane_scores_only_rows_that_can_see_it(self):
+        """Rows so near that the frame is narrower than the lane cannot show
+        a centred lane; counting them made a perfect frame look doubtful."""
+        ground = _gazebo_ground()
+        obs = _centre(_track_frame(ground, (-_HALF, _HALF)), ground)
+        assert obs is not None
+        assert obs.confidence >= 0.9
+
+    def test_crosswalk_bars_inside_the_lane_are_not_boundary_lines(self):
+        """Gazebo run 163611, frame_12: bars parallel to travel look like lane
+        lines in any single row. Pair by the lane width, not by nearness."""
+        ground = _gazebo_ground()
+        frame = _track_frame(ground, (-_HALF, _HALF),
+                             bars=(-0.05, -0.017, 0.017, 0.05))
+        obs = _centre(frame, ground)
+        assert obs is not None
+        assert abs(obs.error) < 0.1
+        assert obs.confidence >= 0.8
+
+    def test_several_unpaired_runs_are_not_guessed_between(self):
+        """Two runs too close to be a lane: no pair, no single-line fallback."""
+        ground = _gazebo_ground()
+        frame = _track_frame(ground, (-0.03, 0.03))
+        assert _centre(frame, ground) is None
+
     def test_lane_shifted_right_steers_right(self):
         ground = _gazebo_ground()
         obs = _centre(_track_frame(ground, (-0.0425, 0.1425)), ground)
@@ -186,12 +218,22 @@ class TestLaneCentre:
         assert obs.error > 0.2
 
     def test_sitting_on_the_right_line_steers_left_back_into_the_lane(self):
-        """The failure seen in Gazebo: latched onto one boundary. The next
-        lane's far line at +0.185 may also be in view."""
+        """The failure seen in Gazebo: latched onto one boundary. Only the
+        lane to the left is in view here."""
+        ground = _gazebo_ground()
+        obs = _centre(_track_frame(ground, (-0.185, 0.0)), ground)
+        assert obs is not None
+        assert obs.error < -0.3
+
+    def test_three_equally_spaced_lines_are_ambiguous_in_one_frame(self):
+        """Known limitation: on a shared boundary with both lanes in view,
+        the two candidate pairs tie on width, and the midpoint tie-break is
+        also a tie. A single frame cannot choose the lane; this pins that
+        the answer is a full-scale lane, not a blend between them."""
         ground = _gazebo_ground()
         obs = _centre(_track_frame(ground, (-0.185, 0.0, 0.185)), ground)
         assert obs is not None
-        assert obs.error < -0.3
+        assert abs(obs.error) == pytest.approx(1.0)
 
     def test_only_the_right_line_visible_infers_the_centre(self):
         ground = _gazebo_ground()
