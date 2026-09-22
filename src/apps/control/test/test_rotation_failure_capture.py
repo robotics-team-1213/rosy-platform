@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
 import unittest
 
+from control.calibration_atomic import CalibrationAtomic
+
 
 def adapter_method(filename, name):
     path = Path(__file__).parents[1]/'control'/filename
@@ -48,7 +50,7 @@ class RegistrationFailureCaptureTest(unittest.TestCase):
             self.assertEqual(data['reference_points'],node.rotation_reference_points)
             self.assertEqual(data['current_points'],node.rotation_points)
             self.assertEqual(data['reason'],'registration_unobservable')
-            report=adapter_method('calibration_atomic.py','rotation_report')(node)
+            report=CalibrationAtomic.rotation_report(node)
             self.assertEqual(report['registration_failure'],diagnostic)
             self.assertNotIn('reference_points',json.dumps(report))
 

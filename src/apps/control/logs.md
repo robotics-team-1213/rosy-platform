@@ -227,3 +227,10 @@
 - gate 변화: 없음.
 - 결정: 없음 — D-119 완성.
 - 교훈: 없음.
+
+## 2026-09-23 · uncommitted · refactor(control): calibration_atomic builds no ROS messages (D-171 track 1)
+- 변경: `calibration_atomic.py`에서 `std_msgs` import를 없애고, 기하 불일치 시 정지를 노드의 `stop_wander()`에 맡겼다(`stop_wander`는 다른 세션의 810dc41에 먼저 커밋됐다). `test_calibration_atomic.py`(실제 값 18개)를 추가했다. AST로 떼어 돌리던 `test_configured_operation.py`·`test_rotation_failure_capture.py`는 직접 import로 바꿨다. `KNOWN_ROS_LEAKS`는 16에서 15가 됐다. 흡수 때 빠진 `tools/gz/run_track260905.sh`를 이식했고, 참조 가드 `test_rig_script_references.py`를 추가했다.
+- 증거: `python -m pytest src/apps/control/test -q` 1310 passed, 28 skipped. 변이 3건(게이트 창, 적용 1.5 s, 기하 정지 제거) 각 적색. WSL Jazzy + Gazebo 8.11, ext4 복사본 rig: 분리 모드 기준본·후보본 모두 `ready`, 비상정지 음성 후보본 `failed`, 한 프로세스 모드는 기준본·후보본 모두 같은 게이트 신선도 실패(기존 결함).
+- gate 변화: 없음(control ROS-SIM은 전체 그래프 기준 HOLD 유지).
+- 결정: D-171 트랙 1 첫 모듈, D-171 규칙 (d) 개정(사용자 승인 2026-09-23).
+- 교훈: 검증 규칙은 그 검증 경로가 실제로 돌아가는지 먼저 확인하고 세운다. 규칙을 쓴 뒤 첫 적용에서야 rig 스크립트가 없다는 것을 알았다.

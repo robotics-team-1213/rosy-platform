@@ -131,3 +131,28 @@ pytest가 import할 수 없다. 그 모듈 안의 판단은 09-06 C1의 정의 �
 시험 파일의 import와 소스 경로 참조를 셌다. 누출 목록은 `test/test_control_ros_edge.py`가 매 실행마다
 다시 도출해 기준선과 대조한다. 판단 수 같은 나머지 수치는 이 문서 작성 시점의 일회성 측정이다.
 다시 잴 때는 §2의 정의를 그대로 쓴다.
+
+## 8. 첫 적용에서 드러난 것 (2026-09-23)
+
+트랙 1의 첫 모듈 `calibration_atomic`을 D-171 규칙 (d)로 검증하면서 세 가지가 드러났다.
+
+- **교정 ROS-SIM 경로가 끊어져 있었다.** `run_calibration_spaces.py`가 실행하는
+  `tools/gz/run_track260905.sh`는 흡수 때 빠져서, 보관된 옛 Rosy Control 저장소에만 있었다. 이 스크립트를
+  live 경로(`rosy_control/`을 `control/`로)에 맞춰 이식했다. 한 프로세스 모드(`RIG_SINGLE_PROCESS=1`)와
+  비상정지 음성 사례(`RIG_ESTOP_PROBE=1`, `rig_estop_probe.py`)도 추가했다.
+  `src/apps/control/test/test_rig_script_references.py`는 rig가 없는 스크립트를 참조하면 적색이 된다.
+- **rig는 ext4에서 돌린다.** WSL `/mnt/f`(Windows 파일 시스템)에서 돌린 첫 실행은 시험 주행 시작 시
+  오도메트리 나이 0.22 s(허용 0.2 s)로 실패했다. 같은 코드를 `/tmp` 복사본에서 돌리면 통과한다.
+  `/mnt/f`에서는 기준본을 돌리지 않았으므로 원인을 파일 시스템 지연으로 확정하지는 않는다.
+- **미해결 — 한 프로세스 모드 결함.** `RIG_COMPONENT=all`은 노드 7개를 `SingleThreadedExecutor` 하나에
+  싣는다. 이 모드에서는 시험 주행 도중 안전 게이트 출력이 신선도 창(0.25 s)을 벗어나 교정이
+  "Fresh final safety command evidence required"로 `failed`가 된다. 기준본(HEAD)과 후보본이 같은
+  메시지로 실패하므로 기존 결함이다. 분리 모드에서는 기준본과 후보본 모두 이 메시지가 0회였다.
+  D-171 규칙 (d)는 이 모드에 대해 A/B 동등만 요구하도록 개정했다.
+
+| 검증 (`calibration_atomic`, rig 기본 시나리오, ext4) | 기준본(HEAD `10ceb53`) | 후보본 |
+|---|---|---|
+| 분리 모드 | `ready` (sim 179.5 s) | `ready` (sim 180.0 s) |
+| 비상정지 음성 | — | `failed` "Emergency stop engaged" (`validating_motion`에서 누름) |
+| 한 프로세스 모드 | `failed` 게이트 신선도 (sim 19.0 s) | `failed` 같은 메시지 (sim 28.5 s) |
+| `/cmd_vel` 발행자 | `safety_node` | `safety_node` |
