@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pathlib import Path
 
-from core_events.events.audit import FileAuditLog
+from core_events.events.audit import PRUNE_INTERVAL_S, FileAuditLog
 from core_events.events.bus import EventBus
 from core_common.protocol.schemas import EventMessage, Severity
 
@@ -282,8 +282,10 @@ def test_a_write_failure_is_counted_rather_than_lost(tmp_path, monkeypatch):
     assert log.health() == {"writable": True, "write_failures": 0,
                             "write_failures_total": 0, "prune_failures": 0,
                             "prune_skipped": 0, "serialize_failures": 0,
+                            "dir_sync_failures": 0,
                             "last_skip_reason": None, "last_write_error": None,
-                            "last_prune_error": None, "last_serialize_error": None}
+                            "last_prune_error": None, "last_serialize_error": None,
+                            "last_dir_sync_error": None}
 
     def refuse(*args, **kwargs):
         raise OSError(28, "No space left on device")
@@ -1229,3 +1231,204 @@ def test_a_line_the_schema_rejects_follows_retention_by_its_own_ts(tmp_path):
     assert not log.quarantine_path.exists(), "it had a ts; it is not quarantined"
     assert [event.seq for event in log.history()] == [7]
     assert log.health()["prune_failures"] == 0
+
+
+# --- 정리 후속: 락 밖 격리, 재시도 중복, 스레드 시작 실패, 디렉터리 fsync ------
+
+
+class _OwnedLock:
+    """누가 쥐고 있는지 아는 락. 락 안에서 fsync 했는지를 시각이 아니라 소유로 본다."""
+
+    def __init__(self) -> None:
+        import threading
+        self._inner = threading.Lock()
+        self.owner = None
+
+    def acquire(self, blocking=True, timeout=-1):
+        import threading
+        got = self._inner.acquire(blocking, timeout)
+        if got:
+            self.owner = threading.get_ident()
+        return got
+
+    def release(self):
+        self.owner = None
+        self._inner.release()
+
+    def locked(self):
+        return self._inner.locked()
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, *exc):
+        self.release()
+
+
+def test_the_quarantine_is_synced_outside_the_lock_and_before_the_replace(tmp_path, monkeypatch):
+    """격리 파일의 fsync 는 SD 카드에서 수~수십 ms 다. 그것을 락 안에서 하면
+    그동안 `record()` — 곧 이벤트를 낸 스레드 — 가 기다린다.
+
+    그래도 순서는 지킨다: 본 파일에서 빼기 전에 격리 파일이 디스크에 닿는다.
+    """
+    import os as _os
+    import threading
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _with_a_torn_line(path, now)
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    lock = _OwnedLock()
+    log._lock, log._idle = lock, threading.Condition(lock)
+
+    order: list[tuple[str, bool]] = []
+    real_fsync, real_replace = _os.fsync, _os.replace
+
+    def fsync(fd):
+        synced = _os.fstat(fd)
+        is_sink = log.quarantine_path.exists() and _os.path.samestat(
+            synced, _os.stat(log.quarantine_path))
+        order.append(("quarantine" if is_sink else "fsync",
+                      lock.owner == threading.get_ident()))
+        return real_fsync(fd)
+
+    monkeypatch.setattr(_os, "fsync", fsync)
+    monkeypatch.setattr(_os, "replace",
+                        lambda *a, **k: (order.append(("replace", True)), real_replace(*a, **k))[1])
+
+    log.record(_event(3, now.isoformat()))
+    assert log.settle()
+
+    names = [name for name, _ in order]
+    assert "quarantine" in names and "replace" in names, order
+    assert names.index("quarantine") < names.index("replace"), "removed before quarantined"
+    assert [name for name, held in order if held and name != "replace"] == [], \
+        f"fsync under the lock: {order}"
+    assert log.quarantine_path.read_bytes() == TORN
+
+
+def test_a_retried_compaction_does_not_quarantine_the_same_bytes_twice(tmp_path, monkeypatch):
+    """바꿔 끼우기가 실패하면(Windows 의 `PermissionError`) 다음 시각에 같은
+    줄을 다시 만난다. 다시 덧붙이면 증거가 두 벌이 되어, 손상이 두 번 난 것처럼
+    읽힌다. 그렇다고 지우기 전에 격리한다는 규칙은 그대로다.
+    """
+    import os as _os
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _with_a_torn_line(path, now)
+    clock = Clock()
+    log = FileAuditLog(path, retention_days=30, now=lambda: now, monotonic=clock)
+
+    real_replace = _os.replace
+
+    def refuse(*args, **kwargs):
+        raise PermissionError("held open")
+
+    monkeypatch.setattr(_os, "replace", refuse)
+    for seq in (3, 4):
+        log.record(_event(seq, now.isoformat()))
+        assert log.settle()
+        clock.advance(PRUNE_INTERVAL_S)
+    assert log.health()["prune_failures"] == 2
+    assert TORN in path.read_bytes(), "a failed replace must leave the original in place"
+    assert log.quarantine_path.read_bytes() == TORN, "the retry quarantined the bytes again"
+
+    monkeypatch.setattr(_os, "replace", real_replace)
+    log.record(_event(5, now.isoformat()))
+    assert log.settle()
+    assert TORN not in path.read_bytes()
+    assert log.quarantine_path.read_bytes() == TORN
+    assert [event.seq for event in log.history()] == [1, 3, 4, 5]
+
+
+def test_a_new_corrupt_line_after_a_failed_replace_is_still_quarantined(tmp_path, monkeypatch):
+    """중복을 막는 표시는 이미 격리한 그 줄만 건너뛴다. 그 사이 새로 생긴 깨진
+    줄까지 건너뛰면, 다음 바꿔 끼우기가 격리하지 않은 바이트를 지운다.
+    """
+    import os as _os
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _with_a_torn_line(path, now)
+    clock = Clock()
+    log = FileAuditLog(path, retention_days=30, now=lambda: now, monotonic=clock)
+
+    real_replace = _os.replace
+    monkeypatch.setattr(_os, "replace",
+                        lambda *a, **k: (_ for _ in ()).throw(PermissionError("held open")))
+    log.record(_event(3, now.isoformat()))
+    assert log.settle()
+
+    second = b"not json at all"
+    with path.open("ab") as handle:
+        handle.write(second + b"\n")
+    monkeypatch.setattr(_os, "replace", real_replace)
+    clock.advance(PRUNE_INTERVAL_S)
+    log.record(_event(4, now.isoformat()))
+    assert log.settle()
+
+    assert log.quarantine_path.read_bytes() == TORN + second + b"\n"
+    assert second not in path.read_bytes()
+
+
+def test_a_worker_that_cannot_start_is_counted_and_does_not_wedge_pruning(tmp_path, monkeypatch):
+    """`Thread.start()` 는 "can't start new thread" 를 던질 수 있다. 그것이
+    `record()` 밖으로 나가면 무던짐 약속이 깨지고, 시작도 안 한 스레드가 칸에
+    남으면 정리는 다시는 돌지 않으며 `settle()` 은 끝나지 않는다.
+    """
+    import threading
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _stale_heavy_log(path, now, lines=3)
+    clock = Clock()
+    log = FileAuditLog(path, retention_days=30, now=lambda: now, monotonic=clock)
+
+    def refuse(self):
+        raise RuntimeError("can't start new thread")
+
+    real_start = threading.Thread.start
+    monkeypatch.setattr(threading.Thread, "start", refuse)
+    log.record(_event(2, now.isoformat()))            # 던지지 않는다
+    monkeypatch.setattr(threading.Thread, "start", real_start)
+
+    assert log.settle(timeout=0), "a never-started worker is still holding the slot"
+    health = log.health()
+    assert health["prune_failures"] == 1
+    assert health["last_prune_error"].startswith("worker start: RuntimeError")
+    assert health["write_failures_total"] == 0, "the event itself was recorded"
+    assert 2 in [event.seq for event in log.history()]
+
+    clock.advance(PRUNE_INTERVAL_S)
+    log.record(_event(3, now.isoformat()))
+    assert log.settle()
+    stale = _event(0, (now - timedelta(days=40)).isoformat()).model_dump_json()
+    assert stale not in path.read_text(encoding="utf-8"), "pruning never ran again"
+
+
+def test_a_directory_sync_failure_after_the_replace_is_not_a_prune_failure(tmp_path, monkeypatch):
+    """이름 바꾸기가 끝났으면 정리는 된 것이다. 그 뒤 디렉터리 fsync 가 실패했다고
+    정리 실패로 세면 운영자는 30 일보다 길게 자라는 파일을 찾아 헤맨다.
+    따로 센다.
+    """
+    import core_events.events.audit as audit
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _stale_heavy_log(path, now, lines=3)
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+
+    def refuse(directory):
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(audit, "_fsync_directory", refuse)
+    log.record(_event(2, now.isoformat()))
+    assert log.settle()
+
+    health = log.health()
+    assert health["prune_failures"] == 0 and health["last_prune_error"] is None
+    assert health["dir_sync_failures"] == 1
+    assert "Input/output error" in health["last_dir_sync_error"]
+    stale = _event(0, (now - timedelta(days=40)).isoformat()).model_dump_json()
+    assert stale not in path.read_text(encoding="utf-8"), "the prune itself did happen"

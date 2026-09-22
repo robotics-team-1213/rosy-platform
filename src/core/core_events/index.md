@@ -28,4 +28,5 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · fix(core_events): audit quarantine off the lock, no duplicate evidence, thread-start and dir-fsync failures counted
 - 2026-09-22 · uncommitted · docs(harness): register core_events under D-168

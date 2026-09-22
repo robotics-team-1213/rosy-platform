@@ -1518,3 +1518,10 @@
 - gate 변화: 없음 — docs SOURCE/LOCAL GO 유지.
 - 결정: D-169 Accepted(소급 공식화, D-147 선례), D-170 Accepted.
 - 교훈: ADR 로그는 인덱스 표만이 아니라 본문이 docs/adr/ 개별 파일과 1:1 이어야 harness 계약을 통과한다 — 새 ADR은 행+본문 파일을 한 변경에.
+
+## 2026-09-22 · uncommitted · docs(api): `logs/audit` 의 `log` 에 `dir_sync_failures`·`last_dir_sync_error` (Additive, v1.15 노트)
+- 변경: API ref §`/api/v1/logs/audit` 필드 목록과 의미, v1.15 변경 이력에 Additive 노트. 버전 유지(Additive 규칙)
+- 증거: `src/core/core/test/test_audit.py::test_a_write_failure_is_counted_rather_than_lost` 가 `health()` 키 전체를 고정
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
