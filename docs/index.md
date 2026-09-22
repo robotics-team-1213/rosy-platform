@@ -87,6 +87,7 @@
 | D-167 | 미들웨어 목표는 평가표로 측정한다 — 8개 판정 축과 기준선 |
 | D-169 | v1 제품 장치 표면은 모터·LiDAR·카메라·I2C-1 ADC로 고정한다 — emotion/lamp/led/imu는 벤치 전용을 소급 공식화 |
 | D-170 | PRT-004 명령 추적 확장은 중앙 Fleet 착수와 함께 간다 — 그 전까지 correlation_id는 계약 전용 필드 |
+| D-172 | 구조 개편 이전의 미병합 브랜치는 태그로 보존하고, 재구현·독립 리뷰를 거쳐서만 main에 들인다 — Python 3.12가 기준 |
 
 ## 계획·결과 문서
 
@@ -121,8 +122,8 @@
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · docs(api): `logs/audit` 의 `log` 에 `dir_sync_failures`·`last_dir_sync_error` (Additive, v1.15 노트)
+- 2026-09-22 · uncommitted · docs(agents): T11 — fleet_agent/bridge AGENTS 현행화 + 소소 수정 팩
+- 2026-09-22 · uncommitted · docs(adr): 미병합 옛 브랜치의 보존·이관 규칙과 후속 항목 (D-172)
 - 2026-09-22 · uncommitted · docs(adr): D-169 제품 장치 표면 고정 · D-170 PRT-004 유예
 - 2026-09-22 · uncommitted · merge(core): land the audit-log port after the event-catalogue port — API reference v1.14
 - 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
-- 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로

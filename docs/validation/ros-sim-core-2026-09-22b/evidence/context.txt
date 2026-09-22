@@ -1,0 +1,20 @@
+# 2026-09-22b ROS-SIM core rerun context
+commit: 581741e5f2ee3e18f1871de15fd74fca8fe39516
+tree: git archive HEAD -- src -> /root/rosy_rerun_ws/src
+host: Linux 6.18.33.2-microsoft-standard-WSL2 x86_64
+os: Ubuntu 24.04.4 LTS
+ROS_DISTRO=jazzy ROS_DOMAIN_ID=41 ROS_LOCALHOST_ONLY=1 ROSY_ROBOT_NUMBER=1 HOME=/root/rosy_rerun_home
+port 8080 before start: 0
+started: 2026-09-22T23:33:10+09:00
+CORE_PID=3182
+ros2 run wrapper PID=3182, core node PID=3186 (/usr/bin/python3 /root/rosy_rerun_ws/install/core/lib/core/core )
+core node exited after SIGTERM: 2026-09-22T23:33:41+09:00
+ros2 run wrapper exit code: 1
+leftover core processes: 0
+/root/rosy_rerun_home/.ros/log/python3_3796_1790087615058.log
+/root/rosy_rerun_home/.ros/log/python3_3425_1790087605525.log
+/root/rosy_rerun_home/.ros/log/python3_3551_1790087610445.log
+/root/rosy_rerun_home/.ros/log/python3_3633_1790087611890.log
+/root/rosy_rerun_home/.ros/log/python3_3395_1790087605085.log
+/root/rosy_rerun_home/.ros/log/python3_3186_1790087590896.log
+/root/rosy_rerun_home/.rosy/audit.jsonl

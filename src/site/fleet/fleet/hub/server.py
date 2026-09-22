@@ -3,26 +3,23 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from core_common.protocol.schemas import Envelope, EnvelopeType
 from fleet.hub.hub import SiteHub
 
 logger = logging.getLogger("hub.server")
 
-def create_hub_app(hub: SiteHub) -> FastAPI:
+def create_hub_app(hub: SiteHub, hub_token: Optional[str] = None) -> FastAPI:
+    """/registry 는 등록 로봇 전원의 상태·이벤트를 내놓는다 — hub_token 을
+    설정하면 Bearer 로 잠긴다(기본 개방은 로컬 시드용 하위호환)."""
     app = FastAPI(title="Rosy Site Hub")
     app.state.hub = hub
 
     @app.get("/registry")
-    async def get_registry():
-        return {
-            rid: {
-                "online": row.online,
-                "snapshot": row.snapshot.model_dump(mode="json") if row.snapshot else None,
-                "events": [e.model_dump(mode="json") for e in row.events]
-            }
-            for rid, row in hub.registry._robots.items()
-        }
+    async def get_registry(authorization: str = Header(default="")):
+        if hub_token is not None and authorization != f"Bearer {hub_token}":
+            raise HTTPException(status_code=401, detail="hub token required")
+        return hub.registry.snapshot()
 
     @app.websocket("/ws/robots")
     async def ws_robots(websocket: WebSocket):

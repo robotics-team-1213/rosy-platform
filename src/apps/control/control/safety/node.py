@@ -219,10 +219,10 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             LaserScan, self.get_parameter('scan_topic').value, self.on_scan, qos_profile_sensor_data
         )
         self.create_subscription(
-            Range, self.get_parameter('us_topic').value, self.on_us, 10
+            Range, self.get_parameter('us_topic').value, self.on_us, qos_profile_sensor_data
         )
         self.create_subscription(
-            UInt16MultiArray, self.get_parameter('ir_topic').value, self.on_ir, 10
+            UInt16MultiArray, self.get_parameter('ir_topic').value, self.on_ir, qos_profile_sensor_data
         )
         self.create_subscription(
             Bool, self.get_parameter('camera_cliff_topic').value, self.on_cam_cliff, 10

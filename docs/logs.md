@@ -1519,9 +1519,17 @@
 - 결정: D-169 Accepted(소급 공식화, D-147 선례), D-170 Accepted.
 - 교훈: ADR 로그는 인덱스 표만이 아니라 본문이 docs/adr/ 개별 파일과 1:1 이어야 harness 계약을 통과한다 — 새 ADR은 행+본문 파일을 한 변경에.
 
-## 2026-09-22 · uncommitted · docs(api): `logs/audit` 의 `log` 에 `dir_sync_failures`·`last_dir_sync_error` (Additive, v1.15 노트)
-- 변경: API ref §`/api/v1/logs/audit` 필드 목록과 의미, v1.15 변경 이력에 Additive 노트. 버전 유지(Additive 규칙)
-- 증거: `src/core/core/test/test_audit.py::test_a_write_failure_is_counted_rather_than_lost` 가 `health()` 키 전체를 고정
-- gate 변화: 없음
-- 결정: 없음
-- 교훈: 없음
+## 2026-09-22 · uncommitted · docs(adr): 미병합 옛 브랜치의 보존·이관 규칙과 후속 항목 (D-172)
+
+- 변경: 신규 `docs/adr/D-172-archived-branch-port-closure.md`. 구조 개편 이전 미병합 브랜치는 `archive/<date>/<branch>` 태그로 보존한다. 이관은 `port/*`에서 재구현하고 독립 리뷰 APPROVE 후에만 병합한다. Python 3.12가 기준이고, API Ref 버전 동시 상향은 병합 순서대로 다시 매긴다. worktree 정리 조건도 정했다. 2026-09-22 판정 결과 5건과 후속 F1~F5를 기록했다(F5는 `581741e`로 닫힘). ADR Log 색인 행, `docs/reference/AGENTS.md` 범위(D-172), `docs/progress.md` adrs를 갱신했다.
+- 증거: 병합 `2ee9a9a`·`0adbe50`·`11f1164`, `bbd14a6`. 태그 `archive/2026-09-22/*` 5개. 병합 후 3.12 core 1214 passed.
+- gate 변화: 없음(문서). core ROS-SIM HOLD는 F1이 닫는다.
+- 결정: D-172 Accepted.
+- 교훈: 공유 트리에서 `git add -A`를 쓰면 남의 미완성 색인 행이 섞여 들어간다(`451223c`). 경로를 지정해 스테이징한다.
+
+## 2026-09-22 · uncommitted · docs(agents): T11 — fleet_agent/bridge AGENTS 현행화 + 소소 수정 팩
+- 변경: ① fleet_agent/AGENTS.md 재작성 — "start() 는 소켓을 열지 않는다"(스텁 시절)을 설정 게이팅 구현체 기술로 정정(hello 신원 실값·backoff 30s·D-170 연결) ② bridge/AGENTS.md 카운트 정정(6 timers/22 subs → 7/24 — 시험은 이미 7/24 고정) + map QoS 소비자 분할 의도 기록 ③ battery_publisher 노드명 오타 battery_publihser→battery_publisher ④ v1/system.py 부실 어노테이션 svc: CoreServices → CoreServicesLike 9건(CoreServices 는 미임포트, annotations 지연으로만 동작).
+- 증거: `python -m pytest src/core/core/test/test_api.py -q` 54 passed · `src/core/core_api_web/test/ -q` 9 passed (2026-09-22 Windows). bringup 패키지 시험은 호스트 경로/ament_lint 환경 제약으로 스킵(변경은 문자열 상수 1건).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.

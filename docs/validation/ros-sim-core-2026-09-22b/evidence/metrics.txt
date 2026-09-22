@@ -1,0 +1,35 @@
+# HELP rosy_uptime_seconds core process uptime
+# TYPE rosy_uptime_seconds gauge
+rosy_uptime_seconds 29.6
+# HELP rosy_state_seq state snapshot sequence
+# TYPE rosy_state_seq counter
+rosy_state_seq 439
+# HELP rosy_events_published_total events published
+# TYPE rosy_events_published_total counter
+rosy_events_published_total 4
+# HELP rosy_battery_percent battery percent estimate
+# TYPE rosy_battery_percent gauge
+rosy_battery_percent 0.0
+# HELP rosy_audit_write_failures_consecutive consecutive audit log write failures (LOG-001)
+# TYPE rosy_audit_write_failures_consecutive gauge
+rosy_audit_write_failures_consecutive 0
+# HELP rosy_audit_write_failures_total audit log write failures since boot (LOG-001)
+# TYPE rosy_audit_write_failures_total counter
+rosy_audit_write_failures_total 0
+# HELP rosy_audit_prune_failures_total audit log prune failures since boot
+# TYPE rosy_audit_prune_failures_total counter
+rosy_audit_prune_failures_total 0
+# HELP rosy_audit_prune_skipped_total prunes skipped because the file changed underneath
+# TYPE rosy_audit_prune_skipped_total counter
+rosy_audit_prune_skipped_total 0
+# HELP rosy_audit_serialize_failures_total audit events whose data had to be repr()-ed
+# TYPE rosy_audit_serialize_failures_total counter
+rosy_audit_serialize_failures_total 0
+# HELP rosy_diagnostics_health component health (0=OK,1=UNKNOWN,2=WARNING,3=ERROR)
+# TYPE rosy_diagnostics_health gauge
+rosy_diagnostics_health{component="core"} 0
+rosy_diagnostics_health{component="cpu"} 0
+rosy_diagnostics_health{component="memory"} 0
+rosy_diagnostics_health{component="disk"} 0
+rosy_diagnostics_health{component="odom_topic"} 1
+rosy_diagnostics_health{component="navigation_readiness"} 0

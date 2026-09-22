@@ -85,9 +85,9 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         self.create_subscription(LaserScan, 'scan', self.on_scan, qos_profile_sensor_data)
         self.create_subscription(Odometry, 'odom', self.on_odom, 10)
         self.create_subscription(OccupancyGrid, 'map', self.on_map, qos_profile_sensor_data)
-        self.create_subscription(UInt16MultiArray, 'ir_sensor/range', self.on_ir, 10)
-        self.create_subscription(Range, 'us_sensor/range', self.on_us, 10)
-        self.create_subscription(Imu, 'imu_raw', self.on_imu, 10)
+        self.create_subscription(UInt16MultiArray, 'ir_sensor/range', self.on_ir, qos_profile_sensor_data)
+        self.create_subscription(Range, 'us_sensor/range', self.on_us, qos_profile_sensor_data)
+        self.create_subscription(Imu, 'imu_raw', self.on_imu, qos_profile_sensor_data)
         self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
         self.hazards = {}
         self.safety_limits = (0., {})
@@ -173,6 +173,10 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
 
     def zero(self):
         self.publish_trial(Twist())
+
+    def stop_wander(self):
+        """Message edge for the ROS-free mixins (D-171): tell wander to stop."""
+        self.wander_pub.publish(String(data='stop'))
 
     def stamped(self, msg, max_age=1.):
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9

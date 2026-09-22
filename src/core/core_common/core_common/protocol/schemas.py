@@ -7,7 +7,8 @@
 - EventMessage: EVT-001 이벤트 모델 (API Ref §8)
 - AckPayload: 명령 추적 (API Ref §7.5, PRT-004)
 
-스키마 변경은 추가 전용(Additive)만 허용 — protocol_version MINOR 상향 (PRT-006).
+스키마 변경은 추가 전용(Additive)만 허용한다. envelope protocol_version 은 1.0 고정이고
+additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노트).
 """
 
 from __future__ import annotations
@@ -164,7 +165,7 @@ class DockState(str, enum.Enum):
     계약이 명시한 DOCK/UNDOCK/CHARGING/DOCKED/DOCK_FAILED 을 다듬은 것이다.
     계약에는 "도크에 있지 않다"는 상태가 없는데 로봇은 대부분의 시간을 거기서
     보내고, 도킹이라는 *행위* 와 그 *결과* 가 한 이름에 섞여 있었다.
-    enum 값 추가는 additive 이므로 PRT-006 MINOR 상향에 해당한다.
+    enum 값 추가는 additive 이므로 문서의 MINOR 로 기록된다(PRT-006).
     """
 
     UNDOCKED = "UNDOCKED"        # 기본 — 도크에 있지 않고 가는 중도 아니다

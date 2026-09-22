@@ -213,3 +213,17 @@
 - gate 변화: 없음.
 - 결정: 없음 — 문서화+계약 시험으로 마는 최소 조치. launch 상호배제 강제(한 노드가 다른 쪽 검사)는 필요 시 별도.
 - 교훈: 없음.
+
+## 2026-09-22 · uncommitted · control(tools): gz 벤치 도구 절대 토픽 발행 금지 (T12)
+- 변경: tools/gz 6개 파일(calibration_mapping_rig·driver·localization_rig·measure_motion_contract·rendered_camera_adapter·rig_estop_probe)의 create_publisher 토픽에서 선행 / 제거 — 상대 이름은 namespace 없이 실행하면 전역으로 풀려 동일, 네임스페이스 안에서는 로봇 ns 로 바르게 풀린다(D-4). 구독은 실제 절대 대상(/pinky/rendered_camera, /tf)이 있어 그대로. 신규 가드 test_gz_tools_topics.py(전 파일 스캔). 부수: PowerShell 리라이트가 붙인 UTF-8 BOM 을 7파일에서 제거(rig_estop_probe 포함, system.py 포함).
+- 증거: `python -m pytest src/apps/control/test/test_gz_tools_topics.py test_rig_odometry_frames.py test_motion_contract_tool.py test_gz_obstacle_camera.py src/core/core/test/test_api.py -q` 62 passed (2026-09-22 Windows, 적색→초록).
+- gate 변화: 없음.
+- 결정: 없음 — D-4 준수. D-149 예외 목록에서 벤치 드라이버의 /cmd_vel 발행 제거.
+- 교훈: Windows PowerShell 5 의 Set-Content -Encoding utf8 은 BOM 을 붙인다 — 파이썬 소스를 고칠 때는 [IO.File]::WriteAllText + UTF8Encoding($false) 를 쓰거나 편집 도구를 쓸 것.
+
+## 2026-09-22 · uncommitted · control(qos): 센서 토픽 소비자 QoS SENSOR 통일 (T13)
+- 변경: startup_calibration_node 의 ir_sensor/range·us_sensor/range·imu_raw 구독과 safety 노드의 us_topic·ir_topic 구독을 depth10(RELIABLE)에서 qos_profile_sensor_data 로 통일 — BEST_EFFORT 구독은 RELIABLE/BEST_EFFORT 발행 모두와 매칭되므로 호환성은 확대만 있다(D-119 소비자 측 완성). STEPS.txt 에 운영자 /estop 발행 시 transient_local QoS 예시 추가(latched 구독과 기본 발행은 영구 비매칭). 신규 가드 test_sensor_qos_unification.py 3건.
+- 증거: `python -m pytest src/apps/control/test/test_sensor_qos_unification.py test_configured_operation.py test_os_calibration_graph.py -q` 25 passed, 1 skipped (2026-09-22 Windows, 적색→초록). map 소비자 3정책 분할은 의도로 bridge/AGENTS.md 에 기록(T11).
+- gate 변화: 없음.
+- 결정: 없음 — D-119 완성.
+- 교훈: 없음.

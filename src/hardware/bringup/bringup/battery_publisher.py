@@ -5,7 +5,7 @@ from rosylib import Battery
 
 class BatteryPublisher(Node):
     def __init__(self):
-        super().__init__('battery_publihser')
+        super().__init__('battery_publisher')
         
         self.battery = Battery()
 

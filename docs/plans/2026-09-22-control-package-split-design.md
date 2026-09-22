@@ -3,6 +3,9 @@
 **상태:** Proposed (2026-09-22). 0단계와 1단계의 `web_node.py`까지 실행했다(§6). 실행은 단계별
 커밋으로 하며, 각 단계는 host pytest와 D-168 구조 시험이 초록인 상태로 끝난다.
 **근거 기준:** D-168 P1(패키지 인정)·P6(줄 수 예산), `2026-09-06-module-split-criteria.md` C1/X6.
+**순서 (D-171, Accepted):** 이 문서의 패키지 분리(§6의 2~5단계)는 트랙 3이다. 트랙 1(ROS 타입은 노드
+경계에서만)과 트랙 2(노드 판단 추출, §4의 교정 파일 2개가 첫 대상) 뒤에 한다. 근거와 수치는
+[control 구조 평가](2026-09-22-control-structural-evaluation.md)에 있다.
 **소유:** `test/test_module_structure.py`의 `SIZE_VERDICTS`에서 `control`,
 `startup_calibration_node.py`, `calib_node.py`가 이 문서를 가리킨다(`web_node.py`는 600줄 아래로
 내려가 판정이 삭제됐다).
