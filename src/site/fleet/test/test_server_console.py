@@ -139,3 +139,76 @@ def test_unknown_robot_is_refused_before_any_transport():
     console = _console(FakeRobot("rosy_01"))
     with pytest.raises(HubError):
         run(console.goal("rosy_99", 0.0, 0.0))
+
+
+class _DegradedSpec:
+    formation = "COLUMN"
+    max_speed = 0.4
+
+
+class _DegradedSession:
+    state = "RUNNING"
+    spec = _DegradedSpec()
+    assignment = ["rosy_02"]
+
+
+def test_degraded_member_actually_triggers_auto_speed_reform():
+    """ADR-1000: 저하 멤버 감지 시 자동 감속 reform 이 실제로 나가야 한다.
+    spec.name 오타(AttributeError)가 except 로 삼켜져 한 번도 살지 못했다."""
+    console = _console(FakeRobot("rosy_01", state={"robot_id": "rosy_01"}),
+                       FakeRobot("rosy_02", state={"robot_id": "rosy_02"}))
+    console._formation = _DegradedSession()
+    calls: list = []
+
+    async def _reform(formation, spacing=None, max_speed=None):
+        calls.append((formation, max_speed))
+
+    console.formation_reform = _reform
+    rows = [{"robot_id": "rosy_02",
+             "state": {"capabilities_degraded": ["vision"]}}]
+    run(console._manage_swarm_speed(rows))
+    assert calls == [("COLUMN", 0.2)]
+
+
+def test_healthy_swarm_does_not_auto_reform():
+    console = _console(FakeRobot("rosy_01", state={"robot_id": "rosy_01"}),
+                       FakeRobot("rosy_02", state={"robot_id": "rosy_02"}))
+    console._formation = _DegradedSession()
+    calls: list = []
+
+    async def _reform(formation, spacing=None, max_speed=None):
+        calls.append((formation, max_speed))
+
+    console.formation_reform = _reform
+    run(console._manage_swarm_speed(
+        [{"robot_id": "rosy_02", "state": {"capabilities_degraded": []}}]))
+    assert calls == []
+
+
+def test_failing_auto_reform_is_logged_and_survives():
+    """reform 이 실패해도 관제 루프는 산다 — 다만 이제 보이게 실패한다."""
+    import logging
+
+    console = _console(FakeRobot("rosy_01", state={"robot_id": "rosy_01"}))
+    console._formation = _DegradedSession()
+
+    async def _boom(formation, spacing=None, max_speed=None):
+        raise OSError("hub down")
+
+    console.formation_reform = _boom
+    records: list = []
+
+    class _Handler(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    handler = _Handler()
+    logger = logging.getLogger("fleet.console")
+    logger.addHandler(handler)
+    try:
+        run(console._manage_swarm_speed(
+            [{"robot_id": "rosy_02",
+              "state": {"capabilities_degraded": ["vision"]}}]))
+    finally:
+        logger.removeHandler(handler)
+    assert any("auto speed reform failed" in r.getMessage() for r in records)

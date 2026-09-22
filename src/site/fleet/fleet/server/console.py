@@ -20,9 +20,12 @@ outbound WS(heartbeat/event)지만, 그 에이전트는 Fleet 서버가 생긴 �
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import time
 from typing import Any, Callable, Optional, Sequence
+
+logger = logging.getLogger("fleet.console")
 
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
@@ -417,9 +420,11 @@ class FleetConsole:
         if current_speed > degraded_speed + 0.01:
             try:
                 await self.formation_reform(
-                    formation=session.spec.name, max_speed=degraded_speed)
-            except Exception:
-                pass  # Ignore transient errors during automatic speed sync
+                    formation=session.spec.formation, max_speed=degraded_speed)
+            except Exception as exc:
+                # 조용한 no-op 는 ADR-1000 을 죽인다 — 실패는 보이게, 재시도
+                # 폭주는 current_speed 가득 가드가 이미 막는다.
+                logger.warning("auto speed reform failed: %s", exc)
 
     async def _run_traffic(self, robots: list) -> None:
         """스냅샷마다 한 번: 끝난 로봇의 점유를 풀고, 풀린 자리의 대기 미션을 내려보낸다."""
