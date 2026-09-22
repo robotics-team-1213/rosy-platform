@@ -27,10 +27,10 @@ for n in $(seq 1 $COUNT); do
   wait $W; RC=$?
   T2=$(date +%s.%N)
   C=$H/console.log
-  printf "lane %d run %3d: exit=%s stop_s=%s alive30s=%s shutting_down=%s fatal=%s native=%s never_retrieved=%s traceback=%s audit_last=%s port=%s\n" \
+  printf "lane %d run %3d: exit=%s stop_s=%s alive30s=%s shutting_down=%s fatal=%s native=%s warn=%s never_retrieved=%s traceback=%s audit_last=%s port=%s\n" \
     $LANE $n $RC "$(python3 -c "print(round($T2-$T1,2))")" $ALIVE "$(grep -c 'core shutting down' $C)" \
-    "$(grep -c 'Fatal Python error' $C)" "$(grep -c NATIVE-CRASH $C)" "$(grep -c 'never retrieved' $C)" "$(grep -c Traceback $C)" \
+    "$(grep -c 'Fatal Python error' $C)" "$(grep -c NATIVE-CRASH $C)" "$(grep -cE 'were not drained|still running callbacks after|no ThreadPoolExecutor|executor shutdown raised|api thread still alive' $C)" "$(grep -c 'never retrieved' $C)" "$(grep -c Traceback $C)" \
     "$(tail -1 $H/.rosy/audit.jsonl 2>/dev/null | grep -o '"type":"[^"]*"' | head -1)" "$(ss -ltn | grep -c ":$PORT ")" >> $OUT
-  if [ $RC != 0 ] || grep -q -e 'Fatal Python error' -e 'never retrieved' -e Traceback $C; then cp $C $OUTDIR/lane$LANE-run$n-console.log; fi
+  if [ $RC != 0 ] || grep -q -e 'Fatal Python error' -e 'never retrieved' -e Traceback -e 'were not drained' -e 'api thread still alive' $C; then cp $C $OUTDIR/lane$LANE-run$n-console.log; fi
   rm -rf $H
 done

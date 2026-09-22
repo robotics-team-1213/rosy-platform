@@ -15,5 +15,5 @@ kill $LOADPIDS 2>/dev/null
 cat $OUTDIR/lane*.txt >> $S
 echo "# finished $(date -Is) loadavg $(cat /proc/loadavg); leftover core procs: $(pgrep -f "$WS/.*lib/core/core" | wc -l)" >> $S
 echo "# exit tally: $(grep -o 'exit=[0-9]*' $S | sort | uniq -c | tr '\n' ' ')" >> $S
-echo "# fatal(faulthandler) runs: $(grep -c 'fatal=[1-9]' $S)  never_retrieved runs: $(grep -c 'never_retrieved=[1-9]' $S)  audit!=system.shutdown: $(grep -vc 'audit_last="type":"system.shutdown"' <(grep '^lane' $S))" >> $S
+echo "# teardown-bound warning runs: $(grep -c 'warn=[1-9]' $S)  fatal(faulthandler) runs: $(grep -c 'fatal=[1-9]' $S)  never_retrieved runs: $(grep -c 'never_retrieved=[1-9]' $S)  audit!=system.shutdown: $(grep -vc 'audit_last="type":"system.shutdown"' <(grep '^lane' $S))" >> $S
 tail -4 $S

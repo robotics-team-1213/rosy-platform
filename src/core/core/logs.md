@@ -373,3 +373,11 @@
 - gate 변화: 없음.
 - 결정: 격상은 **종료 코드**로 보인다(신호 사망 아님). 이 파일 위쪽 2026-09-23 항목의 "이중 신호의 241/254 는 실패로 남긴다"는 `ros2 run` 래퍼 아래의 관찰이며, 래퍼를 걷어낸 출하 형태에서는 이 항목이 대체한다. 정지 의미가 유닛의 exit-code 표가 아니라 프로세스가 내는 값으로 정해진다.
 - 교훈: 래퍼를 걷어내 "신호가 그대로 보이게" 하면 정상 정지만 깨끗해지는 게 아니라 **격상도 깨끗해진다** — 신호로 의미를 나누던 곳에서는 래퍼 제거가 의미 하나를 지운다.
+
+## 2026-09-23 · uncommitted · fix(core): 격상 처리기를 async-signal-safe 하게 (`os.write`) + `SIG_IGN` + 경고 0건 주장의 근거 교체 (리뷰 3차)
+
+- 변경: `core/main.py` — 두 번째 종료 신호 처리기가 (1) `SIG_DFL` 대신 **`SIG_IGN`** 을 깐다(그 몇 줄 사이에 세 번째 신호가 오면 기본 동작은 신호 사망 = systemd 가 보기에 깨끗한 종료라 격상이 다시 정상 정지처럼 보인다), (2) `print` 대신 미리 만든 바이트 상수를 **`os.write(2, ...)`** 로 쓴다(버퍼 잠금을 인터럽트된 주 스레드가 쥐고 있으면 처리기가 거기서 막히고, 멈춘 종료를 끊어야 할 바로 그 경로가 SIGKILL 까지 늘어진다). finally 의 삼킨 예외 메시지는 단계 이름을 싣는다(`... (shutdown)`/`(destroy_node)`). 시험: 격상 시험이 `SIG_IGN`·`os.write` 호출 인자를 확인하고, 새 `test_escalation_message_is_preformatted_bytes_for_os_write` 가 처리기 본문에 `print(` 가 없음을 붙든다. 새 `test_suppressed_hook_exception_names_the_step`.
+- 증거: `docs/validation/core-shutdown-2026-09-23`. **정정**: 바로 위 2026-09-23 항목의 "상한 경고 0건"은 당시 `lane.sh` 가 경고를 세지 않아 근거가 없었다 — `lane.sh` 에 `warn=` 칸(teardown 경고 4종)을 더해 240회를 다시 돌렸고 `warn=[1-9]` 실행 **0건**, exit 0 240/240, SIGSEGV 0(`evidence/after4-steady-TERM-round3.txt`). 최종 코드로 재실행: 래퍼 없는 이중 신호 SIGINT·SIGTERM 각 3회 **exit 2** + 격상 메시지 6/6(`evidence/double-direct-round3.txt`), systemd steady 12 + 기동 중 5 = **17/17 success**(`evidence/sd-new-round3.txt`), 멈춘 종료 2/2 **`Result=exit-code` `ExecMainStatus=2` `failed`**(`evidence/sd-stuck-round3.txt`). 시험 3.14 2561 passed·53 skipped, 3.12(uv) core 1261 passed·14 skipped.
+- gate 변화: 없음.
+- 결정: 신호 처리기 안에서는 포맷도 버퍼도 쓰지 않는다 — 바이트 상수 + `os.write` 만. 격상 중에는 같은 신호를 무시한다(`SIG_IGN`), 그래야 exit 2 가 보장된다.
+- 교훈: "경고가 0건이었다"는 주장에는 경고를 센 칸이 있어야 한다. 수집기에 없는 필드를 근거로 쓰면 그 숫자는 관측이 아니라 인상이다.

@@ -62,6 +62,7 @@
 | 수정 후 `7614627` | 240 | 240 | **0** | 46 (모두 publish, `Destroyable` 0) |
 | 수정 후 `7614627` (+`LD_PRELOAD` 진단) | 360 | 360 | **0** | 63 (같음) |
 | 리뷰 2차 `861386e` (로그·uvicorn graceful 추가) | 240 | 240 | **0** | 45 (같음) |
+| 리뷰 3차 `861386e`+`os.write`/`SIG_IGN` | 240 | 240 | **0** | 32 (같음) |
 
 - 모든 실행: 마지막 감사 이벤트 `system.shutdown`, 종료 후 API 포트 리스너 0, 잔존 core 프로세스 0,
   `core shutting down` 1회, traceback 0.
@@ -73,7 +74,11 @@
 - 리뷰 2차(`861386e`)에서 더한 것: 상한을 넘겼을 때·풀이 없을 때·`executor.shutdown()` 이
   던졌을 때 각각 경고를 남기고(그래서 조용한 실패가 없다), uvicorn 에
   `timeout_graceful_shutdown=3`(WS 엔드포인트가 await 에 park 해 API join 상한을 다 쓰는 것을 막음).
-  위 240회에서 이 경고는 **0건**이었다 — 실제로는 상한에 닿지 않는다.
+- 그 경고가 실제로 나지 않는지는 **리뷰 3차에서야 측정했다**: `evidence/lane.sh` 에 `warn=` 칸을
+  더해(teardown 경고 4종을 실행마다 센다) 240회를 다시 돌렸고 `warn=[1-9]` 인 실행은 **0건**
+  (`evidence/after4-steady-TERM-round3.txt` 꼬리 줄 "teardown-bound warning runs: 0").
+  2차 표의 240회는 콘솔 로그를 전부 남기지 않아 이 주장을 뒷받침하지 못한다 — 숫자는
+  리뷰 3차 실행의 것이다.
 - 부하: 두 팔 모두 busy loop 4개 + 레인 4개 동시. 실제 loadavg 는 수정 전 3–12, **수정 후 15–29**
   (같은 상자의 다른 세션 작업이 겹쳤다) — 수정 후가 더 가혹한 쪽이었다.
 - 남은 `Failed to publish: publisher's context is invalid` 는 teardown 으로 막을 수 없다: rclpy 의
@@ -89,9 +94,17 @@
   걷어내면서 **그 격상이 보이지 않게 됐다**: 노드가 유닛의 주 프로세스가 되면 systemd 의
   `is_clean_exit()` 가 SIGINT/SIGTERM 사망을 깨끗한 종료로 쳐서, 멈춘 종료를 운영자가 끊은
   것이 정상 `systemctl stop` 과 구별되지 않는다(아래 표로 실측).
-- 최종: 두 번째 신호는 `SIG_DFL` 복원 → stderr 한 줄 → **`os._exit(STUCK_SHUTDOWN_EXIT_CODE=2)`**.
-  결정적인 0 아닌 종료 코드이고, core dump 도 남기지 않으며, 격상의 목적(멈춘 훅·join 건너뛰기)을
-  그대로 지킨다(atexit·스레드 join 을 타지 않는다).
+- 최종: 두 번째 신호는 `signal.signal(signum, SIG_IGN)` → `os.write(2, STUCK_SHUTDOWN_MESSAGE)`
+  → **`os._exit(STUCK_SHUTDOWN_EXIT_CODE=2)`**. 결정적인 0 아닌 종료 코드이고, core dump 도
+  남기지 않으며, 격상의 목적(멈춘 훅·join 건너뛰기)을 그대로 지킨다(atexit·스레드 join 을 타지 않는다).
+  - `SIG_DFL` 이 아니라 `SIG_IGN` 인 이유: 이 세 줄 사이에 세 번째 신호가 들어오면 기본 동작은
+    신호 사망이고, 그것은 systemd 가 깨끗한 종료로 치는 바로 그 경로다 — 격상이 다시 정상 정지처럼
+    보인다. 무시해 두면 반드시 exit 2 로 끝난다.
+  - `print` 가 아니라 `os.write` 인 이유: 신호 처리기는 인터럽트된 주 스레드가 쥐고 있을 수 있는
+    버퍼 잠금을 기다리면 안 된다(async-signal-safe). 메시지는 미리 bytes 로 만들어 둔다.
+    이 경로는 "이미 멈춘 상황"에서 반드시 돌아야 하므로 여기서 막히면 SIGKILL 까지 늘어진다.
+    (WSL 재현의 60 s sleep 은 I/O 잠금을 쥐지 않으므로 이 위험을 재현하지 못한다 — 코드 쪽 계약으로
+    막고 `test_escalation_message_is_preformatted_bytes_for_os_write` 가 붙든다.)
 - 시험: `test_core_main_shutdown.py::test_second_signal_exits_non_zero_without_raising`
   (두 신호 모두: `KeyboardInterrupt` 도 `os.kill` 도 쓰면 실패),
   `test_stuck_shutdown_exit_code_is_not_a_signal_death`,
@@ -101,11 +114,17 @@
 
   | 격상 방식 | SIGINT ×3 | SIGTERM ×3 | 첫 신호→종료 |
   |---|---|---|---|
-  | `os._exit(2)` (출하) | **exit 2** ×3 | **exit 2** ×3 | 1.14–1.26 s |
+  | `os._exit(2)` + `SIG_IGN`/`os.write` (출하, 리뷰 3차) | **exit 2** ×3 | **exit 2** ×3 | 1.13–1.15 s |
+  | `os._exit(2)` + `SIG_DFL`/`print` (리뷰 2차) | exit 2 ×3 | exit 2 ×3 | 1.14–1.26 s |
   | `os.kill(self, signum)` (1차 수정) | 130(=신호 사망) ×3 | 143(=신호 사망) ×3 | 1.05–1.15 s |
 
-  두 방식 모두 마지막 감사 이벤트는 `system.shutdown`(sleep 앞에서 기록됨), 잔존 프로세스 0.
-  systemd 에서 이 차이가 어떻게 보이는지는 D 의 "멈춘 종료" 표에 있다.
+  세 방식 모두 마지막 감사 이벤트는 `system.shutdown`(sleep 앞에서 기록됨), 잔존 프로세스 0.
+  출하 형태 6회 모두 `core: second stop signal - shutdown looked stuck; exiting 2` 가
+  stderr 에 찍혔다(`evidence/double-direct-round3.txt`). systemd 에서 이 차이가 어떻게 보이는지는
+  D 의 "멈춘 종료" 표에 있다.
+- **격상은 감사 기록을 보장하지 않는다.** 위 실험은 `system.shutdown` 이 기록된 **뒤** 멈춘 경우라
+  마지막 감사 이벤트가 남았다. 감사 publish 전에 종료가 멈춰 있었다면 격상은 그 기록 없이 끝난다 —
+  의도된 것이다(격상의 정의가 "남은 훅을 포기한다"이다).
 - 참고: 이전 증거(`core-sigterm-2026-09-22`)의 이중 신호 실행은 `ros2 run` 래퍼 아래에서 241/254 로
   관찰한 것이다. 출하 형태(래퍼 없음)에서의 값은 위 표가 대체한다.
 
@@ -180,6 +199,14 @@
 
 같은 유닛에서 평범한 `systemctl stop` 은 그대로 `Result=success` 다(위 steady 12/12,
 startup 5/5). 즉 "정상 정지 = success, 멈춘 종료를 끊음 = failure" 가 실측으로 갈린다.
+리뷰 3차의 최종 코드(`SIG_IGN`+`os.write`)로 다시 돌린 결과도 같다: steady 12 + 기동 중 5 =
+**17/17 success**(`evidence/sd-new-round3.txt`), 멈춘 종료 2회 모두 `Result=exit-code`
+`ExecMainStatus=2` `failed`(`evidence/sd-stuck-round3.txt`, 저널에 격상 메시지 기록).
+
+**재시작 계약**: 유닛은 `Restart=on-failure`, `RestartSec=2` 다. `systemctl stop` 안에서 난 격상은
+재시작을 부르지 않지만, systemctl 밖에서(수동 `kill` 두 번) 격상이 나면 exit 2 = 실패이므로
+core 가 2 s 뒤 다시 뜬다. `ros2 run` 래퍼 시절의 241/254 와 같은 동작이며, 이번에는 의도된 계약으로
+적어 둔다 — 멈춘 core 를 끊으면 운영 중 로봇은 다시 살아난다.
 
 - 남은 실패 창은 `ExecStartPost` 프로브의 **인터프리터 기동 ~0.2 s**(부하 loadavg 15–25 기준)다.
   여기서 죽으면 유닛이 `failed` 로 남지만 재시작은 없고(`systemctl stop` 경로), core 는 아직 뜨지도
@@ -190,8 +217,8 @@ startup 5/5). 즉 "정상 정지 = success, 멈춘 종료를 끊음 = failure" �
 
 ## 시험
 
-- 호스트 3.14: `python -m pytest src/core/core/test/ test/ -q -p no:cacheprovider` → 2559 passed, 53 skipped (리뷰 2차)
-- 호스트 3.12(uv, `requirements-core.txt`): `python -m pytest src/core/core/test/ -q -p no:cacheprovider` → 1259 passed, 14 skipped (리뷰 2차)
+- 호스트 3.14: `python -m pytest src/core/core/test/ test/ -q -p no:cacheprovider` → 2561 passed, 53 skipped (리뷰 3차)
+- 호스트 3.12(uv, `requirements-core.txt`): `python -m pytest src/core/core/test/ -q -p no:cacheprovider` → 1261 passed, 14 skipped (리뷰 3차)
 - ROS 레인(WSL, 진짜 rclpy): `test_core_node_teardown_ros.py` + teardown/main 시험 32 passed
   (`evidence/ros-canary-test.txt`). 이 canary 는 `MultiThreadedExecutor._executor` 가
   `ThreadPoolExecutor` 라는 것을 붙든다 — rclpy 가 바꾸면 호스트 가짜 시험은 계속 통과하므로

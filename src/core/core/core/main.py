@@ -22,6 +22,9 @@ STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 # 두 번째 종료 신호(멈춘 종료를 운영자가 끊음)로 죽을 때의 종료 코드. systemd 가 이것을
 # 실패(`Result=exit-code`, `ExecMainStatus=2`)로 보아야 정상 정지(exit 0)와 구별된다.
 STUCK_SHUTDOWN_EXIT_CODE = 2
+# 신호 처리기가 쓰는 메시지는 미리 바이트로 만들어 둔다 — `os.write` 만이 async-signal-safe 하다.
+STUCK_SHUTDOWN_MESSAGE = (
+    b"core: second stop signal - shutdown looked stuck; exiting 2\n")
 
 
 def is_orderly_shutdown(exc: BaseException, *, stop_requested: bool,
@@ -60,16 +63,20 @@ def install_stop_handlers(stop: threading.Event) -> None:
       끊은 것이 정상 정지와 구별되지 않는다. 0 아닌 종료 코드만 `Result=exit-code` 로 남는다.
     - `os._exit` 인 이유: 격상의 목적이 멈춘 훅/join 을 건너뛰는 것이다 — atexit 와
       스레드 join 을 타면 다시 같은 자리에 걸린다.
-    - `SIG_DFL` 복원은 `os._exit` 직전에 또 신호가 와도 이 처리기로 돌아오지 않게 한다.
+    - `SIG_IGN` (SIG_DFL 이 아니라) 인 이유: 이 몇 줄 사이에 세 번째 신호가 오면 기본 동작은
+      신호 사망 — systemd 가 깨끗한 종료로 치는 그 경로다. 무시해 두면 격상은 반드시
+      `STUCK_SHUTDOWN_EXIT_CODE` 로 끝나고, 이 처리기로 되돌아오지도 않는다.
+    - 메시지는 `print` 가 아니라 `os.write` 다: 신호 처리기는 인터럽트된 주 스레드가 쥐고 있을
+      수도 있는 버퍼 잠금을 기다리면 안 된다(async-signal-safe). 멈춘 상황에서 반드시 도는
+      경로라 여기서 막히면 SIGKILL 까지 늘어진다.
     """
 
     def _request_stop(signum, frame) -> None:
         if not stop.is_set():
             stop.set()
             return
-        signal.signal(signum, signal.SIG_DFL)
-        print(f"core: second stop signal ({signum}) — shutdown looked stuck; exiting "
-              f"{STUCK_SHUTDOWN_EXIT_CODE}", file=sys.stderr, flush=True)
+        signal.signal(signum, signal.SIG_IGN)
+        os.write(2, STUCK_SHUTDOWN_MESSAGE)
         os._exit(STUCK_SHUTDOWN_EXIT_CODE)
 
     for signum in STOP_SIGNALS:
@@ -123,8 +130,8 @@ def main() -> None:
                 try:
                     step()
                 except Exception as exc:
-                    print(f"core: suppressed during shutdown: {exc!r}", file=sys.stderr,
-                          flush=True)
+                    print(f"core: suppressed during shutdown ({step.__name__}): {exc!r}",
+                          file=sys.stderr, flush=True)
         try:
             rclpy.shutdown()
         except Exception:
