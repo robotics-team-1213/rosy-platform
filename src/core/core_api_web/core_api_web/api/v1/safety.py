@@ -153,5 +153,6 @@ def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(admin),
         raise ApiError("INTERNAL_ERROR", 500, f"failed to persist safety.limits: {exc}")
     _apply_safety_patch(svc, patch_safety)
     svc.config.setdefault("safety", {}).update(patch_safety)
-    svc.events.publish("config.changed", source="api", data={"key": "safety.limits"})
+    svc.events.publish("config.changed", severity="warning", source="api",
+                       data={"key": "safety.limits"})
     return _safety_payload(svc)
