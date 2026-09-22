@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Optional
 
@@ -121,8 +122,11 @@ class RosyCoreNode(Node):
             self.control_adapter.attach(executor)
             executor.spin()
         finally:
-            self.control_adapter.detach(executor)
-            executor.remove_node(self)
+            try:
+                self.control_adapter.detach(executor)
+                executor.remove_node(self)
+            finally:
+                _stop_executor(executor, EXECUTOR_DRAIN_TIMEOUT_S)
 
     def shutdown(self) -> None:
         if self._api_server is not None:
@@ -130,3 +134,37 @@ class RosyCoreNode(Node):
         self.core.events.publish("system.shutdown", severity="warning", source="core")
         self.control_adapter.close()
         self.get_logger().info("core shutting down")
+        if self._api_thread is not None:
+            self._api_thread.join(API_JOIN_TIMEOUT_S)
+
+
+# Teardown bounds. Together they stay well inside rosy-core.service TimeoutStopSec=15.
+EXECUTOR_DRAIN_TIMEOUT_S = 3.0
+API_JOIN_TIMEOUT_S = 5.0
+
+
+def _stop_executor(executor: Any, timeout_s: float) -> bool:
+    """Stop the executor and wait (bounded) for callbacks already handed to its workers.
+
+    When spin() returns, MultiThreadedExecutor worker threads may still be running timer
+    callbacks, and more may be queued. Left alone they run after main() has shut the rclpy
+    context down and while the interpreter finalizes ("Failed to publish: publisher's
+    context is invalid", then one SIGSEGV at exit in 105 WSL runs, 2026-09-22).
+    rclpy 7.1.x (Jazzy) does not drain the pool itself: Executor.shutdown() never waits
+    for in-flight work, and MultiThreadedExecutor does not shut its ThreadPoolExecutor
+    down. So cancel the queued callbacks and join the running ones here.
+    Returns False when the bound expired with callbacks still running.
+    """
+    try:
+        executor.shutdown(timeout_sec=0)
+    except Exception:
+        pass
+    pool = getattr(executor, "_executor", None)
+    if not isinstance(pool, ThreadPoolExecutor):
+        return True
+    drain = threading.Thread(target=pool.shutdown,
+                             kwargs={"wait": True, "cancel_futures": True},
+                             daemon=True, name="rosy-executor-drain")
+    drain.start()
+    drain.join(timeout_s)
+    return not drain.is_alive()

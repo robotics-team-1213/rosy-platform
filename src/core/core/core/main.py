@@ -46,9 +46,10 @@ def install_stop_handlers(stop: threading.Event) -> None:
     기본 SIGTERM(SIG_DFL)은 rclpy 가 처리기를 깔기 전 기동 창에서 프로세스를 죽이고,
     기본 SIGINT 는 `KeyboardInterrupt` 를 아무 바이트코드에서나 던져 종료 훅
     (`system.shutdown` 감사 기록, API 포트 해제) 도중에도 끊을 수 있다.
-    두 번째 신호는 종료가 멈췄다는 운영자 의사다 — 기본 동작을 되돌리고 격상한다
-    (SIGINT → `KeyboardInterrupt`, SIGTERM → 같은 신호로 자기 종료). rclpy 가 종료 때
-    이 처리기를 되돌려 놓아도 `stop` 이 이미 서 있으므로 격상은 인터프리터 종료까지 유효하다.
+    두 번째 신호는 종료가 멈췄다는 운영자 의사다 — 기본 동작을 되돌리고 같은 신호로
+    자기 종료한다(SIGINT·SIGTERM 동일). SIGINT 도 `KeyboardInterrupt` 로 올리지 않는다:
+    예외가 잡혀 finally 의 `rclpy.shutdown()` 까지 가면 rclpy 가 OS 처리기를 CPython 의
+    처리기로 되돌리는데, Python 쪽 표가 SIG_DFL 이라 세 번째 SIGINT 부터는 아무 일도 하지 않는다.
     """
 
     def _request_stop(signum, frame) -> None:
@@ -56,8 +57,6 @@ def install_stop_handlers(stop: threading.Event) -> None:
             stop.set()
             return
         signal.signal(signum, signal.SIG_DFL)
-        if signum == signal.SIGINT:
-            raise KeyboardInterrupt
         os.kill(os.getpid(), signum)
 
     for signum in STOP_SIGNALS:
@@ -101,9 +100,17 @@ def main() -> None:
             raise
         print(f"core: suppressed during shutdown: {exc!r}", file=sys.stderr, flush=True)
     finally:
+        # 순서: 종료 훅(감사 system.shutdown, API 스레드 join → 포트 해제) → destroy_node
+        # (타이머·publisher 해제; executor 작업 스레드는 node.run() 이 이미 비웠다) →
+        # rclpy.shutdown. 노드가 context 보다 먼저 내려가야 인터프리터 종료 때 rclpy 객체가
+        # 무효 context 위에서 해제되지 않는다.
         if node is not None:
             try:
                 node.shutdown()
+            except Exception:
+                pass
+            try:
+                node.destroy_node()
             except Exception:
                 pass
         try:

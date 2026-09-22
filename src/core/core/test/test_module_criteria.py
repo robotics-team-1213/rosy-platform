@@ -61,6 +61,9 @@ ALLOWED = Counter({
     ("bridge/control_sensor_adapter.py", "getattr", "safety", '"bind_control_policy"'): 1,
     ("bridge/control_sensor_adapter.py", "hasattr", "observations", '"max_age"'): 1,
     ("node.py", "getattr", "self", '"get_namespace"'): 1,
+    # Accepted (core-shutdown 2026-09-23): rclpy Jazzy's MultiThreadedExecutor never
+    # drains its ThreadPoolExecutor; teardown does it. isinstance-guarded, see doc.
+    ("node.py", "getattr", "executor", '"_executor"'): 1,
     # Accepted: readiness service injection and ROS TransitionEvent state
     # compatibility. All fields are public and remain inside the bridge.
     ("bridge/ros_bridge.py", "getattr", "services", '"readiness"'): 1,

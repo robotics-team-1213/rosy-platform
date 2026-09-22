@@ -91,8 +91,12 @@ def harness(monkeypatch):
                 state["run"]()
 
         def shutdown(self) -> None:
-            # 종료 훅 순서: 노드 shutdown(감사 system.shutdown, 포트 해제) 뒤 rclpy.shutdown
+            # 종료 훅 순서: 노드 shutdown(감사 system.shutdown, 포트 해제) → destroy_node
+            # → rclpy.shutdown
             rclpy.calls.append("node.shutdown")
+
+        def destroy_node(self) -> None:
+            rclpy.calls.append("node.destroy")
 
     node_mod = types.ModuleType("core.node")
     node_mod.RosyCoreNode = FakeNode
@@ -116,7 +120,8 @@ def test_rclerror_after_signal_returns_cleanly_after_shutdown_hook(harness, sign
     rclpy, state = harness
     state["run"] = _signal_then_race(rclpy, signum)
     core_main.main()  # 예외 없음 → console_scripts exit 0
-    assert rclpy.calls == ["init", "node", "run", "node.shutdown", "rclpy.shutdown"]
+    assert rclpy.calls == ["init", "node", "run", "node.shutdown", "node.destroy",
+                           "rclpy.shutdown"]
 
 
 def test_rclerror_when_context_down_before_python_handler_ran(harness):
@@ -128,7 +133,7 @@ def test_rclerror_when_context_down_before_python_handler_ran(harness):
 
     state["run"] = run
     core_main.main()
-    assert rclpy.calls[-2:] == ["node.shutdown", "rclpy.shutdown"]
+    assert rclpy.calls[-3:] == ["node.shutdown", "node.destroy", "rclpy.shutdown"]
 
 
 def test_genuine_error_before_shutdown_still_propagates(harness):
@@ -140,7 +145,7 @@ def test_genuine_error_before_shutdown_still_propagates(harness):
     state["run"] = run
     with pytest.raises(RuntimeError, match="genuine failure"):
         core_main.main()
-    assert rclpy.calls[-2:] == ["node.shutdown", "rclpy.shutdown"]
+    assert rclpy.calls[-3:] == ["node.shutdown", "node.destroy", "rclpy.shutdown"]
 
 
 @pytest.mark.parametrize("signum", core_main.STOP_SIGNALS)
@@ -176,29 +181,25 @@ def test_first_signal_records_without_raising(saved_handlers, signum):
     assert stop.is_set()
 
 
-def test_second_sigint_restores_default_and_raises(saved_handlers):
-    import threading
-    stop = threading.Event()
-    core_main.install_stop_handlers(stop)
-    handler = signal.getsignal(signal.SIGINT)
-    handler(signal.SIGINT, None)
-    with pytest.raises(KeyboardInterrupt):
-        handler(signal.SIGINT, None)
-    assert signal.getsignal(signal.SIGINT) is signal.SIG_DFL
+@pytest.mark.parametrize("signum", core_main.STOP_SIGNALS)
+def test_second_signal_restores_default_and_rekills_self(saved_handlers, monkeypatch, signum):
+    """두 번째 신호는 예외 없이 같은 신호로 자기 종료한다 — SIGINT 도 KeyboardInterrupt 가 아니다.
 
-
-def test_second_sigterm_restores_default_and_rekills_self(saved_handlers, monkeypatch):
+    예전에는 두 번째 SIGINT 가 KeyboardInterrupt 로 올라가 main 이 잡고 finally 의
+    rclpy.shutdown() 까지 갔고, rclpy 가 OS 처리기를 CPython 처리기로 되돌리면
+    (Python 표는 SIG_DFL) 세 번째 SIGINT 는 무시됐다.
+    """
     import threading
     killed = []
     monkeypatch.setattr(core_main.os, "kill", lambda pid, sig: killed.append((pid, sig)))
     stop = threading.Event()
     core_main.install_stop_handlers(stop)
-    handler = signal.getsignal(signal.SIGTERM)
-    handler(signal.SIGTERM, None)
+    handler = signal.getsignal(signum)
+    handler(signum, None)
     assert killed == []
-    handler(signal.SIGTERM, None)
-    assert killed == [(core_main.os.getpid(), signal.SIGTERM)]
-    assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+    handler(signum, None)  # KeyboardInterrupt 를 던지면 실패
+    assert killed == [(core_main.os.getpid(), signum)]
+    assert signal.getsignal(signum) is signal.SIG_DFL
 
 
 def test_suppressed_exception_is_logged(harness, capsys):
