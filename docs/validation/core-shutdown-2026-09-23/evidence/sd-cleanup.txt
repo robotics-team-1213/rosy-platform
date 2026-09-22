@@ -1,0 +1,3 @@
+unit file: ls: '/run/systemd/system/rosy-core-sdtest.service'에 접근할 수 없음: 그런 파일이나 디렉터리가 없습니다 ls: '/etc/systemd/system/rosy-core-sdtest.service'에 접근할 수 없음: 그런 파일이나 디렉터리가 없습니다 
+load state: not-found
+leftover core: 0

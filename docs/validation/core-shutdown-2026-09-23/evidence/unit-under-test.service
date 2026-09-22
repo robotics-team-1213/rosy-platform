@@ -1,0 +1,36 @@
+[Unit]
+Description=ROSY native CORE runtime
+Wants=network-online.target
+
+[Service]
+Environment=ROS_DOMAIN_ID=44 ROS_LOCALHOST_ONLY=1 ROSY_ROBOT_NUMBER=1 ROSY_NAMESPACE=rosy_01 ROSY_RUNTIME_MODE=core ROSY_API_PORT=18490 HOME=/var/lib/rosy-sdtest
+StateDirectory=rosy-sdtest
+ReadWritePaths=/var/lib/rosy-sdtest
+Type=simple
+WorkingDirectory=/opt/rosy_sdtest/current
+# Exec the core entry script itself, not `ros2 run`: the wrapper turns a signal death of
+# the node into exit status 256-N (241/254), which systemd counts as failure. Run
+# directly, a SIGINT/SIGTERM that lands before core installs its handlers is a clean
+# signal exit for systemd. Path follows the --merge-install payload layout.
+ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy_sdtest/current/install/setup.bash && exec /opt/rosy_sdtest/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+ExecStartPost=/usr/bin/python3 /opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=60
+TimeoutStopSec=15
+KillSignal=SIGINT
+UMask=0027
+
+NoNewPrivileges=true
+PrivateDevices=true
+DevicePolicy=closed
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+

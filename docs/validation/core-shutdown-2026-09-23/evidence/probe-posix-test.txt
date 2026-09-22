@@ -1,0 +1,9 @@
+7614627 core tree + deploy/robot/native/wait-core-ready.py from c568fd4 (fix/core-shutdown-followups)
+collecting ... collected 13 items / 9 deselected / 4 selected
+
+test/test_native_systemd_contract.py::test_readiness_probe_has_a_bounded_failure PASSED [ 25%]
+test/test_native_systemd_contract.py::test_readiness_probe_treats_a_stop_signal_as_a_clean_exit PASSED [ 50%]
+test/test_native_systemd_contract.py::test_readiness_probe_process_exits_zero_on_sigint_and_sigterm PASSED [ 75%]
+test/test_native_systemd_contract.py::test_readiness_probe_honors_rosy_api_port PASSED [100%]
+
+======================= 4 passed, 9 deselected in 2.15s ========================

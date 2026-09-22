@@ -288,3 +288,10 @@
 - gate 변화: 없음.
 - 결정: 없음 — SRS §25 전제의 이미지 계약화.
 - 교훈: 문서 버전을 리터럴로 고정한 시험은 버전이 오를 때마다 깨진다 — 헤더를 읽어 판정하도록 쓰는 편이 유지된다(단, 고정 의도라면 리터럴이 맞을 수도 있다. 이번엔 D-143 표기 존재 확인이 본래 목적이므로 헤더 판독형으로).
+
+## 2026-09-23 · uncommitted · fix(native): rosy-core 가 entry script 를 직접 exec + 준비 프로브가 정지 신호를 깨끗이 끝냄
+- 변경: ① `rosy-core.service` `ExecStart` 가 `ros2 run core core` 대신 `/opt/rosy/current/install/lib/core/core` 를 exec 한다 — `ros2 run` 은 자식의 신호 사망을 `sys.exit(-N)`(241/254)로 바꿔 systemd 가 실패로 보게 만들었다. 노드가 주 프로세스면 SIGINT/SIGTERM 사망이 systemd 기본으로 깨끗한 종료이므로 `SuccessExitStatus=241 254` 는 두지 않는다(둘 경우 이중 신호 격상까지 성공으로 덮는다). ② `wait-core-ready.py` 가 SIGINT/SIGTERM 에 exit 0 — 기동 중 `systemctl stop` 은 cgroup 의 `ExecStartPost` 도 때리고, 프로브가 신호로 죽으면 ExecStart 와 무관하게 유닛이 `Failed with result 'signal'` 로 남았다. ③ 계약 시험: ExecStart 에 `ros2 run` 없음·`SuccessExitStatus` 없음·하드코딩 경로가 `--merge-install`+`install_scripts=$base/lib/core` 와 일치, 프로브 신호 처리(POSIX 서브프로세스 시험 포함, Windows 는 skip).
+- 증거: `docs/validation/core-shutdown-2026-09-23` D절 — WSL systemd(`is-system-running=degraded`, 유닛 사본 `/run/systemd/system/rosy-core-sdtest.service`, 개인 workspace `/opt/rosy_sdtest`, ROS_DOMAIN_ID=44). 신규 ExecStart: steady start/stop **12/12 `Result=success`, NRestarts=0**, 매회 감사 `system.boot`+`system.shutdown`·포트 해제; 기동 중 stop 1.3–3.0 s 12점 **12/12 success**(기존 ExecStart 는 같은 창에서 2건 실패, 0.1–8 s 창에서 `ExecMainStatus=254` 1건). 프로브 수정 전에는 기동 중 stop 12점 중 7건이 `Result=signal`. 시험 유닛·상태는 실행 뒤 제거(`LoadState=not-found`). 호스트 `test/test_native_systemd_contract.py` 12 passed·1 skipped(Windows), WSL 에서 프로브 시험 4 passed.
+- gate 변화: 없음. 실기 `systemctl stop` 과 페이로드의 entry script 경로 확인은 DEVICE 몫으로 남는다.
+- 결정: 정지 경로의 판정은 "주 프로세스 종료 코드"만이 아니다 — `ExecStartPost` 같은 control process 도 유닛을 failed 로 만들고, `SuccessExitStatus=` 는 거기에 적용되지 않는다.
+- 교훈: 유닛의 정지 의미를 바꾸고 싶을 때 성공 코드 목록을 덧대는 것보다 래퍼를 걷어 신호가 systemd 에 그대로 보이게 하는 쪽이 덮는 범위가 좁고 정확하다.
