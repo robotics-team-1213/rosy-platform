@@ -54,7 +54,7 @@ The cause is structural. `detect_lane_error` (`control/sensing/lane.py`) steers 
 | Straight lane centre keeping | PASS (1 mm, run 164757) |
 | Crosswalk bars inside the lane | PASS |
 | 90 deg corner | **PASS** (run 184434, corner turning `e3b5eff`) |
-| 45 deg bend toward the roundabout | **HOLD**: stops fail-closed (`camera_bend_184434.png`) |
+| 45 deg bend toward the roundabout | HOLD in 'lane' mode; **PASS in edge_left** (below) |
 | Sitting on a shared boundary line | HOLD: single frame ambiguous, needs lane memory across frames |
 
 ## Corner turning (the user chose to implement it)
@@ -65,5 +65,26 @@ Run `184434` (`trajectory_184434_corner.png`):
 - 1.142 m in total. Down the left lane and through the crosswalk, then a left turn at the bottom-left corner, then about 0.57 m east along the bottom corridor.
 - In the turn it overshot 2.7 cm toward the outer line (y min -0.538). It then settled within 8 mm of the corridor centre (mean y -0.5037 vs -0.511).
 - It stopped fail-closed at x -0.69, where both lines bend 45 deg toward the roundabout. That geometry is neither a straight lane nor an L-corner.
+
+## Full lap: `edge_left` mode (the user chose bends and curves)
+
+On the lap the robot started on, the line on its left is always the inner block's outline: its left and bottom edges, both chevron bends (about 65 deg), the concave arc that forms the roundabout's left side, and the top edge. `edge_left` (`5f17ed8`, `3a1b73b`, `49ca068`, in `control/sensing/lane_bev.py`) works as follows:
+- It projects the thresholded frame to a 2.5 mm bird's-eye grid in base_link.
+- It keeps the left boundary (and the right boundary of the same lane) as odometry-carried memory, re-seen within 0.40 m of travel or dropped.
+- It follows the iso-line at h - lw/2 from the boundary with pure pursuit (lookahead 0.15-0.25 m), inverting CORE's command law so that CORE drives the computed curvature.
+- With no supported lookahead point it outputs no lane, so CORE stops. `LaneCornerTracker` stays armed as a fallback.
+
+| Run | Change | Result |
+|---|---|---|
+| `193728` | edge_left, threshold 220 | Never moved. Gazebo dims paint with range: 226 at 0.12 m, 214 at 0.44 m. The left line never seeded, so the run went LOST (fail-closed). |
+| `194559` | threshold 180 (the bird's-eye view starts at 0.09 m, beyond the 218-grey body rows) | **Full lap: back within 2.9 mm of the start after 3.086 m of travel, heading -87.5 deg.** It then continued through most of a second lap: 5.96 m in total, 620/620 observations visible at confidence >= 0.35, still TRACKING when the window closed (`trajectory_194559_lap.png`). |
+
+The 2.9 mm closure was re-measured independently from `odom_drive.csv`: the minimum distance to the start after 2 m of travel. Host suites: 1327 passed, 29 skipped.
+
+| Lap gate | Verdict |
+|---|---|
+| Straights, crosswalk, both 90 deg corners, chevron bends, roundabout left arc | PASS (ROS-SIM) |
+| Other routes (east S-curve loop, circling the island) | NOT SUPPORTED: left-edge following has no junction choice |
+| Real Pinky: wheel-odom memory, lighting, camera calibration | NOT RUN (edge_left needs a ground model; only the Gazebo one exists) |
 
 Raw logs (`odom_drive.csv`, `line_obs.txt`, `cmd_vel.csv`) are outside Git, in WSL `/rosy_mapv2_ws/evidence/20260922T_map_v2_fleet_<run>/`.
