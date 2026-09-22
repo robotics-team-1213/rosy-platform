@@ -27,6 +27,7 @@ param(
     [string]$Confirmation,
     [string]$PlanPath,
     [string]$OperatorPublicKey,
+    [string]$ReprovisionReceipt,
     [switch]$SetWifiCredential,
     [switch]$PlanOnly
 )
@@ -167,6 +168,35 @@ foreach ($required in @("DiskNumber", "WifiProfile", "ImagePath", "ImageSha256",
 # card receives exactly the robot number, name and Fleet values that were shown.
 $reviewedPlan = $null
 $robotNumberSource = $(if ($PSBoundParameters.ContainsKey("RobotNumber")) { "operator" } else { "auto" })
+
+# D-174 F7: rewriting a card for an already registered robot is allowed only with
+# the receipt of a verified earlier write of exactly that identity.
+$reprovision = $null
+if ($ReprovisionReceipt) {
+    if (-not (Test-Path -LiteralPath $ReprovisionReceipt -PathType Leaf)) { Fail "reprovision receipt is missing" }
+    try {
+        $reprovision = Get-Content -LiteralPath $ReprovisionReceipt -Raw | ConvertFrom-Json
+    }
+    catch {
+        Fail "reprovision receipt is not valid JSON"
+    }
+    $receiptKeys = @($reprovision.PSObject.Properties.Name)
+    foreach ($key in @("device_uid", "device_name", "robot_number", "release_id", "image_sha256", "writer_exit_code", "media_readback", "created_at")) {
+        if ($receiptKeys -cnotcontains $key) { Fail "reprovision receipt has no $key" }
+    }
+    if ([int]$reprovision.writer_exit_code -ne 0 -or -not [bool]$reprovision.media_readback.verified) {
+        Fail "reprovision receipt does not prove a verified earlier write"
+    }
+    $fromReceipt = [ordered]@{ RobotNumber = "robot_number"; DeviceName = "device_name"; DeviceUid = "device_uid" }
+    foreach ($name in $fromReceipt.Keys) {
+        $recorded = $reprovision.($fromReceipt[$name])
+        if ($PSBoundParameters.ContainsKey($name) -and [string](Get-Variable -Name $name -ValueOnly) -cne [string]$recorded) {
+            Fail "-$name does not match the reprovision receipt"
+        }
+        Set-Variable -Name $name -Value $recorded
+    }
+    $robotNumberSource = "reprovision"
+}
 $fleetSource = "operator"
 if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
     Fail "plan already exists and will not be overwritten"
@@ -321,9 +351,11 @@ if ($robotNumberSource -eq "auto" -and -not $reviewedPlan) {
 if ($RobotNumber -lt 1 -or $RobotNumber -gt 61) { Fail "RobotNumber must be between 1 and 61" }
 if ($DeviceName -cnotmatch '^rosy-pinky-[a-hj-km-np-z2-9]{4}$') { Fail "DeviceName is invalid" }
 try { $parsedUid = [guid]$DeviceUid } catch { Fail "DeviceUid is invalid" }
-if (@($registry.robot_numbers) -contains $RobotNumber) { Fail "robot number is already registered" }
-if (@($registry.device_names) -contains $DeviceName) { Fail "device name is already registered" }
-if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
+if (-not $reprovision) {
+    if (@($registry.robot_numbers) -contains $RobotNumber) { Fail "robot number is already registered" }
+    if (@($registry.device_names) -contains $DeviceName) { Fail "device name is already registered" }
+    if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
+}
 
 $firstDisk = Select-SafeDisk (Read-DiskInventory $DiskInventoryJson) $DiskNumber
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
@@ -518,6 +550,13 @@ $receipt = [ordered]@{
     media_readback = $mediaReadback
     personalization = $bundleReceipt
     created_at = [DateTimeOffset]::UtcNow.ToString("o")
+}
+if ($reprovision) {
+    $receipt["supersedes"] = [ordered]@{
+        release_id = [string]$reprovision.release_id
+        image_sha256 = [string]$reprovision.image_sha256
+        created_at = [string]$reprovision.created_at
+    }
 }
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8

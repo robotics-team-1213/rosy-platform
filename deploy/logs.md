@@ -434,3 +434,14 @@
 - 결정: D-174
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · feat(sd): rewrite a card for an existing device identity (D-174 F7)
+
+- 변경: `prepare-rosy-sd.ps1 -ReprovisionReceipt`가 이전 receipt(Imager exit 0, readback verified)의 번호·이름·UID로만 registry
+  재사용을 허용한다. 명시 인자가 receipt와 다르면 거부하고, plan은 `robot_number_source: reprovision`, 새 receipt는 `supersedes`
+  (이전 release_id·image_sha256·created_at)를 남긴다.
+- 증거: `test_sd_writer_contract.py` 55 passed (2026-09-23 Windows). 실제 `receipt-2026.09.22-002.json`(18번 `rosy-pinky-e4us`)이
+  필요한 필드를 모두 가진다.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+

@@ -670,3 +670,87 @@ def test_a_private_key_file_is_refused_as_an_operator_key(writer_case, tmp_path)
 
     assert completed.returncode != 0
     assert "operator public key" in completed.stderr
+
+
+def _prior_receipt(tmp_path, **overrides):
+    receipt = {
+        "device_uid": "9d40feaa-871f-4fd3-975a-a704e82d3af9",
+        "device_name": "rosy-pinky-k7m4",
+        "robot_number": 1,
+        "release_id": "2026.09.20-001",
+        "disk_serial": "FIXTURE-SD-0007",
+        "image_sha256": "a" * 64,
+        "writer_exit_code": 0,
+        "media_readback": {"verified": True},
+        "created_at": "2026-09-22T13:04:48+00:00",
+    }
+    receipt.update(overrides)
+    path = tmp_path / "prior-receipt.json"
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    return path
+
+
+def _registered(case):
+    case["registry"].write_text(json.dumps({
+        "robot_numbers": [1], "device_names": ["rosy-pinky-k7m4"],
+        "device_uids": ["9d40feaa-871f-4fd3-975a-a704e82d3af9"],
+    }), encoding="utf-8")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_registered_identity_can_be_rewritten_only_with_its_prior_receipt(writer_case, tmp_path):
+    # D-174 F7: the same robot gets a fixed release on the same identity.
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case, "-ReprovisionReceipt", prior,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", "-BootMountPath", boot,
+        plan_only=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["supersedes"] == {
+        "release_id": "2026.09.20-001", "image_sha256": "a" * 64,
+        "created_at": "2026-09-22T13:04:48+00:00",
+    }
+    registry = json.loads(writer_case["registry"].read_text(encoding="utf-8-sig"))
+    assert registry["robot_numbers"] == [1]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovision_plan_takes_the_identity_from_the_receipt(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior,
+                     omit=("-RobotNumber", "-DeviceName", "-DeviceUid"))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert (plan["device_name"], plan["robot_number"]) == ("rosy-pinky-k7m4", 1)
+    assert plan["robot_number_source"] == "reprovision"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"robot_number": 2},
+        {"device_name": "rosy-pinky-zzzz"},
+        {"writer_exit_code": 1},
+        {"media_readback": {"verified": False}},
+    ],
+)
+def test_reprovision_refuses_a_receipt_that_does_not_prove_this_identity(writer_case, tmp_path, overrides):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path, **overrides)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr
+    assert not writer_case["marker"].exists()

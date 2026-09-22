@@ -135,5 +135,6 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
   Hardware facts (LED name, agetty reload, avahi reload) unproven until release 003 boots.
 - Task 4 (F3): done. `-OperatorPublicKey` → bundle `operator` → first boot key-only `rosy` login; fingerprints in plan/receipt.
 - Task 6 (F6): done. `LogsDirectory` + `ROS_HOME`/`ROS_LOG_DIR` for core, io and navigation.
-- Tasks 7-9: pending.
+- Task 7 (F7): done. `-ReprovisionReceipt` rewrites identity 18 from its verified receipt; new receipt `supersedes`.
+- Tasks 8-9: pending.
 

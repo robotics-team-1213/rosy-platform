@@ -24,6 +24,10 @@ one-time per-card provisioning bundle.
   never a fixed default (D-33). Omitted Fleet values default to
   `https://<this-host>.local` / `rosy-pilot-lan` and the plan says so
   (`robot_number_source`, `fleet_source`); nothing on the robot reads them yet.
+- `-ReprovisionReceipt <receipt.json>` (D-174 F7) rewrites a card for an already
+  registered robot: the receipt must prove a verified earlier write (writer exit 0,
+  readback verified) of exactly that number, name and UID, which it supplies when
+  omitted. The new receipt records `supersedes`; registry entries stay unique.
 - `-OperatorPublicKey <file.pub>` (D-174 F3) adds one ed25519/ecdsa public key to the
   bundle; first boot creates a key-only `rosy` account (journal groups, NOPASSWD sudo).
   The plan and receipt carry only the `SHA256:` fingerprint, and a write with a
