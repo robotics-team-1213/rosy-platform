@@ -99,3 +99,19 @@ def test_control_package_installs_the_complete_v2_map_bundle():
     )
     assert "map_260905_update_v2" in setup_py
     assert "recursive=True" in setup_py
+
+
+def test_map_v2_fleet_is_catalogued_from_the_control_bundle():
+    profile = profile_for("map_v2_fleet.world")
+    assert profile.world_source == (
+        "package://control/map/map_v2_fleet/worlds/map_v2_fleet.world")
+    assert profile.map == "package://control/map/map_v2_fleet/maps/map_v2_fleet.yaml"
+    assert profile.spawn_x == pytest.approx(-1.26955)
+    assert profile.spawn_y == pytest.approx(0.24255)
+    assert profile.spawn_spacing == 0.0
+
+
+def test_control_package_installs_the_map_v2_fleet_bundle():
+    setup_py = (ROOT.parents[1] / "apps" / "control" / "setup.py").read_text(
+        encoding="utf-8")
+    assert "map_v2_fleet" in setup_py
