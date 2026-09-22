@@ -43,7 +43,6 @@ KNOWN_ROS_LEAKS = {
     "control.wander.motion": "Twist, rclpy Parameter",
     "control.wander.judge": "Twist",
     "control.wander.senses": "Bool/Float32/Odometry/UInt16MultiArray",
-    "control.calibration_relocation": "Twist, String",
     "control.safety.bumper": "Float32/LaserScan/Range, TF",
     "control.wander.contact": "Twist",
     "control.safety.hazard": "Bool/Imu/String/Twist/UInt16MultiArray",
