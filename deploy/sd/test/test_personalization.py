@@ -1,6 +1,10 @@
-﻿import pytest
+import sys
+from pathlib import Path
 from uuid import uuid4
-from deploy.sd.personalization import (
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from personalization import (  # noqa: E402
     DeviceIdentity,
     generate_short_code,
     validate_device_identity,
@@ -28,7 +32,7 @@ def test_validate_device_identity():
     assert validated.device_uid == uid
 
 def test_derive_wpa_psk():
-    psk = derive_wpa_psk("MySSID", "secret123")
+    psk = derive_wpa_psk("MySSID", "hunter2swordfish")
     assert len(psk) == 64
 
 def test_create_provision_bundle():
@@ -46,7 +50,7 @@ def test_create_provision_bundle():
         requested_preset="hardware",
         country_code="KR",
         ssid="MySSID",
-        wifi_passphrase="secretpassphrase",
+        wifi_passphrase="correcthorsebattery",
         fleet_endpoint="https://fleet.local",
         fleet_trust_profile="production",
         pairing_required=True,
@@ -72,7 +76,7 @@ def test_create_provision_receipt():
         requested_preset="hardware",
         country_code="KR",
         ssid="MySSID",
-        wifi_passphrase="secretpassphrase",
+        wifi_passphrase="correcthorsebattery",
         fleet_endpoint="https://fleet.local",
         fleet_trust_profile="production",
         pairing_required=True,
