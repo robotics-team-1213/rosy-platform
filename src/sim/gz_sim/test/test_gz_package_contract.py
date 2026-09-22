@@ -181,7 +181,8 @@ def test_non_composed_nav2_does_not_apply_namespace_twice():
 def test_junction_tools_are_installed():
     from pathlib import Path
     cmake = (Path(__file__).resolve().parents[1] / "CMakeLists.txt").read_text(encoding="utf-8")
-    for script in ("scripts/record_debug.py",):
+    for script in ("scripts/record_debug.py", "scripts/junction_score.py",
+                   "scripts/junction_harness.py"):
         assert script in cmake
 
 
