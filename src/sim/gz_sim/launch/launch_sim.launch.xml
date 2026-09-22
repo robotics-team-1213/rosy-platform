@@ -16,8 +16,14 @@
     <arg name="spawn_y" default="0.0"/>
     <arg name="spawn_z" default="0.1"/>
     <arg name="spawn_yaw" default="0.0"/>
-    
-    <set_env name="GZ_SIM_RESOURCE_PATH" value="$(find-pkg-share description)/../:/$(find-pkg-share gz_sim)/models:/$(env HOME)/.gazebo/models"/>
+    <!-- Appended verbatim to GZ_SIM_RESOURCE_PATH (pass a leading ":").
+         A world using model://<pkg>/... from another package needs that
+         package's share parent here: description/.. is the shared share dir
+         only in a merge-install layout, not in colcon's isolated default.
+         Empty keeps the path unchanged. -->
+    <arg name="extra_resource_path" default=""/>
+
+    <set_env name="GZ_SIM_RESOURCE_PATH" value="$(find-pkg-share description)/../:/$(find-pkg-share gz_sim)/models:/$(env HOME)/.gazebo/models$(var extra_resource_path)"/>
 
     <include file="$(find-pkg-share ros_gz_sim)/launch/gz_sim.launch.py">
         <arg name='gz_args' value='-r -s -v4, $(var world)'/>

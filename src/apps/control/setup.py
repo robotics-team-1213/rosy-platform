@@ -4,13 +4,17 @@ from glob import glob
 from setuptools import find_packages, setup
 
 package_name = 'control'
-map_bundle = os.path.join('map', 'map_260905_update_v2')
+map_bundles = (
+    os.path.join('map', 'map_260905_update_v2'),
+    os.path.join('map', 'map_v2_fleet'),
+)
 map_data_files = [
     (
         os.path.join('share', package_name, os.path.dirname(path)),
         [path],
     )
-    for path in glob(os.path.join(map_bundle, '**', '*'), recursive=True)
+    for bundle in map_bundles
+    for path in glob(os.path.join(bundle, '**', '*'), recursive=True)
     if os.path.isfile(path)
 ]
 

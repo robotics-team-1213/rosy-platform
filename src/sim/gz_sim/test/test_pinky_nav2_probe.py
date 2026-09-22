@@ -48,3 +48,13 @@ def test_probe_uses_nav2_action_and_never_publishes_velocity():
     assert "nav_result_passes(" in source
     assert "create_publisher(Twist" not in source
     assert '"cmd_vel"' not in source
+
+
+def test_probe_waits_for_bt_navigator_active_before_sending_goal():
+    source = PROBE.read_text(encoding="utf-8")
+
+    assert "lifecycle_msgs.srv import GetState" in source
+    assert 'create_client(GetState, "bt_navigator/get_state")' in source
+    assert "PRIMARY_STATE_ACTIVE" in source
+    assert "wait_for_nav2_active" in source
+    assert source.index("wait_for_nav2_active") < source.index("send_goal_async(goal)")

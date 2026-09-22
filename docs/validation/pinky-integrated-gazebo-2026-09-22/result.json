@@ -1,0 +1,152 @@
+{
+  "camera": {
+    "frame_id": "front_camera_link",
+    "frames": 584,
+    "height": 180,
+    "width": 320
+  },
+  "command": {
+    "final": [0.0, 0.0],
+    "final_zero_stable": true,
+    "publishers": ["/core"]
+  },
+  "completed_at_unix_s": 1790017686.6510224,
+  "environment": "ROS-SIM",
+  "full_raster_fidelity_gate": "HOLD_FULL_RASTER_FIDELITY",
+  "gates": {
+    "crosswalk_detected": true,
+    "final_zero_stable": true,
+    "gazebo_camera_frames": true,
+    "map_received": true,
+    "mapping_route_complete": true,
+    "nav2_probe": true,
+    "road_lane_detected": true,
+    "robot_reachable_mapping": true,
+    "sole_final_cmd_vel_publisher": true,
+    "stop_line_detected": true,
+    "trajectory_clearance": true,
+    "white_line_detected": true,
+    "white_line_seen_while_moving": true
+  },
+  "geometry": {
+    "clearance_margin_m": 0.01,
+    "collision": false,
+    "minimum_body_clearance_m": 0.022132383387882745,
+    "minimum_center_to_wall_m": 0.10813238338788274,
+    "robot_diameter_m": 0.172,
+    "robot_radius_m": 0.086,
+    "sample_count": 8580
+  },
+  "line": {
+    "best": {
+      "confidence": 1.0,
+      "error": 0.3400374376039933,
+      "source": "CAMERA_LINE",
+      "stamp": 291.5,
+      "visible": true
+    },
+    "confidence": 1.0,
+    "visible": true,
+    "visible_while_moving": true
+  },
+  "map": {
+    "frame_id": "map",
+    "full_raster_fidelity": {
+      "full_raster_fidelity_passed": false,
+      "minimum_wall_surface_recall": 0.8503649635036497,
+      "phantom_fraction": 0.0038560411311053984,
+      "wall_sampling_m": 0.01,
+      "wall_surface_recall": [
+        1.0, 1.0, 0.8503649635036497, 1.0,
+        1.0, 1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0, 1.0
+      ],
+      "wall_tolerance_m": 0.05
+    },
+    "height": 69,
+    "known_cells": 9037,
+    "origin_xy": [-1.4101231665670209, -0.6895132216693048],
+    "received": true,
+    "resolution_m": 0.019999999552965164,
+    "robot_reachable": {
+      "definition": "spawn_connected_robot_center_configuration_space",
+      "mapping_complete": true,
+      "occupied_fraction": 0.0,
+      "outside_raster_fraction": 0.0,
+      "required_center_clearance_m": 0.09599999999999999,
+      "sample_count": 14788,
+      "sampling_m": 0.01,
+      "unknown_fraction": 0.0
+    },
+    "width": 141
+  },
+  "mapping_status": {
+    "armed": true,
+    "detail": "route_complete_final_zero",
+    "path_m": 14.1411,
+    "phase": "complete",
+    "run_id": "20260922T_pinky_integrated_05",
+    "waypoint": 52,
+    "waypoint_count": 52
+  },
+  "navigation": {
+    "action_status": "SUCCEEDED",
+    "final_pose_xy": [-0.214809728078222, -0.12498407847621314],
+    "goal_xy": [-0.2, -0.15],
+    "max_position_error_m": 0.08,
+    "passed": true,
+    "phase": "complete",
+    "position_error_m": 0.029071022951302195,
+    "run_id": "20260922T_pinky_integrated_05"
+  },
+  "passed": true,
+  "physical_pinky_pro": "NOT_TESTED",
+  "road": {
+    "best": {
+      "crosswalk": {
+        "confidence": 0.5584134615384615,
+        "distance_m": 0.08556688902946043,
+        "image_row": 134.0,
+        "visible": true
+      },
+      "lane": {
+        "confidence": 0.8998015873015873,
+        "error": -0.09629272326350602,
+        "visible": true
+      },
+      "map_id": "map_260905_update_v2",
+      "scene_revision": "road-scene-v1",
+      "signal": {
+        "colour": null,
+        "confidence": 0.0,
+        "conflict": false,
+        "visible": false
+      },
+      "source": "CAMERA_ROAD",
+      "stamp": 0.002,
+      "stop_line": {
+        "confidence": 0.7849431818181818,
+        "distance_m": 0.0627129223265235,
+        "image_row": 174.0,
+        "visible": true
+      }
+    },
+    "best_score": 3,
+    "crosswalk_visible": true,
+    "lane_visible": true,
+    "stop_line_visible": true
+  },
+  "run_id": "20260922T_pinky_integrated_05",
+  "schema_version": 1,
+  "source_identity": {
+    "wall_geometry_path": "/tmp/pinky-integrated-335c743/install/share/control/map/map_260905_update_v2/reports/wall_geometry.json",
+    "wall_geometry_sha256": "edb6b2a918f62b526cd1a98c7afe9e4271e081a5527202417ab2ca1f44103ff2",
+    "world_path": "/tmp/pinky-integrated-335c743/install/share/control/map/map_260905_update_v2/worlds/map_260905_traffic.world",
+    "world_sha256": "af70bbd26d1b3fbe3812af2008403bcfbab42df1b6d4dc6a07d660737ba87373"
+  },
+  "termination_reason": "terminal",
+  "trajectory": {
+    "path_m": 14.516840025328806
+  }
+}

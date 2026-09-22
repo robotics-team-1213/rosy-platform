@@ -99,6 +99,24 @@ def test_full_raster_fidelity_is_reported_separately_from_reachability():
     assert "full_raster_fidelity_passed" in fidelity
 
 
+def test_road_observation_score_only_counts_the_current_camera_sample():
+    policy = _policy()
+
+    complete = {
+        "lane": {"visible": True},
+        "stop_line": {"visible": True},
+        "crosswalk": {"visible": True},
+    }
+    blank = {
+        "lane": {"visible": False},
+        "stop_line": {"visible": False},
+        "crosswalk": {"visible": False},
+    }
+
+    assert policy.road_observation_score(complete) == 3
+    assert policy.road_observation_score(blank) == 0
+
+
 def test_evaluate_acceptance_fails_each_safety_or_evidence_gap_closed():
     policy = _policy()
     evidence = {
@@ -152,3 +170,4 @@ def test_collector_subscribes_to_one_real_graph_and_writes_atomic_json():
     assert "evaluate_acceptance(" in source
     assert "get_publishers_info_by_topic" in source
     assert "create_publisher(Twist" not in source
+    assert "self.publishers" not in source

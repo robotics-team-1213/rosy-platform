@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 import importlib.util
 import sys
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 # Load verify-mounted-image.py dynamically
 spec = importlib.util.spec_from_file_location(
     "verify_mounted_image",
-    Path("deploy/image/verify-mounted-image.py").resolve()
+    Path(__file__).resolve().parents[1] / "verify-mounted-image.py"
 )
 verify_mounted_image = importlib.util.module_from_spec(spec)
 sys.modules["verify_mounted_image"] = verify_mounted_image
