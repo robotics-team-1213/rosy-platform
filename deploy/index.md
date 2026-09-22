@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · fix(native): writable ROS home for service users; bounded persistent journal (D-174 F6, D-175 L0)
 - 2026-09-23 · uncommitted · feat(native): boot black box on the FAT32 boot partition (D-175 L1)
 - 2026-09-23 · uncommitted · feat(native): boot status indicator outside CORE (D-174 T0)
 - 2026-09-23 · uncommitted · fix(native): keep bytecode out of signed releases; require the installed runtime (D-174 review)
 - 2026-09-23 · uncommitted · fix(first-boot): apply the device hostname to the running system (D-174 F2)
-- 2026-09-23 · uncommitted · fix(native): run release recovery from the installed layout (D-174 F1, F5)
