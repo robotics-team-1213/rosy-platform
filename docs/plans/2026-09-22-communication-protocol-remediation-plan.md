@@ -3,7 +3,7 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 - Date: 2026-09-22
-- Status: Phase 1(T1~T4) **완료** — 커밋 998b9f9·545cb0b·2d47b5a·56355f9. Phase 2(T5~T9) **완료** — 4ee66a7·e23ca18·745bb80·7b09b0d·455f48f. Phase 3(T10~T11) **완료** — a29caee+AGENTS 팩. 결정 게이트 G1·G2 **판정 완료(D-169·D-170 Accepted, 커밋 451223c)**. 남은 것: Phase 4(T12~T15)와 ARM64/DEVICE 게이트.
+- Status: **전 페이즈 실행 완료.** Phase 1(T1~T4) — 998b9f9·545cb0b·2d47b5a·56355f9. Phase 2(T5~T9) — 4ee66a7·e23ca18·745bb80·7b09b0d·455f48f. Phase 3(T10~T11) — a29caee·10ceb53. Phase 4(T12~T14) — e65a5a0·f9d6f09·9742084(+d927cea 정정분). 결정 게이트 G1·G2 — D-169·D-170 Accepted(451223c). T15(하네스 마감·전체 회귀) 진행 중. 남은 것: ARM64/DEVICE 게이트(sensor_adc 빌드·udev 심링크·chrony 실측)와 후속 ADR 조건들.
 - Goal: `communication-protocol-report.md`(2026-09-22, Rosy 폴더 — git 루트 밖)의 §9 조치 14건을 test-first로 실행한다.
 - Architecture: 4개 페이즈(안전·차단 해소 → Fleet 정합 → 계약·문서 정합 → 잔여 위생). 모든 태스크는 **Windows host pytest로 검증 가능**하며, C++ 빌드·실측이 필요한 것만 "ARM64 게이트"로 표시한다. 계약 결정이 필요한 2건은 태스크가 아니라 결정 게이트로 분리했다.
 - Tech Stack: pytest(host), colcon/ament(Linux), udev, systemd, FastAPI/websockets, pydantic
@@ -159,7 +159,9 @@ Run: `python -m pytest "src/core/core/test/" -q` → `python tools/harness/rosy_
 
 ---
 
-## Phase 4 — 잔여 위생
+## Phase 4 — 잔여 위생 — **완료 (2026-09-22/23, T15 진행 중)**
+
+이행 요약: T12(커밋 e65a5a0) — tools/gz 6개 파일 발행 토픽 상대화 + 전 스캔 가드 `test_gz_tools_topics.py`(구독 제외). PowerShell BOM 사고 학습됨. T13(f9d6f09) — startup_calibration·safety 의 us/ir/imu 구독 SENSOR 통일(호환성 확대만), STEPS.txt 에 /estop transient_local 발행 예시, 가드 3건 변이 증명. T14(9742084) — wait-core-ready 가 ROSY_API_PORT 따름(행위 시험), chrony 설치+enable+이미지 검증(픽스처 2종 갱신, 부재/비활성 거부 케이스), 타 세션의 API Ref 버전 고정 시험 헤더 판독형으로 수선.
 
 ### T12: tools/gz 절대 토픽 정리
 
