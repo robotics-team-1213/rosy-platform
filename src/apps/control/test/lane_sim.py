@@ -22,6 +22,11 @@ CAM_X = 0.034
 W, HT = 320, 180
 FLOOR, BODY = 109, 218
 DT = 0.2
+# Gazebo run 193728 camera_start.png: paint dims with range, the dimmer
+# line 226 at 0.12 m, 221 at 0.23 m, 217 at 0.33 m, 214 at 0.44 m (fit:
+# 229 - 35 d); floor 103-110; the body (218) only fills rows >= 139, nearer
+# than the bird's-eye view samples. At threshold 220 the left line showed
+# 0.14 m and never seeded; 180 sits midway between floor and far paint.
 KW = dict(bright_threshold=180, lane_half_width_m=H,
           roi_top_fraction=0.25, roi_bottom_fraction=0.75, washed_fraction=0.75)
 

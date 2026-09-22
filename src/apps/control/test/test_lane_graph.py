@@ -49,12 +49,33 @@ def test_segments_join_at_their_nodes(graph):
         assert np.linalg.norm(p[-1] - nodes[seg["to"]]) < 1e-3, name
 
 
+def test_nodes_sit_in_their_compass_quadrant(graph):
+    """NW/NE/SW/SE are named for where they sit around the roundabout
+    centre, not just for which segments happen to touch them."""
+    cx, cy = graph["roundabout"]["centre"]
+    nodes = graph["nodes"]
+    assert nodes["NW"][0] < cx and nodes["NW"][1] > cy
+    assert nodes["NE"][0] > cx and nodes["NE"][1] > cy
+    assert nodes["SW"][0] < cx and nodes["SW"][1] < cy
+    assert nodes["SE"][0] > cx and nodes["SE"][1] < cy
+
+
 def test_centrelines_keep_clear_of_the_boundary_lines(graph):
-    """Every centre point 60-100 mm from the nearest boundary line, except
-    within NODE_EXEMPT_M of a junction node where the lane mouth widens."""
+    """Every centre point, including at the ring nodes, is 60-100 mm from
+    the nearest boundary line (NODE_EXEMPT_M is 0: 2026-09-23 review found
+    the exemption was hiding no real violations at 0.0/0.05/0.08 either)."""
     mod = _module()
     field = mod.LineField(mod.load_scene())
     assert mod.clearance_violations(graph, field) == []
+
+
+def test_segments_are_uniformly_sampled(graph):
+    """No leftover raw-anchor jump at a road's node ends (2026-09-23
+    review): every consecutive pair of points is at most 11 mm apart."""
+    for name, seg in graph["segments"].items():
+        p = np.array(seg["points"])
+        step = np.linalg.norm(np.diff(p, axis=0), axis=1)
+        assert step.max() <= 0.011, name
 
 
 def test_lengths_are_plausible(graph):

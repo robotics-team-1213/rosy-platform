@@ -22,7 +22,6 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 BUNDLE = HERE.parent
-SOURCE = next(BUNDLE.glob("260919*.STL"))
 RULES = BUNDLE / "lane_rules.yaml"
 OUT = BUNDLE / "lane_graph.yaml"
 
@@ -35,18 +34,27 @@ SMOOTH_POINTS = 5
 #: Lane centre to nearest line paint: half-width 92.5 mm minus half a line
 #: width 12.5 mm is 80 mm on a straight; bends and joints vary it.
 CLEAR_MIN_M, CLEAR_MAX_M = 0.060, 0.100
-#: Lane mouths at the ring widen past CLEAR_MAX_M.
-NODE_EXEMPT_M = 0.12
+#: No exemption: measured clearance holds within CLEAR_MIN_M/CLEAR_MAX_M of
+#: every segment point, including at the ring nodes (2026-09-23 review).
+NODE_EXEMPT_M = 0.0
 DECIMALS = 4
 RING_ORDER = (("ring_n", "NE", "NW"), ("ring_w", "NW", "SW"),
               ("ring_s", "SW", "SE"), ("ring_e", "SE", "NE"))
+
+
+def _source_path():
+    matches = sorted(BUNDLE.glob("260919*.STL"))
+    if not matches:
+        raise FileNotFoundError(
+            f"no 260919*.STL file found in {BUNDLE} -- the map bundle is incomplete")
+    return matches[0]
 
 
 def load_scene():
     spec = importlib.util.spec_from_file_location("stl_scene", HERE / "stl_scene.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.load_scene(SOURCE)
+    return mod.load_scene(_source_path())
 
 
 class LineField:
@@ -123,10 +131,14 @@ def ring_meeting(end, before, centre, radius):
     p = np.asarray(end, float) - np.asarray(centre, float)
     b = float(np.dot(d, p))
     c = float(np.dot(p, p)) - radius * radius
+    if c <= 0:
+        raise ValueError("road end anchor is inside or on the roundabout circle")
     disc = b * b - c
     if disc < 0:
         raise ValueError("road end direction misses the roundabout")
     t = -b - math.sqrt(disc)
+    if t < 0:
+        raise ValueError("road end direction meets the roundabout behind the anchor")
     return np.asarray(end, float) + t * d
 
 
@@ -157,15 +169,19 @@ def build(rules_path=RULES):
     if ring["direction"] != "ccw":
         raise ValueError("only a ccw roundabout is modelled")
     centre, radius = np.array(ring["centre"], float), float(ring["radius"])
-    field = LineField(load_scene())
+    scene = load_scene()
+    field = LineField(scene)
     nodes, segments = {}, {}
     ends = {"west": ("SW", "NW"), "east": ("NE", "SE")}
     for name, road in rules["roads"].items():
         anchors = np.array(road["anchors"], float)
         start = ring_meeting(anchors[0], anchors[1], centre, radius)
         end = ring_meeting(anchors[-1], anchors[-2], centre, radius)
-        body = snap(anchors, field)
-        points = np.vstack([[start], body, [end]])
+        # Both nodes are pinned points in the input: snap() never moves
+        # pts[0]/pts[-1], and densify() spaces the node-to-anchor run at
+        # SPACING_M just like every other run, so the whole road is
+        # uniformly sampled with no leftover raw-anchor jump at either end.
+        points = snap(np.vstack([[start], anchors, [end]]), field)
         a, b = ends[name]
         nodes[a], nodes[b] = start, end
         segments[name] = {"from": a, "to": b,
@@ -178,7 +194,7 @@ def build(rules_path=RULES):
     park = rules["parking"]
     spur = resample([park["entry"], park["spot"][:2]], SPACING_M)
     graph = {
-        "source_sha256": load_scene().source_sha256,
+        "source_sha256": scene.source_sha256,
         "roundabout": {"centre": _round([centre])[0], "radius": round(radius, DECIMALS),
                        "direction": "ccw"},
         "nodes": {k: _round([v])[0] for k, v in sorted(nodes.items())},

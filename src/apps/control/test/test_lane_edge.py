@@ -25,9 +25,9 @@ from control.sensing.lane_bev import (
     pose_if_fresh,
 )
 from lane_sim import (  # noqa: E402  (test-directory helper)
-    BODY, CAM_X, DT, FLOOR, GROUND, H, HT, KW, LW, START, W, World,
+    CAM_X, DT, FLOOR, GROUND, H, HT, KW, START, W, World,
     core_command, distance_to_polyline as _distance_to_polyline, lane,
-    offset_polyline, stl_world as _stl_world,
+    stl_world as _stl_world,
 )
 from lane_sim import drive as _drive
 
