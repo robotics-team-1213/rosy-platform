@@ -13,9 +13,9 @@ gates:
     evidence: "1054 passed, 12 skipped (2026-09-22 Windows). D-162 scene context additive 수용(translate road_evidence, RoadEvidence 선택 필드, ros_bridge sensor snapshot) 포함 — D-137/D-151/D-152 회귀 없음"
     cmd: "PYTHONPATH=src/core:src python3 -m pytest src/core/test -q"
   ROS-SIM:
-    state: HOLD
-    blocker: "2026-09-22 SAF-002 워치독 알림 이식이 ros_bridge cmd_vel 경로(cmd_vel_cycle)를 바꿨다. 직전 부트 스모크(89c1d11)는 현재 트리 증거가 아니다 — 동일 절차 재실행 필요"
-    cmd: "docs/validation/ros-sim-core-2026-09-22/README.md 절차 — colcon build --packages-up-to core && ros2 run core core + road/observation 유효/malformed 프로브"
+    state: GO
+    evidence: "2026-09-22 WSL Jazzy 재실행(581741e, cmd_vel_cycle·safety.watchdog·감사 로그 compaction 이후 트리): /cmd_vel Publisher count 1(node core), teleop 0.1→송신 중단 약 0.5 s 뒤 0 + safety.watchdog 감사 기록, logs/audit {events, log}, /metrics rosy_audit_* — docs/validation/ros-sim-core-2026-09-22b. SIGTERM 종료 1/6 회 rclpy context 경합 traceback(exit 1), logs.md 후속"
+    cmd: "docs/validation/ros-sim-core-2026-09-22b/README.md 절차 — colcon build --packages-up-to core && ros2 run core core + road/observation 프로브 + teleop→워치독 프로브"
   ARTIFACT:
     state: HOLD
     blocker: "ARM64 개발 후보만 존재. 서명 manifest와 immutable digest 발행 전"
@@ -50,7 +50,7 @@ plans:
 
 ## 다음 gate
 
-1. ROS Jazzy에서 부트 스모크로 ROS-SIM 복원 — 완료(2026-09-22, docs/validation/ros-sim-core-2026-09-22, D-162 T5 이후 트리).
+1. ROS Jazzy에서 부트 스모크로 ROS-SIM 복원 — 완료(2026-09-22, docs/validation/ros-sim-core-2026-09-22b, cmd_vel_cycle·감사 로그 compaction 이후 트리).
 2. 서명된 native ARM64 artifact 발행 후 Pi readback(ARTIFACT → DEVICE).
 
 ## 현재 유효한 금지사항
