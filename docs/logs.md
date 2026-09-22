@@ -1468,3 +1468,10 @@
 - gate 변화: 없음 (docs SOURCE/LOCAL GO 유지).
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-22 · 8088533 · docs(plans): Phase 1(T1~T4) 전체 호스트 회귀 PASS
+- 변경: 없음(검증 기록만).
+- 증거: `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4140 passed, 82 skipped** in 189.88s (2026-09-22 Windows host, 커밋 998b9f9·545cb0b·2d47b5a·56355f9·8088533 반영 트리). 종료 코드 0.
+- gate 변화: 없음 — 문서 모듈 SOURCE/LOCAL GO 유지. 코드 모듈(control·navigation·deploy·sensor_adc)의 게이트 재판정은 각 progress.md 절차에 맡긴다(필요 시 last_verified 갱신).
+- 결정: 없음.
+- 교훈: 없음.
