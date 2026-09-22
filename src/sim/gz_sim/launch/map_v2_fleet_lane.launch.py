@@ -75,7 +75,8 @@ def generate_launch_description():
                 # half-width off in bird's-eye view: row-wise pairing stopped
                 # at the 65 deg bends (run 184434). Declared Gazebo camera
                 # geometry (tilt 25 deg, 320x180).
-                "camera_lane_mode": LaunchConfiguration("camera_lane_mode"),
+                "camera_lane_mode": ParameterValue(
+                    LaunchConfiguration("camera_lane_mode"), value_type=str),
                 "debug_overlay": ParameterValue(
                     LaunchConfiguration("debug_overlay"), value_type=bool),
                 "debug_lane_graph": os.path.join(

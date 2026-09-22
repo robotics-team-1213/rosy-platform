@@ -138,17 +138,94 @@ def test_launch_group_is_stopped_before_the_recorder_is_joined():
     source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
     run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
     kill_at = run_one_source.index("os.killpg(launch.pid, signal.SIGINT)")
-    join_at = run_one_source.index("recorder.wait(timeout=RECORDER_JOIN_TIMEOUT_S)")
+    join_at = run_one_source.index("recorder.wait(timeout=RECORDER_STOP_TIMEOUT_S)")
     assert kill_at < join_at
 
 
+def test_launch_group_is_stopped_before_rclpy_shutdown():
+    """The launch group (Gazebo, bridge, nodes) should start winding down
+    before this process tears down its own rclpy context, not after."""
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    finally_source = run_one_source.split("finally:", 1)[1]
+    kill_at = finally_source.index("os.killpg(launch.pid, signal.SIGINT)")
+    shutdown_at = finally_source.index("rclpy_module.shutdown()")
+    assert kill_at < shutdown_at
+
+
+def test_recorder_is_sent_sigint_before_being_killed():
+    """record_debug.py finalises overlay.mp4's moov atom in a `finally`
+    block when it's interrupted (SIGINT -> KeyboardInterrupt); SIGKILL gives
+    it no chance to run that block, so overlay.mp4 has no moov atom -- an
+    unplayable file. SIGINT must be tried, and joined, before any kill."""
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    finally_source = run_one_source.split("finally:", 1)[1]
+    sigint_at = finally_source.index("recorder.send_signal(signal.SIGINT)")
+    wait_at = finally_source.index("recorder.wait(timeout=RECORDER_STOP_TIMEOUT_S)")
+    kill_at = finally_source.index("recorder.kill()")
+    assert sigint_at < wait_at < kill_at
+    # the kill is only reached from the TimeoutExpired branch of that wait
+    assert "except subprocess.TimeoutExpired:" in finally_source[wait_at:kill_at]
+
+
 def test_leftover_processes_from_this_scenario_are_checked_and_killed_narrowly():
+    """Scoped by this scenario's own ROS_DOMAIN_ID, read from
+    /proc/<pid>/environ -- not a bare pattern match, which would also kill
+    an unrelated domain, user, or developer's own Gazebo run on the box."""
     mod = _mod()
     assert mod.LEFTOVER_PATTERNS == (
         'gz sim .*map_v2_fleet.world', "map_v2_fleet_lane.launch.py")
     source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
-    assert "_kill_leftover_processes(out_dir)" in source
+    assert "_kill_leftover_processes(out_dir, domain)" in source
     kill_source = source.split("def _kill_leftover_processes(", 1)[1].split("\ndef ", 1)[0]
     assert '["pgrep", "-f", pattern]' in kill_source
-    assert '["pkill", "-f", pattern]' in kill_source
+    assert 'needle = f"ROS_DOMAIN_ID={domain}".encode()' in kill_source
+    assert 'Path(f"/proc/{pid}/environ")' in kill_source
+    assert "needle in environ.split" in kill_source
+    assert '["kill", "-9", *matched]' in kill_source
     assert "log_lines.append" in kill_source
+
+
+def test_leftover_process_cleanup_is_linux_only_and_skips_gracefully_elsewhere():
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    kill_source = source.split("def _kill_leftover_processes(", 1)[1].split("\ndef ", 1)[0]
+    assert 'sys.platform.startswith("linux")' in kill_source
+    skip_branch = kill_source.split('if not sys.platform.startswith("linux"):', 1)[1].split(
+        "\n\n", 1)[0]
+    assert "return" in skip_branch
+    assert "_append_log" in skip_branch
+
+
+def test_launch_popen_is_inside_the_try_so_a_missing_ros2_does_not_abort_main():
+    """A missing `ros2` binary raises OSError/FileNotFoundError from Popen;
+    that must become an error-tagged result for this one scenario, not an
+    uncaught exception escaping run_one() and aborting the rest of main()'s
+    loop."""
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    try_at = run_one_source.index("try:")
+    popen_at = run_one_source.index('subprocess.Popen(\n                ["ros2", "launch"')
+    assert try_at < popen_at
+    except_source = run_one_source.split("except OSError as exc:", 1)[1].split("\n\n", 1)[0]
+    assert '"reason": f"error:{type(exc).__name__}"' in except_source
+
+
+def test_launch_log_file_is_closed_in_the_finally_block():
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    assert 'log_file = (out_dir / "launch.log").open("w")' in run_one_source
+    finally_source = run_one_source.split("finally:", 1)[1]
+    assert "log_file.close()" in finally_source
+
+
+def test_killpg_is_guarded_by_launch_is_not_none():
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    finally_source = run_one_source.split("finally:", 1)[1]
+    assert "if launch is not None:" in finally_source
+    # the killpg call itself must be textually inside that guarded block,
+    # not merely preceded by the guard somewhere earlier in the function
+    guarded = finally_source.split("if launch is not None:", 1)[1]
+    next_top_level_if = guarded.split("\n        if ", 1)[0]
+    assert "os.killpg(launch.pid, signal.SIGINT)" in next_top_level_if

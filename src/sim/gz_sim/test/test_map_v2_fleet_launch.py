@@ -113,3 +113,13 @@ def test_launch_exposes_mode_and_spawn_for_the_junction_harness():
     source = LAUNCH.read_text(encoding="utf-8")
     for arg in ('"camera_lane_mode"', '"spawn_x"', '"spawn_y"', '"spawn_yaw"', '"debug_overlay"'):
         assert f"DeclareLaunchArgument({arg}" in source
+
+
+def test_camera_lane_mode_is_typed_as_a_string_parameter():
+    """A bare LaunchConfiguration substitution can be handed to rclpy as a
+    non-string ParameterType depending on how the launch frontend resolves
+    it; wrap it like debug_overlay's ParameterValue(..., value_type=bool)
+    so 'centre'/'edge_left'/'lane' always arrive as a ROS string param."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert ('"camera_lane_mode": ParameterValue(\n'
+            '                    LaunchConfiguration("camera_lane_mode"), value_type=str)') in source

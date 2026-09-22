@@ -12,10 +12,14 @@ and write results.json plus the overlay MP4 (debug_overlay:=true). A
 scenario that never boots, never reaches its end point, or raises is still
 recorded with a `reason` and does not abort the remaining scenarios.
 
-ROS imports (rclpy, nav_msgs, std_msgs) are deferred into run_one() so this
-module and its scenario/scoring logic can be imported and exercised on a
-host without ROS 2 installed (e.g. the Windows dev host); only actually
-running a scenario requires rclpy.
+To re-score already-recorded evidence against a fixed junction_score.py
+without re-running Gazebo, use junction_score.py's own `--graph --results
+--tracks` CLI (its rescore()/`_rescore_cli`), not this file.
+
+ROS imports (rclpy, nav_msgs, std_msgs) are deferred into wait_ready() and
+run_one() so this module and its scenario/scoring logic can be imported and
+exercised on a host without ROS 2 installed (e.g. the Windows dev host);
+only actually running a scenario requires rclpy.
 """
 
 import argparse
@@ -48,10 +52,13 @@ SET_MODE_RETRIES = 5
 SET_MODE_RETRY_DELAY_S = 1.0
 #: How long to let the launch group exit cleanly after SIGINT before SIGKILL.
 LAUNCH_STOP_TIMEOUT_S = 15.0
-#: How long to let the recorder exit after the launch group is gone.
-RECORDER_JOIN_TIMEOUT_S = 15.0
-#: Leftover Gazebo/launch processes from THIS scenario only, narrowly
-#: matched so an unrelated Gazebo instance on the box is never touched.
+#: How long to let the recorder exit after a SIGINT before killing it. Longer
+#: than a plain terminate: record_debug.py finalises overlay.mp4's moov atom
+#: in its `finally` block, which needs a live process to run in.
+RECORDER_STOP_TIMEOUT_S = 15.0
+#: Gazebo/launch processes from this scenario's own ROS_DOMAIN_ID only, as
+#: read from /proc/<pid>/environ -- narrower than a bare pattern match,
+#: which would kill an unrelated Gazebo/domain/user's run on the same box.
 LEFTOVER_PATTERNS = ("gz sim .*map_v2_fleet.world", "map_v2_fleet_lane.launch.py")
 
 
@@ -112,10 +119,29 @@ def wait_ready(node, rclpy_module, deadline):
     return False
 
 
-def _kill_leftover_processes(out_dir):
-    """Best-effort cleanup of any process from this scenario's launch group
-    that survived the group kill (a grandchild that detached into its own
-    session). Logs what it found so a leak is visible in launch.log."""
+def _append_log(out_dir, lines):
+    if out_dir is None or not lines:
+        return
+    try:
+        with (out_dir / "launch.log").open("a") as fh:
+            fh.write("\n".join(lines) + "\n")
+    except OSError:
+        pass
+
+
+def _kill_leftover_processes(out_dir, domain):
+    """Best-effort cleanup of any process from THIS scenario's launch group
+    that survived the group kill (e.g. a grandchild that detached into its
+    own session). Scoped to processes whose environment carries this
+    scenario's ROS_DOMAIN_ID (via /proc/<pid>/environ), so a different
+    domain, a different user, or a developer's own Gazebo run elsewhere on
+    the box is never touched. /proc is Linux-only; this harness only ever
+    runs under WSL/Linux, but skips gracefully elsewhere. Always logs what
+    it found (or didn't) so a leak is visible in launch.log."""
+    if not sys.platform.startswith("linux"):
+        _append_log(out_dir, ["leftover-check: skipped (not Linux)"])
+        return
+    needle = f"ROS_DOMAIN_ID={domain}".encode()
     log_lines = []
     for pattern in LEFTOVER_PATTERNS:
         try:
@@ -123,15 +149,20 @@ def _kill_leftover_processes(out_dir):
         except FileNotFoundError:
             log_lines.append(f"leftover-check: pgrep unavailable, skipped {pattern!r}")
             continue
-        pids = found.stdout.split()
-        if pids:
-            log_lines.append(f"leftover: killing {pattern!r} pids={pids}")
-            subprocess.run(["pkill", "-f", pattern])
+        matched = []
+        for pid in found.stdout.split():
+            try:
+                environ = Path(f"/proc/{pid}/environ").read_bytes()
+            except OSError:
+                continue
+            if needle in environ.split(b"\0"):
+                matched.append(pid)
+        if matched:
+            log_lines.append(f"leftover: killing {pattern!r} pids={matched} (domain {domain})")
+            subprocess.run(["kill", "-9", *matched])
         else:
-            log_lines.append(f"leftover: none for {pattern!r}")
-    if out_dir is not None:
-        with (out_dir / "launch.log").open("a") as fh:
-            fh.write("\n".join(log_lines) + "\n")
+            log_lines.append(f"leftover: none for {pattern!r} in domain {domain}")
+    _append_log(out_dir, log_lines)
 
 
 def run_one(scenario, graph, mode, out_dir, domain):
@@ -139,78 +170,123 @@ def run_one(scenario, graph, mode, out_dir, domain):
 
     Always returns a result dict with at least `pass` and `reason`; never
     raises (`main` relies on that so one bad scenario does not abort the
-    rest of the run).
+    rest of the run). Every cleanup step below is isolated in its own
+    try/except so one failing step (e.g. a process already gone) does not
+    skip the others.
     """
-    import rclpy
-    from nav_msgs.msg import Odometry
-    from rclpy.node import Node
-    from rclpy.qos import qos_profile_sensor_data
-
     x, y, yaw = scenario["start"]
     env = dict(os.environ, ROS_DOMAIN_ID=str(domain))
-    launch = subprocess.Popen(
-        ["ros2", "launch", "gz_sim", "map_v2_fleet_lane.launch.py",
-         f"spawn_x:={x}", f"spawn_y:={y}", f"spawn_yaw:={yaw}",
-         f"camera_lane_mode:={mode}", "debug_overlay:=true"],
-        env=env, stdout=(out_dir / "launch.log").open("w"), stderr=subprocess.STDOUT,
-        start_new_session=True)
+    launch = None
     recorder = None
     rclpy_started = False
+    node = None
+    rclpy_module = None
+    log_file = None
     try:
+        log_file = (out_dir / "launch.log").open("w")
+        try:
+            launch = subprocess.Popen(
+                ["ros2", "launch", "gz_sim", "map_v2_fleet_lane.launch.py",
+                 f"spawn_x:={x}", f"spawn_y:={y}", f"spawn_yaw:={yaw}",
+                 f"camera_lane_mode:={mode}", "debug_overlay:=true"],
+                env=env, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
+        except OSError as exc:
+            return {"pass": False, "reason": f"error:{type(exc).__name__}"}
+
+        import rclpy
+        from nav_msgs.msg import Odometry
+        from rclpy.node import Node
+        from rclpy.qos import qos_profile_sensor_data
+        rclpy_module = rclpy
+
         os.environ["ROS_DOMAIN_ID"] = str(domain)
         rclpy.init()
         rclpy_started = True
         node = Node("junction_harness")
-        try:
-            boot_deadline = time.monotonic() + BOOT_S
-            if not wait_ready(node, rclpy, boot_deadline):
-                return {"pass": False, "reason": "boot_timeout"}
 
-            recorder = subprocess.Popen(
-                ["python3", str(Path(__file__).with_name("record_debug.py")), "--out", str(out_dir),
-                 "--seconds", str(TIMEOUT_S + 5)], env=env)
+        boot_deadline = time.monotonic() + BOOT_S
+        if not wait_ready(node, rclpy, boot_deadline):
+            return {"pass": False, "reason": "boot_timeout"}
 
-            track = []
-            node.create_subscription(
-                Odometry, "odom",
-                lambda m: track.append((m.pose.pose.position.x, m.pose.pose.position.y)),
-                qos_profile_sensor_data)
-            set_mode("CAMERA_LINE")
-            end = junction_score.directed_points(graph, scenario["out"])
-            s = junction_score._arc_length(end)
-            end_point = end[int(s.searchsorted(junction_score.END_AFTER_M))]
-            deadline = time.monotonic() + TIMEOUT_S
-            reached = False
-            while time.monotonic() < deadline:
-                rclpy.spin_once(node, timeout_sec=0.1)
-                if track and math.dist(track[-1], end_point) < 0.05:
-                    reached = True
-                    break
-            set_mode("OFF")
-            result = junction_score.score(graph, scenario, track or [scenario["start"][:2]])
-            result["reason"] = "reached" if reached else "timeout"
-            (out_dir / "track.json").write_text(json.dumps(track))
-            return result
-        finally:
-            node.destroy_node()
+        recorder = subprocess.Popen(
+            ["python3", str(Path(__file__).with_name("record_debug.py")), "--out", str(out_dir),
+             "--seconds", str(TIMEOUT_S + 5)], env=env)
+
+        track = []
+        node.create_subscription(
+            Odometry, "odom",
+            lambda m: track.append((m.pose.pose.position.x, m.pose.pose.position.y)),
+            qos_profile_sensor_data)
+        set_mode("CAMERA_LINE")
+        end = junction_score.directed_points(graph, scenario["out"])
+        s = junction_score._arc_length(end)
+        end_point = end[int(s.searchsorted(junction_score.END_AFTER_M))]
+        deadline = time.monotonic() + TIMEOUT_S
+        reached = False
+        while time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.1)
+            if track and math.dist(track[-1], end_point) < 0.05:
+                reached = True
+                break
+        set_mode("OFF")
+        result = junction_score.score(graph, scenario, track or [scenario["start"][:2]])
+        result["reason"] = "reached" if reached else "timeout"
+        (out_dir / "track.json").write_text(json.dumps(track))
+        return result
     except Exception as exc:  # noqa: BLE001 - one scenario's failure must not abort the rest
         return {"pass": False, "reason": f"error:{type(exc).__name__}"}
     finally:
-        if rclpy_started:
-            rclpy.shutdown()
-        # Stop the launch group first, then join the recorder, then make
-        # sure nothing from this scenario survives.
-        os.killpg(launch.pid, signal.SIGINT)
-        try:
-            launch.wait(timeout=LAUNCH_STOP_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            os.killpg(launch.pid, signal.SIGKILL)
+        # Stop the launch group first (before touching rclpy), then rclpy,
+        # then the recorder (SIGINT so it finalises the MP4, not SIGKILL),
+        # then anything that still survives, then close the log. Each step
+        # is isolated so one failure does not skip the rest.
+        if launch is not None:
+            try:
+                os.killpg(launch.pid, signal.SIGINT)
+            except Exception:
+                pass
+            try:
+                launch.wait(timeout=LAUNCH_STOP_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(launch.pid, signal.SIGKILL)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        if node is not None:
+            try:
+                node.destroy_node()
+            except Exception:
+                pass
+        if rclpy_started and rclpy_module is not None:
+            try:
+                rclpy_module.shutdown()
+            except Exception:
+                pass
         if recorder is not None:
             try:
-                recorder.wait(timeout=RECORDER_JOIN_TIMEOUT_S)
+                recorder.send_signal(signal.SIGINT)
+            except Exception:
+                pass
+            try:
+                recorder.wait(timeout=RECORDER_STOP_TIMEOUT_S)
             except subprocess.TimeoutExpired:
-                recorder.kill()
-        _kill_leftover_processes(out_dir)
+                try:
+                    recorder.kill()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        try:
+            _kill_leftover_processes(out_dir, domain)
+        except Exception:
+            pass
+        if log_file is not None:
+            try:
+                log_file.close()
+            except Exception:
+                pass
 
 
 def main(argv=None) -> int:
