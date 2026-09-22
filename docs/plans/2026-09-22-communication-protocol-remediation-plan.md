@@ -3,7 +3,7 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 - Date: 2026-09-22
-- Status: Phase 1 **T1~T4 실행 완료**(2026-09-22, 커밋 998b9f9·545cb0b·2d47b5a·56355f9). Phase 2~4·게이트 미실행.
+- Status: Phase 1(T1~T4) **완료** — 커밋 998b9f9·545cb0b·2d47b5a·56355f9. Phase 2(T5~T9) **완료** — 4ee66a7·e23ca18·745bb80·7b09b0d·455f48f. Phase 3(T10~T11) **완료** — a29caee+AGENTS 팩. 결정 게이트 G1·G2 **판정 완료(D-169·D-170 Accepted, 커밋 451223c)**. 남은 것: Phase 4(T12~T15)와 ARM64/DEVICE 게이트.
 - Goal: `communication-protocol-report.md`(2026-09-22, Rosy 폴더 — git 루트 밖)의 §9 조치 14건을 test-first로 실행한다.
 - Architecture: 4개 페이즈(안전·차단 해소 → Fleet 정합 → 계약·문서 정합 → 잔여 위생). 모든 태스크는 **Windows host pytest로 검증 가능**하며, C++ 빌드·실측이 필요한 것만 "ARM64 게이트"로 표시한다. 계약 결정이 필요한 2건은 태스크가 아니라 결정 게이트로 분리했다.
 - Tech Stack: pytest(host), colcon/ament(Linux), udev, systemd, FastAPI/websockets, pydantic

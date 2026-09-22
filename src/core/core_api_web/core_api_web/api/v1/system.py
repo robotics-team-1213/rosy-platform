@@ -1,4 +1,4 @@
-"""core_api_web.api.v1.system — IDN-003 신원, CAP-001 capability, SEC-101 토큰, 호스트 런타임, inventory."""
+﻿"""core_api_web.api.v1.system — IDN-003 신원, CAP-001 capability, SEC-101 토큰, 호스트 런타임, inventory."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ system_router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
 
 @system_router.get("/info")
-def system_info(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def system_info(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return svc.identity.info()
 
 
@@ -45,7 +45,7 @@ class IdentityRequest(BaseModel):
 
 @system_router.put("/info")
 def update_system_info(body: IdentityRequest, _: AuthContext = Depends(admin),
-                       svc: CoreServices = Depends(get_services)):
+                       svc: CoreServicesLike = Depends(get_services)):
     patch_robot: dict[str, str] = {}
     try:
         if body.robot_id is not None:
@@ -74,7 +74,7 @@ def update_system_info(body: IdentityRequest, _: AuthContext = Depends(admin),
 
 
 @system_router.get("/tokens")
-def list_tokens(_: AuthContext = Depends(admin), svc: CoreServices = Depends(get_services)):
+def list_tokens(_: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
     return {"tokens": public_token_records(svc.config)}
 
 
@@ -98,7 +98,7 @@ def _persist_tokens(svc: CoreServices, records: list[dict]) -> None:
 
 @system_router.post("/tokens", status_code=201)
 def add_token(body: TokenRequest, _: AuthContext = Depends(admin),
-              svc: CoreServices = Depends(get_services)):
+              svc: CoreServicesLike = Depends(get_services)):
     role = body.role.strip()
     if role not in ROLE_RANK:
         raise ApiError("VALIDATION_ERROR", 400, "role must be viewer, operator or administrator")
@@ -130,7 +130,7 @@ def add_token(body: TokenRequest, _: AuthContext = Depends(admin),
 
 @system_router.delete("/tokens/{token_id}", status_code=204)
 def delete_token(token_id: str, auth: AuthContext = Depends(admin),
-                 svc: CoreServices = Depends(get_services)):
+                 svc: CoreServicesLike = Depends(get_services)):
     if auth.token_id == token_id:
         raise ApiError("VALIDATION_ERROR", 400, "cannot delete the token in use")
     records = auth_entries(svc.config)
@@ -147,7 +147,7 @@ def delete_token(token_id: str, auth: AuthContext = Depends(admin),
 
 
 @system_router.get("/capabilities")
-def capabilities(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return svc.capability.to_dict()
 
 
@@ -164,12 +164,12 @@ def _jsonable(value: Any) -> Any:
 
 
 @system_router.get("/inventory")
-def system_inventory(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def system_inventory(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return _jsonable(svc.inventory())
 
 
 @system_router.get("/runtime")
-def system_runtime(_: AuthContext = Depends(viewer), svc: CoreServices = Depends(get_services)):
+def system_runtime(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return svc.runtime_probe.snapshot()
 
 
@@ -182,7 +182,7 @@ class CycloneApplyRequest(BaseModel):
 def apply_cyclone_and_reboot(
     body: CycloneApplyRequest,
     auth: AuthContext = Depends(admin),
-    svc: CoreServices = Depends(get_services),
+    svc: CoreServicesLike = Depends(get_services),
 ):
     """Persist Cyclone intent then ask Host Agent to reboot (D-123)."""
     if not body.confirmed:

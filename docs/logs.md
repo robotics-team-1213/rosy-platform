@@ -1526,3 +1526,10 @@
 - gate 변화: 없음(문서). core ROS-SIM HOLD는 F1이 닫는다.
 - 결정: D-172 Accepted.
 - 교훈: 공유 트리에서 `git add -A`를 쓰면 남의 미완성 색인 행이 섞여 들어간다(`451223c`). 경로를 지정해 스테이징한다.
+
+## 2026-09-22 · uncommitted · docs(agents): T11 — fleet_agent/bridge AGENTS 현행화 + 소소 수정 팩
+- 변경: ① fleet_agent/AGENTS.md 재작성 — "start() 는 소켓을 열지 않는다"(스텁 시절)을 설정 게이팅 구현체 기술로 정정(hello 신원 실값·backoff 30s·D-170 연결) ② bridge/AGENTS.md 카운트 정정(6 timers/22 subs → 7/24 — 시험은 이미 7/24 고정) + map QoS 소비자 분할 의도 기록 ③ battery_publisher 노드명 오타 battery_publihser→battery_publisher ④ v1/system.py 부실 어노테이션 svc: CoreServices → CoreServicesLike 9건(CoreServices 는 미임포트, annotations 지연으로만 동작).
+- 증거: `python -m pytest src/core/core/test/test_api.py -q` 54 passed · `src/core/core_api_web/test/ -q` 9 passed (2026-09-22 Windows). bringup 패키지 시험은 호스트 경로/ament_lint 환경 제약으로 스킵(변경은 문자열 상수 1건).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.

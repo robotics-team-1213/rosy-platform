@@ -183,3 +183,10 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-22 · uncommitted · fleet(Phase2)+docs: 통신 정합 T7~T11 마감 기록
+- 변경: 본 세션 Phase 2(T5 backoff 30s · T6 hello 신원 실값 · T7 ADR-1000 no-op 수정 · T8 죽은 hub CLI 제거 · T9 /registry 선택 인증+snapshot)과 Phase 3(T10 버전 표기 3원 정렬+API Ref v1.16 · T11 AGENTS 현행화·소소 수정) 완료. 커밋: 4ee66a7·e23ca18·745bb80·7b09b0d·455f48f·a29caee·(T11).
+- 증거: fleet 스위트 401 passed, core api/protocol·api_web 초록, harness lint 0 errors.
+- gate 변화: 없음.
+- 결정: 없음(D-169/D-170 은 별도 기록).
+- 교훈: 없음.
