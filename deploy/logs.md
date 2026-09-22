@@ -336,3 +336,13 @@
 - 교훈: 저장소 경로로 통과하는 import는 설치 배치에서 깨질 수 있다. 이미지 검증은 파일 존재가 아니라
   설치 위치에서 진입점을 실행해야 한다. 사람이 볼 수 있는 부팅 신호가 없으면 매 실패마다 카드를 회수해야 한다.
 
+## 2026-09-22 · uncommitted · docs(adr): D-174 debug log system and first-boot lesson
+
+- 변경: D-174(CORE 밖 4층 디버그 로그)와 실행 계획 `docs/plans/2026-09-22-rosy-debug-log-system.md`,
+  교훈 `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md` 추가. 코드 변경 없음.
+- 증거: 기존 관측(`/api/v1/logs/audit`, events, diagnostics collector)은 모두 CORE 프로세스 안이라 D-173 F1
+  상황에서 쓸 수 없었다. 원인 확인에 카드 회수·관리자 권한 ext4 추출·WSL journalctl이 필요했다.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 관측 수단은 그것이 진단해야 할 실패와 같은 전제(CORE 기동, 네트워크)에 기대면 안 된다.
+
