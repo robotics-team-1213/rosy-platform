@@ -820,3 +820,10 @@ git commit -m "test(sim): record map_v2_fleet ROS-SIM lane evidence"
 
 1. **실물 선 색**: 어두운 바닥 위 흰 선. 인식 코드는 바꾸지 않는다(원래 Task 5 삭제).
 2. **통합 위치**: 새 브랜치 `feat/map-v2-fleet-world`, 새 워크트리. `codex/pinky-integrated-acceptance`(Phase 5 통합 중)는 건드리지 않는다.
+
+## 실행 중 변경 (2026-09-22)
+
+- Task 3: 해상도를 0.01에서 **0.005 m**로 바꿨다. 5 mm 벽이 1 cm 셀 중심에 걸리지 않아 +x 벽이 빠졌고, 외부가 free로 새어 나갔다(코드 리뷰에서 발견). 테스트는 셀 단위 판정으로 강화했다.
+- Task 5: 차선 메쉬 `model://control/...`가 isolated colcon 레이아웃에서도 풀리도록 `launch_sim.launch.xml`에 `extra_resource_path` 인자를 추가했다. 이 인자의 XML 주석에 `--`가 있어 런치가 깨졌고, 그래서 XML 파싱 테스트를 추가했다.
+- Task 6에서 나온 수정: 로봇 차체가 회색 218로 보여 임계값을 180에서 **220**으로 올렸다. ENFORCED 교통 정책이 도로 증거 없이 HOLD를 걸어서, 이 맵 전용 오버레이 `map_v2_fleet_core.yaml`(DISABLED)을 만들었다.
+- Task 6 결과: 파이프라인은 PASS다. 그러나 **차로 중앙 유지는 FAIL**이다. 현재 검출기는 단일 선을 추종하기 때문이다. 상세는 `docs/validation/map-v2-fleet-gazebo-2026-09-22/result.md`에 있다.
