@@ -1562,3 +1562,22 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 남의 변경 이력 행에 덧붙이지 않는다 — Additive 라도 자기 행을 연다.
+
+## 2026-09-23 · uncommitted · docs(adr): D-172 후속 F1~F6 처리 결과
+
+- 변경: D-172 후속 항목의 처리 결과를 기록한다.
+  - F1 core ROS-SIM 재확인: 닫힘. `0a9a07a`, 증거 `docs/validation/ros-sim-core-2026-09-22b`. `/cmd_vel` 발행자는 core 1개이고 watchdog 0과 `safety.watchdog`을 확인했다. HOLD→GO.
+  - F2 audit 후속: 닫힘. `e8b2976`. 격리 파일 쓰기와 fsync를 잠금 밖으로 옮겼고, 격리 파일이 사라지거나 줄면 다시 쓴다. 스레드 시작 실패와 디렉터리 fsync 실패를 따로 센다. API Ref v1.17.
+  - F3 빈 worktree 6개와 브랜치 5개: 닫힘.
+  - F4 커밋 안 된 작업이 남은 worktree: 메모만 남은 4곳과 방치된 1곳을 정리했다. 커밋 안 된 파일은 세션 scratchpad `worktree-notes/`에 보관했다. 코드 작업 중인 3곳(`pinky-integrated-current`, `pinky-user-validation`, `optional-runtime-slices`)은 소유자 몫으로 남긴다. `.worktrees/gazebo-slam-complete`, `.worktrees/rosy-control-absorption` 폴더는 git 연결만 끊겼고 파일 삭제는 사용자 승인 대기다.
+  - F5 D-171 목록 행: 닫힘. `581741e`.
+  - F6(신규, F1에서 발견) core SIGINT/SIGTERM exit 1 경합: 닫힘. `1586908`, 증거 `docs/validation/core-sigterm-2026-09-22`. `main()` 진입 뒤에는 첫 신호가 정상 종료 exit 0을 보장하고, 두 번째 신호는 강제 종료한다.
+  - 정리 중 발견: `10ceb53`의 `system.py` BOM이 AST 가드 15건을 깨뜨렸다. `4ba205e`에서 BOM을 없애고 `test/test_source_encoding.py` 가드를 추가했다.
+- 증거: 병합 후 3.14 전체 4441 passed(F6 전), 3.12 core 1250 passed(F6 브랜치). 각 PORT와 수정은 독립 리뷰 APPROVE를 받았다.
+- gate 변화: core ROS-SIM GO(F1).
+- 결정: D-172 후속 F1~F3, F5, F6은 닫혔다. 아래 항목은 열린 채 넘긴다.
+  - 종료 시 SIGSEGV 1/105: 스택을 확보한 뒤 executor와 node를 명시적으로 정리한다.
+  - `main()` 진입 전 신호(exit 241)에 대해 unit에 `SuccessExitStatus=241 254`를 둘지 판단한다.
+  - 실기 `systemctl stop`으로 재확인한다.
+  - 두 번째 SIGINT를 `KeyboardInterrupt`로 올린 뒤에는 세 번째 SIGINT가 무시된다(LOW). SIGTERM은 계속 강제 종료된다.
+- 교훈: 짧은 ROS-SIM 재확인이 종료 경합을 드러냈다. 부팅뿐 아니라 종료도 스모크 절차에 포함한다.
