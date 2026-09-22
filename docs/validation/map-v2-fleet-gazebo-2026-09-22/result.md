@@ -79,6 +79,15 @@ On the lap the robot started on, the line on its left is always the inner block'
 | `193728` | edge_left, threshold 220 | Never moved. Gazebo dims paint with range: 226 at 0.12 m, 214 at 0.44 m. The left line never seeded, so the run went LOST (fail-closed). |
 | `194559` | threshold 180 (the bird's-eye view starts at 0.09 m, beyond the 218-grey body rows) | **Full lap: back within 2.9 mm of the start after 3.086 m of travel, heading -87.5 deg.** It then continued through most of a second lap: 5.96 m in total, 620/620 observations visible at confidence >= 0.35, still TRACKING when the window closed (`trajectory_194559_lap.png`). |
 
+| `202739` | after review fix `4d3d811` (stale odom / memory age caps) | 1.335 m, still TRACKING when the window closed. The sim ran at half speed (camera 1.7 Hz, host load 9.5). Not a lap, not a failure. |
+| `204552` | same, 420 s window | **Full lap again: back within 4.3 mm of the start after 3.059 m**, 609/609 observations visible. One transient `observation_stale` HOLD (age 0.424 s > 0.3 s, from slow sim frames) recovered on the next frame. |
+
+Review fix `4d3d811`:
+- Odom older than 0.3 s against the image stamp counts as no pose, so there is no lane output.
+- Memory-only output is capped by the clock (`MEMORY_MAX_AGE_S` = 16.5 s, derived from 0.40 m at the slowest memory-only speed).
+- Armed corners expire by time.
+- The reviewer's frozen-odom repro, which previously drove for 600 s, now stops after 82 frames.
+
 The 2.9 mm closure was re-measured independently from `odom_drive.csv`: the minimum distance to the start after 2 m of travel. Host suites: 1327 passed, 29 skipped.
 
 | Lap gate | Verdict |
