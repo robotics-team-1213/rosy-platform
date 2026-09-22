@@ -296,6 +296,9 @@ TURN_MAX_RAD = math.radians(105.0)
 TURN_TIMEOUT_S = 6.0
 #: The reacquired lane must be this close to centre to end the turn.
 TURN_REACQUIRE_MAX_ERROR = 0.5
+#: A corner confirmed while commits were held stays armed until the robot
+#: has turned this far or driven a half-width past its pivot.
+ARMED_MAX_YAW_RAD = math.radians(30.0)
 
 
 @dataclass(frozen=True)
@@ -406,6 +409,11 @@ class LaneCornerTracker:
     never leaves FOLLOW. Poses are base_link (x, y, yaw) in an odometry
     frame, yaw CCW+; base_link is treated as the rotation centre.
 
+    `commit_allowed=False` (edge-follower handoff) keeps confirming corners
+    but only arms the latest one; a later call with commits allowed turns on
+    that armed evidence while it is still ahead (ARMED_MAX_YAW_RAD, a
+    half-width past the pivot). The default keeps lane mode unchanged.
+
     Limitation: CORE's turn is not a pure pivot (it keeps ~0.028 m/s at
     |error| 1), so the robot ends a few cm towards the outer line and FOLLOW
     corrects it.
@@ -427,6 +435,7 @@ class LaneCornerTracker:
         self._started = None
         self._remaining = None
         self._timeout = None
+        self._armed = None
 
     def _abort(self) -> None:
         self._reset()
@@ -450,7 +459,8 @@ class LaneCornerTracker:
                roi_top_fraction: float,
                roi_bottom_fraction: float,
                bright_threshold: int = _BRIGHT,
-               washed_fraction: float = _WASHED_FRACTION) -> LaneObservation | None:
+               washed_fraction: float = _WASHED_FRACTION,
+               commit_allowed: bool = True) -> LaneObservation | None:
         lane = detect_lane_centre(
             bgr, ground, bright_threshold=bright_threshold,
             lane_half_width_m=lane_half_width_m, roi_top_fraction=roi_top_fraction,
@@ -468,12 +478,25 @@ class LaneCornerTracker:
                 return lane
             corner = detect_lane_corner(bgr, ground, bright_threshold=bright_threshold,
                                         lane_half_width_m=half)
-            if not self._confirmed(corner, pose):
+            if self._confirmed(corner, pose):
+                self._armed = (corner.side, corner.distance_m, pose)
+            elif self._armed is not None:
+                side, distance, seen_at = self._armed
+                along, _ = _travel(seen_at, pose)
+                turned = math.atan2(math.sin(pose[2] - seen_at[2]),
+                                    math.cos(pose[2] - seen_at[2]))
+                if (abs(turned) > ARMED_MAX_YAW_RAD
+                        or along > distance + self._camera_x - half + half):
+                    self._armed = None
+            if not commit_allowed or self._armed is None:
                 return lane
-            self.state, self.side = "APPROACH", corner.side
-            self._origin, self._started = pose, now_s
-            self._remaining = corner.distance_m + self._camera_x - half
-            self._timeout = (APPROACH_TIMEOUT_FACTOR * max(0.0, self._remaining)
+            side, distance, seen_at = self._armed
+            self._armed = None
+            self.state, self.side = "APPROACH", side
+            self._origin, self._started = seen_at, now_s
+            self._remaining = distance + self._camera_x - half
+            already, _ = _travel(seen_at, pose)
+            self._timeout = (APPROACH_TIMEOUT_FACTOR * max(0.0, self._remaining - already)
                              / APPROACH_NOMINAL_SPEED_M_S)
 
         if pose is None:
