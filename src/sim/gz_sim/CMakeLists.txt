@@ -43,6 +43,7 @@ install(
     scripts/map_v2_runner.py
     scripts/pinky_nav2_probe.py
     scripts/pinky_acceptance.py
+    scripts/record_debug.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
   DESTINATION lib/${PROJECT_NAME}

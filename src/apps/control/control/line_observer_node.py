@@ -8,13 +8,15 @@ the sole final ``cmd_vel`` publisher (D-143).
 import json
 import math
 
+import cv2
 import numpy as np
 import rclpy
+import yaml
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from .sensing.camera_ground import simulation_ground_plane
@@ -28,6 +30,7 @@ from .sensing.lane import (
 )
 from .sensing.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.lane_boundaries import LaneBoundaryTracker
+from .sensing.lane_debug import render_debug
 
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.
@@ -66,6 +69,9 @@ class LineObserverNode(Node):
         # default; without odometry the tracker never leaves FOLLOW.
         self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
         self.declare_parameter('camera_x_offset_m', 0.0)
+        self.declare_parameter('debug_overlay', False, _READ_ONLY)
+        self.declare_parameter('debug_overlay_max_hz', 5.0)
+        self.declare_parameter('debug_lane_graph', '')
 
         self._ir_calibration = None
         self._camera_controls_stable = False
@@ -80,6 +86,16 @@ class LineObserverNode(Node):
             corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
         self._centre_tracker = LaneBoundaryTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+        self._debug_pub = None
+        self._debug_last_s = None
+        self._debug_graph = None
+        if bool(self.get_parameter('debug_overlay').value):
+            self._debug_pub = self.create_publisher(
+                CompressedImage, 'line/debug/compressed', 2)
+            path = str(self.get_parameter('debug_lane_graph').value)
+            if path:
+                with open(path, encoding='utf-8') as handle:
+                    self._debug_graph = yaml.safe_load(handle)
         if bool(self.get_parameter('ir_calibration_enabled').value):
             self._ir_calibration = IRLineCalibration(
                 black=tuple(self.get_parameter('ir_black').value),
@@ -224,6 +240,34 @@ class LineObserverNode(Node):
         source_stamp = (float(msg.header.stamp.sec)
                         + float(msg.header.stamp.nanosec) * 1e-9)
         self._publish('CAMERA_LINE', observation, stamp=source_stamp)
+        self._publish_debug(msg, frame, observation)
+
+    def _publish_debug(self, msg, frame, observation) -> None:
+        """Observation only: a picture of the decision just published."""
+        if self._debug_pub is None or frame is None:
+            return
+        stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
+        period = 1.0 / max(0.1, float(self.get_parameter('debug_overlay_max_hz').value))
+        if self._debug_last_s is not None and 0.0 <= stamp - self._debug_last_s < period:
+            return
+        self._debug_last_s = stamp
+        mode = str(self.get_parameter('camera_lane_mode').value)
+        follower = {'centre': self._centre_tracker, 'edge_left': self._edge_follower}.get(mode)
+        if follower is None:
+            return
+        image = render_debug(
+            frame, follower, observation, mode=mode,
+            pose=pose_if_fresh(self._odom_pose, self._odom_stamp, stamp),
+            graph=self._debug_graph,
+            bright_threshold=int(self.get_parameter('camera_bright_threshold').value))
+        ok, data = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        if not ok:
+            return
+        out = CompressedImage()
+        out.header = msg.header
+        out.format = 'jpeg; overlay=lane-debug-v1'
+        out.data = data.tobytes()
+        self._debug_pub.publish(out)
 
     def _on_odom(self, msg: Odometry) -> None:
         pose = msg.pose.pose

@@ -121,7 +121,7 @@ def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
     """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._odom_pose, frame, ground" not in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 3
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 4
 
 
 def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
@@ -129,4 +129,14 @@ def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
     assert "LaneBoundaryTracker" in source
     assert "mode in ('lane', 'edge_left', 'centre')" in source
     assert "self._centre_tracker.update(" in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 3
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 4
+
+
+def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["debug_overlay"] is False
+    assert "CompressedImage, 'line/debug/compressed'" in source
+    assert "render_debug(" in source
+    assert "Twist" not in source and "'cmd_vel'" not in source

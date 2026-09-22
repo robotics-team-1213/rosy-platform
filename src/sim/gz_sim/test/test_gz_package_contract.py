@@ -178,6 +178,13 @@ def test_non_composed_nav2_does_not_apply_namespace_twice():
     assert bringup.count('<arg name="namespace" value=""/>') == 2
 
 
+def test_junction_tools_are_installed():
+    from pathlib import Path
+    cmake = (Path(__file__).resolve().parents[1] / "CMakeLists.txt").read_text(encoding="utf-8")
+    for script in ("scripts/record_debug.py",):
+        assert script in cmake
+
+
 def test_world_to_map_is_installed_and_bench_worlds_exist():
     """HOST에서 도는 정답 맵 생성기가 패키지 표면이다. launch skip이 SOURCE가 아니다."""
     cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")

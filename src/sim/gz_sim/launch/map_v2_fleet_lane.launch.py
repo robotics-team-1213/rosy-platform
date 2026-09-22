@@ -78,6 +78,8 @@ def generate_launch_description():
                 "camera_lane_mode": LaunchConfiguration("camera_lane_mode"),
                 "debug_overlay": ParameterValue(
                     LaunchConfiguration("debug_overlay"), value_type=bool),
+                "debug_lane_graph": os.path.join(
+                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
                 "camera_ground_source": "GAZEBO",
                 "allow_simulation_ground": True,
                 "gazebo_camera_height_m": 0.060194,
