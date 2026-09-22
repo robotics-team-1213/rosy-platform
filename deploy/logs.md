@@ -289,7 +289,7 @@
 - 결정: 없음 — SRS §25 전제의 이미지 계약화.
 - 교훈: 문서 버전을 리터럴로 고정한 시험은 버전이 오를 때마다 깨진다 — 헤더를 읽어 판정하도록 쓰는 편이 유지된다(단, 고정 의도라면 리터럴이 맞을 수도 있다. 이번엔 D-143 표기 존재 확인이 본래 목적이므로 헤더 판독형으로).
 
-## 2026-09-22 · uncommitted · feat(sd): allocate robot number and Fleet defaults, pin writes to the reviewed plan
+## 2026-09-23 · uncommitted · feat(sd): allocate robot number and Fleet defaults, pin writes to the reviewed plan
 
 - 변경: `prepare-rosy-sd.ps1`에서 `-RobotNumber`, `-FleetEndpoint`, `-FleetTrustProfile`을
   선택 입력으로 바꿨다. 로봇 번호는 registry의 빈 번호(1-61) 중 무작위로 배정하고, Fleet 값은
@@ -309,7 +309,7 @@
 - 교훈: PlanOnly와 WRITE가 각자 신원을 새로 뽑으면 검토한 계획과 기록한 카드가 달라진다.
   자동 배정을 도입하면 검토 결과를 고정하는 경로가 같이 필요하다.
 
-## 2026-09-22 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-172)
+## 2026-09-23 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-173)
 
 - 변경: 없음(실행과 기록). `9aee918` 기준 ARM64 run 35717277503의 unsigned handoff를 받아
   기존 파일럿 키로 서명하고 `-PlanOnly -PlanPath`로 검토한 plan에 고정해 관리자 권한으로 기록했다.
@@ -319,34 +319,34 @@
   boot `rosy-provision/provision.json` 726 B; registry 18/`rosy-pinky-e4us`. plan·receipt·log는
   운영 PC `F:\tmp\rosy-release\cards\`에 보관(비밀번호·PSK 없음).
 - gate 변화: 없음. MEDIA 증거일 뿐 BOOT/DEVICE는 HOLD — 부팅과 runbook G0-G2가 다음이다.
-- 결정: D-172
+- 결정: D-173
 - 교훈: 릴리스 폴더를 셸 작업 디렉터리로 두면 도구 hook이 `.omc/`를 만들어 서명기가 미등재 파일로
   거부한다. 서명·검증은 릴리스 폴더 밖에서 실행한다. PowerShell PATH에는 openssl이 없으니
   Git의 `usr\bin`을 앞에 둔다.
 
-## 2026-09-22 · uncommitted · docs(adr): D-173 first-boot defects and boot indicator plan
+## 2026-09-23 · uncommitted · docs(adr): D-174 first-boot defects and boot indicator plan
 
-- 변경: 첫 실기 부팅 결과를 D-173과 실행 계획(`docs/plans/2026-09-22-pinky-first-boot-fixes.md`)으로 기록했다.
+- 변경: 첫 실기 부팅 결과를 D-174과 실행 계획(`docs/plans/2026-09-22-pinky-first-boot-fixes.md`)으로 기록했다.
   코드 변경 없음.
 - 증거: 회수한 카드의 ext4 루트를 읽기 전용으로 추출해 journal 확인. `rosy-release-recover.service`가
   `ModuleNotFoundError: No module named 'signing'`(+7.96s)로 실패해 `rosy-core`/`rosy-runtime.target`이
   dependency 실패. `rosy-first-boot`은 +26.3s에 `PROVISIONED`, Wi-Fi `192.168.1.201`, avahi 이름은 `ubuntu.local`.
 - gate 변화: DEVICE HOLD 유지(부팅은 했으나 CORE 미기동).
-- 결정: D-173
+- 결정: D-174
 - 교훈: 저장소 경로로 통과하는 import는 설치 배치에서 깨질 수 있다. 이미지 검증은 파일 존재가 아니라
   설치 위치에서 진입점을 실행해야 한다. 사람이 볼 수 있는 부팅 신호가 없으면 매 실패마다 카드를 회수해야 한다.
 
-## 2026-09-22 · uncommitted · docs(adr): D-174 debug log system and first-boot lesson
+## 2026-09-23 · uncommitted · docs(adr): D-175 debug log system and first-boot lesson
 
-- 변경: D-174(CORE 밖 4층 디버그 로그)와 실행 계획 `docs/plans/2026-09-22-rosy-debug-log-system.md`,
+- 변경: D-175(CORE 밖 4층 디버그 로그)와 실행 계획 `docs/plans/2026-09-22-rosy-debug-log-system.md`,
   교훈 `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md` 추가. 코드 변경 없음.
-- 증거: 기존 관측(`/api/v1/logs/audit`, events, diagnostics collector)은 모두 CORE 프로세스 안이라 D-173 F1
+- 증거: 기존 관측(`/api/v1/logs/audit`, events, diagnostics collector)은 모두 CORE 프로세스 안이라 D-174 F1
   상황에서 쓸 수 없었다. 원인 확인에 카드 회수·관리자 권한 ext4 추출·WSL journalctl이 필요했다.
 - gate 변화: 없음
-- 결정: D-174
+- 결정: D-175
 - 교훈: 관측 수단은 그것이 진단해야 할 실패와 같은 전제(CORE 기동, 네트워크)에 기대면 안 된다.
 
-## 2026-09-22 · uncommitted · fix(native): run release recovery from the installed layout (D-173 F1, F5)
+## 2026-09-23 · uncommitted · fix(native): run release recovery from the installed layout (D-174 F1, F5)
 
 - 변경: `deploy/robot/native/install-native-runtime.sh`가 런타임을 설치하면서 `signing.py`를 함께 넣는다.
   `build-native-payload.sh`는 두 사본(`/opt/rosy/native-runtime`, release `deploy/robot/native`)을 모두 이
@@ -357,6 +357,6 @@
   (카드 journal과 동일) 재현. 새 `test/test_native_runtime_installed_layout.py` 4 passed, native/image 스위트 105 passed,
   이미지 계약·마운트 검증 13 passed (2026-09-22 Windows)
 - gate 변화: 없음. ARTIFACT/DEVICE는 release 003 빌드·실기 부팅 전까지 HOLD
-- 결정: D-173
+- 결정: D-174
 - 교훈: `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md`
 

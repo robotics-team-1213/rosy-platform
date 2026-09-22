@@ -1,9 +1,9 @@
-## D-174 디버그 로그는 CORE가 죽어도, 네트워크가 없어도, 장비가 없어도 읽을 수 있어야 한다
+## D-175 디버그 로그는 CORE가 죽어도, 네트워크가 없어도, 장비가 없어도 읽을 수 있어야 한다
 
-**Status:** Accepted (2026-09-22). D-173(첫 부팅 결함·부팅 표시)과 짝을 이룬다. D-173 T0은
+**Status:** Accepted (2026-09-22). D-174(첫 부팅 결함·부팅 표시)과 짝을 이룬다. D-174 T0은
 사람에게 "지금 상태"를 보여 주고, 이 ADR은 운영자와 개발자에게 "왜 그렇게 됐는지"를 남긴다.
 
-**Context:** 첫 실기 부팅(D-172 카드)에서 CORE가 뜨지 않았을 때 원인을 알아내는 데 다음 과정이 필요했다.
+**Context:** 첫 실기 부팅(D-173 카드)에서 CORE가 뜨지 않았을 때 원인을 알아내는 데 다음 과정이 필요했다.
 
 1. 카드 회수
 2. 관리자 권한으로 물리 디스크를 읽기 전용으로 열기
@@ -29,7 +29,7 @@
 |---|---|---|---|
 | **L0 원장** | 없음 | journald persistent, 용량 상한 drop-in(`SystemMaxUse`), 모든 ROSY unit은 journal로만 기록 | ext4 `/var/log/journal` |
 | **L1 블랙박스** | 카드만 있음 | 부팅 단계 전이와 실패 때마다 비밀 없는 요약을 쓴다. 단계, 실패 unit, 그 unit의 마지막 로그 N줄, release·revision, 장치 이름·UID·번호, IP·SSID(PSK 없음), boot_id, 시각. 최근 5회 부팅분만 회전 보관하고 크기 상한을 둔다 | **FAT32 boot 파티션** `rosy-diag/` — Windows에 꽂기만 하면 읽힌다 |
-| **L2 수집 번들** | 네트워크 + 운영자 키 | 장치 CLI `rosy-diag collect`가 비밀 없는 tar를 만든다: ROSY unit journal export, `systemctl status`, provisioning 상태, release 활성화 기록, dmesg, 네트워크 상태 요약. Windows `collect-rosy-diagnostics.ps1`이 SSH로 가져온다. SSH가 안 되면 카드 경로(L1 + D-173 F8 읽기 전용 ext4 도구)로 자동 전환 | 운영 PC `evidence/<device>/<boot_id>/` |
+| **L2 수집 번들** | 네트워크 + 운영자 키 | 장치 CLI `rosy-diag collect`가 비밀 없는 tar를 만든다: ROSY unit journal export, `systemctl status`, provisioning 상태, release 활성화 기록, dmesg, 네트워크 상태 요약. Windows `collect-rosy-diagnostics.ps1`이 SSH로 가져온다. SSH가 안 되면 카드 경로(L1 + D-174 F8 읽기 전용 ext4 도구)로 자동 전환 | 운영 PC `evidence/<device>/<boot_id>/` |
 | **L3 실행 중 API** | CORE 기동 | 기존 audit·events·diagnostics에 더해 L1 요약을 읽기 전용 admin API로 노출 | CORE `/api/v1` |
 
 공통 규칙은 다음과 같다.
@@ -39,7 +39,7 @@
   L1은 카드를 가진 누구나 읽을 수 있으므로 특히 엄격하다.
 - **상관관계 키를 통일한다.** 모든 기록에 `boot_id`, `release_id`, `device_name`, 단조 시간을 붙여
   층 사이를 잇는다.
-- **CORE 밖, 최소 권한으로 둔다.** L1 작성자는 D-173 T0 `rosy-boot-status`와 같은 단계 계산 모듈을 쓰는
+- **CORE 밖, 최소 권한으로 둔다.** L1 작성자는 D-174 T0 `rosy-boot-status`와 같은 단계 계산 모듈을 쓰는
   root oneshot이다. 대상 unit의 `OnFailure=`와 runtime 성공 시점에 돈다. CORE 기동을 막지 않는다(`Wants`).
 - **L4 중앙 집계는 열지 않는다.** 중앙 Fleet 착수(D-170)와 함께 별도 ADR로 연다.
 
@@ -58,7 +58,7 @@ boot 파티션에 쓰기가 생기므로 쓰기 횟수와 크기 상한을 계�
 
 **구현·처리 계획:**
 [`docs/plans/2026-09-22-rosy-debug-log-system.md`](../plans/2026-09-22-rosy-debug-log-system.md).
-D-173 계획의 Task 5(부팅 표시 T0)·Task 8(카드 진단 도구)과 단계 계산·카드 읽기를 공유한다.
+D-174 계획의 Task 5(부팅 표시 T0)·Task 8(카드 진단 도구)과 단계 계산·카드 읽기를 공유한다.
 
 **Validation / Transition:** 수용 기준은 이번 결함(F1)을 의도적으로 재현한 이미지로 다음 세 가지를 보이는 것이다.
 

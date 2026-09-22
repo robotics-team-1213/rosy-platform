@@ -182,7 +182,7 @@ def test_mounted_image_verifier_rejects_missing_or_disabled_chrony(tmp_path):
     assert completed.returncode != 0
     assert "chrony" in completed.stderr.lower()
 def test_customizer_executes_native_entrypoints_inside_the_image():
-    # D-173 F5: file-existence checks passed an image whose recovery gate could
+    # D-174 F5: file-existence checks passed an image whose recovery gate could
     # not import its helper. The customizer must run the installed copies.
     source = CUSTOMIZER.read_text(encoding="utf-8")
 

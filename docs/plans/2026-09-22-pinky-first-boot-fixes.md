@@ -1,4 +1,4 @@
-# Pinky First-Boot Fixes and Boot Indicator Plan (D-173)
+# Pinky First-Boot Fixes and Boot Indicator Plan (D-174)
 
 > Execute task-by-task with test-driven development: write the failing contract
 > first, then the fix. Do not write physical media until Tasks 1-8 are green,
@@ -78,7 +78,7 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
    ACT LED trigger (`heartbeat` ready, `timer` fast blink failed), `/etc/issue`
    banner (name, IP, stage), avahi `_rosy._tcp` service with TXT `stage=`.
 3. Root oneshot outside CORE, `Wants=` only; runs on runtime success and on
-   `OnFailure=` of recover/first-boot/core. Commit `feat(native): boot status indicator (D-173 T0)`.
+   `OnFailure=` of recover/first-boot/core. Commit `feat(native): boot status indicator (D-174 T0)`.
 
 ## Task 6: ROS home and log directory for rosy-core (F6)
 
@@ -112,7 +112,7 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
    `-OperatorPublicKey`, then the elevated write with readback.
 3. Boot and check within 5 minutes: ACT heartbeat, `rosy-pinky-e4us.local`,
    `_rosy._tcp stage=CORE_READY`, `ssh rosy@…`, `GET :8080/api/v1`.
-4. Run runbook G0-G2 and record evidence. Update D-172/D-173 tables.
+4. Run runbook G0-G2 and record evidence. Update D-173/D-174 tables.
 
 ## Deferred (new ADRs)
 

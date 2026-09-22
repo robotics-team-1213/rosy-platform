@@ -171,7 +171,7 @@ while IFS= read -r package; do
         "source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 pkg prefix '$package' >/dev/null"
 done < "$PAYLOAD/required-ros-packages.txt"
 
-# D-173 F5: execute the installed native entrypoints, not only check that they
+# D-174 F5: execute the installed native entrypoints, not only check that they
 # exist. Recovery runs against an empty probe root so it touches no image state.
 NATIVE_PROBE=/tmp/rosy-native-probe
 rm -rf -- "$ROOT$NATIVE_PROBE"

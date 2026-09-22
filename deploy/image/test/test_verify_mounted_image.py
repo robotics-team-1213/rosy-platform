@@ -97,7 +97,7 @@ def test_inspect_fails_if_docker_present(tmp_path):
 
 
 def test_inspect_requires_signing_beside_each_native_runtime(tmp_path):
-    # D-173 F1/F5: both installed runtime copies import signing from their own directory.
+    # D-174 F1/F5: both installed runtime copies import signing from their own directory.
     root = tmp_path / "root"
     release_id = "2026.01.01-001"
     for runtime in ("opt/rosy/native-runtime",

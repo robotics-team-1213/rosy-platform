@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the native runtime support tree into DESTINATION so it runs without
-# the repository around it (D-173 F1). The image build installs two copies:
+# the repository around it (D-174 F1). The image build installs two copies:
 # the immutable /opt/rosy/native-runtime and the per-release
 # deploy/robot/native. Both must import their helpers from their own directory.
 set -euo pipefail

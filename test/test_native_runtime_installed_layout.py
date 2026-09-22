@@ -1,6 +1,6 @@
 """The native runtime must run from where the image installs it, not from the repo.
 
-D-173 F1: release recovery imported ``signing`` through a repo-relative path
+D-174 F1: release recovery imported ``signing`` through a repo-relative path
 (``parents[2] / "release"``). Every repo test passed; on the first Pinky boot
 ``/opt/rosy/native-runtime/native_release.py`` failed with ``No module named
 'signing'`` and CORE never started. These tests install the runtime with the

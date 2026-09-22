@@ -62,8 +62,8 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-21-ubuntu-native-ros-runtime.md` | Test-first execution plan for native image, services, payload, SD and device evidence |
 | `2026-09-22-pinky-pro-flashable-image-design.md` | D-164: signed `.img.xz` product artifact, native image customization, trust and gate design |
 | `2026-09-22-pinky-pro-flashable-image.md` | Test-first implementation plan from Canonical Pi image through SD readback and Pinky acceptance |
-| `2026-09-22-pinky-first-boot-fixes.md` | D-173: first-boot defects (recovery import, live hostname, operator key, ROS home, reflash identity, card diagnostics) and boot status indicator T0 |
-| `2026-09-22-rosy-debug-log-system.md` | D-174: layered debug logs outside CORE — journald ledger, FAT32 boot black box, SSH/card collector, native readback, later API |
+| `2026-09-22-pinky-first-boot-fixes.md` | D-174: first-boot defects (recovery import, live hostname, operator key, ROS home, reflash identity, card diagnostics) and boot status indicator T0 |
+| `2026-09-22-rosy-debug-log-system.md` | D-175: layered debug logs outside CORE — journald ledger, FAT32 boot black box, SSH/card collector, native readback, later API |
 | `2026-09-21-traffic-light-controller-research.md` | 알리 신호등(접점 스위치)을 ESP32+릴레이로 관제 제어하는 조사 보고서 — 제품/릴레이/보드/펌웨어/통신/안전 비교와 ROSY-SIGNAL-001 근거 |
 | `2026-09-21-fleet-signals-integration-design.md` | G-S3 설계: Fleet 콘솔이 ROSY-SIGNAL-001 장치를 gather/scatter — signals.yaml, SignalConsole(재단언·all_red scatter), snapshot/UI 통합 |
 | `2026-09-22-fleet-signals-integration.md` | G-S3 실행 계획: T-S3-1~6. 상시 폴링 루프를 throttled refresh 로 바꾼 변경 기록 |

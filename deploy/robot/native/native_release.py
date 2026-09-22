@@ -22,7 +22,7 @@ from typing import Callable, Protocol
 # Installed copies carry signing.py beside this file (install-native-runtime.sh),
 # and the script directory is already first on sys.path. The repository path is
 # only a fallback for running from a checkout, so it must never shadow the
-# installed module (D-173 F1).
+# installed module (D-174 F1).
 RELEASE_TOOLS = Path(__file__).resolve().parents[2] / "release"
 if RELEASE_TOOLS.is_dir() and str(RELEASE_TOOLS) not in sys.path:
     sys.path.append(str(RELEASE_TOOLS))

@@ -1,7 +1,7 @@
-# ROSY Debug Log System Plan (D-174)
+# ROSY Debug Log System Plan (D-175)
 
 > Test-first. Redaction tests come before any collector writes a byte. Shares the
-> stage model with D-173 Task 5 and card reading with D-173 Task 8; do those
+> stage model with D-174 Task 5 and card reading with D-174 Task 8; do those
 > interfaces first so the two plans do not fork.
 
 **Goal:** A failed boot is explainable from the card alone (L1), from one SSH
@@ -41,7 +41,7 @@ pass `deploy/release/secret_scan.py`.
 **Files:** `deploy/robot/native/rosy_diag/boot_report.py`,
 `deploy/robot/native/rosy-boot-report.service`, `test/test_boot_report.py`
 
-1. Pure function over (stage from D-173 Task 5, failed units, per-unit tail lines,
+1. Pure function over (stage from D-174 Task 5, failed units, per-unit tail lines,
    identity, release, network summary) → report dict and a human `latest.txt`.
 2. Writer: `/boot/firmware/rosy-diag/boot-<n>-<boot_id>.json` + `latest.txt`,
    atomic write (tmp + rename + fsync), keep last 5, total cap 2 MiB, per-unit tail
@@ -63,7 +63,7 @@ pass `deploy/release/secret_scan.py`.
 ## Task 5: L2 Windows puller with card fallback
 
 **Files:** `deploy/robot/collect-rosy-diagnostics.ps1`,
-`deploy/sd/read-card-diagnostics.py` (D-173 Task 8), `test/test_collect_diagnostics_contract.py`
+`deploy/sd/read-card-diagnostics.py` (D-174 Task 8), `test/test_collect_diagnostics_contract.py`
 
 1. SSH path: key-only, BatchMode, pinned host key → run `rosy-diag collect`,
    `scp` the bundle into `evidence/<device>/<boot_id>/`, never overwrite.
@@ -87,7 +87,7 @@ pass `deploy/release/secret_scan.py`.
 
 1. Runbook section "부팅이 조용히 실패했을 때": L1 → L2 → deep read order.
 2. Build an image with F1 reintroduced (test-only tag), boot, collect L1 and L2,
-   secret-scan both, then record evidence and close D-174 validation.
+   secret-scan both, then record evidence and close D-175 validation.
 
 ## Deferred
 

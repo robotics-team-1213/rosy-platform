@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · fix(native): run release recovery from the installed layout (D-173 F1, F5)
-- 2026-09-22 · uncommitted · docs(adr): D-174 debug log system and first-boot lesson
-- 2026-09-22 · uncommitted · docs(adr): D-173 first-boot defects and boot indicator plan
-- 2026-09-22 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-172)
-- 2026-09-22 · uncommitted · feat(sd): allocate robot number and Fleet defaults, pin writes to the reviewed plan
+- 2026-09-23 · uncommitted · fix(native): run release recovery from the installed layout (D-174 F1, F5)
+- 2026-09-23 · uncommitted · docs(adr): D-175 debug log system and first-boot lesson
+- 2026-09-23 · uncommitted · docs(adr): D-174 first-boot defects and boot indicator plan
+- 2026-09-23 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-173)
+- 2026-09-23 · uncommitted · feat(sd): allocate robot number and Fleet defaults, pin writes to the reviewed plan

@@ -24,7 +24,7 @@ tags: [installed-layout, native-runtime, image-verification, first-boot, offline
 ## Context
 
 release `2026.09.22-002`를 서명·전체 readback까지 검증해 구운 카드로 Pinky Pro를 처음 부팅했다
-(D-172). 첫 부팅 개인화는 `PROVISIONED`까지 갔고 Wi-Fi도 붙었지만 CORE는 한 번도 뜨지 않았다.
+(D-173). 첫 부팅 개인화는 `PROVISIONED`까지 갔고 Wi-Fi도 붙었지만 CORE는 한 번도 뜨지 않았다.
 저장소 시험, 이미지 파이프라인, 매체 검증은 모두 초록이었다.
 
 회수한 카드의 journal에서 원인이 나왔다.
@@ -93,7 +93,7 @@ RELEASE_TOOLS = Path(__file__).resolve().parents[2] / "release"
 
 ## Examples
 
-설치 배치 재현 시험의 뼈대(D-173 계획 Task 1, 구현 대기):
+설치 배치 재현 시험의 뼈대(D-174 계획 Task 1, 구현 대기):
 
 ```python
 def test_recovery_runs_from_installed_layout(tmp_path):
@@ -107,7 +107,7 @@ def test_recovery_runs_from_installed_layout(tmp_path):
 
 ## Related
 
-- ADR: `docs/adr/D-173-first-boot-defects-and-boot-indicator.md`, `docs/adr/D-172-first-pinky-card-from-merged-release.md`
+- ADR: `docs/adr/D-174-first-boot-defects-and-boot-indicator.md`, `docs/adr/D-173-first-pinky-card-from-merged-release.md`
 - 계획: `docs/plans/2026-09-22-pinky-first-boot-fixes.md`
 - 같은 부류의 교훈: `sim-perception-green-host-tests-hide-live-gazebo-defects-2026-09-22.md`,
   `inability-to-check-recorded-as-clean-result.md`
