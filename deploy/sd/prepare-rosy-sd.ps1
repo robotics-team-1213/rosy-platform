@@ -264,8 +264,15 @@ if (-not $DiskInventoryJson) {
     }
 }
 
-& $RpiImager --cli --sha256 $ImageSha256 $ImagePath $physicalDrive
-$writerExitCode = $LASTEXITCODE
+$writerArguments = @(
+    "--cli",
+    "--sha256",
+    $ImageSha256,
+    ('"{0}"' -f $ImagePath),
+    ('"{0}"' -f $physicalDrive)
+)
+$writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -Wait -PassThru
+$writerExitCode = $writerProcess.ExitCode
 if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
 
 $readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
