@@ -85,7 +85,7 @@ printf '%s\n' "$SOURCE_REVISION" > "$RELEASE_ROOT/source-revision.txt"
 printf '%s\n' "$RELEASE_ID" > "$INSTALL_ROOT/.rosy-release"
 cp "$SCRIPT_DIR/required-ros-packages.txt" "$RELEASE_ROOT/required-ros-packages.txt"
 mkdir -p "$RELEASE_ROOT/deploy/robot"
-cp -a "$NATIVE_RUNTIME_SOURCE" "$RELEASE_ROOT/deploy/robot/native"
+"$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$RELEASE_ROOT/deploy/robot/native"
 
 # Stage the immutable image-owned bootstrap tools separately from the
 # switchable release.  Recovery cannot live below /opt/rosy/current because
@@ -94,7 +94,7 @@ OVERLAY="$RELEASE_ROOT/image-overlay"
 mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
     "$OVERLAY/etc/systemd/system" "$OVERLAY/etc/udev/rules.d" \
     "$OVERLAY/etc/rosy/trusted-release-keys"
-cp -a "$NATIVE_RUNTIME_SOURCE" "$OVERLAY/opt/rosy/native-runtime"
+"$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
 # The native units address the motor bus as /dev/rosy-motor; the image must

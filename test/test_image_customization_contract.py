@@ -181,3 +181,15 @@ def test_mounted_image_verifier_rejects_missing_or_disabled_chrony(tmp_path):
     completed = _verify(absent)
     assert completed.returncode != 0
     assert "chrony" in completed.stderr.lower()
+def test_customizer_executes_native_entrypoints_inside_the_image():
+    # D-173 F5: file-existence checks passed an image whose recovery gate could
+    # not import its helper. The customizer must run the installed copies.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    probe = "rosy-native-probe"
+    assert probe in source
+    for runtime in ("/opt/rosy/native-runtime/native_release.py",
+                    '/opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py'):
+        assert f'chroot "$ROOT" python3 {runtime}' in source
+    assert 'chroot "$ROOT" python3 /opt/rosy/first-boot/rosy-first-boot.py --help' in source
+    assert source.index("rosy-native-probe") < source.index("verify-mounted-image.py")

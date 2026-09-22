@@ -346,3 +346,17 @@
 - 결정: D-174
 - 교훈: 관측 수단은 그것이 진단해야 할 실패와 같은 전제(CORE 기동, 네트워크)에 기대면 안 된다.
 
+## 2026-09-22 · uncommitted · fix(native): run release recovery from the installed layout (D-173 F1, F5)
+
+- 변경: `deploy/robot/native/install-native-runtime.sh`가 런타임을 설치하면서 `signing.py`를 함께 넣는다.
+  `build-native-payload.sh`는 두 사본(`/opt/rosy/native-runtime`, release `deploy/robot/native`)을 모두 이
+  설치기로 만든다. `native_release.py`는 저장소 경로를 fallback으로만 붙여 설치 사본을 가리지 않는다.
+  `customize-rootfs.sh`는 ARM64 chroot에서 두 복구 진입점과 first-boot `--help`를 실제로 실행하고,
+  `verify-mounted-image.py`는 각 사본 옆 `signing.py`를 확인한다.
+- 증거: 기존 `cp -a` 배치로 `native_release.py recover`를 돌리면 `ModuleNotFoundError: No module named 'signing'`
+  (카드 journal과 동일) 재현. 새 `test/test_native_runtime_installed_layout.py` 4 passed, native/image 스위트 105 passed,
+  이미지 계약·마운트 검증 13 passed (2026-09-22 Windows)
+- gate 변화: 없음. ARTIFACT/DEVICE는 release 003 빌드·실기 부팅 전까지 HOLD
+- 결정: D-173
+- 교훈: `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md`
+

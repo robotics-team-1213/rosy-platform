@@ -44,6 +44,12 @@ def inspect(root: Path, release_id: str) -> list[str]:
     for path in required_paths:
         if not path.is_file():
             findings.append(f"missing required image path: {path.relative_to(root)}")
+    # D-173 F1: each installed runtime copy imports signing from its own directory.
+    for runtime in (root / "opt/rosy/native-runtime", release / "deploy/robot/native"):
+        if (runtime / "native_release.py").is_file() and not (runtime / "signing.py").is_file():
+            findings.append(
+                f"missing native runtime helper: {(runtime / 'signing.py').relative_to(root).as_posix()}"
+            )
     for unit in REQUIRED_UNITS:
         if not (root / "etc/systemd/system" / unit).is_file():
             findings.append(f"missing systemd unit: {unit}")

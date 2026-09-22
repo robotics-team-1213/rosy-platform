@@ -94,3 +94,19 @@ def test_inspect_fails_if_docker_present(tmp_path):
     
     findings = verify_mounted_image.inspect(root, release_id)
     assert any("docker must not be installed" in f for f in findings)
+
+
+def test_inspect_requires_signing_beside_each_native_runtime(tmp_path):
+    # D-173 F1/F5: both installed runtime copies import signing from their own directory.
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    for runtime in ("opt/rosy/native-runtime",
+                    f"opt/rosy/releases/{release_id}/deploy/robot/native"):
+        (root / runtime).mkdir(parents=True)
+        (root / runtime / "native_release.py").write_text("", encoding="utf-8")
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    assert "missing native runtime helper: opt/rosy/native-runtime/signing.py" in findings
+    assert (f"missing native runtime helper: opt/rosy/releases/{release_id}"
+            "/deploy/robot/native/signing.py") in findings

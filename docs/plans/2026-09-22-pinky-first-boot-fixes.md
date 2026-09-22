@@ -120,3 +120,13 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
   (`/dev/spidev0.0`, gpiochip) after bench SPI evidence.
 - **T2 Buzzer:** run `deploy/robot/capture-vendor-baseline.sh` on a vendor OS card
   to identify the pin and service, then decide.
+
+## Current checkpoint
+
+- Task 1 (F1): done. Shared installer `deploy/robot/native/install-native-runtime.sh`; installed-layout
+  test reproduces the card's `No module named 'signing'` with the old layout and passes with the new one.
+- Task 2 (F5): done in source. The customizer executes both recovery entrypoints and first-boot `--help`
+  in the ARM64 chroot; the mounted-image verifier requires `signing.py` beside each runtime. Proven only
+  by contract tests until the next ARM64 image run.
+- Tasks 3-9: pending.
+
