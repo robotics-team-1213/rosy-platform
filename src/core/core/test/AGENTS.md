@@ -33,6 +33,7 @@ pytest for core policy, API, dashboard, and protocol. Most tests import Python m
 | `test_diagnostics_api.py` | DIAG-001 rollup, unknown component, agreement with `/metrics` |
 | `conftest.py` | `core_client` fixture: the one place a test stands a robot up |
 | `test_goal_tracker.py` | Nav2 goal generations: stale results, the cancel-before-accept window |
+| `test_event_catalogue.py` | §8 catalogue vs the emit sites across all five core packages: names, payload keys, severity, sender |
 | `test_teleop_watchdog_event.py` | SAF-002 expiry announces `safety.watchdog` once per lapse, after the stop reaches the wheels |
 | `test_cmd_vel_cycle.py` | `bridge/cmd_vel.py` order: select → readiness HOLD → wheels → power/announce; the bridge calls it once |
 | `test_swarm_integration.py` | Real `NavigationManager` + replayed bridge callbacks — the seam a `FakeNav` hides |
@@ -53,6 +54,8 @@ None (ignore `__pycache__/`).
 - A `FakeNav`-style double proves the caller, not the seam. Swarm's two worst defects (a HOLD whose cancel never reached Nav2, NAV-006 silently disabled) both lived between the real managers — keep `test_swarm_integration.py` covering that path.
 - Asserting that a source file contains a string proves only the wiring. Where a value matters, put the computation in a ROS-free module (`bridge/translate.py`, `navigation/initial_pose.py`) and assert the value.
 - When adding an API field, assert it here **and** in `protocol/schemas.py`.
+- A new event needs a row in §8 of the API reference before `test_event_catalogue.py` passes, with its real payload keys and severity. That is deliberate: an undocumented event sits outside the deprecation policy, so it can vanish without anyone having broken a promise.
+- That test reads the emit sites, not a list of known events. An earlier version kept an exclusion list and the list hid `battery.deep` — a `critical` event — so a guard made of hand-maintained names drifts exactly like the document it guards. The four relay bodies it trusts (`_emit`/`_emit_all`) are pinned by fingerprint; editing one means re-reading it and updating `PINNED_RELAYS`.
 
 ### Testing Requirements
 

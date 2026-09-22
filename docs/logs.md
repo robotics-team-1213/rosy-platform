@@ -1419,3 +1419,10 @@
   복제되어 있어 본문 블록은 커밋본과 바이트 동일하다.
 - 교훈: 로그 스크립트는 새 항목을 파일 끝에 append해야 한다. prepend하면 이후
   모든 과거 항목이 "out of order"로 한꺼번에 빨갛게 된다(155 errors 유발).
+
+## 2026-09-22 · uncommitted · docs(api): §8 이벤트 카탈로그를 실제 발행과 맞춘다 (v1.13 Corrective + Additive)
+
+- 변경: `ROSY API & Protocol Reference.md` v1.12→v1.13. API-002 에 Corrective 변경 분류 추가. §8 을 CORE 다섯 패키지의 발행 지점과 일치시켰다 — payload 키 정정(`nav.stuck` `timeout_s`, `mode.changed` `by`, `nav.started` `{goal, by}`, `nav.completed`·`system.shutdown` `{}`, `nav.lane_lost` `{mode, reason, lost_after_s}`, `slam.*`·`presence.*` 분리), `nav.lane_lost` 심각도 warning, 미문서 이벤트 추가(`docking.*` 11종, `battery.deep`, `battery.shutdown_request_failed`, `localization.initialpose`, `nav.line_mode_changed`, `nav.traffic_policy_*` 3종, `sim.traffic_signal_changed`), `nav.blocked` 미구현 표시, `config.changed` key 에 `dds.rmw`. `test/test_line_follow_contract_docs.py` 의 버전 고정을 v1.13 으로 갱신. 보관 브랜치 `archive/2026-09-22/fix/event-catalogue-drift` 의 v1.8 정정을 현재 main 으로 다시 적용한 것이다.
+- 증거: `src/core/core/test/test_event_catalogue.py` 가 카탈로그↔발행 지점(이름·키·심각도·발신)을 양방향으로 고정한다 — 문서 수정 전 7 failed, 후 전부 통과.
+- gate 변화: 없음.
+- 결정: 이미 발행되는 값이 사실이다. 심각도는 `config.changed`·`swarm.aborted` 만 코드를 고쳤고(core 로그 참조) 나머지는 문서를 코드에 맞췄다. 정정은 버전 노트에 양쪽 값을 `A(≠B)` 로 남긴다.

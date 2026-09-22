@@ -280,3 +280,10 @@
 - 증거: `src/core/core/test` 전체 통과(아래 catalogue 가드 커밋의 심각도 검사가 이 둘을 고정한다).
 - gate 변화: 없음.
 - 결정: 설정 변경과 군집 중단은 소비자가 경보를 거는 대상이다 — 문서가 아니라 코드를 고쳤다.
+
+## 2026-09-22 · uncommitted · test(core): §8 이벤트 카탈로그 드리프트 가드 — 발행 지점에서 읽는다
+
+- 변경: `test/test_event_catalogue.py` 추가. CORE 다섯 패키지(core, core_common, core_events, core_features, core_api_web)의 AST 에서 발행 지점(`publish`/`_emit`/수집 튜플)의 이름·심각도·payload 키를 읽어 §8 표와 양방향으로 대조한다. 이름을 정적으로 못 읽는 자리는 통과가 아니라 실패, 중계 함수 4개(`_emit`/`_emit_all`)는 몸통 지문으로만 면제. 보관 브랜치 `archive/2026-09-22/fix/event-catalogue-drift`(7b2384f…f5df9e1 의 최종판)를 이식하면서 새 자리 두 가지를 배웠다 — `svc.vision.publish(bytes…)` 카메라 프레임(소유자+모양으로 제외), `_wire_*(value, "lane.visible")` 필드 경로 라벨; CAP-001/concept id 는 `core_common.domain` 표에서 읽는다.
+- 증거: 문서 정정 전 7 failed(미문서 19종, 키 8건, 심각도 7건, `safety.watchdog`·`nav.blocked` 미발행), 정정 후 73 passed. `src/core/core/test` 전체 통과(커밋 메시지 참조).
+- gate 변화: 없음.
+- 결정: 손으로 관리하는 이벤트 목록을 두지 않는다. 예외 목록(`not_events`)은 발행 이름과 겹치면 실패한다.

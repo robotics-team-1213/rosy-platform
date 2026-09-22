@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.12
+**Version:** v1.13
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -32,8 +32,13 @@ Breaking Change 발생 시 `/api/v2/...`로 분리한다.
 |---|---|---|
 | Additive | 신규 엔드포인트, 응답에 신규 선택 필드 추가 | 버전 유지, 버전 노트 기록 |
 | Breaking | 필드 제거/이름 변경, 의미 변경, 필수화 | 신규 major 버전 |
+| Corrective | 문서가 틀리게 적혀 있던 것을 구현과 맞춤 (payload 키명, 심각도, 발신자) | 버전 유지, 버전 노트에 **양쪽 값을 모두** 기록 |
 
 소비자는 알 수 없는 응답 필드를 무시해야 한다(Must Ignore 원칙).
+
+Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비자는 이미 깨져 있었고, 정정은
+그것을 알려 주는 것이다 — 그래서 어느 쪽으로 고쳤는지(문서를 고쳤는지 코드를 고쳤는지)와
+틀리게 적혀 있던 값이 무엇이었는지를 모두 적는다. 버전 노트에 `A(≠B)` 로 쓴 것이 그것이다.
 
 ### API-003 폐기(Deprecation) 정책
 
@@ -522,29 +527,49 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | type | severity | 발신 | payload 예시 |
 |---|---|---|---|
 | `system.boot` | info | 로봇 | `{version}` |
-| `system.shutdown` | warning | 로봇 | `{reason}` |
-| `config.changed` | warning | 로봇 | `{key}` — `key`: `robot.identity` \| `auth.tokens` \| `safety.limits`. `auth.tokens` 는 `{id, role}` 또는 `{id, deleted}` 를 함께 싣는다. 토큰 원문도, 원문에서 유도된 값도 싣지 않는다 |
-| `mode.changed` | info | 로봇 | `{from, to, source}` |
-| `nav.started` | info | 로봇 | `{goal\|waypoint}` |
-| `nav.completed` | info | 로봇 | `{goal\|waypoint, duration_ms}` |
+| `system.shutdown` | warning | 로봇 | `{}` |
+| `config.changed` | warning | 로봇 | `{key, id, role, deleted}` — `key`: `robot.identity` \| `auth.tokens` \| `safety.limits` \| `dds.rmw`. `id`·`role` 은 토큰 추가, `id`·`deleted` 는 토큰 삭제일 때만 실린다. 토큰 원문도, 원문에서 유도된 값도 싣지 않는다 |
+| `mode.changed` | info | 로봇 | `{from, to, by}` |
+| `nav.started` | info | 로봇 | `{goal, by}` — `goal` 은 `{x, y, yaw}` |
+| `nav.completed` | info | 로봇 | `{}` — 어떤 목표였는지는 싣지 않는다. `nav.started` 와 짝지으려면 소비자가 순서로 이어야 한다 |
 | `nav.failed` | error | 로봇 | `{error_code}` |
 | `nav.canceled` | info | 로봇 | `{source}` |
-| `nav.stuck` | error | 로봇 | `{timeout_ms}` |
-| `nav.lane_lost` | error | 로봇 | `{lost_ms}` (NAV-007 차선 상실 — 유예 초과 시 정지, 자동 재탐색 없음) |
-| `nav.blocked` | warning | 로봇 | `{}` |
+| `nav.stuck` | error | 로봇 | `{timeout_s}` — NAV-006 무진척 판정 시간(초) |
+| `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음) |
+| `nav.line_mode_changed` | info | 로봇 | `{from, to}` — D-143 line-follow 모드 선택 |
+| `nav.traffic_policy_staged` | info | 로봇 | `{actor, policy_revision}` — D-151 traffic policy 변경 대기 |
+| `nav.traffic_policy_applied` | info | 로봇 | `{actor, policy_revision, mode}` — D-151 대기 정책 적용(정지 상태에서만) |
+| `nav.traffic_policy_reset` | info | 로봇 | `{reason}` — D-151 정책 상태 초기화(HOLD/DISABLED 로 복귀) |
+| `sim.traffic_signal_changed` | info | 로봇 | `{actor, colour}` — 시뮬레이션 신호등 제어가 켜진 프로필에서만 |
+| `nav.blocked` | warning | 로봇 | **미구현** — CORE 는 Nav2 액션 피드백을 구독하지 않아 막힘을 알 방법이 없다. 진척이 없는 주행은 NAV-006 이 `nav.stuck` 으로 끝낸다 |
 | `safety.estop` | critical | 로봇 | `{source}` |
 | `safety.estop_released` | warning | 로봇 | `{by}` |
 | `safety.watchdog` | warning | 로봇 | `{timeout_ms}` |
 | `battery.low` | warning | 로봇 | `{percent}` |
 | `battery.critical` | critical | 로봇 | `{percent, policy}` |
+| `battery.deep` | critical | 로봇 | `{percent, voltage, dwell_s}` — D-27 딥 방전. 모터가 서고 셧다운 센티넬이 무장된다 |
+| `battery.shutdown_request_failed` | error | 로봇 | `{path, error, armed}` — D-27 셧다운 센티넬을 쓰지 못했다. 딥배터리 보호가 무장되지 않았다는 뜻이므로 조용히 넘어가면 안 된다 |
 | `command.rejected` | warning | 로봇 | `{source, reason}` |
 | `waypoint.created/updated/deleted` | info | 로봇 | `{name}` |
-| `slam.started` / `slam.stopped` | info | 로봇 | `{by, reset?}` (NAV-005 세션) |
+| `slam.started` | info | 로봇 | `{by, reset}` — `reset` 은 재시작일 때만 (NAV-005) |
+| `slam.stopped` | info | 로봇 | `{by}` |
 | `power.mode_changed` | info | 로봇 | `{from, to, reason, sample_rate_hz}` (PWR-001) |
 | `power.wake` | info | 로봇 | `{reason}` — `proximity\|contact\|api\|battery` (PWR-004) |
-| `presence.detected` / `presence.cleared` | info | 로봇 | `{state, range}` (PWR-002) |
+| `presence.detected` | info | 로봇 | `{state, range}` (PWR-002) |
+| `presence.cleared` | info | 로봇 | `{range}` |
 | `power.lidar_changed` | info | 로봇 | `{spinning, reason, spinup_s}` (PWR-005 STANDBY LiDAR 정지) |
 | `map.saved` | info | 로봇 | `{map_id}` |
+| `localization.initialpose` | info | 로봇 | `{x, y, yaw}` — 운영자가 AMCL 자세를 놓았다. 누가 놓았는지는 envelope 의 `source` 에 있다 |
+| `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
+| `docking.docked` | info | 로봇 | `{dock_id}` |
+| `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
+| `docking.undock_started` | info | 로봇 | `{dock_id}` |
+| `docking.undocked` | info | 로봇 | `{}` |
+| `docking.canceled` | info | 로봇 | `{dock_id}` |
+| `docking.retry` | warning | 로봇 | `{reason, attempt}` — 접근 재시도 |
+| `docking.reseat` | warning | 로봇 | `{reason, attempt}` — 접점 재착좌 |
+| `docking.failed` | error | 로봇 | `{reason, dock_id}` — 종착이며 스스로 재시도하지 않는다 (D-28) |
+| `docking.return_started` | warning | 로봇 | `{dock_id, reason}` — SAF-005 저배터리 복귀 |
 | `mission.assigned` | info | Fleet | `{mission_id, robot_id}` |
 | `mission.started` | info | Fleet | `{mission_id}` |
 | `mission.step_completed` | info | Fleet | `{mission_id, step_index}` |
@@ -552,8 +577,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `robot.online/offline` | info/warning | Fleet | `{robot_id}` |
 | `pairing.requested/approved/revoked` | warning | Fleet | `{robot_id}` |
 | `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, reference_source, by}` |
-| `swarm.hold` | warning | 로봇 | `{reason, formation, …}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) |
-| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots[], by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` |
+| `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) |
+| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` |
 
 ---
 
@@ -685,6 +710,7 @@ Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:80
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.13 | 2026-09-22 | Corrective + Additive. **Corrective**: 이벤트 카탈로그(§8)가 실제 발행과 갈라져 있던 것을 맞춤. payload 키명 — `nav.stuck` 은 `timeout_s`(≠`timeout_ms`), `mode.changed` 는 `by`(≠`source`), `nav.started` 는 `{goal, by}`(≠`{goal\|waypoint}`), `nav.completed`·`system.shutdown` 은 payload 없음(≠기존 표기), `nav.lane_lost` 는 `{mode, reason, lost_after_s}`(≠`{lost_ms}`), `slam.*`·`presence.*` 는 이벤트별로 다름. 심각도 — 문서를 고친 것: `nav.lane_lost` 는 warning(≠error). 코드를 고친 것: `config.changed`·`swarm.aborted` 는 문서대로 warning 을 실제로 싣는다(≠기본값 info). 문서를 그대로 읽은 소비자는 이 목록만큼 이미 깨져 있었다. **Additive**: 구현돼 있지만 적혀 있지 않던 `docking.*` 11 종, `battery.deep`(D-27), `battery.shutdown_request_failed`, `localization.initialpose`, `nav.line_mode_changed`(D-143), `nav.traffic_policy_staged/applied/reset`(D-151), `sim.traffic_signal_changed` 신규 문서화, `config.changed` key 에 `dds.rmw`. `safety.watchdog` 은 v1.0 부터 약속만 있었고 이제 실제로 발행된다(SAF-002). `nav.blocked` 는 미구현 표시. 카탈로그와 발행 지점의 일치는 `src/core/core/test/test_event_catalogue.py` 가 고정한다 |
 | v1.12 | 2026-09-21 | Additive: 인증된 front camera preview status/JPEG API. latest-only bounded frame, source/overlay/sequence 메타데이터, stale 시 404, raw image의 상태 WebSocket·Fleet·명령 경로 제외 |
 | v1.11 | 2026-09-21 | Additive: semantic road `traffic_policy` 상태와 §6.1.1 vision `DetectionEvidence.inference_ms`(선택). map/scene/policy revision과 camera evidence를 결합한 fail-closed traffic policy, 추론 지연 메타, `core_common.protocol.detections`와 control 생산 스냅샷 동기 계약을 추가. envelope `protocol_version`은 1.0 유지 |
 | v1.10 | 2026-09-21 | Additive: D-143 `line-follow` 조회·모드 선택 API와 상태 스냅샷 `line_follow`. IR/카메라 소스는 상호 배타적이며 stale·저신뢰·형식 오류는 0 명령, 3초 손실은 재선택 전까지 `LOST` latch |
