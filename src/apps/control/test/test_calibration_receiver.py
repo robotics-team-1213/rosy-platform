@@ -1,16 +1,12 @@
 """Validate calibration relay readiness without a ROS dependency."""
-import ast
 from pathlib import Path
 from types import SimpleNamespace
 
+from control.web_http import calibration_receiver_available
+
 
 def available(received, publisher):
-    path=Path(__file__).parents[1]/'control/web_node.py'
-    tree=ast.parse(path.read_text(encoding='utf-8'))
-    method=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='calibration_receiver_available')
-    scope={}
-    exec(compile(ast.Module(body=[method],type_ignores=[]),str(path),'exec'),scope)
-    return scope['calibration_receiver_available'](received,100.,publisher)
+    return calibration_receiver_available(received, 100., publisher)
 
 
 def test_missing_stale_or_future_heartbeat_is_not_an_available_receiver():
@@ -28,6 +24,6 @@ def test_discovery_must_confirm_subscriber_when_supported():
 
 
 def test_partial_calibration_and_scoped_retry_are_accepted():
-    source = Path(__file__).parents[1].joinpath('control/web_node.py').read_text(encoding='utf-8')
+    source = Path(__file__).parents[1].joinpath('control/web_http.py').read_text(encoding='utf-8')
     for command in ('partial_calibration', 'retry:stay:full', 'retry:return_origin:skip_motion'):
         assert command in source, command

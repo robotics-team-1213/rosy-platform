@@ -179,3 +179,30 @@
 - 결정: 텔레포트 기반 검증으로 주행 동역학은 미반영 — 주행 폐루프는 2026-09-21 증거가 커버.
 - 교훈: 1차 실행에서 잔존 옵저버가 /road/observation을 오염시켰다(publisher 2). 그래프 검증 스크립트는 publisher 수 단정을 먼저 하라.
 
+## 2026-09-22 · uncommitted · test(control): derive the deployed control closure and pin one sensor provider
+- 변경: `test/test_control_deploy_closure.py` 추가. systemd 유닛·compose에서 launch include 사슬을 따라 배포되는 control 실행 파일을 도출하고, `rosy.sensor_provider:control` 등록자가 정확히 1개임을 검사한다. D-149 Validation에 정정 문단 추가.
+- 증거: `python -m pytest test/test_control_deploy_closure.py -q` 4 passed. 변이 증명 3건(safety_node 편입, road_observer 제거, games에 두 번째 provider 등록 → 각각 적색 → 복구 → 초록).
+- gate 변화: 없음. 배포 폐쇄의 control 실행 파일은 4개(ir_adc·camera_detect·line_observer·road_observer)이며 전부 증거 생산자다.
+- 결정: D-149 정정(결정 불변), D-168 control 분리 설계 0단계.
+- 교훈: 승격 근거로 쓴 "실행 파일 목록"을 사람이 적으면 한 개가 빠진다. 폐쇄는 include 사슬에서 도출해야 한다.
+
+## 2026-09-22 · uncommitted · refactor(control): split web_node into ROS wiring and ROS-free web modules
+- 변경: `web_node.py`(1,091줄)를 노드 배선(558)과 `web_state.py`(STATE·키·한계·/state.json 신선도, 82), `web_http.py`(라우팅·검증·중계 게이트, 304), `web_render.py`(지도 PNG·카메라 JPEG, 78), `web_map_control.py`(slam_toolbox 조작, 147)로 나눴다. 발행만 `WebNode.publish_text`/`publish_teleop`로 위임했고 나머지 코드는 원본과 동일하다(diff 확인). `test_web_http.py`가 실제 HTTP 요청으로 게이트·클램프·경계를 검사한다. 소스를 AST로 떼어 실행하던 `test_calibration_receiver.py`는 직접 import로 바꿨다.
+- 증거: `python -m pytest src/apps/control/test -q` 1284 passed, 28 skipped (2026-09-22 Windows). `test/test_module_structure.py` 등 구조 가드 27 passed — P6가 600줄 아래로 내려간 web_node 판정 삭제를 강제했다.
+- gate 변화: 없음. ROS-SIM 스모크(WSL에서 web_node 기동·요청·토픽 확인)는 WSL 서비스 오류(E_UNEXPECTED)로 미실행.
+- 결정: D-168 P6 `split` 판정 이행, control 분리 설계 1단계 중 web_node.
+- 교훈: `/state.json` 신선도 판정은 이제 요청마다 시각을 한 번만 읽는다. 원본은 판정마다 `time.monotonic()`을 새로 불렀다(마이크로초 차이, 한 응답 안의 판정이 같은 시각 기준이 됨).
+
+## 2026-09-22 · 4933fe0 · test(control): ROS smoke of the split web_node in WSL Jazzy
+- 변경: 없음(검증과 기록만). 앞 항목에서 미실행으로 남긴 ROS 스모크를 `wsl --shutdown` 복구 후 실행했다.
+- 증거: WSL Ubuntu ROS 2 Jazzy, 소스 트리 `python3 -m control.web_node`(colcon 설치 없이, html은 소스 폴백). 5개 web 모듈 import OK. `/state.json` 200(키 limits·map_control·planner_fresh·runtime_id·sensors·teleop_topic), 페이지 106,896바이트. `POST /wander stop` 200 → 리스너가 `/wander/cmd`에서 `'stop'` 수신. 교정 전 `POST /wander start` 409(게이트). `POST /teleop {x:0,z:0}` 200 → `/cmd_vel_raw`에서 `(0.0, 0.0)` 수신. `/cmd_vel` 발행자 0.
+- gate 변화: 없음(control ROS-SIM은 전체 그래프 기준이라 HOLD 유지). web_node 분리의 중계 경로는 ROS에서 확인됐다.
+- 결정: 없음
+- 교훈: WSL 재시작 직후에는 `ros2 topic echo --once`가 발견 지연으로 빈 결과를 낸다. 발행자 수가 잡힐 때까지 기다린 뒤 요청해야 중계를 증명할 수 있다.
+
+## 2026-09-22 · uncommitted · control(watch): graph guard matches the OS node names and cmd_vel ownership
+- 변경: `control/watch.py` 테이블 현행화. REQUIRED 노드명 pinky_* -> bringup/sensor_adc/imu_bno055, FOREIGN 에서 pinky_* 4건 제거(브리지 트윈 parameter_bridge/image_bridge 유지), ALLOWED 의 /cmd_vel_raw 에 control_node 추가. EXCLUSIVE 값을 단일 문자열에서 허용 소유자 집합으로 바꾸고 /cmd_vel 소유자를 {core, safety_node} 로 확정 — inspect() 는 허용 집합에서 정확히 한 종류만 발행해야 하며 두 소유자가 동시에 발행하면 co_owner 인터럽트(D-38 병행 금지의 런타임 감시).
+- 증거: `python -m pytest src/apps/control/test/test_watch.py -q` 22 passed(신규 8건 계약/행위 시험 포함, test-first 적색 확인 후 초록). `python -m pytest src/apps/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거 평가: Rosy 폴더 communication-protocol-report.md §3.2.1 및 docs/plans/2026-09-22-communication-protocol-remediation-plan.md T1.
+- gate 변화: 없음. watch.py 순수 모듈 LOCAL GO 유지.
+- 결정: 없음 — D-2/D-38/D-149 기존 결정을 감시 장치에 반영한 것.
+- 교훈: 감시장치 테이블이 정책을 배반하면 오탐이 상수가 된다. 리네임(D-16) 시기에 감시 테이블이 함께 갱신되지 않아 6개월간 watch_node 가 현행 그래프에서 항상 인터럽트를 보고했다.

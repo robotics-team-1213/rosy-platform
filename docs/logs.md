@@ -1420,6 +1420,30 @@
 - 교훈: 로그 스크립트는 새 항목을 파일 끝에 append해야 한다. prepend하면 이후
   모든 과거 항목이 "out of order"로 한꺼번에 빨갛게 된다(155 errors 유발).
 
+## 2026-09-22 · uncommitted · docs(adr): correct the D-149 deployed-closure list (3 → 4 executables)
+- 변경: D-149 Validation 끝에 정정 문단 추가(본문 기존 문장은 보존). `road_observer_node`가 `line_follow.launch.py`에서 조건 없이 뜬다.
+- 증거: `python -m pytest test/test_control_deploy_closure.py -q` 4 passed — 폐쇄를 유닛·compose에서 도출해 집합 동일성으로 고정.
+- gate 변화: 없음. 누락된 노드도 D-143 증거 생산자이므로 D-149 결정과 Accepted 판단은 그대로다.
+- 결정: D-168 control 분리 설계 0단계.
+- 교훈: 없음
+
+## 2026-09-22 · uncommitted · docs(dock): triage the archived dock-detector measurement rig — carry glossary + lesson only
+
+- 변경: 태그 `archive/2026-09-22/feat/dock-detector-measurement-rig`(32커밋,
+  +6804줄)를 main 새 배치(D-125/D-126) 기준으로 분류했다. 리그 코드(probe.py·
+  profile.py·dock_probe.py·dock_sweep.py·sim dock 모델·measure-dock-baseline.sh·
+  형상 계약 시험)와 그 계획 2건·pi5 체크리스트 §7.6.1은 **대체됨**으로 두고
+  이식하지 않았다. CONCEPTS.md 에 Docking 용어 4개(Dock·Docking·Charging
+  confirmation·Dock detector)를, docs/solutions/workflow-issues 에 교훈 1건을 옮겼다.
+- 증거: 리그의 목적은 LiDAR 기하·intensity·IR 중 검출 방식을 숫자로 고르는
+  것이었고 카메라는 명시적으로 배제했다(설계 §Background). main 은 SRS v1.1
+  DNC-007 + D-138/D-139 로 ArUco 카메라 태그를 택했고 `select_detector`·
+  `ArucoDockDetector`(038ec3a)·도크 조립 설계(2026-09-20) 가 그 위에 서 있다.
+  Dock detector 용어는 DNC-004(무관측은 재시도 아닌 `DOCK_FAILED`)에 맞춰 고쳤다.
+- gate 변화: 없음 (문서만).
+- 결정: 교훈의 SHA·경로는 main 이 아니라 아카이브 태그 기준으로 해석한다고
+  본문 머리에 적었다. 브랜치 `port/dock-detector-measurement-rig`, main 미병합.
+
 ## 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
 
 - 변경: `docs/reference/ROSY API & Protocol Reference.md` v1.12→v1.13. `GET /api/v1/logs/audit` 행에 `{events, log}` 와 `log` 필드 의미, `/metrics` 행에 `rosy_audit_write_failures_consecutive` 경보 기준, 개정 이력 v1.13 추가(additive).
