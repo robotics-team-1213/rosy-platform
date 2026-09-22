@@ -199,11 +199,18 @@ def detect_lane_centre(bgr: np.ndarray, ground, *,
             or not isinstance(lane_half_width_m, (int, float))
             or not math.isfinite(lane_half_width_m) or not lane_half_width_m > 0.0):
         raise ValueError("lane_half_width_m must be a positive finite number")
-    if not isinstance(roi_top_fraction, (int, float)) or not math.isfinite(roi_top_fraction)             or not 0.0 <= roi_top_fraction < 1.0:
+    if (isinstance(roi_top_fraction, bool)
+            or not isinstance(roi_top_fraction, (int, float))
+            or not math.isfinite(roi_top_fraction) or not 0.0 <= roi_top_fraction < 1.0):
         raise ValueError("roi_top_fraction must be in [0, 1)")
-    if not isinstance(roi_bottom_fraction, (int, float))             or not math.isfinite(roi_bottom_fraction)             or not roi_top_fraction < roi_bottom_fraction <= 1.0:
+    if (isinstance(roi_bottom_fraction, bool)
+            or not isinstance(roi_bottom_fraction, (int, float))
+            or not math.isfinite(roi_bottom_fraction)
+            or not roi_top_fraction < roi_bottom_fraction <= 1.0):
         raise ValueError("roi_bottom_fraction must be in (roi_top_fraction, 1]")
-    if not isinstance(washed_fraction, (int, float)) or not math.isfinite(washed_fraction)             or not 0.0 < washed_fraction <= 1.0:
+    if (isinstance(washed_fraction, bool)
+            or not isinstance(washed_fraction, (int, float))
+            or not math.isfinite(washed_fraction) or not 0.0 < washed_fraction <= 1.0):
         raise ValueError("washed_fraction must be in (0, 1]")
     if (isinstance(max_line_width_m, bool)
             or not isinstance(max_line_width_m, (int, float))
@@ -297,8 +304,12 @@ TURN_TIMEOUT_S = 6.0
 #: The reacquired lane must be this close to centre to end the turn.
 TURN_REACQUIRE_MAX_ERROR = 0.5
 #: A corner confirmed while commits were held stays armed until the robot
-#: has turned this far or driven a half-width past its pivot.
+#: has turned this far or driven a half-width past its pivot...
 ARMED_MAX_YAW_RAD = math.radians(30.0)
+#: ...or for this long, whatever odometry says: the farthest armed corner
+#: is CORNER_MAX_RANGE_M ahead, given the approach's own time budget
+#: (APPROACH_TIMEOUT_FACTOR at APPROACH_NOMINAL_SPEED_M_S): 23.3 s.
+ARMED_MAX_AGE_S = APPROACH_TIMEOUT_FACTOR * CORNER_MAX_RANGE_M / APPROACH_NOMINAL_SPEED_M_S
 
 
 @dataclass(frozen=True)
@@ -412,7 +423,7 @@ class LaneCornerTracker:
     `commit_allowed=False` (edge-follower handoff) keeps confirming corners
     but only arms the latest one; a later call with commits allowed turns on
     that armed evidence while it is still ahead (ARMED_MAX_YAW_RAD, a
-    half-width past the pivot). The default keeps lane mode unchanged.
+    half-width past the pivot, ARMED_MAX_AGE_S). The default keeps lane mode unchanged.
 
     Limitation: CORE's turn is not a pure pivot (it keeps ~0.028 m/s at
     |error| 1), so the robot ends a few cm towards the outer line and FOLLOW
@@ -479,18 +490,19 @@ class LaneCornerTracker:
             corner = detect_lane_corner(bgr, ground, bright_threshold=bright_threshold,
                                         lane_half_width_m=half)
             if self._confirmed(corner, pose):
-                self._armed = (corner.side, corner.distance_m, pose)
+                self._armed = (corner.side, corner.distance_m, pose, now_s)
             elif self._armed is not None:
-                side, distance, seen_at = self._armed
+                side, distance, seen_at, armed_at = self._armed
                 along, _ = _travel(seen_at, pose)
                 turned = math.atan2(math.sin(pose[2] - seen_at[2]),
                                     math.cos(pose[2] - seen_at[2]))
                 if (abs(turned) > ARMED_MAX_YAW_RAD
-                        or along > distance + self._camera_x - half + half):
+                        or along > distance + self._camera_x - half + half
+                        or not 0.0 <= now_s - armed_at <= ARMED_MAX_AGE_S):
                     self._armed = None
             if not commit_allowed or self._armed is None:
                 return lane
-            side, distance, seen_at = self._armed
+            side, distance, seen_at, _armed_at = self._armed
             self._armed = None
             self.state, self.side = "APPROACH", side
             self._origin, self._started = seen_at, now_s
@@ -526,6 +538,7 @@ class LaneCornerTracker:
             self._reset()
             return lane
         return LaneObservation(error=-sign, confidence=1.0)
+
 
 def line_observation_payload(source: str, stamp: float,
                              observation: LaneObservation | None) -> dict:

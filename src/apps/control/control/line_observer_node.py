@@ -13,6 +13,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from nav_msgs.msg import Odometry
+from rcl_interfaces.msg import ParameterDescriptor
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt16MultiArray
 
@@ -25,7 +26,11 @@ from .sensing.lane import (
     detect_lane_error,
     line_observation_payload,
 )
-from .sensing.lane_bev import LaneEdgeFollower
+from .sensing.lane_bev import LaneEdgeFollower, pose_if_fresh
+
+#: Fixed at startup: the edge follower and the odom subscription are built
+#: from these once, so a later change would silently run the wrong pipeline.
+_READ_ONLY = ParameterDescriptor(read_only=True)
 
 
 class LineObserverNode(Node):
@@ -46,7 +51,7 @@ class LineObserverNode(Node):
         # boundary lines; 'edge_left' holds the lane's left boundary a
         # half-width off in bird's-eye view (bends, arcs). Both lane modes need
         # a metric ground plane, edge_left also odometry (fail-closed without).
-        self.declare_parameter('camera_lane_mode', 'line')
+        self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
         self.declare_parameter('camera_ground_source', 'PINKY')
@@ -57,7 +62,7 @@ class LineObserverNode(Node):
         self.declare_parameter('gazebo_camera_max_range_m', 0.6)
         # Lane mode only: odometry-bounded 90 deg corner turning. Off by
         # default; without odometry the tracker never leaves FOLLOW.
-        self.declare_parameter('lane_corner_turning', False)
+        self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
         self.declare_parameter('camera_x_offset_m', 0.0)
 
         self._ir_calibration = None
@@ -65,6 +70,7 @@ class LineObserverNode(Node):
         self._simulation_ground_key = None
         self._simulation_ground = None
         self._odom_pose = None
+        self._odom_stamp = None
         self._corner_tracker = LaneCornerTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._edge_follower = LaneEdgeFollower(
@@ -184,9 +190,12 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
                 if mode == 'edge_left':
+                    image_stamp = (float(msg.header.stamp.sec)
+                                   + float(msg.header.stamp.nanosec) * 1e-9)
                     observation = self._edge_follower.update(
-                        float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9,
-                        self._odom_pose, frame, ground, **lane_kwargs)
+                        image_stamp,
+                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        frame, ground, **lane_kwargs)
                 elif bool(self.get_parameter('lane_corner_turning').value):
                     observation = self._corner_tracker.update(
                         float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9,
@@ -207,6 +216,10 @@ class LineObserverNode(Node):
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
+        # The header stamp, not arrival time: edge_left compares it with the
+        # image stamp, so dead or delayed odometry is no pose.
+        self._odom_stamp = (float(msg.header.stamp.sec)
+                            + float(msg.header.stamp.nanosec) * 1e-9)
 
     def _on_camera_controls(self, msg: String) -> None:
         summary = str(msg.data)

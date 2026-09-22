@@ -5,7 +5,7 @@ Row-wise line pairing assumes the lines run roughly along travel; at the
 image and a row sees one wide run. This module stops reading rows and reads
 the floor instead:
 
-  bird's-eye view   every observable cell of a 5 mm robot-frame grid samples
+  bird's-eye view   every observable cell of a 2.5 mm robot-frame grid samples
                     the thresholded camera pixel that images it, through the
                     calibrated GroundPlane (inverse mapping, so the far field
                     has no holes between rows)
@@ -21,7 +21,10 @@ the floor instead:
 
 Frame: base_link, x ahead, y LEFT positive (REP 103). Output keeps the lane
 contract: error > 0 means steer right. No ground plane or no odometry means
-no output: the boundary memory cannot be carried without odometry.
+no output: the boundary memory cannot be carried without odometry. Odometry
+older than ODOM_MAX_SKEW_S against the image counts as none, and memory not
+refreshed by fresh paint for MEMORY_MAX_AGE_S is forgotten, so frozen
+odometry cannot drive on remembered paint for ever.
 
 On the 260919 lap the inner block's outline is one closed line on the
 robot's left, so holding it at a half-width drives the whole lap with no
@@ -111,6 +114,11 @@ MEMORY_RADIUS_M = 0.50
 #: Confidence while pursuing remembered paint only; CORE drives ~0.03 m/s.
 MEMORY_CONFIDENCE = 0.6
 
+#: Odometry whose stamp is further than this from the image's is no pose.
+#: Equal to CORE line_follow stale_after_s: evidence older than that already
+#: stops CORE, and a pose that old cannot place the paint in the image.
+ODOM_MAX_SKEW_S = 0.30
+
 # CORE line_follow law (core_features/line_follow/manager.py, tick()),
 # mirrored so a curvature can be expressed as the error CORE turns into it;
 # test_lane_edge pins these to CORE's LineFollowConfig defaults.
@@ -135,8 +143,39 @@ def error_for_curvature(curvature: float, confidence: float) -> float:
     return max(-1.0, min(1.0, -math.copysign(magnitude, curvature)))
 
 
+#: The tightest path the lap asks for: a half-width round a convex corner.
+_TIGHTEST_PATH_RADIUS_M = 0.0925
+
+
+def _memory_max_age_s() -> float:
+    """MEMORY_TRAVEL_M at the slowest speed CORE commands on memory alone
+    (MEMORY_CONFIDENCE on the tightest path): 0.40 m / 0.0242 m/s = 16.5 s.
+    Travel ages memory only while odometry moves; this ages it by the clock,
+    so memory outlives no drive it could honestly have been used for."""
+    confidence = MEMORY_CONFIDENCE
+    error = error_for_curvature(1.0 / _TIGHTEST_PATH_RADIUS_M, confidence)
+    scale = (confidence - CORE_MIN_CONFIDENCE) / (1.0 - CORE_MIN_CONFIDENCE)
+    slowest = CORE_CRUISE_M_S * scale * max(0.2, 1.0 - CORE_CURVE_SLOWDOWN * abs(error))
+    return MEMORY_TRAVEL_M / slowest
+
+
+#: With no fresh paint of this lane (left or right) for this long, memory is
+#: forgotten and there is no output. See `_memory_max_age_s`.
+MEMORY_MAX_AGE_S = _memory_max_age_s()
+
+
+def pose_if_fresh(pose, pose_stamp_s, image_stamp_s):
+    """`pose` if its stamp is within ODOM_MAX_SKEW_S of the image's, else None
+    (dead odometry, or a pose from another moment)."""
+    if pose is None or pose_stamp_s is None or image_stamp_s is None:
+        return None
+    if abs(float(image_stamp_s) - float(pose_stamp_s)) > ODOM_MAX_SKEW_S:
+        return None
+    return pose
+
+
 class BirdsEye:
-    """Robot-frame 5 mm floor grid sampled from one camera's pixels."""
+    """Robot-frame BEV_CELL_M floor grid sampled from one camera's pixels."""
 
     def __init__(self, ground, width_px: int, height_px: int,
                  camera_x_offset_m: float) -> None:
@@ -281,6 +320,7 @@ class LaneEdgeFollower:
         self._right = _LineMemory()
         self._odometer = 0.0
         self._last_pose = None
+        self._fresh_at = None
         self.last = {}
 
     @property
@@ -293,9 +333,11 @@ class LaneEdgeFollower:
         self._left.clear()
         self._right.clear()
         self._last_pose = None
+        self._fresh_at = None
 
     def _birds_eye(self, ground, shape) -> BirdsEye:
-        key = (id(ground), shape[0], shape[1], self._camera_x)
+        key = (ground.height_m, ground.pitch_rad, ground.focal_px, ground.principal_x,
+               ground.principal_y, ground.max_range_m, shape[0], shape[1], self._camera_x)
         if key != self._view_key:
             self._view = BirdsEye(ground, shape[1], shape[0], self._camera_x)
             self._view_key = key
@@ -331,7 +373,7 @@ class LaneEdgeFollower:
                                     washed_fraction=washed_fraction)
             return None
 
-        edge = self._follow(pose, bgr, ground, float(lane_half_width_m),
+        edge = self._follow(float(now_s), pose, bgr, ground, float(lane_half_width_m),
                             bright_threshold, float(washed_fraction))
         if self._corner is None:
             return edge
@@ -347,7 +389,7 @@ class LaneEdgeFollower:
             return corner
         return edge
 
-    def _follow(self, pose, bgr, ground, half, bright_threshold, washed_fraction):
+    def _follow(self, now_s, pose, bgr, ground, half, bright_threshold, washed_fraction):
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
         view = self._birds_eye(ground, gray.shape)
         paint = view.sample(gray > bright_threshold)
@@ -390,6 +432,12 @@ class LaneEdgeFollower:
                             self._odometer)
         for memory in (self._left, self._right):
             memory.prune(pose, self._odometer)
+        if left is not None or right is not None:
+            self._fresh_at = now_s
+        elif (self._fresh_at is None or now_s < self._fresh_at
+              or now_s - self._fresh_at > MEMORY_MAX_AGE_S):
+            self._forget()
+            return None
         left_grid = self._one_line(self._left.grid(view, pose),
                                    None if left is None else labels == left)
         right_grid = self._one_line(self._right.grid(view, pose),

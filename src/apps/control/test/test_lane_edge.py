@@ -24,6 +24,7 @@ from control.sensing.lane_bev import (
     BirdsEye,
     LaneEdgeFollower,
     error_for_curvature,
+    pose_if_fresh,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,9 +161,14 @@ def _distance_to_polyline(point, polyline):
 def test_core_law_mirror_matches_core_defaults():
     config = (ROOT.parents[1] / "core/core/config/rosy_default.yaml").read_text(encoding="utf-8")
     block = config.split("line_follow:", 1)[1]
-    assert float(re.search(r"cruise_speed:\s*([0-9.]+)", block).group(1)) == lane_bev.CORE_CRUISE_M_S
-    assert float(re.search(r"steering_gain:\s*([0-9.]+)", block).group(1)) == lane_bev.CORE_STEERING_GAIN
-    assert float(re.search(r"min_confidence:\s*([0-9.]+)", block).group(1)) == lane_bev.CORE_MIN_CONFIDENCE
+
+    def value(key):
+        return float(re.search(key + r":\s*([0-9.]+)", block).group(1))
+
+    assert value("cruise_speed") == lane_bev.CORE_CRUISE_M_S
+    assert value("steering_gain") == lane_bev.CORE_STEERING_GAIN
+    assert value("min_confidence") == lane_bev.CORE_MIN_CONFIDENCE
+    assert value("stale_after_s") == lane_bev.ODOM_MAX_SKEW_S
     manager = (ROOT.parents[1] / "core/core_features/core_features/line_follow/manager.py"
                ).read_text(encoding="utf-8")
     assert "max(0.2, 1.0 - 0.65 * abs(error))" in manager
@@ -342,10 +348,9 @@ def test_edge_failure_hands_off_to_an_armed_corner(monkeypatch):
     world, x_t = l_corner_world()
     follower = LaneEdgeFollower(camera_x_offset_m=CAM_X, corner_handoff=True)
     real = follower._follow
-    pose_box = {}
 
-    def failing_follow(pose, *args):
-        result = real(pose, *args)
+    def failing_follow(now_s, pose, *args):
+        result = real(now_s, pose, *args)
         return None if pose[0] > x_t - 0.25 else result
 
     monkeypatch.setattr(follower, "_follow", failing_follow)
@@ -353,7 +358,6 @@ def test_edge_failure_hands_off_to_an_armed_corner(monkeypatch):
     states = [state for _, _, state in log]
     assert "CORNER_APPROACH" in states and "CORNER_TURN" in states
     assert pose[2] == pytest.approx(math.pi / 2, abs=math.radians(20))
-    del pose_box
 
 
 # --- Loss ------------------------------------------------------------------------
@@ -418,3 +422,85 @@ def test_full_lap_of_the_260919_track_returns_to_the_start():
     assert math.dist(pose[:2], START[:2]) < 0.15
     heading = math.atan2(math.sin(pose[2] - START[2]), math.cos(pose[2] - START[2]))
     assert abs(heading) < math.radians(20)
+
+
+# --- Stale or frozen odometry (review of bb85da6) --------------------------------
+
+def test_memory_max_age_is_memory_travel_at_the_slowest_memory_speed():
+    """The slowest speed CORE commands on memory alone: MEMORY_CONFIDENCE on
+    the tightest path the lap asks for (radius one half-width)."""
+    e = error_for_curvature(1.0 / H, lane_bev.MEMORY_CONFIDENCE)
+    slowest, _ = core_command(LaneObservation(error=e, confidence=lane_bev.MEMORY_CONFIDENCE))
+    assert lane_bev.MEMORY_MAX_AGE_S == pytest.approx(lane_bev.MEMORY_TRAVEL_M / slowest,
+                                                      rel=0.02)
+
+
+def test_frozen_odometry_cannot_drive_on_memory_past_its_age():
+    """Reviewer repro: seed, then blank floor while odometry repeats the same
+    pose. Travel never grows, so only a clock can end the memory."""
+    full = lane([(-1.0, 0.0), (2.0, 0.0)])
+    empty = World()
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    pose = (0.0, 0.0, 0.0)
+    for k in range(15):
+        follower.update(k * DT, pose, full.render(pose), GROUND, **KW)
+    last_fresh = 14 * DT
+    outputs = []
+    for k in range(15, 15 + 3000):
+        outputs.append((k * DT, follower.update(k * DT, pose, empty.render((0.5, 0.0, 0.0)),
+                                                GROUND, **KW)))
+    driven = [t for t, obs in outputs if obs is not None]
+    assert driven and max(driven) - last_fresh <= lane_bev.MEMORY_MAX_AGE_S
+    assert all(obs is None for t, obs in outputs if t - last_fresh > lane_bev.MEMORY_MAX_AGE_S)
+    # Forgotten, not merely silent: the same boundary must reseed from scratch.
+    assert not follower._left and not follower._right
+
+
+def test_stale_odometry_stamp_is_no_pose_and_no_output():
+    assert pose_if_fresh((1.0, 2.0, 0.3), 10.0, 10.2) == (1.0, 2.0, 0.3)
+    assert pose_if_fresh((1.0, 2.0, 0.3), 10.0, 10.0 + lane_bev.ODOM_MAX_SKEW_S + 0.01) is None
+    assert pose_if_fresh((1.0, 2.0, 0.3), 10.5, 10.0) is None   # odom from the future
+    assert pose_if_fresh(None, None, 10.0) is None
+    world = lane([(-1.0, 0.0), (2.0, 0.0)])
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    pose = (0.0, 0.0, 0.0)
+    assert follower.update(0.0, pose, world.render(pose), GROUND, **KW) is not None
+    stale = pose_if_fresh(pose, 0.0, 0.2 + lane_bev.ODOM_MAX_SKEW_S + 0.01)
+    assert follower.update(0.2, stale, world.render(pose), GROUND, **KW) is None
+    assert not follower._left
+
+
+def test_armed_corner_expires_by_time_without_odometry_motion():
+    from control.sensing import lane as lane_module
+
+    world, _ = l_corner_world()
+    tracker = LaneCornerTracker(camera_x_offset_m=CAM_X)
+    x = 0.20
+    for k in range(4):
+        tracker.update(k * DT, (x, 0.0, 0.0), world.render((x, 0.0, 0.0)), GROUND,
+                       commit_allowed=False, **KW)
+        x += 0.012
+    assert tracker._armed is not None
+    armed_at = 3 * DT
+    blank = np.full((HT, W), FLOOR, np.uint8)
+    late = armed_at + lane_module.ARMED_MAX_AGE_S + DT
+    tracker.update(late, (x, 0.0, 0.0), blank, GROUND, commit_allowed=False, **KW)
+    assert tracker._armed is None
+    tracker.update(late + DT, (x, 0.0, 0.0), blank, GROUND, **KW)
+    assert tracker.state == "FOLLOW"
+
+
+def test_birds_eye_cache_follows_the_geometry_not_the_object():
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    frame = lane([(-1.0, 0.0), (2.0, 0.0)]).render((0.0, 0.0, 0.0))
+    view = follower._birds_eye(GROUND, frame.shape)
+    twin = simulation_ground_plane(
+        source="GAZEBO", simulation_enabled=True, use_sim_time=True,
+        width_px=W, height_px=HT, height_m=0.060194,
+        pitch_rad=math.radians(25.0), hfov_rad=1.1519, max_range_m=0.6)
+    assert follower._birds_eye(twin, frame.shape) is view
+    tilted = simulation_ground_plane(
+        source="GAZEBO", simulation_enabled=True, use_sim_time=True,
+        width_px=W, height_px=HT, height_m=0.060194,
+        pitch_rad=math.radians(20.0), hfov_rad=1.1519, max_range_m=0.6)
+    assert follower._birds_eye(tilted, frame.shape) is not view

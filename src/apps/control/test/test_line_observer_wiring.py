@@ -97,3 +97,20 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
     # 'line' and 'lane' branches are untouched and the default stays 'line'.
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
+
+
+def test_edge_left_drops_odometry_whose_stamp_is_stale():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "msg.header.stamp" in source.split("def _on_odom", 1)[1]
+    assert "pose_if_fresh(" in source
+    assert "self._odom_stamp" in source
+
+
+def test_modes_fixed_at_startup_are_read_only_parameters():
+    """The edge follower and the odom subscription are built at startup, so
+    switching mode later would silently run the wrong pipeline."""
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "from rcl_interfaces.msg import ParameterDescriptor" in source
+    assert ("self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)" in source)
+    assert ("self.declare_parameter('lane_corner_turning', False, _READ_ONLY)" in source)
+    assert "_READ_ONLY = ParameterDescriptor(read_only=True)" in source
