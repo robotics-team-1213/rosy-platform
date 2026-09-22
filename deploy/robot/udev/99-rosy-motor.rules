@@ -1,0 +1,8 @@
+# ROSY motor bus: UART4 on Pi 5 (dtoverlay=uart4-pi5) -> stable alias.
+# The native units (rosy-io.service / rosy-navigation.service) reference
+# /dev/rosy-motor in DeviceAllow and motor_device:=; the compose device
+# mapping is development-only (D-161), so this rule is what creates the
+# name on the product host. Installed by deploy/image (baked into the
+# image overlay) and by configure-uart-pi5.sh (retrofit on provisioned
+# devices — the alias is meaningless without the UART4 overlay it owns).
+ACTION=="add|change", KERNEL=="ttyAMA4", SYMLINK+="rosy-motor", GROUP="dialout", MODE="0660"

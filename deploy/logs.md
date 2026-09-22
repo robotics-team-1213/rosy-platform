@@ -274,3 +274,10 @@
   rosdep이 Gazebo/GUI를 설치해 rootfs 공간을 소진했다. resolver 회귀 계약을 추가했다.
 - gate 변화: 없음. 새 ARM64 image run 전 ARTIFACT는 HOLD다.
 - 결정: D-161 native product payload와 D-164 image 용량 경계 보강.
+
+## 2026-09-22 · uncommitted · deploy(udev): /dev/rosy-motor 별칭을 실제로 만드는 규칙
+- 변경: `deploy/robot/udev/99-rosy-motor.rules` 신규(ttyAMA4 -> rosy-motor 심링크, dialout/0660). `configure-uart-pi5.sh` 가 멱등 경로(이미 구성됨 조기 종료)를 포함한 모든 실행에서 규칙을 /etc/udev/rules.d 에 설치(udevadm reload/trigger 최선 노력, 재부팅 문맥은 기존 유지). `build-native-payload.sh` 가 이미지 오버레이에 규칙을 굽는다(+소스 존재 가드). 계약 시험 `test/test_rosy_motor_udev.py`.
+- 증거: `python -m pytest test/test_rosy_motor_udev.py test/test_pi_wifi_deployment.py test/test_native_systemd_contract.py test/test_native_ros_payload.py test/test_image_pipeline.py test/test_ubuntu_native_runtime_contract.py -q` 118 passed (2026-09-22 Windows). `bash -n` 두 스크립트 구문 0. 근거: communication-protocol-report.md §8-F — 네이티브 유닛은 DeviceAllow=/dev/rosy-motor 를 요구하나 그 이름을 만드는 주체가 컴테이너 디바이스 매핑(개발 전용, D-161)뿐이었다.
+- gate 변화: 없음. 실기 심링크 확인은 DEVICE(device-readback 에 /dev/rosy-motor 노드 증거 추가 후보).
+- 결정: 없음 — D-161/D-33 기존 결정의 누락된 실행 조각.
+- 교훈: 컴포지이션 양쪽(유닛의 DeviceAllow ↔ 호스트 장치명 생성)이 서로 다른 파일에 있으면 한쪽만 갱신된다. 장치 별칭 계약은 '누가 만드는가'까지 시험으로 고정해야 한다.

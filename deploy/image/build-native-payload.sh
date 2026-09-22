@@ -49,6 +49,7 @@ FIRST_BOOT_SOURCE="$WORKSPACE/deploy/image/first-boot"
 SD_TOOLS_SOURCE="$WORKSPACE/deploy/sd"
 ROBOT_CONFIG_SOURCE="$WORKSPACE/deploy/robot/config"
 CYCLONEDDS_SOURCE="$WORKSPACE/src/hardware/bringup/config/cyclonedds_localhost.xml"
+UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-motor.rules"
 RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.pem"
 [[ -d "$NATIVE_RUNTIME_SOURCE" ]] \
     || fail "native runtime support is missing: deploy/robot/native"
@@ -56,6 +57,8 @@ RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.p
     || fail "Ubuntu first-boot support is missing: deploy/image/first-boot"
 [[ -d "$SD_TOOLS_SOURCE" ]] \
     || fail "SD personalization support is missing: deploy/sd"
+[[ -f "$UDEV_RULE_SOURCE" ]] \
+    || fail "motor udev rule is missing: deploy/robot/udev/99-rosy-motor.rules"
 [[ ! -e "$RELEASE_ROOT/deploy/robot/native" ]] \
     || fail "release root already contains native runtime support"
 [[ -f "$RELEASE_PUBLIC_KEY" ]] \
@@ -89,10 +92,14 @@ cp -a "$NATIVE_RUNTIME_SOURCE" "$RELEASE_ROOT/deploy/robot/native"
 # it must run precisely when that link was interrupted.
 OVERLAY="$RELEASE_ROOT/image-overlay"
 mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
-    "$OVERLAY/etc/systemd/system" "$OVERLAY/etc/rosy/trusted-release-keys"
+    "$OVERLAY/etc/systemd/system" "$OVERLAY/etc/udev/rules.d" \
+    "$OVERLAY/etc/rosy/trusted-release-keys"
 cp -a "$NATIVE_RUNTIME_SOURCE" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
+# The native units address the motor bus as /dev/rosy-motor; the image must
+# carry the rule so a freshly flashed device has the alias on first boot.
+cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
