@@ -133,5 +133,16 @@ def test_inspect_rejects_bytecode_inside_the_signed_release(tmp_path):
 
     findings = verify_mounted_image.inspect(root, release_id)
 
-    assert (f"bytecode cache in signed release: opt/rosy/releases/{release_id}"
+    assert (f"bytecode cache in native runtime: opt/rosy/releases/{release_id}"
             "/deploy/robot/native/__pycache__") in findings
+
+
+def test_colcon_install_bytecode_is_part_of_the_payload(tmp_path):
+    # Release 003 build: colcon installs site-packages/*/__pycache__ with the payload.
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    (root / "opt/rosy/releases" / release_id / "install/lib/python3.12/site-packages/core/__pycache__").mkdir(parents=True)
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    assert not [f for f in findings if "bytecode" in f]
