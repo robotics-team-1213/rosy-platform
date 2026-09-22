@@ -88,7 +88,7 @@ class Driver(Node):
         from sensor_msgs.msg import LaserScan
         self.create_subscription(
             LaserScan, '/scan', self.on_scan, qos_profile_sensor_data)
-        self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.pub = self.create_publisher(Twist, 'cmd_vel', 10)
         self.tfb = TransformBroadcaster(self)
         self.stb = StaticTransformBroadcaster(self)
         self.tf = TfBuffer()
