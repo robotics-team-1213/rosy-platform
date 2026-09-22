@@ -288,3 +288,24 @@
 - gate 변화: 없음.
 - 결정: 없음 — SRS §25 전제의 이미지 계약화.
 - 교훈: 문서 버전을 리터럴로 고정한 시험은 버전이 오를 때마다 깨진다 — 헤더를 읽어 판정하도록 쓰는 편이 유지된다(단, 고정 의도라면 리터럴이 맞을 수도 있다. 이번엔 D-143 표기 존재 확인이 본래 목적이므로 헤더 판독형으로).
+
+## 2026-09-22 · uncommitted · feat(sd): allocate robot number and Fleet defaults, pin writes to the reviewed plan
+
+- 변경: `prepare-rosy-sd.ps1`에서 `-RobotNumber`, `-FleetEndpoint`, `-FleetTrustProfile`을
+  선택 입력으로 바꿨다. 로봇 번호는 registry의 빈 번호(1-61) 중 무작위로 배정하고, Fleet 값은
+  콘솔 호스트(`https://<host>.local`, `rosy-pilot-lan`)로 채운다. plan에 출처
+  (`robot_number_source`, `fleet_source`)를 남긴다. `-PlanPath`는 PlanOnly 결과를 한 번만 저장하고,
+  WRITE는 그 plan의 신원·preset·model·country·Fleet 값을 그대로 쓰고, 디스크·release·image
+  hash·SSID·DDS 신원·registry 경로가 바뀌었거나 명시 인자가 plan과 (대소문자까지) 다르면 writer
+  호출 전에 실패한다. 자동 번호는 WRITE 안에서 뽑지 않는다 — plan 없이 쓰려면 `-RobotNumber` 필수.
+  code-reviewer 지적(대소문자 무시 비교, 조작된 plan의 범위 검사 우회, 미표시 자동 번호,
+  preset 미고정)을 반영했다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py -q` 46 passed; `python -m pytest
+  test/test_sd_personalization.py test/test_media_readback.py test/test_offline_image_signer.py
+  deploy/sd/test -q` 27 passed (2026-09-22 Windows)
+- gate 변화: 없음. MEDIA/DEVICE HOLD 유지
+- 결정: D-33 유지 — 고정 기본값이 아니라 registry 기준 할당이므로 신규 카드마다 다른 번호가 나온다.
+  무작위 배정은 registry가 분리된 운영 PC 사이의 DDS domain 충돌 확률을 낮춘다.
+- 교훈: PlanOnly와 WRITE가 각자 신원을 새로 뽑으면 검토한 계획과 기록한 카드가 달라진다.
+  자동 배정을 도입하면 검토 결과를 고정하는 경로가 같이 필요하다.
+

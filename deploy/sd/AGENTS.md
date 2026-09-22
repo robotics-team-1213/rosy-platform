@@ -20,6 +20,16 @@ one-time per-card provisioning bundle.
   listed file, manifest identity and the exact `.img.xz` filename/hash with
   `verify-image-release.py`. Signature-file presence alone is never enough.
 - Tests and `-PlanOnly` must not invoke an image writer or alter physical media.
+- Omitted `-RobotNumber` is drawn at random from the registry's free slots (1-61),
+  never a fixed default (D-33). Omitted Fleet values default to
+  `https://<this-host>.local` / `rosy-pilot-lan` and the plan says so
+  (`robot_number_source`, `fleet_source`); nothing on the robot reads them yet.
+- `-PlanOnly -PlanPath <file>` saves the reviewed plan once (no overwrite). A write
+  with the same `-PlanPath` takes robot number, name, UID, preset, model, country and
+  Fleet values from the plan, and refuses before the writer if the disk, release, image
+  hash, Wi-Fi SSID, DDS identity or registry path drifted, or an explicit argument
+  differs from the plan (case-sensitive). An automatic robot number is never drawn
+  inside a write: without `-PlanPath` a write must pass `-RobotNumber`.
 - After a verified writer exit, compare every decompressed image byte with the
   selected physical disk before `prepare-rosy-sd.ps1` creates the one-time bundle
   through stdin and copies it atomically to `rosy-provision/provision.json` on the
