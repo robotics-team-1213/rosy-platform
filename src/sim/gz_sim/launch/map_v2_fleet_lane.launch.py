@@ -61,9 +61,11 @@ def generate_launch_description():
             parameters=[line_config, {
                 "use_sim_time": True,
                 "require_camera_controls_stable": False,
-                # Rendered grey: floor ~109, robot body in the bottom rows ~218,
-                # lane paint ~224-228. 220 keeps the body out of the line mask.
-                "camera_bright_threshold": 220,
+                # Rendered grey: floor ~103-110, paint 228 near dimming to 214
+                # at 0.44 m (run 193728). The body (~218, rows >= 139) lies
+                # nearer than edge_left's bird's-eye view samples, so 180
+                # (midway) keeps the far paint that 220 lost.
+                "camera_bright_threshold": 180,
                 # Hold the inner block's outline (the lap's left boundary) a
                 # half-width off in bird's-eye view: row-wise pairing stopped
                 # at the 65 deg bends (run 184434). Declared Gazebo camera

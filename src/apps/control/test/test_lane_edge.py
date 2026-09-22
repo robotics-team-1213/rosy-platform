@@ -31,9 +31,14 @@ H = 0.0925
 LW = 0.025
 CAM_X = 0.034
 W, HT = 320, 180
-FLOOR, PAINT, BODY = 109, 225, 218
+FLOOR, BODY = 109, 218
 DT = 0.2
-KW = dict(bright_threshold=220, lane_half_width_m=H,
+# Gazebo run 193728 camera_start.png: paint dims with range, the dimmer
+# line 226 at 0.12 m, 221 at 0.23 m, 217 at 0.33 m, 214 at 0.44 m (fit:
+# 229 - 35 d); floor 103-110; the body (218) only fills rows >= 139, nearer
+# than the bird's-eye view samples. At threshold 220 the left line showed
+# 0.14 m and never seeded; 180 sits midway between floor and far paint.
+KW = dict(bright_threshold=180, lane_half_width_m=H,
           roi_top_fraction=0.25, roi_bottom_fraction=0.75, washed_fraction=0.75)
 
 GROUND = simulation_ground_plane(
@@ -89,7 +94,7 @@ class World:
         frame = np.full((HT, W), FLOOR, np.uint8)
         painted = np.zeros((HT, W), bool)
         painted[inside] = self.paint[row[inside], col[inside]] > 0
-        frame[painted] = PAINT
+        frame[painted] = np.clip(np.rint(229.0 - 35.0 * _FWD[painted]), 0, 255)
         frame[139:, :] = BODY
         return frame
 
@@ -186,6 +191,17 @@ def test_birds_eye_cells_image_the_floor_they_stand_for():
 
 
 # --- Fail-closed and seeding ---------------------------------------------------
+
+def test_measured_far_paint_dimming_defeats_the_row_mode_threshold():
+    """At 220 the far half of each line is lost (run 193728 never seeded)."""
+    world = lane([(-1.0, 0.0), (2.0, 0.0)])
+    frame = world.render((0.0, 0.0, 0.0))
+    strict = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    assert strict.update(0.0, (0.0, 0.0, 0.0), frame, GROUND, **dict(KW, bright_threshold=220)
+                         ) is None
+    assert LaneEdgeFollower(camera_x_offset_m=CAM_X).update(
+        0.0, (0.0, 0.0, 0.0), frame, GROUND, **KW) is not None
+
 
 def test_no_ground_or_no_odometry_is_no_output():
     world = lane([(-1.0, 0.0), (1.5, 0.0)])

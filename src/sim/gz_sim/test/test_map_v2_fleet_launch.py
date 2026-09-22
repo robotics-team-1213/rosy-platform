@@ -15,12 +15,15 @@ def test_launch_uses_the_catalogued_world_and_spawn():
     assert '"bridge_image": "true"' in source
 
 
-def test_line_observer_threshold_sits_between_body_and_paint():
-    """Gazebo run 20260922T_map_v2_fleet_161132 measured grey levels: floor 109,
-    the robot's own body filling the bottom rows 218, lane paint 224-228.
-    At 180 the body read as line and the frame was rejected as washed out."""
+def test_line_observer_threshold_sits_between_floor_and_far_paint():
+    """Run 161132: floor 109, the robot's body 218 in rows >= 139, near paint
+    224-228; row-wise modes needed 220 to keep the body out. edge_left never
+    samples those rows (bird's-eye view starts at 0.09 m, the body ends at
+    0.083 m), and run 193728 showed paint dimming to 214 at 0.44 m, so at 220
+    the left line was 0.14 m long and never seeded. 180 sits midway."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_bright_threshold": 220' in source
+    assert '"camera_lane_mode": "edge_left"' in source
+    assert '"camera_bright_threshold": 180' in source
 
 
 def test_only_core_can_command_motion():
