@@ -32,13 +32,13 @@ plans:
 - C++ BNO055 IMU 드라이버 노드. `RealtimePublisher<sensor_msgs::msg::Imu>`로 `imu_raw`를 발행한다. 기본 `/dev/i2c-0`, `0x28`, 100 Hz, `frame_id=imu_link`.
 - 작업 트리에 미커밋 변경이 크다: `config/`, `launch/`, `src/bno055_device.{cpp,hpp}`, `src/imu_sample.hpp`, `test/` 신규 추가와 `CMakeLists.txt`/`package.xml`/`main_node.cpp`/`AGENTS.md` 수정. LOCAL·SOURCE 증거는 이 작업 트리 기준이다.
 - `SYS_TRIGGER` reset은 `reset_on_start:=true`일 때만 실행되며 기본은 비활성이다(AGENTS.md 2026-09-14 갱신).
-- `deploy/robot/Dockerfile`에는 core/io 두 이미지만 있고 imu_bno055를 포함하지 않는다. 드라이버 빌드는 CMake에서 aarch64로 게이트된다.
+- `deploy/image/ 빌더`에는 core/io 두 이미지만 있고 imu_bno055를 포함하지 않는다. 드라이버 빌드는 CMake에서 aarch64로 게이트된다.
 
 ## 다음 gate
 
 1. Linux ARM64 ROS 환경에서 드라이버를 빌드하고 `test_driver_faults.py`의 주입 버스 실행 시험을 `BNO055_TEST_EXECUTABLE`로 재실행한다.
 2. ROS 2 Jazzy 컨테이너에서 노드 graph/parameter smoke를 실행해 ROS-SIM을 되돌린다.
-3. hardware 프로필(D-56 optional IMU)이 `deploy/robot/Dockerfile`에 배선되면 ARTIFACT blocker를 서명 artifact 발행으로 바꾸고 DEVICE/FIELD를 PARKED에서 HOLD로 올린다.
+3. hardware 프로필(D-56 optional IMU)이 `deploy/image/ 빌더`에 배선되면 ARTIFACT blocker를 서명 artifact 발행으로 바꾸고 DEVICE/FIELD를 PARKED에서 HOLD로 올린다.
 
 ## 현재 유효한 금지사항
 

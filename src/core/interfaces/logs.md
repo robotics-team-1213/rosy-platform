@@ -1,3 +1,10 @@
+## 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
+
+- 변경: deploy/robot/Dockerfile 의존성을 Native Pi Image Builder로 일괄 변경
+- 증거: D-161, D-164
+- gate 변화: 없음
+
+
 # interfaces logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.

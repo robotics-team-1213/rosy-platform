@@ -18,7 +18,7 @@ gates:
     cmd: "ros2 launch gz_sim gz_multi.launch.py robots:=1 world_name:=map_260905.world mode:=slam headless:=true core:=true"
   ARTIFACT:
     state: HOLD
-    blocker: "io 이미지에 포함된다(deploy/robot/Dockerfile `COPY src/description`, `--packages-select`에 포함; meshes는 `RUN mkdir -p`로 빈 폴더만 생성). 서명 manifest·OCI archive·immutable registry digest 발행 전"
+    blocker: "io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/description`, `--packages-select`에 포함; meshes는 `RUN mkdir -p`로 빈 폴더만 생성). 서명 manifest·OCI archive·immutable registry digest 발행 전"
   DEVICE:
     state: HOLD
     blocker: "Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음"
@@ -34,7 +34,7 @@ plans:
 
 - 로봇 URDF/xacro, visual/collision meshes, RViz 모델 뷰. 첫 하드웨어는 Pinky Pro다. `namespace`/`frame_prefix`를 지원한다(D-4).
 - 시뮬레이션 렌더는 DART 호환 primitive collision과 축 방향 wheel cylinder를 사용하고, 실제 description의 상세 collision mesh는 보존한다.
-- `deploy/robot/Dockerfile`의 io-build 단계가 `description`을 복사·빌드한다. 단 `.dockerignore`가 `src/description/meshes/**`를 build context에서 제외하고, Dockerfile이 `RUN mkdir -p src/description/meshes`로 빈 폴더만 만든다 — meshes 자체는 device 이미지에 실리지 않는다.
+- `deploy/image/ 빌더`의 io-build 단계가 `description`을 복사·빌드한다. 단 `.dockerignore`가 `src/description/meshes/**`를 build context에서 제외하고, Dockerfile이 `RUN mkdir -p src/description/meshes`로 빈 폴더만 만든다 — meshes 자체는 device 이미지에 실리지 않는다.
 - Gazebo는 `rosy_gz.urdf.xacro`를 쓴다. `left_wheel_joint`/`right_wheel_joint` 이름은 `bringup`과 맞춰야 한다.
 
 ## 다음 gate

@@ -16,7 +16,7 @@ gates:
     state: N/A
   ARTIFACT:
     state: HOLD
-    blocker: "io 이미지에 포함된다(deploy/robot/Dockerfile `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전"
+    blocker: "io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전"
   DEVICE:
     state: HOLD
     blocker: "Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음"
@@ -31,9 +31,9 @@ plans:
 ## 지금 상태
 
 - LED·lamp·brightness·LCD emotion용 custom ROS 2 서비스(rosidl 패키지): `Emotion.srv`, `SetLed.srv`, `SetBrightness.srv`, `SetLamp.srv`. `.srv` 변경 후 `colcon build --packages-select interfaces`와 의존 패키지 재빌드가 필요하다.
-- 모듈 경로는 clean이지만 ARTIFACT 판정 근거인 `deploy/robot/Dockerfile`에 미커밋 WIP가 있어 `last_verified`는 `uncommitted`다.
+- 모듈 경로는 clean이지만 ARTIFACT 판정 근거인 `deploy/image/ 빌더`에 미커밋 WIP가 있어 `last_verified`는 `uncommitted`다.
 - REST/Fleet 계약은 여기 없다 — pydantic 스키마는 `core.protocol.schemas`가 유일 소스다(AGENTS.md).
-- `deploy/robot/Dockerfile`의 io-build 단계가 `interfaces`를 복사·빌드한다. 이 모듈은 device에 실제로 배포된다.
+- `deploy/image/ 빌더`의 io-build 단계가 `interfaces`를 복사·빌드한다. 이 모듈은 device에 실제로 배포된다.
 
 ## 다음 gate
 
