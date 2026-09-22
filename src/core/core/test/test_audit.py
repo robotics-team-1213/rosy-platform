@@ -71,28 +71,33 @@ class Clock:
         self.now += seconds
 
 
-def test_a_write_does_not_rewrite_the_whole_file_every_time():
+def test_a_write_does_not_rewrite_the_whole_file_every_time(tmp_path, monkeypatch):
     """예전에는 이벤트 하나마다 파일 전체를 읽고 파싱하고 다시 썼다.
 
     보존 기간이 30 일이라 비용은 계속 자라고, 그 비용은 이벤트를 낸 스레드가
     문다 — 그중 하나가 50 Hz cmd_vel 타이머다.
-    """
-    import tempfile
-    import time
 
-    path = Path(tempfile.mkdtemp()) / "audit.jsonl"
+    벽시계로 재지 않는다(부하 걸린 CI 에서 흔들린다). 대신 정리 시각이 아닌
+    기록이 하는 일을 센다: 덧붙이기 핸들 하나를 열 뿐, 파일을 읽지 않는다.
+    """
+    path = tmp_path / "audit.jsonl"
     log = FileAuditLog(path)
     for seq in range(2000):
         log.record(_event(seq, "2026-09-03T12:00:00+00:00"))
+    assert log.settle()
 
-    started = time.perf_counter()
+    opens: list[str] = []
+    real_open = Path.open
+
+    def note(self, mode="r", *args, **kwargs):
+        opens.append(mode)
+        return real_open(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", note)
     log.record(_event(2000, "2026-09-03T12:00:00+00:00"))
-    elapsed_ms = (time.perf_counter() - started) * 1000
+    monkeypatch.setattr(Path, "open", real_open)
 
-    assert elapsed_ms < 5.0, (
-        f"a single record cost {elapsed_ms:.1f} ms against a 2000-line log; "
-        "one 50 Hz cmd_vel cycle is 20 ms"
-    )
+    assert opens == ["a"], f"a non-due record opened {opens}; it must only append"
 
 
 def test_the_write_path_prunes_at_most_once_an_hour(tmp_path):
@@ -102,17 +107,21 @@ def test_the_write_path_prunes_at_most_once_an_hour(tmp_path):
     log = FileAuditLog(path, retention_days=30, now=lambda: now,
                        monotonic=clock, prune_interval_s=3600.0)
     log.record(_event(1, (now - timedelta(days=31)).isoformat()))   # 첫 기록은 정리한다
+    assert log.settle()
 
     log.record(_event(2, (now - timedelta(days=31)).isoformat()))
     clock.advance(60.0)
     log.record(_event(3, now.isoformat()))
+    assert log.settle()
 
     # 아직 한 시간이 지나지 않았으니 오래된 줄이 파일에 남아 있다.
     assert "seq\":2" in path.read_text(encoding="utf-8").replace(" ", "")
 
     clock.advance(3600.0)
     log.record(_event(4, now.isoformat()))
+    assert log.settle()
 
+    assert "seq\":2" not in path.read_text(encoding="utf-8").replace(" ", "")
     assert [event.seq for event in log.history()] == [3, 4]
 
 
@@ -120,13 +129,16 @@ def test_the_first_write_still_prunes_what_the_last_run_left(tmp_path):
     """재시작 직후 파일에 남아 있는 오래된 줄은 첫 기록에서 정리된다."""
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
     path = tmp_path / "audit.jsonl"
-    FileAuditLog(path, now=lambda: now).record(
-        _event(1, (now - timedelta(days=31)).isoformat()))
+    first = FileAuditLog(path, now=lambda: now)
+    first.record(_event(1, (now - timedelta(days=31)).isoformat()))
+    assert first.settle()
 
-    FileAuditLog(path, retention_days=30, now=lambda: now).record(
-        _event(2, now.isoformat()))
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    log.record(_event(2, now.isoformat()))
+    assert log.settle()
 
     assert [event.seq for event in FileAuditLog(path, now=lambda: now).history()] == [2]
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 1, "the stale line is gone"
 
 
 def test_reading_always_honours_retention(tmp_path):
@@ -150,9 +162,11 @@ def test_pruning_keeps_the_original_line_rather_than_re_serialising(tmp_path):
     kept_line = path.read_text(encoding="utf-8").strip()
 
     log.record(_event(2, (now - timedelta(days=31)).isoformat()))
-    # 정리는 쓰기 경로가 한다. 새 인스턴스의 첫 기록이 그 시각이다.
+    assert log.settle()
+    # 정리는 쓰기 경로가 요청한다. 새 인스턴스의 첫 기록이 그 시각이다.
     fresh = FileAuditLog(path, retention_days=30, now=lambda: now)
     fresh.record(_event(3, now.isoformat()))
+    assert fresh.settle()
 
     lines = path.read_text(encoding="utf-8").strip().splitlines()
     assert lines[0] == kept_line
@@ -168,11 +182,13 @@ def test_a_failed_prune_leaves_the_log_intact(tmp_path, monkeypatch):
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
     log.record(_event(1, now.isoformat()))
     log.record(_event(2, (now - timedelta(days=31)).isoformat()))
+    assert log.settle()
     before = path.read_text(encoding="utf-8")
 
     monkeypatch.setattr(_os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("disk")))
     fresh = FileAuditLog(path, retention_days=30, now=lambda: now)
     fresh.record(_event(3, now.isoformat()))       # 덧붙이기는 되고 정리만 실패한다
+    assert fresh.settle()
 
     assert path.read_text(encoding="utf-8").startswith(before)
     assert not list(tmp_path.glob("*.tmp")), "the temporary file must not be left behind"
@@ -195,6 +211,7 @@ def test_a_failed_prune_is_not_reported_as_an_unwritable_log(tmp_path, monkeypat
     monkeypatch.setattr(_os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("disk")))
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
     log.record(_event(2, now.isoformat()))         # 예외가 밖으로 나오지 않는다
+    assert log.settle()
 
     health = log.health()
     assert health["writable"] is True
@@ -217,6 +234,7 @@ def test_a_read_does_not_rewrite_the_file(tmp_path):
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
     log.record(_event(1, (now - timedelta(days=31)).isoformat()))
     log.record(_event(2, now.isoformat()))
+    assert log.settle()
     before = path.read_bytes()
     inode = path.stat().st_ino
 
@@ -233,7 +251,9 @@ def test_a_prune_with_nothing_to_drop_does_not_rewrite(tmp_path):
     잠깐 사라지는 창이 생기고, 그것을 매 시각 여는 이유가 없다."""
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
     path = tmp_path / "audit.jsonl"
-    FileAuditLog(path, retention_days=30, now=lambda: now).record(_event(1, now.isoformat()))
+    first = FileAuditLog(path, retention_days=30, now=lambda: now)
+    first.record(_event(1, now.isoformat()))
+    assert first.settle()
 
     seen = []
     import os as _os
@@ -242,6 +262,7 @@ def test_a_prune_with_nothing_to_drop_does_not_rewrite(tmp_path):
     try:
         _os.replace = lambda *a, **k: (seen.append(a), real(*a, **k))[1]
         log.record(_event(2, now.isoformat()))     # 첫 기록 = 정리 시각
+        assert log.settle()
     finally:
         _os.replace = real
 
@@ -260,16 +281,16 @@ def test_a_write_failure_is_counted_rather_than_lost(tmp_path, monkeypatch):
     log = FileAuditLog(tmp_path / "audit.jsonl")
     assert log.health() == {"writable": True, "write_failures": 0,
                             "write_failures_total": 0, "prune_failures": 0,
-                            "prune_skipped": 0, "last_skip_reason": None,
-                            "last_write_error": None, "last_prune_error": None}
+                            "prune_skipped": 0, "serialize_failures": 0,
+                            "last_skip_reason": None, "last_write_error": None,
+                            "last_prune_error": None, "last_serialize_error": None}
 
     def refuse(*args, **kwargs):
         raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(Path, "open", refuse)
     for _ in range(3):
-        with pytest.raises(OSError):
-            log.record(_event(1, "2026-09-03T12:00:00+00:00"))
+        log.record(_event(1, "2026-09-03T12:00:00+00:00"))   # 던지지 않는다 — 센다
 
     health = log.health()
     assert health["writable"] is False
@@ -303,8 +324,7 @@ def test_a_recovered_write_clears_the_alarm(tmp_path, monkeypatch):
         raise OSError("nope")
 
     monkeypatch.setattr(Path, "open", refuse)
-    with pytest.raises(OSError):
-        log.record(_event(1, "2026-09-03T12:00:00+00:00"))
+    log.record(_event(1, "2026-09-03T12:00:00+00:00"))
     assert log.health()["writable"] is False
 
     monkeypatch.setattr(Path, "open", real_open)
@@ -348,24 +368,32 @@ def test_a_torn_tail_does_not_take_the_audit_log_down(tmp_path):
     assert [event.seq for event in log.history()] == [1]
 
     log.record(_event(3, now.isoformat()))         # 예외가 밖으로 나오지 않는다
+    assert log.settle()
 
     assert [event.seq for event in log.history()] == [1, 3]
     health = log.health()
     assert health["writable"] is True
-    assert health["prune_failures"] == 0, "정리는 실패한 것이 아니라 그 줄을 버린 것이다"
+    assert health["prune_failures"] == 0, "정리는 실패한 것이 아니라 그 줄을 격리한 것이다"
 
 
-def test_a_torn_tail_is_compacted_away_rather_than_kept_forever(tmp_path):
-    """스스로 낫는 것이 요점이다. 세어만 두면 파일은 영원히 그 상태다."""
+def test_a_torn_tail_is_quarantined_rather_than_kept_forever_or_deleted(tmp_path):
+    """스스로 낫는 것이 요점이다. 세어만 두면 파일은 영원히 그 상태다.
+
+    그렇다고 지우지도 않는다 — 감사 로그에서 삭제는 되돌릴 수 없다. 원본
+    바이트 그대로 격리 파일로 옮긴다.
+    """
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
     path = tmp_path / "audit.jsonl"
     good = _with_a_torn_line(path, now)
 
-    FileAuditLog(path, retention_days=30, now=lambda: now).record(_event(3, now.isoformat()))
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    log.record(_event(3, now.isoformat()))
+    assert log.settle()
 
     raw = path.read_bytes()
     assert b"\xed\x95" not in raw
     assert raw.decode("utf-8").splitlines()[0] == good
+    assert log.quarantine_path.read_bytes() == TORN, "the torn bytes moved, byte for byte"
 
 
 def test_blank_lines_are_compacted_rather_than_kept_forever(tmp_path):
@@ -376,7 +404,10 @@ def test_blank_lines_are_compacted_rather_than_kept_forever(tmp_path):
     good = _event(1, now.isoformat()).model_dump_json()
     path.write_text("\n\n   \n" + good + "\n", encoding="utf-8")
 
-    FileAuditLog(path, retention_days=30, now=lambda: now).record(_event(2, now.isoformat()))
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    log.record(_event(2, now.isoformat()))
+    assert log.settle()
+    assert not log.quarantine_path.exists(), "a blank line is not a record to keep"
 
     assert path.read_text(encoding="utf-8").splitlines()[0] == good
     assert len(path.read_text(encoding="utf-8").splitlines()) == 2
@@ -405,6 +436,7 @@ def _prune_with(log: FileAuditLog, path: Path, during) -> None:
     try:
         FileAuditLog._is_fresh = once
         log.record(_event(2, datetime(2026, 9, 3, tzinfo=timezone.utc).isoformat()))
+        assert log.settle()
     finally:
         FileAuditLog._is_fresh = real
     assert fired, "the hook never ran; the prune did not reach the parse loop"
@@ -550,6 +582,7 @@ def test_the_terminator_is_checked_once_not_on_every_record(tmp_path):
         return real_open(self, *args, **kwargs)
 
     log.record(_event(1, now.isoformat()))          # 첫 기록이 확인한다
+    assert log.settle()
     before = len(opens)
     try:
         Path.open = note
@@ -572,10 +605,11 @@ def test_a_snapshot_read_failure_is_counted_rather_than_swallowed(tmp_path, monk
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
     path = tmp_path / "audit.jsonl"
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
-    monkeypatch.setattr(FileAuditLog, "_snapshot_locked",
+    monkeypatch.setattr(FileAuditLog, "_open_snapshot_locked",
                         lambda self: (_ for _ in ()).throw(PermissionError("in use")))
 
     log.record(_event(1, now.isoformat()))          # 예외가 밖으로 나오지 않는다
+    assert log.settle()
 
     health = log.health()
     assert health["prune_failures"] == 1
@@ -596,9 +630,10 @@ def test_a_failing_snapshot_read_is_not_retried_on_every_record(tmp_path, monkey
         attempts.append(1)
         raise PermissionError("in use")
 
-    monkeypatch.setattr(FileAuditLog, "_snapshot_locked", refuse)
+    monkeypatch.setattr(FileAuditLog, "_open_snapshot_locked", refuse)
     for seq in range(6):
         log.record(_event(seq, now.isoformat()))
+    assert log.settle()
 
     assert attempts == [1], "the prune retried on the hot path"
 
@@ -657,6 +692,7 @@ def test_a_record_with_an_unreadable_timestamp_is_kept_not_deleted(tmp_path):
 
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
     log.record(_event(2, now.isoformat()))
+    assert log.settle()
 
     assert [event.seq for event in log.history()] == [1, 2]
     assert broken in path.read_text(encoding="utf-8")
@@ -689,7 +725,9 @@ def test_a_line_the_decoder_had_to_mangle_is_not_rewritten_mangled(tmp_path):
     stale = _event(2, (now - timedelta(days=31)).isoformat()).model_dump_json()
     path.write_bytes(corrupt + b"\n" + stale.encode("utf-8") + b"\n")
 
-    FileAuditLog(path, retention_days=30, now=lambda: now).record(_event(3, now.isoformat()))
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    log.record(_event(3, now.isoformat()))
+    assert log.settle()
 
     raw = path.read_bytes()
     assert stale.encode("utf-8") not in raw, "the prune did run"
@@ -735,6 +773,7 @@ def test_only_one_record_is_ever_inside_the_compaction_window(tmp_path):
             thread.start()
         for thread in threads:
             thread.join()
+        assert log.settle()
     finally:
         FileAuditLog._is_fresh = real
 
@@ -755,6 +794,7 @@ def test_a_failed_write_does_not_leave_the_tail_looking_terminated(tmp_path, mon
     path = tmp_path / "audit.jsonl"
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
     log.record(_event(1, now.isoformat()))          # 캐시가 참이 된다
+    assert log.settle()
 
     real_open = Path.open
 
@@ -775,9 +815,9 @@ def test_a_failed_write_does_not_leave_the_tail_looking_terminated(tmp_path, mon
             raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(Path, "open", lambda self, *a, **k: HalfWrites(real_open(self, *a, **k)))
-    with pytest.raises(OSError):
-        log.record(_event(2, now.isoformat()))
+    log.record(_event(2, now.isoformat()))
     monkeypatch.setattr(Path, "open", real_open)
+    assert log.health()["write_failures"] == 1
 
     assert not path.read_bytes().endswith(b"\n"), "the fixture must leave a torn tail"
 
@@ -805,6 +845,7 @@ def test_a_last_byte_we_could_not_read_is_treated_as_unterminated(tmp_path, monk
 
     monkeypatch.setattr(Path, "open", deny_reads)
     log.record(_event(2, now.isoformat(), "safety.estop"))
+    assert log.settle()
     monkeypatch.setattr(Path, "open", real_open)
 
     assert 2 in [event.seq for event in log.history()]
@@ -820,9 +861,12 @@ def test_what_record_wrote_is_what_the_prune_keeps(tmp_path):
     log = FileAuditLog(path, retention_days=30, now=lambda: now)
     log.record(_event(1, now.isoformat()))
     log.record(_event(2, (now - timedelta(days=31)).isoformat()))
+    assert log.settle()
     written = path.read_bytes().split(b"\n")[0]
 
-    FileAuditLog(path, retention_days=30, now=lambda: now).record(_event(3, now.isoformat()))
+    fresh = FileAuditLog(path, retention_days=30, now=lambda: now)
+    fresh.record(_event(3, now.isoformat()))
+    assert fresh.settle()
 
     assert written in path.read_bytes(), "the line the module itself wrote came back different"
 
@@ -860,7 +904,9 @@ def test_the_writer_asks_for_no_newline_translation(tmp_path, monkeypatch):
         return real_open(self, mode, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", note)
-    FileAuditLog(tmp_path / "audit.jsonl").record(_event(1, "2026-09-03T12:00:00+00:00"))
+    log = FileAuditLog(tmp_path / "audit.jsonl")
+    log.record(_event(1, "2026-09-03T12:00:00+00:00"))
+    assert log.settle()
 
     # `== [""]` 로 적으면 정당한 두 번째 append 열기(재시도 등)에도 깨지고,
     # 그때 나오는 메시지는 엉뚱한 곳을 가리킨다.
@@ -885,6 +931,7 @@ def test_a_log_written_by_an_older_crlf_build_upgrades_without_loss(tmp_path):
     assert [event.seq for event in log.history()] == [2], "the reader must cope with CRLF"
 
     log.record(_event(3, now.isoformat()))
+    assert log.settle()
 
     assert [event.seq for event in log.history()] == [2, 3]
     raw = path.read_bytes()
@@ -893,19 +940,30 @@ def test_a_log_written_by_an_older_crlf_build_upgrades_without_loss(tmp_path):
     assert len(raw.split(b"\n")) == 3, "two lines and the trailing terminator"
 
 
-def test_a_line_is_split_on_the_newline_and_nothing_else():
+@pytest.mark.parametrize("block", [1, 3, 1024 * 1024])
+def test_a_line_is_split_on_the_newline_and_nothing_else(monkeypatch, block):
     """`bytes.splitlines()` 는 수직탭·폼피드·파일구분자에서도 자른다.
 
     이 파일의 줄 구분자는 개행 하나다(JSON Lines). 갈라지면 한 줄이었던
-    기록이 두 줄로 보여 둘 다 깨진 JSON 이 된다 — 그리고 이제 조회와 정리가
-    **둘 다** 이 함수에 기대므로, 그 결함은 양쪽에 동시에 생긴다.
+    기록이 두 줄로 보여 둘 다 깨진 JSON 이 된다. 정리는 파일을 조각으로
+    읽으므로, 조각 경계에 걸친 줄도 같은 답이어야 한다.
     """
-    from core_events.events.audit import _raw_lines
+    import io
 
-    assert _raw_lines(b'{"a":"x\ry"}') == [b'{"a":"x\ry"}']
-    assert _raw_lines(b"one\ntwo\n") == [b"one", b"two"]
-    assert _raw_lines(b"") == []
-    assert _raw_lines(b"no terminator") == [b"no terminator"]
+    import core_events.events.audit as audit
+
+    monkeypatch.setattr(audit, "_COMPACT_BLOCK", block)
+
+    def lines(blob: bytes) -> list[bytes]:
+        return list(audit._lines_forward(io.BytesIO(blob), len(blob)))
+
+    assert lines(b'{"a":"x\ry"}') == [b'{"a":"x\ry"}']
+    assert lines(b"one\ntwo\n") == [b"one", b"two"]
+    assert lines(b"") == []
+    assert lines(b"no terminator") == [b"no terminator"]
+    assert lines(b"\n\nx\n") == [b"", b"", b"x"]
+    # 연 순간의 크기까지만 읽는다 — 그 뒤에 덧붙는 도중의 줄은 보지 않는다.
+    assert list(audit._lines_forward(io.BytesIO(b"one\ntwo\npartial"), 8)) == [b"one", b"two"]
 
 
 @pytest.mark.parametrize("suffix,visible,label", [
@@ -944,7 +1002,230 @@ def test_what_a_read_returns_is_what_the_prune_keeps(tmp_path, suffix, visible, 
 
     assert (7 in before) is visible, f"{label}: the read disagrees with what we pinned"
 
-    log.record(_event(9, now.isoformat()))          # 첫 기록이 정리한다
+    log.record(_event(9, now.isoformat()))          # 첫 기록이 정리를 요청한다
+    assert log.settle()
 
     after = {event.seq for event in log.history()}
     assert before - {1} <= after, f"{label}: a record the read returned was pruned away"
+
+
+# --- 정리와 조회는 이벤트를 낸 스레드를 세우지 않는다 (2026-09-22 리뷰) --------
+
+
+def _stale_heavy_log(path: Path, now: datetime, lines: int = 3000) -> None:
+    """오래된 줄 하나 + 보존 기간 안의 줄 여럿. 정리하면 반드시 다시 쓴다."""
+    stale = _event(0, (now - timedelta(days=40)).isoformat()).model_dump_json()
+    fresh = _event(1, now.isoformat()).model_dump_json()
+    path.write_text(stale + "\n" + (fresh + "\n") * lines, encoding="utf-8")
+
+
+def test_a_due_prune_is_handed_off_rather_than_done_by_the_caller(tmp_path, monkeypatch):
+    """`record()` 는 버스 구독자이고, 버스는 구독자를 동기로 부른다.
+
+    정리를 그 자리에서 하면 10 만 줄 파일에서 첫 기록이 656 ms, 매시 788 ms 를
+    이벤트를 낸 스레드 — 50 Hz cmd_vel 타이머일 수 있다 — 가 문다. 정리를 막아
+    둔 채로 `record()` 가 돌아오는지, 정리가 **다른 스레드** 에서 도는지 센다.
+    """
+    import threading
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _stale_heavy_log(path, now)
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+
+    real = FileAuditLog._compact
+    release = threading.Event()
+    ran_on: list[int] = []
+
+    def blocked(self):
+        ran_on.append(threading.get_ident())
+        assert release.wait(10), "the test never released the compaction"
+        return real(self)
+
+    monkeypatch.setattr(FileAuditLog, "_compact", blocked)
+    log.record(_event(2, now.isoformat()))         # 정리가 막혀 있어도 돌아온다
+    assert not release.is_set()
+
+    log.record(_event(3, now.isoformat()))         # 정리 도중의 기록도 덧붙이기만 한다
+    release.set()
+    assert log.settle()
+
+    assert ran_on and threading.get_ident() not in ran_on, "the caller did the prune"
+    assert len(ran_on) == 1, "one due prune, one compaction"
+    raw = path.read_text(encoding="utf-8")
+    assert '"seq":0' not in raw.replace(" ", ""), "the prune still happened"
+    assert [event.seq for event in log.history(limit=2)] == [2, 3], (
+        "the record appended during the compaction survived the splice")
+
+
+def test_a_read_does_not_hold_the_write_lock_while_it_parses(tmp_path, monkeypatch):
+    """락을 쥔 채 19 MB 를 읽고 파싱하면 그동안 `record()` 가, 즉 50 Hz 타이머가
+    멈춘다. 여는 순간만 잡는다 — 정리의 `os.replace` 와 겹치지 않게."""
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    for seq in (1, 2, 3):
+        log.record(_event(seq, now.isoformat()))
+    assert log.settle()
+
+    held: list[bool] = []
+    real = FileAuditLog._event_from
+
+    def note(raw_line):
+        free = log._lock.acquire(blocking=False)
+        held.append(not free)
+        if free:
+            log._lock.release()
+        return real(raw_line)
+
+    monkeypatch.setattr(FileAuditLog, "_event_from", staticmethod(note))
+
+    assert [event.seq for event in log.history()] == [1, 2, 3]
+    assert held and not any(held), "history() parsed while holding the write lock"
+
+
+def test_a_small_read_parses_only_the_tail(tmp_path, monkeypatch):
+    """대시보드는 페이지를 열 때 `limit=1` 로 묻는다. 30 일치를 모두 파싱해
+    하나를 돌려주면 10 만 줄에서 1.4 초다."""
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    line = _event(1, now.isoformat()).model_dump_json()
+    path.write_text((line + "\n") * 5000 + _event(2, now.isoformat()).model_dump_json() + "\n",
+                    encoding="utf-8")
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+
+    parsed: list[int] = []
+    real = FileAuditLog._event_from
+
+    def count(raw_line):
+        parsed.append(1)
+        return real(raw_line)
+
+    monkeypatch.setattr(FileAuditLog, "_event_from", staticmethod(count))
+
+    assert [event.seq for event in log.history(limit=1)] == [2]
+    assert len(parsed) <= 2, f"a limit=1 read parsed {len(parsed)} lines"
+
+
+@pytest.mark.parametrize("chunk", [1, 7, 64, 4096])
+def test_reading_backwards_matches_a_full_parse(tmp_path, monkeypatch, chunk):
+    """끝에서부터 조각으로 읽어도 답은 같아야 한다 — 조각 경계에 걸친 줄,
+    보존 기간이 지난 줄, 깨진 줄, 빈 줄, `since_seq` 까지."""
+    import core_events.events.audit as audit
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    rows = []
+    for seq in range(1, 31):
+        ts = (now - timedelta(days=40 if seq % 7 == 0 else 1)).isoformat()
+        rows.append(_event(seq, ts).model_dump_json().encode("utf-8"))
+        if seq % 11 == 0:
+            rows.append(b"not-json")
+        if seq % 13 == 0:
+            rows.append(b"")
+    path.write_bytes(b"\n".join(rows) + b"\n")
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    expected = [seq for seq in range(1, 31) if seq % 7 != 0]
+
+    monkeypatch.setattr(audit, "_READ_CHUNK", chunk)
+
+    assert [event.seq for event in log.history()] == expected
+    assert [event.seq for event in log.history(limit=5)] == expected[-5:]
+    assert [event.seq for event in log.history(since_seq=20)] == [s for s in expected if s > 20]
+    assert [event.seq for event in log.history(since_seq=20, limit=2)] == expected[-2:]
+
+
+def test_an_unserialisable_event_is_counted_and_still_recorded(tmp_path):
+    """`data` 에 JSON 이 될 수 없는 값이 있으면 `model_dump_json()` 이
+    `PydanticSerializationError`(= `ValueError`) 를 던진다.
+
+    그것이 `record()` 밖으로 나가면 EventBus 가 삼키고, 건강 상태는 여전히
+    쓸 수 있다고 답한다 — 기록 하나가 소리 없이 사라진 것이다. 세고, 그 값만
+    `repr` 로 바꿔 기록은 남긴다.
+    """
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    log = FileAuditLog(tmp_path / "audit.jsonl", retention_days=30, now=lambda: now)
+    odd = _event(1, now.isoformat(), "safety.estop")
+    odd.data = {"reason": object()}
+
+    log.record(odd)                                # 던지지 않는다
+
+    health = log.health()
+    assert health["serialize_failures"] == 1
+    assert "PydanticSerializationError" in health["last_serialize_error"]
+    assert health["writable"] is True and health["write_failures_total"] == 0
+    events = log.history()
+    assert [event.type for event in events] == ["safety.estop"]
+    assert events[0].data["reason"].startswith("<object object")
+
+
+def test_the_bus_publishes_an_unserialisable_event_without_losing_the_record(tmp_path):
+    bus = EventBus("rosy_01")
+    log = FileAuditLog(tmp_path / "audit.jsonl")
+    bus.subscribe(log.record)
+
+    bus.publish("safety.estop", source="api", data={"cause": object()})
+
+    assert log.health()["serialize_failures"] == 1
+    assert [event.type for event in log.history()] == ["safety.estop"]
+
+
+def test_the_compacted_file_reaches_the_disk_before_it_replaces_the_log(tmp_path, monkeypatch):
+    """바꿔 끼우기는 30 일치 전체를 새 파일로 옮기는 일이다. 그 파일이 디스크에
+    닿기 전에 이름을 바꾸면, 직후의 정전이 빈 파일을 남길 수 있다.
+
+    덧붙이기는 그대로 fsync 하지 않는다 — 그 비용은 50 Hz 타이머가 문다.
+    """
+    import os as _os
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _stale_heavy_log(path, now, lines=3)
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+
+    order: list[str] = []
+    real_fsync, real_replace = _os.fsync, _os.replace
+    monkeypatch.setattr(_os, "fsync", lambda fd: (order.append("fsync"), real_fsync(fd))[1])
+    monkeypatch.setattr(_os, "replace",
+                        lambda *a, **k: (order.append("replace"), real_replace(*a, **k))[1])
+
+    log.record(_event(2, now.isoformat()))
+    assert log.settle()
+
+    assert "replace" in order, "the prune did not rewrite; the test proves nothing"
+    assert "fsync" in order[: order.index("replace")], "replaced before the data was synced"
+
+    order.clear()
+    for seq in range(3, 8):
+        log.record(_event(seq, now.isoformat()))
+    assert order == [], "a plain append must not fsync"
+
+
+def test_a_line_the_schema_rejects_follows_retention_by_its_own_ts(tmp_path):
+    """롤백 뒤의 스키마 차이나 비트 하나로 스키마 검증에 실패한 줄을 정리가
+    지우면, 감사 로그가 되돌릴 수 없게 기록을 잃는다(`_is_fresh` 의 fail-open 과
+    모순이다).
+
+    JSON 으로 읽히고 `ts` 가 있으면 그 `ts` 로 보존 규칙을 따른다: 기간 안이면
+    원본 그대로 남고, 지났으면 다른 기록처럼 덜어낸다. 조회에는 나오지 않는다 —
+    스키마로 읽을 수 없는 것을 기록이라고 돌려줄 수는 없다.
+    """
+    import json
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    drifted_fresh = json.dumps({"seq": 5, "ts": now.isoformat(), "kind": "renamed.field"})
+    drifted_stale = json.dumps({"seq": 6, "ts": (now - timedelta(days=40)).isoformat(),
+                                "kind": "renamed.field"})
+    path.write_text(drifted_fresh + "\n" + drifted_stale + "\n", encoding="utf-8")
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+
+    log.record(_event(7, now.isoformat()))
+    assert log.settle()
+
+    raw = path.read_text(encoding="utf-8")
+    assert drifted_fresh in raw, "a fresh record the schema rejects was deleted"
+    assert drifted_stale not in raw, "retention still applies to it"
+    assert not log.quarantine_path.exists(), "it had a ts; it is not quarantined"
+    assert [event.seq for event in log.history()] == [7]
+    assert log.health()["prune_failures"] == 0
