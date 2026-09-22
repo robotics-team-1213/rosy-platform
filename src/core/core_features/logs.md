@@ -16,3 +16,5 @@
 - gate 변화: 없음.
 - 결정: 없음 — 계약 정합 수정.
 - 교훈: 없음.
+
+- 같은 세션 T6: RobotIdentity hello 신원 필드 additive + agent hello_payload 실값(근거·증거는 core_common 로그와 동일 세션 기록)

@@ -37,6 +37,54 @@ def test_reconnect_backoff_caps_at_contract_30s():
     assert next_backoff(30.0) == 30.0
 
 
+def test_robot_identity_exposes_fleet_hello_fields():
+    """hello(API Ref §7.2)의 신원 필드명이 실제 RobotIdentity에 있다 (D-170 인접:
+    허브의 DUPLICATE_IDENTITY/IDENTITY_DRIFT 방어는 이 값이 비어 있으면 죽는다)."""
+    from core_common.identity import RobotIdentity
+    ident = RobotIdentity(robot_id="rosy_07", robot_name="Pinky 07",
+                          profile_model="Pinky Pro", serial="SN-7",
+                          device_uid="uid-7", device_name="pinky-7")
+    assert ident.device_uid == "uid-7"
+    assert ident.device_name == "pinky-7"
+    assert ident.model == "Pinky Pro"
+    assert ident.hardware_serial == "SN-7"
+
+
+def test_identity_from_config_reads_device_fields():
+    from core_common.identity import RobotIdentity
+    config = {"robot": {"id": "rosy_07", "name": "Pinky 07",
+                        "device_uid": "uid-7", "device_name": "pinky-7",
+                        "serial": "SN-7"}}
+    ident = RobotIdentity.from_config(config, profile_model="Pinky Pro")
+    assert ident.device_uid == "uid-7"
+    assert ident.device_name == "pinky-7"
+    assert ident.model == "Pinky Pro"
+    assert ident.hardware_serial == "SN-7"
+
+
+def test_identity_defaults_do_not_fake_device_facts():
+    from core_common.identity import RobotIdentity
+    ident = RobotIdentity(robot_id="rosy_07", robot_name="Pinky 07")
+    assert ident.device_uid == ""
+    assert ident.device_name == "Pinky 07"  # 미지정 시 robot_name 폴백
+    assert ident.hardware_serial is None
+
+
+def test_hello_carries_real_identity():
+    from core_common.identity import RobotIdentity
+    ident = RobotIdentity(robot_id="rosy_07", robot_name="Pinky 07",
+                          profile_model="Pinky Pro", serial="SN-7",
+                          device_uid="uid-7", device_name="pinky-7")
+    agent = FleetAgent(DummyState(), DummyEventBus(), {}, ident)
+    payload = agent.hello_payload("pair-token")
+    assert payload["robot_id"] == "rosy_07"
+    assert payload["pairing_token"] == "pair-token"
+    assert payload["device_uid"] == "uid-7"
+    assert payload["device_name"] == "pinky-7"
+    assert payload["model"] == "Pinky Pro"
+    assert payload["hardware_serial"] == "SN-7"
+
+
 def test_core_services_build_wires_disabled_fleet_agent(tmp_path):
     config_dir = Path(__file__).parent.parent / "config"
     config = yaml.safe_load(

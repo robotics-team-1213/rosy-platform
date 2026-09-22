@@ -39,6 +39,40 @@ def test_hello_with_wrong_token_is_pairing_invalid_and_stays_offline():
     assert hub.registry.online_ids() == []
 
 
+def _hello_with_identity(robot_id="rosy_01", token="pair-01",
+                         device_uid="", device_name="",
+                         model="", hardware_serial="") -> Envelope:
+    payload = HelloPayload(
+        robot_id=robot_id, pairing_token=token, device_uid=device_uid,
+        device_name=device_name, model=model,
+        hardware_serial=hardware_serial).model_dump()
+    return Envelope(type=EnvelopeType.HELLO, payload=payload)
+
+
+def test_second_robot_with_same_device_uid_is_duplicate_identity():
+    hub = SiteHub([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "pair-01"),
+                   RobotEndpoint("rosy_02", "http://127.0.0.1:8081", "pair-02")])
+    first = hub.handle(_hello_with_identity("rosy_01", "pair-01",
+                                            device_uid="uid-shared"))
+    assert first.type is EnvelopeType.WELCOME
+    second = hub.handle(_hello_with_identity("rosy_02", "pair-02",
+                                             device_uid="uid-shared"))
+    assert second.type is EnvelopeType.ERROR
+    assert second.payload["code"] == "DUPLICATE_IDENTITY"
+    assert hub.registry.online_ids() == ["rosy_01"]
+
+
+def test_changed_hardware_serial_for_same_robot_is_identity_drift():
+    hub = SiteHub([_ep()])
+    first = hub.handle(_hello_with_identity("rosy_01", "pair-01",
+                                            hardware_serial="SN-1"))
+    assert first.type is EnvelopeType.WELCOME
+    drifted = hub.handle(_hello_with_identity("rosy_01", "pair-01",
+                                              hardware_serial="SN-OTHER"))
+    assert drifted.type is EnvelopeType.ERROR
+    assert drifted.payload["code"] == "IDENTITY_DRIFT"
+
+
 def test_heartbeat_before_hello_is_rejected():
     hub = SiteHub([_ep()])
     snap = StateSnapshot(robot_id="rosy_01")

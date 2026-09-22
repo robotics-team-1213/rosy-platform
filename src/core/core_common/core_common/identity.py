@@ -40,7 +40,8 @@ def _primary_ip() -> str:
 class RobotIdentity:
     def __init__(self, robot_id: str, robot_name: str, profile_model: str = "unknown",
                  serial: Optional[str] = None, hardware_version: Optional[str] = None,
-                 runtime_mode: str = "core", robot_number: Optional[int] = None) -> None:
+                 runtime_mode: str = "core", robot_number: Optional[int] = None,
+                 device_uid: str = "", device_name: Optional[str] = None) -> None:
         self.robot_id = robot_id
         self.robot_name = robot_name
         self.profile_model = profile_model
@@ -48,6 +49,25 @@ class RobotIdentity:
         self.hardware_version = hardware_version
         self.runtime_mode = runtime_mode
         self.robot_number = robot_number
+        # Fleet hello 신원(API Ref §7.2). device_uid 는 장치 고유 식별자로,
+        # 값이 없으면 빈 문자열로 둔다 — 모를 때 지어내면 허브의
+        # DUPLICATE_IDENTITY/IDENTITY_DRIFT 방어가 죽는다.
+        self.device_uid = device_uid
+        self._device_name = device_name
+
+    @property
+    def device_name(self) -> str:
+        """hello 표시명 — 미지정 시 robot_name 폴백."""
+        return self._device_name or self.robot_name
+
+    @property
+    def model(self) -> str:
+        """hello 필드명으로 노출되는 프로파일 모델."""
+        return self.profile_model
+
+    @property
+    def hardware_serial(self) -> Optional[str]:
+        return self.serial
 
     @classmethod
     def from_config(cls, config: dict[str, Any], profile_model: str = "unknown") -> "RobotIdentity":
@@ -64,6 +84,8 @@ class RobotIdentity:
             hardware_version=robot.get("hardware_version"),
             runtime_mode=mode,
             robot_number=number,
+            device_uid=str(robot.get("device_uid", "") or ""),
+            device_name=robot.get("device_name"),
         )
 
     def info(self) -> dict[str, Any]:

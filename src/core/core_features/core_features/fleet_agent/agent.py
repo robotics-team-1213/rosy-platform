@@ -48,6 +48,18 @@ class FleetAgent:
         if self._task:
             self._task.cancel()
 
+    def hello_payload(self, pairing_token: str) -> dict:
+        """PRT-002 hello 본문. 신원은 RobotIdentity 실값에서 온다 (D-170 인접)."""
+        hello = HelloPayload(
+            robot_id=self.identity.robot_id,
+            pairing_token=pairing_token,
+            device_uid=getattr(self.identity, "device_uid", "") or "",
+            device_name=getattr(self.identity, "device_name", "") or "",
+            model=getattr(self.identity, "model", "") or "",
+            hardware_serial=getattr(self.identity, "hardware_serial", "") or "",
+        )
+        return hello.model_dump()
+
     async def _run(self, hub_url: str, pairing_token: str) -> None:
         import websockets
         from websockets.exceptions import WebSocketException
@@ -75,14 +87,7 @@ class FleetAgent:
                         self.connected = True
                         backoff = 1.0
                         
-                        hello = HelloPayload(
-                            robot_id=self.identity.robot_id,
-                            pairing_token=pairing_token,
-                            device_uid=self.identity.device_uid if hasattr(self.identity, 'device_uid') else "",
-                            device_name=self.identity.device_name if hasattr(self.identity, 'device_name') else "",
-                            model=self.identity.model if hasattr(self.identity, 'model') else "",
-                            hardware_serial=self.identity.hardware_serial if hasattr(self.identity, 'hardware_serial') else "",
-                        )
+                        hello = HelloPayload(**self.hello_payload(pairing_token))
                         env = Envelope(type=EnvelopeType.HELLO, payload=hello.model_dump())
                         await ws.send(env.model_dump_json(exclude_none=True))
                         
