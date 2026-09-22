@@ -466,3 +466,14 @@
 - 결정: D-174, D-175
 - 교훈: root가 도는 관측 도구는 관측 대상(CORE)이 쓰는 디렉터리를 절대 쓰지 않는다. 관측이 공격 경로가 된다.
 
+## 2026-09-23 · uncommitted · fix(image): check bytecode only in the native runtime, not colcon's install tree
+
+- 변경: `verify-mounted-image.py`의 `__pycache__` 거부를 release 전체에서 네이티브 런타임 두 사본
+  (`/opt/rosy/native-runtime`, release `deploy/robot/native`)으로 좁혔다. colcon은 `install/.../site-packages/*/__pycache__`를
+  payload 일부로 설치하며, 런타임은 `ProtectSystem=strict`로 `/opt`에 쓰지 못한다.
+- 증거: ARM64 run 35756347921(release 003, `a2095a0`)이 이 검사로 customizer 단계에서 실패했다. colcon `__pycache__`
+  회귀 시험 추가, `deploy/image/test`·이미지 계약 17 passed (2026-09-23 Windows).
+- gate 변화: 없음(ARTIFACT HOLD)
+- 결정: D-174
+- 교훈: 거부 규칙은 위험이 생기는 경로에 정확히 맞춘다. 넓은 규칙은 정상 산출물을 막고, 그 실패는 비싼 ARM64 빌드 끝에서야 보인다.
+
