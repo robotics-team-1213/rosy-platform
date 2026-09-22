@@ -1,0 +1,16 @@
+# after mode=startup signal=SIGTERM count=12; startup window=1.5-8s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: c6230cc (fix/core-sigterm-exit)  started 2026-09-23T00:53:57+09:00  loadavg: 21.84 18.13 14.14 19/1186 59941
+run  1: node 60071 sig@+7.36s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=1 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  2: node 60358 sig@+7.6s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  3: node 60701 sig@+7.3s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  4: node 60967 sig@+7.23s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=1 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  5: node 61143 sig@+6.03s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  6: node 61325 sig@+2.29s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  7: node 61433 sig@+4.03s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  8: node 61568 sig@+6.82s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  9: node 61758 sig@+7.33s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 10: node 61972 sig@+3.94s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run 11: node 62153 sig@+6.3s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run 12: node 62383 sig@+8.19s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+# leftover core processes: 0  finished 2026-09-23T00:56:59+09:00
+# exit-code tally:      12 exit=0 

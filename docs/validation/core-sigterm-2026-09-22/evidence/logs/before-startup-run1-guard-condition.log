@@ -1,0 +1,33 @@
+[WARN] [1790090061.305203810] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1790090061.305352421] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1790090062.738905773] [core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+[INFO] [1790090062.740300270] [core]: core up: robot_id=rosy_01 model=Pinky Pro
+[INFO] [1790090065.280929217] [core]: api server on 0.0.0.0:8080
+Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+[INFO] [1790090065.283982485] [core]: core shutting down
+Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+Traceback (most recent call last):
+  File "/root/rosy_sigterm_ws/install/core/lib/core/core", line 33, in <module>
+    sys.exit(load_entry_point('core', 'console_scripts', 'core')())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/rosy_sigterm_ws/build/core/core/main.py", line 28, in main
+    node.run()
+  File "/root/rosy_sigterm_ws/build/core/core/node.py", line 118, in run
+    executor = MultiThreadedExecutor()
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 967, in __init__
+    super().__init__(context=context)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 198, in __init__
+    self._guard = GuardCondition(
+                  ^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/guard_condition.py", line 24, in __init__
+    self.__gc = _rclpy.GuardCondition(self._context.handle)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rclpy._rclpy_pybind11.RCLError: failed to create guard_condition: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/guard_condition.c:67
+Exception ignored in: <function Executor.__del__ at 0x72c5b6274d60>
+Traceback (most recent call last):
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 305, in __del__
+    if self._sigint_gc is not None:
+       ^^^^^^^^^^^^^^^
+AttributeError: 'MultiThreadedExecutor' object has no attribute '_sigint_gc'
+[ros2run]: Process exited with failure 1

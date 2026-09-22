@@ -343,3 +343,17 @@
 - 증거: `/core` 기동, `/cmd_vel` Publisher count 1(node core, teleop 뒤에도 1), `/nav_cmd_vel` pub 0/sub 1, `/api/v1` 200·`/dashboard` 200·`/robot/state` 401, road 유효/malformed 프로브 NameError 없음. teleop 0.1 ×10 → `/cmd_vel` linear.x 0.0→0.1(79 표본)→0.0, 마지막 teleop 약 0.5 s 뒤 `safety.watchdog`(timeout_ms 500) 감사 기록 1건, `logs/audit` 최상위 `events`·`log`(writable, 실패 0), `/metrics` `rosy_audit_*` 5개 모두 0.
 - gate 변화: ROS-SIM HOLD→GO.
 - 결정: 종료 경합은 게이트를 막지 않는다 — 본 실행의 SIGTERM 에서 `core shutting down` 뒤 `executor.spin()` 이 `RCLError: failed to initialize wait set`(context 무효)으로 traceback, `ros2 run` exit 1. 정상 상태 반복 5/5 는 exit 0·`system.shutdown` 감사 기록. 기동 창 SIGTERM 에서는 `failed to create guard_condition` 도 관찰. `core/main.py` 가 `KeyboardInterrupt` 만 잡고 rclpy 의 SIGTERM 에 의한 context 종료(`RCLError`/`ExternalShutdownException`)를 정상 종료로 다루지 않는 기존 경로이며 두 머지와 무관하다. 후속: exit 1 이 systemd 재시작 판정에 닿으므로 main 에서 외부 종료를 정상 종료로 처리할지 결정 필요. 또 09-22 README 의 road 유효 payload 명령은 닫는 `}` 가 빠져 있어 그대로는 발행되지 않는다(09-22b README 에 올바른 형태).
+
+## 2026-09-22 · uncommitted · fix(core): SIGINT/SIGTERM 종료 경합을 정상 종료(exit 0)로
+
+- 변경: `core/main.py` — `main()` 첫 문장에서 SIGINT/SIGTERM 을 예외를 던지지 않는 처리기로 바꿔 종료 요청만 기록(`install_stop_handlers`)하고, `rclpy.init()` 전후에 요청이 있으면 노드를 만들지 않는다. spin/기동 중 예외는 ROS 없는 `is_orderly_shutdown()` 으로 판정 — 종료 요청 뒤, 또는 한 번 유효했던 context 가 무효가 된 뒤의 예외는 정상 종료(exit 0), context 가 살아 있는 채 난 예외와 `rclpy.init()` 실패는 그대로 올린다(exit 1). finally 순서(`node.shutdown()` → `rclpy.shutdown()`)와 cmd_vel 경로는 그대로. 새 `test/test_core_main_shutdown.py`(판정 함수, 가짜 rclpy 로 경합·기동 창·진짜 오류 전파·훅 순서).
+- 증거: `docs/validation/core-sigterm-2026-09-22` (WSL Jazzy, 부하 6 busy loop, 신호는 core 노드 PID). 수정 전 `0a9a07a`: steady SIGTERM 20회 17×0·3×1(wait set `RCLError`), 기동 0.2–1.5 s 10×241(SIGTERM 사망), 기동 1.5–8 s 3×0·7×1(guard_condition/wait set/publisher). 수정 후 `c6230cc`: steady SIGTERM 20회 19×0·1×245(teardown SIGSEGV), faulthandler steady 85×0, 기동 0.2–1.5 s 6×0·6×241(모두 `main()` 이전 entry script 창), 기동 1.5–8 s 12×0, SIGINT steady 6×0·기동 6×0. 수정 후 exit 0 실행 모두 `system.shutdown` 감사·8080 해제. 새 시험은 수정 전 main.py 에서 실패(수집 오류), 수정 후 13 passed.
+- gate 변화: 없음(ROS-SIM 증거, DEVICE 아님).
+- 결정: 판정은 예외 타입이 아니라 상태(종료 요청·context 유효성)로 한다 — 같은 경합이 `RCLError`, `InvalidHandle`, 콜백 future 의 publish 실패 등 여러 모양으로 나온다. 남은 것: (1) `main()` 전 entry script(`importlib.metadata` 조회) 창의 SIGTERM 은 코드로 닫을 수 없다 — 필요하면 `rosy-core.service` 에 `SuccessExitStatus=241 254` 를 따로 결정. (2) 종료 훅 뒤 teardown SIGSEGV 1/105, 스택 없음 — 후속 조사.
+
+## 2026-09-23 · uncommitted · fix(core): 두 번째 종료 신호 격상 + 삼킨 종료 예외 기록 (리뷰 반영)
+
+- 변경: `core/main.py` — 첫 SIGINT/SIGTERM 은 그대로 기록만, 두 번째는 SIG_DFL 을 되돌리고 격상(SIGINT → `KeyboardInterrupt`, SIGTERM → `os.kill(self, SIGTERM)`) — 멈춘 종료 훅/작업 스레드 join 을 SIGKILL 없이 끊는다. 종료로 판정해 삼킨 예외는 stderr `core: suppressed during shutdown: {exc!r}`. context-무효 분기에 "core 프로세스에서 rclpy context 를 내리는 것은 main() 뿐" 불변식 주석. `test_core_main_shutdown.py` 에 이중 신호(두 신호 모두), RMW 단계 신호 → init 없음, load_config 중 신호 → 노드 없음, `rclpy.init()` 실패 전파, 삼킨 예외 기록, src/core 생산 코드에 `rclpy.shutdown`/`try_shutdown` 없음 시험 추가. main `e8b2976` 병합(BOM 수정 포함).
+- 증거: `docs/validation/core-sigterm-2026-09-22` "리뷰 반영 재확인" — WSL `a545d55` steady SIGTERM 10×0, 기동 1.5–8 s 6×0, 느린 종료(WSL 전용 20 s sleep 패치) 중 이중 SIGINT 3회 exit 254·이중 SIGTERM 3회 exit 241, 첫 신호→종료 1.1–2.0 s. core 시험 3.14 1251 passed·12 skipped, 3.12(uv) 1250 passed·13 skipped.
+- gate 변화: 없음.
+- 결정: 이중 신호의 241/254 는 실패로 남긴다(운영자가 멈춘 종료를 끊은 것). teardown 명시화(`executor.shutdown`/`destroy_node`)는 executor 가 `node.run()` 지역이고 1/105 SIGSEGV 를 검증할 수 없어 보류 — 후속 조사 항목 유지.

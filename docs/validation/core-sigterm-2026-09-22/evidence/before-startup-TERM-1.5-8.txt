@@ -1,0 +1,14 @@
+# before mode=startup signal=SIGTERM count=10; startup window=1.5-8s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: 0a9a07a (main, before fix)  started 2026-09-23T00:14:15+09:00  loadavg: 8.51 8.98 9.85 6/1024 20983
+run  1: node 21239 sig@+5.84s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=2 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  2: node 21574 sig@+5.08s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=2 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  3: node 21896 sig@+3.95s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=2 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  4: node 22212 sig@+6.02s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=1 err=RCLError:_failed_to_initialize_wait_set:_the_given_context_is_not_vali audit_last="type":"system.shutdown" port8080=0
+run  5: node 22489 sig@+2.95s(after node spawn) phase=before-core-up alive30s=no exit=1 shutting_down=0 traceback=1 err=RCLError:_Failed_to_create_publisher:_rcl_node's_context_is_invalid audit_last= port8080=0
+run  6: node 22714 sig@+7.88s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  7: node 22942 sig@+7.6s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  8: node 23194 sig@+4.9s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=2 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+run  9: node 23435 sig@+5.71s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 10: node 23715 sig@+2.83s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=2 err=Error:_'MultiThreadedExecutor'_object_has_no_attribute_'_sigint_gc' audit_last="type":"system.shutdown" port8080=0
+# leftover core processes: 0  finished 2026-09-23T00:16:10+09:00
+# exit-code tally:       3 exit=0       7 exit=1 
