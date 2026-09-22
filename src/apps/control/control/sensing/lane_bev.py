@@ -169,7 +169,8 @@ def pose_if_fresh(pose, pose_stamp_s, image_stamp_s):
     (dead odometry, or a pose from another moment)."""
     if pose is None or pose_stamp_s is None or image_stamp_s is None:
         return None
-    if abs(float(image_stamp_s) - float(pose_stamp_s)) > ODOM_MAX_SKEW_S:
+    skew = float(image_stamp_s) - float(pose_stamp_s)
+    if not math.isfinite(skew) or abs(skew) > ODOM_MAX_SKEW_S:
         return None
     return pose
 

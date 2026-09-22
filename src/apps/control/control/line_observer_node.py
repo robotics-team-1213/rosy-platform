@@ -197,9 +197,12 @@ class LineObserverNode(Node):
                         pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                         frame, ground, **lane_kwargs)
                 elif bool(self.get_parameter('lane_corner_turning').value):
+                    image_stamp = (float(msg.header.stamp.sec)
+                                   + float(msg.header.stamp.nanosec) * 1e-9)
                     observation = self._corner_tracker.update(
-                        float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9,
-                        self._odom_pose, frame, ground, **lane_kwargs)
+                        image_stamp,
+                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        frame, ground, **lane_kwargs)
                 else:
                     observation = detect_lane_centre(frame, ground, **lane_kwargs)
             else:

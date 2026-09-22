@@ -82,7 +82,8 @@ def test_lane_corner_turning_is_off_by_default_and_needs_odometry():
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "Odometry, 'odom'" in source
     assert "LaneCornerTracker" in source
-    assert "self._odom_pose, frame, ground" in source
+    assert "self._corner_tracker.update(" in source
+    assert "self._odom_pose, frame, ground" not in source
     # Turning is still evidence: no motion output from this node.
     assert "Twist" not in source
     assert "'cmd_vel'" not in source
@@ -114,3 +115,10 @@ def test_modes_fixed_at_startup_are_read_only_parameters():
     assert ("self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)" in source)
     assert ("self.declare_parameter('lane_corner_turning', False, _READ_ONLY)" in source)
     assert "_READ_ONLY = ParameterDescriptor(read_only=True)" in source
+
+
+def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
+    """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "self._odom_pose, frame, ground" not in source
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 2
