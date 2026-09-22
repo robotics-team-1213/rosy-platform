@@ -105,11 +105,9 @@ def metrics(svc: CoreServicesLike = Depends(get_services)):
         "# HELP rosy_battery_percent battery percent estimate",
         "# TYPE rosy_battery_percent gauge",
         f"rosy_battery_percent {snap.battery.percent if snap.battery.percent is not None else -1}",
-        "# HELP rosy_diagnostics_health component health (0=OK,1=UNKNOWN,2=WARNING,3=ERROR)",
-        "# TYPE rosy_diagnostics_health gauge",
     ]
     audit = svc.audit.health()
-    lines[-2:-2] = [
+    audit_lines = [
         # 이름이 `rosy_audit_write_failures` 였다면 아래 `_total` 카운터와 같은
         # 계열(family)이 되어, OpenMetrics 로 읽는 쪽에서 gauge 와 counter 가
         # 한 이름으로 충돌한다.
@@ -131,7 +129,17 @@ def metrics(svc: CoreServicesLike = Depends(get_services)):
         "# HELP rosy_audit_prune_skipped_total prunes skipped because the file changed underneath",
         "# TYPE rosy_audit_prune_skipped_total counter",
         f"rosy_audit_prune_skipped_total {audit['prune_skipped']}",
+        # 디스크가 아니라 발행한 쪽의 결함이다. 기록은 `repr` 로 바꿔 남았지만,
+        # 오르고 있으면 어떤 이벤트의 `data` 가 JSON 이 될 수 없는 값을 싣고 있다.
+        "# HELP rosy_audit_serialize_failures_total audit events whose data had to be repr()-ed",
+        "# TYPE rosy_audit_serialize_failures_total counter",
+        f"rosy_audit_serialize_failures_total {audit['serialize_failures']}",
     ]
+    diagnostics_lines = [
+        "# HELP rosy_diagnostics_health component health (0=OK,1=UNKNOWN,2=WARNING,3=ERROR)",
+        "# TYPE rosy_diagnostics_health gauge",
+    ]
+    lines += audit_lines + diagnostics_lines
     for component, health in snap.diagnostics_summary.items():
         lines.append(f'rosy_diagnostics_health{{component="{component}"}} {_HEALTH_VALUE[health.value]}')
     from fastapi.responses import PlainTextResponse

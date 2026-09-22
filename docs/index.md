@@ -119,8 +119,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
 - 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로
 - 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
 - 2026-09-22 · uncommitted · docs(harness): move the prepended D-164 entry to file end — order gate restored (8 logs)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-- 2026-09-22 · uncommitted · docs(adr): 미들웨어 목표를 8축 평가표로 고정 (D-167)

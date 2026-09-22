@@ -1433,3 +1433,10 @@
 - 증거: `test/test_line_follow_contract_docs.py` 1 passed.
 - gate 변화: 없음.
 - 결정: 시험의 의도(line-follow 계약 문서화)는 그대로다. 버전 고정 자체를 없애는 것은 이 이식의 범위 밖이다.
+
+## 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
+
+- 변경: `logs/audit` 행의 `log` 필드에 `serialize_failures`·`last_serialize_error` 와 의미, 스키마로도 JSON 으로도 못 읽는 줄은 `audit.jsonl.quarantine` 으로 옮긴다는 것을 추가. v1.13 개정 이력에 `rosy_audit_serialize_failures_total` 추가.
+- 증거: `test_diagnostics_api.py::test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_alert_on` passed.
+- gate 변화: 없음.
+- 결정: v1.13 은 아직 main 에 없으므로 버전을 올리지 않는다.
