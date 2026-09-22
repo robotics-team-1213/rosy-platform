@@ -421,3 +421,16 @@
 - 결정: D-174, D-175
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · feat(sd): per-card operator SSH key and key-only `rosy` login (D-174 F3)
+
+- 변경: 번들에 선택 섹션 `operator.ssh_authorized_keys`(ed25519/ecdsa 공개키 1-8개, 단일 줄·타입·blob 일치 검증, 개인키 거부)를
+  추가하고 스키마·receipt(지문만)에 반영했다. 첫 부팅은 키가 있을 때만 `rosy` 계정(비밀번호 없음, `systemd-journal`/`adm`,
+  NOPASSWD sudo)을 만들고 `authorized_keys`(0600)를 설치하며 `complete.json`에 지문을 남긴다. `prepare-rosy-sd.ps1
+  -OperatorPublicKey`는 지문을 plan에 고정하고 다른 키로 기록하려 하면 writer 전에 멈춘다. receipt는 `ConvertTo-Json -Depth 10`으로
+  쓴다(기본 깊이 2가 중첩 목록을 문자열로 뭉개던 잠재 결함).
+- 증거: `test_sd_operator_access.py` 13, `test_sd_writer_contract.py` 49, first-boot/personalization 포함 45 passed; 전체 1394 passed
+  (남은 2건은 main `10ceb53`의 `system.py` BOM, 이 브랜치와 무관) (2026-09-23 Windows)
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+

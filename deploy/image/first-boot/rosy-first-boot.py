@@ -14,10 +14,10 @@ from typing import Callable
 
 
 try:
-    from deploy.sd.personalization import validate_provision_bundle
+    from deploy.sd.personalization import operator_key_fingerprint, validate_provision_bundle
 except ModuleNotFoundError:  # Installed image layout.
     sys.path.insert(0, "/opt/rosy")
-    from deploy.sd.personalization import validate_provision_bundle
+    from deploy.sd.personalization import operator_key_fingerprint, validate_provision_bundle
 
 
 SERIAL = re.compile(r"^[0-9a-f]{8,32}$")
@@ -70,6 +70,23 @@ def _default_hostname_apply(hostname: str) -> None:
     subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], **quiet)
 
 
+OPERATOR_USER = "rosy"
+
+
+def _default_operator_account(name: str) -> None:
+    """Create the key-only operator login if it does not exist (D-174 F3)."""
+    quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+             "stderr": subprocess.DEVNULL, "check": False, "timeout": 30}
+    if subprocess.run(["id", "-u", name], **quiet).returncode == 0:
+        return
+    # No password is set, so the account is locked for password logins.
+    created = subprocess.run(
+        ["useradd", "--create-home", "--shell", "/bin/bash",
+         "--groups", "systemd-journal,adm", name], **quiet)
+    if created.returncode != 0:
+        raise OSError("could not create the operator account")
+
+
 class FirstBootProvisioner:
     def __init__(
         self,
@@ -77,6 +94,7 @@ class FirstBootProvisioner:
         root: Path = Path("/"),
         network_activate: Callable[[str], bool] = _default_network_activate,
         hostname_apply: Callable[[str], None] | None = None,
+        operator_account: Callable[[str], None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.network_activate = network_activate
@@ -85,6 +103,9 @@ class FirstBootProvisioner:
         if hostname_apply is None and self.root == Path("/").resolve():
             hostname_apply = _default_hostname_apply
         self.hostname_apply = hostname_apply
+        if operator_account is None and self.root == Path("/").resolve():
+            operator_account = _default_operator_account
+        self.operator_account = operator_account
         self.state_dir = self.root / "var/lib/rosy/provisioning"
         self.complete = self.state_dir / "complete.json"
         self.state = self.state_dir / "state.json"
@@ -118,6 +139,30 @@ class FirstBootProvisioner:
         lines = [line for line in lines if not line.startswith("127.0.1.1")]
         lines.append(f"127.0.1.1 {hostname}")
         _write_atomic(hosts, "\n".join(lines) + "\n", 0o644)
+
+    def _operator(self, operator: dict | None) -> list[str]:
+        """Install per-card operator keys for a key-only login (D-174 F3)."""
+        if not operator:
+            return []
+        keys = operator["ssh_authorized_keys"]
+        if self.operator_account is not None:
+            try:
+                self.operator_account(OPERATOR_USER)
+            except (OSError, subprocess.SubprocessError) as exc:
+                print(f"rosy-first-boot: operator account not created: {exc}", file=sys.stderr)
+        ssh_dir = self._inside(f"home/{OPERATOR_USER}/.ssh")
+        ssh_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(ssh_dir, 0o700)
+        _write_atomic(ssh_dir / "authorized_keys", "".join(f"{key}\n" for key in keys), 0o600)
+        if self.root == Path("/").resolve():
+            import pwd
+
+            account = pwd.getpwnam(OPERATOR_USER)
+            for path in (ssh_dir, ssh_dir / "authorized_keys"):
+                os.chown(path, account.pw_uid, account.pw_gid)
+        _write_atomic(self._inside("etc/sudoers.d/60-rosy-operator"),
+                      f"{OPERATOR_USER} ALL=(ALL) NOPASSWD:ALL\n", 0o440)
+        return [operator_key_fingerprint(key) for key in keys]
 
     def _claim_hardware(self, *, hardware_serial: str, device_uid: str) -> None:
         expected = {
@@ -220,6 +265,7 @@ class FirstBootProvisioner:
         )
         _write_atomic(network_path, self._network_profile(payload), 0o600)
         _json_atomic(self._inside("etc/rosy/fleet-bootstrap.json"), payload["fleet"], 0o600)
+        operator_fingerprints = self._operator(payload.get("operator"))
 
         if not self.network_activate("rosy-site-sta"):
             network_path.unlink(missing_ok=True)
@@ -247,6 +293,8 @@ class FirstBootProvisioner:
             },
             "payload_checksum": payload["payload_checksum"],
         }
+        if operator_fingerprints:
+            complete["operator"] = {"ssh_key_fingerprints": operator_fingerprints}
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         bundle.unlink()

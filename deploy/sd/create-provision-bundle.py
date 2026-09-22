@@ -25,6 +25,8 @@ EXPECTED = {
     "requested_preset", "country_code", "ssid", "wifi_passphrase",
     "fleet_endpoint", "fleet_trust_profile", "pairing_required",
 }
+# D-174 F3: per-card operator public keys; absent keeps the pre-F3 bundle shape.
+OPTIONAL = {"operator_ssh_keys"}
 
 
 def _exclusive_json(path: Path, payload: dict, mode: int) -> None:
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         if len(raw) > 65536:
             raise ValueError("request is too large")
         request = json.loads(raw.lstrip("\ufeff"))
-        if not isinstance(request, dict) or set(request) != EXPECTED:
+        if not isinstance(request, dict) or set(request) - OPTIONAL != EXPECTED:
             raise ValueError("request fields are invalid")
         identity = DeviceIdentity(
             device_uid=request["device_uid"],
@@ -65,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
             fleet_endpoint=request["fleet_endpoint"],
             fleet_trust_profile=request["fleet_trust_profile"],
             pairing_required=request["pairing_required"],
+            operator_ssh_keys=request.get("operator_ssh_keys"),
         )
         _exclusive_json(args.output, bundle, 0o600)
         _exclusive_json(args.receipt, create_provision_receipt(bundle), 0o600)

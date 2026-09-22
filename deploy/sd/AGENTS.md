@@ -24,6 +24,11 @@ one-time per-card provisioning bundle.
   never a fixed default (D-33). Omitted Fleet values default to
   `https://<this-host>.local` / `rosy-pilot-lan` and the plan says so
   (`robot_number_source`, `fleet_source`); nothing on the robot reads them yet.
+- `-OperatorPublicKey <file.pub>` (D-174 F3) adds one ed25519/ecdsa public key to the
+  bundle; first boot creates a key-only `rosy` account (journal groups, NOPASSWD sudo).
+  The plan and receipt carry only the `SHA256:` fingerprint, and a write with a
+  different key than the reviewed plan stops before the writer. Without the flag
+  the bundle keeps its pre-F3 shape, so older images still accept it.
 - `-PlanOnly -PlanPath <file>` saves the reviewed plan once (no overwrite). A write
   with the same `-PlanPath` takes robot number, name, UID, preset, model, country and
   Fleet values from the plan, and refuses before the writer if the disk, release, image

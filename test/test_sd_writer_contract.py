@@ -602,3 +602,71 @@ def test_plan_records_preset_model_country_and_registry(writer_case):
     assert plan["requested_preset"] == "hardware"
     assert plan["country_code"] == "KR"
     assert Path(plan["registry_path"]) == writer_case["registry"].resolve()
+
+
+def _operator_key_file(tmp_path, seed=7):
+    import base64
+    import struct
+
+    def string(value):
+        return struct.pack(">I", len(value)) + value
+
+    blob = string(b"ssh-ed25519") + string(bytes([seed]) * 32)
+    key = f"ssh-ed25519 {base64.b64encode(blob).decode()} operator@bench"
+    path = tmp_path / f"operator-{seed}.pub"
+    path.write_text(key + "\n", encoding="utf-8")
+    return path, key
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_operator_key_is_fingerprinted_in_the_plan_and_installed_on_write(writer_case, tmp_path):
+    # D-174 F3: the card carries a key-only operator login; the plan pins its fingerprint.
+    key_file, key = _operator_key_file(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    planned = _run(writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", key_file)
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    assert plan["operator_key_fingerprint"].startswith("SHA256:")
+    assert key.split()[1] not in plan_path.read_text(encoding="utf-8-sig")
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", key_file,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", "-BootMountPath", boot,
+        plan_only=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
+    assert bundle["operator"] == {"ssh_authorized_keys": [key]}
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["personalization"]["operator"]["ssh_key_fingerprints"] == [plan["operator_key_fingerprint"]]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_different_operator_key_than_reviewed_stops_before_the_writer(writer_case, tmp_path):
+    reviewed, _ = _operator_key_file(tmp_path, seed=7)
+    other, _ = _operator_key_file(tmp_path, seed=9)
+    plan_path = tmp_path / "plan.json"
+    assert _run(writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", reviewed).returncode == 0
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", other,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", plan_only=False,
+    )
+
+    assert completed.returncode != 0
+    assert "operator_key_fingerprint" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_private_key_file_is_refused_as_an_operator_key(writer_case, tmp_path):
+    bad = tmp_path / "id_ed25519"
+    bad.write_text("-----BEGIN OPENSSH " + "PRIVATE KEY-----\n", encoding="utf-8")
+
+    completed = _run(writer_case, "-OperatorPublicKey", bad)
+
+    assert completed.returncode != 0
+    assert "operator public key" in completed.stderr

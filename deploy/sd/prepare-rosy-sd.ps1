@@ -26,6 +26,7 @@ param(
     [string]$BootMountPath,
     [string]$Confirmation,
     [string]$PlanPath,
+    [string]$OperatorPublicKey,
     [switch]$SetWifiCredential,
     [switch]$PlanOnly
 )
@@ -248,6 +249,28 @@ if ($wifiCredential -isnot [System.Management.Automation.PSCredential] -or [stri
     Fail "Wi-Fi credential profile is invalid"
 }
 
+# D-174 F3: an optional operator public key opens a key-only `rosy` login on the
+# card. Only the key file's public line is read; the plan records its fingerprint.
+$operatorKey = $null
+$operatorFingerprint = ""
+if ($OperatorPublicKey) {
+    if (-not (Test-Path -LiteralPath $OperatorPublicKey -PathType Leaf)) { Fail "operator public key file is missing" }
+    $operatorLines = @(Get-Content -LiteralPath $OperatorPublicKey | Where-Object { $_.Trim() })
+    if ($operatorLines.Count -ne 1) { Fail "operator public key file must hold exactly one key" }
+    $operatorKey = $operatorLines[0].Trim()
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+    $fingerprintCode = "import sys; from deploy.sd.personalization import operator_key_fingerprint; print(operator_key_fingerprint(sys.stdin.read()))"
+    Push-Location $repoRoot
+    try {
+        $operatorFingerprint = ($operatorKey | & $PythonExe -c $fingerprintCode)
+        if ($LASTEXITCODE -ne 0) { Fail "operator public key is not an allowed public key" }
+    }
+    finally {
+        Pop-Location
+    }
+    $operatorFingerprint = ([string]$operatorFingerprint).Trim()
+}
+
 if (-not (Test-Path -LiteralPath $ImagePath -PathType Leaf)) { Fail "image file is missing" }
 if ($ImageSha256 -notmatch '^[0-9a-fA-F]{64}$') { Fail "image SHA-256 is invalid" }
 $actualHash = (Get-FileHash -LiteralPath $ImagePath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -326,6 +349,7 @@ $plan = [ordered]@{
     fleet_endpoint = $FleetEndpoint
     fleet_trust_profile = $FleetTrustProfile
     fleet_source = $fleetSource
+    operator_key_fingerprint = $operatorFingerprint
     registry_path = (Resolve-Path -LiteralPath $RegistryJson).ProviderPath
 }
 
@@ -336,7 +360,7 @@ if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $secondDisk)) {
 }
 
 if ($reviewedPlan) {
-    foreach ($field in @("physical_drive", "disk_number", "disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id")) {
+    foreach ($field in @("physical_drive", "disk_number", "disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
         if ($planKeys -cnotcontains $field -or [string]$plan[$field] -cne [string]$reviewedPlan.$field) {
             Fail "target no longer matches the reviewed plan: $field"
         }
@@ -438,6 +462,7 @@ try {
             fleet_trust_profile = $FleetTrustProfile
             pairing_required = $false
         }
+        if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
         $previousOutputEncoding = $OutputEncoding
         $previousPythonUtf8 = $env:PYTHONUTF8
         try {
@@ -494,5 +519,6 @@ $receipt = [ordered]@{
     personalization = $bundleReceipt
     created_at = [DateTimeOffset]::UtcNow.ToString("o")
 }
-$receipt | ConvertTo-Json | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
-$receipt | ConvertTo-Json -Compress
+# -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
+$receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
+$receipt | ConvertTo-Json -Depth 10 -Compress

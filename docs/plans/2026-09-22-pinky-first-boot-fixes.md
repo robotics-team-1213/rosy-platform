@@ -133,5 +133,7 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
 - Task 5 (T0 indicator): done in source. Shared stage model `rosy_boot_state.py`; indicator sinks
   (status json, ACT LED, console banner, avahi) refreshed by a 30 s timer and `OnFailure=` hooks.
   Hardware facts (LED name, agetty reload, avahi reload) unproven until release 003 boots.
-- Tasks 4, 6-9: pending.
+- Task 4 (F3): done. `-OperatorPublicKey` → bundle `operator` → first boot key-only `rosy` login; fingerprints in plan/receipt.
+- Task 6 (F6): done. `LogsDirectory` + `ROS_HOME`/`ROS_LOG_DIR` for core, io and navigation.
+- Tasks 7-9: pending.
 
