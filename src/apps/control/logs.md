@@ -179,3 +179,9 @@
 - 결정: 텔레포트 기반 검증으로 주행 동역학은 미반영 — 주행 폐루프는 2026-09-21 증거가 커버.
 - 교훈: 1차 실행에서 잔존 옵저버가 /road/observation을 오염시켰다(publisher 2). 그래프 검증 스크립트는 publisher 수 단정을 먼저 하라.
 
+## 2026-09-22 · uncommitted · test(control): derive the deployed control closure and pin one sensor provider
+- 변경: `test/test_control_deploy_closure.py` 추가. systemd 유닛·compose에서 launch include 사슬을 따라 배포되는 control 실행 파일을 도출하고, `rosy.sensor_provider:control` 등록자가 정확히 1개임을 검사한다. D-149 Validation에 정정 문단 추가.
+- 증거: `python -m pytest test/test_control_deploy_closure.py -q` 4 passed. 변이 증명 3건(safety_node 편입, road_observer 제거, games에 두 번째 provider 등록 → 각각 적색 → 복구 → 초록).
+- gate 변화: 없음. 배포 폐쇄의 control 실행 파일은 4개(ir_adc·camera_detect·line_observer·road_observer)이며 전부 증거 생산자다.
+- 결정: D-149 정정(결정 불변), D-168 control 분리 설계 0단계.
+- 교훈: 승격 근거로 쓴 "실행 파일 목록"을 사람이 적으면 한 개가 빠진다. 폐쇄는 include 사슬에서 도출해야 한다.

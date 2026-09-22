@@ -98,9 +98,11 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
 각 단계는 하나의 커밋 묶음이고, 끝나는 시점에 host pytest 전체와
 `test/test_module_structure.py`가 초록이어야 한다.
 
-0. **기록 정정.** D-149 폐쇄 목록에 `road_observer_node`를 넣고(또는 launch 인자로 끌 수 있게
-   하고), include 사슬을 따라 실행 파일을 열거하는 폐쇄 시험을 추가한다. provider 등록자
-   유일성 시험도 이 단계에서 추가한다.
+0. **기록 정정 — 완료(2026-09-22).** D-149 Validation에 `road_observer_node`를 넣는 정정 문단을
+   덧붙였다. `test/test_control_deploy_closure.py`가 systemd 유닛·compose에서 include 사슬을
+   따라 배포 실행 파일을 도출해 네 개와 집합 동일성으로 고정하고, `rosy.sensor_provider:control`
+   등록자가 정확히 1개임을 검사한다(변이 증명 3건). 3단계에서 진입점을 옮길 때 이 시험의
+   기대 경로(`apps/control/setup.py`)를 같은 커밋에서 바꾼다.
 1. **파일 단위 분리(§4).** 패키지 경계를 바꾸지 않으므로 먼저 해도 되며, 이후 이동할 모듈 크기가
    줄어든다. `SIZE_VERDICTS`의 해당 항목은 파일이 600줄 아래로 내려가면 삭제한다(시험이 삭제를
    강제한다).

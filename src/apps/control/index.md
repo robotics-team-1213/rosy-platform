@@ -21,11 +21,13 @@
 | D-118 | 생 Image는 Fleet·보드·gz_multi 브리지에 타지 않는다 |
 | D-119 | 스캔·이미지·IMU는 sensor-data QoS다 |
 | D-143 | IR·카메라 차선 추종은 NAVIGATION 내부의 배타적 evidence 소스다 |
+| D-149 | control 단독 모드의 최종 발행 토픽은 계약된 예외다 |
 | D-151 | 도로 의미 인식·정책·최종 명령을 분리하고 관제 변경은 정지 상태에서만 적용한다 |
 | D-152 | CORE 관제의 카메라 표시는 저주기 최신 1장 preview 예외다 |
 | D-155 | Zero-Coupling AST Validation (Build-time Guard) |
 | D-156 | ROS 2 Namespace Strict Segregation (Runtime Guard) |
 | D-162 | 학습된 장면은 설정이지 권한이 아니다 — 장면 상황 프로파일은 등록·리비전·보수 폴백으로만 적용한다 |
+| D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 
 ## 계획·결과 문서
 
@@ -56,8 +58,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · test(control): derive the deployed control closure and pin one sensor provider
 - 2026-09-22 · uncommitted · test(control): D-162 Gazebo 실렌더링 검증 PASS — scene context 폴백 확인
 - 2026-09-22 · uncommitted · test(control): D-162 노드 그래프 ROS-SIM PASS (scene context 슬라이스)
 - 2026-09-22 · uncommitted · feat(sensing): D-162 T3 scene context 노드 wiring + additive payload
 - 2026-09-22 · uncommitted · feat(sensing): D-162 장면 상황 프로파일+히스테리시스 매처 (T1/T2)
-- 2026-09-22 · uncommitted · test(control): anchor subprocess children to the package root

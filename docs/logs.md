@@ -1419,3 +1419,10 @@
   복제되어 있어 본문 블록은 커밋본과 바이트 동일하다.
 - 교훈: 로그 스크립트는 새 항목을 파일 끝에 append해야 한다. prepend하면 이후
   모든 과거 항목이 "out of order"로 한꺼번에 빨갛게 된다(155 errors 유발).
+
+## 2026-09-22 · uncommitted · docs(adr): correct the D-149 deployed-closure list (3 → 4 executables)
+- 변경: D-149 Validation 끝에 정정 문단 추가(본문 기존 문장은 보존). `road_observer_node`가 `line_follow.launch.py`에서 조건 없이 뜬다.
+- 증거: `python -m pytest test/test_control_deploy_closure.py -q` 4 passed — 폐쇄를 유닛·compose에서 도출해 집합 동일성으로 고정.
+- gate 변화: 없음. 누락된 노드도 D-143 증거 생산자이므로 D-149 결정과 Accepted 판단은 그대로다.
+- 결정: D-168 control 분리 설계 0단계.
+- 교훈: 없음
