@@ -445,11 +445,17 @@ class LaneEdgeFollower:
                                     None if right is None else labels == right)
         self.last.update(left_label=left, right_label=right, memory=left_grid,
                          right_memory=right_grid, fresh_length=fresh_length)
+        return self._pursue(view, {
+            "left": left, "right": right, "labels": labels, "stats": stats, "count": count,
+            "left_grid": left_grid, "right_grid": right_grid, "fresh_length": fresh_length,
+        }, half)
 
-        # The left boundary leads; the right one of the same lane stands in
-        # where the left has left the field of view (convex left turns).
+    def _pursue(self, view, found, half):
+        """Target selection. edge_left: the left boundary leads; the right one
+        of the same lane stands in where the left has left the field of view
+        (convex left turns)."""
         target, supported, source = None, False, None
-        for name, grid in (("LEFT", left_grid), ("RIGHT", right_grid)):
+        for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
             if not grid.any():
                 continue
             target, supported = self._lookahead(view, grid, half)
@@ -459,8 +465,12 @@ class LaneEdgeFollower:
         self.last.update(target=target, source=source, supported=supported)
         if target is None or not supported:
             return None
-        confidence = min(1.0, fresh_length / LOOKAHEAD_M)
+        confidence = min(1.0, found["fresh_length"] / LOOKAHEAD_M)
         confidence = max(confidence, MEMORY_CONFIDENCE)
+        return self._observation(target, confidence)
+
+    @staticmethod
+    def _observation(target, confidence):
         x, y = target
         curvature = 2.0 * y / (x * x + y * y)
         return LaneObservation(error=error_for_curvature(curvature, confidence),
@@ -561,6 +571,12 @@ class LaneEdgeFollower:
                                          cv2.DIST_L2, cv2.DIST_MASK_PRECISE) * BEV_CELL_M
         offset = half - LANE_LINE_WIDTH_M / 2.0
         band = (np.abs(distance - offset) <= PATH_BAND_HALF_M).astype(np.uint8)
+        return self._band_lookahead(
+            view, band, lambda target: self._supported(view, boundary_grid, target))
+
+    def _band_lookahead(self, view, band, supported):
+        """Pursuit point on the band piece nearest the robot; `supported`
+        decides whether a candidate may be pursued."""
         count, labels = cv2.connectedComponents(band, connectivity=8)
         if count <= 1:
             return None, False
@@ -587,7 +603,7 @@ class LaneEdgeFollower:
             close = ring & (np.hypot(view.x - view.x.flat[best],
                                      view.y - view.y.flat[best]) <= 0.01)
             target = (float(view.x[close].mean()), float(view.y[close].mean()))
-            if self._supported(view, boundary_grid, np.array(target)):
+            if supported(np.array(target)):
                 return target, True
             if first is None:
                 first = target
