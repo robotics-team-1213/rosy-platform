@@ -23,6 +23,29 @@ def _run(image: Path, device: Path):
     )
 
 
+def _hash_image(image: Path):
+    return subprocess.run(
+        [sys.executable, str(VERIFY), "--image", str(image), "--image-only"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_image_only_hashes_the_decompressed_raw_image(tmp_path):
+    raw = (b"rosy-raw-image-hash\0" * 8192) + b"end"
+    image = tmp_path / "rosy.img.xz"
+    image.write_bytes(lzma.compress(raw))
+
+    completed = _hash_image(image)
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {
+        "bytes_hashed": len(raw),
+        "image_raw_sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
 def test_readback_accepts_exact_decompressed_image_prefix(tmp_path):
     raw = (b"rosy-media-readback\0" * 8192) + b"end"
     image = tmp_path / "rosy.img.xz"
