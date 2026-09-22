@@ -40,7 +40,7 @@
 | 3 | 기존 키로 서명 + 공개키 재검증 (`sign_image_release.py`, `verify-image-release.py`) | 완료 — image sha256 `eaf843c4…` |
 | 4 | `prepare-rosy-sd.ps1` 자동 번호·Fleet 기본값·plan 고정 (PR #20, 계약 46 passed) | 완료, 리뷰 반영 |
 | 5 | `-PlanOnly -PlanPath` 실행, plan 보관 | 완료 — `rosy-pinky-e4us`, 18번, domain 58, disk 1 serial `000000000207` 32 GB |
-| 6 | 관리자 권한 WRITE: Imager `--cli --sha256` → 전체 readback → 일회성 bundle → registry·receipt | 이 ADR로 실행 |
+| 6 | 관리자 권한 WRITE: Imager `--cli --sha256` → 전체 readback → 일회성 bundle → registry·receipt | 완료 (2026-09-22 22:04) — Imager exit 0, readback 8,574,867,968 B `verified: true` (raw sha256 `a82a4652…`), `provision.json` 726 B, registry 18번 등록 |
 | 7 | 카드 부팅, first-boot `PROVISIONED`, readback JSON (runbook G0-G2) | 실기 필요 |
 | 8 | main CI 복구(emotion 로그 순서, fixture 가짜 secret) | 미해결 — main 소유자 작업 |
 | 9 | 서명 키를 별도 오프라인 환경으로 이전 | FIELD 전 조건 |
