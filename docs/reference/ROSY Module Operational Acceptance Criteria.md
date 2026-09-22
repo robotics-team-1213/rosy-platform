@@ -2,7 +2,7 @@
 
 문서 ID: `ROSY-MODULE-ACCEPTANCE-001`  
 상태: 기준 문서  
-적용 대상: Rosy OS의 19개 ROS 패키지와 `deploy`, `dock`, `docs` 운영 모듈
+적용 대상: Rosy OS의 20개 ROS 패키지와 `deploy`, `dock`, `docs` 운영 모듈
 
 ## 1. 목적
 
@@ -23,7 +23,7 @@
 
 ### 2.1 두 종류의 모듈
 
-- **실행 모듈**: `src/`의 ROS 패키지 19개와 `deploy`, `dock`, `docs`다. 빌드,
+- **실행 모듈**: `src/`의 ROS 패키지 20개와 `deploy`, `dock`, `docs`다. 빌드,
   설치, 실행, 장애 격리의 경계다.
 - **논리 모듈**: M01–M14다. 제품 기능과 업무 인수의 경계다. 하나의 논리
   모듈은 여러 실행 모듈을 가로지를 수 있다.

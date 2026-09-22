@@ -81,6 +81,36 @@ modules:
     tests: [src/hardware/lamp_control/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
     functional: [src/hardware/lamp_control/test/test_lamp_package_contract.py]
+  - name: core_common
+    path: src/core/core_common
+    tests: [src/core/core_common/test]
+    functional_kind: pytest
+    functional: [src/core/core_common/test]
+  - name: core_events
+    path: src/core/core_events
+    tests: [src/core/core/test/test_audit.py, src/core/core/test/test_core_logic.py]
+    functional_kind: pytest
+    functional: [src/core/core/test/test_audit.py]
+  - name: core_features
+    path: src/core/core_features
+    tests: [src/core/core/test/test_core_logic.py, src/core/core/test/test_docking.py, src/core/core/test/test_swarm.py, src/core/core/test/test_power.py, src/core/core/test/test_traffic_policy.py]
+    functional_kind: pytest
+    functional: [src/core/core/test/test_core_logic.py, src/core/core/test/test_docking.py]
+  - name: core_api_web
+    path: src/core/core_api_web
+    tests: [src/core/core_api_web/test]
+    functional_kind: pytest
+    functional: [src/core/core_api_web/test]
+  - name: web_common
+    path: src/core/web_common
+    tests: [src/core/core/test/test_ui_token_contracts.py, src/core/core/test/test_palette_gates.py]
+    functional_kind: host-contract
+    functional: [src/core/core/test/test_ui_token_contracts.py]
+  - name: omx_adapter
+    path: src/apps/omx_adapter
+    tests: [src/apps/omx_adapter/test]
+    functional_kind: pytest
+    functional: [src/apps/omx_adapter/test]
   - name: interfaces
     path: src/core/interfaces
     tests: [src/core/interfaces/test/test_srv_surface.py]
