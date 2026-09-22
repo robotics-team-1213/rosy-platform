@@ -12,6 +12,7 @@ Compound lessons about verification process: a gate that cannot actually check i
 | File | Description |
 |------|-------------|
 | `inability-to-check-recorded-as-clean-result.md` | An inability to check is not a clean result: mutation-test gates, check subprocess exit status, do not treat skip as pass |
+| `a-fixture-from-the-same-model-is-one-belief-not-two.md` | A fixture generated from the same mental model as the code is one belief, not two: seed tests with scenes the author did not design (evidence lives on the archived dock-rig tag) |
 
 ## Subdirectories
 
