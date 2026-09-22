@@ -34,6 +34,12 @@ def generate_launch_description():
             "spawn_y": "0.24255",
             "spawn_yaw": LaunchConfiguration("spawn_yaw"),
             "gui": LaunchConfiguration("gazebo_gui"),
+            # The world's model://control/map/map_v2_fleet/meshes/road_lines.stl
+            # lane mesh needs the control share on GZ_SIM_RESOURCE_PATH.
+            # launch_sim.launch.xml's default only resolves via the
+            # `description` share, which has no sibling `control/` dir under
+            # colcon's default isolated (--symlink-install) layout.
+            "extra_resource_path": ":" + os.path.dirname(control_share),
         }.items(),
     )
 

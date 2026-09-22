@@ -16,8 +16,18 @@
     <arg name="spawn_y" default="0.0"/>
     <arg name="spawn_z" default="0.1"/>
     <arg name="spawn_yaw" default="0.0"/>
-    
-    <set_env name="GZ_SIM_RESOURCE_PATH" value="$(find-pkg-share description)/../:/$(find-pkg-share gz_sim)/models:/$(env HOME)/.gazebo/models"/>
+    <!-- Raw text appended to the default GZ_SIM_RESOURCE_PATH below, e.g. a
+         world referencing another package's model://<pkg>/... asset needs
+         that package's share dir added here (with its own leading ":") --
+         because $(find-pkg-share description)/.. only resolves to a shared
+         install/share under --merge-install; colcon's default isolated
+         (--symlink-install) layout gives install/description/share, which
+         has no sibling package dirs (e.g. control/) on it. Left empty (the
+         default), GZ_SIM_RESOURCE_PATH is byte-identical to before this arg
+         existed. -->
+    <arg name="extra_resource_path" default=""/>
+
+    <set_env name="GZ_SIM_RESOURCE_PATH" value="$(find-pkg-share description)/../:/$(find-pkg-share gz_sim)/models:/$(env HOME)/.gazebo/models$(var extra_resource_path)"/>
 
     <include file="$(find-pkg-share ros_gz_sim)/launch/gz_sim.launch.py">
         <arg name='gz_args' value='-r -s -v4, $(var world)'/>
