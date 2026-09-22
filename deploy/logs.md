@@ -281,3 +281,10 @@
 - gate 변화: 없음. 실기 심링크 확인은 DEVICE(device-readback 에 /dev/rosy-motor 노드 증거 추가 후보).
 - 결정: 없음 — D-161/D-33 기존 결정의 누락된 실행 조각.
 - 교훈: 컴포지이션 양쪽(유닛의 DeviceAllow ↔ 호스트 장치명 생성)이 서로 다른 파일에 있으면 한쪽만 갱신된다. 장치 별칭 계약은 '누가 만드는가'까지 시험으로 고정해야 한다.
+
+## 2026-09-23 · uncommitted · deploy(image+native): T14 — wait-core-ready 포트 파라미터화 + chrony 이미지 계약
+- 변경: ① native/wait-core-ready.py 의 URL 이 ROSY_API_PORT(기본 8080)를 따름(api_port 오버레이와 불일치하는 하드코딩 해소) ② customize-rootfs.sh 가 chrony 설치+enable(CORE SRS §25 타임스탬프 전제) ③ verify-mounted-image.py 가 chronyd 존재·chrony.service 활성을 검사. 픽스처 2종(valid root)에 chrony 경로 추가, 부재/비활성 거부 케이스 신규. 부수: 타 세션이 만든 test_line_follow_contract_docs.py 의 API Ref 버전 고정(v1.15)을 헤더 판독형(v1.16)으로 — T10 버전 상향이 깨뜨린 것.
+- 증거: `python -m pytest test/test_image_customization_contract.py test/test_native_systemd_contract.py deploy/image/test/ -q` 23 passed · test_line_follow_contract_docs + test_pinky_user_validation 12 passed (2026-09-23 Windows). bash -n 0.
+- gate 변화: 없음.
+- 결정: 없음 — SRS §25 전제의 이미지 계약화.
+- 교훈: 문서 버전을 리터럴로 고정한 시험은 버전이 오를 때마다 깨진다 — 헤더를 읽어 판정하도록 쓰는 편이 유지된다(단, 고정 의도라면 리터럴이 맞을 수도 있다. 이번엔 D-143 표기 존재 확인이 본래 목적이므로 헤더 판독형으로).

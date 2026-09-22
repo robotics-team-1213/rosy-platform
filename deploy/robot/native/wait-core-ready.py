@@ -10,7 +10,8 @@ import urllib.error
 import urllib.request
 
 
-URL = "http://127.0.0.1:8080/api/v1"
+PORT = os.environ.get("ROSY_API_PORT", "8080")
+URL = f"http://127.0.0.1:{PORT}/api/v1"
 TIMEOUT_SECONDS = float(os.environ.get("ROSY_CORE_READY_TIMEOUT_S", "45"))
 
 

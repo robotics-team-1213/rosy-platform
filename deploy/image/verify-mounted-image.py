@@ -57,6 +57,12 @@ def inspect(root: Path, release_id: str) -> list[str]:
 
     if (root / "usr/bin/docker").exists() or (root / "usr/bin/dockerd").exists():
         findings.append("docker must not be installed in the product image")
+    # CORE SRS §25: UTC ISO 8601 timestamps (evidence freshness, Fleet log
+    # correlation) presume a synced clock — chrony ships enabled in the image.
+    if not (root / "usr/sbin/chronyd").exists():
+        findings.append("chrony is not installed: timestamps presume a synced clock")
+    elif not (root / "etc/systemd/system/multi-user.target.wants/chrony.service").exists():
+        findings.append("chrony.service is not enabled")
     runtime = root / "etc/rosy/runtime.env"
     if runtime.exists():
         content = runtime.read_text(encoding="utf-8", errors="replace")

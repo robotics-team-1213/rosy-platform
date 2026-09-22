@@ -48,7 +48,14 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # Inventory
     (release_dir / "required-ros-packages.txt").write_text("pkg_a", encoding="utf-8")
     (release_dir / "rosy-packages.txt").write_text("pkg_a\npkg_b", encoding="utf-8")
-    
+
+    # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
+    (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/sbin/chronyd").write_text("mock", encoding="utf-8")
+    wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
+    wants.parent.mkdir(parents=True, exist_ok=True)
+    wants.write_text("mock", encoding="utf-8")
+
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
 
