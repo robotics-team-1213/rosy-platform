@@ -18,6 +18,9 @@ WorkingDirectory=/opt/rosy/current
 ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 run core core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
 ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py
 Restart=on-failure
+# Restart without passing through the failed state, so OnFailure= fires only
+# when CORE finally gives up, not on every crash-loop iteration.
+RestartMode=direct
 RestartSec=2
 TimeoutStartSec=60
 TimeoutStopSec=15

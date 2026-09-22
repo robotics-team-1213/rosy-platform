@@ -169,3 +169,44 @@ def test_no_boot_partition_means_no_black_box_and_no_error(tmp_path):
 
     assert errors == []
     assert not (root / "boot/firmware/rosy-diag").exists()
+
+
+def test_a_crash_loop_does_not_keep_rewriting_the_boot_partition(tmp_path):
+    # Review M6: FAILED and PROVISIONED alternated during a CORE restart loop.
+    root = _device(tmp_path)
+    starting = dict(FAILED_CARD_UNITS, **{"rosy-release-recover.service": "active\n",
+                                          "rosy-core.service": "activating\n"})
+    crashed = dict(starting, **{"rosy-core.service": "failed\n"})
+    _boot(root, crashed)
+    report = next((root / "boot/firmware/rosy-diag").glob("boot-*.json"))
+    first = report.stat().st_mtime_ns
+
+    for units in (starting, crashed, starting, crashed):
+        _boot(root, units)
+
+    assert report.stat().st_mtime_ns == first
+    assert json.loads(report.read_text(encoding="utf-8"))["stage"] == "FAILED:rosy-core"
+
+
+def test_recovery_to_ready_is_always_recorded(tmp_path):
+    root = _device(tmp_path)
+    _boot(root, FAILED_CARD_UNITS)
+    ready = {unit: "active\n" for unit in FAILED_CARD_UNITS}
+
+    _boot(root, ready)
+
+    report = next((root / "boot/firmware/rosy-diag").glob("boot-*.json"))
+    assert json.loads(report.read_text(encoding="utf-8"))["stage"] == "CORE_READY"
+
+
+def test_report_numbers_sort_numerically_past_four_digits(tmp_path):
+    blackbox = _load("rosy_blackbox", "rosy_blackbox.py")
+    boot = tmp_path / "boot/firmware"
+    (boot / "rosy-diag").mkdir(parents=True)
+    (boot / "rosy-diag/boot-9999-aaaaaaaa.json").write_text('{"stage": "X"}', encoding="utf-8")
+    record = {"stage": "FAILED:rosy-core", "boot_id": "b" * 32, "units": {}}
+
+    written = blackbox.write(boot, record, {})
+
+    assert written.name == "boot-010000-bbbbbbbb.json"
+    assert {p.name for p in (boot / "rosy-diag").glob("boot-*.json")} >= {written.name, "boot-9999-aaaaaaaa.json"}

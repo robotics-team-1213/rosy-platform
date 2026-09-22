@@ -184,7 +184,10 @@ if ($ReprovisionReceipt) {
     foreach ($key in @("device_uid", "device_name", "robot_number", "release_id", "image_sha256", "writer_exit_code", "media_readback", "created_at")) {
         if ($receiptKeys -cnotcontains $key) { Fail "reprovision receipt has no $key" }
     }
-    if ([int]$reprovision.writer_exit_code -ne 0 -or -not [bool]$reprovision.media_readback.verified) {
+    # Typed checks: in PowerShell 5.1 [bool]"false" is True and [int]$null is 0.
+    $exitCode = $reprovision.writer_exit_code
+    $verified = $reprovision.media_readback.verified
+    if (-not ($exitCode -is [int] -or $exitCode -is [long]) -or $exitCode -ne 0 -or -not ($verified -is [bool]) -or -not $verified) {
         Fail "reprovision receipt does not prove a verified earlier write"
     }
     $fromReceipt = [ordered]@{ RobotNumber = "robot_number"; DeviceName = "device_name"; DeviceUid = "device_uid" }
@@ -349,6 +352,23 @@ if ($robotNumberSource -eq "auto" -and -not $reviewedPlan) {
 # Checked again after drawing or loading a plan: a tampered plan must never
 # reach the writer with an identity the bundle validator would later refuse.
 if ($RobotNumber -lt 1 -or $RobotNumber -gt 61) { Fail "RobotNumber must be between 1 and 61" }
+if ($reprovision) {
+    # A reviewed plan may not swap in another identity under this receipt, and the
+    # receipt's identity must be the one the registry already holds.
+    foreach ($pair in @(@("RobotNumber", "robot_number"), @("DeviceName", "device_name"), @("DeviceUid", "device_uid"))) {
+        if ([string](Get-Variable -Name $pair[0] -ValueOnly) -cne [string]$reprovision.($pair[1])) {
+            Fail "the plan identity does not match the reprovision receipt: $($pair[1])"
+        }
+    }
+    if ($reviewedPlan -and [string]$reviewedPlan.robot_number_source -cne "reprovision") {
+        Fail "the reviewed plan was not made for this reprovision receipt"
+    }
+    if (@($registry.robot_numbers) -notcontains $RobotNumber -or
+        @($registry.device_names) -cnotcontains $DeviceName -or
+        @($registry.device_uids) -cnotcontains $DeviceUid) {
+        Fail "the reprovision receipt identity is not registered here"
+    }
+}
 if ($DeviceName -cnotmatch '^rosy-pinky-[a-hj-km-np-z2-9]{4}$') { Fail "DeviceName is invalid" }
 try { $parsedUid = [guid]$DeviceUid } catch { Fail "DeviceUid is invalid" }
 if (-not $reprovision) {

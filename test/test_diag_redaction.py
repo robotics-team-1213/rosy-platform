@@ -97,3 +97,35 @@ def test_secret_bearing_paths_are_never_read(path):
 )
 def test_diagnostic_paths_are_allowed(path):
     assert not _module().is_denied_path(path)
+
+
+HEX_PSK = "ab" * 32
+MORE_SECRET_LINES = [
+    # Python repr, the most common shape in tracebacks (review M4).
+    "{'wifi_" + "passphrase': '" + PSK_VALUE + "', 'wpa_" + "psk': '" + HEX_PSK + "'}",
+    'pass' + 'word: "' + PSK_VALUE + ' with spaces"',
+    "https://operator:" + PSK_VALUE + "@fleet.example.invalid/api",
+    "nmcli con modify rosy-site-sta wifi-sec." + "psk " + PSK_VALUE,
+    "Cookie: session=" + TOKEN_VALUE + "; theme=dark",
+    '{"sec' + 'ret":' + "123456789012}",
+]
+
+
+@pytest.mark.parametrize("line", MORE_SECRET_LINES)
+def test_more_secret_shapes_are_removed(line):
+    redacted = _module().redact(line)
+
+    for secret in (PSK_VALUE, TOKEN_VALUE, HEX_PSK, "123456789012", "with spaces"):
+        assert secret not in redacted, redacted
+    assert scan_text("diag/journal.txt", redacted) == []
+
+
+@pytest.mark.parametrize("line", ["a." * 24000, "-" * 48000, "x_" * 24000 + "token"],
+                         ids=["dotted", "dashes", "word-run"])
+def test_long_lines_redact_in_linear_time(line):
+    import time
+
+    started = time.perf_counter()
+    _module().redact(line)
+
+    assert time.perf_counter() - started < 1.0

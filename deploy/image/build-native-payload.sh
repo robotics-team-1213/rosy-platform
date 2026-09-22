@@ -109,6 +109,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/syste
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"
+mkdir -p "$OVERLAY/etc/tmpfiles.d"
+cp "$NATIVE_RUNTIME_SOURCE/tmpfiles-rosy-logs.conf" "$OVERLAY/etc/tmpfiles.d/rosy-logs.conf"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.env" "$OVERLAY/etc/rosy/runtime.env.template"
 cp "$ROBOT_CONFIG_SOURCE/motion_profiles.yaml" "$OVERLAY/etc/rosy/motion_profiles.yaml"
 cp "$CYCLONEDDS_SOURCE" "$OVERLAY/etc/rosy/cyclonedds.xml"

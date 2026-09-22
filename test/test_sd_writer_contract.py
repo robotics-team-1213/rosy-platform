@@ -754,3 +754,52 @@ def test_reprovision_refuses_a_receipt_that_does_not_prove_this_identity(writer_
     assert completed.returncode != 0
     assert "reprovision receipt" in completed.stderr
     assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovision_receipt_cannot_launder_another_plans_identity(writer_case, tmp_path):
+    # Review M1: the plan replaced the receipt's identity and every registry check was skipped.
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+    plan_path = tmp_path / "plan-robot-20.json"
+    planned = _run(writer_case, "-PlanPath", plan_path, "-RobotNumber", "20",
+                   "-DeviceName", "rosy-pinky-abcd", "-DeviceUid", "11111111-2222-4333-8444-555555555555")
+    assert planned.returncode == 0, planned.stderr
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path, "-ReprovisionReceipt", prior,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-abcd", plan_only=False,
+        omit=("-RobotNumber", "-DeviceName", "-DeviceUid"),
+    )
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovision_requires_the_identity_to_be_registered(writer_case, tmp_path):
+    prior = _prior_receipt(tmp_path)  # registry is empty in the fixture
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    "overrides",
+    [{"writer_exit_code": None}, {"writer_exit_code": "0"}, {"media_readback": {"verified": "false"}},
+     {"media_readback": {"verified": 1}}],
+    ids=["exit-null", "exit-string", "verified-string", "verified-int"],
+)
+def test_reprovision_proof_fields_are_strictly_typed(writer_case, tmp_path, overrides):
+    # Review M2: [bool]"false" is True and [int]$null is 0 in PowerShell 5.1.
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path, **overrides)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr

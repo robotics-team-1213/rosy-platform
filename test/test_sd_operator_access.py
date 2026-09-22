@@ -54,7 +54,7 @@ def _bundle(**extra) -> dict:
         requested_preset="core",
         country_code="KR",
         ssid="fixture-wifi",
-        wifi_passphrase="fixture-" + "pass-9384",
+        wifi_passphrase="fixture-pass-9384",  # scanner-known fixture
         fleet_endpoint="https://perpros.local",
         fleet_trust_profile="rosy-pilot-lan",
         pairing_required=False,
@@ -180,3 +180,55 @@ def test_default_operator_account_never_touches_the_host_for_a_non_slash_root(tm
     ).apply(bundle=card, hardware_serial="10000000abcdef01")
 
     assert result["state"] == "PROVISIONED"
+
+
+def _provisioner(module, root, **kwargs):
+    kwargs.setdefault("network_activate", lambda _p: True)
+    kwargs.setdefault("hostname_apply", lambda _n: None)
+    kwargs.setdefault("operator_account", lambda _n: None)
+    return module.FirstBootProvisioner(root=root, **kwargs)
+
+
+def test_a_failed_account_creation_still_provisions_without_operator_access(tmp_path):
+    # Review H2: useradd failing used to crash first boot on every later boot.
+    module = _first_boot()
+    root, card = _card(tmp_path, _bundle(operator_ssh_keys=[_ed25519()]))
+
+    def broken(_name):
+        raise OSError("useradd: group rosy exists")
+
+    result = _provisioner(module, root, operator_account=broken,
+                          operator_lookup=lambda _name: None).apply(bundle=card, hardware_serial="10000000abcdef01")
+
+    assert result["state"] == "PROVISIONED"
+    assert not (root / "home/rosy").exists()
+    assert not (root / "etc/sudoers.d/60-rosy-operator").exists()
+    complete = json.loads((root / "var/lib/rosy/provisioning/complete.json").read_text(encoding="utf-8"))
+    assert "operator" not in complete
+
+
+def test_a_pre_existing_account_with_another_home_is_not_silently_used(tmp_path, capsys):
+    # Review L5: keys in /home/rosy would be ignored by sshd for a different home.
+    module = _first_boot()
+    root, card = _card(tmp_path, _bundle(operator_ssh_keys=[_ed25519()]))
+    lookup = lambda _name: {"home": "/var/lib/rosy", "shell": "/usr/sbin/nologin", "uid": 999, "gid": 999}
+
+    result = _provisioner(module, root, operator_lookup=lookup).apply(
+        bundle=card, hardware_serial="10000000abcdef01")
+
+    assert result["state"] == "PROVISIONED"
+    assert not (root / "etc/sudoers.d/60-rosy-operator").exists()
+    assert "operator" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("operator", [7, {"ssh_authorized_keys": [["nested"]]}, {"ssh_authorized_keys": "one"}])
+def test_malformed_operator_sections_are_rejected_not_crashed(operator):
+    # Review L4: a TypeError escaped the validator and crashed first boot.
+    from deploy.sd.personalization import validate_provision_bundle, _checksum
+
+    bundle = _bundle()
+    bundle["operator"] = operator
+    bundle["payload_checksum"] = _checksum({k: v for k, v in bundle.items() if k != "payload_checksum"})
+
+    with pytest.raises(ValueError):
+        validate_provision_bundle(bundle)

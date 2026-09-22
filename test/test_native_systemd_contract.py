@@ -182,3 +182,13 @@ def test_journald_keeps_a_bounded_persistent_ledger():
     for directive in ("[Journal]", "Storage=persistent", "SystemMaxUse=200M", "RuntimeMaxUse=32M"):
         assert directive in conf
     assert 'journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"' in payload
+
+
+def test_ros_log_directories_are_aged_out():
+    # Review M9: ROS writes new files on every start, outside journald's cap.
+    rules = (ROOT / "deploy/robot/native/tmpfiles-rosy-logs.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+
+    for name in ("rosy-core", "rosy-io", "rosy-navigation"):
+        assert f"e /var/log/{name} - - - 7d" in rules
+    assert 'tmpfiles-rosy-logs.conf" "$OVERLAY/etc/tmpfiles.d/rosy-logs.conf"' in payload

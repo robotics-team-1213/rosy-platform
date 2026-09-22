@@ -79,10 +79,10 @@ def test_the_first_card_failure_is_visible_on_every_sink(tmp_path):
     assert errors == []
     assert record["stage"] == "FAILED:rosy-release-recover"
     assert record["ipv4"] == ["192.168.1.201"]
-    status = json.loads((root / "run/rosy/boot-status.json").read_text(encoding="utf-8"))
+    status = json.loads((root / "run/rosy-boot/boot-status.json").read_text(encoding="utf-8"))
     assert status["stage"] == "FAILED:rosy-release-recover"
     assert (root / "sys/class/leds/ACT/trigger").read_text(encoding="ascii") == "timer"
-    issue = (root / "run/rosy/issue").read_text(encoding="utf-8")
+    issue = (root / "run/rosy-boot/issue").read_text(encoding="utf-8")
     assert "rosy-pinky-e4us" in issue and "192.168.1.201" in issue
     assert "journalctl -b -u rosy-release-recover.service" in issue
     avahi = (root / "etc/avahi/services/rosy.service").read_text(encoding="utf-8")
@@ -112,8 +112,8 @@ def test_one_broken_sink_never_stops_the_others(tmp_path):
     record, errors, _calls = _render(module, root, FAILED_CARD_UNITS)
 
     assert len(errors) == 1 and errors[0].startswith("avahi")
-    assert (root / "run/rosy/boot-status.json").is_file()
-    assert (root / "run/rosy/issue").is_file()
+    assert (root / "run/rosy-boot/boot-status.json").is_file()
+    assert (root / "run/rosy-boot/issue").is_file()
 
 
 def test_missing_led_is_not_an_error(tmp_path):
@@ -170,4 +170,76 @@ def test_image_installs_and_enables_the_indicator():
     assert 'rosy-boot-status.service" "$OVERLAY/etc/systemd/system/' in payload
     assert 'rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/' in payload
     assert "rosy-boot-status.timer" in customizer.split("systemctl --root")[1].split("\n\n")[0]
-    assert "etc/issue.d/rosy.issue" in customizer
+    assert "ln -sfn /run/rosy-boot/issue" in customizer
+
+
+def test_indicator_writes_only_to_a_root_owned_directory_and_never_follows_links(tmp_path):
+    # Review H1: /run/rosy belongs to rosy-core. A compromised CORE could plant a
+    # symlink at a predictable temp name and have root overwrite any file.
+    module = _module()
+    root = _device(tmp_path)
+    victim = tmp_path / "victim"
+    victim.write_text("keep me", encoding="utf-8")
+    runtime = root / "run/rosy-boot"
+    runtime.mkdir(parents=True)
+    for name in (".issue.tmp", ".boot-status.json.tmp"):
+        try:
+            (runtime / name).symlink_to(victim)
+        except OSError:
+            pytest.skip("symlinks need privileges on this host")
+
+    _record, errors, _calls = _render(module, root, FAILED_CARD_UNITS)
+
+    assert errors == []
+    assert victim.read_text(encoding="utf-8") == "keep me"
+    assert not (root / "run/rosy").exists()
+    source = (NATIVE / "rosy-boot-status.py").read_text(encoding="utf-8")
+    assert "mkstemp" in source and "run/rosy/" not in source
+
+
+def test_unchanged_status_does_not_rewrite_or_reload(tmp_path):
+    # Review M7: avahi re-announced and the console redrew every 30 s.
+    module = _module()
+    root = _device(tmp_path)
+    _render(module, root, FAILED_CARD_UNITS)
+    avahi = root / "etc/avahi/services/rosy.service"
+    before = avahi.stat().st_mtime_ns
+
+    _record, _errors, calls = _render(module, root, FAILED_CARD_UNITS)
+
+    assert avahi.stat().st_mtime_ns == before
+    assert ["agetty", "--reload"] not in calls
+
+
+def test_one_sink_raising_anything_never_stops_the_black_box(tmp_path):
+    # Review L1: a non-string device name raised AttributeError inside avahi.
+    module = _module()
+    root = _device(tmp_path)
+    (root / "boot/firmware").mkdir(parents=True)
+    (root / "etc/rosy/device-identity.json").write_text('{"device_name": 42}', encoding="utf-8")
+
+    _record, errors, _calls = _render(module, root, FAILED_CARD_UNITS)
+
+    assert (root / "boot/firmware/rosy-diag/latest.txt").is_file()
+    assert all(not error.startswith("blackbox") for error in errors)
+
+
+def test_avahi_advertises_the_configured_api_port(tmp_path):
+    # Review L7: the port followed wait-core-ready, not a literal 8080.
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/runtime.env").write_text("ROSY_API_PORT=9090\n", encoding="utf-8")
+
+    _render(module, root, FAILED_CARD_UNITS)
+
+    assert "<port>9090</port>" in (root / "etc/avahi/services/rosy.service").read_text(encoding="utf-8")
+
+
+def test_indicator_unit_is_rate_unlimited_and_not_ordered_after_the_runtime():
+    service = (NATIVE / "rosy-boot-status.service").read_text(encoding="utf-8")
+    core = (NATIVE / "rosy-core.service").read_text(encoding="utf-8")
+
+    assert "StartLimitIntervalSec=0" in service  # timer + OnFailure bursts (review M6)
+    assert "RuntimeDirectory=rosy-boot" in service and "RuntimeDirectoryPreserve=yes" in service
+    assert "rosy-runtime.target" not in service  # review L2: show BOOTING/PROVISIONED early
+    assert "RestartMode=direct" in core  # restarts no longer fire OnFailure each time

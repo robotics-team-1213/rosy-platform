@@ -1,13 +1,21 @@
 [Unit]
-Description=ROSY boot status indicator (LED, console, mDNS; D-174 T0)
-After=rosy-runtime.target avahi-daemon.service
+Description=ROSY boot status indicator (LED, console, mDNS, black box; D-174 T0, D-175 L1)
+# Not ordered after the runtime target, so BOOTING and PROVISIONED are shown
+# while the runtime is still starting. Started by a timer and by OnFailure= of the
+# boot units, so bursts must never hit the start limit.
+After=basic.target avahi-daemon.service
 Wants=avahi-daemon.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-status.py
 TimeoutStartSec=30
 Nice=10
+# Root-owned; never write into /run/rosy, which rosy-core owns (D-161).
+RuntimeDirectory=rosy-boot
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 
 [Install]
 WantedBy=multi-user.target

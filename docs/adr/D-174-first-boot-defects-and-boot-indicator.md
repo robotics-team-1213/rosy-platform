@@ -32,18 +32,26 @@ Windows에서 ext4 루트를 읽기 전용으로 추출하고 journal을 읽었�
 3. **F3: 운영자 접근은 카드별 공개키로만 연다.** `prepare-rosy-sd.ps1`이 운영자 공개키를 개인화
    bundle에 넣고, 첫 부팅이 전용 `rosy` 계정에 설치한다. 비밀번호 로그인은 계속 끈다. 이미지 공통
    부분에는 키를 넣지 않는다(장치 중립).
+   - **권한 범위:** `rosy`는 `NOPASSWD` sudo를 갖는다. 비밀번호가 없는 계정이라 sudo를 쓰려면 이 형식뿐이고,
+     런북의 `sudo` 절차가 이를 전제한다. 즉 **키 보유자는 그 로봇의 root**다. D-161의 "호스트 권한은
+     CORE 밖" 경계는 서비스 권한에 대한 것이며, 사람의 운영자 경로는 그 경계 밖의 별도 경로다. 키는 카드를
+     굽는 운영 PC의 운영자만 가지며 plan·receipt에는 지문만 남는다. FIELD 전에 키 보유자 목록과 회수 절차를
+     정한다.
+   - 계정 생성이 실패하거나 기존 `rosy` 계정의 홈·셸이 다르면 운영자 접근만 건너뛰고 개인화는 계속한다.
 4. **F4: 부팅 상태는 CORE 밖의 표시 계층이 알린다.** 표시는 CORE 기동을 막지 않고(`Wants`),
    CORE에 권한을 주지 않는다. 단계는 `BOOTING → PROVISIONED → CORE_READY` 또는 `FAILED(<unit>)`이다.
    - **T0(지금, 새 장치 권한 없음):** `rosy-boot-status` 서비스가 systemd 상태로 단계를 계산해
-     `/run/rosy/boot-status.json`에 쓴다. Pi 보드 ACT LED 패턴(준비=heartbeat, 실패=빠른 점멸)으로
-     표시하고, HDMI 콘솔 배너(`/etc/issue`)에 이름·IP·단계를 띄우고, avahi `_rosy._tcp` 서비스
-     TXT로 단계를 광고한다.
+     root 소유 `/run/rosy-boot/boot-status.json`에 쓴다. Pi 보드 ACT LED 패턴(준비=heartbeat, 실패=빠른
+     점멸)으로 표시하고, HDMI 콘솔 배너(`/etc/issue.d/rosy.issue` → `/run/rosy-boot/issue`)에 이름·IP·단계를
+     띄우고, avahi `_rosy._tcp` 서비스 TXT로 단계를 광고한다. root 도구는 CORE 소유 `/run/rosy`에 쓰지 않고
+     예측 가능한 임시 이름을 쓰지 않는다(CORE가 심볼릭 링크로 root 쓰기를 조종하지 못하게).
    - **T1(후속 ADR):** 공식 OS처럼 LCD(ST7789, `/dev/spidev0.0`)에 이름·IP·단계를 보여 주는 전용
      unit. D-169의 좁은 예외(표시 전용 unit에 spidev0.0 + gpiochip만)이며 벤치 SPI 증거가 먼저다.
    - **T2(후속 ADR):** 부저. 핀·구동 방식이 공개되지 않았으므로 공식 OS 카드에서
      `capture-vendor-baseline.sh`로 핀과 서비스를 확인한 뒤 결정한다.
-5. **F6: `rosy-core`는 상태 디렉터리 아래에 ROS 홈과 로그를 둔다**(`ROS_HOME`, `ROS_LOG_DIR` =
-   `/var/lib/rosy/...`). 계약 시험으로 고정한다.
+5. **F6: ROS 서비스(`rosy-core`·`rosy-io`·`rosy-navigation`)는 서비스 소유 로그 디렉터리에 ROS 홈과
+   로그를 둔다**(`LogsDirectory=<unit>`, `ROS_HOME`=`ROS_LOG_DIR`=`/var/log/<unit>`). tmpfiles.d가 7일 지난
+   파일을 지운다. 계약 시험으로 고정한다.
 6. **F7: 같은 장치의 재기록은 이전 receipt로만 허용한다.** 같은 `device_uid`·이름·번호의 receipt를
    제시하면 registry 재사용을 허용하고, 새 receipt는 이전 것을 가리킨다.
 7. **F8: 카드 진단 도구는 읽기 전용으로 저장소에 둔다.** 물리 디스크를 읽기 전용으로 열어 ext4에서

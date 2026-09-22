@@ -87,6 +87,16 @@ def _default_operator_account(name: str) -> None:
         raise OSError("could not create the operator account")
 
 
+def _system_account(name: str) -> dict | None:
+    import pwd
+
+    try:
+        entry = pwd.getpwnam(name)
+    except KeyError:
+        return None
+    return {"home": entry.pw_dir, "shell": entry.pw_shell, "uid": entry.pw_uid, "gid": entry.pw_gid}
+
+
 class FirstBootProvisioner:
     def __init__(
         self,
@@ -95,6 +105,7 @@ class FirstBootProvisioner:
         network_activate: Callable[[str], bool] = _default_network_activate,
         hostname_apply: Callable[[str], None] | None = None,
         operator_account: Callable[[str], None] | None = None,
+        operator_lookup: Callable[[str], dict | None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.network_activate = network_activate
@@ -106,6 +117,10 @@ class FirstBootProvisioner:
         if operator_account is None and self.root == Path("/").resolve():
             operator_account = _default_operator_account
         self.operator_account = operator_account
+        if operator_lookup is None:
+            operator_lookup = (_system_account if self.root == Path("/").resolve()
+                               else lambda name: {"home": f"/home/{name}", "shell": "/bin/bash"})
+        self.operator_lookup = operator_lookup
         self.state_dir = self.root / "var/lib/rosy/provisioning"
         self.complete = self.state_dir / "complete.json"
         self.state = self.state_dir / "state.json"
@@ -150,16 +165,24 @@ class FirstBootProvisioner:
                 self.operator_account(OPERATOR_USER)
             except (OSError, subprocess.SubprocessError) as exc:
                 print(f"rosy-first-boot: operator account not created: {exc}", file=sys.stderr)
-        ssh_dir = self._inside(f"home/{OPERATOR_USER}/.ssh")
+        # Operator access is optional: without a usable account the robot still
+        # provisions, and nothing is installed that sshd would silently ignore.
+        account = self.operator_lookup(OPERATOR_USER)
+        expected_home = f"/home/{OPERATOR_USER}"
+        if account is None:
+            print("rosy-first-boot: operator account is missing; operator access skipped", file=sys.stderr)
+            return []
+        if account["home"] != expected_home or account["shell"].endswith(("nologin", "false")):
+            print(f"rosy-first-boot: existing operator account has home {account['home']} and shell "
+                  f"{account['shell']}; operator access skipped", file=sys.stderr)
+            return []
+        ssh_dir = self._inside(f"{expected_home.lstrip('/')}/.ssh")
         ssh_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(ssh_dir, 0o700)
         _write_atomic(ssh_dir / "authorized_keys", "".join(f"{key}\n" for key in keys), 0o600)
-        if self.root == Path("/").resolve():
-            import pwd
-
-            account = pwd.getpwnam(OPERATOR_USER)
+        if account.get("uid") is not None:
             for path in (ssh_dir, ssh_dir / "authorized_keys"):
-                os.chown(path, account.pw_uid, account.pw_gid)
+                os.chown(path, account["uid"], account["gid"])
         _write_atomic(self._inside("etc/sudoers.d/60-rosy-operator"),
                       f"{OPERATOR_USER} ALL=(ALL) NOPASSWD:ALL\n", 0o440)
         return [operator_key_fingerprint(key) for key in keys]

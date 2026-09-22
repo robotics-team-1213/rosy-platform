@@ -445,3 +445,24 @@
 - 결정: D-174
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · fix(native,sd): review of the boot indicator, black box and operator access (D-174, D-175)
+
+- 변경: code-reviewer 17건(HIGH 2, MEDIUM 9 중 적용 가능 전부, LOW 다수) 반영.
+  H1 root 표시 도구가 CORE 소유 `/run/rosy`에 예측 가능한 임시 이름으로 쓰던 것을 root 소유 `/run/rosy-boot`
+  (`RuntimeDirectory=rosy-boot`, preserve)과 `mkstemp`+`fchmod`로 바꿨다. H2 계정 생성 실패·기존 계정 불일치 시
+  운영자 접근만 건너뛰고 개인화는 계속한다. M1 `-ReprovisionReceipt`는 plan 신원이 receipt와 같고 registry에
+  이미 있을 때만 통과한다. M2 receipt 증거는 타입 검사(`[int]`/`[bool]`)한다. M3·M4 redaction 정규식을 경계·상한이
+  있는 형태로 바꾸고 Python repr, 따옴표 값, URL userinfo, nmcli 인자, Cookie, 숫자 값을 지운다. M6 CORE는
+  `RestartMode=direct`, 표시 unit은 `StartLimitIntervalSec=0`, 블랙박스는 같은 부팅에서 새 실패·CORE_READY 복구가
+  아니면 5분에 한 번만 다시 쓴다. M7 내용이 같으면 avahi·issue를 다시 쓰지 않는다. M8 D-174에 NOPASSWD sudo
+  범위와 실제 로그 위치를 적었다. M9 ROS 로그 디렉터리는 tmpfiles.d로 7일 후 정리한다. L1 출력 하나의 어떤 예외도
+  다른 출력을 멈추지 않는다. L2 표시 unit은 runtime target 뒤에 줄 서지 않는다. L3 보고서 번호는 6자리·숫자 정렬.
+  L4 잘못된 operator 섹션은 `ValueError`. L5 기존 계정의 홈·셸 확인. L7 avahi 포트는 `ROSY_API_PORT`. L8 FAT32
+  rename 뒤 디렉터리 fsync.
+- 증거: 표시·블랙박스·redaction·systemd 75 passed(심볼릭 링크 공격 시험은 Windows 권한 문제로 skip, Linux CI에서 실행),
+  first-boot·personalization 50 passed, SD writer reprovision 12 passed (2026-09-23 Windows). 실기(ACT LED, agetty,
+  avahi, systemd 255 `RestartMode`) 확인은 release 003 부팅 때.
+- gate 변화: 없음
+- 결정: D-174, D-175
+- 교훈: root가 도는 관측 도구는 관측 대상(CORE)이 쓰는 디렉터리를 절대 쓰지 않는다. 관측이 공격 경로가 된다.
+

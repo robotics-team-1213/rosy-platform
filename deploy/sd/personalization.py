@@ -218,8 +218,11 @@ def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("provision bundle keys are invalid")
     if "operator" in bundle:
         operator = bundle["operator"]
-        keys = operator.get("ssh_authorized_keys") if isinstance(operator, dict) else None
-        if set(operator) != {"ssh_authorized_keys"} or not isinstance(keys, list)                 or not 1 <= len(keys) <= MAX_OPERATOR_KEYS or len(set(keys)) != len(keys):
+        if not isinstance(operator, dict) or set(operator) != {"ssh_authorized_keys"}:
+            raise ValueError("operator keys are invalid")
+        keys = operator["ssh_authorized_keys"]
+        if (not isinstance(keys, list) or not all(isinstance(key, str) for key in keys)
+                or not 1 <= len(keys) <= MAX_OPERATOR_KEYS or len(set(keys)) != len(keys)):
             raise ValueError("operator keys are invalid")
         for key in keys:
             if validate_operator_key(key) != key:
