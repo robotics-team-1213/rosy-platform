@@ -1,3 +1,12 @@
 .gitattributes text eol=lf
 *.sh text eol=lf
 src/sim/gz_sim/scripts/*.py text eol=lf
+
+# map_v2_fleet generated outputs must be byte-deterministic across checkouts
+# (test_map_v2_fleet_scene.py compares them byte for byte). core.autocrlf=true
+# would otherwise normalise the text .world/.yaml to CRLF on Windows checkout,
+# and could mangle the binary .stl/.pgm if git's binary heuristic misfires.
+src/apps/control/map/map_v2_fleet/worlds/*.world text eol=lf
+src/apps/control/map/map_v2_fleet/meshes/*.stl -text
+src/apps/control/map/map_v2_fleet/maps/*.pgm -text
+src/apps/control/map/map_v2_fleet/maps/*.yaml text eol=lf

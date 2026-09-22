@@ -2,6 +2,7 @@
 
 import importlib.util
 import struct
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / "map" / "map_v2_fleet"
 SOURCE = BUNDLE / "260919 MAP FILE.STL"
+WORLD = BUNDLE / "worlds" / "map_v2_fleet.world"
+MESH = BUNDLE / "meshes" / "road_lines.stl"
 
 
 def _load(name):
@@ -64,3 +67,37 @@ def test_rejects_truncated_stl(tmp_path):
     bad.write_bytes(b"\0" * 80 + struct.pack("<I", 5))
     with pytest.raises(ValueError, match="binary STL"):
         _load("stl_scene").load_scene(bad)
+
+
+def test_builder_output_is_deterministic_and_checked_in(tmp_path):
+    build = _load("build_world")
+    build.build(SOURCE, tmp_path)
+    assert (tmp_path / "worlds" / "map_v2_fleet.world").read_bytes() == WORLD.read_bytes()
+    assert (tmp_path / "meshes" / "road_lines.stl").read_bytes() == MESH.read_bytes()
+
+
+def test_world_has_four_lidar_height_wall_collisions_only():
+    world = ET.parse(WORLD).getroot().find("world")
+    boxes = [c for c in world.iter("collision") if c.find("./geometry/box") is not None]
+    assert len(boxes) == 4
+    assert not [c for c in world.iter("collision") if c.find("./geometry/mesh") is not None]
+
+
+def test_lane_mesh_is_visual_only_above_the_ground_plane():
+    world = ET.parse(WORLD).getroot().find("world")
+    uris = [u.text for u in world.iter("uri")]
+    assert "model://control/map/map_v2_fleet/meshes/road_lines.stl" in uris
+    lines = world.find("./model[@name='road_lines']")
+    assert lines.find("static").text == "true"
+    assert float(lines.find("pose").text.split()[2]) == pytest.approx(0.001)
+
+
+def test_world_records_the_source_hash(scene):
+    assert scene.source_sha256 in WORLD.read_text(encoding="utf-8")
+
+
+def test_white_lines_on_dark_floor_by_default():
+    """The physical 260919 mat is white tape on a dark floor (lane.py polarity)."""
+    text = WORLD.read_text(encoding="utf-8")
+    assert "<diffuse>0.2 0.2 0.2 1</diffuse>" in text  # floor
+    assert "<diffuse>1 1 1 1</diffuse>" in text        # lane paint
