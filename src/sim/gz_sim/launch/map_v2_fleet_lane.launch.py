@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""One Pinky on the 260919 road track: camera lane evidence into CORE."""
+
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.launch_description_sources import AnyLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    gz_share = get_package_share_directory("gz_sim")
+    control_share = get_package_share_directory("control")
+    world = os.path.join(
+        control_share, "map", "map_v2_fleet", "worlds", "map_v2_fleet.world")
+    line_config = os.path.join(control_share, "config", "line_follow.yaml")
+    default_core_overlay = os.path.join(
+        gz_share, "config", "semantic_road_core.yaml")
+
+    simulation = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            os.path.join(gz_share, "launch", "launch_sim.launch.xml")),
+        launch_arguments={
+            "world": world,
+            "bridge_image": "true",
+            "cam_tilt_deg": "25",
+            "camera_width": LaunchConfiguration("camera_width"),
+            "camera_height": LaunchConfiguration("camera_height"),
+            "camera_update_rate": LaunchConfiguration("camera_update_rate"),
+            "spawn_x": "-1.26955",
+            "spawn_y": "0.24255",
+            "spawn_yaw": LaunchConfiguration("spawn_yaw"),
+            "gui": LaunchConfiguration("gazebo_gui"),
+        }.items(),
+    )
+
+    return LaunchDescription([
+        DeclareLaunchArgument("gazebo_gui", default_value="false"),
+        DeclareLaunchArgument("camera_width", default_value="320"),
+        DeclareLaunchArgument("camera_height", default_value="180"),
+        DeclareLaunchArgument("camera_update_rate", default_value="5"),
+        # -pi/2 faces ROS -y along the left lane (toward the crosswalk).
+        DeclareLaunchArgument("spawn_yaw", default_value="-1.5708"),
+        DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
+        simulation,
+        Node(
+            package="control",
+            executable="line_observer_node",
+            name="line_observer_node",
+            output="screen",
+            parameters=[line_config, {
+                "use_sim_time": True,
+                "require_camera_controls_stable": False,
+                # Floor 0.2 grey (~51) vs paint 1.0 (~255): 180 sits well between.
+                "camera_bright_threshold": 180,
+            }],
+        ),
+        Node(
+            package="core",
+            executable="core",
+            name="core",
+            output="screen",
+            parameters=[{"use_sim_time": True}],
+            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay")},
+        ),
+        LogInfo(msg=(
+            "map_v2_fleet lane sim: http://127.0.0.1:8080/dashboard "
+            "(viewer token: rosy-dev-viewer). Start: PUT /api/v1/line-follow/mode "
+            "{\"mode\": \"CAMERA_LINE\"} with the operator token.")),
+    ])
