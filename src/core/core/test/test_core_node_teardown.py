@@ -79,7 +79,10 @@ class _FakeExecutor:
         self.calls.append("spin returned")
 
     def shutdown(self, timeout_sec=None) -> bool:
+        # Jazzy 는 여기서 작업 스레드가 끝낼 때 부르는 guard condition 을 파괴한다 —
+        # 풀이 비워진 뒤에만 불려야 한다.
         self.calls.append(f"executor.shutdown({timeout_sec})")
+        self.pool_drained_at_shutdown = self._executor._shutdown and self.finished.is_set()
         return True
 
 
@@ -106,6 +109,7 @@ def test_run_drains_executor_workers_before_returning(node_module, monkeypatch):
     assert not executor.queued_ran.is_set()
     assert calls == ["add_node", "attach", "spin returned", "detach", "remove_node",
                      "executor.shutdown(0)"]
+    assert executor.pool_drained_at_shutdown
 
 
 def test_run_drains_even_when_spin_raises(node_module, monkeypatch):

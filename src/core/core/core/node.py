@@ -153,18 +153,22 @@ def _stop_executor(executor: Any, timeout_s: float) -> bool:
     rclpy 7.1.x (Jazzy) does not drain the pool itself: Executor.shutdown() never waits
     for in-flight work, and MultiThreadedExecutor does not shut its ThreadPoolExecutor
     down. So cancel the queued callbacks and join the running ones here.
+    Drain first, then shut the executor down: Executor.shutdown() destroys the guard
+    condition that a running callback triggers when it finishes ("cannot use Destroyable
+    because destruction was requested").
     Returns False when the bound expired with callbacks still running.
     """
+    drained = True
+    pool = getattr(executor, "_executor", None)
+    if isinstance(pool, ThreadPoolExecutor):
+        drain = threading.Thread(target=pool.shutdown,
+                                 kwargs={"wait": True, "cancel_futures": True},
+                                 daemon=True, name="rosy-executor-drain")
+        drain.start()
+        drain.join(timeout_s)
+        drained = not drain.is_alive()
     try:
         executor.shutdown(timeout_sec=0)
     except Exception:
         pass
-    pool = getattr(executor, "_executor", None)
-    if not isinstance(pool, ThreadPoolExecutor):
-        return True
-    drain = threading.Thread(target=pool.shutdown,
-                             kwargs={"wait": True, "cancel_futures": True},
-                             daemon=True, name="rosy-executor-drain")
-    drain.start()
-    drain.join(timeout_s)
-    return not drain.is_alive()
+    return drained
