@@ -249,22 +249,6 @@ async def run_formation(args: argparse.Namespace) -> None:
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
-
-def run_hub(args):
-    import uvicorn
-    if not getattr(args, "listen", False):
-        print("Must specify --listen for hub command")
-        sys.exit(1)
-        
-    from fleet.hub.server import create_hub_app
-    from fleet.hub.hub import SiteHub
-    from fleet.swarm.robots import load_robots
-    
-    robots = load_robots(args.robots)
-    hub = SiteHub(robots)
-    app = create_hub_app(hub)
-    uvicorn.run(app, host=args.host, port=args.port)
-
 def run_console(args: argparse.Namespace) -> None:
     """관제 서버를 연다. uvicorn 이 자기 루프를 돌리므로 여기는 async 가 아니다."""
     import uvicorn
@@ -296,9 +280,6 @@ def run_console(args: argparse.Namespace) -> None:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
-    if args.command == "hub":
-        run_hub(args)
-        return
     if args.command == "console":
         try:
             run_console(args)

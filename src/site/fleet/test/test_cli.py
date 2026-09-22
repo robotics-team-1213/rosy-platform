@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+from pathlib import Path
 
 import pytest
 from fakes import run
@@ -32,6 +33,16 @@ def test_formation_args_build_a_spec_and_split_leader_from_followers(tmp_path):
     assert spec == FormationSpec(Formation.V, spacing=0.7, grid_cols=3, max_speed=0.12,
                                  stream_timeout_ms=1000)
     assert cli.policy_from(args) is HoldPolicy.ABORT
+
+
+def test_hub_is_not_a_registered_command():
+    """dispatch 만 있고 subparser 가 없는 죽은 'hub' 경로는 제거됐다(통신 보고서 §5).
+    허브 서버 자체는 create_hub_app 으로 테스트가 직접 연다."""
+    with pytest.raises(SystemExit):
+        cli.parse_args(["hub", "--listen"])
+    source = (Path(cli.__file__).read_text(encoding="utf-8"))
+    assert "run_hub" not in source
+    assert 'args.command == "hub"' not in source
 
 
 def test_an_unknown_leader_is_refused(tmp_path):
