@@ -5,13 +5,15 @@ import math
 import cv2
 import numpy as np
 import pytest
+import yaml
 
 from control.sensing.lane_bev import MEMORY_CONFIDENCE, MEMORY_TRAVEL_M
 from control.sensing.lane_boundaries import (
-    BRANCH_MAX_LATERAL, MEMORY_MAX_BEARING_RAD, LaneBoundaryTracker, TIERS,
+    BRANCH_MAX_LATERAL, MEMORY_MAX_BEARING_RAD, ONE_MAX_CONFIDENCE, LaneBoundaryTracker, TIERS,
 )
 from lane_sim import (  # noqa: E402  (test-directory helper)
-    CAM_X, GROUND, H, KW, World, drive, lane, offset_polyline, stl_world,
+    CAM_X, GROUND, H, KW, ROOT, World, distance_to_polyline, drive, lane, offset_polyline,
+    stl_world,
 )
 
 
@@ -60,6 +62,42 @@ def test_one_line_visible_falls_to_tier_one():
                       stop=lambda p, k: tiers.append(t.tier) or p[0] > 1.0)
     assert "BOTH" in tiers and "ONE" in tiers
     assert max(abs(p[1]) for p, _, _ in log) < 0.02
+
+
+def test_one_tier_is_capped_below_both():
+    """Design 4.2: a lower tier gets a lower speed cap. BOTH reaches full
+    confidence; with one line left, confidence stays at or under
+    ONE_MAX_CONFIDENCE."""
+    world = World().line(offset_polyline(STRAIGHT, H)).line(
+        offset_polyline(np.array([(-1.0, 0.0), (0.2, 0.0)]), -H))
+    t = tracker()
+    seen = []
+    log, _ = drive(world, t, steps=120, pose=(-0.9, 0.0, 0.0),
+                   stop=lambda p, k: seen.append(t.tier) or p[0] > 1.0)
+    both = [obs.confidence for (_, obs, _), tier in zip(log, seen) if tier == "BOTH"]
+    one = [obs.confidence for (_, obs, _), tier in zip(log, seen) if tier == "ONE"]
+    assert max(both) == 1.0
+    assert one and max(one) <= ONE_MAX_CONFIDENCE
+
+
+@pytest.mark.parametrize("side", [1.0, -1.0])
+def test_90_degree_corner_is_turned_on_the_centre_without_an_opening(side):
+    """A 90 deg lane corner (left +1, right -1): the inner line leaves the
+    field of view and the outer one carries the turn (ONE). It is a convex
+    corner, not a mouth: no OPENS signal."""
+    centre = np.array([(-1.0, 0.0), (0.2, 0.0), (0.2, 0.8 * side)])
+    t = tracker()
+    frames = []
+    log, pose = drive(lane(centre), t, steps=200, pose=(-0.6, 0.0, 0.0),
+                      stop=lambda p, k: frames.append((t.tier, t.last.get("junction")))
+                      or p[1] * side > 0.5)
+    tiers = [tier for tier, _ in frames]
+    signals = {signal for _, signal in frames}
+    assert max(distance_to_polyline(p[:2], centre) for p, _, _ in log) < 0.04
+    assert "STOP" not in tiers and "ONE" in tiers
+    assert pose[1] * side > 0.5
+    assert abs(math.remainder(pose[2] - side * math.pi / 2, 2 * math.pi)) < math.radians(10)
+    assert not signals & {"LEFT_OPENS", "RIGHT_OPENS"}
 
 
 def test_lost_lines_step_down_through_memory_to_stop():
@@ -111,6 +149,25 @@ def test_unsupported_fresh_line_falls_to_the_other_sides_memory():
     x, y = t.last["target"]
     assert abs(y) < 0.005 and x >= 0.15
     assert abs(math.atan2(y, x)) <= MEMORY_MAX_BEARING_RAD
+
+
+def test_memory_bearing_bound_refuses_a_line_across_the_path():
+    """Only the bound blocks this: nothing is seen and the one remembered
+    line runs across the path 0.14 m ahead. Its iso-line (x = 0.06 m) meets
+    the 0.15 m lookahead ring at 66 deg, a supported interior point, but
+    pursuing it on memory alone would demand a tighter turn than any lane
+    centre on the track."""
+    t = tracker()
+    view = t._birds_eye(GROUND, lane(STRAIGHT).render((0.0, 0.0, 0.0)).shape)
+    across = ((np.abs(view.x - 0.14) <= 0.0125) & (np.abs(view.y) <= 0.30)).astype(np.uint8)
+    empty = np.zeros_like(across)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(empty, connectivity=4)
+    found = {"left": None, "right": None, "labels": labels, "stats": stats, "count": count,
+             "left_grid": across, "right_grid": empty, "fresh_length": 0.0}
+    assert t._pursue(view, found, H) is None
+    assert t.tier == "STOP"
+    x, y = t.last["target"]
+    assert abs(math.atan2(y, x)) > MEMORY_MAX_BEARING_RAD
 
 
 def test_no_ground_or_no_odometry_is_no_output():
@@ -175,9 +232,11 @@ def west():
 
 
 def test_west_straight_raises_no_branch_either_way(west):
-    """The wall ring's 5 mm footprint (x -1.405..-1.400) is floor-level STL
-    geometry, so it is paint in stl_world, parallel and 0.13 m right of
-    the robot driving south: it must not read as a branch."""
+    """stl_scene counts the perimeter wall's bottom faces (x -1.405..-1.400)
+    as floor, so stl_world paints a 5 mm strip there, parallel and 0.13 m
+    right of the robot driving south. A host-test-only artefact (in Gazebo
+    the wall stands on it and hides it), but a fair parallel-line case: it
+    must not read as a branch."""
     centre_x = -1.2696
     for yaw, y0, stop_y in ((-math.pi / 2, 0.30, -0.35), (math.pi / 2, -0.30, 0.35)):
         t = tracker()
@@ -198,3 +257,27 @@ def test_west_loop_both_directions_stay_in_the_lane(west):
         log, pose = drive(world, t, steps=120, pose=(centre_x, y0, yaw),
                           stop=lambda p, k: (p[1] < stop_y) if yaw < 0 else (p[1] > stop_y))
         assert max(abs(p[0] - centre_x) for p, _, _ in log) < 0.02
+
+
+def _east_start():
+    """lane_graph.yaml east segment, point 150: the S-curve at x ~0.73 m."""
+    graph = yaml.safe_load((ROOT / "map" / "map_v2_fleet" / "lane_graph.yaml").read_text(
+        encoding="utf-8"))
+    points = np.array(graph["segments"]["east"]["points"])
+    (x, y), (x1, y1) = points[150], points[151]
+    return (float(x), float(y), math.atan2(y1 - y, x1 - x))
+
+
+@pytest.mark.parametrize("start", ["east_curve", "west_chevron"])
+def test_curves_raise_no_branch(west, start):
+    """No branch lines on these curves. The raw BRANCH test flickered on
+    single frames here: at the east S-curve, and where the lap leaves the
+    ring for the top corridor (lap step ~350, west segment). There, a
+    sliver beside the right line's diagonal leg read 25-64 deg against the
+    heading, though parallel to the line it lies beside."""
+    pose = _east_start() if start == "east_curve" else (-0.569, 0.016, 7.826 - 2 * math.pi)
+    t = tracker()
+    signals = []
+    drive(west, t, steps=70 if start == "east_curve" else 60, pose=pose,
+          stop=lambda p, k: signals.append(t.last.get("junction")) or False)
+    assert "BRANCH" not in signals
