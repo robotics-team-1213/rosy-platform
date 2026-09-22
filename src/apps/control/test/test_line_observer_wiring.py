@@ -50,3 +50,67 @@ def test_camera_line_evidence_uses_the_original_image_header_stamp():
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "msg.header.stamp" in source
     assert "stamp=source_stamp" in source
+
+
+def test_camera_lane_mode_defaults_to_single_line_and_fails_closed():
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["camera_lane_mode"] == "line"
+    assert params["lane_half_width_m"] == 0.0925
+    assert params["camera_roi_bottom_fraction"] == 1.0
+    assert params["camera_ground_source"] == "PINKY"
+    assert params["allow_simulation_ground"] is False
+    # Same fail-closed zero geometry as road_observer_node.
+    assert params["gazebo_camera_height_m"] == 0.0
+    assert params["gazebo_camera_pitch_rad"] == 0.0
+    assert params["gazebo_camera_hfov_rad"] == 0.0
+
+
+def test_lane_mode_uses_the_guarded_simulation_ground():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "detect_lane_centre" in source
+    assert "simulation_ground_plane" in source
+    assert "'camera_ground_source'" in source
+    assert "'camera_lane_mode'" in source
+
+
+def test_lane_corner_turning_is_off_by_default_and_needs_odometry():
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["lane_corner_turning"] is False
+    assert params["camera_x_offset_m"] == 0.0
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "Odometry, 'odom'" in source
+    assert "LaneCornerTracker" in source
+    assert "self._odom_pose, frame, ground" in source
+    # Turning is still evidence: no motion output from this node.
+    assert "Twist" not in source
+    assert "'cmd_vel'" not in source
+
+
+def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "LaneEdgeFollower" in source
+    assert "mode == 'edge_left'" in source
+    assert "self._edge_follower.update(" in source
+    assert "mode in ('lane', 'edge_left')" in source   # odom subscription
+    # 'line' and 'lane' branches are untouched and the default stays 'line'.
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
+
+
+def test_edge_left_drops_odometry_whose_stamp_is_stale():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "msg.header.stamp" in source.split("def _on_odom", 1)[1]
+    assert "pose_if_fresh(" in source
+    assert "self._odom_stamp" in source
+
+
+def test_modes_fixed_at_startup_are_read_only_parameters():
+    """The edge follower and the odom subscription are built at startup, so
+    switching mode later would silently run the wrong pipeline."""
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "from rcl_interfaces.msg import ParameterDescriptor" in source
+    assert ("self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)" in source)
+    assert ("self.declare_parameter('lane_corner_turning', False, _READ_ONLY)" in source)
+    assert "_READ_ONLY = ParameterDescriptor(read_only=True)" in source
