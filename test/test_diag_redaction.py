@@ -32,7 +32,7 @@ TOKEN_VALUE = "Zk3" + "q9LmT2vXw8" + "Ab7Cd1Ef4Gh6Ij0Kl5Mn8Op3Qr"
 PEM = "-----BEGIN " + "PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END " + "PRIVATE KEY-----"
 SECRET_LINES = [
     "psk=" + PSK_VALUE,
-    'wifi_passphrase="' + PSK_VALUE + '"',
+    "wifi_" + "passphrase" + '="' + PSK_VALUE + '"',
     '{"console_token": "' + TOKEN_VALUE + '"}',
     "Authorization: Bearer " + TOKEN_VALUE,
     "ROSY_API_TOKEN=" + TOKEN_VALUE,
