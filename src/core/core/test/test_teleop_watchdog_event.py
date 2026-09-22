@@ -298,3 +298,50 @@ def test_a_teleop_between_the_expiry_check_and_the_note_keeps_its_own_lapse():
     cycle(command, 102.0)              # 새 세션의 끊김
 
     assert events.types().count("safety.watchdog") == 2
+
+
+def _lapse(command):
+    """주행하던 세션을 만료시킨다. 쥐고 있는 명령은 0 이 아니다."""
+    assert command.teleop(0.15, 0.0)[0] is True
+    command.watchdog.refresh(100.0)
+    assert cycle(command, 101.0) == Twist(0.0, 0.0)
+
+
+def test_a_stop_arriving_during_the_expiry_check_does_not_resend_the_lapsed_command():
+    """판정 전에 명령을 읽어 두면, 판정 사이에 들어온 teleop(0,0) 이 워치독을
+    되살리고 틱은 만료된 옛 명령(0.15)을 한 번 더 바퀴로 보낸다."""
+    command, _events, _safety = build()
+    _lapse(command)
+    watchdog = command.watchdog
+    real_expired = watchdog.expired
+
+    def expired_with_a_stop_landing(now=None):
+        watchdog.expired = real_expired
+        command.teleop(0.0, 0.0)
+        watchdog.refresh(101.5)
+        return real_expired(now)
+
+    watchdog.expired = expired_with_a_stop_landing
+
+    assert cycle(command, 101.5) == Twist(0.0, 0.0)
+
+
+def test_a_tick_inside_teleop_does_not_resend_the_lapsed_command():
+    """워치독을 명령보다 먼저 되살리면, 그 사이 틱이 새 워치독과 옛 명령을
+    함께 읽는다."""
+    command, _events, _safety = build()
+    _lapse(command)
+    watchdog = command.watchdog
+    real_refresh = watchdog.refresh
+    seen = []
+
+    def refresh_then_tick(now=None):
+        real_refresh(101.5 if now is None else now)
+        if not seen:
+            seen.append(cycle(command, 101.5))
+
+    watchdog.refresh = refresh_then_tick
+    command.teleop(0.0, 0.0)
+    watchdog.refresh = real_refresh
+
+    assert seen == [Twist(0.0, 0.0)]

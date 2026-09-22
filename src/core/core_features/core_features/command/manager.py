@@ -87,12 +87,12 @@ class CommandManager:
             self._reject(source, "invalid velocity")
             return False, "VALIDATION_ERROR"
         linear, angular = self._safety.clip(linear, angular, scope="manual")
-        # 워치독을 먼저 되살린다. 50 Hz 틱이 새 명령과 옛 워치독을 함께 읽으면
-        # 새 세션의 첫 순간을 만료로 적는다.
-        self.watchdog.refresh()
+        # 명령을 먼저 놓고 워치독을 나중에 되살린다. 거꾸로면 그 사이의 틱이
+        # 되살아난 워치독과 만료된 **옛** 명령을 함께 읽어 바퀴로 다시 보낸다.
         self._manual_twist = Twist(linear, angular)
         self._manual_source = source
         self._input_epoch += 1
+        self.watchdog.refresh()
         # 새 명령이 왔으니 다음 끊김은 다시 알릴 일이다.
         self._session += 1
         return True, ""
@@ -200,9 +200,15 @@ class CommandManager:
         if stopped or not ready:
             return ZERO
         if self._modes.mode is Mode.MANUAL:
-            # 번호와 명령을 만료 판정 **전에** 읽는다 (`_note_watchdog_lapse`).
+            # 번호는 만료 판정 **전에** 읽는다 (`_note_watchdog_lapse`).
             session, held = self._session, self._manual_twist
             if held is not None and not self.watchdog.expired(current):
+                # 명령은 판정 **뒤에** 다시 읽는다. 판정 전에 읽은 것을 쓰면,
+                # 그 사이 들어온 teleop 이 되살린 워치독으로 만료된 옛 명령이
+                # 한 틱 동안 바퀴로 나간다.
+                held = self._manual_twist
+                if held is None:
+                    return ZERO
                 l, a = self._safety.clip(held.linear, held.angular, "manual")
                 return self._policy_output(l, a, self._manual_source, current)
             if held is not None:
