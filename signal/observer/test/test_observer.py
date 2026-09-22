@@ -173,7 +173,6 @@ def test_picamera2_outside_pi_is_a_clear_refusal():
 
 def test_stable_needs_two_consecutive_frames():
     """한 프레임 반짝임은 stable 을 바꾸지 못한다 — 두 프레임 연속 일치가 조건이다."""
-    from observer import ObserverConfig, create_app
     cfg = ObserverConfig(rois=tuple(ROIS), stable_after=2)
     frame = make_frame({"left": RED_BGR})
     client = _client([frame, frame], config=cfg)
@@ -188,7 +187,6 @@ def test_stable_needs_two_consecutive_frames():
 
 def test_stable_holds_through_a_single_frame_glitch():
     """빨강으로 안정된 뒤 초록 한 프레임이 반짝여도 stable 은 유지된다."""
-    from observer import ObserverConfig, create_app
     cfg = ObserverConfig(rois=tuple(ROIS), stable_after=2)
     red = make_frame({"left": RED_BGR})
     green = make_frame({"left": GREEN_BGR})
@@ -205,7 +203,6 @@ def test_stable_holds_through_a_single_frame_glitch():
 
 def test_stable_after_one_is_pass_through(tmp_path):
     """stable_after=1 이면 안정화가 사실상 꺼진다 — 바로 stable 이 따라간다."""
-    from observer import ObserverConfig, create_app
     cfg = ObserverConfig(rois=tuple(ROIS), stable_after=1)
     client = _client([make_frame({"left": RED_BGR})], config=cfg)
     body = client.get("/observed").json()

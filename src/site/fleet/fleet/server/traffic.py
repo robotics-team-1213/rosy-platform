@@ -105,3 +105,41 @@ def blocking_robot(route: Sequence[Point], claims: dict[str, Sequence[Point]],
         if routes_conflict(route, claims[robot_id], clearance):
             return robot_id
     return None
+
+
+def closest_points(a: Sequence[Point], b: Sequence[Point]) -> Optional[tuple[Point, Point]]:
+    """두 경로가 가장 가까워지는 지점 쌍. 한쪽이 비면 `None`.
+
+    도로의 교차로다. 선착 판정(누가 그 자리에 먼저 도달하나)은 이 지점을 기준으로
+    한다 - `remaining_distance` 와 함께 쓴다.
+    """
+    if not a or not b:
+        return None
+    best: Optional[tuple[Point, Point]] = None
+    best_d = math.inf
+    for pa in thin(a):
+        for pb in thin(b):
+            d = math.dist(pa, pb)
+            if d < best_d:
+                best_d = d
+                best = (pa, pb)
+    return best
+
+
+def remaining_distance(route: Sequence[Point], pose: Optional[Point],
+                       target: Optional[Point]) -> Optional[float]:
+    """경로 위 `pose` 에서 경로 위 `target` 까지 남은 경로 거리. m.
+
+    판정할 수 없으면 `None` 이고, 부른 쪽은 무한대로 읽는다 — 모른다는 이유로
+    순서를 뒤집지 않는다(빈 경로를 "아무도 안 막는다"로 읽던 원칙과 같다). `target`
+    이 아직 안 온 시작점 뒤면(지나쳤거나 다른 경로 위 점이면) 역시 `None`이다.
+    """
+    if not route or pose is None or target is None:
+        return None
+    thin_route = thin(route)
+    start = min(range(len(thin_route)), key=lambda i: math.dist(thin_route[i], pose))
+    goal = min(range(len(thin_route)), key=lambda i: math.dist(thin_route[i], target))
+    if goal <= start:
+        return None
+    return sum(math.dist(thin_route[i], thin_route[i + 1])
+               for i in range(start, goal))

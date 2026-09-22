@@ -398,25 +398,26 @@ class FleetConsole:
         session = self._formation
         if session is None or session.state != "RUNNING":
             return
-            
+
         degraded_members = [
             row["robot_id"] for row in robots
-            if row.get("state") and row["state"].get("capabilities_degraded") and
-               row["robot_id"] in self._formation_members()
+            if row.get("state") and row["state"].get("capabilities_degraded")
+            and row["robot_id"] in self._formation_members()
         ]
-        
+
         if not degraded_members:
             return
-            
+
         # If any member is degraded, reform the swarm with a lower speed limit
         # This is a naive implementation that halves the current speed
         current_speed = session.spec.max_speed
         degraded_speed = max(0.05, current_speed * 0.5)
-        
+
         # We only want to reform once when degradation is detected
         if current_speed > degraded_speed + 0.01:
             try:
-                await self.formation_reform(formation=session.spec.name, max_speed=degraded_speed)
+                await self.formation_reform(
+                    formation=session.spec.name, max_speed=degraded_speed)
             except Exception:
                 pass  # Ignore transient errors during automatic speed sync
 
@@ -437,12 +438,14 @@ class FleetConsole:
                         # Find an idle alternative
                         for alt_row in robots:
                             alt_id = alt_row["robot_id"]
-                            if alt_id != robot_id and alt_row.get("online"):
-                                alt_state = alt_row.get("state") or {}
-                                if not alt_state.get("capabilities_degraded") and alt_id not in self._goals and alt_id not in self._queued:
-                                    # Re-assign to alternative
-                                    self._queued[alt_id] = target
-                                    break
+                            alt_state = alt_row.get("state") or {}
+                            busy = alt_id in self._goals or alt_id in self._queued
+                            if (alt_id != robot_id and alt_row.get("online")
+                                    and not alt_state.get("capabilities_degraded")
+                                    and not busy):
+                                # Re-assign to alternative
+                                self._queued[alt_id] = target
+                                break
 
         for row in robots:
             state = row.get("state") or {}

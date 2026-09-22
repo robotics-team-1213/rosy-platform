@@ -1,8 +1,9 @@
 # rosy_road 도로 회로 — 점유 우선권 양보 시나리오
 
 - 날짜: 2026-09-22
-- 상태: PROPOSED (월드/맵 생성 완료, 시나리오는 S1~S6 이 기존 코드로 실행 가능,
-  S7 은 traffic.py ETA 판정이 필요하다)
+- 상태: SOURCE — 월드/맵 생성 완료, S1~S6 은 기존 코드로, S7(선착)은
+  `traffic.py` ETA + `console.py` 대기 풀기 순서로 구현되어 시험 통과
+  (`test_server_priority.py`, fleet 372 passed). Gazebo 실측 증거는 미수집.
 - 배경: 260919 MAP FILE.STL 을 1:1 Gazebo 월드(`rosy_road.world`)와 nav2 정답 맵
   (`rosy_road.yaml`)으로 변환했다. 도면이 도로 회로(방 + 로터리 + S 커브)라서,
   도로 교통 규칙에 대응하는 양보 시나리오의 베이스가 된다.
@@ -93,15 +94,17 @@ core 이벤트(`nav.started` / `nav.canceled` / `nav.completed` 타임라인),
 - 관측: 대기 행렬이 풀리는가(순환하면 반드시 풀린다), 화면의 대기 사유가 실제와
   일치하는가.
 
-### S7 교차 입구 선착 — ETA 점유 우선권 (미구현, 이 문서의 목표 상태)
+### S7 교차 입구 선착 — ETA 점유 우선권 (구현: 대기 풀기 순서)
 
-- 배치: A 는 서쪽 멀리서 북쪽 입구를 향해 출발 직전, B 는 북쪽 입구 바로 앞에서
-  진입 시도. B 가 늦게 내린 미션이지만 먼저 도달한다.
-- 기대(목표): ETA(closest approach 도달 시각)가 빠른 B 가 통과하고 A 가 대기한다.
-  오늘의 코드는 mission 순서 기준이라 A(먼저 내린 미션)가 이긴다 — **역전이
-  시나리오의 핵심**이다.
-- 구현 위치: `traffic.py`(순수 기하 + 스냅샷 pose 기반 ETA). asyncio/전송 금지
-  원칙 유지. pose 는 콘솔이 이미 gather 한다.
+- 배치: 블로커 뒤에서 두 미션이 대기 중 — rosy_01 은 공유 충돌 지점까지 멀리,
+  rosy_02 는 바로 앞. 블로커가 지나가 두 미션이 같은 스냅샷에서 풀린다.
+- 동작(2026-09-22 구현): `_run_traffic` 이 대기자를 풀 때 robot_id 순 대신
+  `traffic.remaining_distance`(경로 따라 충돌 지점까지 남은 거리)가 짧은 미션부터
+  내려보낸다. 경로/좌표를 모르면 무한대로 밀리고, 동점이면 robot_id — 결정적이다.
+- 상한선(변경 없음): 점유 클레임(달리는 로봇)은 선착과 무관하게 이긴다. ETA 가
+  바꾸는 것은 **대기자들 사이의 순서**뿐이다. 달리는 로봇을 세우는 데 쓰지 않는다.
+- 구현 위치: `traffic.py` `closest_points` / `remaining_distance`(순수 기하),
+  `console.py` `_release_order`. 시험 `test_server_priority.py`.
 - 계약 변경 없음: 우선권은 점유 상태에서만 온다. 미션 우선순위 클래스(구급차)는
   별도 — `goal()` 계약 확장이고 API Ref 사이클부터 도는 별도 작업이다.
 
@@ -119,15 +122,23 @@ ros2 launch gz_sim gz_multi.launch.py world_name:=rosy_road.world robots:=2
 
 ## 5. 남은 과정 / 알려진 이슈
 
-1. **차로 폭 vs nav2 footprint**: 차로 0.10~0.20 m 에 `robot_radius`(외접 0.12)를
-   쓰면 플래너가 거절한다. `worlds.yaml` 의 `inflation_radius: 0.05` 는 출발점일
-   뿐이고, footprint 폴리곤(반폭 0.06) 사용 여부를 QA 해야 한다.
-2. **외곽 프레임 누수**: 정답 맵에서 프레임 밖으로 새어 나간 free 셀이 152 개
-   (0.06 m2) 있다. inflation 으로 항법에는 흡수되지만, 다음 `stl_to_world.py`
-   수정에서 프레임 이어붙임을 보강한다.
+1. **차로 폭 vs nav2 footprint (QA 수치 확정)**: `nav2_params.yaml` 는 footprint
+   폴리곤 `[[±0.06, ±0.06]]` + `footprint_padding: 0.03` — **실효 폭 0.18 m** 다.
+   rosy_road 차로는 0.10~0.20 m 라서, 0.18 m 이상 차로(링 차로, 넓은 S 커브)만
+   주행 가능하고 0.10~0.15 m 급(상하 통로, 좌측 통로)은 플래너가 거절한다. 선택지:
+   (a) 이 월드 한정 `footprint_padding: 0.01` 로 0.14 m 까지 낮추거나, (b) 맵을
+   `stl_to_world.py --scale 1.3` 로 재생성해 차로를 0.13~0.26 m 로 키우거나,
+   (c) 좁은 구간은 보행 전용으로 남긴다. `worlds.yaml` 의 `inflation_radius: 0.05`
+   는 (a) 전제로 잡아 두었다.
+2. **외곽 프레임 "누수"의 정체**: free 가 프레임 밖으로 새어 나간 게 아니라
+   **프레임 이중선 사이 슬리버**(x 0.01~0.05 m 대역 152 셀)가 free 로 잡힌 것이다.
+   inflation 이 흡수해 항법 영향 없음 — 다음 정비 때 `stl_to_world.py` 에 래스터
+   closing 을 넣어 지운다.
 3. **벽 관절 핀홀**: 이중선 벽의 활선 사이 틈. costmap inflation 이 흡수한다 —
    맵을 SLAM 정합성 비교에 쓸 때만 문제가 된다.
 4. **표시 제거 판정**: 슬롯/rung 사각형 여덟 개와 로터리 입구 X자, 문 사다리는 바닥
    표시로 뺐다(사용자 결정). 실물에 이것들이 벽/언덕으로 있다면 `MARK_ZONES` 와
    `MARK_MAX_EXTENT_MM` 를 되돌려야 한다.
-5. **ETA 판정 구현**(S7): `traffic.py` 에 순수 함수로 추가 — 이 문서의 목표 상태.
+5. **Gazebo 실측**(S1~S8 필드 증거): Windows 호스트는 런치 불가 — Linux/Pi 에서
+   `gz_multi.launch.py world_name:=rosy_road.world robots:=2` 로 위 시나리오를
+   돌리고 이벤트 타임라인과 최소 거리를 logs.md 에 남긴다.
