@@ -75,6 +75,9 @@ def generate_launch_description():
                 "gazebo_camera_max_range_m": 0.6,
                 "camera_roi_top_fraction": 0.25,
                 "camera_roi_bottom_fraction": 0.75,
+                # Crosswalk bars light ~50% of the band (run 164241); 0.75 still
+                # rejects a washed-out frame.
+                "camera_washed_fraction": 0.75,
             }],
         ),
         Node(

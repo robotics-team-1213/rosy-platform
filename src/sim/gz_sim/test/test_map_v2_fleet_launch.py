@@ -80,3 +80,11 @@ def test_line_observer_runs_two_line_lane_mode_on_declared_gazebo_ground():
     assert '"camera_roi_top_fraction": 0.25' in source
     assert '"camera_roi_bottom_fraction": 0.75' in source
     assert '"use_sim_time": True' in source
+
+
+def test_crosswalk_paint_is_not_mistaken_for_overexposure():
+    """Run 164241: entering the crosswalk lit 48-54% of the lane band, above the
+    0.40 washed-out cut, so every frame read as 'no lane' and CORE went LOST.
+    A crosswalk is legitimate paint; only a near-white frame is overexposure."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"camera_washed_fraction": 0.75' in source
