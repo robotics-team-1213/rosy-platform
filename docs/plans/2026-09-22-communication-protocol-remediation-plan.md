@@ -211,17 +211,19 @@ Expected: 전체 PASS (Windows host 범위).
 
 ---
 
-## 결정 게이트 (코드 태스크 아님 — 판정 산출물)
+## 결정 게이트 — **판정 완료 (2026-09-22, D-169·D-170 Accepted)**
 
-### G1: 제품 장치 표면 — emotion/lamp/led/imu
+### G1: 제품 장치 표면 — emotion/lamp/led/imu → **D-169 Accepted**
 
-문제: compose devices·native `DeviceAllow`에 spidev0.0·i2c-0·gpiomem·PWM이 없어 4개 장치 패키지가 제품 런타임에서 실행 불가(코드는 존재, 운영 경로 부재).
-권고: **v1은 벤치 전용으로 선언** — 각 패키지 capabilities/progress에 "제품 이미지 제외" 명시 + `measure-dds-baseline.sh`의 `imu_raw` 기대치에서 imu 제외(또는 주석). 제품 배관(DeviceAllow 확장)은 하드웨어 프로필(D-84)·실기 수요 확정 시 별도 ADR.
-산출물: 짧은 ADR 후보(D-169) 1페이지 — 결정만, 구현 없음.
+- **Context**: compose devices·native `DeviceAllow`에 spidev0.0·i2c-0·gpiomem·PWM이 없어 4개 장치 패키지(emotion, lamp_control, led, imu_bno055)가 제품 런타임에서 실행 불가하다. 코드는 존재하나 운영 경로가 없는 애매 상태였고, 제품 capabilities는 이미 `sensors: [lidar, encoder]`만 광고 중(통신 보고서 §8-F).
+- **Decision**: v1 제품 장치 표면을 **모터(UART4)·LiDAR(ttyAMA0)·카메라(video0)·I2C-1 ADC(ir_adc_node)** 로 고정하고, 4개 장치 노드는 **벤치 전용을 소급 공식화**한다. 이는 이미 시험이 강제하던 상태(compose devices 열거, io 이미지 aux 드라이버 제외, capabilities sensors 표)의 공식화일 뿐 행위 변경이 없다.
+- **Consequences**: ① 장치 노드의 제품 편입(장치 배관·capabilities 확장)은 하드웨어 프로필(D-84)과 실기 수요가 확정되는 후속 ADR로만 연다. ② `measure-dds-baseline.sh`의 `imu_raw`는 벤치 IMU 노드 기동 시에만 잰다는 주석을 달았다. ③ 결정은 `test/test_device_surface_contract.py`가 고정한다(compose devices·native DeviceAllow·capabilities가 D-169 면 외에 넓어지면 적색).
 
-### G2: PRT-004 (correlation_id·AckPayload)
+### G2: PRT-004 (correlation_id·AckPayload) → **D-170 Accepted**
 
-T10의 문서 표기로 v1을 닫는다. 구현 착수 조건: 중앙 Fleet 서버 착수(FLEET SRS Phase 4). 그 전에 코드를 먼저 넣지 않는다(계약-코드 반대 방향 드리프트 방지).
+- **Context**: `Envelope.correlation_id`는 계약·스키마에 존재하지만 어떤 런타임 경로도 설정·소비하지 않으며, `AckPayload`는 문서 §9.5보다 얇다(통신 보고서 §5).
+- **Decision**: PRT-004 확장 구현은 **중앙 Fleet 서버 착수(FLEET SRS Phase 4)와 함께** 간다. 그 전까지 correlation_id는 계약 전용 필드로 남고, API Ref §7.5가 이 상태를 명시한다(v1.13 상태 표기 정정).
+- **Consequences**: ① 로봇 측에 선제 구현을 넣지 않는다(계약-코드 반대 방향 드리프트 방지). ② 중앙 Fleet 착수 시 correlation_id 설정·소비와 `AckPayload`의 `TIMEOUT`·`issued_by`·`ts_issued/ts_final` 확장을 같은 변경에 담는다. ③ `schemas.py`의 `correlation_id` 주석이 D-170을 가리킨다.
 
 ## 범위 밖 (본 계획이 하지 않는 것)
 

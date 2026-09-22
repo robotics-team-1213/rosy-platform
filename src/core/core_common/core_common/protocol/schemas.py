@@ -89,6 +89,8 @@ class EnvelopeType(str, enum.Enum):
 class Envelope(BaseModel):
     protocol_version: str = PROTOCOL_VERSION
     msg_id: str = Field(default_factory=new_msg_id)
+    # 계약 전용 필드(D-170): 중앙 Fleet 서버 착수 전까지 이 필드를 설정·소비하는
+    # 런타임 경로는 없다. 명령 추적 확장은 PRT-004와 함께 같은 변경에 담는다.
     correlation_id: Optional[str] = None
     type: EnvelopeType
     ts: str = Field(default_factory=utc_now_iso)

@@ -90,6 +90,8 @@ TOPICS=(
   "$NS/plan"
   "$NS/scan"
   "$NS/odom"
+  # D-169: imu_bno055 is bench-only in the v1 product runtime — this entry
+  # measures 0/no-device unless the bench IMU node was started separately.
   "$NS/imu_raw"
   "$NS/us_sensor/range"
   "$NS/batt_state"

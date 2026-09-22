@@ -1511,3 +1511,10 @@
 - gate 변화: 없음. core ROS-SIM은 cmd_vel 경로 변경으로 HOLD 유지(부트 스모크 재실행 필요).
 - 결정: 없음
 - 교훈: 버전 고정 문서를 여러 브랜치가 동시에 올리면 병합 순서대로 번호를 다시 매긴다.
+
+## 2026-09-22 · uncommitted · docs(adr): D-169 제품 장치 표면 고정 · D-170 PRT-004 유예
+- 변경: ADR Log 인덱스에 D-169, D-170 행 추가와 개별 본문 `docs/adr/D-{169,170}-*.md` 신규. D-169: v1 제품 장치 표면을 모터·LiDAR·카메라·I2C-1 ADC로 고정, emotion/lamp/led/imu_bno055 벤치 전용 소급 공식화 — `test/test_device_surface_contract.py`(3 가드, 변이 증명: DeviceAllow/compose/capabilities 각 적색→복구→초록)로 고정, measure-dds-baseline.sh imu_raw 주석. D-170: PRT-004 로봇 측 구현을 중앙 Fleet 착수와 같은 변경으로 유예 — API Ref v1.15 §7.5 상태 표기 + 이력 행(타 세션의 v1.13/v1.14 와 병존, 헤더 v1.15), schemas.py correlation_id 주석. remediation plan G1/G2 판정 완료로 갱신, progress adrs·reference AGENTS 관통 표기 D-170.
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py test/test_device_surface_contract.py test/test_nav2_hardware_slice.py test/test_robot_runtime.py src/core/core/test/test_protocol_schemas.py src/site/fleet/test/test_hub.py -q` 151 passed (2026-09-22 Windows). `rosy_harness.py lint` 0 errors. ADR 연속성 시험(인덱스↔본문) 통과.
+- gate 변화: 없음 — docs SOURCE/LOCAL GO 유지.
+- 결정: D-169 Accepted(소급 공식화, D-147 선례), D-170 Accepted.
+- 교훈: ADR 로그는 인덱스 표만이 아니라 본문이 docs/adr/ 개별 파일과 1:1 이어야 harness 계약을 통과한다 — 새 ADR은 행+본문 파일을 한 변경에.

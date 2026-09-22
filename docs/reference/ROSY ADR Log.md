@@ -176,4 +176,7 @@
 | D-166 | 과속 반응은 기록 전용이며, 자동 감속은 로봇 계약 확인과 판정 검증 후에만 상향한다 | Accepted |
 | D-167 | 미들웨어 목표는 평가표로 측정한다 — 8개 판정 축과 기준선 | Proposed |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 | Accepted |
+| D-169 | v1 제품 장치 표면은 모터·LiDAR·카메라·I2C-1 ADC로 고정한다 — emotion/lamp/led/imu는 벤치 전용을 소급 공식화 | Accepted |
+| D-170 | PRT-004 명령 추적 확장은 중앙 Fleet 착수와 함께 간다 — 그 전까지 correlation_id는 계약 전용 필드 | Accepted |
+| D-171 | control 구조 개선은 host 시험 가능한 판단 비율로 재고, ROS 경계 → 노드 판단 추출 → 패키지 분리 순서로 한다 | Proposed |
 ---
