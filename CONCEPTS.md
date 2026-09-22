@@ -91,6 +91,30 @@ A follower's place in a formation, expressed as a distance behind the leader and
 
 Every formation shape reduces to one slot offset per follower, so changing shape is re-issuing offsets rather than a new kind of command. Offsets have a floor below which two robots' footprints, with their obstacle inflation, would overlap.
 
+## Docking
+
+### Dock
+The charging station a robot drives into, which measures the charge it delivers rather than leaving the robot to infer it.
+
+It carries a controller for a safety reason rather than a reporting one: its contacts sit on the floor at pet and toddler height, so it detects a load before it energises anything and de-energises the moment the load leaves. Measurement is the second benefit of a controller that had to exist anyway, and it matters because the robot has no current sensor of its own. The dock never opens a connection to a robot — the robot asks, because the robot knows which dock it is going to and an inbound path into the robot would be an unauthenticated surface for no gain. It reports load and current as separate facts, because contacts can be engaged while nothing flows, and those two situations need different recoveries.
+
+### Docking
+The staged approach that takes a robot from somewhere in the map to engaged contacts.
+
+Map coordinates get it near; every stage after that closes the loop on the observed dock, because localisation error is two orders of magnitude larger than the contact tolerance. The whole approach holds one mode from start to finish, which both stops a fleet command from pushing a half-engaged robot out and avoids widening the mode transition table. Stages exist so that a failure's location is known: not arriving and arriving without conduction need different recoveries, and the second re-seats rather than starting over. A funnel absorbs the last centimetre or two of lateral error, so a controller that must be millimetre-accurate on its own is a controller that fails on a dusty floor.
+
+### Charging confirmation
+The judgement that a robot is actually charging, requiring two independent sources rather than the dock's word.
+
+*Avoid:* charge detection
+
+The dock's reported current is one source; the robot's own filtered pack voltage not falling is the other. Two are required because this judgement suppresses the deep-discharge shutdown, so anything on the network able to assert charging would otherwise be able to switch off a safety path. The asymmetry is deliberate: confirming requires the whole window, and losing it is immediate.
+
+### Dock detector
+The sensing boundary that reports where the dock is, relative to the robot, and nothing else about how it knows.
+
+Which physical signal it uses is deliberately not decided by the boundary, so the approach logic could be built and verified before the sensing was chosen; the product has since chosen a camera tag, and a run missing any piece of that stack falls back to a detector that sees nothing. A detector also has a usable distance band whose near edge is not zero — features leave the sensor's view close in — and that near edge is measured rather than assumed, because it sets how early the dock type hands off to the funnel and the contact judgement. A detector that reports nothing ends the run in a plain failure, never an automatic retry; a detector that confidently reports the wrong pose drives the robot into something that is not the dock, which is why refusing is preferred to guessing.
+
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.
