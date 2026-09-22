@@ -1,6 +1,6 @@
 image: map_v2_fleet.pgm
 mode: trinary
-resolution: 0.01
+resolution: 0.005
 origin: [-1.705, -0.9299999999999999, 0]
 negate: 0
 occupied_thresh: 0.65

@@ -7,6 +7,7 @@ src/sim/gz_sim/scripts/*.py text eol=lf
 # would otherwise normalise the text .world/.yaml to CRLF on Windows checkout,
 # and could mangle the binary .stl/.pgm if git's binary heuristic misfires.
 src/apps/control/map/map_v2_fleet/worlds/*.world text eol=lf
-src/apps/control/map/map_v2_fleet/meshes/*.stl -text
-src/apps/control/map/map_v2_fleet/maps/*.pgm -text
+src/apps/control/map/map_v2_fleet/meshes/*.stl binary
+src/apps/control/map/map_v2_fleet/maps/*.pgm binary
 src/apps/control/map/map_v2_fleet/maps/*.yaml text eol=lf
+"src/apps/control/map/map_v2_fleet/260919 MAP FILE.STL" binary

@@ -64,6 +64,8 @@ def _ring_walls(tall: list[Triangle]) -> tuple[tuple[WallBox, ...], tuple[float,
     heights = {round(v[1], 3) for t in tall for v in t}
     if len(xs) != 4 or len(zs) != 4 or len(heights) != 2:
         raise ValueError("tall geometry is not a single rectangular wall ring")
+    if abs(min(heights)) > 1e-3:
+        raise ValueError("wall ring does not sit on the floor (base is not at y=0)")
     thick_x, thick_z = xs[1] - xs[0], zs[1] - zs[0]
     if abs(thick_x - (xs[3] - xs[2])) > 1e-3 or abs(thick_z - (zs[3] - zs[2])) > 1e-3:
         raise ValueError("wall ring thickness is not uniform")
