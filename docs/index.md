@@ -122,8 +122,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs(api): API ref v1.17 — `logs/audit` 의 `dir_sync_failures`·`last_dir_sync_error`, `rosy_audit_dir_sync_failures_total`
 - 2026-09-22 · uncommitted · docs(agents): T11 — fleet_agent/bridge AGENTS 현행화 + 소소 수정 팩
 - 2026-09-22 · uncommitted · docs(adr): 미병합 옛 브랜치의 보존·이관 규칙과 후속 항목 (D-172)
 - 2026-09-22 · uncommitted · docs(adr): D-169 제품 장치 표면 고정 · D-170 PRT-004 유예
 - 2026-09-22 · uncommitted · merge(core): land the audit-log port after the event-catalogue port — API reference v1.14
-- 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다

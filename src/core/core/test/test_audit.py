@@ -1432,3 +1432,37 @@ def test_a_directory_sync_failure_after_the_replace_is_not_a_prune_failure(tmp_p
     assert "Input/output error" in health["last_dir_sync_error"]
     stale = _event(0, (now - timedelta(days=40)).isoformat()).model_dump_json()
     assert stale not in path.read_text(encoding="utf-8"), "the prune itself did happen"
+
+
+@pytest.mark.parametrize("tamper", ["delete", "truncate"])
+def test_a_quarantine_file_removed_before_the_retry_is_written_again(tmp_path, monkeypatch, tamper):
+    """중복을 막는 표시는 "그 바이트가 격리 파일에 있다"를 뜻한다. 운영자가 그
+    사이 격리 파일을 지우거나 비웠다면 표시는 거짓이 되고, 그것을 믿고 건너뛴
+    재시도는 격리하지 않은 증거를 본 파일에서 지운다.
+    """
+    import os as _os
+
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    _with_a_torn_line(path, now)
+    clock = Clock()
+    log = FileAuditLog(path, retention_days=30, now=lambda: now, monotonic=clock)
+
+    real_replace = _os.replace
+    monkeypatch.setattr(_os, "replace",
+                        lambda *a, **k: (_ for _ in ()).throw(PermissionError("held open")))
+    log.record(_event(3, now.isoformat()))
+    assert log.settle()
+    assert log.quarantine_path.read_bytes() == TORN
+
+    if tamper == "delete":
+        log.quarantine_path.unlink()
+    else:
+        log.quarantine_path.write_bytes(b"")
+    monkeypatch.setattr(_os, "replace", real_replace)
+    clock.advance(PRUNE_INTERVAL_S)
+    log.record(_event(4, now.isoformat()))
+    assert log.settle()
+
+    assert TORN not in path.read_bytes()
+    assert log.quarantine_path.read_bytes() == TORN, "the evidence is in neither file"

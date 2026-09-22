@@ -211,10 +211,11 @@ class FileAuditLog:
         #: 바꾸기를 되돌려도 옛 파일이 남을 뿐 잃는 것은 없다.
         self._dir_sync_failures = 0
         self._last_dir_sync_error: Optional[str] = None
-        #: 이미 격리한 줄 (파일 신원, {(오프셋, 바이트)}), 작업 스레드 전용.
-        #: 바꿔 끼우기가 실패한 뒤의 재시도가 같은 증거를 두 벌 남기지 않게 한다.
-        #: 셋이 모두 같으면 그 바이트는 이미 격리 파일에 있다.
-        self._quarantined: Optional[tuple[tuple, set[tuple[int, bytes]]]] = None
+        #: 이미 격리한 줄 (본 파일 신원, {(오프셋, 바이트)}, 격리 파일의
+        #: (dev, ino, 크기)), 작업 스레드 전용. 바꿔 끼우기가 실패한 뒤의 재시도가
+        #: 같은 증거를 두 벌 남기지 않게 한다. 격리 파일이 그 사이 지워지거나
+        #: 바뀌거나 줄었으면 믿지 않고 다시 격리한다 — 틀려도 중복 쪽으로 틀린다.
+        self._quarantined: Optional[tuple[tuple, set[tuple[int, bytes]], tuple]] = None
         #: 정리 작업 스레드. `None` 이면 요청도 진행 중인 정리도 없다 — 스레드는
         #: 할 일이 없으면 이 칸을 **락 안에서** 비우고 끝난다. 그래서 정리는
         #: 구조적으로 한 번에 하나이고(스레드가 하나뿐이다), 한 시간 내내 잠든
@@ -566,15 +567,16 @@ class FileAuditLog:
             # 본 파일에서 빼기 **전에**, 락 **밖에서** 격리 파일에 내려 둔다.
             # 격리할 줄은 락 없이 읽은 스냅샷 범위에서 나왔다. 락 안의 fsync 는
             # SD 카드에서 수~수십 ms 이고, 그동안 `record()` 가 기다린다.
-            done = (self._quarantined[1] if self._quarantined is not None
-                    and self._quarantined[0] == identity else set())
+            done = self._already_quarantined(identity)
             fresh = [item for item in quarantined if item not in done]
             if fresh:
                 with self.quarantine_path.open("ab") as sink:
                     sink.write(b"".join(line + b"\n" for _, line in fresh))
                     sink.flush()
                     os.fsync(sink.fileno())
-                self._quarantined = (identity, done | set(fresh))
+                    info = os.fstat(sink.fileno())
+                self._quarantined = (identity, done | set(fresh),
+                                     (info.st_dev, info.st_ino, info.st_size))
             with self._lock:
                 tail = self._tail_after_locked(size, identity)
                 if tail is None:
@@ -606,6 +608,19 @@ class FileAuditLog:
             with self._lock:
                 self._dir_sync_failures += 1
                 self._last_dir_sync_error = f"{type(error).__name__}: {error}"
+
+    def _already_quarantined(self, identity: tuple) -> set[tuple[int, bytes]]:
+        """이 본 파일에서 격리했고 **지금도 격리 파일에 있는** 줄. 모르면 빈 집합."""
+        if self._quarantined is None or self._quarantined[0] != identity:
+            return set()
+        try:
+            info = self.quarantine_path.stat()
+        except OSError:
+            return set()
+        dev, ino, size = self._quarantined[2]
+        if (info.st_dev, info.st_ino) != (dev, ino) or info.st_size < size:
+            return set()
+        return self._quarantined[1]
 
     def _classify(self, handle: BinaryIO,
                   size: int) -> tuple[set[int], list[tuple[int, bytes]]]:
