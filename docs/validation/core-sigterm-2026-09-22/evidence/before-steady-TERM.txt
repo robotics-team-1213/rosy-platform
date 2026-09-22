@@ -1,0 +1,24 @@
+# before mode=steady signal=SIGTERM count=20; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: 0a9a07a (main, before fix)  started 2026-09-23T00:05:17+09:00  loadavg: 4.27 8.12 10.14 7/1016 9820
+run  1: node 9979 sig@+31.65s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  2: node 10600 sig@+17.36s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  3: node 10904 sig@+13.59s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=1 err=RCLError:_failed_to_initialize_wait_set:_the_given_context_is_not_vali audit_last="type":"system.shutdown" port8080=0
+run  4: node 11256 sig@+14.08s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  5: node 11660 sig@+14.51s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  6: node 12036 sig@+13.14s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  7: node 12484 sig@+11.14s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=1 err=RCLError:_failed_to_initialize_wait_set:_the_given_context_is_not_vali audit_last="type":"system.shutdown" port8080=0
+run  8: node 12870 sig@+10.85s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  9: node 13245 sig@+9.33s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 10: node 13582 sig@+11.26s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 11: node 13996 sig@+12.93s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 12: node 14440 sig@+9.41s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 13: node 14766 sig@+13.47s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 14: node 15202 sig@+12.51s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 15: node 15570 sig@+8.34s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 16: node 15898 sig@+14.7s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 17: node 16272 sig@+10.9s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 18: node 16672 sig@+11.77s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 19: node 16964 sig@+13.12s(after node spawn) phase=after-api alive30s=no exit=1 shutting_down=1 traceback=1 err=RCLError:_failed_to_initialize_wait_set:_the_given_context_is_not_vali audit_last="type":"system.shutdown" port8080=0
+run 20: node 17299 sig@+12.87s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+# leftover core processes: 0  finished 2026-09-23T00:12:10+09:00
+# exit-code tally:      17 exit=0       3 exit=1 

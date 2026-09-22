@@ -1,0 +1,16 @@
+# after mode=startup signal=SIGTERM count=12; startup window=0.2-1.5s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: c6230cc (fix/core-sigterm-exit)  started 2026-09-23T00:50:32+09:00  loadavg: 14.19 14.31 12.20 11/1167 56562
+run  1: node 56833 sig@+3.94s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  2: node 57158 sig@+2.27s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  3: node 57433 sig@+2.12s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  4: node 57833 sig@+4.4s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  5: node 58123 sig@+1.91s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  6: node 58439 sig@+1.34s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  7: node 58654 sig@+1.74s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  8: node 58954 sig@+2.49s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  9: node 59156 sig@+1.37s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run 10: node 59403 sig@+0.71s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run 11: node 59558 sig@+1.93s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run 12: node 59731 sig@+2.08s(after node spawn) phase=before-core-up alive30s=no exit=0 shutting_down=0 traceback=0 err= audit_last= port8080=0
+# leftover core processes: 0  finished 2026-09-23T00:53:53+09:00
+# exit-code tally:       6 exit=0       6 exit=241 

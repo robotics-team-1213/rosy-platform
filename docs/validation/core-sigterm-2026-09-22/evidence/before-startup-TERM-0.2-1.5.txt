@@ -1,0 +1,14 @@
+# before mode=startup signal=SIGTERM count=10; startup window=0.2-1.5s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: 0a9a07a (main, before fix)  started 2026-09-23T00:12:49+09:00  loadavg: 6.09 8.66 9.83 8/1031 17441
+run  1: node 17592 sig@+0.56s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  2: node 18030 sig@+0.78s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  3: node 18394 sig@+1.03s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  4: node 18795 sig@+0.66s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  5: node 19150 sig@+0.85s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  6: node 19495 sig@+1.8s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  7: node 19876 sig@+0.93s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  8: node 20255 sig@+1.47s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run  9: node 20582 sig@+1.67s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+run 10: node 20915 sig@+1.49s(after node spawn) phase=before-core-up alive30s=no exit=241 shutting_down=0 traceback=0 err= audit_last= port8080=0
+# leftover core processes: 0  finished 2026-09-23T00:14:07+09:00
+# exit-code tally:      10 exit=241 

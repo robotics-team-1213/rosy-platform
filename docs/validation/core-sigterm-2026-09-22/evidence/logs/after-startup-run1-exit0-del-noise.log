@@ -1,0 +1,14 @@
+[WARN] [1790092442.608214683] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1790092442.615487139] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1790092444.378508320] [core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+[INFO] [1790092444.380946123] [core]: core up: robot_id=rosy_01 model=Pinky Pro
+[INFO] [1790092446.873049324] [core]: api server on 0.0.0.0:8080
+Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+Exception ignored in: <function Executor.__del__ at 0x7e0d445616c0>
+Traceback (most recent call last):
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 305, in __del__
+    if self._sigint_gc is not None:
+       ^^^^^^^^^^^^^^^
+AttributeError: 'MultiThreadedExecutor' object has no attribute '_sigint_gc'
+[INFO] [1790092446.875392837] [core]: core shutting down
+Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423

@@ -1,0 +1,20 @@
+[WARN] [1790090112.545706426] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1790090112.545836609] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+Traceback (most recent call last):
+  File "/root/rosy_sigterm_ws/install/core/lib/core/core", line 33, in <module>
+    sys.exit(load_entry_point('core', 'console_scripts', 'core')())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/rosy_sigterm_ws/build/core/core/main.py", line 27, in main
+    node = RosyCoreNode(config)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/rosy_sigterm_ws/build/core/core/node.py", line 86, in __init__
+    self.bridge = RosBridge(self, self.core)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/rosy_sigterm_ws/build/core/core/bridge/ros_bridge.py", line 89, in __init__
+    self.cmd_vel_pub = node.create_publisher(Twist, "cmd_vel", 10)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/node.py", line 1560, in create_publisher
+    publisher_object = _rclpy.Publisher(
+                       ^^^^^^^^^^^^^^^^^
+rclpy._rclpy_pybind11.RCLError: Failed to create publisher: rcl node's context is invalid, at ./src/rcl/node.c:404
+[ros2run]: Process exited with failure 1
