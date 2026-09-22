@@ -56,8 +56,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · test(control): D-162 Gazebo 실렌더링 검증 PASS — scene context 폴백 확인
 - 2026-09-22 · uncommitted · test(control): D-162 노드 그래프 ROS-SIM PASS (scene context 슬라이스)
 - 2026-09-22 · uncommitted · feat(sensing): D-162 T3 scene context 노드 wiring + additive payload
 - 2026-09-22 · uncommitted · feat(sensing): D-162 장면 상황 프로파일+히스테리시스 매처 (T1/T2)
 - 2026-09-22 · uncommitted · test(control): anchor subprocess children to the package root
-- 2026-09-21 · uncommitted · refactor(control): move cross-domain simulations to repository tools
