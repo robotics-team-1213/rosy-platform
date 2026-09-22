@@ -58,8 +58,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · 4933fe0 · test(control): ROS smoke of the split web_node in WSL Jazzy
 - 2026-09-22 · uncommitted · refactor(control): split web_node into ROS wiring and ROS-free web modules
 - 2026-09-22 · uncommitted · test(control): derive the deployed control closure and pin one sensor provider
 - 2026-09-22 · uncommitted · test(control): D-162 Gazebo 실렌더링 검증 PASS — scene context 폴백 확인
 - 2026-09-22 · uncommitted · test(control): D-162 노드 그래프 ROS-SIM PASS (scene context 슬라이스)
-- 2026-09-22 · uncommitted · feat(sensing): D-162 T3 scene context 노드 wiring + additive payload

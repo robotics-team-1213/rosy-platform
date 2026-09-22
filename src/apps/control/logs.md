@@ -192,3 +192,10 @@
 - gate 변화: 없음. ROS-SIM 스모크(WSL에서 web_node 기동·요청·토픽 확인)는 WSL 서비스 오류(E_UNEXPECTED)로 미실행.
 - 결정: D-168 P6 `split` 판정 이행, control 분리 설계 1단계 중 web_node.
 - 교훈: `/state.json` 신선도 판정은 이제 요청마다 시각을 한 번만 읽는다. 원본은 판정마다 `time.monotonic()`을 새로 불렀다(마이크로초 차이, 한 응답 안의 판정이 같은 시각 기준이 됨).
+
+## 2026-09-22 · 4933fe0 · test(control): ROS smoke of the split web_node in WSL Jazzy
+- 변경: 없음(검증과 기록만). 앞 항목에서 미실행으로 남긴 ROS 스모크를 `wsl --shutdown` 복구 후 실행했다.
+- 증거: WSL Ubuntu ROS 2 Jazzy, 소스 트리 `python3 -m control.web_node`(colcon 설치 없이, html은 소스 폴백). 5개 web 모듈 import OK. `/state.json` 200(키 limits·map_control·planner_fresh·runtime_id·sensors·teleop_topic), 페이지 106,896바이트. `POST /wander stop` 200 → 리스너가 `/wander/cmd`에서 `'stop'` 수신. 교정 전 `POST /wander start` 409(게이트). `POST /teleop {x:0,z:0}` 200 → `/cmd_vel_raw`에서 `(0.0, 0.0)` 수신. `/cmd_vel` 발행자 0.
+- gate 변화: 없음(control ROS-SIM은 전체 그래프 기준이라 HOLD 유지). web_node 분리의 중계 경로는 ROS에서 확인됐다.
+- 결정: 없음
+- 교훈: WSL 재시작 직후에는 `ros2 topic echo --once`가 발견 지연으로 빈 결과를 낸다. 발행자 수가 잡힐 때까지 기다린 뒤 요청해야 중계를 증명할 수 있다.
