@@ -28,3 +28,10 @@
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 `git log -- src/sensor_adc`를 본다.
+
+## 2026-09-22 · uncommitted · sensor_adc(robustness): 버스 결함은 발행 생략 + 건강 토픽 (T4)
+- 변경: `src/main_node.cpp` — ① read_channel/read_cycle 헬퍼로 wiringPiI2CRawWrite/RawRead 반환 점검(쓰기 <1, 읽기 !=2 실패) ② 실패 주기는 us/ir/batt 발행을 전부 건너뛴다(무음 0값 발행 금지 — imu_bno055 패턴, CORE 신선도 게이트가 도착 기준으로 동작하게) ③ sensors/adc/status latched(QoS 1 transient_local) 1 Hz JSON 건강 토픽 신설(ok/consecutive_failures/last_error/standby) ④ init 실패 assert 대신 RCLCPP_FATAL + throw(비정상 종료, 감시자가 재시작 소유) ⑤ RCLCPP_WARN_THROTTLE 2 s 실패 로그. AGENTS.md 갱신.
+- 증거: `python -m pytest src/hardware/sensor_adc/test/ -q` 5 passed(계약 시험 3건 적색 후 초록 — 반환 점검·건강 토픽·assert 부재). 컴파일·실측은 ARM64/DEVICE 게이트 남음(Windows 호스트는 빌드 불가). 근거: communication-protocol-report.md §8-E — 버스 결함 시 0값이 신선도 게이트를 무효화하던 유일한 대형 fail-closed 예외.
+- gate 변화: 없음(SOURCE 유지). ROS-SIM/DEVICE는 ARM64 빌드 후 판정.
+- 결정: 없음 — 기존 fail-closed 원칙(도크·신호등·IMU)에 정렬.
+- 교훈: 없음.

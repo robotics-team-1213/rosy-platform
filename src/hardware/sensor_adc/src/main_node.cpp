@@ -6,6 +6,9 @@
 #include "realtime_tools/realtime_publisher.hpp"
 
 #include <cmath>
+#include <cstdio>
+#include <stdexcept>
+#include <string>
 
 #include "wiringPiI2C.h"
 
@@ -36,13 +39,22 @@ class RosySensorADC : public rclcpp::Node
 
             fd_ = wiringPiI2CSetupInterface(interface.c_str(), 0x08);
             if (fd_ == -1) {
-                RCLCPP_FATAL(this->get_logger(), "Failed to init I2C communication.");
-                assert(false);
+                // The C assert macro compiles out under NDEBUG; the external
+                // supervisor owns restarts, so fail loudly and exit nonzero
+                // (same rule as imu_bno055).
+                RCLCPP_FATAL(this->get_logger(),
+                             "Failed to init I2C communication on %s.", interface.c_str());
+                throw std::runtime_error("sensor_adc: I2C init failed");
             }
 
             pub_us_sensor_ = this->create_publisher<sensor_msgs::msg::Range>("us_sensor/range", 10);
             pub_ir_sensor_ = this->create_publisher<std_msgs::msg::UInt16MultiArray>("ir_sensor/range", 10);
             pub_batt_state_ = this->create_publisher<sensor_msgs::msg::BatteryState>("batt_state", 10);
+            // Latched health: late-joining consumers (CORE diagnostics) get
+            // the last state immediately (imu_bno055 publishes the same
+            // contract on sensors/imu/status).
+            pub_health_ = this->create_publisher<std_msgs::msg::String>(
+                "sensors/adc/status", rclcpp::QoS(1).transient_local());
 
             sub_power_mode_ = this->create_subscription<std_msgs::msg::String>(
                 "power/mode", rclcpp::QoS(1).transient_local().reliable(),
@@ -50,6 +62,8 @@ class RosySensorADC : public rclcpp::Node
 
             current_rate_ = this->get_parameter("rate").as_double();
             restart_timer(current_rate_);
+            health_timer_ = this->create_wall_timer(std::chrono::seconds(1),
+                std::bind(&RosySensorADC::health_callback, this));
 
             RCLCPP_INFO(this->get_logger(), "%s initialized...", this->get_name());
         }
@@ -98,25 +112,62 @@ class RosySensorADC : public rclcpp::Node
             RCLCPP_INFO(this->get_logger(), "power mode '%s' -> %.1f Hz", msg->data.c_str(), rate);
         }
 
+        // One channel round trip: write the register pointer, settle, read
+        // the 12-bit sample. Both return codes are checked — a dead bus
+        // yields short reads, not zeros.
+        bool read_channel(int channel, uint16_t &value)
+        {
+            static constexpr uint8_t registers[CH_COUNT] = {0x88, 0xC8, 0x98, 0xD8, 0xF8};
+            uint8_t data[2] = {0, };
+
+            const int written = wiringPiI2CRawWrite(fd_, &registers[channel], 1);
+            if (written < 1) {
+                last_error_ = "ch" + std::to_string(channel) + ": write " + std::to_string(written);
+                return false;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(6));
+
+            const int got = wiringPiI2CRawRead(fd_, data, 2);
+            if (got != 2) {
+                last_error_ = "ch" + std::to_string(channel) + ": read " + std::to_string(got);
+                return false;
+            }
+            value = uint16_t(data[0] << 4) + uint16_t(data[1] >> 4);
+            return true;
+        }
+
+        // True only when every channel of this cycle answered.
+        bool read_cycle(int first, uint16_t adc_result[CH_COUNT])
+        {
+            for(int i = first; i < CH_COUNT; i++)
+            {
+                if(!read_channel(i, adc_result[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         void timer_callback()
         {
-            uint8_t registers[CH_COUNT] = {0x88, 0xC8, 0x98, 0xD8, 0xF8};
             uint16_t adc_result[CH_COUNT] = {0, 0, 0, 0, 0};
 
             // In standby only the wake sensor and the battery are worth the bus
             // time: two round trips per cycle instead of five.
             const int first = standby_ ? CH_ULTRASONIC : CH_IR_FIRST;
 
-            for(int i = first; i < CH_COUNT; i++)
-            {
-                uint8_t data[2] = {0, };
-
-                wiringPiI2CRawWrite(fd_, &registers[i], 1);
-                rclcpp::sleep_for(std::chrono::milliseconds(6));
-
-                wiringPiI2CRawRead(fd_, data, 2);
-                adc_result[i] = uint16_t((data[0] << 4)) + uint16_t(data[1] >> 4);
+            // Fail-closed (imu pattern): a failed bus cycle publishes nothing.
+            // CORE's freshness gate judges arrival, and zeroed samples through
+            // a dead bus would look fresh while saying "no obstacle, full pack".
+            if(!read_cycle(first, adc_result)) {
+                consecutive_failures_++;
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                     "I2C cycle failed (%s); publishing nothing",
+                                     last_error_.c_str());
+                return;
             }
+            consecutive_failures_ = 0;
+            last_error_.clear();
 
             auto us_result = sensor_msgs::msg::Range();
             us_result.header.stamp = this->now();
@@ -160,15 +211,37 @@ class RosySensorADC : public rclcpp::Node
             RCLCPP_DEBUG(this->get_logger(), "%d %d %d %d %d", adc_result[0], adc_result[1], adc_result[2], adc_result[3], adc_result[4]);
         }
 
+        void health_callback()
+        {
+            // Latched 1 Hz JSON health blob on sensors/adc/status.
+            std::string error_json = last_error_.empty()
+                ? std::string("null")
+                : "\"" + last_error_ + "\"";
+            char json[192];
+            std::snprintf(json, sizeof(json),
+                          "{\"ok\": %s, \"consecutive_failures\": %d, \"last_error\": %s, \"standby\": %s}",
+                          consecutive_failures_ == 0 ? "true" : "false",
+                          consecutive_failures_,
+                          error_json.c_str(),
+                          standby_ ? "true" : "false");
+            auto msg = std_msgs::msg::String();
+            msg.data = json;
+            pub_health_->publish(msg);
+        }
+
     private:
         int fd_;
         double current_rate_ = 20.0;
         bool standby_ = false;
+        int consecutive_failures_ = 0;
+        std::string last_error_;
         rclcpp::TimerBase::SharedPtr timer_;
+        rclcpp::TimerBase::SharedPtr health_timer_;
         rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_power_mode_;
         rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr pub_us_sensor_;
         rclcpp::Publisher<std_msgs::msg::UInt16MultiArray>::SharedPtr pub_ir_sensor_;
         rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr pub_batt_state_;
+        rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_health_;
 };
 
 

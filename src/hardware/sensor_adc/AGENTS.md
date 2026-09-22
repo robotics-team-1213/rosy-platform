@@ -5,7 +5,7 @@
 
 ## Purpose
 
-C++ I2C ADC node (`sensor_adc`). Channels 0–2 IR, 3 ultrasonic, 4 battery. Publishes `sensor_msgs/Range`, battery state, and respects `power/mode` duty cycling (PWR-001) without slowing down if CORE is absent.
+C++ I2C ADC node (`sensor_adc`). Channels 0–2 IR, 3 ultrasonic, 4 battery. Publishes `sensor_msgs/Range`, battery state, and respects `power/mode` duty cycling (PWR-001) without slowing down if CORE is absent. Failed I2C cycles publish nothing (fail-closed) and are reported on the latched `sensors/adc/status` health topic (1 Hz JSON, same contract as `imu_bno055`).
 
 ## Key Files
 
