@@ -13,7 +13,9 @@ rclpy 가 설치한 C 처리기가 context 를 내리고 이 처리기를 이어
 
 from __future__ import annotations
 
+import os
 import signal
+import sys
 import threading
 
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM)
@@ -39,15 +41,24 @@ def is_orderly_shutdown(exc: BaseException, *, stop_requested: bool,
 
 
 def install_stop_handlers(stop: threading.Event) -> None:
-    """SIGINT/SIGTERM 을 `stop` 기록으로 바꾼다. 예외를 던지지 않는다.
+    """SIGINT/SIGTERM 을 `stop` 기록으로 바꾼다. 첫 신호는 예외를 던지지 않는다.
 
     기본 SIGTERM(SIG_DFL)은 rclpy 가 처리기를 깔기 전 기동 창에서 프로세스를 죽이고,
     기본 SIGINT 는 `KeyboardInterrupt` 를 아무 바이트코드에서나 던져 종료 훅
     (`system.shutdown` 감사 기록, API 포트 해제) 도중에도 끊을 수 있다.
+    두 번째 신호는 종료가 멈췄다는 운영자 의사다 — 기본 동작을 되돌리고 격상한다
+    (SIGINT → `KeyboardInterrupt`, SIGTERM → 같은 신호로 자기 종료). rclpy 가 종료 때
+    이 처리기를 되돌려 놓아도 `stop` 이 이미 서 있으므로 격상은 인터프리터 종료까지 유효하다.
     """
 
     def _request_stop(signum, frame) -> None:
-        stop.set()
+        if not stop.is_set():
+            stop.set()
+            return
+        signal.signal(signum, signal.SIG_DFL)
+        if signum == signal.SIGINT:
+            raise KeyboardInterrupt
+        os.kill(os.getpid(), signum)
 
     for signum in STOP_SIGNALS:
         signal.signal(signum, _request_stop)
@@ -56,8 +67,6 @@ def install_stop_handlers(stop: threading.Event) -> None:
 def main() -> None:
     stop = threading.Event()
     install_stop_handlers(stop)
-
-    import os
 
     from core_common.rmw import apply_cyclone_rmw
 
@@ -83,10 +92,14 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     except Exception as exc:
+        # 불변식: core 프로세스에서 rclpy context 를 내리는 코드는 이 main() 의 finally 뿐이다
+        # (test_core_main_shutdown 이 src/core 전체를 검사). 그래서 finally 전에 context 가
+        # 무효라면 신호 처리기가 내린 것이다.
         if not is_orderly_shutdown(exc, stop_requested=stop.is_set(),
                                    context_was_valid=context_was_valid,
                                    context_ok=rclpy.ok()):
             raise
+        print(f"core: suppressed during shutdown: {exc!r}", file=sys.stderr, flush=True)
     finally:
         if node is not None:
             try:

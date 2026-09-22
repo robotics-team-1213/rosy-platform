@@ -159,18 +159,113 @@ def test_signal_before_init_skips_startup_and_exits_cleanly(harness, monkeypatch
     assert rclpy.calls[-1] == "rclpy.shutdown"
 
 
-def test_stop_handler_records_without_raising():
-    import threading
+@pytest.fixture
+def saved_handlers():
     saved = {s: signal.getsignal(s) for s in core_main.STOP_SIGNALS}
-    try:
-        stop = threading.Event()
-        core_main.install_stop_handlers(stop)
-        for signum in core_main.STOP_SIGNALS:
-            signal.getsignal(signum)(signum, None)  # KeyboardInterrupt 를 던지면 실패
-        assert stop.is_set()
-    finally:
-        for signum, handler in saved.items():
-            signal.signal(signum, handler)
+    yield
+    for signum, handler in saved.items():
+        signal.signal(signum, handler)
+
+
+@pytest.mark.parametrize("signum", core_main.STOP_SIGNALS)
+def test_first_signal_records_without_raising(saved_handlers, signum):
+    import threading
+    stop = threading.Event()
+    core_main.install_stop_handlers(stop)
+    signal.getsignal(signum)(signum, None)  # KeyboardInterrupt 를 던지면 실패
+    assert stop.is_set()
+
+
+def test_second_sigint_restores_default_and_raises(saved_handlers):
+    import threading
+    stop = threading.Event()
+    core_main.install_stop_handlers(stop)
+    handler = signal.getsignal(signal.SIGINT)
+    handler(signal.SIGINT, None)
+    with pytest.raises(KeyboardInterrupt):
+        handler(signal.SIGINT, None)
+    assert signal.getsignal(signal.SIGINT) is signal.SIG_DFL
+
+
+def test_second_sigterm_restores_default_and_rekills_self(saved_handlers, monkeypatch):
+    import threading
+    killed = []
+    monkeypatch.setattr(core_main.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    stop = threading.Event()
+    core_main.install_stop_handlers(stop)
+    handler = signal.getsignal(signal.SIGTERM)
+    handler(signal.SIGTERM, None)
+    assert killed == []
+    handler(signal.SIGTERM, None)
+    assert killed == [(core_main.os.getpid(), signal.SIGTERM)]
+    assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+
+
+def test_suppressed_exception_is_logged(harness, capsys):
+    rclpy, state = harness
+    state["run"] = _signal_then_race(rclpy, signal.SIGTERM)
+    core_main.main()
+    assert "core: suppressed during shutdown: RuntimeError('failed to initialize wait set"         in capsys.readouterr().err
+
+
+def test_signal_during_rmw_step_skips_init(harness, monkeypatch):
+    rclpy, _ = harness
+    import core_common.rmw
+
+    def apply(env):
+        signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+
+    monkeypatch.setattr(core_common.rmw, "apply_cyclone_rmw", apply)
+    core_main.main()
+    assert "init" not in rclpy.calls
+    assert "node" not in rclpy.calls
+
+
+def test_signal_during_load_config_skips_node(harness, monkeypatch):
+    rclpy, _ = harness
+    import core_common.config
+
+    def load():
+        # rclpy 처리기가 깔린 뒤: C 처리기처럼 context 를 내리고 Python 처리기를 부른다.
+        rclpy.valid = False
+        signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+        raise RuntimeError("context is not valid")
+
+    monkeypatch.setattr(core_common.config, "load_config", load)
+    core_main.main()
+    assert "node" not in rclpy.calls
+    assert rclpy.calls[-1] == "rclpy.shutdown"
+
+
+def test_rclpy_init_failure_propagates(harness, monkeypatch):
+    rclpy, _ = harness
+
+    def init():
+        rclpy.calls.append("init")
+        raise RuntimeError("rcl_init failed")
+
+    monkeypatch.setattr(rclpy, "init", init)
+    with pytest.raises(RuntimeError, match="rcl_init failed"):
+        core_main.main()
+    assert "node" not in rclpy.calls
+
+
+def test_only_main_shuts_rclpy_down_in_core_production_code():
+    """main 의 context-무효 판정은 다른 코드가 context 를 내리지 않는다는 불변식에 기댄다."""
+    import re
+    from pathlib import Path
+    src_core = Path(__file__).resolve().parents[2]
+    pattern = re.compile(
+        r"rclpy\.(try_)?shutdown\b|\btry_shutdown\(|from rclpy(\.utilities)? import[^\n]*\bshutdown\b")
+    offenders = []
+    for path in src_core.rglob("*.py"):
+        rel = path.relative_to(src_core).as_posix()
+        if "/test/" in f"/{rel}" or rel == "core/core/main.py":
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+            if pattern.search(line):
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
+    assert offenders == []
 
 
 def test_main_installs_stop_handlers_before_importing_rclpy():
