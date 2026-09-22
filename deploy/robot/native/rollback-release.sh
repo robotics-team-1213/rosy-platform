@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PUBLIC_KEY="${ROSY_RELEASE_PUBLIC_KEY:-/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem}"
 
-exec python3 "$SCRIPT_DIR/native_release.py" \
+exec python3 -B "$SCRIPT_DIR/native_release.py" \
   --root "${ROSY_ROOT:-/}" \
   --public-key "$PUBLIC_KEY" \
   rollback

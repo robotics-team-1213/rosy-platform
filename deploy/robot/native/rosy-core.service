@@ -1,5 +1,6 @@
 [Unit]
 Description=ROSY native CORE runtime
+OnFailure=rosy-boot-status.service
 Requires=rosy-release-recover.service rosy-sd-provision.service
 After=network-online.target rosy-release-recover.service rosy-sd-provision.service
 Wants=network-online.target
@@ -10,10 +11,16 @@ Type=simple
 User=rosy-core
 Group=rosy-core
 EnvironmentFile=/etc/rosy/runtime.env
+# D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
+LogsDirectory=rosy-core
+Environment=ROS_HOME=/var/log/rosy-core ROS_LOG_DIR=/var/log/rosy-core
 WorkingDirectory=/opt/rosy/current
 ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 run core core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
 ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py
 Restart=on-failure
+# Restart without passing through the failed state, so OnFailure= fires only
+# when CORE finally gives up, not on every crash-loop iteration.
+RestartMode=direct
 RestartSec=2
 TimeoutStartSec=60
 TimeoutStopSec=15

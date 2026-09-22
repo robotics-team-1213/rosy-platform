@@ -33,6 +33,11 @@ def test_inspect_passes_with_valid_image(tmp_path):
         "etc/rosy/cyclonedds.xml",
         "opt/rosy/first-boot/rosy-first-boot.py",
         "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
+        "opt/rosy/native-runtime/native_release.py",
+        "opt/rosy/native-runtime/recover-release.sh",
+        "opt/rosy/native-runtime/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     ]
     for p in paths:
         path = root / p
@@ -74,6 +79,11 @@ def test_inspect_fails_if_docker_present(tmp_path):
         "etc/rosy/cyclonedds.xml",
         "opt/rosy/first-boot/rosy-first-boot.py",
         "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
+        "opt/rosy/native-runtime/native_release.py",
+        "opt/rosy/native-runtime/recover-release.sh",
+        "opt/rosy/native-runtime/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     ]
     for p in paths:
         path = root / p
@@ -94,3 +104,34 @@ def test_inspect_fails_if_docker_present(tmp_path):
     
     findings = verify_mounted_image.inspect(root, release_id)
     assert any("docker must not be installed" in f for f in findings)
+
+
+def test_inspect_requires_both_installed_native_runtime_copies(tmp_path):
+    # D-174 F1/F5: an image without the runtime (or without its helper) must not pass.
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    (root / "opt/rosy/releases" / release_id).mkdir(parents=True)
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    missing = {Path(f.split(": ", 1)[1]).as_posix() for f in findings
+               if f.startswith("missing required image path")}
+    assert {
+        "opt/rosy/native-runtime/native_release.py",
+        "opt/rosy/native-runtime/recover-release.sh",
+        "opt/rosy/native-runtime/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
+    } <= missing
+
+
+def test_inspect_rejects_bytecode_inside_the_signed_release(tmp_path):
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    cache = root / "opt/rosy/releases" / release_id / "deploy/robot/native/__pycache__"
+    cache.mkdir(parents=True)
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    assert (f"bytecode cache in signed release: opt/rosy/releases/{release_id}"
+            "/deploy/robot/native/__pycache__") in findings

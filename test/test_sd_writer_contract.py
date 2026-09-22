@@ -109,7 +109,7 @@ def writer_case(tmp_path: Path):
     }
 
 
-def _run(case, *extra, plan_only=True):
+def _run(case, *extra, plan_only=True, omit=()):
     command = [
         POWERSHELL,
         "-NoProfile",
@@ -135,6 +135,9 @@ def _run(case, *extra, plan_only=True):
         "-DeviceName", "rosy-pinky-k7m4",
         "-DeviceUid", "9d40feaa-871f-4fd3-975a-a704e82d3af9",
     ]
+    for name in omit:
+        index = command.index(name)
+        del command[index:index + 2]
     if plan_only:
         command.append("-PlanOnly")
     extra_values = list(map(str, extra))
@@ -358,3 +361,445 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "ReleasePublicKey" in text
     assert "verify-media-readback.py" in text
     assert text.index("verify-media-readback.py") < text.index("create-provision-bundle.py")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_omitted_robot_number_is_drawn_from_free_registry_slots(writer_case):
+    taken = [number for number in range(1, 62) if number not in (17, 42)]
+    writer_case["registry"].write_text(
+        json.dumps({"robot_numbers": taken, "device_names": [], "device_uids": []}),
+        encoding="utf-8",
+    )
+
+    drawn = set()
+    for _ in range(6):
+        completed = _run(writer_case, omit=("-RobotNumber",))
+        assert completed.returncode == 0, completed.stderr
+        plan = json.loads(completed.stdout)
+        assert plan["robot_number_source"] == "auto"
+        assert plan["ros_domain_id"] == 40 + plan["robot_number"]
+        assert plan["namespace"] == "rosy_{:02d}".format(plan["robot_number"])
+        drawn.add(plan["robot_number"])
+
+    assert drawn <= {17, 42}
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_full_registry_refuses_automatic_robot_number(writer_case):
+    writer_case["registry"].write_text(
+        json.dumps({"robot_numbers": list(range(1, 62)), "device_names": [], "device_uids": []}),
+        encoding="utf-8",
+    )
+
+    completed = _run(writer_case, omit=("-RobotNumber",))
+
+    assert completed.returncode != 0
+    assert "no free robot number" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_explicit_robot_number_is_reported_as_operator_choice(writer_case):
+    completed = _run(writer_case)
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert plan["robot_number"] == 1
+    assert plan["robot_number_source"] == "operator"
+    assert plan["fleet_source"] == "operator"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_omitted_fleet_values_default_to_this_console_host(writer_case):
+    completed = _run(writer_case, omit=("-FleetEndpoint", "-FleetTrustProfile"))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    host = os.environ["COMPUTERNAME"].lower()
+    assert plan["fleet_endpoint"] == f"https://{host}.local"
+    assert plan["fleet_trust_profile"] == "rosy-pilot-lan"
+    assert plan["fleet_source"] == "default"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_plan_file_is_written_once_and_matches_stdout(writer_case, tmp_path):
+    plan_path = tmp_path / "plan.json"
+
+    completed = _run(writer_case, "-PlanPath", plan_path, omit=("-RobotNumber", "-DeviceName", "-DeviceUid"))
+
+    assert completed.returncode == 0, completed.stderr
+    saved = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    assert saved == json.loads(completed.stdout)
+    assert "writer-pass" not in plan_path.read_text(encoding="utf-8-sig")
+
+    again = _run(writer_case, "-PlanPath", plan_path)
+    assert again.returncode != 0
+    assert "plan already exists" in again.stderr
+    assert json.loads(plan_path.read_text(encoding="utf-8-sig")) == saved
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_write_reuses_the_reviewed_plan_identity(writer_case, tmp_path):
+    plan_path = tmp_path / "plan.json"
+    planned = _run(writer_case, "-PlanPath", plan_path, omit=("-RobotNumber", "-DeviceName", "-DeviceUid"))
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case,
+        "-PlanPath", plan_path,
+        "-Confirmation", f"ERASE DISK 7 {plan['device_name']}",
+        "-BootMountPath", boot,
+        plan_only=False,
+        omit=("-RobotNumber", "-DeviceName", "-DeviceUid"),
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    registry = json.loads(writer_case["registry"].read_text(encoding="utf-8-sig"))
+    assert registry["robot_numbers"] == [plan["robot_number"]]
+    assert registry["device_names"] == [plan["device_name"]]
+    assert registry["device_uids"] == [plan["device_uid"]]
+    bundle = json.loads((boot / "rosy-provision" / "provision.json").read_text(encoding="utf-8-sig"))
+    assert bundle["dds"]["robot_number"] == plan["robot_number"]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("disk_serial", "OTHER-CARD-0001"),
+        ("image_sha256", "0" * 64),
+        ("release_id", "2026.09.21-002"),
+        ("mode", "WRITE"),
+        ("wifi_ssid", "FIXTURE-SSID"),
+        ("namespace", "rosy_02"),
+        ("ros_domain_id", 42),
+        ("registry_path", r"C:\other\registry.json"),
+    ],
+)
+def test_write_refuses_a_plan_that_no_longer_matches(writer_case, tmp_path, field, value):
+    plan_path = tmp_path / "plan.json"
+    planned = _run(writer_case, "-PlanPath", plan_path)
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    plan[field] = value
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    completed = _run(
+        writer_case,
+        "-PlanPath", plan_path,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        plan_only=False,
+    )
+
+    assert completed.returncode != 0
+    assert "reviewed plan" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_write_refuses_explicit_identity_that_contradicts_the_plan(writer_case, tmp_path):
+    plan_path = tmp_path / "plan.json"
+    planned = _run(writer_case, "-PlanPath", plan_path)
+    assert planned.returncode == 0, planned.stderr
+
+    completed = _run(
+        writer_case,
+        "-PlanPath", plan_path,
+        "-RobotNumber", "9",
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        plan_only=False,
+    )
+
+    assert completed.returncode != 0
+    assert "reviewed plan" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+def _plan_then_write(case, tmp_path, mutate=None, *extra, omit=()):
+    plan_path = tmp_path / "plan.json"
+    planned = _run(case, "-PlanPath", plan_path)
+    assert planned.returncode == 0, planned.stderr
+    if mutate is not None:
+        plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+        mutate(plan)
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    return _run(
+        case,
+        "-PlanPath", plan_path,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        *extra,
+        plan_only=False,
+        omit=omit,
+    )
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("-DeviceName", "ROSY-PINKY-K7M4"),
+        ("-FleetEndpoint", "https://FLEET.fixture.invalid:8443"),
+        ("-Preset", "core"),
+        ("-CountryCode", "US"),
+    ],
+)
+def test_write_refuses_arguments_that_differ_from_the_plan_even_by_case(writer_case, tmp_path, name, value):
+    completed = _plan_then_write(writer_case, tmp_path, None, name, value)
+
+    assert completed.returncode != 0
+    assert "contradicts the reviewed plan" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_automatic_robot_number_is_never_drawn_inside_a_write(writer_case, tmp_path):
+    completed = _run(
+        writer_case,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-BootMountPath", tmp_path,
+        plan_only=False,
+        omit=("-RobotNumber",),
+    )
+
+    assert completed.returncode != 0
+    assert "needs a reviewed plan" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_tampered_plan_robot_number_is_rejected_before_writer(writer_case, tmp_path):
+    def tamper(plan):
+        plan.update(robot_number=75, robot_number_source="auto", ros_domain_id=115, namespace="rosy_75")
+
+    completed = _plan_then_write(writer_case, tmp_path, tamper, omit=("-RobotNumber",))
+
+    assert completed.returncode != 0
+    assert "between 1 and 61" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("key", ["robot_number_source", "requested_preset", "registry_path"])
+def test_plan_missing_a_field_fails_with_its_name(writer_case, tmp_path, key):
+    completed = _plan_then_write(writer_case, tmp_path, lambda plan: plan.pop(key))
+
+    assert completed.returncode != 0
+    assert f"reviewed plan has no {key}" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_plan_records_preset_model_country_and_registry(writer_case):
+    completed = _run(writer_case)
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert plan["model"] == "pinky_pro"
+    assert plan["requested_preset"] == "hardware"
+    assert plan["country_code"] == "KR"
+    assert Path(plan["registry_path"]) == writer_case["registry"].resolve()
+
+
+def _operator_key_file(tmp_path, seed=7):
+    import base64
+    import struct
+
+    def string(value):
+        return struct.pack(">I", len(value)) + value
+
+    blob = string(b"ssh-ed25519") + string(bytes([seed]) * 32)
+    key = f"ssh-ed25519 {base64.b64encode(blob).decode()} operator@bench"
+    path = tmp_path / f"operator-{seed}.pub"
+    path.write_text(key + "\n", encoding="utf-8")
+    return path, key
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_operator_key_is_fingerprinted_in_the_plan_and_installed_on_write(writer_case, tmp_path):
+    # D-174 F3: the card carries a key-only operator login; the plan pins its fingerprint.
+    key_file, key = _operator_key_file(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    planned = _run(writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", key_file)
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    assert plan["operator_key_fingerprint"].startswith("SHA256:")
+    assert key.split()[1] not in plan_path.read_text(encoding="utf-8-sig")
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", key_file,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", "-BootMountPath", boot,
+        plan_only=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
+    assert bundle["operator"] == {"ssh_authorized_keys": [key]}
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["personalization"]["operator"]["ssh_key_fingerprints"] == [plan["operator_key_fingerprint"]]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_different_operator_key_than_reviewed_stops_before_the_writer(writer_case, tmp_path):
+    reviewed, _ = _operator_key_file(tmp_path, seed=7)
+    other, _ = _operator_key_file(tmp_path, seed=9)
+    plan_path = tmp_path / "plan.json"
+    assert _run(writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", reviewed).returncode == 0
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", other,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", plan_only=False,
+    )
+
+    assert completed.returncode != 0
+    assert "operator_key_fingerprint" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_private_key_file_is_refused_as_an_operator_key(writer_case, tmp_path):
+    bad = tmp_path / "id_ed25519"
+    bad.write_text("-----BEGIN OPENSSH " + "PRIVATE KEY-----\n", encoding="utf-8")
+
+    completed = _run(writer_case, "-OperatorPublicKey", bad)
+
+    assert completed.returncode != 0
+    assert "operator public key" in completed.stderr
+
+
+def _prior_receipt(tmp_path, **overrides):
+    receipt = {
+        "device_uid": "9d40feaa-871f-4fd3-975a-a704e82d3af9",
+        "device_name": "rosy-pinky-k7m4",
+        "robot_number": 1,
+        "release_id": "2026.09.20-001",
+        "disk_serial": "FIXTURE-SD-0007",
+        "image_sha256": "a" * 64,
+        "writer_exit_code": 0,
+        "media_readback": {"verified": True},
+        "created_at": "2026-09-22T13:04:48+00:00",
+    }
+    receipt.update(overrides)
+    path = tmp_path / "prior-receipt.json"
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    return path
+
+
+def _registered(case):
+    case["registry"].write_text(json.dumps({
+        "robot_numbers": [1], "device_names": ["rosy-pinky-k7m4"],
+        "device_uids": ["9d40feaa-871f-4fd3-975a-a704e82d3af9"],
+    }), encoding="utf-8")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_registered_identity_can_be_rewritten_only_with_its_prior_receipt(writer_case, tmp_path):
+    # D-174 F7: the same robot gets a fixed release on the same identity.
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case, "-ReprovisionReceipt", prior,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", "-BootMountPath", boot,
+        plan_only=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["supersedes"] == {
+        "release_id": "2026.09.20-001", "image_sha256": "a" * 64,
+        "created_at": "2026-09-22T13:04:48+00:00",
+    }
+    registry = json.loads(writer_case["registry"].read_text(encoding="utf-8-sig"))
+    assert registry["robot_numbers"] == [1]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovision_plan_takes_the_identity_from_the_receipt(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior,
+                     omit=("-RobotNumber", "-DeviceName", "-DeviceUid"))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert (plan["device_name"], plan["robot_number"]) == ("rosy-pinky-k7m4", 1)
+    assert plan["robot_number_source"] == "reprovision"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"robot_number": 2},
+        {"device_name": "rosy-pinky-zzzz"},
+        {"writer_exit_code": 1},
+        {"media_readback": {"verified": False}},
+    ],
+)
+def test_reprovision_refuses_a_receipt_that_does_not_prove_this_identity(writer_case, tmp_path, overrides):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path, **overrides)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovision_receipt_cannot_launder_another_plans_identity(writer_case, tmp_path):
+    # Review M1: the plan replaced the receipt's identity and every registry check was skipped.
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path)
+    plan_path = tmp_path / "plan-robot-20.json"
+    planned = _run(writer_case, "-PlanPath", plan_path, "-RobotNumber", "20",
+                   "-DeviceName", "rosy-pinky-abcd", "-DeviceUid", "11111111-2222-4333-8444-555555555555")
+    assert planned.returncode == 0, planned.stderr
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path, "-ReprovisionReceipt", prior,
+        "-Confirmation", "ERASE DISK 7 rosy-pinky-abcd", plan_only=False,
+        omit=("-RobotNumber", "-DeviceName", "-DeviceUid"),
+    )
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovision_requires_the_identity_to_be_registered(writer_case, tmp_path):
+    prior = _prior_receipt(tmp_path)  # registry is empty in the fixture
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    "overrides",
+    [{"writer_exit_code": None}, {"writer_exit_code": "0"}, {"media_readback": {"verified": "false"}},
+     {"media_readback": {"verified": 1}}],
+    ids=["exit-null", "exit-string", "verified-string", "verified-int"],
+)
+def test_reprovision_proof_fields_are_strictly_typed(writer_case, tmp_path, overrides):
+    # Review M2: [bool]"false" is True and [int]$null is 0 in PowerShell 5.1.
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path, **overrides)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "reprovision receipt" in completed.stderr

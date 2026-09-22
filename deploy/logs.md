@@ -288,3 +288,181 @@
 - gate 변화: 없음.
 - 결정: 없음 — SRS §25 전제의 이미지 계약화.
 - 교훈: 문서 버전을 리터럴로 고정한 시험은 버전이 오를 때마다 깨진다 — 헤더를 읽어 판정하도록 쓰는 편이 유지된다(단, 고정 의도라면 리터럴이 맞을 수도 있다. 이번엔 D-143 표기 존재 확인이 본래 목적이므로 헤더 판독형으로).
+
+## 2026-09-23 · uncommitted · feat(sd): allocate robot number and Fleet defaults, pin writes to the reviewed plan
+
+- 변경: `prepare-rosy-sd.ps1`에서 `-RobotNumber`, `-FleetEndpoint`, `-FleetTrustProfile`을
+  선택 입력으로 바꿨다. 로봇 번호는 registry의 빈 번호(1-61) 중 무작위로 배정하고, Fleet 값은
+  콘솔 호스트(`https://<host>.local`, `rosy-pilot-lan`)로 채운다. plan에 출처
+  (`robot_number_source`, `fleet_source`)를 남긴다. `-PlanPath`는 PlanOnly 결과를 한 번만 저장하고,
+  WRITE는 그 plan의 신원·preset·model·country·Fleet 값을 그대로 쓰고, 디스크·release·image
+  hash·SSID·DDS 신원·registry 경로가 바뀌었거나 명시 인자가 plan과 (대소문자까지) 다르면 writer
+  호출 전에 실패한다. 자동 번호는 WRITE 안에서 뽑지 않는다 — plan 없이 쓰려면 `-RobotNumber` 필수.
+  code-reviewer 지적(대소문자 무시 비교, 조작된 plan의 범위 검사 우회, 미표시 자동 번호,
+  preset 미고정)을 반영했다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py -q` 46 passed; `python -m pytest
+  test/test_sd_personalization.py test/test_media_readback.py test/test_offline_image_signer.py
+  deploy/sd/test -q` 27 passed (2026-09-22 Windows)
+- gate 변화: 없음. MEDIA/DEVICE HOLD 유지
+- 결정: D-33 유지 — 고정 기본값이 아니라 registry 기준 할당이므로 신규 카드마다 다른 번호가 나온다.
+  무작위 배정은 registry가 분리된 운영 PC 사이의 DDS domain 충돌 확률을 낮춘다.
+- 교훈: PlanOnly와 WRITE가 각자 신원을 새로 뽑으면 검토한 계획과 기록한 카드가 달라진다.
+  자동 배정을 도입하면 검토 결과를 고정하는 경로가 같이 필요하다.
+
+## 2026-09-23 · uncommitted · chore(sd): write the first Pinky Pro card from release 2026.09.22-002 (D-173)
+
+- 변경: 없음(실행과 기록). `9aee918` 기준 ARM64 run 35717277503의 unsigned handoff를 받아
+  기존 파일럿 키로 서명하고 `-PlanOnly -PlanPath`로 검토한 plan에 고정해 관리자 권한으로 기록했다.
+- 증거: SHA256SUMS 12/12 OK; `sign_image_release.py` files_verified 12; `verify-image-release.py`
+  ok (image sha256 `eaf843c4…`); disk 1 `Generic STORAGE DEVICE` serial `000000000207` 32,044,482,560 B;
+  Imager exit 0; 전체 readback 8,574,867,968 B device=raw sha256 `a82a4652…` verified;
+  boot `rosy-provision/provision.json` 726 B; registry 18/`rosy-pinky-e4us`. plan·receipt·log는
+  운영 PC `F:\tmp\rosy-release\cards\`에 보관(비밀번호·PSK 없음).
+- gate 변화: 없음. MEDIA 증거일 뿐 BOOT/DEVICE는 HOLD — 부팅과 runbook G0-G2가 다음이다.
+- 결정: D-173
+- 교훈: 릴리스 폴더를 셸 작업 디렉터리로 두면 도구 hook이 `.omc/`를 만들어 서명기가 미등재 파일로
+  거부한다. 서명·검증은 릴리스 폴더 밖에서 실행한다. PowerShell PATH에는 openssl이 없으니
+  Git의 `usr\bin`을 앞에 둔다.
+
+## 2026-09-23 · uncommitted · docs(adr): D-174 first-boot defects and boot indicator plan
+
+- 변경: 첫 실기 부팅 결과를 D-174과 실행 계획(`docs/plans/2026-09-22-pinky-first-boot-fixes.md`)으로 기록했다.
+  코드 변경 없음.
+- 증거: 회수한 카드의 ext4 루트를 읽기 전용으로 추출해 journal 확인. `rosy-release-recover.service`가
+  `ModuleNotFoundError: No module named 'signing'`(+7.96s)로 실패해 `rosy-core`/`rosy-runtime.target`이
+  dependency 실패. `rosy-first-boot`은 +26.3s에 `PROVISIONED`, Wi-Fi `192.168.1.201`, avahi 이름은 `ubuntu.local`.
+- gate 변화: DEVICE HOLD 유지(부팅은 했으나 CORE 미기동).
+- 결정: D-174
+- 교훈: 저장소 경로로 통과하는 import는 설치 배치에서 깨질 수 있다. 이미지 검증은 파일 존재가 아니라
+  설치 위치에서 진입점을 실행해야 한다. 사람이 볼 수 있는 부팅 신호가 없으면 매 실패마다 카드를 회수해야 한다.
+
+## 2026-09-23 · uncommitted · docs(adr): D-175 debug log system and first-boot lesson
+
+- 변경: D-175(CORE 밖 4층 디버그 로그)와 실행 계획 `docs/plans/2026-09-22-rosy-debug-log-system.md`,
+  교훈 `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md` 추가. 코드 변경 없음.
+- 증거: 기존 관측(`/api/v1/logs/audit`, events, diagnostics collector)은 모두 CORE 프로세스 안이라 D-174 F1
+  상황에서 쓸 수 없었다. 원인 확인에 카드 회수·관리자 권한 ext4 추출·WSL journalctl이 필요했다.
+- gate 변화: 없음
+- 결정: D-175
+- 교훈: 관측 수단은 그것이 진단해야 할 실패와 같은 전제(CORE 기동, 네트워크)에 기대면 안 된다.
+
+## 2026-09-23 · uncommitted · fix(native): run release recovery from the installed layout (D-174 F1, F5)
+
+- 변경: `deploy/robot/native/install-native-runtime.sh`가 런타임을 설치하면서 `signing.py`를 함께 넣는다.
+  `build-native-payload.sh`는 두 사본(`/opt/rosy/native-runtime`, release `deploy/robot/native`)을 모두 이
+  설치기로 만든다. `native_release.py`는 저장소 경로를 fallback으로만 붙여 설치 사본을 가리지 않는다.
+  `customize-rootfs.sh`는 ARM64 chroot에서 두 복구 진입점과 first-boot `--help`를 실제로 실행하고,
+  `verify-mounted-image.py`는 각 사본 옆 `signing.py`를 확인한다.
+- 증거: 기존 `cp -a` 배치로 `native_release.py recover`를 돌리면 `ModuleNotFoundError: No module named 'signing'`
+  (카드 journal과 동일) 재현. 새 `test/test_native_runtime_installed_layout.py` 4 passed, native/image 스위트 105 passed,
+  이미지 계약·마운트 검증 13 passed (2026-09-22 Windows)
+- gate 변화: 없음. ARTIFACT/DEVICE는 release 003 빌드·실기 부팅 전까지 HOLD
+- 결정: D-174
+- 교훈: `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md`
+
+## 2026-09-23 · uncommitted · fix(first-boot): apply the device hostname to the running system (D-174 F2)
+
+- 변경: 첫 부팅이 `/etc/hostname`을 쓴 직후, 네트워크 활성화 전에 `hostnamectl set-hostname`(실패 시 `hostname`)으로
+  실행 중 이름을 바꾸고 `avahi-daemon`을 try-restart한다. 실패해도 개인화는 계속한다(파일은 이미 맞다).
+  `--root`가 `/`가 아니면 호스트 명령을 실행하지 않는다.
+- 증거: `python -m pytest test/test_first_boot_provisioning.py -q` 11 passed(신규 4: 순서, 실패 허용, 비-/ root 보호,
+  기본 명령) (2026-09-23 Windows). 실기 증거는 release 003 부팅 전까지 없음.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · fix(native): keep bytecode out of signed releases; require the installed runtime (D-174 review)
+
+- 변경: code-reviewer 지적 반영. `native_release.py`는 `sys.dont_write_bytecode`를 켜고 release 래퍼 3개와 이미지 chroot
+  probe는 `python3 -B`로 돈다(서명 release 안 `__pycache__`는 unlisted 파일이라 `verify(old_current)`가 복구를 HOLD시킨다).
+  `verify-mounted-image.py`는 두 런타임 사본의 `native_release.py`·`signing.py`·`recover-release.sh`를 필수로 요구하고
+  release 안 `__pycache__`를 거부한다. 설치기는 자기 자신을 배포하지 않는다. `device_readback.py`는
+  `/opt/rosy/native-runtime/signing.py`를 먼저 찾는다. probe 주석을 "import smoke test"로 정정하고 실패 시 정리한다.
+- 증거: native/image/first-boot/readback 스위트 61 passed (2026-09-23 Windows)
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 설치 배치에서 import가 되게 만들면, 그 import가 남기는 부산물(bytecode)도 서명 경계를 넘는다.
+
+## 2026-09-23 · uncommitted · feat(native): boot status indicator outside CORE (D-174 T0)
+
+- 변경: `rosy_boot_state.py`(단계 모델: BOOTING·PROVISIONED·CORE_READY·FAILED:<가장 이른 실패 unit>)와
+  `rosy-boot-status.py`(root oneshot)를 추가했다. 출력은 서로 독립인 네 곳이다: `/run/rosy/boot-status.json`,
+  보드 ACT LED(준비 heartbeat, 실패 100ms 점멸, 그 외 SD 활동), 콘솔 배너(`/run/rosy/issue` ← `/etc/issue.d/rosy.issue`),
+  avahi `_rosy._tcp`(TXT `stage`, `release`, `name`). 30초 timer와 네 부팅 unit의 `OnFailure=`로 갱신하며
+  runtime target·CORE를 막지 않는다. 한 출력의 실패가 다른 출력을 멈추지 않고, 도구는 부팅을 실패시키지 않는다.
+- 증거: `test/test_boot_state.py` 10 passed, `test/test_boot_status_indicator.py` 12 passed — 첫 카드와 같은
+  unit 상태를 넣으면 네 출력 모두 `FAILED:rosy-release-recover`를 보인다. native/image/first-boot 스위트 55 passed
+  (2026-09-23 Windows). 실기(LED 이름 `ACT`, agetty `--reload`, avahi 서비스 재적재)는 release 003 부팅 전까지 미검증.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · feat(native): boot black box on the FAT32 boot partition (D-175 L1)
+
+- 변경: `rosy_diag_redact.py`(비밀 제거·금지 경로)와 `rosy_blackbox.py`를 추가하고 `rosy-boot-status.py`의 독립 출력으로
+  연결했다. `/boot/firmware/rosy-diag/`에 부팅당 한 개의 `boot-NNNN-<boot_id8>.json`과 사람이 읽는 `latest.txt`를 쓴다.
+  단계가 바뀔 때만 쓰고(30초 timer에도 재기록 없음), 최근 5회 부팅·총 2 MiB로 제한하며, 실패 unit의 journal 마지막
+  60줄을 비밀 제거 후 담는다. 치환 문자열 `<redacted>`는 저장소 secret scanner가 자리표시자로 인정한다.
+- 증거: `test_diag_redaction.py` 25, `test_boot_blackbox.py` 7(첫 카드 상태로 `latest.txt`에 `FAILED:rosy-release-recover`와
+  `No module named 'signing'`, 토큰 제거·scanner 통과, 같은 단계 재기록 없음, 5회 회전, 용량 상한), installed-layout 7 passed
+  (2026-09-23 Windows). 실기 FAT32 쓰기는 release 003 부팅 전까지 미검증.
+- gate 변화: 없음
+- 결정: D-175
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · fix(native): writable ROS home for service users; bounded persistent journal (D-174 F6, D-175 L0)
+
+- 변경: `rosy-core`·`rosy-io`·`rosy-navigation`에 `LogsDirectory=`와 `ROS_HOME`/`ROS_LOG_DIR`=`/var/log/<unit>`을 준다(홈 없는
+  서비스 사용자 + `ProtectHome=true`에서 rclpy가 `$HOME/.ros/log`를 쓰려다 실패하는 것을 선제 차단). journald drop-in
+  `60-rosy.conf`(`Storage=persistent`, `SystemMaxUse=200M`, `RuntimeMaxUse=32M`)을 이미지 overlay에 넣는다.
+- 증거: `test_native_systemd_contract.py` 등 44 passed (2026-09-23 Windows). F6는 F1에 가려져 실기에서 재현된 적이 없다 —
+  release 003 부팅에서 CORE 기동으로 확인한다.
+- gate 변화: 없음
+- 결정: D-174, D-175
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · feat(sd): per-card operator SSH key and key-only `rosy` login (D-174 F3)
+
+- 변경: 번들에 선택 섹션 `operator.ssh_authorized_keys`(ed25519/ecdsa 공개키 1-8개, 단일 줄·타입·blob 일치 검증, 개인키 거부)를
+  추가하고 스키마·receipt(지문만)에 반영했다. 첫 부팅은 키가 있을 때만 `rosy` 계정(비밀번호 없음, `systemd-journal`/`adm`,
+  NOPASSWD sudo)을 만들고 `authorized_keys`(0600)를 설치하며 `complete.json`에 지문을 남긴다. `prepare-rosy-sd.ps1
+  -OperatorPublicKey`는 지문을 plan에 고정하고 다른 키로 기록하려 하면 writer 전에 멈춘다. receipt는 `ConvertTo-Json -Depth 10`으로
+  쓴다(기본 깊이 2가 중첩 목록을 문자열로 뭉개던 잠재 결함).
+- 증거: `test_sd_operator_access.py` 13, `test_sd_writer_contract.py` 49, first-boot/personalization 포함 45 passed; 전체 1394 passed
+  (남은 2건은 main `10ceb53`의 `system.py` BOM, 이 브랜치와 무관) (2026-09-23 Windows)
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · feat(sd): rewrite a card for an existing device identity (D-174 F7)
+
+- 변경: `prepare-rosy-sd.ps1 -ReprovisionReceipt`가 이전 receipt(Imager exit 0, readback verified)의 번호·이름·UID로만 registry
+  재사용을 허용한다. 명시 인자가 receipt와 다르면 거부하고, plan은 `robot_number_source: reprovision`, 새 receipt는 `supersedes`
+  (이전 release_id·image_sha256·created_at)를 남긴다.
+- 증거: `test_sd_writer_contract.py` 55 passed (2026-09-23 Windows). 실제 `receipt-2026.09.22-002.json`(18번 `rosy-pinky-e4us`)이
+  필요한 필드를 모두 가진다.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · fix(native,sd): review of the boot indicator, black box and operator access (D-174, D-175)
+
+- 변경: code-reviewer 17건(HIGH 2, MEDIUM 9 중 적용 가능 전부, LOW 다수) 반영.
+  H1 root 표시 도구가 CORE 소유 `/run/rosy`에 예측 가능한 임시 이름으로 쓰던 것을 root 소유 `/run/rosy-boot`
+  (`RuntimeDirectory=rosy-boot`, preserve)과 `mkstemp`+`fchmod`로 바꿨다. H2 계정 생성 실패·기존 계정 불일치 시
+  운영자 접근만 건너뛰고 개인화는 계속한다. M1 `-ReprovisionReceipt`는 plan 신원이 receipt와 같고 registry에
+  이미 있을 때만 통과한다. M2 receipt 증거는 타입 검사(`[int]`/`[bool]`)한다. M3·M4 redaction 정규식을 경계·상한이
+  있는 형태로 바꾸고 Python repr, 따옴표 값, URL userinfo, nmcli 인자, Cookie, 숫자 값을 지운다. M6 CORE는
+  `RestartMode=direct`, 표시 unit은 `StartLimitIntervalSec=0`, 블랙박스는 같은 부팅에서 새 실패·CORE_READY 복구가
+  아니면 5분에 한 번만 다시 쓴다. M7 내용이 같으면 avahi·issue를 다시 쓰지 않는다. M8 D-174에 NOPASSWD sudo
+  범위와 실제 로그 위치를 적었다. M9 ROS 로그 디렉터리는 tmpfiles.d로 7일 후 정리한다. L1 출력 하나의 어떤 예외도
+  다른 출력을 멈추지 않는다. L2 표시 unit은 runtime target 뒤에 줄 서지 않는다. L3 보고서 번호는 6자리·숫자 정렬.
+  L4 잘못된 operator 섹션은 `ValueError`. L5 기존 계정의 홈·셸 확인. L7 avahi 포트는 `ROSY_API_PORT`. L8 FAT32
+  rename 뒤 디렉터리 fsync.
+- 증거: 표시·블랙박스·redaction·systemd 75 passed(심볼릭 링크 공격 시험은 Windows 권한 문제로 skip, Linux CI에서 실행),
+  first-boot·personalization 50 passed, SD writer reprovision 12 passed (2026-09-23 Windows). 실기(ACT LED, agetty,
+  avahi, systemd 255 `RestartMode`) 확인은 release 003 부팅 때.
+- gate 변화: 없음
+- 결정: D-174, D-175
+- 교훈: root가 도는 관측 도구는 관측 대상(CORE)이 쓰는 디렉터리를 절대 쓰지 않는다. 관측이 공격 경로가 된다.
+

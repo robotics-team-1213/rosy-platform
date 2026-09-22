@@ -178,3 +178,69 @@ def test_provisioning_gate_requires_first_boot_to_finish():
 
     assert "Requires=rosy-first-boot.service" in gate
     assert "After=rosy-first-boot.service" in gate
+
+
+def test_hostname_is_applied_live_before_the_network_comes_up(tmp_path):
+    # D-174 F2: only /etc/hostname was written, so avahi kept announcing ubuntu.local
+    # and DHCP sent the old name until a reboot.
+    module = _module()
+    root, bundle = _case(tmp_path)
+    order: list[str] = []
+    provisioner = module.FirstBootProvisioner(
+        root=root,
+        network_activate=lambda profile: order.append(f"network:{profile}") or True,
+        hostname_apply=lambda name: order.append(f"hostname:{name}"),
+    )
+
+    result = provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+
+    assert result["state"] == "PROVISIONED"
+    assert order == ["hostname:rosy-pinky-k7m4", "network:rosy-site-sta"]
+
+
+def test_live_hostname_failure_does_not_block_personalization(tmp_path, capsys):
+    module = _module()
+    root, bundle = _case(tmp_path)
+
+    def broken(_name):
+        raise OSError("hostnamectl unavailable")
+
+    provisioner = module.FirstBootProvisioner(
+        root=root, network_activate=lambda _profile: True, hostname_apply=broken,
+    )
+
+    result = provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+
+    assert result["state"] == "PROVISIONED"
+    assert (root / "etc/hostname").read_text(encoding="utf-8") == "rosy-pinky-k7m4\n"
+    assert "live hostname" in capsys.readouterr().err
+
+
+def test_default_live_hostname_never_touches_the_host_when_root_is_not_slash(tmp_path, monkeypatch):
+    module = _module()
+    root, bundle = _case(tmp_path)
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("must not run host commands for a non-/ root")
+
+    monkeypatch.setattr(module.subprocess, "run", refuse)
+    provisioner = module.FirstBootProvisioner(root=root, network_activate=lambda _profile: True)
+
+    result = provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+
+    assert result["state"] == "PROVISIONED"
+
+
+def test_default_live_hostname_uses_hostnamectl_then_restarts_avahi(monkeypatch):
+    module = _module()
+    calls: list[list[str]] = []
+
+    class Done:
+        returncode = 0
+
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **_kw: calls.append(command) or Done())
+
+    module._default_hostname_apply("rosy-pinky-k7m4")
+
+    assert calls[0] == ["hostnamectl", "set-hostname", "rosy-pinky-k7m4"]
+    assert ["systemctl", "try-restart", "avahi-daemon.service"] in calls
