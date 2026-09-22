@@ -199,3 +199,10 @@
 - gate 변화: 없음(control ROS-SIM은 전체 그래프 기준이라 HOLD 유지). web_node 분리의 중계 경로는 ROS에서 확인됐다.
 - 결정: 없음
 - 교훈: WSL 재시작 직후에는 `ros2 topic echo --once`가 발견 지연으로 빈 결과를 낸다. 발행자 수가 잡힐 때까지 기다린 뒤 요청해야 중계를 증명할 수 있다.
+
+## 2026-09-22 · uncommitted · control(watch): graph guard matches the OS node names and cmd_vel ownership
+- 변경: `control/watch.py` 테이블 현행화. REQUIRED 노드명 pinky_* -> bringup/sensor_adc/imu_bno055, FOREIGN 에서 pinky_* 4건 제거(브리지 트윈 parameter_bridge/image_bridge 유지), ALLOWED 의 /cmd_vel_raw 에 control_node 추가. EXCLUSIVE 값을 단일 문자열에서 허용 소유자 집합으로 바꾸고 /cmd_vel 소유자를 {core, safety_node} 로 확정 — inspect() 는 허용 집합에서 정확히 한 종류만 발행해야 하며 두 소유자가 동시에 발행하면 co_owner 인터럽트(D-38 병행 금지의 런타임 감시).
+- 증거: `python -m pytest src/apps/control/test/test_watch.py -q` 22 passed(신규 8건 계약/행위 시험 포함, test-first 적색 확인 후 초록). `python -m pytest src/apps/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거 평가: Rosy 폴더 communication-protocol-report.md §3.2.1 및 docs/plans/2026-09-22-communication-protocol-remediation-plan.md T1.
+- gate 변화: 없음. watch.py 순수 모듈 LOCAL GO 유지.
+- 결정: 없음 — D-2/D-38/D-149 기존 결정을 감시 장치에 반영한 것.
+- 교훈: 감시장치 테이블이 정책을 배반하면 오탐이 상수가 된다. 리네임(D-16) 시기에 감시 테이블이 함께 갱신되지 않아 6개월간 watch_node 가 현행 그래프에서 항상 인터럽트를 보고했다.

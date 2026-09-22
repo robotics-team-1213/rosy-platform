@@ -9,10 +9,10 @@ from dataclasses import dataclass, field
 
 REQUIRED = (
     'sllidar_node',
-    'pinky_bringup',
-    'pinky_sensor_adc',
+    'bringup',
+    'sensor_adc',
     'led_service_server',
-    'pinky_imu_bno055',
+    'imu_bno055',
     'camera_detect_node',
     'safety_node',
     'wander_node',
@@ -20,23 +20,25 @@ REQUIRED = (
 
 OPTIONAL = ('lcd_node', 'web_node')
 
-# topic -> the one local node that may publish it
+# topic -> local nodes that may own it. Exactly one distinct owner must be
+# publishing at a time (D-2/D-38: CORE owns the final cmd_vel in the OS
+# runtime; the legacy safety gate owns it only in control-standalone mode,
+# D-149 — the two publishing together is an interrupt, not a mode choice).
 EXCLUSIVE = {
-    '/cmd_vel': 'safety_node',
-    '/cmd_vel_raw': 'wander_node',
-    '/scan': 'sllidar_node',
+    '/cmd_vel': frozenset({'core', 'safety_node'}),
+    '/cmd_vel_raw': frozenset({'wander_node'}),
+    '/scan': frozenset({'sllidar_node'}),
 }
 
-# Local extras that are not a fight (safety zeros /cmd_vel_raw on e-stop).
+# Local extras that are not a fight (safety zeros /cmd_vel_raw on e-stop,
+# the odom-P controller and teleop surfaces also write candidates).
 ALLOWED = {
-    '/cmd_vel_raw': frozenset({'safety_node', 'web_node', 'startup_calibration_node', 'calib_node'}),
+    '/cmd_vel_raw': frozenset({'safety_node', 'web_node',
+                               'startup_calibration_node', 'calib_node',
+                               'control_node'}),
 }
 
 FOREIGN = frozenset({
-    'pinky_control',
-    'pinky_move',
-    'pinky_map',
-    'pinky_explore',
     'parameter_bridge',
     'image_bridge',
 })
@@ -102,24 +104,30 @@ def inspect(node_names, pubs_by_topic, *, namespace=None) -> Report:
         n = counts.get(name, 0)
         if n > 1:
             issues.append(Issue('duplicate', '', name, f'duplicate {name} x{n}'))
-    for topic, owner in EXCLUSIVE.items():
+    for topic, allowed in EXCLUSIVE.items():
         endpoints = pubs_by_topic.get(topic) or []
         outside = [p for p in endpoints if not local(p)]
         if outside:
             who = ','.join(sorted(set(outside)))
             issues.append(Issue('foreign_namespace', topic, who, f'{topic} outside namespace: {who}'))
         pubs = [_bare(p) for p in endpoints if local(p)]
-        owners = [p for p in pubs if p == owner]
+        owners = [p for p in pubs if p in allowed]
         foreign = [p for p in pubs if p in FOREIGN]
         allow = ALLOWED.get(topic, frozenset())
         extra = [
             p for p in pubs
-            if p not in FOREIGN and p != owner and p not in IGNORE_NODES and p not in allow
+            if p not in FOREIGN and p not in allowed and p not in IGNORE_NODES and p not in allow
         ]
         if not owners:
-            issues.append(Issue('missing_pub', topic, owner, f'{topic} has no {owner}'))
-        if len(owners) > 1:
-            issues.append(Issue('duplicate', topic, owner, f'{topic} {owner} x{len(owners)}'))
+            label = '/'.join(sorted(allowed))
+            issues.append(Issue('missing_pub', topic, label, f'{topic} has no {label}'))
+        distinct = sorted(set(owners))
+        if len(distinct) > 1:
+            who = ','.join(distinct)
+            issues.append(Issue('co_owner', topic, who, f'{topic} owners conflict: {who}'))
+        for name in distinct:
+            if owners.count(name) > 1:
+                issues.append(Issue('duplicate', topic, name, f'{topic} {name} x{owners.count(name)}'))
         if foreign:
             who = ','.join(sorted(set(foreign)))
             issues.append(Issue('foreign', topic, who, f'{topic} interrupted by {who}'))
