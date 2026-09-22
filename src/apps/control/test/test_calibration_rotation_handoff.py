@@ -1,18 +1,13 @@
-import ast
-from pathlib import Path
 from types import SimpleNamespace
 import unittest
 
 from control.control.calibration_rotation_handoff import rotation_handoff_ready
+from test.mixin_method import mixin_method
 
 
 def method(name):
-    path = Path(__file__).parents[1] / 'control/calibration_rotation.py'
-    cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
-    function = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    namespace = {'time': SimpleNamespace(monotonic=lambda: 10.), 'rotation_handoff_ready': rotation_handoff_ready}
-    exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), 'exec'), namespace)
-    return namespace[name]
+    return mixin_method('control.calibration_rotation', name, time=SimpleNamespace(monotonic=lambda: 10.),
+                        rotation_handoff_ready=rotation_handoff_ready)
 
 
 class RotationHandoffTests(unittest.TestCase):
