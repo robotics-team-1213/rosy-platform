@@ -266,3 +266,10 @@
 - 증거: `/core` 기동, `/cmd_vel` publisher 1(단일 발행자), API 200·대시보드 200·/robot/state 401, **유효 context payload와 malformed JSON 모두 NameError 없이 수신**(구독 확인 Subscription count 1, `import json` 수정 검증), SIGTERM 후 `core shutting down`. evidence 13파일.
 - gate 변화: ROS-SIM HOLD→GO. ARTIFACT/DEVICE는 HOLD 유지.
 - 결정: malformed payload 프로브를 표준 절차에 포함한다 — except 절 평가 경로를 ROS-SIM에서 직접 검증하는 유일한 방법이다.
+
+## 2026-09-22 · uncommitted · fix(core_events): 감사 로그 쓰기 비용·정전 손실·정리 실패 집계 (archive 브랜치 이식)
+
+- 변경: `core_events/events/audit.py` `FileAuditLog` — 이벤트마다 파일 전체를 읽고 재작성하던 것을 덧붙이기 전용으로 바꾸고, 정리는 쓰기 경로에서 최대 한 시간에 한 번 락 밖에서 파싱해 원본 바이트를 그대로 남긴다(스냅샷 이후 덧붙은 꼬리는 `st_dev`/`st_ino` 신원을 확인한 뒤 이어 붙임, 임시 파일 + `os.replace`). `history()` 는 더 이상 파일을 재작성하지 않고 메모리에서 보존 기간을 거른다. 정전으로 잘린 마지막 줄 뒤 첫 이벤트를 삼키지 않도록 개행 종결 여부를 프로세스당 한 번 확인(쓰기 실패 시 캐시 무효화), 잘린 UTF-8 꼬리는 `errors="replace"` 로 읽어 `/logs/audit` 500 을 막는다. 읽기와 정리가 같은 규칙(`_raw_lines`, 바이트 `strip`)으로 줄을 나눈다. Windows CRLF 변환을 막는 `newline=""`. 새 `health()` — 연속/누적 쓰기 실패, 정리 실패, 정리 건너뜀과 채널별 마지막 사유. 원본: `archive/2026-09-22/fix/audit-log-write-cost` (470ce7b..f04e430, 2026-09-07), 재구조화(D-125/D-126) 이후 경로로 재구현.
+- 증거: 이식한 `test_audit.py` 47 시험 중 30 건이 수정 전 main 코드에서 실패, 수정 후 47 passed (2026-09-22 Windows).
+- gate 변화: 없음(LOCAL). 쓰기 경로는 50 Hz cmd_vel 타이머 위에서 불리므로 ROS-SIM/DEVICE 증거는 아니다.
+- 결정: fsync 하지 않는다(매 이벤트 SD 카드 fsync 비용이 원래 문제를 되살린다). 다중 프로세스 쓰기는 D-1 전제로 막지 않는다 — 필요해지면 ADR.
