@@ -9,6 +9,14 @@ from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, H
 
 logger = logging.getLogger("fleet_agent")
 
+#: API Ref §7.6 — exponential reconnect backoff, hard cap 30 s (PRT-006).
+MAX_BACKOFF_S = 30.0
+
+
+def next_backoff(current: float) -> float:
+    return min(current * 2.0, MAX_BACKOFF_S)
+
+
 class FleetAgent:
     def __init__(self, state_manager, event_bus, config: dict, identity) -> None:
         self.state = state_manager
@@ -116,7 +124,7 @@ class FleetAgent:
                 self._ws = None
                 if self.enabled:
                     await asyncio.sleep(backoff)
-                    backoff = min(backoff * 2, 60.0)
+                    backoff = next_backoff(backoff)
         finally:
             self.events.unsubscribe(on_event)
 

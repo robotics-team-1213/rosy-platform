@@ -29,6 +29,14 @@ def test_fleet_agent_does_not_connect_or_enable():
     assert agent.connected is False
 
 
+def test_reconnect_backoff_caps_at_contract_30s():
+    """API Ref §7.6: 1s → 2s → 4s → ... 최대 30s (PRT-006 정합)."""
+    from core_features.fleet_agent.agent import next_backoff
+    assert next_backoff(1.0) == 2.0
+    assert next_backoff(16.0) == 30.0
+    assert next_backoff(30.0) == 30.0
+
+
 def test_core_services_build_wires_disabled_fleet_agent(tmp_path):
     config_dir = Path(__file__).parent.parent / "config"
     config = yaml.safe_load(
