@@ -273,3 +273,10 @@
 - 증거: 이식한 `test_audit.py` 47 시험 중 30 건이 수정 전 main 코드에서 실패, 수정 후 47 passed (2026-09-22 Windows).
 - gate 변화: 없음(LOCAL). 쓰기 경로는 50 Hz cmd_vel 타이머 위에서 불리므로 ROS-SIM/DEVICE 증거는 아니다.
 - 결정: fsync 하지 않는다(매 이벤트 SD 카드 fsync 비용이 원래 문제를 되살린다). 다중 프로세스 쓰기는 D-1 전제로 막지 않는다 — 필요해지면 ADR.
+
+## 2026-09-22 · uncommitted · feat(core_api_web): 감사 로그 기록 상태를 `logs/audit` 와 `/metrics` 로 노출
+
+- 변경: `core_api_web/api/v1/observability.py` — `GET /api/v1/logs/audit` 응답에 `log`(= `FileAuditLog.health()`)를 더하고, `/metrics` 에 `rosy_audit_write_failures_consecutive`(gauge)·`rosy_audit_write_failures_total`·`rosy_audit_prune_failures_total`·`rosy_audit_prune_skipped_total`(counter)을 더한다. EventBus 가 구독자 예외를 삼키므로 감사 기록이 멈춰도 어디에도 남지 않던 상태를 닫는다. API ref v1.13. `test_diagnostics_api.py` 에 계약 문서와 metric 이름을 묶는 시험 추가. 원본: `archive/2026-09-22/fix/audit-log-write-cost` 848a934.
+- 증거: 새 시험은 수정 전 observability 에서 실패, 수정 후 `test_diagnostics_api.py` 9 passed (2026-09-22 Windows).
+- gate 변화: 없음(LOCAL).
+- 결정: 게이지 이름을 `_consecutive` 로 둔다 — `rosy_audit_write_failures` 는 `_total` 카운터와 같은 OpenMetrics family 가 되어 충돌한다. `events` 목록 모양은 그대로(additive).

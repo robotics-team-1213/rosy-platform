@@ -1419,3 +1419,10 @@
   복제되어 있어 본문 블록은 커밋본과 바이트 동일하다.
 - 교훈: 로그 스크립트는 새 항목을 파일 끝에 append해야 한다. prepend하면 이후
   모든 과거 항목이 "out of order"로 한꺼번에 빨갛게 된다(155 errors 유발).
+
+## 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
+
+- 변경: `docs/reference/ROSY API & Protocol Reference.md` v1.12→v1.13. `GET /api/v1/logs/audit` 행에 `{events, log}` 와 `log` 필드 의미, `/metrics` 행에 `rosy_audit_write_failures_consecutive` 경보 기준, 개정 이력 v1.13 추가(additive).
+- 증거: `src/core/core/test/test_diagnostics_api.py::test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_alert_on` 가 노출 metric 이름과 이 문서를 묶는다 — passed.
+- gate 변화: 없음.
+- 결정: 원본 브랜치(2026-09-07)는 v1.8 로 올렸으나 main 은 이미 v1.12 라 v1.13 으로 이식했다.

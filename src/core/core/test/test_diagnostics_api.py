@@ -124,3 +124,28 @@ def test_the_endpoint_and_metrics_agree_component_by_component(client):
     assert set(scraped) == set(listed)
     for component, health in listed.items():
         assert scraped[component] == numeric[health], component
+
+
+def test_the_audit_metric_names_are_the_ones_the_contract_tells_operators_to_alert_on(
+        core_client):
+    """이름을 바꾸면서 문서를 안 고치면, 그 문서대로 쓴 경보 규칙은 아무것도
+    맞히지 못하고 영원히 울리지 않는다 — 대시보드 층의 "조용히 꺼짐"이다.
+
+    계약이 시키는 이름을 여기서 고정한다 (§5, OBS-101).
+    """
+    from pathlib import Path
+
+    tc, _svc = core_client()
+    body = tc.get("/metrics", headers={"Authorization": "Bearer rosy-dev-admin"}).text
+    reference = (Path(__file__).resolve().parents[4] / "docs" / "reference"
+                 / "ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
+
+    for name in ("rosy_audit_write_failures_consecutive",
+                 "rosy_audit_write_failures_total",
+                 "rosy_audit_prune_failures_total",
+                 "rosy_audit_prune_skipped_total"):
+        assert f"\n{name} " in body, f"{name} is not exposed"
+        assert name in reference, f"{name} is exposed but the contract does not name it"
+
+    # 게이지와 카운터가 같은 계열 이름을 쓰면 OpenMetrics 로 읽는 쪽에서 충돌한다.
+    assert "\nrosy_audit_write_failures " not in body

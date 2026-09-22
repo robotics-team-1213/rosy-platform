@@ -119,8 +119,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · docs(api): API ref v1.13 — 감사 로그 기록 상태(`log`)와 audit metrics
 - 2026-09-22 · uncommitted · docs(harness): move the prepended D-164 entry to file end — order gate restored (8 logs)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-22 · uncommitted · docs(adr): 미들웨어 목표를 8축 평가표로 고정 (D-167)
 - 2026-09-22 · uncommitted · docs(plans): D-166 상향 조건 ① 확인 — 로봇 계약에 공식 자율 감속 경로 없음
-- 2026-09-22 · uncommitted · docs(plans): 감사 착지 — v2 §3, AC-23 수치화·AC-24~26 승격, B0 시트 3항목
