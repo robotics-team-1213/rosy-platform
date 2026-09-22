@@ -365,3 +365,11 @@
 - gate 변화: 없음(ROS-SIM 증거).
 - 결정: SIGSEGV 는 **고쳤다고 말하지 않는다** — 수정 전 발생률 0.33%(2/600)라 0/600 은 우연일 확률이 17–25%다. 스택은 못 얻었고, 못 얻은 이유가 단서다: CycloneDDS/lttng 스레드는 SIGSEGV 를 블록하므로(`evidence/thread-sigmask.txt`) faulthandler 도 LD_PRELOAD 처리기도 돌 수 없다 — crash 는 파이썬 스레드가 아니라 네이티브 스레드 또는 인터프리터 종료 이후다. 그래서 고친 것은 "파이썬이 통제할 수 있는 부분"(콜백·노드·API 스레드가 `main()` 안에서 끝나는 것)뿐이다. 실기 재발 시 core dump + gdb 가 필요하다.
 - 교훈: 신호 처리기가 안 돌면 처리기를 의심하기 전에 그 스레드의 `SigBlk` 를 본다. 라이브러리 스레드가 신호를 블록하면 faulthandler 는 조용히 아무것도 못 한다.
+
+## 2026-09-23 · uncommitted · fix(core): 멈춘 종료 격상을 `os._exit(2)` 로 (리뷰 2차) + teardown 경고·uvicorn graceful
+
+- 변경: `core/main.py` — 두 번째 종료 신호는 `SIG_DFL` 복원 뒤 stderr 한 줄을 남기고 `os._exit(STUCK_SHUTDOWN_EXIT_CODE=2)`. 같은 신호로 자기 종료(`os.kill`)하면, 유닛이 `ros2 run` 래퍼 없이 노드를 직접 exec 하는 지금은 systemd 가 주 프로세스의 SIGINT/SIGTERM 사망을 깨끗한 종료로 쳐서 **멈춘 종료를 끊은 것이 정상 `systemctl stop` 과 구별되지 않는다**(리뷰 지적, 실측으로 확인). finally 의 삼킨 예외도 `core: suppressed during shutdown: ...` 로 남긴다. `core/node.py` — `_stop_executor` 가 logger 를 받아 (a) 상한 초과, (b) executor 에 `ThreadPoolExecutor` 가 없음(그 경우 `False` 반환), (c) `executor.shutdown()` 예외를 각각 경고로 남기고, `run()`/`shutdown()` 이 상한을 넘겼을 때도 경고한다. uvicorn `timeout_graceful_shutdown=3`(WS 엔드포인트가 await 에 park 해 API join 상한을 다 쓰는 것 방지). 상한 상수는 클래스 위로. 새 ROS 레인 canary `test/test_core_node_teardown_ros.py`(진짜 rclpy 로 `MultiThreadedExecutor._executor` 가 `ThreadPoolExecutor` 인지 고정), 호스트 drain 시험은 sleep 대신 사건 기반.
+- 증거: `docs/validation/core-shutdown-2026-09-23` B·D절 — 래퍼 없이(출하 형태) 멈춘 종료 + 두 번째 신호: `os._exit(2)` 는 SIGINT·SIGTERM 각 3회 **exit 2**, 1차 수정(`os.kill`)은 130/143(신호 사망). systemd 에서 같은 상황: `os._exit(2)` → **`Result=exit-code`, `ExecMainStatus=2`, `failed`** ×2, `os.kill` → `Result=success` ×2(정상 정지와 구별 불가). 평범한 정지는 그대로 success(steady 12 + 기동 중 5 = 17/17). steady SIGTERM 240회 재실행 `861386e`: **240×0, SIGSEGV 0, 상한 경고 0건**. ROS 레인 32 passed. 시험 3.14 2559 passed·53 skipped, 3.12(uv) core 1259 passed·14 skipped.
+- gate 변화: 없음.
+- 결정: 격상은 **종료 코드**로 보인다(신호 사망 아님). 이 파일 위쪽 2026-09-23 항목의 "이중 신호의 241/254 는 실패로 남긴다"는 `ros2 run` 래퍼 아래의 관찰이며, 래퍼를 걷어낸 출하 형태에서는 이 항목이 대체한다. 정지 의미가 유닛의 exit-code 표가 아니라 프로세스가 내는 값으로 정해진다.
+- 교훈: 래퍼를 걷어내 "신호가 그대로 보이게" 하면 정상 정지만 깨끗해지는 게 아니라 **격상도 깨끗해진다** — 신호로 의미를 나누던 곳에서는 래퍼 제거가 의미 하나를 지운다.

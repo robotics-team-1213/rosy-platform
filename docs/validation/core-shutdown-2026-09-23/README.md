@@ -61,6 +61,7 @@
 | 중간 `48929f7` (drain 순서 전) | 240 | 240 | 0 | 47 (21 publish + 42 `Destroyable`) |
 | 수정 후 `7614627` | 240 | 240 | **0** | 46 (모두 publish, `Destroyable` 0) |
 | 수정 후 `7614627` (+`LD_PRELOAD` 진단) | 360 | 360 | **0** | 63 (같음) |
+| 리뷰 2차 `861386e` (로그·uvicorn graceful 추가) | 240 | 240 | **0** | 45 (같음) |
 
 - 모든 실행: 마지막 감사 이벤트 `system.shutdown`, 종료 후 API 포트 리스너 0, 잔존 core 프로세스 0,
   `core shutting down` 1회, traceback 0.
@@ -69,26 +70,44 @@
   고쳤다고 말할 수 없다. 말할 수 있는 것은 (1) 수정 후 표본에서 재현되지 않았고, (2) crash 직전마다
   나오던 신호 — 종료 훅 뒤까지 살아 도는 executor 콜백 — 의 한 갈래(`Destroyable`)가 사라졌으며,
   (3) teardown 이 이제 인터프리터 종료가 아니라 `main()` 안에서 끝난다는 것이다.
+- 리뷰 2차(`861386e`)에서 더한 것: 상한을 넘겼을 때·풀이 없을 때·`executor.shutdown()` 이
+  던졌을 때 각각 경고를 남기고(그래서 조용한 실패가 없다), uvicorn 에
+  `timeout_graceful_shutdown=3`(WS 엔드포인트가 await 에 park 해 API join 상한을 다 쓰는 것을 막음).
+  위 240회에서 이 경고는 **0건**이었다 — 실제로는 상한에 닿지 않는다.
 - 부하: 두 팔 모두 busy loop 4개 + 레인 4개 동시. 실제 loadavg 는 수정 전 3–12, **수정 후 15–29**
   (같은 상자의 다른 세션 작업이 겹쳤다) — 수정 후가 더 가혹한 쪽이었다.
 - 남은 `Failed to publish: publisher's context is invalid` 는 teardown 으로 막을 수 없다: rclpy 의
   C 신호 처리기가 파이썬이 한 줄도 돌기 전에 비동기로 context 를 내리므로, 그 순간 진행 중이던
   콜백의 publish 는 반드시 실패한다. 종료 코드·감사 기록·포트 해제에는 닿지 않는다.
 
-## B. 세 번째 SIGINT
+## B. 세 번째 SIGINT — 그리고 격상이 실패로 보여야 한다는 것
 
 - 예전: 두 번째 SIGINT 는 `SIG_DFL` 복원 후 `KeyboardInterrupt` 를 던졌다. main 이 그것을 잡고
   finally 의 `rclpy.shutdown()` 까지 가면 rclpy 가 OS 처리기를 CPython 트램폴린으로 되돌리는데,
   파이썬 쪽 표는 `SIG_DFL` 이라 **세 번째 SIGINT 는 아무 일도 하지 않는다**.
-- 변경: 두 번째 신호는 SIGINT·SIGTERM 모두 `signal.signal(signum, SIG_DFL)` 뒤
-  `os.kill(os.getpid(), signum)` — 같은 신호로 즉시 자기 종료. 파이썬으로 돌아오지 않으므로
-  트램폴린 복원 문제 자체가 사라진다.
-- 시험: `test_core_main_shutdown.py::test_second_signal_restores_default_and_rekills_self`
-  (두 신호 모두, `KeyboardInterrupt` 가 나면 실패).
-- WSL 재확인(느린 종료 흉내 — WSL 작업 공간의 `node.shutdown()` 에만 20 s sleep, 실행 뒤 원복):
-  이중 SIGINT 3회 **exit 254**(`[ros2run]: Interrupt`), 이중 SIGTERM 3회 **exit 241**, 첫 신호→종료
-  1.14–1.31 s, `KeyboardInterrupt` 출력 0건, 마지막 감사 이벤트 `system.shutdown`
-  (`evidence/double-signal-after.txt`). 격상 종료 코드가 실패로 남는 것은 이전 결정 그대로다.
+- 1차 수정은 두 신호 모두 `os.kill(self, signum)` 으로 통일했으나, C 에서 `ros2 run` 래퍼를
+  걷어내면서 **그 격상이 보이지 않게 됐다**: 노드가 유닛의 주 프로세스가 되면 systemd 의
+  `is_clean_exit()` 가 SIGINT/SIGTERM 사망을 깨끗한 종료로 쳐서, 멈춘 종료를 운영자가 끊은
+  것이 정상 `systemctl stop` 과 구별되지 않는다(아래 표로 실측).
+- 최종: 두 번째 신호는 `SIG_DFL` 복원 → stderr 한 줄 → **`os._exit(STUCK_SHUTDOWN_EXIT_CODE=2)`**.
+  결정적인 0 아닌 종료 코드이고, core dump 도 남기지 않으며, 격상의 목적(멈춘 훅·join 건너뛰기)을
+  그대로 지킨다(atexit·스레드 join 을 타지 않는다).
+- 시험: `test_core_main_shutdown.py::test_second_signal_exits_non_zero_without_raising`
+  (두 신호 모두: `KeyboardInterrupt` 도 `os.kill` 도 쓰면 실패),
+  `test_stuck_shutdown_exit_code_is_not_a_signal_death`,
+  `test/test_native_systemd_contract.py` 가 유닛 쪽에서 같은 계약을 붙든다.
+- WSL 실측 — **래퍼 없이**(=출하 유닛과 같은 실행 형태) 기동 후 `node.shutdown()` 에 60 s sleep 을
+  넣어 종료를 막고 신호를 두 번 보냈다(`evidence/double-direct-*.txt`, 패치 잔존 0):
+
+  | 격상 방식 | SIGINT ×3 | SIGTERM ×3 | 첫 신호→종료 |
+  |---|---|---|---|
+  | `os._exit(2)` (출하) | **exit 2** ×3 | **exit 2** ×3 | 1.14–1.26 s |
+  | `os.kill(self, signum)` (1차 수정) | 130(=신호 사망) ×3 | 143(=신호 사망) ×3 | 1.05–1.15 s |
+
+  두 방식 모두 마지막 감사 이벤트는 `system.shutdown`(sleep 앞에서 기록됨), 잔존 프로세스 0.
+  systemd 에서 이 차이가 어떻게 보이는지는 D 의 "멈춘 종료" 표에 있다.
+- 참고: 이전 증거(`core-sigterm-2026-09-22`)의 이중 신호 실행은 `ros2 run` 래퍼 아래에서 241/254 로
+  관찰한 것이다. 출하 형태(래퍼 없음)에서의 값은 위 표가 대체한다.
 
 ## C. `main()` 이전 창 — `ros2 run` 래퍼 제거
 
@@ -97,14 +116,18 @@
 - `deploy/robot/native/rosy-core.service`:
   `exec ros2 run core core …` → `exec /opt/rosy/current/install/lib/core/core …`
   (`--merge-install` 페이로드 레이아웃, `setup.cfg` 의 `install_scripts=$base/lib/core`).
-- 근거:
-  - 241/254 는 `ros2 run` 이 자식의 신호 사망을 `sys.exit(-N)` 으로 바꿔 만든 숫자다. 노드가 주
-    프로세스가 되면 systemd 가 신호 사망을 직접 보고 **SIGINT/SIGTERM 사망을 깨끗한 종료로** 친다
-    (systemd 기본). 따로 성공 코드 목록을 둘 필요가 없다 — 목록을 두면 241/254 를 만드는 **다른**
-    경로(이중 신호 격상)까지 성공으로 덮는다.
-  - 래퍼가 사라지면 `systemctl stop` 이 cgroup 에 보내는 SIGINT 를 두 프로세스가 각각 처리하던
-    경합도 없어지고, ros2 CLI 자체의 기동 창(아래 표에서 exit 1/254 를 만든 구간)도 없어진다.
-  - 파이썬 프로세스 하나가 줄어든다(Pi 메모리·기동 시간).
+- 근거(요약: systemd 가 노드를 직접 감독하게 만든다):
+  - 241/254 는 `ros2 run` 이 자식의 신호 사망을 `sys.exit(-N)` 으로 바꿔 만든 숫자다. 래퍼가 없으면
+    그 재인코딩 자체가 없어진다 — `main()` 이전 창의 기본 신호 사망을 systemd 가 신호 사망으로
+    본다(주 프로세스의 SIGINT/SIGTERM 사망 = 깨끗한 종료). 성공 코드 목록으로 숫자를 덮는 것과
+    달리, 정지의 의미가 exit code 표가 아니라 실제 신호로 정해진다.
+  - ros2 CLI 자체의 기동 창이 없어진다 — 아래 표에서 `ros2 run` 쪽만 만들어낸 `ExecMainStatus=1`
+    2건과 `=254` 1건이 그 구간이다.
+  - `systemctl stop` 이 cgroup 에 보내는 SIGINT 를 래퍼와 노드가 각각 처리하던 경합이 없어지고,
+    파이썬 프로세스 하나가 줄어든다(Pi 메모리·기동 시간).
+  - **대가**: 주 프로세스의 신호 사망이 깨끗한 종료가 되므로, 멈춘 종료를 끊는 격상은 더 이상
+    신호 사망이면 안 된다. B 의 `os._exit(2)` 가 그 대가를 치른 자리다. 두 선택지(성공 코드 목록 vs
+    래퍼 제거)의 차이는 "격상을 덮느냐"가 아니라 여기에 있다.
 - 계약 시험: `test/test_native_systemd_contract.py::test_core_is_the_service_main_process_so_stop_signals_stay_clean`
   — ExecStart 에 `ros2 run` 이 없을 것, 유닛에 `SuccessExitStatus` 가 없을 것, 하드코딩한 경로가
   실제 페이로드 레이아웃(`--merge-install` + `install_scripts`)과 맞을 것.
@@ -136,13 +159,27 @@
 
 | 조건 | ExecStart | 결과 |
 |---|---|---|
-| steady start/stop 12회 | 신규(entry script) | **12/12 `Result=success`, `ExecMainStatus=0`, `NRestarts=0`**, 매회 감사 `system.boot`+`system.shutdown`, 포트 해제, 잔존 0 |
+| steady start/stop 12회 | 신규(entry script) | **12/12 `Result=success`, `ExecMainStatus=0`, `NRestarts=0`**, 매회 감사 `system.boot`+`system.shutdown`, 포트 해제, 잔존 0 (리뷰 2차 `861386e` 재실행도 steady 12 + 기동 중 5 = **17/17 success**) |
 | steady start/stop 4회 | 기존(`ros2 run`) | 4/4 success |
 | 기동 중 stop, 0.1–8 s 8점 (프로브 수정 **전**) | 신규 | **7×`Result=signal`**(전부 프로브 사망), 1×success |
 | 기동 중 stop, 0.1–8 s 12점 (프로브 수정 **후**) | 신규 | **10×success**, 0.1 s·0.2 s 2점만 실패(프로브 인터프리터가 처리기를 깔기 전) |
 | 기동 중 stop, 0.1–8 s 12점 (프로브 수정 후) | 기존(`ros2 run`) | 10×success, 1×`ExecMainStatus=254`(C 가 말하는 창), 1×`signal` |
 | 기동 중 stop, 1.3–3.0 s 12점 | 신규 | **12/12 success** |
 | 기동 중 stop, 1.3–3.0 s 12점 | 기존(`ros2 run`) | 10 success, **2×`Result=exit-code` `ExecMainStatus=1`** (ros2 CLI 기동 창) |
+
+### 멈춘 종료를 운영자가 끊었을 때 (B 의 격상이 systemd 에서 어떻게 보이나)
+
+설치된 `node.shutdown()` 에 60 s sleep(>`TimeoutStopSec=15`)을 넣어 정지를 막고,
+`systemctl stop` 이 도는 동안 `systemctl kill -s SIGINT` 로 두 번째 신호를 보냈다
+(`evidence/sd-stuck-*.txt`, 저널 `evidence/logs/`, 패치 잔존 0):
+
+| 격상 방식 | 결과 (2회씩) |
+|---|---|
+| `os._exit(2)` (출하) | **`Result=exit-code`, `ExecMainCode=1`, `ExecMainStatus=2`, `ActiveState=failed`**, 정지까지 1.1 s |
+| `os.kill(self, signum)` (1차 수정) | `Result=success`, `ExecMainStatus=0`, `ActiveState=inactive` — **정상 정지와 구별 불가** |
+
+같은 유닛에서 평범한 `systemctl stop` 은 그대로 `Result=success` 다(위 steady 12/12,
+startup 5/5). 즉 "정상 정지 = success, 멈춘 종료를 끊음 = failure" 가 실측으로 갈린다.
 
 - 남은 실패 창은 `ExecStartPost` 프로브의 **인터프리터 기동 ~0.2 s**(부하 loadavg 15–25 기준)다.
   여기서 죽으면 유닛이 `failed` 로 남지만 재시작은 없고(`systemctl stop` 경로), core 는 아직 뜨지도
@@ -153,9 +190,13 @@
 
 ## 시험
 
-- 호스트 3.14: `python -m pytest src/core/core/test/ test/ -q -p no:cacheprovider` → 2556 passed, 52 skipped
-- 호스트 3.12(uv, `requirements-core.txt`): `python -m pytest src/core/core/test/ -q -p no:cacheprovider` → 1256 passed, 13 skipped
-- 새 시험: `src/core/core/test/test_core_node_teardown.py`(가짜 rclpy 로 drain 순서·상한·API join),
+- 호스트 3.14: `python -m pytest src/core/core/test/ test/ -q -p no:cacheprovider` → 2559 passed, 53 skipped (리뷰 2차)
+- 호스트 3.12(uv, `requirements-core.txt`): `python -m pytest src/core/core/test/ -q -p no:cacheprovider` → 1259 passed, 14 skipped (리뷰 2차)
+- ROS 레인(WSL, 진짜 rclpy): `test_core_node_teardown_ros.py` + teardown/main 시험 32 passed
+  (`evidence/ros-canary-test.txt`). 이 canary 는 `MultiThreadedExecutor._executor` 가
+  `ThreadPoolExecutor` 라는 것을 붙든다 — rclpy 가 바꾸면 호스트 가짜 시험은 계속 통과하므로
+  여기서 깨져야 한다.
+- 새 시험: `src/core/core/test/test_core_node_teardown.py`(가짜 rclpy 로 drain 순서·상한·경고·API join),
   `test_core_main_shutdown.py` 의 두 번째 신호·`node.destroy` 순서,
   `test/test_native_systemd_contract.py` 의 주 프로세스 계약·프로브 신호 처리(POSIX 서브프로세스
   시험은 Windows 에서 skip, WSL 에서 실행 — `evidence/probe-posix-test.txt`).
@@ -166,5 +207,8 @@
   ARM64 이미지, 실제 `rosy-core.service`(User=rosy-core, `/etc/rosy/runtime.env`, ProtectSystem)
   확인은 DEVICE 게이트에 그대로 남는다.** 특히 entry script 경로
   `/opt/rosy/current/install/lib/core/core` 는 실기 페이로드에서 한 번 눈으로 확인할 것.
+- DEVICE 로 미룬 것(여기서 확인할 수 없음): 실제 ARM64 페이로드에서
+  `test -x /opt/rosy/current/install/lib/core/core`, 그리고 "`ExecStartPost` 가 도는 동안 core 가
+  죽는" systemd 사례(여기서는 core 를 고의로 죽이는 유닛 사례를 만들지 않았다).
 - teardown SIGSEGV 는 "수정 후 표본에서 안 났다"까지다. 실기에서 다시 보이면 이번에는
   SIGSEGV 를 블록하지 않는 스레드에서 잡아야 하므로 core dump + gdb 가 필요하다.
