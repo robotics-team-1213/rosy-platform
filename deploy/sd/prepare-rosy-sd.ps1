@@ -264,10 +264,24 @@ if (-not $DiskInventoryJson) {
     }
 }
 
+$readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
+if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
+$rawImageOutput = & $PythonExe $readbackVerifier --image $ImagePath --image-only
+if ($LASTEXITCODE -ne 0) { Fail "raw image SHA-256 calculation failed" }
+try {
+    $rawImage = $rawImageOutput | ConvertFrom-Json
+}
+catch {
+    Fail "raw image SHA-256 evidence is invalid"
+}
+if ([string]$rawImage.image_raw_sha256 -notmatch '^[0-9a-f]{64}$') {
+    Fail "raw image SHA-256 evidence is invalid"
+}
+
 $writerArguments = @(
     "--cli",
     "--sha256",
-    $ImageSha256,
+    [string]$rawImage.image_raw_sha256,
     ('"{0}"' -f $ImagePath),
     ('"{0}"' -f $physicalDrive)
 )
@@ -275,8 +289,6 @@ $writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArgumen
 $writerExitCode = $writerProcess.ExitCode
 if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
 
-$readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
-if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
 $readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
 $mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
 if ($LASTEXITCODE -ne 0) { Fail "full media readback verification failed" }

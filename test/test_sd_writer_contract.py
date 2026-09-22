@@ -77,9 +77,10 @@ def writer_case(tmp_path: Path):
         encoding="utf-8",
     )
     marker = tmp_path / "writer-called.txt"
+    writer_args = tmp_path / "writer-args.txt"
     fake_writer = tmp_path / "fake-writer.cmd"
     fake_writer.write_text(
-        f'@echo off\n> "{marker}" echo called\nexit /b 0\n',
+        f'@echo off\n> "{marker}" echo called\n> "{writer_args}" echo %*\nexit /b 0\n',
         encoding="utf-8",
     )
     local_app_data = tmp_path / "local-app-data"
@@ -100,6 +101,7 @@ def writer_case(tmp_path: Path):
         "inventory": inventory,
         "registry": registry,
         "marker": marker,
+        "writer_args": writer_args,
         "writer": fake_writer,
         "receipt": tmp_path / "receipt.json",
         "readback": raw_image,
@@ -290,6 +292,11 @@ def test_successful_write_stages_one_time_bundle_and_updates_registry(writer_cas
 
     assert completed.returncode == 0, completed.stderr
     assert writer_case["marker"].exists()
+    writer_arguments = writer_case["writer_args"].read_text(encoding="utf-8")
+    raw_sha256 = hashlib.sha256(writer_case["readback"].read_bytes()).hexdigest()
+    compressed_sha256 = hashlib.sha256(writer_case["image"].read_bytes()).hexdigest()
+    assert f"--sha256 {raw_sha256}" in writer_arguments
+    assert f"--sha256 {compressed_sha256}" not in writer_arguments
     bundle_path = boot / "rosy-provision" / "provision.json"
     bundle = json.loads(bundle_path.read_text(encoding="utf-8-sig"))
     assert bundle["device_identity"]["device_name"] == "rosy-pinky-k7m4"
