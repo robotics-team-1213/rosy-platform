@@ -128,5 +128,7 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
 - Task 2 (F5): done in source. The customizer executes both recovery entrypoints and first-boot `--help`
   in the ARM64 chroot; the mounted-image verifier requires `signing.py` beside each runtime. Proven only
   by contract tests until the next ARM64 image run.
-- Tasks 3-9: pending.
+- Task 3 (F2): done in source. First boot applies the hostname live before the network and
+  restarts avahi; host commands never run for a non-`/` root.
+- Tasks 4-9: pending.
 

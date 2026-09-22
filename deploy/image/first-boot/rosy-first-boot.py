@@ -60,15 +60,31 @@ def _default_network_activate(profile: str) -> bool:
     return True
 
 
+def _default_hostname_apply(hostname: str) -> None:
+    """Rename the running system and let avahi announce the new name (D-174 F2)."""
+    quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+             "stderr": subprocess.DEVNULL, "check": False, "timeout": 20}
+    if subprocess.run(["hostnamectl", "set-hostname", hostname], **quiet).returncode != 0:
+        if subprocess.run(["hostname", hostname], **quiet).returncode != 0:
+            raise OSError("could not set the live hostname")
+    subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], **quiet)
+
+
 class FirstBootProvisioner:
     def __init__(
         self,
         *,
         root: Path = Path("/"),
         network_activate: Callable[[str], bool] = _default_network_activate,
+        hostname_apply: Callable[[str], None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.network_activate = network_activate
+        # Only the real root may rename the running host; a fixture or chroot
+        # root must never rename the machine running the tool.
+        if hostname_apply is None and self.root == Path("/").resolve():
+            hostname_apply = _default_hostname_apply
+        self.hostname_apply = hostname_apply
         self.state_dir = self.root / "var/lib/rosy/provisioning"
         self.complete = self.state_dir / "complete.json"
         self.state = self.state_dir / "state.json"
@@ -190,6 +206,12 @@ class FirstBootProvisioner:
         else:
             _json_atomic(identity_path, identity, 0o644)
         self._hostname(identity["hostname"])
+        if self.hostname_apply is not None:
+            try:
+                self.hostname_apply(identity["hostname"])
+            except (OSError, subprocess.SubprocessError) as exc:
+                # /etc/hostname is already correct; the next boot picks it up.
+                print(f"rosy-first-boot: live hostname not applied: {exc}", file=sys.stderr)
         _write_atomic(
             self._inside("etc/rosy/runtime.env"), self._runtime_env(payload), 0o640
         )

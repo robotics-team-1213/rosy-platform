@@ -360,3 +360,14 @@
 - 결정: D-174
 - 교훈: `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md`
 
+## 2026-09-23 · uncommitted · fix(first-boot): apply the device hostname to the running system (D-174 F2)
+
+- 변경: 첫 부팅이 `/etc/hostname`을 쓴 직후, 네트워크 활성화 전에 `hostnamectl set-hostname`(실패 시 `hostname`)으로
+  실행 중 이름을 바꾸고 `avahi-daemon`을 try-restart한다. 실패해도 개인화는 계속한다(파일은 이미 맞다).
+  `--root`가 `/`가 아니면 호스트 명령을 실행하지 않는다.
+- 증거: `python -m pytest test/test_first_boot_provisioning.py -q` 11 passed(신규 4: 순서, 실패 허용, 비-/ root 보호,
+  기본 명령) (2026-09-23 Windows). 실기 증거는 release 003 부팅 전까지 없음.
+- gate 변화: 없음
+- 결정: D-174
+- 교훈: 없음
+
