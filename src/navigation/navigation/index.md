@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · navigation(launch): hardware 그래프의 IR 출처 명시
 - 2026-09-21 · uncommitted · feat(nav): add a real-hardware SLAM backend (D-144)
 - 2026-09-20 · uncommitted · fix(nav2): keep non-composed nodes in one robot namespace
 - 2026-09-18 · uncommitted · test(nav2): 교행 한계는 팽창으로 움직이지 않는다
 - 2026-09-18 · uncommitted · fix(nav2): 코스트맵이 라이다를 한 번도 듣지 않고 있었다
-- 2026-09-18 · uncommitted · fix(nav): 기동 경쟁과 좁은 방 여유를 실측으로 잡는다

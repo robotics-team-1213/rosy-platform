@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · sensor_adc(robustness): 버스 결함은 발행 생략 + 건강 토픽 (T4)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-16 · uncommitted · docs(harness): regrade sensor_adc gates after review
 - 2026-09-15 · uncommitted · docs(harness): start the sensor_adc harness record

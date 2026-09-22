@@ -1443,3 +1443,28 @@
 - gate 변화: 없음 (문서만).
 - 결정: 교훈의 SHA·경로는 main 이 아니라 아카이브 태그 기준으로 해석한다고
   본문 머리에 적었다. 브랜치 `port/dock-detector-measurement-rig`, main 미병합.
+
+## 2026-09-22 · uncommitted · docs(plans): 통신·프로토콜 정합 개선 실행 계획 신규
+
+- 변경: `docs/plans/2026-09-22-communication-protocol-remediation-plan.md` 신규.
+  입력은 통신·프로토콜 평가 보고서(2026-09-22, Rosy 폴더 — git 루트 밖 소재라
+  계획 본문에 요점을 자기완결로 옮겼다). 4개 페이즈 T1~T15(watch 감시 계약
+  현행화, ir 이중 발행 상호배제, /dev/rosy-motor udev, sensor_adc fail-closed,
+  FleetAgent backoff·신원, ADR-1000 no-op 수정, hub CLI·/registry, 버전 표기
+  3원 정렬, API Ref 갱신, QoS 잠복 리스크, chrony 계약 등)와 결정 게이트 2건
+  (제품 장치 표면 G1, PRT-004 G2)로 구성. 전 태스크 Windows host pytest 검증
+  가능, C++ 빌드·실측만 ARM64 게이트로 표시.
+- 증거: 계획 문서 자체 — 미실행(Draft). 실행 시 각 태스크의 test-first 단계와
+  `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test
+  test/ -q` 로 검증한다.
+- gate 변화: 없음 (계획만).
+- 결정: 없음. G1(장치 표면)은 ADR 후보(D-169) 판정을, G2(PRT-004)는 중앙 Fleet
+  착수 조건을 각각 명시했다.
+- 교훈: 없음.
+
+## 2026-09-22 · uncommitted · docs(plans): 통신·프로토콜 정합 계획 Phase 1(T1~T4) 이행 기록
+- 변경: `docs/plans/2026-09-22-communication-protocol-remediation-plan.md` Status 를 Phase 1 완료로 갱신하고 T1~T4 를 커밋 해시(998b9f9·545cb0b·2d47b5a·56355f9)와 실제 이행 요약(계획 대비 조정 3건: ir 시험 위치 repo test/, install-pi.sh 대신 이미지 오버레이+소급 스크립트 2중 경로, ir_source 인자 미추가 YAGNI)으로 대체. 원본 단계 문단은 요약으로 축약.
+- 증거: 각 태스크 시험 기록은 모듈 logs.md(control·navigation·deploy·sensor_adc)와 커밋 참조. 전체 호스트 회귀는 실행 중이며 완료 결과는 별도 기록.
+- gate 변화: 없음 (docs SOURCE/LOCAL GO 유지).
+- 결정: 없음.
+- 교훈: 없음.
