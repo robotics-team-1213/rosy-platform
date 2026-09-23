@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pytest
 
@@ -295,3 +296,268 @@ def test_boot_settings_apply_before_the_network_and_never_block_the_boot():
         assert directive in unit, directive
     assert "User=" not in unit
     assert "After=NetworkManager.service rosy-config.service" in _read("rosy-network.service")
+
+
+# --- D-183: every unit's sandbox covers what its program writes ------------
+#
+# Release 2026.09.23-005 booted with three sandbox defects no host test could
+# see: the recovery gate could not write its journal (ProtectSystem=strict with
+# no writable path), CORE's HOME was under ProtectHome=true, and CORE's
+# StateDirectory=rosy chowned root-only state to rosy-core. These tests read the
+# unit files as systemd would and compare them with what the programs write.
+
+UNITS = sorted(path.name for path in NATIVE.glob("*.service"))
+STATE_RULES = NATIVE / "tmpfiles-rosy-state.conf"
+
+# Directories under /var/lib/rosy that only root may write (identity, the
+# release journal, applied boot settings). No non-root unit may reach them.
+ROOT_ONLY_STATE = (
+    "/var/lib/rosy/provisioning",
+    "/var/lib/rosy/releases",
+    "/var/lib/rosy/config",
+)
+
+# What each ProtectSystem=strict unit's program writes, derived from the code.
+# "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
+DECLARED_WRITES = {
+    "rosy-release-recover.service": {
+        # native_release.py NativeReleaseManager: self.lock is opened on every
+        # recover, even without a journal; self.journal is rewritten/unlinked.
+        "/var/lib/rosy/releases/native-release.lock",
+        "/var/lib/rosy/releases/native-activation.json",
+        # SymlinkStore.set: temporary ".<name>.new" link, then os.replace.
+        "/opt/rosy/current", "/opt/rosy/previous", "/opt/rosy/.current.new",
+    },
+    "rosy-sd-provision.service": set(),
+    "rosy-core.service": {
+        # core_common/config.py LOCAL_CONFIG_PATH / overlay_path (API writes).
+        "$HOME/.rosy/rosy.yaml",
+        # core/node.py waypoints_path; services.py puts the rest beside it.
+        "$HOME/.rosy/waypoints.json", "$HOME/.rosy/audit.jsonl",
+        "$HOME/.rosy/docks.json", "$HOME/.rosy/battery-shutdown-request.json",
+        # ROS logs (D-174 F6) and the host agent socket directory.
+        "/var/log/rosy-core/core.log", "/run/rosy/host-agent.sock",
+    },
+    "rosy-io.service": {"/var/log/rosy-io/launch.log"},
+    "rosy-navigation.service": {
+        "/var/log/rosy-navigation/launch.log",
+        # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
+        "/var/lib/rosy/maps/site.pgm",
+    },
+}
+
+# Absolute paths a unit's program names but only reads.
+DECLARED_READS = {
+    "rosy-release-recover.service": {"/opt/rosy/releases"},  # verify() of old_current
+    "rosy-core.service": {
+        "/var/lib/rosy",       # calibration data_root, runtime probe default
+        "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
+    },
+    "rosy-navigation.service": {
+        "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
+    },
+}
+
+# Program sources scanned for write roots, per unit.
+PROGRAM_SOURCES = {
+    "rosy-release-recover.service": ["deploy/robot/native/native_release.py",
+                                     "deploy/robot/native/recover-release.sh"],
+    "rosy-sd-provision.service": [],
+    "rosy-core.service": ["src/core"],
+    "rosy-io.service": ["src/hardware/bringup"],
+    "rosy-navigation.service": ["src/navigation", "src/hardware/bringup"],
+}
+
+PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
+SEGMENT_CHAIN = re.compile(r"""["'](var|opt|run|etc)["'](?:\s*/\s*["'][^"'/]+["'])+""")
+HOME_USE = re.compile(r"Path\.home\(\)|expanduser\(|os\.path\.expanduser|[\"']~/")
+
+
+def _directives(name: str) -> dict[str, list[str]]:
+    """Directive values in file order; an empty assignment resets the list."""
+    values: dict[str, list[str]] = {}
+    for raw in _read(name).splitlines():
+        line = raw.strip()
+        if not line or line.startswith(("#", ";", "[")) or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if value == "":
+            values[key] = []
+        else:
+            values.setdefault(key, []).append(value)
+    return values
+
+
+def _words(directives: dict[str, list[str]], key: str) -> list[str]:
+    return [word for value in directives.get(key, []) for word in value.split()]
+
+
+def _environment(directives: dict[str, list[str]]) -> dict[str, str]:
+    return dict(word.split("=", 1) for word in _words(directives, "Environment") if "=" in word)
+
+
+def _managed(directives: dict[str, list[str]]) -> set[str]:
+    """Directories systemd itself creates, chowns to User= and makes writable."""
+    paths = {f"/var/lib/{entry}" for entry in _words(directives, "StateDirectory")}
+    paths |= {f"/var/log/{entry}" for entry in _words(directives, "LogsDirectory")}
+    paths |= {f"/run/{entry}" for entry in _words(directives, "RuntimeDirectory")}
+    paths |= {f"/var/cache/{entry}" for entry in _words(directives, "CacheDirectory")}
+    return paths
+
+
+def _writable(directives: dict[str, list[str]]) -> list[tuple[str, bool]]:
+    """(path, optional) for every path systemd makes writable for the unit."""
+    paths = [(path, False) for path in sorted(_managed(directives))]
+    for entry in _words(directives, "ReadWritePaths"):
+        optional = entry.startswith("-")
+        paths.append((entry.lstrip("-+"), optional))
+    if directives.get("PrivateTmp") == ["true"]:
+        paths += [("/tmp", False), ("/var/tmp", False)]
+    return paths
+
+
+def _under(path: str, root: str) -> bool:
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+
+def _expand(path: str, directives: dict[str, list[str]]) -> str:
+    home = _environment(directives).get("HOME", "$HOME")
+    return path.replace("$HOME", home)
+
+
+def _source_files(relative: str) -> list[Path]:
+    root = ROOT / relative
+    if root.is_file():
+        return [root]
+    return sorted(
+        path for path in root.rglob("*")
+        # Python only: shell files in a package tree are installers, not the program.
+        if path.suffix == ".py" and "test" not in path.relative_to(root).parts
+        and not {"build", "install", "log", "__pycache__"} & set(path.relative_to(root).parts)
+    )
+
+
+def _write_roots(unit: str) -> set[str]:
+    """Absolute paths and HOME use the unit's program source names."""
+    found: set[str] = set()
+    for relative in PROGRAM_SOURCES[unit]:
+        for path in _source_files(relative):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            found.update(PATH_LITERAL.findall(text))
+            for match in SEGMENT_CHAIN.finditer(text):
+                found.add("/" + "/".join(re.findall(r"""["']([^"']+)["']""", match.group(0))))
+            if HOME_USE.search(text):
+                found.add("$HOME")
+    return found
+
+
+def test_every_native_unit_is_covered_by_the_sandbox_contract():
+    # A new unit must declare what it writes before it can ship.
+    strict = [name for name in UNITS if _directives(name).get("ProtectSystem") == ["strict"]]
+    assert set(strict) == set(DECLARED_WRITES), sorted(set(strict) ^ set(DECLARED_WRITES))
+
+
+@pytest.mark.parametrize("unit", UNITS)
+def test_no_unit_takes_the_shared_rosy_state_parent(unit):
+    directives = _directives(unit)
+    assert "rosy" not in _words(directives, "StateDirectory"), unit
+    for path, _optional in _writable(directives):
+        assert path.rstrip("/") not in {"/var/lib", "/var/lib/rosy", "/opt", "/etc", "/etc/rosy"}, (unit, path)
+
+
+@pytest.mark.parametrize("unit", UNITS)
+def test_non_root_units_cannot_write_root_only_state(unit):
+    directives = _directives(unit)
+    if directives.get("User", ["root"]) == ["root"]:
+        return
+    for path, _optional in _writable(directives):
+        for protected in ROOT_ONLY_STATE:
+            assert not _under(protected, path) and not _under(path, protected), (unit, path, protected)
+
+
+@pytest.mark.parametrize("unit", sorted(DECLARED_WRITES))
+def test_strict_units_can_write_everything_their_program_writes(unit):
+    directives = _directives(unit)
+    writable = [path for path, _optional in _writable(directives)]
+    for declared in DECLARED_WRITES[unit]:
+        target = _expand(declared, directives)
+        assert "$HOME" not in target, f"{unit} writes {declared} but sets no HOME"
+        assert any(_under(target, root) for root in writable), f"{unit}: {target} is read-only"
+
+
+@pytest.mark.parametrize("unit", sorted(PROGRAM_SOURCES))
+def test_declared_paths_account_for_every_write_root_in_the_program(unit):
+    # Keeps DECLARED_WRITES honest: a new path literal or Path.home() in the
+    # program fails here until someone classifies it as a write or a read.
+    declared = DECLARED_WRITES[unit] | DECLARED_READS.get(unit, set())
+    for root in _write_roots(unit):
+        assert any(_under(item, root) or _under(root, item) for item in declared), (
+            f"{unit}: program names {root}; declare it in DECLARED_WRITES or DECLARED_READS")
+
+
+@pytest.mark.parametrize("unit", UNITS)
+def test_protect_home_service_users_get_a_writable_home(unit):
+    directives = _directives(unit)
+    if directives.get("ProtectHome") != ["true"] or directives.get("User", ["root"]) == ["root"]:
+        return
+    home = _environment(directives).get("HOME")
+    assert home, f"{unit}: ProtectHome=true makes the passwd home unreadable; set HOME"
+    assert any(_under(home, path) for path, _optional in _writable(directives)), (unit, home)
+
+
+def test_the_core_program_really_uses_its_home():
+    # The contract above only bites if CORE keeps using Path.home(); if that
+    # changes, DECLARED_WRITES must move with it.
+    assert "$HOME" in _write_roots("rosy-core.service")
+
+
+@pytest.mark.parametrize("unit", UNITS)
+def test_required_writable_paths_exist_when_the_unit_starts(unit):
+    # A ReadWritePaths entry that does not exist fails the unit with
+    # 226/NAMESPACE. It must be managed by this unit, created by tmpfiles or the
+    # image, or come from a unit this one requires.
+    directives = _directives(unit)
+    created = set(_managed(directives))
+    created |= {line.split()[1] for line in STATE_RULES.read_text(encoding="utf-8").splitlines()
+                if line.startswith("d ")}
+    created.add("/opt/rosy")  # customize-rootfs.sh installs the release store there
+    for required in _words(directives, "Requires"):
+        if required.endswith(".service") and (NATIVE / required).is_file():
+            created |= {f"/run/{entry}" for entry in _words(_directives(required), "RuntimeDirectory")}
+    for entry in _words(directives, "ReadWritePaths"):
+        if entry.startswith("-"):
+            continue
+        assert entry.lstrip("+") in created, f"{unit}: {entry} may not exist at start"
+
+
+def test_state_rules_keep_the_parent_and_root_only_state_with_root():
+    rules = STATE_RULES.read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+
+    assert "d /var/lib/rosy 0755 root root -" in rules
+    assert "d /var/lib/rosy/maps 2750 rosy-io rosy-core -" in rules
+    for protected in ROOT_ONLY_STATE:
+        assert f"Z {protected} - root root -" in rules
+    assert 'tmpfiles-rosy-state.conf" "$OVERLAY/etc/tmpfiles.d/rosy-state.conf"' in payload
+    assert 'install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"' in customizer
+    assert "install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps" in customizer
+    # The accounts must exist before the chroot install names them.
+    assert customizer.index("useradd --uid 961") < customizer.index("-o rosy-io -g rosy-core")
+
+
+def test_contract_parser_sees_the_2026_09_23_005_defects():
+    # The guard must fail on the units that shipped, not only pass on the fixed ones.
+    shipped_core = {
+        "User": ["rosy-core"], "ProtectSystem": ["strict"], "ProtectHome": ["true"],
+        "StateDirectory": ["rosy"], "ReadWritePaths": ["/var/lib/rosy /run/rosy"],
+        "LogsDirectory": ["rosy-core"],
+    }
+    writable = [path for path, _optional in _writable(shipped_core)]
+    assert "/var/lib/rosy" in writable
+    assert any(_under("/var/lib/rosy/provisioning", path) for path in writable)
+    assert "HOME" not in _environment(shipped_core)
+
+    shipped_recover = {"ProtectSystem": ["strict"], "ProtectHome": ["true"]}
+    writable = [path for path, _optional in _writable(shipped_recover)]
+    assert not any(_under("/var/lib/rosy/releases/native-release.lock", path) for path in writable)

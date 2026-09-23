@@ -148,8 +148,10 @@ chroot "$ROOT" getent group rosy-io >/dev/null 2>&1 || chroot "$ROOT" groupadd -
 chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 961 --gid 961 --system --no-create-home --shell /usr/sbin/nologin rosy-io
 
-mkdir -p "$RELEASE" "$ROOT/var/lib/rosy/maps" "$ROOT/etc/rosy/trusted-release-keys" \
-    "$ROOT/etc/cloud/cloud.cfg.d"
+mkdir -p "$RELEASE" "$ROOT/etc/rosy/trusted-release-keys" "$ROOT/etc/cloud/cloud.cfg.d"
+# D-183 D4: the same layout tmpfiles-rosy-state.conf enforces at every boot.
+install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
+chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"
