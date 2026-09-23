@@ -1629,3 +1629,35 @@
 - gate 변화: 없음(수집 경로 보정 — 빌드·런타임 불변).
 - 결정: 수집 오류를 `collect_ignore`로 조용히 없애는 대신 `importorskip`을 택했다 — skip 사유가 보고에 남는다("없는 것"과 "건너뛴 것"은 다르다). 생성된 ament 템플릿 본체는 건드리지 않고 import 블록에만 가드를 넣었다.
 - 교훈: 회귀 명령에 들어 있지 않은 디렉터리의 수집 오류는 오래 살아남는다 — 주기적으로 `--collect-only`로 전체 트리를 훑어야 "건너뛴 테스트"가 드러난다. 수집이 죽으면 실패도 통과도 없고 증거만 없다.
+
+## 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이 설계 기록
+
+- 변경: `docs/plans/2026-09-23-core-dev-overlay-design.md` 추가. 벤치에서 허용된 CORE 파이썬만 `/var/lib/rosy-dev`로 보내고 코어만 재시작하는 루프를, `install-pi.sh` 재설치와 서명 GitHub Release와 분리해 적었다. `docs/plans/AGENTS.md` 키 파일 표에 한 행을 더했다. 구현 파일은 없다.
+- 증거: `python tools/harness/rosy_harness.py generate`가 `deploy/index.md`와 `docs/index.md`를 갱신했다. `python tools/harness/rosy_harness.py lint`는 0 errors, 21 warnings (2026-09-23 Windows, 기존 uncommitted 경고). 설계 문서라 실행 시험은 없다.
+- gate 변화: 없음
+- 결정: 없음. readback HOLD를 코드로 넣는 2단계에서 ADR을 연다.
+
+## 2026-09-23 · uncommitted · docs(adr): 모듈 병렬 작업 가능성 평가표를 D-178로 선기록 (Proposed)
+
+- 변경: `docs/adr/D-178-module-maintainability-scorecard.md` 신규 — 판정 축 5개(M1 독립 작업성 / M2 역할 명확성 / M3 동시 유지보수성 / M4 공용 모듈 관리 / M5 결합 정합, 가중 25/25/20/15/15), 합산 + 컷 게이트(M5≤2 또는 M3≤2→상한 B, M2≤2→상한 C, S는 M3·M5≥4, 구간과 게이트는 낮은 쪽이 이긴다), 기기 전용 ※(보정 없음), 판정 단위 1차 패키지 20개(집합 동일성) / 2차 `control`·`core_features`·`navigation`·`gz_sim` 4개, 재평가 트리거(D-168 예외 목록·SIZE_VERDICTS·패키지 증감·D-171·functional 변동), 기준선 20행(평균 81.5 = S8/A6/B3/C3). ADR 로그 행 D-178 추가 + `docs/reference/AGENTS.md` "through D-177"→D-178. 저장소 밖 `module-coupling-scorecard.md` 정정: ① `gz_sim` "과잉선언 2건(control, core)" **오판 제거** — import만 세는 산출 스크립트가 `get_package_share_directory("control")`·`Node(package="core")` launch 경유 사용을 놓쳤음 ② 진짜 과잉선언 `core_api_web`·`core_features`의 미사용 `core_events` 선언 2건으로 교체(M5=3) ③ 축 개명 W→M ④ 점수 재배치 `gz_sim` 62→71(B), `core_api_web` 83→80(A), `core_features` 65→59(C) — 분포 B 3/C 3, 평균 81.5 유지 ⑤ hardware 3종 `imu_bno055`·`lamp_control`·`sensor_adc` 기기 전용 ※ 표기. 신규 `test/test_module_scorecard.py`는 **산출 규칙만** 검사(가중치 합 100·총점 재계산·등급 구간·컷 게이트·패키지 집합 동일성), 점수 값은 회차 입력이라 고정하지 않음.
+- 증거: `python tools/harness/rosy_harness.py generate` exit 0 → `python -m pytest test/test_module_scorecard.py test/test_harness_contracts.py test/test_network_topology_contracts.py -q` = **74 passed** (21 warnings = 기존 last_verified baseline) → `python tools/harness/rosy_harness.py lint` = **0 error(s), 21 warning(s)**. 변이 증명: 기준선 `games` M5 5→1 주입 → `test_baseline_totals_and_grades_recompute` 적색(`games: 총점 재계산 82 != 기록 94`) → 복구 후 4 passed. 게이트 논리는 합성 행 시험이 상시 고정(M5=1→B, M2=2→C, M3=3인 S 자격 행→A, 전축 5점→S 통과).
+- gate 변화: 있음 — 새 ADR 본문(로그 색인↔본문 제목·Status 일치 계약 대상), 로그 행 D-178(연속성 계약), 산출 규칙 시험 1종 신설. Status는 **Proposed**, Accepted 착지 조건은 2차 회차(B·C 4개 내부 모듈 분해) 완료 + 기준선 갱신.
+- 결정: 선기록은 D-162/D-167 패턴을 따른다. ADR은 **기준·기준선만** 소유하고 회차 근거는 저장소 밖 채점표에 둔다(`module-coupling-report.md` 선례). 총점 합산은 유지하되 컷 게이트로 상쇄를 차단한다 — D-167이 반려한 합산 사유(안전 축 상쇄)는 M축이 안전 축을 담지 않아 여기 성립하지 않고, 안전은 D-167 G-3/G-8과 D-168 시험이 그대로 소유한다. 시험은 산출 규칙만, 점수는 회차 입력 — 주관 채점을 시험에 못 박으면 고치는 쪽이 시험을 같이 고치는 위증이 쉬워진다.
+- 교훈: import만 세는 매트릭스 산출물은 launch 경유 참조(share/node 리터럴)를 반드시 놓친다 — D-168 스캐너와 대조하지 않았다면 오판이 ADR 기준선에 박혔다. 기준선을 박기 전에는 산출 도구의 맹점을 교차 대조할 것.
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-179 벤치 CORE 읽기 전용 오버레이
+
+- 변경: `docs/adr/D-179-bench-core-readonly-overlay.md`와 ADR Log 색인 행을 추가했다(Accepted). 벤치 수정은 `/var/lib/rosy-dev`를 설치 site-packages 위에 읽기 전용으로 바인드하고, 그 장치는 readback HOLD다. `PYTHONPATH` 선행은 setup.bash가 설치 트리를 다시 앞에 놓으면 조용히 무시되므로 채택하지 않았다. 실행 계획은 `docs/plans/2026-09-23-core-dev-overlay.md`. 설계 문서의 바인드·허용 목록·상태 문장을 D-179와 맞췄다. `docs/reference/AGENTS.md`의 로그 범위를 D-179까지로 고쳤다.
+- 증거: `python tools/harness/rosy_harness.py generate` 후 `lint` 0 errors, 21 warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 70 passed, 21 warnings (2026-09-23 Windows). 스크립트 시험은 계획 착지 전이라 없다.
+- gate 변화: 없음
+- 결정: D-179 Accepted. 스크립트는 실행 계획 착지 전에 없다. ARTIFACT/DEVICE는 이 결정으로 오르지 않는다.
+- 교훈: 오버레이 성공은 `__file__` 경로가 아니라 읽은 바이트의 해시다. 바인드는 경로 문자열을 유지한 채 내용만 바꾼다.
+
+## 2026-09-23 · uncommitted · docs(plan): D-179 반복 동작 세 문장
+
+- 변경: `docs/plans/2026-09-23-core-dev-overlay.md`에 반복 동작을 넣었다. 바인드가 있으면 파일 복사와 `rosy-core` 재시작만 하고 성공은 `core/__init__.py` 해시다. 재부팅과 `rosy-runtime` 재시작은 이미지 코드로 돌아가며 마커 HOLD가 남는다. 개발 compose 조각은 `name` 없이 프로젝트 `rosy-runtime`에서 `rosy-core`만 올린다. Task 2·Task 5 시험 항목으로 고정했다.
+- 증거: 계획 본문만. `python tools/harness/rosy_harness.py generate` 후 `lint` 0 errors, 21 warnings (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-179 본문은 그대로다. 실행 계획만 보강했다.
+- 교훈: 없음

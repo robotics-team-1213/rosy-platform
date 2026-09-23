@@ -499,3 +499,27 @@
 - gate 변화: 없음.
 - 결정: `RestartMode=direct`는 그대로 둔다. 다만 `docs/validation/core-shutdown-2026-09-23`의 `ActiveState=failed` 측정은 그 지시어가 없던 유닛에서 나온 값이다. 지시어가 있으면 격상 종료(exit 2)는 여전히 `Restart=on-failure`로 재시작되지만 재시작 동안 unit이 failed 상태를 거치지 않으므로 `systemctl is-failed`로는 보이지 않는다. 실기 게이트에서 `Result=exit-code`/`ExecMainStatus=2`와 저널 격상 줄로 확인한다.
 - 교훈: 정지 계약은 유닛 파일 한 줄이 아니라 여러 지시어의 조합이다. 다른 트랙이 재시작 정책을 바꾸면 종료 판정 근거도 다시 읽어야 한다.
+
+## 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이는 설계만 연결
+
+- 변경: `deploy/progress.md`의 plans에 `docs/plans/2026-09-23-core-dev-overlay-design.md`를 넣고, 지금 상태에 미구현임을 한 줄 적었다. 설치기, compose 기동, readback, 네이티브 유닛은 수정하지 않았다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings (2026-09-23 Windows). 설계 문서라 실행 시험은 없다.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD 유지.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(deploy): D-179를 배포 진행에 연결
+
+- 변경: `deploy/progress.md` adrs에 D-179, plans에 실행 계획을 넣었다. 지금 상태는 정책이 Accepted이고 스크립트·readback은 아직 없다고 적는다. 설치기, compose 기동, 네이티브 유닛 본문은 수정하지 않았다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings. ADR·하네스 계약 `70 passed` (2026-09-23 Windows). 오버레이 스크립트 시험은 계획 착지 전이라 없다.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD 유지.
+- 결정: D-179
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(deploy): D-179 실행 계획에 반복 동작
+
+- 변경: 실행 계획이 두 번째 수정, 재부팅 뒤 재적용, compose 프로젝트 `rosy-runtime` 유지를 시험 항목으로 가진다. `deploy/progress.md`의 gate와 설치기 본문은 그대로다.
+- 증거: 계획 본문만. `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings (2026-09-23 Windows).
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD 유지.
+- 결정: D-179
+- 교훈: 없음

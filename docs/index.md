@@ -124,8 +124,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs(plan): D-179 반복 동작 세 문장
+- 2026-09-23 · uncommitted · docs(adr): D-179 벤치 CORE 읽기 전용 오버레이
+- 2026-09-23 · uncommitted · docs(adr): 모듈 병렬 작업 가능성 평가표를 D-178로 선기록 (Proposed)
+- 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이 설계 기록
 - 2026-09-23 · uncommitted · fix(test): bringup·emotion 패키지 시험의 루트 수집 복구 + ament 가시적 skip
-- 2026-09-23 · uncommitted · docs: AGENTS 현황 드리프트 정리 (D-61 표기·remote/CI 문장·루트 키 파일 표)
-- 2026-09-23 · uncommitted · fix(pkgs): manifest TODO 제거 + 패키지 메타데이터 계약 시험
-- 2026-09-23 · uncommitted · fix(test): the control closure guard ignores colcon output under src/
-- 2026-09-23 · uncommitted · docs(adr): 조건부 후속 ADR D-176·D-177 선기록 (Proposed)

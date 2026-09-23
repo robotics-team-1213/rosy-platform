@@ -23,6 +23,7 @@
 | D-161 | Ubuntu Server 24.04 + ROS 2 Jazzy 네이티브 제품 런타임으로 즉시 전환 |
 | D-164 | Pinky Pro 제품 산출물은 ISO가 아니라 서명된 Raspberry Pi 디스크 이미지다 |
 | D-165 | Pinky Pro 네이티브 ROS 패키지의 하드웨어 의존성도 이미지 입력으로 고정한다 |
+| D-179 | 벤치 CORE 수정은 설치 트리 위의 읽기 전용 바인드이고, 그 장치는 릴리스로 세지 않는다 |
 
 ## 계획·결과 문서
 
@@ -43,6 +44,8 @@
 - [2026-09-21-unsigned-handoff-import.md](../docs/plans/2026-09-21-unsigned-handoff-import.md)
 - [2026-09-22-pinky-pro-flashable-image-design.md](../docs/plans/2026-09-22-pinky-pro-flashable-image-design.md)
 - [2026-09-22-pinky-pro-flashable-image.md](../docs/plans/2026-09-22-pinky-pro-flashable-image.md)
+- [2026-09-23-core-dev-overlay-design.md](../docs/plans/2026-09-23-core-dev-overlay-design.md)
+- [2026-09-23-core-dev-overlay.md](../docs/plans/2026-09-23-core-dev-overlay.md)
 
 ## 교훈 (docs/solutions)
 
@@ -54,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs(deploy): D-179 실행 계획에 반복 동작
+- 2026-09-23 · uncommitted · docs(deploy): D-179를 배포 진행에 연결
+- 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이는 설계만 연결
 - 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — RestartMode=direct와 정지 계약의 관계
 - 2026-09-23 · uncommitted · fix(image): check bytecode only in the native runtime, not colcon's install tree
-- 2026-09-23 · uncommitted · fix(native,sd): review of the boot indicator, black box and operator access (D-174, D-175)
-- 2026-09-23 · uncommitted · feat(sd): rewrite a card for an existing device identity (D-174 F7)
-- 2026-09-23 · uncommitted · feat(sd): per-card operator SSH key and key-only `rosy` login (D-174 F3)

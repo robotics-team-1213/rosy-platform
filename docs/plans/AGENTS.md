@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-23 -->
 
 # plans
 
@@ -73,6 +73,8 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-22-signal-speed-pi-design.md` | 속도 평면 설계 — 라즈베리파이 배치(picamera2 소스), 오도메트리 1차+카메라 검증의 과속 판정, 감속 루프(Fleet 판정·신호 표시), AC-24~26(2026-09-22 수용 계획 §3 으로 승격 완료 — 판정의 기록 위치는 거기), D-166(과속 반응 기록 전용) |
 | `2026-09-22-scene-context-road-design.md` | D-162 장면 상황 프로파일 설계 — 닫힌 context 집합, 오프라인 리비전 프로파일, 제네릭 보수 폴백, 첫 소비자는 도로 인식 파라미터 |
 | `2026-09-22-scene-context-road.md` | D-162 실행 플랜 T1–T5 — 순수 로직(T1/T2 착지), 노드 wiring(T3), CORE 수용(T5) |
+| `2026-09-23-core-dev-overlay-design.md` | D-179 설계: 벤치 CORE는 `/var/lib/rosy-dev` 읽기 전용 바인드. `/opt/rosy`·서명 릴리스·GitHub 설치와 분리 |
+| `2026-09-23-core-dev-overlay.md` | D-179 실행: 허용 목록·해시 성공·readback HOLD·네이티브 drop-in·Windows 호출. 두 번째부터는 재시작만, 재부팅은 이미지로 복귀, compose 프로젝트는 `rosy-runtime` |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 ## Subdirectories
