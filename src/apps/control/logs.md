@@ -289,3 +289,10 @@
 - 결정: D-183 Accepted
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
+- 변경: `planning/gridmap.py`의 `inflate`를 numpy로 바꿨다. 분류는 `np.where`로 한다. 원판 오프셋은 원본과 같은 Python float 비교로 만들고, 오프셋마다 출발점 마스크를 슬라이스로 옮겨 OCC를 찍는다. 출발점은 원본의 `v < OCC_THRESH` 부정이라 NaN 셀도 팽창한다(보수적). 출발점이 없으면 바로 반환하고, 반경은 지도 크기까지만 돈다. 계산은 출발점의 경계 상자로 한정한다. 결과는 Python `int` 리스트이고 매번 새 지도다. 테스트 `test_inflate_equivalence.py`는 원본 복사본(main `631ff091`)과 비교한다.
+- 원인: goal이 2 s마다 계획할 때 후보별·반경별로 지도 전체를 Python 이중 루프로 부풀렸다(host 200×200 48 ms, 400×400 128 ms, goal tick 평균 177 ms). D-185 조사.
+- 증거: 동등성 — 무작위 지도 120개 × 반경 3종, 실제 크기 200×200, 지도보다 큰 반경, 음수·−0.0·NaN·inf 반경의 예외 유형, float·NaN·int8 데이터, 결과의 독립성. `repr` 수준에서 같고 모든 값이 builtin `int`다. 뮤테이션 6종 모두 검출. 속도: 200×200 48→6 ms, 400×400 128→22 ms, 희소 400×400(반경 6–40) 28–34→20–29 ms. host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음). NaN 출발점, 희소·큰 반경 퇴행, 테스트 공백을 반영했다.
+- gate 변화: 없음. Pi 수치는 D-185 R8 전까지 HOLD.
+- 결정: D-185 R1(사용자 승인 2026-09-24). 캐시 대신 벡터화했고, ADR에 구현 메모를 달았다.
+- 교훈: 결과 동일 최적화도 입력 분포가 다르면 느려질 수 있다(희소 지도·큰 반경). 비용은 대표 입력과 극단 입력 모두로 잰다.
