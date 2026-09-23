@@ -74,7 +74,7 @@ def test_route_a_and_route_b_pass_the_scenarios_route_and_start_to_the_launch():
     source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
     launch = LAUNCH.read_text(encoding="utf-8")
     run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
-    assert 'if mode in ("route_a", "route_b") else []' in run_one_source
+    assert 'if mode in ("route_a", "route_b", "route_ab") else []' in run_one_source
     assert "route:=[{scenario['into']}, {scenario['out']}]" in run_one_source
     assert "route_start:=[{x}, {y}, {yaw}]" in run_one_source
     for arg in ("route", "route_start"):

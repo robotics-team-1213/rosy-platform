@@ -126,9 +126,10 @@ def test_camera_lane_mode_is_typed_as_a_string_parameter():
 
 
 def test_route_args_declared_empty_for_the_junction_prototypes():
-    """route_a/route_b (Task 6). Empty by default so line/lane/edge_left/
-    centre are unaffected; the harness overrides them per scenario."""
+    """route_a/route_b/route_ab (Task 6). Empty by default so line/lane/
+    edge_left/centre are unaffected; the harness overrides them per scenario."""
     source = LAUNCH.read_text(encoding="utf-8")
+    assert "route_a/route_b/route_ab only" in source
     assert 'DeclareLaunchArgument("route", default_value="[]")' in source
     assert 'DeclareLaunchArgument("route_start", default_value="[]")' in source
     assert '"lane_graph_path": os.path.join(\n' \

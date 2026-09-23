@@ -35,6 +35,7 @@ from .sensing.lane_boundaries import LaneBoundaryTracker
 from .sensing.lane_debug import next_publish_due, render_debug
 from .sensing.paint_localizer import PaintMap
 from .sensing.route_camera import RouteCameraFollower
+from .sensing.route_hybrid import RouteHybridFollower
 from .sensing.route_map import RouteMapFollower
 
 #: Fixed at startup: the edge follower and the odom subscription are built
@@ -63,8 +64,9 @@ class LineObserverNode(Node):
         # 'centre' follows the centre line between both boundaries (fallback ladder).
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
-        # pursuit from a paint-localised pose (B). Both need
-        # lane_graph_path/route/route_start; fail closed without them.
+        # pursuit from a paint-localised pose (B). 'route_ab' is their
+        # hybrid: A's manoeuvres placed by B's paint-localised pose. All
+        # need lane_graph_path/route/route_start; fail closed without them.
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
@@ -81,7 +83,7 @@ class LineObserverNode(Node):
         self.declare_parameter('debug_overlay', False, _READ_ONLY)
         self.declare_parameter('debug_overlay_max_hz', 5.0)
         self.declare_parameter('debug_lane_graph', '')
-        # route_a/route_b only. route and route_start are declared by type,
+        # route_a/route_b/route_ab only. route and route_start are declared by type,
         # not value: an empty Python list default cannot be typed, and the
         # config file's own empty-list override (line_follow.yaml) needs a
         # declared element type (string / double) to resolve against.
@@ -104,7 +106,7 @@ class LineObserverNode(Node):
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
-        if camera_lane_mode in ('route_a', 'route_b'):
+        if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
             self._route_follower = self._build_route_follower(camera_lane_mode)
         self._debug_pub = None
         self._debug_last_s = None
@@ -143,7 +145,7 @@ class LineObserverNode(Node):
         self.create_subscription(
             String, 'camera/controls', self._on_camera_controls, controls_qos)
         mode = str(self.get_parameter('camera_lane_mode').value)
-        if mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b'):
+        if mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if self._ir_calibration is None:
@@ -151,7 +153,7 @@ class LineObserverNode(Node):
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
 
     def _build_route_follower(self, mode: str):
-        """route_a/route_b only. Missing or invalid lane_graph_path, route or
+        """route_a/route_b/route_ab only. Missing or invalid lane_graph_path, route or
         route_start (or a graph/route that fails to build, e.g. a
         disconnected pair or a one-way ring arc walked backwards) fails
         closed: a warning logged once here at startup, no follower built,
@@ -174,6 +176,10 @@ class LineObserverNode(Node):
                 return RouteCameraFollower(
                     graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset)
             paint_map = PaintMap.from_bundle(os.path.dirname(graph_path))
+            if mode == 'route_ab':
+                return RouteHybridFollower(
+                    graph, route, start_pose=tuple(route_start),
+                    camera_x_offset_m=x_offset, paint_map=paint_map)
             return RouteMapFollower(
                 graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset,
                 paint_map=paint_map)
@@ -263,7 +269,7 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                     min_pixels=int(self.get_parameter('camera_min_pixels').value),
                 )
-            elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b'):
+            elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
@@ -287,7 +293,7 @@ class LineObserverNode(Node):
                         image_stamp,
                         pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                         frame, ground, **lane_kwargs)
-                elif mode in ('route_a', 'route_b'):
+                elif mode in ('route_a', 'route_b', 'route_ab'):
                     if self._route_follower is not None:
                         image_stamp = (float(msg.header.stamp.sec)
                                        + float(msg.header.stamp.nanosec) * 1e-9)
@@ -333,6 +339,7 @@ class LineObserverNode(Node):
             'edge_left': self._edge_follower,
             'route_a': self._route_follower,
             'route_b': self._route_follower,
+            'route_ab': self._route_follower,
         }.get(mode)
         if follower is None:
             return

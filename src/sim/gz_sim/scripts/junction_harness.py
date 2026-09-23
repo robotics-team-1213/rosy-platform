@@ -190,13 +190,13 @@ def run_one(scenario, graph, mode, out_dir, domain):
     try:
         log_file = (out_dir / "launch.log").open("w")
         try:
-            # route_a/route_b only: a YAML flow-list string, which the launch
+            # route_a/route_b/route_ab only: a YAML flow-list string, which the launch
             # file's ParameterValue(value_type=List[str]/List[float]) parses
             # into the node's declared route/route_start array parameters.
             route_args = [
                 f"route:=[{scenario['into']}, {scenario['out']}]",
                 f"route_start:=[{x}, {y}, {yaw}]",
-            ] if mode in ("route_a", "route_b") else []
+            ] if mode in ("route_a", "route_b", "route_ab") else []
             launch = subprocess.Popen(
                 ["ros2", "launch", "gz_sim", "map_v2_fleet_lane.launch.py",
                  f"spawn_x:={x}", f"spawn_y:={y}", f"spawn_yaw:={yaw}",

@@ -58,7 +58,7 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_lane_mode", default_value="edge_left"),
         DeclareLaunchArgument("debug_overlay", default_value="false"),
         DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
-        # route_a/route_b only (junction prototypes, Task 6). Empty by
+        # route_a/route_b/route_ab only (junction followers, Task 6). Empty by
         # default so every other mode is unaffected. Encoded as a YAML flow
         # list on the command line, e.g. route:='[west:f, ring_w:f]' and
         # route_start:='[-1.26955, 0.24255, -1.5708]'; ParameterValue below
@@ -90,7 +90,7 @@ def generate_launch_description():
                     LaunchConfiguration("debug_overlay"), value_type=bool),
                 "debug_lane_graph": os.path.join(
                     control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
-                # route_a/route_b only; every other mode ignores these.
+                # route_a/route_b/route_ab only; every other mode ignores these.
                 "lane_graph_path": os.path.join(
                     control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
                 "route": ParameterValue(

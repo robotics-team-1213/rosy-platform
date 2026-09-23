@@ -41,8 +41,8 @@
     debug_overlay: false            # line/debug/compressed (observation only)
     debug_overlay_max_hz: 5.0
     debug_lane_graph: ""            # optional lane_graph.yaml for the map panel
-    # route_a/route_b only (junction prototypes). Empty means no route is
-    # configured; both modes then fail closed (no follower built).
+    # route_a/route_b/route_ab only (junction followers). Empty means no
+    # route is configured; these modes then fail closed (no follower built).
     lane_graph_path: ""
     route: []
     route_start: []
