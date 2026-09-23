@@ -4,7 +4,11 @@ scenario/scoring logic must stay importable here, and its launch arguments
 must match what map_v2_fleet_lane.launch.py declares."""
 
 import importlib.util
+import io
+import json
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCH = ROOT / "launch" / "map_v2_fleet_lane.launch.py"
@@ -128,7 +132,7 @@ def test_set_mode_retries_a_refused_connection():
     source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
     set_mode_source = source.split("def set_mode(", 1)[1].split("\ndef ", 1)[0]
     assert "for attempt in range(SET_MODE_RETRIES):" in set_mode_source
-    assert "time.sleep(SET_MODE_RETRY_DELAY_S)" in set_mode_source
+    assert "time.sleep(delay)" in set_mode_source
 
 
 def test_every_scenario_records_one_of_the_defined_reasons():
@@ -309,3 +313,65 @@ def test_api_get_returns_none_instead_of_raising(monkeypatch):
 
     monkeypatch.setattr(mod.urllib.request, "urlopen", refuse)
     assert mod._api_get(mod.STATUS_API, mod.VIEWER) is None
+
+
+class _Reply:
+    def __init__(self, body):
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return json.dumps(self._body).encode()
+
+
+def _http_error(mod, status, code):
+    return mod.urllib.error.HTTPError(
+        mod.MODE_API, status, code, {}, io.BytesIO(json.dumps(
+            {"error": {"code": code, "message": code, "detail": None}}).encode()))
+
+
+def _script(monkeypatch, mod, outcomes):
+    calls, sleeps = [], []
+
+    def urlopen(_req, timeout=None):
+        calls.append(1)
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return _Reply(outcome)
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(mod.time, "sleep", sleeps.append)
+    return calls, sleeps
+
+
+def test_set_mode_waits_out_docking_active_with_a_short_backoff(monkeypatch):
+    mod = _mod()
+    calls, sleeps = _script(monkeypatch, mod, [
+        _http_error(mod, 409, "DOCKING_ACTIVE"), {"mode": "CAMERA_LINE"}])
+    assert mod.set_mode("CAMERA_LINE") == {"mode": "CAMERA_LINE"}
+    assert len(calls) == 2
+    assert sleeps == [mod.SET_MODE_BUSY_DELAY_S]
+    assert 0.1 <= mod.SET_MODE_BUSY_DELAY_S <= 0.5
+
+
+def test_set_mode_raises_any_other_http_refusal_at_once(monkeypatch):
+    mod = _mod()
+    calls, sleeps = _script(monkeypatch, mod, [
+        _http_error(mod, 409, "MODE_CONFLICT"), {"mode": "CAMERA_LINE"}])
+    with pytest.raises(mod.urllib.error.HTTPError):
+        mod.set_mode("CAMERA_LINE")
+    assert len(calls) == 1 and sleeps == []
+
+
+def test_set_mode_retries_a_refused_connection_with_the_boot_delay(monkeypatch):
+    mod = _mod()
+    calls, sleeps = _script(monkeypatch, mod, [
+        mod.urllib.error.URLError("refused"), {"mode": "OFF"}])
+    assert mod.set_mode("OFF") == {"mode": "OFF"}
+    assert sleeps == [mod.SET_MODE_RETRY_DELAY_S]

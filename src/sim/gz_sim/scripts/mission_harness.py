@@ -236,7 +236,15 @@ def record_mission(graph, keys, track, stamps, *, spin, api, monotonic, status_l
             elif phase == "undock":
                 begin("tour")
                 state["seen"] = len(track)
-                api.set_line("CAMERA_LINE")
+                try:
+                    line = api.set_line("CAMERA_LINE")
+                except (urllib.error.URLError, OSError):
+                    line = None
+                if not isinstance(line, dict) or line.get("mode") != "CAMERA_LINE":
+                    # Refused: the robot would stand still and the phase would
+                    # tour nothing until its budget ran out.
+                    close("line_refused")
+                    return finish("tour_failed")
             else:
                 return finish("parked")
         elif docked == "DOCK_FAILED":

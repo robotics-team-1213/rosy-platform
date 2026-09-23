@@ -325,3 +325,32 @@ def test_the_script_is_installed_beside_the_other_harnesses():
     cmake = CMAKE.read_text(encoding="utf-8")
     assert "scripts/mission_harness.py" in cmake
     assert cmake.index("scripts/coverage_harness.py") < cmake.index("scripts/mission_harness.py")
+
+
+class RefusedLine(FakeMission):
+    def __init__(self, tour_track, refusal):
+        super().__init__(tour_track)
+        self.refusal = refusal
+
+    def set_line(self, mode):
+        if mode != "CAMERA_LINE":
+            return super().set_line(mode)
+        self.calls.append(mode)
+        if isinstance(self.refusal, Exception):
+            raise self.refusal
+        return self.refusal
+
+
+@pytest.mark.parametrize("refusal", [
+    "raise", None, {"mode": "OFF", "state": "OFF"}])
+def test_a_refused_camera_line_fails_the_tour_instead_of_touring_nothing(
+        graph, plan, tour_track, refusal):
+    import urllib.error
+    if refusal == "raise":
+        refusal = urllib.error.URLError("refused")
+    fake = RefusedLine(tour_track, refusal)
+    _, recorded, _ = _record(graph, plan, fake)
+    assert recorded["reason"] == "tour_failed"
+    tour = [p for p in recorded["phases"] if p["name"] == "tour"]
+    assert tour and tour[0]["outcome"] == "line_refused"
+    assert fake.calls[-1] == "CAMERA_LINE"          # never went on to park

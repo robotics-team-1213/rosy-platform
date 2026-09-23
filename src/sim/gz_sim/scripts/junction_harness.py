@@ -58,6 +58,9 @@ VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator", "Content-Type": "application/json"}
 SET_MODE_RETRIES = 5
 SET_MODE_RETRY_DELAY_S = 1.0
+# 409 DOCKING_ACTIVE: docking still holds the robot for a moment (an undock's
+# last tick releases the mode). Short, and explicit — see set_mode.
+SET_MODE_BUSY_DELAY_S = 0.2
 #: How long to let the launch group exit cleanly after SIGINT before SIGKILL.
 LAUNCH_STOP_TIMEOUT_S = 15.0
 #: How long to let the recorder exit after a SIGINT before killing it. Longer
@@ -107,9 +110,26 @@ def clock_step_s(start_offset, end_offset):
     return round(end_offset - start_offset, 1)
 
 
+def _error_code(exc):
+    """The ERR-101 `error.code` of an HTTP error response, or None."""
+    try:
+        return json.loads(exc.read() or b"null")["error"]["code"]
+    except (ValueError, TypeError, KeyError, OSError):
+        return None
+
+
 def set_mode(mode):
-    """PUT the CAMERA_LINE/OFF mode, retrying a refused connection (the API
-    server may not be listening yet on the very first calls after boot)."""
+    """PUT the CAMERA_LINE/OFF mode. Two refusals are retried, each on
+    purpose and with its own delay:
+
+    * a refused connection — the API server may not be listening yet on the
+      very first calls after boot (SET_MODE_RETRY_DELAY_S);
+    * HTTP 409 DOCKING_ACTIVE — docking still holds the robot for a moment
+      right after an undock (SET_MODE_BUSY_DELAY_S).
+
+    Any other HTTP error is a real refusal and is raised at once. (HTTPError
+    subclasses URLError, so it is caught first — the old single `except`
+    retried every HTTP refusal by accident.)"""
     req_body = json.dumps({"mode": mode}).encode()
     last_error = None
     for attempt in range(SET_MODE_RETRIES):
@@ -117,10 +137,14 @@ def set_mode(mode):
             req = urllib.request.Request(MODE_API, data=req_body, method="PUT", headers=OPERATOR)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 return json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code != 409 or _error_code(exc) != "DOCKING_ACTIVE":
+                raise
+            last_error, delay = exc, SET_MODE_BUSY_DELAY_S
         except (urllib.error.URLError, OSError) as exc:
-            last_error = exc
-            if attempt < SET_MODE_RETRIES - 1:
-                time.sleep(SET_MODE_RETRY_DELAY_S)
+            last_error, delay = exc, SET_MODE_RETRY_DELAY_S
+        if attempt < SET_MODE_RETRIES - 1:
+            time.sleep(delay)
     raise last_error
 
 
