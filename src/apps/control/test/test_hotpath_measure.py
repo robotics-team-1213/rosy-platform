@@ -6,6 +6,7 @@ matching against a fake /proc tree, the report schema and a tiny bench smoke.
 A host run is never device evidence, and the report must say so.
 """
 import json
+import re
 
 import pytest
 
@@ -79,8 +80,8 @@ def test_process_matching_by_entry_point_and_module(tmp_path):
 
 def test_node_names_match_the_installed_entry_points():
     setup = (hm.PKG / 'setup.py').read_text(encoding='utf-8')
-    for name in hm.NODE_NAMES:
-        assert f"'{name} = control." in setup, name
+    # Both ways: a node added to setup.py without NODE_NAMES would silently go unwatched.
+    assert set(re.findall(r"'(\w+) = control\.\w+:main'", setup)) == set(hm.NODE_NAMES)
 
 
 def test_watch_samples_fake_proc(tmp_path):
@@ -115,6 +116,7 @@ def test_report_schema_and_evidence_class(tmp_path):
     # No device-tree model: never device evidence.
     assert report['evidence']['device'] is False
     assert 'not device evidence' in report['evidence']['statement']
+    assert 'one full core' in report['units']['cpu_percent']
     json.dumps(report)
 
     (tmp_path / 'device-tree').mkdir()
@@ -137,5 +139,7 @@ def test_bench_smoke_returns_the_three_hot_paths():
     for row in result.values():
         assert row['n'] == 2 and row['max_ms'] >= row['median_ms'] >= 0.
         assert row['input']
-    # The synthetic registration input must be a case match_motion accepts.
+    # Each synthetic input must take the real code path, not an early return.
     assert result['scan_motion_match_motion']['accepted'] is True
+    assert result['wall_tracker_segments']['segments'] > 0
+    assert result['gridmap_inflate']['grown'] is True

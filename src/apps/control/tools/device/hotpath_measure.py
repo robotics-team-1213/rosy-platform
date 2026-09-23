@@ -282,14 +282,16 @@ def bench(iterations=50, warmup=3):
     result = {
         'wall_tracker_segments': dict(
             _time(lambda: _segments(scan, 0.), iterations, warmup),
-            input='720-ray box scan front 0.4 side 0.6 m, noise 0.5 mm, nose 0, no compensation'),
+            input='720-ray box scan front 0.4 side 0.6 m, noise 0.5 mm, nose 0, no compensation',
+            segments=len(_segments(scan, 0.))),
         'scan_motion_match_motion': dict(
             _time(lambda: match_motion(ref, cur, math.radians(10.)), iterations, warmup),
             input='two 180-point box-room clouds, current rotated 10 deg, yaw hint 10 deg',
             accepted=match_motion(ref, cur, math.radians(10.)) is not None),
         'gridmap_inflate': dict(
             _time(lambda: grid.inflate(5.), iterations, warmup),
-            input='200x200 map at 0.05 m, border + inner walls, r_cells 5'),
+            input='200x200 map at 0.05 m, border + inner walls, r_cells 5',
+            grown=grid.inflate(5.).data != grid.data),
     }
     return result
 
@@ -335,6 +337,8 @@ def build_report(kind, payload, proc_root=Path('/proc'), label=None, argv=None):
     report = {'schema_version': SCHEMA_VERSION, 'kind': kind, 'label': label,
               'created_utc': datetime.now(timezone.utc).isoformat(timespec='seconds'),
               'argv': argv, 'evidence': {'device': device, 'statement': statement}, 'environment': env,
+              'units': {'cpu_percent': 'percent of one full core (100 = one core busy); see environment.cpu_count',
+                        'timings': 'milliseconds of wall time per call'},
               kind: payload}
     if kind == 'watch':
         report['watch_summary'] = watch_summary(payload)
