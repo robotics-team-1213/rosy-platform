@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
+import pytest
 import yaml
 
 
@@ -138,7 +140,8 @@ def _valid_root(tmp_path: Path) -> Path:
     # D-192 US-004: the motor bus overlay and its alias rule.
     (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
     (root / "boot/firmware/config.txt").write_text(
-        "[all]\nkernel=vmlinuz\n\n[all]\n# Rosy motor bus\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+        "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\n\n[all]\n# Rosy motor bus\n"
+        "dtoverlay=uart4-pi5\n", encoding="utf-8")
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
         'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
@@ -242,6 +245,26 @@ def test_mounted_image_verifier_requires_the_uart4_motor_bus(tmp_path):
     completed = _verify(no_rule)
     assert completed.returncode != 0
     assert "missing motor udev rule" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_base_uart_and_i2c_settings(tmp_path):
+    # D-192 review: the LiDAR UART (enable_uart=1 -> /dev/ttyAMA0) and the ADC
+    # bus (dtparam=i2c_arm=on -> /dev/i2c-1) come from the Ubuntu base image.
+    for line in ("enable_uart=1", "dtparam=i2c_arm=on"):
+        root = _valid_root(tmp_path / line.replace("=", "_"))
+        config = root / "boot/firmware/config.txt"
+        config.write_text(config.read_text(encoding="utf-8").replace(line, "#" + line), encoding="utf-8")
+        completed = _verify(root)
+        assert completed.returncode != 0
+        assert f"boot/firmware/config.txt lost {line} for the Pi 5" in completed.stderr
+
+    pi4_only = _valid_root(tmp_path / "pi4")
+    config = pi4_only / "boot/firmware/config.txt"
+    config.write_text("[pi4]\nenable_uart=1\n" + config.read_text(encoding="utf-8").replace("enable_uart=1\n", ""),
+                      encoding="utf-8")
+    completed = _verify(pi4_only)
+    assert completed.returncode != 0
+    assert "lost enable_uart=1" in completed.stderr
 
 
 def test_customizer_executes_native_entrypoints_inside_the_image():
@@ -508,35 +531,147 @@ def test_sllidar_source_is_pinned_like_the_other_hardware_sources():
     assert deps["verified"] is True
 
 
-def test_sllidar_is_fetched_and_verified_like_rpi_ws281x_and_built_offline():
+def test_sllidar_is_fetched_like_rpi_ws281x_and_rechecked_at_build_time():
     deps = (IMAGE / "install-pinky-hardware-deps.sh").read_text(encoding="utf-8")
     payload = PAYLOAD.read_text(encoding="utf-8")
     build = (IMAGE / "build-image.sh").read_text(encoding="utf-8")
 
-    # The hardware-deps step fetches, checks, unpacks outside the workspace and
-    # stamps the tree with the archive hash.
+    # The hardware-deps step fetches and checks the archive and keeps it as is.
     for fragment in ("lock_value hardware_dependencies sllidar_ros2_url",
                      "lock_value hardware_dependencies sllidar_ros2_sha256",
-                     'VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"',
-                     '.rosy-archive-sha256"'):
+                     '"$VENDOR_ARCHIVES/sllidar_ros2-$SLLIDAR_COMMIT.tar.gz"'):
         assert fragment in deps, fragment
     fetch = deps.index('--output "$SLLIDAR_ARCHIVE"')
     check = deps.index('"$SLLIDAR_SHA256" "$SLLIDAR_ARCHIVE" | sha256sum --check --strict')
-    assert fetch < check < deps.index('tar -xzf "$SLLIDAR_ARCHIVE"')
+    assert fetch < check < deps.index('install -m 0644 "$SLLIDAR_ARCHIVE"')
+    assert "tar -x" not in deps[fetch:]
 
-    # The payload builder stays offline and refuses any other tree.
+    # The payload builder stays offline, re-checks and extracts into a fresh
+    # directory, and builds exactly that package.
     assert "curl" not in payload
-    assert 'VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"' in payload
-    assert "sllidar_ros2 source is not the archive inputs.lock.yaml names" in payload
-    assert payload.index("sllidar_ros2 source is not the archive") < payload.index("rosdep install")
-    assert 'rosdep install --from-paths "$WORKSPACE/src" "$VENDOR_SRC" --ignore-src' in payload
-    assert 'colcon build --base-paths src "$VENDOR_SRC" --merge-install' in payload
-    assert 'colcon list --base-paths src "$VENDOR_SRC" --names-only' in payload
+    assert 'VENDOR_WORK="$(mktemp -d)"' in payload
+    assert '"$SCRIPT_DIR/prepare-vendor-source.sh" --lock "$LOCK"' in payload
+    assert payload.index("prepare-vendor-source.sh") < payload.index("rosdep install")
+    assert 'rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src' in payload
+    assert 'colcon build --base-paths src "$SLLIDAR_SRC" --merge-install' in payload
+    assert 'colcon list --base-paths src "$SLLIDAR_SRC" --names-only' in payload
+    assert "rosy-vendor\" --" not in payload and '--base-paths src "$VENDOR' not in payload
     # The release proves it resolves sllidar_ros2 inside its own prefix.
     assert '--required "$SCRIPT_DIR/vendor-ros-packages.txt"' in payload
     vendor = (IMAGE / "vendor-ros-packages.txt").read_text(encoding="utf-8").split()
     assert "sllidar_ros2" in vendor
     assert '--lock "$LOCK"' in build[build.index("build-native-payload.sh"):]
+
+
+# prepare-vendor-source.sh is run for real (bash, tar, sha256sum).
+PREPARE = IMAGE / "prepare-vendor-source.sh"
+_BASH = shutil.which("bash")
+_needs_bash = pytest.mark.skipif(_BASH is None, reason="bash runs the vendor preparation")
+_PACKAGE_XML = "<package format=\"3\"><name>{name}</name></package>\n"
+
+
+def _posix(path: Path) -> str:
+    import os
+
+    if os.name != "nt":
+        return str(path)
+    return subprocess.run([_BASH, "-c", 'cygpath -u "$1"', "_", str(path)],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _vendor_archive(tmp_path: Path, files: dict[str, str]) -> tuple[Path, Path]:
+    """A codeload-shaped archive (one top directory) and a lock naming its hash."""
+    import hashlib
+    import io
+    import tarfile
+
+    archives = tmp_path / "archives"
+    archives.mkdir()
+    archive = archives / f"sllidar_ros2-{SLLIDAR_COMMIT}.tar.gz"
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        for name, text in files.items():
+            data = text.encode("utf-8")
+            info = tarfile.TarInfo(f"sllidar_ros2-{SLLIDAR_COMMIT}/{name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    archive.write_bytes(buffer.getvalue())
+    lock = tmp_path / "inputs.lock.yaml"
+    lock.write_text(
+        "hardware_dependencies:\n"
+        f"  sllidar_ros2_commit: {SLLIDAR_COMMIT}\n"
+        f"  sllidar_ros2_sha256: {hashlib.sha256(archive.read_bytes()).hexdigest()}\n"
+        "  verified: true\n", encoding="utf-8")
+    return archives, lock
+
+
+def _prepare(tmp_path: Path, archives: Path, lock: Path):
+    dest = tmp_path / "work"
+    dest.mkdir(exist_ok=True)
+    completed = subprocess.run(
+        [_BASH, PREPARE.as_posix(), "--lock", _posix(lock), "--archive-dir", _posix(archives),
+         "--dest", _posix(dest)],
+        capture_output=True, text=True, check=False)
+    return completed, dest
+
+
+@_needs_bash
+def test_vendor_preparation_extracts_exactly_the_locked_package(tmp_path):
+    archives, lock = _vendor_archive(tmp_path, {
+        "package.xml": _PACKAGE_XML.format(name="sllidar_ros2"), "src/sllidar_node.cpp": "int main(){}\n"})
+
+    completed, dest = _prepare(tmp_path, archives, lock)
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == _posix(dest / "sllidar_ros2")
+    assert (dest / "sllidar_ros2/src/sllidar_node.cpp").is_file()
+
+
+@_needs_bash
+def test_vendor_preparation_rejects_a_modified_archive(tmp_path):
+    archives, lock = _vendor_archive(tmp_path, {"package.xml": _PACKAGE_XML.format(name="sllidar_ros2")})
+    archive = next(archives.iterdir())
+    archive.write_bytes(archive.read_bytes() + b"\0")
+
+    completed, dest = _prepare(tmp_path, archives, lock)
+
+    assert completed.returncode != 0
+    assert "is not the one inputs.lock.yaml names" in completed.stderr
+    assert not any(dest.iterdir())
+
+
+@_needs_bash
+def test_vendor_preparation_rejects_an_extra_package(tmp_path):
+    archives, lock = _vendor_archive(tmp_path, {
+        "package.xml": _PACKAGE_XML.format(name="sllidar_ros2"),
+        "extra/package.xml": _PACKAGE_XML.format(name="rosy_no_such_extra")})
+
+    completed, _dest = _prepare(tmp_path, archives, lock)
+
+    assert completed.returncode != 0
+    assert "exactly one ROS package" in completed.stderr
+
+
+@_needs_bash
+def test_vendor_preparation_rejects_another_package_name(tmp_path):
+    archives, lock = _vendor_archive(tmp_path, {"package.xml": _PACKAGE_XML.format(name="rplidar_ros")})
+
+    completed, _dest = _prepare(tmp_path, archives, lock)
+
+    assert completed.returncode != 0
+    assert "holds another package" in completed.stderr
+
+
+@_needs_bash
+def test_vendor_preparation_refuses_a_used_destination(tmp_path):
+    archives, lock = _vendor_archive(tmp_path, {"package.xml": _PACKAGE_XML.format(name="sllidar_ros2")})
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work/leftover").write_text("x", encoding="utf-8")
+
+    completed, _dest = _prepare(tmp_path, archives, lock)
+
+    assert completed.returncode != 0
+    assert "destination is not empty" in completed.stderr
 
 
 def test_the_bringup_launch_includes_the_driver_the_image_builds():
@@ -643,3 +778,28 @@ def test_io_probe_reports_missing_modules_without_touching_a_device(monkeypatch)
     monkeypatch.setattr(probe, "HARDWARE_MODULES", ("rosy_no_such_module",))
     failures = probe.check_modules("/usr/local")
     assert any("import rosy_no_such_module" in f for f in failures)
+
+
+@_needs_bash
+def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
+    # D-192 review: bringup exec_depends on sllidar_ros2, which is not in the
+    # chroot's source paths; rosdep must never be asked to resolve it.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    start = source.index("mapfile -t VENDOR_ROS_PACKAGES")
+    end = source.index("--skip-keys", start)
+    end = source.index("\n", end) + 1
+    snippet = source[start:end]
+    script = ('fail() { echo "FAIL $*" >&2; exit 1; }\n'
+              'chroot() { shift; printf "%s\n" "$@"; }\n'
+              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/src/hardware/bringup)\n' + snippet)
+
+    completed = subprocess.run([_BASH, "-c", script, _posix(CUSTOMIZER)],
+                               capture_output=True, text=True, check=False)
+
+    assert completed.returncode == 0, completed.stderr
+    args = completed.stdout.splitlines()
+    assert args[:3] == ["rosdep", "install", "--from-paths"]
+    assert "-r" in args and "--ignore-src" in args
+    assert args[args.index("--skip-keys") + 1].split() == ["sllidar_ros2"]
+    bringup = (ROOT / "src/hardware/bringup/package.xml").read_text(encoding="utf-8")
+    assert "<exec_depend>sllidar_ros2</exec_depend>" in bringup

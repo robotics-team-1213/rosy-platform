@@ -1,7 +1,12 @@
 """Static integration contracts for the ROS motor command path."""
 
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,7 +120,8 @@ def test_no_motion_mode_keeps_torque_off_and_never_listens_to_cmd_vel():
     source = (BRINGUP / "bringup" / "bringup.py").read_text(encoding="utf-8")
     normalized = " ".join(source.split())
 
-    assert "self.declare_parameter('drive_enabled', True)" in source
+    assert "self.declare_parameter('drive_enabled', True, ParameterDescriptor(" in source
+    assert "read_only=True," in source
     assert "enable_torque=self.drive_enabled," in source
     # The only cmd_vel subscription is behind the drive flag.
     assert source.count("create_subscription( Twist") + source.count("create_subscription(\n") >= 1
@@ -148,3 +154,39 @@ def test_native_io_unit_defaults_to_no_motion_and_navigation_drives():
     # Navigation is gated by its approvals and needs the drive.
     assert "drive_enabled" not in nav
     assert "ROSY_IO_DRIVE_ENABLED" not in (native / "rosy-runtime.env").read_text(encoding="utf-8")
+
+
+def _drive_gate() -> str:
+    """rosy-io's ExecStartPre shell body, with systemd's $$ turned into $."""
+    unit = (ROOT / "deploy" / "robot" / "native" / "rosy-io.service").read_text(encoding="utf-8")
+    line = next(line for line in unit.splitlines() if line.startswith("ExecStartPre="))
+    assert line.startswith("ExecStartPre=/usr/bin/bash --noprofile --norc -c '") and line.endswith("'")
+    body = line[len("ExecStartPre=/usr/bin/bash --noprofile --norc -c '"):-1]
+    # A lone $NAME would be systemd's to expand; the gate must read the environment.
+    assert re.search(r"(?<!\$)\$(?!\$)", body) is None
+    return body.replace("$$", "$")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash runs the unit's gate")
+@pytest.mark.parametrize(
+    ("value", "starts"),
+    [("true", True), ("false", True), ("yes", False), ("True", False), ("1", False),
+     ("", False), ("false ", False), ("on", False), ("true; reboot", False)],
+)
+def test_io_unit_starts_only_with_exactly_true_or_false(value, starts):
+    # D-192 review: launch_ros would read "yes"/"1"/"True" as a boolean and drive.
+    env = dict(os.environ, ROSY_IO_DRIVE_ENABLED=value)
+    completed = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", _drive_gate()],
+                               env=env, capture_output=True, text=True, check=False)
+    assert (completed.returncode == 0) is starts, completed.stderr
+    if not starts:
+        assert completed.returncode == 78
+        assert "ROSY_IO_DRIVE_ENABLED must be true or false" in completed.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash runs the unit's gate")
+def test_io_unit_gate_fails_closed_when_the_variable_is_unset():
+    env = {key: value for key, value in os.environ.items() if key != "ROSY_IO_DRIVE_ENABLED"}
+    completed = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", _drive_gate()],
+                               env=env, capture_output=True, text=True, check=False)
+    assert completed.returncode == 78

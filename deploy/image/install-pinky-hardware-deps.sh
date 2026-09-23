@@ -42,7 +42,7 @@ SLLIDAR_SHA256="$(lock_value hardware_dependencies sllidar_ros2_sha256)"
 [[ "$SLLIDAR_URL" == https://* && "$SLLIDAR_URL" == *"/$SLLIDAR_COMMIT" ]] \
     || fail "sllidar_ros2_url must use HTTPS and name the locked commit"
 [[ "$SLLIDAR_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "sllidar_ros2_sha256 is invalid"
-VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"
+VENDOR_ARCHIVES="${ROSY_VENDOR_ARCHIVES:-/usr/local/src/rosy-vendor}"
 
 for command in apt-get curl sha256sum dpkg tar cmake; do
     command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
@@ -68,16 +68,14 @@ cmake -S "$WORK/source" -B "$WORK/build" -DBUILD_SHARED=OFF -DBUILD_TEST=OFF
 cmake --build "$WORK/build" --parallel
 cmake --install "$WORK/build"
 
-# D-192: RPLIDAR C1 driver source for build-native-payload.sh (colcon). The
-# hash stamp lets the offline payload builder refuse any other tree.
+# D-192: the RPLIDAR C1 driver archive for build-native-payload.sh, kept as
+# the archive. The payload builder checks it against the lock again and
+# extracts it itself (prepare-vendor-source.sh); nothing here is trusted later.
 SLLIDAR_ARCHIVE="$WORK/sllidar_ros2.tar.gz"
 curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
     --output "$SLLIDAR_ARCHIVE" "$SLLIDAR_URL"
 printf '%s  %s\n' "$SLLIDAR_SHA256" "$SLLIDAR_ARCHIVE" | sha256sum --check --strict
-rm -rf -- "$VENDOR_SRC/sllidar_ros2"
-mkdir -p "$VENDOR_SRC/sllidar_ros2"
-tar -xzf "$SLLIDAR_ARCHIVE" --strip-components=1 -C "$VENDOR_SRC/sllidar_ros2"
-[[ -f "$VENDOR_SRC/sllidar_ros2/package.xml" ]] || fail "sllidar_ros2 archive has no package.xml"
-printf '%s\n' "$SLLIDAR_SHA256" > "$VENDOR_SRC/sllidar_ros2/.rosy-archive-sha256"
+install -d -m 0755 "$VENDOR_ARCHIVES"
+install -m 0644 "$SLLIDAR_ARCHIVE" "$VENDOR_ARCHIVES/sllidar_ros2-$SLLIDAR_COMMIT.tar.gz"
 
 echo "PINKY_HARDWARE_BUILD_DEPS_INSTALLED"

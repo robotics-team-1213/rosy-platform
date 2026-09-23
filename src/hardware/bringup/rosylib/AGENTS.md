@@ -20,7 +20,7 @@ Rosy-owned stand-in for the vendor's closed `pinkylib` (D-192). Installed by the
 
 - ROS-free and importable on Windows: `fcntl` is imported only inside `DeviceIO`.
 - Never import CORE (`core_features`, `core_common`): the I/O runtime must not pull pydantic. `test/test_rosylib_battery_curve.py` pins `CURVE_2S` equal to CORE's `DEFAULT_CURVE_2S`.
-- Bus ownership: hold `flock(LOCK_EX)` on the `/dev/i2c-1` descriptor for the whole pointer-write, settle, read transaction. `control`'s `ir_adc_node` does the same. The C++ `sensor_adc` does not and must never run beside either.
+- Bus ownership: hold `flock(LOCK_EX)` on the `/dev/i2c-1` descriptor for the whole pointer-write, settle, read transaction. `control`'s `ir_adc_node` and the bench C++ `sensor_adc` do the same. `sensor_adc` still never runs beside `ir_adc_node` (both publish `ir_sensor/range`).
 - Only add what the product device surface (D-169) uses.
 
 ### Testing Requirements

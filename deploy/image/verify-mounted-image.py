@@ -32,7 +32,8 @@ def package_names(path: Path) -> set[str]:
 
 MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
 MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
-HARDWARE_UNITS = ("rosy-io.service", "rosy-navigation.service")
+BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on")
+HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service")
 SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
 
 
@@ -110,6 +111,13 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append("missing boot configuration: boot/firmware/config.txt")
     elif not overlay_applies_to_pi5(config.read_text(encoding="utf-8", errors="replace")):
         findings.append(f"boot/firmware/config.txt does not enable {MOTOR_OVERLAY} for the Pi 5")
+    if config.is_file():
+        # The Ubuntu base image provides these today (LiDAR UART0 /dev/ttyAMA0,
+        # ADC /dev/i2c-1, both seen on rosy-pinky-e4us); a new base must not drop them.
+        text = config.read_text(encoding="utf-8", errors="replace")
+        for line in BASE_BOOT_LINES:
+            if not overlay_applies_to_pi5(text, line):
+                findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
     if not (root / MOTOR_UDEV_RULE).is_file():
         findings.append(f"missing motor udev rule: {MOTOR_UDEV_RULE}")
     # D-192 US-005: the hardware runtime ships installed, not enabled (D-161).

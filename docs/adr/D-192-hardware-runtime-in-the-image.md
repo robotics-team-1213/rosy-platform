@@ -3,8 +3,8 @@
 **Status:** Proposed (2026-09-24). 구현과 host 시험은 끝났다. 아래 "실기 수용 확인"이 통과하면 Accepted로 바꾼다.
 D-161(CORE-only 기본 target, 단일 `cmd_vel` 발행자), D-169(v1 장치 표면), D-181(편입 조건), D-189(unit 샌드박스,
 해시 고정 Python 런타임, 이미지 안 probe)를 유지한다. 새 장치는 열지 않는다. D-189가 열어 둔 "rosy-io·rosy-navigation은
-이미지 overlay에 없다"를 닫는다. 번호: D-190·D-191은 병합되지 않은 PR #26의 몫이다. 이 브랜치에서는 하네스 lint가
-그 두 번호를 빈칸으로 보고한다(아래 Validation).
+이미지 overlay에 없다"를 닫는다. 번호: D-190·D-191은 PR #26(main `7a55ee1b`)의 몫이고, 이 브랜치는 그 위로 rebase했다.
+독립 리뷰(CRITICAL·HIGH 없음)의 MEDIUM 1·LOW 7을 같은 브랜치에서 반영했다(아래 "리뷰 반영").
 
 **Context:** release `2026.09.23-005`와 응급 조치를 올린 `rosy-pinky-e4us`(2026-09-24)에서 CORE는 `CORE_READY`까지 갔다.
 공식 Pinky Pro처럼 하드웨어를 돌리는 데 필요한 것은 이미지에 하나도 없었다. 장치에서 본 것:
@@ -33,7 +33,10 @@ D-161(CORE-only 기본 target, 단일 `cmd_vel` 발행자), D-169(v1 장치 표�
    `rosy-boot-status.py`, `RuntimeDirectory=rosy-boot` 보존)를 `After=rosy-runtime.target rosy-core.service avahi-daemon.service`로
    두고 `WantedBy=multi-user.target`으로 켠다. target이 **Wants하면 안 된다**: target이 Wants한 unit은 target에 도달하기 전에
    돌고, 분류기는 그때 target을 activating으로 본다. `Requires=`·`PartOf=`도 두지 않는다 — 순서만 걸므로 런타임이 실패해도 곧바로
-   `FAILED`가 보이고, 표시 계층이 런타임을 끌어오거나 붙잡지 않는다. 30 s 타이머는 그대로다. 페이로드가 설치하고 customizer가
+   `FAILED`가 보이고, 표시 계층이 런타임을 끌어오거나 붙잡지 않는다. `TimeoutStartSec=10`(멈춘 판정이 `multi-user.target`을
+   오래 잡지 않게). `rosy-boot-status.py`는 `/run/rosy-boot/.run.lock`(root, 0600)에 배타 `flock`을 잡고 **사실 수집부터 마지막
+   sink까지** 한 번에 한 실행만 한다 — 타이머·`OnFailure=`·ready unit이 겹쳐도 먼저 수집한(activating을 본) 실행이 나중 실행의
+   `CORE_READY`를 덮지 않는다(늦게 잠근 실행이 늦게 수집하고 늦게 쓴다). 30 s 타이머는 그대로다. 페이로드가 설치하고 customizer가
    `systemctl --root … enable`, 마운트 검사기가 unit과 `multi-user.target.wants` 링크를 확인한다.
 2. **US-004 — UART4는 이미지가 켠다. 쓰는 코드는 하나다.** customizer가 overlay를 풀어 놓은 뒤
    `bash "$UART_CONFIG" --image-root "$ROOT"`로 `deploy/robot/configure-uart-pi5.sh`를 부른다. 판정(`grep -Fqx` + `[all]`/`[pi5]`
@@ -57,10 +60,12 @@ D-161(CORE-only 기본 target, 단일 `cmd_vel` 발행자), D-169(v1 장치 표�
    - **`sllidar_ros2`:** `inputs.lock.yaml` `hardware_dependencies`에 `sllidar_ros2_commit: 34300099fadfc772965962dec837bf436706188f`
      (Docker 경로와 같은 커밋), `sllidar_ros2_url: https://codeload.github.com/Slamtec/sllidar_ros2/tar.gz/<commit>`,
      `sllidar_ros2_sha256: 6a57c289a235a37dce0b07ef6fdc3ee003e646140d3fdc982988e7bf652367a7`(2026-09-24 독립 다운로드 2회 일치).
-     `rpi_ws281x`와 같은 경로다: `install-pinky-hardware-deps.sh`가 받아 해시를 확인하고 작업 트리 밖
-     (`${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}/sllidar_ros2`)에 풀고 해시를 `.rosy-archive-sha256`으로 남긴다.
-     `build-native-payload.sh`는 오프라인 규칙을 지킨다(네트워크 없음) — 표시된 해시가 lock과 다르면 거부하고, rosdep·colcon에
-     `src`와 나란히 base path로 넘긴다. 인벤토리에 들어가고, `vendor-ros-packages.txt`로 `ros2 pkg prefix`가 릴리스 prefix 안인지
+     `rpi_ws281x`와 같은 경로다: `install-pinky-hardware-deps.sh`가 받아 해시를 확인하고 **아카이브 그대로**
+     `${ROSY_VENDOR_ARCHIVES:-/usr/local/src/rosy-vendor}/sllidar_ros2-<commit>.tar.gz`로 둔다. `build-native-payload.sh`는
+     오프라인 규칙을 지킨다(네트워크 없음): `prepare-vendor-source.sh`가 그 아카이브를 lock 해시와 다시 `sha256sum --check`하고,
+     새 `mktemp -d`에 풀고, `package.xml`이 루트의 `sllidar_ros2` 하나뿐인지(다른 패키지·다른 이름이면 거부) 확인한다. rosdep
+     `--from-paths`와 colcon `--base-paths`에는 그 디렉터리 `<tmp>/sllidar_ros2` 하나만 `src`와 나란히 넘긴다(리뷰 MEDIUM: 풀어 둔
+     트리 옆의 해시 표시는 트리 내용을 증명하지 못했고, 공용 디렉터리 전체를 base path로 넘겼다). 인벤토리에 들어가고, `vendor-ros-packages.txt`로 `ros2 pkg prefix`가 릴리스 prefix 안인지
      확인한다. `required-ros-packages.txt`에 넣지 않은 이유: 그 목록은 `resolve-required-source-paths.py`가 저장소 안 폐포로 푼다.
    - **`dynamixel-sdk==3.8.4`, `pyserial==3.5`:** 별도 io lock이 아니라 `device-python-requirements.txt`에 더했다(순수 휠, 휠당 해시
      하나, cp312 aarch64·x86_64 `--require-hashes --only-binary=:all:` 다운로드로 16개 전부 확인, 폐포는 pyserial 하나). 이유:
@@ -84,8 +89,9 @@ D-161(CORE-only 기본 target, 단일 `cmd_vel` 발행자), D-169(v1 장치 표�
    `rosy-io`에서 ADC를 읽는 것은 `battery_publisher` 하나다. 그러나 `rosy-navigation`(`hardware.launch.py`)은 같은 bringup에
    `enable_line_follow`로 control의 `ir_adc_node`(채널 0-2)를 더할 수 있다. 결정: **Rosy의 모든 0x08 독자는 자기 `/dev/i2c-1`
    descriptor에 `flock(LOCK_EX)`를 잡고 트랜잭션 전체(IR은 세 채널 한 주기)를 끝낸 뒤 푼다.** `rosylib.Battery`와 `ir_adc_node`가
-   그렇게 한다. flock은 inode 단위라 서로 다른 프로세스가 따로 연 descriptor끼리도 배제된다. 잠그지 않는 C++ `sensor_adc`는 벤치
-   전용으로 남고, 어떤 하드웨어 launch도 띄우지 않는다(`test_ir_source_exclusivity`, `test_adc_ownership`).
+   그렇게 한다. flock은 inode 단위라 서로 다른 프로세스가 따로 연 descriptor끼리도 배제된다. 벤치 전용 C++ `sensor_adc`도 채널
+   트랜잭션마다 같은 flock을 잡는다(리뷰 반영). 그래도 `ir_adc_node`와 함께 돌지 않는다 — 둘 다 `ir_sensor/range`를 발행한다 —
+   그리고 어떤 하드웨어 launch도 띄우지 않는다(`test_ir_source_exclusivity`, `test_adc_ownership`).
    구독 방식(`battery_publisher`가 `sensor_adc`의 `batt_state`를 받기)을 고르지 않은 이유: 그러면 `sensor_adc`가 제품 그래프에 들어와야
    하는데, 그것은 `ir_adc_node`와 같은 `ir_sensor/range`를 발행하므로 이미 금지된 조합이다.
 5. **무동작 하드웨어 모드가 `rosy-io`의 기본이다.**
@@ -101,6 +107,9 @@ D-161(CORE-only 기본 target, 단일 `cmd_vel` 발행자), D-169(v1 장치 표�
    - `rosy-io.service`: `Environment=ROSY_IO_DRIVE_ENABLED=false`를 `EnvironmentFile=/etc/rosy/runtime.env` 앞에 두고
      `drive_enabled:=${ROSY_IO_DRIVE_ENABLED}`를 넘긴다. EnvironmentFile이 Environment를 이기므로, 구동은
      `/etc/rosy/runtime.env`에 `ROSY_IO_DRIVE_ENABLED=true`를 적는 명시적 root 행위다. 첫 부팅이 쓰는 runtime.env에는 이 키가 없다.
+     값은 정확히 `true`·`false`만 받는다: `ExecStartPre`가 그 밖의 값(`yes`, `1`, `True`, 빈 값, 미설정)이면 78로 unit을 멈춘다.
+     launch_ros는 `yes`·`1`·`True`를 참으로 읽어 구동하므로, 틀린 값은 무동작이 아니라 **기동 실패**로 닫는다. 노드의
+     `drive_enabled`는 `read_only` 파라미터다 — 돌고 있는 노드에 `ros2 param set`으로 torque를 켤 수 없다.
      배터리 발행자는 켠다(`enable_battery:=true`, ADC는 v1 표면).
    - 모드 개념 정리: `ROSY_RUNTIME_MODE`(`core|motor|hardware`)는 Docker 경로 `runtime-mode.sh`가 compose 프로필을 고르는 스위치이고,
      네이티브에서는 CORE가 읽는 설정 값(capabilities/내비게이션 readiness 기본값)일 뿐 unit을 켜고 끄지 않는다. 네이티브에서
@@ -147,12 +156,31 @@ codeload 아카이브 하나를 더 받는다(해시 고정. GitHub가 아카이
   보정, 또는 팩 종류(고전압 셀) 가운데 무엇인지는 모른다. 충전 직후가 아닌 방전 중 전압을 여러 번 재어 결정한다. 곡선을 바꾸는 것은
   CORE와 함께 바꾸는 변경이다(동일성 시험).
 - **카메라 BLOCKED.** 센서 열거(`libcamera`/`v4l2`) 실기 증거가 생기면 overlay와 노드를 D-181 절차로 연다.
-- **`sensor_adc`의 잠금.** C++ 노드는 잠그지 않는다. 제품 그래프에 들어오는 날 같은 flock을 넣는다.
-- **customizer chroot의 rosdep.** `bringup`의 `sllidar_ros2` exec_depend는 chroot rosdep에서 소스 경로 밖이라 해석되지 않는다(`-r`로
-  계속한다 — 005와 같은 동작). 드라이버의 실행 의존(`rclcpp`, `sensor_msgs`, `std_srvs`)은 `ros-jazzy-ros-base`에 있다. io probe는
-  import와 파일만 보므로 `sllidar_node`의 공유 라이브러리 해석은 실기에서 확인한다.
+- **`sensor_adc` flock은 링크·실행되지 않았다.** WSL `g++ -fsyntax-only`(Jazzy 헤더 + wiringPi 스텁)는 통과했다. 실제 빌드는 다음 arm64 빌드가 처음이다.
+- **`sllidar_node`의 공유 라이브러리.** io probe는 import와 파일만 본다. 드라이버의 실행 의존(`rclcpp`, `sensor_msgs`, `std_srvs`)은
+  `ros-jazzy-ros-base`에 있지만, 라이브러리 해석은 실기에서 확인한다.
 - **`ROSY_IO_DRIVE_ENABLED`의 첫 부팅 기록.** 첫 부팅(`deploy/image/first-boot`)은 이 키를 쓰지 않으므로 기본은 무동작이다. 구동 허용을
   개인화 bundle로 옮길지는 첫 부팅 담당 변경이 정한다.
+
+**리뷰 반영(2026-09-24, 같은 브랜치):**
+
+- (MEDIUM) 벤더 해시 고정을 실제로 만들었다 — 위 3의 `prepare-vendor-source.sh`. 시험은 스크립트를 bash로 실제로 돌려 바뀐
+  아카이브, 여분 패키지, 다른 이름, 쓰던 목적지를 모두 거부하는지 본다.
+- (LOW) `drive_enabled` read-only; `battery_publisher`는 시작 때 버스가 없어도 죽지 않고 타이머에서 다시 열며 그동안 아무것도
+  발행하지 않는다(읽기 실패도 핸들을 닫고 다음 주기에 다시 연다); `sensor_adc` flock; ready unit 10 s와 실행 직렬화;
+  source-grep 대신 동작 시험(stub rclpy 위의 `Rosy` 노드, fake fd 위의 `_ADCReader`, 호출 순서에 기록된 settle).
+- (LOW) 기반 `config.txt` 가드: 장치(`rosy-pinky-e4us`)의 Ubuntu 기본 `config.txt`에는 `enable_uart=1`이 있고 uart0 dtparam은 없으며
+  `/dev/ttyAMA0`(LiDAR)과 `/dev/i2c-1`(dialout 0660)이 있었다. uart0 변경은 하지 않는다. 대신 마운트 검사기가 `enable_uart=1`과
+  `dtparam=i2c_arm=on`이 Pi 5에 적용되는지(섹션 앞, `[all]`, `[pi5]`) 확인해 다음 기반 이미지가 조용히 빼면 빌드가 멈춘다.
+- (LOW) chroot rosdep: `vendor-ros-packages.txt`의 키(`sllidar_ros2`)를 `--skip-keys`로 넘긴다. rosdistro가 그 키를 알든 모르든,
+  `-r`의 종료 코드 동작에 기대지 않고 rosdep이 해석을 시도하지 않는다(시험은 customizer의 그 구간을 bash로 실제 실행).
+- (LOW) 장치의 `config.txt` 복구: 아래.
+
+**장치 retrofit의 `config.txt` 복구(`configure-uart-pi5.sh`, 장치 경로만):** 스크립트는 처음 한 번 `config.txt.rosy-backup`을 남기고
+같은 디렉터리의 임시 파일을 rename으로 바꾼다. vfat의 rename은 전원 차단에 원자적이지 않다(FAT 디렉터리 항목 갱신이 한 번의
+쓰기가 아니다). 편집 중 전원이 끊겨 부팅하지 않으면: 카드를 PC에 꽂고 부트 파티션(`system-boot`)에서 `config.txt`가 없거나
+비었거나 `.rosy-uart.XXXXXX`만 남았으면 `config.txt.rosy-backup`을 `config.txt`로 복사한다. 그 뒤 장치에서 스크립트를 다시
+돌린다(멱등). 이미지 경로는 백업을 남기지 않는다 — 이미지 빌드는 실패하면 버리고 다시 만든다.
 
 **실기 수용 확인(US-004/US-005, 새 카드):**
 
@@ -177,8 +205,9 @@ test/test_image_customization_contract.py test/test_native_runtime_installed_lay
 test/test_rosy_motor_udev.py test/test_native_ros_payload.py test/test_device_surface_contract.py test/test_rosylib_battery_curve.py
 test/test_dynamixel_driver_safety.py test/test_bringup_motor_contracts.py test/test_ir_source_exclusivity.py
 test/test_release_boundary_guards.py test/test_harness_contracts.py test/test_source_encoding.py deploy/image/test src/hardware/*/test -q`.
-`configure-uart-pi5.sh`의 이미지 모드는 Git Bash에서 실제로 실행했다. 이미지 빌드(arm64)와 io probe의 chroot 실행은 다음 이미지 빌드가
-처음이다. 하네스 lint는 이 브랜치에서 `D-190`·`D-191` 누락을 보고한다(PR #26 병합 시 해소, 빈칸 선언을 하지 않는다).
+`configure-uart-pi5.sh`의 이미지 모드와 `prepare-vendor-source.sh`는 Git Bash에서 실제로 실행했고, 표시 실행 잠금의 동시성 시험은
+WSL(POSIX)에서 돌렸다. 이미지 빌드(arm64)와 io probe의 chroot 실행은 다음 이미지 빌드가 처음이다. `origin/main`(`7a55ee1b`,
+D-190·D-191 포함)으로 rebase한 뒤 하네스 lint는 `0 error(s)`다.
 
 **References:** D-161, D-169, D-181, D-189, D-178,
 [Pinky Pro OS 조사](../plans/2026-09-21-pinky-pro-os-research.md) §3.4·§4-6,

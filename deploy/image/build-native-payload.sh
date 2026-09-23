@@ -50,16 +50,16 @@ lock_value() {
 
 # D-192 US-005: the RPLIDAR C1 driver the bringup launch includes. Not in the
 # repository and not an apt package: install-pinky-hardware-deps.sh fetched
-# the locked archive, checked its SHA-256 and unpacked it outside the
-# workspace with the hash beside it. This builder stays offline and only
-# accepts a tree stamped with the hash this lock names.
-VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"
-SLLIDAR_SHA256="$(lock_value hardware_dependencies sllidar_ros2_sha256)"
-[[ "$SLLIDAR_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "sllidar_ros2_sha256 is invalid"
-[[ -f "$VENDOR_SRC/sllidar_ros2/package.xml" ]] \
-    || fail "sllidar_ros2 source is missing; run install-pinky-hardware-deps.sh first"
-[[ "$(tr -d '[:space:]' < "$VENDOR_SRC/sllidar_ros2/.rosy-archive-sha256")" == "$SLLIDAR_SHA256" ]] \
-    || fail "sllidar_ros2 source is not the archive inputs.lock.yaml names"
+# the locked archive. This builder stays offline: it re-checks that archive
+# against the lock, extracts it into a fresh directory and builds exactly
+# that one package (review: a stamp next to an unpacked tree proved nothing).
+VENDOR_ARCHIVES="${ROSY_VENDOR_ARCHIVES:-/usr/local/src/rosy-vendor}"
+VENDOR_WORK="$(mktemp -d)"
+trap 'rm -rf -- "$VENDOR_WORK"' EXIT
+SLLIDAR_SRC="$("$SCRIPT_DIR/prepare-vendor-source.sh" --lock "$LOCK" \
+    --archive-dir "$VENDOR_ARCHIVES" --dest "$VENDOR_WORK")" \
+    || fail "sllidar_ros2 source did not verify against inputs.lock.yaml"
+[[ "$SLLIDAR_SRC" == "$VENDOR_WORK/sllidar_ros2" ]] || fail "unexpected sllidar_ros2 path: $SLLIDAR_SRC"
 
 ACTUAL_REVISION="$(git -C "$WORKSPACE" rev-parse HEAD)"
 [[ "$ACTUAL_REVISION" == "$SOURCE_REVISION" ]] \
@@ -97,14 +97,14 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 
-rosdep install --from-paths "$WORKSPACE/src" "$VENDOR_SRC" --ignore-src -r -y \
+rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
     --rosdistro "$ROS_DISTRO"
 
 (
     cd "$WORKSPACE"
-    colcon build --base-paths src "$VENDOR_SRC" --merge-install \
+    colcon build --base-paths src "$SLLIDAR_SRC" --merge-install \
         --install-base "$INSTALL_ROOT" --event-handlers console_direct+
-    colcon list --base-paths src "$VENDOR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
+    colcon list --base-paths src "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"
 dpkg-query -W -f='${Package}\t${Version}\n' | LC_ALL=C sort > "$DEB_INVENTORY.tmp"

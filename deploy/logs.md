@@ -897,3 +897,17 @@
 - gate 변화: 없음. 이미지 빌드와 실기 확인(D-192 "실기 수용 확인" 1-9)이 남았다
 - 결정: D-192 Proposed
 - 교훈: 이미지가 굽지 않는 retrofit 스크립트는 장치에만 있는 설정을 만든다 — 이미지와 장치가 같은 스크립트를 부르게 한다
+
+## 2026-09-24 · uncommitted · fix(image,bringup): D-192 review
+
+- 변경: (MEDIUM) 벤더 해시 고정: hardware-deps 단계는 `sllidar_ros2` 아카이브를 그대로 두고, payload 빌더가
+  `prepare-vendor-source.sh`로 lock 해시를 다시 확인해 새 임시 디렉터리에 풀고 루트의 `sllidar_ros2` 하나만(여분·다른 이름 거부)
+  rosdep·colcon에 넘긴다. (LOW) `drive_enabled` read-only, `ROSY_IO_DRIVE_ENABLED`는 `ExecStartPre`로 `true`/`false`만(그 밖은 78로
+  기동 실패), `battery_publisher` 버스 재시도(fail-closed), `sensor_adc` C++ flock, ready unit `TimeoutStartSec=10`과
+  `rosy-boot-status.py` 실행 잠금(`/run/rosy-boot/.run.lock`), 검사기가 기반 `config.txt`의 `enable_uart=1`·`dtparam=i2c_arm=on`
+  확인, chroot rosdep `--skip-keys sllidar_ros2`, 장치 `config.txt.rosy-backup` 복구 절차를 D-192에 기록. source-grep 시험을
+  동작 시험(stub rclpy 노드, fake fd IR 독자, settle 순서)으로 바꿨다. `origin/main 7a55ee1b`(D-190·D-191)로 rebase.
+- 증거: 관련 host 스위트 통과(2026-09-24 Windows, 수치는 보고서), 실행 잠금 동시성 시험은 WSL에서 통과, 하네스 lint 0 error.
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 풀어 둔 트리 옆의 해시 표시는 내용을 증명하지 않는다 — 해시는 빌드가 실제로 읽는 바이트에 건다

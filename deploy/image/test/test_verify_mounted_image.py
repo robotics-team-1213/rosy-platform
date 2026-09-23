@@ -67,7 +67,8 @@ def test_inspect_passes_with_valid_image(tmp_path):
     (wants.parent / "rosy-boot-status-ready.service").write_text("mock", encoding="utf-8")
     # D-192 US-004: the motor bus overlay and its alias rule.
     (root / "boot/firmware").mkdir(parents=True)
-    (root / "boot/firmware/config.txt").write_text("[all]\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+    (root / "boot/firmware/config.txt").write_text(
+        "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtoverlay=uart4-pi5\n", encoding="utf-8")
     (root / "etc/udev/rules.d").mkdir(parents=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text("mock", encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.

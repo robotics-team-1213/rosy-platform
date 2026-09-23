@@ -19,8 +19,9 @@ Bus ownership (D-192): other processes read the same MCU (``control``'s
 ``ir_adc_node``). A reading is a pointer write, a settle and a read; two
 readers interleaving them read each other's channel. Every Rosy reader of
 0x08 therefore holds an exclusive ``flock`` on its ``/dev/i2c-1`` descriptor
-for the whole transaction. The bench-only C++ ``sensor_adc`` does not take the
-lock and must never run beside a Rosy reader (``test_ir_source_exclusivity``).
+for the whole transaction, the bench-only C++ ``sensor_adc`` included. That
+node still never runs beside ``ir_adc_node`` (both publish ``ir_sensor/range``;
+``test_ir_source_exclusivity``).
 """
 
 from __future__ import annotations

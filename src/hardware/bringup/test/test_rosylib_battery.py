@@ -50,8 +50,13 @@ class FakeI2C:
         self.calls.append(("close", fd))
 
 
-def _battery(io, sleeps=None):
-    return Battery(io=io, sleep=(sleeps.append if sleeps is not None else lambda _s: None))
+def _battery(io):
+    # The settle is recorded in the same call log, so its place is asserted.
+    def sleep(seconds):
+        assert io.locked, "settled outside the bus lock"
+        io.calls.append(("sleep", seconds))
+
+    return Battery(io=io, sleep=sleep)
 
 
 def test_opens_the_adc_mcu_on_i2c_1():
@@ -62,12 +67,11 @@ def test_opens_the_adc_mcu_on_i2c_1():
 
 def test_one_transaction_is_pointer_write_settle_two_byte_read_under_the_lock():
     io = FakeI2C(replies=[bytes((0x8A, 0x70))])
-    sleeps = []
 
-    raw = _battery(io, sleeps).read_raw()
+    raw = _battery(io).read_raw()
 
-    assert io.calls[1:] == [("lock", 7), ("write", 7, bytes((0xF8,))), ("read", 7, 2), ("unlock", 7)]
-    assert sleeps == [pytest.approx(0.006)]
+    assert io.calls[1:] == [("lock", 7), ("write", 7, bytes((0xF8,))), ("sleep", pytest.approx(0.006)),
+                            ("read", 7, 2), ("unlock", 7)]
     assert raw == (0x8A << 4) + (0x70 >> 4)
 
 

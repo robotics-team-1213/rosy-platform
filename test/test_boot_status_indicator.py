@@ -295,6 +295,72 @@ def test_image_installs_and_enables_the_ready_run():
     assert '"rosy-boot-status-ready.service"' in verifier
 
 
+def test_ready_run_gives_up_quickly():
+    # D-192 review: a stuck ready run must not hold multi-user.target for 30 s.
+    assert "TimeoutStartSec=10" in _unit_lines(READY.read_text(encoding="utf-8"))
+
+
+def test_one_run_holds_the_lock_from_gathering_to_the_last_sink(tmp_path, monkeypatch):
+    # D-192 review: an older classification must never overwrite CORE_READY.
+    module = _module()
+    events: list[str] = []
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def lock(root):
+        assert root == tmp_path
+        events.append("lock")
+        yield
+        events.append("unlock")
+
+    def gather(root, run):
+        events.append("gather")
+        return {"units": {}, "provisioning": None}
+
+    monkeypatch.setattr(module, "run_lock", lock)
+    monkeypatch.setattr(module, "gather", gather)
+    monkeypatch.setattr(module, "classify", lambda units, provisioning: module.Stage("BOOTING"))
+    monkeypatch.setattr(module, "status_record", lambda facts, stage, now: {"stage": "X"})
+    monkeypatch.setattr(module, "apply", lambda root, record, stage, run: events.append("apply") or [])
+
+    assert module.main(["--root", str(tmp_path)]) == 0
+    assert events == ["lock", "gather", "apply", "unlock"]
+
+
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="flock is POSIX; the ordering test above covers Windows hosts")
+def test_a_second_run_waits_for_the_first(tmp_path):
+    import threading
+
+    module = _module()
+    entered = threading.Event()
+    release = threading.Event()
+    second_in = threading.Event()
+
+    def first():
+        with module.run_lock(tmp_path):
+            entered.set()
+            release.wait(5)
+
+    def second():
+        with module.run_lock(tmp_path):
+            second_in.set()
+
+    one = threading.Thread(target=first)
+    one.start()
+    assert entered.wait(5)
+    two = threading.Thread(target=second)
+    two.start()
+    assert not second_in.wait(0.3), "second run entered while the first held the lock"
+    release.set()
+    assert second_in.wait(5)
+    one.join()
+    two.join()
+    lock_file = tmp_path / "run/rosy-boot/.run.lock"
+    assert lock_file.is_file() and (lock_file.stat().st_mode & 0o777) == 0o600
+
+
 # --- Fallback AP shown to people (D-176 Task 5) -----------------------------
 
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal

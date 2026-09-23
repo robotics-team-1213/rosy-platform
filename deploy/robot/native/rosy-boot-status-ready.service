@@ -12,7 +12,7 @@ Wants=avahi-daemon.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-status.py
-TimeoutStartSec=30
+TimeoutStartSec=10
 Nice=10
 # Same root-owned directory as rosy-boot-status.service; never /run/rosy,
 # which rosy-core owns (D-161).

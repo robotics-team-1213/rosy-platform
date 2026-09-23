@@ -152,8 +152,16 @@ ROSDEP_PATH_OUTPUT="$(
 )" || fail "could not resolve required ROSY package dependency closure"
 [[ -n "$ROSDEP_PATH_OUTPUT" ]] || fail "required ROSY package dependency closure is empty"
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
+# D-192: third-party packages the release builds itself (sllidar_ros2, which
+# bringup exec_depends on) are not in these source paths; skip their keys so
+# rosdep never tries to resolve them, whether or not rosdistro knows them.
+mapfile -t VENDOR_ROS_PACKAGES < <(
+    tr -d '\r' < "$(dirname "$0")/vendor-ros-packages.txt" \
+        | sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d'
+)
+(( ${#VENDOR_ROS_PACKAGES[@]} > 0 )) || fail "vendor ROS package list is empty"
 chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
-    --ignore-src -r -y --rosdistro jazzy
+    --ignore-src -r -y --rosdistro jazzy --skip-keys "${VENDOR_ROS_PACKAGES[*]}"
 # D-189 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
 # pydantic 1.10 and fastapi 0.101, and nothing provides websockets. CORE needs
 # the hash-locked set. Root pip on Ubuntu installs into

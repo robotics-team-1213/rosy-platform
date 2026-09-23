@@ -303,3 +303,10 @@
 - gate 변화: 없음
 - 결정: D-192 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(control): ir_adc_node bus lock is a behaviour test (D-192 review)
+- 변경: fake fd·fake `fcntl` 위에서 `_ADCReader.read_channels`를 돌려 잠금이 세 채널의 쓰기·대기·읽기 전체를 덮고 실패 때도 풀리는지 본다
+- 증거: `python -m pytest src/apps/control/test/test_ir_adc_lock.py -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 없음

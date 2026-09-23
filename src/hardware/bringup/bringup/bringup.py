@@ -12,6 +12,7 @@ from tf2_ros import TransformBroadcaster
 from tf_transformations import quaternion_from_euler
 from std_msgs.msg import Bool, Float32
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rcl_interfaces.msg import ParameterDescriptor
 
 from .command_deadman import CommandDeadman
 from .dynamixel_driver import (
@@ -76,7 +77,11 @@ class Rosy(Node):
         # cmd_vel and never reports motor/ready, while odometry, joint states
         # and TF still come from the encoders. Not a board parameter, so it
         # stays outside the PinkyProAdapter mapping.
-        self.declare_parameter('drive_enabled', True)
+        # Read-only: `ros2 param set` must not turn torque on under a running node.
+        self.declare_parameter('drive_enabled', True, ParameterDescriptor(
+            read_only=True,
+            description='false = no-motion mode (D-192); set at launch only',
+        ))
         drive_enabled = self.get_parameter('drive_enabled').value
         if not isinstance(drive_enabled, bool):
             raise ValueError('drive_enabled must be a boolean')
