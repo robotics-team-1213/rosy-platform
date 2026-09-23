@@ -248,3 +248,11 @@
 - gate 변화: 없음.
 - 결정: D-171 트랙 1 코드 보류(사용자 승인). 다음 과제는 rig 간헐 실패의 원인이다.
 - 교훈: 한 번씩만 돌린 rig 이분 탐색이 틀린 원인을 지목했다. "검증된 부분"이라는 판단도 표본이 쌓이자 뒤집혔다. 타이밍에 흔들리는 검증 수단은 판정 전에 기준본의 실패율부터 잰다.
+
+## 2026-09-23 · uncommitted · fix(control): dock tag detection works on the device's OpenCV 4.6
+
+- 변경: `sensing/dock_tag.py`가 OpenCV 4.7에서 생긴 `cv2.aruco.ArucoDetector`만 불렀다. 실기 이미지는 Ubuntu 24.04의 `python3-opencv`(4.6, `package.xml` exec_depend)를 쓰고, 4.6에는 모듈 함수 `cv2.aruco.detectMarkers`만 있다. 그래서 실기에서는 도킹 인식기가 만들어진 뒤 매 프레임 `AttributeError`로 도크를 한 번도 보지 못했다(`select_detector`는 이미 성공했으므로 simulated로도 떨어지지 않는다). `_detect_markers()`가 있는 API를 `hasattr`로 골라 쓴다(4.6 모듈 함수 / 4.7+ `ArucoDetector`; 개발 PC의 5.0은 모듈 함수가 없다). 시험의 마커 생성도 `generateImageMarker`(4.7+) 없으면 `drawMarker`(4.6)를 쓴다.
+- 증거: WSL Ubuntu 24.04 `python3-opencv` 4.6.0에서 도킹 관련 5개 시험 파일(control dock_tag·dock_detector·sensor_provider, games overhead, core docking): 이전 `dock_tag.py` 11 failed / 119 passed, 수정 후 130 passed. Windows OpenCV 5.0.0에서도 130 passed.
+- gate 변화: 없음(실기 도킹 DEVICE 증거는 여전히 없다).
+- 결정: 없음.
+- 교훈: 개발 PC(OpenCV 5.0)와 CI(OpenCV 없음, 시험 건너뜀)가 모두 초록이어도 실기 apt 버전(4.6)에서는 깨질 수 있다. 실기와 같은 배포판 패키지로 한 번은 돌린다.

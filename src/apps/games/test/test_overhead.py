@@ -20,7 +20,7 @@ def _dictionary():
 def _marker(marker_id: int, size: int = 48):
     dictionary = _dictionary()
     try:
-        return cv2.aruco.generateImageMarker(dictionary, marker_id, size)
+        return (getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker)(dictionary, marker_id, size)
     except AttributeError:
         return cv2.aruco.drawMarker(dictionary, marker_id, size)
 

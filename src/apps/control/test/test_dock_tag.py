@@ -28,7 +28,7 @@ DIST = np.zeros(5)
 
 def _marker_canvas(marker_px: int = 200, canvas_wh: tuple[int, int] = (640, 480)) -> np.ndarray:
     """White canvas with one fronto-parallel tag dead centre."""
-    marker = cv2.aruco.generateImageMarker(DICT, SPEC.tag_id, marker_px)
+    marker = (getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker)(DICT, SPEC.tag_id, marker_px)
     canvas = np.full((canvas_wh[1], canvas_wh[0], 3), 255, dtype=np.uint8)
     x0 = (canvas_wh[0] - marker_px) // 2
     y0 = (canvas_wh[1] - marker_px) // 2
@@ -68,7 +68,7 @@ def test_empty_frame_is_no_dock_not_a_guess():
 
 def test_unknown_tag_id_is_refused():
     """A tag from another dock family must not parse as ours (SRS: fail-closed)."""
-    marker = cv2.aruco.generateImageMarker(DICT, 42, 200)
+    marker = (getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker)(DICT, 42, 200)
     canvas = np.full((480, 640, 3), 255, dtype=np.uint8)
     canvas[140:340, 220:420] = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
     assert detect_dock_tag(canvas, SPEC, CAMERA_MATRIX, DIST) is None
