@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# rosy-diag: D-175 L2 diagnostics on the device. Usage: rosy-diag collect --out DIR
+# Runs from the installed native runtime; resolves a symlink on PATH to find it.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec python3 -B "$SCRIPT_DIR/rosy_diag_collect.py" "$@"

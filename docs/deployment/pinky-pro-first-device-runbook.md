@@ -183,6 +183,34 @@ the release/runtime commands below need root. For the Local console path, use
 `--connection console`. Never attach a password, token, credential, private
 key, or `.env` file.
 
+### Changing the site Wi-Fi on the card (D-176)
+
+Power the robot off and put the card in a PC. The boot partition holds
+`rosy-config.yaml`, a commented template written with the card. Uncomment the
+`wifi:` block, set the SSID and password, save, and boot the robot. At boot
+`rosy-config.service` applies the file and rewrites every password on the card
+as `"<applied>"`; the Wi-Fi key stays only in the root-only NetworkManager
+profile. An invalid file applies nothing: the console banner and
+`rosy-diag/` on the boot partition name the error. Identity keys
+(`device_name`, `hostname`, ...) are refused here; change identity by
+rewriting the card with `-ReprovisionReceipt`.
+
+### Reaching the robot through its own AP (D-176)
+
+With no uplink for 120 s the robot opens the WPA2 AP named after the device
+(`rosy-pinky-xxxx`). The password was printed once when the card was written
+and is kept in the writer PC's DPAPI store
+(`%LOCALAPPDATA%\Rosy\ap\<device>.credential.xml`); a local console also shows
+it. Join the AP and connect with the operator key:
+
+```powershell
+ssh -i $env:LOCALAPPDATA\Rosy\ssh\rosy-operator-ed25519 rosy@10.42.0.1
+```
+
+Pi 5 has one radio, so while the AP is up the site Wi-Fi is not scanned. After
+600 s the AP steps aside for another 120 s site Wi-Fi attempt. `ap.mode: relay`
+keeps the AP up; `ap.mode: off` never opens it.
+
 ## 3. Record contract
 
 For every gate, save raw output under `$EVIDENCE`. `prepare` derives G0-G2 from

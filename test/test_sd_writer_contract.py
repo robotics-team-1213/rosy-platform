@@ -244,7 +244,7 @@ def test_existing_receipt_is_never_overwritten(writer_case):
 def test_wrong_confirmation_never_invokes_writer(writer_case):
     completed = _run(
         writer_case,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-wrong",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-wrong",
         plan_only=False,
     )
 
@@ -288,7 +288,7 @@ def test_successful_write_stages_one_time_bundle_and_updates_registry(writer_cas
     boot.mkdir()
     completed = _run(
         writer_case,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
         "-BootMountPath", boot,
         plan_only=False,
     )
@@ -325,7 +325,7 @@ def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case,
 
     completed = _run(
         writer_case,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
         "-BootMountPath", boot,
         plan_only=False,
     )
@@ -347,7 +347,7 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "--cli" in text and "--sha256" in text
     assert "--disable-verify" not in text
     assert "cmd /c" not in text.lower()
-    assert '"ERASE DISK $DiskNumber $DeviceName"' in text
+    assert '"ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"' in text
     assert "Start-Process" in text
     assert "-Wait" in text
     assert "-PassThru" in text
@@ -451,7 +451,7 @@ def test_write_reuses_the_reviewed_plan_identity(writer_case, tmp_path):
     completed = _run(
         writer_case,
         "-PlanPath", plan_path,
-        "-Confirmation", f"ERASE DISK 7 {plan['device_name']}",
+        "-Confirmation", f"ERASE SERIAL FIXTURE-SD-0007 {plan['device_name']}",
         "-BootMountPath", boot,
         plan_only=False,
         omit=("-RobotNumber", "-DeviceName", "-DeviceUid"),
@@ -491,7 +491,7 @@ def test_write_refuses_a_plan_that_no_longer_matches(writer_case, tmp_path, fiel
     completed = _run(
         writer_case,
         "-PlanPath", plan_path,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
         plan_only=False,
     )
 
@@ -510,7 +510,7 @@ def test_write_refuses_explicit_identity_that_contradicts_the_plan(writer_case, 
         writer_case,
         "-PlanPath", plan_path,
         "-RobotNumber", "9",
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
         plan_only=False,
     )
 
@@ -530,7 +530,7 @@ def _plan_then_write(case, tmp_path, mutate=None, *extra, omit=()):
     return _run(
         case,
         "-PlanPath", plan_path,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
         *extra,
         plan_only=False,
         omit=omit,
@@ -559,7 +559,7 @@ def test_write_refuses_arguments_that_differ_from_the_plan_even_by_case(writer_c
 def test_automatic_robot_number_is_never_drawn_inside_a_write(writer_case, tmp_path):
     completed = _run(
         writer_case,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
         "-BootMountPath", tmp_path,
         plan_only=False,
         omit=("-RobotNumber",),
@@ -633,7 +633,7 @@ def test_operator_key_is_fingerprinted_in_the_plan_and_installed_on_write(writer
 
     completed = _run(
         writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", key_file,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", "-BootMountPath", boot,
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4", "-BootMountPath", boot,
         plan_only=False,
     )
 
@@ -653,7 +653,7 @@ def test_a_different_operator_key_than_reviewed_stops_before_the_writer(writer_c
 
     completed = _run(
         writer_case, "-PlanPath", plan_path, "-OperatorPublicKey", other,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", plan_only=False,
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4", plan_only=False,
     )
 
     assert completed.returncode != 0
@@ -707,7 +707,7 @@ def test_a_registered_identity_can_be_rewritten_only_with_its_prior_receipt(writ
 
     completed = _run(
         writer_case, "-ReprovisionReceipt", prior,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4", "-BootMountPath", boot,
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4", "-BootMountPath", boot,
         plan_only=False,
     )
 
@@ -768,7 +768,7 @@ def test_reprovision_receipt_cannot_launder_another_plans_identity(writer_case, 
 
     completed = _run(
         writer_case, "-PlanPath", plan_path, "-ReprovisionReceipt", prior,
-        "-Confirmation", "ERASE DISK 7 rosy-pinky-abcd", plan_only=False,
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-abcd", plan_only=False,
         omit=("-RobotNumber", "-DeviceName", "-DeviceUid"),
     )
 
@@ -803,3 +803,150 @@ def test_reprovision_proof_fields_are_strictly_typed(writer_case, tmp_path, over
 
     assert completed.returncode != 0
     assert "reprovision receipt" in completed.stderr
+
+
+def test_operator_key_is_passed_as_an_argument_not_through_the_console():
+    # Release 004 plan: piping the key through PowerShell 5.1 prepended a BOM and
+    # the real key was refused; the fixture run had no console and passed.
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "operator_key_fingerprint(sys.argv[1])" in text
+    assert "$operatorKey | &" not in text
+
+
+def test_the_writer_never_tries_to_offline_removable_media():
+    # Release 004 retry: "Removable media cannot be set to offline." Mount metadata
+    # is tolerated by verify-media-readback.py instead (see test_media_readback.py).
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "-IsOffline $true" not in text
+    assert "$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget" in text
+
+
+# --- Disk selected by serial, not by Windows disk number -------------------
+# Release 004: another USB device disappeared, the card moved from disk 2 to
+# disk 1, and a reviewed plan pinned to the number could no longer be written.
+
+
+def _inventory(case, *disks):
+    case["inventory"].write_text(json.dumps(list(disks)), encoding="utf-8")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_reviewed_plan_follows_its_card_to_a_new_disk_number(writer_case, tmp_path):
+    plan_path = tmp_path / "plan.json"
+    planned = _run(writer_case, "-PlanPath", plan_path)
+    assert planned.returncode == 0, planned.stderr
+    _inventory(writer_case, _disk(Number=3), _disk(Number=5, SerialNumber="OTHER-CARD", Size=16 * 1024**3))
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(
+        writer_case, "-PlanPath", plan_path,
+        "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4", "-BootMountPath", boot,
+        plan_only=False, omit=("-DiskNumber",),
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "PhysicalDrive3" in writer_case["writer_args"].read_text(encoding="utf-8")
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["disk_serial"] == "FIXTURE-SD-0007"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_disk_serial_selects_the_card_without_a_number(writer_case):
+    _inventory(writer_case, _disk(Number=4))
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007", omit=("-DiskNumber",))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert (plan["disk_number"], plan["disk_serial"]) == (4, "FIXTURE-SD-0007")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    ("disks", "message"),
+    [
+        ([], "no USB disk has serial"),
+        ([{"Number": 3}, {"Number": 4}], "more than one USB disk has serial"),
+    ],
+    ids=["missing", "duplicated"],
+)
+def test_a_serial_must_resolve_to_exactly_one_usb_disk(writer_case, disks, message):
+    _inventory(writer_case, *[_disk(**disk) for disk in disks])
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007", omit=("-DiskNumber",))
+
+    assert completed.returncode != 0
+    assert message in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_number_and_serial_that_disagree_are_refused(writer_case):
+    _inventory(writer_case, _disk(Number=3), _disk(Number=7, SerialNumber="OTHER-CARD"))
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007")  # -DiskNumber 7 is the other card
+
+    assert completed.returncode != 0
+    assert "does not match -DiskSerial" in completed.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_old_number_based_confirmation_is_refused(writer_case, tmp_path):
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(writer_case, "-Confirmation", "ERASE DISK 7 rosy-pinky-k7m4",
+                     "-BootMountPath", boot, plan_only=False)
+
+    assert completed.returncode != 0
+    assert "confirmation did not match" in completed.stderr
+    assert not writer_case["marker"].exists()
+
+
+# --- Fallback AP credentials and the editable settings file (D-176 Task 3) --
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_each_card_gets_a_stored_random_ap_password_and_a_settings_template(writer_case, tmp_path):
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(writer_case, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
+                     "-BootMountPath", boot, plan_only=False)
+
+    assert completed.returncode == 0, completed.stderr
+    bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
+    ap = bundle["network"]["ap"]
+    assert ap["ssid"] == "rosy-pinky-k7m4" and len(ap["password"]) == 14
+    store = Path(writer_case["env"]["LOCALAPPDATA"]) / "Rosy/ap/rosy-pinky-k7m4.credential.xml"
+    assert store.is_file() and ap["password"] not in store.read_text(encoding="utf-16")  # DPAPI, not plaintext
+    receipt_text = writer_case["receipt"].read_text(encoding="utf-8-sig")
+    assert ap["password"] not in receipt_text and ap["password"] not in completed.stdout
+    assert ap["password"] in completed.stderr  # shown once to the operator
+    template = (boot / "rosy-config.yaml").read_text(encoding="utf-8")
+    assert template.startswith("# ROSY robot settings (D-176)")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_rewriting_the_same_device_keeps_its_ap_password_and_an_edited_settings_file(writer_case, tmp_path):
+    boot = tmp_path / "boot"
+    boot.mkdir()
+    assert _run(writer_case, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
+                "-BootMountPath", boot, plan_only=False).returncode == 0
+    first = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["network"]["ap"]
+    (boot / "rosy-provision/provision.json").unlink()
+    (boot / "rosy-config.yaml").write_text("schema_version: 1\ncountry: US\n", encoding="utf-8")
+    writer_case["receipt"].unlink()
+    writer_case["registry"].write_text(json.dumps({"robot_numbers": [], "device_names": [], "device_uids": []}),
+                                       encoding="utf-8")
+
+    completed = _run(writer_case, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
+                     "-BootMountPath", boot, plan_only=False)
+
+    assert completed.returncode == 0, completed.stderr
+    second = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["network"]["ap"]
+    assert second == first
+    assert (boot / "rosy-config.yaml").read_text(encoding="utf-8") == "schema_version: 1\ncountry: US\n"

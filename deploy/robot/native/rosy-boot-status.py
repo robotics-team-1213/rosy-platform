@@ -85,6 +85,9 @@ def gather(root: Path, run: Runner) -> dict:
         "ipv4": ipv4,
         "boot_id": boot_id,
         "api_port": _api_port(root),
+        # D-176: written by rosy-network.py; mode/ssid/address only, never a secret.
+        "network": {key: value for key, value in (_read_json(root / STATUS_DIR / "network.json") or {}).items()
+                    if key in {"mode", "ssid", "address"}},
     }
 
 
@@ -99,12 +102,13 @@ def status_record(facts: dict, stage: Stage, now: datetime) -> dict:
         "ipv4": facts.get("ipv4") or [],
         "boot_id": facts.get("boot_id"),
         "api_port": facts.get("api_port", DEFAULT_API_PORT),
+        "network": facts.get("network") or {},
         "units": facts.get("units") or {},
         "updated_at": now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
 
-def render_issue(record: dict) -> str:
+def render_issue(record: dict, ap_secret: str | None = None) -> str:
     name = str(record.get("device_name") or "rosy (unprovisioned)")
     address = ", ".join(str(a) for a in record.get("ipv4") or []) or "no IPv4 address"
     lines = [
@@ -115,6 +119,11 @@ def render_issue(record: dict) -> str:
     ]
     if record.get("detail"):
         lines.append(f"  detail: {record['detail']}")
+    network = record.get("network") or {}
+    if network.get("mode") == "ap":
+        # Local, physical access only: the console is where a person reads this.
+        lines.append(f"  Wi-Fi AP {network.get('ssid')}  password {ap_secret or '(see operator AP store)'}"
+                     f"  -> ssh rosy@{network.get('address')}")
     if str(record["stage"]).startswith("FAILED"):
         lines.append(f"  see: journalctl -b -u {record.get('failed_unit')}")
     # agetty expands backslash escapes in issue files; keep the text literal.
@@ -126,6 +135,7 @@ def render_avahi(record: dict) -> str:
         "stage": str(record["stage"]),
         "release": str(record.get("release_id") or ""),
         "name": str(record.get("device_name") or ""),
+        "network": str((record.get("network") or {}).get("mode") or "sta"),
     }
     records = "".join(
         f"    <txt-record>{escape(key)}={escape(value)}</txt-record>\n" for key, value in txt.items()
@@ -206,7 +216,11 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
     sink("led", led)
 
     def issue() -> None:
-        if _write_atomic(root / STATUS_DIR / "issue", render_issue(record)):
+        ap_login = None
+        if (record.get("network") or {}).get("mode") == "ap":
+            ap_login = (_read_json(root / "etc/rosy/ap-credentials.json") or {}).get("pass" + "word")
+        # 0600: agetty reads it as root; CORE and other users must not.
+        if _write_atomic(root / STATUS_DIR / "issue", render_issue(record, ap_login), 0o600):
             run(["agetty", "--reload"])
 
     sink("issue", issue)

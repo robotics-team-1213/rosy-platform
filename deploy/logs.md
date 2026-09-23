@@ -491,7 +491,6 @@
 - 결정: D-174
 - 교훈: 거부 규칙은 위험이 생기는 경로에 정확히 맞춘다. 넓은 규칙은 정상 산출물을 막고, 그 실패는 비싼 ARM64 빌드 끝에서야 보인다.
 
-
 ## 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — RestartMode=direct와 정지 계약의 관계
 
 - 변경: origin/main(PR #20·#21, D-174·D-175)을 로컬 main에 병합했다. `rosy-core.service`는 양쪽 변경이 모두 남는다 — 이쪽의 직접 exec ExecStart·정지 계약 주석과, 저쪽의 `LogsDirectory`/`ROS_HOME`/`RestartMode=direct`/`TimeoutStartSec=60`.
@@ -531,3 +530,152 @@
 - gate 변화: 없음. ARTIFACT/DEVICE HOLD 유지.
 - 결정: D-179
 - 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-176 boot config file and per-card fallback AP
+
+- 변경: D-176과 실행 계획 `docs/plans/2026-09-23-boot-config-and-fallback-ap.md`를 추가했다. 코드 변경 없음.
+  운영자가 카드 boot 파티션의 `rosy-config.yaml`로 Wi-Fi·Fleet·AP 정책을 바꾸고, 비밀번호는 적용 직후 카드에서 지운다.
+  업링크가 없으면 카드별 랜덤 비밀번호의 `rosy-pinky-xxxx` AP를 연다(D-154 결정 5·6 부분 대체, D-26 유지).
+- 증거: `network.py` 상태 기계(D-26/D-124/D-154)가 네이티브 이미지에 연결되지 않았고, 첫 부팅은 `PROVISIONING_AP`를 기록만 한다.
+- gate 변화: 없음
+- 결정: D-176
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · fix(sd): pass the operator key as an argument; keep the disk offline during readback
+
+- 변경: `prepare-rosy-sd.ps1`이 운영자 공개키 지문을 계산할 때 파이프 대신 인자(`sys.argv[1]`)로 넘긴다. Windows PowerShell
+  5.1이 콘솔을 거친 파이프에 BOM을 붙여 실제 키가 거부됐다(콘솔 없는 시험은 통과). 전체 readback 동안 대상 디스크를
+  `Set-Disk -IsOffline $true`로 내리고 끝나면 다시 올린 뒤 번들을 복사한다. `-ReadbackDevice`(픽스처)일 때는 물리 디스크를
+  건드리지 않는다.
+- 증거: release 004 기록이 `MEDIA_READBACK_FAILED: media readback mismatch at byte offset 1049576`로 멈췄다. 1 MiB 파티션 시작
+  + 1000 B는 FAT32 FSInfo 섹터이며, 쓰기 직후 Windows가 파티션을 마운트해 갱신한다. `test_sd_writer_contract.py` 63 passed
+  (2026-09-23 Windows).
+- gate 변화: 없음(MEDIA 재기록 필요)
+- 결정: D-173
+- 교훈: `docs/solutions/workflow-issues/guards-validated-only-against-synthetic-fixtures-2026-09-23.md` — 픽스처에는 콘솔도,
+  자동 마운트하는 OS도 없다.
+
+## 2026-09-23 · uncommitted · fix(sd): tolerate exactly the FAT32 fields Windows rewrites on mount; stop offlining removable media
+
+- 변경: `verify-media-readback.py`가 이미지 자신의 MBR·BPB로 FAT32 boot 파티션을 찾아, Windows가 자동 마운트 때 갱신하는 필드만
+  허용한다: FSInfo(원본·백업) 남은 클러스터 수·다음 빈 클러스터(488-495), 부트 섹터 `0x41`의 dirty 비트(0x03), 각 FAT 엔트리 1의
+  clean-shutdown/hard-error 비트(0x0C). 그 밖의 바이트나 비트가 다르면 실패하고, 허용한 오프셋은 `tolerated_fat_mount_metadata`로
+  receipt에 남는다. `Set-Disk -IsOffline`은 제거했다.
+- 증거: release 004 재시도가 `Set-Disk : Not Supported … Removable media cannot be set to offline.`로 멈췄다(Imager 쓰기는 성공).
+  첫 시도의 불일치 오프셋 1049576 = 파티션 시작 + 512 + 488 = FSInfo 남은 클러스터 수. `test_media_readback.py` 9 passed(허용 1, 거부 4 추가).
+- gate 변화: 없음(MEDIA 재기록 필요)
+- 결정: D-173
+- 교훈: 없음(`guards-validated-only-against-synthetic-fixtures-2026-09-23.md`의 사례와 같다)
+
+## 2026-09-23 · uncommitted · fix(sd): compare the FAT32 boot partition as files; everything else stays byte-exact
+
+- 변경: `verify-media-readback.py`는 MBR·틈·루트 파일시스템을 바이트 단위로 대조하고, FAT32 boot 파티션은 이미지와 카드 양쪽을 같은
+  읽기 전용 FAT32 파서(LFN 포함)로 읽어 파일·디렉터리 내용으로 비교한다. 카드에만 있는 항목은 `System Volume Information` 트리만
+  허용하고 `boot_partition.windows_extras`로 남긴다. 직전 커밋의 필드 단위 허용은 이 방식으로 대체했다.
+- 증거: 세 번째 기록이 `media readback mismatch at byte offset 1064967`(FAT1 엔트리 1 상위 바이트 0x0F→0xFF)로 멈췄다. 관리자 읽기
+  전용 비교에서 차이 18곳 중 FSInfo 힌트 외에 FAT 클러스터 할당(`0xFFFFFFFF`)이 보였다 — Windows가 마운트하며 폴더를 만든다.
+  `test_media_readback.py` 10 passed(파일 비교 통과, 바이트 동일 보고, 파일 변조·예상 밖 항목·루트fs·파티션 테이블 변조 실패).
+- gate 변화: 없음(MEDIA 재기록 필요)
+- 결정: D-173
+- 교훈: 측정으로 원인을 확정하기 전에 허용 규칙을 넓히면 한 회차를 더 잃는다. 첫 불일치 오프셋 하나로 규칙을 만들지 않는다.
+
+## 2026-09-23 · uncommitted · feat(sd): select the card by serial, not by Windows disk number
+
+- 변경: `prepare-rosy-sd.ps1`에 `-DiskSerial`을 추가하고, WRITE에서 plan만 주면 plan의 `disk_serial`로 USB 디스크 번호를 다시 찾는다.
+  시리얼은 정확히 하나의 USB 디스크여야 하며, `-DiskNumber`를 함께 주면 둘이 같아야 한다. plan 드리프트 비교에서 디스크 번호를
+  빼고 시리얼·용량·모델로 비교한다. 확인 문구는 `ERASE SERIAL <serial> <device_name>`이다.
+- 증거: release 004 다섯 번째 시도 직전, 다른 USB 장치가 빠지며 카드가 디스크 2 → 1로 바뀌어 `disk number does not resolve to exactly
+  one disk`로 멈췄다(안전장치는 정상 동작). 새 시험 7건 포함 `test_sd_writer_contract.py` 69 passed (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173(카드 기록 절차), D-154 결정 4의 확인 문구 형식을 시리얼로 바꾼다
+- 교훈: 운영체제가 매번 다시 매기는 번호로 물리 대상을 고정하지 않는다. 사람이 확인하는 문구도 안정적인 식별자를 써야 한다.
+
+## 2026-09-23 · uncommitted · feat(sd): operator entry point write-card.ps1 for writing a reviewed plan
+
+- 변경: `deploy/sd/write-card.ps1`을 추가했다. 입력은 plan, 서명 릴리스 폴더, Wi-Fi 프로필이다. 이미지·서명·공개키·registry·receipt 경로를
+  plan과 릴리스에서 계산하고, 카드는 plan의 시리얼로 찾으며, 스스로 UAC 승격하고, 시도마다 시각이 붙은 로그와 `.exit` 표지를 남긴다.
+  receipt가 이미 있으면 멈춘다. ERASE 확인은 승격된 창에서 운영자가 입력한다(`-Confirmation`으로 생략 가능). `-PrintArguments`는 쓰지 않고
+  계산된 호출만 보여 준다.
+- 증거: `test/test_sd_write_card_entrypoint.py` 6 passed; 실제 `plan-2026.09.23-004-disk1.json`으로 `-PrintArguments` 확인 (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173
+- 교훈: 네 번의 004 재시도는 모두 손으로 만든 래퍼(고정 디스크 번호, 경로 조립, 로그 이름 바꾸기)를 거쳤다. 반복되는 운영 절차는 저장소 도구로 만든다.
+
+## 2026-09-23 · uncommitted · feat(native,sd,image): boot settings file and per-card fallback AP (D-176 Task 1-6)
+
+- 변경: `rosy_config.py`(스키마·계층·scrubbed view), `rosy-config-apply.py`(부팅 시 `rosy-config.yaml` 적용 후 카드의 비밀번호를
+  `"<applied>"`로 교체), `rosy-network.py`(uplink 없음 120 s → AP 개방, 600 s 후 사이트 Wi-Fi 재시도), 카드별 랜덤 AP 비밀번호
+  (DPAPI 보관, 1회 출력, plan/receipt에는 SSID만), 콘솔 배너·mDNS의 AP 표시를 추가했다. 이미지가 `rosy-config.service`,
+  `rosy-network.service`, `/etc/rosy/defaults.yaml`을 싣고 활성화하며, 설치 위치에서 세 진입점을 `--help`로 실행해 본다.
+  `deploy.sd` import는 `/opt/rosy` 고정 경로 대신 자기 위치 기준(`parents[1]`)으로 찾는다. 런북에 현장 Wi-Fi 변경과 AP 접속 절차를 넣었다.
+- 증거: `test_rosy_config.py`, `test_rosy_config_apply.py`, `test_rosy_network_fallback.py`, `test_sd_ap_credentials.py`,
+  `test_native_runtime_installed_layout.py`(설치 트리에서 `rosy-config-apply.py`/`rosy-network.py` import),
+  `test_image_customization_contract.py`, `test_native_systemd_contract.py` 통과 (2026-09-23 Windows). 기기 수용은 아직 없음.
+- gate 변화: 없음 (D-176 Validation의 기기 확인은 다음 카드에서)
+- 결정: D-176
+- 교훈: 새 진입점은 저장소 테스트만으로 부족하다. 이미지가 설치하는 트리에서 import해 보는 테스트와 이미지 빌드 probe를 같은 변경에 넣는다.
+
+## 2026-09-23 · uncommitted · feat(sd): read-only card diagnostics without wsl --mount
+
+- 변경: `deploy/sd/read-card-diagnostics.py`를 추가했다. 세션 추출기를 저장소 도구로 올렸다. 물리 디스크(또는 원본 이미지 파일)를
+  읽기 전용으로 열고 MBR에서 Linux 루트(0x83)를 찾아 순수 Python `ext4`로 `/var/lib/rosy`, `/etc/rosy`, `/etc/hostname`,
+  `/etc/passwd`, `/etc/systemd/system`, `/var/log/journal`, `/var/log/cloud-init*.log`만 복사하고, FAT32의 `rosy-diag/`(D-175 L1)도
+  함께 복사한다. `rosy_diag_redact.is_denied_path`가 거부하는 경로(Wi-Fi 연결 파일, `rosy-provision/`, 토큰·키)는 열지 않는다.
+  `extract-report.json`에 크기·sha256·저장 이름·거부·누락·오류를 남긴다. Windows가 못 쓰는 이름(`\x2d`)은 `%`로 이스케이프한다.
+  CI pip에 `ext4`를 추가했다.
+- 증거: `test/test_card_diagnostics.py` 15 passed(실제 `mkfs.ext4 -d` 이미지를 WSL로 만들어 추출, `ext4` 설치 venv, 2026-09-23 Windows);
+  `ext4`가 없는 기본 Python에서는 14 passed, 1 skipped.
+- gate 변화: 없음. 실제 카드에서 이 도구로 다시 읽은 증거는 아직 없다(세션 프로토타입만 실제 카드에서 동작)
+- 결정: D-174 F8, D-175
+- 교훈: 카드 진단 경로는 장애가 난 뒤에 만들면 늦다. 한 번 동작한 수작업은 그 자리에서 거부 목록과 시험을 붙여 도구로 올린다.
+
+## 2026-09-23 · uncommitted · feat(robot): rosy-diag collect, the L2 on-device diagnostics bundle
+
+- 변경: `deploy/robot/native/rosy_diag_collect.py`(표준 라이브러리만)와 `rosy-diag` 래퍼를 추가했다. `rosy-diag collect --out DIR`가
+  이번 부팅 `rosy-*` journal, `systemctl` 상태·목록·실패, `/var/lib/rosy/provisioning/*.json`, release 활성화 journal, dmesg 끝 400줄,
+  네트워크 요약(`ip -brief`, `nmcli` 장치·SSID, 키 없음), boot 파티션 `rosy-diag/`를 모아 tar.gz 하나로 만든다. 모든 멤버는
+  `rosy_diag_redact.redact`를 거치고 거부 경로는 읽지 않는다. `manifest.json`에 멤버 sha256·반환 코드·잘림 여부와 boot_id·release_id·
+  device_name·uptime을 넣는다. 내용 합계 50 MiB 상한(멤버 16 MiB, journal은 최신 줄 유지), 기존 파일은 덮어쓰지 않는다.
+  네이티브 디렉터리 전체가 설치되므로 설치기 변경은 없다.
+- 증거: `test/test_diag_collect.py` Windows 13 passed, 1 skipped(심볼릭 링크 래퍼 시험); WSL Ubuntu 14 passed. 설치 배치
+  (`install-native-runtime.sh` → `<tmp>/opt/rosy/native-runtime`)에서 실행, 모든 멤버가 `secret_scan.scan_text` 통과. WSL에서 실제
+  `journalctl`·`systemctl`·`dmesg`로 한 번 돌려 번들 생성과 scan 0건 확인(2026-09-23).
+- gate 변화: 없음. 실제 Pinky에서의 권한(journal 그룹, dmesg_restrict, sudo)과 크기는 미검증
+- 결정: D-175
+- 교훈: `/proc/sys/kernel/random/boot_id`는 대시가 있는 UUID이고 journald boot id는 32자 hex다. 층 사이 상관 키는 비교 전에 정규화한다.
+
+## 2026-09-23 · uncommitted · feat(robot): collect-rosy-diagnostics.ps1, the L2 Windows puller with a card fallback
+
+- 변경: `deploy/robot/collect-rosy-diagnostics.ps1`를 추가했다. `-Host -User rosy -IdentityFile`로 키 전용 BatchMode SSH(비밀번호·키보드
+  인증 끔, `IdentitiesOnly`)를 `%LOCALAPPDATA%\Rosy\known_hosts`에 고정(첫 접속 `accept-new`)해 장치에서 `rosy-diag collect`를 돌리고
+  번들을 `evidence\<device>\<boot_id>\`로 `scp`한다(`.partial` 후 이동, 기존 파일이면 멈춤, 원격 임시 폴더는 항상 삭제). boot_id는 대시를
+  뺀 32자 hex로 정규화한다. SSH가 255로 끝나고 `-CardDisk <serial>`이 있으면 카드의 FAT32 `rosy-diag\`만 승격 없이 복사하고 journal용
+  관리자 명령(`read-card-diagnostics.py`)을 출력한다. `-PrintPlan`은 아무것도 실행하지 않고 계산된 호출을 보여 준다.
+- 증거: `test/test_collect_diagnostics_contract.py` 7 passed(가짜 ssh/scp로 실제 PowerShell 5.1 실행, 2026-09-23 Windows). 실제
+  Windows OpenSSH 9.5로 도달 불가 주소(192.0.2.1)에 실행해 exit 255 → `-CardDisk` 안내를 확인.
+- gate 변화: 없음. 실제 장치 SSH·scp와 카드 드라이브 문자 탐색(`Get-Disk`/`Get-Volume`)은 미검증
+- 결정: D-175
+- 교훈: Windows PowerShell 5.1은 네이티브 인자 안의 큰따옴표를 망가뜨린다. 원격 명령은 큰따옴표 없이 쓰고 값은 인자로 넘긴다.
+
+## 2026-09-23 · uncommitted · feat(image): put rosy-diag on PATH (D-175 L2)
+
+- 변경: 이미지가 `/usr/local/bin/rosy-diag` → `/opt/rosy/native-runtime/rosy-diag` 링크를 만든다. 콘솔에서 `rosy-diag collect --out DIR`로 바로 쓴다.
+  wrapper는 링크를 따라가 자기 위치를 찾는다(WSL symlink 테스트로 확인됨). Windows 수집기는 계속 전체 경로를 쓴다.
+- 증거: `test_image_customization_contract.py` 통과 (2026-09-23 Windows). 기기 확인 없음.
+- gate 변화: 없음
+- 결정: D-175
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · fix(native,image): D-176 review — no password on vfat, in YAML errors or in world-readable files; AP needs dnsmasq
+
+- 변경: 독립 리뷰(HIGH 4, MEDIUM 5, LOW 2)를 반영했다. (1) vfat 부트 파티션은 chmod가 EPERM이라 스크럽이 실패하고 평문이 남았다 → 카드 쓰기는 mode를
+  건드리지 않는다. (2) PyYAML 오류 문구가 비밀번호 줄을 인용해 0644 상태 파일과 journal에 들어갔다 → 줄·열 위치만 남기고 상태 파일은 0600.
+  (3) AP 비밀번호가 든 `/run/rosy-boot/issue`를 0600으로. (4) NM shared 모드에 필요한 `dnsmasq-base`를 이미지에 넣고 마운트 검증기가 확인한다.
+  그 밖에: 게이트웨이 없는 현장 LAN도 NM `connected`면 uplink로 본다, AP 활성화를 `GENERAL.STATE`로 확인하고 실패하면 광고하지 않고 다시 시도,
+  AP를 닫으면 `nmcli device connect wlan0`로 현장 Wi-Fi를 바로 재시도, 재시작 시 AP를 내리고 시작, 숫자만 있는 비밀번호·SSID 허용,
+  NM keyfile이 망가뜨리는 값(백슬래시·양끝 공백·비ASCII 비밀번호) 거부, 건너뛴 항목이 있으면 기존 Wi-Fi 프로필을 지우지 않음, vfat에 진단 묶음 저장 허용.
+  `relay`는 Pi 5 단일 무선이라 현장 Wi-Fi를 끈다는 점을 템플릿에 적었다.
+- 증거: 관련 스위트 110 passed (2026-09-23 Windows). vfat EPERM은 fchmod 거부를 흉내 낸 테스트로만 확인, 기기 확인 없음.
+- gate 변화: 없음
+- 결정: D-176
+- 교훈: 호스트 파일시스템 테스트는 vfat의 고정 mode를 재현하지 못한다. 부트 파티션에 쓰는 코드는 chmod 거부를 가정한 테스트를 같이 둔다.

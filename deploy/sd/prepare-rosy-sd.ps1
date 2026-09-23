@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [int]$DiskNumber,
+    [string]$DiskSerial,
     [int]$RobotNumber,
     [string]$Model = "pinky_pro",
     [string]$Preset = "core",
@@ -75,6 +76,22 @@ function Read-DiskInventory([string]$FixturePath) {
     return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly)
 }
 
+# Windows renumbers disks as USB devices come and go (release 004: the card moved
+# from disk 2 to disk 1 between plan and write). The card is identified by its
+# serial; the number is resolved from it right before each probe.
+function Resolve-DiskNumberBySerial([object[]]$Inventory, [string]$Serial) {
+    $wanted = $Serial.Trim()
+    # StrictMode: an empty inventory can yield a property-less object, so read
+    # the properties defensively.
+    $matches = @($Inventory | Where-Object {
+        $null -ne $_ -and $_.PSObject.Properties["BusType"] -and $_.PSObject.Properties["SerialNumber"] -and
+        [string]$_.BusType -eq "USB" -and ([string]$_.SerialNumber).Trim() -ceq $wanted
+    })
+    if ($matches.Count -eq 0) { Fail "no USB disk has serial $wanted" }
+    if ($matches.Count -gt 1) { Fail "more than one USB disk has serial $wanted" }
+    return [int]$matches[0].Number
+}
+
 function Select-SafeDisk([object[]]$Inventory, [int]$Number) {
     $matches = @($Inventory | Where-Object { [int]$_.Number -eq $Number })
     if ($matches.Count -ne 1) { Fail "disk number does not resolve to exactly one disk" }
@@ -141,6 +158,26 @@ function Resolve-BootMount([int]$Number, [string]$ExplicitPath, [bool]$FixtureMo
     Fail "the flashed SD boot partition was not found"
 }
 
+# D-176: each card's fallback AP gets its own random password. It is kept in the
+# operator's DPAPI store (reused when the same device is rewritten) and shown
+# once; plans and receipts never hold it.
+function Get-ApPassword([string]$Device) {
+    if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable" }
+    $store = Join-Path $env:LOCALAPPDATA "Rosy\ap"
+    $file = Join-Path $store "$Device.credential.xml"
+    if (Test-Path -LiteralPath $file -PathType Leaf) {
+        return (Import-Clixml -LiteralPath $file).GetNetworkCredential().Password
+    }
+    $alphabet = "abcdefghjkmnpqrstuvwxyz" + "ABCDEFGHJKLMNPQRSTUVWXYZ" + "23456789"
+    $bytes = New-Object byte[] 14
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $password = -join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })
+    New-Item -ItemType Directory -Path $store -Force | Out-Null
+    $secure = ConvertTo-SecureString $password -AsPlainText -Force
+    New-Object System.Management.Automation.PSCredential($Device, $secure) | Export-Clixml -LiteralPath $file
+    return $password
+}
+
 function New-PinkyIdentity {
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
     $code = "from dataclasses import asdict; from deploy.sd.personalization import generate_device_identity; import json; print(json.dumps(asdict(generate_device_identity('pinky_pro'))))"
@@ -160,7 +197,7 @@ if ($SetWifiCredential) {
     if (-not $PSBoundParameters.ContainsKey("DiskNumber")) { exit 0 }
 }
 
-foreach ($required in @("DiskNumber", "WifiProfile", "ImagePath", "ImageSha256", "ImageSignaturePath", "ReleasePublicKey", "ReleaseId", "RegistryJson", "ReceiptPath")) {
+foreach ($required in @("WifiProfile", "ImagePath", "ImageSha256", "ImageSignaturePath", "ReleasePublicKey", "ReleaseId", "RegistryJson", "ReceiptPath")) {
     if (-not $PSBoundParameters.ContainsKey($required)) { Fail "-$required is required" }
 }
 
@@ -263,6 +300,12 @@ elseif (-not $FleetEndpoint -or -not $FleetTrustProfile) {
     Fail "FleetEndpoint and FleetTrustProfile must be supplied together"
 }
 
+if ($reviewedPlan -and -not $DiskSerial -and -not $PSBoundParameters.ContainsKey("DiskNumber")) {
+    $DiskSerial = [string]$reviewedPlan.disk_serial
+}
+if (-not $DiskSerial -and -not $PSBoundParameters.ContainsKey("DiskNumber")) {
+    Fail "-DiskSerial (or -DiskNumber) is required"
+}
 if ($Model -ne "pinky_pro") { Fail "only pinky_pro is supported" }
 if ($PSBoundParameters.ContainsKey("RobotNumber") -and ($RobotNumber -lt 1 -or $RobotNumber -gt 61)) {
     Fail "RobotNumber must be between 1 and 61"
@@ -292,10 +335,12 @@ if ($OperatorPublicKey) {
     if ($operatorLines.Count -ne 1) { Fail "operator public key file must hold exactly one key" }
     $operatorKey = $operatorLines[0].Trim()
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-    $fingerprintCode = "import sys; from deploy.sd.personalization import operator_key_fingerprint; print(operator_key_fingerprint(sys.stdin.read()))"
+    # A public key is not secret; pass it as an argument. Piping it through the
+    # console can prepend a BOM on Windows PowerShell 5.1.
+    $fingerprintCode = "import sys; from deploy.sd.personalization import operator_key_fingerprint; print(operator_key_fingerprint(sys.argv[1]))"
     Push-Location $repoRoot
     try {
-        $operatorFingerprint = ($operatorKey | & $PythonExe -c $fingerprintCode)
+        $operatorFingerprint = (& $PythonExe -c $fingerprintCode $operatorKey)
         if ($LASTEXITCODE -ne 0) { Fail "operator public key is not an allowed public key" }
     }
     finally {
@@ -377,7 +422,15 @@ if (-not $reprovision) {
     if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
 }
 
-$firstDisk = Select-SafeDisk (Read-DiskInventory $DiskInventoryJson) $DiskNumber
+$firstInventory = Read-DiskInventory $DiskInventoryJson
+if ($DiskSerial) {
+    $bySerial = Resolve-DiskNumberBySerial $firstInventory $DiskSerial
+    if ($PSBoundParameters.ContainsKey("DiskNumber") -and $bySerial -ne $DiskNumber) {
+        Fail "-DiskNumber $DiskNumber does not match -DiskSerial $DiskSerial (disk $bySerial)"
+    }
+    $DiskNumber = $bySerial
+}
+$firstDisk = Select-SafeDisk $firstInventory $DiskNumber
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })
@@ -412,7 +465,8 @@ if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $secondDisk)) {
 }
 
 if ($reviewedPlan) {
-    foreach ($field in @("physical_drive", "disk_number", "disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
+    # The disk number is not part of the reviewed identity; the serial is.
+    foreach ($field in @("disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
         if ($planKeys -cnotcontains $field -or [string]$plan[$field] -cne [string]$reviewedPlan.$field) {
             Fail "target no longer matches the reviewed plan: $field"
         }
@@ -440,7 +494,7 @@ if ($PlanOnly) {
     exit 0
 }
 
-$expectedConfirmation = "ERASE DISK $DiskNumber $DeviceName"
+$expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
 if (-not $Confirmation) { $Confirmation = Read-Host "Type exactly: $expectedConfirmation" }
 if ($Confirmation -cne $expectedConfirmation) { Fail "confirmation did not match the selected physical disk and device" }
 
@@ -479,6 +533,9 @@ $writerExitCode = $writerProcess.ExitCode
 if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
 
 $readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
+# Windows auto-mounts the freshly written FAT32 partition and rewrites a few
+# spec-defined fields; removable media cannot be set offline. The verifier
+# tolerates exactly those fields and reports them (release 004, offset 1049576).
 $mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
 if ($LASTEXITCODE -ne 0) { Fail "full media readback verification failed" }
 try {
@@ -515,6 +572,8 @@ try {
             pairing_required = $false
         }
         if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
+        $apLogin = Get-ApPassword $DeviceName
+        $bundleRequest["ap_password"] = $apLogin
         $previousOutputEncoding = $OutputEncoding
         $previousPythonUtf8 = $env:PYTHONUTF8
         try {
@@ -542,6 +601,11 @@ try {
     Copy-Item -LiteralPath $bundleTemp -Destination $bundleTargetTemp
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
     $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
+    # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
+    $configTarget = Join-Path $bootRoot "rosy-config.yaml"
+    if (-not (Test-Path -LiteralPath $configTarget)) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot "rosy-config.template.yaml") -Destination $configTarget
+    }
 }
 finally {
     foreach ($temporaryFile in @($bundleTemp, $bundleReceiptTemp)) {
@@ -581,3 +645,5 @@ if ($reprovision) {
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 10 -Compress
+# Shown once for the operator; not part of the JSON evidence on stdout.
+[Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
