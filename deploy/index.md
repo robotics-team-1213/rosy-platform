@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
-- 2026-09-23 · uncommitted · fix(image): check bytecode only in the native runtime, not colcon's install tree
-- 2026-09-23 · uncommitted · fix(native,sd): review of the boot indicator, black box and operator access (D-174, D-175)
-- 2026-09-23 · uncommitted · feat(sd): rewrite a card for an existing device identity (D-174 F7)
-- 2026-09-23 · uncommitted · feat(sd): per-card operator SSH key and key-only `rosy` login (D-174 F3)
-- 2026-09-23 · uncommitted · fix(native): writable ROS home for service users; bounded persistent journal (D-174 F6, D-175 L0)
+- 2026-09-23 · uncommitted · fix(native,image): D-176 review — no password on vfat, in YAML errors or in world-readable files; AP needs dnsmasq
+- 2026-09-23 · uncommitted · feat(image): put rosy-diag on PATH (D-175 L2)
+- 2026-09-23 · uncommitted · feat(robot): collect-rosy-diagnostics.ps1, the L2 Windows puller with a card fallback
+- 2026-09-23 · uncommitted · feat(robot): rosy-diag collect, the L2 on-device diagnostics bundle
+- 2026-09-23 · uncommitted · feat(sd): read-only card diagnostics without wsl --mount

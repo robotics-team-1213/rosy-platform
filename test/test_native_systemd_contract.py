@@ -192,3 +192,19 @@ def test_ros_log_directories_are_aged_out():
     for name in ("rosy-core", "rosy-io", "rosy-navigation"):
         assert f"e /var/log/{name} - - - 7d" in rules
     assert 'tmpfiles-rosy-logs.conf" "$OVERLAY/etc/tmpfiles.d/rosy-logs.conf"' in payload
+
+
+def test_boot_settings_apply_before_the_network_and_never_block_the_boot():
+    # D-176: root oneshot outside CORE; the fallback AP reads what it wrote.
+    unit = _read("rosy-config.service")
+
+    for directive in (
+        "Type=oneshot", "RemainAfterExit=yes",
+        "ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-config-apply.py",
+        "After=local-fs.target rosy-first-boot.service NetworkManager.service",
+        "Before=network-online.target rosy-network.service",
+        "WantedBy=multi-user.target",
+    ):
+        assert directive in unit, directive
+    assert "User=" not in unit
+    assert "After=NetworkManager.service rosy-config.service" in _read("rosy-network.service")

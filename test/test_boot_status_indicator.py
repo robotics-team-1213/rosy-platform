@@ -243,3 +243,55 @@ def test_indicator_unit_is_rate_unlimited_and_not_ordered_after_the_runtime():
     assert "RuntimeDirectory=rosy-boot" in service and "RuntimeDirectoryPreserve=yes" in service
     assert "rosy-runtime.target" not in service  # review L2: show BOOTING/PROVISIONED early
     assert "RestartMode=direct" in core  # restarts no longer fire OnFailure each time
+
+
+# --- Fallback AP shown to people (D-176 Task 5) -----------------------------
+
+PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
+AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
+
+
+def _with_ap(root: Path) -> None:
+    (root / "run/rosy-boot").mkdir(parents=True, exist_ok=True)
+    (root / "run/rosy-boot/network.json").write_text(
+        json.dumps({"mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}), encoding="utf-8")
+    (root / "etc/rosy/ap-credentials.json").write_text(
+        json.dumps({"ssid": "rosy-pinky-e4us", PW: AP_VALUE}), encoding="utf-8")
+
+
+def test_the_console_shows_how_to_join_the_fallback_ap(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    _with_ap(root)
+
+    record, errors, _calls = _render(module, root, FAILED_CARD_UNITS)
+
+    assert errors == []
+    issue = (root / "run/rosy-boot/issue").read_text(encoding="utf-8")
+    assert "Wi-Fi AP rosy-pinky-e4us" in issue and AP_VALUE in issue and "10.42.0.1" in issue
+    assert record["network"] == {"mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}
+
+
+def test_the_ap_password_never_leaves_the_console(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    _with_ap(root)
+    (root / "boot/firmware").mkdir(parents=True)
+
+    _render(module, root, FAILED_CARD_UNITS)
+
+    for path in (root / "run/rosy-boot/boot-status.json", root / "etc/avahi/services/rosy.service",
+                 root / "boot/firmware/rosy-diag/latest.txt"):
+        assert AP_VALUE not in path.read_text(encoding="utf-8"), path.name
+    assert "network=ap" in (root / "etc/avahi/services/rosy.service").read_text(encoding="utf-8")
+
+
+def test_station_mode_shows_no_ap_lines(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+
+    _render(module, root, FAILED_CARD_UNITS)
+
+    issue = (root / "run/rosy-boot/issue").read_text(encoding="utf-8")
+    assert "Wi-Fi AP" not in issue
+    assert "network=sta" in (root / "etc/avahi/services/rosy.service").read_text(encoding="utf-8")

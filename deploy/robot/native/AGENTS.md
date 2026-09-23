@@ -23,11 +23,15 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   stopping runtime services. Activation retains `previous`, journals the switch,
   and rolls back on failed health; boot recovery runs before CORE.
 - First boot must complete before `rosy-sd-provision.service` can admit CORE.
+- Diagnostics that leave the device go through `rosy_diag_redact.py` (D-175): the boot-partition
+  black box (`rosy_blackbox.py`) and the L2 bundle `rosy-diag collect --out DIR`
+  (`rosy-diag` wrapper -> `rosy_diag_collect.py`, stdlib only, bounded 50 MiB, never overwrites,
+  never reads a denied path). Test from the installed layout, not only the repo path.
 
 ## Tests
 
 ```bash
-python3 -m pytest test/test_native_systemd_contract.py test/test_native_release_activation.py -q
+python3 -m pytest test/test_native_systemd_contract.py test/test_native_release_activation.py test/test_diag_collect.py -q
 ```
 
 Run `systemd-analyze verify` in an Ubuntu 24.04 root before artifact promotion.

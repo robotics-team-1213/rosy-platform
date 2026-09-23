@@ -136,5 +136,8 @@ boot `23fe37a5`. Extracted read-only to `F:\tmp\rosy-release\cards\diag\`.
 - Task 4 (F3): done. `-OperatorPublicKey` → bundle `operator` → first boot key-only `rosy` login; fingerprints in plan/receipt.
 - Task 6 (F6): done. `LogsDirectory` + `ROS_HOME`/`ROS_LOG_DIR` for core, io and navigation.
 - Task 7 (F7): done. `-ReprovisionReceipt` rewrites identity 18 from its verified receipt; new receipt `supersedes`.
-- Tasks 8-9: pending.
+- Task 8 (F8): done in source. `deploy/sd/read-card-diagnostics.py` opens the disk read-only, reads ext4 with the
+  pure-Python `ext4` package and copies the diagnosis set plus FAT32 `rosy-diag/`; denied paths are never opened.
+  Proven on a `mkfs.ext4 -d` fixture image; not yet rerun against a real card.
+- Task 9: pending.
 

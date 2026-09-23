@@ -75,6 +75,9 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append("chrony is not installed: timestamps presume a synced clock")
     elif not (root / "etc/systemd/system/multi-user.target.wants/chrony.service").exists():
         findings.append("chrony.service is not enabled")
+    # D-176: the fallback AP is NetworkManager shared mode, which runs dnsmasq.
+    if not (root / "usr/sbin/dnsmasq").exists():
+        findings.append("dnsmasq is not installed: the fallback AP (NM shared mode) cannot start")
     runtime = root / "etc/rosy/runtime.env"
     if runtime.exists():
         content = runtime.read_text(encoding="utf-8", errors="replace")
