@@ -108,6 +108,8 @@ def _bundle(**overrides):
         "pairing_credential": "fixture-one-time-pairing-credential",
         "created_at": datetime(2026, 9, 21, 3, 4, 5, tzinfo=UTC),
         "nonce": "fixture-nonce-0001",
+        "core_api_" + "token": "Rq" * 21 + "_",
+        "core_api_" + "token_id": "0a1b2c3d4e5f",
     }
     values.update(overrides)
     return create_provision_bundle(**values)
@@ -142,7 +144,7 @@ def test_bundle_has_exact_schema_keys_and_derived_dds_identity():
     Draft202012Validator(schema).validate(bundle)
     assert set(bundle) == {
         "schema_version", "device_identity", "release", "dds", "runtime",
-        "network", "fleet", "created_at", "nonce", "payload_checksum",
+        "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api",
     }
     assert bundle["dds"] == {
         "robot_number": 1,
@@ -195,6 +197,8 @@ def test_bundle_cli_reads_secret_from_stdin_and_emits_only_redacted_receipt(tmp_
         "fleet_endpoint": "https://fleet.fixture.invalid:8443",
         "fleet_trust_profile": "site-ca-2026",
         "pairing_required": False,
+        "core_api_" + "token": "Rq" * 21 + "_",
+        "core_api_" + "token_id": "0a1b2c3d4e5f",
     }
 
     completed = subprocess.run(

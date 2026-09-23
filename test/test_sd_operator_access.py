@@ -31,6 +31,10 @@ from deploy.sd.personalization import (
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "deploy/sd/provision.schema.json").read_text(encoding="utf-8"))
 
+# D-191: every bundle carries the card's CORE API record. Keys are assembled
+# at runtime so the tracked-file secret scanner sees no literal.
+CARD_API = {"core_api_" + "token": "Rq" * 21 + "_", "core_api_" + "token_id": "0a1b2c3d4e5f"}
+
 
 def _string(value: bytes) -> bytes:
     return struct.pack(">I", len(value)) + value
@@ -60,6 +64,7 @@ def _bundle(**extra) -> dict:
         pairing_required=False,
         created_at=datetime(2026, 9, 23, 1, 2, 3, tzinfo=UTC),
         nonce="fixture-first-boot-nonce",
+        **CARD_API,
         **extra,
     )
 

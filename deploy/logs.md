@@ -865,3 +865,20 @@
 - gate 변화: 없음
 - 결정: D-191
 - 교훈: Docker 설치 경로에서 서명 이미지 경로로 옮길 때, 이전 경로가 암묵적으로 설치하던 것(overlay·SDK·외부 패키지·토큰)의 목록을 먼저 만든다.
+
+## 2026-09-24 · uncommitted · feat(sd,first-boot): per-card CORE API administrator credential (D-191, US-009)
+
+- 변경: 실기 평가(2026-09-24, `docs/validation/pinky-pro-evaluation-2026-09-24.md` 매트릭스 6행)에서 서명 이미지 경로 카드가 API 자격을 하나도 갖지 않아 CORE가 모든 인증 경로에 401을 돌려줬다. `prepare-rosy-sd.ps1`이 카드마다 CORE `generate_token` 형식(32바이트 URL-safe) 값과 `new_token_id` 형식 id를 발급해 DPAPI 저장소 `%LOCALAPPDATA%\Rosy\api\<device>.credential.xml`(UserName=id)에 두고 끝에 stderr로 한 번 보여준다. 번들 `core_api.record`는 CORE 저장 레코드(`id`, `role: administrator`, `sha256`, `label`, `created_at`)만 싣고, 영수증은 `personalization.core_api`에 id와 16-hex 다이제스트 지문만 남긴다. 스키마·`personalization.py`·`create-provision-bundle.py`는 선택 필드 패턴을 따른다. first boot는 레코드를 `/var/lib/rosy/core/.rosy/rosy.yaml`(D-189 unit의 `HOME`, `ROSY_CONFIG` 없음 → `core_common.config`가 읽고 대시보드가 쓰는 파일)에 mkstemp 원자 쓰기로 병합한다: 다른 키·다른 레코드 유지, 같은 id·digest는 교체, 소유 `rosy-core`, 파일 0600, 디렉터리 0750, 재실행 동일 바이트. 역할 이름은 CORE의 `administrator`(`admin`은 CORE가 viewer로 떨어뜨린다). 재기록(`-ReprovisionReceipt` 포함)은 저장소 값을 재사용한다. overlay의 `auth.tokens` 목록이 기본값 목록을 통째로 대체하므로 이 카드에서는 공용 `rosy-dev-*` 자격이 막힌다.
+- 증거: `python -m pytest test/test_sd_api_token.py` (스키마·영수증·스캐너·병합·멱등·CORE TestClient 200/401·대시보드 쓰기 후 유지), writer 계약 3건 추가(발급·DPAPI·번들 digest만·plan/영수증/progress 평문 없음·재기록 재사용). POSIX 소유·모드·unit HOME 시험은 Windows에서 skip — Linux 호스트 실행 필요.
+- gate 변화: 없음. DEVICE HOLD 유지 — 실제 카드 first boot에서 파일 소유·모드와 대시보드 로그인 확인이 남음
+- 결정: D-191
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(sd,first-boot): US-009 security review (D-191)
+
+- 변경: 보안 리뷰(CRITICAL·HIGH 없음, MEDIUM 1, LOW 3) 반영. (M1) first boot는 `rosy-core` 소유 HOME 경로를 루트에서 `O_DIRECTORY|O_NOFOLLOW` fd로 한 칸씩 열고 `fstat`·`fchmod`·`fchown`, `rosy.yaml`은 `O_NOFOLLOW|O_NONBLOCK`로 읽어 `S_ISREG` 요구, 임시 파일은 `O_CREAT|O_EXCL|O_NOFOLLOW`로 만들고 `os.replace(src_dir_fd=, dst_dir_fd=)` 뒤 디렉터리 fsync. 경로 어디든 symlink·비정규 파일이면 HOLD, 대상은 그대로. (L2) overlay에 이 카드 id가 아닌 자격(다른 id, 레거시 평문 맵 포함)이 있으면 HOLD — 병합하지 않는다. (L3) `core_api`는 번들 필수(스키마 `required`, `validate_provision_bundle`, `create-provision-bundle.py` EXPECTED); 없으면 first boot HOLD. (L4) DPAPI 저장소 user name을 `<id>|<device_uid>`(AP는 `<device>|<device_uid>`)로 묶고 다른 uid면 카드에 손대기 전 실패, uid 없는 옛 저장소는 한 번 받아 uid로 다시 쓴다; 두 자격은 이제 pre-flight 전에 읽는다. 사용성: 비분리 elevated 창은 닫히고 stderr 한 줄은 transcript에 없으므로 `write-card.ps1`이 성공 시 로그 끝에 `Import-Clixml` 읽기 명령을 남기고, progress `done`의 next도 저장소 경로를 가리킨다(값은 어디에도 안 씀).
+- 증거: WSL(Ubuntu, Python 3.12)에서 symlink `core`·`.rosy`·`rosy.yaml`, FIFO overlay, 소유·모드, unit HOME 시험 포함 녹색; Windows 스위트 수치는 보고서.
+- gate 변화: 없음. DEVICE HOLD 유지
+- 결정: D-191
+- 교훈: 없음
+- 미결(다른 스토리): `rosy-dev-*` 차단은 overlay 목록 대체에만 기대므로 overlay가 비거나 `auth.tokens`를 잃으면 되살아난다. 기기 기본값에서 `rosy-dev-*` 제거 또는 native runtime에서 CORE가 거부하는 심층 방어가 남음 (runbook에도 기록)

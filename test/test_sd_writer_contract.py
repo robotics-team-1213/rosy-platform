@@ -5,6 +5,7 @@ import json
 import lzma
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -986,6 +987,143 @@ def test_rewriting_the_same_device_keeps_its_ap_password_and_an_edited_settings_
     second = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["network"]["ap"]
     assert second == first
     assert (boot / "rosy-config.yaml").read_text(encoding="utf-8") == "schema_version: 1\ncountry: US\n"
+
+
+# --- Per-card CORE API credential (D-191, US-009) ----------------------------
+
+
+def _api_store(case):
+    return Path(case["env"]["LOCALAPPDATA"]) / "Rosy/api/rosy-pinky-k7m4.credential.xml"
+
+
+UID = "9d40feaa-871f-4fd3-975a-a704e82d3af9"
+
+
+def _read_store(case, kind="api"):
+    # The operator's read-back command from the first-device runbook.
+    command = (f'$c = Import-Clixml "$env:LOCALAPPDATA\\Rosy\\{kind}\\rosy-pinky-k7m4.credential.xml"; '
+               '$c.UserName; $c.GetNetworkCredential().Password')
+    completed = subprocess.run([POWERSHELL, "-NoProfile", "-Command", command],
+                               capture_output=True, text=True, env=case["env"], check=True)
+    user_name, value = completed.stdout.split()
+    return user_name, value
+
+
+def _read_api_store(case):
+    user_name, value = _read_store(case)
+    record_id, uid = user_name.split("|")
+    assert uid == UID  # D-191 review: bound to the device_uid
+    return record_id, value
+
+
+def _seed_store(case, kind, user_name, value):
+    store = Path(case["env"]["LOCALAPPDATA"]) / "Rosy" / kind
+    store.mkdir(parents=True, exist_ok=True)
+    command = (f"$s = ConvertTo-SecureString '{value}' -AsPlainText -Force; "
+               f"[pscredential]::new('{user_name}', $s) | "
+               f"Export-Clixml -LiteralPath '{store / 'rosy-pinky-k7m4.credential.xml'}'")
+    subprocess.run([POWERSHELL, "-NoProfile", "-Command", command], check=True, env=case["env"])
+    return store / "rosy-pinky-k7m4.credential.xml"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_each_card_gets_a_stored_core_api_credential_and_only_its_digest_on_the_card(writer_case, tmp_path):
+    from secret_scan import scan_text, validate_redacted_payload
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    record_id, value = _read_api_store(writer_case)
+    # CORE's generate_token / new_token_id formats.
+    assert re.fullmatch(r"[A-Za-z0-9_-]{43}", value)
+    assert re.fullmatch(r"[0-9a-f]{12}", record_id)
+    assert value not in _api_store(writer_case).read_text(encoding="utf-16")  # DPAPI, not plaintext
+    bundle_text = (boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig")
+    record = json.loads(bundle_text)["core_api"]["record"]
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    assert (record["id"], record["role"], record["sha256"]) == (record_id, "administrator", digest)
+    assert value not in bundle_text
+    receipt_text = writer_case["receipt"].read_text(encoding="utf-8-sig")
+    receipt = json.loads(receipt_text)
+    assert receipt["personalization"]["core_api"] == {"token_id": record_id, "digest_fingerprint": digest[:16]}
+    progress_text = Path(str(writer_case["receipt"]) + ".progress.jsonl").read_text(encoding="utf-8")
+    for text in (receipt_text, completed.stdout, progress_text):
+        assert value not in text and digest not in text
+    assert completed.stderr.count(value) == 1  # shown once to the operator
+    assert validate_redacted_payload(receipt, path="receipt") == []
+    assert scan_text("receipt.json", receipt_text) == []
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_plan_issues_no_core_api_credential(writer_case, tmp_path):
+    plan_path = tmp_path / "plan.json"
+
+    completed = _run(writer_case, "-PlanPath", plan_path)
+
+    assert completed.returncode == 0, completed.stderr
+    assert not _api_store(writer_case).exists()
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    assert "core_api" not in plan and "core_api" not in json.loads(completed.stdout)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_reprovisioning_reuses_the_stored_core_api_credential(writer_case, tmp_path):
+    # D-191: a rewritten card keeps the credential the operator already holds.
+    first, boot = _write(writer_case, tmp_path)
+    assert first.returncode == 0, first.stderr
+    stored = _read_api_store(writer_case)
+    first_record = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["core_api"]["record"]
+    prior = tmp_path / "prior-receipt.json"
+    writer_case["receipt"].replace(prior)
+    (boot / "rosy-provision/provision.json").unlink()
+
+    second, _boot = _write(writer_case, tmp_path, "-ReprovisionReceipt", prior)
+
+    assert second.returncode == 0, second.stderr
+    assert _read_api_store(writer_case) == stored
+    record = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["core_api"]["record"]
+    assert (record["id"], record["sha256"]) == (first_record["id"], first_record["sha256"])
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["personalization"]["core_api"]["token_id"] == stored[0]
+    assert "supersedes" in receipt
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("kind", ["api", "ap"])
+def test_a_store_bound_to_another_device_uid_stops_before_the_card_is_touched(writer_case, tmp_path, kind):
+    # D-191 security review L4: the store is keyed by name, so bind it to the uid.
+    other_uid = "11111111-2222-4333-8444-555555555555"
+    user_name = f"0a1b2c3d4e5f|{other_uid}" if kind == "api" else f"rosy-pinky-k7m4|{other_uid}"
+    store = _seed_store(writer_case, kind, user_name, "Rq" * 21 + "_")
+    before = store.read_bytes()
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert f"belongs to device_uid {other_uid}" in _err(completed)
+    assert not writer_case["marker"].exists()
+    assert _failed(_progress(writer_case)) == "untouched"
+    assert store.read_bytes() == before
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_store_written_before_the_uid_binding_is_reused_once_and_rebound(writer_case, tmp_path):
+    legacy_value = "Rq" * 21 + "_"
+    legacy_ap = "Kx7" + "mQ2vR9tLp"
+    _seed_store(writer_case, "api", "0a1b2c3d4e5f", legacy_value)
+    _seed_store(writer_case, "ap", "rosy-pinky-k7m4", legacy_ap)
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
+    record = bundle["core_api"]["record"]
+    assert (record["id"], record["sha256"]) == (
+        "0a1b2c3d4e5f", hashlib.sha256(legacy_value.encode("utf-8")).hexdigest())
+    assert bundle["network"]["ap"]["pass" + "word"] == legacy_ap
+    assert _read_api_store(writer_case) == ("0a1b2c3d4e5f", legacy_value)
+    assert _read_store(writer_case, "ap") == (f"rosy-pinky-k7m4|{UID}", legacy_ap)
 
 
 # Release 005: the same reader reported serial 000000000207, then an empty

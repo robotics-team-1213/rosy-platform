@@ -152,6 +152,17 @@ def test_the_entry_point_elevates_itself_and_keeps_every_attempt():
     assert "Get-Date -Format" in text  # one log per attempt, never renamed by hand
 
 
+def test_a_finished_write_names_the_api_store_but_never_the_credential():
+    # D-191 review: a non-detached elevated window closes, and the one-time
+    # stderr line is not in the transcript, so the transcript names the store.
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "if ($code -eq 0)" in text
+    assert "Rosy\\api\\$deviceName.credential.xml" in text
+    assert "GetNetworkCredential().Password\"" in text  # the command, inside the printed string
+    assert "coreApiLogin" not in text
+
+
 def test_the_operator_is_told_where_progress_is_and_what_state_a_lost_write_left():
     # D-187: release 005's elevated write vanished and its transcript sat at its header.
     text = SCRIPT.read_text(encoding="utf-8")

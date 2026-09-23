@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "device_identity", "release", "dds", "runtime",
-    "network", "fleet", "created_at", "nonce", "payload_checksum"
+    "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api"
   ],
   "properties": {
     "schema_version": {"const": 1},
@@ -63,6 +63,25 @@
     "created_at": {"type": "string", "format": "date-time"},
     "nonce": {"type": "string", "minLength": 16, "maxLength": 128},
     "payload_checksum": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "core_api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record"],
+      "properties": {
+        "record": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "role", "sha256", "label", "created_at"],
+          "properties": {
+            "id": {"type": "string", "pattern": "^[0-9a-f]{12}$"},
+            "role": {"const": "administrator"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "label": {"type": "string", "maxLength": 64},
+            "created_at": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
     "operator": {
       "type": "object",
       "additionalProperties": false,

@@ -223,6 +223,11 @@ catch {
     $code = 1
 }
 finally {
+    if ($code -eq 0) {
+        # D-191: the one-time stderr line never reaches this transcript, and the
+        # elevated window of a non-detached write closes; name the store instead.
+        Write-Output "CORE API credential for ${deviceName}: (Import-Clixml `"`$env:LOCALAPPDATA\Rosy\api\$deviceName.credential.xml`").GetNetworkCredential().Password"
+    }
     Write-Output "EXIT_CODE=$code"
     Stop-Transcript | Out-Null
     Set-Content -LiteralPath $exitMarker -Value $code -Encoding ASCII

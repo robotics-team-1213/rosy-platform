@@ -358,24 +358,69 @@ function Resolve-BootMount([int]$Number, [string]$ExplicitPath, [bool]$FixtureMo
     Fail "the flashed SD boot partition was not found"
 }
 
+# D-191 review: a per-card DPAPI store entry is bound to the device_uid it was
+# issued for; its user name is "<name>|<device_uid>". An entry for another
+# device_uid under the same device name is refused. An entry written before the
+# binding ("<name>" alone) is accepted once for the same device name and
+# rewritten with the uid.
+function Save-BoundCredential([string]$File, [string]$Name, [string]$Uid, [string]$Value) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $File) -Force | Out-Null
+    $secure = ConvertTo-SecureString $Value -AsPlainText -Force
+    New-Object System.Management.Automation.PSCredential("$Name|$Uid", $secure) | Export-Clixml -LiteralPath $File
+}
+
+function Read-BoundCredential([string]$File, [string]$Uid, [string]$What) {
+    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { return $null }
+    $stored = Import-Clixml -LiteralPath $File
+    $parts = ([string]$stored.UserName).Split([char]"|", 2)
+    $value = $stored.GetNetworkCredential().Password
+    if ($parts.Count -eq 2) {
+        if ($parts[1] -cne $Uid) {
+            Fail "the stored $What in $File belongs to device_uid $($parts[1]), not $Uid" "move that file away if the old device is retired, then re-run"
+        }
+    }
+    else {
+        Save-BoundCredential $File $parts[0] $Uid $value
+    }
+    return [pscustomobject]@{ Name = $parts[0]; Value = $value }
+}
+
 # D-176: each card's fallback AP gets its own random password. It is kept in the
 # operator's DPAPI store (reused when the same device is rewritten) and shown
 # once; plans and receipts never hold it.
-function Get-ApPassword([string]$Device) {
+function Get-ApPassword([string]$Device, [string]$Uid) {
     if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable" }
-    $store = Join-Path $env:LOCALAPPDATA "Rosy\ap"
-    $file = Join-Path $store "$Device.credential.xml"
-    if (Test-Path -LiteralPath $file -PathType Leaf) {
-        return (Import-Clixml -LiteralPath $file).GetNetworkCredential().Password
-    }
+    $file = Join-Path $env:LOCALAPPDATA "Rosy\ap\$Device.credential.xml"
+    $stored = Read-BoundCredential $file $Uid "AP password"
+    if ($stored) { return $stored.Value }
     $alphabet = "abcdefghjkmnpqrstuvwxyz" + "ABCDEFGHJKLMNPQRSTUVWXYZ" + "23456789"
     $bytes = New-Object byte[] 14
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $password = -join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })
-    New-Item -ItemType Directory -Path $store -Force | Out-Null
-    $secure = ConvertTo-SecureString $password -AsPlainText -Force
-    New-Object System.Management.Automation.PSCredential($Device, $secure) | Export-Clixml -LiteralPath $file
+    Save-BoundCredential $file $Device $Uid $password
     return $password
+}
+
+# D-191: each card gets its own CORE API administrator credential, in the format
+# of CORE's generate_token (32 random bytes, URL-safe base64 without padding) and
+# new_token_id (6 random bytes as hex). It is kept in the operator's DPAPI store
+# with "<id>|<device_uid>" as the user name, reused when the same device is
+# rewritten, and shown once. Only CORE's sha256 record goes on the card; plans,
+# receipts and the progress file never hold the credential.
+function Get-CoreApiLogin([string]$Device, [string]$Uid) {
+    if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable" }
+    $file = Join-Path $env:LOCALAPPDATA "Rosy\api\$Device.credential.xml"
+    $stored = Read-BoundCredential $file $Uid "CORE API credential"
+    if ($stored) { return [pscustomobject]@{ Id = $stored.Name; Value = $stored.Value } }
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $valueBytes = New-Object byte[] 32
+    $idBytes = New-Object byte[] 6
+    $random.GetBytes($valueBytes)
+    $random.GetBytes($idBytes)
+    $value = [Convert]::ToBase64String($valueBytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    $id = -join ($idBytes | ForEach-Object { $_.ToString("x2") })
+    Save-BoundCredential $file $id $Uid $value
+    return [pscustomobject]@{ Id = $id; Value = $value }
 }
 
 function New-PinkyIdentity {
@@ -726,6 +771,11 @@ if ($PlanOnly) {
     $planJson
     exit 0
 }
+
+# The per-card AP password and CORE API credential are read (or issued) before
+# the card is touched, so a store bound to another device_uid stops here.
+$apLogin = Get-ApPassword $DeviceName $DeviceUid
+$coreApiLogin = Get-CoreApiLogin $DeviceName $DeviceUid
 
 # D-188 pre-flight, before the ERASE confirmation: a timed, read-only sequential
 # read of the card start predicts the job, the card's own identity is checked
@@ -1130,8 +1180,9 @@ try {
             pairing_required = $false
         }
         if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
-        $apLogin = Get-ApPassword $DeviceName
         $bundleRequest["ap_password"] = $apLogin
+        $bundleRequest["core_api_token"] = $coreApiLogin.Value
+        $bundleRequest["core_api_token_id"] = $coreApiLogin.Id
         $previousOutputEncoding = $OutputEncoding
         $previousPythonUtf8 = $env:PYTHONUTF8
         try {
@@ -1223,6 +1274,7 @@ if ($reprovision) {
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 10 -Compress
-Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath" })
+Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath; the CORE API credential is in `$env:LOCALAPPDATA\Rosy\api\$DeviceName.credential.xml (runbook: CORE API administrator credential)" })
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
+[Console]::Error.WriteLine("CORE API administrator for ${DeviceName}: id $($coreApiLogin.Id) value $($coreApiLogin.Value) (stored in your Rosy API store)")
