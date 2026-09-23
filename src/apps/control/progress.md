@@ -137,3 +137,9 @@ plans:
 - 회전 검증이 자기 끝점 계산(`match_motion`, rig 0.3–0.6 s)으로 executor를 막아 스스로 입력을 낡게 만들던 결함을 고쳤다. 정지 중에는 최대 1 s 동안 0을 유지하며 대기하고, 끝점 등록 뒤에는 새 증거가 충분히 신선할 때까지 다음 구간을 시작하지 않는다.
 - rig 분리 모드의 간헐 실패 중 회전 단계 몫은 교차 실행에서 사라졌다(기준 2/5, 수정 5/5, 최종본 11회 연속 통과). translation 단계 실패(부하 20 이상에서 decision 큐 대기)는 별도 과제로 남는다.
 - 실기 영향: Pi에서 `match_motion` 소요 시간은 미측정이다. 0.25 s 창과 `dt <= 0.5` 검사에 걸리는지 DEVICE 단계에서 확인해야 한다. SOURCE/ROS-SIM 근거이고 DEVICE/FIELD는 HOLD.
+
+## 2026-09-23 calibration wall tracker cost
+
+- 직진 교정용 벽 추적(`wall_tracker._fit`)을 결과가 비트 단위로 같게 벡터화했다. scan당 27 ms에서 7 ms로 줄었다. 부하가 높은 rig에서 calibration 노드가 스스로 포화하던 원인(class B의 첫 층)이 줄었다.
+- 남은 class B는 박스 초과 할당(부하 25–30 이상)에 따른 OS 스케줄링 공백이다. 코드 결함이 아니다. rig 판정은 부하가 낮은 시간대에 하거나 환경 가드를 둔다.
+- 실기: Pi에서 scan 콜백 시간과 10 Hz 주기 대비 점유율은 DEVICE 단계에서 확인한다.
