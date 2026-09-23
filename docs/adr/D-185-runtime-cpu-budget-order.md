@@ -90,6 +90,18 @@
      `run_fleet_sim.sh`, localization rig)의 채택은 단계적이다. 그전까지 피어 부하는 가드가 측정만 한다.
    - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄로 재판정했다.
 
+   **R8 구현 메모 (2026-09-24).**
+   - `src/apps/control/tools/device/hotpath_measure.py`를 만들었다. ROS 없이 돌고, 하위 명령마다 JSON 보고서
+     하나(`rosy.control.hotpath_measure/1`)를 쓴다.
+   - `bench`는 `wall_tracker._segments`(720-ray), `match_motion`(180점, 10° 회전), `inflate`(200×200, 반경
+     5셀)의 median·p90·max를 잰다. 입력은 동등성 테스트 생성기와 같은 형태다.
+   - `watch`는 control 노드 프로세스별 CPU%(`/proc/<pid>/stat` 차분)와 RSS, 부하, PSI를 간격마다 기록한다.
+   - 보고서는 `/proc/device-tree/model`이 Raspberry Pi일 때만 실기 증거로 표시한다. host 수치(Windows x86
+     `match_motion` 80 ms 등)는 증거가 아니다.
+   - 실기 실행은 HOLD다. 하드웨어가 없어 Pi 수치는 아직 없다. 절차는 도구 docstring과 device 검증 계획의
+     2026-09-24 checkpoint에 있다.
+   - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,868줄로 재판정했다.
+
    **R3 구현 메모 (2026-09-24).**
    - 선택은 파라미터가 아니라 환경 변수 `ROSY_EXECUTOR`(`single` 기본, `events`)로 한다. 노드 파라미터보다
      먼저, 노드 밖에서 정해야 하기 때문이다. 표의 "파라미터로 선택"은 이 방식으로 대체한다.

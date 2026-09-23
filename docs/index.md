@@ -131,7 +131,7 @@
 ## 최근 기록
 
 - 2026-09-24 · uncommitted · docs(adr): D-185 R3 구현 메모
+- 2026-09-24 · uncommitted · tools(control): D-185 R8 Pi 계측 도구
 - 2026-09-24 · uncommitted · docs(adr): D-185 R4 구현 메모
 - 2026-09-24 · uncommitted · chore(repo): absorb the parent umbrella into Rosy OS
 - 2026-09-24 · uncommitted · docs(data): keep teleop learning clips under data/teleop/learning
-- 2026-09-24 · uncommitted · docs(adr): D-185 R1 구현 메모
