@@ -35,8 +35,10 @@ docking:
         # spot (-1.000, 0) -> tag centre (-0.74979, 0): bottom edge -0.78,
         # 25 deg face, 66.7 mm with its quiet zone.
         tag_offset_m: 0.25021
-        # The tag's top leaves the camera's view ~0.1 m before the spot, so
-        # the approach from the spur entry (0.27 m out) creeps first.
+        # At the spur entry (0.27 m out) the tag's top is above the camera's
+        # view; it comes into view only ~0.1 m before the spot, so the
+        # approach creeps first. backoff_m: a reseat reverses by distance,
+        # not time (the wall is behind the spur).
         acquire_creep_m: 0.20
         backoff_m: 0.10
         # The perimeter wall is 0.1329 m behind the entry's base_link (rear

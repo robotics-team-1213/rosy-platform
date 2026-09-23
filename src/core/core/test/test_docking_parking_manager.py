@@ -4,7 +4,7 @@ robot (docs/plans/2026-09-23-lane-network-parking-design.md §4).
 A parking type (no staging, pose approach, pose settle) is driven by a
 detector that reports the wedge tag from the true pose at 5 Hz with a
 capture latency, and only where the Gazebo camera sees it whole (the
-tag's top leaves the view ~0.1 m before the spot). Odometry is the true
+tag's top only comes into view ~0.1 m before the spot). Odometry is the true
 pose; CORE's map pose too (Gazebo). The original dock types keep their
 behaviour: test_docking.py runs unchanged.
 """
