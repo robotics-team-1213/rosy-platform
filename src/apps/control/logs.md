@@ -241,3 +241,10 @@
 - gate 변화: 없음.
 - 결정: D-171 (d) 충족, main 병합.
 - 교훈: 타이밍에 흔들리는 모드의 A/B는 한 번이 아니라 분포로 본다. 시계 통일과 다중 스레드 실행기는 둘 다 한 프로세스 모드를 더 나쁘게 했다.
+
+## 2026-09-23 · uncommitted · test(control): D-171 track 1 code held back; rig tools merged
+- 변경: rig 비상정지 판정(실패 이유 확인)과 결정 탐침(`tools/gz/rig_decision_probe.py`)만 main에 병합한다. `goal_escape`·`safety.scale`·`evidence`·`gate`·`obstacles`·`hazard`·`bumper` 변환은 `refactor/d171-track1`에 보류한다.
+- 증거: rig 분리 모드, 계측 없음. main 0/약 12. 트랙 1 트리들은 가장 작은 조합(`goal_escape`+`scale`, 최신 main 위)부터 간헐 실패했다(1/2, 묶음 전체 5/13 등, 평가 문서 §8.2 표). 결정 탐침으로는 실패 실행에서도 결정 흐름이 정상이다. 비상정지 음성 사례는 새 판정으로 "Emergency stop engaged" 실패, PASS.
+- gate 변화: 없음.
+- 결정: D-171 트랙 1 코드 보류(사용자 승인). 다음 과제는 rig 간헐 실패의 원인이다.
+- 교훈: 한 번씩만 돌린 rig 이분 탐색이 틀린 원인을 지목했다. "검증된 부분"이라는 판단도 표본이 쌓이자 뒤집혔다. 타이밍에 흔들리는 검증 수단은 판정 전에 기준본의 실패율부터 잰다.

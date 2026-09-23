@@ -164,6 +164,9 @@ if [[ "${RIG_ESTOP_PROBE:-0}" == 1 ]]; then
   setsid python3 tools/gz/rig_estop_probe.py "$out" > "$out/estop-probe.log" 2>&1 & pids+=($!)
 fi
 
+if [[ "${RIG_DECISION_PROBE:-0}" == 1 ]]; then
+  setsid python3 tools/gz/rig_decision_probe.py > "$out/decision-probe.log" 2>&1 & pids+=($!)
+fi
 setsid python3 tools/gz/track_run_monitor.py > "$out/monitor.log" 2>&1 & pids+=($!)
 if [[ "${RIG_OBSTACLE_SCENARIO:-0}" == 1 ]]; then
   setsid python3 -m tools.gz.obstacle_scenario --ros-args -p use_sim_time:=true \
@@ -184,6 +187,8 @@ if os.environ.get('RIG_ESTOP_PROBE') == '1':
     assert probe.get('pressed') is True, f'e-stop probe never fired: {probe}'
     assert result['calibration_ready'] is not True, 'Calibration became ready after an e-stop during its trial'
     assert result['calibration_phase'] == 'failed', f"e-stop during a trial must fail it: {result['calibration_phase']}"
+    # A trial that fails for another reason first proves nothing about the e-stop path.
+    assert 'Emergency stop' in (result.get('message') or ''), f"failed, but not by the e-stop: {result.get('message')}"
 elif not os.environ.get('RIG_CALIBRATION_CASE'):
     assert result['calibration_ready'] is True, result['message']
 assert result['cmd_vel_publishers'] == ['safety_node'], 'Unexpected final command publisher'
