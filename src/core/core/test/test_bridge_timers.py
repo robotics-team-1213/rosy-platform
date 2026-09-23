@@ -147,6 +147,11 @@ class RecordingNode:
             warning=lambda *a, **k: None, error=lambda *a, **k: None,
             debug=lambda *a, **k: None)
 
+    def get_parameter(self, name):
+        # rclpy declares `use_sim_time` on every node; the bridge reads it once.
+        assert name == "use_sim_time"
+        return types.SimpleNamespace(value=False)
+
     def get_clock(self):
         # nanoseconds: D-137 T4 — 브리지가 자문 피드에 노드 시계를 바인딩한다.
         return types.SimpleNamespace(

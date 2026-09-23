@@ -199,6 +199,13 @@ class RosBridge:
         # sim clock 이라, 느리게 도는 기계에서도 "30 초"가 시뮬 30 초를 뜻한다. 실기에서는
         # 시스템 시계와 같아 동작이 달라지지 않는다.
         self._svc.nav.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
+        # Line/road evidence staleness (0.3 s) and loss (3 s) run on one clock:
+        # sim seconds under `use_sim_time` (a Gazebo at RTF 0.25 otherwise ages a
+        # 5 Hz frame 0.8 s of wall time and HOLDs), `time.monotonic` on Device.
+        self._line_clock = traffic_gate.line_clock(
+            bool(node.get_parameter("use_sim_time").value),
+            lambda: self._node.get_clock().now().nanoseconds / 1e9)
+        self._svc.line_follow.bind_clock(self._line_clock)
         self._svc.docking.executor = self
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
@@ -249,14 +256,14 @@ class RosBridge:
             )
             source_now = self._node.get_clock().now().nanoseconds * 1e-9
             accepted = self._svc.line_follow.observe(
-                observation, received_at=time.monotonic(), source_now=source_now)
+                observation, received_at=self._line_clock(), source_now=source_now)
             self._svc.state.set_sensor("line_follow", {
                 "valid": True,
                 "accepted": accepted,
                 "source": observation.source.value,
             })
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            now = time.monotonic()
+            now = self._line_clock()
             if self._svc.line_follow.invalidate(received_at=now):
                 self._svc.command.clear_navigation()
                 self._svc.line_follow.tick(now)
@@ -274,7 +281,7 @@ class RosBridge:
             source_now = self._node.get_clock().now().nanoseconds * 1e-9
             self._svc.traffic_policy.observe(
                 observation,
-                received_at=time.monotonic(),
+                received_at=self._line_clock(),
                 source_now=source_now,
             )
             self._svc.state.set_sensor("traffic_policy", {
@@ -324,14 +331,17 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         if not self._svc.line_follow.active:
             return
-        now = time.monotonic()
+        now = self._line_clock()
         decision = self._svc.line_follow.tick(now)
+        # CommandManager.select_output() ages the nav twist on time.monotonic.
+        command_now = None if self._line_clock is time.monotonic else time.monotonic()
         traffic_gate.apply_line_candidate(
             self._svc.line_follow,
             self._svc.traffic_policy,
             self._svc.command,
             decision,
             now,
+            command_now,
         )
         status = self._svc.line_follow.status()
         self._svc.state.set_line_follow(status)
