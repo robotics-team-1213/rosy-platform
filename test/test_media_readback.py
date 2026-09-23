@@ -9,6 +9,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY = ROOT / "deploy" / "sd" / "verify-media-readback.py"
@@ -118,6 +120,65 @@ def test_an_unreadable_device_exits_3_so_the_writer_can_say_reinsert(tmp_path):
 
     assert completed.returncode == 3
     assert "MEDIA_READBACK_DEVICE_UNREADABLE" in completed.stderr
+
+
+def _run_with_error_file(image: Path, device: Path, error: Path):
+    return subprocess.run(
+        [sys.executable, str(VERIFY), "--image", str(image), "--device", str(device), "--error-json", str(error)],
+        capture_output=True, text=True, check=False,
+    )
+
+
+def test_a_mismatch_is_written_to_the_error_file_with_the_bytes_verified(tmp_path):
+    raw = b"x" * (9 * 1024 * 1024)
+    different = bytearray(raw)
+    different[5 * 1024 * 1024 + 3] ^= 0x01
+    image, device, error = tmp_path / "rosy.img.xz", tmp_path / "device.bin", tmp_path / "error.json"
+    image.write_bytes(lzma.compress(raw))
+    device.write_bytes(bytes(different))
+
+    completed = _run_with_error_file(image, device, error)
+
+    assert completed.returncode == 1
+    assert json.loads(error.read_text(encoding="utf-8")) == {
+        "error": f"media readback mismatch at byte offset {5 * 1024 * 1024 + 3}",
+        "kind": "mismatch",
+        "bytes_verified": 4 * 1024 * 1024,  # the first chunk matched
+    }
+
+
+@pytest.mark.parametrize("case", ["short-card", "missing-card"])
+def test_a_card_that_ends_or_cannot_be_read_is_an_io_error(tmp_path, case):
+    raw = b"y" * (6 * 1024 * 1024)
+    image, device, error = tmp_path / "rosy.img.xz", tmp_path / "device.bin", tmp_path / "error.json"
+    image.write_bytes(lzma.compress(raw))
+    if case == "short-card":
+        device.write_bytes(raw[:5 * 1024 * 1024])
+
+    completed = _run_with_error_file(image, device, error)
+
+    record = json.loads(error.read_text(encoding="utf-8"))
+    assert record["kind"] == "io"
+    if case == "short-card":
+        assert completed.returncode == 1
+        assert record == {"error": f"media is shorter than the image at byte offset {4 * 1024 * 1024}",
+                          "kind": "io", "bytes_verified": 4 * 1024 * 1024}
+    else:
+        assert completed.returncode == 3
+        assert record["error"].startswith("device cannot be opened") and record["bytes_verified"] == 0
+
+
+def test_a_truncated_image_is_an_image_error(tmp_path):
+    raw = b"z" * (6 * 1024 * 1024)
+    compressed = lzma.compress(raw)
+    image, device, error = tmp_path / "rosy.img.xz", tmp_path / "device.bin", tmp_path / "error.json"
+    image.write_bytes(compressed[:len(compressed) // 2])
+    device.write_bytes(raw)
+
+    completed = _run_with_error_file(image, device, error)
+
+    assert completed.returncode == 1
+    assert json.loads(error.read_text(encoding="utf-8"))["kind"] == "image"
 
 
 def test_raw_size_comes_from_the_xz_index_of_every_stream(tmp_path):

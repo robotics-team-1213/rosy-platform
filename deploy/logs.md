@@ -762,3 +762,15 @@
 - gate 변화: 없음
 - 결정: D-181
 - 교훈: 오래 도는 외부 도구를 기다릴 때는 "끝났나"만이 아니라 "움직이나"를 본다. 실패 문구는 원인만이 아니라 카드에 무엇이 남았는지와 다음 명령을 말해야 복구가 싸진다.
+
+## 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-181)
+
+- 변경: 005 재기록 실패 로그에는 `WRITE FAILED: full media readback verification failed`만 남았다. PowerShell 5.1 transcript는 native
+  프로그램의 stderr를 담지 않는다. `verify-media-readback.py --error-json`이 `error`·`kind`(`io`, `mismatch`, `image`)·`bytes_verified`를
+  쓰고, `prepare-rosy-sd.ps1`이 그 이유와 검증된 바이트 수를 실패 문구·진행 파일 `detail`·로그에 옮긴다. 장치 OSError와 짧은 읽기는
+  I/O(다시 꽂거나 다른 리더기로 `-ResumeAfterWrite`), 불일치는 나쁜 데이터(재기록, 반복되면 카드 교체), xz 압축 해제 실패는 릴리스 재다운로드.
+- 증거: 불일치·짧은 카드·없는 장치·잘린 xz의 error 파일과, 불일치·짧은 카드 이유가 Fail 문구와 진행 파일에 남는 writer 테스트(2026-09-24 Windows).
+  실제 카드의 중간 분리는 재현하지 않았다.
+- gate 변화: 없음
+- 결정: D-181
+- 교훈: 실패 이유가 로그까지 오는 경로를 테스트로 고정한다. 하위 도구가 이유를 말해도 상위 로그가 그 스트림을 버리면 없는 것과 같다.

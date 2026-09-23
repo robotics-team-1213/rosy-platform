@@ -351,7 +351,10 @@ def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case,
     assert completed.returncode != 0
     assert writer_case["marker"].exists()
     assert "--disable-verify" in writer_case["writer_args"].read_text(encoding="utf-8")
-    assert "full media readback verification failed" in completed.stderr + completed.stdout
+    # D-181: a card that ends early is an I/O problem (resume); a flipped byte is bad data.
+    rendered = " ".join((completed.stderr + completed.stdout).split())
+    assert ("could not be read during readback" in rendered
+            or "full media readback verification failed" in rendered)
     assert not (boot / "rosy-provision" / "provision.json").exists()
     assert not writer_case["receipt"].exists()
     registry = json.loads(writer_case["registry"].read_text(encoding="utf-8"))
@@ -1228,7 +1231,8 @@ def test_an_unreadable_card_during_readback_says_reinsert_and_resume(writer_case
 
     assert completed.returncode != 0
     assert "could not be read during readback" in _err(completed)
-    assert "next: reinsert the card, then re-run the same command with -ResumeAfterWrite" in _err(completed)
+    assert "next: reinsert the card (or use another reader), then re-run the same command with -ResumeAfterWrite" in _err(completed)
+    assert "device cannot be opened" in _err(completed)  # the verifier's own reason
     assert _failed(_progress(writer_case)) == "written-unverified"
     _nothing_recorded(writer_case, boot)
 
@@ -1326,3 +1330,43 @@ def test_a_resumed_receipt_proves_a_verified_write_for_reprovisioning(writer_cas
     completed = _run(writer_case, "-ReprovisionReceipt", prior)
 
     assert completed.returncode == 0, completed.stderr
+
+
+# Release 005 rewrite: the transcript said only "full media readback verification
+# failed"; the verifier's stderr never reached it, so a mid-read disconnect could
+# not be told from bad data. The reason now travels through --error-json.
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_readback_mismatch_reason_reaches_the_failure_and_the_progress_file(writer_case, tmp_path):
+    raw = writer_case["readback"].read_bytes()
+    writer_case["readback"].write_bytes(_flip_one_byte(raw))
+    offset = len(raw) // 2
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    reason = f"media readback mismatch at byte offset {offset}"
+    assert f"full media readback verification failed: {reason} (verified 0 bytes before it stopped)" in _err(completed)
+    assert "if it fails again, replace the card" in _err(completed)
+    failed = _progress(writer_case)[-1]
+    assert failed["stage"] == "failed" and failed["card_state"] == "written-unverified"
+    assert reason in failed["detail"] and "verified 0 bytes" in failed["detail"]
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_card_that_ends_mid_readback_is_an_io_problem_with_its_reason_logged(writer_case, tmp_path):
+    raw = writer_case["readback"].read_bytes()
+    writer_case["readback"].write_bytes(raw[:1000])  # the reader dropped out partway
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    reason = "media is shorter than the image at byte offset 0"
+    assert f"could not be read during readback (removed, disconnected or I/O error): {reason}" in _err(completed)
+    assert "next: reinsert the card (or use another reader), then re-run the same command with -ResumeAfterWrite" in _err(completed)
+    failed = _progress(writer_case)[-1]
+    assert failed["card_state"] == "written-unverified"
+    assert reason in failed["detail"]
+    _nothing_recorded(writer_case, boot)

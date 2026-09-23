@@ -76,8 +76,10 @@ class Progress:
         self.path = path
         self.interval = interval
         self.last = time.monotonic()
+        self.done = 0  # bytes compared so far; reported when the readback fails
 
     def beat(self, done: int, force: bool = False) -> None:
+        self.done = done
         if self.path is None:
             return
         now = time.monotonic()
@@ -467,7 +469,11 @@ def main() -> int:
     parser.add_argument("--progress", type=Path,
                         help="append readback heartbeat lines (JSON) to this file")
     parser.add_argument("--progress-seconds", type=float, default=60.0)
+    parser.add_argument("--error-json", type=Path,
+                        help="on failure write {error, kind, bytes_verified} here; Windows PowerShell "
+                             "5.1 transcripts do not capture a native program's stderr")
     args = parser.parse_args()
+    progress = Progress(args.progress, args.progress_seconds)
     try:
         if args.raw_size:
             evidence = {"image_raw_size": xz_raw_size(args.image)}
@@ -478,15 +484,34 @@ def main() -> int:
         else:
             if not args.device:
                 raise ValueError("--device is required unless --image-only is used")
-            evidence = verify(args.image, args.device, Progress(args.progress, args.progress_seconds))
+            evidence = verify(args.image, args.device, progress)
     except DeviceReadError as exc:
         print(f"MEDIA_READBACK_DEVICE_UNREADABLE: {exc}", file=sys.stderr)
+        _write_error(args.error_json, exc, "io", progress.done)
         return EXIT_DEVICE_UNREADABLE
     except (OSError, EOFError, lzma.LZMAError, ValueError, struct.error) as exc:
         print(f"MEDIA_READBACK_FAILED: {exc}", file=sys.stderr)
+        _write_error(args.error_json, exc, _failure_kind(exc), progress.done)
         return 1
     print(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
     return 0
+
+
+def _failure_kind(exc: BaseException) -> str:
+    """io: the card ran out or could not be read; image: the .img.xz is unusable;
+    mismatch: the card was read and holds the wrong data."""
+    if isinstance(exc, ValueError) and str(exc).startswith("media is shorter"):
+        return "io"
+    if isinstance(exc, (OSError, EOFError, lzma.LZMAError)):
+        return "image"
+    return "mismatch"
+
+
+def _write_error(path: Path | None, exc: BaseException, kind: str, done: int) -> None:
+    if path is None:
+        return
+    record = {"error": str(exc), "kind": kind, "bytes_verified": done}
+    path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
 
 
 if __name__ == "__main__":

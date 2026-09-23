@@ -695,13 +695,42 @@ if ($ProgressPath) { $readbackOptions += @("--progress", $ProgressPath) }
 # Windows auto-mounts the freshly written FAT32 partition and rewrites a few
 # spec-defined fields; removable media cannot be set offline. The verifier
 # tolerates exactly those fields and reports them (release 004, offset 1049576).
-$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget @readbackOptions
-$readbackExitCode = $LASTEXITCODE
-if ($readbackExitCode -eq 3) {
-    Fail "the card could not be read during readback (removed or I/O error)" "reinsert the card, then $resumeNext"
+# The verifier's reason goes to a file: a PowerShell 5.1 transcript does not
+# capture a native program's stderr, and 2>&1 under ErrorAction Stop would throw
+# (release 005 rewrite: the log said only "readback verification failed").
+$readbackErrorPath = Join-Path ([IO.Path]::GetTempPath()) ("rosy-readback-" + [guid]::NewGuid().ToString("N") + ".json")
+$readbackOptions += @("--error-json", $readbackErrorPath)
+try {
+    $mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget @readbackOptions
+    $readbackExitCode = $LASTEXITCODE
+    $readbackError = $null
+    if (Test-Path -LiteralPath $readbackErrorPath -PathType Leaf) {
+        try { $readbackError = Get-Content -LiteralPath $readbackErrorPath -Raw | ConvertFrom-Json } catch { $readbackError = $null }
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $readbackErrorPath) { Remove-Item -LiteralPath $readbackErrorPath -Force }
 }
 if ($readbackExitCode -ne 0) {
-    Fail "full media readback verification failed" "$fullWriteNext; if it fails again, replace the card"
+    $reason = "no reason reported (verifier exit code $readbackExitCode)"
+    $kind = "mismatch"
+    if ($readbackError) {
+        $reason = "{0} (verified {1} bytes before it stopped)" -f $readbackError.error, $readbackError.bytes_verified
+        $kind = [string]$readbackError.kind
+    }
+    elseif ($readbackExitCode -eq 3) {
+        $kind = "io"
+    }
+    # A read error or a card that ends early is the reader or the connection,
+    # not the data: the written bytes may be fine, so resume. A mismatch is bad data.
+    if ($kind -eq "io") {
+        Fail "the card could not be read during readback (removed, disconnected or I/O error): $reason" "reinsert the card (or use another reader), then $resumeNext"
+    }
+    if ($kind -eq "image") {
+        $script:cardState = "unknown"
+        Fail "the image file could not be decompressed during readback: $reason" "download the release again, then $fullWriteNext"
+    }
+    Fail "full media readback verification failed: $reason" "$fullWriteNext; if it fails again, replace the card"
 }
 try {
     $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json

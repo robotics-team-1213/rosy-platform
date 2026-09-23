@@ -52,7 +52,10 @@
    4 MiB씩 압축을 풀고, 다른 하나가 카드를 순서대로 4 MiB씩 읽어 각자 크기 4의 queue에 넣는다. 주 스레드는 비교와
    raw·device 해시를 맡는다(압축 스트림 해시는 lzma가 바이트를 소비하는 압축 해제 스레드에서 갱신된다). 판정·오류 문구·JSON
    필드는 그대로이고, 어느 worker의 예외도 그대로 실패로 올라온다(부분 통과 없음). 모든 경로에서 두 스레드를 join한다.
-   이미지 끝 뒤를 미리 읽다 난 오류는 판정에 넣지 않는다(예전에도 그 영역은 읽지 않았다). 256 MiB 로컬 fixture에서
+   이미지 끝 뒤를 미리 읽다 난 오류는 판정에 넣지 않는다(예전에도 그 영역은 읽지 않았다).
+   실패하면 verifier가 `--error-json`에 `error`·`kind`(`io`, `mismatch`, `image`)·`bytes_verified`를 쓰고, writer는 그 문구를
+   실패 문구·진행 파일 `detail`·로그에 그대로 옮긴 뒤 `kind`로 카드 상태와 다음 행동을 고른다. PowerShell 5.1 transcript는
+   native 프로그램의 stderr를 담지 않아, 005 재기록 실패 로그에는 "verification failed"만 남았다. 256 MiB 로컬 fixture에서
    page cache 파일은 3.10초 → 2.34초, 60 MB/s로 늦춘 장치는 11.55초 → 6.81초였다. 8 MiB 장치 읽기는 이득이 없어 4 MiB로 둔다.
 
 **실패 유형표:**
@@ -69,8 +72,9 @@
 | Imager 비0 종료 | 종료 코드 | 멈춤 | `writing`(일부 기록) | 전체 쓰기 재실행 |
 | Imager 멈춤, 전체 크기 전 | CPU·I/O 카운터가 `-WriterStallMinutes` 동안 불변 | Imager 프로세스 트리 종료 후 멈춤 | `writing` | 전체 쓰기 재실행 |
 | Imager 멈춤, 전체 크기 뒤 | 위 + `WriteTransferCount` ≥ xz index raw 크기 | Imager 종료 후 멈춤 | `written-unverified` | `-ResumeAfterWrite` |
-| readback 불일치(짧은 매체, byte 차이, boot 파일 차이) | `verify-media-readback.py` exit 1 | bundle·receipt·registry 전 멈춤 | `written-unverified`(틀림 확인) | 전체 쓰기 재실행, 반복되면 카드 교체 |
-| readback 중 카드 빠짐·I/O 오류 | exit 3(`DeviceReadError`) | 멈춤 | `written-unverified` | 카드를 다시 꽂고 `-ResumeAfterWrite` |
+| readback 불일치(byte 차이, boot 파일 차이) | `--error-json`의 `kind: mismatch` | bundle·receipt·registry 전 멈춤. 불일치 offset과 검증된 바이트 수를 실패 문구·진행 파일·로그에 남김 | `written-unverified`(틀림 확인) | 전체 쓰기 재실행, 반복되면 카드 교체 |
+| readback 중 카드 빠짐·I/O 오류·카드가 이미지보다 일찍 끝남 | `kind: io`(`DeviceReadError` exit 3, 또는 짧은 읽기) | 멈춤. OSError 문구·offset·검증된 바이트 수를 남김 | `written-unverified` | 카드를 다시 꽂거나 다른 리더기로 `-ResumeAfterWrite` |
+| readback 중 이미지 압축 해제 실패 | `kind: image`(`LZMAError`, `EOFError`) | 멈춤 | `unknown` | 릴리스를 다시 받고 전체 쓰기 |
 | 서명 뒤 이미지 파일이 바뀜 | readback `image_sha256` ≠ 서명된 해시 | 멈춤 | `unknown` | 릴리스를 다시 받고 전체 쓰기 |
 | readback 증거 형식 오류 | 64자리 hex·양수 `bytes_verified` 검사 | 멈춤 | `written-unverified` | `-ResumeAfterWrite` |
 | bundle 직전 디스크가 바뀜 | 시리얼 재해석 + `Select-SafeDisk` + fingerprint | 멈춤 | `verified-no-bundle` | 리더기·카드를 확인하고 `-ResumeAfterWrite` |

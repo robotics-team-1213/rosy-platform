@@ -110,9 +110,14 @@ mkdir -m 0750 "$EVIDENCE"
 실패 문구 끝은 늘 이 형식이다.
 
 ```text
+the card could not be read during readback (removed, disconnected or I/O error): media is shorter than the image at byte offset 4194304 (verified 4194304 bytes before it stopped)
 stage=readback card_state=written-unverified
-next: reinsert the card, then re-run the same command with -ResumeAfterWrite (...)
+next: reinsert the card (or use another reader), then re-run the same command with -ResumeAfterWrite (...)
 ```
+
+readback이 실패하면 verifier가 말한 이유(불일치 offset, 짧은 읽기, OSError)와 검증된 바이트 수가 이 문구, 진행 파일의
+`failed` 줄 `detail`, 로그에 함께 남는다. 불일치는 데이터가 틀린 것(재기록, 반복되면 카드 교체)이고, 읽기 오류나 짧은
+읽기는 리더기·연결 문제(다시 꽂거나 다른 리더기로 resume)다.
 
 **진행 파일 읽기.** 시도마다 로그 옆에 `<log>.progress.jsonl`이 생긴다. 경로는 시작할 때 `Progress:` 줄로
 출력된다. 단계가 바뀔 때마다 JSON 한 줄이 붙고, 쓰기와 readback 중에는 약 60초마다 `heartbeat` 줄에 지금까지
