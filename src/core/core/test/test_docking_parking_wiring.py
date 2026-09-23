@@ -115,6 +115,9 @@ class StillExecutor:
     def travelled_m(self):
         return 0.0
 
+    def odometry_available(self):
+        return True
+
 
 def test_the_bridge_releases_the_mode_once_docking_stops_moving(core_client):
     client, services = core_client(config_overrides=sim_overrides())

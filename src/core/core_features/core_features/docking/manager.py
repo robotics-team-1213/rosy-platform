@@ -78,6 +78,8 @@ class DockingExecutor(Protocol):
     def reset_odometry_mark(self) -> None: ...
     # 주차형만 쓴다 (선택, getattr 로 찾는다): 오도메트리 base 포즈
     # `odometry_pose() -> Optional[tuple[x, y, yaw]]`.
+    # 선택: `odometry_available() -> bool` — 언도킹 전 오도메트리 기준점이 있는가.
+    # 없으면 travelled_m 이 0.0 에 머물러 후진이 끝나지 않는다.
 
 
 @dataclass
@@ -94,6 +96,7 @@ class DockingConfig:
     approach_gain_yaw: float = 1.2
     max_angular: float = 0.5
     undock_speed: float = 0.08
+    undock_timeout_margin_s: float = 2.0  # 후진 마감 = 2 × 거리/속도 + 이 값
 
     detector_lost_grace_s: float = 2.0  # 이 시간 안에 다시 보이면 실패가 아니다
     charge_confirm_s: float = 10.0      # 충전 확정 창
@@ -271,6 +274,11 @@ class DockingManager:
             raise DockError("EMERGENCY_ACTIVE", "e-stop is active")
         if self._line_follow_active():
             raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
+        available = getattr(self.executor, "odometry_available", None)
+        if callable(available) and not available():
+            # 후진은 오도메트리만 본다. 기준점이 없으면 이동 거리가 0 에 머물러
+            # 벽(57 mm 뒤)에 닿을 때까지 후진한다.
+            raise DockError("NO_ODOMETRY", "no odometry to measure the reverse")
         self._take_mode()
 
         # 도크에 반쯤 물린 상태에서는 LiDAR 도 카메라도 벽을 3 cm 앞에서 보고
@@ -538,7 +546,14 @@ class DockingManager:
             return
         distance = self._type().undock_distance_m \
             if self._dock else 0.35
-        if abs(self.executor.travelled_m()) >= distance:
+        travelled = abs(self.executor.travelled_m())
+        deadline = (2.0 * distance / self._cfg.undock_speed
+                    + self._cfg.undock_timeout_margin_s)
+        if travelled < distance and now - self._phase_since > deadline:
+            # 바퀴가 헛돌거나 무언가에 걸렸다. 무한히 후진하지 않는다.
+            self._fail("undock timed out")
+            return
+        if travelled >= distance:
             self.executor.stop()
             dock_type = self._type()
             if dock_type is not None and dock_type.undock_turn_rad:

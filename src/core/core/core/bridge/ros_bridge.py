@@ -656,6 +656,10 @@ class RosBridge:
         """마크 이후 이동 거리. 언도킹은 센서를 보지 않고 이 값만 쓴다."""
         return odometry.travelled_m(self._dock_odom_mark, self._last_odom_xy)
 
+    def odometry_available(self) -> bool:
+        """언도킹 전: 후진 거리를 잴 오도메트리가 들어오고 있는가."""
+        return self._last_odom_xy is not None
+
     def odometry_pose(self):
         """오도메트리 base 포즈 (x, y, yaw) — 주차형 도크의 프레임 사이 전파와 회전."""
         return self._last_odom_pose

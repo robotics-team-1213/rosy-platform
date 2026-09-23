@@ -39,3 +39,42 @@ def test_the_dock_type_is_cached_when_docking_starts():
     p.manager.database._types.clear()
     phases = run(p, done)
     assert p.manager.state is DockState.DOCKED, phases
+
+
+# --- M4: undocking reverses blind, so it needs odometry and a deadline ---------
+
+
+def docked(p):
+    p.manager._state = DockState.DOCKED
+    p.manager._dock = p.manager.database.get("parking")
+    return p
+
+
+def test_undock_without_odometry_is_refused_and_changes_nothing():
+    p = docked(a_parking(SPOT))
+    p.world.odometry_available = lambda: False
+    with pytest.raises(DockError) as excinfo:
+        p.manager.undock()
+    assert excinfo.value.code == "NO_ODOMETRY"
+    assert p.manager.state is DockState.DOCKED
+    assert p.world.command == (0.0, 0.0)
+
+
+def test_a_reverse_that_never_gets_there_times_out():
+    p = docked(a_parking(SPOT))
+    p.world.drive = lambda linear, angular: None      # wheels slip, odometry still
+    p.manager.undock()
+    distance = p.manager.database.type_of("parking").undock_distance_m
+    deadline = 2 * distance / p.manager._cfg.undock_speed + 2.0
+    run(p, lambda m: m.state is not DockState.UNDOCKING, max_s=deadline - 0.5)
+    assert p.manager.state is DockState.UNDOCKING
+    run(p, lambda m: m.state is not DockState.UNDOCKING, max_s=1.0)
+    assert p.manager.state is DockState.DOCK_FAILED
+    assert "undock timed out" in p.manager.status().error
+
+
+def test_an_ordinary_undock_still_finishes():
+    p = docked(a_parking(SPOT))
+    p.manager.undock()
+    run(p, done)
+    assert p.manager.state is DockState.UNDOCKED
