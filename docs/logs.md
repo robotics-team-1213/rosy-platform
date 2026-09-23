@@ -1701,3 +1701,11 @@
 - gate 변화: 없음. G-7과 DEVICE 판정은 그대로다.
 - 결정: D-182, D-183, D-184 Accepted
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 control 런타임 CPU 절감 순서를 기록(Accepted)
+
+- 변경: rig 계측과 격리 실험의 결과를 D-185 항목 R1–R8로 기록했다. 항목은 `inflate` 캐시, 신선도 구독 depth 1, `EventsExecutor`, rig 환경 가드, `footprint_sweep` 최적화, rig `/clock`, 단일 프로세스 모드, Pi 계측이다. 항목마다 결과 동일(E)과 동작 변경(B)을 구분하고 검증 방식을 정했다. 코드는 바꾸지 않았다.
+- 증거: 2026-09-23 rig 606 s 통과 실행의 프로세스별 CPU(Python 노드 합계 2.16코어). 격리 실험(domain 228)에서 빈 구독 노드는 `SingleThreadedExecutor` 50–58%, `EventsExecutor` 15%, `/clock` 30 Hz 18%. host 측정은 `inflate` 51–128 ms, `footprint_sweep_clearance` 12–31 ms. 설치된 Jazzy rclpy 7.1.11에 `rclpy.experimental.EventsExecutor`가 있음을 import로 확인했다.
+- gate 변화: 없음. 실기 수치는 R8 전까지 HOLD.
+- 결정: D-185 Accepted (사용자 승인 2026-09-24)
+- 교훈: 없음
