@@ -8,6 +8,7 @@ from typing import List
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -66,6 +67,10 @@ def generate_launch_description():
         # parameters with yaml.safe_load.
         DeclareLaunchArgument("route", default_value="[]"),
         DeclareLaunchArgument("route_start", default_value="[]"),
+        # Stage 3 (parking): observe the wedge tag (world model dock_tag_7) on
+        # dock/observation for CORE's parking dock. Off by default so stages
+        # 1-2 run exactly as before.
+        DeclareLaunchArgument("dock_observer", default_value="false"),
         simulation,
         Node(
             package="control",
@@ -112,6 +117,24 @@ def generate_launch_description():
                 # 0.020 + 0.015*cos(25 deg) = 0.034 m ahead of base_link.
                 "lane_corner_turning": True,
                 "camera_x_offset_m": 0.034,
+            }],
+        ),
+        Node(
+            package="control",
+            executable="dock_observer_node",
+            name="dock_observer_node",
+            output="screen",
+            condition=IfCondition(LaunchConfiguration("dock_observer")),
+            parameters=[{
+                "use_sim_time": True,
+                # Declared Gazebo camera, as line_observer's ground plane.
+                "camera_geometry_source": "GAZEBO",
+                "camera_height_m": 0.060194,
+                "camera_pitch_rad": math.radians(25.0),
+                "camera_hfov_rad": 1.1519,
+                "camera_x_offset_m": 0.034,
+                "tag_id": 7,
+                "tag_size_m": 0.05,
             }],
         ),
         Node(

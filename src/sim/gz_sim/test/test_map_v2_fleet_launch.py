@@ -148,3 +148,19 @@ def test_route_and_route_start_are_typed_as_arrays_from_a_yaml_flow_list_string(
             '                    LaunchConfiguration("route_start"), value_type=List[float])'
             ) in source
     assert "from typing import List" in source
+
+
+def test_the_dock_observer_is_opt_in_with_the_declared_gazebo_camera():
+    """Stage 3 (parking): control's dock_observer_node observes the wedge
+    tag on the declared Gazebo camera (25 deg, 0.0602 m, 0.034 m ahead,
+    hfov 1.1519), only when dock_observer:=true. It owns no motion."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert 'DeclareLaunchArgument("dock_observer", default_value="false")' in source
+    block = source.split('executable="dock_observer_node"', 1)[1].split("Node(", 1)[0]
+    assert "IfCondition(LaunchConfiguration(\"dock_observer\"))" in block
+    for text in ['"camera_geometry_source": "GAZEBO"', '"use_sim_time": True',
+                 '"camera_height_m": 0.060194', '"camera_pitch_rad": math.radians(25.0)',
+                 '"camera_hfov_rad": 1.1519', '"camera_x_offset_m": 0.034',
+                 '"tag_id": 7', '"tag_size_m": 0.05']:
+        assert text in block, text
+    assert "cmd_vel" not in source
