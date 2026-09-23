@@ -45,10 +45,18 @@ ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
+PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
+PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
+CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
 [[ "$WIRINGPI_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "WiringPi package SHA-256 is invalid"
+[[ -f "$PYTHON_REQUIREMENTS" ]] || fail "CORE Python requirements lock is missing"
+[[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
+[[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
+    || fail "CORE Python requirements do not match inputs.lock.yaml"
+[[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
@@ -70,6 +78,7 @@ cleanup() {
     rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
     rm -rf -- "$ROOT/tmp/rosy-src"
     rm -rf -- "$ROOT/tmp/rosy-native-probe"
+    rm -rf -- "$ROOT/tmp/rosy-core-probe"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
 }
@@ -121,7 +130,7 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-yaml \
+    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-pip python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 
 cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"
@@ -139,6 +148,26 @@ ROSDEP_PATH_OUTPUT="$(
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
 chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
     --ignore-src -r -y --rosdistro jazzy
+# D-189 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
+# pydantic 1.10 and fastapi 0.101, and nothing provides websockets. CORE needs
+# the hash-locked set. Root pip on Ubuntu installs into
+# /usr/local/lib/python3.12/dist-packages, which precedes /usr/lib/python3 on
+# sys.path. No --prefix: Debian's posix_prefix scheme would pick site-packages,
+# which is not on sys.path at all.
+mkdir -p "$ROOT/tmp/rosy-core-probe"
+cp "$PYTHON_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/device-python-requirements.txt"
+cp "$CORE_PROBE" "$ROOT/tmp/rosy-core-probe/probe-core-runtime.py"
+chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
+# umask 022: the service users must be able to read what root installs.
+(umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
+    --ignore-installed --require-hashes --no-deps --only-binary=:all: \
+    -r /tmp/rosy-core-probe/device-python-requirements.txt) \
+    || fail "CORE Python runtime did not install from the hash lock"
+# D-189: record which runtime the image carries; native_release.py refuses a
+# release built for another one (python-runtime.sha256 in its signed payload).
+install -d -m 0755 "$ROOT/usr/local/share/rosy"
+printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core
@@ -148,8 +177,10 @@ chroot "$ROOT" getent group rosy-io >/dev/null 2>&1 || chroot "$ROOT" groupadd -
 chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 961 --gid 961 --system --no-create-home --shell /usr/sbin/nologin rosy-io
 
-mkdir -p "$RELEASE" "$ROOT/var/lib/rosy/maps" "$ROOT/etc/rosy/trusted-release-keys" \
-    "$ROOT/etc/cloud/cloud.cfg.d"
+mkdir -p "$RELEASE" "$ROOT/etc/rosy/trusted-release-keys" "$ROOT/etc/cloud/cloud.cfg.d"
+# D-189 D4: the same layout tmpfiles-rosy-state.conf enforces at every boot.
+install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
+chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"
@@ -201,6 +232,19 @@ for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
         || fail "installed native entrypoint does not run: $entrypoint"
 done
 rm -rf -- "$ROOT$NATIVE_PROBE"
+
+[[ "$(tr -d '[:space:]' < "$RELEASE/python-runtime.sha256")" == "$PYTHON_REQUIREMENTS_SHA" ]] \
+    || fail "release python-runtime.sha256 does not match the image's Python runtime lock"
+
+# D-189 B: import what rosy-core.service loads at start, as the unit runs it:
+# user rosy-core, its HOME, no login shell, no user site, runtime.env if the
+# image has one, ROS and the release sourced. Assert the pinned set and
+# pydantic 2. -B keeps bytecode out of the signed release tree.
+chroot "$ROOT" setpriv --reuid=rosy-core --regid=rosy-core --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/core PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
+    || fail "CORE does not import inside the image"
+rm -rf -- "$ROOT/tmp/rosy-core-probe"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

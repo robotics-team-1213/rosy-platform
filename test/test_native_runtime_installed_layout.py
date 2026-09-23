@@ -90,6 +90,77 @@ def test_recovery_writes_no_bytecode_into_the_installed_tree(tmp_path):
     assert not list(runtime.rglob("__pycache__"))
 
 
+def _symlinks_work(tmp_path: Path) -> bool:
+    try:
+        (tmp_path / "probe-link").symlink_to(tmp_path, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        return False
+    return True
+
+
+def _written(device_root: Path, before: set[str]) -> set[str]:
+    return {
+        path.relative_to(device_root).as_posix()
+        for path in device_root.rglob("*")
+        if (path.is_file() or path.is_symlink()) and path.relative_to(device_root).as_posix() not in before
+    }
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+def test_recovery_writes_only_where_its_unit_lets_it(tmp_path):
+    # D-189 D1: under ProtectSystem=strict, rosy-release-recover.service can
+    # write only its StateDirectory (/var/lib/rosy/releases) and /opt/rosy.
+    # Recover takes its lock even when there is no journal to replay, which is
+    # why a clean first boot failed with EROFS.
+    device_root = tmp_path / "device"
+    runtime = device_root / "opt/rosy/native-runtime"
+    _install(runtime)
+    public_key = device_root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
+    public_key.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "deploy/release/public-keys/rosy-release-2026-01.pem", public_key)
+    before = {path.relative_to(device_root).as_posix() for path in device_root.rglob("*")}
+
+    completed = _run_recover(runtime, device_root)
+    assert completed.returncode == 0, completed.stderr
+
+    written = _written(device_root, before)
+    assert "var/lib/rosy/releases/native-release.lock" in written
+    for relative in written:
+        assert relative.startswith(("var/lib/rosy/releases/", "opt/rosy/")), relative
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+def test_interrupted_activation_replay_writes_only_where_its_unit_lets_it(tmp_path):
+    if not _symlinks_work(tmp_path):
+        pytest.skip("this host cannot create symlinks")
+    device_root = tmp_path / "device"
+    runtime = device_root / "opt/rosy/native-runtime"
+    _install(runtime)
+    candidate = "2026.09.23-005"
+    (device_root / "opt/rosy/releases" / candidate).mkdir(parents=True)
+    journal = device_root / "var/lib/rosy/releases/native-activation.json"
+    journal.parent.mkdir(parents=True)
+    journal.write_text(
+        '{"candidate":"%s","old_current":null,"old_previous":null,'
+        '"operation":"activate","phase":"switched","schema_version":1}\n' % candidate,
+        encoding="utf-8",
+    )
+    public_key = device_root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
+    public_key.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "deploy/release/public-keys/rosy-release-2026-01.pem", public_key)
+    before = {path.relative_to(device_root).as_posix() for path in device_root.rglob("*")}
+
+    completed = _run_recover(runtime, device_root)
+    assert completed.returncode == 0, completed.stderr
+    assert '"recovered": true' in completed.stdout
+
+    written = _written(device_root, before)
+    assert "opt/rosy/previous" in written
+    assert not journal.exists()
+    for relative in written:
+        assert relative.startswith(("var/lib/rosy/releases/", "opt/rosy/")), relative
+
+
 def test_release_wrappers_run_python_without_bytecode():
     for wrapper in ("activate-release.sh", "rollback-release.sh", "recover-release.sh"):
         text = (ROOT / "deploy/robot/native" / wrapper).read_text(encoding="utf-8")
