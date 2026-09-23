@@ -911,3 +911,13 @@
 - gate 변화: 없음
 - 결정: D-192 Proposed
 - 교훈: 풀어 둔 트리 옆의 해시 표시는 내용을 증명하지 않는다 — 해시는 빌드가 실제로 읽는 바이트에 건다
+
+## 2026-09-24 · uncommitted · ci: gate the hardware safety tests that CI never ran (D-192)
+
+- 변경: CI는 `src/core/core`·`fleet`·`gz_sim`·루트 `test/`만 돌려 `src/hardware/*/test`·`src/apps/*/test`가 한 번도 게이트되지 않았다.
+  무동작 모드(토크 꺼짐·cmd_vel 미구독)·ADC 버스 잠금·배터리 곡선 시험을 새 스텝 "Test (hardware safety …)"로 올렸다.
+- 증거: WSL Linux에서 같은 명령 454 passed. 나머지 패키지 시험의 기존 적색(Linux): bringup/led/emotion ament flake8·pep257,
+  control `test_localization_gate`·`test_os_camera_graph`·`test_os_watch_graph`, games `test_games_cli` 4건 — 이 변경 밖, D-191 후속 과제.
+- gate 변화: CI에 하드웨어 안전 스텝 추가
+- 결정: D-192
+- 교훈: 시험을 추가할 때 CI가 그 폴더를 실제로 돌리는지 확인한다. 이 저장소에서는 루트 `test/`로 옮기면 D-184가, 패키지로 옮기면 CI가 막는다.
