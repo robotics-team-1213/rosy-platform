@@ -321,3 +321,20 @@
 - gate 변화: 없음(rig 도구).
 - 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
 - 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.
+
+## 2026-09-24 · uncommitted · tools(control): Pi hot-path and node CPU measurement tool (D-185 R8)
+- 변경:
+  - `tools/device/hotpath_measure.py`를 새로 만들었다. ROS 없이 돈다. 하위 명령은 둘이고, 각각 JSON 보고서 하나를 쓴다(`schema_version` `rosy.control.hotpath_measure/1`).
+  - `bench`: `wall_tracker._segments`(720-ray 벽 scan), `scan_motion.match_motion`(180점 box-room 두 개, 10° 회전), `OccupancyMap.inflate`(200×200, 벽, 반경 5셀)의 median·p90·max(ms)를 잰다. 입력은 동등성 테스트의 생성기와 같은 형태다. platform, Python·numpy 버전, `/proc/cpuinfo`의 CPU 모델, `/proc/device-tree/model`을 함께 기록한다.
+  - `watch`: setup.py 진입점 이름(또는 `-m control.<node>`)으로 control 노드 프로세스를 찾는다. 간격마다 `/proc/<pid>/stat` utime+stime 차분으로 CPU%, VmRSS, loadavg, PSI `some avg10`을 기록한다. 재시작된 프로세스(starttime 변경)는 첫 표본의 CPU%를 None으로 둔다.
+  - 보고서의 `evidence.device`는 `/proc/device-tree/model`이 Raspberry Pi일 때만 참이다. host 실행은 "not device evidence"로 표시한다.
+  - 실기 절차는 모듈 docstring과 device 검증 계획 문서의 2026-09-24 checkpoint에 적었다.
+  - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄에서 28,868줄로 재판정했다.
+- 원인: D-185가 Pi 수치를 R8 전까지 HOLD로 두었다. `match_motion`의 Pi 소요 시간(평가 문서 §8.3), scan 콜백 점유율(§8.4), goal tick 비용(R1)을 실기에서 잴 도구가 없었다.
+- 증거:
+  - 테스트 11건(`test_hotpath_measure.py`): stat 파싱(comm 안의 공백·괄호), 두 표본의 CPU%, PSI·loadavg·VmRSS 파싱, 가짜 `/proc`의 프로세스 매칭(grep 제외), 진입점 이름과 setup.py 일치, 가짜 `/proc`의 watch 표본, 보고서 스키마와 증거 등급, 통계, bench smoke(세 키, `match_motion` 입력 수락).
+  - host `python -m pytest src/apps/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 통과.
+  - host bench(Windows x86, 증거 아님): `_segments` median 7.7 ms, `match_motion` 80 ms, `inflate` 6.5 ms. WSL `watch` smoke에서 실제 `/proc`의 loadavg·PSI·CPU 모델을 읽었다(노드 없음).
+- gate 변화: 없음. Pi 실행은 HOLD다. 이 세션에는 하드웨어가 없고, Pi 수치는 기록하지 않았다.
+- 결정: D-185 R8. 도구만 만들었고, 실기 실행과 R1–R3 전후 비교는 남는다.
+- 교훈: 측정 보고서가 스스로 증거 등급을 밝혀야 host 수치가 실기 수치로 인용되지 않는다.
