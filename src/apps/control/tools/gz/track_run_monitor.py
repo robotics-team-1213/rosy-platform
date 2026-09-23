@@ -51,6 +51,7 @@ def main():
     node.create_subscription(Twist, '/cmd_vel', lambda m: state.update(safe=[m.linear.x, m.angular.z]), 10)
     node.create_subscription(OccupancyGrid, '/map', lambda m: maps.append(m) if not maps else maps.__setitem__(0, m), 10)
     start, last, wall = None, -1., time.monotonic()
+    start_wall = last_wall = None  # wall time of the same span as elapsed_sim_s (D-185 R4)
     terminal_since = None
     observation_error = None
     while rclpy.ok() and time.monotonic()-wall < float(os.environ.get('RIG_WALL_TIMEOUT', '600')):
@@ -59,9 +60,9 @@ def main():
         if now <= 0:
             continue
         if start is None:
-            start = now
+            start, start_wall = now, time.monotonic()
         if now-last >= .5:
-            last = now
+            last, last_wall = now, time.monotonic()
             row = {'sim_s': now, **state, 'calibration': state['calibration'].get('phase'),
                    'ready': state['calibration'].get('ready'), 'message': state['calibration'].get('message')}
             rows.append(json.loads(json.dumps(row)))
@@ -85,7 +86,9 @@ def main():
     (out/'track_odometry.json').write_text(json.dumps(odometry))
     (out/'track_last_status.json').write_text(json.dumps(state, indent=2))
     points = np.array([r['pose'] for r in rows if r['pose'] is not None])
-    stats = {'elapsed_sim_s': (last-start) if start else 0, 'calibration_phase': state['calibration'].get('phase'),
+    stats = {'elapsed_sim_s': (last-start) if start else 0,
+             'elapsed_wall_s': (last_wall-start_wall) if start_wall is not None and last_wall is not None else None,
+             'calibration_phase': state['calibration'].get('phase'),
              'calibration_ready': state['calibration'].get('ready'), 'message': state['calibration'].get('message'),
              'map_received': bool(maps), 'mapping_complete': False,
              'observation_error': observation_error,

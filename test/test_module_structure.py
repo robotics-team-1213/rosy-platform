@@ -105,7 +105,7 @@ SIZE_VERDICTS = {
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "control": (
-        28_315,
+        28_476,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }
