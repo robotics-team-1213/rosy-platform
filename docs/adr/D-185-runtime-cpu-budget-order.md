@@ -102,6 +102,18 @@
      2026-09-24 checkpoint에 있다.
    - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,868줄로 재판정했다.
 
+   **R3 구현 메모 (2026-09-24).**
+   - 선택은 파라미터가 아니라 환경 변수 `ROSY_EXECUTOR`(`single` 기본, `events`)로 한다. 노드 파라미터보다
+     먼저, 노드 밖에서 정해야 하기 때문이다. 표의 "파라미터로 선택"은 이 방식으로 대체한다.
+   - 14개 control 노드 `main()`과 rig가 `control/executor_choice.py` 하나를 거친다. 기본값은 이전과 같은
+     `rclpy.spin(node)`다. `events`는 executor의 native `spin()`을 써서 rig와 같은 루프를 잰다.
+   - `events`에서 알려진 차이: 콜백이 도착 순서로 돈다. 다른 스레드가 context를 끄면
+     `ExternalShutdownException`이 난다. 콜백이 예외를 내면(watch_node `--once`의 SystemExit) native
+     executor가 FATAL 줄을 먼저 남긴다. 종료 코드는 유지된다.
+   - WSL 탐침(리뷰): SIGINT·SIGTERM 처리, sim-time 타이머, 다른 스레드의 `call_async`는 두 방식이 같았다.
+   - R3는 아직 완료가 아니다. rig A/B(ENV:VALID 실행만), 콜백 순서 영향, 실기 측정(R8)이 남았다. 그전까지
+     제품 기본값은 `single`이다.
+
 4. **범위 밖.** 줄 수·패키지 구조(D-168·D-171), 안전 판정 자체의 임계값은 바꾸지 않는다. CPU 절감을 이유로
    신선도 창이나 게이트 조건을 완화하지 않는다.
 

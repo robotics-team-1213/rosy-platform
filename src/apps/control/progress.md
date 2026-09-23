@@ -162,3 +162,7 @@ plans:
 
 - `tools/device/hotpath_measure.py`가 세 핫패스(`_segments`, `match_motion`, `inflate`)의 소요 시간과 control 노드별 CPU%·RSS·부하·PSI를 JSON으로 남긴다. Raspberry Pi에서 돈 보고서만 실기 증거로 표시한다.
 - 실기: 도구만 준비됐고 Pi 실행은 HOLD다. 수치가 나오기 전까지 D-185의 실기 항목은 그대로 HOLD다.
+
+## 2026-09-24 EventsExecutor opt-in (D-185 R3)
+
+- control 노드와 rig가 `ROSY_EXECUTOR=events`로 EventsExecutor를 쓸 수 있다. 기본값은 이전과 같은 SingleThreadedExecutor다. rig A/B와 실기 측정이 남아 있어 기본값 전환은 하지 않았다.

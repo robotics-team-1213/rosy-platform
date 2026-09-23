@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
+from . import executor_choice
 from .watch import graph_tables, inspect
 
 
@@ -59,7 +60,7 @@ def main():
     rclpy.init()
     node = WatchNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except (KeyboardInterrupt, SystemExit) as exc:
         code = getattr(exc, 'code', 0) or 0
         node.destroy_node()

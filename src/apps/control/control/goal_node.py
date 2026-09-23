@@ -23,6 +23,7 @@ import rclpy
 from geometry_msgs.msg import Point, PoseStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from visualization_msgs.msg import Marker, MarkerArray
+from . import executor_choice
 from .tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
@@ -575,7 +576,7 @@ def main():
     rclpy.init()
     node = GoalNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

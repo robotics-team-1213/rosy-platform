@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
+from . import executor_choice
 from .tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
@@ -951,7 +952,7 @@ def main():
     rclpy.init()
     node = StartupCalibrationNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:
