@@ -1725,3 +1725,11 @@
 - gate 변화: 없음
 - 결정: D-186 Accepted
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(layout): point README and reference at the current folders
+
+- 변경: README 구조와 빌드가 `source env.sh`와 `tools/run_fleet_sim.sh`를 가리키게 했다. 루트 `reference/`는 얼린 zip, `docs/reference/`는 살아 있는 계약이라고 양쪽 AGENTS에 적었다. `src/rosy_*`와 `docs/plan/` 안내를 뺐다.
+- 증거: `test/test_folder_layout.py`에 현재 경로 검사를 더했다.
+- gate 변화: 없음
+- 결정: D-186
+- 교훈: 없음

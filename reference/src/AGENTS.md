@@ -21,7 +21,7 @@ None.
 
 ### Working In This Directory
 
-Read-only. Current code is `/src/rosy_*`.
+Read-only. Current code is the domain groups under the repository `src/`, not this archive.
 
 ### Testing Requirements
 
@@ -35,7 +35,7 @@ Zip archive only.
 
 ### Internal
 
-- `docs/plan/ROSY Implementation Plan.md` §2
+- `docs/plans/ROSY Implementation Plan.md` §2
 
 ### External
 
