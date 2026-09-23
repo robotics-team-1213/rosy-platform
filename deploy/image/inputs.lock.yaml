@@ -116,6 +116,20 @@ hardware_dependencies:
     build host and in the target rootfs; rpi_ws281x is linked statically into
     lamp_control from the pinned Pi 5 branch snapshot.
 
+python_runtime:
+  requirements: device-python-requirements.txt
+  requirements_sha256: 36ffcd27db187d9eee349a73125a425fb2e08d47c5d184467aafa173cb66dd22
+  python_version: "3.12"
+  install_prefix: /usr/local
+  pydantic_major: 2
+  verified: true
+  note: >-
+    D-183. CORE's pip runtime (pydantic 2, fastapi, starlette, uvicorn,
+    websockets and their closure), hash-locked per wheel for cp312 aarch64
+    and x86_64. rosdep's apt python3-pydantic 1.10 / python3-fastapi 0.101
+    stay installed but are shadowed by /usr/local. Hashes were checked on
+    2026-09-24 by a --require-hashes download for both platforms.
+
 containers:
   role: development-and-ci-only
   excluded_from_product_artifact: true

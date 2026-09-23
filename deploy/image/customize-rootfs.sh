@@ -45,10 +45,18 @@ ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
+PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
+PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
+CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
 [[ "$WIRINGPI_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "WiringPi package SHA-256 is invalid"
+[[ -f "$PYTHON_REQUIREMENTS" ]] || fail "CORE Python requirements lock is missing"
+[[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
+[[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
+    || fail "CORE Python requirements do not match inputs.lock.yaml"
+[[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
@@ -70,6 +78,7 @@ cleanup() {
     rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
     rm -rf -- "$ROOT/tmp/rosy-src"
     rm -rf -- "$ROOT/tmp/rosy-native-probe"
+    rm -rf -- "$ROOT/tmp/rosy-core-probe"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
 }
@@ -121,7 +130,7 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-yaml \
+    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-pip python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 
 cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"
@@ -139,6 +148,19 @@ ROSDEP_PATH_OUTPUT="$(
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
 chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
     --ignore-src -r -y --rosdistro jazzy
+# D-183 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
+# pydantic 1.10 and fastapi 0.101, and nothing provides websockets. CORE needs
+# the hash-locked set. Root pip on Ubuntu installs into
+# /usr/local/lib/python3.12/dist-packages, which precedes /usr/lib/python3 on
+# sys.path. No --prefix: Debian's posix_prefix scheme would pick site-packages,
+# which is not on sys.path at all.
+mkdir -p "$ROOT/tmp/rosy-core-probe"
+cp "$PYTHON_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/device-python-requirements.txt"
+cp "$CORE_PROBE" "$ROOT/tmp/rosy-core-probe/probe-core-runtime.py"
+chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
+    --ignore-installed --require-hashes --no-deps --only-binary=:all: \
+    -r /tmp/rosy-core-probe/device-python-requirements.txt \
+    || fail "CORE Python runtime did not install from the hash lock"
 chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core
@@ -203,6 +225,14 @@ for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
         || fail "installed native entrypoint does not run: $entrypoint"
 done
 rm -rf -- "$ROOT$NATIVE_PROBE"
+
+# D-183 B: import what rosy-core.service loads at start, as the unit runs it
+# (ROS and the release sourced, no usable HOME), and assert the pinned set and
+# pydantic 2. -B keeps bytecode out of the signed release tree.
+chroot "$ROOT" env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/nonexistent PYTHONDONTWRITEBYTECODE=1 \
+    bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
+    || fail "CORE does not import inside the image"
+rm -rf -- "$ROOT/tmp/rosy-core-probe"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

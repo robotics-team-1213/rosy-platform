@@ -239,3 +239,158 @@ def test_the_image_carries_dnsmasq_for_the_fallback_ap(tmp_path):
 
     assert completed.returncode != 0
     assert "dnsmasq" in completed.stdout + completed.stderr
+
+
+# --- D-183: CORE's Python runtime is a hash-locked input, imported in-image ---
+
+REQUIREMENTS = IMAGE / "device-python-requirements.txt"
+PROBE = IMAGE / "probe-core-runtime.py"
+# The set that was hotfixed onto the first 2026.09.23-005 card and runs on the
+# WSL sim box. Changing one of these is a runtime change, not a refresh.
+TOP_LEVEL_PINS = {
+    "pydantic": "2.13.5", "pydantic-core": "2.46.5", "fastapi": "0.141.1",
+    "starlette": "1.6.0", "uvicorn": "0.52.4", "websockets": "17.1",
+}
+# What fastapi 0.141.1, starlette 1.6.0, uvicorn 0.52.4 and pydantic 2.13.5
+# require on CPython 3.12 (no extras), resolved 2026-09-24.
+CLOSURE = {"annotated-doc", "annotated-types", "anyio", "click", "h11", "idna",
+           "typing-extensions", "typing-inspection"}
+# Distributions with compiled wheels need one hash per platform.
+PLATFORM_WHEELS = {"pydantic-core", "websockets"}
+
+
+def _requirements() -> dict[str, tuple[str, list[str]]]:
+    entries: dict[str, tuple[str, list[str]]] = {}
+    text = REQUIREMENTS.read_text(encoding="utf-8").replace("\\\n", " ")
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        requirement, *options = line.split()
+        name, version = requirement.split("==")
+        hashes = [option.split(":", 1)[1] for option in options if option.startswith("--hash=sha256:")]
+        assert len(hashes) == len(options), line
+        entries[name] = (version, hashes)
+    return entries
+
+
+def _probe_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("probe_core_runtime", PROBE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_core_python_runtime_is_pinned_and_hash_locked_for_both_platforms():
+    entries = _requirements()
+
+    assert set(entries) == set(TOP_LEVEL_PINS) | CLOSURE
+    for name, version in TOP_LEVEL_PINS.items():
+        assert entries[name][0] == version, name
+    for name, (version, hashes) in entries.items():
+        assert version and all(c.isdigit() or c == "." for c in version), name
+        assert hashes and all(len(h) == 64 and set(h) <= set("0123456789abcdef") for h in hashes), name
+        assert len(set(hashes)) == len(hashes), name
+        assert len(hashes) == (2 if name in PLATFORM_WHEELS else 1), name
+
+
+def test_the_input_lock_pins_the_requirements_file_bytes():
+    import hashlib
+
+    lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))
+    runtime = lock["python_runtime"]
+    data = REQUIREMENTS.read_bytes()
+
+    assert runtime["requirements"] == REQUIREMENTS.name
+    assert b"\r" not in data, "the lock pins LF bytes (.gitattributes eol=lf)"
+    assert hashlib.sha256(data).hexdigest() == runtime["requirements_sha256"]
+    assert runtime["pydantic_major"] == 2
+    assert runtime["verified"] is True
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "deploy/image/device-python-requirements.txt text eol=lf" in attributes
+
+
+def test_customizer_installs_the_locked_runtime_after_rosdep():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    assert "python3-pip" in source[source.index("apt-get install -y"):source.index("rosdep init")]
+    assert "lock_value python_runtime requirements_sha256" in source
+    assert "CORE Python requirements do not match inputs.lock.yaml" in source
+    install = source.index('chroot "$ROOT" python3 -m pip install')
+    command = source[install:source.index("|| fail", install)]
+    for flag in ("--require-hashes", "--no-deps", "--only-binary=:all:", "--ignore-installed",
+                 "--break-system-packages", "-r /tmp/rosy-core-probe/device-python-requirements.txt"):
+        assert flag in command, flag
+    # Debian's posix_prefix scheme would install to site-packages, off sys.path.
+    assert "--prefix" not in command and "--target" not in command and "--user" not in command
+    # rosdep installs apt pydantic 1.10 first; the lock must win after it.
+    assert source.index("rosdep install --from-paths") < install
+
+
+def test_customizer_fails_the_build_when_core_does_not_import_in_the_image():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    probe = source.index("probe-core-runtime.py --requirements")
+    call = source[source.rindex("chroot", 0, probe):source.index("\n", source.index("|| fail", probe))]
+    assert "source /opt/ros/jazzy/setup.bash" in call
+    assert "source /opt/rosy/current/install/setup.bash" in call
+    assert "python3 -B" in call and "PYTHONDONTWRITEBYTECODE=1" in call
+    assert "HOME=/nonexistent" in call
+    assert '|| fail "CORE does not import inside the image"' in call
+    # After the release is linked as current, before the image is accepted.
+    assert source.index('ln -s "releases/$RELEASE_ID" "$ROOT/opt/rosy/current"') < probe
+    assert probe < source.index("verify-mounted-image.py")
+
+
+def test_ci_tests_against_the_runtime_the_device_runs():
+    for workflow in ("ci.yml", "arm64-rehearsal.yml"):
+        text = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+        assert "--require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt" in text
+        for line in text.splitlines():
+            if "pip" in line and " install" in line and "-r deploy/image" not in line:
+                words = set(line.split())
+                assert not words & {"pydantic", "fastapi", "starlette", "uvicorn", "websockets"}, (workflow, line)
+
+
+def test_probe_reads_every_pin():
+    pins = _probe_module().read_pins(REQUIREMENTS)
+    assert pins == {name: version for name, (version, _hashes) in _requirements().items()}
+
+
+def test_probe_follows_lazy_imports_of_the_core_entrypoints():
+    probe = _probe_module()
+    node = (ROOT / "src/core/core/core/node.py").read_text(encoding="utf-8")
+    main = (ROOT / "src/core/core/core/main.py").read_text(encoding="utf-8")
+
+    modules = set(probe.lazy_imports(node)) | set(probe.lazy_imports(main))
+    # Function-level imports a flag-only --help never reaches.
+    for name in ("uvicorn", "core_api_web.api.app", "core.bridge.ros_bridge",
+                 "core_common.profile", "core.node", "core_common.config", "rclpy"):
+        assert name in modules, name
+    assert "__future__" not in modules
+
+
+def test_probe_skips_imports_guarded_by_try():
+    source = (
+        "import json\n"
+        "def f():\n"
+        "    import uvicorn\n"
+        "    try:\n"
+        "        from slam_toolbox.srv import SaveMap\n"
+        "    except ImportError:\n"
+        "        import fallback_only\n"
+    )
+    modules = _probe_module().lazy_imports(source)
+    assert "uvicorn" in modules and "json" in modules
+    assert "slam_toolbox.srv" not in modules and "slam_toolbox.srv.SaveMap" not in modules
+
+
+def test_probe_fails_on_a_missing_or_wrong_pin(tmp_path, capsys):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text(
+        "rosy-no-such-distribution==1.0 --hash=sha256:" + "0" * 64 + "\n", encoding="utf-8")
+
+    assert _probe_module().main(["--requirements", str(requirements)]) == 1
+    assert "rosy-no-such-distribution: not installed" in capsys.readouterr().err
