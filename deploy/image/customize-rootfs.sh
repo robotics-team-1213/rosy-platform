@@ -292,13 +292,20 @@ chroot "$ROOT" setpriv --reuid=rosy-io --regid=rosy-io --clear-groups \
     bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-io-runtime.py' \
     || fail "the hardware runtime does not import inside the image"
 # D-190: the boot display, as rosy-boot-display.service runs it: user
-# rosy-display, its HOME, no shell, no user site, the release on PYTHONPATH
-# and no ROS. spidev, RPi.GPIO (rpi-lgpio), rosylib and the boot card import
-# and render; the unit is enabled with its sandbox. Opens no device.
+# rosy-display, its HOME, LG_WD and working directory (its StateDirectory),
+# RPI_LGPIO_CHIP, no shell, no user site, the release on PYTHONPATH and no
+# ROS. spidev, RPi.GPIO (rpi-lgpio), rosylib and the boot card import and
+# render; the unit is enabled with its sandbox. Opens no device.
+# lgpio creates its notification files in LG_WD or the working directory at
+# import (release 007 build: FileNotFoundError without them), so the probe
+# needs the state directory the unit gets from systemd. Creating it here with
+# the unit's owner and mode is what StateDirectory= would do on first start.
+install -d -o 962 -g 962 -m 0750 "$ROOT/var/lib/rosy/display"
 chroot "$ROOT" setpriv --reuid=rosy-display --regid=rosy-display --clear-groups \
     env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/display PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4 \
     PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages \
-    python3 -B /tmp/rosy-core-probe/probe-display-runtime.py \
+    bash --noprofile --norc -c 'cd /var/lib/rosy/display && exec python3 -B /tmp/rosy-core-probe/probe-display-runtime.py' \
     || fail "the boot display does not import inside the image"
 rm -rf -- "$ROOT/tmp/rosy-core-probe"
 

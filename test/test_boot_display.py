@@ -674,9 +674,17 @@ def test_the_image_installs_the_display_user_packages_rule_and_probe():
     assert "for group in spi gpio i2c; do" in customizer
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-display.service" "$OVERLAY/etc/systemd/system/"' in payload
     assert 'cp "$DISPLAY_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"' in payload
-    probe = customizer.index("probe-display-runtime.py \\")
-    assert customizer.index("setpriv --reuid=rosy-display", probe - 400) < probe
-    assert "PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages" in customizer[probe - 400:probe]
+    probe = customizer.index("probe-display-runtime.py'")
+    call = customizer[customizer.rindex("setpriv --reuid=rosy-display", 0, probe):probe]
+    assert "PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages" in call
+    # The probe runs where the unit runs: lgpio writes into LG_WD / the working
+    # directory at import (release 007 build failed without them).
+    unit_env = " ".join(_directives()["Environment"])
+    for setting in ("HOME=/var/lib/rosy/display", "LG_WD=/var/lib/rosy/display", "RPI_LGPIO_CHIP=4"):
+        assert setting in call and setting in unit_env, setting
+    assert "cd /var/lib/rosy/display && exec python3" in call
+    assert _directives()["WorkingDirectory"] == ["/var/lib/rosy/display"]
+    assert 'install -d -o 962 -g 962 -m 0750 "$ROOT/var/lib/rosy/display"' in customizer[:probe]
     assert probe < customizer.index("verify-mounted-image.py")
     assert customizer.index("useradd --uid 962") < customizer.index("systemctl --root")
     unit_path = [word for word in _directives()["Environment"] if word.startswith("PYTHONPATH=")]

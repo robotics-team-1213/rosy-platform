@@ -951,3 +951,16 @@
 - gate 변화: 없음
 - 결정: D-190·D-181 갱신
 - 교훈: 노드 단위 장치 허용은 프로그램이 쓰는 선보다 넓다 — 허용과 사용을 따로 적고, 좁히는 길을 열린 항목으로 남긴다
+
+## 2026-09-24 · uncommitted · fix(image): run the display probe where the unit runs (LG_WD, working directory)
+
+- 변경: release `2026.09.24-007` 빌드가 `DISPLAY_PROBE_FAIL import lgpio: FileNotFoundError`로 멈췄다. lgpio는 import 때
+  `LG_WD` 또는 작업 디렉터리에 `.lgd-nfy*` 파일을 만든다. unit은 StateDirectory(`/var/lib/rosy/display`)를 HOME·LG_WD·
+  WorkingDirectory로 쓰지만, probe는 chroot의 `/`(rosy-display가 쓸 수 없음)에서 LG_WD 없이 돌았다. 이미지가 그 상태 디렉터리를
+  unit과 같은 소유·모드(962:962 0750)로 만들고, probe에 unit과 같은 LG_WD·RPI_LGPIO_CHIP·작업 디렉터리를 준다.
+- 증거: noble `python3-lgpio 0.2.0.0-0ubuntu3`·`python3-rpi-lgpio 0.5-0ubuntu1`를 풀어 WSL에서 재현 — cwd `/`·LG_WD 없음 → 같은
+  `FileNotFoundError: '.lgd-nfy-3'`, LG_WD가 없는 디렉터리 → 같은 오류, 쓰기 가능한 상태 디렉터리 → `import ok`(`.lgd-nfy0` 생성).
+  `test_boot_display.py` 등 215 passed.
+- gate 변화: 없음(007 빌드 실패, 다음 릴리스에서 probe 통과 확인)
+- 결정: D-190
+- 교훈: 서명 전 probe가 제 역할을 했다. probe의 환경은 unit에서 그대로 복사하고, 그 대응을 시험으로 고정한다.
