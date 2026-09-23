@@ -3,9 +3,9 @@
 <package format="3">
   <name>led</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Python LED service exposing set_led and set_brightness.</description>
   <maintainer email="kyung133851@pinklab.art">pl3</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>interfaces</exec_depend>

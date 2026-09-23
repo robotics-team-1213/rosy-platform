@@ -1605,3 +1605,11 @@
 - gate 변화: 없음(CI 적색 복구).
 - 결정: 없음.
 - 교훈: 저장소 전체를 훑는 가드는 로컬(빌드 산출물 없음)에서만 초록일 수 있다. CI가 소스 트리 안에서 빌드한다는 사실을 스캔 규칙에 넣는다.
+
+## 2026-09-23 · uncommitted · fix(pkgs): manifest TODO 제거 + 패키지 메타데이터 계약 시험
+
+- 변경: upstream 골격에서 남은 8개 `package.xml`(`navigation`, `sensor_adc`, `interfaces`, `emotion`, `led`, `lamp_control`, `gz_sim`, `description`)의 `TODO: Package description` / `TODO: License declaration`을 실명 description과 `Apache-2.0`으로 채웠다. 가드로 `test/test_package_metadata.py` 3시험 신규: (1) 어떤 manifest에도 TODO 잔존 금지, (2) 선언 라이선스가 `{Apache-2.0, Proprietary}` 집합 안에 있어야 함(공백·미선언·신규 값은 적색), (3) description이 TODO·공백 아닌 실명 요약.
+- 증거: test-first — 추가 직후 3 failed(TODO 잔존 8 manifest + 라이선스 선언 검출) → 허용 집합 명시로 판정 유보 후 manifest 수정 → 3 passed. 변이 증명: `led/package.xml`에 TODO 재주입 → `mutation-landed: True` 확인 후 적색(1 failed) → 복원 → 3 passed, `restored-clean: True`.
+- gate 변화: 없음(선언 메타데이터만).
+- 결정: 루트 `LICENSE`는 Apache-2.0인데 `web_common`·`core_features`·`core_events`·`core_common`·`core_api_web` 5개는 `Proprietary`를 선언한다 — 어느 쪽도 임의로 고치지 않고 허용 집합으로 시험에 고정한 뒤 소유자 판단으로 넘긴다(이 항목이 보고). `src/hardware/led/AGENTS.md`의 "license TODO from upstream" 메모도 함께 갱신했다.
+- 교훈: 라이선스 문구는 근거 없이 "맞춤"하지 않는다 — 검거(집합 고정)와 판정(바꾸기)을 분리하면 drifted 계약을 놓치지 않으면서 잘못된 판정은 피한다.
