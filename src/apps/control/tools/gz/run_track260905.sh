@@ -149,11 +149,17 @@ if [[ "${RIG_RENDERED_CAMERA:-0}" == 1 ]]; then
   setsid python3 -m tools.gz.rendered_camera_adapter --ros-args -p use_sim_time:=true \
     > "$out/camera.log" 2>&1 & pids+=($!)
 fi
-setsid ros2 run ros_gz_bridge parameter_bridge \
-  '/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan' \
-  '/odometry_gt@nav_msgs/msg/Odometry[gz.msgs.Odometry' \
-  '/model/pinky/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist' \
-  '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' \
+bridged=('/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'
+  '/odometry_gt@nav_msgs/msg/Odometry[gz.msgs.Odometry'
+  '/model/pinky/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist')
+# D-185 R6: Gazebo publishes /clock every physics step. RIG_CLOCK_HZ=N relays it at N messages
+# per wall second through a throttled gz-transport subscription instead; unset keeps the bridge.
+if [[ -z "${RIG_CLOCK_HZ:-}" ]]; then
+  bridged+=('/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock')
+else
+  setsid python3 tools/gz/clock_relay.py "$RIG_CLOCK_HZ" 8>&- 9>&- > "$out/clock-relay.log" 2>&1 & pids+=($!)
+fi
+setsid ros2 run ros_gz_bridge parameter_bridge "${bridged[@]}" \
   --ros-args -p use_sim_time:=true -r /lidar/scan:=/scan -r /odometry_gt:=/odom_gz \
   -r /model/pinky/cmd_vel:=/cmd_vel > "$out/bridge.log" 2>&1 & pids+=($!)
 if [[ "${RIG_SINGLE_PROCESS:-0}" == 1 ]]; then
