@@ -237,7 +237,7 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         if not odom_rows or not 0 <= time.monotonic()-odom_rows[-1][0] <= .2:
             pose = None
         if precision_scan_required(self.phase):
-            self.rotation_scan_sample(msg, valid and self.stamped(msg, .25))
+            self.rotation_scan_sample(msg, valid, current=self.stamped(msg, .25))
         if not precision_scan_required(self.phase) or self.phase == 'validating_rotation':
             # A navigation turn may leave the calibration wall entirely.
             # Runtime sensor health uses actual scan returns, not a wall fit.

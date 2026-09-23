@@ -34,6 +34,7 @@ class CalibrationRotation:
         self.rotation_alignment = None
         self.rotation_alignment_diagnostic = {}
         self.rotation_scan = None
+        self.rotation_scan_late = None
         self.rotation_imu_yaw = None
         self.rotation_points = self.rotation_reference_points = None
         self.relocation_points = None
@@ -247,7 +248,12 @@ class CalibrationRotation:
         # rotation decision. A translation trial intentionally forbids turns.
         self.publish()
 
-    def rotation_scan_sample(self, msg, valid):
+    def rotation_scan_sample(self, msg, valid, current=True):
+        """``valid``: a usable robot scan; ``current``: within the 0.25 s stamp window."""
+        # A valid scan past its window is stale evidence, not an absent scan: keep its
+        # content so clearance can still judge its structure (rig prof-r2-1, 2026-09-24).
+        self.rotation_scan_late = (tuple(msg.ranges), msg.angle_increment) if valid and not current else None
+        valid = valid and current
         self.rotation_scan = (time.monotonic(), tuple(msg.ranges), msg.angle_increment) if valid else None
         source = msg.header.stamp.sec + msg.header.stamp.nanosec*1e-9
         age = self.get_clock().now().nanoseconds*1e-9-source
@@ -267,7 +273,17 @@ class CalibrationRotation:
 
     def rotation_clear(self, now):
         if not self.rotation_scan or not self.geometry_profile:
-            self.rotation_clearance_diagnostic = {'clear': False, 'reason': 'missing_scan_or_geometry'}
+            late = getattr(self, 'rotation_scan_late', None) if self.geometry_profile else None
+            if late is None:
+                self.rotation_clearance_diagnostic = {'clear': False, 'reason': 'missing_scan_or_geometry'}
+                return False
+            # A queued scan that only missed its 0.25 s window after this node blocked: the
+            # full check runs on its content with no usable age, so a structural fault is
+            # still 'invalid_scan' and only a sound late scan reads 'stale_scan' (held at zero).
+            gate_seen, gate = self.safety_limits
+            ranges, increment = late
+            self.rotation_clearance_diagnostic = dict(calibration_rotation_clearance(
+                ranges, increment, math.inf, gate, now-gate_seen, self.geometry_revision), scan_stored=False)
             return False
         seen, ranges, increment = self.rotation_scan
         gate_seen, gate = self.safety_limits

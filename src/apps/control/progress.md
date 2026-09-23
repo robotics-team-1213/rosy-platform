@@ -148,3 +148,7 @@ plans:
 
 - 경로 안전에 쓰는 지도 부풀리기(`OccupancyMap.inflate`)를 결과가 셀 단위로 같게 벡터화했다. 호출당 비용이 6–8배 줄었다(host). goal·wander의 계획 tick이 가벼워진다.
 - 실기: Pi에서의 goal tick 비용은 D-185 R8에서 확인한다.
+
+## 2026-09-24 calibration late-scan hold
+
+- 회전 검증에서 늦게 도착한 scan을 "없음"이 아니라 "늦음"으로 판정한다. 정지 중에는 기존 1 s 대기로 넘기고, 구조가 잘못된 scan은 여전히 즉시 실패한다. rig에서 본 회전 단계 잔여 실패 경로를 닫았다.

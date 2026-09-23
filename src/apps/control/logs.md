@@ -296,3 +296,11 @@
 - gate 변화: 없음. Pi 수치는 D-185 R8 전까지 HOLD.
 - 결정: D-185 R1(사용자 승인 2026-09-24). 캐시 대신 벡터화했고, ADR에 구현 메모를 달았다.
 - 교훈: 결과 동일 최적화도 입력 분포가 다르면 느려질 수 있다(희소 지도·큰 반경). 비용은 대표 입력과 극단 입력 모두로 잰다.
+
+## 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
+- 변경: `rotation_scan_sample(msg, valid, current)`가 유효하지만 0.25 s 창을 넘긴 scan의 내용을 `rotation_scan_late`에 보관한다. `rotation_clear`는 저장된 scan이 없고 기하 프로필이 있을 때, 그 내용을 `calibration_rotation_clearance`에 나이 무한대로 넣는다. 그래서 구조 결함은 여전히 `invalid_scan`이 되고, 구조가 정상인 늦은 scan만 `stale_scan`(정지 중 1 s 대기)이 된다. 진단에는 `scan_stored: False`를 붙인다. `on_scan`은 유효성과 0.25 s 창을 따로 넘긴다. 패키지 크기 판정(D-168 P6)은 재판정했다. split 판정은 그대로 두고 기준을 28,159줄에서 28,315줄로 바꿨다.
+- 원인: rig 실행 prof-r2-1에서 끝점 등록 stall(0.445 s) 뒤 큐에서 나온 scan이 `stamped(.25)`에 걸렸다. 그 scan이 `rotation_scan = None`으로 저장돼 `missing_scan_or_geometry`가 났고, 이 사유는 대기 대상이 아니라서 정지 중인 trial이 즉시 실패했다(`hold_refused` 기록). c67437d1 회전 대기 수정의 잔여 경로다.
+- 증거: 테스트 신규 8건(늦은 scan의 사유·구조 검사·부재·기하 없음·trial 대기·시작 전 대기·표시 해제, `on_scan` 배선). 뮤테이션 6종 모두 검출. host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음)에서 나온 지적을 반영했다. 구조 검사 우회, 배선·표시 해제·시작 전 경로의 테스트 공백, 진단 정보가 그것이다.
+- gate 변화: 없음(DEVICE/FIELD HOLD).
+- 결정: 사용자 승인 2026-09-24("고침"). 시작 전(trial 없음) 단계에서 늦은 scan 하나로 재배치를 시작하던 경로가 이제 1 s 관측 대기 뒤 실패로 끝난다. 재배치는 저장된 scan이 없으면 쓸 수도 없었다.
+- 교훈: 사유 문자열 하나가 "없음"과 "늦음"을 함께 담으면, 대기 정책이 그 둘을 구분하지 못한다. 판정 입력은 원인별로 분리해 기록한다.
