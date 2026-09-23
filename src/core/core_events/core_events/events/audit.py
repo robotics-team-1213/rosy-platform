@@ -90,8 +90,11 @@ _YIELD_S = 0.001
 
 #: "이 파일이 아직 그 파일인가"를 (장치, inode)만으로 묻지 않는다. Linux 는
 #: 지운 파일의 inode 번호를 곧바로 새 파일에 다시 준다(ext4·tmpfs) — 지우고
-#: 다시 만든 파일이 같은 신원으로 보인다. 그래서 이어 붙일 경계 **바로 앞**
-#: 바이트도 맞춰 본다. 락 안에서 읽는 것은 이만큼뿐이다.
+#: 다시 만든 파일이 같은 신원으로 보인다. 같은 길이로 제자리 저장하는 편집기도
+#: inode·크기를 그대로 둔다. 그래서 파일 **앞**과 이어 붙일 경계 **바로 앞**의
+#: 바이트를 이만큼씩 맞춰 본다 — 락 안에서 읽는 것은 합해 두 배 이하다.
+#: 남는 틈: 그 두 구간 사이만 같은 길이로 고친 제자리 편집은 여전히 못 잡는다.
+#: 막으려면 락 안에서 파일 전체를 읽어야 하고, 그것은 이 설계가 피한 비용이다.
 _FINGERPRINT_BYTES = 4096
 
 
@@ -693,7 +696,7 @@ class FileAuditLog:
         return ts if isinstance(ts, str) else None
 
     def _tail_after_locked(self, offset: int, identity: Optional[tuple],
-                           fingerprint: tuple[bytes, bytes] = (b"", b"")) -> Optional[bytes]:
+                           fingerprint: tuple[bytes, bytes]) -> Optional[bytes]:
         """스냅샷 이후에 덧붙은 바이트. 이어 붙일 수 없으면 `None`.
 
         이 자리가 성립하는 근거는 "그 사이 이 파일에는 덧붙이기만 일어난다"
