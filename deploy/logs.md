@@ -695,3 +695,11 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-179
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
+
+- 변경: `deploy/robot/core_dev_overlay.py`의 마커 민감 필드 거부 패턴 변수를 `_SECRET_KEY` → `_SENSITIVE_FIELD`로 개명(정의·사용 각 1곳, 값과 거부 로직 불변). 이름에 민감 키워드가 들어간 변수에 리터럴을 담은 call 값이 붙는 형태라 스캐너의 대입 휴리스틱에 정확히 걸렸고, `test_no_secrets_in_tracked_files`는 병합 전 `0d0e2a73`부터 초록이 아니었다 — 병합 회귀가 아니라 latent 오탐이었다.
+- 증거: `python -m pytest test/test_release_boundary_guards.py -q` 63 passed. 스캐너 격리 프로브 7건 — 개명으로 오탐 해소, 심어둔 평범한 대입·call 인자 리터럴·`re.compile` 내부 리터럴은 여전히 보고(예외 추가 없음). 전체 `test/` **1620 passed·0 failed·43 skipped** (2026-09-24 Windows).
+- gate 변화: 없음 — 스캐너 예외·파일명 제외 추가하지 않음. DEVICE HOLD.
+- 결정: **출처만 고치고 스캐너는 무장 유지**. `re.compile`의 리터럴을 예외로 인정하면 call에 긴 리터럴을 넘기는 진짜 유출까지 가려서(`_call_holds_no_literal`이 존재하는 이유와 정면 충돌), 파일명 제외는 "제외 파일이 비밀을 숨기기 좋은 곳"이 되기에 버렸다. 값은 그대로 두고 이름만 바꿨다.
+- 교훈: "이름에 민감 키워드 + 리터럴 값" 휴리스틱은 **탐지 패턴을 정의하는 코드**와 본질적으로 충돌한다 — 패턴 변수명에서 민감 키워드를 빼는 것이 스캐너를 무장 유지한 채로 해결하는 길이었다. 그리고 latent 오탐은 병합 회귀로 오인하기 쉽다: 병행 세션은 관련 시험만 돌렸기 때문에 전체 게이트가 이 건을 처음으로 빨강으로 떴다.

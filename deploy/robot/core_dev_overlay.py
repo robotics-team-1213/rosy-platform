@@ -36,7 +36,7 @@ REBOOT_NOTE = (
     "재부팅과 rosy-runtime 재시작은 이미지 코드로 돌아가고 마커 HOLD가 남으니, "
     "같은 동기화를 다시 실행한다."
 )
-_SECRET_KEY = re.compile(r"token|password|secret|psk|authorization", re.IGNORECASE)
+_SENSITIVE_FIELD = re.compile(r"token|password|secret|psk|authorization", re.IGNORECASE)
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -112,7 +112,7 @@ def validate_marker(document: dict) -> dict:
     if not isinstance(document, dict) or set(document) != set(MARKER_FIELDS):
         raise OverlayError("marker fields must be exactly the schema 1 set")
     for key in document:
-        if _SECRET_KEY.search(key):
+        if _SENSITIVE_FIELD.search(key):
             raise OverlayError("marker must not carry a secret field")
     if document["schema_version"] != 1:
         raise OverlayError("marker schema_version must be 1")
