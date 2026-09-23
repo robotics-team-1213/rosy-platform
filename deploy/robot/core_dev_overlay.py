@@ -256,6 +256,69 @@ def render_compose_yaml(pairs: list[tuple[str, str]]) -> str:
     return text
 
 
+def choose_binds_attached(*, explicit: bool, execute: bool, probe) -> bool:
+    """The first apply attaches mounts. A later apply only restarts the process."""
+
+    if explicit:
+        return True
+    if not execute:
+        return False
+    return bool(probe())
+
+
+def overlay_mounts_attached(run=subprocess.run) -> bool:
+    try:
+        container = rosy_core_container(run)
+    except OverlayError:
+        return False
+    inspected = run(
+        ["docker", "inspect", "--format", "{{range .Mounts}}{{.Source}}\n{{end}}", container],
+        capture_output=True, text=True, check=False,
+    )
+    if inspected.returncode != 0:
+        return False
+    return f"{DEV_ROOT}/python/core" in (inspected.stdout or "")
+
+
+def hardware_slice_running(run=subprocess.run) -> bool:
+    """Refuse when the motor or hardware slice cannot be shown to be down."""
+
+    listed = run(
+        [
+            "docker", "compose", "--env-file", ENV_FILE, "-p", PROJECT, "-f", COMPOSE_FILE,
+            "--profile", "motor", "--profile", "hardware", "ps", "-q", "rosy-motor", "rosy-io",
+        ],
+        capture_output=True, text=True, check=False,
+    )
+    if listed.returncode != 0:
+        raise OverlayError("cannot tell whether motor or hardware is running")
+    return bool((listed.stdout or "").strip())
+
+
+def service_main_pid(run=subprocess.run) -> str:
+    shown = run(
+        ["systemctl", "show", "-p", "MainPID", "--value", "rosy-core.service"],
+        capture_output=True, text=True, check=False,
+    )
+    pid = (shown.stdout or "").strip()
+    if shown.returncode != 0 or pid in {"", "0"}:
+        raise OverlayError("rosy-core is not running")
+    return pid
+
+
+def confirm_native_loaded(staged: Path, installed: str, run=subprocess.run) -> None:
+    """Hash the file inside the service mount namespace, where the drop-in bind is visible."""
+
+    expected = hashlib.sha256(staged.read_bytes()).hexdigest()
+    probed = run(
+        ["nsenter", "-t", service_main_pid(run), "-m", "sha256sum", installed],
+        capture_output=True, text=True, check=False,
+    )
+    observed = ((probed.stdout or "").split() or [""])[0]
+    if probed.returncode != 0 or observed != expected:
+        raise OverlayError("running core did not load the overlay bytes")
+
+
 def compose_argv(*, binds_attached: bool, motor_or_hardware_running: bool) -> list[str]:
     if motor_or_hardware_running:
         raise OverlayError("refuse to overlay while motor or hardware is running")
@@ -360,7 +423,9 @@ def _parse_apply(argv: list[str]) -> int:
     if args.command == "clear":
         clear_overlay(args.root)
         return 0
-    if args.motor_running:
+    if args.motor_running or (
+        args.execute and args.backend == "docker" and hardware_slice_running()
+    ):
         raise OverlayError("refuse to overlay while motor or hardware is running")
     if args.archive is not None:
         stage_overlay(args.archive, args.dest)
@@ -376,8 +441,12 @@ def _parse_apply(argv: list[str]) -> int:
     pairs = bind_pairs(core_package, web_share)
     if args.backend == "docker":
         command = compose_argv(
-            binds_attached=args.binds_attached,
-            motor_or_hardware_running=args.motor_running,
+            binds_attached=choose_binds_attached(
+                explicit=args.binds_attached,
+                execute=args.execute,
+                probe=overlay_mounts_attached,
+            ),
+            motor_or_hardware_running=False,
         )
         compose_path = args.dest / "compose.dev.yaml"
         compose_path.parent.mkdir(parents=True, exist_ok=True)
@@ -407,6 +476,10 @@ def _parse_apply(argv: list[str]) -> int:
         )
         if completed.returncode != 0:
             raise OverlayError("core restart failed")
+        confirm_native_loaded(
+            args.dest / "python" / "core" / "__init__.py",
+            f"{core_package.rstrip('/')}/__init__.py",
+        )
     print(REBOOT_NOTE)
     return 0
 

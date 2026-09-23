@@ -37,6 +37,14 @@ if (-not $tempDir.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -
 }
 
 $archive = Join-Path $tempDir "core-dev.tar.gz"
+$revision = (& git rev-parse HEAD 2>&1 | Out-String).Trim()
+if ($revision -notmatch '^[0-9a-f]{40}$') {
+    throw "HEAD is not a commit id that can be recorded on the robot."
+}
+$dirtyFlag = ""
+if ((& git status --porcelain 2>&1 | Out-String).Trim()) {
+    $dirtyFlag = " --dirty"
+}
 $remote = "${PiUser}@${PiHost}"
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
@@ -48,7 +56,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "scp upload failed."
     }
-    $remoteCommand = "chmod 755 /tmp/apply-core-dev.sh; /tmp/apply-core-dev.sh apply --archive /tmp/core-dev.tar.gz --backend $Backend --discover --execute"
+    $remoteCommand = "chmod 755 /tmp/apply-core-dev.sh /tmp/core_dev_overlay.py; sudo -n /tmp/apply-core-dev.sh apply --archive /tmp/core-dev.tar.gz --backend $Backend --discover --execute --git-revision $revision$dirtyFlag"
     & ssh $remote $remoteCommand
     if ($LASTEXITCODE -ne 0) {
         throw "Remote overlay apply failed."

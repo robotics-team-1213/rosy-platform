@@ -679,3 +679,11 @@
 - gate 변화: 없음
 - 결정: D-176
 - 교훈: 호스트 파일시스템 테스트는 vfat의 고정 mode를 재현하지 못한다. 부트 파티션에 쓰는 코드는 chmod 거부를 가정한 테스트를 같이 둔다.
+
+## 2026-09-23 · uncommitted · fix(deploy): second overlay apply restarts, and refuses a live motor slice
+
+- 변경: 바인드가 이미 있으면 `rosy-core`만 재시작한다. 모터·hardware 상태를 확인하지 못하면 풀기 전에 거절한다. 적용은 `sudo -n`이고 마커에 HEAD와 dirty를 남긴다. 네이티브는 서비스 마운트 안에서 해시를 확인한다.
+- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py -q` 45 passed (2026-09-23 Windows).
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-179
+- 교훈: 없음

@@ -204,9 +204,75 @@ def test_clear_removes_only_the_overlay_files(tmp_path: Path):
     assert config.read_text(encoding="utf-8") == "ok\n"
 
 
+def test_later_apply_restarts_only_when_the_mount_is_already_there():
+    assert overlay.choose_binds_attached(explicit=True, execute=False, probe=lambda: False) is True
+    assert overlay.choose_binds_attached(explicit=False, execute=False, probe=lambda: True) is False
+    assert overlay.choose_binds_attached(explicit=False, execute=True, probe=lambda: True) is True
+    assert overlay.choose_binds_attached(explicit=False, execute=True, probe=lambda: False) is False
+
+    def attached(command, **kwargs):
+        del kwargs
+        if command[-2:] == ["-q", "rosy-core"]:
+            return subprocess.CompletedProcess(command, 0, "core-container\n", "")
+        return subprocess.CompletedProcess(command, 0, f"{overlay.DEV_ROOT}/python/core\n", "")
+
+    def fresh(command, **kwargs):
+        del kwargs
+        if command[-2:] == ["-q", "rosy-core"]:
+            return subprocess.CompletedProcess(command, 0, "core-container\n", "")
+        return subprocess.CompletedProcess(command, 0, "/var/lib/rosy\n", "")
+
+    assert overlay.overlay_mounts_attached(attached) is True
+    assert overlay.overlay_mounts_attached(fresh) is False
+
+
+def test_hardware_slice_must_be_shown_down():
+    def down(command, **kwargs):
+        del command, kwargs
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    def up(command, **kwargs):
+        del command, kwargs
+        return subprocess.CompletedProcess([], 0, "motor-id\n", "")
+
+    def unknown(command, **kwargs):
+        del command, kwargs
+        return subprocess.CompletedProcess([], 1, "", "compose failed")
+
+    assert overlay.hardware_slice_running(down) is False
+    assert overlay.hardware_slice_running(up) is True
+    with pytest.raises(overlay.OverlayError):
+        overlay.hardware_slice_running(unknown)
+
+
+def test_native_confirm_hashes_inside_the_service_namespace(tmp_path: Path):
+    staged = tmp_path / "__init__.py"
+    staged.write_bytes(b"overlay\n")
+    digest = hashlib.sha256(b"overlay\n").hexdigest()
+
+    def good(command, **kwargs):
+        del kwargs
+        if command[:2] == ["systemctl", "show"]:
+            return subprocess.CompletedProcess(command, 0, "4242\n", "")
+        assert command[:4] == ["nsenter", "-t", "4242", "-m"]
+        return subprocess.CompletedProcess(command, 0, f"{digest}  file\n", "")
+
+    overlay.confirm_native_loaded(staged, f"{NATIVE_CORE}/__init__.py", good)
+
+    def bad(command, **kwargs):
+        del kwargs
+        if command[:2] == ["systemctl", "show"]:
+            return subprocess.CompletedProcess(command, 0, "4242\n", "")
+        return subprocess.CompletedProcess(command, 0, f"{'ab' * 32}  file\n", "")
+
+    with pytest.raises(overlay.OverlayError):
+        overlay.confirm_native_loaded(staged, f"{NATIVE_CORE}/__init__.py", bad)
+
+
 def test_windows_sync_script_is_the_narrow_transport():
     text = (ROOT / "deploy" / "robot" / "sync-core-dev.ps1").read_text(encoding="utf-8")
     assert "-PiHost" in text and "-PiUser" in text and "-Backend" in text
+    assert "sudo -n" in text and "git rev-parse HEAD" in text and "--dirty" in text
     assert "RobotNumber" not in text
     for forbidden in (
         "install-pi.sh",
