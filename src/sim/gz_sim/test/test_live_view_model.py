@@ -401,3 +401,19 @@ def test_live_log_phase_reads_the_newest_fresh_mission(m, evidence):
     live = m.live_log_phase(evidence, now_wall=1_790_000_102, fresh_s=5.0)
     assert live == {"run": "mission_m7", "phase": "tour", "sim": 12.5}
     assert m.live_log_phase(evidence, now_wall=1_790_000_200, fresh_s=5.0) is None
+
+
+def test_point_at_walks_the_route_from_the_start(m, graph):
+    keys = m.tour_keys(graph)
+    route = m.RouteProgress(graph, keys)
+    x0, y0, _ = route.point_at(0.0)
+    assert (x0, y0) == pytest.approx(m.tour_start(graph), abs=1e-3)
+    xe, ye, _ = route.point_at(route.length_m)
+    assert (xe, ye) == pytest.approx(m.tour_start(graph), abs=1e-3)
+    x, y, heading = route.point_at(5.0)
+    route.update((x, y))
+    assert route.snapshot()["progress_m"] == pytest.approx(0.0, abs=1e-6)  # beyond the window
+    x1, y1, _ = route.point_at(0.3)
+    route.update((x1, y1))
+    assert route.snapshot()["progress_m"] == pytest.approx(0.3, abs=0.005)
+    assert -math.pi <= heading <= math.pi

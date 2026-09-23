@@ -64,7 +64,7 @@ def test_index_html_has_the_required_panels_and_endpoints():
     assert 'id="overlay"' in html
     assert 'id="camera"' in html
     assert 'id="map"' in html
-    assert "<canvas" in html
+    assert "<svg id=\"map\"" in html  # v2: SVG map
     assert "NO DATA" in html
 
 

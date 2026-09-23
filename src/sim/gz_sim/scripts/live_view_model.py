@@ -291,6 +291,17 @@ class RouteProgress:
     def reset(self):
         self._s = self._s0
 
+    def point_at(self, progress_m):
+        """(x, y, heading) `progress_m` along the route from its start."""
+        s = min(max(self._s0 + progress_m, self._s0), self._s_end)
+        i = int(np.searchsorted(self._arc, s, side="right")) - 1
+        i = min(max(i, 0), len(self._points) - 2)
+        a, b = self._points[i], self._points[i + 1]
+        span = self._arc[i + 1] - self._arc[i]
+        t = 0.0 if span <= 0 else (s - self._arc[i]) / span
+        p = a + t * (b - a)
+        return float(p[0]), float(p[1]), math.atan2(b[1] - a[1], b[0] - a[0])
+
     def update(self, xy):
         """Advance on one pose; False when it is off the route window."""
         lo = max(self._s - self.BACK_WINDOW_M, self._s0)
