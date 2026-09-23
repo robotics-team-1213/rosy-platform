@@ -16,6 +16,15 @@ from .control.rotation_envelope import RotationEnvelope, CROSS_ENDPOINT_MODEL
 from .control.calibration_rotation_clearance import calibration_rotation_clearance
 from .control.calibration_rotation_handoff import rotation_handoff_ready
 
+# Evidence-age lapses a stationary trial may wait out. Hazards, e-stop and a
+# stopped-wander violation are never held. The sensor text also covers an
+# invalid sample; that one still fails when the 1 s hold expires.
+FRESHNESS_LAPSES = ('Fresh final safety command evidence required', 'Rotation requires fresh valid ')
+STALE_CLEARANCE = ('stale_scan', 'stale_safety_motion_limits')
+# Freshness the post-registration evidence must still have when the next leg starts:
+# two 20 Hz ticks, so the started leg is covered until newer evidence arrives.
+BARRIER_MARGIN_S = .1
+
 
 class CalibrationRotation:
     def reset_rotation(self):
@@ -36,6 +45,8 @@ class CalibrationRotation:
         self.rotation_endpoint_count = 0
         self.rotation_scan_pause = None
         self.rotation_start_observation_wait = None
+        self.rotation_freshness_hold = None
+        self.rotation_evidence_barrier = None
 
     def wait_rotation_start_observation(self, now):
         diagnostic = getattr(self, 'rotation_clearance_diagnostic', {})
@@ -105,6 +116,48 @@ class CalibrationRotation:
             self.rotation_scan_pause = None
             return False  # Ordinary fresh clearance and alignment gates still run.
         self.message = 'Rotation paused at zero; waiting for a complete LiDAR observation (maximum 1s)'
+        if now-self.last_report >= .5:
+            self.publish()
+        return True
+
+    def hold_freshness_lapse(self, now, reason, detail=None):
+        """Hold zero through a brief evidence-age gap while the trial is stationary.
+
+        Endpoint registration runs in this node's tick and can block its executor
+        longer than the 0.25 s freshness windows, so its own inputs go briefly stale
+        at zero. That gap is not evidence of motion. A moving trial, any other
+        reason, a pose change or a gap over 1 s still fails with the original reason.
+        """
+        trial = self.rotation_trial
+        stale = bool(reason) and reason.startswith(FRESHNESS_LAPSES) or (
+            not reason and (detail or {}).get('reason') in STALE_CLEARANCE)
+        # eligibility reports only its first failing check, so a lapse can mask
+        # an e-stop or hazard behind it; those are checked here, never held.
+        if (trial is None or trial.last_speed != 0. or not stale or
+                self.estop is not False or self.rotation_hazard(now, allow_front_blocked=True)):
+            return False
+        # The newest valid pose, not latest(): after a block the queued odom fails its
+        # stamp window and is recorded invalid, although the pose itself is known.
+        odom = next((row[1] for row in reversed(self.baseline.samples['odom']) if row[2]), None)
+        imu = self.rotation_imu_yaw
+        if (odom is None or imu is None or not math.isfinite(imu) or
+                not all(math.isfinite(value) for value in odom)):
+            return False  # without finite pose evidence a stationary hold is unprovable
+        message = reason or 'Rotation clearance: ' + str(detail)
+        self.zero()
+        hold = getattr(self, 'rotation_freshness_hold', None)
+        if hold is None:
+            hold = (now, tuple(odom), imu)
+            self.rotation_freshness_hold = hold
+        started, origin, original_imu = hold
+        if (now-started > 1. or now-trial.started > 60. or now-trial.leg_started > 7. or
+                math.hypot(odom[0]-origin[0],odom[1]-origin[1]) > .002 or
+                abs(wrap(odom[2]-origin[2])) > .01 or abs(wrap(imu-original_imu)) > .01):
+            self.finish(False, message+'; freshness hold expired or stationary pose changed')
+            return True
+        # As in the scan pause: a zero-speed interval is not integrated as motion.
+        trial.last_time = now
+        self.message = 'Rotation held at zero; waiting for fresh evidence (maximum 1s)'
         if now-self.last_report >= .5:
             self.publish()
         return True
@@ -238,6 +291,9 @@ class CalibrationRotation:
                 deadline = self.relocation_sensor_deadlines.get(name)
                 if deadline is None or now > deadline:
                     return 'Relocation requires fresh source ' + name
+        return self.rotation_hazard(now, allow_front_blocked)
+
+    def rotation_hazard(self, now, allow_front_blocked=False):
         for key in ('/safety/blocked', '/safety/cliff', '/safety/tilt', '/safety/pickup'):
             if allow_front_blocked and key == '/safety/blocked':
                 continue  # Directional capsule and the final gate still guard translation.
@@ -261,6 +317,8 @@ class CalibrationRotation:
         if not state.startswith('stop') or not 0 <= now-seen <= .75 or seen < self.requested:
             hard_reason = reason
         if hard_reason:
+            if self.hold_freshness_lapse(now, hard_reason):
+                return
             self.finish(False, hard_reason)
             return
         if getattr(self, 'rotation_trial', None) is not None and self.pause_rotation_scan(now):
@@ -292,8 +350,28 @@ class CalibrationRotation:
                 return
         if reason or not self.rotation_clear(now):
             detail = getattr(self, 'rotation_clearance_diagnostic', {})
+            if self.hold_freshness_lapse(now, reason, detail):
+                return
             self.finish(False, reason or 'Rotation clearance: ' + str(detail))
             return
+        barrier = getattr(self, 'rotation_evidence_barrier', None)
+        if barrier is not None:
+            gate, scan = getattr(self, 'gate_decision', None), self.rotation_scan
+            # New evidence alone is not enough: a queued decision can be accepted just
+            # inside its window and expire before the next tick of a started leg. The
+            # scan margin uses receipt age, the same window rotation_clear applies; a
+            # header-age margin would starve drivers that stamp at scan start.
+            if (gate is barrier[0] or scan is barrier[1] or not gate or not scan or
+                    gate[0]-now < BARRIER_MARGIN_S or scan[0]+.25-now < BARRIER_MARGIN_S):
+                if not self.hold_freshness_lapse(now, FRESHNESS_LAPSES[0]):
+                    # Eligibility passed, so only missing/non-finite pose can refuse the hold.
+                    self.finish(False, 'Rotation evidence barrier requires finite pose evidence')
+                return
+            self.rotation_evidence_barrier = None
+            # Stationary since the barrier armed; a frozen sim clock may not have
+            # advanced last_time, so the release is not an interrupted interval.
+            self.rotation_trial.last_time = now
+        self.rotation_freshness_hold = None
         if (getattr(self, 'rotation_start_observation_wait', None) is not None and
                 self.wait_rotation_start_observation(now)):
             return
@@ -345,6 +423,13 @@ class CalibrationRotation:
             if not self.record_rotation_endpoint(alignment,odom):
                 self.finish(False, 'Independent rotation-center sensor evidence disagrees or is unobservable')
                 return
+            if self.rotation_trial.last_speed == 0.:
+                # Registration blocks this tick at zero; that interval is not a stall.
+                self.rotation_trial.last_time = time.monotonic()
+                # A sim clock only advances in its /clock callback, so after the block
+                # the next tick can judge old evidence "fresh". Start no leg until a
+                # decision and a scan received after registration arrive.
+                self.rotation_evidence_barrier = (getattr(self, 'gate_decision', None), self.rotation_scan)
         if self.rotation_trial.error or self.rotation_trial.done:
             valid = self.rotation_trial.done and self.rotation_envelope.report()['valid']
             self.complete_rotation(valid, self.rotation_trial.error or (

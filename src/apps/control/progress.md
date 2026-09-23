@@ -131,3 +131,9 @@ plans:
 - red에서는 완전 정지와 dwell/대기, green에서는 제한 속도 재출발, stale evidence에서는 `HOLD` zero command를 확인했다.
 - 관제는 상태·사유·scene/policy revision을 읽고 stage 후 정지 상태에서만 apply한다. tuning과 simulation signal은 안전 경계를 우회하지 못한다.
 - 이 결과는 HOST simulation PASS다. 실제 Gazebo camera graph와 Pinky Pro 카메라·모터·제동거리는 ROS-SIM/DEVICE/FIELD HOLD다.
+
+## 2026-09-23 calibration rotation freshness hold
+
+- 회전 검증이 자기 끝점 계산(`match_motion`, rig 0.3–0.6 s)으로 executor를 막아 스스로 입력을 낡게 만들던 결함을 고쳤다. 정지 중에는 최대 1 s 동안 0을 유지하며 대기하고, 끝점 등록 뒤에는 새 증거가 충분히 신선할 때까지 다음 구간을 시작하지 않는다.
+- rig 분리 모드의 간헐 실패 중 회전 단계 몫은 교차 실행에서 사라졌다(기준 2/5, 수정 5/5, 최종본 11회 연속 통과). translation 단계 실패(부하 20 이상에서 decision 큐 대기)는 별도 과제로 남는다.
+- 실기 영향: Pi에서 `match_motion` 소요 시간은 미측정이다. 0.25 s 창과 `dt <= 0.5` 검사에 걸리는지 DEVICE 단계에서 확인해야 한다. SOURCE/ROS-SIM 근거이고 DEVICE/FIELD는 HOLD.

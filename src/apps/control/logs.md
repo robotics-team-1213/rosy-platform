@@ -248,3 +248,11 @@
 - gate 변화: 없음.
 - 결정: D-171 트랙 1 코드 보류(사용자 승인). 다음 과제는 rig 간헐 실패의 원인이다.
 - 교훈: 한 번씩만 돌린 rig 이분 탐색이 틀린 원인을 지목했다. "검증된 부분"이라는 판단도 표본이 쌓이자 뒤집혔다. 타이밍에 흔들리는 검증 수단은 판정 전에 기준본의 실패율부터 잰다.
+
+## 2026-09-23 · uncommitted · fix(control): rotation trial holds zero through its own evidence gap
+- 변경: `calibration_rotation.py`. 정지(0 명령) 중인 회전 trial이 신선도 공백을 겪으면 최대 1 s 동안 0을 유지하고, 정지 자세를 확인하며 기다린다(`hold_freshness_lapse`). 끝점 등록 뒤에는 증거 장벽을 둔다. 새 decision과 새 scan이 들어오고 각각 0.1 s 이상의 신선도가 남아야 다음 구간을 시작한다. 등록과 해제 때는 `last_time`을 보정한다. 정지 자세 기준은 가장 최근의 유효한 odom 행이다. e-stop과 hazard는 대기하지 않는다(`rotation_hazard`로 분리, 메시지·순서는 그대로). 테스트: `test_rotation_freshness_hold.py` 19건 신규, `test_calibration_rotation_handoff.py` 스텁 1건 보정.
+- 원인: `record_rotation_endpoint`가 `match_motion`을 tick 안에서 동기 실행한다. rig에서 0.3–0.6 s, 경합 없는 x86 코어에서 120–220 ms가 걸린다. 그동안 executor가 막혀 decision·scan·odom이 큐에 쌓인다. sim 시계는 `/clock` 콜백으로만 전진하므로 함께 멈춘다. 풀린 뒤에는 오래된 입력이 0.25 s 창 밖으로 거부되거나 invalid로 기록되고, 한 번의 검사 실패로 trial이 끝났다. 실기에서는 시계가 멈추지 않는다. 그 대신 `dt > 0.5` 검사와 0.25 s 창을 계산 시간 자체가 넘을 수 있다(Pi 측정은 HOLD).
+- 증거: host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1360 passed, 26 skipped. 뮤테이션 16종 모두 검출. WSL Jazzy + Gazebo 8.11, ext4 사본, 분리 모드. 최종본 11회 연속 `ready`. 같은 시간대 교차 실행(부하 5–29): 기준(main `ae99697`) 2/5, 회전 단계 실패 3. 수정본 5/5. 추적 계측(finish 호출 스택, 대기 거절 사유, tick 상태)으로 각 보완이 막는 경로를 확인했다. 독립 리뷰 3회에서 차단 이슈 없음.
+- gate 변화: 없음(control ROS-SIM은 전체 그래프 기준 HOLD 유지, DEVICE/FIELD HOLD).
+- 결정: 사용자 승인 2026-09-23("정지 중 짧은 대기"). 움직이는 trial, e-stop, hazard, wander 미정지는 이전처럼 즉시 실패한다.
+- 교훈: main도 같은 비율로 흔들렸다. D-171 트랙 1 브랜치를 의심한 판단은 박스 부하(피어 세션의 Gazebo)와 시간대 차이를 코드 효과로 오인한 것이었다. 흔들리는 rig는 같은 시간대 교차 실행으로 보고, 실패는 발생 단계별로 센다. stderr 계측은 타이밍을 바꾸므로, 메모리 계수기를 쓰고 1 s마다 파일로 덤프한다.
