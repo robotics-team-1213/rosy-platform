@@ -143,7 +143,14 @@ def distance_to_polyline(point, polyline):
     return best
 
 
-def stl_world():
+def stl_world(wall_footprint=True):
+    """The 260919 STL's floor paint. `wall_footprint=False` leaves out the
+    perimeter wall's floor-height base triangles as PaintLocalizer's map
+    does: in Gazebo a dark 155 mm wall stands on them, so the camera never
+    sees them as paint. The default keeps them (the world every junction
+    and lap test was measured in; near the ring they are out of view)."""
+    from control.sensing.paint_localizer import _wall_footprint
+
     path = ROOT / "map" / "map_v2_fleet" / "scripts" / "stl_scene.py"
     spec = importlib.util.spec_from_file_location("stl_scene_for_lane_sim", path)
     module = importlib.util.module_from_spec(spec)
@@ -151,6 +158,8 @@ def stl_world():
     scene = module.load_scene(next((ROOT / "map" / "map_v2_fleet").glob("260919*.STL")))
     world = World(-1.405, 1.405, -0.63, 0.63)
     for triangle in scene.lines:
+        if not wall_footprint and _wall_footprint(triangle, scene):
+            continue
         corners = np.rint(world.px([v[:2] for v in triangle]) * 16).astype(np.int32)
         cv2.fillPoly(world.paint, [corners], 255, shift=4)
     return world

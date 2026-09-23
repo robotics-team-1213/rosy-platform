@@ -81,6 +81,7 @@ class _SteerLog:
     def __init__(self, subject):
         self.subject = subject
         self.steer = []
+        self.fixes = []
 
     @property
     def state(self):
@@ -90,6 +91,7 @@ class _SteerLog:
         out = self.subject.update(*args, **kwargs)
         if out is not None:
             self.steer.append(self.subject.last["steer"])
+            self.fixes.append(self.subject.last["fix"])
         return out
 
 
@@ -110,12 +112,19 @@ def test_a_ring_entry_is_steered_on_the_route(index):
 @pytest.mark.parametrize("index", sorted(set(range(12)) - set(RING_ENTRIES)))
 def test_elsewhere_the_camera_steers(index):
     """Ring exits and ring to ring stay A's (camera, or its own manoeuvre):
-    route pursuit on the NE exit (01) read 10.7 mm against the camera's 3.8."""
+    route pursuit on the NE exit (01) read 10.7 mm against the camera's 3.8.
+    The ring-entry pursuit ("route") never steers them; a road bend
+    ("bend") may, but only on the road past the exit's node, never on the
+    ring nor through the node."""
     scenario = SCENARIOS[index]
     log = _SteerLog(follower(scenario))
     run_scenario(scenario, log, steps=260)
-    assert set(log.steer) <= {"camera", "manoeuvre"}
+    assert set(log.steer) <= {"camera", "manoeuvre", "bend"}
     assert "camera" in log.steer
+    for steer, fix in zip(log.steer, log.fixes):
+        if steer == "bend":
+            assert fix.segment_index == 1 and fix.s_m >= 0.12, (steer, fix)
+            assert not scenario["out"].startswith("ring"), scenario
 
 
 class _OdomFrameAtOrigin:

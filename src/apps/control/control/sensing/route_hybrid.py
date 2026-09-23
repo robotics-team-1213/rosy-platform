@@ -35,6 +35,24 @@ to drift but its route pursuit swings on the steep NE spoke exit. Per frame:
              estimate, at A's confidence (`last["steer"]` "route"; elsewhere
              "camera", or "manoeuvre" for A's own route pursuit). See below.
 
+  road bend  on a road segment (never on the ring), within BEND_ARM_M of
+             a bend point (`road_bends`: over BEND_TURN_RAD of heading in
+             BEND_SPAN_M) and BEND_NODE_CLEAR_M or more past the segment's
+             start node, the
+             route steers the same way (`last["steer"]` "bend"). The ring
+             entry takes precedence; a ring exit stays camera-steered
+             through the node, its spoke bend beyond it is a road bend.
+
+Why road bends are route-steered (all-lane tour, 2026-09-23, lane_coverage;
+the 12 junction scenarios end 0.30 m past their node and never reached a
+road's interior): the same pursuit geometry as the ring entry below. The
+260919 roads are straights joined by 60-75 deg corners of 0.15-0.29 m
+path radius; A's camera pursuit at 0.15 m cut the spoke corner past the
+SE exit by 37-38 mm and past the NW exit by 41 mm, and at the SE one its
+path ran 35-53 mm off the centreline, so the cross-check stopped the robot
+(DISAGREE) and CORE's lease latched LOST. Route-steered on every bend the
+tour's worst deviation is 23.1 mm (test_lane_tour).
+
 Why the ring entry is route-steered (diagnosis 2026-09-23, offline 00 and
 11, the two Gazebo failures): through the entry A's camera target lies ON
 the route centreline (median 2-3 mm off it; the ONE iso-line of the island
@@ -100,22 +118,53 @@ ENTRY_LOOKAHEAD_M = LOOKAHEAD_M
 RING_TOLERANCE_M = TRACK_HALF_WIDTH_M
 
 
+#: Road bends (see the module docstring): a road centreline point whose
+#: heading turns by more than BEND_TURN_RAD over the BEND_SPAN_M of route
+#: centred on it is a bend point (the ring, 0.1 / 0.2514 m = 22.8 deg per
+#: 0.1 m, is excluded by segment, not by this). 20 deg per 0.1 m is a path
+#: radius under 0.29 m: every spoke and corridor corner of the 260919
+#: track, not its straights. The route steers within BEND_ARM_M of a bend
+#: point, before (the pursuit starts cutting a lookahead early) and after.
+BEND_TURN_RAD = math.radians(20.0)
+BEND_SPAN_M = 0.10
+BEND_ARM_M = 0.15
+#: A road bend is never route-steered within this of the node the road
+#: starts at: the ring exit (and its first spoke kink) stays A's through
+#: the node, where route pursuit read 10.7 mm on the NE exit against the
+#: camera's 3.8 (below). junction_score's NODE_AMBIGUOUS_M.
+BEND_NODE_CLEAR_M = 0.12
+
+
+def _on_ring(graph, key) -> bool:
+    ring = graph.get("roundabout")
+    if not ring:
+        return False
+    centre, radius = np.asarray(ring["centre"], float), float(ring["radius"])
+    points = np.asarray(graph["segments"][key.split(":")[0]]["points"], float)
+    return bool(np.all(np.abs(np.hypot(*(points - centre).T) - radius)
+                       <= RING_TOLERANCE_M))
+
+
 def ring_entries(graph, keys) -> list:
     """Per route node (between keys[i] and keys[i + 1]): True where the
     route leaves a road for a roundabout segment. A graph without a
     `roundabout` has none."""
-    ring = graph.get("roundabout")
-    if not ring:
-        return [False] * (len(keys) - 1)
-    centre, radius = np.asarray(ring["centre"], float), float(ring["radius"])
-
-    def on_ring(key):
-        points = np.asarray(graph["segments"][key.split(":")[0]]["points"], float)
-        return bool(np.all(np.abs(np.hypot(*(points - centre).T) - radius)
-                           <= RING_TOLERANCE_M))
-
-    flags = [on_ring(key) for key in keys]
+    flags = [_on_ring(graph, key) for key in keys]
     return [not a and b for a, b in zip(flags, flags[1:])]
+
+
+def road_bends(graph, keys, points, arc, seg_start) -> np.ndarray:
+    """Route arc positions (on `points` / `arc`, the route polyline, whose
+    segment i starts at seg_start[i]) of every bend point (BEND_TURN_RAD
+    over BEND_SPAN_M) that lies on a road, not on the ring."""
+    heading = np.unwrap(np.arctan2(np.diff(points[:, 1]), np.diff(points[:, 0])))
+    mid = (arc[:-1] + arc[1:]) / 2.0
+    lo = np.clip(np.searchsorted(mid, mid - BEND_SPAN_M / 2.0), 0, len(mid) - 1)
+    hi = np.clip(np.searchsorted(mid, mid + BEND_SPAN_M / 2.0), 0, len(mid) - 1)
+    bend = np.abs(heading[hi] - heading[lo]) > BEND_TURN_RAD
+    segment = np.clip(np.searchsorted(seg_start, mid, side="right") - 1, 0, len(keys) - 1)
+    road = np.array([not _on_ring(graph, key) for key in keys])[segment]
+    return mid[bend & road]
 
 
 def _with_confidence(observation: LaneObservation, confidence: float) -> LaneObservation:
@@ -155,6 +204,9 @@ class RouteHybridFollower:
             seed=seed).initialise(start_pose)
         self._pieces = centreline_pieces(graph)
         self._entries = ring_entries(graph, keys)
+        f = self._follower
+        self._bends = road_bends(graph, keys, f._points, f._arc, f._seg_start)
+        self._road = [not _on_ring(graph, key) for key in keys]
         self._compared = []     # over-threshold flags, last DISAGREE_WINDOW compared frames
         self.state = "STOP"
         self.last = {}
@@ -213,13 +265,26 @@ class RouteHybridFollower:
                  and fix.distance_to_node_m <= JUNCTION_ARM_M)
                 or (i > 0 and self._entries[i - 1] and fix.s_m <= JUNCTION_ARM_M))
 
+    def _in_road_bend(self) -> bool:
+        """Within BEND_ARM_M of a road bend point (`road_bends`)."""
+        fix = self._follower.last.get("fix")
+        if (fix is None or not len(self._bends) or not self._road[fix.segment_index]
+                or fix.s_m < BEND_NODE_CLEAR_M):
+            return False
+        return bool(np.any(np.abs(self._bends - self._follower._s) <= BEND_ARM_M))
+
     def _steer(self, observation: LaneObservation, pose) -> LaneObservation:
-        """A's output, or in a ring entry B's route pursuit at A's
-        confidence (see the module docstring). Where the pursuit target is
-        the route's end, within half the lookahead or behind the robot
-        (route_map's END), A's output is kept."""
+        """A's output, or in a ring entry ("route") or a road bend ("bend")
+        B's route pursuit at A's confidence (see the module docstring).
+        Where the pursuit target is the route's end, within half the
+        lookahead or behind the robot (route_map's END), A's output is
+        kept."""
         self.last["steer"] = "manoeuvre" if self.state == "MANOEUVRE" else "camera"
-        if not self._in_ring_entry():
+        if self._in_ring_entry():
+            kind = "route"
+        elif self._in_road_bend():
+            kind = "bend"
+        else:
             return observation
         x, y, yaw = pose
         route = self._follower.route
@@ -233,7 +298,7 @@ class RouteHybridFollower:
         if range2 <= 1e-9 or (at_end and (ahead <= 0.0
                                           or range2 < (ENTRY_LOOKAHEAD_M / 2.0) ** 2)):
             return observation
-        self.last["steer"] = "route"
+        self.last["steer"] = kind
         self.last["route_target"] = (ahead, left)
         return LaneObservation(
             error=error_for_curvature(2.0 * left / range2, observation.confidence),

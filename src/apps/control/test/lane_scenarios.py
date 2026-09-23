@@ -47,6 +47,12 @@ junction_score = _junction_score()
 GRAPH = yaml.safe_load(GRAPH_PATH.read_text(encoding="utf-8"))
 SCENARIOS = junction_score.scenarios(GRAPH)
 WORLD = lane_sim.stl_world()
+#: The tour's world: WORLD without the perimeter wall's base (lane_sim.
+#: stl_world). The tour drives the east corridor 0.08 m from that wall:
+#: in WORLD its 5 mm base shows as a paint line that PaintLocalizer's map
+#: (and Gazebo, where the wall stands on it) does not have, and the paint
+#: match fell 0.66 -> 0.17 in one frame (LOCALISE_STOP MATCH, then LOST).
+TOUR_WORLD = lane_sim.stl_world(wall_footprint=False)
 
 #: CORE line_follow defaults (LineFollowConfig): evidence under
 #: min_confidence, or none, for longer than lost_after_s latches LOST.
@@ -135,10 +141,11 @@ def run_route(keys, start_pose, follower, max_steps, *, odom_error=None, world=N
     loop (same renderer, CORE law, 3 s lease, odometry error) from
     `start_pose` until the TRUE pose's route coordinate (junction_score's
     windowed projection, anchored on the first key) reaches the start point
-    again on the last key, CORE's lease latches LOST, or `max_steps`.
+    again on the last key, CORE's lease latches LOST, or `max_steps`. The
+    world defaults to TOUR_WORLD.
     Scored with junction_score.score_route; the result adds the track,
     tiers, reason, stall times, last true / odometry poses and `steps`."""
-    world = WORLD if world is None else world
+    world = TOUR_WORLD if world is None else world
     error = OdomError() if odom_error is None else odom_error
     pose = tuple(float(v) for v in start_pose)
     odom = believed_start({"start": pose}, error)
