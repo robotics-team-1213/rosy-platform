@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-191 device readiness matrix and first real-device evaluation
 - 2026-09-24 · uncommitted · docs(adr): D-190 vendor-parity boot display plan (LCD, buzzer, battery)
 - 2026-09-24 · uncommitted · fix(native,image,ci): D-189 review — no startup hooks in a writable HOME, release/image Python runtime match, probe as the unit
 - 2026-09-24 · uncommitted · fix(native,image): D-189 first real boot of 005 — unit sandboxes, CORE HOME, pinned CORE Python runtime
 - 2026-09-24 · uncommitted · fix(sd): D-188 review
-- 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-188)
