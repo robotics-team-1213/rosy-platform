@@ -20,6 +20,22 @@ import numpy as np
 _DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 
 
+def _detect_markers(gray: np.ndarray):
+    """(corners, ids, rejected) on either side of the OpenCV 4.7 ArUco API split.
+
+    The device image takes OpenCV from Ubuntu 24.04's `python3-opencv`, which
+    is 4.6: it has only the module-level `cv2.aruco.detectMarkers`. OpenCV 4.7
+    added `ArucoDetector` and mainline Python builds from then on no longer
+    expose the module-level call (the dev host's 5.0 has only the class). Choose by what exists rather than catching
+    `AttributeError`, so a genuine error inside detection is not mistaken for a
+    missing API.
+    """
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        detector = cv2.aruco.ArucoDetector(_DICTIONARY, cv2.aruco.DetectorParameters())
+        return detector.detectMarkers(gray)
+    return cv2.aruco.detectMarkers(gray, _DICTIONARY)
+
+
 @dataclass(frozen=True)
 class DockTagSpec:
     """Immutable tag contract. Size comes from the dock-type entry (DNC-005);
@@ -58,8 +74,7 @@ def detect_dock_tag(bgr: np.ndarray, spec: DockTagSpec,
                     dist_coeffs: np.ndarray) -> DockTagObservation | None:
     """Detect our tag and solve its relative pose, or None when absent/foreign."""
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
-    detector = cv2.aruco.ArucoDetector(_DICTIONARY, cv2.aruco.DetectorParameters())
-    corners, ids, _ = detector.detectMarkers(gray)
+    corners, ids, _ = _detect_markers(gray)
     if ids is None:
         return None
     match = next((c for c, i in zip(corners, ids.flatten()) if int(i) == spec.tag_id), None)

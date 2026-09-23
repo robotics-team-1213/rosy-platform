@@ -18,7 +18,7 @@ from control.sensing.dock_detector import ArucoDockDetector
 
 def _tag_frame(tag_id: int = 7, marker_px: int = 200) -> np.ndarray:
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    marker = cv2.aruco.generateImageMarker(dictionary, tag_id, marker_px)
+    marker = (getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker)(dictionary, tag_id, marker_px)
     frame = np.full((480, 640, 3), 255, dtype=np.uint8)
     frame[140:340, 220:420] = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
     return frame

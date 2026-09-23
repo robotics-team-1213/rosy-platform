@@ -58,8 +58,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · fix(control): dock tag detection works on the device's OpenCV 4.6
 - 2026-09-23 · uncommitted · test(control): D-171 track 1 code held back; rig tools merged
 - 2026-09-23 · uncommitted · test(control): calibration batch rig A/B before merging D-171 track 1
 - 2026-09-23 · uncommitted · refactor(control): calibration_atomic builds no ROS messages (D-171 track 1)
 - 2026-09-22 · uncommitted · control(qos): 센서 토픽 소비자 QoS SENSOR 통일 (T13)
-- 2026-09-22 · uncommitted · control(tools): gz 벤치 도구 절대 토픽 발행 금지 (T12)
