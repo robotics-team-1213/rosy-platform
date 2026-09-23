@@ -3,7 +3,8 @@
 Observation only: it reads a follower's `last` intermediate results and
 never feeds back into perception or motion.
   camera   the frame with the paint threshold tinted red
-  bev      bird's-eye grid, forward up: paint grey, left boundary green,
+  bev      bird's-eye grid (a route follower's: its camera tracker's,
+           last["tracker"] on `view`), forward up: paint grey, left boundary green,
            right boundary blue, a branch candidate orange, centre band
            yellow, target magenta, the robot a white triangle at the origin
   status   mode, ladder tier, junction signal, error and confidence
@@ -174,15 +175,20 @@ def _map(graph, pose, pose_label):
 def render_debug(frame, follower, observation, *, mode, pose=None, graph=None,
                  bright_threshold=180, pose_label="odom pose"):
     last = dict(getattr(follower, "last", {}) or {})
-    view = getattr(follower, "_view", None)
-    bev_panel_and_size = _bev(last)
-    if last.get("paint") is not None:
-        bev_img = _mark_target(bev_panel_and_size, last, view)
+    # Route followers keep their camera tracker's results under "tracker"
+    # and its bird's-eye grid under `view`.
+    tracker = last.get("tracker")
+    bev_last = tracker if isinstance(tracker, dict) else last
+    view = getattr(follower, "view", None) or getattr(follower, "_view", None)
+    bev_panel_and_size = _bev(bev_last)
+    if bev_last.get("paint") is not None:
+        bev_img = _mark_target(bev_panel_and_size, bev_last, view)
         bev_img = _mark_robot((bev_img, bev_panel_and_size[1]), view)
     else:
         bev_img = np.zeros((PANEL_H, PANEL_W, 3), np.uint8)
     top = np.hstack([_camera(frame, bright_threshold), bev_img])
     tier = last.get("tier") or getattr(follower, "state", "-")
-    bottom = np.hstack([_status(mode, tier, last.get("junction"), observation, last.get("source")),
+    bottom = np.hstack([_status(mode, tier, bev_last.get("junction"), observation,
+                                bev_last.get("source")),
                         _map(graph, pose, pose_label)])
     return np.vstack([top, bottom])

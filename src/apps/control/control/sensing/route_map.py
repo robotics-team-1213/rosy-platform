@@ -253,8 +253,8 @@ class RouteMapFollower:
         self._camera.gate = None if self._seed_pose is None else self
         camera = self._camera.update(now_s, pose, bgr, ground, **lane_kwargs)
         self._frames += 1
-        self.last = {"estimate": estimate, "camera": camera, "reason": None,
-                     "coverage": self._compared_frames / self._frames}
+        self.last = {"estimate": estimate, "camera": camera, "tracker": self._camera.last,
+                     "reason": None, "coverage": self._compared_frames / self._frames}
         if estimate is None:
             return self._stop("NO_ESTIMATE")
         if estimate.spread_m > MAX_SPREAD_M:

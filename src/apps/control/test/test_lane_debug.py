@@ -1,6 +1,7 @@
 """Perception overlay renderer (spec §4.3): what the robot saw and chose."""
 
 import numpy as np
+import pytest
 
 from control.sensing.lane_boundaries import LaneBoundaryTracker
 from control.sensing.lane_debug import PANEL_H, PANEL_W, next_publish_due, render_debug
@@ -96,3 +97,36 @@ def test_rate_limiter_always_publishes_the_first_frame():
 
 def test_rate_limiter_treats_a_backwards_clock_as_due():
     assert next_publish_due(1.0, 0.5, 5.0) is True
+
+
+@pytest.mark.parametrize("kind", ["route_a", "route_b", "route_ab"])
+def test_route_modes_draw_the_trackers_lines_in_the_birds_eye_panel(kind):
+    """The route followers keep their camera tracker's intermediate results
+    under last["tracker"] and its grid under `view`: the bird's-eye panel
+    must show them (it was blank for route_a and route_b)."""
+    from control.sensing.route_camera import RouteCameraFollower
+    from control.sensing.route_hybrid import RouteHybridFollower
+    from control.sensing.route_map import RouteMapFollower
+    from lane_scenarios import GRAPH, SCENARIOS, WORLD
+
+    scenario = SCENARIOS[5]
+    keys = [scenario["into"], scenario["out"]]
+    pose = tuple(scenario["start"])
+    if kind == "route_a":
+        f = RouteCameraFollower(GRAPH, keys, start_pose=pose, camera_x_offset_m=CAM_X)
+    elif kind == "route_b":
+        f = RouteMapFollower(GRAPH, keys, start_pose=pose, camera_x_offset_m=CAM_X, seed=7)
+    else:
+        f = RouteHybridFollower(GRAPH, keys, start_pose=pose, camera_x_offset_m=CAM_X, seed=7)
+    frame = WORLD.render(pose)
+    obs = None
+    for k in range(3):
+        obs = f.update(k * 0.2, pose, frame, GROUND, **KW)
+    img = render_debug(frame, f, obs, mode=kind, pose=pose)
+    bev = img[:PANEL_H, PANEL_W:]
+    grey = (bev == (120, 120, 120)).all(axis=2)
+    green = (bev[:, :, 1] > 180) & (bev[:, :, 0] < 100) & (bev[:, :, 2] < 100)
+    white = (bev == (255, 255, 255)).all(axis=2)
+    assert grey.sum() > 50 and green.sum() > 50 and white.sum() > 10
+    status = img[PANEL_H:, :PANEL_W]
+    assert (status > 200).sum() > 100
