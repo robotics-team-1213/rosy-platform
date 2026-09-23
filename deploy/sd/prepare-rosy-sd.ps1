@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [int]$DiskNumber,
+    [string]$DiskSerial,
     [int]$RobotNumber,
     [string]$Model = "pinky_pro",
     [string]$Preset = "core",
@@ -73,6 +74,22 @@ function Read-DiskInventory([string]$FixturePath) {
         return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json))
     }
     return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly)
+}
+
+# Windows renumbers disks as USB devices come and go (release 004: the card moved
+# from disk 2 to disk 1 between plan and write). The card is identified by its
+# serial; the number is resolved from it right before each probe.
+function Resolve-DiskNumberBySerial([object[]]$Inventory, [string]$Serial) {
+    $wanted = $Serial.Trim()
+    # StrictMode: an empty inventory can yield a property-less object, so read
+    # the properties defensively.
+    $matches = @($Inventory | Where-Object {
+        $null -ne $_ -and $_.PSObject.Properties["BusType"] -and $_.PSObject.Properties["SerialNumber"] -and
+        [string]$_.BusType -eq "USB" -and ([string]$_.SerialNumber).Trim() -ceq $wanted
+    })
+    if ($matches.Count -eq 0) { Fail "no USB disk has serial $wanted" }
+    if ($matches.Count -gt 1) { Fail "more than one USB disk has serial $wanted" }
+    return [int]$matches[0].Number
 }
 
 function Select-SafeDisk([object[]]$Inventory, [int]$Number) {
@@ -160,7 +177,7 @@ if ($SetWifiCredential) {
     if (-not $PSBoundParameters.ContainsKey("DiskNumber")) { exit 0 }
 }
 
-foreach ($required in @("DiskNumber", "WifiProfile", "ImagePath", "ImageSha256", "ImageSignaturePath", "ReleasePublicKey", "ReleaseId", "RegistryJson", "ReceiptPath")) {
+foreach ($required in @("WifiProfile", "ImagePath", "ImageSha256", "ImageSignaturePath", "ReleasePublicKey", "ReleaseId", "RegistryJson", "ReceiptPath")) {
     if (-not $PSBoundParameters.ContainsKey($required)) { Fail "-$required is required" }
 }
 
@@ -263,6 +280,12 @@ elseif (-not $FleetEndpoint -or -not $FleetTrustProfile) {
     Fail "FleetEndpoint and FleetTrustProfile must be supplied together"
 }
 
+if ($reviewedPlan -and -not $DiskSerial -and -not $PSBoundParameters.ContainsKey("DiskNumber")) {
+    $DiskSerial = [string]$reviewedPlan.disk_serial
+}
+if (-not $DiskSerial -and -not $PSBoundParameters.ContainsKey("DiskNumber")) {
+    Fail "-DiskSerial (or -DiskNumber) is required"
+}
 if ($Model -ne "pinky_pro") { Fail "only pinky_pro is supported" }
 if ($PSBoundParameters.ContainsKey("RobotNumber") -and ($RobotNumber -lt 1 -or $RobotNumber -gt 61)) {
     Fail "RobotNumber must be between 1 and 61"
@@ -379,7 +402,15 @@ if (-not $reprovision) {
     if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
 }
 
-$firstDisk = Select-SafeDisk (Read-DiskInventory $DiskInventoryJson) $DiskNumber
+$firstInventory = Read-DiskInventory $DiskInventoryJson
+if ($DiskSerial) {
+    $bySerial = Resolve-DiskNumberBySerial $firstInventory $DiskSerial
+    if ($PSBoundParameters.ContainsKey("DiskNumber") -and $bySerial -ne $DiskNumber) {
+        Fail "-DiskNumber $DiskNumber does not match -DiskSerial $DiskSerial (disk $bySerial)"
+    }
+    $DiskNumber = $bySerial
+}
+$firstDisk = Select-SafeDisk $firstInventory $DiskNumber
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })
@@ -414,7 +445,8 @@ if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $secondDisk)) {
 }
 
 if ($reviewedPlan) {
-    foreach ($field in @("physical_drive", "disk_number", "disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
+    # The disk number is not part of the reviewed identity; the serial is.
+    foreach ($field in @("disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
         if ($planKeys -cnotcontains $field -or [string]$plan[$field] -cne [string]$reviewedPlan.$field) {
             Fail "target no longer matches the reviewed plan: $field"
         }
@@ -442,7 +474,7 @@ if ($PlanOnly) {
     exit 0
 }
 
-$expectedConfirmation = "ERASE DISK $DiskNumber $DeviceName"
+$expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
 if (-not $Confirmation) { $Confirmation = Read-Host "Type exactly: $expectedConfirmation" }
 if ($Confirmation -cne $expectedConfirmation) { Fail "confirmation did not match the selected physical disk and device" }
 

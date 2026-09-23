@@ -525,3 +525,14 @@
 - 결정: D-173
 - 교훈: 측정으로 원인을 확정하기 전에 허용 규칙을 넓히면 한 회차를 더 잃는다. 첫 불일치 오프셋 하나로 규칙을 만들지 않는다.
 
+## 2026-09-23 · uncommitted · feat(sd): select the card by serial, not by Windows disk number
+
+- 변경: `prepare-rosy-sd.ps1`에 `-DiskSerial`을 추가하고, WRITE에서 plan만 주면 plan의 `disk_serial`로 USB 디스크 번호를 다시 찾는다.
+  시리얼은 정확히 하나의 USB 디스크여야 하며, `-DiskNumber`를 함께 주면 둘이 같아야 한다. plan 드리프트 비교에서 디스크 번호를
+  빼고 시리얼·용량·모델로 비교한다. 확인 문구는 `ERASE SERIAL <serial> <device_name>`이다.
+- 증거: release 004 다섯 번째 시도 직전, 다른 USB 장치가 빠지며 카드가 디스크 2 → 1로 바뀌어 `disk number does not resolve to exactly
+  one disk`로 멈췄다(안전장치는 정상 동작). 새 시험 7건 포함 `test_sd_writer_contract.py` 69 passed (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173(카드 기록 절차), D-154 결정 4의 확인 문구 형식을 시리얼로 바꾼다
+- 교훈: 운영체제가 매번 다시 매기는 번호로 물리 대상을 고정하지 않는다. 사람이 확인하는 문구도 안정적인 식별자를 써야 한다.
+

@@ -24,6 +24,10 @@ one-time per-card provisioning bundle.
   never a fixed default (D-33). Omitted Fleet values default to
   `https://<this-host>.local` / `rosy-pilot-lan` and the plan says so
   (`robot_number_source`, `fleet_source`); nothing on the robot reads them yet.
+- The card is identified by its serial, not the Windows disk number, which changes
+  as USB devices come and go. `-DiskSerial` (or a reviewed plan's `disk_serial`)
+  resolves the number right before each probe and must match exactly one USB disk;
+  the confirmation is `ERASE SERIAL <serial> <device_name>`.
 - `-ReprovisionReceipt <receipt.json>` (D-174 F7) rewrites a card for an already
   registered robot: the receipt must prove a verified earlier write (writer exit 0,
   readback verified) of exactly that number, name and UID, which it supplies when
