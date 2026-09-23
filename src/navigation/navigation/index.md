@@ -16,7 +16,7 @@
 | D-54 | Nav2 profile limits and field maps fail closed |
 | D-58 | Hardware motion requires an authoritative readiness gate |
 | D-144 | 하드웨어 맵 생성은 runtime mode가 아니라 검증된 navigation backend다 |
-| D-182 | SD 카드 쓰기는 전문가 없이 운영한다 — 분리 실행, 상태 명령, readback 멈춤 감시, 사전 속도 측정, 카드 신원 |
+| D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 
 ## 계획·결과 문서

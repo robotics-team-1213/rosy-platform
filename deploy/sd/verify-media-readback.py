@@ -9,17 +9,17 @@ cannot be set offline), rewrites FSInfo hints and FAT status bits, and creates
 instead: every file and directory of the image must exist on the card with the
 same content, and the only extra tree allowed is ``System Volume Information``,
 which is reported in the evidence rather than hidden. The areas that hold no
-file are still compared byte for byte (D-182): the reserved region against the
+file are still compared byte for byte (D-188): the reserved region against the
 image apart from the FSInfo free-cluster hints, FAT copy 2 against FAT copy 1
 on the card apart from the FAT[1] shutdown/error bits, and the backup boot
 sector against the primary.
 
 The same pass also hashes every compressed byte it reads (``image_sha256``), so
-the writer can prove the file it compared against is the signed one (D-181).
+the writer can prove the file it compared against is the signed one (D-187).
 Exit codes: 0 verified, 1 mismatch or unusable image, 3 the device could not be
 read (card removed, I/O error, or no data for ``--stall-seconds``).
 
-``--probe`` (D-182) is the writer's pre-flight: the raw size from the xz index,
+``--probe`` (D-188) is the writer's pre-flight: the raw size from the xz index,
 the image's MBR disk signature, and a timed sequential read of the first
 ``--probe-bytes`` of the device with the device's MBR disk signature. It never
 fails on the device; an unreadable device is reported in ``device_error``.
@@ -117,7 +117,7 @@ class Progress:
             "bytes": done,
         }
         # The heartbeat is advisory. A progress file that cannot be written must
-        # not fail a good card as an "image" error (D-181 review).
+        # not fail a good card as an "image" error (D-187 review).
         try:
             with open(self.path, "a", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps(line, separators=(",", ":")) + "\n")
@@ -311,7 +311,7 @@ def _first_difference(want: bytes, have: bytes, skip: set[int]) -> int | None:
 
 
 def compare_boot_non_file_areas(expected: bytes, actual: bytes, base: int = 0) -> dict[str, object]:
-    """Byte-compare the FAT32 areas that hold no file (D-182, review MEDIUM-2).
+    """Byte-compare the FAT32 areas that hold no file (D-188, review MEDIUM-2).
 
     Tolerated, and only these: the FSInfo free-cluster count and next-free hint
     against the image, and the FAT[1] clean-shutdown and hard-error bits between
@@ -468,7 +468,7 @@ class _Prefetch:
     def close(self) -> bool:
         """Stop the worker; return True if it is still alive (wedged in a read).
 
-        Bounded on every path (D-182 review): after a mismatch or an image error
+        Bounded on every path (D-188 review): after a mismatch or an image error
         the device worker may be wedged too, and waiting for it would turn a
         mismatch into a hang and then an "io" failure.
         """
@@ -626,7 +626,7 @@ def mbr_signature(sector: bytes) -> str | None:
 def raw_mbr_signature(sector: bytes) -> str | None:
     """Bytes 440-443 as 8 hex digits whenever the sector holds an MBR (0x55AA),
     "00000000" included; None when it holds none (a blank or unpartitioned card).
-    Only meaningful when the sector was actually read (D-182 review)."""
+    Only meaningful when the sector was actually read (D-188 review)."""
     if len(sector) < 512 or sector[510:512] != b"\x55\xaa":
         return None
     return f"{struct.unpack_from('<I', sector, 440)[0]:08x}"
@@ -686,7 +686,7 @@ def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[s
 
 def probe(image: Path, device: str | None, probe_bytes: int = PROBE_BYTES,
           timeout: float = 120.0) -> tuple[dict[str, object], bool]:
-    """Pre-flight facts for the writer (D-182); never fails on the device."""
+    """Pre-flight facts for the writer (D-188); never fails on the device."""
     result: dict[str, object] = {"image_raw_size": None, "image_mbr_signature": None}
     try:
         result["image_raw_size"] = xz_raw_size(image)

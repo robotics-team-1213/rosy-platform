@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
-- 2026-09-24 · uncommitted · fix(sd): D-182 review
-- 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-182)
-- 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-181)
-- 2026-09-23 · uncommitted · fix(sd): the card writer detects its own failures, says what is on the card and resumes without rewriting (D-181)
-- 2026-09-23 · uncommitted · perf(sd): one authoritative verify — drop the raw-hash pre-pass and Imager read-back (D-180)
+- 2026-09-24 · uncommitted · fix(sd): D-188 review
+- 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-188)
+- 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-187)
+- 2026-09-24 · uncommitted · chore(deploy): split robot dev and verify scripts
+- 2026-09-24 · uncommitted · docs(deploy): 병합(deploy) 항목의 게이트 실측 수치 기록

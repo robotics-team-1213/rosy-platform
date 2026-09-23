@@ -117,6 +117,7 @@
   GO and unreachable-device HOLD paths.
 - gate 변화: none. DEVICE remains HOLD until the physical Pinky produces the
   same evidence from an installed signed ARM64 release.
+
 ## 2026-09-22 · uncommitted · feat(runtime): begin D-161 Ubuntu-native transition
 
 - 변경: Canonical Ubuntu 24.04.5 Raspberry Pi arm64 base URL/SHA-256을 lock에
@@ -696,30 +697,6 @@
 - 결정: D-179
 - 교훈: 없음
 
-## 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
-
-- 변경: `deploy/robot/core_dev_overlay.py`의 마커 민감 필드 거부 패턴 변수를 `_SECRET_KEY` → `_SENSITIVE_FIELD`로 개명(정의·사용 각 1곳, 값과 거부 로직 불변). 이름에 민감 키워드가 들어간 변수에 리터럴을 담은 call 값이 붙는 형태라 스캐너의 대입 휴리스틱에 정확히 걸렸고, `test_no_secrets_in_tracked_files`는 병합 전 `0d0e2a73`부터 초록이 아니었다 — 병합 회귀가 아니라 latent 오탐이었다.
-- 증거: `python -m pytest test/test_release_boundary_guards.py -q` 63 passed. 스캐너 격리 프로브 7건 — 개명으로 오탐 해소, 심어둔 평범한 대입·call 인자 리터럴·`re.compile` 내부 리터럴은 여전히 보고(예외 추가 없음). 전체 `test/` **1620 passed·0 failed·43 skipped** (2026-09-24 Windows).
-- gate 변화: 없음 — 스캐너 예외·파일명 제외 추가하지 않음. DEVICE HOLD.
-- 결정: **출처만 고치고 스캐너는 무장 유지**. `re.compile`의 리터럴을 예외로 인정하면 call에 긴 리터럴을 넘기는 진짜 유출까지 가려서(`_call_holds_no_literal`이 존재하는 이유와 정면 충돌), 파일명 제외는 "제외 파일이 비밀을 숨기기 좋은 곳"이 되기에 버렸다. 값은 그대로 두고 이름만 바꿨다.
-- 교훈: "이름에 민감 키워드 + 리터럴 값" 휴리스틱은 **탐지 패턴을 정의하는 코드**와 본질적으로 충돌한다 — 패턴 변수명에서 민감 키워드를 빼는 것이 스캐너를 무장 유지한 채로 해결하는 길이었다. 그리고 latent 오탐은 병합 회귀로 오인하기 쉽다: 병행 세션은 관련 시험만 돌렸기 때문에 전체 게이트가 이 건을 처음으로 빨강으로 떴다.
-
-## 2026-09-24 · uncommitted · docs(deploy): 병합(deploy) 항목의 게이트 실측 수치 기록
-
-- 변경: 병합(deploy) 항목의 "아래 게이트 줄에 실측 수치" 약속을 본문 고치지 않고 새 항목으로 옮겨 적는다 — HEAD에 들어간 본문은 lint가 append-only 위반으로 거부한다.
-- 증거: `python -m pytest test/ -q` 전체 회귀 **1620 passed·0 failed·43 skipped** + `rosy_harness.py lint` **0 error·21 warning**(기존 baseline) — 2026-09-24 Windows. 병합 신규 15종 전부 초록. image_pipeline bash 3건 전이 실패는 격리 3 passed·파일 단위 58 passed·전량 재검 초록으로 병합 회귀 아님(병합 후 해당 경로 코드 무변경).
-- gate 변화: 없음. DEVICE HOLD.
-- 결정: 실측 수치는 본문 정정이 아니라 별도 append 항목으로 기록한다.
-- 교훈: docs 쪽 항목과 같다 — 커밋 전에 약속을 채운다.
-
-## 2026-09-24 · uncommitted · chore(deploy): split robot dev and verify scripts
-
-- 변경: 벤치 오버레이는 `deploy/robot/dev/`로, 설치 확인과 readback은 `deploy/robot/verify/`로 나눴다. `install-pi.sh`, Windows 배포 스크립트, 현재 운영 문서와 시험의 경로를 같은 변경에서 고쳤다. 제품 유닛은 `native/`에 남겼다.
-- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py test/test_rosy_motor_udev.py test/test_windows_connection_evidence.py test/test_pinky_user_validation.py test/test_folder_layout.py -q` 73 passed (2026-09-24 Windows).
-- gate 변화: 없음. DEVICE HOLD.
-- 결정: D-186
-- 교훈: 없음
-
 ## 2026-09-23 · uncommitted · fix(sd): fall back to the USB instance serial when Get-Disk reports none
 
 - 변경: 같은 리더기가 다시 꽂힌 뒤 `Get-Disk`의 `SerialNumber`를 빈 값으로 보고해(관리자 `Update-HostStorageCache` 뒤에도) 시리얼로 카드를
@@ -744,7 +721,7 @@
 - 결정: D-180
 - 교훈: 나중에 더 엄격한 검사를 넣으면 먼저 있던 약한 검사를 다시 본다. 같은 사실을 여러 번 확인하는 패스는 시간만 쓴다.
 
-## 2026-09-23 · uncommitted · fix(sd): the card writer detects its own failures, says what is on the card and resumes without rewriting (D-181)
+## 2026-09-23 · uncommitted · fix(sd): the card writer detects its own failures, says what is on the card and resumes without rewriting (D-187)
 
 - 변경: `prepare-rosy-sd.ps1`이 단계마다 `<log>.progress.jsonl`에 JSON 한 줄(`ts`, `stage`, `card_state`, `detail`)을 바로 flush하고,
   쓰기·readback 중에는 약 60초마다 처리 바이트를 남긴다. `Start-Process -Wait` 대신 poll loop로 Imager의 CPU·I/O 카운터를 보고,
@@ -760,10 +737,34 @@
   bundle 직전 디스크 변경, resume 성공·불일치·receipt 중복을 재현(2026-09-23 Windows). 실제 카드·실제 Imager 멈춤은 확인하지 않았다.
   pipeline readback은 순차 참조 구현과 9개 fixture × 장치 읽기 크기 3종에서 같은 판정. 256 MiB fixture 3.10s → 2.34s(page cache), 11.55s → 6.81s(60 MB/s 장치 흉내).
 - gate 변화: 없음
-- 결정: D-181
+- 결정: D-187
 - 교훈: 오래 도는 외부 도구를 기다릴 때는 "끝났나"만이 아니라 "움직이나"를 본다. 실패 문구는 원인만이 아니라 카드에 무엇이 남았는지와 다음 명령을 말해야 복구가 싸진다.
 
-## 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-181)
+## 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
+
+- 변경: `deploy/robot/core_dev_overlay.py`의 마커 민감 필드 거부 패턴 변수를 `_SECRET_KEY` → `_SENSITIVE_FIELD`로 개명(정의·사용 각 1곳, 값과 거부 로직 불변). 이름에 민감 키워드가 들어간 변수에 리터럴을 담은 call 값이 붙는 형태라 스캐너의 대입 휴리스틱에 정확히 걸렸고, `test_no_secrets_in_tracked_files`는 병합 전 `0d0e2a73`부터 초록이 아니었다 — 병합 회귀가 아니라 latent 오탐이었다.
+- 증거: `python -m pytest test/test_release_boundary_guards.py -q` 63 passed. 스캐너 격리 프로브 7건 — 개명으로 오탐 해소, 심어둔 평범한 대입·call 인자 리터럴·`re.compile` 내부 리터럴은 여전히 보고(예외 추가 없음). 전체 `test/` **1620 passed·0 failed·43 skipped** (2026-09-24 Windows).
+- gate 변화: 없음 — 스캐너 예외·파일명 제외 추가하지 않음. DEVICE HOLD.
+- 결정: **출처만 고치고 스캐너는 무장 유지**. `re.compile`의 리터럴을 예외로 인정하면 call에 긴 리터럴을 넘기는 진짜 유출까지 가려서(`_call_holds_no_literal`이 존재하는 이유와 정면 충돌), 파일명 제외는 "제외 파일이 비밀을 숨기기 좋은 곳"이 되기에 버렸다. 값은 그대로 두고 이름만 바꿨다.
+- 교훈: "이름에 민감 키워드 + 리터럴 값" 휴리스틱은 **탐지 패턴을 정의하는 코드**와 본질적으로 충돌한다 — 패턴 변수명에서 민감 키워드를 빼는 것이 스캐너를 무장 유지한 채로 해결하는 길이었다. 그리고 latent 오탐은 병합 회귀로 오인하기 쉽다: 병행 세션은 관련 시험만 돌렸기 때문에 전체 게이트가 이 건을 처음으로 빨강으로 떴다.
+
+## 2026-09-24 · uncommitted · docs(deploy): 병합(deploy) 항목의 게이트 실측 수치 기록
+
+- 변경: 병합(deploy) 항목의 "아래 게이트 줄에 실측 수치" 약속을 본문 고치지 않고 새 항목으로 옮겨 적는다 — HEAD에 들어간 본문은 lint가 append-only 위반으로 거부한다.
+- 증거: `python -m pytest test/ -q` 전체 회귀 **1620 passed·0 failed·43 skipped** + `rosy_harness.py lint` **0 error·21 warning**(기존 baseline) — 2026-09-24 Windows. 병합 신규 15종 전부 초록. image_pipeline bash 3건 전이 실패는 격리 3 passed·파일 단위 58 passed·전량 재검 초록으로 병합 회귀 아님(병합 후 해당 경로 코드 무변경).
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: 실측 수치는 본문 정정이 아니라 별도 append 항목으로 기록한다.
+- 교훈: docs 쪽 항목과 같다 — 커밋 전에 약속을 채운다.
+
+## 2026-09-24 · uncommitted · chore(deploy): split robot dev and verify scripts
+
+- 변경: 벤치 오버레이는 `deploy/robot/dev/`로, 설치 확인과 readback은 `deploy/robot/verify/`로 나눴다. `install-pi.sh`, Windows 배포 스크립트, 현재 운영 문서와 시험의 경로를 같은 변경에서 고쳤다. 제품 유닛은 `native/`에 남겼다.
+- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py test/test_rosy_motor_udev.py test/test_windows_connection_evidence.py test/test_pinky_user_validation.py test/test_folder_layout.py -q` 73 passed (2026-09-24 Windows).
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-186
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-187)
 
 - 변경: 005 재기록 실패 로그에는 `WRITE FAILED: full media readback verification failed`만 남았다. PowerShell 5.1 transcript는 native
   프로그램의 stderr를 담지 않는다. `verify-media-readback.py --error-json`이 `error`·`kind`(`io`, `mismatch`, `image`)·`bytes_verified`를
@@ -772,10 +773,10 @@
 - 증거: 불일치·짧은 카드·없는 장치·잘린 xz의 error 파일과, 불일치·짧은 카드 이유가 Fail 문구와 진행 파일에 남는 writer 테스트(2026-09-24 Windows).
   실제 카드의 중간 분리는 재현하지 않았다.
 - gate 변화: 없음
-- 결정: D-181
+- 결정: D-187
 - 교훈: 실패 이유가 로그까지 오는 경로를 테스트로 고정한다. 하위 도구가 이유를 말해도 상위 로그가 그 스트림을 버리면 없는 것과 같다.
 
-## 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-182)
+## 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-188)
 
 - 변경: `write-card.ps1 -Detach`가 관리자 창을 따로 띄우고(UAC 한 번, `-NoExit`) 바로 돌아오며 로그·진행 파일·`.exit`·상태 명령을
   출력한다. launcher가 진행 파일을 운영자 소유로 먼저 만들고 `launch` 줄을 쓰며, UAC 거부는 `failed`/`untouched`와 `next`로 남는다.
@@ -786,18 +787,18 @@
   경고하고 비대화형 실행은 `-AcceptSlowMedia`를 요구한다. plan에 카드 `disk_signature`·`disk_guid`를 남겨 같은 리더기의 다른 카드를
   ERASE 전에 멈추고, resume은 장치 MBR signature가 이미지의 것과 같아야 한다. boot 파티션 파일 비교로 넘어가도 reserved 영역
   (FSInfo 힌트 제외), FAT copy 2 대 1(FAT[1] 상태 비트 제외), backup boot sector 대 primary를 byte 단위로 비교한다.
-  D-181 리뷰: `-ReadbackDevice`는 fixture 전용·receipt `readback_target`, Imager 감시는 프로세스 트리 합산·실제 디스크는 `.exe`만,
+  D-187 리뷰: `-ReadbackDevice`는 fixture 전용·receipt `readback_target`, Imager 감시는 프로세스 트리 합산·실제 디스크는 `.exe`만,
   `taskkill` 5.1 throw 제거, 끝내지 못한 Imager는 재부팅 안내, verifier queue/join 시간 제한, heartbeat OSError는 advisory,
   `bundle-writing`/`bundle-partial` 단계와 bundle이 있는 카드의 resume 거부.
 - 증거: named pipe 가짜 카드(`test/sd_pipe_card.py`)로 매달린 readback 정지와 느린 readback 완주, 자식이 I/O를 하는 가짜 writer,
   사전 측정·느린 매체·카드 신원·resume 거부, detach·UAC 거부 기록, 상태 명령 8가지 상황(텍스트·JSON), boot 비파일 영역 1 byte 반전
   5종(2026-09-24 Windows). 실제 카드·실제 UAC·실제 Imager 트리는 확인하지 않았다.
 - gate 변화: 없음
-- 결정: D-182
+- 결정: D-188
 - 교훈: 오래 도는 작업의 "언제 끝나나"는 짐작이 아니라 같은 장치에서 잰 속도와 실제로 늘어나는 바이트로 답한다. 감시는 도구 안과 밖
   두 겹으로 두고, 느리지만 움직이는 작업을 죽이지 않는 것이 멈춤 감지만큼 중요하다.
 
-## 2026-09-24 · uncommitted · fix(sd): D-182 review
+## 2026-09-24 · uncommitted · fix(sd): D-188 review
 
 - 변경: 이 릴리스의 MBR signature를 가진 카드는 두 조건을 모두 만족할 때만 받아들인다. `rosy-provision/`이 없어야 하고,
   같은 plan으로 Imager 쓰기를 시작한 진행 파일이 있어야 한다(첫 진행 줄에 `plan`을 기록). 그렇지 않으면 `untouched`로 멈춘다.
@@ -809,6 +810,6 @@
 - 증거: 끝난 카드·이전 쓰기 없는 카드 거부, 이전 쓰기가 있으면 재기록, fixture 경계 3종, heartbeat가 늦어도 읽기가 이어지는 readback,
   probe 시간 초과의 느린 매체 처리, 0 signature·원시 섹터 우선, 상대 경로, bounded close(2026-09-24 Windows).
 - gate 변화: 없음
-- 결정: D-182
+- 결정: D-188
 - 교훈: "이 카드가 맞나"의 예외 경로(이미 우리 이미지가 있음)는 가장 흔한 사고 경로이기도 하다. 예외를 열 때는 그 예외가
   무엇으로만 생기는지(이 plan의 이전 쓰기)를 증거로 좁힌다.

@@ -30,7 +30,7 @@ one-time per-card provisioning bundle.
   path from the plan and release, finds the card by serial, elevates itself, keeps a
   timestamped log and `.exit` marker per attempt, and refuses an existing receipt.
   `-PrintArguments` shows the resolved call without writing.
-- D-182: operators launch with `-Detach` (own elevated window, one UAC prompt,
+- D-188: operators launch with `-Detach` (own elevated window, one UAC prompt,
   returns at once) and follow `card-write-status.ps1 -LogPath <log>` (`-Json` for
   agents; no elevation). Quote its ETA; never guess completion times. The write
   measures the card read rate before the ERASE confirmation and stops a

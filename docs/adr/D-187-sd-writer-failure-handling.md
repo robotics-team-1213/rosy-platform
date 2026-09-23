@@ -1,4 +1,4 @@
-## D-181 SD 카드 writer는 자기 실패를 감지해 안전하게 멈추고, 카드 상태와 다음 행동을 알린다
+## D-187 SD 카드 writer는 자기 실패를 감지해 안전하게 멈추고, 카드 상태와 다음 행동을 알린다
 
 **Status:** Accepted (2026-09-23). [D-180](D-180-sd-write-single-authoritative-verify.md)(readback 한 번으로 검증)과
 [D-173](D-173-first-pinky-card-from-merged-release.md)(검토된 plan에 고정한 기록)의 WRITE 단계를 보강한다.

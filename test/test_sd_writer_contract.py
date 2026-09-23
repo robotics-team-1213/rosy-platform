@@ -351,7 +351,7 @@ def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case,
     assert completed.returncode != 0
     assert writer_case["marker"].exists()
     assert "--disable-verify" in writer_case["writer_args"].read_text(encoding="utf-8")
-    # D-181: a card that ends early is an I/O problem (resume); a flipped byte is bad data.
+    # D-187: a card that ends early is an I/O problem (resume); a flipped byte is bad data.
     rendered = " ".join((completed.stderr + completed.stdout).split())
     assert ("could not be read during readback" in rendered
             or "full media readback verification failed" in rendered)
@@ -373,7 +373,7 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "--sha256" not in text
     assert "--image-only" not in text
     assert text.count("verify-media-readback.py") == 1
-    # One readback pass, run as a watched process (D-182); the only other call is
+    # One readback pass, run as a watched process (D-188); the only other call is
     # the pre-flight probe (raw size from the xz index, a timed read of the card start).
     assert text.count("& $PythonExe $readbackVerifier") == 1
     assert "& $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget --probe" in text
@@ -383,7 +383,7 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "cmd /c" not in text.lower()
     assert '"ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"' in text
     assert "Start-Process" in text
-    # D-181: the writer is polled by a stall watchdog, never waited on blindly.
+    # D-187: the writer is polled by a stall watchdog, never waited on blindly.
     assert "-Wait -PassThru" not in text
     assert "WaitForExit($pollMilliseconds)" in text
     assert "-PassThru" in text
@@ -1052,7 +1052,7 @@ def test_no_real_usb_serial_means_no_card(writer_case, unique_id):
     assert not writer_case["marker"].exists()
 
 
-# --- D-181: progress file, stall watchdog, actionable failures, resume ------
+# --- D-187: progress file, stall watchdog, actionable failures, resume ------
 # Release 005: a write vanished without a receipt, Imager stalled for 23 minutes
 # after its last byte while Start-Process -Wait waited, and the transcript never
 # showed which stage was running.
@@ -1064,7 +1064,7 @@ SUCCESS_STAGES = [
     ("bundle", "verified-no-bundle"), ("bundle-writing", "bundle-partial"), ("receipt", "complete"),
     ("done", "complete"),
 ]
-# The tree-wide stall watchdog (D-181 review) sees ping.exe's packets, so an
+# The tree-wide stall watchdog (D-187 review) sees ping.exe's packets, so an
 # idle writer child must really be idle.
 IDLE_CHILD = f'"{sys.executable}" -c "import time; time.sleep(120)"'
 
@@ -1385,7 +1385,7 @@ def test_a_card_that_ends_mid_readback_is_an_io_problem_with_its_reason_logged(w
     _nothing_recorded(writer_case, boot)
 
 
-# --- D-182: readback watchdog, pre-flight, card identity --------------------
+# --- D-188: readback watchdog, pre-flight, card identity --------------------
 # Release 005: the readback ran at about 3.4 MB/s for about 60 minutes, then the
 # reader dropped out of Get-Disk and nothing noticed; the operating agent kept
 # giving wrong completion times; a cheap reader's dummy serial (000000000207)
@@ -1470,14 +1470,14 @@ def test_a_slow_readback_that_keeps_moving_is_never_stopped(writer_case, tmp_pat
     assert completed.returncode == 0, completed.stderr
     receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
     assert receipt["media_readback"]["bytes_verified"] == len(raw)
-    assert receipt["readback_target"] == card.path  # D-181 review: the evidence names what was read
+    assert receipt["readback_target"] == card.path  # D-187 review: the evidence names what was read
     beats = [line for line in _progress(writer_case) if line["stage"] == "readback" and line.get("detail") == "heartbeat"]
     assert len(beats) >= 4
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_a_writer_whose_child_does_the_io_is_not_stalled(writer_case, tmp_path):
-    # D-181 review: only the launched PID was sampled, so a wrapper that waits
+    # D-187 review: only the launched PID was sampled, so a wrapper that waits
     # while its child writes looked idle and was killed mid-write.
     out = tmp_path / "child-writes.bin"
     child = (f'"{sys.executable}" -c "import time; f=open(r\'{out}\', \'ab\', buffering=0); '
@@ -1508,7 +1508,7 @@ def test_the_preflight_measures_the_card_and_predicts_the_job(writer_case, tmp_p
     assert "Pre-flight: card read" in completed.stdout
     receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
     assert receipt["preflight"]["read_mbps"] == measured["read_mbps"]
-    assert receipt["fixture"] is True  # D-182 review: fixture evidence says so
+    assert receipt["fixture"] is True  # D-188 review: fixture evidence says so
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -1559,7 +1559,7 @@ def test_the_plan_pins_the_inserted_cards_identity(writer_case, tmp_path):
 def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp_path, card_signature):
     plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=0x1A2B3C4D)
     # Same reader serial and size, and Get-Disk's cache still shows the planned
-    # signature; the card's own first sector is what counts (D-182 review).
+    # signature; the card's own first sector is what counts (D-188 review).
     writer_case["readback"].write_bytes(_mbr_raw(card_signature))
     boot = tmp_path / "boot"
     boot.mkdir()
@@ -1633,7 +1633,7 @@ def test_resume_accepts_a_card_with_the_images_mbr_signature(writer_case, tmp_pa
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_resume_refuses_a_card_that_already_has_a_bundle(writer_case, tmp_path):
-    # D-181 review: the readback would read the whole card, then fail on the extra file.
+    # D-187 review: the readback would read the whole card, then fail on the extra file.
     boot = tmp_path / "boot"
     (boot / "rosy-provision").mkdir(parents=True)
 
@@ -1665,7 +1665,7 @@ def test_a_failure_while_the_bundle_is_copied_says_rewrite_not_resume(writer_cas
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 @pytest.mark.parametrize("resume", [False, True], ids=["write", "resume"])
 def test_a_readback_device_is_refused_for_a_real_disk(writer_case, tmp_path, resume):
-    # D-181 review MEDIUM: the readback read another device, and the bundle and
+    # D-187 review MEDIUM: the readback read another device, and the bundle and
     # receipt went to the real card.
     completed = _run(writer_case, *WRITE_CONFIRMATION, plan_only=False, omit=("-DiskInventoryJson",),
                      switches=("-ResumeAfterWrite",) if resume else ())
@@ -1688,7 +1688,7 @@ def test_a_writer_that_is_not_an_exe_is_refused_for_a_real_disk(writer_case):
 def test_the_watchdogs_kill_without_throwing_and_never_resume_an_unkillable_writer():
     text = SCRIPT.read_text(encoding="utf-8")
 
-    # D-181 review: taskkill stderr under ErrorAction Stop threw in PowerShell 5.1.
+    # D-187 review: taskkill stderr under ErrorAction Stop threw in PowerShell 5.1.
     assert "2>&1 | Out-Null" not in text
     assert '$ErrorActionPreference = "Continue"' in text and "& taskkill.exe /PID $Process.Id /T /F *> $null" in text
     assert "return $Process.WaitForExit(10000)" in text
@@ -1699,7 +1699,7 @@ def test_the_watchdogs_kill_without_throwing_and_never_resume_an_unkillable_writ
     assert "ParentProcessId" in text
 
 
-# --- D-182 review -------------------------------------------------------------
+# --- D-188 review -------------------------------------------------------------
 
 
 def _card_holding_the_release(case, tmp_path):
@@ -1801,7 +1801,7 @@ def test_a_readback_whose_heartbeat_lags_but_keeps_reading_is_not_stopped(writer
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_a_card_too_slow_for_the_probe_limit_is_slow_media(writer_case, tmp_path):
-    # D-182 review: a probe that timed out gave no rate and skipped the gate.
+    # D-188 review: a probe that timed out gave no rate and skipped the gate.
     raw = _multi_chunk_raw(1)
     _rerelease(writer_case, raw)
     card = PipeCard(raw, ["hang"])

@@ -28,12 +28,12 @@ param(
 # and go). The script elevates itself, and every attempt keeps its own log and
 # exit marker. The operator types the ERASE confirmation in the elevated window.
 #
-# D-181: each attempt also appends one JSON line per stage (and a heartbeat about
+# D-187: each attempt also appends one JSON line per stage (and a heartbeat about
 # every 60 s while writing and reading back) to <log>.progress.jsonl, and every
 # failure names the card state and the next step. -ResumeAfterWrite skips the
 # Imager write and re-runs the authoritative readback, bundle, receipt and registry.
 #
-# D-182: -Detach (the operator default) starts the elevated write in its own
+# D-188: -Detach (the operator default) starts the elevated write in its own
 # window with one UAC prompt and returns at once, printing the log, progress and
 # status-command paths; the write survives this console or agent session closing.
 # card-write-status.ps1 -LogPath <log> reads the progress file without elevation.
@@ -47,7 +47,7 @@ function Fail([string]$Message) {
 
 $PlanPath = (Resolve-Path -LiteralPath $PlanPath).ProviderPath
 $ReleaseDir = (Resolve-Path -LiteralPath $ReleaseDir).ProviderPath
-# D-182 review: the elevated window starts in C:\Windows\System32, so a relative
+# D-188 review: the elevated window starts in C:\Windows\System32, so a relative
 # path would split the progress file and lose the exit marker. Paths are made
 # absolute against this console's location (PowerShell's, which
 # [IO.Path]::GetFullPath does not follow). The writer is always a file path; a
@@ -115,7 +115,7 @@ function Get-LastProgress {
     try { return (Get-Content -LiteralPath $progressPath -Tail 1 | ConvertFrom-Json) } catch { return $null }
 }
 
-# Same line format as prepare-rosy-sd.ps1 (D-181), flushed at once.
+# Same line format as prepare-rosy-sd.ps1 (D-187), flushed at once.
 function Add-ProgressLine([string]$Stage, [string]$CardState, [string]$Detail, [string]$Next) {
     $line = [ordered]@{ ts = [DateTime]::UtcNow.ToString("o"); stage = $Stage; card_state = $CardState }
     if ($Detail) { $line["detail"] = $Detail }

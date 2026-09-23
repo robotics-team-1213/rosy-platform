@@ -46,7 +46,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# D-181: once the release checks start, every failure names the stage, what is on
+# D-187: once the release checks start, every failure names the stage, what is on
 # the card and the operator's next step, and is appended to the progress file.
 $script:stage = ""
 $script:cardState = "untouched"
@@ -95,7 +95,7 @@ function Get-NextStep {
         "writing" { return "the card is partially written: $fullWriteNext" }
         "written-unverified" { return $resumeNext }
         "verified-no-bundle" { return $resumeNext }
-        # D-182 (D-181 review): a bundle half-copied to the card makes the readback
+        # D-188 (D-187 review): a bundle half-copied to the card makes the readback
         # see an extra file, so resume cannot finish it.
         "bundle-partial" { return "a partial provisioning bundle may be on the card and cannot be resumed: $fullWriteNext" }
         "complete" { return "the card has its bundle but no receipt: check the registry file, then $fullWriteNext" }
@@ -105,7 +105,7 @@ function Get-NextStep {
 
 function Format-Failure([string]$Message, [string]$Next) {
     if (-not $Next) { $Next = Get-NextStep }
-    # D-182: the failed line carries the next step, so the status command can show it.
+    # D-188: the failed line carries the next step, so the status command can show it.
     $extra = [ordered]@{ next = $Next }
     if ($script:failureKind) { $extra["kind"] = $script:failureKind }
     Add-ProgressLine "failed" $script:cardState "$($script:stage): $Message" $null $extra
@@ -185,7 +185,7 @@ function Read-DiskInventory([string]$FixturePath) {
         ForEach-Object { Complete-DiskSerial $_ })
 }
 
-# D-182: the serial names the reader, not the card. Cheap readers share dummy
+# D-188: the serial names the reader, not the card. Cheap readers share dummy
 # serials (000000000207 is a known Genesys one), so the plan also pins the
 # inserted card's own identity: its MBR disk signature or GPT disk GUID.
 function Get-CardIdentity([object]$Disk) {
@@ -200,7 +200,7 @@ function Get-CardIdentity([object]$Disk) {
     [pscustomobject]@{ Signature = $signature; Guid = $guid }
 }
 
-# D-182 review: a card that already holds this release is accepted only as the
+# D-188 review: a card that already holds this release is accepted only as the
 # leftover of an earlier attempt of this same plan: a progress file of this plan
 # whose Imager write started. Its provisioning bundle, if any, means it was
 # finished for some robot, and it is never erased under another plan.
@@ -241,7 +241,7 @@ function Test-EarlierWriteOfThisPlan {
 function Assert-PlannedCard([object]$Disk, [object]$Sector) {
     if (-not $reviewedPlan) { return }
     if ($planKeys -cnotcontains "disk_signature" -or $planKeys -cnotcontains "disk_guid") {
-        Write-Warning "the reviewed plan records no card identity (made before D-182); check the card label before the confirmation"
+        Write-Warning "the reviewed plan records no card identity (made before D-188); check the card label before the confirmation"
         return
     }
     $planned = [pscustomobject]@{
@@ -249,7 +249,7 @@ function Assert-PlannedCard([object]$Disk, [object]$Sector) {
         Guid = $(if ($reviewedPlan.disk_guid) { [string]$reviewedPlan.disk_guid } else { $null })
     }
     $found = Get-CardIdentity $Disk
-    # The bytes read from the card win over what Get-Disk last cached (D-182 review:
+    # The bytes read from the card win over what Get-Disk last cached (D-188 review:
     # a sector that was read and holds no signature, or 00000000, means none).
     if ($Sector -and $Sector.Read) {
         $found.Signature = $(if ($Sector.Signature -and $Sector.Signature -ne "00000000") { [string]$Sector.Signature } else { $null })
@@ -424,7 +424,7 @@ if ($ReprovisionReceipt) {
     # Typed checks: in PowerShell 5.1 [bool]"false" is True and [int]$null is 0.
     $exitCode = $reprovision.writer_exit_code
     $verified = $reprovision.media_readback.verified
-    # D-181: a -ResumeAfterWrite receipt has no Imager exit code; its full readback is the proof.
+    # D-187: a -ResumeAfterWrite receipt has no Imager exit code; its full readback is the proof.
     $resumed = $receiptKeys -ccontains "resumed_after_write" -and $reprovision.resumed_after_write -is [bool] -and $reprovision.resumed_after_write
     $writerProven = ($exitCode -is [int] -or $exitCode -is [long]) -and $exitCode -eq 0
     if ($resumed -and $null -eq $exitCode) { $writerProven = $true }
@@ -519,13 +519,13 @@ if ($CountryCode -cnotmatch '^[A-Z]{2}$') { Fail "CountryCode must be two upperc
 if ($ReleaseId -notmatch '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$') { Fail "ReleaseId is invalid" }
 if ($FleetEndpoint -notmatch '^https://') { Fail "FleetEndpoint must use HTTPS" }
 if ([string]::IsNullOrWhiteSpace($FleetTrustProfile)) { Fail "FleetTrustProfile is required" }
-# D-181 review: a readback of another device would pass while the bundle and
+# D-187 review: a readback of another device would pass while the bundle and
 # receipt went to the real card. -ReadbackDevice and a non-.exe writer are test
 # fixtures, accepted only together with a fixture disk inventory.
 if ($ReadbackDevice -and -not $DiskInventoryJson) {
     Fail "-ReadbackDevice is a test fixture option and is refused for a real disk (with or without -ResumeAfterWrite)"
 }
-# D-182 review: fixture mode is bound to fixture targets too; a fixture
+# D-188 review: fixture mode is bound to fixture targets too; a fixture
 # inventory must never drive a real writer or read back a real device.
 if ($DiskInventoryJson -and -not $PlanOnly -and [IO.Path]::GetExtension($RpiImager) -eq ".exe") {
     Fail "a fixture disk inventory (-DiskInventoryJson) cannot drive an .exe writer; fixtures use a stand-in writer"
@@ -727,7 +727,7 @@ if ($PlanOnly) {
     exit 0
 }
 
-# D-182 pre-flight, before the ERASE confirmation: a timed, read-only sequential
+# D-188 pre-flight, before the ERASE confirmation: a timed, read-only sequential
 # read of the card start predicts the job, the card's own identity is checked
 # against the plan, and slow media is flagged. -PlanOnly cannot do this: opening
 # \\.\PhysicalDriveN needs the elevation that only the write has.
@@ -801,7 +801,7 @@ if ($ResumeAfterWrite) {
         $script:cardState = "unknown"
         Fail ("the card does not hold this release's image: its MBR disk signature is {0}, the image's is {1}" -f $(if ($deviceSector.Signature) { $deviceSector.Signature } else { "none" }), $imageSignature) "check that the card this plan wrote is in the reader (label); if it is, its write never reached the partition table: $fullWriteNext"
     }
-    # D-181 review: a bundle already on the card makes the readback fail as a
+    # D-187 review: a bundle already on the card makes the readback fail as a
     # mismatch after the full read; stop before spending that hour.
     $existingBundle = Find-ExistingBundle
     if ($existingBundle) {
@@ -842,13 +842,13 @@ if (-not $DiskInventoryJson) {
     }
 }
 # The card identity once more, right before the erase, from the card's own first
-# sector (D-182 review: not only Get-Disk, whose cache can lag a card swap).
+# sector (D-188 review: not only Get-Disk, whose cache can lag a card swap).
 if (-not $ResumeAfterWrite) {
     Assert-PlannedCard $(if ($DiskInventoryJson) { $secondDisk } else { $writeDisk }) (Get-DeviceSector (Invoke-Probe 512 30))
 }
 
 # Imager CPU and I/O counters summed over its whole process tree; $null once
-# the root is gone. D-181 review: a launcher or wrapper can look idle while its
+# the root is gone. D-187 review: a launcher or wrapper can look idle while its
 # child writes, and watching only the root PID would kill a working write.
 function Get-WriterSample([int]$RootId) {
     $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
@@ -890,7 +890,7 @@ function Get-WriterSample([int]$RootId) {
     }
 }
 
-# D-181 review: taskkill writes to stderr when a process is already gone, and
+# D-187 review: taskkill writes to stderr when a process is already gone, and
 # native stderr under ErrorAction Stop throws in PowerShell 5.1, which skipped the
 # wait and the card-state update. Returns whether the tree is really gone.
 function Stop-ProcessTree([System.Diagnostics.Process]$Process) {
@@ -912,7 +912,7 @@ function ConvertTo-ProcessArgument([string]$Value) {
 
 $writerExitCode = $null
 if ($ResumeAfterWrite) {
-    # D-181: the readback below is authoritative, so a card that matches the signed
+    # D-187: the readback below is authoritative, so a card that matches the signed
     # image byte for byte is good however it was written. Every pre-write check
     # above (signature, serial, fingerprint, plan, confirmation) still ran.
     Set-Stage "write" "written-unverified" "skipped: -ResumeAfterWrite" ([ordered]@{ total = $imageRawSize })
@@ -928,7 +928,7 @@ else {
         ('"{0}"' -f $physicalDrive)
     )
     Set-Stage "write" "writing" "raw image $imageRawSize bytes" ([ordered]@{ total = $imageRawSize })
-    # D-181: no Start-Process -Wait. Release 005 Imager wrote every byte, then sat
+    # D-187: no Start-Process -Wait. Release 005 Imager wrote every byte, then sat
     # with 0 CPU and 0 I/O for 23 minutes while -Wait waited forever.
     $writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -PassThru
     $null = $writerProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
@@ -965,7 +965,7 @@ else {
 }
 
 Set-Stage "readback" "written-unverified" "" ([ordered]@{ total = $imageRawSize })
-# D-182: the readback runs as a watched process. Its heartbeats land in the
+# D-188: the readback runs as a watched process. Its heartbeats land in the
 # progress file; if the verified byte count stops rising for
 # -ReadbackStallMinutes, the verifier is stopped and the failure is an I/O one
 # (release 005: the reader dropped out and the readback sat for an hour).
@@ -1030,7 +1030,7 @@ try {
     $lastAdvance = [DateTime]::UtcNow
     while (-not $readbackProcess.WaitForExit($readbackPoll)) {
         $seen = Read-NewReadbackBytes
-        # D-182 review: the heartbeat is advisory and can fail to land (antivirus
+        # D-188 review: the heartbeat is advisory and can fail to land (antivirus
         # lock, full disk); bytes the verifier reads also count as progress.
         $sample = $(if ($seen -gt $verifiedBytes) { $null } else { Get-WriterSample $readbackProcess.Id })
         if ($seen -gt $verifiedBytes) {
@@ -1160,7 +1160,7 @@ try {
     }
     $bootRoot = Resolve-BootMount $DiskNumber $BootMountPath ([bool]$DiskInventoryJson)
     $bundleDirectory = Join-Path $bootRoot "rosy-provision"
-    # D-181 review: from the first byte on the boot partition, a failure (card
+    # D-187 review: from the first byte on the boot partition, a failure (card
     # pulled mid-copy) leaves a partial bundle that the readback would call a
     # mismatch, so the advice is a full rewrite, not -ResumeAfterWrite.
     Set-Stage "bundle-writing" "bundle-partial" ""
@@ -1206,7 +1206,7 @@ $receipt = [ordered]@{
     writer_exit_code = $writerExitCode
     resumed_after_write = [bool]$ResumeAfterWrite
     media_readback = $mediaReadback
-    # D-181 review: the evidence names the device that was read back.
+    # D-187 review: the evidence names the device that was read back.
     readback_target = $readbackTarget
     fixture = [bool]$DiskInventoryJson
     preflight = $preflight

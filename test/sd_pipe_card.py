@@ -1,4 +1,4 @@
-"""A stand-in card whose reads can hang or trickle (D-182 readback watchdog).
+"""A stand-in card whose reads can hang or trickle (D-188 readback watchdog).
 
 A file stand-in always answers at once. A Windows named pipe lets a test decide
 how fast the "card" hands out its bytes: the verifier opens ``\\\\.\\pipe\\<name>``

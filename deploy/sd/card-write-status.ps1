@@ -6,9 +6,9 @@ param(
     [double]$StallMinutes = 5,
     [string]$NowUtc
 )
-# Where is the card write, how fast, when does it finish, is it stuck? (D-182)
+# Where is the card write, how fast, when does it finish, is it stuck? (D-188)
 #
-# Reads the D-181 progress file <log>.progress.jsonl that write-card.ps1 and
+# Reads the D-187 progress file <log>.progress.jsonl that write-card.ps1 and
 # prepare-rosy-sd.ps1 append to. Needs no elevation and never touches the card:
 # write-card.ps1 creates the progress file as the operator before it elevates,
 # and the elevated window only appends to it.

@@ -1,7 +1,7 @@
-## D-182 SD 카드 쓰기는 전문가가 지켜보지 않아도 되게 한다: 분리 실행, 상태 명령, readback 멈춤 감시, 사전 속도 측정, 카드 신원
+## D-188 SD 카드 쓰기는 전문가가 지켜보지 않아도 되게 한다: 분리 실행, 상태 명령, readback 멈춤 감시, 사전 속도 측정, 카드 신원
 
-**Status:** Accepted (2026-09-24). [D-181](D-181-sd-writer-failure-handling.md)(실패 감지·카드 상태·resume)을 보강하고
-D-181 리뷰 지적 일곱 건을 함께 반영한다. [D-180](D-180-sd-write-single-authoritative-verify.md)의 "readback 한 번이 권위 있는
+**Status:** Accepted (2026-09-24). [D-187](D-187-sd-writer-failure-handling.md)(실패 감지·카드 상태·resume)을 보강하고
+D-187 리뷰 지적 일곱 건을 함께 반영한다. [D-180](D-180-sd-write-single-authoritative-verify.md)의 "readback 한 번이 권위 있는
 검사"는 그대로다.
 
 **Context:** 005 카드(32 GB, 리더기 시리얼 `000000000207`)의 실측이다.
@@ -12,7 +12,7 @@ D-181 리뷰 지적 일곱 건을 함께 반영한다. [D-180](D-180-sd-write-si
 - 앞 카드 004는 전체 48분이었다.
 - 진행을 재는 도구가 없어서, 운영하던 에이전트가 완료 예상 시각을 여러 번 틀리게 말했다.
 
-D-181 이후에도 사람 손에 남은 일이 있었다. 분리 실행 명령을 손으로 조립해야 했고, 진행 파일은 JSON을 직접 읽어야 했다.
+D-187 이후에도 사람 손에 남은 일이 있었다. 분리 실행 명령을 손으로 조립해야 했고, 진행 파일은 JSON을 직접 읽어야 했다.
 readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다른 카드는 구분하지 못했다.
 
 **Decision:**
@@ -46,7 +46,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
    - verifier도 스스로 `--stall-seconds`(writer가 한도의 두 배로 넘김, 단독 실행 기본 600초)를 둔다. 장치 쪽 queue가 그 시간 동안
      비면 `kind: io`로 exit 3을 낸다. 막힌 읽기 스레드는 daemon이므로 기다리지 않고 `os._exit`로 끝낸다(리뷰 5). 두 감시를 모두 둔다.
 4. **사전 속도 측정 (stage `preflight`, ERASE 확인 전).** `verify-media-readback.py --probe`는 네 가지를 한다.
-   - xz index로 raw 크기를 읽는다(D-181의 `--raw-size` 호출을 대신한다).
+   - xz index로 raw 크기를 읽는다(D-187의 `--raw-size` 호출을 대신한다).
    - 이미지 첫 섹터에서 MBR disk signature를 읽는다.
    - 대상 장치 앞 128 MiB(`-ProbeBytes`)를 읽기 전용으로 순서대로 읽어 시간을 잰다.
    - 장치의 MBR signature를 읽는다.
@@ -69,7 +69,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
    - `-ResumeAfterWrite`에서는 쓰기 뒤 signature가 바뀌는 것이 정상이다. 그래서 plan 대신 장치 MBR signature가 이미지의 것과
      같은지 본다. 다르면 readback 한 시간을 쓰기 전에 `card_state=unknown`으로 멈춘다. 이미지에 signature가 없거나 장치 첫 섹터를
      못 읽으면 경고하고 readback에 맡긴다.
-   - D-182 이전 plan에는 이 필드가 없다. 그런 plan은 경고만 한다.
+   - D-188 이전 plan에는 이 필드가 없다. 그런 plan은 경고만 한다.
 6. **boot 파티션의 파일 밖 영역을 byte 단위로 비교 (리뷰 MEDIUM-2).** Windows가 boot 파티션을 건드려 파일 단위 비교로
    넘어가도 다음 세 곳은 byte 단위로 비교한다.
    - 카드의 backup boot sector(BPB `0x32`)와 primary.
@@ -80,7 +80,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
    허용 목록은 `FSINFO_TOLERATED`, `FAT1_STATUS_BITS` 상수로 코드에 드러나 있다. 증거 `boot_partition.non_file_areas`에는
    비교한 바이트 수, backup boot sector 위치, 허용 필드 목록, 실제로 달랐던 허용 필드가 남는다. backup FSInfo(보통 섹터 7)는
    허용하지 않는다. 실제 카드에서 Windows가 그것도 바꾸면 목록에 명시적으로 더한다.
-7. **D-181 리뷰 반영.**
+7. **D-187 리뷰 반영.**
    - (MEDIUM) `-ReadbackDevice`는 fixture 전용이다. `-DiskInventoryJson` 없이 쓰면 resume 여부와 관계없이 거부한다.
      receipt에 `readback_target`을 남긴다.
    - (MEDIUM) Imager 멈춤 감시는 `Win32_Process`를 `ParentProcessId`로 따라가 프로세스 트리 전체의 CPU·I/O를 합산한다.
@@ -94,7 +94,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
    - (LOW) boot 파티션에 첫 byte를 쓰기 직전에 stage `bundle-writing`, `card_state=bundle-partial`를 기록한다.
      그 뒤 실패하면 `next:`는 전체 재기록이다. `-ResumeAfterWrite`는 boot 파티션에 `rosy-provision/`이 이미 있으면 readback 전에 거부한다.
 
-8. **D-182 리뷰 반영.**
+8. **D-188 리뷰 반영.**
    - (MEDIUM) 카드가 이 릴리스의 MBR signature를 가질 때는 두 조건을 모두 만족해야 받아들인다. 첫째, boot 파티션에
      `rosy-provision/`이 없어야 한다. 둘째, 같은 plan(첫 진행 줄의 `plan` 필드)으로 Imager 쓰기를 시작한 이전 시도의 진행 파일이
      plan·로그 폴더에 있어야 한다. 그렇지 않으면 "different card"로 `untouched` 멈춤이다. 이렇게 하면 로봇 A용으로 다 쓰고 아직
@@ -115,7 +115,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
 진행 파일 단계는 `launch` → `verify-signature` → `select-disk` → `preflight` → `confirm` → `write` → `readback` → `bundle` →
 `bundle-writing` → `receipt` → `done`(실패는 `failed`)이다. `card_state`에는 `bundle-partial`이 더해진다.
 
-**실패 유형표 (D-181 표에 더하거나 바꾸는 행):**
+**실패 유형표 (D-187 표에 더하거나 바꾸는 행):**
 
 | 실패 | 감지 | 도구 자동 동작 | 카드 상태 | 운영자 다음 행동 |
 |---|---|---|---|---|
@@ -134,7 +134,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
 | probe가 제한 시간 안에 끝나지 않음 | `-ProbeSeconds` 초과, 읽은 양으로 속도 계산 | 느린 매체로 취급 | `untouched` | 다른 리더기·포트, 또는 `-AcceptSlowMedia` |
 | boot 파티션 파일 밖 영역 차이 | reserved·FAT 2·backup boot sector 비교 | readback 불일치로 멈춤 | `written-unverified` | 전체 쓰기, 반복되면 카드 교체 |
 
-**D-181 "여전히 사람이 해야 하는 일"에서 닫는 것:**
+**D-187 "여전히 사람이 해야 하는 일"에서 닫는 것:**
 
 - 닫음: "readback은 heartbeat만 남기고 멈춤 감시는 없다" → 결정 3.
 - 닫음: "같은 리더기에 꽂힌 같은 용량의 다른 카드는 구분하지 못한다" → 결정 5(신원 없는 공장 초기 카드끼리는 여전히 구분 못 한다).

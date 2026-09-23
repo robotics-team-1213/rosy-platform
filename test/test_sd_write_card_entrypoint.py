@@ -68,7 +68,7 @@ def test_everything_is_derived_from_the_plan_and_the_release(case):
     assert log.parent == case["evidence"]
     assert log.name.startswith(f"write-{RELEASE}-rosy-pinky-e4us-") and log.suffix == ".log"
     assert resolved["exit_marker"] == str(log) + ".exit"
-    # D-181: the stage file sits next to the log and the writer gets its path.
+    # D-187: the stage file sits next to the log and the writer gets its path.
     assert resolved["progress"] == str(log) + ".progress.jsonl"
     assert arguments["ProgressPath"] == resolved["progress"]
     assert arguments["WriterStallMinutes"] == 5
@@ -153,7 +153,7 @@ def test_the_entry_point_elevates_itself_and_keeps_every_attempt():
 
 
 def test_the_operator_is_told_where_progress_is_and_what_state_a_lost_write_left():
-    # D-181: release 005's elevated write vanished and its transcript sat at its header.
+    # D-187: release 005's elevated write vanished and its transcript sat at its header.
     text = SCRIPT.read_text(encoding="utf-8")
 
     assert 'Write-Output "Progress: $progressPath' in text
@@ -162,7 +162,7 @@ def test_the_operator_is_told_where_progress_is_and_what_state_a_lost_write_left
     assert "last stage=$($last.stage) card_state=$($last.card_state)" in text
 
 
-# --- D-182: detached launch, UAC failure, status command --------------------
+# --- D-188: detached launch, UAC failure, status command --------------------
 # Release 005: a write launched from an agent session vanished with it, a
 # declined UAC prompt left no trace, and nothing measured progress, so the
 # operating agent repeatedly gave wrong completion times.
@@ -423,7 +423,7 @@ def test_the_status_command_needs_no_elevation():
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_relative_paths_are_made_absolute_before_the_elevated_window(case):
-    # D-182 review: the elevated window starts in C:\Windows\System32.
+    # D-188 review: the elevated window starts in C:\Windows\System32.
     command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
                "-PlanPath", str(case["plan"]), "-ReleaseDir", str(case["release"]),
                "-WifiProfile", "site-default", "-LogPath", r"logs\attempt.log",

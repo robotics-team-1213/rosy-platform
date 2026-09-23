@@ -68,7 +68,7 @@ def test_readback_accepts_exact_decompressed_image_prefix(tmp_path):
     }
 
 
-# --- D-181: the compared file is the signed one; liveness; unreadable card ---
+# --- D-187: the compared file is the signed one; liveness; unreadable card ---
 
 
 def test_image_sha256_covers_the_whole_compressed_file_even_after_the_xz_stream(tmp_path):
@@ -381,7 +381,7 @@ def test_windows_mount_changes_to_the_boot_partition_are_verified_as_files(tmp_p
         "mode": "files",
         "entries_verified": 3,
         "windows_extras": ["System Volume Information", "System Volume Information/WPSettings.dat"],
-        # D-182: the areas without files are still compared and reported.
+        # D-188: the areas without files are still compared and reported.
         "non_file_areas": {
             "reserved_bytes": RESERVED * SECTOR,
             "fat_copies_compared": 2,
@@ -531,7 +531,7 @@ def _outcome(verify, image: Path, device: Path):
         evidence = dict(verify(image, str(device)))
     except Exception as exc:  # the verdict is the exception type and message
         return ("failed", type(exc).__name__, str(exc))
-    evidence.pop("image_sha256", None)  # D-181 addition, checked separately
+    evidence.pop("image_sha256", None)  # D-187 addition, checked separately
     return ("verified", evidence)
 
 
@@ -674,7 +674,7 @@ def test_the_prefetch_worker_hands_over_its_exception_after_its_chunks():
     assert _no_readback_threads()
 
 
-# --- D-182: boot partition areas that hold no file (review MEDIUM-2) ------
+# --- D-188: boot partition areas that hold no file (review MEDIUM-2) ------
 # The file-level fallback alone would miss a changed byte in the reserved
 # region, FAT copy 2 or the backup boot sector. Only the FSInfo free-cluster
 # hints and the FAT[1] shutdown/error bits Windows toggles are tolerated.
@@ -741,7 +741,7 @@ def test_a_flipped_byte_outside_the_files_fails_the_boot_partition(tmp_path, whe
     assert f"byte offset {offset}" in completed.stderr
 
 
-# --- D-182: pre-flight probe, stalled reads, advisory heartbeat ------------
+# --- D-188: pre-flight probe, stalled reads, advisory heartbeat ------------
 
 import time
 
@@ -807,7 +807,7 @@ def test_the_probe_does_not_time_a_read_too_short_to_mean_anything(tmp_path):
 
 
 def test_a_wedged_card_read_fails_as_io_instead_of_hanging(tmp_path):
-    # D-181 review: queue.get() and join() without a timeout waited forever.
+    # D-187 review: queue.get() and join() without a timeout waited forever.
     raw = _raw_multi_chunk()
     image, error = tmp_path / "rosy.img.xz", tmp_path / "error.json"
     image.write_bytes(lzma.compress(raw))
@@ -846,7 +846,7 @@ def test_a_slow_card_that_keeps_moving_is_not_a_stall(tmp_path):
 
 
 def test_a_progress_file_that_cannot_be_written_does_not_fail_a_good_card(tmp_path):
-    # D-181 review: a heartbeat OSError was reported as kind "image".
+    # D-187 review: a heartbeat OSError was reported as kind "image".
     raw = b"heartbeat" * 1_000_000
     image, device = tmp_path / "rosy.img.xz", tmp_path / "card.bin"
     image.write_bytes(lzma.compress(raw))
@@ -865,7 +865,7 @@ def test_a_progress_file_that_cannot_be_written_does_not_fail_a_good_card(tmp_pa
     assert "MEDIA_READBACK_HEARTBEAT_NOT_WRITTEN" in completed.stderr
 
 
-# --- D-182 review ---------------------------------------------------------------
+# --- D-188 review ---------------------------------------------------------------
 
 
 def test_the_probe_says_whether_it_read_the_sector_and_keeps_a_zero_signature(tmp_path):
@@ -898,7 +898,7 @@ def test_a_probe_that_times_out_reports_the_rate_it_managed(tmp_path):
 
 
 def test_closing_a_wedged_worker_is_bounded_on_every_path(monkeypatch):
-    # D-182 review: after a mismatch the device worker was still joined without a timeout.
+    # D-188 review: after a mismatch the device worker was still joined without a timeout.
     module = _module()
     monkeypatch.setattr(module, "CLOSE_JOIN_SECONDS", 0.3)
     release = threading.Event()
