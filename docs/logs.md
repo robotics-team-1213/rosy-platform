@@ -1749,3 +1749,11 @@
 - gate 변화: 없음.
 - 결정: D-185 R1
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(data): keep teleop learning clips under data/teleop/learning
+
+- 변경: 루트 `video/`의 텔레옵 학습 영상 7개를 `data/teleop/learning/`으로 옮겼다. 그 폴더만 커밋하고, 텔레옵·주행 세션 기록은 gitignore에 남긴다. D-186에 그 예외를 한 줄 더했다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py -q` 11 passed (2026-09-24 Windows). `git check-ignore`는 세션 경로만 무시하고 학습 영상은 무시하지 않는다.
+- gate 변화: 없음
+- 결정: D-186
+- 교훈: 없음

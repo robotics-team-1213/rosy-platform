@@ -5,14 +5,15 @@
 
 | 폴더 | 담는 것 |
 |---|---|
-| `teleop/` | 수동 주행으로 확인하면서 적은 명령과 메모 |
-| `drive/` | 주행 기록. 궤적 줄과 rosbag/MCAP |
+| `teleop/` | 수동 주행으로 확인하면서 적은 명령과 메모. 세션은 커밋하지 않음 |
+| `teleop/learning/` | 학습용으로 남기는 텔레옵 영상. 이 폴더만 커밋한다 |
+| `drive/` | 주행 기록. 궤적 줄과 rosbag/MCAP. 세션은 커밋하지 않음 |
 
 세션을 만들 때:
 
 ```text
-python tools/run_data.py teleop forward-check
-python tools/run_data.py drive map-loop
+python tools/run_data.py new teleop forward-check
+python tools/run_data.py new drive map-loop
 python tools/run_data.py list teleop
 python tools/run_data.py write data/teleop/<session> "{\"linear\":0.1,\"angular\":0}"
 ```
