@@ -141,7 +141,7 @@ class WanderNode(Node, Senses, Judge, Contact, Motion, Navigator):
         self.create_subscription(Float32, 'safety/min_range', self.on_front_range, 10)
         self.create_subscription(Float32, 'safety/rear_range', self.on_rear_range, 10)
         self.create_subscription(Float32, 'safety/left_range', self.on_left, 10)
-        self.create_subscription(String, 'safety/observation', self.on_observation, 10)
+        self.create_subscription(String, 'safety/observation', self.on_observation, 1)  # latest only (D-185 R2)
         self.create_subscription(Float32, 'safety/right_range', self.on_right, 10)
         self.create_subscription(Float32, 'safety/rear_left', self.on_rear_left, 10)
         self.create_subscription(Float32, 'safety/rear_right', self.on_rear_right, 10)
@@ -162,7 +162,7 @@ class WanderNode(Node, Senses, Judge, Contact, Motion, Navigator):
         self.create_subscription(String, 'wander/cmd', self.on_cmd, 10)
         self.motion_limits = {}
         self.motion_limits_received = None
-        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 10)
+        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 1)  # latest only (D-185 R2)
         self.create_subscription(Bool, 'wander/enable', self.on_enable, 10)
         self.create_subscription(
             Odometry, self.get_parameter('odom_topic').value, self.on_odom, 10

@@ -76,7 +76,7 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         self.gate_decision = None
         self.create_subscription(String, 'safety/profile', self.on_safety_profile, latched)
         self.create_subscription(String, 'calibration/applied', self.on_applied, latched)
-        self.create_subscription(String, 'safety/decision', self.on_gate_decision, 10)
+        self.create_subscription(String, 'safety/decision', self.on_gate_decision, 1)  # latest only (D-185 R2)
         self.raw_pub = self.create_publisher(Twist, 'cmd_vel_raw', 10)
         self.wander_pub = self.create_publisher(String, 'wander/cmd', 10)
         self.create_subscription(String, 'calibration/cmd', self.on_command, 10)
@@ -91,13 +91,13 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
         self.hazards = {}
         self.safety_limits = (0., {})
-        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 10)
+        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 1)  # latest only (D-185 R2)
         self.rear_clear = (0., False)
         self.create_subscription(Bool, 'safety/can_reverse',
-            lambda msg: setattr(self, 'rear_clear', (time.monotonic(), msg.data)), 10)
+            lambda msg: setattr(self, 'rear_clear', (time.monotonic(), msg.data)), 1)  # latest only (D-185 R2)
         for topic in ('/safety/blocked', '/safety/cliff', '/safety/tilt', '/safety/pickup'):
             self.create_subscription(Bool, topic.lstrip('/'),
-                lambda msg, key=topic: self.hazards.__setitem__(key, (time.monotonic(), msg.data)), 10)
+                lambda msg, key=topic: self.hazards.__setitem__(key, (time.monotonic(), msg.data)), 1)  # latest only (D-185 R2)
         self.tf = RobotTransformBuffer(self)
         self.listener = TransformListener(self.tf, self)
         self.scan_frame = None
