@@ -1,7 +1,7 @@
 ## D-183 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다
 
-**Status:** Proposed (2026-09-23). `control/watch.py`의 표는 이 기록만으로
-바뀌지 않는다.
+**Status:** Accepted (2026-09-24). `inspect(..., mode='product'|'standalone')`가
+표 하나를 고른다. `watch_node`의 `graph_mode` 기본값은 `standalone`이다.
 
 **Context:** D-2와 D-38은 제품 런타임에서 최종 `/cmd_vel`의 발행자가 CORE
 하나라고 정한다. D-149는 control만 단독으로 띄울 때 레거시 safety 게이트가
@@ -29,5 +29,4 @@
 본다. control 단독 모드는 자기 표를 본다. 표를 나누기 전에는 감시 결과가
 제품 그래프의 증거가 아니다.
 
-**Validation:** 구현 전. 두 표의 토픽·노드 집합이 시험으로 고정되고, 제품
-표의 `/cmd_vel` 소유자가 `core`뿐이면 이 결정을 Accepted로 올릴 수 있다.
+**Validation:** `src/apps/control/test/test_watch.py`.

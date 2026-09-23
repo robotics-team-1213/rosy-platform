@@ -1670,6 +1670,14 @@
 - 결정: 2차 실측이 1차 판정을 그대로 재확인했으므로 기준선 **값은 유지**, 정정은 근거 표기까지만 반영한다. 회차 산출은 .py import만 파싱하므로 navigation의 launch XML 15개(assembly `web_*`)는 파일·라인만 집계 — launch 참조 판정 권위는 D-168 스캐너에 둔다(채점표 §7 한계 기록).
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · merge(docs): origin/main 병합 — ADR 번호 충돌 해소(D-176 복권, 장치 편입은 D-181 이명)
+
+- 변경: `git merge origin/main`(`ebf2516d`, PR #23 19건: D-176 부트 설정·폴백 AP, rosy-diag 2단계, SD 라이터)을 `1d2129af`로 병합했다. 충돌 3건 해소 — ① `docs/reference/ROSY ADR Log.md`: origin의 D-176(카드 `rosy-config.yaml`·폴백 AP, Accepted·pushed·코드 참조 25곳)이 번호를 유지하고, 로컬 장치 편입 ADR은 **D-181로 이명**(1차 후보 D-180은 미병합 `perf/sd-single-verify` 브랜치가 7분 먼저 선점·Accepted·시험 주석 3곳을 확보했으므로 양보). ② `docs/adr/` 파일 개명 `D-176-` → `D-181-device-surface-expansion-conditions.md` + H1 `## D-176` → `## D-181`(색인↔본문 일치). ③ `deploy/logs.md`·`deploy/index.md`: 양쪽 저널 블록을 버리지 않고 모두 보존하고 인덱스는 generate로 재생성. 부수 갱신: `docs/reference/AGENTS.md` 범위 D-181 + D-180 선점 선언, `docs/progress.md` evidence·adrs(D-176 제거·D-181 추가), remediation plan 후속 ADR 표기, `tools/harness/harness.yaml` `adr_gaps`에 D-180 선언(병합 시 제거 조건 명시).
+- 증거: 병합 커밋 `1d2129af`(앞 43·뒤 0). `python -m pytest test/ -q` 전체 회귀(병합 신규 15종 포함) + `rosy_harness.py generate`/`lint` — 아래 게이트 줄에 실측 수치.
+- gate 변화: 없음 — D-181은 Proposed 그대로, 기준선·ADR Status 불변.
+- 결정: 번호 선점 규칙을 "먼저 확정한 쪽이 번호 유지"로 확정 — origin의 Accepted·pushed·코드 참조(25곳) > 로컬 Proposed·미push, 그리고 같은 충돌에서 미병합 브랜치의 선점(22:45 D-180)도 로컬 재번호 후보보다 우선. `test/`의 D-176 참조 19+6곳은 전부 origin 부팅 설정 소유라 손대지 않았다.
+- 교훈: 병합 충돌 해결은 번호뿐 아니라 **세 번째 선점자**를 함께 확인해야 한다 — `git log --all -S"| D-180 |"`로 모든 ref를 뒤지기 전에는 D-180이 이미 다른 브랜치의 Accepted ADR임을 알 수 없었다. 선점이 확인되면 미발견 시점의 편집(5곳)을 한 번에 조정하는 편이 병합 후 재충돌보다 싸다.
+
 ## 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host
 
 - 변경: `deploy/robot/core_dev_overlay.py`가 허용 목록만 `/var/lib/rosy-dev`에 풀고, 바인드가 없으면 컨테이너를 다시 만들고 있으면 `rosy-core`만 재시작한다. 성공은 `core/__init__.py` 해시다. 개발 compose는 `name` 없이 프로젝트 `rosy-runtime`이다. `device_readback.py`는 환경 변수·마커·drop-in이 있으면 `device_runtime=HOLD`다. `sync-core-dev.ps1`과 apply/clear 래퍼가 그 모듈만 호출한다. 제품 유닛과 `install-pi.sh`는 그대로다.
@@ -1684,4 +1692,12 @@
 - 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 70 passed (2026-09-23 Windows).
 - gate 변화: 없음. G-6과 D-168 P2 예외는 이 기록만으로 바뀌지 않는다.
 - 결정: D-182, D-183, D-184 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(core,control): implement D-182, D-183, and D-184
+
+- 변경: 안전 작동은 `ROSY_SIMULATION_ACTUATION=1`만 본다. 파티션과 도메인 숫자는 `src/sim/gz_sim/config/simulation_actuation.yaml`에만 있다. `watch.py`는 product와 standalone 표를 나누고, 제품 `/cmd_vel` 소유자는 `core`뿐이다. 다른 패키지 동작 시험 30개 경로는 `KNOWN_EXTERNAL_BEHAVIOR_TESTS`로 고정했다. 세 ADR은 Accepted다. D-167 스냅샷과 D-168 P2 예외는 그대로다.
+- 증거: `python -m pytest test/test_policy_sim_literals.py test/test_behavior_test_ownership.py src/apps/control/test/test_watch.py src/core/core/test/test_control_policy_link.py src/core/core/test/test_absorption_output_graph.py -q` 57 passed, 10 skipped (2026-09-24 Windows).
+- gate 변화: 없음. G-7과 DEVICE 판정은 그대로다.
+- 결정: D-182, D-183, D-184 Accepted
 - 교훈: 없음

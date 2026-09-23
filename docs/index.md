@@ -128,8 +128,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · feat(core,control): implement D-182, D-183, and D-184
 - 2026-09-23 · uncommitted · docs(adr): D-182·D-183·D-184 경계 세 편을 Proposed로 기록
 - 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host
+- 2026-09-23 · uncommitted · merge(docs): origin/main 병합 — ADR 번호 충돌 해소(D-176 복권, 장치 편입은 D-181 이명)
 - 2026-09-23 · uncommitted · docs(adr): D-178 2차 회차 완료 — Accepted 승격 + 기준선 갱신
-- 2026-09-23 · uncommitted · docs(plan): D-179 반복 동작 세 문장
-- 2026-09-23 · uncommitted · docs(adr): D-179 벤치 CORE 읽기 전용 오버레이

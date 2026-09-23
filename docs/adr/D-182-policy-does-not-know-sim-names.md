@@ -1,7 +1,7 @@
 ## D-182 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다
 
-**Status:** Proposed (2026-09-23). 코드 이동과 래칫 시험은 이 결정의 구현이며,
-이 기록만으로 G-6이 GO가 되지 않는다.
+**Status:** Accepted (2026-09-24). 호스트 래칫이 세 정책 트리의 리터럴 0건을 본다.
+D-167 G-6의 2026-09-22 스냅샷은 그대로고, 장치 판정은 여전히 없다.
 
 **Context:** D-167 G-6은 안전·명령·내비게이션이 벤더와 시뮬을 몰라야 한다고 정하고,
 기준선을 HOLD로 뒀다. 이유는 `core_features/safety/manager.py`가
@@ -25,5 +25,5 @@
 **Consequences:** 시뮬 전용 분기가 필요하면 프로파일은 불리언이나 모드 값을
 넘긴다. G-6의 GO는 리터럴 제거와 그 시험 이후의 재판정이다.
 
-**Validation:** 구현 전. 호스트 시험이 세 트리의 리터럴 0건을 보면 이 결정을
-Accepted로 올릴 수 있다.
+**Validation:** `test/test_policy_sim_literals.py`. 프로파일은
+`src/sim/gz_sim/config/simulation_actuation.yaml`.

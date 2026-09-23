@@ -27,3 +27,11 @@
 - 결정: D-182, D-184 Proposed
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · feat(safety): D-182 simulation actuation is a mode flag
+
+- 변경: `safety/manager.py`가 파티션 이름과 도메인 227 대신 `ROSY_SIMULATION_ACTUATION=1`과 시뮬 시계를 본다.
+- 증거: `test/test_policy_sim_literals.py`와 `src/core/core/test/test_control_policy_link.py` 포함 57 passed, 10 skipped (2026-09-24 Windows).
+- gate 변화: 없음. SOURCE HOLD(자체 test/) 유지.
+- 결정: D-182 Accepted
+- 교훈: 없음
+

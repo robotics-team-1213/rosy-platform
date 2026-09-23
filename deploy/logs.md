@@ -680,6 +680,14 @@
 - 결정: D-176
 - 교훈: 호스트 파일시스템 테스트는 vfat의 고정 mode를 재현하지 못한다. 부트 파티션에 쓰는 코드는 chmod 거부를 가정한 테스트를 같이 둔다.
 
+## 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — D-176 부트 설정·폴백 AP, rosy-diag 2단계, SD 라이터
+
+- 변경: `ebf2516d`(PR #23 19건)을 `1d2129af`로 병합했다. 들어온 것: 카드 `rosy-config.yaml` 부트 설정 스택(`rosy_config.py`·`rosy-config-apply.py`·`rosy-network.py`·`rosy-config.service`·`rosy-network.service`, D-176), 업링크 없을 때 카드별 비밀번호 fallback AP, `rosy_diag_collect.py`·`rosy_diag_redact.py`·`collect-rosy-diagnostics.ps1`·`read-card-diagnostics.py`(diag 2단계), SD 라이터 `write-card` 진입점·단일 readback 검증, `verify-mounted-image.py`/__pycache__ 정련, `.gitattributes`·`ci.yml`. 충돌 3건은 ADR Log(D-176 복권·장치 편입 D-181 이명), `deploy/logs.md`(양쪽 블록 모두 보존), `deploy/index.md`(generate 재생성)으로 해소했다.
+- 증거: 병합 신규 시험 15종(`test_rosy_config`·`test_rosy_network_fallback`·`test_sd_write_card_entrypoint`·`test_card_diagnostics`·`test_boot_status_indicator` 등) 포함 `python -m pytest test/ -q` 전체 회귀 + `rosy_harness.py lint` — 아래 게이트 줄에 실측 수치.
+- gate 변화: 없음 — ARTIFACT/DEVICE HOLD 유지(D-176 Validation의 실기 확인은 다음 카드에서).
+- 결정: `deploy/logs.md` 충돌은 합치지 않고 **origin 블록 → HEAD 블록 순으로 두 벌 모두 보존**(append-only 저널). D-176 번호는 origin 쪽 부팅 설정이 유지, 기존 로컬 D-176(장치 편입)은 D-181로 이명했다.
+- 교훈: append-only 저널의 병합 충돌은 어느 쪽도 버리지 않는다 — `deploy/index.md`는 편집하지 말고 generate로 재생성한다(생성 파일 편집은 다음 생성에서 지워진다).
+
 ## 2026-09-23 · uncommitted · fix(deploy): second overlay apply restarts, and refuses a live motor slice
 
 - 변경: 바인드가 이미 있으면 `rosy-core`만 재시작한다. 모터·hardware 상태를 확인하지 못하면 풀기 전에 거절한다. 적용은 `sudo -n`이고 마커에 HEAD와 dirty를 남긴다. 네이티브는 서비스 마운트 안에서 해시를 확인한다.

@@ -280,3 +280,12 @@
 - gate 변화: 없음(DEVICE/FIELD HOLD). Pi에서의 scan 콜백 시간은 미측정.
 - 결정: 사용자 승인 2026-09-23("wall_tracker 최적화"). 동작은 바꾸지 않는다.
 - 교훈: 부하 25–30 이상에서는 코드가 한가해도 OS 스케줄링 공백(약 340 ms)만으로 0.25 s 창을 넘는다. 이 영역의 rig 실패는 코드 판정에 쓰지 않는다. "비트 단위 동일"은 `==`가 아니라 `repr`로 확인해야 한다(-0.0 == 0.0).
+
+## 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
+
+- 변경: `watch.py`가 product와 standalone 표를 따로 둔다. 제품 `/cmd_vel` 소유자는 `core`만, 단독 control은 `safety_node`만이다. `watch_node`는 `graph_mode`로 하나를 고르고 기본은 standalone이다.
+- 증거: `src/apps/control/test/test_watch.py` 포함 57 passed, 10 skipped (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: D-183 Accepted
+- 교훈: 없음
+

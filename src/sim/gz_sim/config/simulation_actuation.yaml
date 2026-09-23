@@ -1,0 +1,4 @@
+# D-182. Sole source of the commissioned simulation-actuation identity.
+# Safety, command, and navigation code read a mode flag, not these values.
+ros_domain_id: 227
+gz_partition: pinky_calmap227

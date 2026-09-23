@@ -7,7 +7,16 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 
-REQUIRED = (
+# D-183. Product and control-standalone graphs are separate tables.
+# A caller picks one mode; the tables are not merged.
+PRODUCT_REQUIRED = ('core',)
+PRODUCT_OPTIONAL = ()
+PRODUCT_EXCLUSIVE = {
+    '/cmd_vel': frozenset({'core'}),
+}
+PRODUCT_ALLOWED = {}
+
+STANDALONE_REQUIRED = (
     'sllidar_node',
     'bringup',
     'sensor_adc',
@@ -17,25 +26,21 @@ REQUIRED = (
     'safety_node',
     'wander_node',
 )
-
-OPTIONAL = ('lcd_node', 'web_node')
-
-# topic -> local nodes that may own it. Exactly one distinct owner must be
-# publishing at a time (D-2/D-38: CORE owns the final cmd_vel in the OS
-# runtime; the legacy safety gate owns it only in control-standalone mode,
-# D-149 — the two publishing together is an interrupt, not a mode choice).
-EXCLUSIVE = {
-    '/cmd_vel': frozenset({'core', 'safety_node'}),
+STANDALONE_OPTIONAL = ('lcd_node', 'web_node')
+STANDALONE_EXCLUSIVE = {
+    '/cmd_vel': frozenset({'safety_node'}),
     '/cmd_vel_raw': frozenset({'wander_node'}),
     '/scan': frozenset({'sllidar_node'}),
 }
-
-# Local extras that are not a fight (safety zeros /cmd_vel_raw on e-stop,
-# the odom-P controller and teleop surfaces also write candidates).
-ALLOWED = {
+STANDALONE_ALLOWED = {
     '/cmd_vel_raw': frozenset({'safety_node', 'web_node',
                                'startup_calibration_node', 'calib_node',
                                'control_node'}),
+}
+
+_MODES = {
+    'product': (PRODUCT_REQUIRED, PRODUCT_OPTIONAL, PRODUCT_EXCLUSIVE, PRODUCT_ALLOWED),
+    'standalone': (STANDALONE_REQUIRED, STANDALONE_OPTIONAL, STANDALONE_EXCLUSIVE, STANDALONE_ALLOWED),
 }
 
 FOREIGN = frozenset({
@@ -79,7 +84,14 @@ def _bare(name: str) -> str:
     return n
 
 
-def inspect(node_names, pubs_by_topic, *, namespace=None) -> Report:
+def graph_tables(mode: str):
+    try:
+        return _MODES[mode]
+    except KeyError:
+        raise ValueError(f'unknown graph watch mode: {mode}') from None
+
+
+def inspect(node_names, pubs_by_topic, *, namespace=None, mode='standalone') -> Report:
     """node_names: iterable of node name strings.
     pubs_by_topic: {logical topic: [publisher node names]}.
     With namespace set, names must be fully qualified. Nodes from another
@@ -92,19 +104,20 @@ def inspect(node_names, pubs_by_topic, *, namespace=None) -> Report:
             return True
         return name.startswith('/') and (name.rsplit('/', 1)[0] or '/') == scope
 
+    required, optional, exclusive, allowed_extra = graph_tables(mode)
     counts = Counter(_bare(n) for n in node_names if local(n) and _bare(n) not in IGNORE_NODES)
     issues = []
-    for name in REQUIRED:
+    for name in required:
         n = counts.get(name, 0)
         if n == 0:
             issues.append(Issue('missing', '', name, f'missing {name}'))
         elif n > 1:
             issues.append(Issue('duplicate', '', name, f'duplicate {name} x{n}'))
-    for name in OPTIONAL:
+    for name in optional:
         n = counts.get(name, 0)
         if n > 1:
             issues.append(Issue('duplicate', '', name, f'duplicate {name} x{n}'))
-    for topic, allowed in EXCLUSIVE.items():
+    for topic, allowed in exclusive.items():
         endpoints = pubs_by_topic.get(topic) or []
         outside = [p for p in endpoints if not local(p)]
         if outside:
@@ -113,7 +126,7 @@ def inspect(node_names, pubs_by_topic, *, namespace=None) -> Report:
         pubs = [_bare(p) for p in endpoints if local(p)]
         owners = [p for p in pubs if p in allowed]
         foreign = [p for p in pubs if p in FOREIGN]
-        allow = ALLOWED.get(topic, frozenset())
+        allow = allowed_extra.get(topic, frozenset())
         extra = [
             p for p in pubs
             if p not in FOREIGN and p not in allowed and p not in IGNORE_NODES and p not in allow
