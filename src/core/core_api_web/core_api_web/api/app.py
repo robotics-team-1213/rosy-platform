@@ -51,8 +51,8 @@ from core_api_web.api.ws import ws_router
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
-        version="1.17.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.17)",
+        version="1.18.0",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.18)",
     )
     app.state.core = services
     # 현장 화면은 로봇 AP 위에서 뜬다. 대시보드 자산은 압축 없이 122 KB이고
