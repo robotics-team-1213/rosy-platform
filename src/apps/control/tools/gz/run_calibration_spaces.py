@@ -10,6 +10,16 @@ import subprocess
 import sys
 
 
+def outcome(code, passed):
+    """Runner exit to matrix outcome: 3 is environment-invalid and 4 a busy Gazebo lock (D-185 R4);
+    neither counts as a pass or a failure of the code under test."""
+    if code == 3:
+        return 'environment_invalid'
+    if code == 4:
+        return 'lock_busy'
+    return 'pass' if code == 0 and passed else 'fail'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('cases', nargs='*', default=['open','front_wall','rear_wall','corridor_exit','trapped'])
@@ -28,7 +38,8 @@ def main():
         env = dict(os.environ, RIG_CALIBRATION_CASE=case,
                    RIG_REALTIME_FACTOR=os.environ.get('RIG_REALTIME_FACTOR','0.2'),
                    RIG_CALIBRATION_AFTER=args.after,
-                   RIG_DURATION='30' if case == 'trapped' else '180', RIG_WALL_TIMEOUT='700')
+                   RIG_DURATION='30' if case == 'trapped' else '180', RIG_WALL_TIMEOUT='700',
+                   RIG_GZ_LOCK_WAIT=os.environ.get('RIG_GZ_LOCK_WAIT', '30'))  # well inside the 750 s wait
         print('Running calibration case: '+case, flush=True)
         with (target/'runner.log').open('w') as log:
             proc = subprocess.Popen(['bash',str(root/'tools/gz/run_track260905.sh')], cwd=root,
@@ -44,7 +55,7 @@ def main():
         rig = Path('/tmp/pinky-calmap227')
         names = ('track_result.json','track_samples.json','track_last_status.json','calibration.json',
                  'track_identity.json','run_manifest.json','stack.log','calibration.log','safety.log',
-                 'track_map.npz','track_map.pgm','track_map.yaml')
+                 'track_map.npz','track_map.pgm','track_map.yaml','environment.json','environment_samples.jsonl')
         for name in names:
             if (rig/name).exists(): shutil.copy2(rig/name,target/name)
         result = {'case':case,'runner_exit':code,'pass':False}
@@ -74,10 +85,14 @@ def main():
                                   identity.get('case') == case and stopped and expected)
         except (OSError,ValueError,KeyError) as error:
             result['error'] = str(error)
+        result['outcome'] = outcome(code, result['pass'])
         results.append(result)
         (output/'matrix.json').write_text(json.dumps(results,indent=2))
         print(json.dumps(result),flush=True)
-    return 0 if all(row['pass'] for row in results) else 1
+    judged = [row for row in results if row['outcome'] in ('pass', 'fail')]
+    if any(row['outcome'] == 'fail' for row in judged):
+        return 1
+    return 0 if len(judged) == len(results) else 3  # some runs could not be judged
 
 
 if __name__ == '__main__': sys.exit(main())

@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-185 R4 구현 메모
 - 2026-09-24 · uncommitted · chore(repo): absorb the parent umbrella into Rosy OS
 - 2026-09-24 · uncommitted · docs(data): keep teleop learning clips under data/teleop/learning
 - 2026-09-24 · uncommitted · docs(adr): D-185 R1 구현 메모
 - 2026-09-24 · uncommitted · docs: origin/main 병합 게이트 실측 수치를 별도 항목으로 기록
-- 2026-09-24 · uncommitted · docs(layout): point README and reference at the current folders

@@ -304,3 +304,20 @@
 - gate 변화: 없음(DEVICE/FIELD HOLD).
 - 결정: 사용자 승인 2026-09-24("고침"). 시작 전(trial 없음) 단계에서 늦은 scan 하나로 재배치를 시작하던 경로가 이제 1 s 관측 대기 뒤 실패로 끝난다. 재배치는 저장된 scan이 없으면 쓸 수도 없었다.
 - 교훈: 사유 문자열 하나가 "없음"과 "늦음"을 함께 담으면, 대기 정책이 그 둘을 구분하지 못한다. 판정 입력은 원인별로 분리해 기록한다.
+
+## 2026-09-24 · uncommitted · tools(control): rig environment guard marks overloaded runs invalid (D-185 R4)
+- 변경:
+  - `tools/gz/rig_environment.py`를 새로 만들었다. `record`는 2 s마다 loadavg, CPU 압력(PSI), 파티션별 Gazebo 세션 수를 기록하고, 부모가 사라지면 끝난다. `judge`는 순수 함수이고 결과를 `environment.json`으로 쓴다.
+  - `run_track260905.sh`는 세션 간 잠금 `/tmp/rosy-gazebo.lock`을 잡는다(`RIG_GZ_LOCK_WAIT`, 대기 초과 시 종료 코드 4). 기록기는 잠금 fd를 닫고 띄우고, 통과·실패 판정 전에 환경을 판정한다. 무효면 통과·실패를 "not counted"로 표시하고 종료 코드 3, 판정기가 비정상 종료하면 그 종료 코드를 그대로 낸다. 환경 파일은 실행마다 지우고 보관하며, HUP도 정리 경로를 탄다.
+  - `track_run_monitor.py`가 `elapsed_wall_s`를 기록한다.
+  - `run_calibration_spaces.py`는 `outcome()`으로 3·4를 집계에서 빼고, 잠금 대기를 30 s로 제한한다.
+  - control 패키지 크기는 split 판정을 유지한 채 기준을 28,315줄에서 28,476줄로 재판정했다.
+- 원인: 2026-09-23/24 rig에서 피어 세션의 Gazebo가 부하를 25–30까지 올렸다. 한가한 노드도 CPU를 약 340 ms 기다렸고, 한 실행은 시뮬 속도가 0.01배였다. 이런 실행의 통과·실패는 코드와 무관했다(평가 문서 §8.4).
+- 증거:
+  - 테스트 18건: 판정 규칙, 워밍업, 기준 초과 비율과 PSI 보고, 요청 대비 속도, 증거 부족 시 판정 보류, 같은 파티션의 Gazebo 중복, 가짜 `/proc`의 세션 집계, 잘린 JSONL 줄, 부모가 사라질 때 기록기 종료, 스크립트 배선, 러너 결과 분류.
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - WSL smoke 2회: 평균 부하 16.13에서 무효 판정과 종료 코드 3, 표본 147개. 수정 후에는 `elapsed_wall_s` 기록, 실행 뒤 기록기 0개, 잠금 해제를 확인했다. 판정 heredoc은 유효·무효 × 통과·실패 네 경우를 가짜 결과로 실행해 확인했다.
+  - 독립 리뷰 1회(변경 요청)의 HIGH 2건과 MEDIUM 4건을 반영했다. HIGH는 실제 실패를 무효로 덮는 문제와 떨어져 나온 기록기가 잠금을 무는 문제였다.
+- gate 변화: 없음(rig 도구).
+- 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
+- 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.
