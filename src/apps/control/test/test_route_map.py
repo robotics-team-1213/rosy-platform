@@ -7,7 +7,14 @@ import cv2
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.route_map import RouteMapFollower
+from control.sensing.lane_bev import MEMORY_CONFIDENCE
+from control.sensing.route_map import (
+    CONFIDENCE_MIN,
+    MAX_SPREAD_M,
+    MIN_MATCH,
+    RouteMapFollower,
+    confidence_for,
+)
 from lane_scenarios import (
     GRAPH,
     SCENARIOS,
@@ -121,3 +128,20 @@ def test_confidence_stays_inside_cores_band():
         obs = f.update(k * lane_sim.DT, pose, WORLD.render(pose), lane_sim.GROUND, **lane_sim.KW)
         if obs is not None:
             assert 0.35 < obs.confidence <= 1.0
+
+
+def test_a_weak_match_slows_core_below_memory_speed():
+    """MEDIUM (review): confidence was floored at MEMORY_CONFIDENCE, so a
+    barely-accepted estimate drove as fast as remembered paint. A match
+    just above MIN_MATCH must now read below MEMORY_CONFIDENCE."""
+    assert confidence_for(MIN_MATCH + 0.01, 0.0) < MEMORY_CONFIDENCE
+
+
+def test_confidence_maps_quality_linearly_onto_its_band():
+    assert confidence_for(MIN_MATCH, 0.0) == pytest.approx(CONFIDENCE_MIN)
+    assert confidence_for(0.9, 0.0) == pytest.approx(1.0)
+    assert confidence_for(0.9, MAX_SPREAD_M) == pytest.approx(CONFIDENCE_MIN)
+    matches = np.linspace(MIN_MATCH, 0.9, 20)
+    values = [confidence_for(m, 0.004) for m in matches]
+    assert all(b >= a for a, b in zip(values, values[1:]))
+    assert 0.35 < CONFIDENCE_MIN < MEMORY_CONFIDENCE

@@ -32,7 +32,7 @@ import math
 import numpy as np
 
 from .lane import LaneObservation
-from .lane_bev import BEV_MAX_RANGE_M, MEMORY_CONFIDENCE, _to_robot, error_for_curvature
+from .lane_bev import BEV_MAX_RANGE_M, _to_robot, error_for_curvature
 from .lane_bev import LOOKAHEAD_M as CAMERA_LOOKAHEAD_M
 from .lane_route import DirectedSegment, LaneRoute
 from .paint_localizer import PaintLocalizer, PaintMap
@@ -92,13 +92,23 @@ COMPARE_MAX_CELLS = 150
 #: centreline, including both into and out at a node; a pose error moves
 #: it off all of them (the nearest other centreline is a lane width away).
 CENTRELINE_RADIUS_M = 0.60
-#: Confidence is CORE's speed scale: match / MATCH_FULL, times a spread
-#: factor that is 1 up to half MAX_SPREAD_M and falls to 0 at it, floored
-#: at lane_bev's MEMORY_CONFIDENCE (the speed lane following already drives
-#: on remembered paint), which is above CORE's minimum. MATCH_FULL: a
-#: clean lane view at the true pose reads 0.66-0.85 offline.
+#: Confidence is CORE's speed scale. The estimate's quality, a match
+#: factor (0 at MIN_MATCH rising linearly to 1 at MATCH_FULL) times a
+#: spread factor (1 up to half MAX_SPREAD_M, falling linearly to 0 at it),
+#: maps linearly onto [CONFIDENCE_MIN, 1]. MATCH_FULL: a clean lane view at
+#: the true pose reads 0.66-0.85 offline. CONFIDENCE_MIN sits above CORE's
+#: 0.35 minimum (speed scale 0.08: ~6 mm/s at cruise 0.08 m/s), so a
+#: barely-accepted estimate creeps where the old floor at MEMORY_CONFIDENCE
+#: (scale 0.38) drove as fast as remembered paint.
 MATCH_FULL = 0.6
-CONFIDENCE_FLOOR = MEMORY_CONFIDENCE
+CONFIDENCE_MIN = 0.4
+
+
+def confidence_for(match: float, spread_m: float) -> float:
+    """CORE confidence for an accepted estimate; see CONFIDENCE_MIN."""
+    match_q = min(1.0, max(0.0, (match - MIN_MATCH) / (MATCH_FULL - MIN_MATCH)))
+    spread_q = min(1.0, max(0.0, 2.0 * (1.0 - spread_m / MAX_SPREAD_M)))
+    return CONFIDENCE_MIN + (1.0 - CONFIDENCE_MIN) * match_q * spread_q
 
 
 @functools.lru_cache(maxsize=1)
@@ -204,9 +214,7 @@ class RouteMapFollower:
         if range2 <= 1e-9:
             return self._stop("END")
         self.last["target"] = (ahead, left)
-        quality = (min(1.0, estimate.match / MATCH_FULL)
-                   * min(1.0, 2.0 * (1.0 - estimate.spread_m / MAX_SPREAD_M)))
-        confidence = max(CONFIDENCE_FLOOR, quality)
+        confidence = confidence_for(estimate.match, estimate.spread_m)
         self._state = "ROUTE"
         return LaneObservation(error=error_for_curvature(2.0 * left / range2, confidence),
                                confidence=confidence)
