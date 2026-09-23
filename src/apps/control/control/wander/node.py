@@ -12,6 +12,7 @@ from rclpy.clock import Clock, ClockType
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Float32, String, UInt16MultiArray
 
+from .. import executor_choice
 from ..sensing.body import URDF_RADIUS
 from ..control.modes import pick_mode
 from ..control.recover import ExitSteer
@@ -581,7 +582,7 @@ def main():
     rclpy.init()
     node = WanderNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

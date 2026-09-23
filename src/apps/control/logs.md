@@ -321,3 +321,18 @@
 - gate 변화: 없음(rig 도구).
 - 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
 - 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.
+
+## 2026-09-24 · uncommitted · feat(control): opt-in EventsExecutor via ROSY_EXECUTOR (D-185 R3)
+
+- 변경:
+  - `control/executor_choice.py`: `ROSY_EXECUTOR` 해석(`single` 기본, `events`, 그 밖은 ValueError), executor 생성, spin.
+  - 14개 노드 `main()`의 `rclpy.spin(node)`를 `executor_choice.spin(node, rclpy)`로 바꿨다. try/finally 정리는 그대로다.
+  - `events`는 executor의 native `spin()`(add_node → spin → remove_node)을 쓴다. rig도 `make_executor(rclpy, executor_kind())`로 같은 선택을 따른다.
+- 원인: 2026-09-24 domain-228 실험에서 구독 15개인 한가한 노드가 SingleThreadedExecutor로 코어의 50–58%, EventsExecutor로 15%를 썼다. Jazzy에서 EventsExecutor는 실험 기능이라 opt-in으로 둔다.
+- 증거:
+  - 테스트 7건: 기본·single은 이전 호출과 동일, events는 native 루프, spin 예외에도 remove_node, 알 수 없는 값 거부, 두 종류 생성, 14개 진입점이 모두 선택기를 거침(AST).
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1404 passed.
+  - 독립 리뷰 1회(COMMENT, 차단 없음). WSL 탐침으로 SIGINT·SIGTERM·sim-time 타이머·다른 스레드 `call_async`가 두 방식에서 같음을 확인했다. MEDIUM 3건 중 rig와 다른 spin 루프는 고쳤고, ADR 표현과 FATAL 로그 줄은 ADR에 적었다. LOW 중 calib_node import 형식은 고쳤다. 다른 스레드 종료 예외와 잘못된 값의 늦은 실패는 기본 경로를 바꾸지 않으려고 기록만 했다.
+- gate 변화: 없음(기본값 불변). rig A/B와 실기 측정 전까지 R3는 미완료.
+- 결정: D-185 R3(행동 변경 승인: 사용자 2026-09-24 "나머지도 ralph 로 해서 바로 끝까지 처리").
+- 교훈: 측정 경로와 제품 경로가 같은 루프를 돌아야 A/B가 제품을 말한다. `rclpy.spin(node, executor=...)`은 executor의 native 루프가 아니다.

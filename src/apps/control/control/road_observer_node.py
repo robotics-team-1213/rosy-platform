@@ -17,6 +17,7 @@ from rclpy.qos import (
 from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String
 
+from . import executor_choice
 from .sensing.camera_homography import (
     CalibrationThresholds,
     load_homography_profile,
@@ -336,7 +337,7 @@ def main():
     rclpy.init()
     node = RoadObserverNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

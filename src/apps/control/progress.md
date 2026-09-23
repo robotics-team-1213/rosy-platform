@@ -157,3 +157,7 @@ plans:
 
 - rig가 과부하 박스에서 돈 실행을 "환경 무효"로 표시하고 종료 코드 3을 낸다. 판정 스크립트는 이 실행을 통과·실패로 세지 않는다. 속도 증거가 없으면 판정을 보류하고, 실제 실패를 무효로 덮지 않는다.
 - 세션 간 Gazebo 잠금은 이 rig부터 적용했다. 다른 Gazebo 실행기의 채택은 단계적이다.
+
+## 2026-09-24 EventsExecutor opt-in (D-185 R3)
+
+- control 노드와 rig가 `ROSY_EXECUTOR=events`로 EventsExecutor를 쓸 수 있다. 기본값은 이전과 같은 SingleThreadedExecutor다. rig A/B와 실기 측정이 남아 있어 기본값 전환은 하지 않았다.
