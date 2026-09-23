@@ -758,6 +758,8 @@ def test_the_probe_requires_rpi_lgpio_to_honour_the_chip_variable(tmp_path):
 
 
 def test_the_probe_renders_every_stage_from_the_source_tree(tmp_path, monkeypatch):
+    # The CI container has no Pillow; the image build runs this same render check in-image.
+    pytest.importorskip("PIL")
     monkeypatch.syspath_prepend(str(ROOT / "src/apps/emotion"))
     probe = _load("probe_display_runtime_render", IMAGE / "probe-display-runtime.py")
 
