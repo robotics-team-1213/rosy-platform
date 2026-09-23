@@ -69,3 +69,12 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed를 navigation에 연결
+
+- 변경: 정책 코드의 시뮬 리터럴 금지와 동작 시험의 패키지 소유를 navigation 진행 기록에 연결했다. launch와 시험 위치는 그대로다.
+- 증거: ADR 기록. 실행 시험 없음.
+- gate 변화: 없음.
+- 결정: D-182, D-184 Proposed
+- 교훈: 없음.
+

@@ -12,6 +12,8 @@
 | D-61 | 모듈 상태는 progress·logs·생성 index로 기록하고 계약 시험으로 지킨다 |
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
+| D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 
 ## 계획·결과 문서
 
@@ -31,5 +33,6 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 시뮬 리터럴과 시험 위치
 - 2026-09-22 · uncommitted · core_features(fleet_agent): 재접속 backoff 상한 30s (T5)
 - 2026-09-22 · uncommitted · docs(harness): register core_features under D-168
