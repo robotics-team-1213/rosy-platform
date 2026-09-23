@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # bridge
 
@@ -21,6 +21,7 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 | `battery_policy.py` | ROS-free SAF-005/DNC-006 chain: what one voltage reading sets in motion, in order |
 | `cmd_vel.py` | ROS-free 50 Hz `cmd_vel` cycle: select, readiness HOLD → zero, wheels, then power activity and the SAF-002 `safety.watchdog` announcement |
 | `save_map.py` | ROS-free SaveMap reply handling: safe basenames under the configured map directory, `RESULT_SUCCESS = 0`, and the D-13 map id |
+| `docking_mode.py` | ROS-free seam for docking's hold on the DOCKING mode: releases DOCKING in the same critical section that ends a run, and the docking tick rate. Pinned by `core/test/test_docking_mode_{ownership,release}.py` |
 
 ## Subdirectories
 
