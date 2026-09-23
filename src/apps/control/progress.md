@@ -175,3 +175,7 @@ plans:
 ## 2026-09-24 latest-only subscriptions (D-185 R2)
 
 - 최신 값만 쓰는 구독 12개가 옛 값을 쌓지 않는다. rig 유효 실행에서 기준본과 같은 결과(전부 `ready`)를 확인했다.
+
+## 2026-09-24 rig /clock relay (D-185 R6)
+
+- `RIG_CLOCK_HZ=N`이면 rig가 `/clock`을 벽시계 초당 최대 N개로 줄인다. rig 노드 CPU가 절반 이하가 됐다. 기본값은 예전 bridge다.

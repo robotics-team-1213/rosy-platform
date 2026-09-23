@@ -17,6 +17,8 @@
 #     Other Gazebo launchers take the same lock as they adopt it (staged, D-185 R4).
 #     /tmp/rosy-gazebo.lock serialises Gazebo runs of every rig that takes it
 #     (RIG_GZ_LOCK_WAIT seconds, default 1800; exit 4 when it stays busy).
+#   - D-185 R6: RIG_CLOCK_HZ=N (>= 50 x RIG_REALTIME_FACTOR) replaces the bridge's per-step
+#     /clock with tools/gz/clock_relay.py at most N msgs per wall second; exit 2 if invalid.
 # Run from anywhere on a Linux box with ROS 2 Jazzy, Gazebo Harmonic,
 # ros_gz_bridge and slam_toolbox. Results land in /tmp/pinky-calmap227.
 set -eo pipefail
@@ -25,6 +27,10 @@ source /opt/ros/jazzy/setup.bash
 set -u
 export ROS_DOMAIN_ID=227 ROS_LOCALHOST_ONLY=1 GZ_IP=127.0.0.1
 export GZ_PARTITION=pinky_calmap227 PYTHONPATH="$PWD:${PYTHONPATH:-}"
+# D-185 R6: a bad RIG_CLOCK_HZ would leave the rig without /clock until the wall timeout; fail first.
+if [[ -n "${RIG_CLOCK_HZ:-}" ]]; then
+  python3 tools/gz/clock_relay.py --check "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" || exit 2
+fi
 out=/tmp/pinky-calmap227
 mkdir -p "$out"
 exec 9>"$out/run.lock"
@@ -111,6 +117,7 @@ manifest={'run_id':run_id, 'recorded_unix_s':time.time(), 'plant':plant,
     'calibration_case':os.environ.get('RIG_CALIBRATION_CASE'),
     'single_process':os.environ.get('RIG_SINGLE_PROCESS') == '1',
     'estop_probe':os.environ.get('RIG_ESTOP_PROBE') == '1',
+    'clock_hz':int(os.environ['RIG_CLOCK_HZ']) if os.environ.get('RIG_CLOCK_HZ') else None,
     'ros_domain':227, 'gazebo_partition':'pinky_calmap227',
     'world_sha256':hashlib.sha256((out/'world.sdf').read_bytes()).hexdigest(),
     'source_at_start':source_at_start,
@@ -149,11 +156,17 @@ if [[ "${RIG_RENDERED_CAMERA:-0}" == 1 ]]; then
   setsid python3 -m tools.gz.rendered_camera_adapter --ros-args -p use_sim_time:=true \
     > "$out/camera.log" 2>&1 & pids+=($!)
 fi
-setsid ros2 run ros_gz_bridge parameter_bridge \
-  '/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan' \
-  '/odometry_gt@nav_msgs/msg/Odometry[gz.msgs.Odometry' \
-  '/model/pinky/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist' \
-  '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' \
+bridged=('/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'
+  '/odometry_gt@nav_msgs/msg/Odometry[gz.msgs.Odometry'
+  '/model/pinky/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist')
+# D-185 R6: Gazebo publishes /clock every physics step. RIG_CLOCK_HZ=N relays it at most N times
+# per wall second through a throttled gz-transport subscription instead; unset keeps the bridge.
+if [[ -z "${RIG_CLOCK_HZ:-}" ]]; then
+  bridged+=('/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock')
+else
+  setsid python3 tools/gz/clock_relay.py "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" 8>&- 9>&- > "$out/clock-relay.log" 2>&1 & pids+=($!)
+fi
+setsid ros2 run ros_gz_bridge parameter_bridge "${bridged[@]}" \
   --ros-args -p use_sim_time:=true -r /lidar/scan:=/scan -r /odometry_gt:=/odom_gz \
   -r /model/pinky/cmd_vel:=/cmd_vel > "$out/bridge.log" 2>&1 & pids+=($!)
 if [[ "${RIG_SINGLE_PROCESS:-0}" == 1 ]]; then

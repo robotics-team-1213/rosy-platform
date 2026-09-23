@@ -399,3 +399,18 @@
 - gate 변화: 없음.
 - 결정: D-185 R2(범위: 사용자 승인 2026-09-24 "제안 범위대로", 위험·can_reverse 포함).
 - 교훈: 환경 가드가 없었다면 이번 A/B의 첫 10회 중 9회가 판정에 섞였다. 유효 실행만 세니 양쪽 모두 전부 통과였다.
+
+## 2026-09-24 · uncommitted · tools(control): opt-in throttled /clock relay for the rig (D-185 R6)
+
+- 변경:
+  - `tools/gz/clock_relay.py`: gz `/clock`을 `SubscribeOptions.msgs_per_sec`로 줄여 ROS `clock`에 다시 낸다. `--check`는 ROS 없이 빈도를 검사한다.
+  - `run_track260905.sh`: `RIG_CLOCK_HZ`가 있으면 bridge의 `/clock`을 빼고 relay를 띄운다. 잠금 전 검사(종료 코드 2), manifest `clock_hz`.
+- 원인: Gazebo가 physics step마다 `/clock`을 내서 rig 노드마다 초당 수백 번 깨어났다. bridge에는 빈도 옵션이 없다.
+- 증거:
+  - 테스트 5건: 빈도 검사, RTF 대비 하한, `--check` 종료 코드, 시계 값 복사, 스크립트가 unset일 때만 per-step `/clock`을 bridge에 넣음.
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - 독립 리뷰 1회(변경 요청): HIGH 1(D-4 절대 토픽)과 MEDIUM 3(잘못된 값의 늦은 실패, manifest 누락, RTF 대비 하한)을 반영했다. SIGTERM 잡음과 스크립트 시험 강화(LOW)도 반영했다.
+  - WSL: 100 Hz 요청 시 약 88 Hz 전달(리뷰 탐침). rig A/B ENV:VALID: bridge 3/3, relay 2/3, rig 노드 CPU 446%→202%. relay 실패 1회는 slam_toolbox lifecycle 응답 유실이다.
+- gate 변화: 없음(rig 도구, 기본값 불변).
+- 결정: D-185 R6.
+- 교훈: 기본 경로를 건드리지 않는 opt-in 도구도, A/B 기준으로 쓰기 전에 실패 분포를 따로 확인해야 한다.
