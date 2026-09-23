@@ -31,6 +31,7 @@ import time
 import http.server
 
 import rclpy
+from . import executor_choice
 from .tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -545,7 +546,7 @@ def main():
     rclpy.init()
     node = WebNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

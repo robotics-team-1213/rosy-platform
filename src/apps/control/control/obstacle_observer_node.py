@@ -3,6 +3,7 @@ import json
 import math
 
 import rclpy
+from . import executor_choice
 from .tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.time import Time
@@ -117,7 +118,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = ObstacleObserver()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:
