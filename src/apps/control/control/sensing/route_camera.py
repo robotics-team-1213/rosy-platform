@@ -148,8 +148,11 @@ class _RouteGatedTracker(LaneBoundaryTracker):
         left, right = super()._seed(view, labels, stats, count, half)
         if left is not None or self.gate is None:
             return left, right
+        lines = self.gate.predicted_boundaries(half)
+        if len(lines) < 2:
+            return left, right
         picks = []
-        for line in self.gate.predicted_boundaries(half):
+        for line in lines:
             grid = np.zeros((view.rows, view.cols), np.uint8)
             rows = (line[:, 0] - BEV_X_MIN_M) / BEV_CELL_M
             cols = (BEV_Y_HALF_M - line[:, 1]) / BEV_CELL_M

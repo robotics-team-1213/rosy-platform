@@ -22,9 +22,27 @@ from lane_sim import CAM_X
 END_POSITION_MAX_ERROR_M = 0.020
 
 
-def follower(scenario):
-    return RouteMapFollower(GRAPH, [scenario["into"], scenario["out"]],
-                            start_pose=scenario["start"], camera_x_offset_m=CAM_X, seed=7)
+#: Camera/route cross-check coverage (compared frames / frames) on each
+#: clean scenario. Measured 0.57 (05) to 0.94 (08); the frames not compared
+#: are those where the camera tracker holds no fresh lock (MEMORY through
+#: a mouth, the first frames before a seed). The review found 4-26 %.
+MIN_COVERAGE = 0.5
+
+
+def follower(scenario, cls=RouteMapFollower):
+    return cls(GRAPH, [scenario["into"], scenario["out"]],
+               start_pose=scenario["start"], camera_x_offset_m=CAM_X, seed=7)
+
+
+class _BiasedFollower(RouteMapFollower):
+    """Test double: every estimate is shifted `offset_m` to its left
+    (negative: right) before it steers and is cross-checked."""
+
+    offset_m = 0.0
+
+    def _steer_pose(self, estimate):
+        x, y, yaw = estimate.pose
+        return (x - self.offset_m * math.sin(yaw), y + self.offset_m * math.cos(yaw), yaw)
 
 
 def _world_without_paint_after_the_node(scenario):
@@ -56,6 +74,7 @@ def test_every_junction_transition_is_driven(index):
     # The last update saw the pose before the last command: track[-2].
     error = math.dist(f.last["estimate"].pose[:2], result["track"][-2])
     assert error <= END_POSITION_MAX_ERROR_M, (error, summary([result]))
+    assert f.last["coverage"] >= MIN_COVERAGE, f.last["coverage"]
 
 
 def test_a_lost_localiser_stops_rather_than_guessing():
@@ -67,13 +86,16 @@ def test_a_lost_localiser_stops_rather_than_guessing():
     assert result["tiers"][-1] == "STOP"
 
 
-def test_camera_lane_disagreement_stops_the_follower():
-    """If the localised pose says the lane centre is here but the camera's
-    own centre line says otherwise by more than half a half-width, stop."""
-    scenario = SCENARIOS[5]
-    f = follower(scenario)
-    f.force_pose_offset(0.08)     # test hook: bias the estimate laterally
+@pytest.mark.parametrize("offset_m", [0.05, -0.05])
+@pytest.mark.parametrize("index", [0, 5, 7])
+def test_a_50mm_pose_bias_stops_the_follower(index, offset_m):
+    """HIGH-2: if the localised pose places the camera's own lane 50 mm off
+    every centreline, stop (either side; 00 and 07 start on bends)."""
+    scenario = SCENARIOS[index]
+    f = follower(scenario, _BiasedFollower)
+    f.offset_m = offset_m
     result = run_scenario(scenario, f, steps=120)
+    assert not result["pass"]
     assert result["tiers"][-1] == "STOP"
     assert f.last["reason"] == "DISAGREE"
 
