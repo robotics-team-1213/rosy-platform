@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 from typing import Callable
 
 
@@ -71,6 +72,11 @@ def _default_hostname_apply(hostname: str) -> None:
 
 
 OPERATOR_USER = "rosy"
+# D-191: rosy-core.service runs with HOME=/var/lib/rosy/core and no ROSY_CONFIG,
+# so core_common.config reads (and the dashboard writes) Path.home()/.rosy/rosy.yaml.
+CORE_USER = "rosy-core"
+CORE_HOME = "var/lib/rosy/core"
+CORE_OVERLAY = f"{CORE_HOME}/.rosy/rosy.yaml"
 
 
 def _default_operator_account(name: str) -> None:
@@ -106,6 +112,7 @@ class FirstBootProvisioner:
         hostname_apply: Callable[[str], None] | None = None,
         operator_account: Callable[[str], None] | None = None,
         operator_lookup: Callable[[str], dict | None] | None = None,
+        core_lookup: Callable[[str], dict | None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.network_activate = network_activate
@@ -121,6 +128,10 @@ class FirstBootProvisioner:
             operator_lookup = (_system_account if self.root == Path("/").resolve()
                                else lambda name: {"home": f"/home/{name}", "shell": "/bin/bash"})
         self.operator_lookup = operator_lookup
+        # A fixture root has no rosy-core account to hand files to.
+        if core_lookup is None:
+            core_lookup = (_system_account if self.root == Path("/").resolve() else lambda name: None)
+        self.core_lookup = core_lookup
         self.state_dir = self.root / "var/lib/rosy/provisioning"
         self.complete = self.state_dir / "complete.json"
         self.state = self.state_dir / "state.json"
@@ -201,6 +212,63 @@ class FirstBootProvisioner:
                 raise ValueError("hardware serial does not match the claimed device")
             return
         _json_atomic(self.binding, expected, 0o640)
+
+    def _core_api(self, record: dict) -> None:
+        """Merge the card's CORE API record into CORE's persisted overlay (D-191).
+
+        Other overlay keys and other token records are kept; a record with the
+        same id or digest is replaced, so a re-run writes the same file. The
+        overlay's auth.tokens list replaces the package default list as a whole.
+        """
+        import yaml  # python3-yaml ships in the image; only this step needs it.
+
+        path = self._inside(CORE_OVERLAY)
+        overlay: dict = {}
+        if path.is_file():
+            try:
+                loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            except (UnicodeDecodeError, yaml.YAMLError) as exc:
+                raise ValueError("CORE config overlay is unreadable") from exc
+            if not isinstance(loaded, dict):
+                raise ValueError("CORE config overlay is not a mapping")
+            overlay = loaded
+        auth = overlay.get("auth") if isinstance(overlay.get("auth"), dict) else {}
+        records = auth.get("tokens")
+        if isinstance(records, dict):
+            # CORE's legacy {plaintext: role} map; the list form keeps its meaning.
+            records = [{"token": key, "role": value} for key, value in records.items()]
+        elif not isinstance(records, list):
+            records = []
+        kept = [
+            item for item in records
+            if not (isinstance(item, dict) and (
+                item.get("id") == record["id"]
+                or str(item.get("sha256") or "").strip().lower() == record["sha256"]))
+        ]
+        overlay["auth"] = {**auth, "tokens": [*kept, dict(record)]}
+
+        account = self.core_lookup(CORE_USER)
+        owner = (account["uid"], account["gid"]) if account and account.get("uid") is not None else None
+        # The same owner and mode StateDirectory=rosy/core gives CORE's HOME.
+        home = self._inside(CORE_HOME)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for directory in (home, path.parent):
+            os.chmod(directory, 0o750)
+            if owner is not None:
+                os.chown(directory, *owner)
+        descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                yaml.safe_dump(overlay, handle, allow_unicode=True, sort_keys=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, 0o600)
+            if owner is not None:
+                os.chown(temporary, *owner)
+            os.replace(temporary, path)
+        except BaseException:
+            Path(temporary).unlink(missing_ok=True)
+            raise
 
     @staticmethod
     def _runtime_env(bundle: dict) -> str:
@@ -292,6 +360,8 @@ class FirstBootProvisioner:
         if "ap" in payload["network"]:
             # D-176: the fallback AP and the console banner read this root-only file.
             _json_atomic(self._inside("etc/rosy/ap-credentials.json"), payload["network"]["ap"], 0o600)
+        if "core_api" in payload:
+            self._core_api(payload["core_api"]["record"])
 
         if not self.network_activate("rosy-site-sta"):
             network_path.unlink(missing_ok=True)
@@ -321,6 +391,8 @@ class FirstBootProvisioner:
         }
         if operator_fingerprints:
             complete["operator"] = {"ssh_key_fingerprints": operator_fingerprints}
+        if "core_api" in payload:
+            complete["core_api"] = {"token_id": payload["core_api"]["record"]["id"]}
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         bundle.unlink()

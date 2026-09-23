@@ -26,7 +26,8 @@ EXPECTED = {
     "fleet_endpoint", "fleet_trust_profile", "pairing_required",
 }
 # D-174 F3: per-card operator public keys; absent keeps the pre-F3 bundle shape.
-OPTIONAL = {"operator_ssh_keys", "ap_password"}
+# D-191: the CORE API credential is read here only to hash it into CORE's record.
+OPTIONAL = {"operator_ssh_keys", "ap_password", "core_api_token", "core_api_token_id"}
 
 
 def _exclusive_json(path: Path, payload: dict, mode: int) -> None:
@@ -69,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
             pairing_required=request["pairing_required"],
             operator_ssh_keys=request.get("operator_ssh_keys"),
             ap_password=request.get("ap_password"),
+            core_api_token=request.get("core_api_token"),
+            core_api_token_id=request.get("core_api_token_id"),
         )
         _exclusive_json(args.output, bundle, 0o600)
         _exclusive_json(args.receipt, create_provision_receipt(bundle), 0o600)
