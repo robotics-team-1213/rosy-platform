@@ -321,3 +321,15 @@
 - gate 변화: 없음(rig 도구).
 - 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
 - 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.
+
+## 2026-09-24 · uncommitted · fix(control): latest-only subscriptions keep depth 1 (D-185 R2)
+
+- 변경: calibration·wander·goal_escape·web의 최신 값 구독 12개를 KEEP_LAST depth 1로 바꿨다. `test/subscription_scan.py`와 `test_latest_only_subscriptions.py`가 대상 목록과 depth를 고정한다.
+- 원인: depth 10 구독은 executor가 밀릴 때 옛 결정·한계값을 차례로 처리했다. 판정은 항상 마지막 값만 쓰므로 옛 값 처리는 비용이고, 늦게 도착한 옛 값이 잠깐 현재 값처럼 보일 수 있었다.
+- 증거:
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - 독립 리뷰 1회 반영.
+  - rig 교차 A/B(ENV:VALID만): 기준본 3/3, R2 4/4 `ready`. 과부하(평균 부하 20–35)로 무효가 된 6회는 세지 않았다. CPU 중앙값 411% 대 428%, 차이 없음.
+- gate 변화: 없음.
+- 결정: D-185 R2(범위: 사용자 승인 2026-09-24 "제안 범위대로", 위험·can_reverse 포함).
+- 교훈: 환경 가드가 없었다면 이번 A/B의 첫 10회 중 9회가 판정에 섞였다. 유효 실행만 세니 양쪽 모두 전부 통과였다.

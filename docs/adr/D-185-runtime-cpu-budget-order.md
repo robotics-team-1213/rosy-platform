@@ -90,6 +90,16 @@
      `run_fleet_sim.sh`, localization rig)의 채택은 단계적이다. 그전까지 피어 부하는 가드가 측정만 한다.
    - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄로 재판정했다.
 
+   **R2 구현 메모 (2026-09-24).**
+   - 최신 값만 의미 있는 구독 12개를 KEEP_LAST depth 1로 바꿨다. calibration의 decision·motion_limits·
+     can_reverse·위험 4종, wander의 observation·motion_limits, goal_escape의 motion_limits, web의 decision·
+     motion_limits다. 명령·이벤트처럼 순서 전체가 의미 있는 구독은 그대로다.
+   - `test/subscription_scan.py`가 control의 모든 구독 depth를 읽고, 대상 목록 밖의 depth 1과 목록 안의
+     depth 10을 모두 실패로 본다.
+   - rig 교차 A/B(2026-09-24, ENV:VALID 실행만 집계): 기준본 3/3, R2 4/4 `ready`. 무효 실행 6회는
+     세지 않았다. rig 노드 CPU는 중앙값 411% 대 428%로 차이가 없다. R2의 효과는 CPU가 아니라 부하 때
+     쌓인 옛 값을 처리하지 않는 것이며, 유효 부하에서는 적체가 생기지 않아 rig로는 재현되지 않았다.
+
 4. **범위 밖.** 줄 수·패키지 구조(D-168·D-171), 안전 판정 자체의 임계값은 바꾸지 않는다. CPU 절감을 이유로
    신선도 창이나 게이트 조건을 완화하지 않는다.
 
