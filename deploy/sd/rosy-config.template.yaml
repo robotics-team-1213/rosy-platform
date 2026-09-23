@@ -1,0 +1,32 @@
+# ROSY robot settings (D-176). Edit on any PC, put the card back, power on.
+#
+# - Every key is optional; delete what you do not need.
+# - Wi-Fi and AP passwords are applied at boot and then replaced on this card
+#   by "<applied>". Keep "<applied>" to leave an already applied password as is.
+# - The device name and robot number cannot be changed here.
+schema_version: 1
+
+# country: KR
+# timezone: Asia/Seoul
+
+# Site Wi-Fi networks, highest priority first tried.
+# wifi:
+#   - ssid: my-site-wifi
+#     password: <your-wifi-password>
+#     priority: 20
+
+# Robot's own Wi-Fi when there is no uplink.
+#   fallback: open rosy-pinky-xxxx after 120 s without an uplink (default)
+#   relay:    always on, relaying the uplink (D-26 RELAY_AP_STA)
+#   off:      never open an AP
+# ap:
+#   mode: fallback
+#   password: <at-least-12-characters>
+
+# fleet:
+#   endpoint: https://fleet.example.invalid
+#   trust_profile: rosy-pilot-lan
+
+# Operator SSH public keys for the key-only `rosy` login.
+# operator_ssh_keys:
+#   - ssh-ed25519 AAAA... name@laptop

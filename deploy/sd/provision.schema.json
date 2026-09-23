@@ -46,7 +46,8 @@
       "properties": {
         "country_code": {"type": "string", "pattern": "^[A-Z]{2}$"},
         "ssid": {"type": "string", "minLength": 1, "maxLength": 32},
-        "wpa_psk": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "wpa_psk": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ap": {"type": "object", "additionalProperties": false, "required": ["ssid", "password"], "properties": {"ssid": {"type": "string", "minLength": 1, "maxLength": 32}, "password": {"type": "string", "pattern": "^[!-~]{12,63}$"}}}
       }
     },
     "fleet": {

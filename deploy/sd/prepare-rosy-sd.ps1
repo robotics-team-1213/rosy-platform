@@ -158,6 +158,26 @@ function Resolve-BootMount([int]$Number, [string]$ExplicitPath, [bool]$FixtureMo
     Fail "the flashed SD boot partition was not found"
 }
 
+# D-176: each card's fallback AP gets its own random password. It is kept in the
+# operator's DPAPI store (reused when the same device is rewritten) and shown
+# once; plans and receipts never hold it.
+function Get-ApPassword([string]$Device) {
+    if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable" }
+    $store = Join-Path $env:LOCALAPPDATA "Rosy\ap"
+    $file = Join-Path $store "$Device.credential.xml"
+    if (Test-Path -LiteralPath $file -PathType Leaf) {
+        return (Import-Clixml -LiteralPath $file).GetNetworkCredential().Password
+    }
+    $alphabet = "abcdefghjkmnpqrstuvwxyz" + "ABCDEFGHJKLMNPQRSTUVWXYZ" + "23456789"
+    $bytes = New-Object byte[] 14
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $password = -join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })
+    New-Item -ItemType Directory -Path $store -Force | Out-Null
+    $secure = ConvertTo-SecureString $password -AsPlainText -Force
+    New-Object System.Management.Automation.PSCredential($Device, $secure) | Export-Clixml -LiteralPath $file
+    return $password
+}
+
 function New-PinkyIdentity {
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
     $code = "from dataclasses import asdict; from deploy.sd.personalization import generate_device_identity; import json; print(json.dumps(asdict(generate_device_identity('pinky_pro'))))"
@@ -552,6 +572,8 @@ try {
             pairing_required = $false
         }
         if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
+        $apLogin = Get-ApPassword $DeviceName
+        $bundleRequest["ap_password"] = $apLogin
         $previousOutputEncoding = $OutputEncoding
         $previousPythonUtf8 = $env:PYTHONUTF8
         try {
@@ -579,6 +601,11 @@ try {
     Copy-Item -LiteralPath $bundleTemp -Destination $bundleTargetTemp
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
     $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
+    # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
+    $configTarget = Join-Path $bootRoot "rosy-config.yaml"
+    if (-not (Test-Path -LiteralPath $configTarget)) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot "rosy-config.template.yaml") -Destination $configTarget
+    }
 }
 finally {
     foreach ($temporaryFile in @($bundleTemp, $bundleReceiptTemp)) {
@@ -618,3 +645,5 @@ if ($reprovision) {
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 10 -Compress
+# Shown once for the operator; not part of the JSON evidence on stdout.
+[Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")

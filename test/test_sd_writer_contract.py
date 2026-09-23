@@ -904,3 +904,49 @@ def test_the_old_number_based_confirmation_is_refused(writer_case, tmp_path):
     assert completed.returncode != 0
     assert "confirmation did not match" in completed.stderr
     assert not writer_case["marker"].exists()
+
+
+# --- Fallback AP credentials and the editable settings file (D-176 Task 3) --
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_each_card_gets_a_stored_random_ap_password_and_a_settings_template(writer_case, tmp_path):
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(writer_case, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
+                     "-BootMountPath", boot, plan_only=False)
+
+    assert completed.returncode == 0, completed.stderr
+    bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
+    ap = bundle["network"]["ap"]
+    assert ap["ssid"] == "rosy-pinky-k7m4" and len(ap["password"]) == 14
+    store = Path(writer_case["env"]["LOCALAPPDATA"]) / "Rosy/ap/rosy-pinky-k7m4.credential.xml"
+    assert store.is_file() and ap["password"] not in store.read_text(encoding="utf-16")  # DPAPI, not plaintext
+    receipt_text = writer_case["receipt"].read_text(encoding="utf-8-sig")
+    assert ap["password"] not in receipt_text and ap["password"] not in completed.stdout
+    assert ap["password"] in completed.stderr  # shown once to the operator
+    template = (boot / "rosy-config.yaml").read_text(encoding="utf-8")
+    assert template.startswith("# ROSY robot settings (D-176)")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_rewriting_the_same_device_keeps_its_ap_password_and_an_edited_settings_file(writer_case, tmp_path):
+    boot = tmp_path / "boot"
+    boot.mkdir()
+    assert _run(writer_case, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
+                "-BootMountPath", boot, plan_only=False).returncode == 0
+    first = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["network"]["ap"]
+    (boot / "rosy-provision/provision.json").unlink()
+    (boot / "rosy-config.yaml").write_text("schema_version: 1\ncountry: US\n", encoding="utf-8")
+    writer_case["receipt"].unlink()
+    writer_case["registry"].write_text(json.dumps({"robot_numbers": [], "device_names": [], "device_uids": []}),
+                                       encoding="utf-8")
+
+    completed = _run(writer_case, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4",
+                     "-BootMountPath", boot, plan_only=False)
+
+    assert completed.returncode == 0, completed.stderr
+    second = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["network"]["ap"]
+    assert second == first
+    assert (boot / "rosy-config.yaml").read_text(encoding="utf-8") == "schema_version: 1\ncountry: US\n"

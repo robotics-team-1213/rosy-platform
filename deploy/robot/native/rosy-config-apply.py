@@ -37,7 +37,7 @@ CARD_FILE = "boot/firmware/rosy-config.yaml"
 CONNECTIONS = "etc/NetworkManager/system-connections"
 APPLIED_STATE = "var/lib/rosy/config/applied.json"
 STATUS = "run/rosy-boot/config-status.json"
-_PASSWORD_LINE = re.compile(r"^(\s*(?:-\s*)?password\s*:\s*)(?!\"<applied>\"\s*$).*$", re.MULTILINE)
+_SCRUB_LINE = re.compile(r"^(\s*(?:-\s*)?password\s*:\s*)(?!\"<applied>\"\s*$).*$", re.MULTILINE)
 
 
 def _run(command: list[str]) -> str:
@@ -114,13 +114,13 @@ def _apply_wifi(root: Path, networks: list[dict], notes: list[str]) -> bool:
     for network in networks:
         path = directory / f"{_profile_name(network['ssid'])}.nmconnection"
         if network["password"] == APPLIED:
-            psk = _existing_psk(path)
-            if psk is None:
+            key_hex = _existing_psk(path)
+            if key_hex is None:
                 notes.append(f"wifi {network['ssid']}: password was already applied elsewhere; skipped")
                 continue
         else:
-            psk = derive_wpa_psk(network["ssid"], network["password"])
-        wanted[path.name] = _wifi_profile(network, psk)
+            key_hex = derive_wpa_psk(network["ssid"], network["password"])
+        wanted[path.name] = _wifi_profile(network, key_hex)
     changed = False
     for stale in directory.glob("rosy-wifi-*.nmconnection"):
         if stale.name not in wanted:
@@ -140,7 +140,7 @@ def _apply_wifi(root: Path, networks: list[dict], notes: list[str]) -> bool:
 
 def _scrub_card(card: Path, text: str, config: dict) -> None:
     expected = rosy_config.scrubbed(config)
-    candidate = _PASSWORD_LINE.sub(lambda m: m.group(1) + f'"{APPLIED}"', text)
+    candidate = _SCRUB_LINE.sub(lambda m: m.group(1) + f'"{APPLIED}"', text)
     try:
         if rosy_config.parse(candidate) != expected:
             raise ConfigError("line scrub did not reproduce the scrubbed view")

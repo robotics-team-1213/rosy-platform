@@ -144,6 +144,7 @@ def create_provision_bundle(
     pairing_required: bool,
     pairing_credential: str | None = None,
     operator_ssh_keys: Collection[str] | None = None,
+    ap_password: str | None = None,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -198,6 +199,8 @@ def create_provision_bundle(
             "country_code": country_code,
             "ssid": ssid,
             "wpa_psk": derive_wpa_psk(ssid, wifi_passphrase),
+            # D-176: per-card fallback AP, named after the device.
+            **({"ap": {"ssid": identity.device_name, "password": ap_password}} if ap_password else {}),
         },
         "fleet": fleet,
         "created_at": created_text,
@@ -235,8 +238,18 @@ def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "network": {"country_code", "ssid", "wpa_psk"},
     }
     for section, keys in expected_nested.items():
-        if not isinstance(bundle.get(section), dict) or set(bundle[section]) != keys:
+        present = set(bundle[section]) if isinstance(bundle.get(section), dict) else None
+        if present is not None and section == "network":
+            present -= {"ap"}
+        if present != keys:
             raise ValueError(f"{section} keys are invalid")
+    if "ap" in bundle["network"]:
+        ap = bundle["network"]["ap"]
+        if (not isinstance(ap, dict) or set(ap) != {"ssid", "password"}
+                or not isinstance(ap["ssid"], str) or not 1 <= len(ap["ssid"].encode("utf-8")) <= 32
+                or not isinstance(ap["password"], str) or not 12 <= len(ap["password"]) <= 63
+                or not all(33 <= ord(char) <= 126 for char in ap["password"])):
+            raise ValueError("network.ap must hold an SSID and a 12-63 character printable password")
     fleet_keys = set(bundle.get("fleet", {}))
     if not {"endpoint", "trust_profile", "pairing_required"} <= fleet_keys or not fleet_keys <= {
         "endpoint", "trust_profile", "pairing_required", "pairing_credential"
@@ -289,6 +302,7 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
         "network": {
             "ssid": bundle["network"]["ssid"],
             "country_code": bundle["network"]["country_code"],
+            **({"ap_ssid": bundle["network"]["ap"]["ssid"]} if "ap" in bundle["network"] else {}),
         },
         "fleet": {
             "endpoint": bundle["fleet"]["endpoint"],
