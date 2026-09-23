@@ -637,8 +637,8 @@ colcon test --event-handlers console_direct+
 Device 공통 readback:
 
 ```bash
-sudo /opt/rosy/deploy/robot/verify-pi.sh
-sudo /opt/rosy/deploy/robot/device-readback.sh --json
+sudo /opt/rosy/deploy/robot/verify/verify-pi.sh
+sudo /opt/rosy/deploy/robot/verify/device-readback.sh --json
 ```
 
 이 명령들은 공통 시작점이다. 각 모듈의 정상·장애·복구 시나리오와 물리 측정이

@@ -48,11 +48,11 @@ if ((& git status --porcelain 2>&1 | Out-String).Trim()) {
 $remote = "${PiUser}@${PiHost}"
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
-    & python -B (Join-Path $repoRoot "deploy/robot/core_dev_overlay.py") pack --repo $repoRoot --output $archive
+    & python -B (Join-Path $repoRoot "deploy/robot/dev/core_dev_overlay.py") pack --repo $repoRoot --output $archive
     if ($LASTEXITCODE -ne 0) {
         throw "Allowlisted archive failed."
     }
-    & scp $archive (Join-Path $repoRoot "deploy/robot/core_dev_overlay.py") (Join-Path $repoRoot "deploy/robot/apply-core-dev.sh") "${remote}:/tmp/"
+    & scp $archive (Join-Path $repoRoot "deploy/robot/dev/core_dev_overlay.py") (Join-Path $repoRoot "deploy/robot/dev/apply-core-dev.sh") "${remote}:/tmp/"
     if ($LASTEXITCODE -ne 0) {
         throw "scp upload failed."
     }

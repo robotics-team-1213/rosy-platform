@@ -703,3 +703,20 @@
 - gate 변화: 없음 — 스캐너 예외·파일명 제외 추가하지 않음. DEVICE HOLD.
 - 결정: **출처만 고치고 스캐너는 무장 유지**. `re.compile`의 리터럴을 예외로 인정하면 call에 긴 리터럴을 넘기는 진짜 유출까지 가려서(`_call_holds_no_literal`이 존재하는 이유와 정면 충돌), 파일명 제외는 "제외 파일이 비밀을 숨기기 좋은 곳"이 되기에 버렸다. 값은 그대로 두고 이름만 바꿨다.
 - 교훈: "이름에 민감 키워드 + 리터럴 값" 휴리스틱은 **탐지 패턴을 정의하는 코드**와 본질적으로 충돌한다 — 패턴 변수명에서 민감 키워드를 빼는 것이 스캐너를 무장 유지한 채로 해결하는 길이었다. 그리고 latent 오탐은 병합 회귀로 오인하기 쉽다: 병행 세션은 관련 시험만 돌렸기 때문에 전체 게이트가 이 건을 처음으로 빨강으로 떴다.
+
+## 2026-09-24 · uncommitted · docs(deploy): 병합(deploy) 항목의 게이트 실측 수치 기록
+
+- 변경: 병합(deploy) 항목의 "아래 게이트 줄에 실측 수치" 약속을 본문 고치지 않고 새 항목으로 옮겨 적는다 — HEAD에 들어간 본문은 lint가 append-only 위반으로 거부한다.
+- 증거: `python -m pytest test/ -q` 전체 회귀 **1620 passed·0 failed·43 skipped** + `rosy_harness.py lint` **0 error·21 warning**(기존 baseline) — 2026-09-24 Windows. 병합 신규 15종 전부 초록. image_pipeline bash 3건 전이 실패는 격리 3 passed·파일 단위 58 passed·전량 재검 초록으로 병합 회귀 아님(병합 후 해당 경로 코드 무변경).
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: 실측 수치는 본문 정정이 아니라 별도 append 항목으로 기록한다.
+- 교훈: docs 쪽 항목과 같다 — 커밋 전에 약속을 채운다.
+
+## 2026-09-24 · uncommitted · chore(deploy): split robot dev and verify scripts
+
+- 변경: 벤치 오버레이는 `deploy/robot/dev/`로, 설치 확인과 readback은 `deploy/robot/verify/`로 나눴다. `install-pi.sh`, Windows 배포 스크립트, 현재 운영 문서와 시험의 경로를 같은 변경에서 고쳤다. 제품 유닛은 `native/`에 남겼다.
+- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py test/test_rosy_motor_udev.py test/test_windows_connection_evidence.py test/test_pinky_user_validation.py test/test_folder_layout.py -q` 73 passed (2026-09-24 Windows).
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-186
+- 교훈: 없음
+

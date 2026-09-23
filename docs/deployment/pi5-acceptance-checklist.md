@@ -228,7 +228,7 @@ ROSY_IMAGE_MOUNT=/mnt/rosy ./deploy/image/verify-artifacts.sh dist/<release-id>
       실기에서 반드시 확인할 것)
 - [ ] 열 상승과 저장소 로그 증가를 기록했는가 (설계 §12.3 10단계)
 - [ ] UART·모터 승인은 별도 commissioning 절차로 남아 있는가
-      (`deploy/robot/verify-motors.sh`, `docs/deployment/power-bench-verification.md`)
+      (`deploy/robot/verify/verify-motors.sh`, `docs/deployment/power-bench-verification.md`)
 
 모터를 돌리는 순간부터는 이 문서가 아니라 현장 안전 절차의 영역이다.
 

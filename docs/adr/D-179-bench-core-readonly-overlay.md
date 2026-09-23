@@ -61,7 +61,7 @@ ARTIFACT와 DEVICE는 이 ADR로 오르지 않는다.
    동기화는 `.env`, `/etc/rosy/rosy.yaml`, `/var/lib/rosy`, 로봇 번호를 쓰지 않는다.
 
 6. **로봇 쪽 판단은 Python으로 둔다.** 경로 탈출, 링크, 목록 밖 멤버, 바인드 목적지,
-   해시 비교, 마커 기록은 `deploy/robot/core_dev_overlay.py`가 한다. Windows
+   해시 비교, 마커 기록은 `deploy/robot/dev/core_dev_overlay.py`가 한다. Windows
    pytest가 bash 없이 그 판단을 돌린다. PowerShell은 허용 목록만 묶어 SSH로 그
    모듈을 호출한다. 호스트 키 확인은 `deploy-from-windows.ps1`과 같이 끄지 않는다.
 

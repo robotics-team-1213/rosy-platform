@@ -20,7 +20,7 @@ UART_SCRIPT = ROOT / "deploy" / "robot" / "configure-uart-pi5.sh"
 PAYLOAD = ROOT / "deploy" / "image" / "build-native-payload.sh"
 IO_UNIT = ROOT / "deploy" / "robot" / "native" / "rosy-io.service"
 NAV_UNIT = ROOT / "deploy" / "robot" / "native" / "rosy-navigation.service"
-VERIFY_MOTORS = ROOT / "deploy" / "robot" / "verify-motors.sh"
+VERIFY_MOTORS = ROOT / "deploy" / "robot" / "verify" / "verify-motors.sh"
 
 
 def test_rule_creates_stable_alias():

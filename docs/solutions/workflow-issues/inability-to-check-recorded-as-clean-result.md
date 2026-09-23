@@ -108,7 +108,7 @@ second is the defect. Branch on the failure signal — exit status, exception,
 empty-but-should-not-be — before you interpret the value.
 
 The motor preflight is the clearest form. It asks compose which motor containers are
-running, and refuses to touch the UART if any are (`deploy/robot/verify-motors.sh:87-92`):
+running, and refuses to touch the UART if any are (`deploy/robot/verify/verify-motors.sh:87-92`):
 
 ```bash
 if ! running="$("${compose[@]}" --profile motor --profile hardware ps -q rosy-motor rosy-io)"; then
@@ -358,7 +358,7 @@ still derive correctly (`:289-294`). Commit `f3d339c`.
 **Before.** `if [[ -n "$(compose ... ps -q rosy-motor rosy-io)" ]]; then fail ...` — one
 branch, and compose's empty output on failure read as "nothing running."
 
-**After.** Exit status first, then emptiness (`deploy/robot/verify-motors.sh:87-92`).
+**After.** Exit status first, then emptiness (`deploy/robot/verify/verify-motors.sh:87-92`).
 Verified against real Docker and re-driven through bash with a stub `docker` that exits 1,
 asserting the probe is not reached. This defect predates the identity work; the identity
 work only added a third way to trigger it. Commit `057a198`.

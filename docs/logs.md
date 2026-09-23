@@ -1733,3 +1733,11 @@
 - gate 변화: 없음
 - 결정: D-186
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs: origin/main 병합 게이트 실측 수치를 별도 항목으로 기록
+
+- 변경: 병합(docs) 항목의 "아래 게이트 줄에 실측 수치" 약속을 본문 고치지 않고 새 항목으로 옮겨 적는다 — HEAD에 들어간 항목의 본문을 고치면 lint가 append-only 위반으로 거부한다.
+- 증거: `python -m pytest test/ -q` 전체 회귀 **1620 passed·0 failed·43 skipped** (2026-09-24 Windows, 병합 신규 15종 포함) + `rosy_harness.py lint` **0 error·21 warning**(기존 baseline). 병합 직후 1회 실행은 병합 전부터 latent였던 스캐너 오탐 1건으로 빨강이었고, `deploy/robot/core_dev_overlay.py` 개명 항목(deploy/logs.md 2026-09-24)으로 해소했다. 중간 1회 실행의 image_pipeline bash 3건 전이 실패는 격리 3 passed·파일 단위 58 passed·전량 재검 초록으로 병합 회귀가 아님이 확인됐다.
+- gate 변화: 없음 — D-181은 Proposed 그대로, 기준선 불변.
+- 결정: 실측 수치는 본문 정정이 아니라 별도 append 항목으로 기록한다.
+- 교훈: 저널 항목의 "아래 게이트 줄에 실측 수치" 같은 내부 약속은 커밋 전에 채워야 한다. 커밋 후에는 새 항목 한 개가 더 든다.

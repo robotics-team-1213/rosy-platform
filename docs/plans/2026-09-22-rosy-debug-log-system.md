@@ -73,7 +73,7 @@ pass `deploy/release/secret_scan.py`.
 
 ## Task 6: Refresh device readback for the native runtime
 
-**Files:** `deploy/robot/device_readback.py`, `test/test_device_readback.py`
+**Files:** `deploy/robot/verify/device_readback.py`, `test/test_device_readback.py`
 
 1. Replace container assumptions with systemd/native release facts; include the
    L1 latest report reference.

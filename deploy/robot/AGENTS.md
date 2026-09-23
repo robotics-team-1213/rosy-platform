@@ -22,11 +22,10 @@ development and CI compatibility and are not installed in the product image.
 | `install-pi.sh` | First-boot install on Pi. `--preset` (mode/alias) or `--slices` (must match a preset, include `core`); both map to `ROSY_RUNTIME_MODE`. vision/omx/ai: not installable yet |
 | `configure-uart-pi5.sh` | Pi 5 UART (`ttyAMA4` for Dynamixel) |
 | `deploy-from-windows.ps1` | Copy/deploy from a Windows host |
-| `sync-core-dev.ps1` / `core_dev_overlay.py` | D-179 bench overlay: allowlisted CORE Python onto `/var/lib/rosy-dev`, then restart `rosy-core` only. Does not reinstall `/opt/rosy` |
-| `verify-from-windows.ps1` | Read-only remote peer verify; optional bounded batch SSH and atomic GO/HOLD JSON connection evidence |
+| `dev/` | D-179 bench overlay. Not part of the product install path |
+| `verify/` | On-device and Windows checks: `verify-pi.sh`, `verify-motors.sh`, `verify-power.sh`, `device-readback.sh` |
 | `collect-rosy-diagnostics.ps1` | D-175 L2 puller: key-only BatchMode SSH with a pinned `%LOCALAPPDATA%\Rosy\known_hosts` (accept-new), runs `rosy-diag collect`, copies the bundle to `evidence\<device>\<boot_id>\` without overwriting. SSH unreachable + `-CardDisk <serial>`: copies the card's FAT32 `rosy-diag\` (no elevation) and prints the elevated `deploy\sd\read-card-diagnostics.py` command. `-PrintPlan` runs nothing |
-| `verify-pi.sh` / `verify-motors.sh` / `verify-power.sh` | On-device checks. `verify-motors.sh` refuses to probe the UART whenever it cannot establish that the motor runtime is down — a compose failure counts, so missing docker or an unset identity now stops it rather than opening the gate |
-| `device-readback.py` / `device-readback.sh` | Secret-free JSON evidence for OS identity, activation manifest, core health, and ROS graph |
+| `verify/verify-motors.sh` | Refuses to probe the UART whenever it cannot establish that the motor runtime is down |
 | `capture-vendor-baseline.sh` | Pre-G0 vendor stock image (card A) passive, secret-redacted evidence capture; closes upstream research UNKNOWNs and gives G0–G5 reference values. Contract pinned + mutation-proven by `test/test_capture_vendor_baseline.py`; I2C probing is opt-in and raw output requires review before repository admission |
 | `commission-pinky.py` / `commissioning_session.py` | Ordered G0-G5 evidence recorder; G5 binds MCAP telemetry and generated map hashes; operator procedure is `docs/deployment/pinky-pro-first-device-runbook.md` |
 | `measure-dds-baseline.sh` | Phase 0 DDS baseline (D-34). Requires `hardware` mode; records each topic's pre-attach subscriber count because attaching `ros2 topic bw` creates the traffic it measures |
@@ -41,7 +40,9 @@ development and CI compatibility and are not installed in the product image.
 | Directory | Purpose |
 |-----------|---------|
 | `config/` | Pi 5 lite profile, capabilities, example rosy.yaml (see `config/AGENTS.md`) |
+| `dev/` | Bench CORE overlay. Does not reinstall `/opt/rosy` (see `dev/AGENTS.md`) |
 | `native/` | D-161 native systemd product runtime (see `native/AGENTS.md`) |
+| `verify/` | Install checks and secret-free device readback (see `verify/AGENTS.md`) |
 
 ## For AI Agents
 
