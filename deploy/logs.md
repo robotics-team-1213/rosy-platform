@@ -921,3 +921,33 @@
 - gate 변화: CI에 하드웨어 안전 스텝 추가
 - 결정: D-192
 - 교훈: 시험을 추가할 때 CI가 그 폴더를 실제로 돌리는지 확인한다. 이 저장소에서는 루트 `test/`로 옮기면 D-184가, 패키지로 옮기면 CI가 막는다.
+
+## 2026-09-24 · uncommitted · feat(native,image): boot display on the LCD and buzzer (US-006, D-190 S1-S2)
+
+- 변경: `rosy-boot-display.service`(사용자 `rosy-display` 962, `DevicePolicy=closed` + `spidev0.0`·`gpiochip4`·`i2c-1`,
+  `ProtectSystem=strict`, `PrivateNetwork`, HOME·`LG_WD`는 `StateDirectory=rosy/display`)와 상주 루프
+  `rosy-boot-display.py`(1 s 폴링, 바뀔 때만 다시 그림, 배터리 15 s, `rosylib.Battery` 직접, gpiochip4 label 확인, 장치 없으면
+  한 번 기록). 부저 BCM 22 기본 꺼짐(`/etc/rosy/boot-display.env`로 켬), `CORE_READY` 1회·`FAILED` 3회. `rosy-network.py`가
+  AP를 연 동안만 `/run/rosy-boot/ap-display.txt`(SSID·비밀번호 두 줄, root:rosy-display 0640)를 쓰고 지운다. 이미지: apt
+  `python3-spidev`·`python3-rpi-lgpio`·`python3-numpy`·`python3-pil`·`fonts-dejavu-core`, 사용자·그룹, `99-rosy-display.rules`,
+  unit enable, chroot `probe-display-runtime.py`(rosy-display로), 검사기(enable·udev·dpkg·`dtparam=spi=on`). D-181 편입:
+  `board.yaml` `boot_display`, 장치 표면 변이 시험, 샌드박스 계약 선언. emotion은 벤치 전용이라 `Conflicts=` 없음(가드 시험).
+- 증거: 관련 host 스위트 936 passed, 11 skipped(2026-09-24 Windows). AP 파일 0640·그룹 확인은 WSL POSIX에서 통과.
+  장치 표면 변이: `rosy-io.service`에 `spidev0.0` 추가·표시 unit의 `i2c-1`을 `i2c-0`으로 바꾸면 적색, 되돌리면 녹색.
+- gate 변화: 없음. 이미지 빌드(probe 첫 실행)와 D-190 S3 실기 확인이 남았다
+- 결정: D-190 Proposed(S1·S2 완료), D-181 편입 기록 추가
+- 교훈: 백라이트가 소프트웨어 PWM이면 "그리고 끝나는" 표시는 없다 — 표시 장치는 상주 프로세스와 한 쌍으로 설계한다
+
+## 2026-09-24 · uncommitted · fix(native,image): US-006 security review
+
+- 변경: (M1) 부저 핀은 허용 목록 {4,5,6,16,17,20,21,22,23,24,26}만, `board.yaml`에 목록과 헤더 선 주인(0-3, 7-15, 18, 19, 25, 27).
+  (M2) `battery_adc`를 실제 허용(`rw-any-address`, `advisory-flock`)으로, D-181·D-190에 남은 위험과 커널 패널 드라이버 후속.
+  (L1) gpiochip label을 매 시도 읽고, 못 읽으면 패널을 건드리지 않고 재시도. (L2) 패널 노드가 있는데 못 그리면 1로 끝남,
+  `/dev/spidev0.0`이 없으면 0. probe는 "Raspberry Pi" `RuntimeError`만 허용하고 rpi-lgpio의 `RPI_LGPIO_CHIP` 읽기를 확인
+  (noble 0.5-0ubuntu1 소스로 확인, shim 없음). (L3) 장치 표면 가드: `char-spi`·`char-i2c`·`char-gpio`, drop-in, `[Service]`만
+  파싱, 표시 unit의 마지막 `DevicePolicy=closed`, gpio/spi 그룹 비 root unit은 closed 또는 `PrivateDevices`, 변이를 `[Service]`에.
+  (L4) POSIX 시험 `skipif`, fchown·fchmod가 빈 파일 위치 0에서 불리는지, 오래된 AP 파일을 `main --once`가 지우는지 동작 시험.
+- 증거: 보고서 수치(Windows host 스위트, WSL POSIX)
+- gate 변화: 없음
+- 결정: D-190·D-181 갱신
+- 교훈: 노드 단위 장치 허용은 프로그램이 쓰는 선보다 넓다 — 허용과 사용을 따로 적고, 좁히는 길을 열린 항목으로 남긴다

@@ -208,6 +208,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
 
 receipt에는 `resumed_after_write: true`가 남는다. plan의 receipt가 이미 있으면 거부한다(이미 끝난 카드다).
 
+### 전원을 넣으면 보이는 것 (D-190)
+
+LCD는 CORE 밖의 `rosy-boot-display.service`가 그린다. 전원을 넣고 몇 초 안에 첫 화면이 뜨고, 단계가 바뀌면 1초
+안에 다시 그린다.
+
+| 화면 단계 | 뜻 | 다음 행동 |
+|---|---|---|
+| `BOOTING`(회색) | 첫 부팅 개인화나 런타임이 아직 시작 중 | 기다린다. 첫 부팅은 1분 안팎 |
+| `PROVISIONED` | 신원·Wi-Fi 적용 끝, CORE 시작 중 | 기다린다 |
+| `READY` | CORE가 준비됐다. 아래 `IP:포트`로 대시보드·API에 접속 | 접속한다 |
+| `FAILED`(빨강) + unit 이름 | 그 unit이 실패했다 | `journalctl -b -u <unit>`, 또는 카드의 `rosy-diag/` |
+
+- 둘째 줄부터: `IP:포트`(IP가 없으면 `no IP address`), 배터리 %·전압(ADC를 못 읽으면 `battery --`).
+- 현장 Wi-Fi 없이 120 s가 지나 AP가 열리면 `Wi-Fi rosy-pinky-xxxx`와 `PW <비밀번호>`, 주소 `10.42.0.1:8080`이 뜬다.
+  비밀번호는 카드별이고(D-176), 화면에만 나오며 로그에는 남지 않는다. 업링크가 돌아오면 사라진다.
+- 부저는 **기본으로 꺼져 있다.** Pro의 부저 핀이 아직 확인되지 않았기 때문이다(D-190 "부저 핀 확인"). 확인한 뒤
+  `/etc/rosy/boot-display.env`에 `ROSY_BUZZER_ENABLED=true`(핀이 22가 아니면 `ROSY_BUZZER_PIN=<BCM>`도)를 쓰고
+  `sudo systemctl restart rosy-boot-display` 한다. 그러면 `READY`에 한 번, `FAILED`에 세 번 짧게 울린다.
+- 화면이 비어 있으면: `systemctl status rosy-boot-display`, `journalctl -b -u rosy-boot-display`. `/dev/spidev0.0`이
+  없으면 패널이 없는 보드로 보고 조용히 끝난다. 노드가 있는데 그리지 못하면(라이브러리, GPIO 칩 label, 열기 실패) unit이
+  `failed`가 되고 이유가 journal에 한 번 남는다. HDMI 콘솔 배너(D-174)와 `_rosy._tcp` mDNS는 LCD와 상관없이 같은 단계를 보인다.
+
 ## 2. Connection choice
 
 ### SSH path

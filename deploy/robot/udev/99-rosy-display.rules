@@ -1,0 +1,8 @@
+# ROSY boot display (D-190): the ST7789 LCD on SPI0 CE0 and the Pi 5 RP1
+# header GPIO chip (LCD RST 27 / DC 25 / backlight 18, buzzer line). Only
+# rosy-boot-display.service reaches them (DevicePolicy=closed + DeviceAllow);
+# these groups make the nodes openable by its unprivileged user. The ADC bus
+# /dev/i2c-1 keeps the base image's root:dialout 0660. Installed by
+# deploy/image (baked into the image overlay).
+ACTION=="add|change", SUBSYSTEM=="spidev", KERNEL=="spidev0.0", GROUP="spi", MODE="0660"
+ACTION=="add|change", SUBSYSTEM=="gpio", KERNEL=="gpiochip4", GROUP="gpio", MODE="0660"

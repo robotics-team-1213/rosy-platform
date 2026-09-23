@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(native,image): US-006 security review
+- 2026-09-24 · uncommitted · feat(native,image): boot display on the LCD and buzzer (US-006, D-190 S1-S2)
 - 2026-09-24 · uncommitted · ci: gate the hardware safety tests that CI never ran (D-192)
 - 2026-09-24 · uncommitted · fix(image,bringup): D-192 review
 - 2026-09-24 · uncommitted · feat(image,bringup): D-192 hardware runtime in the image (US-003/004/005)
-- 2026-09-24 · uncommitted · fix(sd,first-boot): US-009 security review (D-191)
-- 2026-09-24 · uncommitted · feat(sd,first-boot): per-card CORE API administrator credential (D-191, US-009)
