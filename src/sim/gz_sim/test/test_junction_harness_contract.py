@@ -259,3 +259,53 @@ def test_scenario_budget_is_simulation_time_with_a_wall_cap():
     assert "WALL_CAP_S = " in source
     assert 'result["real_time_factor"]' in source
     assert 'result["sim_s"]' in source and 'result["wall_s"]' in source
+
+
+def test_wall_clock_step_is_measured_against_the_monotonic_clock():
+    """r4 scenario 09 (2026-09-23): WSL stepped the realtime clock back ~15
+    minutes (hv_utils TimeSync re-init) inside one scenario, the only one of
+    102 recorded launch logs with a backward wall-clock jump and the only
+    failure of that code in 36 runs. A step is the change of
+    time.time() - time.monotonic() over the scenario; it must be recorded so
+    such a run can be told apart from a follower failure."""
+    mod = _mod()
+    assert mod.clock_step_s(100.0, 100.2) == 0.2
+    assert mod.clock_step_s(1_790_159_000.0, 1_790_158_054.3) == -945.7
+    assert mod.CLOCK_STEP_TOLERANCE_S > 0
+    offset = mod.wall_clock_offset()
+    assert isinstance(offset, float)
+
+
+def test_every_result_records_the_clock_step_and_logs_a_large_one():
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    start_at = run_one_source.index("clock_offset = wall_clock_offset()")
+    loop_at = run_one_source.index("while time.monotonic() < wall_deadline:")
+    assert start_at < loop_at
+    assert 'result["clock_step_s"] = step' in run_one_source
+    assert "abs(step) > CLOCK_STEP_TOLERANCE_S" in run_one_source
+
+
+def test_core_line_follow_status_is_sampled_into_the_evidence():
+    """r4 scenario 09 stopped with the observer still publishing ONE/0.80
+    evidence every frame; CORE's own state/reason was the missing record.
+    The status API is polled about once per wall second into
+    core_status.jsonl beside track.json."""
+    mod = _mod()
+    assert 0 < mod.STATUS_SAMPLE_S <= 2.0
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    assert '"core_status.jsonl"' in run_one_source
+    loop_source = run_one_source.split("while time.monotonic() < wall_deadline:", 1)[1].split(
+        "wall_elapsed = ", 1)[0]
+    assert "_api_get(STATUS_API, VIEWER)" in loop_source
+
+
+def test_api_get_returns_none_instead_of_raising(monkeypatch):
+    mod = _mod()
+
+    def refuse(*_args, **_kwargs):
+        raise mod.urllib.error.URLError("refused")
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", refuse)
+    assert mod._api_get(mod.STATUS_API, mod.VIEWER) is None

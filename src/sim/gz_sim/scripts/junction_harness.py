@@ -65,6 +65,14 @@ RECORDER_STOP_TIMEOUT_S = 15.0
 #: read from /proc/<pid>/environ -- narrower than a bare pattern match,
 #: which would kill an unrelated Gazebo/domain/user's run on the same box.
 LEFTOVER_PATTERNS = ("gz sim .*map_v2_fleet.world", "map_v2_fleet_lane.launch.py")
+#: A realtime-clock step larger than this inside one scenario is logged. WSL
+#: can step the clock by minutes (r4 scenario 09, 2026-09-23: -945 s on an
+#: hv_utils TimeSync re-init); such a result is infrastructure evidence, not
+#: follower evidence, and wants a rerun.
+CLOCK_STEP_TOLERANCE_S = 1.0
+#: How often (wall seconds) CORE's line-follow status is sampled into
+#: core_status.jsonl, so a stop shows CORE's own state and reason.
+STATUS_SAMPLE_S = 1.0
 
 
 def _api_ok(url, headers):
@@ -74,6 +82,26 @@ def _api_ok(url, headers):
             return resp.status == 200
     except (urllib.error.URLError, OSError):
         return False
+
+
+def _api_get(url, headers):
+    """GET a JSON document, or None on any transport or decode failure."""
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=0.2) as resp:
+            return json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def wall_clock_offset():
+    """Realtime minus monotonic: constant unless the wall clock is stepped."""
+    return time.time() - time.monotonic()
+
+
+def clock_step_s(start_offset, end_offset):
+    """How far the wall clock was stepped between two wall_clock_offset()s."""
+    return round(end_offset - start_offset, 1)
 
 
 def set_mode(mode):
@@ -235,12 +263,20 @@ def run_one(scenario, graph, mode, out_dir, domain):
         end = junction_score.directed_points(graph, scenario["out"])
         s = junction_score._arc_length(end)
         end_point = end[int(s.searchsorted(junction_score.END_AFTER_M))]
+        clock_offset = wall_clock_offset()
         wall_start = time.monotonic()
         wall_deadline = wall_start + WALL_CAP_S
         sim_start = None
         reached, reason = False, "wall_cap"
+        status_log = (out_dir / "core_status.jsonl").open("w")
+        next_status = wall_start
         while time.monotonic() < wall_deadline:
             rclpy.spin_once(node, timeout_sec=0.1)
+            if time.monotonic() >= next_status:
+                next_status = time.monotonic() + STATUS_SAMPLE_S
+                status = _api_get(STATUS_API, VIEWER)
+                status_log.write(json.dumps(
+                    {"sim": stamps[-1] if stamps else None, "status": status}) + "\n")
             if stamps and sim_start is None:
                 sim_start = stamps[-1]
             if track and math.dist(track[-1], end_point) < 0.05:
@@ -249,7 +285,9 @@ def run_one(scenario, graph, mode, out_dir, domain):
             if sim_start is not None and stamps[-1] - sim_start >= TIMEOUT_S:
                 reason = "timeout"
                 break
+        status_log.close()
         wall_elapsed = time.monotonic() - wall_start
+        step = clock_step_s(clock_offset, wall_clock_offset())
         sim_elapsed = (stamps[-1] - sim_start) if sim_start is not None else 0.0
         set_mode("OFF")
         result = junction_score.score(graph, scenario, track or [scenario["start"][:2]])
@@ -257,6 +295,12 @@ def run_one(scenario, graph, mode, out_dir, domain):
         result["sim_s"] = round(sim_elapsed, 2)
         result["wall_s"] = round(wall_elapsed, 2)
         result["real_time_factor"] = round(sim_elapsed / wall_elapsed, 3) if wall_elapsed else None
+        result["clock_step_s"] = step
+        if abs(step) > CLOCK_STEP_TOLERANCE_S:
+            # stderr, not launch.log: the launch group still holds that file
+            # open at its own offset and would overwrite an appended line.
+            print(f"clock-step: {out_dir.name}: wall clock stepped {step:+.1f} s during "
+                  "this scenario; infrastructure, rerun it", file=sys.stderr, flush=True)
         (out_dir / "track.json").write_text(json.dumps(track))
         return result
     except Exception as exc:  # noqa: BLE001 - one scenario's failure must not abort the rest
