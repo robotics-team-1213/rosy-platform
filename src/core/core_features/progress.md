@@ -34,4 +34,4 @@ plans:
 
 ## 현재 유효한 금지사항
 
-- Depends on `core_common`, `core_events`. Never on `core_api_web` or `core`. Never import `control` (D-126).
+- Depends on `core_common`. Never on `core_api_web` or `core`. Never import `control` (D-126).

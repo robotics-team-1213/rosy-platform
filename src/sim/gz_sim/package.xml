@@ -21,7 +21,6 @@
   <exec_depend>description</exec_depend>
   <exec_depend>control</exec_depend>
   <exec_depend>core</exec_depend>
-  <exec_depend>navigation</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>

@@ -35,3 +35,11 @@
 - 결정: D-182 Accepted
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거
+
+- 변경: `package.xml`의 `<depend>core_events</depend>` 제거 — `core_features`의 생산 import는 0건이고(생산 소비자는 오직 `core/core/services.py`), P3는 테스트 import를 결합으로 세지 않는다. `AGENTS.md` Key Files·금지사항·Internal과 `progress.md` 금지사항의 "Depends on" 문구를 `core_common`만으로 동기화.
+- 증거: 커밋 직전 `python -m pytest test/ -q` 초록 — D-168 `test_module_structure.py` 포함 (2026-09-24 Windows).
+- gate 변화: 없음. SOURCE HOLD(자체 test/) 유지.
+- 결정: module-coupling-scorecard §6 과제 4 (D-168 P3 "선언한 결합이 실제로 쓰이는지" 정리).
+- 교훈: 없음
+

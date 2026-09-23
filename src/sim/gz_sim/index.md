@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · chore(sim): `navigation` exec_depend 중복 제거
 - 2026-09-24 · uncommitted · docs(sim): D-182 simulation actuation profile
 - 2026-09-21 · uncommitted · fix(sim): validate the actual Gazebo camera path headlessly (D-152)
 - 2026-09-21 · uncommitted · feat(sim): wire the semantic Gazebo camera to the CORE dashboard (D-152)
 - 2026-09-21 · uncommitted · fix(sim): canonicalize semantic scene hashes (D-151)
-- 2026-09-21 · uncommitted · feat(sim): add semantic road scene and host closed loop (D-151)

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-22 -->
+<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # core_api_web
 
@@ -13,7 +13,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: `core_common`, `core_events`, `core_features`, `web_common` |
+| `package.xml` | Declared deps: `core_common`, `core_features`, `web_common` |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
@@ -38,6 +38,6 @@ python -m pytest src/core/core_api_web/test -q
 
 ### Internal
 
-`core_common`, `core_events`, `core_features`, `web_common`
+`core_common`, `core_features`, `web_common`
 
 <!-- MANUAL: -->

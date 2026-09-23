@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-20 | Updated: 2026-09-20 -->
+<!-- Generated: 2026-09-20 | Updated: 2026-09-24 -->
 
 # core
 
@@ -26,7 +26,7 @@ None at this level. Each package directory has its own `AGENTS.md`.
 
 ### Working In This Directory
 
-- Declared dependency chain is one-way: `core_common` ← `core_events` ← `core_features` ← `core_api_web` ← `core`. Do not add back-edges.
+- Declared dependency chain is one-way: `core_common` ← `core_events` ← `core`, and `core_common` ← `core_features` ← `core_api_web` ← `core`. Do not add back-edges.
 - `core_common.protocol.schemas` (`core_common/core_common/protocol/schemas.py`) is the schema source of truth — change it together with `docs/reference/ROSY API & Protocol Reference.md` (D-18).
 - Command Manager is the only `cmd_vel` publisher (D-2). External clients never speak ROS.
 

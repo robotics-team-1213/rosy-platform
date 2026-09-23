@@ -18,3 +18,11 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거
+
+- 변경: `package.xml`의 `<depend>core_events</depend>` 제거(생산 import 0). `AGENTS.md` Key Files·Internal 선언 목록에서 `core_events` 제거.
+- 증거: 커밋 직전 `python -m pytest test/ -q` 초록 — D-168 구조 시험 포함 (2026-09-24 Windows).
+- gate 변화: 없음. SOURCE HOLD(자체 test/) 유지.
+- 결정: module-coupling-scorecard §6 과제 4 (D-168 P3 "선언한 결합이 실제로 쓰이는지" 정리).
+- 교훈: 없음

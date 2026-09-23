@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-22 -->
+<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # core_features
 
@@ -13,7 +13,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: `core_common`, `core_events` |
+| `package.xml` | Declared deps: `core_common` |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
@@ -25,7 +25,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 ### Working In This Directory
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
-- Depends on `core_common`, `core_events`. Never on `core_api_web` or `core`. Never import `control` (D-126).
+- Depends on `core_common`. Never on `core_api_web` or `core`. Never import `control` (D-126).
 - Structure rules (package tier, declared coupling, direction table, 600/10k line budget): D-168, enforced by `test/test_module_structure.py`.
 
 ### Testing Requirements
@@ -38,6 +38,6 @@ PYTHONPATH=src/core:src python -m pytest src/core/core/test -q
 
 ### Internal
 
-`core_common`, `core_events`
+`core_common`
 
 <!-- MANUAL: -->

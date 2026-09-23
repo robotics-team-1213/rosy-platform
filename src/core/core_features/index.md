@@ -33,6 +33,7 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거
 - 2026-09-24 · uncommitted · feat(safety): D-182 simulation actuation is a mode flag
 - 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 시뮬 리터럴과 시험 위치
 - 2026-09-22 · uncommitted · core_features(fleet_agent): 재접속 backoff 상한 30s (T5)
