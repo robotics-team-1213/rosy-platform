@@ -2,8 +2,8 @@
 
 The sim overlay (gz_sim config/map_v2_fleet_core.yaml) turns docking on and
 seeds the parking dock, but only under runtime.mode simulation; the docking
-API takes the DOCKING mode (the nav slot only reaches the wheels in
-NAVIGATION or DOCKING) and refuses while line following holds the slot; the
+API takes the DOCKING mode (the docking slot only reaches the wheels in
+DOCKING) and refuses while line following holds the slot; the
 bridge hands the mode back when docking stops moving the robot.
 """
 
@@ -87,7 +87,7 @@ def test_the_dock_api_takes_the_docking_mode_and_its_twist_reaches_the_wheels(co
     response = client.post("/api/v1/docking/dock", json={"dock": "parking"}, headers=OPERATOR)
     assert response.status_code == 200, response.text
     assert services.modes.mode is Mode.DOCKING
-    services.command.set_nav_twist(Twist(linear=0.03, angular=0.1))
+    services.command.set_docking_twist(Twist(linear=0.03, angular=0.1))
     out = services.command.select_output()
     assert (out.linear, out.angular) == pytest.approx((0.03, 0.1))
 

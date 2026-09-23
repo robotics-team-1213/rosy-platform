@@ -4,6 +4,8 @@
 - EMERGENCY: 모든 소스 차단, zero-twist (SAF-001)
 - MANUAL: teleop만, watchdog 만료 시 zero (SAF-002)
 - NAVIGATION: nav_cmd_vel(Nav2) 통과, 속도 클리핑 (SAF-004)
+- DOCKING: 도킹 슬롯만 통과 (docking.manager 가 쓴다). nav 슬롯은 막힌다 —
+  Nav2 스테이징은 브리지가 도킹 슬롯으로 넘긴다 (core.bridge.docking_mode)
 """
 
 from __future__ import annotations
@@ -52,6 +54,10 @@ class CommandManager:
         self._nav_twist: Optional[Twist] = None
         self._nav_updated_at: Optional[float] = None
         self._nav_timeout_s = 0.5
+        #: 도킹 전용 슬롯. DOCKING 에서만 바퀴에 닿는다 — nav 슬롯을 같이 쓰면
+        #: DOCKING 을 떠난 뒤에도 도킹 틱이 쓴 값이 NAVIGATION 에서 나간다.
+        self._docking_twist: Optional[Twist] = None
+        self._docking_updated_at: Optional[float] = None
         self._policy_ids = count(1)
         self._input_epoch = 0
         self._safety.estop_listeners.append(self._clear_for_stop)
@@ -122,6 +128,21 @@ class CommandManager:
     def clear_navigation(self) -> None:
         self.set_nav_twist(None)
 
+    def set_docking_twist(self, twist: Optional[Twist], now: Optional[float] = None) -> None:
+        if self._safety.estop or self._modes.is_emergency:
+            twist = None
+        if twist is not None and not finite_velocity(twist.linear, twist.angular):
+            self._reject('docking', 'invalid velocity')
+            twist = None
+        self._docking_twist = twist
+        self._input_epoch += 1
+        self._docking_updated_at = (
+            (now if now is not None else time.monotonic()) if twist is not None else None
+        )
+
+    def clear_docking(self) -> None:
+        self.set_docking_twist(None)
+
     def clear_manual(self) -> None:
         self._manual_twist = None
         self._input_epoch += 1
@@ -142,6 +163,7 @@ class CommandManager:
     def _clear_for_stop(self) -> None:
         self._drop_manual_session()
         self.clear_navigation()
+        self.clear_docking()
 
     def _note_watchdog_lapse(self, session: int) -> None:
         """SAF-002 만료를 기록해 둔다. 내보내는 것은 `announce_pending` 이다.
@@ -214,17 +236,14 @@ class CommandManager:
             if held is not None:
                 self._note_watchdog_lapse(session)
             return ZERO
-        nav_age = current - self._nav_updated_at if self._nav_updated_at is not None else None
-        # DOCKING drives through the same nav slot (docking.manager owns the
-        # motion there; ros_bridge's DockingExecutor writes it). Until the
-        # docking API took the mode, DOCKING was never entered.
-        if (
-            self._modes.mode in (Mode.NAVIGATION, Mode.DOCKING)
-            and self._nav_twist is not None
-            and nav_age is not None
-            and 0.0 <= nav_age <= self._nav_timeout_s
-        ):
-            l, a = self._safety.clip(self._nav_twist.linear, self._nav_twist.angular, "nav")
-            source = 'docking' if self._modes.mode is Mode.DOCKING else 'navigation'
+        if self._modes.mode is Mode.NAVIGATION:
+            held, stamp, source = self._nav_twist, self._nav_updated_at, 'navigation'
+        elif self._modes.mode is Mode.DOCKING:
+            held, stamp, source = self._docking_twist, self._docking_updated_at, 'docking'
+        else:
+            return ZERO
+        age = current - stamp if stamp is not None else None
+        if held is not None and age is not None and 0.0 <= age <= self._nav_timeout_s:
+            l, a = self._safety.clip(held.linear, held.angular, "nav")
             return self._policy_output(l, a, source, current)
         return ZERO

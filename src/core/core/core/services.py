@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from core_common.capability import Capability
-from core_features.command.arbitration import ModeMachine, SourceRegistry
+from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockInstance, DockType
@@ -380,6 +380,19 @@ class CoreServices:
             map_id_provider=lambda: state.map_id,
         )
         nav.session_closed_listener = swarm.on_navigation_session_closed
+
+        def leave_docking(old, new):
+            """Every exit from DOCKING stops the docking run first — API, line
+            follow, e-stop or the bridge's release. The docking slot only
+            reaches the wheels in DOCKING, and nothing else may keep driving it."""
+            if old is not Mode.DOCKING:
+                return
+            if new is Mode.EMERGENCY:
+                docking.abort("emergency stop during docking")
+            else:
+                docking.cancel()
+            command.clear_docking()
+        modes.change_listeners.append(leave_docking)
         def reflect_stop():
             state.set_estop(True)
         safety.estop_listeners.append(reflect_stop)

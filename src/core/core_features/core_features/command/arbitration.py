@@ -41,7 +41,8 @@ _ALLOWED: dict[Mode, set[Mode]] = {
     Mode.IDLE: {Mode.MANUAL, Mode.NAVIGATION, Mode.DOCKING, Mode.EMERGENCY},
     Mode.MANUAL: {Mode.IDLE, Mode.NAVIGATION, Mode.EMERGENCY},
     Mode.NAVIGATION: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
-    Mode.DOCKING: {Mode.IDLE, Mode.EMERGENCY},
+    # MANUAL(3) outranks DOCKING(4): the operator can always take the robot.
+    Mode.DOCKING: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
     Mode.EMERGENCY: {Mode.IDLE},
 }
 
@@ -83,6 +84,10 @@ class ModeMachine:
 
     def __init__(self) -> None:
         self.mode: Mode = Mode.IDLE
+        #: `(old, new)` after every change. Whoever owns a mode's motion (the
+        #: docking run owns DOCKING) stops it here, so no exit path — API,
+        #: line follow, e-stop, the bridge — can leave it running.
+        self.change_listeners: list = []
 
     def can_transition(self, new: Mode) -> bool:
         return new in _ALLOWED[self.mode]
@@ -92,7 +97,9 @@ class ModeMachine:
             return True, ""
         if not self.can_transition(new):
             return False, f"invalid transition {self.mode.value}->{new.value}"
-        self.mode = new
+        old, self.mode = self.mode, new
+        for listener in list(self.change_listeners):
+            listener(old, new)
         return True, ""
 
     def release_emergency(self) -> tuple[bool, str]:

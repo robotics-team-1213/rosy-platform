@@ -247,9 +247,8 @@ class RosBridge:
         self._svc.advisory_feed.ingest(packet)
 
     def _on_nav_cmd_vel(self, msg: Twist) -> None:
-        if self._svc.line_follow.active:
-            return
-        self._svc.command.set_nav_twist(CoreTwist(linear=msg.linear.x, angular=msg.angular.z))
+        docking_mode.route_nav_cmd_vel(
+            self._svc, CoreTwist(linear=msg.linear.x, angular=msg.angular.z))
 
     def _on_line_observation(self, msg: String) -> None:
         """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
@@ -629,15 +628,13 @@ class RosBridge:
     def drive(self, linear: float, angular: float) -> None:
         """접근·후진 속도. 기존 cmd_vel 멀렉서를 통과시킨다.
 
-        nav 슬롯을 쓴다. 수동 조작(우선순위 3)이 도킹(4)을 이겨야 하는데 멀렉서가
-        이미 manual 을 위에 두고 있고, DOCKING 과 NAVIGATION 사이의 구분은 여기서
-        의미가 없다 — 도킹 중에는 도킹 매니저가 주행을 소유하므로 경쟁할 nav
-        목표 자체가 존재하지 않는다.
+        도킹 슬롯을 쓴다 — DOCKING 에서만 바퀴에 닿는다. nav 슬롯을 쓰면 DOCKING
+        을 떠난 뒤(IDLE → NAVIGATION) 도킹 틱의 값이 'navigation' 으로 나간다.
         """
-        self._svc.command.set_nav_twist(CoreTwist(linear=linear, angular=angular))
+        self._svc.command.set_docking_twist(CoreTwist(linear=linear, angular=angular))
 
     def stop(self) -> None:
-        self._svc.command.set_nav_twist(CoreTwist(linear=0.0, angular=0.0))
+        self._svc.command.set_docking_twist(CoreTwist(linear=0.0, angular=0.0))
 
     def set_collision_exemption(self, enabled: bool) -> None:
         """도크는 코스트맵에 장애물로 찍힌다 — 접근 구간에만 면제를 선언한다.

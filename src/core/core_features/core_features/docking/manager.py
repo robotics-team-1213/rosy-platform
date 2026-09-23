@@ -285,6 +285,11 @@ class DockingManager:
         self._emit("docking.canceled", "info",
                    {"dock_id": self._dock.id if self._dock else None})
 
+    def abort(self, reason: str) -> None:
+        """진행 중인 시퀀스를 실패로 접는다 (예: DOCKING 에서 EMERGENCY 로)."""
+        if self._state in (DockState.DOCKING, DockState.UNDOCKING):
+            self._fail(reason)
+
     def on_navigation_state(self, state: NavigationState) -> None:
         self._nav_state = state
 
