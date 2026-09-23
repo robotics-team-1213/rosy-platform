@@ -98,3 +98,59 @@ def test_the_node_publishes_evidence_only_and_fails_closed_off_gazebo():
 def test_the_node_is_an_installed_entry_point():
     setup = (ROOT / "setup.py").read_text(encoding="utf-8")
     assert "'dock_observer_node = control.dock_observer_node:main'" in setup
+
+
+
+_NODE_SMOKE = """
+import json
+import cv2, rclpy
+from sensor_msgs.msg import Image
+import dock_scene
+from control.dock_observer_node import DockObserverNode
+
+bgr = cv2.cvtColor(dock_scene.render(dock_scene.SPOT), cv2.COLOR_GRAY2BGR)
+
+params = {"use_sim_time": "true", "camera_geometry_source": "GAZEBO",
+          "camera_height_m": dock_scene.HEIGHT_M, "camera_pitch_rad": dock_scene.PITCH_RAD,
+          "camera_hfov_rad": dock_scene.HFOV, "camera_x_offset_m": dock_scene.CAM_X}
+args = ["--ros-args"]
+for name, value in params.items():
+    args += ["-p", f"{name}:={value}"]
+rclpy.init(args=args)
+node = DockObserverNode()
+published = []
+node.observation_pub.publish = lambda msg: published.append(json.loads(msg.data))
+msg = Image(height=bgr.shape[0], width=bgr.shape[1], encoding="bgr8",
+            step=bgr.shape[1] * 3, data=bgr.tobytes())
+msg.header.stamp.sec = 12
+node._on_camera(msg)
+print(json.dumps(published[-1]))
+node.destroy_node()
+rclpy.shutdown()
+"""
+
+
+def test_the_node_observes_a_rendered_tag_in_a_fresh_interpreter():
+    """The rclpy shell end to end, in a child interpreter so a native crash
+    (exit -11 from the OpenCV 4.6 aruco API in all three Gazebo missions)
+    fails the test instead of killing pytest. Skipped without rclpy (the
+    Windows host)."""
+    pytest.importorskip("rclpy")
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(ROOT), str(Path(__file__).resolve().parent)]
+        + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
+    result = subprocess.run([sys.executable, "-X", "faulthandler", "-c", _NODE_SMOKE],
+                            env=env, capture_output=True, text=True, timeout=120, check=False)
+    assert result.returncode == 0, (result.returncode, result.stderr[-2000:])
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    x, y, yaw = dock_scene.truth(dock_scene.SPOT)
+    assert payload["visible"] is True and payload["tag_id"] == 7
+    assert payload["stamp"] == 12.0
+    assert payload["x"] == pytest.approx(x, abs=0.004)
+    assert payload["y"] == pytest.approx(y, abs=0.002)
+    assert payload["yaw"] == pytest.approx(yaw, abs=math.radians(1.0))

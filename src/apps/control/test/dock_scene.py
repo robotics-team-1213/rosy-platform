@@ -44,11 +44,18 @@ DIST = np.zeros(5)
 SUPERSAMPLE = 4
 
 
+def marker_image(tag_id, side_px):
+    """DICT_4X4_50 marker image: generateImageMarker on OpenCV >= 4.7,
+    drawMarker before it (the ROS box's apt 4.6)."""
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    draw = getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker
+    return draw(dictionary, tag_id, side_px)
+
+
 def tag_texture(px_per_cell=40, tag_id=TAG_ID):
     """The face texture: the marker plus its white quiet zone, row 0 at the
     top of the slope, column 0 at the tag's left (+y seen from the bay)."""
-    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    marker = cv2.aruco.generateImageMarker(dictionary, tag_id, 6 * px_per_cell)
+    marker = marker_image(tag_id, 6 * px_per_cell)
     pad = QUIET_CELLS * px_per_cell
     return cv2.copyMakeBorder(marker, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
 

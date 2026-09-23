@@ -24,11 +24,31 @@ import cv2
 import numpy as np
 
 
-_DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-_PARAMETERS = cv2.aruco.DetectorParameters()
-# Sub-pixel corners: the parking tag is ~50 px wide at its stop range and a
-# yaw from rvec needs its corners to a fraction of a pixel.
-_PARAMETERS.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+def _detector_parameters(aruco):
+    """Detector parameters with sub-pixel corners: the parking tag is ~50 px
+    wide at its stop range and a yaw from rvec needs its corners to a
+    fraction of a pixel.
+
+    Before OpenCV 4.7 (the ROS box's apt python3-opencv is 4.6) parameters
+    come only from DetectorParameters_create(); a bare DetectorParameters()
+    there wraps a null pointer and setting a field segfaults."""
+    create = getattr(aruco, "DetectorParameters_create", None)
+    parameters = create() if create is not None else aruco.DetectorParameters()
+    parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+    return parameters
+
+
+def _marker_detector(aruco):
+    """gray -> (corners, ids, rejected) for DICT_4X4_50: ArucoDetector on
+    OpenCV >= 4.7, the free detectMarkers() before it."""
+    dictionary = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+    parameters = _detector_parameters(aruco)
+    if hasattr(aruco, "ArucoDetector"):
+        return aruco.ArucoDetector(dictionary, parameters).detectMarkers
+    return lambda gray: aruco.detectMarkers(gray, dictionary, parameters=parameters)
+
+
+_DETECT_MARKERS = _marker_detector(cv2.aruco)
 
 
 @dataclass(frozen=True)
@@ -94,8 +114,7 @@ def detect_dock_tag(bgr: np.ndarray, spec: DockTagSpec,
     """Detect our tag and solve its relative pose, or None when absent/foreign.
     `mount` switches to the base_link contract (module docstring)."""
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
-    detector = cv2.aruco.ArucoDetector(_DICTIONARY, _PARAMETERS)
-    corners, ids, _ = detector.detectMarkers(gray)
+    corners, ids, _ = _DETECT_MARKERS(gray)
     if ids is None:
         return None
     match = next((c for c, i in zip(corners, ids.flatten()) if int(i) == spec.tag_id), None)

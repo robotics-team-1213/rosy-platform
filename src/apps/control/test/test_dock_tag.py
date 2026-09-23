@@ -11,13 +11,13 @@ import cv2
 import numpy as np
 import pytest
 
+import dock_scene
 from control.sensing.dock_tag import (
     DockTagObservation,
     DockTagSpec,
     detect_dock_tag,
 )
 
-DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 SPEC = DockTagSpec(tag_id=7, size_m=0.10, revision="dock-tag-v1")
 # Pinhole fixture: fx=fy=600, centre 320x240, no distortion.
 CAMERA_MATRIX = np.array([[600.0, 0.0, 320.0],
@@ -28,7 +28,7 @@ DIST = np.zeros(5)
 
 def _marker_canvas(marker_px: int = 200, canvas_wh: tuple[int, int] = (640, 480)) -> np.ndarray:
     """White canvas with one fronto-parallel tag dead centre."""
-    marker = cv2.aruco.generateImageMarker(DICT, SPEC.tag_id, marker_px)
+    marker = dock_scene.marker_image(SPEC.tag_id, marker_px)
     canvas = np.full((canvas_wh[1], canvas_wh[0], 3), 255, dtype=np.uint8)
     x0 = (canvas_wh[0] - marker_px) // 2
     y0 = (canvas_wh[1] - marker_px) // 2
@@ -68,7 +68,7 @@ def test_empty_frame_is_no_dock_not_a_guess():
 
 def test_unknown_tag_id_is_refused():
     """A tag from another dock family must not parse as ours (SRS: fail-closed)."""
-    marker = cv2.aruco.generateImageMarker(DICT, 42, 200)
+    marker = dock_scene.marker_image(42, 200)
     canvas = np.full((480, 640, 3), 255, dtype=np.uint8)
     canvas[140:340, 220:420] = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
     assert detect_dock_tag(canvas, SPEC, CAMERA_MATRIX, DIST) is None
@@ -89,7 +89,6 @@ def test_bad_spec_fails_closed():
 # in base_link and the yaw of the tag's inward axis (0 when squarely faced),
 # not the bearing.
 
-import dock_scene  # noqa: E402
 
 from control.sensing.dock_tag import CameraMount  # noqa: E402
 
@@ -176,3 +175,83 @@ def test_a_bad_mount_fails_closed():
         CameraMount(height_m=0.0, pitch_rad=0.4)
     with pytest.raises(ValueError):
         CameraMount(height_m=0.06, pitch_rad=float("nan"))
+
+
+# --- OpenCV API generations ------------------------------------------------
+#
+# The ROS box (Ubuntu 24.04, apt python3-opencv 4.6.0) has the pre-4.7
+# aruco API: no ArucoDetector, parameters from DetectorParameters_create(),
+# detection through the free function detectMarkers(). There a bare
+# DetectorParameters() wraps a null pointer and setting any field on it
+# segfaults the interpreter — dock_observer_node died with exit -11 at
+# import in all three Gazebo missions. The host has OpenCV >= 4.7.
+
+
+class _NullPointerParameters:
+    """4.6's bare DetectorParameters(): touching a field is a native crash,
+    modelled here as an exception so the test survives it."""
+
+    def __setattr__(self, name, value):
+        raise AssertionError("DetectorParameters() is a null pointer before OpenCV 4.7")
+
+
+class _LegacyAruco:
+    """cv2.aruco as OpenCV 4.6 exposes it, delegating to the host's own."""
+
+    DICT_4X4_50 = cv2.aruco.DICT_4X4_50
+    CORNER_REFINE_SUBPIX = cv2.aruco.CORNER_REFINE_SUBPIX
+    getPredefinedDictionary = staticmethod(cv2.aruco.getPredefinedDictionary)
+    DetectorParameters = _NullPointerParameters
+
+    def __init__(self):
+        self.calls = []
+
+    @staticmethod
+    def DetectorParameters_create():
+        create = getattr(cv2.aruco, "DetectorParameters_create", None)
+        return create() if create is not None else cv2.aruco.DetectorParameters()
+
+    def detectMarkers(self, image, dictionary, parameters=None):
+        self.calls.append(parameters)
+        if not hasattr(cv2.aruco, "ArucoDetector"):   # this host is itself pre-4.7
+            return cv2.aruco.detectMarkers(image, dictionary, parameters=parameters)
+        return cv2.aruco.ArucoDetector(dictionary, parameters).detectMarkers(image)
+
+
+def test_the_pre_4_7_aruco_api_detects_with_subpixel_corners():
+    from control.sensing.dock_tag import _marker_detector
+
+    legacy = _LegacyAruco()
+    detect = _marker_detector(legacy)
+    frame = cv2.cvtColor(_marker_canvas(), cv2.COLOR_BGR2GRAY)
+    _, ids, _ = detect(frame)
+    assert ids is not None and [int(i) for i in ids.flatten()] == [SPEC.tag_id]
+    assert len(legacy.calls) == 1
+    assert legacy.calls[0].cornerRefinementMethod == cv2.aruco.CORNER_REFINE_SUBPIX
+
+
+def test_the_current_aruco_api_detects_with_subpixel_corners():
+    from control.sensing.dock_tag import _detector_parameters, _marker_detector
+
+    assert _detector_parameters(cv2.aruco).cornerRefinementMethod \
+        == cv2.aruco.CORNER_REFINE_SUBPIX
+    _, ids, _ = _marker_detector(cv2.aruco)(cv2.cvtColor(_marker_canvas(), cv2.COLOR_BGR2GRAY))
+    assert [int(i) for i in ids.flatten()] == [SPEC.tag_id]
+
+
+def test_the_module_imports_in_a_fresh_interpreter():
+    """A native crash at import (exit -11) kills the node before it logs a
+    line; in-process imports cannot see it, a child interpreter can."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    package_root = str(Path(__file__).resolve().parents[1])
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [package_root] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
+    result = subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", "import control.sensing.dock_tag"],
+        env=env, capture_output=True, text=True, timeout=60, check=False)
+    assert result.returncode == 0, (result.returncode, result.stderr[-2000:])
