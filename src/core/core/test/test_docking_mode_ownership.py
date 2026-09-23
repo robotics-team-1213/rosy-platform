@@ -284,3 +284,29 @@ def test_nav2_and_swarm_output_during_docking_never_reach_the_wheels(core_client
     assert services.docking.phase is not DockPhase.STAGING
     docking_mode.route_nav_cmd_vel(services, Twist(0.2, 0.3))
     assert wheels(services) == (0.0, 0.0)
+
+
+# --- M2: the battery auto-return takes DOCKING through the same seam ----------
+
+
+def test_the_battery_return_takes_docking_and_cancels_navigation(core_client):
+    from core_common.protocol.schemas import BatteryLevel, NavigationState
+    _, services, nav_exec = navigating_robot(core_client)
+    services.docking.on_battery_level(BatteryLevel.WARNING)
+    assert services.docking.state is DockState.DOCKING
+    assert services.modes.mode is Mode.DOCKING
+    assert services.nav.nav_state is NavigationState.CANCELED
+
+
+def test_the_battery_return_waits_while_manual(core_client):
+    from core_common.protocol.schemas import BatteryLevel
+    client, services, executor = manual_robot(core_client)
+    services.docking.on_battery_level(BatteryLevel.WARNING)
+    assert services.docking.state is DockState.UNDOCKED
+    assert services.docking.return_pending
+    assert services.modes.mode is Mode.MANUAL
+    assert executor.calls == []
+    client.post("/api/v1/mode", json={"mode": "IDLE"}, headers=OPERATOR)
+    services.docking.tick()
+    assert services.docking.state is DockState.DOCKING
+    assert services.modes.mode is Mode.DOCKING
