@@ -414,3 +414,15 @@
 - gate 변화: 없음(rig 도구, 기본값 불변).
 - 결정: D-185 R6.
 - 교훈: 기본 경로를 건드리지 않는 opt-in 도구도, A/B 기준으로 쓰기 전에 실패 분포를 따로 확인해야 한다.
+
+## 2026-09-24 · uncommitted · docs(control): D-185 R3 rig A/B and R7 single-process root cause
+
+- 변경: 코드 변경 없음. R3 rig A/B와 R7 원인 조사 결과를 D-185에 기록했다.
+- 원인: R3는 기본값 전환 전에 rig 근거가 필요했다. R7은 2026-09-22부터 원인이 미해결이던 한 프로세스 모드 결함이다.
+- 증거:
+  - rig(WSL Jazzy + Gazebo, ext4 복사본, 콜백 profiler, 모든 실행 평균 부하 16 미만)에서 R3를 비교했다. main `ROSY_EXECUTOR=single` 3/3, `events` 3/3 `ready`. rig 노드 CPU 중앙값은 440%에서 176%로 줄었다.
+  - R7 한 프로세스 모드: `c67437d1^1` 1/3 실패("Fresh final safety command evidence required", sim 19.0 s, 게이트 나이 최대 0.247 s). `76181f00^1` 3/3, main 3/3 `ready`.
+  - 오래된 트리는 `environment.json`을 쓰지 않는다. 그 실행의 유효성은 대기열이 기록한 부하(8–9)로 판단했다.
+- gate 변화: 없음.
+- 결정: D-185 R3·R7. R3 기본값 전환은 실기 측정 뒤 별도 결정.
+- 교훈: 증폭 모드에서만 보이던 결함이 분리 모드 flake와 같은 원인일 수 있다. 수정 전후 트리를 나눠 돌려야 원인을 좁힐 수 있다.
