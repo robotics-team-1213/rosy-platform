@@ -106,7 +106,7 @@ def create_dock(body: DockRequest, _: AuthContext = Depends(admin),
 def delete_dock(dock_id: str, _: AuthContext = Depends(admin),
                 svc: CoreServicesLike = Depends(get_services)):
     try:
-        svc.docking.database.remove(dock_id)
+        svc.docking.remove_dock(dock_id)
     except DockError as exc:
         raise _dock_error(exc)
     return {"deleted": dock_id}

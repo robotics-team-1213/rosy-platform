@@ -29,6 +29,29 @@ def release_docking_mode(svc) -> bool:
     return ok
 
 
+def tick(svc, warn) -> None:
+    """One docking tick from the bridge timer.
+
+    An exception here would propagate out of the rclpy timer and stop CORE's
+    executor — the 50 Hz cmd_vel timer with it — while the mode stayed
+    DOCKING. Like the swarm tick, it is caught: docking fails and the mode is
+    released, so the robot is left stopped in IDLE.
+    """
+    docking = svc.docking
+    docking.on_navigation_state(svc.nav.nav_state)
+    docking.set_manual_active(svc.command.manual_active)
+    try:
+        docking.tick()
+    except Exception as exc:  # a failed tick must not stop the bridge
+        warn(f"docking tick failed: {exc}")
+        try:
+            docking.abort(f"docking tick failed: {exc}")
+        except Exception as cleanup:  # the state is DOCK_FAILED already
+            warn(f"docking cleanup failed: {cleanup}")
+    release_docking_mode(svc)
+    svc.state.set_docking(docking.status())
+
+
 def due(count: int, fast: bool) -> bool:
     """Whether the `count`-th fast-rate call ticks the manager."""
     return fast or count % SLOW_EVERY == 0

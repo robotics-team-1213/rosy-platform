@@ -148,6 +148,8 @@ class DockingManager:
         self._state = DockState.UNDOCKED
         self._phase: Optional[DockPhase] = None
         self._dock: Optional[DockInstance] = None
+        self._dock_type: Any = None
+        self._dock_type_for: Optional[str] = None
         self._detector: Optional[DockDetector] = None
         self._agent: Any = None
         self._charging = ChargingConfirmation(
@@ -248,9 +250,11 @@ class DockingManager:
             dock = self._db.get(dock_id)
 
         dock.require_map(self._map_id_provider())
+        dock_type = self._db.type_of(dock.id)
         self._take_mode()
 
         self._dock = dock
+        self._dock_type, self._dock_type_for = dock_type, dock.id
         self._retries = 0
         self._reseats = 0
         self._error = None
@@ -290,6 +294,14 @@ class DockingManager:
         self._phase = None
         self._emit("docking.canceled", "info",
                    {"dock_id": self._dock.id if self._dock else None})
+
+    def remove_dock(self, dock_id: str) -> None:
+        """도크를 지운다. 도킹·언도킹 중인 도크는 지우지 않는다."""
+        if (self._state in (DockState.DOCKING, DockState.UNDOCKING)
+                and self._dock is not None and self._dock.id == dock_id):
+            raise DockError("DOCKING_ACTIVE",
+                            f"dock '{dock_id}' is in use ({self._state.value})")
+        self._db.remove(dock_id)
 
     def abort(self, reason: str) -> None:
         """진행 중인 시퀀스를 실패로 접는다 (예: DOCKING 에서 EMERGENCY 로)."""
@@ -398,7 +410,7 @@ class DockingManager:
         self._enter(DockPhase.STAGING)
         self._nav_state = NavigationState.PLANNING
         if self.executor is not None and self._dock is not None:
-            offset = self._db.type_of(self._dock.id).staging_offset_m
+            offset = self._type().staging_offset_m
             self.executor.navigate_to(self._dock.staging_pose(offset))
 
     def _tick_staging(self, now: float) -> None:
@@ -416,7 +428,7 @@ class DockingManager:
         self._last_seen_at = None
         if self._detector_factory is not None and self._dock is not None:
             self._detector = self._detector_factory(
-                self._dock, self._db.type_of(self._dock.id))
+                self._dock, self._type())
             self._detector.start(self._dock)
         if self._parking():
             if self._tracker is None:
@@ -455,7 +467,7 @@ class DockingManager:
 
         self._last_seen_at = now
 
-        threshold = self._db.type_of(self._dock.id).docking_threshold_m
+        threshold = self._type().docking_threshold_m
         if observation.range_m <= threshold:
             self._begin_settling()
             return
@@ -524,7 +536,7 @@ class DockingManager:
         if self._phase is DockPhase.TURNING:
             self._tick_turning(now)
             return
-        distance = self._db.type_of(self._dock.id).undock_distance_m \
+        distance = self._type().undock_distance_m \
             if self._dock else 0.35
         if abs(self.executor.travelled_m()) >= distance:
             self.executor.stop()
@@ -565,7 +577,7 @@ class DockingManager:
 
     def _retry(self, reason: str) -> None:
         """스테이징부터 다시. 도크에 도달하지 못한 실패에 쓴다."""
-        limit = self._db.type_of(self._dock.id).max_retries if self._dock else 0
+        limit = self._type().max_retries if self._dock else 0
         if self._retries >= limit:
             self._fail(reason)
             return
@@ -576,7 +588,7 @@ class DockingManager:
 
     def _reseat(self, reason: str) -> None:
         """접점만 다시 문다. 도착은 했으므로 스테이징까지 되돌아가지 않는다."""
-        limit = self._db.type_of(self._dock.id).max_retries if self._dock else 0
+        limit = self._type().max_retries if self._dock else 0
         if self._reseats >= limit:
             self._fail(reason)
             return
@@ -597,7 +609,15 @@ class DockingManager:
     # --- 주차형 단계 ------------------------------------------------------------
 
     def _type(self):
-        return self._db.type_of(self._dock.id) if self._dock is not None else None
+        """The dock's type, cached when docking starts: a dock or type deleted
+        mid-run (another API worker, a hand-edited docks.json) must not raise
+        NOT_FOUND out of the tick."""
+        if self._dock is None:
+            return None
+        if self._dock_type is None or self._dock_type_for != self._dock.id:
+            self._dock_type = self._db.type_of(self._dock.id)
+            self._dock_type_for = self._dock.id
+        return self._dock_type
 
     def _parking(self) -> bool:
         dock_type = self._type()
@@ -799,11 +819,13 @@ class DockingManager:
 
         무인 상태로 스무 번 실패한 로봇은 물리적 문제를 갖고 있다. 자동 루프는
         그것을 숨기면서, 지키려던 팩을 마저 비운다.
+
+        상태를 먼저 적는다 — 정리(_release)가 예외를 내도 도킹은 끝난 것이다.
         """
-        self._release()
         self._state = DockState.DOCK_FAILED
         self._phase = None
         self._error = reason
+        self._release()
         self._emit("docking.failed", "error",
                    {"reason": reason, "dock_id": self._dock.id if self._dock else None})
 

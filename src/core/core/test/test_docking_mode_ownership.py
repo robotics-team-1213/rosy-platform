@@ -364,3 +364,29 @@ def test_a_default_undock_takes_docking_and_releases_it_when_done(core_client):
     services.docking.cancel()
     assert docking_mode.release_docking_mode(services)
     assert services.modes.mode is Mode.IDLE
+
+
+# --- M3: an exception in the docking tick fails docking and releases the mode --
+
+
+def test_a_docking_tick_exception_fails_docking_and_releases_the_mode(core_client):
+    _, services = docking_robot(core_client)
+
+    def boom(now):
+        raise RuntimeError("dock type deleted")
+
+    services.docking._tick_docking = boom
+    warnings = []
+    docking_mode.tick(services, warnings.append)
+    assert services.docking.state is DockState.DOCK_FAILED
+    assert services.modes.mode is Mode.IDLE
+    assert warnings and "dock type deleted" in warnings[0]
+    assert wheels(services) == (0.0, 0.0)
+
+
+def test_the_api_refuses_to_delete_the_active_dock(core_client):
+    client, services = docking_robot(core_client)
+    admin = {"Authorization": "Bearer rosy-dev-admin"}
+    response = client.delete("/api/v1/docking/docks/parking", headers=admin)
+    assert response.status_code == 409, response.text
+    assert [d.id for d in services.docking.database.list()] == ["parking"]

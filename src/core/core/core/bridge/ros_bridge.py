@@ -673,11 +673,7 @@ class RosBridge:
         self._dock_ticks += 1
         if not docking_mode.due(self._dock_ticks, docking.fast_tick):
             return
-        docking.on_navigation_state(self._svc.nav.nav_state)
-        docking.set_manual_active(self._svc.command.manual_active)
-        docking.tick()
-        docking_mode.release_docking_mode(self._svc)
-        self._svc.state.set_docking(docking.status())
+        docking_mode.tick(self._svc, self._node.get_logger().warning)
 
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 
