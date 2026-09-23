@@ -299,10 +299,10 @@ def test_a_lost_tour_fails(graph):
     assert not result["pass"] and result["lost"]
 
 
-def test_a_tour_that_skips_a_segment_misses_it(graph):
-    """Drive the tour's keys without the second ring_e:f (east:f ->
-    ring_n:f is not connected, so cut the track there instead): scoring the
-    full tour against a track that ends after east:f misses the rest."""
+def test_a_tour_cut_short_misses_the_rest(graph):
+    """A track that ends where east:f ends (the tour's second ring_e:f
+    cannot be skipped by a connected route: east:f -> ring_n:f does not
+    exist) scores the first nine keys driven and the rest not."""
     mod = _mod()
     track = _tour_track(graph)
     path, arc, starts = mod.route_path(graph, TOUR)

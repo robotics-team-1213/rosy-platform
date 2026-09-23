@@ -143,12 +143,16 @@ def distance_to_polyline(point, polyline):
     return best
 
 
-def stl_world(wall_footprint=True):
+def stl_world(wall_footprint=False):
     """The 260919 STL's floor paint. `wall_footprint=False` leaves out the
     perimeter wall's floor-height base triangles as PaintLocalizer's map
-    does: in Gazebo a dark 155 mm wall stands on them, so the camera never
-    sees them as paint. The default keeps them (the world every junction
-    and lap test was measured in; near the ring they are out of view)."""
+    does: in Gazebo a 155 mm wall stands on them (slate blue, diffuse
+    0.30 0.35 0.45 in build_world.py, against the paint's white), so the
+    camera never sees them as paint. That is the default since the
+    2026-09-23 stage-2 review; `wall_footprint=True` paints them (the world
+    the junction and lap tests were first measured in; every test that
+    uses the default passed unchanged when it flipped, and the drift grid's
+    end errors fell, B's clean cell 6.3 -> 2.6 mm)."""
     from control.sensing.paint_localizer import _wall_footprint
 
     path = ROOT / "map" / "map_v2_fleet" / "scripts" / "stl_scene.py"

@@ -46,13 +46,15 @@ def _junction_score():
 junction_score = _junction_score()
 GRAPH = yaml.safe_load(GRAPH_PATH.read_text(encoding="utf-8"))
 SCENARIOS = junction_score.scenarios(GRAPH)
+#: Without the perimeter wall's base (lane_sim.stl_world's default). The
+#: tour drives the east and west corridors with their centreline 0.115 m
+#: from that wall's inner face: painted, its 5 mm base shows as a paint
+#: line that PaintLocalizer's map (and Gazebo, where the 155 mm wall stands
+#: on it) does not have, and the paint match fell 0.66 -> 0.17 in one frame
+#: (LOCALISE_STOP MATCH, then LOST).
 WORLD = lane_sim.stl_world()
-#: The tour's world: WORLD without the perimeter wall's base (lane_sim.
-#: stl_world). The tour drives the east corridor 0.08 m from that wall:
-#: in WORLD its 5 mm base shows as a paint line that PaintLocalizer's map
-#: (and Gazebo, where the wall stands on it) does not have, and the paint
-#: match fell 0.66 -> 0.17 in one frame (LOCALISE_STOP MATCH, then LOST).
-TOUR_WORLD = lane_sim.stl_world(wall_footprint=False)
+#: The tour's world (the name predates WORLD dropping the wall base too).
+TOUR_WORLD = WORLD
 
 #: CORE line_follow defaults (LineFollowConfig): evidence under
 #: min_confidence, or none, for longer than lost_after_s latches LOST.

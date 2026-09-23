@@ -77,6 +77,12 @@ day, B then H (A unchanged):
   start 30 mm / 3 deg       12/12  24.7   6.4     12/12  25.0   5.9
   start -30 mm / -3 deg     12/12  21.8   6.3     12/12  22.2   6.1
 
+With lane_sim.stl_world no longer painting the perimeter wall's base (its
+default since the same review) every cell passes as before and B's / H's
+worst end errors fall, e.g. none 2.6 / 1.4 mm, 3% scale 8.2 / 10.3 mm,
+start 30 mm / 3 deg 1.4 / 2.7 mm; H's severe +0.02 rad/s cell stays
+11/12 (36.8 mm, 1 lost). A is unchanged.
+
 Before the ring entries were route-steered the moderate cells read
 37.5 / 36.5 / 32.2 / 37.4 / 36.8 / 30.2 mm, set by the camera's ring
 entries 00 and 11. Now the moderate maxima are the camera-steered ring
