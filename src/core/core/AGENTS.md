@@ -26,7 +26,6 @@ Robot middleware (ROSY-CORE-SRS-001). One process: rclpy node `core` + uvicorn F
 | `config/` | Default YAML, Pinky Pro profile, capabilities (see `config/AGENTS.md`) |
 | `launch/` | `rosy_core.launch.py` (see `launch/AGENTS.md`) |
 | `test/` | pytest for API, power, battery, docking, protocol, dashboard (see `test/AGENTS.md`) |
-| `deploy/` | Legacy unit file / install.sh (Pi runtime now under repo `deploy/robot`) |
 | `resource/` | ament index marker `core` |
 
 ## For AI Agents
@@ -41,6 +40,7 @@ Robot middleware (ROSY-CORE-SRS-001). One process: rclpy node `core` + uvicorn F
 - Inventory: `GET /api/v1/system/inventory` is a derived snapshot (Node/Device/Component/Asset/TaskKind ids). `GET /api/v1/system/capabilities` stays CAP-001.
 - Battery deep shutdown: write sentinel JSON only. Host unit performs halt.
 - Optional ROS pkgs: wrap slam_toolbox (and similar) in constructor try/except.
+- Product `rosy-core.service` lives in `deploy/robot/native`. The old `core/deploy` installer is not a second unit.
 - D-144: select navigation readiness from `runtime.navigation_backend`; SLAM
   requires hardware mode and a writable, bounded map output directory.
 
