@@ -166,7 +166,7 @@ class WebNode(Node):
         self.create_subscription(String, 'robot/mode', self.on_mode, 10)
         self.create_subscription(String, 'wander/state', self.on_wander, 10)
         self.create_subscription(String, 'navigation/session', self.on_navigation_session, 10)
-        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 10)
+        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 1)  # latest only (D-185 R2)
         self.create_subscription(
             String, 'goal_node/state', self.on_gstate, 10)
         self.create_subscription(Float32, 'goal/eta', self.on_eta, 10)
@@ -183,7 +183,7 @@ class WebNode(Node):
         self.create_subscription(
             String, 'camera/calibration/status', self.on_camera_calibration_status, latched)
         self.create_subscription(String, 'safety/profile', self.on_safety_profile, latched)
-        self.create_subscription(String, 'safety/decision', self.on_safety_decision, 10)
+        self.create_subscription(String, 'safety/decision', self.on_safety_decision, 1)  # latest only (D-185 R2)
         self.create_subscription(Bool, 'robot/ok', self.on_ok, 10)
         self.create_subscription(String, 'robot/health', self.on_health, 10)
         self.create_subscription(String, 'robot/evidence_scope', self.on_evidence_scope, latched)
