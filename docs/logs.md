@@ -1717,3 +1717,11 @@
 - gate 변화: 없음
 - 결정: D-186 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(layout): D-186 keep scripts and module docs from overlapping
+
+- 변경: `fix.sh`와 `run_fleet_sim.sh`를 `tools/`로 옮겼다. 옛 `src/core/core/deploy` 설치기는 제거했다. control 캘리브레이션 트랙과 `bringup/scripts/rosy_env.sh`는 그 모듈에 남겼다. `progress.md`·`logs.md`·`index.md`는 하네스 모듈 루트만, `data/` 문서는 README만 시험으로 고정했다. D-186은 Accepted다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py src/apps/control/test/test_rig_script_references.py -q` 13 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-186 Accepted
+- 교훈: 없음

@@ -390,3 +390,12 @@
 - 결정: D-182, D-184 Proposed
 - 교훈: 없음.
 
+## 2026-09-24 · uncommitted · chore(core): remove the legacy core/deploy installer
+
+- 변경: `src/core/core/deploy`의 옛 `install.sh`와 `rosy-core.service`를 제거했다. 제품 유닛은 `deploy/robot/native`에 있다.
+- 증거: `test/test_folder_layout.py` 통과 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: D-186 Accepted
+- 교훈: 없음.
+
+

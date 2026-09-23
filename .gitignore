@@ -59,7 +59,7 @@ data/drive/**
 !data/drive/.gitkeep
 
 # One-off helper scripts at the repository root. Durable root helpers
-# (env.sh, fix.sh, run_fleet_sim.sh) are tracked explicitly; new throwaway
+# (env.sh) is tracked explicitly; new throwaway
 # scripts belong in tools/ or outside the repo.
 /*.py
 

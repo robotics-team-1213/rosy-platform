@@ -3,6 +3,7 @@
 # One-click startup script for multi-robot simulation + sensor control + fleet orchestration
 
 set -e
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 ROBOTS=${1:-2}
 echo "Starting $ROBOTS-robot fleet simulation..."

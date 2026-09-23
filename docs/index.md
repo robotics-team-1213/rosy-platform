@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · feat(layout): D-186 keep scripts and module docs from overlapping
 - 2026-09-24 · uncommitted · docs(adr): D-186 스크립트와 수집 폴더를 Proposed로 계획
 - 2026-09-24 · uncommitted · docs(adr): D-185 control 런타임 CPU 절감 순서를 기록(Accepted)
 - 2026-09-24 · uncommitted · feat(core,control): implement D-182, D-183, and D-184
 - 2026-09-23 · uncommitted · docs(adr): D-182·D-183·D-184 경계 세 편을 Proposed로 기록
-- 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host

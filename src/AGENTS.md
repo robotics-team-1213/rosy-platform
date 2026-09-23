@@ -28,7 +28,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 - Package names are grouped by domain (`core/`, `apps/`, `hardware/`, …). Do not reintroduce `pinky_*` or flat `rosy_*` directory names. The 2026-09 regroup moved `rosy_core` → `core/core`, `rosy_control` → `apps/control`, `rosy_fleet` → `site/fleet`, `rosy_bringup` → `hardware/bringup`, etc.; docs that still say `src/<pkg>/test` mean `src/<domain>/<pkg>/test`.
 - After editing `package.xml` / `setup.py` / `CMakeLists.txt`, rebuild with colcon.
-- `resource/<pkg>` is an ament index marker — do not delete; no need for AGENTS.md there (`fix.sh` at the repo root can recreate them).
+- `resource/<pkg>` is an ament index marker — do not delete; no need for AGENTS.md there (`tools/fix_ament_resource.sh` can recreate them).
 - Do not check in `src/build`, `src/install`, `src/log`.
 
 ### Testing Requirements
