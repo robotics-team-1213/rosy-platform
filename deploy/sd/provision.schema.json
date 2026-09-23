@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "device_identity", "release", "dds", "runtime",
-    "network", "fleet", "created_at", "nonce", "payload_checksum"
+    "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api"
   ],
   "properties": {
     "schema_version": {"const": 1},

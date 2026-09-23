@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
+import stat
 import subprocess
 import sys
 import tempfile
@@ -77,6 +79,50 @@ OPERATOR_USER = "rosy"
 CORE_USER = "rosy-core"
 CORE_HOME = "var/lib/rosy/core"
 CORE_OVERLAY = f"{CORE_HOME}/.rosy/rosy.yaml"
+_NOFOLLOW_FS = (hasattr(os, "O_NOFOLLOW") and hasattr(os, "O_DIRECTORY")
+                and os.open in os.supports_dir_fd and os.replace in os.supports_dir_fd)
+
+
+def _open_directory(name: str, parent: int, *, create_mode: int) -> int:
+    """Open (creating if missing) one directory under `parent`, never through a link."""
+    created = False
+    try:
+        os.mkdir(name, create_mode, dir_fd=parent)
+        created = True
+    except FileExistsError:
+        pass
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+    except OSError as exc:
+        # ELOOP: a symlink; ENOTDIR: something else in the way.
+        raise ValueError(f"CORE config path component {name} is a symlink or not a directory") from exc
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise ValueError(f"CORE config path component {name} is not a directory")
+    if created:
+        os.fchmod(descriptor, create_mode)  # the unit's UMask would narrow the mkdir mode
+    return descriptor
+
+
+def _decode_overlay(data: bytes) -> str:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("CORE config overlay is unreadable") from exc
+
+
+def _read_regular(name: str, parent: int) -> str | None:
+    """Read an existing regular file under `parent` without following a link."""
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise ValueError("CORE config overlay is a symlink or cannot be opened") from exc
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("CORE config overlay is not a regular file")
+        return _decode_overlay(stream.read())
 
 
 def _default_operator_account(name: str) -> None:
@@ -213,58 +259,114 @@ class FirstBootProvisioner:
             return
         _json_atomic(self.binding, expected, 0o640)
 
-    def _core_api(self, record: dict) -> None:
-        """Merge the card's CORE API record into CORE's persisted overlay (D-191).
+    @staticmethod
+    def _merge_core_overlay(text: str | None, record: dict) -> str:
+        """Return CORE's overlay with the card's record as its only credential.
 
-        Other overlay keys and other token records are kept; a record with the
-        same id or digest is replaced, so a re-run writes the same file. The
-        overlay's auth.tokens list replaces the package default list as a whole.
+        Other overlay keys are kept. The overlay's auth.tokens list replaces the
+        package default list as a whole, which is what shuts the shared
+        rosy-dev-* credentials out. A credential that is not this card's own
+        (another id, or CORE's legacy plaintext map) holds provisioning: first
+        boot never decides what to do with a credential it did not issue.
         """
         import yaml  # python3-yaml ships in the image; only this step needs it.
 
-        path = self._inside(CORE_OVERLAY)
         overlay: dict = {}
-        if path.is_file():
+        if text is not None:
             try:
-                loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            except (UnicodeDecodeError, yaml.YAMLError) as exc:
+                loaded = yaml.safe_load(text) or {}
+            except yaml.YAMLError as exc:
                 raise ValueError("CORE config overlay is unreadable") from exc
             if not isinstance(loaded, dict):
                 raise ValueError("CORE config overlay is not a mapping")
             overlay = loaded
-        auth = overlay.get("auth") if isinstance(overlay.get("auth"), dict) else {}
-        records = auth.get("tokens")
-        if isinstance(records, dict):
-            # CORE's legacy {plaintext: role} map; the list form keeps its meaning.
-            records = [{"token": key, "role": value} for key, value in records.items()]
-        elif not isinstance(records, list):
-            records = []
-        kept = [
-            item for item in records
-            if not (isinstance(item, dict) and (
-                item.get("id") == record["id"]
-                or str(item.get("sha256") or "").strip().lower() == record["sha256"]))
-        ]
-        overlay["auth"] = {**auth, "tokens": [*kept, dict(record)]}
+        auth = overlay.get("auth", {})
+        if auth is None:
+            auth = {}
+        if not isinstance(auth, dict):
+            raise ValueError("CORE config overlay auth is not a mapping")
+        records = auth.get("tokens") or []
+        if not isinstance(records, list) or any(
+                not isinstance(item, dict) or item.get("id") != record["id"] for item in records):
+            raise ValueError("CORE config overlay already holds another API credential")
+        overlay["auth"] = {**auth, "tokens": [dict(record)]}
+        return yaml.safe_dump(overlay, allow_unicode=True, sort_keys=False)
 
+    def _core_api(self, record: dict) -> None:
+        """Install the card's CORE API record into CORE's persisted overlay (D-191).
+
+        CORE's HOME belongs to rosy-core, so every step below works on
+        descriptors opened without following symlinks: a link or a non-regular
+        file anywhere on the path holds provisioning and nothing is changed.
+        A re-run writes the same bytes.
+        """
         account = self.core_lookup(CORE_USER)
         owner = (account["uid"], account["gid"]) if account and account.get("uid") is not None else None
-        # The same owner and mode StateDirectory=rosy/core gives CORE's HOME.
+        if not _NOFOLLOW_FS:
+            # Fixture hosts without O_NOFOLLOW/dir_fd (Windows); the device never takes this path.
+            self._core_api_by_path(record)
+            return
+        opened: list[int] = []
+        try:
+            directory = os.open(str(self.root), os.O_RDONLY | os.O_DIRECTORY)
+            opened.append(directory)
+            parts = CORE_OVERLAY.split("/")
+            for index, name in enumerate(parts[:-1]):
+                directory = _open_directory(name, directory, create_mode=0o755 if index < 3 else 0o750)
+                opened.append(directory)
+            home_fd, rosy_fd = opened[-2], opened[-1]
+            name = parts[-1]
+            new_text = self._merge_core_overlay(_read_regular(name, rosy_fd), record)
+            # The same owner and mode StateDirectory=rosy/core gives CORE's HOME.
+            for fd in (home_fd, rosy_fd):
+                os.fchmod(fd, 0o750)
+                if owner is not None:
+                    os.fchown(fd, *owner)
+            temporary = f".{name}.{secrets.token_hex(8)}"
+            handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                             dir_fd=rosy_fd)
+            try:
+                with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
+                    os.fchmod(stream.fileno(), 0o600)
+                    if owner is not None:
+                        os.fchown(stream.fileno(), *owner)
+                    stream.write(new_text)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, name, src_dir_fd=rosy_fd, dst_dir_fd=rosy_fd)
+            except BaseException:
+                try:
+                    os.unlink(temporary, dir_fd=rosy_fd)
+                except FileNotFoundError:
+                    pass
+                raise
+            os.fsync(rosy_fd)
+        finally:
+            for fd in reversed(opened):
+                os.close(fd)
+
+    def _core_api_by_path(self, record: dict) -> None:
+        path = self._inside(CORE_OVERLAY)
         home = self._inside(CORE_HOME)
+        for candidate in (*reversed(path.relative_to(self.root).parents), path.relative_to(self.root)):
+            if (self.root / candidate).is_symlink():
+                raise ValueError(f"CORE config path /{candidate.as_posix()} is a symlink")
+        text = None
+        if path.exists():
+            if not path.is_file():
+                raise ValueError("CORE config overlay is not a regular file")
+            text = _decode_overlay(path.read_bytes())
+        new_text = self._merge_core_overlay(text, record)
         path.parent.mkdir(parents=True, exist_ok=True)
         for directory in (home, path.parent):
             os.chmod(directory, 0o750)
-            if owner is not None:
-                os.chown(directory, *owner)
         descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
         try:
             with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-                yaml.safe_dump(overlay, handle, allow_unicode=True, sort_keys=False)
+                handle.write(new_text)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.chmod(temporary, 0o600)
-            if owner is not None:
-                os.chown(temporary, *owner)
             os.replace(temporary, path)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)
@@ -360,8 +462,8 @@ class FirstBootProvisioner:
         if "ap" in payload["network"]:
             # D-176: the fallback AP and the console banner read this root-only file.
             _json_atomic(self._inside("etc/rosy/ap-credentials.json"), payload["network"]["ap"], 0o600)
-        if "core_api" in payload:
-            self._core_api(payload["core_api"]["record"])
+        # D-191: validate_provision_bundle already refused a bundle without one.
+        self._core_api(payload["core_api"]["record"])
 
         if not self.network_activate("rosy-site-sta"):
             network_path.unlink(missing_ok=True)
@@ -391,8 +493,7 @@ class FirstBootProvisioner:
         }
         if operator_fingerprints:
             complete["operator"] = {"ssh_key_fingerprints": operator_fingerprints}
-        if "core_api" in payload:
-            complete["core_api"] = {"token_id": payload["core_api"]["record"]["id"]}
+        complete["core_api"] = {"token_id": payload["core_api"]["record"]["id"]}
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         bundle.unlink()

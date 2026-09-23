@@ -127,21 +127,49 @@ def test_the_secret_scanner_finds_nothing_in_the_record_or_the_receipt():
     assert scan_text("receipt.json", json.dumps(receipt, indent=2)) == []
 
 
-def test_bundles_without_a_credential_keep_the_old_shape():
-    bundle = _bundle()
+def _without_record() -> dict:
+    from deploy.sd.personalization import _checksum
 
-    assert "core_api" not in bundle and "core_api" not in create_provision_receipt(bundle)
-    Draft202012Validator(SCHEMA).validate(bundle)
+    bundle = _issued()
+    del bundle["core_api"]
+    bundle["payload_checksum"] = _checksum({k: v for k, v in bundle.items() if k != "payload_checksum"})
+    return bundle
+
+
+def test_a_bundle_without_the_record_is_refused_by_validation_and_the_schema():
+    # Security review L3: without the card's record CORE falls back to rosy-dev-*.
+    bundle = _without_record()
+
+    with pytest.raises(ValueError, match="bundle keys"):
+        validate_provision_bundle(bundle)
+    assert list(Draft202012Validator(SCHEMA).iter_errors(bundle))
+
+
+def test_first_boot_holds_a_bundle_without_the_record(tmp_path):
+    with pytest.raises(ValueError):
+        _provision(tmp_path, _without_record())
+
+    root = tmp_path / "root"
+    assert not _overlay(root).exists()
+    assert not (root / "var/lib/rosy/provisioning/complete.json").exists()
 
 
 @pytest.mark.parametrize("extra", [
     {KW: VALUE},
     {KW_ID: RECORD_ID},
+    {},
+])
+def test_the_credential_and_its_id_are_both_required(extra):
+    with pytest.raises(TypeError):
+        _bundle(**extra)
+
+
+@pytest.mark.parametrize("extra", [
     {KW: "short", KW_ID: RECORD_ID},
     {KW: VALUE[:-1] + "=", KW_ID: RECORD_ID},
     {KW: VALUE, KW_ID: "0A1B2C3D4E5F"},
 ])
-def test_a_malformed_or_half_credential_is_refused(extra):
+def test_a_malformed_credential_is_refused(extra):
     with pytest.raises(ValueError):
         _bundle(**extra)
 
@@ -177,6 +205,13 @@ def test_the_bundle_creator_accepts_the_credential_and_writes_no_plaintext(tmp_p
     )
 
     assert completed.returncode == 0, completed.stderr
+    without = {key: value for key, value in request.items() if key not in (KW, KW_ID)}
+    refused = subprocess.run(
+        [sys.executable, str(ROOT / "deploy/sd/create-provision-bundle.py"),
+         "--output", str(tmp_path / "second.json"), "--receipt", str(tmp_path / "second-receipt.json")],
+        input=json.dumps(without), capture_output=True, text=True,
+    )
+    assert refused.returncode != 0 and not (tmp_path / "second.json").exists()
     bundle_text = (tmp_path / "provision.json").read_text(encoding="utf-8")
     receipt_text = (tmp_path / "receipt.json").read_text(encoding="utf-8")
     assert json.loads(bundle_text)["core_api"]["record"]["id"] == RECORD_ID
@@ -198,20 +233,23 @@ def test_first_boot_installs_the_record_where_core_reads_it(tmp_path):
     assert not list(_overlay(root).parent.glob(".rosy.yaml.*")), "no temporary file is left"
 
 
-def test_first_boot_merges_with_existing_overlay_records(tmp_path):
-    existing_digest = hashlib.sha256(OTHER_VALUE.encode("utf-8")).hexdigest()
-    root = tmp_path / "root"
+def _seed_overlay(root: Path, overlay: dict) -> str:
     _overlay(root).parent.mkdir(parents=True)
-    _overlay(root).write_text(yaml.safe_dump({
+    text = yaml.safe_dump(overlay)
+    _overlay(root).write_text(text, encoding="utf-8")
+    return text
+
+
+def test_first_boot_keeps_other_overlay_keys_and_replaces_its_own_record(tmp_path):
+    root = tmp_path / "root"
+    _seed_overlay(root, {
         "robot": {"name": "Bay 7"},
         "safety": {"manual_max_linear": 0.2},
         "auth": {"tokens": [
-            {"id": "ffffffffffff", "role": "viewer", "sha256": existing_digest, "label": "kiosk",
-             "created_at": "2026-09-20T00:00:00+00:00"},
             {"id": RECORD_ID, "role": "viewer", "sha256": "0" * 64, "label": "stale",
              "created_at": "2026-09-20T00:00:00+00:00"},
         ]},
-    }), encoding="utf-8")
+    })
 
     _root, result = _provision(tmp_path, _issued())
 
@@ -219,20 +257,29 @@ def test_first_boot_merges_with_existing_overlay_records(tmp_path):
     overlay = yaml.safe_load(_overlay(root).read_text(encoding="utf-8"))
     assert overlay["robot"] == {"name": "Bay 7"}
     assert overlay["safety"] == {"manual_max_linear": 0.2}
-    assert [item["id"] for item in overlay["auth"]["tokens"]] == ["ffffffffffff", RECORD_ID]
-    assert overlay["auth"]["tokens"][1] == _issued()["core_api"]["record"]
+    assert overlay["auth"]["tokens"] == [_issued()["core_api"]["record"]]
 
 
-def test_first_boot_keeps_a_legacy_plaintext_map_as_equivalent_list_entries(tmp_path):
+@pytest.mark.parametrize("tokens", [
+    # Security review L2: a credential first boot did not issue holds provisioning.
+    [{"id": "ffffffffffff", "role": "viewer", "sha256": "1" * 64, "label": "kiosk",
+      "created_at": "2026-09-20T00:00:00+00:00"}],
+    [{"id": RECORD_ID, "role": "administrator", "sha256": "0" * 64},
+     {"id": "ffffffffffff", "role": "viewer", "sha256": "1" * 64}],
+    [{"to" + "ken": OTHER_VALUE, "role": "operator"}],
+    {OTHER_VALUE: "operator"},  # CORE's legacy plaintext map
+    ["not-a-record"],
+    "not-a-list",
+])
+def test_first_boot_holds_on_a_credential_it_did_not_issue(tmp_path, tokens):
     root = tmp_path / "root"
-    _overlay(root).parent.mkdir(parents=True)
-    _overlay(root).write_text(yaml.safe_dump({"auth": {"tokens": {OTHER_VALUE: "operator"}}}), encoding="utf-8")
+    seeded = _seed_overlay(root, {"auth": {"tokens": tokens}})
 
-    _provision(tmp_path, _issued())
+    with pytest.raises(ValueError, match="another API credential"):
+        _provision(tmp_path, _issued())
 
-    tokens = yaml.safe_load(_overlay(root).read_text(encoding="utf-8"))["auth"]["tokens"]
-    assert tokens[0] == {"to" + "ken": OTHER_VALUE, "role": "operator"}
-    assert tokens[1]["id"] == RECORD_ID
+    assert _overlay(root).read_text(encoding="utf-8") == seeded
+    assert not list(_overlay(root).parent.glob(".rosy.yaml.*"))
 
 
 def test_first_boot_is_idempotent_across_a_held_first_attempt(tmp_path):
@@ -260,11 +307,52 @@ def test_an_unreadable_overlay_stops_provisioning_and_is_left_as_it_was(tmp_path
     assert _overlay(root).read_text(encoding="utf-8") == content
 
 
-def test_a_bundle_without_a_credential_leaves_cores_overlay_alone(tmp_path):
-    root, result = _provision(tmp_path, _bundle())
+@pytest.mark.skipif(os.name != "posix", reason="symlinks and O_NOFOLLOW")
+@pytest.mark.parametrize("linked", ["var/lib/rosy/core", "var/lib/rosy/core/.rosy",
+                                    "var/lib/rosy/core/.rosy/rosy.yaml"])
+def test_first_boot_refuses_a_symlink_on_the_overlay_path(tmp_path, linked):
+    # Security review M1: root must never write, chown or read through a link
+    # that the rosy-core-owned HOME could hold.
+    root = tmp_path / "root"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target_file = outside / "rosy.yaml"
+    target_file.write_text("root-only: content\n", encoding="utf-8")
+    os.chmod(outside, 0o700)
+    os.chmod(target_file, 0o400)
+    before = {path: (path.stat().st_mode, path.stat().st_uid, path.read_bytes() if path.is_file() else None)
+              for path in (outside, target_file)}
+    link = root / linked
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if linked.endswith("rosy.yaml"):
+        link.symlink_to(target_file)
+    elif linked.endswith(".rosy"):
+        link.symlink_to(outside)
+    else:
+        (outside / ".rosy").mkdir()
+        before[outside / ".rosy"] = ((outside / ".rosy").stat().st_mode, os.getuid(), None)
+        link.symlink_to(outside)
+    uid, gid = os.getuid(), os.getgid()
 
-    assert result["state"] == "PROVISIONED"
-    assert not _overlay(root).exists()
+    with pytest.raises(ValueError, match="symlink"):
+        _provision(tmp_path, _issued(), core_lookup=lambda _name: {"uid": uid, "gid": gid})
+
+    after = {path: (path.stat().st_mode, path.stat().st_uid, path.read_bytes() if path.is_file() else None)
+             for path in before}
+    assert after == before
+    assert sorted(p.name for p in outside.iterdir()) == sorted(
+        [".rosy", "rosy.yaml"] if (outside / ".rosy").exists() else ["rosy.yaml"])
+    assert not list(outside.rglob(".rosy.yaml.*"))
+
+
+@pytest.mark.skipif(os.name != "posix", reason="FIFOs and O_NONBLOCK")
+def test_first_boot_refuses_a_non_regular_overlay(tmp_path):
+    root = tmp_path / "root"
+    _overlay(root).parent.mkdir(parents=True)
+    os.mkfifo(_overlay(root))
+
+    with pytest.raises(ValueError, match="not a regular file"):
+        _provision(tmp_path, _issued())
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and modes")

@@ -179,8 +179,8 @@ def create_provision_bundle(
     pairing_credential: str | None = None,
     operator_ssh_keys: Collection[str] | None = None,
     ap_password: str | None = None,
-    core_api_token: str | None = None,
-    core_api_token_id: str | None = None,
+    core_api_token: str,
+    core_api_token_id: str,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -199,8 +199,6 @@ def create_provision_bundle(
         raise ValueError("Fleet trust profile is invalid")
     if pairing_credential is not None and not pairing_required:
         raise ValueError("pairing credential requires pairing_required")
-    if (core_api_token is None) != (core_api_token_id is None):
-        raise ValueError("CORE API credential and its id go together")
 
     created = created_at or datetime.now(UTC)
     if created.tzinfo is None or created.utcoffset() is None:
@@ -246,11 +244,10 @@ def create_provision_bundle(
     }
     if operator_ssh_keys:
         bundle["operator"] = {"ssh_authorized_keys": [validate_operator_key(key) for key in operator_ssh_keys]}
-    if core_api_token is not None:
-        bundle["core_api"] = {"record": core_api_record(
-            core_api_token, core_api_token_id,
-            label=f"{identity.device_name} card admin", created_at=created_text,
-        )}
+    bundle["core_api"] = {"record": core_api_record(
+        core_api_token, core_api_token_id,
+        label=f"{identity.device_name} card admin", created_at=created_text,
+    )}
     bundle["payload_checksum"] = _checksum(bundle)
     return validate_provision_bundle(bundle)
 
@@ -258,14 +255,15 @@ def create_provision_bundle(
 def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     expected_top = {
         "schema_version", "device_identity", "release", "dds", "runtime",
-        "network", "fleet", "created_at", "nonce", "payload_checksum",
+        "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api",
     }
-    if set(bundle) - {"operator", "core_api"} != expected_top:
+    if set(bundle) - {"operator"} != expected_top:
         raise ValueError("provision bundle keys are invalid")
-    if "core_api" in bundle:
-        if not isinstance(bundle["core_api"], dict) or set(bundle["core_api"]) != {"record"}:
-            raise ValueError("core_api is invalid")
-        _validate_core_api_record(bundle["core_api"]["record"])
+    # D-191: required. Without the card's own record CORE would fall back to
+    # the shared rosy-dev-* credentials in its package defaults.
+    if not isinstance(bundle["core_api"], dict) or set(bundle["core_api"]) != {"record"}:
+        raise ValueError("core_api is invalid")
+    _validate_core_api_record(bundle["core_api"]["record"])
     if "operator" in bundle:
         operator = bundle["operator"]
         if not isinstance(operator, dict) or set(operator) != {"ssh_authorized_keys"}:
@@ -363,8 +361,8 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
             operator_key_fingerprint(key) for key in bundle["operator"]["ssh_authorized_keys"]
         ]}} if "operator" in bundle else {}),
         # D-191: the id and a short digest fingerprint name the card's credential.
-        **({"core_api": {
+        "core_api": {
             "token_id": bundle["core_api"]["record"]["id"],
             "digest_fingerprint": bundle["core_api"]["record"]["sha256"][:16],
-        }} if "core_api" in bundle else {}),
+        },
     }
