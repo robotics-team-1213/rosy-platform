@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # ROSY
 
@@ -60,7 +60,7 @@ source env.sh
 cd src && colcon build --symlink-install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/core/core/test/ -v
+python3 -m pytest src/core/core/test/ src/core/core_events/test/ src/core/core_features/test/ src/core/web_common/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest src/site/fleet/test/ -v

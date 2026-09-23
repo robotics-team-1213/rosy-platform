@@ -34,9 +34,6 @@ CORE_CONTRACTS = {"interfaces", "core_common", "web_common"}
 
 #: P2(d) exceptions: packages without their own test/test_*.py.
 KNOWN_WITHOUT_OWN_TESTS = {
-    "core_events": "covered by src/core/core/test (EventBus/audit suites)",
-    "core_features": "covered by src/core/core/test (28 files import core_features)",
-    "web_common": "tokens.css/core_ui_logic.js checked by core/core/test/test_ui_token_contracts.py",
     "navigation": "launch/params contracts live in the repository test/ suite",
 }
 
@@ -104,7 +101,7 @@ SIZE_VERDICTS = {
     ),
     "core/core_events/core_events/events/audit.py": (
         745,
-        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core/test/test_audit.py; "
+        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core_events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "control": (

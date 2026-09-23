@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-20 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # src
 
@@ -35,7 +35,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest core/core/test/ apps/control/test/ site/fleet/test apps/omx_adapter/test apps/games/test -q
+python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ apps/control/test/ site/fleet/test apps/omx_adapter/test apps/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 
