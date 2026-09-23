@@ -219,7 +219,8 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
         ap_login = None
         if (record.get("network") or {}).get("mode") == "ap":
             ap_login = (_read_json(root / "etc/rosy/ap-credentials.json") or {}).get("pass" + "word")
-        if _write_atomic(root / STATUS_DIR / "issue", render_issue(record, ap_login)):
+        # 0600: agetty reads it as root; CORE and other users must not.
+        if _write_atomic(root / STATUS_DIR / "issue", render_issue(record, ap_login), 0o600):
             run(["agetty", "--reload"])
 
     sink("issue", issue)

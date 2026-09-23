@@ -134,3 +134,32 @@ def test_the_scrubbed_view_hides_every_password():
     assert scrubbed["wifi"][0]["password"] == module.APPLIED
     assert scrubbed["ap"]["password"] == module.APPLIED
     assert config["wifi"][0]["password"] == PASSWORD  # the original is untouched
+
+
+@pytest.mark.parametrize("typed", [f"{PW}: 12345678", f"{PW}: '12345678'"])
+def test_an_all_digit_password_is_kept_as_typed(typed):
+    module = _module()
+
+    config = module.parse(_text(f"wifi:\n  - ssid: 2400\n    {typed}\n"))
+
+    assert config["wifi"][0]["ssid"] == "2400"
+    assert config["wifi"][0][PW] == "12345678"
+
+
+@pytest.mark.parametrize("value", ["'back\\\\slash1'", "'  edge-space'", "'\uc548\ub155\ud558\uc138\uc694\uc548\ub155'"])
+def test_values_networkmanager_would_mangle_are_refused(value):
+    module = _module()
+
+    with pytest.raises(module.ConfigError):
+        module.parse(_text(f"ap:\n  {PW}: {value}\n"))
+
+
+def test_a_yaml_error_never_quotes_the_line_it_failed_on():
+    module = _module()
+    typed = "`Secr" + "3tPass"
+
+    with pytest.raises(module.ConfigError) as error:
+        module.parse(_text(f"wifi:\n  - ssid: a\n    {PW}: {typed}\n"))
+
+    assert "Secr" not in str(error.value)
+    assert "line 4" in str(error.value)

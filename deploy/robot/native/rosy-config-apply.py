@@ -46,13 +46,17 @@ def _run(command: list[str]) -> str:
     return subprocess.run(command, capture_output=True, text=True, timeout=30, check=False).stdout
 
 
-def _write(path: Path, content: str, mode: int) -> None:
-    """Atomic write through a random temp name (mkstemp) with the mode set first."""
+def _write(path: Path, content: str, mode: int | None) -> None:
+    """Atomic write through a random temp name (mkstemp) with the mode set first.
+
+    ``mode=None`` leaves the mode alone: on the vfat boot partition every file
+    is 0755 and chmod fails with EPERM, which would leave passwords on the card.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            if hasattr(os, "fchmod"):
+            if mode is not None and hasattr(os, "fchmod"):
                 os.fchmod(handle.fileno(), mode)
             handle.write(content)
             handle.flush()
@@ -124,7 +128,9 @@ def _apply_wifi(root: Path, networks: list[dict], notes: list[str]) -> bool:
             key_hex = derive_wpa_psk(network["ssid"], network["password"])
         wanted[path.name] = _wifi_profile(network, key_hex)
     changed = False
-    for stale in directory.glob("rosy-wifi-*.nmconnection"):
+    # A skipped entry may be a renamed network whose old profile still holds
+    # the only copy of its key; keep every profile rather than lose it.
+    for stale in [] if notes else directory.glob("rosy-wifi-*.nmconnection"):
         if stale.name not in wanted:
             stale.unlink()
             changed = True
@@ -151,7 +157,7 @@ def _scrub_card(card: Path, text: str, config: dict) -> None:
 
         candidate = ("# Rewritten by the robot after applying: passwords are now " + APPLIED + ".\n"
                      + yaml.safe_dump({"schema_version": 1, **expected}, sort_keys=False, allow_unicode=True))
-    _write(card, candidate, 0o644)
+    _write(card, candidate, None)
 
 
 def apply(root: Path, run: Runner) -> dict:
@@ -163,7 +169,7 @@ def apply(root: Path, run: Runner) -> dict:
         config = rosy_config.parse(text)
     except ConfigError as exc:
         result = {"state": "invalid", "error": str(exc)}
-        _write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o644)
+        _write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o600)
         return result
 
     view = rosy_config.scrubbed(config)
@@ -231,7 +237,7 @@ def apply(root: Path, run: Runner) -> dict:
         _scrub_card(card, text, config)
     _write(state_path, json.dumps({"digest": digest}, sort_keys=True) + "\n", 0o600)
     result = {"state": "applied", "notes": notes, "wifi_changed": wifi_changed}
-    _write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o644)
+    _write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o600)
     return result
 
 

@@ -39,17 +39,36 @@ class ConfigError(ValueError):
     """The operator file is invalid; nothing from it is applied."""
 
 
+def _typed(value: object) -> object:
+    # YAML reads an unquoted 12345678 as an integer; str() gives back exactly
+    # what was typed (YAML only makes integers of digits without a leading 0).
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    return value
+
+
+def _keyfile_safe(value: str) -> bool:
+    # NetworkManager keyfiles treat backslash as an escape and strip edge spaces.
+    return "\\" not in value and value == value.strip()
+
+
 def _password(value: object, where: str) -> str:
+    value = _typed(value)
     if value == APPLIED:
         return APPLIED
-    if not isinstance(value, str) or not 8 <= len(value) <= 63 or not value.isprintable():
-        raise ConfigError(f"{where}: must be 8-63 printable characters or {APPLIED}")
+    if (not isinstance(value, str) or not 8 <= len(value) <= 63
+            or not all(32 <= ord(c) <= 126 for c in value) or not _keyfile_safe(value)):
+        raise ConfigError(f"{where}: must be 8-63 ASCII characters without a backslash or edge spaces, "
+                          f"or {APPLIED}")
     return value
 
 
 def _ssid(value: object, where: str) -> str:
+    value = _typed(value)
     if not isinstance(value, str) or not 1 <= len(value.encode("utf-8")) <= 32:
         raise ConfigError(f"{where}: ssid must be 1-32 bytes")
+    if not value.isprintable() or not _keyfile_safe(value):
+        raise ConfigError(f"{where}: ssid must not contain a backslash, control characters or edge spaces")
     return value
 
 
@@ -135,7 +154,11 @@ def parse(text: str) -> dict:
     try:
         document = yaml.safe_load(text) if text.strip() else None
     except yaml.YAMLError as exc:
-        raise ConfigError(f"rosy-config.yaml is not valid YAML: {exc}") from exc
+        # Only the position: PyYAML's message quotes the offending line, which
+        # may hold a password, and this text reaches the console and journal.
+        mark = getattr(exc, "problem_mark", None)
+        where = f" at line {mark.line + 1}, column {mark.column + 1}" if mark is not None else ""
+        raise ConfigError(f"rosy-config.yaml is not valid YAML{where}") from None
     if isinstance(document, dict) and set(document) == {"schema_version"}:
         document = None
     return validate(document)

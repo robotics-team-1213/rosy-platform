@@ -217,7 +217,10 @@ def collect(root: Path, run: Runner, out_dir: Path) -> Path:
             for name, data in members:
                 _add(archive, name, data, now.timestamp())
             _add(archive, "manifest.json", manifest_data, now.timestamp())
-    os.chmod(bundle, 0o644)
+    try:
+        os.chmod(bundle, 0o644)
+    except PermissionError:  # vfat (e.g. --out /boot/firmware/...) has fixed modes
+        pass
     return bundle
 
 

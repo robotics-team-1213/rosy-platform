@@ -128,6 +128,7 @@ def _valid_root(tmp_path: Path) -> Path:
     # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
     (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
     (root / "usr/sbin/chronyd").write_text("# fixture\n", encoding="utf-8")
+    (root / "usr/sbin/dnsmasq").write_text("# fixture\n", encoding="utf-8")
     wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
     wants.parent.mkdir(parents=True, exist_ok=True)
     wants.write_text("[Unit]\n", encoding="utf-8")
@@ -225,3 +226,16 @@ def test_image_puts_rosy_diag_on_path():
     # D-175 L2: an operator on the console types `rosy-diag collect`.
     source = CUSTOMIZER.read_text(encoding="utf-8")
     assert 'ln -sfn /opt/rosy/native-runtime/rosy-diag "$ROOT/usr/local/bin/rosy-diag"' in source
+
+
+def test_the_image_carries_dnsmasq_for_the_fallback_ap(tmp_path):
+    # D-176 review: dnsmasq-base is only a Recommends of network-manager, and
+    # the customizer installs with --no-install-recommends.
+    assert "dnsmasq-base" in CUSTOMIZER.read_text(encoding="utf-8")
+    root = _valid_root(tmp_path)
+    (root / "usr/sbin/dnsmasq").unlink()
+
+    completed = _verify(root)
+
+    assert completed.returncode != 0
+    assert "dnsmasq" in completed.stdout + completed.stderr

@@ -210,3 +210,47 @@ def test_the_card_file_is_never_read_into_diagnostics():
 
     assert redact.is_denied_path("/boot/firmware/rosy-config.yaml")
     assert redact.is_denied_path("/etc/rosy/ap-credentials.json")
+
+
+def test_the_card_is_scrubbed_even_where_chmod_is_refused(tmp_path, monkeypatch):
+    # vfat /boot/firmware: every file is 0755 and chmod fails with EPERM.
+    module = _module()
+    root = _device(tmp_path, CONFIG)
+    card = root / "boot/firmware/rosy-config.yaml"
+    text = card.read_text(encoding="utf-8")
+
+    def refuse(*_args):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(module.os, "fchmod", refuse, raising=False)
+    module._scrub_card(card, text, module.rosy_config.parse(text))
+
+    assert PASSWORD not in card.read_text(encoding="utf-8")
+
+
+def test_an_invalid_file_never_puts_its_text_in_the_status(tmp_path):
+    module = _module()
+    typed = "`Secr" + "3tPass"
+    root = _device(tmp_path, f"wifi:\n  - ssid: a\n    {PW}: {typed}\n")
+
+    result, _calls = _apply(module, root)
+
+    status = root / "run/rosy-boot/config-status.json"
+    assert result["state"] == "invalid"
+    assert "Secr" not in status.read_text(encoding="utf-8")
+    if os.name == "posix":
+        assert status.stat().st_mode & 0o777 == 0o600
+
+
+def test_a_skipped_network_keeps_the_existing_profiles(tmp_path):
+    module = _module()
+    root = _device(tmp_path, CONFIG)
+    _apply(module, root)
+    before = sorted(p.name for p in (root / "etc/NetworkManager/system-connections").glob("rosy-wifi-*"))
+    card = root / "boot/firmware/rosy-config.yaml"
+    card.write_text(card.read_text(encoding="utf-8").replace("site-5g", "renamed-5g"), encoding="utf-8")
+
+    _apply(module, root)
+
+    after = sorted(p.name for p in (root / "etc/NetworkManager/system-connections").glob("rosy-wifi-*"))
+    assert set(before) <= set(after)

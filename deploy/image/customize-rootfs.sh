@@ -121,7 +121,7 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates chrony locales network-manager openssh-server openssl python3 python3-yaml \
+    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 
 cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"

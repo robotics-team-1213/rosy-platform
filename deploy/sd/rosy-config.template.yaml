@@ -10,6 +10,7 @@ schema_version: 1
 # timezone: Asia/Seoul
 
 # Site Wi-Fi networks, highest priority first tried.
+# Quote SSIDs and passwords ('...'), ASCII only, no backslash.
 # wifi:
 #   - ssid: my-site-wifi
 #     password: <your-wifi-password>
@@ -17,7 +18,8 @@ schema_version: 1
 
 # Robot's own Wi-Fi when there is no uplink.
 #   fallback: open rosy-pinky-xxxx after 120 s without an uplink (default)
-#   relay:    always on, relaying the uplink (D-26 RELAY_AP_STA)
+#   relay:    always on (D-26 RELAY_AP_STA). Pi 5 has one radio, so the
+#             site Wi-Fi stays off while the AP is up.
 #   off:      never open an AP
 # ap:
 #   mode: fallback

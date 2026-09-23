@@ -68,7 +68,19 @@ def _run(command: list[str]) -> str:
 
 
 def has_uplink(run: Runner) -> bool:
-    return bool(run(["ip", "route", "show", "default"]).strip())
+    """A default route, or a site Wi-Fi/Ethernet link that NM reports connected.
+
+    Isolated robot LANs often have no gateway; counting only the default route
+    would open the AP (and drop the site link on the single radio) every cycle.
+    """
+    if run(["ip", "route", "show", "default"]).strip():
+        return True
+    for line in run(["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"]).splitlines():
+        fields = line.split(":")
+        if (len(fields) >= 4 and fields[1] in {"wifi", "ethernet"} and fields[2] == "connected"
+                and fields[3] != PROFILE):
+            return True
+    return False
 
 
 def _read_json(path: Path) -> dict:
@@ -129,7 +141,8 @@ def _status(root: Path, mode: str, ssid: str | None = None) -> None:
     _write(root / STATUS, json.dumps(status, sort_keys=True) + "\n", 0o644)
 
 
-def perform(root: Path, action: str, run: Runner) -> None:
+def perform(root: Path, action: str, run: Runner) -> bool:
+    """Carry out the action; False when the AP did not come up."""
     if action == "open":
         credentials = _read_json(root / "etc/rosy/ap-credentials.json")
         policy = load_policy(root)
@@ -138,15 +151,33 @@ def perform(root: Path, action: str, run: Runner) -> None:
         if not secret or not ssid:
             print("rosy-network: no AP credentials; fallback AP not opened", file=sys.stderr)
             _status(root, "none")
-            return
+            return False
         _write(root / f"etc/NetworkManager/system-connections/{PROFILE}.nmconnection",
                _profile(ssid, secret, policy.get("country", "KR")), 0o600)
         run(["nmcli", "connection", "reload"])
         run(["nmcli", "connection", "up", PROFILE])
+        if "activated" not in run(["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", PROFILE]):
+            # e.g. dnsmasq missing or the radio busy: never advertise an AP that is not there.
+            print("rosy-network: fallback AP did not activate", file=sys.stderr)
+            _status(root, "none")
+            return False
         _status(root, "ap", ssid)
     elif action == "close":
         run(["nmcli", "connection", "down", PROFILE])
+        # Ask NM to pick the best site profile now rather than wait out its retry timer.
+        run(["nmcli", "device", "connect", "wlan0"])
         _status(root, "sta")
+    return True
+
+
+def step(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner) -> LinkState:
+    action, following = decide(state, now, policy, uplink=uplink)
+    if action and not perform(root, action, run) and action == "open":
+        # Not up: fallback waits another grace period, relay retries next poll.
+        return LinkState(no_uplink_since=now)
+    if action:
+        print(json.dumps({"action": action}), flush=True)
+    return following
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -155,12 +186,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--once", action="store_true", help="evaluate one step (for diagnostics)")
     args = parser.parse_args(argv)
     state = LinkState()
+    # A restart loses the in-memory state; start from a known "AP down".
+    _run(["nmcli", "connection", "down", PROFILE])
     while True:
         try:
-            action, state = decide(state, time.monotonic(), load_policy(args.root), uplink=has_uplink(_run))
-            if action:
-                perform(args.root, action, _run)
-                print(json.dumps({"action": action}), flush=True)
+            state = step(state, time.monotonic(), load_policy(args.root), has_uplink(_run), args.root, _run)
         except Exception as exc:  # keep supervising; the next poll retries
             print(f"rosy-network: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         if args.once:

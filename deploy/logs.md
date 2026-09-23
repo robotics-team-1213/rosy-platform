@@ -611,3 +611,17 @@
 - gate 변화: 없음
 - 결정: D-175
 - 교훈: 없음
+
+## 2026-09-23 · uncommitted · fix(native,image): D-176 review — no password on vfat, in YAML errors or in world-readable files; AP needs dnsmasq
+
+- 변경: 독립 리뷰(HIGH 4, MEDIUM 5, LOW 2)를 반영했다. (1) vfat 부트 파티션은 chmod가 EPERM이라 스크럽이 실패하고 평문이 남았다 → 카드 쓰기는 mode를
+  건드리지 않는다. (2) PyYAML 오류 문구가 비밀번호 줄을 인용해 0644 상태 파일과 journal에 들어갔다 → 줄·열 위치만 남기고 상태 파일은 0600.
+  (3) AP 비밀번호가 든 `/run/rosy-boot/issue`를 0600으로. (4) NM shared 모드에 필요한 `dnsmasq-base`를 이미지에 넣고 마운트 검증기가 확인한다.
+  그 밖에: 게이트웨이 없는 현장 LAN도 NM `connected`면 uplink로 본다, AP 활성화를 `GENERAL.STATE`로 확인하고 실패하면 광고하지 않고 다시 시도,
+  AP를 닫으면 `nmcli device connect wlan0`로 현장 Wi-Fi를 바로 재시도, 재시작 시 AP를 내리고 시작, 숫자만 있는 비밀번호·SSID 허용,
+  NM keyfile이 망가뜨리는 값(백슬래시·양끝 공백·비ASCII 비밀번호) 거부, 건너뛴 항목이 있으면 기존 Wi-Fi 프로필을 지우지 않음, vfat에 진단 묶음 저장 허용.
+  `relay`는 Pi 5 단일 무선이라 현장 Wi-Fi를 끈다는 점을 템플릿에 적었다.
+- 증거: 관련 스위트 110 passed (2026-09-23 Windows). vfat EPERM은 fchmod 거부를 흉내 낸 테스트로만 확인, 기기 확인 없음.
+- gate 변화: 없음
+- 결정: D-176
+- 교훈: 호스트 파일시스템 테스트는 vfat의 고정 mode를 재현하지 못한다. 부트 파티션에 쓰는 코드는 chmod 거부를 가정한 테스트를 같이 둔다.

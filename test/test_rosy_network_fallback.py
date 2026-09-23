@@ -31,6 +31,10 @@ def _state(module, **values):
     return module.LinkState(**values)
 
 
+def _activated(command: list[str]) -> str:
+    return "GENERAL.STATE:activated\n" if "GENERAL.STATE" in command else ""
+
+
 def test_uplink_keeps_the_ap_closed():
     module = _module()
 
@@ -99,7 +103,7 @@ def test_opening_writes_a_root_only_ap_profile_and_a_secret_free_status(tmp_path
     root = _device(tmp_path)
     calls: list[list[str]] = []
 
-    module.perform(root, "open", lambda command: calls.append(command) or "")
+    assert module.perform(root, "open", lambda command: calls.append(command) or _activated(command))
 
     profile = root / "etc/NetworkManager/system-connections/rosy-fallback-ap.nmconnection"
     text = profile.read_text(encoding="utf-8")
@@ -160,3 +164,49 @@ def test_the_service_runs_outside_core_after_config_is_applied():
     assert "After=NetworkManager.service rosy-config.service" in unit
     assert "Restart=always" in unit
     assert "User=" not in unit  # root: it drives NetworkManager (D-161: never inside CORE)
+
+
+def test_an_ap_that_does_not_activate_is_not_advertised(tmp_path):
+    # e.g. dnsmasq missing: the banner must not send people to a missing AP.
+    module = _module()
+    root = _device(tmp_path)
+
+    assert not module.perform(root, "open", lambda command: "")
+
+    assert json.loads((root / "run/rosy-boot/network.json").read_text(encoding="utf-8"))["mode"] == "none"
+
+
+def test_a_failed_open_is_retried_instead_of_believed(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    waiting = module.LinkState(no_uplink_since=0.0)
+
+    state = module.step(waiting, 200.0, POLICY, False, root, lambda command: "")
+
+    assert not state.ap_active
+    action, _ = module.decide(state, 200.0 + POLICY["grace_seconds"], POLICY, uplink=False)
+    assert action == "open"
+
+
+def test_a_connected_site_link_without_a_gateway_is_an_uplink():
+    module = _module()
+    outputs = {"ip": "", "nmcli": "lo:loopback:unmanaged:\nwlan0:wifi:connected:rosy-wifi-0123456789\n"}
+
+    assert module.has_uplink(lambda command: outputs[command[0]])
+
+
+def test_the_ap_itself_is_not_an_uplink():
+    module = _module()
+    outputs = {"ip": "", "nmcli": "wlan0:wifi:connected:rosy-fallback-ap\n"}
+
+    assert not module.has_uplink(lambda command: outputs[command[0]])
+
+
+def test_closing_asks_networkmanager_to_retry_the_site_wifi(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    calls: list[list[str]] = []
+
+    module.perform(root, "close", lambda command: calls.append(command) or "")
+
+    assert ["nmcli", "device", "connect", "wlan0"] in calls
