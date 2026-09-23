@@ -5,12 +5,15 @@ import math
 import lane_sim
 import numpy as np
 import pytest
-
-from lane_scenarios import (
-    GRAPH, LOST_AFTER_S, SCENARIOS, OdomError, believed_start, run_scenario,
-)
 from control.sensing.lane import LaneObservation
 from control.sensing.lane_boundaries import LaneBoundaryTracker
+from lane_scenarios import (
+    LOST_AFTER_S,
+    SCENARIOS,
+    OdomError,
+    believed_start,
+    run_scenario,
+)
 from lane_sim import CAM_X
 
 
@@ -117,7 +120,7 @@ def test_cores_lease_ends_the_run_as_lost(observation):
     assert result["reason"] == "lost"
     assert not result["pass"]
     # First invalid frame at t=0; LOST on the first tick past 3.0 s.
-    assert len(recorder.poses) == int(round(LOST_AFTER_S / lane_sim.DT)) + 2
+    assert len(recorder.poses) == round(LOST_AFTER_S / lane_sim.DT) + 2
     assert result["stall_s"] == pytest.approx(result["max_stall_s"])
     assert result["max_stall_s"] > LOST_AFTER_S
 

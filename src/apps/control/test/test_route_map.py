@@ -1,6 +1,7 @@
 """Prototype B: pursue the planned route from the localised pose."""
 
 import copy
+import itertools
 import math
 
 import cv2
@@ -162,7 +163,7 @@ def test_confidence_maps_quality_linearly_onto_its_band():
     assert confidence_for(0.9, MAX_SPREAD_M) == pytest.approx(CONFIDENCE_MIN)
     matches = np.linspace(MIN_MATCH, 0.9, 20)
     values = [confidence_for(m, 0.004) for m in matches]
-    assert all(b >= a for a, b in zip(values, values[1:]))
+    assert all(b >= a for a, b in itertools.pairwise(values))
     assert 0.35 < CONFIDENCE_MIN < MEMORY_CONFIDENCE
 
 

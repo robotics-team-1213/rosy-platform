@@ -64,12 +64,12 @@ MIN_MATCH = 0.25
 #: band, or its one-line iso-line) is placed on the map from the steering
 #: pose; per compared frame the statistic is the median distance of its
 #: cells to the nearest lane centreline (`_disagreement`). Offline, 12
-#: clean scenarios (seed 7, 474 compared frames): median 2.1-3.6 mm per
-#: scenario, largest 9.2 mm apart from two single-frame spikes (00: 34.7,
-#: 11: 41.2 mm, a band cut by a mouth). A 50 mm pose bias (either side)
-#: reads a per-scenario median of 30-45 mm. The threshold is half that
-#: bias; it also stays above B's end-estimate error on the moderate drift
-#: grid (test_drift_grid).
+#: clean scenarios (seed 7, 447 compared frames of 555): median 1.8-3.9 mm
+#: per scenario, largest 8.1 mm apart from two single-frame spikes (00:
+#: 39.5, 11: 39.9 mm, a band cut by a mouth). A 50 mm pose bias (either
+#: side) reads a per-scenario median of 30-45 mm. The threshold is half
+#: that bias; it also stays above B's end-estimate error on the moderate
+#: drift grid (worst 7.6 mm, test_drift_grid).
 MAX_DISAGREE_M = 0.025
 #: DISAGREE when at least DISAGREE_MIN_FRAMES of the last DISAGREE_WINDOW
 #: compared frames exceed MAX_DISAGREE_M (a frame with nothing to compare

@@ -47,7 +47,6 @@ import os
 from multiprocessing import get_context
 
 import pytest
-
 from lane_scenarios import (
     GRAPH,
     SCENARIOS,
