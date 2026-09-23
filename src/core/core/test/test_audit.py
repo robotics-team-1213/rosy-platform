@@ -668,6 +668,32 @@ def test_a_file_rewritten_in_place_is_not_spliced(tmp_path):
     assert health["prune_failures"] == 0
 
 
+def test_a_file_edited_in_place_near_the_start_is_not_spliced(tmp_path):
+    """끝 4 KiB 가 같아도 앞부분이 바뀌었으면 이어 붙이지 않는다. 같은 길이로
+    제자리 저장하는 편집기는 inode·크기·끝을 모두 그대로 두므로, 앞도 보지
+    않으면 우리 옛 스냅샷이 그 편집을 조용히 되돌린다."""
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    stale = _event(1, (now - timedelta(days=31)).isoformat()).model_dump_json()
+    fresh = [_event(10 + i, now.isoformat()).model_dump_json() for i in range(80)]
+    path.write_text("\n".join([stale, *fresh]) + "\n", encoding="utf-8")
+    assert path.stat().st_size > 2 * 4096, "the head and the boundary must not overlap"
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    edited = stale.replace('"seq":1,', '"seq":7,')
+    assert edited != stale and len(edited) == len(stale)
+
+    def someone_edits_the_first_line():
+        with path.open("r+b") as handle:          # 같은 inode, 같은 크기, 같은 끝
+            handle.write(edited.encode("utf-8"))
+
+    _prune_with(log, path, someone_edits_the_first_line)
+
+    assert path.read_text(encoding="utf-8").startswith(edited), "the edit was undone"
+    health = log.health()
+    assert health["prune_skipped"] == 1
+    assert health["prune_failures"] == 0
+
+
 def test_a_file_swapped_for_a_longer_one_is_not_spliced(tmp_path):
     """크기만 보면 같은 길이거나 더 긴 것으로 갈아 끼운 것을 못 잡는다 —
     그러면 남의 내용 한가운데에 우리 옛 스냅샷을 이어 붙인다."""

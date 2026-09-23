@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · fix(core_events): the splice check also looks at the head, and the quarantine marker records our own end
 - 2026-09-23 · uncommitted · fix(core_events): a reused inode no longer passes as the same audit file
 - 2026-09-23 · uncommitted · fix(core_events): the quarantine dedupe re-checks that the quarantine file still holds the bytes
 - 2026-09-22 · uncommitted · fix(core_events): audit quarantine off the lock, no duplicate evidence, thread-start and dir-fsync failures counted
