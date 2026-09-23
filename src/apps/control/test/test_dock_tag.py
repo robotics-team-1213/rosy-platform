@@ -79,3 +79,100 @@ def test_bad_spec_fails_closed():
         DockTagSpec(tag_id=7, size_m=0.0, revision="dock-tag-v1")
     with pytest.raises(ValueError):
         DockTagSpec(tag_id=-1, size_m=0.10, revision="dock-tag-v1")
+
+
+# --- Stage-3 parking wedge: camera extrinsics and the tag's own yaw --------
+#
+# dock_scene ray-casts the declared Gazebo camera (320x180, pitch 25 deg,
+# optical centre 0.0602 m high, 0.034 m ahead of base_link) against the
+# inclined wedge tag. With a CameraMount the observation is the tag centre
+# in base_link and the yaw of the tag's inward axis (0 when squarely faced),
+# not the bearing.
+
+import dock_scene  # noqa: E402
+
+from control.sensing.dock_tag import CameraMount  # noqa: E402
+
+WEDGE_SPEC = DockTagSpec(tag_id=dock_scene.TAG_ID, size_m=dock_scene.TAG_SIZE_M)
+MOUNT = CameraMount(height_m=dock_scene.HEIGHT_M, pitch_rad=dock_scene.PITCH_RAD,
+                    x_offset_m=dock_scene.CAM_X)
+
+
+def _wedge(pose):
+    return detect_dock_tag(dock_scene.render(pose), WEDGE_SPEC,
+                           dock_scene.CAMERA_MATRIX, dock_scene.DIST, mount=MOUNT)
+
+
+def test_at_the_spot_the_wedge_tag_is_placed_in_base_link():
+    obs = _wedge(dock_scene.SPOT)
+    x, y, yaw = dock_scene.truth(dock_scene.SPOT)
+    assert obs is not None and obs.tag_id == 7
+    assert obs.x == pytest.approx(x, abs=0.004)
+    assert obs.y == pytest.approx(y, abs=0.002)
+    assert obs.yaw == pytest.approx(yaw, abs=math.radians(1.0))
+    assert obs.range_m == pytest.approx(math.hypot(obs.x, obs.y))
+
+
+@pytest.mark.parametrize("pose", [
+    (-1.00, 0.020, 0.0),
+    (-1.00, -0.020, math.radians(5.0)),
+    (-1.03, 0.015, math.radians(-3.0)),
+    (-1.05, 0.010, math.radians(-5.0)),
+    (-1.08, -0.025, math.radians(6.0)),
+    (-1.10, -0.020, math.radians(4.0)),
+    (-1.10, 0.030, math.radians(-8.0)),
+])
+def test_off_axis_poses_recover_position_and_the_tags_own_yaw(pose):
+    """Within the approach's envelope: x/y within a few mm, yaw within 1.5
+    deg. The yaw is the tag's orientation (from rvec), not the bearing: at
+    a lateral offset with the robot parallel to the dock axis the bearing is
+    several degrees, the yaw zero."""
+    obs = _wedge(pose)
+    x, y, yaw = dock_scene.truth(pose)
+    assert obs is not None, pose
+    assert obs.x == pytest.approx(x, abs=0.005)
+    assert obs.y == pytest.approx(y, abs=0.004)
+    assert obs.yaw == pytest.approx(yaw, abs=math.radians(1.5))
+
+
+def test_the_yaw_is_orientation_not_bearing():
+    pose = (-1.0, 0.025, 0.0)
+    obs = _wedge(pose)
+    bearing = math.atan2(obs.y, obs.x)
+    assert abs(bearing) > math.radians(4.0)
+    assert obs.yaw == pytest.approx(0.0, abs=math.radians(1.0))
+
+
+def test_without_a_mount_the_wedge_reads_as_the_old_bearing_contract():
+    """The DNC-007 path is unchanged: no mount, camera-frame range and a
+    bearing yaw (which ignores the 25 deg pitch and the 0.034 m offset)."""
+    frame = dock_scene.render(dock_scene.SPOT)
+    old = detect_dock_tag(frame, WEDGE_SPEC, dock_scene.CAMERA_MATRIX, dock_scene.DIST)
+    new = detect_dock_tag(frame, WEDGE_SPEC, dock_scene.CAMERA_MATRIX, dock_scene.DIST,
+                          mount=MOUNT)
+    assert old.yaw == pytest.approx(math.atan2(old.y, old.x))
+    assert new.x - old.x == pytest.approx(dock_scene.CAM_X, abs=0.02)
+
+
+def test_the_flipped_ippe_solution_is_never_chosen():
+    """IPPE returns two poses for a small oblique square; the wrong one has
+    the face normal pointing down into the floor. The tag stands on the
+    floor facing up, so only the upward normal can be it."""
+    for pose in [(-1.0, 0.0, 0.0), (-1.0, 0.02, 0.0), (-1.1, -0.02, math.radians(4.0))]:
+        obs = _wedge(pose)
+        assert obs is not None
+        assert obs.yaw == pytest.approx(dock_scene.truth(pose)[2], abs=math.radians(1.5))
+
+
+def test_from_the_spur_entry_the_wedge_is_out_of_view():
+    """The camera sees nothing above ~2 cm at the entry's range: the tag's
+    top is cut and nothing is reported (the manager creeps on odometry)."""
+    assert _wedge(dock_scene.ENTRY) is None
+    assert _wedge((-1.10, 0.0, 0.0)) is not None
+
+
+def test_a_bad_mount_fails_closed():
+    with pytest.raises(ValueError):
+        CameraMount(height_m=0.0, pitch_rad=0.4)
+    with pytest.raises(ValueError):
+        CameraMount(height_m=0.06, pitch_rad=float("nan"))
