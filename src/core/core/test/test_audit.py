@@ -90,7 +90,8 @@ def test_a_write_does_not_rewrite_the_whole_file_every_time(tmp_path, monkeypatc
     real_open = Path.open
 
     def note(self, mode="r", *args, **kwargs):
-        opens.append(mode)
+        if self == path:                    # 남의 스레드가 여는 파일은 세지 않는다
+            opens.append(mode)
         return real_open(self, mode, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", note)
@@ -580,7 +581,11 @@ def test_the_terminator_is_checked_once_not_on_every_record(tmp_path):
     real_open = Path.open
 
     def note(self, *args, **kwargs):
-        opens.append(str(args[0]) if args else "r")
+        # 이 로그의 파일만 센다. `Path.open` 은 클래스 전체에서 바뀌므로, 앞선
+        # 시험이 남긴 백그라운드 스레드가 여는 남의 파일까지 세면 부하가 큰
+        # 전체 실행에서만 가끔 붉어진다.
+        if self == path:
+            opens.append(str(args[0]) if args else "r")
         return real_open(self, *args, **kwargs)
 
     log.record(_event(1, now.isoformat()))          # 첫 기록이 확인한다
@@ -892,7 +897,7 @@ def test_a_last_byte_we_could_not_read_is_treated_as_unterminated(tmp_path, monk
     real_open = Path.open
 
     def deny_reads(self, mode="r", *args, **kwargs):
-        if "b" in mode and "r" in mode:
+        if self == path and "b" in mode and "r" in mode:
             raise PermissionError("in use")
         return real_open(self, mode, *args, **kwargs)
 
@@ -952,7 +957,7 @@ def test_the_writer_asks_for_no_newline_translation(tmp_path, monkeypatch):
     real_open = Path.open
 
     def note(self, mode="r", *args, **kwargs):
-        if "a" in mode:
+        if "a" in mode and self.parent == tmp_path:     # 이 시험의 파일만
             seen.append(kwargs.get("newline", "<missing>"))
         return real_open(self, mode, *args, **kwargs)
 
