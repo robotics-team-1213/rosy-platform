@@ -3,6 +3,9 @@
 ROS 무의존. display/info JSON 페이로드 → PIL 이미지 한 장.
 LCD는 이 이미지를 회전/리사이즈해 출력하므로 여기서는 GIF 프레임과 같은
 가로 방향(기본 320x240)으로 그린다.
+
+``render_boot``는 부팅 카드다(D-190). CORE 밖의 ``rosy-boot-display``가
+``/run/rosy-boot`` 상태로 그린다. 같은 팔레트(D-82)를 쓴다.
 """
 
 from __future__ import annotations
@@ -108,4 +111,121 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         draw.text((width // 2, height - 14), address,
                   font=_font(14), fill=_MUTED, anchor="ms")
 
+    return image
+
+
+# --- D-190: boot card -----------------------------------------------------
+#
+# rosy-boot-display.service draws this outside CORE (D-161) from the boot
+# indicator's files, so it also shows BOOTING, PROVISIONED and FAILED, when
+# CORE does not exist. Normal has no colour (D-82): only FAILED is red.
+
+_STAGE_TITLES = {
+    "BOOTING": "BOOTING",
+    "PROVISIONED": "PROVISIONED",
+    "CORE_READY": "READY",
+    "FAILED": "FAILED",
+}
+_MIN_FONT = 11
+
+# (slot, y, font size) in draw order; the slot names are what boot_lines returns.
+_BOOT_LAYOUT = {
+    "name": (8, 18),
+    "release": (12, 13),
+    "stage": (32, 34),
+    "failed_unit": (74, 18),
+    "detail": (76, 13),
+    "address": (100, 20),
+    "battery": (130, 20),
+    "ap_ssid": (166, 17),
+    "ap_login": (192, 22),
+}
+
+
+def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
+    """(slot, text, colour) rows of the boot card; pure, for tests and render_boot.
+
+    Keys: ``device_name``, ``release_id``, ``stage`` (``FAILED:<unit>`` label),
+    ``failed_unit``, ``detail``, ``ipv4`` (list), ``api_port``,
+    ``battery_percent``, ``battery_voltage``, ``network`` (``mode``/``ssid``/
+    ``address``) and ``ap_login`` (the AP key line, AP mode only).
+    Missing values never stop the card.
+    """
+    stage = str(payload.get("stage") or "BOOTING")
+    kind = stage.split(":", 1)[0]
+    failed = kind == "FAILED"
+    stage_color = _CRIT if failed else (_MUTED if kind == "BOOTING" else _FG)
+    lines = [
+        ("name", str(payload.get("device_name") or "rosy (unprovisioned)"), _MUTED),
+        ("release", str(payload.get("release_id") or "release ?"), _MUTED),
+        ("stage", _STAGE_TITLES.get(kind, kind), stage_color),
+    ]
+    unit = payload.get("failed_unit")
+    if failed and not unit and ":" in stage:
+        unit = stage.split(":", 1)[1]
+    if failed and unit:
+        lines.append(("failed_unit", str(unit).rsplit(".service", 1)[0], _CRIT))
+    elif payload.get("detail"):
+        lines.append(("detail", str(payload["detail"]), _MUTED))
+
+    network = payload.get("network") or {}
+    ap_mode = network.get("mode") == "ap"
+    port = payload.get("api_port") or 8080
+    addresses = [str(address) for address in payload.get("ipv4") or []]
+    if ap_mode and network.get("address"):
+        addresses = [str(network["address"])]
+    if addresses:
+        lines.append(("address", f"{addresses[0]}:{port}", _FG))
+    else:
+        lines.append(("address", "no IP address", _MUTED))
+
+    percent = payload.get("battery_percent")
+    voltage = payload.get("battery_voltage")
+    if percent is None or voltage is None:
+        lines.append(("battery", "battery --", _MUTED))
+    else:
+        lines.append(("battery", f"{float(percent):.0f}%  {float(voltage):.2f} V",
+                      battery_color(float(percent))))
+
+    if ap_mode:
+        lines.append(("ap_ssid", f"Wi-Fi {network.get('ssid') or '?'}", _FG))
+        login = payload.get("ap_login")
+        if login:
+            lines.append(("ap_login", f"PW {login}", _FG))
+        else:
+            lines.append(("ap_login", "PW: see the operator AP store", _MUTED))
+    return lines
+
+
+def _fit(draw: ImageDraw.ImageDraw, text: str, size: int, width: int):
+    """(font, text): the largest font up to ``size`` that fits ``width``.
+
+    Text that does not fit even the smallest font is cut with an ellipsis
+    rather than drawn off the screen.
+    """
+    while size > _MIN_FONT:
+        font = _font(size)
+        if draw.textlength(text, font=font) <= width:
+            return font, text
+        size -= 1
+    font = _font(_MIN_FONT)
+    while len(text) > 1 and draw.textlength(text, font=font) > width:
+        text = text[:-2] + "\u2026"
+    return font, text
+
+
+def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """Boot card: name, release, stage (failed unit), address, battery, AP."""
+    width, _height = size
+    image = Image.new("RGB", size, _BG)
+    draw = ImageDraw.Draw(image)
+    for slot, text, color in boot_lines(payload):
+        y, font_size = _BOOT_LAYOUT[slot]
+        if slot == "release":
+            font, text = _fit(draw, text, font_size, width // 2 - 16)
+            draw.text((width - 12, y), text, font=font, fill=color, anchor="ra")
+            continue
+        limit = width // 2 if slot == "name" else width - 32
+        font, text = _fit(draw, text, font_size, limit)
+        draw.text((16, y), text, font=font, fill=color)
     return image
