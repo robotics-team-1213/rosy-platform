@@ -488,7 +488,7 @@ class DockingManager:
         if self._parking():
             self._tick_approaching_pose(now)
             return
-        observation =self._detector.relative_pose() if self._detector else None
+        observation = self._detector.relative_pose() if self._detector else None
 
         if observation is None:
             # 한 프레임 놓쳤다고 실패로 보지 않는다. 유예를 넘기면 재시도다.
