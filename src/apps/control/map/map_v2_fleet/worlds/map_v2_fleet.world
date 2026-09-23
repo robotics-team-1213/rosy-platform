@@ -4,6 +4,7 @@
   Envelope 2.810 x 1.260 m, centred at the origin.
   STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping.
   Lane paint is visual-only; the perimeter ring is the only collision.
+  dock_tag_7: the stage-3 parking marker (visual-only wedge face).
   Line colour: bright. Orientation vs the physical mat: see README.md.
 -->
 <sdf version="1.6">
@@ -93,6 +94,20 @@
           <pose>1.40250 0.00000 0.07750 0 0 0</pose>
           <geometry><box><size>0.00500 1.26000 0.15500</size></box></geometry>
           <material><ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="dock_tag_7">
+      <static>true</static>
+      <link name="link">
+        <visual name="face">
+          <pose>-0.74979 0 0.01409 0 -0.436332 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>0.06667 0.06667</size></plane></geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse>
+            <pbr><metal><albedo_map>model://control/map/map_v2_fleet/textures/dock_tag_7.png</albedo_map></metal></pbr>
+          </material>
         </visual>
       </link>
     </model>
