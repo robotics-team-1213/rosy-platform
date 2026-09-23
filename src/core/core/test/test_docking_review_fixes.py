@@ -78,3 +78,31 @@ def test_an_ordinary_undock_still_finishes():
     p.manager.undock()
     run(p, done)
     assert p.manager.state is DockState.UNDOCKED
+
+
+# --- M5: an observation pairs only with odometry recorded near its capture ------
+
+
+def test_the_tracker_rejects_a_pairing_far_from_the_capture_time():
+    from core_features.docking.detector import DockObservation
+    from core_features.docking.parking import DockPoseTracker
+    tracker = DockPoseTracker(0.25)
+    tracker.record_odometry(10.0, (0.0, 0.0, 0.0))
+    far = DockObservation(x=0.3, y=0.0, yaw=0.0, confidence=0.9, at=10.5)
+    assert not tracker.observe(far)
+    assert tracker.anchored_at is None
+    near = DockObservation(x=0.3, y=0.0, yaw=0.0, confidence=0.9, at=10.05)
+    assert tracker.observe(near)
+    assert tracker.anchored_at == 10.05
+
+
+def test_the_entry_turn_records_odometry_for_the_first_pairing():
+    from test_docking_parking_manager import DockPhase
+    p = a_parking((ENTRY_X, 0.0, 1.5708))
+    p.manager.dock()
+    assert p.manager.phase is DockPhase.TURNING
+    run(p, lambda m: m.phase is not DockPhase.TURNING)
+    turn_end = p.manager._phase_since
+    samples = list(p.manager._tracker._odometry)
+    assert samples and samples[0][0] < turn_end
+

@@ -57,9 +57,13 @@ class DockPoseTracker:
     by odometry. `record_odometry` every tick; `observe` each new
     observation (its `.at` on the same clock); `pose(odom)` now."""
 
-    def __init__(self, tag_offset_m: float, history_s: float = 3.0) -> None:
+    def __init__(self, tag_offset_m: float, history_s: float = 3.0,
+                 max_pair_gap_s: float = 0.1) -> None:
         self._offset = float(tag_offset_m)
         self._history_s = float(history_s)
+        # An observation pairs only with odometry recorded this close to its
+        # capture time; farther, the pairing would put the latency back in.
+        self._max_pair_gap_s = float(max_pair_gap_s)
         self._odometry: deque = deque()
         self._anchor: Optional[tuple] = None      # (dock pose, odom pose, at)
 
@@ -78,14 +82,16 @@ class DockPoseTracker:
             self._odometry.popleft()
 
     def _odometry_at(self, at: float):
-        """The recorded odometry pose nearest in time to `at`."""
+        """The recorded odometry pose nearest in time to `at`, if it is within
+        `max_pair_gap_s` of it."""
         if not self._odometry:
             return None
-        return min(self._odometry, key=lambda sample: abs(sample[0] - at))[1]
+        sample_t, odom = min(self._odometry, key=lambda sample: abs(sample[0] - at))
+        return odom if abs(sample_t - at) <= self._max_pair_gap_s else None
 
     def observe(self, observation) -> bool:
         """Anchor on a new observation; False if it is not newer or no
-        odometry was recorded to pair it with."""
+        odometry was recorded near its capture time to pair it with."""
         at = float(observation.at)
         if self._anchor is not None and at <= self._anchor[2]:
             return False

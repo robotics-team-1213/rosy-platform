@@ -682,6 +682,8 @@ class DockingManager:
             return
         relative = wrap(target_map_yaw - float(pose[2]))
         self._turn_target = wrap(odom[2] + relative)
+        if self._tracker is None and self._parking():
+            self._tracker = DockPoseTracker(self._type().tag_offset_m)
         self._enter(DockPhase.TURNING)
         if abs(relative) <= self._gains.turn_tolerance_rad:
             self._finish_turn()
@@ -691,6 +693,9 @@ class DockingManager:
         if odom is None:
             self._fail("odometry lost during the turn")
             return
+        if self._tracker is not None:
+            # 회전 끝에 찍힌 프레임이 짝지을 오도메트리를 갖도록 기록한다.
+            self._tracker.record_odometry(now, odom)
         angular, done = turn_twist(wrap(self._turn_target - odom[2]), self._gains)
         if done:
             self._stop()
