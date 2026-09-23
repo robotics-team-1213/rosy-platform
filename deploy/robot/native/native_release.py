@@ -41,6 +41,23 @@ REQUIRED_PAYLOAD = {
     "source-revision.txt",
 }
 METADATA = {"manifest.json", "SHA256SUMS", "SHA256SUMS.sig"}
+# D-189: the CORE Python runtime lives in the image's /usr/local, outside the
+# switchable release. A release names the runtime it was built against (the
+# sha256 of deploy/image/device-python-requirements.txt) in a signed payload
+# file; the image records the one it installed. They must match.
+PYTHON_RUNTIME_RELEASE_FILE = "python-runtime.sha256"
+PYTHON_RUNTIME_IMAGE_FILE = Path("usr/local/share/rosy/python-runtime.sha256")
+RUNTIME_ID = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _runtime_id(path: Path) -> str | None:
+    if path.is_symlink() or not path.is_file():
+        return None
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return value if RUNTIME_ID.fullmatch(value) else None
 
 
 def _write_json_atomic(path: Path, payload: dict) -> None:
@@ -234,6 +251,25 @@ class NativeReleaseManager:
                 raise ValueError(f"NATIVE_MANIFEST_PAYLOAD: digest mismatch for {relative}")
         return manifest
 
+    def check_python_runtime(self, release_id: str) -> str:
+        """Refuse a verified release whose Python runtime is not the image's.
+
+        Only activate and rollback call this. Recovery restores the release that
+        was already running and must never hold on it.
+        """
+        release = self._release(release_id)
+        wanted = _runtime_id(release / PYTHON_RUNTIME_RELEASE_FILE)
+        present = _runtime_id(self.root / PYTHON_RUNTIME_IMAGE_FILE)
+        if wanted is None:
+            raise ValueError(
+                f"NATIVE_PYTHON_RUNTIME: release {release_id} does not declare its Python runtime "
+                f"({PYTHON_RUNTIME_RELEASE_FILE}); reflash with a matching image")
+        if present != wanted:
+            raise ValueError(
+                f"NATIVE_PYTHON_RUNTIME: this release needs Python runtime {wanted}; "
+                f"this image has {present or 'none recorded'}; reflash with a matching image")
+        return wanted
+
     def _link_id(self, link: Path) -> str | None:
         return self.links.get(link.name)
 
@@ -267,6 +303,7 @@ class NativeReleaseManager:
     def activate(self, release_id: str) -> dict:
         with self._locked():
             self.verify(release_id)
+            self.check_python_runtime(release_id)
             old_current = self._link_id(self.current)
             old_previous = self._link_id(self.previous)
             if old_current == release_id:
@@ -301,6 +338,7 @@ class NativeReleaseManager:
             if old_current is None or candidate is None:
                 raise ValueError("NATIVE_ROLLBACK_UNAVAILABLE: current and previous are required")
             self.verify(candidate)
+            self.check_python_runtime(candidate)
             self._write_journal(
                 operation="rollback", candidate=candidate,
                 old_current=old_current, old_previous=candidate, phase="prepared",

@@ -157,10 +157,17 @@ chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
 mkdir -p "$ROOT/tmp/rosy-core-probe"
 cp "$PYTHON_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/device-python-requirements.txt"
 cp "$CORE_PROBE" "$ROOT/tmp/rosy-core-probe/probe-core-runtime.py"
-chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
+chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
+# umask 022: the service users must be able to read what root installs.
+(umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
     --ignore-installed --require-hashes --no-deps --only-binary=:all: \
-    -r /tmp/rosy-core-probe/device-python-requirements.txt \
+    -r /tmp/rosy-core-probe/device-python-requirements.txt) \
     || fail "CORE Python runtime did not install from the hash lock"
+# D-189: record which runtime the image carries; native_release.py refuses a
+# release built for another one (python-runtime.sha256 in its signed payload).
+install -d -m 0755 "$ROOT/usr/local/share/rosy"
+printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core
@@ -226,11 +233,16 @@ for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
 done
 rm -rf -- "$ROOT$NATIVE_PROBE"
 
-# D-189 B: import what rosy-core.service loads at start, as the unit runs it
-# (ROS and the release sourced, no usable HOME), and assert the pinned set and
+[[ "$(tr -d '[:space:]' < "$RELEASE/python-runtime.sha256")" == "$PYTHON_REQUIREMENTS_SHA" ]] \
+    || fail "release python-runtime.sha256 does not match the image's Python runtime lock"
+
+# D-189 B: import what rosy-core.service loads at start, as the unit runs it:
+# user rosy-core, its HOME, no login shell, no user site, runtime.env if the
+# image has one, ROS and the release sourced. Assert the pinned set and
 # pydantic 2. -B keeps bytecode out of the signed release tree.
-chroot "$ROOT" env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/nonexistent PYTHONDONTWRITEBYTECODE=1 \
-    bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
+chroot "$ROOT" setpriv --reuid=rosy-core --regid=rosy-core --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/core PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
     || fail "CORE does not import inside the image"
 rm -rf -- "$ROOT/tmp/rosy-core-probe"
 

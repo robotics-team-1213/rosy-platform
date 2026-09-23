@@ -82,6 +82,10 @@ mv -f -- "$INVENTORY.tmp" "$INVENTORY"
 dpkg-query -W -f='${Package}\t${Version}\n' | LC_ALL=C sort > "$DEB_INVENTORY.tmp"
 mv -f -- "$DEB_INVENTORY.tmp" "$DEB_INVENTORY"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE_ROOT/source-revision.txt"
+# D-189: the CORE Python runtime this release was built and tested against.
+# native_release.py refuses to activate it on an image with a different one.
+sha256sum "$SCRIPT_DIR/device-python-requirements.txt" | awk '{print $1}' \
+    > "$RELEASE_ROOT/python-runtime.sha256"
 printf '%s\n' "$RELEASE_ID" > "$INSTALL_ROOT/.rosy-release"
 cp "$SCRIPT_DIR/required-ros-packages.txt" "$RELEASE_ROOT/required-ros-packages.txt"
 mkdir -p "$RELEASE_ROOT/deploy/robot"

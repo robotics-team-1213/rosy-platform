@@ -29,10 +29,12 @@ jobs:
 
       - name: Install python deps
         run: |
-          python3 -m pip install --break-system-packages --no-cache-dir httpx pyyaml
           # D-189: the CORE runtime set is the image's hash-locked set, not the latest.
           python3 -m pip install --break-system-packages --no-cache-dir --ignore-installed \
             --require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt
+          # Test tools afterwards, constrained to the lock's versions (hash-free view).
+          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
+          python3 -m pip install --break-system-packages --no-cache-dir -c /tmp/rosy-runtime-constraints.txt httpx pyyaml
 
       - name: Build (colcon, native arm64)
         run: |

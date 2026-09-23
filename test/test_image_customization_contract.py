@@ -327,6 +327,24 @@ def test_customizer_installs_the_locked_runtime_after_rosdep():
     assert "--prefix" not in command and "--target" not in command and "--user" not in command
     # rosdep installs apt pydantic 1.10 first; the lock must win after it.
     assert source.index("rosdep install --from-paths") < install
+    # Readable by the service users whatever the builder's umask is.
+    assert source[source.rindex("\n", 0, install):install].endswith("(umask 022 && ")
+
+
+def test_image_and_release_record_the_same_python_runtime():
+    # D-189 review: the runtime lives in the image, the release names the one it
+    # needs, and native_release.py refuses a mismatch on activate and rollback.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+
+    assert '"$ROOT/usr/local/share/rosy/python-runtime.sha256"' in source
+    assert 'printf \'%s\\n\' "$PYTHON_REQUIREMENTS_SHA"' in source
+    assert "release python-runtime.sha256 does not match" in source
+    assert 'sha256sum "$SCRIPT_DIR/device-python-requirements.txt"' in payload
+    assert '"$RELEASE_ROOT/python-runtime.sha256"' in payload
+    native = (ROOT / "deploy/robot/native/native_release.py").read_text(encoding="utf-8")
+    assert 'PYTHON_RUNTIME_IMAGE_FILE = Path("usr/local/share/rosy/python-runtime.sha256")' in native
+    assert 'PYTHON_RUNTIME_RELEASE_FILE = "python-runtime.sha256"' in native
 
 
 def test_customizer_fails_the_build_when_core_does_not_import_in_the_image():
@@ -337,7 +355,14 @@ def test_customizer_fails_the_build_when_core_does_not_import_in_the_image():
     assert "source /opt/ros/jazzy/setup.bash" in call
     assert "source /opt/rosy/current/install/setup.bash" in call
     assert "python3 -B" in call and "PYTHONDONTWRITEBYTECODE=1" in call
-    assert "HOME=/nonexistent" in call
+    # As the unit runs it (D-189 review): the service user, its HOME, no login
+    # shell, no user site, and runtime.env when the image has one.
+    assert "setpriv --reuid=rosy-core --regid=rosy-core --clear-groups" in call
+    assert "HOME=/var/lib/rosy/core" in call and "PYTHONNOUSERSITE=1" in call
+    assert "bash --noprofile --norc -c" in call and "bash -lc" not in call
+    assert "if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi" in call
+    # The accounts exist before the probe switches to one.
+    assert source.index("useradd --uid 960") < probe
     assert '|| fail "CORE does not import inside the image"' in call
     # After the release is linked as current, before the image is accepted.
     assert source.index('ln -s "releases/$RELEASE_ID" "$ROOT/opt/rosy/current"') < probe
@@ -347,7 +372,13 @@ def test_customizer_fails_the_build_when_core_does_not_import_in_the_image():
 def test_ci_tests_against_the_runtime_the_device_runs():
     for workflow in ("ci.yml", "arm64-rehearsal.yml"):
         text = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
-        assert "--require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt" in text
+        lock = "--require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt"
+        assert lock in text
+        # Test tools come after the lock, constrained to its versions, so their
+        # dependencies (anyio, h11, idna, typing-extensions) are not a second copy.
+        constraints = "grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/image/device-python-requirements.txt"
+        assert constraints in text
+        assert text.index(lock) < text.index(constraints) < text.index("-c /tmp/rosy-runtime-constraints.txt")
         for line in text.splitlines():
             if "pip" in line and " install" in line and "-r deploy/image" not in line:
                 words = set(line.split())
