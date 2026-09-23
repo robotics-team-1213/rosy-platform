@@ -1,14 +1,20 @@
 """Synthetic camera renders of the parking wedge marker (test helper).
 
 Ray-casts every pixel of the declared Gazebo camera (320x180, hfov 1.1519,
-pitch 25 deg, optical centre 0.0602 m high and 0.034 m ahead of base_link;
-lane_sim's model) against the floor and the inclined tag face, 4x4
+pitch 25 deg, optical centre 0.0602 m high and 0.0285 m ahead of base_link,
+where the URDF and gz sdf put front_camera_link) against the floor and the inclined tag face, 4x4
 supersampled so tag corners land with sub-pixel edges as a rendered image
 has them. The floor carries lane_sim's paint raster (the 260919 STL paint)
 or none; the wedge is the stage-3 marker (DICT_4X4_50 id 7, a 50 mm tag
 with a one-cell white quiet zone, the face inclined FACE_TILT_RAD from the
 floor, its bottom edge at BOTTOM_X facing -x). World frame: ROS map, x
 right, y up; the robot pose is base_link (x, y, yaw).
+
+Pixel centres follow Gazebo's renderer: pixel i's ray passes through
+i + 0.5 from the image edge, so in OpenCV's convention (pixel centres on
+integers) the principal point is ((W - 1) / 2, (H - 1) / 2), half a pixel
+off the W / 2 that gz's camera_info reports (measured on the rendered
+wedge: -0.5 px in u and v at three ranges).
 
 Grey levels: floor and paint as lane_sim (109; 229 - 35 d); the tag's
 white is WHITE, under line_observer's bright threshold 180 on purpose (the
@@ -35,11 +41,12 @@ ENTRY = (-1.2696, 0.0, 0.0)
 
 HEIGHT_M = 0.060194
 PITCH_RAD = math.radians(25.0)
-CAM_X = 0.034
+CAM_X = 0.028481
 W, H = 320, 180
 HFOV = 1.1519
 FOCAL = (W / 2.0) / math.tan(HFOV / 2.0)
-CAMERA_MATRIX = np.array([[FOCAL, 0.0, W / 2.0], [0.0, FOCAL, H / 2.0], [0.0, 0.0, 1.0]])
+CX, CY = (W - 1) / 2.0, (H - 1) / 2.0
+CAMERA_MATRIX = np.array([[FOCAL, 0.0, CX], [0.0, FOCAL, CY], [0.0, 0.0, 1.0]])
 DIST = np.zeros(5)
 SUPERSAMPLE = 4
 
@@ -73,8 +80,8 @@ def _rays():
     u = np.arange(W)[None, :, None, None] + offsets[None, None, None, :]
     v = np.arange(H)[:, None, None, None] + offsets[None, None, :, None]
     u, v = np.broadcast_arrays(u, v)
-    x = (u - W / 2.0) / FOCAL
-    y = (v - H / 2.0) / FOCAL
+    x = (u - CX) / FOCAL
+    y = (v - CY) / FOCAL
     return np.stack([x, y, np.ones_like(x)], axis=-1).reshape(H, W, -1, 3)
 
 

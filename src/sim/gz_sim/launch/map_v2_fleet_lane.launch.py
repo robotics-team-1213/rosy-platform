@@ -127,12 +127,16 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration("dock_observer")),
             parameters=[{
                 "use_sim_time": True,
-                # Declared Gazebo camera, as line_observer's ground plane.
+                # Declared Gazebo camera: front_camera_link on base_footprint
+                # from the URDF chain, as gz sdf -p places the sensor
+                # (0.0284809, 0, 0.0601944): 0.020 + 0.015*cos(25 deg)
+                # - 0.0121*sin(25 deg) ahead, 0.028 + 0.0495
+                # - 0.015*sin(25 deg) - 0.0121*cos(25 deg) high.
                 "camera_geometry_source": "GAZEBO",
                 "camera_height_m": 0.060194,
                 "camera_pitch_rad": math.radians(25.0),
                 "camera_hfov_rad": 1.1519,
-                "camera_x_offset_m": 0.034,
+                "camera_x_offset_m": 0.028481,
                 "tag_id": 7,
                 "tag_size_m": 0.05,
             }],

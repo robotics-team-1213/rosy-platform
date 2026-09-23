@@ -84,7 +84,7 @@ def test_bad_spec_fails_closed():
 # --- Stage-3 parking wedge: camera extrinsics and the tag's own yaw --------
 #
 # dock_scene ray-casts the declared Gazebo camera (320x180, pitch 25 deg,
-# optical centre 0.0602 m high, 0.034 m ahead of base_link) against the
+# optical centre 0.0602 m high, 0.0285 m ahead of base_link) against the
 # inclined wedge tag. With a CameraMount the observation is the tag centre
 # in base_link and the yaw of the tag's inward axis (0 when squarely faced),
 # not the bearing.
@@ -144,7 +144,7 @@ def test_the_yaw_is_orientation_not_bearing():
 
 def test_without_a_mount_the_wedge_reads_as_the_old_bearing_contract():
     """The DNC-007 path is unchanged: no mount, camera-frame range and a
-    bearing yaw (which ignores the 25 deg pitch and the 0.034 m offset)."""
+    bearing yaw (which ignores the 25 deg pitch and the camera offset)."""
     frame = dock_scene.render(dock_scene.SPOT)
     old = detect_dock_tag(frame, WEDGE_SPEC, dock_scene.CAMERA_MATRIX, dock_scene.DIST)
     new = detect_dock_tag(frame, WEDGE_SPEC, dock_scene.CAMERA_MATRIX, dock_scene.DIST,

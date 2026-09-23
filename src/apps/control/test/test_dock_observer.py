@@ -35,7 +35,8 @@ def test_the_camera_matrix_is_the_gazebo_pinhole():
     matrix = camera_matrix_from_hfov(320, 180, 1.1519)
     assert matrix[0, 0] == pytest.approx(246.4, abs=0.1)
     assert matrix[1, 1] == matrix[0, 0]
-    assert (matrix[0, 2], matrix[1, 2]) == (160.0, 90.0)
+    # Gazebo's pixel centres: (W - 1) / 2, not the W / 2 of its camera_info.
+    assert (matrix[0, 2], matrix[1, 2]) == (159.5, 89.5)
     assert np.allclose(matrix, dock_scene.CAMERA_MATRIX)
     for bad in [(320, 180, 0.0), (320, 180, math.pi), (0, 180, 1.0),
                 (320, 180, float("nan")), (320, 180, "x")]:

@@ -27,9 +27,13 @@ SOURCE = "CAMERA_TAG"
 
 
 def camera_matrix_from_hfov(width: int, height: int, hfov_rad: float) -> np.ndarray | None:
-    """Pinhole matrix of a distortion-free camera (Gazebo's), principal point
-    at the image centre as camera_ground.simulation_ground_plane has it.
-    None when the geometry is unusable."""
+    """Pinhole matrix of a distortion-free camera (Gazebo's). The principal
+    point is the image centre in OpenCV's convention, pixel centres on
+    integers: ((W - 1) / 2, (H - 1) / 2). Gazebo renders pixel i's ray
+    through i + 0.5 and its camera_info reports W / 2, half a pixel off
+    (measured on the rendered wedge: -0.5 px in u and v at three ranges,
+    a 0.5 mm lateral and 0.13 deg yaw bias). None when the geometry is
+    unusable."""
     try:
         width, height, hfov_rad = float(width), float(height), float(hfov_rad)
     except (TypeError, ValueError):
@@ -39,7 +43,8 @@ def camera_matrix_from_hfov(width: int, height: int, hfov_rad: float) -> np.ndar
     if width <= 0 or height <= 0 or not 0.0 < hfov_rad < math.pi:
         return None
     focal = (width / 2.0) / math.tan(hfov_rad / 2.0)
-    return np.array([[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]])
+    cx, cy = (width - 1.0) / 2.0, (height - 1.0) / 2.0
+    return np.array([[focal, 0.0, cx], [0.0, focal, cy], [0.0, 0.0, 1.0]])
 
 
 def dock_observation_payload(stamp: float, observation: DockTagObservation | None) -> dict:

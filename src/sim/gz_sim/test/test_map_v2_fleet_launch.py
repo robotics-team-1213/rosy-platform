@@ -152,7 +152,7 @@ def test_route_and_route_start_are_typed_as_arrays_from_a_yaml_flow_list_string(
 
 def test_the_dock_observer_is_opt_in_with_the_declared_gazebo_camera():
     """Stage 3 (parking): control's dock_observer_node observes the wedge
-    tag on the declared Gazebo camera (25 deg, 0.0602 m, 0.034 m ahead,
+    tag on the declared Gazebo camera (25 deg, 0.0602 m, 0.0285 m ahead,
     hfov 1.1519), only when dock_observer:=true. It owns no motion."""
     source = LAUNCH.read_text(encoding="utf-8")
     assert 'DeclareLaunchArgument("dock_observer", default_value="false")' in source
@@ -160,7 +160,55 @@ def test_the_dock_observer_is_opt_in_with_the_declared_gazebo_camera():
     assert "IfCondition(LaunchConfiguration(\"dock_observer\"))" in block
     for text in ['"camera_geometry_source": "GAZEBO"', '"use_sim_time": True',
                  '"camera_height_m": 0.060194', '"camera_pitch_rad": math.radians(25.0)',
-                 '"camera_hfov_rad": 1.1519', '"camera_x_offset_m": 0.034',
+                 '"camera_hfov_rad": 1.1519', '"camera_x_offset_m": 0.028481',
                  '"tag_id": 7', '"tag_size_m": 0.05']:
         assert text in block, text
     assert "cmd_vel" not in source
+
+
+URDF = Path(__file__).resolve().parents[2] / "description" / "urdf" / "rosy.urdf.xacro"
+
+
+def _urdf_camera_on_base_footprint(tilt_rad):
+    """front_camera_link (the Gazebo camera sensor's frame) on base_footprint,
+    from the xacro's joint chain: base_footprint -> base_link ->
+    front_camera_mount (pitched `tilt_rad`) -> front_camera_link. Returns
+    (x ahead, z above the floor)."""
+    import math
+    import re
+
+    source = URDF.read_text(encoding="utf-8")
+
+    def origin(joint):
+        block = re.split(rf'<joint name="(?:\$\{{namespace\}})?{joint}"', source, maxsplit=1)[1]
+        block = block.split("</joint>", 1)[0]
+        xyz = re.search(r'<origin xyz="([^"]+)"', block).group(1)
+        return [float(v) for v in xyz.split()]
+
+    base = origin("base_link_fixed_joint")
+    mount = origin("front_camera_mount_fixed_joint")
+    link = origin("front_camera_fixed_joint")
+    s, c = math.sin(tilt_rad), math.cos(tilt_rad)
+    # R_y(tilt) applied to the link offset inside the pitched mount.
+    x = base[0] + mount[0] + c * link[0] + s * link[2]
+    z = base[2] + mount[2] - s * link[0] + c * link[2]
+    return x, z
+
+
+def test_the_dock_observer_mount_is_the_urdf_camera():
+    """The declared mount must be where Gazebo puts the camera. 0.034 was
+    0.020 + 0.015*cos(25 deg) and dropped the link's -0.0121 m drop inside
+    the pitched mount (-0.0121*sin(25 deg) = -5.1 mm along x): the dock tag
+    read 5.5 mm long in every Gazebo frame. gz sdf -p puts the sensor at
+    (0.0284809, 0, 0.0601944) on base_footprint."""
+    import math
+    import re
+
+    x, z = _urdf_camera_on_base_footprint(math.radians(25.0))
+    assert (round(x, 6), round(z, 6)) == (0.028481, 0.060194)
+    block = LAUNCH.read_text(encoding="utf-8").split(
+        'executable="dock_observer_node"', 1)[1].split("Node(", 1)[0]
+    declared_x = float(re.search(r'"camera_x_offset_m": ([0-9.]+)', block).group(1))
+    declared_z = float(re.search(r'"camera_height_m": ([0-9.]+)', block).group(1))
+    assert abs(declared_x - x) < 1e-5
+    assert abs(declared_z - z) < 1e-5
