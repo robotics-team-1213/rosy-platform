@@ -513,3 +513,15 @@
 - 결정: D-173
 - 교훈: 없음(`guards-validated-only-against-synthetic-fixtures-2026-09-23.md`의 사례와 같다)
 
+## 2026-09-23 · uncommitted · fix(sd): compare the FAT32 boot partition as files; everything else stays byte-exact
+
+- 변경: `verify-media-readback.py`는 MBR·틈·루트 파일시스템을 바이트 단위로 대조하고, FAT32 boot 파티션은 이미지와 카드 양쪽을 같은
+  읽기 전용 FAT32 파서(LFN 포함)로 읽어 파일·디렉터리 내용으로 비교한다. 카드에만 있는 항목은 `System Volume Information` 트리만
+  허용하고 `boot_partition.windows_extras`로 남긴다. 직전 커밋의 필드 단위 허용은 이 방식으로 대체했다.
+- 증거: 세 번째 기록이 `media readback mismatch at byte offset 1064967`(FAT1 엔트리 1 상위 바이트 0x0F→0xFF)로 멈췄다. 관리자 읽기
+  전용 비교에서 차이 18곳 중 FSInfo 힌트 외에 FAT 클러스터 할당(`0xFFFFFFFF`)이 보였다 — Windows가 마운트하며 폴더를 만든다.
+  `test_media_readback.py` 10 passed(파일 비교 통과, 바이트 동일 보고, 파일 변조·예상 밖 항목·루트fs·파티션 테이블 변조 실패).
+- gate 변화: 없음(MEDIA 재기록 필요)
+- 결정: D-173
+- 교훈: 측정으로 원인을 확정하기 전에 허용 규칙을 넓히면 한 회차를 더 잃는다. 첫 불일치 오프셋 하나로 규칙을 만들지 않는다.
+

@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · fix(sd): compare the FAT32 boot partition as files; everything else stays byte-exact
 - 2026-09-23 · uncommitted · fix(sd): tolerate exactly the FAT32 fields Windows rewrites on mount; stop offlining removable media
 - 2026-09-23 · uncommitted · fix(sd): pass the operator key as an argument; keep the disk offline during readback
 - 2026-09-23 · uncommitted · docs(adr): D-176 boot config file and per-card fallback AP
 - 2026-09-23 · uncommitted · fix(image): check bytecode only in the native runtime, not colcon's install tree
-- 2026-09-23 · uncommitted · fix(native,sd): review of the boot indicator, black box and operator access (D-174, D-175)
