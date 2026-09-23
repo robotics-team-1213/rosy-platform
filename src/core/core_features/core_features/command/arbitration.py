@@ -6,9 +6,12 @@ ROS 무의존 순수 로직 (P1-5, CORE-002).
 from __future__ import annotations
 
 import enum
+import logging
 import threading
 from dataclasses import dataclass, field
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 class Priority(enum.IntEnum):
@@ -110,8 +113,14 @@ class ModeMachine:
             if not self.can_transition(new):
                 return False, f"invalid transition {self.mode.value}->{new.value}"
             old, self.mode = self.mode, new
+        # The mode is committed. A listener's failure must neither escape to the
+        # caller (the e-stop path would skip its latch) nor stop the others —
+        # the same rule as EventBus.publish and the e-stop listeners.
         for listener in list(self.change_listeners):
-            listener(old, new)
+            try:
+                listener(old, new)
+            except Exception:
+                log.exception("mode listener failed on %s->%s", old.value, new.value)
         return True, ""
 
     def release_emergency(self) -> tuple[bool, str]:

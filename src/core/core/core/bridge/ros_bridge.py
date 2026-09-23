@@ -414,7 +414,7 @@ class RosBridge:
         # 순서(고르기 → HOLD 면 0 → 바퀴 → 절전 관측·SAF-002 알림)는
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
-                      self._readiness)
+                      self._readiness, warn=self._node.get_logger().error)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()

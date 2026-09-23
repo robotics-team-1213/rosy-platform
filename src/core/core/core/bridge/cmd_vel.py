@@ -41,7 +41,8 @@ class _Readiness(Protocol):
 
 
 def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
-                  readiness: Optional[_Readiness] = None) -> None:
+                  readiness: Optional[_Readiness] = None,
+                  warn: Optional[Callable[[str], None]] = None) -> None:
     """값을 고르고, 바퀴로 내보내고, 그 뒤에 알린다.
 
     `readiness` 가 HOLD 이면 고른 값 대신 0 을 내보낸다 — 최종 발행자는
@@ -52,7 +53,15 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
     자리로 넘기면 받는 쪽에서 둘을 바꿔 적어도 타입은 맞고, 그것은
     전진 명령을 제자리 회전으로 바꾼다.
     """
-    out = command.select_output()
+    try:
+        out = command.select_output()
+    except Exception as exc:
+        # 고르기가 예외를 내면 (안전 정책 평가 등) 0 을 내보낸다. 예외가 rclpy
+        # 타이머 밖으로 새면 50 Hz 최종 발행자가 멈추고, 바퀴는 마지막 값을 쥔다.
+        send(ZERO)
+        if warn is not None:
+            warn(f"cmd_vel output failed: {exc}")
+        return
     if readiness is not None and not readiness.is_ready():
         out = ZERO
     send(out)

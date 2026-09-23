@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import time
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Optional
 
 from core_common.capability import Capability
@@ -436,10 +437,13 @@ class CoreServices:
             reaches the wheels in DOCKING, and nothing else may keep driving it."""
             if old is not Mode.DOCKING:
                 return
-            if new is Mode.EMERGENCY:
-                docking.abort("emergency stop during docking")
-            else:
-                docking.cancel()
+            try:
+                if new is Mode.EMERGENCY:
+                    docking.abort("emergency stop during docking")
+                else:
+                    docking.cancel()
+            except Exception:
+                logging.getLogger(__name__).exception("docking stop on mode exit failed")
             command.clear_docking()
         modes.change_listeners.append(leave_docking)
         def reflect_stop():

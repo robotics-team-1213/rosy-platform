@@ -207,8 +207,10 @@ class CommandManager:
         if epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop:
             return ZERO
         if output is None:
-            self._modes.transition(Mode.EMERGENCY)
+            # Latch first: whatever the mode change sets in motion, the e-stop
+            # is already set.
             self._safety.trigger_estop('control:' + self._safety.policy_reason)
+            self._modes.transition(Mode.EMERGENCY)
             return ZERO
         return Twist(*output)
 
