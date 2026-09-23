@@ -16,6 +16,8 @@
 | D-54 | Nav2 profile limits and field maps fail closed |
 | D-58 | Hardware motion requires an authoritative readiness gate |
 | D-144 | 하드웨어 맵 생성은 runtime mode가 아니라 검증된 navigation backend다 |
+| D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
+| D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 
 ## 계획·결과 문서
 
@@ -38,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed를 navigation에 연결
 - 2026-09-22 · uncommitted · navigation(launch): hardware 그래프의 IR 출처 명시
 - 2026-09-21 · uncommitted · feat(nav): add a real-hardware SLAM backend (D-144)
 - 2026-09-20 · uncommitted · fix(nav2): keep non-composed nodes in one robot namespace
 - 2026-09-18 · uncommitted · test(nav2): 교행 한계는 팽창으로 움직이지 않는다
-- 2026-09-18 · uncommitted · fix(nav2): 코스트맵이 라이다를 한 번도 듣지 않고 있었다

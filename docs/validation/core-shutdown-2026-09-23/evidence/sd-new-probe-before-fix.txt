@@ -1,0 +1,26 @@
+# variant=new unit=/run/systemd/system/rosy-core-sdtest.service commit=7614627 (fix/core-shutdown-followups) started 2026-09-23T02:52:00+09:00 loadavg 23.73 26.64 26.06 19/1441 288437
+# ExecStart: ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy_sdtest/current/install/setup.bash && exec /opt/rosy_sdtest/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+# Restart=on-failure RestartSec=2 TimeoutStopSec=15 KillSignal=SIGINT 
+# MainPID 288452: /usr/bin/python3 /opt/rosy_sdtest/current/install/lib/core/core --ros-args -r __ns:=/rosy_01
+steady 1 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.65
+steady 2 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.85
+steady 3 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.74
+steady 4 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.76
+steady 5 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.66
+steady 6 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.68
+steady 7 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.75
+steady 8 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.88
+steady 9 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=1.03
+steady 10 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.89
+steady 11 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.62
+steady 12 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.64
+startup stop @0.1s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.12
+startup stop @0.3s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.11
+startup stop @0.5s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.11
+startup stop @0.8s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.11
+startup stop @1.2s (main: /usr/bin/python3 /opt/rosy_sdtest/current/install/lib/core/c): Result=signal NRestarts=0 ExecMainCode=1 ExecMainStatus=0 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.39
+startup stop @2s (main: /usr/bin/python3 /opt/rosy_sdtest/current/install/lib/core/c): Result=signal NRestarts=0 ExecMainCode=1 ExecMainStatus=0 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.22
+startup stop @4s (main: /usr/bin/python3 /opt/rosy_sdtest/current/install/lib/core/c): Result=signal NRestarts=0 ExecMainCode=1 ExecMainStatus=0 ActiveState=failed  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.61
+startup stop @8s (main: /usr/bin/python3 /opt/rosy_sdtest/current/install/lib/core/c): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.86
+# finished 2026-09-23T02:53:44+09:00
+# Result tally:       7 Result=signal      13 Result=success 

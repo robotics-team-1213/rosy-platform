@@ -1,0 +1,8 @@
+# double signal, slow shutdown (node.shutdown sleeps 20 s, WSL-only patch), commit 7614627 (fix/core-shutdown-followups, after)
+SIGINT run 1: alive after 1st signal (in slow shutdown)=yes, alive 10s after 2nd=no, exit=254, first->exit 1.31s, audit_last="type":"system.shutdown", KeyboardInterrupt=0, tail='[ros2run]: Interrupt'
+SIGINT run 2: alive after 1st signal (in slow shutdown)=yes, alive 10s after 2nd=no, exit=254, first->exit 1.17s, audit_last="type":"system.shutdown", KeyboardInterrupt=0, tail='[ros2run]: Interrupt'
+SIGINT run 3: alive after 1st signal (in slow shutdown)=yes, alive 10s after 2nd=no, exit=254, first->exit 1.14s, audit_last="type":"system.shutdown", KeyboardInterrupt=0, tail='[ros2run]: Interrupt'
+SIGTERM run 1: alive after 1st signal (in slow shutdown)=yes, alive 10s after 2nd=no, exit=241, first->exit 1.14s, audit_last="type":"system.shutdown", KeyboardInterrupt=0, tail='[ros2run]: Terminated'
+SIGTERM run 2: alive after 1st signal (in slow shutdown)=yes, alive 10s after 2nd=no, exit=241, first->exit 1.27s, audit_last="type":"system.shutdown", KeyboardInterrupt=0, tail='[ros2run]: Terminated'
+SIGTERM run 3: alive after 1st signal (in slow shutdown)=yes, alive 10s after 2nd=no, exit=241, first->exit 1.25s, audit_last="type":"system.shutdown", KeyboardInterrupt=0, tail='[ros2run]: Terminated'
+# node.py restored: 0 patch lines left; leftover core: 0

@@ -123,14 +123,14 @@ Verify the selected LAN before commissioning. `auto` prefers the default-route
 interface; use `eth0` explicitly on the wired bench:
 
 ```bash
-sudo /opt/rosy/deploy/robot/verify-pi.sh --interface eth0
+sudo /opt/rosy/deploy/robot/verify/verify-pi.sh --interface eth0
 ```
 
 From Windows, verify that the API and dashboard are reachable by another host:
 
 ```powershell
 $ConnectionEvidence = Join-Path $PWD "G0-connection-evidence.json"
-./deploy/robot/verify-from-windows.ps1 `
+./deploy/robot/verify/verify-from-windows.ps1 `
   -PiHost pinky-01.local -NetworkInterface eth0 `
   -BatchMode -ConnectTimeoutSec 5 -EvidencePath $ConnectionEvidence
 ```
@@ -151,7 +151,7 @@ does not change runtime mode or send motor commands.
 ```powershell
 $Revision = "<signed-manifest-full-40-character-git-revision>"
 $Evidence = Join-Path $PWD ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
-./deploy/robot/validate-pinky-from-windows.ps1 `
+./deploy/robot/verify/validate-pinky-from-windows.ps1 `
   -PiHost pinky-01.local -PiUser rosy -NetworkInterface eth0 `
   -ExpectedRobotNumber 1 -ExpectedRevision $Revision `
   -EvidenceDirectory $Evidence
@@ -182,6 +182,34 @@ the ordinary owner of `/var/lib/rosy/commissioning`, never through `sudo`; only
 the release/runtime commands below need root. For the Local console path, use
 `--connection console`. Never attach a password, token, credential, private
 key, or `.env` file.
+
+### Changing the site Wi-Fi on the card (D-176)
+
+Power the robot off and put the card in a PC. The boot partition holds
+`rosy-config.yaml`, a commented template written with the card. Uncomment the
+`wifi:` block, set the SSID and password, save, and boot the robot. At boot
+`rosy-config.service` applies the file and rewrites every password on the card
+as `"<applied>"`; the Wi-Fi key stays only in the root-only NetworkManager
+profile. An invalid file applies nothing: the console banner and
+`rosy-diag/` on the boot partition name the error. Identity keys
+(`device_name`, `hostname`, ...) are refused here; change identity by
+rewriting the card with `-ReprovisionReceipt`.
+
+### Reaching the robot through its own AP (D-176)
+
+With no uplink for 120 s the robot opens the WPA2 AP named after the device
+(`rosy-pinky-xxxx`). The password was printed once when the card was written
+and is kept in the writer PC's DPAPI store
+(`%LOCALAPPDATA%\Rosy\ap\<device>.credential.xml`); a local console also shows
+it. Join the AP and connect with the operator key:
+
+```powershell
+ssh -i $env:LOCALAPPDATA\Rosy\ssh\rosy-operator-ed25519 rosy@10.42.0.1
+```
+
+Pi 5 has one radio, so while the AP is up the site Wi-Fi is not scanned. After
+600 s the AP steps aside for another 120 s site Wi-Fi attempt. `ap.mode: relay`
+keeps the AP up; `ap.mode: off` never opens it.
 
 ## 3. Record contract
 
@@ -266,7 +294,7 @@ sudo rosy-release install --release-id YYYY.MM.DD-NNN --json \
   | tee "$EVIDENCE/G1-install.json"
 sudo /opt/rosy/deploy/robot/runtime-mode.sh status \
   | tee "$EVIDENCE/G1-runtime-status.txt"
-sudo /opt/rosy/deploy/robot/device-readback.sh \
+sudo /opt/rosy/deploy/robot/verify/device-readback.sh \
   | tee "$EVIDENCE/G2-device-readback.json"
 COMMISSION=/opt/rosy/deploy/robot/commission-pinky.py
 python3 "$COMMISSION" prepare \
@@ -349,7 +377,7 @@ install -m 0600 /dev/null "$HOME/.config/rosy/admin.curl"
 ${EDITOR:-vi} "$HOME/.config/rosy/operator.curl" # operator Authorization header
 ${EDITOR:-vi} "$HOME/.config/rosy/admin.curl"    # administrator Authorization header
 sudo /opt/rosy/deploy/robot/runtime-mode.sh down
-sudo /opt/rosy/deploy/robot/verify-motors.sh \
+sudo /opt/rosy/deploy/robot/verify/verify-motors.sh \
   | tee "$EVIDENCE/G4-motor-preflight.txt"
 sudo ROSY_RUNTIME_MODE=motor /opt/rosy/deploy/robot/runtime-mode.sh up
 ```

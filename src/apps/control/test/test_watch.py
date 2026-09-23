@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 import unittest
 
-from control.watch import ALLOWED, EXCLUSIVE, FOREIGN, REQUIRED, inspect
+from control.watch import (
+    FOREIGN,
+    PRODUCT_EXCLUSIVE,
+    PRODUCT_REQUIRED,
+    STANDALONE_ALLOWED,
+    STANDALONE_EXCLUSIVE,
+    STANDALONE_REQUIRED,
+    inspect,
+)
 
 
 def healthy():
-    nodes = list(REQUIRED) + ['lcd_node', 'web_node']
+    nodes = list(STANDALONE_REQUIRED) + ['lcd_node', 'web_node']
     pubs = {
         '/cmd_vel': ['safety_node'],
         '/cmd_vel_raw': ['wander_node'],
@@ -24,24 +32,31 @@ class WatchContractTest(unittest.TestCase):
 
     def test_required_uses_current_node_names(self):
         for name in ('bringup', 'sensor_adc', 'imu_bno055'):
-            self.assertIn(name, REQUIRED)
+            self.assertIn(name, STANDALONE_REQUIRED)
         self.assertFalse(
-            any(n.startswith('pinky_') for n in REQUIRED),
-            f'pinky_* leftovers in REQUIRED: {REQUIRED}')
+            any(n.startswith('pinky_') for n in STANDALONE_REQUIRED),
+            f'pinky_* leftovers in STANDALONE_REQUIRED: {STANDALONE_REQUIRED}')
 
     def test_no_pinky_names_anywhere(self):
         for table, values in (
-                ('FOREIGN', FOREIGN), ('REQUIRED', REQUIRED)):
+                ('FOREIGN', FOREIGN), ('STANDALONE_REQUIRED', STANDALONE_REQUIRED)):
             self.assertFalse(
                 any(str(v).startswith('pinky_') for v in values),
                 f'pinky_* leftovers in {table}')
 
-    def test_cmd_vel_owner_is_exactly_one_of_core_or_safety(self):
-        self.assertEqual(EXCLUSIVE['/cmd_vel'],
-                         frozenset({'core', 'safety_node'}))
+    def test_product_and_standalone_tables_are_separate(self):
+        banned = ('safety_node', 'wander_node', 'sllidar_node', 'camera_detect_node')
+        self.assertEqual(PRODUCT_EXCLUSIVE['/cmd_vel'], frozenset({'core'}))
+        self.assertEqual(PRODUCT_REQUIRED, ('core',))
+        for name in banned:
+            self.assertNotIn(name, PRODUCT_REQUIRED)
+        self.assertEqual(STANDALONE_EXCLUSIVE['/cmd_vel'], frozenset({'safety_node'}))
+        self.assertIsNot(PRODUCT_EXCLUSIVE, STANDALONE_EXCLUSIVE)
+        with self.assertRaises(ValueError):
+            inspect([], {}, mode='both')
 
     def test_cmd_vel_raw_allows_control_node(self):
-        self.assertIn('control_node', ALLOWED['/cmd_vel_raw'])
+        self.assertIn('control_node', STANDALONE_ALLOWED['/cmd_vel_raw'])
 
     def test_bridge_twins_stay_foreign(self):
         self.assertIn('parameter_bridge', FOREIGN)
@@ -161,22 +176,20 @@ class WatchTest(unittest.TestCase):
         self.assertTrue(r.ok, r.line())
 
     def test_core_alone_publishing_cmd_vel_is_ok(self):
-        # OS runtime: CORE is the contracted owner (D-2/D-38).
-        nodes, pubs = healthy()
-        pubs['/cmd_vel'] = ['core']
-        r = inspect(nodes, pubs)
+        # Product runtime: CORE is the only final publisher (D-2/D-38, D-183).
+        r = inspect(['core'], {'/cmd_vel': ['core']}, mode='product')
         self.assertTrue(r.ok, r.line())
 
     def test_core_and_safety_both_publishing_cmd_vel_is_interrupt(self):
         # D-38: the legacy final publisher must never run beside CORE.
         nodes, pubs = healthy()
         pubs['/cmd_vel'] = ['core', 'safety_node']
-        r = inspect(nodes, pubs)
-        self.assertFalse(r.ok)
-        hits = [i for i in r.issues if i.kind == 'co_owner' and i.topic == '/cmd_vel']
-        self.assertEqual(len(hits), 1)
-        self.assertIn('core', hits[0].node)
-        self.assertIn('safety_node', hits[0].node)
+        standalone = inspect(nodes, pubs, mode='standalone')
+        self.assertFalse(standalone.ok)
+        self.assertTrue(any('core' in i.detail for i in standalone.issues))
+        product = inspect(['core'], {'/cmd_vel': ['core', 'safety_node']}, mode='product')
+        self.assertFalse(product.ok)
+        self.assertTrue(any('safety_node' in i.detail for i in product.issues))
 
 
 if __name__ == '__main__':

@@ -1,12 +1,11 @@
-import ast
 import copy
 import math
-from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
 import numpy as np
 from control.control.rotation_envelope import RotationEnvelope,CROSS_ENDPOINT_MODEL,validate_envelope
 from control.control.rotation_trial import RotationTrial
+from test.mixin_method import mixin_method
 
 
 def displacement(center,yaw):
@@ -57,15 +56,12 @@ class CrossEndpointEnvelopeTests(unittest.TestCase):
   self.assertNotIn('trial_sequence',RotationTrial(0.).report())
 
  def test_adapter_pairs_only_consecutive_nonzero_endpoints_in_their_own_frames(self):
-  path=Path(__file__).parents[1]/'control/calibration_rotation.py'
-  cls=next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n,ast.ClassDef))
-  fn=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='record_rotation_endpoint')
   center=(.001,-.002);hints=[]
   def match(ref,cur,hint):
    hints.append(hint);x,y,yaw=displacement(center,hint)
    return dict(dx=x,dy=y,yaw=yaw,residual_m=.0009)
-  scope={'math':math,'wrap':lambda a:math.atan2(math.sin(a),math.cos(a)),'match_motion':match}
-  exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),scope)
+  scope={'record_rotation_endpoint':mixin_method('control.calibration_rotation','record_rotation_endpoint',
+          math=math,wrap=lambda a:math.atan2(math.sin(a),math.cos(a)),match_motion=match)}
   node=NS(zero=lambda:None,rotation_endpoint_previous=None,rotation_endpoint_count=0,
           rotation_envelope=RotationEnvelope(.083,uncertainty_model=CROSS_ENDPOINT_MODEL))
   for index,deg in enumerate((10,-10,10,-10,10)):

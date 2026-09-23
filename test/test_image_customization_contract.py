@@ -73,6 +73,17 @@ def test_customizer_installs_wiringpi_runtime_from_the_verified_lock():
     assert source.index("sha256sum") < source.index("dpkg -i /tmp/wiringpi-arm64.deb")
 
 
+def test_customizer_installs_and_enables_chrony():
+    """CORE SRS §25: UTC ISO 8601 타임스탬프는 동기된 시계를 전제로 한다."""
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    verifier = VERIFY.read_text(encoding="utf-8")
+
+    assert " chrony" in source  # apt install list
+    assert "chrony.service" in source
+    assert source.index("chrony.service") > source.index("enable")  # enabled, not just installed
+    assert "chronyd" in verifier  # the mounted-image check exists too
+
+
 def _valid_root(tmp_path: Path) -> Path:
     root = tmp_path / "root"
     release = root / "opt/rosy/releases/2026.09.22-001"
@@ -88,6 +99,13 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "opt/ros/jazzy/setup.bash").write_text("# fixture\n", encoding="utf-8")
     (release / "install/setup.bash").write_text("# fixture\n", encoding="utf-8")
     (root / "opt/rosy/first-boot/rosy-first-boot.py").write_text("# fixture\n", encoding="utf-8")
+    for runtime, names in (
+        (root / "opt/rosy/native-runtime", ("native_release.py", "recover-release.sh", "signing.py")),
+        (release / "deploy/robot/native", ("native_release.py", "signing.py")),
+    ):
+        runtime.mkdir(parents=True, exist_ok=True)
+        for name in names:
+            (runtime / name).write_text("# fixture\n", encoding="utf-8")
     (release / "required-ros-packages.txt").write_text(
         "# Mandatory product packages in every image.\ncore\ncontrol\n",
         encoding="utf-8",
@@ -107,6 +125,13 @@ def _valid_root(tmp_path: Path) -> Path:
         "rosy-runtime.target",
     ):
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
+    # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
+    (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/sbin/chronyd").write_text("# fixture\n", encoding="utf-8")
+    (root / "usr/sbin/dnsmasq").write_text("# fixture\n", encoding="utf-8")
+    wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
+    wants.parent.mkdir(parents=True, exist_ok=True)
+    wants.write_text("[Unit]\n", encoding="utf-8")
     return root
 
 
@@ -149,3 +174,68 @@ def test_mounted_image_verifier_rejects_product_docker_or_device_secrets(tmp_pat
     assert completed.returncode != 0
     assert "docker" in completed.stderr.lower()
     assert "device-neutral" in completed.stderr.lower()
+
+
+def test_mounted_image_verifier_rejects_missing_or_disabled_chrony(tmp_path):
+    """CORE SRS §25: 타임스탬프 상관의 전제인 chrony 가 빠지거나 꺼진 이미지."""
+    disabled = _valid_root(tmp_path)
+    (disabled / "etc/systemd/system/multi-user.target.wants/chrony.service").unlink()
+    completed = _verify(disabled)
+    assert completed.returncode != 0
+    assert "chrony" in completed.stderr.lower()
+
+    absent = _valid_root(tmp_path)
+    (absent / "usr/sbin/chronyd").unlink()
+    completed = _verify(absent)
+    assert completed.returncode != 0
+    assert "chrony" in completed.stderr.lower()
+
+
+def test_customizer_executes_native_entrypoints_inside_the_image():
+    # D-174 F5: file-existence checks passed an image whose recovery gate could
+    # not import its helper. The customizer must run the installed copies.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    probe = "rosy-native-probe"
+    assert probe in source
+    for runtime in ("/opt/rosy/native-runtime/native_release.py",
+                    '/opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py'):
+        assert f'chroot "$ROOT" python3 -B {runtime}' in source
+    assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help' in source
+    assert source.index("rosy-native-probe") < source.index("verify-mounted-image.py")
+
+
+def test_image_enables_and_probes_the_d176_boot_settings_and_fallback_ap():
+    # D-176: the settings file and the fallback AP only exist on a device if the
+    # image carries, enables and can import them where it installs them.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("mkdir -p \"$ROOT/etc/issue.d\"")]
+    for unit in ("rosy-config.service", "rosy-network.service"):
+        assert unit in enable, unit
+    assert "rosy-config-apply.py rosy-network.py" in source
+    assert 'chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help' in source
+
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    for line in ('cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"',
+                 'cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"',
+                 'cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"'):
+        assert line in payload, line
+
+
+def test_image_puts_rosy_diag_on_path():
+    # D-175 L2: an operator on the console types `rosy-diag collect`.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    assert 'ln -sfn /opt/rosy/native-runtime/rosy-diag "$ROOT/usr/local/bin/rosy-diag"' in source
+
+
+def test_the_image_carries_dnsmasq_for_the_fallback_ap(tmp_path):
+    # D-176 review: dnsmasq-base is only a Recommends of network-manager, and
+    # the customizer installs with --no-install-recommends.
+    assert "dnsmasq-base" in CUSTOMIZER.read_text(encoding="utf-8")
+    root = _valid_root(tmp_path)
+    (root / "usr/sbin/dnsmasq").unlink()
+
+    completed = _verify(root)
+
+    assert completed.returncode != 0
+    assert "dnsmasq" in completed.stdout + completed.stderr

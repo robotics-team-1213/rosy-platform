@@ -1,8 +1,11 @@
-"""Atomic calibration transport; readiness requires the final gate's live acknowledgement."""
+"""Atomic calibration transport; readiness requires the final gate's live acknowledgement.
+
+ROS-free mixin (D-171): the node builds every message. Keep ``import time`` and
+``time.monotonic()`` as written — the sim rig swaps this module's ``time``.
+"""
 import json
 import math
 import time
-from std_msgs.msg import String
 from .control.calibration_profile import make_profile
 
 class CalibrationAtomic:
@@ -36,7 +39,7 @@ class CalibrationAtomic:
                 self.runtime_ready = False
                 self.runtime_healthy_since = None
                 self.zero()
-                self.wander_pub.publish(String(data='stop'))
+                self.stop_wander()
                 self.message = 'Saved calibration retained; safety geometry differs from verified identity'
                 self.publish()
         if (self.trial_geometry_revision and self.geometry_revision != self.trial_geometry_revision and

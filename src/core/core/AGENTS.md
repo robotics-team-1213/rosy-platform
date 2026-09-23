@@ -25,15 +25,14 @@ Robot middleware (ROSY-CORE-SRS-001). One process: rclpy node `core` + uvicorn F
 | `core/` | Python package (see `core/AGENTS.md`) |
 | `config/` | Default YAML, Pinky Pro profile, capabilities (see `config/AGENTS.md`) |
 | `launch/` | `rosy_core.launch.py` (see `launch/AGENTS.md`) |
-| `test/` | pytest for API, power, battery, docking, protocol, dashboard (see `test/AGENTS.md`) |
-| `deploy/` | Legacy unit file / install.sh (Pi runtime now under repo `deploy/robot`) |
+| `test/` | pytest for API, power, battery, protocol, dashboard (see `test/AGENTS.md`) |
 | `resource/` | ament index marker `core` |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Policy modules (`command`, `safety`, `power`, `docking`, `state`, `events`, `protocol`) must stay ROS-import-free so pytest can run on Windows/CI without rclpy.
 - `CoreServices` in `services.py` is the DI container. Wire new managers there, then expose via API routes.
 - Do not publish `cmd_vel` from API or Nav2. CommandManager.select_output() is the only source; bridge publishes at 50 Hz (D-2).
@@ -41,6 +40,7 @@ Robot middleware (ROSY-CORE-SRS-001). One process: rclpy node `core` + uvicorn F
 - Inventory: `GET /api/v1/system/inventory` is a derived snapshot (Node/Device/Component/Asset/TaskKind ids). `GET /api/v1/system/capabilities` stays CAP-001.
 - Battery deep shutdown: write sentinel JSON only. Host unit performs halt.
 - Optional ROS pkgs: wrap slam_toolbox (and similar) in constructor try/except.
+- Product `rosy-core.service` lives in `deploy/robot/native`. The old `core/deploy` installer is not a second unit.
 - D-144: select navigation readiness from `runtime.navigation_backend`; SLAM
   requires hardware mode and a writable, bounded map output directory.
 

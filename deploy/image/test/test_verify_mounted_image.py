@@ -33,6 +33,11 @@ def test_inspect_passes_with_valid_image(tmp_path):
         "etc/rosy/cyclonedds.xml",
         "opt/rosy/first-boot/rosy-first-boot.py",
         "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
+        "opt/rosy/native-runtime/native_release.py",
+        "opt/rosy/native-runtime/recover-release.sh",
+        "opt/rosy/native-runtime/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     ]
     for p in paths:
         path = root / p
@@ -48,7 +53,14 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # Inventory
     (release_dir / "required-ros-packages.txt").write_text("pkg_a", encoding="utf-8")
     (release_dir / "rosy-packages.txt").write_text("pkg_a\npkg_b", encoding="utf-8")
-    
+
+    # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
+    (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/sbin/chronyd").write_text("mock", encoding="utf-8")
+    wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
+    wants.parent.mkdir(parents=True, exist_ok=True)
+    wants.write_text("mock", encoding="utf-8")
+
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
 
@@ -67,6 +79,11 @@ def test_inspect_fails_if_docker_present(tmp_path):
         "etc/rosy/cyclonedds.xml",
         "opt/rosy/first-boot/rosy-first-boot.py",
         "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
+        "opt/rosy/native-runtime/native_release.py",
+        "opt/rosy/native-runtime/recover-release.sh",
+        "opt/rosy/native-runtime/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     ]
     for p in paths:
         path = root / p
@@ -87,3 +104,45 @@ def test_inspect_fails_if_docker_present(tmp_path):
     
     findings = verify_mounted_image.inspect(root, release_id)
     assert any("docker must not be installed" in f for f in findings)
+
+
+def test_inspect_requires_both_installed_native_runtime_copies(tmp_path):
+    # D-174 F1/F5: an image without the runtime (or without its helper) must not pass.
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    (root / "opt/rosy/releases" / release_id).mkdir(parents=True)
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    missing = {Path(f.split(": ", 1)[1]).as_posix() for f in findings
+               if f.startswith("missing required image path")}
+    assert {
+        "opt/rosy/native-runtime/native_release.py",
+        "opt/rosy/native-runtime/recover-release.sh",
+        "opt/rosy/native-runtime/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
+    } <= missing
+
+
+def test_inspect_rejects_bytecode_inside_the_signed_release(tmp_path):
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    cache = root / "opt/rosy/releases" / release_id / "deploy/robot/native/__pycache__"
+    cache.mkdir(parents=True)
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    assert (f"bytecode cache in native runtime: opt/rosy/releases/{release_id}"
+            "/deploy/robot/native/__pycache__") in findings
+
+
+def test_colcon_install_bytecode_is_part_of_the_payload(tmp_path):
+    # Release 003 build: colcon installs site-packages/*/__pycache__ with the payload.
+    root = tmp_path / "root"
+    release_id = "2026.01.01-001"
+    (root / "opt/rosy/releases" / release_id / "install/lib/python3.12/site-packages/core/__pycache__").mkdir(parents=True)
+
+    findings = verify_mounted_image.inspect(root, release_id)
+
+    assert not [f for f in findings if "bytecode" in f]

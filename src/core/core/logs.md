@@ -336,3 +336,66 @@
 - 증거: `test/test_module_structure.py` passed.
 - gate 변화: 없음.
 - 결정: 09-06 X5 — 소유자 하나(`svc.audit`), ROS 없음, `test_audit.py` 가 덮는다. 길이의 절반가량은 덧붙이기·정리·격리 규칙이 기대는 근거 주석이다. 나누면 생기는 이음매가 떠받치는 것이 없다.
+
+## 2026-09-22 · uncommitted · test(core): ROS-SIM 부트 스모크 재실행 — cmd_vel_cycle·watchdog·감사 로그 이후 트리
+
+- 변경: 코드 변경 없음. `0adbe50`(cmd_vel_cycle, `safety.watchdog`)과 `11f1164`(감사 로그 덧붙이기+compaction, `{events, log}`, `rosy_audit_*`) 이후 main(`581741e`)을 WSL Jazzy 에서 09-22 절차대로 재실행하고 teleop→송신 중단→워치독 프로브를 더했다. 증거 `docs/validation/ros-sim-core-2026-09-22b`.
+- 증거: `/core` 기동, `/cmd_vel` Publisher count 1(node core, teleop 뒤에도 1), `/nav_cmd_vel` pub 0/sub 1, `/api/v1` 200·`/dashboard` 200·`/robot/state` 401, road 유효/malformed 프로브 NameError 없음. teleop 0.1 ×10 → `/cmd_vel` linear.x 0.0→0.1(79 표본)→0.0, 마지막 teleop 약 0.5 s 뒤 `safety.watchdog`(timeout_ms 500) 감사 기록 1건, `logs/audit` 최상위 `events`·`log`(writable, 실패 0), `/metrics` `rosy_audit_*` 5개 모두 0.
+- gate 변화: ROS-SIM HOLD→GO.
+- 결정: 종료 경합은 게이트를 막지 않는다 — 본 실행의 SIGTERM 에서 `core shutting down` 뒤 `executor.spin()` 이 `RCLError: failed to initialize wait set`(context 무효)으로 traceback, `ros2 run` exit 1. 정상 상태 반복 5/5 는 exit 0·`system.shutdown` 감사 기록. 기동 창 SIGTERM 에서는 `failed to create guard_condition` 도 관찰. `core/main.py` 가 `KeyboardInterrupt` 만 잡고 rclpy 의 SIGTERM 에 의한 context 종료(`RCLError`/`ExternalShutdownException`)를 정상 종료로 다루지 않는 기존 경로이며 두 머지와 무관하다. 후속: exit 1 이 systemd 재시작 판정에 닿으므로 main 에서 외부 종료를 정상 종료로 처리할지 결정 필요. 또 09-22 README 의 road 유효 payload 명령은 닫는 `}` 가 빠져 있어 그대로는 발행되지 않는다(09-22b README 에 올바른 형태).
+
+## 2026-09-22 · uncommitted · fix(core): SIGINT/SIGTERM 종료 경합을 정상 종료(exit 0)로
+
+- 변경: `core/main.py` — `main()` 첫 문장에서 SIGINT/SIGTERM 을 예외를 던지지 않는 처리기로 바꿔 종료 요청만 기록(`install_stop_handlers`)하고, `rclpy.init()` 전후에 요청이 있으면 노드를 만들지 않는다. spin/기동 중 예외는 ROS 없는 `is_orderly_shutdown()` 으로 판정 — 종료 요청 뒤, 또는 한 번 유효했던 context 가 무효가 된 뒤의 예외는 정상 종료(exit 0), context 가 살아 있는 채 난 예외와 `rclpy.init()` 실패는 그대로 올린다(exit 1). finally 순서(`node.shutdown()` → `rclpy.shutdown()`)와 cmd_vel 경로는 그대로. 새 `test/test_core_main_shutdown.py`(판정 함수, 가짜 rclpy 로 경합·기동 창·진짜 오류 전파·훅 순서).
+- 증거: `docs/validation/core-sigterm-2026-09-22` (WSL Jazzy, 부하 6 busy loop, 신호는 core 노드 PID). 수정 전 `0a9a07a`: steady SIGTERM 20회 17×0·3×1(wait set `RCLError`), 기동 0.2–1.5 s 10×241(SIGTERM 사망), 기동 1.5–8 s 3×0·7×1(guard_condition/wait set/publisher). 수정 후 `c6230cc`: steady SIGTERM 20회 19×0·1×245(teardown SIGSEGV), faulthandler steady 85×0, 기동 0.2–1.5 s 6×0·6×241(모두 `main()` 이전 entry script 창), 기동 1.5–8 s 12×0, SIGINT steady 6×0·기동 6×0. 수정 후 exit 0 실행 모두 `system.shutdown` 감사·8080 해제. 새 시험은 수정 전 main.py 에서 실패(수집 오류), 수정 후 13 passed.
+- gate 변화: 없음(ROS-SIM 증거, DEVICE 아님).
+- 결정: 판정은 예외 타입이 아니라 상태(종료 요청·context 유효성)로 한다 — 같은 경합이 `RCLError`, `InvalidHandle`, 콜백 future 의 publish 실패 등 여러 모양으로 나온다. 남은 것: (1) `main()` 전 entry script(`importlib.metadata` 조회) 창의 SIGTERM 은 코드로 닫을 수 없다 — 필요하면 `rosy-core.service` 에 `SuccessExitStatus=241 254` 를 따로 결정. (2) 종료 훅 뒤 teardown SIGSEGV 1/105, 스택 없음 — 후속 조사.
+
+## 2026-09-23 · uncommitted · fix(core): 두 번째 종료 신호 격상 + 삼킨 종료 예외 기록 (리뷰 반영)
+
+- 변경: `core/main.py` — 첫 SIGINT/SIGTERM 은 그대로 기록만, 두 번째는 SIG_DFL 을 되돌리고 격상(SIGINT → `KeyboardInterrupt`, SIGTERM → `os.kill(self, SIGTERM)`) — 멈춘 종료 훅/작업 스레드 join 을 SIGKILL 없이 끊는다. 종료로 판정해 삼킨 예외는 stderr `core: suppressed during shutdown: {exc!r}`. context-무효 분기에 "core 프로세스에서 rclpy context 를 내리는 것은 main() 뿐" 불변식 주석. `test_core_main_shutdown.py` 에 이중 신호(두 신호 모두), RMW 단계 신호 → init 없음, load_config 중 신호 → 노드 없음, `rclpy.init()` 실패 전파, 삼킨 예외 기록, src/core 생산 코드에 `rclpy.shutdown`/`try_shutdown` 없음 시험 추가. main `e8b2976` 병합(BOM 수정 포함).
+- 증거: `docs/validation/core-sigterm-2026-09-22` "리뷰 반영 재확인" — WSL `a545d55` steady SIGTERM 10×0, 기동 1.5–8 s 6×0, 느린 종료(WSL 전용 20 s sleep 패치) 중 이중 SIGINT 3회 exit 254·이중 SIGTERM 3회 exit 241, 첫 신호→종료 1.1–2.0 s. core 시험 3.14 1251 passed·12 skipped, 3.12(uv) 1250 passed·13 skipped.
+- gate 변화: 없음.
+- 결정: 이중 신호의 241/254 는 실패로 남긴다(운영자가 멈춘 종료를 끊은 것). teardown 명시화(`executor.shutdown`/`destroy_node`)는 executor 가 `node.run()` 지역이고 1/105 SIGSEGV 를 검증할 수 없어 보류 — 후속 조사 항목 유지.
+
+## 2026-09-23 · uncommitted · fix(core): 종료 teardown 명시화(executor drain·destroy_node·API join) + 두 번째 SIGINT 격상 통일
+
+- 변경: `core/node.py` — `run()` 의 finally 가 `_stop_executor()` 로 `MultiThreadedExecutor` 의 `ThreadPoolExecutor` 를 `shutdown(wait=True, cancel_futures=True)` 로 비우고(보조 스레드, 3 s 상한) **그 다음** `executor.shutdown(timeout_sec=0)` 을 부른다(rclpy 7.1.11 은 풀을 비우지 않고, `Executor.shutdown()` 은 진행 중 콜백을 기다리지 않으며 먼저 부르면 guard condition 파괴로 `cannot use Destroyable` 이 난다). `shutdown()` 은 감사 `system.shutdown`·`core shutting down` 뒤 API 스레드를 join(5 s 상한) 한다. `core/main.py` — finally 가 `node.shutdown()` → `node.destroy_node()` → `rclpy.shutdown()` 순서로 노드를 context 보다 먼저 내린다. 두 번째 종료 신호는 SIGINT 도 `KeyboardInterrupt` 대신 `os.kill(self, SIGINT)` 로 격상한다(예전엔 그 뒤 `rclpy.shutdown()` 이 CPython 트램폴린을 되돌려 놓아 세 번째 SIGINT 가 무시됐다). 상한 합 8 s < `TimeoutStopSec=15`. cmd_vel 경로·종료 훅 순서 불변. 새 `test/test_core_node_teardown.py`(가짜 rclpy: drain 순서·상한·spin 예외 경로·API join), `test_core_main_shutdown.py` 에 `node.destroy` 순서와 두 신호 격상 시험. C6 `getattr(executor, "_executor")` 는 판정과 함께 기준 문서·`ALLOWED` 에 기록.
+- 증거: `docs/validation/core-shutdown-2026-09-23` (WSL Jazzy, 레인 4 + busy loop 4). steady SIGTERM 수정 전 `5a4cedb` 600회: 598×0·**2×245(SIGSEGV)**·`never retrieved` 125회, 수정 후 `7614627` 600회: **600×0·245 0건**·`never retrieved` 109회(모두 publish 경합, `Destroyable` 0). SIGINT steady 40×0. 이중 신호(느린 종료 흉내) SIGINT 3×254·SIGTERM 3×241, `KeyboardInterrupt` 0. 모든 실행 마지막 감사 `system.shutdown`·포트 해제·잔존 0. 시험 3.14 `src/core/core/test/ test/` 2556 passed·52 skipped, 3.12(uv) core 1256 passed·13 skipped.
+- gate 변화: 없음(ROS-SIM 증거).
+- 결정: SIGSEGV 는 **고쳤다고 말하지 않는다** — 수정 전 발생률 0.33%(2/600)라 0/600 은 우연일 확률이 17–25%다. 스택은 못 얻었고, 못 얻은 이유가 단서다: CycloneDDS/lttng 스레드는 SIGSEGV 를 블록하므로(`evidence/thread-sigmask.txt`) faulthandler 도 LD_PRELOAD 처리기도 돌 수 없다 — crash 는 파이썬 스레드가 아니라 네이티브 스레드 또는 인터프리터 종료 이후다. 그래서 고친 것은 "파이썬이 통제할 수 있는 부분"(콜백·노드·API 스레드가 `main()` 안에서 끝나는 것)뿐이다. 실기 재발 시 core dump + gdb 가 필요하다.
+- 교훈: 신호 처리기가 안 돌면 처리기를 의심하기 전에 그 스레드의 `SigBlk` 를 본다. 라이브러리 스레드가 신호를 블록하면 faulthandler 는 조용히 아무것도 못 한다.
+
+## 2026-09-23 · uncommitted · fix(core): 멈춘 종료 격상을 `os._exit(2)` 로 (리뷰 2차) + teardown 경고·uvicorn graceful
+
+- 변경: `core/main.py` — 두 번째 종료 신호는 `SIG_DFL` 복원 뒤 stderr 한 줄을 남기고 `os._exit(STUCK_SHUTDOWN_EXIT_CODE=2)`. 같은 신호로 자기 종료(`os.kill`)하면, 유닛이 `ros2 run` 래퍼 없이 노드를 직접 exec 하는 지금은 systemd 가 주 프로세스의 SIGINT/SIGTERM 사망을 깨끗한 종료로 쳐서 **멈춘 종료를 끊은 것이 정상 `systemctl stop` 과 구별되지 않는다**(리뷰 지적, 실측으로 확인). finally 의 삼킨 예외도 `core: suppressed during shutdown: ...` 로 남긴다. `core/node.py` — `_stop_executor` 가 logger 를 받아 (a) 상한 초과, (b) executor 에 `ThreadPoolExecutor` 가 없음(그 경우 `False` 반환), (c) `executor.shutdown()` 예외를 각각 경고로 남기고, `run()`/`shutdown()` 이 상한을 넘겼을 때도 경고한다. uvicorn `timeout_graceful_shutdown=3`(WS 엔드포인트가 await 에 park 해 API join 상한을 다 쓰는 것 방지). 상한 상수는 클래스 위로. 새 ROS 레인 canary `test/test_core_node_teardown_ros.py`(진짜 rclpy 로 `MultiThreadedExecutor._executor` 가 `ThreadPoolExecutor` 인지 고정), 호스트 drain 시험은 sleep 대신 사건 기반.
+- 증거: `docs/validation/core-shutdown-2026-09-23` B·D절 — 래퍼 없이(출하 형태) 멈춘 종료 + 두 번째 신호: `os._exit(2)` 는 SIGINT·SIGTERM 각 3회 **exit 2**, 1차 수정(`os.kill`)은 130/143(신호 사망). systemd 에서 같은 상황: `os._exit(2)` → **`Result=exit-code`, `ExecMainStatus=2`, `failed`** ×2, `os.kill` → `Result=success` ×2(정상 정지와 구별 불가). 평범한 정지는 그대로 success(steady 12 + 기동 중 5 = 17/17). steady SIGTERM 240회 재실행 `861386e`: **240×0, SIGSEGV 0, 상한 경고 0건**. ROS 레인 32 passed. 시험 3.14 2559 passed·53 skipped, 3.12(uv) core 1259 passed·14 skipped.
+- gate 변화: 없음.
+- 결정: 격상은 **종료 코드**로 보인다(신호 사망 아님). 이 파일 위쪽 2026-09-23 항목의 "이중 신호의 241/254 는 실패로 남긴다"는 `ros2 run` 래퍼 아래의 관찰이며, 래퍼를 걷어낸 출하 형태에서는 이 항목이 대체한다. 정지 의미가 유닛의 exit-code 표가 아니라 프로세스가 내는 값으로 정해진다.
+- 교훈: 래퍼를 걷어내 "신호가 그대로 보이게" 하면 정상 정지만 깨끗해지는 게 아니라 **격상도 깨끗해진다** — 신호로 의미를 나누던 곳에서는 래퍼 제거가 의미 하나를 지운다.
+
+## 2026-09-23 · uncommitted · fix(core): 격상 처리기를 async-signal-safe 하게 (`os.write`) + `SIG_IGN` + 경고 0건 주장의 근거 교체 (리뷰 3차)
+
+- 변경: `core/main.py` — 두 번째 종료 신호 처리기가 (1) `SIG_DFL` 대신 **`SIG_IGN`** 을 깐다(그 몇 줄 사이에 세 번째 신호가 오면 기본 동작은 신호 사망 = systemd 가 보기에 깨끗한 종료라 격상이 다시 정상 정지처럼 보인다), (2) `print` 대신 미리 만든 바이트 상수를 **`os.write(2, ...)`** 로 쓴다(버퍼 잠금을 인터럽트된 주 스레드가 쥐고 있으면 처리기가 거기서 막히고, 멈춘 종료를 끊어야 할 바로 그 경로가 SIGKILL 까지 늘어진다). finally 의 삼킨 예외 메시지는 단계 이름을 싣는다(`... (shutdown)`/`(destroy_node)`). 시험: 격상 시험이 `SIG_IGN`·`os.write` 호출 인자를 확인하고, 새 `test_escalation_message_is_preformatted_bytes_for_os_write` 가 처리기 본문에 `print(` 가 없음을 붙든다. 새 `test_suppressed_hook_exception_names_the_step`.
+- 증거: `docs/validation/core-shutdown-2026-09-23`. **정정**: 바로 위 2026-09-23 항목의 "상한 경고 0건"은 당시 `lane.sh` 가 경고를 세지 않아 근거가 없었다 — `lane.sh` 에 `warn=` 칸(teardown 경고 4종)을 더해 240회를 다시 돌렸고 `warn=[1-9]` 실행 **0건**, exit 0 240/240, SIGSEGV 0(`evidence/after4-steady-TERM-round3.txt`). 최종 코드로 재실행: 래퍼 없는 이중 신호 SIGINT·SIGTERM 각 3회 **exit 2** + 격상 메시지 6/6(`evidence/double-direct-round3.txt`), systemd steady 12 + 기동 중 5 = **17/17 success**(`evidence/sd-new-round3.txt`), 멈춘 종료 2/2 **`Result=exit-code` `ExecMainStatus=2` `failed`**(`evidence/sd-stuck-round3.txt`). 시험 3.14 2561 passed·53 skipped, 3.12(uv) core 1261 passed·14 skipped.
+- gate 변화: 없음.
+- 결정: 신호 처리기 안에서는 포맷도 버퍼도 쓰지 않는다 — 바이트 상수 + `os.write` 만. 격상 중에는 같은 신호를 무시한다(`SIG_IGN`), 그래야 exit 2 가 보장된다.
+- 교훈: "경고가 0건이었다"는 주장에는 경고를 센 칸이 있어야 한다. 수집기에 없는 필드를 근거로 쓰면 그 숫자는 관측이 아니라 인상이다.
+
+## 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 명령 코드와 core 시험의 경계
+
+- 변경: 명령 다중화 코드가 시뮬 리터럴을 갖지 않는 결정과, `core/test`는 공개 계약만 본다는 결정을 진행 기록에 연결했다. 시험 파일은 옮기지 않았다.
+- 증거: ADR 기록. 실행 시험 없음.
+- gate 변화: 없음.
+- 결정: D-182, D-184 Proposed
+- 교훈: 없음.
+
+## 2026-09-24 · uncommitted · chore(core): remove the legacy core/deploy installer
+
+- 변경: `src/core/core/deploy`의 옛 `install.sh`와 `rosy-core.service`를 제거했다. 제품 유닛은 `deploy/robot/native`에 있다.
+- 증거: `test/test_folder_layout.py` 통과 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: D-186 Accepted
+- 교훈: 없음.
+
+

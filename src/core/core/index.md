@@ -38,6 +38,8 @@
 | D-158 | UI Component Consistency: Strict Outline Borders (Law 2) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-162 | 학습된 장면은 설정이지 권한이 아니다 — 장면 상황 프로파일은 등록·리비전·보수 폴백으로만 적용한다 |
+| D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
+| D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 
 ## 계획·결과 문서
 
@@ -66,8 +68,8 @@
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · test(structure): audit.py 에 D-168 P6 크기 판정(accept, X5) 기록
-- 2026-09-22 · uncommitted · refactor(core_api_web): audit metrics 블록을 따로 만들어 잇고 `rosy_audit_serialize_failures_total` 추가
-- 2026-09-22 · uncommitted · fix(core_events): 감사 로그 정리·조회를 이벤트를 낸 스레드 밖으로 (리뷰 REQUEST CHANGES 반영)
-- 2026-09-22 · uncommitted · feat(core_api_web): 감사 로그 기록 상태를 `logs/audit` 와 `/metrics` 로 노출
-- 2026-09-22 · uncommitted · fix(core_events): 감사 로그 쓰기 비용·정전 손실·정리 실패 집계 (archive 브랜치 이식)
+- 2026-09-24 · uncommitted · chore(core): remove the legacy core/deploy installer
+- 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 명령 코드와 core 시험의 경계
+- 2026-09-23 · uncommitted · fix(core): 격상 처리기를 async-signal-safe 하게 (`os.write`) + `SIG_IGN` + 경고 0건 주장의 근거 교체 (리뷰 3차)
+- 2026-09-23 · uncommitted · fix(core): 멈춘 종료 격상을 `os._exit(2)` 로 (리뷰 2차) + teardown 경고·uvicorn graceful
+- 2026-09-23 · uncommitted · fix(core): 종료 teardown 명시화(executor drain·destroy_node·API join) + 두 번째 SIGINT 격상 통일

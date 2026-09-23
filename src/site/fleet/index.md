@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-09-22 · uncommitted · fleet(Phase2)+docs: 통신 정합 T7~T11 마감 기록
+- 2026-09-22 · uncommitted · fleet(hub): /registry 선택적 Bearer 인증 + 공개 snapshot (T9)
+- 2026-09-22 · uncommitted · fleet(cli): 죽은 hub 명령 제거 (T8)
+- 2026-09-22 · uncommitted · fleet(console): ADR-1000 자동 감속 no-op 수정 (T7)
 - 2026-09-22 · uncommitted · docs(fleet): swarm TRIGGERS 의 nav.blocked 가 현재 미발행임을 적는다
-- 2026-09-22 · uncommitted · feat(fleet/signals): 3자 교차 검증 (의도 vs 접점 vs 실측) verify 행 착지
-- 2026-09-22 · uncommitted · feat(fleet): traffic priority, ETA ordering, and route-conflict guard
-- 2026-09-22 · uncommitted · feat(server): G-S3 signals — 관제가 ROSY-SIGNAL-001 장치를 모으고 흩뿌린다
-- 2026-09-21 · uncommitted · refactor(fleet): serve installable shared web assets

@@ -11,6 +11,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src" / "core" / "core_api_web" / "core_api_web" / "web"
+#: Production serves `/common/*` from the web_common package (core_api_web
+#: mounts it; `test_ui_route.py` pins the 200s). The harness must mirror that
+#: mount — app.js imports `/common/core_ui_logic.js` absolutely, and a request
+#: with no route escapes to real DNS (rosy.test does not resolve) and kills the
+#: boot before the first assertion.
+WEB_COMMON = ROOT / "src" / "core" / "web_common"
 
 from browser_harness import DECLINE_CONFIRM, accept_confirm, open_page  # noqa: E402
 
@@ -320,6 +326,22 @@ def _launch_page(playwright, extra_init=""):
         lambda route: route.fulfill(
             status=200, content_type="image/jpeg", body=camera.read_bytes()),
     )
+
+    def _serve_common(route):
+        name = Path(urlparse(route.request.url).path).name
+        source = WEB_COMMON / name
+        if not source.is_file():
+            route.fulfill(status=404, body="")
+            return
+        route.fulfill(
+            status=200,
+            content_type=(
+                "text/css" if name.endswith(".css") else "application/javascript"
+            ),
+            body=source.read_text(encoding="utf-8"),
+        )
+
+    page.route("http://rosy.test/common/*", _serve_common)
     page.add_init_script(script=FETCH_INIT)
     if extra_init:
         # D-153 G2 상태 매트릭스 — FETCH_INIT 뒤에 붙어 오버라이드/토큰을 덮어쓴다.

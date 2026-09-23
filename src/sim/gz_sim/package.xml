@@ -3,9 +3,9 @@
 <package format="3">
   <name>gz_sim</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Gazebo simulation worlds, multi-robot launch files and lamp plugin.</description>
   <maintainer email="byeongkyu@gmail.com">byeongkyu</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
@@ -21,7 +21,6 @@
   <exec_depend>description</exec_depend>
   <exec_depend>control</exec_depend>
   <exec_depend>core</exec_depend>
-  <exec_depend>navigation</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>

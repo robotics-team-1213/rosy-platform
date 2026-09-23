@@ -1,0 +1,17 @@
+[Unit]
+Description=Apply /boot/firmware/rosy-config.yaml (D-176)
+# Root oneshot outside CORE (D-161). It never fails the boot: an invalid file
+# applies nothing and is reported by rosy-boot-status.
+After=local-fs.target rosy-first-boot.service NetworkManager.service
+Before=network-online.target rosy-network.service
+Wants=NetworkManager.service
+OnFailure=rosy-boot-status.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-config-apply.py
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

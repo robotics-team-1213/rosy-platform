@@ -101,3 +101,20 @@
 - 증거: 선분 1081 = 벽 1131 / 표시 492; world_to_map 로 free=7199 단일 덩어리 확인, 렌더 이미지로 도면 대조. 시도하고 버린 판정: 이중선 병합(오정합으로 프레임 붕괴), 둑 면적 시험(갈라놓기 벽을 전부 표시로 버림), 선분 탐침(자기 밴드 오염).
 - 한계: 외곽 프레임 누수 152 셀, 관절 핀홀. 배율/두께는 --scale, WALL_HALF_MM 옵션.
 - gate 변화: 월드 자체는 ROS-SIM 미실행 — launch 실측 전까지 HOLD 유지.
+
+## 2026-09-24 · uncommitted · docs(sim): D-182 simulation actuation profile
+
+- 변경: `config/simulation_actuation.yaml`이 파티션 `pinky_calmap227`과 도메인 227의 유일한 출처다. 안전 코드는 이 파일을 읽지 않는다.
+- 증거: `test/test_policy_sim_literals.py` 통과 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: D-182 Accepted
+- 교훈: 없음.
+
+## 2026-09-24 · uncommitted · chore(sim): `navigation` exec_depend 중복 제거
+
+- 변경: `package.xml`의 `<exec_depend>navigation</exec_depend>` 선언 2건 중 D-126 S4 주석 붙은 것은 유지하고, 맨 선언(24행)만 제거했다.
+- 증거: 커밋 직전 `python -m pytest test/ -q` 초록 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: module-coupling-scorecard §6 과제 4.
+- 교훈: 없음.
+

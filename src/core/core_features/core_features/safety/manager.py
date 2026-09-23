@@ -298,7 +298,7 @@ class SafetyManager:
 
         def _evaluate(request):
             bounded = (self._actuation_required and self._actuation is not None and
-                       self._actuation.revision == request.calibration_revision and self._simulation_domain())
+                       self._actuation.revision == request.calibration_revision and self._simulation_actuation_enabled())
             output = evaluate(request.linear, request.angular, request.now, allow_bounded_sweep=bounded)
             if output is None:
                 raise ValueError('Control observation unavailable')
@@ -313,18 +313,17 @@ class SafetyManager:
 
         self.bind_policy(_evaluate, revision)
 
-    def _simulation_domain(self):
-        return (os.environ.get('ROS_DOMAIN_ID') == '227' and
-                os.environ.get('GZ_PARTITION') == 'pinky_calmap227' and
+    def _simulation_actuation_enabled(self):
+        # The partition name and domain number live in the sim profile (D-182).
+        return (os.environ.get('ROSY_SIMULATION_ACTUATION') == '1' and
                 self._simulation_clock_enabled is not None and self._simulation_clock_enabled() is True)
 
     def bind_simulation_actuation(self, calibration, *, simulation_clock_enabled):
-        """Opt-in only to the existing isolated simulation domain, never hardware."""
+        """Opt-in only when the sim profile has enabled actuation, never hardware."""
         revision = getattr(calibration, "revision", None)
         if (revision != self._policy_revision or not callable(simulation_clock_enabled)):
             raise ValueError('Actuation requires the bound policy revision and simulation clock')
-        if (os.environ.get('ROS_DOMAIN_ID') != '227' or os.environ.get('GZ_PARTITION') != 'pinky_calmap227'
-                or simulation_clock_enabled() is not True):
+        if os.environ.get('ROSY_SIMULATION_ACTUATION') != '1' or simulation_clock_enabled() is not True:
             raise ValueError('Actuation is restricted to the commissioned simulation domain')
         self._simulation_clock_enabled = simulation_clock_enabled
         self._actuation = calibration
@@ -375,7 +374,7 @@ class SafetyManager:
         self.policy_reason = 'actuation_unavailable'
         calibration = self._actuation
         try:
-            if calibration is None or calibration.revision != revision or not self._simulation_domain():
+            if calibration is None or calibration.revision != revision or not self._simulation_actuation_enabled():
                 return None
             caps = self.clip(self.limits.max_linear, self.limits.max_angular, scope)
             self.policy_reason = 'actuation_invalid'
@@ -385,7 +384,7 @@ class SafetyManager:
                     abs(prepared.motor_linear) != abs(prepared.linear) or
                     abs(prepared.linear) > min(.014, caps[0]) or abs(prepared.angular) > min(.1, caps[1]) or
                     caps != self.clip(self.limits.max_linear, self.limits.max_angular, scope) or
-                    not self._simulation_domain()):
+                    not self._simulation_actuation_enabled()):
                 return None
             elapsed = self._policy_clock() - started
             self.policy_reason = 'actuation_stale_or_over_budget'

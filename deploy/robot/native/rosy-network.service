@@ -1,0 +1,14 @@
+[Unit]
+Description=ROSY fallback AP controller (D-176)
+# Runs as root outside CORE (D-161): it drives NetworkManager profiles.
+After=NetworkManager.service rosy-config.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-network.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

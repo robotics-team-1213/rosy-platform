@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "robot" / "verify-from-windows.ps1"
+SCRIPT = ROOT / "deploy" / "robot" / "verify" / "verify-from-windows.ps1"
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
 
 

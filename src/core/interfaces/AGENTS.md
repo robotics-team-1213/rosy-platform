@@ -27,7 +27,7 @@ Custom ROS 2 services for LED, lamp, brightness, and LCD emotion. rosidl package
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - REST/Fleet contracts do **not** live here — those are pydantic in `core.protocol.schemas`.
 - After editing `.srv`, `colcon build --packages-select interfaces` and rebuild dependents.
 

@@ -1,0 +1,10 @@
+# after mode=steady signal=SIGINT count=6; startup window=0.2-1.5s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: c6230cc (fix/core-sigterm-exit)  started 2026-09-23T00:58:02+09:00  loadavg: 21.45 22.17 16.89 15/1191 62870
+run  1: node 63012 sig@+9.55s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  2: node 63298 sig@+7.98s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  3: node 63569 sig@+8.38s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  4: node 63804 sig@+7.25s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  5: node 63968 sig@+9.13s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  6: node 64221 sig@+10.43s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+# leftover core processes: 0  finished 2026-09-23T00:59:16+09:00
+# exit-code tally:       6 exit=0 

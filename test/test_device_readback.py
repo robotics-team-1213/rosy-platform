@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "deploy" / "robot" / "device_readback.py"
+MODULE_PATH = ROOT / "deploy" / "robot" / "verify" / "device_readback.py"
 
 _UNTRUSTED_PUBLIC_KEY = (
     "-----BEGIN PUBLIC KEY-----\n"
@@ -177,6 +177,55 @@ def test_readback_reports_identity_artifact_runtime_and_ros_graph(tmp_path: Path
     assert evidence["gates"] == {"device_runtime": "GO", "field": "HOLD"}
 
 
+def test_readback_holds_when_the_core_process_has_the_dev_overlay(tmp_path: Path):
+    root = _fake_device(tmp_path)
+
+    def runner(command: list[str], *, timeout: float):
+        if command[-2:] == ["printenv", "ROSY_DEV_OVERLAY"]:
+            return subprocess.CompletedProcess(command, 0, "1\n", "")
+        return _runner(command, timeout=timeout)
+
+    evidence = device_readback.collect_readback(root=root, run=runner)
+
+    assert evidence["dev_overlay"] is True
+    assert evidence["dev_overlay_reason"] == "active"
+    assert evidence["gates"]["device_runtime"] == "HOLD"
+
+
+def test_readback_holds_when_only_the_overlay_marker_remains(tmp_path: Path):
+    root = _fake_device(tmp_path)
+    marker = root / "etc" / "rosy" / "dev-overlay.json"
+    marker.write_text("{}\n", encoding="utf-8")
+
+    evidence = device_readback.collect_readback(root=root, run=_runner)
+
+    assert evidence["dev_overlay"] is True
+    assert evidence["dev_overlay_reason"] == "stale"
+    assert evidence["gates"]["device_runtime"] == "HOLD"
+    assert "TOKEN" not in json.dumps(evidence)
+
+
+def test_readback_holds_when_only_the_native_dropin_remains(tmp_path: Path):
+    root = _fake_device(tmp_path)
+    dropin = root / "etc" / "systemd" / "system" / "rosy-core.service.d" / "dev-overlay.conf"
+    dropin.parent.mkdir(parents=True)
+    dropin.write_text("[Service]\n", encoding="utf-8")
+
+    evidence = device_readback.collect_readback(root=root, run=_runner)
+
+    assert evidence["dev_overlay"] is True
+    assert evidence["dev_overlay_reason"] == "stale"
+    assert evidence["gates"]["device_runtime"] == "HOLD"
+
+
+def test_readback_reports_no_overlay_on_a_clean_release(tmp_path: Path):
+    evidence = device_readback.collect_readback(root=_fake_device(tmp_path), run=_runner)
+
+    assert evidence["dev_overlay"] is False
+    assert "dev_overlay_reason" not in evidence
+    assert evidence["gates"]["device_runtime"] == "GO"
+
+
 def test_readback_never_serializes_credentials(tmp_path: Path):
     root = _fake_device(tmp_path)
 
@@ -281,10 +330,10 @@ def test_readback_refuses_non_core_activation(tmp_path: Path):
 
 
 def test_installer_and_wrapper_expose_the_same_readback_command():
-    wrapper = (ROOT / "deploy" / "robot" / "device-readback.sh").read_text(encoding="utf-8")
+    wrapper = (ROOT / "deploy" / "robot" / "verify" / "device-readback.sh").read_text(encoding="utf-8")
     installer = (ROOT / "deploy" / "robot" / "install-pi.sh").read_text(encoding="utf-8")
-    verifier = (ROOT / "deploy" / "robot" / "verify-pi.sh").read_text(encoding="utf-8")
+    verifier = (ROOT / "deploy" / "robot" / "verify" / "verify-pi.sh").read_text(encoding="utf-8")
 
     assert 'exec python3 "$SCRIPT_DIR/device_readback.py" "$@"' in wrapper
-    assert '"$INSTALL_ROOT/deploy/robot/device-readback.sh"' in installer
+    assert '"$INSTALL_ROOT/deploy/robot/verify/device-readback.sh"' in installer
     assert "device-readback.sh --json" in verifier

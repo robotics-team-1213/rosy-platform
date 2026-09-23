@@ -48,7 +48,7 @@ def fetch_png(url, timeout=2.0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--backend', default='http://localhost:28162')
+    ap.add_argument('--backend', default='http://localhost:28182')
     ap.add_argument('--done-hold', type=float, default=60.0)
     ap.add_argument('--stall', type=float, default=600.0)
     ap.add_argument('--timeout', type=float, default=4200.0)

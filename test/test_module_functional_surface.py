@@ -55,7 +55,7 @@ def test_interface_only_modules_declare_their_own_artifacts():
 def test_core_docking_is_not_the_dock_firmware_surface():
     dock = next(item for item in _catalog() if item["name"] == "dock")
     core = next(item for item in _catalog() if item["name"] == "core")
-    assert "src/core/core/test/test_docking.py" not in (dock.get("functional") or [])
+    assert "src/core/core_features/test/test_docking.py" not in (dock.get("functional") or [])
     assert "test/test_dock_contract.py" in (dock.get("functional") or [])
     assert "src/core/core/test" in (core.get("functional") or [])
 

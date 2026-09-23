@@ -1526,3 +1526,242 @@
 - gate 변화: 없음(문서). core ROS-SIM HOLD는 F1이 닫는다.
 - 결정: D-172 Accepted.
 - 교훈: 공유 트리에서 `git add -A`를 쓰면 남의 미완성 색인 행이 섞여 들어간다(`451223c`). 경로를 지정해 스테이징한다.
+
+## 2026-09-22 · uncommitted · docs(agents): T11 — fleet_agent/bridge AGENTS 현행화 + 소소 수정 팩
+- 변경: ① fleet_agent/AGENTS.md 재작성 — "start() 는 소켓을 열지 않는다"(스텁 시절)을 설정 게이팅 구현체 기술로 정정(hello 신원 실값·backoff 30s·D-170 연결) ② bridge/AGENTS.md 카운트 정정(6 timers/22 subs → 7/24 — 시험은 이미 7/24 고정) + map QoS 소비자 분할 의도 기록 ③ battery_publisher 노드명 오타 battery_publihser→battery_publisher ④ v1/system.py 부실 어노테이션 svc: CoreServices → CoreServicesLike 9건(CoreServices 는 미임포트, annotations 지연으로만 동작).
+- 증거: `python -m pytest src/core/core/test/test_api.py -q` 54 passed · `src/core/core_api_web/test/ -q` 9 passed (2026-09-22 Windows). bringup 패키지 시험은 호스트 경로/ament_lint 환경 제약으로 스킵(변경은 문자열 상수 1건).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-23 · uncommitted · docs(plans): Phase 4(T12~T14) 이행 기록 — 계획 전 페이즈 완료
+- 변경: `docs/plans/2026-09-22-communication-protocol-remediation-plan.md` Status 를 전 페이즈 실행 완료로 갱신하고 Phase 4 이행 요약 추가(T12 e65a5a0 · T13 f9d6f09 · T14 9742084, T15 하네스 마감 진행 중). 원본 단계 문단은 유지.
+- 증거: 각 커밋·모듈 logs.md(control·deploy). 최종 전체 호스트 회귀는 별도 기록으로 이어 붙인다.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-23 · uncommitted · fix(test): strip the UTF-8 BOM that turned the catalogue and vision guards red, and guard against it
+
+- 변경: `10ceb53`가 `src/core/core_api_web/core_api_web/api/v1/system.py` 앞에 UTF-8 BOM을 넣었다. `ast.parse(read_text())`로 소스를 읽는 가드(`test_event_catalogue.py` 13건, `test_vision_boundaries.py` 2건)가 U+FEFF에서 전부 SyntaxError가 났다. BOM을 제거하고 `test/test_fleet_enrollment_contracts.py`의 BOM도 제거했다. 신규 `test/test_source_encoding.py`는 추적 중인 모든 `.py`가 BOM으로 시작하지 않음을 고정한다.
+- 증거: `python -m pytest test/test_source_encoding.py src/core/core/test/test_event_catalogue.py src/core/core/test/test_vision_boundaries.py test/test_fleet_enrollment_contracts.py -q` 78 passed.
+- gate 변화: 없음(회귀 복구).
+- 결정: 없음(D-172 후속 정리 중 발견).
+- 교훈: Windows 편집기의 BOM 하나가 무관한 AST 가드 15건을 한꺼번에 깬다. 원인이 보이도록 이름 있는 가드로 따로 잡는다.
+
+## 2026-09-23 · 3ec8672 · docs(plans): T15 — 통신 정합 계획 전 페이즈 마감, 최종 회귀 PASS
+- 변경: 없음(검증 기록만).
+- 증거: `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4350 passed, 82 skipped, 0 failed** in 1746s (2026-09-23 Windows, 커밋 3ec8672 트리 — T1~T14 + D-169/D-170 전체 반영). 직전 실행의 19 failed 는 본 세션과 동시 진행 중이던 파일 편집과의 경합 아티팩트로, 동일 트리에서 모두 소멸 확인.
+- gate 변화: 없음 — 코드·문서 모듈 게이트는 각 progress.md 절차대로. 남은 미결: ARM64/DEVICE 게이트(sensor_adc 빌드·실측, udev 심링크 readback, chrony 동기화 품질)와 G1 후속 ADR 조건(하드웨어 프로필 D-84 + 실기 수요), 중앙 Fleet 착수 시 D-170 확장.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-23 · uncommitted · docs(api): API ref v1.17 — `logs/audit` 의 `dir_sync_failures`·`last_dir_sync_error`, `rosy_audit_dir_sync_failures_total`
+- 변경: 헤더 v1.16→v1.17, 변경 이력 v1.17 행(Additive), `/api/v1/logs/audit` 행의 `log` 필드 목록과 의미. 앞선 커밋이 D-170 의 v1.15 행에 덧붙였던 노트는 병합에서 main 쪽으로 되돌리고 자기 행으로 옮겼다. `test/test_line_follow_contract_docs.py` 버전 고정을 v1.17 로
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_diagnostics_api.py` 통과
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 남의 변경 이력 행에 덧붙이지 않는다 — Additive 라도 자기 행을 연다.
+
+## 2026-09-23 · uncommitted · docs(adr): D-172 후속 F1~F6 처리 결과
+
+- 변경: D-172 후속 항목의 처리 결과를 기록한다.
+  - F1 core ROS-SIM 재확인: 닫힘. `0a9a07a`, 증거 `docs/validation/ros-sim-core-2026-09-22b`. `/cmd_vel` 발행자는 core 1개이고 watchdog 0과 `safety.watchdog`을 확인했다. HOLD→GO.
+  - F2 audit 후속: 닫힘. `e8b2976`. 격리 파일 쓰기와 fsync를 잠금 밖으로 옮겼고, 격리 파일이 사라지거나 줄면 다시 쓴다. 스레드 시작 실패와 디렉터리 fsync 실패를 따로 센다. API Ref v1.17.
+  - F3 빈 worktree 6개와 브랜치 5개: 닫힘.
+  - F4 커밋 안 된 작업이 남은 worktree: 메모만 남은 4곳과 방치된 1곳을 정리했다. 커밋 안 된 파일은 세션 scratchpad `worktree-notes/`에 보관했다. 코드 작업 중인 3곳(`pinky-integrated-current`, `pinky-user-validation`, `optional-runtime-slices`)은 소유자 몫으로 남긴다. `.worktrees/gazebo-slam-complete`, `.worktrees/rosy-control-absorption` 폴더는 git 연결만 끊겼고 파일 삭제는 사용자 승인 대기다.
+  - F5 D-171 목록 행: 닫힘. `581741e`.
+  - F6(신규, F1에서 발견) core SIGINT/SIGTERM exit 1 경합: 닫힘. `1586908`, 증거 `docs/validation/core-sigterm-2026-09-22`. `main()` 진입 뒤에는 첫 신호가 정상 종료 exit 0을 보장하고, 두 번째 신호는 강제 종료한다.
+  - 정리 중 발견: `10ceb53`의 `system.py` BOM이 AST 가드 15건을 깨뜨렸다. `4ba205e`에서 BOM을 없애고 `test/test_source_encoding.py` 가드를 추가했다.
+- 증거: 병합 후 3.14 전체 4441 passed(F6 전), 3.12 core 1250 passed(F6 브랜치). 각 PORT와 수정은 독립 리뷰 APPROVE를 받았다.
+- gate 변화: core ROS-SIM GO(F1).
+- 결정: D-172 후속 F1~F3, F5, F6은 닫혔다. 아래 항목은 열린 채 넘긴다.
+  - 종료 시 SIGSEGV 1/105: 스택을 확보한 뒤 executor와 node를 명시적으로 정리한다.
+  - `main()` 진입 전 신호(exit 241)에 대해 unit에 `SuccessExitStatus=241 254`를 둘지 판단한다.
+  - 실기 `systemctl stop`으로 재확인한다.
+  - 두 번째 SIGINT를 `KeyboardInterrupt`로 올린 뒤에는 세 번째 SIGINT가 무시된다(LOW). SIGTERM은 계속 강제 종료된다.
+- 교훈: 짧은 ROS-SIM 재확인이 종료 경합을 드러냈다. 부팅뿐 아니라 종료도 스모크 절차에 포함한다.
+
+## 2026-09-23 · uncommitted · docs: Linux 측 검증 3건 — colcon 빌드·sensor_adc 구문 검사·CI 동등 부트 스모크
+- 변경: 계획 Status 갱신(T15 완료 표기 + WSL 검증 기록, `docs/plans/2026-09-22-communication-protocol-remediation-plan.md`).
+- 증거: WSL x86_64 ROS 2 Jazzy — ① sensor_adc `g++ -fsyntax-only`(ROS Jazzy 헤더+wiringPi 스텁): 원본 적색(const uint8_t* 시그니처) → 16811e5 수정 → `ADC_SYNTAX_OK`, ADC 계약 시험 5 passed ② `colcon build --base-paths src` **20 packages finished, COLCON_EXIT=0**(HEAD 재빌드 포함, 설치 main.py 체크섬 갱신 확인) ③ CI 동등 부트 스모크(ci.yml 절차 복제, 60s poll): `ros_bridge ready (cmd_vel sole publisher @50Hz)` + `core up: robot_id=rosy_01 model=Pinky Pro` + `api server on 0.0.0.0:8080` + kill 후 `core shutting down` 우아한 종료, core_up=1. `slam_toolbox unavailable` 라인 부재는 WSL에 slam_toolbox 설치 상태(/opt/ros/jazzy/share/slam_toolbox 확인)로 예상된 환경 차이 — 해당 라인은 CI ros-base 컨테이너에서만 발생.
+- 부수(디버깅 기록): 최초 스모크 실패("context is invalid") 원인 = Windows drvfs 느린 I/O(스 tats 15~27초 D-상태 반복)로 시작이 ~28초 걸려 **25초 timeout 의 SIGTERM 이 초기화 중간에 진입** + 구(9/19) 설치본 main.py 의 기본 rclpy 핸들러가 context 를 내림. 재빌드 후 신 main.py(a545d55: 첫 신호=이벤트 기록, rclpy C 핸들러 유지)에서는 60s 창에서 재현 없음 — 코드 결함 아님.
+- gate 변화: 없음 — ARM64/DEVICE 게이트는 네이티브 ARM64 빌드·실기 측정이 필요하다.
+- 결정: 없음.
+- 교훈: WSL drvfs 부트 스모크 타임아웃은 CI 와 동일하게 60s 이상 — 25s 는 Windows 파일시스템 I/O 지연에 걸려 신호 경합을 만든다.
+
+## 2026-09-23 · uncommitted · docs(adr): 조건부 후속 ADR D-176·D-177 선기록 (Proposed)
+
+- 변경: D-169/D-170이 "조건 확정되는 후속 ADR로만 연다"고 열어 둔 두 후속 ADR을 **Proposed** 로 미리 등록했다. `docs/adr/D-176-device-surface-expansion-conditions.md` — 벤치 장치(emotion/lamp/led/imu_bno055)의 제품 편입 수용 조건을 장치별 4항목(실기 수요·D-84 프로필 항목·배관 수용·가드 변이 증명) 표로 고정하고, 조건 충족 시 같은 파일 Status 전환+증거 기록으로 편입한다(새 번호 발급 없음). `docs/adr/D-177-prt-004-activation-design.md` — correlation_id 발행 주체(중앙만 생성, 로봇은 소비), 로봇 측 경로(FleetAgent·HttpRobotClient), 3단계 상태기(ACCEPTED→STARTED→COMPLETED|FAILED), AckPayload §9.5 실측 필드, schemas+API Ref+fleet_agent 한 변경 갱신(D-18), additive-only 호환을 활성화 시 설계로 선기록. ADR Log 색인에 Proposed 2행 추가, `docs/progress.md` adrs·`docs/reference/AGENTS.md` 범위(D-177)·remediation plan Status의 후속 항목 표기를 갱신했다.
+- 증거: 편집 직후 `test_harness_contracts.py` 2 failed(생성 기록 stale) → `rosy_harness.py generate` 후 `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q` 초록·`rosy_harness.py lint` 0 errors — 인덱스↔본문 1:1, 상태값 `Proposed` 허용 확인. D-169/D-170 본문은 append-only 원칙에 따라 수정하지 않았고 연결은 신규 ADR 쪽 References가 수행한다.
+- gate 변화: 없음 — 둘 다 Proposed라 어떤 계약·코드도 바뀌지 않는다.
+- 결정: 조건(장치별 실기 수요 + D-84 프로필 확정 / 중앙 Fleet 착수)이 오면 Status를 Accepted로 바꾸고 그 시점의 증거를 본문 표에 채운다. 조건 없는 Status 전환은 "편입 없는 편입 기록"으로 무효(D-176 Status 문단에 명시).
+- 교훈: "나중에 하기로 한 결정"도 문서로 먼저 닫아 두면 활성화 시점의 설계 재논쟁을 막는다 — 단, 유예 조건을 건 ADR은 조건 전까지 Proposed로 두어야 부모 ADR(D-169/D-170)을 위반하지 않는다.
+
+## 2026-09-23 · uncommitted · fix(test): the control closure guard ignores colcon output under src/
+
+- 변경: `test/test_control_deploy_closure.py`가 `src/` 전체를 훑을 때 colcon 산출물(`src/build`, `src/install`, `src/log`)도 셌다. CI(`ros:jazzy`)는 소스 트리 안에서 빌드하므로 launch 파일마다 사본 3개가 잡혀 "ambiguous launch file name"이 되고, `rosy.sensor_provider` 등록자도 `build/control/setup.py`까지 둘로 보였다. `src/` 바로 아래 `build`·`install`·`log`와 숨김 경로를 건너뛰는 `_source_parts()` 하나로 두 스캔을 맞췄다.
+- 증거: origin/main CI가 `5a4cedb`·`a2095a0`·`345adfe` 연속으로 이 3건에서 적색이었다. `src/build`·`src/install`에 사본을 둔 CI 모양에서 수정 전 3 failed, 수정 후 4 passed.
+- gate 변화: 없음(CI 적색 복구).
+- 결정: 없음.
+- 교훈: 저장소 전체를 훑는 가드는 로컬(빌드 산출물 없음)에서만 초록일 수 있다. CI가 소스 트리 안에서 빌드한다는 사실을 스캔 규칙에 넣는다.
+
+## 2026-09-23 · uncommitted · fix(pkgs): manifest TODO 제거 + 패키지 메타데이터 계약 시험
+
+- 변경: upstream 골격에서 남은 8개 `package.xml`(`navigation`, `sensor_adc`, `interfaces`, `emotion`, `led`, `lamp_control`, `gz_sim`, `description`)의 `TODO: Package description` / `TODO: License declaration`을 실명 description과 `Apache-2.0`으로 채웠다. 가드로 `test/test_package_metadata.py` 3시험 신규: (1) 어떤 manifest에도 TODO 잔존 금지, (2) 선언 라이선스가 `{Apache-2.0, Proprietary}` 집합 안에 있어야 함(공백·미선언·신규 값은 적색), (3) description이 TODO·공백 아닌 실명 요약.
+- 증거: test-first — 추가 직후 3 failed(TODO 잔존 8 manifest + 라이선스 선언 검출) → 허용 집합 명시로 판정 유보 후 manifest 수정 → 3 passed. 변이 증명: `led/package.xml`에 TODO 재주입 → `mutation-landed: True` 확인 후 적색(1 failed) → 복원 → 3 passed, `restored-clean: True`.
+- gate 변화: 없음(선언 메타데이터만).
+- 결정: 루트 `LICENSE`는 Apache-2.0인데 `web_common`·`core_features`·`core_events`·`core_common`·`core_api_web` 5개는 `Proprietary`를 선언한다 — 어느 쪽도 임의로 고치지 않고 허용 집합으로 시험에 고정한 뒤 소유자 판단으로 넘긴다(이 항목이 보고). `src/hardware/led/AGENTS.md`의 "license TODO from upstream" 메모도 함께 갱신했다.
+- 교훈: 라이선스 문구는 근거 없이 "맞춤"하지 않는다 — 검거(집합 고정)와 판정(바꾸기)을 분리하면 drifted 계약을 놓치지 않으면서 잘못된 판정은 피한다.
+
+## 2026-09-23 · uncommitted · docs: AGENTS 현황 드리프트 정리 (D-61 표기·remote/CI 문장·루트 키 파일 표)
+
+- 변경: 모듈 `AGENTS.md` 17곳의 `Harness (D-61 Proposed)` 괄호 표기를 `Harness (D-61)`로 정리했다(D-61 본문 Status는 Accepted인데 현황 표기만 남아 있었음). `Rosy OS/AGENTS.md`의 "저장소에 remote 가 없어 CI 가 발화하지 않는다" 문장은 사실과 달라 `origin`(`github.com/livsbittt/rosy-os.git`) 존재·push/PR 발화·ahead 구간에는 CI 증거가 없다는 현재 사실로 갱신했다. 상위 `Rosy/AGENTS.md`(저장소 밖) 키 파일 표에서 실재하지 않는 `task_plan.md`·`findings.md`·`progress.md` 3행 제거, 계약 우선 문장에 퇴역·재생성 금지를 명시했다. `src/hardware/led/AGENTS.md`의 manifest 행 메모는 패키지 메타데이터 커밋(`a2d00d7`)에서 갱신했다.
+- 증거: 수정 후 `grep "D-61 Proposed"` 잔여 17건 = 모듈 `logs.md` 16(각 결정 시점의 역사 기록) + `docs/plans/2026-09-15-module-harness-design.md:160`(P0 마일스톤 행) — 둘 다 append-only/날짜 문서라 보존한 것이 의도. 루트 `findings.md`·`task_plan.md`는 저장소 어디에도 없다(2026-09-23 전체 glob). `rosy_harness.py lint` 0 errors(18 warnings baseline), 하네스 계약 시험 초록.
+- gate 변화: 없음(현황 표기와 낡은 문장만).
+- 결정: ADR Status 전환 커밋에는 현관문(AGENTS)의 괄호 낙관도 함께 갱신한다 — 단 기록형 문서(logs, 날짜 설계문서)의 과거 표기는 append-only 로 보존한다. 저장소 밖 `.device-evidence/`는 README로 판독 결과(HOLD 2건·시의성 상실)를 연결만 하고 삭제는 승인 사안으로 남긴다.
+- 교훈: 상태를 괄호로 흘려 적은 현황 표기는 전환 순간드리프트가 된다 — 적지 않거나, 적었다면 전환과 같이 바꾼다. "no remote" 같은 인프라 사실도 시점이 지나면 거짓이 되므로 사실을 적되 최신 상태 조회 방법(`gh run list`)을 같이 남긴다.
+
+## 2026-09-23 · uncommitted · fix(test): bringup·emotion 패키지 시험의 루트 수집 복구 + ament 가시적 skip
+
+- 변경: `src/hardware/bringup/test/conftest.py`와 `src/apps/emotion/test/conftest.py` 신규 — colcon 설치 없이도 소스 트리가 `sys.path`에 오게 해 `bringup.command_deadman`, `bringup.pinky_pro_adapter`, `emotion.info_screen` import를 가능하게 했다. ament 린터 템플릿 9개(copyright/flake8/pep257 × bringup·led·emotion)에는 `pytest.importorskip("ament_*")` 가드 삽입 — ROS 환경에서는 그대로 실행되고, 없는 호스트는 모듈 단위 skip으로 내려간다.
+- 증거: before `--collect-only` = 14 collection errors(bringup 5 = 실측 2 + ament 3, led 3 = ament, emotion 6 = 실측 3 + ament 3) → after `python -m pytest src/hardware/bringup/test/ src/hardware/led/test/ src/apps/emotion/test/` = **46 passed, 10 skipped** — `test_command_deadman`(드라이버 측 stale cmd_vel 가드)과 emotion 계약이 이 호스트에서 처음으로 실측 실행되고, skip 10 = ament 9 + capture 환경 1이 합리적 skip으로 표시된다.
+- gate 변화: 없음(수집 경로 보정 — 빌드·런타임 불변).
+- 결정: 수집 오류를 `collect_ignore`로 조용히 없애는 대신 `importorskip`을 택했다 — skip 사유가 보고에 남는다("없는 것"과 "건너뛴 것"은 다르다). 생성된 ament 템플릿 본체는 건드리지 않고 import 블록에만 가드를 넣었다.
+- 교훈: 회귀 명령에 들어 있지 않은 디렉터리의 수집 오류는 오래 살아남는다 — 주기적으로 `--collect-only`로 전체 트리를 훑어야 "건너뛴 테스트"가 드러난다. 수집이 죽으면 실패도 통과도 없고 증거만 없다.
+
+## 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이 설계 기록
+
+- 변경: `docs/plans/2026-09-23-core-dev-overlay-design.md` 추가. 벤치에서 허용된 CORE 파이썬만 `/var/lib/rosy-dev`로 보내고 코어만 재시작하는 루프를, `install-pi.sh` 재설치와 서명 GitHub Release와 분리해 적었다. `docs/plans/AGENTS.md` 키 파일 표에 한 행을 더했다. 구현 파일은 없다.
+- 증거: `python tools/harness/rosy_harness.py generate`가 `deploy/index.md`와 `docs/index.md`를 갱신했다. `python tools/harness/rosy_harness.py lint`는 0 errors, 21 warnings (2026-09-23 Windows, 기존 uncommitted 경고). 설계 문서라 실행 시험은 없다.
+- gate 변화: 없음
+- 결정: 없음. readback HOLD를 코드로 넣는 2단계에서 ADR을 연다.
+
+## 2026-09-23 · uncommitted · docs(adr): 모듈 병렬 작업 가능성 평가표를 D-178로 선기록 (Proposed)
+
+- 변경: `docs/adr/D-178-module-maintainability-scorecard.md` 신규 — 판정 축 5개(M1 독립 작업성 / M2 역할 명확성 / M3 동시 유지보수성 / M4 공용 모듈 관리 / M5 결합 정합, 가중 25/25/20/15/15), 합산 + 컷 게이트(M5≤2 또는 M3≤2→상한 B, M2≤2→상한 C, S는 M3·M5≥4, 구간과 게이트는 낮은 쪽이 이긴다), 기기 전용 ※(보정 없음), 판정 단위 1차 패키지 20개(집합 동일성) / 2차 `control`·`core_features`·`navigation`·`gz_sim` 4개, 재평가 트리거(D-168 예외 목록·SIZE_VERDICTS·패키지 증감·D-171·functional 변동), 기준선 20행(평균 81.5 = S8/A6/B3/C3). ADR 로그 행 D-178 추가 + `docs/reference/AGENTS.md` "through D-177"→D-178. 저장소 밖 `module-coupling-scorecard.md` 정정: ① `gz_sim` "과잉선언 2건(control, core)" **오판 제거** — import만 세는 산출 스크립트가 `get_package_share_directory("control")`·`Node(package="core")` launch 경유 사용을 놓쳤음 ② 진짜 과잉선언 `core_api_web`·`core_features`의 미사용 `core_events` 선언 2건으로 교체(M5=3) ③ 축 개명 W→M ④ 점수 재배치 `gz_sim` 62→71(B), `core_api_web` 83→80(A), `core_features` 65→59(C) — 분포 B 3/C 3, 평균 81.5 유지 ⑤ hardware 3종 `imu_bno055`·`lamp_control`·`sensor_adc` 기기 전용 ※ 표기. 신규 `test/test_module_scorecard.py`는 **산출 규칙만** 검사(가중치 합 100·총점 재계산·등급 구간·컷 게이트·패키지 집합 동일성), 점수 값은 회차 입력이라 고정하지 않음.
+- 증거: `python tools/harness/rosy_harness.py generate` exit 0 → `python -m pytest test/test_module_scorecard.py test/test_harness_contracts.py test/test_network_topology_contracts.py -q` = **74 passed** (21 warnings = 기존 last_verified baseline) → `python tools/harness/rosy_harness.py lint` = **0 error(s), 21 warning(s)**. 변이 증명: 기준선 `games` M5 5→1 주입 → `test_baseline_totals_and_grades_recompute` 적색(`games: 총점 재계산 82 != 기록 94`) → 복구 후 4 passed. 게이트 논리는 합성 행 시험이 상시 고정(M5=1→B, M2=2→C, M3=3인 S 자격 행→A, 전축 5점→S 통과).
+- gate 변화: 있음 — 새 ADR 본문(로그 색인↔본문 제목·Status 일치 계약 대상), 로그 행 D-178(연속성 계약), 산출 규칙 시험 1종 신설. Status는 **Proposed**, Accepted 착지 조건은 2차 회차(B·C 4개 내부 모듈 분해) 완료 + 기준선 갱신.
+- 결정: 선기록은 D-162/D-167 패턴을 따른다. ADR은 **기준·기준선만** 소유하고 회차 근거는 저장소 밖 채점표에 둔다(`module-coupling-report.md` 선례). 총점 합산은 유지하되 컷 게이트로 상쇄를 차단한다 — D-167이 반려한 합산 사유(안전 축 상쇄)는 M축이 안전 축을 담지 않아 여기 성립하지 않고, 안전은 D-167 G-3/G-8과 D-168 시험이 그대로 소유한다. 시험은 산출 규칙만, 점수는 회차 입력 — 주관 채점을 시험에 못 박으면 고치는 쪽이 시험을 같이 고치는 위증이 쉬워진다.
+- 교훈: import만 세는 매트릭스 산출물은 launch 경유 참조(share/node 리터럴)를 반드시 놓친다 — D-168 스캐너와 대조하지 않았다면 오판이 ADR 기준선에 박혔다. 기준선을 박기 전에는 산출 도구의 맹점을 교차 대조할 것.
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-179 벤치 CORE 읽기 전용 오버레이
+
+- 변경: `docs/adr/D-179-bench-core-readonly-overlay.md`와 ADR Log 색인 행을 추가했다(Accepted). 벤치 수정은 `/var/lib/rosy-dev`를 설치 site-packages 위에 읽기 전용으로 바인드하고, 그 장치는 readback HOLD다. `PYTHONPATH` 선행은 setup.bash가 설치 트리를 다시 앞에 놓으면 조용히 무시되므로 채택하지 않았다. 실행 계획은 `docs/plans/2026-09-23-core-dev-overlay.md`. 설계 문서의 바인드·허용 목록·상태 문장을 D-179와 맞췄다. `docs/reference/AGENTS.md`의 로그 범위를 D-179까지로 고쳤다.
+- 증거: `python tools/harness/rosy_harness.py generate` 후 `lint` 0 errors, 21 warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 70 passed, 21 warnings (2026-09-23 Windows). 스크립트 시험은 계획 착지 전이라 없다.
+- gate 변화: 없음
+- 결정: D-179 Accepted. 스크립트는 실행 계획 착지 전에 없다. ARTIFACT/DEVICE는 이 결정으로 오르지 않는다.
+- 교훈: 오버레이 성공은 `__file__` 경로가 아니라 읽은 바이트의 해시다. 바인드는 경로 문자열을 유지한 채 내용만 바꾼다.
+
+## 2026-09-23 · uncommitted · docs(plan): D-179 반복 동작 세 문장
+
+- 변경: `docs/plans/2026-09-23-core-dev-overlay.md`에 반복 동작을 넣었다. 바인드가 있으면 파일 복사와 `rosy-core` 재시작만 하고 성공은 `core/__init__.py` 해시다. 재부팅과 `rosy-runtime` 재시작은 이미지 코드로 돌아가며 마커 HOLD가 남는다. 개발 compose 조각은 `name` 없이 프로젝트 `rosy-runtime`에서 `rosy-core`만 올린다. Task 2·Task 5 시험 항목으로 고정했다.
+- 증거: 계획 본문만. `python tools/harness/rosy_harness.py generate` 후 `lint` 0 errors, 21 warnings (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-179 본문은 그대로다. 실행 계획만 보강했다.
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-178 2차 회차 완료 — Accepted 승격 + 기준선 갱신
+
+- 변경: `docs/adr/D-178-module-maintainability-scorecard.md` Status Proposed → **Accepted**(착지 조건 충족: 2차 회차 완료 + 기준선 갱신) — 기준선 표 갱신 노트 추가(점수 변동 없음: `control` 57 · `core_features` 59 · `navigation` 57 · `gz_sim` 71, 분포 S8/A6/B3/C3·평균 81.5 유지), `core_features` 비고 정정, Validation 착지 조건 충족 표기. `docs/reference/ROSY ADR Log.md` D-178 행 Status 동시 갱신(색인↔본문 일치). 저장소 밖 `module-coupling-scorecard.md` **§8 2차 회차** 신설 — C/B 4개 내부 모듈 파일 단위 분해(`control` 9군집 358py·42,260행 / `core_features` 13기능 38py·5,583행 / `navigation` 모듈 6 + launch 16파일·744행 / `gz_sim` 23py·4,892행)와 병렬 작업 충돌 지점 도출(`control`: setup.py console_scripts 14건 + launch 11개 단일 조립, test fan-in 85·55·26건, core/test 5파일·7모듈 D-126 이음새 / `core_features`: 시험 3곳 분산(core/test 29·fleet 1·루트 1) / `navigation`: hardware.launch.py 조립 + web_* assembly + 루트 test/ 5파일 공유 / `gz_sim`: navigation·fleet 설치·벤치 공유 의존). 근거 정정 3건: ① `core_features` "5.5k 예산 초과" → **예산 내**(10k 중 5,583행; M2=3은 13개 기능 공존 앵커 유지 → 총점 불변) ② `control` "600행 4건" → **5건**(SIZE_VERDICTS split 2·accept 3 일치) ③ 외부 시험 소유 28 → **29개**(전역 AST — 시험이 3곳에 분산, M3=2 근거 강화).
+- 증거: 산출 `X:\DevTemp\opencode\round2.py`(파일 단위 AST, splitlines, map 번들 제외) + D-168 스캐너 교차 대조(SIZE_VERDICTS 9행·KNOWN_DIRECTION 3행). `python tools/harness/rosy_harness.py generate` → `python -m pytest test/test_module_scorecard.py test/test_harness_contracts.py test/test_network_topology_contracts.py test/test_module_structure.py -q` = **85 passed** → `lint` = **0 error(s)**(기존 warning baseline).
+- gate 변화: 있음 — ADR Status Proposed→Accepted(로그 색인↔본문 Status 일치 계약 대상), progress SOURCE/LOCAL evidence·cmd·adrs(+D-178) 갱신. 점수 값은 불변이라 산출 규칙 시험은 초록 유지.
+- 결정: 2차 실측이 1차 판정을 그대로 재확인했으므로 기준선 **값은 유지**, 정정은 근거 표기까지만 반영한다. 회차 산출은 .py import만 파싱하므로 navigation의 launch XML 15개(assembly `web_*`)는 파일·라인만 집계 — launch 참조 판정 권위는 D-168 스캐너에 둔다(채점표 §7 한계 기록).
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · merge(docs): origin/main 병합 — ADR 번호 충돌 해소(D-176 복권, 장치 편입은 D-181 이명)
+
+- 변경: `git merge origin/main`(`ebf2516d`, PR #23 19건: D-176 부트 설정·폴백 AP, rosy-diag 2단계, SD 라이터)을 `1d2129af`로 병합했다. 충돌 3건 해소 — ① `docs/reference/ROSY ADR Log.md`: origin의 D-176(카드 `rosy-config.yaml`·폴백 AP, Accepted·pushed·코드 참조 25곳)이 번호를 유지하고, 로컬 장치 편입 ADR은 **D-181로 이명**(1차 후보 D-180은 미병합 `perf/sd-single-verify` 브랜치가 7분 먼저 선점·Accepted·시험 주석 3곳을 확보했으므로 양보). ② `docs/adr/` 파일 개명 `D-176-` → `D-181-device-surface-expansion-conditions.md` + H1 `## D-176` → `## D-181`(색인↔본문 일치). ③ `deploy/logs.md`·`deploy/index.md`: 양쪽 저널 블록을 버리지 않고 모두 보존하고 인덱스는 generate로 재생성. 부수 갱신: `docs/reference/AGENTS.md` 범위 D-181 + D-180 선점 선언, `docs/progress.md` evidence·adrs(D-176 제거·D-181 추가), remediation plan 후속 ADR 표기, `tools/harness/harness.yaml` `adr_gaps`에 D-180 선언(병합 시 제거 조건 명시).
+- 증거: 병합 커밋 `1d2129af`(앞 43·뒤 0). `python -m pytest test/ -q` 전체 회귀(병합 신규 15종 포함) + `rosy_harness.py generate`/`lint` — 아래 게이트 줄에 실측 수치.
+- gate 변화: 없음 — D-181은 Proposed 그대로, 기준선·ADR Status 불변.
+- 결정: 번호 선점 규칙을 "먼저 확정한 쪽이 번호 유지"로 확정 — origin의 Accepted·pushed·코드 참조(25곳) > 로컬 Proposed·미push, 그리고 같은 충돌에서 미병합 브랜치의 선점(22:45 D-180)도 로컬 재번호 후보보다 우선. `test/`의 D-176 참조 19+6곳은 전부 origin 부팅 설정 소유라 손대지 않았다.
+- 교훈: 병합 충돌 해결은 번호뿐 아니라 **세 번째 선점자**를 함께 확인해야 한다 — `git log --all -S"| D-180 |"`로 모든 ref를 뒤지기 전에는 D-180이 이미 다른 브랜치의 Accepted ADR임을 알 수 없었다. 선점이 확인되면 미발견 시점의 편집(5곳)을 한 번에 조정하는 편이 병합 후 재충돌보다 싸다.
+
+## 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host
+
+- 변경: `deploy/robot/core_dev_overlay.py`가 허용 목록만 `/var/lib/rosy-dev`에 풀고, 바인드가 없으면 컨테이너를 다시 만들고 있으면 `rosy-core`만 재시작한다. 성공은 `core/__init__.py` 해시다. 개발 compose는 `name` 없이 프로젝트 `rosy-runtime`이다. `device_readback.py`는 환경 변수·마커·drop-in이 있으면 `device_runtime=HOLD`다. `sync-core-dev.ps1`과 apply/clear 래퍼가 그 모듈만 호출한다. 제품 유닛과 `install-pi.sh`는 그대로다.
+- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py test/test_native_systemd_contract.py -q` 59 passed, 1 skipped (2026-09-23 Windows).
+- gate 변화: 없음. DEVICE는 로봇 실행 증거가 없어 HOLD.
+- 결정: D-179
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-182·D-183·D-184 경계 세 편을 Proposed로 기록
+
+- 변경: 안전 코드의 시뮬 리터럴(D-182), 제품 그래프와 control 단독 감시 표(D-183), 동작 시험의 패키지 소유(D-184)를 Proposed로 추가했다. D-180 공백은 그대로다. 코드와 시험은 옮기지 않았다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 70 passed (2026-09-23 Windows).
+- gate 변화: 없음. G-6과 D-168 P2 예외는 이 기록만으로 바뀌지 않는다.
+- 결정: D-182, D-183, D-184 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(core,control): implement D-182, D-183, and D-184
+
+- 변경: 안전 작동은 `ROSY_SIMULATION_ACTUATION=1`만 본다. 파티션과 도메인 숫자는 `src/sim/gz_sim/config/simulation_actuation.yaml`에만 있다. `watch.py`는 product와 standalone 표를 나누고, 제품 `/cmd_vel` 소유자는 `core`뿐이다. 다른 패키지 동작 시험 30개 경로는 `KNOWN_EXTERNAL_BEHAVIOR_TESTS`로 고정했다. 세 ADR은 Accepted다. D-167 스냅샷과 D-168 P2 예외는 그대로다.
+- 증거: `python -m pytest test/test_policy_sim_literals.py test/test_behavior_test_ownership.py src/apps/control/test/test_watch.py src/core/core/test/test_control_policy_link.py src/core/core/test/test_absorption_output_graph.py -q` 57 passed, 10 skipped (2026-09-24 Windows).
+- gate 변화: 없음. G-7과 DEVICE 판정은 그대로다.
+- 결정: D-182, D-183, D-184 Accepted
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 control 런타임 CPU 절감 순서를 기록(Accepted)
+
+- 변경: rig 계측과 격리 실험의 결과를 D-185 항목 R1–R8로 기록했다. 항목은 `inflate` 캐시, 신선도 구독 depth 1, `EventsExecutor`, rig 환경 가드, `footprint_sweep` 최적화, rig `/clock`, 단일 프로세스 모드, Pi 계측이다. 항목마다 결과 동일(E)과 동작 변경(B)을 구분하고 검증 방식을 정했다. 코드는 바꾸지 않았다.
+- 증거: 2026-09-23 rig 606 s 통과 실행의 프로세스별 CPU(Python 노드 합계 2.16코어). 격리 실험(domain 228)에서 빈 구독 노드는 `SingleThreadedExecutor` 50–58%, `EventsExecutor` 15%, `/clock` 30 Hz 18%. host 측정은 `inflate` 51–128 ms, `footprint_sweep_clearance` 12–31 ms. 설치된 Jazzy rclpy 7.1.11에 `rclpy.experimental.EventsExecutor`가 있음을 import로 확인했다.
+- gate 변화: 없음. 실기 수치는 R8 전까지 HOLD.
+- 결정: D-185 Accepted (사용자 승인 2026-09-24)
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-186 스크립트와 수집 폴더를 Proposed로 계획
+
+- 변경: 스크립트 주인을 `deploy/`, `tools/`, 패키지 `scripts/`, `data/teleop`·`data/drive`로 정하는 D-186과 실행 계획 `docs/plans/2026-09-24-folder-layout.md`를 추가했다. 파일 이동은 하지 않았다. `data/`와 `tools/run_data.py`는 이미 있다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings (2026-09-24 Windows). 파일 이동 시험은 계획 착지 전이라 없다.
+- gate 변화: 없음
+- 결정: D-186 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(layout): D-186 keep scripts and module docs from overlapping
+
+- 변경: `fix.sh`와 `run_fleet_sim.sh`를 `tools/`로 옮겼다. 옛 `src/core/core/deploy` 설치기는 제거했다. control 캘리브레이션 트랙과 `bringup/scripts/rosy_env.sh`는 그 모듈에 남겼다. `progress.md`·`logs.md`·`index.md`는 하네스 모듈 루트만, `data/` 문서는 README만 시험으로 고정했다. D-186은 Accepted다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py src/apps/control/test/test_rig_script_references.py -q` 13 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-186 Accepted
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(layout): point README and reference at the current folders
+
+- 변경: README 구조와 빌드가 `source env.sh`와 `tools/run_fleet_sim.sh`를 가리키게 했다. 루트 `reference/`는 얼린 zip, `docs/reference/`는 살아 있는 계약이라고 양쪽 AGENTS에 적었다. `src/rosy_*`와 `docs/plan/` 안내를 뺐다.
+- 증거: `test/test_folder_layout.py`에 현재 경로 검사를 더했다.
+- gate 변화: 없음
+- 결정: D-186
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs: origin/main 병합 게이트 실측 수치를 별도 항목으로 기록
+
+- 변경: 병합(docs) 항목의 "아래 게이트 줄에 실측 수치" 약속을 본문 고치지 않고 새 항목으로 옮겨 적는다 — HEAD에 들어간 항목의 본문을 고치면 lint가 append-only 위반으로 거부한다.
+- 증거: `python -m pytest test/ -q` 전체 회귀 **1620 passed·0 failed·43 skipped** (2026-09-24 Windows, 병합 신규 15종 포함) + `rosy_harness.py lint` **0 error·21 warning**(기존 baseline). 병합 직후 1회 실행은 병합 전부터 latent였던 스캐너 오탐 1건으로 빨강이었고, `deploy/robot/core_dev_overlay.py` 개명 항목(deploy/logs.md 2026-09-24)으로 해소했다. 중간 1회 실행의 image_pipeline bash 3건 전이 실패는 격리 3 passed·파일 단위 58 passed·전량 재검 초록으로 병합 회귀가 아님이 확인됐다.
+- gate 변화: 없음 — D-181은 Proposed 그대로, 기준선 불변.
+- 결정: 실측 수치는 본문 정정이 아니라 별도 append 항목으로 기록한다.
+- 교훈: 저널 항목의 "아래 게이트 줄에 실측 수치" 같은 내부 약속은 커밋 전에 채워야 한다. 커밋 후에는 새 항목 한 개가 더 든다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R1 구현 메모
+
+- 변경: D-185 R1은 캐시 대신 결과 동일 벡터화로 구현했다는 메모를 ADR에 달았다. 측정은 호출 단위다.
+- 증거: control `logs.md` 2026-09-24 항목.
+- gate 변화: 없음.
+- 결정: D-185 R1
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(data): keep teleop learning clips under data/teleop/learning
+
+- 변경: 루트 `video/`의 텔레옵 학습 영상 7개를 `data/teleop/learning/`으로 옮겼다. 그 폴더만 커밋하고, 텔레옵·주행 세션 기록은 gitignore에 남긴다. D-186에 그 예외를 한 줄 더했다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py -q` 11 passed (2026-09-24 Windows). `git check-ignore`는 세션 경로만 무시하고 학습 영상은 무시하지 않는다.
+- gate 변화: 없음
+- 결정: D-186
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · chore(repo): absorb the parent umbrella into Rosy OS
+
+- 변경: 부모 `Rosy/`의 시뮬 프로브 셸을 `tools/sim/`으로, 통신·결합 보고서와 채점표를 `docs/assessments/`로 들였다. 기계 고정 경로 `/mnt/f/.../Rosy OS`는 스크립트 위치에서 저장소 루트를 계산하게 바꿨다. 안쪽 `Rosy/` 확인 출력은 `data/teleop/probes/`로 옮겼고 git에는 넣지 않는다. archive와 worktree는 부모에 남긴다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_module_scorecard.py -q` 12 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-178 회차 문서의 위치, D-186
+- 교훈: 없음

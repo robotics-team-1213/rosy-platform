@@ -88,6 +88,15 @@ _COMPACT_BLOCK = 256 * 1024
 _YIELD_EVERY = 128
 _YIELD_S = 0.001
 
+#: "이 파일이 아직 그 파일인가"를 (장치, inode)만으로 묻지 않는다. Linux 는
+#: 지운 파일의 inode 번호를 곧바로 새 파일에 다시 준다(ext4·tmpfs) — 지우고
+#: 다시 만든 파일이 같은 신원으로 보인다. 같은 길이로 제자리 저장하는 편집기도
+#: inode·크기를 그대로 둔다. 그래서 파일 **앞**과 이어 붙일 경계 **바로 앞**의
+#: 바이트를 이만큼씩 맞춰 본다 — 락 안에서 읽는 것은 합해 두 배 이하다.
+#: 남는 틈: 그 두 구간 사이만 같은 길이로 고친 제자리 편집은 여전히 못 잡는다.
+#: 막으려면 락 안에서 파일 전체를 읽어야 하고, 그것은 이 설계가 피한 비용이다.
+_FINGERPRINT_BYTES = 4096
+
 
 def _yield_gil() -> None:
     """GIL 을 기다리는 스레드(= `record()` 를 부른 스레드)에 차례를 준다."""
@@ -99,14 +108,8 @@ def _lines_forward(handle: BinaryIO, size: int) -> Iterator[bytes]:
 
     개행 하나로만 나눈다(JSON Lines). `bytes.splitlines()` 를 쓰지 않는다 —
     그것은 홀로 있는 캐리지리턴에서도 자른다. 그러면 한 줄이었던 기록이 두
-    줄로 보여 둘 다 깨진 JSON 이 되고, 조회에서 사라진 뒤 다음 정리에
-    격리된다.
-
-    (`str.splitlines()` 는 여기에 세로탭·폼피드·파일/그룹/레코드 구분자와
-    U+2028·U+2029·U+0085 까지 더한다. 그래서 조회도 str 이 아니라 개행
-    바이트로 나눈다(`_lines_backward`). 그 목록을 짧게 적어 두었더니
-    세로탭·폼피드가 빠졌고, 하필 그 둘이 자르는 순서를 검사할 수 있는 유일한
-    바이트였다.)
+    줄로 보여 둘 다 깨진 JSON 이 되고, 다음 정리에 격리된다. `str.splitlines()`
+    는 세로탭·폼피드·U+2028 등에서도 자르므로 조회도 바이트로 나눈다.
 
     마지막 개행 뒤는 줄이 아니다. 조각마다 GIL 을 내어 준다.
     """
@@ -213,6 +216,17 @@ class FileAuditLog:
         #: 거른 이유는 실패 사유 칸에 적지 않는다. 그러면 prune_failures 를
         #: 보고 온 운영자가 다른 채널의 이야기를 읽게 된다.
         self._last_skip_reason: Optional[str] = None
+        #: 바꿔 끼우기 뒤 디렉터리 fsync 실패. 정리 실패가 아니다 — 정전이 이름
+        #: 바꾸기를 되돌려도 옛 파일이 남을 뿐 잃는 것은 없다.
+        self._dir_sync_failures = 0
+        self._last_dir_sync_error: Optional[str] = None
+        #: 이미 격리한 줄 (본 파일 신원, {(오프셋, 바이트)}, 격리 파일의
+        #: (dev, ino, 우리가 쓴 끝 오프셋, 마지막으로 쓴 바이트)), 작업 스레드 전용.
+        #: 바꿔 끼우기가 실패한 뒤의 재시도가 같은 증거를 두 벌 남기지 않게 한다.
+        #: 격리 파일이 그 사이 지워지거나 바뀌거나 줄었으면 믿지 않고 다시
+        #: 격리한다 — 틀려도 중복 쪽으로 틀린다.
+        self._quarantined: Optional[tuple[
+            tuple[int, int], set[tuple[int, bytes]], tuple[int, int, int, bytes]]] = None
         #: 정리 작업 스레드. `None` 이면 요청도 진행 중인 정리도 없다 — 스레드는
         #: 할 일이 없으면 이 칸을 **락 안에서** 비우고 끝난다. 그래서 정리는
         #: 구조적으로 한 번에 하나이고(스레드가 하나뿐이다), 한 시간 내내 잠든
@@ -248,10 +262,12 @@ class FileAuditLog:
                 "prune_failures": self._prune_failures,
                 "prune_skipped": self._prune_skipped,
                 "serialize_failures": self._serialize_failures,
+                "dir_sync_failures": self._dir_sync_failures,
                 "last_skip_reason": self._last_skip_reason,
                 "last_write_error": self._last_write_error,
                 "last_prune_error": self._last_prune_error,
                 "last_serialize_error": self._last_serialize_error,
+                "last_dir_sync_error": self._last_dir_sync_error,
             }
 
     def settle(self, timeout: Optional[float] = 10.0) -> bool:
@@ -304,12 +320,8 @@ class FileAuditLog:
                 self._note_write_failure(f"{type(error).__name__}: {error}")
                 # 실패한 쓰기는 꼬리에 대해 아무것도 말해 주지 않는다. 부분
                 # 기록일 수도, 아무것도 안 나갔을 수도 있다. 다음 기록이 다시
-                # 확인하게 둔다.
-                #
-                # 실패가 이어지는 동안은 **기록마다** 다시 확인한다. ENOSPC 는
-                # open 을 통과하고 close 에서 나므로 캐시가 매번 여기로 온다.
-                # 한 줄 크기의 메타데이터 읽기이고, 그 사이 감사 기록은 이미
-                # 멈춰 있다 — 성공하는 경로에는 아무 비용도 없다.
+                # 확인하게 둔다(실패가 이어지는 동안은 기록마다 — ENOSPC 는
+                # close 에서 난다 — 성공하는 경로에는 비용이 없다).
                 self._tail_is_terminated = None
                 return
             self._write_failures = 0
@@ -323,7 +335,15 @@ class FileAuditLog:
                 # 하나도 여기서 하지 않는다.
                 self._worker = threading.Thread(
                     target=self._compaction_worker, name="audit-compactor", daemon=True)
-                self._worker.start()
+                try:
+                    self._worker.start()
+                except RuntimeError as error:
+                    # "can't start new thread". 던지면 무던짐 약속이 깨지고, 칸을
+                    # 그대로 두면 시작도 안 한 스레드가 정리를 영영 막는다.
+                    self._worker = None
+                    self._compaction_requested = False
+                    self._prune_failures += 1
+                    self._last_prune_error = f"worker start: {type(error).__name__}: {error}"
 
     @staticmethod
     def _serialize(event: EventMessage) -> tuple[Optional[str], Optional[str]]:
@@ -424,10 +444,8 @@ class FileAuditLog:
         if limit < 1:
             return []
         cutoff = self._now() - timedelta(days=self._retention_days)
-        # 여는 것만 락 안에서 한다. 정리의 `os.replace` 도 락 안이므로 둘이
-        # 겹치지 않는다 — Windows 에서 바꿔 끼우는 도중의 파일을 열면
-        # `PermissionError` 이고, 그것은 `/logs/audit` 의 500 이다. 열기와 크기
-        # 재기는 수 µs 이고, 읽기·파싱은 락 밖이다.
+        # 여는 것만 락 안에서 한다 — 정리의 `os.replace` 와 겹치면 Windows 에서
+        # `PermissionError`, 곧 `/logs/audit` 의 500 이다.
         with self._lock:
             try:
                 handle = self._path.open("rb")
@@ -519,8 +537,9 @@ class FileAuditLog:
         * JSON 으로 읽히고 문자열 `ts` 가 있으면, 그 `ts` 로 보존 규칙을 따른다 —
           보존 기간 안이면 원본 그대로 남기고, 지났으면 다른 기록처럼 덜어낸다.
         * 그렇지 않으면(잘린 꼬리, 깨진 바이트) 원본 바이트를 그대로
-          `<파일>.quarantine` 에 덧붙이고 본 파일에서 뺀다. 격리 파일은 정리하지
-          않는다 — 손상은 드물고, 그 바이트가 사고 조사의 증거일 수 있다.
+          `<파일>.quarantine` 에 덧붙이고(fsync, 락 밖, 바꿔 끼우기 전) 본 파일에서
+          뺀다. 격리 파일은 정리하지 않는다 — 그 바이트가 사고 조사의 증거일 수
+          있다. 재시도가 같은 줄을 두 번 격리하지는 않는다(`_quarantined`).
 
         빈 줄은 기록이 아니므로 그냥 덜어낸다.
         """
@@ -533,7 +552,12 @@ class FileAuditLog:
         # 있으면 Windows 에서는 그동안 누구도 이 파일을 지우거나 바꿔 끼우지
         # 못한다. 읽기 시스템 호출은 GIL 을 놓는다.
         with handle:
-            snapshot = io.BytesIO(handle.read(size))
+            data = handle.read(size)
+        snapshot = io.BytesIO(data)
+        # 앞과 끝을 모두 본다. 끝만 보면 같은 inode 위에서 앞부분만 제자리
+        # 편집된 파일(같은 길이로 저장하는 편집기)을 놓치고, 그 편집을 우리
+        # 옛 스냅샷이 조용히 되돌린다.
+        fingerprint = (data[:_FINGERPRINT_BYTES], data[-_FINGERPRINT_BYTES:])
         tmp = self._path.with_name(self._path.name + ".tmp")
         try:
             dropped, quarantined = self._classify(snapshot, size)
@@ -556,8 +580,27 @@ class FileAuditLog:
                         out.write(raw.strip() + b"\n")
                 out.flush()
                 os.fsync(out.fileno())
+            # 본 파일에서 빼기 **전에**, 락 **밖에서** 격리 파일에 내려 둔다.
+            # 격리할 줄은 락 없이 읽은 스냅샷 범위에서 나왔다. 락 안의 fsync 는
+            # SD 카드에서 수~수십 ms 이고, 그동안 `record()` 가 기다린다.
+            done = self._already_quarantined(identity)
+            fresh = [item for item in quarantined if item not in done]
+            if fresh:
+                payload = b"".join(line + b"\n" for _, line in fresh)
+                with self.quarantine_path.open("ab") as sink:
+                    sink.write(payload)
+                    sink.flush()
+                    # 우리가 쓴 끝. `fstat` 의 크기는 그 사이 남이 덧붙인
+                    # 바이트까지 포함할 수 있고, 그러면 아래 지문이 남의
+                    # 바이트를 가리킨다.
+                    end = sink.tell()
+                    os.fsync(sink.fileno())
+                    info = os.fstat(sink.fileno())
+                self._quarantined = (identity, done | set(fresh),
+                                     (info.st_dev, info.st_ino, end,
+                                      payload[-_FINGERPRINT_BYTES:]))
             with self._lock:
-                tail = self._tail_after_locked(size, identity)
+                tail = self._tail_after_locked(size, identity, fingerprint)
                 if tail is None:
                     # 실패가 아니라 전제가 깨진 것이다. 그래도 세어 둔다 — 조용히
                     # 넘기면 파일을 계속 자르는 외부 도구 하나가 정리를 영원한
@@ -566,14 +609,6 @@ class FileAuditLog:
                     self._last_skip_reason = "the file is no longer the one we read"
                     tmp.unlink(missing_ok=True)
                     return
-                if quarantined:
-                    # 본 파일에서 빼기 **전에** 격리 파일에 내려 둔다. 바꿔 끼우기가
-                    # 실패하면 다음 정리에서 같은 줄이 한 번 더 격리되지만, 순서가
-                    # 거꾸로면 그 사이의 정전이 그 바이트를 영영 지운다.
-                    with self.quarantine_path.open("ab") as sink:
-                        sink.write(b"\n".join(quarantined) + b"\n")
-                        sink.flush()
-                        os.fsync(sink.fileno())
                 # 꼬리는 fsync 하지 않는다. 그것은 스냅샷 뒤에 덧붙은 몇 줄이고,
                 # 덧붙이기는 원래 fsync 하지 않는다(모듈 설명). 30 일치 앞부분은
                 # 위에서 락 밖에서 이미 디스크에 내렸다 — 락 안의 fsync 는 SD
@@ -585,13 +620,40 @@ class FileAuditLog:
                 # 자며 다시 시도하지 않는다. 재시도는 한 시간 뒤 다음 정리 시각이
                 # 한다. 그 사이 원본은 그대로 남아 있으므로 잃는 것은 없다.
                 os.replace(tmp, self._path)
+                self._quarantined = None    # 그 줄들은 이제 본 파일에 없다
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
-        _fsync_directory(self._path.parent)
+        try:
+            _fsync_directory(self._path.parent)
+        except OSError as error:
+            with self._lock:
+                self._dir_sync_failures += 1
+                self._last_dir_sync_error = f"{type(error).__name__}: {error}"
 
-    def _classify(self, handle: BinaryIO, size: int) -> tuple[set[int], list[bytes]]:
-        """(본 파일에서 뺄 줄 번호, 그중 격리할 원본 바이트).
+    def _already_quarantined(self, identity: tuple) -> set[tuple[int, bytes]]:
+        """이 본 파일에서 격리했고 **지금도 격리 파일에 있는** 줄. 모르면 빈 집합."""
+        if self._quarantined is None or self._quarantined[0] != identity:
+            return set()
+        dev, ino, size, last = self._quarantined[2]
+        try:
+            with self.quarantine_path.open("rb") as handle:
+                info = os.fstat(handle.fileno())
+                if (info.st_dev, info.st_ino) != (dev, ino) or info.st_size < size:
+                    return set()
+                # 지우고 다시 만든 격리 파일은 inode 번호를 물려받을 수 있다
+                # (`_FINGERPRINT_BYTES`). 우리가 마지막으로 쓴 바이트가 그
+                # 자리에 그대로 있을 때만 믿는다.
+                handle.seek(size - len(last))
+                if handle.read(len(last)) != last:
+                    return set()
+        except OSError:
+            return set()
+        return self._quarantined[1]
+
+    def _classify(self, handle: BinaryIO,
+                  size: int) -> tuple[set[int], list[tuple[int, bytes]]]:
+        """(본 파일에서 뺄 줄 번호, 그중 격리할 (오프셋, 원본 바이트)).
 
         **줄을 바이트로 다룬다** — 디코드해서 자르고 다시 인코드하면
         `errors="replace"` 가 바꿔 놓은 바이트가 그대로 디스크에 쓰여, "원본 줄을
@@ -599,10 +661,12 @@ class FileAuditLog:
         """
         cutoff = self._now() - timedelta(days=self._retention_days)
         dropped: set[int] = set()
-        quarantined: list[bytes] = []
+        quarantined: list[tuple[int, bytes]] = []
+        offset = 0
         for index, raw in enumerate(_lines_forward(handle, size)):
             if index % _YIELD_EVERY == 0:
                 _yield_gil()
+            start, offset = offset, offset + len(raw) + 1
             stripped = raw.strip()
             if not stripped:
                 # 빈 줄은 기록이 아니다. 빼지 않으면 파일이 사는 내내 남는다.
@@ -615,7 +679,7 @@ class FileAuditLog:
                 ts = self._recover_ts(stripped)
                 if ts is None:
                     dropped.add(index)
-                    quarantined.append(stripped)
+                    quarantined.append((start, stripped))
                     continue
             if not self._is_fresh(ts, cutoff):
                 dropped.add(index)
@@ -631,18 +695,15 @@ class FileAuditLog:
         ts = obj.get("ts") if isinstance(obj, dict) else None
         return ts if isinstance(ts, str) else None
 
-    def _tail_after_locked(self, offset: int,
-                           identity: Optional[tuple]) -> Optional[bytes]:
+    def _tail_after_locked(self, offset: int, identity: Optional[tuple],
+                           fingerprint: tuple[bytes, bytes]) -> Optional[bytes]:
         """스냅샷 이후에 덧붙은 바이트. 이어 붙일 수 없으면 `None`.
 
         이 자리가 성립하는 근거는 "그 사이 이 파일에는 덧붙이기만 일어난다"
         (D-1: 쓰는 것은 한 프로세스, 그리고 정리는 작업 스레드 하나가 한다)
         이다. 근거가 깨졌다면 우리가 든 스냅샷은 더 이상 이 파일의 앞부분이
         아니고, 그대로 이어 붙이면 남의 내용에 우리 옛 스냅샷을 덮어쓴다.
-
-        **크기로만 묻지 않는다.** 크기는 줄어든 것만 잡는다 — 같은 길이거나 더
-        긴 것으로 갈아 끼워지면 통과하고, 우리는 남의 파일 한가운데에 이어
-        붙인다. 신원(`st_dev`, `st_ino`)을 함께 본다.
+        그래서 크기만이 아니라 신원도 본다(`_open_snapshot_locked`).
 
         검사와 읽기는 **같은 핸들** 위에서 한다. `stat()` 으로 묻고 나서 따로
         여는 것은 그 사이에 갈아 끼워질 수 있다는 뜻이다.
@@ -655,6 +716,18 @@ class FileAuditLog:
                 return None
             if info.st_size < offset:
                 return None
+            # 신원이 같아도 inode 번호를 물려받은 다른 파일이거나 제자리 편집된
+            # 파일일 수 있다(`_FINGERPRINT_BYTES`). 앞과 경계 바로 앞이 우리가
+            # 읽은 그대로인지 본다. 락 안에서 읽는 것은 합해 8 KiB 이하다.
+            head, boundary = fingerprint
+            if head:
+                handle.seek(0)
+                if handle.read(len(head)) != head:
+                    return None
+            if boundary:
+                handle.seek(offset - len(boundary))
+                if handle.read(len(boundary)) != boundary:
+                    return None
             handle.seek(offset)
             return handle.read()
 

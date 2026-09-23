@@ -50,11 +50,11 @@ class OutputGraphTests(unittest.TestCase):
         self.exercise(.1, True, None, (0., 0.), control_tracking=True, angular=0.)
 
     def test_calibrated_swept_candidate_reaches_simulation_motor_topic(self):
-        with patch.dict('os.environ', {'ROS_DOMAIN_ID': '227', 'GZ_PARTITION': 'pinky_calmap227'}):
+        with patch.dict('os.environ', {'ROSY_SIMULATION_ACTUATION': '1'}):
             self.exercise(.01, True, None, (-.0125, 0.), control_actuation=True, angular=0.)
 
     def test_bounded_arc_reaches_motor_topic_without_full_spin_permission(self):
-        with patch.dict('os.environ', {'ROS_DOMAIN_ID': '227', 'GZ_PARTITION': 'pinky_calmap227'}):
+        with patch.dict('os.environ', {'ROSY_SIMULATION_ACTUATION': '1'}):
             self.exercise(.005, True, None, (-.005, .05), control_actuation=True, angular=.05)
 
     def exercise(self, linear, required, provider, expected, control_obstacle=False,

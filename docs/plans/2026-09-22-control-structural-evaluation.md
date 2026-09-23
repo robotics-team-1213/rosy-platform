@@ -121,8 +121,9 @@ pytest가 import할 수 없다. 그 모듈 안의 판단은 09-06 C1의 정의 �
 - **트랙 2**
   - 파일마다 추출 대상 판단에 실제 값 host 시험이 생긴다.
   - 그 판단을 AST로 떼어 돌리던 시험은 새 모듈을 직접 import하도록 바꾼다.
-  - `calibration/ready`에 닿는 변경은 rig 기본 시나리오(`RIG_COMPONENT=all`과 분리 모드)와
-    비상정지 음성 사례를 ROS-SIM에서 통과해야 병합한다.
+  - `calibration/ready`에 닿는 변경은 D-171 (d)(2026-09-23 개정)를 따른다. 분리 모드 기본 시나리오는
+    `ready`, 비상정지 음성 사례는 `failed`여야 하고, 한 프로세스 모드는 기준본과 결과가 같아야 한다.
+    rig는 ext4 복사본에서 돌린다(§8).
 - **트랙 3:** 분리 설계 문서 §6의 2~5단계를 따른다.
 
 ## 7. 재현
@@ -131,3 +132,124 @@ pytest가 import할 수 없다. 그 모듈 안의 판단은 09-06 C1의 정의 �
 시험 파일의 import와 소스 경로 참조를 셌다. 누출 목록은 `test/test_control_ros_edge.py`가 매 실행마다
 다시 도출해 기준선과 대조한다. 판단 수 같은 나머지 수치는 이 문서 작성 시점의 일회성 측정이다.
 다시 잴 때는 §2의 정의를 그대로 쓴다.
+
+## 8. 첫 적용에서 드러난 것 (2026-09-23)
+
+트랙 1의 첫 모듈 `calibration_atomic`을 D-171 규칙 (d)로 검증하면서 세 가지가 드러났다.
+
+- **교정 ROS-SIM 경로가 끊어져 있었다.** `run_calibration_spaces.py`가 실행하는
+  `tools/gz/run_track260905.sh`는 흡수 때 빠져서, 보관된 옛 Rosy Control 저장소에만 있었다. 이 스크립트를
+  live 경로(`rosy_control/`을 `control/`로)에 맞춰 이식했다. 한 프로세스 모드(`RIG_SINGLE_PROCESS=1`)와
+  비상정지 음성 사례(`RIG_ESTOP_PROBE=1`, `rig_estop_probe.py`)도 추가했다.
+  `src/apps/control/test/test_rig_script_references.py`는 rig가 없는 스크립트를 참조하면 적색이 된다.
+- **rig는 ext4에서 돌린다.** WSL `/mnt/f`(Windows 파일 시스템)에서 돌린 첫 실행은 시험 주행 시작 시
+  오도메트리 나이 0.22 s(허용 0.2 s)로 실패했다. 같은 코드를 `/tmp` 복사본에서 돌리면 통과한다.
+  `/mnt/f`에서는 기준본을 돌리지 않았으므로 원인을 파일 시스템 지연으로 확정하지는 않는다.
+- **미해결 — 한 프로세스 모드 결함.** `RIG_COMPONENT=all`은 노드 7개를 `SingleThreadedExecutor` 하나에
+  싣는다. 이 모드에서는 시험 주행 도중 안전 게이트 출력이 신선도 창(0.25 s)을 벗어나 교정이
+  "Fresh final safety command evidence required"로 `failed`가 된다. 기준본(HEAD)과 후보본이 같은
+  메시지로 실패하므로 기존 결함이다. 분리 모드에서는 기준본과 후보본 모두 이 메시지가 0회였다.
+  D-171 규칙 (d)는 이 모드에 대해 A/B 동등만 요구하도록 개정했다.
+
+| 검증 (`calibration_atomic`, rig 기본 시나리오, ext4) | 기준본(HEAD `10ceb53`) | 후보본 |
+|---|---|---|
+| 분리 모드 | `ready` (sim 179.5 s) | `ready` (sim 180.0 s) |
+| 비상정지 음성 | — | `failed` "Emergency stop engaged" (`validating_motion`에서 누름) |
+| 한 프로세스 모드 | `failed` 게이트 신선도 (sim 19.0 s) | `failed` 같은 메시지 (sim 28.5 s) |
+| `/cmd_vel` 발행자 | `safety_node` | `safety_node` |
+
+### 8.1 교정 묶음 (2026-09-23): `calibration_rotation`·`calibration_relocation`
+
+main `e8b2976` 대비 브랜치 `refactor/d171-track1`. 두 트리는 교정 파일 3개만 다르고 rig는 같다.
+
+| 검증 | main | 브랜치 |
+|---|---|---|
+| 분리 모드 | `ready` (sim 179.9 s) | `ready` (sim 179.8 s) |
+| 비상정지 음성 | — | `failed` "Emergency stop engaged" (`validating_motion`에서 누름) |
+| 한 프로세스 모드 4회 | 게이트 신선도 실패 3, 지도 TF 재획득 초과 1 | 게이트 신선도 실패 3, 지도 TF 재획득 초과 1 |
+
+한 프로세스 모드는 한 번 돌리면 실패 이유가 달라 보일 수 있다. 첫 비교에서 main은 게이트 신선도, 브랜치는
+지도 TF로 실패했다. 그래서 A/B 동등은 반복 실행의 분포로 판정한다.
+
+**한 프로세스 모드 원인 가설 두 개는 기각됐다.** (A) `time.monotonic()`을 교정 노드 시계로 맞추기,
+(B) `MultiThreadedExecutor`. 둘 다 패치하지 않은 main보다 나빴다. 교정이 시뮬 180 s 내내 `collecting`에
+머물렀다. 원인은 아직 모른다.
+
+### 8.2 트랙 1 코드 보류 — rig가 이 크기의 차이를 판정하지 못한다 (2026-09-23)
+
+`goal_escape`와 안전 모듈 6개(`safety.scale`·`evidence`·`gate`·`obstacles`·`hazard`·`bumper`)는 모두 host
+시험을 통과했다. 치환은 원본과 한 줄씩 대응했고, 모듈마다 변이 시험도 거쳤다. rig 분리 모드에서는 교정
+실패가 간헐적으로 나왔다. 실패 메시지는 셋 중 하나였다.
+- "Fresh final safety command evidence required"
+- 회전 여유 판정의 `missing_scan`
+- 회전 여유 판정의 `stale_scan`
+
+분리 모드, 계측 없이 트리별로 잰 결과는 이렇다. 각 트리는 앞 트리의 변경을 모두 포함한다.
+
+| 트리 | 실패 / 전체 |
+|---|---|
+| main (`e8b2976`–`dff6ba7`) | 0 / 약 12 |
+| `goal_escape` + `scale` (옛 main 위) 및 그 위의 `evidence` 부분 적용 변이 4개 | 0 / 9 |
+| `goal_escape` + `scale` (최신 main `dff6ba7` 위) | 1 / 2 |
+| + `evidence` | 2 / 5 |
+| + `gate` | 3 / 5 |
+| + `obstacles` | 2 / 5 |
+| + `hazard` | 0 / 5 |
+| + `bumper` (묶음 전체) | 5 / 13 |
+| 묶음 전체에서 `evidence.py`만 되돌림 | 1 / 5 |
+
+**확인한 것**
+- 한 번씩만 돌린 이분 탐색은 `evidence`를 단독 원인으로 지목했지만 틀렸다. `evidence.py`를 되돌려도 실패가
+  남는다. 가장 작은 조합(`goal_escape` + `scale`)도 최신 main 위에서 실패했다.
+- 모듈 하나로 설명되지 않는다. 누적 트리인데도 `hazard`까지 적용한 트리는 5/5 통과했다.
+- `tools/gz/rig_decision_probe.py`(`RIG_DECISION_PROBE=1`)로 `/safety/decision`을 재 보면, 실패한 실행에서도
+  결정이 제때 도착한다. 최대 간격은 0.07–0.10 s이고, 나이가 교정 창(-0.1–0.25 s) 안에 있으며, 필드
+  누락도 없다. 교정 노드의 코드는 main과 같다.
+- 교정 노드에 거부 사유를 찍는 계측을 넣으면 실패가 재현되지 않는다(0/9). 표준 오류 출력이 타이밍을
+  바꾸는 것으로 보인다.
+
+**결론.** 이 rig는 분리 모드에서도 원인 모를 간헐 실패를 낸다. 트리 사이 실패율 차이는 20–35%대인데,
+트리당 5회로는 그 차이를 코드 탓인지 우연인지 가를 수 없다. 따라서 D-171 규칙 (d)의 A/B는 현재 판정력이
+없다.
+
+**결정 (사용자 승인 2026-09-23).**
+- 제품 동작을 바꾸지 않는 rig 도구만 병합한다.
+  - 비상정지 음성 사례는 실패 **이유**가 비상정지여야 통과한다. 이전에는 이유가 다른 실패도 통과로 쳤다.
+  - 결정 탐침을 추가한다.
+- 트랙 1 코드는 병합하지 않는다. `goal_escape`, 안전 6개, `evidence.py` 되돌림을 포함한 전부를 브랜치
+  `refactor/d171-track1`에 보류하고, `KNOWN_ROS_LEAKS`는 main 그대로다.
+- 트랙 1을 재개하기 전에 rig 간헐 실패의 원인부터 찾는다. 그래야 A/B가 다시 판정력을 갖는다.
+
+**판정 방식.** 단일 실행으로 A/B를 판정하지 않는다. 분리 모드도 반복 실행 분포로 본다. 기준본(main)도
+같은 시간대에 같은 횟수로 돌린다.
+
+### 8.3 rig 간헐 실패의 원인과 회전 단계 수정 (2026-09-23)
+
+§8.2의 판단 가운데 "트랙 1 코드가 의심된다"는 틀렸다. 같은 시간대에 교차 실행하자 main도 같은 비율로 실패했다(main 3/4, 브랜치 끝 2/4). 과거의 main 0/12는 박스가 비어 있던 시간대의 결과였다. 원인은 두 갈래다.
+
+| 갈래 | 단계 | 메커니즘 | 상태 |
+|---|---|---|---|
+| A | 회전 검증 | `record_rotation_endpoint`의 `match_motion`이 tick 안에서 0.3–0.6 s 동안 executor를 막는다. 입력이 큐에 쌓이고 sim 시계가 멈췄다가 점프하면서 0.25 s 신선도 검사가 한 번에 실패한다. | 수정(`fix/calibration-freshness-hold`) |
+| B | translation·초기 | calibration 프로세스 안의 decision 큐 대기. 부하 20 이상(피어 세션 Gazebo, 8코어)에서만 관찰됐다. 전송과 safety 스탬프는 정상이다(탐침 age 0.04 s 이내, 발행 직전 `issued_s`). | 미해결 |
+
+**측정 방법.** 모든 컴포넌트 프로세스의 콜백을 메모리 계수기로 감쌌다. stall 중 스택은 10 ms 간격으로 샘플링했다. 그 밖에 GC 일시정지, decision 발행에서 처리까지의 벽시계 체류 시간, `finish` 호출 스택, 대기 거절 사유를 기록했다. 모두 ext4 rig 사본에만 넣었고 제품 코드는 바꾸지 않았다. stderr 출력은 쓰지 않았다(§8.2의 0/9는 그 때문이다).
+
+**수정(갈래 A).** 정지 중 신선도 공백은 최대 1 s 동안 0 명령으로 대기한다. 끝점 등록 뒤에는 새 decision과 새 scan이 각각 0.1 s 이상의 신선도를 남기고 들어와야 다음 구간을 시작한다. 움직이는 trial, e-stop, hazard는 이전처럼 즉시 실패한다. 같은 시간대 교차 실행 결과는 기준 2/5(회전 실패 3), 수정 5/5이고, 최종본은 11회 연속 통과했다.
+
+**남은 것.**
+- 갈래 B
+- `pause_rotation_scan`도 `latest('odom')`에 기대는 같은 약점이 있다
+- Pi에서 `match_motion` 소요 시간
+- 대기 중 새 odom이 계속 invalid이면 odom 쪽 정지 확인은 형식적이다. IMU yaw 검사와 대기 해제 뒤 trial의 이동 한계(8 mm, 3°)가 남지만, 2–8 mm 병진은 놓칠 수 있다. 안전 문제는 아니고 교정 정확도 문제다.
+- 장벽의 0.1 s 여유는 휴리스틱이다. 같은 실패가 다시 보이면 다음 단계는 해제 뒤 신선한 tick 두 번을 더 기다리는 것이다.
+
+D-171 트랙 1의 rig A/B는 갈래 A가 병합되면 회전 단계에서 판정력을 되찾는다. translation 단계 판정은 부하가 낮은 시간대에 하거나 갈래 B를 해결한 뒤에 한다.
+
+### 8.4 translation 단계 실패(class B)의 두 층 (2026-09-23)
+
+trial 명령 확인 왕복을 세 구간(calibration → safety → decision 발행 → calibration)으로 재 보면 최대 0.106 s(sim)로 0.2 s 예산 안이었다. 실패는 게이트 decision의 **수신 지연**에서 났다.
+
+1. **자체 포화.** calibration CPU의 75%가 `/scan` 콜백(`wall_tracker`)이었다. 부하 28에서 scan 한 건에 평균 130 ms가 걸렸고, 받은 CPU(1코어의 27–48%)가 수요 이하로 떨어져 decision 체류가 18 ms에서 324 ms까지 늘었다. 그 순간 시뮬 속도가 0.64배로 올라 0.25 s 창을 넘었다. `wall_tracker._fit`을 비트 단위로 같게 벡터화해 scan당 비용을 4배 줄였다(rig 부하 약 28에서 47.6 ms).
+2. **환경 공백.** 최적화본도 부하 약 30에서 한 번 실패했다. calibration이 바쁘지 않았는데도(긴 콜백·바쁜 창 없음) 약 340 ms 동안 decision을 하나도 처리하지 못했다. 8코어에 약 3.7배 초과 할당된 박스의 OS 스케줄링 공백이다. 코드로는 고칠 수 없다.
+
+**판정 규칙.** 부하 25 이상에서 난 rig 실패는 코드 A/B의 근거로 쓰지 않는다. 그런 시간대에는 rig 환경 가드(과부하 실행을 '환경 무효'로 표시)가 필요하다. 가드는 아직 구현하지 않았다.

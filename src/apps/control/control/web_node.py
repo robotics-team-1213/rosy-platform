@@ -8,8 +8,8 @@ by test/test_control_launch_boundary.py. The operator console is CORE
 
     ros2 run control web_node
     ros2 launch control web.launch.py
-    frontend  http://localhost:28161   (port param — the page)
-    backend   http://localhost:28162   (backend_port — the API; see web_http.py)
+    frontend  http://localhost:28181   (port param — the page)
+    backend   http://localhost:28182   (backend_port — the API; see web_http.py)
 
 No decision logic here — a view + relay, like goal_node is thin I/O over
 planning. This module owns ROS wiring only; the ROS-free parts live beside it
@@ -100,8 +100,8 @@ def sensor_cb(key):
 class WebNode(Node):
     def __init__(self):
         super().__init__('web_node')
-        self.declare_parameter('port', 28161)
-        self.declare_parameter('backend_port', 28162)
+        self.declare_parameter('port', 28181)
+        self.declare_parameter('backend_port', 28182)
         self.declare_parameter('battery_topic', 'battery_state')
         self.battery_stamp_ns = None
         self.create_subscription(BatteryState, str(self.get_parameter('battery_topic').value), self.on_battery, qos_profile_sensor_data)

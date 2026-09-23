@@ -23,7 +23,7 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)"
   FIELD:
     state: PARKED
-adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168]
+adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183]
 plans:
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-12-rosy-control-absorption-plan.md
@@ -131,3 +131,24 @@ plans:
 - red에서는 완전 정지와 dwell/대기, green에서는 제한 속도 재출발, stale evidence에서는 `HOLD` zero command를 확인했다.
 - 관제는 상태·사유·scene/policy revision을 읽고 stage 후 정지 상태에서만 apply한다. tuning과 simulation signal은 안전 경계를 우회하지 못한다.
 - 이 결과는 HOST simulation PASS다. 실제 Gazebo camera graph와 Pinky Pro 카메라·모터·제동거리는 ROS-SIM/DEVICE/FIELD HOLD다.
+
+## 2026-09-23 calibration rotation freshness hold
+
+- 회전 검증이 자기 끝점 계산(`match_motion`, rig 0.3–0.6 s)으로 executor를 막아 스스로 입력을 낡게 만들던 결함을 고쳤다. 정지 중에는 최대 1 s 동안 0을 유지하며 대기하고, 끝점 등록 뒤에는 새 증거가 충분히 신선할 때까지 다음 구간을 시작하지 않는다.
+- rig 분리 모드의 간헐 실패 중 회전 단계 몫은 교차 실행에서 사라졌다(기준 2/5, 수정 5/5, 최종본 11회 연속 통과). translation 단계 실패(부하 20 이상에서 decision 큐 대기)는 별도 과제로 남는다.
+- 실기 영향: Pi에서 `match_motion` 소요 시간은 미측정이다. 0.25 s 창과 `dt <= 0.5` 검사에 걸리는지 DEVICE 단계에서 확인해야 한다. SOURCE/ROS-SIM 근거이고 DEVICE/FIELD는 HOLD.
+
+## 2026-09-23 calibration wall tracker cost
+
+- 직진 교정용 벽 추적(`wall_tracker._fit`)을 결과가 비트 단위로 같게 벡터화했다. scan당 27 ms에서 7 ms로 줄었다. 부하가 높은 rig에서 calibration 노드가 스스로 포화하던 원인(class B의 첫 층)이 줄었다.
+- 남은 class B는 박스 초과 할당(부하 25–30 이상)에 따른 OS 스케줄링 공백이다. 코드 결함이 아니다. rig 판정은 부하가 낮은 시간대에 하거나 환경 가드를 둔다.
+- 실기: Pi에서 scan 콜백 시간과 10 Hz 주기 대비 점유율은 DEVICE 단계에서 확인한다.
+
+## 2026-09-24 planning map inflation cost (D-185 R1)
+
+- 경로 안전에 쓰는 지도 부풀리기(`OccupancyMap.inflate`)를 결과가 셀 단위로 같게 벡터화했다. 호출당 비용이 6–8배 줄었다(host). goal·wander의 계획 tick이 가벼워진다.
+- 실기: Pi에서의 goal tick 비용은 D-185 R8에서 확인한다.
+
+## 2026-09-24 calibration late-scan hold
+
+- 회전 검증에서 늦게 도착한 scan을 "없음"이 아니라 "늦음"으로 판정한다. 정지 중에는 기존 1 s 대기로 넘기고, 구조가 잘못된 scan은 여전히 즉시 실패한다. rig에서 본 회전 단계 잔여 실패 경로를 닫았다.

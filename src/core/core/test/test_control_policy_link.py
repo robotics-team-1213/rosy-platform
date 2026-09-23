@@ -193,8 +193,7 @@ def test_tracking_source_delay_and_missing_updates_stop_core(linked):
 def simulation_actuation(linked, monkeypatch):
     from control.control.actuation import SimulationActuation
     command, safety, modes, policy, snapshot = linked
-    monkeypatch.setenv('ROS_DOMAIN_ID', '227')
-    monkeypatch.setenv('GZ_PARTITION', 'pinky_calmap227')
+    monkeypatch.setenv('ROSY_SIMULATION_ACTUATION', '1')
     calibration = SimulationActuation(revision=policy.revision, observed_at=10., expires_at=10.2,
         linear_gains=(1.25, .75), angular_gains=(1., 1.), linear_sign=-1.,
         points=((.5, 0.), (0., .5), (-.5, 0.), (0., -.5)), center=(0., 0.), uncertainty=.003,
@@ -232,11 +231,11 @@ def test_bounded_arc_uses_final_sweep_instead_of_full_spin_permission(simulation
 
 def test_actuation_environment_change_and_policy_rebind_cannot_reuse_calibration(simulation_actuation, monkeypatch):
     command, safety, modes, policy, snapshot, calibration = simulation_actuation
-    monkeypatch.setenv('ROS_DOMAIN_ID', '230')
+    monkeypatch.setenv('ROSY_SIMULATION_ACTUATION', '0')
     command.set_nav_twist(Twist(.01, 0.), now=10.)
     assert command.select_output(now=10.01) == Twist()
     assert safety.estop
-    monkeypatch.setenv('ROS_DOMAIN_ID', '227')
+    monkeypatch.setenv('ROSY_SIMULATION_ACTUATION', '1')
     safety.bind_control_policy(policy)
     safety.release('administrator')
     modes.release_emergency()

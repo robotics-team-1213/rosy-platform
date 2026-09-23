@@ -21,6 +21,21 @@ from robot_contracts import DEPLOY, LAUNCH_REFERENCE, ROOT
 
 SRC = ROOT / "src"
 
+#: colcon output. CI builds inside the source tree (`src/build`, `src/install`),
+#: which copies every launch file and setup.py; counting those makes each name
+#: "ambiguous" and the provider look registered twice.
+COLCON_OUTPUT = {"build", "install", "log"}
+
+
+def _source_parts(path: Path) -> tuple[str, ...] | None:
+    """Parts relative to `src`, or None for hidden and colcon-output paths."""
+    parts = path.relative_to(SRC).parts
+    if parts and parts[0] in COLCON_OUTPUT:
+        return None
+    if any(p.startswith(".") for p in parts):
+        return None
+    return parts
+
 #: D-143 evidence producers. They publish observations, never a velocity command.
 DEPLOYED_CONTROL_EXECUTABLES = {
     "ir_adc_node",
@@ -43,7 +58,8 @@ XML_ATTR = re.compile(r"\b(pkg|exec)\s*=\s*['\"](\w+)['\"]")
 def _launch_index():
     index = {}
     for path in SRC.rglob("*"):
-        if not path.is_file() or any(p.startswith(".") or p == "test" for p in path.parts):
+        parts = _source_parts(path)
+        if not path.is_file() or parts is None or "test" in parts:
             continue
         if LAUNCH_REFERENCE.fullmatch(path.name):
             index.setdefault(path.name, []).append(path)
@@ -135,7 +151,7 @@ def test_exactly_one_package_provides_core_sensors():
     """
     registrants = []
     for path in sorted(SRC.rglob("setup.py")) + sorted(SRC.rglob("setup.cfg")):
-        if any(p.startswith(".") for p in path.parts):
+        if _source_parts(path) is None:
             continue
         text = path.read_text(encoding="utf-8")
         block = re.search(re.escape(PROVIDER_GROUP) + r"['\"]?\s*[:=]\s*\[?(.*?)(\]|\n\S)", text, re.S)

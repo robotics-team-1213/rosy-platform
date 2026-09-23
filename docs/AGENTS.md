@@ -22,7 +22,7 @@ Content lives in the subdirectories below; at this root only the harness records
 | Directory | Purpose |
 |-----------|---------|
 | `spec/` | CORE and FLEET software requirements (see `spec/AGENTS.md`) |
-| `reference/` | API contract, ADR log, Host Agent contract (see `reference/AGENTS.md`) |
+| `reference/` | Live API contract and ADR log. The frozen pinky zip is the repo-root `reference/`, not this directory |
 | `plans/` | Dated design + execute plans; the historical WBS (`ROSY Implementation Plan.md`) and Flask parity checklist moved here when `docs/plan/` retired (see `plans/AGENTS.md`) |
 | `deployment/` | Pi 5 runtime, Wi-Fi image, power bench, release keys (see `deployment/AGENTS.md`) |
 | `test/` | P1 test report (see `test/AGENTS.md`) |
@@ -33,7 +33,7 @@ Content lives in the subdirectories below; at this root only the harness records
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Do not put implementation code here. Specs constrain `src/`; deployment docs constrain `deploy/`.
 - Changing API paths or envelope fields requires updating `reference/ROSY API & Protocol Reference.md` **and** `core_common/protocol/schemas.py` together (D-18).
 - ADRs are append-only: mark old ones `Superseded`, add a new ID. Do not silently rewrite D-n.

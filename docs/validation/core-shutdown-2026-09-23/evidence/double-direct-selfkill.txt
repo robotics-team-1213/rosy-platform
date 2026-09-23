@@ -1,0 +1,9 @@
+# double signal, stuck shutdown (60 s sleep in node.shutdown, WSL-only patch), NO ros2 run wrapper
+# ws=/root/rosy_shutdown_after commit=861386e (fix/core-shutdown-followups, review round 2) escalation=selfkill  2026-09-23T03:34:15+09:00
+SIGINT run 1: stuck after 1st=yes, alive 10s after 2nd=no, exit=130 (245-=signal death, 2=STUCK_SHUTDOWN_EXIT_CODE), first->exit 1.05s, audit_last="type":"system.shutdown", second_signal_line=1
+SIGINT run 2: stuck after 1st=yes, alive 10s after 2nd=no, exit=130 (245-=signal death, 2=STUCK_SHUTDOWN_EXIT_CODE), first->exit 1.14s, audit_last="type":"system.shutdown", second_signal_line=1
+SIGINT run 3: stuck after 1st=yes, alive 10s after 2nd=no, exit=130 (245-=signal death, 2=STUCK_SHUTDOWN_EXIT_CODE), first->exit 1.14s, audit_last="type":"system.shutdown", second_signal_line=1
+SIGTERM run 1: stuck after 1st=yes, alive 10s after 2nd=no, exit=143 (245-=signal death, 2=STUCK_SHUTDOWN_EXIT_CODE), first->exit 1.13s, audit_last="type":"system.shutdown", second_signal_line=1
+SIGTERM run 2: stuck after 1st=yes, alive 10s after 2nd=no, exit=143 (245-=signal death, 2=STUCK_SHUTDOWN_EXIT_CODE), first->exit 1.15s, audit_last="type":"system.shutdown", second_signal_line=1
+SIGTERM run 3: stuck after 1st=yes, alive 10s after 2nd=no, exit=143 (245-=signal death, 2=STUCK_SHUTDOWN_EXIT_CODE), first->exit 1.15s, audit_last="type":"system.shutdown", second_signal_line=1
+# patches reverted: node SLOW lines=0 main selfkill lines=0; leftover core: 0

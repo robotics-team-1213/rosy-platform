@@ -11,7 +11,7 @@ Python LED service server (`led_service_server`) wrapping `rosylib.LED`. Service
 
 | File | Description |
 |------|-------------|
-| `package.xml` | ament_python (description/license still TODO from upstream) |
+| `package.xml` | ament_python (description + Apache-2.0 license filled in 2026-09-23, guarded by `test/test_package_metadata.py`) |
 | `setup.py` / `setup.cfg` | Package install |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
@@ -29,7 +29,7 @@ Python LED service server (`led_service_server`) wrapping `rosylib.LED`. Service
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - CORE battery/LED policy calls `set_led` through `ros_bridge`; do not drive the strip from CORE.
 - `rosylib` is a hardware helper, not in this repo.
 

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-23 -->
 
 # plans
 
@@ -62,6 +62,9 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-21-ubuntu-native-ros-runtime.md` | Test-first execution plan for native image, services, payload, SD and device evidence |
 | `2026-09-22-pinky-pro-flashable-image-design.md` | D-164: signed `.img.xz` product artifact, native image customization, trust and gate design |
 | `2026-09-22-pinky-pro-flashable-image.md` | Test-first implementation plan from Canonical Pi image through SD readback and Pinky acceptance |
+| `2026-09-22-pinky-first-boot-fixes.md` | D-174: first-boot defects (recovery import, live hostname, operator key, ROS home, reflash identity, card diagnostics) and boot status indicator T0 |
+| `2026-09-22-rosy-debug-log-system.md` | D-175: layered debug logs outside CORE — journald ledger, FAT32 boot black box, SSH/card collector, native readback, later API |
+| `2026-09-23-boot-config-and-fallback-ap.md` | D-176: editable boot-partition `rosy-config.yaml` (applied then scrubbed) and per-card fallback AP |
 | `2026-09-21-traffic-light-controller-research.md` | 알리 신호등(접점 스위치)을 ESP32+릴레이로 관제 제어하는 조사 보고서 — 제품/릴레이/보드/펌웨어/통신/안전 비교와 ROSY-SIGNAL-001 근거 |
 | `2026-09-21-fleet-signals-integration-design.md` | G-S3 설계: Fleet 콘솔이 ROSY-SIGNAL-001 장치를 gather/scatter — signals.yaml, SignalConsole(재단언·all_red scatter), snapshot/UI 통합 |
 | `2026-09-22-fleet-signals-integration.md` | G-S3 실행 계획: T-S3-1~6. 상시 폴링 루프를 throttled refresh 로 바꾼 변경 기록 |
@@ -71,6 +74,9 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-22-signal-speed-pi-design.md` | 속도 평면 설계 — 라즈베리파이 배치(picamera2 소스), 오도메트리 1차+카메라 검증의 과속 판정, 감속 루프(Fleet 판정·신호 표시), AC-24~26(2026-09-22 수용 계획 §3 으로 승격 완료 — 판정의 기록 위치는 거기), D-166(과속 반응 기록 전용) |
 | `2026-09-22-scene-context-road-design.md` | D-162 장면 상황 프로파일 설계 — 닫힌 context 집합, 오프라인 리비전 프로파일, 제네릭 보수 폴백, 첫 소비자는 도로 인식 파라미터 |
 | `2026-09-22-scene-context-road.md` | D-162 실행 플랜 T1–T5 — 순수 로직(T1/T2 착지), 노드 wiring(T3), CORE 수용(T5) |
+| `2026-09-23-core-dev-overlay-design.md` | D-179 설계: 벤치 CORE는 `/var/lib/rosy-dev` 읽기 전용 바인드. `/opt/rosy`·서명 릴리스·GitHub 설치와 분리 |
+| `2026-09-23-core-dev-overlay.md` | D-179 실행: 허용 목록·해시 성공·readback HOLD·네이티브 drop-in·Windows 호출. 두 번째부터는 재시작만, 재부팅은 이미지로 복귀, compose 프로젝트는 `rosy-runtime` |
+| `2026-09-24-folder-layout.md` | D-186 실행: 루트는 `env.sh`만, 벤치·설치 셸은 `tools/`와 `deploy/`, 텔레옵·주행 기록은 `data/` |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 ## Subdirectories

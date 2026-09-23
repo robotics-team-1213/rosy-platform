@@ -35,3 +35,10 @@
 - gate 변화: 없음(SOURCE 유지). ROS-SIM/DEVICE는 ARM64 빌드 후 판정.
 - 결정: 없음 — 기존 fail-closed 원칙(도크·신호등·IMU)에 정렬.
 - 교훈: 없음.
+
+## 2026-09-23 · uncommitted · hardware(sensor_adc): wiringPi RawWrite const 호환 (WSL 구문 검사 적색→초록)
+- 변경: T4 의 `static constexpr registers[]` 를 그대로 `wiringPiI2CRawWrite(&registers[ch])` 에 넘기면 비-const 시그니처에서 컴파일 실패 — 로컬 `uint8_t reg` 사본을 넘긴다(const/non-const 양쪽 시그니처 호환). T4 fail-closed 자체는 회귀 4350 passed 로 이미 초록.
+- 증거: WSL `g++ -fsyntax-only -std=c++17 (ROS Jazzy 헤더 + wiringPi 스텁) src/hardware/sensor_adc/src/main_node.cpp` — 원본 적색(invalid conversion const uint8_t*) → 수정 후 `ADC_SYNTAX_OK` (2026-09-23). 실제 ARM64 네이티브 빌드는 아직 DEVICE 게이트.
+- gate 변화: 없음.
+- 결정: 없음 — wiringPi 시그니처 불확실성(버전별 const 유무)에 대한 양쪽 호환.
+- 교훈: x86 호스트 계약 시험은 C++ 소스를 컴파일하지 못한다 — WSL + wiringPi 스텁으로 -fsyntax-only 를 돌리면 ARM64 전야의 컴파일 결함을 잡을 수 있다.

@@ -28,6 +28,7 @@
 | D-156 | ROS 2 Namespace Strict Segregation (Runtime Guard) |
 | D-162 | 학습된 장면은 설정이지 권한이 아니다 — 장면 상황 프로파일은 등록·리비전·보수 폴백으로만 적용한다 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
 
 ## 계획·결과 문서
 
@@ -58,8 +59,8 @@
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · control(ir): ir_sensor/range 단일 발행 계약 고정
-- 2026-09-22 · uncommitted · control(watch): graph guard matches the OS node names and cmd_vel ownership
-- 2026-09-22 · 4933fe0 · test(control): ROS smoke of the split web_node in WSL Jazzy
-- 2026-09-22 · uncommitted · refactor(control): split web_node into ROS wiring and ROS-free web modules
-- 2026-09-22 · uncommitted · test(control): derive the deployed control closure and pin one sensor provider
+- 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
+- 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
+- 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
+- 2026-09-23 · uncommitted · perf(control): vectorise the calibration wall fit, bit for bit
+- 2026-09-23 · uncommitted · docs(adr): D-183 Proposed — 감시 표를 제품과 단독으로 분리

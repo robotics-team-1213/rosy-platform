@@ -1,0 +1,29 @@
+## D-182 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다
+
+**Status:** Accepted (2026-09-24). 호스트 래칫이 세 정책 트리의 리터럴 0건을 본다.
+D-167 G-6의 2026-09-22 스냅샷은 그대로고, 장치 판정은 여전히 없다.
+
+**Context:** D-167 G-6은 안전·명령·내비게이션이 벤더와 시뮬을 몰라야 한다고 정하고,
+기준선을 HOLD로 뒀다. 이유는 `core_features/safety/manager.py`가
+`GZ_PARTITION == pinky_calmap227`과 `ROS_DOMAIN_ID == 227`을 코드에서 직접
+보기 때문이다. D-155의 AST 가드는 import 결합을 막지만, 이 문자열 리터럴은
+막지 않는다. 파티션 이름이 어디로 가야 하는지도 적혀 있지 않다.
+
+**Decision:**
+
+1. `core_features`의 안전, `core`의 명령 다중화, `navigation`의 정책 코드가
+   읽는 시뮬 조건은 프로파일이나 설정이 넘긴 값이다. 그 코드에 Gazebo 파티션
+   이름이나 `ROS_DOMAIN_ID` 숫자 리터럴을 두지 않는다.
+2. `pinky_calmap227`과 도메인 `227`의 소스는 시뮬 프로파일 파일 하나다.
+   안전 코드는 그 파일의 경로와 이름을 import하지 않는다.
+3. 구현 시험은 위 세 트리에서 그 리터럴이 0건임을 본다. 시뮬 프로파일 안의
+   같은 문자열은 허용한다. 시험이 생기기 전에는 이 ADR이 HOLD를 지우지 않는다.
+
+**Alternatives:** 리터럴을 주석으로 남기기 — 분기는 그대로다. 환경 변수 이름만
+상수로 빼기 — 파티션 문자열이 정책 모듈에 남는다.
+
+**Consequences:** 시뮬 전용 분기가 필요하면 프로파일은 불리언이나 모드 값을
+넘긴다. G-6의 GO는 리터럴 제거와 그 시험 이후의 재판정이다.
+
+**Validation:** `test/test_policy_sim_literals.py`. 프로파일은
+`src/sim/gz_sim/config/simulation_actuation.yaml`.

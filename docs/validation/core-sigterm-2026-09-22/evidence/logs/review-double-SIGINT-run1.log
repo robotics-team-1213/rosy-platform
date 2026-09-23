@@ -1,0 +1,23 @@
+[WARN] [1790093666.796585600] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1790093666.796700551] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+[INFO] [1790093667.284857329] [core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+[INFO] [1790093667.287724133] [core]: core up: robot_id=rosy_01 model=Pinky Pro
+[INFO] [1790093668.073430377] [core]: api server on 0.0.0.0:8080
+core: suppressed during shutdown: RCLError('failed to initialize wait set: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/wait.c:130')
+[INFO] [1790093669.919821164] [core]: core shutting down
+Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+SLOW-SHUTDOWN: sleeping 20s
+Traceback (most recent call last):
+  File "/root/rosy_sigterm_ws/install/core/lib/core/core", line 33, in <module>
+    sys.exit(load_entry_point('core', 'console_scripts', 'core')())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/rosy_sigterm_ws/build/core/core/main.py", line 106, in main
+    node.shutdown()
+  File "/root/rosy_sigterm_ws/build/core/core/node.py", line 133, in shutdown
+    import time; print("SLOW-SHUTDOWN: sleeping 20s", flush=True); time.sleep(20)
+                                                                   ^^^^^^^^^^^^^^
+  File "/root/rosy_sigterm_ws/build/core/core/main.py", line 60, in _request_stop
+    raise KeyboardInterrupt
+KeyboardInterrupt
+The following exception was never retrieved: Failed to publish: publisher's context is invalid, at ./src/rcl/publisher.c:423
+[ros2run]: Interrupt

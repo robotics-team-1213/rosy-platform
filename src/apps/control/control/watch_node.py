@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
-from .watch import EXCLUSIVE, inspect
+from .watch import graph_tables, inspect
 
 
 class WatchNode(Node):
@@ -12,6 +12,9 @@ class WatchNode(Node):
         super().__init__('watch_node')
         self.declare_parameter('hz', 1.0)
         self.declare_parameter('once', False)
+        self.declare_parameter('graph_mode', 'standalone')
+        self._mode = str(self.get_parameter('graph_mode').value)
+        graph_tables(self._mode)
         self.ok_pub = self.create_publisher(Bool, 'robot/ok', 10)
         self.health_pub = self.create_publisher(String, 'robot/health', 10)
         self.int_pub = self.create_publisher(String, 'robot/interrupt', 10)
@@ -25,7 +28,8 @@ class WatchNode(Node):
         names = [namespace.rstrip('/') + '/' + name
                  for name, namespace in self.get_node_names_and_namespaces()]
         pubs = {}
-        for topic in EXCLUSIVE:
+        _, _, exclusive, _ = graph_tables(self._mode)
+        for topic in exclusive:
             resolved = self.resolve_topic_name(topic.lstrip('/'))
             info = self.get_publishers_info_by_topic(resolved)
             pubs[topic] = [p.node_namespace.rstrip('/') + '/' + p.node_name for p in info]
@@ -33,7 +37,7 @@ class WatchNode(Node):
 
     def tick(self):
         names, pubs = self._snapshot()
-        report = inspect(names, pubs, namespace=self.get_namespace())
+        report = inspect(names, pubs, namespace=self.get_namespace(), mode=self._mode)
         line = report.line()
         self.ok_pub.publish(Bool(data=report.ok))
         self.health_pub.publish(String(data=line))

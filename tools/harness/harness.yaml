@@ -9,6 +9,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 adr_gaps:
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
+  D-180: "claimed by the unmerged perf/sd-single-verify branch (SD single authoritative verify); remove this entry when that branch merges"
 
 status: STATUS.md
 stale_after_commits: 5
@@ -88,14 +89,14 @@ modules:
     functional: [src/core/core_common/test]
   - name: core_events
     path: src/core/core_events
-    tests: [src/core/core/test/test_audit.py, src/core/core/test/test_core_logic.py]
+    tests: [src/core/core_events/test/test_audit.py, src/core/core/test/test_core_logic.py]
     functional_kind: pytest
-    functional: [src/core/core/test/test_audit.py]
+    functional: [src/core/core_events/test/test_audit.py]
   - name: core_features
     path: src/core/core_features
-    tests: [src/core/core/test/test_core_logic.py, src/core/core/test/test_docking.py, src/core/core/test/test_swarm.py, src/core/core/test/test_power.py, src/core/core/test/test_traffic_policy.py]
+    tests: [src/core/core/test/test_core_logic.py, src/core/core_features/test/test_docking.py, src/core/core_features/test/test_swarm.py, src/core/core/test/test_power.py, src/core/core/test/test_traffic_policy.py]
     functional_kind: pytest
-    functional: [src/core/core/test/test_core_logic.py, src/core/core/test/test_docking.py]
+    functional: [src/core/core/test/test_core_logic.py, src/core/core_features/test/test_docking.py]
   - name: core_api_web
     path: src/core/core_api_web
     tests: [src/core/core_api_web/test]
@@ -103,9 +104,9 @@ modules:
     functional: [src/core/core_api_web/test]
   - name: web_common
     path: src/core/web_common
-    tests: [src/core/core/test/test_ui_token_contracts.py, src/core/core/test/test_palette_gates.py]
+    tests: [src/core/web_common/test/test_ui_token_contracts.py, src/core/web_common/test/test_palette_gates.py, src/core/web_common/test/test_headless_state.py]
     functional_kind: host-contract
-    functional: [src/core/core/test/test_ui_token_contracts.py]
+    functional: [src/core/web_common/test/test_ui_token_contracts.py]
   - name: omx_adapter
     path: src/apps/omx_adapter
     tests: [src/apps/omx_adapter/test]
@@ -124,7 +125,7 @@ modules:
     functional: [src/sim/description/test/test_urdf_surface.py]
   - name: dock
     path: dock
-    tests: [test/test_dock_contract.py, src/core/core/test/test_docking.py]
+    tests: [test/test_dock_contract.py, src/core/core_features/test/test_docking.py]
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal

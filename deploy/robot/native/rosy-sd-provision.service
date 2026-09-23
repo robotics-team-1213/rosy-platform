@@ -1,5 +1,6 @@
 [Unit]
 Description=ROSY device personalization completion gate
+OnFailure=rosy-boot-status.service
 Requires=rosy-first-boot.service
 After=rosy-first-boot.service
 AssertPathExists=/var/lib/rosy/provisioning/complete.json

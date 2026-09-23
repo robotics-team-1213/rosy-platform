@@ -48,7 +48,7 @@
 ### Task 4: Network and dashboard verifier
 
 **Files:**
-- Create: `deploy/robot/verify-pi.sh`
+- Create: `deploy/robot/verify/verify-pi.sh`
 
 **Steps:**
 1. Report WLAN radio/association, SSID, IPv4, default route, DNS, external HTTPS, Docker/service status, local FastAPI and dashboard status.

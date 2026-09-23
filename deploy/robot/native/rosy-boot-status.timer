@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the ROSY boot status indicator
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

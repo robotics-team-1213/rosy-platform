@@ -1,0 +1,22 @@
+# variant=old unit=/run/systemd/system/rosy-core-sdtest.service commit=7614627 core tree + deploy/robot/native/wait-core-ready.py from c568fd4 (fix/core-shutdown-followups) started 2026-09-23T02:59:19+09:00 loadavg 18.02 20.20 23.18 21/1241 293319
+# ExecStart: ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy_sdtest/current/install/setup.bash && exec ros2 run core core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+# Restart=on-failure RestartSec=2 TimeoutStopSec=15 KillSignal=SIGINT 
+# MainPID 293334: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros-args -r __ns:=/rosy_01
+steady 1 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=1.06
+steady 2 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.95
+steady 3 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.57
+steady 4 (start rc=0): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.75
+startup stop @0.1s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=signal NRestarts=0 ExecMainCode=2 ExecMainStatus=2 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.14
+startup stop @0.2s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.17
+startup stop @0.3s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.15
+startup stop @0.5s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.14
+startup stop @0.8s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.19
+startup stop @1.0s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.1
+startup stop @1.2s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.19
+startup stop @1.5s (main: /usr/bin/bash -lc source /opt/ros/jazzy/setup.bash && source): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[] port=0 leftover_core=0 stop_s=0.41
+startup stop @2s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=exit-code NRestarts=0 ExecMainCode=1 ExecMainStatus=254 ActiveState=failed  audit+=[] port=0 leftover_core=0 stop_s=0.19
+startup stop @3s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.7
+startup stop @4s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.69
+startup stop @8s (main: /usr/bin/python3 /opt/ros/jazzy/bin/ros2 run core core --ros): Result=success NRestarts=0 ExecMainCode=0 ExecMainStatus=0 ActiveState=inactive  audit+=[system.boot,system.shutdown,] port=0 leftover_core=0 stop_s=0.76
+# finished 2026-09-23T03:00:20+09:00
+# Result tally:       1 Result=exit-code       1 Result=signal      14 Result=success 

@@ -1,0 +1,17 @@
+## POST /api/v1/mode MANUAL (operator)
+{"mode":"MANUAL"}
+HTTP 200
+## audit seq before teleop
+events 3 last_seq 3
+## teleop linear=0.1 x10 @100ms, started 23:33:36.850032428
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+{"accepted":true} HTTP 200
+## stopped sending at 23:33:38.061968154; waiting 2.5s (> teleop_timeout_ms 500)

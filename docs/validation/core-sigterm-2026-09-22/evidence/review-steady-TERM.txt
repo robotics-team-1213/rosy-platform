@@ -1,0 +1,14 @@
+# review mode=steady signal=SIGTERM count=10; startup window=0.2-1.5s; SIG to core node PID (child of ros2 run); fresh HOME per run; 6 busy-loop load procs
+# commit: a545d55 (fix/core-sigterm-exit, review follow-ups)  started 2026-09-23T01:12:04+09:00  loadavg: 14.77 13.50 14.27 18/1256 67429
+run  1: node 67500 sig@+7.82s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  2: node 67633 sig@+5.38s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  3: node 67767 sig@+6.14s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  4: node 67898 sig@+4.95s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  5: node 68018 sig@+6.56s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  6: node 68139 sig@+5.92s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  7: node 68268 sig@+6.66s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  8: node 68395 sig@+8.63s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run  9: node 68531 sig@+4.31s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+run 10: node 68659 sig@+6.8s(after node spawn) phase=after-api alive30s=no exit=0 shutting_down=1 traceback=0 err= audit_last="type":"system.shutdown" port8080=0
+# leftover core processes: 0  finished 2026-09-23T01:13:30+09:00
+# exit-code tally:      10 exit=0 

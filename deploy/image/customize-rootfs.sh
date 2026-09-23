@@ -69,6 +69,7 @@ cleanup() {
     rm -f -- "$ROOT/tmp/ros2-apt-source.deb"
     rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
     rm -rf -- "$ROOT/tmp/rosy-src"
+    rm -rf -- "$ROOT/tmp/rosy-native-probe"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
 }
@@ -120,7 +121,7 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates locales network-manager openssh-server openssl python3 python3-yaml \
+    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 
 cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"
@@ -160,14 +161,46 @@ printf 'network: {config: disabled}\n' > "$ROOT/etc/cloud/cloud.cfg.d/99-rosy-ne
 rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/ssh_host_"*
 : > "$ROOT/etc/machine-id"
 
-systemctl --root "$ROOT" enable NetworkManager.service ssh.service \
-    rosy-first-boot.service rosy-release-recover.service rosy-runtime.target
+# chrony: CORE SRS §25 — UTC ISO 8601 timestamps and evidence freshness are
+# cross-module premises; NTP reachability is a runtime concern, not an image one.
+systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
+    rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
+    rosy-boot-status.service rosy-boot-status.timer \
+    rosy-config.service rosy-network.service
+# D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
+mkdir -p "$ROOT/etc/issue.d"
+ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
+# D-175 L2: `rosy-diag collect` on PATH; the wrapper resolves the link.
+mkdir -p "$ROOT/usr/local/bin"
+ln -sfn /opt/rosy/native-runtime/rosy-diag "$ROOT/usr/local/bin/rosy-diag"
 
 while IFS= read -r package; do
     [[ -z "$package" || "$package" == \#* ]] && continue
     chroot "$ROOT" bash -lc \
         "source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 pkg prefix '$package' >/dev/null"
 done < "$PAYLOAD/required-ros-packages.txt"
+
+# D-174 F5: import smoke test of the installed native entrypoints, run where the
+# image installs them. Recovery runs against an empty probe root, so it touches
+# no image state and does not exercise the key or openssl; -B keeps bytecode out
+# of the signed release tree.
+NATIVE_PROBE=/tmp/rosy-native-probe
+rm -rf -- "$ROOT$NATIVE_PROBE"
+mkdir -p "$ROOT$NATIVE_PROBE"
+RELEASE_KEY=/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem
+chroot "$ROOT" python3 -B /opt/rosy/native-runtime/native_release.py \
+    --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
+    || fail "installed native-runtime recovery entrypoint does not run"
+chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py \
+    --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
+    || fail "installed release native entrypoint does not run"
+chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \
+    || fail "installed first-boot entrypoint does not run"
+for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
+    chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
+        || fail "installed native entrypoint does not run: $entrypoint"
+done
+rm -rf -- "$ROOT$NATIVE_PROBE"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

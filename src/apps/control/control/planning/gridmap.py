@@ -14,6 +14,8 @@ a route never crosses unmapped space.
 from collections import deque
 import math
 
+import numpy as np
+
 FREE = 0
 OCC = 100
 UNKNOWN = -1
@@ -88,26 +90,42 @@ class OccupancyMap:
         return out
 
     def inflate(self, r_cells):
-        """Grow OCC by a Euclidean ring. Unknown stays unknown, walls grow."""
+        """Grow OCC by a Euclidean ring. Unknown stays unknown, walls grow.
+
+        Vectorised (D-185 R1); cell-for-cell identical to the original two-pass
+        loops, including the float disk test and edge clipping
+        (test_inflate_equivalence). Returns a new, independent map.
+        """
         out = OccupancyMap(self.w, self.h, self.res, (self.ox, self.oy), fill=UNKNOWN)
-        # Pass 1: classify. Pass 2: grow rings. One loop would let later
+        # Pass 1: classify. Pass 2: grow rings. One pass would let later
         # FREE cells stomp on earlier rings (unit test caught exactly that).
         extent = math.ceil(r_cells)
-        for i, v in enumerate(self.data):
-            if v >= OCC_THRESH:
-                out.data[i] = OCC
-            elif v == UNKNOWN:
-                out.data[i] = UNKNOWN
-            else:
-                out.data[i] = FREE
-        for i, v in enumerate(self.data):
-            if v < OCC_THRESH:
-                continue
-            c, r = i % self.w, i // self.w
-            for dc in range(-extent, extent + 1):
-                for dr in range(-extent, extent + 1):
-                    if dc * dc + dr * dr <= r_cells * r_cells:
-                        out.set_cell(c + dc, r + dr, OCC)
+        values = np.asarray(self.data).reshape(self.h, self.w)
+        grid = np.where(values >= OCC_THRESH, OCC, np.where(values == UNKNOWN, UNKNOWN, FREE))
+        # Growth sources are cells *not* below the threshold, exactly as the original
+        # `if v < OCC_THRESH: continue` (a NaN cell therefore still grows, conservatively).
+        occupied = ~(values < OCC_THRESH)
+        if not occupied.any():
+            out.data = grid.ravel().tolist()
+            return out
+        # Offsets beyond the map cannot land; the loop only needs to reach them once.
+        extent = min(extent, max(self.w, self.h))
+        # Only the bounding box of the sources can mark anything: sparse maps stay cheap.
+        rows, cols = np.nonzero(occupied)
+        r0, r1, c0, c1 = int(rows.min()), int(rows.max())+1, int(cols.min()), int(cols.max())+1
+        sources = occupied[r0:r1, c0:c1]
+        for dc in range(-extent, extent + 1):
+            for dr in range(-extent, extent + 1):
+                if dc * dc + dr * dr > r_cells * r_cells:
+                    continue
+                # Source (r, c) marks (r+dr, c+dc); marks shifted off the grid are dropped.
+                t0, t1 = max(0, r0+dr), min(self.h, r1+dr)
+                u0, u1 = max(0, c0+dc), min(self.w, c1+dc)
+                if t0 >= t1 or u0 >= u1:
+                    continue
+                target = grid[t0:t1, u0:u1]
+                target[sources[t0-dr-r0:t1-dr-r0, u0-dc-c0:u1-dc-c0]] = OCC
+        out.data = grid.ravel().tolist()
         return out
 
     def render(self, marks=None, unknown_char='~'):

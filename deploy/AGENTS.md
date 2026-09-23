@@ -32,7 +32,7 @@ Three sibling pipelines below; at this level only the harness records.
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - CORE is internet-facing and unprivileged. Do not add `nmcli`, `reboot`, or docker-compose control inside `core`.
 - Product runtime: `robot/native/rosy-runtime.target` starts CORE only. I/O and navigation are explicit, mutually exclusive hardware modes.
 - Compose services remain test/development compatibility only; do not install Docker in a D-161 product image.

@@ -1,18 +1,13 @@
-import ast
-from pathlib import Path
 from types import SimpleNamespace
 import unittest
 
 from control.control.calibration_rotation_handoff import rotation_handoff_ready
+from test.mixin_method import mixin_method
 
 
 def method(name):
-    path = Path(__file__).parents[1] / 'control/calibration_rotation.py'
-    cls = next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n, ast.ClassDef))
-    function = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    namespace = {'time': SimpleNamespace(monotonic=lambda: 10.), 'rotation_handoff_ready': rotation_handoff_ready}
-    exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), 'exec'), namespace)
-    return namespace[name]
+    return mixin_method('control.calibration_rotation', name, time=SimpleNamespace(monotonic=lambda: 10.),
+                        rotation_handoff_ready=rotation_handoff_ready)
 
 
 class RotationHandoffTests(unittest.TestCase):
@@ -57,7 +52,10 @@ class RotationHandoffTests(unittest.TestCase):
             rotation_handoff_started=10., applied_profile=None, safety_limits=self.limits(),
             profile_session='new', profile_revision='rotation', geometry_revision='body',
             rotation_wait=10.8, last_report=10., zero=lambda: calls.append('zero'),
-            publish=lambda: calls.append('publish'), finish=lambda *args: calls.append(args))
+            publish=lambda: calls.append('publish'), finish=lambda *args: calls.append(args),
+            rotation_trial=None)  # handoff precedes the trial, so no freshness hold applies
+        hold = method('hold_freshness_lapse')
+        node.hold_freshness_lapse = lambda *args: hold(node, *args)
         return node, calls
 
     def test_pending_handoff_holds_zero_without_failing_old_translation_clearance(self):

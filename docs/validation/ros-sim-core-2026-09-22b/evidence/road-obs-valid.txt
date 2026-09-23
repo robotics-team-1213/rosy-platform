@@ -1,0 +1,5 @@
+[WARN] [1790087610.442452251] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+[WARN] [1790087610.443834740] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+publisher: beginning loop
+publishing #1: std_msgs.msg.String(data='{"source": "CAMERA_ROAD", "stamp": 10.0, "map_id": "map_260905_update_v2", "scene_revision": "road-scene-v1", "lane": {"visible": true, "error": 0.0, "confidence": 0.9}, "stop_line": {"visible": true, "image_row": 180.0, "distance_m": 0.16, "confidence": 0.9}, "crosswalk": {"visible": false, "image_row": null, "distance_m": null, "confidence": 0.0}, "signal": {"visible": false, "colour": null, "confidence": 0.0, "conflict": false}, "context": {"id": "crosswalk", "confidence": 0.8, "profile_revision": "ctx-crosswalk-v1"}}')
+

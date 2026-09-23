@@ -23,9 +23,13 @@
 
 ## 시험
 
-- `src/core/core/test/test_audit.py`
+- `src/core/core_events/test/test_audit.py`
 - `src/core/core/test/test_core_logic.py`
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · docs(harness): register core_events under D-168
+- 2026-09-24 · uncommitted · test(core): LOG-001 audit 계약을 자체 `test/`로 이전
+- 2026-09-23 · uncommitted · fix(core_events): the splice check also looks at the head, and the quarantine marker records our own end
+- 2026-09-23 · uncommitted · fix(core_events): a reused inode no longer passes as the same audit file
+- 2026-09-23 · uncommitted · fix(core_events): the quarantine dedupe re-checks that the quarantine file still holds the bytes
+- 2026-09-22 · uncommitted · fix(core_events): audit quarantine off the lock, no duplicate evidence, thread-start and dir-fsync failures counted

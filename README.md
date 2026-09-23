@@ -15,19 +15,23 @@ Rosy Control의 개발 기준은 이 저장소의 `src/apps/control`로 통합�
 
 ```text
 rosy/ (이 리포지토리)
-├── docs/                     # 요구사항·ADR·계획·조사·배포·검증 기록
-│   └── assets/               # 아키텍처·제품 이미지
-├── deploy/                   # OS 이미지·릴리스·장치 운영
+├── env.sh                    # 개발 PC: ROS와 워크스페이스를 읽는 유일한 루트 셸
+├── docs/                     # 요구사항·ADR·계획·검증 기록
+│   └── reference/            # 살아 있는 API 계약과 ADR 로그
+├── deploy/                   # 이미지·릴리스·로봇 설치 셸
+├── tools/                    # tools/fix_ament_resource.sh, tools/run_fleet_sim.sh, tools/run_data.py
+├── data/                     # data/teleop 확인 기록, data/drive 주행 기록. 세션은 커밋하지 않음
 ├── dock/                     # 충전 도크 펌웨어
-├── test/                     # 호스트 배포·소유권 계약 시험
-├── src/                      # ROS 2 패키지 (colcon workspace, 도메인 그룹)
-│   ├── core/                 # CORE: core(게이트웨이)·core_common·core_events·core_features·core_api_web·interfaces
-│   ├── apps/                 # control(흡수 Control)·emotion·games·omx_adapter
-│   ├── hardware/             # bringup·led·lamp_control·imu_bno055·sensor_adc
-│   ├── navigation/           # Nav2/SLAM 설정·런치
-│   ├── sim/                  # description(URDF)·gz_sim(Gazebo, gz_multi.launch.py로 N대)
-│   └── site/                 # fleet(편대·relay·CLI·콘솔 v1)
-└── .github/workflows/ci.yml  # colcon build + 테스트
+├── signal/                   # 신호 제어 펌웨어
+├── reference/                # 얼린 pinky_pro zip. 현재 코드가 아님
+├── test/                     # 호스트 계약 시험
+└── src/                      # ROS 2 패키지 (도메인 그룹)
+    ├── core/                 # core·core_common·core_events·core_features·core_api_web·interfaces
+    ├── apps/                 # control·emotion·games·omx_adapter
+    ├── hardware/             # bringup·led·lamp_control·imu_bno055·sensor_adc
+    ├── navigation/           # Nav2/SLAM
+    ├── sim/                  # description·gz_sim
+    └── site/                 # fleet
 ```
 
 ## 문서 (거버넌스: docs/)
@@ -37,7 +41,7 @@ rosy/ (이 리포지토리)
 | `docs/spec/ROSY CORE SRS.md` | 로봇(엣지) 요구사항 |
 | `docs/spec/ROSY FLEET SRS.md` | 중앙 서버 요구사항 |
 | `docs/reference/ROSY API & Protocol Reference.md` | 공유 API/프로토콜 계약 |
-| `docs/reference/ROSY ADR Log.md` | 의사결정 기록 (흡수·Device·사이트 패브릭·역할 분리: D-37~D-65) |
+| `docs/reference/ROSY ADR Log.md` | 의사결정 색인. 개별 본문은 `docs/adr/D-*.md` |
 | `docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md` | 실행 계획·추적 매트릭스 |
 | `docs/plans/2026-09-14-site-middleware-role-fabric-design.md` | 관제 서버 gather/scatter와 역할 단일 경계 (D-59) |
 | `docs/plans/2026-09-15-navigation-swarm-split-design.md` | 추종을 navigation에서 분리 (D-60) |
@@ -49,14 +53,17 @@ rosy/ (이 리포지토리)
 ## 빌드
 
 ```bash
-cd src && colcon build --symlink-install
-source install/setup.bash
+source env.sh
+colcon build --symlink-install --base-paths src
 
-# 시뮬레이션 2대 (멀티 인스턴스)
+# 시뮬레이션 2대
 ros2 launch gz_sim gz_multi.launch.py robots:=2
 
 # core 게이트웨이
 ros2 launch core rosy_core.launch.py
+
+# 다로봇 시뮬과 Fleet 콘솔을 한 번에
+bash tools/run_fleet_sim.sh
 ```
 
 ## Raspberry Pi 5 런타임

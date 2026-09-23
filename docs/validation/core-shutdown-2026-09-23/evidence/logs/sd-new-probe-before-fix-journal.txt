@@ -1,0 +1,351 @@
+2026-09-23T02:52:00+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:02+09:00 PERPROS bash[288452]: [WARN] [1790099522.470809339] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:02+09:00 PERPROS bash[288452]: [WARN] [1790099522.470921749] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:02+09:00 PERPROS bash[288452]: [INFO] [1790099522.813330561] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:02+09:00 PERPROS bash[288452]: [INFO] [1790099522.814970190] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:03+09:00 PERPROS bash[288452]: [INFO] [1790099523.314001383] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:04+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:06+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:06+09:00 PERPROS bash[288452]: [INFO] [1790099526.056417012] [rosy_01.core]: core shutting down
+2026-09-23T02:52:06+09:00 PERPROS bash[288452]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:06+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:06+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:06+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.128s CPU time, 79.4M memory peak, 0B memory swap peak.
+2026-09-23T02:52:06+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:09+09:00 PERPROS bash[288532]: [WARN] [1790099529.736756337] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:09+09:00 PERPROS bash[288532]: [WARN] [1790099529.736863416] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:10+09:00 PERPROS bash[288532]: [INFO] [1790099530.026120027] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:10+09:00 PERPROS bash[288532]: [INFO] [1790099530.027455721] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:10+09:00 PERPROS bash[288532]: [INFO] [1790099530.438816236] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:11+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:12+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:12+09:00 PERPROS bash[288532]: [INFO] [1790099532.556276107] [rosy_01.core]: core shutting down
+2026-09-23T02:52:12+09:00 PERPROS bash[288532]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:13+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:13+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:13+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.137s CPU time.
+2026-09-23T02:52:13+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:15+09:00 PERPROS bash[288608]: [WARN] [1790099535.488238270] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:15+09:00 PERPROS bash[288608]: [WARN] [1790099535.488274852] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:15+09:00 PERPROS bash[288608]: [INFO] [1790099535.829830986] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:15+09:00 PERPROS bash[288608]: [INFO] [1790099535.831272467] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:16+09:00 PERPROS bash[288608]: [INFO] [1790099536.480876238] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:17+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:18+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:18+09:00 PERPROS bash[288608]: [INFO] [1790099538.916428829] [rosy_01.core]: core shutting down
+2026-09-23T02:52:18+09:00 PERPROS bash[288608]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:19+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:19+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:19+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.263s CPU time.
+2026-09-23T02:52:19+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:21+09:00 PERPROS bash[288797]: [WARN] [1790099541.951341199] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:21+09:00 PERPROS bash[288797]: [WARN] [1790099541.951395796] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:22+09:00 PERPROS bash[288797]: [INFO] [1790099542.232141289] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:22+09:00 PERPROS bash[288797]: [INFO] [1790099542.233194229] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:22+09:00 PERPROS bash[288797]: [INFO] [1790099542.629583900] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:23+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:24+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:24+09:00 PERPROS bash[288797]: [INFO] [1790099544.806856446] [rosy_01.core]: core shutting down
+2026-09-23T02:52:24+09:00 PERPROS bash[288797]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:25+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:25+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:25+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.028s CPU time.
+2026-09-23T02:52:25+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:28+09:00 PERPROS bash[288965]: [WARN] [1790099548.184500587] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:28+09:00 PERPROS bash[288965]: [WARN] [1790099548.184545926] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:28+09:00 PERPROS bash[288965]: [INFO] [1790099548.455022851] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:28+09:00 PERPROS bash[288965]: [INFO] [1790099548.455918673] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:28+09:00 PERPROS bash[288965]: [INFO] [1790099548.848203192] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:30+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:32+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:32+09:00 PERPROS bash[288965]: [INFO] [1790099552.174522987] [rosy_01.core]: core shutting down
+2026-09-23T02:52:32+09:00 PERPROS bash[288965]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:32+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:32+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:32+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.049s CPU time.
+2026-09-23T02:52:33+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:35+09:00 PERPROS bash[289070]: [WARN] [1790099555.033706093] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:35+09:00 PERPROS bash[289070]: [WARN] [1790099555.033743165] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:35+09:00 PERPROS bash[289070]: [INFO] [1790099555.382190990] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:35+09:00 PERPROS bash[289070]: [INFO] [1790099555.382851331] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:35+09:00 PERPROS bash[289070]: [INFO] [1790099555.829039577] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:36+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:37+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:37+09:00 PERPROS bash[289070]: [INFO] [1790099557.841078497] [rosy_01.core]: core shutting down
+2026-09-23T02:52:37+09:00 PERPROS bash[289070]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:38+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:38+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:38+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 2.826s CPU time.
+2026-09-23T02:52:38+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:40+09:00 PERPROS bash[289146]: [WARN] [1790099560.707278006] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:40+09:00 PERPROS bash[289146]: [WARN] [1790099560.707394775] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:40+09:00 PERPROS bash[289146]: [INFO] [1790099560.988474321] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:40+09:00 PERPROS bash[289146]: [INFO] [1790099560.989914254] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:41+09:00 PERPROS bash[289146]: [INFO] [1790099561.375310217] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:42+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:45+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:45+09:00 PERPROS bash[289146]: [INFO] [1790099565.084686053] [rosy_01.core]: core shutting down
+2026-09-23T02:52:45+09:00 PERPROS bash[289146]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:45+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:45+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:45+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.140s CPU time.
+2026-09-23T02:52:46+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:48+09:00 PERPROS bash[289222]: [WARN] [1790099568.180447996] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:48+09:00 PERPROS bash[289222]: [WARN] [1790099568.180483565] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:48+09:00 PERPROS bash[289222]: [INFO] [1790099568.554884284] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:48+09:00 PERPROS bash[289222]: [INFO] [1790099568.556457103] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:49+09:00 PERPROS bash[289222]: [INFO] [1790099569.132362032] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:50+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:52+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:52+09:00 PERPROS bash[289222]: [INFO] [1790099572.693660205] [rosy_01.core]: core shutting down
+2026-09-23T02:52:52+09:00 PERPROS bash[289222]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:53+09:00 PERPROS bash[289222]: The following exception was never retrieved: Failed to publish: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:52:53+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:52:53+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:53+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.381s CPU time.
+2026-09-23T02:52:53+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:55+09:00 PERPROS bash[289313]: [WARN] [1790099575.456429809] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:52:55+09:00 PERPROS bash[289313]: [WARN] [1790099575.456566167] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:52:55+09:00 PERPROS bash[289313]: [INFO] [1790099575.784240088] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:52:55+09:00 PERPROS bash[289313]: [INFO] [1790099575.785382216] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:52:56+09:00 PERPROS bash[289313]: [INFO] [1790099576.242002870] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:52:57+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:52:59+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:52:59+09:00 PERPROS bash[289313]: [INFO] [1790099579.434011201] [rosy_01.core]: core shutting down
+2026-09-23T02:52:59+09:00 PERPROS bash[289313]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:00+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:53:00+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:00+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.499s CPU time.
+2026-09-23T02:53:00+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:02+09:00 PERPROS bash[289389]: [WARN] [1790099582.588499604] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:53:02+09:00 PERPROS bash[289389]: [WARN] [1790099582.588656120] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:53:02+09:00 PERPROS bash[289389]: [INFO] [1790099582.971459096] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:53:02+09:00 PERPROS bash[289389]: [INFO] [1790099582.972246567] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:53:03+09:00 PERPROS bash[289389]: [INFO] [1790099583.327505257] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:53:04+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:06+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:06+09:00 PERPROS bash[289389]: [INFO] [1790099586.506173024] [rosy_01.core]: core shutting down
+2026-09-23T02:53:06+09:00 PERPROS bash[289389]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:06+09:00 PERPROS bash[289389]: The following exception was never retrieved: Failed to publish: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:07+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:53:07+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:07+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.222s CPU time.
+2026-09-23T02:53:07+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:09+09:00 PERPROS bash[289465]: [WARN] [1790099589.369266874] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:53:09+09:00 PERPROS bash[289465]: [WARN] [1790099589.369312713] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:53:09+09:00 PERPROS bash[289465]: [INFO] [1790099589.943282435] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:53:09+09:00 PERPROS bash[289465]: [INFO] [1790099589.945105612] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:53:10+09:00 PERPROS bash[289465]: [INFO] [1790099590.748147109] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:53:11+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:13+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:14+09:00 PERPROS bash[289465]: [INFO] [1790099594.004863845] [rosy_01.core]: core shutting down
+2026-09-23T02:53:14+09:00 PERPROS bash[289465]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:14+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:53:14+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:14+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.433s CPU time.
+2026-09-23T02:53:14+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:16+09:00 PERPROS bash[289541]: [WARN] [1790099596.441602884] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:53:16+09:00 PERPROS bash[289541]: [WARN] [1790099596.441745975] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:53:16+09:00 PERPROS bash[289541]: [INFO] [1790099596.823297103] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:53:16+09:00 PERPROS bash[289541]: [INFO] [1790099596.824888748] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:53:17+09:00 PERPROS bash[289541]: [INFO] [1790099597.221102463] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:53:18+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:21+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:21+09:00 PERPROS bash[289541]: [INFO] [1790099601.192799540] [rosy_01.core]: core shutting down
+2026-09-23T02:53:21+09:00 PERPROS bash[289541]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:21+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:53:21+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:21+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 3.126s CPU time.
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]: Traceback (most recent call last):
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]:     sys.exit(main())
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]:              ^^^^^^
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]:     time.sleep(1)
+2026-09-23T02:53:22+09:00 PERPROS python3[289617]: KeyboardInterrupt
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: Fatal Python error: init_import_site: Failed to import the site module
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: Python runtime state: initialized
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: Traceback (most recent call last):
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap_external>", line 1485, in _path_importer_cache
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: KeyError: '/mnt/f/Dev/Control/Robot/ROS/Rosy/Rosy OS/src/site/fleet'
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: During handling of the above exception, another exception occurred:
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: Traceback (most recent call last):
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 1176, in exec_module
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen site>", line 643, in <module>
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen site>", line 630, in main
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen site>", line 413, in addsitepackages
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen site>", line 242, in addsitedir
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen site>", line 201, in addpackage
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<string>", line 1, in <module>
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 1322, in _find_and_load_unlocked
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap>", line 1262, in _find_spec
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap_external>", line 1528, in find_spec
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap_external>", line 1500, in _get_spec
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap_external>", line 1487, in _path_importer_cache
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap_external>", line 1463, in _path_hooks
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen zipimport>", line 75, in __init__
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]:   File "<frozen importlib._bootstrap_external>", line 147, in _path_stat
+2026-09-23T02:53:22+09:00 PERPROS bash[289629]: KeyboardInterrupt
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]: Traceback (most recent call last):
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]:     sys.exit(main())
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]:              ^^^^^^
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]:     time.sleep(1)
+2026-09-23T02:53:22+09:00 PERPROS python3[289662]: KeyboardInterrupt
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: Fatal Python error: init_import_site: Failed to import the site module
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: Python runtime state: initialized
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: Traceback (most recent call last):
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 1485, in _path_importer_cache
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: KeyError: '/mnt/f/Dev/Control/Robot/ROS/Rosy/Rosy OS/src/site/fleet'
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: During handling of the above exception, another exception occurred:
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: Traceback (most recent call last):
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 1176, in exec_module
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen site>", line 643, in <module>
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen site>", line 630, in main
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen site>", line 413, in addsitepackages
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen site>", line 242, in addsitedir
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen site>", line 201, in addpackage
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<string>", line 1, in <module>
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 1322, in _find_and_load_unlocked
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap>", line 1262, in _find_spec
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 1528, in find_spec
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 1500, in _get_spec
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 1487, in _path_importer_cache
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 1463, in _path_hooks
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 1687, in path_hook_for_FileFinder
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 168, in _path_isdir
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 153, in _path_is_mode_type
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]:   File "<frozen importlib._bootstrap_external>", line 147, in _path_stat
+2026-09-23T02:53:22+09:00 PERPROS bash[289679]: KeyboardInterrupt
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:22+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:23+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]: Traceback (most recent call last):
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]:     sys.exit(main())
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]: Fatal Python error: init_import_site: Failed to import the site module
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]: Python runtime state: initialized
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]: Traceback (most recent call last):
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 1176, in exec_module
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen site>", line 643, in <module>
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen site>", line 636, in main
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen site>", line 575, in execsitecustomize
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "/usr/lib/python3.12/sitecustomize.py", line 3, in <module>
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:     import apport_python_hook
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 1322, in _find_and_load_unlocked
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap>", line 1262, in _find_spec
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap_external>", line 1528, in find_spec
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap_external>", line 1502, in _get_spec
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap_external>", line 1601, in find_spec
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]:   File "<frozen importlib._bootstrap_external>", line 147, in _path_stat
+2026-09-23T02:53:23+09:00 PERPROS bash[289721]: KeyboardInterrupt
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]:              ^^^^^^
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]:     time.sleep(1)
+2026-09-23T02:53:23+09:00 PERPROS python3[289709]: KeyboardInterrupt
+2026-09-23T02:53:23+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:23+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:23+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:23+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]: Traceback (most recent call last):
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:   File "/usr/bin/register-python-argcomplete3", line 29, in <module>
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:     import argcomplete
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:   File "/usr/lib/python3/dist-packages/argcomplete/__init__.py", line 4, in <module>
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]: Traceback (most recent call last):
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]:     sys.exit(main())
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]:              ^^^^^^
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]:     time.sleep(1)
+2026-09-23T02:53:24+09:00 PERPROS python3[289757]: KeyboardInterrupt
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:     from . import completers
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:   File "/usr/lib/python3/dist-packages/argcomplete/completers.py", line 6, in <module>
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:     import subprocess
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:   File "/usr/lib/python3.12/subprocess.py", line 104, in <module>
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:     from _posixsubprocess import fork_exec as _fork_exec
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:   File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]:   File "<frozen importlib._bootstrap>", line 1304, in _find_and_load_unlocked
+2026-09-23T02:53:24+09:00 PERPROS bash[289775]: KeyboardInterrupt
+2026-09-23T02:53:24+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:24+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:24+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:25+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]: Traceback (most recent call last):
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]:     sys.exit(main())
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]:              ^^^^^^
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]:     time.sleep(1)
+2026-09-23T02:53:26+09:00 PERPROS python3[289808]: KeyboardInterrupt
+2026-09-23T02:53:26+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:26+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:26+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:26+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 1.490s CPU time, 36.1M memory peak, 0B memory swap peak.
+2026-09-23T02:53:26+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:28+09:00 PERPROS bash[289865]: [WARN] [1790099608.924821063] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:53:28+09:00 PERPROS bash[289865]: [WARN] [1790099608.924859398] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]: Traceback (most recent call last):
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]:     sys.exit(main())
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]:              ^^^^^^
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]:     time.sleep(1)
+2026-09-23T02:53:28+09:00 PERPROS python3[289866]: KeyboardInterrupt
+2026-09-23T02:53:28+09:00 PERPROS bash[289865]: /opt/ros/jazzy/lib/python3.12/site-packages/rclpy/node.py:188: RuntimeWarning: Failed to fini rosout publisher: rcl node implementation is invalid, at ./src/rcl/node.c:390
+2026-09-23T02:53:28+09:00 PERPROS bash[289865]:   self.__node = _rclpy.Node(
+2026-09-23T02:53:28+09:00 PERPROS bash[289865]: core: suppressed during shutdown: RCLError('error creating node: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/guard_condition.c:67')
+2026-09-23T02:53:28+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:29+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:29+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:29+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 1.596s CPU time, 45.0M memory peak, 0B memory swap peak.
+2026-09-23T02:53:29+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:32+09:00 PERPROS bash[289930]: [WARN] [1790099612.226994058] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:53:32+09:00 PERPROS bash[289930]: [WARN] [1790099612.228778951] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:53:32+09:00 PERPROS bash[289930]: [INFO] [1790099612.507106661] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:53:32+09:00 PERPROS bash[289930]: [INFO] [1790099612.508583360] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:53:32+09:00 PERPROS bash[289930]: [INFO] [1790099612.939681212] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]: Traceback (most recent call last):
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 33, in <module>
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]:     sys.exit(main())
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]:              ^^^^^^
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]:   File "/opt/rosy_sdtest/current/deploy/robot/native/wait-core-ready.py", line 27, in main
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]:     time.sleep(1)
+2026-09-23T02:53:33+09:00 PERPROS python3[289931]: KeyboardInterrupt
+2026-09-23T02:53:33+09:00 PERPROS bash[289930]: [INFO] [1790099613.387696219] [rosy_01.core]: core shutting down
+2026-09-23T02:53:33+09:00 PERPROS bash[289930]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:33+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Control process exited, code=killed, status=2/INT
+2026-09-23T02:53:33+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Failed with result 'signal'.
+2026-09-23T02:53:33+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:33+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 2.651s CPU time, 77.9M memory peak, 0B memory swap peak.
+2026-09-23T02:53:34+09:00 PERPROS systemd[1]: Starting rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:35+09:00 PERPROS bash[290008]: [WARN] [1790099615.751513539] [rcl]: ROS_LOCALHOST_ONLY is deprecated but still honored if it is enabled. Use ROS_AUTOMATIC_DISCOVERY_RANGE and ROS_STATIC_PEERS instead.
+2026-09-23T02:53:35+09:00 PERPROS bash[290008]: [WARN] [1790099615.751579698] [rcl]: 'localhost_only' is enabled, 'automatic_discovery_range' and 'static_peers' will be ignored.
+2026-09-23T02:53:36+09:00 PERPROS bash[290008]: [INFO] [1790099616.160415934] [rosy_01.core]: ros_bridge ready (cmd_vel sole publisher @50Hz)
+2026-09-23T02:53:36+09:00 PERPROS bash[290008]: [INFO] [1790099616.161751076] [rosy_01.core]: core up: robot_id=rosy_01 model=Pinky Pro
+2026-09-23T02:53:36+09:00 PERPROS bash[290008]: [INFO] [1790099616.638801938] [rosy_01.core]: api server on 127.0.0.1:18490
+2026-09-23T02:53:37+09:00 PERPROS systemd[1]: Started rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:42+09:00 PERPROS systemd[1]: Stopping rosy-core-sdtest.service - ROSY native CORE runtime...
+2026-09-23T02:53:42+09:00 PERPROS bash[290008]: [INFO] [1790099622.232665522] [rosy_01.core]: core shutting down
+2026-09-23T02:53:42+09:00 PERPROS bash[290008]: Failed to publish log message to rosout: publisher's context is invalid, at ./src/rcl/publisher.c:423
+2026-09-23T02:53:42+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Deactivated successfully.
+2026-09-23T02:53:42+09:00 PERPROS systemd[1]: Stopped rosy-core-sdtest.service - ROSY native CORE runtime.
+2026-09-23T02:53:42+09:00 PERPROS systemd[1]: rosy-core-sdtest.service: Consumed 4.166s CPU time, 79.5M memory peak, 0B memory swap peak.

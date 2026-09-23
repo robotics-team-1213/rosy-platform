@@ -22,7 +22,7 @@ gates:
     blocker: "Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음"
   FIELD:
     state: N/A
-adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165]
+adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179]
 plans:
   - docs/plans/2026-09-01-rosy-os-v1-image-release-design.md
   - docs/plans/2026-09-08-release-delivery-design.md
@@ -41,6 +41,8 @@ plans:
   - docs/plans/2026-09-21-ubuntu-native-ros-runtime.md
   - docs/plans/2026-09-22-pinky-pro-flashable-image-design.md
   - docs/plans/2026-09-22-pinky-pro-flashable-image.md
+  - docs/plans/2026-09-23-core-dev-overlay-design.md
+  - docs/plans/2026-09-23-core-dev-overlay.md
 ---
 ## 지금 상태
 
@@ -65,6 +67,9 @@ plans:
   전달하고 선택한 물리 디스크의 boot 파티션에만 one-shot bundle을 원자 복사한다.
   Ubuntu first boot는 hostname, DDS 신원, mode 0600 NetworkManager/Fleet bootstrap과
   hardware serial binding을 적용한 뒤에만 CORE gate를 연다.
+- D-179 벤치 오버레이는 `deploy/robot/dev/core_dev_overlay.py`와 Windows 동기화 스크립트로
+  호스트에서 검사된다. readback은 오버레이가 남아 있으면 `device_runtime=HOLD`다.
+  제품 `current`, 설치기, GitHub 설치 경로는 그대로다. 로봇에서 한 줄을 바꾼 증거는 아직 없다.
 
 ## 다음 gate
 

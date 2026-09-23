@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # ROSY
 
@@ -16,8 +16,9 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |
 | `STATUS.md` | Generated: per-module gate snapshot (SOURCE…FIELD) linking each module's `progress.md`. Edit progress/logs/ADRs, not this file |
-| `fix.sh` | WSL helper: recreate ament `resource/<pkg>` markers for Python packages under the domain groups |
-| `run_fleet_sim.sh` | One-click multi-robot Gazebo + fleet orchestration launcher |
+| `tools/fix_ament_resource.sh` | Recreate ament `resource/<pkg>` markers for Python packages under the domain groups |
+| `tools/run_fleet_sim.sh` | One-click multi-robot Gazebo + fleet orchestration launcher |
+| `data/` | Local teleop checks (`teleop/`) and drive recordings (`drive/`). Session files are not committed |
 | `.gitignore` | Ignores colcon `build/` `install/` `log/`, `__pycache__`, `.omc/` |
 
 ## Subdirectories
@@ -25,8 +26,10 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | Directory | Purpose |
 |-----------|---------|
 | `src/` | ROS 2 colcon workspace, domain-grouped (see `src/AGENTS.md`) |
-| `docs/` | Governance docs: spec, API contract, ADR, plans (see `docs/AGENTS.md`) |
-| `deploy/` | Image build, signed release, Pi 5 Docker/systemd runtime (see `deploy/AGENTS.md`) |
+| `docs/` | Governance docs: spec, live API contract, ADR, plans (see `docs/AGENTS.md`) |
+| `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
+| `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
+| `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `dock/` | Charging-dock firmware and ROSY-DOCK-001 contract (see `dock/AGENTS.md`) |
 | `signal/` | Traffic-signal controller: ROSY-SIGNAL-001 contract + ESP32 relay firmware (reference implementation); commanded by the Fleet console, fail-safe flash on lost supervision (see `signal/AGENTS.md`) |
 | `test/` | Host pytest for deploy/release/motor contracts (see `test/AGENTS.md`) |
@@ -57,7 +60,7 @@ source env.sh
 cd src && colcon build --symlink-install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/core/core/test/ -v
+python3 -m pytest src/core/core/test/ src/core/core_events/test/ src/core/core_features/test/ src/core/web_common/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest src/site/fleet/test/ -v
@@ -68,7 +71,7 @@ python3 -m pytest test/ -v
 # CI also: flake8 (max 120), boot smoke without slam_toolbox
 ```
 
-CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-base`, pytest, boot smoke, SaveMap type guard — all on domain-tree paths. Note: the repository currently has no git remote, so CI events do not fire; treat CI-run verification as pending until a remote exists.
+CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-base`, pytest, boot smoke, SaveMap type guard — all on domain-tree paths. Note: `origin` exists (`github.com/livsbittt/rosy-os.git`) and CI events fire on push and pull requests — check the latest run (`gh run list`) for current status; a local `main` that is ahead of `origin/main` has no CI evidence at all.
 
 ### Common Patterns
 

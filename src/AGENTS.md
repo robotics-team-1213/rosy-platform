@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-20 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # src
 
@@ -28,14 +28,14 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 - Package names are grouped by domain (`core/`, `apps/`, `hardware/`, …). Do not reintroduce `pinky_*` or flat `rosy_*` directory names. The 2026-09 regroup moved `rosy_core` → `core/core`, `rosy_control` → `apps/control`, `rosy_fleet` → `site/fleet`, `rosy_bringup` → `hardware/bringup`, etc.; docs that still say `src/<pkg>/test` mean `src/<domain>/<pkg>/test`.
 - After editing `package.xml` / `setup.py` / `CMakeLists.txt`, rebuild with colcon.
-- `resource/<pkg>` is an ament index marker — do not delete; no need for AGENTS.md there (`fix.sh` at the repo root can recreate them).
+- `resource/<pkg>` is an ament index marker — do not delete; no need for AGENTS.md there (`tools/fix_ament_resource.sh` can recreate them).
 - Do not check in `src/build`, `src/install`, `src/log`.
 
 ### Testing Requirements
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest core/core/test/ apps/control/test/ site/fleet/test apps/omx_adapter/test apps/games/test -q
+python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ apps/control/test/ site/fleet/test apps/omx_adapter/test apps/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 

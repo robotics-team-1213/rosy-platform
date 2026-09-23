@@ -88,6 +88,13 @@
 | D-169 | v1 제품 장치 표면은 모터·LiDAR·카메라·I2C-1 ADC로 고정한다 — emotion/lamp/led/imu는 벤치 전용을 소급 공식화 |
 | D-170 | PRT-004 명령 추적 확장은 중앙 Fleet 착수와 함께 간다 — 그 전까지 correlation_id는 계약 전용 필드 |
 | D-172 | 구조 개편 이전의 미병합 브랜치는 태그로 보존하고, 재구현·독립 리뷰를 거쳐서만 main에 들인다 — Python 3.12가 기준 |
+| D-177 | correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현 — 활성화 시 설계를 선기록 |
+| D-178 | 모듈의 병렬 작업 가능성은 평가표로 측정한다 — 5개 판정 축(M1–M5), 컷 게이트, 기준선 |
+| D-181 | 벤치 장치의 제품 편입은 장치별 실기 수요·D-84 프로필 항목·배관/capabilities/가드가 한 변경에서 충족될 때만 — 조건과 절차를 선기록 |
+| D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
+| D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
+| D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
+| D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 |
 
 ## 계획·결과 문서
 
@@ -110,6 +117,7 @@
 - [2026-09-21-semantic-road-control.md](plans/2026-09-21-semantic-road-control.md)
 - [2026-09-22-pinky-pro-flashable-image-design.md](plans/2026-09-22-pinky-pro-flashable-image-design.md)
 - [2026-09-22-pinky-pro-flashable-image.md](plans/2026-09-22-pinky-pro-flashable-image.md)
+- [2026-09-24-folder-layout.md](plans/2026-09-24-folder-layout.md)
 
 ## 교훈 (docs/solutions)
 
@@ -122,8 +130,8 @@
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · docs(adr): 미병합 옛 브랜치의 보존·이관 규칙과 후속 항목 (D-172)
-- 2026-09-22 · uncommitted · docs(adr): D-169 제품 장치 표면 고정 · D-170 PRT-004 유예
-- 2026-09-22 · uncommitted · merge(core): land the audit-log port after the event-catalogue port — API reference v1.14
-- 2026-09-22 · uncommitted · docs(api): API ref v1.13 — `serialize_failures` 와 격리 파일을 계약에 적는다
-- 2026-09-22 · uncommitted · test(docs): line-follow 계약 시험의 API ref 버전 고정을 v1.13 으로
+- 2026-09-24 · uncommitted · chore(repo): absorb the parent umbrella into Rosy OS
+- 2026-09-24 · uncommitted · docs(data): keep teleop learning clips under data/teleop/learning
+- 2026-09-24 · uncommitted · docs(adr): D-185 R1 구현 메모
+- 2026-09-24 · uncommitted · docs: origin/main 병합 게이트 실측 수치를 별도 항목으로 기록
+- 2026-09-24 · uncommitted · docs(layout): point README and reference at the current folders

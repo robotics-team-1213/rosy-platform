@@ -3,9 +3,9 @@
 <package format="3">
   <name>emotion</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>LCD emotion GIF player and info screen for the ROSY robot.</description>
   <maintainer email="kyung133851@pinklab.art">pinklab</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
