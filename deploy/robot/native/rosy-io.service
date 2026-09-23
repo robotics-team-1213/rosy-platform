@@ -18,8 +18,12 @@ Environment=ROS_HOME=/var/log/rosy-io ROS_LOG_DIR=/var/log/rosy-io
 StateDirectory=rosy/io
 StateDirectoryMode=0750
 Environment=HOME=/var/lib/rosy/io
+# D-189 review: HOME is writable, so nothing may run from it. No login shell
+# (~/.profile, ~/.bash_profile) and no user site (~/.local, usercustomize);
+# the environment reaches ExecStartPost's python as well.
+Environment=PYTHONNOUSERSITE=1
 WorkingDirectory=/opt/rosy/current
-ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 launch bringup bringup_robot.launch.py namespace:=${ROSY_NAMESPACE} cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S} motor_device:=/dev/rosy-motor enable_lidar:=true enable_battery:=false'
+ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 launch bringup bringup_robot.launch.py namespace:=${ROSY_NAMESPACE} cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S} motor_device:=/dev/rosy-motor enable_lidar:=true enable_battery:=false'
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=10

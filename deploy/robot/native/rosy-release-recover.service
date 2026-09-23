@@ -20,6 +20,8 @@ ProtectHome=true
 # /opt/rosy/{current,previous} links through a temporary link in /opt/rosy.
 # ProtectSystem=strict makes all of that read-only unless it is listed here.
 StateDirectory=rosy/releases
+# Only root reads the journal (rosy-boot-status, rosy-diag run as root).
+StateDirectoryMode=0700
 ReadWritePaths=/opt/rosy
 
 [Install]

@@ -363,7 +363,8 @@ PROGRAM_SOURCES = {
     "rosy-release-recover.service": ["deploy/robot/native/native_release.py",
                                      "deploy/robot/native/recover-release.sh"],
     "rosy-sd-provision.service": [],
-    "rosy-core.service": ["src/core"],
+    # CORE also imports modules of the control package (sensor adapter, gate).
+    "rosy-core.service": ["src/core", "imported-by:src/core:control:src/apps/control"],
     "rosy-io.service": ["src/hardware/bringup"],
     "rosy-navigation.service": ["src/navigation", "src/hardware/bringup"],
 }
@@ -425,7 +426,29 @@ def _expand(path: str, directives: dict[str, list[str]]) -> str:
     return path.replace("$HOME", home)
 
 
+IMPORT_OF = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", re.MULTILINE)
+
+
+def _imported_modules(importer: str, package: str, package_root: str) -> list[Path]:
+    """Files of `package` (rooted at package_root) that `importer` sources import."""
+    found: set[Path] = set()
+    for source in _source_files(importer):
+        for name in IMPORT_OF.findall(source.read_text(encoding="utf-8", errors="replace")):
+            parts = name.split(".")
+            if parts[0] != package:
+                continue
+            for depth in range(len(parts), 0, -1):
+                base = ROOT / package_root / Path(*parts[:depth])
+                for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+                    if candidate.is_file():
+                        found.add(candidate)
+    return sorted(found)
+
+
 def _source_files(relative: str) -> list[Path]:
+    if relative.startswith("imported-by:"):
+        _tag, importer, package, package_root = relative.split(":")
+        return _imported_modules(importer, package, package_root)
     root = ROOT / relative
     if root.is_file():
         return [root]
@@ -465,10 +488,17 @@ def test_no_unit_takes_the_shared_rosy_state_parent(unit):
         assert path.rstrip("/") not in {"/var/lib", "/var/lib/rosy", "/opt", "/etc", "/etc/rosy"}, (unit, path)
 
 
+def _non_root(directives: dict[str, list[str]]) -> bool:
+    # No User= is root, which is systemd's default; DynamicUser= is not root.
+    if directives.get("DynamicUser", ["no"])[-1] in {"yes", "true", "1", "on"}:
+        return True
+    return directives.get("User", ["root"])[-1] not in {"root", "0"}
+
+
 @pytest.mark.parametrize("unit", UNITS)
 def test_non_root_units_cannot_write_root_only_state(unit):
     directives = _directives(unit)
-    if directives.get("User", ["root"]) == ["root"]:
+    if not _non_root(directives):
         return
     for path, _optional in _writable(directives):
         for protected in ROOT_ONLY_STATE:
@@ -498,7 +528,7 @@ def test_declared_paths_account_for_every_write_root_in_the_program(unit):
 @pytest.mark.parametrize("unit", UNITS)
 def test_protect_home_service_users_get_a_writable_home(unit):
     directives = _directives(unit)
-    if directives.get("ProtectHome") != ["true"] or directives.get("User", ["root"]) == ["root"]:
+    if directives.get("ProtectHome") != ["true"] or not _non_root(directives):
         return
     home = _environment(directives).get("HOME")
     assert home, f"{unit}: ProtectHome=true makes the passwd home unreadable; set HOME"
@@ -518,8 +548,12 @@ def test_required_writable_paths_exist_when_the_unit_starts(unit):
     # image, or come from a unit this one requires.
     directives = _directives(unit)
     created = set(_managed(directives))
-    created |= {line.split()[1] for line in STATE_RULES.read_text(encoding="utf-8").splitlines()
-                if line.startswith("d ")}
+    # tmpfiles runs in systemd-tmpfiles-setup.service; a DefaultDependencies=no
+    # unit may start before it unless it orders itself after it.
+    early = directives.get("DefaultDependencies") == ["no"]
+    if not early or "systemd-tmpfiles-setup.service" in _words(directives, "After"):
+        created |= {line.split()[1] for line in STATE_RULES.read_text(encoding="utf-8").splitlines()
+                    if line.startswith("d ")}
     created.add("/opt/rosy")  # customize-rootfs.sh installs the release store there
     for required in _words(directives, "Requires"):
         if required.endswith(".service") and (NATIVE / required).is_file():
@@ -539,6 +573,8 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     assert "d /var/lib/rosy/maps 2750 rosy-io rosy-core -" in rules
     for protected in ROOT_ONLY_STATE:
         assert f"Z {protected} - root root -" in rules
+    # A map left owned by rosy-core on a 005 card must not block slam_toolbox.
+    assert "z /var/lib/rosy/maps/* - rosy-io rosy-core -" in rules
     assert 'tmpfiles-rosy-state.conf" "$OVERLAY/etc/tmpfiles.d/rosy-state.conf"' in payload
     assert 'install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"' in customizer
     assert "install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps" in customizer
@@ -561,3 +597,62 @@ def test_contract_parser_sees_the_2026_09_23_005_defects():
     shipped_recover = {"ProtectSystem": ["strict"], "ProtectHome": ["true"]}
     writable = [path for path, _optional in _writable(shipped_recover)]
     assert not any(_under("/var/lib/rosy/releases/native-release.lock", path) for path in writable)
+
+
+# --- D-189 review: a writable HOME must not become a startup hook ----------
+
+HOME_UNITS = ("rosy-core.service", "rosy-io.service", "rosy-navigation.service")
+
+
+@pytest.mark.parametrize("unit", UNITS)
+def test_units_with_a_writable_home_run_nothing_from_it(unit):
+    # bash -l sources ~/.profile and ~/.bash_profile; Python adds ~/.local and
+    # imports usercustomize. With HOME writable by the service, a compromised
+    # process could plant code that runs before the signed release on every
+    # start and survives OTA.
+    directives = _directives(unit)
+    home = _environment(directives).get("HOME")
+    if not home or not any(_under(home, path) for path, _optional in _writable(directives)):
+        return
+    assert _environment(directives).get("PYTHONNOUSERSITE") == "1", unit
+    for key in ("ExecStartPre", "ExecStart", "ExecStartPost", "ExecReload", "ExecStop", "ExecStopPost"):
+        for command in directives.get(key, []):
+            words = command.split()
+            shell = words[0].lstrip("-+!@:").rsplit("/", 1)[-1] if words else ""
+            if shell in {"bash", "sh", "dash"}:
+                assert "--noprofile" in words and "--norc" in words, (unit, key, command)
+                flags = [word for word in words[1:] if word.startswith("-") and not word.startswith("--")]
+                assert not any("l" in flag for flag in flags), (unit, key, command)
+                assert "--login" not in words, (unit, key, command)
+
+
+def test_every_home_unit_is_covered_by_the_startup_hook_rule():
+    for unit in HOME_UNITS:
+        directives = _directives(unit)
+        assert _environment(directives).get("HOME"), unit
+        assert _environment(directives).get("PYTHONNOUSERSITE") == "1", unit
+        assert "/usr/bin/bash --noprofile --norc -c '" in _read(unit), unit
+        assert "bash -lc" not in _read(unit), unit
+
+
+def test_recovery_journal_is_private_to_root():
+    directives = _directives("rosy-release-recover.service")
+    assert directives.get("StateDirectoryMode") == ["0700"]
+    assert "User" not in directives
+
+
+def test_contract_helpers_treat_dynamic_users_as_non_root():
+    assert _non_root({"DynamicUser": ["yes"]})
+    assert _non_root({"User": ["rosy-io"]})
+    assert not _non_root({})
+    assert not _non_root({"User": ["root"]})
+
+
+def test_core_program_scan_follows_imports_into_the_control_package():
+    # CORE's production modules import no control module today (only its tests
+    # do), so the scan adds nothing now; it picks them up the moment one does.
+    assert PROGRAM_SOURCES["rosy-core.service"][1] == "imported-by:src/core:control:src/apps/control"
+    resolved = {path.relative_to(ROOT).as_posix()
+                for path in _imported_modules("src/core/core/test", "control", "src/apps/control")}
+    assert "src/apps/control/control/sensor_provider.py" in resolved
+    assert "src/apps/control/control/calibration_storage.py" in resolved
