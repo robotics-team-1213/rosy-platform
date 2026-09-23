@@ -36,7 +36,7 @@ frames coincide and T_map_odom is the identity. Nothing corrects odometry
 drift after that: position along the route is the projection of the
 dead-reckoned pose. With `map_frame=True` the caller already hands poses
 in the map frame (route_hybrid's paint-localised estimate) and no anchor is
-applied.
+applied; the caller may then pass `odom_pose` for the tracker's memory.
 
 Known limitation (review HIGH-3, not redesigned here): the branch choice is
 odometry-metric, not event-driven. Where the route turns is decided by the
@@ -285,7 +285,11 @@ class RouteCameraFollower:
         self._manoeuvre = "ABORTED"
         self.state = "MANOEUVRE_ABORT"
 
-    def update(self, now_s, pose, bgr, ground, **kwargs) -> LaneObservation | None:
+    def update(self, now_s, pose, bgr, ground, *, odom_pose=None,
+               **kwargs) -> LaneObservation | None:
+        """`odom_pose` (map_frame only): the odometry pose that carries the
+        tracker's boundary memory, when `pose` is a map-frame estimate that
+        can step between frames. None: `pose` carries it."""
         if pose is not None:
             pose = tuple(float(v) for v in pose)
             if len(pose) != 3 or not all(math.isfinite(v) for v in pose):
@@ -305,7 +309,9 @@ class RouteCameraFollower:
         self._s = float(self._seg_start[fix.segment_index] + fix.s_m)
         near_node = min(fix.distance_to_node_m, fix.s_m) <= JUNCTION_ARM_M
         self._tracker.gate = self if (near_node or not self.locked) else None
-        observation = self._tracker.update(now_s, pose, bgr, ground, **kwargs)
+        observation = self._tracker.update(
+            now_s, pose if odom_pose is None else tuple(float(v) for v in odom_pose),
+            bgr, ground, **kwargs)
         tier = self._tracker.tier
         if tier in _LOCK_TIERS:
             self.locked = True

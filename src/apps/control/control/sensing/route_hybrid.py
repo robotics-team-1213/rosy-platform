@@ -10,7 +10,10 @@ to drift but its route pursuit swings on the steep NE spoke exit. Per frame:
   steering   RouteCameraFollower (A) with `map_frame=True`, fed the
              estimate as its pose: the route-gated seed, the select and the
              bounded MANOEUVRE all place the route with the corrected pose;
-             the camera tracker still owns lane keeping
+             the camera tracker still owns lane keeping, its boundary memory
+             carried by odometry (smooth frame to frame; the estimate steps
+             on resampling: see test_the_camera_tracker_keeps_its_boundary_
+             memory_on_odometry for the measurement)
   fail-closed B's conditions first: no estimate, spread over MAX_SPREAD_M or
              match under MIN_MATCH is no output (state LOCALISE_STOP,
              `last["reason"]` NO_ESTIMATE / SPREAD / MATCH) and A is not
@@ -25,9 +28,9 @@ to drift but its route pursuit swings on the steep NE spoke exit. Per frame:
              is A's (`_with_confidence`)
 
 The cross-check is kept because A's route gate alone does not catch a
-biased estimate: offline, with the estimate shifted +-30 / +-50 mm, 4 of 48
-runs drove to the end on the right branch 44-57 mm off the centreline
-without stopping; with the check all 48 stop, none unstopped
+biased estimate: offline, with the estimate shifted +-30 / +-50 mm, 6 of 48
+runs drove to the end on the right branch 43-63 mm off the centreline
+without stopping; with the check 47 stop and 1 passes, none unstopped
 (test_a_biased_estimate_is_not_driven_off_the_lane).
 """
 
@@ -124,7 +127,8 @@ class RouteHybridFollower:
             return self._stop("SPREAD")
         if estimate.match < MIN_MATCH:
             return self._stop("MATCH")
-        observation = self._follower.update(now_s, estimate.pose, bgr, ground, **lane_kwargs)
+        observation = self._follower.update(now_s, estimate.pose, bgr, ground,
+                                            odom_pose=pose, **lane_kwargs)
         self.state = self._follower.state
         self.last.update(self._follower.last)
         disagree = disagreement(self._follower._tracker, estimate.pose, self._pieces)

@@ -145,15 +145,17 @@ def _biased(f, offset_m):
     return f
 
 
-@pytest.mark.parametrize(("index", "offset_m"), [(0, 0.05), (6, -0.05), (0, -0.03), (11, -0.03)])
+@pytest.mark.parametrize(("index", "offset_m"),
+                         [(0, -0.05), (6, -0.05), (0, -0.03), (11, -0.03)])
 def test_a_biased_estimate_is_not_driven_off_the_lane(index, offset_m):
     """Why B's camera/route disagreement check is kept. Measured 2026-09-23
     over the 12 scenarios with the estimate shifted +-30 / +-50 mm (48 runs):
-    without the check 34 passed (the camera keeps the lane between nodes),
-    10 stopped, and 4 (these) drove to the end on the right branch 44-57 mm
-    off the centreline without stopping; with it all 48 stop (40 DISAGREE,
-    8 A's own STOP), none unstopped. The cost: an estimate 30 mm off stops
-    the robot where the camera alone often would have coped."""
+    without the check 29 passed (the camera keeps the lane between nodes),
+    13 stopped, and 6 drove to the end on the right branch 43-63 mm off the
+    centreline without stopping (these four among them); with it 47 stop
+    (39 DISAGREE, 8 A's own STOP) and one passes (04, +30 mm, 14 mm), none
+    unstopped. The cost: an estimate 30 mm off stops the robot where the
+    camera alone would often have coped."""
     scenario = SCENARIOS[index]
     f = _biased(follower(scenario), offset_m)
     result = run_scenario(scenario, f, steps=260)
@@ -222,6 +224,31 @@ def test_last_exposes_the_tracker_and_the_estimate_for_the_overlay():
     assert tracker.get("paint") is not None
     assert {"memory", "right_memory", "target"} <= set(tracker)
     assert f.view is not None
+
+
+def test_the_camera_tracker_keeps_its_boundary_memory_on_odometry():
+    """The route (seed, select, manoeuvre) is placed by the estimate, but the
+    tracker's boundary memory is carried by odometry: smooth frame to frame,
+    where the estimate steps on every resample. Measured over seeds 7/1/2 on
+    the moderate cell 3% +0.01 rad/s, 20 mm / 2 deg: estimate-carried memory
+    drove 00 to 43.0 / 35.7 / 43.0 mm (two over the 40 mm bound), odometry-
+    carried 30.2 / 30.2 / 30.7 mm; clean runs are within 1 mm either way."""
+    scenario = SCENARIOS[5]
+    f = follower(scenario)
+    seen = []
+    tracker = f._follower._tracker
+    update = tracker.update
+
+    def spy(now_s, pose, *args, **kwargs):
+        seen.append(pose)
+        return update(now_s, pose, *args, **kwargs)
+
+    tracker.update = spy
+    x, y, yaw = scenario["start"]
+    odom = (x + 0.004, y - 0.003, yaw)       # odometry a few mm off the map pose
+    f.update(0.0, odom, WORLD.render(scenario["start"]), lane_sim.GROUND, **lane_sim.KW)
+    assert seen == [pytest.approx(odom)]
+    assert f.map_pose != pytest.approx(odom)
 
 
 def test_the_route_forbids_the_wrong_way_round_the_ring():
