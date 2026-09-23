@@ -12,7 +12,7 @@ from core_common.capability import Capability
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core_features.docking.agent import DockAgent
-from core_features.docking.database import DockDatabase, DockInstance, DockType
+from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
@@ -20,7 +20,7 @@ from core_features.fleet_agent.agent import FleetAgent
 from core_common.domain.adapters import AdapterRegistry
 
 from core_common.domain.model import inventory_from_config, slices_from_config
-from core_common.protocol.schemas import DockState, HealthState
+from core_common.protocol.schemas import DockState, HealthState, RobotMode
 from core_events.events.audit import FileAuditLog
 from core_events.events.bus import EventBus
 from core_common.identity import RobotIdentity
@@ -369,7 +369,29 @@ class CoreServices:
             battery=battery,
             pose_provider=map_pose,
             line_follow_active_provider=lambda: line_follow.active,
+            take_mode=lambda: take_docking_mode(),
         )
+
+        def take_docking_mode():
+            """Docking drives from start to finish in DOCKING (the docking slot
+            only reaches the wheels there). Checked before the manager changes
+            anything: a refusal leaves the dock state as it was. The table has
+            no NAVIGATION -> DOCKING edge, so NAVIGATION goes through IDLE;
+            MANUAL (3) outranks DOCKING (4) and is refused."""
+            if modes.mode is Mode.DOCKING:
+                return
+            if modes.mode not in (Mode.IDLE, Mode.NAVIGATION):
+                raise DockError("MODE_CONFLICT",
+                                f"invalid transition {modes.mode.value}->DOCKING")
+            previous = modes.mode
+            if previous is Mode.NAVIGATION:
+                modes.transition(Mode.IDLE)
+            modes.transition(Mode.DOCKING)
+            command.clear_docking()
+            state.set_mode(RobotMode.DOCKING)
+            events.publish("mode.changed", source="docking",
+                           data={"from": previous.value, "to": Mode.DOCKING.value,
+                                 "by": "docking"})
         swarm = SwarmManager(
             events, state, nav, safety, capability,
             # Nav2 를 두고 다투는 것은 DOCKING/UNDOCKING 뿐이다. DOCKED·CHARGING 은

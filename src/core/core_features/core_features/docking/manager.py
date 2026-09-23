@@ -122,6 +122,7 @@ class DockingManager:
                  battery: Any = None,
                  pose_provider: Optional[Callable[[], Any]] = None,
                  line_follow_active_provider: Optional[Callable[[], bool]] = None,
+                 take_mode: Optional[Callable[[], None]] = None,
                  ) -> None:
         self._db = database
         self._safety = safety
@@ -136,6 +137,9 @@ class DockingManager:
         # 맵 포즈 (x, y, yaw) — 주차형의 진입 회전과 크리프 조준. 맵은 대략까지다.
         self._pose_provider = pose_provider or (lambda: None)
         self._line_follow_active = line_follow_active_provider or (lambda: False)
+        # DOCKING 모드를 쥔다. 못 쥐면 DockError 로 거절한다 — 매니저를 건드리기
+        # **전에** 부른다. API 와 배터리 복귀가 같은 이음새를 지난다.
+        self._take_mode = take_mode or (lambda: None)
         self._gains = ParkingGains()
         self._lock = threading.Lock()
 
@@ -244,6 +248,7 @@ class DockingManager:
             dock = self._db.get(dock_id)
 
         dock.require_map(self._map_id_provider())
+        self._take_mode()
 
         self._dock = dock
         self._retries = 0
@@ -262,6 +267,7 @@ class DockingManager:
             raise DockError("EMERGENCY_ACTIVE", "e-stop is active")
         if self._line_follow_active():
             raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
+        self._take_mode()
 
         # 도크에 반쯤 물린 상태에서는 LiDAR 도 카메라도 벽을 3 cm 앞에서 보고
         # 있다. 믿을 게 없으므로 검출기를 끄고 오도메트리만으로 빠져나온다.

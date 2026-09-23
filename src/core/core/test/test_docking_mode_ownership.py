@@ -154,3 +154,64 @@ def test_nav_cmd_vel_is_dropped_while_line_following(core_client):
     services.modes.transition(Mode.NAVIGATION)
     services.line_follow.set_mode("CAMERA_LINE")
     assert not docking_mode.route_nav_cmd_vel(services, Twist(0.1, 0.0))
+
+
+# --- H2: the mode is checked before the manager is touched --------------------
+
+
+class RecordingExecutor(DrivingExecutor):
+    def __init__(self, services):
+        super().__init__(services)
+        self.calls = []
+
+    def navigate_to(self, pose):
+        self.calls.append(("navigate_to", pose))
+
+    def drive(self, linear, angular):
+        self.calls.append(("drive", linear, angular))
+        super().drive(linear, angular)
+
+
+def manual_robot(core_client):
+    client, services = core_client(config_overrides=sim_overrides())
+    executor = RecordingExecutor(services)
+    services.docking.executor = executor
+    services.state.set_pose(-1.2696, 0.0, math.pi / 2)
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"},
+                       headers=OPERATOR).status_code == 200
+    return client, services, executor
+
+
+def test_undock_from_manual_leaves_a_docked_robot_docked(core_client):
+    client, services, executor = manual_robot(core_client)
+    services.docking._state = DockState.DOCKED
+    services.docking._dock = services.docking.database.get("parking")
+    response = client.post("/api/v1/docking/undock", headers=OPERATOR)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "MODE_CONFLICT"
+    assert services.docking.state is DockState.DOCKED
+    assert services.docking.status().dock_id == "parking"
+    assert services.modes.mode is Mode.MANUAL
+    assert executor.calls == []
+
+
+def test_dock_from_manual_changes_nothing(core_client):
+    client, services, executor = manual_robot(core_client)
+    response = client.post("/api/v1/docking/dock", json={"dock": "parking"}, headers=OPERATOR)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "MODE_CONFLICT"
+    assert services.docking.state is DockState.UNDOCKED
+    assert services.docking.status().dock_id is None
+    assert services.modes.mode is Mode.MANUAL
+    assert executor.calls == []
+
+
+def test_a_staging_dock_from_manual_sends_no_staging_goal(core_client):
+    from core_features.docking.database import DockInstance, DockType
+    client, services, executor = manual_robot(core_client)
+    services.docking.database.add_type(DockType(name="std", detector="simulated"))
+    services.docking.database.add(DockInstance(id="std1", type="std", x=1.0, y=0.0, yaw=0.0))
+    response = client.post("/api/v1/docking/dock", json={"dock": "std1"}, headers=OPERATOR)
+    assert response.status_code == 409
+    assert executor.calls == []
+    assert services.docking.state is DockState.UNDOCKED

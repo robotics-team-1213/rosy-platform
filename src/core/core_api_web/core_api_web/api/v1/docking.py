@@ -8,9 +8,8 @@ from pydantic import BaseModel
 from core_api_web.api.v1.common import admin, operator, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
-from core_api_web.api.deps import DockError, DockInstance, DockType, Mode
+from core_api_web.api.deps import DockError, DockInstance, DockType
 from core_common.domain.tasks import TaskKind
-from core_common.protocol.schemas import RobotMode
 
 
 docking_router = APIRouter(prefix="/api/v1/docking", tags=["docking"])
@@ -66,25 +65,6 @@ class DockRequest(BaseModel):
 
 class DockCommand(BaseModel):
     dock: str | None = None
-
-
-def _take_docking_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
-    """도킹 주행은 nav 슬롯을 쓰고, 그 슬롯은 NAVIGATION 이나 DOCKING 에서만 바퀴에
-    닿는다. 도킹이 처음부터 끝까지 DOCKING 을 쥔다(매니저 docstring). 표에
-    NAVIGATION→DOCKING 간선은 없으므로 IDLE 을 거친다. 끝나면 ros_bridge 가
-    IDLE 로 돌려놓는다 (core.bridge.docking_mode)."""
-    if svc.modes.mode is Mode.DOCKING:
-        return
-    if svc.modes.mode is Mode.NAVIGATION:
-        svc.modes.transition(Mode.IDLE)
-    ok, reason = svc.modes.transition(Mode.DOCKING)
-    if not ok:
-        svc.docking.cancel()
-        raise ApiError("MODE_CONFLICT", 409, reason)
-    svc.command.clear_navigation()
-    svc.state.set_mode(RobotMode.DOCKING)
-    svc.events.publish("mode.changed", source="api",
-                       data={"from": "api", "to": Mode.DOCKING.value, "by": auth.role})
 
 
 @docking_router.get("/status")
@@ -155,10 +135,11 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
                  svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)              # DNC-003 — 미지원이면 501
     try:
+        # 매니저가 DOCKING 을 먼저 쥔다 (CoreServices.take_docking_mode). 못
+        # 쥐면 아무것도 바꾸지 않고 MODE_CONFLICT 다.
         svc.docking.dock(body.dock)
     except DockError as exc:
         raise _dock_error(exc)
-    _take_docking_mode(svc, auth)
     return svc.docking.status().model_dump()
 
 
@@ -170,7 +151,6 @@ def docking_undock(auth: AuthContext = Depends(operator),
         svc.docking.undock()
     except DockError as exc:
         raise _dock_error(exc)
-    _take_docking_mode(svc, auth)
     return svc.docking.status().model_dump()
 
 
