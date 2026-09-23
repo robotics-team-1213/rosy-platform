@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[4]  # repository root
 for path in (ROOT / "src/hardware/bringup", ROOT / "src/core/core_features",
              ROOT / "src/core/core_common", ROOT / "src/core/core_events"):
     if str(path) not in sys.path:
