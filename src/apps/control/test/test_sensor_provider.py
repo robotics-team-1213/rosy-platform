@@ -14,7 +14,7 @@ from control.sensor_provider import PROVIDER
 def _tag_frame() -> np.ndarray:
     import cv2
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    marker = cv2.aruco.generateImageMarker(dictionary, 7, 200)
+    marker = (getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker)(dictionary, 7, 200)
     frame = np.full((480, 640, 3), 255, dtype=np.uint8)
     frame[140:340, 220:420] = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
     return frame

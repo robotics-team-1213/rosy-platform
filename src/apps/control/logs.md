@@ -249,6 +249,14 @@
 - 결정: D-171 트랙 1 코드 보류(사용자 승인). 다음 과제는 rig 간헐 실패의 원인이다.
 - 교훈: 한 번씩만 돌린 rig 이분 탐색이 틀린 원인을 지목했다. "검증된 부분"이라는 판단도 표본이 쌓이자 뒤집혔다. 타이밍에 흔들리는 검증 수단은 판정 전에 기준본의 실패율부터 잰다.
 
+## 2026-09-23 · uncommitted · fix(control): dock tag detection works on the device's OpenCV 4.6
+
+- 변경: `sensing/dock_tag.py`가 OpenCV 4.7에서 생긴 `cv2.aruco.ArucoDetector`만 불렀다. 실기 이미지는 Ubuntu 24.04의 `python3-opencv`(4.6, `package.xml` exec_depend)를 쓰고, 4.6에는 모듈 함수 `cv2.aruco.detectMarkers`만 있다. 그래서 실기에서는 도킹 인식기가 만들어진 뒤 매 프레임 `AttributeError`로 도크를 한 번도 보지 못했다(`select_detector`는 이미 성공했으므로 simulated로도 떨어지지 않는다). `_detect_markers()`가 있는 API를 `hasattr`로 골라 쓴다(4.6 모듈 함수 / 4.7+ `ArucoDetector`; 개발 PC의 5.0은 모듈 함수가 없다). 시험의 마커 생성도 `generateImageMarker`(4.7+) 없으면 `drawMarker`(4.6)를 쓴다.
+- 증거: WSL Ubuntu 24.04 `python3-opencv` 4.6.0에서 도킹 관련 5개 시험 파일(control dock_tag·dock_detector·sensor_provider, games overhead, core docking): 이전 `dock_tag.py` 11 failed / 119 passed, 수정 후 130 passed. Windows OpenCV 5.0.0에서도 130 passed.
+- gate 변화: 없음(실기 도킹 DEVICE 증거는 여전히 없다).
+- 결정: 없음.
+- 교훈: 개발 PC(OpenCV 5.0)와 CI(OpenCV 없음, 시험 건너뜀)가 모두 초록이어도 실기 apt 버전(4.6)에서는 깨질 수 있다. 실기와 같은 배포판 패키지로 한 번은 돌린다.
+
 ## 2026-09-23 · uncommitted · fix(control): rotation trial holds zero through its own evidence gap
 - 변경: `calibration_rotation.py`. 정지(0 명령) 중인 회전 trial이 신선도 공백을 겪으면 최대 1 s 동안 0을 유지하고, 정지 자세를 확인하며 기다린다(`hold_freshness_lapse`). 끝점 등록 뒤에는 증거 장벽을 둔다. 새 decision과 새 scan이 들어오고 각각 0.1 s 이상의 신선도가 남아야 다음 구간을 시작한다. 등록과 해제 때는 `last_time`을 보정한다. 정지 자세 기준은 가장 최근의 유효한 odom 행이다. e-stop과 hazard는 대기하지 않는다(`rotation_hazard`로 분리, 메시지·순서는 그대로). 테스트: `test_rotation_freshness_hold.py` 19건 신규, `test_calibration_rotation_handoff.py` 스텁 1건 보정.
 - 원인: `record_rotation_endpoint`가 `match_motion`을 tick 안에서 동기 실행한다. rig에서 0.3–0.6 s, 경합 없는 x86 코어에서 120–220 ms가 걸린다. 그동안 executor가 막혀 decision·scan·odom이 큐에 쌓인다. sim 시계는 `/clock` 콜백으로만 전진하므로 함께 멈춘다. 풀린 뒤에는 오래된 입력이 0.25 s 창 밖으로 거부되거나 invalid로 기록되고, 한 번의 검사 실패로 trial이 끝났다. 실기에서는 시계가 멈추지 않는다. 그 대신 `dt > 0.5` 검사와 0.25 s 창을 계산 시간 자체가 넘을 수 있다(Pi 측정은 HOLD).
