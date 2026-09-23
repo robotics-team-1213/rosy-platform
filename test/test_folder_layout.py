@@ -23,6 +23,15 @@ def test_package_trees_do_not_carry_a_second_installer():
     assert (ROOT / "src" / "apps" / "control" / "tools" / "gz" / "run_track260905.sh").is_file()
 
 
+def test_umbrella_scripts_live_in_the_repo():
+    sim = ROOT / "tools" / "sim" / "sim_verify.sh"
+    text = sim.read_text(encoding="utf-8")
+    assert "/mnt/f/" not in text
+    assert "tools/run_fleet_sim.sh" in text
+    assert (ROOT / "docs" / "assessments" / "communication-protocol-report.md").is_file()
+    assert (ROOT / "docs" / "assessments" / "module-coupling-scorecard.md").is_file()
+
+
 def test_developer_scripts_live_under_tools():
     assert (ROOT / "tools" / "fix_ament_resource.sh").is_file()
     assert (ROOT / "tools" / "run_fleet_sim.sh").is_file()
@@ -70,3 +79,15 @@ def test_capture_markdown_is_only_the_data_readme():
     assert markdown == ["README.md"]
     assert (data / "teleop").is_dir()
     assert (data / "drive").is_dir()
+    learning = data / "teleop" / "learning"
+    clips = sorted(path.name for path in learning.glob("*.mp4"))
+    assert clips == [
+        "teleop_20260919_151213_part01.mp4",
+        "teleop_20260919_151213_part02.mp4",
+        "teleop_20260919_151213_part03.mp4",
+        "teleop_20260919_151213_part04.mp4",
+        "teleop_20260919_151213_part05.mp4",
+        "teleop_20260919_151213_part06.mp4",
+        "teleop_20260919_151213_part07.mp4",
+    ]
+    assert not (ROOT / "video").exists()

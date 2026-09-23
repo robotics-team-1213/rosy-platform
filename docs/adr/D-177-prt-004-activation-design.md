@@ -51,6 +51,6 @@ src/core/core/test/test_protocol_version_alignment.py src/site/fleet/test/test_h
 D-18(스키마 단일 원천), PRT-004/PRT-006(추적 계약/버전 규칙), FLEET SRS FAT-03,
 API Ref §7.5·§9.5·§10(v1.16),
 [communication-protocol remediation plan](../plans/2026-09-22-communication-protocol-remediation-plan.md) §G2,
-`communication-protocol-report.md`(2026-09-22, 저장소 상위 폴더) §5.
+`docs/assessments/communication-protocol-report.md` §5.
 
 ---

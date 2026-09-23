@@ -38,7 +38,7 @@ python -m pytest test/test_core_dev_sync.py test/test_device_readback.py -q
 
 ## Task 1: 허용 목록과 풀기 거절
 
-**Files:** `deploy/robot/core_dev_overlay.py`, `test/test_core_dev_sync.py`
+**Files:** `deploy/robot/dev/core_dev_overlay.py`, `test/test_core_dev_sync.py`
 
 1. 실패하는 시험: 다섯 패키지와 `tokens.css`, `core_ui_logic.js`만 아카이브 멤버로
    남는다. `__pycache__`, `.pyc`, `.env`, `rosy.yaml`, `interfaces/*.srv`,
@@ -50,7 +50,7 @@ python -m pytest test/test_core_dev_sync.py test/test_device_readback.py -q
 
 ## Task 2: 바인드 목적지와 해시 성공
 
-**Files:** `deploy/robot/core_dev_overlay.py`, `test/test_core_dev_sync.py`
+**Files:** `deploy/robot/dev/core_dev_overlay.py`, `test/test_core_dev_sync.py`
 
 1. 실패하는 시험: 발견 함수는 `core.__file__` 부모와 web_common share 경로를
    입력으로 받는다. 패키지 경로가 `/opt/rosy_ws/install/.../site-packages/<name>`
@@ -73,7 +73,7 @@ python -m pytest test/test_core_dev_sync.py test/test_device_readback.py -q
 
 ## Task 3: readback HOLD
 
-**Files:** `deploy/robot/device_readback.py`, `test/test_device_readback.py`
+**Files:** `deploy/robot/verify/device_readback.py`, `test/test_device_readback.py`
 
 1. 실패하는 시험: 신원·digest·health가 맞아도 다음 중 하나면
    `device_runtime`은 `HOLD`이고 `dev_overlay`는 true다.
@@ -83,7 +83,7 @@ python -m pytest test/test_core_dev_sync.py test/test_device_readback.py -q
 
 ## Task 4: 네이티브 drop-in은 호스트 상태
 
-**Files:** `deploy/robot/core_dev_overlay.py`, `test/test_core_dev_sync.py`,
+**Files:** `deploy/robot/dev/core_dev_overlay.py`, `test/test_core_dev_sync.py`,
 `test/test_native_systemd_contract.py`
 
 1. 실패하는 시험: `render_native_dropin`은 Task 2의 바인드 쌍으로
@@ -96,8 +96,8 @@ python -m pytest test/test_core_dev_sync.py test/test_device_readback.py -q
 
 ## Task 5: Windows 호출부
 
-**Files:** `deploy/robot/sync-core-dev.ps1`, `deploy/robot/apply-core-dev.sh`,
-`deploy/robot/clear-core-dev.sh`, `test/test_core_dev_sync.py`
+**Files:** `deploy/robot/dev/sync-core-dev.ps1`, `deploy/robot/dev/apply-core-dev.sh`,
+`deploy/robot/dev/clear-core-dev.sh`, `test/test_core_dev_sync.py`
 
 1. 스크립트 본문 시험: `sync-core-dev.ps1`은 `-PiHost`, `-PiUser`,
    `-Backend`만 받고 `RobotNumber`를 받지 않는다. `install-pi.sh`, `apt-get`,

@@ -78,9 +78,10 @@
    `SIZE_VERDICTS` 판정 변경, 패키지 신설·삭제, D-171 control 분리 단계 완료, 시험 소유
    이전(`functional` 목록 변동).
 
-7. **회차는 저장소 밖에, ADR은 기준과 기준선만 소유한다.** 채점표 회차 결과는 저장소
-   바깥 부모 폴더의 `module-coupling-scorecard.md`에 둔다 — 선행
-   `module-coupling-report.md`를 D-168이 그렇게 참조한 선례를 따른다. 채점의 **산출
+7. **회차 문서도 정본 저장소에 둔다.** 채점표와 선행 결합 보고는
+   `docs/assessments/module-coupling-scorecard.md`와
+   `docs/assessments/module-coupling-report.md`다. 부모 폴더에 두던 사본은
+   여기로 들였다. ADR은 기준과 기준선만 소유한다. 채점의 **산출
    규칙**(가중치 합 100, 총점 재계산, 등급 구간, 컷 게이트, 패키지 집합 동일성)은
    `test/test_module_scorecard.py`가 이 표를 재계산해 검사한다. **점수 값 자체는 회차
    입력이라 시험이 고정하지 않는다** — 주관 채점은 회차 문서가 소유하고 시험은 규칙만

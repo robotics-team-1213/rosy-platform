@@ -31,7 +31,7 @@
 
 ### Task 0 — 기준선 고정과 시험 환경 확인
 
-1. `docs/plans/2026-09-12-rosy-os-control-integrated-design.md`, `docs/plans/2026-09-12-control-absorption-results.md`, `docs/reference/ROSY ADR Log.md`, `docs/deployment/arm64-build-notes.md`, `deploy/robot/install-pi.sh`, `deploy/robot/verify-pi.sh`를 읽고 계획의 입력 revision을 기록한다.
+1. `docs/plans/2026-09-12-rosy-os-control-integrated-design.md`, `docs/plans/2026-09-12-control-absorption-results.md`, `docs/reference/ROSY ADR Log.md`, `docs/deployment/arm64-build-notes.md`, `deploy/robot/install-pi.sh`, `deploy/robot/verify/verify-pi.sh`를 읽고 계획의 입력 revision을 기록한다.
 2. `git status --short`, `git rev-parse HEAD`, `git worktree list`를 저장한다. `src/rosy_imu_bno055/**`의 기존 WIP는 명시적 파일 목록 없이 stage/reset/overwrite하지 않는다.
 3. 순수 테스트를 실행한다.
 
@@ -133,9 +133,9 @@ deploy/robot/Dockerfile builds the absorbed package and worker dependencies whil
 
 1. OS image, hostname, Wi-Fi/SSH, 시간 동기화, UART4, Docker와 최소 host package를 준비한다.
 2. `deploy/robot/deploy-from-windows.ps1 -RobotNumber 1 -PiHost <pinky-host> -PiUser rosy`로 immutable `/opt/rosy`를 배포한다. `ROSY_ROBOT_NUMBER`가 없거나 충돌하면 설치를 중단한다.
-3. Pi에서 `deploy/robot/verify-pi.sh`와 `deploy/robot/runtime-mode.sh up`을 실행하여 identity, config generation, unit, container health를 확인한다.
+3. Pi에서 `deploy/robot/verify/verify-pi.sh`와 `deploy/robot/runtime-mode.sh up`을 실행하여 identity, config generation, unit, container health를 확인한다.
 4. `rosy-core`를 stationary 상태로 올리고 readback한다: robot ID, profile, capabilities, image digest, source revision, config generation/digest, container ID, ROS graph, 최종 `cmd_vel` publisher 수.
-5. `/opt/rosy/deploy/robot/device-readback.sh --json` 결과와 설치 전 manifest를 함께 보관한다. SSH 성공이나 HTTP 200만으로 설치 성공을 선언하지 않으며 credential은 readback에 포함하지 않는다.
+5. `/opt/rosy/deploy/robot/verify/device-readback.sh --json` 결과와 설치 전 manifest를 함께 보관한다. SSH 성공이나 HTTP 200만으로 설치 성공을 선언하지 않으며 credential은 readback에 포함하지 않는다.
 
 ### Task 9 — Device commissioning을 위험도 순서로 진행한다
 

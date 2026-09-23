@@ -24,9 +24,11 @@
 
 ## 시험
 
-- `src/core/core/test/test_ui_token_contracts.py`
-- `src/core/core/test/test_palette_gates.py`
+- `src/core/web_common/test/test_ui_token_contracts.py`
+- `src/core/web_common/test/test_palette_gates.py`
+- `src/core/web_common/test/test_headless_state.py`
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · test(core): 토큰·팔레트·헤드리스 시험을 자체 `test/`로 이전
 - 2026-09-22 · uncommitted · docs(harness): register web_common under D-168

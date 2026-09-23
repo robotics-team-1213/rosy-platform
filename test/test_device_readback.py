@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "deploy" / "robot" / "device_readback.py"
+MODULE_PATH = ROOT / "deploy" / "robot" / "verify" / "device_readback.py"
 
 _UNTRUSTED_PUBLIC_KEY = (
     "-----BEGIN PUBLIC KEY-----\n"
@@ -330,10 +330,10 @@ def test_readback_refuses_non_core_activation(tmp_path: Path):
 
 
 def test_installer_and_wrapper_expose_the_same_readback_command():
-    wrapper = (ROOT / "deploy" / "robot" / "device-readback.sh").read_text(encoding="utf-8")
+    wrapper = (ROOT / "deploy" / "robot" / "verify" / "device-readback.sh").read_text(encoding="utf-8")
     installer = (ROOT / "deploy" / "robot" / "install-pi.sh").read_text(encoding="utf-8")
-    verifier = (ROOT / "deploy" / "robot" / "verify-pi.sh").read_text(encoding="utf-8")
+    verifier = (ROOT / "deploy" / "robot" / "verify" / "verify-pi.sh").read_text(encoding="utf-8")
 
     assert 'exec python3 "$SCRIPT_DIR/device_readback.py" "$@"' in wrapper
-    assert '"$INSTALL_ROOT/deploy/robot/device-readback.sh"' in installer
+    assert '"$INSTALL_ROOT/deploy/robot/verify/device-readback.sh"' in installer
     assert "device-readback.sh --json" in verifier

@@ -59,8 +59,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · tools(control): rig environment guard marks overloaded runs invalid (D-185 R4)
+- 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
+- 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
 - 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
 - 2026-09-23 · uncommitted · perf(control): vectorise the calibration wall fit, bit for bit
-- 2026-09-23 · uncommitted · docs(adr): D-183 Proposed — 감시 표를 제품과 단독으로 분리
-- 2026-09-23 · uncommitted · fix(control): rotation trial holds zero through its own evidence gap
-- 2026-09-23 · uncommitted · fix(control): dock tag detection works on the device's OpenCV 4.6

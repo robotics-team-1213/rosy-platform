@@ -30,6 +30,6 @@ src/site/fleet/test/test_hub.py -q` · API Ref v1.15 §7.5 상태 표기.
 
 **References:** D-5(outbound WS), D-10(early envelope 고정), D-18(스키마 단일 원천),
 [communication-protocol remediation plan](../plans/2026-09-22-communication-protocol-remediation-plan.md) §G2,
-`communication-protocol-report.md`(2026-09-22, 저장소 상위 폴더) §5.
+`docs/assessments/communication-protocol-report.md` §5.
 
 ---

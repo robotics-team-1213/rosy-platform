@@ -174,14 +174,14 @@ DDNS 또는 `rosy-01.local`은 브라우저 접속 주소만 해결한다. ROS �
 Pi에서 인터넷까지 필수로 판정한다.
 
 ```bash
-sudo /opt/rosy/deploy/robot/verify-pi.sh --require-internet
+sudo /opt/rosy/deploy/robot/verify/verify-pi.sh --require-internet
 ```
 
 현장 인터넷 없이 로컬 대시보드만 점검할 때는 옵션을 뺀다. 이 경우 인터넷
 실패는 경고지만 Wi-Fi 주소, 런타임, API 또는 대시보드 실패는 전체 실패다.
 
 ```bash
-sudo /opt/rosy/deploy/robot/verify-pi.sh
+sudo /opt/rosy/deploy/robot/verify/verify-pi.sh
 ```
 
 재부팅 후에도 확인한다.
@@ -190,7 +190,7 @@ sudo /opt/rosy/deploy/robot/verify-pi.sh
 sudo reboot
 # 다시 SSH로 접속한 뒤
 systemctl status rosy-runtime.service --no-pager
-sudo /opt/rosy/deploy/robot/verify-pi.sh
+sudo /opt/rosy/deploy/robot/verify/verify-pi.sh
 ```
 
 ## 7. 하드웨어 제어 모드 전환
@@ -208,7 +208,7 @@ sudo reboot
 # 재접속 후 motor runtime이 꺼진 core 상태에서 무토크 ping/read:
 # docker compose 를 언급하며 거절하면 하드웨어가 아니라 설정 문제다 —
 # 이 스크립트는 모터 런타임이 꺼졌는지 확인할 수 없으면 닫히는 쪽으로 실패한다.
-sudo /opt/rosy/deploy/robot/verify-motors.sh
+sudo /opt/rosy/deploy/robot/verify/verify-motors.sh
 
 sudoedit /opt/rosy/deploy/robot/.env
 # ROSY_RUNTIME_MODE=motor 로 변경
@@ -218,7 +218,7 @@ sudoedit /opt/rosy/deploy/robot/.env
 # ROSY_MAX_WHEEL_RPM=100.0
 # ROSY_MOTOR_PROFILE_ACCELERATION=200
 sudo systemctl restart rosy-runtime.service
-sudo /opt/rosy/deploy/robot/verify-pi.sh
+sudo /opt/rosy/deploy/robot/verify/verify-pi.sh
 ```
 
 모터 명령은 `APPLIED`, `LIMITED`, `REJECTED`, `DRIVER_ERROR` 중 하나로

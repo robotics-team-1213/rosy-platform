@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-OVERLAY = ROOT / "deploy" / "robot" / "core_dev_overlay.py"
+OVERLAY = ROOT / "deploy" / "robot" / "dev" / "core_dev_overlay.py"
 
 import importlib.util
 
@@ -270,7 +270,7 @@ def test_native_confirm_hashes_inside_the_service_namespace(tmp_path: Path):
 
 
 def test_windows_sync_script_is_the_narrow_transport():
-    text = (ROOT / "deploy" / "robot" / "sync-core-dev.ps1").read_text(encoding="utf-8")
+    text = (ROOT / "deploy" / "robot" / "dev" / "sync-core-dev.ps1").read_text(encoding="utf-8")
     assert "-PiHost" in text and "-PiUser" in text and "-Backend" in text
     assert "sudo -n" in text and "git rev-parse HEAD" in text and "--dirty" in text
     assert "RobotNumber" not in text
@@ -287,8 +287,8 @@ def test_windows_sync_script_is_the_narrow_transport():
 
 
 def test_shell_wrappers_only_call_the_python_module():
-    apply = (ROOT / "deploy" / "robot" / "apply-core-dev.sh").read_text(encoding="utf-8")
-    clear = (ROOT / "deploy" / "robot" / "clear-core-dev.sh").read_text(encoding="utf-8")
+    apply = (ROOT / "deploy" / "robot" / "dev" / "apply-core-dev.sh").read_text(encoding="utf-8")
+    clear = (ROOT / "deploy" / "robot" / "dev" / "clear-core-dev.sh").read_text(encoding="utf-8")
     for text in (apply, clear):
         assert "python3 -B" in text
         assert "core_dev_overlay.py" in text

@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 EVALUATOR = ROOT / "deploy" / "robot" / "pinky_validation.py"
-WINDOWS_VALIDATOR = ROOT / "deploy" / "robot" / "validate-pinky-from-windows.ps1"
+WINDOWS_VALIDATOR = ROOT / "deploy" / "robot" / "verify" / "validate-pinky-from-windows.ps1"
 RUNBOOK = ROOT / "docs" / "deployment" / "pinky-pro-first-device-runbook.md"
 DESIGN = ROOT / "docs" / "plans" / "2026-09-21-pinky-user-validation-design.md"
 
@@ -284,7 +284,7 @@ command = sys.argv[-1]
 if command == 'ip -4 -o addr show dev eth0 scope global':
     print('2: eth0    inet 127.0.0.1/8 scope global eth0')
     raise SystemExit(0)
-if command == 'sudo -n /opt/rosy/deploy/robot/device-readback.sh --json':
+if command == 'sudo -n /opt/rosy/deploy/robot/verify/device-readback.sh --json':
     print((pathlib.Path(__file__).parent / 'readback.json').read_text(encoding='utf-8'))
     raise SystemExit(0)
 raise SystemExit(1)

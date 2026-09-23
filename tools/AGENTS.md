@@ -21,6 +21,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | Directory | Purpose |
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` |
+| `sim/` | Local sim probes and `sim_verify.sh`. Not a second product tree |
 
 ## For AI Agents
 
@@ -28,7 +29,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 
 - A script that one module installs or that its own test launches stays in that module. `bringup/scripts/rosy_env.sh` and `control/tools/gz/run_track260905.sh` are examples.
 - Robot install and image build stay in `deploy/`.
-- Do not put teleop notes or drive bags here. Those sessions go under `data/`.
+- Do not put teleop notes or drive bags here. Session files go under `data/teleop` and `data/drive` and stay untracked. Learning clips stay in `data/teleop/learning/`.
 
 ### Testing Requirements
 

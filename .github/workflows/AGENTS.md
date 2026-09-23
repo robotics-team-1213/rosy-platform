@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # workflows
 
@@ -11,7 +11,7 @@ CI job definitions for this repository.
 
 | File | Description |
 |------|-------------|
-| `ci.yml` | `ci` workflow: colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest `src/core/core/test`, `src/site/fleet/test`, `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
+| `ci.yml` | `ci` workflow: colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the four core-domain suites (`core/core/test`, `core/core_events/test`, `core/core_features/test`, `core/web_common/test`), `src/site/fleet/test`, `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
 | `build-arm64-payload.yml` | Manual native arm64 build of the unsigned core/io OCI payload; uploads a checksum-bound artifact for offline signing, never a release |
 | `build-pinky-image.yml` | Manual native arm64 `.img.xz` build; uploads an unsigned image handoff for offline signing |
 
@@ -41,7 +41,7 @@ Edit `ci.yml` only with a matching local command. Do not drop the root `test/` s
 
 ### Internal
 
-- `src/`, `src/core/core/test/`, `src/site/fleet/test/`, `src/sim/gz_sim/test/`, `test/`
+- `src/`, `src/core/core/test/`, `src/core/core_events/test/`, `src/core/core_features/test/`, `src/core/web_common/test/`, `src/site/fleet/test/`, `src/sim/gz_sim/test/`, `test/`
 
 ### External
 

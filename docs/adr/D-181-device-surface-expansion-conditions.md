@@ -47,6 +47,6 @@ test/test_robot_runtime.py test/test_nav2_hardware_slice.py -q` + 해당 장치 
 **References:** D-169(부모 — 표면 고정 + "후속 ADR로만 연다"), D-84(하드웨어 프로필
 게이트), D-32(capability 정직성), D-161(네이티브 런타임 DeviceAllow),
 [communication-protocol remediation plan](../plans/2026-09-22-communication-protocol-remediation-plan.md) §G1,
-`communication-protocol-report.md`(2026-09-22, 저장소 상위 폴더) §8-F.
+`docs/assessments/communication-protocol-report.md` §8-F.
 
 ---

@@ -51,7 +51,7 @@ Ubuntu Core는 전체 OS OTA·장기 무인 운용을 초기부터 필수로 요
 병행 저장소 점검에서 확인한 제약은 다음과 같다. 출처는 이 저장소 파일이며 외부 플랫폼 인증과 구분한다.
 
 - `deploy/robot/install-pi.sh`는 `raspbian`/`debian`만 허용하고 Debian Docker 저장소를 사용한다. Ubuntu 호스트로 바꾸려면 설치 경로 수정이 필요하다.
-- `deploy/robot/verify-pi.sh`와 Host Agent 네트워크 구현은 `nmcli`/NetworkManager에 의존한다. Ubuntu를 택하면 네트워크 관리자를 포함한 등록·복구 동작을 정합해야 한다.
+- `deploy/robot/verify/verify-pi.sh`와 Host Agent 네트워크 구현은 `nmcli`/NetworkManager에 의존한다. Ubuntu를 택하면 네트워크 관리자를 포함한 등록·복구 동작을 정합해야 한다.
 - `deploy/release/manifest.py` 및 `cli.py`의 장비 OS 계열은 `raspberry-pi-os-lite`로 구성되어 있다. 호스트 변경은 이미지 교체만의 일이 아니며 릴리스 타깃 계약과 함께 검토해야 한다.
 - `deploy/robot/Dockerfile`의 ROS 기반은 `ros:jazzy-ros-base`다. 호스트 Pi OS와 Ubuntu/Noble ROS 런타임을 분리하는 방향이 이미 존재한다.
 - UART 설정은 Pi 부트 설정 경로와 실제 UART 장치 이름에 의존한다. 또한 현재 하드웨어 프로필의 SLAM 미지원 상태를 Nav2 패키지 설치만으로 준비 완료라고 바꾸면 안 된다.

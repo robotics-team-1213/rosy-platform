@@ -289,3 +289,35 @@
 - 결정: D-183 Accepted
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
+- 변경: `planning/gridmap.py`의 `inflate`를 numpy로 바꿨다. 분류는 `np.where`로 한다. 원판 오프셋은 원본과 같은 Python float 비교로 만들고, 오프셋마다 출발점 마스크를 슬라이스로 옮겨 OCC를 찍는다. 출발점은 원본의 `v < OCC_THRESH` 부정이라 NaN 셀도 팽창한다(보수적). 출발점이 없으면 바로 반환하고, 반경은 지도 크기까지만 돈다. 계산은 출발점의 경계 상자로 한정한다. 결과는 Python `int` 리스트이고 매번 새 지도다. 테스트 `test_inflate_equivalence.py`는 원본 복사본(main `631ff091`)과 비교한다.
+- 원인: goal이 2 s마다 계획할 때 후보별·반경별로 지도 전체를 Python 이중 루프로 부풀렸다(host 200×200 48 ms, 400×400 128 ms, goal tick 평균 177 ms). D-185 조사.
+- 증거: 동등성 — 무작위 지도 120개 × 반경 3종, 실제 크기 200×200, 지도보다 큰 반경, 음수·−0.0·NaN·inf 반경의 예외 유형, float·NaN·int8 데이터, 결과의 독립성. `repr` 수준에서 같고 모든 값이 builtin `int`다. 뮤테이션 6종 모두 검출. 속도: 200×200 48→6 ms, 400×400 128→22 ms, 희소 400×400(반경 6–40) 28–34→20–29 ms. host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음). NaN 출발점, 희소·큰 반경 퇴행, 테스트 공백을 반영했다.
+- gate 변화: 없음. Pi 수치는 D-185 R8 전까지 HOLD.
+- 결정: D-185 R1(사용자 승인 2026-09-24). 캐시 대신 벡터화했고, ADR에 구현 메모를 달았다.
+- 교훈: 결과 동일 최적화도 입력 분포가 다르면 느려질 수 있다(희소 지도·큰 반경). 비용은 대표 입력과 극단 입력 모두로 잰다.
+
+## 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
+- 변경: `rotation_scan_sample(msg, valid, current)`가 유효하지만 0.25 s 창을 넘긴 scan의 내용을 `rotation_scan_late`에 보관한다. `rotation_clear`는 저장된 scan이 없고 기하 프로필이 있을 때, 그 내용을 `calibration_rotation_clearance`에 나이 무한대로 넣는다. 그래서 구조 결함은 여전히 `invalid_scan`이 되고, 구조가 정상인 늦은 scan만 `stale_scan`(정지 중 1 s 대기)이 된다. 진단에는 `scan_stored: False`를 붙인다. `on_scan`은 유효성과 0.25 s 창을 따로 넘긴다. 패키지 크기 판정(D-168 P6)은 재판정했다. split 판정은 그대로 두고 기준을 28,159줄에서 28,315줄로 바꿨다.
+- 원인: rig 실행 prof-r2-1에서 끝점 등록 stall(0.445 s) 뒤 큐에서 나온 scan이 `stamped(.25)`에 걸렸다. 그 scan이 `rotation_scan = None`으로 저장돼 `missing_scan_or_geometry`가 났고, 이 사유는 대기 대상이 아니라서 정지 중인 trial이 즉시 실패했다(`hold_refused` 기록). c67437d1 회전 대기 수정의 잔여 경로다.
+- 증거: 테스트 신규 8건(늦은 scan의 사유·구조 검사·부재·기하 없음·trial 대기·시작 전 대기·표시 해제, `on_scan` 배선). 뮤테이션 6종 모두 검출. host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음)에서 나온 지적을 반영했다. 구조 검사 우회, 배선·표시 해제·시작 전 경로의 테스트 공백, 진단 정보가 그것이다.
+- gate 변화: 없음(DEVICE/FIELD HOLD).
+- 결정: 사용자 승인 2026-09-24("고침"). 시작 전(trial 없음) 단계에서 늦은 scan 하나로 재배치를 시작하던 경로가 이제 1 s 관측 대기 뒤 실패로 끝난다. 재배치는 저장된 scan이 없으면 쓸 수도 없었다.
+- 교훈: 사유 문자열 하나가 "없음"과 "늦음"을 함께 담으면, 대기 정책이 그 둘을 구분하지 못한다. 판정 입력은 원인별로 분리해 기록한다.
+
+## 2026-09-24 · uncommitted · tools(control): rig environment guard marks overloaded runs invalid (D-185 R4)
+- 변경:
+  - `tools/gz/rig_environment.py`를 새로 만들었다. `record`는 2 s마다 loadavg, CPU 압력(PSI), 파티션별 Gazebo 세션 수를 기록하고, 부모가 사라지면 끝난다. `judge`는 순수 함수이고 결과를 `environment.json`으로 쓴다.
+  - `run_track260905.sh`는 세션 간 잠금 `/tmp/rosy-gazebo.lock`을 잡는다(`RIG_GZ_LOCK_WAIT`, 대기 초과 시 종료 코드 4). 기록기는 잠금 fd를 닫고 띄우고, 통과·실패 판정 전에 환경을 판정한다. 무효면 통과·실패를 "not counted"로 표시하고 종료 코드 3, 판정기가 비정상 종료하면 그 종료 코드를 그대로 낸다. 환경 파일은 실행마다 지우고 보관하며, HUP도 정리 경로를 탄다.
+  - `track_run_monitor.py`가 `elapsed_wall_s`를 기록한다.
+  - `run_calibration_spaces.py`는 `outcome()`으로 3·4를 집계에서 빼고, 잠금 대기를 30 s로 제한한다.
+  - control 패키지 크기는 split 판정을 유지한 채 기준을 28,315줄에서 28,476줄로 재판정했다.
+- 원인: 2026-09-23/24 rig에서 피어 세션의 Gazebo가 부하를 25–30까지 올렸다. 한가한 노드도 CPU를 약 340 ms 기다렸고, 한 실행은 시뮬 속도가 0.01배였다. 이런 실행의 통과·실패는 코드와 무관했다(평가 문서 §8.4).
+- 증거:
+  - 테스트 18건: 판정 규칙, 워밍업, 기준 초과 비율과 PSI 보고, 요청 대비 속도, 증거 부족 시 판정 보류, 같은 파티션의 Gazebo 중복, 가짜 `/proc`의 세션 집계, 잘린 JSONL 줄, 부모가 사라질 때 기록기 종료, 스크립트 배선, 러너 결과 분류.
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - WSL smoke 2회: 평균 부하 16.13에서 무효 판정과 종료 코드 3, 표본 147개. 수정 후에는 `elapsed_wall_s` 기록, 실행 뒤 기록기 0개, 잠금 해제를 확인했다. 판정 heredoc은 유효·무효 × 통과·실패 네 경우를 가짜 결과로 실행해 확인했다.
+  - 독립 리뷰 1회(변경 요청)의 HIGH 2건과 MEDIUM 4건을 반영했다. HIGH는 실제 실패를 무효로 덮는 문제와 떨어져 나온 기록기가 잠금을 무는 문제였다.
+- gate 변화: 없음(rig 도구).
+- 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
+- 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.

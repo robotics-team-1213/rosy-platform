@@ -100,6 +100,6 @@ ADR은 방향표에 명시 허용으로만 둔다. 모든 라이브러리 패키
 **References:** D-147, D-148, D-126, D-61, D-125,
 [module split criteria](../plans/2026-09-06-module-split-criteria.md),
 [runtime maintainability rules](../plans/2026-09-03-runtime-maintainability-rules.md),
-`module-coupling-report.md`(2026-09-19, 저장소 상위 폴더).
+`docs/assessments/module-coupling-report.md`.
 
 ---

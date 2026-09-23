@@ -128,7 +128,7 @@ def _load_signature_verifier(root: Path):
     candidates = [
         _rooted(root, "/opt/rosy/native-runtime/signing.py"),
         _rooted(root, "/opt/rosy/deploy/release/signing.py"),
-        Path(__file__).resolve().parents[1] / "release" / "signing.py",
+        Path(__file__).resolve().parents[2] / "release" / "signing.py",
     ]
     for module_path in candidates:
         if not module_path.is_file():

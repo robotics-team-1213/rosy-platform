@@ -1733,3 +1733,43 @@
 - gate 변화: 없음
 - 결정: D-186
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs: origin/main 병합 게이트 실측 수치를 별도 항목으로 기록
+
+- 변경: 병합(docs) 항목의 "아래 게이트 줄에 실측 수치" 약속을 본문 고치지 않고 새 항목으로 옮겨 적는다 — HEAD에 들어간 항목의 본문을 고치면 lint가 append-only 위반으로 거부한다.
+- 증거: `python -m pytest test/ -q` 전체 회귀 **1620 passed·0 failed·43 skipped** (2026-09-24 Windows, 병합 신규 15종 포함) + `rosy_harness.py lint` **0 error·21 warning**(기존 baseline). 병합 직후 1회 실행은 병합 전부터 latent였던 스캐너 오탐 1건으로 빨강이었고, `deploy/robot/core_dev_overlay.py` 개명 항목(deploy/logs.md 2026-09-24)으로 해소했다. 중간 1회 실행의 image_pipeline bash 3건 전이 실패는 격리 3 passed·파일 단위 58 passed·전량 재검 초록으로 병합 회귀가 아님이 확인됐다.
+- gate 변화: 없음 — D-181은 Proposed 그대로, 기준선 불변.
+- 결정: 실측 수치는 본문 정정이 아니라 별도 append 항목으로 기록한다.
+- 교훈: 저널 항목의 "아래 게이트 줄에 실측 수치" 같은 내부 약속은 커밋 전에 채워야 한다. 커밋 후에는 새 항목 한 개가 더 든다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R1 구현 메모
+
+- 변경: D-185 R1은 캐시 대신 결과 동일 벡터화로 구현했다는 메모를 ADR에 달았다. 측정은 호출 단위다.
+- 증거: control `logs.md` 2026-09-24 항목.
+- gate 변화: 없음.
+- 결정: D-185 R1
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(data): keep teleop learning clips under data/teleop/learning
+
+- 변경: 루트 `video/`의 텔레옵 학습 영상 7개를 `data/teleop/learning/`으로 옮겼다. 그 폴더만 커밋하고, 텔레옵·주행 세션 기록은 gitignore에 남긴다. D-186에 그 예외를 한 줄 더했다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py -q` 11 passed (2026-09-24 Windows). `git check-ignore`는 세션 경로만 무시하고 학습 영상은 무시하지 않는다.
+- gate 변화: 없음
+- 결정: D-186
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · chore(repo): absorb the parent umbrella into Rosy OS
+
+- 변경: 부모 `Rosy/`의 시뮬 프로브 셸을 `tools/sim/`으로, 통신·결합 보고서와 채점표를 `docs/assessments/`로 들였다. 기계 고정 경로 `/mnt/f/.../Rosy OS`는 스크립트 위치에서 저장소 루트를 계산하게 바꿨다. 안쪽 `Rosy/` 확인 출력은 `data/teleop/probes/`로 옮겼고 git에는 넣지 않는다. archive와 worktree는 부모에 남긴다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_module_scorecard.py -q` 12 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-178 회차 문서의 위치, D-186
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R4 구현 메모
+
+- 변경: D-185에 R4 판정 규칙, 잠금 채택 범위, 패키지 크기 재판정을 적었다.
+- 증거: control `logs.md` 2026-09-24 R4 항목.
+- gate 변화: 없음.
+- 결정: D-185 R4
+- 교훈: 없음

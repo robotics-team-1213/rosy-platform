@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-22 | Updated: 2026-09-22 -->
+<!-- Generated: 2026-09-22 | Updated: 2026-09-24 -->
 
 # web_common
 
@@ -17,6 +17,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
+| `test/` | `test_ui_token_contracts.py`, `test_palette_gates.py`, `test_headless_state.py` |
 | `tokens.css` | Colour/design tokens — the only palette source |
 | `core_ui_logic.js` | Evidence-state adapter; contains no clock math |
 | `CMakeLists.txt` | Installs both files to share |
@@ -32,7 +33,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 ### Testing Requirements
 
 ```bash
-PYTHONPATH=src/core:src python -m pytest src/core/core/test/test_ui_token_contracts.py src/core/core/test/test_palette_gates.py -q
+python -m pytest src/core/web_common/test -q
 ```
 
 ## Dependencies

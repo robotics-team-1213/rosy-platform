@@ -1,7 +1,7 @@
 """D-178 모듈 병렬 유지보수 평가표 — 산출 규칙만 검사한다 (D-178 Validation).
 
 기준선의 점수 값은 회차 입력이라 이 시험이 고정하지 않는다 — 주관 채점은 ADR 표와
-저장소 밖 채점표(`module-coupling-scorecard.md`)가 소유한다. 고정하고 재계산하는 것은
+`docs/assessments/module-coupling-scorecard.md`가 소유한다. 고정하고 재계산하는 것은
 산출 규칙뿐이다:
 
 - 가중치 합 100, ``총점 = Σ(축 점수 × 가중치) ÷ 5``

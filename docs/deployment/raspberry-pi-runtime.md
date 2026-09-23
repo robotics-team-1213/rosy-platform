@@ -306,7 +306,7 @@ After installation, reboot, or release activation, collect the device-owned
 readback before changing the runtime mode:
 
 ```bash
-sudo /opt/rosy/deploy/robot/device-readback.sh --json \
+sudo /opt/rosy/deploy/robot/verify/device-readback.sh --json \
   | sudo tee /var/lib/rosy/events/device-readback-$(date -u +%Y%m%dT%H%M%SZ).json
 ```
 

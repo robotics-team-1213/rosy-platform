@@ -37,7 +37,7 @@ linux/amd64 호스트에 ARM64 binfmt가 없어 `exec format error`로 중단됐
 `docker buildx build --platform linux/amd64 --target core --tag rosy-core:control-adapter-amd64 --file deploy/robot/Dockerfile --load .`가 통과했고 image digest는
 `sha256:bcf9cd648abeff29ac600eb6c436bbba017df89c5b98ee5053522576395156ae`다.
 entrypoint를 거친 `ros2 pkg prefix rosy_control`/`rosy_core`와 absorbed worker executable 목록을
-확인했다. `deploy/robot/device_readback.py`와 `device-readback.sh`는 OS identity,
+확인했다. `deploy/robot/verify/device_readback.py`와 `device-readback.sh`는 OS identity,
 activation/manifest, core health, ROS graph, 최종 `cmd_vel` publisher를 credential 없이
 JSON으로 남긴다. fake Device filesystem의 GO/HOLD·manifest missing 시험은 통과했으며,
 실제 Pi readback은 ARM64 artifact와 SSH 가능한 Device가 생길 때까지 HOLD다.

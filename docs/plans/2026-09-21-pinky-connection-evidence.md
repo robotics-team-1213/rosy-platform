@@ -13,7 +13,7 @@
 ### Task 1: Successful evidence record
 
 **Files:**
-- Modify: `deploy/robot/verify-from-windows.ps1`
+- Modify: `deploy/robot/verify/verify-from-windows.ps1`
 - Create: `test/test_windows_connection_evidence.py`
 
 1. Write a failing process-level test that supplies fake route/address SSH output and two HTTP 200 responses.
@@ -24,7 +24,7 @@
 ### Task 2: Failure and preservation contract
 
 **Files:**
-- Modify: `deploy/robot/verify-from-windows.ps1`
+- Modify: `deploy/robot/verify/verify-from-windows.ps1`
 - Modify: `test/test_windows_connection_evidence.py`
 
 1. Write failing tests for SSH failure producing HOLD evidence and an existing evidence path being preserved.

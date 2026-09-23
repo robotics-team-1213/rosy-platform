@@ -52,10 +52,11 @@ src/apps/games/config/match.local.yaml
 *.sqlite3
 *.db
 
-# Teleop checks and drive runs. The layout is tracked; the recordings are not.
-data/teleop/**
+# Session recordings stay untracked. Learning clips under teleop/learning are tracked.
+data/teleop/*
 data/drive/**
 !data/teleop/.gitkeep
+!data/teleop/learning/
 !data/drive/.gitkeep
 
 # One-off helper scripts at the repository root. Durable root helpers

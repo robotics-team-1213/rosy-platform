@@ -37,8 +37,9 @@ if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
 }
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$robotRoot = Split-Path -Parent $scriptRoot
 $peerVerifier = Join-Path $scriptRoot "verify-from-windows.ps1"
-$evaluator = Join-Path $scriptRoot "pinky_validation.py"
+$evaluator = Join-Path $robotRoot "pinky_validation.py"
 if (-not (Test-Path -LiteralPath $peerVerifier -PathType Leaf) -or
     -not (Test-Path -LiteralPath $evaluator -PathType Leaf)) {
     throw "The stationary validation kit is incomplete."
@@ -87,7 +88,7 @@ if ($connectionPassed) {
         "-o", "ConnectionAttempts=1",
         "-o", "BatchMode=yes",
         $remoteTarget,
-        "sudo -n /opt/rosy/deploy/robot/device-readback.sh --json"
+        "sudo -n /opt/rosy/deploy/robot/verify/device-readback.sh --json"
     )
     $previousPreference = $ErrorActionPreference
     try {

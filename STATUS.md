@@ -19,10 +19,10 @@
 | [sensor_adc](src/hardware/sensor_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [lamp_control](src/hardware/lamp_control/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [core_common](src/core/core_common/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_events](src/core/core_events/progress.md) | CORE | uncommitted (2026-09-22) | HOLD | GO | N/A | N/A | N/A | N/A |
-| [core_features](src/core/core_features/progress.md) | CORE | uncommitted (2026-09-22) | HOLD | GO | N/A | N/A | N/A | N/A |
+| [core_events](src/core/core_events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_features](src/core/core_features/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/core/core_api_web/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](src/core/web_common/progress.md) | CORE | uncommitted (2026-09-22) | HOLD | GO | N/A | N/A | N/A | N/A |
+| [web_common](src/core/web_common/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
 | [omx_adapter](src/apps/omx_adapter/progress.md) | 장치 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | PARKED | PARKED |
 | [interfaces](src/core/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |
@@ -56,9 +56,6 @@
 - sensor_adc ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
-- core_events SOURCE: 자체 test/ 없음 — 검증이 src/core/core/test에 흩어져 있어 패키지 경계로 드러나지 않는다 (D-168 KNOWN_WITHOUT_OWN_TESTS)
-- core_features SOURCE: 자체 test/ 없음 — 검증이 src/core/core/test에 흩어져 있어 패키지 경계로 드러나지 않는다 (D-168 KNOWN_WITHOUT_OWN_TESTS)
-- web_common SOURCE: 자체 test/ 없음 — 검증이 src/core/core/test에 흩어져 있어 패키지 경계로 드러나지 않는다 (D-168 KNOWN_WITHOUT_OWN_TESTS)
 - omx_adapter ARTIFACT: deploy/image/required-ros-packages.txt에 포함되나 서명 manifest와 immutable digest 발행 전
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음

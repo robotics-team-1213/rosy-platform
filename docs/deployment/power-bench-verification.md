@@ -43,7 +43,7 @@ docker compose exec rosy-core bash
 
 # 컨테이너 안에서
 export ROSY_API_TOKEN='<operator 토큰>'
-bash /opt/rosy/deploy/robot/verify-power.sh --csv /tmp/power-samples.csv
+bash /opt/rosy/deploy/robot/verify/verify-power.sh --csv /tmp/power-samples.csv
 ```
 
 점검 항목과 판정:

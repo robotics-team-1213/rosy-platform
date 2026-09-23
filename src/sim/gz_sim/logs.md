@@ -110,3 +110,11 @@
 - 결정: D-182 Accepted
 - 교훈: 없음.
 
+## 2026-09-24 · uncommitted · chore(sim): `navigation` exec_depend 중복 제거
+
+- 변경: `package.xml`의 `<exec_depend>navigation</exec_depend>` 선언 2건 중 D-126 S4 주석 붙은 것은 유지하고, 맨 선언(24행)만 제거했다.
+- 증거: 커밋 직전 `python -m pytest test/ -q` 초록 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: module-coupling-scorecard §6 과제 4.
+- 교훈: 없음.
+
