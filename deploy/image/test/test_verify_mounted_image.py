@@ -68,7 +68,7 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # D-192 US-004: the motor bus overlay and its alias rule.
     (root / "boot/firmware").mkdir(parents=True)
     (root / "boot/firmware/config.txt").write_text(
-        "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+        "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\ndtoverlay=uart4-pi5\n", encoding="utf-8")
     (root / "etc/udev/rules.d").mkdir(parents=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text("mock", encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.
@@ -78,6 +78,14 @@ def test_inspect_passes_with_valid_image(tmp_path):
     for relative in verify_mounted_image.SLLIDAR_FILES:
         (release_dir / "install" / relative).parent.mkdir(parents=True, exist_ok=True)
         (release_dir / "install" / relative).write_text("mock", encoding="utf-8")
+    # D-190: the boot display ships enabled, with its udev rule and apt libraries.
+    (root / "etc/systemd/system" / verify_mounted_image.DISPLAY_UNIT).write_text("mock", encoding="utf-8")
+    (wants.parent / verify_mounted_image.DISPLAY_UNIT).write_text("mock", encoding="utf-8")
+    (root / verify_mounted_image.DISPLAY_UDEV_RULE).write_text("mock", encoding="utf-8")
+    (root / "var/lib/dpkg").mkdir(parents=True)
+    (root / "var/lib/dpkg/status").write_text("".join(
+        f"Package: {name}\nStatus: install ok installed\n\n"
+        for name in verify_mounted_image.DISPLAY_APT_PACKAGES), encoding="utf-8")
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings

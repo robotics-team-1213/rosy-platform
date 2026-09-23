@@ -7,6 +7,12 @@ it. Pi 5 has one radio: while the AP is up the site Wi-Fi cannot be seen, so
 after `hold_seconds` the AP steps aside and the site Wi-Fi gets a fresh grace
 period. `relay` keeps the AP up (D-26 RELAY_AP_STA); `off` never opens it
 (D-26/D-154 NETWORK_HOLD). Runs as root outside CORE (D-161).
+
+D-190: while the AP is up it also hands the LCD what to show. The boot display
+runs unprivileged (rosy-display) and cannot read the root-only credentials, so
+this root process writes only the two display lines (SSID, key) to
+/run/rosy-boot/ap-display.txt, root:rosy-display 0640, and removes the file
+whenever the AP is not up. Nothing here prints the key.
 """
 
 from __future__ import annotations
@@ -29,6 +35,8 @@ Runner = Callable[[list[str]], str]
 PROFILE = "rosy-fallback-ap"
 AP_ADDRESS = "10.42.0.1"
 STATUS = "run/rosy-boot/network.json"
+DISPLAY_AP = "run/rosy-boot/ap-display.txt"
+DISPLAY_GROUP = "rosy-display"
 POLL_SECONDS = 10
 DEFAULT_POLICY = {"mode": "fallback", "grace_seconds": 120, "hold_seconds": 600}
 
@@ -106,11 +114,14 @@ def load_policy(root: Path) -> dict:
     return policy
 
 
-def _write(path: Path, content: str, mode: int) -> None:
+def _write(path: Path, content: str, mode: int, group: int | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            # Group and mode are set on the still-empty 0600 file, before any content.
+            if group is not None and hasattr(os, "fchown"):
+                os.fchown(handle.fileno(), -1, group)
             if hasattr(os, "fchmod"):
                 os.fchmod(handle.fileno(), mode)
             handle.write(content)
@@ -138,7 +149,37 @@ def _status(root: Path, mode: str, ssid: str | None = None) -> None:
     status = {"mode": mode}
     if mode == "ap":
         status.update(ssid=ssid, address=AP_ADDRESS)
+    else:
+        clear_display_ap(root)
     _write(root / STATUS, json.dumps(status, sort_keys=True) + "\n", 0o644)
+
+
+def _display_gid() -> int | None:
+    """The rosy-display group, or None where it does not exist (no LCD user)."""
+    try:
+        import grp
+        return grp.getgrnam(DISPLAY_GROUP).gr_gid
+    except (ImportError, KeyError):
+        return None
+
+
+def display_ap(root: Path, ssid: str, key: str) -> bool:
+    """D-190: the LCD's AP lines for rosy-boot-display; True when written.
+
+    Only the SSID and the key, as the console banner shows them. 0640
+    root:rosy-display, so CORE and other users cannot read it. Without the
+    group nobody could read it, so it is not written at all.
+    """
+    group = _display_gid()
+    if group is None:
+        clear_display_ap(root)
+        return False
+    _write(root / DISPLAY_AP, f"{ssid}\n{key}\n", 0o640, group)
+    return True
+
+
+def clear_display_ap(root: Path) -> None:
+    (root / DISPLAY_AP).unlink(missing_ok=True)
 
 
 def perform(root: Path, action: str, run: Runner) -> bool:
@@ -162,6 +203,7 @@ def perform(root: Path, action: str, run: Runner) -> bool:
             _status(root, "none")
             return False
         _status(root, "ap", ssid)
+        display_ap(root, ssid, secret)
     elif action == "close":
         run(["nmcli", "connection", "down", PROFILE])
         # Ask NM to pick the best site profile now rather than wait out its retry timer.
@@ -188,6 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     state = LinkState()
     # A restart loses the in-memory state; start from a known "AP down".
     _run(["nmcli", "connection", "down", PROFILE])
+    clear_display_ap(args.root)  # the AP is down; the LCD must not show its key
     while True:
         try:
             state = step(state, time.monotonic(), load_policy(args.root), has_uplink(_run), args.root, _run)

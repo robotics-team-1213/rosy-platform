@@ -168,6 +168,10 @@ accounts:
   io_user: rosy-io
   io_uid: 961
   io_gid: 961
+  # D-190: rosy-boot-display.service (LCD, buzzer, battery ADC read).
+  display_user: rosy-display
+  display_uid: 962
+  display_gid: 962
   login_uid_must_differ: true
 
 sources:

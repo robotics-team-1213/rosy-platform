@@ -140,7 +140,7 @@ def _valid_root(tmp_path: Path) -> Path:
     # D-192 US-004: the motor bus overlay and its alias rule.
     (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
     (root / "boot/firmware/config.txt").write_text(
-        "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\n\n[all]\n# Rosy motor bus\n"
+        "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
         "dtoverlay=uart4-pi5\n", encoding="utf-8")
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
@@ -152,6 +152,15 @@ def _valid_root(tmp_path: Path) -> Path:
     for relative in ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py"):
         (release / "install" / relative).parent.mkdir(parents=True, exist_ok=True)
         (release / "install" / relative).write_text("# fixture\n", encoding="utf-8")
+    # D-190: the boot display ships enabled, with its udev rule and apt libraries.
+    (root / "etc/systemd/system/rosy-boot-display.service").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-boot-display.service").write_text("[Unit]\n", encoding="utf-8")
+    (root / "etc/udev/rules.d/99-rosy-display.rules").write_text('KERNEL=="spidev0.0"\n', encoding="utf-8")
+    (root / "var/lib/dpkg").mkdir(parents=True, exist_ok=True)
+    (root / "var/lib/dpkg/status").write_text("".join(
+        f"Package: {name}\nStatus: install ok installed\nVersion: 1\n\n"
+        for name in ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
+                     "fonts-dejavu-core")), encoding="utf-8")
     return root
 
 
@@ -712,6 +721,31 @@ def test_mounted_image_verifier_requires_the_hardware_runtime(tmp_path):
     assert completed.returncode != 0
     assert "sllidar_ros2 (RPLIDAR C1 driver) is missing" in completed.stderr
     assert "sllidar_ros2 is not installed: install/lib/sllidar_ros2/sllidar_node" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_boot_display(tmp_path):
+    disabled = _valid_root(tmp_path / "disabled")
+    (disabled / "etc/systemd/system/multi-user.target.wants/rosy-boot-display.service").unlink()
+    completed = _verify(disabled)
+    assert completed.returncode != 0
+    assert "rosy-boot-display.service is not enabled" in completed.stderr
+
+    bare = _valid_root(tmp_path / "bare")
+    (bare / "etc/systemd/system/rosy-boot-display.service").unlink()
+    (bare / "etc/udev/rules.d/99-rosy-display.rules").unlink()
+    status = bare / "var/lib/dpkg/status"
+    status.write_text(status.read_text(encoding="utf-8").replace(
+        "Package: python3-rpi-lgpio\nStatus: install ok installed",
+        "Package: python3-rpi-lgpio\nStatus: deinstall ok config-files"), encoding="utf-8")
+    config = bare / "boot/firmware/config.txt"
+    config.write_text(config.read_text(encoding="utf-8").replace("dtparam=spi=on\n", ""), encoding="utf-8")
+    completed = _verify(bare)
+    assert completed.returncode != 0
+    assert "missing systemd unit: rosy-boot-display.service" in completed.stderr
+    assert "missing display udev rule: etc/udev/rules.d/99-rosy-display.rules" in completed.stderr
+    assert "boot display package is not installed: python3-rpi-lgpio" in completed.stderr
+    assert "boot display package is not installed: python3-spidev" not in completed.stderr
+    assert "lost dtparam=spi=on for the Pi 5" in completed.stderr
 
 
 def test_customizer_fails_the_build_when_the_hardware_runtime_does_not_import():

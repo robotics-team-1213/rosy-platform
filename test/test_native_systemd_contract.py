@@ -344,6 +344,11 @@ DECLARED_WRITES = {
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
         "/var/lib/rosy/maps/site.pgm",
     },
+    "rosy-boot-display.service": {
+        # lgpio (under rpi-lgpio's RPi.GPIO) keeps its notification files in
+        # LG_WD, which the unit points at HOME. The program itself writes nothing.
+        "$HOME/.lgd-nfy0",
+    },
 }
 
 # Absolute paths a unit's program names but only reads.
@@ -356,6 +361,8 @@ DECLARED_READS = {
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
     },
+    # boot-status.json, network.json and ap-display.txt (root-written; D-190).
+    "rosy-boot-display.service": {"/run/rosy-boot"},
 }
 
 # Program sources scanned for write roots, per unit.
@@ -367,6 +374,11 @@ PROGRAM_SOURCES = {
     "rosy-core.service": ["src/core", "imported-by:src/core:control:src/apps/control"],
     "rosy-io.service": ["src/hardware/bringup"],
     "rosy-navigation.service": ["src/navigation", "src/hardware/bringup"],
+    # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
+    "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
+                                  "src/apps/emotion/emotion/info_screen.py",
+                                  "src/apps/emotion/emotion/rosy_lcd.py",
+                                  "src/hardware/bringup/rosylib"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")

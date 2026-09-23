@@ -32,9 +32,28 @@ def package_names(path: Path) -> set[str]:
 
 MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
 MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
-BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on")
+# D-190: the LCD is SPI0 CE0 (/dev/spidev0.0); the base image enables SPI.
+BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
 HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service")
 SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
+DISPLAY_UNIT = "rosy-boot-display.service"
+DISPLAY_UDEV_RULE = "etc/udev/rules.d/99-rosy-display.rules"
+# customize-rootfs.sh installs these for the boot display (D-190).
+DISPLAY_APT_PACKAGES = ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
+                        "fonts-dejavu-core")
+
+
+def installed_debs(root: Path) -> set[str]:
+    """Packages dpkg records as installed in the mounted root."""
+    status = root / "var/lib/dpkg/status"
+    if not status.is_file():
+        return set()
+    installed = set()
+    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
+        if fields.get("Status") == "install ok installed" and fields.get("Package"):
+            installed.add(fields["Package"])
+    return installed
 
 
 def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
@@ -132,6 +151,17 @@ def inspect(root: Path, release_id: str) -> list[str]:
     for relative in SLLIDAR_FILES:
         if not (release / "install" / relative).is_file():
             findings.append(f"sllidar_ros2 is not installed: install/{relative}")
+    # D-190: the boot display ships enabled, with its udev rule and libraries.
+    if not (root / "etc/systemd/system" / DISPLAY_UNIT).is_file():
+        findings.append(f"missing systemd unit: {DISPLAY_UNIT}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / DISPLAY_UNIT):
+        findings.append(f"{DISPLAY_UNIT} is not enabled")
+    if not (root / DISPLAY_UDEV_RULE).is_file():
+        findings.append(f"missing display udev rule: {DISPLAY_UDEV_RULE}")
+    debs = installed_debs(root)
+    for package in DISPLAY_APT_PACKAGES:
+        if package not in debs:
+            findings.append(f"boot display package is not installed: {package}")
     # D-176: the fallback AP is NetworkManager shared mode, which runs dnsmasq.
     if not (root / "usr/sbin/dnsmasq").exists():
         findings.append("dnsmasq is not installed: the fallback AP (NM shared mode) cannot start")

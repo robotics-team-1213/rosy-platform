@@ -42,3 +42,25 @@ hardware_packages:
   - lamp_control
   - emotion
   - imu_bno055
+# D-190 / D-181: host devices of the boot display, outside CORE and every
+# runtime mode. rosy-boot-display.service is their only user (its DeviceAllow
+# is exactly this set; test_device_surface_contract.py). They are not CORE
+# capabilities: the API cannot drive them, so no capabilities.*.yaml
+# advertises them (D-32). The emotion face stays bench-only (D-169).
+boot_display:
+  unit: rosy-boot-display.service
+  lcd:
+    driver: st7789
+    spi: /dev/spidev0.0
+    gpiochip: /dev/gpiochip4
+    bcm_lines: {rst: 27, dc: 25, backlight: 18}
+  buzzer:
+    gpiochip: /dev/gpiochip4
+    bcm_line: 22
+    # Sibling boards' pin; unconfirmed on the Pro until heard on the device.
+    enabled_by_default: false
+  battery_adc:
+    bus: /dev/i2c-1
+    address: 0x08
+    channel: 4
+    access: read

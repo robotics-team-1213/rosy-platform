@@ -78,6 +78,7 @@ SD_TOOLS_SOURCE="$WORKSPACE/deploy/sd"
 ROBOT_CONFIG_SOURCE="$WORKSPACE/deploy/robot/config"
 CYCLONEDDS_SOURCE="$WORKSPACE/src/hardware/bringup/config/cyclonedds_localhost.xml"
 UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-motor.rules"
+DISPLAY_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-display.rules"
 RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.pem"
 [[ -d "$NATIVE_RUNTIME_SOURCE" ]] \
     || fail "native runtime support is missing: deploy/robot/native"
@@ -87,6 +88,8 @@ RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.p
     || fail "SD personalization support is missing: deploy/sd"
 [[ -f "$UDEV_RULE_SOURCE" ]] \
     || fail "motor udev rule is missing: deploy/robot/udev/99-rosy-motor.rules"
+[[ -f "$DISPLAY_UDEV_RULE_SOURCE" ]] \
+    || fail "display udev rule is missing: deploy/robot/udev/99-rosy-display.rules"
 [[ ! -e "$RELEASE_ROOT/deploy/robot/native" ]] \
     || fail "release root already contains native runtime support"
 [[ -f "$RELEASE_PUBLIC_KEY" ]] \
@@ -132,6 +135,8 @@ cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
 # The native units address the motor bus as /dev/rosy-motor; the image must
 # carry the rule so a freshly flashed device has the alias on first boot.
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
+# D-190: the boot display's LCD and GPIO chip groups.
+cp "$DISPLAY_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
@@ -145,6 +150,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/syste
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
 # D-192 US-003: one more run right after the runtime target settles.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status-ready.service" "$OVERLAY/etc/systemd/system/"
+# D-190: the LCD and buzzer, unprivileged and outside CORE, enabled by the image.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-display.service" "$OVERLAY/etc/systemd/system/"
 # D-176: boot settings file and fallback AP, both root and outside CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"
