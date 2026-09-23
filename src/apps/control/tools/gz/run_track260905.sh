@@ -164,6 +164,9 @@ if [[ "${RIG_ESTOP_PROBE:-0}" == 1 ]]; then
   setsid python3 tools/gz/rig_estop_probe.py "$out" > "$out/estop-probe.log" 2>&1 & pids+=($!)
 fi
 
+if [[ "${RIG_DECISION_PROBE:-0}" == 1 ]]; then
+  setsid python3 tools/gz/rig_decision_probe.py > "$out/decision-probe.log" 2>&1 & pids+=($!)
+fi
 setsid python3 tools/gz/track_run_monitor.py > "$out/monitor.log" 2>&1 & pids+=($!)
 if [[ "${RIG_OBSTACLE_SCENARIO:-0}" == 1 ]]; then
   setsid python3 -m tools.gz.obstacle_scenario --ros-args -p use_sim_time:=true \
