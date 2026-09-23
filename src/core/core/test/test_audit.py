@@ -643,6 +643,31 @@ def test_a_failing_snapshot_read_is_not_retried_on_every_record(tmp_path, monkey
 # --- 이어 붙이기의 전제 --------------------------------------------------------
 
 
+def test_a_file_rewritten_in_place_is_not_spliced(tmp_path):
+    """신원((장치, inode))까지 같은 다른 파일. Linux 는 지운 파일의 inode 번호를
+    곧바로 다시 주므로 "지우고 다시 만들기"가 이렇게 보인다. 제자리 덮어쓰기는
+    어느 OS 에서나 inode 를 유지하므로 같은 상황을 Windows 에서도 재현한다."""
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    stale = _event(1, (now - timedelta(days=31)).isoformat()).model_dump_json()
+    path.write_text(stale + "\n", encoding="utf-8")
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    replacement = ("x" * (len(stale) + 400)) + "\n"
+
+    def someone_rewrites_it():
+        with path.open("r+b") as handle:          # 같은 inode 그대로
+            handle.seek(0)
+            handle.write(replacement.encode("utf-8"))
+            handle.truncate()
+
+    _prune_with(log, path, someone_rewrites_it)
+
+    assert path.read_text(encoding="utf-8") == replacement
+    health = log.health()
+    assert health["prune_skipped"] == 1
+    assert health["prune_failures"] == 0
+
+
 def test_a_file_swapped_for_a_longer_one_is_not_spliced(tmp_path):
     """크기만 보면 같은 길이거나 더 긴 것으로 갈아 끼운 것을 못 잡는다 —
     그러면 남의 내용 한가운데에 우리 옛 스냅샷을 이어 붙인다."""
@@ -1434,7 +1459,7 @@ def test_a_directory_sync_failure_after_the_replace_is_not_a_prune_failure(tmp_p
     assert stale not in path.read_text(encoding="utf-8"), "the prune itself did happen"
 
 
-@pytest.mark.parametrize("tamper", ["delete", "truncate"])
+@pytest.mark.parametrize("tamper", ["delete", "truncate", "rewrite"])
 def test_a_quarantine_file_removed_before_the_retry_is_written_again(tmp_path, monkeypatch, tamper):
     """중복을 막는 표시는 "그 바이트가 격리 파일에 있다"를 뜻한다. 운영자가 그
     사이 격리 파일을 지우거나 비웠다면 표시는 거짓이 되고, 그것을 믿고 건너뛴
@@ -1457,12 +1482,16 @@ def test_a_quarantine_file_removed_before_the_retry_is_written_again(tmp_path, m
 
     if tamper == "delete":
         log.quarantine_path.unlink()
-    else:
+    elif tamper == "truncate":
         log.quarantine_path.write_bytes(b"")
+    else:
+        # 같은 inode, 같은 크기, 다른 바이트 — Linux 가 지운 파일의 inode 번호를
+        # 새 파일에 다시 줄 때와 신원·크기가 똑같이 보인다.
+        log.quarantine_path.write_bytes(b"Z" * len(TORN))
     monkeypatch.setattr(_os, "replace", real_replace)
     clock.advance(PRUNE_INTERVAL_S)
     log.record(_event(4, now.isoformat()))
     assert log.settle()
 
     assert TORN not in path.read_bytes()
-    assert log.quarantine_path.read_bytes() == TORN, "the evidence is in neither file"
+    assert TORN in log.quarantine_path.read_bytes(), "the evidence is in neither file"

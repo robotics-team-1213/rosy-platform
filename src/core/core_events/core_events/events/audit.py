@@ -88,6 +88,12 @@ _COMPACT_BLOCK = 256 * 1024
 _YIELD_EVERY = 128
 _YIELD_S = 0.001
 
+#: "이 파일이 아직 그 파일인가"를 (장치, inode)만으로 묻지 않는다. Linux 는
+#: 지운 파일의 inode 번호를 곧바로 새 파일에 다시 준다(ext4·tmpfs) — 지우고
+#: 다시 만든 파일이 같은 신원으로 보인다. 그래서 이어 붙일 경계 **바로 앞**
+#: 바이트도 맞춰 본다. 락 안에서 읽는 것은 이만큼뿐이다.
+_FINGERPRINT_BYTES = 4096
+
 
 def _yield_gil() -> None:
     """GIL 을 기다리는 스레드(= `record()` 를 부른 스레드)에 차례를 준다."""
@@ -541,7 +547,9 @@ class FileAuditLog:
         # 있으면 Windows 에서는 그동안 누구도 이 파일을 지우거나 바꿔 끼우지
         # 못한다. 읽기 시스템 호출은 GIL 을 놓는다.
         with handle:
-            snapshot = io.BytesIO(handle.read(size))
+            data = handle.read(size)
+        snapshot = io.BytesIO(data)
+        boundary = data[-_FINGERPRINT_BYTES:]
         tmp = self._path.with_name(self._path.name + ".tmp")
         try:
             dropped, quarantined = self._classify(snapshot, size)
@@ -570,15 +578,17 @@ class FileAuditLog:
             done = self._already_quarantined(identity)
             fresh = [item for item in quarantined if item not in done]
             if fresh:
+                payload = b"".join(line + b"\n" for _, line in fresh)
                 with self.quarantine_path.open("ab") as sink:
-                    sink.write(b"".join(line + b"\n" for _, line in fresh))
+                    sink.write(payload)
                     sink.flush()
                     os.fsync(sink.fileno())
                     info = os.fstat(sink.fileno())
                 self._quarantined = (identity, done | set(fresh),
-                                     (info.st_dev, info.st_ino, info.st_size))
+                                     (info.st_dev, info.st_ino, info.st_size,
+                                      payload[-_FINGERPRINT_BYTES:]))
             with self._lock:
-                tail = self._tail_after_locked(size, identity)
+                tail = self._tail_after_locked(size, identity, boundary)
                 if tail is None:
                     # 실패가 아니라 전제가 깨진 것이다. 그래도 세어 둔다 — 조용히
                     # 넘기면 파일을 계속 자르는 외부 도구 하나가 정리를 영원한
@@ -613,12 +623,19 @@ class FileAuditLog:
         """이 본 파일에서 격리했고 **지금도 격리 파일에 있는** 줄. 모르면 빈 집합."""
         if self._quarantined is None or self._quarantined[0] != identity:
             return set()
+        dev, ino, size, last = self._quarantined[2]
         try:
-            info = self.quarantine_path.stat()
+            with self.quarantine_path.open("rb") as handle:
+                info = os.fstat(handle.fileno())
+                if (info.st_dev, info.st_ino) != (dev, ino) or info.st_size < size:
+                    return set()
+                # 지우고 다시 만든 격리 파일은 inode 번호를 물려받을 수 있다
+                # (`_FINGERPRINT_BYTES`). 우리가 마지막으로 쓴 바이트가 그
+                # 자리에 그대로 있을 때만 믿는다.
+                handle.seek(size - len(last))
+                if handle.read(len(last)) != last:
+                    return set()
         except OSError:
-            return set()
-        dev, ino, size = self._quarantined[2]
-        if (info.st_dev, info.st_ino) != (dev, ino) or info.st_size < size:
             return set()
         return self._quarantined[1]
 
@@ -666,8 +683,8 @@ class FileAuditLog:
         ts = obj.get("ts") if isinstance(obj, dict) else None
         return ts if isinstance(ts, str) else None
 
-    def _tail_after_locked(self, offset: int,
-                           identity: Optional[tuple]) -> Optional[bytes]:
+    def _tail_after_locked(self, offset: int, identity: Optional[tuple],
+                           boundary: bytes = b"") -> Optional[bytes]:
         """스냅샷 이후에 덧붙은 바이트. 이어 붙일 수 없으면 `None`.
 
         이 자리가 성립하는 근거는 "그 사이 이 파일에는 덧붙이기만 일어난다"
@@ -687,6 +704,12 @@ class FileAuditLog:
                 return None
             if info.st_size < offset:
                 return None
+            # 신원이 같아도 inode 번호를 물려받은 다른 파일일 수 있다
+            # (`_FINGERPRINT_BYTES`). 경계 바로 앞이 우리가 읽은 그대로인지 본다.
+            if boundary:
+                handle.seek(offset - len(boundary))
+                if handle.read(len(boundary)) != boundary:
+                    return None
             handle.seek(offset)
             return handle.read()
 
