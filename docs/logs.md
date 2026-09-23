@@ -1589,3 +1589,11 @@
 - gate 변화: 없음 — ARM64/DEVICE 게이트는 네이티브 ARM64 빌드·실기 측정이 필요하다.
 - 결정: 없음.
 - 교훈: WSL drvfs 부트 스모크 타임아웃은 CI 와 동일하게 60s 이상 — 25s 는 Windows 파일시스템 I/O 지연에 걸려 신호 경합을 만든다.
+
+## 2026-09-23 · uncommitted · docs(adr): 조건부 후속 ADR D-176·D-177 선기록 (Proposed)
+
+- 변경: D-169/D-170이 "조건 확정되는 후속 ADR로만 연다"고 열어 둔 두 후속 ADR을 **Proposed** 로 미리 등록했다. `docs/adr/D-176-device-surface-expansion-conditions.md` — 벤치 장치(emotion/lamp/led/imu_bno055)의 제품 편입 수용 조건을 장치별 4항목(실기 수요·D-84 프로필 항목·배관 수용·가드 변이 증명) 표로 고정하고, 조건 충족 시 같은 파일 Status 전환+증거 기록으로 편입한다(새 번호 발급 없음). `docs/adr/D-177-prt-004-activation-design.md` — correlation_id 발행 주체(중앙만 생성, 로봇은 소비), 로봇 측 경로(FleetAgent·HttpRobotClient), 3단계 상태기(ACCEPTED→STARTED→COMPLETED|FAILED), AckPayload §9.5 실측 필드, schemas+API Ref+fleet_agent 한 변경 갱신(D-18), additive-only 호환을 활성화 시 설계로 선기록. ADR Log 색인에 Proposed 2행 추가, `docs/progress.md` adrs·`docs/reference/AGENTS.md` 범위(D-177)·remediation plan Status의 후속 항목 표기를 갱신했다.
+- 증거: 편집 직후 `test_harness_contracts.py` 2 failed(생성 기록 stale) → `rosy_harness.py generate` 후 `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q` 초록·`rosy_harness.py lint` 0 errors — 인덱스↔본문 1:1, 상태값 `Proposed` 허용 확인. D-169/D-170 본문은 append-only 원칙에 따라 수정하지 않았고 연결은 신규 ADR 쪽 References가 수행한다.
+- gate 변화: 없음 — 둘 다 Proposed라 어떤 계약·코드도 바뀌지 않는다.
+- 결정: 조건(장치별 실기 수요 + D-84 프로필 확정 / 중앙 Fleet 착수)이 오면 Status를 Accepted로 바꾸고 그 시점의 증거를 본문 표에 채운다. 조건 없는 Status 전환은 "편입 없는 편입 기록"으로 무효(D-176 Status 문단에 명시).
+- 교훈: "나중에 하기로 한 결정"도 문서로 먼저 닫아 두면 활성화 시점의 설계 재논쟁을 막는다 — 단, 유예 조건을 건 ADR은 조건 전까지 Proposed로 두어야 부모 ADR(D-169/D-170)을 위반하지 않는다.

@@ -183,4 +183,6 @@
 | D-173 | 첫 Pinky Pro 카드는 머지된 커밋의 서명 이미지를 검토된 plan에 고정해 굽는다 | Accepted |
 | D-174 | 첫 실기 부팅 결함을 고치고, 부팅 상태는 CORE 밖의 표시 계층이 사람에게 알린다 | Accepted |
 | D-175 | 디버그 로그는 CORE가 죽어도, 네트워크가 없어도, 장비가 없어도 읽을 수 있어야 한다 | Accepted |
+| D-176 | 벤치 장치의 제품 편입은 장치별 실기 수요·D-84 프로필 항목·배관/capabilities/가드가 한 변경에서 충족될 때만 — 조건과 절차를 선기록 | Proposed |
+| D-177 | correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현 — 활성화 시 설계를 선기록 | Proposed |
 ---
