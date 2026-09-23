@@ -33,7 +33,7 @@ Gazebo simulation: worlds, models, ros_gz bridge params, lamp plugin, and `gz_mu
 
 ### Working In This Directory
 
-Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 
 ```bash
 ros2 launch gz_sim gz_multi.launch.py robots:=2

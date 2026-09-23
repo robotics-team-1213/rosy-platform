@@ -33,7 +33,7 @@ Robot middleware (ROSY-CORE-SRS-001). One process: rclpy node `core` + uvicorn F
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Policy modules (`command`, `safety`, `power`, `docking`, `state`, `events`, `protocol`) must stay ROS-import-free so pytest can run on Windows/CI without rclpy.
 - `CoreServices` in `services.py` is the DI container. Wire new managers there, then expose via API routes.
 - Do not publish `cmd_vel` from API or Nav2. CommandManager.select_output() is the only source; bridge publishes at 50 Hz (D-2).

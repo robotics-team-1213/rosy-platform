@@ -1613,3 +1613,11 @@
 - gate 변화: 없음(선언 메타데이터만).
 - 결정: 루트 `LICENSE`는 Apache-2.0인데 `web_common`·`core_features`·`core_events`·`core_common`·`core_api_web` 5개는 `Proprietary`를 선언한다 — 어느 쪽도 임의로 고치지 않고 허용 집합으로 시험에 고정한 뒤 소유자 판단으로 넘긴다(이 항목이 보고). `src/hardware/led/AGENTS.md`의 "license TODO from upstream" 메모도 함께 갱신했다.
 - 교훈: 라이선스 문구는 근거 없이 "맞춤"하지 않는다 — 검거(집합 고정)와 판정(바꾸기)을 분리하면 drifted 계약을 놓치지 않으면서 잘못된 판정은 피한다.
+
+## 2026-09-23 · uncommitted · docs: AGENTS 현황 드리프트 정리 (D-61 표기·remote/CI 문장·루트 키 파일 표)
+
+- 변경: 모듈 `AGENTS.md` 17곳의 `Harness (D-61 Proposed)` 괄호 표기를 `Harness (D-61)`로 정리했다(D-61 본문 Status는 Accepted인데 현황 표기만 남아 있었음). `Rosy OS/AGENTS.md`의 "저장소에 remote 가 없어 CI 가 발화하지 않는다" 문장은 사실과 달라 `origin`(`github.com/livsbittt/rosy-os.git`) 존재·push/PR 발화·ahead 구간에는 CI 증거가 없다는 현재 사실로 갱신했다. 상위 `Rosy/AGENTS.md`(저장소 밖) 키 파일 표에서 실재하지 않는 `task_plan.md`·`findings.md`·`progress.md` 3행 제거, 계약 우선 문장에 퇴역·재생성 금지를 명시했다. `src/hardware/led/AGENTS.md`의 manifest 행 메모는 패키지 메타데이터 커밋(`a2d00d7`)에서 갱신했다.
+- 증거: 수정 후 `grep "D-61 Proposed"` 잔여 17건 = 모듈 `logs.md` 16(각 결정 시점의 역사 기록) + `docs/plans/2026-09-15-module-harness-design.md:160`(P0 마일스톤 행) — 둘 다 append-only/날짜 문서라 보존한 것이 의도. 루트 `findings.md`·`task_plan.md`는 저장소 어디에도 없다(2026-09-23 전체 glob). `rosy_harness.py lint` 0 errors(18 warnings baseline), 하네스 계약 시험 초록.
+- gate 변화: 없음(현황 표기와 낡은 문장만).
+- 결정: ADR Status 전환 커밋에는 현관문(AGENTS)의 괄호 낙관도 함께 갱신한다 — 단 기록형 문서(logs, 날짜 설계문서)의 과거 표기는 append-only 로 보존한다. 저장소 밖 `.device-evidence/`는 README로 판독 결과(HOLD 2건·시의성 상실)를 연결만 하고 삭제는 승인 사안으로 남긴다.
+- 교훈: 상태를 괄호로 흘려 적은 현황 표기는 전환 순간드리프트가 된다 — 적지 않거나, 적었다면 전환과 같이 바꾼다. "no remote" 같은 인프라 사실도 시점이 지나면 거짓이 되므로 사실을 적되 최신 상태 조회 방법(`gh run list`)을 같이 남긴다.

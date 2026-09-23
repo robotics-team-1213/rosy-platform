@@ -30,7 +30,7 @@ C++ BNO055 IMU driver node `imu_bno055`. Publishes `sensor_msgs/Imu` on `imu_raw
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Default I2C `/dev/i2c-0`, address `0x28`, rate 100 Hz, `frame_id` `imu_link`.
 - Missing chip ID or initialization timeout exits nonzero with stage/register/errno logs.
 - `test/test_driver_faults.py` uses an injected I2C backend for hardware-free failure tests.

@@ -26,7 +26,7 @@ Charging-dock firmware and the ROSY-DOCK-001 agent contract. The microcontroller
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Required `/status` fields: `load_present` and `charging`. Missing is an error, not `false`.
 - Robot confirmation also requires pack voltage not falling (`docking/charging.py`). Dock `charging: true` alone must not suppress D-27 shutdown.
 - Wi-Fi credentials must not appear in sources; `test/test_dock_contract.py` fails the build if they do.

@@ -31,7 +31,7 @@ FLASH RED until a fresh authenticated command arrives. Site 장비라 ROS import
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Rules in order: (1) boot into fail-safe flash, (2) supervisor silence (> `HEARTBEAT_TIMEOUT_MS`) → fail-safe flash, (3) never red+green, (4) commands require the `X-Rosy-Token` and a fresh `seq`, (5) serve `/status` with required fields.
 - 신호등은 표시 장치지 안전 인터록이 아니다. 로봇 CORE 가 신호등을 제어하거나 신호등 보고를 안전 근거로 삼는 설계는 만들지 않는다.
 - 여러 신호기 사이의 순서는 Fleet 이 정한다(D-12) — 장치 안 `cycle` 은 시연·벤치용 반복 패턴이다.

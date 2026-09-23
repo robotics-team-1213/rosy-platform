@@ -57,7 +57,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 
 ### Working In This Directory
 
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - `formation/` and `swarm/arming.py` are pure — no `httpx`, `websockets`, `asyncio`, or `rclpy` imports. `test/test_boundaries.py` enforces this by walking the import graph.
 - The relay forwards leader frames byte-for-byte and never synthesizes one. A stream that stops must read 0 Hz, not repeat the last frame.
 - HOLD (FOR-004's whole-formation hold) is made by pausing the relay, not by a new endpoint (design §6.4, D-35 candidate).

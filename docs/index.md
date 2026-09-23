@@ -124,8 +124,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · docs: AGENTS 현황 드리프트 정리 (D-61 표기·remote/CI 문장·루트 키 파일 표)
 - 2026-09-23 · uncommitted · fix(pkgs): manifest TODO 제거 + 패키지 메타데이터 계약 시험
 - 2026-09-23 · uncommitted · fix(test): the control closure guard ignores colcon output under src/
 - 2026-09-23 · uncommitted · docs(adr): 조건부 후속 ADR D-176·D-177 선기록 (Proposed)
 - 2026-09-23 · uncommitted · docs: Linux 측 검증 3건 — colcon 빌드·sensor_adc 구문 검사·CI 동등 부트 스모크
-- 2026-09-23 · uncommitted · docs(adr): D-172 후속 F1~F6 처리 결과

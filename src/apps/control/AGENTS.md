@@ -32,7 +32,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 ## For AI Agents
 
 ### Working In This Directory
-- Harness (D-61 Proposed): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Treat this directory as part of Rosy OS. The original checkout is archived for provenance; no runtime, build, or test may require it.
 - Preserve pure-logic behavior and its tests before changing ROS wiring. The target runtime must not activate this package's legacy final `/cmd_vel` publisher beside `core`.
 - Keep new **decision logic in the pure-logic subjects** (`control/control/`, `control/planning/`, `control/sensing/`, `control/watch.py`) — no ROS imports there, that is what the tests cover.
