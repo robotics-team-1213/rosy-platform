@@ -11,6 +11,9 @@ Type=simple
 User=rosy-io
 Group=rosy-io
 SupplementaryGroups=dialout i2c video gpio spi
+# D-192: first boot writes runtime.env without these two, and an unset
+# ${...} expands to an empty launch argument. runtime.env still wins.
+Environment=ROSY_NAVIGATION_BACKEND=localization ROSY_MAP=/var/lib/rosy/maps/site.yaml
 EnvironmentFile=/etc/rosy/runtime.env
 # D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
 LogsDirectory=rosy-navigation

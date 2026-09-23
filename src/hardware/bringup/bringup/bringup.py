@@ -72,6 +72,15 @@ class Rosy(Node):
         self.declare_parameter('max_angular_rps', 0.80)
         self.declare_parameter('max_wheel_rpm', 100.0)
         self.declare_parameter('motor_profile_acceleration', 200)
+        # D-192 no-motion mode: false keeps motor torque off, never subscribes
+        # cmd_vel and never reports motor/ready, while odometry, joint states
+        # and TF still come from the encoders. Not a board parameter, so it
+        # stays outside the PinkyProAdapter mapping.
+        self.declare_parameter('drive_enabled', True)
+        drive_enabled = self.get_parameter('drive_enabled').value
+        if not isinstance(drive_enabled, bool):
+            raise ValueError('drive_enabled must be a boolean')
+        self.drive_enabled = drive_enabled
 
         # Keep the board-specific boundary explicit.  This validates the
         # complete ROS parameter set before any SDK object opens a UART; the
@@ -162,7 +171,8 @@ class Rosy(Node):
 
             self.get_logger().info('2. Initializing motors...')
             if not self.driver.initialize_motors(
-                profile_accel=self.motor_profile_acceleration
+                profile_accel=self.motor_profile_acceleration,
+                enable_torque=self.drive_enabled,
             ):
                 self.get_logger().error('Failed to initialize motors! Shutting down.')
                 raise RuntimeError('failed to initialize Dynamixel motors')
@@ -170,10 +180,16 @@ class Rosy(Node):
             self.get_logger().info('Waiting for motors to be ready...')
             time.sleep(1.0)
 
-            self.get_logger().info('3. Setting initial RPM to zero...')
-            if not self.driver.set_double_rpm(0, 0):
-                self.get_logger().error('Failed to set initial RPM! Shutting down.')
-                raise RuntimeError('failed to set initial zero RPM')
+            if self.drive_enabled:
+                self.get_logger().info('3. Setting initial RPM to zero...')
+                if not self.driver.set_double_rpm(0, 0):
+                    self.get_logger().error('Failed to set initial RPM! Shutting down.')
+                    raise RuntimeError('failed to set initial zero RPM')
+            else:
+                self.get_logger().warn(
+                    '3. Drive disabled (no-motion mode): torque stays off, '
+                    'cmd_vel is not subscribed, motor/ready stays false.'
+                )
 
             self.get_logger().info('4. Reading initial encoder values...')
             _, _, self.last_encoder_l, self.last_encoder_r = self.driver.get_feedback()
@@ -190,9 +206,11 @@ class Rosy(Node):
 
             self.odom_pub = self.create_publisher(Odometry, ODOM_PUB_TOPIC_NAME, 10)
             self.joint_pub = self.create_publisher(JointState, JOINT_PUB_TOPIC_NAME, 10)
-            self.twist_sub = self.create_subscription(
-                Twist, TWIST_SUB_TOPIC_NAME, self.twist_callback, 10
-            )
+            self.twist_sub = None
+            if self.drive_enabled:
+                self.twist_sub = self.create_subscription(
+                    Twist, TWIST_SUB_TOPIC_NAME, self.twist_callback, 10
+                )
             self.tf_broadcaster = TransformBroadcaster(self)
             self.timer = self.create_timer(1.0 / 30.0, self.update_and_publish)
 
@@ -208,7 +226,7 @@ class Rosy(Node):
             self.theta = 0.0
             self.last_time = self.get_clock().now()
             self.is_initialized = True
-            self.motor_ready_pub.publish(Bool(data=True))
+            self.motor_ready_pub.publish(Bool(data=self.drive_enabled))
             self.get_logger().info(
                 'Rosy Bringup with Dynamixel has been started successfully.'
             )
@@ -243,9 +261,11 @@ class Rosy(Node):
             self.command_deadman.mark_command()
 
     def update_and_publish(self):
-        if self.is_initialized:
+        if self.is_initialized and self.drive_enabled:
             # This is the adapter lease.  CORE expires it if the motor process
             # stops producing health updates, even though the topic is latched.
+            # A no-motion node never offers it: CORE must not plan on motors
+            # that cannot move.
             self.motor_ready_pub.publish(Bool(data=True))
         stop_result = self.command_deadman.attempt_stop(
             lambda: self.motor_controller.stop().accepted

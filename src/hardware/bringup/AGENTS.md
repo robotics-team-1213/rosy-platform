@@ -24,6 +24,7 @@ Physical robot bringup: Dynamixel differential drive, odometry/TF, optional LiDA
 | Directory | Purpose |
 |-----------|---------|
 | `bringup/` | Nodes and ROS-free motor contracts (see `bringup/AGENTS.md`) |
+| `rosylib/` | Rosy-owned `pinkylib` stand-in: I2C-1 ADC `Battery` (see `rosylib/AGENTS.md`, D-192) |
 | `launch/` | `bringup_robot.launch.py` with namespace/frame_prefix (see `launch/AGENTS.md`) |
 | `config/` | Params + localhost CycloneDDS (see `config/AGENTS.md`) |
 | `scripts/` | Per-robot env isolation `rosy_env.sh` (see `scripts/AGENTS.md`) |
@@ -51,7 +52,9 @@ python3 -m pytest test/test_motor_control.py test/test_bringup_motor_contracts.p
 
 ### Common Patterns
 
-Launch arguments: `namespace`, `enable_battery`, `enable_lidar`, `use_sim_time`.
+Launch arguments: `namespace`, `enable_battery`, `enable_lidar`, `use_sim_time`, `drive_enabled`.
+
+`drive_enabled:=false` is the D-192 no-motion mode: torque stays off, `cmd_vel` is not subscribed, `motor/ready` stays false; odometry, joint states and TF still publish. `rosy-io.service` defaults to it (`ROSY_IO_DRIVE_ENABLED=false`).
 
 ## Dependencies
 

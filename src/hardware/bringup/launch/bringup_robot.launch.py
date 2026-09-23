@@ -19,6 +19,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 
 from launch_ros.actions import Node, PushRosNamespace
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -43,7 +44,12 @@ def generate_launch_description():
                               description='로봇 namespace (예: rosy_01)'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('enable_battery', default_value='false',
-                              description='Enable optional rosylib ADC battery publisher'),
+                              description='Enable the rosylib I2C-1 ADC battery publisher'),
+        DeclareLaunchArgument(
+            'drive_enabled', default_value='true',
+            description='false = no-motion mode: torque off, no cmd_vel '
+                        'subscription, motor/ready stays false (D-192)',
+        ),
         DeclareLaunchArgument('enable_lidar', default_value='true',
                               description='Enable the serial LiDAR driver'),
         DeclareLaunchArgument('wheel_radius', default_value='0.027'),
@@ -102,6 +108,9 @@ def generate_launch_description():
                     'wheel_radius': LaunchConfiguration('wheel_radius'),
                     'wheel_separation': LaunchConfiguration('wheel_separation'),
                     'cmd_vel_timeout_s': LaunchConfiguration('cmd_vel_timeout_s'),
+                    'drive_enabled': ParameterValue(
+                        LaunchConfiguration('drive_enabled'), value_type=bool
+                    ),
                     'frame_prefix': frame_prefix,
                     'motor_device': LaunchConfiguration('motor_device'),
                     'motor_baudrate': LaunchConfiguration('motor_baudrate'),
