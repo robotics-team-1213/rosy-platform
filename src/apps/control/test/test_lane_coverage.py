@@ -98,3 +98,13 @@ def test_the_tour_length_is_reported():
 def test_a_start_off_every_two_way_road_is_refused():
     with pytest.raises(ValueError, match="two-way road"):
         coverage_route(GRAPH, (5.0, 5.0))
+
+
+def test_the_tour_start_pose_heads_along_the_first_key():
+    import math
+    from control.sensing.lane_coverage import tour_start_pose
+    keys = coverage_route(GRAPH, START)
+    x, y, yaw = tour_start_pose(GRAPH, keys, START)
+    assert math.dist((x, y), START) < 0.005
+    # west:f runs north through the parking junction at x = -1.27.
+    assert abs(math.atan2(math.sin(yaw - math.pi / 2), math.cos(yaw - math.pi / 2))) < 0.3

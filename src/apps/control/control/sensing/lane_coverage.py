@@ -158,3 +158,18 @@ def coverage_route(graph, start_xy) -> list:
                 heapq.heappush(heap, (round(cost + offset[nxt], 6), keys + (nxt,),
                                       mask | closing, True))
     raise ValueError("no covering tour")
+
+
+def tour_start_pose(graph, keys, start_xy):
+    """(x, y, yaw) at `start_xy` projected onto the first key, heading
+    along it."""
+    pts = _points(graph, keys[0])
+    s, _ = _project(pts, start_xy)
+    arc = _arc(pts)
+    i = min(max(int(np.searchsorted(arc, s, side="right")) - 1, 0), len(pts) - 2)
+    a, b = pts[i], pts[i + 1]
+    t = 0.0 if arc[i + 1] <= arc[i] else (s - arc[i]) / (arc[i + 1] - arc[i])
+    p = a + t * (b - a)
+    lo, hi = pts[max(i - 1, 0)], pts[min(i + 2, len(pts) - 1)]
+    return (round(float(p[0]), 4), round(float(p[1]), 4),
+            round(float(np.arctan2(hi[1] - lo[1], hi[0] - lo[0])), 4))

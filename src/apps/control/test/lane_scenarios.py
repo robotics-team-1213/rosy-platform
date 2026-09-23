@@ -130,6 +130,62 @@ def run_scenario(scenario, follower, *, steps=200, world=None, odom_error=None):
     return result
 
 
+def run_route(keys, start_pose, follower, max_steps, *, odom_error=None, world=None):
+    """Drive a whole route (lane_coverage's tour) offline: run_scenario's
+    loop (same renderer, CORE law, 3 s lease, odometry error) from
+    `start_pose` until the TRUE pose's route coordinate (junction_score's
+    windowed projection, anchored on the first key) reaches the start point
+    again on the last key, CORE's lease latches LOST, or `max_steps`.
+    Scored with junction_score.score_route; the result adds the track,
+    tiers, reason, stall times, last true / odometry poses and `steps`."""
+    world = WORLD if world is None else world
+    error = OdomError() if odom_error is None else odom_error
+    pose = tuple(float(v) for v in start_pose)
+    odom = believed_start({"start": pose}, error)
+    path, arc, starts = junction_score.route_path(GRAPH, keys)
+    last_key = junction_score.directed_points(GRAPH, keys[-1])
+    s_end = float(starts[-2] + junction_score._nearest_on_path(
+        last_key, junction_score._arc_length(last_key), pose[:2])[0])
+    s, _ = junction_score._nearest_on_path(path, arc, pose[:2], (0.0, float(starts[1])))
+    track, tiers = [pose[:2]], []
+    reason, loss_started, stall, stretch, max_stretch = None, None, 0, 0, 0
+    last_true, last_odom = pose, odom
+    step = 0
+    for step in range(max_steps):
+        now = step * lane_sim.DT
+        last_true, last_odom = pose, odom
+        observation = follower.update(now, odom, world.render(pose),
+                                      lane_sim.GROUND, **lane_sim.KW)
+        tiers.append(getattr(follower, "state", "-"))
+        if observation is None or observation.confidence < CORE_MIN_CONFIDENCE:
+            stall += 1
+            stretch += 1
+            max_stretch = max(max_stretch, stretch)
+            loss_started = now if loss_started is None else loss_started
+            if now - loss_started > LOST_AFTER_S:
+                reason = "lost"
+                break
+        else:
+            loss_started, stretch = None, 0
+        linear, angular = lane_sim.core_command(observation)
+        pose = _integrate(pose, linear, angular)
+        moving = linear > 0.0 or angular != 0.0
+        odom = _integrate(odom, (1.0 + error.scale) * linear,
+                          (1.0 + error.scale) * angular
+                          + (error.yaw_rate_bias if moving else 0.0))
+        track.append(pose[:2])
+        s, _ = junction_score._nearest_on_path(
+            path, arc, pose[:2], (s - junction_score.SEARCH_WINDOW_M,
+                                  s + junction_score.SEARCH_WINDOW_M))
+        if s >= s_end:
+            break
+    result = junction_score.score_route(GRAPH, keys, track, lost=reason is not None)
+    result.update(track=track, tiers=tiers, final_pose=pose, reason=reason,
+                  stall_s=stall * lane_sim.DT, max_stall_s=max_stretch * lane_sim.DT,
+                  last_true_pose=last_true, last_odom_pose=last_odom, steps=step + 1)
+    return result
+
+
 def summary(results):
     """One line per scenario for a test failure message."""
     return "\n".join(

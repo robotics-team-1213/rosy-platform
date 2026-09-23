@@ -239,3 +239,78 @@ def test_rescore_cli_writes_a_rescored_json_next_to_results(graph, tmp_path):
     assert out_path.is_file()
     written = json.loads(out_path.read_text(encoding="utf-8"))
     assert written[0]["pass"] is True
+
+
+#: lane_coverage's map_v2_fleet tour (test_lane_coverage pins it).
+TOUR = ["west:f", "ring_w:f", "ring_s:f", "east:r", "ring_n:f", "west:r", "ring_s:f",
+        "ring_e:f", "east:f", "ring_e:f", "ring_n:f", "ring_w:f", "west:f"]
+
+
+def _tour_track(graph, lateral=0.0, step=0.01):
+    """The tour's centreline from the parking junction back to it, `lateral`
+    to the left, sampled every `step` metres."""
+    mod = _mod()
+    start = np.asarray(graph["parking"]["points"][0], float)
+    path, arc, starts = mod.route_path(graph, TOUR)
+    first = mod.directed_points(graph, TOUR[0])
+    s0, _ = mod._nearest_on_path(first, mod._arc_length(first), start)
+    s_end = starts[-2] + s0
+    track = []
+    for s in np.arange(s0, s_end + 1e-9, step):
+        i = min(int(np.searchsorted(arc, s, side="right")) - 1, len(path) - 2)
+        d = path[i + 1] - path[i]
+        d = d / np.linalg.norm(d)
+        track.append(path[i] + d * (s - arc[i]) + lateral * np.array([-d[1], d[0]]))
+    track.append(start)
+    return [tuple(p) for p in track]
+
+
+def test_the_tour_driven_on_its_centreline_passes(graph):
+    result = _mod().score_route(graph, TOUR, _tour_track(graph))
+    assert result["pass"], result
+    assert result["missing"] == []
+    assert all(result["segments_driven"])
+    assert result["end_distance_m"] <= 0.01
+    assert result["route_length_m"] == pytest.approx(16.874, abs=0.02)
+
+
+def test_a_tour_stopped_halfway_misses_segments(graph):
+    track = _tour_track(graph)
+    result = _mod().score_route(graph, TOUR, track[:len(track) // 2])
+    assert not result["pass"]
+    assert "east:f" in result["missing"]
+    assert result["end_distance_m"] > 0.05
+
+
+def test_a_tour_driven_backwards_is_wrong_way(graph):
+    result = _mod().score_route(graph, TOUR, _tour_track(graph)[::-1])
+    assert not result["pass"]
+    assert result["wrong_way"] or not result["ring_ccw_ok"]
+
+
+def test_a_tour_off_the_centreline_fails_on_deviation(graph):
+    result = _mod().score_route(graph, TOUR, _tour_track(graph, lateral=0.05))
+    assert not result["pass"]
+    assert result["max_centre_dev_m"] > 0.04
+
+
+def test_a_lost_tour_fails(graph):
+    result = _mod().score_route(graph, TOUR, _tour_track(graph), lost=True)
+    assert not result["pass"] and result["lost"]
+
+
+def test_a_tour_that_skips_a_segment_misses_it(graph):
+    """Drive the tour's keys without the second ring_e:f (east:f ->
+    ring_n:f is not connected, so cut the track there instead): scoring the
+    full tour against a track that ends after east:f misses the rest."""
+    mod = _mod()
+    track = _tour_track(graph)
+    path, arc, starts = mod.route_path(graph, TOUR)
+    first = mod.directed_points(graph, TOUR[0])
+    s0, _ = mod._nearest_on_path(first, mod._arc_length(first), track[0])
+    cut = int((starts[9] - s0) / 0.01)
+    result = mod.score_route(graph, TOUR, track[:cut])
+    assert not result["pass"]
+    assert result["segments_driven"][:9] == [True] * 9
+    assert not any(result["segments_driven"][9:])
+    assert "ring_e:f" not in result["missing"]      # driven once already

@@ -220,6 +220,117 @@ def score(graph, scenario, trajectory):
             "pass": branch_ok and ring_ccw_ok and max_dev <= PASS_MAX_CENTRE_DEV_M}
 
 
+#: A route segment counts as driven once the track's route coordinate has
+#: reached within this of its end (the tour's end: of the start point).
+ROUTE_DRIVEN_TOLERANCE_M = 0.05
+#: The tour must end within this of where it started.
+ROUTE_END_MAX_M = 0.05
+
+
+def route_path(graph, keys):
+    """(points, arc, segment start arcs) of the chain of directed `keys`,
+    each later segment's first point (the shared node) dropped."""
+    chunks = [directed_points(graph, keys[0])]
+    for key in keys[1:]:
+        chunks.append(directed_points(graph, key)[1:])
+    path = np.vstack(chunks)
+    arc = _arc_length(path)
+    starts = np.concatenate([[0.0], np.cumsum([_arc_length(directed_points(graph, k))[-1]
+                                               for k in keys])])
+    return path, arc, starts
+
+
+def score_route(graph, keys, trajectory, *, lost=False):
+    """Score a whole-route trajectory (lane_coverage's tour): `score`'s
+    direction-aware rules over the chain of `keys` instead of one into/out
+    pair. The route coordinate is anchored on the FIRST key at the track's
+    first point (a tour starts and ends at the same point, mid-segment) and
+    then searched only within SEARCH_WINDOW_M of the previous point, so a
+    segment the route drives twice is scored pass by pass.
+
+      segments_driven  per key, whether the route coordinate crossed its end
+                       (the last key: reached the start point again). The
+                       first key counts when the last is the same key and
+                       both partial passes were driven.
+      covered/missing  directed keys (of `directed(graph)`) driven in full
+      wrong_way        s went backwards by BACKWARD_S_TOLERANCE_M, or a step
+                       pointed more than 90 deg off the local tangent (outside
+                       NODE_AMBIGUOUS_M of a node)
+      wrong_branch     outside NODE_AMBIGUOUS_M, a segment whose road is not
+                       the current, previous or next key's was nearer
+      max_centre_dev_m nearest-route distance, outside NODE_AMBIGUOUS_M
+      end_distance_m   last track point to the first
+      pass             all driven, nothing missing, no wrong_way or branch,
+                       ring CCW, deviation <= PASS_MAX_CENTRE_DEV_M, end
+                       within ROUTE_END_MAX_M and not `lost` (CORE's lease)
+    """
+    keys = list(keys)
+    path, arc, starts = route_path(graph, keys)
+    seg_vec = path[1:] - path[:-1]
+    seg_len = np.linalg.norm(seg_vec, axis=1)
+    seg_unit = np.divide(seg_vec, seg_len[:, None], out=np.zeros_like(seg_vec),
+                         where=seg_len[:, None] > 0)
+    nodes = [np.asarray(xy, float) for xy in graph["nodes"].values()]
+    pts = np.asarray(trajectory, float).reshape(-1, 2)
+    first_len = starts[1]
+    s0, _ = _nearest_on_path(path, arc, pts[0], (0.0, first_len))
+    last_first, _ = _nearest_on_path(directed_points(graph, keys[-1]),
+                                     _arc_length(directed_points(graph, keys[-1])),
+                                     pts[0])
+    s_end = float(starts[-2] + last_first)
+    roads = [k.split(":")[0] for k in keys]
+    by_road = {}
+    for k, _, _ in directed(graph):
+        by_road.setdefault(k.split(":")[0], []).append(directed_points(graph, k))
+
+    max_dev, wrong_branch, wrong_way, max_s = 0.0, False, False, s0
+    prev_s, prev_p = None, None
+    for p in pts:
+        window = ((0.0, first_len) if prev_s is None
+                  else (prev_s - SEARCH_WINDOW_M, prev_s + SEARCH_WINDOW_M))
+        s_here, seg_i = _nearest_on_path(path, arc, p, window)
+        near_node = any(math.dist(p, n) <= NODE_AMBIGUOUS_M for n in nodes)
+        if not near_node:
+            proj_d = distance_to(path[max(seg_i - 1, 0):seg_i + 3], p)
+            max_dev = max(max_dev, proj_d)
+            k = int(np.clip(np.searchsorted(starts, s_here, side="right") - 1, 0, len(keys) - 1))
+            near_roads = set(roads[max(k - 1, 0):k + 2])
+            d_other = min((distance_to(o, p) for road, polys in by_road.items()
+                           if road not in near_roads for o in polys), default=math.inf)
+            if d_other + 1e-6 < proj_d:
+                wrong_branch = True
+        if prev_s is not None and (prev_s - s_here) > BACKWARD_S_TOLERANCE_M:
+            wrong_way = True
+        if prev_p is not None and not near_node:
+            step = p - prev_p
+            step_len = float(np.linalg.norm(step))
+            if step_len >= MOTION_MIN_STEP_M:
+                if float(np.dot(step / step_len, seg_unit[seg_i])) < 0.0:
+                    wrong_way = True
+        max_s = max(max_s, s_here)
+        prev_s, prev_p = s_here, p
+
+    driven = []
+    for i in range(len(keys)):
+        end = s_end if i == len(keys) - 1 else float(starts[i + 1])
+        driven.append(bool(max_s >= end - ROUTE_DRIVEN_TOLERANCE_M))
+    covered = {keys[i] for i in range(1, len(keys) - 1) if driven[i]}
+    if len(keys) > 1 and keys[0] == keys[-1] and driven[0] and driven[-1]:
+        covered.add(keys[0])
+    required = {k for k, _, _ in directed(graph)}
+    missing = sorted(required - covered)
+    end_distance = float(math.dist(pts[-1], pts[0]))
+    ring_ccw_ok = _ring_ccw_ok(graph, pts)
+    ok = (all(driven) and not missing and not wrong_way and not wrong_branch
+          and ring_ccw_ok and max_dev <= PASS_MAX_CENTRE_DEV_M
+          and end_distance <= ROUTE_END_MAX_M and not lost)
+    return {"segments_driven": driven, "covered": sorted(covered), "missing": missing,
+            "wrong_way": wrong_way, "wrong_branch": wrong_branch,
+            "ring_ccw_ok": ring_ccw_ok, "max_centre_dev_m": round(max_dev, 4),
+            "progress_m": round(max_s - s0, 3), "route_length_m": round(s_end - s0, 3),
+            "end_distance_m": round(end_distance, 4), "lost": bool(lost), "pass": ok}
+
+
 def rescore(graph, results_json_path, track_dir):
     """Re-score already-recorded track.json files against the current
     scoring rules, without re-running Gazebo. Matches junction_harness.py's
