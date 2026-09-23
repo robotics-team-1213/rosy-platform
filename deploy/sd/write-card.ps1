@@ -12,7 +12,13 @@ param(
     [switch]$PrintArguments,
     [string]$LogPath,
     [switch]$ResumeAfterWrite,
-    [double]$WriterStallMinutes = 5
+    [double]$WriterStallMinutes = 5,
+    [double]$ReadbackStallMinutes = 5,
+    [double]$MinReadMBps = 10,
+    [double]$AssumedWriteMBps = 0,
+    [switch]$AcceptSlowMedia,
+    [switch]$Detach,
+    [string]$ElevationLauncher
 )
 # Operator entry point: write one reviewed plan to its card (D-173).
 #
@@ -26,6 +32,11 @@ param(
 # every 60 s while writing and reading back) to <log>.progress.jsonl, and every
 # failure names the card state and the next step. -ResumeAfterWrite skips the
 # Imager write and re-runs the authoritative readback, bundle, receipt and registry.
+#
+# D-182: -Detach (the operator default) starts the elevated write in its own
+# window with one UAC prompt and returns at once, printing the log, progress and
+# status-command paths; the write survives this console or agent session closing.
+# card-write-status.ps1 -LogPath <log> reads the progress file without elevation.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -68,6 +79,10 @@ if ($ReprovisionReceipt) { $arguments.ReprovisionReceipt = (Resolve-Path -Litera
 if ($Confirmation) { $arguments.Confirmation = $Confirmation }
 if ($ResumeAfterWrite) { $arguments.ResumeAfterWrite = $true }
 $arguments.WriterStallMinutes = $WriterStallMinutes
+$arguments.ReadbackStallMinutes = $ReadbackStallMinutes
+$arguments.MinReadMBps = $MinReadMBps
+if ($AssumedWriteMBps -gt 0) { $arguments.AssumedWriteMBps = $AssumedWriteMBps }
+if ($AcceptSlowMedia) { $arguments.AcceptSlowMedia = $true }
 
 if (-not $LogPath) {
     $stamp = Get-Date -Format "yyyyMMddTHHmmss"
@@ -76,9 +91,11 @@ if (-not $LogPath) {
 $exitMarker = "$LogPath.exit"
 $progressPath = "$LogPath.progress.jsonl"
 $arguments.ProgressPath = $progressPath
+$statusScript = Join-Path $PSScriptRoot "card-write-status.ps1"
+$statusCommand = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$statusScript`" -LogPath `"$LogPath`""
 
 if ($PrintArguments) {
-    [ordered]@{ arguments = $arguments; log = $LogPath; exit_marker = $exitMarker; progress = $progressPath } | ConvertTo-Json -Depth 4
+    [ordered]@{ arguments = $arguments; log = $LogPath; exit_marker = $exitMarker; progress = $progressPath; status = $statusCommand } | ConvertTo-Json -Depth 4
     exit 0
 }
 
@@ -87,26 +104,84 @@ function Get-LastProgress {
     try { return (Get-Content -LiteralPath $progressPath -Tail 1 | ConvertFrom-Json) } catch { return $null }
 }
 
-$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    # Re-run elevated with the same inputs and a fixed log path, then report.
-    $forward = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"",
-        "-PlanPath", "`"$PlanPath`"", "-ReleaseDir", "`"$ReleaseDir`"", "-WifiProfile", $WifiProfile,
-        "-EvidenceDir", "`"$EvidenceDir`"", "-RpiImager", "`"$RpiImager`"", "-PythonExe", "`"$PythonExe`"",
-        "-LogPath", "`"$LogPath`"")
-    if ($OperatorPublicKey) { $forward += @("-OperatorPublicKey", "`"$($arguments.OperatorPublicKey)`"") }
-    if ($ReprovisionReceipt) { $forward += @("-ReprovisionReceipt", "`"$($arguments.ReprovisionReceipt)`"") }
-    if ($Confirmation) { $forward += @("-Confirmation", "`"$Confirmation`"") }
-    if ($ResumeAfterWrite) { $forward += "-ResumeAfterWrite" }
-    $forward += @("-WriterStallMinutes", $WriterStallMinutes.ToString([Globalization.CultureInfo]::InvariantCulture))
-    Write-Output "Requesting administrator rights; approve the UAC prompt. Log: $LogPath"
-    Write-Output "Progress: $progressPath (one JSON line per stage, a heartbeat about every 60 s while writing and reading back)"
+# Same line format as prepare-rosy-sd.ps1 (D-181), flushed at once.
+function Add-ProgressLine([string]$Stage, [string]$CardState, [string]$Detail, [string]$Next) {
+    $line = [ordered]@{ ts = [DateTime]::UtcNow.ToString("o"); stage = $Stage; card_state = $CardState }
+    if ($Detail) { $line["detail"] = $Detail }
+    if ($Next) { $line["next"] = $Next }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($line | ConvertTo-Json -Compress) + "`n")
+    $stream = New-Object IO.FileStream($progressPath, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
     try {
-        Start-Process powershell -Verb RunAs -Wait -ArgumentList $forward
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+$invariant = [Globalization.CultureInfo]::InvariantCulture
+# Re-run with the same inputs and a fixed log path.
+$forward = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"",
+    "-PlanPath", "`"$PlanPath`"", "-ReleaseDir", "`"$ReleaseDir`"", "-WifiProfile", $WifiProfile,
+    "-EvidenceDir", "`"$EvidenceDir`"", "-RpiImager", "`"$RpiImager`"", "-PythonExe", "`"$PythonExe`"",
+    "-LogPath", "`"$LogPath`"")
+if ($OperatorPublicKey) { $forward += @("-OperatorPublicKey", "`"$($arguments.OperatorPublicKey)`"") }
+if ($ReprovisionReceipt) { $forward += @("-ReprovisionReceipt", "`"$($arguments.ReprovisionReceipt)`"") }
+if ($Confirmation) { $forward += @("-Confirmation", "`"$Confirmation`"") }
+if ($ResumeAfterWrite) { $forward += "-ResumeAfterWrite" }
+$forward += @("-WriterStallMinutes", $WriterStallMinutes.ToString($invariant))
+$forward += @("-ReadbackStallMinutes", $ReadbackStallMinutes.ToString($invariant))
+$forward += @("-MinReadMBps", $MinReadMBps.ToString($invariant))
+if ($AssumedWriteMBps -gt 0) { $forward += @("-AssumedWriteMBps", $AssumedWriteMBps.ToString($invariant)) }
+if ($AcceptSlowMedia) { $forward += "-AcceptSlowMedia" }
+
+# -ElevationLauncher is a test seam standing in for Start-Process: UAC cannot be
+# driven from a test, so a fixture script receives the same arguments.
+function Start-WriteWindow([string[]]$ArgumentList, [bool]$Elevate, [bool]$Wait) {
+    if ($ElevationLauncher) {
+        & $ElevationLauncher -ArgumentList $ArgumentList -Elevate:$Elevate -Wait:$Wait
+        return
+    }
+    if ($Elevate -and $Wait) { Start-Process powershell -Verb RunAs -Wait -ArgumentList $ArgumentList }
+    elseif ($Elevate) { Start-Process powershell -Verb RunAs -ArgumentList $ArgumentList }
+    else { Start-Process powershell -ArgumentList $ArgumentList }
+}
+
+function Invoke-WriteWindow([string[]]$ArgumentList, [bool]$Elevate, [bool]$Wait) {
+    # The launcher creates the progress file, so it belongs to the operator and
+    # the status command reads it without elevation.
+    Add-ProgressLine "launch" "untouched" $(if ($Elevate) { "waiting for UAC approval and the elevated write window" } else { "starting the write window" }) ""
+    try {
+        Start-WriteWindow $ArgumentList $Elevate $Wait
     }
     catch {
-        Fail ("administrator rights were not granted (UAC prompt declined or timed out): {0}`ncard_state=untouched`nnext: re-run and approve the UAC prompt, or use the detached launch in the runbook" -f $_.Exception.Message)
+        $uacNext = "re-run and approve the UAC prompt (nothing was written to the card)"
+        Add-ProgressLine "failed" "untouched" ("launch: administrator rights were not granted (UAC prompt declined or timed out): " + $_.Exception.Message) $uacNext
+        Fail ("administrator rights were not granted (UAC prompt declined or timed out): {0}`ncard_state=untouched`nnext: {1}" -f $_.Exception.Message, $uacNext)
     }
+}
+
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$isAdministrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if ($Detach) {
+    # One visible window runs the whole write and stays open with its result;
+    # this console, or the agent session that ran it, may close at once.
+    Invoke-WriteWindow (@("-NoExit") + $forward) (-not $isAdministrator) $false
+    Write-Output "The card write runs in its own window; this console can be closed."
+    Write-Output "Log: $LogPath"
+    Write-Output "Progress: $progressPath"
+    Write-Output "Exit marker: $exitMarker"
+    Write-Output "Status: $statusCommand"
+    exit 0
+}
+
+if (-not $isAdministrator) {
+    Write-Output "Requesting administrator rights; approve the UAC prompt. Log: $LogPath"
+    Write-Output "Progress: $progressPath (one JSON line per stage, a heartbeat about every 60 s while writing and reading back)"
+    Write-Output "Status: $statusCommand"
+    Invoke-WriteWindow $forward $true $true
     if (-not (Test-Path -LiteralPath $exitMarker)) {
         $last = Get-LastProgress
         $where = $(if ($last) { "last stage=$($last.stage) card_state=$($last.card_state)" } else { "no stage was recorded, so the card is untouched" })
@@ -125,6 +200,7 @@ if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) {
 
 Start-Transcript -LiteralPath $LogPath | Out-Null
 Write-Output "Progress: $progressPath"
+Write-Output "Status: $statusCommand"
 $code = 1
 try {
     & (Join-Path $PSScriptRoot "prepare-rosy-sd.ps1") @arguments

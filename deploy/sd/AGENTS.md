@@ -30,6 +30,13 @@ one-time per-card provisioning bundle.
   path from the plan and release, finds the card by serial, elevates itself, keeps a
   timestamped log and `.exit` marker per attempt, and refuses an existing receipt.
   `-PrintArguments` shows the resolved call without writing.
+- D-182: operators launch with `-Detach` (own elevated window, one UAC prompt,
+  returns at once) and follow `card-write-status.ps1 -LogPath <log>` (`-Json` for
+  agents; no elevation). Quote its ETA; never guess completion times. The write
+  measures the card read rate before the ERASE confirmation and stops a
+  non-interactive run on slow media unless `-AcceptSlowMedia`; the plan pins the
+  card's `disk_signature`/`disk_guid`. `-ReadbackDevice` and a non-`.exe`
+  `-RpiImager` are fixture-only (they need `-DiskInventoryJson`).
 - The card is identified by its serial, not the Windows disk number, which changes
   as USB devices come and go. `-DiskSerial` (or a reviewed plan's `disk_serial`)
   resolves the number right before each probe and must match exactly one USB disk;
@@ -88,5 +95,5 @@ evidence; do not commit or share them without a secret scan.
 ## Testing
 
 ```powershell
-python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_media_readback.py test/test_card_diagnostics.py -q
+python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py -q
 ```
