@@ -58,6 +58,42 @@ def test_it_converges_once_the_slip_stops():
     assert math.dist(estimate.pose[:2], true_pose[:2]) < 0.008
 
 
+def test_it_follows_an_odometry_heading_bias():
+    """Truth drives straight down the west lane; odometry believes it turns
+    0.004 rad per 16 mm step (0.1 rad over 0.4 m). The per-metre yaw noise
+    lets the paint hold the heading: worst of 8 seeds measured 2.03 deg
+    (3.99 deg without MOTION_YAW_SIGMA_PER_M)."""
+    worst = 0.0
+    for seed in range(8):
+        loc = PaintLocalizer(PaintMap.from_bundle(), camera_x_offset_m=CAM_X,
+                             seed=seed).initialise(START)
+        true_pose, odom_pose = START, START
+        for k in range(25):
+            true_pose = (true_pose[0], true_pose[1] - 0.016, true_pose[2])
+            yaw = odom_pose[2] + 0.004
+            odom_pose = (odom_pose[0] + 0.016 * math.cos(yaw),
+                         odom_pose[1] + 0.016 * math.sin(yaw), yaw)
+            estimate = loc.update(k * 0.2, odom_pose, WORLD.render(true_pose), GROUND, **KW)
+        worst = max(worst, abs(estimate.pose[2] - true_pose[2]))
+    assert worst < math.radians(3.0), math.degrees(worst)
+
+
+def test_a_still_filter_roughens_its_heading():
+    """Stopped 6 deg off (either side): with no motion only the time-based
+    roughening lets the particles find the heading. Worst of 4 seeds x 2
+    sides after 5 s measured 2.07 deg (3.98 deg without it)."""
+    worst = 0.0
+    frame = WORLD.render(START)
+    for seed in range(4):
+        for error in (math.radians(6.0), -math.radians(6.0)):
+            loc = PaintLocalizer(PaintMap.from_bundle(), camera_x_offset_m=CAM_X,
+                                 seed=seed).initialise((START[0], START[1], START[2] + error))
+            for k in range(26):
+                estimate = loc.update(k * 0.2, START, frame, GROUND, **KW)
+            worst = max(worst, abs(estimate.pose[2] - START[2]))
+    assert worst < math.radians(2.5), math.degrees(worst)
+
+
 def test_a_frame_with_no_paint_lowers_the_match_score():
     loc = localizer()
     blank = np.full((180, 320), 109, np.uint8)

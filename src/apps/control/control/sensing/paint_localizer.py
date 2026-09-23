@@ -8,7 +8,9 @@ Spec 2026-09-22 lane-network junction spike §6 (B). ROS-free.
              floor-height triangles in the STL but a 155 mm wall stands on
              them in Gazebo, so they are left out (`_wall_footprint`).
   predict    each particle takes the odometry increment (in its own frame)
-             plus noise proportional to it (MOTION_*)
+             plus noise proportional to it (MOTION_*: per metre in x, y and
+             yaw, per radian in yaw); while odometry is still, the heading
+             is roughened by STILL_YAW_SIGMA_PER_S
   correct    the bird's-eye paint cells (lane_bev.BirdsEye, at most
              MATCH_SAMPLE_CELLS of them) are placed on the map from each
              particle; its score is exp(-mean distance / MATCH_SCALE_M),
@@ -59,13 +61,29 @@ INIT_YAW_SIGMA_RAD = math.radians(2.0)
 #: particles must spread at least that fast to follow. End error of that
 #: test over 8 seeds: 0.10 -> 21.7 mm worst (fails the 20 mm bound), 0.15
 #: -> 20.0 mm worst, 0.20 -> 17.8 mm worst (14.5 mm at seed 7). 0.20 is
-#: the smallest that passes on every seed. Yaw: 0.10 rad/rad is NOT
-#: measured (no offline test slips yaw); it lets a 90 deg turn be 9 deg
-#: off. A per-metre yaw term (10 deg/m) was tried and changed neither the
-#: drift test nor any of the 12 scenarios, so there is none.
+#: the smallest that passes on every seed. MOTION_YAW_SIGMA_PER_RAD: 0.10
+#: rad/rad lets a 90 deg turn be 9 deg off.
 MOTION_XY_SIGMA_PER_M = 0.20
 MOTION_YAW_SIGMA_PER_RAD = 0.10
-
+#: Yaw noise per metre travelled, added in quadrature: odometry yaw drifts
+#: while driving straight too (a gyro/wheel yaw-rate bias), and with no
+#: per-metre term the particles could not follow it. Offline, B over the
+#: 12 scenarios with odometry at 5 % scale and +0.02 rad/s yaw bias
+#: (test_drift_grid), by value: 0 -> 6/12 pass (6 LOST on MATCH stalls,
+#: end error up to 34 mm), 0.25 -> 11/12, 0.5 -> 12/12 (end error <= 17.0
+#: mm), 0.75 -> 12/12 (<= 10.5 mm; -0.02 rad/s: <= 10.8 mm). Its cost is
+#: the lateral-drift test above: worst of 8 seeds 17.8 (0), 17.8 (0.5),
+#: 18.5 (0.75), 20.4 mm (1.0, fails the 20 mm bound). Open loop, a 0.004
+#: rad/step yaw bias over 25 steps ends 3.99 deg off at 0, 2.03 deg at 0.75.
+MOTION_YAW_SIGMA_PER_M = 0.75
+#: Yaw roughening per second while odometry reports no motion (a stopped
+#: robot: CORE stops on a weak match, and without motion no predict noise
+#: would ever let the particles find a better heading). Started 6 deg off
+#: on the still start view, the heading after 5 s is at worst (4 seeds x
+#: +-6 deg) 3.98 deg off at 0, 3.05 at 0.02, 2.07 at 0.05, 1.98 at 0.10;
+#: at the true pose 0.05 costs 0.36 deg (0.11 at 0) and keeps the match
+#: >= 0.58.
+STILL_YAW_SIGMA_PER_S = 0.05
 #: Paint cells matched per frame. The start view has 4,212 paint cells;
 #: 400 random ones keep one update at 6.8 ms median, 9.7 ms worst of 50
 #: (300 particles, this Windows host; budget 30 ms).
@@ -199,6 +217,7 @@ class PaintLocalizer:
         self._particles = None      # (N, 3) x, y, yaw
         self._weights = None
         self._last_odom = None
+        self._last_t = None
         self._gap_since = None
         self.last: Estimate | None = None
 
@@ -211,6 +230,7 @@ class PaintLocalizer:
             yaw + self._rng.normal(0.0, INIT_YAW_SIGMA_RAD, n)], axis=1)
         self._weights = np.full(n, 1.0 / n)
         self._last_odom = None
+        self._last_t = None
         self._gap_since = None
         self.last = None
         return self
@@ -219,6 +239,7 @@ class PaintLocalizer:
         self._particles = None
         self._weights = None
         self._last_odom = None
+        self._last_t = None
         self._gap_since = None
         self.last = None
 
@@ -262,7 +283,7 @@ class PaintLocalizer:
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
 
-        self._predict(odom_pose)
+        self._predict(odom_pose, now_s)
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
         view = self._birds_eye(ground, gray.shape)
         paint = view.sample(gray > bright_threshold).astype(bool)
@@ -283,8 +304,9 @@ class PaintLocalizer:
         self.last = self._estimate(match)
         return self.last
 
-    def _predict(self, odom) -> None:
+    def _predict(self, odom, now_s: float) -> None:
         last, self._last_odom = self._last_odom, odom
+        last_t, self._last_t = self._last_t, now_s
         if last is None:
             return
         c, s = math.cos(last[2]), math.sin(last[2])
@@ -292,11 +314,17 @@ class PaintLocalizer:
         dx, dy = c * wx + s * wy, -s * wx + c * wy
         dyaw = math.atan2(math.sin(odom[2] - last[2]), math.cos(odom[2] - last[2]))
         travel = math.hypot(dx, dy)
-        if travel == 0.0 and dyaw == 0.0:
-            return
         n = self.count
+        if travel == 0.0 and dyaw == 0.0:
+            elapsed = 0.0 if last_t is None else max(0.0, now_s - last_t)
+            if STILL_YAW_SIGMA_PER_S > 0.0 and elapsed > 0.0:
+                p = self._particles
+                p[:, 2] = _wrap(p[:, 2] + self._rng.normal(
+                    0.0, STILL_YAW_SIGMA_PER_S * elapsed, n))
+            return
         sigma_xy = MOTION_XY_SIGMA_PER_M * travel
-        sigma_yaw = MOTION_YAW_SIGMA_PER_RAD * abs(dyaw)
+        sigma_yaw = math.hypot(MOTION_YAW_SIGMA_PER_RAD * abs(dyaw),
+                               MOTION_YAW_SIGMA_PER_M * travel)
         ndx = dx + self._rng.normal(0.0, sigma_xy, n)
         ndy = dy + self._rng.normal(0.0, sigma_xy, n)
         p = self._particles

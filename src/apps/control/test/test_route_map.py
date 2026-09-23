@@ -19,6 +19,7 @@ from lane_scenarios import (
     GRAPH,
     SCENARIOS,
     WORLD,
+    OdomError,
     junction_score,
     run_scenario,
     summary,
@@ -82,6 +83,24 @@ def test_every_junction_transition_is_driven(index):
     error = math.dist(f.last["estimate"].pose[:2], result["track"][-2])
     assert error <= END_POSITION_MAX_ERROR_M, (error, summary([result]))
     assert f.last["coverage"] >= MIN_COVERAGE, f.last["coverage"]
+
+
+@pytest.mark.parametrize("bias", [0.02, -0.02])
+@pytest.mark.parametrize("index", [2, 3, 8, 9])
+def test_a_heading_bias_is_driven_without_stalls(index, bias):
+    """Closed loop, odometry 5 % long with a 0.02 rad/s yaw bias while
+    moving: before the per-metre yaw noise B passed these only through
+    15-34 s MATCH stalls (LOST under CORE's 3 s lease: 6/12). Now no LOST
+    and no stall, and the end estimate within design §7's 20 mm."""
+    scenario = SCENARIOS[index]
+    f = follower(scenario)
+    result = run_scenario(scenario, f, steps=260, odom_error=OdomError(0.05, bias))
+    result["scenario"] = scenario
+    assert result["pass"], summary([result])
+    assert result["reason"] is None
+    assert result["max_stall_s"] <= 0.4, result["max_stall_s"]
+    error = math.dist(f.last["estimate"].pose[:2], result["last_true_pose"][:2])
+    assert error <= END_POSITION_MAX_ERROR_M, error
 
 
 def test_a_lost_localiser_stops_rather_than_guessing():
