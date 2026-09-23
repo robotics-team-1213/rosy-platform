@@ -11,9 +11,15 @@ the rule ships in-tree, the native image bakes it into /etc/udev/rules.d,
 and configure-uart-pi5.sh retrofits it on existing devices (the alias is
 meaningless without the UART4 overlay that script owns).
 """
+import importlib.util
+import os
 from pathlib import Path
+import shutil
+import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+import pytest
+
+ROOT =Path(__file__).resolve().parents[1]
 
 RULE = ROOT / "deploy" / "robot" / "udev" / "99-rosy-motor.rules"
 UART_SCRIPT = ROOT / "deploy" / "robot" / "configure-uart-pi5.sh"
@@ -57,3 +63,150 @@ def test_native_units_and_probe_agree_on_the_alias():
         assert "DeviceAllow=/dev/rosy-motor rw" in text, unit
         assert "motor_device:=/dev/rosy-motor" in text, unit
     assert "/dev/rosy-motor" in VERIFY_MOTORS.read_text(encoding="utf-8")
+
+
+# --- D-192 US-004: the image enables UART4, the rule's only source ----------
+#
+# rosy-pinky-e4us 2026-09-24: /dev/ttyAMA4 and /dev/rosy-motor did not exist.
+# config.txt had no dtoverlay=uart4-pi5; the rule was in the image, the
+# overlay only in this retrofit script, which the image never ran.
+
+CUSTOMIZER = ROOT / "deploy" / "image" / "customize-rootfs.sh"
+VERIFIER = ROOT / "deploy" / "image" / "verify-mounted-image.py"
+BASH = shutil.which("bash")
+# The Ubuntu 24.04 raspi config.txt shape: sections, includes, comments.
+UBUNTU_CONFIG = (
+    "[all]\nkernel=vmlinuz\ncmdline=cmdline.txt\ninitramfs initrd.img followkernel\n\n"
+    "[pi4]\nmax_framebuffers=2\narm_boost=1\n\n"
+    "[all]\n# Enable the audio output, I2C and SPI interfaces on the GPIO header.\n"
+    "dtparam=audio=on\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n"
+    "[cm4]\ndtoverlay=dwc2,dr_mode=host\n\n[all]\n"
+)
+
+
+def test_image_applies_the_overlay_with_the_retrofit_script_not_a_copy():
+    customizer = CUSTOMIZER.read_text(encoding="utf-8")
+
+    assert 'UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"' in customizer
+    call = 'bash "$UART_CONFIG" --image-root "$ROOT"'
+    assert call in customizer
+    # After the overlay (and its udev rule) lands, before the image is accepted.
+    assert customizer.index('cp -a "$PAYLOAD/image-overlay/." "$ROOT/"') < customizer.index(call)
+    assert customizer.index(call) < customizer.index("verify-mounted-image.py")
+    # One writer: the customizer never edits config.txt itself.
+    code = "\n".join(line for line in customizer.splitlines() if not line.lstrip().startswith("#"))
+    assert "dtoverlay=" not in code
+    assert "config.txt" not in code
+    # The boot partition the script edits is the one image-workspace.sh mounted.
+    assert '"$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware"' in customizer
+
+
+def test_verifier_checks_the_overlay_and_the_rule():
+    verifier = VERIFIER.read_text(encoding="utf-8")
+    assert 'MOTOR_OVERLAY = "dtoverlay=uart4-pi5"' in verifier
+    assert 'MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"' in verifier
+
+
+def _verifier():
+    spec = importlib.util.spec_from_file_location("verify_mounted_image_uart", VERIFIER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _bash_path(path: Path) -> str:
+    if os.name != "nt":
+        return str(path)
+    return subprocess.run(
+        [BASH, "-c", 'cygpath -u "$1"', "_", str(path)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+
+def _image(tmp_path: Path, config: str) -> Path:
+    root = tmp_path / "image"
+    (root / "boot/firmware").mkdir(parents=True)
+    (root / "boot/firmware/config.txt").write_bytes(config.encode("utf-8"))
+    return root
+
+
+def _configure(root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [BASH, UART_SCRIPT.as_posix(), "--image-root", _bash_path(root)],
+        capture_output=True, text=True, check=False,
+    )
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the retrofit script")
+def test_image_mode_appends_the_overlay_under_all_and_installs_the_rule(tmp_path):
+    root = _image(tmp_path, UBUNTU_CONFIG)
+
+    completed = _configure(root)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "PASS UART_CONFIG added dtoverlay=uart4-pi5" in completed.stdout
+    assert "REBOOT_REQUIRED" not in completed.stdout
+    config = (root / "boot/firmware/config.txt").read_bytes().decode("utf-8")
+    assert config == UBUNTU_CONFIG + (
+        "\n[all]\n# Rosy motor bus on Raspberry Pi 5 GPIO12/GPIO13\ndtoverlay=uart4-pi5\n")
+    assert _verifier().overlay_applies_to_pi5(config)
+    assert (root / "etc/udev/rules.d/99-rosy-motor.rules").read_bytes() == RULE.read_bytes()
+    # Nothing else is left on the boot partition of a common image.
+    assert sorted(p.name for p in (root / "boot/firmware").iterdir()) == ["config.txt"]
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the retrofit script")
+def test_image_mode_is_idempotent(tmp_path):
+    root = _image(tmp_path, UBUNTU_CONFIG)
+    assert _configure(root).returncode == 0
+    first = (root / "boot/firmware/config.txt").read_bytes()
+
+    completed = _configure(root)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "is already configured" in completed.stdout
+    assert "already current" in completed.stdout
+    assert (root / "boot/firmware/config.txt").read_bytes() == first
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the retrofit script")
+@pytest.mark.parametrize(
+    ("config", "already"),
+    [
+        ("[pi4]\ndtoverlay=uart4-pi5\n", False),        # a Pi 4 section does not apply
+        ("[pi5]\ndtoverlay=uart4-pi5\n", True),
+        ("dtoverlay=uart4-pi5\n", True),                # before any section: applies
+        ("[all]\n#dtoverlay=uart4-pi5\n", False),       # commented out
+        ("[cm4]\ndtoverlay=uart4-pi5\n[all]\n", False),
+    ],
+)
+def test_the_verifier_reads_config_txt_as_the_script_does(tmp_path, config, already):
+    root = _image(tmp_path, config)
+
+    completed = _configure(root)
+
+    assert completed.returncode == 0, completed.stderr
+    assert ("is already configured" in completed.stdout) is already
+    assert _verifier().overlay_applies_to_pi5(config) is already
+    after = (root / "boot/firmware/config.txt").read_text(encoding="utf-8")
+    assert _verifier().overlay_applies_to_pi5(after)
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the retrofit script")
+def test_image_mode_refuses_the_running_system_and_relative_roots(tmp_path):
+    for bad in ("/", "relative/root"):
+        completed = subprocess.run(
+            [BASH, UART_SCRIPT.as_posix(), "--image-root", bad],
+            capture_output=True, text=True, check=False,
+        )
+        assert completed.returncode != 0
+        assert "FAIL UART_CONFIG" in completed.stderr
+
+
+def test_the_device_path_writes_vfat_safely():
+    # /boot/firmware is vfat: chmod that drops the mount mask's x bits is EPERM.
+    text = UART_SCRIPT.read_text(encoding="utf-8")
+    edit = text[text.index("config_tmp=\"$(mktemp"):]
+    assert "install -o root -g root -m 0644 \"$CONFIG_FILE\"" not in text
+    assert "--preserve=mode,ownership" not in text
+    assert 'mv -f "$config_tmp" "$CONFIG_FILE"' in edit

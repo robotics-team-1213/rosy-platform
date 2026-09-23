@@ -30,6 +30,25 @@ def package_names(path: Path) -> set[str]:
     }
 
 
+MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
+MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
+
+
+def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
+    """Read-only twin of configure-uart-pi5.sh's awk check: the line counts
+    before any section header or under [all] / [pi5], comments stripped."""
+    active = True
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if re.fullmatch(r"\[[^]]+\]", stripped):
+            active = re.sub(r"\s", "", stripped) in {"[all]", "[pi5]"}
+            continue
+        line = re.sub(r"\s*#.*", "", raw).strip()
+        if active and line == overlay:
+            return True
+    return False
+
+
 def inspect(root: Path, release_id: str) -> list[str]:
     root = root.resolve()
     findings: list[str] = []
@@ -83,6 +102,14 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append(f"missing systemd unit: {ready}")
     elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / ready):
         findings.append(f"{ready} is not enabled")
+    # D-192 US-004: the motor bus (UART4) and its /dev/rosy-motor alias.
+    config = root / "boot/firmware/config.txt"
+    if not config.is_file():
+        findings.append("missing boot configuration: boot/firmware/config.txt")
+    elif not overlay_applies_to_pi5(config.read_text(encoding="utf-8", errors="replace")):
+        findings.append(f"boot/firmware/config.txt does not enable {MOTOR_OVERLAY} for the Pi 5")
+    if not (root / MOTOR_UDEV_RULE).is_file():
+        findings.append(f"missing motor udev rule: {MOTOR_UDEV_RULE}")
     # D-176: the fallback AP is NetworkManager shared mode, which runs dnsmasq.
     if not (root / "usr/sbin/dnsmasq").exists():
         findings.append("dnsmasq is not installed: the fallback AP (NM shared mode) cannot start")

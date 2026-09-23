@@ -135,6 +135,13 @@ def _valid_root(tmp_path: Path) -> Path:
     # D-192 US-003: the post-runtime indicator run ships enabled.
     (root / "etc/systemd/system/rosy-boot-status-ready.service").write_text("[Unit]\n", encoding="utf-8")
     (wants.parent / "rosy-boot-status-ready.service").write_text("[Unit]\n", encoding="utf-8")
+    # D-192 US-004: the motor bus overlay and its alias rule.
+    (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
+    (root / "boot/firmware/config.txt").write_text(
+        "[all]\nkernel=vmlinuz\n\n[all]\n# Rosy motor bus\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+    (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
+    (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
+        'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
     return root
 
 
@@ -207,6 +214,27 @@ def test_mounted_image_verifier_rejects_a_missing_or_disabled_ready_run(tmp_path
     completed = _verify(absent)
     assert completed.returncode != 0
     assert "missing systemd unit: rosy-boot-status-ready.service" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_uart4_motor_bus(tmp_path):
+    # D-192 US-004: no overlay, no /dev/ttyAMA4, no /dev/rosy-motor.
+    pi4_only = _valid_root(tmp_path / "pi4")
+    (pi4_only / "boot/firmware/config.txt").write_text("[pi4]\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+    completed = _verify(pi4_only)
+    assert completed.returncode != 0
+    assert "does not enable dtoverlay=uart4-pi5 for the Pi 5" in completed.stderr
+
+    no_config = _valid_root(tmp_path / "noconfig")
+    (no_config / "boot/firmware/config.txt").unlink()
+    completed = _verify(no_config)
+    assert completed.returncode != 0
+    assert "missing boot configuration: boot/firmware/config.txt" in completed.stderr
+
+    no_rule = _valid_root(tmp_path / "norule")
+    (no_rule / "etc/udev/rules.d/99-rosy-motor.rules").unlink()
+    completed = _verify(no_rule)
+    assert completed.returncode != 0
+    assert "missing motor udev rule" in completed.stderr
 
 
 def test_customizer_executes_native_entrypoints_inside_the_image():

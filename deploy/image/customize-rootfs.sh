@@ -48,6 +48,7 @@ WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
+UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
@@ -57,8 +58,11 @@ CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
 [[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
+[[ -f "$UART_CONFIG" ]] || fail "UART4 motor bus configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
+[[ "$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware" ]] \
+    || fail "ROSY_IMAGE_BOOT is not the image's /boot/firmware"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
 [[ ! -e "$RELEASE" ]] || fail "release already exists in image"
 for command in curl sha256sum chroot mount umount cp rm mkdir ln systemctl python3; do
@@ -184,6 +188,11 @@ chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"
+# D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
+# Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
+# Same script and same edit as the on-device retrofit, pointed at the image.
+bash "$UART_CONFIG" --image-root "$ROOT" \
+    || fail "could not enable the UART4 motor bus in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 

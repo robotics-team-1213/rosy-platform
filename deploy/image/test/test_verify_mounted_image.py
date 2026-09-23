@@ -65,6 +65,11 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # D-192 US-003: the post-runtime indicator run ships enabled.
     (root / "etc/systemd/system/rosy-boot-status-ready.service").write_text("mock", encoding="utf-8")
     (wants.parent / "rosy-boot-status-ready.service").write_text("mock", encoding="utf-8")
+    # D-192 US-004: the motor bus overlay and its alias rule.
+    (root / "boot/firmware").mkdir(parents=True)
+    (root / "boot/firmware/config.txt").write_text("[all]\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+    (root / "etc/udev/rules.d").mkdir(parents=True)
+    (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text("mock", encoding="utf-8")
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
