@@ -10,8 +10,10 @@ the build.
 Checks:
 1. ``spidev``, ``lgpio``, ``numpy`` and ``PIL`` import from the apt packages;
 2. ``RPi.GPIO`` is the rpi-lgpio layer (the classic RPi.GPIO does not drive
-   the Pi 5's RP1). Its import may refuse a builder that is not a Raspberry
-   Pi; that is accepted only when /proc/device-tree/model names no Pi;
+   the Pi 5's RP1) and its ``setmode`` honours ``RPI_LGPIO_CHIP`` (noble's
+   0.5-0ubuntu1 does; the unit sets it to 4). Its import refuses a builder
+   that is not a Raspberry Pi; only that refusal (a RuntimeError naming the
+   Raspberry Pi) is accepted, and only when /proc/device-tree/model names none;
 3. ``rosylib.Battery`` and ``emotion.info_screen.render_boot`` import from the
    release, and the boot card renders for every stage with the DejaVu font;
 4. the unit is installed, enabled for multi-user.target and keeps its
@@ -50,6 +52,27 @@ def _on_a_pi(root: Path) -> bool:
         return False
 
 
+CHIP_SELECTION = "os.environ.get('RPI_LGPIO_CHIP')"
+
+
+def gpio_import_failure(exc: BaseException, on_a_pi: bool) -> str | None:
+    """None when an ``import RPi.GPIO`` failure is only rpi-lgpio refusing a non-Pi builder."""
+    if not on_a_pi and isinstance(exc, RuntimeError) and "Raspberry Pi" in str(exc):
+        return None
+    return f"import RPi.GPIO: {exc!r}"
+
+
+def check_chip_selection(origin: str) -> list[str]:
+    """rpi-lgpio must let the unit pin the RP1 chip with RPI_LGPIO_CHIP."""
+    try:
+        source = Path(origin).read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"RPi.GPIO source unreadable: {exc!r}"]
+    if CHIP_SELECTION not in source:
+        return [f"RPi.GPIO at {origin} ignores RPI_LGPIO_CHIP"]
+    return []
+
+
 def check_modules(root: Path, release: str) -> list[str]:
     failures: list[str] = []
     for name in APT_MODULES:
@@ -66,16 +89,17 @@ def check_modules(root: Path, release: str) -> list[str]:
     if spec is None or not origin.startswith(APT_PREFIX + "/"):
         failures.append(f"RPi.GPIO: not the apt rpi-lgpio layer ({origin or 'missing'})")
     else:
+        failures += check_chip_selection(origin)
         try:
             gpio = importlib.import_module("RPi.GPIO")
             if "lgpio" not in dir(gpio):  # rpi-lgpio imports lgpio into the module
                 failures.append(f"RPi.GPIO at {origin} is not rpi-lgpio")
         except Exception as exc:  # noqa: BLE001
-            if _on_a_pi(root):
-                failures.append(f"import RPi.GPIO: {exc!r}")
+            failure = gpio_import_failure(exc, _on_a_pi(root))
+            if failure:
+                failures.append(failure)
             else:
-                print(f"DISPLAY_PROBE_NOTE RPi.GPIO import refused off a Pi ({type(exc).__name__}); "
-                      f"installed at {origin}")
+                print(f"DISPLAY_PROBE_NOTE RPi.GPIO refused a non-Pi builder; installed at {origin}")
     for name in RELEASE_MODULES:
         try:
             module = importlib.import_module(name)

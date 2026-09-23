@@ -52,6 +52,7 @@ boot_display:
   lcd:
     driver: st7789
     spi: /dev/spidev0.0
+    # gpiochip4 is the RP1 header (pinctrl-rp1, 54 lines; D-190 S3 check 1).
     gpiochip: /dev/gpiochip4
     bcm_lines: {rst: 27, dc: 25, backlight: 18}
   buzzer:
@@ -59,8 +60,33 @@ boot_display:
     bcm_line: 22
     # Sibling boards' pin; unconfirmed on the Pro until heard on the device.
     enabled_by_default: false
+    # ROSY_BUZZER_PIN accepts only these (rosy-boot-display.py BUZZER_LINES).
+    allowed_bcm_lines: [4, 5, 6, 16, 17, 20, 21, 22, 23, 24, 26]
   battery_adc:
     bus: /dev/i2c-1
     address: 0x08
     channel: 4
-    access: read
+    # The true grant (D-190 security review): the node is rw for any address
+    # on the bus; only the program limits itself to 0x08, and the D-192 flock
+    # is advisory. The chip grant likewise covers all 54 RP1 lines.
+    access: rw-any-address
+    lock: advisory-flock
+  # Every other header BCM line and its owner; buzzer lines must avoid them.
+  header_bcm_owners:
+    0: i2c0 (HAT EEPROM, bench IMU)
+    1: i2c0 (HAT EEPROM, bench IMU)
+    2: i2c1 SDA (ADC)
+    3: i2c1 SCL (ADC)
+    7: spi0 CE1
+    8: spi0 CE0 (LCD)
+    9: spi0 MISO
+    10: spi0 MOSI (LCD)
+    11: spi0 SCLK (LCD)
+    12: uart4 TX (motor)
+    13: uart4 RX (motor)
+    14: uart0 TX (LiDAR)
+    15: uart0 RX (LiDAR)
+    18: LCD backlight
+    19: WS2812 lamp (bench)
+    25: LCD DC
+    27: LCD RST

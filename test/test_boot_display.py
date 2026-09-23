@@ -186,8 +186,8 @@ def test_a_network_change_redraws_without_waiting_for_the_indicator(tmp_path):
 def test_the_battery_is_read_once_per_interval_not_every_poll(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY")
-    display, _lcd, clock, battery, rendered, _logs = _loop(module, tmp_path, voltages=(8.2, 8.2, 7.9),
-                                                          interval=15.0)
+    display, _lcd, clock, battery, rendered, _logs = _loop(
+        module, tmp_path, voltages=(8.2, 8.2, 7.9), interval=15.0)
 
     for _ in range(15):  # 0..14 s: one reading
         display.step()
@@ -312,6 +312,34 @@ def test_buzzer_settings_are_strict(environ, expected):
     assert module.buzzer_settings(environ, module.Log(lambda _line: None)) == expected
 
 
+@pytest.mark.parametrize("pin", ["2", "3", "8", "12", "14", "19", "0", "7", "13", "15", "25", "27", "28"])
+def test_the_buzzer_never_takes_a_line_something_else_owns(pin):
+    # I2C1 (2/3), SPI0 CE0 (8), UART4 motor (12/13), UART0 LiDAR (14/15), lamp (19), LCD.
+    module = _display()
+    lines: list[str] = []
+
+    enabled = module.buzzer_settings({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": pin},
+                                     module.Log(lines.append))
+
+    assert enabled == (False, 22) and "not a free header BCM line" in lines[0]
+
+
+def test_the_buzzer_lines_are_exactly_the_board_s_free_lines():
+    import yaml
+
+    display = yaml.safe_load((ROOT / "deploy/robot/config/board.yaml").read_text(
+        encoding="utf-8"))["boot_display"]
+    owners = set(display["header_bcm_owners"])
+    allowed = set(display["buzzer"]["allowed_bcm_lines"])
+    module = _display()
+
+    assert module.BUZZER_LINES == allowed
+    assert not allowed & owners and allowed | owners == set(range(28))
+    lcd = display["lcd"]["bcm_lines"]
+    assert {lcd["rst"], lcd["dc"], lcd["backlight"], 12, 13, 19} <= owners
+    assert display["buzzer"]["bcm_line"] in allowed
+
+
 # --- LCD opening ----------------------------------------------------------
 
 
@@ -329,7 +357,7 @@ def test_a_missing_lcd_is_retried_logged_once_and_given_up(tmp_path):
 
     assert lcd is None
     assert sleeps == [module.LCD_RETRY_S, module.LCD_RETRY_S] and len(cleanups) == 3
-    assert len(lines) == 2 and "retrying" in lines[0] and "running without it" in lines[1]
+    assert len(lines) == 2 and "retrying" in lines[0] and "no LCD after 3 attempts" in lines[1]
 
 
 def test_the_lcd_opens_when_udev_catches_up(tmp_path):
@@ -342,7 +370,36 @@ def test_the_lcd_opens_when_udev_catches_up(tmp_path):
             raise PermissionError(13, "Permission denied")
         return "lcd"
 
-    assert module.open_lcd(factory, lambda: None, module.Log(lambda _l: None), lambda _s: None) == "lcd"
+    assert module.open_lcd(factory, lambda: "pinctrl-rp1", module.Log(lambda _l: None),
+                           lambda _s: None) == "lcd"
+
+
+def test_an_unreadable_label_is_retried_before_the_panel_is_touched():
+    module = _display()
+    labels = iter([None, None, "pinctrl-rp1"])
+    calls: list[str] = []
+    lines: list[str] = []
+
+    def factory():
+        calls.append("open")
+        return "lcd"
+
+    lcd = module.open_lcd(factory, lambda: next(labels), module.Log(lines.append), lambda _s: None)
+
+    assert lcd == "lcd" and calls == ["open"]
+    assert len(lines) == 1 and "cannot read the /dev/gpiochip4 label" in lines[0]
+
+
+def test_a_label_that_never_reads_means_no_lcd():
+    module = _display()
+
+    def factory():
+        raise AssertionError("never driven blind")
+
+    lines: list[str] = []
+    assert module.open_lcd(factory, lambda: None, module.Log(lines.append), lambda _s: None,
+                           attempts=4) is None
+    assert "no LCD after 4 attempts" in lines[-1]
 
 
 def test_a_gpio_chip_that_is_not_rp1_is_never_driven():
@@ -357,18 +414,49 @@ def test_a_gpio_chip_that_is_not_rp1_is_never_driven():
     assert "not the RP1 header" in lines[0]
 
 
-def test_no_lcd_and_no_buzzer_exits_cleanly_instead_of_restarting(monkeypatch, capsys):
+def _main_with(module, monkeypatch, root, *, lcd=None, lcd_import=None, gpio_import=None):
+    class _GPIO:
+        @staticmethod
+        def cleanup():
+            pass
+
+    def gpio_module():
+        if gpio_import:
+            raise gpio_import
+        return _GPIO
+
+    def lcd_factory():
+        if lcd_import:
+            raise lcd_import
+        return lambda: lcd
+
+    monkeypatch.setattr(module, "_release_modules", lambda: None)
+    monkeypatch.setattr(module, "_gpio_module", gpio_module)
+    monkeypatch.setattr(module, "_lcd_factory", lcd_factory)
+    monkeypatch.setattr(module, "open_lcd", lambda factory, *_args, **_kw: factory())
+    monkeypatch.delenv("ROSY_BUZZER_ENABLED", raising=False)
+    return module.main(["--root", str(root)])
+
+
+def test_a_board_without_a_panel_exits_cleanly_instead_of_restarting(tmp_path, monkeypatch, capsys):
     module = _display()
 
-    def no_lcd(*_args, **_kwargs):
-        return None
+    assert _main_with(module, monkeypatch, tmp_path) == 0
+    err = capsys.readouterr().err
+    assert "has no SPI panel" in err and "nothing to show" in err
 
-    monkeypatch.setattr(module, "open_lcd", no_lcd)
-    monkeypatch.setattr(module, "_release_modules", lambda: None)
-    monkeypatch.delenv("ROSY_BUZZER_ENABLED", raising=False)
 
-    assert module.main(["--root", "/nonexistent"]) == 0
-    assert "nothing to show" in capsys.readouterr().err
+@pytest.mark.parametrize("failure", [
+    {"lcd_import": ImportError("No module named 'spidev'")},
+    {"gpio_import": RuntimeError("This module can only be run on a Raspberry Pi!")},
+    {"lcd": None},  # the panel is there but open_lcd gave up
+])
+def test_a_panel_that_cannot_be_driven_fails_the_unit(tmp_path, monkeypatch, failure):
+    module = _display()
+    (tmp_path / "dev").mkdir()
+    (tmp_path / "dev/spidev0.0").write_text("", encoding="utf-8")
+
+    assert _main_with(module, monkeypatch, tmp_path, **failure) == 1
 
 
 # --- AP hand-off (rosy-network, root) --------------------------------------
@@ -399,12 +487,42 @@ def test_opening_the_ap_hands_the_display_only_its_two_lines(tmp_path, monkeypat
 
     handoff = root / "run/rosy-boot/ap-display.txt"
     assert handoff.read_text(encoding="utf-8") == f"rosy-pinky-e4us\n{AP_VALUE}\n"
-    if os.name == "posix":
-        assert handoff.stat().st_mode & 0o777 == 0o640
-        assert handoff.stat().st_gid == gid
     output = capsys.readouterr()
     assert AP_VALUE not in output.out + output.err
     assert AP_VALUE not in (root / "run/rosy-boot/network.json").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="file mode and group need POSIX (run in WSL)")
+def test_the_handoff_is_0640_and_owned_by_the_display_group(tmp_path, monkeypatch):
+    network = _network()
+    gid = os.getgid()
+    monkeypatch.setattr(network, "_display_gid", lambda: gid)
+    root = _ap_device(tmp_path)
+
+    network.perform(root, "open", _activated)
+
+    handoff = root / "run/rosy-boot/ap-display.txt"
+    assert handoff.stat().st_mode & 0o777 == 0o640
+    assert handoff.stat().st_gid == gid
+
+
+def test_group_and_mode_are_set_before_any_byte_is_written(tmp_path, monkeypatch):
+    network = _network()
+    monkeypatch.setattr(network, "_display_gid", lambda: 4242)
+    seen: list[tuple[str, int, int]] = []
+
+    def record(name):
+        def call(descriptor, *_args):
+            seen.append((name, os.lseek(descriptor, 0, os.SEEK_CUR), os.fstat(descriptor).st_size))
+        return call
+
+    monkeypatch.setattr(network.os, "fchown", record("fchown"), raising=False)
+    monkeypatch.setattr(network.os, "fchmod", record("fchmod"), raising=False)
+
+    network.display_ap(_ap_device(tmp_path), "rosy-pinky-e4us", AP_VALUE)
+
+    assert [name for name, _pos, _size in seen] == ["fchown", "fchmod"]
+    assert all(position == 0 and size == 0 for _name, position, size in seen)
 
 
 def test_closing_or_failing_the_ap_removes_the_handoff(tmp_path, monkeypatch):
@@ -433,12 +551,19 @@ def test_without_the_display_group_nothing_is_handed_off(tmp_path, monkeypatch):
     assert not (root / "run/rosy-boot/ap-display.txt").exists()
 
 
-def test_the_controller_clears_a_stale_handoff_when_it_starts():
-    source = (NATIVE / "rosy-network.py").read_text(encoding="utf-8")
-    main = source[source.index("def main("):]
+def test_the_controller_clears_a_stale_handoff_when_it_starts(tmp_path, monkeypatch):
+    network = _network()
+    root = _ap_device(tmp_path)
+    stale = root / "run/rosy-boot/ap-display.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text(f"rosy-pinky-e4us\n{AP_VALUE}\n", encoding="utf-8")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(network, "_run", lambda command: calls.append(command) or "")
 
-    assert main.index('"connection", "down", PROFILE]') < main.index("clear_display_ap(args.root)")
-    assert main.index("clear_display_ap(args.root)") < main.index("while True:")
+    assert network.main(["--once", "--root", str(root)]) == 0
+
+    assert not stale.exists()
+    assert calls[0] == ["nmcli", "connection", "down", "rosy-fallback-ap"]
 
 
 def test_the_display_shows_the_key_and_never_logs_it(tmp_path, capsys):
@@ -579,8 +704,10 @@ def test_the_board_profile_matches_the_unit_and_no_capability_advertises_it():
     allowed = {value.split()[0] for value in _directives()["DeviceAllow"]}
     assert declared == allowed
     assert display["unit"] == "rosy-boot-display.service"
-    assert display["buzzer"] == {"gpiochip": "/dev/gpiochip4", "bcm_line": 22, "enabled_by_default": False}
-    assert display["battery_adc"]["access"] == "read"
+    assert display["buzzer"]["bcm_line"] == 22 and display["buzzer"]["enabled_by_default"] is False
+    # the true grant, not what the program chooses to do with it (security review M2)
+    assert display["battery_adc"]["access"] == "rw-any-address"
+    assert display["battery_adc"]["lock"] == "advisory-flock"
     for caps in (ROOT / "deploy/robot/config").glob("capabilities.*.yaml"):
         text = caps.read_text(encoding="utf-8").lower()
         for word in ("lcd", "buzzer", "display"):
@@ -604,6 +731,30 @@ def test_the_probe_checks_the_modules_and_the_unit(tmp_path):
     (system / "rosy-boot-display.service").write_text(
         UNIT.read_text(encoding="utf-8") + "DeviceAllow=/dev/gpiomem rw\n", encoding="utf-8")
     assert any("DeviceAllow" in failure for failure in probe.check_unit(tmp_path))
+
+
+def test_the_probe_accepts_only_rpi_lgpio_refusing_a_non_pi_builder():
+    probe = _load("probe_display_runtime_gpio", IMAGE / "probe-display-runtime.py")
+    refusal = RuntimeError("This module can only be run on a Raspberry Pi!")
+
+    assert probe.gpio_import_failure(refusal, on_a_pi=False) is None
+    assert probe.gpio_import_failure(refusal, on_a_pi=True)
+    assert probe.gpio_import_failure(ImportError("No module named 'lgpio'"), on_a_pi=False)
+    assert probe.gpio_import_failure(RuntimeError("can not open gpiochip"), on_a_pi=False)
+    assert probe.gpio_import_failure(OSError("Raspberry Pi"), on_a_pi=False)
+
+
+def test_the_probe_requires_rpi_lgpio_to_honour_the_chip_variable(tmp_path):
+    probe = _load("probe_display_runtime_chip", IMAGE / "probe-display-runtime.py")
+    honours = tmp_path / "honours.py"
+    # noble python3-rpi-lgpio 0.5-0ubuntu1, RPi/GPIO/__init__.py setmode()
+    honours.write_text("        chip_num = os.environ.get('RPI_LGPIO_CHIP')\n", encoding="utf-8")
+    ignores = tmp_path / "ignores.py"
+    ignores.write_text("        chip_num = 4\n", encoding="utf-8")
+
+    assert probe.check_chip_selection(str(honours)) == []
+    assert probe.check_chip_selection(str(ignores))
+    assert "Environment=LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4" in UNIT.read_text(encoding="utf-8")
 
 
 def test_the_probe_renders_every_stage_from_the_source_tree(tmp_path, monkeypatch):

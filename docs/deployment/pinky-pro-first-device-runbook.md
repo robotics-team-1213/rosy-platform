@@ -226,9 +226,9 @@ LCD는 CORE 밖의 `rosy-boot-display.service`가 그린다. 전원을 넣고 �
 - 부저는 **기본으로 꺼져 있다.** Pro의 부저 핀이 아직 확인되지 않았기 때문이다(D-190 "부저 핀 확인"). 확인한 뒤
   `/etc/rosy/boot-display.env`에 `ROSY_BUZZER_ENABLED=true`(핀이 22가 아니면 `ROSY_BUZZER_PIN=<BCM>`도)를 쓰고
   `sudo systemctl restart rosy-boot-display` 한다. 그러면 `READY`에 한 번, `FAILED`에 세 번 짧게 울린다.
-- 화면이 비어 있으면: `systemctl status rosy-boot-display`, `journalctl -b -u rosy-boot-display`. LCD·SPI·GPIO 칩이 없거나
-  `/dev/gpiochip4`가 RP1이 아니면 그 이유가 한 번 기록되고 LCD 없이 돈다. HDMI 콘솔 배너(D-174)와 `_rosy._tcp` mDNS는
-  LCD와 상관없이 같은 단계를 보인다.
+- 화면이 비어 있으면: `systemctl status rosy-boot-display`, `journalctl -b -u rosy-boot-display`. `/dev/spidev0.0`이
+  없으면 패널이 없는 보드로 보고 조용히 끝난다. 노드가 있는데 그리지 못하면(라이브러리, GPIO 칩 label, 열기 실패) unit이
+  `failed`가 되고 이유가 journal에 한 번 남는다. HDMI 콘솔 배너(D-174)와 `_rosy._tcp` mDNS는 LCD와 상관없이 같은 단계를 보인다.
 
 ## 2. Connection choice
 

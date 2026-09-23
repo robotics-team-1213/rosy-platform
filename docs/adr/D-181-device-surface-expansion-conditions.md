@@ -32,7 +32,11 @@
 |------|--------|----------|--------|--------|------|
 | LCD ST7789 (`/dev/spidev0.0`, `/dev/gpiochip4` 선 18·25·27) | D-190 동등성 표(US-006) | `board.yaml` `boot_display.lcd`. CORE capability 아님(API가 구동하지 않음, D-32) | `rosy-boot-display.service` `DeviceAllow` + `99-rosy-display.rules`(spi 0660) + apt `python3-spidev`·`python3-rpi-lgpio`, 이미지 probe·검사기 | `test_device_surface_contract.py`: 표시 unit에만 허용, 다른 unit에 넣는 변이는 적색 | 2026-09-24 조건 1·2·4 충족, 3은 host·이미지 정적 확인까지. 실기 기동은 D-190 S3 |
 | 부저 (`/dev/gpiochip4` 선 22) | 같음 | `boot_display.buzzer`, `enabled_by_default: false` | 같은 unit·같은 칩 노드. 기본 꺼짐 | 같은 시험 | 핀 미확인. 사람이 장치에서 확인한 뒤 D-190 표에 기록하고 켠다 |
-| ADC 읽기(표시) (`/dev/i2c-1` 0x08 ch4, 읽기) | 같음 | `boot_display.battery_adc`, `access: read` | 같은 unit `DeviceAllow`, dialout. D-192 `flock`으로 `rosy-io`와 공존 | 같은 시험 | 2026-09-24 host 완료, 실기 ±0.05 V는 D-190 S3 |
+| ADC 읽기(표시) (`/dev/i2c-1` 0x08 ch4) | 같음 | `boot_display.battery_adc`, 실제 허용은 `access: rw-any-address`, `lock: advisory-flock` | 같은 unit `DeviceAllow`, dialout. D-192 `flock`으로 `rosy-io`와 공존 | 같은 시험 | 2026-09-24 host 완료, 실기 ±0.05 V는 D-190 S3 |
+
+**남은 위험(보안 리뷰 M2):** 허용은 노드 단위다. `gpiochip4`는 54개 선 전부, `i2c-1`은 모든 주소다. `rosy-display`가
+탈취되면 모터 UART 핀이나 I2C 센서를 흔들 수 있다. 입구는 root가 쓰는 파일뿐이고 `PrivateNetwork=true`다. 좁히는
+후속(커널 패널 드라이버, 파일로 받는 배터리)은 D-190 "열린 항목"에 있다.
 
 세 장치 모두 조건 3의 "실기 기동" 증거가 D-190 S3에서 나오면 날짜와 증거를 이 표에 적고 이 ADR의 Status를
 바꾼다. 그 전까지 이 ADR은 Proposed다.

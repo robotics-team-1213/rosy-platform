@@ -937,3 +937,17 @@
 - gate 변화: 없음. 이미지 빌드(probe 첫 실행)와 D-190 S3 실기 확인이 남았다
 - 결정: D-190 Proposed(S1·S2 완료), D-181 편입 기록 추가
 - 교훈: 백라이트가 소프트웨어 PWM이면 "그리고 끝나는" 표시는 없다 — 표시 장치는 상주 프로세스와 한 쌍으로 설계한다
+
+## 2026-09-24 · uncommitted · fix(native,image): US-006 security review
+
+- 변경: (M1) 부저 핀은 허용 목록 {4,5,6,16,17,20,21,22,23,24,26}만, `board.yaml`에 목록과 헤더 선 주인(0-3, 7-15, 18, 19, 25, 27).
+  (M2) `battery_adc`를 실제 허용(`rw-any-address`, `advisory-flock`)으로, D-181·D-190에 남은 위험과 커널 패널 드라이버 후속.
+  (L1) gpiochip label을 매 시도 읽고, 못 읽으면 패널을 건드리지 않고 재시도. (L2) 패널 노드가 있는데 못 그리면 1로 끝남,
+  `/dev/spidev0.0`이 없으면 0. probe는 "Raspberry Pi" `RuntimeError`만 허용하고 rpi-lgpio의 `RPI_LGPIO_CHIP` 읽기를 확인
+  (noble 0.5-0ubuntu1 소스로 확인, shim 없음). (L3) 장치 표면 가드: `char-spi`·`char-i2c`·`char-gpio`, drop-in, `[Service]`만
+  파싱, 표시 unit의 마지막 `DevicePolicy=closed`, gpio/spi 그룹 비 root unit은 closed 또는 `PrivateDevices`, 변이를 `[Service]`에.
+  (L4) POSIX 시험 `skipif`, fchown·fchmod가 빈 파일 위치 0에서 불리는지, 오래된 AP 파일을 `main --once`가 지우는지 동작 시험.
+- 증거: 보고서 수치(Windows host 스위트, WSL POSIX)
+- gate 변화: 없음
+- 결정: D-190·D-181 갱신
+- 교훈: 노드 단위 장치 허용은 프로그램이 쓰는 선보다 넓다 — 허용과 사용을 따로 적고, 좁히는 길을 열린 항목으로 남긴다
