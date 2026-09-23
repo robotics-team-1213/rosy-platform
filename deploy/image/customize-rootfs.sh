@@ -148,7 +148,7 @@ ROSDEP_PATH_OUTPUT="$(
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
 chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
     --ignore-src -r -y --rosdistro jazzy
-# D-183 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
+# D-189 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
 # pydantic 1.10 and fastapi 0.101, and nothing provides websockets. CORE needs
 # the hash-locked set. Root pip on Ubuntu installs into
 # /usr/local/lib/python3.12/dist-packages, which precedes /usr/lib/python3 on
@@ -171,7 +171,7 @@ chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 961 --gid 961 --system --no-create-home --shell /usr/sbin/nologin rosy-io
 
 mkdir -p "$RELEASE" "$ROOT/etc/rosy/trusted-release-keys" "$ROOT/etc/cloud/cloud.cfg.d"
-# D-183 D4: the same layout tmpfiles-rosy-state.conf enforces at every boot.
+# D-189 D4: the same layout tmpfiles-rosy-state.conf enforces at every boot.
 install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
 chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 cp -a "$PAYLOAD/." "$RELEASE/"
@@ -226,7 +226,7 @@ for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
 done
 rm -rf -- "$ROOT$NATIVE_PROBE"
 
-# D-183 B: import what rosy-core.service loads at start, as the unit runs it
+# D-189 B: import what rosy-core.service loads at start, as the unit runs it
 # (ROS and the release sourced, no usable HOME), and assert the pinned set and
 # pydantic 2. -B keeps bytecode out of the signed release tree.
 chroot "$ROOT" env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/nonexistent PYTHONDONTWRITEBYTECODE=1 \

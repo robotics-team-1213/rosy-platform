@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import what rosy-core.service loads at start, inside the built image (D-183).
+"""Import what rosy-core.service loads at start, inside the built image (D-189).
 
 The first 2026.09.23-005 boot failed on ``from pydantic import field_validator``
 because rosdep had installed apt pydantic 1.10. Every host test and the image

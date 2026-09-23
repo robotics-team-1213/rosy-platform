@@ -298,7 +298,7 @@ def test_boot_settings_apply_before_the_network_and_never_block_the_boot():
     assert "After=NetworkManager.service rosy-config.service" in _read("rosy-network.service")
 
 
-# --- D-183: every unit's sandbox covers what its program writes ------------
+# --- D-189: every unit's sandbox covers what its program writes ------------
 #
 # Release 2026.09.23-005 booted with three sandbox defects no host test could
 # see: the recovery gate could not write its journal (ProtectSystem=strict with

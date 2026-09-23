@@ -1,4 +1,4 @@
-# CORE Python runtime for the Pinky Pro image (D-183). Hash-locked, no resolver.
+# CORE Python runtime for the Pinky Pro image (D-189). Hash-locked, no resolver.
 #
 # Installed by deploy/image/customize-rootfs.sh into the image's /usr/local with
 #   pip install --require-hashes --no-deps --only-binary=:all: -r THIS_FILE

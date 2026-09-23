@@ -42,7 +42,7 @@ jobs:
           # --system-site-packages 없이는 rclpy 를 잃고, 그러면 이 워크플로가 검증하려는
           # 대상 자체가 사라진다. 컨테이너는 job 마다 버려지므로 시스템에 직접 깐다.
           pip3 install --no-cache-dir --break-system-packages flake8 httpx pyyaml jsonschema ext4
-          # D-183: CORE 런타임(pydantic 2·fastapi·starlette·uvicorn·websockets 와 그 폐포)은
+          # D-189: CORE 런타임(pydantic 2·fastapi·starlette·uvicorn·websockets 와 그 폐포)은
           # 이미지가 싣는 해시 고정 집합 그대로 깐다. 최신을 깔면 호스트 시험은 장치가 돌리지
           # 않는 버전을 검증한다 — 2026.09.23-005 가 CI 녹색인 채 pydantic 1.10 으로 죽었다.
           # httpx 뒤에 깔아 그 의존(anyio·idna·h11)도 고정 버전으로 덮는다.

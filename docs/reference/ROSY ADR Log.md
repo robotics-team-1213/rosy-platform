@@ -194,6 +194,10 @@
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 | Accepted |
 | D-185 | control 런타임 CPU는 측정한 비용 순으로 줄이고, 항목마다 검증 방식을 미리 정한다 — R1–R8 | Accepted |
 | D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 | Accepted |
+<<<<<<< HEAD
 | D-187 | SD 카드 writer는 자기 실패를 감지해 안전하게 멈추고, 카드 상태와 다음 행동을 알린다 | Accepted |
 | D-188 | SD 카드 쓰기는 전문가 없이 운영한다 — 분리 실행, 상태 명령, readback 멈춤 감시, 사전 속도 측정, 카드 신원 | Accepted |
+=======
+| D-189 | unit의 샌드박스·HOME·Python 의존성은 제품의 일부다 — 서명 전에 실제로 돌려 보고 통과시킨다 | Accepted |
+>>>>>>> 1e1ff6fd (docs(adr): D-189 first real boot runtime defects, lesson and deploy log)
 ---

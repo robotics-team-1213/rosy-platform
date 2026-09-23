@@ -108,7 +108,7 @@ def _written(device_root: Path, before: set[str]) -> set[str]:
 
 @pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
 def test_recovery_writes_only_where_its_unit_lets_it(tmp_path):
-    # D-183 D1: under ProtectSystem=strict, rosy-release-recover.service can
+    # D-189 D1: under ProtectSystem=strict, rosy-release-recover.service can
     # write only its StateDirectory (/var/lib/rosy/releases) and /opt/rosy.
     # Recover takes its lock even when there is no journal to replay, which is
     # why a clean first boot failed with EROFS.

@@ -813,3 +813,19 @@
 - 결정: D-188
 - 교훈: "이 카드가 맞나"의 예외 경로(이미 우리 이미지가 있음)는 가장 흔한 사고 경로이기도 하다. 예외를 열 때는 그 예외가
   무엇으로만 생기는지(이 plan의 이전 쓰기)를 증거로 좁힌다.
+
+## 2026-09-24 · uncommitted · fix(native,image): D-189 first real boot of 005 — unit sandboxes, CORE HOME, pinned CORE Python runtime
+
+- 변경: 005 첫 실기 부팅에서 CORE를 막은 결함 네 개를 제품에 반영했다. (D1) `rosy-release-recover`에 `StateDirectory=rosy/releases`,
+  `ReadWritePaths=/opt/rosy`. (D2) CORE Python 런타임 14개(pydantic 2.13.5·pydantic-core 2.46.5·fastapi 0.141.1·starlette 1.6.0·
+  uvicorn 0.52.4·websockets 17.1 + 폐포 8개)를 `deploy/image/device-python-requirements.txt`에 휠 해시로 고정하고, 이미지는 rosdep 뒤
+  `/usr/local`에, CI·arm64 리허설은 같은 파일로 깐다. `inputs.lock.yaml` `python_runtime`이 파일 해시를 고정. (D3) `rosy-core`
+  `HOME=/var/lib/rosy/core`, `rosy-io`·`rosy-navigation`도 자기 state 디렉터리를 HOME으로. (D4) `rosy-core`의 `StateDirectory=rosy`와
+  `ReadWritePaths=/var/lib/rosy`를 `rosy/core`와 `/run/rosy`로 좁히고, `tmpfiles-rosy-state.conf`가 `/var/lib/rosy` root 0755, 지도 디렉터리
+  `rosy-io:rosy-core 2750`, 005 카드의 root 전용 디렉터리 소유 복구를 맡는다. 가드: 정적 샌드박스 계약(A), 이미지 안 CORE import probe(B).
+- 증거: 새 계약 시험은 005 unit 파일에서 9건 적색, 수정본에서 녹색. 관련 스위트 통과(2026-09-24 Windows, 수치는 커밋 메시지). 복구 쓰기 범위
+  시험 2건은 WSL Linux에서도 통과(저널 재생은 symlink가 되는 host만). 요구 파일은 aarch64·x86_64 각각 `pip download --require-hashes`로
+  14개 전부 확인. probe는 WSL(Jazzy, 비빌드 소스 트리)에서 CORE 진입점·늦은 import·상위 고정 6개를 통과했고(미빌드 `interfaces`와 WSL 폐포 3개 불일치만 보고), 이미지 chroot 실행은 다음 빌드가 처음이다.
+- gate 변화: 없음. 재빌드 이미지의 실기 부팅(응급 조치 없이 `CORE_READY`)이 D1-D4를 닫는다
+- 결정: D-189 (작성 시 D-183이었으나 main의 D-183과 겹쳐 재번호)
+- 교훈: [unit의 샌드박스·HOME·Python 의존성은 제품의 일부다](../docs/solutions/workflow-issues/units-never-run-under-their-sandbox-2026-09-24.md)

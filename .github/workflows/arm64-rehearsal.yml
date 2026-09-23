@@ -30,7 +30,7 @@ jobs:
       - name: Install python deps
         run: |
           python3 -m pip install --break-system-packages --no-cache-dir httpx pyyaml
-          # D-183: the CORE runtime set is the image's hash-locked set, not the latest.
+          # D-189: the CORE runtime set is the image's hash-locked set, not the latest.
           python3 -m pip install --break-system-packages --no-cache-dir --ignore-installed \
             --require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt
 

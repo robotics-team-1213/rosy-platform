@@ -241,7 +241,7 @@ def test_the_image_carries_dnsmasq_for_the_fallback_ap(tmp_path):
     assert "dnsmasq" in completed.stdout + completed.stderr
 
 
-# --- D-183: CORE's Python runtime is a hash-locked input, imported in-image ---
+# --- D-189: CORE's Python runtime is a hash-locked input, imported in-image ---
 
 REQUIREMENTS = IMAGE / "device-python-requirements.txt"
 PROBE = IMAGE / "probe-core-runtime.py"

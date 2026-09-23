@@ -13,7 +13,7 @@ EnvironmentFile=/etc/rosy/runtime.env
 # D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
 LogsDirectory=rosy-io
 Environment=ROS_HOME=/var/log/rosy-io ROS_LOG_DIR=/var/log/rosy-io
-# D-183 D3: a writable HOME under the unit's own state directory. The passwd
+# D-189 D3: a writable HOME under the unit's own state directory. The passwd
 # home is under /home, which ProtectHome=true makes unreadable (EACCES).
 StateDirectory=rosy/io
 StateDirectoryMode=0750
