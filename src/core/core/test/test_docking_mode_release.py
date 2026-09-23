@@ -35,14 +35,14 @@ def test_an_undock_at_the_release_point_keeps_the_robot_docked(core_client):
     real_transition = services.modes.transition
     worker = []
 
-    def undock_arrives(new):
+    def undock_arrives(new, **kwargs):
         # The API worker's undock lands exactly where the mode is released.
         if new is Mode.IDLE and not worker:
             thread = threading.Thread(target=services.docking.undock)
             worker.append(thread)
             thread.start()
             thread.join(0.3)       # blocked on the docking lock, if the release holds it
-        return real_transition(new)
+        return real_transition(new, **kwargs)
 
     services.modes.transition = undock_arrives
     docking_mode.tick(services, lambda msg: None)
@@ -116,3 +116,56 @@ def test_a_mode_exit_from_the_api_still_cancels_and_stays_idle(core_client):
     services.modes.transition(Mode.IDLE)
     assert services.docking.state is DockState.UNDOCKED
     assert services.modes.mode is Mode.IDLE
+
+
+# --- N2: taking DOCKING is a checked, atomic step -----------------------------
+
+
+def test_the_battery_return_refuses_when_manual_lands_mid_take(core_client):
+    """The operator takes MANUAL while docking cancels Nav2 (after the mode
+    check, before the transitions). The take must fail, not ride over MANUAL
+    through MANUAL -> IDLE -> DOCKING."""
+    from core_common.protocol.schemas import BatteryLevel
+    from test_docking_mode_ownership import navigating_robot
+    _, services, _ = navigating_robot(core_client)
+    real_cancel = services.nav.cancel
+
+    def cancel_then_manual(*args, **kwargs):
+        real_cancel(*args, **kwargs)
+        ok, _ = services.modes.transition(Mode.MANUAL)
+        assert ok
+
+    services.nav.cancel = cancel_then_manual
+    services.docking.on_battery_level(BatteryLevel.WARNING)
+    assert services.modes.mode is Mode.MANUAL
+    assert services.docking.state is DockState.UNDOCKED
+    assert services.docking.return_pending          # tried again once MANUAL ends
+
+
+def test_a_mode_transition_with_a_stale_expectation_is_refused():
+    from core_features.command.arbitration import ModeMachine
+    modes = ModeMachine()
+    ok, reason = modes.transition(Mode.DOCKING, expect=Mode.NAVIGATION)
+    assert not ok and "IDLE" in reason
+    assert modes.mode is Mode.IDLE
+    assert modes.transition(Mode.DOCKING, expect=Mode.IDLE) == (True, "")
+    assert modes.mode is Mode.DOCKING
+
+
+def test_concurrent_transitions_commit_one_mode_each():
+    from core_features.command.arbitration import ModeMachine
+    modes = ModeMachine()
+    results = []
+    barrier = threading.Barrier(8)
+
+    def take(target):
+        barrier.wait()
+        results.append(modes.transition(target, expect=Mode.IDLE)[0])
+
+    threads = [threading.Thread(target=take, args=(m,))
+               for m in (Mode.MANUAL, Mode.NAVIGATION, Mode.DOCKING, Mode.MANUAL) * 2]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(5.0)
+    assert results.count(True) == 1

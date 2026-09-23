@@ -6,6 +6,7 @@ ROS 무의존 순수 로직 (P1-5, CORE-002).
 from __future__ import annotations
 
 import enum
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -88,25 +89,37 @@ class ModeMachine:
         #: docking run owns DOCKING) stops it here, so no exit path — API,
         #: line follow, e-stop, the bridge — can leave it running.
         self.change_listeners: list = []
+        # Check-and-set only. Listeners run after the lock is released: the
+        # docking listener takes the docking lock, and docking calls in here
+        # while holding it (docking lock -> mode lock, never the reverse).
+        self._lock = threading.Lock()
 
     def can_transition(self, new: Mode) -> bool:
         return new in _ALLOWED[self.mode]
 
-    def transition(self, new: Mode) -> tuple[bool, str]:
-        if new == self.mode:
-            return True, ""
-        if not self.can_transition(new):
-            return False, f"invalid transition {self.mode.value}->{new.value}"
-        old, self.mode = self.mode, new
+    def transition(self, new: Mode, expect: Optional[Mode] = None) -> tuple[bool, str]:
+        """Change the mode. With `expect`, only from that mode — a caller that
+        checked the mode, then did something else, must not commit over a mode
+        another thread set meanwhile."""
+        with self._lock:
+            if expect is not None and self.mode is not expect:
+                return False, (f"mode changed ({self.mode.value}, "
+                               f"expected {expect.value})")
+            if new == self.mode:
+                return True, ""
+            if not self.can_transition(new):
+                return False, f"invalid transition {self.mode.value}->{new.value}"
+            old, self.mode = self.mode, new
         for listener in list(self.change_listeners):
             listener(old, new)
         return True, ""
 
     def release_emergency(self) -> tuple[bool, str]:
-        if self.mode is not Mode.EMERGENCY:
-            return False, "not in EMERGENCY"
-        self.mode = Mode.IDLE
-        return True, ""
+        with self._lock:
+            if self.mode is not Mode.EMERGENCY:
+                return False, "not in EMERGENCY"
+            self.mode = Mode.IDLE
+            return True, ""
 
     @property
     def is_emergency(self) -> bool:

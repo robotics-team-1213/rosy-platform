@@ -379,18 +379,25 @@ class CoreServices:
             anything: a refusal leaves the dock state as it was. The table has
             no NAVIGATION -> DOCKING edge, so NAVIGATION goes through IDLE;
             MANUAL (3) outranks DOCKING (4) and is refused."""
-            if modes.mode is Mode.DOCKING:
+            previous = modes.mode
+            if previous is Mode.DOCKING:
                 return
-            if modes.mode not in (Mode.IDLE, Mode.NAVIGATION):
+            if previous not in (Mode.IDLE, Mode.NAVIGATION):
                 raise DockError("MODE_CONFLICT",
-                                f"invalid transition {modes.mode.value}->DOCKING")
+                                f"invalid transition {previous.value}->DOCKING")
             # Nav2 and a swarm session are cancelled first: a live Nav2 goal
             # would otherwise keep publishing nav_cmd_vel and preempt staging.
             nav.cancel(source="docking")
-            previous = modes.mode
+            # Each step commits only from the mode it expects: an operator's
+            # MANUAL landing after the check above (during the cancel) must
+            # refuse the take, not be ridden over via MANUAL -> IDLE -> DOCKING.
             if previous is Mode.NAVIGATION:
-                modes.transition(Mode.IDLE)
-            modes.transition(Mode.DOCKING)
+                ok, reason = modes.transition(Mode.IDLE, expect=Mode.NAVIGATION)
+                if not ok:
+                    raise DockError("MODE_CONFLICT", reason)
+            ok, reason = modes.transition(Mode.DOCKING, expect=Mode.IDLE)
+            if not ok:
+                raise DockError("MODE_CONFLICT", reason)
             command.clear_docking()
             state.set_mode(RobotMode.DOCKING)
             events.publish("mode.changed", source="docking",
@@ -405,9 +412,7 @@ class CoreServices:
             undock cannot slip in between and be cancelled by `leave_docking`.
             A no-op when the mode already left DOCKING (an API mode change,
             e-stop): that exit is what cancelled the run in the first place."""
-            if modes.mode is not Mode.DOCKING:
-                return
-            ok, _ = modes.transition(Mode.IDLE)
+            ok, _ = modes.transition(Mode.IDLE, expect=Mode.DOCKING)
             if ok:
                 command.clear_docking()
                 state.set_mode(RobotMode.IDLE)
