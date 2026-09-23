@@ -1597,3 +1597,11 @@
 - gate 변화: 없음 — 둘 다 Proposed라 어떤 계약·코드도 바뀌지 않는다.
 - 결정: 조건(장치별 실기 수요 + D-84 프로필 확정 / 중앙 Fleet 착수)이 오면 Status를 Accepted로 바꾸고 그 시점의 증거를 본문 표에 채운다. 조건 없는 Status 전환은 "편입 없는 편입 기록"으로 무효(D-176 Status 문단에 명시).
 - 교훈: "나중에 하기로 한 결정"도 문서로 먼저 닫아 두면 활성화 시점의 설계 재논쟁을 막는다 — 단, 유예 조건을 건 ADR은 조건 전까지 Proposed로 두어야 부모 ADR(D-169/D-170)을 위반하지 않는다.
+
+## 2026-09-23 · uncommitted · fix(test): the control closure guard ignores colcon output under src/
+
+- 변경: `test/test_control_deploy_closure.py`가 `src/` 전체를 훑을 때 colcon 산출물(`src/build`, `src/install`, `src/log`)도 셌다. CI(`ros:jazzy`)는 소스 트리 안에서 빌드하므로 launch 파일마다 사본 3개가 잡혀 "ambiguous launch file name"이 되고, `rosy.sensor_provider` 등록자도 `build/control/setup.py`까지 둘로 보였다. `src/` 바로 아래 `build`·`install`·`log`와 숨김 경로를 건너뛰는 `_source_parts()` 하나로 두 스캔을 맞췄다.
+- 증거: origin/main CI가 `5a4cedb`·`a2095a0`·`345adfe` 연속으로 이 3건에서 적색이었다. `src/build`·`src/install`에 사본을 둔 CI 모양에서 수정 전 3 failed, 수정 후 4 passed.
+- gate 변화: 없음(CI 적색 복구).
+- 결정: 없음.
+- 교훈: 저장소 전체를 훑는 가드는 로컬(빌드 산출물 없음)에서만 초록일 수 있다. CI가 소스 트리 안에서 빌드한다는 사실을 스캔 규칙에 넣는다.
