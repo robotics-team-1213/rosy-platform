@@ -547,3 +547,16 @@
 - 결정: D-173
 - 교훈: 네 번의 004 재시도는 모두 손으로 만든 래퍼(고정 디스크 번호, 경로 조립, 로그 이름 바꾸기)를 거쳤다. 반복되는 운영 절차는 저장소 도구로 만든다.
 
+## 2026-09-23 · uncommitted · feat(native,sd,image): boot settings file and per-card fallback AP (D-176 Task 1-6)
+
+- 변경: `rosy_config.py`(스키마·계층·scrubbed view), `rosy-config-apply.py`(부팅 시 `rosy-config.yaml` 적용 후 카드의 비밀번호를
+  `"<applied>"`로 교체), `rosy-network.py`(uplink 없음 120 s → AP 개방, 600 s 후 사이트 Wi-Fi 재시도), 카드별 랜덤 AP 비밀번호
+  (DPAPI 보관, 1회 출력, plan/receipt에는 SSID만), 콘솔 배너·mDNS의 AP 표시를 추가했다. 이미지가 `rosy-config.service`,
+  `rosy-network.service`, `/etc/rosy/defaults.yaml`을 싣고 활성화하며, 설치 위치에서 세 진입점을 `--help`로 실행해 본다.
+  `deploy.sd` import는 `/opt/rosy` 고정 경로 대신 자기 위치 기준(`parents[1]`)으로 찾는다. 런북에 현장 Wi-Fi 변경과 AP 접속 절차를 넣었다.
+- 증거: `test_rosy_config.py`, `test_rosy_config_apply.py`, `test_rosy_network_fallback.py`, `test_sd_ap_credentials.py`,
+  `test_native_runtime_installed_layout.py`(설치 트리에서 `rosy-config-apply.py`/`rosy-network.py` import),
+  `test_image_customization_contract.py`, `test_native_systemd_contract.py` 통과 (2026-09-23 Windows). 기기 수용은 아직 없음.
+- gate 변화: 없음 (D-176 Validation의 기기 확인은 다음 카드에서)
+- 결정: D-176
+- 교훈: 새 진입점은 저장소 테스트만으로 부족하다. 이미지가 설치하는 트리에서 import해 보는 테스트와 이미지 빌드 probe를 같은 변경에 넣는다.

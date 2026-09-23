@@ -58,6 +58,9 @@ via `install-native-runtime.sh`, `test/test_rosy_network_fallback.py`
 
 ## Task 6: Image, docs, acceptance
 
+> Status 2026-09-23: 1 and 2 done (units, defaults, enable line, in-image `--help` probes,
+> installed-layout test; runbook sections in `pinky-pro-first-device-runbook.md`). 3 waits for the next card.
+
 1. Install units/defaults in `build-native-payload.sh`; enable in `customize-rootfs.sh`; installed-layout test.
 2. Runbook: "현장에서 Wi-Fi 바꾸기", "AP로 접속하기".
 3. Device acceptance per D-176 Validation.

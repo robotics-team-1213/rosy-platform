@@ -20,7 +20,9 @@ import yaml
 try:
     from deploy.sd.personalization import validate_operator_key
 except ModuleNotFoundError:  # installed image layout
-    sys.path.insert(0, "/opt/rosy")
+    # The image installs deploy/sd beside this runtime: /opt/rosy/deploy/sd
+    # next to /opt/rosy/native-runtime (build-native-payload.sh).
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from deploy.sd.personalization import validate_operator_key
 
 

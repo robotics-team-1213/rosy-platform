@@ -216,10 +216,10 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
     sink("led", led)
 
     def issue() -> None:
-        secret = None
+        ap_login = None
         if (record.get("network") or {}).get("mode") == "ap":
-            secret = (_read_json(root / "etc/rosy/ap-credentials.json") or {}).get("pass" + "word")
-        if _write_atomic(root / STATUS_DIR / "issue", render_issue(record, secret)):
+            ap_login = (_read_json(root / "etc/rosy/ap-credentials.json") or {}).get("pass" + "word")
+        if _write_atomic(root / STATUS_DIR / "issue", render_issue(record, ap_login)):
             run(["agetty", "--reload"])
 
     sink("issue", issue)

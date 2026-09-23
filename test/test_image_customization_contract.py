@@ -202,3 +202,20 @@ def test_customizer_executes_native_entrypoints_inside_the_image():
         assert f'chroot "$ROOT" python3 -B {runtime}' in source
     assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help' in source
     assert source.index("rosy-native-probe") < source.index("verify-mounted-image.py")
+
+
+def test_image_enables_and_probes_the_d176_boot_settings_and_fallback_ap():
+    # D-176: the settings file and the fallback AP only exist on a device if the
+    # image carries, enables and can import them where it installs them.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("mkdir -p \"$ROOT/etc/issue.d\"")]
+    for unit in ("rosy-config.service", "rosy-network.service"):
+        assert unit in enable, unit
+    assert "rosy-config-apply.py rosy-network.py" in source
+    assert 'chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help' in source
+
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    for line in ('cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"',
+                 'cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"',
+                 'cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"'):
+        assert line in payload, line

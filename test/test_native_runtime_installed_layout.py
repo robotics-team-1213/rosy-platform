@@ -118,3 +118,32 @@ def test_boot_status_indicator_imports_from_the_installed_layout(tmp_path):
 
     assert completed.returncode == 0, completed.stderr
     assert not list(runtime.rglob("__pycache__"))
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+@pytest.mark.parametrize("entrypoint", ["rosy-config-apply.py", "rosy-network.py"])
+def test_d176_entrypoints_import_from_the_installed_layout(tmp_path, entrypoint):
+    # D-176: rosy_config imports deploy.sd.personalization. The image installs
+    # deploy/sd at /opt/rosy/deploy/sd beside /opt/rosy/native-runtime.
+    runtime = tmp_path / "device/opt/rosy/native-runtime"
+    _install(runtime)
+    shutil.copytree(ROOT / "deploy/sd", runtime.parent / "deploy/sd",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+
+    completed = subprocess.run(
+        [sys.executable, "-B", str(runtime / entrypoint), "--help"],
+        capture_output=True, text=True, cwd=tmp_path,
+        # The image ships python3-yaml; the host may only have it in the user
+        # site, so keep that but still drop any repository on PYTHONPATH.
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert not list(runtime.rglob("__pycache__"))
+
+
+def test_d176_helpers_find_deploy_sd_relative_to_themselves():
+    for name in ("rosy_config.py", "rosy-config-apply.py"):
+        text = (ROOT / "deploy/robot/native" / name).read_text(encoding="utf-8")
+        assert 'sys.path.insert(0, "/opt/rosy")' not in text, name
+        assert "Path(__file__).resolve().parents[1]" in text, name

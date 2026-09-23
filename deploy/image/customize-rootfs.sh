@@ -165,7 +165,8 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
     rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
-    rosy-boot-status.service rosy-boot-status.timer
+    rosy-boot-status.service rosy-boot-status.timer \
+    rosy-config.service rosy-network.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
@@ -192,6 +193,10 @@ chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/nat
     || fail "installed release native entrypoint does not run"
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \
     || fail "installed first-boot entrypoint does not run"
+for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
+    chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
+        || fail "installed native entrypoint does not run: $entrypoint"
+done
 rm -rf -- "$ROOT$NATIVE_PROBE"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
