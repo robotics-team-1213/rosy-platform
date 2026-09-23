@@ -54,6 +54,7 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · feat(robot): rosy-diag collect, the L2 on-device diagnostics bundle
 - 2026-09-23 · uncommitted · feat(sd): read-only card diagnostics without wsl --mount
 - 2026-09-23 · uncommitted · feat(native,sd,image): boot settings file and per-card fallback AP (D-176 Task 1-6)
 - 2026-09-23 · uncommitted · feat(sd): operator entry point write-card.ps1 for writing a reviewed plan

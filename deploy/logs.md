@@ -574,3 +574,18 @@
 - gate 변화: 없음. 실제 카드에서 이 도구로 다시 읽은 증거는 아직 없다(세션 프로토타입만 실제 카드에서 동작)
 - 결정: D-174 F8, D-175
 - 교훈: 카드 진단 경로는 장애가 난 뒤에 만들면 늦다. 한 번 동작한 수작업은 그 자리에서 거부 목록과 시험을 붙여 도구로 올린다.
+
+## 2026-09-23 · uncommitted · feat(robot): rosy-diag collect, the L2 on-device diagnostics bundle
+
+- 변경: `deploy/robot/native/rosy_diag_collect.py`(표준 라이브러리만)와 `rosy-diag` 래퍼를 추가했다. `rosy-diag collect --out DIR`가
+  이번 부팅 `rosy-*` journal, `systemctl` 상태·목록·실패, `/var/lib/rosy/provisioning/*.json`, release 활성화 journal, dmesg 끝 400줄,
+  네트워크 요약(`ip -brief`, `nmcli` 장치·SSID, 키 없음), boot 파티션 `rosy-diag/`를 모아 tar.gz 하나로 만든다. 모든 멤버는
+  `rosy_diag_redact.redact`를 거치고 거부 경로는 읽지 않는다. `manifest.json`에 멤버 sha256·반환 코드·잘림 여부와 boot_id·release_id·
+  device_name·uptime을 넣는다. 내용 합계 50 MiB 상한(멤버 16 MiB, journal은 최신 줄 유지), 기존 파일은 덮어쓰지 않는다.
+  네이티브 디렉터리 전체가 설치되므로 설치기 변경은 없다.
+- 증거: `test/test_diag_collect.py` Windows 13 passed, 1 skipped(심볼릭 링크 래퍼 시험); WSL Ubuntu 14 passed. 설치 배치
+  (`install-native-runtime.sh` → `<tmp>/opt/rosy/native-runtime`)에서 실행, 모든 멤버가 `secret_scan.scan_text` 통과. WSL에서 실제
+  `journalctl`·`systemctl`·`dmesg`로 한 번 돌려 번들 생성과 scan 0건 확인(2026-09-23).
+- gate 변화: 없음. 실제 Pinky에서의 권한(journal 그룹, dmesg_restrict, sudo)과 크기는 미검증
+- 결정: D-175
+- 교훈: `/proc/sys/kernel/random/boot_id`는 대시가 있는 UUID이고 journald boot id는 32자 hex다. 층 사이 상관 키는 비교 전에 정규화한다.
