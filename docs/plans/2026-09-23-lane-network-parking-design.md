@@ -41,7 +41,7 @@ Gazebo camera (camera/front, 5 Hz, 320x180)
         └─ dock/observation (std_msgs/String JSON, 센서 증거만)
               └─ CORE ros_bridge ── DockObservationFeed (라인 시계로 신선도 판정)
                     └─ DockingManager (주차형 기종: 스테이징 없음, 포즈 정렬 접근, 포즈 정착)
-                          └─ executor.drive → CommandManager nav 슬롯 → cmd_vel (CORE 단독 발행)
+                          └─ executor.drive → CommandManager 도킹 슬롯 → cmd_vel (CORE 단독 발행)
 odom ── CORE ros_bridge ── 프레임 사이 오도메트리 전파, 언도킹 후진·회전
 ```
 
@@ -94,12 +94,27 @@ odom ── CORE ros_bridge ── 프레임 사이 오도메트리 전파, 언�
 언도킹(`UNDOCKING`): 검출기 없이 오도메트리로 0.27 m 후진 → 목표 방위(도크 yaw + π/2)로
 제자리 회전 → `UNDOCKED`. 회전이 없는 기존 기종은 후진만 한다(불변).
 
-동작 모드: `CommandManager.select_output`은 NAVIGATION에서만 nav 슬롯을 낸다. 지금까지
-도킹 API는 모드를 바꾸지 않아 도킹 주행이 바퀴에 닿지 못했다. 도킹/언도킹 API가 모드를
-`DOCKING`으로 올리고(라인 추종이 켜져 있으면 409 `LINE_FOLLOW_ACTIVE`), `select_output`은
-`DOCKING`에서도 nav 슬롯을 내며, ros_bridge가 도킹이 끝나면 `IDLE`로 되돌린다. 이 모드는
-지금 어디서도 들어가지 않으므로 기존 경로에 영향이 없다. 주차형 도킹이 움직이는 동안은
-도킹 틱을 20 Hz로 돌린다(nav 슬롯 0.5 s 만료를 RTF 0.25에서도 넘기지 않게).
+동작 모드 (2026-09-24 독립 리뷰 H1–H3·M1·M2 반영): 도킹은 **모든 기종에서** 처음부터 끝까지
+`DOCKING` 모드를 쥔다. 주차형만 게이트하지 않은 이유: 그 전에는 기본 기종의 도킹 주행이
+NAVIGATION일 때만 우연히 바퀴에 닿았고, 그 우연은 Nav2·군집 목표와 같은 슬롯을 다퉜다.
+
+- `CommandManager`는 도킹 전용 슬롯(`set_docking_twist`)을 둔다. 도킹 슬롯은 `DOCKING`에서만,
+  nav 슬롯은 `NAVIGATION`에서만 바퀴에 닿는다. ros_bridge의 `DockingExecutor.drive/stop`은
+  도킹 슬롯을 쓴다.
+- Nav2의 `nav_cmd_vel`은 `docking_mode.route_nav_cmd_vel`이 나눈다: `NAVIGATION`이면 nav 슬롯,
+  `DOCKING`이면 **기본 기종의 STAGING 단계에서만** 도킹 슬롯, 그 밖에는 버린다.
+- 모드 획득은 `DockingManager`에 주입한 `take_mode`(CoreServices.take_docking_mode) 한 곳이다.
+  `dock()`/`undock()`이 자기 검증 뒤, 상태나 executor를 건드리기 **전에** 부른다. 그래서 API와
+  배터리 자동 복귀가 같은 길을 지나고, MANUAL·EMERGENCY에서의 거절(409 `MODE_CONFLICT`)은
+  도킹 상태를 바꾸지 않는다. 획득할 때 Nav2 목표와 군집 세션을 먼저 취소한다
+  (`nav.cancel(source="docking")`). NAVIGATION은 IDLE을 거친다.
+- `DOCKING`을 떠나는 모든 전이(`ModeMachine.change_listeners`)가 도킹을 먼저 접는다:
+  EMERGENCY면 실패(`DOCK_FAILED`), 그 밖(IDLE·MANUAL)은 취소. `DOCKING → MANUAL`을 허용한다
+  (MANUAL 3 > DOCKING 4). 라인 추종 모드 API는 도킹 중 409 `DOCKING_ACTIVE`로 거절한다.
+- 도킹 중 `NavigationManager.goal/moving_goal`은 `DOCKING_ACTIVE`로 거절한다. 배터리 정책의
+  `RETURN_HOME`은 진행 중인 도킹이 곧 귀환이므로 Nav2 목표를 내지 않는다.
+- ros_bridge가 도킹이 끝나면(도킹/언도킹 상태가 아니면) `IDLE`로 되돌린다. 주차형 도킹이
+  움직이는 동안은 도킹 틱을 20 Hz로 돌린다(슬롯 0.5 s 만료를 RTF 0.25에서도 넘기지 않게).
 
 기능 활성화는 **시뮬레이션 전용**이다: `map_v2_fleet_core.yaml` 오버레이의
 `docking.simulation_supported: true`와 `docking.seed`(주차형 기종 + `parking` 도크 1개)는

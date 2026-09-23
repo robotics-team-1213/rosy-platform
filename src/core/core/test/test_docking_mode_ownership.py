@@ -310,3 +310,57 @@ def test_the_battery_return_waits_while_manual(core_client):
     services.docking.tick()
     assert services.docking.state is DockState.DOCKING
     assert services.modes.mode is Mode.DOCKING
+
+
+# --- M1: every dock type takes DOCKING; a default dock stages through Nav2 ----
+
+
+def default_dock_robot(core_client):
+    from core_features.docking.database import DockInstance, DockType
+    client, services = core_client(config_overrides=sim_overrides())
+    executor = RecordingExecutor(services)
+    services.docking.executor = executor
+    services.docking.database.add_type(DockType(name="std", detector="simulated"))
+    services.docking.database.add(DockInstance(id="std1", type="std", x=1.0, y=0.0, yaw=0.0))
+    return client, services, executor
+
+
+def test_a_default_dock_takes_docking_and_stages_through_nav2(core_client):
+    from core_common.protocol.schemas import NavigationState
+    client, services, executor = default_dock_robot(core_client)
+    response = client.post("/api/v1/docking/dock", json={"dock": "std1"}, headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert services.modes.mode is Mode.DOCKING
+    assert services.docking.phase is DockPhase.STAGING
+    assert [c[0] for c in executor.calls] == ["navigate_to"]
+    # Nav2's staging output reaches the wheels as docking ...
+    assert docking_mode.route_nav_cmd_vel(services, Twist(0.1, 0.05))
+    assert wheels(services) == pytest.approx((0.1, 0.05))
+    # ... and stops doing so once staging ends.
+    services.docking.on_navigation_state(NavigationState.ARRIVED)
+    services.docking.tick()
+    assert services.docking.phase is DockPhase.ACQUIRING
+    assert not docking_mode.route_nav_cmd_vel(services, Twist(0.1, 0.05))
+
+
+def test_a_default_dock_approach_drives_the_docking_slot(core_client):
+    client, services, executor = default_dock_robot(core_client)
+    client.post("/api/v1/docking/dock", json={"dock": "std1"}, headers=OPERATOR)
+    services.docking._phase = DockPhase.APPROACHING
+    executor.drive(0.06, 0.2)
+    assert wheels(services) == pytest.approx((0.06, 0.2))
+
+
+def test_a_default_undock_takes_docking_and_releases_it_when_done(core_client):
+    client, services, executor = default_dock_robot(core_client)
+    services.docking._state = DockState.DOCKED
+    services.docking._dock = services.docking.database.get("std1")
+    response = client.post("/api/v1/docking/undock", headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert services.modes.mode is Mode.DOCKING
+    services.docking.tick()
+    assert executor.calls[-1][0] == "drive"
+    assert wheels(services)[0] < 0.0
+    services.docking.cancel()
+    assert docking_mode.release_docking_mode(services)
+    assert services.modes.mode is Mode.IDLE
