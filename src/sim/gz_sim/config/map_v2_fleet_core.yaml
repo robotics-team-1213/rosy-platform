@@ -16,3 +16,38 @@ vision:
   preview_max_bytes: 512000
   preview_stale_after_s: 2.0
   preview_min_pull_interval_s: 0.4
+
+# Lane-network stage 3, parking (docs/plans/2026-09-23-lane-network-parking-design.md).
+# Read only under runtime.mode simulation: turns docking.supported on and
+# seeds the parking dock in memory. The wedge tag (build_world.py dock_tag_7)
+# is observed by control's dock_observer_node on dock/observation.
+docking:
+  simulation_supported: true
+  seed:
+    dock_types:
+      - name: parking_wedge
+        detector: observation
+        tag_id: 7
+        tag_size_m: 0.05
+        staging: false
+        approach: pose
+        settle: pose
+        # spot (-1.000, 0) -> tag centre (-0.74979, 0): bottom edge -0.78,
+        # 25 deg face, 66.7 mm with its quiet zone.
+        tag_offset_m: 0.25021
+        # The tag's top leaves the camera's view ~0.1 m before the spot, so
+        # the approach from the spur entry (0.27 m out) creeps first.
+        acquire_creep_m: 0.20
+        backoff_m: 0.10
+        # The perimeter wall is 0.1329 m behind the entry's base_link (rear
+        # at -0.075 m): 0.27 m back from the spot, not the default 0.35.
+        undock_distance_m: 0.27
+        # Back onto west:f heading +y, where the tour starts.
+        undock_turn_rad: 1.5707963
+        max_retries: 3
+    docks:
+      - id: parking
+        type: parking_wedge
+        x: -1.0
+        y: 0.0
+        yaw: 0.0

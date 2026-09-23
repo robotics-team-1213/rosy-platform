@@ -12,8 +12,9 @@ from core_common.capability import Capability
 from core_features.command.arbitration import ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core_features.docking.agent import DockAgent
-from core_features.docking.database import DockDatabase
+from core_features.docking.database import DockDatabase, DockInstance, DockType
 from core_features.docking.detector import select_detector
+from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
 from core_common.domain.adapters import AdapterRegistry
@@ -177,6 +178,34 @@ def _traffic_policy_config(raw: dict[str, Any]) -> TrafficPolicyConfig:
     )
 
 
+def _simulation_docking(config: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """The sim-only docking block, or None.
+
+    `docking.simulation_supported: true` turns docking on and `docking.seed`
+    declares its types and docks, but only under `runtime.mode: simulation`
+    (as traffic_policy.simulation_signal_control is gated). The Device keeps
+    capabilities.yaml's `docking.supported` and its docks.json.
+    """
+    raw = config.get("docking") or {}
+    if not isinstance(raw, dict) or not raw.get("simulation_supported", False):
+        return None
+    if str((config.get("runtime") or {}).get("mode", "")).strip().lower() != "simulation":
+        return None
+    return raw
+
+
+def _seeded_dock_database(raw: dict[str, Any]) -> DockDatabase:
+    """In memory, from the overlay: a sim run starts from the declared dock,
+    never from a docks.json an earlier run left behind."""
+    database = DockDatabase.empty()
+    seed = raw.get("seed") or {}
+    for item in seed.get("dock_types", []) or []:
+        database.add_type(DockType.model_validate(item))
+    for item in seed.get("docks", []) or []:
+        database.add(DockInstance.model_validate(item))
+    return database
+
+
 @dataclass
 class CoreServices:
     config: dict[str, Any]
@@ -209,6 +238,8 @@ class CoreServices:
     # Optional absorbed Control worker, owned by the RosyCoreNode lifecycle.
     # It is populated only when the explicit sensor adapter profile is enabled.
     control_adapter: Any = field(default=None, repr=False)
+    # control's dock/observation evidence (ros_bridge ingests, docking reads).
+    dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
@@ -270,6 +301,11 @@ class CoreServices:
         advisory_feed = PersonAdvisoryFeed(safety)
 
         identity = RobotIdentity.from_config(config, profile_model=profile.model)
+        simulation_docking = _simulation_docking(config)
+        if simulation_docking is not None:
+            capability_data = dict(capability_data)
+            capability_data["docking"] = dict(capability_data.get("docking") or {},
+                                              supported=True)
         capability = Capability(capability_data)
         evidence_cfg = (config.get("state") or {}).get("evidence") or {}
         stale_after = dict(CHANNEL_STALE_AFTER_S)
@@ -307,20 +343,32 @@ class CoreServices:
         battery = BatteryMonitor(
             _battery_config(safety_cfg, data_path=waypoints_path.parent),
             events=events)
+        dock_feed = DockObservationFeed()
+
+        def map_pose():
+            pose = state.snapshot().pose
+            return (pose.x, pose.y, pose.yaw)
+
         docking = DockingManager(
-            database=DockDatabase(waypoints_path.parent / "docks.json"),
+            database=(_seeded_dock_database(simulation_docking)
+                      if simulation_docking is not None
+                      else DockDatabase(waypoints_path.parent / "docks.json")),
             safety=safety,
             config=DockingConfig(),
             events=events,
             # 검출기는 경계 뒤다 — `select_detector` 가 기종·제원·provider·
-            # 프레임을 보고 고른다. 오늘은 provider도 프레임도 없어서 항상
-            # 시뮬레이션으로 떨어진다. 카메라가 오면 ros_bridge 가 같은 선택에
-            # provider와 프레임을 꽂는다 (D-138).
-            detector_factory=lambda dock, dock_type: select_detector(dock, dock_type),
+            # 프레임을 보고 고른다. 프레임 경로(aruco)는 아직 provider도 프레임도
+            # 없어서 시뮬레이션으로 떨어진다 (D-138). `detector: observation` 기종은
+            # control 의 dock/observation 증거를 `dock_feed` 로 읽는다 (ros_bridge 가
+            # 채운다). 신선도는 매니저와 같은 시계로 잰다.
+            detector_factory=lambda dock, dock_type: select_detector(
+                dock, dock_type, feed=dock_feed, clock=docking.now),
             agent_factory=lambda dock: DockAgent(dock.agent_url),
             capability_provider=lambda: capability.supports("docking.supported"),
             map_id_provider=lambda: state.map_id,
             battery=battery,
+            pose_provider=map_pose,
+            line_follow_active_provider=lambda: line_follow.active,
         )
         swarm = SwarmManager(
             events, state, nav, safety, capability,
@@ -363,7 +411,8 @@ class CoreServices:
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
-                   audit=audit, adapter_registry=adapter_registry)
+                   audit=audit, adapter_registry=adapter_registry,
+                   dock_feed=dock_feed)
 
     def inventory(self) -> dict[str, Any]:
         cap001 = self.capability.to_dict()

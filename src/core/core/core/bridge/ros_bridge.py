@@ -36,6 +36,7 @@ from std_srvs.srv import Empty
 from core.bridge import (
     battery_policy,
     display,
+    docking_mode,
     odometry,
     reconcile,
     save_map,
@@ -103,6 +104,8 @@ class RosBridge:
         node.create_subscription(String, "detection_evidence",
                                  self._on_detection_evidence, 10)
         node.create_subscription(String, "road/observation", self._on_road_observation, 10)
+        # 주차형 도크: control 의 dock_observer_node 가 태그를 base_link 로 풀어 낸 증거.
+        node.create_subscription(String, "dock/observation", self._on_dock_observation, 10)
         preview_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         node.create_subscription(
@@ -152,13 +155,17 @@ class RosBridge:
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
         self._diag_timer = node.create_timer(1.0, self._tick_diagnostics)
         self._power_timer = node.create_timer(1.0 / 5.0, self._tick_power)
-        self._dock_timer = node.create_timer(1.0 / 5.0, self._tick_docking)
+        # 20 Hz while a parking run moves (DockingManager.fast_tick), 5 Hz
+        # otherwise: docking_mode.due() skips 3 in 4 calls.
+        self._dock_timer = node.create_timer(1.0 / 20.0, self._tick_docking)
+        self._dock_ticks = 0
         self._swarm_timer = node.create_timer(1.0 / 5.0, self._tick_swarm)
         self._line_follow_timer = node.create_timer(1.0 / 20.0, self._tick_line_follow)
         self._goals = GoalTracker()
 
         self._last_odom_ts = 0.0
         self._last_odom_xy = None
+        self._last_odom_pose = None
         self._dock_odom_mark = None
         self._applied_dock_exemption = False
         # slam_toolbox 를 모듈 최상단에서 임포트하면 브리지 임포트가, 따라서
@@ -206,6 +213,9 @@ class RosBridge:
             bool(node.get_parameter("use_sim_time").value),
             lambda: self._node.get_clock().now().nanoseconds / 1e9)
         self._svc.line_follow.bind_clock(self._line_clock)
+        # The dock observation feed is stamped on the same clock, so the
+        # docking manager judges tag freshness and phase timeouts on it too.
+        self._svc.docking.bind_clock(self._line_clock)
         self._svc.docking.executor = self
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
@@ -217,6 +227,7 @@ class RosBridge:
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
         self._last_odom_xy = (sample["x"], sample["y"])
+        self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
 
     def _on_battery(self, msg: Float32) -> None:
@@ -307,6 +318,16 @@ class RosBridge:
                 "reason": "invalid_observation",
                 "detail": str(exc),
             })
+
+    def _on_dock_observation(self, msg: String) -> None:
+        """Tag evidence only; a malformed payload clears the feed (lost, not guessed)."""
+        try:
+            self._svc.dock_feed.ingest(
+                json.loads(msg.data), received_at=self._line_clock(),
+                source_now=self._node.get_clock().now().nanoseconds * 1e-9)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._node.get_logger().warning(
+                f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
 
     def _on_camera_preview(self, msg: CompressedImage) -> None:
         """Store one display-only JPEG without coupling it to driving policy."""
@@ -638,6 +659,10 @@ class RosBridge:
         """마크 이후 이동 거리. 언도킹은 센서를 보지 않고 이 값만 쓴다."""
         return odometry.travelled_m(self._dock_odom_mark, self._last_odom_xy)
 
+    def odometry_pose(self):
+        """오도메트리 base 포즈 (x, y, yaw) — 주차형 도크의 프레임 사이 전파와 회전."""
+        return self._last_odom_pose
+
     def _tick_swarm(self) -> None:
         """SWM-004 는 마감시각으로 판정한다 — 스트림이 끊기면 아무 프레임도
         오지 않으므로 소켓 쪽에서는 알아챌 수 없다."""
@@ -648,9 +673,13 @@ class RosBridge:
 
     def _tick_docking(self) -> None:
         docking = self._svc.docking
+        self._dock_ticks += 1
+        if not docking_mode.due(self._dock_ticks, docking.fast_tick):
+            return
         docking.on_navigation_state(self._svc.nav.nav_state)
         docking.set_manual_active(self._svc.command.manual_active)
         docking.tick()
+        docking_mode.release_docking_mode(self._svc)
         self._svc.state.set_docking(docking.status())
 
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------

@@ -752,9 +752,7 @@ class DockingManager:
                 self._stop_detector()
                 self._state = DockState.DOCKED
                 self._phase = None
-                self._emit("docking.docked", "info", {
-                    "dock_id": self._dock.id, "ex_m": round(ex, 4), "ey_m": round(ey, 4),
-                    "heading_rad": round(heading, 4)})
+                self._emit("docking.docked", "info", {"dock_id": self._dock.id})
                 return
             self._tracker.observe(observation)
             self._reseat(f"parked out of tolerance (ex={ex:+.3f} ey={ey:+.3f} "

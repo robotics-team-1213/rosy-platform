@@ -200,7 +200,7 @@ def registered(tmp_path, monkeypatch):
 #: Period in seconds, in registration order. `1/50` is D-2's sole `cmd_vel`
 #: publisher; `1/10` is `state.rate_hz` from `rosy_default.yaml`.
 EXPECTED_TIMERS = [
-    1.0 / 50.0, 1.0 / 10.0, 1.0, 1.0 / 5.0, 1.0 / 5.0, 1.0 / 5.0,
+    1.0 / 50.0, 1.0 / 10.0, 1.0, 1.0 / 5.0, 1.0 / 20.0, 1.0 / 5.0,
     1.0 / 20.0,
 ]
 
@@ -214,6 +214,7 @@ EXPECTED_SUBSCRIPTIONS = [
     ("line/observation", "_on_line_observation", 10),
     ("detection_evidence", "_on_detection_evidence", 10),
     ("road/observation", "_on_road_observation", 10),
+    ("dock/observation", "_on_dock_observation", 10),
     ("camera/preview/compressed", "_on_camera_preview", "PREVIEW"),
     ("amcl/transition_event", "_on_amcl_transition", 10),
     ("map_server/transition_event", "_on_map_server_transition", 10),

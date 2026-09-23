@@ -215,12 +215,16 @@ class CommandManager:
                 self._note_watchdog_lapse(session)
             return ZERO
         nav_age = current - self._nav_updated_at if self._nav_updated_at is not None else None
+        # DOCKING drives through the same nav slot (docking.manager owns the
+        # motion there; ros_bridge's DockingExecutor writes it). Until the
+        # docking API took the mode, DOCKING was never entered.
         if (
-            self._modes.mode is Mode.NAVIGATION
+            self._modes.mode in (Mode.NAVIGATION, Mode.DOCKING)
             and self._nav_twist is not None
             and nav_age is not None
             and 0.0 <= nav_age <= self._nav_timeout_s
         ):
             l, a = self._safety.clip(self._nav_twist.linear, self._nav_twist.angular, "nav")
-            return self._policy_output(l, a, 'navigation', current)
+            source = 'docking' if self._modes.mode is Mode.DOCKING else 'navigation'
+            return self._policy_output(l, a, source, current)
         return ZERO
