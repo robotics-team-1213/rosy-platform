@@ -1773,3 +1773,11 @@
 - gate 변화: 없음.
 - 결정: D-185 R4
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · tools(control): D-185 R8 Pi 계측 도구
+
+- 변경: control `tools/device/hotpath_measure.py`(bench·watch, JSON 보고서)와 host 테스트를 추가했다. D-185에 R8 구현 메모를, device 검증 계획에 실기 절차 checkpoint를 적었다.
+- 증거: control `logs.md` 2026-09-24 R8 항목.
+- gate 변화: 없음. Pi 실행은 HOLD.
+- 결정: D-185 R8
+- 교훈: 없음
