@@ -8,12 +8,21 @@ cannot be set offline), rewrites FSInfo hints and FAT status bits, and creates
 ``System Volume Information``. So the boot partition is compared as a filesystem
 instead: every file and directory of the image must exist on the card with the
 same content, and the only extra tree allowed is ``System Volume Information``,
-which is reported in the evidence rather than hidden.
+which is reported in the evidence rather than hidden. The areas that hold no
+file are still compared byte for byte (D-182): the reserved region against the
+image apart from the FSInfo free-cluster hints, FAT copy 2 against FAT copy 1
+on the card apart from the FAT[1] shutdown/error bits, and the backup boot
+sector against the primary.
 
 The same pass also hashes every compressed byte it reads (``image_sha256``), so
 the writer can prove the file it compared against is the signed one (D-181).
 Exit codes: 0 verified, 1 mismatch or unusable image, 3 the device could not be
-read (card removed or I/O error).
+read (card removed, I/O error, or no data for ``--stall-seconds``).
+
+``--probe`` (D-182) is the writer's pre-flight: the raw size from the xz index,
+the image's MBR disk signature, and a timed sequential read of the first
+``--probe-bytes`` of the device with the device's MBR disk signature. It never
+fails on the device; an unreadable device is reported in ``device_error``.
 """
 
 from __future__ import annotations
@@ -40,10 +49,22 @@ WINDOWS_EXTRA_TREES = {"system volume information"}
 END_OF_CHAIN = 0x0FFFFFF8
 XZ_HEADER_MAGIC = b"\xfd7zXZ\x00"
 EXIT_DEVICE_UNREADABLE = 3
+DEFAULT_STALL_SECONDS = 600.0
+PROBE_BYTES = 128 * 1024 * 1024
+PROBE_MIN_TIMED_BYTES = 1024 * 1024  # a smaller read times scheduling noise, not the card
+MB = 1_000_000  # rates are decimal MB/s, as Imager and card labels use
+# FAT32 fields Windows rewrites on a mounted card (release 004 offset 1049576 is
+# the FSInfo free count). Everything else in the non-file areas is byte-exact.
+FSINFO_TOLERATED = {"fsinfo.free_count": (488, 4), "fsinfo.next_free": (492, 4)}
+FAT1_STATUS_BITS = 0x0C000000  # ClnShutBitMask 0x08000000 | HrdErrBitMask 0x04000000
 
 
 class DeviceReadError(OSError):
     """The card could not be opened or read (removed mid-readback, I/O error)."""
+
+
+class DeviceStallError(DeviceReadError):
+    """The card produced no data for the stall limit (a wedged read)."""
 
 
 class HashingReader:
@@ -93,10 +114,15 @@ class Progress:
             "detail": "heartbeat",
             "bytes": done,
         }
-        with open(self.path, "a", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(line, separators=(",", ":")) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+        # The heartbeat is advisory. A progress file that cannot be written must
+        # not fail a good card as an "image" error (D-181 review).
+        try:
+            with open(self.path, "a", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(line, separators=(",", ":")) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as exc:
+            print(f"MEDIA_READBACK_HEARTBEAT_NOT_WRITTEN: {exc}", file=sys.stderr)
 
 
 def _varint(data: bytes, pos: int) -> tuple[int, int]:
@@ -273,7 +299,90 @@ class Fat32:
         return result
 
 
-def compare_boot_partition(expected: bytes, actual: bytes) -> dict[str, object]:
+def _first_difference(want: bytes, have: bytes, skip: set[int]) -> int | None:
+    if want == have:
+        return None
+    for index in range(min(len(want), len(have))):
+        if index not in skip and want[index] != have[index]:
+            return index
+    return None if len(want) == len(have) else min(len(want), len(have))
+
+
+def compare_boot_non_file_areas(expected: bytes, actual: bytes, base: int = 0) -> dict[str, object]:
+    """Byte-compare the FAT32 areas that hold no file (D-182, review MEDIUM-2).
+
+    Tolerated, and only these: the FSInfo free-cluster count and next-free hint
+    against the image, and the FAT[1] clean-shutdown and hard-error bits between
+    the two FAT copies. ``base`` is the partition's byte offset on the device,
+    used only to report device offsets.
+    """
+    image, card = Fat32(expected), Fat32(actual)
+    for field in ("sector", "fat_offset", "data_offset"):
+        if getattr(image, field) != getattr(card, field):
+            raise ValueError(f"boot partition layout differs from the image: {field}")
+    sector = card.sector
+    reserved = card.fat_offset
+    fats = actual[0x10]
+    fat_bytes = struct.unpack_from("<I", actual, 0x24)[0] * sector
+
+    # 1. Backup boot sector against the primary, on the card.
+    backup = struct.unpack_from("<H", actual, 0x32)[0]
+    backup_sector = None
+    if 0 < backup < 0xFFFF and (backup + 1) * sector <= reserved:
+        backup_sector = backup
+        at = _first_difference(actual[:sector], actual[backup * sector:(backup + 1) * sector], set())
+        if at is not None:
+            raise ValueError(
+                f"boot partition backup boot sector differs from the primary at byte offset "
+                f"{base + backup * sector + at}"
+            )
+
+    # 2. Reserved region against the image, apart from the FSInfo hints.
+    info = struct.unpack_from("<H", actual, 0x30)[0]
+    skip: set[int] = set()
+    tolerated: list[str] = []
+    if 0 < info < 0xFFFF and (info + 1) * sector <= reserved:
+        for name, (offset, size) in FSINFO_TOLERATED.items():
+            start = info * sector + offset
+            skip.update(range(start, start + size))
+            if expected[start:start + size] != actual[start:start + size]:
+                tolerated.append(name)
+    at = _first_difference(expected[:reserved], actual[:reserved], skip)
+    if at is not None:
+        raise ValueError(f"boot partition reserved region differs at byte offset {base + at}")
+
+    # 3. Every further FAT copy against FAT copy 1, on the card. FAT 1 itself is
+    # not compared with the image: Windows allocates System Volume Information.
+    for fat in range(1, fats):
+        first = actual[reserved:reserved + fat_bytes]
+        other = actual[reserved + fat * fat_bytes:reserved + (fat + 1) * fat_bytes]
+        if len(first) >= 8 and len(other) >= 8:
+            a, b = struct.unpack_from("<I", first, 4)[0], struct.unpack_from("<I", other, 4)[0]
+            if (a ^ b) & ~FAT1_STATUS_BITS & 0xFFFFFFFF:
+                raise ValueError(
+                    f"boot partition FAT copy {fat + 1} differs from FAT copy 1 at byte offset "
+                    f"{base + reserved + fat * fat_bytes + 4}"
+                )
+            if a != b:
+                tolerated.append("fat[1].status_bits")
+        at = _first_difference(first, other, {4, 5, 6, 7})
+        if at is not None:
+            raise ValueError(
+                f"boot partition FAT copy {fat + 1} differs from FAT copy 1 at byte offset "
+                f"{base + reserved + fat * fat_bytes + at}"
+            )
+    return {
+        "reserved_bytes": reserved,
+        "fat_copies_compared": fats,
+        "fat_bytes": fat_bytes,
+        "backup_boot_sector": backup_sector,
+        "tolerated_fields": sorted(FSINFO_TOLERATED) + ["fat[1].status_bits"],
+        "tolerated_differences": sorted(set(tolerated)),
+    }
+
+
+def compare_boot_partition(expected: bytes, actual: bytes, base: int = 0) -> dict[str, object]:
+    non_file = compare_boot_non_file_areas(expected, actual, base)
     want = Fat32(expected).tree()
     have = Fat32(actual).tree()
     for path, value in sorted(want.items()):
@@ -283,7 +392,8 @@ def compare_boot_partition(expected: bytes, actual: bytes) -> dict[str, object]:
     for path in extras:
         if path.split("/", 1)[0].lower() not in WINDOWS_EXTRA_TREES:
             raise ValueError(f"boot partition has an unexpected entry: {path}")
-    return {"mode": "files", "entries_verified": len(want), "windows_extras": extras}
+    return {"mode": "files", "entries_verified": len(want), "windows_extras": extras,
+            "non_file_areas": non_file}
 
 
 def _read_device(actual, size: int) -> bytes:
@@ -298,17 +408,24 @@ class _Prefetch:
 
     ``get()`` returns the next chunk, ``b""`` at the end, or re-raises what the
     worker raised, so a failed read is never mistaken for the end of the data.
+    With ``stall_seconds``, a worker that hands over nothing for that long
+    raises ``stall_error()`` instead of waiting forever on a wedged read; the
+    worker is a daemon thread and is left behind.
     """
 
     _END = object()
 
-    def __init__(self, name: str, produce, depth: int = QUEUE_DEPTH) -> None:
+    def __init__(self, name: str, produce, depth: int = QUEUE_DEPTH,
+                 stall_seconds: float | None = None, stall_error=None) -> None:
         self._produce = produce
         self._queue: queue.Queue = queue.Queue(maxsize=depth)
         self._stopping = threading.Event()
         self._error: BaseException | None = None
         self._finished = False
-        self._thread = threading.Thread(target=self._run, name=name, daemon=True)
+        self._stall_seconds = stall_seconds
+        self._stall_error = stall_error
+        self._stalled = False
+        self._thread =threading.Thread(target=self._run, name=name, daemon=True)
         self._thread.start()
 
     def _put(self, item) -> bool:
@@ -334,7 +451,11 @@ class _Prefetch:
     def get(self) -> bytes:
         if self._finished:
             return b""
-        item = self._queue.get()
+        try:
+            item = self._queue.get(timeout=self._stall_seconds)
+        except queue.Empty:
+            self._stalled = True
+            raise self._stall_error() from None
         if item is self._END:
             self._finished = True
             if self._error is not None:
@@ -344,7 +465,8 @@ class _Prefetch:
 
     def close(self) -> None:
         self._stopping.set()
-        self._thread.join()
+        # A worker wedged in a device read never returns (D-181 review): do not wait for it.
+        self._thread.join(1.0 if self._stalled else None)
 
 
 class _DeviceStream:
@@ -370,11 +492,39 @@ class _DeviceStream:
         return data[:size]
 
 
-def verify(image: Path, device: str, progress: Progress | None = None) -> dict[str, object]:
+def verify(image: Path, device: str, progress: Progress | None = None,
+           stall_seconds: float | None = None) -> dict[str, object]:
     if image.suffix != ".xz":
         raise ValueError("image must be an xz-compressed raw disk image")
 
     progress = progress or Progress(None, 0)
+
+    def device_stalled() -> DeviceStallError:
+        return DeviceStallError(
+            f"device read stalled: no data for {stall_seconds:g} s after byte offset {progress.done}"
+        )
+
+    def image_stalled() -> OSError:
+        return OSError(f"image decompression produced no data for {stall_seconds:g} s")
+
+    try:
+        actual_file = open(device, "rb", buffering=0)
+    except OSError as exc:
+        raise DeviceReadError(f"device cannot be opened: {exc}") from exc
+    stalled = False
+    try:
+        return _verify_open(image, actual_file, progress, stall_seconds, device_stalled, image_stalled)
+    except DeviceStallError:
+        # A thread is still blocked reading this handle; closing it could block too.
+        stalled = True
+        raise
+    finally:
+        if not stalled:
+            actual_file.close()
+
+
+def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_stalled,
+                 image_stalled) -> dict[str, object]:
     image_hash = hashlib.sha256()
     device_hash = hashlib.sha256()
     verified = 0
@@ -382,19 +532,17 @@ def verify(image: Path, device: str, progress: Progress | None = None) -> dict[s
     first_chunk = True
     expected_boot = bytearray()
     actual_boot = bytearray()
-    try:
-        actual_file = open(device, "rb", buffering=0)
-    except OSError as exc:
-        raise DeviceReadError(f"device cannot be opened: {exc}") from exc
-    with open(image, "rb") as compressed, actual_file as actual:
+    with open(image, "rb") as compressed:
         # The compressed bytes the comparison consumes are hashed on the way in,
         # so the evidence ties the compared image to the signed SHA256SUMS entry.
         signed = HashingReader(compressed)
         with lzma.open(signed, "rb") as expected:
             # Decompression (CPU) and the card read (I/O) overlap on two threads;
             # the device is still read strictly in order, one chunk at a time.
-            image_side = _Prefetch("readback-image", lambda: expected.read(CHUNK_SIZE))
-            device_side = _Prefetch("readback-device", lambda: _read_device(actual, DEVICE_CHUNK_SIZE))
+            image_side = _Prefetch("readback-image", lambda: expected.read(CHUNK_SIZE),
+                                   stall_seconds=stall_seconds, stall_error=image_stalled)
+            device_side = _Prefetch("readback-device", lambda: _read_device(actual, DEVICE_CHUNK_SIZE),
+                                    stall_seconds=stall_seconds, stall_error=device_stalled)
             device_stream = _DeviceStream(device_side)
             try:
                 while True:
@@ -453,10 +601,81 @@ def verify(image: Path, device: str, progress: Progress | None = None) -> dict[s
         if expected_boot == actual_boot:
             evidence["boot_partition"] = {"mode": "bytes"}
         else:
-            evidence["boot_partition"] = compare_boot_partition(bytes(expected_boot), bytes(actual_boot))
+            evidence["boot_partition"] = compare_boot_partition(bytes(expected_boot), bytes(actual_boot), boot[0])
     elif evidence["device_sha256"] != evidence["image_raw_sha256"]:
         raise ValueError("media readback digest mismatch")
     return evidence
+
+
+def mbr_signature(sector: bytes) -> str | None:
+    """The MBR disk signature (bytes 440-443) as 8 hex digits, or None if absent."""
+    if len(sector) < 512 or sector[510:512] != b"\x55\xaa":
+        return None
+    value = struct.unpack_from("<I", sector, 440)[0]
+    return f"{value:08x}" if value else None
+
+
+def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[str, object], bool]:
+    state: dict[str, object] = {"done": 0, "head": b""}
+
+    def run() -> None:
+        try:
+            with open(device, "rb", buffering=0) as handle:
+                started = time.perf_counter()
+                done = 0
+                head = b""
+                while done < probe_bytes:
+                    chunk = handle.read(min(DEVICE_CHUNK_SIZE, probe_bytes - done))
+                    if not chunk:
+                        break
+                    if len(head) < 512:
+                        head += chunk[:512 - len(head)]
+                        state["head"] = head
+                    done += len(chunk)
+                    state["done"] = done
+                state["seconds"] = time.perf_counter() - started
+        except OSError as exc:
+            state["error"] = str(exc)
+
+    worker = threading.Thread(target=run, name="probe-device", daemon=True)
+    worker.start()
+    worker.join(timeout)
+    stalled = worker.is_alive()
+    done = int(state["done"])
+    seconds = state.get("seconds")
+    outcome: dict[str, object] = {
+        "device_bytes_read": done,
+        "device_read_seconds": None if seconds is None else round(float(seconds), 3),
+        "device_read_mbps": None,
+        "device_mbr_signature": mbr_signature(bytes(state["head"])),
+    }
+    if stalled:
+        outcome["device_error"] = f"device read stalled: no data for {timeout:g} s after {done} bytes"
+    elif "error" in state:
+        outcome["device_error"] = f"device cannot be read: {state['error']}"
+    elif done < PROBE_MIN_TIMED_BYTES:
+        # A few bytes time the open, not the card; report no rate rather than a wrong one.
+        outcome["device_error"] = f"only {done} bytes could be read; too little to time"
+    elif seconds:
+        outcome["device_read_mbps"] = round(done / MB / float(seconds), 2)
+    return outcome, stalled
+
+
+def probe(image: Path, device: str | None, probe_bytes: int = PROBE_BYTES,
+          timeout: float = 120.0) -> tuple[dict[str, object], bool]:
+    """Pre-flight facts for the writer (D-182); never fails on the device."""
+    result: dict[str, object] = {"image_raw_size": None, "image_mbr_signature": None}
+    try:
+        result["image_raw_size"] = xz_raw_size(image)
+        with lzma.open(image, "rb") as expected:
+            result["image_mbr_signature"] = mbr_signature(expected.read(512))
+    except (OSError, EOFError, lzma.LZMAError, ValueError) as exc:
+        result["image_error"] = str(exc)
+    stalled = False
+    if device:
+        outcome, stalled = _probe_device(device, probe_bytes, timeout)
+        result.update(outcome)
+    return result, stalled
 
 
 def main() -> int:
@@ -472,8 +691,20 @@ def main() -> int:
     parser.add_argument("--error-json", type=Path,
                         help="on failure write {error, kind, bytes_verified} here; Windows PowerShell "
                              "5.1 transcripts do not capture a native program's stderr")
+    parser.add_argument("--stall-seconds", type=float, default=DEFAULT_STALL_SECONDS,
+                        help="fail as an I/O error (exit 3) when the device gives no data for this long")
+    parser.add_argument("--probe", action="store_true",
+                        help="print raw size, MBR signatures and a timed read of the device start")
+    parser.add_argument("--probe-bytes", type=int, default=PROBE_BYTES)
+    parser.add_argument("--probe-seconds", type=float, default=120.0)
     args = parser.parse_args()
     progress = Progress(args.progress, args.progress_seconds)
+    if args.probe:
+        facts, stalled = probe(args.image, args.device, args.probe_bytes, args.probe_seconds)
+        print(json.dumps(facts, sort_keys=True, separators=(",", ":")), flush=True)
+        if stalled:
+            os._exit(0)  # a thread is wedged in a device read; do not wait for it
+        return 0
     try:
         if args.raw_size:
             evidence = {"image_raw_size": xz_raw_size(args.image)}
@@ -484,7 +715,11 @@ def main() -> int:
         else:
             if not args.device:
                 raise ValueError("--device is required unless --image-only is used")
-            evidence = verify(args.image, args.device, progress)
+            evidence = verify(args.image, args.device, progress, args.stall_seconds)
+    except DeviceStallError as exc:
+        print(f"MEDIA_READBACK_DEVICE_UNREADABLE: {exc}", file=sys.stderr, flush=True)
+        _write_error(args.error_json, exc, "io", progress.done)
+        os._exit(EXIT_DEVICE_UNREADABLE)  # the reader thread still holds the wedged handle
     except DeviceReadError as exc:
         print(f"MEDIA_READBACK_DEVICE_UNREADABLE: {exc}", file=sys.stderr)
         _write_error(args.error_json, exc, "io", progress.done)
