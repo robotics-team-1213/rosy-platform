@@ -18,3 +18,12 @@
 - 교훈: 없음.
 
 - 같은 세션 T6: RobotIdentity hello 신원 필드 additive + agent hello_payload 실값(근거·증거는 core_common 로그와 동일 세션 기록)
+
+## 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 시뮬 리터럴과 시험 위치
+
+- 변경: 안전 코드가 파티션·도메인 리터럴을 갖지 않는 결정과, 동작 시험은 패키지가 가진다는 결정을 진행 기록에 연결했다. `safety/manager.py`와 시험 디렉터리는 그대로다.
+- 증거: ADR 기록. 실행 시험 없음.
+- gate 변화: 없음. SOURCE HOLD 유지.
+- 결정: D-182, D-184 Proposed
+- 교훈: 없음
+

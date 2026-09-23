@@ -9,6 +9,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 adr_gaps:
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
+  D-180: "claimed by the unmerged perf/sd-single-verify branch (SD single authoritative verify); remove this entry when that branch merges"
 
 status: STATUS.md
 stale_after_commits: 5

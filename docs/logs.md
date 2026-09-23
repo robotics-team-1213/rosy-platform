@@ -1677,3 +1677,11 @@
 - gate 변화: 없음. DEVICE는 로봇 실행 증거가 없어 HOLD.
 - 결정: D-179
 - 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-182·D-183·D-184 경계 세 편을 Proposed로 기록
+
+- 변경: 안전 코드의 시뮬 리터럴(D-182), 제품 그래프와 control 단독 감시 표(D-183), 동작 시험의 패키지 소유(D-184)를 Proposed로 추가했다. D-180 공백은 그대로다. 코드와 시험은 옮기지 않았다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 70 passed (2026-09-23 Windows).
+- gate 변화: 없음. G-6과 D-168 P2 예외는 이 기록만으로 바뀌지 않는다.
+- 결정: D-182, D-183, D-184 Proposed
+- 교훈: 없음
