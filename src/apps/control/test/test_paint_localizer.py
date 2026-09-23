@@ -169,6 +169,37 @@ def test_covariance_grows_without_paint_and_shrinks_with_it():
     assert strong.spread_m < weak.spread_m
 
 
+def _along_lateral_sigma(loc, yaw):
+    p = loc._particles[:, :2] - loc._particles[:, :2].mean(axis=0)
+    along = p[:, 0] * math.cos(yaw) + p[:, 1] * math.sin(yaw)
+    return float(along.std()), float((-p[:, 0] * math.sin(yaw) + p[:, 1] * math.cos(yaw)).std())
+
+
+def test_the_along_track_spread_follows_the_wheel_scale_not_the_sideways_slip():
+    """1 m straight in 16 mm steps with no paint in view: only the motion
+    noise spreads the particles. Along a straight or gently bending lane
+    the paint never constrains the along-track direction either, so this is
+    the spread the filter carries down a corridor. Sideways it must stay
+    wide enough for the slip test (0.16 m/m); along-track it must stay
+    well under MAX_SPREAD_M, or a long corridor trips the SPREAD stop with
+    an estimate a few mm off (all-lane tour, seed 3: LOCALISE_STOP on
+    east:r at 20.0 mm, 98 % of it along-track, estimate 1.7 mm off)."""
+    from control.sensing.route_map import MAX_SPREAD_M
+    blank = np.full((180, 320), 109, np.uint8)
+    worst_along, least_lateral = 0.0, math.inf
+    for seed in range(4):
+        loc = PaintLocalizer(PaintMap.from_bundle(), camera_x_offset_m=CAM_X,
+                             seed=seed).initialise(START)
+        before = _along_lateral_sigma(loc, START[2])
+        for k, pose in enumerate(_walk(64)):
+            loc.update(k * 0.2, pose, blank, GROUND, **KW)
+        along, lateral = _along_lateral_sigma(loc, START[2])
+        worst_along = max(worst_along, math.sqrt(max(0.0, along ** 2 - before[0] ** 2)))
+        least_lateral = min(least_lateral, math.sqrt(max(0.0, lateral ** 2 - before[1] ** 2)))
+    assert worst_along < 0.75 * MAX_SPREAD_M, worst_along
+    assert least_lateral > MAX_SPREAD_M, least_lateral
+
+
 def test_the_paint_map_leaves_out_the_wall_footprint_but_keeps_crosswalk_bars():
     """The perimeter wall's 8 bottom-face triangles are floor-height in the
     STL, but in Gazebo the 155 mm wall stands on them: the camera never sees

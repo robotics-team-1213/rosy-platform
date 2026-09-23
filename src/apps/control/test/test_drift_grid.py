@@ -60,6 +60,23 @@ route-steered, same host, 2026-09-23 (161 s for the grid, 360 runs):
   start 30 mm / 3 deg       12/12  24.7   6.5 0.2
   start -30 mm / -3 deg     12/12  22.5   6.4 0.2
 
+With PaintLocalizer's along-track noise cut to MOTION_ALONG_SIGMA_PER_M
+(0.10, from the isotropic 0.20; all-lane tour seed sweep), same host and
+day, B then H (A unchanged):
+
+  cell                      B                     H
+  none                      12/12  21.9   6.3     12/12  22.2   6.0
+  3% scale                  12/12  21.4   7.3     12/12  21.6  13.4
+  3% +0.01 rad/s            12/12  21.2   7.2     12/12  28.9  12.4
+  3% -0.01 rad/s            12/12  21.5   7.7     12/12  21.9   9.5
+  start 20 mm / 2 deg       12/12  21.7   5.7     12/12  22.2   5.8
+  3% +0.01, 20 mm / 2 deg   12/12  21.9   7.5     12/12  28.4  11.6
+  severe:
+  5% +0.02 rad/s            12/12  21.0  14.2     11/12  36.9  19.4 (1 lost)
+  5% -0.02 rad/s            12/12  21.9  13.8     12/12  22.3  15.4
+  start 30 mm / 3 deg       12/12  24.7   6.4     12/12  25.0   5.9
+  start -30 mm / -3 deg     12/12  21.8   6.3     12/12  22.2   6.1
+
 Before the ring entries were route-steered the moderate cells read
 37.5 / 36.5 / 32.2 / 37.4 / 36.8 / 30.2 mm, set by the camera's ring
 entries 00 and 11. Now the moderate maxima are the camera-steered ring

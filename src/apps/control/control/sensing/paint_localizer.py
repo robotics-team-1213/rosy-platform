@@ -8,8 +8,8 @@ Spec 2026-09-22 lane-network junction spike §6 (B). ROS-free.
              floor-height triangles in the STL but a 155 mm wall stands on
              them in Gazebo, so they are left out (`_wall_footprint`).
   predict    each particle takes the odometry increment (in its own frame)
-             plus noise proportional to it (MOTION_*: per metre in x, y and
-             yaw, per radian in yaw); while odometry is still, the heading
+             plus noise proportional to it (MOTION_*: per metre along and
+             across the increment and in yaw, per radian in yaw); while odometry is still, the heading
              is roughened by STILL_YAW_SIGMA_PER_S
   correct    the bird's-eye paint cells (lane_bev.BirdsEye, at most
              MATCH_SAMPLE_CELLS of them) are placed on the map from each
@@ -63,8 +63,19 @@ INIT_YAW_SIGMA_RAD = math.radians(2.0)
 #: -> 20.0 mm worst, 0.20 -> 17.8 mm worst (14.5 mm at seed 7). 0.20 is
 #: the smallest that passes on every seed. MOTION_YAW_SIGMA_PER_RAD: 0.10
 #: rad/rad lets a 90 deg turn be 9 deg off.
-MOTION_XY_SIGMA_PER_M = 0.20
+MOTION_LATERAL_SIGMA_PER_M = 0.20
 MOTION_YAW_SIGMA_PER_RAD = 0.10
+#: Along-track (the increment's own direction) the odometry error to follow
+#: is the wheel scale: 3 % on the moderate drift grid, 5 % on the severe
+#: one (test_drift_grid). This is twice the severe one. It was
+#: MOTION_LATERAL_SIGMA_PER_M (isotropic) until the all-lane tour showed the
+#: cost: the paint of a straight or gently bending lane fixes only the
+#: lateral position, so along a corridor the cloud diffuses by this noise
+#: alone. At 0.20 it read 16-18 mm at its widest over the tour (6 of 7
+#: seeds) and 20.0 mm (seed 3: route_map's MAX_SPREAD_M, LOCALISE_STOP
+#: with the estimate 1.7 mm off, then CORE LOST); 98 % of it along-track.
+#: At 0.10 the widest is 13-16 mm over the same seeds (test_lane_tour).
+MOTION_ALONG_SIGMA_PER_M = 0.10
 #: Yaw noise per metre travelled, added in quadrature: odometry yaw drifts
 #: while driving straight too (a gyro/wheel yaw-rate bias), and with no
 #: per-metre term the particles could not follow it. Offline, B over the
@@ -112,8 +123,8 @@ RESAMPLE_FRACTION = 0.5
 #: particles hold is no longer worth resuming from.
 GAP_MAX_S = 1.0
 #: Largest odometry move across a gap that is still applied as one
-#: increment: its MOTION_XY_SIGMA_PER_M spread is then 0.20 x 0.10 m =
-#: 20 mm, route_map's MAX_SPREAD_M. Further, and the filter would only
+#: increment: its MOTION_LATERAL_SIGMA_PER_M spread is then 0.20 x 0.10 m
+#: = 20 mm, route_map's MAX_SPREAD_M. Further, and the filter would only
 #: resume to stop on its spread.
 GAP_MAX_TRAVEL_M = 0.10
 
@@ -322,11 +333,15 @@ class PaintLocalizer:
                 p[:, 2] = _wrap(p[:, 2] + self._rng.normal(
                     0.0, STILL_YAW_SIGMA_PER_S * elapsed, n))
             return
-        sigma_xy = MOTION_XY_SIGMA_PER_M * travel
         sigma_yaw = math.hypot(MOTION_YAW_SIGMA_PER_RAD * abs(dyaw),
                                MOTION_YAW_SIGMA_PER_M * travel)
-        ndx = dx + self._rng.normal(0.0, sigma_xy, n)
-        ndy = dy + self._rng.normal(0.0, sigma_xy, n)
+        # Along and across the increment (dx, dy), in the odometry frame of
+        # the last pose: the increment's own direction takes the scale noise.
+        ux, uy = dx / travel if travel else 1.0, dy / travel if travel else 0.0
+        along = self._rng.normal(0.0, MOTION_ALONG_SIGMA_PER_M * travel, n)
+        across = self._rng.normal(0.0, MOTION_LATERAL_SIGMA_PER_M * travel, n)
+        ndx = dx + ux * along - uy * across
+        ndy = dy + uy * along + ux * across
         p = self._particles
         pc, ps = np.cos(p[:, 2]), np.sin(p[:, 2])
         p[:, 0] += pc * ndx - ps * ndy

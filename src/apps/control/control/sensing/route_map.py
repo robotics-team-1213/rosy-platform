@@ -49,7 +49,7 @@ LOOKAHEAD_M = 0.12
 #: Largest position spread (sqrt of the covariance's largest eigenvalue)
 #: that may still steer: design §7's 20 mm end-position bound. Offline the
 #: 12 scenarios peak at 12.4 mm; blind travel adds 3.2 mm in quadrature
-#: per 16 mm step (MOTION_XY_SIGMA_PER_M), so MIN_MATCH trips first on
+#: per 16 mm step (MOTION_LATERAL_SIGMA_PER_M), so MIN_MATCH trips first on
 #: bare floor.
 MAX_SPREAD_M = 0.02
 #: Smallest paint match that may still steer. `match` is posterior-weighted
