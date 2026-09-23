@@ -90,6 +90,19 @@
      `run_fleet_sim.sh`, localization rig)의 채택은 단계적이다. 그전까지 피어 부하는 가드가 측정만 한다.
    - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄로 재판정했다.
 
+   **R6 구현 메모 (2026-09-24).**
+   - Gazebo는 물리 step마다 `/clock`을 낸다(0.3배 속도에서 벽시계 초당 약 265개). `ros_gz_bridge` 1.0.22에는
+     빈도 옵션이 없다. 그래서 `RIG_CLOCK_HZ=N`이면 `tools/gz/clock_relay.py`가 gz-transport의
+     `SubscribeOptions.msgs_per_sec`로 `/clock`을 벽시계 초당 최대 N개만 ROS로 옮긴다. 값은 복사만 한다.
+     설정하지 않으면 bridge가 예전처럼 step마다 옮긴다.
+   - N은 `RIG_REALTIME_FACTOR`의 50배 이상이어야 한다(시뮬 step 20 ms 이하). 잠금 전에 검사하고 어기면
+     종료 코드 2다. `run_manifest.json`에 `clock_hz`를 남긴다.
+   - rig A/B(2026-09-24, ENV:VALID, 분리 모드): bridge 3/3 `ready`, relay 100 Hz 2/3 `ready`. rig 노드 CPU
+     중앙값은 446%에서 202%로 줄었다. 게이트 나이 최대 21 ms, scan 나이 최대 42 ms로 신선도 여유는 충분했다.
+   - relay 실패 1회는 slam_toolbox lifecycle `change_state` 응답이 rmw 단에서 유실돼(`failed to send response
+     (timeout)`) 지도가 끝내 활성화되지 않은 경우다. 시계 경로와 무관한 시작 경합으로 보지만, 27회 중 이 1회가
+     relay 쪽에서만 나왔으므로 relay를 A/B 기본값으로 쓰기 전에 반복 실행이 더 필요하다. 기본값은 bridge다.
+
 4. **범위 밖.** 줄 수·패키지 구조(D-168·D-171), 안전 판정 자체의 임계값은 바꾸지 않는다. CPU 절감을 이유로
    신선도 창이나 게이트 조건을 완화하지 않는다.
 
