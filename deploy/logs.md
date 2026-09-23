@@ -743,3 +743,22 @@
 - gate 변화: 없음
 - 결정: D-180
 - 교훈: 나중에 더 엄격한 검사를 넣으면 먼저 있던 약한 검사를 다시 본다. 같은 사실을 여러 번 확인하는 패스는 시간만 쓴다.
+
+## 2026-09-23 · uncommitted · fix(sd): the card writer detects its own failures, says what is on the card and resumes without rewriting (D-181)
+
+- 변경: `prepare-rosy-sd.ps1`이 단계마다 `<log>.progress.jsonl`에 JSON 한 줄(`ts`, `stage`, `card_state`, `detail`)을 바로 flush하고,
+  쓰기·readback 중에는 약 60초마다 처리 바이트를 남긴다. `Start-Process -Wait` 대신 poll loop로 Imager의 CPU·I/O 카운터를 보고,
+  `-WriterStallMinutes`(기본 5) 동안 변화가 없으면 프로세스 트리를 끝낸다. xz index의 raw 크기에 닿았으면 `written-unverified`,
+  아니면 `writing`이다. 서명 검증 이후 모든 실패에 `stage=… card_state=…`와 `next:` 한 줄을 붙인다(`trap` 포함).
+  `-ResumeAfterWrite`(두 스크립트)는 Imager만 건너뛰고 readback·bundle·registry·receipt를 그대로 돌며, 모든 쓰기 전 검사와 receipt
+  중복 거부를 유지하고 `resumed_after_write: true`를 남긴다. `verify-media-readback.py`는 압축 파일 전체(xz stream 뒤 포함)의
+  `image_sha256`을 같은 패스에서 내고 서명 해시와 다르면 실패한다(리뷰 MEDIUM-1). 장치를 못 읽으면 exit 3. bundle 직전에 디스크를
+  시리얼로 다시 고르고 fingerprint를 비교한다. `write-card.ps1`은 진행 파일 경로를 알리고, UAC 거부와 `.exit` 없는 종료에
+  마지막 단계·카드 상태를 보고한다. runbook에 "카드 쓰기 중 문제가 생겼을 때"(진행 파일, resume 명령, 분리 실행) 추가.
+  readback은 압축 해제 스레드와 순차 장치 읽기 스레드(각 queue 4, 4 MiB)를 겹치고 주 스레드가 비교·해시한다. 판정은 예전 순차 루프와 같다.
+- 증거: 가짜 writer(`cmd` + `ping`)로 쓰기 중·마지막 byte 뒤 멈춤, Imager 비0, readback 불일치·장치 없음, 서명 뒤 바뀐 이미지,
+  bundle 직전 디스크 변경, resume 성공·불일치·receipt 중복을 재현(2026-09-23 Windows). 실제 카드·실제 Imager 멈춤은 확인하지 않았다.
+  pipeline readback은 순차 참조 구현과 9개 fixture × 장치 읽기 크기 3종에서 같은 판정. 256 MiB fixture 3.10s → 2.34s(page cache), 11.55s → 6.81s(60 MB/s 장치 흉내).
+- gate 변화: 없음
+- 결정: D-181
+- 교훈: 오래 도는 외부 도구를 기다릴 때는 "끝났나"만이 아니라 "움직이나"를 본다. 실패 문구는 원인만이 아니라 카드에 무엇이 남았는지와 다음 명령을 말해야 복구가 싸진다.

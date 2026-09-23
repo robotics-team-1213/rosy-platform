@@ -104,6 +104,78 @@ EVIDENCE="${SESSION%.json}.evidence"
 mkdir -m 0750 "$EVIDENCE"
 ```
 
+### 카드 쓰기 중 문제가 생겼을 때
+
+카드 쓰기(`deploy/sd/write-card.ps1`)는 실패하면 스스로 멈추고, 카드 상태와 다음 명령을 알린다(D-181).
+실패 문구 끝은 늘 이 형식이다.
+
+```text
+stage=readback card_state=written-unverified
+next: reinsert the card, then re-run the same command with -ResumeAfterWrite (...)
+```
+
+**진행 파일 읽기.** 시도마다 로그 옆에 `<log>.progress.jsonl`이 생긴다. 경로는 시작할 때 `Progress:` 줄로
+출력된다. 단계가 바뀔 때마다 JSON 한 줄이 붙고, 쓰기와 readback 중에는 약 60초마다 `heartbeat` 줄에 지금까지
+처리한 `bytes`가 붙는다. 다른 창에서 이렇게 본다.
+
+```powershell
+Get-Content -LiteralPath "<log>.progress.jsonl" -Tail 5 -Wait
+```
+
+- 단계 순서: `verify-signature` → `select-disk` → `confirm` → `write` → `readback` → `bundle` → `receipt` → `done`.
+  실패하면 마지막 줄이 `failed`이고 `detail`에 원인이 있다.
+- heartbeat의 `bytes`가 5분 넘게 늘지 않으면 멈춘 것이다. `write` 단계는 도구가 스스로 Imager를 끝내고 실패한다
+  (`-WriterStallMinutes`, 기본 5). `readback` 단계는 사람이 창을 닫는다.
+- 창이 사라졌거나 PC가 꺼졌으면 마지막 줄의 `card_state`로 다음 명령을 고른다.
+
+| 마지막 `card_state` | 다음 명령 |
+|---|---|
+| `untouched` | 같은 명령을 다시 실행 |
+| `writing` | 전체 쓰기를 다시 실행(`-ResumeAfterWrite` 없이) |
+| `written-unverified`, `verified-no-bundle` | 같은 명령에 `-ResumeAfterWrite`를 붙여 실행 |
+| `complete`(receipt 없음), `unknown` | 실패 문구의 `next:`를 따른다. 모르면 전체 쓰기 |
+
+**쓰기를 다시 하지 않고 이어 가기.** 카드가 끝까지 써진 뒤 Imager가 멈췄거나 readback 중 카드가 빠졌으면,
+쓰기(약 20분)를 건너뛰고 readback부터 다시 한다. 서명 검증, 시리얼 선택, plan 대조, ERASE 확인은 그대로 거친다.
+카드가 서명된 이미지와 다르면 readback이 bundle 전에 멈추므로, 잘못 골라도 잃는 것은 readback 한 번이다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+  -PlanPath <cards>\plan-<release>-<device>.json `
+  -ReleaseDir <signed release dir> `
+  -WifiProfile <profile> `
+  -ResumeAfterWrite
+```
+
+처음 쓸 때 준 `-OperatorPublicKey`·`-ReprovisionReceipt`도 같이 준다. receipt에는 `resumed_after_write: true`가
+남는다. plan의 receipt가 이미 있으면 거부한다(이미 끝난 카드다).
+
+**세션과 분리해 한 번의 UAC로 띄우기.** 쓰기는 약 30분 이상 걸린다. 에이전트 세션이나 곧 닫을 셸의 자식으로
+띄우면 그 세션과 함께 사라진다(release 005). 관리자 창을 따로 하나 띄우면 그 창은 이미 관리자라
+`write-card.ps1`이 다시 승격하지 않는다. UAC는 한 번이고, 창을 띄운 셸을 닫아도 쓰기는 계속된다.
+transcript와 진행 파일은 그 창이 직접 쓴다.
+
+```powershell
+$repo = (Resolve-Path .).Path
+$cards = "<cards>"
+$log = Join-Path $cards ("write-<release>-<device>-" + (Get-Date -Format "yyyyMMddTHHmmss") + ".log")
+$launch = @(
+  "-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit",
+  "-File", "`"$repo\deploy\sd\write-card.ps1`"",
+  "-PlanPath", "`"$cards\plan-<release>-<device>.json`"",
+  "-ReleaseDir", "`"<signed release dir>`"",
+  "-WifiProfile", "<profile>",
+  "-LogPath", "`"$log`""
+)
+Start-Process powershell -Verb RunAs -ArgumentList $launch
+"Log: $log"
+"Progress: $log.progress.jsonl"
+```
+
+ERASE 문구는 새 관리자 창에 입력한다. 이어 가기라면 `$launch`에 `"-ResumeAfterWrite"`를 더한다.
+UAC 창에서 "아니요"를 눌렀거나 시간이 지나 창이 뜨지 않았으면 로그와 진행 파일이 생기지 않는다. 카드는
+`untouched`이니 다시 띄운다. 끝나면 창에 `EXIT_CODE=`가 남고 로그 옆에 `.exit` 표지가 생긴다.
+
 ## 2. Connection choice
 
 ### SSH path
