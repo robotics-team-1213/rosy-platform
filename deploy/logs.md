@@ -796,3 +796,19 @@
 - 결정: D-182
 - 교훈: 오래 도는 작업의 "언제 끝나나"는 짐작이 아니라 같은 장치에서 잰 속도와 실제로 늘어나는 바이트로 답한다. 감시는 도구 안과 밖
   두 겹으로 두고, 느리지만 움직이는 작업을 죽이지 않는 것이 멈춤 감지만큼 중요하다.
+
+## 2026-09-24 · uncommitted · fix(sd): D-182 review
+
+- 변경: 이 릴리스의 MBR signature를 가진 카드는 두 조건을 모두 만족할 때만 받아들인다. `rosy-provision/`이 없어야 하고,
+  같은 plan으로 Imager 쓰기를 시작한 진행 파일이 있어야 한다(첫 진행 줄에 `plan`을 기록). 그렇지 않으면 `untouched`로 멈춘다.
+  fixture 모드: `.exe` writer 거부, `\\.\`·`\\?\` readback 장치 거부, receipt `fixture: true`.
+  `write-card.ps1`은 `-LogPath`·`-RpiImager`(와 구분자가 있는 `-PythonExe`)를 콘솔 위치 기준 절대 경로로 바꾼다.
+  readback 감시는 heartbeat가 없을 때 verifier의 `ReadTransferCount`도 진행으로 본다.
+  probe는 `device_mbr_read`와 `"00000000"`을 보고하고, ERASE 뒤 재확인도 카드 첫 섹터를 다시 읽는다.
+  verifier worker `close()`는 항상 시간 제한이 있다. 시간 안에 끝나지 않은 probe는 읽은 양으로 속도를 내 느린 매체 관문을 탄다(`-ProbeSeconds`).
+- 증거: 끝난 카드·이전 쓰기 없는 카드 거부, 이전 쓰기가 있으면 재기록, fixture 경계 3종, heartbeat가 늦어도 읽기가 이어지는 readback,
+  probe 시간 초과의 느린 매체 처리, 0 signature·원시 섹터 우선, 상대 경로, bounded close(2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-182
+- 교훈: "이 카드가 맞나"의 예외 경로(이미 우리 이미지가 있음)는 가장 흔한 사고 경로이기도 하다. 예외를 열 때는 그 예외가
+  무엇으로만 생기는지(이 plan의 이전 쓰기)를 증거로 좁힌다.

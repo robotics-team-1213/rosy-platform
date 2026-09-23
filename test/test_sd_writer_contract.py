@@ -1432,7 +1432,8 @@ def _measured(lines):
 def test_a_hung_readback_is_stopped_and_points_to_resume(writer_case, tmp_path):
     raw = _multi_chunk_raw()
     _rerelease(writer_case, raw)
-    card = PipeCard(raw, ["full", "hang"])  # the pre-flight reads it, the readback hangs
+    # The pre-flight probe and the pre-erase re-check read it; the readback hangs.
+    card = PipeCard(raw, ["full", "full", "hang"])
     try:
         started = time.monotonic()
         completed, boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path,
@@ -1459,7 +1460,7 @@ def test_a_slow_readback_that_keeps_moving_is_never_stopped(writer_case, tmp_pat
     _rerelease(writer_case, raw)
     # Six 4 MiB pieces 0.8 s apart: about 5 s in all, longer than the 3 s limit,
     # but the verified byte count rises well inside it every time.
-    card = PipeCard(raw, ["full", ("slow", 0.8)])
+    card = PipeCard(raw, ["full", "full", ("slow", 0.8)])
     try:
         completed, _boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path,
                                   "-ReadbackStallMinutes", "0.05", "-HeartbeatSeconds", "0")
@@ -1507,6 +1508,7 @@ def test_the_preflight_measures_the_card_and_predicts_the_job(writer_case, tmp_p
     assert "Pre-flight: card read" in completed.stdout
     receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
     assert receipt["preflight"]["read_mbps"] == measured["read_mbps"]
+    assert receipt["fixture"] is True  # D-182 review: fixture evidence says so
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -1553,9 +1555,12 @@ def test_the_plan_pins_the_inserted_cards_identity(writer_case, tmp_path):
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp_path):
+@pytest.mark.parametrize("card_signature", [0x55667788, 0], ids=["other-signature", "zero-signature"])
+def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp_path, card_signature):
     plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=0x1A2B3C4D)
-    _inventory(writer_case, _disk(Signature=0x55667788))  # same reader serial, same size, other card
+    # Same reader serial and size, and Get-Disk's cache still shows the planned
+    # signature; the card's own first sector is what counts (D-182 review).
+    writer_case["readback"].write_bytes(_mbr_raw(card_signature))
     boot = tmp_path / "boot"
     boot.mkdir()
 
@@ -1563,7 +1568,8 @@ def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp
 
     assert completed.returncode != 0
     assert "a different card is in the reader" in _err(completed)
-    assert "disk signature 1a2b3c4d" in _err(completed) and "disk signature 55667788" in _err(completed)
+    found = "disk signature 55667788" if card_signature else "disk signature none"
+    assert "disk signature 1a2b3c4d" in _err(completed) and found in _err(completed)
     assert "card_state=untouched" in _err(completed)
     assert "next: put the planned card back (check its label)" in _err(completed)
     assert "confirm" not in [line["stage"] for line in _progress(writer_case)]
@@ -1572,6 +1578,7 @@ def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_the_planned_card_is_written(writer_case, tmp_path):
+    _rerelease(writer_case, _mbr_raw(0x1A2B3C4D))  # the card's first sector carries the planned signature
     plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=0x1A2B3C4D)
     boot = tmp_path / "boot"
     boot.mkdir()
@@ -1690,3 +1697,120 @@ def test_the_watchdogs_kill_without_throwing_and_never_resume_an_unkillable_writ
     # The whole process tree is sampled, not only the launched PID.
     assert "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue" in text
     assert "ParentProcessId" in text
+
+
+# --- D-182 review -------------------------------------------------------------
+
+
+def _card_holding_the_release(case, tmp_path):
+    """A blank card was planned; the reader now holds a card with this release on it."""
+    _rerelease(case, _mbr_raw(0xAABBCCDD))
+    plan_path, plan = _plan_with_card(case, tmp_path)  # blank at plan time
+    assert plan["disk_signature"] is None
+    boot = tmp_path / "boot"
+    boot.mkdir(exist_ok=True)
+    return plan_path, boot
+
+
+def _write_plan(case, plan_path, boot):
+    return _run(case, "-PlanPath", plan_path, *WRITE_CONFIRMATION, "-BootMountPath", boot, plan_only=False)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_finished_card_for_another_robot_is_never_erased_under_this_plan(writer_case, tmp_path):
+    # Card A was written and provisioned but not booted: it still carries the
+    # image's MBR signature. Plan B was made on a blank card.
+    plan_path, boot = _card_holding_the_release(writer_case, tmp_path)
+    (boot / "rosy-provision").mkdir()
+
+    completed = _write_plan(writer_case, plan_path, boot)
+
+    assert completed.returncode != 0
+    assert "a different card is in the reader" in _err(completed)
+    assert "provisioning bundle" in _err(completed)
+    assert "card_state=untouched" in _err(completed)
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_card_holding_the_release_needs_an_earlier_write_of_this_plan(writer_case, tmp_path):
+    plan_path, boot = _card_holding_the_release(writer_case, tmp_path)
+
+    completed = _write_plan(writer_case, plan_path, boot)
+
+    assert completed.returncode != 0
+    assert "no earlier write of this plan was recorded" in _err(completed)
+    assert "card_state=untouched" in _err(completed)
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_earlier_write_of_this_plan_lets_the_partly_written_card_be_rewritten(writer_case, tmp_path):
+    plan_path, boot = _card_holding_the_release(writer_case, tmp_path)
+    earlier = tmp_path / "write-earlier.log.progress.jsonl"
+    earlier.write_text(
+        json.dumps({"ts": "2026-09-24T01:00:00Z", "stage": "verify-signature", "card_state": "untouched",
+                    "plan": str(plan_path.resolve())}) + "\n"
+        + json.dumps({"ts": "2026-09-24T01:05:00Z", "stage": "write", "card_state": "writing"}) + "\n",
+        encoding="utf-8")
+
+    completed = _write_plan(writer_case, plan_path, boot)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "from an earlier write of this plan" in " ".join(completed.stdout.split())
+    assert writer_case["marker"].exists()
+    first = _progress(writer_case)[0]
+    assert first["plan"] == str(plan_path.resolve())
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_fixture_inventory_cannot_drive_an_exe_writer(writer_case, tmp_path):
+    completed, _boot = _write(writer_case, tmp_path, "-RpiImager", tmp_path / "rpi-imager.exe")
+
+    assert completed.returncode != 0
+    assert "cannot drive an .exe writer" in _err(completed)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("device", [r"\\.\PhysicalDrive9", r"\\?\PhysicalDrive9"])
+def test_a_fixture_readback_device_cannot_be_a_real_device(writer_case, tmp_path, device):
+    completed, _boot = _write(writer_case, tmp_path, "-ReadbackDevice", device)
+
+    assert completed.returncode != 0
+    assert "must be a file or pipe stand-in" in _err(completed)
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_readback_whose_heartbeat_lags_but_keeps_reading_is_not_stopped(writer_case, tmp_path):
+    # 512 KiB every 0.45 s: a 4 MiB chunk (and so a heartbeat) only every 3.6 s,
+    # longer than the 3 s limit; the verifier's own disk reads show it is moving.
+    raw = _multi_chunk_raw(3)
+    _rerelease(writer_case, raw)
+    card = PipeCard(raw, ["full", "full", ("slow", 0.45, 512 * 1024)])
+    try:
+        completed, _boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path,
+                                  "-ReadbackStallMinutes", "0.05", "-HeartbeatSeconds", "0")
+    finally:
+        card.close()
+
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["media_readback"]["bytes_verified"] == len(raw)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_card_too_slow_for_the_probe_limit_is_slow_media(writer_case, tmp_path):
+    # D-182 review: a probe that timed out gave no rate and skipped the gate.
+    raw = _multi_chunk_raw(1)
+    _rerelease(writer_case, raw)
+    card = PipeCard(raw, ["hang"])
+    try:
+        completed, _boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path, "-ProbeSeconds", "1")
+    finally:
+        card.close()
+
+    assert completed.returncode != 0
+    assert "below -MinReadMBps" in _err(completed) and "-AcceptSlowMedia" in _err(completed)
+    assert _measured(_progress(writer_case))["read_mbps"] == 0
+    assert not writer_case["marker"].exists()

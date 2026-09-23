@@ -50,6 +50,8 @@ END_OF_CHAIN = 0x0FFFFFF8
 XZ_HEADER_MAGIC = b"\xfd7zXZ\x00"
 EXIT_DEVICE_UNREADABLE = 3
 DEFAULT_STALL_SECONDS = 600.0
+CLOSE_JOIN_SECONDS = 5.0
+_left_behind = threading.Event()  # a reader thread still holds a device handle
 PROBE_BYTES = 128 * 1024 * 1024
 PROBE_MIN_TIMED_BYTES = 1024 * 1024  # a smaller read times scheduling noise, not the card
 MB = 1_000_000  # rates are decimal MB/s, as Imager and card labels use
@@ -463,10 +465,16 @@ class _Prefetch:
             return b""
         return item
 
-    def close(self) -> None:
+    def close(self) -> bool:
+        """Stop the worker; return True if it is still alive (wedged in a read).
+
+        Bounded on every path (D-182 review): after a mismatch or an image error
+        the device worker may be wedged too, and waiting for it would turn a
+        mismatch into a hang and then an "io" failure.
+        """
         self._stopping.set()
-        # A worker wedged in a device read never returns (D-181 review): do not wait for it.
-        self._thread.join(1.0 if self._stalled else None)
+        self._thread.join(1.0 if self._stalled else CLOSE_JOIN_SECONDS)
+        return self._thread.is_alive()
 
 
 class _DeviceStream:
@@ -515,11 +523,11 @@ def verify(image: Path, device: str, progress: Progress | None = None,
     try:
         return _verify_open(image, actual_file, progress, stall_seconds, device_stalled, image_stalled)
     except DeviceStallError:
-        # A thread is still blocked reading this handle; closing it could block too.
         stalled = True
         raise
     finally:
-        if not stalled:
+        # A thread still blocked reading this handle could block its close too.
+        if not stalled and not _left_behind.is_set():
             actual_file.close()
 
 
@@ -583,9 +591,9 @@ def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_
                     verified = end
                     progress.beat(verified)
             finally:
-                # Every path joins both workers before the files close.
-                image_side.close()
-                device_side.close()
+                # Every path stops both workers, with a bounded wait, before the files close.
+                if image_side.close() | device_side.close():
+                    _left_behind.set()
             # lzma ignores bytes after the last xz stream; the signed hash covers them.
             image_sha256 = signed.drain()
 
@@ -613,6 +621,15 @@ def mbr_signature(sector: bytes) -> str | None:
         return None
     value = struct.unpack_from("<I", sector, 440)[0]
     return f"{value:08x}" if value else None
+
+
+def raw_mbr_signature(sector: bytes) -> str | None:
+    """Bytes 440-443 as 8 hex digits whenever the sector holds an MBR (0x55AA),
+    "00000000" included; None when it holds none (a blank or unpartitioned card).
+    Only meaningful when the sector was actually read (D-182 review)."""
+    if len(sector) < 512 or sector[510:512] != b"\x55\xaa":
+        return None
+    return f"{struct.unpack_from('<I', sector, 440)[0]:08x}"
 
 
 def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[str, object], bool]:
@@ -643,14 +660,20 @@ def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[s
     stalled = worker.is_alive()
     done = int(state["done"])
     seconds = state.get("seconds")
+    head = bytes(state["head"])
     outcome: dict[str, object] = {
         "device_bytes_read": done,
         "device_read_seconds": None if seconds is None else round(float(seconds), 3),
         "device_read_mbps": None,
-        "device_mbr_signature": mbr_signature(bytes(state["head"])),
+        "device_mbr_read": len(head) >= 512,
+        "device_mbr_signature": raw_mbr_signature(head),
     }
     if stalled:
         outcome["device_error"] = f"device read stalled: no data for {timeout:g} s after {done} bytes"
+        # A card too slow to finish the probe in time is slow media, not unmeasured
+        # media: report the rate it managed (possibly 0) so the slow-media gate applies.
+        outcome["device_read_seconds"] = round(timeout, 3)
+        outcome["device_read_mbps"] = round(done / MB / timeout, 2) if timeout > 0 else 0.0
     elif "error" in state:
         outcome["device_error"] = f"device cannot be read: {state['error']}"
     elif done < PROBE_MIN_TIMED_BYTES:
@@ -725,8 +748,10 @@ def main() -> int:
         _write_error(args.error_json, exc, "io", progress.done)
         return EXIT_DEVICE_UNREADABLE
     except (OSError, EOFError, lzma.LZMAError, ValueError, struct.error) as exc:
-        print(f"MEDIA_READBACK_FAILED: {exc}", file=sys.stderr)
+        print(f"MEDIA_READBACK_FAILED: {exc}", file=sys.stderr, flush=True)
         _write_error(args.error_json, exc, _failure_kind(exc), progress.done)
+        if _left_behind.is_set():
+            os._exit(1)  # a wedged reader thread must not hold up the verdict
         return 1
     print(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
     return 0

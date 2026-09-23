@@ -47,6 +47,17 @@ function Fail([string]$Message) {
 
 $PlanPath = (Resolve-Path -LiteralPath $PlanPath).ProviderPath
 $ReleaseDir = (Resolve-Path -LiteralPath $ReleaseDir).ProviderPath
+# D-182 review: the elevated window starts in C:\Windows\System32, so a relative
+# path would split the progress file and lose the exit marker. Paths are made
+# absolute against this console's location (PowerShell's, which
+# [IO.Path]::GetFullPath does not follow). The writer is always a file path; a
+# bare Python name stays a PATH lookup.
+function ConvertTo-FullPath([string]$Path) {
+    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+}
+if ($LogPath) { $LogPath = ConvertTo-FullPath $LogPath }
+$RpiImager = ConvertTo-FullPath $RpiImager
+if ($PythonExe -match '[\\/]') { $PythonExe = ConvertTo-FullPath $PythonExe }
 if (-not $EvidenceDir) { $EvidenceDir = Split-Path -Parent $PlanPath }
 $EvidenceDir = (Resolve-Path -LiteralPath $EvidenceDir).ProviderPath
 

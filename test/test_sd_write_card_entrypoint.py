@@ -419,3 +419,30 @@ def test_the_status_command_needs_no_elevation():
 
     assert "RunAs" not in text and "#Requires -RunAsAdministrator" not in text
     assert "[IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete" in text
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_relative_paths_are_made_absolute_before_the_elevated_window(case):
+    # D-182 review: the elevated window starts in C:\Windows\System32.
+    command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
+               "-PlanPath", str(case["plan"]), "-ReleaseDir", str(case["release"]),
+               "-WifiProfile", "site-default", "-LogPath", r"logs\attempt.log",
+               "-RpiImager", r"tools\rpi-imager.exe", "-PythonExe", r"py\python.exe", "-PrintArguments"]
+    completed = subprocess.run(command, capture_output=True, text=True, cwd=case["tmp"])
+
+    assert completed.returncode == 0, completed.stderr
+    resolved = json.loads(completed.stdout)
+    log = case["tmp"] / "logs" / "attempt.log"
+    assert Path(resolved["log"]) == log
+    assert Path(resolved["progress"]) == Path(str(log) + ".progress.jsonl")
+    assert Path(resolved["exit_marker"]) == Path(str(log) + ".exit")
+    assert Path(resolved["arguments"]["RpiImager"]) == case["tmp"] / "tools" / "rpi-imager.exe"
+    assert Path(resolved["arguments"]["PythonExe"]) == case["tmp"] / "py" / "python.exe"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_bare_python_name_stays_a_path_lookup(case):
+    completed = _print(case)
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["arguments"]["PythonExe"] == "python"

@@ -175,7 +175,8 @@ Last progress line: 42 s ago
 **다른 카드를 꽂았을 때.** plan은 꽂힌 카드의 MBR disk signature나 GPT GUID를 기록한다. 같은 리더기에 다른 카드를 꽂으면
 `a different card is in the reader`로 ERASE 전에 멈춘다(`card_state=untouched`). 싼 리더기는 같은 가짜 시리얼(`000000000207`)을
 공유하므로, 시리얼만으로는 카드를 구분하지 못한다. 공장 초기 카드는 신원이 없어 시리얼과 크기만 확인하고 경고한다. 그럴 때는
-라벨을 확인한다.
+라벨을 확인한다. 이미 이 릴리스로 써진 카드는, 같은 plan으로 쓰다 멈춘 기록(로그 폴더의 진행 파일)이 있고 `rosy-provision/`이
+없을 때만 다시 쓴다. 다른 로봇용으로 다 쓴 카드는 지우지 않고 멈춘다.
 
 **진행 파일 직접 읽기.** 상태 명령이 읽는 파일은 `<log>.progress.jsonl`이다. 단계가 바뀔 때마다 JSON 한 줄이 붙는다. 쓰기와
 readback 중에는 약 60초마다 `heartbeat` 줄에 지금까지 처리한 `bytes`가 붙는다.

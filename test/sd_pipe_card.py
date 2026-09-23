@@ -9,6 +9,7 @@ first, the readback second); connections past the list get the whole image.
 - ``"full"``: write every byte, then close (end of card).
 - ``"hang"``: write nothing and keep the pipe open, like a wedged reader.
 - ``("slow", seconds)``: write 4 MiB at a time, sleeping ``seconds`` between.
+- ``("slow", seconds, piece)``: the same with ``piece`` bytes at a time.
 """
 
 from __future__ import annotations
@@ -65,10 +66,11 @@ class PipeCard:
                 self._stop.wait()
                 return
             pause = behaviour[1] if isinstance(behaviour, tuple) else 0.0
-            for start in range(0, len(self.data), PIECE):
+            piece = behaviour[2] if isinstance(behaviour, tuple) and len(behaviour) > 2 else PIECE
+            for start in range(0, len(self.data), piece):
                 if self._stop.is_set():
                     return
-                _winapi.WriteFile(handle, self.data[start:start + PIECE])
+                _winapi.WriteFile(handle, self.data[start:start + piece])
                 if pause:
                     time.sleep(pause)
             ctypes.windll.kernel32.FlushFileBuffers(handle)  # let the reader drain before EOF

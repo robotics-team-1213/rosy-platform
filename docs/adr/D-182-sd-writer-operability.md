@@ -65,8 +65,7 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
    세 번째 프로브에서 plan 값과 비교한다. 장치 첫 섹터에서 읽은 signature가 있으면 `Get-Disk` 캐시보다 그 값을 믿는다.
    - 다르면 `a different card is in the reader`로 멈추고, `card_state=untouched`와 `next:`(plan의 카드를 다시 꽂거나 새 plan)를 남긴다.
    - 공장 초기 상태 카드라 signature와 GUID가 모두 없으면 시리얼과 크기로만 확인하고 경고한다.
-   - 카드가 이미 이 릴리스의 MBR signature를 가지면(앞선 시도가 파티션 표까지 썼다) 받아들이고 경고한다.
-     같은 릴리스로 쓴 다른 카드와는 구분하지 못한다.
+   - 카드가 이미 이 릴리스의 MBR signature를 가지면, 이 plan의 앞선 시도가 파티션 표까지 쓴 경우에만 받아들이고 경고한다(결정 8).
    - `-ResumeAfterWrite`에서는 쓰기 뒤 signature가 바뀌는 것이 정상이다. 그래서 plan 대신 장치 MBR signature가 이미지의 것과
      같은지 본다. 다르면 readback 한 시간을 쓰기 전에 `card_state=unknown`으로 멈춘다. 이미지에 signature가 없거나 장치 첫 섹터를
      못 읽으면 경고하고 readback에 맡긴다.
@@ -95,6 +94,24 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
    - (LOW) boot 파티션에 첫 byte를 쓰기 직전에 stage `bundle-writing`, `card_state=bundle-partial`를 기록한다.
      그 뒤 실패하면 `next:`는 전체 재기록이다. `-ResumeAfterWrite`는 boot 파티션에 `rosy-provision/`이 이미 있으면 readback 전에 거부한다.
 
+8. **D-182 리뷰 반영.**
+   - (MEDIUM) 카드가 이 릴리스의 MBR signature를 가질 때는 두 조건을 모두 만족해야 받아들인다. 첫째, boot 파티션에
+     `rosy-provision/`이 없어야 한다. 둘째, 같은 plan(첫 진행 줄의 `plan` 필드)으로 Imager 쓰기를 시작한 이전 시도의 진행 파일이
+     plan·로그 폴더에 있어야 한다. 그렇지 않으면 "different card"로 `untouched` 멈춤이다. 이렇게 하면 로봇 A용으로 다 쓰고 아직
+     부팅하지 않은 카드가, 빈 카드로 만든 plan B에서 지워지지 않는다.
+   - (MEDIUM) fixture 모드는 fixture 대상에만 묶는다. `-DiskInventoryJson`이 있으면 `.exe` writer를 거부한다(`-PlanOnly` 제외).
+     `-ReadbackDevice`는 `\\.\`, `\\?\` 장치 경로를 거부한다(`\\.\pipe\` stand-in만 허용). fixture receipt에는 `fixture: true`를 남긴다.
+   - (MEDIUM) `write-card.ps1`은 `-LogPath`와 `-RpiImager`를 이 콘솔 위치 기준 절대 경로로 바꾼다. `-PythonExe`는 경로 구분자가
+     있을 때만 바꾸고, 이름만 주면 PATH에서 찾는다. 관리자 창은 `C:\Windows\System32`에서 시작하므로, 상대 경로를 그대로 두면
+     진행 파일이 둘로 갈리고 `.exit` 표지를 잃는다. `[IO.Path]::GetFullPath`는 PowerShell 위치를 따르지 않아 쓰지 않는다.
+   - (LOW) readback 감시는 새 heartbeat가 없을 때 verifier 프로세스 트리의 `ReadTransferCount`도 본다. 늘었으면 진행으로 본다.
+     heartbeat 파일이 잠기거나 디스크가 차도 정상 readback을 죽이지 않는다.
+   - (LOW) probe는 `device_mbr_read`를 알리고, MBR이 있으면 signature가 0이어도 `"00000000"`으로 보고한다. 섹터를 실제로 읽었으면
+     "signature 없음"도 그대로 믿는다. ERASE 확인 뒤의 재확인도 `Get-Disk`만 보지 않고 카드 첫 섹터를 다시 읽는다(512바이트 probe).
+   - verifier worker `close()`는 어느 경로에서든 `join(timeout)`이다. 불일치나 이미지 오류 뒤 막힌 장치 스레드가 판정을 `io`로 바꾸지 않는다.
+   - probe가 `-ProbeSeconds`(기본 120) 안에 끝나지 않으면 그때까지 읽은 양으로 속도를 낸다(0일 수도 있다). 그래서 느린 매체 관문을
+     건너뛰지 않고 `-AcceptSlowMedia`를 요구한다.
+
 진행 파일 단계는 `launch` → `verify-signature` → `select-disk` → `preflight` → `confirm` → `write` → `readback` → `bundle` →
 `bundle-writing` → `receipt` → `done`(실패는 `failed`)이다. `card_state`에는 `bundle-partial`이 더해진다.
 
@@ -112,6 +129,9 @@ readback 멈춤은 사람이 알아채야 했고, 같은 리더기에 꽂힌 다
 | resume인데 카드가 이 이미지가 아님 | 장치 MBR signature ≠ 이미지 MBR signature | readback 전에 멈춤 | `unknown` | 쓴 카드인지 확인, 맞으면 전체 쓰기 |
 | resume인데 bundle이 이미 있음 | boot 파티션 `rosy-provision/` 존재 | readback 전에 멈춤 | `bundle-partial` | 전체 재기록(registry에 이 장치가 있으면 먼저 정리) |
 | bundle 복사 중 실패(카드 뽑힘 등) | `Fail`·`trap`, stage `bundle-writing` | 멈춤 | `bundle-partial` | 전체 재기록. resume는 불가 |
+| 이 릴리스를 가진 카드인데 bundle이 있음 | 장치 MBR signature = 이미지 + boot `rosy-provision/` | ERASE 전 멈춤 | `untouched` | 다른 로봇용으로 끝난 카드다. plan의 카드를 꽂는다 |
+| 이 릴리스를 가진 카드인데 이 plan의 이전 쓰기 기록 없음 | 같은 `plan`의 진행 파일에 `write`/`writing` 없음 | ERASE 전 멈춤 | `untouched` | plan의 카드를 꽂거나 이 카드로 새 plan |
+| probe가 제한 시간 안에 끝나지 않음 | `-ProbeSeconds` 초과, 읽은 양으로 속도 계산 | 느린 매체로 취급 | `untouched` | 다른 리더기·포트, 또는 `-AcceptSlowMedia` |
 | boot 파티션 파일 밖 영역 차이 | reserved·FAT 2·backup boot sector 비교 | readback 불일치로 멈춤 | `written-unverified` | 전체 쓰기, 반복되면 카드 교체 |
 
 **D-181 "여전히 사람이 해야 하는 일"에서 닫는 것:**

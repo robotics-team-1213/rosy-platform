@@ -789,6 +789,7 @@ def test_the_probe_reports_an_unreadable_card_instead_of_failing(tmp_path):
     facts = json.loads(completed.stdout)
     assert facts["device_error"].startswith("device cannot be read")
     assert facts["device_read_mbps"] is None
+    assert facts["device_mbr_read"] is False and facts["device_mbr_signature"] is None
     assert facts["image_mbr_signature"] is None  # no 0x55AA: a blank or unpartitioned image
 
 
@@ -862,3 +863,59 @@ def test_a_progress_file_that_cannot_be_written_does_not_fail_a_good_card(tmp_pa
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["verified"] is True
     assert "MEDIA_READBACK_HEARTBEAT_NOT_WRITTEN" in completed.stderr
+
+
+# --- D-182 review ---------------------------------------------------------------
+
+
+def test_the_probe_says_whether_it_read_the_sector_and_keeps_a_zero_signature(tmp_path):
+    raw = _mbr_image(0)
+    image, device = tmp_path / "rosy.img.xz", tmp_path / "card.bin"
+    image.write_bytes(lzma.compress(raw))
+    device.write_bytes(raw)
+
+    facts = json.loads(_probe(image, device).stdout)
+
+    assert facts["device_mbr_read"] is True
+    assert facts["device_mbr_signature"] == "00000000"  # read and zero, not "unknown"
+    assert facts["image_mbr_signature"] is None  # the image side still means "none"
+
+
+def test_a_probe_that_times_out_reports_the_rate_it_managed(tmp_path):
+    raw = _raw_multi_chunk()
+    image = tmp_path / "rosy.img.xz"
+    image.write_bytes(lzma.compress(raw))
+    card = PipeCard(raw, ["hang"])
+    try:
+        completed = _probe(image, card.path, "--probe-seconds", 1)
+    finally:
+        card.close()
+
+    facts = json.loads(completed.stdout)
+    assert facts["device_error"].startswith("device read stalled")
+    assert facts["device_read_mbps"] == 0 and facts["device_read_seconds"] == 1
+    assert facts["device_mbr_read"] is False
+
+
+def test_closing_a_wedged_worker_is_bounded_on_every_path(monkeypatch):
+    # D-182 review: after a mismatch the device worker was still joined without a timeout.
+    module = _module()
+    monkeypatch.setattr(module, "CLOSE_JOIN_SECONDS", 0.3)
+    release = threading.Event()
+    handed = iter([b"one"])
+
+    def produce():
+        try:
+            return next(handed)
+        except StopIteration:
+            release.wait()  # wedged, like a read on a card that stopped answering
+            return b""
+
+    prefetch = module._Prefetch("readback-wedged", produce)
+    try:
+        assert prefetch.get() == b"one"
+        started = time.monotonic()
+        assert prefetch.close() is True  # still alive, and not waited for
+        assert time.monotonic() - started < 3
+    finally:
+        release.set()
