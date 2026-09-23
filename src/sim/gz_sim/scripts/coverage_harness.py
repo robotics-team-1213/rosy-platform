@@ -12,13 +12,16 @@ Launch map_v2_fleet_lane once at the tour start with the whole route in the
 existing `route` / `route_start` launch args, wait for readiness
 (junction_harness.wait_ready, BOOT_S), enable CAMERA_LINE through CORE's
 API, record /odom (Gazebo ground truth) until the true route coordinate
-reaches the start point again on the last key (`Progress`), or the
-simulation-time budget sized from the tour length (`budget_s`), or the
-wall-clock cap; then stop, score with junction_score.score_route and write
+reaches the start point again on the last key (`Progress`), CORE's lease
+is lost (`CoreLease`, from the line-follow status samples), the
+simulation-time budget sized from the tour length (`budget_s`) runs out, or
+the wall-clock cap (`record_tour`); then stop, score with
+junction_score.score_route (lost when the lease was) and write
 results.json, track.json, core_status.jsonl (CORE's line-follow status once
 per wall second) and the overlay MP4 (record_debug.py, debug_overlay:=true)
 into --out. The result carries clock_step_s (a WSL wall-clock step during
-the tour marks it infrastructure evidence, as in junction_harness).
+the tour marks it infrastructure evidence, as in junction_harness). Only
+a tour whose reason is "reached" passes.
 
 Readiness, the mode API and process cleanup are junction_harness's, so the
 two harnesses cannot drift apart. ROS imports are deferred into run_tour()
@@ -57,6 +60,9 @@ ROUTE_MODES = ("route_a", "route_b", "route_ab")
 #: start point on the last key): a sample exactly on the start may project
 #: a hair short of it. Well inside score_route's ROUTE_END_MAX_M.
 END_TOLERANCE_M = 0.005
+#: CORE line_follow's lost_after_s (LineFollowConfig): evidence missing or
+#: under min_confidence for longer than this latches LOST.
+LOST_AFTER_S = 3.0
 
 
 def tour_plan(graph, start_xy=None):
@@ -109,6 +115,87 @@ class Progress:
         return self.s >= self.end_s - END_TOLERANCE_M
 
 
+class CoreLease:
+    """CORE's line-follow lease as seen in its status samples (the
+    core_status.jsonl records): lost on any LOST state, or on a stretch of
+    samples that are not TRACKING spanning more than `lost_after_s` of
+    simulation time (the status is sampled once per wall second, so a LOST
+    latched between samples still shows as the stall). A sample without a
+    status or a simulation stamp says nothing and is skipped."""
+
+    def __init__(self, lost_after_s=LOST_AFTER_S):
+        self.lost_after_s = float(lost_after_s)
+        self.lost = False
+        self._stall_since = None
+
+    def update(self, sim_s, status) -> bool:
+        """Feed one sample; True once the lease is lost (and after)."""
+        if self.lost or not isinstance(status, dict):
+            return self.lost
+        state = status.get("state")
+        if state == "LOST":
+            self.lost = True
+        elif state == "TRACKING":
+            self._stall_since = None
+        elif sim_s is not None:
+            if self._stall_since is None:
+                self._stall_since = float(sim_s)
+            elif float(sim_s) - self._stall_since > self.lost_after_s:
+                self.lost = True
+        return self.lost
+
+
+def record_tour(graph, keys, track, stamps, *, spin, status, monotonic, status_log,
+                sim_budget_s, wall_cap_s, status_period_s=None):
+    """The recording loop of run_tour, ROS-free: `spin()` delivers odometry
+    (appending to `track` and `stamps`, simulation seconds), `status()`
+    returns CORE's line-follow status (or None), `monotonic()` is the wall
+    clock. Each status sample is written to `status_log` as one JSON line
+    {"sim", "status"} and fed to a CoreLease. Progress is anchored on the
+    first recorded sample, as score_route anchors its route coordinate and
+    end distance on track[0]. Returns (reason, sim_start): "reached" (the
+    track is cut after the sample that reached the end), "lost" (CoreLease),
+    "timeout" (sim_budget_s of simulation time) or "wall_cap"."""
+    period = junction_harness.STATUS_SAMPLE_S if status_period_s is None else status_period_s
+    lease = CoreLease()
+    progress = None
+    wall_deadline = monotonic() + wall_cap_s
+    next_status = monotonic()
+    sim_start, seen = None, 0
+    while monotonic() < wall_deadline:
+        spin()
+        if monotonic() >= next_status:
+            next_status = monotonic() + period
+            sample = status()
+            sim = stamps[-1] if stamps else None
+            status_log.write(json.dumps({"sim": sim, "status": sample}) + "\n")
+            if lease.update(sim, sample):
+                return "lost", sim_start
+        if stamps and sim_start is None:
+            sim_start = stamps[-1]
+        while seen < len(track):
+            if progress is None:
+                progress = Progress(graph, keys, track[0])
+            if progress.update(track[seen]):
+                del track[seen + 1:]
+                return "reached", sim_start
+            seen += 1
+        if sim_start is not None and stamps[-1] - sim_start >= sim_budget_s:
+            return "timeout", sim_start
+    return "wall_cap", sim_start
+
+
+def score_tour(graph, keys, track, start_xy, reason):
+    """score_route over the recorded track (lost when the lease was), with
+    `reason`. Only a tour that reached its end passes: a timeout or wall
+    cap can leave a track that still scores within the end tolerance."""
+    result = junction_score.score_route(graph, keys, track or [tuple(start_xy)],
+                                        lost=reason == "lost")
+    result["pass"] = bool(result["pass"]) and reason == "reached"
+    result["reason"] = reason
+    return result
+
+
 def run_tour(graph, keys, pose, mode, out_dir, domain, sim_budget_s, wall_cap_s):
     """ROS-only: launches Gazebo once, records ground-truth odometry over
     the whole tour, scores it. Always returns a result dict with at least
@@ -152,41 +239,22 @@ def run_tour(graph, keys, pose, mode, out_dir, domain, sim_budget_s, wall_cap_s)
             stamps.append(m.header.stamp.sec + m.header.stamp.nanosec * 1e-9)
 
         node.create_subscription(Odometry, "odom", on_odom, qos_profile_sensor_data)
-        progress = Progress(graph, keys, pose[:2])
         junction_harness.set_mode("CAMERA_LINE")
         clock_offset = junction_harness.wall_clock_offset()
         wall_start = time.monotonic()
-        wall_deadline = wall_start + wall_cap_s
-        sim_start, seen = None, 0
-        reached, reason = False, "wall_cap"
-        status_log = (out_dir / "core_status.jsonl").open("w")
-        next_status = wall_start
-        while time.monotonic() < wall_deadline and not reached:
-            rclpy.spin_once(node, timeout_sec=0.1)
-            if time.monotonic() >= next_status:
-                next_status = time.monotonic() + junction_harness.STATUS_SAMPLE_S
-                status = junction_harness._api_get(junction_harness.STATUS_API,
-                                                   junction_harness.VIEWER)
-                status_log.write(json.dumps(
-                    {"sim": stamps[-1] if stamps else None, "status": status}) + "\n")
-            if stamps and sim_start is None:
-                sim_start = stamps[-1]
-            while seen < len(track):
-                if progress.update(track[seen]):
-                    reached, reason = True, "reached"
-                    del track[seen + 1:]
-                    break
-                seen += 1
-            if not reached and sim_start is not None and stamps[-1] - sim_start >= sim_budget_s:
-                reason = "timeout"
-                break
-        status_log.close()
+        with (out_dir / "core_status.jsonl").open("w") as status_log:
+            reason, sim_start = record_tour(
+                graph, keys, track, stamps,
+                spin=lambda: rclpy.spin_once(node, timeout_sec=0.1),
+                status=lambda: junction_harness._api_get(junction_harness.STATUS_API,
+                                                         junction_harness.VIEWER),
+                monotonic=time.monotonic, status_log=status_log,
+                sim_budget_s=sim_budget_s, wall_cap_s=wall_cap_s)
         wall_elapsed = time.monotonic() - wall_start
         step = junction_harness.clock_step_s(clock_offset, junction_harness.wall_clock_offset())
         sim_elapsed = (stamps[-1] - sim_start) if sim_start is not None else 0.0
         junction_harness.set_mode("OFF")
-        result = junction_score.score_route(graph, keys, track or [pose[:2]])
-        result["reason"] = reason
+        result = score_tour(graph, keys, track, pose[:2], reason)
         result["sim_s"] = round(sim_elapsed, 2)
         result["wall_s"] = round(wall_elapsed, 2)
         result["real_time_factor"] = round(sim_elapsed / wall_elapsed, 3) if wall_elapsed else None

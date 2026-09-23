@@ -62,9 +62,6 @@ def test_the_budget_is_simulation_time_sized_from_the_tour_length(graph):
     assert budget == pytest.approx(length / (mod.BUDGET_SPEED_FRACTION * mod.CORE_CRUISE_M_S))
     assert 339.0 * 1.3 < budget < 1200.0
     assert mod.budget_s(0.5) == mod.MIN_BUDGET_S
-    source = _run_tour_source()
-    assert "stamps[-1] - sim_start >= sim_budget_s" in source
-    assert "wall_deadline = wall_start + wall_cap_s" in source
     assert "WALL_CAP_FACTOR * sim_budget" in _source()
 
 
@@ -114,7 +111,8 @@ def test_progress_reaches_the_end_only_after_the_whole_tour(graph):
 
 def test_the_tour_is_scored_with_score_route_and_writes_the_evidence():
     source = _run_tour_source()
-    assert "junction_score.score_route(graph, keys, track" in source
+    assert "score_tour(graph, keys, track, pose[:2], reason)" in source
+    assert "record_tour(" in source
     assert '(out_dir / "track.json").write_text' in source
     assert '(args.out / "results.json").write_text' in _source()
     assert 'Path(__file__).with_name("record_debug.py")' in source
@@ -138,19 +136,153 @@ def test_records_clock_step_and_core_status_like_junction_harness():
     assert 'result["clock_step_s"] = step' in source
     assert "junction_harness.CLOCK_STEP_TOLERANCE_S" in source
     assert '(out_dir / "core_status.jsonl").open("w")' in source
-    assert "junction_harness.STATUS_SAMPLE_S" in source
     assert "junction_harness._api_get(junction_harness.STATUS_API" in source
-    assert "status_log.close()" in source
 
 
-def test_every_outcome_is_a_recorded_reason_never_raised():
+def test_an_error_is_a_recorded_reason_never_raised():
     source = _run_tour_source()
-    assert 'reached, reason = True, "reached"' in source
-    assert 'reason = "timeout"' in source
-    assert 'reached, reason = False, "wall_cap"' in source
-    assert 'result["reason"] = reason' in source
     assert "except Exception as exc" in source
     assert '"reason": f"error:{type(exc).__name__}"' in source
+
+
+# --- the recording loop (record_tour) with fakes, and its scoring -------------
+
+class FakeSim:
+    """Stands in for rclpy + Gazebo + CORE's API: each spin() is 0.1 s of
+    wall clock and delivers `per_spin` odometry samples (dt_s of simulation
+    time each) from `samples`; once they run out the simulation still runs
+    (stamps advance, the robot stands on its last point), or with
+    `stall_clock` it stops (no odometry at all). status() is
+    `status_at(sim_s)`."""
+
+    def __init__(self, samples, status_at=lambda sim: {"state": "TRACKING"},
+                 per_spin=1, dt_s=0.2, stall_clock=False):
+        self.samples, self.status_at = list(samples), status_at
+        self.per_spin, self.dt_s, self.stall_clock = per_spin, dt_s, stall_clock
+        self.track, self.stamps, self.wall, self.sim, self.fed = [], [], 0.0, 0.0, 0
+
+    def spin(self):
+        self.wall += 0.1
+        for _ in range(self.per_spin):
+            if self.fed < len(self.samples):
+                point = self.samples[self.fed]
+                self.fed += 1
+            elif self.stall_clock or not self.track:
+                return
+            else:
+                point = self.track[-1]
+            self.sim += self.dt_s
+            self.track.append(point)
+            self.stamps.append(self.sim)
+
+    def monotonic(self):
+        return self.wall
+
+    def status(self):
+        return self.status_at(self.stamps[-1] if self.stamps else None)
+
+
+def _record(graph, sim, *, sim_budget_s=600.0, wall_cap_s=2400.0):
+    import io
+    import json
+    mod = _mod()
+    keys, _, _ = mod.tour_plan(graph)
+    log = io.StringIO()
+    reason, sim_start = mod.record_tour(
+        graph, keys, sim.track, sim.stamps, spin=sim.spin, status=sim.status,
+        monotonic=sim.monotonic, status_log=log, sim_budget_s=sim_budget_s,
+        wall_cap_s=wall_cap_s, status_period_s=1.0)
+    records = [json.loads(line) for line in log.getvalue().splitlines()]
+    return mod, keys, reason, sim_start, records
+
+
+@pytest.fixture(scope="module")
+def centreline(graph):
+    keys, pose, _ = _mod().tour_plan(graph)
+    return _centreline_track(graph, keys, pose[:2])
+
+
+def test_the_loop_stops_when_the_tour_reaches_its_end_and_cuts_the_track(graph, centreline):
+    """Three odometry samples per spin, so the spin that reaches the end
+    also delivers samples past it: they are cut. The recorded track then
+    scores pass with reason "reached"."""
+    beyond = centreline[1:40]        # the robot carries on past the end
+    sim = FakeSim(centreline + beyond, per_spin=3)
+    mod, keys, reason, sim_start, records = _record(graph, sim)
+    assert reason == "reached"
+    assert sim_start == pytest.approx(0.6)
+    assert len(sim.track) < sim.fed
+    progress = mod.Progress(graph, keys, sim.track[0])
+    assert [progress.update(p) for p in sim.track].index(True) == len(sim.track) - 1
+    result = mod.score_tour(graph, keys, sim.track, sim.track[0], reason)
+    assert result["pass"] and not result["lost"], result
+    # One core_status record per wall second, stamped with the sim time.
+    assert len(records) == pytest.approx(sim.wall, abs=1.0)
+    assert all(r["status"] == {"state": "TRACKING"} for r in records)
+    stamps = [r["sim"] for r in records]
+    assert stamps == sorted(stamps)
+
+
+def test_the_loop_stops_on_the_simulation_budget(graph, centreline):
+    sim = FakeSim(centreline[:300], status_at=lambda sim: None)
+    mod, keys, reason, sim_start, _ = _record(graph, sim, sim_budget_s=120.0)
+    assert reason == "timeout"
+    assert 120.0 <= sim.stamps[-1] - sim_start < 120.0 + 0.2 + 1e-9
+    result = mod.score_tour(graph, keys, sim.track, sim.track[0], reason)
+    assert not result["pass"] and result["missing"]
+
+
+def test_the_loop_stops_on_the_wall_clock_cap(graph):
+    sim = FakeSim([], status_at=lambda sim: None, stall_clock=True)
+    _, _, reason, sim_start, _ = _record(graph, sim, wall_cap_s=30.0)
+    assert reason == "wall_cap" and sim_start is None
+    assert sim.wall == pytest.approx(30.0, abs=0.11)
+
+
+def test_a_lost_core_lease_ends_the_tour_as_lost(graph, centreline):
+    sim = FakeSim(centreline, status_at=lambda sim: {"state": "LOST" if sim >= 40.0
+                                                     else "TRACKING"})
+    mod, keys, reason, _, records = _record(graph, sim)
+    assert reason == "lost"
+    assert records[-1]["status"]["state"] == "LOST" and records[-1]["sim"] >= 40.0
+    assert all(r["status"]["state"] == "TRACKING" for r in records[:-1])
+    result = mod.score_tour(graph, keys, sim.track, sim.track[0], reason)
+    assert result["lost"] and not result["pass"]
+
+
+def test_a_stall_longer_than_the_lease_is_lost_a_shorter_one_is_not(graph, centreline):
+    def stalled(start, length):
+        return lambda sim: {"state": "STALE" if start <= sim < start + length
+                            else "TRACKING"}
+    sim = FakeSim(centreline, status_at=stalled(40.0, 30.0))
+    mod, _, reason, _, records = _record(graph, sim)
+    assert reason == "lost"
+    stale = [r["sim"] for r in records if r["status"]["state"] == "STALE"]
+    assert stale[-1] - stale[0] > mod.LOST_AFTER_S
+    assert stale[-2] - stale[0] <= mod.LOST_AFTER_S
+    # Two samples (2 s of simulation) not TRACKING, then TRACKING again.
+    sim = FakeSim(centreline, status_at=stalled(40.0, 2.5))
+    assert _record(graph, sim)[2] == "reached"
+
+
+def test_the_core_lease_skips_samples_that_say_nothing():
+    lease = _mod().CoreLease(lost_after_s=3.0)
+    assert not lease.update(10.0, {"state": "WAITING"})
+    assert not lease.update(12.0, None)                   # API down: no evidence
+    assert not lease.update(None, {"state": "STALE"})     # no odometry yet
+    assert not lease.update(13.0, {"state": "STALE"})
+    assert lease.update(13.5, {"state": "STALE"})         # 3.5 s since 10.0
+    assert lease.update(20.0, {"state": "TRACKING"})      # latched
+
+
+def test_only_a_reached_tour_passes(graph, centreline):
+    mod = _mod()
+    keys, _, _ = mod.tour_plan(graph)
+    for reason in ("reached", "timeout", "wall_cap", "lost"):
+        result = mod.score_tour(graph, keys, centreline, centreline[0], reason)
+        assert result["pass"] is (reason == "reached"), reason
+        assert result["lost"] is (reason == "lost") and result["reason"] == reason
+    assert mod.score_tour(graph, keys, [], centreline[0], "wall_cap")["progress_m"] == 0.0
 
 
 def test_cleanup_order_matches_junction_harness():
