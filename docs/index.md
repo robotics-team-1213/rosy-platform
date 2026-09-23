@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-185 R3 rig A/B, R7 원인 메모
 - 2026-09-24 · uncommitted · docs(adr): D-185 R6 구현 메모
 - 2026-09-24 · uncommitted · docs(adr): D-185 R2 구현 메모
 - 2026-09-24 · uncommitted · docs(adr): D-185 R5 구현 메모
 - 2026-09-24 · uncommitted · docs(adr): D-185 R3 구현 메모
-- 2026-09-24 · uncommitted · tools(control): D-185 R8 Pi 계측 도구

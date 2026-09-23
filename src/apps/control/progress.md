@@ -179,3 +179,8 @@ plans:
 ## 2026-09-24 rig /clock relay (D-185 R6)
 
 - `RIG_CLOCK_HZ=N`이면 rig가 `/clock`을 벽시계 초당 최대 N개로 줄인다. rig 노드 CPU가 절반 이하가 됐다. 기본값은 예전 bridge다.
+
+## 2026-09-24 EventsExecutor rig result, single-process cause (D-185 R3·R7)
+
+- rig에서 EventsExecutor가 결과를 그대로 두고 rig 노드 CPU를 약 60% 줄였다. 기본값 전환은 실기 측정 뒤로 미룬다.
+- 한 프로세스 모드 실패는 교정 신선도 hold 수정(`c67437d1`)으로 이미 닫혔다. 수정 전 트리에서만 재현된다.
