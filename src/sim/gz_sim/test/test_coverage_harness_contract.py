@@ -137,6 +137,9 @@ def test_records_clock_step_and_core_status_like_junction_harness():
     assert "junction_harness.CLOCK_STEP_TOLERANCE_S" in source
     assert '(out_dir / "core_status.jsonl").open("w")' in source
     assert "junction_harness._api_get(junction_harness.STATUS_API" in source
+    # The stall is a diagnostic in results.json, read off the lease the loop fed.
+    assert "lease=lease" in source
+    assert 'result["longest_stall_s"] = round(lease.longest_stall_s, 2)' in source
 
 
 def test_an_error_is_a_recorded_reason_never_raised():
@@ -250,29 +253,66 @@ def test_a_lost_core_lease_ends_the_tour_as_lost(graph, centreline):
     assert result["lost"] and not result["pass"]
 
 
-def test_a_stall_longer_than_the_lease_is_lost_a_shorter_one_is_not(graph, centreline):
-    def stalled(start, length):
-        return lambda sim: {"state": "STALE" if start <= sim < start + length
+def test_a_long_hold_is_a_diagnostic_never_lost(graph, centreline):
+    """CORE latches LOST until set_mode, so only LOST ends the tour. A long
+    HOLD stretch is recorded (longest_stall_s) and the tour carries on."""
+    def held(start, length):
+        return lambda sim: {"state": "HOLD" if start <= sim < start + length
                             else "TRACKING"}
-    sim = FakeSim(centreline, status_at=stalled(40.0, 30.0))
+    mod = _mod()
+    lease = mod.CoreLease()
+    sim = FakeSim(centreline, status_at=held(40.0, 30.0))
+    keys, _, _ = mod.tour_plan(graph)
+    import io
+    reason, _ = mod.record_tour(
+        graph, keys, sim.track, sim.stamps, spin=sim.spin, status=sim.status,
+        monotonic=sim.monotonic, status_log=io.StringIO(), sim_budget_s=600.0,
+        wall_cap_s=2400.0, status_period_s=1.0, lease=lease)
+    assert reason == "reached"
+    assert not lease.lost
+    assert 28.0 <= lease.longest_stall_s < 30.0
+
+
+def test_brief_holds_aliased_at_a_high_real_time_factor_are_not_lost(graph, centreline):
+    """At RTF 4 one wall-second sample spans 4 s of simulation. Brief 0.2 s
+    HOLDs that each happen to land on a sample look like a 12 s stall; CORE
+    never lost the line, and neither does the lease."""
+    samples = []
+
+    def aliased(sim):
+        # Samples 10-13 each land on a brief 0.2 s HOLD; CORE tracks between.
+        samples.append(sim)
+        return {"state": "HOLD" if 10 <= len(samples) <= 13 else "TRACKING"}
+    sim = FakeSim(centreline, status_at=aliased, per_spin=2)   # 4 s sim per wall second
     mod, _, reason, _, records = _record(graph, sim)
-    assert reason == "lost"
-    stale = [r["sim"] for r in records if r["status"]["state"] == "STALE"]
-    assert stale[-1] - stale[0] > mod.LOST_AFTER_S
-    assert stale[-2] - stale[0] <= mod.LOST_AFTER_S
-    # Two samples (2 s of simulation) not TRACKING, then TRACKING again.
-    sim = FakeSim(centreline, status_at=stalled(40.0, 2.5))
-    assert _record(graph, sim)[2] == "reached"
+    held = [r["sim"] for r in records if r["status"]["state"] == "HOLD"]
+    assert len(held) >= 3 and held[-1] - held[0] > 3.0
+    assert reason == "reached"
 
 
 def test_the_core_lease_skips_samples_that_say_nothing():
-    lease = _mod().CoreLease(lost_after_s=3.0)
+    lease = _mod().CoreLease()
     assert not lease.update(10.0, {"state": "WAITING"})
     assert not lease.update(12.0, None)                   # API down: no evidence
-    assert not lease.update(None, {"state": "STALE"})     # no odometry yet
-    assert not lease.update(13.0, {"state": "STALE"})
-    assert lease.update(13.5, {"state": "STALE"})         # 3.5 s since 10.0
-    assert lease.update(20.0, {"state": "TRACKING"})      # latched
+    assert not lease.update(None, {"state": "HOLD"})      # no odometry yet
+    assert not lease.update(13.0, {"state": "HOLD"})
+    assert not lease.update(20.0, {"state": "HOLD"})      # a long HOLD is not LOST
+    assert lease.stall_s == pytest.approx(10.0)
+    assert lease.update(21.0, {"state": "LOST"})
+    assert lease.update(22.0, {"state": "TRACKING"})      # latched
+
+
+def test_an_api_outage_inside_a_stall_neither_ends_nor_extends_it():
+    lease = _mod().CoreLease()
+    assert not lease.update(10.0, {"state": "HOLD"})
+    assert not lease.update(11.0, None)
+    assert not lease.update(12.0, None)
+    assert lease.stall_s == pytest.approx(0.0)            # outage adds nothing
+    assert not lease.update(13.0, {"state": "WAITING"})
+    assert lease.stall_s == pytest.approx(3.0)            # same stall, from 10.0
+    assert not lease.update(14.0, {"state": "TRACKING"})
+    assert lease.stall_s == 0.0 and lease.longest_stall_s == pytest.approx(3.0)
+    assert lease.update(15.0, {"state": "LOST"})
 
 
 def test_only_a_reached_tour_passes(graph, centreline):

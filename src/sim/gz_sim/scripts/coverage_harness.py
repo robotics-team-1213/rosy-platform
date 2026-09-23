@@ -13,7 +13,7 @@ existing `route` / `route_start` launch args, wait for readiness
 (junction_harness.wait_ready, BOOT_S), enable CAMERA_LINE through CORE's
 API, record /odom (Gazebo ground truth) until the true route coordinate
 reaches the start point again on the last key (`Progress`), CORE's lease
-is lost (`CoreLease`, from the line-follow status samples), the
+reports LOST (`CoreLease`, from the line-follow status samples), the
 simulation-time budget sized from the tour length (`budget_s`) runs out, or
 the wall-clock cap (`record_tour`); then stop, score with
 junction_score.score_route (lost when the lease was) and write
@@ -60,9 +60,6 @@ ROUTE_MODES = ("route_a", "route_b", "route_ab")
 #: start point on the last key): a sample exactly on the start may project
 #: a hair short of it. Well inside score_route's ROUTE_END_MAX_M.
 END_TOLERANCE_M = 0.005
-#: CORE line_follow's lost_after_s (LineFollowConfig): evidence missing or
-#: under min_confidence for longer than this latches LOST.
-LOST_AFTER_S = 3.0
 
 
 def tour_plan(graph, start_xy=None):
@@ -117,16 +114,30 @@ class Progress:
 
 class CoreLease:
     """CORE's line-follow lease as seen in its status samples (the
-    core_status.jsonl records): lost on any LOST state, or on a stretch of
-    samples that are not TRACKING spanning more than `lost_after_s` of
-    simulation time (the status is sampled once per wall second, so a LOST
-    latched between samples still shows as the stall). A sample without a
-    status or a simulation stamp says nothing and is skipped."""
+    core_status.jsonl records): lost only on a LOST state. CORE latches LOST
+    until the next set_mode, so a LOST reached between two samples is still
+    there at the next one; nothing has to be inferred from gaps.
 
-    def __init__(self, lost_after_s=LOST_AFTER_S):
-        self.lost_after_s = float(lost_after_s)
+    A stretch of samples that are not TRACKING (HOLD, WAITING, ...) is kept
+    as a diagnostic only (`stall_s`, `longest_stall_s`, simulation seconds):
+    samples come about once per wall second, so at a real-time factor above
+    1 a few brief HOLDs that each happen to be sampled span several
+    simulation seconds without CORE ever having lost the line. A sample
+    without a status (API down) or without a simulation stamp says nothing
+    and is skipped; it neither ends nor extends a stall."""
+
+    def __init__(self):
         self.lost = False
+        self.longest_stall_s = 0.0
         self._stall_since = None
+        self._stall_last = None
+
+    @property
+    def stall_s(self):
+        """Simulation seconds the current not-TRACKING stretch spans."""
+        if self._stall_since is None:
+            return 0.0
+        return self._stall_last - self._stall_since
 
     def update(self, sim_s, status) -> bool:
         """Feed one sample; True once the lease is lost (and after)."""
@@ -136,28 +147,29 @@ class CoreLease:
         if state == "LOST":
             self.lost = True
         elif state == "TRACKING":
-            self._stall_since = None
+            self._stall_since = self._stall_last = None
         elif sim_s is not None:
             if self._stall_since is None:
                 self._stall_since = float(sim_s)
-            elif float(sim_s) - self._stall_since > self.lost_after_s:
-                self.lost = True
+            self._stall_last = float(sim_s)
+            self.longest_stall_s = max(self.longest_stall_s, self.stall_s)
         return self.lost
 
 
 def record_tour(graph, keys, track, stamps, *, spin, status, monotonic, status_log,
-                sim_budget_s, wall_cap_s, status_period_s=None):
+                sim_budget_s, wall_cap_s, status_period_s=None, lease=None):
     """The recording loop of run_tour, ROS-free: `spin()` delivers odometry
     (appending to `track` and `stamps`, simulation seconds), `status()`
     returns CORE's line-follow status (or None), `monotonic()` is the wall
     clock. Each status sample is written to `status_log` as one JSON line
-    {"sim", "status"} and fed to a CoreLease. Progress is anchored on the
+    {"sim", "status"} and fed to `lease` (a new CoreLease by default; pass
+    one to read its stall diagnostics afterwards). Progress is anchored on the
     first recorded sample, as score_route anchors its route coordinate and
     end distance on track[0]. Returns (reason, sim_start): "reached" (the
     track is cut after the sample that reached the end), "lost" (CoreLease),
     "timeout" (sim_budget_s of simulation time) or "wall_cap"."""
     period = junction_harness.STATUS_SAMPLE_S if status_period_s is None else status_period_s
-    lease = CoreLease()
+    lease = CoreLease() if lease is None else lease
     progress = None
     wall_deadline = monotonic() + wall_cap_s
     next_status = monotonic()
@@ -242,6 +254,7 @@ def run_tour(graph, keys, pose, mode, out_dir, domain, sim_budget_s, wall_cap_s)
         junction_harness.set_mode("CAMERA_LINE")
         clock_offset = junction_harness.wall_clock_offset()
         wall_start = time.monotonic()
+        lease = CoreLease()
         with (out_dir / "core_status.jsonl").open("w") as status_log:
             reason, sim_start = record_tour(
                 graph, keys, track, stamps,
@@ -249,7 +262,7 @@ def run_tour(graph, keys, pose, mode, out_dir, domain, sim_budget_s, wall_cap_s)
                 status=lambda: junction_harness._api_get(junction_harness.STATUS_API,
                                                          junction_harness.VIEWER),
                 monotonic=time.monotonic, status_log=status_log,
-                sim_budget_s=sim_budget_s, wall_cap_s=wall_cap_s)
+                sim_budget_s=sim_budget_s, wall_cap_s=wall_cap_s, lease=lease)
         wall_elapsed = time.monotonic() - wall_start
         step = junction_harness.clock_step_s(clock_offset, junction_harness.wall_clock_offset())
         sim_elapsed = (stamps[-1] - sim_start) if sim_start is not None else 0.0
@@ -259,6 +272,8 @@ def run_tour(graph, keys, pose, mode, out_dir, domain, sim_budget_s, wall_cap_s)
         result["wall_s"] = round(wall_elapsed, 2)
         result["real_time_factor"] = round(sim_elapsed / wall_elapsed, 3) if wall_elapsed else None
         result["clock_step_s"] = step
+        # Diagnostic only: the lease is lost on CORE's LOST, never on this.
+        result["longest_stall_s"] = round(lease.longest_stall_s, 2)
         if abs(step) > junction_harness.CLOCK_STEP_TOLERANCE_S:
             print(f"clock-step: wall clock stepped {step:+.1f} s during the tour; "
                   "infrastructure, rerun it", file=sys.stderr, flush=True)
