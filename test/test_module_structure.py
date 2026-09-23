@@ -104,8 +104,14 @@ SIZE_VERDICTS = {
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core_events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
+    "core/core_features/core_features/docking/manager.py": (
+        930,
+        "accept: one owner (svc.docking / DockingManager, one phase machine for the charging and parking dock "
+        "types), ROS-free, covered by core_features/test/test_docking.py and core/test/test_docking_*.py; "
+        "the 2026-09-06 criteria already cite this file as the X5 example (X5)",
+    ),
     "control": (
-        28_315,
+        31_249,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }

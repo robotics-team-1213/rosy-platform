@@ -304,3 +304,12 @@
 - gate 변화: 없음(DEVICE/FIELD HOLD).
 - 결정: 사용자 승인 2026-09-24("고침"). 시작 전(trial 없음) 단계에서 늦은 scan 하나로 재배치를 시작하던 경로가 이제 1 s 관측 대기 뒤 실패로 끝난다. 재배치는 저장된 scan이 없으면 쓸 수도 없었다.
 - 교훈: 사유 문자열 하나가 "없음"과 "늦음"을 함께 담으면, 대기 정책이 그 둘을 구분하지 못한다. 판정 입력은 원인별로 분리해 기록한다.
+
+## 2026-09-24 · uncommitted · test(repo): control 패키지 크기 재판정 (D-168 P6, lane-network 병합)
+
+- 변경: `test/test_module_structure.py` `SIZE_VERDICTS["control"]` 기준을 28,315줄에서 **31,249줄**로 바꿨다. 판정은 `split`(P1a, `docs/plans/2026-09-22-control-package-split-design.md`) 그대로다. 예산(10,000줄)과 재성장 허용(+150)은 건드리지 않았다.
+- 원인: feat/lane-network-junctions 가 control 생산 코드에 순증 **+2,934줄**을 더했다(main 28,315 → 병합 31,249). 내역: `sensing/` 신규·변경 +2,531(`paint_localizer` 380·`route_camera` 372·`route_hybrid` 319·`route_map` 296·`lane_boundaries` 279·`lane_debug` 194·`lane_coverage` 175·`lane_route` 161·`dock_observer` 96, `dock_tag` +83, `lane_bev` +35), 관측 노드 +250(`dock_observer_node` 102, `line_observer_node` +148), `map_v2_fleet/scripts` +293, `setup.py` +1.
+- 증거: `_over_budget()` 실측 control 31,249 / 하위 `sensing` 7,397. 재판정 뒤 `python -m pytest test/test_module_structure.py test/test_module_scorecard.py -q` 15 passed (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: split 판정 유지. 증가분 대부분은 ROS-free leaf `sensing/*`이며 분리 설계가 떼어낼 `control_sensing` 단위에 그대로 들어간다(분리 후 그 단위도 10k 예산 안). 새 600줄 초과 파일은 없다(`lane_bev` 646 = accept 611+150 안). 기준 이동 폭(+2,934, 허용의 약 20배)이 main 선례(+156)보다 훨씬 크므로 독립 리뷰에서 확인받는다. split 미일정 상태는 바뀌지 않았다.
+- 교훈: 없음
