@@ -94,6 +94,7 @@
 | D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
 | D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
+| D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 |
 
 ## 계획·결과 문서
 
@@ -116,6 +117,7 @@
 - [2026-09-21-semantic-road-control.md](plans/2026-09-21-semantic-road-control.md)
 - [2026-09-22-pinky-pro-flashable-image-design.md](plans/2026-09-22-pinky-pro-flashable-image-design.md)
 - [2026-09-22-pinky-pro-flashable-image.md](plans/2026-09-22-pinky-pro-flashable-image.md)
+- [2026-09-24-folder-layout.md](plans/2026-09-24-folder-layout.md)
 
 ## 교훈 (docs/solutions)
 
@@ -128,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-186 스크립트와 수집 폴더를 Proposed로 계획
 - 2026-09-24 · uncommitted · docs(adr): D-185 control 런타임 CPU 절감 순서를 기록(Accepted)
 - 2026-09-24 · uncommitted · feat(core,control): implement D-182, D-183, and D-184
 - 2026-09-23 · uncommitted · docs(adr): D-182·D-183·D-184 경계 세 편을 Proposed로 기록
 - 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host
-- 2026-09-23 · uncommitted · merge(docs): origin/main 병합 — ADR 번호 충돌 해소(D-176 복권, 장치 편입은 D-181 이명)

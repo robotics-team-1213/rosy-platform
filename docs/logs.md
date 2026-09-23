@@ -1709,3 +1709,11 @@
 - gate 변화: 없음. 실기 수치는 R8 전까지 HOLD.
 - 결정: D-185 Accepted (사용자 승인 2026-09-24)
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-186 스크립트와 수집 폴더를 Proposed로 계획
+
+- 변경: 스크립트 주인을 `deploy/`, `tools/`, 패키지 `scripts/`, `data/teleop`·`data/drive`로 정하는 D-186과 실행 계획 `docs/plans/2026-09-24-folder-layout.md`를 추가했다. 파일 이동은 하지 않았다. `data/`와 `tools/run_data.py`는 이미 있다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 21 warnings (2026-09-24 Windows). 파일 이동 시험은 계획 착지 전이라 없다.
+- gate 변화: 없음
+- 결정: D-186 Proposed
+- 교훈: 없음
