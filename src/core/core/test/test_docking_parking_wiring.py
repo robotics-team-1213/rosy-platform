@@ -119,15 +119,16 @@ class StillExecutor:
         return True
 
 
-def test_the_bridge_releases_the_mode_once_docking_stops_moving(core_client):
+def test_docking_releases_the_mode_once_it_stops_moving(core_client):
     client, services = core_client(config_overrides=sim_overrides())
     services.docking.executor = StillExecutor()
     client.post("/api/v1/docking/dock", json={"dock": "parking"}, headers=OPERATOR)
-    assert not docking_mode.release_docking_mode(services)     # still docking
+    services.docking.tick()
+    assert services.modes.mode is Mode.DOCKING                 # still docking
     services.docking.cancel()
-    assert docking_mode.release_docking_mode(services)
     assert services.modes.mode is Mode.IDLE
-    assert not docking_mode.release_docking_mode(services)     # nothing to release
+    services.docking.tick()
+    assert services.modes.mode is Mode.IDLE                    # nothing to release
 
 
 def test_the_docking_tick_is_fast_only_for_a_moving_parking_run():

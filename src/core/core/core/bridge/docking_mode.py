@@ -2,12 +2,14 @@
 
 The docking API takes DOCKING when a dock or undock starts (the docking slot
 only reaches the wheels in DOCKING). Once the manager leaves
-DOCKING/UNDOCKING — docked, undocked, failed or cancelled — the mode goes back
-to IDLE here, from the bridge's docking tick, so a finished dock never keeps
-the robot in a mode nothing drives.
+DOCKING/UNDOCKING — docked, undocked, failed or cancelled — it gives the mode
+back to IDLE itself, under its lock (`CoreServices.release_docking_mode`), so a
+finished dock never keeps the robot in a mode nothing drives. The bridge used to
+do that here, outside the lock, and an undock arriving in between was cancelled
+by the mode-exit listener (N1).
 """
 
-from core_common.protocol.schemas import DockState, RobotMode
+from core_common.protocol.schemas import DockState
 from core_features.command.arbitration import Mode
 from core_features.docking.manager import DockPhase
 
@@ -16,26 +18,13 @@ from core_features.docking.manager import DockPhase
 SLOW_EVERY = 4
 
 
-def release_docking_mode(svc) -> bool:
-    """IDLE again once docking no longer moves the robot. True if released."""
-    if svc.modes.mode is not Mode.DOCKING:
-        return False
-    if svc.docking.state in (DockState.DOCKING, DockState.UNDOCKING):
-        return False
-    ok, _ = svc.modes.transition(Mode.IDLE)
-    if ok:
-        svc.command.clear_docking()
-        svc.state.set_mode(RobotMode.IDLE)
-    return ok
-
-
 def tick(svc, warn) -> None:
     """One docking tick from the bridge timer.
 
     An exception here would propagate out of the rclpy timer and stop CORE's
     executor — the 50 Hz cmd_vel timer with it — while the mode stayed
-    DOCKING. Like the swarm tick, it is caught: docking fails and the mode is
-    released, so the robot is left stopped in IDLE.
+    DOCKING. Like the swarm tick, it is caught: docking fails, and the abort
+    releases the mode, so the robot is left stopped in IDLE.
     """
     docking = svc.docking
     docking.on_navigation_state(svc.nav.nav_state)
@@ -48,7 +37,6 @@ def tick(svc, warn) -> None:
             docking.abort(f"docking tick failed: {exc}")
         except Exception as cleanup:  # the state is DOCK_FAILED already
             warn(f"docking cleanup failed: {cleanup}")
-    release_docking_mode(svc)
     svc.state.set_docking(docking.status())
 
 

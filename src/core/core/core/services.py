@@ -20,7 +20,7 @@ from core_features.fleet_agent.agent import FleetAgent
 from core_common.domain.adapters import AdapterRegistry
 
 from core_common.domain.model import inventory_from_config, slices_from_config
-from core_common.protocol.schemas import DockState, HealthState, RobotMode
+from core_common.protocol.schemas import HealthState, RobotMode
 from core_events.events.audit import FileAuditLog
 from core_events.events.bus import EventBus
 from core_common.identity import RobotIdentity
@@ -370,6 +370,7 @@ class CoreServices:
             pose_provider=map_pose,
             line_follow_active_provider=lambda: line_follow.active,
             take_mode=lambda: take_docking_mode(),
+            release_mode=lambda: release_docking_mode(),
         )
 
         def take_docking_mode():
@@ -395,23 +396,38 @@ class CoreServices:
             events.publish("mode.changed", source="docking",
                            data={"from": previous.value, "to": Mode.DOCKING.value,
                                  "by": "docking"})
+
+        def release_docking_mode():
+            """IDLE again once docking no longer moves the robot (docked,
+            undocked, failed or cancelled). The manager calls this under its
+            lock, in the same critical section as the terminal state change, so
+            nobody sees the run over while the mode is still DOCKING — and an
+            undock cannot slip in between and be cancelled by `leave_docking`.
+            A no-op when the mode already left DOCKING (an API mode change,
+            e-stop): that exit is what cancelled the run in the first place."""
+            if modes.mode is not Mode.DOCKING:
+                return
+            ok, _ = modes.transition(Mode.IDLE)
+            if ok:
+                command.clear_docking()
+                state.set_mode(RobotMode.IDLE)
         swarm = SwarmManager(
             events, state, nav, safety, capability,
             # Nav2 를 두고 다투는 것은 DOCKING/UNDOCKING 뿐이다. DOCKED·CHARGING 은
             # 주차 상태이고, DOCK_FAILED 는 설계상 종착이라 그것으로 막으면
             # 도킹 실패 한 번이 군집을 영구히 비활성화한다.
-            docking_active_provider=lambda: docking.state in (
-                DockState.DOCKING, DockState.UNDOCKING),
+            # 락 없는 읽기다 (`DockingManager.active`) — follow() 가 swarm 락을
+            # 쥔 채 묻는다.
+            docking_active_provider=lambda: docking.active,
             map_id_provider=lambda: state.map_id,
         )
         nav.session_closed_listener = swarm.on_navigation_session_closed
         nav.docking_active_provider = lambda: (
-            modes.mode is Mode.DOCKING
-            or docking.state in (DockState.DOCKING, DockState.UNDOCKING))
+            modes.mode is Mode.DOCKING or docking.active)
 
         def leave_docking(old, new):
             """Every exit from DOCKING stops the docking run first — API, line
-            follow, e-stop or the bridge's release. The docking slot only
+            follow, e-stop or docking's own release. The docking slot only
             reaches the wheels in DOCKING, and nothing else may keep driving it."""
             if old is not Mode.DOCKING:
                 return

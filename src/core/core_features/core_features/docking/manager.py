@@ -126,6 +126,7 @@ class DockingManager:
                  pose_provider: Optional[Callable[[], Any]] = None,
                  line_follow_active_provider: Optional[Callable[[], bool]] = None,
                  take_mode: Optional[Callable[[], None]] = None,
+                 release_mode: Optional[Callable[[], None]] = None,
                  ) -> None:
         self._db = database
         self._safety = safety
@@ -143,6 +144,10 @@ class DockingManager:
         # DOCKING 모드를 쥔다. 못 쥐면 DockError 로 거절한다 — 매니저를 건드리기
         # **전에** 부른다. API 와 배터리 복귀가 같은 이음새를 지난다.
         self._take_mode = take_mode or (lambda: None)
+        # 도킹이 DOCKING/UNDOCKING 을 떠나는 바로 그 임계구역에서 모드를 놓는다
+        # (락 안). 밖에서 따로 놓으면 그 틈에 들어온 undock 을 모드 이탈 리스너가
+        # 취소해 버린다 (N1). 모드가 이미 DOCKING 이 아니면 아무것도 안 해야 한다.
+        self._release_mode = release_mode or (lambda: None)
         self._gains = ParkingGains()
         # dock/undock/cancel 은 API 워커에서, tick 은 브리지 타이머에서 온다(D-1).
         # 재진입한다: tick 안의 배터리 복귀가 dock() 을, 모드 이탈 리스너가
@@ -187,11 +192,20 @@ class DockingManager:
 
     @property
     def state(self) -> DockState:
-        return self._state
+        with self._lock:
+            return self._state
+
+    @property
+    def active(self) -> bool:
+        """DOCKING/UNDOCKING 인가 — 락 없이 한 속성만 읽는다. 자기 락을 쥔 채
+        묻는 쪽(swarm, navigation)용이다: 거기서 도킹 락을 잡으면 도킹 락 →
+        항법 락 → swarm 락 순서가 뒤집힌다."""
+        return self._state in (DockState.DOCKING, DockState.UNDOCKING)
 
     @property
     def phase(self) -> Optional[DockPhase]:
-        return self._phase
+        with self._lock:
+            return self._phase
 
     @property
     def retries(self) -> int:
@@ -222,13 +236,14 @@ class DockingManager:
         return self._return_pending
 
     def status(self) -> DockingStatus:
-        return DockingStatus(
-            state=self._state,
-            dock_id=self._dock.id if self._dock else None,
-            phase=self._phase.value if self._phase else None,
-            retries=self._retries,
-            error=self._error,
-        )
+        with self._lock:
+            return DockingStatus(
+                state=self._state,
+                dock_id=self._dock.id if self._dock else None,
+                phase=self._phase.value if self._phase else None,
+                retries=self._retries,
+                error=self._error,
+            )
 
     # --- 명령 -----------------------------------------------------------------
 
@@ -307,7 +322,10 @@ class DockingManager:
     def cancel(self) -> None:
         """진행 중인 시퀀스를 접는다. 실패가 아니라 취소다."""
         with self._lock:
-            self._cancel_locked()
+            try:
+                self._cancel_locked()
+            finally:
+                self._release_mode_when_done()
 
     def _cancel_locked(self) -> None:
         if self._state not in (DockState.DOCKING, DockState.UNDOCKING):
@@ -333,8 +351,12 @@ class DockingManager:
     def abort(self, reason: str) -> None:
         """진행 중인 시퀀스를 실패로 접는다 (예: DOCKING 에서 EMERGENCY 로)."""
         with self._lock:
-            if self._state in (DockState.DOCKING, DockState.UNDOCKING):
-                self._fail(reason)
+            try:
+                if self._state in (DockState.DOCKING, DockState.UNDOCKING):
+                    self._fail(reason)
+            finally:
+                # _fail 은 상태를 먼저 적는다 — 정리가 예외를 내도 모드는 놓는다.
+                self._release_mode_when_done()
 
     def on_navigation_state(self, state: NavigationState) -> None:
         self._nav_state = state
@@ -394,7 +416,15 @@ class DockingManager:
 
     def tick(self, now: Optional[float] = None) -> None:
         with self._lock:
-            self._tick_locked(now)
+            try:
+                self._tick_locked(now)
+            finally:
+                self._release_mode_when_done()
+
+    def _release_mode_when_done(self) -> None:
+        """도킹이 더는 로봇을 움직이지 않으면 DOCKING 을 놓는다. 락 안에서만 부른다."""
+        if self._state not in (DockState.DOCKING, DockState.UNDOCKING):
+            self._release_mode()
 
     def _tick_locked(self, now: Optional[float]) -> None:
         current = self._clock() if now is None else now

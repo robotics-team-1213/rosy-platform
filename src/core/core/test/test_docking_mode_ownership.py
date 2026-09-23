@@ -106,10 +106,9 @@ def test_an_emergency_fails_docking(core_client):
     assert services.docking.state is DockState.DOCK_FAILED
 
 
-def test_the_bridge_release_after_a_finished_run_changes_nothing(core_client):
+def test_a_finished_run_releases_the_mode_and_changes_nothing_else(core_client):
     _, services = docking_robot(core_client)
     services.docking.cancel()
-    assert docking_mode.release_docking_mode(services)
     assert services.docking.state is DockState.UNDOCKED
     assert services.modes.mode is Mode.IDLE
 
@@ -362,7 +361,6 @@ def test_a_default_undock_takes_docking_and_releases_it_when_done(core_client):
     assert executor.calls[-1][0] == "drive"
     assert wheels(services)[0] < 0.0
     services.docking.cancel()
-    assert docking_mode.release_docking_mode(services)
     assert services.modes.mode is Mode.IDLE
 
 
