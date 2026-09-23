@@ -589,3 +589,16 @@
 - gate 변화: 없음. 실제 Pinky에서의 권한(journal 그룹, dmesg_restrict, sudo)과 크기는 미검증
 - 결정: D-175
 - 교훈: `/proc/sys/kernel/random/boot_id`는 대시가 있는 UUID이고 journald boot id는 32자 hex다. 층 사이 상관 키는 비교 전에 정규화한다.
+
+## 2026-09-23 · uncommitted · feat(robot): collect-rosy-diagnostics.ps1, the L2 Windows puller with a card fallback
+
+- 변경: `deploy/robot/collect-rosy-diagnostics.ps1`를 추가했다. `-Host -User rosy -IdentityFile`로 키 전용 BatchMode SSH(비밀번호·키보드
+  인증 끔, `IdentitiesOnly`)를 `%LOCALAPPDATA%\Rosy\known_hosts`에 고정(첫 접속 `accept-new`)해 장치에서 `rosy-diag collect`를 돌리고
+  번들을 `evidence\<device>\<boot_id>\`로 `scp`한다(`.partial` 후 이동, 기존 파일이면 멈춤, 원격 임시 폴더는 항상 삭제). boot_id는 대시를
+  뺀 32자 hex로 정규화한다. SSH가 255로 끝나고 `-CardDisk <serial>`이 있으면 카드의 FAT32 `rosy-diag\`만 승격 없이 복사하고 journal용
+  관리자 명령(`read-card-diagnostics.py`)을 출력한다. `-PrintPlan`은 아무것도 실행하지 않고 계산된 호출을 보여 준다.
+- 증거: `test/test_collect_diagnostics_contract.py` 7 passed(가짜 ssh/scp로 실제 PowerShell 5.1 실행, 2026-09-23 Windows). 실제
+  Windows OpenSSH 9.5로 도달 불가 주소(192.0.2.1)에 실행해 exit 255 → `-CardDisk` 안내를 확인.
+- gate 변화: 없음. 실제 장치 SSH·scp와 카드 드라이브 문자 탐색(`Get-Disk`/`Get-Volume`)은 미검증
+- 결정: D-175
+- 교훈: Windows PowerShell 5.1은 네이티브 인자 안의 큰따옴표를 망가뜨린다. 원격 명령은 큰따옴표 없이 쓰고 값은 인자로 넘긴다.

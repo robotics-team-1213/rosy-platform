@@ -100,5 +100,8 @@ pass `deploy/release/secret_scan.py`.
   (D-174 T0), sharing the stage model. FAT32 write on hardware unproven until release 003 boots.
 - Task 4 (L2 collector): done in source. `deploy/robot/native/rosy_diag_collect.py` + `rosy-diag` wrapper; redacted,
   bounded tar.gz with `manifest.json`; proven in the installed layout and once on WSL Ubuntu, not on a Pinky.
-- Tasks 2, 5-8: pending.
+- Task 5 (L2 puller): done in source. `deploy/robot/collect-rosy-diagnostics.ps1` (key-only BatchMode SSH, pinned
+  known_hosts, no-overwrite evidence, card black-box fallback, `-PrintPlan`); deep read is D-174 Task 8's
+  `deploy/sd/read-card-diagnostics.py`. Proven with fake ssh/scp only; no real device pull yet.
+- Tasks 2, 6-8: pending.
 
