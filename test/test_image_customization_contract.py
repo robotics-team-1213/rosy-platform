@@ -219,3 +219,9 @@ def test_image_enables_and_probes_the_d176_boot_settings_and_fallback_ap():
                  'cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"',
                  'cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"'):
         assert line in payload, line
+
+
+def test_image_puts_rosy_diag_on_path():
+    # D-175 L2: an operator on the console types `rosy-diag collect`.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    assert 'ln -sfn /opt/rosy/native-runtime/rosy-diag "$ROOT/usr/local/bin/rosy-diag"' in source

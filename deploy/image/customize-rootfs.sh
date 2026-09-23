@@ -170,6 +170,9 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
+# D-175 L2: `rosy-diag collect` on PATH; the wrapper resolves the link.
+mkdir -p "$ROOT/usr/local/bin"
+ln -sfn /opt/rosy/native-runtime/rosy-diag "$ROOT/usr/local/bin/rosy-diag"
 
 while IFS= read -r package; do
     [[ -z "$package" || "$package" == \#* ]] && continue

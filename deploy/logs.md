@@ -602,3 +602,12 @@
 - gate 변화: 없음. 실제 장치 SSH·scp와 카드 드라이브 문자 탐색(`Get-Disk`/`Get-Volume`)은 미검증
 - 결정: D-175
 - 교훈: Windows PowerShell 5.1은 네이티브 인자 안의 큰따옴표를 망가뜨린다. 원격 명령은 큰따옴표 없이 쓰고 값은 인자로 넘긴다.
+
+## 2026-09-23 · uncommitted · feat(image): put rosy-diag on PATH (D-175 L2)
+
+- 변경: 이미지가 `/usr/local/bin/rosy-diag` → `/opt/rosy/native-runtime/rosy-diag` 링크를 만든다. 콘솔에서 `rosy-diag collect --out DIR`로 바로 쓴다.
+  wrapper는 링크를 따라가 자기 위치를 찾는다(WSL symlink 테스트로 확인됨). Windows 수집기는 계속 전체 경로를 쓴다.
+- 증거: `test_image_customization_contract.py` 통과 (2026-09-23 Windows). 기기 확인 없음.
+- gate 변화: 없음
+- 결정: D-175
+- 교훈: 없음
