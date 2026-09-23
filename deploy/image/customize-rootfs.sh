@@ -196,7 +196,7 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
     rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
-    rosy-boot-status.service rosy-boot-status.timer \
+    rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"

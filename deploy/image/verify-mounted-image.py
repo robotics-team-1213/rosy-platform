@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -75,6 +76,13 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append("chrony is not installed: timestamps presume a synced clock")
     elif not (root / "etc/systemd/system/multi-user.target.wants/chrony.service").exists():
         findings.append("chrony.service is not enabled")
+    # D-192 US-003: CORE_READY is shown as soon as the runtime target settles.
+    # lexists: `systemctl --root` links point at the image's /usr/lib, not the host's.
+    ready = "rosy-boot-status-ready.service"
+    if not (root / "etc/systemd/system" / ready).is_file():
+        findings.append(f"missing systemd unit: {ready}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / ready):
+        findings.append(f"{ready} is not enabled")
     # D-176: the fallback AP is NetworkManager shared mode, which runs dnsmasq.
     if not (root / "usr/sbin/dnsmasq").exists():
         findings.append("dnsmasq is not installed: the fallback AP (NM shared mode) cannot start")

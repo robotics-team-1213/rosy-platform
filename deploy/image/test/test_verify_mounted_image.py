@@ -62,6 +62,9 @@ def test_inspect_passes_with_valid_image(tmp_path):
     wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
     wants.parent.mkdir(parents=True, exist_ok=True)
     wants.write_text("mock", encoding="utf-8")
+    # D-192 US-003: the post-runtime indicator run ships enabled.
+    (root / "etc/systemd/system/rosy-boot-status-ready.service").write_text("mock", encoding="utf-8")
+    (wants.parent / "rosy-boot-status-ready.service").write_text("mock", encoding="utf-8")
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings

@@ -132,6 +132,9 @@ def _valid_root(tmp_path: Path) -> Path:
     wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
     wants.parent.mkdir(parents=True, exist_ok=True)
     wants.write_text("[Unit]\n", encoding="utf-8")
+    # D-192 US-003: the post-runtime indicator run ships enabled.
+    (root / "etc/systemd/system/rosy-boot-status-ready.service").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-boot-status-ready.service").write_text("[Unit]\n", encoding="utf-8")
     return root
 
 
@@ -189,6 +192,21 @@ def test_mounted_image_verifier_rejects_missing_or_disabled_chrony(tmp_path):
     completed = _verify(absent)
     assert completed.returncode != 0
     assert "chrony" in completed.stderr.lower()
+
+
+def test_mounted_image_verifier_rejects_a_missing_or_disabled_ready_run(tmp_path):
+    # D-192 US-003: without it CORE_READY waits for the 30 s timer.
+    disabled = _valid_root(tmp_path / "disabled")
+    (disabled / "etc/systemd/system/multi-user.target.wants/rosy-boot-status-ready.service").unlink()
+    completed = _verify(disabled)
+    assert completed.returncode != 0
+    assert "rosy-boot-status-ready.service is not enabled" in completed.stderr
+
+    absent = _valid_root(tmp_path / "absent")
+    (absent / "etc/systemd/system/rosy-boot-status-ready.service").unlink()
+    completed = _verify(absent)
+    assert completed.returncode != 0
+    assert "missing systemd unit: rosy-boot-status-ready.service" in completed.stderr
 
 
 def test_customizer_executes_native_entrypoints_inside_the_image():

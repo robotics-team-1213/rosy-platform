@@ -245,6 +245,56 @@ def test_indicator_unit_is_rate_unlimited_and_not_ordered_after_the_runtime():
     assert "RestartMode=direct" in core  # restarts no longer fire OnFailure each time
 
 
+# --- D-192 US-003: CORE_READY as soon as the runtime target settles ---------
+#
+# rosy-pinky-e4us 2026-09-24: the indicator ran at ~9 s, ~20 s and then every
+# 30 s, so CORE_READY appeared at 53-55 s although CORE was ready at ~23 s.
+
+READY = NATIVE / "rosy-boot-status-ready.service"
+
+
+def _unit_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+
+
+def test_ready_run_is_ordered_after_the_runtime_target_without_requiring_it():
+    unit = READY.read_text(encoding="utf-8")
+    lines = _unit_lines(unit)
+    after = [line for line in lines if line.startswith("After=")]
+
+    assert after and {"rosy-runtime.target", "rosy-core.service"} <= set(after[0][len("After="):].split())
+    # Ordering, not a dependency: a failed runtime must still be shown at once,
+    # and the indicator must never pull the runtime in or hold it up.
+    assert not any(line.startswith(("Requires=", "BindsTo=", "Requisite=", "PartOf=")) for line in lines)
+    assert "Type=oneshot" in lines
+    assert "ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-status.py" in lines
+    assert "WantedBy=multi-user.target" in lines
+    # Same root-owned output directory as the periodic indicator (review H1).
+    assert "RuntimeDirectory=rosy-boot" in lines and "RuntimeDirectoryPreserve=yes" in lines
+    assert "User=" not in unit
+
+
+def test_the_runtime_target_does_not_pull_the_ready_run_in():
+    # A unit the target Wants runs before the target is reached, when the
+    # classifier still sees it activating.
+    target = (NATIVE / "rosy-runtime.target").read_text(encoding="utf-8")
+    core = (NATIVE / "rosy-core.service").read_text(encoding="utf-8")
+    assert "rosy-boot-status-ready" not in target
+    assert "rosy-boot-status-ready" not in core
+    assert "WantedBy=rosy-runtime.target" not in READY.read_text(encoding="utf-8")
+
+
+def test_image_installs_and_enables_the_ready_run():
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    verifier = (ROOT / "deploy/image/verify-mounted-image.py").read_text(encoding="utf-8")
+
+    assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status-ready.service" "$OVERLAY/etc/systemd/system/"' in payload
+    enable = customizer.split("systemctl --root")[1].split("\n\n")[0]
+    assert "rosy-boot-status-ready.service" in enable
+    assert '"rosy-boot-status-ready.service"' in verifier
+
+
 # --- Fallback AP shown to people (D-176 Task 5) -----------------------------
 
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
