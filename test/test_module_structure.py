@@ -103,7 +103,7 @@ SIZE_VERDICTS = {
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
     "core/core_events/core_events/events/audit.py": (
-        707,
+        745,
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),

@@ -31,3 +31,11 @@
 - gate 변화: 없음.
 - 결정: 없음(D-172 F2 연장).
 - 교훈: 파일 신원 검사를 Windows에서만 검증하면 inode 재사용을 못 본다. 제자리 덮어쓰기 시험으로 OS와 무관하게 재현한다.
+
+## 2026-09-23 · uncommitted · fix(core_events): the splice check also looks at the head, and the quarantine marker records our own end
+
+- 변경: 리뷰(`348e473`)의 선택 보강 3건. (1) 이어 붙이기 전에 경계 바로 앞뿐 아니라 파일 앞 최대 4 KiB도 스냅샷과 비교한다. 같은 길이로 제자리 저장하는 편집기는 inode·크기·끝을 모두 그대로 두므로, 끝만 보면 그 편집을 옛 스냅샷이 조용히 되돌린다. 락 안에서 읽는 양은 합해 8 KiB 이하다. (2) 격리 파일의 중복 방지 표시는 `fstat` 크기 대신 우리가 쓴 끝(`tell()`)을 기록한다. 그 사이 남이 덧붙인 바이트를 지문으로 삼지 않는다. (3) `_quarantined` 타입 주석을 실제 모양대로 적었다. `audit.py` 745줄, D-168 판정 수치 갱신.
+- 증거: 신규 `test_a_file_edited_in_place_near_the_start_is_not_spliced`는 이전 `audit.py`에서 실패하고 이 변경에서 통과한다. `test_audit.py` + `test_diagnostics_api.py` 79 passed(Windows 3.14).
+- gate 변화: 없음.
+- 결정: 없음(D-172 F2 연장).
+- 교훈: 없음

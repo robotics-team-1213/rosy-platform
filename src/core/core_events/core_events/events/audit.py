@@ -90,8 +90,11 @@ _YIELD_S = 0.001
 
 #: "이 파일이 아직 그 파일인가"를 (장치, inode)만으로 묻지 않는다. Linux 는
 #: 지운 파일의 inode 번호를 곧바로 새 파일에 다시 준다(ext4·tmpfs) — 지우고
-#: 다시 만든 파일이 같은 신원으로 보인다. 그래서 이어 붙일 경계 **바로 앞**
-#: 바이트도 맞춰 본다. 락 안에서 읽는 것은 이만큼뿐이다.
+#: 다시 만든 파일이 같은 신원으로 보인다. 같은 길이로 제자리 저장하는 편집기도
+#: inode·크기를 그대로 둔다. 그래서 파일 **앞**과 이어 붙일 경계 **바로 앞**의
+#: 바이트를 이만큼씩 맞춰 본다 — 락 안에서 읽는 것은 합해 두 배 이하다.
+#: 남는 틈: 그 두 구간 사이만 같은 길이로 고친 제자리 편집은 여전히 못 잡는다.
+#: 막으려면 락 안에서 파일 전체를 읽어야 하고, 그것은 이 설계가 피한 비용이다.
 _FINGERPRINT_BYTES = 4096
 
 
@@ -218,10 +221,12 @@ class FileAuditLog:
         self._dir_sync_failures = 0
         self._last_dir_sync_error: Optional[str] = None
         #: 이미 격리한 줄 (본 파일 신원, {(오프셋, 바이트)}, 격리 파일의
-        #: (dev, ino, 크기)), 작업 스레드 전용. 바꿔 끼우기가 실패한 뒤의 재시도가
-        #: 같은 증거를 두 벌 남기지 않게 한다. 격리 파일이 그 사이 지워지거나
-        #: 바뀌거나 줄었으면 믿지 않고 다시 격리한다 — 틀려도 중복 쪽으로 틀린다.
-        self._quarantined: Optional[tuple[tuple, set[tuple[int, bytes]], tuple]] = None
+        #: (dev, ino, 우리가 쓴 끝 오프셋, 마지막으로 쓴 바이트)), 작업 스레드 전용.
+        #: 바꿔 끼우기가 실패한 뒤의 재시도가 같은 증거를 두 벌 남기지 않게 한다.
+        #: 격리 파일이 그 사이 지워지거나 바뀌거나 줄었으면 믿지 않고 다시
+        #: 격리한다 — 틀려도 중복 쪽으로 틀린다.
+        self._quarantined: Optional[tuple[
+            tuple[int, int], set[tuple[int, bytes]], tuple[int, int, int, bytes]]] = None
         #: 정리 작업 스레드. `None` 이면 요청도 진행 중인 정리도 없다 — 스레드는
         #: 할 일이 없으면 이 칸을 **락 안에서** 비우고 끝난다. 그래서 정리는
         #: 구조적으로 한 번에 하나이고(스레드가 하나뿐이다), 한 시간 내내 잠든
@@ -549,7 +554,10 @@ class FileAuditLog:
         with handle:
             data = handle.read(size)
         snapshot = io.BytesIO(data)
-        boundary = data[-_FINGERPRINT_BYTES:]
+        # 앞과 끝을 모두 본다. 끝만 보면 같은 inode 위에서 앞부분만 제자리
+        # 편집된 파일(같은 길이로 저장하는 편집기)을 놓치고, 그 편집을 우리
+        # 옛 스냅샷이 조용히 되돌린다.
+        fingerprint = (data[:_FINGERPRINT_BYTES], data[-_FINGERPRINT_BYTES:])
         tmp = self._path.with_name(self._path.name + ".tmp")
         try:
             dropped, quarantined = self._classify(snapshot, size)
@@ -582,13 +590,17 @@ class FileAuditLog:
                 with self.quarantine_path.open("ab") as sink:
                     sink.write(payload)
                     sink.flush()
+                    # 우리가 쓴 끝. `fstat` 의 크기는 그 사이 남이 덧붙인
+                    # 바이트까지 포함할 수 있고, 그러면 아래 지문이 남의
+                    # 바이트를 가리킨다.
+                    end = sink.tell()
                     os.fsync(sink.fileno())
                     info = os.fstat(sink.fileno())
                 self._quarantined = (identity, done | set(fresh),
-                                     (info.st_dev, info.st_ino, info.st_size,
+                                     (info.st_dev, info.st_ino, end,
                                       payload[-_FINGERPRINT_BYTES:]))
             with self._lock:
-                tail = self._tail_after_locked(size, identity, boundary)
+                tail = self._tail_after_locked(size, identity, fingerprint)
                 if tail is None:
                     # 실패가 아니라 전제가 깨진 것이다. 그래도 세어 둔다 — 조용히
                     # 넘기면 파일을 계속 자르는 외부 도구 하나가 정리를 영원한
@@ -684,7 +696,7 @@ class FileAuditLog:
         return ts if isinstance(ts, str) else None
 
     def _tail_after_locked(self, offset: int, identity: Optional[tuple],
-                           boundary: bytes = b"") -> Optional[bytes]:
+                           fingerprint: tuple[bytes, bytes]) -> Optional[bytes]:
         """스냅샷 이후에 덧붙은 바이트. 이어 붙일 수 없으면 `None`.
 
         이 자리가 성립하는 근거는 "그 사이 이 파일에는 덧붙이기만 일어난다"
@@ -704,8 +716,14 @@ class FileAuditLog:
                 return None
             if info.st_size < offset:
                 return None
-            # 신원이 같아도 inode 번호를 물려받은 다른 파일일 수 있다
-            # (`_FINGERPRINT_BYTES`). 경계 바로 앞이 우리가 읽은 그대로인지 본다.
+            # 신원이 같아도 inode 번호를 물려받은 다른 파일이거나 제자리 편집된
+            # 파일일 수 있다(`_FINGERPRINT_BYTES`). 앞과 경계 바로 앞이 우리가
+            # 읽은 그대로인지 본다. 락 안에서 읽는 것은 합해 8 KiB 이하다.
+            head, boundary = fingerprint
+            if head:
+                handle.seek(0)
+                if handle.read(len(head)) != head:
+                    return None
             if boundary:
                 handle.seek(offset - len(boundary))
                 if handle.read(len(boundary)) != boundary:

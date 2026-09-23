@@ -90,7 +90,8 @@ def test_a_write_does_not_rewrite_the_whole_file_every_time(tmp_path, monkeypatc
     real_open = Path.open
 
     def note(self, mode="r", *args, **kwargs):
-        opens.append(mode)
+        if self == path:                    # 남의 스레드가 여는 파일은 세지 않는다
+            opens.append(mode)
         return real_open(self, mode, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", note)
@@ -580,7 +581,11 @@ def test_the_terminator_is_checked_once_not_on_every_record(tmp_path):
     real_open = Path.open
 
     def note(self, *args, **kwargs):
-        opens.append(str(args[0]) if args else "r")
+        # 이 로그의 파일만 센다. `Path.open` 은 클래스 전체에서 바뀌므로, 앞선
+        # 시험이 남긴 백그라운드 스레드가 여는 남의 파일까지 세면 부하가 큰
+        # 전체 실행에서만 가끔 붉어진다.
+        if self == path:
+            opens.append(str(args[0]) if args else "r")
         return real_open(self, *args, **kwargs)
 
     log.record(_event(1, now.isoformat()))          # 첫 기록이 확인한다
@@ -663,6 +668,32 @@ def test_a_file_rewritten_in_place_is_not_spliced(tmp_path):
     _prune_with(log, path, someone_rewrites_it)
 
     assert path.read_text(encoding="utf-8") == replacement
+    health = log.health()
+    assert health["prune_skipped"] == 1
+    assert health["prune_failures"] == 0
+
+
+def test_a_file_edited_in_place_near_the_start_is_not_spliced(tmp_path):
+    """끝 4 KiB 가 같아도 앞부분이 바뀌었으면 이어 붙이지 않는다. 같은 길이로
+    제자리 저장하는 편집기는 inode·크기·끝을 모두 그대로 두므로, 앞도 보지
+    않으면 우리 옛 스냅샷이 그 편집을 조용히 되돌린다."""
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    path = tmp_path / "audit.jsonl"
+    stale = _event(1, (now - timedelta(days=31)).isoformat()).model_dump_json()
+    fresh = [_event(10 + i, now.isoformat()).model_dump_json() for i in range(80)]
+    path.write_text("\n".join([stale, *fresh]) + "\n", encoding="utf-8")
+    assert path.stat().st_size > 2 * 4096, "the head and the boundary must not overlap"
+    log = FileAuditLog(path, retention_days=30, now=lambda: now)
+    edited = stale.replace('"seq":1,', '"seq":7,')
+    assert edited != stale and len(edited) == len(stale)
+
+    def someone_edits_the_first_line():
+        with path.open("r+b") as handle:          # 같은 inode, 같은 크기, 같은 끝
+            handle.write(edited.encode("utf-8"))
+
+    _prune_with(log, path, someone_edits_the_first_line)
+
+    assert path.read_text(encoding="utf-8").startswith(edited), "the edit was undone"
     health = log.health()
     assert health["prune_skipped"] == 1
     assert health["prune_failures"] == 0
@@ -866,7 +897,7 @@ def test_a_last_byte_we_could_not_read_is_treated_as_unterminated(tmp_path, monk
     real_open = Path.open
 
     def deny_reads(self, mode="r", *args, **kwargs):
-        if "b" in mode and "r" in mode:
+        if self == path and "b" in mode and "r" in mode:
             raise PermissionError("in use")
         return real_open(self, mode, *args, **kwargs)
 
@@ -926,7 +957,7 @@ def test_the_writer_asks_for_no_newline_translation(tmp_path, monkeypatch):
     real_open = Path.open
 
     def note(self, mode="r", *args, **kwargs):
-        if "a" in mode:
+        if "a" in mode and self.parent == tmp_path:     # 이 시험의 파일만
             seen.append(kwargs.get("newline", "<missing>"))
         return real_open(self, mode, *args, **kwargs)
 
