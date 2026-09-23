@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · ci: gate the hardware safety tests that CI never ran (D-192)
+- 2026-09-24 · uncommitted · fix(image,bringup): D-192 review
+- 2026-09-24 · uncommitted · feat(image,bringup): D-192 hardware runtime in the image (US-003/004/005)
 - 2026-09-24 · uncommitted · fix(sd,first-boot): US-009 security review (D-191)
 - 2026-09-24 · uncommitted · feat(sd,first-boot): per-card CORE API administrator credential (D-191, US-009)
-- 2026-09-24 · uncommitted · docs(adr): D-191 device readiness matrix and first real-device evaluation
-- 2026-09-24 · uncommitted · docs(adr): D-190 vendor-parity boot display plan (LCD, buzzer, battery)
-- 2026-09-24 · uncommitted · fix(native,image,ci): D-189 review — no startup hooks in a writable HOME, release/image Python runtime match, probe as the unit

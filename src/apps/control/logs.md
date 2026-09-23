@@ -296,3 +296,17 @@
 - gate 변화: 없음. Pi 수치는 D-185 R8 전까지 HOLD.
 - 결정: D-185 R1(사용자 승인 2026-09-24). 캐시 대신 벡터화했고, ADR에 구현 메모를 달았다.
 - 교훈: 결과 동일 최적화도 입력 분포가 다르면 느려질 수 있다(희소 지도·큰 반경). 비용은 대표 입력과 극단 입력 모두로 잰다.
+
+## 2026-09-24 · uncommitted · fix(control): ir_adc_node holds the I2C-1 bus lock per cycle (D-192)
+- 변경: `ir_adc_node`의 세 채널 읽기를 `/dev/i2c-1` descriptor의 `flock(LOCK_EX)` 안에서 한다. bringup `rosylib.Battery`가 같은 MCU(0x08)의 채널 4를 다른 프로세스에서 읽는다
+- 증거: `python -m pytest src/apps/control/test src/hardware/bringup/test/test_adc_ownership.py test/test_ir_source_exclusivity.py -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(control): ir_adc_node bus lock is a behaviour test (D-192 review)
+- 변경: fake fd·fake `fcntl` 위에서 `_ADCReader.read_channels`를 돌려 잠금이 세 채널의 쓰기·대기·읽기 전체를 덮고 실패 때도 풀리는지 본다
+- 증거: `python -m pytest src/apps/control/test/test_ir_adc_lock.py -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 없음

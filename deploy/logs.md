@@ -882,3 +882,42 @@
 - 결정: D-191
 - 교훈: 없음
 - 미결(다른 스토리): `rosy-dev-*` 차단은 overlay 목록 대체에만 기대므로 overlay가 비거나 `auth.tokens`를 잃으면 되살아난다. 기기 기본값에서 `rosy-dev-*` 제거 또는 native runtime에서 CORE가 거부하는 심층 방어가 남음 (runbook에도 기록)
+
+## 2026-09-24 · uncommitted · feat(image,bringup): D-192 hardware runtime in the image (US-003/004/005)
+
+- 변경: (US-003) `rosy-boot-status-ready.service`를 `After=rosy-runtime.target rosy-core.service`(의존 없음)로 추가해 이미지가
+  설치·활성화한다. (US-004) customizer가 `configure-uart-pi5.sh --image-root`로 `config.txt` `[all]`에 `dtoverlay=uart4-pi5`를 넣는다.
+  같은 스크립트의 vfat 쓰기는 chmod 대신 rename으로 바꿨다. 검사기가 overlay와 udev 규칙을 본다. (US-005) `sllidar_ros2`를 lock
+  (`34300099…`, 아카이브 SHA-256)으로 고정해 hardware-deps 단계가 받고 오프라인 payload 빌더가 빌드한다. `dynamixel-sdk 3.8.4`·
+  `pyserial 3.5`를 `device-python-requirements.txt`에 해시로 더해 D-189 런타임 검사가 덮는다. `rosylib.Battery`(공개 ADC 프로토콜,
+  CORE 곡선 복사), ADC `flock` 소유 규칙, bringup `drive_enabled`(무동작: torque off, `cmd_vel` 미구독, `motor/ready` false)를
+  넣고 `rosy-io`의 기본으로 했다. `rosy-io`·`rosy-navigation`을 overlay에 설치(미활성)하고 io probe가 chroot에서 확인한다.
+- 증거: 관련 host 스위트 통과(2026-09-24 Windows, 수치는 보고서). `configure-uart-pi5.sh` 이미지 모드는 Git Bash로 실제 실행.
+  휠 해시는 cp312 aarch64·x86_64 `--require-hashes` 다운로드 16개, sllidar 아카이브 해시는 독립 다운로드 2회 일치.
+- gate 변화: 없음. 이미지 빌드와 실기 확인(D-192 "실기 수용 확인" 1-9)이 남았다
+- 결정: D-192 Proposed
+- 교훈: 이미지가 굽지 않는 retrofit 스크립트는 장치에만 있는 설정을 만든다 — 이미지와 장치가 같은 스크립트를 부르게 한다
+
+## 2026-09-24 · uncommitted · fix(image,bringup): D-192 review
+
+- 변경: (MEDIUM) 벤더 해시 고정: hardware-deps 단계는 `sllidar_ros2` 아카이브를 그대로 두고, payload 빌더가
+  `prepare-vendor-source.sh`로 lock 해시를 다시 확인해 새 임시 디렉터리에 풀고 루트의 `sllidar_ros2` 하나만(여분·다른 이름 거부)
+  rosdep·colcon에 넘긴다. (LOW) `drive_enabled` read-only, `ROSY_IO_DRIVE_ENABLED`는 `ExecStartPre`로 `true`/`false`만(그 밖은 78로
+  기동 실패), `battery_publisher` 버스 재시도(fail-closed), `sensor_adc` C++ flock, ready unit `TimeoutStartSec=10`과
+  `rosy-boot-status.py` 실행 잠금(`/run/rosy-boot/.run.lock`), 검사기가 기반 `config.txt`의 `enable_uart=1`·`dtparam=i2c_arm=on`
+  확인, chroot rosdep `--skip-keys sllidar_ros2`, 장치 `config.txt.rosy-backup` 복구 절차를 D-192에 기록. source-grep 시험을
+  동작 시험(stub rclpy 노드, fake fd IR 독자, settle 순서)으로 바꿨다. `origin/main 7a55ee1b`(D-190·D-191)로 rebase.
+- 증거: 관련 host 스위트 통과(2026-09-24 Windows, 수치는 보고서), 실행 잠금 동시성 시험은 WSL에서 통과, 하네스 lint 0 error.
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 풀어 둔 트리 옆의 해시 표시는 내용을 증명하지 않는다 — 해시는 빌드가 실제로 읽는 바이트에 건다
+
+## 2026-09-24 · uncommitted · ci: gate the hardware safety tests that CI never ran (D-192)
+
+- 변경: CI는 `src/core/core`·`fleet`·`gz_sim`·루트 `test/`만 돌려 `src/hardware/*/test`·`src/apps/*/test`가 한 번도 게이트되지 않았다.
+  무동작 모드(토크 꺼짐·cmd_vel 미구독)·ADC 버스 잠금·배터리 곡선 시험을 새 스텝 "Test (hardware safety …)"로 올렸다.
+- 증거: WSL Linux에서 같은 명령 454 passed. 나머지 패키지 시험의 기존 적색(Linux): bringup/led/emotion ament flake8·pep257,
+  control `test_localization_gate`·`test_os_camera_graph`·`test_os_watch_graph`, games `test_games_cli` 4건 — 이 변경 밖, D-191 후속 과제.
+- gate 변화: CI에 하드웨어 안전 스텝 추가
+- 결정: D-192
+- 교훈: 시험을 추가할 때 CI가 그 폴더를 실제로 돌리는지 확인한다. 이 저장소에서는 루트 `test/`로 옮기면 D-184가, 패키지로 옮기면 CI가 막는다.

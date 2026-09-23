@@ -1,0 +1,3 @@
+# Third-party ROS packages built into every product image from the lock (D-192).
+# Not in src/, so required-ros-packages.txt (in-tree closure) cannot name them.
+sllidar_ros2

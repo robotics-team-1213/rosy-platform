@@ -48,6 +48,8 @@ WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
+IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
+UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
@@ -57,8 +59,12 @@ CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
 [[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
+[[ -f "$IO_PROBE" ]] || fail "hardware runtime probe is missing"
+[[ -f "$UART_CONFIG" ]] || fail "UART4 motor bus configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
+[[ "$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware" ]] \
+    || fail "ROSY_IMAGE_BOOT is not the image's /boot/firmware"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
 [[ ! -e "$RELEASE" ]] || fail "release already exists in image"
 for command in curl sha256sum chroot mount umount cp rm mkdir ln systemctl python3; do
@@ -146,8 +152,16 @@ ROSDEP_PATH_OUTPUT="$(
 )" || fail "could not resolve required ROSY package dependency closure"
 [[ -n "$ROSDEP_PATH_OUTPUT" ]] || fail "required ROSY package dependency closure is empty"
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
+# D-192: third-party packages the release builds itself (sllidar_ros2, which
+# bringup exec_depends on) are not in these source paths; skip their keys so
+# rosdep never tries to resolve them, whether or not rosdistro knows them.
+mapfile -t VENDOR_ROS_PACKAGES < <(
+    tr -d '\r' < "$(dirname "$0")/vendor-ros-packages.txt" \
+        | sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d'
+)
+(( ${#VENDOR_ROS_PACKAGES[@]} > 0 )) || fail "vendor ROS package list is empty"
 chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
-    --ignore-src -r -y --rosdistro jazzy
+    --ignore-src -r -y --rosdistro jazzy --skip-keys "${VENDOR_ROS_PACKAGES[*]}"
 # D-189 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
 # pydantic 1.10 and fastapi 0.101, and nothing provides websockets. CORE needs
 # the hash-locked set. Root pip on Ubuntu installs into
@@ -157,6 +171,7 @@ chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
 mkdir -p "$ROOT/tmp/rosy-core-probe"
 cp "$PYTHON_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/device-python-requirements.txt"
 cp "$CORE_PROBE" "$ROOT/tmp/rosy-core-probe/probe-core-runtime.py"
+cp "$IO_PROBE" "$ROOT/tmp/rosy-core-probe/probe-io-runtime.py"
 chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 # umask 022: the service users must be able to read what root installs.
 (umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
@@ -184,6 +199,11 @@ chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"
+# D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
+# Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
+# Same script and same edit as the on-device retrofit, pointed at the image.
+bash "$UART_CONFIG" --image-root "$ROOT" \
+    || fail "could not enable the UART4 motor bus in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 
@@ -196,7 +216,7 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
     rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
-    rosy-boot-status.service rosy-boot-status.timer \
+    rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
@@ -244,6 +264,14 @@ chroot "$ROOT" setpriv --reuid=rosy-core --regid=rosy-core --clear-groups \
     env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/core PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
     bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
     || fail "CORE does not import inside the image"
+# D-192 US-005: the hardware runtime, as rosy-io.service runs it: user
+# rosy-io, its HOME, no login shell, no user site. dynamixel_sdk, rosylib
+# and the bringup nodes import; sllidar_ros2 and the launch files resolve in
+# the release; the units are installed, not enabled. Opens no device.
+chroot "$ROOT" setpriv --reuid=rosy-io --regid=rosy-io --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/io PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-io-runtime.py' \
+    || fail "the hardware runtime does not import inside the image"
 rm -rf -- "$ROOT/tmp/rosy-core-probe"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"

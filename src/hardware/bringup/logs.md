@@ -16,3 +16,17 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(bringup): rosylib battery, ADC flock and no-motion mode (D-192)
+- 변경: `rosylib/`(Rosy 소유 `Battery`, `LED`는 명시적 ImportError), `battery_publisher` 버스 실패 시 미발행, `dynamixel_driver.initialize_motors(enable_torque=False)`, 노드 `drive_enabled` 파라미터와 launch 인자
+- 증거: `python -m pytest src/hardware/bringup/test test/test_rosylib_battery_curve.py test/test_dynamixel_driver_safety.py test/test_bringup_motor_contracts.py -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음. DEVICE는 D-192 실기 수용 확인 전까지 HOLD
+- 결정: D-192 Proposed
+- 교훈: 무동작은 발행자가 아니라 액추에이터에서 보장한다
+
+## 2026-09-24 · uncommitted · fix(bringup): D-192 review — read-only drive flag, battery bus retry, behaviour tests
+- 변경: `drive_enabled`를 `ParameterDescriptor(read_only=True)`로, `battery_publisher`가 버스 부재·읽기 실패 뒤 타이머에서 다시 연다(그동안 미발행). `test/ros_stubs.py`로 stub rclpy 위에서 `Rosy` 노드와 발행자를 실제로 돌리는 시험, settle 순서를 기록하는 rosylib 시험
+- 증거: `python -m pytest src/hardware/bringup/test -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 안전 성질은 소스 문자열이 아니라 가짜 버스 위의 실행으로 고정한다

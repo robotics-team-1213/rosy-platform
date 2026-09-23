@@ -93,6 +93,18 @@ jobs:
           . src/install/setup.sh
           python3 -m pytest src/sim/gz_sim/test -v
 
+      # D-192: 패키지 안의 하드웨어 안전 시험은 지금까지 CI 에서 한 번도 돌지 않았다
+      # (이 워크플로는 src/core/core·fleet·gz_sim·루트 test/ 만 실행한다). 무동작 모드
+      # (토크 꺼짐·cmd_vel 미구독), ADC 버스 잠금, 배터리 곡선 고정을 게이트로 올린다.
+      # ament 린트(flake8/pep257/copyright)는 기존 파일들이 이미 적색이라 여기서 빼고,
+      # 다른 패키지 시험(control·games·emotion·led)의 기존 적색은 D-191 후속 과제다.
+      - name: Test (hardware safety - no-motion, ADC lock, battery curve)
+        shell: bash
+        run: |
+          set -eo pipefail
+          . /opt/ros/jazzy/setup.sh
+          python3 -m pytest src/hardware/bringup/test src/hardware/sensor_adc/test             src/apps/control/test/test_ir_adc_lock.py             --ignore=src/hardware/bringup/test/test_flake8.py             --ignore=src/hardware/bringup/test/test_pep257.py             --ignore=src/hardware/bringup/test/test_copyright.py -v
+
       # 루트 test/ 는 배포·릴리스 계약을 담고 있으면서도 지금까지 CI 에서 한 번도
       # 실행되지 않았다. 위 스텝이 src/core/core/test 만 돌기 때문이다. 그래서
       # compose 권한 경계와 Wi-Fi 배포 계약이 검증 없이 지나갔다.

@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(sensor_adc): hold the I2C-1 bus lock per channel transaction (D-192 review)
 - 2026-09-23 · uncommitted · hardware(sensor_adc): wiringPi RawWrite const 호환 (WSL 구문 검사 적색→초록)
 - 2026-09-22 · uncommitted · sensor_adc(robustness): 버스 결함은 발행 생략 + 건강 토픽 (T4)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-16 · uncommitted · docs(harness): regrade sensor_adc gates after review
-- 2026-09-15 · uncommitted · docs(harness): start the sensor_adc harness record

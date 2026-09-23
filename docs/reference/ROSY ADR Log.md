@@ -199,4 +199,5 @@
 | D-189 | unit의 샌드박스·HOME·Python 의존성은 제품의 일부다 — 서명 전에 실제로 돌려 보고 통과시킨다 | Accepted |
 | D-190 | 부팅 표시는 공식 Pinky Pro와 같게 동작한다 — 증거 먼저, 장치 편입은 한 변경에, 장치에서 즉석 수정하지 않는다 | Proposed |
 | D-191 | 이미지는 실기 평가표가 모두 PASS(또는 사람 대기)일 때만 배포한다 — 격차는 스토리 하나씩 저장소→이미지→카드로 닫는다 | Proposed |
+| D-192 | 하드웨어 런타임은 이미지에 들어간다 — UART4·LiDAR 드라이버·DYNAMIXEL SDK·rosylib·io unit을 굽고, 기본은 CORE-only와 무동작이다 | Proposed |
 ---
