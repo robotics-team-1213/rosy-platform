@@ -11,14 +11,15 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy" / "robot"
 INSTALLER = DEPLOY / "install-pi.sh"
-VERIFIER = DEPLOY / "verify-pi.sh"
-READBACK = DEPLOY / "device-readback.sh"
-READBACK_PY = DEPLOY / "device_readback.py"
+VERIFY = DEPLOY / "verify"
+VERIFIER = VERIFY / "verify-pi.sh"
+READBACK = VERIFY / "device-readback.sh"
+READBACK_PY = VERIFY / "device_readback.py"
 RUNTIME_MODE = DEPLOY / "runtime-mode.sh"
 WINDOWS_DEPLOY = DEPLOY / "deploy-from-windows.ps1"
-WINDOWS_VERIFY = DEPLOY / "verify-from-windows.ps1"
+WINDOWS_VERIFY = VERIFY / "verify-from-windows.ps1"
 UART_CONFIG = DEPLOY / "configure-uart-pi5.sh"
-MOTOR_VERIFY = DEPLOY / "verify-motors.sh"
+MOTOR_VERIFY = VERIFY / "verify-motors.sh"
 RESOLVE_MODE = DEPLOY / "config" / "resolve-mode.sh"
 
 def _find_usable_bash():
