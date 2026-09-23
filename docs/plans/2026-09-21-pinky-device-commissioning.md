@@ -123,8 +123,8 @@ Expected: runbook contracts pass.
 ### Task 4a: Align verification with wired commissioning LAN
 
 **Files:**
-- Modify: `deploy/robot/verify-pi.sh`
-- Modify: `deploy/robot/verify-from-windows.ps1`
+- Modify: `deploy/robot/verify/verify-pi.sh`
+- Modify: `deploy/robot/verify/verify-from-windows.ps1`
 - Modify: `test/test_pi_wifi_deployment.py`
 
 Add `auto`/explicit interface selection while preserving Wi-Fi diagnostics when

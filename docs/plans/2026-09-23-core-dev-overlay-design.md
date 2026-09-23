@@ -8,7 +8,7 @@ module: deploy
 
 상태: D-179 Accepted. 정책은 이 문서와 [실행 계획](2026-09-23-core-dev-overlay.md)이다. 스크립트와 readback 변경은 계획의 과제가 착지하기 전에 저장소에 없다.
 
-관련: [D-179](../adr/D-179-bench-core-readonly-overlay.md) · [실행 계획](2026-09-23-core-dev-overlay.md) · [릴리스 전달](2026-09-08-release-delivery-design.md) · [Ubuntu native 런타임](2026-09-21-ubuntu-native-ros-runtime-design.md) (D-161) · [Wi-Fi 배포](2026-09-01-raspberry-pi-wifi-deployment-design.md) · `deploy/robot/deploy-from-windows.ps1` · `deploy/robot/device_readback.py`
+관련: [D-179](../adr/D-179-bench-core-readonly-overlay.md) · [실행 계획](2026-09-23-core-dev-overlay.md) · [릴리스 전달](2026-09-08-release-delivery-design.md) · [Ubuntu native 런타임](2026-09-21-ubuntu-native-ros-runtime-design.md) (D-161) · [Wi-Fi 배포](2026-09-01-raspberry-pi-wifi-deployment-design.md) · `deploy/robot/deploy-from-windows.ps1` · `deploy/robot/verify/device_readback.py`
 
 ## 1. 목표
 
@@ -90,10 +90,10 @@ docker compose --env-file /opt/rosy/deploy/robot/.env \
 
 | 파일 | 역할 |
 |---|---|
-| `deploy/robot/core_dev_overlay.py` | 허용 목록, 경로 거절, 바인드 목적지, 해시 비교, 마커, drop-in 렌더 |
-| `deploy/robot/sync-core-dev.ps1` | Windows에서 허용 목록만 tar로 묶어 `scp`/`ssh` |
-| `deploy/robot/apply-core-dev.sh` | `python3 -B core_dev_overlay.py`로 적용 |
-| `deploy/robot/clear-core-dev.sh` | 같은 모듈로 마커·drop-in·개발 compose만 제거 |
+| `deploy/robot/dev/core_dev_overlay.py` | 허용 목록, 경로 거절, 바인드 목적지, 해시 비교, 마커, drop-in 렌더 |
+| `deploy/robot/dev/sync-core-dev.ps1` | Windows에서 허용 목록만 tar로 묶어 `scp`/`ssh` |
+| `deploy/robot/dev/apply-core-dev.sh` | `python3 -B core_dev_overlay.py`로 적용 |
+| `deploy/robot/dev/clear-core-dev.sh` | 같은 모듈로 마커·drop-in·개발 compose만 제거 |
 
 `sync-core-dev.ps1` 인자는 `-PiHost`, `-PiUser`, `-Backend docker|native`다. `-Backend native`는 3단계 전에는 원격 적용을 거절한다. 스크립트는 `install-pi.sh`, `apt-get`, `docker compose build`, `systemctl reboot`, `git pull`을 호출하지 않는다. 목적지에 `/opt/rosy`를 쓰지 않고 `rsync --delete`를 쓰지 않는다.
 

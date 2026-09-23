@@ -231,4 +231,4 @@ fi
 
 echo
 echo "Rosy Pi verification passed."
-echo "Readback evidence: sudo $install_root/deploy/robot/device-readback.sh --json"
+echo "Readback evidence: sudo $install_root/deploy/robot/verify/device-readback.sh --json"

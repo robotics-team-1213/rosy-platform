@@ -7,7 +7,7 @@ Pinky Pro 현장 인수 상태와 구분한다.
 어떤 OS·identity·release·image가 실제로 부팅되었는지 재현할 수 없다. 환경 파일에는
 API credential이 있어 그대로 수집할 수 없다.
 
-**Decision:** `deploy/robot/device-readback.sh`가 표준 JSON readback을 만든다.
+**Decision:** `deploy/robot/verify/device-readback.sh`가 표준 JSON readback을 만든다.
 readback은 OS/model/architecture, 로봇 번호·DDS domain·namespace, activation record,
 서명된 manifest의 git revision·immutable container digest, systemd/core health,
 ROS node와 최종 `cmd_vel` publisher 수를 포함한다. `.env` 전체와 credential은 포함하지

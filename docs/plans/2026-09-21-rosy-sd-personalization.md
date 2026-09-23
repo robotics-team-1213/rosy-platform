@@ -345,7 +345,7 @@ git commit -m "feat(image): build the common Rosy Pinky image"
 ### Task 6: Extend readback and commissioning evidence
 
 **Files:**
-- Modify: `deploy/robot/device_readback.py`
+- Modify: `deploy/robot/verify/device_readback.py`
 - Modify: `deploy/robot/commissioning_session.py`
 - Modify: `test/test_device_readback.py`
 - Modify: `test/test_pinky_commissioning.py`
@@ -378,7 +378,7 @@ Expected: readback and G0-G5 state-machine tests pass.
 **Step 5: Commit**
 
 ```bash
-git add deploy/robot/device_readback.py deploy/robot/commissioning_session.py test/test_device_readback.py test/test_pinky_commissioning.py
+git add deploy/robot/verify/device_readback.py deploy/robot/commissioning_session.py test/test_device_readback.py test/test_pinky_commissioning.py
 git commit -m "feat(deploy): bind personalized identity into readback"
 ```
 

@@ -48,9 +48,9 @@ module: docs
 
 ## Task 4: deploy/robot 평탄화는 나중
 
-검증 스크립트와 개발 오버레이 스크립트를 하위 폴더로 나누는 일은 이 계획의
-1–3이 끝난 뒤의 별도 변경이다. 그 변경은 `deploy/robot/*.sh`와 `*.ps1`를
-읽는 시험·문서 경로를 같은 커밋에서 고친다.
+검증 스크립트는 `deploy/robot/verify/`로, 개발 오버레이는 `deploy/robot/dev/`로
+나눴다. 설치기와 현재 운영 문서의 경로는 같은 변경에서 고쳤다. 제품 유닛은
+`deploy/robot/native/`에 그대로 둔다.
 
 ## 착지 후 확인
 

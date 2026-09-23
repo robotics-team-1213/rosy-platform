@@ -105,7 +105,7 @@ try {
         "tar -xzf rosy-release.tar.gz -C /tmp/rosy-release"
         "cd /tmp/rosy-release"
         "sudo ROSY_ROBOT_NUMBER=$RobotNumber bash deploy/robot/install-pi.sh"
-        "sudo /opt/rosy/deploy/robot/verify-pi.sh --require-internet"
+        "sudo /opt/rosy/deploy/robot/verify/verify-pi.sh --require-internet"
         "cd /tmp"
         "rm -rf -- /tmp/rosy-release /tmp/rosy-release.tar.gz /tmp/rosy-release.tar.gz.sha256"
     ) -join "; "
@@ -119,7 +119,7 @@ try {
     Write-Host "Deployment complete: http://${PiHost}:8080/dashboard"
     Write-Host "Release revision: $revision"
 
-    $peerVerifier = Join-Path $repoRoot "deploy/robot/verify-from-windows.ps1"
+    $peerVerifier = Join-Path $repoRoot "deploy/robot/verify/verify-from-windows.ps1"
     Write-Host "Verifying API and dashboard from this Wi-Fi client"
     & $peerVerifier -PiHost $PiHost -PiUser $PiUser
 }

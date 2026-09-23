@@ -17,7 +17,7 @@
 |---|---|---|
 | `/api/v1/logs/audit`, `/api/v1/events`, 진단 수집기(DIAG/OBS) | CORE 프로세스 안 | CORE가 안 떠서 없음 |
 | Host Agent 감사 로그 | 장치 파일 | 원격 접속 경로가 없어 못 읽음 |
-| `deploy/robot/device_readback.py` | 운영자가 장치에서 실행 | 컨테이너 시대 가정, 원격 접속 없음 |
+| `deploy/robot/verify/device_readback.py` | 운영자가 장치에서 실행 | 컨테이너 시대 가정, 원격 접속 없음 |
 | journald | ext4 루트 `/var/log/journal` | Windows에서 읽을 수 없음. `wsl --mount`는 USB 리더 미지원 |
 
 관측이 전부 "CORE가 살아 있고 네트워크로 닿는다"는 전제 위에 있었다. 부팅 실패는 정확히 그 전제가

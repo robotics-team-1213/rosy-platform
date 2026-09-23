@@ -196,10 +196,10 @@ install_release() {
     chmod 0755 "$INSTALL_ROOT/deploy/robot/entrypoint.sh" \
         "$INSTALL_ROOT/deploy/robot/runtime-mode.sh" \
         "$INSTALL_ROOT/deploy/robot/install-pi.sh" \
-        "$INSTALL_ROOT/deploy/robot/verify-pi.sh" \
+        "$INSTALL_ROOT/deploy/robot/verify/verify-pi.sh" \
         "$INSTALL_ROOT/deploy/robot/configure-uart-pi5.sh" \
-        "$INSTALL_ROOT/deploy/robot/verify-motors.sh" \
-        "$INSTALL_ROOT/deploy/robot/device-readback.sh" \
+        "$INSTALL_ROOT/deploy/robot/verify/verify-motors.sh" \
+        "$INSTALL_ROOT/deploy/robot/verify/device-readback.sh" \
         "$INSTALL_ROOT/deploy/robot/commission-pinky.py" \
         "$INSTALL_ROOT/deploy/robot/commissioning_session.py"
 }
@@ -424,7 +424,7 @@ main() {
     else
         echo "INFO: existing credentials were preserved; no new credential file was created"
     fi
-    echo "Verify Wi-Fi/dashboard: sudo $INSTALL_ROOT/deploy/robot/verify-pi.sh --require-internet"
+    echo "Verify Wi-Fi/dashboard: sudo $INSTALL_ROOT/deploy/robot/verify/verify-pi.sh --require-internet"
 }
 
 main "$@"
