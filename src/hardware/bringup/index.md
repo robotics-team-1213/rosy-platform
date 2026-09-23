@@ -33,5 +33,6 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · feat(bringup): rosylib battery, ADC flock and no-motion mode (D-192)
 - 2026-09-16 · uncommitted · docs(harness): record the bringup source rerun count
 - 2026-09-15 · uncommitted · docs(harness): start the bringup harness record

@@ -882,3 +882,18 @@
 - 결정: D-191
 - 교훈: 없음
 - 미결(다른 스토리): `rosy-dev-*` 차단은 overlay 목록 대체에만 기대므로 overlay가 비거나 `auth.tokens`를 잃으면 되살아난다. 기기 기본값에서 `rosy-dev-*` 제거 또는 native runtime에서 CORE가 거부하는 심층 방어가 남음 (runbook에도 기록)
+
+## 2026-09-24 · uncommitted · feat(image,bringup): D-192 hardware runtime in the image (US-003/004/005)
+
+- 변경: (US-003) `rosy-boot-status-ready.service`를 `After=rosy-runtime.target rosy-core.service`(의존 없음)로 추가해 이미지가
+  설치·활성화한다. (US-004) customizer가 `configure-uart-pi5.sh --image-root`로 `config.txt` `[all]`에 `dtoverlay=uart4-pi5`를 넣는다.
+  같은 스크립트의 vfat 쓰기는 chmod 대신 rename으로 바꿨다. 검사기가 overlay와 udev 규칙을 본다. (US-005) `sllidar_ros2`를 lock
+  (`34300099…`, 아카이브 SHA-256)으로 고정해 hardware-deps 단계가 받고 오프라인 payload 빌더가 빌드한다. `dynamixel-sdk 3.8.4`·
+  `pyserial 3.5`를 `device-python-requirements.txt`에 해시로 더해 D-189 런타임 검사가 덮는다. `rosylib.Battery`(공개 ADC 프로토콜,
+  CORE 곡선 복사), ADC `flock` 소유 규칙, bringup `drive_enabled`(무동작: torque off, `cmd_vel` 미구독, `motor/ready` false)를
+  넣고 `rosy-io`의 기본으로 했다. `rosy-io`·`rosy-navigation`을 overlay에 설치(미활성)하고 io probe가 chroot에서 확인한다.
+- 증거: 관련 host 스위트 통과(2026-09-24 Windows, 수치는 보고서). `configure-uart-pi5.sh` 이미지 모드는 Git Bash로 실제 실행.
+  휠 해시는 cp312 aarch64·x86_64 `--require-hashes` 다운로드 16개, sllidar 아카이브 해시는 독립 다운로드 2회 일치.
+- gate 변화: 없음. 이미지 빌드와 실기 확인(D-192 "실기 수용 확인" 1-9)이 남았다
+- 결정: D-192 Proposed
+- 교훈: 이미지가 굽지 않는 retrofit 스크립트는 장치에만 있는 설정을 만든다 — 이미지와 장치가 같은 스크립트를 부르게 한다
