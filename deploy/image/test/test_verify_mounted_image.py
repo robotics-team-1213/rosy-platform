@@ -57,6 +57,8 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
     (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
     (root / "usr/sbin/chronyd").write_text("mock", encoding="utf-8")
+    # D-176: the fallback AP (NM shared mode) needs dnsmasq in the image.
+    (root / "usr/sbin/dnsmasq").write_text("mock", encoding="utf-8")
     wants = root / "etc/systemd/system/multi-user.target.wants/chrony.service"
     wants.parent.mkdir(parents=True, exist_ok=True)
     wants.write_text("mock", encoding="utf-8")
