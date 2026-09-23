@@ -32,7 +32,8 @@ class Recorder:
 
 
 def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
-          home_raises=False, status="DISCHARGING", dock_state=None):
+          home_raises=False, status="DISCHARGING", dock_state=None,
+          docking_active=False):
     log = recorder.calls
 
     battery = SimpleNamespace(
@@ -61,7 +62,9 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
 
     return SimpleNamespace(battery=battery, state=state, power=power,
                            safety=safety, docking=docking,
-                           nav=SimpleNamespace(home=home))
+                           nav=SimpleNamespace(
+                               home=home,
+                               docking_active_provider=lambda: docking_active))
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
@@ -166,7 +169,24 @@ def test_a_dock_run_is_the_return_home_so_nav2_is_left_to_it():
     from core_common.protocol.schemas import DockState
     rec = Recorder()
 
-    apply_voltage(build(rec, action="RETURN_HOME", dock_state=DockState.DOCKING), 7.0)
+    apply_voltage(build(rec, action="RETURN_HOME", dock_state=DockState.DOCKING,
+                        docking_active=True), 7.0)
+
+    assert "nav.home" not in rec.names()
+    assert "safety.trigger_estop" not in rec.names()
+
+
+@pytest.mark.parametrize("dock_state", ["UNDOCKING", "UNDOCKED"])
+def test_any_docking_hold_on_the_robot_skips_the_home_goal(dock_state):
+    """N4: navigation refuses goals whenever docking holds the robot — an
+    undock under way, or the DOCKING mode taken before the state moves. Only
+    checking `state is DOCKING` sent those to nav.home, which refused, and the
+    refusal escalated to e-stop."""
+    from core_common.protocol.schemas import DockState
+    rec = Recorder()
+
+    apply_voltage(build(rec, action="RETURN_HOME", dock_state=DockState(dock_state),
+                        docking_active=True), 7.0)
 
     assert "nav.home" not in rec.names()
     assert "safety.trigger_estop" not in rec.names()
