@@ -1,8 +1,9 @@
-"""Measure /safety/decision arrival gaps in the isolated rig (domain 227).
+"""Measure /safety/decision arrival in the isolated rig (domain 227); never publishes.
 
-Writes /tmp/pinky-calmap227/decision_probe.json: per-message issued_s, the gap
-to the previous one, and a summary (count, max gap, gaps over the 0.25 s
-freshness window the calibration trial requires).
+Writes a running summary to /tmp/pinky-calmap227/decision_probe.json: message
+count, inter-arrival gaps (max, count over 0.25 s), decision age on this node's
+clock (min, max, count outside the calibration trial's -0.1..0.25 s window),
+payloads missing a field the trial reads, and counts per decision reason.
 """
 import json
 import os
@@ -13,6 +14,7 @@ if os.environ.get('ROS_DOMAIN_ID') != '227':
     raise RuntimeError('Isolated simulation domain required')
 
 import rclpy
+from rclpy.parameter import Parameter
 from std_msgs.msg import String
 
 OUT = Path('/tmp/pinky-calmap227/decision_probe.json')
@@ -21,7 +23,7 @@ OUT = Path('/tmp/pinky-calmap227/decision_probe.json')
 def main():
     rclpy.init()
     node = rclpy.create_node('rig_decision_probe')
-    node.set_parameters([rclpy.parameter.Parameter('use_sim_time', value=True)])
+    node.set_parameters([Parameter('use_sim_time', value=True)])
     state = {'count': 0, 'max_gap': 0.0, 'gaps_over_250ms': 0, 'last': None, 'first': None,
              'worst_at': None, 'reasons': {},
              # Age as the calibration trial measures it: receiver clock - issued_s.
@@ -45,7 +47,8 @@ def main():
         if not all(name in value for name in
                    ('requested_v', 'requested_omega', 'safe_v', 'safe_omega', 'issued_s')):
             state['missing_fields'] += 1
-        state['reasons'][value.get('reason', '?')] = state['reasons'].get(value.get('reason', '?'), 0) + 1
+        reason = value.get('reason', '?')
+        state['reasons'][reason] = state['reasons'].get(reason, 0) + 1
         if state['first'] is None:
             state['first'] = issued
         if state['last'] is not None:
