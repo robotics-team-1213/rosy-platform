@@ -106,3 +106,22 @@ def test_the_entry_turn_records_odometry_for_the_first_pairing():
     samples = list(p.manager._tracker._odometry)
     assert samples and samples[0][0] < turn_end
 
+
+
+# --- M6: only a new anchor counts as seeing the dock ---------------------------
+
+
+def test_a_repeated_frame_does_not_keep_the_approach_alive():
+    from test_docking_parking_manager import DockPhase
+    p = a_parking((ENTRY_X, 0.0, 1.5708))
+    p.manager.dock()
+    run(p, lambda m: m.phase is DockPhase.APPROACHING)
+    assert p.manager.phase is DockPhase.APPROACHING
+    frozen = p.camera.relative_pose()
+    assert frozen is not None
+    p.camera.relative_pose = lambda: frozen          # the feed repeats one frame
+    p.camera.capture = lambda: None
+    grace = p.manager._cfg.detector_lost_grace_s
+    run(p, lambda m: m.phase is not DockPhase.APPROACHING, max_s=grace + 1.0)
+    assert p.manager.phase is not DockPhase.APPROACHING
+    assert p.manager.retries == 1

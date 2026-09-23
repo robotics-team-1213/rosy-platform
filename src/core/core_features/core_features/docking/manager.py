@@ -713,13 +713,14 @@ class DockingManager:
             self._begin_acquiring()
 
     def _observe(self, now: float) -> bool:
-        """오도메트리를 기록하고, 신선한 관측이 있으면 추정기를 다시 고정한다."""
+        """오도메트리를 기록하고, 새 관측이면 추정기를 다시 고정한다. True 는 새 고정뿐이다 —
+        같은 프레임이 반복되면 도크를 "다시 본" 것이 아니다 (_last_seen_at 이 갱신되면
+        관측이 끊겨도 유예가 끝나지 않는다)."""
         self._tracker.record_odometry(now, self._odometry())
         observation = self._detector.relative_pose() if self._detector else None
         if observation is None:
             return False
-        self._tracker.observe(observation)
-        return True
+        return self._tracker.observe(observation)
 
     def _tick_acquiring_pose(self, now: float) -> None:
         if self._observe(now) and self._tracker.anchored_at is not None:
