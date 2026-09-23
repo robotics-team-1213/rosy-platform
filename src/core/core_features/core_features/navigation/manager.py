@@ -144,6 +144,15 @@ class NavigationManager:
         self._events.publish("nav.started", source="navigation_manager",
                              data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw}, "by": source})
 
+    def external_goal_sent(self) -> None:
+        """A goal just went to Nav2 around `goal()` — docking's staging drive.
+        It is the current goal now: PLANNING, as `goal()` would leave it, and
+        the accept/result callbacks move it on from there. Without this,
+        `nav_state` still shows the last run's ARRIVED or FAILED, and docking,
+        which reads it on its first tick, skips staging or retries at once."""
+        with self._lock:
+            self._set_state(NavigationState.PLANNING)
+
     def _refuse_while_docking(self) -> None:
         if self.docking_active_provider():
             raise NavigationError("DOCKING_ACTIVE", "a docking run owns the robot")

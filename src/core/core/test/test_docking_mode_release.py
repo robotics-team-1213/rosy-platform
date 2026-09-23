@@ -19,6 +19,7 @@ from core_features.command.manager import Twist
 from core.bridge import docking_mode
 
 from test_docking_mode_ownership import docking_robot, wheels
+from test_docking_parking_wiring import sim_overrides
 
 
 def just_docked(core_client):
@@ -169,3 +170,73 @@ def test_concurrent_transitions_commit_one_mode_each():
     for thread in threads:
         thread.join(5.0)
     assert results.count(True) == 1
+
+
+# --- staging reads its own Nav2 goal, not the last run's result ---------------
+
+
+class BridgeStagingExecutor:
+    """ros_bridge's DockingExecutor as far as staging goes: navigate_to sends
+    the Nav2 goal around NavigationManager.goal, and tells navigation so."""
+
+    def __init__(self, services):
+        self._svc = services
+        self.sent = []
+
+    def navigate_to(self, pose):
+        self._svc.nav.external_goal_sent()
+        self.sent.append(pose)
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+
+def staging_robot(core_client, stale):
+    from core_features.docking.database import DockInstance, DockType
+    from core_common.protocol.schemas import NavigationState
+    client, services = core_client(config_overrides=sim_overrides())
+    executor = BridgeStagingExecutor(services)
+    services.docking.executor = executor
+    services.docking.database.add_type(DockType(name="std", detector="simulated"))
+    services.docking.database.add(DockInstance(id="std1", type="std", x=1.0, y=0.0, yaw=0.0))
+    services.nav._set_state(NavigationState(stale))          # the last run's result
+    services.docking.dock("std1")
+    return services, executor
+
+
+def test_a_stale_arrived_does_not_skip_staging(core_client):
+    from core_features.docking.manager import DockPhase
+    services, executor = staging_robot(core_client, "ARRIVED")
+    docking_mode.tick(services, lambda msg: None)
+    assert services.docking.phase is DockPhase.STAGING
+    assert len(executor.sent) == 1
+
+
+def test_a_stale_failure_does_not_retry_staging_at_once(core_client):
+    from core_features.docking.manager import DockPhase
+    services, executor = staging_robot(core_client, "FAILED")
+    docking_mode.tick(services, lambda msg: None)
+    assert services.docking.phase is DockPhase.STAGING
+    assert services.docking.retries == 0
+
+
+def test_staging_still_follows_its_own_goal(core_client):
+    from core_features.docking.manager import DockPhase
+    services, _ = staging_robot(core_client, "ARRIVED")
+    services.nav.on_goal_accepted()
+    docking_mode.tick(services, lambda msg: None)
+    assert services.docking.phase is DockPhase.STAGING
+    services.nav.on_result(True)
+    docking_mode.tick(services, lambda msg: None)
+    assert services.docking.phase is DockPhase.ACQUIRING
+
+
+def test_the_bridge_staging_drive_tells_navigation_before_sending():
+    import ast
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "core" / "bridge"
+              / "ros_bridge.py").read_text(encoding="utf-8")
+    fn = next(node for node in ast.walk(ast.parse(source))
+              if isinstance(node, ast.FunctionDef) and node.name == "navigate_to")
+    calls = [ast.unparse(node.func) for node in ast.walk(fn) if isinstance(node, ast.Call)]
+    assert calls.index("self._svc.nav.external_goal_sent") < calls.index("self.send_goal")

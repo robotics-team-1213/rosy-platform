@@ -619,7 +619,11 @@ class RosBridge:
     # PWR-005 LiDAR 의도와 같은 형태다.
 
     def navigate_to(self, pose) -> None:
-        """스테이징 주행. 도킹 액션이 Nav2 구간까지 소유하므로 여기서 부른다."""
+        """스테이징 주행. 도킹 액션이 Nav2 구간까지 소유하므로 여기서 부른다.
+
+        NavigationManager.goal 을 거치지 않으므로 nav_state 를 먼저 PLANNING
+        으로 둔다 — 아니면 도킹이 첫 틱에 지난 주행의 ARRIVED/FAILED 를 읽는다."""
+        self._svc.nav.external_goal_sent()
         self.send_goal(NavGoalSpec(x=pose.x, y=pose.y, yaw=pose.yaw))
 
     def cancel_navigation(self) -> None:
