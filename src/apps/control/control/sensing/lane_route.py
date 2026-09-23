@@ -7,6 +7,13 @@ around the previous fix, for the same reason as junction_score's
 `_nearest_on_path`: a road segment and its paired ring arc join the same
 two nodes, so their combined path can double back on itself in space and an
 unrestricted global search is ambiguous there.
+
+A long route (lane_coverage's tour) revisits nodes and drives some
+segments twice, and starts and ends mid-segment on the same one. The window
+keeps every fix on the pass the robot is on: the tour's passes of one place
+are more than a window apart in arc length. The first fix has no window;
+where passes coincide in space the nearest-point search ties exactly and
+resolves to the lowest arc length, the first pass (the start).
 """
 
 import math
@@ -71,6 +78,9 @@ class LaneRoute:
             if a.to_node != b.from_node:
                 raise ValueError(f"segments {a.key!r} and {b.key!r} are not connected "
                                   f"({a.to_node!r} != {b.from_node!r})")
+            if a.key.split(":")[0] == b.key.split(":")[0]:
+                raise ValueError(f"segments {a.key!r} and {b.key!r} are a U-turn back "
+                                  f"along the same road")
         # Combined polyline over every segment; each later segment's first
         # point (the shared node) is dropped since the previous segment
         # already ends there.

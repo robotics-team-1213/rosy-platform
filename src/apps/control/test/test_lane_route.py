@@ -60,3 +60,50 @@ def test_route_rejects_a_disconnected_pair():
 def test_route_rejects_a_ring_arc_driven_backwards():
     with pytest.raises(ValueError, match="one-way"):
         LaneRoute(GRAPH, ["ring_n:r", "west:r"])
+
+
+def test_route_rejects_a_u_turn_back_along_the_same_road():
+    with pytest.raises(ValueError, match="U-turn"):
+        LaneRoute(GRAPH, ["west:f", "west:r"])
+
+
+def _tour():
+    from control.sensing.lane_coverage import coverage_route
+    start = tuple(GRAPH["parking"]["points"][0])
+    return coverage_route(GRAPH, start), start
+
+
+def test_a_tour_starting_mid_segment_fixes_on_its_first_pass():
+    keys, start = _tour()
+    assert keys[0] == keys[-1]      # the same segment, driven twice
+    route = LaneRoute(GRAPH, keys)
+    fix = route.locate(start)
+    assert fix.segment_index == 0
+    assert fix.lateral_m == pytest.approx(0.0, abs=0.002)
+
+
+def test_a_long_tour_is_tracked_pass_by_pass_without_jumping():
+    """Walk the whole tour, 5 mm off its centreline, from the start on the
+    first west:f pass to the start again on the last: every fix stays on the
+    pass the walk is on (monotonic s, the right segment index), including
+    the ring arcs and segments the tour drives twice."""
+    keys, start = _tour()
+    route = LaneRoute(GRAPH, keys)
+    first = route.locate(start)
+    s0 = route._seg_start_s[0] + first.s_m
+    last_seg = LaneRoute(GRAPH, keys[-1:])
+    s_end = route._seg_start_s[-1] + last_seg.locate(start).s_m
+    arc, points = route._arc, route._points
+    prev = None
+    for s in np.arange(s0, s_end, 0.01):
+        i = min(int(np.searchsorted(arc, s, side="right")) - 1, len(points) - 2)
+        a, b = points[i], points[i + 1]
+        d = (b - a) / max(np.linalg.norm(b - a), 1e-12)
+        p = a + d * (s - arc[i]) + 0.005 * np.array([-d[1], d[0]])
+        fix = route.locate(p)
+        got = route._seg_start_s[fix.segment_index] + fix.s_m
+        assert got == pytest.approx(s, abs=0.02), (s, got, fix.segment_index)
+        if prev is not None:
+            assert got >= prev - 0.005
+        prev = got
+    assert fix.segment_index == len(keys) - 1
