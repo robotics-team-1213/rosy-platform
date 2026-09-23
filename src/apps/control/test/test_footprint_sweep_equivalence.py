@@ -445,3 +445,136 @@ def test_translation_limits_with_obstacles_on_the_travel_axis_match():
         check_same(new,old,(index,maximum))
         decided+=old is not None and old[int(sign<0)]<maximum
     assert decided>=40, decided
+
+
+def same_value(new, old):
+    # Internal sample minima may differ only in the sign of a zero (see _clearances).
+    return type(new) is float and (repr(new)==repr(old) or new==old==0.)
+
+
+def traced_clearances(monkeypatch, points, polygons):
+    """fs._clearances with the path taken: fallback, stacked or per_sample, and whether points were dropped."""
+    stacked,single=[],[]
+    original_stacked,original_single=fs._stacked_clearances,fs._clearance
+    monkeypatch.setattr(fs,'_stacked_clearances',lambda p,q:(stacked.append(len(p)),original_stacked(p,q))[1])
+    monkeypatch.setattr(fs,'_clearance',lambda p,q:(single.append(len(p)),original_single(p,q))[1])
+    try:
+        values=fs._clearances(points,polygons)
+    finally:
+        monkeypatch.setattr(fs,'_stacked_clearances',original_stacked)
+        monkeypatch.setattr(fs,'_clearance',original_single)
+    if not stacked:
+        return values,'fallback',False
+    if len(stacked)==2:
+        return values,'stacked',stacked[1]<len(points)
+    return values,'per_sample',any(n<len(points) for n in single)
+
+
+def near_guard_polygons(rng):
+    # Coordinates near 1e3, 1e-6 edges and slivers whose inner distance is near 1e-3*R.
+    count=int(rng.choice([3,4,6,12]))
+    radius=float(rng.choice([1.,100.,400.,499.]))
+    angles=np.sort(rng.uniform(0,2*np.pi,count))
+    shape=np.c_[np.cos(angles),np.sin(angles)]*radius
+    if rng.random()<.5:
+        index=rng.integers(count)
+        step=float(rng.choice([1e-6,1.0000001e-6,3e-6]))
+        turn=rng.uniform(0,2*np.pi)
+        shape=np.vstack([shape,shape[index]+step*np.array([np.cos(turn),np.sin(turn)])])
+    if rng.random()<.5:
+        shape[:,1]*=float(rng.choice([1.2e-3,2e-3,2.002e-3]))
+    shape=shape+rng.uniform(-1,1,2)*(999-radius)*rng.random()
+    hull=_hull(shape)
+    samples=int(rng.choice([1,3,17,40]))
+    polygons=[]
+    for index in range(samples):
+        turn=rng.uniform(-.15,.15)*(index>0)
+        c,s=math.cos(turn),math.sin(turn)
+        polygons.append(hull@np.array([[c,s],[-s,c]])+rng.uniform(-.01,.01,2)*(index>0))
+    return np.asarray(polygons)
+
+
+def near_guard_points(rng, polygons):
+    center=polygons[0].mean(0)
+    reach=float(np.sqrt(((polygons[0]-center)**2).sum(1)).max())
+    # The exact bound of a near point sets U; points then sit at the drop threshold.
+    near=polygons[0][0]+(polygons[0][0]-center)/reach*float(rng.choice([1e-3,.05,.5]))
+    bound=_clearance(near[None],polygons[0])
+    points=[near]
+    for _ in range(int(rng.choice([64,100,300]))):
+        polygon=polygons[rng.integers(len(polygons))]
+        edge=rng.integers(len(polygon))
+        a,b=polygon[edge],polygon[(edge+1)%len(polygon)]
+        mode=rng.random()
+        if mode<.3:
+            normal=np.array([b[1]-a[1],a[0]-b[0]])
+            normal/=np.linalg.norm(normal)
+            points.append(a+rng.random()*(b-a)+float(rng.choice([0.,1e-7,1e-6,2e-6,5e-6]))*normal)
+        elif mode<.7:
+            direction=(a-center)/np.linalg.norm(a-center)
+            step=float(rng.choice([1e-6,1.5e-6,2e-6,1e-5,1e-3]))
+            points.append(center+direction*(reach+max(bound,0.)+step))
+        else:
+            normal=np.array([b[1]-a[1],a[0]-b[0]])
+            normal/=np.linalg.norm(normal)
+            points.append(a+rng.random()*(b-a)+rng.uniform(0,5)*normal)
+    return np.clip(np.asarray(points),-1e3,1e3)
+
+
+def test_sample_minima_match_near_the_prefilter_guard(monkeypatch):
+    rng=np.random.default_rng(18510)
+    paths={}
+    for index in range(400):
+        try:
+            polygons=near_guard_polygons(rng)
+        except ValueError:
+            continue
+        if np.max(np.abs(polygons))>1e3:
+            continue
+        points=near_guard_points(rng,polygons)
+        values,path,dropped=traced_clearances(monkeypatch,points,polygons)
+        expected=[_clearance(points,polygon) for polygon in polygons]
+        assert len(values)==len(expected) and all(map(same_value,values,expected)), index
+        key=(path,dropped)
+        paths[key]=paths.get(key,0)+1
+    assert paths.get(('stacked',True),0)>=5 and paths.get(('per_sample',True),0)>=5, paths
+    assert paths.get(('fallback',False),0)>=5, paths
+
+
+def test_translation_limits_match_near_the_candidate_guard():
+    rng=np.random.default_rng(18511)
+    cases=0
+    for index in range(240):
+        count=int(rng.choice([3,4,8,12]))
+        radius=float(rng.choice([.086,1.,50.,500.,998.]))
+        angles=np.sort(rng.uniform(0,2*np.pi,count))
+        shape=np.c_[np.cos(angles),np.sin(angles)]*radius
+        if rng.random()<.4:
+            vertex=rng.integers(count)
+            turn=rng.uniform(0,2*np.pi)
+            shape=np.vstack([shape,shape[vertex]*(1-3e-6/radius)+1e-6*np.array([np.cos(turn),np.sin(turn)])])
+        if rng.random()<.4:
+            shape[:,1]*=float(rng.choice([.05,.2]))
+        try:
+            hull=_hull(shape)
+        except ValueError:
+            continue
+        maximum=float(rng.choice([1e-3,1e-3*(1+1e-12),1e-3*(1-1e-12),9.99e-4,1.001e-3,1e-6,.03,.12]))
+        case=dict(footprint=shape.tolist(),center=(0.,0.),uncertainty=float(rng.choice([0.,.03])),
+                  body_radius=float(np.max(np.linalg.norm(hull,axis=1))),scan_age=float(rng.choice([0.,.2])))
+        margin=_geometry([(1,1),(2,2),(3,1)],**case)[3]
+        points=[]
+        for _ in range(int(rng.choice([64,120,400]))):
+            shift=rng.uniform(0,maximum)*rng.choice([1,-1])
+            swept=_hull(np.vstack([hull,hull+[shift,0]]))
+            edge=rng.integers(len(swept))
+            a,b=swept[edge],swept[(edge+1)%len(swept)]
+            normal=np.array([b[1]-a[1],a[0]-b[0]])
+            normal/=np.linalg.norm(normal)
+            offset=margin+float(rng.choice([0.,1e-12,-1e-12,1e-9,1e-7,1e-6,2e-6,-1e-6,rng.uniform(-.01,.05)]))
+            points.append(a+rng.random()*(b-a)+offset*normal)
+        points=np.clip(np.asarray(points),-1e3,1e3).tolist()
+        check_same(fs.footprint_translation_limits(points,maximum=maximum,**case),
+                   footprint_translation_limits(points,maximum=maximum,**case),(index,radius,maximum))
+        cases+=1
+    assert cases>=150, cases

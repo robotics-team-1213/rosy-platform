@@ -70,11 +70,16 @@ def _clearances(points, polygons):
     gap=|p-c|-R (c = vertex mean, R = farthest vertex from c) exceeds
     max(U,0)+1e-6, where U is the exact clearance of some kept point, so
     U >= the sample minimum. Every point of the convex polygon lies within R of
-    c, hence the true distance D >= gap. The guard below keeps coordinates
-    <= 1e3, edges >= 1e-6 and c at least 1e-3*R inside every edge line, so no
-    value overflows or divides by zero, rounding moves gap and the computed
-    distance by < 1e-10, and the edge line crossed by the segment c->p is at
-    least D*1e-3 from p, which makes the computed inside test false. A left-out
+    c, hence the true distance D >= gap. The guard below keeps every value
+    finite, coordinates <= 1e3, edges >= 1e-6 and c at least r >= 1e-3*R inside
+    every edge line, so no value overflows or divides by zero and rounding
+    moves gap and the computed distance by < 1e-10. For p outside, let q be
+    where the segment c->p leaves the polygon, on edge e: that edge line is
+    at least |p-q|*r/R from p, so the exact cross product is at least
+    |e|*|p-q|*r/R. Its rounding error is a few ulps of |e|*|p-q| plus
+    ~1e-13*|p-q| from vertex coordinates <= 1e3 tilting the edge, so the sign
+    is safe when |e|*r/R > ~1e-13. Edges >= 1e-6 and r/R >= 1e-3 give 1e-9,
+    so the computed inside test is false. A left-out
     point's computed value therefore exceeds U and cannot be the minimum. The
     minimum's sign of zero can differ; callers only subtract a positive margin
     or compare it.
@@ -93,7 +98,9 @@ def _clearances(points, polygons):
         inner=np.min((edges[...,1]*spokes[...,0]-edges[...,0]*spokes[...,1])/lengths,axis=1)
         scale=max(float(np.max(np.abs(points))),float(np.max(np.abs(polygons))))
         with np.errstate(all='ignore'):
-            usable=bool(scale<=1e3 and np.min(lengths)>=1e-6 and np.all(inner>=1e-3*reach))
+            # max() drops a NaN scale, so finiteness is checked explicitly.
+            usable=bool(np.isfinite(points).all() and np.isfinite(polygons).all() and
+                        scale<=1e3 and np.min(lengths)>=1e-6 and np.all(inner>=1e-3*reach))
         if usable:
             offset=points[None]-centers[:,None]
             gaps=np.sqrt(np.sum(offset*offset,axis=2))-reach[:,None]
@@ -115,15 +122,22 @@ def _travel_candidates(obstacles, hull, margin, maximum):
     Only that comparison leaves footprint_translation_limits, so a point whose
     computed clearance exceeds margin can be dropped. With c the hull vertex
     mean, R its farthest vertex and r its smallest edge-line distance, every
-    swept hull contains the disk (c,r) and lies in the disk (c,R+maximum), so
-    the true distance D >= |p-c|-(R+maximum) and the edge line crossed by the
-    segment c->p is at least D*r/(R+maximum) from p. The guard (coordinates
-    <= 1e3, hull edges >= 1e-6, maximum >= 1e-6, r >= 1e-3*(R+maximum)) keeps
-    that line >= 1e-5 away for D > margin >= .01, far beyond rounding, so a
-    dropped point is computed outside at a distance > margin. The best-bound
-    point is always kept so the set is never empty.
+    swept hull contains the disk (c,r) and lies in the disk (c,R'), R'=R+maximum,
+    so the true distance D >= |p-c|-R'. Let q be where the segment c->p leaves
+    a swept hull, on edge e: that edge line is at least |p-q|*r/R' from p, so
+    the exact cross product is at least |e|*|p-q|*r/R'. The bisection shortens
+    the translation edges of the swept hull to maximum/1024; the guard
+    (coordinates <= 1e3, hull edges >= 1e-6, maximum >= 1e-3,
+    r >= 1e-3*R') keeps every edge >= ~1e-6. A translation edge is the
+    difference of a vertex v and fl(v+d), exact by Sterbenz when d is small
+    against v, and otherwise rounded like any other edge, so the computed
+    cross product errs by a few ulps of |e|*|p-q| plus ~1e-13*|p-q| from
+    vertex coordinates <= 1e3 tilting the edge. |e|*r/R' >= 1e-6*1e-3 exceeds
+    that ~1e-13 by about 1e4, and D > margin >= .01 bounds the distance
+    rounding, so a dropped point is computed outside at a distance > margin. The
+    best-bound point is always kept so the set is never empty.
     """
-    if len(obstacles)<64 or maximum<1e-6:
+    if len(obstacles)<64 or maximum<1e-3:
         return obstacles
     center=hull.mean(axis=0)
     spokes=hull-center
