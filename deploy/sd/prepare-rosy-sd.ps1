@@ -292,10 +292,12 @@ if ($OperatorPublicKey) {
     if ($operatorLines.Count -ne 1) { Fail "operator public key file must hold exactly one key" }
     $operatorKey = $operatorLines[0].Trim()
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-    $fingerprintCode = "import sys; from deploy.sd.personalization import operator_key_fingerprint; print(operator_key_fingerprint(sys.stdin.read()))"
+    # A public key is not secret; pass it as an argument. Piping it through the
+    # console can prepend a BOM on Windows PowerShell 5.1.
+    $fingerprintCode = "import sys; from deploy.sd.personalization import operator_key_fingerprint; print(operator_key_fingerprint(sys.argv[1]))"
     Push-Location $repoRoot
     try {
-        $operatorFingerprint = ($operatorKey | & $PythonExe -c $fingerprintCode)
+        $operatorFingerprint = (& $PythonExe -c $fingerprintCode $operatorKey)
         if ($LASTEXITCODE -ne 0) { Fail "operator public key is not an allowed public key" }
     }
     finally {

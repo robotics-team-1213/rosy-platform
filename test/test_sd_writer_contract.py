@@ -803,3 +803,12 @@ def test_reprovision_proof_fields_are_strictly_typed(writer_case, tmp_path, over
 
     assert completed.returncode != 0
     assert "reprovision receipt" in completed.stderr
+
+
+def test_operator_key_is_passed_as_an_argument_not_through_the_console():
+    # Release 004 plan: piping the key through PowerShell 5.1 prepended a BOM and
+    # the real key was refused; the fixture run had no console and passed.
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "operator_key_fingerprint(sys.argv[1])" in text
+    assert "$operatorKey | &" not in text
