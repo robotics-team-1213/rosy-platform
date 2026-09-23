@@ -30,14 +30,101 @@ param(
     [string]$OperatorPublicKey,
     [string]$ReprovisionReceipt,
     [switch]$SetWifiCredential,
-    [switch]$PlanOnly
+    [switch]$PlanOnly,
+    [string]$ProgressPath,
+    [switch]$ResumeAfterWrite,
+    [double]$WriterStallMinutes = 5,
+    [double]$HeartbeatSeconds = 60,
+    [double]$ReadbackStallMinutes = 5,
+    [double]$MinReadMBps = 10,
+    [double]$AssumedWriteMBps = 0,
+    [switch]$AcceptSlowMedia,
+    [int64]$ProbeBytes = 134217728,
+    [double]$ProbeSeconds = 120
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Fail([string]$Message) {
+# D-187: once the release checks start, every failure names the stage, what is on
+# the card and the operator's next step, and is appended to the progress file.
+$script:stage = ""
+$script:cardState = "untouched"
+$script:nextHint = ""
+$script:failureRecorded = $false
+$script:failureKind = ""
+$imageSignature = $null
+$resumeNext = "re-run the same command with -ResumeAfterWrite (skips the write and re-reads the whole card)"
+$fullWriteNext = "re-run the full write (the same command without -ResumeAfterWrite)"
+
+function Add-ProgressLine([string]$Stage, [string]$CardState, [string]$Detail, [object]$Bytes, [System.Collections.IDictionary]$Extra) {
+    if (-not $ProgressPath) { return }
+    $line = [ordered]@{ ts = [DateTime]::UtcNow.ToString("o"); stage = $Stage; card_state = $CardState }
+    if ($Detail) { $line["detail"] = $Detail }
+    if ($null -ne $Bytes) { $line["bytes"] = [int64]$Bytes }
+    if ($Extra) { foreach ($key in $Extra.Keys) { $line[$key] = $Extra[$key] } }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($line | ConvertTo-Json -Compress) + "`n")
+    # Not Start-Transcript: that buffers, and release 005 sat at its header for an hour.
+    $stream = New-Object IO.FileStream($ProgressPath, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Set-Stage([string]$Stage, [string]$CardState, [string]$Detail, [System.Collections.IDictionary]$Extra) {
+    $script:stage = $Stage
+    $script:cardState = $CardState
+    $script:nextHint = ""
+    Add-ProgressLine $Stage $CardState $Detail $null $Extra
+}
+
+function Get-NextStep {
+    if ($script:nextHint) { return $script:nextHint }
+    switch ($script:cardState) {
+        "untouched" {
+            switch ($script:stage) {
+                "verify-signature" { return "download the release again (image, SHA256SUMS, SHA256SUMS.sig), then re-run" }
+                "select-disk" { return "reseat the card reader, re-run -PlanOnly to see which disk is found, then re-run the write" }
+                default { return "re-run the same command" }
+            }
+        }
+        "writing" { return "the card is partially written: $fullWriteNext" }
+        "written-unverified" { return $resumeNext }
+        "verified-no-bundle" { return $resumeNext }
+        # D-188 (D-187 review): a bundle half-copied to the card makes the readback
+        # see an extra file, so resume cannot finish it.
+        "bundle-partial" { return "a partial provisioning bundle may be on the card and cannot be resumed: $fullWriteNext" }
+        "complete" { return "the card has its bundle but no receipt: check the registry file, then $fullWriteNext" }
+        default { return $fullWriteNext }
+    }
+}
+
+function Format-Failure([string]$Message, [string]$Next) {
+    if (-not $Next) { $Next = Get-NextStep }
+    # D-188: the failed line carries the next step, so the status command can show it.
+    $extra = [ordered]@{ next = $Next }
+    if ($script:failureKind) { $extra["kind"] = $script:failureKind }
+    Add-ProgressLine "failed" $script:cardState "$($script:stage): $Message" $null $extra
+    $script:failureRecorded = $true
+    return "$Message`nstage=$($script:stage) card_state=$($script:cardState)`nnext: $Next"
+}
+
+function Fail([string]$Message, [string]$Next) {
+    if ($script:stage -and -not $script:failureRecorded) { $Message = Format-Failure $Message $Next }
     throw $Message
+}
+
+# Errors that do not come through Fail (a missing tool, a file that cannot be
+# copied) get the same stage, card state and next step.
+trap {
+    if ($script:stage -and -not $script:failureRecorded) {
+        throw (Format-Failure ([string]$_.Exception.Message) "")
+    }
+    break
 }
 
 function Get-CredentialPath([string]$Profile) {
@@ -66,14 +153,127 @@ function Save-WifiCredential([string]$Profile, [string]$Ssid) {
     Write-Output "Stored operator-local credential profile '$Profile'."
 }
 
+# Some USB card readers intermittently report an empty Get-Disk SerialNumber
+# (release 005: the same reader showed 000000000207, then blank after a replug)
+# while the USB mass-storage instance ID still carries the device serial:
+# USBSTOR\DISK&VEN_..&PROD_..&REV_..\<serial>&<n>. Use that only when it is a
+# real serial; Windows invents "<digit>&<hash>&<n>" IDs for devices without one.
+function Get-UsbInstanceSerial([string]$UniqueId) {
+    if ($UniqueId -notmatch '^USBSTOR\\[^\\]+\\([^&\\]+)&') { return "" }
+    $candidate = $Matches[1]
+    if ($candidate.Length -lt 4) { return "" }
+    return $candidate
+}
+
+function Complete-DiskSerial([object]$Disk) {
+    if ($null -eq $Disk -or -not $Disk.PSObject.Properties["SerialNumber"]) { return $Disk }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Disk.SerialNumber)) { return $Disk }
+    if ([string]$Disk.BusType -ne "USB" -or -not $Disk.PSObject.Properties["UniqueId"]) { return $Disk }
+    $fallback = Get-UsbInstanceSerial ([string]$Disk.UniqueId)
+    if ($fallback) { $Disk.SerialNumber = $fallback }
+    return $Disk
+}
+
 function Read-DiskInventory([string]$FixturePath) {
     if ($FixturePath) {
         if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) {
             Fail "disk inventory fixture is missing"
         }
-        return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json))
+        return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json) | ForEach-Object { Complete-DiskSerial $_ })
     }
-    return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly)
+    return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, UniqueId, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly, Signature, Guid |
+        ForEach-Object { Complete-DiskSerial $_ })
+}
+
+# D-188: the serial names the reader, not the card. Cheap readers share dummy
+# serials (000000000207 is a known Genesys one), so the plan also pins the
+# inserted card's own identity: its MBR disk signature or GPT disk GUID.
+function Get-CardIdentity([object]$Disk) {
+    $signature = $null
+    $guid = $null
+    if ($Disk.PSObject.Properties["Signature"] -and $null -ne $Disk.Signature -and [int64]$Disk.Signature -ne 0) {
+        $signature = "{0:x8}" -f [int64]$Disk.Signature
+    }
+    if ($Disk.PSObject.Properties["Guid"] -and -not [string]::IsNullOrWhiteSpace([string]$Disk.Guid)) {
+        $guid = ([string]$Disk.Guid).Trim().Trim('{', '}').ToLowerInvariant()
+    }
+    [pscustomobject]@{ Signature = $signature; Guid = $guid }
+}
+
+# D-188 review: a card that already holds this release is accepted only as the
+# leftover of an earlier attempt of this same plan: a progress file of this plan
+# whose Imager write started. Its provisioning bundle, if any, means it was
+# finished for some robot, and it is never erased under another plan.
+function Find-ExistingBundle {
+    if ($BootMountPath) {
+        $candidate = Join-Path $BootMountPath "rosy-provision"
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+        return $null
+    }
+    if ($DiskInventoryJson) { return $null }
+    foreach ($partition in @(Get-Partition -DiskNumber $DiskNumber -ErrorAction SilentlyContinue)) {
+        if ([string]$partition.DriveLetter -notmatch '^[A-Za-z]$') { continue }
+        $candidate = "$($partition.DriveLetter):\rosy-provision"
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    return $null
+}
+
+function Test-EarlierWriteOfThisPlan {
+    if (-not $planFullPath) { return $false }
+    $current = $(if ($ProgressPath) { [IO.Path]::GetFullPath($ProgressPath) } else { "" })
+    $folders = @((Split-Path -Parent $planFullPath))
+    if ($ProgressPath) { $folders += (Split-Path -Parent $current) }
+    foreach ($file in @(Get-ChildItem -LiteralPath ($folders | Select-Object -Unique) -Filter "*.progress.jsonl" -File -ErrorAction SilentlyContinue)) {
+        if ($file.FullName -eq $current) { continue }
+        $ofThisPlan = $false
+        foreach ($text in @(Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue)) {
+            try { $line = $text | ConvertFrom-Json } catch { continue }
+            if ($line.PSObject.Properties["plan"] -and [string]$line.plan -eq $planFullPath) { $ofThisPlan = $true }
+            if ($ofThisPlan -and $line.stage -eq "write" -and $line.card_state -eq "writing") { return $true }
+        }
+    }
+    return $false
+}
+
+# $Sector: what the probe read from the card's first sector. When it was read,
+# its value is trusted over Get-Disk's cache, including "no signature".
+function Assert-PlannedCard([object]$Disk, [object]$Sector) {
+    if (-not $reviewedPlan) { return }
+    if ($planKeys -cnotcontains "disk_signature" -or $planKeys -cnotcontains "disk_guid") {
+        Write-Warning "the reviewed plan records no card identity (made before D-188); check the card label before the confirmation"
+        return
+    }
+    $planned = [pscustomobject]@{
+        Signature = $(if ($reviewedPlan.disk_signature) { [string]$reviewedPlan.disk_signature } else { $null })
+        Guid = $(if ($reviewedPlan.disk_guid) { [string]$reviewedPlan.disk_guid } else { $null })
+    }
+    $found = Get-CardIdentity $Disk
+    # The bytes read from the card win over what Get-Disk last cached (D-188 review:
+    # a sector that was read and holds no signature, or 00000000, means none).
+    if ($Sector -and $Sector.Read) {
+        $found.Signature = $(if ($Sector.Signature -and $Sector.Signature -ne "00000000") { [string]$Sector.Signature } else { $null })
+    }
+    $describe = { param($identity) "disk signature $(if ($identity.Signature) { $identity.Signature } else { 'none' }), GPT GUID $(if ($identity.Guid) { $identity.Guid } else { 'none' })" }
+    $otherCard = "put the planned card back (check its label), or make and review a new plan (-PlanOnly) for the card that is inserted"
+    if ($found.Signature -ceq $planned.Signature -and $found.Guid -ceq $planned.Guid) {
+        if (-not $planned.Signature -and -not $planned.Guid) {
+            Write-Warning "the card has no disk signature or GUID (factory blank); it is identified only by reader serial and size, which another blank card of the same size in this reader would also match. Check the card label."
+        }
+        return
+    }
+    if ($imageSignature -and $found.Signature -ceq $imageSignature) {
+        $bundle = Find-ExistingBundle
+        if ($bundle) {
+            Fail ("a different card is in the reader: it holds this release and a provisioning bundle ({0}), so it was written for a robot; the plan recorded {1}" -f $bundle, (& $describe $planned)) $otherCard
+        }
+        if (-not (Test-EarlierWriteOfThisPlan)) {
+            Fail ("a different card is in the reader: the plan recorded {0}; the inserted card holds this release's image, and no earlier write of this plan was recorded" -f (& $describe $planned)) $otherCard
+        }
+        Write-Warning "the card already holds this release's partition table from an earlier write of this plan; any card written with this release would match. Check the card label."
+        return
+    }
+    Fail ("a different card is in the reader: the plan recorded {0}; the inserted card has {1}" -f (& $describe $planned), (& $describe $found)) $otherCard
 }
 
 # Windows renumbers disks as USB devices come and go (release 004: the card moved
@@ -224,7 +424,11 @@ if ($ReprovisionReceipt) {
     # Typed checks: in PowerShell 5.1 [bool]"false" is True and [int]$null is 0.
     $exitCode = $reprovision.writer_exit_code
     $verified = $reprovision.media_readback.verified
-    if (-not ($exitCode -is [int] -or $exitCode -is [long]) -or $exitCode -ne 0 -or -not ($verified -is [bool]) -or -not $verified) {
+    # D-187: a -ResumeAfterWrite receipt has no Imager exit code; its full readback is the proof.
+    $resumed = $receiptKeys -ccontains "resumed_after_write" -and $reprovision.resumed_after_write -is [bool] -and $reprovision.resumed_after_write
+    $writerProven = ($exitCode -is [int] -or $exitCode -is [long]) -and $exitCode -eq 0
+    if ($resumed -and $null -eq $exitCode) { $writerProven = $true }
+    if (-not $writerProven -or -not ($verified -is [bool]) -or -not $verified) {
         Fail "reprovision receipt does not prove a verified earlier write"
     }
     $fromReceipt = [ordered]@{ RobotNumber = "robot_number"; DeviceName = "device_name"; DeviceUid = "device_uid" }
@@ -315,6 +519,24 @@ if ($CountryCode -cnotmatch '^[A-Z]{2}$') { Fail "CountryCode must be two upperc
 if ($ReleaseId -notmatch '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$') { Fail "ReleaseId is invalid" }
 if ($FleetEndpoint -notmatch '^https://') { Fail "FleetEndpoint must use HTTPS" }
 if ([string]::IsNullOrWhiteSpace($FleetTrustProfile)) { Fail "FleetTrustProfile is required" }
+# D-187 review: a readback of another device would pass while the bundle and
+# receipt went to the real card. -ReadbackDevice and a non-.exe writer are test
+# fixtures, accepted only together with a fixture disk inventory.
+if ($ReadbackDevice -and -not $DiskInventoryJson) {
+    Fail "-ReadbackDevice is a test fixture option and is refused for a real disk (with or without -ResumeAfterWrite)"
+}
+# D-188 review: fixture mode is bound to fixture targets too; a fixture
+# inventory must never drive a real writer or read back a real device.
+if ($DiskInventoryJson -and -not $PlanOnly -and [IO.Path]::GetExtension($RpiImager) -eq ".exe") {
+    Fail "a fixture disk inventory (-DiskInventoryJson) cannot drive an .exe writer; fixtures use a stand-in writer"
+}
+if ($ReadbackDevice -match '^\\\\[.?]\\' -and $ReadbackDevice -notmatch '^\\\\\.\\pipe\\') {
+    Fail "-ReadbackDevice must be a file or pipe stand-in, not a device path"
+}
+if (-not $DiskInventoryJson -and -not $ResumeAfterWrite -and [IO.Path]::GetExtension($RpiImager) -ne ".exe") {
+    Fail "-RpiImager must be the Raspberry Pi Imager .exe; a wrapper would hide the real writer from the stall watchdog"
+}
+if ($ReadbackStallMinutes -le 0 -or $WriterStallMinutes -le 0) { Fail "stall limits must be positive" }
 
 $credentialPath = Get-CredentialPath $WifiProfile
 if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
@@ -349,16 +571,21 @@ if ($OperatorPublicKey) {
     $operatorFingerprint = ([string]$operatorFingerprint).Trim()
 }
 
+if (-not $ProgressPath -and -not $PlanOnly) { $ProgressPath = "$ReceiptPath.progress.jsonl" }
+$planFullPath = $(if ($PlanPath -and (Test-Path -LiteralPath $PlanPath -PathType Leaf)) { (Resolve-Path -LiteralPath $PlanPath).ProviderPath } else { "" })
+Set-Stage "verify-signature" "untouched" $(if ($PlanOnly) { "plan" } elseif ($ResumeAfterWrite) { "resume-after-write" } else { "write" }) $(if ($planFullPath) { [ordered]@{ plan = $planFullPath } } else { $null })
 if (-not (Test-Path -LiteralPath $ImagePath -PathType Leaf)) { Fail "image file is missing" }
 if ($ImageSha256 -notmatch '^[0-9a-fA-F]{64}$') { Fail "image SHA-256 is invalid" }
 $actualHash = (Get-FileHash -LiteralPath $ImagePath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actualHash -ne $ImageSha256.ToLowerInvariant()) { Fail "image SHA-256 does not match" }
 if (-not (Test-Path -LiteralPath $ImageSignaturePath -PathType Leaf)) { Fail "image signature is missing" }
-if (-not (Test-Path -LiteralPath $ReleasePublicKey -PathType Leaf)) { Fail "trusted release public key is missing" }
-if (Test-Path -LiteralPath $ReceiptPath) { Fail "receipt already exists and will not be overwritten" }
-if (-not (Test-Path -LiteralPath $RegistryJson -PathType Leaf)) { Fail "identity registry is missing" }
-if (-not (Test-Path -LiteralPath $RpiImager -PathType Leaf) -and -not (Get-Command $RpiImager -ErrorAction SilentlyContinue)) {
-    Fail "Raspberry Pi Imager CLI is unavailable"
+if (-not (Test-Path -LiteralPath $ReleasePublicKey -PathType Leaf)) { Fail "trusted release public key is missing" "restore deploy/release/public-keys from the repository, then re-run" }
+if (Test-Path -LiteralPath $ReceiptPath) {
+    Fail "receipt already exists and will not be overwritten" "this plan's card was already written and recorded; make a new plan (-PlanOnly) for another card"
+}
+if (-not (Test-Path -LiteralPath $RegistryJson -PathType Leaf)) { Fail "identity registry is missing" "restore the registry file named in the plan, then re-run" }
+if (-not $ResumeAfterWrite -and -not (Test-Path -LiteralPath $RpiImager -PathType Leaf) -and -not (Get-Command $RpiImager -ErrorAction SilentlyContinue)) {
+    Fail "Raspberry Pi Imager CLI is unavailable" "install Raspberry Pi Imager or pass -RpiImager, then re-run"
 }
 
 $releaseRoot = Split-Path -Parent $ImageSignaturePath
@@ -371,6 +598,8 @@ $verification = & $PythonExe $releaseVerifier `
     --release-id $ReleaseId
 if ($LASTEXITCODE -ne 0) { Fail "signed image release verification failed" }
 $verification = $null
+# The release is proven; what can still fail here is the plan, registry or arguments.
+$script:nextHint = "correct the reported plan, registry or argument, then re-run"
 
 $registry = Get-Content -LiteralPath $RegistryJson -Raw | ConvertFrom-Json
 if ($DeviceName -or $DeviceUid) {
@@ -422,6 +651,7 @@ if (-not $reprovision) {
     if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
 }
 
+Set-Stage "select-disk" "untouched" ""
 $firstInventory = Read-DiskInventory $DiskInventoryJson
 if ($DiskSerial) {
     $bySerial = Resolve-DiskNumberBySerial $firstInventory $DiskSerial
@@ -432,6 +662,7 @@ if ($DiskSerial) {
 }
 $firstDisk = Select-SafeDisk $firstInventory $DiskNumber
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
+$cardIdentity = Get-CardIdentity $firstDisk
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })
     physical_drive = $physicalDrive
@@ -439,6 +670,8 @@ $plan = [ordered]@{
     disk_model = [string]$firstDisk.FriendlyName
     disk_serial = [string]$firstDisk.SerialNumber
     disk_size = [int64]$firstDisk.Size
+    disk_signature = $cardIdentity.Signature
+    disk_guid = $cardIdentity.Guid
     device_uid = $DeviceUid
     device_name = $DeviceName
     robot_number = $RobotNumber
@@ -468,13 +701,13 @@ if ($reviewedPlan) {
     # The disk number is not part of the reviewed identity; the serial is.
     foreach ($field in @("disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
         if ($planKeys -cnotcontains $field -or [string]$plan[$field] -cne [string]$reviewedPlan.$field) {
-            Fail "target no longer matches the reviewed plan: $field"
+            Fail "target no longer matches the reviewed plan: $field" "check that the planned card and release are in use; otherwise make and review a new plan (-PlanOnly)"
         }
     }
     # Windows paths are case-insensitive; a different registry would let one
     # plan provision two cards with the same identity.
     if ([string]$plan["registry_path"] -ne [string]$reviewedPlan.registry_path) {
-        Fail "target no longer matches the reviewed plan: registry_path"
+        Fail "target no longer matches the reviewed plan: registry_path" "check that the planned card and release are in use; otherwise make and review a new plan (-PlanOnly)"
     }
 }
 
@@ -494,50 +727,362 @@ if ($PlanOnly) {
     exit 0
 }
 
+# D-188 pre-flight, before the ERASE confirmation: a timed, read-only sequential
+# read of the card start predicts the job, the card's own identity is checked
+# against the plan, and slow media is flagged. -PlanOnly cannot do this: opening
+# \\.\PhysicalDriveN needs the elevation that only the write has.
+$readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
+if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
+$readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
+$invariant = [Globalization.CultureInfo]::InvariantCulture
+Set-Stage "preflight" "untouched" ""
+function Invoke-Probe([int64]$Bytes, [double]$Seconds) {
+    $output = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget --probe --probe-bytes $Bytes --probe-seconds $Seconds.ToString($invariant)
+    if ($LASTEXITCODE -ne 0) { Fail "the card probe failed (verifier exit code $LASTEXITCODE)" }
+    return (($output | Out-String) | ConvertFrom-Json)
+}
+
+function Get-DeviceSector([object]$Facts) {
+    $read = [bool]($Facts.PSObject.Properties["device_mbr_read"] -and $Facts.device_mbr_read)
+    $signature = $(if ($Facts.PSObject.Properties["device_mbr_signature"] -and $Facts.device_mbr_signature) { [string]$Facts.device_mbr_signature } else { $null })
+    [pscustomobject]@{ Read = $read; Signature = $signature }
+}
+
+$probe = Invoke-Probe $ProbeBytes $ProbeSeconds
+function Get-ProbeValue([string]$Name) {
+    if ($probe.PSObject.Properties[$Name]) { return $probe.$Name }
+    return $null
+}
+# The xz index gives the raw size without decompressing; it tells a stall
+# after the last byte (resume) from one mid-write (rewrite).
+$imageRawSize = $(if ($null -ne (Get-ProbeValue "image_raw_size")) { [int64]$probe.image_raw_size } else { [int64]0 })
+$imageSignature = $(if (Get-ProbeValue "image_mbr_signature") { [string]$probe.image_mbr_signature } else { $null })
+$deviceSector = Get-DeviceSector $probe
+$readMBps = $(if ($null -ne (Get-ProbeValue "device_read_mbps")) { [double]$probe.device_read_mbps } else { $null })
+$probeError = [string](Get-ProbeValue "device_error")
+# Without a measurement, fall back to release 005: Imager about 9 MB/s, the
+# single-thread readback about 3.4 MB/s.
+# A probe that timed out reports the rate it managed, possibly 0; the prediction
+# floors it at 0.1 MB/s, and the slow-media gate below still sees the real value.
+$readRate = $(if ($null -ne $readMBps) { [Math]::Max($readMBps, 0.1) } else { 3.4 })
+$writeRate = $(if ($AssumedWriteMBps -gt 0) { $AssumedWriteMBps } elseif ($null -ne $readMBps) { $readRate * 0.8 } else { 9.0 })
+$rawMB = $imageRawSize / 1e6
+$predictedWrite = $(if ($ResumeAfterWrite) { 0 } else { [int64][Math]::Ceiling($rawMB / $writeRate) })
+$predictedReadback = [int64][Math]::Ceiling($rawMB / $readRate)
+$preflight = [ordered]@{
+    read_mbps = $readMBps
+    read_bytes = [int64](Get-ProbeValue "device_bytes_read")
+    raw_bytes = $imageRawSize
+    assumed_write_mbps = [Math]::Round($writeRate, 2)
+    assumed_readback_mbps = [Math]::Round($readRate, 2)
+    predicted_write_seconds = $predictedWrite
+    predicted_readback_seconds = $predictedReadback
+    predicted_total_seconds = $predictedWrite + $predictedReadback
+    min_read_mbps = $MinReadMBps
+}
+if ($probeError) { $preflight["device_error"] = $probeError }
+Add-ProgressLine "preflight" "untouched" "measured" $null $preflight
+$readText = $(if ($null -ne $readMBps) { "{0:N1} MB/s over the first {1:N0} MB" -f $readMBps, ($preflight.read_bytes / 1e6) } else { "not measured ($probeError); assuming $readRate MB/s" })
+Write-Host ("Pre-flight: card read {0}. Image {1:N0} MB: write about {2:N0} min at {3:N1} MB/s{4}, readback about {5:N0} min, total about {6:N0} min." -f
+    $readText, $rawMB, [Math]::Ceiling($predictedWrite / 60), $writeRate,
+    $(if ($ResumeAfterWrite) { " (skipped: -ResumeAfterWrite)" } else { "" }),
+    [Math]::Ceiling($predictedReadback / 60), [Math]::Ceiling(($predictedWrite + $predictedReadback) / 60))
+
+if ($ResumeAfterWrite) {
+    # A fast pre-check before an hour of readback: a card that holds this
+    # release's image starts with the image's MBR disk signature.
+    if (-not $imageSignature) {
+        Write-Warning "the image has no MBR disk signature; the card cannot be pre-checked, the readback decides"
+    }
+    elseif (-not $deviceSector.Read) {
+        Write-Warning "the card's first sector could not be read ($probeError); the readback decides"
+    }
+    elseif ($deviceSector.Signature -cne $imageSignature) {
+        $script:cardState = "unknown"
+        Fail ("the card does not hold this release's image: its MBR disk signature is {0}, the image's is {1}" -f $(if ($deviceSector.Signature) { $deviceSector.Signature } else { "none" }), $imageSignature) "check that the card this plan wrote is in the reader (label); if it is, its write never reached the partition table: $fullWriteNext"
+    }
+    # D-187 review: a bundle already on the card makes the readback fail as a
+    # mismatch after the full read; stop before spending that hour.
+    $existingBundle = Find-ExistingBundle
+    if ($existingBundle) {
+        $script:cardState = "bundle-partial"
+        Fail "the card already has a provisioning bundle ($existingBundle); -ResumeAfterWrite cannot finish it" "rewrite the card: $fullWriteNext; if the registry already lists $DeviceName, remove that entry first"
+    }
+}
+else {
+    Assert-PlannedCard $secondDisk $deviceSector
+}
+
+if ($null -ne $readMBps -and $readMBps -lt $MinReadMBps) {
+    $slowAdvice = "use another USB port or reader (a USB 3.0 reader, with an A1/A2 or U3 card)"
+    Write-Warning ("SLOW MEDIA: the card reads at {0:N1} MB/s, below {1:N1} MB/s; the job will take about {2:N0} min. {3}." -f
+        $readMBps, $MinReadMBps, [Math]::Ceiling($preflight.predicted_total_seconds / 60), $slowAdvice)
+    if (-not $AcceptSlowMedia) {
+        $slowFailure = "the card reads at {0:N1} MB/s, below -MinReadMBps {1:N1} (predicted about {2:N0} min)" -f $readMBps, $MinReadMBps, [Math]::Ceiling($preflight.predicted_total_seconds / 60)
+        $slowNext = "$slowAdvice, then re-run; or re-run with -AcceptSlowMedia to write this card anyway"
+        # A non-interactive run (confirmation passed in, or no console) cannot be asked.
+        if ($Confirmation -or [Console]::IsInputRedirected) { Fail $slowFailure $slowNext }
+        if ((Read-Host "Type SLOW to write this card anyway, anything else to stop") -cne "SLOW") { Fail $slowFailure $slowNext }
+    }
+}
+
+Set-Stage "confirm" "untouched" ""
 $expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
 if (-not $Confirmation) { $Confirmation = Read-Host "Type exactly: $expectedConfirmation" }
-if ($Confirmation -cne $expectedConfirmation) { Fail "confirmation did not match the selected physical disk and device" }
+if ($Confirmation -cne $expectedConfirmation) {
+    Fail "confirmation did not match the selected physical disk and device`ntyped: '$Confirmation'" "re-run and type exactly: $expectedConfirmation"
+}
 
 # Probe a third time immediately before the destructive call when live disk
 # discovery is used. Fixture mode already supplied the explicit second probe.
 if (-not $DiskInventoryJson) {
     $writeDisk = Select-SafeDisk (Read-DiskInventory "") $DiskNumber
     if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $writeDisk)) {
-        Fail "target disk changed immediately before write"
+        Fail "target disk changed immediately before write" "reseat the card reader, re-run -PlanOnly to see which disk is found, then re-run the write"
+    }
+}
+# The card identity once more, right before the erase, from the card's own first
+# sector (D-188 review: not only Get-Disk, whose cache can lag a card swap).
+if (-not $ResumeAfterWrite) {
+    Assert-PlannedCard $(if ($DiskInventoryJson) { $secondDisk } else { $writeDisk }) (Get-DeviceSector (Invoke-Probe 512 30))
+}
+
+# Imager CPU and I/O counters summed over its whole process tree; $null once
+# the root is gone. D-187 review: a launcher or wrapper can look idle while its
+# child writes, and watching only the root PID would kill a working write.
+function Get-WriterSample([int]$RootId) {
+    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $children = @{}
+    $root = $null
+    foreach ($process in $all) {
+        if ([int]$process.ProcessId -eq $RootId) { $root = $process }
+        $parentId = [int]$process.ParentProcessId
+        if (-not $children.ContainsKey($parentId)) { $children[$parentId] = New-Object System.Collections.ArrayList }
+        [void]$children[$parentId].Add($process)
+    }
+    if ($null -eq $root) { return $null }
+    $tree = New-Object System.Collections.ArrayList
+    [void]$tree.Add($root)
+    $seen = @{ $RootId = $true }
+    for ($index = 0; $index -lt $tree.Count; $index++) {
+        $parent = $tree[$index]
+        if (-not $children.ContainsKey([int]$parent.ProcessId)) { continue }
+        foreach ($child in $children[[int]$parent.ProcessId]) {
+            if ($seen.ContainsKey([int]$child.ProcessId)) { continue }
+            # A reused parent PID: the "child" is older than its parent.
+            if ($child.CreationDate -and $parent.CreationDate -and $child.CreationDate -lt $parent.CreationDate) { continue }
+            $seen[[int]$child.ProcessId] = $true
+            [void]$tree.Add($child)
+        }
+    }
+    $sum = @{ Kernel = [uint64]0; User = [uint64]0; Read = [uint64]0; Write = [uint64]0; Other = [uint64]0 }
+    foreach ($process in $tree) {
+        $sum.Kernel += [uint64]$process.KernelModeTime
+        $sum.User += [uint64]$process.UserModeTime
+        $sum.Read += [uint64]$process.ReadTransferCount
+        $sum.Write += [uint64]$process.WriteTransferCount
+        $sum.Other += [uint64]$process.OtherTransferCount
+    }
+    [pscustomobject]@{
+        Written = [int64]$sum.Write
+        Read = [int64]$sum.Read
+        Key = "{0}/{1}/{2}/{3}/{4}/{5}" -f $sum.Kernel, $sum.User, $sum.Read, $sum.Write, $sum.Other, $tree.Count
     }
 }
 
-$readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
-if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
-$rawImageOutput = & $PythonExe $readbackVerifier --image $ImagePath --image-only
-if ($LASTEXITCODE -ne 0) { Fail "raw image SHA-256 calculation failed" }
-try {
-    $rawImage = $rawImageOutput | ConvertFrom-Json
-}
-catch {
-    Fail "raw image SHA-256 evidence is invalid"
-}
-if ([string]$rawImage.image_raw_sha256 -notmatch '^[0-9a-f]{64}$') {
-    Fail "raw image SHA-256 evidence is invalid"
+# D-187 review: taskkill writes to stderr when a process is already gone, and
+# native stderr under ErrorAction Stop throws in PowerShell 5.1, which skipped the
+# wait and the card-state update. Returns whether the tree is really gone.
+function Stop-ProcessTree([System.Diagnostics.Process]$Process) {
+    $previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & taskkill.exe /PID $Process.Id /T /F *> $null
+    }
+    finally {
+        $ErrorActionPreference = $previous
+    }
+    return $Process.WaitForExit(10000)
 }
 
-$writerArguments = @(
-    "--cli",
-    "--sha256",
-    [string]$rawImage.image_raw_sha256,
-    ('"{0}"' -f $ImagePath),
-    ('"{0}"' -f $physicalDrive)
-)
-$writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -Wait -PassThru
-$writerExitCode = $writerProcess.ExitCode
-if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
+# Windows command-line quoting for Start-Process -ArgumentList.
+function ConvertTo-ProcessArgument([string]$Value) {
+    '"' + (($Value -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"'
+}
 
-$readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
+$writerExitCode = $null
+if ($ResumeAfterWrite) {
+    # D-187: the readback below is authoritative, so a card that matches the signed
+    # image byte for byte is good however it was written. Every pre-write check
+    # above (signature, serial, fingerprint, plan, confirmation) still ran.
+    Set-Stage "write" "written-unverified" "skipped: -ResumeAfterWrite" ([ordered]@{ total = $imageRawSize })
+}
+else {
+    # D-180: the full readback below is the single authoritative media check.
+    # Input authenticity was proven by the signed SHA256SUMS before any disk probe,
+    # so Imager's own read-back pass (and a raw-hash pre-pass to feed it) is skipped.
+    $writerArguments = @(
+        "--cli",
+        "--disable-verify",
+        ('"{0}"' -f $ImagePath),
+        ('"{0}"' -f $physicalDrive)
+    )
+    Set-Stage "write" "writing" "raw image $imageRawSize bytes" ([ordered]@{ total = $imageRawSize })
+    # D-187: no Start-Process -Wait. Release 005 Imager wrote every byte, then sat
+    # with 0 CPU and 0 I/O for 23 minutes while -Wait waited forever.
+    $writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -PassThru
+    $null = $writerProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
+    $stallLimit = [TimeSpan]::FromMinutes($WriterStallMinutes)
+    $pollMilliseconds = [int][Math]::Max(200, [Math]::Min(5000, $stallLimit.TotalMilliseconds / 4))
+    $lastKey = ""
+    $lastChange = [DateTime]::UtcNow
+    $lastBeat = [DateTime]::UtcNow
+    $written = [int64]0
+    while (-not $writerProcess.WaitForExit($pollMilliseconds)) {
+        $sample = Get-WriterSample $writerProcess.Id
+        if ($null -eq $sample) { continue }
+        $written = [Math]::Max($written, $sample.Written)
+        $now = [DateTime]::UtcNow
+        if ($sample.Key -ne $lastKey) {
+            $lastKey = $sample.Key
+            $lastChange = $now
+        }
+        elseif ($now - $lastChange -ge $stallLimit) {
+            if (-not (Stop-ProcessTree $writerProcess)) {
+                Fail ("image writer stalled after writing {0} of {1} bytes and could not be stopped" -f $written, $imageRawSize) "Imager could not be stopped: unplug the card reader and reboot the PC before anything else, then $fullWriteNext (do not resume)"
+            }
+            if ($imageRawSize -gt 0 -and $written -ge $imageRawSize) { $script:cardState = "written-unverified" }
+            Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize)
+        }
+        if ($now - $lastBeat -ge [TimeSpan]::FromSeconds($HeartbeatSeconds)) {
+            $lastBeat = $now
+            Add-ProgressLine "write" "writing" "heartbeat" $written
+        }
+    }
+    $writerProcess.WaitForExit()
+    $writerExitCode = $writerProcess.ExitCode
+    if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
+}
+
+Set-Stage "readback" "written-unverified" "" ([ordered]@{ total = $imageRawSize })
+# D-188: the readback runs as a watched process. Its heartbeats land in the
+# progress file; if the verified byte count stops rising for
+# -ReadbackStallMinutes, the verifier is stopped and the failure is an I/O one
+# (release 005: the reader dropped out and the readback sat for an hour).
+# A slow card that keeps moving is never stopped. The verifier's own stall
+# timeout (twice this limit) is the backstop when this script is gone.
+$readbackStallSeconds = $ReadbackStallMinutes * 60
+$beatSeconds = [Math]::Min($HeartbeatSeconds, $readbackStallSeconds / 4)
+$readbackOptions = @("--progress-seconds", $beatSeconds.ToString($invariant),
+    "--stall-seconds", (2 * $readbackStallSeconds).ToString($invariant))
+if ($ProgressPath) { $readbackOptions += @("--progress", $ProgressPath) }
 # Windows auto-mounts the freshly written FAT32 partition and rewrites a few
 # spec-defined fields; removable media cannot be set offline. The verifier
 # tolerates exactly those fields and reports them (release 004, offset 1049576).
-$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
-if ($LASTEXITCODE -ne 0) { Fail "full media readback verification failed" }
+# The verifier's reason goes to a file: a PowerShell 5.1 transcript does not
+# capture a native program's stderr, and 2>&1 under ErrorAction Stop would throw
+# (release 005 rewrite: the log said only "readback verification failed").
+$readbackStem = Join-Path ([IO.Path]::GetTempPath()) ("rosy-readback-" + [guid]::NewGuid().ToString("N"))
+$readbackErrorPath = "$readbackStem.json"
+$readbackOutputPath = "$readbackStem.out"
+$readbackStderrPath = "$readbackStem.err"
+$readbackOptions += @("--error-json", $readbackErrorPath)
+$verifierArguments = @(@($readbackVerifier, "--image", $ImagePath, "--device", $readbackTarget) + $readbackOptions |
+    ForEach-Object { ConvertTo-ProcessArgument ([string]$_) })
+
+function Read-NewReadbackBytes {
+    # Heartbeat lines appended since the last call; the partial last line waits.
+    if (-not $ProgressPath -or -not (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) { return [int64]-1 }
+    $stream = New-Object IO.FileStream($ProgressPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        if ($stream.Length -le $script:progressOffset) { return [int64]-1 }
+        $null = $stream.Seek($script:progressOffset, [IO.SeekOrigin]::Begin)
+        $buffer = New-Object byte[] ($stream.Length - $script:progressOffset)
+        $count = $stream.Read($buffer, 0, $buffer.Length)
+    }
+    finally {
+        $stream.Dispose()
+    }
+    if ($count -le 0) { return [int64]-1 }
+    $end = [Array]::LastIndexOf($buffer, [byte]10, $count - 1)
+    if ($end -lt 0) { return [int64]-1 }
+    $script:progressOffset += $end + 1
+    $best = [int64]-1
+    foreach ($text in [Text.Encoding]::UTF8.GetString($buffer, 0, $end + 1).Split("`n")) {
+        if (-not $text.Trim()) { continue }
+        try { $line = $text | ConvertFrom-Json } catch { continue }
+        if ($line.PSObject.Properties["stage"] -and $line.stage -eq "readback" -and $line.PSObject.Properties["bytes"]) {
+            $best = [Math]::Max($best, [int64]$line.bytes)
+        }
+    }
+    return $best
+}
+
+$script:progressOffset = $(if ($ProgressPath -and (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) { (Get-Item -LiteralPath $ProgressPath).Length } else { [int64]0 })
+try {
+    $readbackProcess = Start-Process -FilePath $PythonExe -ArgumentList $verifierArguments -NoNewWindow -PassThru `
+        -RedirectStandardOutput $readbackOutputPath -RedirectStandardError $readbackStderrPath
+    $null = $readbackProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
+    $readbackLimit = [TimeSpan]::FromSeconds($readbackStallSeconds)
+    $readbackPoll = [int][Math]::Max(200, [Math]::Min(5000, $readbackLimit.TotalMilliseconds / 4))
+    $verifiedBytes = [int64]0
+    $readBytes = [int64]-1
+    $lastAdvance = [DateTime]::UtcNow
+    while (-not $readbackProcess.WaitForExit($readbackPoll)) {
+        $seen = Read-NewReadbackBytes
+        # D-188 review: the heartbeat is advisory and can fail to land (antivirus
+        # lock, full disk); bytes the verifier reads also count as progress.
+        $sample = $(if ($seen -gt $verifiedBytes) { $null } else { Get-WriterSample $readbackProcess.Id })
+        if ($seen -gt $verifiedBytes) {
+            $verifiedBytes = $seen
+            $lastAdvance = [DateTime]::UtcNow
+        }
+        elseif ($null -ne $sample -and $sample.Read -gt $readBytes) {
+            if ($readBytes -ge 0) { $lastAdvance = [DateTime]::UtcNow }
+            $readBytes = $sample.Read
+        }
+        elseif ([DateTime]::UtcNow - $lastAdvance -ge $readbackLimit) {
+            $stopped = Stop-ProcessTree $readbackProcess
+            $script:failureKind = "io"
+            Fail ("the card could not be read during readback (stalled, kind io): no heartbeat and no reads for {0} minutes after verifying {1} of {2} bytes; the verifier was {3}" -f
+                $ReadbackStallMinutes, $verifiedBytes, $imageRawSize, $(if ($stopped) { "stopped" } else { "told to stop but is still running" })) "reinsert the card (or use another reader), then $resumeNext"
+        }
+    }
+    $readbackProcess.WaitForExit()
+    $readbackExitCode = $readbackProcess.ExitCode
+    $mediaReadbackOutput = $(if (Test-Path -LiteralPath $readbackOutputPath -PathType Leaf) { Get-Content -LiteralPath $readbackOutputPath -Raw } else { "" })
+    $readbackError = $null
+    if (Test-Path -LiteralPath $readbackErrorPath -PathType Leaf) {
+        try { $readbackError = Get-Content -LiteralPath $readbackErrorPath -Raw | ConvertFrom-Json } catch { $readbackError = $null }
+    }
+}
+finally {
+    foreach ($readbackFile in @($readbackErrorPath, $readbackOutputPath, $readbackStderrPath)) {
+        if (Test-Path -LiteralPath $readbackFile) { Remove-Item -LiteralPath $readbackFile -Force -ErrorAction SilentlyContinue }
+    }
+}
+if ($readbackExitCode -ne 0) {
+    $reason = "no reason reported (verifier exit code $readbackExitCode)"
+    $kind = "mismatch"
+    if ($readbackError) {
+        $reason = "{0} (verified {1} bytes before it stopped)" -f $readbackError.error, $readbackError.bytes_verified
+        $kind = [string]$readbackError.kind
+    }
+    elseif ($readbackExitCode -eq 3) {
+        $kind = "io"
+    }
+    $script:failureKind = $kind
+    # A read error or a card that ends early is the reader or the connection,
+    # not the data: the written bytes may be fine, so resume. A mismatch is bad data.
+    if ($kind -eq "io") {
+        Fail "the card could not be read during readback (removed, disconnected or I/O error): $reason" "reinsert the card (or use another reader), then $resumeNext"
+    }
+    if ($kind -eq "image") {
+        $script:cardState = "unknown"
+        Fail "the image file could not be decompressed during readback: $reason" "download the release again, then $fullWriteNext"
+    }
+    Fail "full media readback verification failed: $reason" "$fullWriteNext; if it fails again, replace the card"
+}
 try {
     $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json
 }
@@ -545,6 +1090,19 @@ catch {
     Fail "media readback evidence is invalid"
 }
 if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
+foreach ($digestField in @("image_raw_sha256", "device_sha256", "image_sha256")) {
+    if (-not $mediaReadback.PSObject.Properties[$digestField] -or [string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') {
+        Fail "media readback evidence is invalid"
+    }
+}
+if ([int64]$mediaReadback.bytes_verified -le 0) { Fail "media readback evidence is invalid" }
+# Review MEDIUM-1: the readback hashed the compressed file it decompressed; it
+# must be the file whose hash the signed SHA256SUMS vouched for.
+if ([string]$mediaReadback.image_sha256 -cne $actualHash) {
+    $script:cardState = "unknown"
+    Fail "the image read back is not the signed image (image_sha256 $($mediaReadback.image_sha256), signed $actualHash)" "download the release again, then $fullWriteNext"
+}
+Set-Stage "bundle" "verified-no-bundle" ""
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $bundleTool = Join-Path $PSScriptRoot "create-provision-bundle.py"
@@ -592,14 +1150,29 @@ try {
         $bundleRequest = $null
     }
 
+    # Review note: the card is re-selected by serial right before its boot
+    # partition is touched; a reader swapped after the readback stops here.
+    $bundleInventory = Read-DiskInventory $DiskInventoryJson
+    $bundleNumber = $(if ($DiskSerial) { Resolve-DiskNumberBySerial $bundleInventory $DiskSerial } else { $DiskNumber })
+    $bundleDisk = Select-SafeDisk $bundleInventory $bundleNumber
+    if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $bundleDisk)) {
+        Fail "target disk changed between the readback and the bundle"
+    }
     $bootRoot = Resolve-BootMount $DiskNumber $BootMountPath ([bool]$DiskInventoryJson)
     $bundleDirectory = Join-Path $bootRoot "rosy-provision"
+    # D-187 review: from the first byte on the boot partition, a failure (card
+    # pulled mid-copy) leaves a partial bundle that the readback would call a
+    # mismatch, so the advice is a full rewrite, not -ResumeAfterWrite.
+    Set-Stage "bundle-writing" "bundle-partial" ""
     New-Item -ItemType Directory -Path $bundleDirectory -Force | Out-Null
     $bundleTarget = Join-Path $bundleDirectory "provision.json"
     if (Test-Path -LiteralPath $bundleTarget) { Fail "provisioning bundle already exists on the card" }
     $bundleTargetTemp = Join-Path $bundleDirectory ".provision.json.tmp"
     Copy-Item -LiteralPath $bundleTemp -Destination $bundleTargetTemp
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
+    # The bundle is on the card; the readback would now see it as an extra file,
+    # so from here on a failure needs a full rewrite, not -ResumeAfterWrite.
+    Set-Stage "receipt" "complete" ""
     $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
     # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
     $configTarget = Join-Path $bootRoot "rosy-config.yaml"
@@ -631,7 +1204,12 @@ $receipt = [ordered]@{
     image_sha256 = $actualHash
     writer = [IO.Path]::GetFileName($RpiImager)
     writer_exit_code = $writerExitCode
+    resumed_after_write = [bool]$ResumeAfterWrite
     media_readback = $mediaReadback
+    # D-187 review: the evidence names the device that was read back.
+    readback_target = $readbackTarget
+    fixture = [bool]$DiskInventoryJson
+    preflight = $preflight
     personalization = $bundleReceipt
     created_at = [DateTimeOffset]::UtcNow.ToString("o")
 }
@@ -645,5 +1223,6 @@ if ($reprovision) {
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 10 -Compress
+Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath" })
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")

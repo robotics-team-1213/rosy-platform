@@ -104,6 +104,110 @@ EVIDENCE="${SESSION%.json}.evidence"
 mkdir -m 0750 "$EVIDENCE"
 ```
 
+### 카드 쓰기 중 문제가 생겼을 때
+
+카드 쓰기(`deploy/sd/write-card.ps1`)는 실패하면 스스로 멈추고, 카드 상태와 다음 명령을 알린다(D-187).
+실패 문구 끝은 늘 이 형식이다.
+
+```text
+the card could not be read during readback (removed, disconnected or I/O error): media is shorter than the image at byte offset 4194304 (verified 4194304 bytes before it stopped)
+stage=readback card_state=written-unverified
+next: reinsert the card (or use another reader), then re-run the same command with -ResumeAfterWrite (...)
+```
+
+readback이 실패하면 verifier가 말한 이유(불일치 offset, 짧은 읽기, OSError)와 검증된 바이트 수가 이 문구, 진행 파일의
+`failed` 줄 `detail`, 로그에 함께 남는다. 불일치는 데이터가 틀린 것(재기록, 반복되면 카드 교체)이고, 읽기 오류나 짧은
+읽기는 리더기·연결 문제(다시 꽂거나 다른 리더기로 resume)다.
+
+**쓰기는 분리 실행으로 띄운다 (D-188).** 쓰기는 30분에서 1시간 넘게 걸린다. 에이전트 세션이나 곧 닫을 셸의 자식으로
+띄우면 그 세션과 함께 사라진다(release 005). `-Detach`는 관리자 창 하나를 따로 띄우고 바로 돌아온다. UAC는 한 번이다.
+띄운 콘솔이나 에이전트를 닫아도 쓰기는 계속된다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+  -PlanPath <cards>\plan-<release>-<device>.json `
+  -ReleaseDir <signed release dir> `
+  -WifiProfile <profile> `
+  -Detach
+```
+
+출력되는 `Log:`, `Progress:`, `Exit marker:`, `Status:` 경로를 적어 둔다. ERASE 문구는 새 관리자 창에 입력한다.
+처음 쓸 때 준 `-OperatorPublicKey`·`-ReprovisionReceipt`는 여기에도 같이 준다. 끝나면 창에 `EXIT_CODE=`가 남고,
+로그 옆에 `.exit` 표지가 생긴다. 창은 결과를 보인 채 열려 있다.
+UAC 창에서 "아니요"를 눌렀거나 시간이 지났으면 launcher가 `failed`/`untouched`와 `next:`를 진행 파일에 남기고 실패한다.
+카드는 건드리지 않았으니 다시 띄운다.
+
+**상태 보기.** 관리자 권한은 필요 없다. `Status:` 줄의 명령을 그대로 실행한다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\card-write-status.ps1 -LogPath <log>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\card-write-status.ps1 -LogPath <log> -Json   # 에이전트용
+```
+
+```text
+Stage: readback   card_state: written-unverified
+Bytes: 4,800 MB of 8,170 MB (58.8 %)
+Rate: 20.1 MB/s over the last heartbeats
+Pre-flight read: 21.3 MB/s (slow-media limit 10.0 MB/s)
+ETA this stage: 3 min (about 14:32)
+ETA whole job: 3 min (about 14:32)
+Last progress line: 42 s ago
+```
+
+- `ETA this stage`는 이번 단계(`write` 또는 `readback`)의 남은 바이트를 최근 heartbeat의 실제 속도로 나눈 값이다.
+  `ETA whole job`은 쓰기 중이면 남은 쓰기에 readback 예측(사전 측정 읽기 속도)을 더한다. 쓰기 전이면 사전 측정의 전체 예측이다.
+  완료 시각을 말할 때는 이 값을 인용한다. 짐작으로 말하지 않는다.
+- `STALLED:`가 보이면 멈춘 것이다. `write`·`readback`에서 바이트가 5분 넘게 늘지 않았거나, 다른 단계에서 5분 넘게 새 줄이 없었다.
+  `write`는 도구가 Imager를 끝내고(`-WriterStallMinutes`, 기본 5), `readback`은 verifier를 끝낸 뒤(`-ReadbackStallMinutes`, 기본 5)
+  스스로 실패한다. 상태에 `Result: FAILED`와 `next:`가 곧 뜬다. 창이 사라졌거나 얼었으면 창을 닫고 `next:`를 따른다.
+- `Waiting for:`는 멈춤이 아니다. 관리자 창이 ERASE 문구나 느린 매체 질문의 답을 기다리는 중이다.
+- 끝나면 `Result: COMPLETE` 또는 `Result: FAILED - <이유>`와 `next:` 한 줄이 나온다.
+
+**느린 매체 경고.** ERASE 문구 전에 카드 앞 128 MiB를 읽기 전용으로 읽어 속도를 잰다. 창에 `Pre-flight:` 줄로 예상 쓰기·readback·
+전체 시간이 나온다. 읽기 속도가 10 MB/s(`-MinReadMBps`) 미만이면 `SLOW MEDIA` 경고가 나온다(005 카드는 readback이 약 3.4 MB/s로
+약 60분 걸렸다). 이렇게 한다.
+- 다른 USB 포트(USB 3.0)에 꽂거나 다른 리더기를 쓴다.
+- 가능하면 USB 3.0 리더기와 A1/A2 또는 U3 등급 카드를 쓴다.
+
+그래도 이 카드로 쓰려면, 창에서 `SLOW`를 입력하거나 명령에 `-AcceptSlowMedia`를 붙인다. `-Confirmation`을 넘긴 비대화형 실행은
+이 플래그 없이는 카드를 건드리지 않고 멈춘다.
+
+**다른 카드를 꽂았을 때.** plan은 꽂힌 카드의 MBR disk signature나 GPT GUID를 기록한다. 같은 리더기에 다른 카드를 꽂으면
+`a different card is in the reader`로 ERASE 전에 멈춘다(`card_state=untouched`). 싼 리더기는 같은 가짜 시리얼(`000000000207`)을
+공유하므로, 시리얼만으로는 카드를 구분하지 못한다. 공장 초기 카드는 신원이 없어 시리얼과 크기만 확인하고 경고한다. 그럴 때는
+라벨을 확인한다. 이미 이 릴리스로 써진 카드는, 같은 plan으로 쓰다 멈춘 기록(로그 폴더의 진행 파일)이 있고 `rosy-provision/`이
+없을 때만 다시 쓴다. 다른 로봇용으로 다 쓴 카드는 지우지 않고 멈춘다.
+
+**진행 파일 직접 읽기.** 상태 명령이 읽는 파일은 `<log>.progress.jsonl`이다. 단계가 바뀔 때마다 JSON 한 줄이 붙는다. 쓰기와
+readback 중에는 약 60초마다 `heartbeat` 줄에 지금까지 처리한 `bytes`가 붙는다.
+
+- 단계 순서: `launch` → `verify-signature` → `select-disk` → `preflight` → `confirm` → `write` → `readback` → `bundle` →
+  `bundle-writing` → `receipt` → `done`. 실패하면 마지막 줄이 `failed`이고, `detail`에 원인이, `next`에 다음 행동이 있다.
+- 창이 사라졌거나 PC가 꺼졌으면 마지막 줄의 `card_state`로 다음 명령을 고른다.
+
+| 마지막 `card_state` | 다음 명령 |
+|---|---|
+| `untouched` | 같은 명령을 다시 실행 |
+| `writing` | 전체 쓰기를 다시 실행(`-ResumeAfterWrite` 없이) |
+| `written-unverified`, `verified-no-bundle` | 같은 명령에 `-ResumeAfterWrite`를 붙여 실행 |
+| `bundle-partial` | 전체 쓰기(부분 bundle은 resume으로 끝낼 수 없다) |
+| `complete`(receipt 없음), `unknown` | 실패 문구의 `next:`를 따른다. 모르면 전체 쓰기 |
+
+**쓰기를 다시 하지 않고 이어 가기.** 카드가 끝까지 써진 뒤 Imager가 멈췄거나 readback 중 카드가 빠졌으면, 쓰기(약 16–20분)를
+건너뛰고 readback부터 다시 한다. 서명 검증, 시리얼 선택, plan 대조, ERASE 확인은 그대로 거친다. 카드 첫 섹터의 MBR signature가
+이미지와 다르면 readback 전에 멈춘다. boot 파티션에 `rosy-provision/`이 이미 있어도 멈춘다. 카드가 서명된 이미지와 다르면
+readback이 bundle 전에 멈추므로, 잘못 골라도 잃는 것은 readback 한 번이다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+  -PlanPath <cards>\plan-<release>-<device>.json `
+  -ReleaseDir <signed release dir> `
+  -WifiProfile <profile> `
+  -ResumeAfterWrite -Detach
+```
+
+receipt에는 `resumed_after_write: true`가 남는다. plan의 receipt가 이미 있으면 거부한다(이미 끝난 카드다).
+
 ## 2. Connection choice
 
 ### SSH path

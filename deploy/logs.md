@@ -117,6 +117,7 @@
   GO and unreachable-device HOLD paths.
 - gate 변화: none. DEVICE remains HOLD until the physical Pinky produces the
   same evidence from an installed signed ARM64 release.
+
 ## 2026-09-22 · uncommitted · feat(runtime): begin D-161 Ubuntu-native transition
 
 - 변경: Canonical Ubuntu 24.04.5 Raspberry Pi arm64 base URL/SHA-256을 lock에
@@ -696,6 +697,49 @@
 - 결정: D-179
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · fix(sd): fall back to the USB instance serial when Get-Disk reports none
+
+- 변경: 같은 리더기가 다시 꽂힌 뒤 `Get-Disk`의 `SerialNumber`를 빈 값으로 보고해(관리자 `Update-HostStorageCache` 뒤에도) 시리얼로 카드를
+  찾지 못했다. `UniqueId`의 USBSTOR instance ID(`USBSTOR\DISK&...\<serial>&<n>`)에 같은 시리얼이 남아 있어, SerialNumber가 비었고 USB일 때만
+  그 값을 쓴다. Windows가 지어낸 ID(`<digit>&<hash>&<n>`, 4자 미만)와 USBSTOR가 아닌 ID는 쓰지 않는다. 기존 USB·크기·boot/system 검사는 그대로다.
+- 증거: `test_sd_writer_contract.py`, `test_sd_write_card_entrypoint.py` 85 passed; 실제 카드로 `-PlanOnly -DiskSerial 000000000207`이
+  디스크 1을 찾음 (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173
+- 교훈: 하드웨어 식별자 하나에만 기대면 드라이버가 그 칸을 비우는 순간 도구가 멈춘다. 같은 사실을 담은 두 번째 출처와 그 출처를 믿을 조건을 함께 둔다.
+
+## 2026-09-23 · uncommitted · perf(sd): one authoritative verify — drop the raw-hash pre-pass and Imager read-back (D-180)
+
+- 변경: `prepare-rosy-sd.ps1`이 쓰기 전에 `.img.xz` 전체를 풀어 raw SHA-256을 구하던 `--image-only` 패스를 없애고, Imager를
+  `--cli --disable-verify "<image>" "<device>"`로 부른다(`--sha256` 없음). 전체 readback(`--image --device`)은 그대로이며 증거에 64자리
+  `image_raw_sha256`·`device_sha256`와 양수 `bytes_verified`가 없으면 bundle 전에 멈춘다. 서명 검증·ERASE 확인·시리얼 선택·쓰기 직전
+  fingerprint 재확인은 바뀌지 않았다. 2026-09-21 설계 단계 6("write verification을 끄지 않는다")을 대체한다.
+- 증거: 실측 50분(005)·48분(004) = 사전 패스 약 12분 + 쓰기 약 20분 + Imager verify 약 10분 + readback. 설치된 Imager v2.0.8
+  실행 파일의 옵션 테이블에서 `disable-verify` 확인. `test_sd_writer_contract.py` 등 관련 스위트 통과(2026-09-23 Windows).
+  실제 카드 기록 시간은 아직 재지 않았다.
+- gate 변화: 없음
+- 결정: D-180
+- 교훈: 나중에 더 엄격한 검사를 넣으면 먼저 있던 약한 검사를 다시 본다. 같은 사실을 여러 번 확인하는 패스는 시간만 쓴다.
+
+## 2026-09-23 · uncommitted · fix(sd): the card writer detects its own failures, says what is on the card and resumes without rewriting (D-187)
+
+- 변경: `prepare-rosy-sd.ps1`이 단계마다 `<log>.progress.jsonl`에 JSON 한 줄(`ts`, `stage`, `card_state`, `detail`)을 바로 flush하고,
+  쓰기·readback 중에는 약 60초마다 처리 바이트를 남긴다. `Start-Process -Wait` 대신 poll loop로 Imager의 CPU·I/O 카운터를 보고,
+  `-WriterStallMinutes`(기본 5) 동안 변화가 없으면 프로세스 트리를 끝낸다. xz index의 raw 크기에 닿았으면 `written-unverified`,
+  아니면 `writing`이다. 서명 검증 이후 모든 실패에 `stage=… card_state=…`와 `next:` 한 줄을 붙인다(`trap` 포함).
+  `-ResumeAfterWrite`(두 스크립트)는 Imager만 건너뛰고 readback·bundle·registry·receipt를 그대로 돌며, 모든 쓰기 전 검사와 receipt
+  중복 거부를 유지하고 `resumed_after_write: true`를 남긴다. `verify-media-readback.py`는 압축 파일 전체(xz stream 뒤 포함)의
+  `image_sha256`을 같은 패스에서 내고 서명 해시와 다르면 실패한다(리뷰 MEDIUM-1). 장치를 못 읽으면 exit 3. bundle 직전에 디스크를
+  시리얼로 다시 고르고 fingerprint를 비교한다. `write-card.ps1`은 진행 파일 경로를 알리고, UAC 거부와 `.exit` 없는 종료에
+  마지막 단계·카드 상태를 보고한다. runbook에 "카드 쓰기 중 문제가 생겼을 때"(진행 파일, resume 명령, 분리 실행) 추가.
+  readback은 압축 해제 스레드와 순차 장치 읽기 스레드(각 queue 4, 4 MiB)를 겹치고 주 스레드가 비교·해시한다. 판정은 예전 순차 루프와 같다.
+- 증거: 가짜 writer(`cmd` + `ping`)로 쓰기 중·마지막 byte 뒤 멈춤, Imager 비0, readback 불일치·장치 없음, 서명 뒤 바뀐 이미지,
+  bundle 직전 디스크 변경, resume 성공·불일치·receipt 중복을 재현(2026-09-23 Windows). 실제 카드·실제 Imager 멈춤은 확인하지 않았다.
+  pipeline readback은 순차 참조 구현과 9개 fixture × 장치 읽기 크기 3종에서 같은 판정. 256 MiB fixture 3.10s → 2.34s(page cache), 11.55s → 6.81s(60 MB/s 장치 흉내).
+- gate 변화: 없음
+- 결정: D-187
+- 교훈: 오래 도는 외부 도구를 기다릴 때는 "끝났나"만이 아니라 "움직이나"를 본다. 실패 문구는 원인만이 아니라 카드에 무엇이 남았는지와 다음 명령을 말해야 복구가 싸진다.
+
 ## 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
 
 - 변경: `deploy/robot/core_dev_overlay.py`의 마커 민감 필드 거부 패턴 변수를 `_SECRET_KEY` → `_SENSITIVE_FIELD`로 개명(정의·사용 각 1곳, 값과 거부 로직 불변). 이름에 민감 키워드가 들어간 변수에 리터럴을 담은 call 값이 붙는 형태라 스캐너의 대입 휴리스틱에 정확히 걸렸고, `test_no_secrets_in_tracked_files`는 병합 전 `0d0e2a73`부터 초록이 아니었다 — 병합 회귀가 아니라 latent 오탐이었다.
@@ -720,3 +764,52 @@
 - 결정: D-186
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-187)
+
+- 변경: 005 재기록 실패 로그에는 `WRITE FAILED: full media readback verification failed`만 남았다. PowerShell 5.1 transcript는 native
+  프로그램의 stderr를 담지 않는다. `verify-media-readback.py --error-json`이 `error`·`kind`(`io`, `mismatch`, `image`)·`bytes_verified`를
+  쓰고, `prepare-rosy-sd.ps1`이 그 이유와 검증된 바이트 수를 실패 문구·진행 파일 `detail`·로그에 옮긴다. 장치 OSError와 짧은 읽기는
+  I/O(다시 꽂거나 다른 리더기로 `-ResumeAfterWrite`), 불일치는 나쁜 데이터(재기록, 반복되면 카드 교체), xz 압축 해제 실패는 릴리스 재다운로드.
+- 증거: 불일치·짧은 카드·없는 장치·잘린 xz의 error 파일과, 불일치·짧은 카드 이유가 Fail 문구와 진행 파일에 남는 writer 테스트(2026-09-24 Windows).
+  실제 카드의 중간 분리는 재현하지 않았다.
+- gate 변화: 없음
+- 결정: D-187
+- 교훈: 실패 이유가 로그까지 오는 경로를 테스트로 고정한다. 하위 도구가 이유를 말해도 상위 로그가 그 스트림을 버리면 없는 것과 같다.
+
+## 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-188)
+
+- 변경: `write-card.ps1 -Detach`가 관리자 창을 따로 띄우고(UAC 한 번, `-NoExit`) 바로 돌아오며 로그·진행 파일·`.exit`·상태 명령을
+  출력한다. launcher가 진행 파일을 운영자 소유로 먼저 만들고 `launch` 줄을 쓰며, UAC 거부는 `failed`/`untouched`와 `next`로 남는다.
+  새 `card-write-status.ps1 -LogPath <log> [-Json]`은 승격 없이 단계·카드 상태·바이트·실측 속도·단계/전체 ETA·마지막 줄 나이·
+  `STALLED`·결과와 `next`를 보인다. readback은 감시되는 프로세스로 돌고, heartbeat 바이트가 `-ReadbackStallMinutes`(기본 5) 동안
+  그대로면 verifier를 끝내고 `written-unverified`·`kind io`·resume으로 실패한다. verifier도 `--stall-seconds`로 exit 3.
+  ERASE 확인 전 `preflight` 단계가 카드 앞 128 MiB를 읽기 전용으로 읽어 속도를 재고 쓰기·readback 시간을 예측하며, 10 MB/s 미만이면
+  경고하고 비대화형 실행은 `-AcceptSlowMedia`를 요구한다. plan에 카드 `disk_signature`·`disk_guid`를 남겨 같은 리더기의 다른 카드를
+  ERASE 전에 멈추고, resume은 장치 MBR signature가 이미지의 것과 같아야 한다. boot 파티션 파일 비교로 넘어가도 reserved 영역
+  (FSInfo 힌트 제외), FAT copy 2 대 1(FAT[1] 상태 비트 제외), backup boot sector 대 primary를 byte 단위로 비교한다.
+  D-187 리뷰: `-ReadbackDevice`는 fixture 전용·receipt `readback_target`, Imager 감시는 프로세스 트리 합산·실제 디스크는 `.exe`만,
+  `taskkill` 5.1 throw 제거, 끝내지 못한 Imager는 재부팅 안내, verifier queue/join 시간 제한, heartbeat OSError는 advisory,
+  `bundle-writing`/`bundle-partial` 단계와 bundle이 있는 카드의 resume 거부.
+- 증거: named pipe 가짜 카드(`test/sd_pipe_card.py`)로 매달린 readback 정지와 느린 readback 완주, 자식이 I/O를 하는 가짜 writer,
+  사전 측정·느린 매체·카드 신원·resume 거부, detach·UAC 거부 기록, 상태 명령 8가지 상황(텍스트·JSON), boot 비파일 영역 1 byte 반전
+  5종(2026-09-24 Windows). 실제 카드·실제 UAC·실제 Imager 트리는 확인하지 않았다.
+- gate 변화: 없음
+- 결정: D-188
+- 교훈: 오래 도는 작업의 "언제 끝나나"는 짐작이 아니라 같은 장치에서 잰 속도와 실제로 늘어나는 바이트로 답한다. 감시는 도구 안과 밖
+  두 겹으로 두고, 느리지만 움직이는 작업을 죽이지 않는 것이 멈춤 감지만큼 중요하다.
+
+## 2026-09-24 · uncommitted · fix(sd): D-188 review
+
+- 변경: 이 릴리스의 MBR signature를 가진 카드는 두 조건을 모두 만족할 때만 받아들인다. `rosy-provision/`이 없어야 하고,
+  같은 plan으로 Imager 쓰기를 시작한 진행 파일이 있어야 한다(첫 진행 줄에 `plan`을 기록). 그렇지 않으면 `untouched`로 멈춘다.
+  fixture 모드: `.exe` writer 거부, `\\.\`·`\\?\` readback 장치 거부, receipt `fixture: true`.
+  `write-card.ps1`은 `-LogPath`·`-RpiImager`(와 구분자가 있는 `-PythonExe`)를 콘솔 위치 기준 절대 경로로 바꾼다.
+  readback 감시는 heartbeat가 없을 때 verifier의 `ReadTransferCount`도 진행으로 본다.
+  probe는 `device_mbr_read`와 `"00000000"`을 보고하고, ERASE 뒤 재확인도 카드 첫 섹터를 다시 읽는다.
+  verifier worker `close()`는 항상 시간 제한이 있다. 시간 안에 끝나지 않은 probe는 읽은 양으로 속도를 내 느린 매체 관문을 탄다(`-ProbeSeconds`).
+- 증거: 끝난 카드·이전 쓰기 없는 카드 거부, 이전 쓰기가 있으면 재기록, fixture 경계 3종, heartbeat가 늦어도 읽기가 이어지는 readback,
+  probe 시간 초과의 느린 매체 처리, 0 signature·원시 섹터 우선, 상대 경로, bounded close(2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-188
+- 교훈: "이 카드가 맞나"의 예외 경로(이미 우리 이미지가 있음)는 가장 흔한 사고 경로이기도 하다. 예외를 열 때는 그 예외가
+  무엇으로만 생기는지(이 plan의 이전 쓰기)를 증거로 좁힌다.
