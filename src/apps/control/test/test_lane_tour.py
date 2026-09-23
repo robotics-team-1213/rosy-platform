@@ -5,10 +5,11 @@ by the route_ab hybrid under lane_scenarios.run_route (the junction
 scenarios' renderer, CORE law and 3 s lease) and scored with
 junction_score.score_route, over TOUR_SEEDS (the localiser's random
 draws). Measured on the Windows dev host, 2026-09-23, with the
-localiser's along-track noise at MOTION_ALONG_SIGMA_PER_M (0.10): every
-seed passes, 1622-1637 steps, max centre deviation 22.5-23.4 mm, end
-1.4-14.1 mm from the start, no stop. At the old isotropic 0.20 seed 3
-stopped on SPREAD on east:r (CORE LOST at 4.03 m of 16.87).
+localiser's along-track noise at MOTION_ALONG_SIGMA_PER_M (0.10) and the
+relock scoped off-node: every seed passes, 1673-1693 steps, max centre
+deviation 23.2-23.8 mm, end 3.0-15.1 mm from the start, no stop. At the
+old isotropic 0.20 seed 3 stopped on SPREAD on east:r (CORE LOST at
+4.03 m of 16.87).
 
 Drift cells (`-m drift`, lane_scenarios.OdomError, follower built at the
 believed start) at DRIFT_SEEDS, same host and day. Stops: frames entering
@@ -16,22 +17,23 @@ STOP / LOCALISE_STOP / MANOEUVRE_ABORT; est: the follower's end estimate
 against the truth.
 
   cell                  seed  pass  dev mm  stops  stall s (max)  end mm  est mm
-  none                    3   PASS   22.9     0    0.0 (0.0)      12.8     0.6
-  none                    7   PASS   22.8     0    0.0 (0.0)       1.4     2.4
-  3% scale                3   PASS   22.4     0    0.0 (0.0)       9.7    11.0
-  3% scale                7   PASS   22.5     0    0.0 (0.0)       3.3    11.5
-  3% +0.01 rad/s          3   PASS   27.4     4    0.8 (0.2)       8.0     8.4
-  3% +0.01 rad/s          7   PASS   26.4     0    0.0 (0.0)       3.4     9.4
-  3% -0.01 rad/s          3   PASS   24.0     0    0.0 (0.0)      15.1    12.0
-  3% -0.01 rad/s          7   PASS   24.0     0    0.0 (0.0)       8.6    11.5
-  start 20 mm / 2 deg     3   PASS   23.0     0    0.0 (0.0)      12.2     1.0
-  start 20 mm / 2 deg     7   PASS   23.7     0    0.0 (0.0)       1.8     1.6
+  none                    3   PASS   23.8     0    0.0 (0.0)      13.0     2.7
+  none                    7   PASS   23.5     0    0.0 (0.0)      12.6     4.5
+  3% scale                3   PASS   22.4     0    0.0 (0.0)      15.1     7.7
+  3% scale                7   PASS   22.8     0    0.0 (0.0)      14.8     8.4
+  3% +0.01 rad/s          3   PASS   23.0    15    3.2 (0.4)       6.3    10.7
+  3% +0.01 rad/s          7   PASS   24.3     4    0.8 (0.2)       6.6     8.6
+  3% -0.01 rad/s          3   PASS   23.4     0    0.0 (0.0)      15.0     8.2
+  3% -0.01 rad/s          7   PASS   23.4     0    0.0 (0.0)      16.4     9.9
+  start 20 mm / 2 deg     3   PASS   23.5     0    0.0 (0.0)      15.2     3.1
+  start 20 mm / 2 deg     7   PASS   23.8     0    0.0 (0.0)      13.0     2.1
 """
 
 import lane_sim
 import numpy as np
 import pytest
 from control.sensing.lane_coverage import coverage_route, tour_start_pose
+from control.sensing.route_camera import RouteCameraFollower
 from control.sensing.route_hybrid import (
     BEND_TURN_RAD,
     RouteHybridFollower,
@@ -43,7 +45,7 @@ START = tuple(GRAPH["parking"]["points"][0])
 KEYS = coverage_route(GRAPH, START)
 POSE = tour_start_pose(GRAPH, KEYS, START)
 #: 16.874 m at CORE's 0.08 m/s cruise is 1055 steps of 0.2 s; bends,
-#: ONE (0.69 speed) and MEMORY slow it. 1622-1637 were measured.
+#: ONE (0.69 speed) and MEMORY slow it. 1673-1693 were measured.
 MAX_STEPS = 2600
 
 
@@ -121,6 +123,26 @@ def test_road_bends_lie_on_roads_only():
     # Every ring arc turns 22.8 deg per 0.1 m, over the threshold: excluded
     # by segment, not by curvature.
     assert np.degrees(0.1 / GRAPH["roundabout"]["radius"]) > np.degrees(BEND_TURN_RAD)
+
+
+def _segment_bends(keys, index):
+    """road_bends of route `keys`, on keys[index], as s from its start."""
+    f = RouteCameraFollower(GRAPH, keys, start_pose=POSE, map_frame=True)
+    bends = road_bends(GRAPH, keys, f._points, f._arc, f._seg_start)
+    lo, hi = f._seg_start[index], f._seg_start[index + 1]
+    return np.round(bends[(bends >= lo) & (bends < hi)] - lo, 4)
+
+
+@pytest.mark.parametrize("ring, road", [("ring_e:f", "east:f"), ("ring_s:f", "east:r"),
+                                        ("ring_n:f", "west:r")])
+def test_a_road_bend_is_the_roads_own_not_the_node_corner(ring, road):
+    """The corner where the route leaves the ring is not a bend of the road:
+    the road's bend points are the same whether or not the route reaches
+    it from the ring (before: 3-7 extra points at s 0.005-0.065 on every
+    ring exit, route-steered from s 0.12 to 0.215)."""
+    alone = _segment_bends([road], 0)
+    exit_ = _segment_bends([ring, road], 1)
+    assert np.array_equal(alone, exit_), (alone[:8], exit_[:8])
 
 
 # --- Odometry drift (step 4): run with -m drift ------------------------------

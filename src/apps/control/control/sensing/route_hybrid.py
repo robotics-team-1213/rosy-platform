@@ -37,11 +37,15 @@ to drift but its route pursuit swings on the steep NE spoke exit. Per frame:
 
   road bend  on a road segment (never on the ring), within BEND_ARM_M of
              a bend point (`road_bends`: over BEND_TURN_RAD of heading in
-             BEND_SPAN_M) and BEND_NODE_CLEAR_M or more past the segment's
-             start node, the
-             route steers the same way (`last["steer"]` "bend"). The ring
-             entry takes precedence; a ring exit stays camera-steered
-             through the node, its spoke bend beyond it is a road bend.
+             BEND_SPAN_M of the same segment, so the corner at a node is
+             none) and BEND_NODE_CLEAR_M or more past the segment's start
+             node, the route steers the same way (`last["steer"]` "bend").
+             The ring entry takes precedence; a ring exit stays
+             camera-steered through the node and up to BEND_NODE_CLEAR_M
+             past it. On the 260919 roads the road's own bends (a kink at
+             s 0.005-0.065 m on east:r, west:f and west:r, the spoke corner
+             from s 0.265-0.314 m on all four) then arm the route from s
+             0.12 m, as the node corner did before it was excluded.
 
 Why road bends are route-steered (all-lane tour, 2026-09-23, lane_coverage;
 the 12 junction scenarios end 0.30 m past their node and never reached a
@@ -156,13 +160,17 @@ def ring_entries(graph, keys) -> list:
 def road_bends(graph, keys, points, arc, seg_start) -> np.ndarray:
     """Route arc positions (on `points` / `arc`, the route polyline, whose
     segment i starts at seg_start[i]) of every bend point (BEND_TURN_RAD
-    over BEND_SPAN_M) that lies on a road, not on the ring."""
+    over BEND_SPAN_M) that lies on a road, not on the ring. The span is
+    measured within the point's own segment: the corner at a node, where
+    the route turns from one segment onto the next, is not a road bend."""
     heading = np.unwrap(np.arctan2(np.diff(points[:, 1]), np.diff(points[:, 0])))
     mid = (arc[:-1] + arc[1:]) / 2.0
-    lo = np.clip(np.searchsorted(mid, mid - BEND_SPAN_M / 2.0), 0, len(mid) - 1)
-    hi = np.clip(np.searchsorted(mid, mid + BEND_SPAN_M / 2.0), 0, len(mid) - 1)
-    bend = np.abs(heading[hi] - heading[lo]) > BEND_TURN_RAD
     segment = np.clip(np.searchsorted(seg_start, mid, side="right") - 1, 0, len(keys) - 1)
+    first = np.searchsorted(segment, segment, side="left")
+    last = np.searchsorted(segment, segment, side="right") - 1
+    lo = np.maximum(np.searchsorted(mid, mid - BEND_SPAN_M / 2.0), first)
+    hi = np.minimum(np.searchsorted(mid, mid + BEND_SPAN_M / 2.0), last)
+    bend = np.abs(heading[hi] - heading[lo]) > BEND_TURN_RAD
     road = np.array([not _on_ring(graph, key) for key in keys])[segment]
     return mid[bend & road]
 
