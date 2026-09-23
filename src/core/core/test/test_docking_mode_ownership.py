@@ -215,3 +215,72 @@ def test_a_staging_dock_from_manual_sends_no_staging_goal(core_client):
     assert response.status_code == 409
     assert executor.calls == []
     assert services.docking.state is DockState.UNDOCKED
+
+
+# --- H3: taking DOCKING cancels Nav2 and swarm; navigation refuses meanwhile ---
+
+
+class NavExecutor:
+    def __init__(self):
+        self.sent, self.cancelled = [], 0
+
+    def send_goal(self, spec):
+        self.sent.append(spec)
+
+    def cancel_goal(self):
+        self.cancelled += 1
+
+
+def navigating_robot(core_client):
+    from core_features.navigation.manager import NavGoalSpec
+    client, services = core_client(config_overrides=sim_overrides())
+    services.docking.executor = DrivingExecutor(services)
+    services.state.set_pose(-1.2696, 0.0, math.pi / 2)
+    nav_exec = NavExecutor()
+    services.nav.executor = nav_exec
+    services.modes.transition(Mode.NAVIGATION)
+    services.nav.goal(NavGoalSpec(x=1.0, y=0.0, yaw=0.0))
+    return client, services, nav_exec
+
+
+def test_taking_docking_cancels_the_nav2_goal(core_client):
+    from core_common.protocol.schemas import NavigationState
+    client, services, nav_exec = navigating_robot(core_client)
+    response = client.post("/api/v1/docking/dock", json={"dock": "parking"}, headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert nav_exec.cancelled >= 1
+    assert services.nav.nav_state is NavigationState.CANCELED
+    assert services.modes.mode is Mode.DOCKING
+
+
+def test_taking_docking_closes_a_swarm_moving_goal_session(core_client):
+    client, services, nav_exec = navigating_robot(core_client)
+    services.nav.cancel()
+    services.nav.open_moving_session()
+    closed = []
+    services.nav.session_closed_listener = closed.append
+    client.post("/api/v1/docking/dock", json={"dock": "parking"}, headers=OPERATOR)
+    assert services.nav._moving_session is None
+    assert closed == ["docking"]
+
+
+def test_navigation_refuses_goals_while_docking(core_client):
+    from core_features.navigation.manager import NavGoalSpec, NavigationError
+    _, services, nav_exec = navigating_robot(core_client)
+    services.nav.cancel()
+    services.docking.dock("parking")
+    sent = len(nav_exec.sent)
+    for call in (lambda: services.nav.goal(NavGoalSpec(x=1.0, y=0.0, yaw=0.0)),
+                 lambda: services.nav.moving_goal(NavGoalSpec(x=1.0, y=0.0, yaw=0.0))):
+        with pytest.raises(NavigationError) as excinfo:
+            call()
+        assert excinfo.value.code == "DOCKING_ACTIVE"
+    assert len(nav_exec.sent) == sent
+
+
+def test_nav2_and_swarm_output_during_docking_never_reach_the_wheels(core_client):
+    _, services, _ = navigating_robot(core_client)
+    services.docking.dock("parking")
+    assert services.docking.phase is not DockPhase.STAGING
+    docking_mode.route_nav_cmd_vel(services, Twist(0.2, 0.3))
+    assert wheels(services) == (0.0, 0.0)

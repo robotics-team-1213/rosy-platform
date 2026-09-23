@@ -32,7 +32,7 @@ class Recorder:
 
 
 def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
-          home_raises=False, status="DISCHARGING"):
+          home_raises=False, status="DISCHARGING", dock_state=None):
     log = recorder.calls
 
     battery = SimpleNamespace(
@@ -51,7 +51,8 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
         on_battery_percent=lambda p: (log.append(("safety.on_battery_percent", p)) or action),
     )
     docking = SimpleNamespace(
-        on_battery_level=lambda lv: log.append(("docking.on_battery_level", lv)))
+        on_battery_level=lambda lv: log.append(("docking.on_battery_level", lv)),
+        state=dock_state)
 
     def home(source):
         log.append(("nav.home", source))
@@ -155,6 +156,19 @@ def test_return_home_dispatches_a_goal():
     apply_voltage(build(rec, action="RETURN_HOME"), 7.0)
 
     assert ("nav.home", "battery_policy") in rec.calls
+    assert "safety.trigger_estop" not in rec.names()
+
+
+def test_a_dock_run_is_the_return_home_so_nav2_is_left_to_it():
+    """The dock offer came first (DNC-006). A Nav2 home goal would preempt the
+    staging goal — and navigation refuses goals while docking, which would
+    escalate to e-stop and kill the very return that is under way."""
+    from core_common.protocol.schemas import DockState
+    rec = Recorder()
+
+    apply_voltage(build(rec, action="RETURN_HOME", dock_state=DockState.DOCKING), 7.0)
+
+    assert "nav.home" not in rec.names()
     assert "safety.trigger_estop" not in rec.names()
 
 

@@ -383,6 +383,9 @@ class CoreServices:
             if modes.mode not in (Mode.IDLE, Mode.NAVIGATION):
                 raise DockError("MODE_CONFLICT",
                                 f"invalid transition {modes.mode.value}->DOCKING")
+            # Nav2 and a swarm session are cancelled first: a live Nav2 goal
+            # would otherwise keep publishing nav_cmd_vel and preempt staging.
+            nav.cancel(source="docking")
             previous = modes.mode
             if previous is Mode.NAVIGATION:
                 modes.transition(Mode.IDLE)
@@ -402,6 +405,9 @@ class CoreServices:
             map_id_provider=lambda: state.map_id,
         )
         nav.session_closed_listener = swarm.on_navigation_session_closed
+        nav.docking_active_provider = lambda: (
+            modes.mode is Mode.DOCKING
+            or docking.state in (DockState.DOCKING, DockState.UNDOCKING))
 
         def leave_docking(old, new):
             """Every exit from DOCKING stops the docking run first — API, line

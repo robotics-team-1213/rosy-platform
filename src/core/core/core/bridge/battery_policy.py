@@ -27,13 +27,16 @@ could move unchanged.
    this does nothing and the SAF-005 fallback below still stands.
 9. Then the SAF-005 action. A `RETURN_HOME` that cannot be dispatched escalates
    to e-stop: refusing to move is safe, believing you are driving home when you
-   are not is not.
+   are not is not. A dock run under way *is* the return home: a Nav2 home goal
+   would preempt it (and navigation refuses goals while docking), so it is
+   left alone.
 """
 
 from __future__ import annotations
 
 import math
 
+from core_common.protocol.schemas import DockState
 from core_features.power.battery import BatteryLevel
 
 
@@ -64,6 +67,8 @@ def apply_voltage(services, voltage: float) -> None:
 
     action = services.safety.on_battery_percent(percent)
     if action == "RETURN_HOME":
+        if services.docking.state is DockState.DOCKING:
+            return
         try:
             services.nav.home(source="battery_policy")
         except Exception:
