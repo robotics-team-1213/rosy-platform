@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-185 R1 구현 메모
 - 2026-09-24 · uncommitted · docs: origin/main 병합 게이트 실측 수치를 별도 항목으로 기록
 - 2026-09-24 · uncommitted · docs(layout): point README and reference at the current folders
 - 2026-09-24 · uncommitted · feat(layout): D-186 keep scripts and module docs from overlapping
 - 2026-09-24 · uncommitted · docs(adr): D-186 스크립트와 수집 폴더를 Proposed로 계획
-- 2026-09-24 · uncommitted · docs(adr): D-185 control 런타임 CPU 절감 순서를 기록(Accepted)

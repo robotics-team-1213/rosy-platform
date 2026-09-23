@@ -143,3 +143,8 @@ plans:
 - 직진 교정용 벽 추적(`wall_tracker._fit`)을 결과가 비트 단위로 같게 벡터화했다. scan당 27 ms에서 7 ms로 줄었다. 부하가 높은 rig에서 calibration 노드가 스스로 포화하던 원인(class B의 첫 층)이 줄었다.
 - 남은 class B는 박스 초과 할당(부하 25–30 이상)에 따른 OS 스케줄링 공백이다. 코드 결함이 아니다. rig 판정은 부하가 낮은 시간대에 하거나 환경 가드를 둔다.
 - 실기: Pi에서 scan 콜백 시간과 10 Hz 주기 대비 점유율은 DEVICE 단계에서 확인한다.
+
+## 2026-09-24 planning map inflation cost (D-185 R1)
+
+- 경로 안전에 쓰는 지도 부풀리기(`OccupancyMap.inflate`)를 결과가 셀 단위로 같게 벡터화했다. 호출당 비용이 6–8배 줄었다(host). goal·wander의 계획 tick이 가벼워진다.
+- 실기: Pi에서의 goal tick 비용은 D-185 R8에서 확인한다.
