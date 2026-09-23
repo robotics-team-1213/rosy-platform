@@ -812,3 +812,18 @@ def test_operator_key_is_passed_as_an_argument_not_through_the_console():
 
     assert "operator_key_fingerprint(sys.argv[1])" in text
     assert "$operatorKey | &" not in text
+
+
+def test_media_is_offline_while_it_is_compared_and_online_for_the_bundle():
+    # Release 004: Windows mounted the new FAT32 partition and updated its FSInfo
+    # sector, so the byte-for-byte readback failed at offset 1049576.
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    offline = text.index("Set-Disk -Number $DiskNumber -IsOffline $true")
+    readback = text.index("$mediaReadbackOutput = & $PythonExe $readbackVerifier")
+    online = text.index("Set-Disk -Number $DiskNumber -IsOffline $false")
+    boot_mount = text.index("$bootRoot = Resolve-BootMount")
+
+    assert offline < readback < online < boot_mount
+    # Fixture runs pass -ReadbackDevice and must never touch a physical disk.
+    assert 'if (-not $ReadbackDevice) {\n    Set-Disk' in text

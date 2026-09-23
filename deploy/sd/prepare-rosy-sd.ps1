@@ -481,7 +481,24 @@ $writerExitCode = $writerProcess.ExitCode
 if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
 
 $readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
-$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
+# Windows mounts the freshly written FAT32 partition and updates its FSInfo sector,
+# which makes a byte-for-byte readback differ from the image (release 004: mismatch
+# at offset 1049576). Keep the disk offline for the comparison, then bring it back
+# for the one-time bundle copy.
+$offlinedForReadback = $false
+if (-not $ReadbackDevice) {
+    Set-Disk -Number $DiskNumber -IsOffline $true
+    $offlinedForReadback = $true
+}
+try {
+    $mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
+}
+finally {
+    if ($offlinedForReadback) {
+        Set-Disk -Number $DiskNumber -IsOffline $false
+        Start-Sleep -Seconds 2
+    }
+}
 if ($LASTEXITCODE -ne 0) { Fail "full media readback verification failed" }
 try {
     $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json

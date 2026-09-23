@@ -487,3 +487,17 @@
 - 결정: D-176
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · fix(sd): pass the operator key as an argument; keep the disk offline during readback
+
+- 변경: `prepare-rosy-sd.ps1`이 운영자 공개키 지문을 계산할 때 파이프 대신 인자(`sys.argv[1]`)로 넘긴다. Windows PowerShell
+  5.1이 콘솔을 거친 파이프에 BOM을 붙여 실제 키가 거부됐다(콘솔 없는 시험은 통과). 전체 readback 동안 대상 디스크를
+  `Set-Disk -IsOffline $true`로 내리고 끝나면 다시 올린 뒤 번들을 복사한다. `-ReadbackDevice`(픽스처)일 때는 물리 디스크를
+  건드리지 않는다.
+- 증거: release 004 기록이 `MEDIA_READBACK_FAILED: media readback mismatch at byte offset 1049576`로 멈췄다. 1 MiB 파티션 시작
+  + 1000 B는 FAT32 FSInfo 섹터이며, 쓰기 직후 Windows가 파티션을 마운트해 갱신한다. `test_sd_writer_contract.py` 63 passed
+  (2026-09-23 Windows).
+- gate 변화: 없음(MEDIA 재기록 필요)
+- 결정: D-173
+- 교훈: `docs/solutions/workflow-issues/guards-validated-only-against-synthetic-fixtures-2026-09-23.md` — 픽스처에는 콘솔도,
+  자동 마운트하는 OS도 없다.
+
