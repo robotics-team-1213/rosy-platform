@@ -47,6 +47,7 @@ install(
     scripts/junction_score.py
     scripts/junction_harness.py
     scripts/coverage_harness.py
+    scripts/mission_harness.py
     scripts/lane_live_view.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
