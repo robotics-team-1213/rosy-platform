@@ -16,8 +16,11 @@ Spec 2026-09-22 lane-network junction spike §6 (B). ROS-free.
   resample   systematic, when the effective particle count drops below half
 
 Initialisation is from a known pose only (global initialisation is out of
-scope). No ground plane or no odometry pose drops the particles: there is
-no estimate again until `initialise` is called.
+scope). A frame with no ground plane or no odometry pose is a gap: no
+output and no predict; the particles are kept, and the odometry increment
+across the gap is applied on the next valid frame. A gap longer than
+GAP_MAX_S, or one across which odometry moved more than GAP_MAX_TRAVEL_M,
+drops the particles: there is no estimate again until `initialise`.
 
 Each constant carries the measurement it was set from (offline loop:
 test_paint_localizer, test_route_map). Paint matching is flat near the true
@@ -83,6 +86,18 @@ MATCH_TRUNCATE_M = 0.030
 
 #: Particles resample when the effective count falls below this fraction.
 RESAMPLE_FRACTION = 0.5
+
+#: Longest gap (no pose or no ground plane) the particles survive. CORE
+#: stops the robot 0.3 s (stale_after_s) after the last evidence and
+#: latches LOST at 3.0 s (lost_after_s); a gap of five 5 Hz frames is
+#: odometry or camera trouble, not a dropped message, and the pose the
+#: particles hold is no longer worth resuming from.
+GAP_MAX_S = 1.0
+#: Largest odometry move across a gap that is still applied as one
+#: increment: its MOTION_XY_SIGMA_PER_M spread is then 0.20 x 0.10 m =
+#: 20 mm, route_map's MAX_SPREAD_M. Further, and the filter would only
+#: resume to stop on its spread.
+GAP_MAX_TRAVEL_M = 0.10
 
 
 @dataclass(frozen=True)
@@ -184,6 +199,7 @@ class PaintLocalizer:
         self._particles = None      # (N, 3) x, y, yaw
         self._weights = None
         self._last_odom = None
+        self._gap_since = None
         self.last: Estimate | None = None
 
     def initialise(self, pose) -> PaintLocalizer:
@@ -195,6 +211,7 @@ class PaintLocalizer:
             yaw + self._rng.normal(0.0, INIT_YAW_SIGMA_RAD, n)], axis=1)
         self._weights = np.full(n, 1.0 / n)
         self._last_odom = None
+        self._gap_since = None
         self.last = None
         return self
 
@@ -202,6 +219,7 @@ class PaintLocalizer:
         self._particles = None
         self._weights = None
         self._last_odom = None
+        self._gap_since = None
         self.last = None
 
     def _birds_eye(self, ground, shape) -> BirdsEye:
@@ -216,16 +234,31 @@ class PaintLocalizer:
                bright_threshold: int = _BRIGHT, **_lane_kwargs) -> Estimate | None:
         """One frame. `odom_pose` is base_link in the odometry frame; only
         its increments are used. Other lane keyword arguments are accepted
-        and ignored, so callers can pass the same set as to the trackers."""
+        and ignored, so callers can pass the same set as to the trackers.
+        No pose or no ground plane is a gap (see the module docstring)."""
         if odom_pose is not None:
             odom_pose = tuple(float(v) for v in odom_pose)
             if len(odom_pose) != 3 or not all(math.isfinite(v) for v in odom_pose):
                 odom_pose = None
-        if ground is None or odom_pose is None:
-            self.clear()
-            return None
         if self._particles is None:
             return None
+        now_s = float(now_s)
+        if ground is None or odom_pose is None:
+            if self._gap_since is None:
+                self._gap_since = now_s
+            elif not 0.0 <= now_s - self._gap_since <= GAP_MAX_S:
+                self.clear()
+            self.last = None
+            return None
+        if self._gap_since is not None:
+            since, self._gap_since = self._gap_since, None
+            last = self._last_odom
+            if (not 0.0 <= now_s - since <= GAP_MAX_S
+                    or (last is not None and math.hypot(odom_pose[0] - last[0],
+                                                        odom_pose[1] - last[1])
+                        > GAP_MAX_TRAVEL_M)):
+                self.clear()
+                return None
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
 

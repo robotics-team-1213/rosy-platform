@@ -5,7 +5,12 @@ import time
 
 import numpy as np
 import pytest
-from control.sensing.paint_localizer import PaintLocalizer, PaintMap
+from control.sensing.paint_localizer import (
+    GAP_MAX_S,
+    GAP_MAX_TRAVEL_M,
+    PaintLocalizer,
+    PaintMap,
+)
 from lane_sim import CAM_X, GROUND, KW, stl_world
 
 WORLD = stl_world()
@@ -68,12 +73,54 @@ def test_no_ground_or_no_pose_is_no_estimate():
 
 def test_a_cleared_filter_stays_cleared_until_initialised_again():
     """Global initialisation is out of scope (design §6): once the state is
-    dropped there is no estimate until a known pose is given again."""
+    dropped (a gap longer than GAP_MAX_S) there is no estimate until a known
+    pose is given again."""
     loc = localizer()
-    assert loc.update(0.0, None, WORLD.render(START), GROUND, **KW) is None
-    assert loc.update(0.2, START, WORLD.render(START), GROUND, **KW) is None
+    frame = WORLD.render(START)
+    assert loc.update(0.0, None, frame, GROUND, **KW) is None
+    assert loc.update(GAP_MAX_S + 0.2, None, frame, GROUND, **KW) is None
+    assert loc.update(GAP_MAX_S + 0.4, START, frame, GROUND, **KW) is None
     loc.initialise(START)
-    assert loc.update(0.4, START, WORLD.render(START), GROUND, **KW) is not None
+    assert loc.update(GAP_MAX_S + 0.6, START, frame, GROUND, **KW) is not None
+
+
+def _walk(steps, start=START, step_m=0.016):
+    """Straight poses down the west lane from START."""
+    return [(start[0], start[1] - k * step_m, start[2]) for k in range(steps)]
+
+
+def test_a_short_gap_keeps_the_particles():
+    """One missing pose and one missing ground frame: no output and no
+    predict during the gap, then the odometry increment across it is
+    applied at once and the estimate carries on."""
+    loc = localizer()
+    poses = _walk(10)
+    for k in range(4):
+        loc.update(k * 0.2, poses[k], WORLD.render(poses[k]), GROUND, **KW)
+    assert loc.update(0.8, None, WORLD.render(poses[4]), GROUND, **KW) is None
+    assert loc.update(1.0, poses[5], WORLD.render(poses[5]), None, **KW) is None
+    for k in range(6, 10):
+        estimate = loc.update(k * 0.2, poses[k], WORLD.render(poses[k]), GROUND, **KW)
+    assert estimate is not None
+    assert math.dist(estimate.pose[:2], poses[-1][:2]) < 0.01
+
+
+def test_a_gap_longer_than_its_timeout_clears_the_filter():
+    loc = localizer()
+    frame = WORLD.render(START)
+    loc.update(0.0, START, frame, GROUND, **KW)
+    assert loc.update(0.2, None, frame, GROUND, **KW) is None
+    assert loc.update(0.2 + GAP_MAX_S + 0.01, START, frame, GROUND, **KW) is None
+    assert loc.update(0.4 + GAP_MAX_S, START, frame, GROUND, **KW) is None
+
+
+def test_a_gap_that_travelled_too_far_clears_the_filter():
+    loc = localizer()
+    loc.update(0.0, START, WORLD.render(START), GROUND, **KW)
+    assert loc.update(0.2, None, WORLD.render(START), GROUND, **KW) is None
+    moved = (START[0], START[1] - GAP_MAX_TRAVEL_M - 0.005, START[2])
+    assert loc.update(0.4, moved, WORLD.render(moved), GROUND, **KW) is None
+    assert loc.update(0.6, moved, WORLD.render(moved), GROUND, **KW) is None
 
 
 def test_covariance_grows_without_paint_and_shrinks_with_it():
