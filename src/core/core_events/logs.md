@@ -23,3 +23,11 @@
 - gate 변화: 없음. LOCAL GO 유지
 - 결정: 없음
 - 교훈: "이미 했다"는 표시는 그 결과가 담긴 파일이 아직 그 파일일 때만 참이다 — 우리 밖에서 지워질 수 있는 파일에 대한 기억은 쓰기 전에 다시 확인한다.
+
+## 2026-09-23 · uncommitted · fix(core_events): a reused inode no longer passes as the same audit file
+
+- 변경: 정리가 "이 파일이 아직 그 파일인가"를 (장치, inode)와 크기로만 확인했다. Linux(ext4·tmpfs)는 지운 파일의 inode 번호를 곧바로 새 파일에 다시 주므로, 지우고 다시 만든 더 긴 파일이 같은 신원으로 보여 남의 내용 한가운데에 옛 스냅샷을 이어 붙였다. 이제 이어 붙일 경계 바로 앞 최대 4 KiB(`_FINGERPRINT_BYTES`)가 읽은 스냅샷과 같은지도 락 안에서 본다. 격리 파일의 중복 방지 표시도 같은 이유로, 마지막으로 쓴 바이트가 그 자리에 그대로 있을 때만 믿는다.
+- 증거: PR #22 CI(`ros:jazzy`, Linux)에서 `test_a_file_swapped_for_a_longer_one_is_not_spliced`가 실패했다(Windows 3.14·3.12에서는 통과, Windows는 파일 ID를 바로 재사용하지 않는다). 신규 `test_a_file_rewritten_in_place_is_not_spliced`와 `test_a_quarantine_file_removed_before_the_retry_is_written_again[rewrite]`는 제자리 덮어쓰기로 같은 inode를 만들어 어느 OS에서나 재현한다. 수정 전 2 failed, 수정 후 `test_audit.py` 69 passed(Windows 3.14, WSL Linux 3.12.3).
+- gate 변화: 없음.
+- 결정: 없음(D-172 F2 연장).
+- 교훈: 파일 신원 검사를 Windows에서만 검증하면 inode 재사용을 못 본다. 제자리 덮어쓰기 시험으로 OS와 무관하게 재현한다.
