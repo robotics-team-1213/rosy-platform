@@ -536,3 +536,14 @@
 - 결정: D-173(카드 기록 절차), D-154 결정 4의 확인 문구 형식을 시리얼로 바꾼다
 - 교훈: 운영체제가 매번 다시 매기는 번호로 물리 대상을 고정하지 않는다. 사람이 확인하는 문구도 안정적인 식별자를 써야 한다.
 
+## 2026-09-23 · uncommitted · feat(sd): operator entry point write-card.ps1 for writing a reviewed plan
+
+- 변경: `deploy/sd/write-card.ps1`을 추가했다. 입력은 plan, 서명 릴리스 폴더, Wi-Fi 프로필이다. 이미지·서명·공개키·registry·receipt 경로를
+  plan과 릴리스에서 계산하고, 카드는 plan의 시리얼로 찾으며, 스스로 UAC 승격하고, 시도마다 시각이 붙은 로그와 `.exit` 표지를 남긴다.
+  receipt가 이미 있으면 멈춘다. ERASE 확인은 승격된 창에서 운영자가 입력한다(`-Confirmation`으로 생략 가능). `-PrintArguments`는 쓰지 않고
+  계산된 호출만 보여 준다.
+- 증거: `test/test_sd_write_card_entrypoint.py` 6 passed; 실제 `plan-2026.09.23-004-disk1.json`으로 `-PrintArguments` 확인 (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173
+- 교훈: 네 번의 004 재시도는 모두 손으로 만든 래퍼(고정 디스크 번호, 경로 조립, 로그 이름 바꾸기)를 거쳤다. 반복되는 운영 절차는 저장소 도구로 만든다.
+

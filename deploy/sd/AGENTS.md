@@ -24,6 +24,12 @@ one-time per-card provisioning bundle.
   never a fixed default (D-33). Omitted Fleet values default to
   `https://<this-host>.local` / `rosy-pilot-lan` and the plan says so
   (`robot_number_source`, `fleet_source`); nothing on the robot reads them yet.
+- Write a reviewed plan with the operator entry point, not a hand-made wrapper:
+  `write-card.ps1 -PlanPath <plan.json> -ReleaseDir <signed release> -WifiProfile <p>`
+  (plus `-OperatorPublicKey`, `-ReprovisionReceipt` when needed). It derives every
+  path from the plan and release, finds the card by serial, elevates itself, keeps a
+  timestamped log and `.exit` marker per attempt, and refuses an existing receipt.
+  `-PrintArguments` shows the resolved call without writing.
 - The card is identified by its serial, not the Windows disk number, which changes
   as USB devices come and go. `-DiskSerial` (or a reviewed plan's `disk_serial`)
   resolves the number right before each probe and must match exactly one USB disk;
