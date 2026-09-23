@@ -560,3 +560,17 @@
 - gate 변화: 없음 (D-176 Validation의 기기 확인은 다음 카드에서)
 - 결정: D-176
 - 교훈: 새 진입점은 저장소 테스트만으로 부족하다. 이미지가 설치하는 트리에서 import해 보는 테스트와 이미지 빌드 probe를 같은 변경에 넣는다.
+
+## 2026-09-23 · uncommitted · feat(sd): read-only card diagnostics without wsl --mount
+
+- 변경: `deploy/sd/read-card-diagnostics.py`를 추가했다. 세션 추출기를 저장소 도구로 올렸다. 물리 디스크(또는 원본 이미지 파일)를
+  읽기 전용으로 열고 MBR에서 Linux 루트(0x83)를 찾아 순수 Python `ext4`로 `/var/lib/rosy`, `/etc/rosy`, `/etc/hostname`,
+  `/etc/passwd`, `/etc/systemd/system`, `/var/log/journal`, `/var/log/cloud-init*.log`만 복사하고, FAT32의 `rosy-diag/`(D-175 L1)도
+  함께 복사한다. `rosy_diag_redact.is_denied_path`가 거부하는 경로(Wi-Fi 연결 파일, `rosy-provision/`, 토큰·키)는 열지 않는다.
+  `extract-report.json`에 크기·sha256·저장 이름·거부·누락·오류를 남긴다. Windows가 못 쓰는 이름(`\x2d`)은 `%`로 이스케이프한다.
+  CI pip에 `ext4`를 추가했다.
+- 증거: `test/test_card_diagnostics.py` 15 passed(실제 `mkfs.ext4 -d` 이미지를 WSL로 만들어 추출, `ext4` 설치 venv, 2026-09-23 Windows);
+  `ext4`가 없는 기본 Python에서는 14 passed, 1 skipped.
+- gate 변화: 없음. 실제 카드에서 이 도구로 다시 읽은 증거는 아직 없다(세션 프로토타입만 실제 카드에서 동작)
+- 결정: D-174 F8, D-175
+- 교훈: 카드 진단 경로는 장애가 난 뒤에 만들면 늦다. 한 번 동작한 수작업은 그 자리에서 거부 목록과 시험을 붙여 도구로 올린다.
