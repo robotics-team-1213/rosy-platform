@@ -43,3 +43,11 @@
 - 결정: module-coupling-scorecard §6 과제 4 (D-168 P3 "선언한 결합이 실제로 쓰이는지" 정리).
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · test(core): docking·swarm 시험을 자체 `test/`로 이전
+
+- 변경: `src/core/core/test/{test_docking,test_swarm}.py` → `src/core/core_features/test/`(`git mv`) + `test/conftest.py`(`core_features`·`core_common`·`control` sys.path — control은 `sensor_provider` adapter 한정, D-126). D-168 `KNOWN_WITHOUT_OWN_TESTS`에서 `core_features` 제거, `harness.yaml` 경로 갱신, AGENTS·progress 동기화, SOURCE gate HOLD→GO. `test_core_logic`·`test_line_follow_api`·`test_slam_reset`은 `core_client` fixture 혼재로 이번 회차 보류.
+- 증거: `python -m pytest src/core/core_features/test -q` 140 passed (2026-09-24 Windows); 전체 게이트는 커밋 직전 실행.
+- gate 변화: SOURCE HOLD→GO(자체 `test/` 확보), LOCAL GO 유지.
+- 결정: module-coupling-scorecard §6 과제 2.
+- 교훈: 없음
+

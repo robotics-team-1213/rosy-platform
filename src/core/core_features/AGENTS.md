@@ -17,6 +17,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
+| `test/` | `test_docking.py` (DNC-001~003), `test_swarm.py` (SWM follow) |
 | `core_features/<feature>/` | One requirement family per subpackage; split rules in `docs/plans/2026-09-06-module-split-criteria.md` |
 | `core_features/maps.py` | Map read path (not SLAM) |
 
@@ -31,7 +32,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 ### Testing Requirements
 
 ```bash
-PYTHONPATH=src/core:src python -m pytest src/core/core/test -q
+python -m pytest src/core/core_features/test -q
 ```
 
 ## Dependencies

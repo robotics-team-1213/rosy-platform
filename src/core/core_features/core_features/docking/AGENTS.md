@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # docking
 
@@ -33,7 +33,7 @@ None.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest src/core/core/test/test_docking.py -v
+python3 -m pytest src/core/core_features/test/test_docking.py -v
 ```
 
 ### Common Patterns

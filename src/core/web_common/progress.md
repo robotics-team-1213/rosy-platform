@@ -1,15 +1,16 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "uncommitted", date: 2026-09-24 }
 gates:
   SOURCE:
-    state: HOLD
-    blocker: "자체 test/ 없음 — 검증이 src/core/core/test에 흩어져 있어 패키지 경계로 드러나지 않는다 (D-168 KNOWN_WITHOUT_OWN_TESTS)"
+    state: GO
+    evidence: "test_ui_token_contracts·test_palette_gates·test_headless_state가 자체 test/로 이전 — 41 passed (2026-09-24 Windows)"
+    cmd: "python -m pytest src/core/web_common/test -q"
   LOCAL:
     state: GO
-    evidence: "checked from core suite (1056 passed, 12 skipped, 2026-09-22 Windows); no own test/ yet (D-168 KNOWN_WITHOUT_OWN_TESTS)"
-    cmd: "PYTHONPATH=src/core:src python -m pytest src/core/core/test/test_ui_token_contracts.py src/core/core/test/test_palette_gates.py -q"
+    evidence: "41 passed (2026-09-24 Windows)"
+    cmd: "python -m pytest src/core/web_common/test -q"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -26,11 +27,11 @@ plans:
 
 - 라이브러리·계약 등급(D-168 P2)이다. 프로세스가 없으므로 ROS-SIM~FIELD는 N/A이며, 그 판정은 이 패키지를 싣는 `core` 모듈의 gate가 소유한다.
 - 2026-09-22 harness에 처음 등록했다. 이전 이력은 `git log -- src/core/web_common`를 본다.
-- 자체 `test/`가 없다. 검증은 `core` 스위트가 대신한다(LOCAL 증거).
+- 자체 `test/`가 있다(토큰·팔레트·헤드리스 3종, 2026-09-24 `core/test`에서 이전). ament_cmake라 colcon test 배선은 없고 CI 4경로·직접 pytest로 실행한다.
 
 ## 다음 gate
 
-1. 이 패키지만 import하는 시험을 자체 `test/`로 옮기고 D-168 `KNOWN_WITHOUT_OWN_TESTS`에서 뺀다 → SOURCE GO.
+1. 시험 범위를 공개면(팔레트·토큰) 계약으로 넓힌다.
 
 ## 현재 유효한 금지사항
 

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-15 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # dock
 
@@ -36,7 +36,7 @@ Charging-dock firmware and the ROSY-DOCK-001 agent contract. The microcontroller
 ### Testing Requirements
 
 ```bash
-python3 -m pytest test/test_dock_contract.py src/core/core/test/test_docking.py -v
+python3 -m pytest test/test_dock_contract.py src/core/core_features/test/test_docking.py -v
 ```
 
 ### Common Patterns

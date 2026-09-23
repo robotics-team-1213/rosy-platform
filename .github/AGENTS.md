@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # .github
 
@@ -36,7 +36,7 @@ Comments in `ci.yml` document why extra steps exist (root `test/` used to be ski
 
 ### Internal
 
-- Builds `src/`, tests the core package tests (`src/core/core/test`) and repo-root `test/`
+- Builds `src/`, tests the core-domain suites (`src/core/{core,core_events,core_features,web_common}/test`) and repo-root `test/`
 
 ### External
 
