@@ -531,22 +531,13 @@ if (-not $DiskInventoryJson) {
 
 $readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
 if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
-$rawImageOutput = & $PythonExe $readbackVerifier --image $ImagePath --image-only
-if ($LASTEXITCODE -ne 0) { Fail "raw image SHA-256 calculation failed" }
-try {
-    $rawImage = $rawImageOutput | ConvertFrom-Json
-}
-catch {
-    Fail "raw image SHA-256 evidence is invalid"
-}
-if ([string]$rawImage.image_raw_sha256 -notmatch '^[0-9a-f]{64}$') {
-    Fail "raw image SHA-256 evidence is invalid"
-}
 
+# D-180: the full readback below is the single authoritative media check.
+# Input authenticity was proven by the signed SHA256SUMS before any disk probe,
+# so Imager's own read-back pass (and a raw-hash pre-pass to feed it) is skipped.
 $writerArguments = @(
     "--cli",
-    "--sha256",
-    [string]$rawImage.image_raw_sha256,
+    "--disable-verify",
     ('"{0}"' -f $ImagePath),
     ('"{0}"' -f $physicalDrive)
 )
@@ -567,6 +558,10 @@ catch {
     Fail "media readback evidence is invalid"
 }
 if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
+foreach ($digestField in @("image_raw_sha256", "device_sha256")) {
+    if ([string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') { Fail "media readback evidence is invalid" }
+}
+if ([int64]$mediaReadback.bytes_verified -le 0) { Fail "media readback evidence is invalid" }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $bundleTool = Join-Path $PSScriptRoot "create-provision-bundle.py"

@@ -730,3 +730,16 @@
 - gate 변화: 없음
 - 결정: D-173
 - 교훈: 하드웨어 식별자 하나에만 기대면 드라이버가 그 칸을 비우는 순간 도구가 멈춘다. 같은 사실을 담은 두 번째 출처와 그 출처를 믿을 조건을 함께 둔다.
+
+## 2026-09-23 · uncommitted · perf(sd): one authoritative verify — drop the raw-hash pre-pass and Imager read-back (D-180)
+
+- 변경: `prepare-rosy-sd.ps1`이 쓰기 전에 `.img.xz` 전체를 풀어 raw SHA-256을 구하던 `--image-only` 패스를 없애고, Imager를
+  `--cli --disable-verify "<image>" "<device>"`로 부른다(`--sha256` 없음). 전체 readback(`--image --device`)은 그대로이며 증거에 64자리
+  `image_raw_sha256`·`device_sha256`와 양수 `bytes_verified`가 없으면 bundle 전에 멈춘다. 서명 검증·ERASE 확인·시리얼 선택·쓰기 직전
+  fingerprint 재확인은 바뀌지 않았다. 2026-09-21 설계 단계 6("write verification을 끄지 않는다")을 대체한다.
+- 증거: 실측 50분(005)·48분(004) = 사전 패스 약 12분 + 쓰기 약 20분 + Imager verify 약 10분 + readback. 설치된 Imager v2.0.8
+  실행 파일의 옵션 테이블에서 `disable-verify` 확인. `test_sd_writer_contract.py` 등 관련 스위트 통과(2026-09-23 Windows).
+  실제 카드 기록 시간은 아직 재지 않았다.
+- gate 변화: 없음
+- 결정: D-180
+- 교훈: 나중에 더 엄격한 검사를 넣으면 먼저 있던 약한 검사를 다시 본다. 같은 사실을 여러 번 확인하는 패스는 시간만 쓴다.

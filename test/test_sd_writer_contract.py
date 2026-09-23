@@ -298,8 +298,10 @@ def test_successful_write_stages_one_time_bundle_and_updates_registry(writer_cas
     writer_arguments = writer_case["writer_args"].read_text(encoding="utf-8")
     raw_sha256 = hashlib.sha256(writer_case["readback"].read_bytes()).hexdigest()
     compressed_sha256 = hashlib.sha256(writer_case["image"].read_bytes()).hexdigest()
-    assert f"--sha256 {raw_sha256}" in writer_arguments
-    assert f"--sha256 {compressed_sha256}" not in writer_arguments
+    # D-180: Imager only writes; the full readback below is the single verify.
+    assert writer_arguments.split()[:2] == ["--cli", "--disable-verify"]
+    assert "--sha256" not in writer_arguments
+    assert compressed_sha256 not in writer_arguments
     bundle_path = boot / "rosy-provision" / "provision.json"
     bundle = json.loads(bundle_path.read_text(encoding="utf-8-sig"))
     assert bundle["device_identity"]["device_name"] == "rosy-pinky-k7m4"
@@ -312,14 +314,28 @@ def test_successful_write_stages_one_time_bundle_and_updates_registry(writer_cas
     assert "wpa_psk" not in json.dumps(receipt)
     assert receipt["media_readback"]["verified"] is True
     assert receipt["media_readback"]["bytes_verified"] == writer_case["readback"].stat().st_size
+    assert receipt["media_readback"]["image_raw_sha256"] == raw_sha256
+    assert receipt["media_readback"]["device_sha256"] == raw_sha256
     assert registry["robot_numbers"] == [1]
     assert registry["device_names"] == ["rosy-pinky-k7m4"]
     assert registry["device_uids"] == ["9d40feaa-871f-4fd3-975a-a704e82d3af9"]
 
 
+def _flip_one_byte(data: bytes) -> bytes:
+    middle = len(data) // 2
+    return data[:middle] + bytes([data[middle] ^ 0x01]) + data[middle + 1:]
+
+
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case, tmp_path):
-    writer_case["readback"].write_bytes(b"wrong media contents")
+@pytest.mark.parametrize(
+    "corrupt",
+    [lambda data: b"wrong media contents", _flip_one_byte],
+    ids=["short-media", "one-flipped-byte"],
+)
+def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case, tmp_path, corrupt):
+    # D-180: Imager runs with --disable-verify, so this readback is the only
+    # media check; a single wrong byte must still stop bundle, receipt and registry.
+    writer_case["readback"].write_bytes(corrupt(writer_case["readback"].read_bytes()))
     boot = tmp_path / "boot"
     boot.mkdir()
 
@@ -332,6 +348,8 @@ def test_readback_mismatch_stops_before_personalization_and_receipt(writer_case,
 
     assert completed.returncode != 0
     assert writer_case["marker"].exists()
+    assert "--disable-verify" in writer_case["writer_args"].read_text(encoding="utf-8")
+    assert "full media readback verification failed" in completed.stderr + completed.stdout
     assert not (boot / "rosy-provision" / "provision.json").exists()
     assert not writer_case["receipt"].exists()
     registry = json.loads(writer_case["registry"].read_text(encoding="utf-8"))
@@ -344,8 +362,13 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "WifiPassword" not in text
     assert "Export-Clixml" in text and "Import-Clixml" in text
     assert "Read-Host -AsSecureString" in text
-    assert "--cli" in text and "--sha256" in text
-    assert "--disable-verify" not in text
+    # D-180: one authoritative verify (the full readback), no Imager verify,
+    # no --sha256 and no separate raw-hash pre-pass over the image.
+    assert '"--cli",' in text and '"--disable-verify",' in text
+    assert "--sha256" not in text
+    assert "--image-only" not in text
+    assert text.count("verify-media-readback.py") == 1
+    assert text.count("& $PythonExe $readbackVerifier") == 1
     assert "cmd /c" not in text.lower()
     assert '"ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"' in text
     assert "Start-Process" in text
