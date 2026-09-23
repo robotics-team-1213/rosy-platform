@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · fix(sd): fall back to the USB instance serial when Get-Disk reports none
 - 2026-09-24 · uncommitted · chore(deploy): split robot dev and verify scripts
 - 2026-09-24 · uncommitted · docs(deploy): 병합(deploy) 항목의 게이트 실측 수치 기록
 - 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
 - 2026-09-23 · uncommitted · fix(deploy): second overlay apply restarts, and refuses a live motor slice
-- 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — D-176 부트 설정·폴백 AP, rosy-diag 2단계, SD 라이터

@@ -66,14 +66,36 @@ function Save-WifiCredential([string]$Profile, [string]$Ssid) {
     Write-Output "Stored operator-local credential profile '$Profile'."
 }
 
+# Some USB card readers intermittently report an empty Get-Disk SerialNumber
+# (release 005: the same reader showed 000000000207, then blank after a replug)
+# while the USB mass-storage instance ID still carries the device serial:
+# USBSTOR\DISK&VEN_..&PROD_..&REV_..\<serial>&<n>. Use that only when it is a
+# real serial; Windows invents "<digit>&<hash>&<n>" IDs for devices without one.
+function Get-UsbInstanceSerial([string]$UniqueId) {
+    if ($UniqueId -notmatch '^USBSTOR\\[^\\]+\\([^&\\]+)&') { return "" }
+    $candidate = $Matches[1]
+    if ($candidate.Length -lt 4) { return "" }
+    return $candidate
+}
+
+function Complete-DiskSerial([object]$Disk) {
+    if ($null -eq $Disk -or -not $Disk.PSObject.Properties["SerialNumber"]) { return $Disk }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Disk.SerialNumber)) { return $Disk }
+    if ([string]$Disk.BusType -ne "USB" -or -not $Disk.PSObject.Properties["UniqueId"]) { return $Disk }
+    $fallback = Get-UsbInstanceSerial ([string]$Disk.UniqueId)
+    if ($fallback) { $Disk.SerialNumber = $fallback }
+    return $Disk
+}
+
 function Read-DiskInventory([string]$FixturePath) {
     if ($FixturePath) {
         if (-not (Test-Path -LiteralPath $FixturePath -PathType Leaf)) {
             Fail "disk inventory fixture is missing"
         }
-        return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json))
+        return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json) | ForEach-Object { Complete-DiskSerial $_ })
     }
-    return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly)
+    return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, UniqueId, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly |
+        ForEach-Object { Complete-DiskSerial $_ })
 }
 
 # Windows renumbers disks as USB devices come and go (release 004: the card moved

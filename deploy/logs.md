@@ -720,3 +720,13 @@
 - 결정: D-186
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · fix(sd): fall back to the USB instance serial when Get-Disk reports none
+
+- 변경: 같은 리더기가 다시 꽂힌 뒤 `Get-Disk`의 `SerialNumber`를 빈 값으로 보고해(관리자 `Update-HostStorageCache` 뒤에도) 시리얼로 카드를
+  찾지 못했다. `UniqueId`의 USBSTOR instance ID(`USBSTOR\DISK&...\<serial>&<n>`)에 같은 시리얼이 남아 있어, SerialNumber가 비었고 USB일 때만
+  그 값을 쓴다. Windows가 지어낸 ID(`<digit>&<hash>&<n>`, 4자 미만)와 USBSTOR가 아닌 ID는 쓰지 않는다. 기존 USB·크기·boot/system 검사는 그대로다.
+- 증거: `test_sd_writer_contract.py`, `test_sd_write_card_entrypoint.py` 85 passed; 실제 카드로 `-PlanOnly -DiskSerial 000000000207`이
+  디스크 1을 찾음 (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173
+- 교훈: 하드웨어 식별자 하나에만 기대면 드라이버가 그 칸을 비우는 순간 도구가 멈춘다. 같은 사실을 담은 두 번째 출처와 그 출처를 믿을 조건을 함께 둔다.

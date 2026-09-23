@@ -950,3 +950,67 @@ def test_rewriting_the_same_device_keeps_its_ap_password_and_an_edited_settings_
     second = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))["network"]["ap"]
     assert second == first
     assert (boot / "rosy-config.yaml").read_text(encoding="utf-8") == "schema_version: 1\ncountry: US\n"
+
+
+# Release 005: the same reader reported serial 000000000207, then an empty
+# Get-Disk SerialNumber after a replug, while its USBSTOR instance ID kept it.
+USBSTOR = "USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\{}&GL&23:PERPROS"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_empty_serial_falls_back_to_the_usb_instance_id(writer_case):
+    _inventory(writer_case, _disk(Number=1, SerialNumber="", UniqueId=USBSTOR.format("FIXTURE-SD-0007")))
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007", omit=("-DiskNumber",))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert (plan["disk_number"], plan["disk_serial"]) == (1, "FIXTURE-SD-0007")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("unique_id", [USBSTOR.format("7") + "&0", "SCSI\DISK&VEN_X\FIXTURE-SD-0007&0", ""],
+                         ids=["windows-generated", "not-usbstor", "absent"])
+def test_no_serial_is_invented_from_an_id_that_does_not_carry_one(writer_case, unique_id):
+    _inventory(writer_case, _disk(Number=1, SerialNumber="", UniqueId=unique_id))
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007", omit=("-DiskNumber",))
+
+    assert completed.returncode != 0
+    assert "no USB disk has serial" in completed.stderr
+
+
+# Release 005: after a replug the same reader reported an empty Get-Disk
+# SerialNumber; its USBSTOR instance ID still carried 000000000207.
+READER_ID = "USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\FIXTURE-SD-0007&GL&23:PERPROS"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_empty_serial_falls_back_to_the_usb_instance_serial(writer_case):
+    _inventory(writer_case, _disk(Number=4, SerialNumber="", UniqueId=READER_ID))
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007", omit=("-DiskNumber",))
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert (plan["disk_number"], plan["disk_serial"]) == (4, "FIXTURE-SD-0007")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize(
+    "unique_id",
+    [
+        "USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\7&2A3B4C5D&0:PERPROS",  # Windows-invented
+        "SCSI\DISK&VEN_NVME\FIXTURE-SD-0007&0",  # not a USB mass-storage ID
+        "",
+    ],
+    ids=["generated", "not-usbstor", "empty"],
+)
+def test_no_real_usb_serial_means_no_card(writer_case, unique_id):
+    _inventory(writer_case, _disk(Number=4, SerialNumber="", UniqueId=unique_id))
+
+    completed = _run(writer_case, "-DiskSerial", "FIXTURE-SD-0007", omit=("-DiskNumber",))
+
+    assert completed.returncode != 0
+    assert "no USB disk has serial" in completed.stderr
+    assert not writer_case["marker"].exists()
