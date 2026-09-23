@@ -166,3 +166,8 @@ plans:
 ## 2026-09-24 EventsExecutor opt-in (D-185 R3)
 
 - control 노드와 rig가 `ROSY_EXECUTOR=events`로 EventsExecutor를 쓸 수 있다. 기본값은 이전과 같은 SingleThreadedExecutor다. rig A/B와 실기 측정이 남아 있어 기본값 전환은 하지 않았다.
+
+## 2026-09-24 footprint sweep cost (D-185 R5)
+
+- sim safety의 footprint sweep과 직진 한계 계산을 결과가 비트 단위로 같게 줄였다. 증명된 거리 하한으로 먼 scan 점을 빼고, 시간 샘플을 묶어 계산한다. host에서 sweep 호출당 1440점 21→4–6 ms, 직진 한계 5–39→2–8 ms. 점이 모두 가까운 최악 입력에서는 원본과 비슷하다.
+- 실기 경로가 아니다(rig 여력 회복).

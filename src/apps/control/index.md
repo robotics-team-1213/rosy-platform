@@ -59,8 +59,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · chore(control): D-168 P6 size re-judge after R3/R5/R8 (D-185)
+- 2026-09-24 · uncommitted · perf(control): R5 review fixes for the footprint prefilter guards (D-185 R5)
+- 2026-09-24 · uncommitted · perf(control): exact footprint sweep prefilter (D-185 R5)
 - 2026-09-24 · uncommitted · feat(control): opt-in EventsExecutor via ROSY_EXECUTOR (D-185 R3)
 - 2026-09-24 · uncommitted · tools(control): Pi hot-path and node CPU measurement tool (D-185 R8)
-- 2026-09-24 · uncommitted · tools(control): rig environment guard marks overloaded runs invalid (D-185 R4)
-- 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
-- 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
