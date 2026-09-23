@@ -55,6 +55,40 @@ def test_every_junction_transition_is_driven(index):
     assert result["max_centre_dev_m"] <= 0.040, summary([result])
 
 
+class _OdomFrameAtOrigin:
+    """Hands the follower odometry whose frame starts at (0, 0, 0) while the
+    robot stands at the scenario start (a real /odom, unlike Gazebo's)."""
+
+    def __init__(self, subject, start):
+        self.subject = subject
+        self._start = tuple(float(v) for v in start)
+
+    @property
+    def state(self):
+        return self.subject.state
+
+    def update(self, now_s, pose, bgr, ground, **kwargs):
+        x0, y0, yaw0 = self._start
+        c, s = math.cos(yaw0), math.sin(yaw0)
+        dx, dy = pose[0] - x0, pose[1] - y0
+        odom = (c * dx + s * dy, -s * dx + c * dy, pose[2] - yaw0)
+        return self.subject.update(now_s, odom, bgr, ground, **kwargs)
+
+
+@pytest.mark.parametrize("index", [0, 5, 7, 11])
+def test_odometry_from_its_own_origin_is_placed_on_the_map(index):
+    """HIGH-1: /odom starts at (0, 0, 0) wherever the robot is. The follower
+    anchors T_map_odom = start_pose (-) first odometry pose, so the clean
+    scenarios still pass (one per node: NE, NW, SE, SW)."""
+    scenario = SCENARIOS[index]
+    subject = follower(scenario)
+    result = run_scenario(scenario, _OdomFrameAtOrigin(subject, scenario["start"]), steps=260)
+    result["scenario"] = scenario
+    assert result["pass"], summary([result])
+    assert result["max_centre_dev_m"] <= 0.040, summary([result])
+    assert math.dist(subject.map_pose[:2], result["last_true_pose"][:2]) < 1e-6
+
+
 def test_a_manoeuvre_that_never_reacquires_stops():
     """Fail-closed: with the world blank after the node, the manoeuvre ends
     and the follower publishes nothing rather than driving blind."""

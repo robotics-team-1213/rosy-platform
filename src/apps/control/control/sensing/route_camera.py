@@ -28,8 +28,21 @@ segment. Outside that, after the first lock, the tracker runs unmodified.
 Direction on the ring comes from the route: LaneRoute refuses a one-way
 segment walked backwards, so a clockwise ring route cannot be built.
 
-The pose is odometry (the offline loop and Gazebo pass ground truth).
-Position along the route is its projection; drift is not modelled here.
+Pose: `update` takes odometry (base_link in /odom). /odom starts wherever
+the robot was switched on, so the first valid odometry pose is anchored to
+`start_pose` (map frame): T_map_odom = start_pose (-) first odometry, and
+every later pose is T_map_odom (+) odometry (`map_pose`). In Gazebo the two
+frames coincide and T_map_odom is the identity. Nothing corrects odometry
+drift after that: position along the route is the projection of the
+dead-reckoned pose.
+
+Known limitation (review HIGH-3, not redesigned here): the branch choice is
+odometry-metric, not event-driven. Where the route turns is decided by the
+dead-reckoned distance to the node and the route's lateral agreement gate,
+not by seeing the mouth open, so under severe drift (offline: 5 % scale
+with 0.02 rad/s yaw bias, or a 30 mm / 3 deg start error) A can take the
+wrong branch and keep driving on the camera without stopping; see
+test_drift_grid.
 """
 
 from __future__ import annotations
@@ -187,6 +200,8 @@ class RouteCameraFollower:
         self._tracker = _RouteGatedTracker(camera_x_offset_m=camera_x_offset_m)
         self.state = "STOP"
         self.locked = False
+        self._start_pose = start_pose
+        self._map_from_odom = None      # (tx, ty, dyaw), set on the first odometry
         self._pose = start_pose
         self._s = 0.0
         self._manoeuvre = None
@@ -195,6 +210,24 @@ class RouteCameraFollower:
     @property
     def tier(self) -> str:
         return self.state
+
+    @property
+    def map_pose(self):
+        """The last odometry pose placed on the map (start_pose before any)."""
+        return self._pose
+
+    def _to_map(self, odom):
+        """T_map_odom (+) odom; T_map_odom is fixed by the first call."""
+        if self._map_from_odom is None:
+            sx, sy, syaw = self._start_pose
+            dyaw = syaw - odom[2]
+            c, s = math.cos(dyaw), math.sin(dyaw)
+            self._map_from_odom = (sx - (c * odom[0] - s * odom[1]),
+                                   sy - (s * odom[0] + c * odom[1]), dyaw)
+        tx, ty, dyaw = self._map_from_odom
+        c, s = math.cos(dyaw), math.sin(dyaw)
+        return (tx + c * odom[0] - s * odom[1], ty + s * odom[0] + c * odom[1],
+                _wrap(odom[2] + dyaw))
 
     def _window(self, ahead_m: float) -> np.ndarray:
         mask = (self._arc >= self._s - LOOKAHEAD_M) & (self._arc <= self._s + ahead_m)
@@ -250,6 +283,7 @@ class RouteCameraFollower:
                 return None
             self.state = "STOP"
             return None
+        pose = self._to_map(pose)
         self._pose = pose
         fix = self.route.locate(pose[:2])
         self._s = float(self._seg_start[fix.segment_index] + fix.s_m)
