@@ -38,7 +38,7 @@
 | D-158 | UI Component Consistency: Strict Outline Borders (Law 2) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-162 | 학습된 장면은 설정이지 권한이 아니다 — 장면 상황 프로파일은 등록·리비전·보수 폴백으로만 적용한다 |
-| D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
+| D-182 | SD 카드 쓰기는 전문가 없이 운영한다 — 분리 실행, 상태 명령, readback 멈춤 감시, 사전 속도 측정, 카드 신원 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 
 ## 계획·결과 문서

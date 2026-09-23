@@ -774,3 +774,25 @@
 - gate 변화: 없음
 - 결정: D-181
 - 교훈: 실패 이유가 로그까지 오는 경로를 테스트로 고정한다. 하위 도구가 이유를 말해도 상위 로그가 그 스트림을 버리면 없는 것과 같다.
+
+## 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-182)
+
+- 변경: `write-card.ps1 -Detach`가 관리자 창을 따로 띄우고(UAC 한 번, `-NoExit`) 바로 돌아오며 로그·진행 파일·`.exit`·상태 명령을
+  출력한다. launcher가 진행 파일을 운영자 소유로 먼저 만들고 `launch` 줄을 쓰며, UAC 거부는 `failed`/`untouched`와 `next`로 남는다.
+  새 `card-write-status.ps1 -LogPath <log> [-Json]`은 승격 없이 단계·카드 상태·바이트·실측 속도·단계/전체 ETA·마지막 줄 나이·
+  `STALLED`·결과와 `next`를 보인다. readback은 감시되는 프로세스로 돌고, heartbeat 바이트가 `-ReadbackStallMinutes`(기본 5) 동안
+  그대로면 verifier를 끝내고 `written-unverified`·`kind io`·resume으로 실패한다. verifier도 `--stall-seconds`로 exit 3.
+  ERASE 확인 전 `preflight` 단계가 카드 앞 128 MiB를 읽기 전용으로 읽어 속도를 재고 쓰기·readback 시간을 예측하며, 10 MB/s 미만이면
+  경고하고 비대화형 실행은 `-AcceptSlowMedia`를 요구한다. plan에 카드 `disk_signature`·`disk_guid`를 남겨 같은 리더기의 다른 카드를
+  ERASE 전에 멈추고, resume은 장치 MBR signature가 이미지의 것과 같아야 한다. boot 파티션 파일 비교로 넘어가도 reserved 영역
+  (FSInfo 힌트 제외), FAT copy 2 대 1(FAT[1] 상태 비트 제외), backup boot sector 대 primary를 byte 단위로 비교한다.
+  D-181 리뷰: `-ReadbackDevice`는 fixture 전용·receipt `readback_target`, Imager 감시는 프로세스 트리 합산·실제 디스크는 `.exe`만,
+  `taskkill` 5.1 throw 제거, 끝내지 못한 Imager는 재부팅 안내, verifier queue/join 시간 제한, heartbeat OSError는 advisory,
+  `bundle-writing`/`bundle-partial` 단계와 bundle이 있는 카드의 resume 거부.
+- 증거: named pipe 가짜 카드(`test/sd_pipe_card.py`)로 매달린 readback 정지와 느린 readback 완주, 자식이 I/O를 하는 가짜 writer,
+  사전 측정·느린 매체·카드 신원·resume 거부, detach·UAC 거부 기록, 상태 명령 8가지 상황(텍스트·JSON), boot 비파일 영역 1 byte 반전
+  5종(2026-09-24 Windows). 실제 카드·실제 UAC·실제 Imager 트리는 확인하지 않았다.
+- gate 변화: 없음
+- 결정: D-182
+- 교훈: 오래 도는 작업의 "언제 끝나나"는 짐작이 아니라 같은 장치에서 잰 속도와 실제로 늘어나는 바이트로 답한다. 감시는 도구 안과 밖
+  두 겹으로 두고, 느리지만 움직이는 작업을 죽이지 않는 것이 멈춤 감지만큼 중요하다.
