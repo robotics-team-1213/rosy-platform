@@ -68,6 +68,31 @@ def test_everything_is_derived_from_the_plan_and_the_release(case):
     assert log.parent == case["evidence"]
     assert log.name.startswith(f"write-{RELEASE}-rosy-pinky-e4us-") and log.suffix == ".log"
     assert resolved["exit_marker"] == str(log) + ".exit"
+    # D-181: the stage file sits next to the log and the writer gets its path.
+    assert resolved["progress"] == str(log) + ".progress.jsonl"
+    assert arguments["ProgressPath"] == resolved["progress"]
+    assert arguments["WriterStallMinutes"] == 5
+    assert "ResumeAfterWrite" not in arguments
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_resume_after_write_and_the_stall_limit_are_passed_through(case):
+    completed = _print(case, "-ResumeAfterWrite", "-WriterStallMinutes", "7.5")
+
+    assert completed.returncode == 0, completed.stderr
+    arguments = json.loads(completed.stdout)["arguments"]
+    assert arguments["ResumeAfterWrite"] is True
+    assert arguments["WriterStallMinutes"] == 7.5
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_resume_after_write_still_refuses_an_existing_receipt(case):
+    (case["evidence"] / f"receipt-{RELEASE}-rosy-pinky-e4us.json").write_text("{}", encoding="utf-8")
+
+    completed = _print(case, "-ResumeAfterWrite")
+
+    assert completed.returncode != 0
+    assert "receipt already exists" in completed.stderr
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -125,3 +150,13 @@ def test_the_entry_point_elevates_itself_and_keeps_every_attempt():
     assert "prepare-rosy-sd.ps1" in text
     assert "-DiskNumber" not in text  # the card is found by serial
     assert "Get-Date -Format" in text  # one log per attempt, never renamed by hand
+
+
+def test_the_operator_is_told_where_progress_is_and_what_state_a_lost_write_left():
+    # D-181: release 005's elevated write vanished and its transcript sat at its header.
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert 'Write-Output "Progress: $progressPath' in text
+    assert '$forward += "-ResumeAfterWrite"' in text
+    assert "UAC prompt declined or timed out" in text
+    assert "last stage=$($last.stage) card_state=$($last.card_state)" in text

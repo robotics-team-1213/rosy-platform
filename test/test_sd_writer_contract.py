@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -109,7 +110,7 @@ def writer_case(tmp_path: Path):
     }
 
 
-def _run(case, *extra, plan_only=True, omit=()):
+def _run(case, *extra, plan_only=True, omit=(), switches=()):
     command = [
         POWERSHELL,
         "-NoProfile",
@@ -140,6 +141,7 @@ def _run(case, *extra, plan_only=True, omit=()):
         del command[index:index + 2]
     if plan_only:
         command.append("-PlanOnly")
+    command.extend(switches)
     extra_values = list(map(str, extra))
     index = 0
     while index < len(extra_values):
@@ -368,11 +370,16 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
     assert "--sha256" not in text
     assert "--image-only" not in text
     assert text.count("verify-media-readback.py") == 1
-    assert text.count("& $PythonExe $readbackVerifier") == 1
+    # One readback pass; the other call only reads the raw size from the xz index.
+    assert text.count("--device $readbackTarget") == 1
+    assert text.count("& $PythonExe $readbackVerifier") == 2
+    assert "--raw-size" in text
     assert "cmd /c" not in text.lower()
     assert '"ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"' in text
     assert "Start-Process" in text
-    assert "-Wait" in text
+    # D-181: the writer is polled by a stall watchdog, never waited on blindly.
+    assert "-Wait -PassThru" not in text
+    assert "WaitForExit($pollMilliseconds)" in text
     assert "-PassThru" in text
     assert "& $RpiImager" not in text
     assert "create-provision-bundle.py" in text
@@ -1037,3 +1044,285 @@ def test_no_real_usb_serial_means_no_card(writer_case, unique_id):
     assert completed.returncode != 0
     assert "no USB disk has serial" in completed.stderr
     assert not writer_case["marker"].exists()
+
+
+# --- D-181: progress file, stall watchdog, actionable failures, resume ------
+# Release 005: a write vanished without a receipt, Imager stalled for 23 minutes
+# after its last byte while Start-Process -Wait waited, and the transcript never
+# showed which stage was running.
+
+WRITE_CONFIRMATION = ("-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4")
+SUCCESS_STAGES = [
+    ("verify-signature", "untouched"), ("select-disk", "untouched"), ("confirm", "untouched"),
+    ("write", "writing"), ("readback", "written-unverified"), ("bundle", "verified-no-bundle"),
+    ("receipt", "complete"), ("done", "complete"),
+]
+
+
+def _err(completed):
+    # PowerShell wraps long error lines at the console width.
+    return " ".join(completed.stderr.split())
+
+
+def _progress(case):
+    path = Path(str(case["receipt"]) + ".progress.jsonl")
+    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    for line in lines:
+        assert line["ts"].endswith("Z") and "T" in line["ts"]
+    return lines
+
+
+def _stages(lines):
+    return [(line["stage"], line["card_state"]) for line in lines if line.get("detail") != "heartbeat"]
+
+
+def _failed(lines):
+    assert lines[-1]["stage"] == "failed"
+    return lines[-1]["card_state"]
+
+
+def _fake_writer(case, body):
+    case["writer"].write_text(
+        f'@echo off\n> "{case["marker"]}" echo called\n> "{case["writer_args"]}" echo %*\n{body}\n',
+        encoding="utf-8",
+    )
+
+
+def _write(case, tmp_path, *extra, switches=()):
+    boot = tmp_path / "boot"
+    boot.mkdir(exist_ok=True)
+    return _run(case, *WRITE_CONFIRMATION, "-BootMountPath", boot, *extra,
+                plan_only=False, switches=switches), boot
+
+
+def _nothing_recorded(case, boot):
+    assert not (boot / "rosy-provision" / "provision.json").exists()
+    assert not case["receipt"].exists()
+    registry = json.loads(case["registry"].read_text(encoding="utf-8"))
+    assert registry == {"robot_numbers": [], "device_names": [], "device_uids": []}
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_progress_file_records_every_stage_of_a_successful_write(writer_case, tmp_path):
+    completed, _boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    lines = _progress(writer_case)
+    assert _stages(lines) == SUCCESS_STAGES
+    raw_size = writer_case["readback"].stat().st_size
+    assert lines[3]["detail"] == f"raw image {raw_size} bytes"
+    beats = [line for line in lines if line["stage"] == "readback" and line.get("detail") == "heartbeat"]
+    assert beats and beats[-1]["bytes"] == raw_size
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["resumed_after_write"] is False
+    assert receipt["writer_exit_code"] == 0
+    # Review MEDIUM-1: the readback's compressed-stream hash is the signed one.
+    assert receipt["media_readback"]["image_sha256"] == hashlib.sha256(writer_case["image"].read_bytes()).hexdigest()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_bad_signature_leaves_the_card_untouched_and_says_to_download_again(writer_case, tmp_path):
+    writer_case["signature"].write_text("invalid-signature\n", encoding="utf-8")
+
+    completed, _boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert "stage=verify-signature card_state=untouched" in _err(completed)
+    assert "next: download the release again" in _err(completed)
+    assert _failed(_progress(writer_case)) == "untouched"
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_wrong_confirmation_leaves_the_card_untouched_and_says_to_re_run(writer_case, tmp_path):
+    completed, _boot = _write(writer_case, tmp_path, "-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4:")
+
+    assert completed.returncode != 0
+    assert "typed: 'ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4:'" in _err(completed)
+    assert "stage=confirm card_state=untouched" in _err(completed)
+    assert "next: re-run and type exactly: ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-k7m4" in _err(completed)
+    assert _stages(_progress(writer_case))[-2:] == [("confirm", "untouched"), ("failed", "untouched")]
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_missing_card_says_to_reseat_the_reader_and_re_plan(writer_case, tmp_path):
+    _inventory(writer_case, _disk(SerialNumber="OTHER-CARD"))
+
+    completed, _boot = _write(writer_case, tmp_path, "-DiskSerial", "FIXTURE-SD-0007", "-DiskNumber", "7")
+
+    assert completed.returncode != 0
+    assert "no USB disk has serial" in _err(completed)
+    assert "stage=select-disk card_state=untouched" in _err(completed)
+    assert "next: reseat the card reader, re-run -PlanOnly" in _err(completed)
+    assert _failed(_progress(writer_case)) == "untouched"
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_failed_imager_means_a_full_rewrite(writer_case, tmp_path):
+    _fake_writer(writer_case, "exit /b 5")
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert "image writer failed with exit code 5" in _err(completed)
+    assert "stage=write card_state=writing" in _err(completed)
+    assert "next: the card is partially written: re-run the full write" in _err(completed)
+    lines = _progress(writer_case)
+    assert _failed(lines) == "writing"
+    assert "readback" not in [line["stage"] for line in lines]
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_writer_that_stalls_mid_write_is_killed_and_needs_a_full_rewrite(writer_case, tmp_path):
+    # cmd.exe waits on ping with no CPU or I/O of its own, like Imager in release 005.
+    _fake_writer(writer_case, "ping -n 120 127.0.0.1 >nul\nexit /b 0")
+
+    started = time.monotonic()
+    completed, boot = _write(writer_case, tmp_path, "-WriterStallMinutes", "0.05", "-HeartbeatSeconds", "0")
+
+    assert completed.returncode != 0
+    assert "image writer stalled" in _err(completed)
+    assert time.monotonic() - started < 100, "the stalled writer was waited on instead of killed"
+    assert "stage=write card_state=writing" in _err(completed)
+    assert "re-run the full write" in _err(completed)
+    lines = _progress(writer_case)
+    assert any(line["stage"] == "write" and line.get("detail") == "heartbeat" and "bytes" in line for line in lines)
+    assert _failed(lines) == "writing"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_writer_that_stalls_after_the_last_byte_points_to_resume(writer_case, tmp_path):
+    copy = tmp_path / "written.bin"
+    _fake_writer(writer_case, f'copy /b "{writer_case["readback"]}" "{copy}" >nul\nping -n 120 127.0.0.1 >nul')
+
+    completed, boot = _write(writer_case, tmp_path, "-WriterStallMinutes", "0.05")
+
+    assert completed.returncode != 0
+    assert "image writer stalled" in _err(completed)
+    assert "stage=write card_state=written-unverified" in _err(completed)
+    assert "-ResumeAfterWrite" in _err(completed)
+    assert _failed(_progress(writer_case)) == "written-unverified"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_readback_mismatch_says_rewrite_then_replace_the_card(writer_case, tmp_path):
+    writer_case["readback"].write_bytes(_flip_one_byte(writer_case["readback"].read_bytes()))
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert "stage=readback card_state=written-unverified" in _err(completed)
+    assert "re-run the full write" in _err(completed) and "replace the card" in _err(completed)
+    assert _failed(_progress(writer_case)) == "written-unverified"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_unreadable_card_during_readback_says_reinsert_and_resume(writer_case, tmp_path):
+    completed, boot = _write(writer_case, tmp_path, "-ReadbackDevice", tmp_path / "card-was-removed.bin")
+
+    assert completed.returncode != 0
+    assert "could not be read during readback" in _err(completed)
+    assert "next: reinsert the card, then re-run the same command with -ResumeAfterWrite" in _err(completed)
+    assert _failed(_progress(writer_case)) == "written-unverified"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_image_changed_after_the_signature_check_fails_on_its_readback_hash(writer_case, tmp_path):
+    # Bytes after the xz stream do not change what lzma decompresses, so only
+    # the compressed-stream hash can tell this file from the signed one.
+    _fake_writer(writer_case, f'>> "{writer_case["image"]}" echo appended-after-signing\nexit /b 0')
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert "the image read back is not the signed image" in _err(completed)
+    assert "stage=readback card_state=unknown" in _err(completed)
+    assert "next: download the release again" in _err(completed)
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_card_is_selected_again_before_the_bundle(writer_case, tmp_path):
+    swapped = tmp_path / "swapped.json"
+    swapped.write_text(json.dumps([_disk(SerialNumber="SWAPPED-READER")]), encoding="utf-8")
+    # The inventory changes after both pre-write probes, as if the reader were swapped.
+    _fake_writer(writer_case, f'copy /y "{swapped}" "{writer_case["inventory"]}" >nul\nexit /b 0')
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert "target disk changed between the readback and the bundle" in _err(completed)
+    assert "stage=bundle card_state=verified-no-bundle" in _err(completed)
+    assert "-ResumeAfterWrite" in _err(completed)
+    assert _failed(_progress(writer_case)) == "verified-no-bundle"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_resume_after_write_skips_the_writer_and_still_reads_back_everything(writer_case, tmp_path):
+    completed, boot = _write(writer_case, tmp_path, switches=("-ResumeAfterWrite",))
+
+    assert completed.returncode == 0, completed.stderr
+    assert not writer_case["marker"].exists()
+    lines = _progress(writer_case)
+    assert _stages(lines) == [
+        ("verify-signature", "untouched"), ("select-disk", "untouched"), ("confirm", "untouched"),
+        ("write", "written-unverified"), ("readback", "written-unverified"), ("bundle", "verified-no-bundle"),
+        ("receipt", "complete"), ("done", "complete"),
+    ]
+    assert lines[0]["detail"] == "resume-after-write"
+    assert lines[3]["detail"] == "skipped: -ResumeAfterWrite"
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["resumed_after_write"] is True
+    assert receipt["writer_exit_code"] is None
+    assert receipt["media_readback"]["verified"] is True
+    assert (boot / "rosy-provision" / "provision.json").exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_resume_after_write_still_blocks_on_a_readback_mismatch(writer_case, tmp_path):
+    writer_case["readback"].write_bytes(_flip_one_byte(writer_case["readback"].read_bytes()))
+
+    completed, boot = _write(writer_case, tmp_path, switches=("-ResumeAfterWrite",))
+
+    assert completed.returncode != 0
+    assert "full media readback verification failed" in _err(completed)
+    assert not writer_case["marker"].exists()
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("case_name", ["existing-receipt", "wrong-confirmation"])
+def test_resume_after_write_keeps_every_pre_write_check(writer_case, tmp_path, case_name):
+    extra = ()
+    if case_name == "existing-receipt":
+        writer_case["receipt"].write_text("existing evidence\n", encoding="utf-8")
+        message = "receipt already exists"
+    else:
+        extra = ("-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-zzzz")
+        message = "confirmation did not match"
+
+    completed, _boot = _write(writer_case, tmp_path, *extra, switches=("-ResumeAfterWrite",))
+
+    assert completed.returncode != 0
+    assert message in _err(completed)
+    assert "readback" not in [line["stage"] for line in _progress(writer_case)]
+    if case_name == "existing-receipt":
+        assert writer_case["receipt"].read_text(encoding="utf-8") == "existing evidence\n"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_resumed_receipt_proves_a_verified_write_for_reprovisioning(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path, writer_exit_code=None, resumed_after_write=True)
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode == 0, completed.stderr

@@ -10,7 +10,9 @@ param(
     [string]$PythonExe = "python",
     [string]$Confirmation,
     [switch]$PrintArguments,
-    [string]$LogPath
+    [string]$LogPath,
+    [switch]$ResumeAfterWrite,
+    [double]$WriterStallMinutes = 5
 )
 # Operator entry point: write one reviewed plan to its card (D-173).
 #
@@ -19,6 +21,11 @@ param(
 # plan's serial, not by the Windows disk number (it changes as USB devices come
 # and go). The script elevates itself, and every attempt keeps its own log and
 # exit marker. The operator types the ERASE confirmation in the elevated window.
+#
+# D-181: each attempt also appends one JSON line per stage (and a heartbeat about
+# every 60 s while writing and reading back) to <log>.progress.jsonl, and every
+# failure names the card state and the next step. -ResumeAfterWrite skips the
+# Imager write and re-runs the authoritative readback, bundle, receipt and registry.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -59,16 +66,25 @@ $arguments.ReleasePublicKey = (Resolve-Path -LiteralPath $arguments.ReleasePubli
 if ($OperatorPublicKey) { $arguments.OperatorPublicKey = (Resolve-Path -LiteralPath $OperatorPublicKey).ProviderPath }
 if ($ReprovisionReceipt) { $arguments.ReprovisionReceipt = (Resolve-Path -LiteralPath $ReprovisionReceipt).ProviderPath }
 if ($Confirmation) { $arguments.Confirmation = $Confirmation }
+if ($ResumeAfterWrite) { $arguments.ResumeAfterWrite = $true }
+$arguments.WriterStallMinutes = $WriterStallMinutes
 
 if (-not $LogPath) {
     $stamp = Get-Date -Format "yyyyMMddTHHmmss"
     $LogPath = Join-Path $EvidenceDir "write-$releaseId-$deviceName-$stamp.log"
 }
 $exitMarker = "$LogPath.exit"
+$progressPath = "$LogPath.progress.jsonl"
+$arguments.ProgressPath = $progressPath
 
 if ($PrintArguments) {
-    [ordered]@{ arguments = $arguments; log = $LogPath; exit_marker = $exitMarker } | ConvertTo-Json -Depth 4
+    [ordered]@{ arguments = $arguments; log = $LogPath; exit_marker = $exitMarker; progress = $progressPath } | ConvertTo-Json -Depth 4
     exit 0
+}
+
+function Get-LastProgress {
+    if (-not (Test-Path -LiteralPath $progressPath -PathType Leaf)) { return $null }
+    try { return (Get-Content -LiteralPath $progressPath -Tail 1 | ConvertFrom-Json) } catch { return $null }
 }
 
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -81,9 +97,21 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     if ($OperatorPublicKey) { $forward += @("-OperatorPublicKey", "`"$($arguments.OperatorPublicKey)`"") }
     if ($ReprovisionReceipt) { $forward += @("-ReprovisionReceipt", "`"$($arguments.ReprovisionReceipt)`"") }
     if ($Confirmation) { $forward += @("-Confirmation", "`"$Confirmation`"") }
+    if ($ResumeAfterWrite) { $forward += "-ResumeAfterWrite" }
+    $forward += @("-WriterStallMinutes", $WriterStallMinutes.ToString([Globalization.CultureInfo]::InvariantCulture))
     Write-Output "Requesting administrator rights; approve the UAC prompt. Log: $LogPath"
-    Start-Process powershell -Verb RunAs -Wait -ArgumentList $forward
-    if (-not (Test-Path -LiteralPath $exitMarker)) { Fail "the elevated write did not finish; see $LogPath" }
+    Write-Output "Progress: $progressPath (one JSON line per stage, a heartbeat about every 60 s while writing and reading back)"
+    try {
+        Start-Process powershell -Verb RunAs -Wait -ArgumentList $forward
+    }
+    catch {
+        Fail ("administrator rights were not granted (UAC prompt declined or timed out): {0}`ncard_state=untouched`nnext: re-run and approve the UAC prompt, or use the detached launch in the runbook" -f $_.Exception.Message)
+    }
+    if (-not (Test-Path -LiteralPath $exitMarker)) {
+        $last = Get-LastProgress
+        $where = $(if ($last) { "last stage=$($last.stage) card_state=$($last.card_state)" } else { "no stage was recorded, so the card is untouched" })
+        Fail ("the elevated write did not finish ({0}); see $LogPath`nnext: if card_state is written-unverified or verified-no-bundle, re-run with -ResumeAfterWrite; if it is untouched, re-run; otherwise re-run the full write" -f $where)
+    }
     $code = [int]((Get-Content -LiteralPath $exitMarker -Raw).Trim())
     Get-Content -LiteralPath $LogPath -Tail 20
     exit $code
@@ -96,6 +124,7 @@ if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) {
 }
 
 Start-Transcript -LiteralPath $LogPath | Out-Null
+Write-Output "Progress: $progressPath"
 $code = 1
 try {
     & (Join-Path $PSScriptRoot "prepare-rosy-sd.ps1") @arguments

@@ -30,14 +30,86 @@ param(
     [string]$OperatorPublicKey,
     [string]$ReprovisionReceipt,
     [switch]$SetWifiCredential,
-    [switch]$PlanOnly
+    [switch]$PlanOnly,
+    [string]$ProgressPath,
+    [switch]$ResumeAfterWrite,
+    [double]$WriterStallMinutes = 5,
+    [double]$HeartbeatSeconds = 60
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Fail([string]$Message) {
+# D-181: once the release checks start, every failure names the stage, what is on
+# the card and the operator's next step, and is appended to the progress file.
+$script:stage = ""
+$script:cardState = "untouched"
+$script:nextHint = ""
+$script:failureRecorded = $false
+$resumeNext = "re-run the same command with -ResumeAfterWrite (skips the write and re-reads the whole card)"
+$fullWriteNext = "re-run the full write (the same command without -ResumeAfterWrite)"
+
+function Add-ProgressLine([string]$Stage, [string]$CardState, [string]$Detail, [object]$Bytes) {
+    if (-not $ProgressPath) { return }
+    $line = [ordered]@{ ts = [DateTime]::UtcNow.ToString("o"); stage = $Stage; card_state = $CardState }
+    if ($Detail) { $line["detail"] = $Detail }
+    if ($null -ne $Bytes) { $line["bytes"] = [int64]$Bytes }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($line | ConvertTo-Json -Compress) + "`n")
+    # Not Start-Transcript: that buffers, and release 005 sat at its header for an hour.
+    $stream = New-Object IO.FileStream($ProgressPath, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Set-Stage([string]$Stage, [string]$CardState, [string]$Detail) {
+    $script:stage = $Stage
+    $script:cardState = $CardState
+    $script:nextHint = ""
+    Add-ProgressLine $Stage $CardState $Detail $null
+}
+
+function Get-NextStep {
+    if ($script:nextHint) { return $script:nextHint }
+    switch ($script:cardState) {
+        "untouched" {
+            switch ($script:stage) {
+                "verify-signature" { return "download the release again (image, SHA256SUMS, SHA256SUMS.sig), then re-run" }
+                "select-disk" { return "reseat the card reader, re-run -PlanOnly to see which disk is found, then re-run the write" }
+                default { return "re-run the same command" }
+            }
+        }
+        "writing" { return "the card is partially written: $fullWriteNext" }
+        "written-unverified" { return $resumeNext }
+        "verified-no-bundle" { return $resumeNext }
+        "complete" { return "the card has its bundle but no receipt: check the registry file, then $fullWriteNext" }
+        default { return $fullWriteNext }
+    }
+}
+
+function Format-Failure([string]$Message, [string]$Next) {
+    if (-not $Next) { $Next = Get-NextStep }
+    Add-ProgressLine "failed" $script:cardState "$($script:stage): $Message" $null
+    $script:failureRecorded = $true
+    return "$Message`nstage=$($script:stage) card_state=$($script:cardState)`nnext: $Next"
+}
+
+function Fail([string]$Message, [string]$Next) {
+    if ($script:stage -and -not $script:failureRecorded) { $Message = Format-Failure $Message $Next }
     throw $Message
+}
+
+# Errors that do not come through Fail (a missing tool, a file that cannot be
+# copied) get the same stage, card state and next step.
+trap {
+    if ($script:stage -and -not $script:failureRecorded) {
+        throw (Format-Failure ([string]$_.Exception.Message) "")
+    }
+    break
 }
 
 function Get-CredentialPath([string]$Profile) {
@@ -246,7 +318,11 @@ if ($ReprovisionReceipt) {
     # Typed checks: in PowerShell 5.1 [bool]"false" is True and [int]$null is 0.
     $exitCode = $reprovision.writer_exit_code
     $verified = $reprovision.media_readback.verified
-    if (-not ($exitCode -is [int] -or $exitCode -is [long]) -or $exitCode -ne 0 -or -not ($verified -is [bool]) -or -not $verified) {
+    # D-181: a -ResumeAfterWrite receipt has no Imager exit code; its full readback is the proof.
+    $resumed = $receiptKeys -ccontains "resumed_after_write" -and $reprovision.resumed_after_write -is [bool] -and $reprovision.resumed_after_write
+    $writerProven = ($exitCode -is [int] -or $exitCode -is [long]) -and $exitCode -eq 0
+    if ($resumed -and $null -eq $exitCode) { $writerProven = $true }
+    if (-not $writerProven -or -not ($verified -is [bool]) -or -not $verified) {
         Fail "reprovision receipt does not prove a verified earlier write"
     }
     $fromReceipt = [ordered]@{ RobotNumber = "robot_number"; DeviceName = "device_name"; DeviceUid = "device_uid" }
@@ -371,16 +447,20 @@ if ($OperatorPublicKey) {
     $operatorFingerprint = ([string]$operatorFingerprint).Trim()
 }
 
+if (-not $ProgressPath -and -not $PlanOnly) { $ProgressPath = "$ReceiptPath.progress.jsonl" }
+Set-Stage "verify-signature" "untouched" $(if ($PlanOnly) { "plan" } elseif ($ResumeAfterWrite) { "resume-after-write" } else { "write" })
 if (-not (Test-Path -LiteralPath $ImagePath -PathType Leaf)) { Fail "image file is missing" }
 if ($ImageSha256 -notmatch '^[0-9a-fA-F]{64}$') { Fail "image SHA-256 is invalid" }
 $actualHash = (Get-FileHash -LiteralPath $ImagePath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actualHash -ne $ImageSha256.ToLowerInvariant()) { Fail "image SHA-256 does not match" }
 if (-not (Test-Path -LiteralPath $ImageSignaturePath -PathType Leaf)) { Fail "image signature is missing" }
-if (-not (Test-Path -LiteralPath $ReleasePublicKey -PathType Leaf)) { Fail "trusted release public key is missing" }
-if (Test-Path -LiteralPath $ReceiptPath) { Fail "receipt already exists and will not be overwritten" }
-if (-not (Test-Path -LiteralPath $RegistryJson -PathType Leaf)) { Fail "identity registry is missing" }
-if (-not (Test-Path -LiteralPath $RpiImager -PathType Leaf) -and -not (Get-Command $RpiImager -ErrorAction SilentlyContinue)) {
-    Fail "Raspberry Pi Imager CLI is unavailable"
+if (-not (Test-Path -LiteralPath $ReleasePublicKey -PathType Leaf)) { Fail "trusted release public key is missing" "restore deploy/release/public-keys from the repository, then re-run" }
+if (Test-Path -LiteralPath $ReceiptPath) {
+    Fail "receipt already exists and will not be overwritten" "this plan's card was already written and recorded; make a new plan (-PlanOnly) for another card"
+}
+if (-not (Test-Path -LiteralPath $RegistryJson -PathType Leaf)) { Fail "identity registry is missing" "restore the registry file named in the plan, then re-run" }
+if (-not $ResumeAfterWrite -and -not (Test-Path -LiteralPath $RpiImager -PathType Leaf) -and -not (Get-Command $RpiImager -ErrorAction SilentlyContinue)) {
+    Fail "Raspberry Pi Imager CLI is unavailable" "install Raspberry Pi Imager or pass -RpiImager, then re-run"
 }
 
 $releaseRoot = Split-Path -Parent $ImageSignaturePath
@@ -393,6 +473,8 @@ $verification = & $PythonExe $releaseVerifier `
     --release-id $ReleaseId
 if ($LASTEXITCODE -ne 0) { Fail "signed image release verification failed" }
 $verification = $null
+# The release is proven; what can still fail here is the plan, registry or arguments.
+$script:nextHint = "correct the reported plan, registry or argument, then re-run"
 
 $registry = Get-Content -LiteralPath $RegistryJson -Raw | ConvertFrom-Json
 if ($DeviceName -or $DeviceUid) {
@@ -444,6 +526,7 @@ if (-not $reprovision) {
     if (@($registry.device_uids) -contains $DeviceUid) { Fail "device UID is already registered" }
 }
 
+Set-Stage "select-disk" "untouched" ""
 $firstInventory = Read-DiskInventory $DiskInventoryJson
 if ($DiskSerial) {
     $bySerial = Resolve-DiskNumberBySerial $firstInventory $DiskSerial
@@ -490,13 +573,13 @@ if ($reviewedPlan) {
     # The disk number is not part of the reviewed identity; the serial is.
     foreach ($field in @("disk_model", "disk_serial", "disk_size", "release_id", "image_sha256", "wifi_ssid", "namespace", "ros_domain_id", "operator_key_fingerprint")) {
         if ($planKeys -cnotcontains $field -or [string]$plan[$field] -cne [string]$reviewedPlan.$field) {
-            Fail "target no longer matches the reviewed plan: $field"
+            Fail "target no longer matches the reviewed plan: $field" "check that the planned card and release are in use; otherwise make and review a new plan (-PlanOnly)"
         }
     }
     # Windows paths are case-insensitive; a different registry would let one
     # plan provision two cards with the same identity.
     if ([string]$plan["registry_path"] -ne [string]$reviewedPlan.registry_path) {
-        Fail "target no longer matches the reviewed plan: registry_path"
+        Fail "target no longer matches the reviewed plan: registry_path" "check that the planned card and release are in use; otherwise make and review a new plan (-PlanOnly)"
     }
 }
 
@@ -516,41 +599,110 @@ if ($PlanOnly) {
     exit 0
 }
 
+Set-Stage "confirm" "untouched" ""
 $expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
 if (-not $Confirmation) { $Confirmation = Read-Host "Type exactly: $expectedConfirmation" }
-if ($Confirmation -cne $expectedConfirmation) { Fail "confirmation did not match the selected physical disk and device" }
+if ($Confirmation -cne $expectedConfirmation) {
+    Fail "confirmation did not match the selected physical disk and device`ntyped: '$Confirmation'" "re-run and type exactly: $expectedConfirmation"
+}
 
 # Probe a third time immediately before the destructive call when live disk
 # discovery is used. Fixture mode already supplied the explicit second probe.
 if (-not $DiskInventoryJson) {
     $writeDisk = Select-SafeDisk (Read-DiskInventory "") $DiskNumber
     if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $writeDisk)) {
-        Fail "target disk changed immediately before write"
+        Fail "target disk changed immediately before write" "reseat the card reader, re-run -PlanOnly to see which disk is found, then re-run the write"
     }
 }
 
 $readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
 if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
 
-# D-180: the full readback below is the single authoritative media check.
-# Input authenticity was proven by the signed SHA256SUMS before any disk probe,
-# so Imager's own read-back pass (and a raw-hash pre-pass to feed it) is skipped.
-$writerArguments = @(
-    "--cli",
-    "--disable-verify",
-    ('"{0}"' -f $ImagePath),
-    ('"{0}"' -f $physicalDrive)
-)
-$writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -Wait -PassThru
-$writerExitCode = $writerProcess.ExitCode
-if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
+# Imager I/O and CPU counters; $null once the process is gone.
+function Get-WriterSample([int]$ProcessId) {
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue
+    if ($null -eq $process) { return $null }
+    [pscustomobject]@{
+        Written = [int64]$process.WriteTransferCount
+        Key = "{0}/{1}/{2}/{3}/{4}" -f $process.KernelModeTime, $process.UserModeTime,
+            $process.ReadTransferCount, $process.WriteTransferCount, $process.OtherTransferCount
+    }
+}
 
+$writerExitCode = $null
+if ($ResumeAfterWrite) {
+    # D-181: the readback below is authoritative, so a card that matches the signed
+    # image byte for byte is good however it was written. Every pre-write check
+    # above (signature, serial, fingerprint, plan, confirmation) still ran.
+    Set-Stage "write" "written-unverified" "skipped: -ResumeAfterWrite"
+}
+else {
+    # The xz index gives the raw size without decompressing; it tells a stall
+    # after the last byte (resume) from one mid-write (rewrite).
+    $imageRawSize = [int64]0
+    $rawSizeOutput = & $PythonExe $readbackVerifier --image $ImagePath --raw-size
+    if ($LASTEXITCODE -eq 0) { $imageRawSize = [int64]($rawSizeOutput | ConvertFrom-Json).image_raw_size }
+
+    # D-180: the full readback below is the single authoritative media check.
+    # Input authenticity was proven by the signed SHA256SUMS before any disk probe,
+    # so Imager's own read-back pass (and a raw-hash pre-pass to feed it) is skipped.
+    $writerArguments = @(
+        "--cli",
+        "--disable-verify",
+        ('"{0}"' -f $ImagePath),
+        ('"{0}"' -f $physicalDrive)
+    )
+    Set-Stage "write" "writing" "raw image $imageRawSize bytes"
+    # D-181: no Start-Process -Wait. Release 005 Imager wrote every byte, then sat
+    # with 0 CPU and 0 I/O for 23 minutes while -Wait waited forever.
+    $writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -PassThru
+    $null = $writerProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
+    $stallLimit = [TimeSpan]::FromMinutes($WriterStallMinutes)
+    $pollMilliseconds = [int][Math]::Max(200, [Math]::Min(5000, $stallLimit.TotalMilliseconds / 4))
+    $lastKey = ""
+    $lastChange = [DateTime]::UtcNow
+    $lastBeat = [DateTime]::UtcNow
+    $written = [int64]0
+    while (-not $writerProcess.WaitForExit($pollMilliseconds)) {
+        $sample = Get-WriterSample $writerProcess.Id
+        if ($null -eq $sample) { continue }
+        $written = [Math]::Max($written, $sample.Written)
+        $now = [DateTime]::UtcNow
+        if ($sample.Key -ne $lastKey) {
+            $lastKey = $sample.Key
+            $lastChange = $now
+        }
+        elseif ($now - $lastChange -ge $stallLimit) {
+            & taskkill.exe /PID $writerProcess.Id /T /F 2>&1 | Out-Null
+            $null = $writerProcess.WaitForExit(10000)
+            if ($imageRawSize -gt 0 -and $written -ge $imageRawSize) { $script:cardState = "written-unverified" }
+            Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize)
+        }
+        if ($now - $lastBeat -ge [TimeSpan]::FromSeconds($HeartbeatSeconds)) {
+            $lastBeat = $now
+            Add-ProgressLine "write" "writing" "heartbeat" $written
+        }
+    }
+    $writerProcess.WaitForExit()
+    $writerExitCode = $writerProcess.ExitCode
+    if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
+}
+
+Set-Stage "readback" "written-unverified" ""
 $readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
+$readbackOptions = @("--progress-seconds", $HeartbeatSeconds.ToString([Globalization.CultureInfo]::InvariantCulture))
+if ($ProgressPath) { $readbackOptions += @("--progress", $ProgressPath) }
 # Windows auto-mounts the freshly written FAT32 partition and rewrites a few
 # spec-defined fields; removable media cannot be set offline. The verifier
 # tolerates exactly those fields and reports them (release 004, offset 1049576).
-$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget
-if ($LASTEXITCODE -ne 0) { Fail "full media readback verification failed" }
+$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget @readbackOptions
+$readbackExitCode = $LASTEXITCODE
+if ($readbackExitCode -eq 3) {
+    Fail "the card could not be read during readback (removed or I/O error)" "reinsert the card, then $resumeNext"
+}
+if ($readbackExitCode -ne 0) {
+    Fail "full media readback verification failed" "$fullWriteNext; if it fails again, replace the card"
+}
 try {
     $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json
 }
@@ -558,10 +710,19 @@ catch {
     Fail "media readback evidence is invalid"
 }
 if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
-foreach ($digestField in @("image_raw_sha256", "device_sha256")) {
-    if ([string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') { Fail "media readback evidence is invalid" }
+foreach ($digestField in @("image_raw_sha256", "device_sha256", "image_sha256")) {
+    if (-not $mediaReadback.PSObject.Properties[$digestField] -or [string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') {
+        Fail "media readback evidence is invalid"
+    }
 }
 if ([int64]$mediaReadback.bytes_verified -le 0) { Fail "media readback evidence is invalid" }
+# Review MEDIUM-1: the readback hashed the compressed file it decompressed; it
+# must be the file whose hash the signed SHA256SUMS vouched for.
+if ([string]$mediaReadback.image_sha256 -cne $actualHash) {
+    $script:cardState = "unknown"
+    Fail "the image read back is not the signed image (image_sha256 $($mediaReadback.image_sha256), signed $actualHash)" "download the release again, then $fullWriteNext"
+}
+Set-Stage "bundle" "verified-no-bundle" ""
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $bundleTool = Join-Path $PSScriptRoot "create-provision-bundle.py"
@@ -609,6 +770,14 @@ try {
         $bundleRequest = $null
     }
 
+    # Review note: the card is re-selected by serial right before its boot
+    # partition is touched; a reader swapped after the readback stops here.
+    $bundleInventory = Read-DiskInventory $DiskInventoryJson
+    $bundleNumber = $(if ($DiskSerial) { Resolve-DiskNumberBySerial $bundleInventory $DiskSerial } else { $DiskNumber })
+    $bundleDisk = Select-SafeDisk $bundleInventory $bundleNumber
+    if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $bundleDisk)) {
+        Fail "target disk changed between the readback and the bundle"
+    }
     $bootRoot = Resolve-BootMount $DiskNumber $BootMountPath ([bool]$DiskInventoryJson)
     $bundleDirectory = Join-Path $bootRoot "rosy-provision"
     New-Item -ItemType Directory -Path $bundleDirectory -Force | Out-Null
@@ -617,6 +786,9 @@ try {
     $bundleTargetTemp = Join-Path $bundleDirectory ".provision.json.tmp"
     Copy-Item -LiteralPath $bundleTemp -Destination $bundleTargetTemp
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
+    # The bundle is on the card; the readback would now see it as an extra file,
+    # so from here on a failure needs a full rewrite, not -ResumeAfterWrite.
+    Set-Stage "receipt" "complete" ""
     $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
     # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
     $configTarget = Join-Path $bootRoot "rosy-config.yaml"
@@ -648,6 +820,7 @@ $receipt = [ordered]@{
     image_sha256 = $actualHash
     writer = [IO.Path]::GetFileName($RpiImager)
     writer_exit_code = $writerExitCode
+    resumed_after_write = [bool]$ResumeAfterWrite
     media_readback = $mediaReadback
     personalization = $bundleReceipt
     created_at = [DateTimeOffset]::UtcNow.ToString("o")
@@ -662,5 +835,6 @@ if ($reprovision) {
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 10 -Compress
+Set-Stage "done" "complete" ""
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
