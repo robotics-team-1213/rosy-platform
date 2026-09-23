@@ -15,14 +15,15 @@ None at this level.
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/` | Contains `pinky_pro-main.zip` (typically gitignored). Baseline cited by `docs/plan/ROSY Implementation Plan.md` |
+| `src/` | Contains `pinky_pro-main.zip` (gitignored). Cited by `docs/plans/ROSY Implementation Plan.md` |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Do not treat zip contents as live code. Current packages are under `/src` with `rosy_*` names.
-- When comparing behavior (Flask nav server, bringup), unzip locally and diff against `src/rosy_*`.
+- Do not treat zip contents as live code. Current packages are the domain groups under `src/` (`core`, `apps`, `hardware`, `navigation`, `sim`, `site`).
+- Live API and ADR documents are `docs/reference/`, not this folder.
+- When comparing behavior, unzip locally and diff against those domain groups.
 
 ### Testing Requirements
 
