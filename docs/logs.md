@@ -1757,3 +1757,11 @@
 - gate 변화: 없음
 - 결정: D-186
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · chore(repo): absorb the parent umbrella into Rosy OS
+
+- 변경: 부모 `Rosy/`의 시뮬 프로브 셸을 `tools/sim/`으로, 통신·결합 보고서와 채점표를 `docs/assessments/`로 들였다. 기계 고정 경로 `/mnt/f/.../Rosy OS`는 스크립트 위치에서 저장소 루트를 계산하게 바꿨다. 안쪽 `Rosy/` 확인 출력은 `data/teleop/probes/`로 옮겼고 git에는 넣지 않는다. archive와 worktree는 부모에 남긴다.
+- 증거: `python -m pytest test/test_folder_layout.py test/test_module_scorecard.py -q` 12 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-178 회차 문서의 위치, D-186
+- 교훈: 없음

@@ -21,6 +21,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | Directory | Purpose |
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` |
+| `sim/` | Local sim probes and `sim_verify.sh`. Not a second product tree |
 
 ## For AI Agents
 

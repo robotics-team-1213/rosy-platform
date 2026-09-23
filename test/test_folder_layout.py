@@ -23,6 +23,15 @@ def test_package_trees_do_not_carry_a_second_installer():
     assert (ROOT / "src" / "apps" / "control" / "tools" / "gz" / "run_track260905.sh").is_file()
 
 
+def test_umbrella_scripts_live_in_the_repo():
+    sim = ROOT / "tools" / "sim" / "sim_verify.sh"
+    text = sim.read_text(encoding="utf-8")
+    assert "/mnt/f/" not in text
+    assert "tools/run_fleet_sim.sh" in text
+    assert (ROOT / "docs" / "assessments" / "communication-protocol-report.md").is_file()
+    assert (ROOT / "docs" / "assessments" / "module-coupling-scorecard.md").is_file()
+
+
 def test_developer_scripts_live_under_tools():
     assert (ROOT / "tools" / "fix_ament_resource.sh").is_file()
     assert (ROOT / "tools" / "run_fleet_sim.sh").is_file()

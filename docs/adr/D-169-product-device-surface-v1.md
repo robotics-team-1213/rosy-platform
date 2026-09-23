@@ -35,6 +35,6 @@ test/test_nav2_hardware_slice.py test/test_robot_runtime.py -q`
 **References:** D-84(하드웨어 프로필), D-161(네이티브 런타임), D-32(capability 정직성),
 D-147(소급 공식화 선례),
 [communication-protocol remediation plan](../plans/2026-09-22-communication-protocol-remediation-plan.md) §G1,
-`communication-protocol-report.md`(2026-09-22, 저장소 상위 폴더) §8-F.
+`docs/assessments/communication-protocol-report.md` §8-F.
 
 ---
