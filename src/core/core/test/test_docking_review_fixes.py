@@ -164,3 +164,12 @@ def test_the_battery_return_inside_a_tick_does_not_deadlock():
     p.manager.tick()                                   # dock() from inside tick()
     assert p.manager.state is DockState.DOCKING
 
+
+
+# --- L3: the charging window follows the manager's clock -----------------------
+
+
+def test_bind_clock_rebinds_the_charging_confirmation():
+    p = a_parking(SPOT)
+    p.manager.bind_clock(lambda: 42.0)
+    assert p.manager._charging.now() == 42.0

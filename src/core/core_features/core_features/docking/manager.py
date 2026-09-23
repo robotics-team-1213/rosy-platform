@@ -211,7 +211,7 @@ class DockingManager:
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """시계를 바꾼다 (use_sim_time 의 sim 시계). 검출기 신선도와 같은 시계여야 한다."""
         self._clock = clock
-        self._charging._clock = clock
+        self._charging.bind_clock(clock)
 
     def now(self) -> float:
         return self._clock()
