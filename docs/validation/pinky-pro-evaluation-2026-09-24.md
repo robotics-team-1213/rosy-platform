@@ -33,6 +33,15 @@
 | 19 | LED / lamp | pinkylib.LED, WS2812 `lamp_bringup.service` | — | 벤치 전용(D-169). `rosylib.LED`도 없다 | PASS(결정된 차이) | D-181 |
 | 20 | 모터 구동 | — | 런북 G4(바퀴 들고, E-stop, 두 사람) | 사람이 있어야 한다 | BLOCKED | US-008 |
 
+## 행 17·18 계획 (US-006, D-190 S1·S2 완료 2026-09-24)
+
+005 카드의 판정은 위 표 그대로다. 다음 이미지에서 두 행을 다시 채울 때의 기준이다.
+
+| # | 다음 이미지에 들어간 것 | 확인 방법 | PASS 조건 |
+|---|---|---|---|
+| 17 | `rosy-boot-display.service`(enable, 사용자 `rosy-display`, 장치 3개만), apt `python3-spidev`·`python3-rpi-lgpio`, 상주 프로세스(백라이트 PWM 유지), 부팅 카드(이름·IP·단계·실패 unit·배터리·AP) | D-190 "S3 실기 확인" 1-8, 10 | 전원 뒤 LCD에 BOOTING → READY, 배터리 ±0.05 V, 실패 unit 표시, AP 모드 SSID·비밀번호, 재부팅 반복 |
+| 18 | 부저 BCM 22, **기본 꺼짐**. `CORE_READY` 1회·`FAILED` 3회 | D-190 "부저 핀 확인" 뒤 "S3 실기 확인" 9 | 사람이 핀을 확인해 D-190 표에 기록하고, 켠 상태에서 `CORE_READY`에 한 번 울림. 확인 전에는 BLOCKED(핀 증거) 유지 |
+
 ## 우선순위 (배포 가능 기준)
 
 1. **US-002:** 006으로 다시 구워 1·7·8을 응급 조치 없이 PASS로 만든다.
