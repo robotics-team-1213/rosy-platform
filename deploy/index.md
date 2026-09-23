@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · feat(deploy): host-tested D-179 bench overlay
 - 2026-09-23 · uncommitted · docs(deploy): D-179 실행 계획에 반복 동작
 - 2026-09-23 · uncommitted · docs(deploy): D-179를 배포 진행에 연결
 - 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이는 설계만 연결
 - 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — RestartMode=direct와 정지 계약의 관계
-- 2026-09-23 · uncommitted · fix(image): check bytecode only in the native runtime, not colcon's install tree

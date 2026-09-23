@@ -256,6 +256,24 @@ def _ros_graph(
     return graph
 
 
+def _dev_overlay(
+    root: Path,
+    run: Callable[..., subprocess.CompletedProcess[str]],
+    core_id: str | None,
+) -> dict[str, Any]:
+    """A bench overlay is not a signed release. Env wins over a leftover marker."""
+
+    marker = _rooted(root, "/etc/rosy/dev-overlay.json").is_file()
+    dropin = _rooted(root, "/etc/systemd/system/rosy-core.service.d/dev-overlay.conf").is_file()
+    env_on = False
+    if core_id:
+        probed = _invoke(run, ["docker", "exec", core_id, "printenv", "ROSY_DEV_OVERLAY"])
+        env_on = probed["ok"] and probed["stdout"].strip() == "1"
+    if not (env_on or marker or dropin):
+        return {"dev_overlay": False}
+    return {"dev_overlay": True, "dev_overlay_reason": "active" if env_on else "stale"}
+
+
 def collect_readback(
     *,
     root: Path = Path("/"),
@@ -339,6 +357,7 @@ def collect_readback(
     else:
         core["image_match"] = "mismatch"
 
+    overlay = _dev_overlay(root, run, core_id)
     identity_ok = all(identity[key] for key in ("robot_number", "ros_domain_id", "namespace"))
     artifact_ok = (
         artifact.get("status") == "available"
@@ -371,8 +390,10 @@ def collect_readback(
             "core": core,
         },
         "ros_graph": ros_graph,
+        "dev_overlay": overlay["dev_overlay"],
+        **({"dev_overlay_reason": overlay["dev_overlay_reason"]} if overlay["dev_overlay"] else {}),
         "gates": {
-            "device_runtime": "GO" if all((identity_ok, activation_ok, artifact_ok, core_ok, architecture_ok, graph_ok)) else "HOLD",
+            "device_runtime": "HOLD" if overlay["dev_overlay"] or not all((identity_ok, activation_ok, artifact_ok, core_ok, architecture_ok, graph_ok)) else "GO",
             "field": "HOLD",
         },
     }

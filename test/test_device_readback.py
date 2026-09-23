@@ -177,6 +177,55 @@ def test_readback_reports_identity_artifact_runtime_and_ros_graph(tmp_path: Path
     assert evidence["gates"] == {"device_runtime": "GO", "field": "HOLD"}
 
 
+def test_readback_holds_when_the_core_process_has_the_dev_overlay(tmp_path: Path):
+    root = _fake_device(tmp_path)
+
+    def runner(command: list[str], *, timeout: float):
+        if command[-2:] == ["printenv", "ROSY_DEV_OVERLAY"]:
+            return subprocess.CompletedProcess(command, 0, "1\n", "")
+        return _runner(command, timeout=timeout)
+
+    evidence = device_readback.collect_readback(root=root, run=runner)
+
+    assert evidence["dev_overlay"] is True
+    assert evidence["dev_overlay_reason"] == "active"
+    assert evidence["gates"]["device_runtime"] == "HOLD"
+
+
+def test_readback_holds_when_only_the_overlay_marker_remains(tmp_path: Path):
+    root = _fake_device(tmp_path)
+    marker = root / "etc" / "rosy" / "dev-overlay.json"
+    marker.write_text("{}\n", encoding="utf-8")
+
+    evidence = device_readback.collect_readback(root=root, run=_runner)
+
+    assert evidence["dev_overlay"] is True
+    assert evidence["dev_overlay_reason"] == "stale"
+    assert evidence["gates"]["device_runtime"] == "HOLD"
+    assert "TOKEN" not in json.dumps(evidence)
+
+
+def test_readback_holds_when_only_the_native_dropin_remains(tmp_path: Path):
+    root = _fake_device(tmp_path)
+    dropin = root / "etc" / "systemd" / "system" / "rosy-core.service.d" / "dev-overlay.conf"
+    dropin.parent.mkdir(parents=True)
+    dropin.write_text("[Service]\n", encoding="utf-8")
+
+    evidence = device_readback.collect_readback(root=root, run=_runner)
+
+    assert evidence["dev_overlay"] is True
+    assert evidence["dev_overlay_reason"] == "stale"
+    assert evidence["gates"]["device_runtime"] == "HOLD"
+
+
+def test_readback_reports_no_overlay_on_a_clean_release(tmp_path: Path):
+    evidence = device_readback.collect_readback(root=_fake_device(tmp_path), run=_runner)
+
+    assert evidence["dev_overlay"] is False
+    assert "dev_overlay_reason" not in evidence
+    assert evidence["gates"]["device_runtime"] == "GO"
+
+
 def test_readback_never_serializes_credentials(tmp_path: Path):
     root = _fake_device(tmp_path)
 

@@ -523,3 +523,11 @@
 - gate 변화: 없음. ARTIFACT/DEVICE HOLD 유지.
 - 결정: D-179
 - 교훈: 없음
+
+## 2026-09-23 · uncommitted · feat(deploy): host-tested D-179 bench overlay
+
+- 변경: 허용 목록 스테이징, 바인드 명령, 해시 확인, readback HOLD, Windows 동기화 스크립트를 넣었다. 재부팅은 이미지 코드로 돌아가고 마커 HOLD가 남는다. compose 프로젝트는 `rosy-runtime`이다. 설치기와 `rosy-core.service` 본문은 수정하지 않았다.
+- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py test/test_native_systemd_contract.py -q` 59 passed, 1 skipped (2026-09-23 Windows).
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD 유지.
+- 결정: D-179
+- 교훈: 없음
