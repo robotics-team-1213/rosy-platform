@@ -132,6 +132,8 @@ D-169(v1 장치 표면)·D-181(장치 편입 조건)·D-161(CORE 비특권)을 �
 1. `readlink -f /sys/bus/gpio/devices/gpiochip4`가 RP1 노드(`…/1f000d0000.gpio/…`)를 가리키고,
    `sudo python3 -c 'import lgpio; h=lgpio.gpiochip_open(4); print(lgpio.gpio_get_chip_info(h)); lgpio.gpiochip_close(h)'`가
    label `pinctrl-rp1`을 보이는지 본다. 아니면 이 ADR의 gpiochip4 항목대로 한 변경에서 고친다.
+   - 2026-09-24 읽기 전용 확인(release 005, rosy-pinky-e4us): `gpiochip4` → `axi/1000120000.pcie/1f000d0000.gpio/gpiochip4`,
+     sysfs `gpiochip569` label `pinctrl-rp1`, ngpio 54. 나머지 gpiochip0-3은 `gpio-brcmstb`. **확인됨** (새 이미지에서 다시 본다).
 2. `ls -l /dev/spidev0.0 /dev/gpiochip4 /dev/i2c-1`: `root spi 0660`, `root gpio 0660`, `root dialout 0660`.
 3. `systemctl is-enabled rosy-boot-display` = enabled, `systemctl show -p User,DevicePolicy rosy-boot-display`,
    `journalctl -b -u rosy-boot-display`에 경고가 없거나 한 번씩만 있는지. customizer 로그에 `DISPLAY_PROBE_OK`.
