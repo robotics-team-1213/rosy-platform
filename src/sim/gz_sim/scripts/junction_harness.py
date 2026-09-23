@@ -47,7 +47,10 @@ TIMEOUT_S = 90.0
 WALL_CAP_S = 600.0
 #: Upper bound on the readiness poll; a real boot is much faster, but this
 #: is the point at which the scenario is given up on as "never came up".
-BOOT_S = 45.0
+#: 45 s lost 9 of 36 scenarios in r9-r11 (2026-09-24): under host load CORE
+#: was still importing pydantic when the poll gave up. Boot time is not a
+#: driving criterion, so the bound only has to rule out a launch that hangs.
+BOOT_S = 150.0
 READY_POLL_S = 0.5
 STATUS_API = "http://127.0.0.1:8080/api/v1/line-follow"
 MODE_API = "http://127.0.0.1:8080/api/v1/line-follow/mode"
