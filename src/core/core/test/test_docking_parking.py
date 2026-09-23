@@ -150,3 +150,72 @@ def test_the_turn_law_has_a_floor_and_a_tolerance():
     assert not done and w == pytest.approx(gains.turn_min_angular)
     w, done = turn_twist(-math.pi / 2, gains)
     assert not done and w == -gains.max_angular
+
+
+# --- dock/observation feed (control's evidence behind the detector port) ---
+
+from core_features.docking.database import DockInstance, DockType  # noqa: E402
+from core_features.docking.detector import SimulatedDetector, select_detector  # noqa: E402
+from core_features.docking.feed import DockObservationFeed, FeedDetector  # noqa: E402
+
+
+def payload(**kwargs):
+    body = {"source": "CAMERA_TAG", "stamp": 100.0, "visible": True, "tag_id": 7,
+            "x": 0.25, "y": 0.01, "yaw": 0.02, "range_m": 0.2502,
+            "confidence": 0.9, "revision": "dock-tag-v1"}
+    body.update(kwargs)
+    return body
+
+
+def test_the_feed_restamps_the_capture_on_the_manager_clock():
+    feed = DockObservationFeed()
+    assert feed.ingest(payload(stamp=100.0), received_at=50.3, source_now=100.2)
+    obs = feed.latest()
+    assert (obs.x, obs.y, obs.yaw, obs.confidence) == (0.25, 0.01, 0.02, 0.9)
+    assert obs.at == pytest.approx(50.1)             # captured 0.2 s before receipt
+
+
+def test_a_not_visible_payload_clears_the_last_sighting():
+    feed = DockObservationFeed()
+    feed.ingest(payload(), received_at=1.0, source_now=100.0)
+    assert not feed.ingest(payload(visible=False, x=None, y=None, yaw=None, tag_id=None),
+                           received_at=1.2, source_now=100.2)
+    assert feed.latest() is None
+
+
+@pytest.mark.parametrize("bad", [payload(source="CAMERA_LINE"), payload(visible="yes"),
+                                 payload(x=float("nan")), payload(tag_id=7.0),
+                                 payload(stamp=None), "not a dict"])
+def test_a_malformed_payload_raises_and_clears(bad):
+    feed = DockObservationFeed()
+    feed.ingest(payload(), received_at=1.0, source_now=100.0)
+    with pytest.raises((ValueError, TypeError)):
+        feed.ingest(bad, received_at=1.2, source_now=100.2)
+    assert feed.latest() is None
+
+
+def test_the_feed_detector_sees_only_our_fresh_tag_while_started():
+    now = [10.0]
+    feed = DockObservationFeed()
+    detector = FeedDetector(feed, tag_id=7, clock=lambda: now[0], staleness_s=0.6)
+    feed.ingest(payload(), received_at=10.0, source_now=100.0)
+    assert detector.relative_pose() is None           # not started
+    detector.start()
+    assert detector.relative_pose().x == 0.25
+    now[0] = 10.7
+    assert detector.relative_pose() is None           # stale on the manager clock
+    feed.ingest(payload(tag_id=8), received_at=10.7, source_now=100.7)
+    assert detector.relative_pose() is None           # someone else's tag
+    detector.stop()
+    feed.ingest(payload(), received_at=10.7, source_now=100.7)
+    assert detector.relative_pose() is None
+
+
+def test_the_observation_detector_is_selected_only_with_a_feed():
+    dock = DockInstance(id="parking", type="parking")
+    parking = DockType(name="parking", detector="observation", tag_id=7, tag_size_m=0.05)
+    assert isinstance(select_detector(dock, parking), SimulatedDetector)
+    assert isinstance(select_detector(dock, parking, feed=DockObservationFeed()), FeedDetector)
+    other = DockType(name="d", detector="simulated")
+    assert isinstance(select_detector(dock, other, feed=DockObservationFeed()),
+                      SimulatedDetector)
