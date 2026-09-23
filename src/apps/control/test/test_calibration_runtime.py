@@ -106,6 +106,25 @@ def test_ready_scan_keeps_live_health_without_wall_fit_or_rotation_registration(
     node.rotation_scan_sample.assert_called_once()
 
 
+def test_rotation_scan_gets_raw_validity_and_the_quarter_second_window_separately():
+    # A scan inside the 1 s validity window but past 0.25 s is late, not absent (rig prof-r2-1).
+    transform=SimpleNamespace(transform=SimpleNamespace(rotation=SimpleNamespace(x=0.,y=0.,z=0.,w=1.),
+                                                       translation=SimpleNamespace(x=-.017,y=0.)))
+    node=SimpleNamespace(phase='validating_rotation',stamped=lambda msg,max_age=1.:max_age>=1.,
+        tf=SimpleNamespace(lookup_transform=lambda *args:transform),
+        baseline=SimpleNamespace(latest=lambda name:(0.,0.,0.),samples={'odom':[(10.,(0.,0.,0.),True)]}),
+        rotation_scan_sample=Mock(),wall_tracker=SimpleNamespace(update=Mock(return_value=math.inf),diagnostic={}),
+        add_range=Mock(),raw_ranges={},lidar_nose=0.)
+    scan=node_method('on_scan',is_robot_scan=lambda msg:True,math=math,
+        rclpy=SimpleNamespace(time=SimpleNamespace(Time=lambda:None)),
+        nose_from_quaternion=lambda *args:0.,sector_range=lambda *args,**kwargs:.4,
+        precision_scan_required=precision_scan_required,time=SimpleNamespace(monotonic=lambda:10.))
+    msg=SimpleNamespace(header=SimpleNamespace(frame_id='lidar'))
+    scan(node,msg)
+    assert node.rotation_scan_sample.call_args.args==(msg,True)
+    assert node.rotation_scan_sample.call_args.kwargs=={'current':False}
+
+
 def test_live_health_accepts_motion_without_stationary_variance_rechecks():
     samples={name:[(10.,(0.,0.,0.,.5),True)] for name in health()}
     node=SimpleNamespace(baseline=SimpleNamespace(samples=samples),us_source_valid=True,

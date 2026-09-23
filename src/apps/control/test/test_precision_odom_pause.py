@@ -58,7 +58,7 @@ class PrecisionOdomPauseTest(unittest.TestCase):
         node.baseline.latest=lambda name:(0.,0.,0.)
         transform=NS(transform=NS(rotation=NS(x=0.,y=0.,z=0.,w=1.),translation=NS(x=0.,y=0.)))
         node.tf=NS(lookup_transform=lambda *args:transform)
-        node.rotation_scan_sample=lambda *args:None
+        node.rotation_scan_sample=lambda *args,**kwargs:None
         node.add_range=lambda *args:calls.append(args)
         node.wall_tracker.diagnostic={'status':'ok','locked':True}
         method('on_scan')(node,NS(header=NS(frame_id='laser')))
