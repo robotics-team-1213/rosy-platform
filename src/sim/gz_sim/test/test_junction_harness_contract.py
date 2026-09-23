@@ -66,6 +66,21 @@ def test_launch_arguments_the_harness_passes_are_declared_by_the_launch_file():
         assert f'DeclareLaunchArgument("{arg}"' in launch, arg
 
 
+def test_route_a_and_route_b_pass_the_scenarios_route_and_start_to_the_launch():
+    """Task 6: route_a/route_b need lane_graph_path/route/route_start built
+    from the scenario's [into, out] and start pose, encoded as the YAML
+    flow-list string the launch file's ParameterValue(value_type=List[...])
+    parses (route_camera.py/route_map.py both take `keys=[into, out]`)."""
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    launch = LAUNCH.read_text(encoding="utf-8")
+    run_one_source = source.split("def run_one(", 1)[1].split("\ndef main(", 1)[0]
+    assert 'if mode in ("route_a", "route_b") else []' in run_one_source
+    assert "route:=[{scenario['into']}, {scenario['out']}]" in run_one_source
+    assert "route_start:=[{x}, {y}, {yaw}]" in run_one_source
+    for arg in ("route", "route_start"):
+        assert f'DeclareLaunchArgument("{arg}"' in launch, arg
+
+
 def test_harness_finds_record_debug_installed_beside_itself():
     """In an installed ament package, scripts land in lib/gz_sim/ side by
     side; with_name resolves at that installed location, not the source

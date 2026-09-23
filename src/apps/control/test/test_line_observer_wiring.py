@@ -94,7 +94,7 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
     assert "LaneEdgeFollower" in source
     assert "mode == 'edge_left'" in source
     assert "self._edge_follower.update(" in source
-    assert "mode in ('lane', 'edge_left', 'centre')" in source   # odom subscription
+    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b')" in source   # odom subscription
     # 'line' and 'lane' branches are untouched and the default stays 'line'.
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
@@ -121,15 +121,15 @@ def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
     """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._odom_pose, frame, ground" not in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 4
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
 
 
 def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "LaneBoundaryTracker" in source
-    assert "mode in ('lane', 'edge_left', 'centre')" in source
+    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b')" in source
     assert "self._centre_tracker.update(" in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 4
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
 
 
 def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
@@ -155,3 +155,15 @@ def test_debug_overlay_failures_never_stop_line_observation():
     init_body = source.split("def __init__", 1)[1].split("\n    def _ground", 1)[0]
     assert "except (OSError, yaml.YAMLError)" in init_body
     assert "self._debug_graph = None" in init_body
+
+
+def test_route_modes_need_a_graph_and_a_route():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["lane_graph_path"] == ""
+    assert params["route"] == []
+    assert params["route_start"] == []
+    assert "RouteCameraFollower" in source and "RouteMapFollower" in source
+    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b')" in source
+    assert "route modes need lane_graph_path, route and route_start" in source

@@ -3,6 +3,7 @@
 
 import math
 import os
+from typing import List
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -57,6 +58,14 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_lane_mode", default_value="edge_left"),
         DeclareLaunchArgument("debug_overlay", default_value="false"),
         DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
+        # route_a/route_b only (junction prototypes, Task 6). Empty by
+        # default so every other mode is unaffected. Encoded as a YAML flow
+        # list on the command line, e.g. route:='[west:f, ring_w:f]' and
+        # route_start:='[-1.26955, 0.24255, -1.5708]'; ParameterValue below
+        # parses that string into the node's declared string/double array
+        # parameters with yaml.safe_load.
+        DeclareLaunchArgument("route", default_value="[]"),
+        DeclareLaunchArgument("route_start", default_value="[]"),
         simulation,
         Node(
             package="control",
@@ -81,6 +90,13 @@ def generate_launch_description():
                     LaunchConfiguration("debug_overlay"), value_type=bool),
                 "debug_lane_graph": os.path.join(
                     control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                # route_a/route_b only; every other mode ignores these.
+                "lane_graph_path": os.path.join(
+                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                "route": ParameterValue(
+                    LaunchConfiguration("route"), value_type=List[str]),
+                "route_start": ParameterValue(
+                    LaunchConfiguration("route_start"), value_type=List[float]),
                 "camera_ground_source": "GAZEBO",
                 "allow_simulation_ground": True,
                 "gazebo_camera_height_m": 0.060194,

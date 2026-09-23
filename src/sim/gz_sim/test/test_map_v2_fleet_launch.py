@@ -123,3 +123,27 @@ def test_camera_lane_mode_is_typed_as_a_string_parameter():
     source = LAUNCH.read_text(encoding="utf-8")
     assert ('"camera_lane_mode": ParameterValue(\n'
             '                    LaunchConfiguration("camera_lane_mode"), value_type=str)') in source
+
+
+def test_route_args_declared_empty_for_the_junction_prototypes():
+    """route_a/route_b (Task 6). Empty by default so line/lane/edge_left/
+    centre are unaffected; the harness overrides them per scenario."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert 'DeclareLaunchArgument("route", default_value="[]")' in source
+    assert 'DeclareLaunchArgument("route_start", default_value="[]")' in source
+    assert '"lane_graph_path": os.path.join(\n' \
+           '                    control_share, "map", "map_v2_fleet", "lane_graph.yaml")' in source
+
+
+def test_route_and_route_start_are_typed_as_arrays_from_a_yaml_flow_list_string():
+    """A launch-arg substitution is always a string; ParameterValue's
+    List[str]/List[float] value_type parses a YAML flow-list string (e.g.
+    '[west:f, ring_w:f]') into the node's declared string/double array
+    parameters, matching what junction_harness.py builds for route_a/route_b."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert ('"route": ParameterValue(\n'
+            '                    LaunchConfiguration("route"), value_type=List[str])') in source
+    assert ('"route_start": ParameterValue(\n'
+            '                    LaunchConfiguration("route_start"), value_type=List[float])'
+            ) in source
+    assert "from typing import List" in source
