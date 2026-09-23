@@ -865,3 +865,11 @@
 - gate 변화: 없음
 - 결정: D-191
 - 교훈: Docker 설치 경로에서 서명 이미지 경로로 옮길 때, 이전 경로가 암묵적으로 설치하던 것(overlay·SDK·외부 패키지·토큰)의 목록을 먼저 만든다.
+
+## 2026-09-24 · uncommitted · feat(sd,first-boot): per-card CORE API administrator credential (D-191, US-009)
+
+- 변경: 실기 평가(2026-09-24, `docs/validation/pinky-pro-evaluation-2026-09-24.md` 매트릭스 6행)에서 서명 이미지 경로 카드가 API 자격을 하나도 갖지 않아 CORE가 모든 인증 경로에 401을 돌려줬다. `prepare-rosy-sd.ps1`이 카드마다 CORE `generate_token` 형식(32바이트 URL-safe) 값과 `new_token_id` 형식 id를 발급해 DPAPI 저장소 `%LOCALAPPDATA%\Rosy\api\<device>.credential.xml`(UserName=id)에 두고 끝에 stderr로 한 번 보여준다. 번들 `core_api.record`는 CORE 저장 레코드(`id`, `role: administrator`, `sha256`, `label`, `created_at`)만 싣고, 영수증은 `personalization.core_api`에 id와 16-hex 다이제스트 지문만 남긴다. 스키마·`personalization.py`·`create-provision-bundle.py`는 선택 필드 패턴을 따른다. first boot는 레코드를 `/var/lib/rosy/core/.rosy/rosy.yaml`(D-189 unit의 `HOME`, `ROSY_CONFIG` 없음 → `core_common.config`가 읽고 대시보드가 쓰는 파일)에 mkstemp 원자 쓰기로 병합한다: 다른 키·다른 레코드 유지, 같은 id·digest는 교체, 소유 `rosy-core`, 파일 0600, 디렉터리 0750, 재실행 동일 바이트. 역할 이름은 CORE의 `administrator`(`admin`은 CORE가 viewer로 떨어뜨린다). 재기록(`-ReprovisionReceipt` 포함)은 저장소 값을 재사용한다. overlay의 `auth.tokens` 목록이 기본값 목록을 통째로 대체하므로 이 카드에서는 공용 `rosy-dev-*` 자격이 막힌다.
+- 증거: `python -m pytest test/test_sd_api_token.py` (스키마·영수증·스캐너·병합·멱등·CORE TestClient 200/401·대시보드 쓰기 후 유지), writer 계약 3건 추가(발급·DPAPI·번들 digest만·plan/영수증/progress 평문 없음·재기록 재사용). POSIX 소유·모드·unit HOME 시험은 Windows에서 skip — Linux 호스트 실행 필요.
+- gate 변화: 없음. DEVICE HOLD 유지 — 실제 카드 first boot에서 파일 소유·모드와 대시보드 로그인 확인이 남음
+- 결정: D-191
+- 교훈: 없음

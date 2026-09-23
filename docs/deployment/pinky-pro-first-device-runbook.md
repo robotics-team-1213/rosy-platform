@@ -315,6 +315,52 @@ Pi 5 has one radio, so while the AP is up the site Wi-Fi is not scanned. After
 600 s the AP steps aside for another 120 s site Wi-Fi attempt. `ap.mode: relay`
 keeps the AP up; `ap.mode: off` never opens it.
 
+### CORE API administrator credential (D-191)
+
+Every card written with `prepare-rosy-sd.ps1` / `write-card.ps1` gets its own
+CORE API administrator credential. The writer prints it once at the end
+(`CORE API administrator for rosy-pinky-xxxx: id <id> value <value>`) and keeps
+it in the writer PC's DPAPI store,
+`%LOCALAPPDATA%\Rosy\api\<device>.credential.xml`, with the CORE record id as
+the user name. The card carries only CORE's sha256 record; plans, receipts
+(`personalization.core_api` holds the id and a 16-hex digest fingerprint) and
+the progress file never hold the value. Read it back on the same Windows
+account that wrote the card:
+
+```powershell
+$c = Import-Clixml "$env:LOCALAPPDATA\Rosy\api\rosy-pinky-xxxx.credential.xml"
+$c.UserName                              # CORE token id
+$c.GetNetworkCredential().Password       # the credential itself
+```
+
+Use it as `Authorization: Bearer <value>` or paste it into the dashboard login.
+First boot merges the record into `/var/lib/rosy/core/.rosy/rosy.yaml`
+(`rosy-core`, 0600), the overlay CORE reads under `rosy-core.service`
+(`HOME=/var/lib/rosy/core`). Because the overlay's `auth.tokens` list replaces
+the package default list, the shared `rosy-dev-*` credentials do not work on a
+card written this way.
+
+Rewriting the same device (`-ReprovisionReceipt`, or a retried write) reuses the
+stored credential, so dashboards and scripts keep working. To get a new one on
+the next write, delete the store file first. To rotate on a running robot,
+create a new administrator credential, switch to it, then delete the old one:
+
+```powershell
+$h = @{ Authorization = "Bearer $($c.GetNetworkCredential().Password)" }
+$new = Invoke-RestMethod -Method Post -Uri "http://rosy-pinky-xxxx.local:8080/api/v1/system/tokens" `
+    -Headers $h -ContentType application/json -Body '{"role":"administrator","label":"rotated"}'
+# $new.token is shown only in this response. Store it before continuing:
+$secure = ConvertTo-SecureString $new.token -AsPlainText -Force
+New-Object System.Management.Automation.PSCredential($new.id, $secure) |
+    Export-Clixml "$env:LOCALAPPDATA\Rosy\api\rosy-pinky-xxxx.credential.xml"
+Invoke-RestMethod -Method Delete -Headers @{ Authorization = "Bearer $($new.token)" } `
+    -Uri "http://rosy-pinky-xxxx.local:8080/api/v1/system/tokens/$($c.UserName)"
+```
+
+The dashboard's token settings do the same (`GET/POST/DELETE
+/api/v1/system/tokens`). CORE refuses to delete the credential in use or the
+last administrator.
+
 ## 3. Record contract
 
 For every gate, save raw output under `$EVIDENCE`. `prepare` derives G0-G2 from
