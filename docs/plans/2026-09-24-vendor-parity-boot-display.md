@@ -27,6 +27,22 @@ LCD에는 이름, IP, 부팅 단계(실패 시 실패 unit), 배터리, 그리�
 
 **완료 조건:** 위 6개 항목이 모두 "확인됨 + 증거 경로"로 채워진다. 하나라도 비면 S1로 가지 않는다.
 
+### S0 결과 (2026-09-24, 공개 소스 조사)
+
+| 항목 | 결과 | 근거 | 확실도 |
+|---|---|---|---|
+| 백라이트 | `GPIO.PWM(18, 1000)`은 그 Python 프로세스가 살아 있는 동안만 돈다. `close()`가 `bl.stop()`과 `GPIO.cleanup`을 부른다. 한 번 그리고 끝나는 스크립트는 화면이 꺼진다 | `pinky_pro/pinky_emotion/pinky_emotion/pinky_lcd.py` 1-33행, 140-147행 | 확정 → 표시 unit은 상주 프로세스 |
+| LCD 드라이버 | `spidev` 0.0, RST 27 / DC 25 / BL 18, `RPi.GPIO` | 같은 파일. Rosy `rosy_lcd.py`와 동일 | 확정 |
+| Pi 5 GPIO | `RPi.GPIO` 호환층 `python3-rpi-lgpio`, `python3-spidev`(apt) | 형제 보드 `pinklab-art/pinky_violet` README "dependence 설치" | 유력(Pro 문서에는 없음) |
+| 부저 | Pro 핀은 공개되지 않았다. 형제 보드 두 종이 BCM 22, 패시브, `GPIO.PWM`을 쓴다 | `pinky_violet/.../pinkylib/buzzer.py` 1-9행, `pinky_study/1_pinky_blue/part1/01_buzzer.ipynb` | 미확정 → 실기에서 들어 보고 확정(사람 입회) |
+| 부팅 완료 부저 | 공개 자료에 없다. 위키 초기 설정의 "부저가 3번 울리는지 확인"은 수동 시험이다 | `pinky_study` wiki "0. 초기설정(PinkyPro)" | 미확정 |
+| 부팅 LCD의 Wi-Fi 정보 | 공개 코드에 없다. 공식 Wi-Fi 설정은 BLE 앱 `pinky_desktop`(v1.8+)이고, 위키의 LCD 시험은 "초록 화면 3초"다. 연구 문서 §4의 "LCD에 SSID·비밀번호"와 충돌한다 | `pinky_desktop` README, 위키 | 재확인 필요 → Rosy는 AP가 열렸을 때만 AP 정보를 LCD에 표시한다(D-176 연계) |
+| 배터리 % | `pinkylib` 내부라 공개되지 않았다. 공개된 값은 저전압 기준 `LOW_BATTERY_THRESHOLD = 6.8` V뿐이다 | `pinky_bringup/bringup.py`, `battery_publisher.py` | 미확정 → Rosy `BatteryCurve.default()`(2S 곡선)를 쓴다 |
+| 카메라 | Pro 모델은 공개되지 않았다(`pinkylib.Camera`). 형제 보드는 CSI + Picamera2다 | `pinky_violet/.../camera.py` | 유력 → 실기 센서 열거가 먼저다(평가표 16행) |
+
+**S0 남은 확인(사람 입회, 증거 수집으로 기록):** 짧은 PWM 톤으로 BCM 22가 부저인지 확인한다. 공식 동작에 없는
+부팅 부저 패턴은 Rosy가 정한다(`CORE_READY` 한 번, `FAILED` 세 번).
+
 ## S1. 장치 편입 결정 (D-181 표 채우기)
 
 1. 수요: D-190 동등성 표가 수요 문서다.
