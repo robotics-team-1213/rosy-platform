@@ -378,6 +378,33 @@ function Get-ApPassword([string]$Device) {
     return $password
 }
 
+# D-191: each card gets its own CORE API administrator credential, in the format
+# of CORE's generate_token (32 random bytes, URL-safe base64 without padding) and
+# new_token_id (6 random bytes as hex). It is kept in the operator's DPAPI store
+# with its id as the user name, reused when the same device is rewritten, and
+# shown once. Only CORE's sha256 record goes on the card; plans, receipts and
+# the progress file never hold the credential.
+function Get-CoreApiLogin([string]$Device) {
+    if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable" }
+    $store = Join-Path $env:LOCALAPPDATA "Rosy\api"
+    $file = Join-Path $store "$Device.credential.xml"
+    if (Test-Path -LiteralPath $file -PathType Leaf) {
+        $stored = Import-Clixml -LiteralPath $file
+        return [pscustomobject]@{ Id = $stored.UserName; Value = $stored.GetNetworkCredential().Password }
+    }
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $valueBytes = New-Object byte[] 32
+    $idBytes = New-Object byte[] 6
+    $random.GetBytes($valueBytes)
+    $random.GetBytes($idBytes)
+    $value = [Convert]::ToBase64String($valueBytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    $id = -join ($idBytes | ForEach-Object { $_.ToString("x2") })
+    New-Item -ItemType Directory -Path $store -Force | Out-Null
+    $secure = ConvertTo-SecureString $value -AsPlainText -Force
+    New-Object System.Management.Automation.PSCredential($id, $secure) | Export-Clixml -LiteralPath $file
+    return [pscustomobject]@{ Id = $id; Value = $value }
+}
+
 function New-PinkyIdentity {
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
     $code = "from dataclasses import asdict; from deploy.sd.personalization import generate_device_identity; import json; print(json.dumps(asdict(generate_device_identity('pinky_pro'))))"
@@ -1132,6 +1159,9 @@ try {
         if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
         $apLogin = Get-ApPassword $DeviceName
         $bundleRequest["ap_password"] = $apLogin
+        $coreApiLogin = Get-CoreApiLogin $DeviceName
+        $bundleRequest["core_api_token"] = $coreApiLogin.Value
+        $bundleRequest["core_api_token_id"] = $coreApiLogin.Id
         $previousOutputEncoding = $OutputEncoding
         $previousPythonUtf8 = $env:PYTHONUTF8
         try {
@@ -1226,3 +1256,4 @@ $receipt | ConvertTo-Json -Depth 10 -Compress
 Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath" })
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
+[Console]::Error.WriteLine("CORE API administrator for ${DeviceName}: id $($coreApiLogin.Id) value $($coreApiLogin.Value) (stored in your Rosy API store)")
