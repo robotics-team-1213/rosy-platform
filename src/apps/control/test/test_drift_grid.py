@@ -44,27 +44,32 @@ A's end error is its dead reckoning: nothing corrects its odometry (HIGH-3
 is documented in route_camera, not redesigned). B's 0.2 s stalls are
 single frames.
 
-The hybrid H (route_hybrid), same host and date, 198 s for all 360 runs:
+The hybrid H (route_hybrid) with its ring entries (00, 05, 06, 11)
+route-steered, same host, 2026-09-23 (161 s for the grid, 360 runs):
 
   cell                      H
-  none                      12/12  37.5   6.8 0.0
-  3% scale                  12/12  36.5   8.1 0.0
-  3% +0.01 rad/s            12/12  32.2   8.2 0.0
-  3% -0.01 rad/s            12/12  37.4   8.1 0.0
-  start 20 mm / 2 deg       12/12  36.8   6.0 0.0
-  3% +0.01, 20 mm / 2 deg   12/12  30.2   6.7 0.0
+  none                      12/12  22.1   6.8 0.0
+  3% scale                  12/12  21.7   8.1 0.0
+  3% +0.01 rad/s            12/12  28.9   8.2 0.0
+  3% -0.01 rad/s            12/12  31.7   8.1 0.0
+  start 20 mm / 2 deg       12/12  21.9   6.0 0.0
+  3% +0.01, 20 mm / 2 deg   12/12  28.4   6.7 0.0
   severe:
   5% +0.02 rad/s            10/12  37.2  14.4 3.4 (2 lost)
-  5% -0.02 rad/s            10/12  37.3  13.9 3.4 (2 lost)
-  start 30 mm / 3 deg       12/12  36.2   6.5 0.2
-  start -30 mm / -3 deg     12/12  39.1   6.4 0.2
+  5% -0.02 rad/s            10/12  27.5  13.0 3.4 (2 lost)
+  start 30 mm / 3 deg       12/12  24.7   6.5 0.2
+  start -30 mm / -3 deg     12/12  22.5   6.4 0.2
 
-Its four severe losses (01 and 10 at +0.02, 04 and 07 at -0.02 rad/s) are
-all DISAGREE (camera path 26-28 mm off every centreline, over
-MAX_DISAGREE_M) once the estimate lags the yaw bias; the robot then stands
-still, the filter cannot move its position without motion, and CORE's
-lease latches LOST. Fail-closed, never a wrong branch. H's deviation is
-A's (its camera ring entries, 00 and 11), not B's.
+Before the ring entries were route-steered the moderate cells read
+37.5 / 36.5 / 32.2 / 37.4 / 36.8 / 30.2 mm, set by the camera's ring
+entries 00 and 11. Now the moderate maxima are the camera-steered ring
+exits 04 and 07 (28.9 and 31.7 mm under the yaw bias); the entries stay
+at or under 22.1 mm on every moderate cell. The four severe losses (01
+and 10 at +0.02, 04 and 07 at -0.02 rad/s: exits, unchanged by the fix)
+are DISAGREE (camera path 28-31 mm off every centreline, over MAX_DISAGREE_M)
+once the estimate lags the yaw bias; the robot then stands still, the
+filter cannot move its position without motion, and CORE's lease latches
+LOST. Fail-closed, never a wrong branch.
 """
 
 import math

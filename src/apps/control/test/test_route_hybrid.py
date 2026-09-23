@@ -9,7 +9,7 @@ import lane_sim
 import numpy as np
 import pytest
 from control.sensing.lane_bev import MEMORY_CONFIDENCE
-from control.sensing.route_hybrid import RouteHybridFollower
+from control.sensing.route_hybrid import RouteHybridFollower, ring_entries
 from control.sensing.route_map import MAX_SPREAD_M, MIN_MATCH, confidence_for
 from lane_scenarios import (
     GRAPH,
@@ -59,6 +59,63 @@ def test_every_junction_transition_is_driven(index):
     assert result["reason"] is None
     error = math.dist(f.last["estimate"].pose[:2], result["last_true_pose"][:2])
     assert error <= END_POSITION_MAX_ERROR_M, (error, summary([result]))
+
+
+#: Road-to-ring entries among the 12 scenarios (00 and 11 are the two
+#: Gazebo failures, 2026-09-23 comparison.md).
+RING_ENTRIES = (0, 5, 6, 11)
+#: Offline bound on a ring entry: the target set for the fix (measured
+#: 22.1 / 13.3 / 21.8 / 21.3 mm; A's camera steering read 37.5 / 20.9 /
+#: 30.7 / 37.3 mm).
+RING_ENTRY_MAX_DEV_M = 0.025
+
+
+def test_ring_entries_are_the_road_to_ring_nodes():
+    flagged = [i for i, sc in enumerate(SCENARIOS)
+               if ring_entries(GRAPH, [sc["into"], sc["out"]])[0]]
+    assert flagged == list(RING_ENTRIES)
+    assert ring_entries({**GRAPH, "roundabout": None}, ["east:r", "ring_n:f"]) == [False]
+
+
+class _SteerLog:
+    def __init__(self, subject):
+        self.subject = subject
+        self.steer = []
+
+    @property
+    def state(self):
+        return self.subject.state
+
+    def update(self, *args, **kwargs):
+        out = self.subject.update(*args, **kwargs)
+        if out is not None:
+            self.steer.append(self.subject.last["steer"])
+        return out
+
+
+@pytest.mark.parametrize("index", RING_ENTRIES)
+def test_a_ring_entry_is_steered_on_the_route(index):
+    """Road to ring, A's camera target lies on the centreline but its 0.15 m
+    pursuit dips into the island (route_hybrid docstring); B's 0.12 m route
+    pursuit steers within JUNCTION_ARM_M of the node."""
+    scenario = SCENARIOS[index]
+    log = _SteerLog(follower(scenario))
+    result = run_scenario(scenario, log, steps=260)
+    result["scenario"] = scenario
+    assert result["pass"], summary([result])
+    assert result["max_centre_dev_m"] <= RING_ENTRY_MAX_DEV_M, summary([result])
+    assert "route" in log.steer
+
+
+@pytest.mark.parametrize("index", sorted(set(range(12)) - set(RING_ENTRIES)))
+def test_elsewhere_the_camera_steers(index):
+    """Ring exits and ring to ring stay A's (camera, or its own manoeuvre):
+    route pursuit on the NE exit (01) read 10.7 mm against the camera's 3.8."""
+    scenario = SCENARIOS[index]
+    log = _SteerLog(follower(scenario))
+    run_scenario(scenario, log, steps=260)
+    assert set(log.steer) <= {"camera", "manoeuvre"}
+    assert "camera" in log.steer
 
 
 class _OdomFrameAtOrigin:
