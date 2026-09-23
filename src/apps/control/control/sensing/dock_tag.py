@@ -25,8 +25,8 @@ def _detect_markers(gray: np.ndarray):
 
     The device image takes OpenCV from Ubuntu 24.04's `python3-opencv`, which
     is 4.6: it has only the module-level `cv2.aruco.detectMarkers`. OpenCV 4.7
-    added `ArucoDetector`, and later releases (5.x on the dev host) dropped the
-    module-level call. Choose by what exists rather than catching
+    added `ArucoDetector` and mainline Python builds from then on no longer
+    expose the module-level call (the dev host's 5.0 has only the class). Choose by what exists rather than catching
     `AttributeError`, so a genuine error inside detection is not mistaken for a
     missing API.
     """
