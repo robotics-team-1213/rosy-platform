@@ -46,6 +46,7 @@ MODULE_NAMES = {
     "typing-inspection": "typing_inspection",
     "annotated-types": "annotated_types",
     "annotated-doc": "annotated_doc",
+    "pyserial": "serial",  # D-192 rosy-io set; dynamixel-sdk maps by rule
 }
 PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\;]+)")
 

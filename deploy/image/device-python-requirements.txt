@@ -1,4 +1,5 @@
-# CORE Python runtime for the Pinky Pro image (D-189). Hash-locked, no resolver.
+# Device Python runtime for the Pinky Pro image (D-189, D-192). Hash-locked, no resolver.
+# CORE's set first, then the I/O runtime's (rosy-io: bringup's DYNAMIXEL driver).
 #
 # Installed by deploy/image/customize-rootfs.sh into the image's /usr/local with
 #   pip install --require-hashes --no-deps --only-binary=:all: -r THIS_FILE
@@ -50,3 +51,13 @@ typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
 typing-inspection==0.4.4 \
     --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
+
+# D-192: rosy-io runtime. bringup's dynamixel_driver/dynamixel_probe import
+# dynamixel_sdk; the old Docker io image pip-installed the same pin
+# (deploy/robot/requirements-io.txt). pyserial is its only dependency.
+# Both are pure wheels (one hash each); checked 2026-09-24 by a
+# --require-hashes --only-binary=:all: download for cp312 aarch64 and x86_64.
+dynamixel-sdk==3.8.4 \
+    --hash=sha256:e5e837dad3a4cf497cd59fcd9d16396aec0013aa938e3f9c7cfba18e28b1828a
+pyserial==3.5 \
+    --hash=sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0

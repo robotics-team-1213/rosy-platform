@@ -32,6 +32,8 @@ def package_names(path: Path) -> set[str]:
 
 MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
 MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
+HARDWARE_UNITS = ("rosy-io.service", "rosy-navigation.service")
+SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
 
 
 def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
@@ -110,6 +112,18 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append(f"boot/firmware/config.txt does not enable {MOTOR_OVERLAY} for the Pi 5")
     if not (root / MOTOR_UDEV_RULE).is_file():
         findings.append(f"missing motor udev rule: {MOTOR_UDEV_RULE}")
+    # D-192 US-005: the hardware runtime ships installed, not enabled (D-161).
+    for unit in HARDWARE_UNITS:
+        if not (root / "etc/systemd/system" / unit).is_file():
+            findings.append(f"missing systemd unit: {unit}")
+        for wants in sorted((root / "etc/systemd/system").glob("*.wants")):
+            if os.path.lexists(wants / unit):
+                findings.append(f"{unit} must not be enabled ({wants.name})")
+    if "sllidar_ros2" not in inventory:
+        findings.append("sllidar_ros2 (RPLIDAR C1 driver) is missing from the release inventory")
+    for relative in SLLIDAR_FILES:
+        if not (release / "install" / relative).is_file():
+            findings.append(f"sllidar_ros2 is not installed: install/{relative}")
     # D-176: the fallback AP is NetworkManager shared mode, which runs dnsmasq.
     if not (root / "usr/sbin/dnsmasq").exists():
         findings.append("dnsmasq is not installed: the fallback AP (NM shared mode) cannot start")

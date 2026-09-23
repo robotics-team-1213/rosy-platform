@@ -8,6 +8,7 @@ RELEASE_ROOT=""
 SOURCE_REVISION=""
 RELEASE_ID=""
 ROS_DISTRO="jazzy"
+LOCK="$SCRIPT_DIR/inputs.lock.yaml"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -16,6 +17,7 @@ while [[ $# -gt 0 ]]; do
         --source-revision) SOURCE_REVISION="${2:-}"; shift 2 ;;
         --release-id) RELEASE_ID="${2:-}"; shift 2 ;;
         --ros-distro) ROS_DISTRO="${2:-}"; shift 2 ;;
+        --lock) LOCK="${2:-}"; shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -32,6 +34,32 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]] \
     || fail "--release-id must be YYYY.MM.DD-NNN"
 [[ -f "/opt/ros/jazzy/setup.bash" ]] || fail "native ROS 2 Jazzy is not installed"
+[[ -f "$LOCK" ]] || fail "input lock is missing: $LOCK"
+
+lock_value() {
+    local section="$1" wanted="$2"
+    awk -v section="$section" -v wanted="$wanted" '
+        $0 ~ "^" section ":[[:space:]]*$" { inside=1; next }
+        inside && /^[^[:space:]]/ { exit }
+        inside {
+            key=$1; sub(/:$/, "", key)
+            if (key == wanted) { $1=""; sub(/^[[:space:]]+/, ""); sub(/\r$/, ""); print; exit }
+        }
+    ' "$LOCK"
+}
+
+# D-192 US-005: the RPLIDAR C1 driver the bringup launch includes. Not in the
+# repository and not an apt package: install-pinky-hardware-deps.sh fetched
+# the locked archive, checked its SHA-256 and unpacked it outside the
+# workspace with the hash beside it. This builder stays offline and only
+# accepts a tree stamped with the hash this lock names.
+VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"
+SLLIDAR_SHA256="$(lock_value hardware_dependencies sllidar_ros2_sha256)"
+[[ "$SLLIDAR_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "sllidar_ros2_sha256 is invalid"
+[[ -f "$VENDOR_SRC/sllidar_ros2/package.xml" ]] \
+    || fail "sllidar_ros2 source is missing; run install-pinky-hardware-deps.sh first"
+[[ "$(tr -d '[:space:]' < "$VENDOR_SRC/sllidar_ros2/.rosy-archive-sha256")" == "$SLLIDAR_SHA256" ]] \
+    || fail "sllidar_ros2 source is not the archive inputs.lock.yaml names"
 
 ACTUAL_REVISION="$(git -C "$WORKSPACE" rev-parse HEAD)"
 [[ "$ACTUAL_REVISION" == "$SOURCE_REVISION" ]] \
@@ -69,14 +97,14 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 
-rosdep install --from-paths "$WORKSPACE/src" --ignore-src -r -y \
+rosdep install --from-paths "$WORKSPACE/src" "$VENDOR_SRC" --ignore-src -r -y \
     --rosdistro "$ROS_DISTRO"
 
 (
     cd "$WORKSPACE"
-    colcon build --base-paths src --merge-install \
+    colcon build --base-paths src "$VENDOR_SRC" --merge-install \
         --install-base "$INSTALL_ROOT" --event-handlers console_direct+
-    colcon list --base-paths src --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
+    colcon list --base-paths src "$VENDOR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"
 dpkg-query -W -f='${Package}\t${Version}\n' | LC_ALL=C sort > "$DEB_INVENTORY.tmp"
@@ -109,6 +137,10 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/s
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.target" "$OVERLAY/etc/systemd/system/"
+# D-192 US-005: the hardware runtimes ship installed but not enabled; the
+# default target stays CORE-only (D-161). An operator starts one by hand.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-io.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-navigation.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
 # D-192 US-003: one more run right after the runtime target settles.
@@ -135,6 +167,10 @@ source "$INSTALL_ROOT/setup.bash"
 set -u
 "$SCRIPT_DIR/verify-package-inventory.sh" \
     --required "$SCRIPT_DIR/required-ros-packages.txt" \
+    --inventory "$INVENTORY" \
+    --install-root "$INSTALL_ROOT"
+"$SCRIPT_DIR/verify-package-inventory.sh" \
+    --required "$SCRIPT_DIR/vendor-ros-packages.txt" \
     --inventory "$INVENTORY" \
     --install-root "$INSTALL_ROOT"
 

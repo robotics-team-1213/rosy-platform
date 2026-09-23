@@ -142,6 +142,13 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
         'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
+    # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.
+    for unit in ("rosy-io.service", "rosy-navigation.service"):
+        (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
+    (release / "rosy-packages.txt").write_text("control\ncore\nsllidar_ros2\n", encoding="utf-8")
+    for relative in ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py"):
+        (release / "install" / relative).parent.mkdir(parents=True, exist_ok=True)
+        (release / "install" / relative).write_text("# fixture\n", encoding="utf-8")
     return root
 
 
@@ -301,6 +308,9 @@ TOP_LEVEL_PINS = {
 # require on CPython 3.12 (no extras), resolved 2026-09-24.
 CLOSURE = {"annotated-doc", "annotated-types", "anyio", "click", "h11", "idna",
            "typing-extensions", "typing-inspection"}
+# D-192: the rosy-io set in the same file (bringup's DYNAMIXEL driver), so the
+# D-189 image/release runtime check covers it. pyserial is its only dependency.
+IO_PINS = {"dynamixel-sdk": "3.8.4", "pyserial": "3.5"}
 # Distributions with compiled wheels need one hash per platform.
 PLATFORM_WHEELS = {"pydantic-core", "websockets"}
 
@@ -332,8 +342,8 @@ def _probe_module():
 def test_core_python_runtime_is_pinned_and_hash_locked_for_both_platforms():
     entries = _requirements()
 
-    assert set(entries) == set(TOP_LEVEL_PINS) | CLOSURE
-    for name, version in TOP_LEVEL_PINS.items():
+    assert set(entries) == set(TOP_LEVEL_PINS) | CLOSURE | set(IO_PINS)
+    for name, version in {**TOP_LEVEL_PINS, **IO_PINS}.items():
         assert entries[name][0] == version, name
     for name, (version, hashes) in entries.items():
         assert version and all(c.isdigit() or c == "." for c in version), name
@@ -471,3 +481,165 @@ def test_probe_fails_on_a_missing_or_wrong_pin(tmp_path, capsys):
 
     assert _probe_module().main(["--requirements", str(requirements)]) == 1
     assert "rosy-no-such-distribution: not installed" in capsys.readouterr().err
+
+
+# --- D-192 US-005: the hardware runtime is part of the image ----------------
+#
+# rosy-pinky-e4us 2026-09-24 (release 005): sllidar_ros2 not installed,
+# `import dynamixel_sdk` and `import rosylib` failed, rosy-io/rosy-navigation
+# not in the image overlay.
+
+PAYLOAD = IMAGE / "build-native-payload.sh"
+IO_PROBE = IMAGE / "probe-io-runtime.py"
+SLLIDAR_COMMIT = "34300099fadfc772965962dec837bf436706188f"
+
+
+def test_sllidar_source_is_pinned_like_the_other_hardware_sources():
+    lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))
+    deps = lock["hardware_dependencies"]
+
+    # The commit the Docker io image built (deploy/robot/Dockerfile SLLIDAR_COMMIT).
+    assert deps["sllidar_ros2_commit"] == SLLIDAR_COMMIT
+    assert f"SLLIDAR_COMMIT={SLLIDAR_COMMIT}" in (ROOT / "deploy/robot/Dockerfile").read_text(encoding="utf-8")
+    assert deps["sllidar_ros2_url"] == (
+        f"https://codeload.github.com/Slamtec/sllidar_ros2/tar.gz/{SLLIDAR_COMMIT}")
+    assert deps["sllidar_ros2_sha256"] == "".join(
+        ("6a57c289a235a37d", "ce0b07ef6fdc3ee0", "03e646140d3fdc98", "2988e7bf652367a7"))
+    assert deps["verified"] is True
+
+
+def test_sllidar_is_fetched_and_verified_like_rpi_ws281x_and_built_offline():
+    deps = (IMAGE / "install-pinky-hardware-deps.sh").read_text(encoding="utf-8")
+    payload = PAYLOAD.read_text(encoding="utf-8")
+    build = (IMAGE / "build-image.sh").read_text(encoding="utf-8")
+
+    # The hardware-deps step fetches, checks, unpacks outside the workspace and
+    # stamps the tree with the archive hash.
+    for fragment in ("lock_value hardware_dependencies sllidar_ros2_url",
+                     "lock_value hardware_dependencies sllidar_ros2_sha256",
+                     'VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"',
+                     '.rosy-archive-sha256"'):
+        assert fragment in deps, fragment
+    fetch = deps.index('--output "$SLLIDAR_ARCHIVE"')
+    check = deps.index('"$SLLIDAR_SHA256" "$SLLIDAR_ARCHIVE" | sha256sum --check --strict')
+    assert fetch < check < deps.index('tar -xzf "$SLLIDAR_ARCHIVE"')
+
+    # The payload builder stays offline and refuses any other tree.
+    assert "curl" not in payload
+    assert 'VENDOR_SRC="${ROSY_VENDOR_SRC:-/usr/local/src/rosy-vendor}"' in payload
+    assert "sllidar_ros2 source is not the archive inputs.lock.yaml names" in payload
+    assert payload.index("sllidar_ros2 source is not the archive") < payload.index("rosdep install")
+    assert 'rosdep install --from-paths "$WORKSPACE/src" "$VENDOR_SRC" --ignore-src' in payload
+    assert 'colcon build --base-paths src "$VENDOR_SRC" --merge-install' in payload
+    assert 'colcon list --base-paths src "$VENDOR_SRC" --names-only' in payload
+    # The release proves it resolves sllidar_ros2 inside its own prefix.
+    assert '--required "$SCRIPT_DIR/vendor-ros-packages.txt"' in payload
+    vendor = (IMAGE / "vendor-ros-packages.txt").read_text(encoding="utf-8").split()
+    assert "sllidar_ros2" in vendor
+    assert '--lock "$LOCK"' in build[build.index("build-native-payload.sh"):]
+
+
+def test_the_bringup_launch_includes_the_driver_the_image_builds():
+    launch = (ROOT / "src/hardware/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
+    package = (ROOT / "src/hardware/bringup/package.xml").read_text(encoding="utf-8")
+    assert "get_package_share_directory('sllidar_ros2')" in launch
+    assert "'sllidar_c1_launch.py'" in launch
+    assert "<exec_depend>sllidar_ros2</exec_depend>" in package
+
+
+def test_hardware_units_ship_in_the_overlay_and_are_not_enabled():
+    payload = PAYLOAD.read_text(encoding="utf-8")
+    customizer = CUSTOMIZER.read_text(encoding="utf-8")
+
+    for unit in ("rosy-io.service", "rosy-navigation.service"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+        assert unit not in customizer.split("systemctl --root")[1].split("\n\n")[0]
+
+
+def test_mounted_image_verifier_requires_the_hardware_runtime(tmp_path):
+    enabled = _valid_root(tmp_path / "enabled")
+    (enabled / "etc/systemd/system/multi-user.target.wants/rosy-io.service").write_text("[Unit]\n", encoding="utf-8")
+    completed = _verify(enabled)
+    assert completed.returncode != 0
+    assert "rosy-io.service must not be enabled" in completed.stderr
+
+    absent = _valid_root(tmp_path / "absent")
+    (absent / "etc/systemd/system/rosy-navigation.service").unlink()
+    completed = _verify(absent)
+    assert completed.returncode != 0
+    assert "missing systemd unit: rosy-navigation.service" in completed.stderr
+
+    no_lidar = _valid_root(tmp_path / "nolidar")
+    release = no_lidar / "opt/rosy/releases/2026.09.22-001"
+    (release / "rosy-packages.txt").write_text("control\ncore\n", encoding="utf-8")
+    (release / "install/lib/sllidar_ros2/sllidar_node").unlink()
+    completed = _verify(no_lidar)
+    assert completed.returncode != 0
+    assert "sllidar_ros2 (RPLIDAR C1 driver) is missing" in completed.stderr
+    assert "sllidar_ros2 is not installed: install/lib/sllidar_ros2/sllidar_node" in completed.stderr
+
+
+def test_customizer_fails_the_build_when_the_hardware_runtime_does_not_import():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+
+    probe = source.index("probe-io-runtime.py'")
+    call = source[source.rindex("chroot", 0, probe):source.index("\n", source.index("|| fail", probe))]
+    # As rosy-io.service runs: its user and HOME, no login shell, no user site.
+    assert "setpriv --reuid=rosy-io --regid=rosy-io --clear-groups" in call
+    assert "HOME=/var/lib/rosy/io" in call and "PYTHONNOUSERSITE=1" in call
+    assert "bash --noprofile --norc -c" in call and "python3 -B" in call
+    assert "source /opt/rosy/current/install/setup.bash" in call
+    assert '|| fail "the hardware runtime does not import inside the image"' in call
+    assert 'cp "$IO_PROBE" "$ROOT/tmp/rosy-core-probe/probe-io-runtime.py"' in source
+    # After the CORE probe and the overlay, before the image is accepted.
+    assert source.index("probe-core-runtime.py --requirements") < probe
+    assert probe < source.index("verify-mounted-image.py")
+    assert source.index("useradd --uid 961") < probe
+
+
+def _io_probe():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("probe_io_runtime", IO_PROBE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_io_probe_names_what_the_005_card_lacked():
+    probe = _io_probe()
+    for module in ("dynamixel_sdk", "rosylib", "bringup.bringup", "bringup.battery_publisher"):
+        assert module in probe.HARDWARE_MODULES, module
+    assert probe.PACKAGE_FILES["sllidar_ros2"] == (
+        "lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
+    assert set(probe.UNITS) == {"rosy-io.service", "rosy-navigation.service"}
+
+
+def test_io_probe_checks_units_against_the_d189_rules(tmp_path):
+    probe = _io_probe()
+    systemd = tmp_path / "etc/systemd/system"
+    systemd.mkdir(parents=True)
+    native = ROOT / "deploy/robot/native"
+    for unit in probe.UNITS:
+        (systemd / unit).write_bytes((native / unit).read_bytes())
+    rule = tmp_path / probe.UDEV_RULE
+    rule.parent.mkdir(parents=True)
+    rule.write_text("rule\n", encoding="utf-8")
+
+    assert probe.check_units(tmp_path) == []
+
+    (systemd / "multi-user.target.wants").mkdir()
+    (systemd / "multi-user.target.wants/rosy-io.service").write_text("", encoding="utf-8")
+    (systemd / "rosy-navigation.service").write_text("[Service]\n", encoding="utf-8")
+    rule.unlink()
+    failures = probe.check_units(tmp_path)
+    assert any("rosy-io.service is enabled" in f for f in failures)
+    assert any("rosy-navigation.service: missing Environment=PYTHONNOUSERSITE=1" in f for f in failures)
+    assert any("missing motor udev rule" in f for f in failures)
+
+
+def test_io_probe_reports_missing_modules_without_touching_a_device(monkeypatch):
+    probe = _io_probe()
+    monkeypatch.setattr(probe, "HARDWARE_MODULES", ("rosy_no_such_module",))
+    failures = probe.check_modules("/usr/local")
+    assert any("import rosy_no_such_module" in f for f in failures)

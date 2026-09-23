@@ -48,6 +48,7 @@ WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
+IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
 UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
@@ -58,6 +59,7 @@ UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
 [[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
+[[ -f "$IO_PROBE" ]] || fail "hardware runtime probe is missing"
 [[ -f "$UART_CONFIG" ]] || fail "UART4 motor bus configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
@@ -161,6 +163,7 @@ chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
 mkdir -p "$ROOT/tmp/rosy-core-probe"
 cp "$PYTHON_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/device-python-requirements.txt"
 cp "$CORE_PROBE" "$ROOT/tmp/rosy-core-probe/probe-core-runtime.py"
+cp "$IO_PROBE" "$ROOT/tmp/rosy-core-probe/probe-io-runtime.py"
 chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 # umask 022: the service users must be able to read what root installs.
 (umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
@@ -253,6 +256,14 @@ chroot "$ROOT" setpriv --reuid=rosy-core --regid=rosy-core --clear-groups \
     env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/core PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
     bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
     || fail "CORE does not import inside the image"
+# D-192 US-005: the hardware runtime, as rosy-io.service runs it: user
+# rosy-io, its HOME, no login shell, no user site. dynamixel_sdk, rosylib
+# and the bringup nodes import; sllidar_ros2 and the launch files resolve in
+# the release; the units are installed, not enabled. Opens no device.
+chroot "$ROOT" setpriv --reuid=rosy-io --regid=rosy-io --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/io PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-io-runtime.py' \
+    || fail "the hardware runtime does not import inside the image"
 rm -rf -- "$ROOT/tmp/rosy-core-probe"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"

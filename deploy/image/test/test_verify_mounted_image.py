@@ -70,6 +70,13 @@ def test_inspect_passes_with_valid_image(tmp_path):
     (root / "boot/firmware/config.txt").write_text("[all]\ndtoverlay=uart4-pi5\n", encoding="utf-8")
     (root / "etc/udev/rules.d").mkdir(parents=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text("mock", encoding="utf-8")
+    # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.
+    for unit in verify_mounted_image.HARDWARE_UNITS:
+        (root / "etc/systemd/system" / unit).write_text("mock", encoding="utf-8")
+    (release_dir / "rosy-packages.txt").write_text("pkg_a\npkg_b\nsllidar_ros2", encoding="utf-8")
+    for relative in verify_mounted_image.SLLIDAR_FILES:
+        (release_dir / "install" / relative).parent.mkdir(parents=True, exist_ok=True)
+        (release_dir / "install" / relative).write_text("mock", encoding="utf-8")
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings

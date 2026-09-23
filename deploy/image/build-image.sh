@@ -70,7 +70,8 @@ mkdir -p "$IMAGE_WORK_ROOT"
     --workspace "$WORKSPACE" \
     --release-root "$PAYLOAD_ROOT" \
     --source-revision "$SOURCE_REVISION" \
-    --release-id "$RELEASE_ID"
+    --release-id "$RELEASE_ID" \
+    --lock "$LOCK"
 
 BASE_URL="$(awk '
     /^base_image:[[:space:]]*$/ { in_base=1; next }
