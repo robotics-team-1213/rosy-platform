@@ -321,3 +321,20 @@
 - gate 변화: 없음(rig 도구).
 - 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
 - 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.
+
+## 2026-09-24 · uncommitted · perf(control): exact footprint sweep prefilter (D-185 R5)
+- 변경:
+  - `control/footprint_sweep.py`의 `footprint_sweep_clearance`가 시간 샘플 다각형을 먼저 모두 만든 뒤 `_clearances`로 한꺼번에 계산한다. 다각형은 원본과 같은 식(`hull@R+shift`)으로 샘플마다 만든다.
+  - `_clearances`는 먼 점을 증명적으로 뺀다. 샘플마다 꼭짓점 평균 c, 최원 꼭짓점 거리 R로 원판 하한 `|p-c|-R`을 구하고, 하한이 가장 작은 점의 정확한 clearance U에 대해 하한이 `max(U,0)+1e-6`을 넘는 점만 뺀다. 증명과 가드(좌표 ≤1e3, 변 ≥1e-6, c가 모든 변 직선에서 1e-3·R 이상 안쪽)는 docstring에 적었다. 가드를 못 넘으면 원본 경로다.
+  - 남은 점이 적으면(점 수×샘플 ≤4096) 샘플을 쌓은 broadcast 한 번으로, 많으면 원본 `_clearance`를 샘플마다 부른다. 쌓은 계산도 원소별 연산 순서는 원본과 같다.
+  - `footprint_translation_limits`는 `_travel_candidates`로 호출당 한 번 후보를 줄인다. 이 함수에서 나가는 것은 `clearance > margin` 비교뿐이므로, 이동 끝까지 포함하는 원판(c, R+maximum) 하한이 `margin+1e-6`을 넘는 점은 결과를 바꿀 수 없다. 이후 비교는 원본 `_clearance` 그대로다.
+  - `_hull`·`_clearance`는 그대로 두었다(`straight_escape`가 쓴다).
+- 원인: sim rig의 safety 20 Hz tick이 `footprint_sweep_clearance`(17 샘플 × 모든 점 × 변)와 `footprint_translation_limits`(최대 2×10 이분 탐색)를 부른다. host에서 sweep 호출당 720점 12 ms, 1440점 31 ms였다. `bounded_motion`은 sim 전용이라 rig 여력 회복이 목적이다(D-185 조사).
+- 증거:
+  - 동등성 `test_footprint_sweep_equivalence.py`(원본 복사본 main `89001aad`, 5건): sweep 900건, translation 500건, Pinky 팔각형 360/720/1440점 × 명령 18종, 이동 축 위 결정 점 160건, `straight_escape` 보조 함수. `repr` 비교와 반환 타입(builtin float/tuple/None) 검사. 분기 도달을 단언한다(명령 무효·기하 무효·비유한·hull 내부·충돌·여유, translation 무효·정지·전량·이분·혼합).
+  - 뮤테이션 9종 모두 검출(scratchpad `mut_r5.py`, 파일 바이트 복원 확인).
+  - 속도(같은 프로세스 교차 25회 중앙값, Pinky 팔각형, v=.01 w=.05 horizon .8): sweep 방 360/720/1440점 7.4→1.9, 11.1→3.0, 21.3→5.5 ms, 근접 잡동사니 8.5→1.8, 12.0→1.9, 22.8→3.9 ms. translation 방 1.9→1.1, 2.9→1.3, 5.2→2.0 ms, 잡동사니 13.9→5.9, 19.5→6.3, 39.0→8.3 ms. 최악(모든 점이 0.15 m 원 위라 거의 못 뺌) sweep 6.7→7.0, 11.1→9.9, 20.9→19.7 ms.
+  - host `python -m pytest src/apps/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 1403 passed, 26 skipped. 패키지 크기 기준은 넘지 않아 바꾸지 않았다.
+- gate 변화: 없음(sim 전용 경로).
+- 결정: D-185 R5(E, 결과 동일). 발견: 원본은 명령 인자가 numpy 스칼라(`np.float64` horizon 등)면 `np.float64`를 반환한다. 결과 동일 조건이라 이 타입도 그대로 두었다. 가드 조건을 끈 뮤테이션은 코퍼스에서 살아남는다. 가드는 증명의 전제이며, 관측 가능한 반례는 만들지 못했다.
+- 교훈: 벡터화는 캐시 크기를 넘으면 오히려 느려진다(모든 점을 쌓은 17×1440×8 broadcast가 루프보다 1.8배 느렸다). 증명적 제외로 계산량을 먼저 줄이고, 남은 양에 따라 경로를 고른다. 비교만 나가는 함수는 값이 아니라 비교 결과를 보존하는 더 강한 제외가 가능하다.
