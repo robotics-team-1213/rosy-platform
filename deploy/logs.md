@@ -829,3 +829,19 @@
 - gate 변화: 없음. 재빌드 이미지의 실기 부팅(응급 조치 없이 `CORE_READY`)이 D1-D4를 닫는다
 - 결정: D-189 (작성 시 D-183이었으나 main의 D-183과 겹쳐 재번호)
 - 교훈: [unit의 샌드박스·HOME·Python 의존성은 제품의 일부다](../docs/solutions/workflow-issues/units-never-run-under-their-sandbox-2026-09-24.md)
+
+## 2026-09-24 · uncommitted · fix(native,image,ci): D-189 review — no startup hooks in a writable HOME, release/image Python runtime match, probe as the unit
+
+- 변경: 독립 리뷰(CRITICAL·HIGH 없음, MEDIUM 2, LOW 5) 반영. (M1) HOME이 쓰기 가능한 `rosy-core`·`rosy-io`·`rosy-navigation`은
+  `bash --noprofile --norc -c`로 시작하고 `PYTHONNOUSERSITE=1` — `~/.profile`·`~/.local`·`usercustomize`가 서명 릴리스 앞에서
+  돌 수 없다. (M2) 이미지가 `/usr/local/share/rosy/python-runtime.sha256`, 릴리스가 서명된 `python-runtime.sha256`을 갖고
+  `native_release.py` activate·rollback이 불일치·미선언을 `NATIVE_PYTHON_RUNTIME ... reflash with a matching image`로 거부한다
+  (매니페스트 스키마는 그대로, recover는 검사 안 함). (L) customizer pip `umask 022`, probe를 `setpriv`로 rosy-core·그 HOME·
+  runtime.env 조건에서 실행, CI는 lock 먼저·시험 도구는 lock 제약으로, 복구 저널 `StateDirectoryMode=0700`,
+  `z /var/lib/rosy/maps/*`, 계약 시험의 DynamicUser·early-unit tmpfiles·control import 처리, ADR에 005 제자리 갱신 카드 재기록과
+  알려진 한계.
+- 증거: 새 hook·저널 계약 시험은 이전 unit에서 5건 적색, 런타임 동일성 시험은 이전 `native_release.py`에서 4건 적색, 수정본에서 녹색.
+  관련 스위트 통과(2026-09-24 Windows, 수치는 보고서). 시험 도구 설치가 lock 제약으로 해석되는지 `pip --dry-run`으로 확인.
+- gate 변화: 없음
+- 결정: D-189
+- 교훈: 쓸 수 있는 HOME은 시작 훅이다 — 로그인 셸과 user site를 같이 끈다 (교훈 문서에 추가)

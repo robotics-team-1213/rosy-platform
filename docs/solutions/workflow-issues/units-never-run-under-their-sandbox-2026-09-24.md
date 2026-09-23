@@ -51,7 +51,9 @@ D-174의 설치 위치 실행은 "어디에 설치되는가"는 재현했지만 
    그 주체에게 준다 — 응급 조치가 준 권한이 필요한 권한이라는 보장은 없다.
 3. **서비스 계정의 HOME은 unit이 정한다.** `--no-create-home` 계정 + `ProtectHome=true`에서 `Path.home()`은 EACCES를
    낸다(ENOENT가 아니라서 "없으면 기본값" 코드도 못 넘긴다). `ProtectHome=true`인 비 root unit은 쓰기 집합 안의
-   `HOME`을 둔다. ROS 로그만 옮긴 D-174 F6은 같은 함정의 절반이었다.
+   `HOME`을 둔다. ROS 로그만 옮긴 D-174 F6은 같은 함정의 절반이었다. 그리고 쓸 수 있는 HOME은 곧 시작 훅이다:
+   `bash -l`의 `~/.profile`, Python의 `~/.local`·`usercustomize`. 로그인 셸을 쓰지 말고(`--noprofile --norc`)
+   `PYTHONNOUSERSITE=1`을 함께 둔다.
 4. **Python 런타임은 이름이 아니라 해시로 고정한 입력이다.** 시험 환경과 제품 환경이 공유하는 것이 패키지
    이름뿐이면 메이저 버전이 갈려도 아무도 모른다. 하나의 해시 고정 파일을 이미지와 CI가 같은 플래그
    (`--require-hashes --no-deps --only-binary=:all:`)로 깔고, 이미지 lock이 그 파일의 해시를 고정한다.

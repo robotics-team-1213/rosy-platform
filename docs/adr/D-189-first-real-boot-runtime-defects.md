@@ -46,7 +46,7 @@ CORE는 한 번도 뜨지 않았다. 결함 네 개가 차례로 가로막았고
    `ReadWritePaths=/opt/rosy`. `activate`·`rollback`은 이 unit이 아니라 운영자가 `sudo`로 부르는 wrapper
    (`activate-release.sh`, `rollback-release.sh`)라 샌드박스 밖이다. 셋이 쓰는 경로는 같다: 저널·락
    (`/var/lib/rosy/releases`), 링크(`/opt/rosy/{current,previous}`, 임시 `.current.new`/`.previous.new`).
-   `/opt/rosy/releases`는 읽기만 한다.
+   `/opt/rosy/releases`는 읽기만 한다. 저널은 root만 읽으므로(`rosy-boot-status`, `rosy-diag`가 root) `StateDirectoryMode=0700`.
 2. **D2: CORE의 Python 런타임은 해시로 고정한 입력이다.**
    - `deploy/image/device-python-requirements.txt`: 응급 조치 6개(= WSL 시뮬 박스의 검증된 집합)와 그 폐포 8개
      (`annotated-doc 0.0.5`, `annotated-types 0.8.0`, `anyio 4.15.1`, `click 8.5.0`, `h11 0.16.0`, `idna 3.20`,
@@ -59,14 +59,29 @@ CORE는 한 번도 뜨지 않았다. 결함 네 개가 차례로 가로막았고
      깐다. `/usr/local`이 `/usr/lib/python3/dist-packages`보다 `sys.path` 앞이므로 apt pydantic 1은 남아도 가려진다.
      `--prefix`는 쓰지 않는다(Debian의 posix_prefix는 `sys.path`에 없는 `site-packages`로 간다). 이 때문에
      이미지에 `python3-pip`이 들어간다.
-   - CI(`ci.yml`)와 arm64 리허설은 같은 파일을 같은 플래그로 깐다. 시험 도구(`flake8`, `httpx`, `jsonschema`,
-     `ext4`, `pyyaml`)는 고정하지 않는다. `httpx`를 먼저 깔고 고정 집합으로 덮는다.
+   - CI(`ci.yml`)와 arm64 리허설은 같은 파일을 같은 플래그로 **먼저** 깔고, 시험 도구(`flake8`, `httpx`,
+     `jsonschema`, `ext4`, `pyyaml`)는 그 뒤에 고정 집합을 제약(`-c`)으로 깐다. 해시가 든 파일을 제약으로 주면 pip이
+     해시 모드로 바뀌므로 `name==version` 줄만 뽑은 사본을 쓴다. 그래서 anyio·h11·idna·typing-extensions가 두 벌
+     깔리지 않는다. 시험 도구 자체는 고정하지 않는다.
+   - **런타임 동일성(리뷰 반영).** 런타임은 이미지의 `/usr/local`에 있고 릴리스는 바뀐다. 그래서:
+     이미지가 설치한 lock 해시를 `/usr/local/share/rosy/python-runtime.sha256`에 남기고, 페이로드 빌더가 같은 해시를
+     릴리스 페이로드의 `python-runtime.sha256`에 쓴다. 이 파일은 매니페스트 `files`와 서명에 들어가므로 **매니페스트
+     스키마는 바꾸지 않았다**(필드를 늘리면 `native_release.verify`의 고정 키 집합과 모든 생산자가 바뀐다).
+     `native_release.py`의 `activate`·`rollback`은 서명 검증 뒤, 런타임을 멈추기 전에 두 값을 비교하고 다르거나 없으면
+     `NATIVE_PYTHON_RUNTIME: this release needs Python runtime X; this image has Y; reflash with a matching image`로
+     거부한다. 규칙: **고정 집합이 바뀐 릴리스는 OTA로 갈 수 없고 이미지 재기록으로만 간다.** `recover`는 검사하지
+     않는다 — 이미 돌던 릴리스를 되돌리는 경로가 멈추면 장치에 current가 없어진다. 이 규칙 이전 릴리스(선언 파일 없음)와
+     기록이 없는 이미지는 모두 거부된다. customizer는 이미지 기록과 굽는 릴리스의 파일이 같은지도 확인한다.
    - `package.xml`의 rosdep 키는 그대로 둔다. 개발 host의 rosdep 경로를 깨지 않고, 이미지에서는 가려진다.
 3. **D3: HOME을 쓰는 서비스는 자기 state 디렉터리를 HOME으로 받는다.** `rosy-core`: `HOME=/var/lib/rosy/core`,
    `StateDirectory=rosy/core`(0750). CORE 상태는 `/var/lib/rosy/core/.rosy/`에 모인다. `rosy-io`·`rosy-navigation`은
    지금 `Path.home()`을 쓰는 노드를 띄우지 않지만(`startup_calibration_node`의 `~/.local/state/control/…` 기본값은
    `control/robot.launch.py`에서만 뜬다) 같은 함정을 닫는다: `HOME=/var/lib/rosy/{io,navigation}`,
    `StateDirectory=rosy/{io,navigation}`.
+   - **쓰기 가능한 HOME은 시작 훅이 되면 안 된다(리뷰 반영, 보안).** `bash -l`은 `~/.profile`·`~/.bash_profile`을 읽고,
+     Python은 `~/.local/lib/python3.12/site-packages`를 붙이고 `usercustomize`를 읽는다. 침해된 서비스가 거기에 코드를
+     심으면 서명된 릴리스보다 먼저, 매 시작마다, OTA 뒤에도 돈다. 세 unit은 `bash --noprofile --norc -c`로 시작하고
+     `Environment=PYTHONNOUSERSITE=1`을 둔다(`ExecStartPost`의 python에도 닿는다). 장치에는 같은 drop-in이 이미 들어가 있다.
 4. **D4: `/var/lib/rosy`는 root 부모다. 각 unit은 자기 하위 디렉터리만 소유한다.**
    - `rosy-core`: `StateDirectory=rosy/core`, `ReadWritePaths=/run/rosy`. `/var/lib/rosy`·`/var/lib/rosy/maps`를 뺀다.
    - 지도를 쓰는 것은 CORE가 아니다. `POST …/save_map`은 CORE가 경로(`ROSY_MAP_OUTPUT_DIR`, 기본 `/var/lib/rosy/maps`)를
@@ -74,7 +89,8 @@ CORE는 한 번도 뜨지 않았다. 결함 네 개가 차례로 가로막았고
      CORE는 저장된 pgm을 다시 읽어 `map_id` 체크섬만 만든다.
    - 새 `tmpfiles-rosy-state.conf`(`/etc/tmpfiles.d/rosy-state.conf`):
      `d /var/lib/rosy 0755 root root`, `d /var/lib/rosy/maps 2750 rosy-io rosy-core`(setgid 그룹이라
-     `UMask=0027`로 쓴 지도도 CORE가 읽는다), 005를 돌린 카드를 위해 `Z provisioning|releases|config - root root`.
+     `UMask=0027`로 쓴 지도도 CORE가 읽는다), 005를 돌린 카드를 위해 `Z provisioning|releases|config - root root`와
+     `z /var/lib/rosy/maps/* - rosy-io rosy-core`(rosy-core 소유로 남은 `site.pgm`이 slam 저장을 막지 않게).
      이미지도 같은 소유로 만든다.
    - `rosy-io`·`rosy-navigation`의 `ReadWritePaths=/var/lib/rosy/commissioning`은 이미지가 만들지 않는 경로다. 없는
      `ReadWritePaths`는 unit을 226/NAMESPACE로 죽이므로 `-` 접두(선택)로 바꿨다.
@@ -88,12 +104,18 @@ CORE는 한 번도 뜨지 않았다. 결함 네 개가 차례로 가로막았고
      찾고 각각이 쓰기나 읽기(`DECLARED_READS`)로 분류돼 있어야 한다.
    - `ProtectHome=true`인 비 root unit은 쓰기 집합 안에 `HOME`을 둔다.
    - `-` 없는 `ReadWritePaths`는 unit 자신·tmpfiles·이미지·Requires한 unit 중 하나가 만들어야 한다.
+     `DefaultDependencies=no` unit은 `After=systemd-tmpfiles-setup.service`가 없으면 tmpfiles `d`를 세지 않는다.
+   - 쓰기 가능한 HOME을 가진 unit은 `PYTHONNOUSERSITE=1`이고, 셸로 시작하면 `--noprofile --norc`이며 로그인 셸이 아니다.
+   - `DynamicUser=yes`는 root가 아닌 것으로 본다. CORE의 프로그램 소스에는 CORE가 import하는 `control` 모듈도 들어간다
+     (지금은 CORE 제품 코드가 `control`을 import하지 않아 더해지는 파일이 없다 — 시험만 import한다).
    - 이 시험들은 005의 unit 파일에서 9건 실패하고 수정본에서 통과한다(적색→녹색 확인). 설치 배치 시험은 복구를
      실제로 돌려 쓴 파일이 unit 쓰기 집합(`var/lib/rosy/releases/`, `opt/rosy/`) 밖에 없음을 확인한다(저널 재생 경로는
      symlink가 되는 host에서만, WSL에서 통과).
 6. **가드 B — 이미지 안 import probe(`deploy/image/probe-core-runtime.py`).** customizer가 릴리스를 `current`로 건 뒤,
-   `verify-mounted-image.py` 전에 chroot에서 unit과 같은 조건(`env -i`, ROS와 릴리스 overlay source, `HOME=/nonexistent`,
-   `python3 -B`)으로 실행하고 실패하면 이미지 빌드를 실패시킨다. 확인하는 것:
+   `verify-mounted-image.py` 전에 chroot에서 unit과 같은 조건으로 실행하고 실패하면 이미지 빌드를 실패시킨다:
+   `setpriv`로 `rosy-core` 사용자, `HOME=/var/lib/rosy/core`, `PYTHONNOUSERSITE=1`, `env -i`,
+   `bash --noprofile --norc`, 있으면 `/etc/rosy/runtime.env`, ROS와 릴리스 overlay source, `python3 -B`.
+   pip은 `umask 022`로 깔아 서비스 사용자가 읽을 수 있게 한다. 확인하는 것:
    고정 집합 14개가 정확한 버전으로 설치되어 `/usr/local`에서 import되는지, `pydantic` 메이저가 2인지,
    `core.main`·`core.node`와 그 둘이 함수 안에서 늦게 import하는 모든 모듈(`try` 안의 선택적 import 제외; `uvicorn`,
    `core_api_web.api.app`, 브리지들), 그리고 fleet agent의 `websockets`.
@@ -129,8 +151,19 @@ CORE는 한 번도 뜨지 않았다. 결함 네 개가 차례로 가로막았고
 - **폐포 버전의 근거.** WSL 박스의 폐포는 `anyio 4.14.2`, `click 8.1.6`(apt), `idna 3.6`(apt)이고 나머지 5개는 고정과
   같다. 장치 응급 조치는 `--ignore-installed`로 폐포를 새로 해석했으므로 2026-09-24 해석(`anyio 4.15.1`, `click 8.5.0`,
   `idna 3.20`)에 가깝다고 보지만, 005 카드의 `pip list`는 기록하지 않았다. 재빌드 부팅이 이 폐포의 첫 실기 증거다.
-- **005 카드.** 응급 조치로 떠 있는 카드는 재기록을 권한다. 제자리 갱신이면 tmpfiles `Z` 규칙이 root 전용 디렉터리를
-  되돌리지만, 응급 drop-in(`/etc/systemd/system/*.service.d/`)과 `/usr/local`의 pip 설치는 운영자가 지운다.
+- **005 카드는 재기록한다.** 제자리 갱신한 005 카드는 D-161 기준으로 깨끗하지 않다. CORE가 `provisioning`·`releases`·
+  `config`를 소유하고 쓸 수 있었으므로, tmpfiles `Z`는 **소유만** 되돌릴 뿐 그 안의 내용(신원, 복구 저널, 부팅 설정)이
+  그동안 바뀌지 않았다는 보장은 주지 않는다. 또 이 카드의 이미지에는 런타임 기록이 없어 새 릴리스의 OTA가 모두
+  `NATIVE_PYTHON_RUNTIME`으로 거부된다. 응급 drop-in과 `/usr/local` pip 설치도 남아 있다. 재기록만이 답이다.
+- **httpx/httpcore(L3).** `fleet`·`games`는 `python3-httpx`를 쓰며, 둘이 같은 이미지에 들어가면 apt httpx/httpcore와
+  고정된 h11·anyio가 섞인다. 지금은 두 패키지가 이미지 필수 목록(`required-ros-packages.txt`) 밖이라 rosdep이 httpx를
+  깔지 않으므로 장치에서는 생기지 않는다. 두 패키지가 이미지에 들어가는 변경이 httpx·httpcore·certifi를 이 lock에 해시로
+  더한다. CI에서는 httpx가 고정 집합을 제약으로 받아 h11·anyio를 공유한다.
+- **가드 A·B의 알려진 한계.** (1) 프로그램 소스 grep은 리터럴과 `Path.home()`만 보며, 환경 변수로 받은 경로는 선언 목록이
+  대신한다. (2) `User=`가 없으면 root로 본다 — systemd 기본값과 같지만, drop-in으로 `User=`가 들어오는 경우는 보지 않는다.
+  (3) tmpfiles `d`의 존재 가정은 `systemd-tmpfiles-setup` 이후에만 성립한다(위 규칙으로 좁혔다). (4) probe는 `core.main`·
+  `core.node`가 함수 안에서 하는 import까지만 한 단계 따라간다. 더 깊은 모듈의 함수 내부 import는 실제 import가 일어나는
+  모듈 최상위만 확인된다. 재귀로 넓히면 선택 기능(비전 등)의 함수 내부 import까지 이미지에 요구하게 되어 거짓 실패가 난다.
 - **배터리 sentinel 경로 불일치(기존).** CORE는 sentinel을 `$HOME/.rosy/battery-shutdown-request.json`에 쓰고
   `rosy-lowbatt-shutdown.sh`는 `/var/lib/rosy/battery-shutdown-request.json`을 본다. 네이티브 이미지에는 그 셧다운
   서비스가 없으므로 이 ADR은 경로만 기록한다.
