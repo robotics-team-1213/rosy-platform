@@ -12,8 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ament_copyright.main import main
 import pytest
+
+pytest.importorskip(
+    "ament_copyright", reason="ament linters require the ROS environment"
+)
+
+from ament_copyright.main import main  # noqa: E402
 
 
 # Remove the `skip` decorator once the source file(s) have a copyright header

@@ -1621,3 +1621,11 @@
 - gate 변화: 없음(현황 표기와 낡은 문장만).
 - 결정: ADR Status 전환 커밋에는 현관문(AGENTS)의 괄호 낙관도 함께 갱신한다 — 단 기록형 문서(logs, 날짜 설계문서)의 과거 표기는 append-only 로 보존한다. 저장소 밖 `.device-evidence/`는 README로 판독 결과(HOLD 2건·시의성 상실)를 연결만 하고 삭제는 승인 사안으로 남긴다.
 - 교훈: 상태를 괄호로 흘려 적은 현황 표기는 전환 순간드리프트가 된다 — 적지 않거나, 적었다면 전환과 같이 바꾼다. "no remote" 같은 인프라 사실도 시점이 지나면 거짓이 되므로 사실을 적되 최신 상태 조회 방법(`gh run list`)을 같이 남긴다.
+
+## 2026-09-23 · uncommitted · fix(test): bringup·emotion 패키지 시험의 루트 수집 복구 + ament 가시적 skip
+
+- 변경: `src/hardware/bringup/test/conftest.py`와 `src/apps/emotion/test/conftest.py` 신규 — colcon 설치 없이도 소스 트리가 `sys.path`에 오게 해 `bringup.command_deadman`, `bringup.pinky_pro_adapter`, `emotion.info_screen` import를 가능하게 했다. ament 린터 템플릿 9개(copyright/flake8/pep257 × bringup·led·emotion)에는 `pytest.importorskip("ament_*")` 가드 삽입 — ROS 환경에서는 그대로 실행되고, 없는 호스트는 모듈 단위 skip으로 내려간다.
+- 증거: before `--collect-only` = 14 collection errors(bringup 5 = 실측 2 + ament 3, led 3 = ament, emotion 6 = 실측 3 + ament 3) → after `python -m pytest src/hardware/bringup/test/ src/hardware/led/test/ src/apps/emotion/test/` = **46 passed, 10 skipped** — `test_command_deadman`(드라이버 측 stale cmd_vel 가드)과 emotion 계약이 이 호스트에서 처음으로 실측 실행되고, skip 10 = ament 9 + capture 환경 1이 합리적 skip으로 표시된다.
+- gate 변화: 없음(수집 경로 보정 — 빌드·런타임 불변).
+- 결정: 수집 오류를 `collect_ignore`로 조용히 없애는 대신 `importorskip`을 택했다 — skip 사유가 보고에 남는다("없는 것"과 "건너뛴 것"은 다르다). 생성된 ament 템플릿 본체는 건드리지 않고 import 블록에만 가드를 넣었다.
+- 교훈: 회귀 명령에 들어 있지 않은 디렉터리의 수집 오류는 오래 살아남는다 — 주기적으로 `--collect-only`로 전체 트리를 훑어야 "건너뛴 테스트"가 드러난다. 수집이 죽으면 실패도 통과도 없고 증거만 없다.
