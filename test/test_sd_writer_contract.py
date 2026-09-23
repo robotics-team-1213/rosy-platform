@@ -814,16 +814,10 @@ def test_operator_key_is_passed_as_an_argument_not_through_the_console():
     assert "$operatorKey | &" not in text
 
 
-def test_media_is_offline_while_it_is_compared_and_online_for_the_bundle():
-    # Release 004: Windows mounted the new FAT32 partition and updated its FSInfo
-    # sector, so the byte-for-byte readback failed at offset 1049576.
+def test_the_writer_never_tries_to_offline_removable_media():
+    # Release 004 retry: "Removable media cannot be set to offline." Mount metadata
+    # is tolerated by verify-media-readback.py instead (see test_media_readback.py).
     text = SCRIPT.read_text(encoding="utf-8")
 
-    offline = text.index("Set-Disk -Number $DiskNumber -IsOffline $true")
-    readback = text.index("$mediaReadbackOutput = & $PythonExe $readbackVerifier")
-    online = text.index("Set-Disk -Number $DiskNumber -IsOffline $false")
-    boot_mount = text.index("$bootRoot = Resolve-BootMount")
-
-    assert offline < readback < online < boot_mount
-    # Fixture runs pass -ReadbackDevice and must never touch a physical disk.
-    assert 'if (-not $ReadbackDevice) {\n    Set-Disk' in text
+    assert "-IsOffline $true" not in text
+    assert "$mediaReadbackOutput = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget" in text

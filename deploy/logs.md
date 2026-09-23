@@ -501,3 +501,15 @@
 - 교훈: `docs/solutions/workflow-issues/guards-validated-only-against-synthetic-fixtures-2026-09-23.md` — 픽스처에는 콘솔도,
   자동 마운트하는 OS도 없다.
 
+## 2026-09-23 · uncommitted · fix(sd): tolerate exactly the FAT32 fields Windows rewrites on mount; stop offlining removable media
+
+- 변경: `verify-media-readback.py`가 이미지 자신의 MBR·BPB로 FAT32 boot 파티션을 찾아, Windows가 자동 마운트 때 갱신하는 필드만
+  허용한다: FSInfo(원본·백업) 남은 클러스터 수·다음 빈 클러스터(488-495), 부트 섹터 `0x41`의 dirty 비트(0x03), 각 FAT 엔트리 1의
+  clean-shutdown/hard-error 비트(0x0C). 그 밖의 바이트나 비트가 다르면 실패하고, 허용한 오프셋은 `tolerated_fat_mount_metadata`로
+  receipt에 남는다. `Set-Disk -IsOffline`은 제거했다.
+- 증거: release 004 재시도가 `Set-Disk : Not Supported … Removable media cannot be set to offline.`로 멈췄다(Imager 쓰기는 성공).
+  첫 시도의 불일치 오프셋 1049576 = 파티션 시작 + 512 + 488 = FSInfo 남은 클러스터 수. `test_media_readback.py` 9 passed(허용 1, 거부 4 추가).
+- gate 변화: 없음(MEDIA 재기록 필요)
+- 결정: D-173
+- 교훈: 없음(`guards-validated-only-against-synthetic-fixtures-2026-09-23.md`의 사례와 같다)
+
