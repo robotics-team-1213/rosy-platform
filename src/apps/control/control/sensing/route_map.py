@@ -15,7 +15,7 @@ Spec 2026-09-22 lane-network junction spike §6 (B). ROS-free. Per frame:
              Its fresh path, placed on the map by the estimate, must lie on
              a lane_graph centreline: DISAGREE when DISAGREE_MIN_FRAMES of
              the last DISAGREE_WINDOW compared frames are more than
-             MAX_DISAGREE_M off (`_disagreement`). `last["coverage"]` is the
+             MAX_DISAGREE_M off (`disagreement`). `last["coverage"]` is the
              fraction of frames compared so far.
 
 Fail-closed (§6): no estimate, spread over MAX_SPREAD_M, match under
@@ -63,7 +63,7 @@ MIN_MATCH = 0.25
 #: Camera/route disagreement: the fresh camera path (the tracker's centre
 #: band, or its one-line iso-line) is placed on the map from the steering
 #: pose; per compared frame the statistic is the median distance of its
-#: cells to the nearest lane centreline (`_disagreement`). Offline, 12
+#: cells to the nearest lane centreline (`disagreement`). Offline, 12
 #: clean scenarios (seed 7, 447 compared frames of 555): median 1.8-3.9 mm
 #: per scenario, largest 8.1 mm apart from two single-frame spikes (00:
 #: 39.5, 11: 39.9 mm, a band cut by a mouth). A 50 mm pose bias (either
@@ -116,6 +116,62 @@ def confidence_for(match: float, spread_m: float) -> float:
     return CONFIDENCE_MIN + (1.0 - CONFIDENCE_MIN) * match_q * spread_q
 
 
+def centreline_pieces(graph):
+    """Every lane_graph segment as (start points, end points) of its pieces."""
+    pieces = [np.asarray(seg["points"], float) for seg in graph["segments"].values()]
+    return np.vstack([p[:-1] for p in pieces]), np.vstack([p[1:] for p in pieces])
+
+
+def disagreement(tracker, steer_pose, pieces):
+    """Median distance (m) from `tracker`'s fresh camera path to the nearest
+    lane centreline (`pieces`, from centreline_pieces), both placed by
+    `steer_pose`; None when there is nothing to compare.
+
+    The path is the tracker's pursued band (centre band for BOTH, a
+    one-line iso-line for ONE) restricted to cells the camera observes
+    this frame, so boundary memory never enters. Cells further than
+    CORRIDOR_M from every centreline are dropped; what is left must span
+    COMPARE_MIN_LENGTH_M. Junctions are not skipped: there the nearest
+    centreline is into's or out's (or another branch's), whichever lane
+    the band is in."""
+    if tracker.tier not in ("BOTH", "ONE"):
+        return None
+    path = tracker.last.get("path")
+    view = tracker._view
+    if path is None or view is None:
+        return None
+    cells = np.flatnonzero(path & view.observable)
+    if len(cells) == 0:
+        return None
+    if len(cells) > COMPARE_MAX_CELLS:
+        cells = cells[np.linspace(0, len(cells) - 1, COMPARE_MAX_CELLS).astype(int)]
+    px, py = view.x.flat[cells], view.y.flat[cells]
+    x, y, yaw = steer_pose
+    c, s = math.cos(yaw), math.sin(yaw)
+    points = np.stack([x + c * px - s * py, y + s * px + c * py], axis=1)
+    distance = _distance_to_centrelines(points, (x, y), pieces)
+    inside = distance <= CORRIDOR_M
+    if not inside.any() or np.ptp(px[inside]) < COMPARE_MIN_LENGTH_M:
+        return None
+    return float(np.median(distance[inside]))
+
+
+def _distance_to_centrelines(points: np.ndarray, xy, pieces) -> np.ndarray:
+    """Distance from each (n, 2) point to the lane_graph centreline pieces
+    within CENTRELINE_RADIUS_M of `xy`."""
+    a, b = pieces
+    keep = np.hypot(*(a - xy).T) <= CENTRELINE_RADIUS_M
+    if not keep.any():
+        return np.full(len(points), np.inf)
+    a, b = a[keep], b[keep]
+    ab = b - a
+    ab2 = np.maximum(np.einsum("ij,ij->i", ab, ab), 1e-12)
+    ap = points[:, None, :] - a[None, :, :]
+    t = np.clip(np.einsum("nij,ij->ni", ap, ab) / ab2, 0.0, 1.0)
+    nearest = a[None] + t[..., None] * ab[None]
+    return np.min(np.hypot(*(points[:, None, :] - nearest).transpose(2, 0, 1)), axis=1)
+
+
 @functools.lru_cache(maxsize=1)
 def _bundle_map() -> PaintMap:
     return PaintMap.from_bundle()
@@ -137,9 +193,7 @@ class RouteMapFollower:
         self._arc = np.concatenate(
             [[0.0], np.cumsum(np.linalg.norm(np.diff(self._points, axis=0), axis=1))])
         self._seg_start_s = np.concatenate([[0.0], np.cumsum([seg.length_m for seg in segs])])
-        pieces = [np.asarray(seg["points"], float) for seg in graph["segments"].values()]
-        self._piece_a = np.vstack([p[:-1] for p in pieces])
-        self._piece_b = np.vstack([p[1:] for p in pieces])
+        self._pieces = centreline_pieces(graph)
         self._localizer = PaintLocalizer(
             _bundle_map() if paint_map is None else paint_map,
             camera_x_offset_m=camera_x_offset_m, particles=particles,
@@ -155,6 +209,12 @@ class RouteMapFollower:
     @property
     def state(self) -> str:
         return self._state
+
+    @property
+    def view(self):
+        """The cross-check tracker's bird's-eye view (None before a frame):
+        the debug overlay places `last["tracker"]` on it."""
+        return self._camera._view
 
     def _steer_pose(self, estimate):
         """The pose that steers and is cross-checked (tests bias it)."""
@@ -205,7 +265,7 @@ class RouteMapFollower:
         x, y, yaw = steer_pose
         self.last["steer_pose"] = steer_pose
 
-        disagree = self._disagreement(steer_pose)
+        disagree = disagreement(self._camera, steer_pose, self._pieces)
         if disagree is not None:
             self._compared_frames += 1
             self._compared = (self._compared + [disagree > MAX_DISAGREE_M])[-DISAGREE_WINDOW:]
@@ -234,51 +294,3 @@ class RouteMapFollower:
     def _stop(self, reason: str) -> None:
         self._state = "STOP"
         self.last["reason"] = reason
-
-    def _disagreement(self, steer_pose):
-        """Median distance (m) from the fresh camera path to the nearest
-        lane centreline, both placed by `steer_pose`; None when there is
-        nothing to compare.
-
-        The path is the tracker's pursued band (centre band for BOTH, a
-        one-line iso-line for ONE) restricted to cells the camera observes
-        this frame, so boundary memory never enters. Cells further than
-        CORRIDOR_M from every centreline are dropped; what is left must span
-        COMPARE_MIN_LENGTH_M. Junctions are not skipped: there the nearest
-        centreline is into's or out's (or another branch's), whichever lane
-        the band is in."""
-        if self._camera.tier not in ("BOTH", "ONE"):
-            return None
-        path = self._camera.last.get("path")
-        view = self._camera._view
-        if path is None or view is None:
-            return None
-        cells = np.flatnonzero(path & view.observable)
-        if len(cells) == 0:
-            return None
-        if len(cells) > COMPARE_MAX_CELLS:
-            cells = cells[np.linspace(0, len(cells) - 1, COMPARE_MAX_CELLS).astype(int)]
-        px, py = view.x.flat[cells], view.y.flat[cells]
-        x, y, yaw = steer_pose
-        c, s = math.cos(yaw), math.sin(yaw)
-        points = np.stack([x + c * px - s * py, y + s * px + c * py], axis=1)
-        distance = self._distance_to_centrelines(points, (x, y))
-        inside = distance <= CORRIDOR_M
-        if not inside.any() or np.ptp(px[inside]) < COMPARE_MIN_LENGTH_M:
-            return None
-        return float(np.median(distance[inside]))
-
-    def _distance_to_centrelines(self, points: np.ndarray, xy) -> np.ndarray:
-        """Distance from each (n, 2) point to the lane_graph centreline
-        pieces within CENTRELINE_RADIUS_M of `xy`."""
-        a, b = self._piece_a, self._piece_b
-        keep = np.hypot(*(a - xy).T) <= CENTRELINE_RADIUS_M
-        if not keep.any():
-            return np.full(len(points), np.inf)
-        a, b = a[keep], b[keep]
-        ab = b - a
-        ab2 = np.maximum(np.einsum("ij,ij->i", ab, ab), 1e-12)
-        ap = points[:, None, :] - a[None, :, :]
-        t = np.clip(np.einsum("nij,ij->ni", ap, ab) / ab2, 0.0, 1.0)
-        nearest = a[None] + t[..., None] * ab[None]
-        return np.min(np.hypot(*(points[:, None, :] - nearest).transpose(2, 0, 1)), axis=1)

@@ -34,7 +34,9 @@ the robot was switched on, so the first valid odometry pose is anchored to
 every later pose is T_map_odom (+) odometry (`map_pose`). In Gazebo the two
 frames coincide and T_map_odom is the identity. Nothing corrects odometry
 drift after that: position along the route is the projection of the
-dead-reckoned pose.
+dead-reckoned pose. With `map_frame=True` the caller already hands poses
+in the map frame (route_hybrid's paint-localised estimate) and no anchor is
+applied.
 
 Known limitation (review HIGH-3, not redesigned here): the branch choice is
 odometry-metric, not event-driven. Where the route turns is decided by the
@@ -186,7 +188,8 @@ class RouteCameraFollower:
     `state` (also `tier`) is BOTH / ONE / MEMORY (camera), MANOEUVRE
     (route), STOP, or MANOEUVRE_ABORT (latched)."""
 
-    def __init__(self, graph, keys, *, start_pose, camera_x_offset_m: float = 0.0) -> None:
+    def __init__(self, graph, keys, *, start_pose, camera_x_offset_m: float = 0.0,
+                 map_frame: bool = False) -> None:
         self.route = LaneRoute(graph, keys)
         segs = [DirectedSegment.from_graph(graph, key) for key in keys]
         self._points = np.vstack([segs[0].points] + [seg.points[1:] for seg in segs[1:]])
@@ -204,6 +207,7 @@ class RouteCameraFollower:
         self.state = "STOP"
         self.locked = False
         self._start_pose = start_pose
+        self._map_frame = bool(map_frame)
         self._map_from_odom = None      # (tx, ty, dyaw), set on the first odometry
         self._pose = start_pose
         self._s = 0.0
@@ -219,8 +223,17 @@ class RouteCameraFollower:
         """The last odometry pose placed on the map (start_pose before any)."""
         return self._pose
 
+    @property
+    def view(self):
+        """The tracker's bird's-eye view (None before a frame): the debug
+        overlay places `last["tracker"]` on it."""
+        return self._tracker._view
+
     def _to_map(self, odom):
-        """T_map_odom (+) odom; T_map_odom is fixed by the first call."""
+        """T_map_odom (+) odom; T_map_odom is fixed by the first call (the
+        identity with map_frame)."""
+        if self._map_frame:
+            return odom
         if self._map_from_odom is None:
             sx, sy, syaw = self._start_pose
             dyaw = syaw - odom[2]

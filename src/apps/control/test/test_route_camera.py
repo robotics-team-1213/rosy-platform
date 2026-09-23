@@ -134,3 +134,18 @@ def test_camera_tiers_drive_between_junctions():
 def test_the_route_forbids_the_wrong_way_round_the_ring():
     with pytest.raises(ValueError, match="one-way"):
         RouteCameraFollower(GRAPH, ["west:f", "ring_n:r"], start_pose=(0, 0, 0))
+
+
+def test_a_map_frame_pose_is_used_as_given():
+    """route_hybrid feeds the paint-localised estimate, already in the map
+    frame: with map_frame=True no T_map_odom anchor is applied, so a first
+    pose off start_pose is not snapped onto it."""
+    scenario = SCENARIOS[5]
+    subject = RouteCameraFollower(GRAPH, [scenario["into"], scenario["out"]],
+                                  start_pose=scenario["start"], camera_x_offset_m=CAM_X,
+                                  map_frame=True)
+    x, y, yaw = scenario["start"]
+    pose = (x + 0.01, y - 0.02, yaw + 0.05)
+    subject.update(0.0, pose, WORLD.render(scenario["start"]), lane_sim.GROUND, **lane_sim.KW)
+    assert subject.map_pose == pytest.approx(pose)
+    assert follower(scenario).map_pose == tuple(scenario["start"])
