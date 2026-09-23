@@ -24,18 +24,24 @@ three bounded things only:
             (MANOEUVRE_ABORT, fail-closed)
 
   relock    with `map_frame` (route_hybrid: the pose is paint-localised,
-            not dead-reckoned), after a lock, whenever the camera has no
-            BOTH / ONE lock the route seed is armed anywhere on the route,
-            and a line it seeds replaces the boundary memory that lost its
-            line (the memory would refuse it: RESEED_MAX_GAP_M). Measured
-            on the all-lane tour (east S-curve, driven east:r): the tracker
-            held ONE on a line that left the view, never adopted the outer
-            line that replaced it, ran MEMORY to its age and stopped with
-            the robot 1 mm off the centreline; a fresh tracker on the same
-            poses held ONE throughout.
+            not dead-reckoned), after a lock, away from a node, whenever
+            the camera has no BOTH / ONE lock the route seed is armed, and
+            a line it seeds replaces that side's boundary memory (the
+            memory would refuse it: RESEED_MAX_GAP_M); the side it did not
+            seed keeps its memory. Measured on the all-lane tour (east
+            S-curve, driven east:r, s 2.43 m): the tracker held ONE on a
+            line that left the view, never adopted the outer line that
+            replaced it, ran MEMORY to its age and stopped with the robot
+            1 mm off the centreline. Scoped so, it fires once per tour,
+            there (localiser seeds 3 and 7). Armed anywhere and clearing
+            both sides (until the 2026-09-23 review) it fired 21-23 times
+            per tour, every one near a node where the route seed is armed
+            anyway, 7 of them wiping a held memory of the side it did not
+            seed, and never on east:r.
 
 "Near a node" is within JUNCTION_ARM_M of either end of the current route
-segment. Outside that, after the first lock, the tracker runs unmodified.
+segment. Outside that, after the first lock, the tracker runs unmodified
+but for the relock.
 Direction on the ring comes from the route: LaneRoute refuses a one-way
 segment walked backwards, so a clockwise ring route cannot be built.
 
@@ -182,11 +188,13 @@ class _RouteGatedTracker(LaneBoundaryTracker):
                     best = (int(near.sum()), label)
             picks.append(None if best is None else best[1])
         self.last["route_seed"] = tuple(picks)
-        if getattr(self.gate, "relock", False) and any(p is not None for p in picks):
+        if getattr(self.gate, "relock", False):
             # Re-lock on the localised route: the memory that no longer
-            # finds its line would refuse the seed (_continues).
-            self._left.clear()
-            self._right.clear()
+            # finds its line would refuse the seed (_continues). Only the
+            # side the route picked; the other keeps its memory.
+            for pick, memory in zip(picks, (self._left, self._right)):
+                if pick is not None:
+                    memory.clear()
         return picks[0], picks[1]
 
     def _centre(self, view, left_grid, right_grid, half):
@@ -325,7 +333,8 @@ class RouteCameraFollower:
         fix = self.route.locate(pose[:2])
         self._s = float(self._seg_start[fix.segment_index] + fix.s_m)
         near_node = min(fix.distance_to_node_m, fix.s_m) <= JUNCTION_ARM_M
-        self.relock = self._map_frame and self.locked and self._tracker.tier not in _LOCK_TIERS
+        self.relock = (self._map_frame and self.locked and not near_node
+                       and self._tracker.tier not in _LOCK_TIERS)
         self._tracker.gate = self if (near_node or not self.locked or self.relock) else None
         observation = self._tracker.update(
             now_s, pose if odom_pose is None else tuple(float(v) for v in odom_pose),

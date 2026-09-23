@@ -149,3 +149,79 @@ def test_a_map_frame_pose_is_used_as_given():
     subject.update(0.0, pose, WORLD.render(scenario["start"]), lane_sim.GROUND, **lane_sim.KW)
     assert subject.map_pose == pytest.approx(pose)
     assert follower(scenario).map_pose == tuple(scenario["start"])
+
+
+# --- relock (map_frame: route_hybrid's localised pose) -----------------------
+
+def _pose_on(key, s_m):
+    """(x, y, yaw) on `key`'s centreline s_m from its start."""
+    points = directed_points(GRAPH, key)
+    arc = junction_score._arc_length(points)
+    i = int(np.searchsorted(arc, s_m))
+    a, b = points[i - 1], points[i]
+    p = a + (b - a) * (s_m - arc[i - 1]) / (arc[i] - arc[i - 1])
+    return (float(p[0]), float(p[1]), math.atan2(b[1] - a[1], b[0] - a[0]))
+
+
+def _world_right_of(pose):
+    """The STL paint with everything left of the pose's heading line erased:
+    only the lane's right boundary is in view."""
+    world = _blank_world()
+    rows, cols = np.mgrid[0:world.paint.shape[0], 0:world.paint.shape[1]]
+    x, y = world.x0 + cols / 1000.0, world.y1 - rows / 1000.0
+    lateral = -(x - pose[0]) * math.sin(pose[2]) + (y - pose[1]) * math.cos(pose[2])
+    world.paint[lateral > 0.0] = 0
+    return world
+
+
+def _locked_on_both(key, s_m):
+    pose = _pose_on(key, s_m)
+    subject = RouteCameraFollower(GRAPH, [key], start_pose=pose, camera_x_offset_m=CAM_X,
+                                  map_frame=True)
+    frame = WORLD.render(pose)
+    for k in range(3):
+        subject.update(k * 0.2, pose, frame, lane_sim.GROUND, **lane_sim.KW)
+    assert subject.state == "BOTH"
+    return subject, pose
+
+
+def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
+    """East:r 0.9 m in (off-node), locked on BOTH. The odometry that carries
+    the boundary memory then jumps 0.25 m sideways (the memory no longer
+    lies on any line) and only the right line is in view: the tracker's own
+    pair seed has no pair and its memory refuses a line that does not
+    continue it (RESEED_MAX_GAP_M). The localised pose arms the relock,
+    the route seed picks the right line, and only the picked side's memory
+    is replaced."""
+    subject, pose = _locked_on_both("east:r", 0.9)
+    assert not subject.last["near_node"]
+    tracker = subject._tracker
+    odom = (pose[0] - 0.25 * math.sin(pose[2]), pose[1] + 0.25 * math.cos(pose[2]), pose[2])
+    frame = _world_right_of(pose).render(pose)
+    subject.update(0.6, pose, frame, lane_sim.GROUND, odom_pose=odom, **lane_sim.KW)
+    assert subject.state not in ("BOTH", "ONE")
+    subject.update(0.8, pose, frame, lane_sim.GROUND, odom_pose=odom, **lane_sim.KW)
+    assert subject.relock
+    picks = tracker.last["route_seed"]
+    assert picks[0] is None and picks[1] is not None
+    assert subject.state == "ONE" and tracker.last["right_label"] == picks[1]
+    assert tracker._left, "the unpicked side's memory was cleared"
+
+
+def test_at_a_node_the_relock_does_not_wipe_a_correct_memory():
+    """East:r 0.35 m in (within JUNCTION_ARM_M of its start node), locked
+    on BOTH. One frame without paint (MEMORY), then one with only the right
+    line in view: the route seed (armed near a node anyway) picks the right
+    line; the left memory, still where the left line is, must survive."""
+    subject, pose = _locked_on_both("east:r", 0.35)
+    assert subject.last["near_node"]
+    tracker = subject._tracker
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    subject.update(0.6, pose, blank, lane_sim.GROUND, **lane_sim.KW)
+    assert subject.state == "MEMORY"
+    subject.update(0.8, pose, _world_right_of(pose).render(pose), lane_sim.GROUND,
+                   **lane_sim.KW)
+    assert not subject.relock
+    assert tracker.last["route_seed"][1] is not None
+    assert subject.state == "ONE"
+    assert tracker._left, "a correct left memory was wiped"
