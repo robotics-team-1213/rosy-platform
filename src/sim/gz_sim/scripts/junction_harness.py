@@ -39,7 +39,12 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import junction_score  # noqa: E402
 
+#: Scenario budget in SIMULATION seconds (odom header stamps). A loaded host
+#: slows Gazebo, so a wall-clock budget turned slow-but-correct runs into
+#: timeouts (route_b smoke, 2026-09-23: 1.1 Hz camera at load 22 on 8 cores).
 TIMEOUT_S = 90.0
+#: Wall-clock backstop so a stalled simulation cannot hang the run.
+WALL_CAP_S = 600.0
 #: Upper bound on the readiness poll; a real boot is much faster, but this
 #: is the point at which the scenario is given up on as "never came up".
 BOOT_S = 45.0
@@ -217,27 +222,41 @@ def run_one(scenario, graph, mode, out_dir, domain):
 
         recorder = subprocess.Popen(
             ["python3", str(Path(__file__).with_name("record_debug.py")), "--out", str(out_dir),
-             "--seconds", str(TIMEOUT_S + 5)], env=env)
+             "--seconds", str(WALL_CAP_S + 5)], env=env)
 
-        track = []
-        node.create_subscription(
-            Odometry, "odom",
-            lambda m: track.append((m.pose.pose.position.x, m.pose.pose.position.y)),
-            qos_profile_sensor_data)
+        track, stamps = [], []
+
+        def on_odom(m):
+            track.append((m.pose.pose.position.x, m.pose.pose.position.y))
+            stamps.append(m.header.stamp.sec + m.header.stamp.nanosec * 1e-9)
+
+        node.create_subscription(Odometry, "odom", on_odom, qos_profile_sensor_data)
         set_mode("CAMERA_LINE")
         end = junction_score.directed_points(graph, scenario["out"])
         s = junction_score._arc_length(end)
         end_point = end[int(s.searchsorted(junction_score.END_AFTER_M))]
-        deadline = time.monotonic() + TIMEOUT_S
-        reached = False
-        while time.monotonic() < deadline:
+        wall_start = time.monotonic()
+        wall_deadline = wall_start + WALL_CAP_S
+        sim_start = None
+        reached, reason = False, "wall_cap"
+        while time.monotonic() < wall_deadline:
             rclpy.spin_once(node, timeout_sec=0.1)
+            if stamps and sim_start is None:
+                sim_start = stamps[-1]
             if track and math.dist(track[-1], end_point) < 0.05:
-                reached = True
+                reached, reason = True, "reached"
                 break
+            if sim_start is not None and stamps[-1] - sim_start >= TIMEOUT_S:
+                reason = "timeout"
+                break
+        wall_elapsed = time.monotonic() - wall_start
+        sim_elapsed = (stamps[-1] - sim_start) if sim_start is not None else 0.0
         set_mode("OFF")
         result = junction_score.score(graph, scenario, track or [scenario["start"][:2]])
-        result["reason"] = "reached" if reached else "timeout"
+        result["reason"] = reason
+        result["sim_s"] = round(sim_elapsed, 2)
+        result["wall_s"] = round(wall_elapsed, 2)
+        result["real_time_factor"] = round(sim_elapsed / wall_elapsed, 3) if wall_elapsed else None
         (out_dir / "track.json").write_text(json.dumps(track))
         return result
     except Exception as exc:  # noqa: BLE001 - one scenario's failure must not abort the rest

@@ -134,7 +134,10 @@ def test_set_mode_retries_a_refused_connection():
 def test_every_scenario_records_one_of_the_defined_reasons():
     source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
     assert '"reason": "boot_timeout"' in source
-    assert 'result["reason"] = "reached" if reached else "timeout"' in source
+    assert 'reached, reason = True, "reached"' in source
+    assert 'reason = "timeout"' in source
+    assert 'reached, reason = False, "wall_cap"' in source
+    assert 'result["reason"] = reason' in source
     assert '"reason": f"error:{type(exc).__name__}"' in source
 
 
@@ -244,3 +247,15 @@ def test_killpg_is_guarded_by_launch_is_not_none():
     guarded = finally_source.split("if launch is not None:", 1)[1]
     next_top_level_if = guarded.split("\n        if ", 1)[0]
     assert "os.killpg(launch.pid, signal.SIGINT)" in next_top_level_if
+
+
+def test_scenario_budget_is_simulation_time_with_a_wall_cap():
+    """A loaded host slows Gazebo: a wall-clock budget made slow-but-correct
+    runs time out (route_b smoke 2026-09-23, 1.1 Hz camera at load 22). The
+    budget runs on odom header stamps; wall time is only a backstop, and the
+    real-time factor is recorded so load is visible in the results."""
+    source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
+    assert "stamps[-1] - sim_start >= TIMEOUT_S" in source
+    assert "WALL_CAP_S = " in source
+    assert 'result["real_time_factor"]' in source
+    assert 'result["sim_s"]' in source and 'result["wall_s"]' in source
