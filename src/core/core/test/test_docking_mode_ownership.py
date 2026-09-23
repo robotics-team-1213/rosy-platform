@@ -277,6 +277,18 @@ def test_navigation_refuses_goals_while_docking(core_client):
     assert len(nav_exec.sent) == sent
 
 
+def test_the_api_maps_navigations_docking_refusal_to_409(core_client):
+    """N5: NavigationError DOCKING_ACTIVE had no HTTP mapping and fell to 400."""
+    client, services, nav_exec = navigating_robot(core_client)
+    services.docking._state = DockState.UNDOCKING       # docking holds the robot
+    sent = len(nav_exec.sent)
+    response = client.post("/api/v1/navigation/goal", json={"x": 1.0, "y": 0.0},
+                           headers=OPERATOR)
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "DOCKING_ACTIVE"
+    assert len(nav_exec.sent) == sent
+
+
 def test_nav2_and_swarm_output_during_docking_never_reach_the_wheels(core_client):
     _, services, _ = navigating_robot(core_client)
     services.docking.dock("parking")
