@@ -19,6 +19,7 @@ Host-side utilities for the absorbed Control package: a static ROS-name audit, c
 | Directory | Purpose |
 |-----------|---------|
 | `gz/` | Gazebo calibration, localization, obstacle, and track-run rigs (see `gz/AGENTS.md`) |
+| `device/` | On-device measurement: `hotpath_measure.py` (D-185 R8 hot-path bench and node CPU watch, JSON report; device evidence only on the Pi) |
 
 ## For AI Agents
 

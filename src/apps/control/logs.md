@@ -322,6 +322,84 @@
 - 결정: D-185 R4(판정 기준은 사용자 승인 2026-09-24: PSI 기록 후 보정해서 전환). 다른 Gazebo 실행기의 잠금 채택은 단계적이다.
 - 교훈: 환경 가드도 판정기다. 증거가 없을 때 "무효"로 판정하면 실제 결함을 가린다. 속도 증거가 없으면 판정을 보류하고, 부하 증거가 없을 때만 무효로 둔다.
 
+## 2026-09-24 · uncommitted · tools(control): Pi hot-path and node CPU measurement tool (D-185 R8)
+- 변경:
+  - `tools/device/hotpath_measure.py`를 새로 만들었다. ROS 없이 돈다. 하위 명령은 둘이고, 각각 JSON 보고서 하나를 쓴다(`schema_version` `rosy.control.hotpath_measure/1`).
+  - `bench`: `wall_tracker._segments`(720-ray 벽 scan), `scan_motion.match_motion`(180점 box-room 두 개, 10° 회전), `OccupancyMap.inflate`(200×200, 벽, 반경 5셀)의 median·p90·max(ms)를 잰다. 입력은 동등성 테스트의 생성기와 같은 형태다. platform, Python·numpy 버전, `/proc/cpuinfo`의 CPU 모델, `/proc/device-tree/model`을 함께 기록한다.
+  - `watch`: setup.py 진입점 이름(또는 `-m control.<node>`)으로 control 노드 프로세스를 찾는다. 간격마다 `/proc/<pid>/stat` utime+stime 차분으로 CPU%, VmRSS, loadavg, PSI `some avg10`을 기록한다. 재시작된 프로세스(starttime 변경)는 첫 표본의 CPU%를 None으로 둔다.
+  - 보고서의 `evidence.device`는 `/proc/device-tree/model`이 Raspberry Pi일 때만 참이다. host 실행은 "not device evidence"로 표시한다.
+  - 실기 절차는 모듈 docstring과 device 검증 계획 문서의 2026-09-24 checkpoint에 적었다.
+  - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄에서 28,868줄로 재판정했다.
+- 원인: D-185가 Pi 수치를 R8 전까지 HOLD로 두었다. `match_motion`의 Pi 소요 시간(평가 문서 §8.3), scan 콜백 점유율(§8.4), goal tick 비용(R1)을 실기에서 잴 도구가 없었다.
+- 증거:
+  - 테스트 11건(`test_hotpath_measure.py`): stat 파싱(comm 안의 공백·괄호), 두 표본의 CPU%, PSI·loadavg·VmRSS 파싱, 가짜 `/proc`의 프로세스 매칭(grep 제외), 진입점 이름과 setup.py 일치, 가짜 `/proc`의 watch 표본, 보고서 스키마와 증거 등급, 통계, bench smoke(세 키, `match_motion` 입력 수락).
+  - host `python -m pytest src/apps/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 통과.
+  - host bench(Windows x86, 증거 아님): `_segments` median 7.7 ms, `match_motion` 80 ms, `inflate` 6.5 ms. WSL `watch` smoke에서 실제 `/proc`의 loadavg·PSI·CPU 모델을 읽었다(노드 없음).
+- gate 변화: 없음. Pi 실행은 HOLD다. 이 세션에는 하드웨어가 없고, Pi 수치는 기록하지 않았다.
+- 결정: D-185 R8. 도구만 만들었고, 실기 실행과 R1–R3 전후 비교는 남는다.
+- 교훈: 측정 보고서가 스스로 증거 등급을 밝혀야 host 수치가 실기 수치로 인용되지 않는다.
+
+## 2026-09-24 · uncommitted · feat(control): opt-in EventsExecutor via ROSY_EXECUTOR (D-185 R3)
+
+- 변경:
+  - `control/executor_choice.py`: `ROSY_EXECUTOR` 해석(`single` 기본, `events`, 그 밖은 ValueError), executor 생성, spin.
+  - 14개 노드 `main()`의 `rclpy.spin(node)`를 `executor_choice.spin(node, rclpy)`로 바꿨다. try/finally 정리는 그대로다.
+  - `events`는 executor의 native `spin()`(add_node → spin → remove_node)을 쓴다. rig도 `make_executor(rclpy, executor_kind())`로 같은 선택을 따른다.
+- 원인: 2026-09-24 domain-228 실험에서 구독 15개인 한가한 노드가 SingleThreadedExecutor로 코어의 50–58%, EventsExecutor로 15%를 썼다. Jazzy에서 EventsExecutor는 실험 기능이라 opt-in으로 둔다.
+- 증거:
+  - 테스트 7건: 기본·single은 이전 호출과 동일, events는 native 루프, spin 예외에도 remove_node, 알 수 없는 값 거부, 두 종류 생성, 14개 진입점이 모두 선택기를 거침(AST).
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1404 passed.
+  - 독립 리뷰 1회(COMMENT, 차단 없음). WSL 탐침으로 SIGINT·SIGTERM·sim-time 타이머·다른 스레드 `call_async`가 두 방식에서 같음을 확인했다. MEDIUM 3건 중 rig와 다른 spin 루프는 고쳤고, ADR 표현과 FATAL 로그 줄은 ADR에 적었다. LOW 중 calib_node import 형식은 고쳤다. 다른 스레드 종료 예외와 잘못된 값의 늦은 실패는 기본 경로를 바꾸지 않으려고 기록만 했다.
+- gate 변화: 없음(기본값 불변). rig A/B와 실기 측정 전까지 R3는 미완료.
+- 결정: D-185 R3(행동 변경 승인: 사용자 2026-09-24 "나머지도 ralph 로 해서 바로 끝까지 처리").
+- 교훈: 측정 경로와 제품 경로가 같은 루프를 돌아야 A/B가 제품을 말한다. `rclpy.spin(node, executor=...)`은 executor의 native 루프가 아니다.
+
+## 2026-09-24 · uncommitted · perf(control): exact footprint sweep prefilter (D-185 R5)
+- 변경:
+  - `control/footprint_sweep.py`의 `footprint_sweep_clearance`가 시간 샘플 다각형을 먼저 모두 만든 뒤 `_clearances`로 한꺼번에 계산한다. 다각형은 원본과 같은 식(`hull@R+shift`)으로 샘플마다 만든다.
+  - `_clearances`는 먼 점을 증명적으로 뺀다. 샘플마다 꼭짓점 평균 c, 최원 꼭짓점 거리 R로 원판 하한 `|p-c|-R`을 구하고, 하한이 가장 작은 점의 정확한 clearance U에 대해 하한이 `max(U,0)+1e-6`을 넘는 점만 뺀다. 증명과 가드(좌표 ≤1e3, 변 ≥1e-6, c가 모든 변 직선에서 1e-3·R 이상 안쪽)는 docstring에 적었다. 가드를 못 넘으면 원본 경로다.
+  - 남은 점이 적으면(점 수×샘플 ≤4096) 샘플을 쌓은 broadcast 한 번으로, 많으면 원본 `_clearance`를 샘플마다 부른다. 쌓은 계산도 원소별 연산 순서는 원본과 같다.
+  - `footprint_translation_limits`는 `_travel_candidates`로 호출당 한 번 후보를 줄인다. 이 함수에서 나가는 것은 `clearance > margin` 비교뿐이므로, 이동 끝까지 포함하는 원판(c, R+maximum) 하한이 `margin+1e-6`을 넘는 점은 결과를 바꿀 수 없다. 이후 비교는 원본 `_clearance` 그대로다.
+  - `_hull`·`_clearance`는 그대로 두었다(`straight_escape`가 쓴다).
+- 원인: sim rig의 safety 20 Hz tick이 `footprint_sweep_clearance`(17 샘플 × 모든 점 × 변)와 `footprint_translation_limits`(최대 2×10 이분 탐색)를 부른다. host에서 sweep 호출당 720점 12 ms, 1440점 31 ms였다. `bounded_motion`은 sim 전용이라 rig 여력 회복이 목적이다(D-185 조사).
+- 증거:
+  - 동등성 `test_footprint_sweep_equivalence.py`(원본 복사본 main `89001aad`, 5건): sweep 900건, translation 500건, Pinky 팔각형 360/720/1440점 × 명령 18종, 이동 축 위 결정 점 160건, `straight_escape` 보조 함수. `repr` 비교와 반환 타입(builtin float/tuple/None) 검사. 분기 도달을 단언한다(명령 무효·기하 무효·비유한·hull 내부·충돌·여유, translation 무효·정지·전량·이분·혼합).
+  - 뮤테이션 9종 모두 검출(scratchpad `mut_r5.py`, 파일 바이트 복원 확인).
+  - 속도(같은 프로세스 교차 25회 중앙값, Pinky 팔각형, v=.01 w=.05 horizon .8): sweep 방 360/720/1440점 7.4→1.9, 11.1→3.0, 21.3→5.5 ms, 근접 잡동사니 8.5→1.8, 12.0→1.9, 22.8→3.9 ms. translation 방 1.9→1.1, 2.9→1.3, 5.2→2.0 ms, 잡동사니 13.9→5.9, 19.5→6.3, 39.0→8.3 ms. 최악(모든 점이 0.15 m 원 위라 거의 못 뺌) sweep 6.7→7.0, 11.1→9.9, 20.9→19.7 ms.
+  - host `python -m pytest src/apps/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 1403 passed, 26 skipped. 패키지 크기 기준은 넘지 않아 바꾸지 않았다.
+- gate 변화: 없음(sim 전용 경로).
+- 결정: D-185 R5(E, 결과 동일). 발견: 원본은 명령 인자가 numpy 스칼라(`np.float64` horizon 등)면 `np.float64`를 반환한다. 결과 동일 조건이라 이 타입도 그대로 두었다. 가드 조건을 끈 뮤테이션은 코퍼스에서 살아남는다. 가드는 증명의 전제이며, 관측 가능한 반례는 만들지 못했다.
+- 교훈: 벡터화는 캐시 크기를 넘으면 오히려 느려진다(모든 점을 쌓은 17×1440×8 broadcast가 루프보다 1.8배 느렸다). 증명적 제외로 계산량을 먼저 줄이고, 남은 양에 따라 경로를 고른다. 비교만 나가는 함수는 값이 아니라 비교 결과를 보존하는 더 강한 제외가 가능하다.
+
+## 2026-09-24 · uncommitted · perf(control): R5 review fixes for the footprint prefilter guards (D-185 R5)
+- 변경: 독립 리뷰 APPROVE(MEDIUM 1, LOW 3)를 반영했다. `_travel_candidates` 가드를 maximum ≥ 1e-3으로 올렸다. `_clearances` 가드에 `np.isfinite` 검사를 넣었다. 두 docstring의 반올림 논증을 |e|·|p−q|·r/R 기준으로 고쳤다.
+- 원인: 이분 탐색이 이동 변을 maximum/1024까지 줄이므로 1e-6 문턱에서는 방향 반올림 여유가 증명되지 않았다(1e-3에서 약 1e4). Python `max`는 NaN을 버리므로 좌표 크기 가드가 NaN을 통과시킬 수 있었다.
+- 증거: 가드 경계 코퍼스 2건 추가. 좌표 1e3·변 1e-6·내접비 1e-3 근처 다각형, 문턱 U+{1e-6,1.5e-6,2e-6}의 점, maximum 1e-3 경계 위·아래, margin±1e-12의 장애물을 쓴다. stacked·샘플별 경로 모두에서 점 제외가 일어남을 단언한다. host 테스트 1405 passed, 26 skipped. 뮤테이션 9종 모두 검출.
+- gate 변화: 없음(sim 전용 경로).
+- 결정: D-185 R5. 실제 사용값(.03, .12)은 새 문턱 위라 비용 변화가 없다.
+- 교훈: 증명의 가드는 반복으로 줄어드는 양(이분 탐색 변 길이)의 최솟값으로 잡는다.
+
+## 2026-09-24 · uncommitted · chore(control): D-168 P6 size re-judge after R3/R5/R8 (D-185)
+
+- 변경: `test/test_module_structure.py`의 control 크기 기준을 28,868줄에서 29,037줄로 바꿨다. 판정은 split 그대로다.
+- 원인: R3(executor 선택기), R5(동등성 테스트 대상 코드), R8(계측 도구)이 main에서 합쳐져 기준+150줄을 넘었다. 늘어난 줄은 rig·계측 도구와 사전 필터의 증명 주석이며, deploy closure는 바뀌지 않았다.
+- 증거: 병합 후 `test_size_verdicts_are_well_formed_and_current`가 29,037줄로 실패했고, 재판정 뒤 통과했다.
+- gate 변화: 없음.
+- 결정: D-168 P6 재판정 규칙(성장 150줄 초과 시 재판정), D-185
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(control): latest-only subscriptions keep depth 1 (D-185 R2)
+
+- 변경: calibration·wander·goal_escape·web의 최신 값 구독 12개를 KEEP_LAST depth 1로 바꿨다. `test/subscription_scan.py`와 `test_latest_only_subscriptions.py`가 대상 목록과 depth를 고정한다.
+- 원인: depth 10 구독은 executor가 밀릴 때 옛 결정·한계값을 차례로 처리했다. 판정은 항상 마지막 값만 쓰므로 옛 값 처리는 비용이고, 늦게 도착한 옛 값이 잠깐 현재 값처럼 보일 수 있었다.
+- 증거:
+  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - 독립 리뷰 1회 반영.
+  - rig 교차 A/B(ENV:VALID만): 기준본 3/3, R2 4/4 `ready`. 과부하(평균 부하 20–35)로 무효가 된 6회는 세지 않았다. CPU 중앙값 411% 대 428%, 차이 없음.
+- gate 변화: 없음.
+- 결정: D-185 R2(범위: 사용자 승인 2026-09-24 "제안 범위대로", 위험·can_reverse 포함).
+- 교훈: 환경 가드가 없었다면 이번 A/B의 첫 10회 중 9회가 판정에 섞였다. 유효 실행만 세니 양쪽 모두 전부 통과였다.
+
 ## 2026-09-24 · uncommitted · tools(control): opt-in throttled /clock relay for the rig (D-185 R6)
 
 - 변경:

@@ -60,7 +60,7 @@
 ## 최근 기록
 
 - 2026-09-24 · uncommitted · tools(control): opt-in throttled /clock relay for the rig (D-185 R6)
-- 2026-09-24 · uncommitted · tools(control): rig environment guard marks overloaded runs invalid (D-185 R4)
-- 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
-- 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
-- 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
+- 2026-09-24 · uncommitted · fix(control): latest-only subscriptions keep depth 1 (D-185 R2)
+- 2026-09-24 · uncommitted · chore(control): D-168 P6 size re-judge after R3/R5/R8 (D-185)
+- 2026-09-24 · uncommitted · perf(control): R5 review fixes for the footprint prefilter guards (D-185 R5)
+- 2026-09-24 · uncommitted · perf(control): exact footprint sweep prefilter (D-185 R5)

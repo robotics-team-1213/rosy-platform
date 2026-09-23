@@ -17,7 +17,7 @@ class GoalEscape:
         self.escape_used=False
         self.escape_budget=EscapeBudget()
         self.escape_pub=self.create_publisher(String,'goal/straight_escape',10)
-        self.create_subscription(String,'safety/motion_limits',self.on_escape_limits,10)
+        self.create_subscription(String,'safety/motion_limits',self.on_escape_limits,1)  # latest only (D-185 R2)
         self.create_subscription(String,'goal/straight_escape_result',self.on_escape_result,10)
 
     def on_escape_result(self,msg):
