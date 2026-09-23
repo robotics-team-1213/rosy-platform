@@ -144,7 +144,10 @@ class DockingManager:
         # **전에** 부른다. API 와 배터리 복귀가 같은 이음새를 지난다.
         self._take_mode = take_mode or (lambda: None)
         self._gains = ParkingGains()
-        self._lock = threading.Lock()
+        # dock/undock/cancel 은 API 워커에서, tick 은 브리지 타이머에서 온다(D-1).
+        # 재진입한다: tick 안의 배터리 복귀가 dock() 을, 모드 이탈 리스너가
+        # cancel()/abort() 을 부른다.
+        self._lock = threading.RLock()
 
         self.executor: Optional[DockingExecutor] = None
 
@@ -230,6 +233,10 @@ class DockingManager:
     # --- 명령 -----------------------------------------------------------------
 
     def dock(self, dock_id: Optional[str] = None) -> DockInstance:
+        with self._lock:
+            return self._dock_locked(dock_id)
+
+    def _dock_locked(self, dock_id: Optional[str]) -> DockInstance:
         """도킹을 시작한다. 거부는 예외로 나간다 — API 가 그대로 코드에 매핑한다."""
         if not self._capability_provider():
             raise DockError("CAPABILITY_NOT_SUPPORTED",
@@ -268,6 +275,10 @@ class DockingManager:
         return dock
 
     def undock(self) -> None:
+        with self._lock:
+            self._undock_locked()
+
+    def _undock_locked(self) -> None:
         if self._state not in (DockState.DOCKED, DockState.CHARGING):
             raise DockError("NOT_DOCKED", f"not docked ({self._state.value})")
         if getattr(self._safety, "estop", False):
@@ -295,6 +306,10 @@ class DockingManager:
 
     def cancel(self) -> None:
         """진행 중인 시퀀스를 접는다. 실패가 아니라 취소다."""
+        with self._lock:
+            self._cancel_locked()
+
+    def _cancel_locked(self) -> None:
         if self._state not in (DockState.DOCKING, DockState.UNDOCKING):
             return
         self._release()
@@ -305,6 +320,10 @@ class DockingManager:
 
     def remove_dock(self, dock_id: str) -> None:
         """도크를 지운다. 도킹·언도킹 중인 도크는 지우지 않는다."""
+        with self._lock:
+            self._remove_dock_locked(dock_id)
+
+    def _remove_dock_locked(self, dock_id: str) -> None:
         if (self._state in (DockState.DOCKING, DockState.UNDOCKING)
                 and self._dock is not None and self._dock.id == dock_id):
             raise DockError("DOCKING_ACTIVE",
@@ -313,8 +332,9 @@ class DockingManager:
 
     def abort(self, reason: str) -> None:
         """진행 중인 시퀀스를 실패로 접는다 (예: DOCKING 에서 EMERGENCY 로)."""
-        if self._state in (DockState.DOCKING, DockState.UNDOCKING):
-            self._fail(reason)
+        with self._lock:
+            if self._state in (DockState.DOCKING, DockState.UNDOCKING):
+                self._fail(reason)
 
     def on_navigation_state(self, state: NavigationState) -> None:
         self._nav_state = state
@@ -373,6 +393,10 @@ class DockingManager:
     # --- 틱 -------------------------------------------------------------------
 
     def tick(self, now: Optional[float] = None) -> None:
+        with self._lock:
+            self._tick_locked(now)
+
+    def _tick_locked(self, now: Optional[float]) -> None:
         current = self._clock() if now is None else now
 
         # E-Stop 은 어느 단계에서든 즉시 중단시킨다.

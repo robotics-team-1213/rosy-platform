@@ -125,3 +125,42 @@ def test_a_repeated_frame_does_not_keep_the_approach_alive():
     run(p, lambda m: m.phase is not DockPhase.APPROACHING, max_s=grace + 1.0)
     assert p.manager.phase is not DockPhase.APPROACHING
     assert p.manager.retries == 1
+
+
+# --- L1: API workers and the bridge timer do not interleave inside the manager --
+
+
+def test_a_cancel_from_another_thread_waits_for_the_tick():
+    import threading
+    p = a_parking((ENTRY_X, 0.0, 1.5708))
+    p.manager.dock()
+    seen = {}
+    drive = p.world.drive
+
+    def drive_while_cancel_waits(linear, angular):
+        worker = threading.Thread(target=p.manager.cancel)
+        worker.start()
+        worker.join(timeout=0.2)
+        seen["blocked"] = worker.is_alive()
+        seen["state"] = p.manager.state
+        seen["worker"] = worker
+        drive(linear, angular)
+
+    p.world.drive = drive_while_cancel_waits
+    p.manager.tick()
+    seen["worker"].join(timeout=2.0)
+    assert seen["blocked"] and seen["state"] is DockState.DOCKING
+    assert p.manager.state is DockState.UNDOCKED
+
+
+def test_the_battery_return_inside_a_tick_does_not_deadlock():
+    from core_common.protocol.schemas import BatteryLevel
+    p = a_parking(SPOT)
+    p.manager._return_pending = True
+    p.manager.on_battery_level(BatteryLevel.WARNING)   # dock() from the policy
+    assert p.manager.state is DockState.DOCKING
+    p.manager.cancel()
+    p.manager._return_pending = True
+    p.manager.tick()                                   # dock() from inside tick()
+    assert p.manager.state is DockState.DOCKING
+
