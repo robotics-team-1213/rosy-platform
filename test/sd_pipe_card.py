@@ -19,7 +19,12 @@ import threading
 import time
 import uuid
 
-import _winapi
+try:
+    import _winapi  # named pipes stand in for a raw card; Windows only
+except ImportError:  # Linux CI imports the test modules too
+    _winapi = None
+
+import pytest
 
 PIPE_ACCESS_OUTBOUND = 0x00000002
 PIPE_TYPE_BYTE_WAIT = 0x00000000
@@ -29,6 +34,8 @@ PIECE = 4 * 1024 * 1024
 
 class PipeCard:
     def __init__(self, data: bytes, behaviours) -> None:
+        if _winapi is None:
+            pytest.skip("named-pipe card stand-in needs Windows")
         self.data = data
         self.behaviours = list(behaviours)
         self.path = r"\\.\pipe\rosy-card-" + uuid.uuid4().hex
