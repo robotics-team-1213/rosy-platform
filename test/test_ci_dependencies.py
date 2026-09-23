@@ -18,3 +18,9 @@ def test_root_contract_step_sources_the_colcon_install():
     step = step.split("- name:", 1)[0]
     assert ". /opt/ros/jazzy/setup.sh" in step
     assert ". src/install/setup.sh" in step
+
+
+def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():
+    # Without it test_card_diagnostics.py skips its real-ext4 case (D-174 F8).
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "jsonschema ext4" in workflow

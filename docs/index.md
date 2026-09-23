@@ -88,8 +88,9 @@
 | D-169 | v1 제품 장치 표면은 모터·LiDAR·카메라·I2C-1 ADC로 고정한다 — emotion/lamp/led/imu는 벤치 전용을 소급 공식화 |
 | D-170 | PRT-004 명령 추적 확장은 중앙 Fleet 착수와 함께 간다 — 그 전까지 correlation_id는 계약 전용 필드 |
 | D-172 | 구조 개편 이전의 미병합 브랜치는 태그로 보존하고, 재구현·독립 리뷰를 거쳐서만 main에 들인다 — Python 3.12가 기준 |
-| D-176 | 벤치 장치의 제품 편입은 장치별 실기 수요·D-84 프로필 항목·배관/capabilities/가드가 한 변경에서 충족될 때만 — 조건과 절차를 선기록 |
 | D-177 | correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현 — 활성화 시 설계를 선기록 |
+| D-178 | 모듈의 병렬 작업 가능성은 평가표로 측정한다 — 5개 판정 축(M1–M5), 컷 게이트, 기준선 |
+| D-180 | 벤치 장치의 제품 편입은 장치별 실기 수요·D-84 프로필 항목·배관/capabilities/가드가 한 변경에서 충족될 때만 — 조건과 절차를 선기록 |
 
 ## 계획·결과 문서
 
@@ -124,8 +125,8 @@
 
 ## 최근 기록
 
+- 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host
+- 2026-09-23 · uncommitted · docs(adr): D-178 2차 회차 완료 — Accepted 승격 + 기준선 갱신
 - 2026-09-23 · uncommitted · docs(plan): D-179 반복 동작 세 문장
 - 2026-09-23 · uncommitted · docs(adr): D-179 벤치 CORE 읽기 전용 오버레이
 - 2026-09-23 · uncommitted · docs(adr): 모듈 병렬 작업 가능성 평가표를 D-178로 선기록 (Proposed)
-- 2026-09-23 · uncommitted · docs(deploy): CORE 개발 오버레이 설계 기록
-- 2026-09-23 · uncommitted · fix(test): bringup·emotion 패키지 시험의 루트 수집 복구 + ament 가시적 skip

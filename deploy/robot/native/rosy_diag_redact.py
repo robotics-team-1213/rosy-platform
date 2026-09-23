@@ -25,6 +25,10 @@ DENIED_PATH_PARTS = (
     "/etc/rosy/fleet-bootstrap.json",
     "/etc/ssh/ssh_host_",
     "/var/lib/rosy/secrets",
+    # D-176: the operator file holds Wi-Fi passwords until the robot scrubs them.
+    "/boot/firmware/rosy-config.yaml",
+    "/etc/rosy/ap-credentials.json",
+    "/etc/rosy/network-policy.json",
 )
 DENIED_NAME_WORDS = ("token", "secret", "password", "credential", ".key", "private")
 

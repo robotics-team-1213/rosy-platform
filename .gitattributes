@@ -11,3 +11,4 @@ src/apps/control/map/map_v2_fleet/meshes/*.stl binary
 src/apps/control/map/map_v2_fleet/maps/*.pgm binary
 src/apps/control/map/map_v2_fleet/maps/*.yaml text eol=lf
 "src/apps/control/map/map_v2_fleet/260919 MAP FILE.STL" binary
+deploy/robot/native/rosy-diag text eol=lf

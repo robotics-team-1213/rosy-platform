@@ -1661,3 +1661,19 @@
 - gate 변화: 없음
 - 결정: D-179 본문은 그대로다. 실행 계획만 보강했다.
 - 교훈: 없음
+
+## 2026-09-23 · uncommitted · docs(adr): D-178 2차 회차 완료 — Accepted 승격 + 기준선 갱신
+
+- 변경: `docs/adr/D-178-module-maintainability-scorecard.md` Status Proposed → **Accepted**(착지 조건 충족: 2차 회차 완료 + 기준선 갱신) — 기준선 표 갱신 노트 추가(점수 변동 없음: `control` 57 · `core_features` 59 · `navigation` 57 · `gz_sim` 71, 분포 S8/A6/B3/C3·평균 81.5 유지), `core_features` 비고 정정, Validation 착지 조건 충족 표기. `docs/reference/ROSY ADR Log.md` D-178 행 Status 동시 갱신(색인↔본문 일치). 저장소 밖 `module-coupling-scorecard.md` **§8 2차 회차** 신설 — C/B 4개 내부 모듈 파일 단위 분해(`control` 9군집 358py·42,260행 / `core_features` 13기능 38py·5,583행 / `navigation` 모듈 6 + launch 16파일·744행 / `gz_sim` 23py·4,892행)와 병렬 작업 충돌 지점 도출(`control`: setup.py console_scripts 14건 + launch 11개 단일 조립, test fan-in 85·55·26건, core/test 5파일·7모듈 D-126 이음새 / `core_features`: 시험 3곳 분산(core/test 29·fleet 1·루트 1) / `navigation`: hardware.launch.py 조립 + web_* assembly + 루트 test/ 5파일 공유 / `gz_sim`: navigation·fleet 설치·벤치 공유 의존). 근거 정정 3건: ① `core_features` "5.5k 예산 초과" → **예산 내**(10k 중 5,583행; M2=3은 13개 기능 공존 앵커 유지 → 총점 불변) ② `control` "600행 4건" → **5건**(SIZE_VERDICTS split 2·accept 3 일치) ③ 외부 시험 소유 28 → **29개**(전역 AST — 시험이 3곳에 분산, M3=2 근거 강화).
+- 증거: 산출 `X:\DevTemp\opencode\round2.py`(파일 단위 AST, splitlines, map 번들 제외) + D-168 스캐너 교차 대조(SIZE_VERDICTS 9행·KNOWN_DIRECTION 3행). `python tools/harness/rosy_harness.py generate` → `python -m pytest test/test_module_scorecard.py test/test_harness_contracts.py test/test_network_topology_contracts.py test/test_module_structure.py -q` = **85 passed** → `lint` = **0 error(s)**(기존 warning baseline).
+- gate 변화: 있음 — ADR Status Proposed→Accepted(로그 색인↔본문 Status 일치 계약 대상), progress SOURCE/LOCAL evidence·cmd·adrs(+D-178) 갱신. 점수 값은 불변이라 산출 규칙 시험은 초록 유지.
+- 결정: 2차 실측이 1차 판정을 그대로 재확인했으므로 기준선 **값은 유지**, 정정은 근거 표기까지만 반영한다. 회차 산출은 .py import만 파싱하므로 navigation의 launch XML 15개(assembly `web_*`)는 파일·라인만 집계 — launch 참조 판정 권위는 D-168 스캐너에 둔다(채점표 §7 한계 기록).
+- 교훈: 없음
+
+## 2026-09-23 · uncommitted · feat(deploy): D-179 bench overlay on the host
+
+- 변경: `deploy/robot/core_dev_overlay.py`가 허용 목록만 `/var/lib/rosy-dev`에 풀고, 바인드가 없으면 컨테이너를 다시 만들고 있으면 `rosy-core`만 재시작한다. 성공은 `core/__init__.py` 해시다. 개발 compose는 `name` 없이 프로젝트 `rosy-runtime`이다. `device_readback.py`는 환경 변수·마커·drop-in이 있으면 `device_runtime=HOLD`다. `sync-core-dev.ps1`과 apply/clear 래퍼가 그 모듈만 호출한다. 제품 유닛과 `install-pi.sh`는 그대로다.
+- 증거: `python -m pytest test/test_core_dev_sync.py test/test_device_readback.py test/test_native_systemd_contract.py -q` 59 passed, 1 skipped (2026-09-23 Windows).
+- gate 변화: 없음. DEVICE는 로봇 실행 증거가 없어 HOLD.
+- 결정: D-179
+- 교훈: 없음
