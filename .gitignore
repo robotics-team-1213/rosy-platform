@@ -52,6 +52,12 @@ src/apps/games/config/match.local.yaml
 *.sqlite3
 *.db
 
+# Teleop checks and drive runs. The layout is tracked; the recordings are not.
+data/teleop/**
+data/drive/**
+!data/teleop/.gitkeep
+!data/drive/.gitkeep
+
 # One-off helper scripts at the repository root. Durable root helpers
 # (env.sh, fix.sh, run_fleet_sim.sh) are tracked explicitly; new throwaway
 # scripts belong in tools/ or outside the repo.
