@@ -164,3 +164,37 @@ def test_confidence_maps_quality_linearly_onto_its_band():
     values = [confidence_for(m, 0.004) for m in matches]
     assert all(b >= a for a, b in zip(values, values[1:]))
     assert 0.35 < CONFIDENCE_MIN < MEMORY_CONFIDENCE
+
+
+def test_the_route_is_anchored_at_the_start_pose():
+    """LOW: like A, the windowed route projection starts at the known start,
+    so its first fix cannot snap to a far part of the route."""
+    scenario = SCENARIOS[5]          # west:f -> ring_w:f ends where it starts
+    f = follower(scenario)
+    assert f._route._prev_s is not None
+    assert f._route._prev_s < f._route._seg_start_s[1]    # on `into`, not `out`
+
+
+def _pose_on_route_end(scenario, before_m):
+    out = junction_score.directed_points(GRAPH, scenario["out"])
+    arc = junction_score._arc_length(out)
+    k = int(np.searchsorted(arc, arc[-1] - before_m))
+    d = out[-1] - out[-2]
+    return (float(out[k][0]), float(out[k][1]), math.atan2(d[1], d[0]))
+
+
+@pytest.mark.parametrize("before_m", [0.03, -0.03])
+def test_it_stops_at_the_route_end(before_m):
+    """LOW: the pursuit target within LOOKAHEAD_M / 2 (the route end 30 mm
+    ahead) or behind the robot (30 mm past the end) is END, no output."""
+    scenario = SCENARIOS[3]          # ring_n:f -> ring_w:f: its end is not its start
+    if before_m >= 0:
+        pose = _pose_on_route_end(scenario, before_m)
+    else:
+        x, y, yaw = _pose_on_route_end(scenario, 0.0)
+        pose = (x - before_m * math.cos(yaw), y - before_m * math.sin(yaw), yaw)
+    f = RouteMapFollower(GRAPH, [scenario["into"], scenario["out"]], start_pose=pose,
+                         camera_x_offset_m=CAM_X, seed=7)
+    observation = f.update(0.0, pose, WORLD.render(pose), lane_sim.GROUND, **lane_sim.KW)
+    assert observation is None
+    assert f.last["reason"] == "END", f.last["reason"]

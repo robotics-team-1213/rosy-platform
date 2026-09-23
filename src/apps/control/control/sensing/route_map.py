@@ -19,7 +19,9 @@ Spec 2026-09-22 lane-network junction spike §6 (B). ROS-free. Per frame:
              fraction of frames compared so far.
 
 Fail-closed (§6): no estimate, spread over MAX_SPREAD_M, match under
-MIN_MATCH or a camera/route disagreement is no output, and CORE stops.
+MIN_MATCH, a camera/route disagreement, or a pursuit target that is the
+route's end within LOOKAHEAD_M / 2 or behind the robot is no output, and
+CORE stops.
 `state` is "ROUTE" while there is an output, else "STOP"; `last["reason"]`
 names the stop condition.
 """
@@ -50,7 +52,10 @@ LOOKAHEAD_M = 0.12
 #: per 16 mm step (MOTION_XY_SIGMA_PER_M), so MIN_MATCH trips first on
 #: bare floor.
 MAX_SPREAD_M = 0.02
-#: Smallest paint match that may still steer. Offline the 12 scenarios
+#: Smallest paint match that may still steer. `match` is posterior-weighted
+#: (PaintLocalizer's Estimate: the particle weights times their scores),
+#: not the score at the mean pose, so a spread-out or bimodal cloud reads
+#: lower than its best particle. Offline the 12 scenarios
 #: never read below 0.35 (01: the renderer's wall strip, left out of the
 #: map, in view; 0.32 at other lookaheads); a frame with no paint reads 0, and a 30 mm pose error on
 #: the start view reads ~0.21 (mean capped distance 7.7 mm).
@@ -124,6 +129,9 @@ class RouteMapFollower:
                  seed: int | None = None, paint_map: PaintMap | None = None,
                  particles: int = 300) -> None:
         self._route = LaneRoute(graph, keys)
+        # The route projection is windowed around the previous fix; anchor
+        # it at the known start (as prototype A does).
+        self._route.locate(tuple(float(v) for v in start_pose)[:2])
         segs = [DirectedSegment.from_graph(graph, key) for key in keys]
         self._points = np.vstack([segs[0].points] + [seg.points[1:] for seg in segs[1:]])
         self._arc = np.concatenate(
@@ -211,7 +219,11 @@ class RouteMapFollower:
         dx, dy = tx - x, ty - y
         ahead, left = c * dx + s * dy, -s * dx + c * dy
         range2 = ahead * ahead + left * left
-        if range2 <= 1e-9:
+        at_end = self._route_s((x, y)) + LOOKAHEAD_M >= self._arc[-1]
+        if range2 <= 1e-9 or (at_end and (ahead <= 0.0 or range2 < (LOOKAHEAD_M / 2.0) ** 2)):
+            # The target is the route's end, within half the lookahead or
+            # behind the robot. (Mid-route a target beside the robot is a
+            # tight turn, not an end.)
             return self._stop("END")
         self.last["target"] = (ahead, left)
         confidence = confidence_for(estimate.match, estimate.spread_m)
