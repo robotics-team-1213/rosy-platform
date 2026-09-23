@@ -5,6 +5,7 @@ import math
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import rclpy
+from . import executor_choice
 from .tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
@@ -241,7 +242,7 @@ def main():
     rclpy.init()
     node = LocalizationNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

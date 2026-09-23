@@ -52,6 +52,109 @@ def _clearance(points, polygon):
     return float(np.min(np.where(inside,-distance,distance)))
 
 
+def _stacked_clearances(points, polygons):
+    """_clearance for each polygon of a (T,K,2) stack, with the same per-element arithmetic."""
+    edges=np.roll(polygons,-1,axis=1)-polygons
+    delta=points[None,:,None,:]-polygons[:,None,:,:]
+    inside=np.all(edges[:,None,:,0]*delta[...,1]-edges[:,None,:,1]*delta[...,0]>=0,axis=2)
+    fraction=np.clip(np.sum(delta*edges[:,None],axis=3)/np.sum(edges*edges,axis=2)[:,None],0.,1.)
+    residual=delta-fraction[...,None]*edges[:,None]
+    distance=np.sqrt(np.min(np.sum(residual*residual,axis=3),axis=2))
+    return [float(value) for value in np.min(np.where(inside,-distance,distance),axis=1)]
+
+
+def _clearances(points, polygons):
+    """[_clearance(points, p) for p in polygons], skipping provably farther points.
+
+    A point p is left out of polygon t only when its disk bound
+    gap=|p-c|-R (c = vertex mean, R = farthest vertex from c) exceeds
+    max(U,0)+1e-6, where U is the exact clearance of some kept point, so
+    U >= the sample minimum. Every point of the convex polygon lies within R of
+    c, hence the true distance D >= gap. The guard below keeps every value
+    finite, coordinates <= 1e3, edges >= 1e-6 and c at least r >= 1e-3*R inside
+    every edge line, so no value overflows or divides by zero and rounding
+    moves gap and the computed distance by < 1e-10. For p outside, let q be
+    where the segment c->p leaves the polygon, on edge e: that edge line is
+    at least |p-q|*r/R from p, so the exact cross product is at least
+    |e|*|p-q|*r/R. Its rounding error is a few ulps of |e|*|p-q| plus
+    ~1e-13*|p-q| from vertex coordinates <= 1e3 tilting the edge, so the sign
+    is safe when |e|*r/R > ~1e-13. Edges >= 1e-6 and r/R >= 1e-3 give 1e-9,
+    so the computed inside test is false. A left-out
+    point's computed value therefore exceeds U and cannot be the minimum. The
+    minimum's sign of zero can differ; callers only subtract a positive margin
+    or compare it.
+
+    Few kept points go through one stacked broadcast; many go polygon by
+    polygon through the unchanged _clearance, since a large stack is slower
+    than the loop. Both use the original per-element arithmetic.
+    """
+    polygons=np.asarray(polygons)
+    if len(points)>=64:
+        centers=polygons.mean(axis=1)
+        spokes=polygons-centers[:,None]
+        edges=np.roll(polygons,-1,axis=1)-polygons
+        lengths=np.sqrt(np.sum(edges*edges,axis=2))
+        reach=np.sqrt(np.max(np.sum(spokes*spokes,axis=2),axis=1))
+        inner=np.min((edges[...,1]*spokes[...,0]-edges[...,0]*spokes[...,1])/lengths,axis=1)
+        scale=max(float(np.max(np.abs(points))),float(np.max(np.abs(polygons))))
+        with np.errstate(all='ignore'):
+            # max() drops a NaN scale, so finiteness is checked explicitly.
+            usable=bool(np.isfinite(points).all() and np.isfinite(polygons).all() and
+                        scale<=1e3 and np.min(lengths)>=1e-6 and np.all(inner>=1e-3*reach))
+        if usable:
+            offset=points[None]-centers[:,None]
+            gaps=np.sqrt(np.sum(offset*offset,axis=2))-reach[:,None]
+            best=np.argmin(gaps,axis=1)
+            chosen=np.unique(best)
+            bounds=_stacked_clearances(points[chosen],polygons)
+            keep=gaps<=np.maximum(bounds,0.)[:,None]+1e-6
+            keep[np.arange(len(polygons)),best]=True
+            union=np.any(keep,axis=0)
+            if int(np.count_nonzero(union))*len(polygons)<=4096:
+                return _stacked_clearances(points[union],polygons)
+            return [_clearance(points[mask],polygon) for polygon,mask in zip(polygons,keep)]
+    return [_clearance(points,polygon) for polygon in polygons]
+
+
+def _travel_candidates(obstacles, hull, margin, maximum):
+    """Obstacles that can decide `clearance > margin` for any hull swept up to `maximum`.
+
+    Only that comparison leaves footprint_translation_limits, so a point whose
+    computed clearance exceeds margin can be dropped. With c the hull vertex
+    mean, R its farthest vertex and r its smallest edge-line distance, every
+    swept hull contains the disk (c,r) and lies in the disk (c,R'), R'=R+maximum,
+    so the true distance D >= |p-c|-R'. Let q be where the segment c->p leaves
+    a swept hull, on edge e: that edge line is at least |p-q|*r/R' from p, so
+    the exact cross product is at least |e|*|p-q|*r/R'. The bisection shortens
+    the translation edges of the swept hull to maximum/1024; the guard
+    (coordinates <= 1e3, hull edges >= 1e-6, maximum >= 1e-3,
+    r >= 1e-3*R') keeps every edge >= ~1e-6. A translation edge is the
+    difference of a vertex v and fl(v+d), exact by Sterbenz when d is small
+    against v, and otherwise rounded like any other edge, so the computed
+    cross product errs by a few ulps of |e|*|p-q| plus ~1e-13*|p-q| from
+    vertex coordinates <= 1e3 tilting the edge. |e|*r/R' >= 1e-6*1e-3 exceeds
+    that ~1e-13 by about 1e4, and D > margin >= .01 bounds the distance
+    rounding, so a dropped point is computed outside at a distance > margin. The
+    best-bound point is always kept so the set is never empty.
+    """
+    if len(obstacles)<64 or maximum<1e-3:
+        return obstacles
+    center=hull.mean(axis=0)
+    spokes=hull-center
+    edges=np.roll(hull,-1,axis=0)-hull
+    lengths=np.sqrt(np.sum(edges*edges,axis=1))
+    reach=float(np.sqrt(np.max(np.sum(spokes*spokes,axis=1))))+maximum
+    inner=float(np.min((edges[:,1]*spokes[:,0]-edges[:,0]*spokes[:,1])/lengths))
+    scale=max(float(np.max(np.abs(obstacles))),float(np.max(np.abs(hull)))+maximum)
+    if not (scale<=1e3 and float(np.min(lengths))>=1e-6 and inner>=1e-3*reach):
+        return obstacles
+    offset=obstacles-center
+    gap=np.sqrt(np.sum(offset*offset,axis=1))-reach
+    keep=gap<=margin+1e-6
+    keep[np.argmin(gap)]=True
+    return obstacles[keep]
+
+
 def _geometry(points, footprint, center, uncertainty, body_radius, scan_age):
     cx,cy=center
     if (not all(_number(v) for v in (cx,cy,uncertainty,body_radius,scan_age)) or
@@ -83,7 +186,7 @@ def footprint_sweep_clearance(points, footprint, center, uncertainty, body_radiu
         # Every vertex moves at most this fast; the nearest time sample is
         # <=dt/2 away. Minkowski dilation covers all intermediate polygons.
         margin+=(abs(v)+abs(w)*pivot_radius)*horizon/intervals/2
-        nearest=math.inf
+        polygons=[]
         for index in range(intervals+1):
             t=horizon*index/intervals
             angle=w*t
@@ -94,8 +197,10 @@ def footprint_sweep_clearance(points, footprint, center, uncertainty, body_radiu
             cosc=one_minus_cosine/angle if angle else 0.
             shift=np.array([one_minus_cosine*cx+sine*cy+v*t*sinc,
                             -sine*cx+one_minus_cosine*cy+v*t*cosc])
-            polygon=hull@np.array([[cosine,sine],[-sine,cosine]])+shift
-            nearest=min(nearest,_clearance(obstacles,polygon))
+            polygons.append(hull@np.array([[cosine,sine],[-sine,cosine]])+shift)
+        nearest=math.inf
+        for value in _clearances(obstacles,polygons):
+            nearest=min(nearest,value)
         result=nearest-margin
         return result if math.isfinite(result) else None
     except (TypeError,ValueError,OverflowError):
@@ -107,6 +212,7 @@ def footprint_translation_limits(points, footprint, center, uncertainty, body_ra
     try:
         if not _number(maximum) or not 0<maximum<=.12:return None
         obstacles,hull,_,margin=_geometry(points,footprint,center,uncertainty,body_radius,scan_age)
+        obstacles=_travel_candidates(obstacles,hull,margin,maximum)
         if _clearance(obstacles,hull)<=margin:
             return (0.,0.)
         limits=[]

@@ -90,6 +90,43 @@
      `run_fleet_sim.sh`, localization rig)의 채택은 단계적이다. 그전까지 피어 부하는 가드가 측정만 한다.
    - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄로 재판정했다.
 
+   **R8 구현 메모 (2026-09-24).**
+   - `src/apps/control/tools/device/hotpath_measure.py`를 만들었다. ROS 없이 돌고, 하위 명령마다 JSON 보고서
+     하나(`rosy.control.hotpath_measure/1`)를 쓴다.
+   - `bench`는 `wall_tracker._segments`(720-ray), `match_motion`(180점, 10° 회전), `inflate`(200×200, 반경
+     5셀)의 median·p90·max를 잰다. 입력은 동등성 테스트 생성기와 같은 형태다.
+   - `watch`는 control 노드 프로세스별 CPU%(`/proc/<pid>/stat` 차분)와 RSS, 부하, PSI를 간격마다 기록한다.
+   - 보고서는 `/proc/device-tree/model`이 Raspberry Pi일 때만 실기 증거로 표시한다. host 수치(Windows x86
+     `match_motion` 80 ms 등)는 증거가 아니다.
+   - 실기 실행은 HOLD다. 하드웨어가 없어 Pi 수치는 아직 없다. 절차는 도구 docstring과 device 검증 계획의
+     2026-09-24 checkpoint에 있다.
+   - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,868줄로 재판정했다.
+
+   **R3 구현 메모 (2026-09-24).**
+   - 선택은 파라미터가 아니라 환경 변수 `ROSY_EXECUTOR`(`single` 기본, `events`)로 한다. 노드 파라미터보다
+     먼저, 노드 밖에서 정해야 하기 때문이다. 표의 "파라미터로 선택"은 이 방식으로 대체한다.
+   - 14개 control 노드 `main()`과 rig가 `control/executor_choice.py` 하나를 거친다. 기본값은 이전과 같은
+     `rclpy.spin(node)`다. `events`는 executor의 native `spin()`을 써서 rig와 같은 루프를 잰다.
+   - `events`에서 알려진 차이: 콜백이 도착 순서로 돈다. 다른 스레드가 context를 끄면
+     `ExternalShutdownException`이 난다. 콜백이 예외를 내면(watch_node `--once`의 SystemExit) native
+     executor가 FATAL 줄을 먼저 남긴다. 종료 코드는 유지된다.
+   - WSL 탐침(리뷰): SIGINT·SIGTERM 처리, sim-time 타이머, 다른 스레드의 `call_async`는 두 방식이 같았다.
+   - R3는 아직 완료가 아니다. rig A/B(ENV:VALID 실행만), 콜백 순서 영향, 실기 측정(R8)이 남았다. 그전까지
+     제품 기본값은 `single`이다.
+
+   **R5 구현 메모 (2026-09-24).**
+   - 시간 샘플 벡터화와 먼 점의 증명적 제외를 함께 썼다. 샘플별 원판 하한이 정확한 상한 U보다
+     1e-6 이상 크면 그 점을 뺀다. 좌표·변 길이·내접 비율 가드를 못 넘으면 원본 경로로 계산한다.
+   - 남은 점이 적으면 샘플을 쌓아 한 번에, 많으면 원본 `_clearance`로 샘플마다 계산한다. 모든 점을
+     쌓은 broadcast는 루프보다 1.8배 느렸다.
+   - 직진 한계는 `clearance > margin` 비교만 내보내므로, 이동 끝을 포함한 원판 하한이 margin을 넘는
+     점을 호출당 한 번 뺀다.
+   - 호출당 비용(host, 1440점)은 sweep 21–23→4–6 ms, 직진 한계 5–39→2–8 ms다. 점이 모두 가까운 최악
+     입력에서는 원본과 비슷하다(20.9→19.7 ms).
+   - 원본은 numpy 스칼라 명령 인자에 `np.float64`를 반환한다. 결과 동일 조건이라 그대로 두었다.
+   - 독립 리뷰(APPROVE, MEDIUM 1·LOW 3) 반영: 직진 후보 가드를 maximum ≥ 1e-3으로 올리고(여유 약 1e4), 가드에 유한성 검사를 넣고, 반올림 논증을 |e|·r/R 기준으로 고쳐 쓰고, 가드 경계 코퍼스를 추가했다.
+   - main 병합 후 control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 29,037줄로 재판정했다(R3·R8 누적).
+
    **R2 구현 메모 (2026-09-24).**
    - 최신 값만 의미 있는 구독 12개를 KEEP_LAST depth 1로 바꿨다. calibration의 decision·motion_limits·
      can_reverse·위험 4종, wander의 observation·motion_limits, goal_escape의 motion_limits, web의 decision·

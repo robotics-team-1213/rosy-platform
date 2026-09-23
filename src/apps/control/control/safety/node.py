@@ -8,6 +8,7 @@ import os
 import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from geometry_msgs.msg import Twist
+from .. import executor_choice
 from ..tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.time import Time
@@ -781,7 +782,7 @@ def main():
     rclpy.init()
     node = SafetyNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:
