@@ -1,0 +1,12 @@
+# ROSY image defaults (D-176). Every card gets the same values; nothing here is
+# secret. The one-time personalization bundle and the operator's
+# /boot/firmware/rosy-config.yaml override these, in that order.
+schema_version: 1
+country: KR
+timezone: Asia/Seoul
+ap:
+  # fallback: open rosy-pinky-xxxx only while there is no uplink (D-176).
+  # relay: D-26 RELAY_AP_STA. off: D-26/D-154 NETWORK_HOLD, no AP.
+  mode: fallback
+  grace_seconds: 120
+  hold_seconds: 600
