@@ -19,3 +19,5 @@
 **References:** D-23 (FastAPI 내장 대시보드), D-38, 결합도 평가 §4 (2026-09-19).
 
 ---
+
+**Update 2026-09-23:** `web_node` 기본 포트를 28161/28162에서 **28181(페이지)/28182(API)**로 바꿨다(사용자 요청). deploy 부재 가드(`test/test_control_launch_boundary.py`)도 새 포트를 검사한다.

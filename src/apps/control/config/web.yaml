@@ -4,6 +4,6 @@
 # gate. Isolated Gazebo uses the same topic and the same /safety/* gauges.
 /**/web_node:
   ros__parameters:
-    port: 28161
-    backend_port: 28162
+    port: 28181
+    backend_port: 28182
     teleop_topic: auto

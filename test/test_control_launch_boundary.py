@@ -1,7 +1,7 @@
 from robot_contracts import DEPLOY, ROOT
 
 #: D-150: web_node debug ports and executable stay inside the control debug surface.
-DEBUG_PORT_MARKERS = ("28161", "28162")
+DEBUG_PORT_MARKERS = ("28181", "28182")
 DEPLOY_TEXT_SUFFIXES = {".yaml", ".yml", ".service", ".sh", ".ps1", ".py", ".timer", ".path"}
 
 
@@ -41,7 +41,7 @@ def test_deploy_configs_do_not_expose_control_debug_surface():
 
     compose.yaml 은 D-77 검사가 지키고 있다 — 여기는 그 아래 깔리는 모든
     설정/유닛/스크립트까지 확장한다. web_node 는 control 디버그 서피스이며
-    운영 구성의 어떤 파일도 그 포트(28161/28162)를 여는 이름을 가져선 안 된다.
+    운영 구성의 어떤 파일도 그 포트(28181/28182)를 여는 이름을 가져선 안 된다.
     """
     offenders = []
     for path in _deploy_text_files():

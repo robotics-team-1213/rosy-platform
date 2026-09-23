@@ -6,7 +6,7 @@
 Control-stack diagnostic page served by `control/web_node.py` (installed to
 `share/control/web/`). This is **not** the operator console (D-77: that is
 CORE `/dashboard`). D-150 keeps it a debug surface: no operational launch or
-deploy includes it, and its ports (28161/28162) plus the `web_node` executable
+deploy includes it, and its ports (28181/28182) plus the `web_node` executable
 are pinned out of deploy configs by `test/test_control_launch_boundary.py`.
 It is launched only from legacy `robot.launch.py`, never
 from `deploy/robot/compose.yaml`. Polls `/state.json` every 333 ms and `/map.png`
