@@ -264,3 +264,11 @@
 - gate 변화: 없음(control ROS-SIM은 전체 그래프 기준 HOLD 유지, DEVICE/FIELD HOLD).
 - 결정: 사용자 승인 2026-09-23("정지 중 짧은 대기"). 움직이는 trial, e-stop, hazard, wander 미정지는 이전처럼 즉시 실패한다.
 - 교훈: main도 같은 비율로 흔들렸다. D-171 트랙 1 브랜치를 의심한 판단은 박스 부하(피어 세션의 Gazebo)와 시간대 차이를 코드 효과로 오인한 것이었다. 흔들리는 rig는 같은 시간대 교차 실행으로 보고, 실패는 발생 단계별로 센다. stderr 계측은 타이밍을 바꾸므로, 메모리 계수기를 쓰고 1 s마다 파일로 덤프한다.
+
+## 2026-09-23 · uncommitted · perf(control): vectorise the calibration wall fit, bit for bit
+- 변경: `sensing/wall_tracker.py`의 `_fit`을 numpy로 벡터화했다. 점 쌍 기울기는 행렬로, median은 `_median`으로 계산한다(짝수 개면 두 가운데 값의 평균, 결과가 0일 때만 안정 정렬로 ±0 부호를 `sorted()`와 맞춘다). 반환값은 모두 Python `float`/`int`다. `_segments`는 run마다 배열을 한 번 만들어 `_fit(array=...)`에 넘긴다. 테스트 `test_wall_tracker_equivalence.py`는 원본 `_fit`의 복사본(main `860a6740`)과 결과를 `repr`까지 비교한다.
+- 원인: 부하가 높은 rig에서 calibration 노드의 `/scan` 콜백(`on_scan` → `WallTracker.update` → `_segments` → `_fit`)이 프로세스 CPU의 75%였다. scan당 `_fit` 약 130회, 경합 없는 x86 코어에서 27 ms, 부하 28에서 평균 130 ms. 큐가 쌓여 decision 체류가 324 ms까지 늘었고, 0.25 s 신선도 창을 넘어 translation 단계가 실패했다(평가 문서 §8.4 class B).
+- 증거: 동등성 — 무작위 벽 3000, y가 거의 겹치는 쌍 1500, 부호 있는 0 3000, scan 60, tracker 연속 12회와 조각 병합 10회에서 `repr` 동일, 모든 값이 builtin 타입. 뮤테이션 8종 모두 검출. 속도: scan당 27.2 ms → 7.2 ms(4.0배, 같은 프로세스 교차 측정). host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. rig 교차 A/B(부하 약 30): 기준 3/4, 최적화 1/4 통과. 최적화 쪽 실패 2건은 모두 calibration → safety 명령 전달 구간(357 ms, 305 ms)에서 늦었다. 이 구간은 이번 변경과 무관한 safety 프로세스 쪽이다. 이 부하에서 rig는 판정력이 없다(§8.4). 판정 근거는 host 동등성과 결정적 비용 측정이다. 독립 리뷰 1회, 지적(±0 부호) 반영.
+- gate 변화: 없음(DEVICE/FIELD HOLD). Pi에서의 scan 콜백 시간은 미측정.
+- 결정: 사용자 승인 2026-09-23("wall_tracker 최적화"). 동작은 바꾸지 않는다.
+- 교훈: 부하 25–30 이상에서는 코드가 한가해도 OS 스케줄링 공백(약 340 ms)만으로 0.25 s 창을 넘는다. 이 영역의 rig 실패는 코드 판정에 쓰지 않는다. "비트 단위 동일"은 `==`가 아니라 `repr`로 확인해야 한다(-0.0 == 0.0).

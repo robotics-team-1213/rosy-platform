@@ -1,28 +1,50 @@
 """Subject: one associated planar wall for straight calibration, never safety."""
 import math
-from statistics import median
+
+import numpy as np
 
 from .lidar import robot_yaw
 
 
-def _fit(points, allow_exclusion=True):
+def _middle(ordered):
+    middle = len(ordered)//2
+    if len(ordered) % 2:
+        return float(ordered[middle])
+    return (float(ordered[middle-1])+float(ordered[middle]))/2
+
+
+def _median(values):
+    """statistics.median on finite float64 values, bit for bit: even counts average the
+    two middles. Only a zero result can depend on the order of -0.0/+0.0; that case is
+    settled with a stable sort, as sorted() does, and the common case stays fast."""
+    result = _middle(np.sort(values))
+    return _middle(np.sort(values, kind='stable')) if result == 0. else result
+
+
+def _fit(points, allow_exclusion=True, array=None):
+    """``array``, when given, must be ``np.asarray(points, dtype=float)`` (hot-path reuse)."""
     if len(points) < 6 or points[-1][0]-points[0][0] < math.radians(5):
         return None
     # Wide-baseline pair slopes resist isolated noise. Accepted support must
     # satisfy 3mm; sparse isolated/boundary returns may be excluded once only.
+    # Vectorised for the per-scan hot path; the arithmetic matches the original
+    # pure-Python fit exactly (test_wall_tracker_equivalence).
+    array = np.asarray(points, dtype=float) if array is None else array
+    assert len(array) == len(points), 'array must mirror points'
+    ys, xs = array[:, 1], array[:, 2]
     quarter = max(1, len(points)//4)
-    slopes = [(q[2]-p[2])/(q[1]-p[1]) for p in points[:quarter]
-              for q in points[-quarter:] if abs(q[1]-p[1]) > 1e-6]
-    if not slopes:
+    dy = ys[-quarter:][None, :]-ys[:quarter][:, None]
+    keep = np.abs(dy) > 1e-6
+    if not keep.any():
         return None
-    a = median(slopes)
-    b = median(x-a*y for _, y, x in points)
-    errors = [abs(x-a*y-b)/math.hypot(1., a) for _, y, x in points]
-    residual = max(errors)
+    a = _median((xs[-quarter:][None, :]-xs[:quarter][:, None])[keep]/dy[keep])
+    b = _median(xs-a*ys)
+    errors = np.abs(xs-a*ys-b)/math.hypot(1., a)
+    residual = float(errors.max())
     if abs(a) > 2.5 or not .05 < b < 8.:
         return None
     if residual > .003:
-        excluded = [i for i, error in enumerate(errors) if error > .003]
+        excluded = np.flatnonzero(errors > .003).tolist()
         if (not allow_exclusion or len(excluded) > .1*len(points) or residual > .010
                 or any(j == i+1 for i, j in zip(excluded, excluded[1:]))):
             return None
@@ -82,17 +104,18 @@ def _segments(scan, nose, compensation=None):
                  for angle, y, x in run] for run in runs]
     segments = []
     for run in runs:
+        rows = np.asarray(run, dtype=float) if len(run) >= 6 else None
         start = 0
         while start+6 <= len(run):
             end = start+6
             while end <= len(run) and run[end-1][0]-run[start][0] < math.radians(5):
                 end += 1
-            fit = _fit(run[start:end]) if end <= len(run) else None
+            fit = _fit(run[start:end], array=rows[start:end]) if end <= len(run) else None
             if fit is None:
                 start += 1
                 continue
             while end < len(run):
-                grown = _fit(run[start:end+1])
+                grown = _fit(run[start:end+1], array=rows[start:end+1])
                 if grown is None:
                     break
                 fit = grown
