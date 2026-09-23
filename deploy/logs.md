@@ -845,3 +845,23 @@
 - gate 변화: 없음
 - 결정: D-189
 - 교훈: 쓸 수 있는 HOME은 시작 훅이다 — 로그인 셸과 user site를 같이 끈다 (교훈 문서에 추가)
+
+## 2026-09-24 · uncommitted · docs(adr): D-190 vendor-parity boot display plan (LCD, buzzer, battery)
+
+- 변경: D-190과 실행 계획 `docs/plans/2026-09-24-vendor-parity-boot-display.md`를 추가했다. 기준을 공식 Pinky Pro 동작으로 두고,
+  S0 공식 이미지 증거(LCD 주체·GPIO 라이브러리·백라이트·부저 핀·배터리 계산) → S1 D-181 장치 편입 → S2 표시 unit·이미지·가드 →
+  S3 손 설치 없는 실기 검증 순서를 고정했다. 장치 즉석 수정은 증거 수집용일 때만 하고 ADR에 기록한다. 코드 변경 없음.
+- 증거: 2026-09-24 장치 관찰 — 재부팅 23.5 s, 부팅 표시 30 s 지연(런타임 뒤 판정 unit으로 t+67→t+45 s), ADC 배터리 8.67 V,
+  LCD 드라이버는 공식과 동일, 장치에서 한 번 그린 LCD는 보이지 않음(원인 미확정).
+- gate 변화: 없음
+- 결정: D-190
+- 교훈: 장치에서 즉석으로 고치면 공식 동작과 같은지 판단할 근거가 남지 않고 다시 구우면 사라진다. 증거를 먼저 모은다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-191 device readiness matrix and first real-device evaluation
+
+- 변경: D-191과 평가표 `docs/validation/pinky-pro-evaluation-2026-09-24.md`(20행)를 추가했다. 코드 변경 없음.
+- 증거: rosy-pinky-e4us 읽기 전용 검사 — `/dev/ttyAMA4`·`/dev/rosy-motor` 없음(config.txt에 uart4 overlay 없음), `sllidar_ros2`·
+  `dynamixel_sdk`·`rosylib` 없음, `rosy-io` unit 미설치, 이미지 경로에 API 초기 토큰 발급 없음, ADC 배터리 8.67 V, 카메라 센서 미열거.
+- gate 변화: 없음
+- 결정: D-191
+- 교훈: Docker 설치 경로에서 서명 이미지 경로로 옮길 때, 이전 경로가 암묵적으로 설치하던 것(overlay·SDK·외부 패키지·토큰)의 목록을 먼저 만든다.
