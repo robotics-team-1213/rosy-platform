@@ -203,4 +203,5 @@
 | D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed |
 | D-194 | 브라우저 조작 부품은 한 벌이다 | Accepted |
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
+| D-197 | Docker는 제품 아티팩트 체인에서 퇴역한다 — 제품 경로의 신규 Docker 의존은 지금 금지하고, OCI·Compose 체인은 native payload가 ARTIFACT를 통과하면 한 변경으로 정리한다 | Accepted |
 ---
