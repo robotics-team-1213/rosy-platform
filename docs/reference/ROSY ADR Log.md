@@ -223,4 +223,5 @@
 | D-215 | 명령 추적 `TIMEOUT`은 Fleet 기록 전용 상태다 — 로봇 ack enum에 넣지 않는다 | Accepted |
 | D-216 | CAP-001 예시의 `protocol_version` 오타를 고친다 — `"1"`이 아니라 `"1.0"`이다 | Accepted |
 | D-217 | SEC-102의 CORS 문장을 좁힌다 — 로봇 API는 CORS를 제공하지 않는다 | Accepted |
+| D-218 | 웹 확인은 결과를 묻고, 없는 조작은 버튼이 되지 않는다 — alert/prompt 금지, confirm은 핀된 횟수만, Fleet 개입은 모의 조종을 그리지 않는다 | Accepted |
 ---
