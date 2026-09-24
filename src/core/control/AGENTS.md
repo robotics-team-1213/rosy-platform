@@ -42,7 +42,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 - Commits: short imperative behavioral summaries.
 
 ### Testing Requirements
-- `python3 -m pytest test/ -q` from this package directory (`src/apps/control`); needs numpy/OpenCV. ROS graph tests require a separate isolated ROS Jazzy run.
+- `python3 -m pytest test/ -q` from this package directory (`src/core/control`); needs numpy/OpenCV. ROS graph tests require a separate isolated ROS Jazzy run.
 - Keep the suite green before committing; add tests for new pure-logic decisions.
 
 ### Common Patterns

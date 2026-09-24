@@ -29,4 +29,4 @@
 본다. control 단독 모드는 자기 표를 본다. 표를 나누기 전에는 감시 결과가
 제품 그래프의 증거가 아니다.
 
-**Validation:** `src/apps/control/test/test_watch.py`.
+**Validation:** `src/core/control/test/test_watch.py`.

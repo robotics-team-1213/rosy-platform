@@ -5,18 +5,17 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `core/` (runtime and, for now, sensing in `control/`), `devices/` (buses and chips), `products/` (manipulator profile), `face/` (LCD), `navigation/`, `sim/`, `site/` (fleet and the game host). `apps/` still holds `control` until that directory lock clears. Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
+ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `core/` (runtime and sensing in `control/`), `devices/` (buses and chips), `products/` (manipulator profile), `face/` (LCD), `navigation/`, `sim/`, `site/` (fleet and the game host). `apps/` no longer holds a package. Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
 
 ## Key Files
 
-No files at this level. Each package directory has its own `AGENTS.md` (e.g. `core/core/AGENTS.md`, `apps/control/AGENTS.md`, `site/fleet/AGENTS.md`).
+No files at this level. Each package directory has its own `AGENTS.md` (e.g. `core/core/AGENTS.md`, `core/control/AGENTS.md`, `site/fleet/AGENTS.md`).
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `core/` | CORE domain: `core` (gateway kernel: bridge + system wiring), `core_common` (protocol schemas, config, identity, profile, rmw), `core_events` (event bus, audit), `core_features` (command/safety/state/navigation/swarm/waypoints/power/docking/diagnostics/fleet_agent/maps), `core_api_web` (FastAPI/WS, dashboard static files, host-agent client), `interfaces` (custom srv: Emotion, SetBrightness, SetLamp, SetLed) |
-| `apps/` | Only `control` remains here (sensing, camera, calibration, planning). The directory is locked on this machine, so it has not moved next to `core` yet |
+| `core/` | CORE domain: `core` (gateway kernel: bridge + system wiring), `core_common`, `core_events`, `core_features`, `core_api_web`, `web_common`, `interfaces`, and `control` (sensing, camera, calibration, planning). Legacy final publisher must not run beside `core` |
 | `devices/` | Device nodes that used to live in `hardware/`: `bringup`, `led`, `lamp_control`, `imu_bno055`, `sensor_adc`. Chip names are still the package names |
 | `products/` | `omx_adapter` — manipulator profile (`device_type: manipulator`), disabled. Not a second mobile base |
 | `face/` | `emotion` — robot-local LCD |
@@ -28,7 +27,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 ### Working In This Directory
 
-- Package names are grouped by domain (`core/`, `apps/`, `hardware/`, …). Do not reintroduce `pinky_*` or flat `rosy_*` directory names. The 2026-09 regroup moved `rosy_core` → `core/core`, `rosy_control` → `apps/control`, `rosy_fleet` → `site/fleet`, `rosy_bringup` → `hardware/bringup`, etc.; docs that still say `src/<pkg>/test` mean `src/<domain>/<pkg>/test`.
+- Package names stay `control`, `bringup`, and the rest. Directories are `core/`, `devices/`, `products/`, `face/`, `navigation/`, `sim/`, and `site/`. Do not reintroduce `pinky_*` or flat `rosy_*` directory names. `rosy_control` lives at `core/control`, `rosy_bringup` at `devices/bringup`, `rosy_fleet` at `site/fleet`. Docs that still say `src/<pkg>/test` mean `src/<domain>/<pkg>/test`.
 - After editing `package.xml` / `setup.py` / `CMakeLists.txt`, rebuild with colcon.
 - `resource/<pkg>` is an ament index marker — do not delete; no need for AGENTS.md there (`tools/fix_ament_resource.sh` can recreate them).
 - Do not check in `src/build`, `src/install`, `src/log`.
@@ -37,7 +36,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ apps/control/test/ site/fleet/test products/omx_adapter/test site/games/test -q
+python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ core/control/test/ site/fleet/test products/omx_adapter/test site/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 

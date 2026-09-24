@@ -630,7 +630,7 @@ DEVICE/FIELD HOLD gates.
 
 ## 2026-09-24 device measurement checkpoint: control hot paths (D-185 R8)
 
-`src/apps/control/tools/device/hotpath_measure.py` produces the Pi numbers D-185
+`src/core/control/tools/device/hotpath_measure.py` produces the Pi numbers D-185
 marks HOLD. The full procedure is in the tool's module docstring. In short:
 
 1. On the Pinky Pro, check out the revision under test (or copy the single file and
@@ -638,7 +638,7 @@ marks HOLD. The full procedure is in the tool's module docstring. In short:
    measure the deployed `control`).
 2. Stack stopped, about 1-2 min:
    `python3 tools/device/hotpath_measure.py bench --iterations 50 --label <rev> --out ~/rosy-measure/bench-<ts>.json`
-   (from `src/apps/control`).
+   (from `src/core/control`).
 3. Stack running in the scenario to measure, about 600 s:
    `python3 tools/device/hotpath_measure.py watch --duration 600 --interval 2 --label <scenario> --out ~/rosy-measure/watch-<ts>.json`
 4. Copy `~/rosy-measure/*.json` back and cite it in the D-185 R8 record.

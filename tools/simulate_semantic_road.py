@@ -15,7 +15,7 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONTROL_ROOT = REPO_ROOT / "src/apps/control"
+CONTROL_ROOT = REPO_ROOT / "src/core/control"
 if str(CONTROL_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_ROOT))
 for _package in ("core", "core_common", "core_events", "core_features"):

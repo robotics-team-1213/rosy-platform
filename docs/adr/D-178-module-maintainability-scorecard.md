@@ -69,7 +69,7 @@
 
 5. **판정 단위는 1차 패키지, 2차 C/B 모듈의 내부 모듈이다.** 1차는 저장소의 ROS
    패키지 20개 — **집합 동일성**: 새 패키지가 생기면 기준선에 없어 시험이 붉다. 2차는
-   **`apps/control`, `core/core_features`, `navigation/navigation`, `sim/gz_sim`
+   **`core/control`, `core/core_features`, `navigation/navigation`, `sim/gz_sim`
    4개**만 내부 모듈/파크 단위로 분해해 병렬 작업 충돌 지점을 뽑는다 (판정 단위를
    표면으로 고정하는 D-153 패턴).
 

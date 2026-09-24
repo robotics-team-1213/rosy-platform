@@ -2,7 +2,7 @@
 title: 호스트 pytest가 초록이어도 Gazebo 인식 경로는 실제로 돌려서 렌더된 값을 재야 한다
 date: 2026-09-22
 category: workflow-issues
-module: sim/gz_sim + apps/control (map_v2_fleet 차선 주행)
+module: sim/gz_sim + core/control (map_v2_fleet 차선 주행)
 problem_type: workflow_issue
 component: development_workflow
 severity: high

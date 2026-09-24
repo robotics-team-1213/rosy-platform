@@ -2,7 +2,7 @@
 title: 카메라 마운트를 손으로 유도하면 기울어진 조인트 안쪽 오프셋을 빠뜨린다 — URDF 조인트 체인에서 다시 계산해 시험으로 묶는다
 date: 2026-09-24
 category: logic-errors
-module: sim/gz_sim launch + apps/control (dock_observer, line_observer 카메라 외부 파라미터)
+module: sim/gz_sim launch + core/control (dock_observer, line_observer 카메라 외부 파라미터)
 problem_type: logic_error
 component: development_workflow
 severity: medium
@@ -34,7 +34,7 @@ OpenCV 규약(픽셀 중심이 정수)에 맞는 주점은 ((W−1)/2, (H−1)/2
 
 - x 오프셋만으로 태그 거리가 매 프레임 5.5 mm 길게 읽혔다(가드 시험 docstring).
 - 주점 반 픽셀 오차는 렌더된 쐐기에서 u, v 모두 -0.5 px, 측방 0.5 mm, 요 0.13° 편향으로
-  측정됐다(`src/apps/control/control/sensing/dock_observer.py`의 `camera_matrix_from_hfov`
+  측정됐다(`src/core/control/control/sensing/dock_observer.py`의 `camera_matrix_from_hfov`
   docstring). 이 세션 측정으로는 둘을 합쳐 거리가 약 10 mm 길었다.
 
 ## What Didn't Work

@@ -18,7 +18,7 @@ module: docs
 **Files:** `test/test_folder_layout.py`
 
 1. 실패하는 시험: 저장소 루트의 `*.sh`는 `env.sh`만이다.
-2. `src/**/deploy/*.sh`와 `src/apps/control/tools/gz/*.sh`는 0건이다.
+2. `src/**/deploy/*.sh`와 `src/core/control/tools/gz/*.sh`는 0건이다.
 3. `data/teleop`과 `data/drive`가 있고, `tools/run_data.py`가 그 두 종류만 만든다.
 4. `docs/validation` 안의 `*.sh`는 `evidence/` 아래에만 있다.
 
@@ -28,7 +28,7 @@ module: docs
 ## Task 2: 루트와 패키지 안의 어긋난 스크립트
 
 **Files:** `fix.sh`, `run_fleet_sim.sh`, `src/core/core/deploy/install.sh`,
-`src/apps/control/tools/gz/run_track260905.sh`, 그 경로를 적는 문서와 호출부
+`src/core/control/tools/gz/run_track260905.sh`, 그 경로를 적는 문서와 호출부
 
 1. `fix.sh`는 `tools/fix_ament_resource.sh`로 옮겼다. 저장소 루트는 스크립트
    위치에서 계산한다.
@@ -37,7 +37,7 @@ module: docs
 3. `src/core/core/deploy`는 제거했다. 제품 유닛은 `deploy/robot/native`에
    이미 있으므로 옛 유닛을 옆에 복사하지 않는다.
 4. `run_track260905.sh`는 control 모듈의 벤치가 실행하고 시험하므로
-   `src/apps/control/tools/gz/`에 남긴다.
+   `src/core/control/tools/gz/`에 남긴다.
 
 ## Task 3: bringup 환경 스크립트
 

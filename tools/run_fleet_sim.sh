@@ -23,7 +23,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=$(( (RANDOM % 100) + 20 ))
 
 # Nav2 의 정적 점유 맵(map_server) — mode:=nav 는 map:= 인자를 요구한다.
-MAP_YAML="$PWD/src/apps/control/map/map_260905_update_v2/maps/map_260905.yaml"
+MAP_YAML="$PWD/src/core/control/map/map_260905_update_v2/maps/map_260905.yaml"
 
 # 2. Cleanup previous processes
 killall -9 ruby gz python3 parameter_bridge create 2>/dev/null || true

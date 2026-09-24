@@ -20,8 +20,8 @@
 - 작업 디렉터리: `F:\Dev\Control\Robot\ROS\Rosy\.worktrees\lane-network-junctions` (브랜치 `feat/lane-network-junctions`). `git stash`는 쓰지 않는다.
 - Windows 호스트 시험 명령:
   ```powershell
-  $env:PYTHONPATH = "src/apps/control;src/core/core;src"
-  python -m pytest src/apps/control/test/ src/sim/gz_sim/test/ -q
+  $env:PYTHONPATH = "src/core/control;src/core/core;src"
+  python -m pytest src/core/control/test/ src/sim/gz_sim/test/ -q
   ```
   기준선은 1,337 passed, 29 skipped다(main `5207531` 기준). 매 작업 끝에 이 숫자가 줄지 않아야 한다.
 - 커밋 메시지 끝에는 다음 줄을 넣는다:
@@ -32,19 +32,19 @@
 
 | 파일 | 책임 |
 |---|---|
-| Create `src/apps/control/test/lane_sim.py` | 시험 공용: 역투영 렌더러 `World`, 차선 생성, CORE 법칙 거울, 폐루프 `drive`, STL 월드 |
-| Modify `src/apps/control/test/test_lane_edge.py` | 공용 도우미를 `lane_sim`에서 가져온다(동작 변경 없음) |
-| Create `src/apps/control/map/map_v2_fleet/lane_rules.yaml` | 사람이 정한 규칙: 링 기하, 도로 앵커, 통행 방향, 주차 |
-| Create `src/apps/control/map/map_v2_fleet/scripts/lane_graph.py` | 규칙과 STL로 `lane_graph.yaml` 생성, 여유 거리 검증 |
-| Create `src/apps/control/map/map_v2_fleet/lane_graph.yaml` | 생성물(체크인, 결정적) |
-| Create `src/apps/control/test/test_lane_graph.py` | 그래프 시험 |
-| Modify `src/apps/control/control/sensing/lane_bev.py` | `_follow`를 `_pursue` 훅으로 분리하고, `_lookahead`를 띠 기반 `_band_lookahead`로 일반화한다(동작 불변) |
-| Create `src/apps/control/control/sensing/lane_boundaries.py` | `LaneBoundaryTracker`: 좌우 경계, 가운데선, 강등 사다리(BOTH/ONE/MEMORY/STOP), 교차 신호 |
-| Create `src/apps/control/test/test_lane_boundaries.py` | 추종기 시험 |
-| Modify `src/apps/control/control/line_observer_node.py` | `camera_lane_mode: centre`, 디버그 오버레이 발행 |
-| Modify `src/apps/control/config/line_follow.yaml` | 새 파라미터 기본값(끔) |
-| Create `src/apps/control/control/sensing/lane_debug.py` | ROS-free 4칸 오버레이 렌더러 |
-| Create `src/apps/control/test/test_lane_debug.py` | 렌더러 시험 |
+| Create `src/core/control/test/lane_sim.py` | 시험 공용: 역투영 렌더러 `World`, 차선 생성, CORE 법칙 거울, 폐루프 `drive`, STL 월드 |
+| Modify `src/core/control/test/test_lane_edge.py` | 공용 도우미를 `lane_sim`에서 가져온다(동작 변경 없음) |
+| Create `src/core/control/map/map_v2_fleet/lane_rules.yaml` | 사람이 정한 규칙: 링 기하, 도로 앵커, 통행 방향, 주차 |
+| Create `src/core/control/map/map_v2_fleet/scripts/lane_graph.py` | 규칙과 STL로 `lane_graph.yaml` 생성, 여유 거리 검증 |
+| Create `src/core/control/map/map_v2_fleet/lane_graph.yaml` | 생성물(체크인, 결정적) |
+| Create `src/core/control/test/test_lane_graph.py` | 그래프 시험 |
+| Modify `src/core/control/control/sensing/lane_bev.py` | `_follow`를 `_pursue` 훅으로 분리하고, `_lookahead`를 띠 기반 `_band_lookahead`로 일반화한다(동작 불변) |
+| Create `src/core/control/control/sensing/lane_boundaries.py` | `LaneBoundaryTracker`: 좌우 경계, 가운데선, 강등 사다리(BOTH/ONE/MEMORY/STOP), 교차 신호 |
+| Create `src/core/control/test/test_lane_boundaries.py` | 추종기 시험 |
+| Modify `src/core/control/control/line_observer_node.py` | `camera_lane_mode: centre`, 디버그 오버레이 발행 |
+| Modify `src/core/control/config/line_follow.yaml` | 새 파라미터 기본값(끔) |
+| Create `src/core/control/control/sensing/lane_debug.py` | ROS-free 4칸 오버레이 렌더러 |
+| Create `src/core/control/test/test_lane_debug.py` | 렌더러 시험 |
 | Modify `src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py` | 모드, 스폰, 오버레이를 launch 인자로 연다 |
 | Create `src/sim/gz_sim/scripts/record_debug.py` | 디버그 토픽을 MP4와 JSONL로 저장 |
 | Create `src/sim/gz_sim/scripts/junction_score.py` | ROS-free: 그래프로 12개 시나리오를 만들고 궤적을 판정 |
@@ -58,8 +58,8 @@
 ### Task 1: 시험 공용 도우미 분리
 
 **Files:**
-- Create: `src/apps/control/test/lane_sim.py`
-- Modify: `src/apps/control/test/test_lane_edge.py:11-156, 389-402`
+- Create: `src/core/control/test/lane_sim.py`
+- Modify: `src/core/control/test/test_lane_edge.py:11-156, 389-402`
 
 순수 이동이다. 새 동작은 없다. 새 시험 파일들이 같은 렌더러와 폐루프를 쓰게 하려는 것이다.
 
@@ -242,7 +242,7 @@ def drive(world, *, steps, pose=(0.0, 0.0, 0.0), follower=None, odom=True, stop=
                   steps=steps, pose=pose, odom=odom, stop=stop)
 ```
 
-`World._px`를 쓰던 곳은 `World.px`로 바꾼다(`grep -n "_px(" src/apps/control/test/test_lane_edge.py`). 시험 폴더는 pytest `rootdir` 규칙에 따라 `sys.path`에 들어가므로 `import lane_sim`이 동작한다. 동작하지 않으면 `src/apps/control/test/conftest.py`에 다음 두 줄을 넣는다.
+`World._px`를 쓰던 곳은 `World.px`로 바꾼다(`grep -n "_px(" src/core/control/test/test_lane_edge.py`). 시험 폴더는 pytest `rootdir` 규칙에 따라 `sys.path`에 들어가므로 `import lane_sim`이 동작한다. 동작하지 않으면 `src/core/control/test/conftest.py`에 다음 두 줄을 넣는다.
 
 ```python
 import sys, pathlib
@@ -251,13 +251,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 - [ ] **Step 3: 회귀 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_edge.py -q`
-Expected: 이전과 같은 개수로 전부 PASS(`git stash` 없이 `git show HEAD:src/apps/control/test/test_lane_edge.py | grep -c "^def test_"`로 개수를 비교).
+Run: `python -m pytest src/core/control/test/test_lane_edge.py -q`
+Expected: 이전과 같은 개수로 전부 PASS(`git stash` 없이 `git show HEAD:src/core/control/test/test_lane_edge.py | grep -c "^def test_"`로 개수를 비교).
 
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add src/apps/control/test/lane_sim.py src/apps/control/test/test_lane_edge.py src/apps/control/test/conftest.py
+git add src/core/control/test/lane_sim.py src/core/control/test/test_lane_edge.py src/core/control/test/conftest.py
 git commit -m "test(control): share the lane simulation renderer and closed loop"
 ```
 (`conftest.py`를 만들지 않았으면 add에서 뺀다.)
@@ -267,10 +267,10 @@ git commit -m "test(control): share the lane simulation renderer and closed loop
 ### Task 2: 차선 그래프 생성기
 
 **Files:**
-- Create: `src/apps/control/map/map_v2_fleet/lane_rules.yaml`
-- Create: `src/apps/control/map/map_v2_fleet/scripts/lane_graph.py`
-- Create (generated): `src/apps/control/map/map_v2_fleet/lane_graph.yaml`
-- Test: `src/apps/control/test/test_lane_graph.py`
+- Create: `src/core/control/map/map_v2_fleet/lane_rules.yaml`
+- Create: `src/core/control/map/map_v2_fleet/scripts/lane_graph.py`
+- Create (generated): `src/core/control/map/map_v2_fleet/lane_graph.yaml`
+- Test: `src/core/control/test/test_lane_graph.py`
 
 배경:
 - 자동 능선 연결은 횡단보도에서 끊긴다. 막대가 차로 안에 있어서 능선 틈이 0.16 m를 넘는다(2026-09-22 측정).
@@ -455,7 +455,7 @@ def test_generator_output_is_checked_in_and_deterministic(tmp_path):
 
 - [ ] **Step 3: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_graph.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_graph.py -q`
 Expected: FAIL. `lane_graph.yaml`과 `lane_graph.py`가 없어서 `FileNotFoundError`가 난다.
 
 - [ ] **Step 4: 생성기 구현**
@@ -685,8 +685,8 @@ if __name__ == "__main__":
 
 Run:
 ```bash
-python src/apps/control/map/map_v2_fleet/scripts/lane_graph.py
-python -m pytest src/apps/control/test/test_lane_graph.py -q
+python src/core/control/map/map_v2_fleet/scripts/lane_graph.py
+python -m pytest src/core/control/test/test_lane_graph.py -q
 ```
 Expected: 7 passed.
 
@@ -697,12 +697,12 @@ Expected: 7 passed.
 
 - [ ] **Step 6: `.gitattributes`와 설치**
 
-`.gitattributes`에 `src/apps/control/map/map_v2_fleet/lane_graph.yaml text eol=lf`를 추가한다. `setup.py`는 `map_v2_fleet` 전체를 이미 설치한다. `git check-attr eol -- src/apps/control/map/map_v2_fleet/lane_graph.yaml`로 `eol: lf`를 확인한다.
+`.gitattributes`에 `src/core/control/map/map_v2_fleet/lane_graph.yaml text eol=lf`를 추가한다. `setup.py`는 `map_v2_fleet` 전체를 이미 설치한다. `git check-attr eol -- src/core/control/map/map_v2_fleet/lane_graph.yaml`로 `eol: lf`를 확인한다.
 
 - [ ] **Step 7: 커밋**
 
 ```bash
-git add .gitattributes src/apps/control/map/map_v2_fleet/lane_rules.yaml src/apps/control/map/map_v2_fleet/scripts/lane_graph.py src/apps/control/map/map_v2_fleet/lane_graph.yaml src/apps/control/test/test_lane_graph.py
+git add .gitattributes src/core/control/map/map_v2_fleet/lane_rules.yaml src/core/control/map/map_v2_fleet/scripts/lane_graph.py src/core/control/map/map_v2_fleet/lane_graph.yaml src/core/control/test/test_lane_graph.py
 git commit -m "feat(map): 260919 lane graph from rules anchors snapped to the STL"
 ```
 
@@ -711,8 +711,8 @@ git commit -m "feat(map): 260919 lane graph from rules anchors snapped to the ST
 ### Task 3: `LaneEdgeFollower` 리팩터 (동작 불변)
 
 **Files:**
-- Modify: `src/apps/control/control/sensing/lane_bev.py:442-467, 553-594`
-- Test: 기존 `src/apps/control/test/test_lane_edge.py`(바뀌지 않아야 한다)
+- Modify: `src/core/control/control/sensing/lane_bev.py:442-467, 553-594`
+- Test: 기존 `src/core/control/test/test_lane_edge.py`(바뀌지 않아야 한다)
 
 목적은 두 가지다. 하위 클래스가 목표점 선택만 바꿀 수 있게 하고, 띠(band)에서 룩어헤드를 찾는 부분을 재사용하게 하는 것이다.
 
@@ -815,13 +815,13 @@ git commit -m "feat(map): 260919 lane graph from rules anchors snapped to the ST
 
 - [ ] **Step 3: 회귀 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_edge.py src/apps/control/test/test_lane_corner.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_edge.py src/core/control/test/test_lane_corner.py -q`
 Expected: 리팩터 전과 같은 개수로 전부 PASS. 전체 한 바퀴 시험(`test_full_lap_of_the_260919_track_returns_to_the_start`)도 포함한다.
 
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add src/apps/control/control/sensing/lane_bev.py
+git add src/core/control/control/sensing/lane_bev.py
 git commit -m "refactor(control): split edge-follower target choice from boundary finding"
 ```
 
@@ -830,8 +830,8 @@ git commit -m "refactor(control): split edge-follower target choice from boundar
 ### Task 4: 좌우 경계 가운데선 추종기 (`LaneBoundaryTracker`)
 
 **Files:**
-- Create: `src/apps/control/control/sensing/lane_boundaries.py`
-- Test: `src/apps/control/test/test_lane_boundaries.py`
+- Create: `src/core/control/control/sensing/lane_boundaries.py`
+- Test: `src/core/control/test/test_lane_boundaries.py`
 
 spec §4.2의 강등 사다리 중 1(BOTH), 2(ONE), 3(MEMORY), 5(STOP)를 만든다. 4(기동)는 Plan 2에서 A와 B가 채운다.
 
@@ -949,7 +949,7 @@ def test_west_loop_both_directions_stay_in_the_lane():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_boundaries.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_boundaries.py -q`
 Expected: FAIL (`ModuleNotFoundError: control.sensing.lane_boundaries`)
 
 - [ ] **Step 3: 구현**
@@ -1078,7 +1078,7 @@ class LaneBoundaryTracker(LaneEdgeFollower):
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_boundaries.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_boundaries.py -q`
 Expected: 11 passed.
 
 실패하면 합성 프레임과 `t.last`(`centre_band`, `memory`, `right_memory`, `path`)를 `scratchpad`에 그림으로 떨궈서 원인을 본다. 문턱을 바꾸면 측정 근거를 시험 docstring에 적는다.
@@ -1088,13 +1088,13 @@ Expected: 11 passed.
 
 - [ ] **Step 5: 전체 회귀**
 
-Run: `python -m pytest src/apps/control/test/ -q`
+Run: `python -m pytest src/core/control/test/ -q`
 Expected: 기존 개수 + 11, 실패 0.
 
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add src/apps/control/control/sensing/lane_boundaries.py src/apps/control/test/test_lane_boundaries.py
+git add src/core/control/control/sensing/lane_boundaries.py src/core/control/test/test_lane_boundaries.py
 git commit -m "feat(control): centre-line lane following over both boundaries with a fallback ladder"
 ```
 
@@ -1103,10 +1103,10 @@ git commit -m "feat(control): centre-line lane following over both boundaries wi
 ### Task 5: 관측 노드에 `centre` 모드 연결
 
 **Files:**
-- Modify: `src/apps/control/control/line_observer_node.py:29, 55-60, 76-80, 106-108, 182-197`
-- Modify: `src/apps/control/config/line_follow.yaml`
+- Modify: `src/core/control/control/line_observer_node.py:29, 55-60, 76-80, 106-108, 182-197`
+- Modify: `src/core/control/config/line_follow.yaml`
 - Modify: `src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py`
-- Test: `src/apps/control/test/test_line_observer_wiring.py`, `src/sim/gz_sim/test/test_map_v2_fleet_launch.py`
+- Test: `src/core/control/test/test_line_observer_wiring.py`, `src/sim/gz_sim/test/test_map_v2_fleet_launch.py`
 
 - [ ] **Step 1: 실패하는 배선 시험 추가**
 
@@ -1132,7 +1132,7 @@ def test_launch_exposes_mode_and_spawn_for_the_junction_harness():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_map_v2_fleet_launch.py -q`
+Run: `python -m pytest src/core/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_map_v2_fleet_launch.py -q`
 Expected: 새 시험 2개 FAIL
 
 - [ ] **Step 3: 노드 구현**
@@ -1185,11 +1185,11 @@ Expected: 새 시험 2개 FAIL
 
 - [ ] **Step 6: 통과 확인과 커밋**
 
-Run: `python -m pytest src/apps/control/test/ src/sim/gz_sim/test/ -q`
+Run: `python -m pytest src/core/control/test/ src/sim/gz_sim/test/ -q`
 Expected: 전부 PASS
 
 ```bash
-git add src/apps/control/control/line_observer_node.py src/apps/control/config/line_follow.yaml src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py src/apps/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_map_v2_fleet_launch.py
+git add src/core/control/control/line_observer_node.py src/core/control/config/line_follow.yaml src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py src/core/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_map_v2_fleet_launch.py
 git commit -m "feat(control): centre camera lane mode and harness-ready launch arguments"
 ```
 
@@ -1198,8 +1198,8 @@ git commit -m "feat(control): centre camera lane mode and harness-ready launch a
 ### Task 6: 인식 오버레이 렌더러 (ROS-free)
 
 **Files:**
-- Create: `src/apps/control/control/sensing/lane_debug.py`
-- Test: `src/apps/control/test/test_lane_debug.py`
+- Create: `src/core/control/control/sensing/lane_debug.py`
+- Test: `src/core/control/test/test_lane_debug.py`
 
 패널은 4칸이고 각 320×180이다. 전체는 640×360 BGR이다.
 1. 카메라: 원본 프레임에 임계 마스크를 빨갛게 겹친다.
@@ -1267,7 +1267,7 @@ def test_no_observation_still_renders_and_says_stop():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_debug.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_debug.py -q`
 Expected: FAIL (`ModuleNotFoundError`)
 
 - [ ] **Step 3: 구현**
@@ -1394,7 +1394,7 @@ def render_debug(frame, follower, observation, *, mode, pose=None, graph=None,
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_debug.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_debug.py -q`
 Expected: 4 passed.
 
 `_bev`는 `(panel, size)`를 돌려준다. `_mark_target`이 그것을 받는다. `paint`가 없는 분기에서는 빈 패널을 직접 만든다.
@@ -1402,7 +1402,7 @@ Expected: 4 passed.
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/control/sensing/lane_debug.py src/apps/control/test/test_lane_debug.py
+git add src/core/control/control/sensing/lane_debug.py src/core/control/test/test_lane_debug.py
 git commit -m "feat(control): four-panel lane perception overlay renderer"
 ```
 
@@ -1411,10 +1411,10 @@ git commit -m "feat(control): four-panel lane perception overlay renderer"
 ### Task 7: 오버레이 발행과 녹화기
 
 **Files:**
-- Modify: `src/apps/control/control/line_observer_node.py`
+- Modify: `src/core/control/control/line_observer_node.py`
 - Create: `src/sim/gz_sim/scripts/record_debug.py`
 - Modify: `src/sim/gz_sim/CMakeLists.txt:38-46`
-- Test: `src/apps/control/test/test_line_observer_wiring.py`, `src/sim/gz_sim/test/test_gz_package_contract.py`
+- Test: `src/core/control/test/test_line_observer_wiring.py`, `src/sim/gz_sim/test/test_gz_package_contract.py`
 
 - [ ] **Step 1: 실패하는 배선 시험**
 
@@ -1444,7 +1444,7 @@ def test_junction_tools_are_installed():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_gz_package_contract.py -q`
+Run: `python -m pytest src/core/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_gz_package_contract.py -q`
 Expected: 새 시험 FAIL
 
 - [ ] **Step 3: 노드 발행 구현**
@@ -1574,11 +1574,11 @@ if __name__ == "__main__":
 
 - [ ] **Step 5: 통과 확인과 커밋**
 
-Run: `python -m pytest src/apps/control/test/ src/sim/gz_sim/test/ -q`
+Run: `python -m pytest src/core/control/test/ src/sim/gz_sim/test/ -q`
 Expected: 전부 PASS
 
 ```bash
-git add src/apps/control/control/line_observer_node.py src/sim/gz_sim/scripts/record_debug.py src/sim/gz_sim/CMakeLists.txt src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py src/apps/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_gz_package_contract.py
+git add src/core/control/control/line_observer_node.py src/sim/gz_sim/scripts/record_debug.py src/sim/gz_sim/CMakeLists.txt src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py src/core/control/test/test_line_observer_wiring.py src/sim/gz_sim/test/test_gz_package_contract.py
 git commit -m "feat(control): publish and record the lane perception overlay"
 ```
 
@@ -1608,7 +1608,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-GRAPH = ROOT.parents[1] / "apps" / "control" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+GRAPH = ROOT.parents[1] / "core" / "control" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 
 
 def _mod():

@@ -28,7 +28,7 @@ Jazzy), `tools/harness/rosy_harness.py`.
 - **P3(이동)는 이미지 릴리스 사이에 한다(D-191).** 이동 뒤 첫 이미지는 실기 평가표를 다시 통과해야 한다.
 - **host 전체 시험**(약 15–20분, 백그라운드로 돌린다):
   ```bash
-  python -m pytest src/core/core/test/ src/core/core_features/test src/apps/control/test/ src/site/fleet/test \
+  python -m pytest src/core/core/test/ src/core/core_features/test src/core/control/test/ src/site/fleet/test \
     src/apps/omx_adapter/test src/apps/games/test src/sim/gz_sim/test test/ -q -p no:cacheprovider
   ```
   `-n auto`는 쓰지 않는다. xdist가 설치되어 있지 않다.
@@ -116,7 +116,7 @@ sim 안의 URDF, nav2 반경, control의 `robot.yaml`과 센싱 기하, fleet의
 폴더. 모두 기각했다. 근거는 초안 §Alternatives에 있다.
 
 **Consequences:** 도메인 이동은 도메인당 1커밋으로 하고 동작 변경을 섞지 않는다. 이동은 이미지 릴리스
-사이에 하고, 이동 뒤 첫 이미지는 D-191 평가표를 다시 통과해야 한다. `apps/control`의 장치 코드 분리는
+사이에 하고, 이동 뒤 첫 이미지는 D-191 평가표를 다시 통과해야 한다. `core/control`의 장치 코드 분리는
 D-171 트랙 3(control 분할)과 한 계획으로 묶는다.
 
 **Validation / Transition:** P1 `test_module_structure.py`와 `test_robot_literals.py`가 녹색이어야 한다. P2
@@ -366,7 +366,7 @@ def test_robot_literals_stay_in_their_family():
 ```bash
 python -m pytest test/test_robot_literals.py -q -p no:cacheprovider
 ```
-Expected: FAIL `new: ['apps/control/...', ...]`. 2026-09-24 `27821a5c` 기준 72개다(control 44, gz_sim 10, bringup 9, core 4, navigation 2, fleet 2, omx_adapter 1).
+Expected: FAIL `new: ['core/control/...', ...]`. 2026-09-24 `27821a5c` 기준 72개다(control 44, gz_sim 10, bringup 9, core 4, navigation 2, fleet 2, omx_adapter 1).
 
 - [ ] **Step 3: 백로그를 현재 상태로 채운다**
 

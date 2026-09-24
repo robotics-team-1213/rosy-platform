@@ -113,7 +113,7 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
 
 def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     source_root = tmp_path / "src"
-    real_package = source_root / "apps" / "control"
+    real_package = source_root / "core" / "control"
     generated_package = source_root / "build" / "control"
     real_package.mkdir(parents=True)
     generated_package.mkdir(parents=True)
@@ -144,7 +144,7 @@ def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/apps/control"]
+    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/core/control"]
 
 
 def test_required_package_file_matches_the_locked_offline_payload():

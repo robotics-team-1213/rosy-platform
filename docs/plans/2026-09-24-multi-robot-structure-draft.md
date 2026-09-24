@@ -42,10 +42,10 @@ Rosy OS는 Pinky Pro 전용이 아니다. 다음 세 형태를 같은 CORE API�
 | `src/hardware/bringup` | 이름은 일반적인 bringup이지만 내용은 `PinkyProAdapter` 하나다 |
 | `src/sim/description` | URDF가 Pinky 하나뿐이다. 그런데 sim 도메인에 있으면서 실기도 이걸 쓴다 |
 | `src/navigation/.../nav2_params.yaml` | robot_radius와 inflation 값이 Pinky 풋프린트에 맞춰져 있다 |
-| `src/apps/control/config/robot.yaml` | 파일이 스스로 "모든 Pinky 노드의 단일 원천"이라고 선언한다. sensing 코드 15개 파일 이상이 Pinky 기하 값을 쓴다 |
+| `src/core/control/config/robot.yaml` | 파일이 스스로 "모든 Pinky 노드의 단일 원천"이라고 선언한다. sensing 코드 15개 파일 이상이 Pinky 기하 값을 쓴다 |
 | `src/site/fleet/server/bays.py`, `traffic.py` | Pinky 외접 반지름이 상수로 박혀 있다 |
 | `src/apps/omx_adapter` | **도메인이 틀렸다.** 하는 일은 장치 어댑터인데 apps에 있다 |
-| `src/apps/control/control/camera_detect_node.py` | 앱 노드가 `Picamera2()`와 `cv2.VideoCapture`를 직접 열어 캡처하고, 같은 노드에서 검출까지 한다 |
+| `src/core/control/control/camera_detect_node.py` | 앱 노드가 `Picamera2()`와 `cv2.VideoCapture`를 직접 열어 캡처하고, 같은 노드에서 검출까지 한다 |
 | `deploy/` | `install-pinky-hardware-deps.sh`, `commission-pinky.py` |
 
 HWA-001 Robot Profile은 D-11에 따라 capability의 원천이다. 그런데 실제로는 core 안의 yaml일 뿐이고
@@ -110,7 +110,7 @@ src/
 5. **URDF는 조합으로 만든다.** 장치 패키지마다 자기 xacro 매크로를 가진다. `robots/<robot>`이 이
    매크로를 include해서 조립한다.
 
-### 3. apps/control의 Pinky 센싱 코드 배치 규칙
+### 3. core/control의 Pinky 센싱 코드 배치 규칙
 
 > **로봇을 바꿨을 때 코드가 바뀌어야 하면 `devices`에 둔다. 숫자만 바뀌면 `apps`에 두고 값은
 > 프로필/TF에서 읽는다.**

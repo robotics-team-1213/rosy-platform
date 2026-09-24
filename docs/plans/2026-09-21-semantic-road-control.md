@@ -13,11 +13,11 @@
 ### Task 1: Semantic road scene contract and derived world
 
 **Files:**
-- Create: `src/apps/control/map/map_260905_update_v2/semantic/road_scene.yaml`
-- Create: `src/apps/control/map/map_260905_update_v2/scripts/build_road_scene.py`
-- Create: `src/apps/control/map/map_260905_update_v2/tests/test_road_scene.py`
-- Generate: `src/apps/control/map/map_260905_update_v2/worlds/map_260905_traffic.world`
-- Generate: `src/apps/control/map/map_260905_update_v2/review/map_260905_traffic.png`
+- Create: `src/core/control/map/map_260905_update_v2/semantic/road_scene.yaml`
+- Create: `src/core/control/map/map_260905_update_v2/scripts/build_road_scene.py`
+- Create: `src/core/control/map/map_260905_update_v2/tests/test_road_scene.py`
+- Generate: `src/core/control/map/map_260905_update_v2/worlds/map_260905_traffic.world`
+- Generate: `src/core/control/map/map_260905_update_v2/review/map_260905_traffic.png`
 
 1. Write failing schema, source-hash, geometry, and deterministic-output tests.
 2. Run `python -m pytest .../tests/test_road_scene.py -q` and verify the missing-file failure.
@@ -28,11 +28,11 @@
 ### Task 2: Camera road perception
 
 **Files:**
-- Create: `src/apps/control/control/sensing/road.py`
-- Create: `src/apps/control/test/test_road_perception.py`
-- Create: `src/apps/control/control/road_observer_node.py`
-- Modify: `src/apps/control/setup.py`
-- Modify: `src/apps/control/launch/line_follow.launch.py`
+- Create: `src/core/control/control/sensing/road.py`
+- Create: `src/core/control/test/test_road_perception.py`
+- Create: `src/core/control/control/road_observer_node.py`
+- Modify: `src/core/control/setup.py`
+- Modify: `src/core/control/launch/line_follow.launch.py`
 
 1. Write failing synthetic-frame tests for lane, stop line, crosswalk, red/yellow/green, conflicts, and blank frames.
 2. Verify failure because the detector module is absent.
@@ -91,13 +91,13 @@
 
 **Files:**
 - Create: `tools/simulate_semantic_road.py`
-- Create: `src/apps/control/test/test_semantic_road_simulation.py`
+- Create: `src/core/control/test/test_semantic_road_simulation.py`
 - Create: `docs/validation/semantic-road-2026-09-21/README.md`
 - Generate: `docs/validation/semantic-road-2026-09-21/result.json`
 - Generate: `docs/validation/semantic-road-2026-09-21/semantic_road_simulation.svg`
 - Modify: `docs/reference/ROSY ADR Log.md`
-- Modify: `src/apps/control/logs.md`
-- Modify: `src/apps/control/progress.md`
+- Modify: `src/core/control/logs.md`
+- Modify: `src/core/control/progress.md`
 - Modify: `src/sim/gz_sim/logs.md`
 - Modify: `src/sim/gz_sim/progress.md`
 

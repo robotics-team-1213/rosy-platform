@@ -12,7 +12,7 @@ SRC = Path(__file__).resolve().parents[2]
 for _path in (
     SRC / "core_features",
     SRC / "core_common",
-    SRC.parent / "apps" / "control",
+    SRC.parent / "core" / "control",
 ):
     _entry = str(_path)
     if _entry not in sys.path:

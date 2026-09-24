@@ -24,7 +24,7 @@ collision, and CORE preconditions before motion.
 
 ## Immutable inputs
 
-- Bundle world: `src/apps/control/map/map_260905_update_v2/worlds/map_260905.world`
+- Bundle world: `src/core/control/map/map_260905_update_v2/worlds/map_260905.world`
 - World SHA-256: `3f2e3a822cbf72223634d173d49bd3626c0281e8f433cd54e766134bffa15528`
 - Original/source world SHA-256 recorded by the bundle: `8475464857322d71f6e492171419bf285e7bd034089b90ad59d6f106b0941072`
 - Spawn requested: `(-0.20, 0.27, 0)`

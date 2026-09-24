@@ -65,7 +65,7 @@
 | `core/core_features` | 37 / 0 | 1 | 2 | X | – | 시험 예외 1건 (29개 core 시험이 대신 소유 — 시험이 3곳에 분산) + **과잉선언 1건** (`core_events`, 어디서도 0회) |
 | `core/core_api_web` | 25 / 3 | 2 | 1 | O | – | 과잉선언 1건 (`core_events`) |
 | `core/core` | 21 / **74** | 4 | 0 | O | `ros_bridge.py` 759행 (**split 재개**) | 동적 import 1건(D-126, 테스트 이음새) |
-| `apps/control` | **200** / 164 | 0 | 0(code) | O | **패키지 28,159행 (split, 미일정)** + 600행 5건 (split 2·미일정 / accept 3) | launch 미선언 1건 (`control→imu_bno055`) |
+| `core/control` | **200** / 164 | 0 | 0(code) | O | **패키지 28,159행 (split, 미일정)** + 600행 5건 (split 2·미일정 / accept 3) | launch 미선언 1건 (`control→imu_bno055`) |
 | `site/fleet` | 23 / 27 | 1 | 1 | O | `signals.py` 621(split·미일정), `console.py` 767(accept) | – |
 | `sim/gz_sim` | 14 / 9 | 2 | 0 | O | – | launch 경유 `control`·`core`는 **실제 사용**(선언=실제), `navigation` 중복 선언 1건 |
 | `navigation/navigation` | 7 / 0 | launch 4 | 1 | X | – | **미선언 2건 + 방향 위반 2건** |
@@ -109,7 +109,7 @@
 | `sim/gz_sim` | 3 | 4 | 3 | 4 | 4 | **71** | B | fleet·navigation 설치 없이는 벤치 검증 불가(M1) + fan-out 2, 선언은 launch 경유 포함 실제 사용(과잉선언 아님 — 정정), `navigation` 중복 선언 1건 |
 | `core/core` | 3 | 3 | 3 | 4 | 4 | **66** | B | fan-out 4 + 시험 74개가 도메인 전체 소유 + 시험 시 control 소스 필요 |
 | `core/core_features` | 3 | 3 | 2 | 4 | 3 | **59** | **C** | 자기 시험 0(시험이 3곳 분산) + 13개 기능 공존(5.6k행, 예산 내) + 과잉선언 1건 — 고장 통보형 병목 |
-| `apps/control` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
+| `core/control` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
 | `navigation/navigation` | 3 | 3 | 3 | 3 | 2 | **57** | **C** | 미선언 2건·방향 위반 2건, assembly(`web_*`)가 역할에 혼입 |
 
 **분포**: S 8개 · A 6개 · B 3개 · C 3개 · D 0개 / **전체 평균 81.5 (A)** (A 평균 81.3)
@@ -178,7 +178,7 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 | 2 | §3 `control` | "600행 4건" | **5건** (split 2·미일정 / accept 3) | SIZE_VERDICTS: startup_calibration 965·calib_node 641 = split / safety/node 795·lane 611·lane_bev 611 = accept |
 | 3 | §3 `core_features` | "28개 core 시험이 대신 소유" | **29개** (그 외 fleet 1·루트 1 = 총 31) | 전역 AST 스캔(import 위치 무관). 시험이 **3곳에 분산** — M3=2 근거는 오히려 강화 |
 
-### 8.1 `apps/control` (57, C) — 내부 군집 / 358 py·42,260행
+### 8.1 `core/control` (57, C) — 내부 군집 / 358 py·42,260행
 
 | 군집 | 파일 | 행 | 최대 파일 (행) | 성격 |
 |---|---|---|---|---|

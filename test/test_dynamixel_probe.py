@@ -19,7 +19,7 @@ def _load_probe(monkeypatch):
     sdk.PacketHandler = object
     sdk.PortHandler = object
     monkeypatch.setitem(sys.modules, "dynamixel_sdk", sdk)
-    monkeypatch.syspath_prepend(str(ROOT / "src" / "hardware" / "bringup"))
+    monkeypatch.syspath_prepend(str(ROOT / "src" / "devices" / "bringup"))
     sys.modules.pop("bringup.dynamixel_probe", None)
     return importlib.import_module("bringup.dynamixel_probe")
 

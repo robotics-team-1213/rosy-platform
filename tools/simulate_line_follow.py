@@ -14,7 +14,7 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 for _path in (
-    REPO_ROOT / "src/apps/control",
+    REPO_ROOT / "src/core/control",
     REPO_ROOT / "src/core/core_common",
     REPO_ROOT / "src/core/core_events",
     REPO_ROOT / "src/core/core_features",

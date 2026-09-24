@@ -28,20 +28,20 @@ modules:
     functional_kind: host-contract
     functional: [test/test_robot_runtime.py]
   - name: control
-    path: src/apps/control
-    tests: [src/apps/control/test, test/test_control_absorption_package.py]
+    path: src/core/control
+    tests: [src/core/control/test, test/test_control_absorption_package.py]
     functional_kind: pytest
-    functional: [src/apps/control/test]
+    functional: [src/core/control/test]
   - name: fleet
     path: src/site/fleet
     tests: [src/site/fleet/test]
     functional_kind: pytest
     functional: [src/site/fleet/test]
   - name: games
-    path: src/apps/games
-    tests: [src/apps/games/test, test/test_rosy_games_surface.py]
+    path: src/site/games
+    tests: [src/site/games/test, test/test_rosy_games_surface.py]
     functional_kind: pytest
-    functional: [src/apps/games/test]
+    functional: [src/site/games/test]
   - name: gz_sim
     path: src/sim/gz_sim
     tests: [src/sim/gz_sim/test]
@@ -53,35 +53,35 @@ modules:
     functional_kind: pytest
     functional: [test/test_footprint_profiles.py, test/test_nav2_profile_limits.py]
   - name: bringup
-    path: src/hardware/bringup
-    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, src/hardware/bringup/test/test_command_deadman.py, src/hardware/bringup/test/test_pinky_pro_adapter.py]
+    path: src/devices/bringup
+    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, src/devices/bringup/test/test_command_deadman.py, src/devices/bringup/test/test_pinky_pro_adapter.py]
     functional_kind: pytest
-    functional: [src/hardware/bringup/test/test_command_deadman.py, test/test_motor_control.py]
+    functional: [src/devices/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
-    path: src/apps/emotion
-    tests: [src/apps/emotion/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
+    path: src/face/emotion
+    tests: [src/face/emotion/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
-    functional: [src/apps/emotion/test/test_info_screen.py]
+    functional: [src/face/emotion/test/test_info_screen.py]
   - name: led
-    path: src/hardware/led
-    tests: [src/hardware/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/devices/led
+    tests: [src/devices/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/hardware/led/test/test_led_package_contract.py]
+    functional: [src/devices/led/test/test_led_package_contract.py]
   - name: imu_bno055
-    path: src/hardware/imu_bno055
-    tests: [src/hardware/imu_bno055/test/test_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/devices/imu_bno055
+    tests: [src/devices/imu_bno055/test/test_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/hardware/imu_bno055/test/test_package_contract.py]
+    functional: [src/devices/imu_bno055/test/test_package_contract.py]
   - name: sensor_adc
-    path: src/hardware/sensor_adc
-    tests: [src/hardware/sensor_adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/devices/sensor_adc
+    tests: [src/devices/sensor_adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/hardware/sensor_adc/test/test_adc_package_contract.py]
+    functional: [src/devices/sensor_adc/test/test_adc_package_contract.py]
   - name: lamp_control
-    path: src/hardware/lamp_control
-    tests: [src/hardware/lamp_control/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/devices/lamp_control
+    tests: [src/devices/lamp_control/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/hardware/lamp_control/test/test_lamp_package_contract.py]
+    functional: [src/devices/lamp_control/test/test_lamp_package_contract.py]
   - name: core_common
     path: src/core/core_common
     tests: [src/core/core_common/test]
@@ -108,10 +108,10 @@ modules:
     functional_kind: host-contract
     functional: [src/core/web_common/test/test_ui_token_contracts.py]
   - name: omx_adapter
-    path: src/apps/omx_adapter
-    tests: [src/apps/omx_adapter/test]
+    path: src/products/omx_adapter
+    tests: [src/products/omx_adapter/test]
     functional_kind: pytest
-    functional: [src/apps/omx_adapter/test]
+    functional: [src/products/omx_adapter/test]
   - name: interfaces
     path: src/core/interfaces
     tests: [src/core/interfaces/test/test_srv_surface.py]

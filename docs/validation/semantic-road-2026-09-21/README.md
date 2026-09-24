@@ -86,9 +86,9 @@ Semantic YAML truth는 scene 생성과 감사에만 쓰며 detector 입력으로
 - `camera_live_dashboard.png`: 과거 HOST-SIM browser fixture이며 이번 실제 Gazebo
   browser 증거가 아니다.
 - `traffic_policy_dashboard.png`: 과거 browser policy control 증거.
-- `src/apps/control/map/map_260905_update_v2/review/map_260905_traffic.png`:
+- `src/core/control/map/map_260905_update_v2/review/map_260905_traffic.png`:
   측정된 16-wall map 위 semantic overlay.
-- `src/apps/control/map/map_260905_update_v2/worlds/map_260905_traffic.world`:
+- `src/core/control/map/map_260905_update_v2/worlds/map_260905_traffic.world`:
   lane, crosswalk, stop line, signal model이 포함된 Gazebo world.
 
 이번 실행에서 in-app browser inventory가 비어 있어 live full-dashboard screenshot은

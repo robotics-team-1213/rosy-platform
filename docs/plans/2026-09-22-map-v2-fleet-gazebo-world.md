@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `src/apps/control/map/map_v2_fleet/260919 MAP FILE.STL`을 Gazebo Sim 8 월드로 변환하고, Pinky 1대를 그 위에 올려 카메라 차선 인식 → CORE 경유 라인 주행이 실제로 동작하는지 ROS-SIM 증거로 확인한다.
+**Goal:** `src/core/control/map/map_v2_fleet/260919 MAP FILE.STL`을 Gazebo Sim 8 월드로 변환하고, Pinky 1대를 그 위에 올려 카메라 차선 인식 → CORE 경유 라인 주행이 실제로 동작하는지 ROS-SIM 증거로 확인한다.
 
 **Architecture:** ROS-free 변환기(`stl_scene.py`)가 STL을 "바닥 차선 삼각형"과 "외곽 벽 링"으로 분리해 ROS 좌표(m, Z-up, 중심 원점)로 옮긴다. 빌더(`build_world.py`)가 차선은 시각 전용 메쉬(`meshes/road_lines.stl`), 벽은 박스 충돌체로 SDF에 써서 기존 `world_to_map.py`(박스 전용)로 Nav2 맵까지 만든다. 실물 매트는 **어두운 바닥 위 흰 선**(2026-09-22 사용자 확인)이라 기존 `detect_lane_error`(밝은 선 임계값)를 수정 없이 쓰고, 주행은 기존 CORE `CAMERA_LINE` 모드를 그대로 쓴다.
 
@@ -26,7 +26,7 @@
 핵심 결론:
 
 1. **기존 260905 맵은 벽 16개짜리 미로였고, 새 260919 맵은 외곽 벽만 있는 "도로 트랙"이다.** LiDAR/SLAM/AMCL로 볼 수 있는 특징은 직사각형 하나뿐이다. 180° 대칭이라 AMCL 위치 추정이 모호하다. 그래서 이 맵의 1차 합격선은 **카메라 차선 주행**이다. Nav2는 외곽 안에서 충돌만 막는 보조 역할이다.
-2. **선 색.** STL에는 색 정보가 없다. 실물은 **어두운 바닥 위 흰 선**이다(2026-09-22 사용자 확인). 현재 인식 코드(`src/apps/control/control/sensing/lane.py:3-4`, `:118` `THRESH_BINARY`)가 정확히 이 경우를 본다. 그래서 인식 코드는 바꾸지 않는다. 월드는 바닥 회색 0.2, 선 흰색 1.0으로 칠한다. 기존 semantic road 월드(바닥 0.8, 임계값 220)보다 대비가 크다.
+2. **선 색.** STL에는 색 정보가 없다. 실물은 **어두운 바닥 위 흰 선**이다(2026-09-22 사용자 확인). 현재 인식 코드(`src/core/control/control/sensing/lane.py:3-4`, `:118` `THRESH_BINARY`)가 정확히 이 경우를 본다. 그래서 인식 코드는 바꾸지 않는다. 월드는 바닥 회색 0.2, 선 흰색 1.0으로 칠한다. 기존 semantic road 월드(바닥 0.8, 임계값 220)보다 대비가 크다.
 3. **방향 모호성.** CAD의 Y-up 우수 좌표계를 ROS로 옮기는 올바른 회전은 R_x(+90°)다: `(x, y, z)_stl → (x, −z, y)`. 거울상이 아니다. 다만 실물 매트 사진과 한 번 대조해야 한다(Task 6 Step 1).
 4. `gz_multi.launch.py`(N대)는 카메라 브리지와 line/road observer가 없다. 폴더 이름이 `map_v2_fleet`이지만 **이 계획은 1대까지만** 다룬다. 다대 운용은 §범위 밖에 후속으로 남긴다.
 
@@ -41,14 +41,14 @@
 
 | 파일 | 책임 |
 |---|---|
-| Create `src/apps/control/map/map_v2_fleet/scripts/stl_scene.py` | ROS-free: STL 읽기, 바닥선/벽 분리, 좌표 변환, 벽 링 → 박스 4개 |
-| Create `src/apps/control/map/map_v2_fleet/scripts/build_world.py` | CLI: 차선 메쉬 STL + `.world` SDF 쓰기 (결정적 출력) |
-| Create `src/apps/control/map/map_v2_fleet/worlds/map_v2_fleet.world` | 생성물 (체크인) |
-| Create `src/apps/control/map/map_v2_fleet/meshes/road_lines.stl` | 생성물 (체크인) |
-| Create `src/apps/control/map/map_v2_fleet/maps/map_v2_fleet.{pgm,yaml}` | `world_to_map.py` 생성물 (체크인) |
-| Create `src/apps/control/map/map_v2_fleet/README.md` | 출처 해시, 재생성 명령, 증거 경계 |
-| Create `src/apps/control/test/test_map_v2_fleet_scene.py` | 변환기/빌더 테스트 |
-| Modify `src/apps/control/setup.py:7-14` | `map_v2_fleet` 번들도 설치 |
+| Create `src/core/control/map/map_v2_fleet/scripts/stl_scene.py` | ROS-free: STL 읽기, 바닥선/벽 분리, 좌표 변환, 벽 링 → 박스 4개 |
+| Create `src/core/control/map/map_v2_fleet/scripts/build_world.py` | CLI: 차선 메쉬 STL + `.world` SDF 쓰기 (결정적 출력) |
+| Create `src/core/control/map/map_v2_fleet/worlds/map_v2_fleet.world` | 생성물 (체크인) |
+| Create `src/core/control/map/map_v2_fleet/meshes/road_lines.stl` | 생성물 (체크인) |
+| Create `src/core/control/map/map_v2_fleet/maps/map_v2_fleet.{pgm,yaml}` | `world_to_map.py` 생성물 (체크인) |
+| Create `src/core/control/map/map_v2_fleet/README.md` | 출처 해시, 재생성 명령, 증거 경계 |
+| Create `src/core/control/test/test_map_v2_fleet_scene.py` | 변환기/빌더 테스트 |
+| Modify `src/core/control/setup.py:7-14` | `map_v2_fleet` 번들도 설치 |
 | Modify `src/sim/gz_sim/config/worlds.yaml` | `map_v2_fleet.world` 카탈로그 항목 |
 | Modify `src/sim/gz_sim/test/test_world_profiles.py` | 카탈로그/설치 계약 테스트 |
 | Create `src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py` | 1대 + 카메라 + line observer + CORE |
@@ -58,8 +58,8 @@
 테스트 명령(Windows 호스트, 워크트리 루트):
 
 ```powershell
-$env:PYTHONPATH = "src/apps/control;src/core/core;src"
-python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py src/sim/gz_sim/test/test_world_profiles.py src/sim/gz_sim/test/test_map_v2_fleet_launch.py -q
+$env:PYTHONPATH = "src/core/control;src/core/core;src"
+python -m pytest src/core/control/test/test_map_v2_fleet_scene.py src/sim/gz_sim/test/test_world_profiles.py src/sim/gz_sim/test/test_map_v2_fleet_launch.py -q
 ```
 
 ---
@@ -67,8 +67,8 @@ python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py src/sim/gz_sim
 ### Task 1: STL → ROS 좌표 장면 변환기 (ROS-free)
 
 **Files:**
-- Create: `src/apps/control/map/map_v2_fleet/scripts/stl_scene.py`
-- Test: `src/apps/control/test/test_map_v2_fleet_scene.py`
+- Create: `src/core/control/map/map_v2_fleet/scripts/stl_scene.py`
+- Test: `src/core/control/test/test_map_v2_fleet_scene.py`
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -143,7 +143,7 @@ def test_rejects_truncated_stl(tmp_path):
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py -q`
+Run: `python -m pytest src/core/control/test/test_map_v2_fleet_scene.py -q`
 Expected: FAIL — `FileNotFoundError` (`scripts/stl_scene.py` 없음)
 
 - [ ] **Step 3: 최소 구현**
@@ -255,22 +255,22 @@ def load_scene(path: Path | str) -> RoadScene:
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py -q`
+Run: `python -m pytest src/core/control/test/test_map_v2_fleet_scene.py -q`
 Expected: 6 passed. 벽 링 판정이 실패하면 STL을 고치지 말고 `_ring_walls` 가정(x/z 고유값 4개)을 실제 데이터로 다시 확인한다.
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/map/map_v2_fleet/scripts/stl_scene.py src/apps/control/test/test_map_v2_fleet_scene.py
+git add src/core/control/map/map_v2_fleet/scripts/stl_scene.py src/core/control/test/test_map_v2_fleet_scene.py
 git commit -m "feat(map): parse 260919 STL into a ROS-frame road scene"
 ```
 
 ### Task 2: 월드 빌더 (차선 메쉬 + 벽 박스 SDF)
 
 **Files:**
-- Create: `src/apps/control/map/map_v2_fleet/scripts/build_world.py`
-- Create (generated): `src/apps/control/map/map_v2_fleet/worlds/map_v2_fleet.world`, `meshes/road_lines.stl`
-- Test: `src/apps/control/test/test_map_v2_fleet_scene.py` (추가)
+- Create: `src/core/control/map/map_v2_fleet/scripts/build_world.py`
+- Create (generated): `src/core/control/map/map_v2_fleet/worlds/map_v2_fleet.world`, `meshes/road_lines.stl`
+- Test: `src/core/control/test/test_map_v2_fleet_scene.py` (추가)
 
 - [ ] **Step 1: 실패하는 테스트 추가**
 
@@ -317,7 +317,7 @@ def test_white_lines_on_dark_floor_by_default():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py -q`
+Run: `python -m pytest src/core/control/test/test_map_v2_fleet_scene.py -q`
 Expected: 새 5개 FAIL (`build_world.py` 없음)
 
 - [ ] **Step 3: 구현**
@@ -478,26 +478,26 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: 생성물 만들기**
 
-Run: `python src/apps/control/map/map_v2_fleet/scripts/build_world.py`
+Run: `python src/core/control/map/map_v2_fleet/scripts/build_world.py`
 Expected: `worlds/map_v2_fleet.world`, `meshes/road_lines.stl` 생성, 종료 코드 0
 
 - [ ] **Step 5: 통과 확인**
 
-Run: `python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py -q`
+Run: `python -m pytest src/core/control/test/test_map_v2_fleet_scene.py -q`
 Expected: 11 passed
 
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add src/apps/control/map/map_v2_fleet/scripts/build_world.py src/apps/control/map/map_v2_fleet/worlds src/apps/control/map/map_v2_fleet/meshes src/apps/control/test/test_map_v2_fleet_scene.py
+git add src/core/control/map/map_v2_fleet/scripts/build_world.py src/core/control/map/map_v2_fleet/worlds src/core/control/map/map_v2_fleet/meshes src/core/control/test/test_map_v2_fleet_scene.py
 git commit -m "feat(map): generate map_v2_fleet Gazebo world from the 260919 STL"
 ```
 
 ### Task 3: Nav2 점유 맵 생성
 
 **Files:**
-- Create (generated): `src/apps/control/map/map_v2_fleet/maps/map_v2_fleet.pgm`, `.yaml`
-- Test: `src/apps/control/test/test_map_v2_fleet_scene.py` (추가)
+- Create (generated): `src/core/control/map/map_v2_fleet/maps/map_v2_fleet.pgm`, `.yaml`
+- Test: `src/core/control/test/test_map_v2_fleet_scene.py` (추가)
 
 - [ ] **Step 1: 실패하는 테스트 추가**
 
@@ -523,14 +523,14 @@ def test_occupancy_map_matches_the_wall_ring():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_map_v2_fleet_scene.py::test_occupancy_map_matches_the_wall_ring -q`
+Run: `python -m pytest src/core/control/test/test_map_v2_fleet_scene.py::test_occupancy_map_matches_the_wall_ring -q`
 Expected: FAIL (`FileNotFoundError`)
 
 - [ ] **Step 3: 생성**
 
 Run:
 ```bash
-python src/sim/gz_sim/scripts/world_to_map.py src/apps/control/map/map_v2_fleet/worlds/map_v2_fleet.world -o src/apps/control/map/map_v2_fleet/maps/map_v2_fleet --resolution 0.01 --seed -1.26955,0.24255
+python src/sim/gz_sim/scripts/world_to_map.py src/core/control/map/map_v2_fleet/worlds/map_v2_fleet.world -o src/core/control/map/map_v2_fleet/maps/map_v2_fleet --resolution 0.01 --seed -1.26955,0.24255
 ```
 Expected: `.pgm`/`.yaml` 생성. 시드는 Task 4의 스폰 지점(좌측 차로 중심)이다. 차선은 충돌체가 아니므로 링 안쪽 전체가 free다. 이것이 맞는 결과다.
 
@@ -539,14 +539,14 @@ Expected: `.pgm`/`.yaml` 생성. 시드는 Task 4의 스폰 지점(좌측 차로
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/map/map_v2_fleet/maps src/apps/control/test/test_map_v2_fleet_scene.py
+git add src/core/control/map/map_v2_fleet/maps src/core/control/test/test_map_v2_fleet_scene.py
 git commit -m "feat(map): rasterize map_v2_fleet perimeter into a Nav2 map"
 ```
 
 ### Task 4: 설치 + 월드 카탈로그 등록
 
 **Files:**
-- Modify: `src/apps/control/setup.py:7-14`
+- Modify: `src/core/control/setup.py:7-14`
 - Modify: `src/sim/gz_sim/config/worlds.yaml` (`map_260905.world` 항목 아래)
 - Test: `src/sim/gz_sim/test/test_world_profiles.py`
 
@@ -566,7 +566,7 @@ def test_map_v2_fleet_is_catalogued_from_the_control_bundle():
 
 
 def test_control_package_installs_the_map_v2_fleet_bundle():
-    setup_py = (ROOT.parents[1] / "apps" / "control" / "setup.py").read_text(
+    setup_py = (ROOT.parents[1] / "core" / "control" / "setup.py").read_text(
         encoding="utf-8")
     assert "map_v2_fleet" in setup_py
 ```
@@ -616,7 +616,7 @@ Expected: 전부 PASS (기존 `test_control_package_installs_the_complete_v2_map
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/setup.py src/sim/gz_sim/config/worlds.yaml src/sim/gz_sim/test/test_world_profiles.py
+git add src/core/control/setup.py src/sim/gz_sim/config/worlds.yaml src/sim/gz_sim/test/test_world_profiles.py
 git commit -m "feat(sim): catalogue and install the map_v2_fleet world"
 ```
 
@@ -757,7 +757,7 @@ git commit -m "feat(sim): add one-Pinky map_v2_fleet camera lane launch"
 
 **Files:**
 - Create: `docs/validation/map-v2-fleet-gazebo-2026-09-22/result.md`
-- Create: `src/apps/control/map/map_v2_fleet/README.md`
+- Create: `src/core/control/map/map_v2_fleet/README.md`
 
 - [ ] **Step 1: 방향 대조 (사람 확인)**
 
@@ -782,7 +782,7 @@ ROS_DOMAIN_ID=42 ros2 launch gz_sim map_v2_fleet_lane.launch.py gazebo_gui:=true
 - Gazebo 로그에 `road_lines.stl` 메쉬 로드 에러가 없다 (`model://control/...`가 `GZ_SIM_RESOURCE_PATH`의 `share/`에서 풀린다)
 - `ros2 topic hz /camera/front` ≈ 5 Hz
 - `ros2 topic echo /line/observation --once`에 `error`가 0 근처이고 confidence가 0보다 크다
-- 탑뷰 스크린샷을 `src/apps/control/map/map_v2_fleet/review/map_v2_fleet_top.png`로 저장
+- 탑뷰 스크린샷을 `src/core/control/map/map_v2_fleet/review/map_v2_fleet_top.png`로 저장
 
 메쉬가 안 보이면 `GZ_SIM_RESOURCE_PATH`에 `install/share`가 들어 있는지 확인한다. `launch_sim.launch.xml:20`의 `$(find-pkg-share description)/../`가 그 경로다.
 
@@ -810,7 +810,7 @@ ros2 topic info /cmd_vel -v   # 퍼블리셔는 core 하나뿐이어야 한다
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add docs/validation/map-v2-fleet-gazebo-2026-09-22 src/apps/control/map/map_v2_fleet/README.md src/apps/control/map/map_v2_fleet/review
+git add docs/validation/map-v2-fleet-gazebo-2026-09-22 src/core/control/map/map_v2_fleet/README.md src/core/control/map/map_v2_fleet/review
 git commit -m "test(sim): record map_v2_fleet ROS-SIM lane evidence"
 ```
 

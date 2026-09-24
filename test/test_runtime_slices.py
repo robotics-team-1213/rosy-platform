@@ -84,8 +84,9 @@ ALLOWED_CONTROL_IMPORTS = {"control_sensor_adapter.py"}
 
 
 def test_only_control_sensor_adapter_imports_control():
+    control_root = (CORE / "control").resolve()
     for path in CORE.rglob("*.py"):
-        if "test" in path.parts:
+        if "test" in path.parts or control_root in path.resolve().parents:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         names = set()
@@ -114,7 +115,7 @@ def test_core_and_io_images_do_not_copy_hardware_packages():
 def test_core_dockerfile_does_not_copy_control_or_opencv():
     text = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = text.split("FROM runtime-common AS io-runtime")[0]
-    assert "COPY src/apps/control" not in core
+    assert "COPY src/core/control" not in core
     assert "python3-opencv" not in core
 
 

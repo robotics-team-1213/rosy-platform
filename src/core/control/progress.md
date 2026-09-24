@@ -11,7 +11,7 @@ gates:
   LOCAL:
     state: GO
     evidence: "1179 passed, 28 skipped (2026-09-22 Windows, 패키지 cwd). D-162 T1/T2 장면 프로파일·매처 27 시험 + T3 노드 wiring·additive payload 11 시험 포함 — D-137/D-151/D-152 회귀 없음"
-    cmd: "cd src/apps/control && python -m pytest test -q"
+    cmd: "cd src/core/control && python -m pytest test -q"
   ROS-SIM:
     state: HOLD
     blocker: "정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52, 접근 가능 unknown 0%, 충돌 없음). 그러나 Control 전체 gate에는 sensing/camera/calibration/planning/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 단, D-162 슬라이스(road_observer_node+scene context)는 2026-09-22 노드 그래프 검증을 통과했다(docs/validation/scene-context-control-node-2026-09-22)."

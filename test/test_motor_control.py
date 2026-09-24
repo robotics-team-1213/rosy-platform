@@ -9,7 +9,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "hardware" / "bringup"))
+sys.path.insert(0, str(ROOT / "src" / "devices" / "bringup"))
 
 from bringup.motor_control import (  # noqa: E402
     CommandStatus,

@@ -2,7 +2,7 @@
 title: 시뮬에서 인식을 튜닝하기 전에 녹화 영상으로 실물 카메라부터 잰다
 date: 2026-09-24
 category: workflow-issues
-module: sim/gz_sim + apps/control (map_v2_fleet 차선 인식, 카메라 프로필)
+module: sim/gz_sim + core/control (map_v2_fleet 차선 인식, 카메라 프로필)
 problem_type: workflow_issue
 component: development_workflow
 severity: high

@@ -8,7 +8,7 @@
 
 ## Task 1: Pin Linux execution and exact-world contracts
 
-**Files:** `.gitattributes`, `src/sim/gz_sim/test/`, `src/apps/control/setup.py`, `src/sim/gz_sim/config/worlds.yaml`, `src/sim/gz_sim/launch/world_profiles.py`
+**Files:** `.gitattributes`, `src/sim/gz_sim/test/`, `src/core/control/setup.py`, `src/sim/gz_sim/config/worlds.yaml`, `src/sim/gz_sim/launch/world_profiles.py`
 
 1. Keep the reproduced executable-shebang and missing-v2-profile tests red.
 2. Pin executable Python files to LF.

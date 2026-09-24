@@ -32,7 +32,7 @@ Artifacts:
 ## Reproduce
 
 ```powershell
-$env:PYTHONPATH="src/apps/control;src/core/core_common;src/core/core_events;src/core/core_features"
+$env:PYTHONPATH="src/core/control;src/core/core_common;src/core/core_events;src/core/core_features"
 python tools/simulate_line_follow.py `
   --output docs/validation/line-follow-modes-2026-09-21
 ```

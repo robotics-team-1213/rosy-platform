@@ -55,7 +55,7 @@
 
 ## 시험
 
-- `src/apps/control/test`
+- `src/core/control/test`
 - `test/test_control_absorption_package.py`
 
 ## 최근 기록

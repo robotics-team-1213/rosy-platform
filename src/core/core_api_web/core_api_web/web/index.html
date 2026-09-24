@@ -242,9 +242,11 @@
             </dl>
             <p id="line-follow-reason" class="line-follow-message">mode_off</p>
           </div>
-          <div class="traffic-policy-control" aria-labelledby="traffic-policy-heading">
+          <!-- D-201: 정책의 편집(입력·검토본·적용)은 절차다 — 점검 뷰의 현장 설정
+               카드로 갔다. 운용 뷰의 조작 열은 정책의 현재 상태만 말한다. -->
+          <div class="traffic-policy-control" aria-labelledby="traffic-heading">
             <div class="traffic-policy-copy">
-              <h3 id="traffic-policy-heading">교통 인식 · 주행 정책</h3>
+              <h3 id="traffic-heading">교통 인식 · 주행 정책</h3>
               <span>카메라 증거와 최종 명령을 분리해 확인</span>
             </div>
             <dl class="traffic-policy-facts">
@@ -255,31 +257,6 @@
               <div><dt>policy</dt><dd id="traffic-policy-revision">미확정</dd></div>
               <div><dt>판정 사유</dt><dd id="traffic-policy-reason">policy_disabled</dd></div>
             </dl>
-            <div class="traffic-policy-grid">
-              <label>운영 모드
-                <select id="traffic-policy-mode">
-                  <option value="DISABLED">DISABLED</option>
-                  <option value="MONITOR_ONLY">MONITOR_ONLY</option>
-                  <option value="ENFORCED">ENFORCED</option>
-                </select>
-              </label>
-              <label>정책 revision<input id="traffic-policy-revision-input" type="text" maxlength="80"></label>
-              <label>접근 거리 (m)<input id="traffic-approach-distance" type="number" min="0.13" max="3" step="0.01"></label>
-              <label>정지 거리 (m)<input id="traffic-stop-distance" type="number" min="0.01" max="2.9" step="0.01"></label>
-              <label>정지 dwell (s)<input id="traffic-stop-dwell" type="number" min="0.1" max="10" step="0.1"></label>
-              <label>최소 신뢰도<input id="traffic-min-confidence" type="number" min="0.01" max="1" step="0.01"></label>
-            </div>
-            <div class="traffic-policy-actions">
-              <ui-button kind="quiet" type="button" id="traffic-policy-stage">정책 검토본 저장</ui-button>
-              <ui-button kind="primary" type="button" id="traffic-policy-apply" class="primary-button">정지 상태에서 적용</ui-button>
-            </div>
-            <div class="simulation-signal-controls" role="group" aria-label="시뮬레이션 신호등 제어">
-              <span>SIM 신호</span>
-              <ui-button kind="toggle" type="button" data-simulation-signal="RED" disabled>RED</ui-button>
-              <ui-button kind="toggle" type="button" data-simulation-signal="YELLOW" disabled>YELLOW</ui-button>
-              <ui-button kind="toggle" type="button" data-simulation-signal="GREEN" disabled>GREEN</ui-button>
-            </div>
-            <p id="traffic-policy-message" class="line-follow-message" role="status" aria-live="polite">정책 readback 대기</p>
           </div>
           <div id="hitl-escalation" class="hitl-escalation" role="alert" hidden>
             <h3>운영자 지원 요청</h3>
@@ -623,6 +600,38 @@
               <ui-button kind="quiet" type="button" id="dock-cancel">도킹 취소</ui-button>
             </div>
             <p id="dock-message" class="host-note" role="status"></p>
+          </article>
+
+          <article class="settings-card" aria-labelledby="traffic-policy-heading">
+            <header>
+              <h3 id="traffic-policy-heading">주행 정책 편집</h3>
+            </header>
+            <p class="host-note">교통 인식 정책의 검토본을 저장하고 정지 상태에서 적용합니다. 적용은 로봇이 서 있을 때만 반영됩니다. 현재 판정은 운용 뷰의 조작 열에 있습니다.</p>
+            <div class="traffic-policy-grid">
+              <label>운영 모드
+                <select id="traffic-policy-mode">
+                  <option value="DISABLED">DISABLED</option>
+                  <option value="MONITOR_ONLY">MONITOR_ONLY</option>
+                  <option value="ENFORCED">ENFORCED</option>
+                </select>
+              </label>
+              <label>정책 revision<input id="traffic-policy-revision-input" type="text" maxlength="80"></label>
+              <label>접근 거리 (m)<input id="traffic-approach-distance" type="number" min="0.13" max="3" step="0.01"></label>
+              <label>정지 거리 (m)<input id="traffic-stop-distance" type="number" min="0.01" max="2.9" step="0.01"></label>
+              <label>정지 dwell (s)<input id="traffic-stop-dwell" type="number" min="0.1" max="10" step="0.1"></label>
+              <label>최소 신뢰도<input id="traffic-min-confidence" type="number" min="0.01" max="1" step="0.01"></label>
+            </div>
+            <div class="traffic-policy-actions">
+              <ui-button kind="quiet" type="button" id="traffic-policy-stage">정책 검토본 저장</ui-button>
+              <ui-button kind="primary" type="button" id="traffic-policy-apply" class="primary-button">정지 상태에서 적용</ui-button>
+            </div>
+            <div class="simulation-signal-controls" role="group" aria-label="시뮬레이션 신호등 제어">
+              <span>SIM 신호</span>
+              <ui-button kind="toggle" type="button" data-simulation-signal="RED" disabled>RED</ui-button>
+              <ui-button kind="toggle" type="button" data-simulation-signal="YELLOW" disabled>YELLOW</ui-button>
+              <ui-button kind="toggle" type="button" data-simulation-signal="GREEN" disabled>GREEN</ui-button>
+            </div>
+            <p id="traffic-policy-message" class="host-note" role="status" aria-live="polite">정책 readback 대기</p>
           </article>
 
           <article class="settings-card" aria-labelledby="fleet-settings-heading">

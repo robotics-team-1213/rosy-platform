@@ -12,14 +12,14 @@ COMMON = Path(__file__).parent.parent
 COMPONENTS = COMMON / "components.css"
 UI = COMMON / "ui.js"
 TOKENS = COMMON / "tokens.css"
-FACE = ROOT / "apps" / "emotion" / "emotion" / "info_screen.py"
-PITCH = ROOT / "apps" / "games" / "games" / "web" / "styles.css"
+FACE = ROOT / "face" / "emotion" / "emotion" / "info_screen.py"
+PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
 
 SURFACES = (
     ROOT / "core" / "core_api_web" / "core_api_web" / "web",
     ROOT / "site" / "fleet" / "fleet" / "server" / "web",
-    ROOT / "apps" / "games" / "games" / "web",
-    ROOT / "apps" / "control" / "web" / "dashboard.html",
+    ROOT / "site" / "games" / "games" / "web",
+    ROOT / "core" / "control" / "web" / "dashboard.html",
 )
 STYLE_SUFFIXES = {".css", ".html"}
 
@@ -228,7 +228,7 @@ def test_diagnostic_palette_matches_the_token_hex():
         r"(--[a-z0-9-]+):\s*#([0-9a-fA-F]{6})",
         TOKENS.read_text(encoding="utf-8"),
     ))
-    page = (ROOT / "apps" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    page = (ROOT / "core" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
     declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
     mismatch = []
     for local, token in _DIAGNOSTIC_TWINS.items():

@@ -9,7 +9,7 @@
 #   tracked. Real device copies live on the robot under /etc/rosy.
 # - gitignore has no end-of-line comments: a trailing "# ..." becomes part of
 #   the pattern, so every comment sits on its own line.
-# - Package-local .gitignore files (e.g. src/apps/control) only add rules for
+# - Package-local .gitignore files (e.g. src/core/control) only add rules for
 #   that package; shared rules belong here.
 
 # colcon / ROS workspace output, at any depth

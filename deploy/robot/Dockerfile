@@ -114,7 +114,7 @@ COPY src/sim/description ./src/sim/description
 COPY src/devices/bringup ./src/devices/bringup
 COPY src/navigation/navigation ./src/navigation/navigation
 COPY src/products/omx_adapter ./src/products/omx_adapter
-COPY src/apps/control ./src/apps/control
+COPY src/core/control ./src/core/control
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \

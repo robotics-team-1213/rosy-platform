@@ -118,7 +118,7 @@ def test_core_image_does_not_ship_the_absorbed_sensor_worker_runtime():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = dockerfile.split("FROM runtime-common AS io-runtime")[0]
 
-    assert "COPY src/apps/control ./src/apps/control" not in core
+    assert "COPY src/core/control ./src/core/control" not in core
     assert "python3-opencv" not in core
     assert "ros-jazzy-visualization-msgs" in core
     assert "ros-jazzy-tf2-ros" in core
@@ -133,7 +133,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     assert "COPY src/products/omx_adapter ./src/products/omx_adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
-        ROOT / "src" / "apps" / "omx_adapter" / "config" / "omx.disabled.yaml"
+        ROOT / "src" / "products" / "omx_adapter" / "config" / "omx.disabled.yaml"
     ).read_text(encoding="utf-8")
     assert "enabled: false" in disabled
     assert "hardware_plugin: \"\"" in disabled
@@ -142,7 +142,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
 def test_initial_io_slice_disables_unavailable_adc_battery_driver():
     compose_command = compose()["services"]["rosy-io"]["command"]
     launch = (
-        ROOT / "src" / "hardware" / "bringup" / "launch" / "bringup_robot.launch.py"
+        ROOT / "src" / "devices" / "bringup" / "launch" / "bringup_robot.launch.py"
     ).read_text(encoding="utf-8")
 
     assert "enable_battery:=false" in compose_command

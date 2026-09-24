@@ -5,7 +5,7 @@
 
 **Context:** D-168은 `src/<domain>/<package>/` 안의 ROS 패키지 모양을 정한다.
 패키지 밖 실행 파일은 그 규칙에 없다. 지금은 저장소 루트, `src/core/core/deploy`,
-`src/apps/control/tools/gz`, `deploy/robot` 한 줄, `docs/validation` 증거가
+`src/core/control/tools/gz`, `deploy/robot` 한 줄, `docs/validation` 증거가
 같은 종류의 일을 한다. 텔레옵으로 확인한 기록과 주행 기록도 소스 트리에
 들어가면 커밋과 설치물이 섞인다.
 

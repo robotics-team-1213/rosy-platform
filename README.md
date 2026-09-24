@@ -7,7 +7,7 @@
 
 ## 구조
 
-Rosy Control의 개발 기준은 이 저장소의 `src/apps/control`로 통합했다.
+Rosy Control의 개발 기준은 이 저장소의 `src/core/control`로 통합했다.
 별도 Control 저장소·웹 서버를 새 운영 구성으로 사용하지 않는다.
 현재 소스 편입과 보정 노드 경계 정리는 완료했으며, 전체 runtime·안전 중재·이미지·Pi 인수는 진행 중이다.
 현황은 [흡수 실행 결과](docs/plans/2026-09-12-control-absorption-results.md),

@@ -24,7 +24,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-DOMAINS = {"core", "apps", "hardware", "navigation", "sim", "site"}
+DOMAINS = {"core", "devices", "products", "face", "navigation", "sim", "site"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -52,7 +52,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("navigation", "control"): "same edge; resolve by lifting line_follow into the deploy assembly",
-    ("control", "imu_bno055"): "apps -> hardware; the IMU belongs in bringup/deploy assembly, not an app launch",
+    ("control", "imu_bno055"): "core/control -> devices/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
     ("navigation", "core"): "navigation -> core runtime; the web_* launches are assemblies, not navigation",
 }
 
@@ -65,11 +65,11 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "apps/control/control/startup_calibration_node.py": (
+    "core/control/control/startup_calibration_node.py": (
         954,
         f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
     ),
-    "apps/control/control/calib_node.py": (
+    "core/control/control/calib_node.py": (
         640,
         f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
     ),
@@ -77,7 +77,7 @@ SIZE_VERDICTS = {
         621,
         "split: file store, HTTP client and observer are separate roles today (B2); owner fleet, unscheduled",
     ),
-    "apps/control/control/safety/node.py": (
+    "core/control/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -85,11 +85,11 @@ SIZE_VERDICTS = {
         767,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
     ),
-    "apps/control/control/sensing/lane.py": (
+    "core/control/control/sensing/lane.py": (
         611,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
     ),
-    "apps/control/control/sensing/lane_bev.py": (
+    "core/control/control/sensing/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
@@ -206,10 +206,10 @@ def _allowed(source: str, target: str) -> bool:
         return dst_domain == "core"
     if src_domain == "sim":
         return True
-    if src_domain == "hardware":
+    if src_domain == "devices":
         return target == "description"
     if src_domain == "navigation":
-        return dst_domain == "hardware"
+        return dst_domain == "devices"
     return False
 
 

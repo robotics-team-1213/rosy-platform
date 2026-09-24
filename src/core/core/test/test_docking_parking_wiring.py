@@ -24,8 +24,8 @@ from core.bridge import docking_mode
 
 ROOT = Path(__file__).resolve().parents[4]
 OVERLAY = ROOT / "src" / "sim" / "gz_sim" / "config" / "map_v2_fleet_core.yaml"
-BUILD_WORLD = ROOT / "src" / "apps" / "control" / "map" / "map_v2_fleet" / "scripts" / "build_world.py"
-GRAPH = ROOT / "src" / "apps" / "control" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+BUILD_WORLD = ROOT / "src" / "core" / "control" / "map" / "map_v2_fleet" / "scripts" / "build_world.py"
+GRAPH = ROOT / "src" / "core" / "control" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 
 

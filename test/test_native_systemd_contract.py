@@ -389,7 +389,7 @@ PROGRAM_SOURCES = {
                                      "deploy/robot/native/recover-release.sh"],
     "rosy-sd-provision.service": [],
     # CORE also imports modules of the control package (sensor adapter, gate).
-    "rosy-core.service": ["src/core", "imported-by:src/core:control:src/apps/control"],
+    "rosy-core.service": ["src/core", "imported-by:src/core:control:src/core/control"],
     "rosy-io.service": ["src/devices/bringup"],
     "rosy-navigation.service": ["src/navigation", "src/devices/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
@@ -703,8 +703,8 @@ def test_contract_helpers_treat_dynamic_users_as_non_root():
 def test_core_program_scan_follows_imports_into_the_control_package():
     # CORE's production modules import no control module today (only its tests
     # do), so the scan adds nothing now; it picks them up the moment one does.
-    assert PROGRAM_SOURCES["rosy-core.service"][1] == "imported-by:src/core:control:src/apps/control"
+    assert PROGRAM_SOURCES["rosy-core.service"][1] == "imported-by:src/core:control:src/core/control"
     resolved = {path.relative_to(ROOT).as_posix()
-                for path in _imported_modules("src/core/core/test", "control", "src/apps/control")}
-    assert "src/apps/control/control/sensor_provider.py" in resolved
-    assert "src/apps/control/control/calibration_storage.py" in resolved
+                for path in _imported_modules("src/core/core/test", "control", "src/core/control")}
+    assert "src/core/control/control/sensor_provider.py" in resolved
+    assert "src/core/control/control/calibration_storage.py" in resolved

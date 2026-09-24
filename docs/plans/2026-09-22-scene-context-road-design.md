@@ -46,7 +46,7 @@ Proposed로 등록).
 
 ### 1. `scene_context` (pure, ROS-free)
 
-- 소유 위치: `src/apps/control/control/sensing/scene_context.py`
+- 소유 위치: `src/core/control/control/sensing/scene_context.py`
 - `SceneContextProfile`: `RoadPerceptionConfig` 필드 8개 전체를 명시적으로
   담는 frozen 프로파일 + `context_id` + `profile_revision`. diff가 아니라
   전체 집합으로 기록해 병합 모호성을 없앤다. 값 경계는

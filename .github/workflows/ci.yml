@@ -106,7 +106,7 @@ jobs:
         run: |
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
-          python3 -m pytest src/hardware/bringup/test src/hardware/sensor_adc/test             src/apps/control/test/test_ir_adc_lock.py             --ignore=src/hardware/bringup/test/test_flake8.py             --ignore=src/hardware/bringup/test/test_pep257.py             --ignore=src/hardware/bringup/test/test_copyright.py -v
+          python3 -m pytest src/devices/bringup/test src/devices/sensor_adc/test             src/core/control/test/test_ir_adc_lock.py             --ignore=src/devices/bringup/test/test_flake8.py             --ignore=src/devices/bringup/test/test_pep257.py             --ignore=src/devices/bringup/test/test_copyright.py -v
 
       # 루트 test/ 는 배포·릴리스 계약을 담고 있으면서도 지금까지 CI 에서 한 번도
       # 실행되지 않았다. 위 스텝이 src/core/core/test 만 돌기 때문이다. 그래서

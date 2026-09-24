@@ -91,7 +91,7 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
    (`control.control` 66, `sensing` 43, `planning` 15). 36개는 경로로 소스를 읽는다.
 5. **패키지 이름 참조.** 외부 launch·시험에 9곳이 있다(hardware.launch 1, gz_sim 6, 시험 2).
    배포 쪽은 `gz_sim/package.xml`, `deploy/image/required-ros-packages.txt:7`,
-   `inputs.lock.yaml:130`, `deploy/robot/Dockerfile:117,122`이다. 문서의 `apps/control`
+   `inputs.lock.yaml:130`, `deploy/robot/Dockerfile:117,122`이다. 문서의 `core/control`
    언급은 24개 파일에 124곳이다.
 6. **X6 — 경합 확인.** 브랜치 `map-v2-fleet-world`가 `sensing/lane.py`, `sensing/lane_bev.py`,
    `line_observer_node.py`를 고치고 있었다. 2026-09-22 local main `5207531`에 병합되어 해소됐다.
@@ -106,7 +106,7 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
    덧붙였다. `test/test_control_deploy_closure.py`가 systemd 유닛·compose에서 include 사슬을
    따라 배포 실행 파일을 도출해 네 개와 집합 동일성으로 고정하고, `rosy.sensor_provider:control`
    등록자가 정확히 1개임을 검사한다(변이 증명 3건). 3단계에서 진입점을 옮길 때 이 시험의
-   기대 경로(`apps/control/setup.py`)를 같은 커밋에서 바꾼다.
+   기대 경로(`core/control/setup.py`)를 같은 커밋에서 바꾼다.
 1. **파일 단위 분리(§4)** — `web_node.py` 완료(`web_state`/`web_http`/`web_render`/`web_map_control`, `test_web_http.py`). 교정 파일 2개는 남음. 패키지 경계를 바꾸지 않으므로 먼저 해도 되며, 이후 이동할 모듈 크기가
    줄어든다. `SIZE_VERDICTS`의 해당 항목은 파일이 600줄 아래로 내려가면 삭제한다(시험이 삭제를
    강제한다).

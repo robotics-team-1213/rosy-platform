@@ -12,9 +12,9 @@
 ## Regenerate
 
 ```bash
-python src/apps/control/map/map_v2_fleet/scripts/build_world.py
-python src/sim/gz_sim/scripts/world_to_map.py src/apps/control/map/map_v2_fleet/worlds/map_v2_fleet.world \
-  -o src/apps/control/map/map_v2_fleet/maps/map_v2_fleet --resolution 0.005 --seed -1.26955,0.24255
+python src/core/control/map/map_v2_fleet/scripts/build_world.py
+python src/sim/gz_sim/scripts/world_to_map.py src/core/control/map/map_v2_fleet/worlds/map_v2_fleet.world \
+  -o src/core/control/map/map_v2_fleet/maps/map_v2_fleet --resolution 0.005 --seed -1.26955,0.24255
 ```
 
 On Windows, `world_to_map.py` writes the yaml with CRLF. Convert it to LF before committing, because `.gitattributes` expects LF.

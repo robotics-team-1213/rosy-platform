@@ -34,7 +34,7 @@
 
 ## 3. 실제 코드 결합 (비테스트 Python import)
 
-- `apps/control → core_*`: **0건**. `control` 내부 import만 존재. 선언과 일치하며, 흡수 원칙(CORE가 최종 명령 소유, control은 증거 생산) 유지.
+- `core/control → core_*`: **0건**. `control` 내부 import만 존재. 선언과 일치하며, 흡수 원칙(CORE가 최종 명령 소유, control은 증거 생산) 유지.
 - `core/core → control`: `core/core/core/bridge/control_sensor_adapter.py` 1개 파일에서 `control.calibration_snapshot`, `control.control.command_gate`, `control.safety.node` import. **선언(`package.xml`)에는 `control`이 없음 = 미선언 결합.** opt-in 어댑터 의도와 일치하나 빌드 순서·단독 빌드 시 깨짐.
 - `core_api_web → core_features/core_common`: v1 12개 모듈이 `command.arbitration, navigation.manager, docking.database, diagnostics.collector, maps, swarm, waypoints` + `protocol.schemas, config, identity`를 직접 참조. 선언과 일치하나 fan-out 최대(약 12개 하위 모듈).
 - `core_features → core_common`: `protocol.schemas/evidence`로만 수렴. 양호(스탬프 결합 수준).
@@ -48,8 +48,8 @@
 
 - 최종 `cmd_vel` 발행은 1곳: `src/core/core/core/bridge/ros_bridge.py` (`create_publisher(Twist, "cmd_vel")`). 단일 발행자 원칙 유지.
 - `control`은 `cmd_vel_raw`, `wander/cmd`, `calib/*`, `camera/*` 발행, `scan/odom/imu_raw/us_sensor` 구독. 단, 레거시 잔재 2곳이 최종 토픽을 **구독**함:
-  - `src/apps/control/control/web_node.py:431` — `create_subscription(Twist, 'cmd_vel', ...)`
-  - `src/apps/control/control/wander/node.py:36` — 동일 패턴
+  - `src/core/control/control/web_node.py:431` — `create_subscription(Twist, 'cmd_vel', ...)`
+  - `src/core/control/control/wander/node.py:36` — 동일 패턴
   - 발행은 아니나, 운영 시 CORE와 동일 토픽명을 소비하는 이중 결합이므로 정리 대상.
 - `bringup`은 `cmd_vel` 구독(`TWIST_SUB_TOPIC_`) + `odom/joint_states/motor/ready` 발행. `navigation/hardware.launch.py → bringup`, `bringup_robot.launch.py → description/sllidar` 로 launch 결합은 하드웨어 방향으로만 흐르고 `core`를 포함하지 않음. 양호.
 - `emotion`은 `display/info`, `power/mode`(CORE 발행) 구독 — 단방향 관측 결합. 양호.

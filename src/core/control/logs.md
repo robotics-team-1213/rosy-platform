@@ -63,7 +63,7 @@
 ## 2026-09-20 · uncommitted · feat(control): ArUco dock tag to relative pose (DNC-007)
 
 - 변경: `control/sensing/dock_tag.py` 신규 — DICT_4X4_50 태그 검출 + solvePnP 상대포즈(x fwd/y left/yaw CCW). 미검출·他 태그는 None. 시험 `test/test_dock_tag.py` 5건(합성 고정: 거리·방위 부호·빈 프레임·他 ID·스펙 검증)
-- 증거: `python -m pytest src/apps/control/test/test_dock_tag.py -q` 5 passed. 전체 `src/apps/control/test` 999 passed + 기존 환경 실패 4건(Windows subprocess/launch — clean tree 재현 확인, 본 변경 무관)
+- 증거: `python -m pytest src/core/control/test/test_dock_tag.py -q` 5 passed. 전체 `src/core/control/test` 999 passed + 기존 환경 실패 4건(Windows subprocess/launch — clean tree 재현 확인, 본 변경 무관)
 - gate 변화: 없음. ROS-SIM HOLD — 실물 도크·카메라 placement 실측 대기. SRS v1.1에 SAF-006/NAV-007/DNC-007 등록
 
 ## 2026-09-20 · uncommitted · feat(control): ArUco detector lifecycle + DockType tag spec (DNC-007)
@@ -139,7 +139,7 @@
 
 ## 2026-09-21 · uncommitted · refactor(control): move cross-domain simulations to repository tools
 
-- 변경: line-follow·semantic-road 통합 시뮬레이터를 `src/apps/control/tools`에서 루트 `tools/`로 이동하고 직접 실행 경로와 문서 참조를 맞췄다. Control 생산 코드의 CORE import와 최종 operational topic 소유권을 AST/소스 경계로 고정했다.
+- 변경: line-follow·semantic-road 통합 시뮬레이터를 `src/core/control/tools`에서 루트 `tools/`로 이동하고 직접 실행 경로와 문서 참조를 맞췄다. Control 생산 코드의 CORE import와 최종 operational topic 소유권을 AST/소스 경계로 고정했다.
 - 증거: 시뮬레이터 CLI·회귀와 모듈 경계 10 passed.
 - gate 변화: SOURCE/LOCAL GO 유지. 실제 ROS graph publisher 검증은 D-156 Proposed다.
 - 결정: D-155. D-156은 launch/graph 증거 전 Proposed.
@@ -147,7 +147,7 @@
 ## 2026-09-22 · uncommitted · test(control): anchor subprocess children to the package root
 
 - 변경: `test_calibration_spaces.py`와 `test_os_calibration_concurrency.py`가 자식 프로세스에 `cwd=PKG_ROOT`를 넘긴다. 저장소 루트에서 모듈을 합쳐 pytest를 돌려도 `tools.gz`·`control` 임포트가 실패하지 않는다. calibration_spaces CLI 자식은 `capture_output`으로 stderr를 실패 메시지에 남긴다.
-- 증거: `python -m pytest src/apps/control/test/test_calibration_spaces.py src/apps/control/test/test_os_calibration_concurrency.py -q` 15 passed (2026-09-22 Windows, 저장소 루트)
+- 증거: `python -m pytest src/core/control/test/test_calibration_spaces.py src/core/control/test/test_os_calibration_concurrency.py -q` 15 passed (2026-09-22 Windows, 저장소 루트)
 - gate 변화: 없음. SOURCE/LOCAL GO 유지.
 
 ## 2026-09-22 · uncommitted · feat(sensing): D-162 장면 상황 프로파일+히스테리시스 매처 (T1/T2)
@@ -188,7 +188,7 @@
 
 ## 2026-09-22 · uncommitted · refactor(control): split web_node into ROS wiring and ROS-free web modules
 - 변경: `web_node.py`(1,091줄)를 노드 배선(558)과 `web_state.py`(STATE·키·한계·/state.json 신선도, 82), `web_http.py`(라우팅·검증·중계 게이트, 304), `web_render.py`(지도 PNG·카메라 JPEG, 78), `web_map_control.py`(slam_toolbox 조작, 147)로 나눴다. 발행만 `WebNode.publish_text`/`publish_teleop`로 위임했고 나머지 코드는 원본과 동일하다(diff 확인). `test_web_http.py`가 실제 HTTP 요청으로 게이트·클램프·경계를 검사한다. 소스를 AST로 떼어 실행하던 `test_calibration_receiver.py`는 직접 import로 바꿨다.
-- 증거: `python -m pytest src/apps/control/test -q` 1284 passed, 28 skipped (2026-09-22 Windows). `test/test_module_structure.py` 등 구조 가드 27 passed — P6가 600줄 아래로 내려간 web_node 판정 삭제를 강제했다.
+- 증거: `python -m pytest src/core/control/test -q` 1284 passed, 28 skipped (2026-09-22 Windows). `test/test_module_structure.py` 등 구조 가드 27 passed — P6가 600줄 아래로 내려간 web_node 판정 삭제를 강제했다.
 - gate 변화: 없음. ROS-SIM 스모크(WSL에서 web_node 기동·요청·토픽 확인)는 WSL 서비스 오류(E_UNEXPECTED)로 미실행.
 - 결정: D-168 P6 `split` 판정 이행, control 분리 설계 1단계 중 web_node.
 - 교훈: `/state.json` 신선도 판정은 이제 요청마다 시각을 한 번만 읽는다. 원본은 판정마다 `time.monotonic()`을 새로 불렀다(마이크로초 차이, 한 응답 안의 판정이 같은 시각 기준이 됨).
@@ -202,35 +202,35 @@
 
 ## 2026-09-22 · uncommitted · control(watch): graph guard matches the OS node names and cmd_vel ownership
 - 변경: `control/watch.py` 테이블 현행화. REQUIRED 노드명 pinky_* -> bringup/sensor_adc/imu_bno055, FOREIGN 에서 pinky_* 4건 제거(브리지 트윈 parameter_bridge/image_bridge 유지), ALLOWED 의 /cmd_vel_raw 에 control_node 추가. EXCLUSIVE 값을 단일 문자열에서 허용 소유자 집합으로 바꾸고 /cmd_vel 소유자를 {core, safety_node} 로 확정 — inspect() 는 허용 집합에서 정확히 한 종류만 발행해야 하며 두 소유자가 동시에 발행하면 co_owner 인터럽트(D-38 병행 금지의 런타임 감시).
-- 증거: `python -m pytest src/apps/control/test/test_watch.py -q` 22 passed(신규 8건 계약/행위 시험 포함, test-first 적색 확인 후 초록). `python -m pytest src/apps/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거 평가: Rosy 폴더 communication-protocol-report.md §3.2.1 및 docs/plans/2026-09-22-communication-protocol-remediation-plan.md T1.
+- 증거: `python -m pytest src/core/control/test/test_watch.py -q` 22 passed(신규 8건 계약/행위 시험 포함, test-first 적색 확인 후 초록). `python -m pytest src/core/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거 평가: Rosy 폴더 communication-protocol-report.md §3.2.1 및 docs/plans/2026-09-22-communication-protocol-remediation-plan.md T1.
 - gate 변화: 없음. watch.py 순수 모듈 LOCAL GO 유지.
 - 결정: 없음 — D-2/D-38/D-149 기존 결정을 감시 장치에 반영한 것.
 - 교훈: 감시장치 테이블이 정책을 배반하면 오탐이 상수가 된다. 리네임(D-16) 시기에 감시 테이블이 함께 갱신되지 않아 6개월간 watch_node 가 현행 그래프에서 항상 인터럽트를 보고했다.
 
 ## 2026-09-22 · uncommitted · control(ir): ir_sensor/range 단일 발행 계약 고정
 - 변경: `launch/line_follow.launch.py` 헤더에 ir_sensor/range 단일 발행 규칙 주석(ir_adc_node 가 이 launch 의 유일 IR 발행자, C++ sensor_adc 는 같은 버스의 레거시 벤치 판독기 — 병행 금지). `control/calib_node.py` 운영자 메시지 2건에서 구 패키지명 pinky_sensor_adc 제거 및 병행 금지 안내 추가. 계약 시험은 repo `test/test_ir_source_exclusivity.py`(T2).
-- 증거: `python -m pytest test/test_ir_source_exclusivity.py -q` 4 passed(적색 3건 확인 후 초록). `python -m pytest src/apps/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거: communication-protocol-report.md §3.2.1 이중 발행 항.
+- 증거: `python -m pytest test/test_ir_source_exclusivity.py -q` 4 passed(적색 3건 확인 후 초록). `python -m pytest src/core/control/test/ -q` 1292 passed, 28 skipped (2026-09-22 Windows). 근거: communication-protocol-report.md §3.2.1 이중 발행 항.
 - gate 변화: 없음.
 - 결정: 없음 — 문서화+계약 시험으로 마는 최소 조치. launch 상호배제 강제(한 노드가 다른 쪽 검사)는 필요 시 별도.
 - 교훈: 없음.
 
 ## 2026-09-22 · uncommitted · control(tools): gz 벤치 도구 절대 토픽 발행 금지 (T12)
 - 변경: tools/gz 6개 파일(calibration_mapping_rig·driver·localization_rig·measure_motion_contract·rendered_camera_adapter·rig_estop_probe)의 create_publisher 토픽에서 선행 / 제거 — 상대 이름은 namespace 없이 실행하면 전역으로 풀려 동일, 네임스페이스 안에서는 로봇 ns 로 바르게 풀린다(D-4). 구독은 실제 절대 대상(/pinky/rendered_camera, /tf)이 있어 그대로. 신규 가드 test_gz_tools_topics.py(전 파일 스캔). 부수: PowerShell 리라이트가 붙인 UTF-8 BOM 을 7파일에서 제거(rig_estop_probe 포함, system.py 포함).
-- 증거: `python -m pytest src/apps/control/test/test_gz_tools_topics.py test_rig_odometry_frames.py test_motion_contract_tool.py test_gz_obstacle_camera.py src/core/core/test/test_api.py -q` 62 passed (2026-09-22 Windows, 적색→초록).
+- 증거: `python -m pytest src/core/control/test/test_gz_tools_topics.py test_rig_odometry_frames.py test_motion_contract_tool.py test_gz_obstacle_camera.py src/core/core/test/test_api.py -q` 62 passed (2026-09-22 Windows, 적색→초록).
 - gate 변화: 없음.
 - 결정: 없음 — D-4 준수. D-149 예외 목록에서 벤치 드라이버의 /cmd_vel 발행 제거.
 - 교훈: Windows PowerShell 5 의 Set-Content -Encoding utf8 은 BOM 을 붙인다 — 파이썬 소스를 고칠 때는 [IO.File]::WriteAllText + UTF8Encoding($false) 를 쓰거나 편집 도구를 쓸 것.
 
 ## 2026-09-22 · uncommitted · control(qos): 센서 토픽 소비자 QoS SENSOR 통일 (T13)
 - 변경: startup_calibration_node 의 ir_sensor/range·us_sensor/range·imu_raw 구독과 safety 노드의 us_topic·ir_topic 구독을 depth10(RELIABLE)에서 qos_profile_sensor_data 로 통일 — BEST_EFFORT 구독은 RELIABLE/BEST_EFFORT 발행 모두와 매칭되므로 호환성은 확대만 있다(D-119 소비자 측 완성). STEPS.txt 에 운영자 /estop 발행 시 transient_local QoS 예시 추가(latched 구독과 기본 발행은 영구 비매칭). 신규 가드 test_sensor_qos_unification.py 3건.
-- 증거: `python -m pytest src/apps/control/test/test_sensor_qos_unification.py test_configured_operation.py test_os_calibration_graph.py -q` 25 passed, 1 skipped (2026-09-22 Windows, 적색→초록). map 소비자 3정책 분할은 의도로 bridge/AGENTS.md 에 기록(T11).
+- 증거: `python -m pytest src/core/control/test/test_sensor_qos_unification.py test_configured_operation.py test_os_calibration_graph.py -q` 25 passed, 1 skipped (2026-09-22 Windows, 적색→초록). map 소비자 3정책 분할은 의도로 bridge/AGENTS.md 에 기록(T11).
 - gate 변화: 없음.
 - 결정: 없음 — D-119 완성.
 - 교훈: 없음.
 
 ## 2026-09-23 · uncommitted · refactor(control): calibration_atomic builds no ROS messages (D-171 track 1)
 - 변경: `calibration_atomic.py`에서 `std_msgs` import를 없애고, 기하 불일치 시 정지를 노드의 `stop_wander()`에 맡겼다(`stop_wander`는 다른 세션의 810dc41에 먼저 커밋됐다). `test_calibration_atomic.py`(실제 값 18개)를 추가했다. AST로 떼어 돌리던 `test_configured_operation.py`·`test_rotation_failure_capture.py`는 직접 import로 바꿨다. `KNOWN_ROS_LEAKS`는 16에서 15가 됐다. 흡수 때 빠진 `tools/gz/run_track260905.sh`를 이식했고, 참조 가드 `test_rig_script_references.py`를 추가했다.
-- 증거: `python -m pytest src/apps/control/test -q` 1310 passed, 28 skipped. 변이 3건(게이트 창, 적용 1.5 s, 기하 정지 제거) 각 적색. WSL Jazzy + Gazebo 8.11, ext4 복사본 rig: 분리 모드 기준본·후보본 모두 `ready`, 비상정지 음성 후보본 `failed`, 한 프로세스 모드는 기준본·후보본 모두 같은 게이트 신선도 실패(기존 결함).
+- 증거: `python -m pytest src/core/control/test -q` 1310 passed, 28 skipped. 변이 3건(게이트 창, 적용 1.5 s, 기하 정지 제거) 각 적색. WSL Jazzy + Gazebo 8.11, ext4 복사본 rig: 분리 모드 기준본·후보본 모두 `ready`, 비상정지 음성 후보본 `failed`, 한 프로세스 모드는 기준본·후보본 모두 같은 게이트 신선도 실패(기존 결함).
 - gate 변화: 없음(control ROS-SIM은 전체 그래프 기준 HOLD 유지).
 - 결정: D-171 트랙 1 첫 모듈, D-171 규칙 (d) 개정(사용자 승인 2026-09-23).
 - 교훈: 검증 규칙은 그 검증 경로가 실제로 돌아가는지 먼저 확인하고 세운다. 규칙을 쓴 뒤 첫 적용에서야 rig 스크립트가 없다는 것을 알았다.
@@ -260,7 +260,7 @@
 ## 2026-09-23 · uncommitted · fix(control): rotation trial holds zero through its own evidence gap
 - 변경: `calibration_rotation.py`. 정지(0 명령) 중인 회전 trial이 신선도 공백을 겪으면 최대 1 s 동안 0을 유지하고, 정지 자세를 확인하며 기다린다(`hold_freshness_lapse`). 끝점 등록 뒤에는 증거 장벽을 둔다. 새 decision과 새 scan이 들어오고 각각 0.1 s 이상의 신선도가 남아야 다음 구간을 시작한다. 등록과 해제 때는 `last_time`을 보정한다. 정지 자세 기준은 가장 최근의 유효한 odom 행이다. e-stop과 hazard는 대기하지 않는다(`rotation_hazard`로 분리, 메시지·순서는 그대로). 테스트: `test_rotation_freshness_hold.py` 19건 신규, `test_calibration_rotation_handoff.py` 스텁 1건 보정.
 - 원인: `record_rotation_endpoint`가 `match_motion`을 tick 안에서 동기 실행한다. rig에서 0.3–0.6 s, 경합 없는 x86 코어에서 120–220 ms가 걸린다. 그동안 executor가 막혀 decision·scan·odom이 큐에 쌓인다. sim 시계는 `/clock` 콜백으로만 전진하므로 함께 멈춘다. 풀린 뒤에는 오래된 입력이 0.25 s 창 밖으로 거부되거나 invalid로 기록되고, 한 번의 검사 실패로 trial이 끝났다. 실기에서는 시계가 멈추지 않는다. 그 대신 `dt > 0.5` 검사와 0.25 s 창을 계산 시간 자체가 넘을 수 있다(Pi 측정은 HOLD).
-- 증거: host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1360 passed, 26 skipped. 뮤테이션 16종 모두 검출. WSL Jazzy + Gazebo 8.11, ext4 사본, 분리 모드. 최종본 11회 연속 `ready`. 같은 시간대 교차 실행(부하 5–29): 기준(main `ae99697`) 2/5, 회전 단계 실패 3. 수정본 5/5. 추적 계측(finish 호출 스택, 대기 거절 사유, tick 상태)으로 각 보완이 막는 경로를 확인했다. 독립 리뷰 3회에서 차단 이슈 없음.
+- 증거: host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1360 passed, 26 skipped. 뮤테이션 16종 모두 검출. WSL Jazzy + Gazebo 8.11, ext4 사본, 분리 모드. 최종본 11회 연속 `ready`. 같은 시간대 교차 실행(부하 5–29): 기준(main `ae99697`) 2/5, 회전 단계 실패 3. 수정본 5/5. 추적 계측(finish 호출 스택, 대기 거절 사유, tick 상태)으로 각 보완이 막는 경로를 확인했다. 독립 리뷰 3회에서 차단 이슈 없음.
 - gate 변화: 없음(control ROS-SIM은 전체 그래프 기준 HOLD 유지, DEVICE/FIELD HOLD).
 - 결정: 사용자 승인 2026-09-23("정지 중 짧은 대기"). 움직이는 trial, e-stop, hazard, wander 미정지는 이전처럼 즉시 실패한다.
 - 교훈: main도 같은 비율로 흔들렸다. D-171 트랙 1 브랜치를 의심한 판단은 박스 부하(피어 세션의 Gazebo)와 시간대 차이를 코드 효과로 오인한 것이었다. 흔들리는 rig는 같은 시간대 교차 실행으로 보고, 실패는 발생 단계별로 센다. stderr 계측은 타이밍을 바꾸므로, 메모리 계수기를 쓰고 1 s마다 파일로 덤프한다.
@@ -276,7 +276,7 @@
 ## 2026-09-23 · uncommitted · perf(control): vectorise the calibration wall fit, bit for bit
 - 변경: `sensing/wall_tracker.py`의 `_fit`을 numpy로 벡터화했다. 점 쌍 기울기는 행렬로, median은 `_median`으로 계산한다(짝수 개면 두 가운데 값의 평균, 결과가 0일 때만 안정 정렬로 ±0 부호를 `sorted()`와 맞춘다). 반환값은 모두 Python `float`/`int`다. `_segments`는 run마다 배열을 한 번 만들어 `_fit(array=...)`에 넘긴다. 테스트 `test_wall_tracker_equivalence.py`는 원본 `_fit`의 복사본(main `860a6740`)과 결과를 `repr`까지 비교한다.
 - 원인: 부하가 높은 rig에서 calibration 노드의 `/scan` 콜백(`on_scan` → `WallTracker.update` → `_segments` → `_fit`)이 프로세스 CPU의 75%였다. scan당 `_fit` 약 130회, 경합 없는 x86 코어에서 27 ms, 부하 28에서 평균 130 ms. 큐가 쌓여 decision 체류가 324 ms까지 늘었고, 0.25 s 신선도 창을 넘어 translation 단계가 실패했다(평가 문서 §8.4 class B).
-- 증거: 동등성 — 무작위 벽 3000, y가 거의 겹치는 쌍 1500, 부호 있는 0 3000, scan 60, tracker 연속 12회와 조각 병합 10회에서 `repr` 동일, 모든 값이 builtin 타입. 뮤테이션 8종 모두 검출. 속도: scan당 27.2 ms → 7.2 ms(4.0배, 같은 프로세스 교차 측정). host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. rig 교차 A/B(부하 약 30): 기준 3/4, 최적화 1/4 통과. 최적화 쪽 실패 2건은 모두 calibration → safety 명령 전달 구간(357 ms, 305 ms)에서 늦었다. 이 구간은 이번 변경과 무관한 safety 프로세스 쪽이다. 이 부하에서 rig는 판정력이 없다(§8.4). 판정 근거는 host 동등성과 결정적 비용 측정이다. 독립 리뷰 1회, 지적(±0 부호) 반영.
+- 증거: 동등성 — 무작위 벽 3000, y가 거의 겹치는 쌍 1500, 부호 있는 0 3000, scan 60, tracker 연속 12회와 조각 병합 10회에서 `repr` 동일, 모든 값이 builtin 타입. 뮤테이션 8종 모두 검출. 속도: scan당 27.2 ms → 7.2 ms(4.0배, 같은 프로세스 교차 측정). host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. rig 교차 A/B(부하 약 30): 기준 3/4, 최적화 1/4 통과. 최적화 쪽 실패 2건은 모두 calibration → safety 명령 전달 구간(357 ms, 305 ms)에서 늦었다. 이 구간은 이번 변경과 무관한 safety 프로세스 쪽이다. 이 부하에서 rig는 판정력이 없다(§8.4). 판정 근거는 host 동등성과 결정적 비용 측정이다. 독립 리뷰 1회, 지적(±0 부호) 반영.
 - gate 변화: 없음(DEVICE/FIELD HOLD). Pi에서의 scan 콜백 시간은 미측정.
 - 결정: 사용자 승인 2026-09-23("wall_tracker 최적화"). 동작은 바꾸지 않는다.
 - 교훈: 부하 25–30 이상에서는 코드가 한가해도 OS 스케줄링 공백(약 340 ms)만으로 0.25 s 창을 넘는다. 이 영역의 rig 실패는 코드 판정에 쓰지 않는다. "비트 단위 동일"은 `==`가 아니라 `repr`로 확인해야 한다(-0.0 == 0.0).
@@ -284,7 +284,7 @@
 ## 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
 
 - 변경: `watch.py`가 product와 standalone 표를 따로 둔다. 제품 `/cmd_vel` 소유자는 `core`만, 단독 control은 `safety_node`만이다. `watch_node`는 `graph_mode`로 하나를 고르고 기본은 standalone이다.
-- 증거: `src/apps/control/test/test_watch.py` 포함 57 passed, 10 skipped (2026-09-24 Windows).
+- 증거: `src/core/control/test/test_watch.py` 포함 57 passed, 10 skipped (2026-09-24 Windows).
 - gate 변화: 없음.
 - 결정: D-183 Accepted
 - 교훈: 없음
@@ -292,7 +292,7 @@
 ## 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
 - 변경: `planning/gridmap.py`의 `inflate`를 numpy로 바꿨다. 분류는 `np.where`로 한다. 원판 오프셋은 원본과 같은 Python float 비교로 만들고, 오프셋마다 출발점 마스크를 슬라이스로 옮겨 OCC를 찍는다. 출발점은 원본의 `v < OCC_THRESH` 부정이라 NaN 셀도 팽창한다(보수적). 출발점이 없으면 바로 반환하고, 반경은 지도 크기까지만 돈다. 계산은 출발점의 경계 상자로 한정한다. 결과는 Python `int` 리스트이고 매번 새 지도다. 테스트 `test_inflate_equivalence.py`는 원본 복사본(main `631ff091`)과 비교한다.
 - 원인: goal이 2 s마다 계획할 때 후보별·반경별로 지도 전체를 Python 이중 루프로 부풀렸다(host 200×200 48 ms, 400×400 128 ms, goal tick 평균 177 ms). D-185 조사.
-- 증거: 동등성 — 무작위 지도 120개 × 반경 3종, 실제 크기 200×200, 지도보다 큰 반경, 음수·−0.0·NaN·inf 반경의 예외 유형, float·NaN·int8 데이터, 결과의 독립성. `repr` 수준에서 같고 모든 값이 builtin `int`다. 뮤테이션 6종 모두 검출. 속도: 200×200 48→6 ms, 400×400 128→22 ms, 희소 400×400(반경 6–40) 28–34→20–29 ms. host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음). NaN 출발점, 희소·큰 반경 퇴행, 테스트 공백을 반영했다.
+- 증거: 동등성 — 무작위 지도 120개 × 반경 3종, 실제 크기 200×200, 지도보다 큰 반경, 음수·−0.0·NaN·inf 반경의 예외 유형, float·NaN·int8 데이터, 결과의 독립성. `repr` 수준에서 같고 모든 값이 builtin `int`다. 뮤테이션 6종 모두 검출. 속도: 200×200 48→6 ms, 400×400 128→22 ms, 희소 400×400(반경 6–40) 28–34→20–29 ms. host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음). NaN 출발점, 희소·큰 반경 퇴행, 테스트 공백을 반영했다.
 - gate 변화: 없음. Pi 수치는 D-185 R8 전까지 HOLD.
 - 결정: D-185 R1(사용자 승인 2026-09-24). 캐시 대신 벡터화했고, ADR에 구현 메모를 달았다.
 - 교훈: 결과 동일 최적화도 입력 분포가 다르면 느려질 수 있다(희소 지도·큰 반경). 비용은 대표 입력과 극단 입력 모두로 잰다.
@@ -300,7 +300,7 @@
 ## 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
 - 변경: `rotation_scan_sample(msg, valid, current)`가 유효하지만 0.25 s 창을 넘긴 scan의 내용을 `rotation_scan_late`에 보관한다. `rotation_clear`는 저장된 scan이 없고 기하 프로필이 있을 때, 그 내용을 `calibration_rotation_clearance`에 나이 무한대로 넣는다. 그래서 구조 결함은 여전히 `invalid_scan`이 되고, 구조가 정상인 늦은 scan만 `stale_scan`(정지 중 1 s 대기)이 된다. 진단에는 `scan_stored: False`를 붙인다. `on_scan`은 유효성과 0.25 s 창을 따로 넘긴다. 패키지 크기 판정(D-168 P6)은 재판정했다. split 판정은 그대로 두고 기준을 28,159줄에서 28,315줄로 바꿨다.
 - 원인: rig 실행 prof-r2-1에서 끝점 등록 stall(0.445 s) 뒤 큐에서 나온 scan이 `stamped(.25)`에 걸렸다. 그 scan이 `rotation_scan = None`으로 저장돼 `missing_scan_or_geometry`가 났고, 이 사유는 대기 대상이 아니라서 정지 중인 trial이 즉시 실패했다(`hold_refused` 기록). c67437d1 회전 대기 수정의 잔여 경로다.
-- 증거: 테스트 신규 8건(늦은 scan의 사유·구조 검사·부재·기하 없음·trial 대기·시작 전 대기·표시 해제, `on_scan` 배선). 뮤테이션 6종 모두 검출. host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음)에서 나온 지적을 반영했다. 구조 검사 우회, 배선·표시 해제·시작 전 경로의 테스트 공백, 진단 정보가 그것이다.
+- 증거: 테스트 신규 8건(늦은 scan의 사유·구조 검사·부재·기하 없음·trial 대기·시작 전 대기·표시 해제, `on_scan` 배선). 뮤테이션 6종 모두 검출. host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과. 독립 리뷰 1회(차단 없음)에서 나온 지적을 반영했다. 구조 검사 우회, 배선·표시 해제·시작 전 경로의 테스트 공백, 진단 정보가 그것이다.
 - gate 변화: 없음(DEVICE/FIELD HOLD).
 - 결정: 사용자 승인 2026-09-24("고침"). 시작 전(trial 없음) 단계에서 늦은 scan 하나로 재배치를 시작하던 경로가 이제 1 s 관측 대기 뒤 실패로 끝난다. 재배치는 저장된 scan이 없으면 쓸 수도 없었다.
 - 교훈: 사유 문자열 하나가 "없음"과 "늦음"을 함께 담으면, 대기 정책이 그 둘을 구분하지 못한다. 판정 입력은 원인별로 분리해 기록한다.
@@ -332,7 +332,7 @@
 - 원인: 2026-09-23/24 rig에서 피어 세션의 Gazebo가 부하를 25–30까지 올렸다. 한가한 노드도 CPU를 약 340 ms 기다렸고, 한 실행은 시뮬 속도가 0.01배였다. 이런 실행의 통과·실패는 코드와 무관했다(평가 문서 §8.4).
 - 증거:
   - 테스트 18건: 판정 규칙, 워밍업, 기준 초과 비율과 PSI 보고, 요청 대비 속도, 증거 부족 시 판정 보류, 같은 파티션의 Gazebo 중복, 가짜 `/proc`의 세션 집계, 잘린 JSONL 줄, 부모가 사라질 때 기록기 종료, 스크립트 배선, 러너 결과 분류.
-  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
   - WSL smoke 2회: 평균 부하 16.13에서 무효 판정과 종료 코드 3, 표본 147개. 수정 후에는 `elapsed_wall_s` 기록, 실행 뒤 기록기 0개, 잠금 해제를 확인했다. 판정 heredoc은 유효·무효 × 통과·실패 네 경우를 가짜 결과로 실행해 확인했다.
   - 독립 리뷰 1회(변경 요청)의 HIGH 2건과 MEDIUM 4건을 반영했다. HIGH는 실제 실패를 무효로 덮는 문제와 떨어져 나온 기록기가 잠금을 무는 문제였다.
 - gate 변화: 없음(rig 도구).
@@ -350,7 +350,7 @@
 - 원인: D-185가 Pi 수치를 R8 전까지 HOLD로 두었다. `match_motion`의 Pi 소요 시간(평가 문서 §8.3), scan 콜백 점유율(§8.4), goal tick 비용(R1)을 실기에서 잴 도구가 없었다.
 - 증거:
   - 테스트 11건(`test_hotpath_measure.py`): stat 파싱(comm 안의 공백·괄호), 두 표본의 CPU%, PSI·loadavg·VmRSS 파싱, 가짜 `/proc`의 프로세스 매칭(grep 제외), 진입점 이름과 setup.py 일치, 가짜 `/proc`의 watch 표본, 보고서 스키마와 증거 등급, 통계, bench smoke(세 키, `match_motion` 입력 수락).
-  - host `python -m pytest src/apps/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 통과.
+  - host `python -m pytest src/core/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 통과.
   - host bench(Windows x86, 증거 아님): `_segments` median 7.7 ms, `match_motion` 80 ms, `inflate` 6.5 ms. WSL `watch` smoke에서 실제 `/proc`의 loadavg·PSI·CPU 모델을 읽었다(노드 없음).
 - gate 변화: 없음. Pi 실행은 HOLD다. 이 세션에는 하드웨어가 없고, Pi 수치는 기록하지 않았다.
 - 결정: D-185 R8. 도구만 만들었고, 실기 실행과 R1–R3 전후 비교는 남는다.
@@ -365,7 +365,7 @@
 - 원인: 2026-09-24 domain-228 실험에서 구독 15개인 한가한 노드가 SingleThreadedExecutor로 코어의 50–58%, EventsExecutor로 15%를 썼다. Jazzy에서 EventsExecutor는 실험 기능이라 opt-in으로 둔다.
 - 증거:
   - 테스트 7건: 기본·single은 이전 호출과 동일, events는 native 루프, spin 예외에도 remove_node, 알 수 없는 값 거부, 두 종류 생성, 14개 진입점이 모두 선택기를 거침(AST).
-  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1404 passed.
+  - host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 1404 passed.
   - 독립 리뷰 1회(COMMENT, 차단 없음). WSL 탐침으로 SIGINT·SIGTERM·sim-time 타이머·다른 스레드 `call_async`가 두 방식에서 같음을 확인했다. MEDIUM 3건 중 rig와 다른 spin 루프는 고쳤고, ADR 표현과 FATAL 로그 줄은 ADR에 적었다. LOW 중 calib_node import 형식은 고쳤다. 다른 스레드 종료 예외와 잘못된 값의 늦은 실패는 기본 경로를 바꾸지 않으려고 기록만 했다.
 - gate 변화: 없음(기본값 불변). rig A/B와 실기 측정 전까지 R3는 미완료.
 - 결정: D-185 R3(행동 변경 승인: 사용자 2026-09-24 "나머지도 ralph 로 해서 바로 끝까지 처리").
@@ -383,7 +383,7 @@
   - 동등성 `test_footprint_sweep_equivalence.py`(원본 복사본 main `89001aad`, 5건): sweep 900건, translation 500건, Pinky 팔각형 360/720/1440점 × 명령 18종, 이동 축 위 결정 점 160건, `straight_escape` 보조 함수. `repr` 비교와 반환 타입(builtin float/tuple/None) 검사. 분기 도달을 단언한다(명령 무효·기하 무효·비유한·hull 내부·충돌·여유, translation 무효·정지·전량·이분·혼합).
   - 뮤테이션 9종 모두 검출(scratchpad `mut_r5.py`, 파일 바이트 복원 확인).
   - 속도(같은 프로세스 교차 25회 중앙값, Pinky 팔각형, v=.01 w=.05 horizon .8): sweep 방 360/720/1440점 7.4→1.9, 11.1→3.0, 21.3→5.5 ms, 근접 잡동사니 8.5→1.8, 12.0→1.9, 22.8→3.9 ms. translation 방 1.9→1.1, 2.9→1.3, 5.2→2.0 ms, 잡동사니 13.9→5.9, 19.5→6.3, 39.0→8.3 ms. 최악(모든 점이 0.15 m 원 위라 거의 못 뺌) sweep 6.7→7.0, 11.1→9.9, 20.9→19.7 ms.
-  - host `python -m pytest src/apps/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 1403 passed, 26 skipped. 패키지 크기 기준은 넘지 않아 바꾸지 않았다.
+  - host `python -m pytest src/core/control/test/ test/test_module_structure.py test/test_control_ros_edge.py -q -p no:cacheprovider` 1403 passed, 26 skipped. 패키지 크기 기준은 넘지 않아 바꾸지 않았다.
 - gate 변화: 없음(sim 전용 경로).
 - 결정: D-185 R5(E, 결과 동일). 발견: 원본은 명령 인자가 numpy 스칼라(`np.float64` horizon 등)면 `np.float64`를 반환한다. 결과 동일 조건이라 이 타입도 그대로 두었다. 가드 조건을 끈 뮤테이션은 코퍼스에서 살아남는다. 가드는 증명의 전제이며, 관측 가능한 반례는 만들지 못했다.
 - 교훈: 벡터화는 캐시 크기를 넘으면 오히려 느려진다(모든 점을 쌓은 17×1440×8 broadcast가 루프보다 1.8배 느렸다). 증명적 제외로 계산량을 먼저 줄이고, 남은 양에 따라 경로를 고른다. 비교만 나가는 함수는 값이 아니라 비교 결과를 보존하는 더 강한 제외가 가능하다.
@@ -410,7 +410,7 @@
 - 변경: calibration·wander·goal_escape·web의 최신 값 구독 12개를 KEEP_LAST depth 1로 바꿨다. `test/subscription_scan.py`와 `test_latest_only_subscriptions.py`가 대상 목록과 depth를 고정한다.
 - 원인: depth 10 구독은 executor가 밀릴 때 옛 결정·한계값을 차례로 처리했다. 판정은 항상 마지막 값만 쓰므로 옛 값 처리는 비용이고, 늦게 도착한 옛 값이 잠깐 현재 값처럼 보일 수 있었다.
 - 증거:
-  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
   - 독립 리뷰 1회 반영.
   - rig 교차 A/B(ENV:VALID만): 기준본 3/3, R2 4/4 `ready`. 과부하(평균 부하 20–35)로 무효가 된 6회는 세지 않았다. CPU 중앙값 411% 대 428%, 차이 없음.
 - gate 변화: 없음.
@@ -425,7 +425,7 @@
 - 원인: Gazebo가 physics step마다 `/clock`을 내서 rig 노드마다 초당 수백 번 깨어났다. bridge에는 빈도 옵션이 없다.
 - 증거:
   - 테스트 5건: 빈도 검사, RTF 대비 하한, `--check` 종료 코드, 시계 값 복사, 스크립트가 unset일 때만 per-step `/clock`을 bridge에 넣음.
-  - host `python -m pytest src/apps/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
+  - host `python -m pytest src/core/control/test test/test_module_structure.py test/test_control_ros_edge.py` 통과.
   - 독립 리뷰 1회(변경 요청): HIGH 1(D-4 절대 토픽)과 MEDIUM 3(잘못된 값의 늦은 실패, manifest 누락, RTF 대비 하한)을 반영했다. SIGTERM 잡음과 스크립트 시험 강화(LOW)도 반영했다.
   - WSL: 100 Hz 요청 시 약 88 Hz 전달(리뷰 탐침). rig A/B ENV:VALID: bridge 3/3, relay 2/3, rig 노드 CPU 446%→202%. relay 실패 1회는 slam_toolbox lifecycle 응답 유실이다.
 - gate 변화: 없음(rig 도구, 기본값 불변).
@@ -457,21 +457,21 @@
 - 교훈: 운영자 키에 `CodexSandboxUsers` 권한이 붙으면 OpenSSH가 키를 거부한다. 원본은 그대로 두고 권한을 좁힌 임시 사본을 쓴 뒤 지웠다.
 ## 2026-09-24 · uncommitted · fix(control): ir_adc_node holds the I2C-1 bus lock per cycle (D-192)
 - 변경: `ir_adc_node`의 세 채널 읽기를 `/dev/i2c-1` descriptor의 `flock(LOCK_EX)` 안에서 한다. bringup `rosylib.Battery`가 같은 MCU(0x08)의 채널 4를 다른 프로세스에서 읽는다
-- 증거: `python -m pytest src/apps/control/test src/hardware/bringup/test/test_adc_ownership.py test/test_ir_source_exclusivity.py -q` 통과(2026-09-24 Windows)
+- 증거: `python -m pytest src/core/control/test src/hardware/bringup/test/test_adc_ownership.py test/test_ir_source_exclusivity.py -q` 통과(2026-09-24 Windows)
 - gate 변화: 없음
 - 결정: D-192 Proposed
 - 교훈: 없음
 
 ## 2026-09-24 · uncommitted · test(control): ir_adc_node bus lock is a behaviour test (D-192 review)
 - 변경: fake fd·fake `fcntl` 위에서 `_ADCReader.read_channels`를 돌려 잠금이 세 채널의 쓰기·대기·읽기 전체를 덮고 실패 때도 풀리는지 본다
-- 증거: `python -m pytest src/apps/control/test/test_ir_adc_lock.py -q` 통과(2026-09-24 Windows)
+- 증거: `python -m pytest src/core/control/test/test_ir_adc_lock.py -q` 통과(2026-09-24 Windows)
 - gate 변화: 없음
 - 결정: D-192 Proposed
 - 교훈: 없음
 
 ## 2026-09-24 · uncommitted · fix(control): web_common share lookup moves to the node edge (merge of origin/main)
 - 변경: `web_http._web_common_dir()`가 `ament_index_python`을 import하던 것을 `web_common_dir(share)` 순수 함수로 바꾸고, `web_node`가 share를 찾아 `node.web_common_dir`로 넘긴다. 로컬 D-194(구 D-187) 커밋과 origin의 D-171 ROS-edge 시험이 합쳐지며 드러난 위반이다
-- 증거: `python -m pytest test/test_control_ros_edge.py src/apps/control/test/test_web_http.py -q` 14 passed (2026-09-24 Windows)
+- 증거: `python -m pytest test/test_control_ros_edge.py src/core/control/test/test_web_http.py -q` 14 passed (2026-09-24 Windows)
 - gate 변화: 없음
 - 결정: D-171, D-194
 

@@ -92,6 +92,9 @@ A law that has no test is still prose. These are the instruments:
 | Hierarchy is the surface | flat ground reports, raised ground acts. Names are `--surface-flat` and `--surface-raised` | token file. Diagnostic grounds use those hex values |
 | Evidence is four states | `fresh`, `delayed`, `disconnected`, `unavailable`. The server judges. Stale text is quiet, not a status colour | `test_shared_controls.py` |
 | Vocabulary is the audience's | Korean plain words for an operator. Graph names stay for an installer | not a token. Review, not a test |
+| The frame fits the grammar | no-scroll surfaces do not scroll *and do not crush* at their declared viewport; lists scroll inside the frame; safety actions are always in view (D-201) | `test_dashboard_browser.py`, `test_fleet_console_browser.py`, `test_games_board_browser.py` (opt-in) |
+| Danger is a fill | status-crit is never a text colour; any warm-coloured text is ≥ 4.5:1 against its effective ground (D-202) | `test_fleet_console_browser.py` (opt-in) |
+| The rendered scale is closed | every visible computed font-size is a token step — not just the declared ones (D-203) | `test_dashboard_browser.py` (opt-in) |
 
 ## 5. Evidence States
 
@@ -162,7 +165,10 @@ surfaces are deliberately unlike each other.
 ### 7.1 Console — spatial grammar
 
 Fixed three-region split: sense, observe, act. No page scroll; position is
-memory. Capability panels occupy role slots and never reorder when a device is
+memory. The frame fits at the declared viewport: the act column neither scrolls
+nor crushes — a control that silently collapses to nothing is worse than an
+overflow (D-201). Editing a policy is procedure, not operation; it lives in the
+inspect view. Capability panels occupy role slots and never reorder when a device is
 added. When content exceeds the viewport, the sense region scrolls while observe
 and act stay fixed.
 
@@ -180,6 +186,10 @@ The default view contains only robots needing attention; healthy robots are
 absent, not green. The full roster is an explicit action. Navigation is
 keyboard-first: traverse exceptions, then enter one robot's console. The colour
 budget is tightest here — one robot in twenty in trouble means one coloured row.
+Danger is a fill: a critical tag is paper ink on a crit fill, never crit text
+(D-202). The whole page fits the declared site-PC viewport — an ambient surface
+does not ask to be scrolled; the roster list scrolls inside its own frame and
+the map shrinks before the page grows (D-201).
 
 Fleet failure must not present as robot failure (FLEET SRS §1.2). Unknown is
 rendered as unknown.
@@ -201,7 +211,8 @@ are §5's face paragraph — expiry, not ageing.
 The match board has no thresholds, so it has no status colours to spend. Its
 one warm accent is the ball — the focal object the match is about. Team
 identity stays cool-tone, and loss/HOLD is named in text, never only in colour.
-This surface is off the shared tokens by design (D-101); this paragraph fixes
+The halt row never leaves the viewport at the declared laptop size — the focal
+object may shrink, the stop may not (D-201). This surface is off the shared tokens by design (D-101); this paragraph fixes
 its colour law (codified D-153 session 11 from existing practice).
 
 ## 8. Capability Presentation
@@ -261,7 +272,7 @@ guidance:
   (`src/core/web_common/test/test_ui_token_contracts.py`)
 - a status colour never appears in a categorical position (same)
 - client map raster values equal the server renderer's values
-  (`src/apps/control/test/test_map_raster_color_contract.py` — control
+  (`src/core/control/test/test_map_raster_color_contract.py` — control
   pipeline only; see §6)
 - a `blocked` capability without a reason fails
   (`src/core/core/test/test_capability_descriptors.py`)

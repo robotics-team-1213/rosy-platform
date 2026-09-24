@@ -16,7 +16,7 @@
 현재 상태 (`docs/validation/map-v2-fleet-gazebo-2026-09-22/result.md`):
 - `edge_left`는 안쪽 블록 한 바퀴만 돈다. 분기 선택이 없다.
 - 미션 실행기, 차선 그래프, 마커 기반 위치 추정은 저장소에 없다.
-- 도킹 상태기계(`core_features/docking/manager.py`)와 ArUco 검출(`apps/control/control/sensing/dock_tag.py`)은 있다.
+- 도킹 상태기계(`core_features/docking/manager.py`)와 ArUco 검출(`core/control/control/sensing/dock_tag.py`)은 있다.
 - LiDAR 지도는 대칭 직사각형이라 AMCL이 모호하다.
 
 ## 2. 확정된 결정
@@ -50,7 +50,7 @@
 
 ### 4.1 차선 그래프 생성기 (ROS-free)
 
-- `src/apps/control/map/map_v2_fleet/scripts/lane_graph.py`가 STL에서 노드, 구간, 각 구간의 중심선 폴리라인(ROS m, 1 cm 간격), 허용 방향, 길이를 계산해 `lane_graph.yaml`로 쓴다. 출력은 결정적이다.
+- `src/core/control/map/map_v2_fleet/scripts/lane_graph.py`가 STL에서 노드, 구간, 각 구간의 중심선 폴리라인(ROS m, 1 cm 간격), 허용 방향, 길이를 계산해 `lane_graph.yaml`로 쓴다. 출력은 결정적이다.
 - 링 방향은 `lane_rules.yaml`의 `roundabout_direction: ccw`로 정한다.
 - 주차 노드는 `lane_rules.yaml`에 선언한다. 서쪽 블록 내부의 주차 지점과, 좌측 차로의 진입점에서 그 지점으로 가는 직각 진입 구간이다.
 - 시험으로 고정하는 것:

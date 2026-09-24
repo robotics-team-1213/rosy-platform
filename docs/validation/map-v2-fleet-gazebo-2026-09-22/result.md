@@ -4,7 +4,7 @@
 
 ## Setup
 
-- Source: `src/apps/control/map/map_v2_fleet/260919 MAP FILE.STL`, sha256 `cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b`
+- Source: `src/core/control/map/map_v2_fleet/260919 MAP FILE.STL`, sha256 `cabf17a84175da8be1ef7562054ec598971bbb9378810acb8cee3f686fe1f92b`
 - Branch `feat/map-v2-fleet-world`, run commit `29c42bc`
 - WSL Ubuntu, ROS 2 Jazzy, Gazebo Sim 8.11. Isolated colcon layout (`--symlink-install`) in `~/rosy_mapv2_ws`. This layout also checks the `extra_resource_path` mesh fix.
 - `ros2 launch gz_sim map_v2_fleet_lane.launch.py`, headless, `ROS_DOMAIN_ID=57`

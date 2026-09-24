@@ -12,15 +12,15 @@
 
 ## 1. 판정
 
-`core_common.equipment`는 제거했다. 바퀴 매핑의 주인은 `hardware/bringup`의 `PinkyProAdapter`다. 신호등의 주인은 `site/fleet`의 `signals.yaml`과 ROSY-SIGNAL-001이다. 램프 핀의 주인은 `hardware/lamp_control`이다. 그 파일들을 읽지 않는 목록은 두 번째 주인이고, 생산 코드가 import 하지 않으므로 B3이 성립하지 않는다.
+`core_common.equipment`는 제거했다. 바퀴 매핑의 주인은 `devices/bringup`의 `PinkyProAdapter`다. 신호등의 주인은 `site/fleet`의 `signals.yaml`과 ROSY-SIGNAL-001이다. 램프 핀의 주인은 `devices/lamp_control`이다. 그 파일들을 읽지 않는 목록은 두 번째 주인이고, 생산 코드가 import 하지 않으므로 B3이 성립하지 않는다.
 
-`src/apps`가 어색한 것은 사실이다. `control`은 감지이고 `games`만 응용에 가깝다. 그러나 어색함은 B1, B2, B3이 아니다. `src/robots/pinky_pro`를 강제하는 요구 ID가 없다. 1대 readback이 생기기 전에 패키지 경로를 바꾸면 그 증거가 무효가 된다. 이동은 그 경계와 요구 ID가 생기기 전에는 하지 않는다.
+`src/apps`가 어색한 것은 사실이다. `control`은 감지이고 `games`만 응용에 가깝다. 어색함만으로 새 패키지를 만들지는 않는다. `src/robots/pinky_pro`를 강제하는 요구 ID가 없다. 칩 이름을 종류 이름으로 합치는 일과 새 패키지는 1대 readback과 요구 ID가 생기기 전에는 하지 않는다.
 
 ESP 패키지도 만들지 않는다. 버스, 요구 ID, 그 코드를 부를 두 번째 패키지가 없다. B2와 B3이 거짓이다.
 
 ## 2. 지금 트리는 이름마다 패키지가 는다
 
-`hardware/`와 `apps/`는 장치 종류가 아니라 칩과 브랜드로 갈라져 있다. 같은 종류가 하나 더 생기면 패키지가 하나 더 생긴다.
+`devices/` 아래 패키지는 장치 종류가 아니라 칩과 브랜드로 갈라져 있다. 같은 종류가 하나 더 생기면 패키지가 하나 더 생긴다.
 
 | 지금 패키지 | 이름에 박힌 것 | 하나 더 생기면 |
 |---|---|---|
@@ -28,7 +28,7 @@ ESP 패키지도 만들지 않는다. 버스, 요구 ID, 그 코드를 부를 �
 | `sensor_adc` | 그 ADC 보드 | 다른 ADC 패키지 |
 | `lamp_control` | WS2811 스트립 | 다른 램프 패키지 |
 | `led` | 그 LED 서비스 | 또 하나의 LED 패키지 |
-| `omx_adapter` | OMX라는 브랜드 | 다른 팔마다 `apps/<브랜드>_adapter` |
+| `omx_adapter` | OMX라는 브랜드 | 다른 팔마다 어댑터 패키지 |
 
 매니페스트는 이미 종류로 적는다. `bringup/config/adapter.manifest.yaml`은 `device_type: mobile_base`이고 `drive`, `battery`, `lidar`, `local_safety`를 제공한다. `omx_adapter/config/adapter.manifest.yaml`은 `device_type: manipulator`이고 아직 `provides`가 비어 있다. 개념 13은 Pinky와 OMX를 패키지 이동이 아니라 이 매니페스트로 두라고 했고, Pinky 위에 팔을 얹은 복합 자산은 D-55 증거가 나오기 전에는 켜지 말라고 했다. 개념 6은 안전 정지를 칩이 아니라 장치 종류로 나눈다. 모바일 베이스는 멈추고 위치와 감지를 유지한다. 팔은 궤적을 멈추고 관절 한계를 지킨다. 개념 12의 학습 원천은 OMX-AI 하나가 아니다. OMX-L 원격 조작, OMX-F 관절, 그리퍼, Pinky 자세가 따로 있다.
 
@@ -53,7 +53,7 @@ src/devices/     bringup, imu_bno055, sensor_adc, lamp_control, led
 src/products/    omx_adapter
 src/face/        emotion
 src/site/games   노트북 경기
-src/apps/control 감지. 이 디렉터리는 잠겨 있어 src/core/control 로 옮기지 못했다
+src/core/control 감지. 카메라, 보정, 계획
 ```
 
 칩 이름을 종류 이름으로 합치는 일과 `learning/` 생성은 아직 하지 않는다. `src/AGENTS.md`가 이 디렉터리를 따른다.
@@ -94,7 +94,7 @@ src/apps/control 감지. 이 디렉터리는 잠겨 있어 src/core/control 로 
 
 - 실행되지 않는 장비 목록을 다시 만든다.
 - `src/robots/`, `learning/`, ESP 패키지를 만든다.
-- `apps/control`을 이미지 릴리스 전에 옮긴다.
+- 칩 패키지를 종류 폴더로 합친다.
 - 리더가 죽었을 때 팔로워가 서로 새 리더를 뽑는다.
 - 학습을 `core`의 의존성에 넣거나 Pi에서 학습 프로세스를 켠다.
 - 미들웨어가 카메라 원본, 바퀴 속도, 관절 스트림을 중계한다.

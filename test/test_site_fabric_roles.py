@@ -17,8 +17,8 @@ def test_robot_compose_has_no_site_broker_service():
 
 def test_perception_sources_do_not_publish_cmd_vel():
     roots = [
-        ROOT / "src" / "apps" / "control" / "control" / "sensing" / "camera_worker.py",
-        ROOT / "src" / "apps" / "control" / "control" / "camera_detect_node.py",
+        ROOT / "src" / "core" / "control" / "control" / "sensing" / "camera_worker.py",
+        ROOT / "src" / "core" / "control" / "control" / "camera_detect_node.py",
     ]
     for path in roots:
         text = path.read_text(encoding="utf-8")

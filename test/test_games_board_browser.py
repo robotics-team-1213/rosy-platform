@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "apps" / "games"))
+sys.path.insert(0, str(ROOT / "src" / "site" / "games"))
 
 from browser_harness import open_page, save_temp_screenshot  # noqa: E402
 
