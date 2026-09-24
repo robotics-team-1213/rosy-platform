@@ -257,6 +257,8 @@ class SwarmFollowParams(BaseModel):
     max_speed: float = 0.15        # m/s (SAF-004 상한과 별개 추가 제약)
     stream_timeout_ms: int = 1000  # pose 스트림 단절 판정 (SWM-004)
     source: SwarmReferenceSource = SwarmReferenceSource.FLEET  # v1.2 additive
+    #: v1 additive. 대형 멤버를 robots.yaml 순서로. 비어 있으면 승계를 하지 않는다.
+    members: list[str] = Field(default_factory=list)
 
 
 class PoseSample(BaseModel):

@@ -27,6 +27,7 @@ from typing import Any, Callable, Optional, Sequence
 
 logger = logging.getLogger("fleet.console")
 
+from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.server import bays, traffic
@@ -154,6 +155,7 @@ class FleetConsole:
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
                                "queued": _shown(queued), "error": None, "state": result})
         self._remember(robots)
+        await self._handoff_dead_leader(robots)
         await self._run_traffic(robots)
         await self._manage_swarm_speed(robots)
         # 교통 정리가 대기 미션을 내려보냈으면 이 스냅샷이 이미 그 뒤다. 행을 다시 읽지
@@ -723,8 +725,10 @@ class FleetConsole:
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
         kwargs = {} if self._relay_factory is None else {"relay_factory": self._relay_factory}
+        member_order = [rid for rid in self._order if rid == leader_id or rid in follower_ids]
         session = FormationSession(leader, followers,
-                                   self._spec(formation, spacing, max_speed), **kwargs)
+                                   self._spec(formation, spacing, max_speed),
+                                   member_order=member_order, **kwargs)
         self._formation = session
         self._formation_leader = leader_id
         try:
@@ -733,6 +737,37 @@ class FleetConsole:
             # 세션이 자기 안에서 이미 무장을 되돌렸다. 상태는 남겨 화면이 이유를 읽게 한다.
             raise HubError("ARMING_FAILED", str(exc)) from exc
         return self.formation_status()
+
+    async def _handoff_dead_leader(self, robots: list) -> None:
+        """리더 상태가 안 오면 대형을 풀고, 명단의 다음 생존자로 다시 연다.
+
+        팔로워가 각자 다른 리더를 뽑지 않는다. `next_leader` 가 고른 한 명을
+        관제가 `formation_start` 로 앉힌다. 살아있는 팔로워가 없으면 풀기만 한다.
+        """
+        if not self._formation_members():
+            return
+        leader_id = self._formation_leader
+        session = self._formation
+        if leader_id is None or session is None:
+            return
+        rows = {row["robot_id"]: row for row in robots}
+        if rows.get(leader_id, {}).get("online"):
+            return
+        order = [rid for rid in self._order
+                 if rid == leader_id or rid in session.assignment]
+        dead = {rid for rid in order if not rows.get(rid, {}).get("online")}
+        spec = session.spec
+        chosen = next_leader(order, dead)
+        living = [rid for rid in order if rid not in dead]
+        await self.formation_stop()
+        if chosen is None:
+            return
+        try:
+            await self.formation_start(
+                chosen, formation=spec.formation.value, spacing=spec.spacing,
+                max_speed=spec.max_speed, members=living)
+        except HubError:
+            return
 
     async def formation_reform(self, formation: str, spacing=None, max_speed=None) -> dict:
         session = self._formation

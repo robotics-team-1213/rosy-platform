@@ -23,6 +23,7 @@ from core_common.protocol.schemas import (
     SwarmRole,
     SwarmStatus,
 )
+from core_common.succession import next_leader
 from core_features.swarm.poses import ReferencePose, follow_goal
 
 #: SWM-002 v1: moving goal 갱신 상한. 군집 속도(<=0.2 m/s)에서 충분하고,
@@ -42,7 +43,7 @@ class SwarmManager:
 
     def __init__(self, events, state_manager, nav, safety, capability,
                  clock=time.monotonic, docking_active_provider=None,
-                 map_id_provider=None) -> None:
+                 map_id_provider=None, robot_id: str = "") -> None:
         self._events = events
         self._state = state_manager
         self.nav = nav
@@ -57,7 +58,12 @@ class SwarmManager:
         # MAP-002 가드가 있는데(resolve_goal 의 MAP_MISMATCH) 추종에는 없었고,
         # 다른 맵의 리더를 따라가면 그럴듯해 보이는 엉뚱한 좌표로 간다.
         self._map_id = map_id_provider or (lambda: None)
+        self._robot_id = robot_id
         self._lock = threading.RLock()
+        #: 참조가 끊긴 뒤 이 로봇이 승계로 리더가 됐으면 True. 관제가 다시 follow
+        #: 나 cancel 을 보내면 지운다 — 로컬 리더와 관제 리더가 겹쳐 남지 않게.
+        self._elected = False
+        self._successor: Optional[str] = None
 
         self._params: Optional[SwarmFollowParams] = None
         #: NavigationManager 가 발급한다. 목표에 붙여 보내면, 취소 뒤에 뒤늦게
@@ -87,6 +93,8 @@ class SwarmManager:
     def status(self) -> SwarmStatus:
         with self._lock:
             if self._params is None:
+                if self._elected:
+                    return SwarmStatus(role=SwarmRole.LEADER, active=False)
                 return SwarmStatus()
             return SwarmStatus(
                 role=SwarmRole.FOLLOWER,
@@ -195,6 +203,8 @@ class SwarmManager:
                 self._pending = None
                 self._holding = False
                 self._map_mismatch = None
+                self._elected = False
+                self._successor = None
                 status = self.status()
         if blocked is not None:
             raise SwarmError(*blocked)
@@ -221,6 +231,8 @@ class SwarmManager:
             self._pending = None
             self._holding = False
             self._map_mismatch = None
+            self._elected = False
+            self._successor = None
             self._session = None
             self._safety.set_session_speed(None)
 
@@ -327,6 +339,8 @@ class SwarmManager:
         current = self._clock() if now is None else now
         spec: Optional[NavGoalSpec] = None
         hold = False
+        elect_members: Optional[list[str]] = None
+        elect_target: Optional[str] = None
         with self._lock:
             params = self._params
             if params is None:
@@ -336,12 +350,18 @@ class SwarmManager:
             if self._last_sample_at is not None:
                 age_ms = (current - self._last_sample_at) * 1000.0
                 if age_ms >= timeout_ms and not self._holding:
-                    self._holding = True
-                    self._pending = None
-                    # 맵 불일치로 이미 서 있는 대형이면 다시 알리지 않는다.
-                    # 서 있는 이유는 그쪽이고, 목표도 이미 거둬져 있다 —
-                    # 알리면 감사 로그가 멈춘 원인을 되풀이해 잘못 말한다.
-                    hold = self._map_mismatch is None
+                    if params.members:
+                        # 명단이 있으면 끊긴 참조를 이어서 따라가지 않는다.
+                        # 팔로워는 같은 순서로 다음 리더를 고르고 follow 를 끝낸다.
+                        elect_members = list(params.members)
+                        elect_target = params.target_robot_id
+                    else:
+                        self._holding = True
+                        self._pending = None
+                        # 맵 불일치로 이미 서 있는 대형이면 다시 알리지 않는다.
+                        # 서 있는 이유는 그쪽이고, 목표도 이미 거둬져 있다 —
+                        # 알리면 감사 로그가 멈춘 원인을 되풀이해 잘못 말한다.
+                        hold = self._map_mismatch is None
                 elif not self._holding and self._pending is not None and (
                     self._last_goal_at is None
                     or current - self._last_goal_at >= _MIN_GOAL_INTERVAL_S
@@ -351,6 +371,9 @@ class SwarmManager:
                     self._last_goal_at = current
             session = self._session
 
+        if elect_members is not None and elect_target is not None:
+            self._announce_succession(elect_members, elect_target)
+            return
         if hold:
             # 자리를 지킨다: 목표만 거두고 follow 는 살려 둔다. 스트림이 돌아오면
             # 새 follow 명령 없이 이어서 따라간다 — 그래서 세션은 닫지 않는다.
@@ -362,6 +385,25 @@ class SwarmManager:
                                        "stream_timeout_ms": timeout_ms})
         elif spec is not None:
             self.nav.moving_goal(spec, source="swarm", session=session)
+
+    def _announce_succession(self, members: list[str], dead_leader: str) -> None:
+        """명단이 공유된 대형에서 죽은 리더의 follow 를 끝낸다.
+
+        고르는 규칙은 `next_leader` 하나다. 이 로봇이 그 자리면 로컬 역할만
+        리더로 남긴다. 다른 팔로워의 pose 를 받는 릴레이는 여기서 열지 않는다.
+        """
+        chosen = next_leader(members, dead=[dead_leader])
+        self.cancel(source="succession", reason="leader_lost")
+        with self._lock:
+            self._successor = chosen
+            self._elected = chosen is not None and chosen == self._robot_id
+            status = self.status()
+        self._state.set_swarm(status)
+        self._events.publish(
+            "swarm.succession", severity="warning", source="swarm_manager",
+            data={"leader": chosen, "dead": dead_leader,
+                  "role": status.role.value, "by": "followers"},
+        )
 
     def on_estop(self) -> None:
         """안전 경로에서 직접 부를 수 있는 입구. tick 을 기다리지 않는다."""

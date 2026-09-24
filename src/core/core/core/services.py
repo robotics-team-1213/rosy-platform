@@ -420,7 +420,7 @@ class CoreServices:
                 command.clear_docking()
                 state.set_mode(RobotMode.IDLE)
         swarm = SwarmManager(
-            events, state, nav, safety, capability,
+            events, state, nav, safety, capability, robot_id=robot_id,
             # Nav2 를 두고 다투는 것은 DOCKING/UNDOCKING 뿐이다. DOCKED·CHARGING 은
             # 주차 상태이고, DOCK_FAILED 는 설계상 종착이라 그것으로 막으면
             # 도킹 실패 한 번이 군집을 영구히 비활성화한다.

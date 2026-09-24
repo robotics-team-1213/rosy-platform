@@ -114,7 +114,7 @@ def build(capability=CAPABLE):
     nav = FakeNav()
     safety = SafetyManager(SpeedLimits(), BatteryPolicy(), events)
     manager = SwarmManager(events, state, nav, safety, capability, clock=clock,
-                           map_id_provider=lambda: state.map_id)
+                           map_id_provider=lambda: state.map_id, robot_id="rosy_01")
     return manager, clock, events, state, nav, safety
 
 
@@ -332,6 +332,49 @@ def test_a_returning_stream_resumes_following_without_a_new_follow_command():
 
     assert manager.holding is False
     assert nav.goals[-1].x == pytest.approx(2.5)
+
+
+def test_followers_name_one_successor_and_drop_the_dead_leader():
+    """명단이 같으면 어느 팔로워나 같은 다음 리더를 말한다. 죽은 참조는 이어가지 않는다."""
+    from core_common.succession import next_leader
+
+    order = ["rosy_02", "rosy_01", "rosy_03"]
+    assert next_leader(order, dead=["rosy_02"]) == "rosy_01"
+    manager, clock, events, state, _nav, _safety = build()
+    manager.follow(params(target_robot_id="rosy_02", members=order, stream_timeout_ms=1000))
+    manager.on_reference_pose(ReferencePose("rosy_02", 1.0, 0.0, 0.0))
+
+    clock.advance(1.0)
+    manager.tick()
+
+    chosen = [data for kind, data in events.published if kind == "swarm.succession"]
+    assert chosen == [{"leader": "rosy_01", "dead": "rosy_02", "role": "leader", "by": "followers"}]
+    assert manager.active is False
+    assert state.snapshot().swarm.role.value == "leader"
+    assert manager.on_reference_pose(ReferencePose("rosy_02", 4.0, 0.0, 0.0)) is False
+
+
+def test_a_follower_who_is_not_next_stops_without_taking_the_lead():
+    order = ["rosy_02", "rosy_03", "rosy_01"]
+    manager, clock, events, state, _nav, _safety = build()
+    manager.follow(params(target_robot_id="rosy_02", members=order, stream_timeout_ms=1000))
+    manager.on_reference_pose(ReferencePose("rosy_02", 1.0, 0.0, 0.0))
+
+    clock.advance(1.0)
+    manager.tick()
+
+    chosen = [data for kind, data in events.published if kind == "swarm.succession"]
+    assert chosen[0]["leader"] == "rosy_03"
+    assert chosen[0]["role"] == "none"
+    assert state.snapshot().swarm.role.value == "none"
+    assert manager.active is False
+
+
+def test_one_survivor_is_not_a_formation():
+    from core_common.succession import next_leader
+
+    assert next_leader(["rosy_01", "rosy_02"], dead=["rosy_01", "rosy_02"]) is None
+    assert next_leader(["rosy_01", "rosy_02"], dead=["rosy_01"]) is None
 
 
 def test_tick_before_the_first_sample_does_not_hold():
