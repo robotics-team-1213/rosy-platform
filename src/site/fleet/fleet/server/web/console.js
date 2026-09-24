@@ -516,13 +516,11 @@ function render() {
   for (const r of view.robots) {
     if (!r.state) continue;
     if (r.state.hitl_requested) {
+      // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는
+      // 능력이다 — 못 하는 조작을 모의 버튼으로 걸어 두면 경보가 거짓말을
+      // 한다(D-218, F-20). 진짜 개입은 그 로봇의 대시보드에서 일어난다.
       const li = document.createElement("li");
-      li.innerHTML = `<b>${r.robot_id}</b>: 개입 필요`;
-      const btn = document.createElement("ui-button");
-      btn.setAttribute("kind", "irreversible");
-      btn.textContent = "조종 (WebRTC)";
-      btn.onclick = () => alert(`${r.robot_id} 원격 조종 연결됨 (Mock)`);
-      li.appendChild(btn);
+      li.innerHTML = `<b>${r.robot_id}</b>: 개입 필요 — 로봇 화면에서 확인`;
       critList.appendChild(li);
       criticalCount++;
     } else if (r.state.capabilities_degraded && r.state.capabilities_degraded.length > 0) {
