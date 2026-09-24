@@ -22,7 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/hardware/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
+COPY src/devices/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
 
 FROM runtime-common AS core-runtime
 
@@ -111,9 +111,9 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && rm -rf .git
 COPY src/core/interfaces ./src/core/interfaces
 COPY src/sim/description ./src/sim/description
-COPY src/hardware/bringup ./src/hardware/bringup
+COPY src/devices/bringup ./src/devices/bringup
 COPY src/navigation/navigation ./src/navigation/navigation
-COPY src/apps/omx_adapter ./src/apps/omx_adapter
+COPY src/products/omx_adapter ./src/products/omx_adapter
 COPY src/apps/control ./src/apps/control
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \

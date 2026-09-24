@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace, grouped by domain: `core/`, `apps/`, `hardware/`, `navigation/`, `sim/`, `site/`. Build with `colcon build --symlink-install` from this directory (or `source env.sh && colcon build --base-paths src` from repo root). ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
+ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `core/` (runtime and, for now, sensing in `control/`), `devices/` (buses and chips), `products/` (manipulator profile), `face/` (LCD), `navigation/`, `sim/`, `site/` (fleet and the game host). `apps/` still holds `control` until that directory lock clears. Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
 
 ## Key Files
 
@@ -16,11 +16,13 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 | Directory | Purpose |
 |-----------|---------|
 | `core/` | CORE domain: `core` (gateway kernel: bridge + system wiring), `core_common` (protocol schemas, config, identity, profile, rmw), `core_events` (event bus, audit), `core_features` (command/safety/state/navigation/swarm/waypoints/power/docking/diagnostics/fleet_agent/maps), `core_api_web` (FastAPI/WS, dashboard static files, host-agent client), `interfaces` (custom srv: Emotion, SetBrightness, SetLamp, SetLed) |
-| `apps/` | Application layer: `control` (absorbed Control: sensing, camera/OpenCV, calibration, planning, safety-policy), `emotion` (LCD GIF emotions + info screen), `games` (laptop game host, D-90 — no ROS, no cmd_vel), `omx_adapter` (ROS-native ros2_control/MoveIt contract boundary, disabled by default) |
-| `hardware/` | Physical device layer: `bringup` (motors, odometry, LiDAR, battery publisher, cmd_vel deadman), `led` (Python LED service), `lamp_control` (C++ WS2811, aarch64 only), `imu_bno055` (C++ BNO055, aarch64 only), `sensor_adc` (C++ I2C ADC: IR, ultrasonic, battery — aarch64 only) |
-| `navigation/` | `navigation` — Nav2/SLAM launch, maps, params; hardware navigation graph |
-| `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds, multi-robot launch, lamp plugin; CMake no-ops on aarch64) |
-| `site/` | `fleet` — formation geometry, slot assignment, reference-stream relay, FOR-004 session, CLI, and the Fleet console v1 (D-59 SiteHub gather/scatter) |
+| `apps/` | Only `control` remains here (sensing, camera, calibration, planning). The directory is locked on this machine, so it has not moved next to `core` yet |
+| `devices/` | Device nodes that used to live in `hardware/`: `bringup`, `led`, `lamp_control`, `imu_bno055`, `sensor_adc`. Chip names are still the package names |
+| `products/` | `omx_adapter` — manipulator profile (`device_type: manipulator`), disabled. Not a second mobile base |
+| `face/` | `emotion` — robot-local LCD |
+| `navigation/` | `navigation` — Nav2/SLAM launch, maps, params |
+| `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
+| `site/` | `fleet` (formation, SiteHub, console) and `games` (laptop match host, no `cmd_vel`) |
 
 ## For AI Agents
 
@@ -35,7 +37,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ apps/control/test/ site/fleet/test apps/omx_adapter/test apps/games/test -q
+python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ apps/control/test/ site/fleet/test products/omx_adapter/test site/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 

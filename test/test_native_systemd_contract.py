@@ -390,13 +390,13 @@ PROGRAM_SOURCES = {
     "rosy-sd-provision.service": [],
     # CORE also imports modules of the control package (sensor adapter, gate).
     "rosy-core.service": ["src/core", "imported-by:src/core:control:src/apps/control"],
-    "rosy-io.service": ["src/hardware/bringup"],
-    "rosy-navigation.service": ["src/navigation", "src/hardware/bringup"],
+    "rosy-io.service": ["src/devices/bringup"],
+    "rosy-navigation.service": ["src/navigation", "src/devices/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
-                                  "src/apps/emotion/emotion/info_screen.py",
-                                  "src/apps/emotion/emotion/rosy_lcd.py",
-                                  "src/hardware/bringup/rosylib"],
+                                  "src/face/emotion/emotion/info_screen.py",
+                                  "src/face/emotion/emotion/rosy_lcd.py",
+                                  "src/devices/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
                                 "deploy/robot/native/rosy_config.py"],

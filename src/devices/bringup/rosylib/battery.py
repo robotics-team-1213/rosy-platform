@@ -4,7 +4,7 @@ The vendor's ``battery_publisher`` imports ``Battery`` from ``pinkylib``, a
 closed library preinstalled on the vendor image that Rosy cannot ship. This is
 a Rosy-owned ``Battery`` with the two methods the publisher calls,
 ``get_voltage()`` and ``battery_percentage()``, over the public ADC protocol
-that ``src/hardware/sensor_adc/src/main_node.cpp`` already speaks:
+that ``src/devices/sensor_adc/src/main_node.cpp`` already speaks:
 
 * bus ``/dev/i2c-1``, MCU address ``0x08``, battery on channel 4 (``0xF8``);
 * write the one-byte register pointer, wait about 6 ms, read two bytes;

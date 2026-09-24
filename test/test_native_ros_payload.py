@@ -103,7 +103,7 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     for suffix in (
         "/core/core", "/core/core_common", "/core/core_events",
         "/core/core_features", "/core/core_api_web", "/core/interfaces",
-        "/hardware/sensor_adc", "/hardware/imu_bno055", "/hardware/lamp_control",
+        "/devices/sensor_adc", "/devices/imu_bno055", "/devices/lamp_control",
     ):
         assert any(path.endswith(suffix) for path in paths)
     assert not any(path.endswith("/sim/gz_sim") for path in paths)

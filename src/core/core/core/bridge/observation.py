@@ -20,7 +20,7 @@ from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
 from core_features.command.manager import Twist as CoreTwist
 from core_features.line_follow import LineFollowMode, LineObservation
-from core_features.vision import parse_preview_format
+from core_features.vision import accept_preview
 
 Warn = Callable[[str], None]
 
@@ -107,9 +107,7 @@ def camera_preview(services, msg, *, warn: Warn) -> None:
     `msg` is duck-typed (`format`, `header.stamp`, `frame_id`, `data`).
     """
     try:
-        metadata = parse_preview_format(msg.format)
-        if metadata is None:
-            raise ValueError("camera preview format must be jpeg")
+        metadata = accept_preview(msg.format)
         stamp = (
             float(msg.header.stamp.sec)
             + float(msg.header.stamp.nanosec) * 1e-9

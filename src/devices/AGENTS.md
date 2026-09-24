@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Physical device layer: motors/odometry/LiDAR/battery bringup with the `cmd_vel` deadman, plus LED, WS2811 lamp, BNO055 IMU, and I2C ADC drivers. C++ driver packages (`lamp_control`, `imu_bno055`, `sensor_adc`) build only on aarch64.
+Device nodes moved out of `hardware/`. Package names are still the chip or board (`imu_bno055`, `sensor_adc`, `lamp_control`, `led`) plus `bringup` for the Pinky drive. A second IMU or arm must not become another top-level package name. C++ drivers (`lamp_control`, `imu_bno055`, `sensor_adc`) build only on aarch64.
 
 ## Key Files
 

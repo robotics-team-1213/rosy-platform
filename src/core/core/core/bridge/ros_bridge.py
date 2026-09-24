@@ -45,6 +45,7 @@ from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
+from core_features.vision import PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import SetLed
 import tf2_ros
@@ -99,7 +100,7 @@ class RosBridge:
         preview_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         node.create_subscription(
-            CompressedImage, "camera/preview/compressed",
+            CompressedImage, PREVIEW_TOPIC,
             self._on_camera_preview, preview_qos)
         # Nav2 lifecycle nodes announce their authoritative goal state on
         # transition_event.  CORE never infers readiness from node discovery;
