@@ -28,8 +28,11 @@ except ModuleNotFoundError:  # installed image layout
 
 APPLIED = "<applied>"
 AP_MODES = {"fallback", "relay", "off"}
+#: D-193 8: whether the robot shows a login code at boot, and for which role.
+LOGIN_BOOT_CODES = {"off", "operator", "administrator"}
+LOGIN_MAX_MINUTES = 60
 IDENTITY_KEYS = {"device_uid", "device_name", "hostname", "robot_number", "ros_domain_id", "namespace"}
-TOP_KEYS = {"schema_version", "country", "timezone", "wifi", "ap", "fleet", "operator_ssh_keys"}
+TOP_KEYS = {"schema_version", "country", "timezone", "wifi", "ap", "fleet", "operator_ssh_keys", "login"}
 MAX_WIFI = 8
 _COUNTRY = re.compile(r"^[A-Z]{2}$")
 _TIMEZONE = re.compile(r"^[A-Za-z]+(?:/[A-Za-z0-9_+-]+){0,2}$")
@@ -70,6 +73,14 @@ def _ssid(value: object, where: str) -> str:
     if not value.isprintable() or not _keyfile_safe(value):
         raise ConfigError(f"{where}: ssid must not contain a backslash, control characters or edge spaces")
     return value
+
+
+def _boot_code(value: object, where: str) -> str:
+    if value is False:  # YAML 1.1 reads a bare `off` as false
+        value = "off"
+    if value not in LOGIN_BOOT_CODES:
+        raise ConfigError(f"{where} must be one of {', '.join(sorted(LOGIN_BOOT_CODES))}")
+    return str(value)
 
 
 def validate(document: object) -> dict:
@@ -139,6 +150,13 @@ def validate(document: object) -> dict:
             if not isinstance(profile, str) or not 1 <= len(profile) <= 128:
                 raise ConfigError("fleet.trust_profile must be 1-128 characters")
             config["fleet"]["trust_profile"] = profile
+    if "login" in document:
+        login = document["login"] or {}
+        if not isinstance(login, dict) or set(login) - {"boot_code"}:
+            raise ConfigError("login: allowed key is boot_code")
+        config["login"] = {}
+        if "boot_code" in login:
+            config["login"]["boot_code"] = _boot_code(login["boot_code"], "login.boot_code")
     if "operator_ssh_keys" in document:
         keys = document["operator_ssh_keys"] or []
         if not isinstance(keys, list) or len(keys) > 8:
@@ -167,12 +185,18 @@ def parse(text: str) -> dict:
 def load_defaults(path: Path) -> dict:
     document = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     ap = document.pop("ap", {}) or {}
+    login = document.pop("login", {}) or {}
     config = validate({key: value for key, value in document.items() if key in TOP_KEYS})
     config["ap"] = {"mode": ap.get("mode", "fallback"),
                     "grace_seconds": int(ap.get("grace_seconds", 120)),
                     "hold_seconds": int(ap.get("hold_seconds", 600))}
     if config["ap"]["mode"] not in AP_MODES:
         raise ConfigError("defaults: ap.mode is invalid")
+    minutes = login.get("minutes", 10)
+    if not isinstance(minutes, int) or isinstance(minutes, bool) or not 1 <= minutes <= LOGIN_MAX_MINUTES:
+        raise ConfigError(f"defaults: login.minutes must be 1-{LOGIN_MAX_MINUTES}")
+    config["login"] = {"boot_code": _boot_code(login.get("boot_code", "operator"), "defaults: login.boot_code"),
+                       "minutes": minutes}
     return config
 
 

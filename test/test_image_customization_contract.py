@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -161,7 +162,28 @@ def _valid_root(tmp_path: Path) -> Path:
         f"Package: {name}\nStatus: install ok installed\nVersion: 1\n\n"
         for name in ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
                      "fonts-dejavu-core")), encoding="utf-8")
+    # D-193: the login-code issuer (enabled), its banner link and command, and
+    # CORE defaults without tokens.
+    (root / "etc/systemd/system/rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
+    _link(root / "etc/issue.d/60-rosy-login.issue", "/run/rosy-boot/login.issue")
+    _link(root / "usr/local/sbin/rosy-login-code", "/opt/rosy/native-runtime/rosy-login-code")
+    defaults = release / "install/share/core/config/rosy_default.yaml"
+    defaults.parent.mkdir(parents=True, exist_ok=True)
+    defaults.write_text((ROOT / "src/core/core/config/rosy_default.yaml").read_text(encoding="utf-8"),
+                        encoding="utf-8")
     return root
+
+
+def _link(path: Path, target: str) -> None:
+    """A symlink where the host allows one; a placeholder file on Windows without the privilege."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(path):  # _valid_root may be built twice in one tmp_path
+        path.unlink()
+    try:
+        path.symlink_to(target)
+    except OSError:
+        path.write_text("# fixture link\n", encoding="utf-8")
 
 
 def _verify(root: Path) -> subprocess.CompletedProcess[str]:
@@ -178,6 +200,60 @@ def test_mounted_image_verifier_accepts_native_core_only_layout(tmp_path):
     completed = _verify(root)
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["ok"] is True
+
+
+def test_mounted_image_verifier_rejects_tokens_in_core_defaults(tmp_path):
+    # D-193 7: a payload whose packaged defaults carry any token fails the build.
+    root = _valid_root(tmp_path)
+    defaults = root / "opt/rosy/releases/2026.09.22-001/install/share/core/config/rosy_default.yaml"
+    defaults.write_text("auth:\n  tokens:\n    - token: rosy-dev-" + "admin\n      role: administrator\n",
+                        encoding="utf-8")
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert "CORE defaults carry API tokens" in completed.stderr
+
+    defaults.write_text("auth:\n  tokens:\n    - sha256: " + "0" * 64 + "\n      role: viewer\n",
+                        encoding="utf-8")
+    assert "CORE defaults carry API tokens" in _verify(root).stderr
+    defaults.unlink()
+    assert "missing CORE defaults" in _verify(root).stderr
+
+
+def test_mounted_image_verifier_requires_the_login_code_issuer(tmp_path):
+    root = _valid_root(tmp_path)
+    (root / "etc/systemd/system/multi-user.target.wants/rosy-login-code.service").unlink()
+    (root / "etc/issue.d/60-rosy-login.issue").unlink()
+    (root / "usr/local/sbin/rosy-login-code").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    for finding in ("rosy-login-code.service is not enabled", "60-rosy-login.issue",
+                    "missing login code command"):
+        assert finding in completed.stderr, finding
+    (root / "etc/systemd/system/rosy-login-code.service").unlink()
+    assert "missing systemd unit: rosy-login-code.service" in _verify(root).stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need a privilege on Windows")
+def test_mounted_image_verifier_rejects_a_banner_link_to_elsewhere(tmp_path):
+    root = _valid_root(tmp_path)
+    link = root / "etc/issue.d/60-rosy-login.issue"
+    link.unlink()
+    link.symlink_to("/run/rosy/login.issue")
+    assert "60-rosy-login.issue" in _verify(root).stderr
+
+
+def test_image_installs_enables_and_probes_the_login_code_issuer():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("mkdir -p \"$ROOT/etc/issue.d\"")]
+    assert "rosy-login-code.service" in enable
+    assert 'ln -sfn /run/rosy-boot/login.issue "$ROOT/etc/issue.d/60-rosy-login.issue"' in source
+    assert 'ln -sfn /opt/rosy/native-runtime/rosy-login-code "$ROOT/usr/local/sbin/rosy-login-code"' in source
+    loop = source[source.index("for entrypoint in rosy-boot-status.py"):]
+    assert "rosy-login-code.py; do" in loop[:loop.index("done")]
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"' in payload
+    wrapper = (ROOT / "deploy/robot/native/rosy-login-code").read_text(encoding="utf-8")
+    assert 'exec /usr/bin/python3 -I -B "$SCRIPT_DIR/rosy-login-code.py" "$@"' in wrapper
 
 
 def test_mounted_image_verifier_rejects_missing_required_package(tmp_path):

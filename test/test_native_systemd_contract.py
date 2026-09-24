@@ -351,6 +351,14 @@ DECLARED_WRITES = {
         # LG_WD, which the unit points at HOME. The program itself writes nothing.
         "$HOME/.lgd-nfy0",
     },
+    "rosy-login-code.service": {
+        # rosy-login-code.py CODE_FILE, DISPLAY_FILE, ISSUE_FILE, LOCK_FILE, BOOT_MARK (D-193).
+        "/run/rosy-boot/login-code.json", "/run/rosy-boot/login-display.txt",
+        "/run/rosy-boot/login.issue", "/run/rosy-boot/.login.lock",
+        "/run/rosy-boot/.login-boot-issued",
+        # `agetty --reload` opens it for writing (ExecStartPre=+ creates it first).
+        "/run/agetty.reload",
+    },
 }
 
 # Absolute paths a unit's program names but only reads.
@@ -367,6 +375,12 @@ DECLARED_READS = {
     },
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
+    # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
+    # followed); the image defaults and the applied rosy-config policy.
+    "rosy-login-code.service": {
+        "/run/rosy-boot/boot-status.json", "/run/rosy/login-code-state.json",
+        "/etc/rosy/defaults.yaml", "/etc/rosy/login-policy.json",
+    },
 }
 
 # Program sources scanned for write roots, per unit.
@@ -383,6 +397,9 @@ PROGRAM_SOURCES = {
                                   "src/apps/emotion/emotion/info_screen.py",
                                   "src/apps/emotion/emotion/rosy_lcd.py",
                                   "src/hardware/bringup/rosylib"],
+    # D-193: the issuer and the policy loader it imports.
+    "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
+                                "deploy/robot/native/rosy_config.py"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
@@ -649,6 +666,25 @@ def test_every_home_unit_is_covered_by_the_startup_hook_rule():
         assert _environment(directives).get("PYTHONNOUSERSITE") == "1", unit
         assert "/usr/bin/bash --noprofile --norc -c '" in _read(unit), unit
         assert "bash -lc" not in _read(unit), unit
+
+
+def test_the_login_code_issuer_is_a_root_sandbox_without_network():
+    # D-193 2: root outside CORE, no network, only /run/rosy-boot writable.
+    directives = _directives("rosy-login-code.service")
+    assert not _non_root(directives)
+    for key, value in (("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
+                       ("ProtectSystem", "strict"), ("ProtectHome", "true"),
+                       ("NoNewPrivileges", "true"), ("Restart", "always")):
+        assert directives.get(key, [""])[-1] == value, key
+    assert _words(directives, "ReadWritePaths") == ["/run/rosy-boot", "-/run/agetty.reload"]
+    assert _environment(directives).get("PYTHONNOUSERSITE") == "1"
+    assert "rosy-boot-status.service" in _words(directives, "After")
+    assert directives["ExecStart"] == [
+        "/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-login-code.py --daemon"]
+    assert directives["ExecStartPre"] == ["+/usr/bin/touch /run/agetty.reload"]
+    assert "bash" not in _read("rosy-login-code.service")
+    # It never writes where CORE runs (/run/rosy is rosy-core's).
+    assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
 
 
 def test_recovery_journal_is_private_to_root():

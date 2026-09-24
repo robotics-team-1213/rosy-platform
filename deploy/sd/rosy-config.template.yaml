@@ -29,6 +29,13 @@ schema_version: 1
 #   endpoint: https://fleet.example.invalid
 #   trust_profile: rosy-pilot-lan
 
+# Dashboard login code on the robot screen and console after each boot (D-193).
+#   operator:      one-time code for an operator login (default)
+#   administrator: the same, as administrator (only where no passer-by sees the LCD)
+#   off:           no code at boot; use `sudo rosy-login-code` over SSH
+# login:
+#   boot_code: operator
+
 # Operator SSH public keys for the key-only `rosy` login.
 # operator_ssh_keys:
 #   - ssh-ed25519 AAAA... name@laptop
