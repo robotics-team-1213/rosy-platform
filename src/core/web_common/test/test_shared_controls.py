@@ -27,7 +27,11 @@ RAW_SIZE = re.compile(r"font-size:\s*[0-9.]+(?:px|rem)")
 RAW_COLOR = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d")
 TAG = re.compile(r"<ui-button\b([^>]*)>", re.S)
 RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
-CONTROL = re.compile(r"ui-button|ui-field|ui-tag|ui-text")
+CONTROL = re.compile(
+    r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
+    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty"
+)
+EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 PAINT = re.compile(
     r"(?<![-a-z])(background|color|font-size|font-weight|font|opacity|border-radius|border-color|border)\s*:"
 )
@@ -61,8 +65,13 @@ def _surface_texts():
 def test_shared_controls_are_the_only_painted_components():
     css = COMPONENTS.read_text(encoding="utf-8")
     script = UI.read_text(encoding="utf-8")
-    assert "ui-button" in css and "ui-field" in css and "ui-tag" in css and "ui-text" in css
-    for name in ("ui-button", "ui-field", "ui-tag", "ui-text"):
+    names = (
+        "ui-button", "ui-field", "ui-tag", "ui-text",
+        "ui-head", "ui-grid", "ui-chip", "ui-triage", "ui-evidence",
+        "ui-shell", "ui-topbar", "ui-brand", "ui-section", "ui-empty",
+    )
+    for name in names:
+        assert name in css
         assert f'"{name}"' in script
     assert not RAW_COLOR.findall(css), "components.css에 원시 색이 있다"
     assert not RAW_SIZE.findall(css)
@@ -105,6 +114,20 @@ def test_every_button_names_its_kind():
             if not found or found.group(1) not in allowed:
                 invented.append(f"{path.name}:{index + 1}")
     assert not invented, invented
+    evidence = re.search(
+        r"const EVIDENCE = \[(.*?)\];", UI.read_text(encoding="utf-8"), re.S
+    )
+    assert evidence, "ui.js가 EVIDENCE를 선언하지 않는다"
+    states = set(re.findall(r'"([a-z]+)"', evidence.group(1)))
+    bare = []
+    for path in _surface_texts():
+        if path.suffix != ".html":
+            continue
+        for attrs in EVIDENCE_TAG.findall(path.read_text(encoding="utf-8")):
+            found = re.search(r'state="([a-z]+)"', attrs)
+            if not found or found.group(1) not in states:
+                bare.append(path.name)
+    assert not bare, bare
 
 
 def test_surfaces_do_not_repaint_shared_controls():
@@ -214,3 +237,30 @@ def test_diagnostic_palette_matches_the_token_hex():
         if got != expected:
             mismatch.append(f"--{local} #{got} != {token} #{expected}")
     assert not mismatch, mismatch
+
+
+def test_a_browser_page_starts_from_the_shell():
+    """다음 화면은 template.html 의 틀을 쓴다. 문법 없는 껍질은 실패다."""
+    pages = [
+        path for path in ROOT.rglob("*.html")
+        if path.name in {"index.html", "dashboard.html"}
+        and "<!doctype html>" in path.read_text(encoding="utf-8").lower()
+    ]
+    assert pages, "제품 화면이 없다"
+    missing = []
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        for bit in (
+            "<ui-shell", "<ui-topbar", 'grammar="',
+            "/common/tokens.css", "/common/components.css", "/common/ui.js",
+        ):
+            if bit not in text:
+                missing.append(f"{page.relative_to(ROOT)} 에 {bit} 이 없다")
+    template = (COMMON / "template.html").read_text(encoding="utf-8")
+    for bit in (
+        "<ui-shell", "<ui-topbar", "<ui-brand", "<ui-section", "<ui-empty",
+        'kind="primary"', 'kind="quiet"', 'kind="irreversible"',
+    ):
+        if bit not in template:
+            missing.append(f"template.html 에 {bit} 이 없다")
+    assert not missing, missing

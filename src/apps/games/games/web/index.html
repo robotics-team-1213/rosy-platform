@@ -11,11 +11,14 @@
   <script type="module" src="/board.js"></script>
 </head>
 <body>
-  <header class="rail">
-    <p class="kicker">노트북 게임 호스트</p>
-    <h1>1v1 피치</h1>
+  <ui-shell grammar="focal">
+  <ui-topbar>
+    <ui-brand>
+      <small>노트북 게임 호스트</small>
+      <b>1v1 피치</b>
+    </ui-brand>
     <p id="phase">대기</p>
-  </header>
+  </ui-topbar>
   <section class="score" aria-label="점수">
     <div>
       <span id="home-name">home</span>
@@ -35,5 +38,6 @@
     <ui-button id="halt" kind="irreversible" type="button">정지</ui-button>
     <span>스페이스도 양쪽을 세운다</span>
   </p>
+  </ui-shell>
 </body>
 </html>

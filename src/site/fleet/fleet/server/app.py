@@ -201,6 +201,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     common_assets = {
         "tokens.css": "text/css",
         "components.css": "text/css",
+        "template.html": "text/html",
         "core_ui_logic.js": "application/javascript",
         "ui.js": "application/javascript",
     }

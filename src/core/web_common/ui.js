@@ -79,7 +79,7 @@ class UiField extends HTMLElement {
   connectedCallback() {
     if (this.querySelector("input, select, textarea")) return;
     const input = document.createElement("input");
-    for (const name of ["type", "name", "placeholder", "autocomplete", "value", "required"]) {
+    for (const name of ["type", "name", "placeholder", "autocomplete", "value", "required", "aria-label"]) {
       if (this.hasAttribute(name)) input.setAttribute(name, this.getAttribute(name));
     }
     if (this.hasAttribute("invalid")) input.setAttribute("aria-invalid", "true");
@@ -124,11 +124,82 @@ class UiText extends HTMLElement {
   }
 }
 
+const EVIDENCE = ["fresh", "delayed", "disconnected", "unavailable"];
+const MARKS = ["neutral", "warn", "crit"];
+
+class UiHead extends HTMLElement {
+  connectedCallback() {
+    if (this.querySelector("[data-rule]")) return;
+    const rule = document.createElement("span");
+    rule.dataset.rule = "";
+    rule.setAttribute("aria-hidden", "true");
+    const last = this.lastElementChild;
+    if (last && this.children.length > 1) this.insertBefore(rule, last);
+    else this.append(rule);
+  }
+}
+
+class UiGrid extends HTMLElement {
+  connectedCallback() {
+    if (!this.hasAttribute("columns")) this.setAttribute("columns", "3");
+  }
+}
+
+class UiChip extends HTMLElement {}
+
+class UiTriage extends HTMLElement {
+  connectedCallback() {
+    if (!MARKS.includes(this.getAttribute("status"))) {
+      this.setAttribute("status", "neutral");
+    }
+  }
+}
+
+const GRAMMARS = ["spatial", "exception", "focal", "procedure"];
+
+class UiShell extends HTMLElement {
+  connectedCallback() {
+    if (!GRAMMARS.includes(this.getAttribute("grammar"))) {
+      this.setAttribute("data-grammar-missing", "true");
+    }
+  }
+}
+
+class UiTopbar extends HTMLElement {}
+
+class UiBrand extends HTMLElement {}
+
+class UiSection extends HTMLElement {
+  connectedCallback() {
+    if (!this.hasAttribute("role")) this.setAttribute("role", "region");
+  }
+}
+
+class UiEmpty extends HTMLElement {}
+
+class UiEvidence extends HTMLElement {
+  connectedCallback() {
+    if (!EVIDENCE.includes(this.getAttribute("state"))) {
+      this.setAttribute("data-state-missing", "true");
+    }
+  }
+}
+
 for (const [name, ctor] of [
   ["ui-button", UiButton],
   ["ui-field", UiField],
-  ["ui-tag", UiTag],
   ["ui-text", UiText],
+  ["ui-tag", UiTag],
+  ["ui-head", UiHead],
+  ["ui-grid", UiGrid],
+  ["ui-chip", UiChip],
+  ["ui-triage", UiTriage],
+  ["ui-evidence", UiEvidence],
+  ["ui-shell", UiShell],
+  ["ui-topbar", UiTopbar],
+  ["ui-brand", UiBrand],
+  ["ui-section", UiSection],
+  ["ui-empty", UiEmpty],
 ]) {
   if (!customElements.get(name)) customElements.define(name, ctor);
 }

@@ -292,8 +292,9 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
 </style>
 </head>
 <body>
-<header>
-  <div class="brand"><span class="dot" id="live"></span> pinky <small>ROBOT CONSOLE</small></div>
+<ui-shell grammar="procedure">
+<ui-topbar>
+  <ui-brand><span class="dot" id="live"></span> pinky <small>ROBOT CONSOLE</small></ui-brand>
   <div class="chips">
     <span class="chip" id="modeChip">모드 <b id="mode">-</b></span>
     <span class="chip">주행 <b id="wander">-</b></span>
@@ -301,7 +302,7 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
     <span class="chip" id="okChip">노드 <b id="ok">-</b></span>
     <span class="chip" title="watch_node /robot/health">진단 <b id="health">-</b></span>
   </div>
-</header>
+</ui-topbar>
 <div class="statusline" aria-label="로봇 상태 요약">
   <div class="statusitem"><label>배터리</label><strong id="batteryvalue">정보 없음</strong><small id="batterydetail">배터리 측정 대기</small><div class="battery-track"><div id="batteryfill"></div></div></div>
   <div class="statusitem"><label>자동 보정</label><strong id="overviewcal">확인 중</strong><small id="overviewcaldetail">실제 적용 상태 확인</small></div>
@@ -1851,5 +1852,6 @@ showSpeed();
 showSending();
 })();
 </script>
+</ui-shell>
 </body>
 </html>

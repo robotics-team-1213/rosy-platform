@@ -41,3 +41,19 @@
 - gate 변화: SOURCE GO, LOCAL GO 유지.
 - 결정: D-188
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(web): 어휘 표의 나머지 다섯 부품을 만든다
+
+- 변경: `ui-head`, `ui-grid`, `ui-chip`, `ui-triage`, `ui-evidence`를 `web_common`에 두고 스타일가이드가 그 요소로 어휘를 렌더한다. 라벨·값·필드·태그 예시도 `ui-text`, `ui-field`, `ui-tag`로 바꿨다. D-92가 미룬 넷은 그대로다.
+- 증거: `python -m pytest src/core/web_common/test/test_shared_controls.py src/core/core_api_web/test/test_ui_route.py -q` — 15 passed (2026-09-24 Windows).
+- gate 변화: SOURCE GO, LOCAL GO 유지.
+- 결정: D-187
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(web): 화면 틀을 공용 UI로 둔다
+
+- 변경: `ui-shell`, `ui-topbar`, `ui-brand`, `ui-section`, `ui-empty`와 `template.html`. 콘솔·Fleet·경기 보드·진단 페이지가 그 껍질을 쓴다. 제품 `index.html`·`dashboard.html`에 껍질이 없으면 시험이 실패한다.
+- 증거: `python -m pytest src/core/web_common/test/test_shared_controls.py src/core/core_api_web/test/test_ui_route.py src/apps/games/test/test_preview.py src/site/fleet/test/test_grammar_separation.py src/core/core/test/test_dashboard.py -q` — 45 passed (2026-09-24 Windows).
+- gate 변화: SOURCE GO, LOCAL GO 유지.
+- 결정: D-187
+- 교훈: 없음

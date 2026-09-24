@@ -43,6 +43,7 @@ GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
 _COMMON_MEDIA = {
     "tokens.css": "text/css",
     "components.css": "text/css",
+    "template.html": "text/html",
     "ui.js": "text/javascript",
     "core_ui_logic.js": "text/javascript",
 }
