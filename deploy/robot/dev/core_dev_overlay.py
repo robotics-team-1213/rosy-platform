@@ -319,6 +319,45 @@ def confirm_native_loaded(staged: Path, installed: str, run=subprocess.run) -> N
         raise OverlayError("running core did not load the overlay bytes")
 
 
+def restart_native(run=subprocess.run) -> None:
+    """Reload units first: a new or changed drop-in is ignored until daemon-reload.
+
+    2026-09-24 on rosy-pinky-e4us: restart without reload left NeedDaemonReload=yes
+    and the running core had none of the binds.
+    """
+    for command in (["systemctl", "daemon-reload"], ["systemctl", "restart", "rosy-core.service"]):
+        if run(command, check=False).returncode != 0:
+            raise OverlayError(f"{' '.join(command)} failed")
+
+
+def confirm_native_binds(pairs: list[tuple[str, str]], run=subprocess.run) -> None:
+    """Every bind target must be a mount point in the running core's namespace.
+
+    A hash of one file cannot prove this alone: core/__init__.py can be byte-equal
+    between the image and the overlay (it was, 2026-09-24), so an unloaded overlay
+    passed the old check.
+    """
+    pid = service_main_pid(run)
+    shown = run(["cat", f"/proc/{pid}/mountinfo"], capture_output=True, text=True, check=False)
+    if shown.returncode != 0:
+        raise OverlayError("cannot read the running core's mounts")
+    mounted = set()
+    for line in (shown.stdout or "").splitlines():
+        fields = line.split()
+        if len(fields) > 4:
+            mounted.add(fields[4].replace("\\040", " "))
+    # /opt/rosy/current is a symlink to the release: the kernel records the
+    # resolved path (/opt/rosy/releases/<id>/...), so resolve before comparing.
+    def resolved(target: str) -> str:
+        shown = run(["readlink", "-f", target], capture_output=True, text=True, check=False)
+        return (shown.stdout or "").strip() if shown.returncode == 0 else target
+
+    missing = [target for _source, target in pairs
+               if target not in mounted and resolved(target) not in mounted]
+    if missing:
+        raise OverlayError(f"running core is missing overlay binds: {', '.join(missing)}")
+
+
 def compose_argv(*, binds_attached: bool, motor_or_hardware_running: bool) -> list[str]:
     if motor_or_hardware_running:
         raise OverlayError("refuse to overlay while motor or hardware is running")
@@ -470,12 +509,8 @@ def _parse_apply(argv: list[str]) -> int:
             rosy_core_container(),
         )
     elif args.execute:
-        completed = subprocess.run(
-            ["systemctl", "restart", "rosy-core.service"],
-            check=False,
-        )
-        if completed.returncode != 0:
-            raise OverlayError("core restart failed")
+        restart_native()
+        confirm_native_binds(pairs)
         confirm_native_loaded(
             args.dest / "python" / "core" / "__init__.py",
             f"{core_package.rstrip('/')}/__init__.py",

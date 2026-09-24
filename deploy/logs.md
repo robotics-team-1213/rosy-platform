@@ -973,3 +973,14 @@
 - gate 변화: 없음
 - 결정: D-193
 - 교훈: 로그인 편의를 위해 장기 비밀을 화면에 띄우는 대신, 물리 접근의 증표를 짧고 일회용인 값으로 만든다.
+
+## 2026-09-24 · uncommitted · fix(dev): native CORE overlay reloads units and proves every bind is mounted (D-179)
+
+- 변경: 실기(`rosy-pinky-e4us`, release 005)에서 `sync-core-dev.ps1 -Backend native`가 성공으로 끝났지만 오버레이는 적용되지 않았다.
+  (1) drop-in을 쓴 뒤 `daemon-reload` 없이 재시작해 `NeedDaemonReload=yes`인 채로 bind가 없었다. (2) 확인이 `core/__init__.py` 해시 하나였고,
+  그 파일은 이미지와 main에서 같아 거짓 통과했다. 이제 reload 후 재시작하고, 실행 중 CORE의 `/proc/<pid>/mountinfo`에 모든 bind 대상이
+  있어야 통과한다(`/opt/rosy/current` 심볼릭 링크는 커널이 풀어 기록하므로 resolve해 비교).
+- 증거: 고친 도구로 main(05bd4a0)의 CORE를 실기에 올림 — mountinfo에 7개 bind, `rosy-core` active, API 200. `test_core_dev_sync.py` 34 passed.
+- gate 변화: 없음(장치는 dev 마커 HOLD 상태)
+- 결정: D-179
+- 교훈: "적용됐다"는 확인은 바뀐 것만 볼 수 있는 증거로 한다. 바뀌지 않았을 수도 있는 파일의 해시는 증거가 아니다.
