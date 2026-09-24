@@ -52,15 +52,15 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 
 /* ---- 증거 — 값은 자기가 얼마나 믿을 만한지 같이 말한다(D-72 S4) ---------- */
-[data-evidence="delayed"] { color: var(--status-warn); }
+[data-evidence="delayed"],
 [data-evidence="disconnected"],
-[data-evidence="unavailable"] { color: var(--muted); }
+[data-evidence="unavailable"] { color: var(--nominal-quiet); }
 /* 낡은 값은 나이를 달고 다닌다. 임계값은 title에 있고 신선한 값에는 아무것도
    붙지 않는다. 블록으로 쌓이면 칸이 무너지므로 인라인이다. */
 [data-evidence="delayed"][data-age]::after {
   content: " " attr(data-age) "초";
   display: inline;
-  color: var(--status-warn);
+  color: var(--nominal-quiet);
   font-size: 0.78em;
   font-family: var(--mono);
   white-space: nowrap;
@@ -160,7 +160,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .mode-chip[data-mode="motor"],
 .mode-chip[data-mode="hardware"] { color: var(--status-crit); border-color: var(--status-crit-a45); }
 
-.empty-state { margin: 0; color: var(--nominal-quiet); font: var(--text-label)/1.5 var(--body); }
+
 
 /* ---- 묶음 제목 — 줄이지 상자의 뚜껑이 아니다 -----------------------------
    작은 대문자 라벨, 이어지는 실선, 오른쪽 끝의 기계 값. 아래 내용과 붙어
@@ -885,7 +885,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .settings-row input { flex: 1 1 auto; }
 
 .waypoint-list { display: grid; margin: 0; padding: 0; list-style: none; }
-.waypoint-list li:not(.empty-state) {
+.waypoint-list li:not(:has(ui-empty)) {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: var(--space-1) var(--space-3);
@@ -897,7 +897,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .waypoint-actions { display: flex; align-items: start; gap: var(--space-1); }
 
 .event-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 var(--space-5); margin: 0; padding: 0; list-style: none; }
-.event-list li:not(.empty-state) {
+.event-list li:not(:has(ui-empty)) {
   display: grid;
   grid-template-columns: 76px 1fr auto;
   align-items: start;
@@ -950,7 +950,7 @@ body[data-view="operate"] .page-footer { display: none; }
   .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ros-network-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .teleop-pad { grid-template-columns: repeat(2, 1fr); }
-  .event-list li:not(.empty-state) { grid-template-columns: 62px 1fr; }
+  .event-list li:not(:has(ui-empty)) { grid-template-columns: 62px 1fr; }
   .event-severity { grid-column: 2; }
   .page-footer { flex-direction: column; gap: var(--space-3); }
 }

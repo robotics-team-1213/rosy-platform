@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(web): 빈 목록과 증거 색을 공용 부품에 맞춘다
 - 2026-09-24 · uncommitted · feat(web): 화면 틀을 공용 UI로 둔다
 - 2026-09-24 · uncommitted · feat(web): 어휘 표의 나머지 다섯 부품을 만든다
 - 2026-09-24 · uncommitted · feat(web): 치수 계단과 진단 팔레트를 토큰에 잠근다
 - 2026-09-24 · uncommitted · fix(web): 버튼 종류와 색 사본을 시험으로 잠근다
-- 2026-09-24 · uncommitted · feat(web): 브라우저 조작 부품을 web_common 한 벌로 모은다
