@@ -1362,6 +1362,86 @@ def test_a_writer_that_stalls_after_the_last_byte_points_to_resume(writer_case, 
     _nothing_recorded(writer_case, boot)
 
 
+def _partial_copy_child(source: Path, dest: Path, byte_count: int) -> str:
+    # A sleep after the write keeps this process (and its I/O counters) alive
+    # long enough for the writer's stall-watchdog poll to sample it; otherwise
+    # a process that exits between polls (python's own cold-start here can
+    # take several seconds) never has its bytes counted (Get-WriterSample
+    # only sums currently-live processes).
+    return (f'"{sys.executable}" -c "'
+            f'import time; data=open(r\'{source}\', \'rb\').read({byte_count}); '
+            f'out=open(r\'{dest}\', \'wb\'); out.write(data); out.flush(); out.close(); '
+            f'time.sleep(2)"')
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_writer_that_stalls_at_999_percent_points_to_resume_with_readback_caveat(writer_case, tmp_path):
+    # D-230 3.2: a write that stalls at or above 99.9% of the raw image size is
+    # close enough that the authoritative readback (D-187) should decide, not a
+    # full rewrite, but the message must not overpromise: a short card still
+    # fails at that readback, before bundle/receipt, and a full rewrite is the
+    # fallback if it does.
+    raw_size = writer_case["readback"].stat().st_size
+    near_complete = int(raw_size * 0.9995)
+    assert near_complete >= int(raw_size * 0.999)  # the fixture must land inside the threshold
+    copy = tmp_path / "written.bin"
+    _fake_writer(writer_case, f"{_partial_copy_child(writer_case['readback'], copy, near_complete)}\n{IDLE_CHILD}")
+
+    completed, boot = _write(writer_case, tmp_path, "-WriterStallMinutes", "0.05")
+
+    assert completed.returncode != 0
+    assert "image writer stalled" in _err(completed)
+    assert "stage=write card_state=written-unverified" in _err(completed)
+    assert "-ResumeAfterWrite" in _err(completed)
+    err = _err(completed)
+    assert "readback" in err and "every byte" in err
+    assert "before" in err and "bundle" in err and "receipt" in err
+    assert "full rewrite" in err or "re-run the full write" in err
+    assert _failed(_progress(writer_case)) == "written-unverified"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_writer_that_stalls_well_below_the_threshold_still_needs_a_full_rewrite(writer_case, tmp_path):
+    # Below 99.9%, today's full-rewrite guidance stays: the byte count is not
+    # close enough to trust the readback to resolve it.
+    raw_size = writer_case["readback"].stat().st_size
+    partial = int(raw_size * 0.9)
+    assert partial < int(raw_size * 0.999)
+    copy = tmp_path / "written.bin"
+    _fake_writer(writer_case, f"{_partial_copy_child(writer_case['readback'], copy, partial)}\n{IDLE_CHILD}")
+
+    completed, boot = _write(writer_case, tmp_path, "-WriterStallMinutes", "0.05")
+
+    assert completed.returncode != 0
+    assert "image writer stalled" in _err(completed)
+    assert "stage=write card_state=writing" in _err(completed)
+    assert "re-run the full write" in _err(completed)
+    assert "-ResumeAfterWrite (skips" not in _err(completed)
+    assert _failed(_progress(writer_case)) == "writing"
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_resuming_a_card_truncated_at_9995_percent_fails_readback_and_records_nothing(writer_case, tmp_path):
+    # D-230 ADR Validation 2: the near-complete resume band from 3.2 (>= 99.9%)
+    # recommends -ResumeAfterWrite, but the readback (D-187) is still the sole
+    # authority. A card genuinely short by this much (here simulated directly,
+    # not via a stalled Imager) must fail the readback and leave nothing
+    # recorded -- resuming can never let a short card slip through.
+    raw = writer_case["readback"].read_bytes()
+    truncated_len = int(len(raw) * 0.9995)
+    assert truncated_len < len(raw)  # the fixture must actually be short
+    writer_case["readback"].write_bytes(raw[:truncated_len])
+
+    completed, boot = _write(writer_case, tmp_path, switches=("-ResumeAfterWrite",))
+
+    assert completed.returncode != 0
+    assert "media is shorter than the image" in _err(completed)
+    assert "stage=readback card_state=written-unverified" in _err(completed)
+    _nothing_recorded(writer_case, boot)
+
+
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_a_readback_mismatch_says_rewrite_then_replace_the_card(writer_case, tmp_path):
     writer_case["readback"].write_bytes(_flip_one_byte(writer_case["readback"].read_bytes()))
@@ -1672,6 +1752,40 @@ def test_accept_slow_media_writes_anyway(writer_case, tmp_path):
     assert completed.returncode == 0, completed.stderr
     assert "SLOW MEDIA" in completed.stdout
     assert writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_reader_under_30_mbps_gets_a_hint_but_still_writes(writer_case, tmp_path):
+    # D-230 3.1 (hint): a reader this slow looks USB-2.0-class; nudge toward a
+    # USB 3 UHS-I reader, but never fail on this alone (the MinReadMBps floor,
+    # default 10, is the only hard gate).
+    raw = _multi_chunk_raw(1)
+    _rerelease(writer_case, raw)
+    card = PipeCard(raw, [("slow", 0.07, 1024 * 1024)])  # ~15 MB/s: below the 30 hint, above the 10 floor
+    try:
+        completed, _boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path)
+    finally:
+        card.close()
+
+    assert completed.returncode == 0, completed.stderr
+    measured = _measured(_progress(writer_case))
+    assert 10 < measured["read_mbps"] < 30
+    assert "reader_hint" in measured
+    assert "USB 2.0" in measured["reader_hint"]
+    assert "USB 3" in measured["reader_hint"]
+    assert "8" in measured["reader_hint"] and "10" in measured["reader_hint"]
+    assert "USB 2.0-class" in completed.stdout
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_fast_reader_gets_no_hint(writer_case, tmp_path):
+    _rerelease(writer_case, _multi_chunk_raw(1))
+    completed, _boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    measured = _measured(_progress(writer_case))
+    assert "reader_hint" not in measured
+    assert "USB 2.0-class" not in completed.stdout
 
 
 def _plan_with_card(case, tmp_path, **identity):
