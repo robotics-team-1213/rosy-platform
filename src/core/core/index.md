@@ -69,7 +69,7 @@
 ## 최근 기록
 
 - 2026-09-24 · uncommitted · refactor(core): move the bridge's DockingExecutor into bridge/docking_executor.py
+- 2026-09-24 · uncommitted · fix(core): CORE-only 에서 출처 없는 채널은 `unavailable` (US-010)
 - 2026-09-24 · uncommitted · chore(core): remove the legacy core/deploy installer
 - 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 명령 코드와 core 시험의 경계
 - 2026-09-23 · uncommitted · fix(core): 격상 처리기를 async-signal-safe 하게 (`os.write`) + `SIG_IGN` + 경고 0건 주장의 근거 교체 (리뷰 3차)
-- 2026-09-23 · uncommitted · fix(core): 멈춘 종료 격상을 `os._exit(2)` 로 (리뷰 2차) + teardown 경고·uvicorn graceful

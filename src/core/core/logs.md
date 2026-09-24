@@ -398,8 +398,14 @@
 - 결정: D-186 Accepted
 - 교훈: 없음.
 
-## 2026-09-24 · uncommitted · refactor(core): move the bridge's DockingExecutor into bridge/docking_executor.py
+## 2026-09-24 · uncommitted · fix(core): CORE-only 에서 출처 없는 채널은 `unavailable` (US-010)
+- 변경: `core/services.py` 가 `runtime.mode == core` 일 때 `StateManager(sources_configured=False)` 로 만든다 — 한 번도 값이 오지 않은 채널은 `disconnected`(출처는 있는데 무음)가 아니라 `unavailable`. 첫 표본이 오면 보통 판정. inventory descriptor 에 런타임 차단 이유 전달. `bridge/display.py` `battery_percent` 결측은 `None`. `test_api.py`·`test_battery.py` 기대값을 새 계약으로 갱신, `test/test_truthful_core_only.py`(이 패키지, 16건) 추가.
+- 증거: `python -m pytest src/core/core/test -q` 초록 (2026-09-24 Windows, 위 1966 passed 에 포함).
+- gate 변화: 없음 (DEVICE 재검증 필요).
+- 결정: D-161, D-32.
+- 교훈: 하드웨어 모드의 `safety` 채널은 여전히 공급자가 없다(API estop 만 갱신) — 대시보드는 이제 그것을 UNVERIFIED 로 정직하게 보인다. 공급 경로는 후속 과제.
 
+## 2026-09-24 · uncommitted · refactor(core): move the bridge's DockingExecutor into bridge/docking_executor.py
 - 변경: `ros_bridge.py`의 DockingExecutor 구현(`navigate_to`·`cancel_navigation`·`drive`·`stop`·`set_collision_exemption`·`reset_odometry_mark`·`travelled_m`·`odometry_available`·`odometry_pose`와 `_dock_odom_mark`·`_applied_dock_exemption`)을 ROS-free `bridge/docking_executor.py`의 `BridgeDockingExecutor`로 옮겼다. ROS 동작(Nav2 goal 전송·취소, 면제 Bool 발행, 마지막 odom 포즈)은 callable 로 받는다. `services.docking.executor`는 이제 `bridge.docking_executor`다. `_last_odom_xy`는 없애고 포즈에서 xy 를 읽는다(둘은 `_on_odom`에서 함께 쓰였다). 순서 보장 유지: `external_goal_sent` → send_goal, 면제 latch 멱등. 소스 읽는 시험 3건(`test_executor_contracts`, `test_docking_mode_release`, `test_bridge_timers`)은 경로·이름만 바꿨다. 신규 `test/test_bridge_docking_executor.py` 10건.
 - 증거: `ros_bridge.py` 635 → 581줄(D-168 P6 600줄 예산 안, 새 verdict 불요). `src/core/core/test` 1133 passed·13 skipped, `src/core/core_features/test` 202 passed, `test/test_module_structure.py` 11 passed, harness lint 0 errors (2026-09-24 Windows).
 - gate 변화: 없음.

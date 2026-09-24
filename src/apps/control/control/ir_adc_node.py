@@ -24,11 +24,22 @@ class _ADCReader:
         fcntl.ioctl(self._fd, I2C_SLAVE, address)
 
     def read_channels(self) -> list[int]:
+        import fcntl
+
+        # D-192 bus ownership: the MCU keeps one register pointer, and
+        # rosylib.Battery (bringup battery_publisher) reads channel 4 of the
+        # same MCU from another process. Every Rosy reader holds an exclusive
+        # flock on its /dev/i2c-1 descriptor for the whole pointer-write,
+        # settle, read sequence.
         values = []
-        for command in CHANNEL_COMMANDS:
-            os.write(self._fd, bytes((command,)))
-            time.sleep(0.006)
-            values.append(decode_adc12(os.read(self._fd, 2)))
+        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        try:
+            for command in CHANNEL_COMMANDS:
+                os.write(self._fd, bytes((command,)))
+                time.sleep(0.006)
+                values.append(decode_adc12(os.read(self._fd, 2)))
+        finally:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
         return [values[2], values[1], values[0]]
 
     def close(self) -> None:

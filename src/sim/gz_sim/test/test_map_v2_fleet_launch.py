@@ -33,6 +33,13 @@ def test_only_core_can_command_motion():
     assert "road_observer_node" not in source  # needs a map_v2_fleet road scene first
 
 
+def test_core_serves_the_dev_tokens_the_launch_message_names():
+    # D-193 7: the packaged defaults carry no tokens; the sim opts in.
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"ROSY_DEV_AUTH": "1"' in source
+    assert "rosy-dev-viewer" in source
+
+
 def test_launch_sim_is_well_formed_xml():
     """ros2 launch rejects the file outright if it is not XML (e.g. "--" in a comment)."""
     ET.parse(LAUNCH_SIM)

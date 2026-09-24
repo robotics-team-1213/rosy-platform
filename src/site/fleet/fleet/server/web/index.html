@@ -19,8 +19,8 @@
     <input id="console-token" class="token" type="password" placeholder="관제 토큰"
            autocomplete="off" aria-label="관제 토큰">
     <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
-    <span id="online-pill" class="pill">연결 대기</span>
-    <span id="clock" class="pill">--:--:--</span>
+    <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
+    <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" class="estop" type="button">전체 정지</ui-button>
   </ui-topbar>
 
@@ -32,7 +32,7 @@
           <h2 id="map-heading">현장 지도</h2>
         </div>
         <div class="spacer"></div>
-        <span id="map-tag" class="pill">맵 대기</span>
+        <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
       <canvas id="map-canvas" class="idle" width="800" height="600"
               aria-label="현장 점유 지도와 로봇 위치"></canvas>

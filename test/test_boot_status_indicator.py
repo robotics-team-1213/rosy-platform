@@ -245,6 +245,122 @@ def test_indicator_unit_is_rate_unlimited_and_not_ordered_after_the_runtime():
     assert "RestartMode=direct" in core  # restarts no longer fire OnFailure each time
 
 
+# --- D-192 US-003: CORE_READY as soon as the runtime target settles ---------
+#
+# rosy-pinky-e4us 2026-09-24: the indicator ran at ~9 s, ~20 s and then every
+# 30 s, so CORE_READY appeared at 53-55 s although CORE was ready at ~23 s.
+
+READY = NATIVE / "rosy-boot-status-ready.service"
+
+
+def _unit_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+
+
+def test_ready_run_is_ordered_after_the_runtime_target_without_requiring_it():
+    unit = READY.read_text(encoding="utf-8")
+    lines = _unit_lines(unit)
+    after = [line for line in lines if line.startswith("After=")]
+
+    assert after and {"rosy-runtime.target", "rosy-core.service"} <= set(after[0][len("After="):].split())
+    # Ordering, not a dependency: a failed runtime must still be shown at once,
+    # and the indicator must never pull the runtime in or hold it up.
+    assert not any(line.startswith(("Requires=", "BindsTo=", "Requisite=", "PartOf=")) for line in lines)
+    assert "Type=oneshot" in lines
+    assert "ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-status.py" in lines
+    assert "WantedBy=multi-user.target" in lines
+    # Same root-owned output directory as the periodic indicator (review H1).
+    assert "RuntimeDirectory=rosy-boot" in lines and "RuntimeDirectoryPreserve=yes" in lines
+    assert "User=" not in unit
+
+
+def test_the_runtime_target_does_not_pull_the_ready_run_in():
+    # A unit the target Wants runs before the target is reached, when the
+    # classifier still sees it activating.
+    target = (NATIVE / "rosy-runtime.target").read_text(encoding="utf-8")
+    core = (NATIVE / "rosy-core.service").read_text(encoding="utf-8")
+    assert "rosy-boot-status-ready" not in target
+    assert "rosy-boot-status-ready" not in core
+    assert "WantedBy=rosy-runtime.target" not in READY.read_text(encoding="utf-8")
+
+
+def test_image_installs_and_enables_the_ready_run():
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    verifier = (ROOT / "deploy/image/verify-mounted-image.py").read_text(encoding="utf-8")
+
+    assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status-ready.service" "$OVERLAY/etc/systemd/system/"' in payload
+    enable = customizer.split("systemctl --root")[1].split("\n\n")[0]
+    assert "rosy-boot-status-ready.service" in enable
+    assert '"rosy-boot-status-ready.service"' in verifier
+
+
+def test_ready_run_gives_up_quickly():
+    # D-192 review: a stuck ready run must not hold multi-user.target for 30 s.
+    assert "TimeoutStartSec=10" in _unit_lines(READY.read_text(encoding="utf-8"))
+
+
+def test_one_run_holds_the_lock_from_gathering_to_the_last_sink(tmp_path, monkeypatch):
+    # D-192 review: an older classification must never overwrite CORE_READY.
+    module = _module()
+    events: list[str] = []
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def lock(root):
+        assert root == tmp_path
+        events.append("lock")
+        yield
+        events.append("unlock")
+
+    def gather(root, run):
+        events.append("gather")
+        return {"units": {}, "provisioning": None}
+
+    monkeypatch.setattr(module, "run_lock", lock)
+    monkeypatch.setattr(module, "gather", gather)
+    monkeypatch.setattr(module, "classify", lambda units, provisioning: module.Stage("BOOTING"))
+    monkeypatch.setattr(module, "status_record", lambda facts, stage, now: {"stage": "X"})
+    monkeypatch.setattr(module, "apply", lambda root, record, stage, run: events.append("apply") or [])
+
+    assert module.main(["--root", str(tmp_path)]) == 0
+    assert events == ["lock", "gather", "apply", "unlock"]
+
+
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="flock is POSIX; the ordering test above covers Windows hosts")
+def test_a_second_run_waits_for_the_first(tmp_path):
+    import threading
+
+    module = _module()
+    entered = threading.Event()
+    release = threading.Event()
+    second_in = threading.Event()
+
+    def first():
+        with module.run_lock(tmp_path):
+            entered.set()
+            release.wait(5)
+
+    def second():
+        with module.run_lock(tmp_path):
+            second_in.set()
+
+    one = threading.Thread(target=first)
+    one.start()
+    assert entered.wait(5)
+    two = threading.Thread(target=second)
+    two.start()
+    assert not second_in.wait(0.3), "second run entered while the first held the lock"
+    release.set()
+    assert second_in.wait(5)
+    one.join()
+    two.join()
+    lock_file = tmp_path / "run/rosy-boot/.run.lock"
+    assert lock_file.is_file() and (lock_file.stat().st_mode & 0o777) == 0o600
+
+
 # --- Fallback AP shown to people (D-176 Task 5) -----------------------------
 
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal

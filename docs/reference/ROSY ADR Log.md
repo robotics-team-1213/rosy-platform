@@ -143,11 +143,11 @@
 | D-133 | CORE SIGSEGV 는 재현 경로로 쫓고, 흔들리는 환경에서의 반복은 폐기한다 | Accepted |
 | D-134 | 릴레이 준비 신호는 실측으로 말한다 | Accepted |
 | D-135 | CI 러너는 Ubuntu 버전을 고정하고, 다음 LTS 이동은 기한 전에 리허설한다 | Accepted |
-| D-140 | ARM64 ?? ??? ?? arm64 ??? ?? ????? ? ARTIFACT ? ?? ?? ??? | Accepted |
 | D-136 | 영상 대역폭은 예산으로 다룬다 — 경로 분리 + 상한 + 자동킬 | Superseded by D-152 |
 | D-137 | YOLO는 자문역이다 — LiDAR/IR가 결정하고 영상은 증거만 낸다 | Proposed |
 | D-138 | 도크 검출기는 센서 provider 포트를 탄다 — 새 정적 간선 없음 | Accepted |
 | D-139 | OS는 자리만 내고, 무엇을 볼지는 제품이 정한다 | Accepted |
+| D-140 | ARM64 ?? ??? ?? arm64 ??? ?? ????? ? ARTIFACT ? ?? ?? ??? | Accepted |
 | D-141 | 대형 주행 실측은 네 게이트를 순서대로 통과한다 — 단일 세션 묶음 | Accepted |
 | D-142 | 실물 전에 소프트웨어 계약을 닫는다 — 잔여 3건 | Accepted |
 | D-143 | IR·카메라 차선 추종은 NAVIGATION 내부의 배타적 evidence 소스다 | Accepted |
@@ -187,12 +187,20 @@
 | D-177 | correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현 — 활성화 시 설계를 선기록 | Proposed |
 | D-178 | 모듈의 병렬 작업 가능성은 평가표로 측정한다 — 5개 판정 축(M1–M5), 컷 게이트, 기준선 | Accepted |
 | D-179 | 벤치 CORE 수정은 설치 트리 위의 읽기 전용 바인드이고, 그 장치는 릴리스로 세지 않는다 | Accepted |
+| D-180 | SD 카드 기록은 전체 readback 한 번으로만 검증하고, Imager 검증과 raw 해시 사전 패스는 끈다 | Accepted |
 | D-181 | 벤치 장치의 제품 편입은 장치별 실기 수요·D-84 프로필 항목·배관/capabilities/가드가 한 변경에서 충족될 때만 — 조건과 절차를 선기록 | Proposed |
 | D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 | Accepted |
 | D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 | Accepted |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 | Accepted |
 | D-185 | control 런타임 CPU는 측정한 비용 순으로 줄이고, 항목마다 검증 방식을 미리 정한다 — R1–R8 | Accepted |
 | D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 | Accepted |
-| D-187 | 브라우저 조작 부품은 한 벌이다 | Accepted |
-| D-188 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
+| D-187 | SD 카드 writer는 자기 실패를 감지해 안전하게 멈추고, 카드 상태와 다음 행동을 알린다 | Accepted |
+| D-188 | SD 카드 쓰기는 전문가 없이 운영한다 — 분리 실행, 상태 명령, readback 멈춤 감시, 사전 속도 측정, 카드 신원 | Accepted |
+| D-189 | unit의 샌드박스·HOME·Python 의존성은 제품의 일부다 — 서명 전에 실제로 돌려 보고 통과시킨다 | Accepted |
+| D-190 | 부팅 표시는 공식 Pinky Pro와 같게 동작한다 — 증거 먼저, 장치 편입은 한 변경에, 장치에서 즉석 수정하지 않는다 | Proposed |
+| D-191 | 이미지는 실기 평가표가 모두 PASS(또는 사람 대기)일 때만 배포한다 — 격차는 스토리 하나씩 저장소→이미지→카드로 닫는다 | Proposed |
+| D-192 | 하드웨어 런타임은 이미지에 들어간다 — UART4·LiDAR 드라이버·DYNAMIXEL SDK·rosylib·io unit을 굽고, 기본은 CORE-only와 무동작이다 | Proposed |
+| D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed |
+| D-194 | 브라우저 조작 부품은 한 벌이다 | Accepted |
+| D-195 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
 ---

@@ -522,6 +522,8 @@ CONFIG_DIR = Path(__file__).parent.parent / "config"
 @pytest.fixture
 def client():
     config = yaml.safe_load((CONFIG_DIR / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((CONFIG_DIR / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(CONFIG_DIR / config["profile"])
     caps = yaml.safe_load((CONFIG_DIR / "capabilities.yaml").read_text(encoding="utf-8"))
     svc = CoreServices.build(config, profile, caps, Path(tempfile.mkdtemp()) / "waypoints.json")

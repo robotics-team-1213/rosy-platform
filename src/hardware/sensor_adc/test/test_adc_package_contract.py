@@ -55,3 +55,17 @@ def test_init_failure_exits_instead_of_asserting():
     assert "assert(" not in text, (
         "assert(false) compiles out under NDEBUG; init failure must exit")
     assert "throw std::runtime_error" in text
+
+
+def test_every_bus_transaction_holds_the_shared_i2c_lock():
+    # D-192 review: rosylib.Battery and control's ir_adc_node take an exclusive
+    # flock on their /dev/i2c-1 descriptor per transaction; so does this node.
+    text = _source()
+    assert "#include <sys/file.h>" in text
+    wrapper = text[text.index("bool read_channel(int channel"):text.index("bool read_channel_locked(")]
+    assert wrapper.index("flock(fd_, LOCK_EX)") < wrapper.index("read_channel_locked(channel, value)")
+    assert wrapper.index("read_channel_locked(channel, value)") < wrapper.index("flock(fd_, LOCK_UN)")
+    locked = text[text.index("bool read_channel_locked("):text.index("bool read_cycle(")]
+    for step in ("wiringPiI2CRawWrite", "sleep_for", "wiringPiI2CRawRead"):
+        assert step in locked, step
+    assert "flock" not in locked  # one lock, taken once, released on every path

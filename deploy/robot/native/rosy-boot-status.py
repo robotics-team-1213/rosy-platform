@@ -15,6 +15,7 @@ CORE must not be able to steer these writes (D-161).
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
@@ -242,15 +243,45 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
     return errors
 
 
+LOCK_NAME = ".run.lock"
+
+
+@contextmanager
+def run_lock(root: Path):
+    """One run at a time, from gathering facts to the last sink (D-192 review).
+
+    The timer, OnFailure= and rosy-boot-status-ready.service can overlap. A run
+    that gathered while the runtime was still activating must not write after a
+    later run that saw CORE_READY; holding the lock across gather and apply makes
+    the last run to start the last to write. The lock file is root-owned under
+    /run/rosy-boot, never /run/rosy (rosy-core's).
+    """
+    try:
+        import fcntl
+    except ImportError:  # host tests on Windows: no concurrent runs there
+        yield
+        return
+    directory = root / STATUS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(directory / LOCK_NAME, flags, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("/"))
     args = parser.parse_args(argv)
     try:
-        facts = gather(args.root, _run)
-        stage = classify(facts["units"], facts["provisioning"])
-        record = status_record(facts, stage, datetime.now(timezone.utc))
-        errors = apply(args.root, record, stage, _run)
+        with run_lock(args.root):
+            facts = gather(args.root, _run)
+            stage = classify(facts["units"], facts["provisioning"])
+            record = status_record(facts, stage, datetime.now(timezone.utc))
+            errors = apply(args.root, record, stage, _run)
     except Exception as exc:  # never fail the boot over an indicator
         print(f"rosy-boot-status: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 0

@@ -264,3 +264,25 @@ def test_a_browser_page_starts_from_the_shell():
         if bit not in template:
             missing.append(f"template.html 에 {bit} 이 없다")
     assert not missing, missing
+
+
+def test_evidence_states_are_one_closed_set():
+    """fresh·delayed·disconnected·unavailable 네 이름만 쓴다."""
+    logic = (COMMON / "core_ui_logic.js").read_text(encoding="utf-8")
+    ui = UI.read_text(encoding="utf-8")
+    block = re.search(r"EVIDENCE_STATES = new Set\(\[(.*?)\]\)", logic, re.S)
+    ui_block = re.search(r"const EVIDENCE = \[(.*?)\];", ui, re.S)
+    assert block and ui_block
+    from_logic = set(re.findall(r'"([a-z]+)"', block.group(1)))
+    from_ui = set(re.findall(r'"([a-z]+)"', ui_block.group(1)))
+    assert from_logic == from_ui == {
+        "fresh", "delayed", "disconnected", "unavailable",
+    }
+    painted = set()
+    for path in _surface_texts():
+        if path.suffix not in {".css", ".html"}:
+            continue
+        painted.update(re.findall(
+            r'data-evidence="([a-z]+)"', path.read_text(encoding="utf-8"),
+        ))
+    assert painted <= from_logic, sorted(painted - from_logic)

@@ -149,6 +149,8 @@ def test_core_true_adds_one_core_per_robot_with_distinct_ports_and_homes():
     assert len(cores) == 3
     envs = [_env(a, context) for a in cores]
     assert [e["ROSY_NAMESPACE"] for e in envs] == ["rosy_01", "rosy_02", "rosy_03"]
+    # D-193 7: the dev operator token in robots.yaml exists only with ROSY_DEV_AUTH=1.
+    assert all(e["ROSY_DEV_AUTH"] == "1" for e in envs)
     assert len({e["HOME"] for e in envs}) == 3
     ports = []
     for e in envs:

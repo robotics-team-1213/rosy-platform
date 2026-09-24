@@ -1,0 +1,73 @@
+[Unit]
+Description=ROSY boot display on the Pinky Pro LCD and buzzer (D-190)
+# Outside CORE (D-161) and not ordered after it: it shows BOOTING, PROVISIONED
+# and FAILED as well. It only reads /run/rosy-boot, which the root indicator
+# units write, and polls for it, so it needs no ordering on them either.
+# emotion (the face on the same LCD) is bench-only (D-169): no product unit or
+# launch runs it, so there is nothing to Conflicts= with. A unit that starts
+# emotion on the product image must add Conflicts=rosy-boot-display.service.
+After=local-fs.target systemd-udevd.service
+# A crash loop stops after five tries; missing devices never exit non-zero.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=rosy-display
+Group=rosy-display
+# /dev/i2c-1 is root:dialout 0660 on the Ubuntu image (rosy-pinky-e4us);
+# 99-rosy-display.rules gives spidev0.0 to spi and gpiochip4 to gpio.
+SupplementaryGroups=dialout spi gpio
+# The buzzer pin is unconfirmed on the Pro (D-190 S0): off until a person
+# hears it on the device and writes ROSY_BUZZER_ENABLED=true (and, if it is
+# not BCM 22, ROSY_BUZZER_PIN) into /etc/rosy/boot-display.env, which wins.
+Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=22
+EnvironmentFile=-/etc/rosy/boot-display.env
+# emotion.info_screen, emotion.rosy_lcd and rosylib come from the running release.
+Environment=PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages
+# D-189: HOME is the unit's own state directory; nothing runs from it.
+StateDirectory=rosy/display
+StateDirectoryMode=0750
+Environment=HOME=/var/lib/rosy/display
+Environment=PYTHONNOUSERSITE=1
+# lgpio (under rpi-lgpio) keeps its notification files in LG_WD or the
+# working directory; both are the state directory. RPI_LGPIO_CHIP selects
+# gpiochip4, the RP1 header chip, where rpi-lgpio honours it; the program
+# refuses to drive the LCD when gpiochip4 is not labelled pinctrl-rp1.
+Environment=LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4
+WorkingDirectory=/var/lib/rosy/display
+ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-display.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=5
+UMask=0077
+Nice=5
+
+NoNewPrivileges=true
+CapabilityBoundingSet=
+# The LCD, the buzzer line and the battery ADC, nothing else (D-181, D-190).
+PrivateDevices=false
+DevicePolicy=closed
+DeviceAllow=/dev/spidev0.0 rw
+DeviceAllow=/dev/gpiochip4 rw
+DeviceAllow=/dev/i2c-1 rw
+# Everything it shows comes from files; it has no network of its own.
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

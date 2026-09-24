@@ -20,6 +20,7 @@ from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
 from core_common.domain.adapters import AdapterRegistry
 
+from core_common.domain.capabilities import hardware_runtime_reason
 from core_common.domain.model import inventory_from_config, slices_from_config
 from core_common.protocol.schemas import HealthState, RobotMode
 from core_events.events.audit import FileAuditLog
@@ -312,7 +313,8 @@ class CoreServices:
         stale_after = dict(CHANNEL_STALE_AFTER_S)
         if isinstance(evidence_cfg, dict):
             stale_after.update({str(k): float(v) for k, v in evidence_cfg.items()})
-        state = StateManager(robot_id, stale_after_s=stale_after)
+        state = StateManager(robot_id, stale_after_s=stale_after,
+                             sources_configured=runtime_mode != "core")
         registry = SourceRegistry(config.get("command_sources"))
         modes = ModeMachine()
         command = CommandManager(registry, modes, safety, events=events, readiness=readiness)
@@ -498,6 +500,7 @@ class CoreServices:
             booting=not snap.diagnostics_summary,
             cap001=cap001,
             hitl_requested=snap.hitl_requested,
+            runtime_reason=hardware_runtime_reason(self.config, self.state),
         )
         data["adapters"] = [item.id for item in self.adapter_registry.enabled()]
         return data

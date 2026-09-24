@@ -197,6 +197,9 @@ def apply(root: Path, run: Runner) -> dict:
     if "ssid" in ap:
         policy["ssid"] = ap["ssid"]
     _write(root / "etc/rosy/network-policy.json", json.dumps(policy, sort_keys=True) + "\n", 0o600)
+    # D-193 8: the boot login code policy for rosy-login-code (root-only, like the AP policy).
+    login_policy = {"boot_code": merged.get("login", {}).get("boot_code", "operator")}
+    _write(root / "etc/rosy/login-policy.json", json.dumps(login_policy, sort_keys=True) + "\n", 0o600)
     if ap.get("password") not in (None, APPLIED):
         credentials_path = root / "etc/rosy/ap-credentials.json"
         try:

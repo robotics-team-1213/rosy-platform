@@ -14,6 +14,18 @@ EnvironmentFile=/etc/rosy/runtime.env
 # D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
 LogsDirectory=rosy-core
 Environment=ROS_HOME=/var/log/rosy-core ROS_LOG_DIR=/var/log/rosy-core
+# D-189 D3: CORE keeps rosy.yaml, waypoints, docks, audit and the battery
+# sentinel under Path.home()/.rosy. The passwd home is under /home, which
+# ProtectHome=true makes unreadable (EACCES, not ENOENT), so point HOME at the
+# unit's own state directory.
+Environment=HOME=/var/lib/rosy/core
+# D-189 review: HOME is writable, so nothing may run from it. No login shell
+# (~/.profile, ~/.bash_profile) and no user site (~/.local, usercustomize);
+# the environment reaches ExecStartPost's python as well.
+Environment=PYTHONNOUSERSITE=1
+# D-193 7: device mode even on a card whose runtime.env predates it (first boot
+# writes it too): no shared development or plaintext API tokens, ROSY_DEV_AUTH ignored.
+Environment=ROSY_DEPLOYMENT=device
 WorkingDirectory=/opt/rosy/current
 # Exec the core entry script itself, not `ros2 run`: systemd then supervises the node
 # directly. The wrapper re-encoded a signal death of the node as exit 241/254, added its
@@ -22,7 +34,7 @@ WorkingDirectory=/opt/rosy/current
 # core.main escalates a stuck shutdown with exit code 2 instead of re-signalling itself,
 # so `systemctl stop` stays success and an operator cutting a wedged shutdown stays a
 # failure. Path follows the --merge-install payload layout.
-ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /opt/rosy/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /opt/rosy/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
 ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py
 Restart=on-failure
 # Restart without passing through the failed state, so OnFailure= fires only
@@ -32,8 +44,16 @@ RestartSec=2
 TimeoutStartSec=60
 TimeoutStopSec=15
 KillSignal=SIGINT
-StateDirectory=rosy
+# D-189 D4: never StateDirectory=rosy. systemd chowns a StateDirectory to
+# User= recursively on every start, which handed root-only provisioning/,
+# releases/ and config/ to CORE (D-161). CORE owns only its own subdirectory.
+StateDirectory=rosy/core
+StateDirectoryMode=0750
 RuntimeDirectory=rosy
+# D-193 security review M1: CORE's login-code state (used/burned/failing) must
+# survive a CORE restart, or a restart would re-arm a spent code. Kept across
+# restarts only; a stop still clears it.
+RuntimeDirectoryPreserve=restart
 UMask=0027
 
 NoNewPrivileges=true
@@ -48,7 +68,8 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-ReadWritePaths=/var/lib/rosy /run/rosy
+# Maps are written by slam_toolbox in rosy-navigation; CORE only reads them back.
+ReadWritePaths=/run/rosy
 
 [Install]
 WantedBy=rosy-runtime.target

@@ -1,6 +1,6 @@
-## D-188 치수와 진단 팔레트도 닫힌 집합이다
+## D-195 치수와 진단 팔레트도 닫힌 집합이다
 
-**Status:** Accepted (2026-09-24). concept 16의 Law 1·Law 2를 D-187 다음에
+**Status:** Accepted (2026-09-24). concept 16의 Law 1·Law 2를 D-194 다음에
 치수까지 시험으로 내린다.
 
 **Context:** 색·글자·버튼 종류는 한 파일로 잠겼다. 간격과 모서리는 토큰이
@@ -21,4 +21,4 @@
 
 **Validation:** `src/core/web_common/test/test_shared_controls.py`.
 
-**References:** concept 16 §3·§4, D-82, D-187.
+**References:** concept 16 §3·§4, D-82, D-194.

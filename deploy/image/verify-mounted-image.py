@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -27,6 +28,70 @@ def package_names(path: Path) -> set[str]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     }
+
+
+MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
+MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
+# D-190: the LCD is SPI0 CE0 (/dev/spidev0.0); the base image enables SPI.
+BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
+HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service")
+SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
+DISPLAY_UNIT = "rosy-boot-display.service"
+DISPLAY_UDEV_RULE = "etc/udev/rules.d/99-rosy-display.rules"
+# customize-rootfs.sh installs these for the boot display (D-190).
+DISPLAY_APT_PACKAGES = ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
+                        "fonts-dejavu-core")
+# D-193: the root login-code issuer, its console banner link and its command.
+LOGIN_UNIT = "rosy-login-code.service"
+LOGIN_ISSUE_LINK = "etc/issue.d/60-rosy-login.issue"
+LOGIN_ISSUE_TARGET = "/run/rosy-boot/login.issue"
+LOGIN_COMMAND = "usr/local/sbin/rosy-login-code"
+CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
+
+
+def default_config_tokens(text: str) -> bool | None:
+    """True when CORE's packaged defaults carry any API token (D-193 7); None if unreadable."""
+    try:
+        import yaml
+    except ImportError:  # the build host has it; a textual check otherwise
+        return "rosy-dev-" in text or bool(re.search(r"(?m)^\s+-\s+(?:token|sha256)\s*:", text))
+    try:
+        config = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return None
+    if not isinstance(config, dict):
+        return None
+    auth = config.get("auth") or {}
+    tokens = auth.get("tokens") if isinstance(auth, dict) else auth
+    return bool(tokens) or "rosy-dev-" in text
+
+
+def installed_debs(root: Path) -> set[str]:
+    """Packages dpkg records as installed in the mounted root."""
+    status = root / "var/lib/dpkg/status"
+    if not status.is_file():
+        return set()
+    installed = set()
+    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
+        if fields.get("Status") == "install ok installed" and fields.get("Package"):
+            installed.add(fields["Package"])
+    return installed
+
+
+def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
+    """Read-only twin of configure-uart-pi5.sh's awk check: the line counts
+    before any section header or under [all] / [pi5], comments stripped."""
+    active = True
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if re.fullmatch(r"\[[^]]+\]", stripped):
+            active = re.sub(r"\s", "", stripped) in {"[all]", "[pi5]"}
+            continue
+        line = re.sub(r"\s*#.*", "", raw).strip()
+        if active and line == overlay:
+            return True
+    return False
 
 
 def inspect(root: Path, release_id: str) -> list[str]:
@@ -75,6 +140,70 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append("chrony is not installed: timestamps presume a synced clock")
     elif not (root / "etc/systemd/system/multi-user.target.wants/chrony.service").exists():
         findings.append("chrony.service is not enabled")
+    # D-192 US-003: CORE_READY is shown as soon as the runtime target settles.
+    # lexists: `systemctl --root` links point at the image's /usr/lib, not the host's.
+    ready = "rosy-boot-status-ready.service"
+    if not (root / "etc/systemd/system" / ready).is_file():
+        findings.append(f"missing systemd unit: {ready}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / ready):
+        findings.append(f"{ready} is not enabled")
+    # D-192 US-004: the motor bus (UART4) and its /dev/rosy-motor alias.
+    config = root / "boot/firmware/config.txt"
+    if not config.is_file():
+        findings.append("missing boot configuration: boot/firmware/config.txt")
+    elif not overlay_applies_to_pi5(config.read_text(encoding="utf-8", errors="replace")):
+        findings.append(f"boot/firmware/config.txt does not enable {MOTOR_OVERLAY} for the Pi 5")
+    if config.is_file():
+        # The Ubuntu base image provides these today (LiDAR UART0 /dev/ttyAMA0,
+        # ADC /dev/i2c-1, both seen on rosy-pinky-e4us); a new base must not drop them.
+        text = config.read_text(encoding="utf-8", errors="replace")
+        for line in BASE_BOOT_LINES:
+            if not overlay_applies_to_pi5(text, line):
+                findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
+    if not (root / MOTOR_UDEV_RULE).is_file():
+        findings.append(f"missing motor udev rule: {MOTOR_UDEV_RULE}")
+    # D-192 US-005: the hardware runtime ships installed, not enabled (D-161).
+    for unit in HARDWARE_UNITS:
+        if not (root / "etc/systemd/system" / unit).is_file():
+            findings.append(f"missing systemd unit: {unit}")
+        for wants in sorted((root / "etc/systemd/system").glob("*.wants")):
+            if os.path.lexists(wants / unit):
+                findings.append(f"{unit} must not be enabled ({wants.name})")
+    if "sllidar_ros2" not in inventory:
+        findings.append("sllidar_ros2 (RPLIDAR C1 driver) is missing from the release inventory")
+    for relative in SLLIDAR_FILES:
+        if not (release / "install" / relative).is_file():
+            findings.append(f"sllidar_ros2 is not installed: install/{relative}")
+    # D-190: the boot display ships enabled, with its udev rule and libraries.
+    if not (root / "etc/systemd/system" / DISPLAY_UNIT).is_file():
+        findings.append(f"missing systemd unit: {DISPLAY_UNIT}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / DISPLAY_UNIT):
+        findings.append(f"{DISPLAY_UNIT} is not enabled")
+    if not (root / DISPLAY_UDEV_RULE).is_file():
+        findings.append(f"missing display udev rule: {DISPLAY_UDEV_RULE}")
+    # D-193: login codes come from root, not CORE; the device defaults have no login.
+    if not (root / "etc/systemd/system" / LOGIN_UNIT).is_file():
+        findings.append(f"missing systemd unit: {LOGIN_UNIT}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / LOGIN_UNIT):
+        findings.append(f"{LOGIN_UNIT} is not enabled")
+    link = root / LOGIN_ISSUE_LINK
+    if not os.path.lexists(link) or (os.path.islink(link) and os.readlink(link) != LOGIN_ISSUE_TARGET):
+        findings.append(f"missing console login banner link: {LOGIN_ISSUE_LINK} -> {LOGIN_ISSUE_TARGET}")
+    if not os.path.lexists(root / LOGIN_COMMAND):
+        findings.append(f"missing login code command: {LOGIN_COMMAND}")
+    defaults = release / CORE_DEFAULTS
+    if not defaults.is_file():
+        findings.append(f"missing CORE defaults: {defaults.relative_to(root)}")
+    else:
+        carries = default_config_tokens(defaults.read_text(encoding="utf-8", errors="replace"))
+        if carries is None:
+            findings.append(f"CORE defaults are unreadable: {defaults.relative_to(root)}")
+        elif carries:
+            findings.append(f"CORE defaults carry API tokens (D-193 fail closed): {defaults.relative_to(root)}")
+    debs = installed_debs(root)
+    for package in DISPLAY_APT_PACKAGES:
+        if package not in debs:
+            findings.append(f"boot display package is not installed: {package}")
     # D-176: the fallback AP is NetworkManager shared mode, which runs dnsmasq.
     if not (root / "usr/sbin/dnsmasq").exists():
         findings.append("dnsmasq is not installed: the fallback AP (NM shared mode) cannot start")

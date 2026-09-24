@@ -59,12 +59,16 @@ export function setText(id, value, fallback = "—", evidence) {
   else node.removeAttribute("title");
 }
 
+// `Number(null)` is 0, so a missing value must be caught before the cast —
+// otherwise "no reading" renders as 0% / 0.00 V, a false alarm (D-82 Law 0).
 export function number(value, digits = 1) {
-  return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "—";
+  const amount = metricNumber(value);
+  return amount === null ? "—" : amount.toFixed(digits);
 }
 
 export function percent(value) {
-  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}%` : "—";
+  const amount = metricNumber(value);
+  return amount === null ? "—" : `${Math.round(amount)}%`;
 }
 
 export function bytes(value) {

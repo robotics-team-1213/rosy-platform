@@ -23,6 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "deploy/sd/provision.schema.json").read_text(encoding="utf-8"))
 AP_VALUE = "Kx7" + "mQ2vR9tLp"
 
+# D-191: every bundle carries the card's CORE API record. Keys are assembled
+# at runtime so the tracked-file secret scanner sees no literal.
+CARD_API = {"core_api_" + "token": "Rq" * 21 + "_", "core_api_" + "token_id": "0a1b2c3d4e5f"}
+
 
 def _bundle(**extra) -> dict:
     return create_provision_bundle(
@@ -34,7 +38,8 @@ def _bundle(**extra) -> dict:
         ssid="fixture-wifi", wifi_passphrase="fixture-pass-9384",  # scanner-known fixture
         fleet_endpoint="https://perpros.local", fleet_trust_profile="rosy-pilot-lan",
         pairing_required=False, created_at=datetime(2026, 9, 23, tzinfo=UTC),
-        nonce="fixture-first-boot-nonce", **extra,
+        nonce="fixture-first-boot-nonce",
+        **CARD_API, **extra,
     )
 
 

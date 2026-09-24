@@ -44,6 +44,33 @@ def test_the_image_defaults_are_valid_and_carry_no_secrets():
     assert "password" not in (NATIVE / "defaults.yaml").read_text(encoding="utf-8")
 
 
+def test_the_image_defaults_show_an_operator_login_code_for_ten_minutes():
+    # D-193 8: the boot code policy comes from the card; the image default is operator.
+    module = _module()
+    defaults = module.load_defaults(NATIVE / "defaults.yaml")
+    assert defaults["login"] == {"boot_code": "operator", "minutes": 10}
+
+
+@pytest.mark.parametrize("value, expected", [("operator", "operator"), ("administrator", "administrator"),
+                                             ("off", "off"), (False, "off")])
+def test_login_boot_code_accepts_off_operator_and_administrator(value, expected):
+    module = _module()
+    assert module.validate({"login": {"boot_code": value}}) == {"login": {"boot_code": expected}}
+
+
+@pytest.mark.parametrize("login", [{"boot_code": "viewer"}, {"boot_code": "admin"}, {"minutes": 30},
+                                   {"boot_code": "operator", "extra": 1}, ["operator"]])
+def test_login_rejects_anything_else(login):
+    module = _module()
+    with pytest.raises(module.ConfigError):
+        module.validate({"login": login})
+
+
+def test_a_bare_off_in_the_card_file_turns_the_boot_code_off():
+    module = _module()
+    assert module.parse(_text("login:\n  boot_code: off\n")) == {"login": {"boot_code": "off"}}
+
+
 def test_a_full_operator_file_parses():
     module = _module()
     config = module.parse(_text(

@@ -60,7 +60,7 @@
 ## 최근 기록
 
 - 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
+- 2026-09-24 · uncommitted · fix(control): web_common share lookup moves to the node edge (merge of origin/main)
+- 2026-09-24 · uncommitted · test(control): ir_adc_node bus lock is a behaviour test (D-192 review)
+- 2026-09-24 · uncommitted · fix(control): ir_adc_node holds the I2C-1 bus lock per cycle (D-192)
 - 2026-09-24 · uncommitted · docs(control): first device bench of the D-185 hot paths (R8)
-- 2026-09-24 · uncommitted · docs(control): D-185 R3 rig A/B and R7 single-process root cause
-- 2026-09-24 · uncommitted · tools(control): opt-in throttled /clock relay for the rig (D-185 R6)
-- 2026-09-24 · uncommitted · fix(control): latest-only subscriptions keep depth 1 (D-185 R2)

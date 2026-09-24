@@ -1,0 +1,24 @@
+[Unit]
+Description=ROSY boot status indicator, re-evaluated as soon as CORE is ready
+# D-192 US-003: rosy-boot-status runs at ~9 s and ~20 s and then every 30 s,
+# so CORE_READY showed up to 30 s after CORE was ready. This oneshot runs the
+# same classifier once, right after the runtime target settles. It must be
+# ordered After= the target (not Wanted by it): the classifier needs the
+# target active, and a unit the target Wants would run before it is reached.
+# After= orders without requiring, so a failed runtime is shown as soon too.
+After=rosy-runtime.target rosy-core.service avahi-daemon.service
+Wants=avahi-daemon.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-status.py
+TimeoutStartSec=10
+Nice=10
+# Same root-owned directory as rosy-boot-status.service; never /run/rosy,
+# which rosy-core owns (D-161).
+RuntimeDirectory=rosy-boot
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

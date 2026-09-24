@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
-- 2026-09-24 · uncommitted · chore(deploy): split robot dev and verify scripts
-- 2026-09-24 · uncommitted · docs(deploy): 병합(deploy) 항목의 게이트 실측 수치 기록
-- 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
-- 2026-09-23 · uncommitted · fix(deploy): second overlay apply restarts, and refuses a live motor slice
-- 2026-09-23 · uncommitted · merge(deploy): origin/main 병합 — D-176 부트 설정·폴백 AP, rosy-diag 2단계, SD 라이터
+- 2026-09-24 · uncommitted · fix(core,native): D-193 security review
+- 2026-09-24 · uncommitted · feat(auth,native,image): D-193 S1·S2 login code issuer and token lifecycle
+- 2026-09-24 · uncommitted · fix(dev): native CORE overlay reloads units and proves every bind is mounted (D-179)
+- 2026-09-24 · uncommitted · docs(adr): D-193 login code on the robot screen and credential lifecycle
+- 2026-09-24 · uncommitted · fix(image): run the display probe where the unit runs (LG_WD, working directory)

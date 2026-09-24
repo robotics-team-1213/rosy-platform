@@ -104,6 +104,132 @@ EVIDENCE="${SESSION%.json}.evidence"
 mkdir -m 0750 "$EVIDENCE"
 ```
 
+### 카드 쓰기 중 문제가 생겼을 때
+
+카드 쓰기(`deploy/sd/write-card.ps1`)는 실패하면 스스로 멈추고, 카드 상태와 다음 명령을 알린다(D-187).
+실패 문구 끝은 늘 이 형식이다.
+
+```text
+the card could not be read during readback (removed, disconnected or I/O error): media is shorter than the image at byte offset 4194304 (verified 4194304 bytes before it stopped)
+stage=readback card_state=written-unverified
+next: reinsert the card (or use another reader), then re-run the same command with -ResumeAfterWrite (...)
+```
+
+readback이 실패하면 verifier가 말한 이유(불일치 offset, 짧은 읽기, OSError)와 검증된 바이트 수가 이 문구, 진행 파일의
+`failed` 줄 `detail`, 로그에 함께 남는다. 불일치는 데이터가 틀린 것(재기록, 반복되면 카드 교체)이고, 읽기 오류나 짧은
+읽기는 리더기·연결 문제(다시 꽂거나 다른 리더기로 resume)다.
+
+**쓰기는 분리 실행으로 띄운다 (D-188).** 쓰기는 30분에서 1시간 넘게 걸린다. 에이전트 세션이나 곧 닫을 셸의 자식으로
+띄우면 그 세션과 함께 사라진다(release 005). `-Detach`는 관리자 창 하나를 따로 띄우고 바로 돌아온다. UAC는 한 번이다.
+띄운 콘솔이나 에이전트를 닫아도 쓰기는 계속된다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+  -PlanPath <cards>\plan-<release>-<device>.json `
+  -ReleaseDir <signed release dir> `
+  -WifiProfile <profile> `
+  -Detach
+```
+
+출력되는 `Log:`, `Progress:`, `Exit marker:`, `Status:` 경로를 적어 둔다. ERASE 문구는 새 관리자 창에 입력한다.
+처음 쓸 때 준 `-OperatorPublicKey`·`-ReprovisionReceipt`는 여기에도 같이 준다. 끝나면 창에 `EXIT_CODE=`가 남고,
+로그 옆에 `.exit` 표지가 생긴다. 창은 결과를 보인 채 열려 있다.
+UAC 창에서 "아니요"를 눌렀거나 시간이 지났으면 launcher가 `failed`/`untouched`와 `next:`를 진행 파일에 남기고 실패한다.
+카드는 건드리지 않았으니 다시 띄운다.
+
+**상태 보기.** 관리자 권한은 필요 없다. `Status:` 줄의 명령을 그대로 실행한다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\card-write-status.ps1 -LogPath <log>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\card-write-status.ps1 -LogPath <log> -Json   # 에이전트용
+```
+
+```text
+Stage: readback   card_state: written-unverified
+Bytes: 4,800 MB of 8,170 MB (58.8 %)
+Rate: 20.1 MB/s over the last heartbeats
+Pre-flight read: 21.3 MB/s (slow-media limit 10.0 MB/s)
+ETA this stage: 3 min (about 14:32)
+ETA whole job: 3 min (about 14:32)
+Last progress line: 42 s ago
+```
+
+- `ETA this stage`는 이번 단계(`write` 또는 `readback`)의 남은 바이트를 최근 heartbeat의 실제 속도로 나눈 값이다.
+  `ETA whole job`은 쓰기 중이면 남은 쓰기에 readback 예측(사전 측정 읽기 속도)을 더한다. 쓰기 전이면 사전 측정의 전체 예측이다.
+  완료 시각을 말할 때는 이 값을 인용한다. 짐작으로 말하지 않는다.
+- `STALLED:`가 보이면 멈춘 것이다. `write`·`readback`에서 바이트가 5분 넘게 늘지 않았거나, 다른 단계에서 5분 넘게 새 줄이 없었다.
+  `write`는 도구가 Imager를 끝내고(`-WriterStallMinutes`, 기본 5), `readback`은 verifier를 끝낸 뒤(`-ReadbackStallMinutes`, 기본 5)
+  스스로 실패한다. 상태에 `Result: FAILED`와 `next:`가 곧 뜬다. 창이 사라졌거나 얼었으면 창을 닫고 `next:`를 따른다.
+- `Waiting for:`는 멈춤이 아니다. 관리자 창이 ERASE 문구나 느린 매체 질문의 답을 기다리는 중이다.
+- 끝나면 `Result: COMPLETE` 또는 `Result: FAILED - <이유>`와 `next:` 한 줄이 나온다.
+
+**느린 매체 경고.** ERASE 문구 전에 카드 앞 128 MiB를 읽기 전용으로 읽어 속도를 잰다. 창에 `Pre-flight:` 줄로 예상 쓰기·readback·
+전체 시간이 나온다. 읽기 속도가 10 MB/s(`-MinReadMBps`) 미만이면 `SLOW MEDIA` 경고가 나온다(005 카드는 readback이 약 3.4 MB/s로
+약 60분 걸렸다). 이렇게 한다.
+- 다른 USB 포트(USB 3.0)에 꽂거나 다른 리더기를 쓴다.
+- 가능하면 USB 3.0 리더기와 A1/A2 또는 U3 등급 카드를 쓴다.
+
+그래도 이 카드로 쓰려면, 창에서 `SLOW`를 입력하거나 명령에 `-AcceptSlowMedia`를 붙인다. `-Confirmation`을 넘긴 비대화형 실행은
+이 플래그 없이는 카드를 건드리지 않고 멈춘다.
+
+**다른 카드를 꽂았을 때.** plan은 꽂힌 카드의 MBR disk signature나 GPT GUID를 기록한다. 같은 리더기에 다른 카드를 꽂으면
+`a different card is in the reader`로 ERASE 전에 멈춘다(`card_state=untouched`). 싼 리더기는 같은 가짜 시리얼(`000000000207`)을
+공유하므로, 시리얼만으로는 카드를 구분하지 못한다. 공장 초기 카드는 신원이 없어 시리얼과 크기만 확인하고 경고한다. 그럴 때는
+라벨을 확인한다. 이미 이 릴리스로 써진 카드는, 같은 plan으로 쓰다 멈춘 기록(로그 폴더의 진행 파일)이 있고 `rosy-provision/`이
+없을 때만 다시 쓴다. 다른 로봇용으로 다 쓴 카드는 지우지 않고 멈춘다.
+
+**진행 파일 직접 읽기.** 상태 명령이 읽는 파일은 `<log>.progress.jsonl`이다. 단계가 바뀔 때마다 JSON 한 줄이 붙는다. 쓰기와
+readback 중에는 약 60초마다 `heartbeat` 줄에 지금까지 처리한 `bytes`가 붙는다.
+
+- 단계 순서: `launch` → `verify-signature` → `select-disk` → `preflight` → `confirm` → `write` → `readback` → `bundle` →
+  `bundle-writing` → `receipt` → `done`. 실패하면 마지막 줄이 `failed`이고, `detail`에 원인이, `next`에 다음 행동이 있다.
+- 창이 사라졌거나 PC가 꺼졌으면 마지막 줄의 `card_state`로 다음 명령을 고른다.
+
+| 마지막 `card_state` | 다음 명령 |
+|---|---|
+| `untouched` | 같은 명령을 다시 실행 |
+| `writing` | 전체 쓰기를 다시 실행(`-ResumeAfterWrite` 없이) |
+| `written-unverified`, `verified-no-bundle` | 같은 명령에 `-ResumeAfterWrite`를 붙여 실행 |
+| `bundle-partial` | 전체 쓰기(부분 bundle은 resume으로 끝낼 수 없다) |
+| `complete`(receipt 없음), `unknown` | 실패 문구의 `next:`를 따른다. 모르면 전체 쓰기 |
+
+**쓰기를 다시 하지 않고 이어 가기.** 카드가 끝까지 써진 뒤 Imager가 멈췄거나 readback 중 카드가 빠졌으면, 쓰기(약 16–20분)를
+건너뛰고 readback부터 다시 한다. 서명 검증, 시리얼 선택, plan 대조, ERASE 확인은 그대로 거친다. 카드 첫 섹터의 MBR signature가
+이미지와 다르면 readback 전에 멈춘다. boot 파티션에 `rosy-provision/`이 이미 있어도 멈춘다. 카드가 서명된 이미지와 다르면
+readback이 bundle 전에 멈추므로, 잘못 골라도 잃는 것은 readback 한 번이다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+  -PlanPath <cards>\plan-<release>-<device>.json `
+  -ReleaseDir <signed release dir> `
+  -WifiProfile <profile> `
+  -ResumeAfterWrite -Detach
+```
+
+receipt에는 `resumed_after_write: true`가 남는다. plan의 receipt가 이미 있으면 거부한다(이미 끝난 카드다).
+
+### 전원을 넣으면 보이는 것 (D-190)
+
+LCD는 CORE 밖의 `rosy-boot-display.service`가 그린다. 전원을 넣고 몇 초 안에 첫 화면이 뜨고, 단계가 바뀌면 1초
+안에 다시 그린다.
+
+| 화면 단계 | 뜻 | 다음 행동 |
+|---|---|---|
+| `BOOTING`(회색) | 첫 부팅 개인화나 런타임이 아직 시작 중 | 기다린다. 첫 부팅은 1분 안팎 |
+| `PROVISIONED` | 신원·Wi-Fi 적용 끝, CORE 시작 중 | 기다린다 |
+| `READY` | CORE가 준비됐다. 아래 `IP:포트`로 대시보드·API에 접속 | 접속한다 |
+| `FAILED`(빨강) + unit 이름 | 그 unit이 실패했다 | `journalctl -b -u <unit>`, 또는 카드의 `rosy-diag/` |
+
+- 둘째 줄부터: `IP:포트`(IP가 없으면 `no IP address`), 배터리 %·전압(ADC를 못 읽으면 `battery --`).
+- 현장 Wi-Fi 없이 120 s가 지나 AP가 열리면 `Wi-Fi rosy-pinky-xxxx`와 `PW <비밀번호>`, 주소 `10.42.0.1:8080`이 뜬다.
+  비밀번호는 카드별이고(D-176), 화면에만 나오며 로그에는 남지 않는다. 업링크가 돌아오면 사라진다.
+- 부저는 **기본으로 꺼져 있다.** Pro의 부저 핀이 아직 확인되지 않았기 때문이다(D-190 "부저 핀 확인"). 확인한 뒤
+  `/etc/rosy/boot-display.env`에 `ROSY_BUZZER_ENABLED=true`(핀이 22가 아니면 `ROSY_BUZZER_PIN=<BCM>`도)를 쓰고
+  `sudo systemctl restart rosy-boot-display` 한다. 그러면 `READY`에 한 번, `FAILED`에 세 번 짧게 울린다.
+- 화면이 비어 있으면: `systemctl status rosy-boot-display`, `journalctl -b -u rosy-boot-display`. `/dev/spidev0.0`이
+  없으면 패널이 없는 보드로 보고 조용히 끝난다. 노드가 있는데 그리지 못하면(라이브러리, GPIO 칩 label, 열기 실패) unit이
+  `failed`가 되고 이유가 journal에 한 번 남는다. HDMI 콘솔 배너(D-174)와 `_rosy._tcp` mDNS는 LCD와 상관없이 같은 단계를 보인다.
+
 ## 2. Connection choice
 
 ### SSH path
@@ -210,6 +336,119 @@ ssh -i $env:LOCALAPPDATA\Rosy\ssh\rosy-operator-ed25519 rosy@10.42.0.1
 Pi 5 has one radio, so while the AP is up the site Wi-Fi is not scanned. After
 600 s the AP steps aside for another 120 s site Wi-Fi attempt. `ap.mode: relay`
 keeps the AP up; `ap.mode: off` never opens it.
+
+### CORE API administrator credential (D-191)
+
+Every card written with `prepare-rosy-sd.ps1` / `write-card.ps1` gets its own
+CORE API administrator credential. The writer prints it once at the end
+(`CORE API administrator for rosy-pinky-xxxx: id <id> value <value>`) and keeps
+it in the writer PC's DPAPI store,
+`%LOCALAPPDATA%\Rosy\api\<device>.credential.xml`, with `<CORE token id>|<device_uid>`
+as the user name. The card carries only CORE's sha256 record; plans, receipts
+(`personalization.core_api` holds the id and a 16-hex digest fingerprint) and
+the progress file never hold the value. A write through `write-card.ps1` ends
+its log with the read-back command, because the one-time line is not in the
+transcript. Read it back on the same Windows account that wrote the card:
+
+```powershell
+$c = Import-Clixml "$env:LOCALAPPDATA\Rosy\api\rosy-pinky-xxxx.credential.xml"
+$id, $uid = $c.UserName -split '\|'      # CORE token id, device_uid
+$c.GetNetworkCredential().Password       # the credential itself
+```
+
+Use it as `Authorization: Bearer <value>` or paste it into the dashboard login.
+First boot installs the record into `/var/lib/rosy/core/.rosy/rosy.yaml`
+(`rosy-core`, 0600), the overlay CORE reads under `rosy-core.service`
+(`HOME=/var/lib/rosy/core`), marked `source: card` (`GET /api/v1/auth/whoami`
+answers `administrator`, `card`). The shared `rosy-dev-*` credentials never work
+on a device (D-193 7): the packaged defaults carry no tokens, the dev tokens are
+merged only with `ROSY_DEV_AUTH=1` on a development host, and CORE in device
+mode (`ROSY_DEPLOYMENT=device`, set by `rosy-core.service` and `runtime.env`)
+refuses their digests and any plaintext entry wherever they come from. With no
+credential at all CORE still starts and answers every request with 401;
+recover with `sudo rosy-login-code --role administrator` below. First boot holds
+provisioning (`PROVISIONING_HOLD`) when
+the bundle has no record, when that file already holds a credential other than
+this card's own, or when any part of that path is a symlink or not a regular
+file/directory.
+
+The store is bound to the device: a store file for the same device name but
+another `device_uid` stops the write before the card is touched (move it away if
+that robot is retired). A store written before this binding is accepted once and
+rewritten with the uid; the AP store (`Rosy\ap`) follows the same rule.
+
+Rewriting the same device (`-ReprovisionReceipt`, or a retried write) reuses the
+stored credential, so dashboards and scripts keep working. To get a new one on
+the next write, delete the store file first. To rotate on a running robot,
+create a new administrator credential, switch to it, then delete the old one:
+
+```powershell
+$h = @{ Authorization = "Bearer $($c.GetNetworkCredential().Password)" }
+$new = Invoke-RestMethod -Method Post -Uri "http://rosy-pinky-xxxx.local:8080/api/v1/system/tokens" `
+    -Headers $h -ContentType application/json -Body '{"role":"administrator","label":"rotated"}'
+# $new.token is shown only in this response. Store it before continuing:
+$secure = ConvertTo-SecureString $new.token -AsPlainText -Force
+New-Object System.Management.Automation.PSCredential("$($new.id)|$uid", $secure) |
+    Export-Clixml "$env:LOCALAPPDATA\Rosy\api\rosy-pinky-xxxx.credential.xml"
+Invoke-RestMethod -Method Delete -Headers @{ Authorization = "Bearer $($new.token)" } `
+    -Uri "http://rosy-pinky-xxxx.local:8080/api/v1/system/tokens/$id"
+```
+
+The dashboard's token settings do the same (`GET/POST/DELETE
+/api/v1/system/tokens`, `PATCH` for the label). CORE refuses to delete the
+credential in use or the last administrator without an expiry: a paired
+(24 h) administrator does not count.
+
+### Dashboard login code (D-193)
+
+Tablets and other PCs do not need the 43-character credential. A root service,
+`rosy-login-code.service` (no network, outside CORE), issues a one-time
+8-character code such as `ABCD-EFGH` after the first `CORE_READY` of each boot:
+
+- The LCD shows `Login ABCD-EFGH operator` under the stage (only at
+  `CORE_READY`). The same code is on the local console banner
+  (`/etc/issue.d/60-rosy-login.issue`).
+- Type it in the dashboard login (the "robot screen code" tab arrives with
+  S3; until then `POST /api/v1/auth/pair` with `{"code": "ABCD-EFGH"}` from the
+  robot LAN). The browser gets its own token: `operator`/`viewer` for 7 days,
+  `administrator` for 24 h (`auth.pairing.token_lifetime_hours`), listed as
+  `pair-physical` in the token settings and revocable there or with
+  `POST /api/v1/auth/logout`.
+- The code works once and for 10 minutes on the robot's monotonic clock, only
+  from RFC 1918 addresses, the AP (`10.42.0.0/24`) or loopback. It leaves the
+  LCD within a second of use. Five wrong tries burn it: the LCD shows
+  `Login code burned` for a minute. More than five tries per address per minute
+  (30 in total) are answered 429. A burned or used boot code does not come
+  back by restarting CORE; issue a new one with `sudo rosy-login-code` (or
+  reboot). While an administrator's enrollment code is live, wrong tries count
+  against it instead of the boot code.
+- A paired browser session (any token with an expiry) cannot create tokens
+  or delete a non-expiring administrator, and devices it enrolls expire no
+  later than it does. Use the card credential for those.
+- The card decides the boot code: `login: {boot_code: off | operator |
+  administrator}` in `rosy-config.yaml` (default `operator`). Where passers-by
+  can read the LCD, set `off`.
+- An administrator can enroll another device from the dashboard:
+  `POST /api/v1/auth/enrollment-codes` returns a 5-minute code (role at most
+  the caller's, kept in CORE memory only; tokens from it are `pair-admin`).
+
+No LCD, or a code on demand: over SSH or the local console,
+
+```bash
+sudo rosy-login-code                          # operator, 10 minutes
+sudo rosy-login-code --role administrator --minutes 5
+```
+
+prints the code to that terminal only (never to the journal), replaces any
+earlier code and also puts it on the console banner. This is also the recovery
+path when a robot has no working credential.
+
+The code is never in CORE, the avahi TXT record, the black box or a
+diagnostics bundle: CORE reads only the scrypt verifier
+`/run/rosy-boot/login-code.json` (root:rosy-core 0640) and tells root through
+`/run/rosy/login-code-state.json` that the code was used or burned. Plain HTTP
+is still the transport (D-193 10): keep the robot LAN an operator-only
+SSID/VLAN.
 
 ## 3. Record contract
 

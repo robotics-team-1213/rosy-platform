@@ -27,6 +27,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
     config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(Path(__file__).parent.parent / "config" / "profile.pinky_pro.yaml")
     caps = yaml.safe_load((Path(__file__).parent.parent / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
@@ -80,7 +82,11 @@ def test_tokens_are_admin_only_and_never_echo_secrets(client):
     assert "rosy-dev-admin" not in blob
     assert "rosy-dev-operator" not in blob
     # Nothing in the listing is derived from the secret — no fingerprint, no hint.
-    assert all(set(item) == {"id", "role", "label", "created_at", "legacy"} for item in listed)
+    assert all(set(item) == {"id", "role", "label", "created_at", "legacy", "expires_at", "source",
+                             "current", "last_used_at"} for item in listed)
+    # D-193 5: the caller's own token is marked, and the listing says when it was last used.
+    assert [item["current"] for item in listed if item["role"] == "administrator"] == [True]
+    assert all(item["last_used_at"] for item in listed if item["current"])
 
     created = tc.post(
         "/api/v1/system/tokens",
@@ -139,7 +145,7 @@ def test_writing_a_token_migrates_the_plaintext_defaults_to_hashes(client, tmp_p
     raw = overlay.read_text(encoding="utf-8")
     assert "rosy-dev-admin" not in raw
     assert "rosy-dev-viewer" not in raw
-    assert all(set(item) == {"id", "role", "sha256", "label", "created_at"} for item in stored)
+    assert all(set(item) == {"id", "role", "sha256", "label", "created_at", "source"} for item in stored)
     assert all(len(item["sha256"]) == 64 for item in stored)
     # The packaged plaintext tokens still authenticate; only their storage changed.
     assert tc.get("/api/v1/system/info", headers=ADMIN).status_code == 200
@@ -170,8 +176,14 @@ def test_system_info_and_capabilities(client):
     assert "ros_namespace" in r.json()
     assert "ros_domain_id" in r.json()
     assert "robot_number" in r.json()
+    # The default fixture is `core` mode: until odometry proves a base is
+    # attached, CAP-001 withholds the hardware flags (D-32, D-161).
+    r = tc.get("/api/v1/system/capabilities", headers=VIEWER)
+    assert r.json()["swarm"] == {"follow": False, "lead": False}
+    svc.state.set_velocity(0.0, 0.0)
     r = tc.get("/api/v1/system/capabilities", headers=VIEWER)
     assert r.json()["swarm"] == {"follow": True, "lead": True}
+    assert "withheld" not in r.json()
 
 
 def test_inventory_is_booting_before_diagnostics_arrive(client):
@@ -195,6 +207,7 @@ def test_inventory_leaves_booting_after_a_diagnostic(client):
 
     tc, svc = client
     svc.state.set_diagnostic("drive", HealthState.OK)
+    svc.state.set_velocity(0.0, 0.0)  # odometry: a base is attached
     body = tc.get("/api/v1/system/inventory", headers=VIEWER).json()
     assert body["device_state"] == "READY"
     by_id = {item["id"]: item for item in body["descriptors"]}
@@ -213,7 +226,8 @@ def test_robot_state_carries_server_judged_evidence(client):
         record = evidence[channel]
         assert record["evidence"] in ("fresh", "delayed", "disconnected", "unavailable")
         assert isinstance(record["stale_after_s"], (int, float))
-        assert record["evidence"] == "disconnected"
+        # Default fixture is CORE-only: no channel has a configured source.
+        assert record["evidence"] == "unavailable"
         assert record["received_at"] is None
     assert evidence["pose"]["stale_after_s"] == 2.0
     assert evidence["velocity"]["stale_after_s"] == 0.5
@@ -225,7 +239,7 @@ def test_robot_state_carries_server_judged_evidence(client):
     assert fresh["pose"]["evidence"] == "fresh"
     assert fresh["velocity"]["evidence"] == "fresh"
     assert fresh["pose"]["received_at"]
-    assert fresh["battery"]["evidence"] == "disconnected"
+    assert fresh["battery"]["evidence"] == "unavailable"
 
 
 def test_inventory_is_a_mobile_base_without_pick_or_rfid(client):
@@ -631,6 +645,8 @@ def docking_client(tmp_path, monkeypatch):
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
     config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(Path(__file__).parent.parent / "config" / "profile.pinky_pro.yaml")
     caps = yaml.safe_load((Path(__file__).parent.parent / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
     caps["docking"] = {"supported": True}

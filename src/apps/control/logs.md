@@ -455,6 +455,25 @@
 - gate 변화: 없음. `watch`와 R3 실기 비교는 남았다.
 - 결정: D-185 R8.
 - 교훈: 운영자 키에 `CodexSandboxUsers` 권한이 붙으면 OpenSSH가 키를 거부한다. 원본은 그대로 두고 권한을 좁힌 임시 사본을 쓴 뒤 지웠다.
+## 2026-09-24 · uncommitted · fix(control): ir_adc_node holds the I2C-1 bus lock per cycle (D-192)
+- 변경: `ir_adc_node`의 세 채널 읽기를 `/dev/i2c-1` descriptor의 `flock(LOCK_EX)` 안에서 한다. bringup `rosylib.Battery`가 같은 MCU(0x08)의 채널 4를 다른 프로세스에서 읽는다
+- 증거: `python -m pytest src/apps/control/test src/hardware/bringup/test/test_adc_ownership.py test/test_ir_source_exclusivity.py -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(control): ir_adc_node bus lock is a behaviour test (D-192 review)
+- 변경: fake fd·fake `fcntl` 위에서 `_ADCReader.read_channels`를 돌려 잠금이 세 채널의 쓰기·대기·읽기 전체를 덮고 실패 때도 풀리는지 본다
+- 증거: `python -m pytest src/apps/control/test/test_ir_adc_lock.py -q` 통과(2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(control): web_common share lookup moves to the node edge (merge of origin/main)
+- 변경: `web_http._web_common_dir()`가 `ament_index_python`을 import하던 것을 `web_common_dir(share)` 순수 함수로 바꾸고, `web_node`가 share를 찾아 `node.web_common_dir`로 넘긴다. 로컬 D-194(구 D-187) 커밋과 origin의 D-171 ROS-edge 시험이 합쳐지며 드러난 위반이다
+- 증거: `python -m pytest test/test_control_ros_edge.py src/apps/control/test/test_web_http.py -q` 14 passed (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-171, D-194
 
 ## 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
 

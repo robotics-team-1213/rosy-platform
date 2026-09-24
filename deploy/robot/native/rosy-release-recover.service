@@ -15,6 +15,14 @@ NoNewPrivileges=true
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+# D-189 D1: recover always takes native-release.lock and may rewrite the
+# activation journal under /var/lib/rosy/releases, and it swaps the
+# /opt/rosy/{current,previous} links through a temporary link in /opt/rosy.
+# ProtectSystem=strict makes all of that read-only unless it is listed here.
+StateDirectory=rosy/releases
+# Only root reads the journal (rosy-boot-status, rosy-diag run as root).
+StateDirectoryMode=0700
+ReadWritePaths=/opt/rosy
 
 [Install]
 WantedBy=multi-user.target

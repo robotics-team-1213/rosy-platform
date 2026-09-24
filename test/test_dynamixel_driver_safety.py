@@ -289,3 +289,21 @@ def test_encoder_delta_crosses_signed_32_rollover_without_odometry_jump(monkeypa
     assert module.wrapped_encoder_delta(-0x80000000, 0x7FFFFFFF) == 1
     assert module.wrapped_encoder_delta(0x7FFFFFFF, -0x80000000) == -1
     assert module.wrapped_encoder_delta(110, 100) == 10
+
+
+def test_no_motion_initialization_confirms_zero_and_never_enables_torque(monkeypatch):
+    # D-192 no-motion mode: encoders read back, the wheels cannot be driven.
+    events = []
+    driver = _load_driver(monkeypatch, events)
+
+    assert driver.initialize_motors(enable_torque=False) is True
+
+    assert not any(
+        event[0] == "write1" and event[2] in (driver.ADDR_TORQUE_ENABLE, driver.ADDR_LED_RED)
+        and event[3] == 1
+        for event in events
+    )
+    assert ("write1", 1, driver.ADDR_TORQUE_ENABLE, 0) in events
+    assert ("write1", 2, driver.ADDR_TORQUE_ENABLE, 0) in events
+    assert ("read4", 1, driver.ADDR_GOAL_VELOCITY) in events
+    assert ("read4", 2, driver.ADDR_GOAL_VELOCITY) in events

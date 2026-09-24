@@ -72,6 +72,8 @@ def rmw_client(tmp_path, monkeypatch):
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
     config_dir = ROOT / "config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(config_dir / "profile.pinky_pro.yaml")
     caps = yaml.safe_load((config_dir / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
