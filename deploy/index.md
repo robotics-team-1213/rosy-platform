@@ -59,6 +59,6 @@
 
 - 2026-09-24 · uncommitted · fix(image,uart): recovery console on the debug UART, strict getty masks (PR #39 review)
 - 2026-09-24 · uncommitted · fix(image,uart): keep the kernel console and getty off the LiDAR UART
+- 2026-09-24 · uncommitted · fix(first-boot): PR #38 review — held retry changes nothing, one run at a time
+- 2026-09-24 · uncommitted · fix(first-boot): retry the site Wi-Fi and self-heal a held first boot
 - 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
-- 2026-09-24 · uncommitted · docs(adr): D-198 Docker operational surface retirement
-- 2026-09-24 · uncommitted · fix(dashboard,deploy): D-193 S3 security review (PR #35)
