@@ -57,6 +57,25 @@ def battery_color(percent: float) -> tuple[int, int, int]:
     return _CRIT
 
 
+def _draw_alarm(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
+    """경보 문장은 채움이다(D-202 의 얼굴 번역).
+
+    얼굴은 1.5m 밖에서 0.5초에 읽히는 화면이다. crit 글자는 어두운 바탕 위에서
+    2.2:1 로 읽히지 않는다 — 위험을 알리는 문장이 제일 읽기 어려운 문장이 되는
+    것은 계기의 역할과 반대다. 위험 채움 위에 종이 잉크로 얹는다(웹 표면의
+    ui-tag[status=crit]·E-Stop 와 같은 얼굴).
+    """
+    x, y = xy
+    left, _top, right, bottom = draw.textbbox((x, y), text, font=font)
+    pad = 4
+    draw.rounded_rectangle(
+        # 하단 여백은 2px 로 짧게 — 칩이 다음 줄의 영역(y=100 경계 같은)을
+        # 침범하면 '그 아래는 위험색이 아니다' 계약이 부러진다.
+        (left - pad, y - pad, right + pad, bottom + 2), radius=4, fill=_CRIT
+    )
+    draw.text((x, y), text, font=font, fill=_FG)
+
+
 def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     """웨이크 정보 카드. 값이 없으면 '--'로 두고 화면은 반드시 그린다."""
     width, height = size
@@ -75,7 +94,10 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
               font=_font(18), fill=_MUTED)
 
     if has_percent:
-        draw.text((16, 36), f"{percent:.0f}%", font=_font(56), fill=color)
+        if color == _CRIT:
+            _draw_alarm(draw, (16, 36), f"{percent:.0f}%", _font(56))
+        else:
+            draw.text((16, 36), f"{percent:.0f}%", font=_font(56), fill=color)
     else:
         draw.text((16, 36), "--", font=_font(56), fill=_MUTED)
     draw.text((width - 16, 60), "--" if voltage is None else f"{float(voltage):.2f} V",
@@ -103,8 +125,10 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     for index, (label, value) in enumerate(rows):
         y = 142 + index * 24
         draw.text((16, y), label, font=_font(14), fill=_MUTED)
-        fill = _CRIT if value == "E-STOP" else _FG
-        draw.text((92, y), value, font=_font(16), fill=fill)
+        if value == "E-STOP":
+            _draw_alarm(draw, (92, y), value, _font(16))
+        else:
+            draw.text((92, y), value, font=_font(16), fill=_FG)
 
     address = str(payload.get("address") or "")
     if address:
@@ -236,5 +260,9 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Im
             continue
         limit = width // 2 if slot == "name" else width - 32
         font, text = _fit(draw, text, font_size, limit)
-        draw.text((16, y), text, font=font, fill=color)
+        if color == _CRIT:
+            # D-202 — 부팅 카드의 위험 문장(FAILED·실패 유닛·코드 소각)도 채움.
+            _draw_alarm(draw, (16, y), text, font)
+        else:
+            draw.text((16, y), text, font=font, fill=color)
     return image

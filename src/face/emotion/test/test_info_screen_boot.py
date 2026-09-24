@@ -68,6 +68,13 @@ def test_failed_names_the_unit_in_red_and_nothing_else_is_red():
     assert _CRIT not in _colors(image, (0, 100, 320, 240))
 
 
+def test_failed_alarm_is_paper_on_a_crit_fill():
+    # D-202 의 얼굴 번역 — FAILED 문장은 위험 채움 위 종이 잉크로 그린다.
+    image = render_boot({**READY, "stage": "FAILED:rosy-core"})
+    colors = _colors(image, (0, 28, 320, 96))
+    assert _CRIT in colors and _FG in colors, sorted(colors)
+
+
 def test_the_failed_unit_comes_from_the_stage_label_when_the_field_is_missing():
     assert _rows({"stage": "FAILED:rosy-core"})["failed_unit"] == ("rosy-core", _CRIT)
 

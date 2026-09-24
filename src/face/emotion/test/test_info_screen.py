@@ -5,7 +5,7 @@ import pytest
 from PIL import ImageChops
 from pathlib import Path
 
-from emotion.info_screen import DEFAULT_SIZE, _CRIT, battery_color, render
+from emotion.info_screen import DEFAULT_SIZE, _CRIT, _FG, _WARN, battery_color, render
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,6 +87,27 @@ class TestRender:
 
     def test_estop_payload_renders(self):
         assert render(self._payload(estop=True)).size == DEFAULT_SIZE
+
+    def test_alarm_statements_are_paper_on_a_crit_fill(self):
+        # D-202 의 얼굴 번역 — E-STOP 문장은 위험 채움 위 종이 잉크다. crit 글자
+        # (어두운 바탕 위 2.2:1)는 경보가 제일 읽기 어려운 문장이 되게 한다.
+        estop = render(self._payload(estop=True))
+        box = estop.crop((88, 186, 320, 212))
+        colors = {color for _count, color in box.getcolors(maxcolors=1 << 16)}
+        assert _CRIT in colors and _FG in colors, sorted(colors)
+
+    def test_critical_battery_number_is_paper_on_a_crit_fill(self):
+        low = render(self._payload(battery_percent=12.0))
+        box = low.crop((12, 32, 200, 100))
+        colors = {color for _count, color in box.getcolors(maxcolors=1 << 16)}
+        assert _CRIT in colors and _FG in colors, sorted(colors)
+
+    def test_nominal_wake_card_spends_no_alarm_colour(self):
+        # 정상(73.4%)의 웨이크 카드에는 따뜻한 색이 없다 — 색 예산은 경보가
+        # 쓴다(D-82). 부팅 카드의 READY 게이트와 같은 규약.
+        image = render(self._payload())
+        colors = {color for _count, color in image.getcolors(maxcolors=1 << 16)}
+        assert _CRIT not in colors and _WARN not in colors, sorted(colors)
 
     def test_hitl_request_changes_the_health_row_but_never_overrides_estop(self):
         normal = render(self._payload())
