@@ -411,3 +411,10 @@
 - gate 변화: 없음.
 - 결정: 없음. main 의 24b6d4bb(`bridge/observation.py`)와 같은 방식의 동작 보존 추출.
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · docs(adr): D-200 docking owns the DOCKING mode
+- 변경: `docs/adr/D-200-docking-owns-the-docking-mode.md` 추가(Accepted), ADR Log 표 D-200 행, `progress.md`의 `adrs`에 D-200. 주차 설계 문서에 D-200 링크 한 줄. 이미 main에 있는 구현(도킹 전용 슬롯, `route_nav_cmd_vel`, `take_docking_mode`/`release_docking_mode`/`leave_docking`, ModeMachine `expect`와 리스너 격리)을 기록했다. 코드 본문은 바꾸지 않았다.
+- 증거: 시험 `test_docking_mode_ownership`, `test_docking_mode_release`, `test_mode_listener_isolation`, `test_bridge_docking_executor`, `test_docking_parking*`, `core_features/test/test_docking_review_fixes`. Gazebo 미션 4/4(주차 오차 1.4–2.3 mm, 1.7° 이하)는 25° 세계의 ROS-SIM이고 장치 증거가 아니다.
+- gate 변화: 없음.
+- 결정: D-200 Accepted. API 코드는 API & Protocol Reference v1.20.
+- 교훈: 없음. 후속(최종 리뷰): 라인 추종 PUT과 `dock()` 경합(MED), 정지·해제 경합 시 잠금 없는 EMERGENCY, 잠금 없는 `on_battery_level`, `cmd_vel_cycle` 오류 로그 폭주.
