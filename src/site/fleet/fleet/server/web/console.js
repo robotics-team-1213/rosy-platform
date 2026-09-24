@@ -30,7 +30,7 @@ function authHeaders() {
 function markLocked() {
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
-  pill.className = "pill bad";
+  pill.setAttribute("status", "crit");
   el("console-token").classList.add("locked");
 }
 
@@ -554,12 +554,12 @@ async function refreshState() {
     el("fleet-name").textContent = (snapshot.fleet.name || "site").toUpperCase();
     const pill = el("online-pill");
     pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
-    pill.className = `pill ${snapshot.fleet.online === snapshot.fleet.total ? "good" : "bad"}`;
+    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
     render();
   } catch (err) {
     const pill = el("online-pill");
     pill.textContent = "Fleet 서버 없음";
-    pill.className = "pill bad";
+    pill.setAttribute("status", "crit");
   }
 }
 

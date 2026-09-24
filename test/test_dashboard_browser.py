@@ -414,7 +414,7 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
         page.locator("#field-settings-panel").scroll_into_view_if_needed()
 
         page.wait_for_function(
-            "document.querySelector('#waypoint-list .empty-state')?.textContent?.includes('없습니다')"
+            "document.querySelector('#waypoint-list ui-empty')?.textContent?.includes('없습니다')"
         )
         page.wait_for_function(
             "document.getElementById('limits-save')"

@@ -90,7 +90,7 @@ A law that has no test is still prose. These are the instruments:
 | Measure is a closed scale | padding, margin, gap use `--space-*`. Radius uses `--radius-*`. A 1px rule is a line, not a step | `test_shared_controls.py` |
 | Irreversible is a kind | `ui-button` `kind="irreversible"`. Surfaces do not repaint it | `test_shared_controls.py` |
 | Hierarchy is the surface | flat ground reports, raised ground acts. Names are `--surface-flat` and `--surface-raised` | token file. Diagnostic grounds use those hex values |
-| Evidence is four states | the server judges, the client displays | still the console and `core_ui_logic.js`. Not yet a gate on every surface |
+| Evidence is four states | `fresh`, `delayed`, `disconnected`, `unavailable`. The server judges. Stale text is quiet, not a status colour | `test_shared_controls.py` |
 | Vocabulary is the audience's | Korean plain words for an operator. Graph names stay for an installer | not a token. Review, not a test |
 
 ## 5. Evidence States
