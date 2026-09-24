@@ -75,6 +75,17 @@ python -m pytest src/face/emotion/test/test_info_screen_capture.py -q
 3. 게임 보드의 `#frame`(천장 프레임)과 피치가 동시에 보일 때의 적합은
    이 회차가 재지 않았다(play 상태만).
 
+## 재검증 노트 (2026-09-25)
+
+동시 세션의 커밋 6건(fleet succession·D-206/207·병합) 이후 전 게이트 재검증:
+브라우저 43+13 passed, 단위 565 passed, 얼굴 47 passed, harness lint 0 오류.
+한 번의 플레이크 — `test_warm_coloured_text_stays_readable`가 최대 경합
+상태의 조합 실행에서 1회 적색 후 재현 없음(단독·파일·조합 재실행 4연속
+통과). F-02와 같은 처분: 원인 미확인 종결. 게이트의 위반 목록 출력은
+살아 있으니 재발 시 목록이 요소를 지목한다 — 실패 당시 실행자의 콘솔
+필터가 목록을 버린 것이 유일한 손해였다. 기계 경합이 의심되는 근거:
+같은 묶음의 소요가 113초→388초로 3.4배까지 늘어났다가 회복.
+
 **ADR:** [D-201](../../adr/D-201-fixed-grammar-surfaces-fit-contract.md),
 [D-202](../../adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md),
 [D-203](../../adr/D-203-computed-type-scale-closure.md)

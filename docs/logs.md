@@ -1854,3 +1854,12 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.
+
+
+## 2026-09-25 · HEAD(bd5e4584) · docs(validation): 재검증 — 동시 커밋 6건 이후 전 게이트 초록
+
+- 변경: 없음(재검증 회차). 브라우저 43+13 passed, 단위 565 passed(fleet succession 신규 시험 2종 포함), 얼굴 47 passed, harness lint 0 오류(1eca4409가 append-only 이력 복구). 플레이크 1회(test_warm_coloured_text_stays_readable, 최대 경합 조합 실행) — 재현 4회 시도 없음, F-02 선례대로 종결 기록.
+- 증거: 회차 README 재검증 노트(2026-09-25).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 실패 출력은 전문 보존 후 필터한다 — 위반 목록을 버리면 플레이크가 미스터리가 된다.
