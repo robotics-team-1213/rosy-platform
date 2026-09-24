@@ -30,6 +30,11 @@
         <ui-button kind="segment" id="view-operate" class="view-tab" type="button" aria-pressed="true">운용</ui-button>
         <ui-button kind="segment" id="view-inspect" class="view-tab" type="button" aria-pressed="false">점검</ui-button>
       </div>
+      <!-- D-193 6: who this browser is, from GET /api/v1/auth/whoami. -->
+      <span id="whoami-badge" class="machine-tag whoami-badge" hidden>
+        <b id="whoami-role"></b><span id="whoami-detail"></span>
+      </span>
+      <ui-button kind="quiet" id="logout" class="quiet-button" type="button" hidden>로그아웃</ui-button>
       <ui-button kind="quiet" id="open-auth" class="quiet-button" type="button">접속 키</ui-button>
     </div>
   </ui-topbar>
@@ -37,14 +42,37 @@
   <aside id="auth-drawer" class="auth-drawer" aria-labelledby="auth-title">
     <div>
       <h2 id="auth-title">Rosy에 연결</h2>
-      <p>viewer, operator 또는 administrator 토큰을 입력하세요. 키는 이 탭이 열려 있는 동안에만 보관됩니다.</p>
+      <p>로봇 화면(LCD)이나 콘솔에 뜬 8자 로그인 코드로 이 브라우저 전용 키를 받습니다. 코드는 한 번만, 10분 동안 쓸 수 있습니다.</p>
+      <p id="auth-notice" class="form-message" role="status" aria-live="polite"></p>
     </div>
-    <form id="auth-form">
+    <!-- D-193 6: two tabs, the robot screen code first. -->
+    <div class="view-switch auth-tabs" role="tablist" aria-label="로그인 방법">
+      <ui-button kind="segment" id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-form">로봇 화면 코드</ui-button>
+      <ui-button kind="segment" id="auth-tab-token" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-form">API 토큰</ui-button>
+    </div>
+    <form id="code-form" role="tabpanel" aria-labelledby="auth-tab-code">
+      <label for="code-input">로그인 코드</label>
+      <div class="auth-row">
+        <input id="code-input" name="code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCD-EFGH" required>
+        <ui-button kind="primary" id="code-submit" type="submit" class="primary-button">로그인</ui-button>
+      </div>
+      <label for="code-label">이 기기 이름표 (선택)</label>
+      <div class="auth-row">
+        <input id="code-label" name="label" type="text" maxlength="64" autocomplete="off" placeholder="bay 7 태블릿">
+      </div>
+      <label class="bench-confirmation" for="code-remember">
+        <input id="code-remember" type="checkbox">
+        <span>이 브라우저에서 로그인 유지(최대 7일). 끄면 이 탭을 닫을 때 지웁니다.</span>
+      </label>
+      <p id="code-message" class="form-message" role="status" aria-live="polite"></p>
+    </form>
+    <form id="auth-form" role="tabpanel" aria-labelledby="auth-tab-token" hidden>
       <label for="token-input">API 토큰</label>
       <div class="auth-row">
         <input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="rosy-…" required>
         <ui-button kind="primary" type="submit" class="primary-button">연결</ui-button>
       </div>
+      <p>카드 토큰이나 설정에서 만든 토큰입니다. 키는 이 탭이 열려 있는 동안에만 보관됩니다.</p>
       <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
     </form>
     <ui-button kind="quiet" id="close-auth" class="drawer-close" type="button" aria-label="접속 키 창 닫기">×</ui-button>

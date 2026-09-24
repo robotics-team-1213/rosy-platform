@@ -257,7 +257,8 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   font-size: var(--text-label);
   cursor: pointer;
 }
-.view-tab[aria-pressed="true"] { background: var(--paper); color: var(--button-primary-ink); font-weight: 700; }
+.view-tab[aria-pressed="true"],
+.view-tab[aria-selected="true"] { background: var(--paper); color: var(--button-primary-ink); font-weight: 700; }
 
 .auth-drawer {
   position: fixed;
@@ -277,6 +278,13 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .auth-drawer label { display: block; margin-bottom: var(--space-2); }
 .auth-row { display: flex; gap: var(--space-2); }
 .auth-row input { flex: 1; }
+.auth-drawer form { display: grid; gap: var(--space-2); }
+.auth-drawer form[hidden] { display: none; }
+.auth-tabs { justify-self: start; }
+/* The checkbox row keeps its sentence case inside the drawer's label rule. */
+.auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.auth-row input#code-input { text-transform: uppercase; letter-spacing: 0.12em; }
+.whoami-badge b { color: var(--paper); }
 .drawer-close {
   position: absolute;
   top: var(--space-2);
@@ -941,7 +949,7 @@ body[data-view="operate"] .page-footer { display: none; }
   .region-act { border-top: 1px solid var(--surface-line); }
   body[data-view="operate"] .page-footer { display: flex; }
   .topbar { min-height: 66px; padding: 0 var(--space-4); }
-  .clock, .status-badge span { display: none; }
+  .clock, .status-badge span, .whoami-badge span { display: none; }
   .status-badge { justify-content: center; }
   .hero-strip { flex-wrap: wrap; padding: 0 var(--space-4); }
   .hero-copy { flex: 1 0 100%; }

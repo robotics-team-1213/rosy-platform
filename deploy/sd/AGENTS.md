@@ -62,6 +62,16 @@ one-time per-card provisioning bundle.
   selected disk's FAT32 boot partition. Registry and receipt are updated only then.
 - An image write is MEDIA evidence only; it is not BOOT, DEVICE, or FLEET proof.
 
+## Rotating the CORE API credential (D-193 5)
+
+`rotate-core-api-credential.ps1 -DeviceName <name> [-BaseUrl http://host:8080]`
+rotates the card's administrator token over CORE's API only (no SSH): whoami
+(stored value must be this robot's non-expiring administrator) -> add -> DPAPI
+store -> whoami with the stored value -> delete the old id. It rolls back the
+store and the new id if storing or confirming fails, never prints the value,
+and uses HttpClient with the proxy and redirects off. Keep it ASCII (Windows
+PowerShell 5.1 reads BOM-less scripts as ANSI).
+
 ## Card diagnostics without mounting (D-174 F8, D-175)
 
 When a card fails to boot and SSH is not available, read the card on Windows:
@@ -95,5 +105,5 @@ evidence; do not commit or share them without a secret scan.
 ## Testing
 
 ```powershell
-python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py -q
+python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py test/test_rotate_core_api_credential.py -q
 ```

@@ -84,6 +84,7 @@ MAX_WRONG_ATTEMPTS = 5
 ENROLLMENT_TTL_S = 300.0
 MAX_ENROLLMENT_CODES = 8
 DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "operator": 168.0, "administrator": 24.0}
+MAX_LIFETIME_HOURS = 168.0
 
 #: D-193 4: 사설·AP 대역과 루프백만 받는다. AP(10.42.0.0/24)는 10/8 안에 있다.
 ALLOWED_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
@@ -339,11 +340,13 @@ def _lifetime_seconds(config: dict, role: str) -> float:
         hours = DEFAULT_LIFETIME_HOURS[role]
     if not math.isfinite(hours) or hours <= 0:
         hours = DEFAULT_LIFETIME_HOURS[role]
-    return hours * 3600.0
+    # D-193 6: "keep me logged in (at most 7 days)" — no pairing outlives it.
+    return min(hours, MAX_LIFETIME_HOURS) * 3600.0
 
 
-def _error(status: int, code: str, message: str, headers: Optional[dict] = None) -> JSONResponse:
-    return JSONResponse(status_code=status, content=error_body(code, message),
+def _error(status: int, code: str, message: str, headers: Optional[dict] = None,
+           detail: Any = None) -> JSONResponse:
+    return JSONResponse(status_code=status, content=error_body(code, message, detail),
                         headers={**NO_STORE, **(headers or {})})
 
 
@@ -454,7 +457,12 @@ async def pair(request: Request, svc: CoreServicesLike = Depends(get_services)):
         svc.events.publish("auth.code_burned", severity="warning", source="api",
                            data={"code_id": code_id, "attempts": MAX_WRONG_ATTEMPTS})
     if matched is None:
-        return _error(401, "UNAUTHORIZED", "invalid or expired login code")
+        # D-193 S3: the request whose miss burned the code says so, so the dashboard
+        # can tell the operator to fetch a new one instead of retyping this one.
+        # Every other miss stays one indistinguishable 401 (wrong, used, expired
+        # or no code issued) so a guesser learns nothing about live codes.
+        return _error(401, "UNAUTHORIZED", "invalid or expired login code",
+                      detail={"burned": True} if burned else None)
 
     if matched["source"] == "pair-physical":
         state.signal_root(matched["code_id"], "used")
