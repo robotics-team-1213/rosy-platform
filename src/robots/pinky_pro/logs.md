@@ -9,3 +9,11 @@
 - gate 변화: 신규 기록. SOURCE GO, LOCAL GO, ROS-SIM/ARTIFACT/DEVICE HOLD, FIELD PARKED
 - 결정: D-196 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: ROS-SIM gate를 GO로 올렸다. 도커 core 단계가 이 패키지를 복사하도록 `.dockerignore` 허용 목록에 넣었고, CI host pytest가 `robots/pinky_pro/test`를 돈다.
+- 증거: WSL Ubuntu Jazzy 새 작업공간 `/root/rosy_ws_d196`(기존 `/root/rosy_ws`는 다른 작업의 구 레이아웃이라 건드리지 않음) — `colcon build --symlink-install --packages-up-to core pinky_pro` 8 packages finished; `ls $(ros2 pkg prefix pinky_pro)/share/pinky_pro/config` → `capabilities.yaml profile.yaml`; `robot_config_dir("pinky_pro")` → `/root/rosy_ws_d196/install/pinky_pro/share/pinky_pro/config`; `ros2 run core core` 부팅 `model=Pinky Pro`, api 8080, SIGINT 종료 (2026-09-24).
+- gate 변화: ROS-SIM HOLD→GO
+- 결정: D-196 Proposed
+- 교훈: `wsl -- <cmd>`는 기본 셸(/bin/sh)이 명령줄을 다시 해석해 `$(...)`·`$PATH`가 바깥에서 먼저 펼쳐진다 — `wsl -e bash -c`로 실행한다.

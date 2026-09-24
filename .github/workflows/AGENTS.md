@@ -11,7 +11,7 @@ CI job definitions for this repository.
 
 | File | Description |
 |------|-------------|
-| `ci.yml` | `ci` workflow: colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the four core-domain suites (`core/core/test`, `core/core_events/test`, `core/core_features/test`, `core/web_common/test`), `src/site/fleet/test`, `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
+| `ci.yml` | `ci` workflow: colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the core-domain suites (`core/core/test`, `core/core_events/test`, `core/core_features/test`, `core/web_common/test`, `core/core_common/test`) and `robots/pinky_pro/test` (D-196), `src/site/fleet/test`, `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
 | `build-arm64-payload.yml` | Manual native arm64 build of the unsigned core/io OCI payload; uploads a checksum-bound artifact for offline signing, never a release |
 | `build-pinky-image.yml` | Manual native arm64 `.img.xz` build; uploads an unsigned image handoff for offline signing |
 

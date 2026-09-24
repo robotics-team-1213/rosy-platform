@@ -13,8 +13,9 @@ gates:
     evidence: "core 시험이 robot_config_dir('pinky_pro')의 소스 트리 폴백으로 이 패키지 파일을 읽고 통과 (2026-09-24 Windows host)"
     cmd: "python -m pytest src/core/core/test src/core/core_common/test -q"
   ROS-SIM:
-    state: HOLD
-    blocker: "WSL Jazzy에서 colcon build 후 CORE가 share/pinky_pro/config에서 프로필을 읽고 부팅하는지 미확인"
+    state: GO
+    evidence: "WSL Ubuntu Jazzy 새 작업공간 /root/rosy_ws_d196: colcon build --symlink-install --packages-up-to core pinky_pro 8 packages finished(실패 0); ros2 pkg prefix pinky_pro → share/pinky_pro/config에 capabilities.yaml·profile.yaml; robot_config_dir('pinky_pro') = install/pinky_pro/share/pinky_pro/config; 오버레이 없이 ros2 run core core 부팅 'core up: robot_id=rosy_01 model=Pinky Pro'·api server 8080, SIGINT 정상 종료; 미설치 모델은 ConfigError(--packages-up-to core <name> 안내) (2026-09-24)"
+    cmd: "wsl -d Ubuntu -e bash -c 'cd /root/rosy_ws_d196 && source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to core pinky_pro && source install/setup.bash && ls $(ros2 pkg prefix pinky_pro)/share/pinky_pro/config && timeout -s INT 20 ros2 run core core'"
   ARTIFACT:
     state: HOLD
     blocker: "required-ros-packages.txt에 pinky_pro를 올린 뒤의 이미지 빌드와 package inventory(ros2 pkg prefix pinky_pro) 증거 없음"
@@ -35,8 +36,8 @@ plans:
 
 ## 다음 gate
 
-1. WSL Jazzy에서 colcon build 후 CORE 부팅이 `share/pinky_pro/config`를 읽는지 확인(ROS-SIM).
-2. 이미지 빌드와 inventory에서 `pinky_pro` 확인(ARTIFACT) → 장치 CORE_READY와 capabilities readback(DEVICE).
+1. 이미지 빌드와 inventory에서 `pinky_pro` 확인(ARTIFACT).
+2. 장치 CORE_READY와 GET /system/capabilities readback(DEVICE).
 
 ## 현재 유효한 금지사항
 

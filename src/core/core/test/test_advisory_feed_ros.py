@@ -25,9 +25,11 @@ def _build_services(tmp_path):
     def read(name):
         return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
 
+    robot_dir = robot_config_dir("pinky_pro")
     return CoreServices.build(read("rosy_default.yaml"),
-                              RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml"),
-                              yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8")), tmp_path / "wp.json")
+                              RobotProfile.load(robot_dir / "profile.yaml"),
+                              yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8")),
+                              tmp_path / "wp.json")
 
 
 def test_wire_packets_drive_and_clear_the_advisory(tmp_path):

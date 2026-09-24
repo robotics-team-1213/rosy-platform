@@ -1865,3 +1865,11 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: D-178 Decision 5 "ROS 패키지 20개"에 `(2026-09-24: +pinky_pro 잠정, D-196)` 표기(분포 줄과 일치). `test/robot_literal_backlog.txt` 머리말을 "개수는 줄기만 한다; 계획된 D-196 이동은 줄을 옮길 수 있다(로그에 남김)"로 고쳤다 — 27226ac4의 `core_common/profile.py` 추가가 그 사례다.
+- 증거: `test/test_module_scorecard.py`·`test/test_robot_literals.py` 통과 (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-196 Proposed, D-178
+- 교훈: 없음

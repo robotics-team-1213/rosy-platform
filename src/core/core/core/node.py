@@ -24,12 +24,33 @@ API_GRACEFUL_TIMEOUT_S = 3.0
 API_JOIN_TIMEOUT_S = 5.0
 
 
-def _resolve_path(config: dict[str, Any], key: str, fallback: Path, base_dir: Path) -> Path:
-    raw = config.get("robot", {}).get(key) or config.get(key)
-    if raw:
-        candidate = Path(str(raw)).expanduser()
-        return candidate if candidate.is_absolute() else base_dir / candidate.name
-    return fallback
+def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
+    """(profile, capabilities) paths CORE loads (D-196).
+
+    An absolute path (the `/etc/rosy/*.yaml` overlay) is used as is. A missing key reads
+    the robot package's default file, and a relative name is looked up inside that package.
+    The package named by `robot.model` is looked up only when one of the two needs it, so
+    an overlay that names both files boots without the robot package installed.
+    """
+    from core_common import profile as profile_module
+
+    robot = config.get("robot", {})
+    robot_dir: Optional[Path] = None
+
+    def resolve(key: str, default_name: str) -> Path:
+        nonlocal robot_dir
+        raw = robot.get(key) or config.get(key)
+        name = default_name
+        if raw:
+            candidate = Path(str(raw)).expanduser()
+            if candidate.is_absolute():
+                return candidate
+            name = candidate.name
+        if robot_dir is None:
+            robot_dir = profile_module.robot_config_dir(str(robot.get("model") or profile_module.DEFAULT_ROBOT))
+        return robot_dir / name
+
+    return resolve("profile", "profile.yaml"), resolve("capabilities", "capabilities.yaml")
 
 
 class RosyCoreNode(Node):
@@ -39,12 +60,10 @@ class RosyCoreNode(Node):
         self._api_thread: Optional[threading.Thread] = None
         self._api_server = None
 
-        from core_common.profile import DEFAULT_ROBOT, RobotProfile, robot_config_dir
+        from core_common.profile import RobotProfile
         import yaml
 
-        robot_dir = robot_config_dir(str(config.get("robot", {}).get("model") or DEFAULT_ROBOT))
-        profile_path = _resolve_path(config, "profile", robot_dir / "profile.yaml", robot_dir)
-        capability_path = _resolve_path(config, "capabilities", robot_dir / "capabilities.yaml", robot_dir)
+        profile_path, capability_path = _robot_file_paths(config)
         profile = RobotProfile.load(profile_path)
         capability_data = yaml.safe_load(capability_path.read_text(encoding="utf-8"))
 

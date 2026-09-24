@@ -26,4 +26,5 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
 - 2026-09-24 · uncommitted · feat(robots): pinky_pro robot package carries the profile CORE loads (D-196)

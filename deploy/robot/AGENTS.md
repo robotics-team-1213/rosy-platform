@@ -15,7 +15,7 @@ development and CI compatibility and are not installed in the product image.
 | File | Description |
 |------|-------------|
 | `native/` | Product systemd target/services, non-secret environment template, provisioning gate and readiness probe |
-| `Dockerfile` | Development/CI-only legacy container build |
+| `Dockerfile` | Development/CI-only legacy container build. The `core` stage copies `interfaces`, `core` and `src/robots/pinky_pro` (D-196; `.dockerignore` allow-lists `src/robots/pinky_pro/**`). Pre-existing gap: it does not copy `core_common`/`core_events`/`core_features`/`core_api_web`, so that stage is not a working CORE build today |
 | `compose.yaml` | Development/CI-only legacy slice runner; never a product-image dependency |
 | `runtime-mode.sh` | Modes: `core` \| `motor` \| `hardware` (not `io`); hardware selects `ROSY_NAVIGATION_BACKEND=localization|slam` |
 | `entrypoint.sh` | Container entry |

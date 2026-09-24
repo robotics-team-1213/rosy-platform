@@ -1,5 +1,5 @@
 # D-196 de-Pinky backlog: src product files outside devices/pinky_pro and robots/pinky_pro*
-# that still say "pinky". Set equality with test_robot_literals.py. Remove lines, never add.
+# that still say "pinky". Set equality with test_robot_literals.py. The count only goes down; a planned D-196 relocation may move a line (log it).
 apps/control/config/line_follow.yaml
 apps/control/config/robot.yaml
 apps/control/control/calibration_relocation.py

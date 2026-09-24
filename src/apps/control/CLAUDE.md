@@ -25,7 +25,7 @@ Build the package in a ROS 2 Jazzy environment:
 ```bash
 source /opt/ros/jazzy/setup.bash
 cd /opt/rosy
-colcon build --merge-install --packages-up-to core
+colcon build --merge-install --packages-up-to core pinky_pro
 source install/setup.bash
 ```
 

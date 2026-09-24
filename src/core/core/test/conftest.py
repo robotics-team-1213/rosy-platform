@@ -55,8 +55,9 @@ def core_client(tmp_path):
             # D-193 7: the shared dev tokens live only in rosy_dev_auth.yaml,
             # merged like ROSY_DEV_AUTH=1 does; the pairing block stays.
             config["auth"] = {**config["auth"], **read("rosy_dev_auth.yaml")["auth"]}
-        caps = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
-        profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
+        robot_dir = robot_config_dir("pinky_pro")
+        caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
+        profile = RobotProfile.load(robot_dir / "profile.yaml")
         if capabilities:
             caps.update(capabilities)
         if config_overrides:

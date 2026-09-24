@@ -25,6 +25,7 @@ None.
 - `rosy_default.yaml` carries **no** tokens (fail closed, D-193 7). Dev and sim opt in with `ROSY_DEV_AUTH=1`; host tests merge `rosy_dev_auth.yaml` themselves (`core_client` does). A device (`ROSY_DEPLOYMENT=device`) refuses the dev digests and plaintext entries wherever they come from.
 - Battery curve is 2S Li-ion OCV. Invalid `battery_curve` must not prevent boot (`services._battery_config` falls back).
 - Profile and capabilities are not here: see `src/robots/pinky_pro/config/` (D-196). Pinky Pro `capabilities.yaml` has `docking.supported: false`.
+- A hand-written overlay with a relative `profile:`/`capabilities:` name now resolves inside `share/<robot.model>/config/` (the old `profile.pinky_pro.yaml` is now `profile.yaml` there). Use absolute paths or omit the keys.
 - New safety keys need matching fields in `BatteryConfig` / `PowerConfig` with defaults.
 
 ### Testing Requirements

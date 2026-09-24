@@ -419,3 +419,11 @@
 - gate 변화: 없음. share 조회 경로는 ROS-SIM(WSL Jazzy colcon build + CORE 부팅)에서 아직 미확인.
 - 결정: D-196 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `core/node.py` `_resolve_path`를 순수 함수 `_robot_file_paths(config)`로 바꿨다. `profile`/`capabilities`가 둘 다 절대 경로(오버레이)면 로봇 패키지를 조회하지 않아 패키지가 없어도 부팅한다. 키가 없거나 상대 이름일 때만 `robot_config_dir(robot.model)`를 한 번 부른다. 신규 `test/test_core_node_robot_paths.py` 4건(가짜 rclpy로 호스트에서 검사, `test_core_node_teardown` 방식). 11개 시험 파일은 `robot_dir = robot_config_dir("pinky_pro")`를 한 번 묶어 120자 안으로.
+- 증거: 실패 먼저 — 4 failed(`AttributeError: _robot_file_paths`). 수정 후 대상 실행(core·core_common·robots 시험 + 구조·리터럴·harness·scorecard·payload·runtime 계약) 1339 passed·14 skipped. WSL Jazzy `ros2 run core core`가 오버레이 없이 `core up: robot_id=rosy_01 model=Pinky Pro`로 부팅(share/pinky_pro/config).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음

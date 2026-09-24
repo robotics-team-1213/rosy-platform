@@ -90,9 +90,10 @@ def test_core_services_build_wires_disabled_fleet_agent(tmp_path):
     config = yaml.safe_load(
         (config_dir / "rosy_default.yaml").read_text(encoding="utf-8")
     )
-    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
     capabilities = yaml.safe_load(
-        (robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8")
+        (robot_dir / "capabilities.yaml").read_text(encoding="utf-8")
     )
 
     services = CoreServices.build(

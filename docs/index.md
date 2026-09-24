@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
 - 2026-09-24 · uncommitted · test(repo): D-196 pinky literals live in the pinky family
 - 2026-09-24 · uncommitted · test(structure): _family only reads the 3-level devices shape (D-196 review)
 - 2026-09-24 · uncommitted · test(structure): D-196 devices/robots domains and direction rows
 - 2026-09-24 · uncommitted · docs(adr): D-196 robots are compositions of devices (Proposed)
-- 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench

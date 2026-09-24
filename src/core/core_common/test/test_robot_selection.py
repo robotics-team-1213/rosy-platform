@@ -42,3 +42,15 @@ def test_rosy_robot_env_must_be_a_package_name(monkeypatch, tmp_path, bad):
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
     with pytest.raises(ConfigError):
         load_config()
+
+
+def test_existing_robot_package_resolves_to_its_source_config():
+    assert robot_config_dir("pinky_pro") == SRC / "robots" / "pinky_pro" / "config"
+
+
+def test_unknown_robot_names_the_package_and_how_to_fix_it():
+    with pytest.raises(ConfigError) as caught:
+        robot_config_dir("no_such_robot")
+    message = str(caught.value)
+    for part in ("no_such_robot", "robot.model", "ROSY_ROBOT", "--packages-up-to core no_such_robot"):
+        assert part in message, part

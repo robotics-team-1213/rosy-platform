@@ -483,3 +483,11 @@
 - gate 변화: 없음.
 - 결정: 사용자 결정 2026-09-24를 따른다(기록만 하고, 분리는 인식 재설계 P1~P3에서).
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `README.md`·`CLAUDE.md` 빌드 예시를 `--packages-up-to core pinky_pro`로 — CORE가 읽는 로봇 프로필이 이제 `pinky_pro` 패키지에 있다(D-196).
+- 증거: 문서만. WSL Jazzy에서 같은 선택으로 빌드 8 packages finished (2026-09-24).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음

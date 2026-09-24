@@ -94,8 +94,9 @@ def test_core_services_turns_the_gate_on_for_hardware_even_without_an_overlay(tm
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["runtime"] = {"mode": "hardware"}
     config["navigation"].pop("readiness", None)
-    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
-    capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
+    capabilities = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
 
     services = CoreServices.build(config, profile, capabilities, tmp_path / "waypoints.json")
 
@@ -116,8 +117,9 @@ def test_mapping_backend_uses_slam_readiness_instead_of_amcl(tmp_path):
             "slam": ["slam_toolbox", "controller_server", "local_costmap", "global_costmap", "motor_adapter"],
         },
     }
-    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
-    capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
+    capabilities = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
 
     services = CoreServices.build(config, profile, capabilities, tmp_path / "waypoints.json")
 

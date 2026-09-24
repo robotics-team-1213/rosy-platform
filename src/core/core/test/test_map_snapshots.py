@@ -31,8 +31,9 @@ def client(tmp_path):
     config = yaml.safe_load((CONFIG_DIR / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
     config.update(yaml.safe_load((CONFIG_DIR / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
-    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
-    caps = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
+    caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
     return TestClient(create_app(config, services)), services
 

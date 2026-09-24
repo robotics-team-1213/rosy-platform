@@ -14,6 +14,9 @@
 !src/hardware/
 !src/hardware/bringup/
 !src/hardware/bringup/**
+!src/robots/
+!src/robots/pinky_pro/
+!src/robots/pinky_pro/**
 !src/navigation/
 !src/navigation/navigation/
 !src/navigation/navigation/**
