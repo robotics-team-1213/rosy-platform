@@ -359,9 +359,15 @@ $c.GetNetworkCredential().Password       # the credential itself
 Use it as `Authorization: Bearer <value>` or paste it into the dashboard login.
 First boot installs the record into `/var/lib/rosy/core/.rosy/rosy.yaml`
 (`rosy-core`, 0600), the overlay CORE reads under `rosy-core.service`
-(`HOME=/var/lib/rosy/core`). Because the overlay's `auth.tokens` list replaces
-the package default list, the shared `rosy-dev-*` credentials do not work on a
-card written this way. First boot holds provisioning (`PROVISIONING_HOLD`) when
+(`HOME=/var/lib/rosy/core`), marked `source: card` (`GET /api/v1/auth/whoami`
+answers `administrator`, `card`). The shared `rosy-dev-*` credentials never work
+on a device (D-193 7): the packaged defaults carry no tokens, the dev tokens are
+merged only with `ROSY_DEV_AUTH=1` on a development host, and CORE in device
+mode (`ROSY_DEPLOYMENT=device`, set by `rosy-core.service` and `runtime.env`)
+refuses their digests and any plaintext entry wherever they come from. With no
+credential at all CORE still starts and answers every request with 401;
+recover with `sudo rosy-login-code --role administrator` below. First boot holds
+provisioning (`PROVISIONING_HOLD`) when
 the bundle has no record, when that file already holds a credential other than
 this card's own, or when any part of that path is a symlink or not a regular
 file/directory.
@@ -389,14 +395,54 @@ Invoke-RestMethod -Method Delete -Headers @{ Authorization = "Bearer $($new.toke
 ```
 
 The dashboard's token settings do the same (`GET/POST/DELETE
-/api/v1/system/tokens`). CORE refuses to delete the credential in use or the
-last administrator.
+/api/v1/system/tokens`, `PATCH` for the label). CORE refuses to delete the
+credential in use or the last administrator without an expiry: a paired
+(24 h) administrator does not count.
 
-Open item (another story): the `rosy-dev-*` credentials are shut out only
-because the card's record replaces CORE's default token list. If that overlay
-is emptied or loses `auth.tokens`, CORE falls back to `rosy-dev-admin`. Defence
-in depth is still needed: drop `rosy-dev-*` from the device defaults, or have
-CORE refuse them under the native runtime.
+### Dashboard login code (D-193)
+
+Tablets and other PCs do not need the 43-character credential. A root service,
+`rosy-login-code.service` (no network, outside CORE), issues a one-time
+8-character code such as `ABCD-EFGH` after the first `CORE_READY` of each boot:
+
+- The LCD shows `Login ABCD-EFGH operator` under the stage (only at
+  `CORE_READY`). The same code is on the local console banner
+  (`/etc/issue.d/60-rosy-login.issue`).
+- Type it in the dashboard login (the "robot screen code" tab arrives with
+  S3; until then `POST /api/v1/auth/pair` with `{"code": "ABCD-EFGH"}` from the
+  robot LAN). The browser gets its own token: `operator`/`viewer` for 7 days,
+  `administrator` for 24 h (`auth.pairing.token_lifetime_hours`), listed as
+  `pair-physical` in the token settings and revocable there or with
+  `POST /api/v1/auth/logout`.
+- The code works once and for 10 minutes on the robot's monotonic clock, only
+  from RFC 1918 addresses, the AP (`10.42.0.0/24`) or loopback. It leaves the
+  LCD within a second of use. Five wrong tries burn it: the LCD shows
+  `Login code burned` for a minute. More than five tries per address per minute
+  (30 in total) are answered 429.
+- The card decides the boot code: `login: {boot_code: off | operator |
+  administrator}` in `rosy-config.yaml` (default `operator`). Where passers-by
+  can read the LCD, set `off`.
+- An administrator can enroll another device from the dashboard:
+  `POST /api/v1/auth/enrollment-codes` returns a 5-minute code (role at most
+  the caller's, kept in CORE memory only; tokens from it are `pair-admin`).
+
+No LCD, or a code on demand: over SSH or the local console,
+
+```bash
+sudo rosy-login-code                          # operator, 10 minutes
+sudo rosy-login-code --role administrator --minutes 5
+```
+
+prints the code to that terminal only (never to the journal), replaces any
+earlier code and also puts it on the console banner. This is also the recovery
+path when a robot has no working credential.
+
+The code is never in CORE, the avahi TXT record, the black box or a
+diagnostics bundle: CORE reads only the scrypt verifier
+`/run/rosy-boot/login-code.json` (root:rosy-core 0640) and tells root through
+`/run/rosy/login-code-state.json` that the code was used or burned. Plain HTTP
+is still the transport (D-193 10): keep the robot LAN an operator-only
+SSID/VLAN.
 
 ## 3. Record contract
 

@@ -42,10 +42,24 @@
 | 17 | `rosy-boot-display.service`(enable, 사용자 `rosy-display`, 장치 3개만), apt `python3-spidev`·`python3-rpi-lgpio`, 상주 프로세스(백라이트 PWM 유지), 부팅 카드(이름·IP·단계·실패 unit·배터리·AP) | D-190 "S3 실기 확인" 1-8, 10 | 전원 뒤 LCD에 BOOTING → READY, 배터리 ±0.05 V, 실패 unit 표시, AP 모드 SSID·비밀번호, 재부팅 반복 |
 | 18 | 부저 BCM 22, **기본 꺼짐**. `CORE_READY` 1회·`FAILED` 3회 | D-190 "부저 핀 확인" 뒤 "S3 실기 확인" 9 | 사람이 핀을 확인해 D-190 표에 기록하고, 켠 상태에서 `CORE_READY`에 한 번 울림. 확인 전에는 BLOCKED(핀 증거) 유지 |
 
+## 행 6 계획 (D-193, S1·S2 구현 2026-09-24, 실기 S4)
+
+005 카드의 판정은 위 표 그대로다. 행 6은 D-193 평가표 6a-6g로 나눠 다음 이미지에서 채운다. 장치에서 즉석으로 고치지 않는다(D-190 결정 6).
+
+| # | 다음 이미지에 들어간 것 | 확인 | PASS 조건 |
+|---|---|---|---|
+| 6a | 개발 토큰 차단: 기본값 `auth.tokens: []`, 장치 모드(`ROSY_DEPLOYMENT=device`)의 `rosy-dev-*`·평문 거부, 이미지 검사(`verify-mounted-image.py`) | `curl -H "Authorization: Bearer rosy-dev-admin" .../api/v1/robot/state` | 새 이미지에서 401. overlay의 `auth`를 지우고 CORE를 재시작해도 401. journal에 `auth.credentials_refused`가 없거나 거부 수가 보인다 |
+| 6b | 카드 토큰: first boot가 레코드를 `source: card`로 설치 | DPAPI 값으로 `GET /api/v1/auth/whoami` | `role: administrator`, `source: card`, `expires_at: null` |
+| 6c | LCD 코드: `rosy-login-code.service`(root, 네트워크 없음), `login-display.txt`, `POST /api/v1/auth/pair` | 전원 뒤 LCD, 휴대폰 대시보드(S3 전에는 `curl -X POST .../api/v1/auth/pair`) | `CORE_READY` 뒤 LCD에 `Login XXXX-XXXX operator`. 페어링 → 역할 보임. 코드가 LCD에서 1 s 안에 사라지고, 다시 쓰면 401. Pi 5 scrypt 검증 시간을 `deploy/logs.md`에 기록 |
+| 6d | 폐기·속도 | 틀린 코드 5회, 한 IP에서 6회 | LCD에 `Login code burned`(1분). 여섯 번째 요청 → 429 + `Retry-After` |
+| 6e | 비밀 위생 | `stat`, `journalctl -u rosy-login-code -u rosy-core -b` | `login-code.json` root:rosy-core 0640, `login-display.txt` root:rosy-display 0640, `login.issue` 0600. journal·avahi TXT·블랙박스·진단 번들에 코드 없음 |
+| 6f | LCD 없음 | 콘솔, SSH `sudo rosy-login-code --role administrator` | 콘솔 배너에 코드. 그 코드로 페어링 → `administrator`, 만료 +24 h |
+| 6g | 수명주기 | 설정 화면(S3) 또는 `GET /api/v1/system/tokens`, `POST /api/v1/auth/logout`, `DELETE` | 목록에 `source`·`expires_at`·`current`가 보인다. 로그아웃 204, 카드 토큰 로그아웃 409. 만료 없는 마지막 관리자 삭제 → 409 |
+
 ## 우선순위 (배포 가능 기준)
 
 1. **US-002:** 006으로 다시 구워 1·7·8을 응급 조치 없이 PASS로 만든다.
-2. **US-009:** 카드마다 API 토큰을 발급해 6을 PASS로 만든다. 대시보드와 API를 쓰려면 반드시 필요하다.
+2. **US-009:** 카드마다 API 토큰을 발급해 6을 PASS로 만든다. 대시보드와 API를 쓰려면 반드시 필요하다. 이어서 D-193 6a-6g(위 계획)로 로그인 코드와 토큰 수명주기를 확인한다.
 3. **US-004 → US-005:** 모터 UART, 라이다 드라이버, 모터 SDK, 배터리 라이브러리, 하드웨어 런타임 unit(9-11, 13, 14)을 해결한다.
 4. **US-003:** 부팅 표시 시점(2)을 고친다.
 5. **US-006:** LCD·부저(17, 18)를 고친다(D-190 S0부터).

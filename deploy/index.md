@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · feat(auth,native,image): D-193 S1·S2 login code issuer and token lifecycle
 - 2026-09-24 · uncommitted · fix(dev): native CORE overlay reloads units and proves every bind is mounted (D-179)
 - 2026-09-24 · uncommitted · docs(adr): D-193 login code on the robot screen and credential lifecycle
 - 2026-09-24 · uncommitted · fix(image): run the display probe where the unit runs (LG_WD, working directory)
 - 2026-09-24 · uncommitted · fix(native,image): US-006 security review
-- 2026-09-24 · uncommitted · feat(native,image): boot display on the LCD and buzzer (US-006, D-190 S1-S2)
