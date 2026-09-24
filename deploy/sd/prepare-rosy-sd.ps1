@@ -1032,6 +1032,8 @@ else {
             if (-not (Stop-ProcessTree $writerProcess)) {
                 Fail ("image writer stalled after writing {0} of {1} bytes and could not be stopped" -f $written, $imageRawSize) "Imager could not be stopped: unplug the card reader and reboot the PC before anything else, then $fullWriteNext (do not resume)"
             }
+            # $written is a process I/O counter, not a card fact: it is only advisory
+            # here to pick the recommendation; the readback below is what decides.
             if ($imageRawSize -gt 0 -and $written -ge ($imageRawSize * $ResumeThresholdFraction)) {
                 $script:cardState = "written-unverified"
                 Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize) $resumeNearCompleteNext
