@@ -55,7 +55,7 @@ P1(b) 계약 소유와 P1(c) 장애 격리는 발화하지 않는다. 이미 노
 | `control_safety` | `safety/*`, `control.control`의 안전 폐쇄(`command_gate`, `lidar_guard`, `obstacle_risk`, `motion_sweep`, `footprint_*`, `rotation_*`, `actuation`, `policy_handoff`, `escape_space`, `safety_profile`, `calibration_profile/certificate`, `route`), `calibration_{record,storage,lock,snapshot}`, `sensor_provider` + 진입점, `safety_node` | `control_sensing` |
 | `control` (잔류) | wander, goal, planning, 나머지 `control.control`, 교정 노드 2개, web/watch, `control_node`, `tools/`, 레거시 launch, maps | `control_safety`, `control_sensing` |
 
-결과: io 이미지는 `control_sensing`만 복사하면 된다. core가 provider를 쓸 때는
+결과: io 이미지는 `control_sensing`만 복사하면 된다. (2026-09-24 D-196 개정으로 바뀌었다 — 아래 개정 참고.) core가 provider를 쓸 때는
 `control_safety`까지만 필요하다. 잔류 `control`은 개발·교정·레거시 비교용이다.
 
 **4번째 `control_calibration`은 지금 만들지 않는다.** `startup_calibration`이 `planning`을

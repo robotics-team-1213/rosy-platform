@@ -16,6 +16,7 @@ sim 안의 URDF, nav2 반경, control의 `robot.yaml`과 센싱 기하, fleet의
    딸린 부품은 그 계열 안에 함께 둔다. `src/robots/<robot>/`은 코드 없이 설정·URDF 조립·launch만 담는
    패키지다. `hardware` 도메인은 이동이 끝나면 없앤다. `devices/<계열>/` 안의 패키지에는 계열 접두
    이름을 허용한다. 이것이 D-147 §2를 대체하는 부분이다.
+   로봇 모델 `description`(현 `src/sim/description`, Pinky URDF)은 P3에서 `devices/pinky_pro/description`으로 옮긴다. 그러면 `bringup → description`은 같은 계열 결합이 된다. 장치별 xacro 매크로와 `robots/<robot>` 조립으로 나누는 일은 P6에서 한다.
 2. **P4 방향표 추가 행.** `devices` → core 계약, 같은 계열, `devices/common`. `robots` → core 계약,
    `devices`. `navigation` → core 계약, `devices`(전 `hardware`).
 3. **거주지 규칙.** src 제품 파일의 `pinky` 리터럴은 `devices/pinky_pro/`와 `robots/pinky_pro*` 안에만
