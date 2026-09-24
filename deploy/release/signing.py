@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -66,8 +67,24 @@ class SigningToolMissing(RuntimeError):
     """
 
 
+# Windows operator PCs often carry OpenSSL only inside Git for Windows, which a
+# plain PowerShell PATH does not include. 2026-09-24: the card writer's release
+# check failed with "openssl not found" while pytest passed, because only
+# test/conftest.py knew these folders.
+_WINDOWS_OPENSSL_DIRS = (
+    r"C:\Program Files\Git\usr\bin",
+    r"C:\Program Files\Git\mingw64\bin",
+)
+
+
 def _openssl() -> str:
     path = shutil.which("openssl")
+    if path is None and os.name == "nt":
+        for folder in _WINDOWS_OPENSSL_DIRS:
+            candidate = os.path.join(folder, "openssl.exe")
+            if os.path.isfile(candidate):
+                path = candidate
+                break
     if path is None:
         raise SigningToolMissing(
             "openssl not found; release signatures cannot be verified without it"

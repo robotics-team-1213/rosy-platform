@@ -367,6 +367,7 @@ def test_a_missing_verifier_raises_rather_than_rejecting(monkeypatch, release, k
 
     _private, public = keys
     monkeypatch.setattr(signing.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(signing, "_WINDOWS_OPENSSL_DIRS", ())
 
     # A well-formed 64-byte signature, so the call reaches openssl rather than
     # stopping at the length check.
@@ -435,3 +436,21 @@ def test_a_non_utf8_signature_file_is_rejected(release, keys):
 
     rejections = verify_release_files(release, public)
     assert [r.code for r in rejections] == ["SIGNATURE_MALFORMED"]
+
+
+def test_openssl_falls_back_to_git_for_windows_when_path_has_none(monkeypatch, tmp_path):
+    # 2026-09-24: the card writer's PowerShell PATH had no openssl, pytest's did.
+    import signing
+
+    folder = tmp_path / "Git" / "usr" / "bin"
+    folder.mkdir(parents=True)
+    (folder / "openssl.exe").write_bytes(b"")
+    monkeypatch.setattr(signing.shutil, "which", lambda name: None)
+    monkeypatch.setattr(signing.os, "name", "nt")
+    monkeypatch.setattr(signing, "_WINDOWS_OPENSSL_DIRS", (str(tmp_path / "missing"), str(folder)))
+
+    assert signing._openssl() == str(folder / "openssl.exe")
+
+    monkeypatch.setattr(signing, "_WINDOWS_OPENSSL_DIRS", (str(tmp_path / "missing"),))
+    with pytest.raises(signing.SigningToolMissing):
+        signing._openssl()

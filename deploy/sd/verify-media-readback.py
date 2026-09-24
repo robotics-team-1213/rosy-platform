@@ -632,6 +632,15 @@ def raw_mbr_signature(sector: bytes) -> str | None:
     return f"{struct.unpack_from('<I', sector, 440)[0]:08x}"
 
 
+def sector_is_blank(sector: bytes) -> bool:
+    """True when a full first sector was read and every byte is zero.
+
+    2026-09-24: an interrupted Imager write left sector 0 all zeros, and Get-Disk
+    (which -PlanOnly reads) reports such a disk as MBR with signature 1.
+    """
+    return len(sector) >= 512 and not any(sector[:512])
+
+
 def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[str, object], bool]:
     state: dict[str, object] = {"done": 0, "head": b""}
 
@@ -667,6 +676,7 @@ def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[s
         "device_read_mbps": None,
         "device_mbr_read": len(head) >= 512,
         "device_mbr_signature": raw_mbr_signature(head),
+        "device_mbr_blank": sector_is_blank(head),
     }
     if stalled:
         outcome["device_error"] = f"device read stalled: no data for {timeout:g} s after {done} bytes"
