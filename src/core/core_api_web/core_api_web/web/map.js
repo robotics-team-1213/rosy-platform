@@ -126,6 +126,7 @@ export function createFieldMap(options) {
   const apiMaybe = options.apiMaybe;
   const getPose = options.getPose;
   const getNavigation = options.getNavigation;
+  const getMapSources = options.getMapSources;
   const canGoal = options.canGoal;
   const setAction = options.setAction;
   const layerButtons = [...(options.layerRoot?.querySelectorAll("[data-map-layer]") || [])];
@@ -226,11 +227,19 @@ export function createFieldMap(options) {
     paint();
   }
 
+  // Ask only for snapshots the server says exist (v1.21 `runtime.maps`); a
+  // CORE-only robot has none, and each 404 is a console error. No block
+  // (older CORE) means unknown: ask, and treat 404 as "no map".
+  function wanted(key) {
+    const sources = getMapSources?.();
+    return !sources || sources[key] !== false;
+  }
+
   async function refresh() {
     const [grid, path, costmap] = await Promise.all([
-      apiMaybe("/api/v1/map"),
+      wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
       apiMaybe("/api/v1/navigation/path"),
-      apiMaybe("/api/v1/map/costmap?scope=global"),
+      wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
     ]);
     state.occupancy = grid;
     state.path = path?.poses || [];

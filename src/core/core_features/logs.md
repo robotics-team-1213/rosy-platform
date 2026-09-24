@@ -75,3 +75,10 @@
 - gate 변화: 없음.
 - 결정: 전략은 자기 락도 자기 상태도 없다. 주차형 단계 상태(`_tracker`·`_turn_target`·`_after_turn`·`_creep_from`·`_creep_done_at`·`_backoff_from`)는 매니저 필드로 남아 매니저가 만들고 되돌리며, 전략은 `ParkingHost` 프로토콜로 적은 매니저 멤버만 쓴다. 모든 진입점이 매니저의 RLock 안(틱·명령 경로)에서만 불리므로 N1(락 안 모드 해제)·H2(`take_mode` 먼저)·estop 먼저 순서는 매니저 한 곳에서 읽힌다. 600줄 목표는 이번 분리로 닿지 않았다 — 남은 663줄은 매니저가 소유해야 할 것(상태·락·모드 이음새·fail/retry/release·기본 기종 단계·배터리 복귀·공개 API)이라 더 떼면 락 소유자가 둘로 갈린다. D-178 재채점 트리거(`SIZE_VERDICTS` 판정 변경)에 해당한다.
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(core_features): readiness `component_state`, state `received_age` (D-32)
+- 변경: `navigation/readiness.py` `NavigationReadinessGate.component_state()` — 게이트가 required 가 아니어도 한 구성요소의 마지막 보고를 `ready`/`inactive`/`stale`/`unobserved` 로 돌려준다(CORE-only 에서 무동작 bringup 의 `motor/ready: false` 를 읽기 위해). `state/manager.py` `StateManager.received_age()` — 채널의 마지막 표본 이후 초.
+- 증거: `src/core/core/test/test_hardware_runtime_truth.py::test_component_state*` 4 passed, `src/core/core_features/test` 포함 1553 passed (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: D-32, D-192.
+- 교훈: 없음

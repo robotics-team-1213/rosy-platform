@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(core_common): 하드웨어 존재·구동 준비를 살아 있는 증거로 판정 (D-32, D-192), 계약 v1.21
 - 2026-09-24 · uncommitted · fix(core_common): 결측은 결측으로, 신원은 프로비저닝에서, 광고는 지킬 수 있는 만큼 (US-010)
 - 2026-09-22 · uncommitted · core_common+api_web(protocol): 버전 표기 3원 정렬 + API Ref v1.16 (T10)
 - 2026-09-22 · uncommitted · core_common+fleet_agent(identity): hello 신원 실값 공급 (T6)

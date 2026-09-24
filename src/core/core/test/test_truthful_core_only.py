@@ -162,6 +162,15 @@ def test_hardware_runtime_advertises_the_profile(core_client):
     from core_common.protocol.schemas import HealthState
 
     tc, svc = core_client(config_overrides=HARDWARE)
+    # Hardware mode requires the readiness gate: until the motor adapter and
+    # the Nav2 lifecycle report, the flags cannot be kept (D-32, v1.21).
+    caps = tc.get("/api/v1/system/capabilities", headers=VIEWER).json()
+    assert caps["teleop"] is False
+    assert caps["withheld"]["reasons"]["teleop"] == "drive_absent"
+    assert caps["withheld"]["reasons"]["navigation.goal_navigation"] == "drive_absent"
+    for component in svc.readiness.required_components:
+        svc.readiness.observe(component, True, lease=component == "motor_adapter")
+    svc.state.set_velocity(0.0, 0.0)
     caps = tc.get("/api/v1/system/capabilities", headers=VIEWER).json()
     assert caps["teleop"] is True
     assert "withheld" not in caps

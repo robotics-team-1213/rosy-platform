@@ -411,3 +411,10 @@
 - gate 변화: 없음.
 - 결정: 없음. main 의 24b6d4bb(`bridge/observation.py`)와 같은 방식의 동작 보존 추출.
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · fix(core): inventory 가 런타임 증거(readiness 포함)로 descriptor 를 막는다 (D-32)
+- 변경: `services.py` `inventory()` 가 `runtime_truth(config, state, readiness).reasons` 를 넘긴다. 시험 `test/test_hardware_runtime_truth.py` 신규(무동작 `rosy-io`, 배터리만, 끊김, lease 만료, 시뮬 벤치, SAFE_STOP 순서, 맵 존재). `test_truthful_core_only.py` 하드웨어 모드는 motor adapter·Nav2 보고 뒤에만 광고. `test_api.py` BOOTING 보다 런타임 이유가 먼저.
+- 증거: `python -m pytest src/core/core/test -q` 초록 (2026-09-24 Windows, 위 1553 passed 에 포함).
+- gate 변화: 없음 (DEVICE 재검증 필요).
+- 결정: D-32, D-192.
+- 교훈: 없음

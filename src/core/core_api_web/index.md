@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(dashboard,api): 무동작 하드웨어 런타임을 사실대로 — 구동 꺼짐, 이동 광고 없음, API 정지 문구, 맵 404 없음, 계약 v1.21
 - 2026-09-24 · uncommitted · docs(api): contract v1.20 — lane-network docking rows renumbered on merge
 - 2026-09-24 · uncommitted · docs(api): 계약 v1.18 — 도킹·라인 추종 거부 코드
 - 2026-09-24 · uncommitted · fix(dashboard): 하드웨어가 없거나 모를 때 사실대로 보인다 (US-010), 계약 v1.18
 - 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거
-- 2026-09-23 · uncommitted · feat(api): `/metrics` 에 `rosy_audit_dir_sync_failures_total`, 계약 v1.17

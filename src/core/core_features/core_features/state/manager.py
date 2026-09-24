@@ -179,6 +179,12 @@ class StateManager:
         with self._lock:
             return channel in self._received
 
+    def received_age(self, channel: str) -> Optional[float]:
+        """Seconds since the last sample on `channel`, or None if none arrived."""
+        with self._lock:
+            stamp = self._received.get(channel)
+            return None if stamp is None else max(0.0, self._clock() - stamp)
+
     def push_error(self, message: str) -> None:
         with self._lock:
             self._errors.append(message)

@@ -130,5 +130,29 @@ class NavigationReadinessGate:
             )
         return ReadinessSnapshot(True, True, (), "ready", observed)
 
+    def component_state(self, component: str, now: Optional[float] = None) -> str:
+        """One component's last report, whether or not the gate is required.
+
+        `ready` (active, and fresh if leased), `inactive` (reported not
+        active), `stale` (active but its lease expired) or `unobserved`.
+        The capability view reads this in CORE-only runtime too, where the
+        gate itself is disabled but a real bringup still reports
+        `motor/ready` (D-192 no-motion mode reports false).
+        """
+        if component not in COMPONENTS:
+            raise ValueError(f"unknown navigation readiness component: {component}")
+        current = self._monotonic() if now is None else float(now)
+        with self._lock:
+            stamp = self._observed_at.get(component)
+            active = self._active[component]
+            leased = self._leased[component]
+        if stamp is None:
+            return "unobserved"
+        if not active:
+            return "inactive"
+        if leased and not 0.0 <= current - stamp <= self.stale_after_s:
+            return "stale"
+        return "ready"
+
     def is_ready(self, now: Optional[float] = None) -> bool:
         return self.snapshot(now).ready
