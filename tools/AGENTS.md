@@ -22,6 +22,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` |
 | `sim/` | Local sim probes and `sim_verify.sh`. Not a second product tree |
+| `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool |
 
 ## For AI Agents
 
