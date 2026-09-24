@@ -22,14 +22,16 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `components.css` | Shared `ui-button`, `ui-field`, `ui-tag`, `ui-text` |
 | `ui.js` | Custom elements for those controls; no build step |
 | `core_ui_logic.js` | Evidence-state adapter; contains no clock math |
-| `CMakeLists.txt` | Installs both files to share |
+| `CMakeLists.txt` | Installs the shared files to share |
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
-- Do not copy tokens into consumers; link `/ui/tokens.css` (D-130.3).
+- Do not copy tokens into consumers; link `/ui/tokens.css` or `/common/tokens.css` (D-130.3).
+- A new `ui-button` names `kind` as `primary`, `quiet`, `irreversible`, `segment`, or `toggle`. Do not infer kind from a parent class. `test_shared_controls.py` rejects a button without that attribute, and rejects a surface rule that sets background, color, border, font, or opacity on `ui-button`, `ui-field`, `ui-tag`, or `ui-text`. Placement (flex, width, margin) stays in the surface.
+- Copied colour numbers, including the face LCD tuples, stay equal to `tokens.css`. The same test fails the drift. Pitch colours stay in the one `:root` block of the game sheet.
 - Structure rules (package tier, declared coupling, direction table, 600/10k line budget): D-168, enforced by `test/test_module_structure.py`.
 
 ### Testing Requirements

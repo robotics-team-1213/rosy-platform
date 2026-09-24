@@ -24,6 +24,9 @@ control 진단 페이지는 11px와 36px를 한 화면에 두었다. 같은 이�
 그 렌더링의 소스는 표면 시트가 아니라 `components.css`다. 진단 페이지의 지도
 래스터 색(`--unk`, `--free`, `--wall`)은 서버 PNG와 짝을 이루므로 그대로다.
 
-**Validation:** `src/core/web_common/test/test_shared_controls.py`.
+**Validation:** `src/core/web_common/test/test_shared_controls.py`. 버튼은
+`kind`를 표시에 적고, 표면 시트는 그 부품의 면·글자·테두리를 다시 칠하지
+않는다. 얼굴 LCD의 색 튜플은 토큰 hex와 같아야 한다. 경기 피치의 원시 색은
+그 시트의 `:root` 한 블록 안에만 있다.
 
 **References:** D-72, D-75, D-92, D-129, D-157, concept 16 §4.

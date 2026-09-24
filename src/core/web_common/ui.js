@@ -1,29 +1,7 @@
 // 빌드 없는 공용 조작 부품. 그림자는 쓰지 않는다 — 자식 글자와 기존 리스너가
 // 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
 
-const SEGMENT_PARENT = new Set([
-  "mode-control",
-  "line-follow-modes",
-  "view-switch",
-  "map-toolbar",
-]);
-
-function kindFrom(button) {
-  if (button.classList.contains("primary-button")) return "primary";
-  if (
-    button.classList.contains("stop-button")
-    || button.classList.contains("estop")
-    || button.classList.contains("halt")
-  ) return "irreversible";
-  if (button.classList.contains("view-tab")) return "segment";
-  const parent = button.parentElement;
-  if (parent) {
-    for (const name of parent.classList) {
-      if (SEGMENT_PARENT.has(name)) return "segment";
-    }
-  }
-  return "quiet";
-}
+const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 
 class UiButton extends HTMLElement {
   static formAssociated = true;
@@ -55,7 +33,9 @@ class UiButton extends HTMLElement {
   }
 
   connectedCallback() {
-    if (!this.hasAttribute("kind")) this.setAttribute("kind", kindFrom(this));
+    if (!KINDS.includes(this.getAttribute("kind"))) {
+      this.setAttribute("data-kind-missing", "true");
+    }
     if (!this.hasAttribute("type")) this.setAttribute("type", "button");
     if (!this.hasAttribute("role")) this.setAttribute("role", "button");
     this._sync();

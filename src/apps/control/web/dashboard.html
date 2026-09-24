@@ -158,7 +158,7 @@ main { flex:1; min-height:0; display:grid; gap:0;
           font-variant-numeric:tabular-nums; }
 .viewbar { position:absolute; top:8px; right:8px; display:flex; gap:4px;
            align-items:center; }
-.viewbar ui-button { padding:2px 9px; font-size: var(--text-micro); border-radius:6px; }
+.viewbar ui-button { flex: none; }
 #zoompct { font-size: var(--text-micro); color:var(--ink-2); background:rgba(13,13,13,0.78);
            border:1px solid var(--border); border-radius:6px; padding:2px 8px;
            font-variant-numeric:tabular-nums; }
@@ -196,19 +196,6 @@ main { flex:1; min-height:0; display:grid; gap:0;
   border-radius:6px; padding:8px; font:inherit; }
 #navsessionstart { margin-top:10px; width:100%; }
 .btnrow + .btnrow { margin-top:6px; }
-ui-button { background:var(--act-2); color:var(--ink);
-         border:1px solid var(--border); border-radius:8px;
-         padding:8px 10px; font:inherit; font-size: var(--text-body); cursor:pointer; }
-ui-button:hover:not(:disabled) { border-color:var(--muted); }
-ui-button:active:not(:disabled) { transform:translateY(1px); }
-ui-button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
-ui-button:disabled { opacity:0.42; cursor:not-allowed; transform:none; }
-ui-button.danger { background:var(--status-crit-a45);
-                border-color:rgba(208,59,59,0.55); color:#ffd7d7; }
-ui-button.danger:hover:not(:disabled) { border-color:var(--crit); }
-ui-button.halt { padding:13px 10px; font-size: var(--text-body); font-weight:600;
-              letter-spacing:0.06em; }
-ui-button.mini { flex:none; padding:2px 9px; font-size: var(--text-micro); border-radius:6px; }
 .sub { margin-top:10px; padding-top:9px; border-top:1px solid var(--rule); }
 .sub.first { margin-top:0; padding-top:0; border-top:0; }
 .sub > h4 { margin:0 0 5px; font-size: var(--text-micro); font-weight:600;
@@ -216,7 +203,7 @@ ui-button.mini { flex:none; padding:2px 9px; font-size: var(--text-micro); borde
 .mapping-error { color:var(--serious); font-size: var(--text-micro); margin-top:8px; }
 .mapping-error:empty { display:none; }
 .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-.pad ui-button { padding:11px 0; }
+
 .keys { display:grid; grid-template-columns:repeat(3,1fr); gap:4px;
         margin-top:6px; }
 .keys span { display:flex; align-items:center; justify-content:center;
@@ -272,11 +259,10 @@ main { grid-template-columns:250px minmax(0,1fr) 350px; }
 .rbody { gap:18px; }
 .act .block { border-radius:10px; padding:14px; }
 .block > h3 { font-size: var(--text-label); color:var(--ink); }
-ui-button { min-height:var(--target-secondary); font-weight:550; }
-ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
+input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
 .hint { line-height:1.6; }
 .estop .btnrow { display:inline-flex; width:calc(50% - 3px); margin-top:0; vertical-align:top; }
-.estop ui-button { min-height:var(--target-irreversible); }
+
 #mappingcard .btnrow { display:grid; grid-template-columns:1fr 1fr; }
 #mapsave { grid-column:1/-1; }
 .switchrow { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:10px 0; border-top:1px solid var(--rule); }
@@ -371,9 +357,9 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
     <div class="rhead"><h2 id="h-observe">관측</h2>
       <span class="gloss">지도 위 현재 위치와 경로</span>
       <span class="pin" id="pin"></span>
-      <ui-button type="button" class="mini" id="pinsend" style="display:none"
+      <ui-button kind="quiet" type="button" class="mini" id="pinsend" style="display:none"
               aria-label="찍은 지점으로 로봇 보내기">이 지점으로</ui-button>
-      <ui-button type="button" class="mini" id="pinclear" style="display:none"
+      <ui-button kind="quiet" type="button" class="mini" id="pinclear" style="display:none"
               aria-label="지점 지우기">지우기</ui-button>
     </div>
     <div class="rbody">
@@ -388,13 +374,13 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
       <div class="mapwrap" id="mapwrap">
         <canvas id="map" role="img" aria-label="점유 격자 지도와 경로 오버레이"></canvas>
         <div class="viewbar">
-          <ui-button type="button" data-view="in" aria-label="확대">+</ui-button>
-          <ui-button type="button" data-view="out" aria-label="축소">&minus;</ui-button>
-          <ui-button type="button" data-view="fit" aria-label="화면 맞춤">맞춤</ui-button>
-          <ui-button type="button" data-view="align" title="현재 로봇 방향을 화면 오른쪽으로 정렬">방향 정렬</ui-button>
-          <ui-button type="button" data-view="left" aria-label="지도 왼쪽으로 5도 회전">↶</ui-button>
-          <ui-button type="button" data-view="right" aria-label="지도 오른쪽으로 5도 회전">↷</ui-button>
-          <ui-button type="button" data-view="north" title="원래 지도 방향">0°</ui-button>
+          <ui-button kind="quiet" type="button" data-view="in" aria-label="확대">+</ui-button>
+          <ui-button kind="quiet" type="button" data-view="out" aria-label="축소">&minus;</ui-button>
+          <ui-button kind="quiet" type="button" data-view="fit" aria-label="화면 맞춤">맞춤</ui-button>
+          <ui-button kind="quiet" type="button" data-view="align" title="현재 로봇 방향을 화면 오른쪽으로 정렬">방향 정렬</ui-button>
+          <ui-button kind="quiet" type="button" data-view="left" aria-label="지도 왼쪽으로 5도 회전">↶</ui-button>
+          <ui-button kind="quiet" type="button" data-view="right" aria-label="지도 오른쪽으로 5도 회전">↷</ui-button>
+          <ui-button kind="quiet" type="button" data-view="north" title="원래 지도 방향">0°</ui-button>
           <span id="viewangle">0.0°</span>
           <span id="zoompct">100%</span>
         </div>
@@ -430,11 +416,11 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
         <h3>비상정지</h3>
         <p class="hint">모터 출력을 정지합니다. 해제해도 자동 출발하지 않습니다.</p>
         <div class="btnrow">
-          <ui-button type="button" class="danger halt" data-post="/estop"
+          <ui-button kind="irreversible" type="button" class="danger halt" data-post="/estop"
                   data-val="stop">정지</ui-button>
         </div>
         <div class="btnrow">
-          <ui-button type="button" data-post="/estop" data-val="release">해제</ui-button>
+          <ui-button kind="quiet" type="button" data-post="/estop" data-val="release">해제</ui-button>
         </div>
       </div>
       <p id="commandstatus" class="command-status" role="status" aria-live="polite">명령 대기 · 시작은 직접 선택합니다</p>
@@ -468,10 +454,10 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
       <select id="calibrationafter"><option value="stay">확보한 위치에 머물기</option><option value="return_origin">원래 위치로 복귀</option></select>
       <p class="hint">공간 확보·복귀는 지원되는 실행 환경에서만 수행합니다. 복귀 경로가 막히면 정지합니다.</p>
       <div class="btnrow">
-        <ui-button type="button" id="calibrationretry" data-calibration="retry">전체 보정</ui-button>
-        <ui-button type="button" id="calibrationpartialaction" data-calibration="partial_calibration">부분 보정 · 실패 센서 제외</ui-button>
-        <ui-button type="button" id="calibrationmotion" data-calibration="validate_motion" disabled>4초 저속 이동 검증</ui-button>
-        <ui-button type="button" data-calibration="abort">검증 중단</ui-button>
+        <ui-button kind="quiet" type="button" id="calibrationretry" data-calibration="retry">전체 보정</ui-button>
+        <ui-button kind="quiet" type="button" id="calibrationpartialaction" data-calibration="partial_calibration">부분 보정 · 실패 센서 제외</ui-button>
+        <ui-button kind="quiet" type="button" id="calibrationmotion" data-calibration="validate_motion" disabled>4초 저속 이동 검증</ui-button>
+        <ui-button kind="quiet" type="button" data-calibration="abort">검증 중단</ui-button>
       </div>
       <p class="command-status" id="calibrationpartialreason" role="status" aria-live="polite" hidden></p>
       <div id="calibrationerror" role="alert"></div>
@@ -495,14 +481,14 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
           <label for="navstall">이동 정체 제한 (초, 10–600)</label>
           <input id="navstall" type="number" min="10" max="600" value="90" step="1">
           <p class="hint">대기·회복을 포함한 실제 시간입니다. 정체 제한 동안 2cm 이상 이동하지 못하면 정지합니다. 브라우저를 닫아도 제한은 유지됩니다.</p>
-          <ui-button type="button" id="navsessionstart" disabled>선택한 방법으로 시작</ui-button>
+          <ui-button kind="quiet" type="button" id="navsessionstart" disabled>선택한 방법으로 시작</ui-button>
           <p class="hint" id="navsessionstatus" role="status">실행 상태 확인 중…</p>
           <p class="hint" id="navsessionerror" role="alert"></p>
           <details><summary>시간 제한 없는 기존 실행</summary>
           <div class="btnrow">
-            <ui-button type="button" id="navexplore" data-post="/wander"
+            <ui-button kind="quiet" type="button" id="navexplore" data-post="/wander"
                     data-val="explore" disabled>자동 탐색</ui-button>
-            <ui-button type="button" id="navcoverage" data-post="/wander"
+            <ui-button kind="quiet" type="button" id="navcoverage" data-post="/wander"
                     data-val="coverage" disabled>영역 순회</ui-button>
           </div>
           </details>
@@ -511,12 +497,12 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
           <h4>센서 회피</h4>
           <p class="hint">라이다로 벽을 따라갑니다. 같은 자리 반복 복구는 제한됩니다.</p>
           <div class="btnrow">
-            <ui-button type="button" id="wanderstart" data-post="/wander" data-val="start" disabled>센서 회피 시작</ui-button>
+            <ui-button kind="quiet" type="button" id="wanderstart" data-post="/wander" data-val="start" disabled>센서 회피 시작</ui-button>
           </div>
         </div>
         <div class="sub">
           <div class="btnrow">
-            <ui-button type="button" class="danger" data-post="/wander"
+            <ui-button kind="irreversible" type="button" class="danger" data-post="/wander"
                     data-val="stop">주행 정지</ui-button>
           </div>
         </div>
@@ -527,9 +513,9 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
         <p class="hint" id="mappingstatus" role="status">매핑 상태 확인 중…</p>
         <label class="switchrow"><div><span>지도 수집</span><small>끄면 자동 주행 정지 · 지도는 유지</small></div><input id="mappingtoggle" type="checkbox" role="switch" aria-label="지도 수집" disabled></label>
         <div class="btnrow">
-          <ui-button type="button" id="mapsave" disabled>지도 PNG 저장</ui-button>
-          <ui-button type="button" class="danger" id="mapreset" disabled>지도 초기화</ui-button>
-          <ui-button type="button" id="mapresume" disabled>매핑 재개</ui-button>
+          <ui-button kind="quiet" type="button" id="mapsave" disabled>지도 PNG 저장</ui-button>
+          <ui-button kind="irreversible" type="button" class="danger" id="mapreset" disabled>지도 초기화</ui-button>
+          <ui-button kind="quiet" type="button" id="mapresume" disabled>매핑 재개</ui-button>
         </div>
         <p class="hint" style="margin:8px 0 0">초기화하면 주행을 정지하고 지도
           수집을 일시정지합니다. 다시 배치한 뒤 재개하세요.</p>
@@ -548,13 +534,13 @@ ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2p
           같이 눌러 조합, k는 정지, +/&minus;로 속도 단계.</p>
         <div class="pad">
           <span></span>
-          <ui-button type="button" data-hold="up" aria-label="전진">&#8593;</ui-button>
+          <ui-button kind="toggle" type="button" data-hold="up" aria-label="전진">&#8593;</ui-button>
           <span></span>
-          <ui-button type="button" data-hold="left" aria-label="좌회전">&#8592;</ui-button>
-          <ui-button type="button" data-hold="stop" aria-label="정지">정지</ui-button>
-          <ui-button type="button" data-hold="right" aria-label="우회전">&#8594;</ui-button>
+          <ui-button kind="toggle" type="button" data-hold="left" aria-label="좌회전">&#8592;</ui-button>
+          <ui-button kind="irreversible" type="button" data-hold="stop" aria-label="정지">정지</ui-button>
+          <ui-button kind="toggle" type="button" data-hold="right" aria-label="우회전">&#8594;</ui-button>
           <span></span>
-          <ui-button type="button" data-hold="down" aria-label="후진">&#8595;</ui-button>
+          <ui-button kind="toggle" type="button" data-hold="down" aria-label="후진">&#8595;</ui-button>
           <span></span>
         </div>
         <div class="keys" id="keys">

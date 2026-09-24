@@ -74,10 +74,34 @@ ui-button[kind="segment"] {
 }
 
 ui-button[kind="segment"][aria-pressed="true"],
-ui-button[kind="segment"].active {
+ui-button[kind="segment"].active,
+ui-button[kind="quiet"].arming {
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
+  border-color: transparent;
   font-weight: 700;
+}
+
+ui-button[kind="toggle"].active,
+ui-button[kind="toggle"][data-active="true"] {
+  color: var(--button-primary-ink);
+  background: var(--series-primary);
+  border-color: transparent;
+  font-weight: 700;
+}
+
+ui-button[kind="toggle"] small,
+ui-button[kind="irreversible"] small {
+  display: block;
+}
+
+ui-button[kind="toggle"].active small,
+ui-button[kind="toggle"][data-active="true"] small {
+  color: var(--button-primary-ink);
+}
+
+ui-button[data-kind-missing] {
+  outline: 2px solid var(--status-crit);
 }
 
 ui-button[disabled] {
@@ -112,7 +136,6 @@ textarea.ui-field {
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
-  width: 100%;
   min-height: var(--target-secondary);
   margin: 0;
   padding: 0 var(--space-3);
@@ -122,6 +145,8 @@ textarea.ui-field {
   background: var(--field-bg);
   font: 500 var(--text-body)/1.2 var(--mono);
 }
+
+ui-field { width: 100%; }
 
 ui-field input,
 ui-field select,

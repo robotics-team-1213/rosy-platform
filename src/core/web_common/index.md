@@ -31,6 +31,7 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(web): 버튼 종류와 색 사본을 시험으로 잠근다
 - 2026-09-24 · uncommitted · feat(web): 브라우저 조작 부품을 web_common 한 벌로 모은다
 - 2026-09-24 · uncommitted · test(core): 토큰·팔레트·헤드리스 시험을 자체 `test/`로 이전
 - 2026-09-22 · uncommitted · docs(harness): register web_common under D-168

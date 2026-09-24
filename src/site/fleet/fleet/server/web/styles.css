@@ -11,7 +11,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-ui-button, input, select { font: inherit; color: inherit; }
+input, select { font: inherit; color: inherit; }
 
 .topbar {
   display: flex;
@@ -56,27 +56,7 @@ ui-button, input, select { font: inherit; color: inherit; }
   width: 11rem;
 }
 .token.locked { border-color: var(--status-crit-a45); }
-#token-save {
-  font-size: var(--text-micro);
-  padding: 0.35rem 0.8rem;
-  border-radius: 0.45rem;
-  border: 1px solid var(--line-14);
-  background: var(--sheen-04);
-  cursor: pointer;
-}
-#token-save:hover { border-color: var(--focus-ring); }
 
-.estop {
-  padding: 0.55rem 1.3rem;
-  border-radius: 0.5rem;
-  border: 0;
-  background: var(--status-crit);
-  color: var(--paper);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-}
-.estop:hover { filter: brightness(1.12); }
 
 main {
   display: grid;
@@ -181,17 +161,7 @@ main {
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: 500; }
 
 .robot-actions { display: flex; gap: 0.4rem; }
-.robot-actions ui-button {
-  flex: 1;
-  padding: 0.45rem 0.4rem;
-  border-radius: 0.45rem;
-  border: 1px solid var(--line-14);
-  background: var(--sheen-04);
-  cursor: pointer;
-  font-size: var(--text-label);
-}
-.robot-actions ui-button:hover:not(:disabled) { border-color: var(--focus-ring); color: var(--paper); }
-.robot-actions ui-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.robot-actions ui-button { flex: 1; }
 
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
@@ -219,7 +189,7 @@ main {
 
 .signal-body { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
 .signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
-.robot-actions ui-button.arming { background: var(--paper); color: var(--ground); border-color: var(--paper); }
+
 
 .log {
   margin-top: 1rem;
@@ -276,7 +246,7 @@ main {
   background: var(--ground-soft);
   font-size: var(--text-label);
 }
-.formation .robot-actions ui-button { font-size: var(--text-label); }
+
 
 
 /* FOR-001 Robot Selection — 대형 폼의 멤버 선택. 간격은 단일 파일의 스케일을 따른다. */
@@ -322,12 +292,4 @@ main {
   align-items: center;
   color: var(--paper);
 }
-.issue-list ui-button {
-  padding: 0.3rem 0.6rem;
-  font-size: var(--text-label);
-  background: var(--status-crit);
-  color: var(--paper);
-  border: none;
-  border-radius: 2px;
-  cursor: pointer;
-}
+
