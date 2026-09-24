@@ -22,6 +22,19 @@ def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     return TestClient(create_app(console, console_token=token, web_common=web_common))
 
 
+def test_do_translates_a_goal_and_rejects_a_ros_word():
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    client = _client(robot)
+    sent = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": 1.0, "y": 2.0, "yaw": 0.0,
+    })
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["steps"][0]["path"] == "/api/v1/navigation/goal"
+    refused = client.post("/api/fleet/do", json={"do": "navigate", "x": 0, "y": 0, "twist": {}})
+    assert refused.status_code == 400
+    assert refused.json()["detail"]["code"] == "FORBIDDEN"
+
+
 def test_state_lists_the_roster():
     client = _client(FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"}),
                      FakeRobot("rosy_02", state={"robot_id": "rosy_02", "mode": "NAVIGATION"}))

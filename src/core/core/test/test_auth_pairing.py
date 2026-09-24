@@ -157,6 +157,19 @@ def test_five_wrong_attempts_burn_the_code_and_tell_root(robot):
     assert _pair(other).status_code == 401  # the right code no longer works
 
 
+def test_only_the_miss_that_burns_the_code_says_burned(robot):
+    # D-193 S3: the dashboard tells the operator to fetch a new code. Every other
+    # miss (wrong, used, expired, none issued) stays one indistinguishable 401.
+    tc, _svc, _state, _events = robot()
+    write_code(robot.boot)
+
+    details = [_pair(tc, OTHER_CODE).json()["error"]["detail"] for _ in range(5)]
+    assert details == [None, None, None, None, {"burned": True}]
+    other = type(tc)(tc.app, client=("192.168.1.21", 50000))
+    after = _pair(other)
+    assert after.status_code == 401 and after.json()["error"]["detail"] is None
+
+
 def test_the_sixth_request_from_one_address_is_rate_limited(robot):
     tc, _svc, state, _events = robot()
 
@@ -239,6 +252,17 @@ def test_pairing_lifetimes_come_from_auth_pairing(robot):
     expires = datetime.fromisoformat(_pair(tc).json()["expires_at"])
 
     assert timedelta(hours=1, minutes=59) < expires - datetime.now(timezone.utc) <= timedelta(hours=2)
+
+
+def test_a_configured_lifetime_never_exceeds_seven_days(robot):
+    # D-193 6: the dashboard promises "at most 7 days"; the server holds it too.
+    tc, _svc, _state, _events = robot()
+    tc.app.state.core.config["auth"]["pairing"] = {"token_lifetime_hours": {"operator": 24 * 30}}
+    write_code(robot.boot)
+
+    expires = datetime.fromisoformat(_pair(tc).json()["expires_at"])
+
+    assert timedelta(days=6, hours=23) < expires - datetime.now(timezone.utc) <= timedelta(days=7)
 
 
 # --- enrollment codes -----------------------------------------------------------

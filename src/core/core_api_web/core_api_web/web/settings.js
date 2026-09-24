@@ -15,7 +15,7 @@ import {
   setFieldMessage,
   setText,
 } from "./dom.js";
-import { api, session } from "./client.js";
+import { api, expiryLabel, session, sourceLabel } from "./client.js";
 
 const hooks = {
   // 신원을 바꾸면 헤더의 이름도 따라가야 한다. 그것은 셸의 영역이다.
@@ -69,8 +69,11 @@ export function renderTokens(payload) {
     title.textContent = item.role || "viewer";
     const meta = document.createElement("span");
     const created = item.created_at ? String(item.created_at).slice(0, 10) : "";
-    const parts = [item.label || item.id || "", created].filter(Boolean);
+    // D-193 6g: source, expiry and "this device" are visible per token.
+    const parts = [item.label || item.id || "", sourceLabel(item.source), expiryLabel(item.expires_at), created]
+      .filter(Boolean);
     if (item.legacy) parts.push("설정 파일 평문");
+    if (item.current) parts.push("이 기기");
     meta.textContent = parts.join(" · ");
     const actions = document.createElement("div");
     actions.className = "waypoint-actions";
@@ -79,6 +82,8 @@ export function renderTokens(payload) {
     remove.type = "button";
     remove.dataset.tokenAction = "delete";
     remove.textContent = "삭제";
+    // CORE refuses to delete the token in use; log out from the header instead.
+    remove.disabled = item.current === true;
     actions.append(remove);
     row.append(title, meta, actions);
     list.append(row);

@@ -21,6 +21,7 @@ from core_api_web.api.v1.routes import (
     logs_router,
     line_follow_router,
     host_router,
+    intent_router,
     map_router,
     metrics_router,
     navigation_router,
@@ -106,6 +107,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(swarm_router)
     app.include_router(metrics_router)
     app.include_router(host_router)
+    app.include_router(intent_router)
     app.include_router(ws_router)
 
     @app.get("/api/v1", tags=["system"])

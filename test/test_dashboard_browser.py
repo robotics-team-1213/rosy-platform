@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from urllib.parse import urlparse
 from pathlib import Path
@@ -109,8 +110,16 @@ window.__trafficReadback = {
   staged: null,
   simulation_signal: {available: true, colour: 'GREEN'},
 };
+window.__sockets = [];
 window.WebSocket = class extends EventTarget {
-  constructor() { super(); setTimeout(() => this.dispatchEvent(new Event('open')), 0); }
+  constructor(url) {
+    super();
+    this.url = url;
+    this.sent = [];
+    window.__sockets.push(this);
+    setTimeout(() => this.dispatchEvent(new Event('open')), 0);
+  }
+  send(data) { this.sent.push(String(data)); }
   close() {}
 };
 window.fetch = async (input, options = {}) => {
@@ -123,7 +132,8 @@ window.fetch = async (input, options = {}) => {
   }
   window.__apiCalls.push({ method, path, search: url.search, body: parsed });
   const authorization = new Headers(options.headers || {}).get('Authorization') || '';
-  if (authorization.includes('bad-token')) {
+  if (authorization.includes('bad-token')
+      || (window.__revoked && authorization.includes(window.__revoked))) {
     return new Response(JSON.stringify({error: {code: 'UNAUTHORIZED', message: 'invalid token'}}), {
       status: 401, headers: {'Content-Type': 'application/json'},
     });
@@ -203,6 +213,34 @@ window.fetch = async (input, options = {}) => {
   }
   if (window.__rosyHostNetworkOverride) {
     Object.assign(bodies['/api/v1/host/network'], window.__rosyHostNetworkOverride);
+  }
+  if (path === '/api/v1/auth/whoami') {
+    const paired = authorization.includes('paired-test-token');
+    return new Response(JSON.stringify(paired ? {
+      id: 'b1c2d3e4f5a6', role: 'operator', label: 'bay 7 tablet', source: 'pair-physical',
+      created_at: '2026-09-24T00:00:00+00:00', expires_at: '2099-10-01T00:00:00+00:00',
+    } : {
+      id: '0a1b2c3d4e5f', role: bodies['/api/v1/system/info'].caller_role, label: 'bench',
+      source: 'card', created_at: '2026-09-24T00:00:00+00:00', expires_at: null,
+    }), {status: 200, headers: {'Content-Type': 'application/json'}});
+  }
+  if (method === 'POST' && path === '/api/v1/auth/pair') {
+    const reply = window.__pairReply || {status: 201, body: {
+      id: 'b1c2d3e4f5a6', token: 'paired-test-token', role: 'operator', label: 'bay 7 tablet',
+      source: 'pair-physical',
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000 - 60 * 1000).toISOString(),
+    }};
+    return new Response(JSON.stringify(reply.body), {
+      status: reply.status,
+      headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(reply.headers || {})},
+    });
+  }
+  if (method === 'POST' && path === '/api/v1/auth/logout') {
+    if (authorization.includes('paired-test-token')) return new Response(null, {status: 204});
+    return new Response(JSON.stringify({error: {code: 'VALIDATION_ERROR',
+      message: 'only a paired browser token can log out'}}), {
+      status: 409, headers: {'Content-Type': 'application/json'},
+    });
   }
   if (path === '/api/v1/teleop') {
     const command = JSON.parse(options.body);
@@ -382,7 +420,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
         # 하나뿐이다(Law 3/D-82 "위험은 채움이다"). 실투 스캔 실측(회차 9).
         page.wait_for_timeout(300)
         warm = page.evaluate(WARM_SCAN)
-        assert set(warm) <= {"button#emergency-stop.stop-button"}, (
+        assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, (
             f"정상 상태의 경보 예산 밖 따뜻한 색: {warm}"
         )
         assert page.locator("#network-rx-rate").inner_text() == "—"
@@ -583,8 +621,9 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
             "document.getElementById('vision-stage')?.dataset.state === 'live'"
         )
         page.locator("#open-auth").click()
+        page.locator("#auth-tab-token").click()
         page.locator("#token-input").fill("bad-token")
-        page.locator("#auth-form button[type=submit]").click()
+        page.locator("#auth-form [type=submit]").click()
         page.wait_for_function(
             "document.getElementById('vision-empty')?.textContent.includes('인증 실패')"
         )
@@ -981,7 +1020,7 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
         assert page.locator("#triage-title").inner_text() == "하드웨어 런타임 꺼짐 (CORE-only)"
         assert page.locator("#triage").get_attribute("data-category") == "observation"
         warm = page.evaluate(WARM_SCAN)
-        assert set(warm) <= {"button#emergency-stop.stop-button"}, (
+        assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, (
             f"CORE-only는 고장이 아니다 — 경보 예산 밖 따뜻한 색: {warm}"
         )
         # 5. a viewer never asks for what it cannot read
@@ -1016,4 +1055,335 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
         )
         assert page.locator("#safety-label").inner_text() == "UNVERIFIED"
         assert page.locator("#safety-source").inner_text() == "안전 회로 수신 끊김"
+        browser.close()
+
+
+# --- D-193 S3: login code, whoami badge, logout, first-message WebSocket auth ---
+
+NO_TOKEN_INIT = "sessionStorage.removeItem('rosy.dashboard.token');"
+
+
+def _open_dashboard(playwright, extra_init=""):
+    browser, page = _launch_page(playwright, extra_init=extra_init)
+    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    return browser, page
+
+
+def _storage(page):
+    return page.evaluate(
+        "({session: sessionStorage.getItem('rosy.dashboard.token'),"
+        " local: localStorage.getItem('rosy.dashboard.paired')})"
+    )
+
+
+def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, NO_TOKEN_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        # The code tab is the default and the token form is hidden.
+        assert "open" in page.locator("#auth-drawer").get_attribute("class")
+        assert page.locator("#auth-tab-code").get_attribute("aria-selected") == "true"
+        assert page.locator("#auth-form").is_hidden()
+        assert page.locator("#whoami-badge").is_hidden()
+
+        page.locator("#code-input").fill(" abcd efgh ")
+        page.locator("#code-label").fill("bay 7 tablet")
+        page.locator("#code-submit").click()
+        page.wait_for_function(
+            "document.getElementById('whoami-role')?.textContent === 'operator'")
+
+        pair = next(call for call in page.evaluate("window.__apiCalls")
+                    if call["path"] == "/api/v1/auth/pair")
+        assert pair["body"] == {"code": "ABCDEFGH", "label": "bay 7 tablet"}
+        detail = page.locator("#whoami-detail").inner_text()
+        assert "bay 7 tablet" in detail and "로봇 화면 코드" in detail and "만료" in detail
+        assert page.locator("#logout").inner_text() == "로그아웃"
+        # Not ticked: this tab only.
+        assert _storage(page) == {"session": "paired-test-token", "local": None}
+        # The socket URL carries no token; the first message does.
+        page.wait_for_function(
+            "window.__sockets.length > 0 && window.__sockets.at(-1).sent.length > 0")
+        socket = page.evaluate(
+            "({url: window.__sockets.at(-1).url, sent: window.__sockets.at(-1).sent})")
+        assert socket["url"].endswith("/ws/state") and "token" not in socket["url"]
+        assert socket["sent"] == ['{"type":"auth","token":"paired-test-token"}']
+        for call in page.evaluate("window.__apiCalls"):
+            assert "token" not in call["search"]
+        browser.close()
+
+
+def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, NO_TOKEN_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.locator("#code-input").fill("ABCD-EFGH")
+        page.locator("#code-remember").check()
+        page.locator("#code-submit").click()
+        page.wait_for_function(
+            "document.getElementById('whoami-role')?.textContent === 'operator'")
+        stored = _storage(page)
+        assert stored["session"] is None
+        remembered = json.loads(stored["local"])
+        assert remembered["token"] == "paired-test-token"
+        assert set(remembered) == {"token", "expires_at"}
+
+        # A pasted (non-expiring) token replaces it and lives in this tab only.
+        page.locator("#open-auth").click()
+        page.locator("#auth-tab-token").click()
+        page.locator("#token-input").fill("operator-test-token")
+        page.locator("#auth-form [type=submit]").click()
+        page.wait_for_function(
+            "document.getElementById('whoami-detail')?.textContent.includes('만료 없음')")
+        assert _storage(page) == {"session": "operator-test-token", "local": None}
+        assert page.locator("#token-input").input_value() == ""
+        assert page.locator("#logout").inner_text() == "이 브라우저에서 잊기"
+        browser.close()
+
+
+def test_an_expired_remembered_token_is_dropped_on_load():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = NO_TOKEN_INIT + (
+        "localStorage.setItem('rosy.dashboard.paired', JSON.stringify("
+        "{token: 'paired-test-token', expires_at: '2000-01-01T00:00:00+00:00'}));")
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_timeout(300)
+        assert _storage(page) == {"session": None, "local": None}
+        assert "open" in page.locator("#auth-drawer").get_attribute("class")
+        assert not page.evaluate("window.__apiCalls")
+        browser.close()
+
+
+@pytest.mark.parametrize("reply, expected", [
+    ({"status": 401, "body": {"error": {"code": "UNAUTHORIZED",
+                                        "message": "invalid or expired login code", "detail": None}}},
+     "발급된 코드가 없습니다"),
+    ({"status": 401, "body": {"error": {"code": "UNAUTHORIZED",
+                                        "message": "invalid or expired login code",
+                                        "detail": {"burned": True}}}},
+     "관리자에게 새 코드를 요청"),
+    ({"status": 429, "body": {"error": {"code": "RATE_LIMITED", "message": "too many pairing attempts"}},
+      "headers": {"Retry-After": "37"}},
+     "37초 뒤에"),
+    ({"status": 403, "body": {"error": {"code": "FORBIDDEN", "message": "robot LAN"}}},
+     "로봇 LAN"),
+], ids=["wrong-used-expired-or-none", "burned", "rate-limited", "outside-lan"])
+def test_login_code_failures_say_what_the_robot_said(reply, expected):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = NO_TOKEN_INIT + f"window.__pairReply = {json.dumps(reply)};"
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.locator("#code-input").fill("ABCD-EFGH")
+        page.locator("#code-submit").click()
+        page.wait_for_function(
+            "(text) => document.getElementById('code-message')?.textContent.includes(text)",
+            arg=expected,
+        )
+        assert _storage(page) == {"session": None, "local": None}
+        assert page.locator("#whoami-badge").is_hidden()
+        if reply["status"] == 429:
+            page.wait_for_timeout(300)
+            assert page.locator("#code-submit").is_disabled()
+        else:
+            page.wait_for_function("!document.getElementById('code-submit').disabled")
+        browser.close()
+
+
+@pytest.mark.parametrize("typed, expected", [
+    ("ABCD-EFG", "8자입니다"),
+    ("ABCD-EFG0", "0"),
+    ("", "8자 코드를 입력"),
+])
+def test_a_malformed_code_is_caught_before_it_spends_an_attempt(typed, expected):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, NO_TOKEN_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.evaluate("document.getElementById('code-input').required = false; null")
+        page.locator("#code-input").fill(typed)
+        page.locator("#code-submit").click()
+        page.wait_for_function(
+            "(text) => document.getElementById('code-message')?.textContent.includes(text)",
+            arg=expected,
+        )
+        assert not [call for call in page.evaluate("window.__apiCalls")
+                    if call["path"] == "/api/v1/auth/pair"]
+        browser.close()
+
+
+def test_logout_deletes_the_paired_token_and_forgets_it():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = "sessionStorage.setItem('rosy.dashboard.token', 'paired-test-token');"
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function("document.getElementById('logout')?.textContent === '로그아웃'")
+        page.locator("#logout").click()
+        page.wait_for_function("document.getElementById('auth-drawer').classList.contains('open')")
+        calls = page.evaluate("window.__apiCalls")
+        assert any(call["method"] == "POST" and call["path"] == "/api/v1/auth/logout"
+                   for call in calls)
+        assert _storage(page) == {"session": None, "local": None}
+        assert page.locator("#whoami-badge").is_hidden()
+        assert "로봇에서 지워졌습니다" in page.locator("#auth-notice").inner_text()
+        before = len(page.evaluate("window.__apiCalls"))
+        page.wait_for_timeout(2_500)  # no polling with a forgotten token
+        assert len(page.evaluate("window.__apiCalls")) == before
+        browser.close()
+
+
+def test_logging_out_a_card_token_is_refused_by_core_and_only_forgotten_here():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function(
+            "document.getElementById('logout')?.textContent === '이 브라우저에서 잊기'")
+        page.locator("#logout").click()
+        page.wait_for_function("document.getElementById('auth-drawer').classList.contains('open')")
+        paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
+        assert "/api/v1/auth/logout" in paths  # CORE decides; it answers 409
+        assert _storage(page) == {"session": None, "local": None}
+        assert "로봇에 남아 있습니다" in page.locator("#auth-notice").inner_text()
+        browser.close()
+
+
+def test_a_4401_close_with_a_revoked_token_signs_out_without_reconnecting():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function(
+            "window.__sockets.length === 1 && window.__sockets[0].sent.length === 1")
+        page.evaluate(
+            "window.__revoked = 'operator-test-token';"
+            " window.__sockets[0].dispatchEvent(new CloseEvent('close', {code: 4401})); null"
+        )
+        page.wait_for_function(
+            "document.getElementById('auth-notice')?.textContent.includes('만료되었거나 회수')")
+        assert _storage(page) == {"session": None, "local": None}
+        page.wait_for_timeout(1_500)
+        assert page.evaluate("window.__sockets.length") == 1
+        browser.close()
+
+
+REFUSE_EVERY_SOCKET = (
+    "window.__refuse = setInterval(() => {"
+    "  for (const socket of window.__sockets) {"
+    "    if (!socket.refused) {"
+    "      socket.refused = true;"
+    "      socket.dispatchEvent(new CloseEvent('close', {code: 1006}));"
+    "    }"
+    "  }"
+    "}, 10); null"
+)
+
+
+def test_refused_sockets_reconnect_with_growing_backoff_not_a_hot_loop():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function("window.__sockets.length === 1")
+        # Every socket is refused at once (1013 arrives as 1006 before accept).
+        page.evaluate(REFUSE_EVERY_SOCKET)
+        page.wait_for_timeout(4_000)
+        count = page.evaluate("window.__sockets.length")
+        # Retries after 1 s and 2 s (+ up to 20 % jitter): at most three sockets in 4 s.
+        assert 2 <= count <= 3, count
+        # REST polling keeps the state fresh meanwhile.
+        polls = [call for call in page.evaluate("window.__apiCalls")
+                 if call["path"] == "/api/v1/robot/state"]
+        assert len(polls) >= 2
+        browser.close()
+
+
+def test_a_paired_token_expiring_beyond_seven_days_is_not_remembered():
+    # M1: "로그인 유지(최대 7일)" must not keep a longer-lived token in localStorage.
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    reply = {"status": 201, "body": {
+        "id": "b1c2d3e4f5a6", "token": "paired-test-token", "role": "operator", "label": "",
+        "source": "pair-physical", "expires_at": "2099-10-01T00:00:00+00:00"}}
+    init = NO_TOKEN_INIT + f"window.__pairReply = {json.dumps(reply)};"
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.locator("#code-input").fill("ABCD-EFGH")
+        page.locator("#code-remember").check()
+        page.locator("#code-submit").click()
+        page.wait_for_function(
+            "document.getElementById('whoami-role')?.textContent === 'operator'")
+        assert _storage(page) == {"session": "paired-test-token", "local": None}
+        browser.close()
+
+
+def test_a_socket_that_sends_one_frame_then_closes_still_backs_off():
+    # L3: one delivered frame is not "stable"; the backoff keeps growing.
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function("window.__sockets.length === 1")
+        page.evaluate(
+            "window.__flap = setInterval(() => {"
+            "  for (const socket of window.__sockets) {"
+            "    if (!socket.flapped && socket.sent.length) {"
+            "      socket.flapped = true;"
+            "      socket.dispatchEvent(new MessageEvent('message', {data: '{}'}));"
+            "      socket.dispatchEvent(new CloseEvent('close', {code: 1011}));"
+            "    }"
+            "  }"
+            "}, 10); null"
+        )
+        page.wait_for_timeout(4_000)
+        count = page.evaluate("window.__sockets.length")
+        assert 2 <= count <= 3, count
         browser.close()

@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · feat(fleet): POST /api/fleet/do 통역기
 - 2026-09-22 · uncommitted · fleet(Phase2)+docs: 통신 정합 T7~T11 마감 기록
 - 2026-09-22 · uncommitted · fleet(hub): /registry 선택적 Bearer 인증 + 공개 snapshot (T9)
 - 2026-09-22 · uncommitted · fleet(cli): 죽은 hub 명령 제거 (T8)
 - 2026-09-22 · uncommitted · fleet(console): ADR-1000 자동 감속 no-op 수정 (T7)
-- 2026-09-22 · uncommitted · docs(fleet): swarm TRIGGERS 의 nav.blocked 가 현재 미발행임을 적는다

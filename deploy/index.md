@@ -58,7 +58,7 @@
 ## 최근 기록
 
 - 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
-- 2026-09-24 · uncommitted · fix(core,native): D-193 security review
-- 2026-09-24 · uncommitted · feat(auth,native,image): D-193 S1·S2 login code issuer and token lifecycle
-- 2026-09-24 · uncommitted · fix(dev): native CORE overlay reloads units and proves every bind is mounted (D-179)
-- 2026-09-24 · uncommitted · docs(adr): D-193 login code on the robot screen and credential lifecycle
+- 2026-09-24 · uncommitted · docs(adr): D-198 Docker operational surface retirement
+- 2026-09-24 · uncommitted · fix(dashboard,deploy): D-193 S3 security review (PR #35)
+- 2026-09-24 · uncommitted · feat(dashboard,deploy): D-193 S3 code login, whoami badge, first-message WebSocket, credential rotation
+- 2026-09-24 · uncommitted · docs(adr): D-197 Docker exits the product artifact chain

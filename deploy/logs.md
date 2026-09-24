@@ -1019,6 +1019,60 @@
 - 결정: D-193 보완(2026-09-24 보안 리뷰)
 - 교훈: 일회용 값의 "소비됨"은 그 값을 검증하는 프로세스의 수명보다 오래 가야 한다 — 메모리만으로는 재시작이 곧 재무장이다.
 
+## 2026-09-24 · uncommitted · docs(adr): D-197 Docker exits the product artifact chain
+
+- 변경: `docs/adr/D-197-docker-exits-the-product-chain.md` 추가, ADR Log 표 D-197 행. 제품 경로의 신규
+  Docker/OCI 의존 금지, OCI·Compose 체인의 폐기 트리거(native payload ARTIFACT 통과 시 한 변경 정리),
+  계약 테스트 고정 대상 이동 뒤 Dockerfile/compose 삭제라는 순서 계약, D-179 벤치 compose의 잔류 조건을
+  기록했다. 코드·워크플로·계약 테스트 본문은 바꾸지 않았다.
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q`;
+  `python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-197 (D-196은 2026-09-24 멀티로봇 구조 개편 계획이 먼저 선점했다 — 커밋 4c496c24)
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · feat(dashboard,deploy): D-193 S3 code login, whoami badge, first-message WebSocket, credential rotation
+
+- 변경: 대시보드 로그인 서랍에 "로봇 화면 코드"(기본)·"API 토큰" 두 탭. 코드는 브라우저에서 정규화·알파벳·길이 확인 뒤
+  `POST auth/pair`, 실패 문구는 401(틀림·사용·만료·발급 없음 한 문장)·폐기(`error.detail.burned`, 서버 추가)·429(`Retry-After`
+  동안 버튼 끔)·403(LAN 밖)을 구분. 저장소 규칙(D-193 6): 만료 없는 토큰은 `sessionStorage`, 페어링 토큰은 "로그인 유지"일 때만
+  `localStorage`(만료 지나면 삭제). 머리글 whoami 배지(역할·이름표·출처·만료)와 로그아웃(페어링만 `auth/logout`, 그 밖은
+  "이 브라우저에서 잊기"). 역할은 `whoami`에서. WebSocket은 `?token=` 없이 첫 메시지 인증, 4401→whoami 확인, 4403 재시도 없음,
+  그 밖 1→30 s 백오프(상태 수신 뒤에만 복귀), REST 401이면 로그아웃. 토큰 목록에 출처·만료·"이 기기".
+  `deploy/sd/rotate-core-api-credential.ps1`: whoami → 추가 → DPAPI 저장 → 저장값 whoami → 옛 id 삭제, 실패 시 저장소·새 id 되돌림,
+  값 미출력, HttpClient 프록시·리다이렉트 끔. API Ref v1.19 행·첫 메시지 2 s 정정, 런북, D-193 S3 노트.
+- 증거: host pytest(Windows) `src/core/core/test`, `test/test_dashboard_browser.py`(ROSY_RUN_BROWSER_TESTS=1, Chromium),
+  `test/test_rotate_core_api_credential.py`(Windows PowerShell 5.1 + 가짜 CORE) — 보고서 수치. 장치 미검증(평가표 6c·6g는 S4).
+- gate 변화: 없음(S4 실기 전)
+- 결정: D-193 S3
+- 교훈: 세션을 끝내는 신호(4401)는 토큰 문제 말고도 첫 메시지 지연에서도 온다 — 소켓 닫힘 코드만 보고 로그아웃하지 말고 REST로 한 번 확인한다.
+
+## 2026-09-24 · uncommitted · fix(dashboard,deploy): D-193 S3 security review (PR #35)
+
+- 변경: 시험의 Bearer 파싱 줄이 비밀 스캐너에 걸리지 않게 바꿈(허용 목록 그대로). "로그인 유지"는 만료 7일 이내만
+  `localStorage`, CORE 페어링 수명 상한 168 h. 로그아웃은 항상 `auth/logout`(409면 로컬만). 폐기 문구 두 경우. WebSocket
+  백오프는 10 s 안정 뒤에만 복귀. 회전 스크립트: 새 토큰 `expires_at` 거부·되돌림, 교체·다시 읽기 실패 시 `.previous` 복원,
+  DELETE 전 id 형식 확인, `http://` 경고와 신원 증명 경로 부재의 위협 기술.
+- 증거: host pytest(Windows) `src/core/core/test`, 브라우저 시험(Chromium, ROSY_RUN_BROWSER_TESTS=1), 회전 계약 시험,
+  `test_release_boundary_guards.py` — 보고서 수치. 장치 미검증.
+- gate 변화: 없음
+- 결정: D-193 S3 보완
+- 교훈: "최대 N일" 같은 약속은 클라이언트와 서버 양쪽에서 강제한다 — 한쪽 설정만 바뀌어도 약속이 깨진다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-198 Docker operational surface retirement
+
+- 변경: `docs/adr/D-198-docker-operational-surface-retirement.md` 추가, ADR Log 표 D-198 행. D-197이 닫은
+  빌드·릴리스 체인 밖에 남은 장치 운영면(install-pi.sh의 docker.com 설치, runtime-mode.sh, 레거시 유닛,
+  verify-motors/verify-pi/measure-dds-baseline/device_readback의 compose 판정, dev overlay docker backend,
+  Dockerfile 부속품)의 처분을 기록했다. 안전 게이트의 native 대체는 ARTIFACT와 무관하게 지금 구현하고,
+  install-pi.sh·runtime-mode.sh은 대체 없이 폐기하며, 삭제 순서는 D-197의 계약 테스트 재고정 계약을 따른다.
+  코드 본문은 바꾸지 않았다.
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q`;
+  `python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-198 (D-197 후속)
+- 교훈: 없음
+
 ## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
 
 - 변경: `.dockerignore`에 `!src/robots/`·`!src/robots/pinky_pro/`·`!src/robots/pinky_pro/**` 추가(없으면 Dockerfile core 단계의 `COPY src/robots/pinky_pro`가 실패). `test/test_robot_runtime.py`에 COPY와 허용 목록 문자열 가드. `deploy/robot/AGENTS.md`에 기존 결함 기록: core 단계는 `core_common`/`core_events`/`core_features`/`core_api_web`를 복사하지 않는다(이번에 고치지 않음). `.github/workflows/ci.yml` host pytest 단계에 `core/core_common/test robots/pinky_pro/test` 추가(`cd src` 기준, 로컬에서 같은 명령 1539 passed·14 skipped로 수집 확인), `.github/workflows/AGENTS.md` 동기화.

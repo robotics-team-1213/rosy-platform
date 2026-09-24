@@ -190,3 +190,11 @@
 - gate 변화: 없음.
 - 결정: 없음(D-169/D-170 은 별도 기록).
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · feat(fleet): POST /api/fleet/do 통역기
+
+- 변경: `core_common.intent`가 JSON·YAML `do` 문장을 기존 주소로 바꾼다. 관제는 `/api/fleet/do`로 그 문장을 받고, 로봇 일은 그 로봇 API로 흩뿌린다. `/api/v1/...` 기본 경로는 그대로다.
+- 증거: `python -m pytest src/core/core/test/test_intent.py src/site/fleet/test/test_server_app.py::test_do_translates_a_goal_and_rejects_a_ros_word -q` — 통과 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
