@@ -1173,3 +1173,11 @@
 - gate 변화: 없음(MEDIA 증거만, BOOT/DEVICE HOLD)
 - 결정: D-225
 - 교훈: 010은 99.9%에서 멈춘 기록을 전체 재기록으로 되돌려 37분을 잃었다. 판정은 readback이 하므로 안내는 재개부터 한다. 카드 readback은 xz 압축 해제가 CPU를 써서, 기록 중에는 무거운 병렬 작업을 피한다.
+
+## 2026-09-25 · f9e52192 · feat(robot): 서명 payload를 SSH로 보내 전환하는 `rosy-release-push.ps1` (D-225)
+
+- 변경: `deploy/robot/rosy-release-push.ps1`이 Linux에서 만든 서명 payload tarball을 운영 PC에서 먼저 검증(`signing.py` verify, 저장소 공개키)하고 scp로 보낸 뒤, `rosy-release-unpack.sh`로 `/opt/rosy/releases/<id>`에 풀고(임시 폴더 → `mv -T`, `sync`), `activate-release.sh`와 CORE 준비 확인을 실행한다. `-Rollback`, `-PrintCommands`(원격 명령 전체를 실행 없이 출력) 지원. 풀기 전 python `tarfile`로 전 항목을 읽어 일반 파일·폴더만 허용하고(심볼릭·하드링크·FIFO·장치, 절대경로, `..`, 제어문자 거부), `--no-same-owner --no-same-permissions` 뒤 root 소유·`go-w,u-s,g-s`로 고정한다. 같은 id가 있으면 `sha256sum -c`로 다시 검증해 손상 시 `RELEASE_DAMAGED`. `-ReleaseDir` 실전송은 거부(Windows tar가 실행 비트를 잃음).
+- 증거: `test_release_push_entrypoint.py` + `test_release_unpack_helper.py`(bash로 helper 실행) + `test_native_release_activation.py` + `test_robot_runtime.py` 78 passed, 1 skipped(NTFS에서 setuid 비트 확인 불가 — Linux에서 실행). 독립 리뷰 → 수정 2회 → 재검증 MERGE. 로봇 접속 없음.
+- gate 변화: 없음(`UPDATE_GO` HOLD 유지 — e4us에서 activate·rollback·recover 실증 전)
+- 결정: D-225
+- 교훈: root로 tar를 풀면 서명이 보장하지 않는 소유자·권한·항목 종류가 그대로 들어온다. 서명 검증과 별개로 풀기 전 항목 허용 목록과 풀고 난 뒤 권한 고정이 필요하다. 첫 부팅이 운영자 계정에 `NOPASSWD:ALL`을 준다 — 좁히는 일은 후속 과제.
