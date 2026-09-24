@@ -24,7 +24,11 @@ def open_page(playwright, width: int, height: int):
     page = browser.new_page(viewport={"width": width, "height": height})
     errors: list[str] = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))
-    page.set_default_timeout(5_000)
+    # 기본 대기 예산은 15초다(2026-09-25). 5초는 경합 중인 호스트에서
+    # goto(networkidle)·wait_for_function 을 계약과 무관하게 쓰러뜨렸다 —
+    # 플레이크 사후 처리 3건이 같은 원인이었다. 계약 자체의 타임아웃은
+    # 호출처에서 이미 명시적으로 지정한다.
+    page.set_default_timeout(15_000)
     return browser, page, errors
 
 

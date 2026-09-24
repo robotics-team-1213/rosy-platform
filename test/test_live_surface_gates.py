@@ -36,10 +36,6 @@ pytestmark = [
 ]
 
 
-def _norm(v: str) -> str:
-    return f"(() => {{ const c = document.createElement('canvas').getContext('2d'); c.fillStyle = {v!r}.trim(); return c.fillStyle; }})()"
-
-
 CENSUS = """() => {
   const cs = getComputedStyle(document.documentElement);
   const ctx = document.createElement('canvas').getContext('2d');

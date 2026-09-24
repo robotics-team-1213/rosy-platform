@@ -396,6 +396,9 @@ function card(robot, index) {
   node.className = `robot s${index % view.colors.length}`;
   if (!robot.online) node.classList.add("offline");
   if (view.selected === robot.robot_id) node.classList.add("selected");
+  // D-224 — ↑/↓ 순회의 착지점. tabindex -1 은 프로그램 포커스만 허용한다
+  // (탭 순서를 더럽히지 않는다).
+  node.tabIndex = -1;
 
   const state = robot.state || {};
   const pose = state.pose;
@@ -564,6 +567,35 @@ async function refreshState() {
 }
 
 // --- 조작 ------------------------------------------------------------------
+
+// D-224 — 예외 문법의 키보드 어휘(§7.3 "keyboard-first" 의 실현).
+// ↑/↓ 로 로스터를 순회하고, Enter 로 그 로봇의 목표 지정을 누르고,
+// Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
+// 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
+document.addEventListener("keydown", (event) => {
+  if (event.target.closest("input, select, textarea, button, ui-button, a")) return;
+  const cards = [...document.querySelectorAll("#roster article")];
+  if (!cards.length) return;
+  const active = document.activeElement;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const idx = cards.indexOf(active);
+    const next = idx < 0
+      ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
+      : cards[(idx + (event.key === "ArrowDown" ? 1 : -1) + cards.length) % cards.length];
+    next.focus();
+  } else if (event.key === "Enter" && cards.includes(active)) {
+    const aim = active.querySelector(".robot-actions ui-button");
+    if (aim && !aim.disabled) {
+      event.preventDefault();
+      aim.click();
+    }
+  } else if (event.key === "Escape" && view.selected) {
+    const selectedCard = cards.find((c) => c.classList.contains("selected"));
+    const aim = selectedCard && selectedCard.querySelector(".robot-actions ui-button");
+    if (aim) aim.click();
+  }
+});
 
 el("map-canvas").addEventListener("click", async (event) => {
   if (!view.selected || !view.map) return;

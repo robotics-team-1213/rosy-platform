@@ -1899,3 +1899,15 @@
 - gate 변화: BENCH용 라이브 게이트 신설(옵트인, ROSY_LIVE_DASHBOARD_URL).
 - 결정: D-201/202/203/214/220의 실물 집행 수단
 - 교훈: BENCH를 기다리게 하는 게 아니라 BENCH가 명령 하나가 되게 한다.
+
+## 2026-09-25 · uncommitted · docs(adr): D-224 surface keyboard vocabulary
+
+- 변경: D-224 (promised keys work: fleet roster traversal/goal/clear,
+  games Space fires /stop once, tabindex -1 landings), ADR log row,
+  round README keyboard session (F-21, F-22). Harness default wait
+  5s -> 15s with the contention-flake post-mortem in the ADR.
+- 증거: browser 3 new gates green + mutation red/green, dialog +
+  queues contracts 8 passed, harness lint clean.
+- gate 변화: none (docs).
+- 결정: D-224
+- 교훈: none.

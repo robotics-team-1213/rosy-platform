@@ -178,3 +178,14 @@
 - gate 변화: 게임 G1에 halt 가시 게이트 추가.
 - 결정: D-201
 - 교훈: 없음.
+
+## 2026-09-25 · uncommitted · fix(games): the Space promise is real (D-224)
+
+- 변경: F-22 — body-focus Space fires the same /stop POST once as the
+  halt click; controls keep native Space-to-click (no double fire),
+  repeat ignored. The "Space stops both" hint was text-only before.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pytest space test -q passes
+  (mutation: dead handler goes red, restore goes green).
+- gate 변화: games G1 gains the Space browser gate.
+- 결정: D-224
+- 교훈: none.

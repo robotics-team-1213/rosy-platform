@@ -224,3 +224,17 @@
 - gate 변화: Fleet G1에 큐 계약 시험 추가(D-159 승격의 Fleet 쪽 계약).
 - 결정: D-218, D-219
 - 교훈: 경보 큐 안의 거짓 조작은 최악의 자리다 — 큐는 이름과 경로만 말한다.
+
+## 2026-09-25 · uncommitted · fix(fleet): roster keyboard vocabulary, queue render gates (D-224, D-219)
+
+- 변경: (1) F-21 — roster Up/Down traversal, Enter arms the goal, Escape
+  clears; cards are tabindex -1 landing points, inputs exempt, focus ring
+  from the global :focus-visible rule. (2) D-219 render layer: HITL +
+  degraded queue render test, panel absent when healthy. (3) Removed dead
+  .topbar rule from the fleet sheet.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pytest keyboard + queues tests -q
+  passes (mutation: dead handler goes red, restore goes green).
+- gate 변화: fleet G1 gains keyboard + queue-render browser gates.
+- 결정: D-224
+- 교훈: a declared grammar without a realized path is a defect, not a
+  difference - check the source before trusting the sentence.

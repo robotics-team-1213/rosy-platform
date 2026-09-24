@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(adr): D-224 surface keyboard vocabulary
 - 2026-09-25 · uncommitted · test+docs: BENCH 라이브 게이트 러너와 현행 체크리스트
 - 2026-09-25 · uncommitted · docs(adr): D-221 얼굴 어휘 — F-07 처분
 - 2026-09-25 · uncommitted · docs(adr): D-218 확인 졸업 · D-219 D-159 승격 · D-220 정지 계약
 - 2026-09-25 · uncommitted · docs(adr): D-214 텍스트 대비의 바닥
-- 2026-09-25 · 743a707f · docs(validation): 재검증 — 동시 커밋 6건 이후 전 게이트 초록

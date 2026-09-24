@@ -130,6 +130,22 @@ python -m pytest src/face/emotion/test/test_info_screen_capture.py -q
 BENCH 질문도 재정의됐다: "라벨을 무엇으로"가 아니라 "비문자 채널(봉·칩·%)
 이 1.5m·0.5초에 읽히는가".
 
+
+## Keyboard session (2026-09-25, D-224)
+
+- F-21: Fleet 7.3 declares keyboard-first but had no keyboard path —
+  only the token-input Enter. Fix: roster Up/Down traversal, Enter to
+  arm a goal, Escape to clear; cards are tabindex -1 landing points.
+- F-22: the games Space promise was text only (no keyboard handling in
+  board.js, Law 0). Fix: Space with body focus fires the same /stop
+  POST once, like the halt click.
+- Fleet queue render contract (D-219 render layer): HITL + degraded
+  visible, panel absent when healthy.
+- Harness: default wait 5s -> 15s — shared cause of 3 contention
+  flakes on goto(networkidle)/wait_for_function.
+- Dead code removed: unused .topbar rule in fleet styles, unused
+  _norm helper in the live gates.
+- All new gates mutation-proven red then green.
 **ADR:** [D-201](../../adr/D-201-fixed-grammar-surfaces-fit-contract.md),
 [D-202](../../adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md),
 [D-203](../../adr/D-203-computed-type-scale-closure.md)

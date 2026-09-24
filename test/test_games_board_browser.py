@@ -196,3 +196,39 @@ def test_halt_row_stays_inside_the_declared_viewport():
     assert fit["halt"]["bottom"] <= fit["vh"] and fit["halt"]["top"] >= 0, (
         f"정지 행이 뷰포트 밖이다(D-201): {fit}"
     )
+
+
+def test_the_space_bar_promise_is_real():
+    """D-224 — "스페이스도 양쪽을 세운다"가 참이어야 한다(Law 0).
+
+    2026-09-25 까지 이 약속은 글자뿐이었다 — board.js 에 키보드 처리가 없어
+    힌트가 거짓말을 했다. 몸에 포커스가 있을 때 Space 는 /stop 을 친다.
+    """
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function(
+                "document.getElementById('phase')?.textContent === 'play'"
+            )
+            stops: list[str] = []
+
+            def serve_stop(route):
+                stops.append(route.request.method)
+                route.fulfill(status=200, json={"ok": True})
+
+            page.route("**/stop", serve_stop)
+            page.evaluate("document.body.focus(); null")
+            page.keyboard.press("Space")
+            page.wait_for_timeout(250)
+            assert stops == ["POST"], f"스페이스가 /stop 을 치지 않는다: {stops}"
+            assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()

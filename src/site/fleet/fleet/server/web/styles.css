@@ -13,18 +13,6 @@ body {
 
 input, select { font: inherit; color: inherit; }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--line-10);
-  background: var(--scrim);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: 700; font-size: var(--text-value); letter-spacing: 0.04em; }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }

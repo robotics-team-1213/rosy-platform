@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · fix(games): the Space promise is real (D-224)
 - 2026-09-24 · uncommitted · fix(games): 경기 보드 정지 행 가시 (D-201)
 - 2026-09-22 · uncommitted · test(games): unique test basenames; fix the gate cmd spec
 - 2026-09-18 · uncommitted · feat(games): stair 1 visibility report; close host track (D-112, D-113)
 - 2026-09-18 · uncommitted · feat(games): first-contact 0.10 cap and --stair 1-5 (D-110, D-111)
-- 2026-09-18 · uncommitted · test(games): reject onboard, isaac, neural until stair 4 (D-109)

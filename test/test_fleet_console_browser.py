@@ -360,6 +360,102 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         browser.close()
 
 
+# --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
+
+def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        page.keyboard.press("ArrowDown")
+        page.wait_for_function(
+            "() => document.activeElement"
+            " && document.activeElement.matches('#roster article')"
+            " && document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
+        )
+        page.keyboard.press("ArrowDown")
+        page.wait_for_function(
+            "() => document.activeElement.querySelector('b')?.textContent === 'rosy_02'"
+        )
+        page.keyboard.press("Enter")
+        page.wait_for_function(
+            "() => document.querySelectorAll('.robot.selected').length === 1"
+            " && document.querySelector('.robot.selected b')?.textContent === 'rosy_02'"
+        )
+        page.keyboard.press("Escape")
+        page.wait_for_function(
+            "() => document.querySelectorAll('.robot.selected').length === 0"
+        )
+        assert not errors, f"페이지 오류: {errors}"
+        browser.close()
+
+
+# --- D-219: 큐의 렌더 계약 — HITL 과 성능 저하가 보이고, 비면 사라진다 ---------
+
+def _with_state(robot: dict, **state_extra) -> dict:
+    row = {**robot, "state": {**robot["state"], **state_extra}}
+    return row
+
+
+def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
+    from playwright.sync_api import sync_playwright
+
+    degraded = {
+        "fleet": {"name": "site", "online": 3, "total": 3},
+        "robots": [
+            _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0}),
+            _with_state(_robot("rosy_02", {"x": 0.45, "y": 1.0, "yaw": 0.0}),
+                        hitl_requested=True),
+            _with_state(_robot("rosy_03", {"x": 0.45, "y": 0.4, "yaw": 0.0}),
+                        capabilities_degraded=["lidar", "docking"]),
+        ],
+        "ts": 0.0,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, {
+            "/api/fleet/state": degraded,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelectorAll('#critical-list li').length === 1"
+            " && document.querySelectorAll('#warning-list li').length === 1"
+        )
+        crit = page.inner_text("#critical-list")
+        warn = page.inner_text("#warning-list")
+        assert "rosy_02" in crit and "개입 필요" in crit
+        assert "로봇 화면에서 확인" in crit  # 정직한 경로(D-218, F-20)
+        assert "rosy_03" in warn and "lidar" in warn
+        assert page.locator(".queues-panel").is_visible()
+        assert not errors, f"페이지 오류: {errors}"
+        save_temp_screenshot(page, "fleet_console_queues.png")
+        browser.close()
+
+    with sync_playwright() as p:
+        browser, page, _errors = _open_console(p, {
+            "/api/fleet/state": SNAPSHOT,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": FORMATION,
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
+        assert page.locator(".queues-panel").is_hidden()
+        browser.close()
+
+
 # --- D-201: 예외 문법의 적합 계약 — 선언 뷰포트(사이트 PC 1920×1080)에서
 #     문서가 스크롤되지 않고 신호등·대형이 뷰포트 안에 있다. -------------------
 

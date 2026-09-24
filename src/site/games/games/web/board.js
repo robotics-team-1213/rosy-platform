@@ -137,5 +137,15 @@ document.getElementById("halt").addEventListener("click", async () => {
   await fetch("/stop", { method: "POST" });
 });
 
+// 초점 문법의 키보드 약속(D-224) — "스페이스도 양쪽을 세운다"가 이제 참이다.
+// 포커스가 컨트롤에 있으면 브라우저가 이미 Space 를 click 으로 바꾼다 —
+// 이중 발사를 막으려 몸에서만 잡는다.
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || event.repeat) return;
+  if (event.target.closest("button, ui-button, input, select, textarea, a")) return;
+  event.preventDefault();
+  document.getElementById("halt").click();
+});
+
 setInterval(tick, 250);
 tick();
