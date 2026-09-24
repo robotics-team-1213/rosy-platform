@@ -99,3 +99,27 @@ def test_resolve_wires_the_two_lookups_without_touching_the_network():
     offline = display.resolve_api_address(
         8080, hostname=lambda: "rosy-01", probe=lambda: None)
     assert offline == "http://rosy-01:8080"
+
+
+# --- republish (the decision `_INFO_REPUBLISH_S` used to guard inline) -------
+
+def test_the_info_window_republishes_on_the_rising_edge():
+    """The screen holds no state: opening the window must paint it at once."""
+    assert display.republish_due(True, was_visible=False,
+                                 now=100.0, last_pub=0.0) is True
+
+
+def test_an_open_window_republishes_only_at_the_interval():
+    assert display.republish_due(True, was_visible=True,
+                                 now=100.9, last_pub=100.0) is False
+    assert display.republish_due(True, was_visible=True,
+                                 now=101.0, last_pub=100.0) is True
+
+
+def test_a_closed_window_never_republishes():
+    assert display.republish_due(False, was_visible=True,
+                                 now=1e9, last_pub=0.0) is False
+
+
+def test_the_republish_interval_is_one_second():
+    assert display.REPUBLISH_S == 1.0

@@ -12,11 +12,33 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 import re
+import threading
 from typing import Optional
 
 
 class SaveMapFailed(RuntimeError):
     """slam_toolbox refused or could not complete the save."""
+
+
+def await_call(future, *, timeout: float):
+    """동기 파사드가 비동기 ROS 서비스 future 를 기다리는 유일한 방식.
+
+    실행기 스레드는 spin 할 수 없으므로 done-callback 하나가 event 를
+    세우고 기다린다. 태임아웃과 결과 부재는 각각 원래의 메시지로 갈린다 —
+    두 경우는 운영자에게 다른 뜻이다 (서비스가 안 뜬 것 vs 응답이 없던 것).
+    """
+    done = threading.Event()
+
+    def _cb(_):
+        done.set()
+
+    future.add_done_callback(_cb)
+    if not done.wait(timeout=timeout):
+        raise RuntimeError("save_map service timeout")
+    response = future.result()
+    if response is None:
+        raise RuntimeError("save_map service failed")
+    return response
 
 
 _SAFE_MAP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
