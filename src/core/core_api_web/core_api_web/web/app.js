@@ -17,7 +17,22 @@ import {
   setText,
   svgText,
 } from "./dom.js";
-import { api, apiMaybe, authHeaders, isAdmin, session, setConnection } from "./client.js";
+import {
+  PAIRED_SOURCES,
+  api,
+  apiMaybe,
+  authHeaders,
+  expiryLabel,
+  forgetToken,
+  isAdmin,
+  logout,
+  normalizeLoginCode,
+  pairWithCode,
+  rememberToken,
+  session,
+  setConnection,
+  sourceLabel,
+} from "./client.js";
 import {
   fillIdentityForm,
   fillSafetyForm,
@@ -898,17 +913,46 @@ function updateAdminControls() {
   setEnabled("network-connect", networkOn);
 }
 
-// The server names the caller's role on a route every role may read. Probing an
-// admin-only route instead cost every viewer a 403 in the console on each load.
+// D-193 5: the server says who this browser is (role, label, source, expiry) on a
+// route every role may read. Probing an admin-only route instead cost every
+// viewer a 403 in the console on each load (US-010).
 async function detectRole() {
   session.role = "";
+  session.identity = null;
   try {
-    const info = await api("/api/v1/system/info");
-    session.role = info?.caller_role || "";
+    const me = await api("/api/v1/auth/whoami");
+    session.identity = me || null;
+    session.role = me?.role || "";
   } catch (_error) {
     session.role = "";
   }
+  renderIdentity();
   updateAdminControls();
+}
+
+function renderIdentity() {
+  const me = session.identity;
+  const badge = elements["whoami-badge"];
+  const button = elements["logout"];
+  if (!me) {
+    if (badge) badge.hidden = true;
+    if (button) button.hidden = true;
+    return;
+  }
+  setText("whoami-role", me.role || "—");
+  const who = me.label || me.id || "";
+  setText("whoami-detail", [who, sourceLabel(me.source), expiryLabel(me.expires_at)]
+    .filter(Boolean).join(" · "));
+  if (badge) {
+    badge.hidden = false;
+    badge.title = `${me.role} · ${who} · ${sourceLabel(me.source)} · ${expiryLabel(me.expires_at)}`;
+  }
+  if (button) {
+    button.hidden = false;
+    // Only a paired token can log itself out (API Ref v1.19); any other token
+    // is only forgotten by this browser and stays valid on the robot.
+    button.textContent = PAIRED_SOURCES.has(me.source) ? "로그아웃" : "이 브라우저에서 잊기";
+  }
 }
 
 async function refreshSlowData() {
@@ -952,31 +996,132 @@ async function refreshRobotState() {
   renderRobotState(state);
 }
 
-function connectStateSocket() {
-  session.socket?.close();
+// Reconnect backoff. It grows on every close and resets only once a socket has
+// delivered state, so a server that accepts and closes (4401, 1013, a restart)
+// never gets a hot loop.
+const RECONNECT_MIN_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+
+function closeStateSocket() {
+  const socket = session.socket;
+  session.socket = null;
+  session.socketLive = false;
+  socket?.close();
+}
+
+function stopStateSocket() {
+  clearTimeout(session.reconnectTimer);
+  session.reconnectTimer = null;
   clearInterval(session.fallbackTimer);
+  session.fallbackTimer = null;
+  closeStateSocket();
+}
+
+function startRestFallback() {
+  if (session.fallbackTimer) return;
+  setConnection("error", "REST 폴링 전환");
+  session.fallbackTimer = setInterval(() => refreshRobotState().catch(showConnectionError), 2000);
+}
+
+function scheduleReconnect() {
+  clearTimeout(session.reconnectTimer);
+  const delay = session.reconnectDelayMs;
+  session.reconnectDelayMs = Math.min(delay * 2, RECONNECT_MAX_MS);
+  const jitter = Math.round(delay * 0.2 * Math.random());
+  session.reconnectTimer = setTimeout(() => {
+    session.reconnectTimer = null;
+    if (session.token && !session.socket) connectStateSocket();
+  }, delay + jitter);
+}
+
+// 4401 means the token is missing, wrong, revoked, logged out or expired, or the
+// first message came too late. Ask REST which: 401 there ends the session,
+// anything else is retried with backoff.
+async function verifyAfterSocketRefusal() {
+  try {
+    await api("/api/v1/auth/whoami");
+  } catch (error) {
+    if (error.status === 401) {
+      signOut("세션이 만료되었거나 회수되었습니다. 다시 로그인하세요.");
+      return;
+    }
+  }
+  if (session.token) scheduleReconnect();
+}
+
+function connectStateSocket() {
+  // REST polling, if running, keeps going until the new socket delivers state.
+  clearTimeout(session.reconnectTimer);
+  session.reconnectTimer = null;
+  closeStateSocket();
+  if (!session.token) return;
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  const url = `${scheme}://${window.location.host}/ws/state?token=${encodeURIComponent(session.token)}`;
-  const socket = new WebSocket(url);
+  // D-193 10: the token goes in the first message, never in the URL.
+  const socket = new WebSocket(`${scheme}://${window.location.host}/ws/state`);
   session.socket = socket;
-  socket.addEventListener("open", () => setConnection("online", "상태 스트림 연결"));
+  socket.addEventListener("open", () => {
+    if (socket !== session.socket || !session.token) return;
+    socket.send(JSON.stringify({ type: "auth", token: session.token }));
+  });
   socket.addEventListener("message", (event) => {
+    if (socket !== session.socket) return;
+    if (!session.socketLive) {
+      session.socketLive = true;
+      session.reconnectDelayMs = RECONNECT_MIN_MS;
+      clearInterval(session.fallbackTimer);
+      session.fallbackTimer = null;
+      setConnection("online", "상태 스트림 연결");
+    }
     try { renderRobotState(JSON.parse(event.data)); } catch (_error) { setConnection("error", "상태 해석 실패"); }
   });
-  socket.addEventListener("close", () => {
-    if (socket !== session.socket || !session.token) return;
-    setConnection("error", "REST 폴링 전환");
-    session.fallbackTimer = setInterval(() => refreshRobotState().catch(showConnectionError), 2000);
+  socket.addEventListener("close", (event) => {
+    if (socket !== session.socket) return;
+    session.socket = null;
+    session.socketLive = false;
+    if (!session.token) return;
+    startRestFallback();
+    if (event.code === 4401) {
+      verifyAfterSocketRefusal();
+    } else if (event.code === 4403) {
+      // Authenticated but not allowed: retrying cannot change that.
+      setConnection("error", "상태 스트림 권한 없음 · REST 폴링");
+    } else {
+      // 1013 (first-message slots full) arrives as 1006 before accept; both wait.
+      scheduleReconnect();
+    }
   });
 }
 
+/** End this browser's session locally: stop everything that uses the token, then forget it. */
+function signOut(message) {
+  stopTeleop("로그아웃으로 정지했습니다.");
+  stopStateSocket();
+  clearInterval(session.refreshTimer);
+  session.refreshTimer = null;
+  stopVisionPreview("카메라 인증 대기");
+  forgetToken();
+  session.reconnectDelayMs = RECONNECT_MIN_MS;
+  renderIdentity();
+  updateAdminControls();
+  setConnection("unknown", "인증 대기");
+  setText("auth-notice", message);
+  elements["auth-drawer"].classList.add("open");
+}
+
 function showConnectionError(error) {
+  if (error?.status === 401 && session.token) {
+    // The robot no longer knows this token (expired, revoked, logged out elsewhere).
+    signOut("세션이 만료되었거나 회수되었습니다. 다시 로그인하세요.");
+    return;
+  }
   stopTeleop("연결 오류로 정지했습니다.");
   setConnection("error", "연결 확인 필요");
   setText("hero-message", error.message || "Rosy API에 연결할 수 없습니다.");
 }
 
 async function connect() {
+  session.reconnectDelayMs = RECONNECT_MIN_MS;
+  setText("auth-notice", "");
   setConnection("unknown", "연결 중");
   await detectRole();
   await Promise.all([refreshRobotState(), refreshSlowData()]);
@@ -990,18 +1135,82 @@ async function connect() {
 elements["auth-form"].addEventListener("submit", async (event) => {
   event.preventDefault();
   stopVisionPreview("카메라 재인증 중");
-  session.token = elements["token-input"].value.trim();
-  sessionStorage.setItem("rosy.dashboard.token", session.token);
+  // A pasted token (card or manual) has no expiry: this tab only (D-193 6).
+  rememberToken(elements["token-input"].value.trim());
+  elements["token-input"].value = "";
   setText("auth-message", "연결 확인 중…");
   try {
     await connect();
     setText("auth-message", "연결되었습니다.");
   } catch (error) {
-    sessionStorage.removeItem("rosy.dashboard.token");
-    session.token = "";
+    forgetToken();
+    stopStateSocket();
+    renderIdentity();
     stopVisionPreview("카메라 인증 실패");
     setText("auth-message", error.message);
     showConnectionError(error);
+  }
+});
+
+let codeRetryTimer = null;
+
+elements["code-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (elements["code-submit"].disabled) return;
+  const code = normalizeLoginCode(elements["code-input"].value);
+  if (code.error) {
+    setText("code-message", code.error);
+    return;
+  }
+  setText("code-message", "코드 확인 중…");
+  elements["code-submit"].disabled = true;
+  let identity = null;
+  try {
+    identity = await pairWithCode(code.value, {
+      label: elements["code-label"].value.trim(),
+      persist: elements["code-remember"].checked,
+    });
+  } catch (error) {
+    setText("code-message", error.message || "로봇에 닿지 못했습니다.");
+    // 429: keep the button off until the server's Retry-After has passed.
+    clearTimeout(codeRetryTimer);
+    codeRetryTimer = setTimeout(() => {
+      elements["code-submit"].disabled = false;
+    }, (error.retryAfter || 0) * 1000);
+    return;
+  }
+  elements["code-submit"].disabled = false;
+  elements["code-input"].value = "";
+  stopVisionPreview("카메라 재인증 중");
+  try {
+    await connect();
+    setText("code-message", `${identity.role} 로 로그인했습니다 · ${expiryLabel(identity.expires_at)}`);
+  } catch (error) {
+    setText("code-message", `로그인은 되었지만 연결하지 못했습니다: ${error.message}`);
+    showConnectionError(error);
+  }
+});
+
+function showAuthTab(which) {
+  const code = which === "code";
+  elements["auth-tab-code"].setAttribute("aria-selected", String(code));
+  elements["auth-tab-token"].setAttribute("aria-selected", String(!code));
+  elements["code-form"].hidden = !code;
+  elements["auth-form"].hidden = code;
+  elements[code ? "code-input" : "token-input"].focus();
+}
+
+elements["auth-tab-code"].addEventListener("click", () => showAuthTab("code"));
+elements["auth-tab-token"].addEventListener("click", () => showAuthTab("token"));
+
+elements["logout"].addEventListener("click", async () => {
+  try {
+    const paired = await logout();
+    signOut(paired
+      ? "로그아웃했습니다. 이 브라우저의 키는 로봇에서 지워졌습니다."
+      : "이 브라우저에서 키를 지웠습니다. 토큰 자체는 로봇에 남아 있습니다 — 회수는 설정의 API 토큰에서 합니다.");
+  } catch (error) {
+    setText("hero-message", `로그아웃 실패: ${error.message}`);
   }
 });
 
@@ -1322,7 +1531,6 @@ setInterval(() => setText("clock", new Date().toLocaleTimeString("ko-KR", { hour
 setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false }));
 
 if (session.token) {
-  elements["token-input"].value = session.token;
   connect().catch((error) => {
     showConnectionError(error);
     elements["auth-drawer"].classList.add("open");

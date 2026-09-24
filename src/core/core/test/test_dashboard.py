@@ -1,3 +1,4 @@
+import re
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -22,6 +23,21 @@ def dashboard_js(*, without: tuple[str, ...] = ()) -> str:
         if path.name not in without
     )
 
+
+
+def assert_storage_rule(bundle: str) -> None:
+    """D-193 6: localStorage holds only a paired token, and only when asked to.
+
+    Every other use of localStorage in the dashboard would be a way for a
+    non-expiring token to outlive the tab.
+    """
+    client = (WEB_ROOT / "client.js").read_text(encoding="utf-8")
+    others = dashboard_js(without=("client.js",))
+    assert "localStorage" not in others
+    assert client.count("localStorage.setItem(") == 1
+    guarded = client.split("localStorage.setItem(", 1)[0].rsplit("export function rememberToken", 1)[1]
+    assert "if (persist && expiresAt" in guarded
+    assert "localStorage" in bundle
 
 
 @pytest.fixture
@@ -61,7 +77,7 @@ def test_dashboard_assets_are_local_and_reference_runtime_contract(dashboard_cli
     bundle = dashboard_js()
     assert "sessionStorage" in bundle
     assert "runtime_mode" in bundle
-    assert "localStorage" not in bundle
+    assert_storage_rule(bundle)
     assert "/api/v1/system/runtime" in bundle
     assert "/api/v1/robot/state" in bundle
     assert "/api/v1/safety/stop" in bundle
@@ -321,9 +337,9 @@ def test_dashboard_field_settings_use_click_handlers_not_form_submit():
     assert '["dock-register"]?.addEventListener("click"' in script
     assert '["slam-save"]?.addEventListener("click"' in script
     assert "detectRole" in script
-    # US-010: the role comes from /system/info, never from an admin-only probe
-    # that answers every viewer with a 403.
-    assert "caller_role" in script
+    # US-010 / D-193 5: the role comes from whoami, never from an admin-only
+    # probe that answers every viewer with a 403.
+    assert "/api/v1/auth/whoami" in script
     assert "/api/v1/logs/audit" not in script
     assert "bindFormSave" in script
     assert "const optional" in script
@@ -340,7 +356,7 @@ def test_dashboard_field_settings_use_click_handlers_not_form_submit():
     assert "/api/v1/system/tokens" in script
     assert 'method: "PUT"' in script
     assert "renderTokens" in script
-    assert "localStorage" not in script
+    assert_storage_rule(script)
 
 
 def test_dashboard_exposes_local_field_settings_not_fleet():
@@ -540,3 +556,48 @@ def test_uncompressed_clients_still_get_the_dashboard(dashboard_client):
     assert response.status_code == 200
     assert "content-encoding" not in response.headers
     assert "--signal-danger" in response.text
+
+
+def test_dashboard_login_has_code_and_token_tabs_and_a_whoami_badge():
+    """D-193 S3: robot-screen code first, API token second, identity in the header."""
+    html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+    script = dashboard_js()
+    drawer = html.split('id="auth-drawer"', 1)[1].split("</aside>", 1)[0]
+    assert drawer.index('id="auth-tab-code"') < drawer.index('id="auth-tab-token"')
+    assert 'id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true"' in drawer
+    assert 'id="auth-form" role="tabpanel" aria-labelledby="auth-tab-token" hidden' in drawer
+    assert 'id="code-input"' in drawer and 'id="code-remember" type="checkbox"' in drawer
+    assert 'id="whoami-badge"' in html and 'id="logout"' in html
+    assert "/api/v1/auth/pair" in script
+    assert "/api/v1/auth/logout" in script
+    assert 'LOGIN_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"' in script
+
+
+def test_dashboard_code_alphabet_matches_the_server():
+    from core_api_web.api.v1.auth import ALPHABET, CODE_LENGTH
+
+    client = (WEB_ROOT / "client.js").read_text(encoding="utf-8")
+    assert f'LOGIN_CODE_ALPHABET = "{ALPHABET}"' in client
+    assert f"LOGIN_CODE_LENGTH = {CODE_LENGTH};" in client
+
+
+def test_dashboard_never_puts_a_token_in_a_url_or_the_console():
+    """D-193 10: WebSocket auth is the first message; tokens never reach a URL or a log."""
+    script = dashboard_js()
+    assert "?token=" not in script
+    assert "encodeURIComponent(session.token)" not in script
+    assert 'socket.send(JSON.stringify({ type: "auth", token: session.token }))' in script
+    assert re.search(r"console\.(log|info|warn|error|debug)\(", script) is None
+    assert "document.cookie" not in script
+
+
+def test_dashboard_websocket_reconnect_backs_off_and_honours_close_codes():
+    script = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
+    assert "event.code === 4401" in script and "event.code === 4403" in script
+    assert "RECONNECT_MAX_MS" in script and "session.reconnectDelayMs * 2" not in script
+    assert "Math.min(delay * 2, RECONNECT_MAX_MS)" in script
+    # The backoff resets only after a socket delivered state, not on open.
+    message = script.split('socket.addEventListener("message"', 1)[1].split("});", 1)[0]
+    assert "session.reconnectDelayMs = RECONNECT_MIN_MS" in message
+    opened = script.split('socket.addEventListener("open"', 1)[1].split("});", 1)[0]
+    assert "reconnectDelayMs" not in opened

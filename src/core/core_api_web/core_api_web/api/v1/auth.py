@@ -342,8 +342,9 @@ def _lifetime_seconds(config: dict, role: str) -> float:
     return hours * 3600.0
 
 
-def _error(status: int, code: str, message: str, headers: Optional[dict] = None) -> JSONResponse:
-    return JSONResponse(status_code=status, content=error_body(code, message),
+def _error(status: int, code: str, message: str, headers: Optional[dict] = None,
+           detail: Any = None) -> JSONResponse:
+    return JSONResponse(status_code=status, content=error_body(code, message, detail),
                         headers={**NO_STORE, **(headers or {})})
 
 
@@ -454,7 +455,12 @@ async def pair(request: Request, svc: CoreServicesLike = Depends(get_services)):
         svc.events.publish("auth.code_burned", severity="warning", source="api",
                            data={"code_id": code_id, "attempts": MAX_WRONG_ATTEMPTS})
     if matched is None:
-        return _error(401, "UNAUTHORIZED", "invalid or expired login code")
+        # D-193 S3: the request whose miss burned the code says so, so the dashboard
+        # can tell the operator to fetch a new one instead of retyping this one.
+        # Every other miss stays one indistinguishable 401 (wrong, used, expired
+        # or no code issued) so a guesser learns nothing about live codes.
+        return _error(401, "UNAUTHORIZED", "invalid or expired login code",
+                      detail={"burned": True} if burned else None)
 
     if matched["source"] == "pair-physical":
         state.signal_root(matched["code_id"], "used")

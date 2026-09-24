@@ -1018,3 +1018,19 @@
 - gate 변화: 없음
 - 결정: D-193 보완(2026-09-24 보안 리뷰)
 - 교훈: 일회용 값의 "소비됨"은 그 값을 검증하는 프로세스의 수명보다 오래 가야 한다 — 메모리만으로는 재시작이 곧 재무장이다.
+
+## 2026-09-24 · uncommitted · feat(dashboard,deploy): D-193 S3 code login, whoami badge, first-message WebSocket, credential rotation
+
+- 변경: 대시보드 로그인 서랍에 "로봇 화면 코드"(기본)·"API 토큰" 두 탭. 코드는 브라우저에서 정규화·알파벳·길이 확인 뒤
+  `POST auth/pair`, 실패 문구는 401(틀림·사용·만료·발급 없음 한 문장)·폐기(`error.detail.burned`, 서버 추가)·429(`Retry-After`
+  동안 버튼 끔)·403(LAN 밖)을 구분. 저장소 규칙(D-193 6): 만료 없는 토큰은 `sessionStorage`, 페어링 토큰은 "로그인 유지"일 때만
+  `localStorage`(만료 지나면 삭제). 머리글 whoami 배지(역할·이름표·출처·만료)와 로그아웃(페어링만 `auth/logout`, 그 밖은
+  "이 브라우저에서 잊기"). 역할은 `whoami`에서. WebSocket은 `?token=` 없이 첫 메시지 인증, 4401→whoami 확인, 4403 재시도 없음,
+  그 밖 1→30 s 백오프(상태 수신 뒤에만 복귀), REST 401이면 로그아웃. 토큰 목록에 출처·만료·"이 기기".
+  `deploy/sd/rotate-core-api-credential.ps1`: whoami → 추가 → DPAPI 저장 → 저장값 whoami → 옛 id 삭제, 실패 시 저장소·새 id 되돌림,
+  값 미출력, HttpClient 프록시·리다이렉트 끔. API Ref v1.19 행·첫 메시지 2 s 정정, 런북, D-193 S3 노트.
+- 증거: host pytest(Windows) `src/core/core/test`, `test/test_dashboard_browser.py`(ROSY_RUN_BROWSER_TESTS=1, Chromium),
+  `test/test_rotate_core_api_credential.py`(Windows PowerShell 5.1 + 가짜 CORE) — 보고서 수치. 장치 미검증(평가표 6c·6g는 S4).
+- gate 변화: 없음(S4 실기 전)
+- 결정: D-193 S3
+- 교훈: 세션을 끝내는 신호(4401)는 토큰 문제 말고도 첫 메시지 지연에서도 온다 — 소켓 닫힘 코드만 보고 로그아웃하지 말고 REST로 한 번 확인한다.

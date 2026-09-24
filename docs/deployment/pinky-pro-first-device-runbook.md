@@ -380,7 +380,22 @@ rewritten with the uid; the AP store (`Rosy\ap`) follows the same rule.
 Rewriting the same device (`-ReprovisionReceipt`, or a retried write) reuses the
 stored credential, so dashboards and scripts keep working. To get a new one on
 the next write, delete the store file first. To rotate on a running robot,
-create a new administrator credential, switch to it, then delete the old one:
+run from the PC that holds the store (D-193 5; robot LAN, no SSH):
+
+```powershell
+deploy\sd\rotate-core-api-credential.ps1 -DeviceName rosy-pinky-xxxx
+# -BaseUrl http://<address>:8080 when mDNS does not resolve
+```
+
+It checks the stored credential with `whoami` (it must be this robot's
+non-expiring administrator), creates a new administrator, stores it in the same
+DPAPI file (keeping `<id>|<device_uid>`), confirms the stored value with
+`whoami`, then deletes the old id. It never prints the new value; read it back
+with the command above. If storing or confirming fails, the old store is put
+back and the new id is deleted again. If only the last delete fails, the new
+credential is already stored and the script names the old id to delete in the
+dashboard token settings. The rotated token shows `source: manual`. The manual
+equivalent, for reference:
 
 ```powershell
 $h = @{ Authorization = "Bearer $($c.GetNetworkCredential().Password)" }
@@ -408,9 +423,11 @@ Tablets and other PCs do not need the 43-character credential. A root service,
 - The LCD shows `Login ABCD-EFGH operator` under the stage (only at
   `CORE_READY`). The same code is on the local console banner
   (`/etc/issue.d/60-rosy-login.issue`).
-- Type it in the dashboard login (the "robot screen code" tab arrives with
-  S3; until then `POST /api/v1/auth/pair` with `{"code": "ABCD-EFGH"}` from the
-  robot LAN). The browser gets its own token: `operator`/`viewer` for 7 days,
+- Type it in the dashboard login, tab "로봇 화면 코드" (case, spaces and the
+  hyphen do not matter; or `POST /api/v1/auth/pair` with `{"code": "ABCD-EFGH"}`
+  from the robot LAN). The browser keeps the token for this tab only unless
+  "로그인 유지(최대 7일)" is ticked; the header shows role, source and expiry,
+  and "로그아웃" deletes the token on the robot. The browser gets its own token: `operator`/`viewer` for 7 days,
   `administrator` for 24 h (`auth.pairing.token_lifetime_hours`), listed as
   `pair-physical` in the token settings and revocable there or with
   `POST /api/v1/auth/logout`.
