@@ -1829,3 +1829,16 @@
 - gate 변화: 없음.
 - 결정: D-185 R8
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-196 robots are compositions of devices (Proposed)
+
+- 변경: `docs/adr/D-196-devices-and-robots-domains.md` 신규(Proposed). ADR Log에 D-196 표 행 추가.
+  `docs/reference/AGENTS.md`의 `append-only decisions through D-195`를 D-196으로. `docs/plans/2026-09-24-multi-robot-structure-draft.md`
+  Status를 "ADR로 승격됨"으로 갱신. `docs/plans/2026-09-22-control-package-split-design.md` §3에
+  D-196 개정(장치 코드는 devices로) 문단 추가
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_module_structure.py -q -p no:cacheprovider`,
+  `python tools/harness/rosy_harness.py generate && python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-196 Proposed — `src/devices/<계열>/`과 `src/robots/<robot>/` 도메인을 두고 로봇 지식을
+  그 안에만 둔다. D-147 §1·§2 일부와 D-168 P4 방향표를 대체
+- 교훈: 없음

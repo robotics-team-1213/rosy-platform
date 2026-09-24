@@ -63,6 +63,14 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
 그래서 지금 떼어 내면 패키지 사이클이 생긴다. `planning`·`path_follow`·`pursuit`·`escape_budget`을
 라이브러리로 먼저 뽑은 다음에 재검토한다(X3: 예정된 작업이 없으면 만들지 않는다).
 
+**개정 (2026-09-24, D-196):** `control_sensing`에 넣기로 했던 것 중 장치 코드는 devices로 간다.
+- `ir_adc_node`와 `sensing/ir_adc.py`는 `devices/pinky_pro`로 간다. D-192 §4의 0x08 독자를 한 계열에 모으기 위해서다.
+- `camera_detect_node`의 캡처부와 `sensing/camera_controls.py`는 `devices/common/camera`로 간다.
+- `control_sensing`에는 알고리즘만 남는다. line/road/dock observer는 `Image`를 구독하고, 카메라
+  기하는 프로필/TF에서 받는다.
+
+이 개정은 트랙 3의 첫 단계에서 함께 실행한다. io 이미지 폐쇄는 `devices/pinky_pro` + `devices/common/camera` + `control_sensing`이 된다.
+
 ## 4. 파일 단위 분리 (P6 `split` 판정 3건)
 
 패키지 이동과 별개로, 같은 패키지 안에서 ROS와 무관한 부분을 형제 모듈로 뽑는다.
