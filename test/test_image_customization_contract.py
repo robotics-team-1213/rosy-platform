@@ -143,6 +143,13 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
         "dtoverlay=uart4-pi5\n", encoding="utf-8")
+    # The bus UARTs carry no console (configure-uart-pi5.sh edits the Ubuntu line).
+    (root / "boot/firmware/cmdline.txt").write_text(
+        "console=ttyAMA10,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 root=LABEL=writable "
+        "rootfstype=ext4 rootwait fixrtc\n",
+        encoding="utf-8")
+    for tty in ("ttyAMA0", "ttyAMA4"):
+        _link(root / f"etc/systemd/system/serial-getty@{tty}.service", "/dev/null")
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
         'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
@@ -197,6 +204,8 @@ def _verify(root: Path) -> subprocess.CompletedProcess[str]:
 
 def test_mounted_image_verifier_accepts_native_core_only_layout(tmp_path):
     root = _valid_root(tmp_path)
+    if not _bus_masks_are_symlinks(root):
+        pytest.skip("no symlink rights on this host; the verifier accepts only a real /dev/null mask")
     completed = _verify(root)
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["ok"] is True
@@ -350,6 +359,71 @@ def test_mounted_image_verifier_requires_the_base_uart_and_i2c_settings(tmp_path
     completed = _verify(pi4_only)
     assert completed.returncode != 0
     assert "lost enable_uart=1" in completed.stderr
+
+
+@pytest.mark.parametrize("console", ["console=serial0,115200", "console=ttyAMA0,115200",
+                                     "console=ttyAMA4,115200", "console=ttyAMA0"])
+def test_mounted_image_verifier_rejects_a_console_on_a_robot_bus_uart(tmp_path, console):
+    # rosy-pinky-e4us 2026-09-24: Ubuntu's console=serial0,115200 is ttyAMA0 with
+    # enable_uart=1; the kernel console and agetty held the RPLIDAR C1 port.
+    root = _valid_root(tmp_path)
+    cmdline = root / "boot/firmware/cmdline.txt"
+    cmdline.write_text(f"{console} " + cmdline.read_text(encoding="utf-8"), encoding="utf-8")
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert f"routes a console to a robot bus UART: {console}" in completed.stderr
+
+
+def _bus_masks_are_symlinks(root: Path) -> bool:
+    return all((root / f"etc/systemd/system/serial-getty@{tty}.service").is_symlink()
+               for tty in ("ttyAMA0", "ttyAMA4"))
+
+
+def test_mounted_image_verifier_accepts_the_screen_and_debug_uart_consoles(tmp_path):
+    root = _valid_root(tmp_path)
+    if not _bus_masks_are_symlinks(root):
+        pytest.skip("no symlink rights on this host; the verifier accepts only a real /dev/null mask")
+    completed = _verify(root)
+    assert "cmdline.txt" not in completed.stderr
+    assert "serial getty" not in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_recovery_console(tmp_path):
+    root = _valid_root(tmp_path)
+    cmdline = root / "boot/firmware/cmdline.txt"
+    cmdline.write_text(cmdline.read_text(encoding="utf-8").replace("console=ttyAMA10,115200 ", ""),
+                       encoding="utf-8")
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert "no recovery console on the debug UART (console=ttyAMA10)" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_cmdline_and_masked_bus_gettys(tmp_path):
+    no_cmdline = _valid_root(tmp_path / "nocmdline")
+    (no_cmdline / "boot/firmware/cmdline.txt").unlink()
+    assert "missing kernel command line: boot/firmware/cmdline.txt" in _verify(no_cmdline).stderr
+
+    for tty in ("ttyAMA0", "ttyAMA4"):
+        mask = f"etc/systemd/system/serial-getty@{tty}.service"
+        missing = _valid_root(tmp_path / tty)
+        (missing / mask).unlink()
+        completed = _verify(missing)
+        assert completed.returncode != 0
+        assert f"serial getty is not masked: {mask}" in completed.stderr
+
+        # A regular file is not a mask, whatever it contains.
+        regular = _valid_root(tmp_path / f"{tty}-file")
+        (regular / mask).unlink()
+        (regular / mask).write_text("/dev/null\n", encoding="utf-8")
+        assert f"serial getty is not masked: {mask}" in _verify(regular).stderr
+
+        elsewhere = _valid_root(tmp_path / f"{tty}-link")
+        (elsewhere / mask).unlink()
+        try:
+            (elsewhere / mask).symlink_to("/lib/systemd/system/serial-getty@.service")
+        except OSError:
+            continue  # no symlink rights: the two cases above still hold
+        assert f"serial getty is not masked: {mask}" in _verify(elsewhere).stderr
 
 
 def test_customizer_executes_native_entrypoints_inside_the_image():

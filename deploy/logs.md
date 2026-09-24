@@ -1126,3 +1126,33 @@
 - 교훈: 주기 재시도는 "아무것도 안 바뀌었으면 아무것도 쓰지 않는다"가 기본이어야 한다 — 전체 적용 경로를 그대로 돌리면 부작용이 주기가 된다.
 - 후속(미처리): fallback AP의 "업링크 있음" 규칙이 사이트 프로필 대신 아무 연결이나 인정하는 점, 재시도 동안
   `rosy-first-boot.service`가 failed로 남아 부팅 표시가 FAILED를 보이는 잡음, 재시도 유닛 샌드박스 강화.
+
+## 2026-09-24 · uncommitted · fix(image,uart): keep the kernel console and getty off the LiDAR UART
+
+- 변경: `configure-uart-pi5.sh`(이미지·장치 공통)가 `cmdline.txt`에서 `console=serial0|ttyAMA0|ttyAMA4[,baud]`만 지우고
+  (`console=tty1`, 디버그 UART `ttyAMA10`은 유지) `serial-getty@ttyAMA0`·`@ttyAMA4`를 `/dev/null`로 mask한다. 멱등.
+  `verify-mounted-image.py`는 `cmdline.txt` 누락·버스 UART 콘솔·mask 누락이면 빌드를 멈추고, `verify-pi.sh`에 `UART` 검사
+  (`/proc/cmdline`, 활성 `serial-getty@ttyAMA0`)를 더했다.
+- 증거: 실기 `rosy-pinky-e4us`, release 2026.09.24-010. Ubuntu `cmdline.txt`의 `console=serial0,115200`이 `enable_uart=1`에서
+  `/proc/cmdline`의 `console=ttyAMA0,115200`이 되어 agetty가 RPLIDAR C1 포트를 잡았다. `sllidar_node`는
+  `SL_RESULT_OPERATION_TIMEOUT`, getty 정지 뒤 `0x80008004`(커널 콘솔). 항목을 지우고 재부팅하자 getty 없음,
+  `health status : OK`, DenseBoost 10 Hz. host: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py
+  test/test_pi_wifi_deployment.py test/test_device_readback.py test/test_pinky_flashable_image_contract.py test/test_pinky_user_validation.py -q`
+- gate 변화: 평가표 11행 FAIL → 소스 수정. DEVICE는 현장 cmdline 수정으로 LiDAR PASS, 새 이미지로는 미확인(ARTIFACT HOLD)
+- 결정: D-192 보완(2026-09-24)
+- 교훈: 기반 이미지가 "이미 준다"고 본 장치 노드도 그 노드를 누가 잡고 있는지까지 확인한다. `enable_uart=1`은 포트를 만들지만
+  `console=serial0`과 짝지어지면 그 포트를 콘솔에 넘긴다.
+
+## 2026-09-24 · uncommitted · fix(image,uart): recovery console on the debug UART, strict getty masks (PR #39 review)
+
+- 변경: 바로 위 항목의 보완. `configure-uart-pi5.sh`가 버스 UART 콘솔을 지운 뒤 복구용 시리얼 콘솔
+  `console=ttyAMA10,115200`(Pi 5 디버그 3핀 UART, 로봇 버스 없음)이 없으면 앞에 넣는다(`console=tty1`은 마지막에 유지) —
+  위 항목대로면 시리얼 콘솔이 하나도 남지 않았다. `verify-mounted-image.py`는 `ttyAMA10` 콘솔이 없어도 빌드를 멈추고,
+  getty mask는 `/dev/null` symlink만 인정한다(일반 파일 거부). 두 임시 파일을 지우는 EXIT trap을 편집 전에 두고,
+  `cmdline.txt`를 사전 검사하고, `REBOOT_REQUIRED`는 한 번만 출력한다. `verify-pi.sh`는 `serial-getty@ttyAMA0`·`@ttyAMA4`의
+  활성과 masked 상태를 함께 본다. `pi5-acceptance-checklist.md`의 UART 콘솔은 디버그 UART로 명시했다.
+- 증거: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py deploy/image/test -q`
+- gate 변화: 없음(평가표 11행 그대로, 이미지 미확인)
+- 결정: D-192 보완(2026-09-24) 문구 갱신
+- 교훈: 콘솔을 치울 때는 복구 경로가 남는지 먼저 본다. 검사기가 Windows 시험 편의를 위해 느슨해지면 실제 이미지에서도 느슨하다 —
+  시험 쪽을 skip한다.
