@@ -8,9 +8,13 @@
 # full manifest/target/runtime check) does not run until activation. Between
 # unpack and activate the payload sits on disk as root, so this script treats
 # the tarball as untrusted content and, on top of the copy itself:
-#   - lists every member before writing anything and refuses an absolute
-#     path, a ".." component, or a symlink outright, rather than trusting an
-#     extractor's own (version- and flavor-dependent) defaults;
+#   - lists every member's type and name (via python3's tarfile module, not
+#     line-oriented `tar -t` text, which a newline embedded in a member name
+#     can split across lines and dodge a per-line check) before writing
+#     anything, and allowlists only regular files and directories -- a
+#     symlink, hardlink, fifo, device node, or any other type is refused
+#     outright, along with an absolute path, a ".." component, or a control
+#     character (including a newline) anywhere in a name;
 #   - extracts with --no-same-owner/--no-same-permissions and then reasserts
 #     root:root ownership and strips setuid/setgid/group-or-other-write bits,
 #     so an unsigned tar header cannot hand the payload a mode or owner that
@@ -53,29 +57,45 @@ trap cleanup EXIT
 rm -rf -- "$TMP"
 mkdir -p "$TMP"
 
-# Refuse before writing a single byte: an absolute member path, a ".."
-# component anywhere in it, or a symlink entry.
-while IFS= read -r entry; do
-  [[ -n "$entry" ]] || continue
-  case "$entry" in
-    /*)
-      echo "TARBALL_ENTRY_UNSAFE: absolute path entry: $entry" >&2
-      exit 1
-      ;;
-  esac
-  IFS='/' read -ra parts <<<"$entry"
-  for part in "${parts[@]}"; do
-    if [[ "$part" == ".." ]]; then
-      echo "TARBALL_ENTRY_UNSAFE: path traversal entry: $entry" >&2
-      exit 1
-    fi
-  done
-done < <(tar -tzf "$TARBALL")
+# Refuse before writing a single byte. Allowlisted, not denylisted: only a
+# regular file or a directory passes; a symlink, hardlink, fifo, char/block
+# device, or anything else is rejected regardless of its name. python3's
+# tarfile module parses the real member table (name, type) rather than the
+# line-oriented text `tar -t`/`tar -tv` print, so a name containing a
+# newline cannot split across two lines and slip past an absolute-path or
+# ".." check the way it could with a line-by-line text scan.
+python3 - "$TARBALL" <<'PY'
+import re
+import sys
+import tarfile
 
-if tar -tvzf "$TARBALL" | awk '{ print substr($1, 1, 1) }' | grep -q '^l$'; then
-  echo "TARBALL_ENTRY_UNSAFE: tarball contains a symlink entry" >&2
-  exit 1
-fi
+CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+KIND = {
+    tarfile.SYMTYPE: "symlink",
+    tarfile.LNKTYPE: "hardlink",
+    tarfile.FIFOTYPE: "fifo",
+    tarfile.CHRTYPE: "character device",
+    tarfile.BLKTYPE: "block device",
+}
+
+
+def reject(reason: str) -> None:
+    print(f"TARBALL_ENTRY_UNSAFE: {reason}", file=sys.stderr)
+    sys.exit(1)
+
+
+with tarfile.open(sys.argv[1], "r:gz") as tar:
+    for member in tar.getmembers():
+        name = member.name
+        if CONTROL.search(name):
+            reject(f"control character in entry name: {name!r}")
+        if name.startswith("/"):
+            reject(f"absolute path entry: {name}")
+        if any(part == ".." for part in name.split("/")):
+            reject(f"path traversal entry: {name}")
+        if not (member.isreg() or member.isdir()):
+            reject(f"{KIND.get(member.type, f'type {member.type!r}')} entry: {name}")
+PY
 
 tar --no-same-owner --no-same-permissions -xzf "$TARBALL" -C "$TMP"
 

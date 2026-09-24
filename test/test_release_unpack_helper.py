@@ -4,8 +4,9 @@ rosy-release-push.ps1 scp's this helper to the robot and runs it under
 `sudo -n`; it is the only thing that ever writes into /opt/rosy/releases on
 the device side of a push. These tests run the real script (not just grep its
 text) against a scratch "releases" directory under tmp_path, never /opt,
-covering: a normal unpack, three kinds of hostile tarball entries (absolute
-path, ".." traversal, symlink) that must be refused before anything is
+covering: a normal unpack, hostile tarball entries (absolute path, ".."
+traversal, symlink, hardlink, fifo, a name containing a newline, a name
+containing a control character) that must be refused before anything is
 written, the same-id-same-content and same-id-different-content outcomes,
 and that a payload file's owner/mode is normalized regardless of what the
 tarball's header claimed.
@@ -28,10 +29,11 @@ SCRIPT = ROOT / "deploy" / "robot" / "rosy-release-unpack.sh"
 BASH = shutil.which("bash")
 TAR = shutil.which("tar")
 SHA256SUM = shutil.which("sha256sum")
+PYTHON3 = shutil.which("python3")
 
 pytestmark = pytest.mark.skipif(
-    BASH is None or TAR is None or SHA256SUM is None,
-    reason="bash, tar and sha256sum are required",
+    BASH is None or TAR is None or SHA256SUM is None or PYTHON3 is None,
+    reason="bash, tar, sha256sum and python3 are required",
 )
 
 
@@ -181,6 +183,73 @@ def test_a_symlink_entry_is_refused_before_writing_anything(tmp_path, releases):
     assert "TARBALL_ENTRY_UNSAFE" in completed.stderr
     assert "symlink" in completed.stderr
     assert not (releases / "2026.01.05-001").exists()
+
+
+def test_a_hardlink_entry_is_refused_before_writing_anything(tmp_path, releases):
+    # An allowlist (regular file, directory) rather than a symlink-only
+    # denylist: a hardlink can point at a file the extracting root can read
+    # but the release payload should never have been able to name.
+    archive = tmp_path / "pack.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo(name="link1")
+        info.type = tarfile.LNKTYPE
+        info.linkname = "file1"
+        tar.addfile(info)
+
+    completed = _run("2026.01.10-001", archive, releases)
+
+    assert completed.returncode != 0
+    assert "TARBALL_ENTRY_UNSAFE" in completed.stderr
+    assert "hardlink" in completed.stderr
+    assert not (releases / "2026.01.10-001").exists()
+
+
+def test_a_fifo_entry_is_refused_before_writing_anything(tmp_path, releases):
+    archive = tmp_path / "pack.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo(name="fifo1")
+        info.type = tarfile.FIFOTYPE
+        tar.addfile(info)
+
+    completed = _run("2026.01.11-001", archive, releases)
+
+    assert completed.returncode != 0
+    assert "TARBALL_ENTRY_UNSAFE" in completed.stderr
+    assert "fifo" in completed.stderr
+    assert not (releases / "2026.01.11-001").exists()
+
+
+def test_a_name_containing_a_newline_is_refused(tmp_path, releases):
+    # A newline inside a member name splits across lines in `tar -t` text
+    # output and can dodge a per-line absolute-path/".." check; the scan
+    # must read the real member table (python3's tarfile), not that text.
+    archive = tmp_path / "pack.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo(name="evil\n../escaped")
+        info.size = 0
+        tar.addfile(info)
+
+    completed = _run("2026.01.12-001", archive, releases)
+
+    assert completed.returncode != 0
+    assert "TARBALL_ENTRY_UNSAFE" in completed.stderr
+    assert "control character" in completed.stderr
+    assert not (releases / "2026.01.12-001").exists()
+
+
+def test_a_name_containing_a_control_character_is_refused(tmp_path, releases):
+    archive = tmp_path / "pack.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo(name="evil\x01name")
+        info.size = 0
+        tar.addfile(info)
+
+    completed = _run("2026.01.13-001", archive, releases)
+
+    assert completed.returncode != 0
+    assert "TARBALL_ENTRY_UNSAFE" in completed.stderr
+    assert "control character" in completed.stderr
+    assert not (releases / "2026.01.13-001").exists()
 
 
 def test_the_same_id_with_matching_content_is_a_safe_no_op(tmp_path, releases):
