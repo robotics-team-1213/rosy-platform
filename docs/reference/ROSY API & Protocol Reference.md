@@ -61,7 +61,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 
 - `Authorization: Bearer <token>` (REST). 쿠키는 쓰지 않는다.
 - WebSocket: 연결 뒤 첫 메시지 `{"type": "auth", "token": "<token>"}` (v1.19). 5 s 안에 오지 않거나 틀리면 4401.
-  첫 메시지를 기다리는 소켓은 전체 16 개까지이고, 넘으면 수락 전에 1013 으로 닫는다. 열린 소켓은 30 s 마다 토큰을 다시 보고,
+  첫 메시지를 기다리는 소켓은 출발지 호스트마다 4 개, 전체 64 개까지이고(2 s 안에 첫 메시지), 넘으면 수락 전에 닫는다(Starlette는 수락 전 close를 HTTP 403으로 보낸다). 열린 소켓은 30 s 마다 토큰을 다시 보고,
   회수·로그아웃·만료됐으면 4401 로 닫는다.
   `?token=<token>` 쿼리도 한 릴리스 동안 받는다(v1.19 기준 폐기 예정 — URL 은 프록시·기록에 남는다).
 - 토큰은 sha256 다이제스트로만 저장한다. 레코드에는 `source`(`card` \| `manual` \| `pair-physical` \| `pair-admin` \| `legacy`)와

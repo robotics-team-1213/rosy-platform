@@ -16,6 +16,7 @@ Fleet 릴레이를 물리든 리더의 pose 소켓을 그대로 물리든 추종
 from __future__ import annotations
 
 import asyncio
+import collections
 import functools
 import json
 
@@ -29,10 +30,13 @@ from core_common.protocol.schemas import Envelope, EnvelopeType, Pose, PoseSampl
 ws_router = APIRouter()
 
 #: 쿼리 토큰 없이 연결했을 때 첫 인증 메시지를 기다리는 시간.
-FIRST_MESSAGE_TIMEOUT_S = 5.0
+FIRST_MESSAGE_TIMEOUT_S = 2.0
 #: D-193 보안 리뷰 L3: 첫 메시지를 기다리는 소켓 수 상한. 넘으면 1013(나중에 다시).
-MAX_PENDING_FIRST_MESSAGE = 16
-_pending_first_message = 0
+# One host cannot hold every slot: a shared cap alone let 16 idle sockets from
+# one client lock every dashboard out of first-message auth (D-193 review).
+MAX_PENDING_PER_IP = 4
+MAX_PENDING_FIRST_MESSAGE = 64
+_pending_by_ip: collections.Counter[str] = collections.Counter()
 #: D-193 보안 리뷰 L2: 열린 소켓의 토큰을 이 주기로 다시 본다. 회수·만료·로그아웃이면 4401.
 REVALIDATE_S = 30.0
 
@@ -145,19 +149,22 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
     `?token=` 이 있으면 수락 전에 판정한다(기존 동작). 없으면 수락하고 첫
     메시지를 기다린다.
     """
-    global _pending_first_message
     svc = websocket.app.state.core
     query_token = websocket.query_params.get("token")
     if query_token is None:
-        if _pending_first_message >= MAX_PENDING_FIRST_MESSAGE:
+        host = websocket.client.host if websocket.client else ""
+        if (_pending_by_ip[host] >= MAX_PENDING_PER_IP
+                or sum(_pending_by_ip.values()) >= MAX_PENDING_FIRST_MESSAGE):
             await websocket.close(code=1013)
             return None
-        _pending_first_message += 1
+        _pending_by_ip[host] += 1
         try:
             await websocket.accept()
             token = await _first_message_token(websocket)
         finally:
-            _pending_first_message -= 1
+            _pending_by_ip[host] -= 1
+            if _pending_by_ip[host] <= 0:
+                del _pending_by_ip[host]
     else:
         token = query_token
     try:

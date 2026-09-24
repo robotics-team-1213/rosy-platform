@@ -636,12 +636,40 @@ def test_sockets_waiting_for_a_first_message_are_capped(robot, monkeypatch):
     from starlette.websockets import WebSocketDisconnect
     import core_api_web.api.ws as ws_module
 
+    import collections
+
     tc, _svc, _state, _events = robot()
-    monkeypatch.setattr(ws_module, "_pending_first_message", ws_module.MAX_PENDING_FIRST_MESSAGE)
+    # The whole-server cap still holds.
+    full = collections.Counter({f"10.0.0.{n}": 1 for n in range(ws_module.MAX_PENDING_FIRST_MESSAGE)})
+    monkeypatch.setattr(ws_module, "_pending_by_ip", full)
     with pytest.raises(WebSocketDisconnect) as closed:
         with tc.websocket_connect("/ws/state") as socket:
             socket.receive_json()
     assert closed.value.code == 1013
+
+
+def test_one_host_cannot_hold_every_first_message_slot(robot, monkeypatch):
+    """D-193 review: 16 idle sockets from one client used to lock every dashboard out."""
+    from starlette.websockets import WebSocketDisconnect
+    import collections
+    import core_api_web.api.ws as ws_module
+
+    tc, _svc, _state, _events = robot()
+    # This client's own slots are full (per-host cap 0) while the server has room.
+    monkeypatch.setattr(ws_module, "MAX_PENDING_PER_IP", 0)
+    monkeypatch.setattr(ws_module, "_pending_by_ip", collections.Counter({"10.0.0.9": 1}))
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with tc.websocket_connect("/ws/state") as socket:
+            socket.receive_json()
+    assert closed.value.code == 1013
+    assert sum(ws_module._pending_by_ip.values()) < ws_module.MAX_PENDING_FIRST_MESSAGE
+
+
+def test_the_per_host_cap_is_below_the_server_cap():
+    import core_api_web.api.ws as ws_module
+
+    assert 0 < ws_module.MAX_PENDING_PER_IP < ws_module.MAX_PENDING_FIRST_MESSAGE
+    assert ws_module.FIRST_MESSAGE_TIMEOUT_S <= 2.0
 
 
 def test_token_writers_share_one_lock():
