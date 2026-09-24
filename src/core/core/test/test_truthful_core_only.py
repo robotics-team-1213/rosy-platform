@@ -73,6 +73,9 @@ def _load(tmp_path, monkeypatch, *, env: dict, overlay: str | None = None):
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
+    # D-193 7: the defaults carry no tokens; the dev viewer token needs the opt-in.
+    monkeypatch.delenv("ROSY_DEPLOYMENT", raising=False)
+    monkeypatch.setenv("ROSY_DEV_AUTH", "1")
     return config_module.load_config(str(CONFIG_DIR / "rosy_default.yaml"))
 
 
