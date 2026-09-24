@@ -214,4 +214,5 @@
 | D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 | Proposed |
 | D-207 | 제품과 장치 종류는 주인이 하나다 — 제품 기록은 src/products, 새 칩은 종류 안의 구현, 조명 두 서비스와 현장 펌웨어와 맵은 부르는 쪽에 둔다 | Proposed |
 | D-208 | 감지 프로파일은 속도를 발행하지 않는다 — full만 D-149의 단독 최종 발행 예외이고 sensing은 safety_node와 Twist 발행자를 만들지 않는다 | Accepted |
+| D-209 | 인식과 학습 백엔드의 자리 — 몸통 인식은 control/sensing/perception, VLA는 backend_learned, 재생과 학습 세트는 로봇 이미지 밖 | Accepted |
 ---
