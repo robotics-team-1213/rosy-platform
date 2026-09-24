@@ -389,6 +389,8 @@ PROGRAM_SOURCES = {
                                      "deploy/robot/native/recover-release.sh"],
     "rosy-sd-provision.service": [],
     # CORE also imports modules of the control package (sensor adapter, gate).
+    # control sits under src/core since a93d5188 but runs its nodes as their own
+    # processes, so only the modules CORE imports count (PROGRAM_EXCLUDES).
     "rosy-core.service": ["src/core", "imported-by:src/core:control:src/core/control"],
     "rosy-io.service": ["src/devices/bringup"],
     "rosy-navigation.service": ["src/navigation", "src/devices/bringup"],
@@ -465,7 +467,12 @@ IMPORT_OF = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", re.MULTILINE)
 def _imported_modules(importer: str, package: str, package_root: str) -> list[Path]:
     """Files of `package` (rooted at package_root) that `importer` sources import."""
     found: set[Path] = set()
+    own = ROOT / package_root
     for source in _source_files(importer):
+        # The package's own imports are not the importer's: control sits inside
+        # src/core since a93d5188, and would otherwise pull in all of itself.
+        if source.is_relative_to(own):
+            continue
         for name in IMPORT_OF.findall(source.read_text(encoding="utf-8", errors="replace")):
             parts = name.split(".")
             if parts[0] != package:
@@ -476,6 +483,12 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
                     if candidate.is_file():
                         found.add(candidate)
     return sorted(found)
+
+
+# Trees inside a directory source that are not part of that unit's program.
+PROGRAM_EXCLUDES = {
+    "rosy-core.service": ("src/core/control",),
+}
 
 
 def _source_files(relative: str) -> list[Path]:
@@ -496,8 +509,12 @@ def _source_files(relative: str) -> list[Path]:
 def _write_roots(unit: str) -> set[str]:
     """Absolute paths and HOME use the unit's program source names."""
     found: set[str] = set()
+    excluded = [ROOT / item for item in PROGRAM_EXCLUDES.get(unit, ())]
     for relative in PROGRAM_SOURCES[unit]:
         for path in _source_files(relative):
+            if not relative.startswith("imported-by:") and any(
+                    path.is_relative_to(item) for item in excluded):
+                continue
             text = path.read_text(encoding="utf-8", errors="replace")
             found.update(PATH_LITERAL.findall(text))
             for match in SEGMENT_CHAIN.finditer(text):
