@@ -1842,3 +1842,10 @@
 - 결정: D-196 Proposed — `src/devices/<계열>/`과 `src/robots/<robot>/` 도메인을 두고 로봇 지식을
   그 안에만 둔다. D-147 §1·§2 일부와 D-168 P4 방향표를 대체
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(structure): D-196 devices/robots domains and direction rows
+- 변경: `test/test_module_structure.py`에 `devices`·`robots` 도메인, `layout_ok`(devices만 계열 한 단 허용), P4 방향표를 순수 함수 `edge_allowed`로 옮기고 D-196 행 추가. 매개변수 시험 15건
+- 증거: `python -m pytest test/test_module_structure.py -q` 통과 (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음

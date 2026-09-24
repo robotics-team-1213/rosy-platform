@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · test(structure): D-196 devices/robots domains and direction rows
 - 2026-09-24 · uncommitted · docs(adr): D-196 robots are compositions of devices (Proposed)
 - 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench
 - 2026-09-24 · uncommitted · docs(adr): D-185 R3 rig A/B, R7 원인 메모
 - 2026-09-24 · uncommitted · docs(adr): D-185 R6 구현 메모
-- 2026-09-24 · uncommitted · docs(adr): D-185 R2 구현 메모
