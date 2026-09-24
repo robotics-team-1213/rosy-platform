@@ -101,3 +101,12 @@
 - gate 변화: 얼굴 G1에 경보 침 픽셀 게이트·정상 무색 게이트 추가.
 - 결정: D-202(얼굴 번역 문단)
 - 교훈: 팔레트가 옳아도 칠하는 방식이 틀리면 경보는 여전히 안 읽힌다 — 값의 게이트와 용법의 게이트는 다르다.
+
+
+## 2026-09-25 · uncommitted · test(emotion): 웨이크 카드 어휘 고정 (D-221, F-07 처분)
+
+- 변경: test_info_screen.py 에 두 계약 추가 — 행 라벨(MODE·NAV·HEALTH) 고정, 렌더러 폰트 의존 금지(DejaVu 후보만, CJK 경로 금지). 변이 증명: MODE→모드 교체 → 적색.
+- 증거: PYTHONPATH=src/face/emotion python -m pytest src/face/emotion/test -q → 49 passed.
+- gate 변화: 얼굴 G1에 어휘·폰트 계약 추가.
+- 결정: D-221
+- 교훈: 보류된 결정도 저장소 안 사실(폰트 부재, enum 값)으로 닫을 수 있을 때가 있다 — 하드웨어가 유일한 입력이라는 가정을 먼저 검증하라.

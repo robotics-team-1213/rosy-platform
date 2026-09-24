@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · test(emotion): 웨이크 카드 어휘 고정 (D-221, F-07 처분)
 - 2026-09-24 · uncommitted · fix(emotion): 경보 문장은 채움이다 — 얼굴 번역 (D-202)
 - 2026-09-24 · uncommitted · feat(emotion): stage-aware boot card for the LCD (D-190 S2)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-21 · uncommitted · feat(emotion): render operator-assistance request on the robot face
-- 2026-09-21 · uncommitted · test(emotion): face captures are reproducible from the repo (D-153 session 6)

@@ -88,6 +88,24 @@ class TestRender:
     def test_estop_payload_renders(self):
         assert render(self._payload(estop=True)).size == DEFAULT_SIZE
 
+    def test_row_labels_are_the_pinned_machine_acronyms(self):
+        # D-221(F-07 처분) — 행 라벨은 기계 약어로 고정이다. 행인의 채널은
+        # 글자가 아니라 형태·색·만료이고(§7.4), 라벨만 번역하면 값(enum)과
+        # 어휘가 섞인다. 바꾸려면 D-221 amendment 다.
+        source = (ROOT / "emotion" / "info_screen.py").read_text(encoding="utf-8")
+        assert '("MODE", str(payload.get("mode")' in source
+        assert '("NAV", str(payload.get("navigation")' in source
+        assert '("HEALTH", str(payload.get("health")' in source
+
+    def test_the_renderer_carries_no_font_dependency(self):
+        # D-221 — 폰트 후보는 DejaVu 둘뿐. CJK 경로가 들어오는 것은 이미지에
+        # 폰트를 싣는 ADR 와 같은 커밋에서만 일어날 수 있다.
+        source = (ROOT / "emotion" / "info_screen.py").read_text(encoding="utf-8")
+        assert source.count("_FONT_CANDIDATES") >= 1
+        assert "noto" not in source.lower()
+        assert "nanum" not in source.lower()
+        assert "malgun" not in source.lower()
+
     def test_alarm_statements_are_paper_on_a_crit_fill(self):
         # D-202 의 얼굴 번역 — E-STOP 문장은 위험 채움 위 종이 잉크다. crit 글자
         # (어두운 바탕 위 2.2:1)는 경보가 제일 읽기 어려운 문장이 되게 한다.

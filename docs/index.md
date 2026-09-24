@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(adr): D-221 얼굴 어휘 — F-07 처분
 - 2026-09-25 · uncommitted · docs(adr): D-218 확인 졸업 · D-219 D-159 승격 · D-220 정지 계약
 - 2026-09-25 · uncommitted · docs(adr): D-214 텍스트 대비의 바닥
 - 2026-09-25 · 743a707f · docs(validation): 재검증 — 동시 커밋 6건 이후 전 게이트 초록
 - 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
-- 2026-09-24 · uncommitted · docs(adr): D-202 얼굴 번역 문단, 회차 폴더 얼굴 추가

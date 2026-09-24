@@ -120,6 +120,16 @@ python -m pytest src/face/emotion/test/test_info_screen_capture.py -q
   적색).
 - concept 16 §7 표에 선언 뷰포트 열(D-201 산문에서 계약 표로 이사).
 
+## F-07 처분 (2026-09-25, D-221)
+
+회차 1이 "소유자 결정"으로 남긴 얼굴 어휘 긴장을 저장소 안 사실로 닫았다:
+제품 이미지에 CJK 폰트가 없다(한글 라벨 = 배포 의존), 행의 값은 서버 enum
+이라 라벨만 번역하면 어휘가 섞인다, §7.4는 행인의 채널을 애초에 글자가
+아니라 형태·색·만료로 규정한다. **라벨은 기계 약어로 남는다**(D-221) —
+폰트 의존 금지와 함께 계약 시험로 고정(변이 증명: 라벨 교체 → 적색).
+BENCH 질문도 재정의됐다: "라벨을 무엇으로"가 아니라 "비문자 채널(봉·칩·%)
+이 1.5m·0.5초에 읽히는가".
+
 **ADR:** [D-201](../../adr/D-201-fixed-grammar-surfaces-fit-contract.md),
 [D-202](../../adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md),
 [D-203](../../adr/D-203-computed-type-scale-closure.md)

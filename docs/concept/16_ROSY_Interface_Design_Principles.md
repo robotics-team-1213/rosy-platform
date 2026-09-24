@@ -205,7 +205,10 @@ intent, not state: the direction it is about to take, not a mode name. This is
 the one surface where a second typeface is justified, chosen for small-size
 low-resolution rendering. Danger is a fill here too: an alarm sentence
 (E-STOP, FAILED) is paper ink on a crit fill, never crit text — the pixel
-gates live with the renderer tests (D-202).
+gates live with the renderer tests (D-202). The bystander's channel is shape,
+colour and expiry, not words; row labels stay machine acronyms because the
+values are server enums — translating one without the other mixes vocabularies
+without helping the passer-by (D-221).
 
 The PWR-003 wake card is the one state-bearing exception: on wake it shows a
 state snapshot (battery margin, E-stop) for a fixed `hold_s`, then the face
