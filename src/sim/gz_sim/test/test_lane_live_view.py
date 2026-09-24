@@ -231,7 +231,7 @@ def test_status_json_shape():
 def test_status_json_shape_defaults_to_empty_dicts_before_any_data():
     mod = _mod()
     status = mod.build_status(None, None, None, {"ok": False, "age_s": None, "fps": 0.0},
-                               {"ok": False, "age_s": None, "fps": 0.0}, now=0.0)
+                              {"ok": False, "age_s": None, "fps": 0.0}, now=0.0)
     assert status["core"] == {}
     assert status["observation"] == {}
     assert status["odom"] == {}

@@ -307,7 +307,8 @@ def run_one(scenario, graph, mode, out_dir, domain):
             if stamps and sim_start is None:
                 sim_start = stamps[-1]
             if track and math.dist(track[-1], end_point) < 0.05:
-                reached, reason = True, "reached"
+                # `reached` is not read; test_junction_harness_contract pins this pair
+                reached, reason = True, "reached"  # noqa: F841
                 break
             if sim_start is not None and stamps[-1] - sim_start >= TIMEOUT_S:
                 reason = "timeout"

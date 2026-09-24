@@ -233,7 +233,8 @@ def render_index_html():
   #overlay { width: 100%; border: 1px solid #333; border-radius: 4px; background: #000; }
   #camera { width: 240px; border: 1px solid #333; border-radius: 4px; background: #000; }
   #map { width: 100%; max-width: 480px; background: #0a0c10; border: 1px solid #333; border-radius: 4px; }
-  #status { background: #1a1d24; border: 1px solid #333; border-radius: 4px; padding: 10px; font-size: 0.85rem; white-space: pre-wrap; }
+  #status { background: #1a1d24; border: 1px solid #333; border-radius: 4px; padding: 10px;
+            font-size: 0.85rem; white-space: pre-wrap; }
   .stale { color: #ff6b6b; font-weight: 700; }
   .fresh { color: #6bffa0; }
   .panel-title { font-size: 0.8rem; color: #9aa0ac; margin: 0 0 4px; }
