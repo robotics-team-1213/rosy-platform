@@ -702,8 +702,9 @@ function renderEvents(payload) {
   elements["event-list"].replaceChildren();
   if (!events.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "수신된 이벤트가 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "수신된 이벤트가 없습니다.";
+    empty.append(note);
     elements["event-list"].append(empty);
     return;
   }

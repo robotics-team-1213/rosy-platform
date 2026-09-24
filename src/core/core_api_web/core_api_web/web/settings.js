@@ -56,8 +56,9 @@ export function renderTokens(payload) {
   list.replaceChildren();
   if (!tokens.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "저장된 토큰이 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "저장된 토큰이 없습니다.";
+    empty.append(note);
     list.append(empty);
     return;
   }
@@ -120,8 +121,9 @@ export function renderDocks(payload) {
   list.replaceChildren();
   if (!docks.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "등록된 도크가 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "등록된 도크가 없습니다.";
+    empty.append(note);
     list.append(empty);
     return;
   }
@@ -174,8 +176,9 @@ export function renderWaypoints(payload) {
   list.replaceChildren();
   if (!waypoints.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "저장된 웨이포인트가 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "저장된 웨이포인트가 없습니다.";
+    empty.append(note);
     list.append(empty);
     return;
   }

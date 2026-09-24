@@ -150,6 +150,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         valid_assets = {
             "tokens.css": "text/css",
             "components.css": "text/css",
+            "template.html": "text/html",
             "core_ui_logic.js": "application/javascript",
             "ui.js": "application/javascript",
         }

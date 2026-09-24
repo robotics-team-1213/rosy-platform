@@ -17,6 +17,7 @@ COMMON = Path(__file__).resolve().parents[4] / "core" / "web_common"
 COMMON_ASSETS = {
     "tokens.css": ".css",
     "components.css": ".css",
+    "template.html": ".html",
     "ui.js": ".js",
     "core_ui_logic.js": ".js",
 }

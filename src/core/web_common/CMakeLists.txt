@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 install(FILES
   tokens.css
   components.css
+  template.html
   core_ui_logic.js
   ui.js
   DESTINATION share/${PROJECT_NAME}

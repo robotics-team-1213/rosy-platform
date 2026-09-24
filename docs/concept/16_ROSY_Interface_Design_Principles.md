@@ -70,10 +70,14 @@ Layout stays with the surface.
 | L2 — Grammar | where a control sits, and the question the surface answers | per surface |
 | L3 — Content | what a capability contributes | portable across surfaces |
 
-Browser chrome is one set (D-187): `ui-button`, `ui-field`, `ui-tag`, and
-`ui-text` in `web_common`. Each control names a `kind`. A surface places it
-and does not repaint it. The robot face stays a pixel renderer and does not
-mount these elements (D-75).
+Browser chrome is one set (D-187) in `web_common`: `ui-text`, `ui-head`,
+`ui-grid`, `ui-button`, `ui-field`, `ui-tag`, `ui-chip`, `ui-triage`, and
+`ui-evidence`. A button names a `kind`. Evidence names a `state`. A surface
+places the control and does not repaint it. A new page copies
+`web_common/template.html`: a `ui-shell` with one `grammar` and a `ui-topbar`. The robot face stays a pixel
+renderer and does not mount these elements (D-75). The four pieces D-92 left
+undesigned as components — irreversible confirm, fleet exception row, narrow
+console, face intent — stay undesigned until a second surface needs the logic.
 
 ### Binding instruments
 
