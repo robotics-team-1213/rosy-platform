@@ -1072,3 +1072,19 @@
 - gate 변화: 없음
 - 결정: D-198 (D-197 후속)
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
+
+- 변경: (1) `deploy/release/signing.py`가 PATH에 openssl이 없을 때 Git for Windows(`usr\bin`, `mingw64\bin`)를 찾는다 —
+  비관리자 PowerShell의 `prepare-rosy-sd.ps1 -PlanOnly`가 "openssl not found"로 멈췄고, 시험은 `test/conftest.py`만 그 경로를 알아 통과했다.
+  (2) 첫 섹터가 전부 0인 카드를 Get-Disk는 MBR 서명 1로 보고한다(중단된 Imager 쓰기 뒤 실측, 섹터 덤프로 확인). 계획이 `00000001`을
+  기록하고 pre-flight 원시 읽기가 "없음"이면 공장 공백 카드 경로(시리얼·크기, 경고)로 본다. 실제 서명을 기록한 계획은 여전히 공백 카드를 거부한다.
+  (3) 관리자 쓰기 창이 QuickEdit을 끈다 — 창을 클릭하면 "Select" 상태가 되어 콘솔에 쓰는 Imager `--cli`가 0 CPU·0 I/O로 멈추고,
+  stall watchdog이 8 MB 남기고 죽였다. 005의 23분 멈춤도 같은 원인으로 보인다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py test/test_media_readback.py test/test_release_signing.py test/test_offline_image_signer.py -q`
+  243 passed. 실기: 이 브랜치의 writer로 010을 카드에 기록, `receipt-2026.09.24-010-rosy-pinky-e4us.json` `media_readback.verified: true`
+  (쓰기 8분·readback 7분, 멈춤 없음).
+- gate 변화: 없음
+- 결정: D-187/D-188 보완
+- 교훈: 시험 conftest가 환경을 고쳐 주면 실제 운영 경로의 같은 결함을 가린다 — 보정은 제품 코드에 두고 시험은 그 보정을 검증한다.
+  카드 신원은 Windows 캐시와 원시 섹터가 다를 수 있으니, 실패 시 섹터를 먼저 덤프해 추측을 끝낸다.

@@ -1715,6 +1715,34 @@ def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("planned,sector,passes", [
+    (0x00000001, bytes(MIB), True),         # all-zero sector, Get-Disk said 1: blank card
+    (0x1A2B3C4D, bytes(MIB), False),        # a real planned signature still refuses a blank card
+    (0x00000001, _mbr_raw(0x55667788), False),  # a card with its own signature is another card
+], ids=["zeroed-planned-as-1", "zeroed-vs-real-plan", "other-card"])
+def test_an_all_zero_first_sector_planned_as_signature_1_is_a_blank_card(writer_case, tmp_path, planned, sector, passes):
+    # 2026-09-24, release 010: an interrupted Imager write left sector 0 all zeros;
+    # Get-Disk (so the plan) said signature 1, the probe said none, and every fresh
+    # plan was refused as "a different card".
+    plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=planned)
+    writer_case["readback"].write_bytes(sector)
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(writer_case, "-PlanPath", plan_path, *WRITE_CONFIRMATION, "-BootMountPath", boot, plan_only=False)
+
+    stages = [line["stage"] for line in _progress(writer_case)]
+    if passes:
+        assert "a different card is in the reader" not in _err(completed)
+        assert "confirm" in stages
+        assert "factory blank" in " ".join(completed.stdout.split())
+    else:
+        assert completed.returncode != 0
+        assert "a different card is in the reader" in _err(completed)
+        assert "confirm" not in stages
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_the_planned_card_is_written(writer_case, tmp_path):
     _rerelease(writer_case, _mbr_raw(0x1A2B3C4D))  # the card's first sector carries the planned signature
     plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=0x1A2B3C4D)
@@ -1952,3 +1980,12 @@ def test_a_card_too_slow_for_the_probe_limit_is_slow_media(writer_case, tmp_path
     assert "below -MinReadMBps" in _err(completed) and "-AcceptSlowMedia" in _err(completed)
     assert _measured(_progress(writer_case))["read_mbps"] == 0
     assert not writer_case["marker"].exists()
+
+
+def test_the_elevated_write_window_turns_off_quickedit_before_the_write():
+    # 2026-09-24, release 010: a click put the window in "Select" mode and froze
+    # Imager's console output 8 MB before the end; the stall watchdog then killed it.
+    text = (ROOT / "deploy/sd/write-card.ps1").read_text(encoding="utf-8")
+    elevated = text[text.index("# Elevated: the release signature verifier"):]
+    assert elevated.index("Disable-QuickEdit\n") < elevated.index("Start-Transcript")
+    assert "(-bnot [uint32]0x40)" in text and "-bor [uint32]0x80" in text

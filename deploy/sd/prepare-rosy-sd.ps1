@@ -253,6 +253,13 @@ function Assert-PlannedCard([object]$Disk, [object]$Sector) {
     # a sector that was read and holds no signature, or 00000000, means none).
     if ($Sector -and $Sector.Read) {
         $found.Signature = $(if ($Sector.Signature -and $Sector.Signature -ne "00000000") { [string]$Sector.Signature } else { $null })
+        # 2026-09-24: Get-Disk reports an all-zero first sector (e.g. after an
+        # interrupted Imager write) as MBR signature 1, and -PlanOnly records that.
+        # Such a card has no identity of its own: it is the factory-blank case below.
+        if (-not $found.Signature -and $planned.Signature -ceq "00000001" -and -not $planned.Guid -and
+                $Sector.PSObject.Properties["Blank"] -and $Sector.Blank) {
+            $planned.Signature = $null
+        }
     }
     $describe = { param($identity) "disk signature $(if ($identity.Signature) { $identity.Signature } else { 'none' }), GPT GUID $(if ($identity.Guid) { $identity.Guid } else { 'none' })" }
     $otherCard = "put the planned card back (check its label), or make and review a new plan (-PlanOnly) for the card that is inserted"
@@ -795,7 +802,8 @@ function Invoke-Probe([int64]$Bytes, [double]$Seconds) {
 function Get-DeviceSector([object]$Facts) {
     $read = [bool]($Facts.PSObject.Properties["device_mbr_read"] -and $Facts.device_mbr_read)
     $signature = $(if ($Facts.PSObject.Properties["device_mbr_signature"] -and $Facts.device_mbr_signature) { [string]$Facts.device_mbr_signature } else { $null })
-    [pscustomobject]@{ Read = $read; Signature = $signature }
+    $blank = [bool]($Facts.PSObject.Properties["device_mbr_blank"] -and $Facts.device_mbr_blank)
+    [pscustomobject]@{ Read = $read; Signature = $signature; Blank = $blank }
 }
 
 $probe = Invoke-Probe $ProbeBytes $ProbeSeconds

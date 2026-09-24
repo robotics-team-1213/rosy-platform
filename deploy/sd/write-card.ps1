@@ -209,6 +209,31 @@ if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) {
     if (Test-Path -LiteralPath (Join-Path $gitOpenSsl "openssl.exe")) { $env:PATH = "$gitOpenSsl;$env:PATH" }
 }
 
+# 2026-09-24: a click in this window starts QuickEdit selection ("Select" in the
+# title), which blocks every process writing to the console. Imager --cli writes
+# its progress here, so it sat with 0 CPU and 0 I/O until the stall watchdog
+# killed it 8 MB short (release 010); the 005 "23 minute hang" fits the same cause.
+# Typing still works without QuickEdit; only mouse selection is turned off.
+function Disable-QuickEdit {
+    try {
+        Add-Type -Namespace RosyConsole -Name Mode -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)] public static extern System.IntPtr GetStdHandle(int handle);
+[DllImport("kernel32.dll", SetLastError = true)] public static extern bool GetConsoleMode(System.IntPtr handle, out uint mode);
+[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetConsoleMode(System.IntPtr handle, uint mode);
+'@ -ErrorAction Stop
+        $consoleInput = [RosyConsole.Mode]::GetStdHandle(-10)
+        $mode = [uint32]0
+        if ([RosyConsole.Mode]::GetConsoleMode($consoleInput, [ref]$mode)) {
+            # Clear ENABLE_QUICK_EDIT_MODE (0x40); ENABLE_EXTENDED_FLAGS (0x80) makes it stick.
+            [void][RosyConsole.Mode]::SetConsoleMode($consoleInput, (($mode -band (-bnot [uint32]0x40)) -bor [uint32]0x80))
+        }
+    }
+    catch {
+        Write-Warning "could not turn off QuickEdit; do not click inside this window while the card is written"
+    }
+}
+Disable-QuickEdit
+
 Start-Transcript -LiteralPath $LogPath | Out-Null
 Write-Output "Progress: $progressPath"
 Write-Output "Status: $statusCommand"
