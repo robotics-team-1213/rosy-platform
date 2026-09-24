@@ -511,3 +511,10 @@
 - gate 변화: 없음.
 - 결정: D-206 Proposed. 측정 표준은 기록지, 확정 프로필 revision은 `measured-YYYY-MM-DD`, 게이트는 `camcal/bevfinal.py`의 c-c 세 지점(0.2/0.3/0.5 m)이 실측 ±5 mm, `src/robots/pinky_pro/config/`은 D-196(PR #36) 머지 뒤 만든다.
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · docs(validation): P0 lens height reading 63 mm (tentative)
+- 변경: 측정 기록지 B-7행에 렌즈 높이 잠정치 63 mm(2026-09-24 1회 판독)를 기입했다. 코드와 프로필 본문은 바꾸지 않았다.
+- 증거: 사용자 판독 1회. 초안 67 mm보다 낮고, 초안의 "CAD 차선 185 mm → 높이 63.7 mm" 앵커와 일치하는 방향이다. 확정은 1번(차선 간격)·3번(막대 피치) 실측 뒤 fx·높이 합동 재맞춤(D-206 결정 2)으로.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.

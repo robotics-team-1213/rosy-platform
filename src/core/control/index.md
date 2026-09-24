@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(validation): P0 lens height reading 63 mm (tentative)
 - 2026-09-24 · uncommitted · docs(adr): D-206 P0 measurement procedure and profile custody
 - 2026-09-24 · uncommitted · docs(validation): P0 track measurement sheet (D-205)
 - 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · docs(adr): D-199 camera perception contracts and backends
-- 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
