@@ -1,0 +1,3740 @@
+{
+ "captures": [
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 1829,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/700/mono/ls=0.84px": 6,
+    "14px/600/mono/ls=0.84px": 4,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 5,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "18px/600/mono/ls=0.36px": 2,
+    "12px/400/mono/ls=normal": 35,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "12px/400/mono/ls=0.48px": 4,
+    "18px/600/mono/ls=normal": 6,
+    "16px/700/mono/ls=normal": 1,
+    "14px/400/body/ls=normal": 6,
+    "12px/400/mono/ls=0.72px": 1,
+    "12px/700/mono/ls=normal": 4,
+    "18px/700/mono/ls=0.72px": 1,
+    "14px/500/body/ls=normal": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/700/body/ls=normal": 3,
+    "16px/600/body/ls=normal": 4,
+    "14px/700/mono/ls=normal": 12,
+    "13.3333px/600/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 155,
+    "pad:0px": 169,
+    "pad:12px 16px": 4,
+    "gap:12px": 5,
+    "pad:0px 16px": 4,
+    "gap:4px": 14,
+    "gap:8px": 69,
+    "pad:4px 12px": 6,
+    "pad:0px 12px": 23,
+    "gap:16px": 3,
+    "pad:8px 12px 12px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "gap:0px 12px": 1,
+    "pad:4px 0px": 1,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6,
+    "pad:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 88,
+     "w": 390,
+     "h": 139
+    },
+    ".regions": {
+     "x": 0,
+     "y": 227,
+     "w": 390,
+     "h": 2352
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 227,
+     "w": 390,
+     "h": 442
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 669,
+     "w": 390,
+     "h": 641
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 1310,
+     "w": 390,
+     "h": 1269
+    },
+    ".teleop-pad": {
+     "x": 13,
+     "y": 2416,
+     "w": 365,
+     "h": 92
+    },
+    ".mode-control": {
+     "x": 13,
+     "y": 1550,
+     "w": 365,
+     "h": 46
+    },
+    "#vision-stage": {
+     "x": 12,
+     "y": 753,
+     "w": 366,
+     "h": 262
+    },
+    ".map-stage": {
+     "x": 12,
+     "y": 1114,
+     "w": 366,
+     "h": 184
+    },
+    ".telemetry-grid": {
+     "x": 12,
+     "y": 310,
+     "w": 365,
+     "h": 216
+    },
+    ".safety-actions": {
+     "x": 13,
+     "y": 1416,
+     "w": 365,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 13,
+     "y": 1360,
+     "w": 365,
+     "h": 1207
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 13,
+     "y": 1416,
+     "w": 365,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "각속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 132,
+   "warmHits": [
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 132,
+   "viewport_name": "phone",
+   "state": "fresh",
+   "view": "operate",
+   "png": "phone_fresh_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 5335,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 12,
+    "20px/600/body/ls=normal": 5,
+    "12px/400/mono/ls=0.48px": 14,
+    "12px/600/body/ls=1.44px": 31,
+    "16px/400/mono/ls=normal": 3,
+    "20px/700/mono/ls=normal": 4,
+    "12px/400/mono/ls=normal": 12,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 14,
+    "16px/700/body/ls=normal": 8,
+    "18px/400/body/ls=normal": 6,
+    "18px/700/mono/ls=normal": 2,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/400/mono/ls=normal": 2,
+    "14px/500/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 167,
+    "pad:0px": 185,
+    "pad:12px 16px": 1,
+    "gap:12px": 23,
+    "pad:0px 16px": 3,
+    "gap:4px": 2,
+    "gap:8px": 79,
+    "pad:4px 12px": 16,
+    "pad:0px 12px": 31,
+    "gap:16px": 6,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#host-agent-status.machine-tag",
+     "text": "Host Agent 없음",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "UNAVAILABLE",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#network-mode.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#release-state.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-rollback.-",
+     "text": "이전 릴리스로 롤백",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-clear-hold.-",
+     "text": "복구 홀드 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#commissioning-note.host-note",
+     "text": "FLEET_HOLD. core",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#host-name.machine-tag",
+     "text": "—",
+     "ratio": 5.77
+    },
+    {
+     "sel": "span#-.-",
+     "text": "운영체제",
+     "ratio": 5.77
+    }
+   ],
+   "below3": 2,
+   "below45": 2,
+   "contrastSamples": 141,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#host-agent-status",
+    "p#network-note",
+    "span#ros-graph-status",
+    "p#release-note"
+   ],
+   "visibleTextNodes": 141,
+   "viewport_name": "phone",
+   "state": "fresh",
+   "view": "inspect",
+   "png": "phone_fresh_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 1868,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/700/mono/ls=0.84px": 5,
+    "14px/600/mono/ls=0.84px": 5,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 5,
+    "16px/700/body/ls=normal": 4,
+    "14px/400/body/ls=normal": 7,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "18px/600/mono/ls=0.36px": 2,
+    "12px/400/mono/ls=normal": 35,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "12px/400/mono/ls=0.48px": 4,
+    "18px/600/mono/ls=normal": 6,
+    "16px/700/mono/ls=normal": 1,
+    "12px/400/mono/ls=0.72px": 1,
+    "12px/700/mono/ls=normal": 4,
+    "18px/700/mono/ls=0.72px": 1,
+    "14px/500/body/ls=normal": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/600/body/ls=normal": 4,
+    "14px/700/mono/ls=normal": 12,
+    "13.3333px/600/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 158,
+    "pad:0px": 173,
+    "pad:12px 16px": 4,
+    "gap:12px": 6,
+    "pad:0px 16px": 4,
+    "gap:4px": 14,
+    "gap:8px": 69,
+    "pad:4px 12px": 6,
+    "pad:0px 12px": 23,
+    "gap:16px": 4,
+    "pad:8px 24px": 1,
+    "pad:8px 12px 12px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "gap:0px 12px": 1,
+    "pad:4px 0px": 1,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6,
+    "pad:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 127,
+     "w": 390,
+     "h": 139
+    },
+    ".regions": {
+     "x": 0,
+     "y": 266,
+     "w": 390,
+     "h": 2352
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 266,
+     "w": 390,
+     "h": 442
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 708,
+     "w": 390,
+     "h": 641
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 1349,
+     "w": 390,
+     "h": 1269
+    },
+    ".teleop-pad": {
+     "x": 13,
+     "y": 2455,
+     "w": 365,
+     "h": 92
+    },
+    ".mode-control": {
+     "x": 13,
+     "y": 1589,
+     "w": 365,
+     "h": 46
+    },
+    "#vision-stage": {
+     "x": 12,
+     "y": 792,
+     "w": 366,
+     "h": 262
+    },
+    ".map-stage": {
+     "x": 12,
+     "y": 1153,
+     "w": 366,
+     "h": 184
+    },
+    ".telemetry-grid": {
+     "x": 12,
+     "y": 350,
+     "w": 365,
+     "h": 216
+    },
+    ".safety-actions": {
+     "x": 13,
+     "y": 1455,
+     "w": 365,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 13,
+     "y": 1399,
+     "w": 365,
+     "h": 1207
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 13,
+     "y": 1455,
+     "w": 365,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "MANUAL",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 134,
+   "warmHits": [
+    "section#triage",
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 134,
+   "viewport_name": "phone",
+   "state": "safe-stop",
+   "view": "operate",
+   "png": "phone_safe-stop_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 5335,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 12,
+    "20px/600/body/ls=normal": 5,
+    "12px/400/mono/ls=0.48px": 14,
+    "12px/600/body/ls=1.44px": 31,
+    "16px/400/mono/ls=normal": 3,
+    "20px/700/mono/ls=normal": 4,
+    "12px/400/mono/ls=normal": 12,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 14,
+    "16px/700/body/ls=normal": 8,
+    "18px/400/body/ls=normal": 6,
+    "18px/700/mono/ls=normal": 2,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/400/mono/ls=normal": 2,
+    "14px/500/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 167,
+    "pad:0px": 185,
+    "pad:12px 16px": 1,
+    "gap:12px": 23,
+    "pad:0px 16px": 3,
+    "gap:4px": 2,
+    "gap:8px": 79,
+    "pad:4px 12px": 16,
+    "pad:0px 12px": 31,
+    "gap:16px": 6,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#host-agent-status.machine-tag",
+     "text": "Host Agent 없음",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "UNAVAILABLE",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#network-mode.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#release-state.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-rollback.-",
+     "text": "이전 릴리스로 롤백",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-clear-hold.-",
+     "text": "복구 홀드 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#commissioning-note.host-note",
+     "text": "FLEET_HOLD. core",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#host-name.machine-tag",
+     "text": "—",
+     "ratio": 5.77
+    },
+    {
+     "sel": "span#-.-",
+     "text": "운영체제",
+     "ratio": 5.77
+    }
+   ],
+   "below3": 2,
+   "below45": 2,
+   "contrastSamples": 141,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#host-agent-status",
+    "p#network-note",
+    "span#ros-graph-status",
+    "p#release-note"
+   ],
+   "visibleTextNodes": 141,
+   "viewport_name": "phone",
+   "state": "safe-stop",
+   "view": "inspect",
+   "png": "phone_safe-stop_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 1678,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/700/mono/ls=0.84px": 5,
+    "14px/600/mono/ls=0.84px": 5,
+    "14px/600/body/ls=normal": 4,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "12px/400/mono/ls=normal": 35,
+    "18px/600/mono/ls=0.36px": 1,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "14px/500/body/ls=normal": 2,
+    "12px/400/mono/ls=0.48px": 2,
+    "14px/400/mono/ls=0.56px": 1,
+    "14px/400/body/ls=normal": 5,
+    "18px/700/mono/ls=0.72px": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/600/body/ls=normal": 6,
+    "14px/700/mono/ls=normal": 11,
+    "16px/700/body/ls=normal": 1,
+    "13.3333px/600/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 141,
+    "pad:0px": 156,
+    "pad:12px 16px": 4,
+    "gap:12px": 6,
+    "pad:0px 16px": 4,
+    "gap:4px": 14,
+    "gap:8px": 67,
+    "pad:4px 12px": 5,
+    "pad:0px 12px": 22,
+    "gap:16px": 3,
+    "pad:8px 12px 12px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6,
+    "pad:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 88,
+     "w": 390,
+     "h": 133
+    },
+    ".regions": {
+     "x": 0,
+     "y": 221,
+     "w": 390,
+     "h": 2208
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 221,
+     "w": 390,
+     "h": 312
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 533,
+     "w": 390,
+     "h": 627
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 1159,
+     "w": 390,
+     "h": 1269
+    },
+    ".teleop-pad": {
+     "x": 13,
+     "y": 2265,
+     "w": 365,
+     "h": 92
+    },
+    ".mode-control": {
+     "x": 13,
+     "y": 1399,
+     "w": 365,
+     "h": 46
+    },
+    "#vision-stage": {
+     "x": 12,
+     "y": 616,
+     "w": 366,
+     "h": 262
+    },
+    ".map-stage": {
+     "x": 12,
+     "y": 963,
+     "w": 366,
+     "h": 184
+    },
+    ".telemetry-grid": {
+     "x": 12,
+     "y": 294,
+     "w": 365,
+     "h": 136
+    },
+    ".safety-actions": {
+     "x": 13,
+     "y": 1265,
+     "w": 365,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 13,
+     "y": 1209,
+     "w": 365,
+     "h": 1207
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 13,
+     "y": 1265,
+     "w": 365,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "MANUAL",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 115,
+   "warmHits": [
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 115,
+   "viewport_name": "phone",
+   "state": "first-boot",
+   "view": "operate",
+   "png": "phone_first-boot_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 5374,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "14px/600/body/ls=normal": 11,
+    "20px/600/body/ls=normal": 5,
+    "12px/600/body/ls=1.44px": 31,
+    "12px/400/mono/ls=normal": 11,
+    "12px/400/mono/ls=0.48px": 8,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 23,
+    "16px/700/body/ls=normal": 8,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/500/body/ls=normal": 5,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 160,
+    "pad:0px": 194,
+    "pad:12px 16px": 1,
+    "gap:12px": 37,
+    "pad:0px 16px": 3,
+    "gap:4px": 4,
+    "gap:8px": 77,
+    "pad:4px 12px": 15,
+    "pad:0px 12px": 30,
+    "gap:16px": 6,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "확인 전",
+     "ratio": 2.68
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "AP",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "WLAN IPv4",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "기본 경로",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "DNS",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "인터넷",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "같은 WLAN 단말 접근",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "current",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 1,
+   "below45": 1,
+   "contrastSamples": 125,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#ros-graph-status"
+   ],
+   "visibleTextNodes": 125,
+   "viewport_name": "phone",
+   "state": "first-boot",
+   "view": "inspect",
+   "png": "phone_first-boot_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 1868,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/700/mono/ls=0.84px": 6,
+    "14px/600/mono/ls=0.84px": 4,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 6,
+    "16px/700/body/ls=normal": 4,
+    "14px/400/body/ls=normal": 7,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "18px/600/mono/ls=0.36px": 2,
+    "12px/400/mono/ls=normal": 35,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "12px/400/mono/ls=0.48px": 4,
+    "18px/600/mono/ls=normal": 6,
+    "16px/700/mono/ls=normal": 1,
+    "12px/400/mono/ls=0.72px": 1,
+    "12px/700/mono/ls=normal": 4,
+    "18px/700/mono/ls=0.72px": 1,
+    "14px/500/body/ls=normal": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/600/body/ls=normal": 4,
+    "14px/700/mono/ls=normal": 12,
+    "13.3333px/600/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 159,
+    "pad:0px": 176,
+    "pad:12px 16px": 4,
+    "gap:12px": 7,
+    "pad:0px 16px": 4,
+    "gap:4px": 14,
+    "gap:8px": 70,
+    "pad:4px 12px": 6,
+    "pad:0px 12px": 23,
+    "gap:16px": 4,
+    "pad:8px 24px": 1,
+    "pad:8px 12px 12px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "gap:0px 12px": 1,
+    "pad:4px 0px": 1,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6,
+    "pad:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 127,
+     "w": 390,
+     "h": 139
+    },
+    ".regions": {
+     "x": 0,
+     "y": 266,
+     "w": 390,
+     "h": 2352
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 266,
+     "w": 390,
+     "h": 442
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 708,
+     "w": 390,
+     "h": 641
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 1349,
+     "w": 390,
+     "h": 1269
+    },
+    ".teleop-pad": {
+     "x": 13,
+     "y": 2455,
+     "w": 365,
+     "h": 92
+    },
+    ".mode-control": {
+     "x": 13,
+     "y": 1589,
+     "w": 365,
+     "h": 46
+    },
+    "#vision-stage": {
+     "x": 12,
+     "y": 792,
+     "w": 366,
+     "h": 262
+    },
+    ".map-stage": {
+     "x": 12,
+     "y": 1153,
+     "w": 366,
+     "h": 184
+    },
+    ".telemetry-grid": {
+     "x": 12,
+     "y": 350,
+     "w": 365,
+     "h": 216
+    },
+    ".safety-actions": {
+     "x": 13,
+     "y": 1455,
+     "w": 365,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 13,
+     "y": 1399,
+     "w": 365,
+     "h": 1207
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 13,
+     "y": 1455,
+     "w": 365,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "각속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 135,
+   "warmHits": [
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 135,
+   "viewport_name": "phone",
+   "state": "delayed",
+   "view": "operate",
+   "png": "phone_delayed_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 5335,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 12,
+    "20px/600/body/ls=normal": 5,
+    "12px/400/mono/ls=0.48px": 14,
+    "12px/600/body/ls=1.44px": 31,
+    "16px/400/mono/ls=normal": 3,
+    "20px/700/mono/ls=normal": 4,
+    "12px/400/mono/ls=normal": 12,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 14,
+    "16px/700/body/ls=normal": 8,
+    "18px/400/body/ls=normal": 6,
+    "18px/700/mono/ls=normal": 2,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/400/mono/ls=normal": 2,
+    "14px/500/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 167,
+    "pad:0px": 185,
+    "pad:12px 16px": 1,
+    "gap:12px": 23,
+    "pad:0px 16px": 3,
+    "gap:4px": 2,
+    "gap:8px": 79,
+    "pad:4px 12px": 16,
+    "pad:0px 12px": 31,
+    "gap:16px": 6,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#host-agent-status.machine-tag",
+     "text": "Host Agent 없음",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "UNAVAILABLE",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#network-mode.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#release-state.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-rollback.-",
+     "text": "이전 릴리스로 롤백",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-clear-hold.-",
+     "text": "복구 홀드 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#commissioning-note.host-note",
+     "text": "FLEET_HOLD. core",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#host-name.machine-tag",
+     "text": "—",
+     "ratio": 5.77
+    },
+    {
+     "sel": "span#-.-",
+     "text": "운영체제",
+     "ratio": 5.77
+    }
+   ],
+   "below3": 2,
+   "below45": 2,
+   "contrastSamples": 141,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#host-agent-status",
+    "p#network-note",
+    "span#ros-graph-status",
+    "p#release-note"
+   ],
+   "visibleTextNodes": 141,
+   "viewport_name": "phone",
+   "state": "delayed",
+   "view": "inspect",
+   "png": "phone_delayed_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": false,
+    "docOverflowY": 0,
+    "senseScrollable": 0,
+    "actScrollable": 439
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 6,
+    "14px/700/mono/ls=0.84px": 6,
+    "14px/600/mono/ls=0.84px": 4,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 5,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "18px/600/mono/ls=0.36px": 2,
+    "12px/400/mono/ls=normal": 35,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "18px/600/mono/ls=normal": 6,
+    "16px/700/mono/ls=normal": 1,
+    "14px/400/body/ls=normal": 6,
+    "12px/400/mono/ls=0.72px": 1,
+    "12px/700/mono/ls=normal": 4,
+    "18px/700/mono/ls=0.72px": 1,
+    "14px/500/body/ls=normal": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/700/body/ls=normal": 3,
+    "16px/600/body/ls=normal": 4,
+    "14px/700/mono/ls=normal": 12,
+    "13.3333px/600/body/ls=normal": 4
+   },
+   "spacingCensus": {
+    "gap:normal": 157,
+    "pad:0px": 172,
+    "pad:12px 16px": 4,
+    "gap:12px": 5,
+    "pad:0px 16px": 3,
+    "gap:4px": 14,
+    "gap:8px": 69,
+    "pad:4px 12px": 6,
+    "pad:0px 12px": 23,
+    "pad:0px 24px": 2,
+    "gap:16px": 3,
+    "pad:12px 16px 16px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "gap:0px 12px": 1,
+    "pad:4px 0px": 1,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 88,
+     "w": 1536,
+     "h": 48
+    },
+    ".regions": {
+     "x": 0,
+     "y": 136,
+     "w": 1536,
+     "h": 729
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 136,
+     "w": 272,
+     "h": 729
+    },
+    ".region-observe": {
+     "x": 272,
+     "y": 136,
+     "w": 944,
+     "h": 729
+    },
+    ".region-act": {
+     "x": 1216,
+     "y": 136,
+     "w": 320,
+     "h": 729
+    },
+    ".teleop-pad": {
+     "x": 1233,
+     "y": 1194,
+     "w": 287,
+     "h": 50
+    },
+    ".mode-control": {
+     "x": 1233,
+     "y": 350,
+     "w": 287,
+     "h": 2
+    },
+    "#vision-stage": {
+     "x": 288,
+     "y": 223,
+     "w": 912,
+     "h": 268
+    },
+    ".map-stage": {
+     "x": 288,
+     "y": 591,
+     "w": 912,
+     "h": 257
+    },
+    ".telemetry-grid": {
+     "x": 16,
+     "y": 223,
+     "w": 239,
+     "h": 167
+    },
+    ".safety-actions": {
+     "x": 1233,
+     "y": 217,
+     "w": 287,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 1233,
+     "y": 189,
+     "w": 287,
+     "h": 660
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 1233,
+     "y": 217,
+     "w": 287,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "각속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 133,
+   "warmHits": [
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 133,
+   "viewport_name": "laptop",
+   "state": "fresh",
+   "view": "operate",
+   "png": "laptop_fresh_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 3132,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 16,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 12,
+    "20px/600/body/ls=normal": 5,
+    "12px/600/body/ls=1.44px": 31,
+    "16px/400/mono/ls=normal": 3,
+    "20px/700/mono/ls=normal": 4,
+    "12px/400/mono/ls=normal": 12,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 14,
+    "16px/700/body/ls=normal": 8,
+    "18px/400/body/ls=normal": 6,
+    "18px/700/mono/ls=normal": 2,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/400/mono/ls=normal": 2,
+    "14px/500/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 171,
+    "pad:0px": 190,
+    "pad:12px 16px": 1,
+    "gap:12px": 23,
+    "pad:0px 16px": 3,
+    "gap:4px": 2,
+    "gap:8px": 79,
+    "pad:4px 12px": 16,
+    "pad:0px 12px": 31,
+    "gap:16px": 7,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#host-agent-status.machine-tag",
+     "text": "Host Agent 없음",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "UNAVAILABLE",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#network-mode.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#release-state.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-rollback.-",
+     "text": "이전 릴리스로 롤백",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-clear-hold.-",
+     "text": "복구 홀드 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#commissioning-note.host-note",
+     "text": "FLEET_HOLD. core",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#host-name.machine-tag",
+     "text": "—",
+     "ratio": 5.77
+    },
+    {
+     "sel": "span#-.-",
+     "text": "운영체제",
+     "ratio": 5.77
+    }
+   ],
+   "below3": 2,
+   "below45": 2,
+   "contrastSamples": 144,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#host-agent-status",
+    "p#network-note",
+    "span#ros-graph-status",
+    "p#release-note"
+   ],
+   "visibleTextNodes": 144,
+   "viewport_name": "laptop",
+   "state": "fresh",
+   "view": "inspect",
+   "png": "laptop_fresh_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": false,
+    "docOverflowY": 0,
+    "senseScrollable": 0,
+    "actScrollable": 479
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 6,
+    "14px/700/mono/ls=0.84px": 5,
+    "14px/600/mono/ls=0.84px": 5,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 5,
+    "16px/700/body/ls=normal": 4,
+    "14px/400/body/ls=normal": 7,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "18px/600/mono/ls=0.36px": 2,
+    "12px/400/mono/ls=normal": 35,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "18px/600/mono/ls=normal": 6,
+    "16px/700/mono/ls=normal": 1,
+    "12px/400/mono/ls=0.72px": 1,
+    "12px/700/mono/ls=normal": 4,
+    "18px/700/mono/ls=0.72px": 1,
+    "14px/500/body/ls=normal": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/600/body/ls=normal": 4,
+    "14px/700/mono/ls=normal": 12,
+    "13.3333px/600/body/ls=normal": 4
+   },
+   "spacingCensus": {
+    "gap:normal": 160,
+    "pad:0px": 176,
+    "pad:12px 16px": 4,
+    "gap:12px": 6,
+    "pad:0px 16px": 3,
+    "gap:4px": 14,
+    "gap:8px": 69,
+    "pad:4px 12px": 6,
+    "pad:0px 12px": 23,
+    "gap:16px": 4,
+    "pad:8px 24px": 1,
+    "pad:0px 24px": 2,
+    "pad:12px 16px 16px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "gap:0px 12px": 1,
+    "pad:4px 0px": 1,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 127,
+     "w": 1536,
+     "h": 48
+    },
+    ".regions": {
+     "x": 0,
+     "y": 175,
+     "w": 1536,
+     "h": 689
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 175,
+     "w": 272,
+     "h": 689
+    },
+    ".region-observe": {
+     "x": 272,
+     "y": 175,
+     "w": 944,
+     "h": 689
+    },
+    ".region-act": {
+     "x": 1216,
+     "y": 175,
+     "w": 320,
+     "h": 689
+    },
+    ".teleop-pad": {
+     "x": 1233,
+     "y": 1233,
+     "w": 287,
+     "h": 50
+    },
+    ".mode-control": {
+     "x": 1233,
+     "y": 390,
+     "w": 287,
+     "h": 2
+    },
+    "#vision-stage": {
+     "x": 288,
+     "y": 263,
+     "w": 912,
+     "h": 268
+    },
+    ".map-stage": {
+     "x": 288,
+     "y": 630,
+     "w": 912,
+     "h": 218
+    },
+    ".telemetry-grid": {
+     "x": 16,
+     "y": 263,
+     "w": 239,
+     "h": 167
+    },
+    ".safety-actions": {
+     "x": 1233,
+     "y": 256,
+     "w": 287,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 1233,
+     "y": 228,
+     "w": 287,
+     "h": 620
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 1233,
+     "y": 256,
+     "w": 287,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "MANUAL",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 135,
+   "warmHits": [
+    "section#triage",
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 135,
+   "viewport_name": "laptop",
+   "state": "safe-stop",
+   "view": "operate",
+   "png": "laptop_safe-stop_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 3132,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 16,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 12,
+    "20px/600/body/ls=normal": 5,
+    "12px/600/body/ls=1.44px": 31,
+    "16px/400/mono/ls=normal": 3,
+    "20px/700/mono/ls=normal": 4,
+    "12px/400/mono/ls=normal": 12,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 14,
+    "16px/700/body/ls=normal": 8,
+    "18px/400/body/ls=normal": 6,
+    "18px/700/mono/ls=normal": 2,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/400/mono/ls=normal": 2,
+    "14px/500/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 171,
+    "pad:0px": 190,
+    "pad:12px 16px": 1,
+    "gap:12px": 23,
+    "pad:0px 16px": 3,
+    "gap:4px": 2,
+    "gap:8px": 79,
+    "pad:4px 12px": 16,
+    "pad:0px 12px": 31,
+    "gap:16px": 7,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#host-agent-status.machine-tag",
+     "text": "Host Agent 없음",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "UNAVAILABLE",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#network-mode.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#release-state.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-rollback.-",
+     "text": "이전 릴리스로 롤백",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-clear-hold.-",
+     "text": "복구 홀드 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#commissioning-note.host-note",
+     "text": "FLEET_HOLD. core",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#host-name.machine-tag",
+     "text": "—",
+     "ratio": 5.77
+    },
+    {
+     "sel": "span#-.-",
+     "text": "운영체제",
+     "ratio": 5.77
+    }
+   ],
+   "below3": 2,
+   "below45": 2,
+   "contrastSamples": 144,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#host-agent-status",
+    "p#network-note",
+    "span#ros-graph-status",
+    "p#release-note"
+   ],
+   "visibleTextNodes": 144,
+   "viewport_name": "laptop",
+   "state": "safe-stop",
+   "view": "inspect",
+   "png": "laptop_safe-stop_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": false,
+    "docOverflowY": 0,
+    "senseScrollable": 0,
+    "actScrollable": 458
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 3,
+    "14px/700/mono/ls=0.84px": 5,
+    "14px/600/mono/ls=0.84px": 5,
+    "14px/600/body/ls=normal": 4,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "12px/400/mono/ls=normal": 35,
+    "18px/600/mono/ls=0.36px": 1,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "14px/500/body/ls=normal": 2,
+    "14px/400/mono/ls=0.56px": 1,
+    "14px/400/body/ls=normal": 5,
+    "18px/700/mono/ls=0.72px": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/600/body/ls=normal": 6,
+    "14px/700/mono/ls=normal": 11,
+    "16px/700/body/ls=normal": 1,
+    "13.3333px/600/body/ls=normal": 4
+   },
+   "spacingCensus": {
+    "gap:normal": 141,
+    "pad:0px": 156,
+    "pad:12px 16px": 4,
+    "gap:12px": 5,
+    "pad:0px 16px": 3,
+    "gap:4px": 14,
+    "gap:8px": 67,
+    "pad:4px 12px": 5,
+    "pad:0px 12px": 22,
+    "pad:0px 24px": 2,
+    "gap:16px": 3,
+    "pad:12px 16px 16px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 88,
+     "w": 1536,
+     "h": 48
+    },
+    ".regions": {
+     "x": 0,
+     "y": 136,
+     "w": 1536,
+     "h": 729
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 136,
+     "w": 272,
+     "h": 729
+    },
+    ".region-observe": {
+     "x": 272,
+     "y": 136,
+     "w": 944,
+     "h": 729
+    },
+    ".region-act": {
+     "x": 1216,
+     "y": 136,
+     "w": 320,
+     "h": 729
+    },
+    ".teleop-pad": {
+     "x": 1233,
+     "y": 1194,
+     "w": 287,
+     "h": 50
+    },
+    ".mode-control": {
+     "x": 1233,
+     "y": 350,
+     "w": 287,
+     "h": 2
+    },
+    "#vision-stage": {
+     "x": 288,
+     "y": 223,
+     "w": 912,
+     "h": 268
+    },
+    ".map-stage": {
+     "x": 288,
+     "y": 576,
+     "w": 912,
+     "h": 272
+    },
+    ".telemetry-grid": {
+     "x": 16,
+     "y": 213,
+     "w": 239,
+     "h": 91
+    },
+    ".safety-actions": {
+     "x": 1233,
+     "y": 217,
+     "w": 287,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 1233,
+     "y": 189,
+     "w": 287,
+     "h": 660
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 1233,
+     "y": 217,
+     "w": 287,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "MANUAL",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 115,
+   "warmHits": [
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 115,
+   "viewport_name": "laptop",
+   "state": "first-boot",
+   "view": "operate",
+   "png": "laptop_first-boot_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 3288,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 9,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "14px/600/body/ls=normal": 11,
+    "20px/600/body/ls=normal": 5,
+    "12px/600/body/ls=1.44px": 31,
+    "12px/400/mono/ls=normal": 11,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 23,
+    "16px/700/body/ls=normal": 8,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/500/body/ls=normal": 5,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 162,
+    "pad:0px": 196,
+    "pad:12px 16px": 1,
+    "gap:12px": 36,
+    "pad:0px 16px": 3,
+    "gap:4px": 4,
+    "gap:8px": 77,
+    "pad:4px 12px": 15,
+    "pad:0px 12px": 30,
+    "gap:16px": 7,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "확인 전",
+     "ratio": 2.68
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "AP",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "WLAN IPv4",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "기본 경로",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "DNS",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "인터넷",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "같은 WLAN 단말 접근",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "current",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 1,
+   "below45": 1,
+   "contrastSamples": 127,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#ros-graph-status"
+   ],
+   "visibleTextNodes": 127,
+   "viewport_name": "laptop",
+   "state": "first-boot",
+   "view": "inspect",
+   "png": "laptop_first-boot_inspect.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": false,
+    "docOverflowY": 0,
+    "senseScrollable": 0,
+    "actScrollable": 479
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 1,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 6,
+    "14px/700/mono/ls=0.84px": 6,
+    "14px/600/mono/ls=0.84px": 4,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 6,
+    "16px/700/body/ls=normal": 4,
+    "14px/400/body/ls=normal": 8,
+    "18px/600/body/ls=normal": 1,
+    "14px/400/mono/ls=0.84px": 1,
+    "12px/600/body/ls=1.44px": 15,
+    "18px/600/mono/ls=0.36px": 2,
+    "12px/400/mono/ls=normal": 35,
+    "14px/600/body/ls=1.96px": 3,
+    "12px/400/body/ls=normal": 4,
+    "18px/600/mono/ls=normal": 6,
+    "16px/700/mono/ls=normal": 1,
+    "12px/400/mono/ls=0.72px": 1,
+    "12px/700/mono/ls=normal": 4,
+    "18px/700/mono/ls=0.72px": 1,
+    "14px/500/body/ls=normal": 1,
+    "11.6667px/600/body/ls=normal": 1,
+    "16.38px/700/body/ls=normal": 2,
+    "16px/600/body/ls=normal": 4,
+    "14px/700/mono/ls=normal": 12,
+    "13.3333px/600/body/ls=normal": 4
+   },
+   "spacingCensus": {
+    "gap:normal": 162,
+    "pad:0px": 180,
+    "pad:12px 16px": 4,
+    "gap:12px": 7,
+    "pad:0px 16px": 3,
+    "gap:4px": 14,
+    "gap:8px": 70,
+    "pad:4px 12px": 6,
+    "pad:0px 12px": 23,
+    "gap:16px": 4,
+    "pad:8px 24px": 1,
+    "pad:0px 24px": 2,
+    "pad:12px 16px 16px": 3,
+    "pad:0px 0px 8px": 3,
+    "gap:1px": 2,
+    "pad:8px": 7,
+    "pad:8px 0px 0px": 2,
+    "gap:0px 12px": 1,
+    "pad:4px 0px": 1,
+    "pad:4px 8px": 5,
+    "pad:4px": 14,
+    "gap:4px 12px": 1,
+    "pad:8px 16px": 1,
+    "pad:0px 8px": 6
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 127,
+     "w": 1536,
+     "h": 48
+    },
+    ".regions": {
+     "x": 0,
+     "y": 175,
+     "w": 1536,
+     "h": 689
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 175,
+     "w": 272,
+     "h": 689
+    },
+    ".region-observe": {
+     "x": 272,
+     "y": 175,
+     "w": 944,
+     "h": 689
+    },
+    ".region-act": {
+     "x": 1216,
+     "y": 175,
+     "w": 320,
+     "h": 689
+    },
+    ".teleop-pad": {
+     "x": 1233,
+     "y": 1233,
+     "w": 287,
+     "h": 50
+    },
+    ".mode-control": {
+     "x": 1233,
+     "y": 390,
+     "w": 287,
+     "h": 2
+    },
+    "#vision-stage": {
+     "x": 288,
+     "y": 263,
+     "w": 912,
+     "h": 268
+    },
+    ".map-stage": {
+     "x": 288,
+     "y": 630,
+     "w": 912,
+     "h": 218
+    },
+    ".telemetry-grid": {
+     "x": 16,
+     "y": 263,
+     "w": 239,
+     "h": 167
+    },
+    ".safety-actions": {
+     "x": 1233,
+     "y": 256,
+     "w": 287,
+     "h": 122
+    },
+    ".control-panel": {
+     "x": 1233,
+     "y": 228,
+     "w": 287,
+     "h": 620
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 1233,
+     "y": 256,
+     "w": 287,
+     "h": 70
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#-.-",
+     "text": "로봇을 움직이는 것",
+     "ratio": 4.82
+    },
+    {
+     "sel": "h2#control-heading.-",
+     "text": "운영 제어",
+     "ratio": 4.82
+    },
+    {
+     "sel": "a#-.docs-link",
+     "text": "API 문서 ↗",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "정지 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "small#-.-",
+     "text": "관리자 권한 필요",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "NAV",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "IR 또는 카메라 중 하나만 선택",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "상태",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "입력",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "오차",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "신뢰도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "선속도",
+     "ratio": 4.82
+    },
+    {
+     "sel": "dt#-.-",
+     "text": "각속도",
+     "ratio": 4.82
+    }
+   ],
+   "below3": 0,
+   "below45": 0,
+   "contrastSamples": 137,
+   "warmHits": [
+    "ui-button#emergency-stop"
+   ],
+   "visibleTextNodes": 137,
+   "viewport_name": "laptop",
+   "state": "delayed",
+   "view": "operate",
+   "png": "laptop_delayed_operate.png"
+  },
+  {
+   "viewport": {
+    "w": 1536,
+    "h": 864
+   },
+   "scroll": {
+    "docScrollable": true,
+    "docOverflowY": 3132,
+    "senseScrollable": 0,
+    "actScrollable": 0
+   },
+   "typeCensus": {
+    "16px/400/body/ls=normal": 4,
+    "18px/700/mono/ls=3.24px": 1,
+    "12px/400/mono/ls=1.44px": 1,
+    "14px/400/mono/ls=1.4px": 1,
+    "12px/400/mono/ls=0.48px": 16,
+    "14px/600/mono/ls=0.84px": 1,
+    "14px/700/mono/ls=0.84px": 1,
+    "12px/700/mono/ls=0.48px": 1,
+    "14px/600/body/ls=normal": 12,
+    "20px/600/body/ls=normal": 5,
+    "12px/600/body/ls=1.44px": 31,
+    "16px/400/mono/ls=normal": 3,
+    "20px/700/mono/ls=normal": 4,
+    "12px/400/mono/ls=normal": 12,
+    "16px/600/body/ls=normal": 11,
+    "14px/400/body/ls=normal": 14,
+    "16px/700/body/ls=normal": 8,
+    "18px/400/body/ls=normal": 6,
+    "18px/700/mono/ls=normal": 2,
+    "12px/400/mono/ls=1.2px": 2,
+    "14px/400/mono/ls=normal": 2,
+    "14px/500/body/ls=normal": 4,
+    "12px/400/mono/ls=0.96px": 2
+   },
+   "spacingCensus": {
+    "gap:normal": 171,
+    "pad:0px": 190,
+    "pad:12px 16px": 1,
+    "gap:12px": 23,
+    "pad:0px 16px": 3,
+    "gap:4px": 2,
+    "gap:8px": 79,
+    "pad:4px 12px": 16,
+    "pad:0px 12px": 31,
+    "gap:16px": 7,
+    "pad:24px": 6,
+    "gap:12px 24px": 1,
+    "pad:0px 0px 8px": 4,
+    "pad:12px": 12,
+    "pad:16px": 11,
+    "pad:0px 24px": 8,
+    "gap:1px": 1,
+    "pad:24px 8px 8px": 1,
+    "pad:8px": 1,
+    "gap:0px 24px": 1,
+    "pad:16px 24px 32px": 1
+   },
+   "geo": {
+    ".hero-strip": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".regions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-sense": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-observe": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".region-act": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".teleop-pad": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".mode-control": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#vision-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".map-stage": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".telemetry-grid": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".safety-actions": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    ".control-panel": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1536,
+     "h": 88
+    },
+    "#emergency-stop": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    }
+   },
+   "worstContrast": [
+    {
+     "sel": "span#host-agent-status.machine-tag",
+     "text": "Host Agent 없음",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#ros-graph-status.machine-tag",
+     "text": "UNAVAILABLE",
+     "ratio": 2.68
+    },
+    {
+     "sel": "span#network-mode.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-off.-",
+     "text": "AP 끄기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#network-ap-on.-",
+     "text": "AP 켜기",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "Wi-Fi SSID",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "암호",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "네트워크 프로파일",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#release-state.mode-chip",
+     "text": "—",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-rollback.-",
+     "text": "이전 릴리스로 롤백",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#release-clear-hold.-",
+     "text": "복구 홀드 해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#commissioning-note.host-note",
+     "text": "FLEET_HOLD. core",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#host-name.machine-tag",
+     "text": "—",
+     "ratio": 5.77
+    },
+    {
+     "sel": "span#-.-",
+     "text": "운영체제",
+     "ratio": 5.77
+    }
+   ],
+   "below3": 2,
+   "below45": 2,
+   "contrastSamples": 144,
+   "warmHits": [
+    "p#runtime-warning",
+    "span#host-agent-status",
+    "p#network-note",
+    "span#ros-graph-status",
+    "p#release-note"
+   ],
+   "visibleTextNodes": 144,
+   "viewport_name": "laptop",
+   "state": "delayed",
+   "view": "inspect",
+   "png": "laptop_delayed_inspect.png"
+  }
+ ]
+}

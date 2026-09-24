@@ -329,8 +329,8 @@ window.fetch = async (input, options = {}) => {
 """
 
 
-def _launch_page(playwright, extra_init=""):
-    browser, page, _errors = open_page(playwright, 390, 844)
+def _launch_page(playwright, extra_init="", width=390, height=844):
+    browser, page, _errors = open_page(playwright, width, height)
     html = (WEB / "index.html").read_text(encoding="utf-8")
     page.route(
         "http://rosy.test/dashboard",
@@ -532,6 +532,8 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
             wait_until="domcontentloaded",
             timeout=5_000,
         )
+        # D-201 — 정책 편집은 점검 뷰(절차 문법)의 현장 설정 카드에 산다.
+        page.locator("#view-inspect").click()
         page.locator("#traffic-policy-revision-input").fill(
             "traffic-policy-v2")
         page.locator("#traffic-policy-mode").select_option("ENFORCED")
@@ -548,7 +550,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
         if screenshot := os.environ.get("ROSY_DASHBOARD_SCREENSHOT"):
             output = Path(screenshot)
             output.parent.mkdir(parents=True, exist_ok=True)
-            page.locator(".traffic-policy-control").screenshot(
+            page.locator(".settings-card[aria-labelledby='traffic-policy-heading']").screenshot(
                 path=str(output))
         calls = page.evaluate("window.__apiCalls")
         browser.close()
@@ -1061,6 +1063,115 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
 # --- D-193 S3: login code, whoami badge, logout, first-message WebSocket auth ---
 
 NO_TOKEN_INIT = "sessionStorage.removeItem('rosy.dashboard.token');"
+
+
+# --- D-201: 적합 계약 — 고정 문법 표면은 선언 뷰포트에서 스크롤도 분쇄도 없다 ---
+
+FIT_PROBE = """() => {
+  const act = document.querySelector('.region-act');
+  const mode = document.querySelector('.mode-control');
+  const estop = document.getElementById('emergency-stop').getBoundingClientRect();
+  return {
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    actOverflow: act.scrollHeight - act.clientHeight,
+    modeHeight: Math.round(mode.getBoundingClientRect().height),
+    estopInside: estop.top >= 0 && estop.bottom <= window.innerHeight,
+  };
+}"""
+
+#: 공간 문법의 선언 최소 뷰포트. 1366×768 이 상용 노트북 바닥이고
+#: 1536×864 는 회차 1이 전화만 찍고 비운 자리다(D-201).
+FIT_VIEWPORTS = [(1536, 864), (1366, 768)]
+
+
+@pytest.mark.parametrize(
+    "state", ["", CONSOLE_STATE_INIT["safe-stop"]]
+)
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_operate_view_fits_and_does_not_crush(viewport, state):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(
+                playwright, extra_init=state,
+                width=viewport[0], height=viewport[1])
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.wait_for_function(
+            "document.getElementById('robot-mode')?.textContent !== undefined"
+        )
+        page.wait_for_timeout(700)
+        fit = page.evaluate(FIT_PROBE)
+        browser.close()
+
+    assert fit["docOverflow"] <= 0, (
+        f"{viewport}: 운용 뷰 문서가 스크롤된다 — 공간 문법 위반(D-201): {fit}"
+    )
+    assert fit["actOverflow"] <= 1, (
+        f"{viewport}: 조작 열이 프레임을 넘는다 — 관측·조작은 고정(D-201): {fit}"
+    )
+    assert fit["modeHeight"] >= 40, (
+        f"{viewport}: 모드 분절 제어가 분쇄됐다 — min-height 44의 조작 요소가"
+        f" {fit['modeHeight']}px로 눌렸다(D-201): {fit}"
+    )
+    assert fit["estopInside"], f"{viewport}: 즉시 정지가 뷰포트 밖이다: {fit}"
+
+
+# --- D-203: 계산 척급 폐쇄 — 보이는 계산 크기는 토큰 단계뿐이다 ---------------
+
+TYPE_STEPS = "new Set(['12px', '14px', '16px', '18px', '20px', '32px'])"
+
+OFF_SCALE_CENSUS = """() => {
+  const steps = STEPS;
+  const off = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const size = getComputedStyle(el).fontSize;
+    if (!steps.has(size)) {
+      off.push(`${size} <${el.tagName.toLowerCase()}#${el.id || '-'}>`
+               + `.${(el.className || '').toString().split(' ')[0] || '-'}`);
+    }
+  }
+  return off;
+}"""
+
+
+@pytest.mark.parametrize("state_init", ["", CONSOLE_STATE_INIT["delayed"]])
+def test_visible_type_scale_is_closed(state_init):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=state_init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        off = page.evaluate(OFF_SCALE_CENSUS)
+        # 점검 뷰(절차 문법)도 같은 계단을 쓴다 — 편집 UI가 살고 있는 곳이다.
+        page.locator("#view-inspect").click()
+        page.wait_for_timeout(300)
+        off += page.evaluate(OFF_SCALE_CENSUS)
+        browser.close()
+
+    assert off == [], (
+        "계단 밖 계산 크기가 화면에 있다 — 닫힌 여섯 단계 밖이다(D-203): "
+        + "; ".join(off[:6])
+    )
 
 
 def _open_dashboard(playwright, extra_init=""):

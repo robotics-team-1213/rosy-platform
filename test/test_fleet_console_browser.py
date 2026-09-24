@@ -215,7 +215,7 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
             "() => document.getElementById('online-pill')?.textContent"
             " === 'Fleet 서버 없음'"
         )
-        assert "bad" in page.locator("#online-pill").get_attribute("class")
+        assert page.locator("#online-pill").get_attribute("status") == "crit"
         assert not errors
         save_temp_screenshot(page, "fleet_console_gather-error.png")
         browser.close()
@@ -358,3 +358,133 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
         browser.close()
+
+
+# --- D-201: 예외 문법의 적합 계약 — 선언 뷰포트(사이트 PC 1920×1080)에서
+#     문서가 스크롤되지 않고 신호등·대형이 뷰포트 안에 있다. -------------------
+
+FLEET_FIT_PROBE = """() => {
+  const inside = (sel) => {
+    const n = document.querySelector(sel);
+    if (!n) return null;
+    const b = n.getBoundingClientRect();
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom) };
+  };
+  return {
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    signals: inside('.signals'),
+    formation: inside('.formation'),
+    rosterPanel: inside('main > .panel[aria-labelledby="roster-heading"]'),
+    vh: window.innerHeight,
+  };
+}"""
+
+
+def test_console_fits_the_declared_viewport(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        fit = page.evaluate(FLEET_FIT_PROBE)
+        assert not errors
+        save_temp_screenshot(page, "fleet_console_fit.png")
+        browser.close()
+
+    assert fit["docOverflow"] <= 0, (
+        f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
+        " 보인다(D-201): " + str(fit)
+    )
+    for name in ("signals", "formation", "rosterPanel"):
+        box = fit[name]
+        assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
+            f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
+        )
+
+
+# --- D-202: 위험은 채움이다 — 따뜻한 글자는 4.5:1 이상이어야 읽힌다 ----------
+
+WARM_TEXT_CONTRAST = """() => {
+  const cs = getComputedStyle(document.documentElement);
+  const ctx = document.createElement('canvas').getContext('2d');
+  const norm = (v) => { ctx.fillStyle = v.trim(); return ctx.fillStyle; };
+  const warm = new Set([norm(cs.getPropertyValue('--status-warn')),
+                        norm(cs.getPropertyValue('--status-crit'))]);
+  const effBg = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const s = getComputedStyle(node);
+      const m = s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+      if (m && (m[1].split(',').length < 4 || Number(m[1].split(',')[3]) === 1)) {
+        return norm(s.backgroundColor);
+      }
+      node = node.parentElement;
+    }
+    return norm(cs.getPropertyValue('--ground'));
+  };
+  const lum = (c) => {
+    let r, g, b;
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.replace(/[^#]/g, (x) => x + x) : c;
+      r = parseInt(h.slice(1, 3), 16); g = parseInt(h.slice(3, 5), 16);
+      b = parseInt(h.slice(5, 7), 16);
+    } else {
+      const m = c.match(/rgba?\\(([^)]+)\\)/);
+      if (!m) return null;
+      [r, g, b] = m[1].split(',').map(Number);
+    }
+    const f = (v) => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const offenders = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const s = getComputedStyle(el);
+    const color = norm(s.color);
+    if (!warm.has(color)) continue;
+    const la = lum(color), lb = lum(effBg(el));
+    if (la === null || lb === null) continue;
+    const ratio = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    if (ratio < 4.5) {
+      offenders.push(`${el.tagName.toLowerCase()}.${(el.className || '').toString()}"
+        ${ratio.toFixed(2)}:1 "${el.textContent.trim().slice(0, 16)}"`);
+    }
+  }
+  return offenders;
+}"""
+
+
+def test_warm_coloured_text_stays_readable(console_url):
+    """D-202 — crit 글자(2.24:1) 같은 읽히지 않는 경보를 금지한다."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        offenders = page.evaluate(WARM_TEXT_CONTRAST)
+        assert not errors
+        browser.close()
+
+    assert offenders == [], (
+        "따뜻한 색 글자가 4.5:1 미만이다 — 위험은 채움이다(D-202): "
+        + "; ".join(offenders[:6])
+    )

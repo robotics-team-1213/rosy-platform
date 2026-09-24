@@ -142,6 +142,38 @@
             <ui-empty>연결 후 기능 계약을 표시합니다.</ui-empty>
           </div>
         </section>
+        <!-- D-201: 차선·교통의 계기값은 "로봇이 재는 값"이다 — 감지 영역의 몫.
+             조작 열에는 입력(센서 선택)만 남는다. -->
+        <section class="panel line-follow-panel" aria-labelledby="line-follow-facts-heading">
+          <div class="panel-heading">
+            <div>
+              <h2 id="line-follow-facts-heading">차선 인식</h2>
+            </div>
+          </div>
+          <dl class="line-follow-facts">
+            <div><dt>상태</dt><dd id="line-follow-state">OFF</dd></div>
+            <div><dt>입력</dt><dd id="line-follow-source">없음</dd></div>
+            <div><dt>오차</dt><dd id="line-follow-error"></dd></div>
+            <div><dt>신뢰도</dt><dd id="line-follow-confidence">0%</dd></div>
+            <div><dt>선속도</dt><dd id="line-follow-linear">0.000 m/s</dd></div>
+            <div><dt>각속도</dt><dd id="line-follow-angular">0.000 rad/s</dd></div>
+          </dl>
+        </section>
+        <section class="panel traffic-facts-panel" aria-labelledby="traffic-facts-heading">
+          <div class="panel-heading">
+            <div>
+              <h2 id="traffic-facts-heading">교통 인식</h2>
+            </div>
+          </div>
+          <dl class="traffic-policy-facts">
+            <div><dt>판정</dt><dd id="traffic-policy-state">DISABLED</dd></div>
+            <div><dt>신호</dt><dd id="traffic-policy-signal">미수신</dd></div>
+            <div><dt>정지선</dt><dd id="traffic-policy-stop-distance">미수신</dd></div>
+            <div><dt>scene</dt><dd id="traffic-policy-scene">미확정</dd></div>
+            <div><dt>policy</dt><dd id="traffic-policy-revision">미확정</dd></div>
+            <div><dt>판정 사유</dt><dd id="traffic-policy-reason">policy_disabled</dd></div>
+          </dl>
+        </section>
         </div>
 
         <div class="region region-observe" aria-label="관측">
@@ -232,32 +264,10 @@
               <ui-button kind="toggle" type="button" data-line-mode="IR_LINE">IR 센서</ui-button>
               <ui-button kind="toggle" type="button" data-line-mode="CAMERA_LINE">카메라</ui-button>
             </div>
-            <dl class="line-follow-facts">
-              <div><dt>상태</dt><dd id="line-follow-state">OFF</dd></div>
-              <div><dt>입력</dt><dd id="line-follow-source">없음</dd></div>
-              <div><dt>오차</dt><dd id="line-follow-error"></dd></div>
-              <div><dt>신뢰도</dt><dd id="line-follow-confidence">0%</dd></div>
-              <div><dt>선속도</dt><dd id="line-follow-linear">0.000 m/s</dd></div>
-              <div><dt>각속도</dt><dd id="line-follow-angular">0.000 rad/s</dd></div>
-            </dl>
             <p id="line-follow-reason" class="line-follow-message">mode_off</p>
           </div>
           <!-- D-201: 정책의 편집(입력·검토본·적용)은 절차다 — 점검 뷰의 현장 설정
-               카드로 갔다. 운용 뷰의 조작 열은 정책의 현재 상태만 말한다. -->
-          <div class="traffic-policy-control" aria-labelledby="traffic-heading">
-            <div class="traffic-policy-copy">
-              <h3 id="traffic-heading">교통 인식 · 주행 정책</h3>
-              <span>카메라 증거와 최종 명령을 분리해 확인</span>
-            </div>
-            <dl class="traffic-policy-facts">
-              <div><dt>판정</dt><dd id="traffic-policy-state">DISABLED</dd></div>
-              <div><dt>신호</dt><dd id="traffic-policy-signal">미수신</dd></div>
-              <div><dt>정지선</dt><dd id="traffic-policy-stop-distance">미수신</dd></div>
-              <div><dt>scene</dt><dd id="traffic-policy-scene">미확정</dd></div>
-              <div><dt>policy</dt><dd id="traffic-policy-revision">미확정</dd></div>
-              <div><dt>판정 사유</dt><dd id="traffic-policy-reason">policy_disabled</dd></div>
-            </dl>
-          </div>
+               카드로 갔다. 정책의 현재 판정은 감지 영역의 교통 인식 패널에 있다. -->
           <div id="hitl-escalation" class="hitl-escalation" role="alert" hidden>
             <h3>운영자 지원 요청</h3>
             <p>로봇이 자동 판단을 중단하고 사람의 확인을 요청했습니다.</p>

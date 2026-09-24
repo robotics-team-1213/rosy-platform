@@ -533,10 +533,12 @@ function render() {
     }
   }
 
-  // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state
-  warnList.parentElement.style.display = warningCount > 0 ? "block" : "none";
-  critList.parentElement.style.display = criticalCount > 0 ? "block" : "none";
-  document.querySelector(".queues-panel").style.display = (warningCount + criticalCount) > 0 ? "block" : "none";
+  // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
+  // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다
+  // (D-201 회차 계측에서 style.display 토글이 실서버에서는 무시됨을 확인).
+  warnList.parentElement.hidden = warningCount === 0;
+  critList.parentElement.hidden = criticalCount === 0;
+  document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
 
   fillLeaders();
   drawOverlay();
@@ -569,8 +571,18 @@ el("map-canvas").addEventListener("click", async (event) => {
   if (!view.selected || !view.map) return;
   const canvas = el("map-canvas");
   const rect = canvas.getBoundingClientRect();
-  const col = ((event.clientX - rect.left) / rect.width) * view.map.width;
-  const rowFromTop = ((event.clientY - rect.top) / rect.height) * view.map.height;
+  // D-201 — 캔버스는 object-fit: contain 으로 그려진다. 레터박스(빈 여백)를
+  // 제외한 그려진 영역 안에서만 셀 좌표가 성립한다.
+  const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
+  const drawnW = view.map.width * scale;
+  const drawnH = view.map.height * scale;
+  const offX = (rect.width - drawnW) / 2;
+  const offY = (rect.height - drawnH) / 2;
+  const col = ((event.clientX - rect.left - offX) / drawnW) * view.map.width;
+  const rowFromTop = ((event.clientY - rect.top - offY) / drawnH) * view.map.height;
+  if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) {
+    return; // 여백을 찍은 것 — 목표가 아니다.
+  }
   const point = cellToWorld(view.map, Math.floor(col), Math.floor(view.map.height - rowFromTop));
   const robotId = view.selected;
   view.selected = null;

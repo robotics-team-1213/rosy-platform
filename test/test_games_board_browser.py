@@ -154,3 +154,45 @@ def test_match_board_initial_state_before_any_publish():
             browser.close()
     finally:
         server.close()
+
+
+# --- D-201: 초점 문법의 적합 계약 — 정지 행은 선언 뷰포트(1280×800) 안에 있다.
+
+GAMES_FIT_PROBE = """() => {
+  const halt = document.getElementById('halt').getBoundingClientRect();
+  return {
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    halt: { top: Math.round(halt.top), bottom: Math.round(halt.bottom) },
+    vh: window.innerHeight,
+  };
+}"""
+
+
+def test_halt_row_stays_inside_the_declared_viewport():
+    """정지 버튼이 접힘 아래로 내려가면 스페이스를 알아도 손이 못 쓴다."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function(
+                "document.getElementById('phase')?.textContent === 'play'"
+            )
+            page.wait_for_timeout(400)
+            fit = page.evaluate(GAMES_FIT_PROBE)
+            assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()
+
+    assert fit["docOverflow"] <= 0, (
+        f"보드가 {fit['docOverflow']}px 스크롤된다 — 초점 문법 위반(D-201): {fit}"
+    )
+    assert fit["halt"]["bottom"] <= fit["vh"] and fit["halt"]["top"] >= 0, (
+        f"정지 행이 뷰포트 밖이다(D-201): {fit}"
+    )

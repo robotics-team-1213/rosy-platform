@@ -170,3 +170,11 @@
 - 변경: `progress.md` gate cmd와 `AGENTS.md` 테스트 명령의 옛 경로를 고쳤다 — `src/games/test`→`src/apps/games/test`, 없는 `test/test_games_surface.py`→`test/test_rosy_games_surface.py` (harness.yaml과 같게).
 - 증거: `python -m pytest src/apps/games/test test/test_rosy_games_surface.py -q` 110 passed (2026-09-22 Windows)
 - gate 변화: 없음. SOURCE·LOCAL GO 유지.
+
+## 2026-09-24 · uncommitted · fix(games): 경기 보드 정지 행 가시 (D-201)
+
+- 변경: `#pitch`·`#frame`에 `max-width/height` 종횡비 보존 상한 ? 선언 뷰포트(1280×800)에서 halt 행이 y=806으로 접힘 아래로 내려가던 것 해소. 초점 물체는 줄어들 수 있어도 정지를 밀어낼 수 없다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_games_board_browser.py -q` → 5 passed(신규 게이트 변이 증명: 상한 제거 → 429px 적색).
+- gate 변화: 게임 G1에 halt 가시 게이트 추가.
+- 결정: D-201
+- 교훈: 없음.

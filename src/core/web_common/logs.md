@@ -65,3 +65,11 @@
 - gate 변화: SOURCE GO, LOCAL GO 유지.
 - 결정: D-194
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(web_common): ui-button small 기본 척급 규칙 (D-203)
+
+- 변경: components.css에 `ui-button small` 기본 규칙 추가 ? kind가 크기를 지정하지 않아도 `--text-micro` 계단 안에 들어온다. UA 기본값(smaller)이 16px 맥락에서 13.33px, 14px 맥락에서 11.67px를 만드는 누수의 뿌리.
+- 증거: `python -m pytest src/core/web_common/test -q` → 60 passed. 계산 척급 센서스 게이트(test_dashboard_browser.py) off-scale 0.
+- gate 변화: 없음.
+- 결정: D-203
+- 교훈: 닫힌 척급은 선언이 아니라 계산값에서 닫혀야 한다.

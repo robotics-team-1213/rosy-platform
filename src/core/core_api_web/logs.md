@@ -47,3 +47,11 @@
 - gate 변화: 없음
 - 결정: PRT-006
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(web): 운용 조작 열 적합 회복과 정책 편집 이동 (D-201, D-203)
+
+- 변경: (1) 조작 열 분쇄 방지 ? 고정 프레임 flex 자식 `flex: none`(모드 분절 제어가 44px→2px로 눌리던 것 실측). (2) 교통 정책 편집 UI(입력 6종·검토본·적용·SIM 신호)를 점검 뷰 현장 설정 카드로 이동, id는 그대로라 바인딩 생존. (3) 차선·교통 계기값 dl을 감지 영역 패널로 이동(사실은 감지, 조작은 조작). (4) 공용 라벨 규칙에 line-follow-copy h3 보강(16.38px 누수), 나이 접미 em→토큰. (5) region-act 잔존 inset sheen 제거(D-158 정신).
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py -q` → 43 passed(신규 게이트 5종 포함, 변이 증명 완료). 단위 60+54 passed.
+- gate 변화: 콘솔 G1에 적합 게이트(2뷰포트×2상태)·계산 척급 센서스 게이트 추가.
+- 결정: D-201, D-203
+- 교훈: 스크롤이 금지된 문법에서 flex-shrink는 넘침을 조용한 분쇄로 바꾼다 ? 게이트는 분쇄도 재야 한다.

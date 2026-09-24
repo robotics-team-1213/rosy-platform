@@ -1,0 +1,661 @@
+{
+ "captures": [
+  {
+   "scroll": {
+    "docOverflowY": 755
+   },
+   "typeCensus": {
+    "20px/700/body": 1,
+    "12px/500/mono": 1,
+    "14px/600/body": 11,
+    "14px/600/mono": 2,
+    "18px/650/mono": 1,
+    "18px/700/body": 1,
+    "12px/400/mono": 26,
+    "18px/600/body": 2,
+    "14px/400/body": 4,
+    "16px/700/mono": 5,
+    "14px/500/mono": 12,
+    "16px/400/body": 1,
+    "12px/400/body": 1
+   },
+   "spacingCensus": {
+    "gap:normal": 81,
+    "gap:12px": 3,
+    "gap:8px": 22,
+    "gap:16px": 2,
+    "gap:4px": 8,
+    "gap:4px 12px": 3,
+    "gap:0px": 12,
+    "gap:4px 8px": 1
+   },
+   "geo": {
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1920,
+     "h": 88
+    },
+    ".panel": {
+     "x": 24,
+     "y": 104,
+     "w": 1472,
+     "h": 1608
+    },
+    "#map-canvas": {
+     "x": 41,
+     "y": 186,
+     "w": 1438,
+     "h": 1438
+    },
+    ".queues-container": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#roster": {
+     "x": 1529,
+     "y": 176,
+     "w": 350,
+     "h": 600
+    },
+    ".formation": {
+     "x": 1529,
+     "y": 792,
+     "w": 350,
+     "h": 338
+    },
+    ".signals": {
+     "x": 1529,
+     "y": 1130,
+     "w": 350,
+     "h": 107
+    },
+    ".note": {
+     "x": 24,
+     "y": 1760,
+     "w": 1872,
+     "h": 43
+    },
+    "main": {
+     "x": 0,
+     "y": 88,
+     "w": 1920,
+     "h": 1656
+    }
+   },
+   "warmHits": [
+    "ui-button#estop.estop",
+    "span#-.tag",
+    "span#-.tag"
+   ],
+   "worstContrast": [
+    {
+     "sel": "span#-.tag",
+     "text": "끊김",
+     "ratio": 2.24
+    },
+    {
+     "sel": "span#-.tag",
+     "text": "NAVIGATION",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "POSE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "YAW",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "BATTERY",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "SAFETY",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "목표 지정",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "취소",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.tag",
+     "text": "NAVIGATION",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "POSE",
+     "ratio": 4.82
+    }
+   ],
+   "below45": 1,
+   "contrastSamples": 68,
+   "textNodes": 68,
+   "surface": "fleet",
+   "state": "formation-active",
+   "png": "fleet_formation-active_1920x1080.png"
+  },
+  {
+   "scroll": {
+    "docOverflowY": 755
+   },
+   "typeCensus": {
+    "20px/700/body": 1,
+    "12px/500/mono": 1,
+    "14px/600/body": 5,
+    "14px/600/mono": 2,
+    "18px/650/mono": 1,
+    "18px/700/body": 1,
+    "12px/400/mono": 7,
+    "18px/600/body": 2,
+    "14px/400/body": 3,
+    "16px/700/mono": 2,
+    "16px/400/body": 1,
+    "12px/400/body": 1
+   },
+   "spacingCensus": {
+    "gap:normal": 40,
+    "gap:12px": 2,
+    "gap:8px": 9,
+    "gap:16px": 2,
+    "gap:4px": 5,
+    "gap:4px 8px": 1
+   },
+   "geo": {
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1920,
+     "h": 88
+    },
+    ".panel": {
+     "x": 24,
+     "y": 104,
+     "w": 1472,
+     "h": 1608
+    },
+    "#map-canvas": {
+     "x": 41,
+     "y": 186,
+     "w": 1438,
+     "h": 1438
+    },
+    ".queues-container": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#roster": {
+     "x": 1529,
+     "y": 176,
+     "w": 350,
+     "h": 0
+    },
+    ".formation": {
+     "x": 1529,
+     "y": 192,
+     "w": 350,
+     "h": 292
+    },
+    ".signals": {
+     "x": 1529,
+     "y": 484,
+     "w": 350,
+     "h": 107
+    },
+    ".note": {
+     "x": 24,
+     "y": 1760,
+     "w": 1872,
+     "h": 43
+    },
+    "main": {
+     "x": 0,
+     "y": 88,
+     "w": 1920,
+     "h": 1656
+    }
+   },
+   "warmHits": [
+    "ui-button#estop.estop"
+   ],
+   "worstContrast": [
+    {
+     "sel": "span#formation-state.tag",
+     "text": "IDLE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "리더",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "모양",
+     "ratio": 4.82
+    },
+    {
+     "sel": "label#-.-",
+     "text": "간격 m",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#formation-start.-",
+     "text": "무장",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#formation-reform.-",
+     "text": "대형 변경",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#formation-resume.-",
+     "text": "재개",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#formation-stop.-",
+     "text": "해제",
+     "ratio": 4.82
+    },
+    {
+     "sel": "p#formation-detail.hint",
+     "text": "리더와 포함 로봇을 고르고 무장하면 ",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#estop.estop",
+     "text": "전체 정지",
+     "ratio": 5.31
+    }
+   ],
+   "below45": 0,
+   "contrastSamples": 27,
+   "textNodes": 27,
+   "surface": "fleet",
+   "state": "empty",
+   "png": "fleet_empty_1920x1080.png"
+  },
+  {
+   "scroll": {
+    "docOverflowY": 755
+   },
+   "typeCensus": {
+    "20px/700/body": 1,
+    "12px/500/mono": 1,
+    "14px/600/body": 11,
+    "14px/600/mono": 2,
+    "18px/650/mono": 1,
+    "18px/700/body": 1,
+    "12px/400/mono": 26,
+    "18px/600/body": 2,
+    "14px/400/body": 4,
+    "16px/700/mono": 5,
+    "14px/500/mono": 12,
+    "16px/400/body": 1,
+    "12px/400/body": 1
+   },
+   "spacingCensus": {
+    "gap:normal": 81,
+    "gap:12px": 3,
+    "gap:8px": 22,
+    "gap:16px": 2,
+    "gap:4px": 8,
+    "gap:4px 12px": 3,
+    "gap:0px": 12,
+    "gap:4px 8px": 1
+   },
+   "geo": {
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1920,
+     "h": 88
+    },
+    ".panel": {
+     "x": 24,
+     "y": 104,
+     "w": 1472,
+     "h": 1608
+    },
+    "#map-canvas": {
+     "x": 41,
+     "y": 186,
+     "w": 1438,
+     "h": 1438
+    },
+    ".queues-container": {
+     "x": 0,
+     "y": 0,
+     "w": 0,
+     "h": 0
+    },
+    "#roster": {
+     "x": 1529,
+     "y": 176,
+     "w": 350,
+     "h": 600
+    },
+    ".formation": {
+     "x": 1529,
+     "y": 792,
+     "w": 350,
+     "h": 338
+    },
+    ".signals": {
+     "x": 1529,
+     "y": 1130,
+     "w": 350,
+     "h": 107
+    },
+    ".note": {
+     "x": 24,
+     "y": 1760,
+     "w": 1872,
+     "h": 43
+    },
+    "main": {
+     "x": 0,
+     "y": 88,
+     "w": 1920,
+     "h": 1656
+    }
+   },
+   "warmHits": [
+    "ui-button#estop.estop",
+    "span#-.tag",
+    "span#-.tag",
+    "span#formation-state.tag"
+   ],
+   "worstContrast": [
+    {
+     "sel": "span#-.tag",
+     "text": "끊김",
+     "ratio": 2.24
+    },
+    {
+     "sel": "span#-.tag",
+     "text": "NAVIGATION",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "POSE",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "YAW",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "BATTERY",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "SAFETY",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "목표 지정",
+     "ratio": 4.82
+    },
+    {
+     "sel": "ui-button#-.-",
+     "text": "취소",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.tag",
+     "text": "NAVIGATION",
+     "ratio": 4.82
+    },
+    {
+     "sel": "span#-.-",
+     "text": "POSE",
+     "ratio": 4.82
+    }
+   ],
+   "below45": 1,
+   "contrastSamples": 68,
+   "textNodes": 68,
+   "surface": "fleet",
+   "state": "holding",
+   "png": "fleet_holding_1920x1080.png"
+  },
+  {
+   "scroll": {
+    "docOverflowY": 88
+   },
+   "typeCensus": {
+    "12px/500/mono": 1,
+    "20px/700/body": 1,
+    "16px/400/body": 3,
+    "14px/400/body": 10,
+    "32px/700/body": 2,
+    "18px/700/body": 1
+   },
+   "spacingCensus": {
+    "gap:normal": 25,
+    "gap:12px": 2,
+    "gap:1px": 1,
+    "gap:4px": 1,
+    "gap:8px": 1
+   },
+   "geo": {
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 113
+    },
+    ".score": {
+     "x": 24,
+     "y": 113,
+     "w": 1232,
+     "h": 88
+    },
+    "#pitch": {
+     "x": 24,
+     "y": 213,
+     "w": 720,
+     "h": 480
+    },
+    ".halt-row": {
+     "x": 24,
+     "y": 806,
+     "w": 1232,
+     "h": 58
+    }
+   },
+   "warmHits": [
+    "ui-button#halt.-"
+   ],
+   "worstContrast": [
+    {
+     "sel": "ui-button#halt.-",
+     "text": "정지",
+     "ratio": 5.31
+    },
+    {
+     "sel": "span#home-name.-",
+     "text": "rosy_01",
+     "ratio": 6.75
+    },
+    {
+     "sel": "span#away-name.-",
+     "text": "rosy_02",
+     "ratio": 6.75
+    },
+    {
+     "sel": "small#-.-",
+     "text": "노트북 게임 호스트",
+     "ratio": 6.95
+    },
+    {
+     "sel": "p#stair1.-",
+     "text": "계단 1 아직 (FIELD GO 아님",
+     "ratio": 7.51
+    },
+    {
+     "sel": "span#-.-",
+     "text": "스페이스도 양쪽을 세운다",
+     "ratio": 7.51
+    },
+    {
+     "sel": "p#phase.-",
+     "text": "play",
+     "ratio": 7.97
+    },
+    {
+     "sel": "li#-.-",
+     "text": "12 코너",
+     "ratio": 9.58
+    },
+    {
+     "sel": "li#-.-",
+     "text": "13 코너",
+     "ratio": 9.58
+    },
+    {
+     "sel": "li#-.-",
+     "text": "2 로봇",
+     "ratio": 9.58
+    }
+   ],
+   "below45": 0,
+   "contrastSamples": 18,
+   "textNodes": 18,
+   "surface": "games",
+   "state": "play",
+   "png": "games_play_1280x800.png"
+  },
+  {
+   "scroll": {
+    "docOverflowY": 134
+   },
+   "typeCensus": {
+    "12px/500/mono": 1,
+    "20px/700/body": 1,
+    "16px/400/body": 4,
+    "14px/400/body": 10,
+    "32px/700/body": 2,
+    "18px/700/body": 1
+   },
+   "spacingCensus": {
+    "gap:normal": 26,
+    "gap:12px": 2,
+    "gap:1px": 1,
+    "gap:4px": 1,
+    "gap:8px": 1
+   },
+   "geo": {
+    "ui-topbar": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 113
+    },
+    ".score": {
+     "x": 24,
+     "y": 113,
+     "w": 1232,
+     "h": 88
+    },
+    "#pitch": {
+     "x": 24,
+     "y": 213,
+     "w": 720,
+     "h": 480
+    },
+    ".halt-row": {
+     "x": 24,
+     "y": 852,
+     "w": 1232,
+     "h": 58
+    }
+   },
+   "warmHits": [
+    "ui-button#halt.-"
+   ],
+   "worstContrast": [
+    {
+     "sel": "p#lost.lost",
+     "text": "공을 잃음 · HOLD",
+     "ratio": 4.75
+    },
+    {
+     "sel": "ui-button#halt.-",
+     "text": "정지",
+     "ratio": 5.31
+    },
+    {
+     "sel": "span#home-name.-",
+     "text": "rosy_01",
+     "ratio": 6.75
+    },
+    {
+     "sel": "span#away-name.-",
+     "text": "rosy_02",
+     "ratio": 6.75
+    },
+    {
+     "sel": "small#-.-",
+     "text": "노트북 게임 호스트",
+     "ratio": 6.95
+    },
+    {
+     "sel": "p#stair1.-",
+     "text": "계단 1 아직 (FIELD GO 아님",
+     "ratio": 7.51
+    },
+    {
+     "sel": "span#-.-",
+     "text": "스페이스도 양쪽을 세운다",
+     "ratio": 7.51
+    },
+    {
+     "sel": "p#phase.-",
+     "text": "hold",
+     "ratio": 7.97
+    },
+    {
+     "sel": "li#-.-",
+     "text": "10 코너",
+     "ratio": 9.58
+    },
+    {
+     "sel": "li#-.-",
+     "text": "11 코너",
+     "ratio": 9.58
+    }
+   ],
+   "below45": 0,
+   "contrastSamples": 19,
+   "textNodes": 19,
+   "surface": "games",
+   "state": "lost",
+   "png": "games_lost_1280x800.png"
+  }
+ ]
+}

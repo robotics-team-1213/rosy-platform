@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(web): 운용 조작 열 적합 회복과 정책 편집 이동 (D-201, D-203)
 - 2026-09-24 · uncommitted · docs(api): contract v1.20 — lane-network docking rows renumbered on merge
 - 2026-09-24 · uncommitted · docs(api): 계약 v1.18 — 도킹·라인 추종 거부 코드
 - 2026-09-24 · uncommitted · fix(dashboard): 하드웨어가 없거나 모를 때 사실대로 보인다 (US-010), 계약 v1.18
 - 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거
-- 2026-09-23 · uncommitted · feat(api): `/metrics` 에 `rosy_audit_dir_sync_failures_total`, 계약 v1.17
