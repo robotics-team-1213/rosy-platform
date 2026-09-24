@@ -13,6 +13,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/core/core/test/test_api.py",
     "src/core/core/test/test_battery.py",
     "src/core/core/test/test_bridge_battery_policy.py",
+    # bridge/docking_executor.py seam (split out of ros_bridge, df02d52e); same kind as
+    # test_bridge_battery_policy: CORE bridge wiring driven through core_features fakes.
+    "src/core/core/test/test_bridge_docking_executor.py",
     "src/core/core/test/test_control_absorption_safety.py",
     "src/core/core/test/test_control_policy_link.py",
     "src/core/core/test/test_control_sensor_adapter.py",
