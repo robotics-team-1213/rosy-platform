@@ -6,33 +6,38 @@
   <meta name="theme-color" content="#111614">
   <title>Rosy OS — Field Runtime</title>
   <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/dashboard/assets/styles.css">
+  <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/dashboard/assets/app.js"></script>
 </head>
 <body>
+  <ui-shell grammar="spatial">
   <a class="skip-link" href="#dashboard-main">상태 화면으로 건너뛰기</a>
-  <header class="topbar">
+  <ui-topbar>
+    <ui-brand>
     <a class="brand" href="/dashboard" aria-label="Rosy OS 대시보드 홈">
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
       <span><b>ROSY</b><small>Field runtime</small></span>
     </a>
+    </ui-brand>
     <div class="topbar-status">
       <span id="clock" class="clock">--:--:--</span>
       <span id="connection-badge" class="status-badge status-unknown">
         <i aria-hidden="true"></i><span>인증 대기</span>
       </span>
       <div class="view-switch" role="group" aria-label="화면 전환">
-        <button id="view-operate" class="view-tab" type="button" aria-pressed="true">운용</button>
-        <button id="view-inspect" class="view-tab" type="button" aria-pressed="false">점검</button>
+        <ui-button kind="segment" id="view-operate" class="view-tab" type="button" aria-pressed="true">운용</ui-button>
+        <ui-button kind="segment" id="view-inspect" class="view-tab" type="button" aria-pressed="false">점검</ui-button>
       </div>
       <!-- D-193 6: who this browser is, from GET /api/v1/auth/whoami. -->
       <span id="whoami-badge" class="machine-tag whoami-badge" hidden>
         <b id="whoami-role"></b><span id="whoami-detail"></span>
       </span>
-      <button id="logout" class="quiet-button" type="button" hidden>로그아웃</button>
-      <button id="open-auth" class="quiet-button" type="button">접속 키</button>
+      <ui-button kind="quiet" id="logout" class="quiet-button" type="button" hidden>로그아웃</ui-button>
+      <ui-button kind="quiet" id="open-auth" class="quiet-button" type="button">접속 키</ui-button>
     </div>
-  </header>
+  </ui-topbar>
 
   <aside id="auth-drawer" class="auth-drawer" aria-labelledby="auth-title">
     <div>
@@ -42,14 +47,14 @@
     </div>
     <!-- D-193 6: two tabs, the robot screen code first. -->
     <div class="view-switch auth-tabs" role="tablist" aria-label="로그인 방법">
-      <button id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-form">로봇 화면 코드</button>
-      <button id="auth-tab-token" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-form">API 토큰</button>
+      <ui-button kind="segment" id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-form">로봇 화면 코드</ui-button>
+      <ui-button kind="segment" id="auth-tab-token" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-form">API 토큰</ui-button>
     </div>
     <form id="code-form" role="tabpanel" aria-labelledby="auth-tab-code">
       <label for="code-input">로그인 코드</label>
       <div class="auth-row">
         <input id="code-input" name="code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCD-EFGH" required>
-        <button id="code-submit" type="submit" class="primary-button">로그인</button>
+        <ui-button kind="primary" id="code-submit" type="submit" class="primary-button">로그인</ui-button>
       </div>
       <label for="code-label">이 기기 이름표 (선택)</label>
       <div class="auth-row">
@@ -65,12 +70,12 @@
       <label for="token-input">API 토큰</label>
       <div class="auth-row">
         <input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="rosy-…" required>
-        <button type="submit" class="primary-button">연결</button>
+        <ui-button kind="primary" type="submit" class="primary-button">연결</ui-button>
       </div>
       <p>카드 토큰이나 설정에서 만든 토큰입니다. 키는 이 탭이 열려 있는 동안에만 보관됩니다.</p>
       <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
     </form>
-    <button id="close-auth" class="drawer-close" type="button" aria-label="접속 키 창 닫기">×</button>
+    <ui-button kind="quiet" id="close-auth" class="drawer-close" type="button" aria-label="접속 키 창 닫기">×</ui-button>
   </aside>
 
   <main id="dashboard-main" class="dashboard" aria-label="Rosy OS 상태">
@@ -134,7 +139,7 @@
             <span id="capability-count" class="machine-tag"></span>
           </div>
           <div id="capability-list" class="capability-list" aria-live="polite">
-            <p class="empty-state">연결 후 기능 계약을 표시합니다.</p>
+            <ui-empty>연결 후 기능 계약을 표시합니다.</ui-empty>
           </div>
         </section>
         </div>
@@ -171,13 +176,13 @@
           <div class="map-stage">
             <div class="map-controls">
               <div class="map-toolbar" role="group" aria-label="지도 레이어">
-                <button type="button" data-map-layer="occupancy" aria-pressed="true">격자</button>
-                <button type="button" data-map-layer="costmap" aria-pressed="true">코스트</button>
-                <button type="button" data-map-layer="path" aria-pressed="true">경로</button>
+                <ui-button kind="segment" type="button" data-map-layer="occupancy" aria-pressed="true">격자</ui-button>
+                <ui-button kind="segment" type="button" data-map-layer="costmap" aria-pressed="true">코스트</ui-button>
+                <ui-button kind="segment" type="button" data-map-layer="path" aria-pressed="true">경로</ui-button>
               </div>
               <div class="map-toolbar" role="group" aria-label="지도 클릭 동작">
-                <button type="button" data-map-click="pose" aria-pressed="true">초기 자세</button>
-                <button type="button" data-map-click="goal" aria-pressed="false">목표</button>
+                <ui-button kind="segment" type="button" data-map-click="pose" aria-pressed="true">초기 자세</ui-button>
+                <ui-button kind="segment" type="button" data-map-click="goal" aria-pressed="false">목표</ui-button>
               </div>
               <p class="map-hint">먼저 로봇이 있는 칸을 찍어 AMCL 초기 자세를 맞춘 뒤, 목표로 전환하세요. 목표는 NAVIGATION 모드로 들어가 바퀴에 속도가 나갑니다.</p>
             </div>
@@ -205,17 +210,17 @@
             <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API 문서 ↗</a>
           </div>
           <div class="safety-actions">
-            <button id="emergency-stop" class="stop-button" type="button">
+            <ui-button kind="irreversible" id="emergency-stop" class="stop-button" type="button">
               <span>즉시 정지</span><small>모든 역할에서 실행 가능</small>
-            </button>
-            <button id="release-stop" class="release-button" type="button">
+            </ui-button>
+            <ui-button kind="quiet" id="release-stop" class="release-button" type="button">
               <span>정지 해제</span><small>관리자 권한 필요</small>
-            </button>
+            </ui-button>
           </div>
           <div class="mode-control" role="group" aria-label="로봇 운전 모드">
-            <button type="button" data-mode="IDLE">IDLE</button>
-            <button type="button" data-mode="MANUAL">MANUAL</button>
-            <button type="button" data-mode="NAVIGATION" disabled title="기능 확인 중">NAV</button>
+            <ui-button kind="segment" type="button" data-mode="IDLE">IDLE</ui-button>
+            <ui-button kind="segment" type="button" data-mode="MANUAL">MANUAL</ui-button>
+            <ui-button kind="segment" type="button" data-mode="NAVIGATION" disabled title="기능 확인 중">NAV</ui-button>
           </div>
           <div class="line-follow-control" aria-labelledby="line-follow-heading">
             <div class="line-follow-copy">
@@ -223,9 +228,9 @@
               <span>IR 또는 카메라 중 하나만 선택</span>
             </div>
             <div class="line-follow-modes" role="group" aria-label="차선 인식 센서">
-              <button type="button" data-line-mode="OFF">OFF</button>
-              <button type="button" data-line-mode="IR_LINE">IR 센서</button>
-              <button type="button" data-line-mode="CAMERA_LINE">카메라</button>
+              <ui-button kind="toggle" type="button" data-line-mode="OFF">OFF</ui-button>
+              <ui-button kind="toggle" type="button" data-line-mode="IR_LINE">IR 센서</ui-button>
+              <ui-button kind="toggle" type="button" data-line-mode="CAMERA_LINE">카메라</ui-button>
             </div>
             <dl class="line-follow-facts">
               <div><dt>상태</dt><dd id="line-follow-state">OFF</dd></div>
@@ -265,21 +270,21 @@
               <label>최소 신뢰도<input id="traffic-min-confidence" type="number" min="0.01" max="1" step="0.01"></label>
             </div>
             <div class="traffic-policy-actions">
-              <button type="button" id="traffic-policy-stage">정책 검토본 저장</button>
-              <button type="button" id="traffic-policy-apply" class="primary-button">정지 상태에서 적용</button>
+              <ui-button kind="quiet" type="button" id="traffic-policy-stage">정책 검토본 저장</ui-button>
+              <ui-button kind="primary" type="button" id="traffic-policy-apply" class="primary-button">정지 상태에서 적용</ui-button>
             </div>
             <div class="simulation-signal-controls" role="group" aria-label="시뮬레이션 신호등 제어">
               <span>SIM 신호</span>
-              <button type="button" data-simulation-signal="RED" disabled>RED</button>
-              <button type="button" data-simulation-signal="YELLOW" disabled>YELLOW</button>
-              <button type="button" data-simulation-signal="GREEN" disabled>GREEN</button>
+              <ui-button kind="toggle" type="button" data-simulation-signal="RED" disabled>RED</ui-button>
+              <ui-button kind="toggle" type="button" data-simulation-signal="YELLOW" disabled>YELLOW</ui-button>
+              <ui-button kind="toggle" type="button" data-simulation-signal="GREEN" disabled>GREEN</ui-button>
             </div>
             <p id="traffic-policy-message" class="line-follow-message" role="status" aria-live="polite">정책 readback 대기</p>
           </div>
           <div id="hitl-escalation" class="hitl-escalation" role="alert" hidden>
             <h3>운영자 지원 요청</h3>
             <p>로봇이 자동 판단을 중단하고 사람의 확인을 요청했습니다.</p>
-            <button type="button" id="teleop-override">저속 직접 제어로 이동</button>
+            <ui-button kind="quiet" type="button" id="teleop-override">저속 직접 제어로 이동</ui-button>
           </div>
           <div class="teleop-commissioning" aria-labelledby="teleop-heading">
             <div class="teleop-copy">
@@ -293,10 +298,10 @@
               <span>바퀴를 띄웠고 물리 전원 차단을 준비했습니다.</span>
             </label>
             <div class="teleop-pad" role="group" aria-label="저속 수동 주행">
-              <button type="button" data-teleop="forward" data-linear="0.05" data-angular="0" aria-label="전진">↑<small>전진</small></button>
-              <button type="button" data-teleop="left" data-linear="0" data-angular="0.35" aria-label="좌회전">←<small>좌회전</small></button>
-              <button type="button" data-teleop="backward" data-linear="-0.05" data-angular="0" aria-label="후진">↓<small>후진</small></button>
-              <button type="button" data-teleop="right" data-linear="0" data-angular="-0.35" aria-label="우회전">→<small>우회전</small></button>
+              <ui-button kind="toggle" type="button" data-teleop="forward" data-linear="0.05" data-angular="0" aria-label="전진">↑<small>전진</small></ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="left" data-linear="0" data-angular="0.35" aria-label="좌회전">←<small>좌회전</small></ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="backward" data-linear="-0.05" data-angular="0" aria-label="후진">↓<small>후진</small></ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="right" data-linear="0" data-angular="-0.35" aria-label="우회전">→<small>우회전</small></ui-button>
             </div>
             <p id="teleop-message" class="teleop-message" role="status" aria-live="assertive">MANUAL 모드에서 버튼을 누르고 있는 동안만 움직입니다.</p>
           </div>
@@ -373,8 +378,8 @@
             </dl>
             <p class="host-note" id="network-note" role="status"></p>
             <div class="host-actions">
-              <button type="button" id="network-ap-off" data-role="administrator" disabled>AP 끄기</button>
-              <button type="button" id="network-ap-on" data-role="administrator" disabled>AP 켜기</button>
+              <ui-button kind="quiet" type="button" id="network-ap-off" data-role="administrator" disabled>AP 끄기</ui-button>
+              <ui-button kind="quiet" type="button" id="network-ap-on" data-role="administrator" disabled>AP 켜기</ui-button>
             </div>
             <form id="network-connect-form">
               <label for="network-ssid-input">Wi-Fi SSID</label>
@@ -382,14 +387,14 @@
               <label for="network-psk-input">암호</label>
               <div class="settings-row">
                 <input id="network-psk-input" name="psk" type="password" maxlength="63" autocomplete="new-password">
-                <button type="button" id="network-connect" class="primary-button" disabled>Wi-Fi 연결</button>
+                <ui-button kind="primary" type="button" id="network-connect" class="primary-button" disabled>Wi-Fi 연결</ui-button>
               </div>
             </form>
             <form id="network-apply-form">
               <label for="network-profile-id">네트워크 프로파일</label>
               <div class="settings-row">
                 <input id="network-profile-id" name="profile_id" maxlength="64" placeholder="rosy-site-sta" autocomplete="off">
-                <button type="button" id="network-apply" class="primary-button" disabled>프로파일 적용</button>
+                <ui-button kind="primary" type="button" id="network-apply" class="primary-button" disabled>프로파일 적용</ui-button>
               </div>
             </form>
           </article>
@@ -408,7 +413,7 @@
           <article><span>NAMESPACE</span><strong id="ros-namespace"></strong><small>로봇 식별 경계</small></article>
           <article><span>DDS ISOLATION</span><strong id="dds-isolation"></strong><small id="dds-interface">인터페이스 확인 전</small></article>
           <article><span>RMW</span><strong id="dds-rmw"></strong><small>CycloneDDS만 (D-117)</small>
-            <button type="button" id="dds-cyclone-apply">Cyclone 저장 후 재부팅</button>
+            <ui-button kind="quiet" type="button" id="dds-cyclone-apply">Cyclone 저장 후 재부팅</ui-button>
           </article>
           <article><span>NODES</span><strong id="ros-node-count"></strong><small>발견된 프로세스</small></article>
           <article><span>TOPICS</span><strong id="ros-topic-count"></strong><small>메시지 경로</small></article>
@@ -430,7 +435,7 @@
           </div>
           <aside class="risk-tape" aria-labelledby="risk-heading">
             <h3 id="risk-heading">충돌 지표</h3>
-            <ul id="ros-risk-list"><li class="empty-state">그래프 수집 대기 중</li></ul>
+            <ul id="ros-risk-list"><li><ui-empty>그래프 수집 대기 중</ui-empty></li></ul>
             <p>위험이 표시되면 주행을 멈추고 장비의 Domain ID와 namespace를 확인합니다.</p>
           </aside>
         </div>
@@ -453,12 +458,12 @@
             </dl>
             <p class="host-note" id="release-note" role="status"></p>
             <div class="host-actions">
-              <button type="button" id="release-rollback" data-role="administrator" disabled>
+              <ui-button kind="quiet" type="button" id="release-rollback" data-role="administrator" disabled>
                 이전 릴리스로 롤백
-              </button>
-              <button type="button" id="release-clear-hold" data-role="administrator" disabled>
+              </ui-button>
+              <ui-button kind="quiet" type="button" id="release-clear-hold" data-role="administrator" disabled>
                 복구 홀드 해제
-              </button>
+              </ui-button>
             </div>
           </article>
 
@@ -490,7 +495,7 @@
               <input id="robot-id-input" name="robot_id" maxlength="64" placeholder="rosy_01" autocomplete="off" readonly>
               <label for="robot-name-input">이름</label>
               <input id="robot-name-input" name="robot_name" maxlength="64" placeholder="Rosy 01" autocomplete="off">
-              <button type="button" id="identity-save" class="primary-button" disabled>신원 적용</button>
+              <ui-button kind="primary" type="button" id="identity-save" class="primary-button" disabled>신원 적용</ui-button>
             </form>
             <p id="identity-message" class="host-note" role="status"></p>
           </article>
@@ -502,7 +507,7 @@
             </header>
             <p class="host-note">토큰은 해시로만 저장됩니다. 전문은 만들 때 한 번 보여주고 다시 볼 수 없습니다. 사용 중인 토큰과 마지막 관리자 토큰은 삭제할 수 없습니다.</p>
             <ul id="token-list" class="waypoint-list">
-              <li class="empty-state">관리자로 연결하면 토큰 목록을 표시합니다.</li>
+              <li><ui-empty>관리자로 연결하면 토큰 목록을 표시합니다.</ui-empty></li>
             </ul>
             <form id="token-form">
               <label for="token-new">새 토큰 (비우면 자동 생성)</label>
@@ -515,7 +520,7 @@
                 <option value="operator">operator</option>
                 <option value="administrator">administrator</option>
               </select>
-              <button type="button" id="token-add" class="primary-button" disabled>토큰 추가</button>
+              <ui-button kind="primary" type="button" id="token-add" class="primary-button" disabled>토큰 추가</ui-button>
             </form>
             <p id="token-message" class="host-note" role="status"></p>
           </article>
@@ -530,11 +535,11 @@
               <label for="waypoint-name">이름</label>
               <div class="settings-row">
                 <input id="waypoint-name" name="name" maxlength="64" required placeholder="zone_a 또는 __home__" autocomplete="off">
-                <button type="button" id="waypoint-save" class="primary-button">현재 위치 저장</button>
+                <ui-button kind="primary" type="button" id="waypoint-save" class="primary-button">현재 위치 저장</ui-button>
               </div>
             </form>
             <ul id="waypoint-list" class="waypoint-list">
-              <li class="empty-state">연결 후 웨이포인트를 표시합니다.</li>
+              <li><ui-empty>연결 후 웨이포인트를 표시합니다.</ui-empty></li>
             </ul>
             <p id="waypoint-message" class="host-note" role="status"></p>
           </article>
@@ -572,7 +577,7 @@
                 <option value="RETURN_HOME">RETURN_HOME</option>
                 <option value="STOP">STOP</option>
               </select>
-              <button type="button" id="limits-save" class="primary-button" disabled>정책 적용</button>
+              <ui-button kind="primary" type="button" id="limits-save" class="primary-button" disabled>정책 적용</ui-button>
             </form>
             <p id="limits-message" class="host-note" role="status"></p>
           </article>
@@ -584,14 +589,14 @@
             </header>
             <p class="host-note">SLAM 세션은 이 로봇에서만 동작합니다. 저장하면 현재 map_id가 바뀝니다.</p>
             <div class="host-actions">
-              <button type="button" id="slam-start">맵핑 시작</button>
-              <button type="button" id="slam-stop">맵핑 중지</button>
+              <ui-button kind="quiet" type="button" id="slam-start">맵핑 시작</ui-button>
+              <ui-button kind="quiet" type="button" id="slam-stop">맵핑 중지</ui-button>
             </div>
             <form id="slam-save-form">
               <label for="slam-map-name">저장 이름</label>
               <div class="settings-row">
                 <input id="slam-map-name" name="name" maxlength="64" value="rosy_map" autocomplete="off">
-                <button type="button" id="slam-save" class="primary-button">맵 저장</button>
+                <ui-button kind="primary" type="button" id="slam-save" class="primary-button">맵 저장</ui-button>
               </div>
             </form>
             <p id="slam-message" class="host-note" role="status"></p>
@@ -608,14 +613,14 @@
               <input id="dock-id" name="id" maxlength="64" required placeholder="dock_1" autocomplete="off">
               <label for="dock-type">기종</label>
               <input id="dock-type" name="type" maxlength="64" value="rosy_v1" autocomplete="off">
-              <button type="button" id="dock-register" class="primary-button" disabled>도크 등록</button>
+              <ui-button kind="primary" type="button" id="dock-register" class="primary-button" disabled>도크 등록</ui-button>
             </form>
             <ul id="dock-list" class="waypoint-list">
-              <li class="empty-state">연결 후 도크를 표시합니다.</li>
+              <li><ui-empty>연결 후 도크를 표시합니다.</ui-empty></li>
             </ul>
             <div class="host-actions">
-              <button type="button" id="dock-undock">언도크</button>
-              <button type="button" id="dock-cancel">도킹 취소</button>
+              <ui-button kind="quiet" type="button" id="dock-undock">언도크</ui-button>
+              <ui-button kind="quiet" type="button" id="dock-cancel">도킹 취소</ui-button>
             </div>
             <p id="dock-message" class="host-note" role="status"></p>
           </article>
@@ -639,10 +644,10 @@
           <div>
             <h2 id="event-heading">최근 이벤트</h2>
           </div>
-          <button id="refresh-events" class="quiet-button" type="button">새로고침</button>
+          <ui-button kind="quiet" id="refresh-events" class="quiet-button" type="button">새로고침</ui-button>
         </div>
         <ol id="event-list" class="event-list">
-          <li class="empty-state">수신된 이벤트가 없습니다.</li>
+          <li><ui-empty>수신된 이벤트가 없습니다.</ui-empty></li>
         </ol>
       </section>
     </div>
@@ -652,5 +657,6 @@
     <span>ROSY OS / FASTAPI EDGE CONSOLE</span>
     <span id="last-sync">마지막 동기화</span>
   </footer>
+  </ui-shell>
 </body>
 </html>

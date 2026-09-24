@@ -18,7 +18,6 @@ if os.environ.get('ROS_DOMAIN_ID') != '227' or os.environ.get('GZ_PARTITION') !=
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.executors import SingleThreadedExecutor
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import LaserScan, Range, Imu, Image
@@ -202,6 +201,7 @@ def main():
     from control.wander.node import WanderNode
     from control.goal_node import GoalNode
     from control.web_node import WebNode
+    from control.executor_choice import executor_kind, make_executor
     factories = {'adapter': Auxiliary, 'safety': SafetyNode, 'calibration': StartupCalibrationNode,
                  'wander': WanderNode, 'goal': GoalNode, 'web': WebNode}
     selected = list(factories) if component == 'all' else [component]
@@ -213,7 +213,8 @@ def main():
         clock_provider[0] = nodes[1]
         clock_node.destroy_node()
         nodes = nodes[1:]
-    executor = SingleThreadedExecutor()
+    # ROSY_EXECUTOR=events runs the rig on EventsExecutor, as the product nodes can (D-185 R3).
+    executor = make_executor(rclpy, executor_kind())
     if component == 'wander' and os.environ.get('RIG_NAV_TRACE') == '1':
         wander = nodes[0]
         def trace_navigation():

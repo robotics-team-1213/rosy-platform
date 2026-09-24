@@ -24,6 +24,7 @@ Backend API (all CORS *, JSON contract unchanged since v1):
 import http.server
 import json
 import math
+import os
 import time
 
 from control.control.navigation_session import validate_options
@@ -37,6 +38,26 @@ POST_VERBS = {
     '/estop': ('estop_pub', ('stop', 'release')),
 }
 GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
+
+
+_COMMON_MEDIA = {
+    "tokens.css": "text/css",
+    "components.css": "text/css",
+    "template.html": "text/html",
+    "ui.js": "text/javascript",
+    "core_ui_logic.js": "text/javascript",
+}
+
+
+def web_common_dir(share=None):
+    """The installed web_common share when it carries the controls, else the
+    source tree. The node resolves ``share``; this module stays ROS-free (D-171)."""
+    if share and os.path.isfile(os.path.join(share, "components.css")):
+        return share
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))),
+        "core", "web_common")
 
 
 def _handler(node, html, api):
@@ -68,8 +89,33 @@ def _handler(node, html, api):
             self.end_headers()
             self.wfile.write(data)
 
+        def _common(self, name):
+            media = _COMMON_MEDIA.get(name)
+            root = getattr(node, 'web_common_dir', None) or web_common_dir()
+            file = os.path.join(root, name)
+            if media is None or not os.path.isfile(file):
+                self.send_response(404)
+                self.end_headers()
+                return
+            with open(file, 'rb') as handle:
+                data = handle.read()
+            self.send_response(200)
+            self.send_header('Content-Type', media)
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
         def do_GET(self):
             path = self.path.split('?')[0]
+            if path.startswith('/common/'):
+                name = path[len('/common/'):]
+                if '/' in name or name.startswith('.'):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._common(name)
+                return
             if path == '/':
                 self._html()
                 return

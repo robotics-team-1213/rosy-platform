@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy 화면 틀</title>
+  <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
+  <script type="module" src="/common/ui.js"></script>
+</head>
+<body>
+  <!-- grammar: spatial 콘솔 · exception 관제 · focal 경기 · procedure 점검 -->
+  <ui-shell grammar="spatial">
+    <ui-topbar>
+      <ui-brand>
+        <b>화면 이름</b>
+        <small>한 줄 설명</small>
+      </ui-brand>
+      <span data-spacer></span>
+      <ui-tag>대기</ui-tag>
+      <ui-button kind="quiet" type="button">조용한 동작</ui-button>
+      <ui-button kind="primary" type="button">주 동작</ui-button>
+      <ui-button kind="irreversible" type="button">정지</ui-button>
+    </ui-topbar>
+    <main>
+      <ui-section aria-labelledby="sample-heading">
+        <ui-head>
+          <ui-text id="sample-heading" scale="label">구역</ui-text>
+          <ui-text scale="value">값</ui-text>
+        </ui-head>
+        <ui-grid columns="3">
+          <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
+          <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
+          <div><ui-text scale="label">항목</ui-text><ui-text scale="value">—</ui-text></div>
+        </ui-grid>
+        <ui-empty>아직 표시할 내용이 없습니다.</ui-empty>
+        <ui-evidence state="fresh">최신</ui-evidence>
+        <ui-field placeholder="입력" aria-label="입력 예"></ui-field>
+      </ui-section>
+    </main>
+  </ui-shell>
+</body>
+</html>

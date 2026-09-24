@@ -13,6 +13,14 @@ from games.field import Field
 from games.game import MatchState, Observation
 
 WEB = Path(__file__).resolve().parents[1] / "web"
+COMMON = Path(__file__).resolve().parents[4] / "core" / "web_common"
+COMMON_ASSETS = {
+    "tokens.css": ".css",
+    "components.css": ".css",
+    "template.html": ".html",
+    "ui.js": ".js",
+    "core_ui_logic.js": ".js",
+}
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -131,6 +139,15 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(404, "text/plain; charset=utf-8", b"no frame")
                 return
             self._send(200, MIME[".jpg"], jpeg)
+            return
+        if path.startswith("/common/"):
+            asset = path.removeprefix("/common/")
+            suffix = COMMON_ASSETS.get(asset)
+            file = COMMON / asset
+            if suffix is None or "/" in asset or not file.is_file():
+                self._send(404, "text/plain; charset=utf-8", b"not found")
+                return
+            self._send(200, MIME[suffix], file.read_bytes())
             return
         name = "index.html" if path in ("/", "/index.html") else path.lstrip("/")
         if "/" in name or name.startswith("."):

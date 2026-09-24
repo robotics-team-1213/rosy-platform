@@ -53,8 +53,8 @@ from core_api_web.api.ws import ws_router
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
-        version="1.19.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.19)",
+        version="1.20.0",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.20)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -160,7 +160,10 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     def common_asset(asset_name: str):
         valid_assets = {
             "tokens.css": "text/css",
-            "core_ui_logic.js": "application/javascript"
+            "components.css": "text/css",
+            "template.html": "text/html",
+            "core_ui_logic.js": "application/javascript",
+            "ui.js": "application/javascript",
         }
         media_type = valid_assets.get(asset_name)
         if not media_type:

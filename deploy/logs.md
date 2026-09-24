@@ -1019,6 +1019,18 @@
 - 결정: D-193 보완(2026-09-24 보안 리뷰)
 - 교훈: 일회용 값의 "소비됨"은 그 값을 검증하는 프로세스의 수명보다 오래 가야 한다 — 메모리만으로는 재시작이 곧 재무장이다.
 
+## 2026-09-24 · uncommitted · docs(adr): D-197 Docker exits the product artifact chain
+
+- 변경: `docs/adr/D-197-docker-exits-the-product-chain.md` 추가, ADR Log 표 D-197 행. 제품 경로의 신규
+  Docker/OCI 의존 금지, OCI·Compose 체인의 폐기 트리거(native payload ARTIFACT 통과 시 한 변경 정리),
+  계약 테스트 고정 대상 이동 뒤 Dockerfile/compose 삭제라는 순서 계약, D-179 벤치 compose의 잔류 조건을
+  기록했다. 코드·워크플로·계약 테스트 본문은 바꾸지 않았다.
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q`;
+  `python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-197 (D-196은 2026-09-24 멀티로봇 구조 개편 계획이 먼저 선점했다 — 커밋 4c496c24)
+- 교훈: 없음
+
 ## 2026-09-24 · uncommitted · feat(dashboard,deploy): D-193 S3 code login, whoami badge, first-message WebSocket, credential rotation
 
 - 변경: 대시보드 로그인 서랍에 "로봇 화면 코드"(기본)·"API 토큰" 두 탭. 코드는 브라우저에서 정규화·알파벳·길이 확인 뒤

@@ -15,7 +15,7 @@ colour, hierarchy and vocabulary, not about a rendering stack.
 |---|---|---|---|
 | Robot console | field operator | "Can I send this robot now?" | live (`core` `/dashboard` only — D-77) |
 | Device runtime | installer, maintainer | "Is this hardware standing up correctly?" | live (`/dashboard` host and ROS-graph panels) |
-| Fleet | dispatcher | "Which robot is the problem?" | target — Fleet server unimplemented |
+| Fleet | dispatcher | "Which robot is the problem?" | live (`fleet` console) |
 | Robot face | bystander | "What is it about to do?" | live (`rosy_emotion` LCD, `info_screen`) |
 | Control diagnostic | control-stack maintainer | "What is the absorbed IO graph showing?" | live on legacy `control/launch/robot.launch.py` only; not composed with CORE |
 | Game host | laptop match operator | "Are the pitch, ball, robots, and goals visible?" | live localhost preview in `rosy_games` (D-101); never CORE `/dashboard` |
@@ -60,17 +60,38 @@ one wording.
 
 ## 4. Three Layers
 
-What is shared is law and vocabulary. Components are not shared.
+What is shared is law, measure, and the browser controls that draw that law.
+Layout stays with the surface.
 
 | Layer | Content | Scope |
 |---|---|---|
-| L1 — Law | tokens, evidence states, colour sets, surface hierarchy | binding on every surface |
-| L1.5 — Headless state | framework-free accessors over server-judged evidence | shared behaviour, no visual components |
-| L2 — Grammar | layout, interaction model, components | per surface, independent, not shared |
+| L1 — Law | colour, type, space, radius, evidence states, hierarchy | binding on every surface |
+| L1.5 — Headless state | framework-free accessors over server-judged evidence | shared behaviour, no paint |
+| L2 — Grammar | where a control sits, and the question the surface answers | per surface |
 | L3 — Content | what a capability contributes | portable across surfaces |
 
-A single component library spanning all four surfaces is a defect, not a goal:
-it would make Fleet look like a console and make the LCD impossible.
+Browser chrome is one set (D-194) in `web_common`: `ui-text`, `ui-head`,
+`ui-grid`, `ui-button`, `ui-field`, `ui-tag`, `ui-chip`, `ui-triage`, and
+`ui-evidence`. A button names a `kind`. Evidence names a `state`. A surface
+places the control and does not repaint it. A new page copies
+`web_common/template.html`: a `ui-shell` with one `grammar` and a `ui-topbar`. The robot face stays a pixel
+renderer and does not mount these elements (D-75). The four pieces D-92 left
+undesigned as components — irreversible confirm, fleet exception row, narrow
+console, face intent — stay undesigned until a second surface needs the logic.
+
+### Binding instruments
+
+A law that has no test is still prose. These are the instruments:
+
+| Law | Instrument | Gate |
+|---|---|---|
+| Colour means something | `tokens.css` only. A copied hex matches that file. Pitch hex lives in one `:root`. Raster hex matches the PNG pipeline | `test_shared_controls.py`, `test_map_raster_color_contract.py` |
+| Type is a closed scale | `--text-micro` through `--text-display` | `test_shared_controls.py` |
+| Measure is a closed scale | padding, margin, gap use `--space-*`. Radius uses `--radius-*`. A 1px rule is a line, not a step | `test_shared_controls.py` |
+| Irreversible is a kind | `ui-button` `kind="irreversible"`. Surfaces do not repaint it | `test_shared_controls.py` |
+| Hierarchy is the surface | flat ground reports, raised ground acts. Names are `--surface-flat` and `--surface-raised` | token file. Diagnostic grounds use those hex values |
+| Evidence is four states | `fresh`, `delayed`, `disconnected`, `unavailable`. The server judges. Stale text is quiet, not a status colour | `test_shared_controls.py` |
+| Vocabulary is the audience's | Korean plain words for an operator. Graph names stay for an installer | not a token. Review, not a test |
 
 ## 5. Evidence States
 
@@ -237,7 +258,7 @@ These are contract tests, in the style the repository already uses, not review
 guidance:
 
 - surface stylesheets contain no raw colour outside the token file
-  (`src/core/core/test/test_ui_token_contracts.py`)
+  (`src/core/web_common/test/test_ui_token_contracts.py`)
 - a status colour never appears in a categorical position (same)
 - client map raster values equal the server renderer's values
   (`src/apps/control/test/test_map_raster_color_contract.py` — control
@@ -247,7 +268,7 @@ guidance:
 - evidence state is present on every rendered telemetry binding
   (`src/core/core/test/test_dashboard.py`, `test_evidence.py`)
 - a surface stylesheet declares no tokens of its own — no alias vocabulary
-  beside the token file (`src/core/core/test/test_ui_token_contracts.py`, D-92)
+  beside the token file (`src/core/web_common/test/test_ui_token_contracts.py`, D-92)
 - spacing comes from `--space-*` and type size from `--text-*` (same)
 - the operate view does not scroll and the map keeps the observe region
   (`src/core/core/test/test_console_layout.py`)

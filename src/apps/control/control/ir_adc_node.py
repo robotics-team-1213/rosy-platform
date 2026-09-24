@@ -8,6 +8,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import UInt16MultiArray
 
+from . import executor_choice
 from .sensing.ir_adc import decode_adc12
 
 
@@ -101,7 +102,7 @@ def main() -> None:
     rclpy.init()
     node = IRADCNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

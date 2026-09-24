@@ -15,8 +15,8 @@ semantic. That is the whole mandate.
 So:
 
 - **Do not** add a test here that calls a callback, drives a tick, or asserts on
-  a message value. Those belong in the ROS-free siblings (`translate.py`,
-  `display.py`, `reconcile.py`, `odometry.py`, `save_map.py`,
+  a message value. Those belong in the ROS-free siblings (`observation.py`,
+  `translate.py`, `display.py`, `reconcile.py`, `odometry.py`, `save_map.py`,
   `battery_policy.py`, `goal_tracker.py`), where no stub is involved.
 - **Do not** move the stub into `conftest.py`. It lives in this file so its
   blast radius is this file: nothing else can start depending on stub
@@ -147,6 +147,11 @@ class RecordingNode:
             warning=lambda *a, **k: None, error=lambda *a, **k: None,
             debug=lambda *a, **k: None)
 
+    def get_parameter(self, name):
+        # rclpy declares `use_sim_time` on every node; the bridge reads it once.
+        assert name == "use_sim_time"
+        return types.SimpleNamespace(value=False)
+
     def get_clock(self):
         # nanoseconds: D-137 T4 — 브리지가 자문 피드에 노드 시계를 바인딩한다.
         return types.SimpleNamespace(
@@ -195,11 +200,11 @@ def registered(tmp_path, monkeypatch):
 #: Period in seconds, in registration order. `1/50` is D-2's sole `cmd_vel`
 #: publisher; `1/10` is `state.rate_hz` from `rosy_default.yaml`.
 EXPECTED_TIMERS = [
-    1.0 / 50.0, 1.0 / 10.0, 1.0, 1.0 / 5.0, 1.0 / 5.0, 1.0 / 5.0,
+    1.0 / 50.0, 1.0 / 10.0, 1.0, 1.0 / 5.0, 1.0 / 20.0, 1.0 / 5.0,
     1.0 / 20.0,
 ]
 
-#: `(topic, callback, qos)` — read off `ros_bridge.py:89-103`, not off this
+#: `(topic, callback, qos)` — read off `ros_bridge.py:86-126`, not off this
 #: harness's own output. Topic alone would not see `scan` rewired to `_on_imu`,
 #: and QoS alone would not see the `map` latch dropped.
 EXPECTED_SUBSCRIPTIONS = [
@@ -209,6 +214,7 @@ EXPECTED_SUBSCRIPTIONS = [
     ("line/observation", "_on_line_observation", 10),
     ("detection_evidence", "_on_detection_evidence", 10),
     ("road/observation", "_on_road_observation", 10),
+    ("dock/observation", "_on_dock_observation", 10),
     ("camera/preview/compressed", "_on_camera_preview", "PREVIEW"),
     ("amcl/transition_event", "_on_amcl_transition", 10),
     ("map_server/transition_event", "_on_map_server_transition", 10),
@@ -229,7 +235,8 @@ EXPECTED_SUBSCRIPTIONS = [
     ("global_costmap/costmap_raw", "_on_global_costmap", 10),
 ]
 
-#: `(topic, qos)` — `ros_bridge.py:81-107`.
+#: `(topic, qos)` — `ros_bridge.py:78-80,128-131` (cmd_vel/initialpose first,
+#: power/mode · display/info · docking/collision_exemption after the subs).
 EXPECTED_PUBLISHERS = [
     ("cmd_vel", 10),
     ("initialpose", 10),
@@ -292,10 +299,13 @@ def test_the_nav2_action_client_and_tf_listener_are_built(registered):
 
 
 def test_both_executor_contracts_are_wired_to_the_bridge(registered):
-    """C3 itself: one class answering two Protocols. A composition root has to
+    """C3 itself: the bridge answers NavExecutor and owns the DockingExecutor
+    (ROS-free `docking_executor.py`, D-168 P6). A composition root has to
     reproduce these two assignments, and nothing else checks that it did."""
+    from core.bridge.docking_executor import BridgeDockingExecutor
     assert registered.services.nav.executor is registered.bridge
-    assert registered.services.docking.executor is registered.bridge
+    assert registered.services.docking.executor is registered.bridge.docking_executor
+    assert isinstance(registered.bridge.docking_executor, BridgeDockingExecutor)
 
 
 def test_lifecycle_transition_parser_accepts_active_id_and_label(registered):

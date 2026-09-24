@@ -1,11 +1,11 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # test
 
 ## Purpose
 
-Host-side pytest for deploy/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from `src/core/core/test`. `conftest.py` inserts `deploy/release` onto `sys.path` so modules shipped as scripts remain importable.
+Host-side pytest for deploy/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/core/*/test` suites. `conftest.py` inserts `deploy/release` onto `sys.path` so modules shipped as scripts remain importable.
 
 ## Key Files
 

@@ -79,6 +79,9 @@ class NavigationManager:
         #: 알리지 않으면 추종자는 자기가 살아 있다고 계속 광고하면서 목표를
         #: 하나도 내지 못하는 상태로 남는다.
         self.session_closed_listener = None
+        #: 도킹이 주행을 쥐고 있는가 (CoreServices 가 주입). 그동안 목표는 거절한다 —
+        #: Nav2 목표가 도크 진입을 선점하면 안 된다 (DOCKING 4 > NAVIGATION 5).
+        self.docking_active_provider = lambda: False
 
     def set_readiness_gate(self, readiness) -> None:
         """Attach the runtime readiness gate after construction if needed."""
@@ -125,6 +128,7 @@ class NavigationManager:
             raise NavigationError("EMERGENCY_ACTIVE", "e-stop is active")
         if self.mapping_active:
             raise NavigationError("MAPPING_ACTIVE", "mapping session active")
+        self._refuse_while_docking()
         with self._lock:
             if self._moving_session is not None:
                 # 추종 중에 들어온 단발 목표는 0.5 초 뒤 스트림에 덮인다.
@@ -139,6 +143,19 @@ class NavigationManager:
             self._set_state(NavigationState.PLANNING)
         self._events.publish("nav.started", source="navigation_manager",
                              data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw}, "by": source})
+
+    def external_goal_sent(self) -> None:
+        """A goal just went to Nav2 around `goal()` — docking's staging drive.
+        It is the current goal now: PLANNING, as `goal()` would leave it, and
+        the accept/result callbacks move it on from there. Without this,
+        `nav_state` still shows the last run's ARRIVED or FAILED, and docking,
+        which reads it on its first tick, skips staging or retries at once."""
+        with self._lock:
+            self._set_state(NavigationState.PLANNING)
+
+    def _refuse_while_docking(self) -> None:
+        if self.docking_active_provider():
+            raise NavigationError("DOCKING_ACTIVE", "a docking run owns the robot")
 
     def open_moving_session(self) -> int:
         """추종 세션을 연다. 이후 이 토큰을 단 목표만 받아들인다.
@@ -179,6 +196,7 @@ class NavigationManager:
             raise NavigationError("EMERGENCY_ACTIVE", "e-stop is active")
         if self.mapping_active:
             raise NavigationError("MAPPING_ACTIVE", "mapping session active")
+        self._refuse_while_docking()
         with self._lock:
             if session is not None and self._moving_session != session:
                 # 취소된 세션의 뒤늦은 목표. 내보내면 아무도 거두지 않는다.

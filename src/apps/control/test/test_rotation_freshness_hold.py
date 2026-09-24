@@ -290,3 +290,86 @@ def test_endpoint_registration_time_is_not_counted_as_a_stall():
     tick(state, 10.1, monotonic=10.7)  # registration finished 0.6 s after the tick began
     assert trial.last_time == 10.7
     assert ('drive', 0.) in calls
+
+
+GOOD_LATE = ((1.,)*360, math.tau/360)  # a structurally valid scan that only arrived late
+
+
+def late_state(late=GOOD_LATE, geometry=True):
+    state, calls = node(gate=None)
+    state.geometry_profile = {'effective': {}} if geometry else None
+    state.geometry_revision = 'body'
+    state.safety_limits = (10.05, {'geometry_revision': 'body', 'can_rotate': True})
+    state.rotation_scan, state.rotation_scan_late = None, late
+    return state, calls
+
+
+def real_clear(state):
+    bound = method('rotation_clear')
+    state.rotation_clear = lambda now: bound(state, now)
+
+
+def test_a_scan_that_arrived_too_late_is_reported_as_stale():
+    # Rig 2026-09-24 (prof-r2-1): after a 0.445 s registration block the queued scan failed
+    # stamped(.25), was stored as no scan, and 'missing_scan_or_geometry' failed the trial.
+    state, _ = late_state()
+    assert method('rotation_clear')(state, 10.1) is False
+    diagnostic = state.rotation_clearance_diagnostic
+    assert diagnostic['reason'] == 'stale_scan' and diagnostic['scan_stored'] is False
+    assert diagnostic['missing_bins'] == 0  # the late scan's own content is still reported
+
+
+def test_a_late_scan_with_bad_structure_stays_invalid():
+    for late in (((math.inf,)*360, math.tau/360), ((1.,)*360, .02), ((1.,)*100, math.tau/100)):
+        state, _ = late_state(late)
+        method('rotation_clear')(state, 10.1)
+        assert state.rotation_clearance_diagnostic['reason'] == 'invalid_scan', late[1]
+
+
+def test_an_absent_scan_or_missing_geometry_stays_missing():
+    for late, geometry in ((None, True), (GOOD_LATE, False)):
+        state, _ = late_state(late, geometry)
+        assert method('rotation_clear')(state, 10.1) is False
+        assert state.rotation_clearance_diagnostic['reason'] == 'missing_scan_or_geometry', (late, geometry)
+
+
+def test_stationary_trial_holds_through_a_late_scan():
+    state, calls = late_state()
+    real_clear(state)
+    tick(state, 10.1)
+    assert calls == ['zero']
+
+
+def test_stationary_trial_still_fails_on_an_absent_or_invalid_late_scan():
+    for late in (None, ((math.inf,)*360, math.tau/360)):
+        state, calls = late_state(late)
+        real_clear(state)
+        tick(state, 10.1)
+        assert calls[-1][0] is False, late
+
+
+def test_scan_sample_keeps_only_a_valid_late_scan_and_clears_it_on_the_next_scan():
+    sample = method('rotation_scan_sample')
+    msg = NS(ranges=(1.,)*360, angle_increment=.0175, angle_min=0., header=NS(stamp=NS(sec=9, nanosec=0)))
+    for valid, current, late, kept in ((True, True, False, True), (True, False, True, False),
+                                       (False, False, False, False), (False, True, False, False)):
+        state = NS(get_clock=lambda: NS(now=lambda: NS(nanoseconds=int(10e9))), rotation_mount=None,
+                   rotation_reference=None, rotation_alignment=None,
+                   rotation_scan_late=GOOD_LATE)  # a previous late scan must never linger
+        sample(state, msg, valid, current=current)
+        assert (state.rotation_scan_late is not None) is late, (valid, current)
+        if late:
+            assert state.rotation_scan_late == (msg.ranges, msg.angle_increment)
+        assert (state.rotation_scan is not None) is kept, (valid, current)
+
+
+def test_preflight_waits_on_a_late_scan_instead_of_relocating():
+    state, calls = late_state()
+    state.rotation_trial = None
+    real_clear(state)
+    wait = method('wait_rotation_start_observation')
+    state.wait_rotation_start_observation = lambda now: wait(state, now)
+    state.begin_relocation = lambda now: calls.append('relocate') or True
+    tick(state, 10.1)
+    assert 'relocate' not in calls and calls[0] == 'zero'
+    assert state.rotation_start_observation_wait is not None

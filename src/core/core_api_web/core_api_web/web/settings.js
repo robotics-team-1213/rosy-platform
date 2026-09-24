@@ -56,8 +56,9 @@ export function renderTokens(payload) {
   list.replaceChildren();
   if (!tokens.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "저장된 토큰이 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "저장된 토큰이 없습니다.";
+    empty.append(note);
     list.append(empty);
     return;
   }
@@ -76,7 +77,8 @@ export function renderTokens(payload) {
     meta.textContent = parts.join(" · ");
     const actions = document.createElement("div");
     actions.className = "waypoint-actions";
-    const remove = document.createElement("button");
+    const remove = document.createElement("ui-button");
+    remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.tokenAction = "delete";
     remove.textContent = "삭제";
@@ -124,8 +126,9 @@ export function renderDocks(payload) {
   list.replaceChildren();
   if (!docks.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "등록된 도크가 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "등록된 도크가 없습니다.";
+    empty.append(note);
     list.append(empty);
     return;
   }
@@ -138,16 +141,19 @@ export function renderDocks(payload) {
     meta.textContent = `${dock.type || "?"} · ${number(dock.x, 2)}, ${number(dock.y, 2)}`;
     const actions = document.createElement("div");
     actions.className = "waypoint-actions";
-    const teach = document.createElement("button");
+    const teach = document.createElement("ui-button");
+    teach.setAttribute("kind", "quiet");
     teach.type = "button";
     teach.dataset.dockAction = "teach";
     teach.textContent = "현재 자리 teach";
-    const go = document.createElement("button");
+    const go = document.createElement("ui-button");
+    go.setAttribute("kind", "quiet");
     go.type = "button";
     go.dataset.dockAction = "dock";
     go.textContent = "도킹";
     go.disabled = !session.dockingSupported;
-    const remove = document.createElement("button");
+    const remove = document.createElement("ui-button");
+    remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.dockAction = "delete";
     remove.textContent = "삭제";
@@ -175,8 +181,9 @@ export function renderWaypoints(payload) {
   list.replaceChildren();
   if (!waypoints.length) {
     const empty = document.createElement("li");
-    empty.className = "empty-state";
-    empty.textContent = "저장된 웨이포인트가 없습니다.";
+    const note = document.createElement("ui-empty");
+    note.textContent = "저장된 웨이포인트가 없습니다.";
+    empty.append(note);
     list.append(empty);
     return;
   }
@@ -189,11 +196,13 @@ export function renderWaypoints(payload) {
     meta.textContent = `${number(waypoint.x, 2)}, ${number(waypoint.y, 2)} · yaw ${number(waypoint.yaw, 2)}`;
     const actions = document.createElement("div");
     actions.className = "waypoint-actions";
-    const go = document.createElement("button");
+    const go = document.createElement("ui-button");
+    go.setAttribute("kind", "quiet");
     go.type = "button";
     go.dataset.waypointAction = waypoint.name === "__home__" ? "home" : "go";
     go.textContent = waypoint.name === "__home__" ? "복귀" : "이동";
-    const remove = document.createElement("button");
+    const remove = document.createElement("ui-button");
+    remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.waypointAction = "delete";
     remove.textContent = "삭제";

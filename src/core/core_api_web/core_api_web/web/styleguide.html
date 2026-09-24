@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ROSY UI 어휘 — 스타일 갤러리</title>
   <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
+  <script type="module" src="/common/ui.js"></script>
 </head>
 <body>
   <header class="page-head">
@@ -20,8 +22,8 @@
       <h2>라벨</h2>
       <p class="rule">작은 대문자. 값이 아니라 값의 이름이다.</p>
       <div class="demo">
-        <span class="demo-label">SITE MAP</span>
-        <span class="demo-label">PINKY-01</span>
+        <ui-text scale="label">SITE MAP</ui-text>
+        <ui-text scale="label">PINKY-01</ui-text>
       </div>
       <p class="gate">게이트: <code>test_type_sizes_come_from_the_scale</code></p>
     </section>
@@ -30,8 +32,8 @@
       <h2>값</h2>
       <p class="rule">등폭 + tabular-nums. 넘치면 자르지 않고 접는다 — 잘린 좌표는 좌표가 아니다.</p>
       <div class="demo">
-        <span class="demo-value">128.402</span>
-        <span class="demo-value">-7.05</span>
+        <ui-text scale="value">128.402</ui-text>
+        <ui-text scale="value">-7.05</ui-text>
       </div>
       <p class="gate">게이트: <code>test_console_layout.py</code></p>
     </section>
@@ -40,7 +42,10 @@
       <h2>묶음 제목 줄</h2>
       <p class="rule">라벨 + 이어지는 1px 실선 + 오른쪽 끝 기계 값. 상자를 만들지 않는다.</p>
       <div class="demo demo-wide">
-        <div class="demo-entry-head"><span class="demo-label">BATTERY</span><span class="demo-headrule"></span><span class="demo-value">12.8 V</span></div>
+        <ui-head>
+          <ui-text scale="label">BATTERY</ui-text>
+          <ui-text scale="value">12.8 V</ui-text>
+        </ui-head>
       </div>
       <p class="gate">게이트: 없음 — 규칙만. 배치 실측(Playwright)이 간접 증거다</p>
     </section>
@@ -49,11 +54,11 @@
       <h2>값 격자</h2>
       <p class="rule">gap: 1px 실선 격자. 칸마다 테두리·모서리를 주면 작은 카드가 여섯 개가 된다.</p>
       <div class="demo demo-wide">
-        <div class="demo-grid">
-          <div><span class="demo-label">MODE</span><span class="demo-value">IDLE</span></div>
-          <div><span class="demo-label">BATT</span><span class="demo-value">12.8</span></div>
-          <div><span class="demo-label">TEMP</span><span class="demo-value">41.2</span></div>
-        </div>
+        <ui-grid columns="3">
+          <div><ui-text scale="label">MODE</ui-text><ui-text scale="value">IDLE</ui-text></div>
+          <div><ui-text scale="label">BATT</ui-text><ui-text scale="value">12.8</ui-text></div>
+          <div><ui-text scale="label">TEMP</ui-text><ui-text scale="value">41.2</ui-text></div>
+        </ui-grid>
       </div>
       <p class="gate">게이트: <code>test_spacing_comes_from_the_step_scale</code></p>
     </section>
@@ -62,9 +67,9 @@
       <h2>버튼 셋</h2>
       <p class="rule">주(가장 밝은 중립) · 조용(테두리 하나) · 되돌릴 수 없는 것(채운 면 + 잉크).</p>
       <div class="demo demo-row">
-        <button class="demo-btn primary" type="button">주 버튼</button>
-        <button class="demo-btn quiet" type="button">조용한 버튼</button>
-        <button class="demo-btn irreversible" type="button">전체 정지</button>
+        <ui-button kind="primary" type="button">주 버튼</ui-button>
+        <ui-button kind="quiet" type="button">조용한 버튼</ui-button>
+        <ui-button kind="irreversible" type="button">전체 정지</ui-button>
       </div>
       <p class="gate">게이트: <code>test_irreversible_actions_are_a_fill_not_text</code>,
       <code>test_a_danger_fill_carries_ink_not_dark_text</code></p>
@@ -74,7 +79,7 @@
       <h2>필드</h2>
       <p class="rule">파인 면. 바닥은 터치 바닥 이상, 포커스는 상태색 아닌 링.</p>
       <div class="demo demo-wide">
-        <input class="demo-field" type="text" placeholder="목표 좌표 X" aria-label="필드 예">
+        <ui-field placeholder="목표 좌표 X" aria-label="필드 예"></ui-field>
       </div>
       <p class="gate">게이트: <code>test_touch_targets_clear_the_floor</code>,
       <code>test_focus_is_interaction_not_status</code></p>
@@ -84,9 +89,9 @@
       <h2>태그</h2>
       <p class="rule">상태 어휘는 중립·주의·위험 셋뿐. 뱃지·기계 태그·모드 칩·이벤트 심각도가 같은 셋을 쓴다.</p>
       <div class="demo demo-row">
-        <span class="demo-tag">NEUTRAL</span>
-        <span class="demo-tag warn">CAUTION</span>
-        <span class="demo-tag crit">DANGER</span>
+        <ui-tag>NEUTRAL</ui-tag>
+        <ui-tag status="warn">CAUTION</ui-tag>
+        <ui-tag status="crit">DANGER</ui-tag>
       </div>
       <p class="gate">게이트: <code>test_nominal_carries_no_colour</code></p>
     </section>
@@ -95,7 +100,7 @@
       <h2>오버레이 칩</h2>
       <p class="rule">지도 위에 얹는 것은 전부 장막 바탕 + 표면선 테두리.</p>
       <div class="demo demo-wide demo-map">
-        <span class="demo-chip">WAYPOINT 3</span>
+        <ui-chip>WAYPOINT 3</ui-chip>
       </div>
       <p class="gate">게이트: <code>test_the_map_controls_ride_on_the_map_instead_of_stealing_its_height</code></p>
     </section>
@@ -104,7 +109,7 @@
       <h2>분류 머리</h2>
       <p class="rule">한 줄. 색을 가진 것은 언제나 하나이고 맥락은 색 없이 따라간다.</p>
       <div class="demo demo-wide">
-        <p class="demo-triage"><span class="demo-dot warn"></span>주의 2<small>rosy_02 · rosy_07 — 배터리 임계</small></p>
+        <ui-triage status="warn"><b>주의 2</b><small>rosy_02 · rosy_07 — 배터리 임계</small></ui-triage>
       </div>
       <p class="gate">게이트: <code>test_triage_contract.py</code></p>
     </section>
@@ -113,9 +118,10 @@
       <h2>증거·빈 상태</h2>
       <p class="rule">fresh에는 아무것도 붙이지 않는다. delayed·disconnected·unavailable만 표시한다.</p>
       <div class="demo demo-row">
-        <span class="demo-evidence"><i class="demo-dot"></i>fresh — 표시 없음</span>
-        <span class="demo-evidence delayed">지연 4s</span>
-        <span class="demo-evidence unavailable">없음</span>
+        <ui-evidence state="fresh">fresh — 표시 없음</ui-evidence>
+        <ui-evidence state="delayed">지연 4s</ui-evidence>
+        <ui-evidence state="disconnected">끊김</ui-evidence>
+        <ui-evidence state="unavailable">없음</ui-evidence>
       </div>
       <p class="gate">게이트: <code>test_evidence_margin.py</code></p>
     </section>

@@ -1765,3 +1765,67 @@
 - gate 변화: 없음
 - 결정: D-178 회차 문서의 위치, D-186
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R4 구현 메모
+
+- 변경: D-185에 R4 판정 규칙, 잠금 채택 범위, 패키지 크기 재판정을 적었다.
+- 증거: control `logs.md` 2026-09-24 R4 항목.
+- gate 변화: 없음.
+- 결정: D-185 R4
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · tools(control): D-185 R8 Pi 계측 도구
+
+- 변경: control `tools/device/hotpath_measure.py`(bench·watch, JSON 보고서)와 host 테스트를 추가했다. D-185에 R8 구현 메모를, device 검증 계획에 실기 절차 checkpoint를 적었다.
+- 증거: control `logs.md` 2026-09-24 R8 항목.
+- gate 변화: 없음. Pi 실행은 HOLD.
+- 결정: D-185 R8
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R3 구현 메모
+
+- 변경: D-185에 R3 선택 방식(환경 변수), events의 알려진 차이, 남은 완료 조건을 적었다.
+- 증거: control `logs.md` 2026-09-24 R3 항목.
+- gate 변화: 없음.
+- 결정: D-185 R3
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R5 구현 메모
+
+- 변경: D-185에 R5의 제외 증명 방식, 경로 선택, 비용, 반환 타입 발견을 적었다.
+- 증거: control `logs.md` 2026-09-24 R5 항목.
+- gate 변화: 없음.
+- 결정: D-185 R5
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R2 구현 메모
+
+- 변경: D-185에 R2 대상 구독, 검사 방식, rig 교차 A/B 결과를 적었다.
+- 증거: control `logs.md` 2026-09-24 R2 항목.
+- gate 변화: 없음.
+- 결정: D-185 R2
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R6 구현 메모
+
+- 변경: D-185에 R6 relay 방식, 빈도 하한, rig A/B 결과와 남은 확인을 적었다.
+- 증거: control `logs.md` 2026-09-24 R6 항목.
+- gate 변화: 없음.
+- 결정: D-185 R6
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R3 rig A/B, R7 원인 메모
+
+- 변경: D-185에 R3 rig A/B 결과와 R7 한 프로세스 모드 원인을 적었다.
+- 증거: control `logs.md` 2026-09-24 R3·R7 항목.
+- gate 변화: 없음.
+- 결정: D-185 R3·R7
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench
+
+- 변경: D-185에 Pi 5 실기 bench 결과와 남은 실기 측정을 적었다.
+- 증거: control `logs.md` 2026-09-24 R8 실기 bench 항목.
+- gate 변화: 없음.
+- 결정: D-185 R8
+- 교훈: 없음

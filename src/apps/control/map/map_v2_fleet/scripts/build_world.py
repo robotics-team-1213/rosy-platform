@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Build worlds/map_v2_fleet.world and meshes/road_lines.stl from the 260919 STL.
+"""Build worlds/map_v2_fleet.world, meshes/road_lines.stl and the parking
+marker's textures/dock_tag_7.png from the 260919 STL.
 
 Usage: python build_world.py [--out BUNDLE_DIR] [--line-colour bright|dark]
 Output is byte-deterministic; re-run and diff before committing.
@@ -7,6 +8,7 @@ Output is byte-deterministic; re-run and diff before committing.
 
 import argparse
 import importlib.util
+import math
 import struct
 from pathlib import Path
 
@@ -19,6 +21,24 @@ COLOURS = {
     "dark": ("1 1 1 1", "0.05 0.05 0.05 1"),
     "bright": ("0.2 0.2 0.2 1", "1 1 1 1"),
 }
+
+#: Stage-3 parking marker (docs/plans/2026-09-23-lane-network-parking-design.md):
+#: a low inclined ("wedge") ArUco tag, DICT_4X4_50 id 7, 50 mm, with a white
+#: one-cell quiet zone, on a face inclined 25 deg whose bottom edge lies at
+#: (-0.78, 0) facing -x into the bay. Its top rises 28 mm: the camera
+#: (0.060 m high, 25 deg down) sees nothing above ~6 cm and only ~2 cm at
+#: the spur entry's range. Visual only, like the paint. The face's diffuse
+#: keeps the tag's white under line_observer's bright threshold (180), so
+#: the paint pipeline never takes the marker for paint.
+DOCK_TAG_ID = 7
+DOCK_TAG_SIZE_M = 0.050
+DOCK_TAG_QUIET_CELLS = 1
+DOCK_TAG_FACE_M = DOCK_TAG_SIZE_M * (6 + 2 * DOCK_TAG_QUIET_CELLS) / 6
+DOCK_TAG_TILT_RAD = math.radians(25.0)
+DOCK_TAG_BOTTOM_X = -0.78
+DOCK_TAG_DIFFUSE = "0.6 0.6 0.6 1"
+DOCK_TAG_PX_PER_CELL = 40
+TEXTURE_URI = "model://control/map/map_v2_fleet/textures/dock_tag_7.png"
 
 
 def _scene_module():
@@ -62,6 +82,42 @@ def _wall_xml(i: int, w) -> str:
 """
 
 
+def write_tag_texture(path: Path) -> None:
+    """The marker plus its white quiet zone, row 0 at the top of the slope."""
+    import cv2
+
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    marker = cv2.aruco.generateImageMarker(dictionary, DOCK_TAG_ID, 6 * DOCK_TAG_PX_PER_CELL)
+    pad = DOCK_TAG_QUIET_CELLS * DOCK_TAG_PX_PER_CELL
+    image = cv2.copyMakeBorder(marker, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ok, data = cv2.imencode(".png", image)
+    if not ok:
+        raise RuntimeError("could not encode the dock tag texture")
+    path.write_bytes(data.tobytes())
+
+
+def _dock_tag_xml() -> str:
+    half = DOCK_TAG_FACE_M / 2.0
+    cx = DOCK_TAG_BOTTOM_X + half * math.cos(DOCK_TAG_TILT_RAD)
+    cz = half * math.sin(DOCK_TAG_TILT_RAD)
+    # R_y(-tilt) takes the plane's +z normal to (-sin, 0, cos): facing -x, up.
+    return f"""    <model name="dock_tag_{DOCK_TAG_ID}">
+      <static>true</static>
+      <link name="link">
+        <visual name="face">
+          <pose>{cx:.5f} 0 {cz:.5f} 0 {-DOCK_TAG_TILT_RAD:.6f} 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>{DOCK_TAG_FACE_M:.5f} {DOCK_TAG_FACE_M:.5f}</size></plane></geometry>
+          <material>
+            <ambient>{DOCK_TAG_DIFFUSE}</ambient><diffuse>{DOCK_TAG_DIFFUSE}</diffuse>
+            <pbr><metal><albedo_map>{TEXTURE_URI}</albedo_map></metal></pbr>
+          </material>
+        </visual>
+      </link>
+    </model>
+"""
+
+
 def world_xml(scene, line_colour: str) -> str:
     floor, paint = COLOURS[line_colour]
     walls = "".join(_wall_xml(i, w) for i, w in enumerate(scene.walls))
@@ -71,6 +127,7 @@ def world_xml(scene, line_colour: str) -> str:
   Envelope {scene.size_x:.3f} x {scene.size_y:.3f} m, centred at the origin.
   STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping.
   Lane paint is visual-only; the perimeter ring is the only collision.
+  dock_tag_7: the stage-3 parking marker (visual-only wedge face).
   Line colour: {line_colour}. Orientation vs the physical mat: see README.md.
 -->
 <sdf version="1.6">
@@ -123,7 +180,8 @@ def world_xml(scene, line_colour: str) -> str:
       <link name="link">
 {walls}      </link>
     </model>
-  </world>
+
+{_dock_tag_xml()}  </world>
 </sdf>
 """
 
@@ -131,6 +189,7 @@ def world_xml(scene, line_colour: str) -> str:
 def build(source: Path, out: Path, line_colour: str = "bright") -> None:
     scene = _scene_module().load_scene(source)
     write_mesh(scene.lines, out / "meshes" / "road_lines.stl")
+    write_tag_texture(out / "textures" / f"dock_tag_{DOCK_TAG_ID}.png")
     world = out / "worlds" / "map_v2_fleet.world"
     world.parent.mkdir(parents=True, exist_ok=True)
     world.write_text(world_xml(scene, line_colour), encoding="utf-8", newline="\n")

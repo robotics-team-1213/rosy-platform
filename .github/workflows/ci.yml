@@ -69,10 +69,10 @@ jobs:
           cd src
           flake8 core/core/core core/core_common/core_common core/core_events/core_events core/core_features/core_features core/core_api_web/core_api_web site/fleet/fleet site/fleet/test sim/gz_sim/launch sim/gz_sim/scripts sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
 
-      - name: Test (core protocol schemas, P1-19)
+      - name: Test (core domain suites, protocol schemas P1-19)
         run: |
-          cd src/core/core
-          python3 -m pytest test/ -v
+          cd src
+          python3 -m pytest core/core/test core/core_events/test core/core_features/test core/web_common/test -v
 
       # fleet 은 ROS 를 import 하지 않는다. conftest 가 src/core/core_common 과
       # src/core/core_features 를 sys.path 에 얹으므로 colcon 오버레이 없이도

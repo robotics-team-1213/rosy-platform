@@ -8,7 +8,6 @@
   <license>Proprietary</license>
 
   <depend>core_common</depend>
-  <depend>core_events</depend>
   <depend>core_features</depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>web_common</exec_depend>

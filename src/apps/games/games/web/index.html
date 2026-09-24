@@ -4,15 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rosy 경기 보드</title>
+  <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/board.js"></script>
 </head>
 <body>
-  <header class="rail">
-    <p class="kicker">노트북 게임 호스트</p>
-    <h1>1v1 피치</h1>
+  <ui-shell grammar="focal">
+  <ui-topbar>
+    <ui-brand>
+      <small>노트북 게임 호스트</small>
+      <b>1v1 피치</b>
+    </ui-brand>
     <p id="phase">대기</p>
-  </header>
+  </ui-topbar>
   <section class="score" aria-label="점수">
     <div>
       <span id="home-name">home</span>
@@ -29,8 +35,9 @@
   <p id="stair1">계단 1 아직 (FIELD GO 아님)</p>
   <p id="lost" class="lost" hidden>유실</p>
   <p class="halt-row">
-    <button id="halt" type="button">정지</button>
+    <ui-button id="halt" kind="irreversible" type="button">정지</ui-button>
     <span>스페이스도 양쪽을 세운다</span>
   </p>
+  </ui-shell>
 </body>
 </html>

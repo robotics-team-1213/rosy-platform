@@ -31,7 +31,11 @@ def test_the_console_region_grid_does_not_smuggle_into_fleet():
 def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
     """D-129·D-130.1 — 참조할 수 있는 시트는 자기 것과 공용 토큰뿐이다."""
     hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"', PAGE.read_text(encoding="utf-8"))
-    assert hrefs == ["/common/tokens.css", "/console/assets/styles.css"], hrefs
+    assert hrefs == [
+        "/common/tokens.css",
+        "/common/components.css",
+        "/console/assets/styles.css",
+    ], hrefs
 
 
 def test_no_stylesheet_imports():

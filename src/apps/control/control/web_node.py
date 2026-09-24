@@ -31,6 +31,7 @@ import time
 import http.server
 
 import rclpy
+from . import executor_choice
 from .tf_buffer import RobotTransformBuffer
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -47,7 +48,7 @@ from sensor_msgs.msg import Image, LaserScan, BatteryState
 from control.sensing.battery import battery_values
 from std_msgs.msg import Bool, Float32, String
 from visualization_msgs.msg import MarkerArray
-from control.web_http import make_api_handler, make_page_handler
+from control.web_http import make_api_handler, make_page_handler, web_common_dir
 from control.web_map_control import MapControl
 from control.web_render import render_cam, render_png
 from control.web_state import (
@@ -100,6 +101,11 @@ def sensor_cb(key):
 class WebNode(Node):
     def __init__(self):
         super().__init__('web_node')
+        try:
+            common_share = get_package_share_directory('web_common')
+        except Exception:
+            common_share = None
+        self.web_common_dir = web_common_dir(common_share)
         self.declare_parameter('port', 28181)
         self.declare_parameter('backend_port', 28182)
         self.declare_parameter('battery_topic', 'battery_state')
@@ -165,7 +171,7 @@ class WebNode(Node):
         self.create_subscription(String, 'robot/mode', self.on_mode, 10)
         self.create_subscription(String, 'wander/state', self.on_wander, 10)
         self.create_subscription(String, 'navigation/session', self.on_navigation_session, 10)
-        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 10)
+        self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 1)  # latest only (D-185 R2)
         self.create_subscription(
             String, 'goal_node/state', self.on_gstate, 10)
         self.create_subscription(Float32, 'goal/eta', self.on_eta, 10)
@@ -182,7 +188,7 @@ class WebNode(Node):
         self.create_subscription(
             String, 'camera/calibration/status', self.on_camera_calibration_status, latched)
         self.create_subscription(String, 'safety/profile', self.on_safety_profile, latched)
-        self.create_subscription(String, 'safety/decision', self.on_safety_decision, 10)
+        self.create_subscription(String, 'safety/decision', self.on_safety_decision, 1)  # latest only (D-185 R2)
         self.create_subscription(Bool, 'robot/ok', self.on_ok, 10)
         self.create_subscription(String, 'robot/health', self.on_health, 10)
         self.create_subscription(String, 'robot/evidence_scope', self.on_evidence_scope, latched)
@@ -545,7 +551,7 @@ def main():
     rclpy.init()
     node = WebNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

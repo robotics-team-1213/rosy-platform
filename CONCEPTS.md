@@ -115,6 +115,13 @@ The sensing boundary that reports where the dock is, relative to the robot, and 
 
 Which physical signal it uses is deliberately not decided by the boundary, so the approach logic could be built and verified before the sensing was chosen; the product has since chosen a camera tag, and a run missing any piece of that stack falls back to a detector that sees nothing. A detector also has a usable distance band whose near edge is not zero — features leave the sensor's view close in — and that near edge must be measured on the chosen sensor before it is trusted, because it sets how early the dock type hands off to the funnel and the contact judgement; for the camera tag it has not been measured yet. A detector that reports nothing ends the run in a plain failure, never an automatic retry; a detector that confidently reports the wrong pose drives the robot into something that is not the dock, which is why refusing is preferred to guessing.
 
+## Line following
+
+### Lane lost
+The line-follow state a robot enters after going without fresh lane evidence for longer than its loss window; it stops the robot and stays set until a line-follow mode is selected again.
+
+Stale evidence on its own only holds the robot while the evidence stays stale; lost is latched, so a robot that regains its view of the lane still does not move. Freshness is judged on the clock the evidence arrives on — in simulation that is simulated time, because a slow simulator would otherwise age every frame past the window by wall time and latch a robot that sees the lane perfectly well.
+
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.

@@ -30,8 +30,14 @@ log = logging.getLogger(__name__)
 def select_detector(dock: DockInstance, dock_type, *,
                     provider=None, frame_source=None,
                     camera_matrix=None, dist_coeffs=None,
-                    clock: Callable[[], float] = time.monotonic):
+                    clock: Callable[[], float] = time.monotonic,
+                    feed=None):
     """Choose the detector for one docking run (DNC-007, D-138).
+
+    `detector="observation"` reads control's `dock/observation` evidence
+    through `feed` (stage-3 parking; the tag is detected in control, CORE
+    keeps no frames and no OpenCV). Without a feed it falls back to the
+    empty script like every other incomplete stack.
 
     The ArUco vision detector is selected only when the whole stack is
     present: `detector="aruco"` naming it, a complete tag spec on the dock
@@ -42,6 +48,10 @@ def select_detector(dock: DockInstance, dock_type, *,
     into `DOCK_FAILED` instead of driving on a guess. A provider that raises
     (no cv2 on this image) falls back the same way, with a warning.
     """
+    if dock_type.detector == "observation" and feed is not None:
+        from core_features.docking.feed import FeedDetector
+
+        return FeedDetector(feed, tag_id=getattr(dock_type, "tag_id", None), clock=clock)
     if (dock_type.detector == "aruco"
             and getattr(dock_type, "tag_id", None) is not None
             and getattr(dock_type, "tag_size_m", None) is not None

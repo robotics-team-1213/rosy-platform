@@ -8,7 +8,6 @@
   <license>Proprietary</license>
 
   <depend>core_common</depend>
-  <depend>core_events</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

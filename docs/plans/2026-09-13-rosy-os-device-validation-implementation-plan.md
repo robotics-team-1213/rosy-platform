@@ -627,3 +627,22 @@ motor-contract tests. The complete `src/rosy_core/test` suite is `758 passed,
 root suite remains subject to the existing Windows `openssl` fixture blocker;
 ARM64 lifecycle, UART-loss, restart and physical stop-latency evidence remain
 DEVICE/FIELD HOLD gates.
+
+## 2026-09-24 device measurement checkpoint: control hot paths (D-185 R8)
+
+`src/apps/control/tools/device/hotpath_measure.py` produces the Pi numbers D-185
+marks HOLD. The full procedure is in the tool's module docstring. In short:
+
+1. On the Pinky Pro, check out the revision under test (or copy the single file and
+   source `/opt/ros/jazzy/setup.bash` and `/opt/rosy/current/install/setup.bash` to
+   measure the deployed `control`).
+2. Stack stopped, about 1-2 min:
+   `python3 tools/device/hotpath_measure.py bench --iterations 50 --label <rev> --out ~/rosy-measure/bench-<ts>.json`
+   (from `src/apps/control`).
+3. Stack running in the scenario to measure, about 600 s:
+   `python3 tools/device/hotpath_measure.py watch --duration 600 --interval 2 --label <scenario> --out ~/rosy-measure/watch-<ts>.json`
+4. Copy `~/rosy-measure/*.json` back and cite it in the D-185 R8 record.
+
+A report counts as DEVICE evidence only when `evidence.device` is true
+(`/proc/device-tree/model` names a Raspberry Pi). As of 2026-09-24 no Pi run exists;
+this checkpoint does not advance DEVICE, which stays HOLD.

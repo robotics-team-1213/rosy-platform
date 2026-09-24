@@ -39,3 +39,11 @@
 - gate 변화: 없음.
 - 결정: 없음(D-172 F2 연장).
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(core): LOG-001 audit 계약을 자체 `test/`로 이전
+
+- 변경: `src/core/core/test/test_audit.py` → `src/core/core_events/test/test_audit.py`(`git mv`) + `test/conftest.py` 부트스트랩(`core_events`·`core_common` sys.path). D-168 `KNOWN_WITHOUT_OWN_TESTS`에서 `core_events` 제거, `harness.yaml` `tests`/`functional` 경로 갱신, AGENTS 테이블·Testing 블록 갱신, SOURCE gate HOLD→GO.
+- 증거: `python -m pytest src/core/core_events/test -q` 70 passed (2026-09-24 Windows); 전체 게이트는 커밋 직전 실행.
+- gate 변화: SOURCE HOLD→GO(자체 `test/` 확보), LOCAL GO 유지.
+- 결정: module-coupling-scorecard §6 과제 2(집합 동일성 단정과 동시 갱신).
+- 교훈: 없음

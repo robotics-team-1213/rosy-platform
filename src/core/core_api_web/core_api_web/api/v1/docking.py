@@ -25,6 +25,9 @@ _DOCK_HTTP = {
     "NOT_DOCKED": 409,
     "DOCK_REQUIRED": 400,
     "CAPABILITY_NOT_SUPPORTED": 501,
+    "LINE_FOLLOW_ACTIVE": 409,
+    "MODE_CONFLICT": 409,
+    "NO_ODOMETRY": 409,
 }
 
 
@@ -39,6 +42,16 @@ class DockTypeRequest(BaseModel):
     docking_threshold_m: float = 0.05
     max_retries: int = 3
     undock_distance_m: float = 0.35
+    tag_id: int | None = None
+    tag_size_m: float | None = None
+    # 주차형 (docs/plans/2026-09-23-lane-network-parking-design.md). 기본값은 원래 도크.
+    staging: bool = True
+    approach: str = "bearing"
+    settle: str = "agent"
+    tag_offset_m: float | None = None
+    acquire_creep_m: float = 0.0
+    backoff_m: float | None = None
+    undock_turn_rad: float = 0.0
 
 
 class DockRequest(BaseModel):
@@ -94,7 +107,7 @@ def create_dock(body: DockRequest, _: AuthContext = Depends(admin),
 def delete_dock(dock_id: str, _: AuthContext = Depends(admin),
                 svc: CoreServicesLike = Depends(get_services)):
     try:
-        svc.docking.database.remove(dock_id)
+        svc.docking.remove_dock(dock_id)
     except DockError as exc:
         raise _dock_error(exc)
     return {"deleted": dock_id}
@@ -123,6 +136,8 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
                  svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)              # DNC-003 — 미지원이면 501
     try:
+        # 매니저가 DOCKING 을 먼저 쥔다 (CoreServices.take_docking_mode). 못
+        # 쥐면 아무것도 바꾸지 않고 MODE_CONFLICT 다.
         svc.docking.dock(body.dock)
     except DockError as exc:
         raise _dock_error(exc)

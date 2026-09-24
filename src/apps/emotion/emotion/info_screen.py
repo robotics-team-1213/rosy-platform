@@ -14,9 +14,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 DEFAULT_SIZE = (320, 240)
 
-# concept 16 L1 / D-82 — 색은 네 표면이 공유한다. 값은 core의
-# `web/tokens.css`와 같은 OKLCH 생성본이며, 여기서는 D-73에 따라 이 모듈이
-# 자기 사본과 자기 시험을 갖는다(교차 패키지 단언은 harness에 거처가 없다).
+# concept 16 L1 / D-82 / D-194 — 색은 토큰과 같은 값이다. 이 모듈은 파일을
+# 읽지 않고 튜플만 가진다. 숫자가 토큰과 어긋나면
+# web_common/test/test_shared_controls.py 가 실패한다.
 #
 # 이전 값은 적록 색약 시야에서 _WARN 대 _CRIT 대비가 1.26:1이었다 — 얼굴은
 # 1.5m 밖에서 0.5초에 읽히는 화면인데 주의와 위험이 구분되지 않았다.

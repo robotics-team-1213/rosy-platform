@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-15 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
 
 # test
 
@@ -17,17 +17,14 @@ pytest for core policy, API, dashboard, and protocol. Most tests import Python m
 | `test_sprint2.py` | Later P1 slices |
 | `test_power.py` | IDLE/STANDBY/proximity wake |
 | `test_battery.py` | Curve, hysteresis, deep shutdown sentinel (SAF-005, D-27) |
-| `test_docking.py` | Dock SM, staging vs sensor closed-loop |
 | `test_dashboard.py` | Embedded `/dashboard` assets and CSP |
 | `test_host_cards.py` | Dashboard host/network/release cards |
 | `test_host_runtime.py` | `HostRuntimeProbe` read-only telemetry |
 | `test_ros_graph_monitor.py` | ROS graph snapshot bounds |
 | `test_runtime_config.py` | YAML merge / ROSY_CONFIG |
 | `test_fleet_agent.py` | FleetAgent stays disconnected |
-| `test_audit.py` | LOG-001 file audit retention |
 | `test_initial_pose.py` | AMCL covariance, occupancy map id |
 | `test_bridge_translate.py` | ROS message → domain dict conversion, with duck-typed messages |
-| `test_swarm.py` | SWM follow state machine via `from core.swarm`, 2 Hz cap, stream-loss HOLD |
 | `test_swarm_api.py` | SWM-002 REST contract, including the 501 on a capability that says false |
 | `test_swarm_stream.py` | `/ws/swarm/pose` envelope and `/ws/swarm/reference` ingest |
 | `test_diagnostics_api.py` | DIAG-001 rollup, unknown component, agreement with `/metrics` |

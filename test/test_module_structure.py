@@ -34,9 +34,6 @@ CORE_CONTRACTS = {"interfaces", "core_common", "web_common"}
 
 #: P2(d) exceptions: packages without their own test/test_*.py.
 KNOWN_WITHOUT_OWN_TESTS = {
-    "core_events": "covered by src/core/core/test (EventBus/audit suites)",
-    "core_features": "covered by src/core/core/test (28 files import core_features)",
-    "web_common": "tokens.css/core_ui_logic.js checked by core/core/test/test_ui_token_contracts.py",
     "navigation": "launch/params contracts live in the repository test/ suite",
 }
 
@@ -84,12 +81,6 @@ SIZE_VERDICTS = {
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
-    "core/core/core/bridge/ros_bridge.py": (
-        759,
-        "split: the 2026-09-06 accept (at 516 lines) is void — its re-entry trigger (a) fired with a "
-        "seventh timer (_tick_line_follow); re-open C2 per docs/plans/2026-09-06-module-split-criteria.md; "
-        "owner core, unscheduled",
-    ),
     "site/fleet/fleet/server/console.py": (
         767,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
@@ -104,11 +95,23 @@ SIZE_VERDICTS = {
     ),
     "core/core_events/core_events/events/audit.py": (
         745,
-        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core/test/test_audit.py; "
+        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core_events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
+    "core/core_features/core_features/docking/manager.py": (
+        663,
+        "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
+        "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
+        "what remains is the one lock owner (state, RLock, take/release_mode seams, fail/retry/release, the "
+        "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
+        "and core/test/test_docking_*.py (X5)",
+    ),
+    "sim/gz_sim/scripts/lane_live_view.py": (
+        709,
+        "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
+    ),
     "control": (
-        28_310,  # re-judged 2026-09-24 (D-192): +ADC bus lock and its test; split verdict unchanged
+        32_106,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }

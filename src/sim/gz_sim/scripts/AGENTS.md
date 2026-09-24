@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-14 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-14 | Updated: 2026-09-24 -->
 
 # scripts
 
@@ -14,6 +14,12 @@ Host-side swarm bench (`swarm_bench.py`, no `rclpy`) and `seed_initialpose.py` (
 | `swarm_bench.py` | Async bench: `follow` / `reform` / `hold` / `stuck` scenarios; CSV of slot error, stream age, relay Hz |
 | `world_to_map.py` | World collision boxes → nav2 occupancy. No rclpy |
 | `seed_initialpose.py` | D-115: publish `{ns}/initialpose` at spawn. rclpy. Host pytest does not import this file |
+| `junction_score.py` | Junction scenarios from `lane_graph.yaml` and trajectory scoring. ROS-free |
+| `junction_harness.py` | Runs the 12 junction scenarios in headless Gazebo and scores them |
+| `coverage_harness.py` | Drives the all-lane coverage tour in headless Gazebo and scores it |
+| `mission_harness.py` | Drives the lane-network mission (undock → tour → park) in headless Gazebo |
+| `lane_live_view.py` | Live HTTP viewer (camera, perception overlay, progress) for a WSL Gazebo lane run |
+| `record_debug.py` | Records `line/debug/compressed` to `overlay.mp4` plus `frames.jsonl` |
 
 ## Subdirectories
 

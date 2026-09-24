@@ -10,6 +10,15 @@
 #   - RIG_ESTOP_PROBE=1 starts rig_estop_probe.py, which presses the
 #     simulation e-stop once calibration reaches validating_motion. The run
 #     then must end in a failed calibration, never ready.
+#   - D-185 R4: an overloaded box (mean load >= RIG_MAX_MEAN_LOAD, default 16) or a
+#     stalled simulation (real-time factor < RIG_MIN_RTF, default 0.1) makes the run
+#     environment-invalid: 'RIG ENVIRONMENT: INVALID' and exit 3 before any pass/fail.
+#     Without rate evidence (no result, <10 s simulated) the verdict stays pass/fail.
+#     Other Gazebo launchers take the same lock as they adopt it (staged, D-185 R4).
+#     /tmp/rosy-gazebo.lock serialises Gazebo runs of every rig that takes it
+#     (RIG_GZ_LOCK_WAIT seconds, default 1800; exit 4 when it stays busy).
+#   - D-185 R6: RIG_CLOCK_HZ=N (>= 50 x RIG_REALTIME_FACTOR) replaces the bridge's per-step
+#     /clock with tools/gz/clock_relay.py at most N msgs per wall second; exit 2 if invalid.
 # Run from anywhere on a Linux box with ROS 2 Jazzy, Gazebo Harmonic,
 # ros_gz_bridge and slam_toolbox. Results land in /tmp/pinky-calmap227.
 set -eo pipefail
@@ -18,10 +27,16 @@ source /opt/ros/jazzy/setup.bash
 set -u
 export ROS_DOMAIN_ID=227 ROS_LOCALHOST_ONLY=1 GZ_IP=127.0.0.1
 export GZ_PARTITION=pinky_calmap227 PYTHONPATH="$PWD:${PYTHONPATH:-}"
+# D-185 R6: a bad RIG_CLOCK_HZ would leave the rig without /clock until the wall timeout; fail first.
+if [[ -n "${RIG_CLOCK_HZ:-}" ]]; then
+  python3 tools/gz/clock_relay.py --check "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" || exit 2
+fi
 out=/tmp/pinky-calmap227
 mkdir -p "$out"
 exec 9>"$out/run.lock"
 flock -n 9 || { echo 'A calibration mapping rig already owns this partition'; exit 1; }
+exec 8>/tmp/rosy-gazebo.lock
+flock -w "${RIG_GZ_LOCK_WAIT:-1800}" 8 || { echo 'Another Gazebo run holds /tmp/rosy-gazebo.lock'; exit 4; }
 if [[ -n "${RIG_CALIBRATION_CASE:-}" ]]; then
   python3 -m tools.gz.calibration_spaces "$RIG_CALIBRATION_CASE" /tmp/pinky-calmap227
 else
@@ -38,7 +53,7 @@ if (out/'stack.log').exists():
     if camera_frames.is_dir() and not camera_frames.is_symlink():
         camera_frames.rename(archive/'rendered-camera')
     for path in out.iterdir():
-        if path.is_file() and path.suffix in ('.log','.json','.yaml','.pgm','.npz','.sdf','.txt'):
+        if path.is_file() and path.suffix in ('.log','.json','.jsonl','.yaml','.pgm','.npz','.sdf','.txt'):
             shutil.copy2(path, archive/path.name)
 run_id=uuid.uuid4().hex
 # An old complete map is historical evidence, never this run's readiness.
@@ -47,7 +62,8 @@ for name in ('map.pgm','map.yaml','map_grid.npz','calibration.json','calibration
              'track_map.npz','track_map.pgm','track_map.yaml','track_map_quality.json',
              'track_map_audit.json','track_result.png','obstacle-scenario.json',
              'decision-events.json','health-capture.json','scan-capture.json','realtime-adjustment.txt',
-             'track_odometry.json','track_footprint_audit.json','estop_probe.json'):
+             'track_odometry.json','track_footprint_audit.json','estop_probe.json',
+             'environment.json','environment_samples.jsonl'):
     (out/name).unlink(missing_ok=True)
 (out/'mapping_metrics.json').write_text(json.dumps({'run_id':run_id, 'status':'pending',
     'map_raster_complete':False, 'raster_and_sampled_clearance_ok':False}))
@@ -101,6 +117,7 @@ manifest={'run_id':run_id, 'recorded_unix_s':time.time(), 'plant':plant,
     'calibration_case':os.environ.get('RIG_CALIBRATION_CASE'),
     'single_process':os.environ.get('RIG_SINGLE_PROCESS') == '1',
     'estop_probe':os.environ.get('RIG_ESTOP_PROBE') == '1',
+    'clock_hz':int(os.environ['RIG_CLOCK_HZ']) if os.environ.get('RIG_CLOCK_HZ') else None,
     'ros_domain':227, 'gazebo_partition':'pinky_calmap227',
     'world_sha256':hashlib.sha256((out/'world.sdf').read_bytes()).hexdigest(),
     'source_at_start':source_at_start,
@@ -120,8 +137,11 @@ cleanup() {
   for pid in "${pids[@]}"; do kill -KILL -- -"$pid" 2>/dev/null || true; done
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 130' INT TERM HUP
+rig_start=$(date +%s.%N)
 setsid gz sim -s -r --headless-rendering "$out/world.sdf" > "$out/gz.log" 2>&1 & pids+=($!)
+# The recorder must not hold the rig locks, and exits with this script.
+setsid python3 tools/gz/rig_environment.py record "$out" "$$" 8>&- 9>&- > "$out/environment.log" 2>&1 & pids+=($!)
 sleep 4
 if [[ "${RIG_TRACK_OBSTACLES:-0}" == 1 ]]; then
   setsid python3 -m control.obstacle_observer_node --ros-args -p use_sim_time:=true \
@@ -136,11 +156,17 @@ if [[ "${RIG_RENDERED_CAMERA:-0}" == 1 ]]; then
   setsid python3 -m tools.gz.rendered_camera_adapter --ros-args -p use_sim_time:=true \
     > "$out/camera.log" 2>&1 & pids+=($!)
 fi
-setsid ros2 run ros_gz_bridge parameter_bridge \
-  '/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan' \
-  '/odometry_gt@nav_msgs/msg/Odometry[gz.msgs.Odometry' \
-  '/model/pinky/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist' \
-  '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock' \
+bridged=('/lidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'
+  '/odometry_gt@nav_msgs/msg/Odometry[gz.msgs.Odometry'
+  '/model/pinky/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist')
+# D-185 R6: Gazebo publishes /clock every physics step. RIG_CLOCK_HZ=N relays it at most N times
+# per wall second through a throttled gz-transport subscription instead; unset keeps the bridge.
+if [[ -z "${RIG_CLOCK_HZ:-}" ]]; then
+  bridged+=('/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock')
+else
+  setsid python3 tools/gz/clock_relay.py "$RIG_CLOCK_HZ" "${RIG_REALTIME_FACTOR:-1.0}" 8>&- 9>&- > "$out/clock-relay.log" 2>&1 & pids+=($!)
+fi
+setsid ros2 run ros_gz_bridge parameter_bridge "${bridged[@]}" \
   --ros-args -p use_sim_time:=true -r /lidar/scan:=/scan -r /odometry_gt:=/odom_gz \
   -r /model/pinky/cmd_vel:=/cmd_vel > "$out/bridge.log" 2>&1 & pids+=($!)
 if [[ "${RIG_SINGLE_PROCESS:-0}" == 1 ]]; then
@@ -177,25 +203,47 @@ else
 fi
 echo "Isolated exact-track run: $out"
 wait "${pids[$monitor_index]}"
+set +e
+python3 tools/gz/rig_environment.py judge "$out"
+environment=$?
+set -e
+if [[ $environment != 0 && $environment != 3 ]]; then
+  echo "rig_environment judge crashed ($environment)"; exit "$environment"
+fi
+# Environment-invalid (3): the verdict below is still reported, marked not counted,
+# and the run exits 3 - neither a pass nor a failure of the code under test.
+export RIG_ENVIRONMENT_INVALID=$(( environment == 3 ))
 python3 - "$out" <<'PY'
 import json, os, sys
 from pathlib import Path
 out = Path(sys.argv[1])
 result = json.loads((out/'track_result.json').read_text())
-if os.environ.get('RIG_ESTOP_PROBE') == '1':
+uncounted = os.environ.get('RIG_ENVIRONMENT_INVALID') == '1'
+def verdict():
+  if os.environ.get('RIG_ESTOP_PROBE') == '1':
     probe = json.loads((out/'estop_probe.json').read_text())
     assert probe.get('pressed') is True, f'e-stop probe never fired: {probe}'
     assert result['calibration_ready'] is not True, 'Calibration became ready after an e-stop during its trial'
     assert result['calibration_phase'] == 'failed', f"e-stop during a trial must fail it: {result['calibration_phase']}"
     # A trial that fails for another reason first proves nothing about the e-stop path.
     assert 'Emergency stop' in (result.get('message') or ''), f"failed, but not by the e-stop: {result.get('message')}"
-elif not os.environ.get('RIG_CALIBRATION_CASE'):
+  elif not os.environ.get('RIG_CALIBRATION_CASE'):
     assert result['calibration_ready'] is True, result['message']
-assert result['cmd_vel_publishers'] == ['safety_node'], 'Unexpected final command publisher'
-if os.environ.get('RIG_REQUIRE_COMPLETE') == '1':
+  assert result['cmd_vel_publishers'] == ['safety_node'], 'Unexpected final command publisher'
+  if os.environ.get('RIG_REQUIRE_COMPLETE') == '1':
     assert result['mapping_complete'] is True, 'Full fresh world-aligned map acceptance failed'
-print('RIG VERDICT: PASS', json.dumps({k: result.get(k) for k in
-      ('calibration_phase', 'calibration_ready', 'cmd_vel_publishers', 'elapsed_sim_s', 'message')}))
+summary = json.dumps({k: result.get(k) for k in
+    ('calibration_phase', 'calibration_ready', 'cmd_vel_publishers', 'elapsed_sim_s', 'message')})
+if not uncounted:
+  verdict()
+  print('RIG VERDICT: PASS', summary)
+else:
+  try:
+    verdict()
+    print('RIG VERDICT (environment-invalid, not counted): PASS', summary)
+  except (AssertionError, OSError, ValueError, KeyError) as error:
+    print('RIG VERDICT (environment-invalid, not counted): FAIL', error, summary)
+  sys.exit(3)
 PY
 if [[ "${RIG_REQUIRE_COMPLETE:-0}" == 1 ]]; then
   python3 -m tools.gz.track_map_audit "$out"

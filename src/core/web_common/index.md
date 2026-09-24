@@ -13,6 +13,8 @@
 | D-72 | 표면은 법을 공유하고 문법은 나눈다 |
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-194 | 브라우저 조작 부품은 한 벌이다 |
+| D-195 | 치수와 진단 팔레트도 닫힌 집합이다 |
 
 ## 계획·결과 문서
 
@@ -24,9 +26,14 @@
 
 ## 시험
 
-- `src/core/core/test/test_ui_token_contracts.py`
-- `src/core/core/test/test_palette_gates.py`
+- `src/core/web_common/test/test_ui_token_contracts.py`
+- `src/core/web_common/test/test_palette_gates.py`
+- `src/core/web_common/test/test_headless_state.py`
 
 ## 최근 기록
 
-- 2026-09-22 · uncommitted · docs(harness): register web_common under D-168
+- 2026-09-24 · uncommitted · fix(web): 빈 목록과 증거 색을 공용 부품에 맞춘다
+- 2026-09-24 · uncommitted · feat(web): 화면 틀을 공용 UI로 둔다
+- 2026-09-24 · uncommitted · feat(web): 어휘 표의 나머지 다섯 부품을 만든다
+- 2026-09-24 · uncommitted · feat(web): 치수 계단과 진단 팔레트를 토큰에 잠근다
+- 2026-09-24 · uncommitted · fix(web): 버튼 종류와 색 사본을 시험으로 잠근다
