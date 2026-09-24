@@ -56,6 +56,13 @@ $script:failureKind = ""
 $imageSignature = $null
 $resumeNext = "re-run the same command with -ResumeAfterWrite (skips the write and re-reads the whole card)"
 $fullWriteNext = "re-run the full write (the same command without -ResumeAfterWrite)"
+# D-230 3.2: a stall this close to the end is cheaper to resolve with the
+# authoritative readback (D-187, every byte) than with another full write.
+$ResumeThresholdFraction = 0.999
+$resumeNearCompleteNext = "$resumeNext; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, $fullWriteNext"
+# D-230 3.1 (hint): below this, a reader looks USB-2.0-class; never a hard
+# failure (MinReadMBps, default 10, is the only floor).
+$ReaderHintMBps = 30
 
 function Add-ProgressLine([string]$Stage, [string]$CardState, [string]$Detail, [object]$Bytes, [System.Collections.IDictionary]$Extra) {
     if (-not $ProgressPath) { return }
@@ -849,7 +856,13 @@ $preflight = [ordered]@{
     min_read_mbps = $MinReadMBps
 }
 if ($probeError) { $preflight["device_error"] = $probeError }
+$readerHint = $null
+if ($null -ne $readMBps -and $readMBps -lt $ReaderHintMBps) {
+    $readerHint = ("the card reader reads at {0:N1} MB/s, below {1:N0} MB/s: it looks like a USB 2.0-class reader; a USB 3 UHS-I reader would cut about 8-10 min (D-230)" -f $readMBps, $ReaderHintMBps)
+    $preflight["reader_hint"] = $readerHint
+}
 Add-ProgressLine "preflight" "untouched" "measured" $null $preflight
+if ($readerHint) { Write-Warning $readerHint }
 $readText = $(if ($null -ne $readMBps) { "{0:N1} MB/s over the first {1:N0} MB" -f $readMBps, ($preflight.read_bytes / 1e6) } else { "not measured ($probeError); assuming $readRate MB/s" })
 Write-Host ("Pre-flight: card read {0}. Image {1:N0} MB: write about {2:N0} min at {3:N1} MB/s{4}, readback about {5:N0} min, total about {6:N0} min." -f
     $readText, $rawMB, [Math]::Ceiling($predictedWrite / 60), $writeRate,
@@ -1019,7 +1032,10 @@ else {
             if (-not (Stop-ProcessTree $writerProcess)) {
                 Fail ("image writer stalled after writing {0} of {1} bytes and could not be stopped" -f $written, $imageRawSize) "Imager could not be stopped: unplug the card reader and reboot the PC before anything else, then $fullWriteNext (do not resume)"
             }
-            if ($imageRawSize -gt 0 -and $written -ge $imageRawSize) { $script:cardState = "written-unverified" }
+            if ($imageRawSize -gt 0 -and $written -ge ($imageRawSize * $ResumeThresholdFraction)) {
+                $script:cardState = "written-unverified"
+                Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize) $resumeNearCompleteNext
+            }
             Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize)
         }
         if ($now - $lastBeat -ge [TimeSpan]::FromSeconds($HeartbeatSeconds)) {
