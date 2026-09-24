@@ -1,0 +1,23 @@
+[Unit]
+Description=Finish ROSY first boot once NetworkManager has joined the site Wi-Fi
+# 2026-09-24 rosy-pinky-e4us: the first association on a phone hotspot failed,
+# rosy-first-boot gave up, and NM autoconnect joined 40 s later. This run only
+# checks the site profile (--network check); it never starts it, so it cannot
+# take the single radio from the D-176 fallback AP.
+After=rosy-first-boot.service NetworkManager.service
+ConditionPathExists=!/var/lib/rosy/provisioning/complete.json
+ConditionPathExists=/boot/firmware/rosy-provision/provision.json
+
+[Service]
+Type=oneshot
+ExecStart=/opt/rosy/first-boot/rosy-first-boot.sh --network check
+# Provisioned now. rosy-runtime.target failed with rosy-first-boot at boot;
+# starting it re-runs rosy-first-boot (ALREADY_PROVISIONED, no network work)
+# through rosy-sd-provision's Requires=, then CORE.
+ExecStartPost=/usr/bin/systemctl start --no-block rosy-runtime.target
+# Show CORE_READY as soon as the runtime settles, not at the next 30 s tick.
+ExecStartPost=-/usr/bin/systemctl start --no-block rosy-boot-status-ready.service
+ExecStartPost=-/usr/bin/systemctl stop --no-block rosy-first-boot-retry.timer
+# Covers the 200 s flock wait in rosy-first-boot.sh behind a manual run.
+TimeoutStartSec=240
+UMask=0077

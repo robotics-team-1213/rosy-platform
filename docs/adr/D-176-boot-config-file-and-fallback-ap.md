@@ -66,3 +66,15 @@ D-33·D-154의 장치 신원 규칙은 유지한다.
 1. 카드의 `rosy-config.yaml`에 Wi-Fi를 적고 부팅해 연결되는지, 비밀번호가 지워졌는지 본다.
 2. 없는 SSID를 적고 부팅해 120초 뒤 AP가 열리고 `10.42.0.1`로 SSH가 되는지 본다.
 3. 공유기를 켜서 AP가 닫히는지 본다.
+
+**첫 부팅 현장 Wi-Fi 보완 (2026-09-24)**: release `2026.09.24-010`, `rosy-pinky-e4us`에서 폰 핫스팟 첫 연결이 25초 만에
+실패하자(18.7→44.0 s) 첫 부팅이 곧바로 `PROVISIONING_AP`로 끝나고 `rosy-site-sta` 프로필을 지웠다. NM autoconnect는
+메모리의 프로필로 84.9 s에 붙었지만 런타임은 시작되지 않았고, 재부팅하면 현장 Wi-Fi를 잃을 상태였다. 이제
+(1) 첫 부팅은 최대 3회·30초씩·사이 15초, 합계 120초 안에서 재시도하고 시도 전마다 NM이 이미 붙였는지 본다.
+(2) 예산을 다 써도 프로필(0600)은 지우지 않는다 — 같은 비밀은 카드의 번들에 이미 있고, 프로필이 있어야 NM
+autoconnect와 이 ADR의 fallback AP 종료(`nmcli device connect wlan0`)가 현장 Wi-Fi로 돌아갈 수 있다. 이 범위에서
+D-154 결정 6의 "후보를 폐기"를 대체한다. (3) `rosy-first-boot-retry.timer`가 30초마다 `--network check`로 프로필이
+활성인지만 보고(연결을 직접 올리지 않아 단일 라디오의 AP를 빼앗지 않는다) 활성이면 개인화를 마치고
+`rosy-runtime.target`을 시작한다. `rosy-first-boot.service`에 `Restart=`를 쓰지 않는 이유는, 재시작 대기 중에는 시작
+job이 끝나지 않아 뒤에 정렬된 `rosy-config`·`rosy-network`(fallback AP)가 묶이기 때문이다. 첫 부팅 예산만큼 AP가
+늦게 열릴 수 있다(최악 약 +120 s).
