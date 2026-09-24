@@ -174,6 +174,16 @@
    - 한 프로세스 모드의 CPU는 약 109%로 분리 모드(약 440%)보다 훨씬 낮다. 프로세스 사이 DDS 전달과 프로세스별
      `/clock` 처리가 없기 때문이다.
 
+   **R8 실기 bench (2026-09-24).** Pinky `rosy-pinky-e4us`(Raspberry Pi 5 Model B Rev 1.1, numpy 1.26.4),
+   release 005 위에서 `/tmp` 사본으로 측정했다. 설치본은 건드리지 않았다. 보고서 `evidence.device`는 true다.
+   - old = `c67437d1^1`(D-185 이전), new = main `75c69277`. 같은 도구, 50회, old/new를 번갈아 2회씩 돌렸다.
+     CORE만 돌던 상태였다(부하 약 0.3, CORE 한 코어의 약 22%).
+   - `wall_tracker._segments` median 21.2 → 9.1 ms(−57%), `inflate` 47.8 → 6.5 ms(−86%).
+     `match_motion`은 68–70 대 65–73 ms로 변화가 없다. 최적화 대상이 아니었다.
+   - `match_motion` 73 ms는 50 ms 교정 tick보다 길다. 회전 단계 stall의 원인 경로이므로 다음 CPU 후보다.
+   - `watch`(노드별 CPU)와 R3 EventsExecutor의 실기 비교는 아직이다. control 노드를 로봇에서 띄워야 하고
+     바퀴가 움직일 수 있으므로 사용자가 로봇 옆에 있을 때 한다.
+
 4. **범위 밖.** 줄 수·패키지 구조(D-168·D-171), 안전 판정 자체의 임계값은 바꾸지 않는다. CPU 절감을 이유로
    신선도 창이나 게이트 조건을 완화하지 않는다.
 
