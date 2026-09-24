@@ -59,8 +59,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(control): control 패키지 크기 결정 기록 (D-168 P6, lane-network 병합)
 - 2026-09-24 · uncommitted · test(repo): control 패키지 크기 재판정 (D-168 P6, lane-network 병합)
 - 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
 - 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
 - 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
-- 2026-09-23 · uncommitted · perf(control): vectorise the calibration wall fit, bit for bit

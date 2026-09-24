@@ -313,3 +313,11 @@
 - gate 변화: 없음.
 - 결정: split 판정 유지. 증가분 대부분은 ROS-free leaf `sensing/*`이며 분리 설계가 떼어낼 `control_sensing` 단위에 그대로 들어간다(분리 후 그 단위도 10k 예산 안). 새 600줄 초과 파일은 없다(`lane_bev` 646 = accept 611+150 안). 기준 이동 폭(+2,934, 허용의 약 20배)이 main 선례(+156)보다 훨씬 크므로 독립 리뷰에서 확인받는다. split 미일정 상태는 바뀌지 않았다.
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(control): control 패키지 크기 결정 기록 (D-168 P6, lane-network 병합)
+
+- 변경: 없음(기록만). `SIZE_VERDICTS["control"]` 31,249줄 split 판정은 그대로다.
+- 증거: 없음(결정 기록).
+- gate 변화: 없음.
+- 결정: 2026-09-24 control 31,249줄은 이번 병합에서 기록만 하고, 패키지 분리는 인식 재설계(docs/plans/2026-09-24-perception-architecture-design.md P1~P3)에서 실행한다 — 사용자 결정 2026-09-24
+- 교훈: 없음
