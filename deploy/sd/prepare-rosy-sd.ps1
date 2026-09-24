@@ -56,11 +56,11 @@ $script:failureKind = ""
 $imageSignature = $null
 $resumeNext = "re-run the same command with -ResumeAfterWrite (skips the write and re-reads the whole card)"
 $fullWriteNext = "re-run the full write (the same command without -ResumeAfterWrite)"
-# D-230 3.2: a stall this close to the end is cheaper to resolve with the
+# D-225 3.2: a stall this close to the end is cheaper to resolve with the
 # authoritative readback (D-187, every byte) than with another full write.
 $ResumeThresholdFraction = 0.999
 $resumeNearCompleteNext = "$resumeNext; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, $fullWriteNext"
-# D-230 3.1 (hint): below this, a reader looks USB-2.0-class; never a hard
+# D-225 3.1 (hint): below this, a reader looks USB-2.0-class; never a hard
 # failure (MinReadMBps, default 10, is the only floor).
 $ReaderHintMBps = 30
 
@@ -858,7 +858,7 @@ $preflight = [ordered]@{
 if ($probeError) { $preflight["device_error"] = $probeError }
 $readerHint = $null
 if ($null -ne $readMBps -and $readMBps -lt $ReaderHintMBps) {
-    $readerHint = ("the card reader reads at {0:N1} MB/s, below {1:N0} MB/s: it looks like a USB 2.0-class reader; a USB 3 UHS-I reader would cut about 8-10 min (D-230)" -f $readMBps, $ReaderHintMBps)
+    $readerHint = ("the card reader reads at {0:N1} MB/s, below {1:N0} MB/s: it looks like a USB 2.0-class reader; a USB 3 UHS-I reader would cut about 8-10 min (D-225)" -f $readMBps, $ReaderHintMBps)
     $preflight["reader_hint"] = $readerHint
 }
 Add-ProgressLine "preflight" "untouched" "measured" $null $preflight

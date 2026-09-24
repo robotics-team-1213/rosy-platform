@@ -1164,3 +1164,12 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.
+
+## 2026-09-25 · 4512c897 · feat(sd): 99.9% 이상에서 멈춘 기록은 재개부터, 느린 리더 안내 (D-225)
+
+- 변경: `prepare-rosy-sd.ps1`이 Imager 정지 시 기록량이 원본의 99.9% 이상이면 전체 재기록 대신 `-ResumeAfterWrite`를 먼저 안내한다(readback이 모든 바이트를 다시 비교하고, 덜 쓰인 카드는 bundle·receipt 전에 실패한다는 문구 포함). preflight `read_mbps < 30`이면 `reader_hint`를 progress JSON과 경고로 남긴다(실패 아님, 하한 10 MB/s 유지). `card-write-status.ps1`도 같은 안내를 낸다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py -q` 142 passed(99.95%에서 자른 카드로 재개 → readback 실패·기록 없음 포함); 이전 커밋 기준 SD 묶음 184 passed(2026-09-25 Windows). 독립 리뷰 MERGE.
+- 실기: 같은 날 release 2026.09.25-011을 `rosy-pinky-e4us`(18)에 재기록 — Imager exit 0, readback 8,574,867,968 B verified(부트 파티션은 Windows `System Volume Information` 때문에 파일 단위 비교 371개). readback 18분은 동시 실행 작업의 CPU 경합 탓(010은 7분).
+- gate 변화: 없음(MEDIA 증거만, BOOT/DEVICE HOLD)
+- 결정: D-225
+- 교훈: 010은 99.9%에서 멈춘 기록을 전체 재기록으로 되돌려 37분을 잃었다. 판정은 readback이 하므로 안내는 재개부터 한다. 카드 readback은 xz 압축 해제가 CPU를 써서, 기록 중에는 무거운 병렬 작업을 피한다.

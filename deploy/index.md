@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · 4512c897 · feat(sd): 99.9% 이상에서 멈춘 기록은 재개부터, 느린 리더 안내 (D-225)
 - 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
 - 2026-09-24 · uncommitted · fix(image,uart): recovery console on the debug UART, strict getty masks (PR #39 review)
 - 2026-09-24 · uncommitted · fix(image,uart): keep the kernel console and getty off the LiDAR UART
 - 2026-09-24 · uncommitted · fix(first-boot): PR #38 review — held retry changes nothing, one run at a time
-- 2026-09-24 · uncommitted · fix(first-boot): retry the site Wi-Fi and self-heal a held first boot

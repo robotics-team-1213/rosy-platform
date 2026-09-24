@@ -51,7 +51,7 @@ function Get-NextByCardState([string]$CardState) {
     switch ($CardState) {
         "untouched" { return "re-run the same write-card.ps1 command" }
         "writing" { return "re-run the full write (without -ResumeAfterWrite)" }
-        # D-230 3.2: the readback that -ResumeAfterWrite triggers is authoritative
+        # D-225 3.2: the readback that -ResumeAfterWrite triggers is authoritative
         # (re-verifies every byte); say so, and name the fallback if it fails.
         "written-unverified" { return "re-run the same command with -ResumeAfterWrite; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, re-run the full write (without -ResumeAfterWrite)" }
         "verified-no-bundle" { return "re-run the same command with -ResumeAfterWrite; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, re-run the full write (without -ResumeAfterWrite)" }

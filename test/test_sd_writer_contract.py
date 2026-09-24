@@ -1376,7 +1376,7 @@ def _partial_copy_child(source: Path, dest: Path, byte_count: int) -> str:
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_a_writer_that_stalls_at_999_percent_points_to_resume_with_readback_caveat(writer_case, tmp_path):
-    # D-230 3.2: a write that stalls at or above 99.9% of the raw image size is
+    # D-225 3.2: a write that stalls at or above 99.9% of the raw image size is
     # close enough that the authoritative readback (D-187) should decide, not a
     # full rewrite, but the message must not overpromise: a short card still
     # fails at that readback, before bundle/receipt, and a full rewrite is the
@@ -1424,7 +1424,7 @@ def test_a_writer_that_stalls_well_below_the_threshold_still_needs_a_full_rewrit
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_resuming_a_card_truncated_at_9995_percent_fails_readback_and_records_nothing(writer_case, tmp_path):
-    # D-230 ADR Validation 2: the near-complete resume band from 3.2 (>= 99.9%)
+    # D-225 ADR Validation 2: the near-complete resume band from 3.2 (>= 99.9%)
     # recommends -ResumeAfterWrite, but the readback (D-187) is still the sole
     # authority. A card genuinely short by this much (here simulated directly,
     # not via a stalled Imager) must fail the readback and leave nothing
@@ -1756,7 +1756,7 @@ def test_accept_slow_media_writes_anyway(writer_case, tmp_path):
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_a_reader_under_30_mbps_gets_a_hint_but_still_writes(writer_case, tmp_path):
-    # D-230 3.1 (hint): a reader this slow looks USB-2.0-class; nudge toward a
+    # D-225 3.1 (hint): a reader this slow looks USB-2.0-class; nudge toward a
     # USB 3 UHS-I reader, but never fail on this alone (the MinReadMBps floor,
     # default 10, is the only hard gate).
     raw = _multi_chunk_raw(1)
