@@ -15,6 +15,9 @@ ExecStart=/opt/rosy/first-boot/rosy-first-boot.sh --network check
 # starting it re-runs rosy-first-boot (ALREADY_PROVISIONED, no network work)
 # through rosy-sd-provision's Requires=, then CORE.
 ExecStartPost=/usr/bin/systemctl start --no-block rosy-runtime.target
+# Show CORE_READY as soon as the runtime settles, not at the next 30 s tick.
+ExecStartPost=-/usr/bin/systemctl start --no-block rosy-boot-status-ready.service
 ExecStartPost=-/usr/bin/systemctl stop --no-block rosy-first-boot-retry.timer
-TimeoutStartSec=60
+# Covers the 200 s flock wait in rosy-first-boot.sh behind a manual run.
+TimeoutStartSec=240
 UMask=0077

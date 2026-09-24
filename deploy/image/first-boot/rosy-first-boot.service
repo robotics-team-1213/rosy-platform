@@ -8,6 +8,8 @@ Before=network-online.target rosy-sd-provision.service rosy-runtime.target
 [Service]
 Type=oneshot
 ExecStart=/opt/rosy/first-boot/rosy-first-boot.sh
+# Provisioned (or already so): the retry timer has nothing left to do.
+ExecStartPost=-/usr/bin/systemctl stop --no-block rosy-first-boot-retry.timer
 RemainAfterExit=yes
 # Site Wi-Fi gets up to 120 s (rosy-first-boot.py NETWORK_BUDGET_S) plus the file work.
 TimeoutStartSec=180

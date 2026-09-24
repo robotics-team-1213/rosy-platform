@@ -1107,3 +1107,22 @@
 - 결정: D-176 보완 노트(2026-09-24), D-154 결정 6의 "후보 폐기"를 이 범위에서 대체
 - 교훈: 한 번의 연결 실패를 영구 실패로 다루고 복구 수단(프로필)까지 지우면, 하위 계층(NM autoconnect)이 스스로 회복해도 상위가
   따라오지 못한다. oneshot의 `Restart=`는 시작 job을 붙잡아 뒤 유닛을 막으므로, 재시도는 별도 타이머로 한다.
+
+## 2026-09-24 · uncommitted · fix(first-boot): PR #38 review — held retry changes nothing, one run at a time
+
+- 변경: (1) `--network check`는 `complete.json`이 없고 사이트 프로필이 활성이 아니면 `apply()`에 들어가기 전에 held JSON만
+  출력하고 1로 끝난다 — 30초마다 state.json·hostname·avahi 재시작·runtime.env/프로필/authorized_keys/sudoers/CORE overlay를
+  다시 쓰던 것을 없앴다. 확인 전에 남겨 둔 프로필을 `nmcli connection load <path>`로 다시 읽힌다(라디오는 건드리지 않음).
+  (2) `rosy-first-boot.sh`를 `flock -w 200 /run/rosy-first-boot.lock`으로 감싸고, `_write_atomic`은 같은 디렉터리의
+  `tempfile.mkstemp`를 쓴다(고정 `.tmp` 이름 충돌 제거). 재시도 유닛 `TimeoutStartSec` 240.
+  (3) `rosy-first-boot.service`가 성공하면(`ExecStartPost`) 재시도 타이머를 멈춘다. (4) 재시도 성공 시
+  `rosy-boot-status-ready.service`도 시작해 CORE_READY를 바로 표시한다. (5) `GENERAL.STATE`가 `activating`이면 `up`을 내지
+  않고 5초씩 기다린다(예산 안에서) — 2026-09-24에는 첫 부팅 1.7초 만에 NM이 이미 연결 중이었다. (6) D-154 결정 6에 D-176 노트 포인터.
+- 증거: `python -m pytest test/test_first_boot_provisioning.py test/test_sd_api_token.py test/test_sd_ap_credentials.py test/test_sd_operator_access.py test/test_boot_state.py test/test_boot_status_indicator.py test/test_boot_blackbox.py test/test_image_customization_contract.py test/test_native_systemd_contract.py test/test_rosy_network_fallback.py test/test_network_topology_contracts.py -q`
+  306 passed, 10 skipped (first-boot 23). held 확인은 state.json·프로필·runtime.env·hostname·CORE overlay의 mtime·내용과 파일 목록이
+  그대로이고 hostnamectl/systemctl 호출이 없음을 확인한다. 실기 재현은 아직 없음.
+- gate 변화: 없음
+- 결정: 없음 (D-176 보완 노트 유지)
+- 교훈: 주기 재시도는 "아무것도 안 바뀌었으면 아무것도 쓰지 않는다"가 기본이어야 한다 — 전체 적용 경로를 그대로 돌리면 부작용이 주기가 된다.
+- 후속(미처리): fallback AP의 "업링크 있음" 규칙이 사이트 프로필 대신 아무 연결이나 인정하는 점, 재시도 동안
+  `rosy-first-boot.service`가 failed로 남아 부팅 표시가 FAILED를 보이는 잡음, 재시도 유닛 샌드박스 강화.

@@ -393,19 +393,37 @@ def test_held_card_finishes_when_the_retry_run_sees_nm_joined(tmp_path, monkeypa
                          "--hardware-serial", "10000000abcdef01", "--network", "check"])
 
     assert code == 0
-    assert commands == [["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", "rosy-site-sta"]]
+    profile = root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection"
+    assert commands == [
+        ["nmcli", "connection", "load", str(profile)],
+        ["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", "rosy-site-sta"],
+    ]
     state = json.loads((root / "var/lib/rosy/provisioning/state.json").read_text(encoding="utf-8"))
     assert state == {"state": "PROVISIONED"}
     assert not bundle.exists()
 
 
-def test_retry_check_while_site_wifi_is_down_stays_held(tmp_path, monkeypatch):
+def test_retry_check_while_site_wifi_is_down_touches_nothing(tmp_path, monkeypatch, capsys):
+    # The timer fires every 30 s: a held check must not rewrite state.json, the
+    # profile or runtime.env, rename the host or restart avahi each time.
     module = _module()
     root, bundle = _case(tmp_path)
+    module.FirstBootProvisioner(root=root, network_activate=lambda _p: False).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01")
+    capsys.readouterr()
+    watched = [
+        root / "var/lib/rosy/provisioning/state.json",
+        root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection",
+        root / "etc/rosy/runtime.env",
+        root / "etc/hostname",
+        root / "var/lib/rosy/core/.rosy/rosy.yaml",
+    ]
+    before = {path: (path.stat().st_mtime_ns, path.read_bytes()) for path in watched}
+    listing = sorted(str(path) for path in root.rglob("*"))
 
     class Result:
         returncode = 0
-        stdout = ""
+        stdout = "GENERAL.STATE:activating\n"
 
     commands: list[list[str]] = []
     monkeypatch.setattr(module.subprocess, "run", lambda command, **_kw: commands.append(command) or Result())
@@ -414,8 +432,61 @@ def test_retry_check_while_site_wifi_is_down_stays_held(tmp_path, monkeypatch):
                          "--hardware-serial", "10000000abcdef01", "--network", "check"])
 
     assert code == 1
-    assert not any("up" in command for command in commands)
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": False, "state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
+    assert [command[:3] for command in commands] == [
+        ["nmcli", "connection", "load"], ["nmcli", "-t", "-f"]]
+    assert not any(command[0] in {"hostnamectl", "hostname", "systemctl"} for command in commands)
+    assert {path: (path.stat().st_mtime_ns, path.read_bytes()) for path in watched} == before
+    assert sorted(str(path) for path in root.rglob("*")) == listing
     assert bundle.exists()
+
+
+def test_an_association_nm_is_still_making_is_waited_for_not_restarted():
+    # 2026-09-24: NM was already activating the profile 1.7 s into first boot.
+    module = _module()
+    nm = FakeNetworkManager([])
+    states = iter(["activating"] * 4 + ["activated"])
+    real_run = nm.run
+
+    def run(command, timeout):
+        if "show" in command:
+            nm.commands.append(command)
+            return 0, f"GENERAL.STATE:{next(states)}\n"
+        return real_run(command, timeout)
+
+    assert module.activate_site_wifi("rosy-site-sta", run=run, clock=nm.clock, sleep=nm.sleep) is True
+    assert nm.up_calls() == 0
+    assert nm.sleeps == [module.NETWORK_ACTIVATING_POLL_S] * 4
+    assert nm.now <= module.NETWORK_BUDGET_S
+
+
+def test_a_stuck_activation_is_still_bounded_by_the_budget():
+    module = _module()
+    nm = FakeNetworkManager([])
+
+    def run(command, timeout):
+        nm.commands.append(command)
+        return 0, "GENERAL.STATE:activating\n" if "show" in command else ""
+
+    assert module.activate_site_wifi("rosy-site-sta", run=run, clock=nm.clock, sleep=nm.sleep) is False
+    assert nm.now <= module.NETWORK_BUDGET_S
+    assert nm.up_calls() == 0
+
+
+def test_atomic_writes_use_unique_temporaries(tmp_path):
+    module = _module()
+    target = tmp_path / "etc/rosy/runtime.env"
+    (target.parent).mkdir(parents=True)
+    # A leftover from an older fixed-name temporary must not be reused or clobber anything.
+    (target.parent / ".runtime.env.tmp").write_text("stale", encoding="utf-8")
+
+    module._write_atomic(target, "A=1\n", 0o640)
+
+    assert target.read_text(encoding="utf-8") == "A=1\n"
+    assert sorted(path.name for path in target.parent.iterdir()) == [".runtime.env.tmp", "runtime.env"]
+    source = (FIRST_BOOT / "rosy-first-boot.py").read_text(encoding="utf-8")
+    assert "tempfile.mkstemp(dir=path.parent" in source
 
 
 def test_retry_units_only_check_and_then_start_the_runtime():
@@ -436,5 +507,16 @@ def test_retry_units_only_check_and_then_start_the_runtime():
     for unit in ("rosy-first-boot-retry.service", "rosy-first-boot-retry.timer"):
         assert f'cp "$FIRST_BOOT_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
     assert "rosy-first-boot-retry.timer" in customizer.split("systemctl --root")[1].split("\n\n")[0]
+    assert "ExecStartPost=-/usr/bin/systemctl start --no-block rosy-boot-status-ready.service" in service
     script = (FIRST_BOOT / "rosy-first-boot.sh").read_text(encoding="utf-8")
     assert '"$@"' in script
+    # Boot unit, retry timer and a manual start never run apply() at the same time.
+    assert "exec flock -w 200 /run/rosy-first-boot.lock python3" in script
+    assert int(service.split("TimeoutStartSec=")[1].split()[0]) > 200
+
+
+def test_a_successful_first_boot_stops_the_retry_timer():
+    unit = (FIRST_BOOT / "rosy-first-boot.service").read_text(encoding="utf-8")
+
+    # ExecStartPost runs only after ExecStart succeeded (PROVISIONED or ALREADY_PROVISIONED).
+    assert "ExecStartPost=-/usr/bin/systemctl stop --no-block rosy-first-boot-retry.timer" in unit
