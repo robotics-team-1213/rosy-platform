@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Rosy 라이브 미션</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0a0d12;
+  --panel: #10151e;
+  --panel-2: #151b26;
+  --line: #1f2835;
+  --line-2: #2b3648;
+  --text: #e7ecf3;
+  --muted: #8592a6;
+  --dim: #5a6678;
+  --accent: #ff8a3d;
+  --accent-soft: rgba(255, 138, 61, 0.14);
+  --both: #34d399;
+  --one: #38bdf8;
+  --memory: #fbbf24;
+  --stop: #f87171;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --road: #3a475c;
+  --done: #2fb887;
+  --radius: 10px;
+  --font-ui: "Pretendard Variable", Pretendard, "SUIT Variable", "Noto Sans KR",
+             "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  --font-num: "JetBrains Mono", "Cascadia Mono", "D2Coding", "SF Mono", Consolas,
+              ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 14px/1.45 var(--font-ui); -webkit-font-smoothing: antialiased; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.muted { color: var(--muted); }
+button { font: inherit; color: inherit; }
+
+/* ---------- header ---------- */
+.top {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px 20px; background: rgba(10, 13, 18, 0.92);
+  border-bottom: 1px solid var(--line); backdrop-filter: blur(6px);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand b { font: 800 15px/1 var(--font-num); letter-spacing: 0.18em; color: var(--accent); }
+.brand span { font-weight: 600; font-size: 15px; }
+.tabs { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; padding: 2px; }
+.tabs button { background: none; border: 0; padding: 5px 14px; border-radius: 6px;
+               cursor: pointer; color: var(--muted); font-weight: 600; }
+.tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text);
+                                     box-shadow: inset 0 0 0 1px var(--line-2); }
+.clock { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.kv { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 10px;
+      border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+.kv small { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+.kv.warn { border-color: rgba(251, 191, 36, 0.5); color: var(--warn); }
+.kv.bad { border-color: rgba(248, 113, 113, 0.55); color: var(--bad); }
+
+/* ---------- health strip ---------- */
+.health { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 20px;
+          border-bottom: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+.hp { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.hp i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
+.hp.ok i { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.hp.bad i { background: var(--bad); }
+.hp.warn i { background: var(--warn); }
+.hp b { color: var(--text); font-weight: 600; }
+.hp .num { color: var(--text); }
+
+main { padding: 16px 20px 40px; max-width: 1600px; margin: 0 auto; }
+
+/* ---------- offline banner ---------- */
+.banner { display: none; align-items: center; gap: 14px; margin-bottom: 14px;
+          padding: 14px 18px; border-radius: var(--radius);
+          border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.07); }
+.banner.show { display: flex; }
+.banner strong { font-size: 16px; }
+.banner p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.banner .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--bad); flex: none; }
+body.offline .live-panel { opacity: 0.45; filter: saturate(0.4); }
+
+/* ---------- phase rail ---------- */
+.rail { display: flex; align-items: stretch; gap: 0; margin-bottom: 14px;
+        background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px; overflow-x: auto; }
+.phase { flex: 1 1 0; min-width: 92px; position: relative; padding: 8px 12px 8px 14px;
+         border-radius: 8px; color: var(--dim); }
+.phase + .phase::before { content: ""; position: absolute; left: -6px; top: 50%;
+         width: 12px; height: 2px; background: var(--line-2); }
+.phase .name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.phase .name i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; }
+.phase .when { font-size: 11px; margin-top: 2px; min-height: 16px; }
+.phase.done { color: var(--muted); }
+.phase.done .name i { background: var(--done); border-color: var(--done); }
+.phase.current { background: var(--accent-soft); color: var(--text);
+                 box-shadow: inset 0 0 0 1px rgba(255, 138, 61, 0.55); }
+.phase.current .name i { border-color: var(--accent); background: var(--accent);
+                         animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 138, 61, 0.6); }
+                   50% { box-shadow: 0 0 0 5px rgba(255, 138, 61, 0); } }
+.rail-meta { display: flex; flex-direction: column; justify-content: center; gap: 2px;
+             padding: 0 8px 0 16px; margin-left: 8px; border-left: 1px solid var(--line);
+             min-width: 150px; }
+.rail-meta .big { font: 700 22px/1 var(--font-num); }
+.alert { display: none; margin-bottom: 14px; padding: 10px 16px; border-radius: var(--radius);
+         background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.5);
+         color: #fecaca; font-weight: 700; }
+.alert.show { display: block; }
+
+/* ---------- grid + cards ---------- */
+.grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 14px; }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 14px 16px; min-width: 0; }
+.card h2 { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+           color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.card h2 .src { margin-left: auto; font: 500 11px var(--font-num); color: var(--dim);
+                letter-spacing: 0; text-align: right; overflow-wrap: anywhere; }
+.card h2 > :first-child, .card h2 { white-space: nowrap; }
+.card h2 .src { white-space: normal; }
+
+/* ---------- cameras ---------- */
+.cams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cam figcaption { font-size: 12px; color: var(--muted); margin-bottom: 5px;
+                  display: flex; justify-content: space-between; gap: 8px; }
+.frame { position: relative; aspect-ratio: 4 / 3; background: #05070a; border-radius: 7px;
+         overflow: hidden; border: 1px solid var(--line); }
+.frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+             display: block; }
+.frame .nodata { position: absolute; inset: 0; display: none; place-items: center;
+                 text-align: center; color: var(--muted); font-size: 13px;
+                 background: repeating-linear-gradient(135deg, #0b0e13 0 12px, #0e1218 12px 24px); }
+.frame.stale .nodata { display: grid; }
+.frame .nodata b { display: block; font: 700 13px var(--font-num); color: var(--bad);
+                   letter-spacing: 0.1em; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px;
+          color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
+.sw.box { width: 14px; height: 10px; border-radius: 2px; }
+.legend .note { display: block; flex-basis: 100%; color: var(--dim); }
+
+/* ---------- map ---------- */
+.mapwrap { position: relative; }
+#map { width: 100%; height: auto; display: block; background: #0b1017; border-radius: 8px;
+       border: 1px solid var(--line); }
+#map .seg { fill: none; stroke: var(--road); stroke-width: 7; stroke-linecap: round;
+            stroke-linejoin: round; }
+#map .seg.done { stroke: var(--done); }
+#map .seg.partial { stroke: #2a6b58; }
+#map .seg.current { stroke: var(--accent); }
+#map .centre { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 1;
+               stroke-dasharray: 3 4; }
+#map .cur { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 6 6;
+            animation: flow 1s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -12; } }
+#map .spur { fill: none; stroke: #4b3d63; stroke-width: 7; stroke-linecap: round; }
+#map .trail { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5;
+              stroke-linejoin: round; }
+#map .node { fill: #0b1017; stroke: var(--line-2); stroke-width: 1.5; }
+#map .lbl { fill: var(--dim); font: 600 11px var(--font-num); }
+#map .spot { fill: none; stroke: #c4b5fd; stroke-width: 1.5; stroke-dasharray: 3 2; }
+#map .tag { fill: #c4b5fd; }
+.progress { margin-top: 12px; }
+.progress .row { display: flex; justify-content: space-between; align-items: baseline;
+                 gap: 10px; flex-wrap: wrap; }
+.progress .row b { font-size: 16px; }
+.bar { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2);
+       border: 1px solid var(--line); overflow: hidden; margin-top: 8px; }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--done), var(--accent));
+           width: 0; transition: width 0.4s ease; }
+.keys { display: flex; gap: 3px; margin-top: 8px; }
+.keys i { flex: 1; height: 6px; border-radius: 2px; background: var(--road); }
+.keys i.done { background: var(--done); }
+.keys i.current { background: var(--accent); }
+.maplegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px;
+             color: var(--muted); }
+.maplegend span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- perception ---------- */
+.tier { display: flex; align-items: center; gap: 14px; }
+.chip-tier { padding: 12px 18px; border-radius: 10px; font-weight: 800; font-size: 26px;
+             line-height: 1; min-width: 150px; text-align: center; color: #0a0d12;
+             background: var(--dim); transition: background 0.2s; }
+.chip-tier small { display: block; font: 700 11px var(--font-num); letter-spacing: 0.12em;
+                   margin-top: 6px; opacity: 0.7; }
+.t-BOTH { background: var(--both); } .t-ONE { background: var(--one); }
+.t-MEMORY { background: var(--memory); } .t-STOP { background: var(--stop); }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; flex: 1; }
+.stat small { display: block; font-size: 11px; color: var(--muted); }
+.stat .num { font-size: 18px; font-weight: 600; }
+#spark { width: 100%; height: 78px; display: block; margin-top: 12px; background: var(--panel-2);
+         border-radius: 6px; border: 1px solid var(--line); }
+.spark-cap { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
+             margin-top: 4px; }
+.dist { margin-top: 12px; }
+.dist .stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden;
+               background: var(--panel-2); border: 1px solid var(--line); }
+.dist .stack i { display: block; height: 100%; transition: width 0.4s ease; }
+.dist .rows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+              margin-top: 8px; }
+.dist .rows div { font-size: 12px; color: var(--muted); }
+.dist .rows b { display: block; font: 600 16px var(--font-num); color: var(--text); }
+.hint { font-size: 11px; color: var(--dim); margin-top: 8px; }
+
+/* ---------- core + parking ---------- */
+.pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.pair small { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-weight: 700;
+        font-size: 13px; background: var(--panel-2); border: 1px solid var(--line-2); }
+.pill.ok { color: var(--ok); border-color: rgba(52, 211, 153, 0.45); }
+.pill.warn { color: var(--warn); border-color: rgba(251, 191, 36, 0.45); }
+.pill.bad { color: var(--bad); border-color: rgba(248, 113, 113, 0.5); }
+.pill.accent { color: var(--accent); border-color: rgba(255, 138, 61, 0.5); }
+.reason { font-size: 12px; color: var(--muted); margin-top: 3px; font-family: var(--font-num);
+          word-break: break-word; }
+.gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.gauge small { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.gauge .track { position: relative; height: 8px; border-radius: 4px; background: var(--panel-2);
+                border: 1px solid var(--line); margin-top: 5px; overflow: hidden; }
+.gauge .track i { position: absolute; top: 0; bottom: 0; background: var(--accent);
+                  transition: all 0.25s ease; }
+.gauge .track.centered::after { content: ""; position: absolute; left: 50%; top: -2px;
+                                bottom: -2px; width: 1px; background: var(--line-2); }
+.park-idle { color: var(--dim); font-size: 13px; }
+.meter { margin-top: 10px; }
+.meter small { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.meter .track { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2);
+                border: 1px solid var(--line); margin-top: 5px; overflow: hidden; }
+.meter .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad);
+                  transition: width 0.3s ease; }
+.meter .track i.in { background: var(--ok); }
+.meter .track u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; opacity: 0.8; }
+
+/* ---------- results ---------- */
+#results { display: none; }
+body.tab-results #results { display: block; }
+body.tab-results #live { display: none; }
+.runs-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 700;
+     letter-spacing: 0.06em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--panel-2); }
+tbody tr.sel { background: var(--accent-soft); }
+tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.kind { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px;
+        background: var(--panel-2); border: 1px solid var(--line-2); white-space: nowrap; }
+.verdict { font: 700 12px var(--font-num); letter-spacing: 0.06em; }
+.verdict.pass { color: var(--ok); } .verdict.fail { color: var(--bad); }
+.verdict.none { color: var(--dim); }
+.metrics { font-family: var(--font-num); font-size: 12px; color: var(--muted); }
+.metrics b { color: var(--text); font-weight: 600; }
+#runplot { width: 100%; height: auto; display: block; background: #0b1017; border-radius: 8px;
+           border: 1px solid var(--line); }
+#runplot .seg { fill: none; stroke: #263142; stroke-width: 6; stroke-linecap: round; }
+#runplot .tr { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.rundetail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 12px 0 0;
+                font-size: 13px; }
+.rundetail dt { color: var(--muted); }
+.rundetail dd { margin: 0; font-family: var(--font-num); }
+.empty { color: var(--dim); padding: 20px 4px; }
+
+@media (max-width: 1000px) {
+  .grid, .runs-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .top { padding: 8px 12px; gap: 10px; }
+  .clock { margin-left: 0; width: 100%; }
+  .health { padding: 6px 12px; }
+  main { padding: 12px 12px 32px; }
+  .cams { grid-template-columns: 1fr; }
+  .rail { flex-wrap: wrap; gap: 4px; }
+  .phase { min-width: 30%; flex: 1 1 30%; }
+  .phase + .phase::before { display: none; }
+  .rail-meta { border-left: 0; margin-left: 0; padding: 6px 12px; width: 100%; }
+  .chip-tier { min-width: 120px; font-size: 21px; }
+  .tier { flex-wrap: wrap; }
+  .metrics-col { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>ROSY</b><span>라이브 미션</span></div>
+  <nav class="tabs" role="tablist" aria-label="보기">
+    <button role="tab" id="tab-live" aria-selected="true" data-tab="live">라이브</button>
+    <button role="tab" id="tab-results" aria-selected="false" data-tab="results">지난 결과</button>
+  </nav>
+  <div class="clock">
+    <span class="kv"><small>SIM</small><span class="num" id="simTime">--</span></span>
+    <span class="kv" id="rtfBox"><small>실시간 배율</small><span class="num" id="rtf">--</span></span>
+    <span class="kv" id="stepBox"><small>시계 점프</small><span class="num" id="step">--</span></span>
+  </div>
+</header>
+
+<div class="health" id="health" aria-live="polite">
+  <span class="hp" id="h-camera"><i></i><b>카메라</b><span class="num">NO DATA</span></span>
+  <span class="hp" id="h-overlay"><i></i><b>오버레이</b><span class="num">NO DATA</span></span>
+  <span class="hp" id="h-odom"><i></i><b>오도메트리</b><span class="num">NO DATA</span></span>
+  <span class="hp" id="h-clock"><i></i><b>/clock</b><span class="num">NO DATA</span></span>
+  <span class="hp" id="h-core"><i></i><b>CORE API</b><span class="num">--</span></span>
+  <span class="hp" id="h-src"><i></i><b>단계 출처</b><span class="num">--</span></span>
+  <span class="hp"><b>마지막 갱신</b><span class="num" id="h-updated">--</span></span>
+</div>
+
+<main>
+<section id="live">
+  <div class="banner" id="offline" role="status">
+    <span class="dot"></span>
+    <div><strong id="offlineTitle">주행 중이 아님 — Gazebo가 꺼져 있습니다</strong>
+      <p id="offlineHint">시뮬레이션을 시작하면 자동으로 연결됩니다. 이전 실행은 ‘지난 결과’ 탭에서 볼 수 있습니다.</p></div>
+  </div>
+
+  <div class="rail live-panel" id="rail" aria-label="미션 단계"></div>
+  <div class="alert" id="alert" role="alert"></div>
+
+  <div class="grid">
+    <div class="col">
+      <div class="card live-panel">
+        <h2>카메라 · 인식 오버레이 <span class="src">camera/front · line/debug/compressed</span></h2>
+        <div class="cams">
+          <figure class="cam" style="margin:0">
+            <figcaption><span>원본 카메라</span><span class="num" id="cam-meta"></span></figcaption>
+            <div class="frame stale" id="frame-camera">
+              <img id="camera" src="/camera.mjpg" alt="원본 카메라 영상"/>
+              <div class="nodata"><div><b>NO DATA</b>카메라 신호 없음</div></div>
+            </div>
+          </figure>
+          <figure class="cam" style="margin:0">
+            <figcaption><span>인식 오버레이</span><span class="num" id="ov-meta"></span></figcaption>
+            <div class="frame stale" id="frame-overlay">
+              <img id="overlay" src="/overlay.mjpg" alt="차선 인식 오버레이"/>
+              <div class="nodata"><div><b>NO DATA</b>오버레이 신호 없음 (순회 중에만 나옵니다)</div></div>
+            </div>
+          </figure>
+        </div>
+        <div class="legend" aria-label="오버레이 범례">
+          <span><i class="sw" style="background:#50dc50"></i>왼쪽 차선</span>
+          <span><i class="sw" style="background:#288cff"></i>오른쪽 차선</span>
+          <span><i class="sw" style="background:#f0d228"></i>따라갈 경로</span>
+          <span><i class="sw box" style="background:#121214;border:1px solid #333"></i>아래 어두운 띠 = 로봇 몸체</span>
+          <span class="note">그려진 선은 이번 프레임에서 본 것만이 아니라 <b>기억</b>(최근에 본 차선)도 포함합니다. 선이 보이는데 인식 등급이 ‘기억’이면 지금은 페인트를 보지 못하고 있다는 뜻입니다.</span>
+        </div>
+      </div>
+
+      <div class="card live-panel">
+        <h2>실시간 지도 <span class="src" id="routeKeys"></span></h2>
+        <div class="mapwrap">
+          <svg id="map" viewBox="0 0 100 60" role="img" aria-label="트랙 지도와 로봇 위치">
+            <g id="m-base"></g><g id="m-route"></g><g id="m-trail"></g><g id="m-robot"></g>
+          </svg>
+        </div>
+        <div class="maplegend">
+          <span><i class="sw" style="background:var(--done)"></i>완료</span>
+          <span><i class="sw" style="background:var(--accent)"></i>지금 구간</span>
+          <span><i class="sw" style="background:var(--road)"></i>남은 구간</span>
+          <span><i class="sw" style="background:#4b3d63"></i>주차 진입로</span>
+          <span><i class="sw box" style="background:#c4b5fd"></i>주차 칸 · 마커</span>
+        </div>
+        <div class="progress">
+          <div class="row">
+            <b id="keysDone">8개 방향 구간 중 0개 완료</b>
+            <span class="num" id="meters">0.0 / 0.0 m</span>
+          </div>
+          <div class="bar" aria-hidden="true"><i id="progressBar"></i></div>
+          <div class="keys" id="keyStrip" aria-hidden="true"></div>
+          <div class="hint" id="curKey"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card live-panel">
+        <h2>인식 상태 <span class="src">line/observation</span></h2>
+        <div class="tier">
+          <div class="chip-tier" id="tierChip">--<small id="tierCode">NO DATA</small></div>
+          <div class="stats">
+            <div class="stat"><small>차선 오차</small><span class="num" id="pErr">--</span></div>
+            <div class="stat"><small>신뢰도</small><span class="num" id="pConf">--</span></div>
+            <div class="stat"><small>보임</small><span class="num" id="pVis">--</span></div>
+            <div class="stat"><small>나이</small><span class="num" id="pAge">--</span></div>
+          </div>
+        </div>
+        <svg id="spark" viewBox="0 0 600 78" preserveAspectRatio="none" aria-label="최근 60초 차선 오차와 인식 등급"></svg>
+        <div class="spark-cap"><span>-60 s</span><span>차선 오차 (선) · 인식 등급 (띠)</span><span>지금</span></div>
+        <div class="dist">
+          <h2 style="margin:0 0 6px">이번 실행 순회 중 인식 분포 <span class="src" id="distN"></span></h2>
+          <div class="stack" id="distStack"></div>
+          <div class="rows" id="distRows"></div>
+        </div>
+        <div class="hint">등급은 신뢰도로 추정합니다: 양쪽 ≥ 0.85 · 한쪽 ≈ 0.8 · 기억 ≈ 0.6 · 그 아래는 정지.</div>
+      </div>
+
+      <div class="card live-panel">
+        <h2>CORE <span class="src" id="coreSrc">/api/v1</span></h2>
+        <div class="pairs">
+          <div class="pair"><small>로봇 모드</small><span class="pill" id="cMode">--</span></div>
+          <div class="pair"><small>비상 정지</small><span class="pill" id="cEstop">--</span></div>
+          <div class="pair"><small>차선 추종</small><span class="pill" id="cLine">--</span>
+            <div class="reason" id="cLineReason"></div></div>
+          <div class="pair"><small>도킹</small><span class="pill" id="cDock">--</span>
+            <div class="reason" id="cDockMeta"></div></div>
+        </div>
+        <div class="gauges">
+          <div class="gauge"><small><span>명령 직진 속도</span><span class="num" id="gLinV">--</span></small>
+            <div class="track"><i id="gLin"></i></div></div>
+          <div class="gauge"><small><span>명령 회전 속도</span><span class="num" id="gAngV">--</span></small>
+            <div class="track centered"><i id="gAng"></i></div></div>
+        </div>
+      </div>
+
+      <div class="card live-panel" id="parkCard">
+        <h2>주차 <span class="src">dock/observation · odom</span></h2>
+        <div id="parkIdle" class="park-idle">주차·칸 확인 중이 아닙니다. 도킹이 시작되거나 마커가 보이면 여기에 표시됩니다.</div>
+        <div id="parkBody">
+          <div class="pairs">
+            <div class="pair"><small>마커</small><span class="pill" id="kTag">--</span></div>
+            <div class="pair"><small>마커 기준 x · y · yaw</small><span class="num" id="kXY">--</span></div>
+          </div>
+          <div class="meter"><small><span>칸까지 거리 (목표 ≤ 20 mm)</span><span class="num" id="kDist">--</span></small>
+            <div class="track"><i id="kDistBar"></i><u style="left:50%"></u></div></div>
+          <div class="meter"><small><span>방향 오차 (목표 ≤ 5°)</span><span class="num" id="kHead">--</span></small>
+            <div class="track"><i id="kHeadBar"></i><u style="left:50%"></u></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="runs-grid">
+    <div class="card">
+      <h2>지난 실행 <span class="src" id="evPath"></span></h2>
+      <table>
+        <thead><tr><th>종류</th><th>태그</th><th>판정</th><th class="metrics-col">주요 지표</th><th>시각</th></tr></thead>
+        <tbody id="runRows"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card rundetail">
+      <h2>궤적 <span class="src" id="runTitle">실행을 고르세요</span></h2>
+      <svg id="runplot" viewBox="0 0 100 60" role="img" aria-label="선택한 실행의 궤적"></svg>
+      <div class="legend" id="runLegend"></div>
+      <dl id="runFacts"></dl>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+const TIER_COLOR = { BOTH: "var(--both)", ONE: "var(--one)", MEMORY: "var(--memory)", STOP: "var(--stop)" };
+const TIER_LABEL = { BOTH: "양쪽", ONE: "한쪽", MEMORY: "기억", STOP: "정지" };
+const PHASE_ORDER = ["boot", "confirm", "undock", "tour", "park", "done"];
+const PHASE_KO = { boot: "부팅", confirm: "칸 확인", undock: "출차", tour: "순회", park: "주차", done: "완료" };
+const LIN_MAX = 0.12, ANG_MAX = 1.0;
+let graph = null, view = null, lastOk = 0;
+
+function fmt(v, d, unit) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "NO DATA";
+  return Number(v).toFixed(d === undefined ? 2 : d) + (unit || "");
+}
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function setPill(node, text, cls) { node.textContent = text; node.className = "pill" + (cls ? " " + cls : ""); }
+function setHp(id, cls, text) { const n = $(id); n.className = "hp " + cls; n.querySelector(".num").textContent = text; }
+
+/* ---------- tabs ---------- */
+function showTab(tab) {
+  document.body.classList.toggle("tab-results", tab === "results");
+  for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  if (tab === "results") loadRuns();
+  try { localStorage.setItem("rosyTab", tab); } catch (e) { /* storage unavailable */ }
+}
+for (const b of document.querySelectorAll(".tabs button")) b.addEventListener("click", () => showTab(b.dataset.tab));
+
+/* ---------- map geometry ---------- */
+function bounds(g) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const eat = (p) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); };
+  for (const pts of Object.values(g.segments || {})) pts.forEach(eat);
+  if (g.parking) g.parking.points.forEach(eat);
+  if (g.marker) eat(g.marker);
+  const pad = 0.08;
+  return { x0: x0 - pad, x1: x1 + pad, y0: y0 - pad, y1: y1 + pad };
+}
+function makeView(svg, b) {
+  const scale = 1000 / Math.max(b.x1 - b.x0, 1e-6);
+  const w = 1000, h = Math.round((b.y1 - b.y0) * scale);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  return { scale, P: (x, y) => [((x - b.x0) * scale).toFixed(1), ((b.y1 - y) * scale).toFixed(1)] };
+}
+function pathD(v, pts) { return pts.map((p, i) => (i ? "L" : "M") + v.P(p[0], p[1]).join(",")).join(""); }
+
+function drawBase(svg, g, v, into, opts) {
+  into.innerHTML = "";
+  if (g.parking) el("path", { d: pathD(v, g.parking.points), class: "spur" }, into);
+  for (const [name, pts] of Object.entries(g.segments)) {
+    el("path", { d: pathD(v, pts), class: "seg", id: opts.prefix + name }, into);
+    if (opts.centre) el("path", { d: pathD(v, pts), class: "centre" }, into);
+  }
+  if (!opts.labels) return;
+  for (const [name, p] of Object.entries(g.nodes || {})) {
+    const [x, y] = v.P(p[0], p[1]);
+    el("circle", { cx: x, cy: y, r: 5, class: "node" }, into);
+    const t = el("text", { x: +x + 9, y: +y - 8, class: "lbl" }, into); t.textContent = name;
+  }
+  if (g.parking) {
+    const s = g.parking.spot, [sx, sy] = v.P(s[0], s[1]), r = 0.06 * v.scale;
+    el("rect", { x: sx - r, y: sy - r * 0.8, width: 2 * r, height: 1.6 * r, rx: 4, class: "spot" }, into);
+    const t = el("text", { x: sx - r, y: +sy + r * 0.8 + 14, class: "lbl" }, into); t.textContent = "주차 칸";
+  }
+  if (g.marker) {
+    const [mx, my] = v.P(g.marker[0], g.marker[1]), hh = 0.04 * v.scale;
+    el("rect", { x: +mx - 1, y: my - hh, width: 5, height: 2 * hh, class: "tag" }, into);
+    const t = el("text", { x: +mx + 8, y: +my + 4, class: "lbl" }, into); t.textContent = "마커";
+  }
+}
+
+async function loadGraph() {
+  try {
+    graph = await (await fetch("/graph.json", { cache: "no-store" })).json();
+  } catch (e) { graph = { segments: {}, nodes: {} }; }
+  if (!Object.keys(graph.segments || {}).length) return;
+  view = makeView($("map"), bounds(graph));
+  drawBase($("map"), graph, view, $("m-base"), { prefix: "seg-", labels: true, centre: true });
+  const keys = (graph.route && graph.route.keys) || [];
+  $("routeKeys").textContent = keys.length ? `경로 ${keys.length}개 구간 · 방향 ${new Set(keys).size}개` : "";
+  $("keyStrip").innerHTML = keys.map((k) => `<i title="${esc(k)}"></i>`).join("");
+}
+
+function keyPoints(key) {
+  const [name, way] = key.split(":");
+  const pts = (graph.segments[name] || []).slice();
+  return way === "r" ? pts.reverse() : pts;
+}
+
+function drawRoute(route) {
+  const g = $("m-route"); g.innerHTML = "";
+  if (!graph || !view || !route) return;
+  const per = {};
+  route.keys.forEach((k, i) => {
+    const name = k.split(":")[0], st = route.key_states[i];
+    per[name] = per[name] || new Set(); per[name].add(st);
+  });
+  for (const [name, set] of Object.entries(per)) {
+    const node = $("seg-" + name); if (!node) continue;
+    const cls = set.has("current") ? "current" : set.has("todo") ? (set.has("done") ? "partial" : "") : "done";
+    node.setAttribute("class", "seg " + cls);
+  }
+  if (!route.finished) el("path", { d: pathD(view, keyPoints(route.current_key)), class: "cur" }, g);
+}
+
+function drawRobot(odom, trail) {
+  const tg = $("m-trail"), rg = $("m-robot");
+  tg.innerHTML = ""; rg.innerHTML = "";
+  if (!view) return;
+  if (trail && trail.length > 1) el("path", { d: pathD(view, trail), class: "trail" }, tg);
+  if (odom && odom.x !== undefined) {
+    const [x, y] = view.P(odom.x, odom.y), deg = -((odom.yaw || 0) * 180) / Math.PI;
+    const s = 0.05 * view.scale;
+    const grp = el("g", { transform: `translate(${x},${y}) rotate(${deg.toFixed(1)})` }, rg);
+    el("circle", { r: s * 1.1, fill: "rgba(255,138,61,0.18)" }, grp);
+    el("path", { d: `M${s},0 L${-s * 0.7},${s * 0.65} L${-s * 0.35},0 L${-s * 0.7},${-s * 0.65} Z`,
+                 fill: "#fff", stroke: "var(--accent)", "stroke-width": 2, "stroke-linejoin": "round" }, grp);
+  }
+}
+
+/* ---------- panels ---------- */
+function renderRail(m, clock) {
+  const rail = $("rail");
+  if (!rail.children.length) {
+    rail.innerHTML = PHASE_ORDER.map((p) => `<div class="phase" id="ph-${p}"><div class="name"><i></i>${PHASE_KO[p]}</div><div class="when num"></div></div>`).join("")
+      + `<div class="rail-meta"><span class="muted" style="font-size:12px">경과 시뮬 시간</span><span class="big" id="elapsed">--</span><span class="muted num" id="phaseSince" style="font-size:12px"></span></div>`;
+  }
+  for (const p of m.phases) {
+    const n = $("ph-" + p.key);
+    n.className = "phase " + p.state;
+    if (p.state === "current") n.setAttribute("aria-current", "step"); else n.removeAttribute("aria-current");
+    n.querySelector(".when").textContent = p.sim_start === null || p.sim_start === undefined ? "" : "t=" + fmt(p.sim_start, 1, " s");
+  }
+  $("elapsed").textContent = clock.sim_s === null ? "--" : fmt(clock.sim_s, 1, " s");
+  const cur = m.phases.find((p) => p.state === "current");
+  $("phaseSince").textContent = cur && cur.sim_start != null && clock.sim_s != null
+    ? `${cur.label} ${fmt(clock.sim_s - cur.sim_start, 1)} s 경과` : "";
+  const a = $("alert");
+  a.textContent = m.alert || ""; a.classList.toggle("show", !!m.alert);
+}
+
+function renderClock(c) {
+  $("simTime").textContent = c.sim_s === null ? "--" : fmt(c.sim_s, 1, " s");
+  $("rtf").textContent = c.rtf === null ? "--" : "×" + fmt(c.rtf, 2);
+  $("rtfBox").className = "kv" + (c.rtf === null ? "" : c.rtf < 0.25 ? " bad" : c.rtf < 0.6 ? " warn" : "");
+  $("step").textContent = (c.step_s >= 0 ? "+" : "") + fmt(c.step_s, 1, " s");
+  $("stepBox").className = "kv" + (c.step_warn ? " bad" : "");
+  $("stepBox").title = c.step_warn ? "벽시계가 1초 넘게 점프했습니다. 이번 실행의 시간 측정은 믿을 수 없습니다 (재실행 권장)." : "벽시계 점프 없음";
+}
+
+function streamHp(id, h) {
+  if (!h || !h.ok) setHp(id, "bad", h && h.age_s != null ? `끊김 ${fmt(h.age_s, 1)} s` : "NO DATA");
+  else setHp(id, h.fps < 1 ? "warn" : "ok", `${fmt(h.fps, 1)} fps · ${fmt(h.age_s, 1)} s`);
+}
+
+function renderHealth(s) {
+  streamHp("h-camera", s.streams.camera);
+  streamHp("h-overlay", s.streams.overlay);
+  const oa = s.odom_age_s;
+  setHp("h-odom", oa != null && oa < 2 ? "ok" : "bad", oa == null ? "NO DATA" : `${fmt(oa, 1)} s 전`);
+  const ca = s.clock.age_s;
+  setHp("h-clock", ca != null && ca < 2 ? "ok" : "bad", ca == null ? "NO DATA" : `${fmt(ca, 1)} s 전`);
+  const api = s.core_api;
+  setHp("h-core", api.reachable ? "ok" : "bad", api.reachable ? "응답 있음" : "응답 없음");
+  setHp("h-src", s.mission.source === "log" ? "ok" : "", s.mission.source === "log" ? `하네스 로그 ${s.mission.log_run || ""}` : "CORE 상태로 추정");
+  $("h-updated").textContent = new Date(s.wall_time * 1000).toLocaleTimeString("ko-KR", { hour12: false });
+  for (const [id, h, meta] of [["frame-camera", s.streams.camera, "cam-meta"], ["frame-overlay", s.streams.overlay, "ov-meta"]]) {
+    $(id).classList.toggle("stale", !(h && h.ok));
+    $(meta).textContent = h && h.ok ? `${fmt(h.fps, 1)} fps` : "";
+    const img = $(id).querySelector("img");
+    if (img.naturalWidth) $(id).style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+  }
+}
+
+function renderProgress(r) {
+  if (!r) { $("keysDone").textContent = "경로 없음"; return; }
+  $("keysDone").textContent = `${r.total_unique}개 방향 구간 중 ${r.done_unique}개 완료`;
+  $("meters").textContent = `${fmt(r.progress_m, 1)} / ${fmt(r.length_m, 1)} m`;
+  $("progressBar").style.width = (100 * Math.min(1, r.fraction)).toFixed(1) + "%";
+  const strip = $("keyStrip").children;
+  r.key_states.forEach((st, i) => { if (strip[i]) strip[i].className = st === "todo" ? "" : st; });
+  $("curKey").textContent = r.finished ? "경로 끝까지 주행 완료"
+    : `지금 ${r.segment_index + 1}/${r.keys.length}번째 구간 · ${r.current_key}`;
+}
+
+function renderSpark(history) {
+  const svg = $("spark"); svg.innerHTML = "";
+  const W = 600, H = 78, band = 10, mid = (H - band) / 2, amp = 0.05;
+  el("line", { x1: 0, x2: W, y1: mid, y2: mid, stroke: "#2b3648", "stroke-width": 1 }, svg);
+  const X = (t) => ((t + 60) / 60) * W;
+  for (let i = 0; i < history.length; i++) {
+    const [t, , , tier] = history[i];
+    const t2 = i + 1 < history.length ? history[i + 1][0] : 0;
+    if (!tier) continue;
+    el("rect", { x: X(t), y: H - band, width: Math.max(1, X(t2) - X(t)), height: band, fill: TIER_COLOR[tier] }, svg);
+  }
+  const pts = history.filter((h) => h[1] !== null && h[1] !== undefined)
+    .map((h) => `${X(h[0]).toFixed(1)},${(mid - (Math.max(-amp, Math.min(amp, h[1])) / amp) * (mid - 4)).toFixed(1)}`);
+  if (pts.length > 1) el("polyline", { points: pts.join(" "), fill: "none", stroke: "#e7ecf3", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke" }, svg);
+  const lab = el("text", { x: 4, y: 12, fill: "#5a6678", "font-size": 10 }, svg); lab.textContent = "±50 mm";
+}
+
+function renderPerception(p) {
+  const chip = $("tierChip"), tier = p.tier;
+  chip.className = "chip-tier" + (tier ? " t-" + tier : "");
+  chip.firstChild.nodeValue = tier ? p.tier_label : "--";
+  $("tierCode").textContent = tier || "NO DATA";
+  $("pErr").textContent = p.error == null ? "--" : fmt(p.error * 1000, 1, " mm");
+  $("pConf").textContent = p.confidence == null ? "--" : fmt(p.confidence, 2);
+  $("pVis").textContent = p.visible == null ? "--" : p.visible ? "예" : "아니오";
+  $("pAge").textContent = p.age_s == null ? "NO DATA" : fmt(p.age_s, 1, " s");
+  renderSpark(p.history || []);
+  const d = p.distribution;
+  $("distN").textContent = d.samples ? `${d.samples} 샘플` : "순회가 시작되면 집계";
+  $("distStack").innerHTML = ["BOTH", "ONE", "MEMORY", "STOP"].map((t) => `<i style="width:${d.pct[t]}%;background:${TIER_COLOR[t]}" title="${TIER_LABEL[t]} ${d.pct[t]}%"></i>`).join("");
+  $("distRows").innerHTML = ["BOTH", "ONE", "MEMORY", "STOP"].map((t) => `<div><i class="sw" style="background:${TIER_COLOR[t]}"></i> ${TIER_LABEL[t]}<b>${d.samples ? d.pct[t].toFixed(1) + "%" : "--"}</b></div>`).join("");
+}
+
+function renderCore(api) {
+  const lf = api.line_follow || {}, dk = api.docking || {};
+  setPill($("cMode"), api.mode || "NO DATA", api.mode === "EMERGENCY" ? "bad" : api.mode ? "accent" : "");
+  setPill($("cEstop"), api.estop == null ? "NO DATA" : api.estop ? "작동 중" : "해제", api.estop ? "bad" : api.estop === false ? "ok" : "");
+  setPill($("cLine"), lf.mode ? `${lf.mode} · ${lf.state}` : "NO DATA", lf.mode && lf.mode !== "OFF" ? "ok" : "");
+  $("cLineReason").textContent = lf.reason ? `reason: ${lf.reason}` : "";
+  const ds = dk.state;
+  setPill($("cDock"), ds || "NO DATA", ds === "DOCK_FAILED" ? "bad" : ds === "DOCKING" || ds === "UNDOCKING" ? "warn" : ds === "DOCKED" ? "ok" : "");
+  $("cDockMeta").textContent = ds ? `phase ${dk.phase || "-"} · 재시도 ${dk.retries ?? 0}${dk.error ? " · " + dk.error : ""}` : "";
+  const lin = lf.linear ?? 0, ang = lf.angular ?? 0;
+  $("gLinV").textContent = fmt(lin, 3, " m/s");
+  $("gAngV").textContent = fmt(ang, 2, " rad/s");
+  const gl = $("gLin"); gl.style.left = "0"; gl.style.width = (100 * Math.min(1, Math.abs(lin) / LIN_MAX)).toFixed(1) + "%";
+  const ga = $("gAng"), f = Math.max(-1, Math.min(1, ang / ANG_MAX)) * 50;
+  ga.style.left = (f >= 0 ? 50 : 50 + f) + "%"; ga.style.width = Math.abs(f) + "%";
+  $("coreSrc").textContent = api.reachable ? `/api/v1 · ${fmt(api.age_s, 1)} s 전` : "/api/v1 · 응답 없음";
+}
+
+function renderParking(k) {
+  $("parkIdle").style.display = k.active ? "none" : "block";
+  $("parkBody").style.display = k.active ? "block" : "none";
+  if (!k.active) return;
+  setPill($("kTag"), k.tag_visible ? `보임 · id ${k.tag.tag_id ?? "?"}` : "안 보임", k.tag_visible ? "ok" : "warn");
+  $("kXY").textContent = k.tag_visible ? `${fmt(k.tag.x, 3)} · ${fmt(k.tag.y, 3)} m · ${fmt((k.tag.yaw * 180) / Math.PI, 1)}°` : "--";
+  const e = k.spot_error;
+  if (!e) { $("kDist").textContent = "NO DATA"; $("kHead").textContent = "NO DATA"; return; }
+  $("kDist").textContent = fmt(e.dist_m * 1000, 1, " mm");
+  $("kHead").textContent = fmt(e.heading_err_deg, 1, "°");
+  const db = $("kDistBar"), hb = $("kHeadBar");
+  db.style.width = Math.min(100, (e.dist_m / (2 * e.target_m)) * 100) + "%"; db.className = e.ok_position ? "in" : "";
+  hb.style.width = Math.min(100, (Math.abs(e.heading_err_deg) / (2 * e.target_deg)) * 100) + "%"; hb.className = e.ok_heading ? "in" : "";
+}
+
+function render(s) {
+  document.body.classList.toggle("offline", !s.live);
+  $("offline").classList.toggle("show", !s.live);
+  $("offlineTitle").textContent = "주행 중이 아님 — Gazebo가 꺼져 있습니다";
+  $("offlineHint").textContent = s.core_api.reachable
+    ? "CORE는 응답하지만 카메라·오도메트리·/clock이 없습니다. 시뮬레이션을 시작하면 자동으로 연결됩니다."
+    : "시뮬레이션을 시작하면 자동으로 연결됩니다. 이전 실행은 ‘지난 결과’ 탭에서 볼 수 있습니다.";
+  renderClock(s.clock);
+  renderHealth(s);
+  renderRail(s.mission, s.clock);
+  renderProgress(s.route);
+  drawRoute(s.route);
+  drawRobot(s.odom, s.trail);
+  renderPerception(s.perception);
+  renderCore(s.core_api);
+  renderParking(s.parking);
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/status.json", { cache: "no-store" });
+    const s = await r.json();
+    lastOk = Date.now();
+    render(s);
+  } catch (e) {
+    document.body.classList.add("offline");
+    $("offline").classList.add("show");
+    $("offlineTitle").textContent = "뷰어 서버에 연결할 수 없습니다";
+    $("offlineHint").textContent = "lane_live_view.py가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.";
+    setHp("h-core", "bad", "NO DATA");
+  }
+  setTimeout(poll, 330);
+}
+
+/* MJPEG reconnect: a relaunched server closes the stream; retry quietly. */
+for (const id of ["camera", "overlay"]) {
+  const img = $(id);
+  img.addEventListener("error", () => setTimeout(() => { img.src = `/${id}.mjpg?r=${Date.now()}`; }, 2000));
+}
+
+/* ---------- results ---------- */
+let runsLoaded = false, selected = null;
+function when(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" }) + " " + d.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" });
+}
+function mm(v) { return v == null ? "--" : (v * 1000).toFixed(1) + " mm"; }
+function metricsHtml(r) {
+  const m = r.metrics || {};
+  if (r.kind === "junctions") return `<b>${m.passed ?? "-"}/${m.scenarios ?? "-"}</b> 통과 · 최대 이탈 <b>${mm(m.max_dev_m)}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`;
+  if (r.kind === "mission") return `최대 이탈 <b>${mm(m.max_dev_m)}</b> · 주차 오차 <b>${mm(m.park_error_m)}</b> / <b>${fmt(m.park_dyaw_deg, 1, "°")}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`;
+  return `최대 이탈 <b>${mm(m.max_dev_m)}</b> · 끝 오차 <b>${mm(m.end_error_m)}</b> · sim <b>${fmt(m.sim_s, 0, " s")}</b>`;
+}
+function verdict(r) {
+  if (r.pass === true) return `<span class="verdict pass">PASS</span>`;
+  if (r.pass === false) return `<span class="verdict fail">FAIL</span>${r.reason && r.reason !== "reached" ? `<div class="reason">${esc(r.reason)}</div>` : ""}`;
+  return `<span class="verdict none">결과 없음</span>`;
+}
+async function loadRuns() {
+  if (runsLoaded) return;
+  try {
+    const j = await (await fetch("/runs.json", { cache: "no-store" })).json();
+    runsLoaded = true;
+    $("evPath").textContent = j.evidence || "";
+    const rows = $("runRows");
+    if (!j.runs.length) { rows.innerHTML = `<tr><td colspan="5" class="empty">증거 디렉터리에 실행이 없습니다.</td></tr>`; return; }
+    rows.innerHTML = j.runs.map((r) => `<tr tabindex="0" data-id="${esc(r.id)}"><td><span class="kind">${esc(r.label)}</span></td><td class="num">${esc(r.tag || "—")}</td><td>${verdict(r)}</td><td class="metrics metrics-col">${metricsHtml(r)}</td><td class="num muted">${when(r.mtime)}</td></tr>`).join("");
+    for (const tr of rows.querySelectorAll("tr[data-id]")) {
+      tr.addEventListener("click", () => openRun(tr.dataset.id));
+      tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRun(tr.dataset.id); } });
+    }
+    openRun(j.runs[0].id);
+  } catch (e) {
+    $("runRows").innerHTML = `<tr><td colspan="5" class="empty">실행 목록을 불러올 수 없습니다.</td></tr>`;
+  }
+}
+const TRACK_COLORS = { confirm: "#c4b5fd", undock: "#38bdf8", tour: "#ff8a3d", park: "#34d399" };
+const PALETTE = ["#ff8a3d", "#38bdf8", "#34d399", "#fbbf24", "#c4b5fd", "#f87171", "#5eead4", "#f0abfc"];
+async function openRun(id) {
+  selected = id;
+  for (const tr of document.querySelectorAll("#runRows tr")) tr.classList.toggle("sel", tr.dataset.id === id);
+  $("runTitle").textContent = id;
+  let run;
+  try { run = await (await fetch(`/run/${encodeURIComponent(id)}.json`, { cache: "no-store" })).json(); }
+  catch (e) { $("runFacts").innerHTML = "<dt>오류</dt><dd>불러올 수 없음</dd>"; return; }
+  if (selected !== id) return;
+  const svg = $("runplot"); svg.innerHTML = "";
+  if (graph && Object.keys(graph.segments || {}).length) {
+    const v = makeView(svg, bounds(graph));
+    const base = el("g", {}, svg);
+    drawBase(svg, graph, v, base, { prefix: "rp-", labels: false, centre: false });
+    run.tracks.forEach((t, i) => {
+      if (t.points.length < 2) return;
+      const c = TRACK_COLORS[t.label] || PALETTE[i % PALETTE.length];
+      el("path", { d: pathD(v, t.points), class: "tr", stroke: c }, svg);
+    });
+  }
+  const labels = run.tracks.map((t, i) => `<span><i class="sw" style="background:${TRACK_COLORS[t.label] || PALETTE[i % PALETTE.length]}"></i>${esc(PHASE_KO[t.label] || t.label)}</span>`);
+  $("runLegend").innerHTML = labels.slice(0, 14).join("") + (labels.length > 14 ? `<span>외 ${labels.length - 14}개</span>` : "");
+  const s = run.summary, m = s.metrics || {}, facts = [["종류", s.label], ["판정", s.pass === null ? "결과 없음" : s.pass ? "PASS" : "FAIL"], ["사유", s.reason || "—"]];
+  const names = { max_dev_m: ["최대 차선 이탈", mm], end_error_m: ["끝 지점 오차", mm], park_error_m: ["주차 위치 오차", mm],
+                  park_dyaw_deg: ["주차 방향 오차", (v) => fmt(v, 2, "°")], sim_s: ["시뮬 시간", (v) => fmt(v, 1, " s")],
+                  rtf: ["실시간 배율", (v) => fmt(v, 2)], progress_m: ["진행", (v) => fmt(v, 2, " m")],
+                  scenarios: ["시나리오", (v) => v], passed: ["통과", (v) => v] };
+  for (const [k, [label, f]] of Object.entries(names)) if (m[k] != null) facts.push([label, f(m[k])]);
+  $("runFacts").innerHTML = facts.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join("");
+}
+
+loadGraph().then(poll);
+let initialTab = "live";
+try { initialTab = localStorage.getItem("rosyTab") || "live"; } catch (e) { /* storage unavailable */ }
+showTab(initialTab);
+</script>
+</body>
+</html>

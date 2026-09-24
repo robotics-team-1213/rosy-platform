@@ -49,10 +49,15 @@ install(
     scripts/coverage_harness.py
     scripts/mission_harness.py
     scripts/lane_live_view.py
+    scripts/live_view_model.py
+    scripts/live_view_demo.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+# lane_live_view.py serves this page from its own directory.
+install(FILES scripts/lane_live_view.html DESTINATION lib/${PROJECT_NAME})
 
 install(
   DIRECTORY
