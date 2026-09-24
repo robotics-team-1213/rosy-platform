@@ -17,12 +17,45 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
+from core_common.intent import IntentError, interpret
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.signals import SignalApiError
 from fleet.swarm.transport import RobotApiError
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
+
+
+async def _site_call(console: FleetConsole, call) -> dict:
+    if call.verb == "formation_start":
+        return await console.formation_start(
+            call.body["leader"], call.body.get("formation", "COLUMN"),
+            call.body.get("spacing"), call.body.get("max_speed"),
+            members=call.body.get("members"))
+    if call.verb == "formation_stop":
+        return await console.formation_stop()
+    if call.verb == "formation_resume":
+        return await console.formation_resume()
+    if call.verb == "estop":
+        return await console.estop_all()
+    raise HubError("UNKNOWN_VERB", call.verb)
+
+
+async def _robot_call(console: FleetConsole, call) -> dict:
+    robot = call.robot
+    if call.verb == "navigate":
+        if call.body.get("x") is None or call.body.get("y") is None:
+            raise HubError("WAYPOINT_STAYS_ON_ROBOT", "name a point, or tell the robot itself")
+        return await console.goal(robot, float(call.body["x"]), float(call.body["y"]),
+                                  float(call.body.get("yaw") or 0.0))
+    if call.verb == "cancel":
+        return await console.cancel(robot)
+    if call.verb == "stop":
+        return await console._client(robot).estop()
+    if call.verb == "follow":
+        from core_common.protocol.schemas import SwarmFollowParams
+        return await console._client(robot).follow(SwarmFollowParams(**call.body))
+    return await console._client(robot)._post(call.path, call.body or None)
 
 #: 경로 순회를 막는 유일한 방어다 — 디렉터리 스캔으로 바꾸지 않는다 (core 와 같은 규칙).
 #: 공용 L1 자산은 여기 없다. 서버는 설정받은 web_common 디렉터리에서 명시된
@@ -179,6 +212,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return await console.signal_command(signal_id, body.model_dump(exclude_none=True))
         except (HubError, SignalApiError, OSError) as exc:
             raise _http_error(exc) from exc
+
+    @app.post("/api/fleet/do", dependencies=guard, tags=["fleet"])
+    async def fleet_do(body: dict) -> dict:
+        """같은 통역기. 로봇 일은 그 로봇 API로, 현장 말은 이 서버가 실행한다."""
+        try:
+            calls = interpret(body)
+        except IntentError as exc:
+            raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
+        steps = []
+        for call in calls:
+            try:
+                if call.scope == "site":
+                    result = await _site_call(console, call)
+                else:
+                    if not call.robot:
+                        raise HubError("ROBOT_REQUIRED", call.verb)
+                    result = await _robot_call(console, call)
+            except (HubError, RobotApiError, OSError) as exc:
+                raise _http_error(exc) from exc
+            steps.append({"do": call.verb, "robot": call.robot, "path": call.path, "result": result})
+        return {"accepted": True, "steps": steps}
 
     @app.post("/api/fleet/estop", dependencies=guard, tags=["fleet"])
     async def fleet_estop() -> dict:
