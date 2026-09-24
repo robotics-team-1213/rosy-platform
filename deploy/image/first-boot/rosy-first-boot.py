@@ -13,6 +13,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Callable
 
 
@@ -45,22 +46,74 @@ def _json_atomic(path: Path, payload: dict, mode: int) -> None:
     )
 
 
+SITE_PROFILE = "rosy-site-sta"
+# Site Wi-Fi activation budget. 2026-09-24, rosy-pinky-e4us (release
+# 2026.09.24-010) on a phone hotspot: NM started the profile at 18.7 s, the
+# first association failed at 44.0 s (25 s), NM's own autoconnect retry began
+# at 77.6 s and was up at 84.9 s, 66 s after the first try. One failed attempt
+# used to discard the profile and fail the boot. Three attempts of at most 30 s
+# with 15 s pauses cover those 66 s almost twice over, and the 120 s ceiling
+# matches the grace D-176 gives the site Wi-Fi before the fallback AP opens.
+NETWORK_ATTEMPTS = 3
+NETWORK_ATTEMPT_WAIT_S = 30
+NETWORK_RETRY_PAUSE_S = 15
+NETWORK_BUDGET_S = 120
+
+
+def _nmcli(command: list[str], timeout: float) -> tuple[int, str]:
+    """Run nmcli quietly; a hang or a missing binary is a failed attempt."""
+    try:
+        result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True,
+                                text=True, check=False, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+    return result.returncode, result.stdout
+
+
+def site_wifi_up(profile: str, run: Callable[[list[str], float], tuple[int, str]] = _nmcli) -> bool:
+    """True when NetworkManager reports the profile activated (by us or by autoconnect)."""
+    _code, output = run(["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", profile], 15)
+    return output.strip().rsplit(":", 1)[-1] == "activated"
+
+
+def activate_site_wifi(
+    profile: str,
+    *,
+    run: Callable[[list[str], float], tuple[int, str]] = _nmcli,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    attempts: int = NETWORK_ATTEMPTS,
+    attempt_wait_s: int = NETWORK_ATTEMPT_WAIT_S,
+    pause_s: float = NETWORK_RETRY_PAUSE_S,
+    budget_s: float = NETWORK_BUDGET_S,
+) -> bool:
+    """Bring the site profile up, retrying within a bounded budget.
+
+    Before each attempt the profile state is checked, so an association NM's
+    autoconnect finished during a pause counts and is not torn down.
+    """
+    deadline = clock() + budget_s
+    run(["nmcli", "connection", "reload"], 20)
+    for attempt in range(attempts):
+        if attempt:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                break
+            sleep(min(pause_s, remaining))
+        if site_wifi_up(profile, run):
+            return True
+        wait = int(min(attempt_wait_s, deadline - clock()))
+        if wait < 1:
+            break
+        code, _output = run(["nmcli", "--wait", str(wait), "connection", "up", profile,
+                             "ifname", "wlan0"], wait + 10)
+        if code == 0:
+            return True
+    return site_wifi_up(profile, run)
+
+
 def _default_network_activate(profile: str) -> bool:
-    for command in (
-        ["nmcli", "connection", "reload"],
-        ["nmcli", "--wait", "30", "connection", "up", profile, "ifname", "wlan0"],
-    ):
-        result = subprocess.run(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=40,
-        )
-        if result.returncode != 0:
-            return False
-    return True
+    return activate_site_wifi(profile)
 
 
 def _default_hostname_apply(hostname: str) -> None:
@@ -468,8 +521,11 @@ class FirstBootProvisioner:
         # D-191: validate_provision_bundle already refused a bundle without one.
         self._core_api(payload["core_api"]["record"])
 
-        if not self.network_activate("rosy-site-sta"):
-            network_path.unlink(missing_ok=True)
+        if not self.network_activate(SITE_PROFILE):
+            # The site profile stays (0600, the bundle on the card holds the same
+            # secret): NM autoconnect keeps trying it, rosy-network (D-176) hands
+            # the radio back to it after the fallback AP, and
+            # rosy-first-boot-retry.timer finishes provisioning once it is up.
             held = {"state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
             _json_atomic(self.state, held, 0o600)
             return {"ok": False, **held}
@@ -524,9 +580,15 @@ def _main(argv: list[str] | None = None) -> int:
         default=Path("/boot/firmware/rosy-provision/provision.json"),
     )
     parser.add_argument("--hardware-serial")
+    parser.add_argument(
+        "--network", choices=("activate", "check"), default="activate",
+        help="check: never start the site profile, only accept it once NM has it up "
+             "(the retry timer must not take the single radio from the fallback AP)",
+    )
     args = parser.parse_args(argv)
+    network_activate = _default_network_activate if args.network == "activate" else site_wifi_up
     try:
-        result = FirstBootProvisioner(root=args.root).apply(
+        result = FirstBootProvisioner(root=args.root, network_activate=network_activate).apply(
             bundle=args.bundle,
             hardware_serial=args.hardware_serial or _hardware_serial(args.root),
         )

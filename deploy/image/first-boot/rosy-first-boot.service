@@ -9,7 +9,8 @@ Before=network-online.target rosy-sd-provision.service rosy-runtime.target
 Type=oneshot
 ExecStart=/opt/rosy/first-boot/rosy-first-boot.sh
 RemainAfterExit=yes
-TimeoutStartSec=90
+# Site Wi-Fi gets up to 120 s (rosy-first-boot.py NETWORK_BUDGET_S) plus the file work.
+TimeoutStartSec=180
 UMask=0077
 
 [Install]

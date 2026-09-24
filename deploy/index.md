@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(first-boot): retry the site Wi-Fi and self-heal a held first boot
 - 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
 - 2026-09-24 · uncommitted · docs(adr): D-198 Docker operational surface retirement
 - 2026-09-24 · uncommitted · fix(dashboard,deploy): D-193 S3 security review (PR #35)
 - 2026-09-24 · uncommitted · feat(dashboard,deploy): D-193 S3 code login, whoami badge, first-message WebSocket, credential rotation
-- 2026-09-24 · uncommitted · docs(adr): D-197 Docker exits the product artifact chain

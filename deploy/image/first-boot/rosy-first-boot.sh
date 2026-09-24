@@ -4,4 +4,5 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec python3 "$SCRIPT_DIR/rosy-first-boot.py" \
   --root "${ROSY_ROOT:-/}" \
-  --bundle "${ROSY_PROVISION_BUNDLE:-/boot/firmware/rosy-provision/provision.json}"
+  --bundle "${ROSY_PROVISION_BUNDLE:-/boot/firmware/rosy-provision/provision.json}" \
+  "$@"
