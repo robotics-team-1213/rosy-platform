@@ -155,7 +155,7 @@ def _domain(name: str) -> str:
 
 def _family(name: str):
     parts = PACKAGES[name]["dir"].relative_to(SRC).parts
-    return parts[1] if parts[0] == "devices" else None
+    return parts[1] if len(parts) == 3 and parts[0] == "devices" else None
 
 
 def layout_ok(rel: tuple, name: str) -> bool:
@@ -386,6 +386,8 @@ def test_size_verdicts_are_well_formed_and_current():
         ("robots", None, "devices", "pinky_pro", "bringup", True),
         ("robots", None, "apps", None, "control", False),
         ("navigation", None, "devices", "pinky_pro", "bringup", True),
+        ("navigation", None, "hardware", None, "bringup", True),
+        ("navigation", None, "apps", None, "control", False),
         ("apps", None, "devices", "common", "imu_bno055", False),
     ],
 )

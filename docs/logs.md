@@ -1849,3 +1849,11 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(structure): _family only reads the 3-level devices shape (D-196 review)
+
+- 변경: `_family`가 `src/devices/<계열>/<패키지>` 모양일 때만 계열을 돌려준다(짧은 경로에서 IndexError나 패키지명을 계열로 오인하지 않게). navigation 행에 hardware 허용·apps 거부 사례 추가
+- 증거: `python -m pytest test/test_module_structure.py -q` 28 passed (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
