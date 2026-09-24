@@ -199,7 +199,9 @@ rendered as unknown.
 Legible at about 1.5 m within about 0.5 s, without reading text. It shows
 intent, not state: the direction it is about to take, not a mode name. This is
 the one surface where a second typeface is justified, chosen for small-size
-low-resolution rendering.
+low-resolution rendering. Danger is a fill here too: an alarm sentence
+(E-STOP, FAILED) is paper ink on a crit fill, never crit text — the pixel
+gates live with the renderer tests (D-202).
 
 The PWR-003 wake card is the one state-bearing exception: on wake it shows a
 state snapshot (battery margin, E-stop) for a fixed `hold_s`, then the face
