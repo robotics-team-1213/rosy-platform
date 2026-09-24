@@ -117,6 +117,7 @@
   GO and unreachable-device HOLD paths.
 - gate 변화: none. DEVICE remains HOLD until the physical Pinky produces the
   same evidence from an installed signed ARM64 release.
+
 ## 2026-09-22 · uncommitted · feat(runtime): begin D-161 Ubuntu-native transition
 
 - 변경: Canonical Ubuntu 24.04.5 Raspberry Pi arm64 base URL/SHA-256을 lock에
@@ -696,6 +697,49 @@
 - 결정: D-179
 - 교훈: 없음
 
+## 2026-09-23 · uncommitted · fix(sd): fall back to the USB instance serial when Get-Disk reports none
+
+- 변경: 같은 리더기가 다시 꽂힌 뒤 `Get-Disk`의 `SerialNumber`를 빈 값으로 보고해(관리자 `Update-HostStorageCache` 뒤에도) 시리얼로 카드를
+  찾지 못했다. `UniqueId`의 USBSTOR instance ID(`USBSTOR\DISK&...\<serial>&<n>`)에 같은 시리얼이 남아 있어, SerialNumber가 비었고 USB일 때만
+  그 값을 쓴다. Windows가 지어낸 ID(`<digit>&<hash>&<n>`, 4자 미만)와 USBSTOR가 아닌 ID는 쓰지 않는다. 기존 USB·크기·boot/system 검사는 그대로다.
+- 증거: `test_sd_writer_contract.py`, `test_sd_write_card_entrypoint.py` 85 passed; 실제 카드로 `-PlanOnly -DiskSerial 000000000207`이
+  디스크 1을 찾음 (2026-09-23 Windows).
+- gate 변화: 없음
+- 결정: D-173
+- 교훈: 하드웨어 식별자 하나에만 기대면 드라이버가 그 칸을 비우는 순간 도구가 멈춘다. 같은 사실을 담은 두 번째 출처와 그 출처를 믿을 조건을 함께 둔다.
+
+## 2026-09-23 · uncommitted · perf(sd): one authoritative verify — drop the raw-hash pre-pass and Imager read-back (D-180)
+
+- 변경: `prepare-rosy-sd.ps1`이 쓰기 전에 `.img.xz` 전체를 풀어 raw SHA-256을 구하던 `--image-only` 패스를 없애고, Imager를
+  `--cli --disable-verify "<image>" "<device>"`로 부른다(`--sha256` 없음). 전체 readback(`--image --device`)은 그대로이며 증거에 64자리
+  `image_raw_sha256`·`device_sha256`와 양수 `bytes_verified`가 없으면 bundle 전에 멈춘다. 서명 검증·ERASE 확인·시리얼 선택·쓰기 직전
+  fingerprint 재확인은 바뀌지 않았다. 2026-09-21 설계 단계 6("write verification을 끄지 않는다")을 대체한다.
+- 증거: 실측 50분(005)·48분(004) = 사전 패스 약 12분 + 쓰기 약 20분 + Imager verify 약 10분 + readback. 설치된 Imager v2.0.8
+  실행 파일의 옵션 테이블에서 `disable-verify` 확인. `test_sd_writer_contract.py` 등 관련 스위트 통과(2026-09-23 Windows).
+  실제 카드 기록 시간은 아직 재지 않았다.
+- gate 변화: 없음
+- 결정: D-180
+- 교훈: 나중에 더 엄격한 검사를 넣으면 먼저 있던 약한 검사를 다시 본다. 같은 사실을 여러 번 확인하는 패스는 시간만 쓴다.
+
+## 2026-09-23 · uncommitted · fix(sd): the card writer detects its own failures, says what is on the card and resumes without rewriting (D-187)
+
+- 변경: `prepare-rosy-sd.ps1`이 단계마다 `<log>.progress.jsonl`에 JSON 한 줄(`ts`, `stage`, `card_state`, `detail`)을 바로 flush하고,
+  쓰기·readback 중에는 약 60초마다 처리 바이트를 남긴다. `Start-Process -Wait` 대신 poll loop로 Imager의 CPU·I/O 카운터를 보고,
+  `-WriterStallMinutes`(기본 5) 동안 변화가 없으면 프로세스 트리를 끝낸다. xz index의 raw 크기에 닿았으면 `written-unverified`,
+  아니면 `writing`이다. 서명 검증 이후 모든 실패에 `stage=… card_state=…`와 `next:` 한 줄을 붙인다(`trap` 포함).
+  `-ResumeAfterWrite`(두 스크립트)는 Imager만 건너뛰고 readback·bundle·registry·receipt를 그대로 돌며, 모든 쓰기 전 검사와 receipt
+  중복 거부를 유지하고 `resumed_after_write: true`를 남긴다. `verify-media-readback.py`는 압축 파일 전체(xz stream 뒤 포함)의
+  `image_sha256`을 같은 패스에서 내고 서명 해시와 다르면 실패한다(리뷰 MEDIUM-1). 장치를 못 읽으면 exit 3. bundle 직전에 디스크를
+  시리얼로 다시 고르고 fingerprint를 비교한다. `write-card.ps1`은 진행 파일 경로를 알리고, UAC 거부와 `.exit` 없는 종료에
+  마지막 단계·카드 상태를 보고한다. runbook에 "카드 쓰기 중 문제가 생겼을 때"(진행 파일, resume 명령, 분리 실행) 추가.
+  readback은 압축 해제 스레드와 순차 장치 읽기 스레드(각 queue 4, 4 MiB)를 겹치고 주 스레드가 비교·해시한다. 판정은 예전 순차 루프와 같다.
+- 증거: 가짜 writer(`cmd` + `ping`)로 쓰기 중·마지막 byte 뒤 멈춤, Imager 비0, readback 불일치·장치 없음, 서명 뒤 바뀐 이미지,
+  bundle 직전 디스크 변경, resume 성공·불일치·receipt 중복을 재현(2026-09-23 Windows). 실제 카드·실제 Imager 멈춤은 확인하지 않았다.
+  pipeline readback은 순차 참조 구현과 9개 fixture × 장치 읽기 크기 3종에서 같은 판정. 256 MiB fixture 3.10s → 2.34s(page cache), 11.55s → 6.81s(60 MB/s 장치 흉내).
+- gate 변화: 없음
+- 결정: D-187
+- 교훈: 오래 도는 외부 도구를 기다릴 때는 "끝났나"만이 아니라 "움직이나"를 본다. 실패 문구는 원인만이 아니라 카드에 무엇이 남았는지와 다음 명령을 말해야 복구가 싸진다.
+
 ## 2026-09-24 · uncommitted · fix(deploy): 오버레이 마커 탐지 패턴을 개명해 비밀 스캐너 오탐 제거
 
 - 변경: `deploy/robot/core_dev_overlay.py`의 마커 민감 필드 거부 패턴 변수를 `_SECRET_KEY` → `_SENSITIVE_FIELD`로 개명(정의·사용 각 1곳, 값과 거부 로직 불변). 이름에 민감 키워드가 들어간 변수에 리터럴을 담은 call 값이 붙는 형태라 스캐너의 대입 휴리스틱에 정확히 걸렸고, `test_no_secrets_in_tracked_files`는 병합 전 `0d0e2a73`부터 초록이 아니었다 — 병합 회귀가 아니라 latent 오탐이었다.
@@ -720,3 +764,223 @@
 - 결정: D-186
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · fix(sd): readback failures keep the verifier's reason and tell I/O from bad data (D-187)
+
+- 변경: 005 재기록 실패 로그에는 `WRITE FAILED: full media readback verification failed`만 남았다. PowerShell 5.1 transcript는 native
+  프로그램의 stderr를 담지 않는다. `verify-media-readback.py --error-json`이 `error`·`kind`(`io`, `mismatch`, `image`)·`bytes_verified`를
+  쓰고, `prepare-rosy-sd.ps1`이 그 이유와 검증된 바이트 수를 실패 문구·진행 파일 `detail`·로그에 옮긴다. 장치 OSError와 짧은 읽기는
+  I/O(다시 꽂거나 다른 리더기로 `-ResumeAfterWrite`), 불일치는 나쁜 데이터(재기록, 반복되면 카드 교체), xz 압축 해제 실패는 릴리스 재다운로드.
+- 증거: 불일치·짧은 카드·없는 장치·잘린 xz의 error 파일과, 불일치·짧은 카드 이유가 Fail 문구와 진행 파일에 남는 writer 테스트(2026-09-24 Windows).
+  실제 카드의 중간 분리는 재현하지 않았다.
+- gate 변화: 없음
+- 결정: D-187
+- 교훈: 실패 이유가 로그까지 오는 경로를 테스트로 고정한다. 하위 도구가 이유를 말해도 상위 로그가 그 스트림을 버리면 없는 것과 같다.
+
+## 2026-09-24 · uncommitted · feat(sd): the card writer runs without an expert watching it (D-188)
+
+- 변경: `write-card.ps1 -Detach`가 관리자 창을 따로 띄우고(UAC 한 번, `-NoExit`) 바로 돌아오며 로그·진행 파일·`.exit`·상태 명령을
+  출력한다. launcher가 진행 파일을 운영자 소유로 먼저 만들고 `launch` 줄을 쓰며, UAC 거부는 `failed`/`untouched`와 `next`로 남는다.
+  새 `card-write-status.ps1 -LogPath <log> [-Json]`은 승격 없이 단계·카드 상태·바이트·실측 속도·단계/전체 ETA·마지막 줄 나이·
+  `STALLED`·결과와 `next`를 보인다. readback은 감시되는 프로세스로 돌고, heartbeat 바이트가 `-ReadbackStallMinutes`(기본 5) 동안
+  그대로면 verifier를 끝내고 `written-unverified`·`kind io`·resume으로 실패한다. verifier도 `--stall-seconds`로 exit 3.
+  ERASE 확인 전 `preflight` 단계가 카드 앞 128 MiB를 읽기 전용으로 읽어 속도를 재고 쓰기·readback 시간을 예측하며, 10 MB/s 미만이면
+  경고하고 비대화형 실행은 `-AcceptSlowMedia`를 요구한다. plan에 카드 `disk_signature`·`disk_guid`를 남겨 같은 리더기의 다른 카드를
+  ERASE 전에 멈추고, resume은 장치 MBR signature가 이미지의 것과 같아야 한다. boot 파티션 파일 비교로 넘어가도 reserved 영역
+  (FSInfo 힌트 제외), FAT copy 2 대 1(FAT[1] 상태 비트 제외), backup boot sector 대 primary를 byte 단위로 비교한다.
+  D-187 리뷰: `-ReadbackDevice`는 fixture 전용·receipt `readback_target`, Imager 감시는 프로세스 트리 합산·실제 디스크는 `.exe`만,
+  `taskkill` 5.1 throw 제거, 끝내지 못한 Imager는 재부팅 안내, verifier queue/join 시간 제한, heartbeat OSError는 advisory,
+  `bundle-writing`/`bundle-partial` 단계와 bundle이 있는 카드의 resume 거부.
+- 증거: named pipe 가짜 카드(`test/sd_pipe_card.py`)로 매달린 readback 정지와 느린 readback 완주, 자식이 I/O를 하는 가짜 writer,
+  사전 측정·느린 매체·카드 신원·resume 거부, detach·UAC 거부 기록, 상태 명령 8가지 상황(텍스트·JSON), boot 비파일 영역 1 byte 반전
+  5종(2026-09-24 Windows). 실제 카드·실제 UAC·실제 Imager 트리는 확인하지 않았다.
+- gate 변화: 없음
+- 결정: D-188
+- 교훈: 오래 도는 작업의 "언제 끝나나"는 짐작이 아니라 같은 장치에서 잰 속도와 실제로 늘어나는 바이트로 답한다. 감시는 도구 안과 밖
+  두 겹으로 두고, 느리지만 움직이는 작업을 죽이지 않는 것이 멈춤 감지만큼 중요하다.
+
+## 2026-09-24 · uncommitted · fix(sd): D-188 review
+
+- 변경: 이 릴리스의 MBR signature를 가진 카드는 두 조건을 모두 만족할 때만 받아들인다. `rosy-provision/`이 없어야 하고,
+  같은 plan으로 Imager 쓰기를 시작한 진행 파일이 있어야 한다(첫 진행 줄에 `plan`을 기록). 그렇지 않으면 `untouched`로 멈춘다.
+  fixture 모드: `.exe` writer 거부, `\\.\`·`\\?\` readback 장치 거부, receipt `fixture: true`.
+  `write-card.ps1`은 `-LogPath`·`-RpiImager`(와 구분자가 있는 `-PythonExe`)를 콘솔 위치 기준 절대 경로로 바꾼다.
+  readback 감시는 heartbeat가 없을 때 verifier의 `ReadTransferCount`도 진행으로 본다.
+  probe는 `device_mbr_read`와 `"00000000"`을 보고하고, ERASE 뒤 재확인도 카드 첫 섹터를 다시 읽는다.
+  verifier worker `close()`는 항상 시간 제한이 있다. 시간 안에 끝나지 않은 probe는 읽은 양으로 속도를 내 느린 매체 관문을 탄다(`-ProbeSeconds`).
+- 증거: 끝난 카드·이전 쓰기 없는 카드 거부, 이전 쓰기가 있으면 재기록, fixture 경계 3종, heartbeat가 늦어도 읽기가 이어지는 readback,
+  probe 시간 초과의 느린 매체 처리, 0 signature·원시 섹터 우선, 상대 경로, bounded close(2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-188
+- 교훈: "이 카드가 맞나"의 예외 경로(이미 우리 이미지가 있음)는 가장 흔한 사고 경로이기도 하다. 예외를 열 때는 그 예외가
+  무엇으로만 생기는지(이 plan의 이전 쓰기)를 증거로 좁힌다.
+
+## 2026-09-24 · uncommitted · fix(native,image): D-189 first real boot of 005 — unit sandboxes, CORE HOME, pinned CORE Python runtime
+
+- 변경: 005 첫 실기 부팅에서 CORE를 막은 결함 네 개를 제품에 반영했다. (D1) `rosy-release-recover`에 `StateDirectory=rosy/releases`,
+  `ReadWritePaths=/opt/rosy`. (D2) CORE Python 런타임 14개(pydantic 2.13.5·pydantic-core 2.46.5·fastapi 0.141.1·starlette 1.6.0·
+  uvicorn 0.52.4·websockets 17.1 + 폐포 8개)를 `deploy/image/device-python-requirements.txt`에 휠 해시로 고정하고, 이미지는 rosdep 뒤
+  `/usr/local`에, CI·arm64 리허설은 같은 파일로 깐다. `inputs.lock.yaml` `python_runtime`이 파일 해시를 고정. (D3) `rosy-core`
+  `HOME=/var/lib/rosy/core`, `rosy-io`·`rosy-navigation`도 자기 state 디렉터리를 HOME으로. (D4) `rosy-core`의 `StateDirectory=rosy`와
+  `ReadWritePaths=/var/lib/rosy`를 `rosy/core`와 `/run/rosy`로 좁히고, `tmpfiles-rosy-state.conf`가 `/var/lib/rosy` root 0755, 지도 디렉터리
+  `rosy-io:rosy-core 2750`, 005 카드의 root 전용 디렉터리 소유 복구를 맡는다. 가드: 정적 샌드박스 계약(A), 이미지 안 CORE import probe(B).
+- 증거: 새 계약 시험은 005 unit 파일에서 9건 적색, 수정본에서 녹색. 관련 스위트 통과(2026-09-24 Windows, 수치는 커밋 메시지). 복구 쓰기 범위
+  시험 2건은 WSL Linux에서도 통과(저널 재생은 symlink가 되는 host만). 요구 파일은 aarch64·x86_64 각각 `pip download --require-hashes`로
+  14개 전부 확인. probe는 WSL(Jazzy, 비빌드 소스 트리)에서 CORE 진입점·늦은 import·상위 고정 6개를 통과했고(미빌드 `interfaces`와 WSL 폐포 3개 불일치만 보고), 이미지 chroot 실행은 다음 빌드가 처음이다.
+- gate 변화: 없음. 재빌드 이미지의 실기 부팅(응급 조치 없이 `CORE_READY`)이 D1-D4를 닫는다
+- 결정: D-189 (작성 시 D-183이었으나 main의 D-183과 겹쳐 재번호)
+- 교훈: [unit의 샌드박스·HOME·Python 의존성은 제품의 일부다](../docs/solutions/workflow-issues/units-never-run-under-their-sandbox-2026-09-24.md)
+
+## 2026-09-24 · uncommitted · fix(native,image,ci): D-189 review — no startup hooks in a writable HOME, release/image Python runtime match, probe as the unit
+
+- 변경: 독립 리뷰(CRITICAL·HIGH 없음, MEDIUM 2, LOW 5) 반영. (M1) HOME이 쓰기 가능한 `rosy-core`·`rosy-io`·`rosy-navigation`은
+  `bash --noprofile --norc -c`로 시작하고 `PYTHONNOUSERSITE=1` — `~/.profile`·`~/.local`·`usercustomize`가 서명 릴리스 앞에서
+  돌 수 없다. (M2) 이미지가 `/usr/local/share/rosy/python-runtime.sha256`, 릴리스가 서명된 `python-runtime.sha256`을 갖고
+  `native_release.py` activate·rollback이 불일치·미선언을 `NATIVE_PYTHON_RUNTIME ... reflash with a matching image`로 거부한다
+  (매니페스트 스키마는 그대로, recover는 검사 안 함). (L) customizer pip `umask 022`, probe를 `setpriv`로 rosy-core·그 HOME·
+  runtime.env 조건에서 실행, CI는 lock 먼저·시험 도구는 lock 제약으로, 복구 저널 `StateDirectoryMode=0700`,
+  `z /var/lib/rosy/maps/*`, 계약 시험의 DynamicUser·early-unit tmpfiles·control import 처리, ADR에 005 제자리 갱신 카드 재기록과
+  알려진 한계.
+- 증거: 새 hook·저널 계약 시험은 이전 unit에서 5건 적색, 런타임 동일성 시험은 이전 `native_release.py`에서 4건 적색, 수정본에서 녹색.
+  관련 스위트 통과(2026-09-24 Windows, 수치는 보고서). 시험 도구 설치가 lock 제약으로 해석되는지 `pip --dry-run`으로 확인.
+- gate 변화: 없음
+- 결정: D-189
+- 교훈: 쓸 수 있는 HOME은 시작 훅이다 — 로그인 셸과 user site를 같이 끈다 (교훈 문서에 추가)
+
+## 2026-09-24 · uncommitted · docs(adr): D-190 vendor-parity boot display plan (LCD, buzzer, battery)
+
+- 변경: D-190과 실행 계획 `docs/plans/2026-09-24-vendor-parity-boot-display.md`를 추가했다. 기준을 공식 Pinky Pro 동작으로 두고,
+  S0 공식 이미지 증거(LCD 주체·GPIO 라이브러리·백라이트·부저 핀·배터리 계산) → S1 D-181 장치 편입 → S2 표시 unit·이미지·가드 →
+  S3 손 설치 없는 실기 검증 순서를 고정했다. 장치 즉석 수정은 증거 수집용일 때만 하고 ADR에 기록한다. 코드 변경 없음.
+- 증거: 2026-09-24 장치 관찰 — 재부팅 23.5 s, 부팅 표시 30 s 지연(런타임 뒤 판정 unit으로 t+67→t+45 s), ADC 배터리 8.67 V,
+  LCD 드라이버는 공식과 동일, 장치에서 한 번 그린 LCD는 보이지 않음(원인 미확정).
+- gate 변화: 없음
+- 결정: D-190
+- 교훈: 장치에서 즉석으로 고치면 공식 동작과 같은지 판단할 근거가 남지 않고 다시 구우면 사라진다. 증거를 먼저 모은다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-191 device readiness matrix and first real-device evaluation
+
+- 변경: D-191과 평가표 `docs/validation/pinky-pro-evaluation-2026-09-24.md`(20행)를 추가했다. 코드 변경 없음.
+- 증거: rosy-pinky-e4us 읽기 전용 검사 — `/dev/ttyAMA4`·`/dev/rosy-motor` 없음(config.txt에 uart4 overlay 없음), `sllidar_ros2`·
+  `dynamixel_sdk`·`rosylib` 없음, `rosy-io` unit 미설치, 이미지 경로에 API 초기 토큰 발급 없음, ADC 배터리 8.67 V, 카메라 센서 미열거.
+- gate 변화: 없음
+- 결정: D-191
+- 교훈: Docker 설치 경로에서 서명 이미지 경로로 옮길 때, 이전 경로가 암묵적으로 설치하던 것(overlay·SDK·외부 패키지·토큰)의 목록을 먼저 만든다.
+
+## 2026-09-24 · uncommitted · feat(sd,first-boot): per-card CORE API administrator credential (D-191, US-009)
+
+- 변경: 실기 평가(2026-09-24, `docs/validation/pinky-pro-evaluation-2026-09-24.md` 매트릭스 6행)에서 서명 이미지 경로 카드가 API 자격을 하나도 갖지 않아 CORE가 모든 인증 경로에 401을 돌려줬다. `prepare-rosy-sd.ps1`이 카드마다 CORE `generate_token` 형식(32바이트 URL-safe) 값과 `new_token_id` 형식 id를 발급해 DPAPI 저장소 `%LOCALAPPDATA%\Rosy\api\<device>.credential.xml`(UserName=id)에 두고 끝에 stderr로 한 번 보여준다. 번들 `core_api.record`는 CORE 저장 레코드(`id`, `role: administrator`, `sha256`, `label`, `created_at`)만 싣고, 영수증은 `personalization.core_api`에 id와 16-hex 다이제스트 지문만 남긴다. 스키마·`personalization.py`·`create-provision-bundle.py`는 선택 필드 패턴을 따른다. first boot는 레코드를 `/var/lib/rosy/core/.rosy/rosy.yaml`(D-189 unit의 `HOME`, `ROSY_CONFIG` 없음 → `core_common.config`가 읽고 대시보드가 쓰는 파일)에 mkstemp 원자 쓰기로 병합한다: 다른 키·다른 레코드 유지, 같은 id·digest는 교체, 소유 `rosy-core`, 파일 0600, 디렉터리 0750, 재실행 동일 바이트. 역할 이름은 CORE의 `administrator`(`admin`은 CORE가 viewer로 떨어뜨린다). 재기록(`-ReprovisionReceipt` 포함)은 저장소 값을 재사용한다. overlay의 `auth.tokens` 목록이 기본값 목록을 통째로 대체하므로 이 카드에서는 공용 `rosy-dev-*` 자격이 막힌다.
+- 증거: `python -m pytest test/test_sd_api_token.py` (스키마·영수증·스캐너·병합·멱등·CORE TestClient 200/401·대시보드 쓰기 후 유지), writer 계약 3건 추가(발급·DPAPI·번들 digest만·plan/영수증/progress 평문 없음·재기록 재사용). POSIX 소유·모드·unit HOME 시험은 Windows에서 skip — Linux 호스트 실행 필요.
+- gate 변화: 없음. DEVICE HOLD 유지 — 실제 카드 first boot에서 파일 소유·모드와 대시보드 로그인 확인이 남음
+- 결정: D-191
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(sd,first-boot): US-009 security review (D-191)
+
+- 변경: 보안 리뷰(CRITICAL·HIGH 없음, MEDIUM 1, LOW 3) 반영. (M1) first boot는 `rosy-core` 소유 HOME 경로를 루트에서 `O_DIRECTORY|O_NOFOLLOW` fd로 한 칸씩 열고 `fstat`·`fchmod`·`fchown`, `rosy.yaml`은 `O_NOFOLLOW|O_NONBLOCK`로 읽어 `S_ISREG` 요구, 임시 파일은 `O_CREAT|O_EXCL|O_NOFOLLOW`로 만들고 `os.replace(src_dir_fd=, dst_dir_fd=)` 뒤 디렉터리 fsync. 경로 어디든 symlink·비정규 파일이면 HOLD, 대상은 그대로. (L2) overlay에 이 카드 id가 아닌 자격(다른 id, 레거시 평문 맵 포함)이 있으면 HOLD — 병합하지 않는다. (L3) `core_api`는 번들 필수(스키마 `required`, `validate_provision_bundle`, `create-provision-bundle.py` EXPECTED); 없으면 first boot HOLD. (L4) DPAPI 저장소 user name을 `<id>|<device_uid>`(AP는 `<device>|<device_uid>`)로 묶고 다른 uid면 카드에 손대기 전 실패, uid 없는 옛 저장소는 한 번 받아 uid로 다시 쓴다; 두 자격은 이제 pre-flight 전에 읽는다. 사용성: 비분리 elevated 창은 닫히고 stderr 한 줄은 transcript에 없으므로 `write-card.ps1`이 성공 시 로그 끝에 `Import-Clixml` 읽기 명령을 남기고, progress `done`의 next도 저장소 경로를 가리킨다(값은 어디에도 안 씀).
+- 증거: WSL(Ubuntu, Python 3.12)에서 symlink `core`·`.rosy`·`rosy.yaml`, FIFO overlay, 소유·모드, unit HOME 시험 포함 녹색; Windows 스위트 수치는 보고서.
+- gate 변화: 없음. DEVICE HOLD 유지
+- 결정: D-191
+- 교훈: 없음
+- 미결(다른 스토리): `rosy-dev-*` 차단은 overlay 목록 대체에만 기대므로 overlay가 비거나 `auth.tokens`를 잃으면 되살아난다. 기기 기본값에서 `rosy-dev-*` 제거 또는 native runtime에서 CORE가 거부하는 심층 방어가 남음 (runbook에도 기록)
+
+## 2026-09-24 · uncommitted · feat(image,bringup): D-192 hardware runtime in the image (US-003/004/005)
+
+- 변경: (US-003) `rosy-boot-status-ready.service`를 `After=rosy-runtime.target rosy-core.service`(의존 없음)로 추가해 이미지가
+  설치·활성화한다. (US-004) customizer가 `configure-uart-pi5.sh --image-root`로 `config.txt` `[all]`에 `dtoverlay=uart4-pi5`를 넣는다.
+  같은 스크립트의 vfat 쓰기는 chmod 대신 rename으로 바꿨다. 검사기가 overlay와 udev 규칙을 본다. (US-005) `sllidar_ros2`를 lock
+  (`34300099…`, 아카이브 SHA-256)으로 고정해 hardware-deps 단계가 받고 오프라인 payload 빌더가 빌드한다. `dynamixel-sdk 3.8.4`·
+  `pyserial 3.5`를 `device-python-requirements.txt`에 해시로 더해 D-189 런타임 검사가 덮는다. `rosylib.Battery`(공개 ADC 프로토콜,
+  CORE 곡선 복사), ADC `flock` 소유 규칙, bringup `drive_enabled`(무동작: torque off, `cmd_vel` 미구독, `motor/ready` false)를
+  넣고 `rosy-io`의 기본으로 했다. `rosy-io`·`rosy-navigation`을 overlay에 설치(미활성)하고 io probe가 chroot에서 확인한다.
+- 증거: 관련 host 스위트 통과(2026-09-24 Windows, 수치는 보고서). `configure-uart-pi5.sh` 이미지 모드는 Git Bash로 실제 실행.
+  휠 해시는 cp312 aarch64·x86_64 `--require-hashes` 다운로드 16개, sllidar 아카이브 해시는 독립 다운로드 2회 일치.
+- gate 변화: 없음. 이미지 빌드와 실기 확인(D-192 "실기 수용 확인" 1-9)이 남았다
+- 결정: D-192 Proposed
+- 교훈: 이미지가 굽지 않는 retrofit 스크립트는 장치에만 있는 설정을 만든다 — 이미지와 장치가 같은 스크립트를 부르게 한다
+
+## 2026-09-24 · uncommitted · fix(image,bringup): D-192 review
+
+- 변경: (MEDIUM) 벤더 해시 고정: hardware-deps 단계는 `sllidar_ros2` 아카이브를 그대로 두고, payload 빌더가
+  `prepare-vendor-source.sh`로 lock 해시를 다시 확인해 새 임시 디렉터리에 풀고 루트의 `sllidar_ros2` 하나만(여분·다른 이름 거부)
+  rosdep·colcon에 넘긴다. (LOW) `drive_enabled` read-only, `ROSY_IO_DRIVE_ENABLED`는 `ExecStartPre`로 `true`/`false`만(그 밖은 78로
+  기동 실패), `battery_publisher` 버스 재시도(fail-closed), `sensor_adc` C++ flock, ready unit `TimeoutStartSec=10`과
+  `rosy-boot-status.py` 실행 잠금(`/run/rosy-boot/.run.lock`), 검사기가 기반 `config.txt`의 `enable_uart=1`·`dtparam=i2c_arm=on`
+  확인, chroot rosdep `--skip-keys sllidar_ros2`, 장치 `config.txt.rosy-backup` 복구 절차를 D-192에 기록. source-grep 시험을
+  동작 시험(stub rclpy 노드, fake fd IR 독자, settle 순서)으로 바꿨다. `origin/main 7a55ee1b`(D-190·D-191)로 rebase.
+- 증거: 관련 host 스위트 통과(2026-09-24 Windows, 수치는 보고서), 실행 잠금 동시성 시험은 WSL에서 통과, 하네스 lint 0 error.
+- gate 변화: 없음
+- 결정: D-192 Proposed
+- 교훈: 풀어 둔 트리 옆의 해시 표시는 내용을 증명하지 않는다 — 해시는 빌드가 실제로 읽는 바이트에 건다
+
+## 2026-09-24 · uncommitted · ci: gate the hardware safety tests that CI never ran (D-192)
+
+- 변경: CI는 `src/core/core`·`fleet`·`gz_sim`·루트 `test/`만 돌려 `src/hardware/*/test`·`src/apps/*/test`가 한 번도 게이트되지 않았다.
+  무동작 모드(토크 꺼짐·cmd_vel 미구독)·ADC 버스 잠금·배터리 곡선 시험을 새 스텝 "Test (hardware safety …)"로 올렸다.
+- 증거: WSL Linux에서 같은 명령 454 passed. 나머지 패키지 시험의 기존 적색(Linux): bringup/led/emotion ament flake8·pep257,
+  control `test_localization_gate`·`test_os_camera_graph`·`test_os_watch_graph`, games `test_games_cli` 4건 — 이 변경 밖, D-191 후속 과제.
+- gate 변화: CI에 하드웨어 안전 스텝 추가
+- 결정: D-192
+- 교훈: 시험을 추가할 때 CI가 그 폴더를 실제로 돌리는지 확인한다. 이 저장소에서는 루트 `test/`로 옮기면 D-184가, 패키지로 옮기면 CI가 막는다.
+
+## 2026-09-24 · uncommitted · feat(native,image): boot display on the LCD and buzzer (US-006, D-190 S1-S2)
+
+- 변경: `rosy-boot-display.service`(사용자 `rosy-display` 962, `DevicePolicy=closed` + `spidev0.0`·`gpiochip4`·`i2c-1`,
+  `ProtectSystem=strict`, `PrivateNetwork`, HOME·`LG_WD`는 `StateDirectory=rosy/display`)와 상주 루프
+  `rosy-boot-display.py`(1 s 폴링, 바뀔 때만 다시 그림, 배터리 15 s, `rosylib.Battery` 직접, gpiochip4 label 확인, 장치 없으면
+  한 번 기록). 부저 BCM 22 기본 꺼짐(`/etc/rosy/boot-display.env`로 켬), `CORE_READY` 1회·`FAILED` 3회. `rosy-network.py`가
+  AP를 연 동안만 `/run/rosy-boot/ap-display.txt`(SSID·비밀번호 두 줄, root:rosy-display 0640)를 쓰고 지운다. 이미지: apt
+  `python3-spidev`·`python3-rpi-lgpio`·`python3-numpy`·`python3-pil`·`fonts-dejavu-core`, 사용자·그룹, `99-rosy-display.rules`,
+  unit enable, chroot `probe-display-runtime.py`(rosy-display로), 검사기(enable·udev·dpkg·`dtparam=spi=on`). D-181 편입:
+  `board.yaml` `boot_display`, 장치 표면 변이 시험, 샌드박스 계약 선언. emotion은 벤치 전용이라 `Conflicts=` 없음(가드 시험).
+- 증거: 관련 host 스위트 936 passed, 11 skipped(2026-09-24 Windows). AP 파일 0640·그룹 확인은 WSL POSIX에서 통과.
+  장치 표면 변이: `rosy-io.service`에 `spidev0.0` 추가·표시 unit의 `i2c-1`을 `i2c-0`으로 바꾸면 적색, 되돌리면 녹색.
+- gate 변화: 없음. 이미지 빌드(probe 첫 실행)와 D-190 S3 실기 확인이 남았다
+- 결정: D-190 Proposed(S1·S2 완료), D-181 편입 기록 추가
+- 교훈: 백라이트가 소프트웨어 PWM이면 "그리고 끝나는" 표시는 없다 — 표시 장치는 상주 프로세스와 한 쌍으로 설계한다
+
+## 2026-09-24 · uncommitted · fix(native,image): US-006 security review
+
+- 변경: (M1) 부저 핀은 허용 목록 {4,5,6,16,17,20,21,22,23,24,26}만, `board.yaml`에 목록과 헤더 선 주인(0-3, 7-15, 18, 19, 25, 27).
+  (M2) `battery_adc`를 실제 허용(`rw-any-address`, `advisory-flock`)으로, D-181·D-190에 남은 위험과 커널 패널 드라이버 후속.
+  (L1) gpiochip label을 매 시도 읽고, 못 읽으면 패널을 건드리지 않고 재시도. (L2) 패널 노드가 있는데 못 그리면 1로 끝남,
+  `/dev/spidev0.0`이 없으면 0. probe는 "Raspberry Pi" `RuntimeError`만 허용하고 rpi-lgpio의 `RPI_LGPIO_CHIP` 읽기를 확인
+  (noble 0.5-0ubuntu1 소스로 확인, shim 없음). (L3) 장치 표면 가드: `char-spi`·`char-i2c`·`char-gpio`, drop-in, `[Service]`만
+  파싱, 표시 unit의 마지막 `DevicePolicy=closed`, gpio/spi 그룹 비 root unit은 closed 또는 `PrivateDevices`, 변이를 `[Service]`에.
+  (L4) POSIX 시험 `skipif`, fchown·fchmod가 빈 파일 위치 0에서 불리는지, 오래된 AP 파일을 `main --once`가 지우는지 동작 시험.
+- 증거: 보고서 수치(Windows host 스위트, WSL POSIX)
+- gate 변화: 없음
+- 결정: D-190·D-181 갱신
+- 교훈: 노드 단위 장치 허용은 프로그램이 쓰는 선보다 넓다 — 허용과 사용을 따로 적고, 좁히는 길을 열린 항목으로 남긴다
+
+## 2026-09-24 · uncommitted · fix(image): run the display probe where the unit runs (LG_WD, working directory)
+
+- 변경: release `2026.09.24-007` 빌드가 `DISPLAY_PROBE_FAIL import lgpio: FileNotFoundError`로 멈췄다. lgpio는 import 때
+  `LG_WD` 또는 작업 디렉터리에 `.lgd-nfy*` 파일을 만든다. unit은 StateDirectory(`/var/lib/rosy/display`)를 HOME·LG_WD·
+  WorkingDirectory로 쓰지만, probe는 chroot의 `/`(rosy-display가 쓸 수 없음)에서 LG_WD 없이 돌았다. 이미지가 그 상태 디렉터리를
+  unit과 같은 소유·모드(962:962 0750)로 만들고, probe에 unit과 같은 LG_WD·RPI_LGPIO_CHIP·작업 디렉터리를 준다.
+- 증거: noble `python3-lgpio 0.2.0.0-0ubuntu3`·`python3-rpi-lgpio 0.5-0ubuntu1`를 풀어 WSL에서 재현 — cwd `/`·LG_WD 없음 → 같은
+  `FileNotFoundError: '.lgd-nfy-3'`, LG_WD가 없는 디렉터리 → 같은 오류, 쓰기 가능한 상태 디렉터리 → `import ok`(`.lgd-nfy0` 생성).
+  `test_boot_display.py` 등 215 passed.
+- gate 변화: 없음(007 빌드 실패, 다음 릴리스에서 probe 통과 확인)
+- 결정: D-190
+- 교훈: 서명 전 probe가 제 역할을 했다. probe의 환경은 unit에서 그대로 복사하고, 그 대응을 시험으로 고정한다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-193 login code on the robot screen and credential lifecycle
+
+- 변경: D-193을 추가했다. LCD에는 장기 토큰이 아니라 root가 만드는 8자 일회용 코드(10분, scrypt 검증자, 기본 operator)를 띄우고,
+  `POST /api/v1/auth/pair`로 브라우저 전용 만료 토큰을 받는다. 장치 기본값의 `rosy-dev-*` 토큰을 없애 fail closed로 한다. 코드 변경 없음.
+- 증거: 2026-09-24 대시보드 점검 — 카드 005에서 `rosy-dev-*`가 LAN에서 통함, 대시보드는 역할을 감사 로그 403으로 추측함.
+- gate 변화: 없음
+- 결정: D-193
+- 교훈: 로그인 편의를 위해 장기 비밀을 화면에 띄우는 대신, 물리 접근의 증표를 짧고 일회용인 값으로 만든다.
+
+## 2026-09-24 · uncommitted · fix(dev): native CORE overlay reloads units and proves every bind is mounted (D-179)
+
+- 변경: 실기(`rosy-pinky-e4us`, release 005)에서 `sync-core-dev.ps1 -Backend native`가 성공으로 끝났지만 오버레이는 적용되지 않았다.
+  (1) drop-in을 쓴 뒤 `daemon-reload` 없이 재시작해 `NeedDaemonReload=yes`인 채로 bind가 없었다. (2) 확인이 `core/__init__.py` 해시 하나였고,
+  그 파일은 이미지와 main에서 같아 거짓 통과했다. 이제 reload 후 재시작하고, 실행 중 CORE의 `/proc/<pid>/mountinfo`에 모든 bind 대상이
+  있어야 통과한다(`/opt/rosy/current` 심볼릭 링크는 커널이 풀어 기록하므로 resolve해 비교).
+- 증거: 고친 도구로 main(05bd4a0)의 CORE를 실기에 올림 — mountinfo에 7개 bind, `rosy-core` active, API 200. `test_core_dev_sync.py` 34 passed.
+- gate 변화: 없음(장치는 dev 마커 HOLD 상태)
+- 결정: D-179
+- 교훈: "적용됐다"는 확인은 바뀐 것만 볼 수 있는 증거로 한다. 바뀌지 않았을 수도 있는 파일의 해시는 증거가 아니다.

@@ -136,6 +136,8 @@ window.fetch = async (input, options = {}) => {
       evidence: {
         pose: {evidence: 'fresh', stale_after_s: 2.0},
         velocity: {evidence: 'fresh', stale_after_s: 0.5},
+        battery: {evidence: 'fresh', stale_after_s: 5.0},
+        safety: {evidence: 'fresh', stale_after_s: 0.2},
       },
       traffic_policy: {
         mode: 'MONITOR_ONLY', state: 'FOLLOW', reason: 'clear_road',
@@ -148,7 +150,10 @@ window.fetch = async (input, options = {}) => {
       network: {throughput: {rx_bytes_per_second: null, tx_bytes_per_second: null}},
       ros: null,
     },
-    '/api/v1/system/info': {name: 'Rosy', robot_id: 'rosy_01', hardware_model: 'test'},
+    '/api/v1/system/info': {
+      name: 'Rosy', robot_id: 'rosy_01', hardware_model: 'test',
+      runtime_mode: 'hardware', caller_role: window.__callerRole || 'administrator',
+    },
     '/api/v1/system/capabilities': {
       teleop: true, slam: true, docking: {supported: false},
       navigation: {goal_navigation: true},
@@ -186,6 +191,15 @@ window.fetch = async (input, options = {}) => {
   }
   if (window.__rosyRuntimeOverride) {
     Object.assign(bodies['/api/v1/system/runtime'], window.__rosyRuntimeOverride);
+  }
+  if (window.__rosyInfoOverride) {
+    Object.assign(bodies['/api/v1/system/info'], window.__rosyInfoOverride);
+  }
+  if (window.__rosyCapabilitiesOverride) {
+    bodies['/api/v1/system/capabilities'] = window.__rosyCapabilitiesOverride;
+  }
+  if (window.__rosyInventoryOverride) {
+    bodies['/api/v1/system/inventory'] = window.__rosyInventoryOverride;
   }
   if (window.__rosyHostNetworkOverride) {
     Object.assign(bodies['/api/v1/host/network'], window.__rosyHostNetworkOverride);
@@ -265,8 +279,9 @@ window.fetch = async (input, options = {}) => {
     });
   }
   if (path === '/api/v1/logs/audit') {
-    return new Response(JSON.stringify({events: []}), {
-      status: 200, headers: {'Content-Type': 'application/json'},
+    const admin = bodies['/api/v1/system/info'].caller_role === 'administrator';
+    return new Response(JSON.stringify(admin ? {events: []} : {error: {code: 'FORBIDDEN'}}), {
+      status: admin ? 200 : 403, headers: {'Content-Type': 'application/json'},
     });
   }
   return new Response(JSON.stringify(bodies[path] ?? {}), {
@@ -889,3 +904,116 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
     assert "CycloneDDS를 저장하고 로봇을 재부팅할까요" in confirms[0]
     assert declined == []
     assert len(confirms) == 2
+
+
+# US-010 — rosy-pinky-e4us, release 005, CORE-only, viewer token. The page
+# showed BATTERY 0% / 0.00 V, "Rosy 01", 5/5 motion capabilities, and a red
+# "안전 회로 수신 끊김" banner beside "READY 주행 회로 정상", and it probed
+# /logs/audit for a 403. The payloads below are what CORE now answers there.
+CORE_ONLY_VIEWER_INIT = """
+    sessionStorage.setItem('rosy.dashboard.token', 'viewer-test-token');
+    window.__callerRole = 'viewer';
+    window.__rosyInfoOverride = {
+      robot_name: 'rosy-pinky-e4us', robot_id: 'rosy_18', runtime_mode: 'core',
+    };
+    const unavailable = (stale) => ({received_at: null, evidence: 'unavailable', stale_after_s: stale});
+    window.__rosyStateOverrides = {robot_state: {
+      robot_id: 'rosy_18', mode: 'IDLE',
+      pose: {x: 0, y: 0, yaw: 0}, velocity: {linear: 0, angular: 0},
+      battery: {percent: null, voltage: null},
+      evidence: {
+        pose: unavailable(2.0), velocity: unavailable(0.5), battery: unavailable(5.0),
+        navigation: unavailable(2.0), safety: unavailable(0.2),
+        docking: {received_at: '2026-09-24T00:00:00.000Z', evidence: 'fresh', stale_after_s: 2.0},
+      },
+    }};
+    window.__rosyCapabilitiesOverride = {
+      teleop: false, slam: false, docking: {supported: false},
+      navigation: {goal_navigation: false, return_home: false},
+      swarm: {follow: false, lead: false},
+      withheld: {flags: ['teleop', 'navigation.goal_navigation', 'swarm.follow',
+                         'swarm.lead', 'slam', 'navigation.return_home'],
+                 reason: 'runtime_mode:core'},
+    };
+    const blocked = (id) => ({id, available: false, state: 'blocked', reason: 'runtime_mode:core'});
+    window.__rosyInventoryOverride = {
+      device_state: 'READY',
+      descriptors: ['mobility.move', 'mobility.navigate', 'mobility.follow',
+                    'mobility.lead', 'perception.localize'].map(blocked),
+    };
+"""
+
+
+def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "document.getElementById('safety-label')?.textContent === 'HW OFF'"
+        )
+        page.wait_for_function(
+            "document.getElementById('capability-count')?.textContent === '0 / 5'"
+        )
+        page.wait_for_timeout(300)
+
+        # 1. no battery reading is not 0% / 0.00 V
+        assert page.locator("#battery-value").inner_text() == "—"
+        assert page.locator("#battery-voltage").inner_text() == "voltage —"
+        assert page.locator("#battery-value").get_attribute("data-evidence") == "unavailable"
+        # 2. the provisioned name, not the placeholder
+        assert page.locator("#robot-name").inner_text() == "rosy-pinky-e4us"
+        # 3. motion is withheld and says why, without alarm colour
+        capabilities = page.locator("#capability-list").inner_text()
+        assert "하드웨어 런타임 꺼짐 (CORE-only)" in capabilities
+        assert page.locator('#capability-list [data-cause="runtime"]').count() == 5
+        assert page.locator('[data-teleop="forward"]').is_disabled()
+        # 4. hero and banner agree: no source, and the reason is CORE-only
+        assert "CORE-only" in page.locator("#safety-source").inner_text()
+        triage_text = page.locator("#triage").inner_text()
+        assert "수신 끊김" not in triage_text
+        assert "출처는 있는데" not in triage_text
+        assert page.locator("#triage-title").inner_text() == "하드웨어 런타임 꺼짐 (CORE-only)"
+        assert page.locator("#triage").get_attribute("data-category") == "observation"
+        warm = page.evaluate(WARM_SCAN)
+        assert set(warm) <= {"button#emergency-stop.stop-button"}, (
+            f"CORE-only는 고장이 아니다 — 경보 예산 밖 따뜻한 색: {warm}"
+        )
+        # 5. a viewer never asks for what it cannot read
+        paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
+        assert "/api/v1/system/info" in paths
+        assert "/api/v1/logs/audit" not in paths
+        assert "/api/v1/system/tokens" not in paths
+        assert page.locator("#limits-save").is_disabled()
+        browser.close()
+
+
+def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
+    """Same evidence, other cause: the hero must match the banner, not contradict it."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = """
+        window.__rosyStateOverrides = {robot_state: {evidence: {
+          pose: {evidence: 'fresh', stale_after_s: 2.0},
+          velocity: {evidence: 'fresh', stale_after_s: 0.5},
+          safety: {received_at: null, evidence: 'disconnected', stale_after_s: 0.2},
+        }}};
+    """
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "document.getElementById('triage-title')?.textContent === '안전 회로 수신 끊김'"
+        )
+        assert page.locator("#safety-label").inner_text() == "UNVERIFIED"
+        assert page.locator("#safety-source").inner_text() == "안전 회로 수신 끊김"
+        browser.close()

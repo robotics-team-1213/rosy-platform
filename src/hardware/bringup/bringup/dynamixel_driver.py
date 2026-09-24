@@ -117,7 +117,13 @@ class DynamixelDriver:
                 except Exception:
                     pass
 
-    def initialize_motors(self, profile_accel=200):
+    def initialize_motors(self, profile_accel=200, enable_torque=True):
+        """Reboot, velocity mode, zero goal confirmed, then torque on.
+
+        enable_torque=False (D-192 no-motion mode) stops after the zero goal is
+        confirmed: torque stays off, so the wheels cannot be driven whatever is
+        written later, while Present Velocity/Position still read back.
+        """
         try:
             profile_accel = validate_profile_acceleration(profile_accel)
         except ValueError:
@@ -163,6 +169,9 @@ class DynamixelDriver:
             if comm_result != COMM_SUCCESS or packet_error != 0 or goal != 0:
                 self._disable_all()
                 return False
+
+        if not enable_torque:
+            return True
 
         for dxl_id in self.DXL_IDS:
             if not self._packet_ok(

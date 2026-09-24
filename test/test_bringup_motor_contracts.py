@@ -1,7 +1,12 @@
 """Static integration contracts for the ROS motor command path."""
 
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,3 +111,82 @@ def test_bringup_publishes_a_latched_motor_readiness_lease():
     assert "TRANSIENT_LOCAL" in source
     assert "self.motor_ready_pub.publish(Bool(data=False))" in source
     assert "self.motor_ready_pub.publish(Bool(data=True))" in source
+
+
+# --- D-192 no-motion hardware mode -------------------------------------------
+
+
+def test_no_motion_mode_keeps_torque_off_and_never_listens_to_cmd_vel():
+    source = (BRINGUP / "bringup" / "bringup.py").read_text(encoding="utf-8")
+    normalized = " ".join(source.split())
+
+    assert "self.declare_parameter('drive_enabled', True, ParameterDescriptor(" in source
+    assert "read_only=True," in source
+    assert "enable_torque=self.drive_enabled," in source
+    # The only cmd_vel subscription is behind the drive flag.
+    assert source.count("create_subscription( Twist") + source.count("create_subscription(\n") >= 1
+    assert "if self.drive_enabled: self.twist_sub = self.create_subscription( Twist," in normalized
+    # No initial goal write when torque is off, no readiness lease offered.
+    assert "if self.drive_enabled: self.get_logger().info('3. Setting initial RPM to zero...')" in normalized
+    assert "if self.is_initialized and self.drive_enabled:" in source
+    assert "self.motor_ready_pub.publish(Bool(data=self.drive_enabled))" in source
+
+
+def test_launch_passes_drive_enabled_as_a_boolean_defaulting_to_drive():
+    launch = (BRINGUP / "launch" / "bringup_robot.launch.py").read_text(encoding="utf-8")
+    normalized = " ".join(launch.split())
+
+    assert "DeclareLaunchArgument( 'drive_enabled', default_value='true'," in normalized
+    assert ("'drive_enabled': ParameterValue( LaunchConfiguration('drive_enabled'), "
+            "value_type=bool )") in normalized
+
+
+def test_native_io_unit_defaults_to_no_motion_and_navigation_drives():
+    native = ROOT / "deploy" / "robot" / "native"
+    io = (native / "rosy-io.service").read_text(encoding="utf-8")
+    nav = (native / "rosy-navigation.service").read_text(encoding="utf-8")
+
+    # EnvironmentFile= overrides Environment=, so runtime.env can opt in.
+    assert io.index("Environment=ROSY_IO_DRIVE_ENABLED=false") < io.index(
+        "EnvironmentFile=/etc/rosy/runtime.env")
+    assert "drive_enabled:=${ROSY_IO_DRIVE_ENABLED}" in io
+    assert "enable_battery:=true" in io
+    # Navigation is gated by its approvals and needs the drive.
+    assert "drive_enabled" not in nav
+    assert "ROSY_IO_DRIVE_ENABLED" not in (native / "rosy-runtime.env").read_text(encoding="utf-8")
+
+
+def _drive_gate() -> str:
+    """rosy-io's ExecStartPre shell body, with systemd's $$ turned into $."""
+    unit = (ROOT / "deploy" / "robot" / "native" / "rosy-io.service").read_text(encoding="utf-8")
+    line = next(line for line in unit.splitlines() if line.startswith("ExecStartPre="))
+    assert line.startswith("ExecStartPre=/usr/bin/bash --noprofile --norc -c '") and line.endswith("'")
+    body = line[len("ExecStartPre=/usr/bin/bash --noprofile --norc -c '"):-1]
+    # A lone $NAME would be systemd's to expand; the gate must read the environment.
+    assert re.search(r"(?<!\$)\$(?!\$)", body) is None
+    return body.replace("$$", "$")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash runs the unit's gate")
+@pytest.mark.parametrize(
+    ("value", "starts"),
+    [("true", True), ("false", True), ("yes", False), ("True", False), ("1", False),
+     ("", False), ("false ", False), ("on", False), ("true; reboot", False)],
+)
+def test_io_unit_starts_only_with_exactly_true_or_false(value, starts):
+    # D-192 review: launch_ros would read "yes"/"1"/"True" as a boolean and drive.
+    env = dict(os.environ, ROSY_IO_DRIVE_ENABLED=value)
+    completed = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", _drive_gate()],
+                               env=env, capture_output=True, text=True, check=False)
+    assert (completed.returncode == 0) is starts, completed.stderr
+    if not starts:
+        assert completed.returncode == 78
+        assert "ROSY_IO_DRIVE_ENABLED must be true or false" in completed.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash runs the unit's gate")
+def test_io_unit_gate_fails_closed_when_the_variable_is_unset():
+    env = {key: value for key, value in os.environ.items() if key != "ROSY_IO_DRIVE_ENABLED"}
+    completed = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", _drive_gate()],
+                               env=env, capture_output=True, text=True, check=False)
+    assert completed.returncode == 78

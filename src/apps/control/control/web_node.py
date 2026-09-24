@@ -48,7 +48,7 @@ from sensor_msgs.msg import Image, LaserScan, BatteryState
 from control.sensing.battery import battery_values
 from std_msgs.msg import Bool, Float32, String
 from visualization_msgs.msg import MarkerArray
-from control.web_http import make_api_handler, make_page_handler
+from control.web_http import make_api_handler, make_page_handler, web_common_dir
 from control.web_map_control import MapControl
 from control.web_render import render_cam, render_png
 from control.web_state import (
@@ -101,6 +101,11 @@ def sensor_cb(key):
 class WebNode(Node):
     def __init__(self):
         super().__init__('web_node')
+        try:
+            common_share = get_package_share_directory('web_common')
+        except Exception:
+            common_share = None
+        self.web_common_dir = web_common_dir(common_share)
         self.declare_parameter('port', 28181)
         self.declare_parameter('backend_port', 28182)
         self.declare_parameter('battery_topic', 'battery_state')

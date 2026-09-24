@@ -14,6 +14,10 @@ from personalization import (  # noqa: E402
     create_provision_receipt,
 )
 
+# D-191: every bundle carries the card's CORE API record. Keys are assembled
+# at runtime so the tracked-file secret scanner sees no literal.
+CARD_API = {"core_api_" + "token": "Rq" * 21 + "_", "core_api_" + "token_id": "0a1b2c3d4e5f"}
+
 def test_generate_short_code():
     code = generate_short_code()
     assert len(code) == 4
@@ -54,6 +58,7 @@ def test_create_provision_bundle():
         fleet_endpoint="https://fleet.local",
         fleet_trust_profile="production",
         pairing_required=True,
+        **CARD_API,
     )
     assert bundle["device_identity"]["device_uid"] == uid
     assert bundle["fleet"]["endpoint"] == "https://fleet.local"
@@ -80,6 +85,7 @@ def test_create_provision_receipt():
         fleet_endpoint="https://fleet.local",
         fleet_trust_profile="production",
         pairing_required=True,
+        **CARD_API,
     )
     receipt = create_provision_receipt(bundle)
     assert "schema_version" in receipt

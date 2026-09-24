@@ -45,12 +45,28 @@ ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
+PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
+PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
+CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
+IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
+DISPLAY_PROBE="$(dirname "$0")/probe-display-runtime.py"
+UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
 [[ "$WIRINGPI_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "WiringPi package SHA-256 is invalid"
+[[ -f "$PYTHON_REQUIREMENTS" ]] || fail "CORE Python requirements lock is missing"
+[[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
+[[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
+    || fail "CORE Python requirements do not match inputs.lock.yaml"
+[[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
+[[ -f "$IO_PROBE" ]] || fail "hardware runtime probe is missing"
+[[ -f "$DISPLAY_PROBE" ]] || fail "boot display probe is missing"
+[[ -f "$UART_CONFIG" ]] || fail "UART4 motor bus configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
+[[ "$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware" ]] \
+    || fail "ROSY_IMAGE_BOOT is not the image's /boot/firmware"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
 [[ ! -e "$RELEASE" ]] || fail "release already exists in image"
 for command in curl sha256sum chroot mount umount cp rm mkdir ln systemctl python3; do
@@ -70,6 +86,7 @@ cleanup() {
     rm -f -- "$ROOT/tmp/wiringpi-arm64.deb"
     rm -rf -- "$ROOT/tmp/rosy-src"
     rm -rf -- "$ROOT/tmp/rosy-native-probe"
+    rm -rf -- "$ROOT/tmp/rosy-core-probe"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
 }
@@ -121,8 +138,14 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-yaml \
+    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-pip python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
+# D-190: the boot display (rosy-boot-display.service). RPi.GPIO on the Pi 5 is
+# the rpi-lgpio compatibility layer; spidev drives the ST7789; PIL, numpy and
+# DejaVu draw the card. From the locked Ubuntu suites like every apt package
+# here; the versions land in deb-packages.txt and the verifier checks them.
+chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    python3-spidev python3-rpi-lgpio python3-numpy python3-pil fonts-dejavu-core
 
 cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"
 if [[ ! -f "$ROOT/etc/ros/rosdep/sources.list.d/20-default.list" ]]; then
@@ -137,8 +160,38 @@ ROSDEP_PATH_OUTPUT="$(
 )" || fail "could not resolve required ROSY package dependency closure"
 [[ -n "$ROSDEP_PATH_OUTPUT" ]] || fail "required ROSY package dependency closure is empty"
 mapfile -t ROSDEP_SOURCE_PATHS <<< "$ROSDEP_PATH_OUTPUT"
+# D-192: third-party packages the release builds itself (sllidar_ros2, which
+# bringup exec_depends on) are not in these source paths; skip their keys so
+# rosdep never tries to resolve them, whether or not rosdistro knows them.
+mapfile -t VENDOR_ROS_PACKAGES < <(
+    tr -d '\r' < "$(dirname "$0")/vendor-ros-packages.txt" \
+        | sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d'
+)
+(( ${#VENDOR_ROS_PACKAGES[@]} > 0 )) || fail "vendor ROS package list is empty"
 chroot "$ROOT" rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}" \
-    --ignore-src -r -y --rosdistro jazzy
+    --ignore-src -r -y --rosdistro jazzy --skip-keys "${VENDOR_ROS_PACKAGES[*]}"
+# D-189 D2: rosdep resolves python3-pydantic/python3-fastapi to Ubuntu's apt
+# pydantic 1.10 and fastapi 0.101, and nothing provides websockets. CORE needs
+# the hash-locked set. Root pip on Ubuntu installs into
+# /usr/local/lib/python3.12/dist-packages, which precedes /usr/lib/python3 on
+# sys.path. No --prefix: Debian's posix_prefix scheme would pick site-packages,
+# which is not on sys.path at all.
+mkdir -p "$ROOT/tmp/rosy-core-probe"
+cp "$PYTHON_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/device-python-requirements.txt"
+cp "$CORE_PROBE" "$ROOT/tmp/rosy-core-probe/probe-core-runtime.py"
+cp "$IO_PROBE" "$ROOT/tmp/rosy-core-probe/probe-io-runtime.py"
+cp "$DISPLAY_PROBE" "$ROOT/tmp/rosy-core-probe/probe-display-runtime.py"
+chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
+# umask 022: the service users must be able to read what root installs.
+(umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --break-system-packages \
+    --ignore-installed --require-hashes --no-deps --only-binary=:all: \
+    -r /tmp/rosy-core-probe/device-python-requirements.txt) \
+    || fail "CORE Python runtime did not install from the hash lock"
+# D-189: record which runtime the image carries; native_release.py refuses a
+# release built for another one (python-runtime.sha256 in its signed payload).
+install -d -m 0755 "$ROOT/usr/local/share/rosy"
+printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core
@@ -147,12 +200,29 @@ chroot "$ROOT" getent passwd rosy-core >/dev/null 2>&1 || \
 chroot "$ROOT" getent group rosy-io >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 961 rosy-io
 chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 961 --gid 961 --system --no-create-home --shell /usr/sbin/nologin rosy-io
+# D-190: the boot display's own account; no login shell, no home of its own
+# (the unit gives it HOME=/var/lib/rosy/display). SupplementaryGroups= in the
+# units names spi, gpio and i2c; systemd refuses to start a unit whose group
+# does not exist, so make sure they do. 99-rosy-display.rules assigns them.
+chroot "$ROOT" getent group rosy-display >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 962 rosy-display
+chroot "$ROOT" getent passwd rosy-display >/dev/null 2>&1 || \
+    chroot "$ROOT" useradd --uid 962 --gid 962 --system --no-create-home --shell /usr/sbin/nologin rosy-display
+for group in spi gpio i2c; do
+    chroot "$ROOT" getent group "$group" >/dev/null 2>&1 || chroot "$ROOT" groupadd --system "$group"
+done
 
-mkdir -p "$RELEASE" "$ROOT/var/lib/rosy/maps" "$ROOT/etc/rosy/trusted-release-keys" \
-    "$ROOT/etc/cloud/cloud.cfg.d"
+mkdir -p "$RELEASE" "$ROOT/etc/rosy/trusted-release-keys" "$ROOT/etc/cloud/cloud.cfg.d"
+# D-189 D4: the same layout tmpfiles-rosy-state.conf enforces at every boot.
+install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
+chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"
+# D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
+# Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
+# Same script and same edit as the on-device retrofit, pointed at the image.
+bash "$UART_CONFIG" --image-root "$ROOT" \
+    || fail "could not enable the UART4 motor bus in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 
@@ -165,8 +235,8 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
     rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
-    rosy-boot-status.service rosy-boot-status.timer \
-    rosy-config.service rosy-network.service
+    rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
+    rosy-config.service rosy-network.service rosy-boot-display.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
@@ -196,11 +266,48 @@ chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/nat
     || fail "installed release native entrypoint does not run"
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \
     || fail "installed first-boot entrypoint does not run"
-for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py; do
+for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-boot-display.py; do
     chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
         || fail "installed native entrypoint does not run: $entrypoint"
 done
 rm -rf -- "$ROOT$NATIVE_PROBE"
+
+[[ "$(tr -d '[:space:]' < "$RELEASE/python-runtime.sha256")" == "$PYTHON_REQUIREMENTS_SHA" ]] \
+    || fail "release python-runtime.sha256 does not match the image's Python runtime lock"
+
+# D-189 B: import what rosy-core.service loads at start, as the unit runs it:
+# user rosy-core, its HOME, no login shell, no user site, runtime.env if the
+# image has one, ROS and the release sourced. Assert the pinned set and
+# pydantic 2. -B keeps bytecode out of the signed release tree.
+chroot "$ROOT" setpriv --reuid=rosy-core --regid=rosy-core --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/core PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-core-runtime.py --requirements /tmp/rosy-core-probe/device-python-requirements.txt' \
+    || fail "CORE does not import inside the image"
+# D-192 US-005: the hardware runtime, as rosy-io.service runs it: user
+# rosy-io, its HOME, no login shell, no user site. dynamixel_sdk, rosylib
+# and the bringup nodes import; sllidar_ros2 and the launch files resolve in
+# the release; the units are installed, not enabled. Opens no device.
+chroot "$ROOT" setpriv --reuid=rosy-io --regid=rosy-io --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/io PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-io-runtime.py' \
+    || fail "the hardware runtime does not import inside the image"
+# D-190: the boot display, as rosy-boot-display.service runs it: user
+# rosy-display, its HOME, LG_WD and working directory (its StateDirectory),
+# RPI_LGPIO_CHIP, no shell, no user site, the release on PYTHONPATH and no
+# ROS. spidev, RPi.GPIO (rpi-lgpio), rosylib and the boot card import and
+# render; the unit is enabled with its sandbox. Opens no device.
+# lgpio creates its notification files in LG_WD or the working directory at
+# import (release 007 build: FileNotFoundError without them), so the probe
+# needs the state directory the unit gets from systemd. Creating it here with
+# the unit's owner and mode is what StateDirectory= would do on first start.
+install -d -o 962 -g 962 -m 0750 "$ROOT/var/lib/rosy/display"
+chroot "$ROOT" setpriv --reuid=rosy-display --regid=rosy-display --clear-groups \
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/display PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
+    LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4 \
+    PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages \
+    bash --noprofile --norc -c 'cd /var/lib/rosy/display && exec python3 -B /tmp/rosy-core-probe/probe-display-runtime.py' \
+    || fail "the boot display does not import inside the image"
+rm -rf -- "$ROOT/tmp/rosy-core-probe"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

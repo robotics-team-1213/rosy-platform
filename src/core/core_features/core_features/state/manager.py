@@ -46,8 +46,14 @@ def _as_map_id(value) -> Optional[str]:
 
 
 class StateManager:
-    def __init__(self, robot_id: str, clock=time.time, stale_after_s=None) -> None:
+    def __init__(self, robot_id: str, clock=time.time, stale_after_s=None,
+                 sources_configured: bool = True) -> None:
         self._robot_id = robot_id
+        # False in CORE-only runtime (D-161): no motor, IO or Nav2 unit runs, so a
+        # channel that never reported has no source at all. It is judged
+        # `unavailable` (nothing configured), not `disconnected` (a source that
+        # went quiet). The first sample proves a source and normal judgment resumes.
+        self._sources_configured = sources_configured
         self._clock = clock
         self._stale_after_s = dict(CHANNEL_STALE_AFTER_S)
         if stale_after_s:
@@ -168,6 +174,11 @@ class StateManager:
             data = self._sensors.get(key)
             return dict(data) if data else None
 
+    def has_received(self, channel: str) -> bool:
+        """True once any sample arrived on `channel` (no seq bump)."""
+        with self._lock:
+            return channel in self._received
+
     def push_error(self, message: str) -> None:
         with self._lock:
             self._errors.append(message)
@@ -179,7 +190,8 @@ class StateManager:
             now = self._clock()
             evidence = {
                 channel: judge(
-                    has_source=True,
+                    has_source=(self._sources_configured
+                                or channel in self._received),
                     received_at=self._received.get(channel),
                     now=now,
                     stale_after_s=stale,

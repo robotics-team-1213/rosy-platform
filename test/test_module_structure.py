@@ -105,7 +105,7 @@ SIZE_VERDICTS = {
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "control": (
-        29_037,
+        29_037,  # re-judged 2026-09-24 (D-192 ADC bus lock + D-185 R8 rotation); split verdict unchanged
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }

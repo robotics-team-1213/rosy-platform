@@ -27,6 +27,7 @@ from core_api_web.api.deps import (
 )
 from core_api_web.api.errors import ApiError
 from core_common.config import ConfigError, patch_local_config
+from core_common.domain.capabilities import hardware_runtime_reason, withhold_hardware_flags
 from core_common.identity import validate_robot_id, validate_robot_name
 
 
@@ -34,8 +35,10 @@ system_router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
 
 @system_router.get("/info")
-def system_info(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return svc.identity.info()
+def system_info(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    # `caller_role` lets the dashboard gate admin panels without probing an
+    # admin-only route and eating a 403 for every viewer (v1.18 additive).
+    return {**svc.identity.info(), "caller_role": auth.role}
 
 
 class IdentityRequest(BaseModel):
@@ -148,7 +151,9 @@ def delete_token(token_id: str, auth: AuthContext = Depends(admin),
 
 @system_router.get("/capabilities")
 def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return svc.capability.to_dict()
+    data = svc.capability.to_dict()
+    reason = hardware_runtime_reason(svc.config, svc.state)
+    return withhold_hardware_flags(data, reason) if reason else data
 
 
 def _jsonable(value: Any) -> Any:

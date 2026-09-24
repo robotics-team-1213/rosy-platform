@@ -82,3 +82,13 @@
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 `git log -- src/emotion`를 본다.
+
+## 2026-09-24 · uncommitted · feat(emotion): stage-aware boot card for the LCD (D-190 S2)
+
+- 변경: `info_screen.render_boot`/`boot_lines` 추가. 부팅 표시(`rosy-boot-display`, CORE 밖)가 쓰는 320x240 카드: 이름, 릴리스,
+  단계(FAILED 빨강 + 실패 unit), `IP:포트`, 배터리, AP SSID·비밀번호. D-82 팔레트, 긴 문자열은 줄이고 최소 글꼴 아래에서만 자름.
+  기존 `render`(얼굴의 정보 카드)는 그대로. 얼굴 자체는 여전히 벤치 전용(D-169)
+- 증거: `python -m pytest src/apps/emotion/test -q` 43 passed, 4 skipped(2026-09-24 Windows), 부팅 카드 시험은 WSL(DejaVu)에서도 통과
+- gate 변화: 없음
+- 결정: D-190
+- 교훈: 없음

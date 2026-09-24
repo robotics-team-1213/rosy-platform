@@ -49,14 +49,11 @@ _COMMON_MEDIA = {
 }
 
 
-def _web_common_dir():
-    try:
-        from ament_index_python.packages import get_package_share_directory
-        shared = os.path.join(get_package_share_directory("web_common"))
-        if os.path.isfile(os.path.join(shared, "components.css")):
-            return shared
-    except Exception:
-        pass
+def web_common_dir(share=None):
+    """The installed web_common share when it carries the controls, else the
+    source tree. The node resolves ``share``; this module stays ROS-free (D-171)."""
+    if share and os.path.isfile(os.path.join(share, "components.css")):
+        return share
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))),
@@ -94,7 +91,7 @@ def _handler(node, html, api):
 
         def _common(self, name):
             media = _COMMON_MEDIA.get(name)
-            root = _web_common_dir()
+            root = getattr(node, 'web_common_dir', None) or web_common_dir()
             file = os.path.join(root, name)
             if media is None or not os.path.isfile(file):
                 self.send_response(404)

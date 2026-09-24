@@ -70,7 +70,7 @@ Layout stays with the surface.
 | L2 — Grammar | where a control sits, and the question the surface answers | per surface |
 | L3 — Content | what a capability contributes | portable across surfaces |
 
-Browser chrome is one set (D-187) in `web_common`: `ui-text`, `ui-head`,
+Browser chrome is one set (D-194) in `web_common`: `ui-text`, `ui-head`,
 `ui-grid`, `ui-button`, `ui-field`, `ui-tag`, `ui-chip`, `ui-triage`, and
 `ui-evidence`. A button names a `kind`. Evidence names a `state`. A surface
 places the control and does not repaint it. A new page copies

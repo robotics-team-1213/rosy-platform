@@ -110,11 +110,33 @@ hardware_dependencies:
   rpi_ws281x_commit: 1396df4f35a86de0f7e5eda91d94d4539eef1727
   rpi_ws281x_url: https://codeload.github.com/jgarff/rpi_ws281x/tar.gz/1396df4f35a86de0f7e5eda91d94d4539eef1727
   rpi_ws281x_sha256: 18896f9576848944a7f53834b4e329aaeb1961d2cadf7bf67aecf1f9df91aaa6
+  sllidar_ros2_commit: 34300099fadfc772965962dec837bf436706188f
+  sllidar_ros2_url: https://codeload.github.com/Slamtec/sllidar_ros2/tar.gz/34300099fadfc772965962dec837bf436706188f
+  sllidar_ros2_sha256: 6a57c289a235a37dce0b07ef6fdc3ee003e646140d3fdc982988e7bf652367a7
   verified: true
   note: >-
     Pinky Pro native ARM64 build inputs. WiringPi is installed both on the
     build host and in the target rootfs; rpi_ws281x is linked statically into
     lamp_control from the pinned Pi 5 branch snapshot.
+    sllidar_ros2 (RPLIDAR C1 driver, D-192) is built from source into the
+    release payload at the commit the Docker io image used; the archive
+    hash was checked 2026-09-24 by two independent downloads.
+
+python_runtime:
+  requirements: device-python-requirements.txt
+  requirements_sha256: a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176
+  python_version: "3.12"
+  install_prefix: /usr/local
+  pydantic_major: 2
+  verified: true
+  note: >-
+    D-189. CORE's pip runtime (pydantic 2, fastapi, starlette, uvicorn,
+    websockets and their closure), hash-locked per wheel for cp312 aarch64
+    and x86_64. rosdep's apt python3-pydantic 1.10 / python3-fastapi 0.101
+    stay installed but are shadowed by /usr/local. Hashes were checked on
+    2026-09-24 by a --require-hashes download for both platforms.
+    D-192 added the rosy-io set (dynamixel-sdk 3.8.4, pyserial 3.5) to the
+    same file, so native_release.py's runtime check covers it too.
 
 containers:
   role: development-and-ci-only
@@ -146,6 +168,10 @@ accounts:
   io_user: rosy-io
   io_uid: 961
   io_gid: 961
+  # D-190: rosy-boot-display.service (LCD, buzzer, battery ADC read).
+  display_user: rosy-display
+  display_uid: 962
+  display_gid: 962
   login_uid_must_differ: true
 
 sources:

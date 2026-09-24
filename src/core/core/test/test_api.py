@@ -170,8 +170,14 @@ def test_system_info_and_capabilities(client):
     assert "ros_namespace" in r.json()
     assert "ros_domain_id" in r.json()
     assert "robot_number" in r.json()
+    # The default fixture is `core` mode: until odometry proves a base is
+    # attached, CAP-001 withholds the hardware flags (D-32, D-161).
+    r = tc.get("/api/v1/system/capabilities", headers=VIEWER)
+    assert r.json()["swarm"] == {"follow": False, "lead": False}
+    svc.state.set_velocity(0.0, 0.0)
     r = tc.get("/api/v1/system/capabilities", headers=VIEWER)
     assert r.json()["swarm"] == {"follow": True, "lead": True}
+    assert "withheld" not in r.json()
 
 
 def test_inventory_is_booting_before_diagnostics_arrive(client):
@@ -195,6 +201,7 @@ def test_inventory_leaves_booting_after_a_diagnostic(client):
 
     tc, svc = client
     svc.state.set_diagnostic("drive", HealthState.OK)
+    svc.state.set_velocity(0.0, 0.0)  # odometry: a base is attached
     body = tc.get("/api/v1/system/inventory", headers=VIEWER).json()
     assert body["device_state"] == "READY"
     by_id = {item["id"]: item for item in body["descriptors"]}
@@ -213,7 +220,8 @@ def test_robot_state_carries_server_judged_evidence(client):
         record = evidence[channel]
         assert record["evidence"] in ("fresh", "delayed", "disconnected", "unavailable")
         assert isinstance(record["stale_after_s"], (int, float))
-        assert record["evidence"] == "disconnected"
+        # Default fixture is CORE-only: no channel has a configured source.
+        assert record["evidence"] == "unavailable"
         assert record["received_at"] is None
     assert evidence["pose"]["stale_after_s"] == 2.0
     assert evidence["velocity"]["stale_after_s"] == 0.5
@@ -225,7 +233,7 @@ def test_robot_state_carries_server_judged_evidence(client):
     assert fresh["pose"]["evidence"] == "fresh"
     assert fresh["velocity"]["evidence"] == "fresh"
     assert fresh["pose"]["received_at"]
-    assert fresh["battery"]["evidence"] == "disconnected"
+    assert fresh["battery"]["evidence"] == "unavailable"
 
 
 def test_inventory_is_a_mobile_base_without_pick_or_rfid(client):

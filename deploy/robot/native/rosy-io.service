@@ -9,12 +9,30 @@ Type=simple
 User=rosy-io
 Group=rosy-io
 SupplementaryGroups=dialout i2c video gpio spi
+# D-192 no-motion hardware mode is the default: bringup, LiDAR, battery and
+# joint states run, motor torque stays off and cmd_vel is not subscribed.
+# Driving needs ROSY_IO_DRIVE_ENABLED=true in /etc/rosy/runtime.env, which
+# overrides this line (EnvironmentFile= wins over Environment=).
+Environment=ROSY_IO_DRIVE_ENABLED=false
 EnvironmentFile=/etc/rosy/runtime.env
 # D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
 LogsDirectory=rosy-io
 Environment=ROS_HOME=/var/log/rosy-io ROS_LOG_DIR=/var/log/rosy-io
+# D-189 D3: a writable HOME under the unit's own state directory. The passwd
+# home is under /home, which ProtectHome=true makes unreadable (EACCES).
+StateDirectory=rosy/io
+StateDirectoryMode=0750
+Environment=HOME=/var/lib/rosy/io
+# D-189 review: HOME is writable, so nothing may run from it. No login shell
+# (~/.profile, ~/.bash_profile) and no user site (~/.local, usercustomize);
+# the environment reaches ExecStartPost's python as well.
+Environment=PYTHONNOUSERSITE=1
 WorkingDirectory=/opt/rosy/current
-ExecStart=/usr/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 launch bringup bringup_robot.launch.py namespace:=${ROSY_NAMESPACE} cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S} motor_device:=/dev/rosy-motor enable_lidar:=true enable_battery:=false'
+# D-192 review: only the exact words true/false. launch_ros would read "yes",
+# "1" or "True" as a boolean and drive; anything else stops the unit (fail closed).
+# $$ is systemd's literal dollar: bash reads the value from the environment.
+ExecStartPre=/usr/bin/bash --noprofile --norc -c 'case "$$ROSY_IO_DRIVE_ENABLED" in true|false) exit 0 ;; *) echo "ROSY_IO_DRIVE_ENABLED must be true or false, got: $$ROSY_IO_DRIVE_ENABLED" >&2; exit 78 ;; esac'
+ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 launch bringup bringup_robot.launch.py namespace:=${ROSY_NAMESPACE} cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S} motor_device:=/dev/rosy-motor enable_lidar:=true enable_battery:=true drive_enabled:=${ROSY_IO_DRIVE_ENABLED}'
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=10
@@ -37,4 +55,6 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-ReadWritePaths=/var/lib/rosy/commissioning /run/rosy
+# commissioning/ is not created by the image; a missing ReadWritePaths entry
+# fails the unit with 226/NAMESPACE, so it is optional ("-").
+ReadWritePaths=-/var/lib/rosy/commissioning /run/rosy

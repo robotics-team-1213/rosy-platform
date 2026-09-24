@@ -1,5 +1,5 @@
 import { createFieldMap } from "./map.js";
-import { triage } from "./triage.js";
+import { CORE_ONLY_REASON, CORE_ONLY_TEXT, triage } from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
 import {
   bindFormSave,
@@ -66,6 +66,8 @@ function motionEvidenceBlocks(state) {
 }
 
 function renderRobotInfo(info) {
+  session.runtimeMode = info.runtime_mode || "";
+  renderSafetyHero();
   const name = info.robot_name || info.name || "Rosy";
   setText("robot-name", name);
   setText("robot-id", `${info.robot_id || "—"} / ${info.hardware_model || "unknown model"} / ${info.runtime_mode || "core"}`);
@@ -331,7 +333,7 @@ function renderRobotState(state) {
   setText("velocity-linear", number(state.velocity?.linear, 3), "—", state.evidence?.velocity);
   setText("velocity-angular", number(state.velocity?.angular, 3), "—", state.evidence?.velocity);
   setText("battery-value", percent(state.battery?.percent), "—", state.evidence?.battery);
-  setText("battery-voltage", Number.isFinite(Number(state.battery?.voltage)) ? `${number(state.battery.voltage, 2)} V` : "voltage —", "—", state.evidence?.battery);
+  setText("battery-voltage", metricNumber(state.battery?.voltage) === null ? "voltage —" : `${number(state.battery.voltage, 2)} V`, "—", state.evidence?.battery);
   setText("navigation-state", state.navigation, "—", state.evidence?.navigation);
   setText("map-id", `map ${state.map_id || "—"}`);
   setText("state-age", state.timestamp ? new Date(state.timestamp).toLocaleTimeString("ko-KR") : "—");
@@ -343,10 +345,7 @@ function renderRobotState(state) {
   renderLineFollow(state.line_follow);
   renderTrafficStatus(state.traffic_policy);
 
-  const stopped = Boolean(state.safety?.estop);
-  elements["safety-indicator"].className = `hero-safety ${stopped ? "danger" : "safe"}`;
-  setText("safety-label", stopped ? "STOPPED" : "READY");
-  setText("safety-source", stopped ? "비상정지 활성" : "주행 회로 정상");
+  renderSafetyHero();
   setConnection("online", "상태 스트림 연결");
   setText("last-sync", `마지막 동기화 ${new Date().toLocaleTimeString("ko-KR")}`);
   renderTriage();
@@ -355,15 +354,42 @@ function renderRobotState(state) {
   fieldMap.setPose();
 }
 
+// The hero and the triage banner read the same server evidence, so they cannot
+// disagree: READY only while the safety channel is fresh. A channel with no
+// source at all (CORE-only, D-161) says why instead of claiming a live circuit.
+function safetyHero(state, runtimeMode, source) {
+  if (state?.safety?.estop) {
+    return { tone: "danger", label: "STOPPED", source: source || "비상정지 활성" };
+  }
+  const judged = evidenceOf(state, "safety");
+  if (judged === "fresh") return { tone: "safe", label: "READY", source: "주행 회로 정상" };
+  if (judged === "unavailable") {
+    return runtimeMode === "core"
+      ? { tone: "unverified", label: "HW OFF", source: CORE_ONLY_TEXT }
+      : { tone: "unverified", label: "NO SOURCE", source: "안전 회로 출처 없음" };
+  }
+  return {
+    tone: "unverified",
+    label: "UNVERIFIED",
+    source: judged === "delayed" ? "안전 회로 지연" : "안전 회로 수신 끊김",
+  };
+}
+
+function renderSafetyHero() {
+  if (!session.robotState) return;
+  const hero = safetyHero(session.robotState, session.runtimeMode, session.safetySource);
+  elements["safety-indicator"].className = `hero-safety ${hero.tone}`;
+  setText("safety-label", hero.label);
+  setText("safety-source", hero.source);
+}
+
 function renderSafety(safety) {
   session.robotState = {
     ...(session.robotState || {}),
     safety: { ...(session.robotState?.safety || {}), estop: Boolean(safety.estop) },
   };
-  const stopped = Boolean(safety.estop);
-  elements["safety-indicator"].className = `hero-safety ${stopped ? "danger" : "safe"}`;
-  setText("safety-label", stopped ? "STOPPED" : "READY");
-  setText("safety-source", safety.source || (stopped ? "source unknown" : "주행 회로 정상"));
+  session.safetySource = safety.source || null;
+  renderSafetyHero();
   fillSafetyForm(safety);
   updateTeleopControls();
   updateLineFollowButtons();
@@ -568,6 +594,7 @@ function renderInventory(inventory) {
     const item = document.createElement("div");
     item.className = "capability-item";
     item.dataset.state = row.state;
+    if (row.reason === CORE_ONLY_REASON) item.dataset.cause = "runtime";
     const label = document.createElement("span");
     label.textContent = row.id;
     const state = document.createElement("b");
@@ -575,7 +602,7 @@ function renderInventory(inventory) {
     item.append(label, state);
     if (row.reason) {
       const reason = document.createElement("small");
-      reason.textContent = row.reason;
+      reason.textContent = row.reason === CORE_ONLY_REASON ? CORE_ONLY_TEXT : row.reason;
       item.append(reason);
     }
     elements["capability-list"].append(item);
@@ -872,12 +899,13 @@ function updateAdminControls() {
   setEnabled("network-connect", networkOn);
 }
 
+// The server names the caller's role on a route every role may read. Probing an
+// admin-only route instead cost every viewer a 403 in the console on each load.
 async function detectRole() {
   session.role = "";
   try {
-    const response = await fetch("/api/v1/logs/audit?limit=1", { headers: authHeaders() });
-    if (response.status === 200) session.role = "administrator";
-    else if (response.status !== 401) session.role = "operator";
+    const info = await api("/api/v1/system/info");
+    session.role = info?.caller_role || "";
   } catch (_error) {
     session.role = "";
   }

@@ -42,3 +42,10 @@
 - gate 변화: 없음.
 - 결정: 없음 — wiringPi 시그니처 불확실성(버전별 const 유무)에 대한 양쪽 호환.
 - 교훈: x86 호스트 계약 시험은 C++ 소스를 컴파일하지 못한다 — WSL + wiringPi 스텁으로 -fsyntax-only 를 돌리면 ARM64 전야의 컴파일 결함을 잡을 수 있다.
+
+## 2026-09-24 · uncommitted · fix(sensor_adc): hold the I2C-1 bus lock per channel transaction (D-192 review)
+- 변경: `read_channel`이 `/dev/i2c-1` fd에 `flock(LOCK_EX)`를 잡고 쓰기·6 ms·읽기(`read_channel_locked`)를 한 뒤 푼다. `rosylib.Battery`·`ir_adc_node`와 같은 규칙
+- 증거: WSL `g++ -fsyntax-only -std=c++17`(Jazzy 헤더 + wiringPi 스텁) `ADC_SYNTAX_OK`, `python -m pytest src/hardware/sensor_adc/test -q` 통과(2026-09-24)
+- gate 변화: 없음. 노드는 여전히 벤치 전용
+- 결정: D-192 Proposed
+- 교훈: 없음

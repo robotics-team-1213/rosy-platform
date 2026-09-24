@@ -25,7 +25,13 @@ def _keys(tmp_path: Path) -> tuple[Path, Path]:
     return private, public
 
 
-def _release(root: Path, private: Path, release_id: str, *, architecture="arm64") -> Path:
+# D-189: sha256 of the CORE Python requirements lock a release was built against.
+IMAGE_RUNTIME = "1" * 64
+OTHER_RUNTIME = "2" * 64
+
+
+def _release(root: Path, private: Path, release_id: str, *, architecture="arm64",
+             python_runtime: str | None = IMAGE_RUNTIME) -> Path:
     release = root / "opt" / "rosy" / "releases" / release_id
     files = {
         "install/.rosy-release": release_id,
@@ -33,6 +39,8 @@ def _release(root: Path, private: Path, release_id: str, *, architecture="arm64"
         "rosy-packages.txt": "core\ninterfaces\n",
         "source-revision.txt": "a" * 40 + "\n",
     }
+    if python_runtime is not None:
+        files["python-runtime.sha256"] = python_runtime + "\n"
     for relative, content in files.items():
         path = release / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,6 +107,9 @@ def native_case(tmp_path: Path):
     key = root / "etc" / "rosy" / "trusted-release-keys" / public.name
     key.parent.mkdir(parents=True)
     key.write_bytes(public.read_bytes())
+    marker = root / "usr" / "local" / "share" / "rosy" / "python-runtime.sha256"
+    marker.parent.mkdir(parents=True)
+    marker.write_text(IMAGE_RUNTIME + "\n", encoding="utf-8")
     first = _release(root, private, "2026.09.22-001")
     second = _release(root, private, "2026.09.22-002")
     return NativeReleaseManager, root, key, private, first, second, MemoryLinks()
@@ -212,3 +223,76 @@ def test_artifact_gate_can_verify_the_signed_native_release_before_media_write()
     assert "ROSY_NATIVE_RELEASE_ID" in verifier
     assert "native_release.py" in verifier
     assert " verify --release-id" in verifier
+
+
+# --- D-189: a release must match the image's CORE Python runtime -----------
+
+def test_release_built_for_another_python_runtime_is_refused_before_runtime_stops(native_case):
+    manager_type, root, key, private, _first, _second, links = native_case
+    other = _release(root, private, "2026.09.22-003", python_runtime=OTHER_RUNTIME)
+    runtime = RuntimeRecorder()
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links)
+
+    with pytest.raises(ValueError, match="needs Python runtime 2{64}.*reflash with a matching image"):
+        manager.activate(other.name)
+
+    assert runtime.actions == []
+    assert links.values["current"] is None
+    assert not (root / "var/lib/rosy/releases/native-activation.json").exists()
+
+
+def test_release_without_a_declared_python_runtime_is_refused(native_case):
+    manager_type, root, key, private, _first, _second, links = native_case
+    legacy = _release(root, private, "2026.09.22-003", python_runtime=None)
+
+    with pytest.raises(ValueError, match="NATIVE_PYTHON_RUNTIME: .*does not declare"):
+        manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(legacy.name)
+
+
+def test_image_without_a_recorded_python_runtime_refuses_every_release(native_case):
+    manager_type, root, key, _private, first, _second, links = native_case
+    (root / "usr/local/share/rosy/python-runtime.sha256").unlink()
+
+    with pytest.raises(ValueError, match="this image has none recorded"):
+        manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+
+
+def test_python_runtime_file_is_covered_by_the_release_signature(native_case):
+    manager_type, root, key, _private, first, _second, links = native_case
+    (first / "python-runtime.sha256").write_text(OTHER_RUNTIME + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="CHECKSUM_MISMATCH"):
+        manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+
+
+def test_rollback_to_a_release_for_another_python_runtime_is_refused(native_case):
+    manager_type, root, key, _private, first, second, links = native_case
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links)
+    manager.activate(first.name)
+    manager.activate(second.name)
+    marker = root / "usr/local/share/rosy/python-runtime.sha256"
+    marker.write_text(OTHER_RUNTIME + "\n", encoding="utf-8")
+    runtime = RuntimeRecorder()
+
+    with pytest.raises(ValueError, match="needs Python runtime 1{64}"):
+        manager_type(root=root, public_key=key, runtime=runtime, links=links).rollback()
+
+    assert runtime.actions == []
+    assert links.values == {"current": second.name, "previous": first.name}
+
+
+def test_recovery_never_holds_on_the_python_runtime(native_case):
+    # Recovery restores the release that was running; refusing it would leave
+    # the device with no current release at all.
+    manager_type, root, key, _private, first, second, links = native_case
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links)
+    manager.activate(first.name)
+    (root / "usr/local/share/rosy/python-runtime.sha256").unlink()
+    journal = root / "var/lib/rosy/releases/native-activation.json"
+    journal.write_text(json.dumps({
+        "schema_version": 1, "operation": "activate", "candidate": second.name,
+        "old_current": first.name, "old_previous": None, "phase": "switched",
+    }), encoding="utf-8")
+
+    assert manager.recover()["recovered"] is True
+    assert links.values["current"] == first.name

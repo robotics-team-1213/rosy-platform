@@ -24,6 +24,14 @@ OPERATOR_KEY_TYPES = frozenset({
     "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
 })
 MAX_OPERATOR_KEYS = 8
+# D-191: the per-card CORE API credential. The writer issues it in the format of
+# CORE's generate_token (secrets.token_urlsafe(32)) and an id in the format of
+# new_token_id (secrets.token_hex(6)); the bundle carries only CORE's stored
+# record, keyed "sha256" exactly as core_api_web.api.deps.stored_token_entries.
+CORE_API_ROLE = "administrator"
+CORE_API_RECORD_KEYS = frozenset({"id", "role", "sha256", "label", "created_at"})
+_CORE_API_VALUE = re.compile(r"^[A-Za-z0-9_-]{43}$")
+_CORE_API_ID = re.compile(r"^[0-9a-f]{12}$")
 _OPERATOR_KEY = re.compile(r"^(?P<type>[a-z0-9@.-]+) (?P<blob>[A-Za-z0-9+/]+={0,2})(?: (?P<comment>[!-~ ]{1,100}))?$")
 
 
@@ -123,6 +131,32 @@ def derive_wpa_psk(ssid: str, passphrase: str) -> str:
     ).hex()
 
 
+def core_api_record(value: str, record_id: str, *, label: str, created_at: str) -> dict[str, Any]:
+    """CORE's stored token record for `value`; the value itself is not kept."""
+    if not isinstance(value, str) or not _CORE_API_VALUE.fullmatch(value):
+        raise ValueError("CORE API credential must be a 43-character URL-safe value")
+    if not isinstance(record_id, str) or not _CORE_API_ID.fullmatch(record_id):
+        raise ValueError("CORE API credential id must be 12 lowercase hexadecimal characters")
+    return {
+        "id": record_id,
+        "role": CORE_API_ROLE,
+        # Same digest as core_api_web.api.deps.token_digest.
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+        "label": label,
+        "created_at": created_at,
+    }
+
+
+def _validate_core_api_record(record: Any) -> None:
+    if (not isinstance(record, dict) or set(record) != CORE_API_RECORD_KEYS
+            or not isinstance(record["id"], str) or not _CORE_API_ID.fullmatch(record["id"])
+            or record["role"] != CORE_API_ROLE
+            or not isinstance(record["sha256"], str) or not RAW_64_HEX_PATTERN.fullmatch(record["sha256"])
+            or not isinstance(record["label"], str) or len(record["label"]) > 64
+            or not isinstance(record["created_at"], str) or not record["created_at"]):
+        raise ValueError("core_api.record is invalid")
+
+
 def _checksum(payload: Mapping[str, Any]) -> str:
     canonical = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -145,6 +179,8 @@ def create_provision_bundle(
     pairing_credential: str | None = None,
     operator_ssh_keys: Collection[str] | None = None,
     ap_password: str | None = None,
+    core_api_token: str,
+    core_api_token_id: str,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -208,6 +244,10 @@ def create_provision_bundle(
     }
     if operator_ssh_keys:
         bundle["operator"] = {"ssh_authorized_keys": [validate_operator_key(key) for key in operator_ssh_keys]}
+    bundle["core_api"] = {"record": core_api_record(
+        core_api_token, core_api_token_id,
+        label=f"{identity.device_name} card admin", created_at=created_text,
+    )}
     bundle["payload_checksum"] = _checksum(bundle)
     return validate_provision_bundle(bundle)
 
@@ -215,10 +255,15 @@ def create_provision_bundle(
 def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     expected_top = {
         "schema_version", "device_identity", "release", "dds", "runtime",
-        "network", "fleet", "created_at", "nonce", "payload_checksum",
+        "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api",
     }
     if set(bundle) - {"operator"} != expected_top:
         raise ValueError("provision bundle keys are invalid")
+    # D-191: required. Without the card's own record CORE would fall back to
+    # the shared rosy-dev-* credentials in its package defaults.
+    if not isinstance(bundle["core_api"], dict) or set(bundle["core_api"]) != {"record"}:
+        raise ValueError("core_api is invalid")
+    _validate_core_api_record(bundle["core_api"]["record"])
     if "operator" in bundle:
         operator = bundle["operator"]
         if not isinstance(operator, dict) or set(operator) != {"ssh_authorized_keys"}:
@@ -315,4 +360,9 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
         **({"operator": {"ssh_key_fingerprints": [
             operator_key_fingerprint(key) for key in bundle["operator"]["ssh_authorized_keys"]
         ]}} if "operator" in bundle else {}),
+        # D-191: the id and a short digest fingerprint name the card's credential.
+        "core_api": {
+            "token_id": bundle["core_api"]["record"]["id"],
+            "digest_fingerprint": bundle["core_api"]["record"]["sha256"][:16],
+        },
     }

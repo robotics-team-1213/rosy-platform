@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <sys/file.h>
+
 #include "wiringPiI2C.h"
 
 using realtime_tools::RealtimePublisher;
@@ -116,6 +118,21 @@ class RosySensorADC : public rclcpp::Node
         // the 12-bit sample. Both return codes are checked — a dead bus
         // yields short reads, not zeros.
         bool read_channel(int channel, uint16_t &value)
+        {
+            // D-192 bus ownership: the MCU keeps one register pointer, and
+            // rosylib.Battery / control's ir_adc_node read it from other
+            // processes. Every reader holds an exclusive flock on its
+            // /dev/i2c-1 descriptor for the whole write, settle, read.
+            if (flock(fd_, LOCK_EX) != 0) {
+                last_error_ = "ch" + std::to_string(channel) + ": bus lock failed";
+                return false;
+            }
+            const bool ok = read_channel_locked(channel, value);
+            flock(fd_, LOCK_UN);
+            return ok;
+        }
+
+        bool read_channel_locked(int channel, uint16_t &value)
         {
             static constexpr uint8_t registers[CH_COUNT] = {0x88, 0xC8, 0x98, 0xD8, 0xF8};
             uint8_t data[2] = {0, };

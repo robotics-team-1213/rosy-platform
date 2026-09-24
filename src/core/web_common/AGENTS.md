@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Framework-free shared web assets: `tokens.css` (single colour and type scale), `components.css` and `ui.js` (shared browser controls, D-187), and `core_ui_logic.js` (server-judged evidence enum adapter). Installed to `share/web_common`; consumed by `core_api_web`, `fleet`, the game host, and the control diagnostic page.
+Framework-free shared web assets: `tokens.css` (single colour and type scale), `components.css` and `ui.js` (shared browser controls, D-194), and `core_ui_logic.js` (server-judged evidence enum adapter). Installed to `share/web_common`; consumed by `core_api_web`, `fleet`, the game host, and the control diagnostic page.
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
 

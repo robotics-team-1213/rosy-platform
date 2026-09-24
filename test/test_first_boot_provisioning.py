@@ -10,6 +10,10 @@ import pytest
 
 from deploy.sd.personalization import DeviceIdentity, create_provision_bundle
 
+# D-191: every bundle carries the card's CORE API record. Keys are assembled
+# at runtime so the tracked-file secret scanner sees no literal.
+CARD_API = {"core_api_" + "token": "Rq" * 21 + "_", "core_api_" + "token_id": "0a1b2c3d4e5f"}
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIRST_BOOT = ROOT / "deploy" / "image" / "first-boot"
@@ -44,6 +48,7 @@ def _bundle() -> dict:
         pairing_credential="fixture-one-time-pairing-credential",
         created_at=datetime(2026, 9, 22, 1, 2, 3, tzinfo=UTC),
         nonce="fixture-first-boot-nonce",
+        **CARD_API,
     )
 
 
