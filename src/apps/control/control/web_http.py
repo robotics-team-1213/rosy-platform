@@ -24,6 +24,7 @@ Backend API (all CORS *, JSON contract unchanged since v1):
 import http.server
 import json
 import math
+import os
 import time
 
 from control.control.navigation_session import validate_options
@@ -37,6 +38,28 @@ POST_VERBS = {
     '/estop': ('estop_pub', ('stop', 'release')),
 }
 GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
+
+
+_COMMON_MEDIA = {
+    "tokens.css": "text/css",
+    "components.css": "text/css",
+    "ui.js": "text/javascript",
+    "core_ui_logic.js": "text/javascript",
+}
+
+
+def _web_common_dir():
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        shared = os.path.join(get_package_share_directory("web_common"))
+        if os.path.isfile(os.path.join(shared, "components.css")):
+            return shared
+    except Exception:
+        pass
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))),
+        "core", "web_common")
 
 
 def _handler(node, html, api):
@@ -68,8 +91,33 @@ def _handler(node, html, api):
             self.end_headers()
             self.wfile.write(data)
 
+        def _common(self, name):
+            media = _COMMON_MEDIA.get(name)
+            root = _web_common_dir()
+            file = os.path.join(root, name)
+            if media is None or not os.path.isfile(file):
+                self.send_response(404)
+                self.end_headers()
+                return
+            with open(file, 'rb') as handle:
+                data = handle.read()
+            self.send_response(200)
+            self.send_header('Content-Type', media)
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
         def do_GET(self):
             path = self.path.split('?')[0]
+            if path.startswith('/common/'):
+                name = path[len('/common/'):]
+                if '/' in name or name.startswith('.'):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._common(name)
+                return
             if path == '/':
                 self._html()
                 return

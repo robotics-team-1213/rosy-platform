@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Float64
+from . import executor_choice
 
 
 def yaw_from_quat(q) -> float:
@@ -124,7 +125,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = ControlNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

@@ -112,8 +112,12 @@ SIZE_VERDICTS = {
         "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
         "and core/test/test_docking_*.py (X5)",
     ),
+    "sim/gz_sim/scripts/lane_live_view.py": (
+        709,
+        "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
+    ),
     "control": (
-        31_249,
+        32_106,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }

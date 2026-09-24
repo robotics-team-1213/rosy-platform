@@ -69,6 +69,121 @@
    - 캐시는 필요해지면 따로 결정한다.
    - 측정은 호출 단위이고 goal tick 단위가 아니다.
 
+   **R4 구현 메모 (2026-09-24).**
+   - `tools/gz/rig_environment.py`가 실행 중 2 s마다 부하, CPU 압력(PSI), Gazebo 세션을 기록한다. 기록기는
+     잠금 fd를 닫고 실행되며, rig 스크립트가 끝나면 함께 끝난다.
+   - 실행이 무효인 조건은 다음과 같다. 모든 조건은 첫 60 s를 제외하고 판단한다.
+     - 평균 부하 16 이상
+     - 요청한 속도 대비 0.1 미만의 시뮬 속도
+     - 같은 파티션에 Gazebo 세션이 둘 이상
+   - 무효면 `RIG ENVIRONMENT: INVALID`를 내고 종료 코드 3으로 끝난다. 통과·실패는
+     `RIG VERDICT (environment-invalid, not counted)`로만 표시한다. 판정기가 비정상 종료하면 종료 코드 3과
+     구분된다.
+   - 속도 판정에는 증거가 필요하다. 모니터가 잰 sim 10 s 이상과 그 구간의 벽시계 시간이다. 증거가 없으면
+     통과·실패 판정을 그대로 둔다. 실제 실패를 "환경"으로 덮지 않으려는 규칙이다.
+   - CPU 압력(PSI `some avg10`)과 부하 16 이상 표본 비율은 기록만 하고 판정에는 쓰지 않는다. 다른 세션의
+     Gazebo가 없는 단독 실행에서도 부하 16 이상 표본이 29%였다. PSI 기준은 기록된 실행으로 보정한 뒤
+     판정에 넣는다(사용자 승인 2026-09-24).
+   - 매트릭스 러너(`run_calibration_spaces.py`)는 3을 `environment_invalid`, 4를 `lock_busy`로 두고
+     통과·실패 집계에서 뺀다.
+   - 세션 간 Gazebo 잠금(`/tmp/rosy-gazebo.lock`)은 이 rig만 잡는다. 다른 Gazebo 실행기(`gz_sim` launch,
+     `run_fleet_sim.sh`, localization rig)의 채택은 단계적이다. 그전까지 피어 부하는 가드가 측정만 한다.
+   - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄로 재판정했다.
+
+   **R8 구현 메모 (2026-09-24).**
+   - `src/apps/control/tools/device/hotpath_measure.py`를 만들었다. ROS 없이 돌고, 하위 명령마다 JSON 보고서
+     하나(`rosy.control.hotpath_measure/1`)를 쓴다.
+   - `bench`는 `wall_tracker._segments`(720-ray), `match_motion`(180점, 10° 회전), `inflate`(200×200, 반경
+     5셀)의 median·p90·max를 잰다. 입력은 동등성 테스트 생성기와 같은 형태다.
+   - `watch`는 control 노드 프로세스별 CPU%(`/proc/<pid>/stat` 차분)와 RSS, 부하, PSI를 간격마다 기록한다.
+   - 보고서는 `/proc/device-tree/model`이 Raspberry Pi일 때만 실기 증거로 표시한다. host 수치(Windows x86
+     `match_motion` 80 ms 등)는 증거가 아니다.
+   - 실기 실행은 HOLD다. 하드웨어가 없어 Pi 수치는 아직 없다. 절차는 도구 docstring과 device 검증 계획의
+     2026-09-24 checkpoint에 있다.
+   - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,868줄로 재판정했다.
+
+   **R3 구현 메모 (2026-09-24).**
+   - 선택은 파라미터가 아니라 환경 변수 `ROSY_EXECUTOR`(`single` 기본, `events`)로 한다. 노드 파라미터보다
+     먼저, 노드 밖에서 정해야 하기 때문이다. 표의 "파라미터로 선택"은 이 방식으로 대체한다.
+   - 14개 control 노드 `main()`과 rig가 `control/executor_choice.py` 하나를 거친다. 기본값은 이전과 같은
+     `rclpy.spin(node)`다. `events`는 executor의 native `spin()`을 써서 rig와 같은 루프를 잰다.
+   - `events`에서 알려진 차이: 콜백이 도착 순서로 돈다. 다른 스레드가 context를 끄면
+     `ExternalShutdownException`이 난다. 콜백이 예외를 내면(watch_node `--once`의 SystemExit) native
+     executor가 FATAL 줄을 먼저 남긴다. 종료 코드는 유지된다.
+   - WSL 탐침(리뷰): SIGINT·SIGTERM 처리, sim-time 타이머, 다른 스레드의 `call_async`는 두 방식이 같았다.
+   - R3는 아직 완료가 아니다. rig A/B(ENV:VALID 실행만), 콜백 순서 영향, 실기 측정(R8)이 남았다. 그전까지
+     제품 기본값은 `single`이다.
+
+   **R5 구현 메모 (2026-09-24).**
+   - 시간 샘플 벡터화와 먼 점의 증명적 제외를 함께 썼다. 샘플별 원판 하한이 정확한 상한 U보다
+     1e-6 이상 크면 그 점을 뺀다. 좌표·변 길이·내접 비율 가드를 못 넘으면 원본 경로로 계산한다.
+   - 남은 점이 적으면 샘플을 쌓아 한 번에, 많으면 원본 `_clearance`로 샘플마다 계산한다. 모든 점을
+     쌓은 broadcast는 루프보다 1.8배 느렸다.
+   - 직진 한계는 `clearance > margin` 비교만 내보내므로, 이동 끝을 포함한 원판 하한이 margin을 넘는
+     점을 호출당 한 번 뺀다.
+   - 호출당 비용(host, 1440점)은 sweep 21–23→4–6 ms, 직진 한계 5–39→2–8 ms다. 점이 모두 가까운 최악
+     입력에서는 원본과 비슷하다(20.9→19.7 ms).
+   - 원본은 numpy 스칼라 명령 인자에 `np.float64`를 반환한다. 결과 동일 조건이라 그대로 두었다.
+   - 독립 리뷰(APPROVE, MEDIUM 1·LOW 3) 반영: 직진 후보 가드를 maximum ≥ 1e-3으로 올리고(여유 약 1e4), 가드에 유한성 검사를 넣고, 반올림 논증을 |e|·r/R 기준으로 고쳐 쓰고, 가드 경계 코퍼스를 추가했다.
+   - main 병합 후 control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 29,037줄로 재판정했다(R3·R8 누적).
+
+   **R2 구현 메모 (2026-09-24).**
+   - 최신 값만 의미 있는 구독 12개를 KEEP_LAST depth 1로 바꿨다. calibration의 decision·motion_limits·
+     can_reverse·위험 4종, wander의 observation·motion_limits, goal_escape의 motion_limits, web의 decision·
+     motion_limits다. 명령·이벤트처럼 순서 전체가 의미 있는 구독은 그대로다.
+   - `test/subscription_scan.py`가 control의 모든 구독 depth를 읽고, 대상 목록 밖의 depth 1과 목록 안의
+     depth 10을 모두 실패로 본다.
+   - rig 교차 A/B(2026-09-24, ENV:VALID 실행만 집계): 기준본 3/3, R2 4/4 `ready`. 무효 실행 6회는
+     세지 않았다. rig 노드 CPU는 중앙값 411% 대 428%로 차이가 없다. R2의 효과는 CPU가 아니라 부하 때
+     쌓인 옛 값을 처리하지 않는 것이며, 유효 부하에서는 적체가 생기지 않아 rig로는 재현되지 않았다.
+
+   **R6 구현 메모 (2026-09-24).**
+   - Gazebo는 물리 step마다 `/clock`을 낸다(0.3배 속도에서 벽시계 초당 약 265개). `ros_gz_bridge` 1.0.22에는
+     빈도 옵션이 없다. 그래서 `RIG_CLOCK_HZ=N`이면 `tools/gz/clock_relay.py`가 gz-transport의
+     `SubscribeOptions.msgs_per_sec`로 `/clock`을 벽시계 초당 최대 N개만 ROS로 옮긴다. 값은 복사만 한다.
+     설정하지 않으면 bridge가 예전처럼 step마다 옮긴다.
+   - N은 `RIG_REALTIME_FACTOR`의 50배 이상이어야 한다(시뮬 step 20 ms 이하). 잠금 전에 검사하고 어기면
+     종료 코드 2다. `run_manifest.json`에 `clock_hz`를 남긴다.
+   - rig A/B(2026-09-24, ENV:VALID, 분리 모드): bridge 3/3 `ready`, relay 100 Hz 2/3 `ready`. rig 노드 CPU
+     중앙값은 446%에서 202%로 줄었다. 게이트 나이 최대 21 ms, scan 나이 최대 42 ms로 신선도 여유는 충분했다.
+   - relay 실패 1회는 slam_toolbox lifecycle `change_state` 응답이 rmw 단에서 유실돼(`failed to send response
+     (timeout)`) 지도가 끝내 활성화되지 않은 경우다. 시계 경로와 무관한 시작 경합으로 보지만, 27회 중 이 1회가
+     relay 쪽에서만 나왔으므로 relay를 A/B 기본값으로 쓰기 전에 반복 실행이 더 필요하다. 기본값은 bridge다.
+
+   **R3 rig A/B (2026-09-24).** main `9d9c44f1`, 분리 모드, ENV:VALID 실행만.
+   - `ROSY_EXECUTOR=single` 3/3, `events` 3/3 `ready`. rig 노드 CPU 합 중앙값은 440%에서 176%(−60%),
+     시뮬 1초당 CPU 초는 5.23에서 2.03이다. 노드마다 줄었다(safety 86→43%, wander 79→28%, web 84→28%).
+   - 콜백 순서 차이로 인한 실패는 이 표본에서 나오지 않았다.
+   - 제품 기본값은 아직 `single`이다. 기본값 전환은 실기 측정(R8 `hotpath_measure.py watch`, HOLD) 뒤 따로
+     결정한다.
+
+   **R7 원인 메모 (2026-09-24).**
+   - 한 프로세스 모드(`RIG_SINGLE_PROCESS=1`)의 "Fresh final safety command evidence required" 실패는
+     교정 신선도 hold 수정(`c67437d1`) 이전 트리에서만 재현된다.
+     - `c67437d1^1`: 1/3 실패. 이전 기록과 같은 메시지, 같은 시뮬 19.0 s. 그 실행의 게이트 출력 나이 최대는 0.247 s였다.
+     - `76181f00^1`(hold 수정 후, wall_tracker 벡터화 전): 3/3 `ready`.
+     - main: 3/3 `ready`.
+   - 메커니즘: 한 프로세스에서는 노드 7개가 executor 스레드 하나를 나눠 쓴다. 느린 콜백 하나가 safety 출력을
+     늦추면, 교정의 0.25 s 신선도 검사가 한 번의 시점에서 창을 넘는다. 수정 전에는 그 한 번으로 실패했다.
+     `c67437d1`의 정지 hold(최대 1 s 대기, 0.1 s 여유)가 그 한 시점 판정을 없앴다. 분리 모드의 회전 단계
+     flake와 같은 원인이다. 한 프로세스 모드는 그 결함을 드러내는 증폭기였다.
+   - 이전에 기각된 두 가설(시계 통일, `MultiThreadedExecutor`)과도 맞는다. 둘 다 스레드 경합이나 대기
+     조건을 바꿨을 뿐 한 시점 판정은 그대로였다.
+   - 추가 수정은 필요 없다. 이 모드는 D-171 규칙 (d)처럼 A/B 동등 비교로만 쓴다. 표본이 작으므로(실패 1/3,
+     수정 후 0/6) 결론은 "재현 조건과 일치"이며 확률적 증명은 아니다.
+   - 한 프로세스 모드의 CPU는 약 109%로 분리 모드(약 440%)보다 훨씬 낮다. 프로세스 사이 DDS 전달과 프로세스별
+     `/clock` 처리가 없기 때문이다.
+
+   **R8 실기 bench (2026-09-24).** Pinky `rosy-pinky-e4us`(Raspberry Pi 5 Model B Rev 1.1, numpy 1.26.4),
+   release 005 위에서 `/tmp` 사본으로 측정했다. 설치본은 건드리지 않았다. 보고서 `evidence.device`는 true다.
+   - old = `c67437d1^1`(D-185 이전), new = main `75c69277`. 같은 도구, 50회, old/new를 번갈아 2회씩 돌렸다.
+     CORE만 돌던 상태였다(부하 약 0.3, CORE 한 코어의 약 22%).
+   - `wall_tracker._segments` median 21.2 → 9.1 ms(−57%), `inflate` 47.8 → 6.5 ms(−86%).
+     `match_motion`은 68–70 대 65–73 ms로 변화가 없다. 최적화 대상이 아니었다.
+   - `match_motion` 73 ms는 50 ms 교정 tick보다 길다. 회전 단계 stall의 원인 경로이므로 다음 CPU 후보다.
+   - `watch`(노드별 CPU)와 R3 EventsExecutor의 실기 비교는 아직이다. control 노드를 로봇에서 띄워야 하고
+     바퀴가 움직일 수 있으므로 사용자가 로봇 옆에 있을 때 한다.
+
 4. **범위 밖.** 줄 수·패키지 구조(D-168·D-171), 안전 판정 자체의 임계값은 바꾸지 않는다. CPU 절감을 이유로
    신선도 창이나 게이트 조건을 완화하지 않는다.
 

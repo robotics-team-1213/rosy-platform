@@ -21,6 +21,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
+from . import executor_choice
 from .sensing.camera_ground import simulation_ground_plane
 from .sensing.lane import (
     IRLineCalibration,
@@ -382,7 +383,7 @@ def main():
     rclpy.init()
     node = LineObserverNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

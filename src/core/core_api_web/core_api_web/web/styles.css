@@ -38,9 +38,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-button, input, select { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-button { color: inherit; }
+input, select { font: inherit; }
+ui-button, a { -webkit-tap-highlight-color: transparent; }
 
 /* 포커스는 상태가 아니라 상호작용이다 — 어디서나 같은 링이다. */
 :focus-visible {
@@ -103,44 +102,9 @@ button { color: inherit; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- 버튼 셋 — 크기가 위험도다(Law 3) ------------------------------------
-   주 명령은 초록이 아니라 가장 밝은 중립이다. 초록은 경보 예산이고, 정상에는
-   색이 없다(D-82). */
-.primary-button {
-  min-height: var(--target-primary);
-  padding: 0 var(--space-5);
-  border: 0;
-  border-radius: var(--radius-button);
-  color: var(--button-primary-ink);
-  background: var(--button-primary-bg);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-/* 조용한 조작: 테두리 하나. 누를 수 있다고만 말한다. */
-.quiet-button, .docs-link, .host-actions button, .waypoint-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--target-secondary);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-button);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font-size: var(--text-label);
-  text-decoration: none;
-  cursor: pointer;
-}
-.quiet-button:hover, .docs-link:hover,
-.host-actions button:hover, .waypoint-actions button:hover {
-  color: var(--paper);
-  border-color: var(--paper);
-}
-.host-actions button:disabled, .waypoint-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
+/* 버튼의 얼굴은 components.css 의 ui-button 이다. 여기는 자리만 정한다. */
+.host-actions ui-button,
+.waypoint-actions ui-button { flex: 1 1 auto; }
 
 /* ---- 필드 — 입력은 파인 면이다 ------------------------------------------ */
 .auth-row input,
@@ -410,7 +374,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 맥락은 "또 무엇이 잘못됐나"를 말한다. 제목은 끝까지 보이고 설명은 자리가
    남는 만큼만 보인다 — DOM에는 남으므로 화면 낭독기는 전문을 읽는다. */
-.triage-context li { display: flex; gap: var(--space-2); max-width: 30ch; font-size: var(--text-micro); line-height: 1.3; opacity: 0.72; white-space: nowrap; }
+.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--paper); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
 .triage-context b { flex-shrink: 0; font-weight: 600; }
 .triage-context span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .triage-context:empty { display: none; }
@@ -560,7 +524,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .capability-item span { min-width: 0; overflow: hidden; font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
 .capability-item b { font: var(--text-micro)/1 var(--mono); letter-spacing: 0.06em; }
-.capability-item small { grid-column: 1 / -1; color: var(--nominal-quiet); font-size: var(--text-micro); line-height: 1.4; }
+.capability-item small { grid-column: 1 / -1; color: var(--paper); font-size: var(--text-label); line-height: 1.4; }
 /* 가용은 정상이므로 색이 없다. 제약과 차단만 색을 쓴다(D-82). */
 .capability-item[data-state="constrained"] b { color: var(--status-warn); }
 .capability-item[data-state="blocked"] b { color: var(--status-crit); }
@@ -638,20 +602,8 @@ body[data-view="operate"] .page-footer { display: none; }
   background: var(--scrim);
 }
 .map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: var(--space-1); }
-.map-toolbar button {
-  min-height: var(--target-secondary);
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--radius-control);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--text-micro)/1 var(--mono);
-  letter-spacing: 0.08em;
-  cursor: pointer;
-}
-.map-toolbar button[aria-pressed="true"] { color: var(--button-primary-ink); background: var(--button-primary-bg); }
 /* 안내는 클릭 모드 툴바를 설명하는 글이다 — 그 아래 붙여 둔다. */
-.map-hint { max-width: 236px; margin: 0; padding: var(--space-2); color: var(--muted); font-size: var(--text-micro); line-height: 1.5; }
+.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--paper); font-size: var(--text-label); line-height: 1.45; }
 /* 범례는 지도의 색을 설명한다 — 지도 위가 제자리다. */
 .map-legend {
   position: absolute;
@@ -682,18 +634,12 @@ body[data-view="operate"] .page-footer { display: none; }
    가로로 넓다 — 글자가 세로로 눕는 순간 못 읽는다. */
 .control-panel { gap: var(--space-3); }
 .safety-actions { display: grid; gap: var(--space-2); }
-.stop-button, .release-button {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-button);
+.safety-actions ui-button {
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
   text-align: left;
-  cursor: pointer;
 }
-.stop-button { min-height: var(--target-irreversible); color: var(--paper); background: var(--status-crit); }
-.release-button { min-height: var(--target-secondary); color: var(--paper); border-color: var(--surface-line); background: transparent; }
-.stop-button span, .release-button span, .stop-button small, .release-button small { display: block; }
-.stop-button span, .release-button span { margin-bottom: var(--space-1); font: 700 var(--text-value)/1.2 var(--mono); letter-spacing: 0.04em; }
-.stop-button small, .release-button small { font: var(--text-micro)/1.3 var(--mono); opacity: 0.75; }
 
 /* 모드는 셋 중 하나다 — 분절 제어. 지금 어디에 있는지가 채운 칸으로 보인다. */
 .mode-control {
@@ -703,20 +649,8 @@ body[data-view="operate"] .page-footer { display: none; }
   border-radius: var(--radius-control);
   overflow: hidden;
 }
-.mode-control button {
-  min-height: var(--target-secondary);
-  border: 0;
-  border-right: 1px solid var(--surface-line);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--text-label)/1 var(--mono);
-  letter-spacing: 0.08em;
-  cursor: pointer;
-}
-.mode-control button:last-child { border-right: 0; }
-.mode-control button:hover:not(:disabled) { color: var(--paper); background: var(--surface-sheen); }
-.mode-control button.active { color: var(--button-primary-ink); background: var(--button-primary-bg); font-weight: 700; }
-.mode-control button:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.35; }
+.mode-control ui-button { border-right: 1px solid var(--surface-line); }
+.mode-control ui-button:last-child { border-right: 0; }
 
 .line-follow-control { display: flex; flex-direction: column; gap: var(--space-2); }
 .line-follow-copy { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
@@ -729,23 +663,13 @@ body[data-view="operate"] .page-footer { display: none; }
   border-radius: var(--radius-control);
   overflow: hidden;
 }
-.line-follow-modes button {
-  min-height: var(--target-secondary);
-  border: 0;
-  border-right: 1px solid var(--surface-line);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--text-label)/1 var(--mono);
-  cursor: pointer;
-}
-.line-follow-modes button:last-child { border-right: 0; }
-.line-follow-modes button.active { color: var(--button-primary-ink); background: var(--series-primary); font-weight: 700; }
-.line-follow-modes button:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.35; }
+.line-follow-modes ui-button { border-right: 1px solid var(--surface-line); }
+.line-follow-modes ui-button:last-child { border-right: 0; }
 .line-follow-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); margin: 0; }
 .line-follow-facts div { min-width: 0; padding: var(--space-1); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
 .line-follow-facts dt { color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
 .line-follow-facts dd { overflow: hidden; margin: var(--space-1) 0 0; font: 700 var(--text-label)/1.2 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.line-follow-message { min-height: 1.4em; margin: 0; color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.line-follow-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--text-label)/1.4 var(--body); }
 
 .traffic-policy-control {
   display: flex;
@@ -765,10 +689,9 @@ body[data-view="operate"] .page-footer { display: none; }
 .traffic-policy-grid label { display: grid; gap: var(--space-1); color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
 .traffic-policy-grid input, .traffic-policy-grid select { min-width: 0; min-height: var(--target-secondary); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--paper); background: var(--ground); padding: 0 var(--space-2); }
 .traffic-policy-actions, .simulation-signal-controls { display: flex; align-items: center; gap: var(--space-1); }
-.traffic-policy-actions button { flex: 1; }
+.traffic-policy-actions ui-button { flex: 1; }
 .simulation-signal-controls span { margin-right: auto; color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
-.simulation-signal-controls button:disabled { opacity: 0.35; cursor: not-allowed; }
-.simulation-signal-controls button[data-active="true"] { color: var(--button-primary-ink); background: var(--series-primary); }
+
 
 /* 저속 직접 제어도 카드가 아니다 — 같은 면 위의 묶음이다. */
 .teleop-commissioning { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -791,25 +714,9 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .bench-confirmation input { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--focus-ring); }
 .teleop-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
-.teleop-pad button {
-  min-height: var(--target-secondary);
-  padding: var(--space-1);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-control);
-  color: var(--paper);
-  background: transparent;
-  font: var(--text-value)/1 var(--mono);
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
-}
-.teleop-pad button small { display: block; margin-top: var(--space-1); color: var(--nominal-quiet); font: var(--text-micro)/1 var(--mono); }
-/* 눌려 있는 동안만 움직인다 — 그 사실이 계열색 채움으로 보인다. */
-.teleop-pad button.active { color: var(--button-primary-ink); background: var(--series-primary); }
-.teleop-pad button.active small { color: var(--button-primary-ink); }
-.teleop-pad button:disabled { cursor: not-allowed; opacity: 0.3; }
+.teleop-pad ui-button { touch-action: none; user-select: none; }
 
-.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--text-label)/1.4 var(--body); }
 
 /* ===========================================================================
    4. 점검 — 절차 문법(concept 16 §7.2)
@@ -898,7 +805,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .host-facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
 .host-note { margin: 0; color: var(--nominal-quiet); font-size: var(--text-label); line-height: 1.5; }
 .host-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
-.host-actions button { flex: 1 1 auto; }
+.host-actions ui-button { flex: 1 1 auto; }
 .host-card form { display: grid; gap: var(--space-2); }
 
 .ros-network-facts {

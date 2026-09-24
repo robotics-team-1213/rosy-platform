@@ -59,8 +59,8 @@
 
 ## 최근 기록
 
-- 2026-09-24 · uncommitted · docs(control): control 패키지 크기 결정 기록 (D-168 P6, lane-network 병합)
-- 2026-09-24 · uncommitted · test(repo): control 패키지 크기 재판정 (D-168 P6, lane-network 병합)
-- 2026-09-24 · uncommitted · fix(control): a late rotation scan is stale, not missing
-- 2026-09-24 · uncommitted · perf(control): vectorise OccupancyMap.inflate cell for cell (D-185 R1)
-- 2026-09-24 · uncommitted · feat(watch): D-183 product and standalone graph tables
+- 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
+- 2026-09-24 · uncommitted · docs(control): first device bench of the D-185 hot paths (R8)
+- 2026-09-24 · uncommitted · docs(control): D-185 R3 rig A/B and R7 single-process root cause
+- 2026-09-24 · uncommitted · tools(control): opt-in throttled /clock relay for the rig (D-185 R6)
+- 2026-09-24 · uncommitted · fix(control): latest-only subscriptions keep depth 1 (D-185 R2)

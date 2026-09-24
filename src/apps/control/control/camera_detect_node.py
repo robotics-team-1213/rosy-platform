@@ -22,6 +22,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32, String
 
+from . import executor_choice
 from .sensing.camera import classify_frame
 from .sensing.camera_controls import (
     lock_action, lock_controls, lock_summary, static_controls)
@@ -472,7 +473,7 @@ def main():
     rclpy.init()
     node = CameraDetectNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

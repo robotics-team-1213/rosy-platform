@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rosy 경기 보드</title>
+  <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/board.js"></script>
 </head>
 <body>
@@ -29,7 +32,7 @@
   <p id="stair1">계단 1 아직 (FIELD GO 아님)</p>
   <p id="lost" class="lost" hidden>유실</p>
   <p class="halt-row">
-    <button id="halt" type="button">정지</button>
+    <ui-button id="halt" kind="irreversible" type="button">정지</ui-button>
     <span>스페이스도 양쪽을 세운다</span>
   </p>
 </body>

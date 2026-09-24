@@ -152,3 +152,39 @@ plans:
 ## 2026-09-24 calibration late-scan hold
 
 - 회전 검증에서 늦게 도착한 scan을 "없음"이 아니라 "늦음"으로 판정한다. 정지 중에는 기존 1 s 대기로 넘기고, 구조가 잘못된 scan은 여전히 즉시 실패한다. rig에서 본 회전 단계 잔여 실패 경로를 닫았다.
+
+## 2026-09-24 rig environment guard (D-185 R4)
+
+- rig가 과부하 박스에서 돈 실행을 "환경 무효"로 표시하고 종료 코드 3을 낸다. 판정 스크립트는 이 실행을 통과·실패로 세지 않는다. 속도 증거가 없으면 판정을 보류하고, 실제 실패를 무효로 덮지 않는다.
+- 세션 간 Gazebo 잠금은 이 rig부터 적용했다. 다른 Gazebo 실행기의 채택은 단계적이다.
+
+## 2026-09-24 Pi hot-path measurement tool (D-185 R8)
+
+- `tools/device/hotpath_measure.py`가 세 핫패스(`_segments`, `match_motion`, `inflate`)의 소요 시간과 control 노드별 CPU%·RSS·부하·PSI를 JSON으로 남긴다. Raspberry Pi에서 돈 보고서만 실기 증거로 표시한다.
+- 실기: 도구만 준비됐고 Pi 실행은 HOLD다. 수치가 나오기 전까지 D-185의 실기 항목은 그대로 HOLD다.
+
+## 2026-09-24 EventsExecutor opt-in (D-185 R3)
+
+- control 노드와 rig가 `ROSY_EXECUTOR=events`로 EventsExecutor를 쓸 수 있다. 기본값은 이전과 같은 SingleThreadedExecutor다. rig A/B와 실기 측정이 남아 있어 기본값 전환은 하지 않았다.
+
+## 2026-09-24 footprint sweep cost (D-185 R5)
+
+- sim safety의 footprint sweep과 직진 한계 계산을 결과가 비트 단위로 같게 줄였다. 증명된 거리 하한으로 먼 scan 점을 빼고, 시간 샘플을 묶어 계산한다. host에서 sweep 호출당 1440점 21→4–6 ms, 직진 한계 5–39→2–8 ms. 점이 모두 가까운 최악 입력에서는 원본과 비슷하다.
+- 실기 경로가 아니다(rig 여력 회복).
+
+## 2026-09-24 latest-only subscriptions (D-185 R2)
+
+- 최신 값만 쓰는 구독 12개가 옛 값을 쌓지 않는다. rig 유효 실행에서 기준본과 같은 결과(전부 `ready`)를 확인했다.
+
+## 2026-09-24 rig /clock relay (D-185 R6)
+
+- `RIG_CLOCK_HZ=N`이면 rig가 `/clock`을 벽시계 초당 최대 N개로 줄인다. rig 노드 CPU가 절반 이하가 됐다. 기본값은 예전 bridge다.
+
+## 2026-09-24 EventsExecutor rig result, single-process cause (D-185 R3·R7)
+
+- rig에서 EventsExecutor가 결과를 그대로 두고 rig 노드 CPU를 약 60% 줄였다. 기본값 전환은 실기 측정 뒤로 미룬다.
+- 한 프로세스 모드 실패는 교정 신선도 hold 수정(`c67437d1`)으로 이미 닫혔다. 수정 전 트리에서만 재현된다.
+
+## 2026-09-24 first device bench (D-185 R8)
+
+- Pi 5 실기에서 wall_tracker는 2.3배, inflate는 7.4배 빨라졌다. match_motion(호출당 약 70 ms)이 다음 CPU 후보다.

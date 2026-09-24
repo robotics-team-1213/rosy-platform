@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ROSY UI 어휘 — 스타일 갤러리</title>
   <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
+  <script type="module" src="/common/ui.js"></script>
 </head>
 <body>
   <header class="page-head">
@@ -62,9 +64,9 @@
       <h2>버튼 셋</h2>
       <p class="rule">주(가장 밝은 중립) · 조용(테두리 하나) · 되돌릴 수 없는 것(채운 면 + 잉크).</p>
       <div class="demo demo-row">
-        <button class="demo-btn primary" type="button">주 버튼</button>
-        <button class="demo-btn quiet" type="button">조용한 버튼</button>
-        <button class="demo-btn irreversible" type="button">전체 정지</button>
+        <ui-button kind="primary" type="button">주 버튼</ui-button>
+        <ui-button kind="quiet" type="button">조용한 버튼</ui-button>
+        <ui-button kind="irreversible" type="button">전체 정지</ui-button>
       </div>
       <p class="gate">게이트: <code>test_irreversible_actions_are_a_fill_not_text</code>,
       <code>test_a_danger_fill_carries_ink_not_dark_text</code></p>
