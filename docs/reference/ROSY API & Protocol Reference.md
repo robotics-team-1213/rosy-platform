@@ -705,6 +705,8 @@ profile:
   "ts_issued": "...", "ts_final": "..." }
 ```
 
+`TIMEOUT`은 Fleet 측 레코드 전용이며 로봇 ack에는 나타나지 않는다 (D-215).
+
 ---
 
 # 10. Fleet REST API 카탈로그

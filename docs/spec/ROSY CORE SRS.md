@@ -227,7 +227,7 @@ GET /api/v1/system/capabilities
   "sensors": ["lidar", "imu", "battery", "encoder"],
   "events": ["nav.*", "safety.*", "mission.assigned", "system.*"],
   "api_versions": ["v1"],
-  "protocol_version": "1"
+  "protocol_version": "1.0"
 }
 ```
 
@@ -979,7 +979,7 @@ Fleet 접속 주소, 토큰, 단절 정책(SAF-003)을 설정할 수 있어야 �
 
 ### SEC-102 전송 보안
 
-HTTPS/WSS는 리버스 프록시(caddy) 옵션으로 지원하고, 초기 폐쇄형 LAN에서는 HTTP 허용을 배포 정책으로 설정할 수 있다. CORS 제어를 지원한다.
+HTTPS/WSS는 리버스 프록시(caddy) 옵션으로 지원하고, 초기 폐쇄형 LAN에서는 HTTP 허용을 배포 정책으로 설정할 수 있다. 로봇 API는 CORS 헤더를 제공하지 않는다(AUTH-103). 브라우저 직접 접속이 필요하면 호출자 출신의 리버스 프록시가 CORS를 처리한다.
 
 ### SEC-103 Fleet 간 인증
 
