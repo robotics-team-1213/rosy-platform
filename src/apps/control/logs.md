@@ -426,3 +426,15 @@
 - gate 변화: 없음.
 - 결정: D-185 R3·R7. R3 기본값 전환은 실기 측정 뒤 별도 결정.
 - 교훈: 증폭 모드에서만 보이던 결함이 분리 모드 flake와 같은 원인일 수 있다. 수정 전후 트리를 나눠 돌려야 원인을 좁힐 수 있다.
+
+## 2026-09-24 · uncommitted · docs(control): first device bench of the D-185 hot paths (R8)
+
+- 변경: 코드 변경 없음. `tools/device/hotpath_measure.py bench`로 Pinky(Raspberry Pi 5)에서 D-185 전후를 쟀다.
+- 원인: R1과 wall_tracker 벡터화의 효과는 지금까지 host 수치뿐이었다.
+- 증거:
+  - `rosy-pinky-e4us`, release 005, `/tmp` 사본(old `c67437d1^1`, new `75c69277`, 도구는 같은 main 파일). 50회, 번갈아 2회씩 돌렸다. 보고서 `evidence.device`는 true다.
+  - median: `_segments` 21.2→9.1 ms, `inflate` 47.8→6.5 ms, `match_motion` 약 68→약 69 ms(변화 없음). 합성 입력은 실제 경로를 탔다(segments 1, accepted, grown).
+  - 측정 뒤 로봇 `/tmp` 사본과 임시 키 사본은 지웠다.
+- gate 변화: 없음. `watch`와 R3 실기 비교는 남았다.
+- 결정: D-185 R8.
+- 교훈: 운영자 키에 `CodexSandboxUsers` 권한이 붙으면 OpenSSH가 키를 거부한다. 원본은 그대로 두고 권한을 좁힌 임시 사본을 쓴 뒤 지웠다.

@@ -1821,3 +1821,11 @@
 - gate 변화: 없음.
 - 결정: D-185 R3·R7
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench
+
+- 변경: D-185에 Pi 5 실기 bench 결과와 남은 실기 측정을 적었다.
+- 증거: control `logs.md` 2026-09-24 R8 실기 bench 항목.
+- gate 변화: 없음.
+- 결정: D-185 R8
+- 교훈: 없음

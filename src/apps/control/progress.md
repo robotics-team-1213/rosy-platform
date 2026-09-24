@@ -184,3 +184,7 @@ plans:
 
 - rig에서 EventsExecutor가 결과를 그대로 두고 rig 노드 CPU를 약 60% 줄였다. 기본값 전환은 실기 측정 뒤로 미룬다.
 - 한 프로세스 모드 실패는 교정 신선도 hold 수정(`c67437d1`)으로 이미 닫혔다. 수정 전 트리에서만 재현된다.
+
+## 2026-09-24 first device bench (D-185 R8)
+
+- Pi 5 실기에서 wall_tracker는 2.3배, inflate는 7.4배 빨라졌다. match_motion(호출당 약 70 ms)이 다음 CPU 후보다.
