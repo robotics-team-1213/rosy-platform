@@ -1073,6 +1073,90 @@
 - 결정: D-198 (D-197 후속)
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
+
+- 변경: (1) `deploy/release/signing.py`가 PATH에 openssl이 없을 때 Git for Windows(`usr\bin`, `mingw64\bin`)를 찾는다 —
+  비관리자 PowerShell의 `prepare-rosy-sd.ps1 -PlanOnly`가 "openssl not found"로 멈췄고, 시험은 `test/conftest.py`만 그 경로를 알아 통과했다.
+  (2) 첫 섹터가 전부 0인 카드를 Get-Disk는 MBR 서명 1로 보고한다(중단된 Imager 쓰기 뒤 실측, 섹터 덤프로 확인). 계획이 `00000001`을
+  기록하고 pre-flight 원시 읽기가 "없음"이면 공장 공백 카드 경로(시리얼·크기, 경고)로 본다. 실제 서명을 기록한 계획은 여전히 공백 카드를 거부한다.
+  (3) 관리자 쓰기 창이 QuickEdit을 끈다 — 창을 클릭하면 "Select" 상태가 되어 콘솔에 쓰는 Imager `--cli`가 0 CPU·0 I/O로 멈추고,
+  stall watchdog이 8 MB 남기고 죽였다. 005의 23분 멈춤도 같은 원인으로 보인다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py test/test_media_readback.py test/test_release_signing.py test/test_offline_image_signer.py -q`
+  243 passed. 실기: 이 브랜치의 writer로 010을 카드에 기록, `receipt-2026.09.24-010-rosy-pinky-e4us.json` `media_readback.verified: true`
+  (쓰기 8분·readback 7분, 멈춤 없음).
+- gate 변화: 없음
+- 결정: D-187/D-188 보완
+- 교훈: 시험 conftest가 환경을 고쳐 주면 실제 운영 경로의 같은 결함을 가린다 — 보정은 제품 코드에 두고 시험은 그 보정을 검증한다.
+  카드 신원은 Windows 캐시와 원시 섹터가 다를 수 있으니, 실패 시 섹터를 먼저 덤프해 추측을 끝낸다.
+
+## 2026-09-24 · uncommitted · fix(first-boot): retry the site Wi-Fi and self-heal a held first boot
+
+- 변경: `deploy/image/first-boot/rosy-first-boot.py`의 현장 Wi-Fi 활성화가 한 번 실패하면 곧바로 `PROVISIONING_AP`로 끝나고
+  `rosy-site-sta.nmconnection`을 지우던 것을 고쳤다. (1) `activate_site_wifi`: 최대 3회, 회당 `--wait 30`, 사이 15초, 합계 120초
+  (단조 시계 기준) 안에서 재시도하고, 매 시도 전에 `GENERAL.STATE`로 NM autoconnect가 이미 붙였는지 확인한다. 유닛
+  `TimeoutStartSec`는 90→180. (2) 예산을 다 써도 프로필은 남긴다. (3) 새 `rosy-first-boot-retry.timer`/`.service`가 부팅 150초 뒤부터
+  30초마다 `--network check`(연결을 올리지 않고 상태만 확인)로 재실행하고, 성공하면 `rosy-runtime.target`을 시작하고 타이머를 멈춘다.
+  이미지 payload·enable 목록에 두 유닛을 추가했다.
+- 증거: 실기 저널(release `2026.09.24-010`, `rosy-pinky-e4us`): 18.7 s 활성화 시작, 44.0 s 실패 → 첫 부팅 즉시
+  `site_wifi_unreachable`, LCD `FAILED:rosy-first-boot`; 77.6 s NM 재시도, 84.9 s 연결. Wi-Fi가 붙은 뒤 수동
+  `systemctl start rosy-first-boot`가 PROVISIONED, 재부팅 후 CORE_READY — `apply()`는 재진입 가능. 시험:
+  `python -m pytest test/test_first_boot_provisioning.py test/test_sd_api_token.py test/test_sd_ap_credentials.py test/test_sd_operator_access.py test/test_boot_state.py test/test_boot_status_indicator.py test/test_boot_blackbox.py test/test_image_customization_contract.py test/test_native_systemd_contract.py test/test_rosy_network_fallback.py test/test_network_topology_contracts.py deploy/image/test -q`
+  307 passed, 10 skipped, 1 failed(`test_verify_mounted_image.py::test_inspect_passes_with_valid_image` — origin/main에서도 같은 실패, 이번 변경과 무관).
+  실기 재현은 아직 없음.
+- gate 변화: 없음 (SOURCE만. DEVICE 재검증 필요: 느린 핫스팟으로 첫 부팅, 잘못된 SSID로 AP 개방 후 핫스팟 복구 시 자동 PROVISIONED)
+- 결정: D-176 보완 노트(2026-09-24), D-154 결정 6의 "후보 폐기"를 이 범위에서 대체
+- 교훈: 한 번의 연결 실패를 영구 실패로 다루고 복구 수단(프로필)까지 지우면, 하위 계층(NM autoconnect)이 스스로 회복해도 상위가
+  따라오지 못한다. oneshot의 `Restart=`는 시작 job을 붙잡아 뒤 유닛을 막으므로, 재시도는 별도 타이머로 한다.
+
+## 2026-09-24 · uncommitted · fix(first-boot): PR #38 review — held retry changes nothing, one run at a time
+
+- 변경: (1) `--network check`는 `complete.json`이 없고 사이트 프로필이 활성이 아니면 `apply()`에 들어가기 전에 held JSON만
+  출력하고 1로 끝난다 — 30초마다 state.json·hostname·avahi 재시작·runtime.env/프로필/authorized_keys/sudoers/CORE overlay를
+  다시 쓰던 것을 없앴다. 확인 전에 남겨 둔 프로필을 `nmcli connection load <path>`로 다시 읽힌다(라디오는 건드리지 않음).
+  (2) `rosy-first-boot.sh`를 `flock -w 200 /run/rosy-first-boot.lock`으로 감싸고, `_write_atomic`은 같은 디렉터리의
+  `tempfile.mkstemp`를 쓴다(고정 `.tmp` 이름 충돌 제거). 재시도 유닛 `TimeoutStartSec` 240.
+  (3) `rosy-first-boot.service`가 성공하면(`ExecStartPost`) 재시도 타이머를 멈춘다. (4) 재시도 성공 시
+  `rosy-boot-status-ready.service`도 시작해 CORE_READY를 바로 표시한다. (5) `GENERAL.STATE`가 `activating`이면 `up`을 내지
+  않고 5초씩 기다린다(예산 안에서) — 2026-09-24에는 첫 부팅 1.7초 만에 NM이 이미 연결 중이었다. (6) D-154 결정 6에 D-176 노트 포인터.
+- 증거: `python -m pytest test/test_first_boot_provisioning.py test/test_sd_api_token.py test/test_sd_ap_credentials.py test/test_sd_operator_access.py test/test_boot_state.py test/test_boot_status_indicator.py test/test_boot_blackbox.py test/test_image_customization_contract.py test/test_native_systemd_contract.py test/test_rosy_network_fallback.py test/test_network_topology_contracts.py -q`
+  306 passed, 10 skipped (first-boot 23). held 확인은 state.json·프로필·runtime.env·hostname·CORE overlay의 mtime·내용과 파일 목록이
+  그대로이고 hostnamectl/systemctl 호출이 없음을 확인한다. 실기 재현은 아직 없음.
+- gate 변화: 없음
+- 결정: 없음 (D-176 보완 노트 유지)
+- 교훈: 주기 재시도는 "아무것도 안 바뀌었으면 아무것도 쓰지 않는다"가 기본이어야 한다 — 전체 적용 경로를 그대로 돌리면 부작용이 주기가 된다.
+- 후속(미처리): fallback AP의 "업링크 있음" 규칙이 사이트 프로필 대신 아무 연결이나 인정하는 점, 재시도 동안
+  `rosy-first-boot.service`가 failed로 남아 부팅 표시가 FAILED를 보이는 잡음, 재시도 유닛 샌드박스 강화.
+
+## 2026-09-24 · uncommitted · fix(image,uart): keep the kernel console and getty off the LiDAR UART
+
+- 변경: `configure-uart-pi5.sh`(이미지·장치 공통)가 `cmdline.txt`에서 `console=serial0|ttyAMA0|ttyAMA4[,baud]`만 지우고
+  (`console=tty1`, 디버그 UART `ttyAMA10`은 유지) `serial-getty@ttyAMA0`·`@ttyAMA4`를 `/dev/null`로 mask한다. 멱등.
+  `verify-mounted-image.py`는 `cmdline.txt` 누락·버스 UART 콘솔·mask 누락이면 빌드를 멈추고, `verify-pi.sh`에 `UART` 검사
+  (`/proc/cmdline`, 활성 `serial-getty@ttyAMA0`)를 더했다.
+- 증거: 실기 `rosy-pinky-e4us`, release 2026.09.24-010. Ubuntu `cmdline.txt`의 `console=serial0,115200`이 `enable_uart=1`에서
+  `/proc/cmdline`의 `console=ttyAMA0,115200`이 되어 agetty가 RPLIDAR C1 포트를 잡았다. `sllidar_node`는
+  `SL_RESULT_OPERATION_TIMEOUT`, getty 정지 뒤 `0x80008004`(커널 콘솔). 항목을 지우고 재부팅하자 getty 없음,
+  `health status : OK`, DenseBoost 10 Hz. host: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py
+  test/test_pi_wifi_deployment.py test/test_device_readback.py test/test_pinky_flashable_image_contract.py test/test_pinky_user_validation.py -q`
+- gate 변화: 평가표 11행 FAIL → 소스 수정. DEVICE는 현장 cmdline 수정으로 LiDAR PASS, 새 이미지로는 미확인(ARTIFACT HOLD)
+- 결정: D-192 보완(2026-09-24)
+- 교훈: 기반 이미지가 "이미 준다"고 본 장치 노드도 그 노드를 누가 잡고 있는지까지 확인한다. `enable_uart=1`은 포트를 만들지만
+  `console=serial0`과 짝지어지면 그 포트를 콘솔에 넘긴다.
+
+## 2026-09-24 · uncommitted · fix(image,uart): recovery console on the debug UART, strict getty masks (PR #39 review)
+
+- 변경: 바로 위 항목의 보완. `configure-uart-pi5.sh`가 버스 UART 콘솔을 지운 뒤 복구용 시리얼 콘솔
+  `console=ttyAMA10,115200`(Pi 5 디버그 3핀 UART, 로봇 버스 없음)이 없으면 앞에 넣는다(`console=tty1`은 마지막에 유지) —
+  위 항목대로면 시리얼 콘솔이 하나도 남지 않았다. `verify-mounted-image.py`는 `ttyAMA10` 콘솔이 없어도 빌드를 멈추고,
+  getty mask는 `/dev/null` symlink만 인정한다(일반 파일 거부). 두 임시 파일을 지우는 EXIT trap을 편집 전에 두고,
+  `cmdline.txt`를 사전 검사하고, `REBOOT_REQUIRED`는 한 번만 출력한다. `verify-pi.sh`는 `serial-getty@ttyAMA0`·`@ttyAMA4`의
+  활성과 masked 상태를 함께 본다. `pi5-acceptance-checklist.md`의 UART 콘솔은 디버그 UART로 명시했다.
+- 증거: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py deploy/image/test -q`
+- gate 변화: 없음(평가표 11행 그대로, 이미지 미확인)
+- 결정: D-192 보완(2026-09-24) 문구 갱신
+- 교훈: 콘솔을 치울 때는 복구 경로가 남는지 먼저 본다. 검사기가 Windows 시험 편의를 위해 느슨해지면 실제 이미지에서도 느슨하다 —
+  시험 쪽을 skip한다.
+
 ## 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
 
 - 변경: a93d5188 경로 재편이 2026-09-21 test(deploy) 항목(D-149)의 `apps/control`을 `core/control`로 고쳐 쓴 것을 원문으로 복원했다. 로그는 append-only고 역사 항목은 당시 경로를 말해야 한다. 현재 경로는 이 시점 기준 `src/core/control`이다.

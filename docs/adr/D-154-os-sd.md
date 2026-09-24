@@ -42,6 +42,7 @@ Git, 명령행 또는 감사 로그에 넣을 수도 없다. 마지막으로 Win
    최초 bundle 또는 Wi-Fi 후보가 실패하면 후보를 폐기하고 `PROVISIONING_AP`로
    돌아가며 motor/hardware를 시작하지 않는다. 이미 provisioned인 장치의 일반
    WLAN 장애는 D-26대로 `NETWORK_HOLD`이고 자동 recovery AP를 열지 않는다.
+   (2026-09-24: 첫 부팅 Wi-Fi 후보는 재시도 예산 뒤에도 폐기하지 않는다 — D-176의 "첫 부팅 현장 Wi-Fi 보완" 노트.)
 7. **개인화는 Fleet 가입 준비까지 포함하되 군집 운용 완료로 간주하지 않는다.**
    bundle은 site별 `fleet_endpoint`, trust profile과 pairing 필요 여부를 장치 신원에
    결속한다. 일회용 pairing credential이 필요하면 Wi-Fi PSK와 같은 transient secret

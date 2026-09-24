@@ -221,6 +221,9 @@ rm -rf -- "$RELEASE/image-overlay"
 # D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
 # Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
 # Same script and same edit as the on-device retrofit, pointed at the image.
+# It also drops console=serial0/ttyAMA0/ttyAMA4 from the boot cmdline and masks
+# serial-getty@ttyAMA0/ttyAMA4: Ubuntu's console=serial0 lands on the LiDAR
+# UART (rosy-pinky-e4us, release 2026.09.24-010).
 bash "$UART_CONFIG" --image-root "$ROOT" \
     || fail "could not enable the UART4 motor bus in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
@@ -234,7 +237,8 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # chrony: CORE SRS §25 — UTC ISO 8601 timestamps and evidence freshness are
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
-    rosy-first-boot.service rosy-release-recover.service rosy-runtime.target \
+    rosy-first-boot.service rosy-first-boot-retry.timer rosy-release-recover.service \
+    rosy-runtime.target \
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-boot-display.service \
     rosy-login-code.service

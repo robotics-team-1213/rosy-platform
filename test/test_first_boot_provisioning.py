@@ -112,7 +112,12 @@ def test_wrong_wifi_returns_to_provisioning_hold_without_consuming_bundle(tmp_pa
     assert result == {"ok": False, "state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
     assert bundle.exists(), "the powered-off card must remain repairable"
     assert not (root / "var/lib/rosy/provisioning/complete.json").exists()
-    assert not (root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection").exists()
+    # 2026-09-24: the profile stays so NM autoconnect (and rosy-network after the
+    # fallback AP) can still join, and the retry timer can finish provisioning.
+    network = root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection"
+    assert "ssid=fixture-wifi" in network.read_text(encoding="utf-8")
+    if os.name == "posix":
+        assert os.stat(network).st_mode & 0o777 == 0o600
     state = json.loads((root / "var/lib/rosy/provisioning/state.json").read_text(encoding="utf-8"))
     assert state == {"state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
     assert "fixture-pass-9384" not in json.dumps(result) + json.dumps(state)
@@ -249,3 +254,269 @@ def test_default_live_hostname_uses_hostnamectl_then_restarts_avahi(monkeypatch)
 
     assert calls[0] == ["hostnamectl", "set-hostname", "rosy-pinky-k7m4"]
     assert ["systemctl", "try-restart", "avahi-daemon.service"] in calls
+
+
+class FakeNetworkManager:
+    """nmcli stand-in on a fake monotonic clock; never touches the host.
+
+    `up` lists the outcome of each `connection up` (True: activated). Each
+    failed `up` uses `fail_s` of the clock, capped by its --wait;
+    `autoconnect_at` marks the profile activated once the clock passes it.
+    """
+
+    def __init__(self, up: list[bool], *, fail_s: float = 25.0, autoconnect_at: float | None = None):
+        self.up = list(up)
+        self.fail_s = fail_s
+        self.autoconnect_at = autoconnect_at
+        self.now = 0.0
+        self.active = False
+        self.commands: list[list[str]] = []
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def run(self, command: list[str], timeout: float) -> tuple[int, str]:
+        self.commands.append(command)
+        if self.autoconnect_at is not None and self.now >= self.autoconnect_at:
+            self.active = True
+        if "up" in command:
+            wait = float(command[command.index("--wait") + 1])
+            assert timeout > wait
+            outcome = self.up.pop(0) if self.up else False
+            if outcome:
+                self.now += 7.0  # 77.6 -> 84.9 on 2026-09-24
+                self.active = True
+                return 0, ""
+            self.now += min(self.fail_s, wait)
+            return 4, ""
+        if "show" in command:
+            return 0, "GENERAL.STATE:activated\n" if self.active else ""
+        return 0, ""
+
+    def up_calls(self) -> int:
+        return sum("up" in command for command in self.commands)
+
+    def activate(self, module, **overrides):
+        return lambda profile: module.activate_site_wifi(
+            profile, run=self.run, clock=self.clock, sleep=self.sleep, **overrides)
+
+
+def test_a_first_failed_association_is_retried_and_provisions(tmp_path):
+    # 2026-09-24 rosy-pinky-e4us: the first association on a phone hotspot failed
+    # after 25 s; a later try joined. That must provision, not fail the boot.
+    module = _module()
+    root, bundle = _case(tmp_path)
+    nm = FakeNetworkManager([False, True])
+
+    result = module.FirstBootProvisioner(root=root, network_activate=nm.activate(module)).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01")
+
+    assert result == {"ok": True, "state": "PROVISIONED", "device_name": "rosy-pinky-k7m4"}
+    assert nm.up_calls() == 2
+    assert nm.sleeps == [module.NETWORK_RETRY_PAUSE_S]
+    assert not bundle.exists()
+
+
+def test_an_autoconnect_finished_during_the_pause_is_accepted_without_another_up():
+    module = _module()
+    nm = FakeNetworkManager([False], autoconnect_at=30.0)
+
+    assert nm.activate(module)("rosy-site-sta") is True
+    assert nm.up_calls() == 1, "a profile NM already activated must not be torn down"
+
+
+def test_all_attempts_failing_holds_provisioning_ap_and_keeps_the_profile(tmp_path):
+    module = _module()
+    root, bundle = _case(tmp_path)
+    nm = FakeNetworkManager([False, False, False], fail_s=60.0)
+
+    result = module.FirstBootProvisioner(root=root, network_activate=nm.activate(module)).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01")
+
+    assert result == {"ok": False, "state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
+    assert nm.up_calls() == module.NETWORK_ATTEMPTS
+    assert nm.now <= module.NETWORK_BUDGET_S
+    assert (root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection").is_file()
+    assert bundle.exists()
+    state = json.loads((root / "var/lib/rosy/provisioning/state.json").read_text(encoding="utf-8"))
+    assert state == {"state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
+
+
+def test_retry_budget_is_bounded_however_many_attempts_are_allowed():
+    module = _module()
+    # NM never answers early: every attempt runs its full --wait.
+    nm = FakeNetworkManager([], fail_s=10_000.0)
+
+    assert nm.activate(module, attempts=50)("rosy-site-sta") is False
+    assert nm.now <= module.NETWORK_BUDGET_S
+    assert nm.up_calls() < 50
+    for command in nm.commands:
+        if "up" in command:
+            assert 1 <= int(command[command.index("--wait") + 1]) <= module.NETWORK_ATTEMPT_WAIT_S
+
+
+def test_budget_covers_the_2026_09_24_timings_and_fits_the_unit_timeout():
+    module = _module()
+    # First activation 18.7 s, NM's own retry was up at 84.9 s: 66 s.
+    assert module.NETWORK_BUDGET_S >= 84.9 - 18.7
+    worst = (module.NETWORK_ATTEMPTS * module.NETWORK_ATTEMPT_WAIT_S
+             + (module.NETWORK_ATTEMPTS - 1) * module.NETWORK_RETRY_PAUSE_S)
+    assert worst <= module.NETWORK_BUDGET_S
+    unit = (FIRST_BOOT / "rosy-first-boot.service").read_text(encoding="utf-8")
+    timeout = int(unit.split("TimeoutStartSec=")[1].split()[0])
+    # reload, the last show and the per-call subprocess margin come on top.
+    assert timeout >= module.NETWORK_BUDGET_S + 45
+
+
+def test_held_card_finishes_when_the_retry_run_sees_nm_joined(tmp_path, monkeypatch):
+    # After the budget, NM autoconnect joined on its own (84.9 s on 2026-09-24).
+    # The timer's --network check run must then provision without `connection up`.
+    module = _module()
+    root, bundle = _case(tmp_path)
+    held = module.FirstBootProvisioner(root=root, network_activate=lambda _p: False).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01")
+    assert held["state"] == "PROVISIONING_AP"
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = "GENERAL.STATE:activated\n"
+
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **_kw: commands.append(command) or Result())
+
+    code = module._main(["--root", str(root), "--bundle", str(bundle),
+                         "--hardware-serial", "10000000abcdef01", "--network", "check"])
+
+    assert code == 0
+    profile = root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection"
+    assert commands == [
+        ["nmcli", "connection", "load", str(profile)],
+        ["nmcli", "-t", "-f", "GENERAL.STATE", "connection", "show", "rosy-site-sta"],
+    ]
+    state = json.loads((root / "var/lib/rosy/provisioning/state.json").read_text(encoding="utf-8"))
+    assert state == {"state": "PROVISIONED"}
+    assert not bundle.exists()
+
+
+def test_retry_check_while_site_wifi_is_down_touches_nothing(tmp_path, monkeypatch, capsys):
+    # The timer fires every 30 s: a held check must not rewrite state.json, the
+    # profile or runtime.env, rename the host or restart avahi each time.
+    module = _module()
+    root, bundle = _case(tmp_path)
+    module.FirstBootProvisioner(root=root, network_activate=lambda _p: False).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01")
+    capsys.readouterr()
+    watched = [
+        root / "var/lib/rosy/provisioning/state.json",
+        root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection",
+        root / "etc/rosy/runtime.env",
+        root / "etc/hostname",
+        root / "var/lib/rosy/core/.rosy/rosy.yaml",
+    ]
+    before = {path: (path.stat().st_mtime_ns, path.read_bytes()) for path in watched}
+    listing = sorted(str(path) for path in root.rglob("*"))
+
+    class Result:
+        returncode = 0
+        stdout = "GENERAL.STATE:activating\n"
+
+    commands: list[list[str]] = []
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **_kw: commands.append(command) or Result())
+
+    code = module._main(["--root", str(root), "--bundle", str(bundle),
+                         "--hardware-serial", "10000000abcdef01", "--network", "check"])
+
+    assert code == 1
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": False, "state": "PROVISIONING_AP", "reason": "site_wifi_unreachable"}
+    assert [command[:3] for command in commands] == [
+        ["nmcli", "connection", "load"], ["nmcli", "-t", "-f"]]
+    assert not any(command[0] in {"hostnamectl", "hostname", "systemctl"} for command in commands)
+    assert {path: (path.stat().st_mtime_ns, path.read_bytes()) for path in watched} == before
+    assert sorted(str(path) for path in root.rglob("*")) == listing
+    assert bundle.exists()
+
+
+def test_an_association_nm_is_still_making_is_waited_for_not_restarted():
+    # 2026-09-24: NM was already activating the profile 1.7 s into first boot.
+    module = _module()
+    nm = FakeNetworkManager([])
+    states = iter(["activating"] * 4 + ["activated"])
+    real_run = nm.run
+
+    def run(command, timeout):
+        if "show" in command:
+            nm.commands.append(command)
+            return 0, f"GENERAL.STATE:{next(states)}\n"
+        return real_run(command, timeout)
+
+    assert module.activate_site_wifi("rosy-site-sta", run=run, clock=nm.clock, sleep=nm.sleep) is True
+    assert nm.up_calls() == 0
+    assert nm.sleeps == [module.NETWORK_ACTIVATING_POLL_S] * 4
+    assert nm.now <= module.NETWORK_BUDGET_S
+
+
+def test_a_stuck_activation_is_still_bounded_by_the_budget():
+    module = _module()
+    nm = FakeNetworkManager([])
+
+    def run(command, timeout):
+        nm.commands.append(command)
+        return 0, "GENERAL.STATE:activating\n" if "show" in command else ""
+
+    assert module.activate_site_wifi("rosy-site-sta", run=run, clock=nm.clock, sleep=nm.sleep) is False
+    assert nm.now <= module.NETWORK_BUDGET_S
+    assert nm.up_calls() == 0
+
+
+def test_atomic_writes_use_unique_temporaries(tmp_path):
+    module = _module()
+    target = tmp_path / "etc/rosy/runtime.env"
+    (target.parent).mkdir(parents=True)
+    # A leftover from an older fixed-name temporary must not be reused or clobber anything.
+    (target.parent / ".runtime.env.tmp").write_text("stale", encoding="utf-8")
+
+    module._write_atomic(target, "A=1\n", 0o640)
+
+    assert target.read_text(encoding="utf-8") == "A=1\n"
+    assert sorted(path.name for path in target.parent.iterdir()) == [".runtime.env.tmp", "runtime.env"]
+    source = (FIRST_BOOT / "rosy-first-boot.py").read_text(encoding="utf-8")
+    assert "tempfile.mkstemp(dir=path.parent" in source
+
+
+def test_retry_units_only_check_and_then_start_the_runtime():
+    service = (FIRST_BOOT / "rosy-first-boot-retry.service").read_text(encoding="utf-8")
+    timer = (FIRST_BOOT / "rosy-first-boot-retry.timer").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+
+    assert "ExecStart=/opt/rosy/first-boot/rosy-first-boot.sh --network check" in service
+    assert "connection up" not in service
+    assert "ExecStartPost=/usr/bin/systemctl start --no-block rosy-runtime.target" in service
+    assert "ConditionPathExists=!/var/lib/rosy/provisioning/complete.json" in service
+    assert "ConditionPathExists=!/var/lib/rosy/provisioning/complete.json" in timer
+    assert "OnUnitInactiveSec=" in timer and "WantedBy=timers.target" in timer
+    # No Restart= on the first-boot unit: its pending start job would hold
+    # rosy-config and rosy-network (the D-176 fallback AP) behind it.
+    assert "Restart=" not in (FIRST_BOOT / "rosy-first-boot.service").read_text(encoding="utf-8")
+    for unit in ("rosy-first-boot-retry.service", "rosy-first-boot-retry.timer"):
+        assert f'cp "$FIRST_BOOT_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+    assert "rosy-first-boot-retry.timer" in customizer.split("systemctl --root")[1].split("\n\n")[0]
+    assert "ExecStartPost=-/usr/bin/systemctl start --no-block rosy-boot-status-ready.service" in service
+    script = (FIRST_BOOT / "rosy-first-boot.sh").read_text(encoding="utf-8")
+    assert '"$@"' in script
+    # Boot unit, retry timer and a manual start never run apply() at the same time.
+    assert "exec flock -w 200 /run/rosy-first-boot.lock python3" in script
+    assert int(service.split("TimeoutStartSec=")[1].split()[0]) > 200
+
+
+def test_a_successful_first_boot_stops_the_retry_timer():
+    unit = (FIRST_BOOT / "rosy-first-boot.service").read_text(encoding="utf-8")
+
+    # ExecStartPost runs only after ExecStart succeeded (PROVISIONED or ALREADY_PROVISIONED).
+    assert "ExecStartPost=-/usr/bin/systemctl stop --no-block rosy-first-boot-retry.timer" in unit
