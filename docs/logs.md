@@ -767,7 +767,7 @@
 
 ## 2026-09-20 · uncommitted · docs(fleet): my session's findings cross-validate the map bundle's result.md — the CORE API gate is closed by 6ff2cb8
 
-- 변경: 없음(교차 검증과 기록만). 맵 번들 세션의 result.md(src/core/control/docs/validation/map-260905-update-v2-2026-09-20)와 이 세션의 실측이 정합 — 그들의 FAIL 게이트 "CORE robot API: AttributeError before opening port 18080"는 이 세션의 6ff2cb8(node.py D-126 리네임 누락 4곳 수정)이 닫는다
+- 변경: 없음(교차 검증과 기록만). 맵 번들 세션의 result.md(src/apps/control/docs/validation/map-260905-update-v2-2026-09-20)와 이 세션의 실측이 정합 — 그들의 FAIL 게이트 "CORE robot API: AttributeError before opening port 18080"는 이 세션의 6ff2cb8(node.py D-126 리네임 누락 4곳 수정)이 닫는다
 - 증거: result.md 게이트 표와 본 세션 관측의 대응 — physics/collision FAIL(DART mesh unimplemented) ↔ 리더 포즈 불변·rosy_02 (0,0) 고정 / sensor bridge FAIL(ROS로 clock·scan·odom 0 메시지) ↔ safety "no lidar"·AMCL 불가·map TF 부재·Nav2 PLANNING 정체 / Live Fleet monitoring FAIL(ConnectError) ↔ 6ff2cb8 이전 상태. sensor bridge·SLAM 게이트는 slam_toolbox 설치 확인 후에도 동일 — 환경(센서 브리지) 귀속이 맞다
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. ARTIFACT/DEVICE/FIELD HOLD·PARKED
 - 결정: 남은 FAIL 게이트 2개(DART mesh collision, 센서 브리지)는 gz_sim/D-83 도메인이다 — 로봇 SDF의 충돌 지오메트리를 단순 형태로, 센서 브리지를 헤드리스 렌더링 경로로. fleet 측 할 일은 없다
@@ -1252,7 +1252,7 @@
 ## 2026-09-22 · uncommitted · docs(plans+adr): 장면 상황 프로파일 설계·실행 플랜, D-162 등록
 
 - 변경: `docs/plans/2026-09-22-scene-context-road-design.md`(장면 상황 프로파일 설계 — closed context 집합, 오프라인 리비전 프로파일, 폴백 우선 일반화, road_scene.yaml/scene_revision과의 이름 구분), `docs/plans/2026-09-22-scene-context-road.md`(실행 플랜 T1–T5) 추가. ADR 로그에 D-162 "학습된 장면은 설정이지 권한이 아니다" Proposed 등록. 둘 다 `docs/plans/AGENTS.md` 표에 등록
-- 증거: control LOCAL 1168 passed, 28 skipped (2026-09-22 Windows, T1/T2 순수 로직+시험 포함) — `src/core/control/logs.md` 2026-09-22 항목 참조
+- 증거: control LOCAL 1168 passed, 28 skipped (2026-09-22 Windows, T1/T2 순수 로직+시험 포함) — `src/apps/control/logs.md` 2026-09-22 항목 참조
 - gate 변화: 없음 (D-162는 Proposed)
 - 결정: 장면=상황 기반 context(닫힌 집합: generic/lane_follow/stop_line/crosswalk), 학습은 오프라인 프로파일 저작, 일반화는 제네릭 보수 폴백이 기본값, 첫 소비자=도로 인식 파라미터(D-151 구조 안)
 - 교훈: 없음
@@ -1455,7 +1455,7 @@
   (제품 장치 표면 G1, PRT-004 G2)로 구성. 전 태스크 Windows host pytest 검증
   가능, C++ 빌드·실측만 ARM64 게이트로 표시.
 - 증거: 계획 문서 자체 — 미실행(Draft). 실행 시 각 태스크의 test-first 단계와
-  `python -m pytest src/core/core/test/ src/core/control/test/ src/site/fleet/test
+  `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test
   test/ -q` 로 검증한다.
 - gate 변화: 없음 (계획만).
 - 결정: 없음. G1(장치 표면)은 ADR 후보(D-169) 판정을, G2(PRT-004)는 중앙 Fleet
@@ -1471,7 +1471,7 @@
 
 ## 2026-09-22 · 8088533 · docs(plans): Phase 1(T1~T4) 전체 호스트 회귀 PASS
 - 변경: 없음(검증 기록만).
-- 증거: `python -m pytest src/core/core/test/ src/core/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4140 passed, 82 skipped** in 189.88s (2026-09-22 Windows host, 커밋 998b9f9·545cb0b·2d47b5a·56355f9·8088533 반영 트리). 종료 코드 0.
+- 증거: `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4140 passed, 82 skipped** in 189.88s (2026-09-22 Windows host, 커밋 998b9f9·545cb0b·2d47b5a·56355f9·8088533 반영 트리). 종료 코드 0.
 - gate 변화: 없음 — 문서 모듈 SOURCE/LOCAL GO 유지. 코드 모듈(control·navigation·deploy·sensor_adc)의 게이트 재판정은 각 progress.md 절차에 맡긴다(필요 시 last_verified 갱신).
 - 결정: 없음.
 - 교훈: 없음.
@@ -1551,7 +1551,7 @@
 
 ## 2026-09-23 · 3ec8672 · docs(plans): T15 — 통신 정합 계획 전 페이즈 마감, 최종 회귀 PASS
 - 변경: 없음(검증 기록만).
-- 증거: `python -m pytest src/core/core/test/ src/core/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4350 passed, 82 skipped, 0 failed** in 1746s (2026-09-23 Windows, 커밋 3ec8672 트리 — T1~T14 + D-169/D-170 전체 반영). 직전 실행의 19 failed 는 본 세션과 동시 진행 중이던 파일 편집과의 경합 아티팩트로, 동일 트리에서 모두 소멸 확인.
+- 증거: `python -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test src/apps/omx_adapter/test src/apps/games/test test/ -q` **4350 passed, 82 skipped, 0 failed** in 1746s (2026-09-23 Windows, 커밋 3ec8672 트리 — T1~T14 + D-169/D-170 전체 반영). 직전 실행의 19 failed 는 본 세션과 동시 진행 중이던 파일 편집과의 경합 아티팩트로, 동일 트리에서 모두 소멸 확인.
 - gate 변화: 없음 — 코드·문서 모듈 게이트는 각 progress.md 절차대로. 남은 미결: ARM64/DEVICE 게이트(sensor_adc 빌드·실측, udev 심링크 readback, chrony 동기화 품질)와 G1 후속 ADR 조건(하드웨어 프로필 D-84 + 실기 수요), 중앙 Fleet 착수 시 D-170 확장.
 - 결정: 없음.
 - 교훈: 없음.
@@ -1697,7 +1697,7 @@
 ## 2026-09-24 · uncommitted · feat(core,control): implement D-182, D-183, and D-184
 
 - 변경: 안전 작동은 `ROSY_SIMULATION_ACTUATION=1`만 본다. 파티션과 도메인 숫자는 `src/sim/gz_sim/config/simulation_actuation.yaml`에만 있다. `watch.py`는 product와 standalone 표를 나누고, 제품 `/cmd_vel` 소유자는 `core`뿐이다. 다른 패키지 동작 시험 30개 경로는 `KNOWN_EXTERNAL_BEHAVIOR_TESTS`로 고정했다. 세 ADR은 Accepted다. D-167 스냅샷과 D-168 P2 예외는 그대로다.
-- 증거: `python -m pytest test/test_policy_sim_literals.py test/test_behavior_test_ownership.py src/core/control/test/test_watch.py src/core/core/test/test_control_policy_link.py src/core/core/test/test_absorption_output_graph.py -q` 57 passed, 10 skipped (2026-09-24 Windows).
+- 증거: `python -m pytest test/test_policy_sim_literals.py test/test_behavior_test_ownership.py src/apps/control/test/test_watch.py src/core/core/test/test_control_policy_link.py src/core/core/test/test_absorption_output_graph.py -q` 57 passed, 10 skipped (2026-09-24 Windows).
 - gate 변화: 없음. G-7과 DEVICE 판정은 그대로다.
 - 결정: D-182, D-183, D-184 Accepted
 - 교훈: 없음
@@ -1721,7 +1721,7 @@
 ## 2026-09-24 · uncommitted · feat(layout): D-186 keep scripts and module docs from overlapping
 
 - 변경: `fix.sh`와 `run_fleet_sim.sh`를 `tools/`로 옮겼다. 옛 `src/core/core/deploy` 설치기는 제거했다. control 캘리브레이션 트랙과 `bringup/scripts/rosy_env.sh`는 그 모듈에 남겼다. `progress.md`·`logs.md`·`index.md`는 하네스 모듈 루트만, `data/` 문서는 README만 시험으로 고정했다. D-186은 Accepted다.
-- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py src/core/control/test/test_rig_script_references.py -q` 13 passed (2026-09-24 Windows).
+- 증거: `python -m pytest test/test_folder_layout.py test/test_run_data.py src/apps/control/test/test_rig_script_references.py -q` 13 passed (2026-09-24 Windows).
 - gate 변화: 없음
 - 결정: D-186 Accepted
 - 교훈: 없음
@@ -1846,3 +1846,11 @@
 - gate 변화: 없음(문서).
 - 결정: D-202
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
+
+- 변경: a93d5188 경로 재편이 과거 항목 6곳의 `src/apps/control` 경로를 `src/core/control`로 고쳐 쓴 것을 원문으로 복원했다(2026-09-20 맵 번들 교차 검증의 result.md 경로, 2026-09-22 scene-context 증거의 logs.md 경로, 장치 표면 계획 증거의 pytest 명령 2줄, D-182·D-183·D-184 증거의 test_watch 경로, D-186 증거의 rig_script_references 경로). 로그는 append-only고 역사 항목은 당시 경로를 말해야 한다. 현재 경로는 이 시점 기준 `src/core/control`이다(재편 a93d5188).
+- 증거: `python tools/harness/rosy_harness.py lint` — 3a17a0aa 기준 append-only 오류 소멸(커밋 뒤 HEAD 기준도 통과).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.

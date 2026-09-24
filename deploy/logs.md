@@ -94,7 +94,7 @@
 - gate 변화: 없음
 
 ## 2026-09-21 · uncommitted · test(deploy): core launches never reference the control stack (D-149)
-- 변경: test/test_control_launch_boundary.py 에 코어 쪽 가드 추가 — src/core/core/launch 의 모든 launch 파일이 control 패키지 참조(package='control', core/control)를 가지지 않는다. launch 파일 개명(rosy_core→core)에도 견디도록 디렉터리 glob 방식.
+- 변경: test/test_control_launch_boundary.py 에 코어 쪽 가드 추가 — src/core/core/launch 의 모든 launch 파일이 control 패키지 참조(package='control', apps/control)를 가지지 않는다. launch 파일 개명(rosy_core→core)에도 견디도록 디렉터리 glob 방식.
 - 증거: 변이 증명 완료 — rosy_core.launch.py 말미에 package='control' 주석 삽입 시 적색, 복원 후 초록. python -m pytest test/test_control_launch_boundary.py -q 5 passed.
 - gate 변화: 없음
 
@@ -1072,3 +1072,11 @@
 - gate 변화: 없음
 - 결정: D-198 (D-197 후속)
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
+
+- 변경: a93d5188 경로 재편이 2026-09-21 test(deploy) 항목(D-149)의 `apps/control`을 `core/control`로 고쳐 쓴 것을 원문으로 복원했다. 로그는 append-only고 역사 항목은 당시 경로를 말해야 한다. 현재 경로는 이 시점 기준 `src/core/control`이다.
+- 증거: `python tools/harness/rosy_harness.py lint` — 3a17a0aa 기준 append-only 오류 소멸(커밋 뒤 HEAD 기준도 통과).
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.
