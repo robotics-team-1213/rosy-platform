@@ -35,7 +35,7 @@ PACKAGE = Path(__file__).resolve().parents[1] / "core"
 #: the implementer — the bridge — stayed in the kernel.
 CONTRACTS = [
     ("navigation/manager.py", "NavExecutor"),
-    ("docking/manager.py", "DockingExecutor"),
+    ("docking/model.py", "DockingExecutor"),
 ]
 IMPLEMENTER = ("bridge/ros_bridge.py", "RosBridge")
 

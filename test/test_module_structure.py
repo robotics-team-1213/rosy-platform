@@ -105,10 +105,12 @@ SIZE_VERDICTS = {
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "core/core_features/core_features/docking/manager.py": (
-        930,
-        "accept: one owner (svc.docking / DockingManager, one phase machine for the charging and parking dock "
-        "types), ROS-free, covered by core_features/test/test_docking.py and core/test/test_docking_*.py; "
-        "the 2026-09-06 criteria already cite this file as the X5 example (X5)",
+        663,
+        "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
+        "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
+        "what remains is the one lock owner (state, RLock, take/release_mode seams, fail/retry/release, the "
+        "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
+        "and core/test/test_docking_*.py (X5)",
     ),
     "control": (
         31_249,

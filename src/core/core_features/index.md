@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · refactor(docking): 주차형 단계를 `docking/parking_phases.py` 전략으로 분리 (D-168 P6)
 - 2026-09-24 · uncommitted · test(repo): `docking/manager.py` 크기 판정 accept (D-168 P6)
 - 2026-09-24 · uncommitted · test(core): lane-network 주차 도크 시험을 자체 `test/`로 (main 병합, D-184)
 - 2026-09-24 · uncommitted · test(core): docking·swarm 시험을 자체 `test/`로 이전
 - 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거
-- 2026-09-24 · uncommitted · feat(safety): D-182 simulation actuation is a mode flag

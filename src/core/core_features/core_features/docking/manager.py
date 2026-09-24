@@ -13,9 +13,8 @@
 ROS 무의존 — 시계는 주입되며 테스트가 시간을 직접 전진시킨다.
 
 주차형 기종(`approach="pose"`, 차선망 미션 3단계)은 같은 상태머신을 기종 설정으로
-갈라 쓴다: 스테이징 대신 진입 회전(TURNING), 태그가 보일 때까지 주차점 쪽으로
-크리프(ACQUIRING), 도크 좌표계 정렬 접근(APPROACHING), 제자리 방위 정렬(ALIGNING),
-포즈 정착(SETTLING). 언도킹은 후진 뒤 회전. 기본 기종의 경로는 그대로다.
+갈라 쓴다. 그 단계 로직은 `parking_phases.ParkingPhases` 에 있고, 상태·락·순서는
+여기 남는다. 단계·모션 계약·설정 정의는 `model` 에 있다.
 
 설계: docs/plans/2026-09-02-docking-station-design.md,
       docs/plans/2026-09-23-lane-network-parking-design.md
@@ -23,25 +22,17 @@ ROS 무의존 — 시계는 주입되며 테스트가 시간을 직접 전진시
 
 from __future__ import annotations
 
-import enum
 import math
 import threading
 import time
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Optional
 
 from core_features.docking.charging import ChargingConfirmation
-from core_features.docking.database import DockDatabase, DockError, DockInstance, Pose2D
+from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
-from core_features.docking.parking import (
-    DockPoseTracker,
-    ParkingGains,
-    approach_twist,
-    reverse_twist,
-    robot_in_dock_frame,
-    turn_twist,
-    wrap,
-)
+from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
+from core_features.docking.parking import DockPoseTracker
+from core_features.docking.parking_phases import ParkingPhases
 from core_common.protocol.schemas import (
     BatteryLevel,
     DockingStatus,
@@ -49,66 +40,7 @@ from core_common.protocol.schemas import (
     NavigationState,
 )
 
-
-class DockPhase(str, enum.Enum):
-    """`DOCKING` 안의 내부 단계.
-
-    재시도가 *어디서* 실패했는지 알아야 하기 때문에 존재한다. 도착하지 못한
-    것과 도착했는데 전류가 없는 것은 복구 방법이 다르다.
-    """
-
-    STAGING = "staging"          # Nav2 로 도크 앞까지
-    ACQUIRING = "acquiring"      # 검출기가 도크를 찾는다
-    APPROACHING = "approaching"  # 관측 상대 포즈에 서보
-    SETTLING = "settling"        # 전류가 흐르기를 기다린다
-    BACKOFF = "backoff"          # 실패 후 뒤로 빠져 재시도 준비
-    TURNING = "turning"          # 주차형: 제자리 회전 (진입, 언도킹 뒤)
-    ALIGNING = "aligning"        # 주차형: 주차점에서 방위만 맞춘다
-
-
-class DockingExecutor(Protocol):
-    """모션. ros_bridge 가 구현하고 이 계층은 의도만 말한다."""
-
-    def navigate_to(self, pose: Pose2D) -> None: ...
-    def cancel_navigation(self) -> None: ...
-    def drive(self, linear: float, angular: float) -> None: ...
-    def stop(self) -> None: ...
-    def set_collision_exemption(self, enabled: bool) -> None: ...
-    def travelled_m(self) -> float: ...
-    def reset_odometry_mark(self) -> None: ...
-    # 주차형만 쓴다 (선택, getattr 로 찾는다): 오도메트리 base 포즈
-    # `odometry_pose() -> Optional[tuple[x, y, yaw]]`.
-    # 선택: `odometry_available() -> bool` — 언도킹 전 오도메트리 기준점이 있는가.
-    # 없으면 travelled_m 이 0.0 에 머물러 후진이 끝나지 않는다.
-
-
-@dataclass
-class DockingConfig:
-    staging_timeout_s: float = 120.0
-    acquire_timeout_s: float = 15.0
-    approach_timeout_s: float = 60.0
-    settle_timeout_s: float = 20.0
-    backoff_s: float = 2.0
-    backoff_distance_m: float = 0.25
-    reseat_distance_m: float = 0.06     # 접점 재착좌 — 스테이징까지 가지 않는다
-
-    approach_speed: float = 0.06        # m/s — 접근은 느려야 한다
-    approach_gain_yaw: float = 1.2
-    max_angular: float = 0.5
-    undock_speed: float = 0.08
-    undock_timeout_margin_s: float = 2.0  # 후진 마감 = 2 × 거리/속도 + 이 값
-
-    detector_lost_grace_s: float = 2.0  # 이 시간 안에 다시 보이면 실패가 아니다
-    charge_confirm_s: float = 10.0      # 충전 확정 창
-
-    # 주차형 (approach="pose")
-    turn_timeout_s: float = 30.0
-    align_timeout_s: float = 15.0
-    settle_still_s: float = 0.6         # 멈춘 뒤 이만큼 지나 찍힌 관측으로 판정
-    creep_exhausted_s: float = 1.0      # 크리프를 다 쓰고도 이만큼 안 보이면 재시도
-    acquire_look_s: float = 0.5         # 기어가기 전에 먼저 본다 (5 Hz 두 프레임 + 지연)
-    backoff_timeout_s: float = 10.0
-    aim_min_m: float = 0.05             # 이보다 가까우면 주차점이 아니라 도크 yaw 를 겨눈다
+__all__ = ["DockingConfig", "DockingExecutor", "DockingManager", "DockPhase"]
 
 
 class DockingManager:
@@ -148,7 +80,8 @@ class DockingManager:
         # (락 안). 밖에서 따로 놓으면 그 틈에 들어온 undock 을 모드 이탈 리스너가
         # 취소해 버린다 (N1). 모드가 이미 DOCKING 이 아니면 아무것도 안 해야 한다.
         self._release_mode = release_mode or (lambda: None)
-        self._gains = ParkingGains()
+        # 주차형 단계의 전략. 자기 락·상태가 없고, 아래 필드와 이 락을 그대로 쓴다.
+        self._parking_phases = ParkingPhases(self)
         # dock/undock/cancel 은 API 워커에서, tick 은 브리지 타이머에서 온다(D-1).
         # 재진입한다: tick 안의 배터리 복귀가 dock() 을, 모드 이탈 리스너가
         # cancel()/abort() 을 부른다.
@@ -458,16 +391,16 @@ class DockingManager:
         elif phase is DockPhase.BACKOFF:
             self._tick_backoff(now)
         elif phase is DockPhase.TURNING:
-            self._tick_turning(now)
+            self._parking_phases.tick_turning(now)
         elif phase is DockPhase.ALIGNING:
-            self._tick_aligning(now)
+            self._parking_phases.tick_aligning(now)
 
     # --- 단계 -----------------------------------------------------------------
 
     def _begin_staging(self) -> None:
         dock_type = self._type()
         if dock_type is not None and not dock_type.staging:
-            self._begin_entry_turn()
+            self._parking_phases.begin_entry_turn()
             return
         self._enter(DockPhase.STAGING)
         self._nav_state = NavigationState.PLANNING
@@ -493,15 +426,11 @@ class DockingManager:
                 self._dock, self._type())
             self._detector.start(self._dock)
         if self._parking():
-            if self._tracker is None:
-                self._tracker = DockPoseTracker(self._type().tag_offset_m)
-            self._tracker.reset()
-            self._creep_from = self._odometry()
-            self._creep_done_at = None
+            self._parking_phases.begin_acquiring()
 
     def _tick_acquiring(self, now: float) -> None:
         if self._parking():
-            self._tick_acquiring_pose(now)
+            self._parking_phases.tick_acquiring(now)
             return
         if self._detector is not None and self._detector.relative_pose() is not None:
             self._enter(DockPhase.APPROACHING)
@@ -516,7 +445,7 @@ class DockingManager:
 
     def _tick_approaching(self, now: float) -> None:
         if self._parking():
-            self._tick_approaching_pose(now)
+            self._parking_phases.tick_approaching(now)
             return
         observation = self._detector.relative_pose() if self._detector else None
 
@@ -562,13 +491,11 @@ class DockingManager:
     def _tick_settling(self, now: float) -> None:
         dock_type = self._type()
         if dock_type is not None and dock_type.settle == "pose":
-            self._tick_settling_pose(now, dock_type)
+            self._parking_phases.tick_settling(now, dock_type)
             return
         status = self._agent.poll() if self._agent is not None else None
         if status is not None and status.answered and status.load_present:
-            self._state = DockState.DOCKED
-            self._phase = None
-            self._emit("docking.docked", "info", {"dock_id": self._dock.id})
+            self._mark_docked()
             return
         if now - self._phase_since > self._cfg.settle_timeout_s:
             # 접점에 닿지 못했다. 스테이징까지 돌아갈 일은 아니고 재착좌면 된다.
@@ -596,7 +523,7 @@ class DockingManager:
             self._state = DockState.UNDOCKED
             return
         if self._phase is DockPhase.TURNING:
-            self._tick_turning(now)
+            self._parking_phases.tick_turning(now)
             return
         distance = self._type().undock_distance_m \
             if self._dock else 0.35
@@ -609,10 +536,8 @@ class DockingManager:
             return
         if travelled >= distance:
             self.executor.stop()
-            dock_type = self._type()
-            if dock_type is not None and dock_type.undock_turn_rad:
-                # 주차형: 후진 뒤 차선 방향으로 돈다 (도크 yaw + undock_turn_rad).
-                self._begin_turn(self._dock.yaw + dock_type.undock_turn_rad, "undocked")
+            # 주차형: 후진 뒤 차선 방향으로 돈다 (도크 yaw + undock_turn_rad).
+            if self._parking_phases.begin_undock_turn():
                 return
             self._finish_undock()
             return
@@ -629,7 +554,7 @@ class DockingManager:
     def _tick_backoff(self, now: float) -> None:
         dock_type = self._type()
         if dock_type is not None and dock_type.backoff_m is not None:
-            self._tick_backoff_distance(now, dock_type.backoff_m)
+            self._parking_phases.tick_backoff(now, dock_type.backoff_m)
             return
         if now - self._phase_since < self._cfg.backoff_s:
             if self.executor is not None:
@@ -672,7 +597,7 @@ class DockingManager:
         if self.executor is not None:
             self.executor.set_collision_exemption(False)
             self.executor.reset_odometry_mark()
-        self._backoff_from = self._odometry()
+        self._backoff_from = self._parking_phases.odometry()
         self._enter(DockPhase.BACKOFF)
 
     # --- 주차형 단계 ------------------------------------------------------------
@@ -692,203 +617,6 @@ class DockingManager:
         dock_type = self._type()
         return dock_type is not None and dock_type.approach == "pose"
 
-    def _odometry(self) -> Optional[tuple]:
-        source = getattr(self.executor, "odometry_pose", None)
-        pose = source() if callable(source) else None
-        return None if pose is None else tuple(float(v) for v in pose)
-
-    def _drive(self, linear: float, angular: float) -> None:
-        if self.executor is not None:
-            self.executor.drive(linear, angular)
-
-    def _stop(self) -> None:
-        if self.executor is not None:
-            self.executor.stop()
-
-    def _aim(self) -> float:
-        """주차점을 겨누는 맵 방위. 가까우면 도크 yaw — 맵은 대략까지다."""
-        pose = self._pose_provider()
-        if pose is None:
-            return self._dock.yaw
-        dx, dy = self._dock.x - float(pose[0]), self._dock.y - float(pose[1])
-        if math.hypot(dx, dy) <= self._cfg.aim_min_m:
-            return self._dock.yaw
-        return math.atan2(dy, dx)
-
-    def _near_spot(self, pose) -> bool:
-        """맵 포즈가 도크 축 위에서 주차점 aim_min_m 앞까지 왔는가."""
-        if pose is None:
-            return False
-        along = ((self._dock.x - float(pose[0])) * math.cos(self._dock.yaw)
-                 + (self._dock.y - float(pose[1])) * math.sin(self._dock.yaw))
-        return along <= self._cfg.aim_min_m
-
-    def _begin_entry_turn(self) -> None:
-        self._begin_turn(self._aim(), "acquire")
-
-    def _begin_turn(self, target_map_yaw: float, after: str) -> None:
-        """맵 방위 `target_map_yaw` 로 제자리 회전. 상대각은 맵 포즈로 한 번 재고,
-        수행은 오도메트리로 한다 — 회전 중 맵 포즈가 튀어도 흔들리지 않는다."""
-        self._after_turn = after
-        pose, odom = self._pose_provider(), self._odometry()
-        if pose is None or odom is None:
-            self._fail("no pose for the turn")
-            return
-        relative = wrap(target_map_yaw - float(pose[2]))
-        self._turn_target = wrap(odom[2] + relative)
-        if self._tracker is None and self._parking():
-            self._tracker = DockPoseTracker(self._type().tag_offset_m)
-        self._enter(DockPhase.TURNING)
-        if abs(relative) <= self._gains.turn_tolerance_rad:
-            self._finish_turn()
-
-    def _tick_turning(self, now: float) -> None:
-        odom = self._odometry()
-        if odom is None:
-            self._fail("odometry lost during the turn")
-            return
-        if self._tracker is not None:
-            # 회전 끝에 찍힌 프레임이 짝지을 오도메트리를 갖도록 기록한다.
-            self._tracker.record_odometry(now, odom)
-        angular, done = turn_twist(wrap(self._turn_target - odom[2]), self._gains)
-        if done:
-            self._stop()
-            self._finish_turn()
-            return
-        if now - self._phase_since > self._cfg.turn_timeout_s:
-            self._fail("turn timed out")
-            return
-        self._drive(0.0, angular)
-
-    def _finish_turn(self) -> None:
-        if self._after_turn == "undocked":
-            self._finish_undock()
-        else:
-            self._begin_acquiring()
-
-    def _observe(self, now: float) -> bool:
-        """오도메트리를 기록하고, 새 관측이면 추정기를 다시 고정한다. True 는 새 고정뿐이다 —
-        같은 프레임이 반복되면 도크를 "다시 본" 것이 아니다 (_last_seen_at 이 갱신되면
-        관측이 끊겨도 유예가 끝나지 않는다)."""
-        self._tracker.record_odometry(now, self._odometry())
-        observation = self._detector.relative_pose() if self._detector else None
-        if observation is None:
-            return False
-        return self._tracker.observe(observation)
-
-    def _tick_acquiring_pose(self, now: float) -> None:
-        if self._observe(now) and self._tracker.anchored_at is not None:
-            self._enter(DockPhase.APPROACHING)
-            self._last_seen_at = now
-            if self.executor is not None:
-                self.executor.set_collision_exemption(True)
-            return
-        if now - self._phase_since > self._cfg.acquire_timeout_s:
-            self._retry("dock not acquired")
-            return
-        creep = self._type().acquire_creep_m
-        odom = self._odometry()
-        travelled = (math.dist(odom[:2], self._creep_from[:2])
-                     if odom is not None and self._creep_from is not None else creep)
-        if now - self._phase_since < self._cfg.acquire_look_s:
-            self._stop()
-            return
-        pose = self._pose_provider()
-        if travelled < creep and not self._near_spot(pose):
-            # 태그가 아직 시야 밖이다 (진입점에서는 태그 윗단이 잘린다). 주차점을
-            # 겨누고 기어간다 — 맵 포즈가 없으면 방위를 유지한다. 재시도가 거듭돼도
-            # 맵 위의 주차점을 넘어가며 기지는 않는다.
-            error = 0.0 if pose is None else wrap(self._aim() - float(pose[2]))
-            limit = self._gains.max_angular
-            self._drive(self._gains.creep_speed,
-                        max(-limit, min(limit, self._gains.gain_heading * error)))
-            return
-        self._stop()
-        if self._creep_done_at is None:
-            self._creep_done_at = now
-        elif now - self._creep_done_at > self._cfg.creep_exhausted_s:
-            self._retry("dock not acquired")
-
-    def _tick_approaching_pose(self, now: float) -> None:
-        if self._observe(now):
-            self._last_seen_at = now
-        if self._last_seen_at is None or \
-                now - self._last_seen_at > self._cfg.detector_lost_grace_s:
-            self._retry("dock lost during approach")
-            return
-        if now - self._phase_since > self._cfg.approach_timeout_s:
-            self._retry("approach timed out")
-            return
-        pose = self._tracker.pose(self._odometry())
-        if pose is None:
-            self._retry("odometry lost during approach")
-            return
-        linear, angular, arrived = approach_twist(pose, self._gains)
-        if arrived:
-            self._stop()
-            self._enter(DockPhase.ALIGNING)
-            return
-        self._drive(linear, angular)
-
-    def _tick_aligning(self, now: float) -> None:
-        self._observe(now)
-        pose = self._tracker.pose(self._odometry())
-        if pose is None or now - self._phase_since > self._cfg.align_timeout_s:
-            self._reseat("heading not aligned at the spot")
-            return
-        angular, done = turn_twist(-pose[2], self._gains)
-        if done:
-            self._begin_settling()
-            return
-        self._drive(0.0, angular)
-
-    def _tick_settling_pose(self, now: float, dock_type) -> None:
-        self._stop()
-        self._tracker.record_odometry(now, self._odometry())
-        if now - self._phase_since < self._cfg.settle_still_s:
-            return
-        observation = self._detector.relative_pose() if self._detector else None
-        if observation is not None and \
-                observation.at >= self._phase_since + self._cfg.settle_still_s / 2.0:
-            ex, ey, heading = robot_in_dock_frame(
-                observation.x, observation.y, observation.yaw, dock_type.tag_offset_m)
-            if (abs(ex) <= dock_type.pose_tolerance_m
-                    and abs(ey) <= dock_type.pose_tolerance_m
-                    and abs(heading) <= dock_type.pose_tolerance_rad):
-                self._stop_detector()
-                self._state = DockState.DOCKED
-                self._phase = None
-                self._emit("docking.docked", "info", {"dock_id": self._dock.id})
-                return
-            self._tracker.observe(observation)
-            self._reseat(f"parked out of tolerance (ex={ex:+.3f} ey={ey:+.3f} "
-                         f"heading={math.degrees(heading):+.1f} deg)")
-            return
-        if now - self._phase_since > self._cfg.settle_timeout_s:
-            self._reseat("no tag at the spot")
-
-    def _tick_backoff_distance(self, now: float, distance: float) -> None:
-        """거리로 끝나는 후진. 벽 앞 주차면은 시간 기준 후진(0.16 m)이 벽에 닿을 수
-        있다. 추정이 있으면 횡오차를 줄이는 쪽으로 조향한다."""
-        odom = self._odometry()
-        travelled = (math.dist(odom[:2], self._backoff_from[:2])
-                     if odom is not None and self._backoff_from is not None else distance)
-        if travelled < distance and now - self._phase_since < self._cfg.backoff_timeout_s:
-            pose = None
-            if self._tracker is not None:
-                self._tracker.record_odometry(now, odom)
-                pose = self._tracker.pose(odom)
-            if pose is not None:
-                self._drive(*reverse_twist(pose, self._gains))
-            else:
-                self._drive(-self._gains.reverse_speed, 0.0)
-            return
-        self._stop()
-        if self._next_phase_after_backoff is DockPhase.ACQUIRING:
-            self._begin_acquiring()
-        else:
-            self._begin_staging()
-
     def _fail(self, reason: str) -> None:
         """종착이다. 스스로 재시도하지 않는다.
 
@@ -905,6 +633,11 @@ class DockingManager:
                    {"reason": reason, "dock_id": self._dock.id if self._dock else None})
 
     # --- 공통 -----------------------------------------------------------------
+
+    def _mark_docked(self) -> None:
+        self._state = DockState.DOCKED
+        self._phase = None
+        self._emit("docking.docked", "info", {"dock_id": self._dock.id})
 
     def _enter(self, phase: DockPhase) -> None:
         self._phase = phase
