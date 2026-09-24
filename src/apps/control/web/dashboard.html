@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rosy control diagnostic</title>
+<link rel="stylesheet" href="/common/tokens.css">
+<link rel="stylesheet" href="/common/components.css">
+<script type="module" src="/common/ui.js"></script>
 <style>
 :root {
   color-scheme: dark;
@@ -26,8 +29,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin:0; background:var(--bg); color:var(--ink-2);
-       font: 400 13px/1.5 system-ui, -apple-system, "Segoe UI",
-             "Malgun Gothic", sans-serif;
+       font: 400 var(--text-body)/1.5 var(--body);
        display:flex; flex-direction:column;
        -webkit-font-smoothing:antialiased; }
 b, strong { font-weight:600; }
@@ -36,14 +38,14 @@ b, strong { font-weight:600; }
 header { flex:none; display:flex; align-items:center; gap:16px;
          padding:9px 16px 8px; background:var(--observe);
          border-bottom:1px solid var(--border); }
-.brand { font-size:14px; font-weight:600; color:var(--ink);
+.brand { font-size: var(--text-label); font-weight:600; color:var(--ink);
          display:flex; align-items:center; gap:9px; letter-spacing:0.01em; }
 .dot { width:8px; height:8px; border-radius:50%; background:var(--muted);
        flex:none; }
 .dot.live { background:var(--good); }
 .chips { margin-left:auto; display:flex; gap:7px; flex-wrap:wrap;
          align-items:center; }
-.chip { display:inline-flex; align-items:baseline; gap:6px; font-size:12px;
+.chip { display:inline-flex; align-items:baseline; gap:6px; font-size: var(--text-micro);
         color:var(--muted); background:var(--bg);
         border:1px solid var(--border); border-radius:999px; padding:3px 11px; }
 .chip b { color:var(--ink); font-weight:600; }
@@ -65,28 +67,28 @@ main { flex:1; min-height:0; display:grid; gap:0;
    the divider, so no boxes are needed to tell the regions apart. */
 .rhead { flex:none; display:flex; align-items:center; gap:10px;
          padding:11px 14px 9px; }
-.rhead h2 { margin:0; font-size:12px; font-weight:600; color:var(--ink-2); }
-.rhead .gloss { font-size:11px; color:var(--muted); }
+.rhead h2 { margin:0; font-size: var(--text-micro); font-weight:600; color:var(--ink-2); }
+.rhead .gloss { font-size: var(--text-micro); color:var(--muted); }
 .rhead::after { content:""; flex:1; height:1px; background:var(--rule); }
 .rbody { flex:1; min-height:0; display:flex; flex-direction:column;
          gap:14px; padding:0 14px 16px; }
 .act .rbody { gap:12px; }
 
 /* ---- block (a grouped set inside a region) ------------------------------ */
-.block > h3 { margin:0 0 7px; font-size:12px; font-weight:600;
+.block > h3 { margin:0 0 7px; font-size: var(--text-micro); font-weight:600;
               color:var(--ink-2); }
-.hint { margin:0 0 8px; font-size:11.5px; line-height:1.45; color:var(--muted); }
+.hint { margin:0 0 8px; font-size: var(--text-micro); line-height:1.45; color:var(--muted); }
 .hint:empty { display:none; }
 
 /* ---- 감지: dial --------------------------------------------------------- */
 .dialwrap { display:flex; flex-direction:column; align-items:center; }
 #scan { display:block; width:100%; max-width:262px; height:auto; }
-.dialnote { margin-top:2px; text-align:center; font-size:11px;
+.dialnote { margin-top:2px; text-align:center; font-size: var(--text-micro);
             color:var(--muted); }
 /* ---- 감지: clearance gauges --------------------------------------------- */
 .gauge { display:grid; grid-template-columns:66px minmax(0,1fr) 58px;
          align-items:center; gap:9px; padding:3px 0; }
-.gauge .g-k { font-size:12px; color:var(--muted); overflow:hidden;
+.gauge .g-k { font-size: var(--text-micro); color:var(--muted); overflow:hidden;
               text-overflow:ellipsis; white-space:nowrap; }
 .gauge .g-t { position:relative; height:9px; border-radius:3px;
               background:var(--track); overflow:hidden; }
@@ -95,9 +97,9 @@ main { flex:1; min-height:0; display:grid; gap:0;
               transition:width .18s linear, background-color .18s linear; }
 .gauge .g-x { position:absolute; top:-2px; bottom:-2px; width:2px;
               background:rgba(255,255,255,0.42); }
-.gauge .g-v { text-align:right; font-size:12.5px; font-weight:600;
+.gauge .g-v { text-align:right; font-size: var(--text-micro); font-weight:600;
               color:var(--ink); font-variant-numeric:tabular-nums; }
-.gauge.lead .g-v { font-size:17px; }
+.gauge.lead .g-v { font-size: var(--text-body); }
 .gauge.lead .g-k { color:var(--ink-2); }
 .gauge.lead .g-t { height:12px; }
 .gauge.miss .g-v, .gauge.miss .g-k { color:var(--muted); font-weight:400; }
@@ -107,7 +109,7 @@ main { flex:1; min-height:0; display:grid; gap:0;
 .g-v.crit { color:var(--crit); }
 /* ---- 감지: flags -------------------------------------------------------- */
 .flags { display:flex; flex-wrap:wrap; gap:5px; }
-.flag { font-size:11px; color:var(--muted); background:rgba(255,255,255,0.02);
+.flag { font-size: var(--text-micro); color:var(--muted); background:rgba(255,255,255,0.02);
         border:1px solid var(--rule); border-radius:999px; padding:2px 9px;
         white-space:nowrap; }
 .flag.hit { color:var(--crit); border-color:rgba(208,59,59,0.6);
@@ -120,12 +122,12 @@ main { flex:1; min-height:0; display:grid; gap:0;
 #camimg { width:100%; display:block; }
 #camimg.old { opacity:0.42; filter:saturate(0.4); }
 .camveil { position:absolute; inset:auto 0 0 0; padding:4px 8px;
-           font-size:11px; color:var(--warn);
+           font-size: var(--text-micro); color:var(--warn);
            background:linear-gradient(transparent, rgba(13,13,13,0.85)); }
 .camveil:empty { display:none; }
-#camnone { color:var(--muted); font-size:12px; padding:22px 0;
+#camnone { color:var(--muted); font-size: var(--text-micro); padding:22px 0;
            text-align:center; }
-.camcap { font-size:11px; color:var(--muted); margin-top:6px;
+.camcap { font-size: var(--text-micro); color:var(--muted); margin-top:6px;
           overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .camcap:empty { display:none; }
 
@@ -133,7 +135,7 @@ main { flex:1; min-height:0; display:grid; gap:0;
 .observe .rbody { gap:10px; padding:0 14px 12px; }
 .maphead { flex:none; display:flex; align-items:center; gap:12px;
            flex-wrap:wrap; }
-.legend { display:flex; gap:13px; flex-wrap:wrap; font-size:11.5px;
+.legend { display:flex; gap:13px; flex-wrap:wrap; font-size: var(--text-micro);
           color:var(--muted); }
 .key { display:inline-flex; align-items:center; gap:6px; }
 .sw { width:14px; height:3px; border-radius:2px; flex:none; }
@@ -141,7 +143,7 @@ main { flex:1; min-height:0; display:grid; gap:0;
 .sw.alt { background:var(--alt); }
 .sw.hist { background:var(--hist); }
 .sw.goal { width:9px; height:9px; border-radius:2px; background:var(--goal); }
-.pin { font-size:12px; color:var(--pin); margin-left:auto;
+.pin { font-size: var(--text-micro); color:var(--pin); margin-left:auto;
        font-variant-numeric:tabular-nums; }
 .mapwrap { position:relative; flex:1; min-height:180px;
            background:var(--unk); border:1px solid var(--rule);
@@ -149,36 +151,36 @@ main { flex:1; min-height:0; display:grid; gap:0;
 .mapwrap.grabbing { cursor:grabbing; }
 #map { position:absolute; inset:0; width:100%; height:100%; display:block; }
 .coords:empty { display:none; }
-.coords { position:absolute; left:10px; bottom:8px; font-size:11px;
+.coords { position:absolute; left:10px; bottom:8px; font-size: var(--text-micro);
           color:var(--ink-2); background:rgba(13,13,13,0.78);
           border:1px solid var(--border); border-radius:6px;
           padding:2px 8px; pointer-events:none;
           font-variant-numeric:tabular-nums; }
 .viewbar { position:absolute; top:8px; right:8px; display:flex; gap:4px;
            align-items:center; }
-.viewbar button { padding:2px 9px; font-size:12px; border-radius:6px; }
-#zoompct { font-size:11px; color:var(--ink-2); background:rgba(13,13,13,0.78);
+.viewbar ui-button { padding:2px 9px; font-size: var(--text-micro); border-radius:6px; }
+#zoompct { font-size: var(--text-micro); color:var(--ink-2); background:rgba(13,13,13,0.78);
            border:1px solid var(--border); border-radius:6px; padding:2px 8px;
            font-variant-numeric:tabular-nums; }
 .stale { position:absolute; inset:0; display:none; align-items:center;
          justify-content:center; background:rgba(13,13,13,0.55);
-         color:var(--warn); font-size:13px; pointer-events:none; }
+         color:var(--warn); font-size: var(--text-label); pointer-events:none; }
 .empty-note { position:absolute; inset:0; display:flex; align-items:center;
-              justify-content:center; color:var(--muted); font-size:13px;
+              justify-content:center; color:var(--muted); font-size: var(--text-label);
               pointer-events:none; }
-.goal-state { flex:none; font-size:12px; color:var(--ink-2);
+.goal-state { flex:none; font-size: var(--text-micro); color:var(--ink-2);
               overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* metrics strip: the map's own numbers, under the map, not in a far card */
 .strip { flex:none; display:grid; gap:1px; background:var(--rule);
          border:1px solid var(--rule); border-radius:8px; overflow:hidden;
          grid-template-columns:repeat(6, minmax(0,1fr)); }
 .cell { background:var(--observe); padding:6px 10px 7px; min-width:0; }
-.cell .lbl { font-size:11px; color:var(--muted); overflow:hidden;
+.cell .lbl { font-size: var(--text-micro); color:var(--muted); overflow:hidden;
              text-overflow:ellipsis; white-space:nowrap; }
-.cell .val { font-size:14px; font-weight:600; color:var(--ink); margin-top:1px;
+.cell .val { font-size: var(--text-label); font-weight:600; color:var(--ink); margin-top:1px;
              font-variant-numeric:tabular-nums; overflow:hidden;
              text-overflow:ellipsis; white-space:nowrap; }
-.cell.warnval .val { color:var(--warn); font-size:12px; font-weight:500; }
+.cell.warnval .val { color:var(--warn); font-size: var(--text-micro); font-weight:500; }
 
 /* ---- 조작: raised controls ---------------------------------------------- */
 .act .block { background:rgba(255,255,255,0.025);
@@ -187,44 +189,44 @@ main { flex:1; min-height:0; display:grid; gap:0;
 .act .block.estop { border-color:rgba(208,59,59,0.45);
                     background:rgba(208,59,59,0.07); }
 .btnrow { display:flex; gap:6px; }
-.btnrow button { flex:1; }
+.btnrow ui-button { flex:1; }
 .act label { display:block; margin:9px 0 4px; }
 .act select, .act input[type="number"] { width:100%; box-sizing:border-box;
   background:var(--act-2); color:var(--ink); border:1px solid var(--border);
   border-radius:6px; padding:8px; font:inherit; }
 #navsessionstart { margin-top:10px; width:100%; }
 .btnrow + .btnrow { margin-top:6px; }
-button { background:var(--act-2); color:var(--ink);
+ui-button { background:var(--act-2); color:var(--ink);
          border:1px solid var(--border); border-radius:8px;
-         padding:8px 10px; font:inherit; font-size:12.5px; cursor:pointer; }
-button:hover:not(:disabled) { border-color:var(--muted); }
-button:active:not(:disabled) { transform:translateY(1px); }
-button:focus-visible { outline:2px solid var(--route); outline-offset:2px; }
-button:disabled { opacity:0.42; cursor:not-allowed; transform:none; }
-button.danger { background:rgba(208,59,59,0.18);
+         padding:8px 10px; font:inherit; font-size: var(--text-body); cursor:pointer; }
+ui-button:hover:not(:disabled) { border-color:var(--muted); }
+ui-button:active:not(:disabled) { transform:translateY(1px); }
+ui-button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+ui-button:disabled { opacity:0.42; cursor:not-allowed; transform:none; }
+ui-button.danger { background:var(--status-crit-a45);
                 border-color:rgba(208,59,59,0.55); color:#ffd7d7; }
-button.danger:hover:not(:disabled) { border-color:var(--crit); }
-button.halt { padding:13px 10px; font-size:15px; font-weight:600;
+ui-button.danger:hover:not(:disabled) { border-color:var(--crit); }
+ui-button.halt { padding:13px 10px; font-size: var(--text-body); font-weight:600;
               letter-spacing:0.06em; }
-button.mini { flex:none; padding:2px 9px; font-size:11px; border-radius:6px; }
+ui-button.mini { flex:none; padding:2px 9px; font-size: var(--text-micro); border-radius:6px; }
 .sub { margin-top:10px; padding-top:9px; border-top:1px solid var(--rule); }
 .sub.first { margin-top:0; padding-top:0; border-top:0; }
-.sub > h4 { margin:0 0 5px; font-size:11.5px; font-weight:600;
+.sub > h4 { margin:0 0 5px; font-size: var(--text-micro); font-weight:600;
             color:var(--ink-2); }
-.mapping-error { color:var(--serious); font-size:11.5px; margin-top:8px; }
+.mapping-error { color:var(--serious); font-size: var(--text-micro); margin-top:8px; }
 .mapping-error:empty { display:none; }
 .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-.pad button { padding:11px 0; }
+.pad ui-button { padding:11px 0; }
 .keys { display:grid; grid-template-columns:repeat(3,1fr); gap:4px;
         margin-top:6px; }
 .keys span { display:flex; align-items:center; justify-content:center;
              background:rgba(255,255,255,0.03); border:1px solid var(--rule);
-             border-radius:5px; padding:4px 0; font-size:11px;
+             border-radius:5px; padding:4px 0; font-size: var(--text-micro);
              color:var(--muted); user-select:none; }
 .keys span.on { border-color:var(--route); color:var(--ink);
                 background:rgba(57,135,229,0.16); }
 .srow { display:flex; justify-content:space-between; gap:8px;
-        font-size:12px; padding:2px 0; }
+        font-size: var(--text-micro); padding:2px 0; }
 .srow .k { color:var(--muted); }
 .srow .v { color:var(--ink); font-weight:500;
            font-variant-numeric:tabular-nums; overflow:hidden;
@@ -255,48 +257,48 @@ button.mini { flex:none; padding:2px 9px; font-size:11px; border-radius:6px; }
 /* Operations hierarchy: status first, map central, commands in the act region. */
 header { padding:14px 20px; gap:20px; }
 body { word-break:keep-all; overflow-wrap:anywhere; }
-.brand { font-size:17px; letter-spacing:-.03em; }
-.brand small { font-size:10px; color:var(--muted); letter-spacing:.12em; margin-left:4px; }
+.brand { font-size: var(--text-body); letter-spacing:-.03em; }
+.brand small { font-size: var(--text-micro); color:var(--muted); letter-spacing:.12em; margin-left:4px; }
 .statusline { display:grid; grid-template-columns:1.1fr 1fr 1fr 1.4fr; background:var(--observe); border-bottom:1px solid var(--border); flex:none; }
 .statusitem { padding:14px 20px; border-right:1px solid var(--rule); min-width:0; }
-.statusitem label { display:block; color:var(--muted); font-size:11px; margin-bottom:5px; }
-.statusitem strong { display:block; color:var(--ink); font-size:20px; letter-spacing:-.025em; }
-.statusitem small { display:block; margin-top:3px; font-size:11px; color:var(--muted); }
+.statusitem label { display:block; color:var(--muted); font-size: var(--text-micro); margin-bottom:5px; }
+.statusitem strong { display:block; color:var(--ink); font-size: var(--text-value); letter-spacing:-.025em; }
+.statusitem small { display:block; margin-top:3px; font-size: var(--text-micro); color:var(--muted); }
 .battery-track { width:72px; height:4px; background:var(--track); margin-top:7px; border-radius:3px; overflow:hidden; }
 #batteryfill { height:100%; background:var(--ink-2); width:0; }
 main { grid-template-columns:250px minmax(0,1fr) 350px; }
 .rhead { padding-top:16px; padding-bottom:14px; }
-.rhead h2 { font-size:13px; }
+.rhead h2 { font-size: var(--text-label); }
 .rbody { gap:18px; }
 .act .block { border-radius:10px; padding:14px; }
-.block > h3 { font-size:13px; color:var(--ink); }
-button { min-height:38px; font-weight:550; }
-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px solid var(--route); outline-offset:3px; }
+.block > h3 { font-size: var(--text-label); color:var(--ink); }
+ui-button { min-height:var(--target-secondary); font-weight:550; }
+ui-button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
 .hint { line-height:1.6; }
 .estop .btnrow { display:inline-flex; width:calc(50% - 3px); margin-top:0; vertical-align:top; }
-.estop button { min-height:46px; }
+.estop ui-button { min-height:var(--target-irreversible); }
 #mappingcard .btnrow { display:grid; grid-template-columns:1fr 1fr; }
 #mapsave { grid-column:1/-1; }
 .switchrow { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:10px 0; border-top:1px solid var(--rule); }
-.switchrow span { display:block; font-size:12px; color:var(--ink); }
-.switchrow small { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
+.switchrow span { display:block; font-size: var(--text-micro); color:var(--ink); }
+.switchrow small { display:block; color:var(--muted); font-size: var(--text-micro); margin-top:3px; }
 .switchrow input { appearance:none; width:38px; height:22px; flex:none; border-radius:12px; border:1px solid var(--border); background:var(--act-2); position:relative; cursor:pointer; }
 .switchrow input::after { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; border-radius:50%; background:var(--muted); transition:transform .15s; }
 .switchrow input:checked { background:var(--route); }
 .switchrow input:checked::after { transform:translateX(16px); background:white; }
 .switchrow input:disabled { opacity:.35; cursor:not-allowed; }
-.command-status { padding:10px 12px; margin:0; border-left:2px solid var(--route); background:var(--observe); font-size:12px; }
-.procedure { margin:8px 0; font-size:11px; color:var(--muted); }
+.command-status { padding:10px 12px; margin:0; border-left:2px solid var(--route); background:var(--observe); font-size: var(--text-micro); }
+.procedure { margin:8px 0; font-size: var(--text-micro); color:var(--muted); }
 .procedure summary { cursor:pointer; padding:5px 0; }
 [hidden] { display:none !important; }
 @media(max-width:1279px) { main { grid-template-columns:minmax(0,1fr) 350px; } }
 @media(max-width:900px) {
  header { padding:12px; flex-wrap:wrap; gap:8px; }
  .chips { margin-left:0; gap:4px; }
- .chip { font-size:10px; padding:2px 7px; }
+ .chip { font-size: var(--text-micro); padding:2px 7px; }
  .statusline { grid-template-columns:1fr 1fr; }
  .statusitem { padding:10px 14px; border-bottom:1px solid var(--rule); }
- .statusitem strong { font-size:17px; }
+ .statusitem strong { font-size: var(--text-body); }
  main { grid-template-columns:minmax(0,1fr); grid-template-areas:'observe' 'act' 'sense'; }
  .observe .mapwrap { height:42vh; min-height:260px; }
  .act { overflow:visible; }
@@ -369,10 +371,10 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
     <div class="rhead"><h2 id="h-observe">관측</h2>
       <span class="gloss">지도 위 현재 위치와 경로</span>
       <span class="pin" id="pin"></span>
-      <button type="button" class="mini" id="pinsend" style="display:none"
-              aria-label="찍은 지점으로 로봇 보내기">이 지점으로</button>
-      <button type="button" class="mini" id="pinclear" style="display:none"
-              aria-label="지점 지우기">지우기</button>
+      <ui-button type="button" class="mini" id="pinsend" style="display:none"
+              aria-label="찍은 지점으로 로봇 보내기">이 지점으로</ui-button>
+      <ui-button type="button" class="mini" id="pinclear" style="display:none"
+              aria-label="지점 지우기">지우기</ui-button>
     </div>
     <div class="rbody">
       <div class="maphead">
@@ -386,13 +388,13 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
       <div class="mapwrap" id="mapwrap">
         <canvas id="map" role="img" aria-label="점유 격자 지도와 경로 오버레이"></canvas>
         <div class="viewbar">
-          <button type="button" data-view="in" aria-label="확대">+</button>
-          <button type="button" data-view="out" aria-label="축소">&minus;</button>
-          <button type="button" data-view="fit" aria-label="화면 맞춤">맞춤</button>
-          <button type="button" data-view="align" title="현재 로봇 방향을 화면 오른쪽으로 정렬">방향 정렬</button>
-          <button type="button" data-view="left" aria-label="지도 왼쪽으로 5도 회전">↶</button>
-          <button type="button" data-view="right" aria-label="지도 오른쪽으로 5도 회전">↷</button>
-          <button type="button" data-view="north" title="원래 지도 방향">0°</button>
+          <ui-button type="button" data-view="in" aria-label="확대">+</ui-button>
+          <ui-button type="button" data-view="out" aria-label="축소">&minus;</ui-button>
+          <ui-button type="button" data-view="fit" aria-label="화면 맞춤">맞춤</ui-button>
+          <ui-button type="button" data-view="align" title="현재 로봇 방향을 화면 오른쪽으로 정렬">방향 정렬</ui-button>
+          <ui-button type="button" data-view="left" aria-label="지도 왼쪽으로 5도 회전">↶</ui-button>
+          <ui-button type="button" data-view="right" aria-label="지도 오른쪽으로 5도 회전">↷</ui-button>
+          <ui-button type="button" data-view="north" title="원래 지도 방향">0°</ui-button>
           <span id="viewangle">0.0°</span>
           <span id="zoompct">100%</span>
         </div>
@@ -428,11 +430,11 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
         <h3>비상정지</h3>
         <p class="hint">모터 출력을 정지합니다. 해제해도 자동 출발하지 않습니다.</p>
         <div class="btnrow">
-          <button type="button" class="danger halt" data-post="/estop"
-                  data-val="stop">정지</button>
+          <ui-button type="button" class="danger halt" data-post="/estop"
+                  data-val="stop">정지</ui-button>
         </div>
         <div class="btnrow">
-          <button type="button" data-post="/estop" data-val="release">해제</button>
+          <ui-button type="button" data-post="/estop" data-val="release">해제</ui-button>
         </div>
       </div>
       <p id="commandstatus" class="command-status" role="status" aria-live="polite">명령 대기 · 시작은 직접 선택합니다</p>
@@ -466,10 +468,10 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
       <select id="calibrationafter"><option value="stay">확보한 위치에 머물기</option><option value="return_origin">원래 위치로 복귀</option></select>
       <p class="hint">공간 확보·복귀는 지원되는 실행 환경에서만 수행합니다. 복귀 경로가 막히면 정지합니다.</p>
       <div class="btnrow">
-        <button type="button" id="calibrationretry" data-calibration="retry">전체 보정</button>
-        <button type="button" id="calibrationpartialaction" data-calibration="partial_calibration">부분 보정 · 실패 센서 제외</button>
-        <button type="button" id="calibrationmotion" data-calibration="validate_motion" disabled>4초 저속 이동 검증</button>
-        <button type="button" data-calibration="abort">검증 중단</button>
+        <ui-button type="button" id="calibrationretry" data-calibration="retry">전체 보정</ui-button>
+        <ui-button type="button" id="calibrationpartialaction" data-calibration="partial_calibration">부분 보정 · 실패 센서 제외</ui-button>
+        <ui-button type="button" id="calibrationmotion" data-calibration="validate_motion" disabled>4초 저속 이동 검증</ui-button>
+        <ui-button type="button" data-calibration="abort">검증 중단</ui-button>
       </div>
       <p class="command-status" id="calibrationpartialreason" role="status" aria-live="polite" hidden></p>
       <div id="calibrationerror" role="alert"></div>
@@ -493,15 +495,15 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
           <label for="navstall">이동 정체 제한 (초, 10–600)</label>
           <input id="navstall" type="number" min="10" max="600" value="90" step="1">
           <p class="hint">대기·회복을 포함한 실제 시간입니다. 정체 제한 동안 2cm 이상 이동하지 못하면 정지합니다. 브라우저를 닫아도 제한은 유지됩니다.</p>
-          <button type="button" id="navsessionstart" disabled>선택한 방법으로 시작</button>
+          <ui-button type="button" id="navsessionstart" disabled>선택한 방법으로 시작</ui-button>
           <p class="hint" id="navsessionstatus" role="status">실행 상태 확인 중…</p>
           <p class="hint" id="navsessionerror" role="alert"></p>
           <details><summary>시간 제한 없는 기존 실행</summary>
           <div class="btnrow">
-            <button type="button" id="navexplore" data-post="/wander"
-                    data-val="explore" disabled>자동 탐색</button>
-            <button type="button" id="navcoverage" data-post="/wander"
-                    data-val="coverage" disabled>영역 순회</button>
+            <ui-button type="button" id="navexplore" data-post="/wander"
+                    data-val="explore" disabled>자동 탐색</ui-button>
+            <ui-button type="button" id="navcoverage" data-post="/wander"
+                    data-val="coverage" disabled>영역 순회</ui-button>
           </div>
           </details>
         </div>
@@ -509,13 +511,13 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
           <h4>센서 회피</h4>
           <p class="hint">라이다로 벽을 따라갑니다. 같은 자리 반복 복구는 제한됩니다.</p>
           <div class="btnrow">
-            <button type="button" id="wanderstart" data-post="/wander" data-val="start" disabled>센서 회피 시작</button>
+            <ui-button type="button" id="wanderstart" data-post="/wander" data-val="start" disabled>센서 회피 시작</ui-button>
           </div>
         </div>
         <div class="sub">
           <div class="btnrow">
-            <button type="button" class="danger" data-post="/wander"
-                    data-val="stop">주행 정지</button>
+            <ui-button type="button" class="danger" data-post="/wander"
+                    data-val="stop">주행 정지</ui-button>
           </div>
         </div>
       </div>
@@ -525,9 +527,9 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
         <p class="hint" id="mappingstatus" role="status">매핑 상태 확인 중…</p>
         <label class="switchrow"><div><span>지도 수집</span><small>끄면 자동 주행 정지 · 지도는 유지</small></div><input id="mappingtoggle" type="checkbox" role="switch" aria-label="지도 수집" disabled></label>
         <div class="btnrow">
-          <button type="button" id="mapsave" disabled>지도 PNG 저장</button>
-          <button type="button" class="danger" id="mapreset" disabled>지도 초기화</button>
-          <button type="button" id="mapresume" disabled>매핑 재개</button>
+          <ui-button type="button" id="mapsave" disabled>지도 PNG 저장</ui-button>
+          <ui-button type="button" class="danger" id="mapreset" disabled>지도 초기화</ui-button>
+          <ui-button type="button" id="mapresume" disabled>매핑 재개</ui-button>
         </div>
         <p class="hint" style="margin:8px 0 0">초기화하면 주행을 정지하고 지도
           수집을 일시정지합니다. 다시 배치한 뒤 재개하세요.</p>
@@ -546,13 +548,13 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline:2px s
           같이 눌러 조합, k는 정지, +/&minus;로 속도 단계.</p>
         <div class="pad">
           <span></span>
-          <button type="button" data-hold="up" aria-label="전진">&#8593;</button>
+          <ui-button type="button" data-hold="up" aria-label="전진">&#8593;</ui-button>
           <span></span>
-          <button type="button" data-hold="left" aria-label="좌회전">&#8592;</button>
-          <button type="button" data-hold="stop" aria-label="정지">정지</button>
-          <button type="button" data-hold="right" aria-label="우회전">&#8594;</button>
+          <ui-button type="button" data-hold="left" aria-label="좌회전">&#8592;</ui-button>
+          <ui-button type="button" data-hold="stop" aria-label="정지">정지</ui-button>
+          <ui-button type="button" data-hold="right" aria-label="우회전">&#8594;</ui-button>
           <span></span>
-          <button type="button" data-hold="down" aria-label="후진">&#8595;</button>
+          <ui-button type="button" data-hold="down" aria-label="후진">&#8595;</ui-button>
           <span></span>
         </div>
         <div class="keys" id="keys">

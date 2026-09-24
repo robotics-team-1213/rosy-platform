@@ -149,7 +149,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     def common_asset(asset_name: str):
         valid_assets = {
             "tokens.css": "text/css",
-            "core_ui_logic.js": "application/javascript"
+            "components.css": "text/css",
+            "core_ui_logic.js": "application/javascript",
+            "ui.js": "application/javascript",
         }
         media_type = valid_assets.get(asset_name)
         if not media_type:

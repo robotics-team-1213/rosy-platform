@@ -3,7 +3,7 @@
 <package format="3">
   <name>web_common</name>
   <version>0.1.0</version>
-  <description>Framework-free ROSY web evidence adapter and shared design tokens.</description>
+  <description>Framework-free ROSY web tokens, shared controls, and evidence adapter.</description>
   <maintainer email="dev@rosy.com">Dev</maintainer>
   <license>Proprietary</license>
 

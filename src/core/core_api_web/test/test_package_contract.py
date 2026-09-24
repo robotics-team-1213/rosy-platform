@@ -25,6 +25,7 @@ def test_web_common_is_an_installable_neutral_asset_package():
 
     assert "<name>web_common</name>" in manifest
     assert "install(FILES" in cmake
-    assert "tokens.css" in cmake and "core_ui_logic.js" in cmake
+    assert "tokens.css" in cmake and "components.css" in cmake
+    assert "core_ui_logic.js" in cmake and "ui.js" in cmake
     assert "<exec_depend>web_common</exec_depend>" in api_manifest
     assert "<exec_depend>web_common</exec_depend>" in fleet_manifest

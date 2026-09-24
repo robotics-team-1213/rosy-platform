@@ -11,7 +11,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-button, input, select { font: inherit; color: inherit; }
+ui-button, input, select { font: inherit; color: inherit; }
 
 .topbar {
   display: flex;
@@ -26,14 +26,14 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
-.brand b { font-weight: 700; font-size: 1.25rem; letter-spacing: 0.04em; }
-.brand small { font-family: var(--mono); font-size: 0.66rem; color: var(--muted); letter-spacing: 0.16em; }
+.brand b { font-weight: 700; font-size: var(--text-value); letter-spacing: 0.04em; }
+.brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }
 
 .topbar .spacer { flex: 1; }
 
 .pill {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: var(--text-micro);
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--line-14);
@@ -47,7 +47,7 @@ button, input, select { font: inherit; color: inherit; }
    색·배치는 클래스로만 준다 (CSP `style-src 'self'`). */
 .token {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: var(--text-micro);
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--line-14);
@@ -57,7 +57,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .token.locked { border-color: var(--status-crit-a45); }
 #token-save {
-  font-size: 0.78rem;
+  font-size: var(--text-micro);
   padding: 0.35rem 0.8rem;
   border-radius: 0.45rem;
   border: 1px solid var(--line-14);
@@ -96,12 +96,12 @@ main {
 
 .eyebrow {
   font-family: var(--mono);
-  font-size: 0.64rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.2em;
   color: var(--nominal-quiet);
   margin: 0 0 0.15rem;
 }
-.panel h2 { font-weight: 600; font-size: 1.15rem; margin: 0 0 0.8rem; }
+.panel h2 { font-weight: 600; font-size: var(--text-value); margin: 0 0 0.8rem; }
 
 .map-head { display: flex; align-items: baseline; gap: 0.8rem; }
 .map-head .spacer { flex: 1; }
@@ -121,12 +121,12 @@ main {
 
 .hint {
   margin: 0.7rem 0 0;
-  font-size: 0.8rem;
+  font-size: var(--text-label);
   color: var(--muted);
   line-height: 1.5;
 }
 
-.legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.7rem; font-family: var(--mono); font-size: 0.66rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.7rem; font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
 .legend i { width: 0.7rem; height: 0.7rem; border-radius: 0.2rem; border: 1px solid var(--line-14); }
 .sw.free { background: var(--paper); }
@@ -153,12 +153,12 @@ main {
 .robot.offline { opacity: 0.55; }
 
 .robot-head { display: flex; align-items: center; gap: 0.5rem; }
-.robot-head b { font-family: var(--mono); font-size: 0.95rem; letter-spacing: 0.04em; }
+.robot-head b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: 0.04em; }
 .robot-head .spacer { flex: 1; }
 
 .tag {
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.1em;
   padding: 0.15rem 0.45rem;
   border-radius: 0.3rem;
@@ -177,21 +177,21 @@ main {
   margin: 0.6rem 0 0.7rem;
 }
 .facts div { display: flex; flex-direction: column; gap: 0.1rem; }
-.facts span { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.12em; color: var(--muted); }
-.facts strong { font-family: var(--mono); font-size: 0.86rem; font-weight: 500; }
+.facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: 0.12em; color: var(--muted); }
+.facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: 500; }
 
 .robot-actions { display: flex; gap: 0.4rem; }
-.robot-actions button {
+.robot-actions ui-button {
   flex: 1;
   padding: 0.45rem 0.4rem;
   border-radius: 0.45rem;
   border: 1px solid var(--line-14);
   background: var(--sheen-04);
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: var(--text-label);
 }
-.robot-actions button:hover:not(:disabled) { border-color: var(--focus-ring); color: var(--paper); }
-.robot-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.robot-actions ui-button:hover:not(:disabled) { border-color: var(--focus-ring); color: var(--paper); }
+.robot-actions ui-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
@@ -218,13 +218,13 @@ main {
 .lamp.green.on { background: var(--nominal); border-color: var(--nominal); }
 
 .signal-body { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
-.signal-meta { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); }
-.robot-actions button.arming { background: var(--paper); color: var(--ground); border-color: var(--paper); }
+.signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
+.robot-actions ui-button.arming { background: var(--paper); color: var(--ground); border-color: var(--paper); }
 
 .log {
   margin-top: 1rem;
   font-family: var(--mono);
-  font-size: 0.7rem;
+  font-size: var(--text-micro);
   color: var(--muted);
   max-height: 11rem;
   overflow-y: auto;
@@ -239,7 +239,7 @@ main {
   padding: 0.8rem 1rem;
   border-left: 2px solid var(--line-14);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--text-micro);
   line-height: 1.6;
 }
 
@@ -263,7 +263,7 @@ main {
 }
 .formation-form label {
   font-family: var(--mono);
-  font-size: 0.6rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.12em;
   color: var(--muted);
 }
@@ -274,14 +274,14 @@ main {
   border-radius: 0.4rem;
   border: 1px solid var(--line-14);
   background: var(--ground-soft);
-  font-size: 0.82rem;
+  font-size: var(--text-label);
 }
-.formation .robot-actions button { font-size: 0.78rem; }
+.formation .robot-actions ui-button { font-size: var(--text-label); }
 
 
 /* FOR-001 Robot Selection — 대형 폼의 멤버 선택. 간격은 단일 파일의 스케일을 따른다. */
 .member-list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); font-size: 12px; color: var(--paper); }
+.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-micro); color: var(--paper); }
 .member-list input:disabled + * { opacity: 0.45; }
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
@@ -304,7 +304,7 @@ main {
 }
 .queue h3 {
   margin: 0 0 0.5rem 0;
-  font-size: 0.9rem;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .issue-list {
@@ -322,9 +322,9 @@ main {
   align-items: center;
   color: var(--paper);
 }
-.issue-list button {
+.issue-list ui-button {
   padding: 0.3rem 0.6rem;
-  font-size: 0.8rem;
+  font-size: var(--text-label);
   background: var(--status-crit);
   color: var(--paper);
   border: none;

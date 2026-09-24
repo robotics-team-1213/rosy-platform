@@ -470,7 +470,7 @@ function card(robot, index) {
 
   const actions = document.createElement("div");
   actions.className = "robot-actions";
-  const aim = document.createElement("button");
+  const aim = document.createElement("ui-button");
   aim.type = "button";
   aim.textContent = view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정";
   if (view.selected === robot.robot_id) aim.classList.add("arming");
@@ -480,7 +480,7 @@ function card(robot, index) {
     el("map-canvas").classList.toggle("idle", view.selected === null);
     render();
   });
-  const cancel = document.createElement("button");
+  const cancel = document.createElement("ui-button");
   cancel.type = "button";
   cancel.textContent = "취소";
   cancel.disabled = !robot.online;
@@ -516,7 +516,7 @@ function render() {
     if (r.state.hitl_requested) {
       const li = document.createElement("li");
       li.innerHTML = `<b>${r.robot_id}</b>: 개입 필요`;
-      const btn = document.createElement("button");
+      const btn = document.createElement("ui-button");
       btn.textContent = "조종 (WebRTC)";
       btn.onclick = () => alert(`${r.robot_id} 원격 조종 연결됨 (Mock)`);
       li.appendChild(btn);
@@ -799,7 +799,7 @@ function signalCard(row) {
   const actions = document.createElement("div");
   actions.className = "robot-actions";
   const mk = (label, body_, kind) => {
-    const button = document.createElement("button");
+    const button = document.createElement("ui-button");
     button.type = "button";
     button.textContent = label;
     button.disabled = !row.online;

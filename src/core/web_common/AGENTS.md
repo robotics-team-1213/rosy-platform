@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Framework-free shared web assets: `tokens.css` (single colour source, D-72 L1) and `core_ui_logic.js` (server-judged evidence enum adapter). Installed to `share/web_common`; consumed by `core_api_web` and `fleet`.
+Framework-free shared web assets: `tokens.css` (single colour and type scale), `components.css` and `ui.js` (shared browser controls, D-187), and `core_ui_logic.js` (server-judged evidence enum adapter). Installed to `share/web_common`; consumed by `core_api_web`, `fleet`, the game host, and the control diagnostic page.
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
 
@@ -17,8 +17,10 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
-| `test/` | `test_ui_token_contracts.py`, `test_palette_gates.py`, `test_headless_state.py` |
-| `tokens.css` | Colour/design tokens — the only palette source |
+| `test/` | Token, palette, headless, and shared-control contract tests |
+| `tokens.css` | Colour and type scale — the only palette and size source |
+| `components.css` | Shared `ui-button`, `ui-field`, `ui-tag`, `ui-text` |
+| `ui.js` | Custom elements for those controls; no build step |
 | `core_ui_logic.js` | Evidence-state adapter; contains no clock math |
 | `CMakeLists.txt` | Installs both files to share |
 

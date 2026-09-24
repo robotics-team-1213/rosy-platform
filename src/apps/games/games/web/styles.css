@@ -15,7 +15,7 @@ html, body {
   min-height: 100%;
   background: #0c160f;
   color: var(--ink);
-  font: 15px/1.4 "Segoe UI", sans-serif;
+  font: var(--text-body)/1.4 var(--body);
 }
 
 .rail {
@@ -26,13 +26,13 @@ html, body {
   margin: 0;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--mute);
 }
 
 h1 {
   margin: 4px 0 0;
-  font-size: 28px;
+  font-size: var(--text-title);
   font-weight: 650;
 }
 
@@ -56,12 +56,12 @@ h1 {
 
 .score span {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-label);
   color: var(--mute);
 }
 
 .score strong {
-  font-size: 36px;
+  font-size: var(--text-display);
   font-variant-numeric: tabular-nums;
 }
 
@@ -94,7 +94,7 @@ h1 {
 .chips li {
   background: var(--chip);
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
 }
 
@@ -106,7 +106,7 @@ h1 {
 #stair1 {
   margin: 0 22px 8px;
   color: var(--mute);
-  font-size: 13px;
+  font-size: var(--text-body);
 }
 
 .lost {
@@ -120,16 +120,7 @@ h1 {
   gap: 12px;
   margin: 0 22px 28px;
   color: var(--mute);
-  font-size: 13px;
+  font-size: var(--text-body);
 }
 
-#halt {
-  min-width: 96px;
-  min-height: 48px;
-  border: 0;
-  background: var(--lost);
-  color: #f4f1ea;
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
+#halt { min-width: 96px; }

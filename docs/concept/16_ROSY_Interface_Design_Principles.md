@@ -69,8 +69,11 @@ What is shared is law and vocabulary. Components are not shared.
 | L2 — Grammar | layout, interaction model, components | per surface, independent, not shared |
 | L3 — Content | what a capability contributes | portable across surfaces |
 
-A single component library spanning all four surfaces is a defect, not a goal:
-it would make Fleet look like a console and make the LCD impossible.
+Browser chrome is one component set (D-187): `ui-button`, `ui-field`, `ui-tag`,
+and `ui-text` in `web_common`, drawn only from `tokens.css`. Each surface still
+places those controls in its own layout. The robot face stays a pixel renderer
+and does not mount these elements. A framework bundle is not part of this set
+(D-75).
 
 ## 5. Evidence States
 

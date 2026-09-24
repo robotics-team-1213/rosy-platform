@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#111614">
   <title>Rosy Fleet — 사이트 관제</title>
   <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
+  <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
 </head>
 <body>
@@ -15,10 +17,10 @@
     <div class="spacer"></div>
     <input id="console-token" class="token" type="password" placeholder="관제 토큰"
            autocomplete="off" aria-label="관제 토큰">
-    <button id="token-save" type="button">접속</button>
+    <ui-button id="token-save" type="button">접속</ui-button>
     <span id="online-pill" class="pill">연결 대기</span>
     <span id="clock" class="pill">--:--:--</span>
-    <button id="estop" class="estop" type="button">전체 정지</button>
+    <ui-button id="estop" class="estop" type="button">전체 정지</ui-button>
   </header>
 
   <main>
@@ -89,10 +91,10 @@
           <div id="formation-members" class="member-list"></div>
         </div>
         <div class="robot-actions">
-          <button id="formation-start" type="button">무장</button>
-          <button id="formation-reform" type="button">대형 변경</button>
-          <button id="formation-resume" type="button">재개</button>
-          <button id="formation-stop" type="button">해제</button>
+          <ui-button id="formation-start" type="button">무장</ui-button>
+          <ui-button id="formation-reform" type="button">대형 변경</ui-button>
+          <ui-button id="formation-resume" type="button">재개</ui-button>
+          <ui-button id="formation-stop" type="button">해제</ui-button>
         </div>
         <p class="hint" id="formation-detail">리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다.</p>
       </div>

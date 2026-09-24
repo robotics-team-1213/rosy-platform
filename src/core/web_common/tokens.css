@@ -130,7 +130,7 @@
   --target-irreversible: 58px;
 
   /* 콘솔은 스크롤하지 않는다 — 남는 높이를 계산하려면 머리 높이가 토큰이어야 한다. */
-  --topbar-height: 76px;
+  --topbar-height: 88px;
 
   /* ---- 면 — 표면이 위계다(concept 16 Law 2) ---------------------------
    * 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다.
@@ -186,17 +186,17 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono",
           "DejaVu Sans Mono", "Noto Sans Mono", monospace;
 
-  /* 크기도 닫힌 집합이다. 예전 표면 규칙에는 0.55 ~ 6.7rem 사이의 크기가
-   * 마흔 가지 있었고 그중 스물여섯은 한 번만 쓰였다 — 계단이 없으면 아무도
-   * 같은 값을 고르지 않는다. 다섯 단계면 위계를 말하기에 충분하다.
-   *   micro 단위·각주.      label 대문자 머리·라벨.   body 읽는 글.
+  /* 크기는 닫힌 집합이다. 바닥은 팔 길이·장갑·관제 모니터에서 읽히는 12px.
+   *   micro 단위·각주.      label 이름·짧은 라벨.   body 읽는 글.
    *   value 계기 값(등폭).  title 화면 하나의 이름.
-   * 콘솔은 micro~value만 쓴다. 큰 글자는 위계가 아니라 소음이다. */
-  --text-micro: 0.58rem;
-  --text-label: 0.68rem;
-  --text-body: 0.8rem;
-  --text-value: 0.95rem;
-  --text-title: 1.15rem;
+   *   display 점수처럼 일부러 키우는 숫자 하나. 문장에 쓰지 않는다.
+   * 한 화면에서 가장 큰 단계와 가장 작은 단계의 비율은 이 여섯으로 닫는다. */
+  --text-micro: 0.75rem;
+  --text-label: 0.875rem;
+  --text-body: 1rem;
+  --text-value: 1.125rem;
+  --text-title: 1.25rem;
+  --text-display: 2rem;
 
   /* 대문자 라벨은 자간이 없으면 뭉친다. 한 값으로 고정한다. */
   --track-label: 0.12em;

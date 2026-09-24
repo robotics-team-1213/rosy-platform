@@ -200,7 +200,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     common_assets = {
         "tokens.css": "text/css",
+        "components.css": "text/css",
         "core_ui_logic.js": "application/javascript",
+        "ui.js": "application/javascript",
     }
 
     @app.get("/common/{asset_name:path}", include_in_schema=False)
