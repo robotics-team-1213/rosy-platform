@@ -2,9 +2,22 @@
 
 **Status:** Draft (2026-09-24). 사용자와 rosy-25 세션이 합의한 방향이다. 아직 ADR이 아니다.
 
-**번호:** 지금은 배정하지 않는다. 로컬 `main`은 ahead 32 / behind 52이다. origin/main에는 이미
-D-190–D-193이 있고, 다른 브랜치들도 D-187/188을 서로 다른 내용으로 쓰고 있다. `main`을 동기화한 뒤
-다음 빈 번호로 `docs/adr/`에 옮기고 `ROSY ADR Log.md`에 색인한다.
+**번호:** 이 ADR은 **D-196**이 될 예정이다. 로컬 `main`에만 있는 D-187(브라우저 조작 부품)과
+D-188(치수·진단 팔레트)이 origin/main의 D-187·D-188(SD writer)과 번호가 겹친다. 두 건은 아직 push하지
+않았으므로, 동기화(P0) 때 로컬 두 건을 D-194·D-195로 다시 매긴다. 그 뒤에 이 초안을 `docs/adr/`로 옮긴다.
+
+**재평가 (2026-09-24, origin/main `208752ae` 기준):** 방향은 유지한다. 아래 표의 발견을 반영해 3절,
+2절 2항, 진행 순서를 고쳤다.
+
+| 발견 | 반영 |
+|---|---|
+| `fix/device-boot-runtime`이 origin에 머지되었다(PR #24) | 이동 선행 조건을 해제한다 |
+| D-192 §4: 0x08을 읽는 코드는 모두 `flock`을 잡는다. 읽는 코드는 `rosylib.Battery`(hardware), `ir_adc_node`(apps), `sensor_adc`(벤치 전용)이다 | ADC를 읽는 코드를 모두 `devices/pinky_pro`로 모은다. `sensor_adc` 통합안은 철회한다(D-192가 벤치 전용과 동시 실행 금지를 이미 정했다) |
+| US-010: `withhold_hardware_flags`가 CORE-only 모드에서 하드웨어 capability를 보류한다 | drive 게이팅은 두 층으로 둔다. 정적 층 = Profile v2의 장치 조합, 런타임 층 = US-010 보류(기존 코드 유지) |
+| bringup에 `drive_enabled`(무동작 모드)와 `rosylib`이 들어왔다 | 둘 다 `devices/pinky_pro`로 옮긴다 |
+| `apps/emotion/rosy_lcd.py`는 Pinky SPI LCD 드라이버다. D-190 부팅 표시가 이 LCD를 쓴다 | LCD 드라이버는 `devices/pinky_pro`로 옮기고, 감정·화면 로직은 `apps/emotion`에 남긴다(3절) |
+| control 분할 설계 §3(D-171 트랙 3)이 `ir_adc_node`와 카메라 캡처를 `control_sensing`에 둔다 | 이 설계의 P4를 D-171 트랙 3과 합친다. `control_sensing`에는 알고리즘만 남긴다 |
+| D-191: 이미지는 실기 평가표를 모두 통과해야 배포한다 | 이동(P3)은 이미지 릴리스 사이에 한다. 이동 뒤 첫 이미지는 평가표를 다시 통과해야 한다 |
 
 **대체/보완:** D-147 §1·§2의 일부를 대체한다(장치 계열 이름 허용, 도메인 재편). D-168 P4 방향표에
 행을 추가한다. D-11/HWA-003, D-57, D-44, D-163, D-169는 유지하고 확장한다. D-186(스크립트·수집 폴더)과는
@@ -78,7 +91,9 @@ src/
    정한 방향이다. Pinky의 Python 드라이버는 **재편 뒤에** 교체한다. 그 전에 베이스 계약은 TurtleBot3
    sim으로 먼저 증명한다.
 2. **core의 drive 전제를 capability로 게이팅한다.** "최종 `cmd_vel`의 유일한 발행자는 core"라는 규칙을
-   "drive capability가 있을 때만"으로 좁힌다. 단독 OMX에는 `cmd_vel`이 없다.
+   "drive capability가 있을 때만"으로 좁힌다. 단독 OMX에는 `cmd_vel`이 없다. 게이팅은 두 층이다.
+   정적 층은 Profile v2의 장치 조합이다(베이스가 없으면 drive capability가 false). 런타임 층은 US-010의
+   `withhold_hardware_flags`이며 기존 코드를 그대로 쓴다.
 3. **팔 명령 경로는 core가 MoveIt 액션을 대행하는 방식이다.** 안전을 우선한다. D-44의 interlock
    ("팔이 동작하는 동안 베이스 정지 확인")을 core의 중재가 소유한다. 팔 쪽이 직접 실행하고 core는
    허가 토큰만 주는 안은 기각했다.
@@ -102,7 +117,8 @@ src/
 
 | 파일 | 배치 |
 |---|---|
-| `ir_adc_node.py`, `sensing/ir_adc.py` | `devices/pinky_pro`로 옮긴다. `/dev/i2c-1`을 ioctl로 직접 읽는 코드다. C++ `sensor_adc`와 기능이 겹치므로 하나로 합친다. 출력은 표준 msg다. D-169 장치 표면 시험의 경로도 함께 고친다 |
+| `ir_adc_node.py`, `sensing/ir_adc.py` | `devices/pinky_pro`로 옮긴다. `/dev/i2c-1`을 ioctl로 직접 읽는 코드다. 이동하면 0x08을 읽는 코드(`rosylib.Battery`, `sensor_adc`)가 모두 한 계열에 모인다. D-192 §4의 `flock` 계약과 `test_adc_ownership`·`test_ir_source_exclusivity`는 그대로 둔다. D-169 장치 표면 시험의 경로도 함께 고친다 |
+| `apps/emotion/emotion/rosy_lcd.py` | `devices/pinky_pro`로 옮긴다(SPI LCD 드라이버). GIF와 `info_screen` 같은 화면 로직은 `apps/emotion`에 남는다. D-190 부팅 표시 경로도 함께 고친다 |
 | `sensing/camera_controls.py`와 `camera_detect_node.py`의 캡처부 | `devices/common/camera`로 옮긴다(4절) |
 | `sensing/camera_ground.py` | apps에 남긴다. 카메라 외부 파라미터는 TF/프로필에서 읽는다 |
 | `sensing/lidar.py` | apps에 남긴다. `lidar_yaw_offset`은 TF로 바꾼다. `pinky/` 프레임 판별은 sim 픽스처로 옮긴다 |
@@ -149,14 +165,19 @@ intra-process 통신을 쓴다. 효과는 Pi에서 측정하기 전까지 가정
 
 ## 진행 순서
 
+P0–P3은 동작을 바꾸지 않으므로 바로 진행한다. P4는 D-171 트랙 3(control 분할)과 합쳐 한 번에 한다.
+control 파일을 두 번 흔들지 않기 위해서다(사용자 결정, 2026-09-24).
+
 | 단계 | 내용 | 완료 판정 |
 |---|---|---|
-| 0 | `main` 동기화, 이 초안을 ADR로 승격하고 번호 배정 | ADR 로그 시험 통과 |
-| 1 | 계약 작업: Profile v2 스키마와 로더, core drive 게이팅, `robot:=` 인자. 적합성 시험 추가: ① `devices/pinky_pro`·`robots/pinky_pro*` 밖의 `pinky` 리터럴은 `KNOWN_*` 집합 동일성(D-168 P5 방식)으로만 허용 ② 모든 로봇 프로필이 URDF와 capability를 생성함 | host pytest 통과 |
-| 2 | 기계적 이동만: `git mv`를 도메인당 1커밋. **`fix/device-boot-runtime`(D-189–D-192 계열) 머지 뒤에** 한다 | CI 통과 + WSL gz 벤치 결과가 이동 전과 같음 |
-| 3 | 3·4절 적용: apps/control·fleet에서 Pinky 값 제거, 카메라 캡처 분리 | 1단계 `KNOWN_*` 목록이 비게 됨 |
-| 4 | sim 검증: `pinky_pro_omx` → `omx_desk` → TurtleBot3 sim(베이스 계약) | 세 프로필이 같은 CORE API로 기동 |
-| 5 | Pinky 드라이버를 `ros2_control`로 교체하고 실기 재검증(D-57 Validation) | 엔코더 부호·오도메트리·한계·deadman·torque-off·재시작 비교 |
+| **P0 동기화** | origin/main을 로컬 `main`에 머지한다. 로컬 D-187·D-188 → D-194·D-195로 다시 매긴다(파일, ADR Log, 참조) | ADR 로그 시험 + host pytest 통과, push |
+| **P1 ADR D-196 + 시험** | 이 초안을 `docs/adr/`로 승격한다. `test/test_module_structure.py`에서 `DOMAINS`에 `devices`·`robots`를 넣고, P4 방향표 행을 추가하고, src 안 `pinky` 리터럴을 `KNOWN_*` 집합 동일성으로 묶는다. control 분할 설계 §3도 개정한다 | 새 시험 녹색(현재 상태를 목록으로 인정) |
+| **P2 프로필 (이동 없음)** | `robots/pinky_pro`를 만든다. `profile.pinky_pro.yaml`을 core 밖으로 옮기고, `robot:=`/`ROSY_ROBOT` 인자와 정적 capability 층을 추가한다 | core 시험 통과 + 모든 프로필이 capability 생성 |
+| **P3 기계적 이동** | 그룹당 1커밋, 패키지 이름 유지: `hardware/{bringup,sensor_adc,lamp_control,led}` → `devices/pinky_pro/`, `hardware/imu_bno055` → `devices/common/`, `apps/omx_adapter` → `devices/omx/`, `sim/description` → `devices/pinky_pro/`(xacro 매크로) + `robots/pinky_pro/`(조립). 패키지 이름 변경은 별도 커밋. 이미지 릴리스 사이에 한다(D-191) | CI + 이미지 입력 시험 + WSL gz 벤치 결과가 이동 전과 같음 |
+| **P4 앱에서 장치 코드 분리 + D-171 트랙 3** | 3·4절의 devices 이동(`ir_adc_node`, LCD 드라이버, 카메라 캡처 → `devices/common/camera`)과 control 3분할을 한 계획으로 묶는다. 보류된 `refactor/d171-track1`은 D-172 방식으로 재구현한다 | ADC 소유·IR 배타 시험 통과, `KNOWN_*` 감소 |
+| **P5 Pinky 값 걷어내기** | safety, lidar, body, fleet, nav2 오버레이 | `KNOWN_*`가 빔 |
+| **P6 sim 검증** | `pinky_pro_omx` → `omx_desk` → TurtleBot3 sim(베이스 계약) | 세 프로필이 같은 CORE API로 기동 |
+| **P7 ros2_control** | Pinky 드라이버를 교체하고 실기 재검증(D-57 Validation) | 엔코더 부호·오도메트리·한계·deadman·torque-off·재시작 비교 |
 
 ## 열린 항목
 
