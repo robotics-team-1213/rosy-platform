@@ -305,6 +305,23 @@
 - 결정: 사용자 승인 2026-09-24("고침"). 시작 전(trial 없음) 단계에서 늦은 scan 하나로 재배치를 시작하던 경로가 이제 1 s 관측 대기 뒤 실패로 끝난다. 재배치는 저장된 scan이 없으면 쓸 수도 없었다.
 - 교훈: 사유 문자열 하나가 "없음"과 "늦음"을 함께 담으면, 대기 정책이 그 둘을 구분하지 못한다. 판정 입력은 원인별로 분리해 기록한다.
 
+## 2026-09-24 · uncommitted · test(repo): control 패키지 크기 재판정 (D-168 P6, lane-network 병합)
+
+- 변경: `test/test_module_structure.py` `SIZE_VERDICTS["control"]` 기준을 28,315줄에서 **31,249줄**로 바꿨다. 판정은 `split`(P1a, `docs/plans/2026-09-22-control-package-split-design.md`) 그대로다. 예산(10,000줄)과 재성장 허용(+150)은 건드리지 않았다.
+- 원인: feat/lane-network-junctions 가 control 생산 코드에 순증 **+2,934줄**을 더했다(main 28,315 → 병합 31,249). 내역: `sensing/` 신규·변경 +2,531(`paint_localizer` 380·`route_camera` 372·`route_hybrid` 319·`route_map` 296·`lane_boundaries` 279·`lane_debug` 194·`lane_coverage` 175·`lane_route` 161·`dock_observer` 96, `dock_tag` +83, `lane_bev` +35), 관측 노드 +250(`dock_observer_node` 102, `line_observer_node` +148), `map_v2_fleet/scripts` +293, `setup.py` +1.
+- 증거: `_over_budget()` 실측 control 31,249 / 하위 `sensing` 7,397. 재판정 뒤 `python -m pytest test/test_module_structure.py test/test_module_scorecard.py -q` 15 passed (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: split 판정 유지. 증가분 대부분은 ROS-free leaf `sensing/*`이며 분리 설계가 떼어낼 `control_sensing` 단위에 그대로 들어간다(분리 후 그 단위도 10k 예산 안). 새 600줄 초과 파일은 없다(`lane_bev` 646 = accept 611+150 안). 기준 이동 폭(+2,934, 허용의 약 20배)이 main 선례(+156)보다 훨씬 크므로 독립 리뷰에서 확인받는다. split 미일정 상태는 바뀌지 않았다.
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(control): control 패키지 크기 결정 기록 (D-168 P6, lane-network 병합)
+
+- 변경: 없음(기록만). `SIZE_VERDICTS["control"]` 31,249줄 split 판정은 그대로다.
+- 증거: 없음(결정 기록).
+- gate 변화: 없음.
+- 결정: 2026-09-24 control 31,249줄은 이번 병합에서 기록만 하고, 패키지 분리는 인식 재설계(docs/plans/2026-09-24-perception-architecture-design.md P1~P3)에서 실행한다 — 사용자 결정 2026-09-24
+- 교훈: 없음
+
 ## 2026-09-24 · uncommitted · tools(control): rig environment guard marks overloaded runs invalid (D-185 R4)
 - 변경:
   - `tools/gz/rig_environment.py`를 새로 만들었다. `record`는 2 s마다 loadavg, CPU 압력(PSI), 파티션별 Gazebo 세션 수를 기록하고, 부모가 사라지면 끝난다. `judge`는 순수 함수이고 결과를 `environment.json`으로 쓴다.
@@ -457,4 +474,12 @@
 - 증거: `python -m pytest test/test_control_ros_edge.py src/apps/control/test/test_web_http.py -q` 14 passed (2026-09-24 Windows)
 - gate 변화: 없음
 - 결정: D-171, D-194
+
+## 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
+
+- 변경: `SIZE_VERDICTS["control"]` 기준을 31,249줄에서 **32,106줄**로 바꿨다. 판정은 `split` 그대로다. 같은 병합에서 `sim/gz_sim/scripts/lane_live_view.py`(709줄, live viewer v2)에 accept 판정을 추가했다.
+- 원인: main 재병합(672834e7까지)으로 main 쪽 control 증가분(main 기록 29,037)이 합쳐졌다. 브랜치 순증은 이전 기록과 같다.
+- 증거: `_over_budget()` 실측 control 32,106. `python -m pytest test/test_module_structure.py -q`에서 남은 실패 1건(`test_every_cross_package_use_is_declared`, `web_http.py → web_common`)은 main에서도 똑같이 실패한다. 이 브랜치와 무관하다.
+- gate 변화: 없음.
+- 결정: 사용자 결정 2026-09-24를 따른다(기록만 하고, 분리는 인식 재설계 P1~P3에서).
 - 교훈: 없음

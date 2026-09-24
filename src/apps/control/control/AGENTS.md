@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-06 | Updated: 2026-09-06 -->
+<!-- Generated: 2026-09-06 | Updated: 2026-09-24 -->
 
 # control/ (Python package)
 
@@ -18,6 +18,8 @@ The package's Python code: executable ROS node wrappers at the top level and the
 | `goal_node.py` | Map point-to-go: `/map`+TF → `/goal_point`, `/route`; thin I/O over `planning.GoalBrain`; advisory only, never touches `/cmd_vel_raw` |
 | `watch_node.py` | Graph health: required nodes, exclusive topic ownership, foreign-node detection → `/robot/ok|health|interrupt` |
 | `watch.py` | Pure graph-inspect logic (ROS-free), covered by `test_watch.py` |
+| `line_observer_node.py` | Normalised white-line evidence from IR reflectance or camera frames; modes include the lane-network followers (`route_a`/`route_b`/`route_ab` over `sensing/route_*`, fail-closed without `lane_graph_path`/`route`/`route_start`) and an optional `line/debug` overlay |
+| `dock_observer_node.py` | Camera frames → `dock/observation` via `sensing/dock_observer`; owns no motion. Only the Gazebo camera (`camera_geometry_source` GAZEBO under `use_sim_time`) may use the declared height/pitch/hfov/offset; any other source fails closed (every frame publishes not-visible) |
 
 ## Subdirectories
 | Directory | Purpose |

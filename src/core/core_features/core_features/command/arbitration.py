@@ -6,8 +6,12 @@ ROS 무의존 순수 로직 (P1-5, CORE-002).
 from __future__ import annotations
 
 import enum
+import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 class Priority(enum.IntEnum):
@@ -41,7 +45,8 @@ _ALLOWED: dict[Mode, set[Mode]] = {
     Mode.IDLE: {Mode.MANUAL, Mode.NAVIGATION, Mode.DOCKING, Mode.EMERGENCY},
     Mode.MANUAL: {Mode.IDLE, Mode.NAVIGATION, Mode.EMERGENCY},
     Mode.NAVIGATION: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
-    Mode.DOCKING: {Mode.IDLE, Mode.EMERGENCY},
+    # MANUAL(3) outranks DOCKING(4): the operator can always take the robot.
+    Mode.DOCKING: {Mode.IDLE, Mode.MANUAL, Mode.EMERGENCY},
     Mode.EMERGENCY: {Mode.IDLE},
 }
 
@@ -83,23 +88,47 @@ class ModeMachine:
 
     def __init__(self) -> None:
         self.mode: Mode = Mode.IDLE
+        #: `(old, new)` after every change. Whoever owns a mode's motion (the
+        #: docking run owns DOCKING) stops it here, so no exit path — API,
+        #: line follow, e-stop, the bridge — can leave it running.
+        self.change_listeners: list = []
+        # Check-and-set only. Listeners run after the lock is released: the
+        # docking listener takes the docking lock, and docking calls in here
+        # while holding it (docking lock -> mode lock, never the reverse).
+        self._lock = threading.Lock()
 
     def can_transition(self, new: Mode) -> bool:
         return new in _ALLOWED[self.mode]
 
-    def transition(self, new: Mode) -> tuple[bool, str]:
-        if new == self.mode:
-            return True, ""
-        if not self.can_transition(new):
-            return False, f"invalid transition {self.mode.value}->{new.value}"
-        self.mode = new
+    def transition(self, new: Mode, expect: Optional[Mode] = None) -> tuple[bool, str]:
+        """Change the mode. With `expect`, only from that mode — a caller that
+        checked the mode, then did something else, must not commit over a mode
+        another thread set meanwhile."""
+        with self._lock:
+            if expect is not None and self.mode is not expect:
+                return False, (f"mode changed ({self.mode.value}, "
+                               f"expected {expect.value})")
+            if new == self.mode:
+                return True, ""
+            if not self.can_transition(new):
+                return False, f"invalid transition {self.mode.value}->{new.value}"
+            old, self.mode = self.mode, new
+        # The mode is committed. A listener's failure must neither escape to the
+        # caller (the e-stop path would skip its latch) nor stop the others —
+        # the same rule as EventBus.publish and the e-stop listeners.
+        for listener in list(self.change_listeners):
+            try:
+                listener(old, new)
+            except Exception:
+                log.exception("mode listener failed on %s->%s", old.value, new.value)
         return True, ""
 
     def release_emergency(self) -> tuple[bool, str]:
-        if self.mode is not Mode.EMERGENCY:
-            return False, "not in EMERGENCY"
-        self.mode = Mode.IDLE
-        return True, ""
+        with self._lock:
+            if self.mode is not Mode.EMERGENCY:
+                return False, "not in EMERGENCY"
+            self.mode = Mode.IDLE
+            return True, ""
 
     @property
     def is_emergency(self) -> bool:

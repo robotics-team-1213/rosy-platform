@@ -11,6 +11,7 @@ src/apps/control/map/map_v2_fleet/meshes/*.stl binary
 src/apps/control/map/map_v2_fleet/maps/*.pgm binary
 src/apps/control/map/map_v2_fleet/maps/*.yaml text eol=lf
 "src/apps/control/map/map_v2_fleet/260919 MAP FILE.STL" binary
+src/apps/control/map/map_v2_fleet/lane_graph.yaml text eol=lf
 deploy/robot/native/rosy-diag text eol=lf
 # D-189: inputs.lock.yaml pins this file by SHA-256; its bytes must not change per checkout.
 deploy/image/device-python-requirements.txt text eol=lf

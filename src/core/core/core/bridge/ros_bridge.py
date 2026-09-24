@@ -3,7 +3,7 @@
 유일한 cmd_vel 퍼블리셔 (D-2, 50 Hz) · 구독·발행·서비스·7타이머·Nav2 액션·TF 전부
 여기에만 (목록은 `test/test_bridge_timers.py`가 고정). 판정은 하지 않는다: 값을
 정하는 일은 ROS-free 시블리(`observation`, `goal_tracker`, `reconcile`, `display`,
-`save_map`, `translate`)로 빠져 있고, 이 파일은 적응과 전달만 한다 — 그 자리가
+`save_map`, `translate`, `docking_executor`)로 빠져 있고, 이 파일은 적응과 전달만 한다 — 그 자리가
 호스트 pytest 에서 도달 불가능하기 때문이다.
 """
 
@@ -32,6 +32,7 @@ from std_srvs.srv import Empty
 from core.bridge import (
     battery_policy,
     display,
+    docking_mode,
     goal_tracker,
     observation,
     odometry,
@@ -41,6 +42,7 @@ from core.bridge import (
     translate,
 )
 from core.bridge.cmd_vel import cmd_vel_cycle
+from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
 from core_features.navigation.initial_pose import amcl_pose_covariance
@@ -92,6 +94,8 @@ class RosBridge:
         node.create_subscription(String, "detection_evidence",
                                  self._on_detection_evidence, 10)
         node.create_subscription(String, "road/observation", self._on_road_observation, 10)
+        # 주차형 도크: control 의 dock_observer_node 가 태그를 base_link 로 풀어 낸 증거.
+        node.create_subscription(String, "dock/observation", self._on_dock_observation, 10)
         preview_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         node.create_subscription(
@@ -138,15 +142,16 @@ class RosBridge:
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
         self._diag_timer = node.create_timer(1.0, self._tick_diagnostics)
         self._power_timer = node.create_timer(1.0 / 5.0, self._tick_power)
-        self._dock_timer = node.create_timer(1.0 / 5.0, self._tick_docking)
+        # 20 Hz while a parking run moves (DockingManager.fast_tick), 5 Hz
+        # otherwise: docking_mode.due() skips 3 in 4 calls.
+        self._dock_timer = node.create_timer(1.0 / 20.0, self._tick_docking)
+        self._dock_ticks = 0
         self._swarm_timer = node.create_timer(1.0 / 5.0, self._tick_swarm)
         self._line_follow_timer = node.create_timer(1.0 / 20.0, self._tick_line_follow)
         self._goals = GoalTracker()
 
         self._last_odom_ts = 0.0
-        self._last_odom_xy = None
-        self._dock_odom_mark = None
-        self._applied_dock_exemption = False
+        self._last_odom_pose = None
         # 최상단 임포트는 노드 기동 전체를 실패시킨다(core 에 없고 slam: false).
         # 여기서 시도하고, 클라이언트는 생성자에서 만들어야 DDS 엔드포인트 매칭에
         # 노드 수명만큼의 시간이 주어진다.
@@ -183,7 +188,22 @@ class RosBridge:
         # sim clock 이라, 느리게 도는 기계에서도 "30 초"가 시뮬 30 초를 뜻한다. 실기에서는
         # 시스템 시계와 같아 동작이 달라지지 않는다.
         self._svc.nav.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
-        self._svc.docking.executor = self
+        # Line/road evidence staleness (0.3 s) and loss (3 s) run on one clock:
+        # sim seconds under `use_sim_time` (a Gazebo at RTF 0.25 otherwise ages a
+        # 5 Hz frame 0.8 s of wall time and HOLDs), `time.monotonic` on Device.
+        self._line_clock = traffic_gate.line_clock(
+            bool(node.get_parameter("use_sim_time").value),
+            lambda: self._node.get_clock().now().nanoseconds / 1e9)
+        self._svc.line_follow.bind_clock(self._line_clock)
+        # The dock observation feed is stamped on the same clock, so the
+        # docking manager judges tag freshness and phase timeouts on it too.
+        self._svc.docking.bind_clock(self._line_clock)
+        # DockingExecutor: ROS-free in docking_executor.py; only the ROS actions come from here.
+        self.docking_executor = BridgeDockingExecutor(
+            self._svc, send_goal=self.send_goal, cancel_goal=self.cancel_goal,
+            publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
+            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
+        self._svc.docking.executor = self.docking_executor
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
@@ -193,7 +213,7 @@ class RosBridge:
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
-        self._last_odom_xy = (sample["x"], sample["y"])
+        self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
 
     def _on_battery(self, msg: Float32) -> None:
@@ -204,21 +224,35 @@ class RosBridge:
         observation.detection_evidence(self._svc, msg.data)
 
     def _on_nav_cmd_vel(self, msg: Twist) -> None:
-        observation.nav_twist(self._svc, msg.linear.x, msg.angular.z)
+        # Docking owns the nav slot rules (NAVIGATION, or DOCKING+STAGING);
+        # line-follow still blocks Nav2 output there.
+        docking_mode.route_nav_cmd_vel(
+            self._svc, CoreTwist(linear=msg.linear.x, angular=msg.angular.z))
 
     def _on_line_observation(self, msg: String) -> None:
         """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
         source_now = self._node.get_clock().now().nanoseconds * 1e-9
+        # received_at runs on the line clock (sim seconds under use_sim_time).
         observation.line_observation(
             self._svc, msg.data,
-            source_now=source_now, received_at=time.monotonic())
+            source_now=source_now, received_at=self._line_clock())
 
     def _on_road_observation(self, msg: String) -> None:
         """Decode road evidence; invalid data invalidates an enforced lease."""
         source_now = self._node.get_clock().now().nanoseconds * 1e-9
         observation.road_observation(
             self._svc, msg.data,
-            source_now=source_now, received_at=time.monotonic())
+            source_now=source_now, received_at=self._line_clock())
+
+    def _on_dock_observation(self, msg: String) -> None:
+        """Tag evidence only; a malformed payload clears the feed (lost, not guessed)."""
+        try:
+            self._svc.dock_feed.ingest(
+                json.loads(msg.data), received_at=self._line_clock(),
+                source_now=self._node.get_clock().now().nanoseconds * 1e-9)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._node.get_logger().warning(
+                f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
 
     def _on_camera_preview(self, msg: CompressedImage) -> None:
         observation.camera_preview(
@@ -227,14 +261,17 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         if not self._svc.line_follow.active:
             return
-        now = time.monotonic()
+        now = self._line_clock()
         decision = self._svc.line_follow.tick(now)
+        # CommandManager.select_output() ages the nav twist on time.monotonic.
+        command_now = None if self._line_clock is time.monotonic else time.monotonic()
         traffic_gate.apply_line_candidate(
             self._svc.line_follow,
             self._svc.traffic_policy,
             self._svc.command,
             decision,
             now,
+            command_now,
         )
         status = self._svc.line_follow.status()
         self._svc.state.set_line_follow(status)
@@ -287,7 +324,7 @@ class RosBridge:
         # 순서(고르기 → HOLD 면 0 → 바퀴 → 절전 관측·SAF-002 알림)는
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
-                      self._readiness)
+                      self._readiness, warn=self._node.get_logger().error)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
@@ -446,52 +483,6 @@ class RosBridge:
                 HealthState.OK if self._readiness.snapshot().ready else HealthState.ERROR,
             )
 
-
-    # --- DockingExecutor 구현 (docking.manager와 계약) -------------------------
-    #
-    # 정책은 core_features.docking.manager 가 갖고 여기는 조정만 한다 — power/mode 와
-    # PWR-005 LiDAR 의도와 같은 형태다.
-
-    def navigate_to(self, pose) -> None:
-        """스테이징 주행. 도킹 액션이 Nav2 구간까지 소유하므로 여기서 부른다."""
-        self.send_goal(NavGoalSpec(x=pose.x, y=pose.y, yaw=pose.yaw))
-
-    def cancel_navigation(self) -> None:
-        self.cancel_goal()
-
-    def drive(self, linear: float, angular: float) -> None:
-        """접근·후진 속도. 기존 cmd_vel 멀렉서를 통과시킨다.
-
-        nav 슬롯을 쓴다. 수동 조작(우선순위 3)이 도킹(4)을 이겨야 하는데 멀렉서가
-        이미 manual 을 위에 두고 있고, DOCKING 과 NAVIGATION 사이의 구분은 여기서
-        의미가 없다 — 도킹 중에는 도킹 매니저가 주행을 소유하므로 경쟁할 nav
-        목표 자체가 존재하지 않는다.
-        """
-        self._svc.command.set_nav_twist(CoreTwist(linear=linear, angular=angular))
-
-    def stop(self) -> None:
-        self._svc.command.set_nav_twist(CoreTwist(linear=0.0, angular=0.0))
-
-    def set_collision_exemption(self, enabled: bool) -> None:
-        """도크는 코스트맵에 장애물로 찍힌다 — 접근 구간에만 면제를 선언한다.
-
-        Nav2 에 이를 끄는 표준 서비스가 없어서 의도를 토픽으로 내보낸다. 실제
-        코스트맵 연동은 실기 항목으로 남는다(DOCK_GO).
-        """
-        if enabled == self._applied_dock_exemption:
-            return
-        self._applied_dock_exemption = enabled
-        self.dock_exemption_pub.publish(Bool(data=bool(enabled)))
-        self._node.get_logger().info(
-            "docking collision exemption %s" % ("on" if enabled else "off"))
-
-    def reset_odometry_mark(self) -> None:
-        self._dock_odom_mark = self._last_odom_xy
-
-    def travelled_m(self) -> float:
-        """마크 이후 이동 거리. 언도킹은 센서를 보지 않고 이 값만 쓴다."""
-        return odometry.travelled_m(self._dock_odom_mark, self._last_odom_xy)
-
     def _tick_swarm(self) -> None:
         """SWM-004 는 마감시각으로 판정한다 — 스트림이 끊기면 아무 프레임도
         오지 않으므로 소켓 쪽에서는 알아챌 수 없다."""
@@ -502,10 +493,10 @@ class RosBridge:
 
     def _tick_docking(self) -> None:
         docking = self._svc.docking
-        docking.on_navigation_state(self._svc.nav.nav_state)
-        docking.set_manual_active(self._svc.command.manual_active)
-        docking.tick()
-        self._svc.state.set_docking(docking.status())
+        self._dock_ticks += 1
+        if not docking_mode.due(self._dock_ticks, docking.fast_tick):
+            return
+        docking_mode.tick(self._svc, self._node.get_logger().warning)
 
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 

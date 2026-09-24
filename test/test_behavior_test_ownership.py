@@ -13,6 +13,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/core/core/test/test_api.py",
     "src/core/core/test/test_battery.py",
     "src/core/core/test/test_bridge_battery_policy.py",
+    # bridge/docking_executor.py seam (split out of ros_bridge, df02d52e); same kind as
+    # test_bridge_battery_policy: CORE bridge wiring driven through core_features fakes.
+    "src/core/core/test/test_bridge_docking_executor.py",
     "src/core/core/test/test_control_absorption_safety.py",
     "src/core/core/test/test_control_policy_link.py",
     "src/core/core/test/test_control_sensor_adapter.py",
@@ -37,6 +40,18 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "test/test_footprint_profiles.py",
     "test/test_nav2_profile_limits.py",
     "test/test_robot_runtime.py",
+    # feat/lane-network-junctions, written 2026-09-23..24 alongside D-184's
+    # acceptance and brought in by the main merge. They drive CORE's own
+    # docking/mode wiring (core.bridge.docking_mode, services.take_docking_mode,
+    # core.bridge.traffic_gate.line_clock); four go through the core_client
+    # fixture, the same entanglement main deferred for test_core_logic/
+    # test_line_follow_api/test_slam_reset. The pure core_features parking tests moved to
+    # core_features/test instead. Pending review: keep here or split.
+    "src/core/core/test/test_docking_mode_ownership.py",
+    "src/core/core/test/test_docking_mode_release.py",
+    "src/core/core/test/test_docking_parking_wiring.py",
+    "src/core/core/test/test_line_follow_sim_clock.py",
+    "src/core/core/test/test_mode_listener_isolation.py",
 })
 
 

@@ -202,6 +202,9 @@ class BirdsEye:
                            & (pixel_col >= 0) & (pixel_col < width_px))
         self._pixel_row = np.where(self.observable, pixel_row, 0).astype(np.intp)
         self._pixel_col = np.where(self.observable, pixel_col, 0).astype(np.intp)
+        #: Range and |bearing| of every cell from base_link (fixed per view).
+        self.radius = np.hypot(self.x, self.y)
+        self.bearing = np.abs(np.arctan2(self.y, self.x))
 
     def sample(self, bright: np.ndarray) -> np.ndarray:
         return (bright[self._pixel_row, self._pixel_col] & self.observable).astype(np.uint8)
@@ -226,34 +229,48 @@ def _to_odom(points_robot: np.ndarray, pose) -> np.ndarray:
 
 
 class _LineMemory:
-    """One boundary line's paint cells in the odometry frame."""
+    """One boundary line's paint cells in the odometry frame: integer cell
+    keys (BEV_CELL_M lattice) and the odometer reading each was last seen
+    at, one row per distinct key."""
 
     def __init__(self) -> None:
-        self._cells = {}
+        self._keys = np.empty((0, 2), np.int64)
+        self._seen = np.empty(0)
 
     def __bool__(self) -> bool:
-        return bool(self._cells)
+        return len(self._seen) > 0
 
     def clear(self) -> None:
-        self._cells.clear()
+        self._keys = np.empty((0, 2), np.int64)
+        self._seen = np.empty(0)
 
     def remember(self, points_robot: np.ndarray, pose, odometer: float) -> None:
-        for key in map(tuple, np.rint(_to_odom(points_robot, pose) / BEV_CELL_M).astype(int)):
-            self._cells[key] = odometer
+        keys = np.rint(_to_odom(points_robot, pose) / BEV_CELL_M).astype(np.int64)
+        if len(keys) == 0:
+            return
+        keys = np.vstack([self._keys, keys])
+        seen = np.concatenate([self._seen, np.full(len(keys) - len(self._seen), odometer)])
+        # One row per key, the latest sighting winning (unique over the
+        # reversed rows keeps each key's last occurrence). |key| < 2^31.
+        code = (keys[:, 0] << 32) + keys[:, 1]
+        _, first = np.unique(code[::-1], return_index=True)
+        last = len(code) - 1 - first
+        self._keys, self._seen = keys[last], seen[last]
 
     def prune(self, pose, odometer: float) -> None:
+        if not len(self._seen):
+            return
         radius_cells = MEMORY_RADIUS_M / BEV_CELL_M
         px, py = pose[0] / BEV_CELL_M, pose[1] / BEV_CELL_M
-        self._cells = {
-            key: seen for key, seen in self._cells.items()
-            if odometer - seen <= MEMORY_TRAVEL_M
-            and math.hypot(key[0] - px, key[1] - py) <= radius_cells}
+        keep = ((odometer - self._seen <= MEMORY_TRAVEL_M)
+                & (np.hypot(self._keys[:, 0] - px, self._keys[:, 1] - py) <= radius_cells))
+        self._keys, self._seen = self._keys[keep], self._seen[keep]
 
     def grid(self, view: BirdsEye, pose) -> np.ndarray:
         grid = np.zeros((view.rows, view.cols), np.uint8)
-        if not self._cells:
+        if not len(self._seen):
             return grid
-        points = _to_robot(np.array(list(self._cells.keys()), float) * BEV_CELL_M, pose)
+        points = _to_robot(self._keys * BEV_CELL_M, pose)
         i = np.floor((points[:, 0] - BEV_X_MIN_M) / BEV_CELL_M).astype(int)
         j = np.floor((BEV_Y_HALF_M - points[:, 1]) / BEV_CELL_M).astype(int)
         inside = (i >= 0) & (i < view.rows) & (j >= 0) & (j < view.cols)
@@ -262,7 +279,7 @@ class _LineMemory:
         return cv2.morphologyEx(grid, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
 
     def __len__(self) -> int:
-        return len(self._cells)
+        return len(self._seen)
 
 
 class LaneEdgeFollower:
@@ -445,11 +462,17 @@ class LaneEdgeFollower:
                                     None if right is None else labels == right)
         self.last.update(left_label=left, right_label=right, memory=left_grid,
                          right_memory=right_grid, fresh_length=fresh_length)
+        return self._pursue(view, {
+            "left": left, "right": right, "labels": labels, "stats": stats, "count": count,
+            "left_grid": left_grid, "right_grid": right_grid, "fresh_length": fresh_length,
+        }, half)
 
-        # The left boundary leads; the right one of the same lane stands in
-        # where the left has left the field of view (convex left turns).
+    def _pursue(self, view, found, half):
+        """Target selection. edge_left: the left boundary leads; the right one
+        of the same lane stands in where the left has left the field of view
+        (convex left turns)."""
         target, supported, source = None, False, None
-        for name, grid in (("LEFT", left_grid), ("RIGHT", right_grid)):
+        for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
             if not grid.any():
                 continue
             target, supported = self._lookahead(view, grid, half)
@@ -459,8 +482,12 @@ class LaneEdgeFollower:
         self.last.update(target=target, source=source, supported=supported)
         if target is None or not supported:
             return None
-        confidence = min(1.0, fresh_length / LOOKAHEAD_M)
+        confidence = min(1.0, found["fresh_length"] / LOOKAHEAD_M)
         confidence = max(confidence, MEMORY_CONFIDENCE)
+        return self._observation(target, confidence)
+
+    @staticmethod
+    def _observation(target, confidence):
         x, y = target
         curvature = 2.0 * y / (x * x + y * y)
         return LaneObservation(error=error_for_curvature(curvature, confidence),
@@ -561,33 +588,41 @@ class LaneEdgeFollower:
                                          cv2.DIST_L2, cv2.DIST_MASK_PRECISE) * BEV_CELL_M
         offset = half - LANE_LINE_WIDTH_M / 2.0
         band = (np.abs(distance - offset) <= PATH_BAND_HALF_M).astype(np.uint8)
+        return self._band_lookahead(
+            view, band, lambda target: self._supported(view, boundary_grid, target))
+
+    def _band_lookahead(self, view, band, supported):
+        """Pursuit point on the band piece nearest the robot; `supported`
+        decides whether a candidate may be pursued."""
         count, labels = cv2.connectedComponents(band, connectivity=8)
         if count <= 1:
             return None, False
-        radius = np.hypot(view.x, view.y)
+        radius = view.radius
         in_band = labels > 0
         nearest = np.argmin(np.where(in_band, radius, np.inf))
         if radius.flat[nearest] > PATH_MAX_OFFSET_M:
             return None, False
         path = labels == labels.flat[nearest]
         self.last["path"] = path
-        bearing = np.abs(np.arctan2(view.y, view.x))
+        # The rings below only ever select path cells: work on those, in
+        # raster order (argmin ties and means match the full-grid form).
+        cells = np.flatnonzero(path)
+        px, py = view.x.flat[cells], view.y.flat[cells]
+        pr, pb = radius.flat[cells], view.bearing.flat[cells]
         first = None
         steps = int(round((LOOKAHEAD_MAX_M - LOOKAHEAD_M) / LOOKAHEAD_STEP_M))
         for step in range(steps + 1):
-            ring = path & (np.abs(radius - (LOOKAHEAD_M + step * LOOKAHEAD_STEP_M))
-                           <= BEV_CELL_M)
+            ring = np.abs(pr - (LOOKAHEAD_M + step * LOOKAHEAD_STEP_M)) <= BEV_CELL_M
             if not ring.any():
                 continue
-            candidates = np.where(ring, bearing, np.inf)
+            candidates = np.where(ring, pb, np.inf)
             best = np.argmin(candidates)
-            if candidates.flat[best] > LOOKAHEAD_MAX_BEARING_RAD:
+            if candidates[best] > LOOKAHEAD_MAX_BEARING_RAD:
                 continue
             # Average the ring cells within 1 cm of the best one.
-            close = ring & (np.hypot(view.x - view.x.flat[best],
-                                     view.y - view.y.flat[best]) <= 0.01)
-            target = (float(view.x[close].mean()), float(view.y[close].mean()))
-            if self._supported(view, boundary_grid, np.array(target)):
+            close = ring & (np.hypot(px - px[best], py - py[best]) <= 0.01)
+            target = (float(px[close].mean()), float(py[close].mean()))
+            if supported(np.array(target)):
                 return target, True
             if first is None:
                 first = target

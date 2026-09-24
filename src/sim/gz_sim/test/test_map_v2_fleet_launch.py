@@ -10,8 +10,8 @@ LAUNCH_SIM = Path(__file__).resolve().parents[1] / "launch" / "launch_sim.launch
 def test_launch_uses_the_catalogued_world_and_spawn():
     source = LAUNCH.read_text(encoding="utf-8")
     assert '"map_v2_fleet", "worlds", "map_v2_fleet.world"' in source
-    assert '"spawn_x": "-1.26955"' in source
-    assert '"spawn_y": "0.24255"' in source
+    assert 'DeclareLaunchArgument("spawn_x", default_value="-1.26955")' in source
+    assert 'DeclareLaunchArgument("spawn_y", default_value="0.24255")' in source
     assert '"bridge_image": "true"' in source
 
 
@@ -22,7 +22,7 @@ def test_line_observer_threshold_sits_between_floor_and_far_paint():
     0.083 m), and run 193728 showed paint dimming to 214 at 0.44 m, so at 220
     the left line was 0.14 m long and never seeded. 180 sits midway."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "edge_left"' in source
+    assert 'DeclareLaunchArgument("camera_lane_mode", default_value="edge_left")' in source
     assert '"camera_bright_threshold": 180' in source
 
 
@@ -73,7 +73,7 @@ def test_line_observer_runs_two_line_lane_mode_on_declared_gazebo_ground():
     """The 260919 track bounds each lane with two lines; single-line centroid
     latched onto one boundary in Gazebo. Lane mode needs the metric ground."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "edge_left"' in source
+    assert 'DeclareLaunchArgument("camera_lane_mode", default_value="edge_left")' in source
     assert '"camera_ground_source": "GAZEBO"' in source
     assert '"allow_simulation_ground": True' in source
     assert '"gazebo_camera_height_m": 0.060194' in source
@@ -105,5 +105,110 @@ def test_lap_runs_left_edge_following():
     """Run 184434 stopped where both lines bend 65 deg: the lap holds the inner
     block's outline on the left instead of pairing lines row by row."""
     source = LAUNCH.read_text(encoding="utf-8")
-    assert '"camera_lane_mode": "edge_left"' in source
+    assert 'DeclareLaunchArgument("camera_lane_mode", default_value="edge_left")' in source
     assert '"lane_corner_turning": True' in source
+
+
+def test_launch_exposes_mode_and_spawn_for_the_junction_harness():
+    source = LAUNCH.read_text(encoding="utf-8")
+    for arg in ('"camera_lane_mode"', '"spawn_x"', '"spawn_y"', '"spawn_yaw"', '"debug_overlay"'):
+        assert f"DeclareLaunchArgument({arg}" in source
+
+
+def test_camera_lane_mode_is_typed_as_a_string_parameter():
+    """A bare LaunchConfiguration substitution can be handed to rclpy as a
+    non-string ParameterType depending on how the launch frontend resolves
+    it; wrap it like debug_overlay's ParameterValue(..., value_type=bool)
+    so 'centre'/'edge_left'/'lane' always arrive as a ROS string param."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert ('"camera_lane_mode": ParameterValue(\n'
+            '                    LaunchConfiguration("camera_lane_mode"), value_type=str)') in source
+
+
+def test_route_args_declared_empty_for_the_junction_prototypes():
+    """route_a/route_b/route_ab (Task 6). Empty by default so line/lane/
+    edge_left/centre are unaffected; the harness overrides them per scenario."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert "route_a/route_b/route_ab only" in source
+    assert 'DeclareLaunchArgument("route", default_value="[]")' in source
+    assert 'DeclareLaunchArgument("route_start", default_value="[]")' in source
+    assert '"lane_graph_path": os.path.join(\n' \
+           '                    control_share, "map", "map_v2_fleet", "lane_graph.yaml")' in source
+
+
+def test_route_and_route_start_are_typed_as_arrays_from_a_yaml_flow_list_string():
+    """A launch-arg substitution is always a string; ParameterValue's
+    List[str]/List[float] value_type parses a YAML flow-list string (e.g.
+    '[west:f, ring_w:f]') into the node's declared string/double array
+    parameters, matching what junction_harness.py builds for route_a/route_b."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert ('"route": ParameterValue(\n'
+            '                    LaunchConfiguration("route"), value_type=List[str])') in source
+    assert ('"route_start": ParameterValue(\n'
+            '                    LaunchConfiguration("route_start"), value_type=List[float])'
+            ) in source
+    assert "from typing import List" in source
+
+
+def test_the_dock_observer_is_opt_in_with_the_declared_gazebo_camera():
+    """Stage 3 (parking): control's dock_observer_node observes the wedge
+    tag on the declared Gazebo camera (25 deg, 0.0602 m, 0.0285 m ahead,
+    hfov 1.1519), only when dock_observer:=true. It owns no motion."""
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert 'DeclareLaunchArgument("dock_observer", default_value="false")' in source
+    block = source.split('executable="dock_observer_node"', 1)[1].split("Node(", 1)[0]
+    assert "IfCondition(LaunchConfiguration(\"dock_observer\"))" in block
+    for text in ['"camera_geometry_source": "GAZEBO"', '"use_sim_time": True',
+                 '"camera_height_m": 0.060194', '"camera_pitch_rad": math.radians(25.0)',
+                 '"camera_hfov_rad": 1.1519', '"camera_x_offset_m": 0.028481',
+                 '"tag_id": 7', '"tag_size_m": 0.05']:
+        assert text in block, text
+    assert "cmd_vel" not in source
+
+
+URDF = Path(__file__).resolve().parents[2] / "description" / "urdf" / "rosy.urdf.xacro"
+
+
+def _urdf_camera_on_base_footprint(tilt_rad):
+    """front_camera_link (the Gazebo camera sensor's frame) on base_footprint,
+    from the xacro's joint chain: base_footprint -> base_link ->
+    front_camera_mount (pitched `tilt_rad`) -> front_camera_link. Returns
+    (x ahead, z above the floor)."""
+    import math
+    import re
+
+    source = URDF.read_text(encoding="utf-8")
+
+    def origin(joint):
+        block = re.split(rf'<joint name="(?:\$\{{namespace\}})?{joint}"', source, maxsplit=1)[1]
+        block = block.split("</joint>", 1)[0]
+        xyz = re.search(r'<origin xyz="([^"]+)"', block).group(1)
+        return [float(v) for v in xyz.split()]
+
+    base = origin("base_link_fixed_joint")
+    mount = origin("front_camera_mount_fixed_joint")
+    link = origin("front_camera_fixed_joint")
+    s, c = math.sin(tilt_rad), math.cos(tilt_rad)
+    # R_y(tilt) applied to the link offset inside the pitched mount.
+    x = base[0] + mount[0] + c * link[0] + s * link[2]
+    z = base[2] + mount[2] - s * link[0] + c * link[2]
+    return x, z
+
+
+def test_the_dock_observer_mount_is_the_urdf_camera():
+    """The declared mount must be where Gazebo puts the camera. 0.034 was
+    0.020 + 0.015*cos(25 deg) and dropped the link's -0.0121 m drop inside
+    the pitched mount (-0.0121*sin(25 deg) = -5.1 mm along x): the dock tag
+    read 5.5 mm long in every Gazebo frame. gz sdf -p puts the sensor at
+    (0.0284809, 0, 0.0601944) on base_footprint."""
+    import math
+    import re
+
+    x, z = _urdf_camera_on_base_footprint(math.radians(25.0))
+    assert (round(x, 6), round(z, 6)) == (0.028481, 0.060194)
+    block = LAUNCH.read_text(encoding="utf-8").split(
+        'executable="dock_observer_node"', 1)[1].split("Node(", 1)[0]
+    declared_x = float(re.search(r'"camera_x_offset_m": ([0-9.]+)', block).group(1))
+    declared_z = float(re.search(r'"camera_height_m": ([0-9.]+)', block).group(1))
+    assert abs(declared_x - x) < 1e-5
+    assert abs(declared_z - z) < 1e-5

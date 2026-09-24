@@ -19,8 +19,10 @@ safety_router = APIRouter(prefix="/api/v1/safety", tags=["safety"])
 
 @safety_router.post("/stop")
 def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    svc.modes.transition(Mode.EMERGENCY)
+    # Latch first: the mode change runs listeners (docking abort, ...), and
+    # nothing they do may leave EMERGENCY without the latch behind it.
     svc.safety.trigger_estop(f"api:{auth.role}")
+    svc.modes.transition(Mode.EMERGENCY)
     svc.state.set_estop(True)
     return {"estop": True}
 

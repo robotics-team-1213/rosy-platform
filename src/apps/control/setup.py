@@ -46,6 +46,7 @@ setup(
             'camera_detect_node = control.camera_detect_node:main',
             'ir_adc_node = control.ir_adc_node:main',
             'line_observer_node = control.line_observer_node:main',
+            'dock_observer_node = control.dock_observer_node:main',
             'road_observer_node = control.road_observer_node:main',
             'obstacle_observer_node = control.obstacle_observer_node:main',
             'watch_node = control.watch_node:main',

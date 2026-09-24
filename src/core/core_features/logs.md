@@ -51,3 +51,27 @@
 - 결정: module-coupling-scorecard §6 과제 2.
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · test(core): lane-network 주차 도크 시험을 자체 `test/`로 (main 병합, D-184)
+
+- 변경: feat/lane-network-junctions 에 main(427ed9d9)을 병합하면서 D-184 `test_behavior_test_ownership` 이 브랜치의 새 `core/test` 시험 8개를 잡았다. `core_features` 동작만 보는 3개(`test_docking_parking.py`·`test_docking_parking_manager.py`·`test_docking_review_fixes.py` — `core`·`core_client` 미사용)를 `src/core/core_features/test/`로 `git mv`. CORE 자체 배선(`core.bridge.docking_mode`·`services.take_docking_mode`·`traffic_gate.line_clock`)을 보는 5개(`test_docking_mode_ownership`·`test_docking_mode_release`·`test_docking_parking_wiring`·`test_line_follow_sim_clock`·`test_mode_listener_isolation`)는 `KNOWN_EXTERNAL_BEHAVIOR_TESTS`에 주석과 함께 고정했다 — 4개가 `core_client` fixture 를 쓰고, main 도 같은 이유로 `test_core_logic` 등 3개를 보류했다.
+- 증거: `python -m pytest src/core/core_features/test -q` 198 passed(140 + 이전 58), `python -m pytest test/test_behavior_test_ownership.py -q` 1 passed (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: 5개 고정은 병합 준비 단계의 잠정 판정이다. D-184 결정 2(새 `core/test` 시험은 CORE 공개 계약만)와 긴장이 있어 독립 리뷰에서 유지/분리를 정한다.
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(repo): `docking/manager.py` 크기 판정 accept (D-168 P6)
+
+- 변경: `SIZE_VERDICTS`에 `core/core_features/core_features/docking/manager.py`(930줄)를 `accept`(X5)로 추가. main 511줄 → 브랜치 930줄(주차형 도크 단계 27b65067·784ffad2와 리뷰 수정 H1–N6).
+- 증거: 병합 뒤 `test_over_budget_code_has_a_recorded_verdict` 가 이 파일을 판정 없음으로 잡았다. 추가 뒤 `python -m pytest test/test_module_structure.py -q` 초록 (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: accept — 소유자 하나(`svc.docking` / `DockingManager`, 충전·주차 두 도크 기종의 한 phase 기계), ROS-free, `core_features/test/test_docking*.py`로 host 시험 가능. 2026-09-06 분리 기준 X5 가 바로 이 파일을 예로 든다. 주차 전용 phase(`_tick_*_pose`, `_begin_turn` 등)를 전략 객체로 떼는 split 대안은 독립 리뷰에 남긴다. D-178 재채점 트리거(`SIZE_VERDICTS` 판정 변경)에 해당하므로 스코어카드 회차 갱신이 필요하다.
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · refactor(docking): 주차형 단계를 `docking/parking_phases.py` 전략으로 분리 (D-168 P6)
+
+- 변경: `docking/manager.py` 930줄 → 663줄. 주차형(`approach="pose"`) 단계 로직 — 진입·언도킹 회전(`begin_turn`·`tick_turning`), 크리프 획득, 추정기·오도메트리 접근, 정렬, 포즈 판정·재착좌 정착, 거리 후진, `_aim`·`_near_spot`·`_observe` — 을 신규 `docking/parking_phases.py`(301줄, `ParkingPhases`)로 옮겼다. `DockPhase`·`DockingExecutor`·`DockingConfig`는 신규 `docking/model.py`(76줄)로 옮기고 `manager` 가 다시 내보낸다(`__all__`) — 기존 import 경로는 그대로다. 기본 기종 정착과 포즈 정착이 같은 DOCKED 전이를 쓰도록 `_mark_docked()` 를 뒀다. `SIZE_VERDICTS` 의 manager 판정을 663줄 accept 로 갱신했다. 시험 `test/test_docking_parking_phases.py` 4건(pose 단계 위임, 거리 후진 위임, 전략의 자기 상태·락 없음, 주차 모듈의 ROS·cv2·threading import 금지).
+- 원인: 사용자 결정 2026-09-24 — 크기 예외(accept 930) 대신 분리.
+- 증거: 기존 docking 시험은 수정 없이 통과한다(`core_features/test` + `core/test/test_docking_mode_*`·`test_docking_parking_wiring`·`test_mode_listener_isolation` 255 passed → 신규 포함 259 passed, `test_parking_offline` 기본·`-m drift`, `test_mission_harness_contract`) (2026-09-24 Windows).
+- gate 변화: 없음.
+- 결정: 전략은 자기 락도 자기 상태도 없다. 주차형 단계 상태(`_tracker`·`_turn_target`·`_after_turn`·`_creep_from`·`_creep_done_at`·`_backoff_from`)는 매니저 필드로 남아 매니저가 만들고 되돌리며, 전략은 `ParkingHost` 프로토콜로 적은 매니저 멤버만 쓴다. 모든 진입점이 매니저의 RLock 안(틱·명령 경로)에서만 불리므로 N1(락 안 모드 해제)·H2(`take_mode` 먼저)·estop 먼저 순서는 매니저 한 곳에서 읽힌다. 600줄 목표는 이번 분리로 닿지 않았다 — 남은 663줄은 매니저가 소유해야 할 것(상태·락·모드 이음새·fail/retry/release·기본 기종 단계·배터리 복귀·공개 API)이라 더 떼면 락 소유자가 둘로 갈린다. D-178 재채점 트리거(`SIZE_VERDICTS` 판정 변경)에 해당한다.
+- 교훈: 없음

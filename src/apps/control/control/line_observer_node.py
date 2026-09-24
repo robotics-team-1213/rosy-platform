@@ -7,14 +7,18 @@ the sole final ``cmd_vel`` publisher (D-143).
 
 import json
 import math
+import os
 
+import cv2
 import numpy as np
 import rclpy
+import yaml
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
@@ -28,6 +32,12 @@ from .sensing.lane import (
     line_observation_payload,
 )
 from .sensing.lane_bev import LaneEdgeFollower, pose_if_fresh
+from .sensing.lane_boundaries import LaneBoundaryTracker
+from .sensing.lane_debug import next_publish_due, render_debug
+from .sensing.paint_localizer import PaintMap
+from .sensing.route_camera import RouteCameraFollower
+from .sensing.route_hybrid import RouteHybridFollower
+from .sensing.route_map import RouteMapFollower
 
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.
@@ -52,6 +62,12 @@ class LineObserverNode(Node):
         # boundary lines; 'edge_left' holds the lane's left boundary a
         # half-width off in bird's-eye view (bends, arcs). Both lane modes need
         # a metric ground plane, edge_left also odometry (fail-closed without).
+        # 'centre' follows the centre line between both boundaries (fallback ladder).
+        # 'route_a'/'route_b' are the junction prototypes: route-driven
+        # manoeuvres over the centre-line tracker (A) and planned-route
+        # pursuit from a paint-localised pose (B). 'route_ab' is their
+        # hybrid: A's manoeuvres placed by B's paint-localised pose. All
+        # need lane_graph_path/route/route_start; fail closed without them.
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
@@ -65,6 +81,16 @@ class LineObserverNode(Node):
         # default; without odometry the tracker never leaves FOLLOW.
         self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
         self.declare_parameter('camera_x_offset_m', 0.0)
+        self.declare_parameter('debug_overlay', False, _READ_ONLY)
+        self.declare_parameter('debug_overlay_max_hz', 5.0)
+        self.declare_parameter('debug_lane_graph', '')
+        # route_a/route_b/route_ab only. route and route_start are declared by type,
+        # not value: an empty Python list default cannot be typed, and the
+        # config file's own empty-list override (line_follow.yaml) needs a
+        # declared element type (string / double) to resolve against.
+        self.declare_parameter('lane_graph_path', '', _READ_ONLY)
+        self.declare_parameter('route', Parameter.Type.STRING_ARRAY, _READ_ONLY)
+        self.declare_parameter('route_start', Parameter.Type.DOUBLE_ARRAY, _READ_ONLY)
 
         self._ir_calibration = None
         self._camera_controls_stable = False
@@ -77,6 +103,31 @@ class LineObserverNode(Node):
         self._edge_follower = LaneEdgeFollower(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
+        self._centre_tracker = LaneBoundaryTracker(
+            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+        self._route_follower = None
+        camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
+        if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
+            self._route_follower = self._build_route_follower(camera_lane_mode)
+        self._debug_pub = None
+        self._debug_last_s = None
+        self._debug_graph = None
+        if bool(self.get_parameter('debug_overlay').value):
+            self._debug_pub = self.create_publisher(
+                CompressedImage, 'line/debug/compressed', 2)
+            path = str(self.get_parameter('debug_lane_graph').value)
+            if path:
+                # A missing or malformed graph must never fail startup
+                # (D-143: this node still owes CORE line/observation); the
+                # map panel just goes without a route overlay.
+                try:
+                    with open(path, encoding='utf-8') as handle:
+                        self._debug_graph = yaml.safe_load(handle)
+                except (OSError, yaml.YAMLError) as exc:
+                    self.get_logger().warning(
+                        f'debug_lane_graph {path!r} could not be loaded, '
+                        f'map panel will show no route: {exc}')
+                    self._debug_graph = None
         if bool(self.get_parameter('ir_calibration_enabled').value):
             self._ir_calibration = IRLineCalibration(
                 black=tuple(self.get_parameter('ir_black').value),
@@ -95,12 +146,50 @@ class LineObserverNode(Node):
         self.create_subscription(
             String, 'camera/controls', self._on_camera_controls, controls_qos)
         mode = str(self.get_parameter('camera_lane_mode').value)
-        if mode in ('lane', 'edge_left'):
+        if mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if self._ir_calibration is None:
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
+
+    def _build_route_follower(self, mode: str):
+        """route_a/route_b/route_ab only. Missing or invalid lane_graph_path, route or
+        route_start (or a graph/route that fails to build, e.g. a
+        disconnected pair or a one-way ring arc walked backwards) fails
+        closed: a warning logged once here at startup, no follower built,
+        and CAMERA_LINE keeps publishing None (visible:false) every frame
+        rather than going silent (D-143: this node still owes CORE
+        evidence)."""
+        graph_path = str(self.get_parameter('lane_graph_path').value)
+        route = [str(key) for key in self.get_parameter('route').value]
+        route_start = [float(v) for v in self.get_parameter('route_start').value]
+        if not graph_path or not route or len(route_start) != 3:
+            self.get_logger().warning(
+                f'{mode} route modes need lane_graph_path, route and route_start; '
+                'no follower built, CAMERA_LINE will publish no observation')
+            return None
+        try:
+            with open(graph_path, encoding='utf-8') as handle:
+                graph = yaml.safe_load(handle)
+            x_offset = float(self.get_parameter('camera_x_offset_m').value)
+            if mode == 'route_a':
+                return RouteCameraFollower(
+                    graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset)
+            paint_map = PaintMap.from_bundle(os.path.dirname(graph_path))
+            if mode == 'route_ab':
+                return RouteHybridFollower(
+                    graph, route, start_pose=tuple(route_start),
+                    camera_x_offset_m=x_offset, paint_map=paint_map)
+            return RouteMapFollower(
+                graph, route, start_pose=tuple(route_start), camera_x_offset_m=x_offset,
+                paint_map=paint_map)
+        except (OSError, yaml.YAMLError, ValueError) as exc:
+            self.get_logger().warning(
+                f'{mode} route modes need lane_graph_path, route and route_start '
+                f'to build a valid follower ({exc}); no follower built, '
+                'CAMERA_LINE will publish no observation')
+            return None
 
     def _ground(self, width: int, height: int):
         source = str(self.get_parameter('camera_ground_source').value)
@@ -152,6 +241,7 @@ class LineObserverNode(Node):
 
     def _on_camera(self, msg: Image) -> None:
         observation = None
+        frame = None
         if (bool(self.get_parameter(
                 'require_camera_controls_stable').value)
                 and not self._camera_controls_stable):
@@ -180,7 +270,7 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                     min_pixels=int(self.get_parameter('camera_min_pixels').value),
                 )
-            elif mode in ('lane', 'edge_left'):
+            elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
@@ -190,13 +280,28 @@ class LineObserverNode(Node):
                         self.get_parameter('camera_roi_bottom_fraction').value),
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
-                if mode == 'edge_left':
+                if mode == 'centre':
+                    image_stamp = (float(msg.header.stamp.sec)
+                                   + float(msg.header.stamp.nanosec) * 1e-9)
+                    observation = self._centre_tracker.update(
+                        image_stamp,
+                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        frame, ground, **lane_kwargs)
+                elif mode == 'edge_left':
                     image_stamp = (float(msg.header.stamp.sec)
                                    + float(msg.header.stamp.nanosec) * 1e-9)
                     observation = self._edge_follower.update(
                         image_stamp,
                         pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                         frame, ground, **lane_kwargs)
+                elif mode in ('route_a', 'route_b', 'route_ab'):
+                    if self._route_follower is not None:
+                        image_stamp = (float(msg.header.stamp.sec)
+                                       + float(msg.header.stamp.nanosec) * 1e-9)
+                        observation = self._route_follower.update(
+                            image_stamp,
+                            pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                            frame, ground, **lane_kwargs)
                 elif bool(self.get_parameter('lane_corner_turning').value):
                     image_stamp = (float(msg.header.stamp.sec)
                                    + float(msg.header.stamp.nanosec) * 1e-9)
@@ -213,6 +318,49 @@ class LineObserverNode(Node):
         source_stamp = (float(msg.header.stamp.sec)
                         + float(msg.header.stamp.nanosec) * 1e-9)
         self._publish('CAMERA_LINE', observation, stamp=source_stamp)
+        self._publish_debug(msg, frame, observation)
+
+    def _publish_debug(self, msg, frame, observation) -> None:
+        """Observation only: a picture of the decision just published.
+
+        Never allowed to take line/observation down with it (D-143): any
+        render or encode failure here is caught, logged (throttled), and
+        skipped, so this frame's overlay is lost but every later
+        line/observation still publishes."""
+        if self._debug_pub is None or frame is None:
+            return
+        stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
+        max_hz = float(self.get_parameter('debug_overlay_max_hz').value)
+        if not next_publish_due(self._debug_last_s, stamp, max_hz):
+            return
+        self._debug_last_s = stamp
+        mode = str(self.get_parameter('camera_lane_mode').value)
+        follower = {
+            'centre': self._centre_tracker,
+            'edge_left': self._edge_follower,
+            'route_a': self._route_follower,
+            'route_b': self._route_follower,
+            'route_ab': self._route_follower,
+        }.get(mode)
+        if follower is None:
+            return
+        try:
+            image = render_debug(
+                frame, follower, observation, mode=mode,
+                pose=pose_if_fresh(self._odom_pose, self._odom_stamp, stamp),
+                graph=self._debug_graph,
+                bright_threshold=int(self.get_parameter('camera_bright_threshold').value))
+            ok, data = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ok:
+                return
+            out = CompressedImage()
+            out.header = msg.header
+            out.format = 'jpeg; overlay=lane-debug-v1'
+            out.data = data.tobytes()
+            self._debug_pub.publish(out)
+        except Exception as exc:  # noqa: BLE001 - the overlay must never be fatal.
+            self.get_logger().warning(
+                f'debug overlay render/publish failed: {exc}', throttle_duration_sec=5.0)
 
     def _on_odom(self, msg: Odometry) -> None:
         pose = msg.pose.pose

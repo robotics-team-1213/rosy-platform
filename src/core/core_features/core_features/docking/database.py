@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -48,6 +48,17 @@ class DockType(BaseModel):
     tag_family: str = "DICT_4X4_50"
     tag_id: Optional[int] = None
     tag_size_m: Optional[float] = None
+    # 주차형 도크 (차선망 미션 3단계, docs/plans/2026-09-23-lane-network-parking-design.md).
+    # 기본값은 원래 도크의 동작 그대로다 — 이 필드들을 바꾼 기종만 달라진다.
+    staging: bool = True                # False: Nav2 스테이징 없이 진입 회전부터
+    approach: Literal["bearing", "pose"] = "bearing"   # pose: 도크 좌표계 정렬 접근
+    settle: Literal["agent", "pose"] = "agent"         # pose: 접점 없이 포즈로 정착
+    tag_offset_m: Optional[float] = None  # 주차점 → 태그 중심, 도크 축 방향 (pose 접근)
+    acquire_creep_m: float = 0.0        # 태그가 안 보일 때 주차점 쪽으로 기어갈 거리
+    backoff_m: Optional[float] = None   # 재시도 후진 거리 (오도메트리). None: 시간 기준
+    undock_turn_rad: float = 0.0        # 언도킹 후진 뒤 목표 방위 = 도크 yaw + 이 값
+    pose_tolerance_m: float = 0.012     # pose 정착 판정 (위치, 축 방향·횡 각각)
+    pose_tolerance_rad: float = 0.0524  # pose 정착 판정 (방위, 3 deg)
 
     @field_validator("staging_offset_m")
     @classmethod
@@ -63,6 +74,20 @@ class DockType(BaseModel):
             raise ValueError("tag_id must be non-negative")
         if self.tag_size_m is not None and self.tag_size_m <= 0.0:
             raise ValueError("tag_size_m must be positive")
+        return self
+
+    @model_validator(mode="after")
+    def _parking_is_consistent(self) -> "DockType":
+        # 포즈 접근은 주차점이 태그에서 얼마나 떨어졌는지 모르면 설 자리를 모른다.
+        if self.approach == "pose" and not (self.tag_offset_m or 0.0) > 0.0:
+            raise ValueError("a pose approach needs a positive tag_offset_m")
+        # 포즈 정착은 포즈 접근이 세운 도크 좌표계로만 판정할 수 있다.
+        if self.settle == "pose" and self.approach != "pose":
+            raise ValueError("a pose settle needs a pose approach")
+        if self.acquire_creep_m < 0.0 or (self.backoff_m is not None and self.backoff_m <= 0.0):
+            raise ValueError("creep and backoff distances must be positive")
+        if self.pose_tolerance_m <= 0.0 or self.pose_tolerance_rad <= 0.0:
+            raise ValueError("pose tolerances must be positive")
         return self
 
 

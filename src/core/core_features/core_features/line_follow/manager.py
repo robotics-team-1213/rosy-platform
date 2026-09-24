@@ -97,6 +97,13 @@ class LineFollowManager:
         self._invalid_observation = False
         self._status = LineFollowStatus()
 
+    def bind_clock(self, clock: Callable[[], float]) -> None:
+        """Use the bridge's line clock for defaults (mode change, loss start)."""
+        if not callable(clock):
+            raise ValueError("line-follow clock must be callable")
+        with self._lock:
+            self._clock = clock
+
     @property
     def mode(self) -> LineFollowMode:
         with self._lock:

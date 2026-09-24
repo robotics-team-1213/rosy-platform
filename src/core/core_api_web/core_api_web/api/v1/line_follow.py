@@ -9,7 +9,7 @@ from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import enter_navigation_mode, operator, viewer
 from core_common.domain.tasks import TaskKind
-from core_common.protocol.schemas import RobotMode
+from core_common.protocol.schemas import DockState, RobotMode
 from core_api_web.api.deps import Mode
 from core_api_web.api.deps import LineFollowMode
 
@@ -54,6 +54,10 @@ def set_line_follow_mode(body: LineFollowModeRequest,
 
     if svc.safety.estop or svc.modes.is_emergency:
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
+    if svc.modes.mode is Mode.DOCKING or svc.docking.state in (
+            DockState.DOCKING, DockState.UNDOCKING):
+        # 도킹이 바퀴를 쥐고 있다. 조용히 빼앗지 않는다 — 먼저 취소하게 한다.
+        raise ApiError("DOCKING_ACTIVE", 409, "cancel docking first")
     if svc.nav.mapping_active:
         raise ApiError("MAPPING_ACTIVE", 409, "mapping session owns navigation")
 

@@ -3,13 +3,16 @@
 
 import math
 import os
+from typing import List
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -31,8 +34,8 @@ def generate_launch_description():
             "camera_width": LaunchConfiguration("camera_width"),
             "camera_height": LaunchConfiguration("camera_height"),
             "camera_update_rate": LaunchConfiguration("camera_update_rate"),
-            "spawn_x": "-1.26955",
-            "spawn_y": "0.24255",
+            "spawn_x": LaunchConfiguration("spawn_x"),
+            "spawn_y": LaunchConfiguration("spawn_y"),
             "spawn_yaw": LaunchConfiguration("spawn_yaw"),
             "gui": LaunchConfiguration("gazebo_gui"),
             # The world's model://control/map/map_v2_fleet/meshes/road_lines.stl
@@ -49,9 +52,25 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_width", default_value="320"),
         DeclareLaunchArgument("camera_height", default_value="180"),
         DeclareLaunchArgument("camera_update_rate", default_value="5"),
+        DeclareLaunchArgument("spawn_x", default_value="-1.26955"),
+        DeclareLaunchArgument("spawn_y", default_value="0.24255"),
         # -pi/2 faces ROS -y along the left lane (toward the crosswalk).
         DeclareLaunchArgument("spawn_yaw", default_value="-1.5708"),
+        DeclareLaunchArgument("camera_lane_mode", default_value="edge_left"),
+        DeclareLaunchArgument("debug_overlay", default_value="false"),
         DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
+        # route_a/route_b/route_ab only (junction followers, Task 6). Empty by
+        # default so every other mode is unaffected. Encoded as a YAML flow
+        # list on the command line, e.g. route:='[west:f, ring_w:f]' and
+        # route_start:='[-1.26955, 0.24255, -1.5708]'; ParameterValue below
+        # parses that string into the node's declared string/double array
+        # parameters with yaml.safe_load.
+        DeclareLaunchArgument("route", default_value="[]"),
+        DeclareLaunchArgument("route_start", default_value="[]"),
+        # Stage 3 (parking): observe the wedge tag (world model dock_tag_7) on
+        # dock/observation for CORE's parking dock. Off by default so stages
+        # 1-2 run exactly as before.
+        DeclareLaunchArgument("dock_observer", default_value="false"),
         simulation,
         Node(
             package="control",
@@ -70,7 +89,19 @@ def generate_launch_description():
                 # half-width off in bird's-eye view: row-wise pairing stopped
                 # at the 65 deg bends (run 184434). Declared Gazebo camera
                 # geometry (tilt 25 deg, 320x180).
-                "camera_lane_mode": "edge_left",
+                "camera_lane_mode": ParameterValue(
+                    LaunchConfiguration("camera_lane_mode"), value_type=str),
+                "debug_overlay": ParameterValue(
+                    LaunchConfiguration("debug_overlay"), value_type=bool),
+                "debug_lane_graph": os.path.join(
+                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                # route_a/route_b/route_ab only; every other mode ignores these.
+                "lane_graph_path": os.path.join(
+                    control_share, "map", "map_v2_fleet", "lane_graph.yaml"),
+                "route": ParameterValue(
+                    LaunchConfiguration("route"), value_type=List[str]),
+                "route_start": ParameterValue(
+                    LaunchConfiguration("route_start"), value_type=List[float]),
                 "camera_ground_source": "GAZEBO",
                 "allow_simulation_ground": True,
                 "gazebo_camera_height_m": 0.060194,
@@ -86,6 +117,28 @@ def generate_launch_description():
                 # 0.020 + 0.015*cos(25 deg) = 0.034 m ahead of base_link.
                 "lane_corner_turning": True,
                 "camera_x_offset_m": 0.034,
+            }],
+        ),
+        Node(
+            package="control",
+            executable="dock_observer_node",
+            name="dock_observer_node",
+            output="screen",
+            condition=IfCondition(LaunchConfiguration("dock_observer")),
+            parameters=[{
+                "use_sim_time": True,
+                # Declared Gazebo camera: front_camera_link on base_footprint
+                # from the URDF chain, as gz sdf -p places the sensor
+                # (0.0284809, 0, 0.0601944): 0.020 + 0.015*cos(25 deg)
+                # - 0.0121*sin(25 deg) ahead, 0.028 + 0.0495
+                # - 0.015*sin(25 deg) - 0.0121*cos(25 deg) high.
+                "camera_geometry_source": "GAZEBO",
+                "camera_height_m": 0.060194,
+                "camera_pitch_rad": math.radians(25.0),
+                "camera_hfov_rad": 1.1519,
+                "camera_x_offset_m": 0.028481,
+                "tag_id": 7,
+                "tag_size_m": 0.05,
             }],
         ),
         Node(

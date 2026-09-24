@@ -33,11 +33,13 @@ PACKAGE = Path(__file__).resolve().parents[1] / "core"
 #: (contract module, Protocol class) -> the class expected to implement it.
 #: Contract Protocols moved to core_features at the domain regroup (D-125);
 #: the implementer — the bridge — stayed in the kernel.
+#: DockingExecutor moved out of `ros_bridge.py` into the ROS-free
+#: `bridge/docking_executor.py` (D-168 P6 file budget); RosBridge wires it.
 CONTRACTS = [
-    ("navigation/manager.py", "NavExecutor"),
-    ("docking/manager.py", "DockingExecutor"),
+    ("navigation/manager.py", "NavExecutor", ("bridge/ros_bridge.py", "RosBridge")),
+    ("docking/model.py", "DockingExecutor",
+     ("bridge/docking_executor.py", "BridgeDockingExecutor")),
 ]
-IMPLEMENTER = ("bridge/ros_bridge.py", "RosBridge")
 
 
 def _class_def(base: Path, relative: str, name: str) -> ast.ClassDef:
@@ -57,10 +59,11 @@ def _methods(node: ast.ClassDef) -> set[str]:
     }
 
 
-@pytest.mark.parametrize("relative,protocol", CONTRACTS, ids=[c[1] for c in CONTRACTS])
-def test_ros_bridge_implements_every_declared_contract_member(relative, protocol):
+@pytest.mark.parametrize("relative,protocol,implementer", CONTRACTS,
+                         ids=[c[1] for c in CONTRACTS])
+def test_ros_bridge_implements_every_declared_contract_member(relative, protocol, implementer):
     declared = _methods(_class_def(FEATURES, relative, protocol))
-    implemented = _methods(_class_def(PACKAGE, *IMPLEMENTER))
+    implemented = _methods(_class_def(PACKAGE, *implementer))
     missing = declared - implemented
 
     assert not missing, (

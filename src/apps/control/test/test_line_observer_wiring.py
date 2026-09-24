@@ -94,7 +94,7 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
     assert "LaneEdgeFollower" in source
     assert "mode == 'edge_left'" in source
     assert "self._edge_follower.update(" in source
-    assert "mode in ('lane', 'edge_left')" in source   # odom subscription
+    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source   # odom subscription
     # 'line' and 'lane' branches are untouched and the default stays 'line'.
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"
@@ -121,4 +121,63 @@ def test_corner_turning_in_lane_mode_also_rejects_stale_odometry():
     """A dead odom topic must not steer an APPROACH/TURN manoeuvre either."""
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "self._odom_pose, frame, ground" not in source
-    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 2
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
+
+
+def test_centre_mode_uses_the_boundary_tracker_with_fresh_odometry():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    assert "LaneBoundaryTracker" in source
+    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
+    assert "self._centre_tracker.update(" in source
+    assert source.count("pose_if_fresh(self._odom_pose, self._odom_stamp") == 5
+
+
+def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["debug_overlay"] is False
+    assert "CompressedImage, 'line/debug/compressed'" in source
+    assert "render_debug(" in source
+    assert "Twist" not in source and "'cmd_vel'" not in source
+
+
+def test_debug_overlay_failures_never_stop_line_observation():
+    """A render/encode bug in the overlay, or a missing/broken
+    debug_lane_graph at startup, must not lose line/observation (D-143):
+    rclpy re-raises an uncaught callback exception out of spin, and main()
+    only catches KeyboardInterrupt."""
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    publish_debug = source.split("def _publish_debug", 1)[1].split("\n    def _on_odom", 1)[0]
+    assert "try:" in publish_debug
+    assert "except Exception" in publish_debug
+    assert "throttle_duration_sec=5.0" in publish_debug
+    init_body = source.split("def __init__", 1)[1].split("\n    def _ground", 1)[0]
+    assert "except (OSError, yaml.YAMLError)" in init_body
+    assert "self._debug_graph = None" in init_body
+
+
+def test_route_modes_need_a_graph_and_a_route():
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["lane_graph_path"] == ""
+    assert params["route"] == []
+    assert params["route_start"] == []
+    assert "RouteCameraFollower" in source and "RouteMapFollower" in source
+    assert "RouteHybridFollower" in source
+    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source
+    assert "route modes need lane_graph_path, route and route_start" in source
+
+
+def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
+    """route_ab is built like route_b: the paint map is loaded from the
+    lane_graph_path directory (the map_v2_fleet bundle), and the overlay
+    maps route_ab to the route follower."""
+    source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    build = source.split("def _build_route_follower", 1)[1].split("\n    def _ground", 1)[0]
+    assert "PaintMap.from_bundle(os.path.dirname(graph_path))" in build
+    assert "RouteHybridFollower(" in build
+    assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
+    assert "mode in ('route_a', 'route_b', 'route_ab'):" in source
+    assert "'route_ab': self._route_follower," in source

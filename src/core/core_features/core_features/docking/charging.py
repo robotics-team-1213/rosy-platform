@@ -40,6 +40,13 @@ class ChargingConfirmation:
         self._peak_v: Optional[float] = None     # 그 구간의 최고 전압
         self._confirmed = False
 
+    def bind_clock(self, clock: Callable[[], float]) -> None:
+        """시계를 바꾼다 (도킹 매니저의 sim 시계와 같게)."""
+        self._clock = clock
+
+    def now(self) -> float:
+        return self._clock()
+
     @property
     def confirmed(self) -> bool:
         return self._confirmed

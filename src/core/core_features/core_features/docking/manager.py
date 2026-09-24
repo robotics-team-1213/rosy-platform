@@ -12,21 +12,27 @@
 
 ROS 무의존 — 시계는 주입되며 테스트가 시간을 직접 전진시킨다.
 
-설계: docs/plans/2026-09-02-docking-station-design.md
+주차형 기종(`approach="pose"`, 차선망 미션 3단계)은 같은 상태머신을 기종 설정으로
+갈라 쓴다. 그 단계 로직은 `parking_phases.ParkingPhases` 에 있고, 상태·락·순서는
+여기 남는다. 단계·모션 계약·설정 정의는 `model` 에 있다.
+
+설계: docs/plans/2026-09-02-docking-station-design.md,
+      docs/plans/2026-09-23-lane-network-parking-design.md
 """
 
 from __future__ import annotations
 
-import enum
 import math
 import threading
 import time
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Optional
 
 from core_features.docking.charging import ChargingConfirmation
-from core_features.docking.database import DockDatabase, DockError, DockInstance, Pose2D
+from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
+from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
+from core_features.docking.parking import DockPoseTracker
+from core_features.docking.parking_phases import ParkingPhases
 from core_common.protocol.schemas import (
     BatteryLevel,
     DockingStatus,
@@ -34,50 +40,7 @@ from core_common.protocol.schemas import (
     NavigationState,
 )
 
-
-class DockPhase(str, enum.Enum):
-    """`DOCKING` 안의 내부 단계.
-
-    재시도가 *어디서* 실패했는지 알아야 하기 때문에 존재한다. 도착하지 못한
-    것과 도착했는데 전류가 없는 것은 복구 방법이 다르다.
-    """
-
-    STAGING = "staging"          # Nav2 로 도크 앞까지
-    ACQUIRING = "acquiring"      # 검출기가 도크를 찾는다
-    APPROACHING = "approaching"  # 관측 상대 포즈에 서보
-    SETTLING = "settling"        # 전류가 흐르기를 기다린다
-    BACKOFF = "backoff"          # 실패 후 뒤로 빠져 재시도 준비
-
-
-class DockingExecutor(Protocol):
-    """모션. ros_bridge 가 구현하고 이 계층은 의도만 말한다."""
-
-    def navigate_to(self, pose: Pose2D) -> None: ...
-    def cancel_navigation(self) -> None: ...
-    def drive(self, linear: float, angular: float) -> None: ...
-    def stop(self) -> None: ...
-    def set_collision_exemption(self, enabled: bool) -> None: ...
-    def travelled_m(self) -> float: ...
-    def reset_odometry_mark(self) -> None: ...
-
-
-@dataclass
-class DockingConfig:
-    staging_timeout_s: float = 120.0
-    acquire_timeout_s: float = 15.0
-    approach_timeout_s: float = 60.0
-    settle_timeout_s: float = 20.0
-    backoff_s: float = 2.0
-    backoff_distance_m: float = 0.25
-    reseat_distance_m: float = 0.06     # 접점 재착좌 — 스테이징까지 가지 않는다
-
-    approach_speed: float = 0.06        # m/s — 접근은 느려야 한다
-    approach_gain_yaw: float = 1.2
-    max_angular: float = 0.5
-    undock_speed: float = 0.08
-
-    detector_lost_grace_s: float = 2.0  # 이 시간 안에 다시 보이면 실패가 아니다
-    charge_confirm_s: float = 10.0      # 충전 확정 창
+__all__ = ["DockingConfig", "DockingExecutor", "DockingManager", "DockPhase"]
 
 
 class DockingManager:
@@ -91,7 +54,12 @@ class DockingManager:
                  agent_factory: Optional[Callable[[DockInstance], Any]] = None,
                  capability_provider: Optional[Callable[[], bool]] = None,
                  map_id_provider: Optional[Callable[[], Optional[str]]] = None,
-                 battery: Any = None) -> None:
+                 battery: Any = None,
+                 pose_provider: Optional[Callable[[], Any]] = None,
+                 line_follow_active_provider: Optional[Callable[[], bool]] = None,
+                 take_mode: Optional[Callable[[], None]] = None,
+                 release_mode: Optional[Callable[[], None]] = None,
+                 ) -> None:
         self._db = database
         self._safety = safety
         self._cfg = config or DockingConfig()
@@ -102,13 +70,30 @@ class DockingManager:
         self._capability_provider = capability_provider or (lambda: False)
         self._map_id_provider = map_id_provider or (lambda: None)
         self._battery = battery
-        self._lock = threading.Lock()
+        # 맵 포즈 (x, y, yaw) — 주차형의 진입 회전과 크리프 조준. 맵은 대략까지다.
+        self._pose_provider = pose_provider or (lambda: None)
+        self._line_follow_active = line_follow_active_provider or (lambda: False)
+        # DOCKING 모드를 쥔다. 못 쥐면 DockError 로 거절한다 — 매니저를 건드리기
+        # **전에** 부른다. API 와 배터리 복귀가 같은 이음새를 지난다.
+        self._take_mode = take_mode or (lambda: None)
+        # 도킹이 DOCKING/UNDOCKING 을 떠나는 바로 그 임계구역에서 모드를 놓는다
+        # (락 안). 밖에서 따로 놓으면 그 틈에 들어온 undock 을 모드 이탈 리스너가
+        # 취소해 버린다 (N1). 모드가 이미 DOCKING 이 아니면 아무것도 안 해야 한다.
+        self._release_mode = release_mode or (lambda: None)
+        # 주차형 단계의 전략. 자기 락·상태가 없고, 아래 필드와 이 락을 그대로 쓴다.
+        self._parking_phases = ParkingPhases(self)
+        # dock/undock/cancel 은 API 워커에서, tick 은 브리지 타이머에서 온다(D-1).
+        # 재진입한다: tick 안의 배터리 복귀가 dock() 을, 모드 이탈 리스너가
+        # cancel()/abort() 을 부른다.
+        self._lock = threading.RLock()
 
         self.executor: Optional[DockingExecutor] = None
 
         self._state = DockState.UNDOCKED
         self._phase: Optional[DockPhase] = None
         self._dock: Optional[DockInstance] = None
+        self._dock_type: Any = None
+        self._dock_type_for: Optional[str] = None
         self._detector: Optional[DockDetector] = None
         self._agent: Any = None
         self._charging = ChargingConfirmation(
@@ -124,6 +109,14 @@ class DockingManager:
         self._manual_active = False
         self._return_pending = False
 
+        # 주차형 단계 상태
+        self._tracker: Optional[DockPoseTracker] = None
+        self._turn_target: Optional[float] = None     # 오도메트리 yaw
+        self._after_turn: Optional[str] = None        # "acquire" | "undocked"
+        self._creep_from: Optional[tuple] = None
+        self._creep_done_at: Optional[float] = None
+        self._backoff_from: Optional[tuple] = None
+
     # --- 조회 -----------------------------------------------------------------
 
     @property
@@ -132,11 +125,20 @@ class DockingManager:
 
     @property
     def state(self) -> DockState:
-        return self._state
+        with self._lock:
+            return self._state
+
+    @property
+    def active(self) -> bool:
+        """DOCKING/UNDOCKING 인가 — 락 없이 한 속성만 읽는다. 자기 락을 쥔 채
+        묻는 쪽(swarm, navigation)용이다: 거기서 도킹 락을 잡으면 도킹 락 →
+        항법 락 → swarm 락 순서가 뒤집힌다."""
+        return self._state in (DockState.DOCKING, DockState.UNDOCKING)
 
     @property
     def phase(self) -> Optional[DockPhase]:
-        return self._phase
+        with self._lock:
+            return self._phase
 
     @property
     def retries(self) -> int:
@@ -147,22 +149,42 @@ class DockingManager:
         return self._reseats
 
     @property
+    def fast_tick(self) -> bool:
+        """주차형이 움직이는 동안 True — 브리지가 틱을 20 Hz 로 올린다. nav 슬롯은
+        0.5 s 에 만료되고, 크리프·정렬은 5 Hz 로는 거칠다."""
+        return (self._state in (DockState.DOCKING, DockState.UNDOCKING)
+                and self._parking())
+
+    def bind_clock(self, clock: Callable[[], float]) -> None:
+        """시계를 바꾼다 (use_sim_time 의 sim 시계). 검출기 신선도와 같은 시계여야 한다."""
+        self._clock = clock
+        self._charging.bind_clock(clock)
+
+    def now(self) -> float:
+        return self._clock()
+
+    @property
     def return_pending(self) -> bool:
         """복귀가 필요하지만 아직 시작하지 못했는가 (수동 조작 중 등)."""
         return self._return_pending
 
     def status(self) -> DockingStatus:
-        return DockingStatus(
-            state=self._state,
-            dock_id=self._dock.id if self._dock else None,
-            phase=self._phase.value if self._phase else None,
-            retries=self._retries,
-            error=self._error,
-        )
+        with self._lock:
+            return DockingStatus(
+                state=self._state,
+                dock_id=self._dock.id if self._dock else None,
+                phase=self._phase.value if self._phase else None,
+                retries=self._retries,
+                error=self._error,
+            )
 
     # --- 명령 -----------------------------------------------------------------
 
     def dock(self, dock_id: Optional[str] = None) -> DockInstance:
+        with self._lock:
+            return self._dock_locked(dock_id)
+
+    def _dock_locked(self, dock_id: Optional[str]) -> DockInstance:
         """도킹을 시작한다. 거부는 예외로 나간다 — API 가 그대로 코드에 매핑한다."""
         if not self._capability_provider():
             raise DockError("CAPABILITY_NOT_SUPPORTED",
@@ -172,6 +194,10 @@ class DockingManager:
         if self._state in (DockState.DOCKING, DockState.UNDOCKING):
             raise DockError("DOCKING_ACTIVE",
                             f"docking already in progress ({self._state.value})")
+        # 라인 추종도 같은 nav 슬롯에 20 Hz 로 쓴다. 둘이 번갈아 쓰면 바퀴가 둘 중
+        # 아무것도 따르지 않는다 — 먼저 끄게 한다.
+        if self._line_follow_active():
+            raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
 
         if dock_id is None:
             dock = self._db.only()
@@ -182,8 +208,11 @@ class DockingManager:
             dock = self._db.get(dock_id)
 
         dock.require_map(self._map_id_provider())
+        dock_type = self._db.type_of(dock.id)
+        self._take_mode()
 
         self._dock = dock
+        self._dock_type, self._dock_type_for = dock_type, dock.id
         self._retries = 0
         self._reseats = 0
         self._error = None
@@ -194,10 +223,22 @@ class DockingManager:
         return dock
 
     def undock(self) -> None:
+        with self._lock:
+            self._undock_locked()
+
+    def _undock_locked(self) -> None:
         if self._state not in (DockState.DOCKED, DockState.CHARGING):
             raise DockError("NOT_DOCKED", f"not docked ({self._state.value})")
         if getattr(self._safety, "estop", False):
             raise DockError("EMERGENCY_ACTIVE", "e-stop is active")
+        if self._line_follow_active():
+            raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
+        available = getattr(self.executor, "odometry_available", None)
+        if callable(available) and not available():
+            # 후진은 오도메트리만 본다. 기준점이 없으면 이동 거리가 0 에 머물러
+            # 벽(57 mm 뒤)에 닿을 때까지 후진한다.
+            raise DockError("NO_ODOMETRY", "no odometry to measure the reverse")
+        self._take_mode()
 
         # 도크에 반쯤 물린 상태에서는 LiDAR 도 카메라도 벽을 3 cm 앞에서 보고
         # 있다. 믿을 게 없으므로 검출기를 끄고 오도메트리만으로 빠져나온다.
@@ -213,6 +254,13 @@ class DockingManager:
 
     def cancel(self) -> None:
         """진행 중인 시퀀스를 접는다. 실패가 아니라 취소다."""
+        with self._lock:
+            try:
+                self._cancel_locked()
+            finally:
+                self._release_mode_when_done()
+
+    def _cancel_locked(self) -> None:
         if self._state not in (DockState.DOCKING, DockState.UNDOCKING):
             return
         self._release()
@@ -220,6 +268,28 @@ class DockingManager:
         self._phase = None
         self._emit("docking.canceled", "info",
                    {"dock_id": self._dock.id if self._dock else None})
+
+    def remove_dock(self, dock_id: str) -> None:
+        """도크를 지운다. 도킹·언도킹 중인 도크는 지우지 않는다."""
+        with self._lock:
+            self._remove_dock_locked(dock_id)
+
+    def _remove_dock_locked(self, dock_id: str) -> None:
+        if (self._state in (DockState.DOCKING, DockState.UNDOCKING)
+                and self._dock is not None and self._dock.id == dock_id):
+            raise DockError("DOCKING_ACTIVE",
+                            f"dock '{dock_id}' is in use ({self._state.value})")
+        self._db.remove(dock_id)
+
+    def abort(self, reason: str) -> None:
+        """진행 중인 시퀀스를 실패로 접는다 (예: DOCKING 에서 EMERGENCY 로)."""
+        with self._lock:
+            try:
+                if self._state in (DockState.DOCKING, DockState.UNDOCKING):
+                    self._fail(reason)
+            finally:
+                # _fail 은 상태를 먼저 적는다 — 정리가 예외를 내도 모드는 놓는다.
+                self._release_mode_when_done()
 
     def on_navigation_state(self, state: NavigationState) -> None:
         self._nav_state = state
@@ -278,6 +348,18 @@ class DockingManager:
     # --- 틱 -------------------------------------------------------------------
 
     def tick(self, now: Optional[float] = None) -> None:
+        with self._lock:
+            try:
+                self._tick_locked(now)
+            finally:
+                self._release_mode_when_done()
+
+    def _release_mode_when_done(self) -> None:
+        """도킹이 더는 로봇을 움직이지 않으면 DOCKING 을 놓는다. 락 안에서만 부른다."""
+        if self._state not in (DockState.DOCKING, DockState.UNDOCKING):
+            self._release_mode()
+
+    def _tick_locked(self, now: Optional[float]) -> None:
         current = self._clock() if now is None else now
 
         # E-Stop 은 어느 단계에서든 즉시 중단시킨다.
@@ -308,14 +390,22 @@ class DockingManager:
             self._tick_settling(now)
         elif phase is DockPhase.BACKOFF:
             self._tick_backoff(now)
+        elif phase is DockPhase.TURNING:
+            self._parking_phases.tick_turning(now)
+        elif phase is DockPhase.ALIGNING:
+            self._parking_phases.tick_aligning(now)
 
     # --- 단계 -----------------------------------------------------------------
 
     def _begin_staging(self) -> None:
+        dock_type = self._type()
+        if dock_type is not None and not dock_type.staging:
+            self._parking_phases.begin_entry_turn()
+            return
         self._enter(DockPhase.STAGING)
         self._nav_state = NavigationState.PLANNING
         if self.executor is not None and self._dock is not None:
-            offset = self._db.type_of(self._dock.id).staging_offset_m
+            offset = self._type().staging_offset_m
             self.executor.navigate_to(self._dock.staging_pose(offset))
 
     def _tick_staging(self, now: float) -> None:
@@ -333,10 +423,15 @@ class DockingManager:
         self._last_seen_at = None
         if self._detector_factory is not None and self._dock is not None:
             self._detector = self._detector_factory(
-                self._dock, self._db.type_of(self._dock.id))
+                self._dock, self._type())
             self._detector.start(self._dock)
+        if self._parking():
+            self._parking_phases.begin_acquiring()
 
     def _tick_acquiring(self, now: float) -> None:
+        if self._parking():
+            self._parking_phases.tick_acquiring(now)
+            return
         if self._detector is not None and self._detector.relative_pose() is not None:
             self._enter(DockPhase.APPROACHING)
             self._last_seen_at = now
@@ -349,6 +444,9 @@ class DockingManager:
             self._retry("dock not acquired")
 
     def _tick_approaching(self, now: float) -> None:
+        if self._parking():
+            self._parking_phases.tick_approaching(now)
+            return
         observation = self._detector.relative_pose() if self._detector else None
 
         if observation is None:
@@ -360,7 +458,7 @@ class DockingManager:
 
         self._last_seen_at = now
 
-        threshold = self._db.type_of(self._dock.id).docking_threshold_m
+        threshold = self._type().docking_threshold_m
         if observation.range_m <= threshold:
             self._begin_settling()
             return
@@ -382,16 +480,22 @@ class DockingManager:
             self.executor.stop()
             # 면제는 접근 구간 전용이다. 여기서 반드시 되돌린다.
             self.executor.set_collision_exemption(False)
+        dock_type = self._type()
+        if dock_type is not None and dock_type.settle == "pose":
+            # 포즈 정착은 멈춘 뒤의 관측으로 판정한다. 검출기는 판정까지 켜 둔다.
+            return
         self._stop_detector()
         if self._agent_factory is not None and self._dock is not None:
             self._agent = self._agent_factory(self._dock)
 
     def _tick_settling(self, now: float) -> None:
+        dock_type = self._type()
+        if dock_type is not None and dock_type.settle == "pose":
+            self._parking_phases.tick_settling(now, dock_type)
+            return
         status = self._agent.poll() if self._agent is not None else None
         if status is not None and status.answered and status.load_present:
-            self._state = DockState.DOCKED
-            self._phase = None
-            self._emit("docking.docked", "info", {"dock_id": self._dock.id})
+            self._mark_docked()
             return
         if now - self._phase_since > self._cfg.settle_timeout_s:
             # 접점에 닿지 못했다. 스테이징까지 돌아갈 일은 아니고 재착좌면 된다.
@@ -418,17 +522,40 @@ class DockingManager:
         if self.executor is None:
             self._state = DockState.UNDOCKED
             return
-        distance = self._db.type_of(self._dock.id).undock_distance_m \
+        if self._phase is DockPhase.TURNING:
+            self._parking_phases.tick_turning(now)
+            return
+        distance = self._type().undock_distance_m \
             if self._dock else 0.35
-        if abs(self.executor.travelled_m()) >= distance:
+        travelled = abs(self.executor.travelled_m())
+        deadline = (2.0 * distance / self._cfg.undock_speed
+                    + self._cfg.undock_timeout_margin_s)
+        if travelled < distance and now - self._phase_since > deadline:
+            # 바퀴가 헛돌거나 무언가에 걸렸다. 무한히 후진하지 않는다.
+            self._fail("undock timed out")
+            return
+        if travelled >= distance:
             self.executor.stop()
-            self._state = DockState.UNDOCKED
-            self._dock = None
-            self._emit("docking.undocked", "info", {})
+            # 주차형: 후진 뒤 차선 방향으로 돈다 (도크 yaw + undock_turn_rad).
+            if self._parking_phases.begin_undock_turn():
+                return
+            self._finish_undock()
             return
         self.executor.drive(-self._cfg.undock_speed, 0.0)
 
+    def _finish_undock(self) -> None:
+        if self.executor is not None:
+            self.executor.stop()
+        self._state = DockState.UNDOCKED
+        self._phase = None
+        self._dock = None
+        self._emit("docking.undocked", "info", {})
+
     def _tick_backoff(self, now: float) -> None:
+        dock_type = self._type()
+        if dock_type is not None and dock_type.backoff_m is not None:
+            self._parking_phases.tick_backoff(now, dock_type.backoff_m)
+            return
         if now - self._phase_since < self._cfg.backoff_s:
             if self.executor is not None:
                 self.executor.drive(-self._cfg.undock_speed, 0.0)
@@ -444,7 +571,7 @@ class DockingManager:
 
     def _retry(self, reason: str) -> None:
         """스테이징부터 다시. 도크에 도달하지 못한 실패에 쓴다."""
-        limit = self._db.type_of(self._dock.id).max_retries if self._dock else 0
+        limit = self._type().max_retries if self._dock else 0
         if self._retries >= limit:
             self._fail(reason)
             return
@@ -455,7 +582,7 @@ class DockingManager:
 
     def _reseat(self, reason: str) -> None:
         """접점만 다시 문다. 도착은 했으므로 스테이징까지 되돌아가지 않는다."""
-        limit = self._db.type_of(self._dock.id).max_retries if self._dock else 0
+        limit = self._type().max_retries if self._dock else 0
         if self._reseats >= limit:
             self._fail(reason)
             return
@@ -470,22 +597,47 @@ class DockingManager:
         if self.executor is not None:
             self.executor.set_collision_exemption(False)
             self.executor.reset_odometry_mark()
+        self._backoff_from = self._parking_phases.odometry()
         self._enter(DockPhase.BACKOFF)
+
+    # --- 주차형 단계 ------------------------------------------------------------
+
+    def _type(self):
+        """The dock's type, cached when docking starts: a dock or type deleted
+        mid-run (another API worker, a hand-edited docks.json) must not raise
+        NOT_FOUND out of the tick."""
+        if self._dock is None:
+            return None
+        if self._dock_type is None or self._dock_type_for != self._dock.id:
+            self._dock_type = self._db.type_of(self._dock.id)
+            self._dock_type_for = self._dock.id
+        return self._dock_type
+
+    def _parking(self) -> bool:
+        dock_type = self._type()
+        return dock_type is not None and dock_type.approach == "pose"
 
     def _fail(self, reason: str) -> None:
         """종착이다. 스스로 재시도하지 않는다.
 
         무인 상태로 스무 번 실패한 로봇은 물리적 문제를 갖고 있다. 자동 루프는
         그것을 숨기면서, 지키려던 팩을 마저 비운다.
+
+        상태를 먼저 적는다 — 정리(_release)가 예외를 내도 도킹은 끝난 것이다.
         """
-        self._release()
         self._state = DockState.DOCK_FAILED
         self._phase = None
         self._error = reason
+        self._release()
         self._emit("docking.failed", "error",
                    {"reason": reason, "dock_id": self._dock.id if self._dock else None})
 
     # --- 공통 -----------------------------------------------------------------
+
+    def _mark_docked(self) -> None:
+        self._state = DockState.DOCKED
+        self._phase = None
+        self._emit("docking.docked", "info", {"dock_id": self._dock.id})
 
     def _enter(self, phase: DockPhase) -> None:
         self._phase = phase

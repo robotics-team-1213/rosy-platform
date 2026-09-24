@@ -98,8 +98,20 @@ SIZE_VERDICTS = {
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core_events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
+    "core/core_features/core_features/docking/manager.py": (
+        663,
+        "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
+        "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
+        "what remains is the one lock owner (state, RLock, take/release_mode seams, fail/retry/release, the "
+        "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
+        "and core/test/test_docking_*.py (X5)",
+    ),
+    "sim/gz_sim/scripts/lane_live_view.py": (
+        709,
+        "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
+    ),
     "control": (
-        29_037,  # re-judged 2026-09-24 (D-192 ADC bus lock + D-185 R8 rotation); split verdict unchanged
+        32_106,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }
