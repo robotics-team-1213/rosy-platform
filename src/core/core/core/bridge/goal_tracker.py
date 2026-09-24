@@ -74,3 +74,42 @@ class GoalTracker:
             self._live.clear()
             self._generation += 1
             return handles
+
+
+def on_response(goals: GoalTracker, nav, future, generation: int, *,
+                attach_result) -> None:
+    """Send-goal future → 수락·거절, 그리고 지나간 세대의 수락 차단.
+
+    rclpy 없이 전부 확인할 수 있도록 핸들은 불투명 객체다. `attach_result`
+    (result future 를 이 세대에 묶는 일)만 브리지가 준다 — 그쪽이 ROS 다.
+    """
+    goal_handle = future.result()
+    if goal_handle is None or not goal_handle.accepted:
+        if goals.rejected(generation):
+            nav.on_result(False, "REJECTED")
+        return
+    if not goals.accepted(generation, goal_handle):
+        # 이미 지나간 목표의 수락이다(선점됐거나, 보내는 사이 취소됐다).
+        # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다.
+        goal_handle.cancel_goal_async()
+        return
+    nav.on_goal_accepted()
+    attach_result(goal_handle.get_result_async(), generation)
+
+
+def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
+    """Result future → `nav.on_result`. 선점된 목표의 뒤늦은 결과는 무시한다.
+
+    `result.status == 4` 는 `GoalStatus.STATUS_SUCCEEDED` 다 — rclpy 는
+    성공 여부가 아니라 상태 코드를 주므로 그 비교가 전부다.
+    """
+    if not goals.finished(generation):
+        # 선점된 목표의 뒤늦은 결과. moving goal 에서는 abort 로 끝나며,
+        # 이것을 현재 목표의 실패로 읽으면 nav_state 가 FAILED 로 떨어져
+        # 이어지는 HOLD 의 취소가 통째로 무시된다.
+        return
+    try:
+        result = future.result()
+        nav.on_result(result.status == 4)
+    except Exception as exc:
+        nav.on_result(False, str(exc))

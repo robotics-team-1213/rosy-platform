@@ -20,6 +20,22 @@ from typing import Any, Callable, Optional
 #: choice that does not have to be reachable.
 _ROUTE_PROBE_TARGET = ("8.8.8.8", 80)
 
+#: 정보 창이 열려 있는 동안 display/info 재발행 간격 (s).
+REPUBLISH_S = 1.0
+
+
+def republish_due(visible: bool, was_visible: bool, now: float,
+                  last_pub: float) -> bool:
+    """이 틱에 `display/info` 를 다시 띄워야 하는가.
+
+    창이 열리는 순간 한 번, 그 뒤로는 `REPUBLISH_S` 마다 — 화면은 자기
+    상태를 갖고 있지 않아 늦게 떠 노드나 놓친 패킷은 다음 재발행까지
+    아무것도 보지 못한다. 창이 닫혀 있으면 아무 때도 아니다.
+    """
+    if not visible:
+        return False
+    return (not was_visible) or (now - last_pub) >= REPUBLISH_S
+
 
 def outbound_ip(target: tuple[str, int] = _ROUTE_PROBE_TARGET) -> Optional[str]:
     """The local address the OS would route from, or None if it cannot say.
