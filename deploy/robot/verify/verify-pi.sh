@@ -145,10 +145,22 @@ fi
 bus_consoles="$(tr ' ' '\n' </proc/cmdline 2>/dev/null | grep -E '^console=(serial0|ttyAMA0|ttyAMA4)(,|$)' | tr '\n' ' ' || true)"
 if [[ -n "$bus_consoles" ]]; then
   fail "UART" "kernel console on a robot bus UART (${bus_consoles% }); run sudo $(dirname "$0")/../configure-uart-pi5.sh and reboot"
-elif has_command systemctl && systemctl is-active --quiet serial-getty@ttyAMA0.service 2>/dev/null; then
-  fail "UART" "serial-getty@ttyAMA0.service holds the LiDAR UART; run sudo $(dirname "$0")/../configure-uart-pi5.sh and reboot"
+elif ! has_command systemctl; then
+  warn "UART" "no kernel console on ttyAMA0/ttyAMA4; systemctl unavailable, getty state unknown"
 else
-  pass "UART" "no console or getty on ttyAMA0 (LiDAR) / ttyAMA4 (motor)"
+  uart_ok=1
+  for tty in ttyAMA0 ttyAMA4; do
+    if systemctl is-active --quiet "serial-getty@${tty}.service" 2>/dev/null; then
+      fail "UART" "serial-getty@${tty}.service holds a robot bus UART; run sudo $(dirname "$0")/../configure-uart-pi5.sh and reboot"
+      uart_ok=0
+    elif [[ "$(systemctl is-enabled "serial-getty@${tty}.service" 2>/dev/null || true)" != "masked" ]]; then
+      fail "UART" "serial-getty@${tty}.service is not masked; run sudo $(dirname "$0")/../configure-uart-pi5.sh"
+      uart_ok=0
+    fi
+  done
+  if ((uart_ok)); then
+    pass "UART" "no console or getty on ttyAMA0 (LiDAR) / ttyAMA4 (motor); gettys masked"
+  fi
 fi
 
 install_root="${ROSY_INSTALL_ROOT:-/opt/rosy}"

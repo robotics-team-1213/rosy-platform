@@ -1104,3 +1104,17 @@
 - 결정: D-192 보완(2026-09-24)
 - 교훈: 기반 이미지가 "이미 준다"고 본 장치 노드도 그 노드를 누가 잡고 있는지까지 확인한다. `enable_uart=1`은 포트를 만들지만
   `console=serial0`과 짝지어지면 그 포트를 콘솔에 넘긴다.
+
+## 2026-09-24 · uncommitted · fix(image,uart): recovery console on the debug UART, strict getty masks (PR #39 review)
+
+- 변경: 바로 위 항목의 보완. `configure-uart-pi5.sh`가 버스 UART 콘솔을 지운 뒤 복구용 시리얼 콘솔
+  `console=ttyAMA10,115200`(Pi 5 디버그 3핀 UART, 로봇 버스 없음)이 없으면 앞에 넣는다(`console=tty1`은 마지막에 유지) —
+  위 항목대로면 시리얼 콘솔이 하나도 남지 않았다. `verify-mounted-image.py`는 `ttyAMA10` 콘솔이 없어도 빌드를 멈추고,
+  getty mask는 `/dev/null` symlink만 인정한다(일반 파일 거부). 두 임시 파일을 지우는 EXIT trap을 편집 전에 두고,
+  `cmdline.txt`를 사전 검사하고, `REBOOT_REQUIRED`는 한 번만 출력한다. `verify-pi.sh`는 `serial-getty@ttyAMA0`·`@ttyAMA4`의
+  활성과 masked 상태를 함께 본다. `pi5-acceptance-checklist.md`의 UART 콘솔은 디버그 UART로 명시했다.
+- 증거: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py deploy/image/test -q`
+- gate 변화: 없음(평가표 11행 그대로, 이미지 미확인)
+- 결정: D-192 보완(2026-09-24) 문구 갱신
+- 교훈: 콘솔을 치울 때는 복구 경로가 남는지 먼저 본다. 검사기가 Windows 시험 편의를 위해 느슨해지면 실제 이미지에서도 느슨하다 —
+  시험 쪽을 skip한다.

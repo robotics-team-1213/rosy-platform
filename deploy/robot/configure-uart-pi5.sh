@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Enable the Rosy motor bus (UART4 on Raspberry Pi 5) and its /dev/rosy-motor alias,
 # and keep the kernel console and serial getty off the LiDAR (UART0, /dev/ttyAMA0)
-# and motor (UART4, /dev/ttyAMA4) buses.
+# and motor (UART4, /dev/ttyAMA4) buses; the serial console is the debug UART (ttyAMA10).
 #
 #   sudo configure-uart-pi5.sh                    retrofit a running device
 #   sudo configure-uart-pi5.sh --image-root ROOT  bake it into a mounted image
@@ -72,38 +72,45 @@ install_motor_udev_rule() {
 # Ubuntu's raspi cmdline.txt ships console=serial0,115200. With enable_uart=1
 # serial0 is UART0 on the Pi 5, so the kernel console and serial-getty@ttyAMA0
 # (agetty) hold the RPLIDAR C1 port and sllidar_node times out
-# (rosy-pinky-e4us, 2026-09-24). The debug UART (ttyAMA10) is not touched.
+# (rosy-pinky-e4us, 2026-09-24). The serial console moves to the Pi 5 debug
+# UART (3-pin JST, ttyAMA10), which carries no robot bus, so a recovery
+# console remains.
 CMDLINE_FILE="$(dirname "$CONFIG_FILE")/cmdline.txt"
 CONSOLE_PATTERN='^console=(serial0|ttyAMA0|ttyAMA4)(,|$)'
+RECOVERY_CONSOLE="console=ttyAMA10,115200"
 MASKED_GETTYS=("serial-getty@ttyAMA0.service" "serial-getty@ttyAMA4.service")
+REBOOT_NEEDED=0
+config_tmp=""
+cmdline_tmp=""
 
 isolate_bus_consoles() {
-    local unit link changed=0
-    if [[ -f "$CMDLINE_FILE" ]]; then
-        [[ ! -L "$CMDLINE_FILE" ]] || fail "$CMDLINE_FILE must not be a symlink"
-        local cmdline_tmp
-        cmdline_tmp="$(mktemp --tmpdir="$(dirname "$CMDLINE_FILE")" .rosy-cmdline.XXXXXX)"
-        # Same vfat-safe staging as config.txt below: copy, edit, rename.
-        awk -v pattern="$CONSOLE_PATTERN" '
-            { sub(/\r$/, ""); out = ""
-              for (i = 1; i <= NF; i++) if ($i !~ pattern) out = out (out == "" ? "" : " ") $i
-              print out }
-        ' "$CMDLINE_FILE" >"$cmdline_tmp"
-        if cmp -s "$CMDLINE_FILE" "$cmdline_tmp"; then
-            rm -f "$cmdline_tmp"
-            echo "PASS CONSOLE_ISOLATION $CMDLINE_FILE routes no console to ttyAMA0/ttyAMA4"
-        else
-            if [[ -z "$IMAGE_ROOT" && ! -e "${CMDLINE_FILE}.rosy-backup" ]]; then
-                cp "$CMDLINE_FILE" "${CMDLINE_FILE}.rosy-backup"
-            fi
-            sync -f "$cmdline_tmp" 2>/dev/null || sync
-            mv -f "$cmdline_tmp" "$CMDLINE_FILE"
-            sync -f "$CMDLINE_FILE" 2>/dev/null || sync
-            changed=1
-            echo "PASS CONSOLE_ISOLATION removed serial console from $CMDLINE_FILE"
+    local unit link
+    cmdline_tmp="$(mktemp --tmpdir="$(dirname "$CMDLINE_FILE")" .rosy-cmdline.XXXXXX)"
+    # Same vfat-safe staging as config.txt below: copy, edit, rename. The
+    # recovery console goes first so the base's last console= (tty1) stays
+    # /dev/console.
+    awk -v pattern="$CONSOLE_PATTERN" -v recovery="$RECOVERY_CONSOLE" '
+        { sub(/\r$/, ""); out = ""; has = 0
+          for (i = 1; i <= NF; i++) {
+              if ($i ~ pattern) continue
+              if ($i ~ /^console=ttyAMA10(,|$)/) has = 1
+              out = out (out == "" ? "" : " ") $i
+          }
+          if (NR == 1 && !has) out = recovery (out == "" ? "" : " ") out
+          print out }
+    ' "$CMDLINE_FILE" >"$cmdline_tmp"
+    if cmp -s "$CMDLINE_FILE" "$cmdline_tmp"; then
+        rm -f "$cmdline_tmp"
+        echo "PASS CONSOLE_ISOLATION $CMDLINE_FILE: no console on ttyAMA0/ttyAMA4, recovery console on ttyAMA10"
+    else
+        if [[ -z "$IMAGE_ROOT" && ! -e "${CMDLINE_FILE}.rosy-backup" ]]; then
+            cp "$CMDLINE_FILE" "${CMDLINE_FILE}.rosy-backup"
         fi
-    elif [[ -z "$IMAGE_ROOT" ]]; then
-        fail "$CMDLINE_FILE is missing"
+        sync -f "$cmdline_tmp" 2>/dev/null || sync
+        mv -f "$cmdline_tmp" "$CMDLINE_FILE"
+        sync -f "$CMDLINE_FILE" 2>/dev/null || sync
+        REBOOT_NEEDED=1
+        echo "PASS CONSOLE_ISOLATION moved the serial console to ttyAMA10 in $CMDLINE_FILE"
     fi
     # A masked getty stays off even if a later cmdline edit routes a console back.
     install -d -m 0755 "$SYSTEMD_DIR"
@@ -113,13 +120,16 @@ isolate_bus_consoles() {
             continue
         fi
         ln -sfn /dev/null "$link"
-        changed=1
+        REBOOT_NEEDED=1
         echo "PASS CONSOLE_ISOLATION masked $unit"
     done
-    if [[ -z "$IMAGE_ROOT" && "$changed" -eq 1 ]]; then
+    if [[ -z "$IMAGE_ROOT" && "$REBOOT_NEEDED" -eq 1 ]]; then
         systemctl daemon-reload >/dev/null 2>&1 || true
-        echo "REBOOT_REQUIRED sudo reboot"
     fi
+}
+
+report_reboot() {
+    [[ -n "$IMAGE_ROOT" || "$REBOOT_NEEDED" -eq 0 ]] || echo "REBOOT_REQUIRED sudo reboot"
 }
 
 overlay_applies_to_pi5() {
@@ -149,17 +159,22 @@ overlay_applies_to_pi5() {
     || fail "$CONFIG_FILE must be a regular non-symlink file"
 [[ "$(readlink -f "$CONFIG_FILE")" == "$CONFIG_FILE" ]] \
     || fail "$CONFIG_FILE is not canonical"
+[[ -f "$CMDLINE_FILE" && ! -L "$CMDLINE_FILE" ]] \
+    || fail "$CMDLINE_FILE must be a regular non-symlink file"
+[[ "$(readlink -f "$CMDLINE_FILE")" == "$CMDLINE_FILE" ]] \
+    || fail "$CMDLINE_FILE is not canonical"
+trap 'rm -f "${config_tmp:-}" "${cmdline_tmp:-}"' EXIT
 
 install_motor_udev_rule
 isolate_bus_consoles
 
 if grep -Fqx "$OVERLAY" "$CONFIG_FILE" && overlay_applies_to_pi5 "$CONFIG_FILE"; then
     echo "PASS UART_CONFIG $OVERLAY is already configured"
+    report_reboot
     exit 0
 fi
 
 config_tmp="$(mktemp --tmpdir="$(dirname "$CONFIG_FILE")" .rosy-uart.XXXXXX)"
-trap 'rm -f "${config_tmp:-}"' EXIT
 
 # /boot/firmware is vfat: it has no owners and refuses a chmod that drops the
 # x bits its mount mask shows (EPERM), so no install -m / cp --preserve here.
@@ -179,4 +194,5 @@ mv -f "$config_tmp" "$CONFIG_FILE"
 sync -f "$CONFIG_FILE" 2>/dev/null || sync
 
 echo "PASS UART_CONFIG added $OVERLAY"
-[[ -n "$IMAGE_ROOT" ]] || echo "REBOOT_REQUIRED sudo reboot"
+REBOOT_NEEDED=1
+report_reboot

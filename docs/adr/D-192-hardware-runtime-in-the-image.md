@@ -205,10 +205,12 @@ codeload 아카이브 하나를 더 받는다(해시 고정. GitHub가 아카이
 `serial0`이 `ttyAMA0`이다. `/proc/cmdline`에 `console=ttyAMA0,115200`이 있었고 `serial-getty@ttyAMA0.service`(agetty)가 포트를 잡아
 `sllidar_node`가 `SL_RESULT_OPERATION_TIMEOUT`, getty를 멈춘 뒤에도 커널 콘솔 때문에 `0x80008004`로 실패했다. 그 항목을 지우고
 재부팅하자 getty 없음, `health status : OK`, DenseBoost 10 Hz. 결정: `configure-uart-pi5.sh`(이미지·장치 공통)가 `cmdline.txt`에서
-`console=serial0|ttyAMA0|ttyAMA4[,baud]`만 지우고(`console=tty1`, 디버그 UART `ttyAMA10`은 그대로) `serial-getty@ttyAMA0`·`@ttyAMA4`를
+`console=serial0|ttyAMA0|ttyAMA4[,baud]`를 지우고, 시리얼 콘솔이 하나도 남지 않는 일이 없도록 복구 콘솔 `console=ttyAMA10,115200`(Pi 5 디버그 3핀 UART,
+로봇 버스 없음)이 없으면 앞에 넣는다(`console=tty1`은 그대로 마지막이라 `/dev/console`). `serial-getty@ttyAMA0`·`@ttyAMA4`를
 `/dev/null`로 mask한다 — 나중에 cmdline을 다시 고쳐도 getty는 돌아오지 않는다. `verify-mounted-image.py`는 `cmdline.txt`가 없거나
-버스 UART로 콘솔을 보내거나 mask가 없으면 빌드를 멈추고, `verify-pi.sh`는 `/proc/cmdline`과 활성 getty를 보고 이유를 적어 실패한다.
-실기 수용 확인 2에 `grep -o 'console=[^ ]*' /proc/cmdline`이 `tty1`만 보이고 `systemctl is-enabled serial-getty@ttyAMA0`이 `masked`를 더한다.
+버스 UART로 콘솔을 보내거나 `ttyAMA10` 복구 콘솔이 없거나 mask가 `/dev/null` symlink가 아니면 빌드를 멈추고, `verify-pi.sh`는 `/proc/cmdline`과 두 getty의 활성·masked 상태를 보고 이유를 적어 실패한다.
+실기 수용 확인 2에 `grep -o 'console=[^ ]*' /proc/cmdline`이 `ttyAMA10,115200`과 `tty1`만 보이고 `systemctl is-enabled serial-getty@ttyAMA0 serial-getty@ttyAMA4`가
+둘 다 `masked`인 것을 더한다.
 
 **Validation / Transition:** host 시험(2026-09-24 Windows, Python 3.14): `python -m pytest test/test_native_systemd_contract.py
 test/test_image_customization_contract.py test/test_native_runtime_installed_layout.py test/test_boot_status_indicator.py
