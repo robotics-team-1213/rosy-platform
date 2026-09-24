@@ -1058,3 +1058,17 @@
 - gate 변화: 없음
 - 결정: D-193 S3 보완
 - 교훈: "최대 N일" 같은 약속은 클라이언트와 서버 양쪽에서 강제한다 — 한쪽 설정만 바뀌어도 약속이 깨진다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-198 Docker operational surface retirement
+
+- 변경: `docs/adr/D-198-docker-operational-surface-retirement.md` 추가, ADR Log 표 D-198 행. D-197이 닫은
+  빌드·릴리스 체인 밖에 남은 장치 운영면(install-pi.sh의 docker.com 설치, runtime-mode.sh, 레거시 유닛,
+  verify-motors/verify-pi/measure-dds-baseline/device_readback의 compose 판정, dev overlay docker backend,
+  Dockerfile 부속품)의 처분을 기록했다. 안전 게이트의 native 대체는 ARTIFACT와 무관하게 지금 구현하고,
+  install-pi.sh·runtime-mode.sh은 대체 없이 폐기하며, 삭제 순서는 D-197의 계약 테스트 재고정 계약을 따른다.
+  코드 본문은 바꾸지 않았다.
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q`;
+  `python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-198 (D-197 후속)
+- 교훈: 없음
