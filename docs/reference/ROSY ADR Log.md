@@ -166,7 +166,7 @@
 | D-156 | ROS 2 Namespace Strict Segregation (Runtime Guard) | Proposed |
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) | Accepted |
 | D-158 | UI Component Consistency: Strict Outline Borders (Law 2) | Accepted |
-| D-159 | State Summary Visibility: Management by Exception (Law 0) | Proposed |
+| D-159 | State Summary Visibility: Management by Exception (Law 0) | Accepted |
 | D-160 | Games Domain Strict Decoupling (AST Validation) | Accepted |
 | D-161 | Ubuntu Server 24.04 + ROS 2 Jazzy 네이티브 제품 런타임으로 즉시 전환 | Accepted (supersedes D-22 runtime mechanism) |
 | D-162 | 학습된 장면은 설정이지 권한이 아니다 — 장면 상황 프로파일은 등록·리비전·보수 폴백으로만 적용한다 | Proposed |
@@ -223,5 +223,10 @@
 | D-215 | 명령 추적 `TIMEOUT`은 Fleet 기록 전용 상태다 — 로봇 ack enum에 넣지 않는다 | Accepted |
 | D-216 | CAP-001 예시의 `protocol_version` 오타를 고친다 — `"1"`이 아니라 `"1.0"`이다 | Accepted |
 | D-217 | SEC-102의 CORS 문장을 좁힌다 — 로봇 API는 CORS를 제공하지 않는다 | Accepted |
-| D-218 | 웹 확인은 결과를 묻고, 없는 조작은 버튼이 되지 않는다 — alert/prompt 금지, confirm은 핀된 횟수만, Fleet 개입은 모의 조종을 그리지 않는다 | Accepted |
+| D-218 | 확인 문법의 졸업 — 네이티브 window.confirm이 공유 컴포넌트다: 거부는 호출 0회, alert/prompt는 금지, 확인 문장은 결과를 묻는 평문이다 | Accepted |
+| D-219 | 운용 요약 어휘의 실행 계약 — 콘솔 분류 범주와 Fleet 큐가 닫힌 선언적 표로 고정되며 D-159가 승격된다: 빈 큐는 부재다, 초록이 아니다 | Accepted |
+| D-220 | 정지 계약 — 움직임 예산은 0이다: 상태 변화는 점프 컷이며 보간은 없는 값을 있는 것처럼 보이게 한다, 예외는 ADR로만 | Accepted |
+| D-218 | 확인 문법의 졸업 — 네이티브 confirm이 공유 컴포넌트다. alert/prompt 금지, confirm은 핀된 횟수, 없는 조종은 버튼이 아니다 | Accepted |
+| D-219 | 운용 요약 어휘의 실행 계약 — D-159를 Accepted로 승격하고 Fleet 큐 규칙을 콘솔 분류와 같이 고정한다 | Accepted |
+| D-220 | 정지 계약 — 움직임 예산은 0이다. 보이는 요소의 전이와 애니메이션은 없다 | Accepted |
 ---

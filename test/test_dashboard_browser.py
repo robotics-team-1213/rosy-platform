@@ -1251,6 +1251,54 @@ def test_visible_text_meets_the_contrast_floor(state_init):
     )
 
 
+# --- D-220: 정지 계약 — 움직임 예산은 0이다 -----------------------------------
+
+MOTION_CENSUS = """() => {
+  const moving = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const s = getComputedStyle(el);
+    if ((s.transitionDuration !== '0s' && s.transitionProperty !== 'none')
+        || s.animationName !== 'none') {
+      moving.push(`${el.tagName.toLowerCase()}#${el.id || '-'}`
+        + `.${(el.className || '').toString().split(' ')[0] || '-'}`
+        + ` t=${s.transitionDuration}/${s.transitionProperty}`
+        + ` a=${s.animationName}`);
+    }
+  }
+  return moving;
+}"""
+
+
+def test_no_visible_element_moves():
+    """D-220 — 상태 변화는 점프 컷이다. 보간은 없는 값을 있는 것처럼 보이게 한다."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.wait_for_timeout(700)
+        moving = page.evaluate(MOTION_CENSUS)
+        page.locator("#view-inspect").click()
+        page.wait_for_timeout(300)
+        moving += page.evaluate(MOTION_CENSUS)
+        browser.close()
+
+    assert moving == [], (
+        "움직이는 요소가 있다 — 예산은 0이다, 예외는 ADR 로만(D-220): "
+        + "; ".join(moving[:6])
+    )
+
+
 def _open_dashboard(playwright, extra_init=""):
     browser, page = _launch_page(playwright, extra_init=extra_init)
     page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)

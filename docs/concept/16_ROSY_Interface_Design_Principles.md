@@ -96,6 +96,9 @@ A law that has no test is still prose. These are the instruments:
 | Danger is a fill | status-crit is never a text colour; any warm-coloured text is ≥ 4.5:1 against its effective ground (D-202) | `test_fleet_console_browser.py` (opt-in) |
 | The rendered scale is closed | every visible computed font-size is a token step — not just the declared ones (D-203) | `test_dashboard_browser.py` (opt-in) |
 | Text keeps a contrast floor | every visible text is ≥ 4.5:1 (≥ 3:1 at display size) against its effective ground, on every surface incl. off-token ones — selection never spends readability (D-214) | `test_dashboard_browser.py`, `test_fleet_console_browser.py` (opt-in) |
+| Confirmation is native | world-changing actions pass `window.confirm`; decline makes zero calls; `alert`/`prompt` are not surface vocabulary (D-218) | `test_web_dialog_contract.py` |
+| The summary is exception-pinned | console triage categories and fleet queues are closed declarative tables; empty means absent, never green (D-219) | `test_triage_contract.py`, `src/site/fleet/test/test_console_queues_contract.py` |
+| The surfaces are still | no element transitions or animates; state changes are jump cuts (D-220) | `test_dashboard_browser.py` (opt-in) |
 
 ## 5. Evidence States
 
@@ -155,13 +158,13 @@ here, not treated as a pass.
 Layout follows from the viewer's time budget and input device. This is where
 surfaces are deliberately unlike each other.
 
-| Surface | Time budget | Input | Grammar |
-|---|---|---|---|
-| Robot console | ~2 s, standing beside the robot | pointer and keyboard, possibly gloved | spatial |
-| Device runtime | ~30 s, seated | pointer | procedural |
-| Fleet | ambient, while doing other work | keyboard-first | exception |
-| Robot face | ~0.5 s, walking past | none | intent |
-| Game host | one match, standing at the laptop | keyboard | focal |
+| Surface | Time budget | Input | Grammar | Declared viewport (D-201) |
+|---|---|---|---|---|
+| Robot console | ~2 s, standing beside the robot | pointer and keyboard, possibly gloved | spatial | ≥ 1366×768 (stacks below 720 px width) |
+| Device runtime | ~30 s, seated | pointer | procedural | scrolls by design |
+| Fleet | ambient, while doing other work | keyboard-first | exception | 1920×1080 site PC |
+| Robot face | ~0.5 s, walking past | none | intent | 320×240 LCD at ~1.5 m |
+| Game host | one match, standing at the laptop | keyboard | focal | 1280×800 |
 
 ### 7.1 Console — spatial grammar
 
