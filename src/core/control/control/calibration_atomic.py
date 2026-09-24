@@ -10,6 +10,8 @@ from .control.calibration_profile import make_profile
 
 class CalibrationAtomic:
     def publish_trial(self, command):
+        if getattr(self, 'raw_pub', None) is None:
+            return
         pair = (command.linear.x, command.angular.z)
         previous = getattr(self, '_trial_request', None)
         if previous is None or previous[1:] != pair:

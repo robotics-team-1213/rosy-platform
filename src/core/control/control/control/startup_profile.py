@@ -16,8 +16,10 @@ def startup_profile(profile='full', overrides=None, calibration_sensing_only='au
         raise ValueError(f'Unknown startup profile: {profile!r}')
     overrides = overrides or {}
     if set(overrides) - set(FEATURES):
-        raise ValueError('Only optional feature nodes can be overridden; safety is mandatory')
-    nodes = {'safety': True}
+        raise ValueError(
+            'Only optional feature nodes can be overridden; '
+            'the full profile always starts safety and sensing never does')
+    nodes = {'safety': profile == 'full'}
     for name in FEATURES:
         nodes[name] = _option(overrides.get(name, 'auto'), profile == 'full' or name in ('camera', 'web', 'calibration'))
     sensing = _option(calibration_sensing_only, profile == 'sensing')

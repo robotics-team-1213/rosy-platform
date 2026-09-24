@@ -1,6 +1,7 @@
 """LEGACY_FULL_STACK: Select processing features; hardware bringup and ADC are separate prerequisites.
 
-Do not launch this file beside core. CORE owns the final cmd_vel publisher.
+Do not launch profile:=full beside core. That profile starts safety_node, the
+legacy final cmd_vel publisher. profile:=sensing starts no Twist publisher.
 """
 import os
 
@@ -40,10 +41,11 @@ def _processing_actions(context):
         actions.append(node('main_node', [], package='imu_bno055', name='imu_bno055'))
     if enabled['camera']:
         actions.append(node('camera_detect_node', [robot, os.path.join(cfg, 'camera.yaml')]))
-    safety = node('safety_node', [robot, os.path.join(cfg, 'safety.yaml'),
-        os.path.join(cfg, 'cliff_calib.yaml'), os.path.join(cfg, 'auto_calib.yaml'),
-        {'localization_required': LaunchConfiguration('localization_required')}])
-    actions.append(TimerAction(period=1.5, actions=[safety]))
+    if enabled['safety']:
+        safety = node('safety_node', [robot, os.path.join(cfg, 'safety.yaml'),
+            os.path.join(cfg, 'cliff_calib.yaml'), os.path.join(cfg, 'auto_calib.yaml'),
+            {'localization_required': LaunchConfiguration('localization_required')}])
+        actions.append(TimerAction(period=1.5, actions=[safety]))
     if enabled['wander']:
         actions.append(TimerAction(period=3.0, actions=[
             node('wander_node', [robot, os.path.join(cfg, 'wander.yaml')])]))

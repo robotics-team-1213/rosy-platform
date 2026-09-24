@@ -78,7 +78,10 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         self.create_subscription(String, 'safety/profile', self.on_safety_profile, latched)
         self.create_subscription(String, 'calibration/applied', self.on_applied, latched)
         self.create_subscription(String, 'safety/decision', self.on_gate_decision, 1)  # latest only (D-185 R2)
-        self.raw_pub = self.create_publisher(Twist, 'cmd_vel_raw', 10)
+        # 감지 프로파일은 속도를 내지 않는다. 발행자를 만들기만 해도 그래프에
+        # cmd_vel_raw 주인이 하나 더 생긴다.
+        sensing_only = bool(self.get_parameter('calibration_sensing_only').value)
+        self.raw_pub = None if sensing_only else self.create_publisher(Twist, 'cmd_vel_raw', 10)
         self.wander_pub = self.create_publisher(String, 'wander/cmd', 10)
         self.create_subscription(String, 'calibration/cmd', self.on_command, 10)
         self.create_subscription(Bool, 'estop/state', self.on_estop, latched)
@@ -105,7 +108,6 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         self.lidar_nose = None
         self.estop = None
         self.wander_state = ('', 0.)
-        sensing_only = bool(self.get_parameter('calibration_sensing_only').value)
         self.reset(sensing_only=sensing_only)
         if not sensing_only:
             self.restore_certificate()
@@ -173,6 +175,8 @@ class StartupCalibrationNode(Node, CalibrationRotation, CalibrationAtomic, Calib
         self.publish()
 
     def zero(self):
+        if self.raw_pub is None:
+            return
         self.publish_trial(Twist())
 
     def stop_wander(self):

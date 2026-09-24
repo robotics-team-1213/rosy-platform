@@ -16,7 +16,8 @@ class StartupProfileTests(unittest.TestCase):
     def test_sensing_loads_only_stationary_core(self):
         profile = startup_profile('sensing')
         self.assertEqual({name for name, enabled in profile['nodes'].items() if enabled},
-                         {'safety', 'camera', 'web', 'calibration'})
+                         {'camera', 'web', 'calibration'})
+        self.assertFalse(profile['nodes']['safety'])
         self.assertTrue(profile['calibration_sensing_only'])
 
     def test_explicit_camera_and_external_imu(self):
@@ -65,12 +66,12 @@ class StartupLaunchTests(unittest.TestCase):
         nodes = [item for item in actions if item['kind'] == 'node']
         nodes += [node for item in actions if item['kind'] == 'timer' for node in item['actions']]
         self.assertEqual({node['executable'] for node in nodes},
-                         {'camera_detect_node', 'safety_node', 'web_node', 'startup_calibration_node'})
+                         {'camera_detect_node', 'web_node', 'startup_calibration_node'})
         self.assertEqual(set(looked_up), {'control'})
         calibration = next(node for node in nodes if node['executable'] == 'startup_calibration_node')
         self.assertIs(calibration['parameters'][-1]['calibration_sensing_only'], True)
         self.assertTrue(all(node['respawn'] for node in nodes))
-        self.assertEqual([item['period'] for item in actions if item['kind'] == 'timer'], [1.5, 3.5, 4.0])
+        self.assertEqual([item['period'] for item in actions if item['kind'] == 'timer'], [3.5, 4.0])
         self.assertIn('disabled:', actions[0]['msg'])
 
     def test_full_can_skip_missing_lcd_and_preserves_wander_delay(self):
