@@ -1,0 +1,52 @@
+[Unit]
+Description=ROSY one-time dashboard login code issuer (D-193)
+# Root and outside CORE (D-161): CORE only reads the verifier this writes and
+# never generates a physical login code. It issues one code after the first
+# CORE_READY in /run/rosy-boot/boot-status.json and polls for it, so it is only
+# ordered after the indicator that creates /run/rosy-boot, not after CORE.
+After=rosy-boot-status.service local-fs.target
+
+[Service]
+Type=simple
+# agetty --reload opens /run/agetty.reload for writing; create it before the
+# sandbox so ReadWritePaths= below can bind it (ProtectSystem=strict makes /run
+# read-only). The "+" runs only this touch outside the sandbox.
+ExecStartPre=+/usr/bin/touch /run/agetty.reload
+ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-login-code.py --daemon
+Restart=always
+RestartSec=5
+# No login shell, no user site (D-189); root's HOME is not writable here anyway.
+Environment=PYTHONNOUSERSITE=1
+UMask=0077
+# Same root-owned directory as rosy-boot-status.service; never /run/rosy,
+# which rosy-core owns (D-161). The issuer only reads CORE's signal there.
+RuntimeDirectory=rosy-boot
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+# /run/rosy-boot: the verifier, the LCD line, the console banner and the lock.
+# /run/agetty.reload: `agetty --reload` touches it so consoles redraw /etc/issue.d.
+ReadWritePaths=/run/rosy-boot -/run/agetty.reload
+
+NoNewPrivileges=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# chown to rosy-core / rosy-display and nothing else.
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE
+
+[Install]
+WantedBy=multi-user.target

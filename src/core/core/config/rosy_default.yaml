@@ -45,14 +45,13 @@ control:
       active_generation: ""        # supplied by the mounted Device runtime
       context: {}                   # exact robot/model/geometry/sensor/generation identity
 
-auth:                         # SEC-101 정적 토큰 (운용 시 교체 필수)
-  tokens:
-    - token: rosy-dev-admin
-      role: administrator
-    - token: rosy-dev-operator
-      role: operator
-    - token: rosy-dev-viewer
-      role: viewer
+auth:                         # SEC-101 / D-193 7: 장치 기본값에는 로그인이 없다 (fail closed)
+  tokens: []                  # 개발·시뮬 토큰은 rosy_dev_auth.yaml (ROSY_DEV_AUTH=1 일 때만)
+  pairing:                    # D-193: 로그인 코드로 받는 브라우저 토큰의 수명 (시간). 만료 없는 값은 없다
+    token_lifetime_hours:
+      viewer: 168
+      operator: 168
+      administrator: 24
 
 safety:
   teleop_timeout_ms: 500          # SAF-002

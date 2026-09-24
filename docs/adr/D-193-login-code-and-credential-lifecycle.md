@@ -158,3 +158,15 @@
 - **S2 root 발급자와 LCD·콘솔 표시:** `rosy-login-code` unit·CLI, `login-display.txt`, 이미지 설치·검사.
 - **S3 대시보드와 PC 도구:** 코드 로그인 탭, 저장소 규칙, whoami 배지, WebSocket 첫 메시지 인증, 회전 스크립트.
 - **S4 실기:** 새 이미지 카드로 평가표 6a-6g를 채운다. 장치에서 즉석으로 고치지 않는다(D-190 결정 6).
+
+**2026-09-24 보안 리뷰 반영 (구현 `feat/login-code`):**
+
+- **소비·실패 상태의 지속:** CORE 재시작이 쓴 코드를 되살리지 않도록 CORE는 자기 `/run/rosy/login-code-state.json`을
+  root와 같은 규칙(`O_NOFOLLOW`, 정규 파일, 256 B)으로 다시 읽는다. 틀린 시도는 `{"state": "failing", "attempts": n}`으로
+  남긴다(root는 모르는 상태를 무시한다). `rosy-core.service`는 `RuntimeDirectoryPreserve=restart`다.
+- **scrypt 동시 실행:** 한 번에 둘까지(각 16 MiB).
+- **페어링 세션의 한계:** 만료가 있는 호출자는 만료 없는 토큰을 만들 수 없고 만료 없는 administrator를 지울 수 없다(403).
+  등록 코드로 받은 토큰은 발급자 토큰의 만료를 넘지 않고, 발급자 토큰이 사라지면 코드도 무효다.
+- **그 밖:** 토큰 목록 쓰기는 하나의 락 안에서 읽고 쓴다. WebSocket은 30 s마다 토큰을 다시 보고 사라졌으면 4401로 닫는다.
+  첫 메시지를 기다리는 소켓은 16개까지다. 등록 코드가 살아 있는 동안 틀린 시도는 부팅 코드가 아니라 그 코드에 센다.
+  `POST /system/tokens` 응답은 `no-store`다. uvicorn은 `proxy_headers=False`로 소켓 주소만 믿는다.

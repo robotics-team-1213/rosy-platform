@@ -88,6 +88,7 @@ class MappingRunner(Node):
         self.declare_parameter("completion_zero_dwell_s", 0.5)
         self.declare_parameter("run_id", "unset")
         self.declare_parameter("core_api", "http://127.0.0.1:8080")
+        # core's dev operator token; the sim launch starts core with ROSY_DEV_AUTH=1 (D-193 7).
         self.declare_parameter("operator_token", "rosy-dev-operator")
         diameter = float(self.get_parameter("robot_diameter_m").value)
         self.limits = TraversalLimits(

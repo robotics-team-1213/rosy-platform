@@ -139,6 +139,7 @@ _BOOT_LAYOUT = {
     "battery": (130, 20),
     "ap_ssid": (166, 17),
     "ap_login": (192, 22),
+    "login": (216, 20),
 }
 
 
@@ -148,8 +149,9 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
     Keys: ``device_name``, ``release_id``, ``stage`` (``FAILED:<unit>`` label),
     ``failed_unit``, ``detail``, ``ipv4`` (list), ``api_port``,
     ``battery_percent``, ``battery_voltage``, ``network`` (``mode``/``ssid``/
-    ``address``) and ``ap_login`` (the AP key line, AP mode only).
-    Missing values never stop the card.
+    ``address``), ``ap_login`` (the AP key line, AP mode only) and, at
+    CORE_READY only, ``login_code``/``login_role`` (D-193's one-time dashboard
+    code) or ``login_burned``. Missing values never stop the card.
     """
     stage = str(payload.get("stage") or "BOOTING")
     kind = stage.split(":", 1)[0]
@@ -194,6 +196,13 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
             lines.append(("ap_login", f"PW {login}", _FG))
         else:
             lines.append(("ap_login", "PW: see the operator AP store", _MUTED))
+
+    if kind == "CORE_READY":
+        if payload.get("login_code"):
+            lines.append(("login", f"Login {payload['login_code']} {payload.get('login_role') or ''}".rstrip(),
+                          _FG))
+        elif payload.get("login_burned"):
+            lines.append(("login", "Login code burned", _CRIT))
     return lines
 
 

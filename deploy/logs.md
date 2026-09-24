@@ -984,3 +984,37 @@
 - gate 변화: 없음(장치는 dev 마커 HOLD 상태)
 - 결정: D-179
 - 교훈: "적용됐다"는 확인은 바뀐 것만 볼 수 있는 증거로 한다. 바뀌지 않았을 수도 있는 파일의 해시는 증거가 아니다.
+## 2026-09-24 · uncommitted · feat(auth,native,image): D-193 S1·S2 login code issuer and token lifecycle
+
+- 변경: (S1 CORE) 토큰 레코드에 `expires_at`·`source`(`card`|`manual`|`pair-physical`|`pair-admin`|`legacy`)·`paired_via`.
+  만료 토큰 401, 저장 때 정리. 마지막 관리자 규칙은 만료 없는 administrator만 센다. 새 `api/v1/auth.py`: `POST auth/pair`
+  (인증 없음, 1 KiB, RFC 1918·루프백만, IP 60 s 5회·전체 30회 → 429 `Retry-After`, 코드별 틀린 시도 5회 폐기,
+  scrypt N=2^14 스레드풀, `boot_id`+monotonic 만료, `/run/rosy-boot/login-code.json`을 O_NOFOLLOW·정규 파일로 매번 읽음,
+  `no-store`), `whoami`, `logout`(pair-*만, 그 밖 409), `enrollment-codes`(관리자, 5분, 메모리). `PATCH system/tokens/{id}`.
+  CORE는 `/run/rosy/login-code-state.json`에 `{code_id, state}`만 쓴다. `rosy_default.yaml`의 `auth.tokens: []`,
+  개발 토큰은 `rosy_dev_auth.yaml`(`ROSY_DEV_AUTH=1`, 장치 모드 제외). 장치 모드(`ROSY_DEPLOYMENT=device`: runtime.env
+  템플릿·first boot·`rosy-core.service`)는 개발 다이제스트·평문을 거부하고 `auth.credentials_refused`를 낸다. first boot는 카드
+  레코드를 `source: card`로 설치. WebSocket 첫 메시지 인증(`?token=`은 한 릴리스 유지). API Ref v1.19 (US-010의 v1.18 위).
+  (S2 root) `rosy-login-code.py`(데몬+CLI, `.login.lock` flock): 첫 CORE_READY에 한 번 발급(`login.boot_code`),
+  검증자 root:rosy-core 0640, LCD 줄 root:rosy-display 0640(D-190 `_write`), 콘솔 `login.issue` 0600 + `agetty --reload`,
+  CORE 신호를 엄격히 읽어 자기 `code_id`만 지움, 만료 때도 지움, 폐기면 LCD에 1분간 "Login code burned".
+  `rosy-login-code.service`(root, PrivateNetwork, AF_UNIX, ProtectSystem=strict, `/run/rosy-boot`만 쓰기). `rosy_config`의
+  `login.boot_code`, `defaults.yaml` `login`, `rosy-config-apply`가 `login-policy.json`을 씀. LCD·`render_boot`에 CORE_READY
+  전용 로그인 줄. 이미지: unit enable, `/usr/local/sbin/rosy-login-code`, `/etc/issue.d/60-rosy-login.issue`, 진입점 probe,
+  `verify-mounted-image.py`가 페이로드 `rosy_default.yaml`의 토큰·unit·링크 누락을 막는다.
+- 증거: host pytest(Windows)·WSL POSIX 시험 — 보고서 수치. 장치 미검증(평가표 6a-6g).
+- gate 변화: 없음(S4 실기 전)
+- 결정: D-193
+- 교훈: 템플릿 `rosy-runtime.env`는 first boot가 쓰지 않는다 — 장치 환경 변수는 first boot `_runtime_env`와 unit 양쪽에 넣어야 실제 카드에 닿는다.
+
+## 2026-09-24 · uncommitted · fix(core,native): D-193 security review
+
+- 변경: (M1) CORE가 자기 `login-code-state.json`을 엄격히 다시 읽어 재시작 뒤에도 쓴·폐기한 코드를 거부하고, 틀린 시도를
+  `failing`/`attempts`로 남긴다. `rosy-core.service` `RuntimeDirectoryPreserve=restart`. scrypt 동시 2개. (M2) 만료가 있는
+  호출자는 `POST system/tokens`·만료 없는 administrator `DELETE`가 403, 등록 토큰 만료는 발급자 만료 이하. (L1-L7) 토큰 쓰기 락,
+  WebSocket 30 s 재확인(4401), 첫 메시지 대기 소켓 16개 상한(1013), 등록 코드가 살아 있으면 실패를 그 코드에 셈, 토큰 생성
+  응답 `no-store`, uvicorn `proxy_headers=False`, 발급자 토큰이 사라진 등록 코드 무효. D-193에 날짜 붙은 보완 노트.
+- 증거: host pytest(Windows)·WSL POSIX — 보고서 수치.
+- gate 변화: 없음
+- 결정: D-193 보완(2026-09-24 보안 리뷰)
+- 교훈: 일회용 값의 "소비됨"은 그 값을 검증하는 프로세스의 수명보다 오래 가야 한다 — 메모리만으로는 재시작이 곧 재무장이다.

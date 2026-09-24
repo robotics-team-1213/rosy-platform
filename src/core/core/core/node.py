@@ -119,8 +119,12 @@ class RosyCoreNode(Node):
         # timeout_graceful_shutdown: /ws/events, /ws/state 는 await 에 park 해 있어서
         # should_exit 만으로는 바로 끝나지 않는다. 대시보드가 붙은 채 정지하면 이 상한이
         # 없을 때 아래 API join 상한을 매번 다 쓴다.
+        # proxy_headers=False (D-193 보안 리뷰 L6): the client address is the
+        # socket peer. A future proxy must not turn every client into 127.0.0.1
+        # or let X-Forwarded-For pick the pairing rate-limit key.
         server_config = uvicorn.Config(app, host=host, port=port, log_level="warning",
-                                       timeout_graceful_shutdown=API_GRACEFUL_TIMEOUT_S)
+                                       timeout_graceful_shutdown=API_GRACEFUL_TIMEOUT_S,
+                                       proxy_headers=False)
         self._api_server = uvicorn.Server(server_config)
         self._api_thread = threading.Thread(target=self._api_server.run, daemon=True,
                                             name="rosy-api")

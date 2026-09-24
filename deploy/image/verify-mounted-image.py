@@ -41,6 +41,29 @@ DISPLAY_UDEV_RULE = "etc/udev/rules.d/99-rosy-display.rules"
 # customize-rootfs.sh installs these for the boot display (D-190).
 DISPLAY_APT_PACKAGES = ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
                         "fonts-dejavu-core")
+# D-193: the root login-code issuer, its console banner link and its command.
+LOGIN_UNIT = "rosy-login-code.service"
+LOGIN_ISSUE_LINK = "etc/issue.d/60-rosy-login.issue"
+LOGIN_ISSUE_TARGET = "/run/rosy-boot/login.issue"
+LOGIN_COMMAND = "usr/local/sbin/rosy-login-code"
+CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
+
+
+def default_config_tokens(text: str) -> bool | None:
+    """True when CORE's packaged defaults carry any API token (D-193 7); None if unreadable."""
+    try:
+        import yaml
+    except ImportError:  # the build host has it; a textual check otherwise
+        return "rosy-dev-" in text or bool(re.search(r"(?m)^\s+-\s+(?:token|sha256)\s*:", text))
+    try:
+        config = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return None
+    if not isinstance(config, dict):
+        return None
+    auth = config.get("auth") or {}
+    tokens = auth.get("tokens") if isinstance(auth, dict) else auth
+    return bool(tokens) or "rosy-dev-" in text
 
 
 def installed_debs(root: Path) -> set[str]:
@@ -158,6 +181,25 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append(f"{DISPLAY_UNIT} is not enabled")
     if not (root / DISPLAY_UDEV_RULE).is_file():
         findings.append(f"missing display udev rule: {DISPLAY_UDEV_RULE}")
+    # D-193: login codes come from root, not CORE; the device defaults have no login.
+    if not (root / "etc/systemd/system" / LOGIN_UNIT).is_file():
+        findings.append(f"missing systemd unit: {LOGIN_UNIT}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / LOGIN_UNIT):
+        findings.append(f"{LOGIN_UNIT} is not enabled")
+    link = root / LOGIN_ISSUE_LINK
+    if not os.path.lexists(link) or (os.path.islink(link) and os.readlink(link) != LOGIN_ISSUE_TARGET):
+        findings.append(f"missing console login banner link: {LOGIN_ISSUE_LINK} -> {LOGIN_ISSUE_TARGET}")
+    if not os.path.lexists(root / LOGIN_COMMAND):
+        findings.append(f"missing login code command: {LOGIN_COMMAND}")
+    defaults = release / CORE_DEFAULTS
+    if not defaults.is_file():
+        findings.append(f"missing CORE defaults: {defaults.relative_to(root)}")
+    else:
+        carries = default_config_tokens(defaults.read_text(encoding="utf-8", errors="replace"))
+        if carries is None:
+            findings.append(f"CORE defaults are unreadable: {defaults.relative_to(root)}")
+        elif carries:
+            findings.append(f"CORE defaults carry API tokens (D-193 fail closed): {defaults.relative_to(root)}")
     debs = installed_debs(root)
     for package in DISPLAY_APT_PACKAGES:
         if package not in debs:

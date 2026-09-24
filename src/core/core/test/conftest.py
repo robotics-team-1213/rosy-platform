@@ -46,11 +46,15 @@ def core_client(tmp_path):
     from core.services import CoreServices
 
     def build(*, capabilities: Optional[dict] = None,
-              config_overrides: Optional[dict] = None):
+              config_overrides: Optional[dict] = None, dev_auth: bool = True):
         def read(name):
             return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
 
         config = read("rosy_default.yaml")
+        if dev_auth:
+            # D-193 7: the shared dev tokens live only in rosy_dev_auth.yaml,
+            # merged like ROSY_DEV_AUTH=1 does; the pairing block stays.
+            config["auth"] = {**config["auth"], **read("rosy_dev_auth.yaml")["auth"]}
         caps = read("capabilities.yaml")
         profile = RobotProfile.load(CONFIG_DIR / "profile.pinky_pro.yaml")
         if capabilities:

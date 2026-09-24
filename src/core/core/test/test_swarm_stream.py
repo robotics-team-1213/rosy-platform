@@ -202,9 +202,13 @@ def test_a_reference_for_another_robot_changes_nothing(client):
 
 
 @pytest.mark.parametrize("path", ["/ws/swarm/pose", "/ws/swarm/reference"])
-def test_a_bad_token_is_closed_with_4401_like_ws_state(client, path):
+def test_a_bad_token_is_closed_with_4401_like_ws_state(client, path, monkeypatch):
     tc, _svc = client
     from starlette.websockets import WebSocketDisconnect
+    import core_api_web.api.ws as ws_module
+
+    # No query token waits for a first-message token (D-193); do not wait 5 s for it.
+    monkeypatch.setattr(ws_module, "FIRST_MESSAGE_TIMEOUT_S", 0.05)
 
     for query in ("", "?token=", "?token=nope"):
         with pytest.raises(WebSocketDisconnect) as raised:

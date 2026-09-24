@@ -10,3 +10,10 @@ ap:
   mode: fallback
   grace_seconds: 120
   hold_seconds: 600
+login:
+  # D-193: a one-time dashboard login code on the LCD and console after the
+  # first CORE_READY of each boot. off | operator | administrator. Where
+  # passers-by can read the LCD, set `login: {boot_code: off}` in
+  # rosy-config.yaml and use `sudo rosy-login-code` over SSH instead.
+  boot_code: operator
+  minutes: 10

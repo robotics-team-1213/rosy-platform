@@ -119,8 +119,10 @@ def check_render(root: Path) -> list[str]:
     try:
         info_screen = importlib.import_module("emotion.info_screen")
         for stage in STAGES:
+            # D-193: the login line (shown at CORE_READY only) is part of every render.
             image = info_screen.render_boot({"stage": stage, "ipv4": ["192.0.2.1"],
-                                             "battery_percent": 80, "battery_voltage": 7.9})
+                                             "battery_percent": 80, "battery_voltage": 7.9,
+                                             "login_code": "ABCD-EFGH", "login_role": "operator"})
             if image.size != info_screen.DEFAULT_SIZE:
                 failures.append(f"render_boot({stage}) drew {image.size}")
     except Exception as exc:  # noqa: BLE001

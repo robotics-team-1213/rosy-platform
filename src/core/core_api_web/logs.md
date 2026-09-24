@@ -40,3 +40,10 @@
 - gate 변화: 없음.
 - 결정: Additive(MINOR) + Corrective. envelope `protocol_version` 1.0 유지.
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(api): contract v1.20 — lane-network docking rows renumbered on merge
+- 변경: origin의 US-010(v1.18)·D-193(v1.19)과 로컬 lane-network 도킹 변경(원래 v1.18)이 같은 번호를 썼다. 도킹 행을 v1.20으로, `api/app.py` 버전과 API Ref 헤더, `test_line_follow_contract_docs.py` 고정값을 v1.20으로 맞췄다
+- 증거: 머지 후 host pytest (sync/origin-main)
+- gate 변화: 없음
+- 결정: PRT-006
+- 교훈: 없음
