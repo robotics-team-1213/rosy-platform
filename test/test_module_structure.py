@@ -81,12 +81,6 @@ SIZE_VERDICTS = {
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
-    "core/core/core/bridge/ros_bridge.py": (
-        759,
-        "split: the 2026-09-06 accept (at 516 lines) is void — its re-entry trigger (a) fired with a "
-        "seventh timer (_tick_line_follow); re-open C2 per docs/plans/2026-09-06-module-split-criteria.md; "
-        "owner core, unscheduled",
-    ),
     "site/fleet/fleet/server/console.py": (
         767,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",

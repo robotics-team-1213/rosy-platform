@@ -8,9 +8,49 @@ reporting a map it never wrote.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
-from core.bridge.save_map import SaveMapFailed, check_result
+from core.bridge.save_map import SaveMapFailed, await_call, check_result
+
+
+class _DoneFuture:
+    """Like rclpy's: an already-finished future invokes the callback at once."""
+
+    def __init__(self, result) -> None:
+        self._result = result
+
+    def add_done_callback(self, callback) -> None:
+        callback(self)
+
+    def result(self):
+        return self._result
+
+
+class _NeverFinishes:
+    def add_done_callback(self, callback) -> None:
+        pass
+
+    def result(self):
+        raise AssertionError("a future that never finished has no result")
+
+
+def test_a_finished_future_is_returned_as_is():
+    response = SimpleNamespace(result=0)
+
+    assert await_call(_DoneFuture(response), timeout=0.0) is response
+
+
+def test_a_future_that_never_finishes_times_out_with_the_documented_message():
+    with pytest.raises(RuntimeError, match="save_map service timeout"):
+        await_call(_NeverFinishes(), timeout=0.0)
+
+
+def test_a_missing_response_is_not_a_success():
+    """"no answer" and "service down" are different things to an operator."""
+    with pytest.raises(RuntimeError, match="save_map service failed"):
+        await_call(_DoneFuture(None), timeout=0.0)
 
 
 def test_zero_is_success():

@@ -15,8 +15,8 @@ semantic. That is the whole mandate.
 So:
 
 - **Do not** add a test here that calls a callback, drives a tick, or asserts on
-  a message value. Those belong in the ROS-free siblings (`translate.py`,
-  `display.py`, `reconcile.py`, `odometry.py`, `save_map.py`,
+  a message value. Those belong in the ROS-free siblings (`observation.py`,
+  `translate.py`, `display.py`, `reconcile.py`, `odometry.py`, `save_map.py`,
   `battery_policy.py`, `goal_tracker.py`), where no stub is involved.
 - **Do not** move the stub into `conftest.py`. It lives in this file so its
   blast radius is this file: nothing else can start depending on stub
@@ -204,7 +204,7 @@ EXPECTED_TIMERS = [
     1.0 / 20.0,
 ]
 
-#: `(topic, callback, qos)` — read off `ros_bridge.py:89-103`, not off this
+#: `(topic, callback, qos)` — read off `ros_bridge.py:86-126`, not off this
 #: harness's own output. Topic alone would not see `scan` rewired to `_on_imu`,
 #: and QoS alone would not see the `map` latch dropped.
 EXPECTED_SUBSCRIPTIONS = [
@@ -235,7 +235,8 @@ EXPECTED_SUBSCRIPTIONS = [
     ("global_costmap/costmap_raw", "_on_global_costmap", 10),
 ]
 
-#: `(topic, qos)` — `ros_bridge.py:81-107`.
+#: `(topic, qos)` — `ros_bridge.py:78-80,128-131` (cmd_vel/initialpose first,
+#: power/mode · display/info · docking/collision_exemption after the subs).
 EXPECTED_PUBLISHERS = [
     ("cmd_vel", 10),
     ("initialpose", 10),
