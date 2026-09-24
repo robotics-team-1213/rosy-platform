@@ -146,6 +146,7 @@ rosy_packages:
   required:
     - interfaces
     - core
+    - pinky_pro
     - bringup
     - description
     - navigation

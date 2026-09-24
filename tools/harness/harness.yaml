@@ -117,6 +117,11 @@ modules:
     functional_kind: interface-only
     functional: [src/core/interfaces/test/test_srv_surface.py]
     artifacts: [src/core/interfaces/srv/SetLed.srv, src/core/interfaces/srv/SetLamp.srv, src/core/interfaces/srv/SetBrightness.srv, src/core/interfaces/srv/Emotion.srv]
+  - name: pinky_pro
+    path: src/robots/pinky_pro
+    tests: [src/robots/pinky_pro/test]
+    functional_kind: host-contract
+    functional: [src/robots/pinky_pro/test/test_robot_package.py]
   - name: description
     path: src/sim/description
     tests: [src/sim/description/test/test_urdf_surface.py, test/test_robot_runtime.py]

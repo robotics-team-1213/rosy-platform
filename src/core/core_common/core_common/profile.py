@@ -7,6 +7,21 @@ from typing import Any, Optional
 
 import yaml
 
+#: D-196: the robot package CORE loads when nothing names one.
+DEFAULT_ROBOT = "pinky_pro"
+
+
+def robot_config_dir(robot: str) -> Path:
+    """Config directory of the robot package ``robot`` (D-196).
+
+    The installed ament share wins; a host checkout falls back to src/robots/<robot>/config.
+    """
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        return Path(get_package_share_directory(robot)) / "config"
+    except Exception:
+        return Path(__file__).resolve().parents[3] / "robots" / robot / "config"
+
 
 class RobotProfile:
     def __init__(self, data: dict[str, Any]) -> None:

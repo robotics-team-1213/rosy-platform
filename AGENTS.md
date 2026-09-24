@@ -48,8 +48,8 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
 - Config merge order: `src/core/core/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
-- Hardware profile is YAML. In-tree Pinky full spec is `src/core/core/config/profile.pinky_pro.yaml`. The robot advertises `deploy/robot/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
-- Package names are grouped by domain: `src/{core,apps,hardware,navigation,sim,site}` (D-147). Do not reintroduce `rosy_*` or `pinky_*` package names. ci.yml was realigned to the domain tree (verified 2026-09-21); the CORE launch file still carries its legacy filename `rosy_core.launch.py` — README matches that file name.
+- Hardware profile is YAML. In-tree Pinky full spec is `src/robots/pinky_pro/config/profile.yaml`. The robot advertises `deploy/robot/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
+- Package names are grouped by domain: `src/{core,apps,hardware,robots,navigation,sim,site}` (D-147, D-196). Do not reintroduce `rosy_*` or `pinky_*` package names; the one exception is a robot or device-family package named after its hardware under `src/robots/` or `src/devices/` (D-196, e.g. `src/robots/pinky_pro`). ci.yml was realigned to the domain tree (verified 2026-09-21); the CORE launch file still carries its legacy filename `rosy_core.launch.py` — README matches that file name.
 - Dashboard is FastAPI static files under `core_api_web` (`src/core/core_api_web/core_api_web/web/`), not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
 
 ### Testing Requirements

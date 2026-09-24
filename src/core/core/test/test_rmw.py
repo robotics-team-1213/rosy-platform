@@ -63,7 +63,7 @@ def rmw_client(tmp_path, monkeypatch):
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
     from core_api_web.api.app import create_app
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
     import yaml
 
@@ -74,8 +74,8 @@ def rmw_client(tmp_path, monkeypatch):
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
     config.update(yaml.safe_load((config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
-    profile = RobotProfile.load(config_dir / "profile.pinky_pro.yaml")
-    caps = yaml.safe_load((config_dir / "capabilities.yaml").read_text(encoding="utf-8"))
+    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
+    caps = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
     return TestClient(create_app(config, services)), overlay
 

@@ -411,3 +411,11 @@
 - gate 변화: 없음.
 - 결정: 없음. main 의 24b6d4bb(`bridge/observation.py`)와 같은 방식의 동작 보존 추출.
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · feat(robots): CORE loads the robot profile from robots/<model> (D-196)
+
+- 변경: `config/profile.pinky_pro.yaml`·`config/capabilities.yaml`을 `src/robots/pinky_pro/config/{profile,capabilities}.yaml`로 옮겼다. `rosy_default.yaml`은 최상위 `profile:`/`capabilities:` 대신 `robot.model: pinky_pro`를 둔다. `core/node.py` `_resolve_path`는 네 번째 인자 `base_dir`(로봇 패키지 config)를 받고, 기본 경로는 `robot_config_dir(robot.model or DEFAULT_ROBOT)`다. 절대 경로 오버레이(`/etc/rosy/profile.yaml` 등)는 그대로 우선한다. 두 파일을 읽던 core 시험 11개(`conftest.py` 포함)는 `robot_config_dir("pinky_pro")`로 읽는다.
+- 증거: `src/core/core/test` 1199 passed·14 skipped, `src/robots/pinky_pro/test` 2 passed, `test/test_module_structure.py`·`test_robot_literals.py`·`test_harness_contracts.py` 통과, harness lint 0 errors (2026-09-24 Windows).
+- gate 변화: 없음. share 조회 경로는 ROS-SIM(WSL Jazzy colcon build + CORE 부팅)에서 아직 미확인.
+- 결정: D-196 Proposed
+- 교훈: 없음

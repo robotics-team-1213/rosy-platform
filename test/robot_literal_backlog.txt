@@ -45,10 +45,8 @@ apps/control/tools/gz/rig_reload_navigation.py
 apps/control/tools/gz/run_calibration_spaces.py
 apps/control/tools/gz/track_run_monitor.py
 apps/omx_adapter/config/omx.disabled.yaml
-core/core/config/capabilities.yaml
-core/core/config/profile.pinky_pro.yaml
 core/core/config/rosy_default.yaml
-core/core/core/node.py
+core/core_common/core_common/profile.py
 hardware/bringup/bringup/battery_publisher.py
 hardware/bringup/bringup/bringup.py
 hardware/bringup/bringup/pinky_pro_adapter.py

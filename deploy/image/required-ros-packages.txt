@@ -1,6 +1,7 @@
 # Mandatory Pinky Pro ROSY packages in every product image (D-161).
 interfaces
 core
+pinky_pro
 bringup
 description
 navigation

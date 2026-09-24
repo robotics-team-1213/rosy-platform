@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Pinky Pro board overlays mounted into `rosy-core`. `ROSY_RUNTIME_MODE` selects `core`, `motor`, or `hardware`. `board.yaml` catalogs slices (`required: [core]`) and presets that map onto those modes. The full in-tree `src/core/core/config/capabilities.yaml` is the Pinky source profile; these files are what the robot actually advertises.
+Pinky Pro board overlays mounted into `rosy-core`. `ROSY_RUNTIME_MODE` selects `core`, `motor`, or `hardware`. `board.yaml` catalogs slices (`required: [core]`) and presets that map onto those modes. The full in-tree `src/robots/pinky_pro/config/capabilities.yaml` (D-196) is the Pinky source profile; these files are what the robot actually advertises.
 
 ## Key Files
 

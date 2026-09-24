@@ -31,7 +31,7 @@ None.
 ### Working In This Directory
 
 - Design: `docs/plans/2026-09-02-docking-station-design.md`.
-- Pinky Pro `capabilities.yaml` has `docking.supported: false` — keep capability checks.
+- Pinky Pro `src/robots/pinky_pro/config/capabilities.yaml` has `docking.supported: false` — keep capability checks.
 - ROS-free: inject clock and detector. Do not subscribe to scans here.
 
 ### Testing Requirements

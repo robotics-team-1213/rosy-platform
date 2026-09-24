@@ -42,7 +42,7 @@ def core_client(tmp_path):
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
     from core_api_web.api.app import create_app
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
     def build(*, capabilities: Optional[dict] = None,
@@ -55,8 +55,8 @@ def core_client(tmp_path):
             # D-193 7: the shared dev tokens live only in rosy_dev_auth.yaml,
             # merged like ROSY_DEV_AUTH=1 does; the pairing block stays.
             config["auth"] = {**config["auth"], **read("rosy_dev_auth.yaml")["auth"]}
-        caps = read("capabilities.yaml")
-        profile = RobotProfile.load(CONFIG_DIR / "profile.pinky_pro.yaml")
+        caps = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+        profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
         if capabilities:
             caps.update(capabilities)
         if config_overrides:

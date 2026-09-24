@@ -20,14 +20,14 @@ CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 def _build_services(tmp_path):
     import yaml
     from core.services import CoreServices
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
 
     def read(name):
         return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
 
     return CoreServices.build(read("rosy_default.yaml"),
-                              RobotProfile.load(CONFIG_DIR / "profile.pinky_pro.yaml"),
-                              read("capabilities.yaml"), tmp_path / "wp.json")
+                              RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml"),
+                              yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8")), tmp_path / "wp.json")
 
 
 def test_wire_packets_drive_and_clear_the_advisory(tmp_path):
