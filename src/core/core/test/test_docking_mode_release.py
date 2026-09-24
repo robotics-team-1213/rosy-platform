@@ -235,8 +235,8 @@ def test_the_bridge_staging_drive_tells_navigation_before_sending():
     import ast
     from pathlib import Path
     source = (Path(__file__).resolve().parents[1] / "core" / "bridge"
-              / "ros_bridge.py").read_text(encoding="utf-8")
+              / "docking_executor.py").read_text(encoding="utf-8")
     fn = next(node for node in ast.walk(ast.parse(source))
               if isinstance(node, ast.FunctionDef) and node.name == "navigate_to")
     calls = [ast.unparse(node.func) for node in ast.walk(fn) if isinstance(node, ast.Call)]
-    assert calls.index("self._svc.nav.external_goal_sent") < calls.index("self.send_goal")
+    assert calls.index("self._svc.nav.external_goal_sent") < calls.index("self._send_goal")

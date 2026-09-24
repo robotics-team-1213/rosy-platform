@@ -3,7 +3,7 @@
 유일한 cmd_vel 퍼블리셔 (D-2, 50 Hz) · 구독·발행·서비스·7타이머·Nav2 액션·TF 전부
 여기에만 (목록은 `test/test_bridge_timers.py`가 고정). 판정은 하지 않는다: 값을
 정하는 일은 ROS-free 시블리(`observation`, `goal_tracker`, `reconcile`, `display`,
-`save_map`, `translate`)로 빠져 있고, 이 파일은 적응과 전달만 한다 — 그 자리가
+`save_map`, `translate`, `docking_executor`)로 빠져 있고, 이 파일은 적응과 전달만 한다 — 그 자리가
 호스트 pytest 에서 도달 불가능하기 때문이다.
 """
 
@@ -42,6 +42,7 @@ from core.bridge import (
     translate,
 )
 from core.bridge.cmd_vel import cmd_vel_cycle
+from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
 from core_features.navigation.initial_pose import amcl_pose_covariance
@@ -150,10 +151,7 @@ class RosBridge:
         self._goals = GoalTracker()
 
         self._last_odom_ts = 0.0
-        self._last_odom_xy = None
         self._last_odom_pose = None
-        self._dock_odom_mark = None
-        self._applied_dock_exemption = False
         # 최상단 임포트는 노드 기동 전체를 실패시킨다(core 에 없고 slam: false).
         # 여기서 시도하고, 클라이언트는 생성자에서 만들어야 DDS 엔드포인트 매칭에
         # 노드 수명만큼의 시간이 주어진다.
@@ -200,7 +198,12 @@ class RosBridge:
         # The dock observation feed is stamped on the same clock, so the
         # docking manager judges tag freshness and phase timeouts on it too.
         self._svc.docking.bind_clock(self._line_clock)
-        self._svc.docking.executor = self
+        # DockingExecutor: ROS-free in docking_executor.py; only the ROS actions come from here.
+        self.docking_executor = BridgeDockingExecutor(
+            self._svc, send_goal=self.send_goal, cancel_goal=self.cancel_goal,
+            publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
+            odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
+        self._svc.docking.executor = self.docking_executor
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
@@ -210,7 +213,6 @@ class RosBridge:
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
-        self._last_odom_xy = (sample["x"], sample["y"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
 
@@ -480,61 +482,6 @@ class RosBridge:
                 "navigation_readiness",
                 HealthState.OK if self._readiness.snapshot().ready else HealthState.ERROR,
             )
-
-    # --- DockingExecutor 구현 (docking.manager와 계약) -------------------------
-    #
-    # 정책은 core_features.docking.manager 가 갖고 여기는 조정만 한다 — power/mode 와
-    # PWR-005 LiDAR 의도와 같은 형태다.
-
-    def navigate_to(self, pose) -> None:
-        """스테이징 주행. 도킹 액션이 Nav2 구간까지 소유하므로 여기서 부른다.
-
-        NavigationManager.goal 을 거치지 않으므로 nav_state 를 먼저 PLANNING
-        으로 둔다 — 아니면 도킹이 첫 틱에 지난 주행의 ARRIVED/FAILED 를 읽는다."""
-        self._svc.nav.external_goal_sent()
-        self.send_goal(NavGoalSpec(x=pose.x, y=pose.y, yaw=pose.yaw))
-
-    def cancel_navigation(self) -> None:
-        self.cancel_goal()
-
-    def drive(self, linear: float, angular: float) -> None:
-        """접근·후진 속도. 기존 cmd_vel 멀렉서를 통과시킨다.
-
-        도킹 슬롯을 쓴다 — DOCKING 에서만 바퀴에 닿는다. nav 슬롯을 쓰면 DOCKING
-        을 떠난 뒤(IDLE → NAVIGATION) 도킹 틱의 값이 'navigation' 으로 나간다.
-        """
-        self._svc.command.set_docking_twist(CoreTwist(linear=linear, angular=angular))
-
-    def stop(self) -> None:
-        self._svc.command.set_docking_twist(CoreTwist(linear=0.0, angular=0.0))
-
-    def set_collision_exemption(self, enabled: bool) -> None:
-        """도크는 코스트맵에 장애물로 찍힌다 — 접근 구간에만 면제를 선언한다.
-
-        Nav2 에 이를 끄는 표준 서비스가 없어서 의도를 토픽으로 내보낸다. 실제
-        코스트맵 연동은 실기 항목으로 남는다(DOCK_GO).
-        """
-        if enabled == self._applied_dock_exemption:
-            return
-        self._applied_dock_exemption = enabled
-        self.dock_exemption_pub.publish(Bool(data=bool(enabled)))
-        self._node.get_logger().info(
-            "docking collision exemption %s" % ("on" if enabled else "off"))
-
-    def reset_odometry_mark(self) -> None:
-        self._dock_odom_mark = self._last_odom_xy
-
-    def travelled_m(self) -> float:
-        """마크 이후 이동 거리. 언도킹은 센서를 보지 않고 이 값만 쓴다."""
-        return odometry.travelled_m(self._dock_odom_mark, self._last_odom_xy)
-
-    def odometry_available(self) -> bool:
-        """언도킹 전: 후진 거리를 잴 오도메트리가 들어오고 있는가."""
-        return self._last_odom_xy is not None
-
-    def odometry_pose(self):
-        """오도메트리 base 포즈 (x, y, yaw) — 주차형 도크의 프레임 사이 전파와 회전."""
-        return self._last_odom_pose
 
     def _tick_swarm(self) -> None:
         """SWM-004 는 마감시각으로 판정한다 — 스트림이 끊기면 아무 프레임도

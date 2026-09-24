@@ -299,10 +299,13 @@ def test_the_nav2_action_client_and_tf_listener_are_built(registered):
 
 
 def test_both_executor_contracts_are_wired_to_the_bridge(registered):
-    """C3 itself: one class answering two Protocols. A composition root has to
+    """C3 itself: the bridge answers NavExecutor and owns the DockingExecutor
+    (ROS-free `docking_executor.py`, D-168 P6). A composition root has to
     reproduce these two assignments, and nothing else checks that it did."""
+    from core.bridge.docking_executor import BridgeDockingExecutor
     assert registered.services.nav.executor is registered.bridge
-    assert registered.services.docking.executor is registered.bridge
+    assert registered.services.docking.executor is registered.bridge.docking_executor
+    assert isinstance(registered.bridge.docking_executor, BridgeDockingExecutor)
 
 
 def test_lifecycle_transition_parser_accepts_active_id_and_label(registered):
