@@ -103,6 +103,23 @@ python -m pytest src/face/emotion/test/test_info_screen_capture.py -q
 적색→수정→녹색의 변이 증명). 플레이크 재발 2회는 모두 부하 유발 대기
 타임아웃(소요 3:45 대 1:00 상관) — 선택 대기 20s로 넉넉히 하고 종결.
 
+## 어휘 회차 (2026-09-25, 같은 날 추가 — D-218·D-219·D-220)
+
+- **F-20** Fleet HITL 큐의 "조종 (WebRTC)" 버튼이 `kind=irreversible` 모의
+  버튼으로 `alert("(Mock)")` — 없는 능력을 경보 큐 안의 활성 조작으로 그린
+  Law 0 위반. 처분: 행은 로봇 이름 + 진짜 경로("로봇 화면에서 확인")로.
+- **D-218** 확인 문법 졸업 — 실측상 `window.confirm` 은 이미 콘솔 21곳 +
+  Fleet 1곳의 보편 문법이었다. 네이티브 confirm 이 공유 컴포넌트다(거부 =
+  호출 0회는 브라우저 시험 고정). 계기: `test_web_dialog_contract.py`
+  (alert/prompt 금지·confirm 핀·물음 형태). 변이: alert 주입 → 적색. 첫
+  룩어하인드가 `window.alert` 를 면책한 것도 변이가 붙잡았다.
+- **D-219 + D-159 승격** — Fleet 큐에 실행 계약이 없었던 것이 승격의 마지막
+  구멍. `test_console_queues_contract.py` 신설(선언적 표 방식, 변이 증명).
+- **D-220 정지 계약** — 움직임 센서스 실측: 콘솔 양 뷰 움직이는 요소 0개.
+  관행을 계약으로. 계기: 브라우저 움직임 센서스(변이: 전이 주입 → 0.24s
+  적색).
+- concept 16 §7 표에 선언 뷰포트 열(D-201 산문에서 계약 표로 이사).
+
 **ADR:** [D-201](../../adr/D-201-fixed-grammar-surfaces-fit-contract.md),
 [D-202](../../adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md),
 [D-203](../../adr/D-203-computed-type-scale-closure.md)
