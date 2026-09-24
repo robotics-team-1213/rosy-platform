@@ -294,7 +294,7 @@ def run_one(scenario, graph, mode, out_dir, domain):
         wall_start = time.monotonic()
         wall_deadline = wall_start + WALL_CAP_S
         sim_start = None
-        reached, reason = False, "wall_cap"
+        reason = "wall_cap"
         status_log = (out_dir / "core_status.jsonl").open("w")
         next_status = wall_start
         while time.monotonic() < wall_deadline:
@@ -307,8 +307,7 @@ def run_one(scenario, graph, mode, out_dir, domain):
             if stamps and sim_start is None:
                 sim_start = stamps[-1]
             if track and math.dist(track[-1], end_point) < 0.05:
-                # `reached` is not read; test_junction_harness_contract pins this pair
-                reached, reason = True, "reached"  # noqa: F841
+                reason = "reached"
                 break
             if sim_start is not None and stamps[-1] - sim_start >= TIMEOUT_S:
                 reason = "timeout"

@@ -138,9 +138,9 @@ def test_set_mode_retries_a_refused_connection():
 def test_every_scenario_records_one_of_the_defined_reasons():
     source = (ROOT / "scripts" / "junction_harness.py").read_text(encoding="utf-8")
     assert '"reason": "boot_timeout"' in source
-    assert 'reached, reason = True, "reached"' in source
+    assert 'reason = "reached"' in source
     assert 'reason = "timeout"' in source
-    assert 'reached, reason = False, "wall_cap"' in source
+    assert 'reason = "wall_cap"' in source
     assert 'result["reason"] = reason' in source
     assert '"reason": f"error:{type(exc).__name__}"' in source
 
