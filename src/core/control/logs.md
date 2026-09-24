@@ -504,3 +504,10 @@
 - gate 변화: 없음.
 - 결정: P0 시작. 실측값이 오면 확정 프로필(revision `measured-<날짜>`)을 만들고 `camcal/bevfinal.py`로 게이트를 잰다.
 - 교훈: 없음.
+
+## 2026-09-24 · uncommitted · docs(adr): D-206 P0 measurement procedure and profile custody
+- 변경: `docs/adr/D-206-p0-measurement-procedure-and-profile-custody.md` 추가(Proposed). ADR Log 표 D-206 행, `progress.md`의 `adrs`에 D-206, D-205 끝에 see-also 한 줄. 측정 기록지의 오타(축척 퇴개→퇴화)를 고쳤다. 코드 본문은 바꾸지 않았다.
+- 증거: 절차 결정이라 게이트 증거는 없다(측정 대기). 기록 형태는 `test/test_harness_contracts.py`·`test/test_network_topology_contracts.py`로 확인한다.
+- gate 변화: 없음.
+- 결정: D-206 Proposed. 측정 표준은 기록지, 확정 프로필 revision은 `measured-YYYY-MM-DD`, 게이트는 `camcal/bevfinal.py`의 c-c 세 지점(0.2/0.3/0.5 m)이 실측 ±5 mm, `src/robots/pinky_pro/config/`은 D-196(PR #36) 머지 뒤 만든다.
+- 교훈: 없음.

@@ -31,6 +31,7 @@
 | D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
+| D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 |
 
 ## 계획·결과 문서
 
@@ -61,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-206 P0 measurement procedure and profile custody
 - 2026-09-24 · uncommitted · docs(validation): P0 track measurement sheet (D-205)
 - 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · docs(adr): D-199 camera perception contracts and backends
 - 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
-- 2026-09-24 · uncommitted · fix(control): web_common share lookup moves to the node edge (merge of origin/main)

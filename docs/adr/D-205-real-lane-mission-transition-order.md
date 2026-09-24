@@ -125,3 +125,5 @@
 [실물 영상 기준선](../validation/perception-real-video/2026-09-24/baseline.md),
 [카메라 프로필 초안](../validation/perception-real-video/2026-09-24/camera_profile_draft.json),
 [API & Protocol Reference](../reference/ROSY%20API%20%26%20Protocol%20Reference.md) v1.20, D-2, D-136, D-137, D-186, D-196, D-199, D-200.
+
+**See also:** [D-206](D-206-p0-measurement-procedure-and-profile-custody.md) — P0 실측의 실행 절차와 확정 프로필 보관.
