@@ -16,8 +16,8 @@ input, select { font: inherit; color: inherit; }
 .topbar {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.9rem 1.4rem;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--line-10);
   background: var(--scrim);
   position: sticky;
@@ -34,8 +34,8 @@ input, select { font: inherit; color: inherit; }
 .pill {
   font-family: var(--mono);
   font-size: var(--text-micro);
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-flag);
   border: 1px solid var(--line-14);
   color: var(--muted);
   white-space: nowrap;
@@ -48,8 +48,8 @@ input, select { font: inherit; color: inherit; }
 .token {
   font-family: var(--mono);
   font-size: var(--text-micro);
-  padding: 0.3rem 0.6rem;
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-flag);
   border: 1px solid var(--line-14);
   background: var(--ground-soft);
   color: var(--paper);
@@ -61,17 +61,17 @@ input, select { font: inherit; color: inherit; }
 main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24rem;
-  gap: 1.1rem;
-  padding: 1.1rem 1.4rem 2rem;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5) var(--space-6);
   align-items: start;
 }
 
 .panel {
   background: var(--panel-fill);
   border: 1px solid var(--line-10);
-  border-radius: 0.9rem;
+  border-radius: var(--radius-panel);
   box-shadow: 0 24px 60px var(--shade-28);
-  padding: 1rem 1.1rem 1.2rem;
+  padding: var(--space-4) var(--space-4) var(--space-4);
 }
 
 .eyebrow {
@@ -79,11 +79,11 @@ main {
   font-size: var(--text-micro);
   letter-spacing: 0.2em;
   color: var(--nominal-quiet);
-  margin: 0 0 0.15rem;
+  margin: 0 0 var(--space-1);
 }
-.panel h2 { font-weight: 600; font-size: var(--text-value); margin: 0 0 0.8rem; }
+.panel h2 { font-weight: 600; font-size: var(--text-value); margin: 0 0 var(--space-3); }
 
-.map-head { display: flex; align-items: baseline; gap: 0.8rem; }
+.map-head { display: flex; align-items: baseline; gap: var(--space-3); }
 .map-head .spacer { flex: 1; }
 
 #map-canvas {
@@ -92,7 +92,7 @@ main {
   display: block;
   /* 격자 한 칸은 5 cm 다. 보간하면 벽이 번져 어디가 통로인지 읽을 수 없다. */
   image-rendering: pixelated;
-  border-radius: 0.6rem;
+  border-radius: var(--radius-button);
   border: 1px solid var(--line-14);
   background: var(--ground-deep);
   cursor: crosshair;
@@ -100,29 +100,29 @@ main {
 #map-canvas.idle { cursor: default; }
 
 .hint {
-  margin: 0.7rem 0 0;
+  margin: var(--space-3) 0 0;
   font-size: var(--text-label);
   color: var(--muted);
   line-height: 1.5;
 }
 
-.legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.7rem; font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
-.legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
-.legend i { width: 0.7rem; height: 0.7rem; border-radius: 0.2rem; border: 1px solid var(--line-14); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: var(--space-1); }
+.legend i { width: 0.7rem; height: 0.7rem; border-radius: var(--radius-control); border: 1px solid var(--line-14); }
 .sw.free { background: var(--paper); }
 .sw.occupied { background: var(--ground-deep); }
 .sw.unknown { background: var(--ground-soft); }
 .sw.robot { background: var(--robot-2); }
 .sw.goal { background: var(--series-goal); }
 
-.roster { display: flex; flex-direction: column; gap: 0.8rem; }
+.roster { display: flex; flex-direction: column; gap: var(--space-3); }
 
 .robot {
   border: 1px solid var(--line-10);
   border-left: 3px solid var(--robot-2);
-  border-radius: 0.7rem;
+  border-radius: var(--radius-panel);
   background: var(--ground-card);
-  padding: 0.85rem 0.9rem;
+  padding: var(--space-3) var(--space-4);
 }
 /* 로봇 정체색은 클래스로 돈다 — CSP 아래에서 style 속성은 적용되지 않는다. 지도의
    삼각형도 같은 순서로 색을 고르므로 카드의 띠와 지도의 로봇이 맞물린다. */
@@ -132,7 +132,7 @@ main {
 .robot.selected { background: var(--ground-card-2); border-color: var(--line-30); }
 .robot.offline { opacity: 0.55; }
 
-.robot-head { display: flex; align-items: center; gap: 0.5rem; }
+.robot-head { display: flex; align-items: center; gap: var(--space-2); }
 .robot-head b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: 0.04em; }
 .robot-head .spacer { flex: 1; }
 
@@ -140,8 +140,8 @@ main {
   font-family: var(--mono);
   font-size: var(--text-micro);
   letter-spacing: 0.1em;
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.3rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
   border: 1px solid var(--line-14);
   color: var(--muted);
 }
@@ -153,31 +153,31 @@ main {
 .facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem 0.8rem;
-  margin: 0.6rem 0 0.7rem;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
 }
-.facts div { display: flex; flex-direction: column; gap: 0.1rem; }
+.facts div { display: flex; flex-direction: column; gap: 0; }
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: 0.12em; color: var(--muted); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: 500; }
 
-.robot-actions { display: flex; gap: 0.4rem; }
+.robot-actions { display: flex; gap: var(--space-2); }
 .robot-actions ui-button { flex: 1; }
 
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
-.signal-cards { display: grid; gap: 0.6rem; margin-top: 0.6rem; }
+.signal-cards { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
 .signal {
   border: 1px solid var(--line-10);
   border-left: 3px solid var(--series-primary);
-  border-radius: 0.7rem;
+  border-radius: var(--radius-panel);
   background: var(--ground-card);
-  padding: 0.7rem 0.8rem;
+  padding: var(--space-3) var(--space-3);
 }
 .signal.broken { border-left-color: var(--status-crit); }
 
-.lamps { display: flex; gap: 0.45rem; align-items: center; }
+.lamps { display: flex; gap: var(--space-2); align-items: center; }
 .lamp {
-  width: 0.85rem; height: 0.85rem; border-radius: 50%;
+  width: 0.85rem; height: 0.85rem; border-radius: var(--radius-flag);
   border: 1px solid var(--line-30);
   background: var(--ground-deep);
   opacity: 0.5;
@@ -187,12 +187,12 @@ main {
 .lamp.yellow.on { background: var(--status-warn); border-color: var(--status-warn); }
 .lamp.green.on { background: var(--nominal); border-color: var(--nominal); }
 
-.signal-body { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
+.signal-body { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
 .signal-meta { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
 
 
 .log {
-  margin-top: 1rem;
+  margin-top: var(--space-4);
   font-family: var(--mono);
   font-size: var(--text-micro);
   color: var(--muted);
@@ -200,13 +200,13 @@ main {
   overflow-y: auto;
   line-height: 1.7;
 }
-.log div { border-bottom: 1px solid var(--line-06); padding: 0.2rem 0; }
+.log div { border-bottom: 1px solid var(--line-06); padding: var(--space-1) 0; }
 .log .bad { color: var(--status-crit); }
 .log .good { color: var(--nominal-quiet); }
 
 .note {
-  margin: 1rem 1.4rem 2rem;
-  padding: 0.8rem 1rem;
+  margin: var(--space-4) var(--space-5) var(--space-6);
+  padding: var(--space-3) var(--space-4);
   border-left: 2px solid var(--line-14);
   color: var(--muted);
   font-size: var(--text-micro);
@@ -218,18 +218,18 @@ main {
 }
 
 .formation {
-  margin-top: 1rem;
+  margin-top: var(--space-4);
   border: 1px solid var(--line-10);
-  border-radius: 0.7rem;
+  border-radius: var(--radius-panel);
   background: var(--ground-card);
-  padding: 0.85rem 0.9rem;
+  padding: var(--space-3) var(--space-4);
 }
 .formation-form {
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1fr);
-  gap: 0.35rem 0.6rem;
+  gap: var(--space-1) var(--space-2);
   align-items: center;
-  margin: 0.6rem 0 0.7rem;
+  margin: var(--space-2) 0 var(--space-3);
 }
 .formation-form label {
   font-family: var(--mono);
@@ -240,8 +240,8 @@ main {
 .formation-form select,
 .formation-form input {
   width: 100%;
-  padding: 0.35rem 0.4rem;
-  border-radius: 0.4rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
   border: 1px solid var(--line-14);
   background: var(--ground-soft);
   font-size: var(--text-label);
@@ -256,13 +256,13 @@ main {
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
 }
 .queue {
   flex: 1;
-  padding: 1rem;
-  border-radius: 4px;
+  padding: var(--space-4);
+  border-radius: var(--radius-control);
   background: var(--ground-card);
   border: 1px solid var(--line-10);
 }
@@ -273,7 +273,7 @@ main {
   border-left: 4px solid var(--status-crit);
 }
 .queue h3 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 var(--space-2) 0;
   font-size: var(--text-label);
   color: var(--muted);
 }
@@ -283,10 +283,10 @@ main {
   margin: 0;
 }
 .issue-list li {
-  padding: 0.5rem;
+  padding: var(--space-2);
   background: var(--ground-raise);
-  margin-bottom: 0.5rem;
-  border-radius: 2px;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-control);
   display: flex;
   justify-content: space-between;
   align-items: center;

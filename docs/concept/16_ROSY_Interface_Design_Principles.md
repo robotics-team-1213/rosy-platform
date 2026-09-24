@@ -15,7 +15,7 @@ colour, hierarchy and vocabulary, not about a rendering stack.
 |---|---|---|---|
 | Robot console | field operator | "Can I send this robot now?" | live (`core` `/dashboard` only — D-77) |
 | Device runtime | installer, maintainer | "Is this hardware standing up correctly?" | live (`/dashboard` host and ROS-graph panels) |
-| Fleet | dispatcher | "Which robot is the problem?" | target — Fleet server unimplemented |
+| Fleet | dispatcher | "Which robot is the problem?" | live (`fleet` console) |
 | Robot face | bystander | "What is it about to do?" | live (`rosy_emotion` LCD, `info_screen`) |
 | Control diagnostic | control-stack maintainer | "What is the absorbed IO graph showing?" | live on legacy `control/launch/robot.launch.py` only; not composed with CORE |
 | Game host | laptop match operator | "Are the pitch, ball, robots, and goals visible?" | live localhost preview in `rosy_games` (D-101); never CORE `/dashboard` |
@@ -60,20 +60,34 @@ one wording.
 
 ## 4. Three Layers
 
-What is shared is law and vocabulary. Components are not shared.
+What is shared is law, measure, and the browser controls that draw that law.
+Layout stays with the surface.
 
 | Layer | Content | Scope |
 |---|---|---|
-| L1 — Law | tokens, evidence states, colour sets, surface hierarchy | binding on every surface |
-| L1.5 — Headless state | framework-free accessors over server-judged evidence | shared behaviour, no visual components |
-| L2 — Grammar | layout, interaction model, components | per surface, independent, not shared |
+| L1 — Law | colour, type, space, radius, evidence states, hierarchy | binding on every surface |
+| L1.5 — Headless state | framework-free accessors over server-judged evidence | shared behaviour, no paint |
+| L2 — Grammar | where a control sits, and the question the surface answers | per surface |
 | L3 — Content | what a capability contributes | portable across surfaces |
 
-Browser chrome is one component set (D-187): `ui-button`, `ui-field`, `ui-tag`,
-and `ui-text` in `web_common`, drawn only from `tokens.css`. Each surface still
-places those controls in its own layout. The robot face stays a pixel renderer
-and does not mount these elements. A framework bundle is not part of this set
-(D-75).
+Browser chrome is one set (D-187): `ui-button`, `ui-field`, `ui-tag`, and
+`ui-text` in `web_common`. Each control names a `kind`. A surface places it
+and does not repaint it. The robot face stays a pixel renderer and does not
+mount these elements (D-75).
+
+### Binding instruments
+
+A law that has no test is still prose. These are the instruments:
+
+| Law | Instrument | Gate |
+|---|---|---|
+| Colour means something | `tokens.css` only. A copied hex matches that file. Pitch hex lives in one `:root`. Raster hex matches the PNG pipeline | `test_shared_controls.py`, `test_map_raster_color_contract.py` |
+| Type is a closed scale | `--text-micro` through `--text-display` | `test_shared_controls.py` |
+| Measure is a closed scale | padding, margin, gap use `--space-*`. Radius uses `--radius-*`. A 1px rule is a line, not a step | `test_shared_controls.py` |
+| Irreversible is a kind | `ui-button` `kind="irreversible"`. Surfaces do not repaint it | `test_shared_controls.py` |
+| Hierarchy is the surface | flat ground reports, raised ground acts. Names are `--surface-flat` and `--surface-raised` | token file. Diagnostic grounds use those hex values |
+| Evidence is four states | the server judges, the client displays | still the console and `core_ui_logic.js`. Not yet a gate on every surface |
+| Vocabulary is the audience's | Korean plain words for an operator. Graph names stay for an installer | not a token. Review, not a test |
 
 ## 5. Evidence States
 
