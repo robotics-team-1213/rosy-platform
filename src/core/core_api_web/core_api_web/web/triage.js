@@ -45,6 +45,12 @@ const BATTERY_FAULT = {
   deep: { category: "hazard", title: "배터리 고갈", detail: "모터가 멈추고 호스트가 곧 꺼집니다." },
 };
 
+// CORE-only runtime (D-161): the server blocks every hardware descriptor with
+// this reason. It is one fact, not five faults, and it is a deliberate
+// configuration rather than a failure, so it is told once and without colour.
+export const CORE_ONLY_REASON = "runtime_mode:core";
+export const CORE_ONLY_TEXT = "하드웨어 런타임 꺼짐 (CORE-only)";
+
 const BLOCKING_NAVIGATION = {
   BLOCKED: "경로를 찾지 못했습니다. 목표를 바꾸거나 장애물을 치우세요.",
   FAILED: "주행이 실패했습니다. 다시 하달하기 전에 원인을 확인하세요.",
@@ -93,13 +99,26 @@ function collectFaults({ state, inventory } = {}) {
     });
   }
 
+  let coreOnly = false;
   for (const row of inventory?.descriptors || []) {
     if (row?.state !== "blocked") continue;
+    if (row.reason === CORE_ONLY_REASON) {
+      coreOnly = true;
+      continue;
+    }
     faults.push({
       id: `capability.${row.id}`,
       category: "blocked",
       title: `${row.id} 사용 불가`,
       detail: row.reason ? `이유: ${row.reason}` : "서버가 이유를 주지 않았습니다.",
+    });
+  }
+  if (coreOnly) {
+    faults.push({
+      id: "runtime.core_only",
+      category: "observation",
+      title: CORE_ONLY_TEXT,
+      detail: "모터·센서 출처가 구성되지 않아 이동과 위치 추정을 제공하지 않습니다.",
     });
   }
 

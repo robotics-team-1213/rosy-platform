@@ -55,13 +55,14 @@ def info_payload(snapshot, status, *, health: str, address: str,
 
     Rounding is the contract with the screen, not a formatting detail: percent
     to 0.1 and volts to 0.01 are what fit the widths, and the hold countdown to
-    0.1 so it ticks visibly. Voltage stays `None` rather than becoming `0.0`
+    0.1 so it ticks visibly. Percent and voltage stay `None` rather than `0.0`
     when no cell reading has arrived — a screen showing 0.00 V reads as a dead
     battery, which is the one thing it must not say by accident.
     """
     battery = snapshot.battery
     return {
-        "battery_percent": round(battery.percent, 1),
+        "battery_percent": (round(battery.percent, 1)
+                            if battery.percent is not None else None),
         "battery_voltage": (round(battery.voltage, 2)
                             if battery.voltage is not None else None),
         "robot_id": snapshot.robot_id,

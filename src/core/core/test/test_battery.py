@@ -439,7 +439,7 @@ class TestBatteryStatusSchema:
         """대시보드와 /metrics 가 읽는 필드 — 이 작업으로 깨지면 안 된다."""
         from core_common.protocol.schemas import StateSnapshot
         snap = StateSnapshot(robot_id="rosy_01")
-        assert snap.battery.percent == 0.0
+        assert snap.battery.percent is None  # no reading is not 0% (D-82 Law 0)
         assert snap.battery.voltage is None
 
     def test_state_manager_accepts_a_battery_status(self, clock):

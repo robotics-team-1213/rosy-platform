@@ -133,7 +133,13 @@ class Velocity(BaseModel):
 
 
 class Battery(BaseModel):
-    percent: float = 0.0
+    """Raw battery reading. `None` means no reading has arrived yet.
+
+    A missing reading is not 0% (D-82 Law 0): 0% reads as a flat battery, a
+    false critical alarm on a robot whose battery source simply is not running.
+    """
+
+    percent: Optional[float] = None
     voltage: Optional[float] = None
 
 

@@ -19,6 +19,8 @@ DEFAULT_CONFIG_NAME = "rosy_default.yaml"
 LOCAL_CONFIG_PATH = Path.home() / ".rosy" / "rosy.yaml"
 RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
 NAVIGATION_BACKENDS = frozenset({"localization", "slam"})
+#: `robot.name` in rosy_default.yaml. Seen alone it means "nobody named this robot".
+DEFAULT_ROBOT_NAME = "Rosy 01"
 
 
 class ConfigError(Exception):
@@ -66,9 +68,13 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
         config = yaml.safe_load(f) or {}
 
     override_path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
+    overlay: dict[str, Any] = {}
     if override_path.exists():
         with open(override_path, encoding="utf-8") as f:
-            config = _deep_merge(config, yaml.safe_load(f) or {})
+            overlay = yaml.safe_load(f) or {}
+            config = _deep_merge(config, overlay)
+    overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
+    overlay_named = isinstance(overlay_robot, dict) and "name" in overlay_robot
 
     namespace = os.environ.get("ROSY_NAMESPACE", "").strip().strip("/")
     if namespace:
@@ -92,6 +98,21 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
         robot["number"] = number
         if not namespace:
             robot["id"] = expected
+
+    # Provisioned identity: first boot copies device-identity.json's
+    # device_name into /etc/rosy/runtime.env. It is an immutable fact about
+    # this card, so it wins over anything a config file says.
+    device_name = os.environ.get("ROSY_DEVICE_NAME", "").strip()
+    if device_name:
+        robot["device_name"] = device_name
+    # The package default name ("Rosy 01") is a placeholder, not an identity: a
+    # provisioned robot #18 must not introduce itself as robot 01. An operator
+    # rename lives in the overlay and is kept as is.
+    if not overlay_named and robot.get("name") in (None, "", DEFAULT_ROBOT_NAME):
+        if device_name:
+            robot["name"] = device_name
+        elif "number" in robot:
+            robot["name"] = f"Rosy {int(robot['number']):02d}"
 
     mode = os.environ.get("ROSY_RUNTIME_MODE", "").strip()
     if mode:

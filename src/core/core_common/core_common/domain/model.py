@@ -116,6 +116,7 @@ def inventory_from_config(
     booting: bool = False,
     cap001: Optional[Mapping[str, Any]] = None,
     hitl_requested: bool = False,
+    runtime_reason: Optional[str] = None,
 ) -> dict[str, Any]:
     robot = config.get("robot") or {}
     robot_id = str(robot.get("id") or "rosy_01")
@@ -153,7 +154,8 @@ def inventory_from_config(
         from core_common.domain.capabilities import descriptors_from_cap001
         from core_common.domain.tasks import TaskKind
 
-        descriptors = descriptors_from_cap001(cap001, device_state=state)
+        descriptors = descriptors_from_cap001(
+            cap001, device_state=state, runtime_reason=runtime_reason)
         payload["descriptors"] = [
             {
                 "id": item.id,

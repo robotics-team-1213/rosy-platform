@@ -60,15 +60,72 @@ def _flag_is_true(data: Any, dotted: str) -> bool:
     return node is True
 
 
-def _presentation(device_state: Optional[DeviceState]) -> tuple[bool, str, Optional[str]]:
-    if device_state is None:
-        return True, PresentationState.AVAILABLE.value, None
+#: Blocked-descriptor reason while the hardware runtime is off (D-161, D-32).
+CORE_ONLY_REASON = "runtime_mode:core"
+
+# CAP-001 flags that need motors, sensors or Nav2. `return_home` has no
+# descriptor of its own but drives the same base.
+HARDWARE_FLAGS: tuple[str, ...] = tuple(
+    flag for flag, _ in _CAP001_TO_CONCEPT
+) + ("navigation.return_home",)
+
+
+def withhold_hardware_flags(data: Mapping[str, Any], reason: str) -> dict[str, Any]:
+    """CAP-001 as this runtime can actually keep it (D-32).
+
+    Every hardware flag that was advertised true becomes false, and the
+    additive `withheld` block says which ones and why. The profile YAML is
+    left alone: it still says what the robot can do once its runtime is up.
+    """
+    result: dict[str, Any] = {
+        key: dict(value) if isinstance(value, dict) else value
+        for key, value in data.items()
+    }
+    withheld = []
+    for flag in HARDWARE_FLAGS:
+        if not _flag_is_true(result, flag):
+            continue
+        *parents, leaf = flag.split(".")
+        node = result
+        for part in parents:
+            node = node[part]
+        node[leaf] = False
+        withheld.append(flag)
+    if withheld:
+        result["withheld"] = {"flags": withheld, "reason": reason}
+    return result
+
+
+def hardware_runtime_reason(config: Mapping[str, Any], state: Any) -> Optional[str]:
+    """Why hardware capabilities are withheld right now, or None.
+
+    CORE-only runtime (D-161) has no motor, IO or Nav2 unit, so nothing that
+    moves or localizes can be kept (D-32). Odometry proves a base is attached
+    anyway (a simulator bench runs `core` with simulated odom), so the first
+    pose or velocity sample lifts the gate. `state` needs `has_received()`.
+    """
+    runtime = config.get("runtime") or {}
+    if str(runtime.get("mode") or "core").strip().lower() != "core":
+        return None
+    if state.has_received("pose") or state.has_received("velocity"):
+        return None
+    return CORE_ONLY_REASON
+
+
+def _presentation(
+    device_state: Optional[DeviceState],
+    runtime_reason: Optional[str] = None,
+) -> tuple[bool, str, Optional[str]]:
     if device_state in _UNAVAILABLE_STATES:
         return (
             False,
             PresentationState.BLOCKED.value,
             f"device_state:{device_state.value}",
         )
+    if runtime_reason:
+        return False, PresentationState.BLOCKED.value, runtime_reason
+    if device_state is None:
+        return True, PresentationState.AVAILABLE.value, None
     if device_state is DeviceState.DEGRADED:
         return (
             True,
@@ -82,8 +139,10 @@ def descriptors_from_cap001(
     data: Mapping[str, Any],
     *,
     device_state: Optional[DeviceState] = None,
+    runtime_reason: Optional[str] = None,
 ) -> tuple[CapabilityDescriptor, ...]:
-    available, state, reason = _presentation(device_state)
+    """`runtime_reason` blocks every descriptor: they all need hardware."""
+    available, state, reason = _presentation(device_state, runtime_reason)
     return tuple(
         CapabilityDescriptor(
             id=concept_id, available=available, state=state, reason=reason

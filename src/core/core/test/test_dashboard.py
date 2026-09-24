@@ -321,7 +321,10 @@ def test_dashboard_field_settings_use_click_handlers_not_form_submit():
     assert '["dock-register"]?.addEventListener("click"' in script
     assert '["slam-save"]?.addEventListener("click"' in script
     assert "detectRole" in script
-    assert "/api/v1/logs/audit" in script
+    # US-010: the role comes from /system/info, never from an admin-only probe
+    # that answers every viewer with a 403.
+    assert "caller_role" in script
+    assert "/api/v1/logs/audit" not in script
     assert "bindFormSave" in script
     assert "const optional" in script
     assert "requiredResults" in script
