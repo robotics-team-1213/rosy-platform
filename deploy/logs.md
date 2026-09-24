@@ -964,3 +964,12 @@
 - gate 변화: 없음(007 빌드 실패, 다음 릴리스에서 probe 통과 확인)
 - 결정: D-190
 - 교훈: 서명 전 probe가 제 역할을 했다. probe의 환경은 unit에서 그대로 복사하고, 그 대응을 시험으로 고정한다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-193 login code on the robot screen and credential lifecycle
+
+- 변경: D-193을 추가했다. LCD에는 장기 토큰이 아니라 root가 만드는 8자 일회용 코드(10분, scrypt 검증자, 기본 operator)를 띄우고,
+  `POST /api/v1/auth/pair`로 브라우저 전용 만료 토큰을 받는다. 장치 기본값의 `rosy-dev-*` 토큰을 없애 fail closed로 한다. 코드 변경 없음.
+- 증거: 2026-09-24 대시보드 점검 — 카드 005에서 `rosy-dev-*`가 LAN에서 통함, 대시보드는 역할을 감사 로그 403으로 추측함.
+- gate 변화: 없음
+- 결정: D-193
+- 교훈: 로그인 편의를 위해 장기 비밀을 화면에 띄우는 대신, 물리 접근의 증표를 짧고 일회용인 값으로 만든다.
