@@ -997,15 +997,18 @@ async function refreshRobotState() {
 }
 
 // Reconnect backoff. It grows on every close and resets only once a socket has
-// delivered state, so a server that accepts and closes (4401, 1013, a restart)
-// never gets a hot loop.
+// stayed live for RECONNECT_STABLE_MS, so a server that accepts, sends one frame
+// and closes (4401, 1013, a restart loop) never gets a hot loop.
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
+const RECONNECT_STABLE_MS = 10000;
 
 function closeStateSocket() {
   const socket = session.socket;
   session.socket = null;
   session.socketLive = false;
+  clearTimeout(session.stableTimer);
+  session.stableTimer = null;
   socket?.close();
 }
 
@@ -1067,7 +1070,9 @@ function connectStateSocket() {
     if (socket !== session.socket) return;
     if (!session.socketLive) {
       session.socketLive = true;
-      session.reconnectDelayMs = RECONNECT_MIN_MS;
+      session.stableTimer = setTimeout(() => {
+        if (socket === session.socket) session.reconnectDelayMs = RECONNECT_MIN_MS;
+      }, RECONNECT_STABLE_MS);
       clearInterval(session.fallbackTimer);
       session.fallbackTimer = null;
       setConnection("online", "상태 스트림 연결");
@@ -1078,6 +1083,8 @@ function connectStateSocket() {
     if (socket !== session.socket) return;
     session.socket = null;
     session.socketLive = false;
+    clearTimeout(session.stableTimer);
+    session.stableTimer = null;
     if (!session.token) return;
     startRestFallback();
     if (event.code === 4401) {
@@ -1205,8 +1212,8 @@ elements["auth-tab-token"].addEventListener("click", () => showAuthTab("token"))
 
 elements["logout"].addEventListener("click", async () => {
   try {
-    const paired = await logout();
-    signOut(paired
+    const deleted = await logout();
+    signOut(deleted
       ? "로그아웃했습니다. 이 브라우저의 키는 로봇에서 지워졌습니다."
       : "이 브라우저에서 키를 지웠습니다. 토큰 자체는 로봇에 남아 있습니다 — 회수는 설정의 API 토큰에서 합니다.");
   } catch (error) {

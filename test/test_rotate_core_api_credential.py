@@ -40,8 +40,11 @@ class FakeCore:
         }
         self.requests: list[tuple[str, str, str]] = []  # (method, path, bearer)
         self.forget_new_token = False
+        self.new_token_expires_at = None  # what whoami reports for the new token
+        self.create_reply_expires_at = None  # what the create reply says
         self.refuse_delete_of: set[str] = set()
         self.create_status = 201
+        self.issued: dict[str, dict] = {}
         server = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -57,9 +60,10 @@ class FakeCore:
                 self.wfile.write(payload)
 
             def _caller(self):
-                bearer = self.headers.get("Authorization", "").removeprefix("Bearer ")
-                server.requests.append((self.command, self.path, bearer))
-                return server.tokens.get(bearer)
+                header = self.headers.get("Authorization", "")
+                presented = header[len("Bearer "):] if header.startswith("Bearer ") else ""
+                server.requests.append((self.command, self.path, presented))
+                return server.tokens.get(presented)
 
             def _unauthorized(self):
                 self._reply(401, {"error": {"code": "UNAUTHORIZED", "message": "missing or invalid token"}})
@@ -87,9 +91,11 @@ class FakeCore:
                 record = {"id": secrets.token_hex(6), "role": body["role"], "expires_at": None,
                           "source": "manual", "label": body.get("label", "")}
                 if not server.forget_new_token:
-                    server.tokens[value] = record
+                    server.tokens[value] = {**record, "expires_at": server.new_token_expires_at}
                 server.created_label = body.get("label")
-                self._reply(201, {**record, "created_at": "2026-09-24T00:00:00+00:00", "token": value})
+                server.issued[value] = record
+                self._reply(201, {**record, "expires_at": server.create_reply_expires_at,
+                                  "created_at": "2026-09-24T00:00:00+00:00", "token": value})
 
             def do_DELETE(self):  # noqa: N802
                 caller = self._caller()
@@ -171,6 +177,23 @@ def _assert_no_secret_printed(completed: subprocess.CompletedProcess, *values: s
         assert value not in completed.stdout and value not in completed.stderr
 
 
+def _new_values(core: FakeCore) -> list[str]:
+    """Every token value the fake CORE handed out in a create response."""
+    return [value for value, record in core.issued.items()]
+
+
+def _assert_store_clean(local_app_data: Path, core: FakeCore) -> None:
+    """Only the store file is left, and no token value is readable anywhere under LOCALAPPDATA."""
+    store = _store(local_app_data)
+    assert sorted(path.name for path in store.parent.iterdir()) == [store.name]
+    for path in local_app_data.rglob("*"):
+        if path.is_file():
+            raw = path.read_bytes()
+            for value in [OLD_VALUE, *_new_values(core)]:
+                for encoding in ("utf-8", "utf-16-le"):
+                    assert value.encode(encoding) not in raw, path
+
+
 def test_rotation_adds_stores_confirms_then_deletes_the_old_id(core, local_app_data):
     _seed(local_app_data)
 
@@ -194,7 +217,7 @@ def test_rotation_adds_stores_confirms_then_deletes_the_old_id(core, local_app_d
     assert core.created_label.startswith("card (rotated ")
     # Plaintext only in the DPAPI store: never printed, never in the file as text.
     _assert_no_secret_printed(completed, value, OLD_VALUE)
-    assert value not in _store(local_app_data).read_text(encoding="utf-16")
+    _assert_store_clean(local_app_data, core)
     assert new_id in completed.stdout and OLD_ID in completed.stdout
     assert "GetNetworkCredential().Password" in completed.stdout
     assert sorted(path.name for path in _store(local_app_data).parent.iterdir()) == [f"{DEVICE}.credential.xml"]
@@ -268,7 +291,8 @@ def test_an_unconfirmed_new_credential_is_rolled_back(core, local_app_data):
     assert core.ids() == {OLD_ID}
     assert [method for method, _, _ in core.requests][-1] == "DELETE"  # tried to undo the new id
     assert sorted(path.name for path in store.parent.iterdir()) == [store.name]
-    _assert_no_secret_printed(completed, OLD_VALUE)
+    _assert_no_secret_printed(completed, OLD_VALUE, *_new_values(core))
+    _assert_store_clean(local_app_data, core)
 
 
 def test_an_old_id_that_cannot_be_deleted_is_named_and_the_new_one_kept(core, local_app_data):
@@ -283,6 +307,7 @@ def test_an_old_id_that_cannot_be_deleted_is_named_and_the_new_one_kept(core, lo
     assert core.tokens[value]["id"] == user_name.split("|")[0]
     assert core.ids() == {OLD_ID, user_name.split("|")[0]}
     _assert_no_secret_printed(completed, value, OLD_VALUE)
+    _assert_store_clean(local_app_data, core)
 
 
 def test_leftovers_from_an_interrupted_rotation_stop_the_next_one(core, local_app_data):
@@ -320,3 +345,58 @@ def test_the_script_keeps_the_token_off_proxies_logs_and_command_lines():
     uses = [line.strip() for line in text.splitlines() if "$newValue" in line]
     assert len(uses) == 3, uses
     assert any("ConvertTo-SecureString $newValue" in line for line in uses)
+
+
+def test_a_new_token_that_expires_is_rolled_back(core, local_app_data):
+    # M2: an expiring administrator would lock the operator out when it lapses.
+    core.new_token_expires_at = "2026-09-25T00:00:00+00:00"
+    _seed(local_app_data)
+
+    completed = _rotate(core, local_app_data)
+
+    assert completed.returncode == 1
+    assert "non-expiring administrator" in completed.stderr
+    assert _read(local_app_data) == (f"{OLD_ID}|{UID}", OLD_VALUE)
+    assert core.ids() == {OLD_ID}
+    _assert_no_secret_printed(completed, OLD_VALUE, *_new_values(core))
+    _assert_store_clean(local_app_data, core)
+
+
+def test_a_create_reply_with_an_expiry_is_undone(core, local_app_data):
+    core.create_reply_expires_at = "2026-09-25T00:00:00+00:00"
+    _seed(local_app_data)
+
+    completed = _rotate(core, local_app_data)
+
+    assert completed.returncode == 1
+    assert "non-expiring administrator" in completed.stderr
+    assert _read(local_app_data) == (f"{OLD_ID}|{UID}", OLD_VALUE)
+    assert core.ids() == {OLD_ID}  # the new id was deleted before anything was stored
+    _assert_store_clean(local_app_data, core)
+
+
+def test_plain_http_is_warned_about(core, local_app_data):
+    _seed(local_app_data)
+
+    completed = _rotate(core, local_app_data)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "WARNING" in completed.stderr and "plain HTTP" in completed.stderr
+
+
+def test_a_store_that_cannot_be_swapped_is_left_as_it_was(core, local_app_data):
+    # L5: the swap fails (read-only store); the old store stays and the new id is undone.
+    store = _seed(local_app_data)
+    before = store.read_bytes()
+    os.chmod(store, 0o444)
+    try:
+        completed = _rotate(core, local_app_data)
+    finally:
+        os.chmod(store, 0o666)
+
+    assert completed.returncode == 1
+    assert "could not be stored" in completed.stderr
+    assert store.read_bytes() == before
+    assert core.ids() == {OLD_ID}
+    _assert_no_secret_printed(completed, OLD_VALUE, *_new_values(core))
+    _assert_store_clean(local_app_data, core)

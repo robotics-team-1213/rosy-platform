@@ -1034,3 +1034,15 @@
 - gate 변화: 없음(S4 실기 전)
 - 결정: D-193 S3
 - 교훈: 세션을 끝내는 신호(4401)는 토큰 문제 말고도 첫 메시지 지연에서도 온다 — 소켓 닫힘 코드만 보고 로그아웃하지 말고 REST로 한 번 확인한다.
+
+## 2026-09-24 · uncommitted · fix(dashboard,deploy): D-193 S3 security review (PR #35)
+
+- 변경: 시험의 Bearer 파싱 줄이 비밀 스캐너에 걸리지 않게 바꿈(허용 목록 그대로). "로그인 유지"는 만료 7일 이내만
+  `localStorage`, CORE 페어링 수명 상한 168 h. 로그아웃은 항상 `auth/logout`(409면 로컬만). 폐기 문구 두 경우. WebSocket
+  백오프는 10 s 안정 뒤에만 복귀. 회전 스크립트: 새 토큰 `expires_at` 거부·되돌림, 교체·다시 읽기 실패 시 `.previous` 복원,
+  DELETE 전 id 형식 확인, `http://` 경고와 신원 증명 경로 부재의 위협 기술.
+- 증거: host pytest(Windows) `src/core/core/test`, 브라우저 시험(Chromium, ROSY_RUN_BROWSER_TESTS=1), 회전 계약 시험,
+  `test_release_boundary_guards.py` — 보고서 수치. 장치 미검증.
+- gate 변화: 없음
+- 결정: D-193 S3 보완
+- 교훈: "최대 N일" 같은 약속은 클라이언트와 서버 양쪽에서 강제한다 — 한쪽 설정만 바뀌어도 약속이 깨진다.

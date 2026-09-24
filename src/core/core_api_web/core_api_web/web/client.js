@@ -8,6 +8,8 @@ import { elements } from "./dom.js";
 // Tokens never go into a URL, a cookie or the console.
 const SESSION_KEY = "rosy.dashboard.token";
 const PAIRED_KEY = "rosy.dashboard.paired";
+// "로그인 유지(최대 7일)" is a promise: a token that would outlive it stays in this tab only.
+export const REMEMBER_MAX_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const PAIRED_SOURCES = new Set(["pair-physical", "pair-admin"]);
 
@@ -19,8 +21,8 @@ function persistedPairedToken() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(PAIRED_KEY) || "null"); } catch (_error) { saved = null; }
   if (!saved) return "";
-  const expires = Date.parse(saved.expires_at || "");
-  if (typeof saved.token !== "string" || !saved.token || !(expires > Date.now())) {
+  const left = Date.parse(saved.expires_at || "") - Date.now();
+  if (typeof saved.token !== "string" || !saved.token || !(left > 0 && left <= REMEMBER_MAX_MS)) {
     storageRemove(localStorage, PAIRED_KEY);
     return "";
   }
@@ -43,6 +45,7 @@ export const session = {
   socket: null,
   socketLive: false,
   reconnectTimer: null,
+  stableTimer: null,
   reconnectDelayMs: 1000,
   fallbackTimer: null,
   refreshTimer: null,
@@ -71,10 +74,11 @@ export function setConnection(kind, label) {
   badge.querySelector("span").textContent = label;
 }
 
-/** Keep `token` for this browser. `persist` applies only to a token with an expiry. */
+/** Keep `token` for this browser. `persist` applies only to a token that expires within 7 days. */
 export function rememberToken(token, { expiresAt = null, persist = false } = {}) {
   session.token = token;
-  if (persist && expiresAt && Date.parse(expiresAt) > Date.now()) {
+  const left = expiresAt ? Date.parse(expiresAt) - Date.now() : NaN;
+  if (persist && left > 0 && left <= REMEMBER_MAX_MS) {
     try {
       localStorage.setItem(PAIRED_KEY, JSON.stringify({ token, expires_at: expiresAt }));
       storageRemove(sessionStorage, SESSION_KEY);
@@ -117,8 +121,9 @@ export function normalizeLoginCode(text) {
 /** Why a pairing failed, in words that do not claim more than the server said. */
 function pairFailure(status, body, retryAfter) {
   if (status === 401 && body?.error?.detail?.burned === true) {
-    return "틀린 시도가 5번 쌓여 이 코드는 폐기되었습니다(로봇 화면: 코드 폐기됨). "
-      + "로봇을 다시 켜거나 SSH에서 sudo rosy-login-code 로 새 코드를 받으세요.";
+    // The flag does not say which kind of code burned, so name both ways out.
+    return "틀린 시도가 5번 쌓여 이 코드는 폐기되었습니다. 로봇 화면의 코드였다면 로봇을 다시 켜거나 "
+      + "SSH에서 sudo rosy-login-code 로 새 코드를 받으세요. 관리자가 준 등록 코드였다면 관리자에게 새 코드를 요청하세요.";
   }
   if (status === 401) {
     // CORE answers every other miss the same way on purpose (D-193 4).
@@ -167,19 +172,26 @@ export async function pairWithCode(code, { label = "", persist = false } = {}) {
   return identity;
 }
 
-/** POST /api/v1/auth/logout for a paired token; any other token is only forgotten here. */
+/**
+ * Always asks CORE to log this token out; CORE decides what may be deleted.
+ * Resolves true when the token no longer works on the robot, false when CORE
+ * keeps it (409: card or manual tokens are revoked in settings) and it is only
+ * forgotten here.
+ */
 export async function logout() {
-  const paired = PAIRED_SOURCES.has(session.identity?.source);
-  if (paired && session.token) {
+  let deleted = false;
+  if (session.token) {
     try {
       await api("/api/v1/auth/logout", { method: "POST" });
+      deleted = true;
     } catch (error) {
-      // 401: the token is already gone on the robot, which is what logout wants.
-      if (error.status !== 401) throw error;
+      // 401: already gone on the robot. 409: not a paired token, forget it locally.
+      if (error.status === 401) deleted = true;
+      else if (error.status !== 409) throw error;
     }
   }
   forgetToken();
-  return paired;
+  return deleted;
 }
 
 const SOURCE_LABELS = {

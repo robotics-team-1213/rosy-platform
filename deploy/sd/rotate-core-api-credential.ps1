@@ -18,6 +18,13 @@ the new token is deleted again, so the robot keeps exactly the credential the
 operator already holds. If only the last step (deleting the old id) fails, the
 new credential is already the stored one and the old id is named for manual
 removal.
+
+Threat: CORE has no unauthenticated route that proves which robot answers, so
+the stored Bearer credential is sent to whatever answers -BaseUrl before the
+whoami id check can catch a wrong robot. Over http:// (the D-193 10 transport)
+anyone on the same LAN can read it, and a spoofed mDNS name can receive it.
+Run this only on the operator-only robot SSID/VLAN, and prefer -BaseUrl with
+the robot's known address over the .local name. The script warns on http://.
 #>
 [CmdletBinding()]
 param(
@@ -43,6 +50,9 @@ if ($TimeoutSeconds -lt 1 -or $TimeoutSeconds -gt 120) { Fail "TimeoutSeconds mu
 if (-not $Label) { $Label = "card (rotated $([DateTime]::UtcNow.ToString('yyyy-MM-dd')))" }
 if ($Label.Length -gt 64) { Fail "Label must be at most 64 characters" }
 if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable" }
+if ($BaseUrl -like "http://*") {
+    [Console]::Error.WriteLine("WARNING: $BaseUrl is plain HTTP: the administrator credential crosses the LAN readable by anyone on it, and CORE cannot prove its identity before it is sent (D-193 10). Run this only on the operator-only robot network.")
+}
 
 $storeFile = Join-Path $env:LOCALAPPDATA "Rosy\api\$DeviceName.credential.xml"
 $pendingFile = "$storeFile.rotating"
@@ -122,15 +132,43 @@ $request = @{ role = "administrator"; label = $Label } | ConvertTo-Json -Compres
 $created = Invoke-Core "POST" "/api/v1/system/tokens" $oldValue $request
 $newId = Get-Field $created.Body "id"
 $newValue = Get-Field $created.Body "token"
-if ($created.Status -ne 201 -or $newId -cnotmatch '^[0-9a-f]{12}$' -or $newValue -cnotmatch '^[A-Za-z0-9_-]{43}$') {
-    if ($newId -and $created.Status -eq 201) { [void](Invoke-Core "DELETE" "/api/v1/system/tokens/$newId" $oldValue "") }
-    Fail "CORE did not create a new administrator credential ($(Format-Reply $created)); the stored credential is unchanged"
+if ($created.Status -ne 201 -or $newId -cnotmatch '^[0-9a-f]{12}$' -or $newValue -cnotmatch '^[A-Za-z0-9_-]{43}$' -or $null -ne (Get-Field $created.Body "expires_at")) {
+    if ($created.Status -eq 201 -and $newId -cmatch '^[0-9a-f]{12}$') {
+        [void](Invoke-Core "DELETE" "/api/v1/system/tokens/$newId" $oldValue "")
+    }
+    Fail "CORE did not create a new non-expiring administrator credential ($(Format-Reply $created)); the stored credential is unchanged"
 }
 
 function Undo-NewToken([string]$Why) {
     $undo = Invoke-Core "DELETE" "/api/v1/system/tokens/$newId" $oldValue ""
     if ($undo.Status -eq 204) { Fail "$Why; the new id $newId was deleted again and the stored credential (id $oldId) is unchanged" }
     Fail "$Why; the stored credential (id $oldId) is unchanged, but the new id $newId could not be deleted ($(Format-Reply $undo)): delete it in the dashboard token settings"
+}
+
+# Put the old store back after a failed swap or check. Returns false if it could not.
+function Restore-OldStore {
+    try {
+        if (Test-Path -LiteralPath $backupFile -PathType Leaf) {
+            if (Test-Path -LiteralPath $storeFile -PathType Leaf) {
+                [IO.File]::Replace($backupFile, $storeFile, [NullString]::Value)
+            }
+            else {
+                [IO.File]::Move($backupFile, $storeFile)
+            }
+        }
+        Remove-Item -LiteralPath $pendingFile -Force -ErrorAction SilentlyContinue
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Fail-Restored([string]$Why) {
+    if (Restore-OldStore) { Undo-NewToken $Why }
+    # The old store could not be put back: keep the new id alive so the store
+    # (whichever file holds it) still opens the robot.
+    Fail "$Why; the old store could not be restored from $backupFile (new id $newId left on the robot): keep whichever of $storeFile / $backupFile whoami accepts"
 }
 
 # 3. Store it: write beside the store, then swap with a backup of the old one.
@@ -140,18 +178,29 @@ try {
     [IO.File]::Replace($pendingFile, $storeFile, $backupFile)
 }
 catch {
-    Remove-Item -LiteralPath $pendingFile -Force -ErrorAction SilentlyContinue
-    Undo-NewToken "the new credential could not be stored in $storeFile ($($_.Exception.GetType().Name))"
+    Fail-Restored "the new credential could not be stored in $storeFile ($($_.Exception.GetType().Name))"
 }
 
-# 4. Confirm what the store now holds, read back the way the operator will.
-$readBack = (Import-Clixml -LiteralPath $storeFile).GetNetworkCredential().Password
-$check = Invoke-Core "GET" "/api/v1/auth/whoami" $readBack ""
-if ($check.Status -ne 200 -or (Get-Field $check.Body "id") -cne $newId -or (Get-Field $check.Body "role") -ne "administrator") {
-    [IO.File]::Replace($backupFile, $storeFile, [NullString]::Value)
-    Undo-NewToken "the stored new credential was not confirmed by whoami ($(Format-Reply $check))"
+# 4. Confirm what the store now holds, read back the way the operator will: the
+# same id, an administrator, and no expiry (a paired token would lock the
+# operator out when it lapses).
+try {
+    $readBack = (Import-Clixml -LiteralPath $storeFile).GetNetworkCredential().Password
 }
-Remove-Item -LiteralPath $backupFile -Force
+catch {
+    Fail-Restored "the stored new credential could not be read back ($($_.Exception.GetType().Name))"
+}
+$check = Invoke-Core "GET" "/api/v1/auth/whoami" $readBack ""
+if ($check.Status -ne 200 -or (Get-Field $check.Body "id") -cne $newId `
+        -or (Get-Field $check.Body "role") -ne "administrator" -or $null -ne (Get-Field $check.Body "expires_at")) {
+    Fail-Restored "the stored new credential was not confirmed by whoami as a non-expiring administrator ($(Format-Reply $check))"
+}
+try {
+    Remove-Item -LiteralPath $backupFile -Force
+}
+catch {
+    [Console]::Error.WriteLine("WARNING: $backupFile (the old credential) could not be removed; delete it after this run")
+}
 
 # 5. Retire the old id with the new credential.
 $deleted = Invoke-Core "DELETE" "/api/v1/system/tokens/$oldId" $readBack ""

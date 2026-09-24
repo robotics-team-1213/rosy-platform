@@ -394,7 +394,13 @@ DPAPI file (keeping `<id>|<device_uid>`), confirms the stored value with
 with the command above. If storing or confirming fails, the old store is put
 back and the new id is deleted again. If only the last delete fails, the new
 credential is already stored and the script names the old id to delete in the
-dashboard token settings. The rotated token shows `source: manual`. The manual
+dashboard token settings. The rotated token shows `source: manual`.
+
+CORE has no unauthenticated route that proves which robot answers, so the
+stored credential is sent to whatever answers `-BaseUrl` before the whoami id
+check can catch a wrong robot; over plain HTTP anyone on that LAN can read it
+(the script warns). Rotate only from the operator-only robot SSID/VLAN and
+prefer `-BaseUrl http://<known address>:8080` over the `.local` name. The manual
 equivalent, for reference:
 
 ```powershell

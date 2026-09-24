@@ -254,6 +254,17 @@ def test_pairing_lifetimes_come_from_auth_pairing(robot):
     assert timedelta(hours=1, minutes=59) < expires - datetime.now(timezone.utc) <= timedelta(hours=2)
 
 
+def test_a_configured_lifetime_never_exceeds_seven_days(robot):
+    # D-193 6: the dashboard promises "at most 7 days"; the server holds it too.
+    tc, _svc, _state, _events = robot()
+    tc.app.state.core.config["auth"]["pairing"] = {"token_lifetime_hours": {"operator": 24 * 30}}
+    write_code(robot.boot)
+
+    expires = datetime.fromisoformat(_pair(tc).json()["expires_at"])
+
+    assert timedelta(days=6, hours=23) < expires - datetime.now(timezone.utc) <= timedelta(days=7)
+
+
 # --- enrollment codes -----------------------------------------------------------
 
 

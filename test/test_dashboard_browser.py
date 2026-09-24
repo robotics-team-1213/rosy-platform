@@ -227,7 +227,8 @@ window.fetch = async (input, options = {}) => {
   if (method === 'POST' && path === '/api/v1/auth/pair') {
     const reply = window.__pairReply || {status: 201, body: {
       id: 'b1c2d3e4f5a6', token: 'paired-test-token', role: 'operator', label: 'bay 7 tablet',
-      source: 'pair-physical', expires_at: '2099-10-01T00:00:00+00:00',
+      source: 'pair-physical',
+      expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000 - 60 * 1000).toISOString(),
     }};
     return new Response(JSON.stringify(reply.body), {
       status: reply.status,
@@ -235,7 +236,11 @@ window.fetch = async (input, options = {}) => {
     });
   }
   if (method === 'POST' && path === '/api/v1/auth/logout') {
-    return new Response(null, {status: 204});
+    if (authorization.includes('paired-test-token')) return new Response(null, {status: 204});
+    return new Response(JSON.stringify({error: {code: 'VALIDATION_ERROR',
+      message: 'only a paired browser token can log out'}}), {
+      status: 409, headers: {'Content-Type': 'application/json'},
+    });
   }
   if (path === '/api/v1/teleop') {
     const command = JSON.parse(options.body);
@@ -1128,8 +1133,9 @@ def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage(
             "document.getElementById('whoami-role')?.textContent === 'operator'")
         stored = _storage(page)
         assert stored["session"] is None
-        assert json.loads(stored["local"]) == {
-            "token": "paired-test-token", "expires_at": "2099-10-01T00:00:00+00:00"}
+        remembered = json.loads(stored["local"])
+        assert remembered["token"] == "paired-test-token"
+        assert set(remembered) == {"token", "expires_at"}
 
         # A pasted (non-expiring) token replaces it and lives in this tab only.
         page.locator("#open-auth").click()
@@ -1170,7 +1176,7 @@ def test_an_expired_remembered_token_is_dropped_on_load():
     ({"status": 401, "body": {"error": {"code": "UNAUTHORIZED",
                                         "message": "invalid or expired login code",
                                         "detail": {"burned": True}}}},
-     "폐기되었습니다"),
+     "관리자에게 새 코드를 요청"),
     ({"status": 429, "body": {"error": {"code": "RATE_LIMITED", "message": "too many pairing attempts"}},
       "headers": {"Retry-After": "37"}},
      "37초 뒤에"),
@@ -1254,7 +1260,7 @@ def test_logout_deletes_the_paired_token_and_forgets_it():
         browser.close()
 
 
-def test_forgetting_a_card_token_does_not_call_logout():
+def test_logging_out_a_card_token_is_refused_by_core_and_only_forgotten_here():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -1268,7 +1274,7 @@ def test_forgetting_a_card_token_does_not_call_logout():
         page.locator("#logout").click()
         page.wait_for_function("document.getElementById('auth-drawer').classList.contains('open')")
         paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
-        assert "/api/v1/auth/logout" not in paths
+        assert "/api/v1/auth/logout" in paths  # CORE decides; it answers 409
         assert _storage(page) == {"session": None, "local": None}
         assert "로봇에 남아 있습니다" in page.locator("#auth-notice").inner_text()
         browser.close()
@@ -1329,4 +1335,55 @@ def test_refused_sockets_reconnect_with_growing_backoff_not_a_hot_loop():
         polls = [call for call in page.evaluate("window.__apiCalls")
                  if call["path"] == "/api/v1/robot/state"]
         assert len(polls) >= 2
+        browser.close()
+
+
+def test_a_paired_token_expiring_beyond_seven_days_is_not_remembered():
+    # M1: "로그인 유지(최대 7일)" must not keep a longer-lived token in localStorage.
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    reply = {"status": 201, "body": {
+        "id": "b1c2d3e4f5a6", "token": "paired-test-token", "role": "operator", "label": "",
+        "source": "pair-physical", "expires_at": "2099-10-01T00:00:00+00:00"}}
+    init = NO_TOKEN_INIT + f"window.__pairReply = {json.dumps(reply)};"
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright, init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.locator("#code-input").fill("ABCD-EFGH")
+        page.locator("#code-remember").check()
+        page.locator("#code-submit").click()
+        page.wait_for_function(
+            "document.getElementById('whoami-role')?.textContent === 'operator'")
+        assert _storage(page) == {"session": "paired-test-token", "local": None}
+        browser.close()
+
+
+def test_a_socket_that_sends_one_frame_then_closes_still_backs_off():
+    # L3: one delivered frame is not "stable"; the backoff keeps growing.
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function("window.__sockets.length === 1")
+        page.evaluate(
+            "window.__flap = setInterval(() => {"
+            "  for (const socket of window.__sockets) {"
+            "    if (!socket.flapped && socket.sent.length) {"
+            "      socket.flapped = true;"
+            "      socket.dispatchEvent(new MessageEvent('message', {data: '{}'}));"
+            "      socket.dispatchEvent(new CloseEvent('close', {code: 1011}));"
+            "    }"
+            "  }"
+            "}, 10); null"
+        )
+        page.wait_for_timeout(4_000)
+        count = page.evaluate("window.__sockets.length")
+        assert 2 <= count <= 3, count
         browser.close()

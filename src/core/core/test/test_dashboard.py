@@ -36,7 +36,7 @@ def assert_storage_rule(bundle: str) -> None:
     assert "localStorage" not in others
     assert client.count("localStorage.setItem(") == 1
     guarded = client.split("localStorage.setItem(", 1)[0].rsplit("export function rememberToken", 1)[1]
-    assert "if (persist && expiresAt" in guarded
+    assert "if (persist && left > 0 && left <= REMEMBER_MAX_MS)" in guarded
     assert "localStorage" in bundle
 
 
@@ -599,5 +599,15 @@ def test_dashboard_websocket_reconnect_backs_off_and_honours_close_codes():
     # The backoff resets only after a socket delivered state, not on open.
     message = script.split('socket.addEventListener("message"', 1)[1].split("});", 1)[0]
     assert "session.reconnectDelayMs = RECONNECT_MIN_MS" in message
+    assert "RECONNECT_STABLE_MS" in message and "const RECONNECT_STABLE_MS = 10000;" in script
     opened = script.split('socket.addEventListener("open"', 1)[1].split("});", 1)[0]
     assert "reconnectDelayMs" not in opened
+
+
+def test_remember_me_is_capped_at_seven_days_in_the_browser():
+    client = (WEB_ROOT / "client.js").read_text(encoding="utf-8")
+    assert "REMEMBER_MAX_MS = 7 * 24 * 60 * 60 * 1000;" in client
+    guarded = client.split("export function rememberToken", 1)[1].split("localStorage.setItem(", 1)[0]
+    assert "left <= REMEMBER_MAX_MS" in guarded
+    loader = client.split("function persistedPairedToken", 1)[1].split("\n}\n", 1)[0]
+    assert "left <= REMEMBER_MAX_MS" in loader

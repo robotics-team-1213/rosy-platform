@@ -84,6 +84,7 @@ MAX_WRONG_ATTEMPTS = 5
 ENROLLMENT_TTL_S = 300.0
 MAX_ENROLLMENT_CODES = 8
 DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "operator": 168.0, "administrator": 24.0}
+MAX_LIFETIME_HOURS = 168.0
 
 #: D-193 4: 사설·AP 대역과 루프백만 받는다. AP(10.42.0.0/24)는 10/8 안에 있다.
 ALLOWED_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
@@ -339,7 +340,8 @@ def _lifetime_seconds(config: dict, role: str) -> float:
         hours = DEFAULT_LIFETIME_HOURS[role]
     if not math.isfinite(hours) or hours <= 0:
         hours = DEFAULT_LIFETIME_HOURS[role]
-    return hours * 3600.0
+    # D-193 6: "keep me logged in (at most 7 days)" — no pairing outlives it.
+    return min(hours, MAX_LIFETIME_HOURS) * 3600.0
 
 
 def _error(status: int, code: str, message: str, headers: Optional[dict] = None,
