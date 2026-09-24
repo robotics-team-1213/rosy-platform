@@ -27,6 +27,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
     config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(Path(__file__).parent.parent / "config" / "profile.pinky_pro.yaml")
     caps = yaml.safe_load((Path(__file__).parent.parent / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
@@ -80,7 +82,11 @@ def test_tokens_are_admin_only_and_never_echo_secrets(client):
     assert "rosy-dev-admin" not in blob
     assert "rosy-dev-operator" not in blob
     # Nothing in the listing is derived from the secret — no fingerprint, no hint.
-    assert all(set(item) == {"id", "role", "label", "created_at", "legacy"} for item in listed)
+    assert all(set(item) == {"id", "role", "label", "created_at", "legacy", "expires_at", "source",
+                             "current", "last_used_at"} for item in listed)
+    # D-193 5: the caller's own token is marked, and the listing says when it was last used.
+    assert [item["current"] for item in listed if item["role"] == "administrator"] == [True]
+    assert all(item["last_used_at"] for item in listed if item["current"])
 
     created = tc.post(
         "/api/v1/system/tokens",
@@ -139,7 +145,7 @@ def test_writing_a_token_migrates_the_plaintext_defaults_to_hashes(client, tmp_p
     raw = overlay.read_text(encoding="utf-8")
     assert "rosy-dev-admin" not in raw
     assert "rosy-dev-viewer" not in raw
-    assert all(set(item) == {"id", "role", "sha256", "label", "created_at"} for item in stored)
+    assert all(set(item) == {"id", "role", "sha256", "label", "created_at", "source"} for item in stored)
     assert all(len(item["sha256"]) == 64 for item in stored)
     # The packaged plaintext tokens still authenticate; only their storage changed.
     assert tc.get("/api/v1/system/info", headers=ADMIN).status_code == 200
@@ -639,6 +645,8 @@ def docking_client(tmp_path, monkeypatch):
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
     config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(Path(__file__).parent.parent / "config" / "profile.pinky_pro.yaml")
     caps = yaml.safe_load((Path(__file__).parent.parent / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
     caps["docking"] = {"supported": True}

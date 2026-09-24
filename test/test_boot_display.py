@@ -605,6 +605,86 @@ def test_an_unreadable_handoff_falls_back_to_the_operator_store(tmp_path):
     assert "ap_login" not in view and view["network"]["ssid"] == "rosy-pinky-e4us"
 
 
+# --- D-193 login line ---------------------------------------------------------
+
+LOGIN_VALUE = "7KXM-" + "P3QA"
+
+
+def _login(root: Path, content: str) -> None:
+    (root / "run/rosy-boot/login-display.txt").write_text(content, encoding="utf-8")
+
+
+def test_the_login_line_is_shown_at_core_ready_and_never_logged(tmp_path, capsys):
+    module = _display()
+    _status(tmp_path, "CORE_READY")
+    _login(tmp_path, f"{LOGIN_VALUE}\noperator\n")
+    logs: list[str] = []
+    display, _lcd, _clock, _battery, rendered, _ = _loop(
+        module, tmp_path, voltages=(OSError(5, "I/O error"),), logs=logs)
+
+    display.step()
+
+    assert rendered[-1]["login_code"] == LOGIN_VALUE and rendered[-1]["login_role"] == "operator"
+    assert logs and all(LOGIN_VALUE not in line for line in logs)
+    output = capsys.readouterr()
+    assert LOGIN_VALUE not in output.out + output.err
+
+
+@pytest.mark.parametrize("stage", ["BOOTING", "PROVISIONED", "FAILED:rosy-core"])
+def test_the_login_line_is_hidden_before_core_ready(tmp_path, stage):
+    module = _display()
+    _status(tmp_path, stage)
+    _login(tmp_path, f"{LOGIN_VALUE}\noperator\n")
+
+    view = module.read_view(tmp_path, None)
+
+    assert "login_code" not in view and "login_burned" not in view
+
+
+def test_a_burned_code_shows_the_notice_and_a_new_code_redraws(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY")
+    display, lcd, _clock, _battery, rendered, _ = _loop(module, tmp_path)
+    _login(tmp_path, "BURNED\n")
+    display.step()
+    assert rendered[-1]["login_burned"] is True and "login_code" not in rendered[-1]
+
+    (tmp_path / "run/rosy-boot/login-display.txt").unlink()
+    assert display.step()  # the line going away is a redraw too
+    assert "login_burned" not in rendered[-1]
+    assert len(lcd.shown) == 2
+
+
+@pytest.mark.parametrize("content", ["ABCD-EFG1\noperator\n", f"{LOGIN_VALUE}\nroot\n", f"{LOGIN_VALUE}\n",
+                                     "", "\x00\x01"])
+def test_a_malformed_login_hand_off_shows_nothing(tmp_path, content):
+    module = _display()
+    _status(tmp_path, "CORE_READY")
+    _login(tmp_path, content)
+
+    view = module.read_view(tmp_path, None)
+
+    assert "login_code" not in view and "login_burned" not in view
+
+
+def test_the_boot_card_rows_for_the_login_line():
+    sys.path.insert(0, str(ROOT / "src/apps/emotion"))
+    info_screen = pytest.importorskip("emotion.info_screen")
+    base = {"stage": "CORE_READY", "ipv4": ["192.168.1.201"], "battery_percent": 80, "battery_voltage": 7.9}
+
+    rows = {slot: (text, color) for slot, text, color in info_screen.boot_lines(
+        {**base, "login_code": LOGIN_VALUE, "login_role": "administrator"})}
+    assert rows["login"] == (f"Login {LOGIN_VALUE} administrator", info_screen._FG)
+    burned = {slot: (text, color) for slot, text, color in info_screen.boot_lines({**base, "login_burned": True})}
+    assert burned["login"] == ("Login code burned", info_screen._CRIT)
+    early = {slot for slot, _text, _color in info_screen.boot_lines(
+        {**base, "stage": "BOOTING", "login_code": LOGIN_VALUE, "login_role": "operator"})}
+    assert "login" not in early
+    # The line sits below the AP rows and inside the 240-pixel card.
+    y, size = info_screen._BOOT_LAYOUT["login"]
+    assert y > info_screen._BOOT_LAYOUT["ap_login"][0] and y + size <= info_screen.DEFAULT_SIZE[1]
+
+
 # --- unit and image ---------------------------------------------------------
 
 

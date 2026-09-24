@@ -11,9 +11,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
-from core_api_web.api.deps import CoreServicesLike
+from core_api_web.api.deps import CoreServicesLike, refused_token_count
 from core_api_web.api.errors import register_exception_handlers
+from core_api_web.api.v1.auth import PairingState
 from core_api_web.api.v1.routes import (
+    auth_router,
     control_router,
     events_router,
     logs_router,
@@ -51,10 +53,18 @@ from core_api_web.api.ws import ws_router
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
-        version="1.18.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.18)",
+        version="1.19.0",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.19)",
     )
     app.state.core = services
+    app.state.pairing = PairingState()
+    refused = refused_token_count(config)
+    if refused:
+        # D-193 7: a device never accepts the shared dev tokens or plaintext
+        # entries, whichever layer brought them in. Say so once at start.
+        logging.warning("device mode refused %d development or plaintext API token(s)", refused)
+        services.events.publish("auth.credentials_refused", severity="warning", source="api",
+                                data={"count": refused})
     # 현장 화면은 로봇 AP 위에서 뜬다. 대시보드 자산은 압축 없이 122 KB이고
     # gzip 뒤에는 29 KB다 — 첫 로드에서 93 KB가 줄어든다. 별도 런타임도,
     # 빌드 산출물도 늘리지 않으므로 D-23의 최소 표면 원칙을 지킨다.
@@ -75,6 +85,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "settings.js": "application/javascript",
     }
 
+    app.include_router(auth_router)
     app.include_router(system_router)
     app.include_router(robot_router)
     app.include_router(control_router)

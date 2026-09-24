@@ -29,6 +29,8 @@ def client(tmp_path):
     from fastapi.testclient import TestClient
 
     config = yaml.safe_load((CONFIG_DIR / "rosy_default.yaml").read_text(encoding="utf-8"))
+    # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
+    config.update(yaml.safe_load((CONFIG_DIR / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     profile = RobotProfile.load(CONFIG_DIR / "profile.pinky_pro.yaml")
     caps = yaml.safe_load((CONFIG_DIR / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")

@@ -155,6 +155,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-display.service" "$OVERLAY/etc/systemd/syst
 # D-176: boot settings file and fallback AP, both root and outside CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"
+# D-193: the root login-code issuer (no network), enabled by the image.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"

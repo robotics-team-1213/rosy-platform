@@ -12,6 +12,9 @@ Inputs, all read-only:
 * /run/rosy-boot/network.json - AP mode, SSID, address (rosy-network, root);
 * /run/rosy-boot/ap-display.txt - the AP SSID and key, root:rosy-display 0640,
   written by rosy-network only while the AP is up (D-176). Never logged;
+* /run/rosy-boot/login-display.txt - the one-time dashboard login code and its
+  role, or BURNED, root:rosy-display 0640, written by rosy-login-code (D-193).
+  Shown only at CORE_READY. Never logged;
 * the battery ADC on /dev/i2c-1 through ``rosylib.Battery``, which holds the
   same flock as every other Rosy reader of 0x08 (D-192), so it is read
   directly whether rosy-io runs or not.
@@ -35,6 +38,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import sys
 import time
@@ -43,6 +47,8 @@ from typing import Callable
 sys.dont_write_bytecode = True
 
 STATUS_DIR = "run/rosy-boot"
+LOGIN_CODE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$")
+LOGIN_ROLES = frozenset({"viewer", "operator", "administrator"})
 POLL_S = 1.0
 BATTERY_INTERVAL_S = 15.0
 LCD_ATTEMPTS = 6  # udev may still be applying the device groups at start
@@ -107,7 +113,22 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
         if len(lines) >= 2 and lines[1]:
             network["ssid"] = network.get("ssid") or lines[0]
             view["ap_login"] = lines[1]
+    if view["stage"] == "CORE_READY":
+        view.update(_login_view(root))
     return view
+
+
+def _login_view(root: Path) -> dict:
+    """D-193: the login line from rosy-login-code's hand-off; only well-formed values."""
+    try:
+        lines = (root / STATUS_DIR / "login-display.txt").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return {}
+    if lines and lines[0] == "BURNED":
+        return {"login_burned": True}
+    if len(lines) >= 2 and LOGIN_CODE.fullmatch(lines[0]) and lines[1] in LOGIN_ROLES:
+        return {"login_code": lines[0], "login_role": lines[1]}
+    return {}
 
 
 class BatteryReader:

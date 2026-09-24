@@ -227,7 +227,8 @@ def test_first_boot_installs_the_record_where_core_reads_it(tmp_path):
 
     assert result["state"] == "PROVISIONED"
     overlay = yaml.safe_load(_overlay(root).read_text(encoding="utf-8"))
-    assert overlay == {"auth": {"tokens": [_issued()["core_api"]["record"]]}}
+    # D-193 5: installed as a `card` credential (the bundle record itself carries no source).
+    assert overlay == {"auth": {"tokens": [{**_issued()["core_api"]["record"], "source": "card"}]}}
     complete = json.loads((root / "var/lib/rosy/provisioning/complete.json").read_text(encoding="utf-8"))
     assert complete["core_api"] == {"token_id": RECORD_ID}
     assert not list(_overlay(root).parent.glob(".rosy.yaml.*")), "no temporary file is left"
@@ -257,7 +258,7 @@ def test_first_boot_keeps_other_overlay_keys_and_replaces_its_own_record(tmp_pat
     overlay = yaml.safe_load(_overlay(root).read_text(encoding="utf-8"))
     assert overlay["robot"] == {"name": "Bay 7"}
     assert overlay["safety"] == {"manual_max_linear": 0.2}
-    assert overlay["auth"]["tokens"] == [_issued()["core_api"]["record"]]
+    assert overlay["auth"]["tokens"] == [{**_issued()["core_api"]["record"], "source": "card"}]
 
 
 @pytest.mark.parametrize("tokens", [

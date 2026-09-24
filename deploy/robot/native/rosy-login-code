@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# rosy-login-code: issue a one-time dashboard login code (D-193). Usage:
+#   sudo rosy-login-code [--role operator|administrator] [--minutes N]
+# The code is printed to this terminal only. Runs from the installed native
+# runtime (a symlink on PATH is resolved); -I keeps PYTHONPATH and the user
+# site out of a root process.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec /usr/bin/python3 -I -B "$SCRIPT_DIR/rosy-login-code.py" "$@"

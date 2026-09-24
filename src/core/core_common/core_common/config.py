@@ -4,6 +4,10 @@
 1. config/rosy_default.yaml (패키지 기본값)
 2. ~/.rosy/rosy.yaml (로봇 로컬 오버라이드) — 있으면 병합
 3. 환경변수 ROSY_CONFIG (명시적 경로) — 최우선
+
+개발 토큰(D-193 7)은 기본값에 없다. `ROSY_DEV_AUTH=1` 이고 장치 모드
+(`ROSY_DEPLOYMENT=device`)가 아닐 때만 config/rosy_dev_auth.yaml 을 기본값
+바로 위에 병합한다. 오버라이드의 `auth.tokens` 는 그 목록을 통째로 대신한다.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from typing import Any, Optional
 import yaml
 
 DEFAULT_CONFIG_NAME = "rosy_default.yaml"
+DEV_AUTH_CONFIG_NAME = "rosy_dev_auth.yaml"
 LOCAL_CONFIG_PATH = Path.home() / ".rosy" / "rosy.yaml"
 RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
 NAVIGATION_BACKENDS = frozenset({"localization", "slam"})
@@ -59,6 +64,13 @@ def _find_default_config() -> Path:
             / DEFAULT_CONFIG_NAME)
 
 
+def dev_auth_enabled() -> bool:
+    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시한다(D-193 7)."""
+    if os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device":
+        return False
+    return os.environ.get("ROSY_DEV_AUTH", "").strip() == "1"
+
+
 def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     """기본값 → 로컬 오버라이드 → 명시적 경로 순으로 병합해 반환한다."""
 
@@ -66,6 +78,14 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     config: dict[str, Any] = {}
     with open(base_path, encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
+
+    if dev_auth_enabled():
+        dev_path = base_path.parent / DEV_AUTH_CONFIG_NAME
+        if not dev_path.exists():
+            dev_path = _find_default_config().parent / DEV_AUTH_CONFIG_NAME
+        if dev_path.exists():
+            with open(dev_path, encoding="utf-8") as f:
+                config = _deep_merge(config, yaml.safe_load(f) or {})
 
     override_path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
     overlay: dict[str, Any] = {}

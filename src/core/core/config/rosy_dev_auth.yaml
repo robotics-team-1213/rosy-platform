@@ -1,0 +1,12 @@
+# D-193 7: 개발·시뮬 전용 공용 토큰. 기본값(rosy_default.yaml)에는 없다.
+# core_common.config.load_config 가 ROSY_DEV_AUTH=1 이고 ROSY_DEPLOYMENT 가
+# device 가 아닐 때만 기본값 바로 위에 병합한다. 장치 모드의 CORE 는 이
+# 세 토큰의 다이제스트를 어디서 오든 거부한다.
+auth:
+  tokens:
+    - token: rosy-dev-admin
+      role: administrator
+    - token: rosy-dev-operator
+      role: operator
+    - token: rosy-dev-viewer
+      role: viewer
