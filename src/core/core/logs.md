@@ -399,3 +399,10 @@
 - 교훈: 없음.
 
 
+
+## 2026-09-24 · uncommitted · fix(core): CORE-only 에서 출처 없는 채널은 `unavailable` (US-010)
+- 변경: `core/services.py` 가 `runtime.mode == core` 일 때 `StateManager(sources_configured=False)` 로 만든다 — 한 번도 값이 오지 않은 채널은 `disconnected`(출처는 있는데 무음)가 아니라 `unavailable`. 첫 표본이 오면 보통 판정. inventory descriptor 에 런타임 차단 이유 전달. `bridge/display.py` `battery_percent` 결측은 `None`. `test_api.py`·`test_battery.py` 기대값을 새 계약으로 갱신, `test/test_truthful_core_only.py`(이 패키지, 16건) 추가.
+- 증거: `python -m pytest src/core/core/test -q` 초록 (2026-09-24 Windows, 위 1966 passed 에 포함).
+- gate 변화: 없음 (DEVICE 재검증 필요).
+- 결정: D-161, D-32.
+- 교훈: 하드웨어 모드의 `safety` 채널은 여전히 공급자가 없다(API estop 만 갱신) — 대시보드는 이제 그것을 UNVERIFIED 로 정직하게 보인다. 공급 경로는 후속 과제.
