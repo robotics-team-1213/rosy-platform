@@ -35,13 +35,16 @@ from pydantic import BaseModel, Field
 from core_api_web.api.deps import (
     PAIRED_SOURCES,
     ROLE_RANK,
+    TOKEN_WRITE_LOCK,
     AuthContext,
     CoreServicesLike,
     auth_entries,
+    expires_before,
     generate_token,
     get_services,
     new_token_record,
     persist_token_records,
+    token_alive,
     utc_after,
 )
 from core_api_web.api.errors import ApiError, error_body
@@ -70,6 +73,10 @@ SCRYPT_MAXMEM = 64 * 1024 * 1024
 
 MAX_BODY_BYTES = 1024
 MAX_CODE_FILE_BYTES = 4096
+MAX_STATE_BYTES = 256  # same cap root applies to this file (rosy-login-code.py)
+#: D-193 보안 리뷰 M1: scrypt(N=2^14, r=8) takes 16 MiB; at most two at once, so
+#: a burst of pairing requests cannot push CORE out of memory.
+SCRYPT_SLOTS = threading.BoundedSemaphore(2)
 PER_IP_LIMIT = 5
 GLOBAL_LIMIT = 30
 RATE_WINDOW_S = 60.0
@@ -215,16 +222,63 @@ class PairingState:
             return None
         if code["code_id"] in self.spent:
             return None
+        # D-193 보안 리뷰 M1: what CORE already recorded for this code survives a
+        # CORE restart (RuntimeDirectoryPreserve=restart): a used or burned code
+        # stays dead and failed attempts keep counting.
+        own = self.own_state()
+        if own is not None and own["code_id"] == code["code_id"]:
+            if own["state"] in {"used", "burned"} or own["attempts"] >= MAX_WRONG_ATTEMPTS:
+                with self.lock:
+                    self.spent.add(code["code_id"])
+                return None
+            with self.lock:
+                self.failures[code["code_id"]] = max(self.failures.get(code["code_id"], 0), own["attempts"])
         # D-193 3: 같은 부팅이고 monotonic 시계가 만료 전일 때만 유효하다.
         if code["boot_id"] != self._boot_id() or not self.clock() < code["expires_monotonic"]:
             return None
         return code
 
-    def signal_root(self, code_id: str, state: str) -> None:
-        """CORE → root 신호. 실패해도 코드는 CORE 안에서 이미 소비됐다."""
+    def own_state(self) -> Optional[dict[str, Any]]:
+        """CORE's own state file, read as strictly as root reads it, or None."""
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
+            | getattr(os, "O_CLOEXEC", 0)
+        try:
+            descriptor = os.open(self.state_file, flags)
+        except OSError:
+            return None
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_STATE_BYTES:
+                return None
+            raw = os.read(descriptor, MAX_STATE_BYTES + 1)
+        except OSError:
+            return None
+        finally:
+            os.close(descriptor)
+        try:
+            data = json.loads(raw.decode("ascii")) if len(raw) <= MAX_STATE_BYTES else None
+        except (UnicodeDecodeError, ValueError):
+            return None
+        if not isinstance(data, dict) or not CODE_ID_RE.fullmatch(str(data.get("code_id", ""))):
+            return None
+        attempts = data.get("attempts", 0)
+        if data.get("state") not in {"used", "burned", "failing"} or not isinstance(attempts, int) \
+                or isinstance(attempts, bool) or attempts < 0:
+            return None
+        return {"code_id": data["code_id"], "state": data["state"], "attempts": attempts}
+
+    def signal_root(self, code_id: str, state: str, attempts: Optional[int] = None) -> None:
+        """CORE → root 신호. 실패해도 코드는 CORE 안에서 이미 소비됐다.
+
+        `failing` (with `attempts`) is CORE's own bookkeeping; root knows only
+        `used` and `burned` and ignores anything else.
+        """
         directory = os.path.dirname(self.state_file) or "."
         temporary = os.path.join(directory, f".login-code-state.{secrets.token_hex(6)}")
-        payload = json.dumps({"code_id": code_id, "state": state}, sort_keys=True) + "\n"
+        record: dict[str, Any] = {"code_id": code_id, "state": state}
+        if attempts is not None:
+            record["attempts"] = attempts
+        payload = json.dumps(record, sort_keys=True) + "\n"
         try:
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
             descriptor = os.open(temporary, flags, 0o644)
@@ -246,7 +300,8 @@ class PairingState:
             del self.enrollment[code_id]
         return list(self.enrollment.items())
 
-    def add_enrollment(self, code: str, role: str, issuer: str) -> tuple[str, float]:
+    def add_enrollment(self, code: str, role: str, issuer: str,
+                       issuer_expires_at: Optional[str] = None) -> tuple[str, float]:
         code_id = secrets.token_hex(8)
         salt = secrets.token_bytes(16)
         with self.lock:
@@ -259,6 +314,8 @@ class PairingState:
                 "digest": hashlib.sha256(salt + code.encode("ascii")).digest(),
                 "role": role,
                 "issuer": issuer,
+                # D-193 보안 리뷰 M2: a token enrolled by a paired admin ends with it.
+                "issuer_expires_at": issuer_expires_at,
                 "expires": self.clock() + ENROLLMENT_TTL_S,
             }
         return code_id, ENROLLMENT_TTL_S
@@ -307,24 +364,33 @@ async def _read_body(request: Request) -> Optional[bytes]:
     return bytes(body)
 
 
-def _match(state: PairingState, code: str) -> tuple[Optional[dict[str, Any]], dict[str, bool]]:
+def _match(state: PairingState, code: str,
+           config: dict) -> tuple[Optional[dict[str, Any]], dict[str, bool]]:
     """(맞은 코드, 틀렸을 때 시도를 셀 코드 id → 물리 코드인가). 스레드풀에서 돈다."""
     candidates: dict[str, bool] = {}
     with state.lock:
         enrollment = state.live_enrollment()
+        # D-193 보안 리뷰 L7: an enrollment code dies with its issuer's token.
+        for code_id, item in list(enrollment):
+            if not token_alive(config, item["issuer"]):
+                state.enrollment.pop(code_id, None)
+                enrollment.remove((code_id, item))
     for code_id, item in enrollment:
         candidates[code_id] = False
         presented = hashlib.sha256(item["salt"] + code.encode("ascii")).digest()
         if hmac.compare_digest(presented, item["digest"]):
             return ({"code_id": code_id, "role": item["role"], "source": "pair-admin",
-                     "paired_via": item["issuer"]}, candidates)
+                     "paired_via": item["issuer"], "issuer_expires_at": item["issuer_expires_at"]},
+                    candidates)
     physical = state.physical_code()
     if physical is not None:
         candidates[physical["code_id"]] = True
-        presented = scrypt_digest(code, physical["salt"])
+        with SCRYPT_SLOTS:
+            presented = scrypt_digest(code, physical["salt"])
         if hmac.compare_digest(presented, physical["digest"]):
             return ({"code_id": physical["code_id"], "role": physical["role"],
-                     "source": "pair-physical", "paired_via": physical["code_id"]}, candidates)
+                     "source": "pair-physical", "paired_via": physical["code_id"],
+                     "issuer_expires_at": None}, candidates)
     return None, candidates
 
 
@@ -355,23 +421,33 @@ async def pair(request: Request, svc: CoreServicesLike = Depends(get_services)):
     if not CODE_RE.fullmatch(code):
         return _error(400, "VALIDATION_ERROR", "a login code is 8 characters like ABCD-EFGH")
 
-    matched, candidates = await run_in_threadpool(_match, state, code)
+    matched, candidates = await run_in_threadpool(_match, state, code, svc.config)
     burned: list[tuple[str, bool]] = []  # (code_id, physical)
+    failing: list[tuple[str, int]] = []  # physical code still alive after a miss
+    # D-193 보안 리뷰 L4: while an administrator's enrollment code is live, a miss
+    # counts against it, not the boot code: one visitor cannot burn both, and the
+    # enrollment code is the one its issuer can simply reissue.
+    enrollment_live = any(not physical for physical in candidates.values())
     with state.lock:
         if matched is not None and matched["code_id"] in state.spent:
             matched = None  # another request used it while this one was hashing
         if matched is None:
-            for code_id in candidates:
-                if code_id in state.spent:
+            for code_id, physical in candidates.items():
+                if code_id in state.spent or (physical and enrollment_live):
                     continue
                 state.failures[code_id] = state.failures.get(code_id, 0) + 1
                 if state.failures[code_id] >= MAX_WRONG_ATTEMPTS:
                     state.spent.add(code_id)
                     state.enrollment.pop(code_id, None)
-                    burned.append((code_id, candidates[code_id]))
+                    burned.append((code_id, physical))
+                elif physical:
+                    failing.append((code_id, state.failures[code_id]))
         else:
             state.spent.add(matched["code_id"])
             state.enrollment.pop(matched["code_id"], None)
+    for code_id, attempts in failing:
+        # Persisted so a CORE restart does not reset the count (M1); root ignores it.
+        state.signal_root(code_id, "failing", attempts)
     for code_id, physical in burned:
         if physical:  # root clears only the code it issued; enrollment codes live here
             state.signal_root(code_id, "burned")
@@ -384,14 +460,16 @@ async def pair(request: Request, svc: CoreServicesLike = Depends(get_services)):
         state.signal_root(matched["code_id"], "used")
     role = matched["role"]
     token = generate_token()
-    expires_at = utc_after(_lifetime_seconds(svc.config, role))
+    expires_at = expires_before(utc_after(_lifetime_seconds(svc.config, role)),
+                                matched["issuer_expires_at"])
     label = body.label.strip() or ("robot screen login" if matched["source"] == "pair-physical"
                                    else "enrolled device")
     record = new_token_record(token, role, label, source=matched["source"],
                               expires_at=expires_at, paired_via=matched["paired_via"])
-    records = auth_entries(svc.config)
-    records.append(record)
-    persist_token_records(svc, records)
+    with TOKEN_WRITE_LOCK:
+        records = auth_entries(svc.config)
+        records.append(record)
+        persist_token_records(svc, records)
     # 코드도 토큰도 싣지 않는다. 누가(id) 어떤 권한으로 언제까지 붙었는지만 남긴다.
     svc.events.publish("auth.paired", severity="warning", source="api",
                        data={"id": record["id"], "role": role, "source": matched["source"],
@@ -425,8 +503,9 @@ def logout(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(
     if auth.source not in PAIRED_SOURCES:
         raise ApiError("VALIDATION_ERROR", 409,
                        "only a paired browser token can log out; revoke other tokens in settings")
-    records = auth_entries(svc.config)
-    persist_token_records(svc, [item for item in records if item["id"] != auth.token_id])
+    with TOKEN_WRITE_LOCK:
+        records = auth_entries(svc.config)
+        persist_token_records(svc, [item for item in records if item["id"] != auth.token_id])
     svc.events.publish("config.changed", severity="warning", source="api",
                        data={"key": "auth.tokens", "id": auth.token_id, "deleted": True})
     return Response(status_code=204, headers=NO_STORE)
@@ -447,7 +526,7 @@ def create_enrollment_code(body: EnrollmentRequest, request: Request,
     if ROLE_RANK[role] > auth.rank:
         raise ApiError("FORBIDDEN", 403, "an enrollment code cannot exceed the issuer's role")
     code = "".join(secrets.choice(ALPHABET) for _ in range(CODE_LENGTH))
-    code_id, ttl = _pairing(request).add_enrollment(code, role, auth.token_id)
+    code_id, ttl = _pairing(request).add_enrollment(code, role, auth.token_id, auth.expires_at)
     svc.events.publish("auth.enrollment_code_issued", severity="warning", source="api",
                        data={"code_id": code_id, "role": role, "by": auth.token_id})
     return JSONResponse(status_code=201, headers=NO_STORE, content={

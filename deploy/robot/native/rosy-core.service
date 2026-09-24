@@ -50,6 +50,10 @@ KillSignal=SIGINT
 StateDirectory=rosy/core
 StateDirectoryMode=0750
 RuntimeDirectory=rosy
+# D-193 security review M1: CORE's login-code state (used/burned/failing) must
+# survive a CORE restart, or a restart would re-arm a spent code. Kept across
+# restarts only; a stop still clears it.
+RuntimeDirectoryPreserve=restart
 UMask=0027
 
 NoNewPrivileges=true

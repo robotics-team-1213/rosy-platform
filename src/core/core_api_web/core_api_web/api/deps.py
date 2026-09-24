@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -110,6 +111,11 @@ DEV_TOKEN_DIGESTS = frozenset(
 #: 토큰 id → 마지막 인증 시각. 요청마다 파일을 쓰지 않으려고 메모리에만 둔다.
 _LAST_USED: dict[str, str] = {}
 
+#: D-193 보안 리뷰 L1: 토큰 목록을 읽고 다시 쓰는 모든 경로(추가·삭제·이름표·로그아웃·
+#: 페어링)는 이 락을 읽기부터 저장까지 잡는다. 없으면 경쟁하는 PATCH 가 방금 회수된
+#: 토큰을 옛 목록째 되살린다.
+TOKEN_WRITE_LOCK = threading.RLock()
+
 
 def device_mode() -> bool:
     """네이티브 장치 런타임인가 (`rosy-runtime.env` 의 `ROSY_DEPLOYMENT=device`)."""
@@ -150,6 +156,25 @@ def is_expired(record: dict[str, Any], now: Optional[datetime] = None) -> bool:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     return moment <= (now or datetime.now(timezone.utc))
+
+
+def expires_before(first: Optional[str], second: Optional[str]) -> Optional[str]:
+    """두 만료 시각 중 이른 것 (None 은 만료 없음). 읽을 수 없는 값은 그대로 이긴다(닫힌 실패)."""
+    if first is None or second is None:
+        return first if second is None else second
+    try:
+        a = datetime.fromisoformat(first)
+        b = datetime.fromisoformat(second)
+    except ValueError:
+        return first
+    a = a if a.tzinfo else a.replace(tzinfo=timezone.utc)
+    b = b if b.tzinfo else b.replace(tzinfo=timezone.utc)
+    return first if a <= b else second
+
+
+def token_alive(config: dict, token_id: str) -> bool:
+    """그 id 의 토큰이 아직 있고 만료되지 않았는가 (WebSocket 재확인, 등록 코드 발급자)."""
+    return any(item["id"] == token_id and not is_expired(item) for item in auth_entries(config))
 
 
 def is_durable_admin(record: dict[str, Any]) -> bool:

@@ -418,7 +418,13 @@ Tablets and other PCs do not need the 43-character credential. A root service,
   from RFC 1918 addresses, the AP (`10.42.0.0/24`) or loopback. It leaves the
   LCD within a second of use. Five wrong tries burn it: the LCD shows
   `Login code burned` for a minute. More than five tries per address per minute
-  (30 in total) are answered 429.
+  (30 in total) are answered 429. A burned or used boot code does not come
+  back by restarting CORE; issue a new one with `sudo rosy-login-code` (or
+  reboot). While an administrator's enrollment code is live, wrong tries count
+  against it instead of the boot code.
+- A paired browser session (any token with an expiry) cannot create tokens
+  or delete a non-expiring administrator, and devices it enrolls expire no
+  later than it does. Use the card credential for those.
 - The card decides the boot code: `login: {boot_code: off | operator |
   administrator}` in `rosy-config.yaml` (default `operator`). Where passers-by
   can read the LCD, set `off`.

@@ -1006,3 +1006,15 @@
 - gate 변화: 없음(S4 실기 전)
 - 결정: D-193
 - 교훈: 템플릿 `rosy-runtime.env`는 first boot가 쓰지 않는다 — 장치 환경 변수는 first boot `_runtime_env`와 unit 양쪽에 넣어야 실제 카드에 닿는다.
+
+## 2026-09-24 · uncommitted · fix(core,native): D-193 security review
+
+- 변경: (M1) CORE가 자기 `login-code-state.json`을 엄격히 다시 읽어 재시작 뒤에도 쓴·폐기한 코드를 거부하고, 틀린 시도를
+  `failing`/`attempts`로 남긴다. `rosy-core.service` `RuntimeDirectoryPreserve=restart`. scrypt 동시 2개. (M2) 만료가 있는
+  호출자는 `POST system/tokens`·만료 없는 administrator `DELETE`가 403, 등록 토큰 만료는 발급자 만료 이하. (L1-L7) 토큰 쓰기 락,
+  WebSocket 30 s 재확인(4401), 첫 메시지 대기 소켓 16개 상한(1013), 등록 코드가 살아 있으면 실패를 그 코드에 셈, 토큰 생성
+  응답 `no-store`, uvicorn `proxy_headers=False`, 발급자 토큰이 사라진 등록 코드 무효. D-193에 날짜 붙은 보완 노트.
+- 증거: host pytest(Windows)·WSL POSIX — 보고서 수치.
+- gate 변화: 없음
+- 결정: D-193 보완(2026-09-24 보안 리뷰)
+- 교훈: 일회용 값의 "소비됨"은 그 값을 검증하는 프로세스의 수명보다 오래 가야 한다 — 메모리만으로는 재시작이 곧 재무장이다.

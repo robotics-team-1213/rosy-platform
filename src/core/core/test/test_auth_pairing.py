@@ -354,9 +354,10 @@ def test_the_last_non_expiring_administrator_cannot_be_deleted(robot):
     write_code(robot.boot, role="administrator")
     paired_admin = bearer(_pair(tc).json()["token"])
 
-    # A paired (24 h) administrator does not count as the one that must remain.
+    # A paired (24 h) administrator cannot remove the owner's non-expiring
+    # administrator at all (security review M2); it would be the last one too.
     refused = tc.delete("/api/v1/system/tokens/card01", headers=paired_admin)
-    assert refused.status_code == 409
+    assert refused.status_code == 403
     assert "non-expiring" in refused.json()["error"]["message"]
     # Deleting an expiring administrator is fine while the card admin remains.
     paired_id = tc.get("/api/v1/auth/whoami", headers=paired_admin).json()["id"]
@@ -495,3 +496,165 @@ def test_websocket_refuses_a_wrong_or_missing_first_message(robot, monkeypatch):
             socket.send_text(json.dumps({"type": "auth", "token": "rosy-dev-" + "viewer"}))
             socket.receive_json()
     assert closed.value.code == 4403
+
+
+# --- 2026-09-24 security review ------------------------------------------------
+
+
+def test_a_core_restart_cannot_reuse_a_used_code(robot):
+    tc, _svc, _state, _events = robot()
+    write_code(robot.boot)
+    assert _pair(tc).status_code == 201
+
+    restarted, _svc2, _state2, _events2 = robot()  # a new PairingState, same /run
+    assert _pair(restarted).status_code == 401
+
+
+def test_a_core_restart_does_not_reset_wrong_attempts(robot):
+    tc, _svc, state, _events = robot()
+    write_code(robot.boot)
+    for _ in range(3):
+        assert _pair(tc, OTHER_CODE).status_code == 401
+    assert _state_file(state) == {"code_id": CODE_ID, "state": "failing", "attempts": 3}
+
+    restarted, _svc2, state2, _events2 = robot()
+    for _ in range(2):
+        assert _pair(restarted, OTHER_CODE).status_code == 401
+    assert _state_file(state2) == {"code_id": CODE_ID, "state": "burned"}
+    other = type(restarted)(restarted.app, client=("192.168.1.30", 50000))
+    assert _pair(other).status_code == 401
+
+
+def test_root_ignores_cores_failing_bookkeeping():
+    import importlib.util
+    import sys as _sys
+
+    native = Path(__file__).resolve().parents[4] / "deploy/robot/native"
+    _sys.path.insert(0, str(native))
+    spec = importlib.util.spec_from_file_location("rosy_login_code_review", native / "rosy-login-code.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.STATE_CODE_ID.fullmatch(CODE_ID)
+    record = json.dumps({"code_id": CODE_ID, "state": "failing", "attempts": 4})
+    assert len(record) <= module.MAX_STATE_BYTES
+
+
+def test_at_most_two_scrypt_checks_run_at_once(robot, monkeypatch):
+    import threading
+    import time as _time
+    from core_api_web.api.v1 import auth as auth_module
+
+    tc, svc, state, _events = robot()
+    write_code(robot.boot)
+    running, peak, guard = [0], [0], threading.Lock()
+
+    def slow(code, salt):
+        with guard:
+            running[0] += 1
+            peak[0] = max(peak[0], running[0])
+        _time.sleep(0.05)
+        with guard:
+            running[0] -= 1
+        return b"x" * 32
+
+    monkeypatch.setattr(auth_module, "scrypt_digest", slow)
+    threads = [threading.Thread(target=auth_module._match, args=(state, OTHER_CODE, svc.config))
+               for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert peak[0] == 2
+
+
+def test_a_paired_administrator_cannot_make_itself_permanent(robot):
+    tc, _svc, _state, _events = robot(config_overrides=_card_config(), dev_auth=False)
+    write_code(robot.boot, role="administrator")
+    paired = _pair(tc).json()
+    paired_admin = bearer(paired["token"])
+
+    assert tc.post("/api/v1/system/tokens", json={"role": "administrator"},
+                   headers=paired_admin).status_code == 403
+    assert tc.delete("/api/v1/system/tokens/card01", headers=paired_admin).status_code == 403
+
+    # Chained enrollment never outlives the issuer: the viewer token (168 h by
+    # default) ends when the paired administrator's 24 h end.
+    code = tc.post("/api/v1/auth/enrollment-codes", json={"role": "viewer"},
+                   headers=paired_admin).json()["code"]
+    other = type(tc)(tc.app, client=("192.168.1.40", 50000))
+    enrolled = _pair(other, code).json()
+    assert enrolled["role"] == "viewer"
+    assert datetime.fromisoformat(enrolled["expires_at"]) <= datetime.fromisoformat(paired["expires_at"])
+
+
+def test_an_enrollment_code_dies_with_its_issuers_token(robot):
+    tc, _svc, _state, _events = robot(config_overrides=_card_config(), dev_auth=False)
+    second = tc.post("/api/v1/system/tokens", json={"role": "administrator"}, headers=CARD).json()
+    code = tc.post("/api/v1/auth/enrollment-codes", json={"role": "operator"},
+                   headers=bearer(second["token"])).json()["code"]
+    assert tc.delete(f"/api/v1/system/tokens/{second['id']}", headers=CARD).status_code == 204
+    assert _pair(tc, code).status_code == 401
+
+
+def test_misses_count_against_a_live_enrollment_code_not_the_boot_code(robot):
+    tc, _svc, state, events = robot()
+    write_code(robot.boot)
+    tc.post("/api/v1/auth/enrollment-codes", json={"role": "viewer"}, headers=DEV_ADMIN)
+
+    for _ in range(5):
+        assert _pair(tc, OTHER_CODE).status_code == 401
+    burned = [event.data["code_id"] for event in events if event.type == "auth.code_burned"]
+    assert len(burned) == 1 and burned[0] != CODE_ID  # the enrollment code went, the boot code stayed
+    other = type(tc)(tc.app, client=("192.168.1.31", 50000))
+    assert _pair(other).status_code == 201
+
+
+def test_a_created_token_is_never_cached(robot):
+    tc, _svc, _state, _events = robot()
+    created = tc.post("/api/v1/system/tokens", json={"role": "viewer"}, headers=DEV_ADMIN)
+    assert created.status_code == 201 and created.headers["cache-control"] == "no-store"
+
+
+def test_an_open_websocket_closes_when_its_token_is_logged_out(robot, monkeypatch):
+    from starlette.websockets import WebSocketDisconnect
+    import core_api_web.api.ws as ws_module
+
+    monkeypatch.setattr(ws_module, "REVALIDATE_S", 0.05)
+    tc, _svc, _state, _events = robot()
+    write_code(robot.boot)
+    paired = _pair(tc).json()
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with tc.websocket_connect("/ws/events") as socket:
+            socket.send_text(json.dumps({"type": "auth", "token": paired["token"]}))
+            assert tc.post("/api/v1/auth/logout", headers=bearer(paired["token"])).status_code == 204
+            for _ in range(10):  # the logout's own config.changed event may come first
+                socket.receive_json()
+    assert closed.value.code == 4401
+
+
+def test_sockets_waiting_for_a_first_message_are_capped(robot, monkeypatch):
+    from starlette.websockets import WebSocketDisconnect
+    import core_api_web.api.ws as ws_module
+
+    tc, _svc, _state, _events = robot()
+    monkeypatch.setattr(ws_module, "_pending_first_message", ws_module.MAX_PENDING_FIRST_MESSAGE)
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with tc.websocket_connect("/ws/state") as socket:
+            socket.receive_json()
+    assert closed.value.code == 1013
+
+
+def test_token_writers_share_one_lock():
+    import inspect
+    from core_api_web.api.v1 import auth as auth_module, system as system_module
+
+    for function in (system_module.add_token, system_module.delete_token, system_module.relabel_token,
+                     auth_module.logout, auth_module.pair):
+        source = inspect.getsource(function)
+        assert "with TOKEN_WRITE_LOCK:" in source, function.__name__
+        assert source.index("with TOKEN_WRITE_LOCK:") < source.index("persist_token_records"), function.__name__
+
+
+def test_the_api_server_ignores_proxy_headers():
+    node = (Path(__file__).resolve().parents[1] / "core" / "node.py").read_text(encoding="utf-8")
+    assert "proxy_headers=False" in node

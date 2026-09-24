@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from core_api_web.api.v1.common import admin, viewer
@@ -17,6 +18,7 @@ from core_api_web.api.deps import (
     MAX_TOKEN_LENGTH,
     MIN_TOKEN_LENGTH,
     ROLE_RANK,
+    TOKEN_WRITE_LOCK,
     auth_entries,
     generate_token,
     get_services,
@@ -93,8 +95,12 @@ class TokenRequest(BaseModel):
 
 
 @system_router.post("/tokens", status_code=201)
-def add_token(body: TokenRequest, _: AuthContext = Depends(admin),
+def add_token(body: TokenRequest, auth: AuthContext = Depends(admin),
               svc: CoreServicesLike = Depends(get_services)):
+    if auth.expires_at is not None:
+        # D-193 보안 리뷰 M2: a paired (expiring) session cannot mint a
+        # non-expiring credential and so outlive its own 24 h.
+        raise ApiError("FORBIDDEN", 403, "a paired session cannot create non-expiring tokens")
     role = body.role.strip()
     if role not in ROLE_RANK:
         raise ApiError("VALIDATION_ERROR", 400, "role must be viewer, operator or administrator")
@@ -104,14 +110,15 @@ def add_token(body: TokenRequest, _: AuthContext = Depends(admin),
         raise ApiError("VALIDATION_ERROR", 400,
                        f"token must be at least {MIN_TOKEN_LENGTH} characters")
 
-    records = auth_entries(svc.config)
-    digest = token_digest(token)
-    if any(hmac.compare_digest(digest, item["digest"]) for item in records):
-        raise ApiError("VALIDATION_ERROR", 409, "token already exists")
+    with TOKEN_WRITE_LOCK:
+        records = auth_entries(svc.config)
+        digest = token_digest(token)
+        if any(hmac.compare_digest(digest, item["digest"]) for item in records):
+            raise ApiError("VALIDATION_ERROR", 409, "token already exists")
 
-    record = new_token_record(token, role, body.label.strip())
-    records.append(record)
-    persist_token_records(svc, records)
+        record = new_token_record(token, role, body.label.strip())
+        records.append(record)
+        persist_token_records(svc, records)
     svc.events.publish(
         "config.changed", severity="warning", source="api",
         data={"key": "auth.tokens", "id": record["id"], "role": role},
@@ -121,7 +128,8 @@ def add_token(body: TokenRequest, _: AuthContext = Depends(admin),
     if generated:
         # 원문이 나가는 유일한 지점이다. 저장도 재조회도 되지 않는다.
         created["token"] = token
-    return created
+    return JSONResponse(status_code=201, content=created,
+                        headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
 
 
 @system_router.delete("/tokens/{token_id}", status_code=204)
@@ -129,16 +137,20 @@ def delete_token(token_id: str, auth: AuthContext = Depends(admin),
                  svc: CoreServicesLike = Depends(get_services)):
     if auth.token_id == token_id:
         raise ApiError("VALIDATION_ERROR", 400, "cannot delete the token in use")
-    records = auth_entries(svc.config)
-    target = next((item for item in records if item["id"] == token_id), None)
-    if target is None:
-        raise ApiError("NOT_FOUND", 404, "token id not found")
-    remaining = [item for item in records if item["id"] != token_id]
-    # D-193 5: an expiring administrator (a paired browser) cannot hold the
-    # robot's administration on its own; only non-expiring ones count.
-    if is_durable_admin(target) and not any(is_durable_admin(item) for item in remaining):
-        raise ApiError("VALIDATION_ERROR", 409, "cannot delete the last non-expiring administrator token")
-    persist_token_records(svc, remaining)
+    with TOKEN_WRITE_LOCK:
+        records = auth_entries(svc.config)
+        target = next((item for item in records if item["id"] == token_id), None)
+        if target is None:
+            raise ApiError("NOT_FOUND", 404, "token id not found")
+        if auth.expires_at is not None and is_durable_admin(target):
+            # D-193 보안 리뷰 M2: a paired session cannot lock the owner out.
+            raise ApiError("FORBIDDEN", 403, "a paired session cannot delete a non-expiring administrator")
+        remaining = [item for item in records if item["id"] != token_id]
+        # D-193 5: an expiring administrator (a paired browser) cannot hold the
+        # robot's administration on its own; only non-expiring ones count.
+        if is_durable_admin(target) and not any(is_durable_admin(item) for item in remaining):
+            raise ApiError("VALIDATION_ERROR", 409, "cannot delete the last non-expiring administrator token")
+        persist_token_records(svc, remaining)
     svc.events.publish(
         "config.changed", severity="warning", source="api",
         data={"key": "auth.tokens", "id": token_id, "deleted": True},
@@ -152,12 +164,13 @@ class TokenLabelRequest(BaseModel):
 @system_router.patch("/tokens/{token_id}")
 def relabel_token(token_id: str, body: TokenLabelRequest, auth: AuthContext = Depends(admin),
                   svc: CoreServicesLike = Depends(get_services)):
-    records = auth_entries(svc.config)
-    target = next((item for item in records if item["id"] == token_id), None)
-    if target is None or is_expired(target):
-        raise ApiError("NOT_FOUND", 404, "token id not found")
-    target["label"] = body.label.strip()
-    persist_token_records(svc, records)
+    with TOKEN_WRITE_LOCK:
+        records = auth_entries(svc.config)
+        target = next((item for item in records if item["id"] == token_id), None)
+        if target is None or is_expired(target):
+            raise ApiError("NOT_FOUND", 404, "token id not found")
+        target["label"] = body.label.strip()
+        persist_token_records(svc, records)
     svc.events.publish(
         "config.changed", severity="warning", source="api",
         data={"key": "auth.tokens", "id": token_id},
