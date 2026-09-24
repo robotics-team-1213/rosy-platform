@@ -26,13 +26,13 @@ development and CI compatibility and are not installed in the product image.
 | `verify/` | On-device and Windows checks: `verify-pi.sh`, `verify-motors.sh`, `verify-power.sh`, `device-readback.sh` |
 | `collect-rosy-diagnostics.ps1` | D-175 L2 puller: key-only BatchMode SSH with a pinned `%LOCALAPPDATA%\Rosy\known_hosts` (accept-new), runs `rosy-diag collect`, copies the bundle to `evidence\<device>\<boot_id>\` without overwriting. SSH unreachable + `-CardDisk <serial>`: copies the card's FAT32 `rosy-diag\` (no elevation) and prints the elevated `deploy\sd\read-card-diagnostics.py` command. `-PrintPlan` runs nothing |
 | `verify/verify-motors.sh` | Refuses to probe the UART whenever it cannot establish that the motor runtime is down |
-| `capture-vendor-baseline.sh` | Pre-G0 vendor stock image (card A) passive, secret-redacted evidence capture; closes upstream research UNKNOWNs and gives G0–G5 reference values. Contract pinned + mutation-proven by `test/test_capture_vendor_baseline.py`; I2C probing is opt-in and raw output requires review before repository admission |
+| `capture-vendor-baseline.sh` | Pre-G0 vendor stock image (card A) passive, secret-redacted evidence capture; closes upstream research UNKNOWNs and gives G0?밎5 reference values. Contract pinned + mutation-proven by `test/test_capture_vendor_baseline.py`; I2C probing is opt-in and raw output requires review before repository admission |
 | `commission-pinky.py` / `commissioning_session.py` | Ordered G0-G5 evidence recorder; G5 binds MCAP telemetry and generated map hashes; operator procedure is `docs/deployment/pinky-pro-first-device-runbook.md` |
 | `measure-dds-baseline.sh` | Phase 0 DDS baseline (D-34). Requires `hardware` mode; records each topic's pre-attach subscriber count because attaching `ros2 topic bw` creates the traffic it measures |
 | `rosy-runtime.service` | Legacy Compose unit retained for development compatibility; product images enable `native/rosy-runtime.target` |
 | `rosy-lowbatt-shutdown.service` / `.path` / `.sh` | D-27: host watches CORE sentinel file and halts |
 | `rosy-release-recover.service` / `release-recover.sh` | Failed-release recovery |
-| `rosy-release-push.ps1` | D-230: operator-PC entry point that scp's a signed native payload release to an existing robot and runs `native/activate-release.sh` (or `native/rollback-release.sh`), no card re-flash. Verifies the signature/checksums locally first (reuses `deploy/release/signing.py`); `-PrintCommands` shows the exact ssh/scp sequence without touching the network |
+| `rosy-release-push.ps1` | D-225: operator-PC entry point that scp's a signed native payload release to an existing robot and runs `native/activate-release.sh` (or `native/rollback-release.sh`), no card re-flash. Verifies the signature/checksums locally first (reuses `deploy/release/signing.py`); `-PrintCommands` shows the exact ssh/scp sequence without touching the network |
 | `rosy-release-unpack.sh` | Remote helper `rosy-release-push.ps1` copies over: atomically places a release tarball under `/opt/rosy/releases/<id>`, refusing an id that already exists with different content |
 | `requirements-core.txt` / `requirements-io.txt` | pip constraints per image |
 | `.env.example` | Compose env template (do not commit secrets) |
@@ -57,8 +57,8 @@ development and CI compatibility and are not installed in the product image.
 - `rosy-core` has **no** `/dev` devices and no Docker socket. Do not add them.
 - Host proc/sys bind-mounts are read-only for dashboard telemetry (`ROSY_HOST_ROOT=/host`).
 - Low-battery shutdown: CORE writes `battery-shutdown-request.json`; the host unit executes halt (sentinel age 900 s, grace cap 600 s). CORE must not call shutdown itself (D-27).
-- `rosy-runtime.service` **Requires** `rosy-release-recover.service` — `Wants=` would make recovery advisory.
-- `ROS_DOMAIN_ID` has **no default** — it is derived from `ROSY_ROBOT_NUMBER`
+- `rosy-runtime.service` **Requires** `rosy-release-recover.service` ??`Wants=` would make recovery advisory.
+- `ROS_DOMAIN_ID` has **no default** ??it is derived from `ROSY_ROBOT_NUMBER`
   (`40 + N`, namespace `rosy_%02d`) at install time and `compose.yaml` uses the
   `${VAR:?}` form so an unset identity stops the runtime (D-33). A default here is
   what shipped every unit as 42/`rosy_01`. CycloneDDS URI `file:///etc/rosy/cyclonedds.xml`.

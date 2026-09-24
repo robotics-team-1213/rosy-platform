@@ -19,7 +19,7 @@ param(
     [string]$ScpExe = "scp",
     [string]$TarExe = "tar"
 )
-# D-230 Decision 2.3: push a signed native payload release from the operator
+# D-225 Decision 2.3: push a signed native payload release from the operator
 # PC to an existing robot and activate it (or roll it back), without a card
 # re-flash. This completes the payload-transition path native_release.py
 # already verifies on-device: build-native-payload.sh/sign_image_release.py
@@ -59,6 +59,18 @@ if ($Rollback) {
     if (-not $ReleaseDir -and -not $Tarball) {
         Fail "Pass -ReleaseDir <signed release directory> or -Tarball <packed release>, or use -Rollback."
     }
+    if ($ReleaseDir -and -not $PrintCommands) {
+        # Windows tar cannot represent a POSIX exec bit: rebuilding the
+        # tarball here would silently strip +x from every payload script and
+        # activation would fail on-device with no signature-verification
+        # signal pointing at why. A real push only accepts a tarball a Linux
+        # build already packed (build-native-payload.sh on the payload-build
+        # branch); -ReleaseDir is accepted only to preview the plan shape.
+        Fail ("-ReleaseDir only works with -PrintCommands (a preview): repacking a release " +
+              "directory with Windows tar loses POSIX exec bits and the pushed release would " +
+              "fail to activate. Build the release tarball on Linux (build-native-payload.sh) " +
+              "and pass it with -Tarball for a real push.")
+    }
 }
 
 if (-not $KeyPath) {
@@ -87,6 +99,7 @@ $releaseId = $null
 $stagingRoot = $null
 $verification = $null
 $tarballPath = $null
+$tempDirsToClean = New-Object System.Collections.Generic.List[string]
 
 function New-TempDirectory([string]$Prefix) {
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
@@ -95,6 +108,7 @@ function New-TempDirectory([string]$Prefix) {
         Fail "Refusing to use a temporary path outside the system temp directory."
     }
     New-Item -ItemType Directory -Path $path | Out-Null
+    $tempDirsToClean.Add($path)
     return $path
 }
 
@@ -177,6 +191,8 @@ sys.exit(1 if rejections else 0)
     return [ordered]@{ ok = ($result.exit_code -eq 0); rejections_json = $rejectionsJson }
 }
 
+try {
+
 if (-not $Rollback) {
     if ($Tarball) {
         $Tarball = (Resolve-Path -LiteralPath $Tarball).ProviderPath
@@ -216,6 +232,19 @@ if (-not $Rollback) {
 
 # --- the one function every remote command is built by ---------------------
 
+function Get-CoreReadyArguments([string]$CoreReadyProbe) {
+    # rosy-core.service gets its API port (and everything else device-
+    # specific) from /etc/rosy/runtime.env via systemd's EnvironmentFile=; a
+    # plain non-login SSH command runs no unit and no shell profile, so
+    # without this the probe would run with none of that and silently fall
+    # back to its own hardcoded default port. Source the same file the unit
+    # loads, then run the existing bounded probe unchanged.
+    return @(
+        "bash", "-lc",
+        "'set -a; [ -f /etc/rosy/runtime.env ] && . /etc/rosy/runtime.env; set +a; exec python3 -B $CoreReadyProbe'"
+    )
+}
+
 function ConvertTo-DisplayLine([string]$Executable, [string[]]$Arguments) {
     $quoted = $Arguments | ForEach-Object {
         if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
@@ -232,7 +261,12 @@ function Get-RemoteCommandPlan {
         [string]$SshExe, [string]$ScpExe
     )
     $target = "${RosyUser}@${Robot}"
-    $sshOptions = @("-o", "UserKnownHostsFile=$KnownHosts", "-o", "StrictHostKeyChecking=yes")
+    # ssh parses a "-o Key=Value" argument the way it parses an ssh_config
+    # line: an unquoted Value is split on whitespace. A KnownHosts path under
+    # "C:\Program Files\..." would otherwise be cut at the first space even
+    # though it arrives here as a single argv element, so the value itself is
+    # quoted.
+    $sshOptions = @("-o", "UserKnownHostsFile=`"$KnownHosts`"", "-o", "StrictHostKeyChecking=yes")
     $plan = New-Object System.Collections.ArrayList
 
     function Add-Step($list, [string]$Kind, [string]$Executable, [string[]]$Arguments) {
@@ -246,7 +280,7 @@ function Get-RemoteCommandPlan {
 
     if ($Rollback) {
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))
-        Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "python3", "-B", $CoreReadyProbe))
+        Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
         return $plan
     }
 
@@ -259,7 +293,7 @@ function Get-RemoteCommandPlan {
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "chmod", "+x", $remoteUnpack))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $remoteUnpack, $ReleaseId, $remoteTarball, $RemoteReleasesDir))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $ActivateWrapper, $ReleaseId))
-    Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "python3", "-B", $CoreReadyProbe))
+    Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
     return $plan
 }
 
@@ -300,9 +334,15 @@ foreach ($step in $plan) {
             Write-Warning "activation wrapper did not print the expected JSON result line."
         }
     }
-    if ($arguments -contains $CoreReadyProbe) {
+    if ($arguments | Where-Object { $_ -like "*$CoreReadyProbe*" }) {
         Write-Host "CORE readiness: PASS"
     }
 }
 
 Write-Host "done."
+
+} finally {
+    foreach ($directory in $tempDirsToClean) {
+        Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}

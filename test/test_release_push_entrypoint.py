@@ -1,5 +1,5 @@
 """Operator entry point for pushing a signed native release to a robot without
-a card re-flash (D-230 Decision 2.3).
+a card re-flash (D-225 Decision 2.3).
 
 rosy-release-push.ps1 completes the payload-transition path native_release.py
 already verifies on-device: it locally re-checks the signature and file
@@ -97,8 +97,13 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     activate_step = plan[5]["arguments"]
     assert activate_step[-2:] == ["/opt/rosy/native-runtime/activate-release.sh", RELEASE_ID]
     assert "sudo" in activate_step and "-n" in activate_step
-    # readiness probe reuses the existing on-device bounded probe.
-    assert plan[6]["arguments"][-1] == "/opt/rosy/native-runtime/wait-core-ready.py"
+    # readiness probe sources the unit's env file (for ROSY_API_PORT, which a
+    # plain non-login ssh command otherwise never sees) then reuses the
+    # existing on-device bounded probe unchanged.
+    ready_args = plan[6]["arguments"]
+    assert ready_args[-3:-1] == ["bash", "-lc"]
+    assert "/etc/rosy/runtime.env" in ready_args[-1]
+    assert "wait-core-ready.py" in ready_args[-1]
     for step in plan:
         assert "-o" in step["arguments"] and "StrictHostKeyChecking=yes" in step["arguments"]
         assert "StrictHostKeyChecking=no" not in step["display"]
@@ -117,7 +122,9 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert len(plan) == 2
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
-    assert plan[1]["arguments"][-1] == "/opt/rosy/native-runtime/wait-core-ready.py"
+    ready_args = plan[1]["arguments"]
+    assert ready_args[-3:-1] == ["bash", "-lc"]
+    assert "wait-core-ready.py" in ready_args[-1]
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -215,7 +222,44 @@ def test_default_key_and_known_hosts_paths_are_under_localappdata(release, monke
     first_ssh = plan[0]["arguments"]
     assert first_ssh[1] == "C:\\Users\\test-operator\\AppData\\Local\\Rosy\\ssh\\rosy-operator-ed25519"
     known_hosts_option = next(a for a in first_ssh if a.startswith("UserKnownHostsFile="))
-    assert known_hosts_option == "UserKnownHostsFile=C:\\Users\\test-operator\\AppData\\Local\\Rosy\\known_hosts"
+    # the value is quoted: ssh parses "-o Key=Value" like an ssh_config line,
+    # which splits an unquoted value on whitespace, and a LOCALAPPDATA under
+    # "C:\Program Files\..." would otherwise be cut at the first space.
+    assert known_hosts_option == 'UserKnownHostsFile="C:\\Users\\test-operator\\AppData\\Local\\Rosy\\known_hosts"'
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_known_hosts_paths_with_spaces_survive_intact(release, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", "C:\\Users\\test operator\\AppData\\Local")
+
+    completed = _print_push(release)
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)["plan"]
+    known_hosts_option = next(a for a in plan[0]["arguments"] if a.startswith("UserKnownHostsFile="))
+    assert known_hosts_option == 'UserKnownHostsFile="C:\\Users\\test operator\\AppData\\Local\\Rosy\\known_hosts"'
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_real_push_refuses_release_dir_and_names_tarball_as_the_fix(release):
+    # Windows tar cannot represent a POSIX exec bit; without -PrintCommands
+    # this must fail loudly instead of silently shipping a broken payload.
+    completed = _run(["-Robot", "rosy-e4us.local", "-ReleaseDir", str(release["dir"]),
+                       "-PublicKeyPath", str(release["public_key"])])
+
+    assert completed.returncode != 0
+    assert "-PrintCommands" in completed.stderr
+    assert "-Tarball" in completed.stderr
+    assert "POSIX exec bits" in completed.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_release_dir_is_still_accepted_for_a_print_commands_preview(release):
+    # covered by _print_push in the other tests too; asserted here by name so
+    # the -PrintCommands exception to the -ReleaseDir rule reads as a rule.
+    completed = _print_push(release)
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_the_script_never_disables_host_key_checking():
@@ -223,7 +267,7 @@ def test_the_script_never_disables_host_key_checking():
 
     assert "StrictHostKeyChecking=yes" in text
     assert "StrictHostKeyChecking=no" not in text
-    assert "UserKnownHostsFile=$KnownHosts" in text
+    assert "UserKnownHostsFile=" in text
 
 
 def test_every_remote_command_comes_from_one_function():
@@ -236,13 +280,31 @@ def test_every_remote_command_comes_from_one_function():
     assert "foreach ($step in $plan)" in text
 
 
-def test_activation_and_rollback_run_under_a_narrow_sudo_and_reuse_the_core_probe():
+def test_activation_and_rollback_run_under_sudo_and_reuse_the_core_probe():
+    # rosy already carries ALL=(ALL) NOPASSWD:ALL in
+    # deploy/image/first-boot/rosy-first-boot.py; there is no narrower
+    # sudoers rule for these wrappers to run under today.
     text = SCRIPT.read_text(encoding="utf-8")
 
     assert '"sudo", "-n", $ActivateWrapper' in text
     assert '"sudo", "-n", $RollbackWrapper' in text
     assert "wait-core-ready.py" in text
     assert "$CoreReadyProbe" in text
+
+
+def test_the_readiness_probe_sources_the_runtime_env_file():
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "/etc/rosy/runtime.env" in text
+    assert "function Get-CoreReadyArguments" in text
+
+
+def test_temporary_directories_are_cleaned_up_in_a_finally_block():
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "$tempDirsToClean" in text
+    assert "} finally {" in text
+    assert "Remove-Item -LiteralPath $directory -Recurse -Force" in text
 
 
 def test_the_unpack_helper_refuses_a_different_release_with_the_same_id():
