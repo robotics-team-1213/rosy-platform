@@ -53,3 +53,7 @@ DEVICE 조명·시간대 유지율 측정 후 D-162를 Accepted로 뒤집는다.
 **References:** D-47, D-48, D-137, D-139, D-143, D-151,
 `docs/plans/2026-09-22-scene-context-road-design.md`,
 `docs/plans/2026-09-22-scene-context-road.md`.
+
+**부분 검증 기록 (2026-09-25, Proposed 유지):** D-162 슬라이스(road_observer_node + scene context)가
+2026-09-22 노드 그래프 검증을 통과했다(STATUS 기록). 단 본 ADR의 Accepted 조건(DEVICE 조명·시간대 유지율 측정)은
+미충족이므로 뒤집지 않는다.

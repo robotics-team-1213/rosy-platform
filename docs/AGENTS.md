@@ -57,7 +57,7 @@ python3 tools/harness/rosy_harness.py lint
 
 ### Internal
 
-- Implementation: `src/core/core`, `src/hardware/bringup`, `deploy/`
+- Implementation: `src/core/core`, `src/devices/bringup`, `deploy/`
 - Traceability matrix in Implementation Plan §11
 
 ### External
