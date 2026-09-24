@@ -141,7 +141,7 @@ main {
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
 .robot.s2 { border-left-color: var(--robot-3); }
-.robot.selected { background: var(--ground-card-2); border-color: var(--line-30); }
+.robot.selected { background: var(--ground); border-color: var(--line-30); }
 .robot.offline { opacity: 0.55; }
 
 .robot-head { display: flex; align-items: center; gap: var(--space-2); }

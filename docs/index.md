@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(adr): D-214 텍스트 대비의 바닥
+- 2026-09-25 · 743a707f · docs(validation): 재검증 — 동시 커밋 6건 이후 전 게이트 초록
 - 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
 - 2026-09-24 · uncommitted · docs(adr): D-202 얼굴 번역 문단, 회차 폴더 얼굴 추가
 - 2026-09-24 · uncommitted · docs(adr): D-201·D-202·D-203 공예 계약과 UI/UX 회차
-- 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench
-- 2026-09-24 · uncommitted · docs(adr): D-185 R3 rig A/B, R7 원인 메모

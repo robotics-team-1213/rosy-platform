@@ -143,13 +143,19 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   white-space: nowrap;
 }
 .status-badge i { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: currentColor; }
-/* 상태 어휘는 셋뿐이다: 중립(기본) · 주의(글자) · 위험(글자).
+/* 상태 어휘는 셋뿐이다: 중립(기본) · 주의(글자) · 위험(채움).
    같은 셋을 뱃지·기계 태그·모드 칩·[data-status]가 함께 쓴다 — 표면마다
-   다른 색 규칙을 만들면 그게 곧 세 번째 팔레트다. */
+   다른 색 규칙을 만들면 그게 곧 세 번째 팔레트다.
+   위험은 채움이다(D-202/D-214): crit 글자는 점검 패널 위에서 2.68:1로
+   읽히지 않는다 — 종이 잉크 + 위험 채움. */
 .status-online, [data-status="OK"] { color: var(--nominal); }
-.status-error,
-[data-status="ERROR"], [data-status="UNAVAILABLE"] { color: var(--status-crit); border-color: var(--status-crit-a45); }
 [data-status="WARNING"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
+.status-error,
+[data-status="ERROR"], [data-status="UNAVAILABLE"] {
+  color: var(--paper);
+  background: var(--status-crit);
+  border-color: transparent;
+}
 
 .mode-chip[data-mode="SITE_STA"],
 .mode-chip[data-mode="ACTIVATED_CORE_ONLY"],

@@ -488,3 +488,91 @@ def test_warm_coloured_text_stays_readable(console_url):
         "따뜻한 색 글자가 4.5:1 미만이다 — 위험은 채움이다(D-202): "
         + "; ".join(offenders[:6])
     )
+
+
+# --- D-214: 텍스트 대비의 바닥 — 색이 아니라 청중의 계약 ---------------------
+
+TEXT_CONTRAST_FLOOR = """() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  const effBg = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const s = getComputedStyle(node);
+      const m = s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+      if (m && (m[1].split(',').length < 4 || Number(m[1].split(',')[3]) === 1)) {
+        return s.backgroundColor;
+      }
+      node = node.parentElement;
+    }
+    return getComputedStyle(document.documentElement).getPropertyValue('--ground');
+  };
+  const lum = (c) => {
+    let r, g, b;
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.replace(/[^#]/g, (x) => x + x) : c;
+      r = parseInt(h.slice(1, 3), 16); g = parseInt(h.slice(3, 5), 16);
+      b = parseInt(h.slice(5, 7), 16);
+    } else {
+      const m = c.match(/rgba?\\(([^)]+)\\)/);
+      if (!m) return null;
+      [r, g, b] = m[1].split(',').map(Number);
+    }
+    const f = (v) => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const offenders = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const s = getComputedStyle(el);
+    const la = lum(s.color), lb = lum(effBg(el));
+    if (la === null || lb === null) continue;
+    const ratio = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    // 24px 이상의 디스플레이 값은 크기가 대비를 보상한다(D-214).
+    const floor = parseFloat(s.fontSize) >= 24 ? 3.0 : 4.5;
+    if (ratio < floor) {
+      offenders.push(`${el.tagName.toLowerCase()}.${(el.className || '').toString()}`
+        + ` ${ratio.toFixed(2)}:1 <${floor} "${el.textContent.trim().slice(0, 14)}"`);
+    }
+  }
+  return offenders;
+}"""
+
+
+def test_visible_text_meets_the_contrast_floor(console_url):
+    """D-214 — 보이는 모든 글자는 4.5:1(큰 값 3.0:1) 바닥 위에 있다.
+
+    선택된 로봇 카드의 muted 라벨(4.11:1)이 이 게이트의 첫 적발이다.
+    """
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        # 로스터의 선택 상태를 만든다 — 바닥 붕괴는 선택 카드에서 났다.
+        # 선택은 카드가 아니라 '목표 지정' 버튼으로 일어난다(console.js).
+        page.locator("#roster article ui-button", has_text="목표 지정").first.click()
+        # 경합 하에서 기본 5초를 넘기는 것은 대기의 문제지 대비의 문제가 아니다
+        # — 계약은 센서스가 지킨다(2026-09-25 재검증 노트의 플레이크와 같은 계열).
+        page.wait_for_function(
+            "() => document.querySelectorAll('.robot.selected').length === 1",
+            timeout=20_000,
+        )
+        offenders = page.evaluate(TEXT_CONTRAST_FLOOR)
+        assert not errors
+        browser.close()
+
+    assert offenders == [], (
+        "바닥 아래 텍스트가 있다 — 선택도 읽기를 희생하지 않는다(D-214): "
+        + "; ".join(offenders[:6])
+    )

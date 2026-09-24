@@ -95,6 +95,7 @@ A law that has no test is still prose. These are the instruments:
 | The frame fits the grammar | no-scroll surfaces do not scroll *and do not crush* at their declared viewport; lists scroll inside the frame; safety actions are always in view (D-201) | `test_dashboard_browser.py`, `test_fleet_console_browser.py`, `test_games_board_browser.py` (opt-in) |
 | Danger is a fill | status-crit is never a text colour; any warm-coloured text is ≥ 4.5:1 against its effective ground (D-202) | `test_fleet_console_browser.py` (opt-in) |
 | The rendered scale is closed | every visible computed font-size is a token step — not just the declared ones (D-203) | `test_dashboard_browser.py` (opt-in) |
+| Text keeps a contrast floor | every visible text is ≥ 4.5:1 (≥ 3:1 at display size) against its effective ground, on every surface incl. off-token ones — selection never spends readability (D-214) | `test_dashboard_browser.py`, `test_fleet_console_browser.py` (opt-in) |
 
 ## 5. Evidence States
 

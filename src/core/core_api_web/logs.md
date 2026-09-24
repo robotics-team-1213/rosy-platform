@@ -55,3 +55,12 @@
 - gate 변화: 콘솔 G1에 적합 게이트(2뷰포트×2상태)·계산 척급 센서스 게이트 추가.
 - 결정: D-201, D-203
 - 교훈: 스크롤이 금지된 문법에서 flex-shrink는 넘침을 조용한 분쇄로 바꾼다 ? 게이트는 분쇄도 재야 한다.
+
+
+## 2026-09-25 · uncommitted · fix(web): 점검 머신 태그의 위험은 채움 (D-214)
+
+- 변경: [data-status=ERROR]·[data-status=UNAVAILABLE]을 crit 글자(점검 패널 위 2.68:1)에서 종이 잉크+위험 채움으로. 회차 1 warm 스캔이 operate만 봐서 못 잡은 D-202 잔존분을 바닥 게이트가 적발.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pytest test/test_dashboard_browser.py -q → 45 passed(전 텍스트 바닥 게이트 2종 신설 — F-19가 그 자체로 변이 증명: 적색→수정→녹색).
+- gate 변화: 콘솔 G1에 전 텍스트 대비 바닥 게이트 추가(양 뷰×2상태).
+- 결정: D-214
+- 교훈: warm 스캔의 뷰 범위가 곧 게이트의 눈이었다 — 점검 뷰는 별개 세계다.

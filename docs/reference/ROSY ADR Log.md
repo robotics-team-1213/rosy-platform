@@ -215,4 +215,12 @@
 | D-207 | 제품과 장치 종류는 주인이 하나다 — 제품 기록은 src/products, 새 칩은 종류 안의 구현, 조명 두 서비스와 현장 펌웨어와 맵은 부르는 쪽에 둔다 | Proposed |
 | D-208 | 감지 프로파일은 속도를 발행하지 않는다 — full만 D-149의 단독 최종 발행 예외이고 sensing은 safety_node와 Twist 발행자를 만들지 않는다 | Accepted |
 | D-209 | 인식과 학습 백엔드의 자리 — 몸통 인식은 control/sensing/perception, VLA는 backend_learned, 재생과 학습 세트는 로봇 이미지 밖 | Accepted |
+| D-210 | 실사용 1차 범위 — 2대 관제+군집을 실물 1대+시뮬 1대로 닫는다 | Proposed |
+| D-211 | ROS-SIM 재실행 묶음 — 현재 트리에서 2대 관제+군집을 증명한다 | Proposed |
+| D-212 | ARTIFACT 네이티브 경로 — Pi 5에서 서명 이미지까지만 간다 | Proposed |
+| D-213 | DEVICE→FIELD 승격 순서 — 실물 1대 stationary부터 2대(실물+sim) 현장 반복까지 | Proposed |
+| D-214 | 텍스트 대비의 바닥 — 모든 보이는 글자는 4.5:1(큰 값 3.0:1) 이상이다: 팔레트는 표면의 자유지만 읽힘은 청중의 권리이며 선택도 읽기를 희생하지 않는다 | Accepted |
+| D-215 | 명령 추적 `TIMEOUT`은 Fleet 기록 전용 상태다 — 로봇 ack enum에 넣지 않는다 | Proposed |
+| D-216 | CAP-001 예시의 `protocol_version` 오타를 고친다 — `"1"`이 아니라 `"1.0"`이다 | Proposed |
+| D-217 | SEC-102의 CORS 문장을 좁힌다 — 로봇 API는 CORS를 제공하지 않는다 | Proposed |
 ---

@@ -1174,6 +1174,83 @@ def test_visible_type_scale_is_closed(state_init):
     )
 
 
+# --- D-214: 텍스트 대비의 바닥 — 보이는 모든 글자가 읽혀야 한다 ---------------
+
+TEXT_FLOOR_CENSUS = """() => {
+  const effBg = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const s = getComputedStyle(node);
+      const m = s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+      if (m && (m[1].split(',').length < 4 || Number(m[1].split(',')[3]) === 1)) {
+        return s.backgroundColor;
+      }
+      node = node.parentElement;
+    }
+    return getComputedStyle(document.documentElement).getPropertyValue('--ground');
+  };
+  const lum = (c) => {
+    let r, g, b;
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.replace(/[^#]/g, (x) => x + x) : c;
+      r = parseInt(h.slice(1, 3), 16); g = parseInt(h.slice(3, 5), 16);
+      b = parseInt(h.slice(5, 7), 16);
+    } else {
+      const m = c.match(/rgba?\\(([^)]+)\\)/);
+      if (!m) return null;
+      [r, g, b] = m[1].split(',').map(Number);
+    }
+    const f = (v) => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const offenders = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const s = getComputedStyle(el);
+    const la = lum(s.color), lb = lum(effBg(el));
+    if (la === null || lb === null) continue;
+    const ratio = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    const floor = parseFloat(s.fontSize) >= 24 ? 3.0 : 4.5;
+    if (ratio < floor) {
+      offenders.push(`${el.tagName.toLowerCase()}#${el.id || '-'}`
+        + ` ${ratio.toFixed(2)}:1 "${el.textContent.trim().slice(0, 14)}"`);
+    }
+  }
+  return offenders;
+}"""
+
+
+@pytest.mark.parametrize("state_init", ["", CONSOLE_STATE_INIT["safe-stop"]])
+def test_visible_text_meets_the_contrast_floor(state_init):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=state_init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.wait_for_timeout(700)
+        offenders = page.evaluate(TEXT_FLOOR_CENSUS)
+        page.locator("#view-inspect").click()
+        page.wait_for_timeout(300)
+        offenders += page.evaluate(TEXT_FLOOR_CENSUS)
+        browser.close()
+
+    assert offenders == [], (
+        "바닥(4.5:1, 큰 값 3.0:1) 아래 텍스트가 있다(D-214): "
+        + "; ".join(offenders[:6])
+    )
+
+
 def _open_dashboard(playwright, extra_init=""):
     browser, page = _launch_page(playwright, extra_init=extra_init)
     page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)

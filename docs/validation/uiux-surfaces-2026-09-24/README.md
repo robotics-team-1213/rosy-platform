@@ -86,6 +86,23 @@ python -m pytest src/face/emotion/test/test_info_screen_capture.py -q
 필터가 목록을 버린 것이 유일한 손해였다. 기계 경합이 의심되는 근거:
 같은 묶음의 소요가 113초→388초로 3.4배까지 늘어났다가 회복.
 
+## D-214 바닥 회차 (2026-09-25, 같은 날 추가)
+
+텍스트 대비의 바닥(D-214)을 계약으로 만들며 게이트가 즉시 두 위반을 잡았다:
+
+- **F-18** Fleet 선택 로스터 카드의 muted 라벨(12px) — `--ground-card-2`
+  위에서 **4.11:1**. 관제자가 제일 집중해 보는 카드의 라벨이 제일 안
+  읽혔다. 처분: 선택 바탕을 `--ground`(6.55)로 낮추고 밝은 테두리
+  (`--line-30`)가 선택을 나른다.
+- **F-19** 점검 뷰의 `[data-status="UNAVAILABLE"]`·`[data-status="ERROR"]`
+  머신 태그가 crit **글자**(2.68:1) — 회차 1의 warm 스캔이 operate 뷰만
+  재서 못 잡은 D-202 위반의 콘솔 잔존분. 처분: 종이 잉크 + 위험 채움.
+
+게이트: 전 텍스트 대비 센서스(4.5 바닥, 24px+ 값 3.0) — Fleet(선택 상태
+포함, 변이 증명: card-2 복귀 → 4.11 적색)와 콘솔(양 뷰, F-19 자체가
+적색→수정→녹색의 변이 증명). 플레이크 재발 2회는 모두 부하 유발 대기
+타임아웃(소요 3:45 대 1:00 상관) — 선택 대기 20s로 넉넉히 하고 종결.
+
 **ADR:** [D-201](../../adr/D-201-fixed-grammar-surfaces-fit-contract.md),
 [D-202](../../adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md),
 [D-203](../../adr/D-203-computed-type-scale-closure.md)

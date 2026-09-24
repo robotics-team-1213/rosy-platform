@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · fix(fleet): 선택 카드가 읽기를 희생하지 않는다 (D-214)
 - 2026-09-24 · uncommitted · fix(fleet): 관제 콘솔 적합·경보 채움 (D-201, D-202)
 - 2026-09-24 · uncommitted · feat(fleet): POST /api/fleet/do 통역기
 - 2026-09-22 · uncommitted · fleet(Phase2)+docs: 통신 정합 T7~T11 마감 기록
 - 2026-09-22 · uncommitted · fleet(hub): /registry 선택적 Bearer 인증 + 공개 snapshot (T9)
-- 2026-09-22 · uncommitted · fleet(cli): 죽은 hub 명령 제거 (T8)
