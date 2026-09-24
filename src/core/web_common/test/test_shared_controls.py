@@ -152,3 +152,65 @@ def test_face_literals_match_the_token_file():
         if rgb != expected:
             mismatch.append(f"{name} {rgb} != --{token.lstrip('-')} #{hex_colour}")
     assert not mismatch, mismatch
+
+
+_MEASURE = re.compile(
+    r"(?<![-a-z])(padding|margin|gap|row-gap|column-gap|border-radius)[a-z-]*\s*:\s*([^;}{]+)"
+)
+_LENGTH = re.compile(r"(?<![\w.-])(\d*\.?\d+)(px|rem)")
+
+# Diagnostic names that are the shared palette, written as hex so the canvas
+# mirror can read them. Raster and the two colours with no token stay local.
+_DIAGNOSTIC_TWINS = {
+    "bg": "--ground-deep",
+    "observe": "--ground",
+    "act": "--ground-card",
+    "act-2": "--ground-card-2",
+    "ink": "--paper",
+    "ink-2": "--muted",
+    "muted": "--muted",
+    "route": "--series-primary",
+    "goal": "--series-goal",
+    "good": "--status-ok",
+    "warn": "--status-warn",
+    "crit": "--status-crit",
+    "hist": "--muted",
+}
+
+
+def test_measure_comes_from_the_scale():
+    """간격과 모서리는 닫힌 계단이다. 1px은 실선이다."""
+    offenders = []
+    for path in _surface_texts():
+        if path.suffix not in {".css", ".html"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if path.suffix == ".html":
+            blocks = re.findall(r"<style>(.*?)</style>", text, re.S)
+            blocks.extend(re.findall(r'style="([^"]*)"', text))
+            text = "\n".join(blocks)
+        for prop, value in _MEASURE.findall(text):
+            if "var(--space-" in value or "var(--radius-" in value:
+                value = re.sub(r"var\(--(?:space|radius)-[a-z0-9-]+\)", "", value)
+            for raw, unit in _LENGTH.findall(value):
+                px = float(raw) * (16 if unit == "rem" else 1)
+                if px in (0, 1):
+                    continue
+                offenders.append(f"{path.name} {prop}: {raw}{unit}")
+    assert not offenders, offenders
+
+
+def test_diagnostic_palette_matches_the_token_hex():
+    tokens = dict(re.findall(
+        r"(--[a-z0-9-]+):\s*#([0-9a-fA-F]{6})",
+        TOKENS.read_text(encoding="utf-8"),
+    ))
+    page = (ROOT / "apps" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
+    mismatch = []
+    for local, token in _DIAGNOSTIC_TWINS.items():
+        got = declared.get(local)
+        expected = tokens.get(token)
+        if got != expected:
+            mismatch.append(f"--{local} #{got} != {token} #{expected}")
+    assert not mismatch, mismatch
