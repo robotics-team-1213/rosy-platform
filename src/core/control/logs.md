@@ -497,3 +497,10 @@
 - gate 변화: 없음.
 - 결정: D-205 Proposed. P0 실측 → P1 계약 → P2 재생 도구 → P3 새 RuleBackend·SceneTracker → P4 현실화한 Gazebo → P5 재합격 → P6 장면 요소 주행 반영, 단계마다 게이트. 장치 주행은 P3·P5 통과 뒤. control 분할은 P1–P3 안에서.
 - 교훈: 없음. 후속: line_observer `camera_x_offset_m` 0.034(참값 0.028481), 주점 규약 `W/2` 대 `(W-1)/2`, `MOTION_ALONG_SIGMA_PER_M` 0.10 과신.
+
+## 2026-09-24 · uncommitted · docs(validation): P0 track measurement sheet (D-205)
+- 변경: `docs/validation/perception-real-video/2026-09-24/p0_track_measurements.md` 추가. D-205 P0 실측 항목 8개(차선 간격·테이프 폭·횡단보도 막대·링 지름·매트 외곽·벽 높이·렌즈 높이·렌즈 앞 오프셋)를 측정 방법·참고값(CAD/영상 추정)·기입란과 함께 정리했다. 게이트(재생 BEV 차선 간격 ±5 mm) 절차와 측정 뒤 프로필 확정·보관 규칙(이 폴더에 revision으로 두고 `src/robots/pinky_pro/config/`는 D-196 PR #36 이후)을 적었다.
+- 증거: 없음(측정 대기). 코드와 프로필 본문은 바꾸지 않았다.
+- gate 변화: 없음.
+- 결정: P0 시작. 실측값이 오면 확정 프로필(revision `measured-<날짜>`)을 만들고 `camcal/bevfinal.py`로 게이트를 잰다.
+- 교훈: 없음.
