@@ -301,3 +301,57 @@ def test_shell_wrappers_only_call_the_python_module():
     assert overlay.REBOOT_NOTE in apply
     assert "render_native_dropin" not in apply
     assert "--backend" in apply or "core_dev_overlay.py" in apply
+
+
+def test_native_restart_reloads_units_first():
+    calls = []
+
+    def run(command, **kwargs):
+        del kwargs
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    overlay.restart_native(run)
+
+    assert calls == [["systemctl", "daemon-reload"], ["systemctl", "restart", "rosy-core.service"]]
+
+
+def _mountinfo(targets):
+    rows = [f"{index} 1 179:2 /var/lib/rosy-dev/x {target} ro,relatime - ext4 /dev/root rw"
+            for index, target in enumerate(targets, start=30)]
+    return "\n".join(["22 1 179:2 / / rw,relatime - ext4 /dev/root rw", *rows]) + "\n"
+
+
+def _runner(mountinfo):
+    def run(command, **kwargs):
+        del kwargs
+        if command[:2] == ["systemctl", "show"]:
+            return subprocess.CompletedProcess(command, 0, "4242\n", "")
+        if command[:2] == ["readlink", "-f"]:
+            path = command[2].replace("/opt/rosy/current/", "/opt/rosy/releases/2026.09.24-008/")
+            return subprocess.CompletedProcess(command, 0, path + "\n", "")
+        assert command == ["cat", "/proc/4242/mountinfo"]
+        return subprocess.CompletedProcess(command, 0, mountinfo, "")
+    return run
+
+
+def test_native_confirm_requires_every_bind_in_the_running_namespace():
+    pairs = overlay.bind_pairs(NATIVE_CORE, NATIVE_SHARE)
+    targets = [target for _source, target in pairs]
+
+    overlay.confirm_native_binds(pairs, _runner(_mountinfo(targets)))
+
+    with pytest.raises(overlay.OverlayError, match="missing overlay binds"):
+        overlay.confirm_native_binds(pairs, _runner(_mountinfo(targets[:-1])))
+    # 2026-09-24: drop-in written but not loaded -> no binds at all, yet core/__init__.py hashed equal.
+    with pytest.raises(overlay.OverlayError, match="missing overlay binds"):
+        overlay.confirm_native_binds(pairs, _runner(_mountinfo([])))
+
+
+def test_native_confirm_accepts_binds_recorded_under_the_resolved_release():
+    # The kernel records the bind under the symlink's target (seen on the device).
+    pairs = overlay.bind_pairs(NATIVE_CORE, NATIVE_SHARE)
+    resolved = [target.replace("/opt/rosy/current/", "/opt/rosy/releases/2026.09.24-008/")
+                for _source, target in pairs]
+
+    overlay.confirm_native_binds(pairs, _runner(_mountinfo(resolved)))
