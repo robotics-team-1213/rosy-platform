@@ -94,7 +94,8 @@ def generate_launch_description():
             name="core",
             output="screen",
             parameters=[{"use_sim_time": True}],
-            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay")},
+            # D-193 7: the dev tokens below exist only with ROSY_DEV_AUTH=1.
+            additional_env={"ROSY_CONFIG": LaunchConfiguration("core_overlay"), "ROSY_DEV_AUTH": "1"},
         ),
         LogInfo(msg=(
             "map_v2_fleet lane sim: http://127.0.0.1:8080/dashboard "

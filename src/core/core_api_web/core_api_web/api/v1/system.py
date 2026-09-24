@@ -20,9 +20,11 @@ from core_api_web.api.deps import (
     auth_entries,
     generate_token,
     get_services,
+    is_durable_admin,
+    is_expired,
     new_token_record,
+    persist_token_records,
     public_token_records,
-    stored_token_entries,
     token_digest,
 )
 from core_api_web.api.errors import ApiError
@@ -77,8 +79,8 @@ def update_system_info(body: IdentityRequest, _: AuthContext = Depends(admin),
 
 
 @system_router.get("/tokens")
-def list_tokens(_: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
-    return {"tokens": public_token_records(svc.config)}
+def list_tokens(auth: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
+    return {"tokens": public_token_records(svc.config, current_id=auth.token_id)}
 
 
 class TokenRequest(BaseModel):
@@ -88,15 +90,6 @@ class TokenRequest(BaseModel):
                               max_length=MAX_TOKEN_LENGTH)
     role: str
     label: str = Field(default="", max_length=64)
-
-
-def _persist_tokens(svc: CoreServices, records: list[dict]) -> None:
-    stored = stored_token_entries(records)
-    try:
-        patch_local_config({"auth": {"tokens": stored}})
-    except (ConfigError, OSError) as exc:
-        raise ApiError("INTERNAL_ERROR", 500, f"failed to persist tokens: {exc}")
-    svc.config.setdefault("auth", {})["tokens"] = stored
 
 
 @system_router.post("/tokens", status_code=201)
@@ -118,13 +111,13 @@ def add_token(body: TokenRequest, _: AuthContext = Depends(admin),
 
     record = new_token_record(token, role, body.label.strip())
     records.append(record)
-    _persist_tokens(svc, records)
+    persist_token_records(svc, records)
     svc.events.publish(
         "config.changed", severity="warning", source="api",
         data={"key": "auth.tokens", "id": record["id"], "role": role},
     )
     created = {"id": record["id"], "role": role, "label": record["label"],
-               "created_at": record["created_at"]}
+               "created_at": record["created_at"], "expires_at": None, "source": record["source"]}
     if generated:
         # 원문이 나가는 유일한 지점이다. 저장도 재조회도 되지 않는다.
         created["token"] = token
@@ -137,16 +130,40 @@ def delete_token(token_id: str, auth: AuthContext = Depends(admin),
     if auth.token_id == token_id:
         raise ApiError("VALIDATION_ERROR", 400, "cannot delete the token in use")
     records = auth_entries(svc.config)
-    remaining = [item for item in records if item["id"] != token_id]
-    if len(remaining) == len(records):
+    target = next((item for item in records if item["id"] == token_id), None)
+    if target is None:
         raise ApiError("NOT_FOUND", 404, "token id not found")
-    if not any(item["role"] == "administrator" for item in remaining):
-        raise ApiError("VALIDATION_ERROR", 409, "cannot delete the last administrator token")
-    _persist_tokens(svc, remaining)
+    remaining = [item for item in records if item["id"] != token_id]
+    # D-193 5: an expiring administrator (a paired browser) cannot hold the
+    # robot's administration on its own; only non-expiring ones count.
+    if is_durable_admin(target) and not any(is_durable_admin(item) for item in remaining):
+        raise ApiError("VALIDATION_ERROR", 409, "cannot delete the last non-expiring administrator token")
+    persist_token_records(svc, remaining)
     svc.events.publish(
         "config.changed", severity="warning", source="api",
         data={"key": "auth.tokens", "id": token_id, "deleted": True},
     )
+
+
+class TokenLabelRequest(BaseModel):
+    label: str = Field(max_length=64)
+
+
+@system_router.patch("/tokens/{token_id}")
+def relabel_token(token_id: str, body: TokenLabelRequest, auth: AuthContext = Depends(admin),
+                  svc: CoreServicesLike = Depends(get_services)):
+    records = auth_entries(svc.config)
+    target = next((item for item in records if item["id"] == token_id), None)
+    if target is None or is_expired(target):
+        raise ApiError("NOT_FOUND", 404, "token id not found")
+    target["label"] = body.label.strip()
+    persist_token_records(svc, records)
+    svc.events.publish(
+        "config.changed", severity="warning", source="api",
+        data={"key": "auth.tokens", "id": token_id},
+    )
+    return next(item for item in public_token_records(svc.config, current_id=auth.token_id)
+                if item["id"] == token_id)
 
 
 @system_router.get("/capabilities")

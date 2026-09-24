@@ -337,6 +337,8 @@ DECLARED_WRITES = {
         "$HOME/.rosy/docks.json", "$HOME/.rosy/battery-shutdown-request.json",
         # ROS logs (D-174 F6) and the host agent socket directory.
         "/var/log/rosy-core/core.log", "/run/rosy/host-agent.sock",
+        # D-193: CORE's used/burned signal to rosy-login-code (api/v1/auth.py STATE_FILE).
+        "/run/rosy/login-code-state.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-navigation.service": {
@@ -357,6 +359,8 @@ DECLARED_READS = {
     "rosy-core.service": {
         "/var/lib/rosy",       # calibration data_root, runtime probe default
         "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
+        # D-193: the root issuer's verifier, root:rosy-core 0640. CORE never writes there (D-161).
+        "/run/rosy-boot/login-code.json",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",

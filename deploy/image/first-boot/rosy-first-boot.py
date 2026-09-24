@@ -289,7 +289,8 @@ class FirstBootProvisioner:
         if not isinstance(records, list) or any(
                 not isinstance(item, dict) or item.get("id") != record["id"] for item in records):
             raise ValueError("CORE config overlay already holds another API credential")
-        overlay["auth"] = {**auth, "tokens": [dict(record)]}
+        # D-193 5: the card's credential is listed (and whoami answers) as `card`.
+        overlay["auth"] = {**auth, "tokens": [{**record, "source": "card"}]}
         return yaml.safe_dump(overlay, allow_unicode=True, sort_keys=False)
 
     def _core_api(self, record: dict) -> None:
@@ -386,6 +387,8 @@ class FirstBootProvisioner:
             "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
             "CYCLONEDDS_URI=file:///etc/rosy/cyclonedds.xml",
             "ROSY_CMD_VEL_TIMEOUT_S=0.5",
+            # D-193 7: CORE refuses the shared dev tokens and ignores ROSY_DEV_AUTH.
+            "ROSY_DEPLOYMENT=device",
             "",
         ])
 
