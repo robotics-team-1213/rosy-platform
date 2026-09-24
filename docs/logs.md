@@ -1857,3 +1857,11 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(repo): D-196 pinky literals live in the pinky family
+
+- 변경: `test/test_robot_literals.py`와 `test/robot_literal_backlog.txt` 추가. src 제품 파일의 `pinky`는 `devices/pinky_pro/`·`robots/pinky_pro*` 안에만 두고, 현재 위반 72개를 백로그로 집합 동일성 검사
+- 증거: `python -m pytest test/test_robot_literals.py -q` 1 passed; 백로그에 가짜 줄을 넣으면 stale로 실패함을 확인 (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
