@@ -118,3 +118,18 @@
 - 결정: module-coupling-scorecard §6 과제 4.
 - 교훈: 없음.
 
+
+## 2026-09-24 · uncommitted · fix(ci): install python3-opencv for the lane live viewer
+
+- 변경: `.github/workflows/ci.yml` Install colcon & tools 단계의 apt 목록에 `python3-opencv` 추가.
+  `src/sim/gz_sim/scripts/lane_live_view.py`(650fad89/b1e69932)가 모듈 최상단에서 cv2를 import하는데
+  러너에 OpenCV가 없어 gz_sim 단계가 수집 단계부터 죽었고, 그 뒤의 모든 gate(boot smoke, SaveMap 가드,
+  deploy/release 계약)가 실행조차 되지 않은 채 main이 2026-09-24부터 계속 빨강이었다. 패키지 선택은
+  io 이미지가 쓰는 `python3-opencv`와 같다.
+- 증거: 실패 원문 `gh run view 35991296072 --log-failed` → `ModuleNotFoundError: No module named 'cv2'`
+  (lane_live_view.py:44). D-197 머지 run 35977600574도 동일 단계 실패 — 빨강의 시작은 내 변경 이전이다.
+  로컬 재현: Windows 러너에서 gz_sim suite는 ROS 의존으로 실행 불가 — CI 실행으로 검증한다(커밋 후 run 확인).
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 모듈 최상단 cv2 import는 그 스크립트를 import하는 모든 시험의 선행 조건이 된다 — 시험 도구가
+  없는 환경에서 수집 단계부터 죽으면, 그 뒤의 게이트들이 "통과"가 아니라 "미실행"으로 가려진다.
