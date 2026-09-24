@@ -29,7 +29,7 @@ Keep tests ROS-free. Do not open `/dev` LCD in pytest.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest src/apps/emotion/test/test_info_screen.py -v
+python3 -m pytest src/face/emotion/test/test_info_screen.py -v
 ```
 
 ### Common Patterns

@@ -130,8 +130,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-202 얼굴 번역 문단, 회차 폴더 얼굴 추가
 - 2026-09-24 · uncommitted · docs(adr): D-201·D-202·D-203 공예 계약과 UI/UX 회차
 - 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench
 - 2026-09-24 · uncommitted · docs(adr): D-185 R3 rig A/B, R7 원인 메모
 - 2026-09-24 · uncommitted · docs(adr): D-185 R6 구현 메모
-- 2026-09-24 · uncommitted · docs(adr): D-185 R2 구현 메모
