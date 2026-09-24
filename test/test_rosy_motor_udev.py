@@ -210,3 +210,80 @@ def test_the_device_path_writes_vfat_safely():
     assert "install -o root -g root -m 0644 \"$CONFIG_FILE\"" not in text
     assert "--preserve=mode,ownership" not in text
     assert 'mv -f "$config_tmp" "$CONFIG_FILE"' in edit
+
+
+# --- LiDAR UART console isolation (rosy-pinky-e4us, release 2026.09.24-010) --
+#
+# Ubuntu's cmdline.txt ships console=serial0,115200; with enable_uart=1 that is
+# /dev/ttyAMA0, the RPLIDAR C1 port. serial-getty@ttyAMA0 (agetty) held it and
+# sllidar_node timed out; with the console removed, health OK and 10 Hz.
+
+UBUNTU_CMDLINE = ("console=serial0,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 "
+                  "root=LABEL=writable rootfstype=ext4 rootwait fixrtc\n")
+CLEAN_CMDLINE = ("multipath=off dwc_otg.lpm_enable=0 console=tty1 "
+                 "root=LABEL=writable rootfstype=ext4 rootwait fixrtc\n")
+
+
+def _image_with_cmdline(tmp_path: Path, cmdline: str) -> Path:
+    root = _image(tmp_path, UBUNTU_CONFIG)
+    (root / "boot/firmware/cmdline.txt").write_bytes(cmdline.encode("utf-8"))
+    return root
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the retrofit script")
+def test_image_mode_removes_the_serial_console_and_masks_the_bus_gettys(tmp_path):
+    root = _image_with_cmdline(tmp_path, UBUNTU_CMDLINE)
+
+    completed = _configure(root)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "PASS CONSOLE_ISOLATION removed serial console" in completed.stdout
+    assert "REBOOT_REQUIRED" not in completed.stdout
+    assert (root / "boot/firmware/cmdline.txt").read_bytes().decode("utf-8") == CLEAN_CMDLINE
+    for tty in ("ttyAMA0", "ttyAMA4"):
+        mask = root / f"etc/systemd/system/serial-getty@{tty}.service"
+        assert os.path.lexists(mask)
+        if mask.is_symlink():  # Windows without symlink rights leaves a copy
+            assert os.readlink(mask) == "/dev/null"
+    assert sorted(p.name for p in (root / "boot/firmware").iterdir()) == ["cmdline.txt", "config.txt"]
+    findings = _verifier().inspect(root, "none")
+    assert not [f for f in findings if "cmdline" in f or "serial getty" in f]
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the retrofit script")
+@pytest.mark.parametrize(
+    ("cmdline", "expected"),
+    [
+        (UBUNTU_CMDLINE, CLEAN_CMDLINE),
+        ("console=ttyAMA0,115200 console=tty1 rootwait\n", "console=tty1 rootwait\n"),
+        ("console=ttyAMA4,1000000 console=tty1 rootwait\r\n", "console=tty1 rootwait\n"),
+        # The Pi 5 debug UART and the screen stay.
+        ("console=ttyAMA10,115200 console=tty1 rootwait\n", "console=ttyAMA10,115200 console=tty1 rootwait\n"),
+        # A lookalike device name is not the bus.
+        ("console=ttyAMA01 console=tty1\n", "console=ttyAMA01 console=tty1\n"),
+    ],
+)
+def test_image_mode_edits_only_bus_consoles_and_is_idempotent(tmp_path, cmdline, expected):
+    root = _image_with_cmdline(tmp_path, cmdline)
+    assert _configure(root).returncode == 0
+    assert (root / "boot/firmware/cmdline.txt").read_bytes().decode("utf-8") == expected
+
+    again = _configure(root)
+
+    assert again.returncode == 0, again.stderr
+    assert "routes no console to ttyAMA0/ttyAMA4" in again.stdout
+    assert "masked" not in again.stdout
+    assert (root / "boot/firmware/cmdline.txt").read_bytes().decode("utf-8") == expected
+
+
+def test_console_isolation_runs_before_the_idempotent_exit():
+    text = UART_SCRIPT.read_text(encoding="utf-8")
+    assert 0 < text.find("\nisolate_bus_consoles\n") < text.find("is already configured")
+
+
+def test_the_device_verifier_reports_a_console_on_the_lidar_uart():
+    verify_pi = (ROOT / "deploy" / "robot" / "verify" / "verify-pi.sh").read_text(encoding="utf-8")
+    assert "/proc/cmdline" in verify_pi
+    assert "console=(serial0|ttyAMA0|ttyAMA4)(,|$)" in verify_pi
+    assert "serial-getty@ttyAMA0.service" in verify_pi
+    assert "configure-uart-pi5.sh and reboot" in verify_pi

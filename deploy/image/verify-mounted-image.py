@@ -34,6 +34,11 @@ MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
 MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
 # D-190: the LCD is SPI0 CE0 (/dev/spidev0.0); the base image enables SPI.
 BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
+# The LiDAR (UART0) and motor (UART4) buses carry no kernel console or getty.
+# Ubuntu's console=serial0 is UART0 on the Pi 5 with enable_uart=1.
+BUS_CONSOLE = re.compile(r"console=(serial0|ttyAMA0|ttyAMA4)(,|$)")
+BUS_GETTY_MASKS = ("etc/systemd/system/serial-getty@ttyAMA0.service",
+                   "etc/systemd/system/serial-getty@ttyAMA4.service")
 HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service")
 SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
 DISPLAY_UNIT = "rosy-boot-display.service"
@@ -160,6 +165,17 @@ def inspect(root: Path, release_id: str) -> list[str]:
         for line in BASE_BOOT_LINES:
             if not overlay_applies_to_pi5(text, line):
                 findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
+    cmdline = root / "boot/firmware/cmdline.txt"
+    if not cmdline.is_file():
+        findings.append("missing kernel command line: boot/firmware/cmdline.txt")
+    else:
+        for token in cmdline.read_text(encoding="utf-8", errors="replace").split():
+            if BUS_CONSOLE.match(token):
+                findings.append(f"boot/firmware/cmdline.txt routes a console to a robot bus UART: {token}")
+    for mask in BUS_GETTY_MASKS:
+        path = root / mask
+        if not os.path.lexists(path) or (os.path.islink(path) and os.readlink(path) != "/dev/null"):
+            findings.append(f"serial getty is not masked: {mask} -> /dev/null")
     if not (root / MOTOR_UDEV_RULE).is_file():
         findings.append(f"missing motor udev rule: {MOTOR_UDEV_RULE}")
     # D-192 US-005: the hardware runtime ships installed, not enabled (D-161).

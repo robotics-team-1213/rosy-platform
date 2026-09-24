@@ -221,6 +221,9 @@ rm -rf -- "$RELEASE/image-overlay"
 # D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
 # Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
 # Same script and same edit as the on-device retrofit, pointed at the image.
+# It also drops console=serial0/ttyAMA0/ttyAMA4 from the boot cmdline and masks
+# serial-getty@ttyAMA0/ttyAMA4: Ubuntu's console=serial0 lands on the LiDAR
+# UART (rosy-pinky-e4us, release 2026.09.24-010).
 bash "$UART_CONFIG" --image-root "$ROOT" \
     || fail "could not enable the UART4 motor bus in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"

@@ -139,6 +139,18 @@ else
   warn "INTERNET" "outbound HTTPS failed; local dashboard may still work"
 fi
 
+# The LiDAR (ttyAMA0) and motor (ttyAMA4) buses must carry no kernel console or
+# getty. Ubuntu's console=serial0 lands on ttyAMA0 with enable_uart=1 and
+# sllidar_node then times out (rosy-pinky-e4us, 2026-09-24).
+bus_consoles="$(tr ' ' '\n' </proc/cmdline 2>/dev/null | grep -E '^console=(serial0|ttyAMA0|ttyAMA4)(,|$)' | tr '\n' ' ' || true)"
+if [[ -n "$bus_consoles" ]]; then
+  fail "UART" "kernel console on a robot bus UART (${bus_consoles% }); run sudo $(dirname "$0")/../configure-uart-pi5.sh and reboot"
+elif has_command systemctl && systemctl is-active --quiet serial-getty@ttyAMA0.service 2>/dev/null; then
+  fail "UART" "serial-getty@ttyAMA0.service holds the LiDAR UART; run sudo $(dirname "$0")/../configure-uart-pi5.sh and reboot"
+else
+  pass "UART" "no console or getty on ttyAMA0 (LiDAR) / ttyAMA4 (motor)"
+fi
+
 install_root="${ROSY_INSTALL_ROOT:-/opt/rosy}"
 compose_file="$install_root/deploy/robot/compose.yaml"
 env_file="$install_root/deploy/robot/.env"

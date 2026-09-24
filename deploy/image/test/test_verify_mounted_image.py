@@ -69,6 +69,13 @@ def test_inspect_passes_with_valid_image(tmp_path):
     (root / "boot/firmware").mkdir(parents=True)
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+    # The LiDAR/motor UARTs carry no console; their gettys are masked.
+    (root / "boot/firmware/cmdline.txt").write_text("console=tty1 rootwait\n", encoding="utf-8")
+    for mask in verify_mounted_image.BUS_GETTY_MASKS:
+        try:
+            (root / mask).symlink_to("/dev/null")
+        except OSError:  # Windows without symlink rights
+            (root / mask).write_text("mock", encoding="utf-8")
     (root / "etc/udev/rules.d").mkdir(parents=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text("mock", encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.

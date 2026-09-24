@@ -200,6 +200,16 @@ codeload 아카이브 하나를 더 받는다(해시 고정. GitHub가 아카이
 9. `rosy-navigation`과 ADC 공유: 승인 파일 두 개와 `enable_line_follow` 구성에서 `ir_sensor/range`와 `battery/voltage`가 함께 나오고
    전압이 IR 값으로 튀지 않음.
 
+**2026-09-24 보완 — 버스 UART에는 콘솔이 없어야 한다(release 010, `rosy-pinky-e4us`):** 위 "UART0 LiDAR" 행의 "overlay 추가 없음"은
+맞았지만 전제가 하나 빠졌다. Ubuntu raspi `cmdline.txt`는 `console=serial0,115200 ... console=tty1`이고, Pi 5에서 `enable_uart=1`이면
+`serial0`이 `ttyAMA0`이다. `/proc/cmdline`에 `console=ttyAMA0,115200`이 있었고 `serial-getty@ttyAMA0.service`(agetty)가 포트를 잡아
+`sllidar_node`가 `SL_RESULT_OPERATION_TIMEOUT`, getty를 멈춘 뒤에도 커널 콘솔 때문에 `0x80008004`로 실패했다. 그 항목을 지우고
+재부팅하자 getty 없음, `health status : OK`, DenseBoost 10 Hz. 결정: `configure-uart-pi5.sh`(이미지·장치 공통)가 `cmdline.txt`에서
+`console=serial0|ttyAMA0|ttyAMA4[,baud]`만 지우고(`console=tty1`, 디버그 UART `ttyAMA10`은 그대로) `serial-getty@ttyAMA0`·`@ttyAMA4`를
+`/dev/null`로 mask한다 — 나중에 cmdline을 다시 고쳐도 getty는 돌아오지 않는다. `verify-mounted-image.py`는 `cmdline.txt`가 없거나
+버스 UART로 콘솔을 보내거나 mask가 없으면 빌드를 멈추고, `verify-pi.sh`는 `/proc/cmdline`과 활성 getty를 보고 이유를 적어 실패한다.
+실기 수용 확인 2에 `grep -o 'console=[^ ]*' /proc/cmdline`이 `tty1`만 보이고 `systemctl is-enabled serial-getty@ttyAMA0`이 `masked`를 더한다.
+
 **Validation / Transition:** host 시험(2026-09-24 Windows, Python 3.14): `python -m pytest test/test_native_systemd_contract.py
 test/test_image_customization_contract.py test/test_native_runtime_installed_layout.py test/test_boot_status_indicator.py
 test/test_rosy_motor_udev.py test/test_native_ros_payload.py test/test_device_surface_contract.py test/test_rosylib_battery_curve.py
