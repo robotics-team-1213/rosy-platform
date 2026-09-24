@@ -244,7 +244,10 @@ def test_the_scan_sees_the_whole_tree():
 
 
 def test_every_package_sits_in_a_domain_group_under_its_own_name():
-    """P2(a) + D-147 + D-196: src/<domain>/<package>/ (devices: src/devices/<family>/<package>/), directory name = package name."""
+    """P2(a) + D-147 + D-196: src/<domain>/<package>/, directory name = package name.
+
+    devices nest one level deeper: src/devices/<family>/<package>/.
+    """
     bad = []
     for name, info in PACKAGES.items():
         rel = info["dir"].relative_to(SRC).parts

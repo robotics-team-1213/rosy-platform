@@ -17,7 +17,7 @@ def _no_operator_overlay(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
-def test_robot_config_dir_falls_back_to_the_source_tree():
+def test_robot_config_dir_falls_back_to_the_source_tree(no_ament_share):
     assert robot_config_dir("pinky_pro") == SRC / "robots" / "pinky_pro" / "config"
 
 
@@ -44,13 +44,32 @@ def test_rosy_robot_env_must_be_a_package_name(monkeypatch, tmp_path, bad):
         load_config()
 
 
-def test_existing_robot_package_resolves_to_its_source_config():
+def test_existing_robot_package_resolves_to_its_source_config(no_ament_share):
     assert robot_config_dir("pinky_pro") == SRC / "robots" / "pinky_pro" / "config"
 
 
-def test_unknown_robot_names_the_package_and_how_to_fix_it():
+def test_unknown_robot_names_the_package_and_how_to_fix_it(no_ament_share):
     with pytest.raises(ConfigError) as caught:
         robot_config_dir("no_such_robot")
     message = str(caught.value)
     for part in ("no_such_robot", "robot.model", "ROSY_ROBOT", "--packages-up-to core no_such_robot"):
         assert part in message, part
+
+
+def test_unsourced_ament_falls_back_to_the_source_tree(fake_ament):
+    """ament importable but AMENT_PREFIX_PATH unset: its lookup raises OSError."""
+
+    def unset(name, not_found):
+        raise OSError("AMENT_PREFIX_PATH unset")
+
+    fake_ament(unset)
+    assert robot_config_dir("pinky_pro") == SRC / "robots" / "pinky_pro" / "config"
+
+
+def test_package_not_found_falls_back_to_the_source_tree(no_ament_share):
+    assert robot_config_dir("pinky_pro") == SRC / "robots" / "pinky_pro" / "config"
+
+
+def test_installed_share_wins_over_the_source_tree(fake_ament, tmp_path):
+    fake_ament(lambda name, not_found: str(tmp_path / "share" / name))
+    assert robot_config_dir("pinky_pro") == tmp_path / "share" / "pinky_pro" / "config"

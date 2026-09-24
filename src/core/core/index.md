@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
 - 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
 - 2026-09-24 · uncommitted · feat(robots): CORE loads the robot profile from robots/<model> (D-196)
 - 2026-09-24 · uncommitted · refactor(core): move the bridge's DockingExecutor into bridge/docking_executor.py
 - 2026-09-24 · uncommitted · fix(core): CORE-only 에서 출처 없는 채널은 `unavailable` (US-010)
-- 2026-09-24 · uncommitted · chore(core): remove the legacy core/deploy installer

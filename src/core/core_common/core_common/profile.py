@@ -27,8 +27,8 @@ def robot_config_dir(robot: str) -> Path:
     else:
         try:
             share = get_package_share_directory(robot)
-        except PackageNotFoundError:
-            share = None
+        except (PackageNotFoundError, OSError):
+            share = None  # not installed, or ament present but AMENT_PREFIX_PATH unset
     if share is not None:
         return Path(share) / "config"
     source = Path(__file__).resolve().parents[3] / "robots" / robot / "config"

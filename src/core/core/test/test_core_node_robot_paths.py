@@ -45,6 +45,26 @@ def node_module(monkeypatch):
         core.node = saved_attr
 
 
+@pytest.fixture
+def no_ament_share(monkeypatch):
+    """ament importable but knowing no robot package, so the source fallback is the answer
+    on a host and on a sourced ROS box alike."""
+    package = types.ModuleType("ament_index_python")
+    packages = types.ModuleType("ament_index_python.packages")
+
+    class PackageNotFoundError(KeyError):
+        pass
+
+    def missing(name):
+        raise PackageNotFoundError(name)
+
+    packages.PackageNotFoundError = PackageNotFoundError
+    packages.get_package_share_directory = missing
+    package.packages = packages
+    monkeypatch.setitem(sys.modules, "ament_index_python", package)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", packages)
+
+
 def test_absolute_overlays_boot_without_the_robot_package(node_module, monkeypatch, tmp_path):
     def no_lookup(robot):
         raise AssertionError(f"robot package looked up for {robot!r}")
@@ -57,14 +77,14 @@ def test_absolute_overlays_boot_without_the_robot_package(node_module, monkeypat
     assert node_module._robot_file_paths(config) == (profile, capabilities)
 
 
-def test_missing_keys_read_the_default_robot_package(node_module):
+def test_missing_keys_read_the_default_robot_package(node_module, no_ament_share):
     robot_dir = SRC / "robots" / "pinky_pro" / "config"
 
     assert node_module._robot_file_paths({"robot": {}}) == (
         robot_dir / "profile.yaml", robot_dir / "capabilities.yaml")
 
 
-def test_relative_names_resolve_inside_the_robot_package(node_module):
+def test_relative_names_resolve_inside_the_robot_package(node_module, no_ament_share):
     robot_dir = SRC / "robots" / "pinky_pro" / "config"
     config = {"robot": {"model": "pinky_pro", "profile": "profile.yaml", "capabilities": "caps/capabilities.yaml"}}
 
@@ -72,7 +92,7 @@ def test_relative_names_resolve_inside_the_robot_package(node_module):
         robot_dir / "profile.yaml", robot_dir / "capabilities.yaml")
 
 
-def test_a_missing_robot_package_fails_with_the_config_error(node_module, tmp_path):
+def test_a_missing_robot_package_fails_with_the_config_error(node_module, no_ament_share, tmp_path):
     config = {"robot": {"model": "not_installed", "profile": str(tmp_path / "profile.yaml")}}
 
     with pytest.raises(ConfigError, match="not_installed"):

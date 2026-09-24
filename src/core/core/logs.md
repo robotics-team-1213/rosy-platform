@@ -427,3 +427,11 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
+
+- 변경: `test/test_core_node_robot_paths.py`의 기본·상대·미설치 경우에 지역 `no_ament_share` fixture(가짜 `ament_index_python.packages`, PackageNotFoundError)를 걸어 소싱된 ROS 상자에서도 소스 폴백 경로를 단언하도록 했다.
+- 증거: WSL Jazzy 소싱 상태에서 core_common·이 파일·robots 시험 20 passed; Windows host 48 passed(대상 묶음) (2026-09-24).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
