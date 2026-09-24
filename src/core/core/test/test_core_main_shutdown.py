@@ -306,8 +306,26 @@ def test_rclpy_init_failure_propagates(harness, monkeypatch):
     assert "node" not in rclpy.calls
 
 
+def _entry_point_spans(source: str) -> list[tuple[int, int]]:
+    """모듈 최상위 `main()` 과 `if __name__ == "__main__":` 의 줄 범위."""
+    import ast
+    spans = []
+    for node in ast.parse(source).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "main":
+            spans.append((node.lineno, node.end_lineno))
+        elif isinstance(node, ast.If) and "__main__" in ast.unparse(node.test):
+            spans.append((node.lineno, node.end_lineno))
+    return spans
+
+
 def test_only_main_shuts_rclpy_down_in_core_production_code():
-    """main 의 context-무효 판정은 다른 코드가 context 를 내리지 않는다는 불변식에 기댄다."""
+    """main 의 context-무효 판정은 다른 코드가 context 를 내리지 않는다는 불변식에 기댄다.
+
+    `control` 은 src/core 아래로 옮겨졌지만(a93d5188) 노드마다 자기 프로세스로 뜬다.
+    그 노드의 `main()` 은 CORE 프로세스에서 불리지 않으므로 자기 context 를 내려도 된다.
+    CORE 가 `control.sensor_provider` 로 import 하는 모듈 본문은 여전히 막는다.
+    `control/tools/` 는 설치되지 않는 시뮬레이션 스크립트다.
+    """
     import re
     from pathlib import Path
     src_core = Path(__file__).resolve().parents[2]
@@ -316,12 +334,29 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     offenders = []
     for path in src_core.rglob("*.py"):
         rel = path.relative_to(src_core).as_posix()
-        if "/test/" in f"/{rel}" or rel == "core/core/main.py":
+        if "/test/" in f"/{rel}" or rel == "core/core/main.py" or rel.startswith("control/tools/"):
             continue
-        for lineno, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
-            if pattern.search(line):
+        source = path.read_text(encoding="utf-8-sig")
+        spans = _entry_point_spans(source) if rel.startswith("control/") else []
+        for lineno, line in enumerate(source.splitlines(), 1):
+            if pattern.search(line) and not any(a <= lineno <= b for a, b in spans):
                 offenders.append(f"{rel}:{lineno}: {line.strip()}")
     assert offenders == []
+
+
+def test_the_control_shutdown_exemption_still_catches_module_level_calls():
+    """면제는 진입점 안쪽뿐이다. 노드 클래스나 모듈 본문의 shutdown 은 걸린다."""
+    source = (
+        "import rclpy\n"
+        "class Node:\n"
+        "    def stop(self):\n"
+        "        rclpy.shutdown()\n"
+        "def main():\n"
+        "    rclpy.shutdown()\n"
+    )
+    spans = _entry_point_spans(source)
+    assert not any(a <= 4 <= b for a, b in spans)
+    assert any(a <= 6 <= b for a, b in spans)
 
 
 def test_main_installs_stop_handlers_before_importing_rclpy():
