@@ -98,6 +98,32 @@ def test_runtime_builds_distinct_targets_from_shared_dockerfile():
     assert "src/sim/description/meshes/**" in dockerignore
 
 
+def test_dockerignore_admits_every_source_path_the_dockerfile_copies():
+    # .dockerignore excludes everything and re-admits a whitelist. After a
+    # tree move the whitelist kept src/apps and src/hardware while COPY moved
+    # on, so the io build failed at COPY. Every COPY source must be admitted.
+    dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
+    admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").split())
+    sources = {
+        line.split()[1]
+        for line in dockerfile.splitlines()
+        if line.startswith("COPY src/")
+    }
+
+    assert sources
+    missing = [
+        source for source in sorted(sources)
+        if not any(f"!{parent}/**" in admitted or f"!{parent}" in admitted
+                   for parent in _self_and_parents(source))
+    ]
+    assert missing == []
+
+
+def _self_and_parents(path: str) -> list[str]:
+    parts = path.rstrip("/").split("/")
+    return ["/".join(parts[:end]) for end in range(len(parts), 0, -1)]
+
+
 def test_motion_profile_is_mounted_into_each_device_runtime():
     services = compose()["services"]
     profile_mount = "./config/profile.${ROSY_RUNTIME_MODE:-core}.yaml:/etc/rosy/profile.yaml:ro"
