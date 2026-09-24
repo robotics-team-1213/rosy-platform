@@ -23,7 +23,7 @@
 
 ## 시험
 
-- `src/apps/emotion/test/test_info_screen.py`
+- `src/face/emotion/test/test_info_screen.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록

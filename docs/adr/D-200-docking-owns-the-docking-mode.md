@@ -76,3 +76,5 @@
 
 **References:** 설계 [2026-09-23-lane-network-parking-design.md](../plans/2026-09-23-lane-network-parking-design.md),
 [API & Protocol Reference](../reference/ROSY%20API%20%26%20Protocol%20Reference.md) v1.20, D-2, D-199.
+
+**See also:** [D-205](D-205-real-lane-mission-transition-order.md) — 다음 단계의 실행 순서와 게이트, 인계 절차.

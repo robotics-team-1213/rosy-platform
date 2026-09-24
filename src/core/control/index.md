@@ -30,6 +30,7 @@
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 |
+| D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 
 ## 계획·결과 문서
 
@@ -60,8 +61,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · docs(adr): D-199 camera perception contracts and backends
 - 2026-09-24 · uncommitted · test(repo): control 크기 기준 재측정 (main 재병합)
 - 2026-09-24 · uncommitted · fix(control): web_common share lookup moves to the node edge (merge of origin/main)
 - 2026-09-24 · uncommitted · test(control): ir_adc_node bus lock is a behaviour test (D-192 review)
-- 2026-09-24 · uncommitted · fix(control): ir_adc_node holds the I2C-1 bus lock per cycle (D-192)

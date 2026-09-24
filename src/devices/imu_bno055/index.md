@@ -23,7 +23,7 @@
 
 ## 시험
 
-- `src/hardware/imu_bno055/test/test_package_contract.py`
+- `src/devices/imu_bno055/test/test_package_contract.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록

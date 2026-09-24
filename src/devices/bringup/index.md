@@ -28,8 +28,8 @@
 - `test/test_motor_control.py`
 - `test/test_bringup_motor_contracts.py`
 - `test/test_dynamixel_driver_safety.py`
-- `src/hardware/bringup/test/test_command_deadman.py`
-- `src/hardware/bringup/test/test_pinky_pro_adapter.py`
+- `src/devices/bringup/test/test_command_deadman.py`
+- `src/devices/bringup/test/test_pinky_pro_adapter.py`
 
 ## 최근 기록
 

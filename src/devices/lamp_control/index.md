@@ -22,7 +22,7 @@
 
 ## 시험
 
-- `src/hardware/lamp_control/test/test_lamp_package_contract.py`
+- `src/devices/lamp_control/test/test_lamp_package_contract.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록

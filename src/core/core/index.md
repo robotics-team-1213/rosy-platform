@@ -41,6 +41,7 @@
 | D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-200 | 도킹은 DOCKING 모드와 전용 명령 슬롯을 쥔다 — 모든 도크 기종이 처음부터 끝까지 DOCKING에서 움직인다 |
+| D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 
 ## 계획·결과 문서
 
@@ -69,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · docs(adr): D-200 docking owns the DOCKING mode
 - 2026-09-24 · uncommitted · refactor(core): move the bridge's DockingExecutor into bridge/docking_executor.py
 - 2026-09-24 · uncommitted · fix(core): CORE-only 에서 출처 없는 채널은 `unavailable` (US-010)
 - 2026-09-24 · uncommitted · chore(core): remove the legacy core/deploy installer
-- 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed — 명령 코드와 core 시험의 경계

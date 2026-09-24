@@ -418,3 +418,10 @@
 - gate 변화: 없음.
 - 결정: D-200 Accepted. API 코드는 API & Protocol Reference v1.20.
 - 교훈: 없음. 후속(최종 리뷰): 라인 추종 PUT과 `dock()` 경합(MED), 정지·해제 경합 시 잠금 없는 EMERGENCY, 잠금 없는 `on_battery_level`, `cmd_vel_cycle` 오류 로그 폭주.
+
+## 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
+- 변경: `docs/adr/D-205-real-lane-mission-transition-order.md` 추가(Proposed), ADR Log 표 D-205 행, `progress.md`의 `adrs`에 D-205. D-199·D-200에 see-also 한 줄, 인식 설계 문서에 D-205 링크 한 줄. `harness.yaml`의 `adr_gaps`에 D-201–D-204(concept 16과 역할 화면 설계가 먼저 쓴 번호)를 선언했다. 코드 본문은 바꾸지 않았다.
+- 증거: 문서 변경. 시험은 harness lint와 문서 구조 시험.
+- gate 변화: 없음.
+- 결정: D-205 Proposed. D-200 최종 리뷰의 core 후속 넷을 이어받는다.
+- 교훈: 없음. 후속: (MED) 라인 추종 `PUT`과 `dock()` 경합, 정지·해제 경합 시 잠금 없는 EMERGENCY, 잠금 없는 `on_battery_level`, `cmd_vel_cycle` 오류 로그 폭주. API 문서의 `LINE_FOLLOW_ACTIVE`·`NO_ODOMETRY` "(v1.18)" 표기는 v1.20이 맞다.

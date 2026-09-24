@@ -133,3 +133,10 @@
 - 결정: 없음
 - 교훈: 모듈 최상단 cv2 import는 그 스크립트를 import하는 모든 시험의 선행 조건이 된다 — 시험 도구가
   없는 환경에서 수집 단계부터 죽으면, 그 뒤의 게이트들이 "통과"가 아니라 "미실행"으로 가려진다.
+
+## 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
+- 변경: `docs/adr/D-205-real-lane-mission-transition-order.md` 추가(Proposed), `progress.md`의 `adrs`에 D-205. 코드 본문은 바꾸지 않았다.
+- 증거: 문서 변경. 25° 세계의 이전 합격(교차로 3×12/12, 순회 3/3, 미션 4/4)은 ROS-SIM이고 장치 증거가 아니다.
+- gate 변화: 없음.
+- 결정: D-205 Proposed. P4에서 세계 revision을 올린다(프로필 카메라, 흰 무광 벽과 파란 테이프, 카펫, 실측 매트, GroundTruthLabeler·채점기·데이터셋 기록기). P5에서 같은 기준으로 다시 합격받는다.
+- 교훈: 없음. 후속: `map_v2_fleet_lane.launch.py`의 line_observer `camera_x_offset_m` 0.034(참값 0.028481)는 코너 튜닝을 다시 잰 뒤 고친다.

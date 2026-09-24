@@ -74,3 +74,5 @@
 
 **References:** 설계 [2026-09-24-perception-architecture-design.md](../plans/2026-09-24-perception-architecture-design.md),
 [실물 영상 기준선](../validation/perception-real-video/2026-09-24/baseline.md), D-66, D-136, D-137, D-143, D-162, D-186.
+
+**See also:** [D-205](D-205-real-lane-mission-transition-order.md) — 다음 단계의 실행 순서와 게이트, 인계 절차.

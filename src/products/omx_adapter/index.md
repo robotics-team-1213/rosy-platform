@@ -23,7 +23,7 @@
 
 ## 시험
 
-- `src/apps/omx_adapter/test`
+- `src/products/omx_adapter/test`
 
 ## 최근 기록
 

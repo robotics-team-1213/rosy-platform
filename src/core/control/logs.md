@@ -490,3 +490,10 @@
 - gate 변화: 없음. 이전 25° 세계의 시뮬 합격은 장치 증거가 아니다.
 - 결정: D-199 Proposed. 두 층 계약(`perception/evidence`, `perception/frame`), 교체 가능한 백엔드, 공통 GroundProjector·SceneTracker, 프로필 revision fail-closed, 기존 관측 토픽은 파생 출력으로 유지. control 분할(32,106줄)은 P1–P3 안에서 실행한다.
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
+- 변경: `docs/adr/D-205-real-lane-mission-transition-order.md` 추가(Proposed), ADR Log 표 D-205 행, `progress.md`의 `adrs`에 D-205. D-199·D-200에 see-also 한 줄, 인식 설계 문서에 D-205 링크 한 줄. `harness.yaml`의 `adr_gaps`에 D-201–D-204(concept 16과 역할 화면 설계가 먼저 쓴 번호)를 선언했다. 코드 본문은 바꾸지 않았다. 앞 커밋에서 프로토타입 스크립트를 `tools/perception/prototype/`에, 카메라 프로필 초안을 `docs/validation/perception-real-video/2026-09-24/camera_profile_draft.json`에 두었다.
+- 증거: 옮긴 `replay.py` + `analyze.py`가 이 트리에서 기준선을 재현했다(4981프레임, `centre` BOTH 13.0 · ONE 36.0 · MEMORY 14.3 · STOP 36.7, `line` 벽 조향 22.4%, 정지선 89.5%). REAL VIDEO REPLAY, host only; DEVICE: NOT RUN.
+- gate 변화: 없음.
+- 결정: D-205 Proposed. P0 실측 → P1 계약 → P2 재생 도구 → P3 새 RuleBackend·SceneTracker → P4 현실화한 Gazebo → P5 재합격 → P6 장면 요소 주행 반영, 단계마다 게이트. 장치 주행은 P3·P5 통과 뒤. control 분할은 P1–P3 안에서.
+- 교훈: 없음. 후속: line_observer `camera_x_offset_m` 0.034(참값 0.028481), 주점 규약 `W/2` 대 `(W-1)/2`, `MOTION_ALONG_SIGMA_PER_M` 0.10 과신.

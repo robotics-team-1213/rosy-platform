@@ -44,7 +44,7 @@
 
 ## 시험
 
-- `src/apps/games/test`
+- `src/site/games/test`
 - `test/test_rosy_games_surface.py`
 
 ## 최근 기록

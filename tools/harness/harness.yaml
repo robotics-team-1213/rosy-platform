@@ -10,6 +10,10 @@ adr_gaps:
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
   D-196: "reserved by the committed multi-robot structure plan (docs/plans/2026-09-24-multi-robot-structure.md Task 1, commit 4c496c24); remove once its ADR is written"
+  D-201: "reserved by concept 16 and core_api_web index.html (frame fits the grammar, commit a93d5188); remove once its ADR is written"
+  D-202: "reserved by concept 16 (danger is a fill, commit a93d5188); remove once its ADR is written"
+  D-203: "reserved by concept 16 and web_common components.css (closed rendered type scale, commit a93d5188); remove once its ADR is written"
+  D-204: "reserved by docs/plans/2026-09-24-role-surfaces-panel-composition-design.md (commit 1bb45943); remove once its ADR is written"
 
 status: STATUS.md
 stale_after_commits: 5

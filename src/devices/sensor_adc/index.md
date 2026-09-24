@@ -23,7 +23,7 @@
 
 ## 시험
 
-- `src/hardware/sensor_adc/test/test_adc_package_contract.py`
+- `src/devices/sensor_adc/test/test_adc_package_contract.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록
