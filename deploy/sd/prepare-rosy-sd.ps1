@@ -181,7 +181,7 @@ function Read-DiskInventory([string]$FixturePath) {
         }
         return @((Get-Content -LiteralPath $FixturePath -Raw | ConvertFrom-Json) | ForEach-Object { Complete-DiskSerial $_ })
     }
-    return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, UniqueId, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly, Signature, Guid |
+    return @(Get-Disk | Select-Object Number, FriendlyName, SerialNumber, UniqueId, Size, BusType, IsBoot, IsSystem, IsOffline, IsReadOnly, Signature, Guid, NumberOfPartitions |
         ForEach-Object { Complete-DiskSerial $_ })
 }
 
@@ -257,9 +257,16 @@ function Assert-PlannedCard([object]$Disk, [object]$Sector) {
         # interrupted Imager write) as MBR signature 1, and -PlanOnly records that.
         # Such a card has no identity of its own: it is the factory-blank case below.
         if (-not $found.Signature -and $planned.Signature -ceq "00000001" -and -not $planned.Guid -and
+                $planKeys -ccontains "disk_partitions" -and $null -ne $reviewedPlan.disk_partitions -and
+                [int]$reviewedPlan.disk_partitions -eq 0 -and
                 $Sector.PSObject.Properties["Blank"] -and $Sector.Blank) {
             $planned.Signature = $null
         }
+    }
+    elseif ($Sector -and -not $Sector.Read -and $found.Signature -ceq "00000001" -and -not $found.Guid) {
+        # Get-Disk reports every all-zero card as signature 1, so without the
+        # sector this identity proves nothing (PR #37 review).
+        Fail "the card's first sector could not be read right before the erase; its identity cannot be confirmed" "reseat the card reader, then re-run"
     }
     $describe = { param($identity) "disk signature $(if ($identity.Signature) { $identity.Signature } else { 'none' }), GPT GUID $(if ($identity.Guid) { $identity.Guid } else { 'none' })" }
     $otherCard = "put the planned card back (check its label), or make and review a new plan (-PlanOnly) for the card that is inserted"
@@ -724,6 +731,9 @@ $plan = [ordered]@{
     disk_size = [int64]$firstDisk.Size
     disk_signature = $cardIdentity.Signature
     disk_guid = $cardIdentity.Guid
+    # Partition count at plan time: tells an all-zero card (Get-Disk: signature 1,
+    # no partitions) from a real card whose signature happens to be 1 (PR #37 review).
+    disk_partitions = $(if ($firstDisk.PSObject.Properties["NumberOfPartitions"] -and $null -ne $firstDisk.NumberOfPartitions) { [int]$firstDisk.NumberOfPartitions } else { $null })
     device_uid = $DeviceUid
     device_name = $DeviceName
     robot_number = $RobotNumber

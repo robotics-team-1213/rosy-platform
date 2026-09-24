@@ -1715,16 +1715,17 @@ def test_another_card_in_the_same_reader_stops_before_the_erase(writer_case, tmp
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-@pytest.mark.parametrize("planned,sector,passes", [
-    (0x00000001, bytes(MIB), True),         # all-zero sector, Get-Disk said 1: blank card
-    (0x1A2B3C4D, bytes(MIB), False),        # a real planned signature still refuses a blank card
-    (0x00000001, _mbr_raw(0x55667788), False),  # a card with its own signature is another card
-], ids=["zeroed-planned-as-1", "zeroed-vs-real-plan", "other-card"])
-def test_an_all_zero_first_sector_planned_as_signature_1_is_a_blank_card(writer_case, tmp_path, planned, sector, passes):
+@pytest.mark.parametrize("planned,partitions,sector,passes", [
+    (0x00000001, 0, bytes(MIB), True),          # all-zero sector, Get-Disk said 1, no partitions: blank card
+    (0x1A2B3C4D, 0, bytes(MIB), False),         # a real planned signature still refuses a blank card
+    (0x00000001, 0, _mbr_raw(0x55667788), False),  # a card with its own signature is another card
+    (0x00000001, 2, bytes(MIB), False),         # a real card with signature 1 keeps its pin (PR #37 review)
+], ids=["zeroed-planned-as-1", "zeroed-vs-real-plan", "other-card", "real-signature-1"])
+def test_an_all_zero_first_sector_planned_as_signature_1_is_a_blank_card(writer_case, tmp_path, planned, partitions, sector, passes):
     # 2026-09-24, release 010: an interrupted Imager write left sector 0 all zeros;
     # Get-Disk (so the plan) said signature 1, the probe said none, and every fresh
     # plan was refused as "a different card".
-    plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=planned)
+    plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=planned, NumberOfPartitions=partitions)
     writer_case["readback"].write_bytes(sector)
     boot = tmp_path / "boot"
     boot.mkdir()
@@ -1989,3 +1990,20 @@ def test_the_elevated_write_window_turns_off_quickedit_before_the_write():
     elevated = text[text.index("# Elevated: the release signature verifier"):]
     assert elevated.index("Disable-QuickEdit\n") < elevated.index("Start-Transcript")
     assert "(-bnot [uint32]0x40)" in text and "-bor [uint32]0x80" in text
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_unread_first_sector_does_not_confirm_a_signature_1_card(writer_case, tmp_path):
+    # Get-Disk reports every all-zero card as signature 1, so a plan of 1 must not
+    # be confirmed from the cache alone when the sector read fails (PR #37 review).
+    plan_path, _plan = _plan_with_card(writer_case, tmp_path, Signature=0x00000001, NumberOfPartitions=0)
+    writer_case["readback"].write_bytes(bytes(100))
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(writer_case, "-PlanPath", plan_path, *WRITE_CONFIRMATION, "-BootMountPath", boot, plan_only=False)
+
+    assert completed.returncode != 0
+    assert "first sector could not be read right before the erase" in _err(completed)
+    assert "confirm" not in [line["stage"] for line in _progress(writer_case)]
+    assert not writer_case["marker"].exists()

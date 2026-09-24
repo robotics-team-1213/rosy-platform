@@ -223,10 +223,10 @@ function Disable-QuickEdit {
 '@ -ErrorAction Stop
         $consoleInput = [RosyConsole.Mode]::GetStdHandle(-10)
         $mode = [uint32]0
-        if ([RosyConsole.Mode]::GetConsoleMode($consoleInput, [ref]$mode)) {
-            # Clear ENABLE_QUICK_EDIT_MODE (0x40); ENABLE_EXTENDED_FLAGS (0x80) makes it stick.
-            [void][RosyConsole.Mode]::SetConsoleMode($consoleInput, (($mode -band (-bnot [uint32]0x40)) -bor [uint32]0x80))
-        }
+        # Clear ENABLE_QUICK_EDIT_MODE (0x40); ENABLE_EXTENDED_FLAGS (0x80) makes it stick.
+        $ok = [RosyConsole.Mode]::GetConsoleMode($consoleInput, [ref]$mode) -and
+            [RosyConsole.Mode]::SetConsoleMode($consoleInput, (($mode -band (-bnot [uint32]0x40)) -bor [uint32]0x80))
+        if (-not $ok) { Write-Warning "could not turn off QuickEdit; do not click inside this window while the card is written" }
     }
     catch {
         Write-Warning "could not turn off QuickEdit; do not click inside this window while the card is written"
