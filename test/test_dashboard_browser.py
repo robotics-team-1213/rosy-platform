@@ -420,7 +420,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
         # 하나뿐이다(Law 3/D-82 "위험은 채움이다"). 실투 스캔 실측(회차 9).
         page.wait_for_timeout(300)
         warm = page.evaluate(WARM_SCAN)
-        assert set(warm) <= {"button#emergency-stop.stop-button"}, (
+        assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, (
             f"정상 상태의 경보 예산 밖 따뜻한 색: {warm}"
         )
         assert page.locator("#network-rx-rate").inner_text() == "—"
@@ -623,7 +623,7 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
         page.locator("#open-auth").click()
         page.locator("#auth-tab-token").click()
         page.locator("#token-input").fill("bad-token")
-        page.locator("#auth-form button[type=submit]").click()
+        page.locator("#auth-form [type=submit]").click()
         page.wait_for_function(
             "document.getElementById('vision-empty')?.textContent.includes('인증 실패')"
         )
@@ -1020,7 +1020,7 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
         assert page.locator("#triage-title").inner_text() == "하드웨어 런타임 꺼짐 (CORE-only)"
         assert page.locator("#triage").get_attribute("data-category") == "observation"
         warm = page.evaluate(WARM_SCAN)
-        assert set(warm) <= {"button#emergency-stop.stop-button"}, (
+        assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, (
             f"CORE-only는 고장이 아니다 — 경보 예산 밖 따뜻한 색: {warm}"
         )
         # 5. a viewer never asks for what it cannot read
@@ -1141,7 +1141,7 @@ def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage(
         page.locator("#open-auth").click()
         page.locator("#auth-tab-token").click()
         page.locator("#token-input").fill("operator-test-token")
-        page.locator("#auth-form button[type=submit]").click()
+        page.locator("#auth-form [type=submit]").click()
         page.wait_for_function(
             "document.getElementById('whoami-detail')?.textContent.includes('만료 없음')")
         assert _storage(page) == {"session": "operator-test-token", "local": None}
