@@ -21,6 +21,7 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
+from . import executor_choice
 from .sensing.dock_observer import DockTagObserver, dock_observation_payload
 from .sensing.dock_tag import CameraMount
 
@@ -89,7 +90,7 @@ def main():
     rclpy.init()
     node = DockObserverNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     except KeyboardInterrupt:
         pass
     finally:

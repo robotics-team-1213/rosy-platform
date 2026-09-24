@@ -67,6 +67,7 @@ NODE_NAMES = (
     'control_node', 'safety_node', 'wander_node', 'calib_node', 'startup_calibration_node',
     'camera_detect_node', 'ir_adc_node', 'line_observer_node', 'road_observer_node',
     'obstacle_observer_node', 'watch_node', 'goal_node', 'localization_node', 'web_node',
+    'dock_observer_node',
 )
 
 

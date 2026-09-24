@@ -96,4 +96,4 @@ def test_every_control_entry_point_spins_through_the_selector():
                 elif owner == 'executor_choice':
                     users.append(path.relative_to(CONTROL).as_posix())
     assert offenders == [], offenders
-    assert len(users) == 14, users  # every control node main() found on 2026-09-24
+    assert len(users) == 15, users  # every control node main() (14 on 2026-09-24 + dock_observer_node)
