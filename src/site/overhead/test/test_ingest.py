@@ -235,7 +235,7 @@ async def test_replacing_a_half_open_old_connection_does_not_stall_the_new_one()
     The old socket never answers the close handshake; the new connection must
     still get its config promptly, not after websockets' 10 s close timeout."""
     async with _Harness() as h:
-        _, old_writer = await _half_open_peer(h.url, _hello())
+        old_reader, old_writer = await _half_open_peer(h.url, _hello())
         await _wait_for(lambda: "overhead-1" in h.server.source_names())
         new = await h.connect()
         started = time.monotonic()
@@ -243,6 +243,12 @@ async def test_replacing_a_half_open_old_connection_does_not_stall_the_new_one()
         config = json.loads(await asyncio.wait_for(new.recv(), timeout=5))
         assert config["type"] == "config"
         assert time.monotonic() - started < 1.0
+        # The old socket never answers the close frame, so the server must
+        # abort it rather than hold it open; the new one keeps the slot.
+        while await asyncio.wait_for(old_reader.read(65536), timeout=5):
+            pass
+        assert h.server.source_names() == ["overhead-1"]
+        assert new.state.name == "OPEN"
         await new.close()
         old_writer.close()
 
@@ -273,9 +279,21 @@ async def test_frames_near_max_bytes_are_accepted_not_closed_1009():
         await ws.close()
 
 
-def test_receive_queue_is_bounded_small():
+@run_async
+async def test_receive_queue_is_bounded_small(monkeypatch):
     """D-136 6항: the receiver must not buffer a backlog of frames inside
-    websockets while a handler is busy."""
-    from overhead.ingest import RECEIVE_QUEUE_FRAMES
+    websockets while a handler is busy — the bound must reach serve()."""
+    import overhead.ingest as ingest
 
-    assert RECEIVE_QUEUE_FRAMES <= 2
+    seen = {}
+    real_serve = ingest.serve
+
+    async def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return await real_serve(*args, **kwargs)
+
+    monkeypatch.setattr(ingest, "serve", spy)
+    async with _Harness():
+        pass
+    assert seen["max_queue"] == ingest.RECEIVE_QUEUE_FRAMES
+    assert ingest.RECEIVE_QUEUE_FRAMES <= 2
