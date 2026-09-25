@@ -388,6 +388,8 @@ DECLARED_READS = {
         "/run/rosy-boot/hardware.json",
         # D-247 6: the root test's outcome, root:rosy-core 0640 (HW_TEST_RESULT_FILE).
         "/run/rosy-boot/hw-test.json",
+        # D-260 5: rosy-boot-status's stage for the summary line (BOOT_STATUS_FILE), 0644.
+        "/run/rosy-boot/boot-status.json",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",

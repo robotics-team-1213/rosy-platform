@@ -19,6 +19,7 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import admin, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient
+from core_common import robot_state
 
 
 # --- Network / Release / Commissioning (WP-5, 설계 §10.2/§10.3) --------------
@@ -247,10 +248,8 @@ def host_reboot(
     return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 재부팅하지 못했습니다.")
 
 
-MOTION_REASON = {
-    "core": "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.",
-    "motor": "모터 벤치 모드입니다. 저속 직접 제어만 됩니다. LiDAR와 자율주행(Nav2)은 꺼져 있습니다.",
-}
+# D-247 7's sentences live in the D-260 rule table, which the boot display shares.
+MOTION_REASON = robot_state.MOTION_REASON
 
 
 @host_router.get("/commissioning")
@@ -707,3 +706,76 @@ def host_hardware_confirm(
         except OSError as exc:
             raise ApiError("HW_CONFIRM_UNAVAILABLE", 503, "확인 결과를 기록하지 못했습니다") from exc
     return {"recorded": True, "device": body.device, **entry}
+
+
+# --- D-260: one robot state for the operate view's summary line ---------------
+#
+# The same rule table (core_common.robot_state) the root-side boot display
+# applies to the same files, so the LCD, the lamp, the buzzer and this line
+# never disagree. CORE reads boot-status.json as strictly as hardware.json.
+
+BOOT_STATUS_FILE = "/run/rosy-boot/boot-status.json"
+
+
+def read_boot_status(path: str) -> Optional[dict[str, Optional[str]]]:
+    """rosy-boot-status's stage and failed unit, or None when absent, unreadable or malformed."""
+    data = _read_small_json(path)
+    if not isinstance(data, dict):
+        return None
+    stage, failed_unit = data.get("stage"), data.get("failed_unit")
+    if not isinstance(stage, str) or not stage or len(stage) > MAX_TEXT:
+        return None
+    if failed_unit is not None and (not isinstance(failed_unit, str) or len(failed_unit) > MAX_TEXT):
+        return None
+    return {"stage": stage, "failed_unit": failed_unit}
+
+
+def _battery_reading(snapshot: Any) -> tuple[Optional[float], Optional[float]]:
+    """(percent, voltage) from the state snapshot; a reading whose channel is not fresh is none."""
+    battery = getattr(snapshot, "battery", None)
+    percent, voltage = getattr(battery, "percent", None), getattr(battery, "voltage", None)
+    judged = _evidence_of(snapshot, "battery")
+    if judged is not None and judged != "fresh":
+        return None, None
+    number = (int, float)
+    return (float(percent) if isinstance(percent, number) and not isinstance(percent, bool) else None,
+            float(voltage) if isinstance(voltage, number) and not isinstance(voltage, bool) else None)
+
+
+@host_router.get("/status-summary")
+def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    """운용 화면 요약줄(D-260 5): 로봇 상태 하나, 이유, 장치 요약, 배터리·온도, 할 일."""
+    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
+    boot = read_boot_status(str(cfg.get("boot_status_path", BOOT_STATUS_FILE)))
+    # CORE is answering, so a missing indicator file is not "booting": the stage
+    # is taken as CORE_READY and the response says the file was not there.
+    stage = boot["stage"] if boot else "CORE_READY"
+    hardware = host_hardware(auth, svc)
+    devices = hardware["devices"] if hardware.get("available") else []
+    state = getattr(svc, "state", None)
+    snapshot = state.snapshot() if state is not None and hasattr(state, "snapshot") else None
+    percent, voltage = _battery_reading(snapshot)
+    policy = getattr(getattr(svc, "safety", None), "battery_policy", None)
+    warning = getattr(policy, "warning_percent", robot_state.BATTERY_WARNING_PERCENT)
+    mode = (svc.config or {}).get("runtime", {}).get("mode", robot_state.DEFAULT_RUNTIME_MODE)
+    result = robot_state.evaluate(stage, devices, battery_percent=percent, battery_warning_percent=warning,
+                                  runtime_mode=mode, failed_unit=boot["failed_unit"] if boot else None)
+    probe = getattr(svc, "runtime_probe", None)
+    temperature = probe.temperature() if probe is not None and hasattr(probe, "temperature") else None
+    counts = robot_state.device_counts(devices)
+    return {
+        "state": result["state"],
+        "label": result["label"],
+        "reason": result["reason"],
+        "state_line": robot_state.state_line(result),
+        "motion_reason": result["motion_reason"],
+        "runtime_mode": mode,
+        "boot": {"available": boot is not None, "stage": boot["stage"] if boot else None},
+        "devices": {"available": bool(hardware.get("available")), "stale": bool(hardware.get("stale")),
+                    **counts},
+        "battery": {"percent": percent, "voltage": voltage, "warning_percent": warning,
+                    "low": robot_state.battery_low(percent, warning)},
+        "temperature_c": temperature,
+        "todos": [{key: item[key] for key in ("id", "text", "device") if key in item}
+                  for item in result["todos"]],
+    }
