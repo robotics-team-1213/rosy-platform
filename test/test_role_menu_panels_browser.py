@@ -57,3 +57,40 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
         assert page.evaluate("window.__stopped") is True
         assert errors == []
         browser.close()
+
+
+def test_setup_docking_never_sends_motion_without_supported_capability():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "setup" / "docking.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/setup/docking.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/setup/docking.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, _interval, onData, onError) { callbacks[path] = {onData, onError}; return () => {}; }};
+          const apiCalls = [];
+          window.__apiCalls = apiCalls;
+          window.__unmount = mount(root, {role: 'operator', store, api: async (path) => { apiCalls.push(path); }});
+          callbacks['/api/v1/docking/status'].onData({supported: false, state: 'UNDOCKED'});
+          callbacks['/api/v1/docking/docks'].onData({docks: [{id: 'dock-a', type: 'charger', map_id: 'map-a'}]});
+          window.confirm = () => true;
+          root.querySelector('[data-dock-id="dock-a"] ui-button:last-child').click();
+          root.querySelectorAll('.surface-actions ui-button').forEach(button => button.click());
+        }""")
+        assert "동작을 막았습니다" in page.locator("[role=status]").inner_text()
+        assert page.locator("[data-dock-id='dock-a'] ui-button:last-child").evaluate("node => node.disabled === true")
+        assert page.evaluate("window.__apiCalls") == []
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
