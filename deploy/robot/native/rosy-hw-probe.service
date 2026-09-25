@@ -5,6 +5,9 @@ Description=ROSY read-only board device probe (D-247)
 # (CORE ready, udev settled) and again whenever rosy-hw-probe.path sees CORE's
 # refresh request. The probe checks rosy-io itself and leaves its buses alone.
 After=rosy-core.service rosy-boot-status.service systemd-udevd.service local-fs.target
+# A hardware runtime started while the probe runs waits for it: the probe never
+# shares a UART with rosy-io or rosy-navigation (D-247 4).
+Before=rosy-io.service rosy-navigation.service
 # CORE debounces refresh requests; a burst must never fail the path unit.
 StartLimitIntervalSec=0
 
@@ -56,8 +59,9 @@ RestrictSUIDSGID=true
 LockPersonality=true
 SystemCallArchitectures=native
 # chown the result to rosy-core; read the kernel log (dmesg_restrict); open
-# the device nodes regardless of their group.
-CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_SYSLOG
+# the device nodes regardless of their group; list other users' /proc/<pid>/fd
+# to see who holds a UART (read access only; the probe attaches to nothing).
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_SYSLOG CAP_SYS_PTRACE
 
 [Install]
 WantedBy=multi-user.target

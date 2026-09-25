@@ -45,9 +45,13 @@ def _raw(value: int) -> bytes:
 
 class FakeIo(probe_module.SystemIo):
     def __init__(self, root: Path, *, active=(), i2c=None, lidar=None, motors=None, commands=None,
-                 i2c_delay_s: float = 0.0) -> None:
+                 i2c_delay_s: float = 0.0, states=None, holders=()) -> None:
         super().__init__(root)
         self.active = set(active)
+        #: unit -> ActiveState, or a callable(unit, call_number) for a state that changes mid-run.
+        self.states = states or {}
+        self.holders = {} if holders == () else holders
+        self.state_calls = 0
         self.i2c = i2c or {}
         self.lidar = lidar
         self.motors = motors
@@ -55,8 +59,18 @@ class FakeIo(probe_module.SystemIo):
         self.i2c_delay_s = i2c_delay_s
         self.touched: list[tuple] = []
 
-    def unit_active(self, unit):
-        return unit in self.active
+    def unit_state(self, unit):
+        self.state_calls += 1
+        if callable(self.states):
+            return self.states(unit, self.state_calls)
+        if unit in self.states:
+            return self.states[unit]
+        return "active" if unit in self.active else "inactive"
+
+    def device_holders(self, devices):
+        if self.holders is None:
+            return None
+        return {pid for pid, node in self.holders.items() if node in devices}
 
     def run(self, command):
         return self.commands.get(tuple(command))
@@ -192,6 +206,76 @@ def test_navigation_holds_the_same_buses(tmp_path):
     rows = probe_module.Probe(io).run()
     assert not [item for item in io.touched if item[0] in {"uart", "dxl"} or item[1] == "dev/i2c-1"]
     assert _evidence(rows)["lidar"] == "rosy-navigation 사용 중 — 토픽으로 판정"
+
+
+@pytest.mark.parametrize("state", [None, "activating", "deactivating", "reloading", "unknown"])
+def test_an_unknown_or_moving_runtime_state_keeps_every_io_bus_closed(tmp_path, state):
+    root = _tree(tmp_path)
+    io = FakeIo(root, states={"rosy-io.service": state}, i2c=HEALTHY_ADC, lidar=LIDAR_OK, motors=MOTORS_OK)
+    rows = probe_module.Probe(io).run()
+    assert not [item for item in io.touched if item[0] in {"uart", "dxl"} or item[1] == "dev/i2c-1"]
+    states = _states(rows)
+    assert all(states[key] == "not_measured" for key in ("motor.1", "lidar", "adc.battery", "adc.ir2"))
+    if state is None:
+        assert _evidence(rows)["lidar"] == "rosy-io 상태 확인 불가 — 측정 안 함"
+
+
+def test_a_failed_runtime_frees_its_buses(tmp_path):
+    root = _tree(tmp_path)
+    io = FakeIo(root, states={"rosy-io.service": "failed"}, i2c=HEALTHY_ADC, lidar=LIDAR_OK, motors=MOTORS_OK)
+    assert _states(probe_module.Probe(io).run())["motor.1"] == "ok"
+
+
+def test_a_runtime_that_starts_mid_run_is_seen_before_the_next_bus(tmp_path):
+    root = _tree(tmp_path)
+
+    def starting(unit, call):
+        # Free for the motor check (calls 1-2), then rosy-io comes up.
+        return "active" if unit == "rosy-io.service" and call > 2 else "inactive"
+
+    io = FakeIo(root, states=starting, i2c=HEALTHY_ADC, lidar=LIDAR_OK, motors=MOTORS_OK)
+    states = _states(probe_module.Probe(io).run())
+    assert states["motor.1"] == "ok"
+    assert states["lidar"] == states["adc.battery"] == "not_measured"
+    assert ("uart", "dev/ttyAMA0") not in io.touched
+
+
+def test_a_foreign_process_holding_a_uart_keeps_it_closed(tmp_path):
+    root = _tree(tmp_path)
+    io = FakeIo(root, holders={4242: "/dev/ttyAMA4"}, i2c=HEALTHY_ADC, lidar=LIDAR_OK, motors=MOTORS_OK)
+    rows = probe_module.Probe(io).run()
+    assert _states(rows)["motor.1"] == "not_measured"
+    assert _evidence(rows)["motor.2"] == "다른 프로세스(pid 4242)가 사용 중 — 측정 안 함"
+    assert ("dxl", "dev/rosy-motor") not in io.touched
+    assert _states(rows)["lidar"] == "ok"
+
+    blind = FakeIo(root, holders=None, lidar=LIDAR_OK, motors=MOTORS_OK)
+    rows = probe_module.Probe(blind).run()
+    assert _states(rows)["lidar"] == "not_measured" and not [i for i in blind.touched if i[0] in {"uart", "dxl"}]
+
+
+def test_fd_holders_are_read_from_proc(tmp_path):
+    root = _tree(tmp_path)
+    fd = root / "proc/77/fd"
+    fd.mkdir(parents=True)
+    (root / "proc/78/fd").mkdir(parents=True)
+    try:
+        (fd / "3").symlink_to("/dev/ttyAMA0")
+    except OSError:
+        pytest.skip("no symlink rights on this host")
+    assert probe_module.SystemIo(root).device_holders(("/dev/ttyAMA0",)) == {77}
+    assert probe_module.SystemIo(root).device_holders(("/dev/ttyAMA4",)) == set()
+
+
+def test_the_unit_state_is_read_like_rosy_boot_status(tmp_path):
+    class Commands(probe_module.SystemIo):
+        def run(self, command):
+            self.command = command
+            return (0, "activating\n")
+
+    io = Commands(tmp_path)
+    assert io.unit_state("rosy-io.service") == "activating"
+    assert io.command == ["systemctl", "show", "--property=ActiveState", "--value", "rosy-io.service"]
 
 
 # --- the wedged bus -------------------------------------------------------------

@@ -60,6 +60,12 @@ STATES = (OK, NO_RESPONSE, BUS_MISSING, DRIVER_MISSING, NEEDS_HUMAN, NOT_MEASURE
 
 #: Units that open the motor UART, the LiDAR UART and /dev/i2c-1 (rosy-io.service DeviceAllow).
 IO_UNITS = ("rosy-io.service", "rosy-navigation.service")
+#: ActiveState values that prove a unit holds nothing. Anything else (active,
+#: activating, deactivating, reloading, unknown) leaves its buses alone.
+FREE_STATES = ("inactive", "failed")
+#: How /proc/<pid>/fd shows the two UARTs (the motor alias resolves to ttyAMA4).
+MOTOR_NODES = ("/dev/rosy-motor", "/dev/ttyAMA4")
+LIDAR_NODES = ("/dev/ttyAMA0",)
 DISPLAY_UNIT = "rosy-boot-display.service"
 
 MOTOR_DEV = "dev/rosy-motor"
@@ -138,9 +144,45 @@ class SystemIo:
             return None
         return done.returncode, done.stdout
 
-    def unit_active(self, unit: str) -> bool:
-        result = self.run(["systemctl", "is-active", "--quiet", unit])
-        return result is not None and result[0] == 0
+    def unit_state(self, unit: str) -> Optional[str]:
+        """systemd's ActiveState (as rosy-boot-status.py reads it), or None when unknown."""
+        result = self.run(["systemctl", "show", "--property=ActiveState", "--value", unit])
+        if result is None or result[0] != 0:
+            return None
+        return result[1].strip() or None
+
+    def device_holders(self, devices: tuple[str, ...]) -> Optional[set[int]]:
+        """Pids (other than this one) with one of `devices` open; None when /proc cannot be read.
+
+        `devices` are absolute paths as /proc/<pid>/fd links show them. The
+        unit's CAP_SYS_PTRACE lets root read other users' fd tables.
+        """
+        wanted = set(devices)
+        holders: set[int] = set()
+        proc = self.path("proc")
+        try:
+            entries = [entry for entry in os.listdir(proc) if entry.isdigit()]
+        except OSError:
+            return None
+        for entry in entries:
+            if int(entry) == os.getpid():
+                continue
+            fd_dir = proc / entry / "fd"
+            try:
+                names = os.listdir(fd_dir)
+            except FileNotFoundError:
+                continue  # the process exited
+            except OSError:
+                return None  # cannot see its fds: not provably free
+            for name in names:
+                try:
+                    target = os.readlink(fd_dir / name)
+                except OSError:
+                    continue
+                if target in wanted:
+                    holders.add(int(entry))
+                    break
+        return holders
 
     def i2c_read(self, bus: str, address: int, register: int, length: int, delay_s: float = 0.0) -> bytes:
         """One register read under the bus flock (D-192). OSError(ETIMEDOUT) on a wedged bus."""
@@ -270,17 +312,36 @@ class Probe:
 
     # --- buses the I/O runtime owns --------------------------------------
 
-    def io_owner(self) -> Optional[str]:
+    def held(self, nodes: tuple[str, ...] = ()) -> Optional[tuple[str, Optional[str]]]:
+        """(evidence, held_by) when the bus may be in use, None when it is provably free.
+
+        Asked again right before each bus is opened, so a runtime that started
+        since the last bus is still seen. Fail closed: an unknown unit state or
+        an unreadable fd table counts as held.
+        """
         for unit in IO_UNITS:
-            if self.io.unit_active(unit):
-                return unit
+            state = self.io.unit_state(unit)
+            name = unit.removesuffix(".service")
+            if state is None:
+                return f"{name} 상태 확인 불가 — 측정 안 함", None
+            if state == "active":
+                return f"{name} 사용 중 — 토픽으로 판정", unit
+            if state not in FREE_STATES:
+                return f"{name} {state} — 측정 안 함", unit
+        if nodes:
+            holders = self.io.device_holders(nodes)
+            if holders is None:
+                return "장치 사용 여부 확인 불가 — 측정 안 함", None
+            if holders:
+                pids = ", ".join(str(pid) for pid in sorted(holders))
+                return f"다른 프로세스(pid {pids})가 사용 중 — 측정 안 함", None
         return None
 
-    def motors(self, owner: Optional[str]) -> list[Row]:
+    def motors(self) -> list[Row]:
         ids = [f"motor.{motor_id}" for motor_id in MOTOR_IDS]
-        if owner:
-            return [Row(i, NOT_MEASURED, f"{owner.removesuffix('.service')} 사용 중 — 토픽으로 판정", owner)
-                    for i in ids]
+        holder = self.held(MOTOR_NODES)
+        if holder:
+            return [Row(i, NOT_MEASURED, holder[0], holder[1]) for i in ids]
         if not self.io.exists(MOTOR_DEV):
             return [Row(i, BUS_MISSING, "/dev/rosy-motor 없음 (uart4-pi5 오버레이·udev 규칙)") for i in ids]
         try:
@@ -295,9 +356,10 @@ class Probe:
             rows.append(Row(row_id, OK if answered else NO_RESPONSE, evidence))
         return rows
 
-    def lidar(self, owner: Optional[str]) -> Row:
-        if owner:
-            return Row("lidar", NOT_MEASURED, f"{owner.removesuffix('.service')} 사용 중 — 토픽으로 판정", owner)
+    def lidar(self) -> Row:
+        holder = self.held(LIDAR_NODES)
+        if holder:
+            return Row("lidar", NOT_MEASURED, holder[0], holder[1])
         if not self.io.exists(LIDAR_DEV):
             return Row("lidar", BUS_MISSING, "/dev/ttyAMA0 없음")
         try:
@@ -344,11 +406,12 @@ class Probe:
             return Row("imu", NEEDS_HUMAN, f"칩 ID 0xA0 · 상태 {status} · 시스템 오류 {error}")
         return Row("imu", OK, f"칩 ID 0xA0 · 상태 {status} · 오류 {error}")
 
-    def adc(self, owner: Optional[str]) -> list[Row]:
+    def adc(self) -> list[Row]:
         ids = [channel for channel, _register in ADC_CHANNELS]
-        if owner:
-            return [Row(i, NOT_MEASURED, f"{owner.removesuffix('.service')} 사용 중 — 토픽으로 판정", owner)
-                    for i in ids]
+        # /dev/i2c-1 is shared with the boot display by design; the D-192 flock orders them.
+        holder = self.held()
+        if holder:
+            return [Row(i, NOT_MEASURED, holder[0], holder[1]) for i in ids]
         if not self.io.exists(ADC_BUS):
             return [Row(i, BUS_MISSING, "/dev/i2c-1 없음 (dtparam=i2c_arm=on)") for i in ids]
         rows: list[Row] = []
@@ -405,7 +468,7 @@ class Probe:
     def lcd(self) -> Row:
         if not self.io.exists(LCD_SPI):
             return Row("lcd", BUS_MISSING, "/dev/spidev0.0 없음 (dtparam=spi=on)")
-        if self.io.unit_active(DISPLAY_UNIT):
+        if self.io.unit_state(DISPLAY_UNIT) == "active":
             return Row("lcd", OK, "rosy-boot-display 실행 중 · 화면 내용은 사람이 봐야 함")
         return Row("lcd", NEEDS_HUMAN, "rosy-boot-display 멈춤 · 화면을 사람이 확인")
 
@@ -455,8 +518,7 @@ class Probe:
         return Row("pi.power", OK, evidence)
 
     def run(self) -> list[Row]:
-        owner = self.io_owner()
-        rows = self.motors(owner) + [self.lidar(owner), self.imu()] + self.adc(owner)
+        rows = self.motors() + [self.lidar(), self.imu()] + self.adc()
         rows += [self.camera(), self.lcd(), self.buzzer(), self.lamp(), self.pi_power()]
         return rows
 
