@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -296,3 +297,35 @@ def test_repack_refuses_when_members_differ_from_the_unsigned_tarball(case, tmp_
 
     with pytest.raises(ValueError, match="PACK_MODES_MISMATCH"):
         pack_release(staging, tmp_path / "x.tar.gz", allow_unsigned=True, modes_from=unsigned)
+
+
+def _posix(path: Path) -> str:
+    """Git-Bash path form; see test_release_unpack_helper.py."""
+    text = str(path).replace("\\", "/")
+    if len(text) >= 2 and text[1] == ":":
+        text = f"/{text[0].lower()}{text[2:]}"
+    return text
+
+
+@pytest.mark.skipif(
+    any(shutil.which(tool) is None for tool in ("bash", "tar", "sha256sum", "python3")),
+    reason="bash, tar, sha256sum and python3 are required",
+)
+def test_real_unpack_helper_accepts_the_signed_tarball_and_native_verify_passes(case, tmp_path):
+    manager_type, device, key, private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+    build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    _sign(staging, private)
+    tarball = tmp_path / f"{RELEASE_ID}.tar.gz"
+    pack_release(staging, tarball, public_key=key)
+    releases = device / "opt" / "rosy" / "releases"
+    releases.mkdir(parents=True)
+    script = ROOT / "deploy" / "robot" / "rosy-release-unpack.sh"
+
+    completed = subprocess.run(
+        [shutil.which("bash"), _posix(script), RELEASE_ID, _posix(tarball), _posix(releases)],
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert manager_type(root=device, public_key=key).verify(RELEASE_ID)["release_id"] == RELEASE_ID
