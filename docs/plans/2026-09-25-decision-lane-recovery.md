@@ -23,7 +23,7 @@ module: docs
 
 **Files:** `src/core/core_features/core_features/line_follow/manager.py`, `src/core/core/test/test_line_follow.py`
 
-조건: Task 1 이 통과한 뒤. 이 파일의 이번 실행에서는 하지 않는다.
+조건: Task 1 이 통과한 뒤. `line_follow.tick` 은 `lane_recovery_rule` 이 `FOLLOW` 일 때만 기존 속도 식으로 들어간다.
 
 1. `tick` 의 추적 여부는 `lane_recovery_rule` 의 `FOLLOW` 와 같다.
 2. `TRACKING` 일 때의 선속도·각속도 식은 그대로다.

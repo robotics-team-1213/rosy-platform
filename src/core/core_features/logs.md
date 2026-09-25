@@ -91,3 +91,11 @@
 - gate 변화: 없음
 - 결정: D-228
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · feat(line_follow): track only when lane_recovery says FOLLOW
+
+- 변경: `line_follow.tick` 은 `lane_recovery_rule` 이 FOLLOW 일 때만 기존 속도 식을 쓴다. HOLD/LOST/WAITING 문구와 손실 래치는 매니저에 남는다.
+- 증거: `python -m pytest src/core/core/test/test_line_follow.py src/core/core/test/test_line_follow_sim_clock.py src/core/core_features/test/test_lane_recovery.py -q` 30 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음

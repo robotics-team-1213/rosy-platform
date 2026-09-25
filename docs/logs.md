@@ -1935,3 +1935,11 @@
 - gate 변화: 없음
 - 결정: D-228
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(control): split perception from sensing geometry
+
+- 변경: 카메라·차선 증거를 `sensing/perception`으로 나누고, 차선 추종 속도는 `lane_recovery` 가 FOLLOW 일 때만 계산한다. 라이다·차체·도크와 `src/runtime` 은 그대로다.
+- 증거: 인식 폴더·차선·카메라·구조 시험 131 passed. 추종 시계·lane_recovery 30 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-209, D-228
+- 교훈: 없음

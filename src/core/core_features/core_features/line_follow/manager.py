@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from core_common.protocol.schemas import LineFollowStatus
+from core_features.decision.contract import DecisionRequest
+from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
 class LineFollowMode(str, enum.Enum):
@@ -222,19 +224,44 @@ class LineFollowManager:
 
             observation = self._observation
             age = None if self._received_at is None else current - self._received_at
-            if observation is None or self._received_at is None:
-                return self._loss_or_stop(current, "WAITING", "no_observation", age)
-            if observation.source is not self._mode:
-                return self._loss_or_stop(current, "HOLD", "source_mismatch", age)
-            if age < 0.0 or age > self._config.stale_after_s:
-                if self._loss_started_at is None:
-                    self._loss_started_at = min(current, self._received_at + self._config.stale_after_s)
-                return self._loss_or_stop(current, "HOLD", "observation_stale", age)
-            if not observation.visible:
-                reason = "invalid_observation" if self._invalid_observation else "line_not_visible"
-                return self._loss_or_stop(current, "HOLD", reason, age)
-            if observation.confidence < self._config.min_confidence:
-                return self._loss_or_stop(current, "HOLD", "low_confidence", age)
+            choice = lane_recovery_rule(
+                DecisionRequest(
+                    decision_id=f"line-{self._generation}",
+                    decision_type="lane_recovery",
+                    allowed_actions=LANE_ACTIONS,
+                    snapshot_age_ms=0,
+                    max_age_ms=1,
+                    deadline_ms=1,
+                    elapsed_ms=0,
+                    mode="NAVIGATION",
+                    safety_state="NORMAL",
+                    context={
+                        "visible": bool(observation and observation.visible),
+                        "confidence": 0.0 if observation is None else float(observation.confidence),
+                        "min_confidence": self._config.min_confidence,
+                        "age_s": None if observation is None or self._received_at is None else age,
+                        "stale_after_s": self._config.stale_after_s,
+                        "source_matches": bool(observation and observation.source is self._mode),
+                    },
+                    fallback_action=STOP,
+                ),
+                LANE_ACTIONS,
+            )
+            if choice != FOLLOW:
+                if observation is None or self._received_at is None:
+                    return self._loss_or_stop(current, "WAITING", "no_observation", age)
+                if observation.source is not self._mode:
+                    return self._loss_or_stop(current, "HOLD", "source_mismatch", age)
+                if age < 0.0 or age > self._config.stale_after_s:
+                    if self._loss_started_at is None:
+                        self._loss_started_at = min(current, self._received_at + self._config.stale_after_s)
+                    return self._loss_or_stop(current, "HOLD", "observation_stale", age)
+                if not observation.visible:
+                    reason = "invalid_observation" if self._invalid_observation else "line_not_visible"
+                    return self._loss_or_stop(current, "HOLD", reason, age)
+                if observation.confidence < self._config.min_confidence:
+                    return self._loss_or_stop(current, "HOLD", "low_confidence", age)
+                return self._loss_or_stop(current, "HOLD", "lane_recovery", age)
 
             self._loss_started_at = None
             error = float(observation.error)
