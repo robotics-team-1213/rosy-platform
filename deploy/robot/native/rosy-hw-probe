@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# rosy-hw-probe: observe every board device once, read-only (D-247). Usage:
+#   sudo rosy-hw-probe            # rewrite /run/rosy-boot/hardware.json
+#   sudo rosy-hw-probe --stdout   # print the result here instead
+# Runs from the installed native runtime (a symlink on PATH is resolved); -I
+# keeps PYTHONPATH and the user site out of a root process.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec /usr/bin/python3 -I -B "$SCRIPT_DIR/rosy-hw-probe.py" "$@"
