@@ -228,6 +228,14 @@ fi
 KERNEL_MAJOR="${BASH_REMATCH[1]}"
 KERNEL_MINOR="${BASH_REMATCH[2]}"
 [[ -d "$ROOT/lib/modules/$IMAGE_KERNEL/kernel" ]] || fail "the image has no modules for kernel $IMAGE_KERNEL"
+# Packages installed in the image, one name per line, sorted for comm(1).
+installed_packages() {
+    chroot "$ROOT" dpkg-query -W -f='${db:Status-Status} ${Package}\n' \
+        | awk '$1 == "installed" {print $2}' | LC_ALL=C sort -u
+}
+# What the image already carries before the build tools arrive. Only what the
+# lamp build adds is purged afterwards: a compiler something else installed stays.
+PACKAGES_BEFORE_LAMP="$(installed_packages)"
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     "linux-headers-$IMAGE_KERNEL" make gcc device-tree-compiler \
     || fail "linux-headers-$IMAGE_KERNEL is not installable from the locked apt suites (lamp driver)"
@@ -264,6 +272,29 @@ chroot "$ROOT" dtc -@ -I dts -O dtb -o /boot/firmware/overlays/rosy-ws281x.dtbo 
 rm -rf -- "$LAMP_BUILD"
 printf '%s\n' "$IMAGE_KERNEL" > "$ROOT/usr/local/share/rosy/lamp-driver-kernel"
 chmod 0644 "$ROOT/usr/local/share/rosy/lamp-driver-kernel"
+# The build tools (headers, make, gcc, dtc and what they pulled in) are not part
+# of the robot: purge exactly the packages the lamp build added.
+mapfile -t LAMP_BUILD_ONLY < <(comm -13 <(printf '%s\n' "$PACKAGES_BEFORE_LAMP") <(installed_packages))
+if (( ${#LAMP_BUILD_ONLY[@]} > 0 )); then
+    chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get purge -y "${LAMP_BUILD_ONLY[@]}" \
+        || fail "could not purge the lamp driver build tools: ${LAMP_BUILD_ONLY[*]}"
+fi
+# rp1_ws281x_pwm.ko exists only for $IMAGE_KERNEL. An apt upgrade to another
+# kernel would boot without /dev/ws281x_pwm, so the kernel stays where the module
+# was built: hold its image and modules, its headers if present, and the metas.
+IMAGE_KERNEL_PACKAGES="$(installed_packages)"
+KERNEL_HOLDS=()
+for package in "linux-image-$IMAGE_KERNEL" "linux-modules-$IMAGE_KERNEL"; do
+    grep -qxF -- "$package" <<< "$IMAGE_KERNEL_PACKAGES" \
+        || fail "$package is not installed; cannot hold the kernel the lamp driver was built for"
+    KERNEL_HOLDS+=("$package")
+done
+for package in "linux-headers-$IMAGE_KERNEL" linux-raspi linux-image-raspi linux-headers-raspi; do
+    if grep -qxF -- "$package" <<< "$IMAGE_KERNEL_PACKAGES"; then
+        KERNEL_HOLDS+=("$package")
+    fi
+done
+chroot "$ROOT" apt-mark hold "${KERNEL_HOLDS[@]}" || fail "could not hold the image kernel packages"
 chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core

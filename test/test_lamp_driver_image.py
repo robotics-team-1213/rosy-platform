@@ -125,6 +125,23 @@ def test_the_image_builds_the_module_for_its_own_kernel():
     assert 'rm -rf -- "$ROOT/tmp/rosy-ws281x"' in code  # cleanup on any exit
 
 
+def test_the_image_purges_the_build_tools_it_added_and_holds_the_kernel():
+    code = _code(CUSTOMIZER)
+    # Snapshot before the tools arrive; purge only the difference, after the last dtc.
+    before = code.index('PACKAGES_BEFORE_LAMP="$(installed_packages)"')
+    install = code.index('"linux-headers-$IMAGE_KERNEL" make gcc device-tree-compiler')
+    purge = code.index('apt-get purge -y "${LAMP_BUILD_ONLY[@]}"')
+    assert before < install < code.index("dtc -@ -I dts") < purge
+    assert 'comm -13 <(printf \'%s\\n\' "$PACKAGES_BEFORE_LAMP") <(installed_packages)' in code
+    assert "autoremove" not in code  # never removes what something else installed
+    # The kernel the module was built for is held; image and modules are required.
+    hold = code.index('apt-mark hold "${KERNEL_HOLDS[@]}"')
+    assert purge < hold < code.index("deb-packages.txt") < code.index("verify-mounted-image.py")
+    assert 'for package in "linux-image-$IMAGE_KERNEL" "linux-modules-$IMAGE_KERNEL"; do' in code
+    assert 'for package in "linux-headers-$IMAGE_KERNEL" linux-raspi linux-image-raspi linux-headers-raspi; do' \
+        in code
+
+
 def test_the_remove_new_edit_matches_the_pinned_source_line():
     # The pinned rp1_ws281x_pwm.c has a tab-indented `.remove = rp1_ws281x_pwm_remove,`.
     import re
@@ -149,6 +166,26 @@ def test_the_verifier_accepts_the_lamp_driver(tmp_path):
      "missing lamp driver module: lib/modules/6.8.0-1064-raspi/extra/rp1_ws281x_pwm.ko"),
     (lambda root: (root / "lib/modules/6.8.0-1064-raspi/modules.alias").write_text("", encoding="utf-8"),
      "lamp driver is not in lib/modules/6.8.0-1064-raspi/modules.alias"),
+    (lambda root: (root / "lib/modules/6.8.0-1064-raspi/extra/rp1_ws281x_pwm.ko").write_bytes(
+        b"\x7fELF\0vermagic=6.8.0-1063-raspi SMP preempt mod_unload aarch64\0"),
+     "lamp driver module vermagic 6.8.0-1063-raspi does not match the recorded kernel 6.8.0-1064-raspi"),
+    (lambda root: (root / "lib/modules/6.8.0-1064-raspi/extra/rp1_ws281x_pwm.ko").write_bytes(b"\x7fELF"),
+     "lamp driver module has no vermagic (recorded kernel 6.8.0-1064-raspi)"),
+    (lambda root: (root / "var/lib/dpkg/status").write_text(
+        (root / "var/lib/dpkg/status").read_text(encoding="utf-8").replace(
+            "Package: linux-image-6.8.0-1064-raspi\nStatus: hold ok installed", "Package: linux-image-6.8.0-1064-raspi\nStatus: install ok installed"),
+        encoding="utf-8"),
+     "kernel package is not held for the lamp driver: linux-image-6.8.0-1064-raspi"),
+    (lambda root: (root / "var/lib/dpkg/status").write_text(
+        (root / "var/lib/dpkg/status").read_text(encoding="utf-8").replace(
+            "Package: linux-modules-6.8.0-1064-raspi\nStatus: hold ok installed", "Package: linux-modules-6.8.0-1064-raspi\nStatus: install ok installed"),
+        encoding="utf-8"),
+     "kernel package is not held for the lamp driver: linux-modules-6.8.0-1064-raspi"),
+    (lambda root: (root / "var/lib/dpkg/status").write_text(
+        (root / "var/lib/dpkg/status").read_text(encoding="utf-8").replace(
+            "Package: linux-raspi\nStatus: hold ok installed", "Package: linux-raspi\nStatus: install ok installed"),
+        encoding="utf-8"),
+     "kernel package is not held for the lamp driver: linux-raspi"),
     (lambda root: (root / "usr/local/share/rosy/lamp-driver-kernel").write_text("6.9.0-1-raspi\n",
                                                                              encoding="utf-8"),
      "lamp driver was built for 6.9.0-1-raspi, which the image does not carry"),

@@ -102,6 +102,29 @@ def installed_debs(root: Path) -> set[str]:
     return installed
 
 
+def package_states(root: Path) -> dict[str, str]:
+    """Each package's dpkg Status line in the mounted root (e.g. "hold ok installed")."""
+    status = root / "var/lib/dpkg/status"
+    if not status.is_file():
+        return {}
+    states = {}
+    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
+        if fields.get("Package") and fields.get("Status"):
+            states[fields["Package"]] = fields["Status"]
+    return states
+
+
+def module_vermagic(path: Path) -> str | None:
+    """The kernel release a .ko was built for: the first word of its modinfo vermagic."""
+    data = path.read_bytes()
+    start = data.find(b"\0vermagic=")
+    if start < 0:
+        return None
+    value = data[start + len(b"\0vermagic="):].split(b"\0", 1)[0].decode("utf-8", errors="replace")
+    return value.split(" ", 1)[0] or None
+
+
 def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
     """Read-only twin of configure-uart-pi5.sh's awk check: the line counts
     before any section header or under [all] / [pi5], comments stripped."""
@@ -130,8 +153,24 @@ def lamp_driver_findings(root: Path) -> list[str]:
         modules = root / "lib/modules" / kernel
         if not (modules / "kernel").is_dir():
             findings.append(f"lamp driver was built for {kernel}, which the image does not carry")
-        if not (modules / "extra/rp1_ws281x_pwm.ko").is_file():
+        module = modules / "extra/rp1_ws281x_pwm.ko"
+        if not module.is_file():
             findings.append(f"missing lamp driver module: lib/modules/{kernel}/extra/rp1_ws281x_pwm.ko")
+        else:
+            vermagic = module_vermagic(module)
+            if vermagic is None:
+                findings.append(f"lamp driver module has no vermagic (recorded kernel {kernel})")
+            elif vermagic != kernel:
+                findings.append(f"lamp driver module vermagic {vermagic} does not match the recorded kernel {kernel}")
+        # An upgrade to another kernel would drop /dev/ws281x_pwm: the kernel is held.
+        states = package_states(root)
+        for package in (f"linux-image-{kernel}", f"linux-modules-{kernel}"):
+            if states.get(package) != "hold ok installed":
+                findings.append(f"kernel package is not held for the lamp driver: {package}")
+        for package in (f"linux-headers-{kernel}", "linux-raspi", "linux-image-raspi", "linux-headers-raspi"):
+            state = states.get(package, "")
+            if state.endswith(" installed") and state != "hold ok installed":
+                findings.append(f"kernel package is not held for the lamp driver: {package}")
         alias = modules / "modules.alias"
         if not alias.is_file() or "rp1-ws281x-pwm" not in alias.read_text(encoding="utf-8", errors="replace"):
             findings.append(f"lamp driver is not in lib/modules/{kernel}/modules.alias (depmod)")

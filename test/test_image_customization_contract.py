@@ -151,7 +151,8 @@ def _valid_root(tmp_path: Path) -> Path:
     kernel = "6.8.0-1064-raspi"
     (root / "lib/modules" / kernel / "kernel").mkdir(parents=True, exist_ok=True)
     (root / "lib/modules" / kernel / "extra").mkdir(parents=True, exist_ok=True)
-    (root / "lib/modules" / kernel / "extra/rp1_ws281x_pwm.ko").write_bytes(b"\x7fELF")
+    (root / "lib/modules" / kernel / "extra/rp1_ws281x_pwm.ko").write_bytes(
+        b"\x7fELF\0license=GPL\0vermagic=" + kernel.encode() + b" SMP preempt mod_unload aarch64\0")
     (root / "lib/modules" / kernel / "modules.alias").write_text(
         "alias of:N*T*Crp1-ws281x-pwm rp1_ws281x_pwm\n", encoding="utf-8")
     (root / "usr/local/share/rosy").mkdir(parents=True, exist_ok=True)
@@ -187,7 +188,11 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "var/lib/dpkg/status").write_text("".join(
         f"Package: {name}\nStatus: install ok installed\nVersion: 1\n\n"
         for name in ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
-                     "fonts-dejavu-core")), encoding="utf-8")
+                     "fonts-dejavu-core")) + "".join(
+        # D-247: the kernel the lamp driver was built for is held.
+        f"Package: {name}\nStatus: hold ok installed\nVersion: 1\n\n"
+        for name in ("linux-image-6.8.0-1064-raspi", "linux-modules-6.8.0-1064-raspi", "linux-raspi")),
+        encoding="utf-8")
     # D-193: the login-code issuer (enabled), its banner link and command, and
     # CORE defaults without tokens.
     (root / "etc/systemd/system/rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
