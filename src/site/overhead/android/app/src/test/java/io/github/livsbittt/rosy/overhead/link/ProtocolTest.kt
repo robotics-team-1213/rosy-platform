@@ -19,6 +19,7 @@ class ProtocolTest {
     fun closeCodesMatchVectors() {
         val codes = Vectors.root.getJSONObject("close_codes")
         assertEquals(codes.getInt("bad_proto"), Protocol.CLOSE_BAD_PROTO)
+        assertEquals(codes.getInt("unauthorized_source"), Protocol.CLOSE_UNAUTHORIZED)
         assertEquals(codes.getInt("replaced_by_same_source"), Protocol.CLOSE_REPLACED)
     }
 

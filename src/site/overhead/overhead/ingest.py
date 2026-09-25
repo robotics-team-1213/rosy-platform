@@ -19,6 +19,7 @@ import json
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Mapping
 
 import websockets
 
@@ -111,8 +112,18 @@ class _Source:
 class IngestServer:
     """One ``rosy-overhead/1`` receive-only endpoint. Latest-frame-per-source only."""
 
-    def __init__(self, token: str, config: dict | None = None) -> None:
-        self.token = token
+    def __init__(self, source_tokens: Mapping[str, str], config: dict | None = None) -> None:
+        if not source_tokens:
+            raise ValueError("at least one source token is required")
+        tokens = dict(source_tokens)
+        for source, token in tokens.items():
+            if not isinstance(source, str) or not protocol.SOURCE_PATTERN.fullmatch(source):
+                raise ValueError(f"invalid source name {source!r}")
+            if not isinstance(token, str) or not token:
+                raise ValueError(f"source {source!r} needs a non-empty token")
+        if len(set(tokens.values())) != len(tokens):
+            raise ValueError("each source must have a unique token")
+        self.source_tokens = tokens
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -144,7 +155,10 @@ class IngestServer:
         if request.path != protocol.WS_PATH:
             return connection.respond(404, "not found\n")
         auth = request.headers.get("Authorization")
-        if not hmac.compare_digest(auth or "", f"Bearer {self.token}"):
+        authorized = False
+        for token in self.source_tokens.values():
+            authorized |= hmac.compare_digest(auth or "", f"Bearer {token}")
+        if not authorized:
             return connection.respond(401, "unauthorized\n")
         return None
 
@@ -170,6 +184,11 @@ class IngestServer:
             return
 
         source_name = hello["source"]
+        expected = self.source_tokens.get(source_name)
+        auth = connection.request.headers.get("Authorization")
+        if expected is None or not hmac.compare_digest(auth or "", f"Bearer {expected}"):
+            await connection.close(protocol.CLOSE_UNAUTHORIZED, "token is not authorized for source")
+            return
         replaced = self._sources.get(source_name)
         src = _Source(name=source_name, connection=connection)
         self._sources[source_name] = src

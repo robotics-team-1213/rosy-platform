@@ -75,7 +75,7 @@ async def _run_receive(args: argparse.Namespace) -> int:
         token = secrets.token_urlsafe(24)
         print(f"${args.token_env} is not set; generated a token for this run only")
 
-    server = IngestServer(token)
+    server = IngestServer({args.source_name: token})
     ws_server = await server.start(args.host, args.port)
     advertise_host = args.advertise_host or _detect_advertise_host(args.host)
     uri = protocol.pairing_uri(advertise_host, args.port, token, args.source_name)

@@ -29,6 +29,7 @@ SOURCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 DEFAULT_CONFIG = {"fps": 3, "width": 1280, "jpeg_quality": 70, "max_bytes": 200000}
 
 CLOSE_BAD_PROTO = 4400
+CLOSE_UNAUTHORIZED = 4401
 CLOSE_REPLACED = 4409
 
 

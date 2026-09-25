@@ -22,9 +22,11 @@
 - **Task 1 완료:** 현재 브라우저/Fleet, Fleet/CORE REST, CORE Agent/SiteHub, overhead phone/ingress, 내부 DDS 및 미정 Pinky/팔 경계를 D-269 Proposed와 ADR Log에 기록했다.
 - **Task 2 완료:** `robots.yaml`의 선택적 `fleet_pairing_token`을 추가하고 REST token 재사용을 거부한다. pairing token 미설정 robot은 Agent pairing 대상에서 제외된다. 자세한 실제 장비 secret provisioning 절차는 Ubuntu 배포 전용 후속 단계다.
 - **Task 3 완료 (LOCAL):** 실제 `FleetAgent`를 loopback Uvicorn으로 실행해 동일 `fleet console` 앱에서 hello/welcome, heartbeat, event, disconnect/offline, reconnect를 확인했다. `/registry`는 console token을 검사한다. protocol major mismatch도 pairing 전에 거부한다.
+- **Task 4 진행 중:** overhead 수신기는 source→token map을 요구하고 HTTP Authorization token과 hello의 source를 묶어 검증한다. token 미설정/다른 source/unknown source, token 재사용은 fail-closed다. CLI token은 `--source-name` 하나에만 귀속하며 unauthorized source는 shared vector `4401`로 거절하고 Android가 fatal `Unauthorized`로 표시한다. Python server 49 passed, Android unit test `:app:testDebugUnitTest` 통과 (LOCAL).
 - **LOCAL 결과:** `src/site/fleet/test` 416 passed / 5 skipped, CORE FleetAgent 8 passed, overhead 45 passed, `git diff --check` 통과.
 - **문서 harness 제한:** `test/test_network_topology_contracts.py test/test_harness_contracts.py`는 68 passed / 2 failed다. 실패 2건 모두 기존 `src/hmi/dashboard/logs.md` 네 항목의 `- 증거:` 누락이고, `rosy_harness.py lint`도 동일한 4 errors와 19 기존 `last_verified` warnings를 보고했다. 해당 append-only 로그는 이 작업에서 수정하지 않았다.
-- **아직 미수용:** overhead source별 token, phone→vision→Fleet 파생 evidence 경로, 사이트 Compose/저장/복구, 사용자 역할·감사·공통 작업 수명주기, Ubuntu RTX/실물 phone·CORE 시험은 Task 4–8이다. DEVICE/FIELD, 자동 이동, 집기, Pinky 및 팔 카메라 연동은 계속 HOLD다.
+- **Task 4 남음:** 운영자용 token 발급·회전·폐기와 QR 비밀 전달 절차, Android emulator/실제 phone→receiver LAN 연결, 연속 frame freshness와 재시작 시험.
+- **아직 미수용:** phone→vision→Fleet 파생 evidence 경로, 사이트 Compose/저장/복구, 사용자 역할·감사·공통 작업 수명주기, Ubuntu RTX/실물 CORE 시험은 Task 5–8이다. DEVICE/FIELD, 자동 이동, 집기, Pinky 및 팔 카메라 연동은 계속 HOLD다.
 - **배포/형상:** 현재 결과는 Windows localhost LOCAL 증거뿐이다. 현장 Ubuntu 호스트 수용이나 원격 배포 증거가 아니며, 원격 push/deploy는 호스트와 승인 revision이 확인될 때 별도 진행한다.
 
 ## Task 1 — 현재 wire contract·권한 감사 고정

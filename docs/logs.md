@@ -2242,3 +2242,11 @@
 - gate 변화: 없음
 - 결정: D-260 Proposed
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity
+
+- 변경: receiver가 source별 고유 Bearer token map만 받고, WebSocket Authorization과 `hello.source`를 연결 시 대조한다. CLI token은 선택한 source에만 발급한다. 잘못된/미등록 source는 shared protocol close `4401`로 거부하며 Android는 재시도 중단 `Unauthorized`로 표시한다.
+- 증거: Python overhead 전체 49 passed, `git diff --check` 통과; feature worktree Android `:app:testDebugUnitTest` BUILD SUCCESSFUL. TDD에서 cross-source token use와 empty/duplicate token 설정 테스트가 구현 전에 실패하고 수정 후 통과했다. unknown source 거부도 검증했다.
+- 제한: LOCAL 시험뿐이다. 운영 token 발급·회전·폐기 UX, 실제 phone/emulator LAN 연결, TLS 및 현장 freshness는 확인하지 않았다.
+- gate 변화: 없음. D-269 Proposed, camera DEVICE/FIELD와 vision→Fleet은 미수용이다.
+- 결정: QR/deep-link는 카메라 앱의 out-of-band provisioning으로만 다루고 로그/공유 화면은 secret-safe하게 유지해야 한다.
