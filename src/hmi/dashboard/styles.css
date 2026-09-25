@@ -826,9 +826,10 @@ body[data-view="operate"] .page-footer { display: none; }
 .host-actions ui-button { flex: 1 1 auto; }
 .host-card form { display: grid; gap: var(--space-2); }
 
-/* D-247 장치 카드 — 한 줄에 장치 하나. 상태 칩은 공용 세 어휘([data-status])를
-   그대로 쓴다: 정상=중립, 버스·드라이버 없음=주의, 응답 없음=위험 채움,
-   사람 확인·측정 안 함=색 없음. 새 색은 없다. */
+/* D-247 장치 카드 — 한 줄에 장치 하나. 상태 칩은 공용 [data-status] 어휘를
+   그대로 쓴다: 정상=OK(평상 글자색), 버스·드라이버 없음=WARNING(주의 글자),
+   응답 없음=ERROR(위험 채움), 사람 확인·측정 안 함=속성 없음(칩 기본색).
+   새 색은 없다. */
 .device-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .device-row {
   display: grid;

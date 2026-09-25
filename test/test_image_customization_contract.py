@@ -269,6 +269,8 @@ def test_image_installs_enables_and_probes_the_hardware_probe():
     assert 'ln -sfn /opt/rosy/native-runtime/rosy-hw-probe "$ROOT/usr/local/sbin/rosy-hw-probe"' in source
     loop = source[source.index("for entrypoint in rosy-boot-status.py"):]
     assert "rosy-hw-probe.py" in loop[:loop.index("; do")]
+    after = loop[loop.index("done"):]
+    assert """chroot "$ROOT" python3 -I -c 'import dynamixel_sdk'""" in after[:400]
     payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
     for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
         assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload

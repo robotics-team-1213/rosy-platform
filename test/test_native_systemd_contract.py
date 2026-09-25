@@ -760,7 +760,7 @@ def test_the_hardware_probe_is_a_bounded_root_oneshot_without_network():
     # A hardware runtime started during a probe waits for it (review 2026-09-25 A1).
     assert {"rosy-io.service", "rosy-navigation.service"} <= set(_words(directives, "Before"))
     assert "CAP_SYS_PTRACE" in _words(directives, "CapabilityBoundingSet")
-    assert directives["ExecStart"] == ["/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-hw-probe.py"]
+    assert directives["ExecStart"] == ["/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-probe.py"]
     assert "Restart" not in directives
     assert "bash" not in _read("rosy-hw-probe.service")
 

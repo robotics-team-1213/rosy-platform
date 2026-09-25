@@ -89,6 +89,8 @@ LCD_SPI = "dev/spidev0.0"
 LAMP_NODE = "dev/ws281x_pwm"
 BUZZER_DEFAULT_PIN = 22
 LOCK_WAIT_S = 2.0
+#: A result this fresh is kept: a burst of refresh requests runs the buses once.
+MIN_INTERVAL_S = 10.0
 COMMAND_TIMEOUT_S = 3.0
 CAMERA_SENSORS = re.compile(r"\b(ov5647|imx219|imx708)\b")
 PROBE_FAILED = re.compile(r"failed with error (-\d+)")
@@ -118,6 +120,10 @@ DEVICE_IDS = tuple(device[0] for device in DEVICES)
 
 class BusTimeout(Exception):
     """The bus did not answer in time; the rest of that bus is not measured."""
+
+
+class LockHeld(Exception):
+    """Another reader held the D-192 bus flock past LOCK_WAIT_S; the bus is left alone."""
 
 
 def _errno_text(error: OSError) -> str:
@@ -200,7 +206,7 @@ class SystemIo:
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise OSError(errno_codes.EWOULDBLOCK, "bus lock held") from None
+                        raise LockHeld(bus) from None
                     time.sleep(0.02)
             fcntl.ioctl(descriptor, 0x0703, address)  # I2C_SLAVE; never I2C_SLAVE_FORCE
             os.write(descriptor, bytes([register]))
@@ -400,6 +406,8 @@ class Probe:
             error = self._i2c(IMU_BUS, IMU_ADDRESS, 0x3A, 1)[0]
         except BusTimeout as timeout:
             return Row("imu", NO_RESPONSE, f"{timeout} — 버스 멈춤")
+        except LockHeld:
+            return Row("imu", NOT_MEASURED, "버스 잠금 대기 시간 초과 — 측정 안 함")
         except OSError as failure:
             return Row("imu", NO_RESPONSE, _errno_text(failure))
         # Judged by chip id and SYS_ERR only: after power-on the chip sits in
@@ -427,11 +435,12 @@ class Probe:
                 rows += [Row(rest, NOT_MEASURED, "같은 버스가 시간 초과 — 측정 안 함")
                          for rest, _register in ADC_CHANNELS[index + 1:]]
                 break
+            except LockHeld:
+                rows += [Row(rest, NOT_MEASURED, "D-192 버스 잠금 대기 시간 초과 — 측정 안 함")
+                         for rest, _register in ADC_CHANNELS[index:]]
+                break
             except OSError as failure:
-                if failure.errno == errno_codes.EWOULDBLOCK:
-                    rows.append(Row(channel, NOT_MEASURED, "D-192 버스 잠금 대기 시간 초과"))
-                else:
-                    rows.append(Row(channel, NO_RESPONSE, _errno_text(failure)))
+                rows.append(Row(channel, NO_RESPONSE, _errno_text(failure)))
                 continue
             state, evidence = _adc_value(channel, (d0 << 4) + (d1 >> 4))
             rows.append(Row(channel, state, evidence))
@@ -588,6 +597,14 @@ def main(argv: list[str] | None = None, *, io: SystemIo | None = None,
     if args.root == Path("/") and not args.stdout and hasattr(os, "geteuid") and os.geteuid() != 0:
         print("rosy-hw-probe: run as root", file=sys.stderr)
         return 1
+    if not args.stdout:
+        try:
+            age = time.time() - (args.root / OUTPUT).stat().st_mtime
+        except OSError:
+            age = None
+        if age is not None and 0 <= age < MIN_INTERVAL_S:
+            print(json.dumps({"hw_probe": "skipped", "result_age_s": round(age, 1)}), flush=True)
+            return 0
     probe = Probe(io or SystemIo(args.root))
     started = time.monotonic()
     result = document(probe.run(), args.root)

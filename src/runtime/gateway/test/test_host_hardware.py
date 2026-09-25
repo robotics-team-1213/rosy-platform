@@ -119,6 +119,9 @@ def test_the_card_needs_a_token(tmp_path):
     lambda doc: doc["devices"][0].update(label=None),
     lambda doc: doc["devices"][0].update(held_by=5),
     lambda doc: doc.update(devices=[_device(f"d{i}") for i in range(65)]),
+    lambda doc: doc.update(devices=[_device("camera"), _device("camera", "no_response")]),
+    lambda doc: doc.update(boot_id="b" * 65),
+    lambda doc: doc.update(boot_id=7),
 ])
 def test_a_malformed_result_is_unreadable_not_trusted(tmp_path, mutate):
     document = {"schema": 1, "boot_id": "b", "measured_at": "2026-09-25T10:00:00+00:00",
@@ -181,17 +184,21 @@ class FakeState:
     A fake, not StateManager, so this API test stays inside the gateway (D-184).
     """
 
-    def __init__(self, *, velocity="unavailable", battery="unavailable", voltage=None, lidar_at=None):
+    def __init__(self, *, velocity="unavailable", battery="unavailable", voltage=None, lidar_at=None,
+                 ultrasonic_at=None):
         self.evidence = {"velocity": SimpleNamespace(evidence=velocity),
                          "battery": SimpleNamespace(evidence=battery)}
         self.voltage = voltage
-        self.lidar_at = lidar_at
+        self.samples = {"lidar": lidar_at, "ultrasonic": ultrasonic_at}
+        self.snapshots = 0
 
     def snapshot(self):
+        self.snapshots += 1
         return SimpleNamespace(evidence=self.evidence, battery=SimpleNamespace(voltage=self.voltage))
 
     def get_sensor(self, key):
-        return {"received_at": self.lidar_at} if key == "lidar" and self.lidar_at is not None else None
+        at = self.samples.get(key)
+        return {"received_at": at} if at is not None else None
 
 
 def _held(device_id: str) -> dict:
@@ -201,9 +208,10 @@ def _held(device_id: str) -> dict:
 def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path):
     import time
 
-    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=time.time())
+    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=time.time(),
+                      ultrasonic_at=time.time())
     _write(tmp_path, [_held("motor.1"), _held("motor.2"), _held("lidar"), _held("adc.battery"),
-                      _held("adc.ir0"), _device("camera", "no_response")])
+                      _held("adc.ir0"), _held("adc.ultrasonic"), _device("camera", "no_response")])
     body = _client(_config(tmp_path, "hardware"), state).get(
         "/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
     rows = {row["id"]: row for row in body["devices"]}
@@ -212,8 +220,11 @@ def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path):
     assert rows["motor.1"]["evidence"] == "odom 수신 중 (토픽 판정)"
     assert rows["adc.battery"]["evidence"] == "8.49 V (토픽 판정)"
     assert rows["lidar"]["state"] == "ok" and rows["lidar"]["source"] == "topic"
-    # No topic for the IR channels: the probe's word stands.
+    assert rows["adc.ultrasonic"]["state"] == "ok" and rows["adc.ultrasonic"]["evidence"].startswith("us_range")
+    # CORE has no IR topic: the row stays not_measured and says who holds the bus.
     assert rows["adc.ir0"]["state"] == "not_measured" and "source" not in rows["adc.ir0"]
+    assert rows["adc.ir0"]["evidence"] == "측정 안 함 — rosy-io 사용 중"
+    assert state.snapshots == 1, "one snapshot per request"
     assert rows["camera"]["state"] == "no_response"
 
 

@@ -288,6 +288,10 @@ for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-
     chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
         || fail "installed native entrypoint does not run: $entrypoint"
 done
+# D-247: rosy-hw-probe.service runs `python3 -I` as root; its torque-free motor
+# ping needs dynamixel_sdk from the system site, not from a release PYTHONPATH.
+chroot "$ROOT" python3 -I -c 'import dynamixel_sdk' \
+    || fail "root python3 -I cannot import dynamixel_sdk (rosy-hw-probe motor ping)"
 rm -rf -- "$ROOT$NATIVE_PROBE"
 
 [[ "$(tr -d '[:space:]' < "$RELEASE/python-runtime.sha256")" == "$PYTHON_REQUIREMENTS_SHA" ]] \

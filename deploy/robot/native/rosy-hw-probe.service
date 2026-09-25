@@ -13,7 +13,8 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-hw-probe.py
+# -I: no PYTHONPATH, no user site, no script-directory surprises in a root process.
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-probe.py
 # Per-device limits live in the program (wedged I2C ~1 s, UART 1 s, commands
 # 3 s); this bounds the whole run.
 TimeoutStartSec=60

@@ -308,8 +308,9 @@ HW_STATES = ("ok", "no_response", "bus_missing", "driver_missing", "needs_human"
 REFRESH_MIN_INTERVAL_S = 10.0
 #: The card is not telemetry (D-247): a result older than this is shown faded.
 HW_STALE_AFTER_S = 600.0
-#: LiDAR scans are a 10 Hz stream; two seconds without one is a stopped sensor.
-SCAN_FRESH_S = 2.0
+#: LiDAR scans and ultrasonic ranges are streams; two seconds without one is a stopped sensor.
+TOPIC_FRESH_S = 2.0
+MAX_BOOT_ID = 64
 _last_refresh: dict[str, float] = {}
 
 
@@ -351,14 +352,16 @@ def read_hardware(path: str) -> Optional[dict[str, Any]]:
     if measured.tzinfo is None or not isinstance(devices, list) or not 0 < len(devices) <= MAX_DEVICES:
         return None
     clean = []
+    seen: set[str] = set()
     for device in devices:
         if not isinstance(device, dict):
             return None
         row = {key: device.get(key) for key in ("id", "label", "bus", "state", "evidence")}
         if not all(isinstance(value, str) and len(value) <= MAX_TEXT for value in row.values()):
             return None
-        if row["state"] not in HW_STATES or type(device.get("product")) is not bool:
+        if row["state"] not in HW_STATES or type(device.get("product")) is not bool or row["id"] in seen:
             return None
+        seen.add(row["id"])
         row["product"] = device["product"]
         held_by = device.get("held_by")
         if held_by is not None:
@@ -367,7 +370,9 @@ def read_hardware(path: str) -> Optional[dict[str, Any]]:
             row["held_by"] = held_by
         clean.append(row)
     boot_id = data.get("boot_id")
-    return {"measured_at": measured, "boot_id": boot_id if isinstance(boot_id, str) else None,
+    if boot_id is not None and (not isinstance(boot_id, str) or len(boot_id) > MAX_BOOT_ID):
+        return None
+    return {"measured_at": measured, "boot_id": boot_id,
             "devices": clean}
 
 
@@ -377,31 +382,37 @@ def _evidence_of(snapshot: Any, channel: str) -> Optional[str]:
     return None if judged is None else str(getattr(judged, "value", judged))
 
 
-def _topic_overlay(row: dict[str, Any], svc: CoreServicesLike) -> dict[str, Any]:
+#: Rows judged from a sensor sample CORE keeps (state.get_sensor): device id -> (sensor, topic).
+SAMPLE_TOPICS = {"lidar": ("lidar", "scan"), "adc.ultrasonic": ("ultrasonic", "us_range")}
+#: Rows judged from CORE's own evidence channels: device id -> (channel, topic).
+EVIDENCE_TOPICS = {"adc.battery": ("battery", "battery"), "motor.1": ("velocity", "odom"),
+                   "motor.2": ("velocity", "odom")}
+
+
+def _topic_overlay(row: dict[str, Any], state: Any, snapshot: Any) -> dict[str, Any]:
     """Judge a device rosy-io holds from topics CORE already receives (D-247 4).
 
-    Only rows the probe left `not_measured` because a runtime held the bus;
-    a topic CORE has never seen leaves the row as the probe wrote it.
+    Only rows the probe left `not_measured` because a runtime held the bus. A
+    row with no topic in CORE (the IR channels) says so instead of waiting
+    for a judgment that will not come.
     """
-    state = getattr(svc, "state", None)
     if state is None or row["state"] != "not_measured" or not row.get("held_by"):
         return row
     device = row["id"]
-    if device == "lidar":
-        sample = state.get_sensor("lidar") if hasattr(state, "get_sensor") else None
+    if device in SAMPLE_TOPICS:
+        sensor, topic = SAMPLE_TOPICS[device]
+        sample = state.get_sensor(sensor) if hasattr(state, "get_sensor") else None
         received = (sample or {}).get("received_at")
         if not isinstance(received, (int, float)):
-            return row
+            return {**row, "evidence": f"측정 안 함 — {row['held_by'].removesuffix('.service')} 사용 중"}
         age = max(0.0, time.time() - received)
-        if age <= SCAN_FRESH_S:
-            return {**row, "state": "ok", "evidence": f"scan {age:.1f} s 전 (토픽 판정)", "source": "topic"}
-        return {**row, "state": "no_response", "evidence": f"scan {age:.0f} s 전에 끊김 (토픽 판정)",
+        if age <= TOPIC_FRESH_S:
+            return {**row, "state": "ok", "evidence": f"{topic} {age:.1f} s 전 (토픽 판정)", "source": "topic"}
+        return {**row, "state": "no_response", "evidence": f"{topic} {age:.0f} s 전에 끊김 (토픽 판정)",
                 "source": "topic"}
-    channel, topic = {"adc.battery": ("battery", "battery"), "motor.1": ("velocity", "odom"),
-                      "motor.2": ("velocity", "odom")}.get(device, (None, None))
-    if channel is None:
-        return row
-    snapshot = state.snapshot()
+    if device not in EVIDENCE_TOPICS or snapshot is None:
+        return {**row, "evidence": f"측정 안 함 — {row['held_by'].removesuffix('.service')} 사용 중"}
+    channel, topic = EVIDENCE_TOPICS[device]
     judged = _evidence_of(snapshot, channel)
     if judged == "fresh":
         volts = getattr(getattr(snapshot, "battery", None), "voltage", None)
@@ -410,7 +421,7 @@ def _topic_overlay(row: dict[str, Any], svc: CoreServicesLike) -> dict[str, Any]
         return {**row, "state": "ok", "evidence": text, "source": "topic"}
     if judged in {"delayed", "disconnected"}:
         return {**row, "state": "no_response", "evidence": f"{topic} {judged} (토픽 판정)", "source": "topic"}
-    return row
+    return {**row, "evidence": f"측정 안 함 — {row['held_by'].removesuffix('.service')} 사용 중"}
 
 
 @host_router.get("/hardware")
@@ -427,6 +438,11 @@ def host_hardware(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depe
         return {"available": False, "detail": "장치 점검 결과를 읽을 수 없습니다", "devices": []}
     measured = result["measured_at"]
     age = max(0.0, (datetime.now(timezone.utc) - measured).total_seconds())
+    # One snapshot per request, and only when a row needs a topic judgment.
+    state = getattr(svc, "state", None)
+    needs = state is not None and any(row["state"] == "not_measured" and row.get("held_by")
+                                       for row in result["devices"])
+    snapshot = state.snapshot() if needs else None
     return {
         "available": True,
         "schema": HW_SCHEMA,
@@ -434,7 +450,7 @@ def host_hardware(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depe
         "age_s": round(age, 1),
         "stale": age > HW_STALE_AFTER_S,
         "boot_id": result["boot_id"],
-        "devices": [_topic_overlay(row, svc) for row in result["devices"]],
+        "devices": [_topic_overlay(row, state, snapshot) for row in result["devices"]],
         "detail": "",
     }
 

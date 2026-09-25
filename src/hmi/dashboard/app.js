@@ -902,7 +902,8 @@ function renderCommissioning(payload) {
 }
 
 // D-247 3: six states, fixed. Colour comes from the shared [data-status]
-// vocabulary: neutral (no attribute), warn, crit fill. No new palette.
+// vocabulary: OK is the nominal text colour, WARNING the warn text, ERROR the
+// crit fill; the two states a machine cannot judge carry no status at all.
 const DEVICE_STATES = {
   ok: {text: "정상", status: "OK"},
   no_response: {text: "응답 없음", status: "ERROR"},

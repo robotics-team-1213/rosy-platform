@@ -315,12 +315,20 @@ def test_a_missing_address_is_no_response_and_the_bus_goes_on(tmp_path):
     assert states["adc.ir1"] == states["adc.ultrasonic"] == "ok"
 
 
-def test_a_held_d192_lock_is_not_a_fault(tmp_path):
+def test_a_held_d192_lock_is_not_a_fault_and_ends_the_bus(tmp_path):
     root = _tree(tmp_path)
     replies = dict(HEALTHY_ADC)
-    replies[("dev/i2c-1", 0x08, 0xF8)] = OSError(errno.EWOULDBLOCK, "bus lock held")
-    rows = probe_module.Probe(FakeIo(root, i2c=replies, lidar=LIDAR_OK, motors=MOTORS_OK)).run()
-    assert _states(rows)["adc.battery"] == "not_measured"
+    replies[("dev/i2c-1", 0x08, 0x88)] = probe_module.LockHeld("dev/i2c-1")
+    io = FakeIo(root, i2c=replies, lidar=LIDAR_OK, motors=MOTORS_OK)
+    rows = probe_module.Probe(io).run()
+    states = _states(rows)
+    assert states["adc.battery"] == "ok"
+    assert [states[f"adc.{name}"] for name in ("ir0", "ir1", "ir2", "ultrasonic")] == ["not_measured"] * 4
+    assert [item[3] for item in io.touched if item[1] == "dev/i2c-1"] == [0xF8, 0x88]
+    # EAGAIN from the device itself is a transport error, not the lock.
+    replies[("dev/i2c-1", 0x08, 0x88)] = OSError(errno.EAGAIN, "try again")
+    assert _states(probe_module.Probe(FakeIo(root, i2c=replies, lidar=LIDAR_OK, motors=MOTORS_OK)).run())[
+        "adc.ir0"] == "no_response"
 
 
 def test_an_out_of_range_battery_needs_a_person(tmp_path):
@@ -480,6 +488,21 @@ def test_the_result_is_root_rosy_core_0640(tmp_path):
     probe_module.main(["--root", str(root)], io=FakeIo(root), group=lambda name: os.getgid())
     info = (root / "run/rosy-boot/hardware.json").stat()
     assert stat.S_IMODE(info.st_mode) == 0o640 and info.st_gid == os.getgid()
+
+
+def test_a_result_younger_than_ten_seconds_is_kept(tmp_path, capsys):
+    root = _tree(tmp_path)
+    output = root / "run/rosy-boot/hardware.json"
+    output.write_text("{}", encoding="utf-8")
+    io = FakeIo(root, i2c=HEALTHY_ADC, lidar=LIDAR_OK, motors=MOTORS_OK)
+    assert probe_module.main(["--root", str(root)], io=io, group=lambda name: None) == 0
+    assert output.read_text(encoding="utf-8") == "{}" and io.touched == []
+    assert json.loads(capsys.readouterr().out)["hw_probe"] == "skipped"
+
+    old = time.time() - 60
+    os.utime(output, (old, old))
+    assert probe_module.main(["--root", str(root)], io=io, group=lambda name: None) == 0
+    assert json.loads(output.read_text(encoding="utf-8"))["schema"] == 1
 
 
 def test_stdout_mode_writes_nothing(tmp_path, capsys):
