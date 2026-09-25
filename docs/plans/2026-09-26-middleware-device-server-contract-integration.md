@@ -93,7 +93,7 @@
 
 1. viewer/operator/policy-admin의 deny-by-default, lease expiry, credential revoke, user/action/source/evidence audit rows 테스트를 쓴다.
 2. manual operator action과 automatic policy action이 동일한 task validation/transition/history service를 통과하게 한다. status는 `REQUESTED/ACCEPTED/RUNNING/COMPLETED/FAILED/UNKNOWN/HOLD`로 receipt와 실제 결과를 구분한다.
-3. `correlation_id`/ACK는 D-177/API Ref/schema와 한 change로 구현한다. timeout 또는 unknown result는 자동 재발행 대신 `UNKNOWN/HOLD`로 정지한다.
+3. **D-170 activation gate:** Accepted D-170은 `correlation_id` 생성·소비와 ACK 상태기를 FLEET SRS Phase 4 중앙 Fleet(10대) 착수와 같은 변경까지 보류한다. 현재 단일 사이트 Fleet 서버는 그 선행조건을 충족한다고 보지 않으므로 이 단계에서 correlation ID나 ACK를 구현하지 않는다. 본 사이트 rollout에서는 REST 접수와 완료를 구분하고 모호한 결과를 `UNKNOWN`으로 저장한다. Phase 4 착수 시 D-177에 따라 `core_common.protocol.schemas`, API Ref, FleetAgent 및 수신측을 한 변경으로 갱신하고 timeout은 자동 재시도 없이 `UNKNOWN/HOLD`로 남긴다.
 4. fail-closed stale/missing evidence, auth revocation, duplicate/replay, crash recovery와 storage migration 시험을 수행한다. automatic enable remains OFF.
 
 **Task 7 implementation progress (LOCAL, partial):** the operator `/goal` route,
@@ -116,6 +116,9 @@ evidence only. Browser RBAC/revocation, per-user identity,
 remain open. Startup recovery now
 converts any persisted `REQUESTED` task to `UNKNOWN` with a system audit row and
 does not redispatch it. This does not complete Task 7 or accept D-268/D-177.
+The D-177 correlation/ACK work is explicitly deferred by Accepted D-170 until
+central Fleet Phase 4; it is not a missing implementation step for this single
+site-host rollout.
 
 ## Task 8 — Ubuntu RTX host와 각 장비별 수용
 

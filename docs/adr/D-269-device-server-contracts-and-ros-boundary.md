@@ -29,7 +29,7 @@
    | Pinky 카메라·로봇암 | 미정인 전용 media/action 계약 | 사이트 연결 없음 | 대역·지연·권한·로컬 안전 계약을 별도 ADR로 수용 |
 
 2. **자격 증명을 목적과 장치별로 분리한다.** 브라우저 console 토큰, 로봇 CORE REST 제어 토큰, CORE Agent 페어링 토큰, 천장 카메라 source 토큰은 서로 바꾸어 쓸 수 없다. 배포 설정은 읽기 권한을 제한하고 회수·교체를 지원한다. 토큰은 네트워크 요청 URL/query, 로그, 영상 payload에 넣지 않는다. D-261의 `rosyov://` QR/deep-link는 페어링 시 앱에 자격 증명을 전달하는 별도 out-of-band 경로이므로 QR 표시·공유/로그를 비밀로 취급한다. `tls=1` 페어링은 Android를 `wss://`로 유도하며 전송 자격 증명을 실제 네트워크에서 쓸 때 TLS가 필수다.
-3. **Robot Fleet Agent는 상태·이벤트 업링크다.** 이 경로를 CORE DDS 제어 또는 임의의 로봇 명령 채널로 사용하지 않는다. 사용자 명령은 기존 Fleet → CORE REST 계약을 따라가며 수락 응답과 실제 완료 이벤트를 구분한다. D-177의 correlation/ACK 계약을 구현하기 전에는 응답을 완료로 표시하지 않는다.
+3. **Robot Fleet Agent는 상태·이벤트 업링크다.** 이 경로를 CORE DDS 제어 또는 임의의 로봇 명령 채널로 사용하지 않는다. 사용자 명령은 기존 Fleet → CORE REST 계약을 따라가며 수락 응답과 실제 완료 이벤트를 구분한다. Accepted D-170에 따라 현재 사이트 Fleet은 `correlation_id`를 만들거나 ACK 추적을 주장하지 않는다. 이는 FLEET SRS Phase 4 중앙 Fleet(10대) 착수 시 D-177 한 변경으로 활성화한다. 그 전까지 응답은 완료가 아니며 모호한 결과는 `UNKNOWN`으로 남긴다.
 4. **영상은 사이트의 제한된 입력이다.** 폰 영상은 사이트 관측 worker에서 처리하고 Fleet에는 D-257이 수용된 뒤 작은 파생 결과만 보낸다. raw JPEG, 영상 URL, `sensor_msgs/Image`는 Fleet/Hub/API/브라우저에 전달하지 않는다. ROS robot camera preview를 사이트 입력으로 재사용하지 않는다.
 5. **자동 실행은 계속 차단한다.** D-257 sighting은 표시·대조 자료다. 자동 작업은 D-268이 요구하는 별도 수용 정책 증거와 작업별 freshness/false-trigger 수용 뒤에만 허용한다. 미확인·stale·출처 불일치는 `HOLD`이며 운전자 명령 또한 같은 task 검증·감사 경로를 쓴다.
 6. **장비별 연결 증거를 따로 기록한다.** 계약 벡터/단위시험은 SOURCE, 실제 localhost 서비스 간 왕복은 LOCAL, 합성 또는 로봇 시뮬은 ROS-SIM, 고정 이미지와 호스트 드라이버 시험은 ARTIFACT/SITE, 실제 폰·CORE·팔·Pinky 측정은 각각 DEVICE/FIELD 증거다. 한 연결의 통과를 다른 장비나 배포의 통과로 승격하지 않는다.
