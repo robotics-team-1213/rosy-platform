@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `contracts/` (messages and shared schemas), `runtime/` (gateway, sensing, navigation), `devices/` (buses and chips), `products/` (Pinky config package), `hmi/` (LCD and shared browser assets), `sim/`, `site/` (fleet and the game host). Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `pinky_pro`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
+ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `contracts/` (messages and shared schemas), `runtime/` (gateway, sensing, navigation), `devices/` (buses and chips), `products/` (Pinky config package), `hmi/` (LCD and shared browser assets), `sim/`, `site/` (fleet and the game host). Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `pinky_pro`, `omx`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
 
 ## Key Files
 
@@ -18,7 +18,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `contracts/` | `interfaces` (custom srv) and `core_common` (protocol schemas, config, identity, profile) |
 | `runtime/` | `core` (gateway), `core_events`, `core_features` (managers plus `decision/`), `core_api_web`, `control` (sensing and `sensing/perception`), `navigation`. Judgment does not publish `cmd_vel` |
 | `devices/` | Families: `pinky_pro/` (`bringup`, `sensor_adc`, `lamp_control`, `led`), `common/` (`imu_bno055`), `omx/` (`omx_adapter`) |
-| `products/` | `pinky_pro` — config-only package (profile and capabilities) selected by `robot.model` |
+| `products/` | Config only: `pinky_pro` (profile and capabilities for `robot.model`), `omx` (disabled arm profile) |
 | `hmi/` | `emotion` (robot LCD) and `web_common` (shared browser assets) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
 | `site/` | `fleet` (formation, SiteHub, console) and `games` (laptop match host, no `cmd_vel`) |

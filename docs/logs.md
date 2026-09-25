@@ -2023,3 +2023,10 @@
 - gate 변화: 없음(문서+시험)
 - 결정: D-231
 - 교훈: 영역 이름만 바뀌는 이동은 깊이가 같아 `parents[N]`을 고치지 않는다. 깊이 변경은 계열 폴더로 들어가는 장치에 한정된다
+
+## 2026-09-25 · uncommitted · docs(adr): D-232 OMX 제품 설정은 products/omx
+- 변경: D-232 Accepted. `omx.disabled.yaml`을 `src/products/omx`로 옮긴다. 어댑터 코드와 `adapter.manifest.yaml`은 `devices/omx/omx_adapter`에 남긴다. `omx-ai`는 모델 이름이다. 판단·perception·`tools/perception` 자리는 그대로고 AI 워커 폴더는 만들지 않는다. Pinky 보드 핀맵(`bringup`, `sensor_adc`, `lamp_control`, `led`)은 `devices/pinky_pro`에 남긴다. URDF는 `sim/description`에 남긴다
+- 증거: 이 기록 직후 `python -m pytest src/products/omx/test src/devices/omx/omx_adapter/test test/architecture/test_target_layout.py test/architecture/test_module_structure.py test/test_robot_runtime.py -q`
+- gate 변화: 없음(문서+설정 패키지)
+- 결정: D-232
+- 교훈: 없음

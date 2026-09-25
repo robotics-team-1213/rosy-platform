@@ -26,6 +26,7 @@ TARGET = {
     "devices/common/imu_bno055": "devices/common/imu_bno055",
     "devices/omx/omx_adapter": "devices/omx/omx_adapter",
     "products/pinky_pro": "products/pinky_pro",
+    "products/omx": "products/omx",
     "hmi/emotion": "hmi/emotion",
     "hmi/web_common": "hmi/web_common",
     "site/fleet": "site/fleet",
@@ -67,17 +68,13 @@ def test_each_package_sits_where_the_phase_allows():
 
 
 def test_products_hold_configuration_not_packages():
-    # A product may be a config-only ament package (package.xml + CMakeLists install
-    # its share, D-196) with its own test/, but it carries no runtime code.
-    # omx_adapter is the one code package still waiting to move to devices/omx.
+    # A product package installs config only (package.xml + CMakeLists, D-196, D-232).
     products = SRC / "products"
-    waiting = products / "omx_adapter"
     code = [
         path.relative_to(ROOT).as_posix()
         for path in products.rglob("*")
         if (path.suffix in {".py", ".cpp", ".hpp"} or path.name == "setup.py")
         and "test" not in path.relative_to(products).parts
-        and (MOVED or waiting not in path.parents)
     ]
     assert code == []
 

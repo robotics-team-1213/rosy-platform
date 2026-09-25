@@ -116,12 +116,13 @@ COPY src/sim/description ./src/sim/description
 COPY src/devices/pinky_pro/bringup ./src/devices/pinky_pro/bringup
 COPY src/runtime/navigation ./src/runtime/navigation
 COPY src/devices/omx/omx_adapter ./src/devices/omx/omx_adapter
+COPY src/products/omx ./src/products/omx
 COPY src/runtime/control ./src/runtime/control
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \
-        --packages-select sllidar_ros2 interfaces description bringup navigation omx_adapter control \
+        --packages-select sllidar_ros2 interfaces description bringup navigation omx_adapter omx control \
     && test -d /opt/rosy_ws/install
 
 FROM io-runtime AS io

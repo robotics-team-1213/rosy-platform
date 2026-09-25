@@ -5,7 +5,7 @@
 
 ## Purpose
 
-팔 장치. `omx_adapter`는 코드 패키지이고, 제품 설정은 `src/products`에 둔다.
+팔 장치. `omx_adapter`는 코드 패키지이고, 제품 설정은 `src/products/omx`다.
 
 ## Subdirectories
 

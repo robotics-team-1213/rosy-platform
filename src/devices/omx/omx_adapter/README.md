@@ -14,7 +14,7 @@ OpenMANIPULATOR-X family. The actual vendor transport is a later adapter
 implementation and must remain behind this profile boundary.
 
 ```bash
-python -m omx_adapter.cli src/omx_adapter/config/omx.disabled.yaml
+python -m omx_adapter.cli src/products/omx/config/omx.disabled.yaml
 ```
 
 The empty JSON contract from the disabled profile is expected. A non-empty

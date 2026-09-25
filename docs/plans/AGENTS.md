@@ -82,7 +82,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-25-ownership-naming-input-v0.2.md` | 입력 노트. D-227이 채택한 범위만 실행 기준이다 |
 | `2026-09-25-decision-fabric-input-v0.8.md` | 입력 노트. 판단 경계는 D-228·D-229다. `src/runtime` 트리는 폴더가 아니다 |
 | `2026-09-25-folder-map.md` | D-229 이후의 현재 폴더를 읽는 지도 |
-| `2026-09-25-d231-layered-move.md` | D-231 실행: 영역 하나당 커밋 하나로 `contracts/runtime/devices/<계열>/products/hmi` + `firmware/`로 옮긴다. D-196 Task 6–8을 대체. 미실행 |
+| `2026-09-25-d231-layered-move.md` | D-231 실행 기록. 층 이동은 로컬 main `a3eca209`에 있다. OMX 제품 설정은 D-232 |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 ## Subdirectories

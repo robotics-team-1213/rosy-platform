@@ -163,7 +163,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     assert "COPY src/devices/omx/omx_adapter ./src/devices/omx/omx_adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
-        ROOT / "src" / "devices" / "omx" / "omx_adapter" / "config" / "omx.disabled.yaml"
+        ROOT / "src" / "products" / "omx" / "config" / "omx.disabled.yaml"
     ).read_text(encoding="utf-8")
     assert "enabled: false" in disabled
     assert "hardware_plugin: \"\"" in disabled

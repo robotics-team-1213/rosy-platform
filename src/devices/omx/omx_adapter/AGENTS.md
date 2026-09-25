@@ -23,7 +23,7 @@ ROS-native OMX profile boundary. Validates a model-neutral YAML profile and emit
 | Directory | Purpose |
 |-----------|---------|
 | `omx_adapter/` | `profile.py` + CLI validator (see `omx_adapter/AGENTS.md`) |
-| `config/` | Intentionally disabled profile YAML (see `config/AGENTS.md`) |
+| `config/` | Device manifest only. The disabled arm profile is `src/products/omx` |
 | `test/` | ROS-free profile/CLI tests (see `test/AGENTS.md`) |
 | `resource/` | ament index marker `omx_adapter` |
 
@@ -40,7 +40,7 @@ ROS-native OMX profile boundary. Validates a model-neutral YAML profile and emit
 
 ```bash
 python3 -m pytest src/devices/omx/omx_adapter/test/test_omx_profile.py -v
-python -m omx_adapter.cli src/devices/omx/omx_adapter/config/omx.disabled.yaml
+python -m omx_adapter.cli src/products/omx/config/omx.disabled.yaml
 ```
 
 The CLI on the disabled profile must print `{}`.

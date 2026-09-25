@@ -5,13 +5,13 @@
 
 ## Purpose
 
-OMX adapter profile YAML. The in-tree file is intentionally disabled until the model, driver, mount, and payload are measured on Pinky Pro.
+Device manifest for the OMX adapter. The disabled arm profile lives in `src/products/omx`.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `omx.disabled.yaml` | `omx.enabled: false`; empty model/driver/plugin; default six joint names and frames |
+| `adapter.manifest.yaml` | Device id `rosy.device.omx`, type manipulator, disabled |
 
 ## Subdirectories
 
@@ -23,7 +23,7 @@ None.
 
 - Do not fill in a fake `hardware_plugin` so the stack looks enabled.
 - Selecting `omx-f` / `omx-ai` / `openmanipulator-x` is a measured-hardware decision, not a YAML tidy-up.
-- CLI: `python -m omx_adapter.cli src/devices/omx/omx_adapter/config/omx.disabled.yaml` must print `{}`.
+- CLI: `python -m omx_adapter.cli src/products/omx/config/omx.disabled.yaml` must print `{}`.
 
 ### Testing Requirements
 

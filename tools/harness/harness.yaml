@@ -124,6 +124,11 @@ modules:
     tests: [src/products/pinky_pro/test]
     functional_kind: host-contract
     functional: [src/products/pinky_pro/test/test_robot_package.py]
+  - name: omx
+    path: src/products/omx
+    tests: [src/products/omx/test]
+    functional_kind: host-contract
+    functional: [src/products/omx/test/test_omx_package.py]
   - name: description
     path: src/sim/description
     tests: [src/sim/description/test/test_urdf_surface.py, test/test_robot_runtime.py]

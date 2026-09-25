@@ -26,6 +26,7 @@
 | [omx_adapter](src/devices/omx/omx_adapter/progress.md) | 장치 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [omx](src/products/omx/progress.md) | 로봇 통합 | uncommitted (2026-09-25) | GO | GO | HOLD | HOLD | N/A | N/A |
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [dock](firmware/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](firmware/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
@@ -62,6 +63,8 @@
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
 - pinky_pro ARTIFACT: required-ros-packages.txt에 pinky_pro를 올린 뒤의 이미지 빌드와 package inventory(ros2 pkg prefix pinky_pro) 증거 없음
 - pinky_pro DEVICE: 새 이미지에서 CORE_READY와 GET /system/capabilities readback 증거 없음
+- omx ROS-SIM: colcon으로 share/omx/config 설치를 본 기록이 없다
+- omx ARTIFACT: io 이미지가 이 패키지를 포함한 뒤의 package inventory가 없다
 - description ARTIFACT: io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/description`, `--packages-select`에 포함; meshes는 `RUN mkdir -p`로 빈 폴더만 생성). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - description DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
 - dock ROS-SIM: 코스트맵 충돌 면제(docking/collision_exemption)는 실제 costmap 통합 시험 전까지 intent-only (Device 검증 계획 P1 §7). ROS 2 Jazzy 환경에서 도킹 시퀀스 시뮬레이션 미실행

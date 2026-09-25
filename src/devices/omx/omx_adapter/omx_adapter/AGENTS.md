@@ -41,7 +41,7 @@ python3 -m pytest src/devices/omx/omx_adapter/test/test_omx_profile.py -v
 
 ### Internal
 
-- Config example: `../config/omx.disabled.yaml`
+- Config example: `src/products/omx/config/omx.disabled.yaml`
 
 ### External
 
