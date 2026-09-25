@@ -1,0 +1,18 @@
+{
+  "captured_age_ms": {
+    "max": 96,
+    "median": 83.5
+  },
+  "failed": 0,
+  "frames": 20,
+  "pose_tolerance_m": 0.15,
+  "rate_hz": 3,
+  "roundtrip_ms": {
+    "max": 50.35,
+    "median": 37.77,
+    "min": 32.8,
+    "p95": 49.74
+  },
+  "scope": "synthetic-local-Docker",
+  "stale_at_readback": 0
+}
