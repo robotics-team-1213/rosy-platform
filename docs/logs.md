@@ -2137,3 +2137,9 @@
 - gate 변화: D-259 Proposed→Accepted
 - 결정: D-259 Accepted. D-224 약속표 추가는 이 문서가 대신한다(타 ADR 불편집)
 - 교훈: 시험이 map.js를 스텁으로 갈아낀다는 것을 모르고 빈 손으로 디버깅했다 — 실패가 어서션 위치가 아니라 import 위치를 가리킬 수 있다. _serve_module 주석이 경고済였는데 읽지 않았다
+## 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
+- 변경: `docs/solutions/workflow-issues/`에 신규 2건 — (1) reprovision 테스트의 빈 exit code 플레이키(throw 지점 `deploy/sd/prepare-rosy-sd.ps1:1147-1148`, `$writerExitCode` null 초기화는 1008행, 원인 미확·D-230 레인 소관), (2) 동시 세션 공유 git 인덱스 규칙(amend/`reset --hard` 금지, `git commit -- <path>` 금지, append-only 공유 파일은 자기 행만 스테이징, 파일+행 원자적 페어링)
+- 증거: 단독 재현 10회 중 6회 FAIL(2026-09-26 3회 = FAIL/PASS/FAIL), `full_test.log` 동일 시그니처. ce-compound lightweight 기계 검사 `validate-doc-claims.py` 5 paths·3 SHAs 0 flags, `validate-frontmatter.py` 2건 OK
+- gate 변화: 없음(docs/solutions 신규 2건 — generate 후 lint 0 error 확인)
+- 결정: 플레이키는 원인 미확 상태로 판정 문서만 남기고 수정은 D-230 레인에 위임. git 규칙은 기존 ADR 번호 충돌 노트와 분리(번호 = 기획, git 메커니즘 = 실행)
+- 교훈: frontmatter 제목에 ': '가 있으면 따옴표 필수(파서가 중첩 매핑으로 오해). Windows에서 UTF-8 문서는 검사 스크립트가 cp949 기본인코딩으로 열어 실패하므로 `python -X utf8` 필요
