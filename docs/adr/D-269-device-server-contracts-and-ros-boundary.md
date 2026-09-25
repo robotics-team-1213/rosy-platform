@@ -23,7 +23,7 @@
    | Fleet 서버 → CORE | `/api/v1/*` HTTPS REST, 장비별 로봇 토큰 | `HttpRobotClient` 구현, 현재 gather는 REST 폴링 | 실제 CORE, 인증·timeout·stale·명령 상태 시험 |
 | CORE Agent → Fleet 서버 | WSS `/ws/robots`, API Ref PRT Envelope, hello/heartbeat/event | 운영 앱 결합·분리된 token·localhost reconnect 통합 LOCAL | 실제 CORE와 Ubuntu/TLS/LAN 연결, seq 누락·stale 운용 시험 |
 | 천장 폰 → 사이트 수신기 | WSS `/overhead/v1/frames`, `rosy-overhead/1`, JPEG | source/token 결합 검증·Android 4401 처리 LOCAL | token 발급·회전·폐기 흐름, 실제 폰/LAN/연속 신선도 시험 |
-   | 사이트 영상 작업자 → Fleet | D-257 sighting JSON 및 후속 D-268 정책 증거 | 인식·publish endpoint 없음, D-257/D-268 Proposed | API Ref와 shared schema 동시 변경, quality·freshness·거절 시험 |
+| 사이트 영상 작업자 → Fleet | D-257 `SiteSightingPayload` JSON 및 별도 D-268 정책 증거 | source-scoped write/readback API와 shared schema는 LOCAL 구현, worker publisher·운영 설정 없음, D-257/D-268 Proposed | phone→receiver→worker→Fleet source/seq/map/calibration lineage, actual config/credential provisioning 및 freshness 시험 |
    | 로봇 내부 | ROS 2 DDS → CORE → 로컬 기능·장치 | 로봇 런타임 소유 | 장치별 DEVICE 절차; 사이트 서버는 DDS 참가자가 아님 |
    | Pinky 카메라·로봇암 | 미정인 전용 media/action 계약 | 사이트 연결 없음 | 대역·지연·권한·로컬 안전 계약을 별도 ADR로 수용 |
 
@@ -42,6 +42,6 @@
 
 **Consequences:** 현장 호스트는 서비스 프로세스를 한 대에서 운영할 수 있지만, 폰 ingress·vision worker·Fleet API·CORE 연결·저장소는 분리된 설정과 상태로 관찰한다. 로컬 Hub 연결을 여는 첫 구현은 credential separation과 동일 앱 통합 시험을 포함한다. Pinky 카메라 및 로봇암은 이 결정만으로 활성화되지 않는다.
 
-**Validation / Transition:** [장비-서버 계약 감사 및 연동 계획](../plans/2026-09-26-middleware-device-server-contract-integration.md)의 단계별 수용을 실행한다. Windows LOCAL에서 실제 `FleetAgent`→동일 `fleet console` ASGI `/ws/robots` hello/heartbeat/event/reconnect와 분리 token, 카메라 수신기의 source/token 결합 및 Android 4401 오류 처리를 검증했다. 별도 다음 수용은 phone→receiver→vision→Fleet 파생 결과의 같은 source/seq/map lineage다. 운영 token provisioning/회전, 실물 장비·TLS·현장 네트워크 시험 전까지 DEVICE/FIELD 및 자동 실행은 HOLD다.
+**Validation / Transition:** [장비-서버 계약 감사 및 연동 계획](../plans/2026-09-26-middleware-device-server-contract-integration.md)의 단계별 수용을 실행한다. Windows LOCAL에서 실제 `FleetAgent`→동일 `fleet console` ASGI `/ws/robots` hello/heartbeat/event/reconnect와 분리 token, 카메라 수신기의 source/token 결합 및 Android 4401 오류 처리를 검증했다. D-257 sighting schema/API의 credential·map/calibration·stale·image-free 격리도 단위시험했다. 남은 다음 수용은 phone→receiver→vision worker→Fleet 경로의 같은 source/seq/map/calibration lineage 및 재시작·freshness 시험이다. 운영 token provisioning/회전, 실물 장비·TLS·현장 네트워크 시험 전까지 DEVICE/FIELD 및 자동 실행은 HOLD다.
 
 **References:** [D-118](D-118-image-fleet-gz-multi.md), [D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-267](D-267-ubuntu-site-fleet-and-vision-workflow.md), [D-268](D-268-policy-eligible-vision-evidence-for-fleet-tasks.md), [ROSY API & Protocol Reference](../reference/ROSY%20API%20%26%20Protocol%20Reference.md).

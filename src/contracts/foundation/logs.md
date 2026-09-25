@@ -69,3 +69,11 @@
 - gate 변화: 없음
 - 결정: D-260 Proposed (구현, DEVICE 확인 남음)
 - 교훈: 부팅 화면 프로그램(rosy-display)과 CORE가 한 표를 쓰려면 패키지 `__init__`이 아무것도 import하지 않아야 한다 — 시험으로 고정
+
+## 2026-09-26 · uncommitted · feat(core_common): D-257 SiteSightingPayload
+
+- 변경: image/policy/client source identity를 담지 않는 파생 pose schema 추가. seq, 유한 좌표·quality, map/calibration/processor revision과 4개 고유 코너 ID를 검증한다.
+- 증거: `python -m pytest src/runtime/gateway/test/test_site_sightings.py -q -p no:cacheprovider` 14 passed; gateway 전체 1325 passed/16 skipped.
+- gate 변화: 없음. D-257/D-268 Proposed.
+- 결정: schema는 operator sighting을 위한 것이며 automatic policy input이 아니다.
+- 교훈: source identity는 요청 본문이 아니라 Fleet credential configuration에서 결정한다.

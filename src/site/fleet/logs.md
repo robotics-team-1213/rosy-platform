@@ -238,3 +238,11 @@
 - 결정: D-224
 - 교훈: a declared grammar without a realized path is a defect, not a
   difference - check the source before trusting the sentence.
+
+## 2026-09-26 · uncommitted · feat(fleet): D-257 source-scoped sighting API
+
+- 변경: optional source-token `POST /api/fleet/sightings`와 operator-only latest readback 추가. Source는 allowlisted robot/map/calibration/corners만 쓰며 Fleet/CORE/console 토큰과 credential reuse를 거부한다. 최신 pose만 RAM에 보관하고 command API와 분리했다.
+- 증거: `python -m pytest src/site/fleet/test -q -p no:cacheprovider` 423 passed/5 skipped; `test_no_video_relay.py` 2 passed.
+- gate 변화: LOCAL 기존 GO; DEVICE/FIELD/PERSISTENCE 미수용.
+- 결정: D-257/D-268 Proposed 유지, sightings는 operator display/reconciliation 전용.
+- 교훈: sighting API를 추가해도 운영 CLI provisioning, persistent audit, vision publisher를 따로 검증해야 한다.

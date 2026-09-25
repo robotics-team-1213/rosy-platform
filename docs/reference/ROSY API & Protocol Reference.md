@@ -733,6 +733,9 @@ Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:80
 > 것과 로봇 계약을 섞지 않으려는 의도)와 SiteHub gather/scatter 뿐이다. 로봇↔
 > 시드 콘솔 사이의 실제 프로토콜은 §5~§7 을 따른다.
 
+사이트 시드의 추가 경로는 §10.6에 기록한다. 이 API는 로봇 `/api/v1/*`와 다른
+listener·자격 증명이며 중앙 Fleet catalog의 구현 상태로 간주하지 않는다.
+
 ## 10.1 로봇·페어링
 
 | Method | Path | Role | 요구사항 |
@@ -784,12 +787,49 @@ Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:80
 | GET | `/api/v1/fleet/events?robot_id=&type=&since=` | Viewer | 통합 이벤트 조회 (OBS-202) |
 | GET | `/api/v1/fleet/audit` | Admin | Fleet 감사 로그 |
 
+## 10.6 Site Fleet sighting (D-257 Proposed)
+
+Base: `http://<site-fleet-host>:8090`. 이 경로는 지도 위 표시·로봇 pose 대조용이다.
+이미지나 자동 정책 입력이 아니며 source 설정이 없는 앱에는 경로를 등록하지 않는다.
+현재는 `create_app(..., sightings=...)`를 통해 설정된 LOCAL API이며 `fleet console` CLI의
+안전한 source/map/calibration 설정과 persistent store 연결은 아직 구현되지 않았다.
+
+| Method | Path | Credential | 요구사항 |
+|---|---|---|---|
+| POST | `/api/fleet/sightings` | source 전용 Bearer token | vision worker가 `SiteSightingPayload`를 제출. 토큰 설정이 허용한 source/robot/map/calibration만 수용 |
+| GET | `/api/fleet/sightings` | console Bearer token | 로봇별 최신 sighting, server-derived source, capture/receive age 및 1 s lease stale 상태 |
+
+`POST` body `SiteSightingPayload`:
+
+```json
+{
+  "robot_id": "rosy_01",
+  "x": 1.25,
+  "y": -0.5,
+  "yaw": 0.2,
+  "captured_at": 1790000000.25,
+  "seq": 42,
+  "map_id": "lane-map:sha256:abc",
+  "calibration_revision": "ceiling-1-v2",
+  "processor_revision": "aruco-map-v1",
+  "quality": 0.98,
+  "corner_marker_ids": [30, 31, 32, 33]
+}
+```
+
+`captured_at`은 UTC Unix seconds다. 서버가 `source_id`와 `received_at`을 붙인다. client가
+`source_id`, image/JPEG/URL 또는 policy 필드를 추가하면 422다. map/calibration/코너 설정
+불일치, 1 s 초과 stale/future/out-of-order 입력은 409, 허가되지 않은 robot은 403이다.
+source token은 console/robot REST/CORE Agent token과 달라야 하고 이 credential로 명령
+경로를 호출할 수 없다. D-268 policy evidence 및 자동 실행은 이 API에 포함되지 않는다.
+
 ---
 
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.26 | 2026-09-26 | Additive(D-257 Proposed): Site Fleet 전용 source-token `POST /api/fleet/sightings`, operator `GET` readback 및 `SiteSightingPayload` shared schema. 파생 pose만 전달하며 source identity는 서버가 token에서 결정. 1 s 표시 lease, D-268 자동 정책 경로는 계속 별도/HOLD |
 | v1.25 | 2026-09-26 | Additive(D-260 5): `GET /host/status-summary`(Viewer) 신설 — 로봇 상태 하나·이유·장치 요약·배터리·온도·할 일. 기존 필드 불변 — envelope `protocol_version` 1.0 유지 |
 | v1.24 | 2026-09-26 | Additive(D-263/D-265): 역할별 기반 화면 `GET /api/v1/ui/surfaces/{surface}` 및 `UiSurfaceManifest` REST 응답 스키마. 메뉴 노출은 패널 수와 독립이며 직접 요청은 역할에 따라 401/403/404. Fleet envelope `protocol_version` 1.0 유지 |
 | v1.23 | 2026-09-26 | Additive(D-247 6): `POST /host/hardware/test`·`POST /host/hardware/confirm`(Admin) 신설, `HW_TEST_COOLDOWN`(429)·`HW_TEST_UNAVAILABLE`(503)·`HW_CONFIRM_UNAVAILABLE`(503)·`HW_CONFIRM_NO_TEST`(409), `GET /host/hardware`의 `test` 필드와 `source:"human"` 행 덮기 추가. 기존 필드 불변 — envelope `protocol_version` 1.0 유지 |

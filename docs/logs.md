@@ -2250,3 +2250,11 @@
 - 제한: LOCAL 시험뿐이다. 운영 token 발급·회전·폐기 UX, 실제 phone/emulator LAN 연결, TLS 및 현장 freshness는 확인하지 않았다.
 - gate 변화: 없음. D-269 Proposed, camera DEVICE/FIELD와 vision→Fleet은 미수용이다.
 - 결정: QR/deep-link는 카메라 앱의 out-of-band provisioning으로만 다루고 로그/공유 화면은 secret-safe하게 유지해야 한다.
+
+## 2026-09-26 · uncommitted · feat(fleet): add source-scoped site sighting contract
+
+- 변경: shared `SiteSightingPayload`, API Ref §10.6, configured-only `POST /api/fleet/sightings`와 operator-authenticated latest readback을 추가했다. 허용 source/robot/map/calibration/corners를 config로 제한하고 server derives `source_id`; stale/future/out-of-order 및 mismatched map/calibration은 fail-closed다. image/policy/client source identity는 거부한다.
+- 증거: Fleet 423 passed/5 skipped, gateway 1325 passed/16 skipped, `test_no_video_relay.py` 2 passed, 새 schema 14 tests 및 sighting HTTP 7 tests 통과. 새/수정 Python 파일은 flake8 (기존 console.py logger-before-import E402는 제외)과 diff check 통과.
+- 제한: API는 programmatic app config로만 열리고 in-memory latest-only다. CLI provisioning, persistent/audit storage, JPEG→vision→Fleet publisher, browser display, Ubuntu/TLS/device는 미구현이다.
+- gate 변화: 없음. D-257/D-268 Proposed, automatic movement HOLD.
+- 결정: sighting은 표시·대조 데이터에만 사용한다. 자동 작업 경로와 D-268 policy evidence는 별도 승인 계약이다.

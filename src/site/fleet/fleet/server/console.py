@@ -20,6 +20,7 @@ outbound WS(heartbeat/event)지만, 그 에이전트는 Fleet 서버가 생긴 �
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import math
 import time
@@ -84,6 +85,9 @@ class FleetConsole:
         self._clients: dict[str, RobotClient] = {
             ep.robot_id: client for ep, client in zip(endpoints, clients)
         }
+        self._rest_tokens = tuple(ep.token for ep in endpoints)
+        self._agent_pairing_tokens = tuple(ep.fleet_pairing_token for ep in endpoints
+                                           if ep.fleet_pairing_token is not None)
         self._order = [ep.robot_id for ep in endpoints]
         self._clock = clock
         self._map_ttl_s = map_ttl_s
@@ -128,6 +132,20 @@ class FleetConsole:
     @property
     def robot_ids(self) -> list[str]:
         return list(self._order)
+
+    def uses_rest_token(self, candidate: str) -> bool:
+        """Check credential separation without exposing configured robot tokens."""
+        matched = False
+        for token in self._rest_tokens:
+            matched |= hmac.compare_digest(candidate, token)
+        return matched
+
+    def uses_agent_pairing_token(self, candidate: str) -> bool:
+        """Check credential separation without exposing CORE FleetAgent secrets."""
+        matched = False
+        for token in self._agent_pairing_tokens:
+            matched |= hmac.compare_digest(candidate, token)
+        return matched
 
     @property
     def hub(self) -> SiteHub:

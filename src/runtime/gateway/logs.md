@@ -10,6 +10,7 @@
 - 결정: D-61 Proposed
 - 교훈: 없음
 
+
 ## 2026-09-15 · uncommitted · docs(harness): stop carrying over unrerun ROS-SIM evidence
 - 변경: 리뷰 반영. `last_verified.commit`을 `uncommitted`로, SOURCE에 재실행 명령 추가
 - 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q` 62 passed; `python tools/harness/rosy_harness.py lint` 0 errors, 2 warnings(uncommitted). ROS 시험 자체는 미실행
@@ -462,4 +463,12 @@
 - 증거: `test_host_status_summary.py::test_the_runtime_probe_reads_only_the_temperature` 통과; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
 - gate 변화: 없음
 - 결정: D-260 Proposed
+- 교훈: 없음
+
+## 2026-09-26 · uncommitted · test(core): D-257 site sighting schema coverage
+
+- 변경: `SiteSightingPayload` 계약의 finite/bounds/lineage/image-free 거부를 gateway contract suite에서 검증한다.
+- 증거: `python -m pytest src/runtime/gateway/test -q -p no:cacheprovider` 1325 passed/16 skipped.
+- gate 변화: 없음; ROS-SIM/DEVICE/FIELD 범위 밖.
+- 결정: D-257 Proposed; schema-only pass는 카메라/vision worker 동작 증명이 아니다.
 - 교훈: 없음

@@ -17,9 +17,11 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
+from core_common.protocol.sightings import SiteSightingPayload
 from core_common.intent import IntentError, interpret
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
+from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
 from fleet.swarm.transport import RobotApiError
 
@@ -125,7 +127,7 @@ def _http_error(exc: BaseException) -> HTTPException:
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
-               web_common: Optional[Path] = None, hub=None) -> FastAPI:
+               web_common: Optional[Path] = None, hub=None, sightings=None) -> FastAPI:
     app = FastAPI(
         title="ROSY Fleet",
         version="0.1.0",
@@ -147,6 +149,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                                          "message": "console token required"})
 
     guard = [Depends(authorize)]
+
+    if sightings is not None and sightings.enabled:
+        if console_token is not None and sightings.uses_token(console_token):
+            raise ValueError("sighting source credentials must differ from the console token")
+        if sightings.reuses_any(console.uses_rest_token):
+            raise ValueError("sighting source credentials must differ from robot REST tokens")
+        if sightings.reuses_any(console.uses_agent_pairing_token):
+            raise ValueError("sighting source credentials must differ from CORE Agent pairing tokens")
+
+        @app.post("/api/fleet/sightings", tags=["sightings"])
+        async def submit_sighting(body: SiteSightingPayload,
+                                  authorization: Optional[str] = Header(default=None)) -> dict:
+            try:
+                return sightings.accept(authorization, body)
+            except SightingError as exc:
+                raise HTTPException(status_code=exc.status_code,
+                                    detail={"code": exc.code, "message": str(exc)}) from exc
+
+        @app.get("/api/fleet/sightings", dependencies=guard, tags=["sightings"])
+        async def sighting_readback() -> dict:
+            return sightings.snapshot()
 
     @app.get("/api/fleet/state", dependencies=guard, tags=["fleet"])
     async def fleet_state() -> dict:
