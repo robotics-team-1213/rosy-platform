@@ -1,7 +1,9 @@
 ## D-255 UI/UX 평가 회차 2 — 코드는 닫혔고 평가는 열린 채로 둔다
 
-**Status:** Proposed (2026-09-26). D-153의 첫 적용 회차다. 판정은 GO가 아니라
-HOLD이며, 그 이유를 이 문서에 남긴다.
+**Status:** Accepted (2026-09-26). B1(G2 14셀,
+`docs/validation/uiux-surfaces-2026-09-26/`) 완료로 amendment. 표면 판정은
+HOLD 유지 — B2(BENCH 합동)·B3(진단 편입)이 blocker로 남는다. D-153의 첫 적용
+회차다.
 
 잇는 결정: [D-153](D-153-ui-ux.md) · D-233 · D-245 · D-248 · D-249 · D-250 ·
 D-251 · D-252 · D-253 · D-254 · concept 16.

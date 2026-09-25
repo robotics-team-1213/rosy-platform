@@ -253,8 +253,8 @@
 | D-252 | Fleet 큐·대형 — 머리 triage·대기 요약 | Accepted |
 | D-253 | 게임·진단 마무리 — 관전 없음·진단 동결 | Accepted |
 | D-254 | 디자인 철학과 토큰 전집 | Accepted |
-| D-255 | UI/UX 평가 회차 2 | Proposed |
-| D-258 | 디자인 리뷰 루프 | Proposed |
+| D-255 | UI/UX 평가 회차 2 | Accepted |
+| D-258 | 디자인 리뷰 루프 | Accepted |
 | D-259 | 지도 키보드 조작 | Accepted |
 | D-262 | 웹 예산 판정 제안 | Proposed |
 | D-260 | 로봇은 부팅음·LED·LCD·운용 화면 요약줄 네 곳에서 같은 상태를 같은 말로 보여준다 | Proposed |
