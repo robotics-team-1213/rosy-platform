@@ -43,7 +43,7 @@ MUST_TRACK = [
     "deploy/sd/rosy-config.template.yaml",
     "deploy/sd/provision.schema.json",
     "deploy/release/public-keys/rosy-release-2026-01.pem",
-    "signal/observer/config.example.json",
+    "firmware/signal/observer/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
 ]
 

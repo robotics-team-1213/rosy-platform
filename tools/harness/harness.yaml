@@ -130,15 +130,15 @@ modules:
     functional_kind: host-contract
     functional: [src/sim/description/test/test_urdf_surface.py]
   - name: dock
-    path: dock
+    path: firmware/dock
     tests: [test/test_dock_contract.py, src/core/core_features/test/test_docking.py]
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal
-    path: signal
-    tests: [test/test_signal_contract.py, signal/observer/test]
+    path: firmware/signal
+    tests: [test/test_signal_contract.py, firmware/signal/observer/test]
     functional_kind: host-contract
-    functional: [test/test_signal_contract.py, signal/observer/test]
+    functional: [test/test_signal_contract.py, firmware/signal/observer/test]
   - name: docs
     path: docs
     tests: [test/test_network_topology_contracts.py, test/test_harness_contracts.py]

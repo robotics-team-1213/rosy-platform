@@ -30,7 +30,7 @@ plans:
 ---
 ## 지금 상태
 
-- ROSY-DOCK-001 계약: `dock/README.md`의 `/status` 예시와 `rosy_core.docking.agent`의 파서가 일치함을 시험이 고정한다. `load_present`·`charging`은 필수(누락은 오류, `false` 기본값 금지).
+- ROSY-DOCK-001 계약: `firmware/dock/README.md`의 `/status` 예시와 `rosy_core.docking.agent`의 파서가 일치함을 시험이 고정한다. `load_present`·`charging`은 필수(누락은 오류, `false` 기본값 금지).
 - 도크는 부하를 감지한 뒤에만 통전하고 제거 시 즉시 차단한다(감전·단락 방지가 MCU를 두는 1차 이유이며 전류 보고는 부차적).
 - 충전 확인은 도크 보고 전류 **와** 로봇 필터링 팩 전압(하강하지 않음) 두 소스를 모두 요구한다(D-28). 이 판정이 D-27 deep-discharge 셧다운 억제의 입력이다.
 - 코스트맵 충돌 면제는 approach 구간 전용으로 설계되었으나 실제 costmap 통합 시험은 아직 없다 — intent-only.

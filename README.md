@@ -21,8 +21,7 @@ rosy/ (이 리포지토리)
 ├── deploy/                   # 이미지·릴리스·로봇 설치 셸
 ├── tools/                    # tools/fix_ament_resource.sh, tools/run_fleet_sim.sh, tools/run_data.py
 ├── data/                     # data/teleop 확인 기록, data/drive 주행 기록. 세션은 커밋하지 않음
-├── dock/                     # 충전 도크 펌웨어
-├── signal/                   # 신호 제어 펌웨어
+├── firmware/                 # 충전 도크·신호 제어 펌웨어 (colcon 밖)
 ├── reference/                # 얼린 pinky_pro zip. 현재 코드가 아님
 ├── test/                     # 호스트 계약 시험
 └── src/                      # ROS 2 패키지 (도메인 그룹)

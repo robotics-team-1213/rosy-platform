@@ -56,7 +56,7 @@ Contract in README; implementation in `firmware/rosy_signal/rosy_signal.ino`; cl
 ### Internal
 
 - Design: `docs/plans/2026-09-21-traffic-light-controller-research.md`
-- Precedent: `dock/README.md` (ROSY-DOCK-001), `docs/plans/2026-09-14-site-middleware-role-fabric-design.md` (D-59)
+- Precedent: `firmware/dock/README.md` (ROSY-DOCK-001), `docs/plans/2026-09-14-site-middleware-role-fabric-design.md` (D-59)
 
 ### External
 

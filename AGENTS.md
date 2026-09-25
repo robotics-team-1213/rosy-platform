@@ -30,8 +30,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
-| `dock/` | Charging-dock firmware and ROSY-DOCK-001 contract (see `dock/AGENTS.md`) |
-| `signal/` | Traffic-signal controller: ROSY-SIGNAL-001 contract + ESP32 relay firmware (reference implementation); commanded by the Fleet console, fail-safe flash on lost supervision (see `signal/AGENTS.md`) |
+| `firmware/` | Dock and signal firmware outside colcon (see `firmware/AGENTS.md`) |
 | `test/` | Host pytest for deploy/release/motor contracts (see `test/AGENTS.md`) |
 | `docs/assets/` | Architecture and product images (see `docs/assets/AGENTS.md`) |
 | `docs/solutions/` | Documented solutions to past problems — bugs, best practices, workflow patterns — by category, with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in a documented area |

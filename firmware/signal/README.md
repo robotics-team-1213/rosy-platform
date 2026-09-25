@@ -4,7 +4,7 @@
 - **Status:** Reference implementation (G-S1 compile/bench·G-S3 Fleet client 전).
   참조 펌웨어는 `firmware/`에 있고 host source-contract만 통과했다
 - **Related:** `docs/plans/2026-09-21-traffic-light-controller-research.md` (조사 보고서),
-  `dock/README.md` (ROSY-DOCK-001 — 폴링 방향·자격증명 규칙의 선례),
+  `firmware/dock/README.md` (ROSY-DOCK-001 — 폴링 방향·자격증명 규칙의 선례),
   `docs/plans/2026-09-14-site-middleware-role-fabric-design.md` (D-59)
 
 ## 이 컨트롤러가 필요한 이유

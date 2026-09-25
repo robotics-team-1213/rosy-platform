@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -13,10 +13,10 @@
 
 ## 계획·결과 문서
 
-- [2026-09-21-fleet-signals-integration-design.md](../docs/plans/2026-09-21-fleet-signals-integration-design.md)
-- [2026-09-21-traffic-light-controller-research.md](../docs/plans/2026-09-21-traffic-light-controller-research.md)
-- [2026-09-22-fleet-signals-integration.md](../docs/plans/2026-09-22-fleet-signals-integration.md)
-- [2026-09-22-signals-acceptance-plan.md](../docs/plans/2026-09-22-signals-acceptance-plan.md)
+- [2026-09-21-fleet-signals-integration-design.md](../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
+- [2026-09-21-traffic-light-controller-research.md](../../docs/plans/2026-09-21-traffic-light-controller-research.md)
+- [2026-09-22-fleet-signals-integration.md](../../docs/plans/2026-09-22-fleet-signals-integration.md)
+- [2026-09-22-signals-acceptance-plan.md](../../docs/plans/2026-09-22-signals-acceptance-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -25,12 +25,12 @@
 ## 시험
 
 - `test/test_signal_contract.py`
-- `signal/observer/test`
+- `firmware/signal/observer/test`
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · refactor(firmware): move signal under firmware/ (D-231)
 - 2026-09-22 · uncommitted · feat(signal/observer): 프레임 동결 강등 + preview 자체 캡처 + ROI 경계 검증 (v0.3)
 - 2026-09-22 · uncommitted · docs(signal): D-163 — 관측은 읽기 전용 분리 평면, 카메라 역할 셋 (ADR)
 - 2026-09-22 · uncommitted · feat(observer): 프레임 소스 추상화 + Pi 속도 평면 설계
 - 2026-09-22 · uncommitted · feat(observer): 신호등 관측 서비스 — 읽기 전용 실측 평면
-- 2026-09-22 · uncommitted · docs(signal): 실물 수용 계획 — 평가 방법 고정

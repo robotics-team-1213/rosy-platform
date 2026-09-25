@@ -16,3 +16,11 @@
 - gate 변화: ARTIFACT N/A→HOLD (펌웨어 빌드는 적용 대상이지만 미검증)
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(firmware): move dock under firmware/ (D-231)
+
+- 변경: `firmware/dock/`로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 도크 계약 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음

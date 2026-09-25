@@ -42,7 +42,7 @@ Fail-safe flash at 500 ms (`FLASH_INTERVAL_MS`); 20 ms tick; cycle phases greenâ
 
 ### Internal
 
-- Contract `signal/README.md` (ROSY-SIGNAL-001 Draft)
+- Contract `firmware/signal/README.md` (ROSY-SIGNAL-001 Draft)
 
 ### External
 

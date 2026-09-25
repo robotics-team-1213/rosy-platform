@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -14,8 +14,8 @@
 
 ## 계획·결과 문서
 
-- [2026-09-02-docking-station-design.md](../docs/plans/2026-09-02-docking-station-design.md)
-- [2026-09-15-module-harness-design.md](../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-02-docking-station-design.md](../../docs/plans/2026-09-02-docking-station-design.md)
+- [2026-09-15-module-harness-design.md](../../docs/plans/2026-09-15-module-harness-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -28,5 +28,6 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · refactor(firmware): move dock under firmware/ (D-231)
 - 2026-09-15 · uncommitted · docs(harness): hold unverified dock firmware instead of N/A
 - 2026-09-15 · uncommitted · docs(harness): start the dock harness pilot

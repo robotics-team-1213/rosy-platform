@@ -39,7 +39,7 @@ Debounced load (300 ms), 50 ms sample interval.
 
 ### Internal
 
-- Contract `dock/README.md` (ROSY-DOCK-001, D-28)
+- Contract `firmware/dock/README.md` (ROSY-DOCK-001, D-28)
 
 ### External
 

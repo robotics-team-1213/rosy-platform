@@ -69,3 +69,11 @@
 - 증거: `python -m pytest signal/observer/test -q` → 32 passed (신규 9건: 동결 강등·해제 debounce 재시작·frame_id/age·preview 자체 캡처·설정 거절 5종). flake8 대상 파일 무결 (2026-09-22 Windows).
 - gate 변화: 없음 — 합성 ≠ DEVICE, 실촬 회귀·AC-23/24 는 벤치(B0~B7) 몫.
 - 교훈: 멈춘 프레임의 CONFIRMED 는 가장 비싼 거짓말이다 — 정보의 나이(frame_id/age)를 응답에 실어 소비자가 스스로 강등하게 하는 편이, 서버가 "지금 켜짐"을 조작하는 것보다 낫다.
+
+## 2026-09-25 · uncommitted · refactor(firmware): move signal under firmware/ (D-231)
+
+- 변경: `firmware/signal/`로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 신호 계약 시험과 observer 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음

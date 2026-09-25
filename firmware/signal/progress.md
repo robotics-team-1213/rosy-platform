@@ -32,8 +32,8 @@ plans:
 ---
 ## 지금 상태
 
-- ROSY-SIGNAL-001 reference implementation: `signal/README.md` 의 `/status`·`/command` 예시와
-  `signal/firmware/rosy_signal/rosy_signal.ino` 가 계약 시험으로 고정된다.
+- ROSY-SIGNAL-001 reference implementation: `firmware/signal/README.md` 의 `/status`·`/command` 예시와
+  `firmware/signal/firmware/rosy_signal/rosy_signal.ino` 가 계약 시험으로 고정된다.
   `mode`·`lamps` 는 필수(누락은 오류, 기본값 금지).
 - 펌웨어의 1차 임무는 제어가 아니라 **신뢰할 수 없음의 표시**다: 부팅·감독자 침묵
   (10 s)·재시작 → 전 기능 적색 점멸, 새 인증 명령 전까지 유지. 마지막 명령은 NVS 에

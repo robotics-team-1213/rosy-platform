@@ -7,7 +7,7 @@ ESP32 컨트롤러와 Fleet 콘솔의 몫이다.
 ## 실행
 
 ```bash
-python signal/observer/observer.py --config signal/observer/config.example.json \
+python firmware/signal/observer/observer.py --config firmware/signal/observer/config.example.json \
     --host 127.0.0.1 --port 8095
 curl http://127.0.0.1:8095/observed
 ```
@@ -59,7 +59,7 @@ curl -o preview.jpg http://127.0.0.1:8095/preview.jpeg
 ## 검증
 
 ```bash
-python -m pytest signal/observer/test -q
+python -m pytest firmware/signal/observer/test -q
 ```
 
 합성 프레임 시험 32건 — 실촬 프레임 회귀 세트는 벤치에서 수집해 합류시킨다

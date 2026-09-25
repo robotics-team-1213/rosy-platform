@@ -27,8 +27,8 @@
 | [interfaces](src/core/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |
-| [dock](dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [signal](signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
+| [dock](firmware/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [signal](firmware/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | uncommitted (2026-09-23) | GO | GO | N/A | N/A | N/A | N/A |
 
 ## HOLD blockers
