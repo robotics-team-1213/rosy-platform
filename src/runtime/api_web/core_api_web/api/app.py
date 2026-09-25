@@ -99,6 +99,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "dom.js": "application/javascript",
         "client.js": "application/javascript",
         "settings.js": "application/javascript",
+        "vision.js": "application/javascript",
     }
 
     app.include_router(auth_router)
