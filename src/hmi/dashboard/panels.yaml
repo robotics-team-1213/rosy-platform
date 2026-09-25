@@ -28,6 +28,14 @@ panels:
     min_role: operator
     module: panels/setup/localization.js
     css: [panels/surface-panels.css]
+  - id: setup.docking
+    title: 도킹 준비 및 상태
+    surface: setup
+    slot: main
+    order: 30
+    min_role: operator
+    module: panels/setup/docking.js
+    css: [panels/surface-panels.css]
   - id: system.events
     title: 최근 이벤트
     surface: device

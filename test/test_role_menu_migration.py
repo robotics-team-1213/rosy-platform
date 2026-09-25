@@ -47,3 +47,15 @@ def test_device_surface_moves_credential_and_safety_policy_controls():
     source = (WEB / panel["module"]).read_text(encoding="utf-8")
     assert {"/api/v1/system/tokens", "/api/v1/safety/limits"} <= set(
         __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+
+
+def test_setup_surface_contains_capability_gated_docking_preparation():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["setup.docking"]
+    assert panel["surface"] == "setup"
+    assert panel["min_role"] == "operator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/docking/status", "/api/v1/docking/docks", "/api/v1/docking/dock",
+            "/api/v1/docking/undock", "/api/v1/docking/cancel"} <= set(
+                __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
