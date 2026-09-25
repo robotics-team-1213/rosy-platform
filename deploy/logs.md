@@ -1257,3 +1257,10 @@
 - gate 변화: 없음 — DEVICE 확인 전
 - 결정: D-260 Proposed
 - 교훈: 권한 없는 부팅 화면 프로그램이 못 읽는 입력(runtime.env 0600, hardware.json 0640)은 이미 root로 도는 표시기가 필요한 칸만 옮긴다
+
+## 2026-09-26 · uncommitted · fix(deploy): D-260 review M1 M2 L1-L4
+- 변경: `rosy-boot-status`가 CORE의 `/run/rosy/status-inputs.json`(SAF-005 경고 임계, 덮기를 거친 장치 상태)을 엄격히 읽어 boot-status.json에 옮기고 부팅 화면 프로그램이 그 임계를 쓴다. `rosy-hw-test`는 ActiveState가 정확히 `active`이고 `rosy-display` 그룹이 있을 때만 넘긴다. 스위치 해석기 `rosy_display_env.py` 공유. 주의 소리만 300 s 반복 억제. `rosy-hw-test.service` 주석 정정
+- 증거: `test_boot_display.py`·`test_hw_test.py`·`test_hw_probe.py`·native systemd·device surface 412 passed(gateway status-summary 포함, 2026-09-26 Windows); 두 경로 동등 시험 3건
+- gate 변화: 없음 — DEVICE 확인 전
+- 결정: D-260 Proposed
+- 교훈: 권한 없는 표시기가 CORE와 같은 판정을 하려면 입력을 CORE가 넘겨야 한다

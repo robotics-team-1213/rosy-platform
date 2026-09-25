@@ -103,3 +103,10 @@
 - gate 변화: 없음
 - 결정: D-260 Proposed
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · fix(core_api_web): D-260 review M1 status inputs hand-over
+- 변경: `api/v1/host.py`에 `status_inputs`·`write_status_inputs`(`/run/rosy/status-inputs.json`, 원자적 교체). `core/node.py` 타이머가 10 s마다 쓴다
+- 증거: `python -m pytest src/runtime/gateway/test/test_host_status_summary.py -q` 27 passed, 1 skipped
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음
