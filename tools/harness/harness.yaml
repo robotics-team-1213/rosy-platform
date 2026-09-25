@@ -51,6 +51,11 @@ modules:
     tests: [src/site/games/test, test/test_rosy_games_surface.py]
     functional_kind: pytest
     functional: [src/site/games/test]
+  - name: overhead
+    path: src/site/overhead
+    tests: [src/site/overhead/test]
+    functional_kind: pytest
+    functional: [src/site/overhead/test]
   - name: gz_sim
     path: src/sim/gz_sim
     tests: [src/sim/gz_sim/test]
