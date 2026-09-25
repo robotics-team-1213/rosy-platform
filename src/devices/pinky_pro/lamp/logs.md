@@ -36,3 +36,12 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-26 · 8e6902fd · feat(devices): lamp_selftest for the D-247 lamp test
+
+- 변경: `src/lamp_selftest.c`는 ROS 없는 C 도우미다. 8 LED, GPIO19, GBR, dma 10이다. 빨강·초록·파랑을 1 s씩 켰다가 끄고, 신호를 받아도 끈다. CMake가 aarch64에서 main_node와 함께 빌드해 `lib/lamp_control`에 설치한다. `rosy-hw-test`가 root로 실행한다.
+- 증거: x86 WSL gcc 13에서 `-Wall -Wextra -Wpedantic` 경고 없이 컴파일·링크했다. Pi 밖에서는 "Hardware revision is not supported"로 종료 2. 패키지 계약 2 passed
+- 미증명: ARM64 colcon 빌드와 실기 점등
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 없음

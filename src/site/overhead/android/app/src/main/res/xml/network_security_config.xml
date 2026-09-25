@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  D-261 5: the first version streams over plain ws:// with a Bearer token to the observation
+  adapter on the isolated site LAN. The adapter address is an arbitrary LAN IP or host entered
+  at pairing time, which a domain-config cannot enumerate, so cleartext is allowed app-wide.
+  The token travels unencrypted: never operate over public networks or the internet.
+  TLS is left to a follow-up ADR.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

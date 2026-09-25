@@ -149,6 +149,7 @@ def test_every_board_device_has_one_row_and_d169_decides_product():
 def test_a_healthy_board_reads_ok_where_a_machine_can_tell(tmp_path):
     root = _tree(tmp_path, nodes=("rosy-motor", "ttyAMA0", "i2c-0", "i2c-1", "spidev0.0", "ws281x_pwm"),
                  csi=("okay", "disabled"), kmsg="6,900,1000,-;ov5647 10-0036: Consider updating driver\n")
+    _lamp_channel(root, "3")
     io = FakeIo(root, active={"rosy-boot-display.service"}, i2c={**HEALTHY_ADC, **IMU_OK}, lidar=LIDAR_OK,
                 motors=MOTORS_OK, commands=PI_OK)
     rows = probe_module.Probe(io).run()
@@ -185,7 +186,7 @@ def test_the_2026_09_25_rosy_18_board_shows_all_six_states(tmp_path):
     assert evidence["camera"] == "ov5647 10-0036 probe -121 · CSI 활성"
     assert "dtoverlay=i2c0-pi5,pins_0_1" in evidence["imu"]
     assert "rp1_ws281x_pwm" in evidence["lamp"]
-    assert evidence["buzzer"].startswith("BCM 22 미확인 · 꺼짐")
+    assert evidence["buzzer"].startswith("BCM 4 · 꺼짐")
     held = {row.id: row.held_by for row in rows if row.held_by}
     assert held == dict.fromkeys(["motor.1", "motor.2", "lidar", "adc.battery", "adc.ir0", "adc.ir1",
                                   "adc.ir2", "adc.ultrasonic"], "rosy-io.service")
@@ -438,7 +439,33 @@ def test_the_buzzer_reads_its_pin_from_the_display_environment(tmp_path):
     (root / "etc/rosy/boot-display.env").write_text("ROSY_BUZZER_ENABLED=true\nROSY_BUZZER_PIN=17\n",
                                                    encoding="utf-8")
     row = probe_module.Probe(FakeIo(root)).buzzer()
-    assert row.state == "needs_human" and row.evidence.startswith("BCM 17 미확인 · 켜짐")
+    assert row.state == "needs_human" and row.evidence.startswith("BCM 17 · 켜짐")
+
+
+def _lamp_channel(root: Path, value: str) -> None:
+    parameters = root / "sys/module/rp1_ws281x_pwm/parameters"
+    parameters.mkdir(parents=True, exist_ok=True)
+    (parameters / "pwm_channel").write_text(value + "\n", encoding="ascii")
+
+
+def test_the_buzzer_defaults_to_the_pro_pin_heard_on_rosy_18(tmp_path):
+    row = probe_module.Probe(FakeIo(_tree(tmp_path))).buzzer()
+    assert probe_module.BUZZER_DEFAULT_PIN == 4
+    assert row.state == "needs_human"
+    assert row.evidence == "BCM 4 · 꺼짐 (ROSY_BUZZER_ENABLED=false) · 소리는 사람이 확인"
+
+
+@pytest.mark.parametrize(("channel", "state", "text"), [
+    ("3", "needs_human", "드라이버 있음 · pwm_channel=3 (GPIO19) · 빛은 사람이 확인"),
+    ("2", "driver_missing", "rp1_ws281x_pwm pwm_channel=2 — GPIO19 램프는 3 (/etc/modprobe.d/rosy-ws281x.conf)"),
+    (None, "driver_missing", "rp1_ws281x_pwm pwm_channel=? — GPIO19 램프는 3 (/etc/modprobe.d/rosy-ws281x.conf)"),
+])
+def test_the_lamp_driver_must_drive_gpio19_not_the_lcd_backlight(tmp_path, channel, state, text):
+    root = _tree(tmp_path, nodes=("ws281x_pwm",))
+    if channel is not None:
+        _lamp_channel(root, channel)
+    row = probe_module.Probe(FakeIo(root)).lamp()
+    assert (row.state, row.evidence) == (state, text)
 
 
 def test_pi_power_throttling_and_a_missing_vcgencmd(tmp_path):

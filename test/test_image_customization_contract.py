@@ -145,7 +145,23 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
-        "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n", encoding="utf-8")
+        "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n\n[all]\n# Rosy lamp\n"
+        "dtoverlay=rosy-ws281x\n", encoding="utf-8")
+    # D-247: the WS2812 lamp driver built for the image kernel.
+    kernel = "6.8.0-1064-raspi"
+    (root / "lib/modules" / kernel / "kernel").mkdir(parents=True, exist_ok=True)
+    (root / "lib/modules" / kernel / "extra").mkdir(parents=True, exist_ok=True)
+    (root / "lib/modules" / kernel / "extra/rp1_ws281x_pwm.ko").write_bytes(
+        b"\x7fELF\0license=GPL\0vermagic=" + kernel.encode() + b" SMP preempt mod_unload aarch64\0")
+    (root / "lib/modules" / kernel / "modules.alias").write_text(
+        "alias of:N*T*Crp1-ws281x-pwm rp1_ws281x_pwm\n", encoding="utf-8")
+    (root / "usr/local/share/rosy").mkdir(parents=True, exist_ok=True)
+    (root / "usr/local/share/rosy/lamp-driver-kernel").write_text(kernel + "\n", encoding="utf-8")
+    (root / "boot/firmware/overlays").mkdir(parents=True, exist_ok=True)
+    (root / "boot/firmware/overlays/rosy-ws281x.dtbo").write_bytes(b"\xd0\x0d\xfe\xed")
+    (root / "etc/modprobe.d").mkdir(parents=True, exist_ok=True)
+    (root / "etc/modprobe.d/rosy-ws281x.conf").write_bytes(
+        (ROOT / "deploy/robot/modprobe/rosy-ws281x.conf").read_bytes())
     # The bus UARTs carry no console (configure-uart-pi5.sh edits the Ubuntu line).
     (root / "boot/firmware/cmdline.txt").write_text(
         "console=ttyAMA10,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 root=LABEL=writable "
@@ -156,6 +172,7 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
         'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
+    (root / "etc/udev/rules.d/99-rosy-lamp.rules").write_text('KERNEL=="ws281x_pwm"\n', encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.
     for unit in ("rosy-io.service", "rosy-navigation.service"):
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
@@ -171,7 +188,11 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "var/lib/dpkg/status").write_text("".join(
         f"Package: {name}\nStatus: install ok installed\nVersion: 1\n\n"
         for name in ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
-                     "fonts-dejavu-core")), encoding="utf-8")
+                     "fonts-dejavu-core")) + "".join(
+        # D-247: the kernel the lamp driver was built for is held.
+        f"Package: {name}\nStatus: hold ok installed\nVersion: 1\n\n"
+        for name in ("linux-image-6.8.0-1064-raspi", "linux-modules-6.8.0-1064-raspi", "linux-raspi")),
+        encoding="utf-8")
     # D-193: the login-code issuer (enabled), its banner link and command, and
     # CORE defaults without tokens.
     (root / "etc/systemd/system/rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
@@ -183,6 +204,10 @@ def _valid_root(tmp_path: Path) -> Path:
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
         (wants.parent / unit).write_text("[Unit]\n", encoding="utf-8")
     _link(root / "usr/local/sbin/rosy-hw-probe", "/opt/rosy/native-runtime/rosy-hw-probe")
+    # D-247 6: the buzzer/lamp test service and its enabled path unit.
+    (root / "etc/systemd/system/rosy-hw-test.service").write_text("[Unit]\n", encoding="utf-8")
+    (root / "etc/systemd/system/rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
     defaults = release / "install/share/core/config/rosy_default.yaml"
     defaults.parent.mkdir(parents=True, exist_ok=True)
     defaults.write_text((ROOT / "src/runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8"),
@@ -273,6 +298,27 @@ def test_image_installs_enables_and_probes_the_hardware_probe():
     assert """chroot "$ROOT" python3 -I -c 'import dynamixel_sdk'""" in after[:400]
     payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
     for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+
+
+def test_mounted_image_verifier_requires_the_hardware_test(tmp_path):
+    root = _valid_root(tmp_path)
+    (root / "etc/systemd/system/multi-user.target.wants/rosy-hw-test.path").unlink()
+    (root / "etc/systemd/system/rosy-hw-test.service").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    for finding in ("rosy-hw-test.path is not enabled", "missing systemd unit: rosy-hw-test.service"):
+        assert finding in completed.stderr
+
+
+def test_image_installs_and_enables_the_hardware_test_path_only():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("# D-174 T0")]
+    assert "rosy-hw-test.path" in enable and "rosy-hw-test.service" not in enable
+    loop = source[source.index("for entrypoint in"):]
+    assert "rosy-hw-test.py" in loop[:loop.index("; do")]
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+    for unit in ("rosy-hw-test.service", "rosy-hw-test.path"):
         assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
 
 

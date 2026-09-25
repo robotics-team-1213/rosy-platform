@@ -87,7 +87,12 @@ ADC_FULL_SCALE = 4095
 BATTERY_RANGE_V = (6.0, 8.8)
 LCD_SPI = "dev/spidev0.0"
 LAMP_NODE = "dev/ws281x_pwm"
-BUZZER_DEFAULT_PIN = 22
+#: The driver's PWM0 channel: 3 is GPIO19, the lamp; its default 2 is GPIO18, the
+#: LCD backlight (rosy_18 2026-09-26). /etc/modprobe.d/rosy-ws281x.conf sets 3.
+LAMP_CHANNEL = "sys/module/rp1_ws281x_pwm/parameters/pwm_channel"
+LAMP_PWM_CHANNEL = 3
+#: The Pinky Pro buzzer (board.yaml), heard on rosy_18 2026-09-26; ROSY_BUZZER_PIN wins.
+BUZZER_DEFAULT_PIN = 4
 LOCK_WAIT_S = 2.0
 #: A result this fresh is kept: a burst of refresh requests runs the buses once.
 MIN_INTERVAL_S = 10.0
@@ -111,7 +116,7 @@ DEVICES = (
     ("adc.ultrasonic", "초음파 거리 (ADC)", "I2C1 /dev/i2c-1 0x08", True),
     ("camera", "카메라 (OV5647)", "CSI", True),
     ("lcd", "LCD (ST7789)", "SPI0 /dev/spidev0.0", False),
-    ("buzzer", "부저", "GPIO BCM 22", False),
+    ("buzzer", "부저", "GPIO (ROSY_BUZZER_PIN, 기본 BCM 4)", False),
     ("lamp", "LED 램프 (WS2812)", "GPIO BCM 19 PWM", False),
     ("pi.power", "Pi 전원·온도", "vcgencmd", False),
 )
@@ -500,12 +505,22 @@ class Probe:
             elif key == "ROSY_BUZZER_PIN" and value.strip().isdigit():
                 pin = int(value.strip())
         switch = "켜짐" if enabled else "꺼짐 (ROSY_BUZZER_ENABLED=false)"
-        return Row("buzzer", NEEDS_HUMAN, f"BCM {pin} 미확인 · {switch} · 소리는 사람이 확인")
+        return Row("buzzer", NEEDS_HUMAN, f"BCM {pin} · {switch} · 소리는 사람이 확인")
 
     def lamp(self) -> Row:
         if not self.io.exists(LAMP_NODE):
             return Row("lamp", DRIVER_MISSING, "/dev/ws281x_pwm 없음 (rp1_ws281x_pwm 커널 모듈)")
-        return Row("lamp", NEEDS_HUMAN, "드라이버 있음 · 빛은 사람이 확인")
+        try:
+            channel = self.io.path(LAMP_CHANNEL).read_text(encoding="ascii").strip()
+        except (OSError, UnicodeDecodeError):
+            channel = ""
+        if channel != str(LAMP_PWM_CHANNEL):
+            # Channel 2 drives GPIO18 (the LCD backlight): the lamp stays dark and a
+            # lamp test would flicker the screen, so this is not a light for a person.
+            shown = channel or "?"
+            return Row("lamp", DRIVER_MISSING,
+                       f"rp1_ws281x_pwm pwm_channel={shown} — GPIO19 램프는 3 (/etc/modprobe.d/rosy-ws281x.conf)")
+        return Row("lamp", NEEDS_HUMAN, "드라이버 있음 · pwm_channel=3 (GPIO19) · 빛은 사람이 확인")
 
     def pi_power(self) -> Row:
         throttled = self.io.run(["vcgencmd", "get_throttled"])

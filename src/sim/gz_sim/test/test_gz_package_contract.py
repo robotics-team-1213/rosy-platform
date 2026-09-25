@@ -170,7 +170,8 @@ def test_non_composed_nav2_does_not_apply_namespace_twice():
     """The parent owns the namespace; child launch groups must receive an empty one."""
     bringup = (
         ROOT.parents[1]
-        / "navigation"
+        # D-241 role dirs: navigation lives at src/runtime/navigation (no nesting).
+        / "runtime"
         / "navigation"
         / "launch"
         / "bringup_launch.xml"

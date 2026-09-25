@@ -57,8 +57,9 @@ boot_display:
     bcm_lines: {rst: 27, dc: 25, backlight: 18}
   buzzer:
     gpiochip: /dev/gpiochip4
-    bcm_line: 22
-    # Sibling boards' pin; unconfirmed on the Pro until heard on the device.
+    bcm_line: 4
+    # Heard by a person on rosy_18 on 2026-09-26 (D-190 table, D-247); BCM 22,
+    # the sibling boards' pin, is silent on the Pro. Enabling it by default is D-190's call.
     enabled_by_default: false
     # ROSY_BUZZER_PIN accepts only these (rosy-boot-display.py BUZZER_LINES).
     allowed_bcm_lines: [4, 5, 6, 16, 17, 20, 21, 22, 23, 24, 26]

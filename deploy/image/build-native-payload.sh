@@ -79,6 +79,8 @@ ROBOT_CONFIG_SOURCE="$WORKSPACE/deploy/robot/config"
 CYCLONEDDS_SOURCE="$WORKSPACE/src/devices/pinky_pro/bringup/config/cyclonedds_localhost.xml"
 UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-motor.rules"
 DISPLAY_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-display.rules"
+LAMP_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-lamp.rules"
+LAMP_MODPROBE_SOURCE="$WORKSPACE/deploy/robot/modprobe/rosy-ws281x.conf"
 RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.pem"
 [[ -d "$NATIVE_RUNTIME_SOURCE" ]] \
     || fail "native runtime support is missing: deploy/robot/native"
@@ -90,6 +92,10 @@ RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.p
     || fail "motor udev rule is missing: deploy/robot/udev/99-rosy-motor.rules"
 [[ -f "$DISPLAY_UDEV_RULE_SOURCE" ]] \
     || fail "display udev rule is missing: deploy/robot/udev/99-rosy-display.rules"
+[[ -f "$LAMP_UDEV_RULE_SOURCE" ]] \
+    || fail "lamp udev rule is missing: deploy/robot/udev/99-rosy-lamp.rules"
+[[ -f "$LAMP_MODPROBE_SOURCE" ]] \
+    || fail "lamp driver options are missing: deploy/robot/modprobe/rosy-ws281x.conf"
 [[ ! -e "$RELEASE_ROOT/deploy/robot/native" ]] \
     || fail "release root already contains native runtime support"
 [[ -f "$RELEASE_PUBLIC_KEY" ]] \
@@ -153,6 +159,10 @@ cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
 # D-190: the boot display's LCD and GPIO chip groups.
 cp "$DISPLAY_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
+# D-247: the WS2812 lamp driver node and its GPIO19 channel (pwm_channel=3).
+cp "$LAMP_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
+mkdir -p "$OVERLAY/etc/modprobe.d"
+cp "$LAMP_MODPROBE_SOURCE" "$OVERLAY/etc/modprobe.d/rosy-ws281x.conf"
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot.service" "$OVERLAY/etc/systemd/system/"
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.service" "$OVERLAY/etc/systemd/system/"
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.timer" "$OVERLAY/etc/systemd/system/"
@@ -178,6 +188,9 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system
 # D-247: the read-only root board device probe and CORE's refresh request watch.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.path" "$OVERLAY/etc/systemd/system/"
+# D-247 6: the buzzer/lamp test an administrator starts through CORE.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.path" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"

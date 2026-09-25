@@ -63,6 +63,8 @@ async def _robot_call(console: FleetConsole, call) -> dict:
 CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
+    "formation.js": "application/javascript",
+    "signals.js": "application/javascript",
 }
 
 CONSOLE_CSP = (

@@ -240,9 +240,9 @@ def test_the_buzzer_is_off_by_default(tmp_path):
     module = _display()
     lines: list[str] = []
 
-    assert module.buzzer_settings({}, module.Log(lines.append)) == (False, 22)
+    assert module.buzzer_settings({}, module.Log(lines.append)) == (False, 4)
     unit = UNIT.read_text(encoding="utf-8")
-    assert "Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=22" in unit
+    assert "Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=4" in unit
     assert lines == []
 
 
@@ -300,11 +300,11 @@ def test_a_second_failed_unit_does_not_beep_again(tmp_path):
 
 
 @pytest.mark.parametrize("environ,expected", [
-    ({"ROSY_BUZZER_ENABLED": "true"}, (True, 22)),
+    ({"ROSY_BUZZER_ENABLED": "true"}, (True, 4)),
     ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "23"}, (True, 23)),
-    ({"ROSY_BUZZER_ENABLED": "yes"}, (False, 22)),
-    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "18"}, (False, 22)),  # the backlight
-    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "x"}, (False, 22)),
+    ({"ROSY_BUZZER_ENABLED": "yes"}, (False, 4)),
+    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "18"}, (False, 4)),  # the backlight
+    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "x"}, (False, 4)),
 ])
 def test_buzzer_settings_are_strict(environ, expected):
     module = _display()
@@ -321,7 +321,7 @@ def test_the_buzzer_never_takes_a_line_something_else_owns(pin):
     enabled = module.buzzer_settings({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": pin},
                                      module.Log(lines.append))
 
-    assert enabled == (False, 22) and "not a free header BCM line" in lines[0]
+    assert enabled == (False, 4) and "not a free header BCM line" in lines[0]
 
 
 def test_the_buzzer_lines_are_exactly_the_board_s_free_lines():
@@ -792,7 +792,9 @@ def test_the_board_profile_matches_the_unit_and_no_capability_advertises_it():
     allowed = {value.split()[0] for value in _directives()["DeviceAllow"]}
     assert declared == allowed
     assert display["unit"] == "rosy-boot-display.service"
-    assert display["buzzer"]["bcm_line"] == 22 and display["buzzer"]["enabled_by_default"] is False
+    # BCM 4: heard on rosy_18 on 2026-09-26 (D-190 table); still off by default.
+    assert display["buzzer"]["bcm_line"] == _display().BUZZER_DEFAULT_LINE == 4
+    assert display["buzzer"]["enabled_by_default"] is False
     # the true grant, not what the program chooses to do with it (security review M2)
     assert display["battery_adc"]["access"] == "rw-any-address"
     assert display["battery_adc"]["lock"] == "advisory-flock"

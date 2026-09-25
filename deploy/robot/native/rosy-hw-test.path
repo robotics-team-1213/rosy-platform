@@ -1,0 +1,11 @@
+[Unit]
+Description=ROSY buzzer and lamp test on an administrator's request (D-247)
+# CORE writes /run/rosy/hw-test.request (its own RuntimeDirectory) through
+# POST /api/v1/host/hardware/test; rosy-hw-test.py reads it strictly.
+
+[Path]
+PathChanged=/run/rosy/hw-test.request
+Unit=rosy-hw-test.service
+
+[Install]
+WantedBy=multi-user.target

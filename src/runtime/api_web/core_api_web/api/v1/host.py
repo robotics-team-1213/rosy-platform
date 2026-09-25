@@ -5,13 +5,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import secrets
 import stat
+import threading
 import time
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import admin, viewer
@@ -313,10 +315,149 @@ TOPIC_FRESH_S = 2.0
 MAX_BOOT_ID = 64
 _last_refresh: dict[str, float] = {}
 
+# D-247 6: the buzzer and the lamp are judged by a person. CORE asks the root
+# rosy-hw-test (through rosy-hw-test.path) to beep or flash once, reads its
+# outcome, and records the administrator's answer in its own state directory.
+HW_TEST_REQUEST_FILE = "/run/rosy/hw-test.request"
+HW_TEST_RESULT_FILE = "/run/rosy-boot/hw-test.json"
+HW_CONFIRM_NAME = "hw-confirmations.json"
+HW_TEST_DEVICES = ("buzzer", "lamp")
+HW_TEST_STATES = ("done", "busy", "unavailable", "failed")
+#: One test at a time: a second press inside this window starts nothing.
+HW_TEST_COOLDOWN_S = 10.0
+MAX_SMALL_FILE_BYTES = 8 * 1024
+#: What a person answered, in the words of each device.
+NOT_OBSERVED = {"buzzer": "들리지 않음", "lamp": "보이지 않음"}
+#: An answer must follow a test of that device that rosy-hw-test finished this recently.
+HW_CONFIRM_WINDOW_S = 300.0
+#: rosy-hw-test and CORE share a clock; a finish time further ahead than this is not trusted.
+HW_CONFIRM_FUTURE_SKEW_S = 5.0
+_last_test: dict[str, float] = {}
+#: Two presses in the same instant must not both pass the cool-down check.
+_test_lock = threading.Lock()
+#: Two answers in the same instant must not drop each other's device.
+_confirm_lock = threading.Lock()
+
 
 def _hardware_paths(svc: CoreServicesLike) -> tuple[str, str]:
     cfg = (svc.config or {}).get("hardware_probe", {}) or {}
     return str(cfg.get("result_path", HARDWARE_FILE)), str(cfg.get("request_path", HW_REQUEST_FILE))
+
+
+def _test_paths(svc: CoreServicesLike) -> tuple[str, str, str]:
+    """(request, result, confirmations). The answers live beside CORE's other state (~/.rosy)."""
+    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
+    confirm = cfg.get("confirm_path") or str(Path.home() / ".rosy" / HW_CONFIRM_NAME)
+    return (str(cfg.get("test_request_path", HW_TEST_REQUEST_FILE)),
+            str(cfg.get("test_result_path", HW_TEST_RESULT_FILE)), str(confirm))
+
+
+def _read_small_json(path: str) -> Any:
+    """A small JSON document, never through a symlink or a FIFO; None when absent or unreadable."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
+        | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_SMALL_FILE_BYTES:
+            return None
+        raw = os.read(descriptor, MAX_SMALL_FILE_BYTES + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_SMALL_FILE_BYTES:
+        return None
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+
+def _aware_time(value: Any) -> Optional[datetime]:
+    try:
+        moment = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else None
+
+
+def read_test_result(path: str) -> Optional[dict[str, Any]]:
+    """rosy-hw-test's last outcome, validated like hardware.json, or None."""
+    data = _read_small_json(path)
+    if not isinstance(data, dict) or data.get("schema") != 1:
+        return None
+    row = {key: data.get(key) for key in ("request_id", "action", "state", "detail")}
+    if not all(isinstance(value, str) and len(value) <= MAX_TEXT for value in row.values()):
+        return None
+    if row["action"] not in HW_TEST_DEVICES or row["state"] not in HW_TEST_STATES:
+        return None
+    finished = _aware_time(data.get("finished_at"))
+    if finished is None:
+        return None
+    row["finished_at"] = finished.astimezone(timezone.utc).isoformat(timespec="seconds")
+    return row
+
+
+def read_confirmations(path: str) -> dict[str, dict[str, Any]]:
+    """The recorded answers per device; an entry that does not validate is dropped."""
+    data = _read_small_json(path)
+    devices = data.get("devices") if isinstance(data, dict) and data.get("schema") == 1 else None
+    if not isinstance(devices, dict):
+        return {}
+    clean = {}
+    for device, entry in devices.items():
+        if device not in HW_TEST_DEVICES or not isinstance(entry, dict):
+            continue
+        if type(entry.get("observed")) is not bool or _aware_time(entry.get("at")) is None:
+            continue
+        if not all(isinstance(entry.get(key), str) and len(entry[key]) <= MAX_TEXT for key in ("by", "label")):
+            continue
+        clean[device] = {key: entry[key] for key in ("observed", "by", "label", "at")}
+        request_id = entry.get("request_id")
+        if isinstance(request_id, str) and len(request_id) <= MAX_TEXT:
+            clean[device]["request_id"] = request_id
+    return clean
+
+
+def _confirmation_overlay(row: dict[str, Any], confirmations: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """A person's answer turns a `needs_human` buzzer or lamp row into ok / no_response.
+
+    Only `needs_human`: a missing driver or a wrong lamp channel stays what the
+    probe measured, whatever someone once heard or saw.
+    """
+    answer = confirmations.get(row["id"])
+    if answer is None or row["state"] != "needs_human":
+        return row
+    at = _aware_time(answer["at"]).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    who = answer["label"] or answer["by"]
+    if answer["observed"]:
+        return {**row, "state": "ok", "evidence": f"사람 확인: {who} {at}", "source": "human"}
+    heard = NOT_OBSERVED[row["id"]]
+    return {**row, "state": "no_response", "evidence": f"사람 확인: {heard} · {who} {at}", "source": "human"}
+
+
+def _write_private(path: str, payload: str, mode: int, prefix: str) -> None:
+    """Write beside the target with O_EXCL | O_NOFOLLOW, then rename over it (atomic)."""
+    directory = os.path.dirname(path) or "."
+    temporary = os.path.join(directory, f".{prefix}.{secrets.token_hex(6)}")
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(temporary, flags, mode)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except OSError:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 def read_hardware(path: str) -> Optional[dict[str, Any]]:
@@ -443,6 +584,8 @@ def host_hardware(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depe
     needs = state is not None and any(row["state"] == "not_measured" and row.get("held_by")
                                        for row in result["devices"])
     snapshot = state.snapshot() if needs else None
+    _request, test_result, confirm_path = _test_paths(svc)
+    confirmations = read_confirmations(confirm_path)
     return {
         "available": True,
         "schema": HW_SCHEMA,
@@ -450,7 +593,10 @@ def host_hardware(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depe
         "age_s": round(age, 1),
         "stale": age > HW_STALE_AFTER_S,
         "boot_id": result["boot_id"],
-        "devices": [_topic_overlay(row, state, snapshot) for row in result["devices"]],
+        "devices": [_confirmation_overlay(_topic_overlay(row, state, snapshot), confirmations)
+                    for row in result["devices"]],
+        # D-247 6: the last buzzer/lamp test rosy-hw-test ran, for the card to show.
+        "test": read_test_result(test_result),
         "detail": "",
     }
 
@@ -481,3 +627,83 @@ def host_hardware_refresh(auth: AuthContext = Depends(admin), svc: CoreServicesL
         raise ApiError("HW_PROBE_UNAVAILABLE", 503, "장치 점검을 요청하지 못했습니다") from exc
     _last_refresh[request_path] = now
     return {"accepted": True, "detail": "장치 점검을 요청했습니다. 잠시 뒤 결과가 바뀝니다."}
+
+
+class HardwareTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    device: Literal["buzzer", "lamp"]
+
+
+class HardwareConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    device: Literal["buzzer", "lamp"]
+    observed: StrictBool
+
+
+@host_router.post("/hardware/test")
+def host_hardware_test(
+    body: HardwareTestRequest,
+    auth: AuthContext = Depends(admin),
+    svc: CoreServicesLike = Depends(get_services),
+):
+    """부저를 한 번 울리거나 램프를 한 번 켠다(D-247 6). CORE는 요청 파일만 쓰고 장치는 root가 다룬다."""
+    request_path, _result, _confirm = _test_paths(svc)
+    request_id = secrets.token_hex(8)
+    payload = json.dumps({"action": body.device, "request_id": request_id, "by": auth.token_id,
+                          "requested_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                         sort_keys=True) + "\n"
+    # Check, write and start the cool-down as one step: of two presses at once, one is accepted.
+    with _test_lock:
+        now = time.monotonic()
+        last = _last_test.get(request_path)
+        if last is not None and now - last < HW_TEST_COOLDOWN_S:
+            raise ApiError("HW_TEST_COOLDOWN", 429, "방금 시험했습니다. 10초 뒤에 다시 누르세요.")
+        try:
+            _write_private(request_path, payload, 0o640, "hw-test.request")
+        except OSError as exc:
+            raise ApiError("HW_TEST_UNAVAILABLE", 503, "장치 시험을 요청하지 못했습니다") from exc
+        _last_test[request_path] = now
+    what = "부저를 울립니다" if body.device == "buzzer" else "램프를 켭니다"
+    return {"accepted": True, "request_id": request_id, "device": body.device,
+            "detail": f"{what}. 들렸는지·보였는지 확인해 주세요."}
+
+
+@host_router.post("/hardware/confirm")
+def host_hardware_confirm(
+    body: HardwareConfirmRequest,
+    auth: AuthContext = Depends(admin),
+    svc: CoreServicesLike = Depends(get_services),
+):
+    """관리자가 들림·보임을 기록한다(D-247 6). 누가 언제 확인했는지 CORE 상태 디렉터리에 남는다.
+
+    답은 방금 끝난 그 장치의 시험에 대한 것이어야 한다: rosy-hw-test 가 같은 장치를
+    `done` 으로 5분 안에 끝낸 결과가 없으면 409 ``HW_CONFIRM_NO_TEST``. 울리지 않은
+    부저를 "들림" 으로 기록하지 않기 위해서다.
+    """
+    _request, result_path, confirm_path = _test_paths(svc)
+    test = read_test_result(result_path)
+    if test is None or test["action"] != body.device:
+        raise ApiError("HW_CONFIRM_NO_TEST", 409, "이 장치를 먼저 시험한 뒤에 답해 주세요.")
+    if test["state"] != "done":
+        raise ApiError("HW_CONFIRM_NO_TEST", 409, "마지막 시험이 끝나지 않았습니다. 다시 시험한 뒤에 답해 주세요.")
+    now = datetime.now(timezone.utc)
+    age = (now - datetime.fromisoformat(test["finished_at"])).total_seconds()
+    if not -HW_CONFIRM_FUTURE_SKEW_S <= age <= HW_CONFIRM_WINDOW_S:
+        raise ApiError("HW_CONFIRM_NO_TEST", 409, "마지막 시험이 5분보다 오래되었습니다. 다시 시험한 뒤에 답해 주세요.")
+    entry = {"observed": body.observed, "by": auth.token_id, "label": (auth.label or "")[:MAX_TEXT],
+             "at": now.isoformat(timespec="seconds")}
+    # The test's request_id ties the answer to the run it judged. It stays in the 0600 file
+    # (audit); the response and the card do not carry it.
+    stored = {**entry, "request_id": test["request_id"]}
+    with _confirm_lock:
+        confirmations = read_confirmations(confirm_path)
+        confirmations[body.device] = stored
+        payload = json.dumps({"schema": 1, "devices": confirmations}, ensure_ascii=False, sort_keys=True) + "\n"
+        try:
+            os.makedirs(os.path.dirname(confirm_path) or ".", mode=0o700, exist_ok=True)
+            _write_private(confirm_path, payload, 0o600, HW_CONFIRM_NAME)
+        except OSError as exc:
+            raise ApiError("HW_CONFIRM_UNAVAILABLE", 503, "확인 결과를 기록하지 못했습니다") from exc
+    return {"recorded": True, "device": body.device, **entry}

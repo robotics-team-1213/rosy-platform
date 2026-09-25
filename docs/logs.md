@@ -2165,3 +2165,25 @@
 - 증거: dashboard/API/gateway focused pytest 88 passed, 1 skipped. Chromium에서 역할 메뉴 3종, 각 화면 패널, Viewer 403, 패널 JS 404 중 E-Stop 요청 접수를 확인했고 콘솔 오류는 없었다. API 수락은 물리 정지 증거가 아니다.
 - 남음: 레거시 Dashboard의 주행·지도·카메라, Setup의 SLAM·도킹, Device의 설정/네트워크/ROS 도구 이관 및 Pi·실기 검증.
 - gate 변화: 없음. 이관 단위가 시작됐으나 레거시 Dashboard 기능과 실기 수용이 남아 있어 전체 웹 메뉴 마이그레이션 완료로 보지 않는다.
+
+## 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
+- 변경: D-247 Validation/Transition에 슬라이스 2를 적었다. 결정 6 구현, IMU 버스, 램프 드라이버 네 조건(커널 빌드와 `.remove_new`, 오버레이 경로와 gpio19 먹스, `pwm_channel=3`, rpihw rev 1.1)을 담았다. 부저는 BCM 4이고 D-169는 그대로다. D-190 Status에 날짜 붙은 부저 핀 확인과 표 두 행을 더했다(Decision 불변). API Ref v1.23에 시험·확인 경로와 에러 코드 세 개를 더했다.
+- 증거: `rosy_18` 2026-09-26 사람 입회 확인(부저 BCM 4 들림·BCM 22 조용, 램프 8 LED 점등). 시험 목록은 코드 로그에 있다.
+- gate 변화: 없음(D-247 Proposed 유지)
+- 결정: D-247, D-190
+- 교훈: 없음
+
+
+## 2026-09-26 · uncommitted · docs(verification): 전수 시험 28 스위트로 확장 — 실패 전건을 레인별 판정
+- 변경: 코드 변경 없음. 전수 시험 결과를 기록만 한다(기준선 확장).
+- 증거: 2분할 실행 — run1 24 스위트 4994건(4841 passed/16 failed/137 skipped, 1602s) + run2 sensing·bringup·imu 3 스위트 2194건(2007 passed/96 failed/91 skipped + 7 errors, 344s), 합계 7188건. 실패 분류: (a) sd_writer 빈 exit code 플레이키 1건(문서화됨, 11회 중 7회째), (b) CI red와 정확히 같은 src/runtime 7건(test_core_main_shutdown·event_catalogue×2·executor_contracts×2·v1_import_boundary·swarm — 타 세션 레인), (c) host_cards×6·host_hardware×1·gz_sim×1 — 실행 창에 동료의 미커밋 dashboard/host 카드 분할이 작업 트리에 있었고 그 커밋 14645463이 시험 종료 27초 후(01:39:31 vs 01:39:58) 랜드, (d) sensing 96 failed + 7 errors — 이 호스트 최초 실행(제어 흡수 레인). 제 docs 변경의 문서 게이트는 lint 0 error + 계약 121 passed(HEAD 60520fb1 worktree 포함).
+- gate 변화: 없음(전수 시험 실패는 전부 타 레인/시점 예술 — 문서 게이트는 초록)
+- 결정: 전수 시험 기준선을 28 스위트/7188건으로 확장 기록. 한 번에 돌리면 test_battery·ament lint·test_package_contract basename 충돌로 수집이 중단되므로 2분할이 정본. sensing·host_cards 실패는 소유 레인에 보고만, 수정하지 않음
+- 교훈: 전수 시험은 동료가 미커밋 변경을 작업 트리에 두고 있는 창에 돌리면 실패 소유가 흐려진다 — 실패 파일의 git log와 커밋 타임스탬프를 시험 창과 겹쳐 봐야 판정이 선다. 상위 폴더 AGENTS의 시험 경로는 재그룹(D-147) 후 낡아 첫 실행이 즉시 죽었다(수정 완료)
+
+## 2026-09-26 · uncommitted · docs(verification): 전수 시험 붉음 전건 수리 — CI red 7·sensing 96+7·CRLF 2
+- 변경: 9 파일. `paint_localizer.from_bundle` parents[2]→[3](`sensing/map/` 정본), `test_gz_package_contract` bringup 경로 `runtime/navigation/launch`, `test_host_hardware` D-262 분할 반영(host-cards.js 병합 읽기·motionReason 콜백 체인 assert), `test_executor_contracts`·`test_v1_import_boundary`·`test_swarm` role 디렉터리 경로(`services/`·`api_web/`), `test_core_main_shutdown` 가드 매핑(`gateway/core/main.py` 제외·`sensing/tools/` 제외·`sensing/control/` span), `test_event_catalogue` PINNED_RELAYS 키 4건 `core_features/core_features/`→`services/core_features/`(해시 동일=본문 무변경), `.gitattributes` map_v2_fleet 6경로 `src/apps/control`→`src/runtime/sensing` 재지정 + worktree LF 재작성
+- 증거: 변경 7 시험 파일 181 passed/1 skipped, sensing 전체 1658 passed(잔여 2건=CRLF) 후 EOL 수리 2 passed, docs 게이트 lint 0 error + 계약 121 passed. CI red 7건 전건 초록 확인
+- gate 변화: 없음(ADR·게이트 문서 무변경). CI 붉음은 다음 push로 소멸 확인 대상
+- 회귀: worktree 재작성 후 내용 동일인데 `git status`가 ` M` 유지(stat 캐시 괴리) → `git add`로 stat 갱신 해소. phantom M은 `git diff`(내용 비교)로 검증할 것
+- 교훈: 폴더 이동은 테스트뿐 아니라 `.gitattributes` 규칙·핑 키·가드 제외 목록까지 낡게 만든다(2026-09-25 노트에 2차 파도 연장 기록). sensing 스위트는 CI에 없어 어디서도 자동으로 잡히지 않는다

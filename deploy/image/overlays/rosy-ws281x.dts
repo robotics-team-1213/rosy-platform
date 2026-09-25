@@ -1,0 +1,47 @@
+// D-247: the Pinky Pro WS2812 lamp (8 LEDs, GPIO19) through rpi_ws281x's
+// rp1_ws281x_pwm kernel driver. Upstream rp1_ws281x_pwm.dts targets
+// /axi/pcie@1000120000/rp1, which is not the node on the Ubuntu 6.8 raspi
+// kernel (/axi/pcie@120000/rp1), and sets no pin mux. This is the overlay
+// verified on rosy_18 (Pi 5 rev 1.1, 6.8.0-1064-raspi) on 2026-09-26.
+// GPIO19 is PWM0 channel 3; the driver's default channel 2 is GPIO18, the LCD
+// backlight, so /etc/modprobe.d/rosy-ws281x.conf sets pwm_channel=3.
+// customize-rootfs.sh compiles it: dtc -@ -I dts -O dtb -o rosy-ws281x.dtbo
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2712";
+
+    fragment@0 {
+        target = <&rp1_gpio>;
+        __overlay__ {
+            rosy_ws281x_pins: rosy_ws281x_pins {
+                function = "pwm0";
+                pins = "gpio19";
+                bias-disable;
+            };
+        };
+    };
+
+    fragment@1 {
+        target-path = "/axi/pcie@120000/rp1";
+        __overlay__ {
+            #address-cells = <2>;
+            #size-cells = <2>;
+
+            ws281x_pwm@98000 {
+                compatible = "rp1-ws281x-pwm";
+                clocks = <&rp1_clocks 0x11>;
+                assigned-clocks = <&rp1_clocks 0x11>;
+                assigned-clock-rates = <2400000>;
+                reg = <0xc0 0x40098000 0x00 0x100>;
+                #pwm-cells = <0x03>;
+                dmas = <&rp1_dma 0x18>;  // RP1_DMA_PWM0
+                dma-names = "pwm0";
+                pinctrl-names = "default";
+                pinctrl-0 = <&rosy_ws281x_pins>;
+                status = "okay";
+            };
+        };
+    };
+};

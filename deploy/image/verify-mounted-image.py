@@ -36,6 +36,14 @@ MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
 BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
 # D-247: customize-rootfs.sh adds the IMU bus (BNO055 on I2C0, /dev/i2c-0).
 IMU_OVERLAY = "dtoverlay=i2c0-pi5,pins_0_1"
+# D-247: the WS2812 lamp driver customize-rootfs.sh builds for the image kernel.
+LAMP_OVERLAY = "dtoverlay=rosy-ws281x"
+LAMP_DTBO = "boot/firmware/overlays/rosy-ws281x.dtbo"
+LAMP_KERNEL_RECORD = "usr/local/share/rosy/lamp-driver-kernel"
+LAMP_UDEV_RULE = "etc/udev/rules.d/99-rosy-lamp.rules"
+LAMP_MODPROBE = "etc/modprobe.d/rosy-ws281x.conf"
+# GPIO19 is RP1 PWM0 channel 3; the default channel 2 is GPIO18, the LCD backlight.
+LAMP_OPTIONS = "options rp1_ws281x_pwm pwm_channel=3"
 # The LiDAR (UART0) and motor (UART4) buses carry no kernel console or getty.
 # Ubuntu's console=serial0 is UART0 on the Pi 5 with enable_uart=1.
 BUS_CONSOLE = re.compile(r"console=(serial0|ttyAMA0|ttyAMA4)(,|$)")
@@ -58,6 +66,9 @@ LOGIN_COMMAND = "usr/local/sbin/rosy-login-code"
 # D-247: the read-only board device probe, its refresh watch and its command.
 HW_PROBE_UNITS = ("rosy-hw-probe.service", "rosy-hw-probe.path")
 HW_PROBE_COMMAND = "usr/local/sbin/rosy-hw-probe"
+# D-247 6: the buzzer/lamp test: the service is started only by its path unit.
+HW_TEST_SERVICE = "rosy-hw-test.service"
+HW_TEST_PATH = "rosy-hw-test.path"
 CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
 
 
@@ -91,6 +102,29 @@ def installed_debs(root: Path) -> set[str]:
     return installed
 
 
+def package_states(root: Path) -> dict[str, str]:
+    """Each package's dpkg Status line in the mounted root (e.g. "hold ok installed")."""
+    status = root / "var/lib/dpkg/status"
+    if not status.is_file():
+        return {}
+    states = {}
+    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
+        if fields.get("Package") and fields.get("Status"):
+            states[fields["Package"]] = fields["Status"]
+    return states
+
+
+def module_vermagic(path: Path) -> str | None:
+    """The kernel release a .ko was built for: the first word of its modinfo vermagic."""
+    data = path.read_bytes()
+    start = data.find(b"\0vermagic=")
+    if start < 0:
+        return None
+    value = data[start + len(b"\0vermagic="):].split(b"\0", 1)[0].decode("utf-8", errors="replace")
+    return value.split(" ", 1)[0] or None
+
+
 def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
     """Read-only twin of configure-uart-pi5.sh's awk check: the line counts
     before any section header or under [all] / [pi5], comments stripped."""
@@ -104,6 +138,49 @@ def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
         if active and line == overlay:
             return True
     return False
+
+
+def lamp_driver_findings(root: Path) -> list[str]:
+    """D-247: the rp1_ws281x_pwm module for the image kernel, its overlay, udev rule and channel."""
+    findings = []
+    if not (root / LAMP_DTBO).is_file():
+        findings.append(f"missing lamp overlay: {LAMP_DTBO}")
+    record = root / LAMP_KERNEL_RECORD
+    kernel = record.read_text(encoding="utf-8").strip() if record.is_file() else ""
+    if not re.fullmatch(r"\d+\.\d+\.\d+-\d+-raspi", kernel):
+        findings.append(f"missing lamp driver kernel record: {LAMP_KERNEL_RECORD}")
+    else:
+        modules = root / "lib/modules" / kernel
+        if not (modules / "kernel").is_dir():
+            findings.append(f"lamp driver was built for {kernel}, which the image does not carry")
+        module = modules / "extra/rp1_ws281x_pwm.ko"
+        if not module.is_file():
+            findings.append(f"missing lamp driver module: lib/modules/{kernel}/extra/rp1_ws281x_pwm.ko")
+        else:
+            vermagic = module_vermagic(module)
+            if vermagic is None:
+                findings.append(f"lamp driver module has no vermagic (recorded kernel {kernel})")
+            elif vermagic != kernel:
+                findings.append(f"lamp driver module vermagic {vermagic} does not match the recorded kernel {kernel}")
+        # An upgrade to another kernel would drop /dev/ws281x_pwm: the kernel is held.
+        states = package_states(root)
+        for package in (f"linux-image-{kernel}", f"linux-modules-{kernel}"):
+            if states.get(package) != "hold ok installed":
+                findings.append(f"kernel package is not held for the lamp driver: {package}")
+        for package in (f"linux-headers-{kernel}", "linux-raspi", "linux-image-raspi", "linux-headers-raspi"):
+            state = states.get(package, "")
+            if state.endswith(" installed") and state != "hold ok installed":
+                findings.append(f"kernel package is not held for the lamp driver: {package}")
+        alias = modules / "modules.alias"
+        if not alias.is_file() or "rp1-ws281x-pwm" not in alias.read_text(encoding="utf-8", errors="replace"):
+            findings.append(f"lamp driver is not in lib/modules/{kernel}/modules.alias (depmod)")
+    if not (root / LAMP_UDEV_RULE).is_file():
+        findings.append(f"missing lamp udev rule: {LAMP_UDEV_RULE}")
+    options = root / LAMP_MODPROBE
+    lines = options.read_text(encoding="utf-8", errors="replace").splitlines() if options.is_file() else []
+    if LAMP_OPTIONS not in (line.strip() for line in lines):
+        findings.append(f"{LAMP_MODPROBE} does not set pwm_channel=3 (GPIO19; channel 2 is the LCD backlight)")
+    return findings
 
 
 def inspect(root: Path, release_id: str) -> list[str]:
@@ -174,6 +251,9 @@ def inspect(root: Path, release_id: str) -> list[str]:
                 findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
         if not overlay_applies_to_pi5(text, IMU_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {IMU_OVERLAY} for the Pi 5 (IMU bus)")
+        if not overlay_applies_to_pi5(text, LAMP_OVERLAY):
+            findings.append(f"boot/firmware/config.txt does not enable {LAMP_OVERLAY} for the Pi 5 (lamp driver)")
+    findings += lamp_driver_findings(root)
     cmdline = root / "boot/firmware/cmdline.txt"
     if not cmdline.is_file():
         findings.append("missing kernel command line: boot/firmware/cmdline.txt")
@@ -228,6 +308,12 @@ def inspect(root: Path, release_id: str) -> list[str]:
             findings.append(f"{unit} is not enabled")
     if not os.path.lexists(root / HW_PROBE_COMMAND):
         findings.append(f"missing hardware probe command: {HW_PROBE_COMMAND}")
+    if not (root / "etc/systemd/system" / HW_TEST_SERVICE).is_file():
+        findings.append(f"missing systemd unit: {HW_TEST_SERVICE}")
+    if not (root / "etc/systemd/system" / HW_TEST_PATH).is_file():
+        findings.append(f"missing systemd unit: {HW_TEST_PATH}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / HW_TEST_PATH):
+        findings.append(f"{HW_TEST_PATH} is not enabled")
     defaults = release / CORE_DEFAULTS
     if not defaults.is_file():
         findings.append(f"missing CORE defaults: {defaults.relative_to(root)}")

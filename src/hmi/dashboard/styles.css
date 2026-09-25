@@ -842,6 +842,9 @@ body[data-view="operate"] .page-footer { display: none; }
 .device-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
 .device-bus { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
 .device-evidence { grid-column: 1 / -1; margin: 0; color: var(--nominal-quiet); line-height: 1.5; }
+/* D-247 6 부저·램프 시험: 관리자만 보이는 한 줄. 버튼은 공용 ui-button. */
+.device-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.device-test { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
 /* 오래된 측정은 흐리다 — 판정은 서버가 내린 `stale`이다(D-72 S4). */
 .host-card[data-stale="true"] .device-list { opacity: 0.72; }
 
