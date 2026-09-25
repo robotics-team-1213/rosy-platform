@@ -218,3 +218,132 @@ def test_the_runtime_probe_reads_only_the_temperature(tmp_path):
     assert probe.temperature() == 48.75
     assert probe._last_cpu is None  # the runtime card's CPU delta is untouched
     assert HostRuntimeProbe(host_root=tmp_path / "none").temperature() is None
+
+
+# --- D-260 M1: the boot display evaluates the inputs CORE evaluates ----------------
+
+REPO = Path(__file__).resolve().parents[4]
+NATIVE = REPO / "deploy/robot/native"
+
+
+def _native(name: str, filename: str):
+    import importlib.util
+    import sys
+
+    sys.path.insert(0, str(NATIVE))
+    spec = importlib.util.spec_from_file_location(name, NATIVE / filename)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+READY_UNITS = {unit: "active" for unit in ("rosy-release-recover.service", "rosy-first-boot.service",
+                                           "rosy-sd-provision.service", "rosy-core.service",
+                                           "rosy-runtime.target")}
+
+
+def _root_side(tmp_path: Path, battery_percent):
+    """rosy-boot-status (root) copies CORE's hand-over; the display evaluates boot-status.json."""
+    status = _native("rosy_boot_status_m1", "rosy-boot-status.py")
+    display = _native("rosy_boot_display_m1", "rosy-boot-display.py")
+    (tmp_path / "etc/rosy").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "etc/rosy/runtime.env").write_text("ROSY_RUNTIME_MODE=hardware\n", encoding="utf-8")
+    (tmp_path / "var/lib/rosy/provisioning").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "var/lib/rosy/provisioning/state.json").write_text('{"state":"PROVISIONED"}', encoding="utf-8")
+
+    def run(command):
+        return READY_UNITS.get(command[-1], "") if command[:2] == ["systemctl", "show"] else ""
+
+    facts = status.gather(tmp_path, run)
+    stage = status.classify(facts["units"], facts["provisioning"])
+    record = status.status_record(facts, stage, datetime.now(timezone.utc))
+    (tmp_path / "run/rosy-boot/boot-status.json").write_text(json.dumps(record), encoding="utf-8")
+    battery = None if battery_percent is None else (battery_percent, 7.4)
+    return record, display.read_view(tmp_path, battery)
+
+
+def _m1_config(tmp_path: Path) -> dict:
+    config = _config(tmp_path, "hardware")
+    (tmp_path / "run/rosy").mkdir(parents=True, exist_ok=True)
+    config["hardware_probe"]["status_inputs_path"] = str(tmp_path / "run/rosy/status-inputs.json")
+    return config
+
+
+@pytest.mark.parametrize("case", ["live_threshold", "topic_overlay", "human_answer"])
+def test_the_boot_display_and_the_summary_say_the_same_state(tmp_path, case):
+    config = _m1_config(tmp_path)
+    devices = [_device("motor.1"), _device("buzzer", "needs_human", product=False)]
+    battery, evidence, warning = 80.0, "fresh", 20.0
+    if case == "live_threshold":
+        battery, warning = 35.0, 40.0  # the display's default 20 % would call this ready
+    elif case == "topic_overlay":
+        devices.append({**_device("adc.battery", "not_measured"), "held_by": "rosy-io.service"})
+        battery, evidence = None, "delayed"  # CORE judges the held ADC silent from its topic
+    else:
+        confirm = tmp_path / "home/.rosy/hw-confirmations.json"
+        confirm.parent.mkdir(parents=True)
+        confirm.write_text(json.dumps({"schema": 1, "devices": {"buzzer": {
+            "observed": True, "by": "t", "label": "관리자", "at": "2026-09-26T05:00:00+00:00"}}}), encoding="utf-8")
+    _boot(tmp_path, "CORE_READY")
+    _hardware(tmp_path, devices)
+    svc = SimpleNamespace(config=config, state=FakeState(battery, 7.4, evidence=evidence),
+                          safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=warning)))
+
+    host_api.write_status_inputs(svc)
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    summary = TestClient(create_app(config, svc)).get(
+        "/api/v1/host/status-summary", headers={"Authorization": f"Bearer {VIEWER_TOKEN}"}).json()
+    record, view = _root_side(tmp_path, battery)
+
+    assert record["battery_warning_percent"] == warning
+    assert view["robot_state"] == summary["state"]
+    assert (view["todo"] is None) == (not summary["todos"])
+    expected = {"live_threshold": robot_state.CAUTION, "topic_overlay": robot_state.CAUTION,
+                "human_answer": robot_state.READY}[case]
+    assert summary["state"] == expected
+    if case == "human_answer":
+        assert view["todo"] is None  # the confirmed buzzer asks nothing on the LCD either
+
+
+def test_the_status_inputs_carry_only_the_threshold_and_the_overlaid_states(tmp_path):
+    config = _m1_config(tmp_path)
+    _hardware(tmp_path, [_device("camera", "no_response", label="카메라")])
+    svc = SimpleNamespace(config=config, state=None,
+                          safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=25.0)))
+
+    host_api.write_status_inputs(svc)
+    written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
+
+    assert set(written) == {"schema", "written_at", "battery_warning_percent", "devices"}
+    assert written["battery_warning_percent"] == 25.0
+    assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda doc: doc.update(schema=2),
+    lambda doc: doc.update(written_at="2020-01-01T00:00:00+00:00"),  # CORE stopped writing
+    lambda doc: doc.update(written_at="now"),
+    lambda doc: doc.update(battery_warning_percent=0),
+    lambda doc: doc.update(battery_warning_percent=True),
+    lambda doc: doc.update(devices=[{"id": "camera", "state": "broken", "product": True}]),
+])
+def test_a_stale_or_malformed_hand_over_falls_back_to_the_probe_and_the_default(tmp_path, mutate):
+    status = _native("rosy_boot_status_m1b", "rosy-boot-status.py")
+    document = {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "battery_warning_percent": 30.0, "devices": [{"id": "camera", "state": "ok", "product": True}]}
+    mutate(document)
+    (tmp_path / "run/rosy").mkdir(parents=True)
+    (tmp_path / "run/rosy/status-inputs.json").write_text(json.dumps(document), encoding="utf-8")
+
+    assert status._core_inputs(tmp_path, datetime.now(timezone.utc)) is None
+
+
+def test_an_oversized_hand_over_is_not_read(tmp_path):
+    status = _native("rosy_boot_status_m1c", "rosy-boot-status.py")
+    (tmp_path / "run/rosy").mkdir(parents=True)
+    (tmp_path / "run/rosy/status-inputs.json").write_text("x" * (17 * 1024), encoding="utf-8")
+
+    assert status._core_inputs(tmp_path, datetime.now(timezone.utc)) is None

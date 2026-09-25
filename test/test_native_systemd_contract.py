@@ -344,6 +344,8 @@ DECLARED_WRITES = {
         # D-247 6: the buzzer/lamp test request to rosy-hw-test.path (HW_TEST_REQUEST_FILE)
         # and the person's answers (HW_CONFIRM_FILE, beside the other CORE state).
         "/run/rosy/hw-test.request", "$HOME/.rosy/hw-confirmations.json",
+        # D-260 M1: the boot display's inputs only CORE knows (api/v1/host.py STATUS_INPUTS_FILE).
+        "/run/rosy/status-inputs.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-navigation.service": {

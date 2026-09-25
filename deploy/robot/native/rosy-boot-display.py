@@ -181,8 +181,13 @@ def _state_view(view: dict, status: dict) -> dict:
         return {}
     devices = status.get("devices") if isinstance(status.get("devices"), list) else []
     mode = status.get("runtime_mode") if isinstance(status.get("runtime_mode"), str) else None
+    # D-260 M1: CORE's live SAF-005 warning when rosy-boot-status copied it; else the table's default.
+    warning = status.get("battery_warning_percent")
+    if isinstance(warning, bool) or not isinstance(warning, (int, float)):
+        warning = robot_state.BATTERY_WARNING_PERCENT
     result = robot_state.evaluate(view["stage"], devices, battery_percent=view["battery_percent"],
-                                  runtime_mode=mode, failed_unit=view["failed_unit"])
+                                  battery_warning_percent=warning, runtime_mode=mode,
+                                  failed_unit=view["failed_unit"])
     todos = result["todos"]
     return {"robot_state": result["state"], "state_line": robot_state.state_line(result, lcd=True),
             "todo": todos[0]["lcd"] if todos else None}

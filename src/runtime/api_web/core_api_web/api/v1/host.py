@@ -755,8 +755,7 @@ def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLi
     state = getattr(svc, "state", None)
     snapshot = state.snapshot() if state is not None and hasattr(state, "snapshot") else None
     percent, voltage = _battery_reading(snapshot)
-    policy = getattr(getattr(svc, "safety", None), "battery_policy", None)
-    warning = getattr(policy, "warning_percent", robot_state.BATTERY_WARNING_PERCENT)
+    warning = _warning_percent(svc)
     mode = (svc.config or {}).get("runtime", {}).get("mode", robot_state.DEFAULT_RUNTIME_MODE)
     result = robot_state.evaluate(stage, devices, battery_percent=percent, battery_warning_percent=warning,
                                   runtime_mode=mode, failed_unit=boot["failed_unit"] if boot else None)
@@ -779,3 +778,36 @@ def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLi
         "todos": [{key: item[key] for key in ("id", "text", "device") if key in item}
                   for item in result["todos"]],
     }
+
+
+# D-260 M1: the boot display must evaluate the same inputs CORE does. It cannot
+# read CORE's SAF-005 policy or the overlays (topic judgment, human answers), so
+# CORE hands them over in its own runtime directory; root rosy-boot-status reads
+# the file strictly and copies the values into boot-status.json.
+STATUS_INPUTS_FILE = "/run/rosy/status-inputs.json"
+STATUS_INPUTS_PERIOD_S = 10.0
+
+
+def _warning_percent(svc: CoreServicesLike) -> float:
+    policy = getattr(getattr(svc, "safety", None), "battery_policy", None)
+    value = getattr(policy, "warning_percent", robot_state.BATTERY_WARNING_PERCENT)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return robot_state.BATTERY_WARNING_PERCENT
+
+
+def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
+    """What the root side cannot know: the live warning threshold and the overlaid device states."""
+    hardware = host_hardware(None, svc)
+    devices = [{"id": row["id"], "state": row["state"], "product": row["product"]}
+               for row in (hardware["devices"] if hardware.get("available") else [])]
+    return {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "battery_warning_percent": _warning_percent(svc), "devices": devices}
+
+
+def write_status_inputs(svc: CoreServicesLike) -> None:
+    """Replace the hand-over atomically (0644: rosy-boot-status is root, nothing in it is secret)."""
+    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
+    path = str(cfg.get("status_inputs_path", STATUS_INPUTS_FILE))
+    _write_private(path, json.dumps(status_inputs(svc), sort_keys=True) + "\n", 0o644, "status-inputs")

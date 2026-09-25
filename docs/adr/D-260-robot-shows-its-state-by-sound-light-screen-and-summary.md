@@ -126,10 +126,14 @@
   - *요약줄 (결정 5).* `src/hmi/dashboard/status-summary.js`(D-262 분해 모양). 상태 칩 위에 이유, 장치 요약(누르면 점검 뷰의 첫
     문제 행), 배터리·전압·온도, 할 일 개수(누르면 겹쳐 펼침). 따로 한 줄을 쌓으면 1366×768에서 조작 열이 34 px 넘쳤다(D-201).
     그래서 요약줄은 상태 레일의 한 칸이다. 보통 운용 데이터와 같은 5초 주기로 새로 읽는다.
-  - *부팅 화면 프로그램 입력.* `runtime.env`(0600)와 `hardware.json`(root:rosy-core 0640)은 `rosy-display`가 못 읽는다.
-    `rosy-boot-status`(root, 30초 타이머)가 `runtime_mode`와 장치 행의 `id·state·product`만 `boot-status.json`에 옮긴다.
-    근거 문장은 옮기지 않는다. 사람 확인 덮기는 CORE에만 있으므로, LCD 할 일 줄은 확인을 마친 부저·램프도 `시험 동작으로 확인`으로
-    보일 수 있다(가장 급한 하나만 보이므로 앞선 할 일이 있으면 가려진다).
+  - *부팅 화면 프로그램 입력 — CORE와 같은 입력.* `runtime.env`(0600)와 `hardware.json`(root:rosy-core 0640)은 `rosy-display`가
+    못 읽는다. CORE의 SAF-005 경고 임계와 장치 덮기(토픽 판정·사람 확인)도 CORE만 안다. 그래서 CORE가 10초마다
+    `/run/rosy/status-inputs.json`(경고 임계, 덮기를 거친 `id·state·product`)을 쓰고, `rosy-boot-status`(root, 30초 타이머)가
+    그 파일을 엄격히 읽어(링크·FIFO 거부, 16 KiB, 60초 안에 쓴 것만) `runtime_mode`와 함께 `boot-status.json`에 옮긴다. 근거
+    문장은 옮기지 않는다. 두 쪽이 같은 입력을 같은 표에 넣는지는 한 fixture를 두 경로에 흘리는 시험이 지킨다(임계·토픽 덮기·사람
+    확인). 남은 차이는 둘이다. (1) 지연: CORE 쓰기 10초 + 표시기 30초까지 LCD·램프가 늦을 수 있다. (2) CORE가 멈추거나 파일이
+    60초보다 오래되면 부팅 화면 프로그램은 probe 행과 기본 임계 20 %로 돌아간다. 배터리 값은 부팅 화면 프로그램이 ADC를 직접,
+    CORE가 토픽으로 읽지만 같은 센서다.
   - *부저 (결정 2).* 기본값 켜짐(`Environment=ROSY_BUZZER_ENABLED=true`, 카드의 `boot-display.env`가 이긴다). 준비됨 두 상태는 한
     소리다. 같은 소리는 300초 안에 다시 울리지 않는다. 배터리가 임계 근처에서 오르내릴 때 15초마다 울리지 않게 하려는 것이다.
     주의는 800 Hz 두 번이다.
