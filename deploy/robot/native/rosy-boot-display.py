@@ -28,8 +28,9 @@ panel at all, a stable configuration, so the program exits 0 when the buzzer
 is off too. A panel node that is there but cannot be driven (libraries missing,
 GPIO chip label unreadable or not RP1, open failing after LCD_ATTEMPTS) is a
 fault: exit 1, visible in systemd and capped by StartLimitBurst. It never
-drives the lines blind. The buzzer (BCM 22 on sibling boards, unconfirmed on
-the Pro) stays off until a person confirms it and sets ROSY_BUZZER_ENABLED=true.
+drives the lines blind. The buzzer (BCM 4 on the Pro, heard on rosy_18 on
+2026-09-26; BCM 22 on sibling boards is silent there) stays off until
+ROSY_BUZZER_ENABLED=true is written for the device (D-190).
 """
 
 from __future__ import annotations
@@ -60,6 +61,8 @@ SPIDEV = "dev/spidev0.0"
 # against its header_bcm_owners): not I2C0/1 (0-3), SPI0 (7-11), UART4 motor
 # (12/13), UART0 LiDAR (14/15), the LCD (18/25/27) or the bench lamp (19).
 BUZZER_LINES = frozenset({4, 5, 6, 16, 17, 20, 21, 22, 23, 24, 26})
+# The Pinky Pro buzzer (board.yaml boot_display.buzzer.bcm_line), heard on rosy_18 2026-09-26.
+BUZZER_DEFAULT_LINE = 4
 BUZZER_PATTERNS = {"CORE_READY": 1, "FAILED": 3}
 BUZZER_FREQUENCY_HZ = 2000
 BUZZER_DUTY = 10  # percent; a passive piezo is quiet at a low duty cycle
@@ -199,11 +202,11 @@ def buzzer_settings(environ: dict[str, str], log: Log) -> tuple[bool, int]:
     if enabled_text not in {"true", "false"}:
         log.once("buzzer-config", f"ROSY_BUZZER_ENABLED must be true or false, got {enabled_text!r}; buzzer off")
         enabled_text = "false"
-    pin_text = environ.get("ROSY_BUZZER_PIN", "22")
+    pin_text = environ.get("ROSY_BUZZER_PIN", str(BUZZER_DEFAULT_LINE))
     if not pin_text.isdigit() or int(pin_text) not in BUZZER_LINES:
         log.once("buzzer-config", f"ROSY_BUZZER_PIN {pin_text!r} is not a free header BCM line "
                                   f"{sorted(BUZZER_LINES)}; buzzer off")
-        return False, 22
+        return False, BUZZER_DEFAULT_LINE
     return enabled_text == "true", int(pin_text)
 
 

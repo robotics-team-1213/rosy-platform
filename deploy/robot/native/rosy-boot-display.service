@@ -18,10 +18,10 @@ Group=rosy-display
 # /dev/i2c-1 is root:dialout 0660 on the Ubuntu image (rosy-pinky-e4us);
 # 99-rosy-display.rules gives spidev0.0 to spi and gpiochip4 to gpio.
 SupplementaryGroups=dialout spi gpio
-# The buzzer pin is unconfirmed on the Pro (D-190 S0): off until a person
-# hears it on the device and writes ROSY_BUZZER_ENABLED=true (and, if it is
-# not BCM 22, ROSY_BUZZER_PIN) into /etc/rosy/boot-display.env, which wins.
-Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=22
+# The Pro buzzer is BCM 4 (heard on rosy_18 2026-09-26; BCM 22 is silent there).
+# Off until ROSY_BUZZER_ENABLED=true (and any other ROSY_BUZZER_PIN) is written
+# into /etc/rosy/boot-display.env, which wins (D-190).
+Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=4
 EnvironmentFile=-/etc/rosy/boot-display.env
 # emotion.info_screen, emotion.rosy_lcd and rosylib come from the running release.
 Environment=PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages

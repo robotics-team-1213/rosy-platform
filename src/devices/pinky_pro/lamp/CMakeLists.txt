@@ -26,8 +26,16 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     ws2811
   )
 
+  # D-247 decision 6: the lamp test rosy-hw-test.service runs as root. No ROS;
+  # the same statically linked, Pi 5 patched rpi_ws281x as main_node.
+  add_executable(lamp_selftest src/lamp_selftest.c)
+  set_target_properties(lamp_selftest PROPERTIES C_STANDARD 11)
+  target_include_directories(lamp_selftest PRIVATE /usr/local/include)
+  target_link_libraries(lamp_selftest ws2811 m)
+
   install(TARGETS
     main_node
+    lamp_selftest
     DESTINATION lib/${PROJECT_NAME}
   )
 else()

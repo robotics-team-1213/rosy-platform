@@ -341,6 +341,9 @@ DECLARED_WRITES = {
         "/run/rosy/login-code-state.json",
         # D-247: CORE's refresh request to rosy-hw-probe.path (api/v1/host.py HW_REQUEST_FILE).
         "/run/rosy/hw-probe.request",
+        # D-247 6: the buzzer/lamp test request to rosy-hw-test.path (HW_TEST_REQUEST_FILE)
+        # and the person's answers (HW_CONFIRM_FILE, beside the other CORE state).
+        "/run/rosy/hw-test.request", "$HOME/.rosy/hw-confirmations.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-navigation.service": {
@@ -365,6 +368,12 @@ DECLARED_WRITES = {
         # rosy-hw-probe.py OUTPUT, via a temporary file beside it (D-247).
         "/run/rosy-boot/hardware.json",
     },
+    "rosy-hw-test.service": {
+        # rosy-hw-test.py RESULT, via a temporary file beside it (D-247 6).
+        "/run/rosy-boot/hw-test.json",
+        # lgpio's notification files in LG_WD (the unit's own runtime directory).
+        "/run/rosy-hw-test/.lgd-nfy0",
+    },
 }
 
 # Absolute paths a unit's program names but only reads.
@@ -377,6 +386,8 @@ DECLARED_READS = {
         "/run/rosy-boot/login-code.json",
         # D-247: the root probe's result, root:rosy-core 0640 (api/v1/host.py HARDWARE_FILE).
         "/run/rosy-boot/hardware.json",
+        # D-247 6: the root test's outcome, root:rosy-core 0640 (HW_TEST_RESULT_FILE).
+        "/run/rosy-boot/hw-test.json",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
@@ -394,6 +405,12 @@ DECLARED_READS = {
     "rosy-hw-probe.service": {
         "/proc/sys/kernel/random/boot_id", "/proc/device-tree", "/dev/kmsg",
         "/etc/rosy/boot-display.env",
+    },
+    # D-247 6: CORE's request (read strictly, never followed), the buzzer pin of
+    # the boot display, the lamp driver's channel and the release's lamp helper.
+    "rosy-hw-test.service": {
+        "/run/rosy/hw-test.request", "/etc/rosy/boot-display.env",
+        "/opt/rosy/current/install/lib/lamp_control/lamp_selftest",
     },
 }
 
@@ -425,6 +442,8 @@ PROGRAM_SOURCES = {
                                 "deploy/robot/native/rosy_config.py"],
     # D-247: the probe is standard library only (dynamixel_sdk is imported lazily).
     "rosy-hw-probe.service": ["deploy/robot/native/rosy-hw-probe.py"],
+    # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
+    "rosy-hw-test.service": ["deploy/robot/native/rosy-hw-test.py"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
@@ -770,6 +789,38 @@ def test_the_hardware_probe_is_a_bounded_root_oneshot_without_network():
     assert "WantedBy=multi-user.target" in path
     # CORE writes the request file in its own RuntimeDirectory.
     assert "RuntimeDirectory=rosy" in _read("rosy-core.service")
+
+
+def test_the_hardware_test_is_a_bounded_root_oneshot_only_core_can_start():
+    # D-247 6: root outside CORE, started only by the path unit on CORE's request;
+    # only /run/rosy-boot (and its own runtime directory) writable, never /run/rosy.
+    directives = _directives("rosy-hw-test.service")
+    assert not _non_root(directives)
+    for key, value in (("Type", "oneshot"), ("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
+                       ("ProtectSystem", "strict"), ("ProtectHome", "true"), ("NoNewPrivileges", "true"),
+                       ("DevicePolicy", "closed"), ("StartLimitIntervalSec", "0"),
+                       ("ProtectKernelModules", "true"), ("ProtectKernelLogs", "true")):
+        assert directives.get(key, [""])[-1] == value, key
+    assert 0 < int(directives["TimeoutStartSec"][-1]) <= 60
+    assert _words(directives, "ReadWritePaths") == ["/run/rosy-boot"]
+    assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
+    environment = _environment(directives)
+    assert environment.get("PYTHONNOUSERSITE") == "1"
+    assert environment.get("RPI_LGPIO_CHIP") == "4"
+    assert environment.get("LG_WD") == "/run/rosy-hw-test" == directives["WorkingDirectory"][-1]
+    assert "/run/rosy-hw-test" in _managed(directives)
+    assert _words(directives, "CapabilityBoundingSet") == ["CAP_CHOWN", "CAP_FOWNER", "CAP_DAC_OVERRIDE"]
+    assert directives["ExecStart"] == ["/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-test.py"]
+    assert "Restart" not in directives
+    text = _read("rosy-hw-test.service")
+    assert "bash" not in text
+    # Never enabled on its own: only the path unit starts it.
+    assert "[Install]" not in text
+
+    path = _read("rosy-hw-test.path")
+    assert "PathChanged=/run/rosy/hw-test.request" in path
+    assert "Unit=rosy-hw-test.service" in path
+    assert "WantedBy=multi-user.target" in path
 
 
 def test_recovery_journal_is_private_to_root():

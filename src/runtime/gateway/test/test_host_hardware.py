@@ -38,7 +38,10 @@ def _config(tmp_path: Path, mode: str = "core") -> dict:
         "runtime": {"mode": mode},
         "host_agent": {"socket_path": "/nonexistent/host-agent.sock", "timeout_s": 0.1},
         "hardware_probe": {"result_path": str(tmp_path / "run/rosy-boot/hardware.json"),
-                           "request_path": str(tmp_path / "run/rosy/hw-probe.request")},
+                           "request_path": str(tmp_path / "run/rosy/hw-probe.request"),
+                           "test_request_path": str(tmp_path / "run/rosy/hw-test.request"),
+                           "test_result_path": str(tmp_path / "run/rosy-boot/hw-test.json"),
+                           "confirm_path": str(tmp_path / "home/.rosy/hw-confirmations.json")},
     }
 
 
@@ -70,8 +73,10 @@ def _write(tmp_path: Path, devices: list[dict], *, measured_at: str | None = Non
 @pytest.fixture(autouse=True)
 def _no_refresh_memory():
     host_api._last_refresh.clear()
+    host_api._last_test.clear()
     yield
     host_api._last_refresh.clear()
+    host_api._last_test.clear()
 
 
 # --- GET /api/v1/host/hardware ----------------------------------------------------
@@ -284,6 +289,217 @@ def test_the_api_runs_no_subprocess_for_hardware():
     source = Path(host_api.__file__).read_text(encoding="utf-8")
     assert "import subprocess" not in source and "subprocess." not in source
     assert '"systemctl"' not in source
+
+
+# --- D-247 6: buzzer / lamp test and the person's answer ----------------------------
+
+HW_TEST = Path(__file__).resolve().parents[4] / "deploy/robot/native/rosy-hw-test.py"
+
+
+def _human_rows(tmp_path: Path, buzzer="needs_human", lamp="needs_human") -> None:
+    _write(tmp_path, [_device("buzzer", buzzer, product=False), _device("lamp", lamp, product=False),
+                      _device("camera", "no_response")])
+
+
+def test_only_an_administrator_can_start_a_test(tmp_path):
+    client = _client(_config(tmp_path))
+    for token in (VIEWER_TOKEN, OPERATOR_TOKEN):
+        response = client.post("/api/v1/host/hardware/test", json={"device": "buzzer"}, headers=_auth(token))
+        assert response.status_code == 403
+    assert not (tmp_path / "run/rosy/hw-test.request").exists()
+
+
+def test_a_test_writes_the_request_rosy_hw_test_accepts(tmp_path):
+    spec = importlib.util.spec_from_file_location("rosy_hw_test_for_core", HW_TEST)
+    program = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(program)
+
+    response = _client(_config(tmp_path)).post("/api/v1/host/hardware/test", json={"device": "lamp"},
+                                               headers=_auth(ADMIN_TOKEN))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["accepted"] is True and body["device"] == "lamp" and "보였는지" in body["detail"]
+    path = tmp_path / "run/rosy/hw-test.request"
+    request = program.read_request(path)
+    assert request is not None, path.read_text(encoding="utf-8")
+    assert request["action"] == "lamp" and request["request_id"] == body["request_id"]
+    assert not [p for p in path.parent.iterdir() if p.name.startswith(".hw-test")]
+
+
+def test_rosy_hw_tests_outcome_passes_cores_validation(tmp_path):
+    spec = importlib.util.spec_from_file_location("rosy_hw_test_outcome", HW_TEST)
+    program = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(program)
+
+    class Quiet(program.System):
+        def unit_state(self, unit):
+            return "inactive"
+
+        def beep(self, pin):
+            return None
+
+    config = _config(tmp_path)
+    _client(config).post("/api/v1/host/hardware/test", json={"device": "buzzer"}, headers=_auth(ADMIN_TOKEN))
+    root = tmp_path / "root"
+    (root / "run/rosy").mkdir(parents=True)
+    (root / "run/rosy/hw-test.request").write_bytes((tmp_path / "run/rosy/hw-test.request").read_bytes())
+    assert program.main(["--root", str(root)], system=Quiet(root), group=lambda _name: None) == 0
+    outcome = host_api.read_test_result(str(root / "run/rosy-boot/hw-test.json"))
+    assert outcome is not None and outcome["state"] == "done" and outcome["action"] == "buzzer"
+
+
+def test_a_second_test_inside_the_cool_down_is_its_own_error(tmp_path):
+    client = _client(_config(tmp_path))
+    assert client.post("/api/v1/host/hardware/test", json={"device": "buzzer"},
+                       headers=_auth(ADMIN_TOKEN)).status_code == 200
+    again = client.post("/api/v1/host/hardware/test", json={"device": "lamp"}, headers=_auth(ADMIN_TOKEN))
+    assert again.status_code == 429
+    assert again.json()["error"]["code"] == "HW_TEST_COOLDOWN"
+    request = json.loads((tmp_path / "run/rosy/hw-test.request").read_text(encoding="utf-8"))
+    assert request["action"] == "buzzer"
+
+
+@pytest.mark.parametrize("body", [{"device": "motor.1"}, {"device": "lamp", "extra": 1}, {}])
+def test_a_test_only_names_the_buzzer_or_the_lamp(tmp_path, body):
+    response = _client(_config(tmp_path)).post("/api/v1/host/hardware/test", json=body,
+                                               headers=_auth(ADMIN_TOKEN))
+    assert response.status_code in (400, 422)
+    assert not (tmp_path / "run/rosy/hw-test.request").exists()
+
+
+def test_a_test_without_cores_runtime_directory_is_a_503(tmp_path):
+    config = _config(tmp_path)
+    config["hardware_probe"]["test_request_path"] = str(tmp_path / "missing/hw-test.request")
+    response = _client(config).post("/api/v1/host/hardware/test", json={"device": "buzzer"},
+                                    headers=_auth(ADMIN_TOKEN))
+    assert response.status_code == 503 and response.json()["error"]["code"] == "HW_TEST_UNAVAILABLE"
+    # A failed write does not start the cool-down.
+    config["hardware_probe"]["test_request_path"] = str(tmp_path / "run/rosy/hw-test.request")
+    assert _client(config).post("/api/v1/host/hardware/test", json={"device": "buzzer"},
+                                headers=_auth(ADMIN_TOKEN)).status_code == 200
+
+
+def test_the_card_shows_the_last_test_outcome(tmp_path):
+    _human_rows(tmp_path)
+    (tmp_path / "run/rosy-boot/hw-test.json").write_text(json.dumps({
+        "schema": 1, "request_id": "0123456789abcdef", "action": "buzzer", "state": "busy",
+        "detail": "부팅 표시가 BCM 4 부저를 쓰는 중", "started_at": "2026-09-26T05:00:00+00:00",
+        "finished_at": "2026-09-26T05:00:01+00:00"}, ensure_ascii=False), encoding="utf-8")
+    body = _client(_config(tmp_path)).get("/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
+    assert body["test"] == {"request_id": "0123456789abcdef", "action": "buzzer", "state": "busy",
+                            "detail": "부팅 표시가 BCM 4 부저를 쓰는 중",
+                            "finished_at": "2026-09-26T05:00:01+00:00"}
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda doc: doc.update(schema=2),
+    lambda doc: doc.update(action="motor"),
+    lambda doc: doc.update(state="ok"),
+    lambda doc: doc.update(detail="x" * 201),
+    lambda doc: doc.update(finished_at="2026-09-26T05:00:01"),
+])
+def test_a_malformed_test_outcome_is_not_shown(tmp_path, mutate):
+    document = {"schema": 1, "request_id": "0123456789abcdef", "action": "lamp", "state": "done",
+                "detail": "d", "finished_at": "2026-09-26T05:00:01+00:00"}
+    mutate(document)
+    path = tmp_path / "hw-test.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    assert host_api.read_test_result(str(path)) is None
+
+
+def test_only_an_administrator_can_record_an_answer(tmp_path):
+    client = _client(_config(tmp_path))
+    for token in (VIEWER_TOKEN, OPERATOR_TOKEN):
+        response = client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": True},
+                               headers=_auth(token))
+        assert response.status_code == 403
+    assert not (tmp_path / "home/.rosy/hw-confirmations.json").exists()
+
+
+def test_heard_and_not_seen_turn_the_rows_into_ok_and_no_response(tmp_path):
+    _human_rows(tmp_path)
+    client = _client(_config(tmp_path))
+    heard = client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": True},
+                        headers=_auth(ADMIN_TOKEN))
+    assert heard.status_code == 200
+    record = heard.json()
+    assert record["recorded"] is True and record["observed"] is True and record["device"] == "buzzer"
+    assert record["by"] and record["at"].endswith("+00:00")
+    assert client.post("/api/v1/host/hardware/confirm", json={"device": "lamp", "observed": False},
+                       headers=_auth(ADMIN_TOKEN)).status_code == 200
+
+    stored = json.loads((tmp_path / "home/.rosy/hw-confirmations.json").read_text(encoding="utf-8"))
+    assert stored["schema"] == 1 and set(stored["devices"]) == {"buzzer", "lamp"}
+    assert set(stored["devices"]["buzzer"]) == {"observed", "by", "label", "at"}
+    assert not [p for p in (tmp_path / "home/.rosy").iterdir() if p.name.startswith(".")]
+
+    rows = {row["id"]: row for row in client.get("/api/v1/host/hardware",
+                                                  headers=_auth(VIEWER_TOKEN)).json()["devices"]}
+    assert rows["buzzer"]["state"] == "ok" and rows["buzzer"]["source"] == "human"
+    assert rows["buzzer"]["evidence"].startswith("사람 확인: ") and rows["buzzer"]["evidence"].endswith(" UTC")
+    assert rows["lamp"]["state"] == "no_response"
+    assert rows["lamp"]["evidence"].startswith("사람 확인: 보이지 않음")
+    assert rows["camera"]["state"] == "no_response" and "source" not in rows["camera"]
+
+
+def test_a_later_answer_replaces_the_earlier_one(tmp_path):
+    _human_rows(tmp_path)
+    client = _client(_config(tmp_path))
+    for observed in (False, True):
+        client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": observed},
+                    headers=_auth(ADMIN_TOKEN))
+    rows = {row["id"]: row for row in client.get("/api/v1/host/hardware",
+                                                  headers=_auth(VIEWER_TOKEN)).json()["devices"]}
+    assert rows["buzzer"]["state"] == "ok"
+    assert rows["lamp"]["state"] == "needs_human"
+
+
+def test_an_answer_never_hides_a_missing_driver(tmp_path):
+    _human_rows(tmp_path, lamp="driver_missing")
+    client = _client(_config(tmp_path))
+    client.post("/api/v1/host/hardware/confirm", json={"device": "lamp", "observed": True},
+                headers=_auth(ADMIN_TOKEN))
+    rows = {row["id"]: row for row in client.get("/api/v1/host/hardware",
+                                                  headers=_auth(VIEWER_TOKEN)).json()["devices"]}
+    assert rows["lamp"]["state"] == "driver_missing"
+
+
+@pytest.mark.parametrize("body", [{"device": "buzzer", "observed": "yes"}, {"device": "buzzer"},
+                                  {"device": "camera", "observed": True},
+                                  {"device": "lamp", "observed": True, "by": "someone"}])
+def test_an_answer_is_strictly_typed(tmp_path, body):
+    response = _client(_config(tmp_path)).post("/api/v1/host/hardware/confirm", json=body,
+                                               headers=_auth(ADMIN_TOKEN))
+    assert response.status_code in (400, 422)
+
+
+def test_an_unwritable_state_directory_is_its_own_error(tmp_path):
+    config = _config(tmp_path)
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a file, not a directory", encoding="utf-8")
+    config["hardware_probe"]["confirm_path"] = str(blocker / "hw-confirmations.json")
+    response = _client(config).post("/api/v1/host/hardware/confirm", json={"device": "lamp", "observed": True},
+                                    headers=_auth(ADMIN_TOKEN))
+    assert response.status_code == 503 and response.json()["error"]["code"] == "HW_CONFIRM_UNAVAILABLE"
+
+
+def test_a_corrupt_answer_file_is_ignored_not_trusted(tmp_path):
+    _human_rows(tmp_path)
+    path = tmp_path / "home/.rosy/hw-confirmations.json"
+    path.parent.mkdir(parents=True)
+    for text in ("not json", json.dumps({"schema": 1, "devices": {"buzzer": {"observed": "yes", "by": "a",
+                                                                               "label": "", "at": "x"}}})):
+        path.write_text(text, encoding="utf-8")
+        assert host_api.read_confirmations(str(path)) == {}
+    body = _client(_config(tmp_path)).get("/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
+    assert {row["id"]: row["state"] for row in body["devices"]}["buzzer"] == "needs_human"
+
+
+def test_the_default_answer_file_is_beside_cores_other_state():
+    svc = SimpleNamespace(config={})
+    request, result, confirm = host_api._test_paths(svc)
+    assert request == "/run/rosy/hw-test.request" and result == "/run/rosy-boot/hw-test.json"
+    assert Path(confirm) == Path.home() / ".rosy" / "hw-confirmations.json"
 
 
 # --- the dashboard wiring (the Chromium checks are optional; these always run) -----

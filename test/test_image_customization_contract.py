@@ -199,6 +199,10 @@ def _valid_root(tmp_path: Path) -> Path:
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
         (wants.parent / unit).write_text("[Unit]\n", encoding="utf-8")
     _link(root / "usr/local/sbin/rosy-hw-probe", "/opt/rosy/native-runtime/rosy-hw-probe")
+    # D-247 6: the buzzer/lamp test service and its enabled path unit.
+    (root / "etc/systemd/system/rosy-hw-test.service").write_text("[Unit]\n", encoding="utf-8")
+    (root / "etc/systemd/system/rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
     defaults = release / "install/share/core/config/rosy_default.yaml"
     defaults.parent.mkdir(parents=True, exist_ok=True)
     defaults.write_text((ROOT / "src/runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8"),
@@ -289,6 +293,27 @@ def test_image_installs_enables_and_probes_the_hardware_probe():
     assert """chroot "$ROOT" python3 -I -c 'import dynamixel_sdk'""" in after[:400]
     payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
     for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+
+
+def test_mounted_image_verifier_requires_the_hardware_test(tmp_path):
+    root = _valid_root(tmp_path)
+    (root / "etc/systemd/system/multi-user.target.wants/rosy-hw-test.path").unlink()
+    (root / "etc/systemd/system/rosy-hw-test.service").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    for finding in ("rosy-hw-test.path is not enabled", "missing systemd unit: rosy-hw-test.service"):
+        assert finding in completed.stderr
+
+
+def test_image_installs_and_enables_the_hardware_test_path_only():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("# D-174 T0")]
+    assert "rosy-hw-test.path" in enable and "rosy-hw-test.service" not in enable
+    loop = source[source.index("for entrypoint in"):]
+    assert "rosy-hw-test.py" in loop[:loop.index("; do")]
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+    for unit in ("rosy-hw-test.service", "rosy-hw-test.path"):
         assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
 
 

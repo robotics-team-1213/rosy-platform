@@ -19,6 +19,11 @@ D-247 intake: the root board device probe (rosy-hw-probe.service) observes
 every board device, bench-only ones included, read-only and outside CORE. It
 is not a product surface (it drives nothing and advertises nothing), so like
 the display it gets exactly its own nodes, and no other unit gains any.
+
+D-247 slice 2: the root test unit (rosy-hw-test.service) beeps the buzzer or
+flashes the bench lamp once on an administrator's request, so a person can say
+whether it works. It too gets exactly its two nodes (the GPIO chip and the lamp
+driver) and advertises nothing; the lamp and the buzzer stay bench-only (D-169).
 """
 from pathlib import Path
 import sys
@@ -45,6 +50,11 @@ DISPLAY_DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1")
 PROBE_UNIT = "rosy-hw-probe.service"
 PROBE_DEVICES = {"/dev/rosy-motor": "rw", "/dev/ttyAMA0": "rw", "/dev/i2c-0": "rw", "/dev/i2c-1": "rw",
                  "/dev/vcio": "rw", "/dev/kmsg": "r"}
+#: D-247 6: the buzzer/lamp test; nothing that moves the robot and no ADC.
+TEST_UNIT = "rosy-hw-test.service"
+TEST_DEVICES = {"/dev/gpiochip4": "rw", "/dev/ws281x_pwm": "rw"}
+#: Root units that hold exactly these nodes.
+ROOT_DEVICE_UNITS = {PROBE_UNIT: PROBE_DEVICES, TEST_UNIT: TEST_DEVICES}
 
 
 def test_compose_io_devices_stay_on_the_d169_surface():
@@ -105,13 +115,14 @@ def surface_violations(units: dict[str, str]) -> list[str]:
             if policy != "closed":
                 found.append(f"{name} ends with DevicePolicy={policy}, not closed")
             continue
-        if name == PROBE_UNIT:
+        if name in ROOT_DEVICE_UNITS:
+            expected = ROOT_DEVICE_UNITS[name]
             granted = {}
             for line in allows:
                 device, _, access = line.split("=", 1)[1].partition(" ")
                 granted[device] = access.strip()
-            if granted != PROBE_DEVICES or len(allows) != len(PROBE_DEVICES):
-                found.append(f"{name} devices {sorted(granted.items())} != {sorted(PROBE_DEVICES.items())}")
+            if granted != expected or len(allows) != len(expected):
+                found.append(f"{name} devices {sorted(granted.items())} != {sorted(expected.items())}")
             if policy != "closed":
                 found.append(f"{name} ends with DevicePolicy={policy}, not closed")
             if _non_root(directives):
@@ -123,8 +134,9 @@ def surface_violations(units: dict[str, str]) -> list[str]:
                     found.append(f"{name} grew a bench-only device: {line}")
     if DISPLAY_UNIT not in units:
         found.append(f"{DISPLAY_UNIT} is missing")
-    if PROBE_UNIT not in units:
-        found.append(f"{PROBE_UNIT} is missing")
+    for unit in ROOT_DEVICE_UNITS:
+        if unit not in units:
+            found.append(f"{unit} is missing")
     return found
 
 
@@ -178,6 +190,15 @@ def test_native_device_allow_stays_on_the_d169_surface():
     (PROBE_UNIT, "DevicePolicy=auto"),
     (PROBE_UNIT, "User=rosy-core"),
     ("rosy-login-code.service", "DeviceAllow=/dev/i2c-0 rw"),
+    # D-247 6: the test unit reaches the buzzer line and the lamp, never a bus that moves or measures.
+    (TEST_UNIT, "DeviceAllow=/dev/rosy-motor rw"),
+    (TEST_UNIT, "DeviceAllow=/dev/i2c-1 rw"),
+    (TEST_UNIT, "DeviceAllow=/dev/gpiomem rw"),
+    (TEST_UNIT, "DeviceAllow=char-gpiochip rw"),
+    (TEST_UNIT, "DevicePolicy=auto"),
+    (TEST_UNIT, "User=rosy-core"),
+    ("rosy-io.service", "DeviceAllow=/dev/ws281x_pwm rw"),
+    ("rosy-core.service", "DeviceAllow=/dev/ws281x_pwm rw"),
 ])
 def test_mutation_widening_any_surface_turns_the_guard_red(unit, line):
     units = _native_units()

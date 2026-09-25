@@ -46,6 +46,11 @@ _HTTP_BY_CODE = {
     "HARDWARE_NOT_READY": 503,
     # D-247: CORE could not hand rosy-hw-probe a refresh request (not a D-58 hardware gate).
     "HW_PROBE_UNAVAILABLE": 503,
+    # D-247 6: a buzzer/lamp test inside the 10 s cool-down, or its request / the
+    # person's answer could not be written. Not D-58 hardware gates either.
+    "HW_TEST_COOLDOWN": 429,
+    "HW_TEST_UNAVAILABLE": 503,
+    "HW_CONFIRM_UNAVAILABLE": 503,
     "COMMAND_TIMEOUT": 504,
     "INTERNAL_ERROR": 500,
 }

@@ -66,6 +66,9 @@ LOGIN_COMMAND = "usr/local/sbin/rosy-login-code"
 # D-247: the read-only board device probe, its refresh watch and its command.
 HW_PROBE_UNITS = ("rosy-hw-probe.service", "rosy-hw-probe.path")
 HW_PROBE_COMMAND = "usr/local/sbin/rosy-hw-probe"
+# D-247 6: the buzzer/lamp test: the service is started only by its path unit.
+HW_TEST_SERVICE = "rosy-hw-test.service"
+HW_TEST_PATH = "rosy-hw-test.path"
 CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
 
 
@@ -266,6 +269,12 @@ def inspect(root: Path, release_id: str) -> list[str]:
             findings.append(f"{unit} is not enabled")
     if not os.path.lexists(root / HW_PROBE_COMMAND):
         findings.append(f"missing hardware probe command: {HW_PROBE_COMMAND}")
+    if not (root / "etc/systemd/system" / HW_TEST_SERVICE).is_file():
+        findings.append(f"missing systemd unit: {HW_TEST_SERVICE}")
+    if not (root / "etc/systemd/system" / HW_TEST_PATH).is_file():
+        findings.append(f"missing systemd unit: {HW_TEST_PATH}")
+    elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / HW_TEST_PATH):
+        findings.append(f"{HW_TEST_PATH} is not enabled")
     defaults = release / CORE_DEFAULTS
     if not defaults.is_file():
         findings.append(f"missing CORE defaults: {defaults.relative_to(root)}")

@@ -1,0 +1,55 @@
+[Unit]
+Description=ROSY buzzer and lamp test on an administrator's request (D-247)
+# Root and outside CORE (D-161). Started only by rosy-hw-test.path when CORE
+# writes /run/rosy/hw-test.request; beeps the buzzer or flashes the lamp once
+# and writes /run/rosy-boot/hw-test.json. Never a motor, cmd_vel or the ADC.
+After=rosy-core.service systemd-udevd.service local-fs.target
+# CORE rate-limits the requests; a burst must never fail the path unit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+# -I: no PYTHONPATH, no user site; RPi.GPIO (rpi-lgpio) comes from the system site.
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-test.py
+# Three 150 ms beeps, or three seconds of lamp and a 10 s helper limit.
+TimeoutStartSec=30
+Environment=PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+# lgpio keeps its notification files in LG_WD or the working directory, and
+# RPI_LGPIO_CHIP selects gpiochip4, the RP1 header (as rosy-boot-display).
+Environment=LG_WD=/run/rosy-hw-test RPI_LGPIO_CHIP=4
+WorkingDirectory=/run/rosy-hw-test
+UMask=0077
+# /run/rosy-boot is the root-owned directory rosy-hw-probe and
+# rosy-boot-status use; /run/rosy (CORE's) is only watched by the path unit.
+RuntimeDirectory=rosy-boot rosy-hw-test
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/run/rosy-boot
+
+# The buzzer line and the lamp driver, nothing else (D-247 6).
+PrivateDevices=false
+DevicePolicy=closed
+DeviceAllow=/dev/gpiochip4 rw
+DeviceAllow=/dev/ws281x_pwm rw
+
+NoNewPrivileges=true
+PrivateNetwork=true
+# systemctl show talks to systemd over a UNIX socket.
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# chown the result to rosy-core; open the GPIO chip and the lamp node
+# regardless of their group (udev gives them to gpio).
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE

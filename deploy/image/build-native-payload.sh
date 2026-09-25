@@ -188,6 +188,9 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system
 # D-247: the read-only root board device probe and CORE's refresh request watch.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.path" "$OVERLAY/etc/systemd/system/"
+# D-247 6: the buzzer/lamp test an administrator starts through CORE.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.path" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"
