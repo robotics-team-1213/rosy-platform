@@ -11,8 +11,11 @@ object Vectors {
         JSONObject(File(path).readText(Charsets.UTF_8))
     }
 
-    fun hex(s: String): ByteArray = ByteArray(s.length / 2) { i ->
-        s.substring(2 * i, 2 * i + 2).toInt(16).toByte()
+    /** Vector hex is grouped by header field with spaces; compare and decode without them. */
+    fun compactHex(s: String): String = s.filterNot { it.isWhitespace() }
+
+    fun hex(s: String): ByteArray = compactHex(s).let { h ->
+        ByteArray(h.length / 2) { i -> h.substring(2 * i, 2 * i + 2).toInt(16).toByte() }
     }
 
     fun toHex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }

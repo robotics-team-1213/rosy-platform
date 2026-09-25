@@ -1,5 +1,5 @@
 {
-  "_doc": "rosy-overhead/1 shared test vectors (D-257, D-261). Kotlin and Python tests both read this file. Header: little-endian '<4sIIHHHH' = magic 'ROF1', seq u32, age_ms u32, width u16, height u16, rotation_deg u16, reserved u16; 20 bytes, then JPEG bytes.",
+  "_doc": "rosy-overhead/1 shared test vectors (D-257, D-261). Kotlin and Python tests both read this file. Header: little-endian '<4sIIHHHH' = magic 'ROF1', seq u32, age_ms u32, width u16, height u16, rotation_deg u16, reserved u16; 20 bytes, then JPEG bytes. 'hex' is grouped by header field with single spaces; strip whitespace before decoding.",
   "proto": "rosy-overhead/1",
   "header_size": 20,
   "frame_headers": {
@@ -11,7 +11,7 @@
         "width": 1280,
         "height": 720,
         "rotation_deg": 90,
-        "hex": "524f463100000000000000000005d0025a000000"
+        "hex": "524f4631 00000000 00000000 0005 d002 5a00 0000"
       },
       {
         "name": "typical",
@@ -20,7 +20,7 @@
         "width": 1280,
         "height": 720,
         "rotation_deg": 0,
-        "hex": "524f463132070000390000000005d00200000000"
+        "hex": "524f4631 32070000 39000000 0005 d002 0000 0000"
       },
       {
         "name": "u32_max_seq",
@@ -29,34 +29,34 @@
         "width": 65535,
         "height": 1,
         "rotation_deg": 270,
-        "hex": "524f4631ffffffffffffffffffff01000e010000"
+        "hex": "524f4631 ffffffff ffffffff ffff 0100 0e01 0000"
       }
     ],
     "invalid": [
       {
         "name": "bad_magic",
         "reason": "magic",
-        "hex": "524f463201000000010000008002e00100000000"
+        "hex": "524f4632 01000000 01000000 8002 e001 0000 0000"
       },
       {
         "name": "short",
         "reason": "short",
-        "hex": "524f463101000000010000008002e001000000"
+        "hex": "524f4631 01000000 01000000 8002 e001 0000 00"
       },
       {
         "name": "nonzero_reserved",
         "reason": "reserved",
-        "hex": "524f463101000000010000008002e00100000700"
+        "hex": "524f4631 01000000 01000000 8002 e001 0000 0700"
       },
       {
         "name": "bad_rotation",
         "reason": "rotation",
-        "hex": "524f463101000000010000008002e0012d000000"
+        "hex": "524f4631 01000000 01000000 8002 e001 2d00 0000"
       },
       {
         "name": "zero_width",
         "reason": "size",
-        "hex": "524f463101000000010000000000e00100000000"
+        "hex": "524f4631 01000000 01000000 0000 e001 0000 0000"
       }
     ]
   },

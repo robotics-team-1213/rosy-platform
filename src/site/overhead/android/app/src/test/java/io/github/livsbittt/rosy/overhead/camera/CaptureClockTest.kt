@@ -9,7 +9,7 @@ class CaptureClockTest {
     // Heuristic path: used only when SENSOR_INFO_TIMESTAMP_SOURCE is unavailable.
 
     @Test
-    fun heuristicRealtimeSensorTimestampIsConvertedToMonotonic() {
+    fun heuristicConvertsRealtimeStampToMonotonic() {
         // Sensor stamped 40 ms ago on the elapsedRealtime clock (includes deep sleep).
         val mono = CaptureClock.toMonotonic(sensorNanos = 9_960 * ms, nowMonoNanos = 5_000 * ms, nowRealtimeNanos = 10_000 * ms)
         assertEquals(4_960 * ms, mono)
@@ -45,7 +45,7 @@ class CaptureClockTest {
     }
 
     @Test
-    fun uptimeSourceIsNotMistakenForRealtimeAfterShortDeepSleep() {
+    fun uptimeNotMistakenForRealtimeAfterDeepSleep() {
         // Uptime base: sensor 30 ms before now on nanoTime. The device slept 1 s, so the
         // realtime clock is 1 s ahead; the heuristic would read the sensor stamp as 1.03 s old.
         val sensor = 4_970 * ms

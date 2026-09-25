@@ -26,7 +26,7 @@ class FrameHeaderTest {
                 height = v.getInt("height"),
                 rotationDeg = v.getInt("rotation_deg"),
             )
-            assertEquals(v.getString("name"), v.getString("hex"), Vectors.toHex(header.pack()))
+            assertEquals(v.getString("name"), Vectors.compactHex(v.getString("hex")), Vectors.toHex(header.pack()))
         }
     }
 
