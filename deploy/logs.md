@@ -1181,3 +1181,20 @@
 - gate 변화: 없음(`UPDATE_GO` HOLD 유지 — e4us에서 activate·rollback·recover 실증 전)
 - 결정: D-225
 - 교훈: root로 tar를 풀면 서명이 보장하지 않는 소유자·권한·항목 종류가 그대로 들어온다. 서명 검증과 별개로 풀기 전 항목 허용 목록과 풀고 난 뒤 권한 고정이 필요하다. 첫 부팅이 운영자 계정에 `NOPASSWD:ALL`을 준다 — 좁히는 일은 후속 과제.
+
+## 2026-09-25 · uncommitted · fix(sd): writer 멈춤은 두 단계로, 콘솔 없으면 묻지 않고 실패 (D-230)
+
+- 변경: `prepare-rosy-sd.ps1` 쓰기 감시가 Imager `--cli` stdout를 캡처해 `%`·바이트 진행률을 파싱하고, 진행이 있으면 WMI CPU/I/O가 idle이어도 stall 시계를 리셋한다(파서 출력이 없으면 기존 `Get-WriterSample` 폴백). stall은 soft(`-WriterSoftStallMinutes` 기본 2, hard 절반으로 clamp — 경고 heartbeat `warning` 필드만, stage 집계 불변)와 hard(`-WriterStallMinutes` 기본 5 — 기존 kill·card_state·99.9% resume 안내 그대로)로 분리했다. `-NonInteractive`는 저속 미디어·ERASE 확인의 `Read-Host`를 묻지 않고 fail-closed로 바꾼다. `write-card.ps1`이 두 파라미터를 전달하고, `card-write-status.ps1`이 soft 경고를 `WARNING:` 줄·JSON `warning`으로 보인다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_sd_personalization.py test/test_media_readback.py -q` **245 passed** (2026-09-25 Windows). 도중 계약 테스트가 작은 hard 값(`-WriterStallMinutes 0.05`)에서 기본 soft와 충돌하는 것을 잡아 clamp로 고쳤다 — 기본값 검증을 `Fail`이 아니라 clamp로 해야 기존 호출이 깨지지 않는다.
+- gate 변화: 없음(MEDIA 절차 개선, BOOT/DEVICE HOLD)
+- 결정: D-230
+- 교훈: stall 한도는 "죽이는 값" 하나가 아니라 "알리는 값 + 죽이는 값" 두 개다. 알리는 값을 실패로 만들면(기본 soft > 작은 hard) 기존 호출자가 먼저 깨진다 — 경고 한도는 clamp한다.
+
+## 2026-09-25 · 4107311c · feat(release): payload만 빌드·서명·묶는 경로와 리뷰 수정 (D-225)
+
+- 변경: `deploy/release/build_payload_release.py`(`build` → `native_release.py verify()`가 받는 manifest·SHA256SUMS 릴리스 폴더, `pack` → 정렬·고정 mtime·root 소유·일반 파일/폴더만 담은 재현 가능한 tarball, `--modes-from`으로 Linux 실행 비트 유지), `.github/workflows/build-native-payload.yml`(ubuntu-24.04-arm, 서명 안 된 payload artifact). 오프라인 서명은 기존 `sign_image_release.py` 그대로. 리뷰 수정: colcon 뒤 `compileall --invalidation-mode checked-hash`로 고정 mtime에서도 `.pyc` 유효, 네 unit에 `PYTHONDONTWRITEBYTECODE=1`(서명 릴리스에 목록 밖 `.pyc`가 생기지 않게, `verify()`는 약화하지 않음), Windows에서 서명된 재묶음은 `--modes-from` 필수, `ros-packages.txt` 기록(활성화 게이트 없음 — 운영자가 이미지 `deb-packages.txt`와 비교), 메타데이터 이름은 모든 깊이에서 거부.
+- 증거: 재검증 244 passed, 6 skipped(`test_payload_release_build`, `test_native_payload_workflow`, `test_native_release_activation`, `test_release_unpack_helper`, `test_native_systemd_contract`, `test_robot_runtime`, `test_image_customization_contract`, `test_flashable_image_layout`). 묶은 tarball이 실제 `rosy-release-unpack.sh`를 지나 `verify()` 통과. 독립 리뷰 → 수정 → 재검증 PASS.
+- 미증명: workflow를 ARM64에서 실행한 적 없음, 실제 colcon 설치 트리로 `build` 미실행, e4us activate·rollback·recover 미실증.
+- gate 변화: 없음(`UPDATE_GO` HOLD)
+- 결정: D-225
+- 교훈: 묶을 때 mtime을 고정하면 timestamp `.pyc`가 전부 낡은 것으로 보인다. 재현성과 `.pyc` 유효성을 같이 얻으려면 checked-hash로 컴파일한다. 첫 시도는 8시간 커밋 0건으로 멈췄다 — 단계별 커밋·제한 시간·커밋 감시로 다시 돌려 23분에 끝났다.
