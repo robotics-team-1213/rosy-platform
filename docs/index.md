@@ -131,8 +131,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(adr): D-228 decision lives in core_features
 - 2026-09-25 · uncommitted · docs(adr): D-227 소유 이름은 지금 트리 위에 둔다
 - 2026-09-25 · uncommitted · docs(adr): D-224 surface keyboard vocabulary
 - 2026-09-25 · uncommitted · test+docs: BENCH 라이브 게이트 러너와 현행 체크리스트
 - 2026-09-25 · uncommitted · docs(adr): D-221 얼굴 어휘 — F-07 처분
-- 2026-09-25 · uncommitted · docs(adr): D-218 확인 졸업 · D-219 D-159 승격 · D-220 정지 계약

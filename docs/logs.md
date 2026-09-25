@@ -1919,3 +1919,11 @@
 - gate 변화: 없음
 - 결정: D-227
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(adr): D-228 decision lives in core_features
+
+- 변경: D-228 Accepted. 판단 폴더는 `core_features/decision`. `src/runtime`·`rosy_pinky_pro`·`src/site/rosy_ai_worker` 는 만들지 않는다. 차선 코드는 옮기지 않는다.
+- 증거: `python -m pytest src/core/core_features/test -q` 218 passed (2026-09-25 Windows). 패키지 개명 없음.
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음

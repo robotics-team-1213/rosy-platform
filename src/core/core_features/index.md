@@ -14,6 +14,7 @@
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
+| D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 |
 
 ## 계획·결과 문서
 
@@ -33,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · feat(core_features): D-228 decision library under core_features
 - 2026-09-24 · uncommitted · refactor(docking): 주차형 단계를 `docking/parking_phases.py` 전략으로 분리 (D-168 P6)
 - 2026-09-24 · uncommitted · test(repo): `docking/manager.py` 크기 판정 accept (D-168 P6)
 - 2026-09-24 · uncommitted · test(core): lane-network 주차 도크 시험을 자체 `test/`로 (main 병합, D-184)
 - 2026-09-24 · uncommitted · test(core): docking·swarm 시험을 자체 `test/`로 이전
-- 2026-09-24 · uncommitted · refactor(core): D-168 미사용 `core_events` 선언 제거

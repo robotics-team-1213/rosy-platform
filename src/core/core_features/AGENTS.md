@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Feature managers behind `CoreServices`: command arbitration, safety, state, navigation, swarm, waypoints, power, docking, diagnostics, fleet_agent, maps, line_follow, traffic_policy, vision.
+Feature managers behind `CoreServices`: command arbitration, safety, state, navigation, swarm, waypoints, power, docking, diagnostics, fleet_agent, maps, line_follow, traffic_policy, vision, and shared `decision/` (allowed action id only, D-228).
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
 

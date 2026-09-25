@@ -12,7 +12,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | File | Description |
 |------|-------------|
 | `ROSY API & Protocol Reference.md` | ROSY-API-REF-001 — only shared robot/fleet/SDK interface; `/api/v1`, envelope, events |
-| `ROSY ADR Log.md` | ROSY-ADR-001 — append-only decisions through D-227 (D-19 superseded by D-26, D-6 by D-33; gaps D-29, D-35, D-196, D-204, D-223) |
+| `ROSY ADR Log.md` | ROSY-ADR-001 — append-only decisions through D-228 (D-19 superseded by D-26, D-6 by D-33; gaps D-29, D-35, D-196, D-204, D-223) |
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
 

@@ -75,3 +75,11 @@
 - gate 변화: 없음.
 - 결정: 전략은 자기 락도 자기 상태도 없다. 주차형 단계 상태(`_tracker`·`_turn_target`·`_after_turn`·`_creep_from`·`_creep_done_at`·`_backoff_from`)는 매니저 필드로 남아 매니저가 만들고 되돌리며, 전략은 `ParkingHost` 프로토콜로 적은 매니저 멤버만 쓴다. 모든 진입점이 매니저의 RLock 안(틱·명령 경로)에서만 불리므로 N1(락 안 모드 해제)·H2(`take_mode` 먼저)·estop 먼저 순서는 매니저 한 곳에서 읽힌다. 600줄 목표는 이번 분리로 닿지 않았다 — 남은 663줄은 매니저가 소유해야 할 것(상태·락·모드 이음새·fail/retry/release·기본 기종 단계·배터리 복귀·공개 API)이라 더 떼면 락 소유자가 둘로 갈린다. D-178 재채점 트리거(`SIZE_VERDICTS` 판정 변경)에 해당한다.
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · feat(core_features): D-228 decision library under core_features
+
+- 변경: `core_features/decision` 계약과 로컬 라우터. 허용 집합 밖 동작은 INVALID, selected_action 은 DECIDED 만. SAFE_STOP·EMERGENCY·MANUAL 은 motion 선택지를 규칙보다 먼저 뺀다. src/runtime 과 rosy_pinky_pro 는 만들지 않는다.
+- 증거: `python -m pytest src/core/core_features/test -q` 218 passed (2026-09-25 Windows). test_decision.py 11건 포함.
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음

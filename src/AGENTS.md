@@ -15,7 +15,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 
 | Directory | Purpose |
 |-----------|---------|
-| `core/` | CORE domain: `core` (gateway kernel: bridge + system wiring), `core_common`, `core_events`, `core_features`, `core_api_web`, `web_common`, `interfaces`, and `control` (sensing, camera, calibration, planning). Legacy final publisher must not run beside `core` |
+| `core/` | CORE domain: `core` (gateway kernel: bridge + system wiring), `core_common`, `core_events`, `core_features` (managers plus shared `decision/`), `core_api_web`, `web_common`, `interfaces`, and `control` (sensing, camera, calibration, planning). Judgment does not publish `cmd_vel`. Legacy final publisher must not run beside `core` |
 | `devices/` | Device nodes that used to live in `hardware/`: `bringup`, `led`, `lamp_control`, `imu_bno055`, `sensor_adc`. Chip names are still the package names |
 | `products/` | `omx_adapter` — manipulator profile (`device_type: manipulator`), disabled. Not a second mobile base |
 | `face/` | `emotion` — robot-local LCD |

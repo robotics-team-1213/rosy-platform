@@ -1,15 +1,15 @@
 ---
 module: core_features
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-24 }
+last_verified: { commit: "uncommitted", date: 2026-09-25 }
 gates:
   SOURCE:
     state: GO
-    evidence: "test_docking.py·test_swarm.py가 자체 test/로 이전 — 140 passed (2026-09-24 Windows)"
+    evidence: "docking·swarm·decision — test_decision.py 포함 (2026-09-25 Windows)"
     cmd: "python -m pytest src/core/core_features/test -q"
   LOCAL:
     state: GO
-    evidence: "140 passed (2026-09-24 Windows)"
+    evidence: "218 passed (2026-09-25 Windows), test_decision.py 포함"
     cmd: "python -m pytest src/core/core_features/test -q"
   ROS-SIM:
     state: N/A
@@ -19,7 +19,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-182, D-184]
+adrs: [D-61, D-147, D-168, D-182, D-184, D-228]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
 ---

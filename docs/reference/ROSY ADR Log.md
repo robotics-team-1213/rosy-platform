@@ -235,4 +235,5 @@
 | D-224 | 표면의 키보드 어휘 — 약속한 키는 동작한다: Fleet 로스터 ↑/↓ 순회·Enter 목표·Escape 해소, 게임 스페이스는 /stop 1회, 카드 착지점은 tabindex -1 | Accepted |
 | D-226 | 문서는 공개 여부를 먼저 가르고, 그다음 주인 폴더에 둔다 — 비밀·식별·권리 불명·전략 초안은 private/, 코드가 읽으면 데이터, 날짜 증거는 docs/validation, 모듈 설명은 모듈 docs/ 하나, 출처 있는 자산 묶음은 통째로 | Proposed |
 | D-227 | 여섯 책임은 지금 트리 위의 이름이다 — 새 루트와 명령 봉투와 AI 워커는 만들지 않는다 | Proposed |
+| D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 | Accepted |
 ---
