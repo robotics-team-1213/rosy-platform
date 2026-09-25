@@ -1,10 +1,19 @@
-"""core_api_web.api.v1.host — Host Agent 릴레이 (네트워크·릴리스·커미셔닝)."""
+"""core_api_web.api.v1.host — Host Agent 릴레이 (네트워크·릴리스·커미셔닝)와 장치 관측(D-247)."""
 
 from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import os
+import secrets
+import stat
+import time
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import admin, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient
@@ -236,6 +245,12 @@ def host_reboot(
     return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 재부팅하지 못했습니다.")
 
 
+MOTION_REASON = {
+    "core": "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.",
+    "motor": "모터 벤치 모드입니다. 저속 직접 제어만 됩니다. LiDAR와 자율주행(Nav2)은 꺼져 있습니다.",
+}
+
+
 @host_router.get("/commissioning")
 def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """runtime mode 와 hardware 재승인 사유.
@@ -262,6 +277,9 @@ def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServicesLike =
         )
     return {
         "runtime_mode": mode,
+        # D-247 7: why the robot cannot move, in words that are not a
+        # permission message. Empty when the mode itself does not hold motion.
+        "motion_reason": MOTION_REASON.get(mode, ""),
         "motor_hold": mode == "core",
         "lidar_hold": mode != "hardware",
         "battery_hold": True,
@@ -270,3 +288,177 @@ def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServicesLike =
         "fleet_hold": True,
         "detail": detail,
     }
+
+
+# --- D-247: board devices (root probe -> /run/rosy-boot/hardware.json) --------
+#
+# CORE never opens a device (D-161). rosy-hw-probe (root) writes what it saw;
+# CORE reads that file as strictly as it reads the login verifier (D-193) and
+# asks for a new run by writing a request file into its own /run/rosy, which
+# rosy-hw-probe.path watches. No subprocess, no D-Bus.
+
+HARDWARE_FILE = "/run/rosy-boot/hardware.json"
+HW_REQUEST_FILE = "/run/rosy/hw-probe.request"
+MAX_HARDWARE_BYTES = 64 * 1024
+MAX_DEVICES = 64
+MAX_TEXT = 200
+HW_SCHEMA = 1
+HW_STATES = ("ok", "no_response", "bus_missing", "driver_missing", "needs_human", "not_measured")
+#: The probe takes seconds; a second request inside this window starts nothing new.
+REFRESH_MIN_INTERVAL_S = 10.0
+#: LiDAR scans are a 10 Hz stream; two seconds without one is a stopped sensor.
+SCAN_FRESH_S = 2.0
+_last_refresh: dict[str, float] = {}
+
+
+def _hardware_paths(svc: CoreServicesLike) -> tuple[str, str]:
+    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
+    return str(cfg.get("result_path", HARDWARE_FILE)), str(cfg.get("request_path", HW_REQUEST_FILE))
+
+
+def read_hardware(path: str) -> Optional[dict[str, Any]]:
+    """The probe's result, validated, or None. Root wrote it; CORE still reads it strictly.
+
+    No symlink (O_NOFOLLOW), regular files only (a FIFO would block), at most
+    MAX_HARDWARE_BYTES, schema 1, known states and bounded strings. A missing
+    file raises FileNotFoundError: "not measured yet" is not "unreadable".
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) \
+        | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(path, flags)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_HARDWARE_BYTES:
+            return None
+        raw = os.read(descriptor, MAX_HARDWARE_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_HARDWARE_BYTES:
+        return None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("schema") != HW_SCHEMA:
+        return None
+    try:
+        measured = datetime.fromisoformat(str(data["measured_at"]))
+    except (KeyError, ValueError):
+        return None
+    devices = data.get("devices")
+    if measured.tzinfo is None or not isinstance(devices, list) or not 0 < len(devices) <= MAX_DEVICES:
+        return None
+    clean = []
+    for device in devices:
+        if not isinstance(device, dict):
+            return None
+        row = {key: device.get(key) for key in ("id", "label", "bus", "state", "evidence")}
+        if not all(isinstance(value, str) and len(value) <= MAX_TEXT for value in row.values()):
+            return None
+        if row["state"] not in HW_STATES or type(device.get("product")) is not bool:
+            return None
+        row["product"] = device["product"]
+        held_by = device.get("held_by")
+        if held_by is not None:
+            if not isinstance(held_by, str) or len(held_by) > MAX_TEXT:
+                return None
+            row["held_by"] = held_by
+        clean.append(row)
+    boot_id = data.get("boot_id")
+    return {"measured_at": measured, "boot_id": boot_id if isinstance(boot_id, str) else None,
+            "devices": clean}
+
+
+def _evidence_of(snapshot: Any, channel: str) -> Optional[str]:
+    value = (getattr(snapshot, "evidence", None) or {}).get(channel)
+    judged = getattr(value, "evidence", None)
+    return None if judged is None else str(getattr(judged, "value", judged))
+
+
+def _topic_overlay(row: dict[str, Any], svc: CoreServicesLike) -> dict[str, Any]:
+    """Judge a device rosy-io holds from topics CORE already receives (D-247 4).
+
+    Only rows the probe left `not_measured` because a runtime held the bus;
+    a topic CORE has never seen leaves the row as the probe wrote it.
+    """
+    state = getattr(svc, "state", None)
+    if state is None or row["state"] != "not_measured" or not row.get("held_by"):
+        return row
+    device = row["id"]
+    if device == "lidar":
+        sample = state.get_sensor("lidar") if hasattr(state, "get_sensor") else None
+        received = (sample or {}).get("received_at")
+        if not isinstance(received, (int, float)):
+            return row
+        age = max(0.0, time.time() - received)
+        if age <= SCAN_FRESH_S:
+            return {**row, "state": "ok", "evidence": f"scan {age:.1f} s 전 (토픽 판정)", "source": "topic"}
+        return {**row, "state": "no_response", "evidence": f"scan {age:.0f} s 전에 끊김 (토픽 판정)",
+                "source": "topic"}
+    channel, topic = {"adc.battery": ("battery", "battery"), "motor.1": ("velocity", "odom"),
+                      "motor.2": ("velocity", "odom")}.get(device, (None, None))
+    if channel is None:
+        return row
+    snapshot = state.snapshot()
+    judged = _evidence_of(snapshot, channel)
+    if judged == "fresh":
+        volts = getattr(getattr(snapshot, "battery", None), "voltage", None)
+        text = (f"{volts:.2f} V (토픽 판정)" if channel == "battery" and isinstance(volts, (int, float))
+                else f"{topic} 수신 중 (토픽 판정)")
+        return {**row, "state": "ok", "evidence": text, "source": "topic"}
+    if judged in {"delayed", "disconnected"}:
+        return {**row, "state": "no_response", "evidence": f"{topic} {judged} (토픽 판정)", "source": "topic"}
+    return row
+
+
+@host_router.get("/hardware")
+def host_hardware(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    """보드의 모든 장치가 붙어 있고 응답하는지 (D-247). capability와는 다른 질문이다."""
+    result_path, _request_path = _hardware_paths(svc)
+    try:
+        result = read_hardware(result_path)
+    except FileNotFoundError:
+        return {"available": False, "detail": "장치 점검 결과가 아직 없습니다", "devices": []}
+    except OSError:
+        result = None
+    if result is None:
+        return {"available": False, "detail": "장치 점검 결과를 읽을 수 없습니다", "devices": []}
+    measured = result["measured_at"]
+    age = max(0.0, (datetime.now(timezone.utc) - measured).total_seconds())
+    return {
+        "available": True,
+        "schema": HW_SCHEMA,
+        "measured_at": measured.astimezone(timezone.utc).isoformat(timespec="seconds"),
+        "age_s": round(age, 1),
+        "boot_id": result["boot_id"],
+        "devices": [_topic_overlay(row, svc) for row in result["devices"]],
+        "detail": "",
+    }
+
+
+@host_router.post("/hardware/refresh")
+def host_hardware_refresh(auth: AuthContext = Depends(admin), svc: CoreServicesLike = Depends(get_services)):
+    """rosy-hw-probe 재실행 요청. CORE는 요청 파일만 쓰고 측정은 root가 한다(D-161)."""
+    _result_path, request_path = _hardware_paths(svc)
+    now = time.monotonic()
+    last = _last_refresh.get(request_path)
+    if last is not None and now - last < REFRESH_MIN_INTERVAL_S:
+        return {"accepted": False, "detail": "방금 점검을 요청했습니다. 잠시 뒤 결과를 확인하세요."}
+    directory = os.path.dirname(request_path) or "."
+    temporary = os.path.join(directory, f".hw-probe.request.{secrets.token_hex(6)}")
+    payload = json.dumps({"requested_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                          "by": auth.token_id}, sort_keys=True) + "\n"
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(temporary, flags, 0o640)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        os.replace(temporary, request_path)
+    except OSError as exc:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise ApiError("HARDWARE_NOT_READY", 503, "장치 점검을 요청하지 못했습니다") from exc
+    _last_refresh[request_path] = now
+    return {"accepted": True, "detail": "장치 점검을 요청했습니다. 잠시 뒤 결과가 바뀝니다."}

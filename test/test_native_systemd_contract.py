@@ -339,6 +339,8 @@ DECLARED_WRITES = {
         "/var/log/rosy-core/core.log", "/run/rosy/host-agent.sock",
         # D-193: CORE's used/burned signal to rosy-login-code (api/v1/auth.py STATE_FILE).
         "/run/rosy/login-code-state.json",
+        # D-247: CORE's refresh request to rosy-hw-probe.path (api/v1/host.py HW_REQUEST_FILE).
+        "/run/rosy/hw-probe.request",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-navigation.service": {
@@ -373,6 +375,8 @@ DECLARED_READS = {
         "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
         # D-193: the root issuer's verifier, root:rosy-core 0640. CORE never writes there (D-161).
         "/run/rosy-boot/login-code.json",
+        # D-247: the root probe's result, root:rosy-core 0640 (api/v1/host.py HARDWARE_FILE).
+        "/run/rosy-boot/hardware.json",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
