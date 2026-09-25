@@ -2187,3 +2187,11 @@
 - gate 변화: 없음(ADR·게이트 문서 무변경). CI 붉음은 다음 push로 소멸 확인 대상
 - 회귀: worktree 재작성 후 내용 동일인데 `git status`가 ` M` 유지(stat 캐시 괴리) → `git add`로 stat 갱신 해소. phantom M은 `git diff`(내용 비교)로 검증할 것
 - 교훈: 폴더 이동은 테스트뿐 아니라 `.gitattributes` 규칙·핑 키·가드 제외 목록까지 낡게 만든다(2026-09-25 노트에 2차 파도 연장 기록). sensing 스위트는 CI에 없어 어디서도 자동으로 잡히지 않는다
+
+## 2026-09-26 · uncommitted · docs(architecture): D-267 Ubuntu 사이트 Fleet·영상·자동 작업 설계
+
+- 변경: D-267 Proposed, ADR Log 행, Ubuntu RTX 상시 호스트의 Fleet/영상/GPU/저장 역할과 자동·수동 공통 작업 검증 경로 실행 계획을 기록했다.
+- 증거: `test_network_topology_contracts.py` + `test_harness_contracts.py` 70 passed, `rosy_harness.py lint` 0 errors/기존 last_verified 19 warnings, 상대 링크 누락 0건. 코드·Ubuntu 배포·실물 카메라/로봇 검증은 수행되지 않았다.
+- gate 변화: 없음. D-257 Proposed, D-55 OMX 비활성, 자동 이동/집기 FIELD HOLD 유지.
+- 결정: D-267 Proposed. D-118의 영상 경계와 D-170의 PRT-004 중앙 Fleet 동시 착수 조건을 유지한다.
+- 교훈: 현장 서버와 GPU 노트북이 같은 물리 장비여도 서비스 실패·명령권·영상 경로는 분리해 설계한다.
