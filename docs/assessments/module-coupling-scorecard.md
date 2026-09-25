@@ -6,7 +6,7 @@
 
 **이번 평가에 새로 확인한 사실(2026-09-23 재검증)**
 
-- `test/test_module_structure.py`(D-168) **11 passed** — 미선언 결합·방향 위반·크기 예산이 지금도 게이트로 잡히는 중.
+- `test/architecture/test_module_structure.py`(D-168) **11 passed** — 미선언 결합·방향 위반·크기 예산이 지금도 게이트로 잡히는 중.
 - 비테스트 교차 import 매트릭스 재산출: 코드 수준 미선언 결합 **0건**. 남은 미선언은 launch/설정 수준 4건(게이트에 기록된 예외 목록과 일치).
 - `web_common`(tokens.css / core_ui_logic.js)이 공용 1차원으로 정착 — `core_api_web`·`fleet` 선언 의존 + 소비자 계약 테스트 4종으로 고정.
 - **정정 1건**: `gz_sim`의 '과잉선언 2건(control, core)'은 import만 세는 산출 스크립트의 **오판** — launch 경유(`get_package_share_directory("control")`, `Node(package="core")`)로 실제 사용한다. 진짜 과잉선언은 `core_api_web`·`core_features`의 미사용 `core_events` 선언 2건으로 교체 반영(§3·§5).
@@ -159,7 +159,7 @@
 - 매트릭스는 Python import 기준이라 **C++ `#include`·launch 포함은 `test_module_structure.py` 결과에만 반영**했다.
 - `control`의 인바운드 결합(핵심 시험 **5개 파일**이 control 내부 **7개 모듈**을 안다 — 2차 회차 전역 AST 재확인)은 패키지 fan-out 표에는 안 보이므로 §3 주석으로만 표기했다.
 - 산출 스크립트(`coupling_matrix.py`)는 **Python import만 세어 launch 경유 참조를 놓친다** — `gz_sim` 과잉선언 오판이 그 결과였다. D-168 스캐너(share/node 리터럴 인식)와 대조해 정정했으므로, 재산출 시 launch·`package://` 참조까지 포함하도록 확장할 것.
-- 재산출 방법: `X:\DevTemp\opencode\coupling_matrix.py`(비테스트 import 매트릭스) + `python -m pytest "Rosy OS/test/test_module_structure.py"`.
+- 재산출 방법: `X:\DevTemp\opencode\coupling_matrix.py`(비테스트 import 매트릭스) + `python -m pytest "Rosy OS/test/architecture/test_module_structure.py"`.
 - 2차 회차 산출(`X:\DevTemp\opencode\round2.py`)은 **.py import만** 파싱한다 — `navigation`의 launch **XML 15개**(assembly `web_*` 포함)는 파일·라인만 집계했고, launch 참조 판정의 권위는 D-168 스캐너(`WORKSPACE_REF_PATTERNS`·`LAUNCH_EXEC_PATTERNS`)에 있다.
 
 ---

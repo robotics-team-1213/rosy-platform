@@ -67,7 +67,7 @@ ROSY OS uses six primary domain objects:
 
 ## Current mapping (2026-09-17)
 
-`docs/concept` is the **target** distributed OS. v1 maps those terms onto the live Pinky CORE + D-62 slices stack (D-65). Contract documents win on API, modes, `cmd_vel`, and identity: [CORE SRS](../spec/ROSY%20CORE%20SRS.md) §1.3, [ADR log](../reference/ROSY%20ADR%20Log.md) (D-62, D-65, D-67–D-71), [alignment design](../plans/2026-09-16-concept-runtime-alignment-design.md), [concept ADR plan](../plans/2026-09-17-concept-folder-adr-plan.md). Live glossary: [CONCEPTS.md](../../CONCEPTS.md).
+`docs/architecture` is the **target** distributed OS. v1 maps those terms onto the live Pinky CORE + D-62 slices stack (D-65). Contract documents win on API, modes, `cmd_vel`, and identity: [CORE SRS](../spec/ROSY%20CORE%20SRS.md) §1.3, [ADR log](../reference/ROSY%20ADR%20Log.md) (D-62, D-65, D-67–D-71), [alignment design](../plans/2026-09-16-concept-runtime-alignment-design.md), [concept ADR plan](../plans/2026-09-17-concept-folder-adr-plan.md). Live glossary: [CONCEPTS.md](../../CONCEPTS.md).
 
 | Concept | v1 mapping | ADR | Status |
 |---|---|---|---|

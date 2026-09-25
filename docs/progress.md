@@ -11,7 +11,7 @@ gates:
   LOCAL:
     state: GO
     evidence: "85 passed (2026-09-23 Windows). test_network_topology_contracts + test_harness_contracts + test_module_scorecard + test_module_structure"
-    cmd: "python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py test/test_module_scorecard.py test/test_module_structure.py -q"
+    cmd: "python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py test/test_module_scorecard.py test/architecture/test_module_structure.py -q"
   ROS-SIM:
     state: N/A
   ARTIFACT:

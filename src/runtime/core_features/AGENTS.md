@@ -27,7 +27,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Depends on `core_common`. Never on `core_api_web` or `core`. Never import `control` (D-126).
-- Structure rules (package tier, declared coupling, direction table, 600/10k line budget): D-168, enforced by `test/test_module_structure.py`.
+- Structure rules (package tier, declared coupling, direction table, 600/10k line budget): D-168, enforced by `test/architecture/test_module_structure.py`.
 
 ### Testing Requirements
 

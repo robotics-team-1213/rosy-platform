@@ -17,6 +17,7 @@ Rosy Control의 개발 기준은 이 저장소의 `src/runtime/control`로 통�
 rosy/ (이 리포지토리)
 ├── env.sh                    # 개발 PC: ROS와 워크스페이스를 읽는 유일한 루트 셸
 ├── docs/                     # 요구사항·ADR·계획·검증 기록
+│   ├── architecture/         # 목표 분산 OS 번호 문서
 │   └── reference/            # 살아 있는 API 계약과 ADR 로그
 ├── deploy/                   # 이미지·릴리스·로봇 설치 셸
 ├── tools/                    # tools/fix_ament_resource.sh, tools/run_fleet_sim.sh, tools/run_data.py

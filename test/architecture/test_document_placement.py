@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 # D-226 table "gitignore로 막는 것": sample paths that must never be committable.
 MUST_IGNORE = [

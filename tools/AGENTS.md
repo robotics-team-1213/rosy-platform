@@ -35,7 +35,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 ### Testing Requirements
 
 ```bash
-python -m pytest test/test_folder_layout.py test/test_run_data.py -q
+python -m pytest test/architecture/test_folder_layout.py test/test_run_data.py -q
 ```
 
 ### Common Patterns
