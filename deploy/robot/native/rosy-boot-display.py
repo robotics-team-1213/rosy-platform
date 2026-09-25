@@ -40,7 +40,7 @@ copies them; runtime.env and hardware.json are not readable here), and
 the stage and the battery into one state:
 
 * the buzzer sounds on state changes only: once when ready, three times on
-  failure, two low tones on caution; the same sound is not repeated within
+  failure, two low tones on caution; caution is not repeated within
   BUZZER_REPEAT_S;
 * the WS2812 lamp shows the state's pattern through ``lamp_pattern`` (one
   helper process per pattern, /dev/ws281x_pwm granted to this unit alone),
@@ -67,6 +67,9 @@ import subprocess
 from typing import Callable
 
 sys.dont_write_bytecode = True
+# The shared switch parser (rosy_display_env.py) sits beside this program.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rosy_display_env  # noqa: E402
 
 try:  # the release's rule table (D-260); an older release has none
     from core_common import robot_state
@@ -97,8 +100,10 @@ BUZZER_OFF_S = 0.12
 #: D-260 2, per sound: (beeps, frequency). Ready and held ready share one sound.
 BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQUENCY_HZ),
                    "caution": (2, BUZZER_LOW_HZ)}
-#: The same sound again inside this window stays silent (a battery near the threshold).
+#: Caution again inside this window stays silent (a battery near the threshold). Ready and
+#: failed always sound on a real transition (review L2): they are the news a person waits for.
 BUZZER_REPEAT_S = 300.0
+REPEAT_LIMITED = frozenset({"caution"})
 #: D-247 6's buzzer test, when handed over: three 150 ms beeps, like rosy-hw-test.
 TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 #: robot state -> sound; booting is silent.
@@ -434,25 +439,25 @@ def write_test_result(path: Path, content: str) -> None:
 
 def buzzer_settings(environ: dict[str, str], log: Log) -> tuple[bool, int]:
     """ROSY_BUZZER_ENABLED (exactly true/false, default true since D-260 2) and ROSY_BUZZER_PIN (BCM)."""
-    enabled_text = environ.get("ROSY_BUZZER_ENABLED", "true")
-    if enabled_text not in {"true", "false"}:
-        log.once("buzzer-config", f"ROSY_BUZZER_ENABLED must be true or false, got {enabled_text!r}; buzzer off")
-        enabled_text = "false"
-    pin_text = environ.get("ROSY_BUZZER_PIN", str(BUZZER_DEFAULT_LINE))
+    enabled, valid = rosy_display_env.flag(environ, rosy_display_env.BUZZER_KEY)
+    if not valid:
+        log.once("buzzer-config", "ROSY_BUZZER_ENABLED must be true or false, got "
+                                  f"{environ.get('ROSY_BUZZER_ENABLED')!r}; buzzer off")
+    pin_text = rosy_display_env.unquote(environ.get("ROSY_BUZZER_PIN", str(BUZZER_DEFAULT_LINE)))
     if not pin_text.isdigit() or int(pin_text) not in BUZZER_LINES:
         log.once("buzzer-config", f"ROSY_BUZZER_PIN {pin_text!r} is not a free header BCM line "
                                   f"{sorted(BUZZER_LINES)}; buzzer off")
         return False, BUZZER_DEFAULT_LINE
-    return enabled_text == "true", int(pin_text)
+    return enabled, int(pin_text)
 
 
 def lamp_enabled(environ: dict[str, str], log: Log) -> bool:
     """ROSY_LAMP_ENABLED (exactly true/false, default true, D-260 3)."""
-    text = environ.get("ROSY_LAMP_ENABLED", "true")
-    if text not in {"true", "false"}:
-        log.once("lamp-config", f"ROSY_LAMP_ENABLED must be true or false, got {text!r}; lamp off")
-        return False
-    return text == "true"
+    enabled, valid = rosy_display_env.flag(environ, rosy_display_env.LAMP_KEY)
+    if not valid:
+        log.once("lamp-config", "ROSY_LAMP_ENABLED must be true or false, got "
+                                f"{environ.get('ROSY_LAMP_ENABLED')!r}; lamp off")
+    return enabled
 
 
 class BootDisplay:
@@ -476,6 +481,7 @@ class BootDisplay:
         self._drawn: str | None = None
         self._state: str | None = None
         self._sounded: dict[str, float] = {}
+        self._sound: str | None = None
         self._tested: str | None = None
         self.draws = 0
         self.battery_reads = 0
@@ -490,10 +496,12 @@ class BootDisplay:
 
     def _announce(self, state: str, now: float) -> None:
         sound = SOUNDS.get(state)
-        if sound is None:
+        # Ready and held ready are one sound: moving between them is not a new sound.
+        previous, self._sound = self._sound, sound
+        if sound is None or sound == previous:
             return
         last = self._sounded.get(sound)
-        if last is not None and now - last < BUZZER_REPEAT_S:
+        if sound in REPEAT_LIMITED and last is not None and now - last < BUZZER_REPEAT_S:
             return
         self._sounded[sound] = now
         self._buzzer.announce(sound)

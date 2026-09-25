@@ -51,6 +51,9 @@ import time
 from typing import Callable, Optional
 
 sys.dont_write_bytecode = True
+# The shared switch parser (rosy_display_env.py) sits beside this program.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rosy_display_env  # noqa: E402
 
 SCHEMA = 1
 REQUEST = "run/rosy/hw-test.request"
@@ -142,13 +145,9 @@ def buzzer_settings(text: str) -> tuple[bool, Optional[int]]:
     The display's buzzer is on by default since D-260 2 (its unit sets true);
     only an explicit ``false`` leaves the line free.
     """
-    enabled, pin_text = True, str(BUZZER_DEFAULT_LINE)
-    for line in text.splitlines():
-        key, _, value = line.strip().partition("=")
-        if key == "ROSY_BUZZER_ENABLED":
-            enabled = value.strip() != "false"
-        elif key == "ROSY_BUZZER_PIN":
-            pin_text = value.strip()
+    values = rosy_display_env.parse_env(text)
+    enabled, _valid = rosy_display_env.flag(values, rosy_display_env.BUZZER_KEY)
+    pin_text = values.get("ROSY_BUZZER_PIN", str(BUZZER_DEFAULT_LINE))
     if not pin_text.isdigit() or int(pin_text) not in BUZZER_LINES:
         return enabled, None
     return enabled, int(pin_text)
@@ -156,12 +155,7 @@ def buzzer_settings(text: str) -> tuple[bool, Optional[int]]:
 
 def lamp_owned(text: str) -> bool:
     """D-260 3: the display shows state patterns unless boot-display.env says ROSY_LAMP_ENABLED=false."""
-    owned = True
-    for line in text.splitlines():
-        key, _, value = line.strip().partition("=")
-        if key == "ROSY_LAMP_ENABLED":
-            owned = value.strip() != "false"
-    return owned
+    return rosy_display_env.flag(rosy_display_env.parse_env(text), rosy_display_env.LAMP_KEY)[0]
 
 
 def read_handoff_result(path: Path, request_id: str) -> Optional[tuple[str, str]]:
@@ -242,13 +236,16 @@ class System:
     def clock(self) -> float:
         return time.monotonic()
 
+    def display_group(self) -> Optional[int]:
+        return group_id(DISPLAY_GROUP)
+
     def handoff(self, action: str, request_id: str) -> tuple[str, str]:
         """D-260: let rosy-boot-display play the test on the device it owns; its (state, detail)."""
         request = self.path(HANDOFF_REQUEST)
         result = self.path(HANDOFF_RESULT)
         payload = json.dumps({"action": action, "request_id": request_id, "requested_at": time.time()},
                              sort_keys=True) + "\n"
-        write_atomic(request, payload, 0o640, group_id(DISPLAY_GROUP))
+        write_atomic(request, payload, 0o640, self.display_group())
         try:
             deadline = self.clock() + HANDOFF_WAIT_S
             while True:
@@ -274,15 +271,27 @@ def _read_text(path: Path) -> str:
         return ""
 
 
-def _display_runs(system: System) -> bool:
-    return system.unit_state(DISPLAY_UNIT) not in {"inactive", "failed"}
+def _display_takes_it(system: System) -> bool:
+    """Hand over only to a display that is up (ActiveState exactly "active") and can read the request.
+
+    activating / auto-restart / an unreadable state: the display is not polling, so
+    the device is driven here as before (review M2). Without the rosy-display
+    group the display could not read the request (review L4): said once, driven here.
+    """
+    if system.unit_state(DISPLAY_UNIT) != "active":
+        return False
+    if system.display_group() is None:
+        print(f"rosy-hw-test: no {DISPLAY_GROUP} group; the boot display cannot read a hand-over, "
+              "driving the device here", file=sys.stderr, flush=True)
+        return False
+    return True
 
 
 def run_buzzer(system: System, request_id: str) -> tuple[str, str]:
     enabled, pin = buzzer_settings(_read_text(system.path(DISPLAY_ENV)))
     if pin is None:
         return UNAVAILABLE, f"ROSY_BUZZER_PIN이 허용 목록 {sorted(BUZZER_LINES)} 밖 — 울리지 않음"
-    if enabled and _display_runs(system):
+    if enabled and _display_takes_it(system):
         # The boot display holds the line (D-260 2): it plays the test. Two owners of
         # one GPIO line is exactly what the D-190 sandbox rules out.
         state, detail = system.handoff("buzzer", request_id)
@@ -304,7 +313,7 @@ def run_lamp(system: System, request_id: str) -> tuple[str, str]:
     if channel != LAMP_PWM_CHANNEL:
         return UNAVAILABLE, (f"rp1_ws281x_pwm pwm_channel={channel or '?'} — GPIO19 램프가 아니라 "
                              "LCD 백라이트(GPIO18)를 건드리므로 켜지 않음")
-    if lamp_owned(_read_text(system.path(DISPLAY_ENV))) and _display_runs(system):
+    if lamp_owned(_read_text(system.path(DISPLAY_ENV))) and _display_takes_it(system):
         # The boot display shows the state pattern (D-260 3): it pauses it and plays the test.
         state, detail = system.handoff("lamp", request_id)
         if state != UNAVAILABLE:

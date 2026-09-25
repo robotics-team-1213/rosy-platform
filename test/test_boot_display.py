@@ -1011,8 +1011,9 @@ def test_caution_is_two_low_tones_and_held_ready_one(tmp_path):
     assert ("change", module.BUZZER_LOW_HZ) in gpio.events
 
 
-def test_the_same_sound_is_not_repeated_within_the_window(tmp_path):
-    # A battery hovering at the threshold must not beep every 15 s.
+def test_caution_is_not_repeated_within_the_window_but_ready_and_failed_always_sound(tmp_path):
+    # A battery hovering at the threshold must not beep caution every 15 s (review L2:
+    # only caution is limited; ready and failed are real news on every transition).
     module = _display()
     gpio = FakeGPIO()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")
@@ -1026,12 +1027,21 @@ def test_the_same_sound_is_not_repeated_within_the_window(tmp_path):
         _status(tmp_path, "CORE_READY", runtime_mode="hardware")
         clock.now += 20
         display.step()
-    assert len(_starts(gpio)) == 1 + 2  # the first caution only; ready again is inside the window too
+    assert len(_starts(gpio)) == 1 + 2 + 3  # caution once (two tones), ready on each return
+
+    for _ in range(2):
+        _status(tmp_path, "FAILED:rosy-core")
+        clock.now += 1
+        display.step()
+        _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+        clock.now += 1
+        display.step()
+    assert len(_starts(gpio)) == 6 + 2 * (3 + 1)  # failed and ready both sound every time
 
     clock.now += module.BUZZER_REPEAT_S
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", devices=caution)
     display.step()
-    assert len(_starts(gpio)) == 5
+    assert len(_starts(gpio)) == 16
 
 
 def test_ready_and_held_ready_share_one_sound(tmp_path):

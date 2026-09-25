@@ -44,6 +44,7 @@ class FakeSystem(hw.System):
         super().__init__(root)
         self.display = display
         self.answer = answer
+        self.group = 962  # rosy-display, as on the image
         self.handoffs: list[tuple[str, str]] = []
         self.trusted = trusted
         self.beep_error = beep_error
@@ -62,6 +63,9 @@ class FakeSystem(hw.System):
 
     def helper_trusted(self, helper):
         return self.trusted
+
+    def display_group(self):
+        return self.group
 
     def handoff(self, action, request_id):
         self.handoffs.append((action, request_id))
@@ -192,7 +196,7 @@ def test_the_buzzer_defaults_to_the_pro_pin(tmp_path):
 
 
 @pytest.mark.parametrize("env", [None, "ROSY_BUZZER_ENABLED=true\nROSY_BUZZER_PIN=4\n"])
-@pytest.mark.parametrize("display", ["active", "activating", None])
+@pytest.mark.parametrize("display", ["active"])
 def test_the_buzzer_test_is_handed_to_the_boot_display_when_it_owns_the_line(tmp_path, display, env):
     # D-260 2: the display's buzzer is on by default; it plays the test, nothing beeps here.
     root = _root(tmp_path, env=env)
@@ -381,7 +385,7 @@ def test_the_real_beep_drives_three_short_quiet_tones(monkeypatch):
 # --- lamp -----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("display", ["active", None])
+@pytest.mark.parametrize("display", ["active"])
 def test_the_lamp_test_is_handed_to_the_boot_display_while_it_shows_the_state(tmp_path, display):
     root = _root(tmp_path)
     _request(root, "lamp")
@@ -494,3 +498,72 @@ def test_the_wrapper_path_and_help_run_without_root(tmp_path):
     completed = subprocess.run([sys.executable, "-I", "-B", str(NATIVE / "rosy-hw-test.py"), "--help"],
                                capture_output=True, text=True, check=False)
     assert completed.returncode == 0 and "rosy-hw-test" in completed.stdout
+
+
+# --- review M2 / L4: hand over only to a display that can take it ------------------
+
+
+@pytest.mark.parametrize("action", ["buzzer", "lamp"])
+@pytest.mark.parametrize("display", ["activating", "auto-restart", "deactivating", "reloading", None])
+def test_a_display_that_is_not_active_gets_no_hand_over(tmp_path, display, action):
+    root = _root(tmp_path)
+    _request(root, action)
+    system = FakeSystem(root, display=display)
+    result = _run(root, system)
+
+    assert system.handoffs == [] and result["state"] == "done"
+    assert (system.beeps, system.lamps) == (([4], []) if action == "buzzer" else ([], [root / hw.LAMP_HELPER]))
+
+
+def test_without_the_display_group_the_test_is_driven_here_and_said_once(tmp_path, capsys):
+    root = _root(tmp_path)
+    _request(root)
+    system = FakeSystem(root, display="active")
+    system.group = None
+    result = _run(root, system)
+
+    assert system.handoffs == [] and system.beeps == [4] and result["state"] == "done"
+    assert capsys.readouterr().err.count("no rosy-display group") == 1
+
+
+# --- review L1: one reading of the switches ------------------------------------------
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("", (True, True)), ("ROSY_BUZZER_ENABLED=true\n", (True, True)), ('ROSY_BUZZER_ENABLED="false"\n', (False, True)),
+    ("ROSY_BUZZER_ENABLED='true'\n", (True, True)), ("ROSY_BUZZER_ENABLED= false \n", (False, True)),
+    ("ROSY_BUZZER_ENABLED=yes\n", (False, False)), ("ROSY_BUZZER_ENABLED=TRUE\n", (False, False)),
+    ("ROSY_BUZZER_ENABLED=\n", (False, False)), ("# ROSY_BUZZER_ENABLED=false\n", (True, True)),
+])
+def test_the_switch_is_exact_after_quotes_and_anything_else_is_off(text, expected):
+    import rosy_display_env as switch
+
+    assert switch.flag(switch.parse_env(text), switch.BUZZER_KEY) == expected
+    assert hw.buzzer_settings(text)[0] is expected[0]
+
+
+@pytest.mark.parametrize("value", ["true", '"true"', "false", "'false'", "yes", "1", ""])
+def test_display_hw_test_and_probe_read_the_switch_the_same_way(tmp_path, value):
+    display = _display_module()
+    probe_spec = importlib.util.spec_from_file_location("probe_for_switch", NATIVE / "rosy-hw-probe.py")
+    probe = importlib.util.module_from_spec(probe_spec)
+    sys.modules[probe_spec.name] = probe  # its dataclasses look the module up
+    probe_spec.loader.exec_module(probe)
+    import rosy_display_env as switch
+
+    environ = {"ROSY_BUZZER_ENABLED": switch.unquote(value)}  # systemd strips the quotes itself
+    shown = display.buzzer_settings(environ, display.Log(lambda _line: None))[0]
+    tested = hw.buzzer_settings(f"ROSY_BUZZER_ENABLED={value}\n")[0]
+    root = tmp_path / "root"
+    (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/boot-display.env").write_text(f"ROSY_BUZZER_ENABLED={value}\n", encoding="utf-8")
+
+    class Io:
+        def path(self, relative):
+            return root / relative
+
+    probed = "켜짐" in probe.Probe(Io()).buzzer().evidence
+    assert shown == tested == probed
+    lamp_shown = display.lamp_enabled({"ROSY_LAMP_ENABLED": switch.unquote(value)},
+                                      display.Log(lambda _line: None))
+    assert lamp_shown == hw.lamp_owned(f"ROSY_LAMP_ENABLED={value}\n")

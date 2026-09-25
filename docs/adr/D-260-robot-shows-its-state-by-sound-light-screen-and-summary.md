@@ -135,8 +135,9 @@
     60초보다 오래되면 부팅 화면 프로그램은 probe 행과 기본 임계 20 %로 돌아간다. 배터리 값은 부팅 화면 프로그램이 ADC를 직접,
     CORE가 토픽으로 읽지만 같은 센서다.
   - *부저 (결정 2).* 기본값 켜짐(`Environment=ROSY_BUZZER_ENABLED=true`, 카드의 `boot-display.env`가 이긴다). 준비됨 두 상태는 한
-    소리다. 같은 소리는 300초 안에 다시 울리지 않는다. 배터리가 임계 근처에서 오르내릴 때 15초마다 울리지 않게 하려는 것이다.
-    주의는 800 Hz 두 번이다.
+    소리다. 주의 소리만 300초 안에 다시 울리지 않는다. 배터리가 임계 근처에서 오르내릴 때 15초마다 울리지 않게 하려는 것이다.
+    준비됨과 실패는 실제로 바뀔 때마다 울린다. 주의는 800 Hz 두 번이다. `ROSY_BUZZER_ENABLED`·`ROSY_LAMP_ENABLED`는 세 프로그램이
+    같은 해석기(`deploy/robot/native/rosy_display_env.py`: 따옴표 제거, 정확히 true/false, 그 밖은 꺼짐)로 읽는다.
   - *램프 (결정 3), 최소 권한.* `lamp_control`에 C 도우미 `lamp_pattern`을 더했다. 고정 `rpi_ws281x`로 빌드하고, 상태마다
     프로세스 하나를 띄운다. SIGTERM을 받으면 램프를 끄고 끝낸다. `/dev/ws281x_pwm`은 udev가 root:**rosy-display** 0660으로 주고,
     `DeviceAllow`는 부팅 화면 unit에만 더했다. root 도우미 unit은 두지 않았다: 권한 있는 상주 프로세스가 하나 늘고, 상태를 넘길
@@ -147,7 +148,7 @@
     같은 무늬를 울리거나 켠다(램프는 상태 무늬를 멈췄다가 되살린다). 결과는 자기 `RuntimeDirectory`의
     `/run/rosy-display/display-test.json`에 쓴다. `rosy-hw-test`가 이 결과를 `hw-test.json`에 옮긴다. D-247의 결과 파일,
     `request_id`, 5분 확인 규칙은 그대로다. 부팅 화면 프로그램이 `unavailable`(그 장치를 쥐고 있지 않음)이라 답하면 예전처럼 직접
-    구동한다. 15초 안에 답이 없으면 `failed`이고 아무것도 구동하지 않는다. 위 문단의 "그 전까지는 부저 시험 때 부팅 부저를 잠시
+    구동한다. 15초 안에 답이 없으면 `failed`이고 아무것도 구동하지 않는다. 넘기는 것은 부팅 화면 unit의 ActiveState가 정확히 `active`이고 `rosy-display` 그룹이 있을 때뿐이다(activating·auto-restart이거나 그룹이 없으면 예전처럼 직접 구동하고, 그룹 없음은 한 번 기록). 위 문단의 "그 전까지는 부저 시험 때 부팅 부저를 잠시
     끈다"는 이제 필요 없다.
   - *DEVICE 확인 (남음).* `rosy_18`에서 사람이 확인한다.
     - 부팅 중 파랑 숨쉬기(25 %), 준비 완료 초록 3초 뒤 꺼짐과 한 번 울림.
