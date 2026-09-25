@@ -17,7 +17,7 @@
 **Decision (초안):**
 
 1. **사이트 관제 지도의 기준은 `lane_graph.yaml`이다.** Fleet은 기동 시 이 파일을 읽어 `GET /api/fleet/lanes`로 내준다. `map_id`는 파일명 + 콘텐츠 체크섬이다(D-13). 점유격자는 배경 층으로 남는다. 새 차선 층은 D-249 FieldMap spec 3항을 지킨다.
-2. **폰은 카메라만 한다.** 폰의 IP카메라 앱(MJPEG/HTTP)이 현장 LAN에 영상을 낸다. 폰에서 인식하지 않는다(브라우저 `getUserMedia`는 HTTPS를 요구해 현장 인증서 문제가 생긴다 — 후속 ADR로 미룬다).
+2. **폰은 카메라만 한다.** 전용 안드로이드 앱이 JPEG 프레임을 지정된 어댑터 주소로 **밀어 보낸다**(WebSocket, `rosy-overhead/1`, 최신 1장). 속도·해상도는 어댑터가 정해 내려보낸다. 폰에서 인식하지 않는다(브라우저 `getUserMedia`는 HTTPS를 요구해 현장 인증서 문제가 생긴다 — 후속 ADR로 미룬다). 기성 IP카메라 앱(MJPEG 끌어오기)은 시험용 대체 입력으로만 남긴다. 앱 구조: [`docs/plans/2026-09-26-overhead-camera-android-app-design.md`](../plans/2026-09-26-overhead-camera-android-app-design.md). *(2026-09-26 개정: 처음 초안은 기성 IP카메라 앱 끌어오기였다.)*
 3. **영상은 별도 현장 관측 어댑터가 처리한다.** 어댑터는 Fleet 밖의 프로세스이며, 가장 최신 프레임 1장만 읽는다(큐 없음, D-136 6항). ArUco로 코너와 로봇 마커를 찾고, 호모그래피로 **`map` 프레임 m 좌표**를 낸다. cv2는 어댑터의 한 파일에만 산다(D-94 방식). 순수 기하는 `games.field.homography`를 import해 재사용하고 뽑지 않는다(D-249 2항과 같은 이유 — 소비자 둘).
 4. **Fleet은 위치만 받는다.** 어댑터가 `POST /api/fleet/sightings`로 JSON(로봇별 `x, y, yaw`, `captured_at`, `seq`, `map_id`, 출처)을 보낸다. 이미지 바이트, 영상 URL, 썸네일은 싣지 않는다. 라우트 이름은 `test_no_video_relay.py` 정규식에 걸리지 않는다. 쓰기 전용 어댑터 토큰을 따로 두어 이 토큰으로는 goal/e-stop을 못 부른다.
 5. **관측(sighting)은 표시·대조용이다.** Fleet은 최신 1건만 보관하고 1 s lease가 지나면 표시에서 회색 처리, 판단 입력에서 제외한다. 판단 입력(교통정리 등, 후속)은 신선도 ≤ 300 ms만 쓴다(D-136 5항). 로봇 자기 pose와의 차이가 임계를 넘으면 콘솔이 경고한다. **sighting은 로봇 위치 추정, 정책, 최종 `cmd_vel`에 들어가지 않는다.**

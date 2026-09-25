@@ -18,13 +18,13 @@
 
 ```
 [폰, 트랙 위 거치]            [현장 PC]                                [현장 PC 또는 같은 LAN]
- IP카메라 앱 ── MJPEG/HTTP ──▶ 관측 어댑터 (cv2, 최신 1장)  ── JSON ──▶ Fleet 서버 (영상 없음)
+ Rosy 앱 ──── WebSocket ────▶ 관측 어댑터 (cv2, 최신 1장)  ── JSON ──▶ Fleet 서버 (영상 없음)
                                ArUco → 호모그래피 → map m     sightings    ├ lane_graph.yaml 적재
                                                                            ├ 로봇 자기 pose (기존 gather)
                                                                            └ 콘솔: 차선 층 + 두 위치 + 차이 경고
 ```
 
-- **폰:** 카메라만. 인식 없음. 앱은 MJPEG를 HTTP로 내는 흔한 IP카메라 앱이면 된다.
+- **폰:** 카메라만. 인식 없음. 전용 안드로이드 앱이 지정된 어댑터 주소로 JPEG 프레임을 밀어 보낸다 — 구조는 [안드로이드 앱 설계](2026-09-26-overhead-camera-android-app-design.md). 기성 IP카메라 앱(MJPEG 끌어오기)은 시험용 대체 입력.
 - **관측 어댑터:** 새 ROS-free 프로세스. 위치 제안: `src/site/overhead/` (이름은 D-231 규칙 확인 후 확정). cv2는 한 파일(`detect.py`)에만. 좌표 변환은 `games.field.homography.fit(src_px, dst_m)`를 import한다 — 이미 입력 좌표계를 가리지 않는다.
 - **Fleet:** 위치 JSON만 받는다. cv2·이미지·영상 URL 없음. `test_no_video_relay.py` 녹색 유지.
 
@@ -37,7 +37,8 @@
 설정 예 (`overhead.yaml`, 주소·토큰은 `private/` 또는 환경변수 — 공개 저장소다):
 
 ```yaml
-stream_url: ${ROSY_OVERHEAD_STREAM}      # 폰 MJPEG 주소
+listen: 0.0.0.0:8095                    # 폰 앱이 밀어 넣는 WebSocket (rosy-overhead/1)
+fallback_mjpeg_url: ${ROSY_OVERHEAD_STREAM}  # 선택: 기성 IP카메라 앱 시험용
 fleet_url: http://127.0.0.1:8090
 lane_graph: src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml
 dictionary: DICT_4X4_50
@@ -90,7 +91,7 @@ max_fps: 5
 **Stage 2 — 관측 어댑터 (LOCAL)**
 1. `detect.py`(cv2 유일): 프레임 → `{marker_id: 코너 4점}`.
 2. `project.py`(순수): 코너 4점 → 호모그래피 → 로봇 `x, y, yaw`, 시차 보정. 코너 하나라도 없으면 빈 결과.
-3. `run.py`: 스트림에서 최신 프레임만 읽고(버퍼 비움), `max_fps` 이하로 sightings POST. 스트림 끊김 → 재연결, 그동안 POST 없음.
+3. `ingest.py`: 폰 앱 WebSocket 수신(`rosy-overhead/1`, 최신 1장 보관, `config`/`status` 송신). 선택으로 MJPEG URL 끌어오기. `run.py`: 최신 프레임 → sightings POST(`max_fps` 이하). 입력 끊김 → 그동안 POST 없음.
 4. 시험: `cv2.aruco.generateImageMarker`로 만든 합성 장면에서 위치 오차 ≤ 10 mm, yaw ≤ 2°. 코너 누락 → 무출력. 경계 시험: cv2는 `detect.py`에만.
 
 **Stage 3 — Fleet 수신과 대조 표시**
