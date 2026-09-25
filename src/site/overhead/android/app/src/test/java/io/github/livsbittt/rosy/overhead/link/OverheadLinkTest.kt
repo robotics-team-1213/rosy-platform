@@ -134,8 +134,7 @@ class OverheadLinkTest {
         val status = awaitStatus(l) { it.stopped }
         assertEquals(LinkError.ProtocolMismatch, status.error)
         assertEquals(LinkState.DISCONNECTED, status.state)
-        Thread.sleep(1_500)
-        assertEquals("no reconnect after 4400", 1, server.requestCount)
+        assertNoReconnect("4400")
         assertFalse(l.admitFrame())
     }
 
@@ -149,8 +148,7 @@ class OverheadLinkTest {
 
         val status = awaitStatus(l) { it.stopped }
         assertEquals(LinkError.Replaced, status.error)
-        Thread.sleep(1_500)
-        assertEquals("no reconnect after 4409", 1, server.requestCount)
+        assertNoReconnect("4409")
     }
 
     @Test
@@ -174,6 +172,21 @@ class OverheadLinkTest {
         val l = newLink()
         assertFalse(l.admitFrame())
         assertEquals(0L, l.status.value.dropped)
+    }
+
+    /**
+     * Asserts that no second upgrade request arrives within the first backoff step (1 s) plus
+     * margin. Returns as soon as a reconnect shows up instead of sleeping a fixed time.
+     */
+    private fun assertNoReconnect(code: String) {
+        assertNotNull("initial request", server.takeRequest(5, TimeUnit.SECONDS))
+        val retry = server.takeRequest(RECONNECT_WINDOW_MS, TimeUnit.MILLISECONDS)
+        assertEquals("no reconnect after $code", null, retry)
+    }
+
+    private companion object {
+        /** First backoff step is 1000 ms; wait past it with margin for a slow CI JVM. */
+        const val RECONNECT_WINDOW_MS = 2_500L
     }
 
     /** Waits until the previous frame has left the socket queue (earlier refusals count as drops). */
