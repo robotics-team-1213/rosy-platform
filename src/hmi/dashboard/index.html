@@ -461,6 +461,22 @@
             </header>
             <p class="host-note" id="commissioning-note" role="status">확인 전</p>
           </article>
+
+          <!-- D-247: 장치가 붙어 있고 응답하는가. 제품 기능(capability)과는 다른 질문이다. -->
+          <article class="host-card" id="hardware-card" data-step="4" data-available="unknown"
+                   aria-labelledby="hardware-heading">
+            <header>
+              <h3 id="hardware-heading">장치</h3>
+              <span id="hardware-measured" class="machine-tag">측정 전</span>
+            </header>
+            <ul id="hardware-list" class="device-list" aria-label="보드 장치 관측"></ul>
+            <p class="host-note" id="hardware-note" role="status">확인 전</p>
+            <div class="host-actions">
+              <ui-button kind="quiet" type="button" id="hardware-refresh" data-role="administrator" disabled>
+                다시 점검
+              </ui-button>
+            </div>
+          </article>
       </div>
 
       <section id="field-settings-panel" class="panel field-settings-panel" aria-labelledby="field-settings-heading">

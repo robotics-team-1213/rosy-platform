@@ -91,9 +91,17 @@ def test_a_viewer_reads_every_row_with_its_age(tmp_path):
 
     assert body["available"] is True and body["schema"] == 1 and body["detail"] == ""
     assert 89 <= body["age_s"] <= 120
+    assert body["stale"] is False
     assert body["measured_at"] == measured
     assert [(row["id"], row["state"], row["product"]) for row in body["devices"]] == [
         ("camera", "no_response", True), ("imu", "bus_missing", False)]
+
+
+def test_an_old_result_is_marked_stale_by_the_server(tmp_path):
+    measured = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(timespec="seconds")
+    _write(tmp_path, [_device("camera")], measured_at=measured)
+    body = _client(_config(tmp_path)).get("/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
+    assert body["stale"] is True
 
 
 def test_the_card_needs_a_token(tmp_path):
@@ -255,6 +263,35 @@ def test_the_api_runs_no_subprocess_for_hardware():
     source = Path(host_api.__file__).read_text(encoding="utf-8")
     assert "import subprocess" not in source and "subprocess." not in source
     assert '"systemctl"' not in source
+
+
+# --- the dashboard wiring (the Chromium checks are optional; these always run) -----
+
+WEB = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+
+
+def test_the_inspect_view_has_the_device_card_after_commissioning():
+    markup = (WEB / "index.html").read_text(encoding="utf-8")
+    inspect = markup.split('id="view-inspect-panel"')[1]
+    assert inspect.index('id="commissioning-card"') < inspect.index('id="hardware-card"') \
+        < inspect.index('id="field-settings-panel"')
+    card = inspect.split('id="hardware-card"')[1].split("</article>")[0]
+    assert '<h3 id="hardware-heading">장치</h3>' in card
+    assert 'id="hardware-refresh" data-role="administrator" disabled' in card
+
+
+def test_the_script_renders_six_states_and_the_motion_reason():
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    assert 'api("/api/v1/host/hardware")' in script
+    assert '"/api/v1/host/hardware/refresh", {method: "POST"}' in script
+    for text in ("정상", "응답 없음", "버스 없음", "드라이버 없음", "사람 확인 필요", "측정 안 함", "벤치 전용"):
+        assert f'"{text}"' in script, text
+    assert "session.motionReason = payload.motion_reason" in script
+    assert 'setEnabled("hardware-refresh", isAdmin())' in script
+    # No raw colour for the chips: they reuse the shared [data-status] vocabulary.
+    css = (WEB / "styles.css").read_text(encoding="utf-8")
+    device_rules = css.split("D-247 장치 카드")[1].split("\n\n")[0]
+    assert "#" not in device_rules.split("*/", 1)[1] and "rgb" not in device_rules
 
 
 # --- /commissioning: why the robot cannot move -------------------------------------

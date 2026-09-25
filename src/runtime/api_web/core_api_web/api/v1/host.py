@@ -306,6 +306,8 @@ HW_SCHEMA = 1
 HW_STATES = ("ok", "no_response", "bus_missing", "driver_missing", "needs_human", "not_measured")
 #: The probe takes seconds; a second request inside this window starts nothing new.
 REFRESH_MIN_INTERVAL_S = 10.0
+#: The card is not telemetry (D-247): a result older than this is shown faded.
+HW_STALE_AFTER_S = 600.0
 #: LiDAR scans are a 10 Hz stream; two seconds without one is a stopped sensor.
 SCAN_FRESH_S = 2.0
 _last_refresh: dict[str, float] = {}
@@ -430,6 +432,7 @@ def host_hardware(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depe
         "schema": HW_SCHEMA,
         "measured_at": measured.astimezone(timezone.utc).isoformat(timespec="seconds"),
         "age_s": round(age, 1),
+        "stale": age > HW_STALE_AFTER_S,
         "boot_id": result["boot_id"],
         "devices": [_topic_overlay(row, svc) for row in result["devices"]],
         "detail": "",

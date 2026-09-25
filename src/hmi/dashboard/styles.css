@@ -814,7 +814,8 @@ body[data-view="operate"] .page-footer { display: none; }
 /* 값이 오지 않은 카드는 흐려지고 그렇게 말한다. 아무 말 없는 정상 카드처럼
    보이면 안 된다. */
 .host-card[data-available="false"] { border-style: dashed; opacity: 0.72; }
-.host-card[data-available="false"] .host-facts { display: none; }
+.host-card[data-available="false"] .host-facts,
+.host-card[data-available="false"] .device-list { display: none; }
 .host-card[data-available="false"] .host-note { color: var(--status-warn); }
 .host-facts { display: grid; gap: var(--space-1); margin: 0; }
 .host-facts > div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-label); }
@@ -824,6 +825,24 @@ body[data-view="operate"] .page-footer { display: none; }
 .host-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
 .host-actions ui-button { flex: 1 1 auto; }
 .host-card form { display: grid; gap: var(--space-2); }
+
+/* D-247 장치 카드 — 한 줄에 장치 하나. 상태 칩은 공용 세 어휘([data-status])를
+   그대로 쓴다: 정상=중립, 버스·드라이버 없음=주의, 응답 없음=위험 채움,
+   사람 확인·측정 안 함=색 없음. 새 색은 없다. */
+.device-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.device-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--surface-line);
+  font-size: var(--text-label);
+}
+.device-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.device-bus { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.device-evidence { grid-column: 1 / -1; margin: 0; color: var(--nominal-quiet); line-height: 1.5; }
+/* 오래된 측정은 흐리다 — 판정은 서버가 내린 `stale`이다(D-72 S4). */
+.host-card[data-stale="true"] .device-list { opacity: 0.72; }
 
 .ros-network-facts {
   display: grid;

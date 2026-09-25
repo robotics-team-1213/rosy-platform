@@ -192,7 +192,17 @@ window.fetch = async (input, options = {}) => {
     '/api/v1/host/network': {available: false, detail: 'no agent'},
     '/api/v1/host/release': {available: false, detail: 'no agent'},
     '/api/v1/host/commissioning': {runtime_mode: 'core', fleet_hold: true, detail: 'core'},
+    '/api/v1/host/hardware': window.__rosyHardware
+      || {available: false, detail: '장치 점검 결과가 아직 없습니다', devices: []},
   };
+  if (window.__rosyCommissioningOverride) {
+    Object.assign(bodies['/api/v1/host/commissioning'], window.__rosyCommissioningOverride);
+  }
+  if (method === 'POST' && path === '/api/v1/host/hardware/refresh') {
+    return new Response(JSON.stringify({accepted: true, detail: '장치 점검을 요청했습니다.'}), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
   if (window.__rosyStateOverrides?.robot_state) {
     Object.assign(bodies['/api/v1/robot/state'], window.__rosyStateOverrides.robot_state);
   }
@@ -1623,3 +1633,153 @@ def test_a_socket_that_sends_one_frame_then_closes_still_backs_off():
         count = page.evaluate("window.__sockets.length")
         assert 2 <= count <= 3, count
         browser.close()
+
+
+# --- D-247: the inspect view's device card and the operate view's motion reason ---
+
+#: rosy_18 as checked by hand on 2026-09-25, one row per state.
+HARDWARE_INIT = """
+    window.__rosyHardware = {
+      available: true, schema: 1, measured_at: new Date(Date.now() - 42000).toISOString(),
+      age_s: 42, stale: false, boot_id: 'b', detail: '',
+      devices: [
+        {id: 'motor.1', label: '구동 모터 1 (XL330)', bus: 'UART4 /dev/rosy-motor', state: 'ok',
+         evidence: 'odom 수신 중 (토픽 판정)', product: true, held_by: 'rosy-io.service', source: 'topic'},
+        {id: 'imu', label: 'IMU (BNO055)', bus: 'I2C0 /dev/i2c-0 0x28', state: 'bus_missing',
+         evidence: '/dev/i2c-0 없음', product: false},
+        {id: 'adc.battery', label: '배터리 전압 (ADC)', bus: 'I2C1 /dev/i2c-1 0x08', state: 'no_response',
+         evidence: 'ETIMEDOUT — 로봇 전원을 완전히 껐다 켜세요', product: true},
+        {id: 'lamp', label: 'LED 램프 (WS2812)', bus: 'GPIO BCM 19 PWM', state: 'driver_missing',
+         evidence: '/dev/ws281x_pwm 없음', product: false},
+        {id: 'buzzer', label: '부저', bus: 'GPIO BCM 22', state: 'needs_human',
+         evidence: 'BCM 22 미확인', product: true},
+        {id: 'lidar', label: 'LiDAR (RPLIDAR C1)', bus: 'UART0 /dev/ttyAMA0', state: 'not_measured',
+         evidence: 'rosy-io 사용 중 — 토픽으로 판정', product: true, held_by: 'rosy-io.service'},
+      ],
+    };
+"""
+
+
+def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        rows = page.evaluate(
+            "[...document.querySelectorAll('#hardware-list .device-row')].map((row) => ({"
+            " id: row.dataset.device,"
+            " chip: row.querySelector('.device-state').textContent,"
+            " status: row.querySelector('.device-state').dataset.status || null,"
+            " bench: Boolean([...row.querySelectorAll('.machine-tag')]"
+            "   .find((tag) => tag.textContent === '벤치 전용')),"
+            " bus: getComputedStyle(row.querySelector('.device-bus')).fontFamily }))"
+        )
+        assert [(row["id"], row["chip"], row["status"], row["bench"]) for row in rows] == [
+            ("motor.1", "정상", "OK", False),
+            ("imu", "버스 없음", "WARNING", True),
+            ("adc.battery", "응답 없음", "ERROR", False),
+            ("lamp", "드라이버 없음", "WARNING", True),
+            ("buzzer", "사람 확인 필요", None, False),
+            ("lidar", "측정 안 함", None, False),
+        ]
+        assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower() for row in rows), rows
+        assert page.locator("#hardware-card").get_attribute("data-available") == "true"
+        assert page.locator("#hardware-measured").inner_text().endswith("42초 전")
+        assert "전원을 완전히 껐다 켜세요" in page.locator("#hardware-list").inner_text()
+        # The populated card keeps the closed type scale and the contrast floor.
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        assert page.evaluate(OFF_SCALE_CENSUS) == []
+        assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+
+        # An administrator can ask for a new run; it goes to the refresh route only.
+        refresh = page.locator("#hardware-refresh")
+        assert refresh.is_enabled()
+        refresh.click()
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.method === 'POST'"
+            " && call.path === '/api/v1/host/hardware/refresh')"
+        )
+        page.wait_for_function(
+            "document.getElementById('hardware-note')?.textContent === '장치 점검을 요청했습니다.'")
+        browser.close()
+
+
+def test_a_viewer_sees_the_device_card_but_cannot_rerun_the_probe():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        assert page.locator("#hardware-refresh").is_disabled()
+        browser.close()
+
+
+def test_no_probe_result_yet_is_said_not_blanked():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function(
+            "document.getElementById('hardware-card')?.dataset.available === 'false'")
+        assert page.locator("#hardware-note").inner_text() == "장치 점검 결과가 아직 없습니다"
+        assert page.locator("#hardware-list .device-row").count() == 0
+        browser.close()
+
+
+MOTION_REASON = "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다."
+
+
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport):
+    """D-247 7 + D-201: the reason replaces the vague profile line without scrolling the console."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    reason = CORE_ONLY_VIEWER_INIT + (
+        "window.__rosyCommissioningOverride = {runtime_mode: 'core', motor_hold: true,"
+        f" motion_reason: '{MOTION_REASON}'}};"
+    )
+    fits = {}
+    with sync_playwright() as playwright:
+        for label, init in (("before", CORE_ONLY_VIEWER_INIT), ("reason", reason)):
+            try:
+                browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
+            except Exception as error:
+                pytest.skip(f"Playwright Chromium unavailable: {error}")
+            page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+            page.wait_for_function(
+                "document.getElementById('capability-count')?.textContent === '0 / 5'")
+            if label == "reason":
+                page.wait_for_function(
+                    f"document.getElementById('teleop-message')?.textContent === '{MOTION_REASON}'")
+                assert "권한" not in page.locator("#teleop-message").inner_text()
+            page.wait_for_timeout(300)
+            fits[label] = page.evaluate(FIT_PROBE)
+            browser.close()
+
+    fit = fits["reason"]
+    assert fit["docOverflow"] <= 0, f"{viewport}: 이유 문장이 운용 뷰를 스크롤시킨다(D-201): {fits}"
+    assert fit["estopInside"], fits
+    # The CORE-only viewer state already overflows the act column by a few px at
+    # 1366x768 with the old sentence (2026-09-25, feed2fc7); the reason must not add to it.
+    assert fit["actOverflow"] <= max(1, fits["before"]["actOverflow"]), (
+        f"{viewport}: 이유 문장이 조작 열을 더 넘치게 한다(D-201): {fits}")

@@ -646,7 +646,11 @@ function updateTeleopControls() {
   if (!session.token) {
     setText("teleop-message", "operator 접속 키가 필요합니다.");
   } else if (session.capabilities && session.capabilities.teleop !== true) {
-    setText("teleop-message", "현재 하드웨어 프로필에서 teleop을 사용할 수 없습니다.");
+    // D-247 7: a runtime mode that holds the motors is not a permission problem.
+    const byMode = String(session.capabilities.withheld?.reason || "").startsWith("runtime_mode:");
+    setText("teleop-message", byMode && session.motionReason
+      ? session.motionReason
+      : "현재 하드웨어 프로필에서 teleop을 사용할 수 없습니다.");
   } else if (session.robotState?.safety?.estop) {
     setText("teleop-message", "비상정지가 활성화되어 있습니다.");
   } else if (motionEvidenceBlocks(session.robotState)) {
@@ -892,6 +896,82 @@ function renderCommissioning(payload) {
     const holdText = holds.length ? `${holds.join(" · ")}. ` : "";
     note.textContent = `${holdText}${payload.detail || ""}`;
   }
+  // D-247 7: the operate view says why the robot cannot move in these words.
+  session.motionReason = payload.motion_reason || "";
+  updateTeleopControls();
+}
+
+// D-247 3: six states, fixed. Colour comes from the shared [data-status]
+// vocabulary: neutral (no attribute), warn, crit fill. No new palette.
+const DEVICE_STATES = {
+  ok: {text: "정상", status: "OK"},
+  no_response: {text: "응답 없음", status: "ERROR"},
+  bus_missing: {text: "버스 없음", status: "WARNING"},
+  driver_missing: {text: "드라이버 없음", status: "WARNING"},
+  needs_human: {text: "사람 확인 필요", status: null},
+  not_measured: {text: "측정 안 함", status: null},
+};
+
+function measuredLabel(payload) {
+  const stamp = Date.parse(payload.measured_at || "");
+  if (!Number.isFinite(stamp)) return "측정 시각 없음";
+  const time = new Date(stamp).toLocaleTimeString("ko-KR", {hour12: false});
+  const age = Math.max(0, Math.floor(Number(payload.age_s) || 0));
+  const ago = age < 60 ? `${age}초` : age < 3600 ? `${Math.floor(age / 60)}분` : `${Math.floor(age / 3600)}시간`;
+  return `측정 ${time} · ${ago} 전`;
+}
+
+function deviceRow(device) {
+  const known = DEVICE_STATES[device.state] || DEVICE_STATES.not_measured;
+  const item = document.createElement("li");
+  item.className = "device-row";
+  item.dataset.device = device.id;
+  item.dataset.state = device.state;
+  const name = document.createElement("span");
+  name.className = "device-name";
+  const label = document.createElement("strong");
+  label.textContent = device.label;
+  const bus = document.createElement("span");
+  bus.className = "device-bus";
+  bus.textContent = device.bus;
+  name.append(label, bus);
+  if (device.product === false) {
+    const bench = document.createElement("span");
+    bench.className = "machine-tag";
+    bench.textContent = "벤치 전용";
+    name.append(bench);
+  }
+  const chip = document.createElement("span");
+  chip.className = "mode-chip device-state";
+  chip.textContent = known.text;
+  if (known.status) chip.dataset.status = known.status;
+  const evidence = document.createElement("p");
+  evidence.className = "device-evidence";
+  evidence.textContent = device.evidence;
+  item.append(name, chip, evidence);
+  return item;
+}
+
+function renderHardware(payload) {
+  const card = document.getElementById("hardware-card");
+  const list = elements["hardware-list"];
+  setEnabled("hardware-refresh", isAdmin());
+  if (!payload || payload.available !== true) {
+    if (list) list.replaceChildren();
+    setText("hardware-measured", "측정 전");
+    if (card) card.dataset.stale = "false";
+    setCardUnavailable("hardware-card", "hardware-note", payload || {});
+    return;
+  }
+  if (card) {
+    card.dataset.available = "true";
+    card.dataset.stale = payload.stale ? "true" : "false";
+  }
+  if (list) list.replaceChildren(...(payload.devices || []).map(deviceRow));
+  setText("hardware-measured", measuredLabel(payload));
+  setText("hardware-note", payload.stale
+    ? "측정한 지 오래되었습니다. 관리자가 다시 점검하면 새로 잽니다."
+    : "벤치 전용 장치도 모두 보입니다. 제품 기능 여부는 기능 목록이 정합니다.");
 }
 
 
@@ -906,6 +986,7 @@ function updateAdminControls() {
   setEnabled("dock-register", isAdmin());
   setEnabled("identity-save", isAdmin());
   setEnabled("token-add", isAdmin());
+  setEnabled("hardware-refresh", isAdmin());
   const networkCard = document.getElementById("network-card");
   const networkOn = isAdmin() && networkCard?.dataset.available === "true";
   setEnabled("network-apply", networkOn);
@@ -972,6 +1053,7 @@ async function refreshSlowData() {
   const optional = [
     [api("/api/v1/waypoints"), renderWaypoints],
     [api("/api/v1/docking/status"), renderDockingStatus],
+    [api("/api/v1/host/hardware"), renderHardware],
     [api("/api/v1/docking/docks"), renderDocks],
     [isAdmin() ? api("/api/v1/system/tokens") : Promise.resolve({tokens: []}), renderTokens],
     [fieldMap.refresh(), () => {}],
@@ -1428,6 +1510,24 @@ elements["dds-cyclone-apply"]?.addEventListener("click", async () => {
     setText("action-message", reboot.ok ? "재부팅을 요청했습니다." : (reboot.detail || "재부팅이 거부되었습니다."));
   } catch (error) {
     setText("action-message", `Cyclone 적용 실패: ${error.message}`);
+  }
+});
+
+// D-247: CORE only writes a request file; the root probe measures. The result
+// lands a few seconds later, so the card is read again after a pause.
+elements["hardware-refresh"]?.addEventListener("click", async () => {
+  setEnabled("hardware-refresh", false);
+  try {
+    const reply = await api("/api/v1/host/hardware/refresh", {method: "POST"});
+    setText("hardware-note", reply.detail || "장치 점검을 요청했습니다.");
+    if (reply.accepted) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      renderHardware(await api("/api/v1/host/hardware"));
+    }
+  } catch (error) {
+    setText("hardware-note", `장치 점검 요청 실패: ${error.message}`);
+  } finally {
+    setEnabled("hardware-refresh", isAdmin());
   }
 });
 
