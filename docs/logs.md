@@ -2211,3 +2211,10 @@
 - 증거: `python tools/harness/rosy_harness.py generate`가 `docs/index.md`를 갱신했다. `python tools/harness/rosy_harness.py lint`는 0 errors/기존 `last_verified` 19 warnings, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider --disable-warnings`는 70 passed다.
 - gate 변화: 없음. D-267/D-268 Proposed, 자동 이동 미수용, D-55 집기 장치 게이트 미통과 상태를 유지한다.
 - 결정: 자동화 문서 변경은 sighting endpoint와 로봇 DDS 경계를 열지 않는다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25
+- 변경: D-260 Validation/Transition에 구현 내용·최소 권한 선택·부저 시험 충돌 해소·DEVICE 확인 목록. D-247에 부저 기본값과 시험 넘김 메모. API Ref v1.25 행(`GET /host/status-summary`)과 변경 이력
+- 증거: 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음

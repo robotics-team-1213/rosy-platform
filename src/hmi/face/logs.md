@@ -118,3 +118,10 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(emotion): D-260 boot card state line and top todo
+- 변경: `info_screen.py` 부팅 카드에 `robot_state`(154, 16)·`todo`(176, 15) 줄. AP 줄은 할 일 자리를 쓰고 한 칸씩 내려감(login 218+18 ≤ 240)
+- 증거: `python -m pytest src/hmi/face/test/test_info_screen_boot.py -q` 29 passed; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: DejaVu에 한글이 없어 LCD는 같은 규칙의 영어 짧은 말을 쓴다

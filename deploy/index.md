@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(deploy): D-260 boot display sound, lamp and LCD; test hand-over
 - 2026-09-26 · 8e6902fd · feat(native,api): buzzer and lamp test with a person's answer (D-247 6)
 - 2026-09-26 · b7d7b17a · feat(image): build the WS2812 lamp driver for the image kernel (D-247)
 - 2026-09-26 · 1d0c3420 · feat(image): enable the I2C0 IMU bus in config.txt (D-247)
 - 2026-09-25 · 17ef9af8 · feat(native): read-only root board device probe (D-247)
-- 2026-09-25 · 57e7e5d7 · feat(image,release,sd,first-boot): 이미지 안 공장 릴리스를 오프라인 서명해 첫 부팅에 설치 (D-225)

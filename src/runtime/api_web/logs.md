@@ -96,3 +96,10 @@
 - gate 변화: 없음. host API 시험은 실제 Pi probe 응답을 증명하지 않는다.
 - 결정: 새 REST 경로·필드는 추가하지 않았다.
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(core_api_web): D-260 GET /api/v1/host/status-summary (API Ref v1.25)
+- 변경: `api/v1/host.py`에 `read_boot_status`(엄격 읽기)와 `status-summary` 라우트. 장치 행은 `/host/hardware` 덮기를 그대로 거친다. `app.py` 설명 v1.25, 대시보드 자산 allowlist에 `status-summary.js`
+- 증거: `python -m pytest src/runtime/gateway/test/test_host_status_summary.py -q` 16 passed, 1 skipped(POSIX 링크); 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음
