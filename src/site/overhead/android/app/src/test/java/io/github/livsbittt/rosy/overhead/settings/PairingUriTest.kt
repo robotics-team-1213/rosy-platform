@@ -92,4 +92,12 @@ class PairingUriTest {
         val original = PairingUri("site-pc.local", 9000, "x+y &z", "cam-north")
         assertEquals(PairingUri.Parsed.Valid(original), PairingUri.parse(original.toUri()))
     }
+
+    @Test
+    fun toStringRedactsTheToken() {
+        val text = PairingUri("192.0.2.10", 8095, "s3cret-token", "overhead-1").toString()
+        assertTrue(text, !text.contains("s3cret-token"))
+        assertTrue(text, text.contains("192.0.2.10") && text.contains("8095") && text.contains("overhead-1"))
+        assertTrue(text, text.contains("<redacted>"))
+    }
 }

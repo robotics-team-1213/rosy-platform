@@ -21,6 +21,9 @@ data class PairingUri(
 
     val wsUrl: String get() = "ws://${hostForUrl(host)}:$port${Protocol.WS_PATH}"
 
+    /** Never prints the token: pairings end up in logs and crash reports. */
+    override fun toString(): String = "PairingUri(host=$host, port=$port, token=<redacted>, source=$source)"
+
     fun toUri(): String = "$SCHEME://${hostForUrl(host)}:$port/?t=${encode(token)}&s=${encode(source)}"
 
     companion object {
