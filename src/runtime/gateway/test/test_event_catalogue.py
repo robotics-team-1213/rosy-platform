@@ -687,6 +687,7 @@ def test_a_literal_that_looks_like_an_event_is_either_emitted_or_declared():
         "dds.rmw": "config.changed 의 key 값",
         "rosy.sensor_provider": "importlib entry-point group (control_sensor_adapter)",
         "adc.battery": "D-247 hardware.json 장치 id (api/v1/host.py 토픽 판정 표)",
+        "adc.ultrasonic": "D-247 hardware.json 장치 id (api/v1/host.py 토픽 판정 표)",
     }
     names = {site.name for site in emitted()}
 
