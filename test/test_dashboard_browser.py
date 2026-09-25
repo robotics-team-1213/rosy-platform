@@ -1652,7 +1652,7 @@ HARDWARE_INIT = """
         {id: 'lamp', label: 'LED 램프 (WS2812)', bus: 'GPIO BCM 19 PWM', state: 'driver_missing',
          evidence: '/dev/ws281x_pwm 없음', product: false},
         {id: 'buzzer', label: '부저', bus: 'GPIO BCM 22', state: 'needs_human',
-         evidence: 'BCM 22 미확인', product: true},
+         evidence: 'BCM 22 미확인', product: false},
         {id: 'lidar', label: 'LiDAR (RPLIDAR C1)', bus: 'UART0 /dev/ttyAMA0', state: 'not_measured',
          evidence: 'rosy-io 사용 중 — 토픽으로 판정', product: true, held_by: 'rosy-io.service'},
       ],
@@ -1686,7 +1686,7 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             ("imu", "버스 없음", "WARNING", True),
             ("adc.battery", "응답 없음", "ERROR", False),
             ("lamp", "드라이버 없음", "WARNING", True),
-            ("buzzer", "사람 확인 필요", None, False),
+            ("buzzer", "사람 확인 필요", None, True),
             ("lidar", "측정 안 함", None, False),
         ]
         assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower() for row in rows), rows

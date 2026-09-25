@@ -47,7 +47,7 @@ OUTPUT = f"{STATUS_DIR}/hardware.json"
 BOOT_ID = "proc/sys/kernel/random/boot_id"
 DISPLAY_ENV = "etc/rosy/boot-display.env"
 KMSG = "dev/kmsg"
-CSI_GLOB = "proc/device-tree/axi/pcie@120000/rp1/csi@*/status"
+CSI_GLOB = "proc/device-tree/axi/pcie@*/rp1/csi@*/status"
 CORE_GROUP = "rosy-core"
 
 OK = "ok"
@@ -91,9 +91,12 @@ BUZZER_DEFAULT_PIN = 22
 LOCK_WAIT_S = 2.0
 COMMAND_TIMEOUT_S = 3.0
 CAMERA_SENSORS = re.compile(r"\b(ov5647|imx219|imx708)\b")
-PROBE_FAILED = re.compile(r"probe of (\S+) failed with error (-\d+)|(\S+): probe with driver \S+ failed with error (-\d+)")
+PROBE_FAILED = re.compile(r"failed with error (-\d+)")
+#: The sensor's I2C client, e.g. 10-0036 (bus 10, address 0x36): one per camera port.
+I2C_CLIENT = re.compile(r"\b(\d+-00[0-9a-fA-F]{2})\b")
 
-#: (id, label, bus, product). product follows D-169/D-190: bench-only devices are false.
+#: (id, label, bus, product). product follows D-169 (Accepted): only the motors, the
+#: LiDAR, the camera and the ADC are product devices; everything else is bench/host.
 DEVICES = (
     ("motor.1", "구동 모터 1 (XL330)", "UART4 /dev/rosy-motor", True),
     ("motor.2", "구동 모터 2 (XL330)", "UART4 /dev/rosy-motor", True),
@@ -105,10 +108,10 @@ DEVICES = (
     ("adc.ir2", "IR 센서 2 (ADC)", "I2C1 /dev/i2c-1 0x08", True),
     ("adc.ultrasonic", "초음파 거리 (ADC)", "I2C1 /dev/i2c-1 0x08", True),
     ("camera", "카메라 (OV5647)", "CSI", True),
-    ("lcd", "LCD (ST7789)", "SPI0 /dev/spidev0.0", True),
-    ("buzzer", "부저", "GPIO BCM 22", True),
+    ("lcd", "LCD (ST7789)", "SPI0 /dev/spidev0.0", False),
+    ("buzzer", "부저", "GPIO BCM 22", False),
     ("lamp", "LED 램프 (WS2812)", "GPIO BCM 19 PWM", False),
-    ("pi.power", "Pi 전원·온도", "vcgencmd", True),
+    ("pi.power", "Pi 전원·온도", "vcgencmd", False),
 )
 DEVICE_IDS = tuple(device[0] for device in DEVICES)
 
@@ -447,22 +450,25 @@ class Probe:
         log = self.io.kernel_log()
         if log is None:
             return Row("camera", NOT_MEASURED, "커널 로그(/dev/kmsg)를 읽지 못함")
-        failure = None
-        seen = None
+        # Per camera port (I2C client): the last word the kernel said about it.
+        # The Pi 5 has two ports; an empty one answering -121 is not a fault
+        # when the other registered a sensor.
+        ports: dict[str, tuple[str, Optional[str]]] = {}
         for line in log:
             sensor = CAMERA_SENSORS.search(line)
-            if not sensor:
+            client = I2C_CLIENT.search(line)
+            if not sensor or not client:
                 continue
-            seen = sensor.group(1)
             failed = PROBE_FAILED.search(line)
-            if failed:
-                failure = (seen, failed.group(1) or failed.group(3), failed.group(2) or failed.group(4))
+            ports[client.group(1)] = (sensor.group(1), failed.group(1) if failed else None)
         csi = "CSI 활성" if csi_on else "CSI 비활성"
-        if failure:
-            sensor, address, code = failure
-            return Row("camera", NO_RESPONSE, f"{sensor} {address} probe {code} · {csi}")
-        if seen and csi_on:
-            return Row("camera", OK, f"{seen} 커널 probe 성공 · {csi}")
+        good = sorted(f"{name} {port}" for port, (name, code) in ports.items() if code is None)
+        bad = sorted(f"{name} {port} probe {code}" for port, (name, code) in ports.items() if code)
+        if good and csi_on:
+            note = f" · 빈 포트 {', '.join(bad)}" if bad else ""
+            return Row("camera", OK, f"{', '.join(good)} 커널 probe 성공 · {csi}{note}")
+        if bad:
+            return Row("camera", NO_RESPONSE, f"{', '.join(bad)} · {csi}")
         return Row("camera", NO_RESPONSE, f"{csi} · 센서 미검출")
 
     def lcd(self) -> Row:

@@ -462,6 +462,6 @@ def host_hardware_refresh(auth: AuthContext = Depends(admin), svc: CoreServicesL
             os.unlink(temporary)
         except OSError:
             pass
-        raise ApiError("HARDWARE_NOT_READY", 503, "장치 점검을 요청하지 못했습니다") from exc
+        raise ApiError("HW_PROBE_UNAVAILABLE", 503, "장치 점검을 요청하지 못했습니다") from exc
     _last_refresh[request_path] = now
     return {"accepted": True, "detail": "장치 점검을 요청했습니다. 잠시 뒤 결과가 바뀝니다."}

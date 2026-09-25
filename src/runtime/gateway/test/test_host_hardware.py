@@ -266,7 +266,7 @@ def test_refresh_without_cores_runtime_directory_is_a_503(tmp_path):
     config["hardware_probe"]["request_path"] = str(tmp_path / "missing/hw-probe.request")
     response = _client(config).post("/api/v1/host/hardware/refresh", headers=_auth(ADMIN_TOKEN))
     assert response.status_code == 503
-    assert response.json()["error"]["code"] == "HARDWARE_NOT_READY"
+    assert response.json()["error"]["code"] == "HW_PROBE_UNAVAILABLE"
 
 
 def test_the_api_runs_no_subprocess_for_hardware():

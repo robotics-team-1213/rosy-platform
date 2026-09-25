@@ -140,8 +140,10 @@ def test_every_board_device_has_one_row_and_d169_decides_product():
     ids = [device[0] for device in probe_module.DEVICES]
     assert ids == ["motor.1", "motor.2", "lidar", "imu", "adc.battery", "adc.ir0", "adc.ir1", "adc.ir2",
                    "adc.ultrasonic", "camera", "lcd", "buzzer", "lamp", "pi.power"]
-    bench = {device[0] for device in probe_module.DEVICES if not device[3]}
-    assert bench == {"imu", "lamp"}  # D-169: IMU, lamp/LED and emotion are bench-only
+    product = {device[0] for device in probe_module.DEVICES if device[3]}
+    # D-169 (Accepted): the product surface is the motors, the LiDAR, the camera and the ADC.
+    assert product == {"motor.1", "motor.2", "lidar", "camera", "adc.battery", "adc.ir0", "adc.ir1",
+                       "adc.ir2", "adc.ultrasonic"}
 
 
 def test_a_healthy_board_reads_ok_where_a_machine_can_tell(tmp_path):
@@ -393,6 +395,23 @@ def test_a_camera_without_a_sensor_or_a_csi_is_no_response(tmp_path):
     root = _tree(tmp_path, csi=("disabled", "disabled"), kmsg="6,1,1,-;Booting Linux\n")
     row = probe_module.Probe(FakeIo(root)).camera()
     assert (row.state, row.evidence) == ("no_response", "CSI 비활성 · 센서 미검출")
+
+
+def test_an_empty_second_port_does_not_fail_a_registered_camera(tmp_path):
+    kmsg = ("3,1,1,-;ov5647 11-0036: probe with driver ov5647 failed with error -121\n"
+            "6,2,2,-;ov5647 10-0036: Consider updating driver ov5647 to match on endpoints\n")
+    root = _tree(tmp_path, csi=("okay", "okay"), kmsg=kmsg)
+    row = probe_module.Probe(FakeIo(root)).camera()
+    assert row.state == "ok"
+    assert row.evidence == "ov5647 10-0036 커널 probe 성공 · CSI 활성 · 빈 포트 ov5647 11-0036 probe -121"
+
+
+def test_the_csi_status_is_found_under_any_pcie_node(tmp_path):
+    root = _tree(tmp_path, csi=(), kmsg="6,2,2,-;ov5647 10-0036: registered\n")
+    node = root / "proc/device-tree/axi/pcie@1000120000/rp1/csi@110000"
+    node.mkdir(parents=True)
+    (node / "status").write_bytes(b"okay\0")
+    assert probe_module.Probe(FakeIo(root)).camera().state == "ok"
 
 
 def test_an_unreadable_kernel_log_is_not_measured(tmp_path):

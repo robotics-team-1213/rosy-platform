@@ -44,6 +44,8 @@ _HTTP_BY_CODE = {
     "CAPABILITY_NOT_SUPPORTED": 501,
     "ROBOT_OFFLINE": 503,
     "HARDWARE_NOT_READY": 503,
+    # D-247: CORE could not hand rosy-hw-probe a refresh request (not a D-58 hardware gate).
+    "HW_PROBE_UNAVAILABLE": 503,
     "COMMAND_TIMEOUT": 504,
     "INTERNAL_ERROR": 500,
 }
