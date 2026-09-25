@@ -77,6 +77,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-23-core-dev-overlay-design.md` | D-179 설계: 벤치 CORE는 `/var/lib/rosy-dev` 읽기 전용 바인드. `/opt/rosy`·서명 릴리스·GitHub 설치와 분리 |
 | `2026-09-23-core-dev-overlay.md` | D-179 실행: 허용 목록·해시 성공·readback HOLD·네이티브 drop-in·Windows 호출. 두 번째부터는 재시작만, 재부팅은 이미지로 복귀, compose 프로젝트는 `rosy-runtime` |
 | `2026-09-24-folder-layout.md` | D-186 실행: 루트는 `env.sh`만, 벤치·설치 셸은 `tools/`와 `deploy/`, 텔레옵·주행 기록은 `data/` |
+| `2026-09-25-ownership-naming-control-plane.md` | D-227: 여섯 책임은 지금 트리의 이름. 목표 루트·명령 봉투·AI 워커는 열지 않는다 |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 ## Subdirectories

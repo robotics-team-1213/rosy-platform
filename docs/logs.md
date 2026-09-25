@@ -1911,3 +1911,11 @@
 - gate 변화: none (docs).
 - 결정: D-224
 - 교훈: none.
+
+## 2026-09-25 · uncommitted · docs(adr): D-227 소유 이름은 지금 트리 위에 둔다
+
+- 변경: D-227 Proposed. 여섯 책임은 현재 폴더를 읽는 이름이고, foundation/runtime/hmi 루트와 명령 봉투와 site AI 워커는 만들지 않는다. 실행 순서는 `docs/plans/2026-09-25-ownership-naming-control-plane.md`. 색인 행과 reference·plans 안내를 D-227 까지로 맞췄다. 입력 원문은 저장소 밖 v0.2 이고 이 커밋에 넣지 않았다.
+- 증거: 문서 결정. 패키지 이동 없음. `python tools/harness/rosy_harness.py lint` 0 errors, 16 warnings(기존 last_verified). `python -m pytest test/test_harness_contracts.py::test_repository_adr_log_is_contiguous_and_indexed -q` 1 passed (2026-09-25 Windows). generate 로 `docs/index.md` 갱신.
+- gate 변화: 없음
+- 결정: D-227
+- 교훈: 없음
