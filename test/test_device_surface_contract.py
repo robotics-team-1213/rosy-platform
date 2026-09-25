@@ -14,6 +14,11 @@ and buzzer) and a read of the I2C-1 ADC are product devices now, but only for
 the boot display unit. Every other native unit keeps the D-169 surface, and
 the display gets exactly those three nodes. The mutation tests below prove
 the guard turns red for each way the surface could widen.
+
+D-247 intake: the root board device probe (rosy-hw-probe.service) observes
+every board device, bench-only ones included, read-only and outside CORE. It
+is not a product surface (it drives nothing and advertises nothing), so like
+the display it gets exactly its own nodes, and no other unit gains any.
 """
 from pathlib import Path
 import sys
@@ -36,6 +41,10 @@ NATIVE = ROOT / "deploy" / "robot" / "native"
 #: D-190: the one unit that may hold display devices, and exactly these.
 DISPLAY_UNIT = "rosy-boot-display.service"
 DISPLAY_DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1")
+#: D-247: the read-only probe; the lamp and LCD nodes are only checked for existence.
+PROBE_UNIT = "rosy-hw-probe.service"
+PROBE_DEVICES = {"/dev/rosy-motor": "rw", "/dev/ttyAMA0": "rw", "/dev/i2c-0": "rw", "/dev/i2c-1": "rw",
+                 "/dev/vcio": "rw", "/dev/kmsg": "r"}
 
 
 def test_compose_io_devices_stay_on_the_d169_surface():
@@ -96,12 +105,26 @@ def surface_violations(units: dict[str, str]) -> list[str]:
             if policy != "closed":
                 found.append(f"{name} ends with DevicePolicy={policy}, not closed")
             continue
+        if name == PROBE_UNIT:
+            granted = {}
+            for line in allows:
+                device, _, access = line.split("=", 1)[1].partition(" ")
+                granted[device] = access.strip()
+            if granted != PROBE_DEVICES or len(allows) != len(PROBE_DEVICES):
+                found.append(f"{name} devices {sorted(granted.items())} != {sorted(PROBE_DEVICES.items())}")
+            if policy != "closed":
+                found.append(f"{name} ends with DevicePolicy={policy}, not closed")
+            if _non_root(directives):
+                found.append(f"{name} must stay root: it reads nodes of every group")
+            continue
         for line in allows:
             for fragment in BENCH_ONLY_FRAGMENTS:
                 if fragment in line.lower():
                     found.append(f"{name} grew a bench-only device: {line}")
     if DISPLAY_UNIT not in units:
         found.append(f"{DISPLAY_UNIT} is missing")
+    if PROBE_UNIT not in units:
+        found.append(f"{PROBE_UNIT} is missing")
     return found
 
 
@@ -147,6 +170,14 @@ def test_native_device_allow_stays_on_the_d169_surface():
     (DISPLAY_UNIT, "DeviceAllow=char-gpiochip rw"),
     (DISPLAY_UNIT, "DevicePolicy=auto"),
     ("rosy-io.service", "DevicePolicy=auto"),  # gpio/spi groups without a closed policy
+    # D-247: the probe gets its six nodes and nothing more, read-only where it only reads.
+    (PROBE_UNIT, "DeviceAllow=/dev/gpiochip4 rw"),
+    (PROBE_UNIT, "DeviceAllow=/dev/spidev0.0 rw"),
+    (PROBE_UNIT, "DeviceAllow=/dev/kmsg rw"),
+    (PROBE_UNIT, "DeviceAllow=char-i2c rw"),
+    (PROBE_UNIT, "DevicePolicy=auto"),
+    (PROBE_UNIT, "User=rosy-core"),
+    ("rosy-login-code.service", "DeviceAllow=/dev/i2c-0 rw"),
 ])
 def test_mutation_widening_any_surface_turns_the_guard_red(unit, line):
     units = _native_units()

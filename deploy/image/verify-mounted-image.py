@@ -53,6 +53,9 @@ LOGIN_UNIT = "rosy-login-code.service"
 LOGIN_ISSUE_LINK = "etc/issue.d/60-rosy-login.issue"
 LOGIN_ISSUE_TARGET = "/run/rosy-boot/login.issue"
 LOGIN_COMMAND = "usr/local/sbin/rosy-login-code"
+# D-247: the read-only board device probe, its refresh watch and its command.
+HW_PROBE_UNITS = ("rosy-hw-probe.service", "rosy-hw-probe.path")
+HW_PROBE_COMMAND = "usr/local/sbin/rosy-hw-probe"
 CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
 
 
@@ -213,6 +216,14 @@ def inspect(root: Path, release_id: str) -> list[str]:
         findings.append(f"missing console login banner link: {LOGIN_ISSUE_LINK} -> {LOGIN_ISSUE_TARGET}")
     if not os.path.lexists(root / LOGIN_COMMAND):
         findings.append(f"missing login code command: {LOGIN_COMMAND}")
+    # D-247: the board device card reads what this root probe writes.
+    for unit in HW_PROBE_UNITS:
+        if not (root / "etc/systemd/system" / unit).is_file():
+            findings.append(f"missing systemd unit: {unit}")
+        elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / unit):
+            findings.append(f"{unit} is not enabled")
+    if not os.path.lexists(root / HW_PROBE_COMMAND):
+        findings.append(f"missing hardware probe command: {HW_PROBE_COMMAND}")
     defaults = release / CORE_DEFAULTS
     if not defaults.is_file():
         findings.append(f"missing CORE defaults: {defaults.relative_to(root)}")

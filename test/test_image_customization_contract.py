@@ -178,6 +178,11 @@ def _valid_root(tmp_path: Path) -> Path:
     (wants.parent / "rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
     _link(root / "etc/issue.d/60-rosy-login.issue", "/run/rosy-boot/login.issue")
     _link(root / "usr/local/sbin/rosy-login-code", "/opt/rosy/native-runtime/rosy-login-code")
+    # D-247: the board device probe and its refresh watch (enabled), and its command.
+    for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
+        (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
+        (wants.parent / unit).write_text("[Unit]\n", encoding="utf-8")
+    _link(root / "usr/local/sbin/rosy-hw-probe", "/opt/rosy/native-runtime/rosy-hw-probe")
     defaults = release / "install/share/core/config/rosy_default.yaml"
     defaults.parent.mkdir(parents=True, exist_ok=True)
     defaults.write_text((ROOT / "src/runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8"),
@@ -243,6 +248,30 @@ def test_mounted_image_verifier_requires_the_login_code_issuer(tmp_path):
         assert finding in completed.stderr, finding
     (root / "etc/systemd/system/rosy-login-code.service").unlink()
     assert "missing systemd unit: rosy-login-code.service" in _verify(root).stderr
+
+
+def test_mounted_image_verifier_requires_the_hardware_probe(tmp_path):
+    root = _valid_root(tmp_path)
+    (root / "etc/systemd/system/multi-user.target.wants/rosy-hw-probe.path").unlink()
+    (root / "usr/local/sbin/rosy-hw-probe").unlink()
+    (root / "etc/systemd/system/rosy-hw-probe.service").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    for finding in ("rosy-hw-probe.path is not enabled", "missing hardware probe command",
+                    "missing systemd unit: rosy-hw-probe.service"):
+        assert finding in completed.stderr, finding
+
+
+def test_image_installs_enables_and_probes_the_hardware_probe():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("mkdir -p \"$ROOT/etc/issue.d\"")]
+    assert "rosy-hw-probe.service rosy-hw-probe.path" in enable
+    assert 'ln -sfn /opt/rosy/native-runtime/rosy-hw-probe "$ROOT/usr/local/sbin/rosy-hw-probe"' in source
+    loop = source[source.index("for entrypoint in rosy-boot-status.py"):]
+    assert "rosy-hw-probe.py" in loop[:loop.index("; do")]
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need a privilege on Windows")

@@ -359,6 +359,10 @@ DECLARED_WRITES = {
         # `agetty --reload` opens it for writing (ExecStartPre=+ creates it first).
         "/run/agetty.reload",
     },
+    "rosy-hw-probe.service": {
+        # rosy-hw-probe.py OUTPUT, via a temporary file beside it (D-247).
+        "/run/rosy-boot/hardware.json",
+    },
 }
 
 # Absolute paths a unit's program names but only reads.
@@ -380,6 +384,12 @@ DECLARED_READS = {
     "rosy-login-code.service": {
         "/run/rosy-boot/boot-status.json", "/run/rosy/login-code-state.json",
         "/etc/rosy/defaults.yaml", "/etc/rosy/login-policy.json",
+    },
+    # D-247: the boot id, the CSI node status, the kernel log and the buzzer
+    # settings of the boot display. Devices are opened, never written to disk.
+    "rosy-hw-probe.service": {
+        "/proc/sys/kernel/random/boot_id", "/proc/device-tree", "/dev/kmsg",
+        "/etc/rosy/boot-display.env",
     },
 }
 
@@ -409,6 +419,8 @@ PROGRAM_SOURCES = {
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
                                 "deploy/robot/native/rosy_config.py"],
+    # D-247: the probe is standard library only (dynamixel_sdk is imported lazily).
+    "rosy-hw-probe.service": ["deploy/robot/native/rosy-hw-probe.py"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
@@ -724,6 +736,33 @@ def test_the_login_code_issuer_is_a_root_sandbox_without_network():
     assert "bash" not in _read("rosy-login-code.service")
     # It never writes where CORE runs (/run/rosy is rosy-core's).
     assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
+
+
+def test_the_hardware_probe_is_a_bounded_root_oneshot_without_network():
+    # D-247 4: root outside CORE, run once after boot and on CORE's request;
+    # only /run/rosy-boot writable, never /run/rosy (CORE's; D-161).
+    directives = _directives("rosy-hw-probe.service")
+    assert not _non_root(directives)
+    for key, value in (("Type", "oneshot"), ("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
+                       ("ProtectSystem", "strict"), ("ProtectHome", "true"), ("NoNewPrivileges", "true"),
+                       ("DevicePolicy", "closed"), ("StartLimitIntervalSec", "0")):
+        assert directives.get(key, [""])[-1] == value, key
+    timeout = int(directives["TimeoutStartSec"][-1])
+    assert 0 < timeout <= 120
+    assert _words(directives, "ReadWritePaths") == ["/run/rosy-boot"]
+    assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
+    assert _environment(directives).get("PYTHONNOUSERSITE") == "1"
+    assert "rosy-core.service" in _words(directives, "After")
+    assert directives["ExecStart"] == ["/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-hw-probe.py"]
+    assert "Restart" not in directives
+    assert "bash" not in _read("rosy-hw-probe.service")
+
+    path = _read("rosy-hw-probe.path")
+    assert "PathChanged=/run/rosy/hw-probe.request" in path
+    assert "Unit=rosy-hw-probe.service" in path
+    assert "WantedBy=multi-user.target" in path
+    # CORE writes the request file in its own RuntimeDirectory.
+    assert "RuntimeDirectory=rosy" in _read("rosy-core.service")
 
 
 def test_recovery_journal_is_private_to_root():

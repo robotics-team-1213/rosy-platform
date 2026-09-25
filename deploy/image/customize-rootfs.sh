@@ -244,7 +244,7 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-runtime.target \
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-boot-display.service \
-    rosy-login-code.service
+    rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
@@ -255,6 +255,8 @@ ln -sfn /run/rosy-boot/login.issue "$ROOT/etc/issue.d/60-rosy-login.issue"
 # the caller's terminal only; the wrapper resolves the link.
 mkdir -p "$ROOT/usr/local/sbin"
 ln -sfn /opt/rosy/native-runtime/rosy-login-code "$ROOT/usr/local/sbin/rosy-login-code"
+# D-247: `sudo rosy-hw-probe [--stdout]` re-runs the board device probe.
+ln -sfn /opt/rosy/native-runtime/rosy-hw-probe "$ROOT/usr/local/sbin/rosy-hw-probe"
 # D-175 L2: `rosy-diag collect` on PATH; the wrapper resolves the link.
 mkdir -p "$ROOT/usr/local/bin"
 ln -sfn /opt/rosy/native-runtime/rosy-diag "$ROOT/usr/local/bin/rosy-diag"
@@ -282,7 +284,7 @@ chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/nat
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \
     || fail "installed first-boot entrypoint does not run"
 for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-boot-display.py \
-    rosy-login-code.py; do
+    rosy-hw-probe.py rosy-login-code.py; do
     chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
         || fail "installed native entrypoint does not run: $entrypoint"
 done
