@@ -132,8 +132,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(adr): D-229 layer boundaries
 - 2026-09-25 · uncommitted · refactor(control): split perception from sensing geometry
 - 2026-09-25 · uncommitted · docs(plan): D-228 lane_recovery execution
 - 2026-09-25 · uncommitted · docs(adr): D-228 decision lives in core_features
 - 2026-09-25 · uncommitted · docs(adr): D-227 소유 이름은 지금 트리 위에 둔다
-- 2026-09-25 · uncommitted · docs(adr): D-224 surface keyboard vocabulary

@@ -1943,3 +1943,18 @@
 - gate 변화: 없음
 - 결정: D-209, D-228
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(adr): D-229 layer boundaries
+
+- 변경: D-229 Accepted. 인식은 증거, 판단은 동작 id, 추종기는 FOLLOW 다음의 속도. `sensing` 입구는 영상을 다시 내보내지 않는다. `test/test_layer_boundaries.py` 가 import 를 잠근다.
+- 증거: `python -m pytest test/test_layer_boundaries.py src/core/control/test/test_lane_edge.py src/core/control/test/test_camera_ground.py src/core/control/test/test_perception_folder.py -q` 91 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-229
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · test+docs(layout): D-226 Accepted — CI가 공개 경계와 문서 자리를 지킨다
+- 변경: D-226 Proposed → Accepted. ADR에 "gitignore로 막는 것 / 추적하는 것" 짝 표를 더했다. `test/test_document_placement.py` 신설(추적 파일이 ignore 규칙에 걸리지 않음, 비밀·내부 경로 21개 ignore, 템플릿·공개키 8개 추적, 루트 파일 허용 목록, `src/**/docs/validation` 날짜 항목 금지, 모듈 루트 문서 허용 목록). `test_folder_layout.py`가 `.worktrees/`·`.claude/worktrees/` 링크 체크아웃을 훑지 않게 했다. `pinky-pro-evaluation-2026-09-24.md`의 실제 장치 IP를 `<robot-ip>`로 바꿨다. 루트 AGENTS.md에 D-226 한 줄을 더했다. 이동 자체는 9a83470e
+- 증거: `python -m pytest test/test_document_placement.py test/test_folder_layout.py src/core/control/test/test_straight_escape.py -q` 28 passed (2026-09-25 Windows). 변이: `.gitignore`에서 `provision.json`을 지우자 `deploy/sd/provision.json`으로 실패, 원복 후 통과
+- gate 변화: 없음(문서+시험)
+- 결정: D-226
+- 교훈: 넓은 ignore 규칙은 옆의 템플릿까지 삼킬 수 있다. 막는 칸과 추적하는 칸을 같이 시험한다
