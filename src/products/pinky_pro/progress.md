@@ -11,7 +11,7 @@ gates:
   LOCAL:
     state: GO
     evidence: "core 시험이 robot_config_dir('pinky_pro')의 소스 트리 폴백으로 이 패키지 파일을 읽고 통과 (2026-09-24 Windows host)"
-    cmd: "python -m pytest src/core/core/test src/contracts/core_common/test -q"
+    cmd: "python -m pytest src/runtime/core/test src/contracts/core_common/test -q"
   ROS-SIM:
     state: GO
     evidence: "WSL Ubuntu Jazzy 새 작업공간 /root/rosy_ws_d196: colcon build --symlink-install --packages-up-to core pinky_pro 8 packages finished(실패 0); ros2 pkg prefix pinky_pro → share/pinky_pro/config에 capabilities.yaml·profile.yaml; robot_config_dir('pinky_pro') = install/pinky_pro/share/pinky_pro/config; 오버레이 없이 ros2 run core core 부팅 'core up: robot_id=rosy_01 model=Pinky Pro'·api server 8080, SIGINT 정상 종료; 미설치 모델은 ConfigError(--packages-up-to core <name> 안내) (2026-09-24)"

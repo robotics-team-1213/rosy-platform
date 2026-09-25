@@ -38,7 +38,7 @@ WorkingDirectory=/opt/rosy/current
 # core.main escalates a stuck shutdown with exit code 2 instead of re-signalling itself,
 # so `systemctl stop` stays success and an operator cutting a wedged shutdown stays a
 # failure. Path follows the --merge-install payload layout.
-ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /opt/rosy/current/install/lib/core/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
+ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /opt/rosy/current/install/lib/runtime/core --ros-args -r __ns:=/${ROSY_NAMESPACE}'
 ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py
 Restart=on-failure
 # Restart without passing through the failed state, so OnFailure= fires only

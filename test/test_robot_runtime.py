@@ -13,7 +13,7 @@ from robot_contracts import (
     runtime_launch_closure,
 )
 
-sys.path.insert(0, str(ROOT / "src" / "navigation" / "navigation"))
+sys.path.insert(0, str(ROOT / "src" / "runtime" / "navigation"))
 from navigation.profile_limits import load_motion_limits
 
 
@@ -148,7 +148,7 @@ def test_core_image_does_not_ship_the_absorbed_sensor_worker_runtime():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = dockerfile.split("FROM runtime-common AS io-runtime")[0]
 
-    assert "COPY src/core/control ./src/core/control" not in core
+    assert "COPY src/runtime/control ./src/runtime/control" not in core
     assert "python3-opencv" not in core
     assert "ros-jazzy-visualization-msgs" in core
     assert "ros-jazzy-tf2-ros" in core
@@ -339,7 +339,7 @@ def test_core_reads_only_bounded_host_telemetry_paths():
 
 def test_core_image_prepares_dashboard_and_host_mount_directories():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
-    setup = (ROOT / "src" / "core" / "core" / "setup.py").read_text(encoding="utf-8")
+    setup = (ROOT / "src" / "runtime" / "core" / "setup.py").read_text(encoding="utf-8")
 
     assert (
         "mkdir -p /host/proc/net /host/etc /host/sys/class/thermal "
@@ -361,7 +361,7 @@ def test_systemd_unit_delegates_to_runtime_mode_wrapper():
 
 
 def test_teleop_watchdog_lives_in_safety_manager_not_a_stub():
-    safety = ROOT / "src" / "core" / "core_features" / "core_features" / "safety"
+    safety = ROOT / "src" / "runtime" / "core_features" / "core_features" / "safety"
     assert not (safety / "watchdog.py").is_file()
     assert "class TeleopWatchdog" in (safety / "manager.py").read_text(encoding="utf-8")
 

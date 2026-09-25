@@ -41,7 +41,7 @@ Dataclasses + enums. Input numbers, output numbers. Follower pose is leader head
 
 ### Internal
 
-- Spacing rationale cites `src/navigation/navigation/params/nav2_params.yaml`
+- Spacing rationale cites `src/runtime/navigation/params/nav2_params.yaml`
 - Slot offsets feed `core.navigation.swarm.follow_goal` (contract, not an import)
 
 ### External

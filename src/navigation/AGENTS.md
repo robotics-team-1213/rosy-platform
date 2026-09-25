@@ -21,8 +21,8 @@ None at this level. See `navigation/AGENTS.md`.
 
 ### Working In This Directory
 
-- Follow/session logic moved out to `src/core/core_features/core_features/swarm` (D-60); this tree is launch/config/maps only.
-- No dedicated pytest here; integration is launch + navigation tests in `src/core/core/test/`.
+- Follow/session logic moved out to `src/runtime/core_features/core_features/swarm` (D-60); this tree is launch/config/maps only.
+- No dedicated pytest here; integration is launch + navigation tests in `src/runtime/core/test/`.
 
 ## Dependencies
 

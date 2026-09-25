@@ -6,11 +6,12 @@
 !src/core/
 !src/contracts/
 !src/contracts/interfaces/
+!src/runtime/
 !src/contracts/interfaces/**
-!src/core/core/
-!src/core/core/**
-!src/core/control/
-!src/core/control/**
+!src/runtime/core/
+!src/runtime/core/**
+!src/runtime/control/
+!src/runtime/control/**
 !src/products/
 !src/products/omx_adapter/
 !src/products/omx_adapter/**
@@ -20,8 +21,8 @@
 !src/devices/bringup/
 !src/devices/bringup/**
 !src/navigation/
-!src/navigation/navigation/
-!src/navigation/navigation/**
+!src/runtime/navigation/
+!src/runtime/navigation/**
 !src/sim/
 !src/sim/description/
 !src/sim/description/**

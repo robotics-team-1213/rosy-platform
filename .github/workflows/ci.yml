@@ -70,15 +70,15 @@ jobs:
       - name: Lint (flake8)
         run: |
           cd src
-          flake8 core/core/core contracts/core_common/core_common core/core_events/core_events core/core_features/core_features core/core_api_web/core_api_web site/fleet/fleet site/fleet/test sim/gz_sim/launch sim/gz_sim/scripts sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
+          flake8 runtime/core/core contracts/core_common/core_common runtime/core_events/core_events runtime/core_features/core_features runtime/core_api_web/core_api_web site/fleet/fleet site/fleet/test sim/gz_sim/launch sim/gz_sim/scripts sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
 
       - name: Test (core domain suites, protocol schemas P1-19)
         run: |
           cd src
-          python3 -m pytest core/core/test core/core_events/test core/core_features/test core/web_common/test contracts/core_common/test products/pinky_pro/test -v
+          python3 -m pytest runtime/core/test runtime/core_events/test runtime/core_features/test core/web_common/test contracts/core_common/test products/pinky_pro/test -v
 
       # fleet 은 ROS 를 import 하지 않는다. conftest 가 src/contracts/core_common 과
-      # src/core/core_features 를 sys.path 에 얹으므로 colcon 오버레이 없이도
+      # src/runtime/core_features 를 sys.path 에 얹으므로 colcon 오버레이 없이도
       # 돈다 — Windows 개발 환경과 같은 조건이다.
       - name: Test (fleet formation, relay, session)
         run: python3 -m pytest src/site/fleet/test/ -v
@@ -97,7 +97,7 @@ jobs:
           python3 -m pytest src/sim/gz_sim/test -v
 
       # D-192: 패키지 안의 하드웨어 안전 시험은 지금까지 CI 에서 한 번도 돌지 않았다
-      # (이 워크플로는 src/core/core·fleet·gz_sim·루트 test/ 만 실행한다). 무동작 모드
+      # (이 워크플로는 src/runtime/core·fleet·gz_sim·루트 test/ 만 실행한다). 무동작 모드
       # (토크 꺼짐·cmd_vel 미구독), ADC 버스 잠금, 배터리 곡선 고정을 게이트로 올린다.
       # ament 린트(flake8/pep257/copyright)는 기존 파일들이 이미 적색이라 여기서 빼고,
       # 다른 패키지 시험(control·games·emotion·led)의 기존 적색은 D-191 후속 과제다.
@@ -106,10 +106,10 @@ jobs:
         run: |
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
-          python3 -m pytest src/devices/bringup/test src/devices/sensor_adc/test             src/core/control/test/test_ir_adc_lock.py             --ignore=src/devices/bringup/test/test_flake8.py             --ignore=src/devices/bringup/test/test_pep257.py             --ignore=src/devices/bringup/test/test_copyright.py -v
+          python3 -m pytest src/devices/bringup/test src/devices/sensor_adc/test             src/runtime/control/test/test_ir_adc_lock.py             --ignore=src/devices/bringup/test/test_flake8.py             --ignore=src/devices/bringup/test/test_pep257.py             --ignore=src/devices/bringup/test/test_copyright.py -v
 
       # 루트 test/ 는 배포·릴리스 계약을 담고 있으면서도 지금까지 CI 에서 한 번도
-      # 실행되지 않았다. 위 스텝이 src/core/core/test 만 돌기 때문이다. 그래서
+      # 실행되지 않았다. 위 스텝이 src/runtime/core/test 만 돌기 때문이다. 그래서
       # compose 권한 경계와 Wi-Fi 배포 계약이 검증 없이 지나갔다.
       # ROS 오버레이는 필요 없다 — test_motor_control.py 가 직접 sys.path 를 잡는다.
       # 2026-09-21: 구조적 적색 3건(D-136·D-137 인덱스 행 + D-137 T2 저널 필드)이

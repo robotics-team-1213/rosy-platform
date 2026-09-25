@@ -9,34 +9,34 @@ _IMPORT = re.compile(r"(?m)^(?:from|import)\s+(core_features|navigation|control)
 # Set equality. A new path fails, and a path that moved into its package
 # stays red until it is removed from this set.
 KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
-    "src/core/core/test/test_absorption_command_validity.py",
-    "src/core/core/test/test_api.py",
-    "src/core/core/test/test_battery.py",
-    "src/core/core/test/test_bridge_battery_policy.py",
+    "src/runtime/core/test/test_absorption_command_validity.py",
+    "src/runtime/core/test/test_api.py",
+    "src/runtime/core/test/test_battery.py",
+    "src/runtime/core/test/test_bridge_battery_policy.py",
     # bridge/docking_executor.py seam (split out of ros_bridge, df02d52e); same kind as
     # test_bridge_battery_policy: CORE bridge wiring driven through core_features fakes.
-    "src/core/core/test/test_bridge_docking_executor.py",
-    "src/core/core/test/test_control_absorption_safety.py",
-    "src/core/core/test/test_control_policy_link.py",
-    "src/core/core/test/test_control_sensor_adapter.py",
-    "src/core/core/test/test_core_logic.py",
-    "src/core/core/test/test_domain_model.py",
-    "src/core/core/test/test_evidence.py",
-    "src/core/core/test/test_fleet_agent.py",
-    "src/core/core/test/test_initial_pose.py",
-    "src/core/core/test/test_line_follow.py",
-    "src/core/core/test/test_line_follow_api.py",
-    "src/core/core/test/test_navigation_readiness.py",
-    "src/core/core/test/test_operational_journey.py",
-    "src/core/core/test/test_power.py",
-    "src/core/core/test/test_slam_reset.py",
-    "src/core/core/test/test_sprint2.py",
-    "src/core/core/test/test_swarm_integration.py",
-    "src/core/core/test/test_teleop_watchdog_event.py",
-    "src/core/core/test/test_traffic_api.py",
-    "src/core/core/test/test_traffic_policy.py",
-    "src/core/core/test/test_traffic_policy_bridge_contract.py",
-    "src/core/core/test/test_vision_preview.py",
+    "src/runtime/core/test/test_bridge_docking_executor.py",
+    "src/runtime/core/test/test_control_absorption_safety.py",
+    "src/runtime/core/test/test_control_policy_link.py",
+    "src/runtime/core/test/test_control_sensor_adapter.py",
+    "src/runtime/core/test/test_core_logic.py",
+    "src/runtime/core/test/test_domain_model.py",
+    "src/runtime/core/test/test_evidence.py",
+    "src/runtime/core/test/test_fleet_agent.py",
+    "src/runtime/core/test/test_initial_pose.py",
+    "src/runtime/core/test/test_line_follow.py",
+    "src/runtime/core/test/test_line_follow_api.py",
+    "src/runtime/core/test/test_navigation_readiness.py",
+    "src/runtime/core/test/test_operational_journey.py",
+    "src/runtime/core/test/test_power.py",
+    "src/runtime/core/test/test_slam_reset.py",
+    "src/runtime/core/test/test_sprint2.py",
+    "src/runtime/core/test/test_swarm_integration.py",
+    "src/runtime/core/test/test_teleop_watchdog_event.py",
+    "src/runtime/core/test/test_traffic_api.py",
+    "src/runtime/core/test/test_traffic_policy.py",
+    "src/runtime/core/test/test_traffic_policy_bridge_contract.py",
+    "src/runtime/core/test/test_vision_preview.py",
     "test/test_footprint_profiles.py",
     "test/test_nav2_profile_limits.py",
     "test/test_robot_runtime.py",
@@ -47,17 +47,17 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # fixture, the same entanglement main deferred for test_core_logic/
     # test_line_follow_api/test_slam_reset. The pure core_features parking tests moved to
     # core_features/test instead. Pending review: keep here or split.
-    "src/core/core/test/test_docking_mode_ownership.py",
-    "src/core/core/test/test_docking_mode_release.py",
-    "src/core/core/test/test_docking_parking_wiring.py",
-    "src/core/core/test/test_line_follow_sim_clock.py",
-    "src/core/core/test/test_mode_listener_isolation.py",
+    "src/runtime/core/test/test_docking_mode_ownership.py",
+    "src/runtime/core/test/test_docking_mode_release.py",
+    "src/runtime/core/test/test_docking_parking_wiring.py",
+    "src/runtime/core/test/test_line_follow_sim_clock.py",
+    "src/runtime/core/test/test_mode_listener_isolation.py",
 })
 
 
 def _found() -> set[str]:
     found = set()
-    for base in (ROOT / "src" / "core" / "core" / "test", ROOT / "test"):
+    for base in (ROOT / "src" / "runtime" / "core" / "test", ROOT / "test"):
         for path in base.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
             if _IMPORT.search(text):

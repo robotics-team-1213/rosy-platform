@@ -28,7 +28,7 @@ None.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest src/core/core/test/test_protocol_schemas.py -v
+python3 -m pytest src/runtime/core/test/test_protocol_schemas.py -v
 ```
 
 ### Common Patterns

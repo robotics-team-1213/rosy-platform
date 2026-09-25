@@ -5,7 +5,7 @@
 
 ## Purpose
 
-CORE domain — the external API gateway and the shared contracts. `core` (`core/core`) is the only ROS+FastAPI gateway process; `core_common` owns the protocol schemas that outside clients and packages share (D-18); `core_events` owns the event bus/audit; `core_features` owns the feature managers (command/safety/navigation/power/docking/…); `core_api_web` owns REST/WS routes, the dashboard static files, and the host-agent client. `interfaces` holds the custom service types.
+CORE domain — the external API gateway and the shared contracts. `core` (`runtime/core`) is the only ROS+FastAPI gateway process; `core_common` owns the protocol schemas that outside clients and packages share (D-18); `core_events` owns the event bus/audit; `core_features` owns the feature managers (command/safety/navigation/power/docking/…); `core_api_web` owns REST/WS routes, the dashboard static files, and the host-agent client. `interfaces` holds the custom service types.
 
 ## Key Files
 
@@ -34,7 +34,7 @@ None at this level. Each package directory has its own `AGENTS.md`.
 
 ```bash
 # from src/
-python3 -m pytest core/core/test/ core/core_events/test/ core/core_features/test/ core/web_common/test/ -v
+python3 -m pytest runtime/core/test/ runtime/core_events/test/ runtime/core_features/test/ core/web_common/test/ -v
 ```
 
 ### Common Patterns

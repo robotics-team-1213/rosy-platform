@@ -17,7 +17,7 @@ pkill -9 -f 'parameter_bridge' 2>/dev/null || true
 pkill -9 -f 'ros_gz' 2>/dev/null || true
 pkill -9 -f 'cli.py console' 2>/dev/null || true
 pkill -9 -f 'run_fleet_sim' 2>/dev/null || true
-pkill -9 -f 'lib/core/core' 2>/dev/null || true
+pkill -9 -f 'lib/runtime/core' 2>/dev/null || true
 killall -9 gz ruby gzserver python3 create 2>/dev/null || true
 sleep 10
 

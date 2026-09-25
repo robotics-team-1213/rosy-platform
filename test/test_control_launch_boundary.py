@@ -15,8 +15,8 @@ def _deploy_text_files():
 
 def test_operational_compose_does_not_launch_legacy_control_stack():
     text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
-    assert "core/control/launch" not in text
-    assert "core/control/launch/robot.launch.py" not in text
+    assert "runtime/control/launch" not in text
+    assert "runtime/control/launch/robot.launch.py" not in text
 
 
 def test_operational_compose_does_not_serve_the_control_console():
@@ -24,15 +24,15 @@ def test_operational_compose_does_not_serve_the_control_console():
     text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
     assert "web_node" not in text
     assert "dashboard.html" not in text
-    html = (ROOT / "src" / "core" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    html = (ROOT / "src" / "runtime" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
     assert "<title>pinky console</title>" not in html
     assert "<title>Rosy control diagnostic</title>" in html
 
 
 def test_hardware_launch_does_not_start_safety_as_final_publisher():
-    nav = ROOT / "src" / "navigation" / "navigation" / "launch" / "hardware.launch.py"
+    nav = ROOT / "src" / "runtime" / "navigation" / "launch" / "hardware.launch.py"
     text = nav.read_text(encoding="utf-8")
-    assert "core/control" not in text
+    assert "runtime/control" not in text
     assert "safety_node" not in text
 
 
@@ -61,13 +61,13 @@ def test_core_launches_do_not_reference_the_control_stack():
     그래프에서 만난다. launch 파일 이름 개명(rosy_core → core)에도 견디도록
     디렉터리를 glob 한다.
     """
-    core_launch_dir = ROOT / "src" / "core" / "core" / "launch"
+    core_launch_dir = ROOT / "src" / "runtime" / "core" / "launch"
     launches = sorted(core_launch_dir.glob("*.launch.py"))
     assert launches, "core launch directory unexpectedly empty — guard lost its scope"
     offenders = []
     for path in launches:
         text = path.read_text(encoding="utf-8")
-        for marker in ("package='control'", 'package="control"', "core/control"):
+        for marker in ("package='control'", 'package="control"', "runtime/control"):
             if marker in text:
                 offenders.append(f"{path.name}: {marker}")
     assert not offenders, (

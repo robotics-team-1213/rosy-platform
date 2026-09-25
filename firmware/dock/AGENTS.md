@@ -36,7 +36,7 @@ Charging-dock firmware and the ROSY-DOCK-001 agent contract. The microcontroller
 ### Testing Requirements
 
 ```bash
-python3 -m pytest test/test_dock_contract.py src/core/core_features/test/test_docking.py -v
+python3 -m pytest test/test_dock_contract.py src/runtime/core_features/test/test_docking.py -v
 ```
 
 ### Common Patterns
@@ -47,7 +47,7 @@ Contract in README; implementation in `firmware/rosy_dock/rosy_dock.ino`; client
 
 ### Internal
 
-- `src/core/core_features/core_features/docking/agent.py`
+- `src/runtime/core_features/core_features/docking/agent.py`
 - Design: `docs/plans/2026-09-02-docking-station-design.md`
 
 ### External

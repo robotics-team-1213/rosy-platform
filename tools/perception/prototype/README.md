@@ -26,7 +26,7 @@ python "$T\realrun\replay.py" 1 16     # part 1의 앞 16프레임
 
 ## `realrun/` — 현재 인식을 실물 영상으로 재생
 
-저장소의 `src/core/control` 인식 코드를 읽기 전용으로 import 한다.
+저장소의 `src/runtime/control` 인식 코드를 읽기 전용으로 import 한다.
 
 | 파일 | 하는 일 | 실행 |
 |---|---|---|

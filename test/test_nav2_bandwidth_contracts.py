@@ -24,7 +24,7 @@ import yaml
 
 from robot_contracts import NAV_PARAMS, ROOT
 
-_PKG = str(ROOT / "src" / "navigation" / "navigation")
+_PKG = str(ROOT / "src" / "runtime" / "navigation")
 if _PKG not in sys.path:
     sys.path.append(_PKG)
 

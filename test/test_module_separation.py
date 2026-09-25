@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
 CORE = SRC / "core"
-CONTROL_PKG = SRC / "core" / "control" / "control"
+CONTROL_PKG = SRC / "runtime" / "control" / "control"
 FLEET = SRC / "site" / "fleet"
 
 #: Other-domain tops that core production code must never import (S1).
@@ -55,7 +55,7 @@ FINAL_CMD_VEL = re.compile(r"""['"]cmd_vel['"]""")
 #: safety_node as the legacy final publisher). Everything else in control
 #: must not name the final topic.
 LEGACY_FINAL_PUBLISHER = (
-    "core/control/control/safety/node.py",
+    "runtime/control/control/safety/node.py",
     "self.declare_parameter('cmd_out', 'cmd_vel')",
 )
 
@@ -85,10 +85,10 @@ def _import_tops(path: Path):
 def test_core_imports_no_slice_code():
     """Guard 1 (S1): no slice imports in core production code.
 
-    ``control`` sits at ``src/core/control`` and imports itself. That package
+    ``control`` sits at ``src/runtime/control`` and imports itself. That package
     is not the core gateway importing a slice.
     """
-    control_root = (SRC / "core" / "control").resolve()
+    control_root = (SRC / "runtime" / "control").resolve()
     violations = []
     for path in _prod_py_files(CORE):
         if control_root in path.resolve().parents:
@@ -193,7 +193,7 @@ def test_cmd_vel_single_publisher():
                 line = text[: text.index(call)].count("\n") + 1
                 publishers.append(f"{path.relative_to(SRC).as_posix()}:{line}")
     assert len(publishers) == 1, publishers
-    assert publishers[0].startswith("core/core/core/bridge/ros_bridge.py:"), publishers
+    assert publishers[0].startswith("runtime/core/core/bridge/ros_bridge.py:"), publishers
 
 
 def test_fleet_prod_only_core_common():

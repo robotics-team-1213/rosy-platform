@@ -11,15 +11,15 @@ ROOT = Path(__file__).parents[1]
 def test_io_image_contains_line_follow_runtime_without_polluting_core():
     dockerfile = (ROOT / "deploy/robot/Dockerfile").read_text(encoding="utf-8")
     core, io = dockerfile.split("FROM runtime-common AS io-runtime", 1)
-    assert "COPY src/core/control" not in core
+    assert "COPY src/runtime/control" not in core
     assert "python3-opencv" not in core
-    assert "COPY src/core/control ./src/core/control" in io
+    assert "COPY src/runtime/control ./src/runtime/control" in io
     assert "python3-opencv" in io
     assert "control" in io
 
 
 def test_hardware_launch_reaches_sensing_only_line_follow_launch():
-    launch = (ROOT / "src/navigation/navigation/launch/hardware.launch.py").read_text(
+    launch = (ROOT / "src/runtime/navigation/launch/hardware.launch.py").read_text(
         encoding="utf-8")
     assert 'get_package_share_directory("control")' in launch
     assert '"line_follow.launch.py"' in launch
@@ -58,9 +58,9 @@ def test_ir_calibration_is_an_external_runtime_profile_not_an_image_rebuild():
 
 
 def test_bridge_checks_original_sensor_age_not_only_receipt_age():
-    bridge = (ROOT / "src/core/core/core/bridge/ros_bridge.py").read_text(
+    bridge = (ROOT / "src/runtime/core/bridge/ros_bridge.py").read_text(
         encoding="utf-8")
-    gate = (ROOT / "src/core/core/core/bridge/traffic_gate.py").read_text(
+    gate = (ROOT / "src/runtime/core/bridge/traffic_gate.py").read_text(
         encoding="utf-8")
     assert "self._node.get_clock().now().nanoseconds" in bridge
     assert "source_now=source_now" in bridge

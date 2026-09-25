@@ -55,7 +55,7 @@ def _payload_tree(root: Path, release_id: str = RELEASE_ID) -> Path:
         "install/local_setup.sh": "# generated from colcon_core/shell/template/prefix.sh.em\n",
         "install/_local_setup_util_sh.py": "# generated from colcon_core/shell/template/prefix_util.py.em\n",
         "install/COLCON_IGNORE": "",
-        "install/lib/core/core": (
+        "install/lib/runtime/core": (
             "#!/usr/bin/python3\nimport sys\nfrom core.main import main\nsys.exit(main())\n"),
         "install/lib/python3.12/site-packages/core/__init__.py": "VERSION = '0.1.0'\n",
         "install/share/core/package.xml": (
@@ -89,7 +89,7 @@ def _payload_tree(root: Path, release_id: str = RELEASE_ID) -> Path:
         str(package / "__init__.py"), cfile=str(package / "__pycache__" / "__init__.cpython-312.pyc"),
         dfile="core/__init__.py", doraise=True,
         invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)
-    for executable in (root / "install" / "lib" / "core" / "core", library):
+    for executable in (root / "install" / "lib" / "runtime" / "core", library):
         executable.chmod(0o755)  # no effect on Windows; --modes-from covers that
     return root
 
@@ -136,7 +136,7 @@ def test_built_and_signed_payload_passes_native_verify(case):
     assert manager.check_python_runtime(RELEASE_ID) == IMAGE_RUNTIME
     listed = {entry["path"] for entry in manifest["files"]}
     assert {
-        "install/lib/core/core",
+        "install/lib/runtime/core",
         "install/local_setup.bash",
         "install/share/core/package.xml",
         "install/lib/python3.12/site-packages/core/__pycache__/__init__.cpython-312.pyc",
@@ -152,7 +152,7 @@ def test_linux_pack_keeps_colcon_exec_bits(tmp_path):
     pack_release(Path(report["release_dir"]), tmp_path / "a.tar.gz", allow_unsigned=True)
     modes = {member.name: member.mode for member in _members(tmp_path / "a.tar.gz")}
 
-    assert modes["install/lib/core/core"] == 0o755
+    assert modes["install/lib/runtime/core"] == 0o755
     assert modes["install/lib/libinterfaces__rosidl_typesupport_c.so"] == 0o755
     assert modes["install/lib/python3.12/site-packages/core/__pycache__/__init__.cpython-312.pyc"] == 0o644
     assert modes["install/share/core/package.xml"] == 0o644
@@ -466,7 +466,7 @@ def test_repack_after_signing_keeps_exec_bits_from_the_unsigned_linux_tarball(ca
     plain = tmp_path / "plain.tar.gz"
     pack_release(staging, plain, allow_unsigned=True)
     unsigned = tmp_path / "unsigned.tar.gz"
-    _with_exec_bit(plain, unsigned, "install/lib/core/core")
+    _with_exec_bit(plain, unsigned, "install/lib/runtime/core")
     _sign(staging, private)
 
     signed = tmp_path / "signed.tar.gz"
@@ -475,7 +475,7 @@ def test_repack_after_signing_keeps_exec_bits_from_the_unsigned_linux_tarball(ca
 
     assert report["ok"] is True, report
     modes = {member.name: member.mode for member in _members(signed)}
-    assert modes["install/lib/core/core"] == 0o755
+    assert modes["install/lib/runtime/core"] == 0o755
     assert modes["install/setup.bash"] == 0o644
     assert modes["SHA256SUMS.sig"] == 0o644
 

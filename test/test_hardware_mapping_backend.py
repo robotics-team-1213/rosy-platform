@@ -77,7 +77,7 @@ def test_hardware_launch_has_mutually_exclusive_localization_and_mapping_graphs(
 def test_mapper_params_are_rewritten_for_the_robot_namespace(tmp_path):
     import sys
 
-    package = ROOT / "src" / "navigation" / "navigation"
+    package = ROOT / "src" / "runtime" / "navigation"
     if str(package) not in sys.path:
         sys.path.append(str(package))
     from navigation.params_rewrite import write_prefixed_nav2_params
@@ -96,6 +96,6 @@ def test_mapper_params_are_rewritten_for_the_robot_namespace(tmp_path):
 
 def test_navigation_package_declares_slam_runtime_dependency():
     package_xml = (
-        ROOT / "src" / "navigation" / "navigation" / "package.xml"
+        ROOT / "src" / "runtime" / "navigation" / "package.xml"
     ).read_text(encoding="utf-8")
     assert "<exec_depend>slam_toolbox</exec_depend>" in package_xml

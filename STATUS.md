@@ -5,13 +5,13 @@
 
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
-| [core](src/core/core/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [core](src/runtime/core/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | uncommitted (2026-09-22) | GO | GO | N/A | HOLD | HOLD | N/A |
-| [control](src/core/control/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [control](src/runtime/control/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | uncommitted (2026-09-22) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | 411a303 (2026-09-18) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
-| [navigation](src/navigation/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](src/devices/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [emotion](src/face/emotion/progress.md) | 장치 | uncommitted (2026-09-21) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [led](src/devices/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -19,9 +19,9 @@
 | [sensor_adc](src/devices/sensor_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [lamp_control](src/devices/lamp_control/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [core_common](src/contracts/core_common/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_events](src/core/core_events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_features](src/core/core_features/progress.md) | CORE | uncommitted (2026-09-25) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_api_web](src/core/core_api_web/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_events](src/runtime/core_events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_features](src/runtime/core_features/progress.md) | CORE | uncommitted (2026-09-25) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_api_web](src/runtime/core_api_web/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](src/core/web_common/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
 | [omx_adapter](src/products/omx_adapter/progress.md) | 장치 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |

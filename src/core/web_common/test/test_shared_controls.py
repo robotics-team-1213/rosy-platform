@@ -16,10 +16,10 @@ FACE = ROOT / "face" / "emotion" / "emotion" / "info_screen.py"
 PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
 
 SURFACES = (
-    ROOT / "core" / "core_api_web" / "core_api_web" / "web",
+    ROOT / "runtime" / "core_api_web" / "core_api_web" / "web",
     ROOT / "site" / "fleet" / "fleet" / "server" / "web",
     ROOT / "site" / "games" / "games" / "web",
-    ROOT / "core" / "control" / "web" / "dashboard.html",
+    ROOT / "runtime" / "control" / "web" / "dashboard.html",
 )
 STYLE_SUFFIXES = {".css", ".html"}
 
@@ -228,7 +228,7 @@ def test_diagnostic_palette_matches_the_token_hex():
         r"(--[a-z0-9-]+):\s*#([0-9a-fA-F]{6})",
         TOKENS.read_text(encoding="utf-8"),
     ))
-    page = (ROOT / "core" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    page = (ROOT / "runtime" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
     declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
     mismatch = []
     for local, token in _DIAGNOSTIC_TWINS.items():

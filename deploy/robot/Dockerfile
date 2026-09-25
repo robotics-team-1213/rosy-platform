@@ -55,7 +55,7 @@ RUN apt-get -o Acquire::Retries=5 update \
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
 COPY src/contracts/interfaces ./src/contracts/interfaces
-COPY src/core/core ./src/core/core
+COPY src/runtime/core ./src/runtime/core
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
 COPY src/products/pinky_pro ./src/products/pinky_pro
 RUN set -eo pipefail \
@@ -114,9 +114,9 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
 COPY src/contracts/interfaces ./src/contracts/interfaces
 COPY src/sim/description ./src/sim/description
 COPY src/devices/bringup ./src/devices/bringup
-COPY src/navigation/navigation ./src/navigation/navigation
+COPY src/runtime/navigation ./src/runtime/navigation
 COPY src/products/omx_adapter ./src/products/omx_adapter
-COPY src/core/control ./src/core/control
+COPY src/runtime/control ./src/runtime/control
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \

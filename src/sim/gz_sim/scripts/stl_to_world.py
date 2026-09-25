@@ -17,7 +17,7 @@ mm 이어진 큰 묶음이다. 남은 것은 123 mm 짜리 작은 사각형 여�
 
     python3 stl_to_world.py "260919 MAP FILE.STL" -o ../worlds/rosy_road.world
     python3 world_to_map.py ../worlds/rosy_road.world \
-        -o ../../../navigation/navigation/map/rosy_road \
+        -o ../../../runtime/navigation/map/rosy_road \
         --resolution 0.02 --seed 0.48,0.64
 """
 

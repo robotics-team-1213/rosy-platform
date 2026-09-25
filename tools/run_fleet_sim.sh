@@ -23,7 +23,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=$(( (RANDOM % 100) + 20 ))
 
 # Nav2 의 정적 점유 맵(map_server) — mode:=nav 는 map:= 인자를 요구한다.
-MAP_YAML="$PWD/src/core/control/map/map_260905_update_v2/maps/map_260905.yaml"
+MAP_YAML="$PWD/src/runtime/control/map/map_260905_update_v2/maps/map_260905.yaml"
 
 # 2. Cleanup previous processes
 killall -9 ruby gz python3 parameter_bridge create 2>/dev/null || true
@@ -75,7 +75,7 @@ done
 
 # 5. Start Fleet Server
 echo "[3/3] Starting Fleet Console..."
-export PYTHONPATH="$PYTHONPATH:$(pwd)/src/site/fleet:$(pwd)/src/contracts/core_common:$(pwd)/src/core/core_features"
+export PYTHONPATH="$PYTHONPATH:$(pwd)/src/site/fleet:$(pwd)/src/contracts/core_common:$(pwd)/src/runtime/core_features"
 
 echo ""
 echo "========================================================="
@@ -91,7 +91,7 @@ echo "========================================================="
 echo "Press Ctrl+C to stop all processes."
 
 python3 src/site/fleet/fleet/cli.py console --robots "$ROBOTS_YAML" \
-    --ui-tokens "$PWD/src/core/core_api_web/core_api_web/web/tokens.css"
+    --ui-tokens "$PWD/src/runtime/core_api_web/core_api_web/web/tokens.css"
 
 # Cleanup on exit
 kill $(jobs -p) 2>/dev/null || true

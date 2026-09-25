@@ -11,7 +11,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "core" / "core_api_web" / "core_api_web" / "web"
+WEB = ROOT / "src" / "runtime" / "core_api_web" / "core_api_web" / "web"
 #: Production serves `/common/*` from the web_common package (core_api_web
 #: mounts it; `test_ui_route.py` pins the 200s). The harness must mirror that
 #: mount — app.js imports `/common/core_ui_logic.js` absolutely, and a request

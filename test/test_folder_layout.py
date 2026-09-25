@@ -20,7 +20,7 @@ def test_root_shell_is_only_the_dev_environment():
 def test_package_trees_do_not_carry_a_second_installer():
     assert list(ROOT.glob("src/**/deploy/*.sh")) == []
     assert (ROOT / "src" / "devices" / "bringup" / "scripts" / "rosy_env.sh").is_file()
-    assert (ROOT / "src" / "core" / "control" / "tools" / "gz" / "run_track260905.sh").is_file()
+    assert (ROOT / "src" / "runtime" / "control" / "tools" / "gz" / "run_track260905.sh").is_file()
 
 
 def test_umbrella_scripts_live_in_the_repo():

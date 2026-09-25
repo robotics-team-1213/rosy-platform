@@ -4,7 +4,7 @@ Y=$(ls -t /tmp/rosy_gz_multi_*/robots.yaml 2>/dev/null | head -1)
 ls -la "$Y" 2>/dev/null
 grep -c 'robot_id' "$Y" 2>/dev/null
 echo "--- 콘솔/코어 프로세스 ---"
-ps aux | grep -E '[c]li.py console|[l]ib/core/core' | awk '{print $2, $14, $15, $16}' | head -5
+ps aux | grep -E '[c]li.py console|[l]ib/runtime/core' | awk '{print $2, $14, $15, $16}' | head -5
 echo "--- fleet state (60s 여유) ---"
 curl -s --max-time 60 http://127.0.0.1:8090/api/fleet/state | python3 -c "
 import json, sys

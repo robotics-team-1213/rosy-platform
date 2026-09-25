@@ -14,10 +14,10 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 for _path in (
-    REPO_ROOT / "src/core/control",
+    REPO_ROOT / "src/runtime/control",
     REPO_ROOT / "src/contracts/core_common",
-    REPO_ROOT / "src/core/core_events",
-    REPO_ROOT / "src/core/core_features",
+    REPO_ROOT / "src/runtime/core_events",
+    REPO_ROOT / "src/runtime/core_features",
 ):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))

@@ -61,14 +61,14 @@
 | `contracts/interfaces` | 0 / 1 | 0 | 4(IDL) | O | – | – |
 | `core/web_common` | 0 / 0 | 0 | 2 | X | – | 시험 예외 1건 |
 | `contracts/core_common` | 16 / 1 | 0(+1 launch) | **5** | O | – | **역방향 1건** (`common→core` 설정 공유) |
-| `core/core_events` | 4 / 0 | 1 | 1 | X | 파일 745행(accept) | 시험 예외 1건 |
-| `core/core_features` | 37 / 0 | 1 | 2 | X | – | 시험 예외 1건 (29개 core 시험이 대신 소유 — 시험이 3곳에 분산) + **과잉선언 1건** (`core_events`, 어디서도 0회) |
-| `core/core_api_web` | 25 / 3 | 2 | 1 | O | – | 과잉선언 1건 (`core_events`) |
-| `core/core` | 21 / **74** | 4 | 0 | O | `ros_bridge.py` 759행 (**split 재개**) | 동적 import 1건(D-126, 테스트 이음새) |
-| `core/control` | **200** / 164 | 0 | 0(code) | O | **패키지 28,159행 (split, 미일정)** + 600행 5건 (split 2·미일정 / accept 3) | launch 미선언 1건 (`control→imu_bno055`) |
+| `runtime/core_events` | 4 / 0 | 1 | 1 | X | 파일 745행(accept) | 시험 예외 1건 |
+| `runtime/core_features` | 37 / 0 | 1 | 2 | X | – | 시험 예외 1건 (29개 core 시험이 대신 소유 — 시험이 3곳에 분산) + **과잉선언 1건** (`core_events`, 어디서도 0회) |
+| `runtime/core_api_web` | 25 / 3 | 2 | 1 | O | – | 과잉선언 1건 (`core_events`) |
+| `runtime/core` | 21 / **74** | 4 | 0 | O | `ros_bridge.py` 759행 (**split 재개**) | 동적 import 1건(D-126, 테스트 이음새) |
+| `runtime/control` | **200** / 164 | 0 | 0(code) | O | **패키지 28,159행 (split, 미일정)** + 600행 5건 (split 2·미일정 / accept 3) | launch 미선언 1건 (`control→imu_bno055`) |
 | `site/fleet` | 23 / 27 | 1 | 1 | O | `signals.py` 621(split·미일정), `console.py` 767(accept) | – |
 | `sim/gz_sim` | 14 / 9 | 2 | 0 | O | – | launch 경유 `control`·`core`는 **실제 사용**(선언=실제), `navigation` 중복 선언 1건 |
-| `navigation/navigation` | 7 / 0 | launch 4 | 1 | X | – | **미선언 2건 + 방향 위반 2건** |
+| `runtime/navigation` | 7 / 0 | launch 4 | 1 | X | – | **미선언 2건 + 방향 위반 2건** |
 | `hardware/bringup` | 9 / 7 | 0 | 0(code) | O | – | – |
 | `hardware/led` | 2 / 4 | IDL | 1 | O | – | – |
 | `hardware/imu_bno055` | 1 / 2 | 0 | 0 | O(린터 위주) | – | 인바운드 미선언 1건 |
@@ -101,17 +101,17 @@
 | `core/web_common` | 4 | 5 | 4 | 5 | 5 | **91** | S | 0 fan-out 공용 자산 + 소비자 계약 테스트 4종 + 600/10k 예산 |
 | `products/pinky_pro` | 5 | 5 | 4 | 3 | 4 | **87** | A | D-196 신규(2026-09-24 잠정): config 전용·자기 시험 보유·fan-out 0. M4 — `deploy/robot/config/profile.*.yaml`이 속도 상한을 부분 복제(`test_nav2_profile_limits`가 일치 고정). M5 — core가 `robot.model`로 동적 조회(선언 없음, D-126과 같은 종류) |
 | `contracts/core_common` | 4 | 5 | 4 | 5 | 3 | **85** | A | fan-in 5의 공용 스키마, 그러나 기록된 역방향 1건 |
-| `core/core_api_web` | 4 | 4 | 4 | 5 | 3 | **80** | A | `deps` 파사드 + v1 직접 import 금지 게이트로 전파 반경 봉쇄, 과잉선언 1건 (`core_events` — 생산 코드 0회) |
+| `runtime/core_api_web` | 4 | 4 | 4 | 5 | 3 | **80** | A | `deps` 파사드 + v1 직접 import 금지 게이트로 전파 반경 봉쇄, 과잉선언 1건 (`core_events` — 생산 코드 0회) |
 | `site/fleet` | 4 | 4 | 4 | 4 | 5 | **83** | A | 자기 시험 27개, `fleet.bench` 공개면으로 gz_sim과 분리 |
 | `hardware/lamp_control` | 3 | 5 | 3 | 5 | 5 | **82** | A | IDL 경유 깨끗, 단 aarch64 전용·기능 시험 없음 — **기기 전용 ※** |
-| `core/core_events` | 3 | 5 | 3 | 4 | 5 | **79** | A | 책임 명확 단일 목적, 단 시험을 `core/test`가 소유 |
+| `runtime/core_events` | 3 | 5 | 3 | 4 | 5 | **79** | A | 책임 명확 단일 목적, 단 시험을 `core/test`가 소유 |
 | `hardware/sensor_adc` | 3 | 5 | 3 | 4 | 5 | **79** | A | 역할 명확, 단 aarch64 전용 + 린터성 시험만 — **기기 전용 ※** |
 | `hardware/imu_bno055` | 3 | 5 | 3 | 4 | 3 | **73** | B | 역할은 명확하나 호스트 검증 불가 + control의 미선언 인바운드 — **기기 전용 ※** |
 | `sim/gz_sim` | 3 | 4 | 3 | 4 | 4 | **71** | B | fleet·navigation 설치 없이는 벤치 검증 불가(M1) + fan-out 2, 선언은 launch 경유 포함 실제 사용(과잉선언 아님 — 정정), `navigation` 중복 선언 1건 |
-| `core/core` | 3 | 3 | 3 | 4 | 4 | **66** | B | fan-out 4 + 시험 74개가 도메인 전체 소유 + 시험 시 control 소스 필요 |
-| `core/core_features` | 3 | 3 | 2 | 4 | 3 | **59** | **C** | 자기 시험 0(시험이 3곳 분산) + 13개 기능 공존(5.6k행, 예산 내) + 과잉선언 1건 — 고장 통보형 병목 |
-| `core/control` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
-| `navigation/navigation` | 3 | 3 | 3 | 3 | 2 | **57** | **C** | 미선언 2건·방향 위반 2건, assembly(`web_*`)가 역할에 혼입 |
+| `runtime/core` | 3 | 3 | 3 | 4 | 4 | **66** | B | fan-out 4 + 시험 74개가 도메인 전체 소유 + 시험 시 control 소스 필요 |
+| `runtime/core_features` | 3 | 3 | 2 | 4 | 3 | **59** | **C** | 자기 시험 0(시험이 3곳 분산) + 13개 기능 공존(5.6k행, 예산 내) + 과잉선언 1건 — 고장 통보형 병목 |
+| `runtime/control` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
+| `runtime/navigation` | 3 | 3 | 3 | 3 | 2 | **57** | **C** | 미선언 2건·방향 위반 2건, assembly(`web_*`)가 역할에 혼입 |
 
 **분포**: S 8개 · A 6개 · B 3개 · C 3개 · D 0개 / **전체 평균 81.5 (A)** (A 평균 81.3) — 2026-09-23 20개 기준. `products/pinky_pro`(2026-09-24, D-196 신설)는 잠정 행이며 분포·평균에 넣지 않았다(다음 회차 재채점)
 **도메인 롤업**: `hardware` 85.4 · `apps` 85.0 · `sim` 83.5 · `site` 83.0 · `core` 79.4 · `navigation` 57.0 (C)
@@ -121,12 +121,12 @@
 ## 5. 축별로 본 해석
 
 **M1 독립 작업성 — 평균 4.0, 가장 큰 구조적 취약점은 "시험 소유 분산"**
-소형 모듈(`games`, `emotion`, `omx_adapter`, `bringup`)은 fan-out 0 + 자기 시험 보유로 만점에 가깝다. 반면 `core_features`(자기 시험 0)·`core_events`(0)·`web_common`(0)·`navigation`(0)은 **자기 코드를 남의 시험실에서 검증**한다. `core_features`는 28개 `core/test` 파일이 그 내용을 알고 있어, features를 고치려면 사실상 `core/core/test`를 같이 열어야 한다.
+소형 모듈(`games`, `emotion`, `omx_adapter`, `bringup`)은 fan-out 0 + 자기 시험 보유로 만점에 가깝다. 반면 `core_features`(자기 시험 0)·`core_events`(0)·`web_common`(0)·`navigation`(0)은 **자기 코드를 남의 시험실에서 검증**한다. `core_features`는 28개 `core/test` 파일이 그 내용을 알고 있어, features를 고치려면 사실상 `runtime/core/test`를 같이 열어야 한다.
 
 **M2 역할 명확성 — 예산 초과 2건이 전부 리스크 상위**
 `control`(28,159행, 예약된 split 계획 미일정)과 `core`(ros_bridge 759행, split 판정이 **재개**)가 여기서 가장 낮다. `core_features`는 하위 모듈마다 `AGENTS.md`가 있어 문서적 명확성은 있으나, **한 패키지 안에 13개 기능이 공존**한다. `navigation`은 launch assembly(`web_nav2`/`web_slam`이 core까지 띄움)가 자기 역할 안에 들어와 있다.
 
-**M3 동시 유지보수성 — 병렬 작업의 병목은 `core/core/test` 한 디렉터리**
+**M3 동시 유지보수성 — 병렬 작업의 병목은 `runtime/core/test` 한 디렉터리**
 충돌 면적은 코드 import가 아니라 **시험 디렉터리**에서 나온다. `core/test` 74개 파일이 core·core_common·core_events·core_features·web_common·control(테스트 이음새)의 검증을 겸한다. 최소 4개 모듈을 동시에 고치는 두 사람이면 여기서 만난다.
 반대로 `core_api_web`(deps 파사드 + `test_v1_import_boundary`), `fleet`(`fleet.bench` 공개면 + 구조 테스트), `gz_sim`(D-148 고정)은 **변경 전파를 코드로 봉쇄한 사례**다 — 이 패턴이 M3 만점의 기준이다.
 
@@ -179,7 +179,7 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 | 2 | §3 `control` | "600행 4건" | **5건** (split 2·미일정 / accept 3) | SIZE_VERDICTS: startup_calibration 965·calib_node 641 = split / safety/node 795·lane 611·lane_bev 611 = accept |
 | 3 | §3 `core_features` | "28개 core 시험이 대신 소유" | **29개** (그 외 fleet 1·루트 1 = 총 31) | 전역 AST 스캔(import 위치 무관). 시험이 **3곳에 분산** — M3=2 근거는 오히려 강화 |
 
-### 8.1 `core/control` (57, C) — 내부 군집 / 358 py·42,260행
+### 8.1 `runtime/control` (57, C) — 내부 군집 / 358 py·42,260행
 
 | 군집 | 파일 | 행 | 최대 파일 (행) | 성격 |
 |---|---|---|---|---|
@@ -204,7 +204,7 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 
 **해석**: 충돌 전부가 **패키지 내부**(외부 fan-out 0) → D-171 split 실행 시 (a) 노드+launch (b) 내부 라이브러리 (c) sensing (d) planning (e) safety+wander (f) tools **여섯 스트림**이 각자 이미 존재하는 자기 시험과 함께 갈라진다. `core/test` 5파일·7모듈이 유일한 외부 접점 — split 미일정이 병렬성을 막는 유일한 요인이라는 뜻(§6 과제 1의 독립 증거).
 
-### 8.2 `core/core_features` (59, C) — 13기능 / 38 py·5,583행 (**예산 내**)
+### 8.2 `runtime/core_features` (59, C) — 13기능 / 38 py·5,583행 (**예산 내**)
 
 | 특징 | 수치 | 의미 |
 |---|---|---|
@@ -214,10 +214,10 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 | 최대 기능 | docking 6파일 1,131 (manager 511) | 내부 fan-in 5, 기능 안에서만 |
 | 600행 파일 | 0 (safety/manager 정확히 500) | 파일 예산 안 |
 
-**충돌 지점**: 코드가 아니라 **`core/core/test` 한 디렉터리**가 병목 — command·safety·state·navigation이 **각각 6개** core 시험 파일에 의해 검증된다. features에서 두 명이 기능별로 일해도 시험은 core 작업자와 같은 폴더에서 만난다(전체 core 시험 74개 중 일부). D-168 `KNOWN_WITHOUT_OWN_TESTS` 예외 1건이 이 구조를 허용 중.
+**충돌 지점**: 코드가 아니라 **`runtime/core/test` 한 디렉터리**가 병목 — command·safety·state·navigation이 **각각 6개** core 시험 파일에 의해 검증된다. features에서 두 명이 기능별로 일해도 시험은 core 작업자와 같은 폴더에서 만난다(전체 core 시험 74개 중 일부). D-168 `KNOWN_WITHOUT_OWN_TESTS` 예외 1건이 이 구조를 허용 중.
 **해석**: 코드 패러다임은 이미 분리(13기능 × 자기 모듈), 실패하는 것은 **시험 소유**뿐 → §6 과제 2(자기 `test/` 신설)가 M1·M3를 동시에 올린다는 파일 단위 확인. fan-out 1·교차 3건이라 시험 이전 비용도 작다.
 
-### 8.3 `navigation/navigation` (57, C) — 모듈 6·513행 + launch 16파일·744행
+### 8.3 `runtime/navigation` (57, C) — 모듈 6·513행 + launch 16파일·744행
 
 - **조립 단일 지점**: `hardware.launch.py` 222행이 모듈 4개(site_map·params_rewrite·footprint_profile·profile_limits)를 전부 import. launch/는 **16파일**(.py 1 + .xml 15)이고 그중 `web_nav2`·`web_slam`(+ gz 대응)은 **core까지 띄우는 assembly** — D-168 `KNOWN_DIRECTION`의 navigation→control·navigation→core 2건이 정확히 여기서 나온다.
 - **시험 소유 0, 시험 위치 = 루트 `test/` 5파일** (params_rewrite 4 · profile_limits 2 · frame_prefix 2 · site_map 1 · footprint 1) — deploy·nav2 대역 시험과 **공유 디렉터리**라 외부 작업자와 충돌면이 겹친다.
@@ -243,7 +243,7 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 | 패키지 | 1순위 충돌 지점 | 누가 만남 | 해소 (§6 대응) |
 |---|---|---|---|
 | `control` | `setup.py`·`launch/` 단일 조립 + `test/` fan-in(85/55/26) + core/test 5파일·7모듈 | 노드 작업자 전원 / sensing·planning 수정자 / core 작업자 | 과제 1 **split** |
-| `core_features` | `core/core/test` 한 디렉터리에 13기능 시험 29개 | features 작업자 ↔ core 작업자 상면 | 과제 2 **자기 시험 신설** |
+| `core_features` | `runtime/core/test` 한 디렉터리에 13기능 시험 29개 | features 작업자 ↔ core 작업자 상면 | 과제 2 **자기 시험 신설** |
 | `navigation` | assembly `web_*` + `hardware.launch.py` + 루트 `test/` 공유 | launch 작업자 ↔ core·deploy 작업자 | 과제 3 **assembly 분리 + 시험 소유** |
 | `gz_sim` | 설치·벤치 공유 의존(navigation·fleet) + 통합 시험 재실행면 | sim ↔ navigation·fleet 작업자 | 과제 6 **게이트 스캐너 확장** |
 

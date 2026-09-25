@@ -94,7 +94,7 @@ def test_exact_v2_world_resolves_to_the_installed_control_bundle():
 
 
 def test_control_package_installs_the_complete_v2_map_bundle():
-    setup_py = (ROOT.parents[1] / "core" / "control" / "setup.py").read_text(
+    setup_py = (ROOT.parents[1] / "runtime" / "control" / "setup.py").read_text(
         encoding="utf-8"
     )
     assert "map_260905_update_v2" in setup_py
@@ -112,6 +112,6 @@ def test_map_v2_fleet_is_catalogued_from_the_control_bundle():
 
 
 def test_control_package_installs_the_map_v2_fleet_bundle():
-    setup_py = (ROOT.parents[1] / "core" / "control" / "setup.py").read_text(
+    setup_py = (ROOT.parents[1] / "runtime" / "control" / "setup.py").read_text(
         encoding="utf-8")
     assert "map_v2_fleet" in setup_py

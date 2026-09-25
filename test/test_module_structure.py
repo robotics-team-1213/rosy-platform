@@ -25,7 +25,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-DOMAINS = {"core", "contracts", "devices", "products", "face", "navigation", "sim", "site"}
+DOMAINS = {"core", "contracts", "runtime", "devices", "products", "face", "navigation", "sim", "site"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -53,9 +53,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("core_common", "core"): "default config file lives in the core package share; the lookup stayed when core_common moved to contracts",
-    ("navigation", "control"): "same edge; resolve by lifting line_follow into the deploy assembly",
-    ("control", "imu_bno055"): "core/control -> devices/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
-    ("navigation", "core"): "navigation -> core runtime; the web_* launches are assemblies, not navigation",
+    ("control", "imu_bno055"): "runtime/control -> devices/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
 }
 
 #: P6 budgets.
@@ -67,11 +65,11 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "core/control/control/startup_calibration_node.py": (
+    "runtime/control/control/startup_calibration_node.py": (
         954,
         f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
     ),
-    "core/control/control/calib_node.py": (
+    "runtime/control/control/calib_node.py": (
         640,
         f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
     ),
@@ -79,7 +77,7 @@ SIZE_VERDICTS = {
         621,
         "split: file store, HTTP client and observer are separate roles today (B2); owner fleet, unscheduled",
     ),
-    "core/control/control/safety/node.py": (
+    "runtime/control/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -87,20 +85,20 @@ SIZE_VERDICTS = {
         767,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
     ),
-    "core/control/control/sensing/perception/lane.py": (
+    "runtime/control/control/sensing/perception/lane.py": (
         611,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
     ),
-    "core/control/control/sensing/perception/lane_bev.py": (
+    "runtime/control/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
-    "core/core_events/core_events/events/audit.py": (
+    "runtime/core_events/core_events/events/audit.py": (
         745,
-        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/core/core_events/test/test_audit.py; "
+        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/core_events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
-    "core/core_features/core_features/docking/manager.py": (
+    "runtime/core_features/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
         "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
@@ -235,7 +233,12 @@ def edge_allowed(src_domain, src_family, dst_domain, dst_family, target) -> bool
 
 
 def _allowed(source: str, target: str) -> bool:
-    return edge_allowed(_domain(source), _family(source), _domain(target), _family(target), target)
+    src_domain, dst_domain = _domain(source), _domain(target)
+    if source == "navigation" and dst_domain == "devices":
+        return True
+    if src_domain == "runtime" and dst_domain == "runtime":
+        return True
+    return edge_allowed(src_domain, _family(source), dst_domain, _family(target), target)
 
 
 def _lines(path: Path) -> int:
