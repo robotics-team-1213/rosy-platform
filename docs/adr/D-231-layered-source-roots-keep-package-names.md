@@ -26,7 +26,7 @@
    |---|---|
    | `src/contracts/` 계약: 메시지, 스키마, 도메인 값 | `core/interfaces` → `contracts/interfaces`, `core/core_common` → `contracts/core_common` |
    | `src/runtime/` 로봇 실행과 최종 권한 | `core/core`, `core/core_features`, `core/core_events`, `core/control`, `core/core_api_web` → `runtime/<같은 이름>`, `navigation/navigation` → `runtime/navigation` |
-   | `src/devices/` 하드웨어 진실 | `bringup`, `imu_bno055`, `sensor_adc`, `lamp_control`, `led`는 그대로, `products/omx_adapter` → `devices/omx_adapter` |
+   | `src/devices/<계열>/` 하드웨어 진실 | `bringup`, `sensor_adc`, `lamp_control`, `led` → `devices/pinky_pro/<같은 이름>`, `imu_bno055` → `devices/common/imu_bno055`, `products/omx_adapter` → `devices/omx/omx_adapter` |
    | `src/products/` 제품 조합(설정만) | D-196의 `robots/pinky_pro` → `products/pinky_pro`, OMX 설정 → `products/omx`. 코드와 launch를 두지 않는다 |
    | `src/hmi/` 로봇 로컬 화면 | `face/emotion` → `hmi/emotion`, `core/web_common` → `hmi/web_common` |
    | `src/site/` 사이트 쪽 | `fleet`, `games` 그대로 |
@@ -36,8 +36,10 @@
    | `docs/architecture/` | `docs/concept/` 의 번호 문서 |
 
    `core_api_web`은 로봇 API라서 `runtime`이다. 그 안의 정적 화면 자산을 `hmi`로 떼는 일은 이 결정이 아니다.
+
+   **장치는 계열로 묶는다(2026-09-25 소유자 결정, D-196 원안).** `devices/pinky_pro/`는 Pinky 보드에만 붙는 패키지, `devices/common/`은 여러 차체가 쓰는 칩, `devices/omx/`는 팔이다. 두 번째 로봇이 생기면 무엇이 Pinky 전용인지 폴더만 보고 안다. 패키지 디렉터리 이름은 그대로라 D-207 결정 2(종류 이름은 두 번째 구현 전에 바꾸지 않는다)와 부딪히지 않는다. URDF(`sim/description`)는 제품 조립(D-196 P6) 때 옮기고, 이 묶음에서는 `sim`에 둔다. 계열 폴더로 한 단계 깊어지는 것은 장치 패키지뿐이므로, `parents[N]`으로 저장소 루트를 찾는 시험을 고칠 곳도 장치 패키지뿐이다.
 2. **패키지 이름 규칙은 D-227 결정 2 그대로다.** 기존 이름은 유지하고, `rosy_*`·`pinky_*` 접두는 다시 쓰지 않는다(D-147).
-3. **제품 폴더는 설정만 가진다.** 매니페스트, 차체 숫자, 능력, URDF 조합이다. launch와 코드는 `runtime`과 `devices`가 갖는다. Pinky 고유 코드는 `devices/`에만 있고, 여러 제품이 쓰는 실행 코드에 제품 이름을 붙이지 않는다.
+3. **제품 폴더는 설정만 가진다.** 매니페스트, 차체 숫자, 능력, URDF 조합이다. CORE가 설치 경로에서 찾도록 `package.xml`과 `CMakeLists.txt`만 가진 설정 패키지(D-196 `pinky_pro`)는 된다. launch와 코드는 `runtime`과 `devices`가 갖는다. Pinky 고유 코드는 `devices/`에만 있고, 여러 제품이 쓰는 실행 코드에 제품 이름을 붙이지 않는다.
 4. **목표 트리에서 받지 않는 자리.**
    - **`runtime/rosy_pinky_pro`(인식·주행·행동)** — 공유 실행 코드를 한 제품 이름에 묶는다. 두 번째 차체에서 복사가 생긴다. 결정 3으로 대신한다.
    - **`rosy_decision/providers/remote`** — 원격 AI가 로봇 명령 경로에 들어간다. 판단은 `core_features/decision`(D-228)이고, 원격 모델은 증거나 `/do` 의도만 낸다. 네트워크나 GPU PC가 죽어도 로봇 안의 규칙이 멈춘다.
@@ -47,7 +49,7 @@
    - **`data/episodes`, `data/datasets`** — D-186의 `data/teleop`·`data/drive`가 그대로다. 에피소드 형식이 정해지면 그 ADR에서 연다.
    - **`deploy/targets·provisioning·release` 재배치** — D-186 결정 6의 별도 변경이다.
 
-**이동 묶음(Transition):**
+**이동 묶음(Transition):** 단계별 실행은 [2026-09-25-d231-layered-move.md](../plans/2026-09-25-d231-layered-move.md)다.
 
 - **조건.** 다른 세션이 `src/`를 옮기거나 크게 고치는 중이 아니다. 이미지 릴리스 사이다(D-191). `refactor/multi-robot-structure`(D-196)를 같은 묶음에서 `main`에 머지하고, 그 `robots/pinky_pro`는 `products/pinky_pro`로 바로 들어간다.
 - **방법.** 목표 영역 하나당 커밋 하나. 각 커밋은 `git mv`와 그 경로를 참조하는 살아 있는 파일(ci.yml, Dockerfile, `.dockerignore`, deploy 스크립트, `tools/harness/harness.yaml`, 시험, README·AGENTS)을 함께 고친다. 기록 문서(`logs.md`, 날짜 붙은 plans, ADR 본문)의 옛 경로는 고치지 않는다(D-226).

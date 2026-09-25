@@ -1973,3 +1973,10 @@
 - gate 변화: 없음(문서+시험)
 - 결정: D-231
 - 교훈: 층 구조의 이득은 디렉터리 이동으로 얻고, 패키지 개명은 따로 비용을 따진다
+
+## 2026-09-25 · uncommitted · docs(plans): D-231 이동 묶음 계획, 장치는 계열로
+- 변경: 소유자 결정으로 장치 패키지를 계열로 묶는다(D-196 원안): `devices/pinky_pro/{bringup,sensor_adc,lamp_control,led}`, `devices/common/imu_bno055`, `devices/omx/omx_adapter`. D-231 표와 `test_target_layout.py`의 `TARGET`을 맞췄다. 제품 폴더는 코드 없는 설정 패키지(`package.xml`+`CMakeLists.txt`, 자체 `test/`)를 허용한다(D-196 `pinky_pro`). 실행 계획 `docs/plans/2026-09-25-d231-layered-move.md` 신설(단계 0 D-196 브랜치 통합과 충돌 15개 푸는 법 → 1 firmware → 2 contracts → 3 runtime → 4 hmi → 5 devices 계열 → 6 test/docs architecture → 7 시험 전환·colcon·벤치·이미지). 옛 D-196 계획의 Task 6–8에 대체 표시. 폴더는 옮기지 않았다
+- 증거: `python -m pytest test/test_target_layout.py -q` 5 passed (2026-09-25 Windows). `git merge-tree`로 D-196 브랜치 충돌 15개 확인. 경로별 살아 있는 참조 수를 `git grep`으로 셌다
+- gate 변화: 없음(문서+시험)
+- 결정: D-231
+- 교훈: 영역 이름만 바뀌는 이동은 깊이가 같아 `parents[N]`을 고치지 않는다. 깊이 변경은 계열 폴더로 들어가는 장치에 한정된다

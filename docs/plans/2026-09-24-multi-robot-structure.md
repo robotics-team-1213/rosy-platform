@@ -1,5 +1,7 @@
 # 다기종 로봇 구조 재편 실행 계획 (D-196)
 
+> **2026-09-25:** Task 6–8(폴더 이동)은 [D-231 이동 묶음 계획](2026-09-25-d231-layered-move.md)이 대체한다. 이 문서의 `src/hardware`·`src/apps`·`src/robots` 경로는 작성 당시의 기록이다. Task 0–5와 P4–P7은 그대로다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Pinky Pro, Pinky+OMX, 단독 OMX, 다른 주행 베이스를 같은 CORE로 돌릴 수 있게 `src/`에

@@ -18,12 +18,13 @@ TARGET = {
     "core/control": "runtime/control",
     "core/core_api_web": "runtime/core_api_web",
     "navigation/navigation": "runtime/navigation",
-    "devices/bringup": "devices/bringup",
-    "devices/imu_bno055": "devices/imu_bno055",
-    "devices/sensor_adc": "devices/sensor_adc",
-    "devices/lamp_control": "devices/lamp_control",
-    "devices/led": "devices/led",
-    "products/omx_adapter": "devices/omx_adapter",
+    # Devices group by family (D-196 original plan): pinky_pro board, common chips, omx arm.
+    "devices/bringup": "devices/pinky_pro/bringup",
+    "devices/sensor_adc": "devices/pinky_pro/sensor_adc",
+    "devices/lamp_control": "devices/pinky_pro/lamp_control",
+    "devices/led": "devices/pinky_pro/led",
+    "devices/imu_bno055": "devices/common/imu_bno055",
+    "products/omx_adapter": "devices/omx/omx_adapter",
     "face/emotion": "hmi/emotion",
     "core/web_common": "hmi/web_common",
     "site/fleet": "site/fleet",
@@ -65,13 +66,16 @@ def test_each_package_sits_where_the_phase_allows():
 
 
 def test_products_hold_configuration_not_packages():
-    # omx_adapter is the one package still waiting to move to devices/.
+    # A product may be a config-only ament package (package.xml + CMakeLists install
+    # its share, D-196) with its own test/, but it carries no runtime code.
+    # omx_adapter is the one code package still waiting to move to devices/omx.
     products = SRC / "products"
     waiting = products / "omx_adapter"
     code = [
         path.relative_to(ROOT).as_posix()
         for path in products.rglob("*")
-        if (path.suffix in {".py", ".cpp", ".hpp"} or path.name in {"package.xml", "setup.py"})
+        if (path.suffix in {".py", ".cpp", ".hpp"} or path.name == "setup.py")
+        and "test" not in path.relative_to(products).parts
         and (MOVED or waiting not in path.parents)
     ]
     assert code == []
