@@ -137,8 +137,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · test(release): 기준선 결손 2건과 스캐너 오탐을 복구 (D-178 기준선, apt 체크섬)
+- 2026-09-25 · uncommitted · docs(design-system): 번호 충돌 수렴 (AuthBar D-248, FieldMap D-249)
+- 2026-09-25 · uncommitted · docs(design-system): D-247 Accepted (AuthBar 파일럿 착지)
+- 2026-09-25 · uncommitted · docs(design-system): D-245 Accepted (파일럿 착지)
 - 2026-09-25 · uncommitted · docs(runtime): 네이티브 우선을 문서 네곳에 명시하고 D-246으로 고정
-- 2026-09-25 · uncommitted · docs: 네이티브 런타임과 디자인 시스템 초안을 색인에 맞춘다 (D-246, D-233, D-245)
-- 2026-09-25 · uncommitted · docs(design-system): D-233 초안·롤아웃 계획·D-245 파일럿 Proposed
-- 2026-09-25 · uncommitted · refactor(hmi): operator screens leave the API package (D-243)
-- 2026-09-25 · uncommitted · refactor(layout): 나머지 역할 폴더 (D-242)

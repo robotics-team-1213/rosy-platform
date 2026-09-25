@@ -61,9 +61,10 @@ def test_builds_payload_only_then_assembles_unsigned_release():
 def test_ros_apt_source_is_checksum_pinned_like_the_image_workflow():
     image = (ROOT / ".github" / "workflows" / "build-pinky-image.yml").read_text(encoding="utf-8")
     text = _run_text()
-    pin = "0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5"
+    # Public apt-source SHA-256 checksum: integrity data, not a credential.
+    apt_source_sha256 = "0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5"
 
-    assert pin in text and pin in image
+    assert apt_source_sha256 in text and apt_source_sha256 in image
     assert "sha256sum --check --strict" in text
 
 

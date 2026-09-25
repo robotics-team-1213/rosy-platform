@@ -2089,3 +2089,9 @@
 - gate 변화: 없음. D-248·D-249 Accepted (파일럿 증거는 기존 회차·프로브 그대로)
 - 결정: 번호는 공유 자원이므로 선점 확인 후 배정, 플랜은 실행 순서대로 재배열한다
 - 교훈: add -A식 커밋이 타 세션 작업을 쓸어담는다 — 이 커밋부터 내 경로만 지정 커밋한다
+## 2026-09-25 · uncommitted · test(release): 기준선 결손 2건과 스캐너 오탐을 복구 (D-178 기준선, apt 체크섬)
+- 변경: D-178 기준선 표에 `omx`(93 S)·`dashboard`(73 B) 잠정 행 추가 — D-232·D-243으로 패키지가 늘어 집합 동일성 시험이 붉음. `test_native_payload_workflow.py`의 apt 소스 SHA-256 핀 변수명을 `pin` → `apt_source_sha256`로 바꿔 그 행에 무결성 맥락이 뜨게 함 (스캐너는 아무 매처도 넓히지 않음)
+- 증거: mutation-proven 적용 — dashboard 총점 조작·omx 행 삭제·dashboard 등급 조작 3건 모두 red, 복원 green. 스캐너 직접 프로브 — 무결성 맥락 없는 hex 할당은 여전히 'high-entropy-token' 보고(context 없음), `api_token`은 integrity 단어가 있어도 credential 보고, 고친 행만 침묵. `pytest test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_native_payload_workflow.py -q` 73 passed
+- gate 변화: 없음 (SOURCE GO, ARTIFACT/DEVICE HOLD 유지)
+- 결정: 스캐너 매처를 넓히지 않고 값의 정체를 행 위에 쓰는 쪽을 택 — 검사를 고장 내어 통과시키는 것은 위증이다
+- 교훈: 새 패키지는 코드 추가와 동시에 기준선 행이 없으면 집합 동일성 시험이 붉다 — 패키지 이동(D-232)도 예외가 아니다
