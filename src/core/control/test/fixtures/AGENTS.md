@@ -23,7 +23,9 @@ Recorded lidar scans, maps, and localization snapshots used by the ROS-free Cont
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `mapping-finish-2026-09-08/` | Saved track maps and identity/corner scans that `test_straight_escape.py` reads (moved from `docs/validation` by D-226: data a test reads lives beside the test) |
 
 ## For AI Agents
 

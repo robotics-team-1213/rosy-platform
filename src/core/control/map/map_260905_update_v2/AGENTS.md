@@ -29,7 +29,7 @@ plans, generation/validation scripts, and an integrity manifest. Read
 - `config/*.patch.yaml` are PROPOSALS, not finished Nav2 configs.
 - End-to-end results (2026-09-20, Gazebo Harmonic): bundle integrity and world
   load PASS; physics/sensor bridge/SLAM/driving FAIL or BLOCKED — recorded in
-  `../../docs/validation/map-260905-update-v2-2026-09-20/result.md`.
+  `../../../../../docs/validation/map-260905-update-v2-2026-09-20/result.md`.
 
 ### Testing Requirements
 
@@ -39,7 +39,7 @@ plans, generation/validation scripts, and an integrity manifest. Read
 
 ### Internal
 
-- `../../` control package; end-to-end evidence in `../../docs/validation/`
+- `../../` control package; end-to-end evidence in `../../../../../docs/validation/`
 
 ### External
 

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Operator-facing notes for camera ground calibration, localization, and narrow-passage navigation, plus dated validation dumps. Korean prose. These are package notes, not the repo governance docs in `Rosy OS/docs/`.
+Operator-facing notes for camera ground calibration, localization, and narrow-passage navigation. Korean prose. These are package notes, not the repo governance docs in `Rosy OS/docs/`.
 
 ## Key Files
 
@@ -17,16 +17,14 @@ Operator-facing notes for camera ground calibration, localization, and narrow-pa
 
 ## Subdirectories
 
-| Directory | Purpose |
-|-----------|---------|
-| `validation/` | Dated mapping/planner evidence (`*.npz`, `*.json`). Artifact dumps — no nested AGENTS.md |
+None. Dated evidence goes in `../../../../docs/validation/`; data a test reads goes in `../test/fixtures/` (D-226).
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - Unmeasured camera geometry stays `distance_m: null`. A plausible fake distance is worse than unknown.
-- Do not treat `validation/` snapshots as the pytest suite; tests load `../test/fixtures/`.
+- Do not add a `validation/` folder here. Dated results go in the repo `docs/validation/<topic>-<YYYY-MM-DD>/` (D-226).
 - Repo-level SRS/ADR changes go in `../../../docs/`, not here.
 
 ### Testing Requirements

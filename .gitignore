@@ -110,3 +110,6 @@ reference/src/*.zip
 Thumbs.db
 *.swp
 *~
+
+# Linked checkouts. Not part of this branch.
+.worktrees/

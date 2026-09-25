@@ -9,7 +9,7 @@ from control.control.footprint_sweep import footprint_translation_limits
 
 
 def test_actual_corner_has_a_short_fixed_heading_exit():
-    folder=Path(__file__).parents[1]/'docs/validation/mapping-finish-2026-09-08/v4-polygon-planner'
+    folder=Path(__file__).parents[0]/'fixtures/mapping-finish-2026-09-08/v4-polygon-planner'
     saved=np.load(folder/'track_map.npz')
     arr=saved['data']; m=OccupancyMap(arr.shape[1],arr.shape[0],float(saved['resolution']),saved['origin'])
     m.data=arr.ravel().tolist()
@@ -95,7 +95,7 @@ def test_sensor_travel_selects_reverse_and_rejects_missing_full_segment():
 
 
 def test_actual_lidar_blocked_forward_escape_selects_observed_reverse():
-    folder=Path(__file__).parents[1]/'docs/validation/mapping-finish-2026-09-08/v5-forward-escape'
+    folder=Path(__file__).parents[0]/'fixtures/mapping-finish-2026-09-08/v5-forward-escape'
     saved=np.load(folder/'track_map.npz'); arr=saved['data']
     m=OccupancyMap(arr.shape[1],arr.shape[0],float(saved['resolution']),saved['origin']); m.data=arr.ravel().tolist()
     scan=json.loads((folder/'corner_scan.json').read_text()); r=scan['limits']['rotation_estimate']
