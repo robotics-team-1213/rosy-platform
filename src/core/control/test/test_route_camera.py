@@ -5,7 +5,7 @@ import math
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.route_camera import MANOEUVRE_MAX_TRAVEL_M, RouteCameraFollower
+from control.sensing.perception.route_camera import MANOEUVRE_MAX_TRAVEL_M, RouteCameraFollower
 from lane_scenarios import (
     GRAPH,
     SCENARIOS,

@@ -9,7 +9,7 @@ search drive. YOLO is not involved by design (SRS NAV-007).
 import numpy as np
 import pytest
 
-from control.sensing.lane import (
+from control.sensing.perception.lane import (
     LANE_MAX_LINEAR_M_S,
     LaneObservation,
     LaneTracker,
@@ -57,24 +57,24 @@ def test_lane_speed_cap_is_a_crawl():
 
 
 def test_centred_lane_commands_no_turn():
-    from control.sensing.lane import steer_correction
+    from control.sensing.perception.lane import steer_correction
     assert steer_correction(0.0) == pytest.approx(0.0)
 
 
 def test_right_lane_commands_right_turn():
     """오차 + (차선 우측) → 우회전 = 음각속도 (ROS CCW+)."""
-    from control.sensing.lane import steer_correction
+    from control.sensing.perception.lane import steer_correction
     assert steer_correction(0.5, max_angular=1.0) == pytest.approx(-0.5)
 
 
 def test_steering_saturates_at_max_angular():
-    from control.sensing.lane import steer_correction
+    from control.sensing.perception.lane import steer_correction
     assert steer_correction(1.0, gain=2.0, max_angular=0.4) == pytest.approx(-0.4)
     assert steer_correction(-1.0, gain=2.0, max_angular=0.4) == pytest.approx(0.4)
 
 
 def test_bad_steering_gains_fail_closed():
-    from control.sensing.lane import steer_correction
+    from control.sensing.perception.lane import steer_correction
     with pytest.raises(ValueError):
         steer_correction(0.5, gain=-1.0)
     with pytest.raises(ValueError):
@@ -133,8 +133,8 @@ class TestLaneTracker:
 
 import math
 
-from control.sensing.camera_ground import simulation_ground_plane
-from control.sensing.lane import detect_lane_centre
+from control.sensing.perception.camera_ground import simulation_ground_plane
+from control.sensing.perception.lane import detect_lane_centre
 
 _HALF = 0.0925
 _W, _H = 320, 180

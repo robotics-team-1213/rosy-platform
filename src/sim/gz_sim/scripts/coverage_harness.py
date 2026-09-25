@@ -65,7 +65,7 @@ END_TOLERANCE_M = 0.005
 def tour_plan(graph, start_xy=None):
     """(keys, start pose, length m) of lane_coverage's tour from `start_xy`
     (default: the parking spur's junction point, graph["parking"])."""
-    from control.sensing.lane_coverage import coverage_route, tour_length, tour_start_pose
+    from control.sensing.perception.lane_coverage import coverage_route, tour_length, tour_start_pose
 
     start_xy = tuple(graph["parking"]["points"][0]) if start_xy is None else tuple(start_xy)
     keys = coverage_route(graph, start_xy)

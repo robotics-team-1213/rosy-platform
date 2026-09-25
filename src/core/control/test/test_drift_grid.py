@@ -147,9 +147,9 @@ A_MIN_PASS = {
 def run_one(kind, cell, index):
     """One closed-loop run (module level, so a worker process can run it)."""
     import lane_sim
-    from control.sensing.route_camera import RouteCameraFollower
-    from control.sensing.route_hybrid import RouteHybridFollower
-    from control.sensing.route_map import RouteMapFollower
+    from control.sensing.perception.route_camera import RouteCameraFollower
+    from control.sensing.perception.route_hybrid import RouteHybridFollower
+    from control.sensing.perception.route_map import RouteMapFollower
 
     scenario = SCENARIOS[index]
     error = CELLS[cell]

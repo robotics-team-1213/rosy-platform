@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from control.sensing.lane_boundaries import LaneBoundaryTracker
-from control.sensing.lane_debug import PANEL_H, PANEL_W, next_publish_due, render_debug
+from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
+from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, next_publish_due, render_debug
 from lane_sim import CAM_X, GROUND, KW, lane
 
 STRAIGHT = np.array([(-1.0, 0.0), (1.4, 0.0)])
@@ -104,9 +104,9 @@ def test_route_modes_draw_the_trackers_lines_in_the_birds_eye_panel(kind):
     """The route followers keep their camera tracker's intermediate results
     under last["tracker"] and its grid under `view`: the bird's-eye panel
     must show them (it was blank for route_a and route_b)."""
-    from control.sensing.route_camera import RouteCameraFollower
-    from control.sensing.route_hybrid import RouteHybridFollower
-    from control.sensing.route_map import RouteMapFollower
+    from control.sensing.perception.route_camera import RouteCameraFollower
+    from control.sensing.perception.route_hybrid import RouteHybridFollower
+    from control.sensing.perception.route_map import RouteMapFollower
     from lane_scenarios import GRAPH, SCENARIOS, WORLD
 
     scenario = SCENARIOS[5]

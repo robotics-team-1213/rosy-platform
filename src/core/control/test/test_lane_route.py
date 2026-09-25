@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import yaml
 
-from control.sensing.lane_route import LaneRoute
+from control.sensing.perception.lane_route import LaneRoute
 from lane_scenarios import GRAPH, SCENARIOS
 
 
@@ -68,7 +68,7 @@ def test_route_rejects_a_u_turn_back_along_the_same_road():
 
 
 def _tour():
-    from control.sensing.lane_coverage import coverage_route
+    from control.sensing.perception.lane_coverage import coverage_route
     start = tuple(GRAPH["parking"]["points"][0])
     return coverage_route(GRAPH, start), start
 

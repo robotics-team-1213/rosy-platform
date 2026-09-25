@@ -10,8 +10,8 @@ import json
 import pytest
 
 from control.control.obstacle_risk import camera_hold
-from control.sensing.camera_evidence import REGION_CAP, observation_payload
-from control.sensing.camera_policy import CameraPolicy
+from control.sensing.perception.camera_evidence import REGION_CAP, observation_payload
+from control.sensing.perception.camera_policy import CameraPolicy
 
 
 def frame(cliff=False, blocked=False, valid=True):
@@ -172,7 +172,7 @@ def test_classify_frame_truncates_to_the_cap_and_keeps_the_biggest_regions():
     """
     np = pytest.importorskip('numpy')
     pytest.importorskip('cv2')
-    from control.sensing.camera import classify_frame
+    from control.sensing.perception.camera import classify_frame
 
     frame = np.full((240, 320, 3), 100, dtype=np.uint8)
     # 70 separated blobs in the upper half. Each must clear the area floor, which

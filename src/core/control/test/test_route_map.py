@@ -8,8 +8,8 @@ import cv2
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.lane_bev import MEMORY_CONFIDENCE
-from control.sensing.route_map import (
+from control.sensing.perception.lane_bev import MEMORY_CONFIDENCE
+from control.sensing.perception.route_map import (
     CONFIDENCE_MIN,
     MAX_SPREAD_M,
     MIN_MATCH,

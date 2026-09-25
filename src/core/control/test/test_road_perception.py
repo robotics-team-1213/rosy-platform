@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from control.sensing.road import (
+from control.sensing.perception.road import (
     PreviewRateLimiter,
     RoadObservation,
     RoadPreviewConfig,

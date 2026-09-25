@@ -17,12 +17,12 @@ import numpy as np
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
 sys.path.insert(0, REPO + "/src/core/control")
 
-from control.sensing.camera_ground import simulation_ground_plane  # noqa: E402
-from control.sensing.lane import detect_lane_error, detect_lane_centre, LANE_LINE_WIDTH_M  # noqa: E402
-from control.sensing.lane_boundaries import LaneBoundaryTracker  # noqa: E402
-from control.sensing.lane_bev import BEV_CELL_M  # noqa: E402
-from control.sensing.lane_debug import render_debug, PANEL_W, PANEL_H  # noqa: E402
-from control.sensing.road import detect_road_observation  # noqa: E402
+from control.sensing.perception.camera_ground import simulation_ground_plane  # noqa: E402
+from control.sensing.perception.lane import detect_lane_error, detect_lane_centre, LANE_LINE_WIDTH_M  # noqa: E402
+from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
+from control.sensing.perception.lane_bev import BEV_CELL_M  # noqa: E402
+from control.sensing.perception.lane_debug import render_debug, PANEL_W, PANEL_H  # noqa: E402
+from control.sensing.perception.road import detect_road_observation  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VIDEO = REPO + "/data/teleop/learning/teleop_20260919_151213_part%02d.mp4"
@@ -213,7 +213,7 @@ def main():
     cap = cv2.VideoCapture(VIDEO % part)
     tracker = LaneBoundaryTracker(camera_x_offset_m=X_OFF)
     frozen = LaneBoundaryTracker(camera_x_offset_m=X_OFF)
-    from control.sensing.lane_bev import BirdsEye
+    from control.sensing.perception.lane_bev import BirdsEye
     vo = BevVO(BirdsEye(GROUND, W, H, X_OFF))
     writer = cv2.VideoWriter(os.path.join(out_dir, f"overlay_p{part:02d}_mp4v.mp4"),
                              cv2.VideoWriter_fourcc(*"mp4v"), FPS, (2 * PANEL_W, 2 * PANEL_H))

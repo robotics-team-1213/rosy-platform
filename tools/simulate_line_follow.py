@@ -22,7 +22,7 @@ for _path in (
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from control.sensing.lane import IRLineCalibration, detect_ir_line, detect_lane_error
+from control.sensing.perception.lane import IRLineCalibration, detect_ir_line, detect_lane_error
 from core_events.events.bus import EventBus
 from core_features.line_follow import (
     LineFollowConfig,

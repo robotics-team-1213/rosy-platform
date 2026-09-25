@@ -11,7 +11,7 @@ import inspect
 import pytest
 
 from control.sensing import camera_ground
-from control.sensing.camera_ground import focal_from_hfov, ground_plane
+from control.sensing.perception.camera_ground import focal_from_hfov, ground_plane
 
 HEIGHT, PITCH = 0.08, 0.25
 WIDTH, HEIGHT_PX, HFOV = 320, 240, 1.2
@@ -197,7 +197,7 @@ def test_classify_frame_reports_unranged_until_a_calibration_is_supplied():
     """End to end: the pipeline stays honest without a measured calibration."""
     np = pytest.importorskip('numpy')
     pytest.importorskip('cv2')
-    from control.sensing.camera import classify_frame
+    from control.sensing.perception.camera import classify_frame
 
     frame = np.full((240, 320, 3), 100, dtype=np.uint8)
     frame[170:225, 155:170] = (20, 20, 220)

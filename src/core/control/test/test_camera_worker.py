@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from control.sensing.camera_worker import (
+from control.sensing.perception.camera_worker import (
     CameraFrame,
     CameraPreprocessProfile,
     CameraPreprocessWorker,

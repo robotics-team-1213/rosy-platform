@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from control.sensing.lane import (
+from control.sensing.perception.lane import (
     IRLineCalibration,
     detect_ir_line,
     detect_lane_error,

@@ -15,10 +15,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from control.sensing.camera_ground import simulation_ground_plane
-from control.sensing.lane import LaneCornerTracker, LaneObservation
+from control.sensing.perception.camera_ground import simulation_ground_plane
+from control.sensing.perception.lane import LaneCornerTracker, LaneObservation
 from control.sensing import lane_bev
-from control.sensing.lane_bev import (
+from control.sensing.perception.lane_bev import (
     BirdsEye,
     LaneEdgeFollower,
     error_for_curvature,

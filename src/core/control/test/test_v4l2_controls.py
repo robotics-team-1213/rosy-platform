@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from control.sensing.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
+from control.sensing.perception.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
 
 
 CV2 = SimpleNamespace(

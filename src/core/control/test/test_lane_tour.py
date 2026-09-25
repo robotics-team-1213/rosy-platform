@@ -32,9 +32,9 @@ against the truth.
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.lane_coverage import coverage_route, tour_start_pose
-from control.sensing.route_camera import RouteCameraFollower
-from control.sensing.route_hybrid import (
+from control.sensing.perception.lane_coverage import coverage_route, tour_start_pose
+from control.sensing.perception.route_camera import RouteCameraFollower
+from control.sensing.perception.route_hybrid import (
     BEND_TURN_RAD,
     RouteHybridFollower,
     road_bends,

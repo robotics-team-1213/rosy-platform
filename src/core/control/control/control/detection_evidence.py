@@ -25,7 +25,7 @@ MAX_PACKET_BYTES = 8192
 MAX_DETECTIONS = 64
 MAX_LABEL_CHARS = 64
 #: Input-plane bounds follow the camera profile contract
-#: (sensing/camera_worker.py).  The inference plane is smaller in practice;
+#: (sensing/perception/camera_worker.py).  The inference plane is smaller in practice;
 #: the bound only rejects impossible specifications.
 MIN_INPUT_PX = 8
 MAX_INPUT_PX = 4096

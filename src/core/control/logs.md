@@ -518,3 +518,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-25 · uncommitted · refactor(control): camera and lane evidence under sensing/perception
+
+- 변경: 카메라·차선·도로·장면 모듈을 `control/sensing/perception/`으로 이동. 라이다·차체·도크 태그는 `sensing/`에 남김. import 경로를 같이 고침.
+- 증거: `python -m pytest src/core/control/test/test_perception_folder.py src/core/control/test/test_lane.py src/core/control/test/test_camera.py src/core/control/test/test_road_perception.py src/core/control/test/test_scene_context.py src/core/control/test/test_line_modes.py test/test_module_structure.py -q` 131 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-209, D-228
+- 교훈: 없음

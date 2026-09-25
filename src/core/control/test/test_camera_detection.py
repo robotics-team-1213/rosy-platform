@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
-from control.sensing.camera import classify_frame
+from control.sensing.perception.camera import classify_frame
 from control.control.obstacle_risk import camera_hold
-from control.sensing.camera_evidence import legacy_flags
+from control.sensing.perception.camera_evidence import legacy_flags
 
 
 def test_legacy_flags_hold_on_invalid_then_recover_on_valid_clear():

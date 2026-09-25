@@ -8,8 +8,8 @@ import pytest
 import yaml
 
 from control.sensing.body import WHEEL_R, WHEEL_Y
-from control.sensing.lane_bev import MEMORY_CONFIDENCE, MEMORY_TRAVEL_M
-from control.sensing.lane_boundaries import (
+from control.sensing.perception.lane_bev import MEMORY_CONFIDENCE, MEMORY_TRAVEL_M
+from control.sensing.perception.lane_boundaries import (
     BRANCH_MAX_LATERAL, MEMORY_MAX_BEARING_RAD, ONE_MAX_CONFIDENCE, LaneBoundaryTracker, TIERS,
 )
 from lane_sim import (  # noqa: E402  (test-directory helper)

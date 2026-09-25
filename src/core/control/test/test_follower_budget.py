@@ -26,9 +26,9 @@ import time
 
 import numpy as np
 import pytest
-from control.sensing.route_camera import RouteCameraFollower
-from control.sensing.route_hybrid import RouteHybridFollower
-from control.sensing.route_map import RouteMapFollower
+from control.sensing.perception.route_camera import RouteCameraFollower
+from control.sensing.perception.route_hybrid import RouteHybridFollower
+from control.sensing.perception.route_map import RouteMapFollower
 from lane_scenarios import GRAPH, SCENARIOS, run_scenario
 from lane_sim import CAM_X
 

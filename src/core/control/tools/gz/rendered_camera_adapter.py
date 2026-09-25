@@ -10,9 +10,9 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32, String
-from control.sensing.camera import classify_frame
-from control.sensing.camera_evidence import observation_payload
-from control.sensing.camera_policy import CameraPolicy
+from control.sensing.perception.camera import classify_frame
+from control.sensing.perception.camera_evidence import observation_payload
+from control.sensing.perception.camera_policy import CameraPolicy
 
 
 class RenderedCamera(Node):

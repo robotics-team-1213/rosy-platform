@@ -1,11 +1,11 @@
 import pytest
 
-from control.sensing.road import (
+from control.sensing.perception.road import (
     LaneObservation,
     RoadMarkingObservation,
     RoadObservation,
 )
-from control.sensing.scene_context import (
+from control.sensing.perception.scene_context import (
     GENERIC_CONTEXT_ID,
     GENERIC_PROFILE_REVISION,
     SceneContextMatcher,

@@ -13,7 +13,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from control.sensing.camera_ground import simulation_ground_plane
+from control.sensing.perception.camera_ground import simulation_ground_plane
 
 ROOT = Path(__file__).resolve().parents[1]
 H = 0.0925
@@ -153,7 +153,7 @@ def stl_world(wall_footprint=False):
     the junction and lap tests were first measured in; every test that
     uses the default passed unchanged when it flipped, and the drift grid's
     end errors fell, B's clean cell 6.3 -> 2.6 mm)."""
-    from control.sensing.paint_localizer import _wall_footprint
+    from control.sensing.perception.paint_localizer import _wall_footprint
 
     path = ROOT / "map" / "map_v2_fleet" / "scripts" / "stl_scene.py"
     spec = importlib.util.spec_from_file_location("stl_scene_for_lane_sim", path)

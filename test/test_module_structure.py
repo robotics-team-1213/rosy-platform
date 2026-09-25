@@ -85,11 +85,11 @@ SIZE_VERDICTS = {
         767,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
     ),
-    "core/control/control/sensing/lane.py": (
+    "core/control/control/sensing/perception/lane.py": (
         611,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
     ),
-    "core/control/control/sensing/lane_bev.py": (
+    "core/control/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),

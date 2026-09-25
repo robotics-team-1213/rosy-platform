@@ -1,7 +1,7 @@
 """All-lane coverage tour (mission plan stage 2, step 1)."""
 
 import pytest
-from control.sensing.lane_coverage import (
+from control.sensing.perception.lane_coverage import (
     coverage_route,
     covered,
     directed_keys,
@@ -102,7 +102,7 @@ def test_a_start_off_every_two_way_road_is_refused():
 
 def test_the_tour_start_pose_heads_along_the_first_key():
     import math
-    from control.sensing.lane_coverage import tour_start_pose
+    from control.sensing.perception.lane_coverage import tour_start_pose
     keys = coverage_route(GRAPH, START)
     x, y, yaw = tour_start_pose(GRAPH, keys, START)
     assert math.dist((x, y), START) < 0.005

@@ -18,12 +18,12 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String
 
 from . import executor_choice
-from .sensing.camera_homography import (
+from .sensing.perception.camera_homography import (
     CalibrationThresholds,
     load_homography_profile,
 )
-from .sensing.camera_ground import simulation_ground_plane
-from .sensing.road import (
+from .sensing.perception.camera_ground import simulation_ground_plane
+from .sensing.perception.road import (
     RoadObservation,
     RoadPerceptionConfig,
     RoadPreviewConfig,
@@ -32,7 +32,7 @@ from .sensing.road import (
     render_road_preview,
     road_observation_payload,
 )
-from .sensing.scene_context import (
+from .sensing.perception.scene_context import (
     SceneContextMatcher,
     default_scene_context_store,
 )

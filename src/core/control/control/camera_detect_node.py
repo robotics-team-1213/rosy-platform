@@ -8,7 +8,7 @@
   /camera/blocked     obstacle filling the view ahead
   /camera/side        -1 left, +1 right, 0 center/unknown
   /camera/front       OV5647 BGR8 (libcamera RGB888 is BGR in memory)
-  /camera/observation compact per-frame evidence; schema in sensing/camera_evidence
+  /camera/observation compact per-frame evidence; schema in sensing/perception/camera_evidence
   /camera/controls    the exposure/gain/white-balance the sensor was frozen at
   /camera/debug       one-line human-readable column scores
 """
@@ -23,15 +23,15 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32, String
 
 from . import executor_choice
-from .sensing.camera import classify_frame
-from .sensing.camera_controls import (
+from .sensing.perception.camera import classify_frame
+from .sensing.perception.camera_controls import (
     lock_action, lock_controls, lock_summary, static_controls)
-from .sensing.camera_evidence import observation_payload
-from .sensing.camera_ground import ground_plane
-from .sensing.camera_homography import CalibrationThresholds, load_homography_profile
-from .sensing.camera_policy import CameraPolicy
-from .sensing.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
-from .sensing.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
+from .sensing.perception.camera_evidence import observation_payload
+from .sensing.perception.camera_ground import ground_plane
+from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
+from .sensing.perception.camera_policy import CameraPolicy
+from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
+from .sensing.perception.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
 
 
 class _OpenCVCamera:

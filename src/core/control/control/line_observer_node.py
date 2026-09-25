@@ -22,8 +22,8 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
-from .sensing.camera_ground import simulation_ground_plane
-from .sensing.lane import (
+from .sensing.perception.camera_ground import simulation_ground_plane
+from .sensing.perception.lane import (
     IRLineCalibration,
     LaneCornerTracker,
     detect_ir_line,
@@ -31,13 +31,13 @@ from .sensing.lane import (
     detect_lane_error,
     line_observation_payload,
 )
-from .sensing.lane_bev import LaneEdgeFollower, pose_if_fresh
-from .sensing.lane_boundaries import LaneBoundaryTracker
-from .sensing.lane_debug import next_publish_due, render_debug
-from .sensing.paint_localizer import PaintMap
-from .sensing.route_camera import RouteCameraFollower
-from .sensing.route_hybrid import RouteHybridFollower
-from .sensing.route_map import RouteMapFollower
+from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
+from .sensing.perception.lane_boundaries import LaneBoundaryTracker
+from .sensing.perception.lane_debug import next_publish_due, render_debug
+from .sensing.perception.paint_localizer import PaintMap
+from .sensing.perception.route_camera import RouteCameraFollower
+from .sensing.perception.route_hybrid import RouteHybridFollower
+from .sensing.perception.route_map import RouteMapFollower
 
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.

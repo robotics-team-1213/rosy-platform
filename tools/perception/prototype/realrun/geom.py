@@ -1,7 +1,7 @@
 import os, sys, math, numpy as np
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..","..","..","src","core","control"))
-from control.sensing.camera_ground import simulation_ground_plane
-from control.sensing.lane_bev import BirdsEye, BEV_CELL_M
+from control.sensing.perception.camera_ground import simulation_ground_plane
+from control.sensing.perception.lane_bev import BirdsEye, BEV_CELL_M
 for name,(w,h,ch,p,hf,xo) in {"real":(320,240,0.067,0.1396,2*math.atan(160/281.6),0.034),
                           "sim":(320,180,0.060194,math.radians(25),1.1519,0.034)}.items():
     g=simulation_ground_plane(source="GAZEBO",simulation_enabled=True,use_sim_time=True,width_px=w,height_px=h,height_m=ch,pitch_rad=p,hfov_rad=hf,max_range_m=0.6)

@@ -1,7 +1,7 @@
 import math, numpy as np, cv2, sys
 sys.argv=["x","1"]
 import replay as R
-from control.sensing.lane_bev import BirdsEye
+from control.sensing.perception.lane_bev import BirdsEye
 g=R.GROUND
 rng=np.random.default_rng(0)
 tex=cv2.GaussianBlur((rng.random((800,800))*255).astype(np.float32),(0,0),3)

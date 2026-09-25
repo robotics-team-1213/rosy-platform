@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 import pytest
-from control.sensing.paint_localizer import (
+from control.sensing.perception.paint_localizer import (
     GAP_MAX_S,
     GAP_MAX_TRAVEL_M,
     PaintLocalizer,
@@ -184,7 +184,7 @@ def test_the_along_track_spread_follows_the_wheel_scale_not_the_sideways_slip():
     well under MAX_SPREAD_M, or a long corridor trips the SPREAD stop with
     an estimate a few mm off (all-lane tour, seed 3: LOCALISE_STOP on
     east:r at 20.0 mm, 98 % of it along-track, estimate 1.7 mm off)."""
-    from control.sensing.route_map import MAX_SPREAD_M
+    from control.sensing.perception.route_map import MAX_SPREAD_M
     blank = np.full((180, 320), 109, np.uint8)
     worst_along, least_lateral = 0.0, math.inf
     for seed in range(4):

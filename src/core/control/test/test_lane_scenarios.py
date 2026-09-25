@@ -5,8 +5,8 @@ import math
 import lane_sim
 import numpy as np
 import pytest
-from control.sensing.lane import LaneObservation
-from control.sensing.lane_boundaries import LaneBoundaryTracker
+from control.sensing.perception.lane import LaneObservation
+from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
 from lane_scenarios import (
     LOST_AFTER_S,
     SCENARIOS,

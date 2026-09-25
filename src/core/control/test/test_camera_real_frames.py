@@ -25,7 +25,7 @@ import pathlib
 import numpy as np
 import pytest
 
-from control.sensing.camera import classify_frame
+from control.sensing.perception.camera import classify_frame
 
 ARTIFACTS = pathlib.Path(__file__).resolve().parent.parent / 'artifacts' / 'pinky-real-20260907'
 THRESHOLDS = dict(void_v_ratio=0.50, obst_frac=0.45)   # config/camera.yaml

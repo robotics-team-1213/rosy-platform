@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from control.sensing.camera import classify_frame
+from control.sensing.perception.camera import classify_frame
 
 
 class CameraNearObstacleTest(unittest.TestCase):

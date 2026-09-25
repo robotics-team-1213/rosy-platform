@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from control.sensing.camera_homography import (
+from control.sensing.perception.camera_homography import (
     CalibrationThresholds,
     HomographyGroundPlane,
     evaluate_homography_profile,

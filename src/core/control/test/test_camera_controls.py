@@ -7,7 +7,7 @@ open is worse than no lock -- it hides the drift instead of reporting it.
 """
 import pytest
 
-from control.sensing.camera_controls import (
+from control.sensing.perception.camera_controls import (
     COLOUR_GAIN_MAX, LOCK_MAX_ATTEMPTS, LOCKED_KEYS, lock_action, lock_controls,
     lock_summary, static_controls)
 

@@ -23,7 +23,7 @@ for _package in ("core", "core_common", "core_events", "core_features"):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from control.sensing.road import (  # noqa: E402
+from control.sensing.perception.road import (  # noqa: E402
     detect_road_observation,
     render_road_preview,
     road_observation_payload,

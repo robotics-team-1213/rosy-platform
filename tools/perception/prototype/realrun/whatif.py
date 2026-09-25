@@ -3,8 +3,8 @@ bright_threshold values. No repo code changed."""
 import sys, json, os, cv2
 part=int(sys.argv[1]); sys.argv=["x","1"]
 import replay as R
-from control.sensing.lane_boundaries import LaneBoundaryTracker
-from control.sensing.lane_bev import BirdsEye
+from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
+from control.sensing.perception.lane_bev import BirdsEye
 TH=(140,150,165)
 cap=cv2.VideoCapture(R.VIDEO%part)
 vo=R.BevVO(BirdsEye(R.GROUND,R.W,R.H,R.X_OFF))
