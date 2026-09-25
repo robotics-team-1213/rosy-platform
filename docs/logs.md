@@ -2143,3 +2143,8 @@
 - gate 변화: 없음(docs/solutions 신규 2건 — generate 후 lint 0 error 확인)
 - 결정: 플레이키는 원인 미확 상태로 판정 문서만 남기고 수정은 D-230 레인에 위임. git 규칙은 기존 ADR 번호 충돌 노트와 분리(번호 = 기획, git 메커니즘 = 실행)
 - 교훈: frontmatter 제목에 ': '가 있으면 따옴표 필수(파서가 중첩 매핑으로 오해). Windows에서 UTF-8 문서는 검사 스크립트가 cp949 기본인코딩으로 열어 실패하므로 `python -X utf8` 필요
+## 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
+- 변경: D-263 Accepted. 상단 메뉴는 사용자 질문을 가진 화면만 가리키고, 화면 메타데이터를 단일 출처로 쓴다. 역할·capability·inventory·API 권한을 분리하고 새 메뉴의 등록 조건과 화면 문법·검증 항목을 고정했다.
+- 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; `python -X utf8 tools/harness/rosy_harness.py lint` 0 error, 기존 last_verified 경고 19건. 최초 시험의 생성 색인 stale 2건은 `generate` 후 같은 명령 재실행으로 해소했다.
+- gate 변화: 없음. ADR은 설계 결정이며 D-204 화면 이관·기기 수용의 구현 증거가 아니다.
+- 결정: D-204 브랜치의 패널 조립 계약과 중복되는 메뉴 레지스트리를 만들지 않는다. D-243 이후 소유 경계로 이관 계획을 다시 맞춰야 한다.
