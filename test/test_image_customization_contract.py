@@ -647,8 +647,8 @@ def test_probe_reads_every_pin():
 
 def test_probe_follows_lazy_imports_of_the_core_entrypoints():
     probe = _probe_module()
-    node = (ROOT / "src/runtime/core/node.py").read_text(encoding="utf-8")
-    main = (ROOT / "src/runtime/core/main.py").read_text(encoding="utf-8")
+    node = (ROOT / "src/runtime/core/core/node.py").read_text(encoding="utf-8")
+    main = (ROOT / "src/runtime/core/core/main.py").read_text(encoding="utf-8")
 
     modules = set(probe.lazy_imports(node)) | set(probe.lazy_imports(main))
     # Function-level imports a flag-only --help never reaches.

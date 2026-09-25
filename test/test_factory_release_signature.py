@@ -51,7 +51,7 @@ def _payload(root: Path, release_id: str) -> Path:
     files = {
         "install/.rosy-release": release_id + "\n",
         "install/setup.bash": "# colcon\n",
-        "install/lib/runtime/core": "#!/usr/bin/python3\n",
+        "install/lib/core/core": "#!/usr/bin/python3\n",
         "deploy/robot/native/rosy-runtime.target": "[Unit]\n",
         "rosy-packages.txt": "core\n",
         "deb-packages.txt": "python3\t3.12\n",

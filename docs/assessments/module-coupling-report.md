@@ -46,7 +46,7 @@
 
 ## 4. ROS 통신 결합
 
-- 최종 `cmd_vel` 발행은 1곳: `src/runtime/core/bridge/ros_bridge.py` (`create_publisher(Twist, "cmd_vel")`). 단일 발행자 원칙 유지.
+- 최종 `cmd_vel` 발행은 1곳: `src/runtime/core/core/bridge/ros_bridge.py` (`create_publisher(Twist, "cmd_vel")`). 단일 발행자 원칙 유지.
 - `control`은 `cmd_vel_raw`, `wander/cmd`, `calib/*`, `camera/*` 발행, `scan/odom/imu_raw/us_sensor` 구독. 단, 레거시 잔재 2곳이 최종 토픽을 **구독**함:
   - `src/runtime/control/control/web_node.py:431` — `create_subscription(Twist, 'cmd_vel', ...)`
   - `src/runtime/control/control/wander/node.py:36` — 동일 패턴

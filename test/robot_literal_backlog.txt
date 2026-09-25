@@ -45,15 +45,6 @@ runtime/control/tools/gz/run_calibration_spaces.py
 runtime/control/tools/gz/track_run_monitor.py
 runtime/core/config/rosy_default.yaml
 contracts/core_common/core_common/profile.py
-devices/pinky_pro/bringup/bringup/battery_publisher.py
-devices/pinky_pro/bringup/bringup/bringup.py
-devices/pinky_pro/bringup/bringup/pinky_pro_adapter.py
-devices/pinky_pro/bringup/config/adapter.manifest.yaml
-devices/pinky_pro/bringup/config/pinky_pro_adapter.yaml
-devices/pinky_pro/bringup/launch/bringup_robot.launch.py
-devices/pinky_pro/bringup/rosylib/__init__.py
-devices/pinky_pro/bringup/rosylib/battery.py
-devices/pinky_pro/bringup/setup.py
 runtime/navigation/launch/hardware.launch.py
 runtime/navigation/params/nav2_params.yaml
 devices/omx/omx_adapter/config/omx.disabled.yaml

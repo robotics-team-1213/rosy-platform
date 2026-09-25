@@ -36,7 +36,7 @@ def test_core_runs_as_a_device_free_hardened_service():
         "DevicePolicy=closed", "PrivateDevices=true",
         "NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",
         "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py",
-        "exec /opt/rosy/current/install/lib/runtime/core --ros-args", "Restart=on-failure",
+        "exec /opt/rosy/current/install/lib/core/core --ros-args", "Restart=on-failure",
         "KillSignal=SIGINT",
     ):
         assert directive in unit
@@ -336,7 +336,7 @@ DECLARED_WRITES = {
         "$HOME/.rosy/waypoints.json", "$HOME/.rosy/audit.jsonl",
         "$HOME/.rosy/docks.json", "$HOME/.rosy/battery-shutdown-request.json",
         # ROS logs (D-174 F6) and the host agent socket directory.
-        "/var/log/rosy-runtime/core.log", "/run/rosy/host-agent.sock",
+        "/var/log/rosy-core/core.log", "/run/rosy/host-agent.sock",
         # D-193: CORE's used/burned signal to rosy-login-code (api/v1/auth.py STATE_FILE).
         "/run/rosy/login-code-state.json",
     },
