@@ -24,7 +24,7 @@
     <string name="last_error">마지막 오류: %1$s</string>
 
     <string name="error_unauthorized">토큰이 맞지 않습니다 (401). 어댑터 QR로 다시 페어링하세요.</string>
-    <string name="error_protocol_mismatch">프로토콜 불일치 — 앱과 어댑터 버전을 확인하세요. 재연결을 멈췄습니다.</string>
+    <string name="error_protocol_mismatch">어댑터가 이 앱의 hello를 거부했습니다 (4400, 프로토콜 불일치). 앱과 어댑터 버전을 확인하세요. 재연결을 멈췄습니다.</string>
     <string name="error_replaced">같은 이름(source)의 다른 연결이 이 연결을 대체했습니다. 재연결을 멈췄습니다.</string>
     <string name="error_invalid_config">어댑터가 보낸 설정 값이 잘못되었습니다 (%1$s)</string>
     <string name="error_network">네트워크 오류: %1$s</string>
