@@ -56,8 +56,6 @@ export const session = {
   dockingSupported: false,
   role: "",
   modeChangePending: false,
-  teleopTimer: null,
-  teleopActive: false,
   teleopPending: null,
   teleopIntervalMs: 100,
   networkHistory: { rx: [], tx: [] },

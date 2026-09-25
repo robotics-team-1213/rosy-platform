@@ -2095,3 +2095,9 @@
 - gate 변화: 없음 (SOURCE GO, ARTIFACT/DEVICE HOLD 유지)
 - 결정: 스캐너 매처를 넓히지 않고 값의 정체를 행 위에 쓰는 쪽을 택 — 검사를 고장 내어 통과시키는 것은 위증이다
 - 교훈: 새 패키지는 코드 추가와 동시에 기준선 행이 없으면 집합 동일성 시험이 붉다 — 패키지 이동(D-232)도 예외가 아니다
+## 2026-09-25 · uncommitted · docs(design-system): D-250 Accepted (첫 L2 headless)
+- 변경: src/hmi/web/hold-ticker.js 신설 + CMake·/common allowlist 등록, 대시보드 start/stop/transmit을 티커로 이관(자격·전송·문구 그대로), session의 teleopActive/teleopTimer 제거, 회차에 console-teleop-hold-1366x768.png 1셀, D-250 Accepted
+- 증거: node 단위 어서션(start 즉시 tick·멱등·zero 1회·예외 시 고아 interval 없음). 브라우저 46 passed. 변이(ticker zero 제거) 적색 → 원복 녹색. 구현 중 자가 결함 1건: 즉시 tick이 active 전에 돌아 transmit 가드에 걸림 — interval 등록을 tick보다 먼저로 고침(try/finally 아님, throw 시 정리). dialog+web+dashboard 56 passed, api_web·gateway 대시보드 시험 녹색(D-241 잔재 test_package_contract 1건 제외 — 타 세션 범위)
+- gate 변화: D-250 Proposed→Accepted. 다음은 D-251(HostCard) Proposed
+- 결정: D-250 Accepted. L2 첫 선례 — 자격·전송은 표면 소유 유지
+- 교훈: headless 티커의 즉시 tick은 active 플래그가 선행되어야 한다. 가드를 읽는 쪽(transmit)이 있으면 순서가 계약이다

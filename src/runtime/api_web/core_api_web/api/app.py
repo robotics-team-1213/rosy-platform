@@ -180,6 +180,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             "components.css": "text/css",
             "template.html": "text/html",
             "core_ui_logic.js": "application/javascript",
+            "hold-ticker.js": "application/javascript",
             "ui.js": "application/javascript",
         }
         media_type = valid_assets.get(asset_name)

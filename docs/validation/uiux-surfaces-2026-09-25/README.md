@@ -13,6 +13,7 @@ D-245(E-Stop 파일럿)의 G2 셀 1개. 전체 UI/UX 판정이 아니라 파일�
 |---|---|---|
 | Fleet 전체 정지 범위 병기 | `captures/fleet-estop-note-1920x1080.png` | 버튼 라벨 `전체 정지\n등록된 모든 로봇` 단언 통과, 바운딩 박스 뷰포트 내(y=14.5, h=58, ≤1080), 페이지 오류 0. 확인 문장(`등록된 모든 로봇을 정지시킵니다. 계속할까요?`)과 같은 말을 버튼으로 올림 — PINNED 불변 |
 | Fleet 잠금 pill (D-248) | `captures/fleet-locked-pill-1920x1080.png` | 오토큰 입력 후 pill `토큰 필요`(crit) 유지 단언 통과, 2.5s 추가 대기 후 추가 `/api` 호출 0 (프로브: 수정 5회 vs 변이 9회·증가 중). `refreshState` catch가 잠금 pill을 `Fleet 서버 없음`으로 덮던 결함도 함께 수정 — 401의 이유가 남는다 |
+| 운용 teleop 홀드 (D-250) | `captures/console-teleop-hold-1366x768.png` | 1366×768 선언 최소 뷰포트. 홀드 중 패널 캡처(전진 활성 + `전진 명령 전송 중…`), 해제 후 `__teleopCommands`에 주행→zero 순서 기록. 변이(티커 zero 제거) 적색 → 원복 녹색 |
 
 ## 한계
 
