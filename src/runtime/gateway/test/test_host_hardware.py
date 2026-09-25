@@ -631,12 +631,15 @@ def test_the_inspect_view_has_the_device_card_after_commissioning():
 
 
 def test_the_script_renders_six_states_and_the_motion_reason():
-    script = (WEB / "app.js").read_text(encoding="utf-8")
+    # The shell split (D-262) moved the card rendering into host-cards.js.
+    script = "\n".join((WEB / name).read_text(encoding="utf-8") for name in ("app.js", "host-cards.js"))
     assert 'api("/api/v1/host/hardware")' in script
     assert '"/api/v1/host/hardware/refresh", {method: "POST"}' in script
     for text in ("정상", "응답 없음", "버스 없음", "드라이버 없음", "사람 확인 필요", "측정 안 함", "벤치 전용"):
         assert f'"{text}"' in script, text
-    assert "session.motionReason = payload.motion_reason" in script
+    # host-cards.js hands the reason to the shell through onCommissioningRendered.
+    assert 'onCommissioningRendered(payload.motion_reason || "")' in script
+    assert "session.motionReason = reason" in script
     assert 'setEnabled("hardware-refresh", isAdmin())' in script
     # No raw colour for the chips: they reuse the shared [data-status] vocabulary.
     css = (WEB / "styles.css").read_text(encoding="utf-8")
@@ -645,7 +648,8 @@ def test_the_script_renders_six_states_and_the_motion_reason():
 
 
 def test_the_script_wires_the_buzzer_and_lamp_test_for_administrators_only():
-    script = (WEB / "app.js").read_text(encoding="utf-8")
+    # The shell split (D-262) moved the card rendering into host-cards.js.
+    script = "\n".join((WEB / name).read_text(encoding="utf-8") for name in ("app.js", "host-cards.js"))
     assert '"/api/v1/host/hardware/test", {method: "POST", body: JSON.stringify({device})}' in script
     assert '"/api/v1/host/hardware/confirm", {method: "POST", body: JSON.stringify({device, observed})}' in script
     for text in ("울려 보기", "켜 보기", "들림", "안 들림", "보임", "안 보임"):

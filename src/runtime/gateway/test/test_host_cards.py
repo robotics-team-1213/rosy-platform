@@ -384,7 +384,11 @@ NEWLINE = chr(10)
 
 
 def _script() -> str:
-    return (WEB / "app.js").read_text(encoding="utf-8")
+    # D-262: host-card renderers live in host-cards.js; the shell only calls them.
+    return "".join(
+        (WEB / name).read_text(encoding="utf-8")
+        for name in ("app.js", "host-cards.js")
+    )
 
 
 def _function_body(script: str, name: str) -> str:

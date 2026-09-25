@@ -95,6 +95,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "styles.css": "text/css",
         "app.js": "application/javascript",
         "map.js": "application/javascript",
+        "host-cards.js": "application/javascript",
         "ros-network.js": "application/javascript",
         "triage.js": "application/javascript",
         "dom.js": "application/javascript",
