@@ -1,0 +1,5 @@
+# ROSY WS2812 lamp (D-247): /dev/ws281x_pwm from the rp1_ws281x_pwm kernel
+# module the image builds for its kernel. Only root units open it
+# (rosy-hw-test.service's lamp test, DeviceAllow); the gpio group matches the
+# header GPIO chip rule in 99-rosy-display.rules. Installed by deploy/image.
+ACTION=="add|change", SUBSYSTEM=="misc", KERNEL=="ws281x_pwm", GROUP="gpio", MODE="0660"

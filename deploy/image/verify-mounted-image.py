@@ -36,6 +36,14 @@ MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
 BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
 # D-247: customize-rootfs.sh adds the IMU bus (BNO055 on I2C0, /dev/i2c-0).
 IMU_OVERLAY = "dtoverlay=i2c0-pi5,pins_0_1"
+# D-247: the WS2812 lamp driver customize-rootfs.sh builds for the image kernel.
+LAMP_OVERLAY = "dtoverlay=rosy-ws281x"
+LAMP_DTBO = "boot/firmware/overlays/rosy-ws281x.dtbo"
+LAMP_KERNEL_RECORD = "usr/local/share/rosy/lamp-driver-kernel"
+LAMP_UDEV_RULE = "etc/udev/rules.d/99-rosy-lamp.rules"
+LAMP_MODPROBE = "etc/modprobe.d/rosy-ws281x.conf"
+# GPIO19 is RP1 PWM0 channel 3; the default channel 2 is GPIO18, the LCD backlight.
+LAMP_OPTIONS = "options rp1_ws281x_pwm pwm_channel=3"
 # The LiDAR (UART0) and motor (UART4) buses carry no kernel console or getty.
 # Ubuntu's console=serial0 is UART0 on the Pi 5 with enable_uart=1.
 BUS_CONSOLE = re.compile(r"console=(serial0|ttyAMA0|ttyAMA4)(,|$)")
@@ -106,6 +114,33 @@ def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
     return False
 
 
+def lamp_driver_findings(root: Path) -> list[str]:
+    """D-247: the rp1_ws281x_pwm module for the image kernel, its overlay, udev rule and channel."""
+    findings = []
+    if not (root / LAMP_DTBO).is_file():
+        findings.append(f"missing lamp overlay: {LAMP_DTBO}")
+    record = root / LAMP_KERNEL_RECORD
+    kernel = record.read_text(encoding="utf-8").strip() if record.is_file() else ""
+    if not re.fullmatch(r"\d+\.\d+\.\d+-\d+-raspi", kernel):
+        findings.append(f"missing lamp driver kernel record: {LAMP_KERNEL_RECORD}")
+    else:
+        modules = root / "lib/modules" / kernel
+        if not (modules / "kernel").is_dir():
+            findings.append(f"lamp driver was built for {kernel}, which the image does not carry")
+        if not (modules / "extra/rp1_ws281x_pwm.ko").is_file():
+            findings.append(f"missing lamp driver module: lib/modules/{kernel}/extra/rp1_ws281x_pwm.ko")
+        alias = modules / "modules.alias"
+        if not alias.is_file() or "rp1-ws281x-pwm" not in alias.read_text(encoding="utf-8", errors="replace"):
+            findings.append(f"lamp driver is not in lib/modules/{kernel}/modules.alias (depmod)")
+    if not (root / LAMP_UDEV_RULE).is_file():
+        findings.append(f"missing lamp udev rule: {LAMP_UDEV_RULE}")
+    options = root / LAMP_MODPROBE
+    lines = options.read_text(encoding="utf-8", errors="replace").splitlines() if options.is_file() else []
+    if LAMP_OPTIONS not in (line.strip() for line in lines):
+        findings.append(f"{LAMP_MODPROBE} does not set pwm_channel=3 (GPIO19; channel 2 is the LCD backlight)")
+    return findings
+
+
 def inspect(root: Path, release_id: str) -> list[str]:
     root = root.resolve()
     findings: list[str] = []
@@ -174,6 +209,9 @@ def inspect(root: Path, release_id: str) -> list[str]:
                 findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
         if not overlay_applies_to_pi5(text, IMU_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {IMU_OVERLAY} for the Pi 5 (IMU bus)")
+        if not overlay_applies_to_pi5(text, LAMP_OVERLAY):
+            findings.append(f"boot/firmware/config.txt does not enable {LAMP_OVERLAY} for the Pi 5 (lamp driver)")
+    findings += lamp_driver_findings(root)
     cmdline = root / "boot/firmware/cmdline.txt"
     if not cmdline.is_file():
         findings.append("missing kernel command line: boot/firmware/cmdline.txt")

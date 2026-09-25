@@ -48,6 +48,10 @@ ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
+WS281X_COMMIT="$(lock_value hardware_dependencies rpi_ws281x_commit)"
+WS281X_URL="$(lock_value hardware_dependencies rpi_ws281x_url)"
+WS281X_SHA="$(lock_value hardware_dependencies rpi_ws281x_sha256)"
+LAMP_OVERLAY_SOURCE="$(dirname "$0")/overlays/rosy-ws281x.dts"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
@@ -59,6 +63,11 @@ BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
 [[ "$WIRINGPI_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "WiringPi package SHA-256 is invalid"
+[[ "$WS281X_COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "rpi_ws281x commit is invalid"
+[[ "$WS281X_URL" == https://* && "$WS281X_URL" == *"/$WS281X_COMMIT" ]] \
+    || fail "rpi_ws281x URL must use HTTPS and name the locked commit"
+[[ "$WS281X_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "rpi_ws281x archive SHA-256 is invalid"
+[[ -f "$LAMP_OVERLAY_SOURCE" ]] || fail "WS2812 lamp overlay source is missing"
 [[ -f "$PYTHON_REQUIREMENTS" ]] || fail "CORE Python requirements lock is missing"
 [[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
@@ -81,6 +90,7 @@ done
 MOUNTS=()
 ROS_SOURCE_TMP=""
 WIRINGPI_TMP=""
+WS281X_TMP=""
 cleanup() {
     local index
     set +e
@@ -92,8 +102,10 @@ cleanup() {
     rm -rf -- "$ROOT/tmp/rosy-src"
     rm -rf -- "$ROOT/tmp/rosy-native-probe"
     rm -rf -- "$ROOT/tmp/rosy-core-probe"
+    rm -rf -- "$ROOT/tmp/rosy-ws281x"
     [[ -z "$ROS_SOURCE_TMP" ]] || rm -f -- "$ROS_SOURCE_TMP"
     [[ -z "$WIRINGPI_TMP" ]] || rm -f -- "$WIRINGPI_TMP"
+    [[ -z "$WS281X_TMP" ]] || rm -f -- "$WS281X_TMP"
 }
 trap cleanup EXIT
 
@@ -197,6 +209,61 @@ chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 install -d -m 0755 "$ROOT/usr/local/share/rosy"
 printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+
+# D-247: the WS2812 lamp driver. rpi_ws281x drives the Pi 5 lamp only through
+# its rp1_ws281x_pwm kernel module (/dev/ws281x_pwm), which no Ubuntu package
+# ships. Built here, in the image, against the kernel the image boots; the
+# source is the same locked archive lamp_control links (inputs.lock.yaml).
+# ROSY_IMAGE_KERNEL names the kernel when the image carries more than one.
+if [[ -n "${ROSY_IMAGE_KERNEL:-}" ]]; then
+    IMAGE_KERNEL="$ROSY_IMAGE_KERNEL"
+else
+    mapfile -t IMAGE_KERNELS < <(find "$ROOT/lib/modules" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort)
+    (( ${#IMAGE_KERNELS[@]} == 1 )) \
+        || fail "cannot tell the image kernel (${IMAGE_KERNELS[*]:-none} under /lib/modules); set ROSY_IMAGE_KERNEL"
+    IMAGE_KERNEL="${IMAGE_KERNELS[0]}"
+fi
+[[ "$IMAGE_KERNEL" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+-[0-9]+-raspi$ ]] \
+    || fail "image kernel is not an Ubuntu raspi kernel: $IMAGE_KERNEL"
+KERNEL_MAJOR="${BASH_REMATCH[1]}"
+KERNEL_MINOR="${BASH_REMATCH[2]}"
+[[ -d "$ROOT/lib/modules/$IMAGE_KERNEL/kernel" ]] || fail "the image has no modules for kernel $IMAGE_KERNEL"
+chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    "linux-headers-$IMAGE_KERNEL" make gcc device-tree-compiler \
+    || fail "linux-headers-$IMAGE_KERNEL is not installable from the locked apt suites (lamp driver)"
+WS281X_TMP="$(mktemp)"
+curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
+    --output "$WS281X_TMP" "$WS281X_URL"
+[[ "$(sha256sum "$WS281X_TMP" | awk '{print $1}')" == "$WS281X_SHA" ]] || fail "rpi_ws281x archive checksum mismatch"
+LAMP_BUILD="$ROOT/tmp/rosy-ws281x"
+rm -rf -- "$LAMP_BUILD"
+mkdir -p "$LAMP_BUILD"
+tar -xzf "$WS281X_TMP" --strip-components=2 -C "$LAMP_BUILD" "rpi_ws281x-$WS281X_COMMIT/rp1_ws281x_pwm"
+[[ -f "$LAMP_BUILD/rp1_ws281x_pwm.c" ]] || fail "rpi_ws281x archive has no rp1_ws281x_pwm module source"
+# Linux 6.11 made platform_driver.remove return void; before that a void
+# remove must be .remove_new (6.8.0-1064-raspi on rosy_18 refuses .remove).
+if (( KERNEL_MAJOR < 6 || (KERNEL_MAJOR == 6 && KERNEL_MINOR < 11) )); then
+    sed -i 's/^\([[:space:]]*\)\.remove = rp1_ws281x_pwm_remove,$/\1.remove_new = rp1_ws281x_pwm_remove,/' \
+        "$LAMP_BUILD/rp1_ws281x_pwm.c"
+    grep -q '^[[:space:]]*\.remove_new = rp1_ws281x_pwm_remove,$' "$LAMP_BUILD/rp1_ws281x_pwm.c" \
+        || fail "could not adapt rp1_ws281x_pwm to kernel $IMAGE_KERNEL (.remove_new)"
+fi
+chroot "$ROOT" make -C "/lib/modules/$IMAGE_KERNEL/build" M=/tmp/rosy-ws281x modules \
+    || fail "rp1_ws281x_pwm does not build for kernel $IMAGE_KERNEL"
+install -d -m 0755 "$ROOT/lib/modules/$IMAGE_KERNEL/extra"
+install -m 0644 "$LAMP_BUILD/rp1_ws281x_pwm.ko" "$ROOT/lib/modules/$IMAGE_KERNEL/extra/rp1_ws281x_pwm.ko"
+# depmod records the OF alias, so udev loads the module when the overlay's
+# rp1-ws281x-pwm node appears; /etc/modprobe.d/rosy-ws281x.conf picks GPIO19.
+chroot "$ROOT" depmod "$IMAGE_KERNEL"
+grep -q 'rp1-ws281x-pwm' "$ROOT/lib/modules/$IMAGE_KERNEL/modules.alias" \
+    || fail "depmod did not record the rp1_ws281x_pwm OF alias"
+cp "$LAMP_OVERLAY_SOURCE" "$LAMP_BUILD/rosy-ws281x.dts"
+install -d -m 0755 "$ROOT/boot/firmware/overlays"
+chroot "$ROOT" dtc -@ -I dts -O dtb -o /boot/firmware/overlays/rosy-ws281x.dtbo /tmp/rosy-ws281x/rosy-ws281x.dts \
+    || fail "the WS2812 lamp overlay does not compile"
+rm -rf -- "$LAMP_BUILD"
+printf '%s\n' "$IMAGE_KERNEL" > "$ROOT/usr/local/share/rosy/lamp-driver-kernel"
+chmod 0644 "$ROOT/usr/local/share/rosy/lamp-driver-kernel"
 chroot "$ROOT" apt-get clean
 
 chroot "$ROOT" getent group rosy-core >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 960 rosy-core
@@ -236,7 +303,13 @@ bash "$UART_CONFIG" --image-root "$ROOT" \
 # enables only i2c_arm (/dev/i2c-1), so without this there is no /dev/i2c-0.
 # Verified on rosy_18 (Pi 5 rev 1.1, 6.8.0-1064-raspi) 2026-09-26: chip id
 # 0xA0. A runtime `dtoverlay` does not work on this kernel; config.txt only.
-bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=i2c0-pi5,pins_0_1"     --comment "Rosy IMU bus (BNO055) on Raspberry Pi 5 GPIO0/GPIO1"     || fail "could not enable the I2C0 IMU bus in the image"
+bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=i2c0-pi5,pins_0_1" \
+    --comment "Rosy IMU bus (BNO055) on Raspberry Pi 5 GPIO0/GPIO1" \
+    || fail "could not enable the I2C0 IMU bus in the image"
+# D-247: the WS2812 lamp overlay (rosy-ws281x.dtbo, compiled above).
+bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=rosy-ws281x" \
+    --comment "Rosy WS2812 lamp (rp1_ws281x_pwm) on Raspberry Pi 5 GPIO19" \
+    || fail "could not enable the WS2812 lamp overlay in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 

@@ -145,7 +145,22 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
-        "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n", encoding="utf-8")
+        "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n\n[all]\n# Rosy lamp\n"
+        "dtoverlay=rosy-ws281x\n", encoding="utf-8")
+    # D-247: the WS2812 lamp driver built for the image kernel.
+    kernel = "6.8.0-1064-raspi"
+    (root / "lib/modules" / kernel / "kernel").mkdir(parents=True, exist_ok=True)
+    (root / "lib/modules" / kernel / "extra").mkdir(parents=True, exist_ok=True)
+    (root / "lib/modules" / kernel / "extra/rp1_ws281x_pwm.ko").write_bytes(b"\x7fELF")
+    (root / "lib/modules" / kernel / "modules.alias").write_text(
+        "alias of:N*T*Crp1-ws281x-pwm rp1_ws281x_pwm\n", encoding="utf-8")
+    (root / "usr/local/share/rosy").mkdir(parents=True, exist_ok=True)
+    (root / "usr/local/share/rosy/lamp-driver-kernel").write_text(kernel + "\n", encoding="utf-8")
+    (root / "boot/firmware/overlays").mkdir(parents=True, exist_ok=True)
+    (root / "boot/firmware/overlays/rosy-ws281x.dtbo").write_bytes(b"\xd0\x0d\xfe\xed")
+    (root / "etc/modprobe.d").mkdir(parents=True, exist_ok=True)
+    (root / "etc/modprobe.d/rosy-ws281x.conf").write_bytes(
+        (ROOT / "deploy/robot/modprobe/rosy-ws281x.conf").read_bytes())
     # The bus UARTs carry no console (configure-uart-pi5.sh edits the Ubuntu line).
     (root / "boot/firmware/cmdline.txt").write_text(
         "console=ttyAMA10,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 root=LABEL=writable "
@@ -156,6 +171,7 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
         'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
+    (root / "etc/udev/rules.d/99-rosy-lamp.rules").write_text('KERNEL=="ws281x_pwm"\n', encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.
     for unit in ("rosy-io.service", "rosy-navigation.service"):
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
