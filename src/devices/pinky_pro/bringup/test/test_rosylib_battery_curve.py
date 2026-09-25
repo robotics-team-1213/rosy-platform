@@ -12,8 +12,8 @@ import sys
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[4]  # repository root
-for path in (ROOT / "src/devices/bringup", ROOT / "src/runtime/core_features",
+ROOT = Path(__file__).resolve().parents[5]  # repository root
+for path in (ROOT / "src/devices/pinky_pro/bringup", ROOT / "src/runtime/core_features",
              ROOT / "src/contracts/core_common", ROOT / "src/runtime/core_events"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -34,6 +34,6 @@ def test_percent_matches_battery_curve_default(millivolts):
 
 
 def test_rosylib_does_not_import_core():
-    for source in (ROOT / "src/devices/bringup/rosylib").glob("*.py"):
+    for source in (ROOT / "src/devices/pinky_pro/bringup/rosylib").glob("*.py"):
         text = source.read_text(encoding="utf-8")
         assert "import core" not in text and "from core" not in text, source

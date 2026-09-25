@@ -49,3 +49,11 @@
 - gate 변화: 없음. 노드는 여전히 벤치 전용
 - 결정: D-192 Proposed
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(devices): move sensor_adc under src/devices/pinky_pro/sensor_adc (D-231)
+
+- 변경: src/devices/pinky_pro/sensor_adc로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 장치 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음

@@ -851,8 +851,8 @@ def test_vendor_preparation_refuses_a_used_destination(tmp_path):
 
 
 def test_the_bringup_launch_includes_the_driver_the_image_builds():
-    launch = (ROOT / "src/devices/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
-    package = (ROOT / "src/devices/bringup/package.xml").read_text(encoding="utf-8")
+    launch = (ROOT / "src/devices/pinky_pro/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
+    package = (ROOT / "src/devices/pinky_pro/bringup/package.xml").read_text(encoding="utf-8")
     assert "get_package_share_directory('sllidar_ros2')" in launch
     assert "'sllidar_c1_launch.py'" in launch
     assert "<exec_depend>sllidar_ros2</exec_depend>" in package
@@ -992,7 +992,7 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     snippet = source[start:end]
     script = ('fail() { echo "FAIL $*" >&2; exit 1; }\n'
               'chroot() { shift; printf "%s\n" "$@"; }\n'
-              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/src/devices/bringup)\n' + snippet)
+              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/src/devices/pinky_pro/bringup)\n' + snippet)
 
     completed = subprocess.run([_BASH, "-c", script, _posix(CUSTOMIZER)],
                                capture_output=True, text=True, check=False)
@@ -1002,7 +1002,7 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     assert args[:3] == ["rosdep", "install", "--from-paths"]
     assert "-r" in args and "--ignore-src" in args
     assert args[args.index("--skip-keys") + 1].split() == ["sllidar_ros2"]
-    bringup = (ROOT / "src/devices/bringup/package.xml").read_text(encoding="utf-8")
+    bringup = (ROOT / "src/devices/pinky_pro/bringup/package.xml").read_text(encoding="utf-8")
     assert "<exec_depend>sllidar_ros2</exec_depend>" in bringup
 
 

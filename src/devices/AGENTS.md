@@ -1,25 +1,19 @@
 <!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-20 | Updated: 2026-09-20 -->
 
-# hardware
+# devices
 
 ## Purpose
 
-Device nodes moved out of `hardware/`. Package names are still the chip or board (`imu_bno055`, `sensor_adc`, `lamp_control`, `led`) plus `bringup` for the Pinky drive. A second IMU or arm must not become another top-level package name. C++ drivers (`lamp_control`, `imu_bno055`, `sensor_adc`) build only on aarch64.
-
-## Key Files
-
-None at this level. Each package directory has its own `AGENTS.md`.
+장치 패키지는 계열 안에 둔다. Pinky 보드 전용은 `pinky_pro`, 여러 차체가 쓰는 칩은 `common`, 팔은 `omx`. 패키지 이름은 칩·보드 이름 그대로다. C++ 드라이버는 aarch64에서만 빌드한다.
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `bringup/` | Motors (Dynamixel), odometry, LiDAR, battery publisher, `cmd_vel` deadman, Pinky Pro adapter (see `bringup/AGENTS.md`) |
-| `led/` | Python LED service (`set_led`, `set_brightness`) (see `led/AGENTS.md`) |
-| `lamp_control/` | C++ WS2811 lamp + SetLamp service — aarch64 only (see `lamp_control/AGENTS.md`) |
-| `imu_bno055/` | C++ BNO055 IMU driver — aarch64/wiringPi only (see `imu_bno055/AGENTS.md`) |
-| `sensor_adc/` | C++ I2C ADC: IR, ultrasonic, battery — aarch64 only (see `sensor_adc/AGENTS.md`) |
+| `pinky_pro/` | Pinky 보드: `bringup`, `sensor_adc`, `lamp_control`, `led` (see `pinky_pro/AGENTS.md`) |
+| `common/` | 공유 칩: `imu_bno055` (see `common/AGENTS.md`) |
+| `omx/` | 팔: `omx_adapter` (see `omx/AGENTS.md`) |
 
 ## For AI Agents
 
@@ -32,7 +26,7 @@ None at this level. Each package directory has its own `AGENTS.md`.
 
 ```bash
 # from src/
-python3 -m pytest hardware/bringup/test/ hardware/led/test/ hardware/imu_bno055/test/ -v
+python3 -m pytest devices/pinky_pro/bringup/test/ devices/pinky_pro/led/test/ devices/common/imu_bno055/test/ -v
 ```
 
 ## Dependencies

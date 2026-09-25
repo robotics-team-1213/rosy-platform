@@ -9,3 +9,11 @@
 - gate 변화: 없음(신규 기록). SOURCE/LOCAL GO, ARTIFACT HOLD, ROS-SIM/DEVICE/FIELD PARKED
 - 결정: D-168
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(devices): move omx_adapter under src/devices/omx/omx_adapter (D-231)
+
+- 변경: src/devices/omx/omx_adapter로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 장치 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음

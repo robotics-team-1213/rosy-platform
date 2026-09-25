@@ -53,7 +53,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("core_common", "core"): "default config file lives in the core package share; the lookup stayed when core_common moved to contracts",
-    ("control", "imu_bno055"): "runtime/control -> devices/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/control -> devices/common/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
 }
 
 #: P6 budgets.
@@ -158,14 +158,11 @@ def _family(name: str):
 
 
 def layout_ok(rel: tuple, name: str) -> bool:
-    """P2(a) + D-196: src/<domain>/<package>, and src/devices/<family>/<package>.
-
-    Until the D-231 device-family move, src/devices/<package> still passes.
-    """
+    """P2(a) + D-196: src/<domain>/<package>, and src/devices/<family>/<package>."""
     if not rel or rel[0] not in DOMAINS:
         return False
-    if rel[0] == "devices" and len(rel) == 3:
-        return rel[2] == name
+    if rel[0] == "devices":
+        return len(rel) == 3 and rel[2] == name
     return len(rel) == 2 and rel[1] == name
 
 
@@ -408,7 +405,7 @@ def test_direction_table_rows_for_devices_and_robots(src_domain, src_family, dst
     "rel, name, ok",
     [
         (("devices", "pinky_pro", "bringup"), "bringup", True),
-        (("devices", "bringup"), "bringup", True),
+        (("devices", "bringup"), "bringup", False),
         (("products", "pinky_pro"), "pinky_pro", True),
         (("core", "control"), "control", True),
         (("apps", "x", "control"), "control", False),

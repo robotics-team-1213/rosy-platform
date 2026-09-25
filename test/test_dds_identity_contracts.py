@@ -25,7 +25,7 @@ from robot_contracts import DEPLOY, ROOT
 ENV_EXAMPLE = DEPLOY / ".env.example"
 COMPOSE = DEPLOY / "compose.yaml"
 INSTALLER = DEPLOY / "install-pi.sh"
-ROSY_ENV = ROOT / "src" / "devices" / "bringup" / "scripts" / "rosy_env.sh"
+ROSY_ENV = ROOT / "src" / "devices" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh"
 
 IDENTITY_KEYS = ("ROS_DOMAIN_ID", "ROSY_NAMESPACE")
 

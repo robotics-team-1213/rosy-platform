@@ -12,18 +12,18 @@
 | [games](src/site/games/progress.md) | GAMES | 411a303 (2026-09-18) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [bringup](src/devices/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [bringup](src/devices/pinky_pro/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [emotion](src/hmi/emotion/progress.md) | 장치 | uncommitted (2026-09-21) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [led](src/devices/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [imu_bno055](src/devices/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [sensor_adc](src/devices/sensor_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [lamp_control](src/devices/lamp_control/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [led](src/devices/pinky_pro/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [imu_bno055](src/devices/common/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [sensor_adc](src/devices/pinky_pro/sensor_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [lamp_control](src/devices/pinky_pro/lamp_control/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [core_common](src/contracts/core_common/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_events](src/runtime/core_events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](src/runtime/core_features/progress.md) | CORE | uncommitted (2026-09-25) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/runtime/core_api_web/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](src/hmi/web_common/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
-| [omx_adapter](src/products/omx_adapter/progress.md) | 장치 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | PARKED | PARKED |
+| [omx_adapter](src/devices/omx/omx_adapter/progress.md) | 장치 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |

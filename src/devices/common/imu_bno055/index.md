@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -14,8 +14,8 @@
 
 ## 계획·결과 문서
 
-- [2026-09-12-rosy-os-module-evaluation-maintenance-design.md](../../../docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md)
-- [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-12-rosy-os-module-evaluation-maintenance-design.md](../../../../docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md)
+- [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -23,11 +23,12 @@
 
 ## 시험
 
-- `src/devices/imu_bno055/test/test_package_contract.py`
+- `src/devices/common/imu_bno055/test/test_package_contract.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · refactor(devices): move imu_bno055 under src/devices/common/imu_bno055 (D-231)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-20 · uncommitted · feat(imu): publish raw calibration and health evidence
 - 2026-09-16 · uncommitted · docs(harness): back imu source with its package contract

@@ -6,11 +6,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "test_adapter_manifest + test_omx_profile 10 passed (2026-09-22 Windows)"
-    cmd: "python -m pytest src/apps/omx_adapter/test -q"
+    cmd: "python -m pytest src/devices/omx/omx_adapter/test -q"
   LOCAL:
     state: GO
     evidence: "동일. 비활성 프로필 CLI는 `{}`를 출력한다"
-    cmd: "python -m pytest src/apps/omx_adapter/test -q"
+    cmd: "python -m pytest src/devices/omx/omx_adapter/test -q"
   ROS-SIM:
     state: PARKED
   ARTIFACT:

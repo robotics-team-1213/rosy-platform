@@ -399,13 +399,13 @@ PROGRAM_SOURCES = {
         "src/contracts/core_common",
         "imported-by:src/runtime/core:control:src/runtime/control",
     ],
-    "rosy-io.service": ["src/devices/bringup"],
-    "rosy-navigation.service": ["src/runtime/navigation", "src/devices/bringup"],
+    "rosy-io.service": ["src/devices/pinky_pro/bringup"],
+    "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
                                   "src/hmi/emotion/emotion/info_screen.py",
                                   "src/hmi/emotion/emotion/rosy_lcd.py",
-                                  "src/devices/bringup/rosylib"],
+                                  "src/devices/pinky_pro/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
                                 "deploy/robot/native/rosy_config.py"],
