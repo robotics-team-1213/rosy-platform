@@ -93,10 +93,12 @@ def test_image_applies_the_overlay_with_the_retrofit_script_not_a_copy():
     # After the overlay (and its udev rule) lands, before the image is accepted.
     assert customizer.index('cp -a "$PAYLOAD/image-overlay/." "$ROOT/"') < customizer.index(call)
     assert customizer.index(call) < customizer.index("verify-mounted-image.py")
-    # One writer: the customizer never edits config.txt itself.
-    code = "\n".join(line for line in customizer.splitlines() if not line.lstrip().startswith("#"))
-    assert "dtoverlay=" not in code
-    assert "config.txt" not in code
+    # The customizer never edits config.txt itself: the UART script and, for the
+    # D-247 IMU bus and lamp driver, configure-boot-overlay-pi5.sh do.
+    code_lines = [line for line in customizer.splitlines() if not line.lstrip().startswith("#")]
+    assert all(line.startswith('bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=')
+               for line in code_lines if "dtoverlay=" in line)
+    assert "config.txt" not in "\n".join(code_lines)
     # The boot partition the script edits is the one image-workspace.sh mounted.
     assert '"$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware"' in customizer
 
