@@ -28,4 +28,4 @@ WORKDIR /opt/rosy
 EXPOSE 8090
 USER 0:0
 ENTRYPOINT ["python3", "/opt/rosy/secret_exec.py"]
-CMD ["--", "python3", "-m", "fleet.cli", "console", "--robots", "/run/rosy-config/robots.yaml", "--host", "0.0.0.0", "--port", "8090", "--web-common", "/opt/rosy/web-common", "--token-env", "ROSY_SITE_OPERATOR_TOKEN", "--sightings-config", "/run/rosy-config/site-cameras.yaml", "--sightings-db", "/var/lib/rosy/fleet.sqlite3"]
+CMD ["--", "python3", "-m", "fleet.cli", "console", "--robots", "/run/rosy-config/robots.yaml", "--host", "0.0.0.0", "--port", "8090", "--web-common", "/opt/rosy/web-common", "--token-env", "ROSY_SITE_OPERATOR_TOKEN", "--sightings-config", "/run/rosy-config/site-cameras.yaml", "--sightings-db", "/var/lib/rosy/fleet.sqlite3", "--tasks-db", "/var/lib/rosy/fleet.sqlite3"]

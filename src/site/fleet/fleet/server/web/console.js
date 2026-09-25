@@ -643,14 +643,20 @@ el("map-canvas").addEventListener("click", async (event) => {
   try {
     const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ x: point.x, y: point.y, yaw: 0 }),
     });
+    const task = result && result.task ? result.task : null;
+    if (task && task.status !== "ACCEPTED") {
+      log(`${robotId} 작업 상태 ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
+      return;
+    }
+    const receipt = task ? task.receipt : result;
     const where = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
-    if (result && result.queued) {
+    if (receipt && receipt.queued) {
       // 자리가 없어 못 가는 것과, 곧 비켜 줄 것을 기다리는 것은 운영자가 할 일이 다르다.
       log(`${robotId} → ${where} ${queuedReason(result)}`,
-          result.reason === "NO_YIELD_SPACE" ? "bad" : "");
+          receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
     } else {
       log(`${robotId} → ${where} 미션 하달`, "good");
     }

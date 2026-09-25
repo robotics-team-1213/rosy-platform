@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import sqlite3
+from hashlib import sha256
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +25,8 @@ from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import IdempotencyConflict
 from fleet.swarm.transport import RobotApiError
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
@@ -128,7 +131,8 @@ def _http_error(exc: BaseException) -> HTTPException:
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
-               web_common: Optional[Path] = None, hub=None, sightings=None) -> FastAPI:
+               web_common: Optional[Path] = None, hub=None, sightings=None,
+               task_service: Optional[FleetTaskService] = None) -> FastAPI:
     app = FastAPI(
         title="ROSY Fleet",
         version="0.1.0",
@@ -136,6 +140,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     )
     app.state.console = console
     app.state.web_common = Path(web_common) if web_common is not None else None
+    app.state.task_service = task_service
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict:
@@ -212,11 +217,41 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         return grid
 
     @app.post("/api/fleet/robots/{robot_id}/goal", dependencies=guard, tags=["fleet"])
-    async def fleet_goal(robot_id: str, body: GoalRequest) -> dict:
+    async def fleet_goal(robot_id: str, body: GoalRequest,
+                         idempotency_key: Optional[str] = Header(default=None,
+                                                                  alias="Idempotency-Key")) -> dict:
         try:
+            if task_service is not None:
+                if not idempotency_key:
+                    raise HTTPException(status_code=400, detail={
+                        "code": "IDEMPOTENCY_KEY_REQUIRED",
+                        "message": "Idempotency-Key is required for navigation requests",
+                    })
+                task = await task_service.submit_navigation(
+                    robot_id=robot_id, x=body.x, y=body.y, yaw=body.yaw,
+                    source="operator", actor_id="site-console", request_key=idempotency_key,
+                    dispatch=lambda: console.goal(robot_id, body.x, body.y, body.yaw),
+                )
+                return {"accepted": task["status"] == "ACCEPTED", "task": task}
             return await console.goal(robot_id, body.x, body.y, body.yaw)
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail={
+                "code": "IDEMPOTENCY_CONFLICT", "message": str(exc),
+            }) from exc
+        except ValueError as exc:
+            code = str(exc)
+            status = 404 if code == "UNKNOWN_ROBOT" else 400
+            raise HTTPException(status_code=status, detail={"code": code}) from exc
         except (HubError, RobotApiError, OSError) as exc:
             raise _http_error(exc) from exc
+
+    if task_service is not None:
+        @app.get("/api/fleet/tasks/{task_id}", dependencies=guard, tags=["fleet-tasks"])
+        def fleet_task_readback(task_id: str) -> dict:
+            task = task_service.store.get_task(task_id)
+            if task is None:
+                raise HTTPException(status_code=404, detail={"code": "TASK_NOT_FOUND"})
+            return {"task": task, "history": task_service.store.history(task_id)}
 
     @app.post("/api/fleet/robots/{robot_id}/cancel", dependencies=guard, tags=["fleet"])
     async def fleet_cancel(robot_id: str) -> dict:
@@ -272,7 +307,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             raise _http_error(exc) from exc
 
     @app.post("/api/fleet/do", dependencies=guard, tags=["fleet"])
-    async def fleet_do(body: dict) -> dict:
+    async def fleet_do(body: dict,
+                       idempotency_key: Optional[str] = Header(default=None,
+                                                                alias="Idempotency-Key")) -> dict:
         """같은 통역기. 로봇 일은 그 로봇 API로, 현장 말은 이 서버가 실행한다."""
         try:
             calls = interpret(body)
@@ -286,7 +323,33 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 else:
                     if not call.robot:
                         raise HubError("ROBOT_REQUIRED", call.verb)
-                    result = await _robot_call(console, call)
+                    if task_service is not None and call.verb == "navigate":
+                        if not idempotency_key:
+                            raise HTTPException(status_code=400, detail={
+                                "code": "IDEMPOTENCY_KEY_REQUIRED",
+                                "message": "Idempotency-Key is required for navigation requests",
+                            })
+                        if call.body.get("x") is None or call.body.get("y") is None:
+                            raise HubError("WAYPOINT_STAYS_ON_ROBOT",
+                                           "name a point, or tell the robot itself")
+                        child_key = sha256(f"{idempotency_key}:{len(steps)}".encode()).hexdigest()
+                        task = await task_service.submit_navigation(
+                            robot_id=call.robot, x=float(call.body["x"]),
+                            y=float(call.body["y"]), yaw=float(call.body.get("yaw") or 0.0),
+                            source="operator", actor_id="site-console", request_key=child_key,
+                            dispatch=lambda: _robot_call(console, call),
+                        )
+                        result = {"accepted": task["status"] == "ACCEPTED", "task": task}
+                    else:
+                        result = await _robot_call(console, call)
+            except IdempotencyConflict as exc:
+                raise HTTPException(status_code=409, detail={
+                    "code": "IDEMPOTENCY_CONFLICT", "message": str(exc),
+                }) from exc
+            except ValueError as exc:
+                code = str(exc)
+                status = 404 if code == "UNKNOWN_ROBOT" else 400
+                raise HTTPException(status_code=status, detail={"code": code}) from exc
             except (HubError, RobotApiError, OSError) as exc:
                 raise _http_error(exc) from exc
             steps.append({"do": call.verb, "robot": call.robot, "path": call.path, "result": result})

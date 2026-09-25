@@ -72,6 +72,31 @@ def test_console_defaults_to_the_installable_web_common_assets(tmp_path):
     assert (args.web_common / "core_ui_logic.js").is_file()
 
 
+def test_external_console_requires_persistent_task_database(tmp_path):
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)),
+                           "--host", "0.0.0.0", "--token", "operator-test"])
+
+    with pytest.raises(SystemExit, match="--tasks-db is required"):
+        cli.run_console(args)
+
+
+def test_console_wires_configured_task_database_into_authenticated_app(tmp_path, monkeypatch):
+    robots = _write(tmp_path)
+    task_db = tmp_path / "fleet.sqlite3"
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args(["console", "--robots", str(robots), "--tasks-db", str(task_db),
+                           "--token", "operator-test"])
+
+    cli.run_console(args)
+
+    assert task_db.is_file()
+    assert captured["app"].state.task_service.store.path == task_db
+    assert captured["app"].state.task_service.robot_ids == {
+        "rosy_01", "rosy_02", "rosy_03",
+    }
+
+
 def test_console_loads_source_permissions_and_persistent_sighting_store(tmp_path, monkeypatch):
     robots = _write(tmp_path)
     config = tmp_path / "sightings.yaml"

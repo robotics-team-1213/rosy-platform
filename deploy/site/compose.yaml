@@ -26,6 +26,8 @@ services:
       - /var/lib/rosy/fleet.sqlite3
       - --events-db
       - /var/lib/rosy/fleet.sqlite3
+      - --tasks-db
+      - /var/lib/rosy/fleet.sqlite3
       - --tls-cert
       - /run/secrets/site_cert
       - --tls-key

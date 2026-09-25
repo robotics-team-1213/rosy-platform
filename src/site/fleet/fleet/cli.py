@@ -78,6 +78,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for latest sightings and acceptance audit")
     console.add_argument("--events-db", default=None, type=Path,
                          help="SQLite path for durable CORE Agent event history")
+    console.add_argument("--tasks-db", default=None, type=Path,
+                         help="SQLite path for durable operator and policy task history")
     return parser.parse_args(argv)
 
 
@@ -283,6 +285,9 @@ def run_console(args: argparse.Namespace) -> None:
             sys.exit(f"operator token environment variable {token_env} is required")
     if args.host not in LOOPBACK_HOSTS and not console_token:
         sys.exit("--token 없이 루프백 밖으로 열 수 없다: 이 포트는 현장의 모든 로봇을 움직인다")
+    tasks_db = getattr(args, "tasks_db", None)
+    if args.host not in LOOPBACK_HOSTS and tasks_db is None:
+        sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
     endpoints = load_robots(args.robots)
     _warn_if_world_readable(args.robots)
     signal_console = None
@@ -321,8 +326,15 @@ def run_console(args: argparse.Namespace) -> None:
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
     hub = console.hub if pairing_configured else None
+    task_service = None
+    if tasks_db is not None:
+        from fleet.server.task_service import FleetTaskService
+        from fleet.server.task_store import FleetTaskStore
+
+        task_service = FleetTaskService(FleetTaskStore(tasks_db),
+                                        robot_ids=console.robot_ids)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
-                     hub=hub, sightings=sighting_service)
+                     hub=hub, sightings=sighting_service, task_service=task_service)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(endpoints)} robots{signals_note})",

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.30
+**Version:** v1.31
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -846,10 +846,36 @@ SQLite `audit_id`는 재시작 뒤에도 유지되는 페이지 커서다. `--ev
 
 ---
 
+# 10.8 Site Fleet task submission and readback (D-269 Proposed)
+
+When durable task storage is configured, the operator navigation route creates a
+persistent task before contacting CORE. The browser sends a fresh
+`Idempotency-Key`; repeating the same request with the same authenticated
+operator identity returns the original task without issuing another robot
+command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT`.
+
+| Method | Path | Credential | Requirement |
+|---|---|---|---|
+| POST | `/api/fleet/robots/{robot_id}/goal` | console Bearer token + `Idempotency-Key` | Validates the configured robot and finite goal, writes `REQUESTED`, then records an explicit receipt or `UNKNOWN` if dispatch outcome is ambiguous. |
+| POST | `/api/fleet/do` (when `do` is `navigate`) | console Bearer token + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
+| GET | `/api/fleet/tasks/{task_id}` | console Bearer token | Returns the durable task projection and append-only status history. |
+
+Task status is `REQUESTED`, `ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`,
+`UNKNOWN`, or `HOLD`. The current console maps the shared operator token to the
+auditable principal `site-console`; individual operator identity and role
+management are not implemented. Policy submissions use the same validation and
+storage service, but remain `HOLD` with `POLICY_NOT_ACCEPTED` while D-268 is
+Proposed. A command timeout or unclassified post-dispatch error becomes
+`UNKNOWN`; the server does not retry it. D-177 command correlation and CORE
+ACK/final-result reconciliation remain separate required work.
+On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
+`fleet-recovery` history entry; startup never assumes that it is safe to resend.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.31 | 2026-09-26 | Additive(D-269 Proposed): operator navigation `Idempotency-Key`, durable task status/history, authenticated `/api/fleet/tasks/{task_id}` readback. Policy work remains `HOLD`; D-177 command ACK and per-user identity are not implemented. |
 | v1.30 | 2026-09-26 | Additive(D-269 Proposed): paired CORE Agent 이벤트를 credential-free bounded SQLite audit history에 저장, 중복 `event_id` 멱등 처리, 인증된 cursor 기반 `/api/fleet/events` 조회. 이는 자동 작업 승인이나 D-177 command ACK 구현을 뜻하지 않음 |
 | v1.29 | 2026-09-26 | Clarify(D-257/D-269 Proposed): Fleet CLI source config와 SQLite latest/history storage, HTTPS API path 및 site Docker TLS boundaries. Synthetic Docker WSS→vision→Fleet readback은 LOCAL evidence만 제공; D-268/자동 실행 상태 불변 |
 | v1.28 | 2026-09-26 | Additive(D-257 Proposed): Site Fleet sighting `quality`는 미측정 시 `null` 허용. 표시 전용이며 D-268 정책 증거로 사용하지 않음. envelope `protocol_version` 1.0 유지 |

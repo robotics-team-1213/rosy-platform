@@ -96,6 +96,27 @@
 3. `correlation_id`/ACK는 D-177/API Ref/schema와 한 change로 구현한다. timeout 또는 unknown result는 자동 재발행 대신 `UNKNOWN/HOLD`로 정지한다.
 4. fail-closed stale/missing evidence, auth revocation, duplicate/replay, crash recovery와 storage migration 시험을 수행한다. automatic enable remains OFF.
 
+**Task 7 implementation progress (LOCAL, partial):** the operator `/goal` route,
+navigation intents through `/api/fleet/do`, and internal policy entry point share
+configured-robot/finite-goal validation, SQLite
+task projection plus append-only transitions, and idempotency handling. The console
+uses a random request key; replay returns the original task without redispatch.
+Definite rejection is `FAILED`; ambiguous post-dispatch results are `UNKNOWN`.
+The externally reachable CLI requires both operator authentication and
+`--tasks-db`; site Compose uses `/var/lib/rosy/fleet.sqlite3` for tasks, sightings,
+and CORE event history. The current shared token is attributed to `site-console`.
+Policy submissions stay `HOLD` without dispatch. Focused task/API/CLI/docs tests
+passed (36); the full Fleet suite passed (461 passed, 5 skipped). Linux/amd64
+Docker images rebuilt, Compose configuration validated, and all three services
+became healthy. An authenticated navigation request to an intentionally
+unreachable smoke endpoint persisted as `UNKNOWN`; Fleet restart restored its
+task/history, and same-key replay returned the same task. This is local Docker
+evidence only. Browser RBAC/revocation, per-user identity,
+`correlation_id`/CORE ACK and final-result reconciliation, and UNKNOWN resolution
+remain open. Startup recovery now
+converts any persisted `REQUESTED` task to `UNKNOWN` with a system audit row and
+does not redispatch it. This does not complete Task 7 or accept D-268/D-177.
+
 ## Task 8 — Ubuntu RTX host와 각 장비별 수용
 
 1. 접속 대상 hostname/OS/user, network/TLS termination, NVIDIA driver, Docker Engine/Compose, disk/data backup, time sync를 inventory하고 private evidence에 기록한다.

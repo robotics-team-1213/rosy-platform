@@ -34,6 +34,8 @@
 5. **자동 실행은 계속 차단한다.** D-257 sighting은 표시·대조 자료다. 자동 작업은 D-268이 요구하는 별도 수용 정책 증거와 작업별 freshness/false-trigger 수용 뒤에만 허용한다. 미확인·stale·출처 불일치는 `HOLD`이며 운전자 명령 또한 같은 task 검증·감사 경로를 쓴다.
 6. **장비별 연결 증거를 따로 기록한다.** 계약 벡터/단위시험은 SOURCE, 실제 localhost 서비스 간 왕복은 LOCAL, 합성 또는 로봇 시뮬은 ROS-SIM, 고정 이미지와 호스트 드라이버 시험은 ARTIFACT/SITE, 실제 폰·CORE·팔·Pinky 측정은 각각 DEVICE/FIELD 증거다. 한 연결의 통과를 다른 장비나 배포의 통과로 승격하지 않는다.
 
+7. **Manual and policy navigation share a durable task lifecycle.** The operator console uses an idempotency key, validates configured robot identity and finite goal coordinates, persists `REQUESTED` before dispatch, then stores the receipt or `UNKNOWN` with append-only history. Replaying the same actor/key/request returns the existing task without redispatch; key reuse for a different request is a conflict. Policy submissions use the same validation/storage path but end in `HOLD` while D-268 is Proposed. The current shared console Bearer maps to `site-console`; it does not establish per-user roles. D-177 correlation/ACK and final result reconciliation are not implemented by this decision.
+
 **Alternatives:**
 
 - *모든 장비를 DDS domain에 직접 붙임* — 웹·스마트폰 경계와 장치 인증을 복잡하게 만들고 CORE 단일 gateway와 충돌하므로 기각한다.

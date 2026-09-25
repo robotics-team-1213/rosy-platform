@@ -87,6 +87,18 @@ a quiesced SQLite-aware backup; do not copy only the live main DB file while
 WAL is active. Protect the backup as operational data, test restore to a
 separate volume, and define site retention before production operation.
 
+The same named volume stores operator task requests and append-only status
+history (`--tasks-db`). An externally reachable Fleet console requires both an
+operator token and this persistent task database. Browser navigation requests
+to `/api/fleet/robots/{robot_id}/goal` or navigation intents through
+`/api/fleet/do` include an `Idempotency-Key`; read status and audit history through the
+authenticated `GET /api/fleet/tasks/{task_id}` route. The shared console token
+is currently recorded as `site-console`, so this does not provide per-user
+identity or role based access. Ambiguous command results remain `UNKNOWN` and
+are never retried automatically. Policy generated navigation remains `HOLD`
+until the D-268 acceptance contract is approved; D-177 command correlation and
+CORE ACK/final-result reconciliation are still outstanding.
+
 ## Current acceptance boundary
 
 The stack is local-testable, but installing and running it on an Ubuntu control
