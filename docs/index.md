@@ -139,12 +139,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
 - 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
 - 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
 - 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
 - 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
-- 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
-- 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
-- 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
-- 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
+- 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
