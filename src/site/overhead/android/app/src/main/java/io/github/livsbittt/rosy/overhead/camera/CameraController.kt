@@ -1,9 +1,14 @@
 package io.github.livsbittt.rosy.overhead.camera
 
 import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
+import androidx.annotation.OptIn
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -46,6 +51,10 @@ class CameraController(
     private var config: OverheadConfig = OverheadConfig.DEFAULT
     private var provider: ProcessCameraProvider? = null
     private var boundWidth = 0
+
+    /** Sensor timestamp base, read once per bind; written on main, read on the analysis thread. */
+    @Volatile
+    private var timestampSource = CaptureClock.Source.UNAVAILABLE
     private var stopped = false
 
     fun start(initial: OverheadConfig) {
@@ -97,16 +106,33 @@ class CameraController(
         analysis.setAnalyzer(analysisExecutor, ::analyze)
         try {
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            val camera = cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            timestampSource = readTimestampSource(camera)
             boundWidth = target.width
             analysis.resolutionInfo?.let { info ->
                 link.sensor = SensorInfo(info.resolution.width, info.resolution.height, info.rotationDegrees)
             }
-            Log.i(TAG, "bound analysis at ${analysis.resolutionInfo?.resolution} for width ${target.width}")
+            Log.i(
+                TAG,
+                "bound analysis at ${analysis.resolutionInfo?.resolution} for width ${target.width}, " +
+                    "timestamp source $timestampSource",
+            )
         } catch (e: Exception) {
             Log.e(TAG, "camera bind failed", e)
             onError(e)
         }
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun readTimestampSource(camera: Camera): CaptureClock.Source = try {
+        CaptureClock.Source.fromCamera2(
+            Camera2CameraInfo.from(camera.cameraInfo)
+                .getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE),
+        )
+    } catch (e: IllegalArgumentException) {
+        // Not a Camera2-backed CameraInfo: fall back to the heuristic.
+        Log.w(TAG, "timestamp source unavailable", e)
+        CaptureClock.Source.UNAVAILABLE
     }
 
     private fun analyze(image: ImageProxy) {
@@ -115,6 +141,7 @@ class CameraController(
             if (!limiter.tryAdmit(arrivalMono)) return
             if (!link.admitFrame()) return
             val captureMono = CaptureClock.toMonotonic(
+                source = timestampSource,
                 sensorNanos = image.imageInfo.timestamp,
                 nowMonoNanos = arrivalMono,
                 nowRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
