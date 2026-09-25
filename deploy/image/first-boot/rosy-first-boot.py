@@ -212,6 +212,33 @@ def _default_operator_account(name: str) -> None:
         raise OSError("could not create the operator account")
 
 
+# D-225 2.2: the image ships its factory release unsigned; the bundle carries
+# the offline signature over its SHA256SUMS.
+TRUSTED_RELEASE_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
+_NATIVE_RELEASE_CANDIDATES = (
+    Path(__file__).resolve().parents[3] / "deploy/robot/native/native_release.py",  # checkout
+    Path("/opt/rosy/native-runtime/native_release.py"),  # installed image
+)
+
+
+def _native_release():
+    """native_release.py, loaded from the checkout or the image's native runtime."""
+    import importlib.util
+
+    path = next((candidate for candidate in _NATIVE_RELEASE_CANDIDATES if candidate.is_file()), None)
+    if path is None:
+        raise OSError("native_release.py is not installed")
+    # The installed copy imports signing.py from its own directory.
+    if str(path.parent) not in sys.path:
+        sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location("rosy_native_release", path)
+    if spec is None or spec.loader is None:
+        raise OSError("native_release.py cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _system_account(name: str) -> dict | None:
     import pwd
 
@@ -446,6 +473,51 @@ class FirstBootProvisioner:
             Path(temporary).unlink(missing_ok=True)
             raise
 
+    def _factory_signature(self, record: dict | None) -> dict | None:
+        """Install the offline factory release signature, but only one that verifies (D-225 2.2).
+
+        The image ships /opt/rosy/releases/<id> sealed and unsigned. Written
+        next to it, the bundle's signature makes native_release verify() accept
+        that release, so the robot can roll back or recover to it. verify()
+        itself decides: if it still refuses the release, the signature is
+        removed again and provisioning continues with the release unsigned,
+        as it was before D-225 2.2. A re-run finds it already verified.
+        """
+        if record is None:
+            return None
+        release_id = record["release_id"]
+        release = self._inside(f"opt/rosy/releases/{release_id}")
+        signature = release / "SHA256SUMS.sig"
+        result = {"release_id": release_id, "signed": False}
+        written = False
+        try:
+            if release.is_symlink() or not release.is_dir():
+                raise ValueError("factory release is not installed")
+            manager = _native_release().NativeReleaseManager(
+                root=self.root, public_key=self._inside(TRUSTED_RELEASE_KEY))
+            try:
+                manager.verify(release_id)
+                return {**result, "signed": True}  # already signed: a retry, or never needed
+            except ValueError:
+                pass
+            # A signature that does not verify is worth nothing; ours replaces it.
+            # Stale temporaries of an interrupted write would be unlisted files.
+            for stale in (signature, *release.glob(".SHA256SUMS.sig.*")):
+                if stale.is_symlink() or stale.is_file():
+                    stale.unlink()
+            written = True
+            _write_atomic(signature, record["sha256sums_sig_b64"] + "\n", 0o644)
+            manager.verify(release_id)
+            return {**result, "signed": True}
+        except (OSError, ValueError, RuntimeError) as exc:
+            if written:
+                try:
+                    signature.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            print(f"rosy-first-boot: factory release {release_id} stays unsigned: {exc}", file=sys.stderr)
+            return {**result, "reason": str(exc)[:200]}
+
     @staticmethod
     def _runtime_env(bundle: dict) -> str:
         identity = bundle["device_identity"]
@@ -538,6 +610,7 @@ class FirstBootProvisioner:
             _json_atomic(self._inside("etc/rosy/ap-credentials.json"), payload["network"]["ap"], 0o600)
         # D-191: validate_provision_bundle already refused a bundle without one.
         self._core_api(payload["core_api"]["record"])
+        factory = self._factory_signature(payload.get("factory_release"))
 
         if not self.network_activate(SITE_PROFILE):
             # The site profile stays (0600, the bundle on the card holds the same
@@ -570,6 +643,8 @@ class FirstBootProvisioner:
         if operator_fingerprints:
             complete["operator"] = {"ssh_key_fingerprints": operator_fingerprints}
         complete["core_api"] = {"token_id": payload["core_api"]["record"]["id"]}
+        if factory is not None:
+            complete["factory_release"] = factory
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         bundle.unlink()
