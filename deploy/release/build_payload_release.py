@@ -177,14 +177,43 @@ def _tar_members(release_dir: Path) -> list[tuple[str, Path]]:
     return members
 
 
+def _modes_from(unsigned: Path, members: list[tuple[str, Path]]) -> dict[str, int]:
+    """File modes from the unsigned Linux tarball, keyed by member name."""
+    recorded: dict[str, tuple[bool, int]] = {}
+    with tarfile.open(unsigned, "r:gz") as tar:
+        for member in tar.getmembers():
+            if not (member.isreg() or member.isdir()):
+                raise ValueError(f"PACK_MODES_SOURCE: {member.name} is not a regular file or directory")
+            recorded[member.name] = (member.isdir(), 0o755 if member.mode & 0o111 else 0o644)
+    local = {relative: path.is_dir() for relative, path in members}
+    expected = set(local) - {SIGNATURE_FILENAME}
+    if set(recorded) != expected:
+        differing = sorted(set(recorded) ^ expected)
+        raise ValueError(f"PACK_MODES_MISMATCH: unsigned tarball members differ: {differing[:5]}")
+    modes = {SIGNATURE_FILENAME: 0o644}
+    for relative, (is_dir, mode) in recorded.items():
+        if is_dir != local[relative]:
+            raise ValueError(f"PACK_MODES_MISMATCH: {relative} changed type since the build")
+        modes[relative] = mode
+    return modes
+
+
 def pack_release(
     release_dir: Path,
     tarball: Path,
     *,
     public_key: Path | None = None,
     allow_unsigned: bool = False,
+    modes_from: Path | None = None,
 ) -> dict[str, object]:
-    """Write a byte-reproducible ``.tar.gz`` of ``release_dir``'s contents."""
+    """Write a byte-reproducible ``.tar.gz`` of ``release_dir``'s contents.
+
+    ``modes_from`` is the unsigned tarball the Linux build packed. A GitHub
+    artifact download (zip) or a Windows checkout loses POSIX exec bits, so a
+    re-pack after offline signing takes each member's mode from that tarball
+    instead of the local file system; the member set must match exactly,
+    except the added ``SHA256SUMS.sig``.
+    """
     release_dir = Path(release_dir).resolve(strict=True)
     tarball = Path(tarball)
     if not release_dir.is_dir():
@@ -206,6 +235,7 @@ def pack_release(
             raise ValueError(str(rejections[0]))
 
     members = _tar_members(release_dir)
+    modes = _modes_from(modes_from, members) if modes_from is not None else None
     tarball.parent.mkdir(parents=True, exist_ok=True)
     temporary = tarball.with_name(f".{tarball.name}.tmp")
     try:
@@ -223,7 +253,10 @@ def pack_release(
                     tar.addfile(info)
                     continue
                 info.type = tarfile.REGTYPE
-                info.mode = 0o755 if path.stat().st_mode & 0o111 else 0o644
+                if modes is not None:
+                    info.mode = modes[relative]
+                else:
+                    info.mode = 0o755 if path.stat().st_mode & 0o111 else 0o644
                 info.size = path.stat().st_size
                 with path.open("rb") as handle:
                     tar.addfile(info, handle)
@@ -256,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
     pack.add_argument("--public-key", type=Path, help="verify the signature before packing")
     pack.add_argument("--allow-unsigned", action="store_true",
                       help="pack a release without SHA256SUMS.sig (never pushable)")
+    pack.add_argument("--modes-from", type=Path,
+                      help="unsigned Linux tarball whose file modes (exec bits) to keep")
     args = parser.parse_args(argv)
     try:
         if args.command == "build":
@@ -263,7 +298,8 @@ def main(argv: list[str] | None = None) -> int:
                                    signing_key_id=args.signing_key_id)
         else:
             report = pack_release(args.release_dir, args.out, public_key=args.public_key,
-                                  allow_unsigned=args.allow_unsigned)
+                                  allow_unsigned=args.allow_unsigned,
+                                  modes_from=args.modes_from)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}))
         return 2

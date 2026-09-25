@@ -253,3 +253,46 @@ def test_offline_signer_refuses_a_payload_changed_after_build(case, tmp_path):
     assert report["ok"] is False
     assert "CHECKSUM_UNLISTED_FILE" in report["error"]
     assert not (staging / "SHA256SUMS.sig").exists()
+
+
+def _with_exec_bit(source: Path, out: Path, name: str) -> None:
+    """Rewrite a tarball with ``name`` at 0755, as a Linux build would pack it."""
+    with tarfile.open(source, "r:gz") as src, tarfile.open(out, "w:gz") as dst:
+        for member in src.getmembers():
+            data = src.extractfile(member) if member.isreg() else None
+            if member.name == name:
+                member.mode = 0o755
+            dst.addfile(member, data)
+
+
+def test_repack_after_signing_keeps_exec_bits_from_the_unsigned_linux_tarball(case, tmp_path):
+    _manager_type, _device, key, private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+    build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    plain = tmp_path / "plain.tar.gz"
+    pack_release(staging, plain, allow_unsigned=True)
+    unsigned = tmp_path / "unsigned.tar.gz"
+    _with_exec_bit(plain, unsigned, "install/lib/core/core_node")
+    _sign(staging, private)
+
+    signed = tmp_path / "signed.tar.gz"
+    report = _run(BUILDER, "pack", "--release-dir", staging, "--out", signed,
+                  "--public-key", key, "--modes-from", unsigned)
+
+    assert report["ok"] is True, report
+    modes = {member.name: member.mode for member in _members(signed)}
+    assert modes["install/lib/core/core_node"] == 0o755
+    assert modes["install/setup.bash"] == 0o644
+    assert modes["SHA256SUMS.sig"] == 0o644
+
+
+def test_repack_refuses_when_members_differ_from_the_unsigned_tarball(case, tmp_path):
+    _manager_type, _device, _key, _private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+    build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    unsigned = tmp_path / "unsigned.tar.gz"
+    pack_release(staging, unsigned, allow_unsigned=True)
+    (staging / "install" / "late.py").write_text("x = 1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="PACK_MODES_MISMATCH"):
+        pack_release(staging, tmp_path / "x.tar.gz", allow_unsigned=True, modes_from=unsigned)
