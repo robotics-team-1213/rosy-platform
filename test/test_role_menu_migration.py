@@ -64,6 +64,31 @@ def test_setup_surface_contains_capability_gated_docking_preparation():
     assert all(path not in source for path in ("/api/v1/docking/dock\"", "/api/v1/docking/undock", "/api/v1/docking/cancel"))
 
 
+def test_setup_surface_contains_admin_dock_registration_and_cleanup():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["setup.dock_admin"]
+    assert panel["surface"] == "setup"
+    assert panel["min_role"] == "administrator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/robot/state", "/api/v1/docking/docks", "/api/v1/docking/types"} <= set(
+        __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+    assert "/api/v1/docking/docks/${" in source
+
+
+def test_setup_surface_contains_staged_traffic_policy_actions():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["setup.traffic_policy"]
+    assert panel["surface"] == "setup"
+    assert panel["min_role"] == "operator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/traffic", "/api/v1/traffic/policy/stage", "/api/v1/traffic/policy/apply",
+            "/api/v1/traffic/simulation/signal"} <= set(
+        __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+    assert "window.confirm" in source
+
+
 def test_console_surface_contains_a_keyboard_accessible_map_panel():
     manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
     panels = {panel["id"]: panel for panel in manifest["panels"]}
@@ -87,8 +112,30 @@ def test_console_surface_contains_operator_hold_to_drive_panel():
     assert panel["min_role"] == "operator"
     source = (WEB / panel["module"]).read_text(encoding="utf-8")
     assert {"/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/safety/state",
-            "/api/v1/teleop", "/api/v1/mode"} <= set(
+            "/api/v1/teleop"} <= set(
                 __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+
+
+def test_console_surface_contains_capability_gated_mode_selector():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["console.mode"]
+    assert panel["surface"] == "console"
+    assert panel["min_role"] == "operator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/mode"} <= set(
+        __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+
+
+def test_console_surface_contains_navigation_capability_gated_line_follow():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["console.line_follow"]
+    assert panel["surface"] == "console"
+    assert panel["min_role"] == "operator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/line-follow", "/api/v1/line-follow/mode", "/api/v1/system/capabilities"} <= set(
+        __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
 
 
 def test_console_surface_contains_a_stoppable_live_camera_panel():

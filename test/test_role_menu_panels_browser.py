@@ -118,7 +118,7 @@ def test_console_docking_blocks_motion_when_capability_is_missing():
           const {mount} = await import('/assets/panels/console/docking.js');
           const root = document.createElement('main'); document.body.append(root);
           const callbacks = {};
-          const store = {poll(path, _interval, onData) { callbacks[path] = onData; return () => {}; }};
+          const store = {poll(path, _interval, onData) { callbacks[path] = onData; if(path==='/api/v1/system/capabilities') window.__capabilities=onData; return () => {}; }};
           const calls = []; window.__calls = calls;
           window.__unmount = mount(root, {role:'operator',store,api:async path=>calls.push(path)});
           callbacks['/api/v1/docking/status']({supported:false,state:'UNDOCKED'});
@@ -298,5 +298,175 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
         assert page.evaluate("window.__stopped") == 1
         page.evaluate("window.__unmount()")
         assert page.evaluate("window.__stopped") == 2
+        assert errors == []
+        browser.close()
+
+
+def test_console_mode_requires_navigation_capability_and_stops_held_motion():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "console" / "mode.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/mode.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/mode.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, _interval, onData) { callbacks[path] = onData; if(path==='/api/v1/system/capabilities') window.__capabilities=onData; return () => {}; }};
+          const calls=[]; window.__calls=calls; window.__stoppedMotion=0;
+          window.addEventListener('rosy:stop-motion',()=>window.__stoppedMotion++);
+          window.__unmount=mount(root,{role:'operator',store,api:async(path,options)=>calls.push({path,body:JSON.parse(options.body)})});
+          callbacks['/api/v1/robot/state']({mode:'IDLE'});
+          callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:false}});
+          window.confirm=()=>true;
+          const nav=root.querySelector('[data-mode="NAVIGATION"]'); nav.click();
+          window.__navButton=nav;
+        }""")
+        assert page.locator("[data-mode='NAVIGATION']").evaluate("button=>button.disabled")
+        assert page.evaluate("window.__calls") == []
+        page.evaluate("""() => {
+          // Feed a positive capability snapshot after the fail-closed readback.
+          window.__capabilities({navigation:{goal_navigation:true}});
+          window.__navButton.click();
+        }""")
+        page.wait_for_timeout(30)
+        assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"NAVIGATION"}}]
+        assert page.evaluate("window.__stoppedMotion") == 1
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
+
+
+def test_line_follow_keeps_stop_available_when_navigation_capability_is_missing():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "console" / "line-follow.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/line-follow.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks={}; const store={poll(path,_interval,onData){callbacks[path]=onData;return()=>{};}};
+          const calls=[]; window.__calls=calls;
+          window.__unmount=mount(root,{role:'operator',store,api:async(path,options)=>{calls.push({path,method:options.method,body:JSON.parse(options.body)});return {mode:'OFF'};}});
+          callbacks['/api/v1/line-follow']({mode:'IR_LINE',state:'TRACKING',confidence:.9});
+          callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:false}});
+          root.querySelector('ui-button:first-of-type').click();
+          root.querySelectorAll('ui-button')[1].click();
+        }""")
+        page.wait_for_timeout(20)
+        assert page.evaluate("window.__calls") == [{"path":"/api/v1/line-follow/mode","method":"PUT","body":{"mode":"OFF"}}]
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
+
+
+def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "setup" / "dock-admin.js").read_text(encoding="utf-8")
+        logic = (WEB.parent / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/setup/dock-admin.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=logic))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/setup/dock-admin.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks={}; const store={poll(path,_interval,onData,_onError){callbacks[path]=onData;return()=>{};}};
+          const calls=[]; window.__calls=calls;
+          window.__unmount=mount(root,{role:'administrator',store,api:async(path,options={})=>{
+            calls.push({path,method:options.method||'GET',body:options.body?JSON.parse(options.body):null});
+            return path.endsWith('/types')?{name:'test_type',detector:'simulated'}:{};
+          }});
+          window.__callbacks=callbacks;
+          document.querySelector('[name="dock_id"]').value='dock-1';
+          document.querySelector('[name="dock_type"]').value='test_type';
+          document.querySelector('[name="dock_type"]').dispatchEvent(new Event('input',{bubbles:true}));
+          document.querySelector('form').requestSubmit();
+          callbacks['/api/v1/docking/types']({types:[{name:'test_type',detector:'simulated'}]});
+        }""")
+        page.wait_for_timeout(20)
+        assert page.evaluate("window.__calls") == []
+        page.evaluate("""() => {
+          window.__callbacks['/api/v1/robot/state']({map_id:'map-1',pose:{x:1,y:2,yaw:0.5},evidence:{pose:{evidence:'fresh'}}});
+          window.confirm=()=>true;
+          document.querySelector('form').requestSubmit();
+        }""")
+        page.wait_for_timeout(30)
+        assert page.evaluate("window.__calls") == [{
+            "path":"/api/v1/docking/docks","method":"POST",
+            "body":{"id":"dock-1","type":"test_type","x":1,"y":2,"yaw":0.5,"map_id":"map-1"},
+        }]
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
+
+
+def test_setup_traffic_policy_stages_before_confirmed_apply():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "setup" / "traffic-policy.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/setup/traffic-policy.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount}=await import('/assets/panels/setup/traffic-policy.js');
+          const root=document.createElement('main');document.body.append(root);
+          const callbacks={};const store={poll(path,_interval,onData){callbacks[path]=onData;return()=>{};}};
+          const calls=[];window.__calls=calls;
+          window.__unmount=mount(root,{store,api:async(path,options)=>{
+            calls.push({path,method:options.method,body:options.body?JSON.parse(options.body):null});
+            if(path.endsWith('/stage'))return {active:{policy_revision:'old'},staged:{policy_revision:'candidate',mode:'ENFORCED'},status:{state:'DISABLED'}};
+            if(path.endsWith('/apply'))return {active:{policy_revision:'candidate'},status:{state:'ENFORCED'}};
+            return {};
+          }});
+          callbacks['/api/v1/traffic']({active:{policy_revision:'old',mode:'ADVISORY',approach_distance_m:1,stop_distance_m:.3,stop_dwell_s:1,min_confidence:.8},simulation_signal:{available:false},status:{state:'DISABLED'}});
+          window.confirm=()=>true;
+        }""")
+        page.locator('[name="policy_revision"]').fill("candidate")
+        page.locator("ui-button").filter(has_text="정책 검토본 저장").click()
+        page.wait_for_function("window.__calls.length === 1")
+        assert page.evaluate("window.__calls[0].path") == "/api/v1/traffic/policy/stage"
+        assert not page.locator("ui-button").filter(has_text="정지 상태에서 적용").is_disabled()
+        page.locator("ui-button").filter(has_text="정지 상태에서 적용").click()
+        page.wait_for_function("window.__calls.length === 2")
+        assert page.evaluate("window.__calls[1].path") == "/api/v1/traffic/policy/apply"
+        page.evaluate("window.__unmount()")
         assert errors == []
         browser.close()

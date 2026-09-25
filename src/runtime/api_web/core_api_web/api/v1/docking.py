@@ -84,6 +84,13 @@ def list_docks(_: AuthContext = Depends(viewer),
     return {"docks": [d.model_dump() for d in svc.docking.database.list()]}
 
 
+@docking_router.get("/types")
+def list_dock_types(_: AuthContext = Depends(viewer),
+                    svc: CoreServicesLike = Depends(get_services)):
+    """Setup lists the configured detector types without granting mutation authority."""
+    return {"types": [dock_type.model_dump() for dock_type in svc.docking.database.types()]}
+
+
 @docking_router.post("/types")
 def create_dock_type(body: DockTypeRequest, _: AuthContext = Depends(admin),
                      svc: CoreServicesLike = Depends(get_services)):

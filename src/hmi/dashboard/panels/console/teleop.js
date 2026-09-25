@@ -21,8 +21,7 @@ export function mount(root, ctx) {
     const button = el("ui-button", "", command.label); button.type = "button"; button.dataset.linear = String(command.linear); button.dataset.angular = String(command.angular); button.disabled = true;
     button.setAttribute("aria-label", `${command.label}. 누르는 동안에만 저속으로 움직입니다.`); controls.append(button); return button;
   });
-  const mode = el("ui-button", "", "MANUAL 모드로 전환"); mode.type = "button"; mode.disabled = true;
-  root.append(head, status, confirmLabel, controls, mode);
+  root.append(head, status, confirmLabel, controls);
 
   let state = null;
   let capabilities = null;
@@ -46,7 +45,6 @@ export function mount(root, ctx) {
   function update() {
     const can = eligible();
     buttons.forEach((button) => { button.disabled = !can && button !== activeButton; });
-    mode.disabled = ctx.role === "viewer" || state?.mode === "MANUAL";
     if (!can && ticker.active) stop("운전 조건이 바뀌어 정지했습니다.");
     if (!ticker.active) status.textContent = describeHold();
   }
@@ -102,13 +100,7 @@ export function mount(root, ctx) {
   window.addEventListener("blur", () => stop("창 포커스를 잃어 정지했습니다.", true), {signal: listeners.signal});
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop("화면이 숨겨져 정지했습니다.", true); }, {signal: listeners.signal});
   confirmed.addEventListener("change", update, {signal: listeners.signal});
-  mode.addEventListener("click", async () => {
-    if (mode.disabled || !window.confirm("MANUAL 모드로 전환할까요? 운전 면적이 비었는지 확인하세요.")) return;
-    stop("모드 변경 전에 정지했습니다."); mode.disabled = true;
-    try { await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: "MANUAL"})}); status.textContent = "MANUAL 모드 요청을 전달했습니다."; }
-    catch (error) { status.textContent = `모드 변경 실패: ${error.message}`; }
-    finally { mode.disabled = ctx.role === "viewer" || state?.mode === "MANUAL"; }
-  }, {signal: listeners.signal});
+  window.addEventListener("rosy:stop-motion", () => stop("공유 운전 제어에서 정지했습니다.", true), {signal: listeners.signal});
 
   const stopState = ctx.store.poll("/api/v1/robot/state", 500, (data) => { state = data; update(); }, (error) => { state = null; status.textContent = `로봇 상태를 읽지 못해 운전을 막았습니다: ${error.message}`; stop("상태 연결이 끊겨 정지했습니다.", true); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; update(); }, (error) => { capabilities = null; status.textContent = `운전 capability 확인 실패: ${error.message}`; update(); });
