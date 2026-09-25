@@ -1177,3 +1177,100 @@ def test_the_display_keeps_running_for_the_lamp_without_a_panel_or_buzzer(tmp_pa
         module.main(["--root", str(tmp_path)])
 
     assert built and built[0]["lamp"].available() and built[0]["lcd"] is None
+
+
+# --- D-260 / D-247 6: a buzzer or lamp test handed over by rosy-hw-test -----------
+
+REQUEST_ID = "00112233445566778899aabb"
+
+
+def _hand_over(root: Path, action: str = "buzzer", request_id: str = REQUEST_ID, *, at: float = 1_000_000.0,
+               **extra) -> None:
+    path = root / "run/rosy-boot/display-test.request"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"action": action, "request_id": request_id, "requested_at": at, **extra}),
+                    encoding="utf-8")
+
+
+def _answer(root: Path):
+    path = root / "run/rosy-display/display-test.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
+def test_the_display_plays_a_handed_over_buzzer_test_once(tmp_path):
+    module = _display()
+    gpio = FakeGPIO()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    display.step()
+    _hand_over(tmp_path)
+
+    display.step()
+    clock.now += 1
+    display.step()  # the same request id again: nothing more
+
+    starts = _starts(gpio)
+    assert starts == [("start", module.BUZZER_DUTY)] * module.TEST_BEEPS
+    assert _answer(tmp_path) == {"schema": 1, "request_id": REQUEST_ID, "action": "buzzer", "state": "done",
+                                 "detail": "BCM 22 · 2 kHz · duty 10 % · 3×150 ms (부팅 표시가 울림)"}
+
+
+def test_a_display_with_the_buzzer_off_answers_unavailable(tmp_path):
+    module = _display()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path)
+    _hand_over(tmp_path)
+
+    assert display.handle_test() == "unavailable"
+    assert _answer(tmp_path)["state"] == "unavailable"
+
+
+def test_a_handed_over_lamp_test_pauses_the_state_pattern_and_resumes_it(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    _hand_over(tmp_path, "lamp")
+
+    assert display.handle_test() == "done"
+
+    assert spawn.patterns == ["booting", "test", "booting"]
+    assert spawn.processes[0].terminated == 1 and lamp.pattern == "booting"
+    assert _answer(tmp_path)["detail"].endswith("(부팅 표시가 켬)")
+
+
+def test_a_lamp_test_without_a_usable_lamp_answers_unavailable(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path, channel="2")
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    display, _lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    _hand_over(tmp_path, "lamp")
+
+    assert display.handle_test() == "unavailable" and spawn.patterns == []
+
+
+@pytest.mark.parametrize("change", [
+    {"action": "motor"}, {"request_id": "../../etc"}, {"request_id": 7}, {"at": 1_000_000.0 - 60},
+    {"at": 1_000_000.0 + 60}, {"extra": 1}, {"at": True},
+])
+def test_anything_but_a_fresh_exact_hand_over_is_ignored(tmp_path, change):
+    module = _display()
+    gpio = FakeGPIO()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    arguments = {"action": "buzzer", "request_id": REQUEST_ID, "at": 1_000_000.0}
+    arguments.update(change)
+    _hand_over(tmp_path, arguments.pop("action"), arguments.pop("request_id"), **arguments)
+
+    assert display.handle_test() is None
+    assert _starts(gpio) == [] and _answer(tmp_path) is None
+
+
+def test_an_oversized_hand_over_is_not_read(tmp_path):
+    module = _display()
+    _hand_over(tmp_path, pad="x" * 600)
+
+    assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is None

@@ -374,6 +374,8 @@ DECLARED_WRITES = {
     "rosy-hw-test.service": {
         # rosy-hw-test.py RESULT, via a temporary file beside it (D-247 6).
         "/run/rosy-boot/hw-test.json",
+        # D-260: the hand-over to the boot display (HANDOFF_REQUEST), root:rosy-display 0640.
+        "/run/rosy-boot/display-test.request",
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
@@ -416,6 +418,8 @@ DECLARED_READS = {
     "rosy-hw-test.service": {
         "/run/rosy/hw-test.request", "/etc/rosy/boot-display.env",
         "/opt/rosy/current/install/lib/lamp_control/lamp_selftest",
+        # D-260: the boot display's answer to a hand-over (HANDOFF_RESULT).
+        "/run/rosy-display/display-test.json",
     },
 }
 

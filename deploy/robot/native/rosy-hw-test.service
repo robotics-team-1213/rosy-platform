@@ -3,6 +3,9 @@ Description=ROSY buzzer and lamp test on an administrator's request (D-247)
 # Root and outside CORE (D-161). Started only by rosy-hw-test.path when CORE
 # writes /run/rosy/hw-test.request; beeps the buzzer or flashes the lamp once
 # and writes /run/rosy-boot/hw-test.json. Never a motor, cmd_vel or the ADC.
+# D-260: while rosy-boot-display owns the buzzer or the lamp, the test is handed
+# to it (/run/rosy-boot/display-test.request, answer in /run/rosy-display) and
+# nothing is driven from here.
 After=rosy-core.service systemd-udevd.service local-fs.target
 # CORE rate-limits the requests; a burst must never fail the path unit.
 StartLimitIntervalSec=0
