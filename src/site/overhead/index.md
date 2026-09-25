@@ -26,6 +26,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · c6647a1e · 에뮬레이터 종단 확인 (안드로이드 앱 → 이 어댑터)
+- 2026-09-26 · 27b8f34e · fix(overhead): never stall a reconnecting phone behind a half-open old socket
 - 2026-09-26 · uncommitted · feat(overhead): rosy_overhead receive CLI + ament_python package (D-261 A2)
 - 2026-09-26 · uncommitted · feat(overhead): receive-only WebSocket ingest server (D-261 A2)
 - 2026-09-26 · uncommitted · feat(overhead): rosy-overhead/1 protocol module (D-261 A1)
