@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
+import py_compile
 import shutil
 import subprocess
 import sys
@@ -177,6 +179,40 @@ def test_unsigned_tarball_is_regular_files_and_dirs_only_and_reproducible(tmp_pa
     for member in members:
         assert member.isreg() or member.isdir()
         assert (member.uid, member.gid, member.mtime) == (0, 0, 946684800)
+
+
+def _compile(source: Path, mode: py_compile.PycInvalidationMode) -> Path:
+    return Path(py_compile.compile(str(source), doraise=True, invalidation_mode=mode))
+
+
+def test_checked_hash_pyc_stays_valid_after_build_and_pack_fix_mtimes(tmp_path):
+    # D-225: pack sets every mtime to 2000-01-01. build-native-payload.sh
+    # rewrites colcon's pycs as checked-hash so the robot keeps using them.
+    payload = _payload_tree(tmp_path / "p")
+    site = payload / "install" / "lib" / "python3.12" / "site-packages" / "rosylib"
+    site.mkdir(parents=True)
+    (site / "hashed.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (site / "stamped.py").write_text("VALUE = 2\n", encoding="utf-8")
+    hashed = _compile(site / "hashed.py", py_compile.PycInvalidationMode.CHECKED_HASH)
+    stamped = _compile(site / "stamped.py", py_compile.PycInvalidationMode.TIMESTAMP)
+    report = build_release(payload, RELEASE_ID, tmp_path / "r")
+    pack_release(Path(report["release_dir"]), tmp_path / "a.tar.gz", allow_unsigned=True)
+    out = tmp_path / "x"
+    with tarfile.open(tmp_path / "a.tar.gz", "r:gz") as tar:
+        tar.extractall(out, filter="fully_trusted")
+
+    def unpacked(path: Path) -> Path:
+        return out / path.relative_to(payload)
+
+    source = unpacked(site / "hashed.py")
+    header = unpacked(hashed).read_bytes()[:16]
+    assert int(source.stat().st_mtime) == 946684800
+    assert int.from_bytes(header[4:8], "little") == 0b11  # hash-based, check_source
+    assert header[8:16] == importlib.util.source_hash(source.read_bytes())
+    # The timestamp pyc it replaces: recorded mtime no longer matches, so stale.
+    stale = unpacked(stamped).read_bytes()[:16]
+    assert int.from_bytes(stale[4:8], "little") == 0
+    assert int.from_bytes(stale[8:12], "little") != int(unpacked(site / "stamped.py").stat().st_mtime)
 
 
 def test_pack_refuses_unsigned_release_by_default(tmp_path):

@@ -110,6 +110,17 @@ rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
     colcon list --base-paths src "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"
+# D-225: build_payload_release.py pack sets every member's mtime to
+# 2000-01-01, so a timestamp-validated .pyc from colcon no longer matches its
+# source on the robot and Python recompiles (or, read-only, re-reads) it on
+# every start. Rewrite them as checked-hash pycs, valid by source hash alone.
+# Explicit rather than SOURCE_DATE_EPOCH: it covers every compiler path.
+shopt -s nullglob
+PYTHON_DIRS=("$INSTALL_ROOT"/lib/python3*/site-packages "$INSTALL_ROOT"/local/lib/python3*/dist-packages)
+shopt -u nullglob
+if [[ ${#PYTHON_DIRS[@]} -gt 0 ]]; then
+    python3 -m compileall -q -f --invalidation-mode checked-hash "${PYTHON_DIRS[@]}"
+fi
 dpkg-query -W -f='${Package}\t${Version}\n' | LC_ALL=C sort > "$DEB_INVENTORY.tmp"
 mv -f -- "$DEB_INVENTORY.tmp" "$DEB_INVENTORY"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE_ROOT/source-revision.txt"

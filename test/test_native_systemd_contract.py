@@ -685,6 +685,21 @@ def test_every_home_unit_is_covered_by_the_startup_hook_rule():
         assert "bash -lc" not in _read(unit), unit
 
 
+@pytest.mark.parametrize("unit", [
+    "rosy-core.service", "rosy-io.service", "rosy-navigation.service", "rosy-boot-display.service",
+])
+def test_python_units_never_write_bytecode_into_the_release(unit):
+    # D-225: the payload ships checked-hash pycs (valid after pack fixes mtimes);
+    # the runtime must not add or rewrite any under the signed release.
+    assert _environment(_directives(unit)).get("PYTHONDONTWRITEBYTECODE") == "1", unit
+
+
+def test_payload_build_rewrites_pycs_as_checked_hash():
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    compile_at = payload.index("python3 -m compileall -q -f --invalidation-mode checked-hash")
+    assert payload.index("colcon build") < compile_at < payload.index('"$INSTALL_ROOT/.rosy-release"')
+
+
 def test_the_login_code_issuer_is_a_root_sandbox_without_network():
     # D-193 2: root outside CORE, no network, only /run/rosy-boot writable.
     directives = _directives("rosy-login-code.service")

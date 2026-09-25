@@ -30,6 +30,10 @@ StateDirectory=rosy/display
 StateDirectoryMode=0750
 Environment=HOME=/var/lib/rosy/display
 Environment=PYTHONNOUSERSITE=1
+# D-225: never write .pyc under the release. The payload ships checked-hash
+# pycs that stay valid after pack fixes mtimes; a stray write would fail
+# under ProtectSystem=strict and must not change a signed release anyway.
+Environment=PYTHONDONTWRITEBYTECODE=1
 # lgpio (under rpi-lgpio) keeps its notification files in LG_WD or the
 # working directory; both are the state directory. RPI_LGPIO_CHIP selects
 # gpiochip4, the RP1 header chip, where rpi-lgpio honours it; the program
