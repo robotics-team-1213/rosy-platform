@@ -20,6 +20,14 @@ panels:
     min_role: operator
     module: panels/setup/waypoints.js
     css: [panels/surface-panels.css]
+  - id: setup.localization
+    title: 위치 설정 및 맵 준비
+    surface: setup
+    slot: main
+    order: 20
+    min_role: operator
+    module: panels/setup/localization.js
+    css: [panels/surface-panels.css]
   - id: system.events
     title: 최근 이벤트
     surface: device
@@ -35,10 +43,34 @@ panels:
     min_role: administrator
     module: panels/host/hardware.js
     css: [panels/host/hardware.css]
+  - id: host.system
+    title: 시스템 및 기능 상태
+    surface: device
+    slot: main
+    order: 20
+    min_role: administrator
+    module: panels/host/system.js
+    css: [panels/surface-panels.css]
+  - id: host.operations
+    title: 네트워크 및 장치 운영 상태
+    surface: device
+    slot: main
+    order: 30
+    min_role: administrator
+    module: panels/host/operations.js
+    css: [panels/surface-panels.css]
   - id: system.diagnostics
     title: 진단 상태
     surface: device
     slot: main
     order: 100
     module: panels/system/diagnostics.js
+    css: [panels/surface-panels.css]
+  - id: system.security
+    title: 보안 및 안전 정책
+    surface: device
+    slot: main
+    order: 40
+    min_role: administrator
+    module: panels/system/security.js
     css: [panels/surface-panels.css]
