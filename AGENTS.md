@@ -51,7 +51,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 - Hardware profile is YAML. In-tree Pinky full spec is `src/products/pinky_pro/config/profile.yaml`. The robot advertises `deploy/robot/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - Package names are grouped by directory: `src/{core,devices,products,face,navigation,sim,site}` (D-147, later regrouped). Do not reintroduce `rosy_*` or `pinky_*` package names. ci.yml was realigned to the domain tree (verified 2026-09-21); the CORE launch file still carries its legacy filename `rosy_core.launch.py` — README matches that file name.
 - Dashboard screens are static files in `src/hmi/dashboard`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
-- Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`).
+- Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot).
 
 ### Testing Requirements
 
