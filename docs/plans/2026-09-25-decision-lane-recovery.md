@@ -4,7 +4,7 @@ module: docs
 
 # 차선 판단을 동작 id로 연결 (D-228)
 
-결정: [D-228](../adr/D-228-decision-lives-in-core-features.md). 입력은 저장소 밖 `ROSY_Decision_Fabric_AI_Judgment_Architecture_v0.8.md` 의 첫 사례 `lane_recovery` 다.
+결정: [D-228](../adr/D-228-decision-lives-in-core-features.md). 입력은 [2026-09-25-decision-fabric-input-v0.8.md](2026-09-25-decision-fabric-input-v0.8.md) 의 첫 사례 `lane_recovery` 다.
 
 이 계획은 `control` 을 나누지 않고, `src/runtime` 을 만들지 않는다. 차선 추종이 내는 선속도·각속도는 `line_follow` 에 남는다. 판단 라이브러리는 `FOLLOW` 또는 `STOP` 만 고른다.
 

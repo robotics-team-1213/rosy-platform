@@ -6,7 +6,7 @@ module: docs
 
 **Status:** 초안 (2026-09-25). 결정: [D-227](../adr/D-227-ownership-names-stay-on-the-current-tree.md). 이 계획은 파일을 옮기지 않는다. 판단 라이브러리의 실행은 [2026-09-25-decision-lane-recovery.md](2026-09-25-decision-lane-recovery.md) (D-228) 다.
 
-입력은 저장소 밖 `ROSY_Ownership_Naming_AI_ControlPlane_Refactoring_v0.2.md` 다. v0.2 의 "소유 먼저, 이동은 나중"은 받는다. v0.2 §5 와 §47 의 목표 트리는 다음 작업이 아니다. D-227 이 Accepted 되기 전에는 `src/AGENTS.md` 의 현재 트리가 이긴다.
+입력은 [2026-09-25-ownership-naming-input-v0.2.md](2026-09-25-ownership-naming-input-v0.2.md) 다. v0.2 의 "소유 먼저, 이동은 나중"은 받는다. v0.2 §5 와 §47 의 목표 트리는 다음 작업이 아니다. D-227 이 Accepted 되기 전에는 `src/AGENTS.md` 의 현재 트리가 이긴다.
 
 ## 이 계획이 열지 않는 일
 

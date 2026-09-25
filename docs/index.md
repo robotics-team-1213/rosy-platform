@@ -118,8 +118,11 @@
 - [2026-09-22-pinky-pro-flashable-image-design.md](plans/2026-09-22-pinky-pro-flashable-image-design.md)
 - [2026-09-22-pinky-pro-flashable-image.md](plans/2026-09-22-pinky-pro-flashable-image.md)
 - [2026-09-24-folder-layout.md](plans/2026-09-24-folder-layout.md)
+- [2026-09-25-decision-fabric-input-v0.8.md](plans/2026-09-25-decision-fabric-input-v0.8.md)
 - [2026-09-25-decision-lane-recovery.md](plans/2026-09-25-decision-lane-recovery.md)
+- [2026-09-25-folder-map.md](plans/2026-09-25-folder-map.md)
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
+- [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
 
 ## 교훈 (docs/solutions)
 
@@ -133,7 +136,7 @@
 ## 최근 기록
 
 - 2026-09-25 · uncommitted · test+docs(layout): D-226 Accepted — CI가 공개 경계와 문서 자리를 지킨다
+- 2026-09-25 · uncommitted · docs(plans): gather root architecture notes
 - 2026-09-25 · uncommitted · docs(adr): D-229 layer boundaries
 - 2026-09-25 · uncommitted · refactor(control): split perception from sensing geometry
 - 2026-09-25 · uncommitted · docs(plan): D-228 lane_recovery execution
-- 2026-09-25 · uncommitted · docs(adr): D-228 decision lives in core_features

@@ -79,6 +79,9 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-24-folder-layout.md` | D-186 실행: 루트는 `env.sh`만, 벤치·설치 셸은 `tools/`와 `deploy/`, 텔레옵·주행 기록은 `data/` |
 | `2026-09-25-ownership-naming-control-plane.md` | D-227: 여섯 책임은 지금 트리의 이름. 목표 루트·명령 봉투·AI 워커는 열지 않는다 |
 | `2026-09-25-decision-lane-recovery.md` | D-228 실행: 차선 판단은 FOLLOW/STOP id. 속도는 line_follow 에 남긴다 |
+| `2026-09-25-ownership-naming-input-v0.2.md` | 입력 노트. D-227이 채택한 범위만 실행 기준이다 |
+| `2026-09-25-decision-fabric-input-v0.8.md` | 입력 노트. 판단 경계는 D-228·D-229다. `src/runtime` 트리는 폴더가 아니다 |
+| `2026-09-25-folder-map.md` | D-229 이후의 현재 폴더를 읽는 지도 |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 ## Subdirectories
