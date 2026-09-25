@@ -256,6 +256,7 @@
 | D-255 | UI/UX 평가 회차 2 | Accepted |
 | D-258 | 디자인 리뷰 루프 | Accepted |
 | D-259 | 지도 키보드 조작 | Accepted |
+| D-266 | 진단 PARKED 해제 조건 | Proposed |
 | D-262 | 웹 예산 판정 제안 | Proposed |
 | D-260 | 로봇은 부팅음·LED·LCD·운용 화면 요약줄 네 곳에서 같은 상태를 같은 말로 보여준다 | Proposed |
 | D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 | Accepted |
