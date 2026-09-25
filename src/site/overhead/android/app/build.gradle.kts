@@ -31,6 +31,8 @@ android {
     }
 
     testOptions {
+        // OverheadLink logs through android.util.Log; on the JVM those stubs return defaults.
+        unitTests.isReturnDefaultValues = true
         unitTests.all {
             // Shared rosy-overhead/1 vectors, also read by the Python adapter tests.
             it.systemProperty(
@@ -60,4 +62,5 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    testImplementation(libs.okhttp.mockwebserver)
 }
