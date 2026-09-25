@@ -123,6 +123,11 @@ if [[ ${#PYTHON_DIRS[@]} -gt 0 ]]; then
 fi
 dpkg-query -W -f='${Package}\t${Version}\n' | LC_ALL=C sort > "$DEB_INVENTORY.tmp"
 mv -f -- "$DEB_INVENTORY.tmp" "$DEB_INVENTORY"
+# D-225: the ROS debs this payload was built against (the runner's current
+# apt state, not a lock). A payload-only update keeps the robot's image debs,
+# so the operator diffs this against the image's deb-packages.txt.
+awk -F'\t' '$1 ~ /^ros-jazzy-/ { print $1 "=" $2 }' "$DEB_INVENTORY" > "$RELEASE_ROOT/ros-packages.txt.tmp"
+mv -f -- "$RELEASE_ROOT/ros-packages.txt.tmp" "$RELEASE_ROOT/ros-packages.txt"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE_ROOT/source-revision.txt"
 # D-189: the CORE Python runtime this release was built and tested against.
 # native_release.py refuses to activate it on an image with a different one.

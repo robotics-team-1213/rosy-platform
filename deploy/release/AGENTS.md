@@ -70,6 +70,13 @@ python deploy\release\build_payload_release.py pack --release-dir X:\payload\<id
 deploy\robot\rosy-release-push.ps1 -Robot <ip> -Tarball X:\payload\<id>.tar.gz
 ```
 
+ROS 의존성: payload는 잠긴 입력이 아니라 **CI 러너에 그 시점 설치된** `ros-jazzy-*` deb에 대고 빌드된다. payload-only 갱신은 로봇 이미지의 deb를 바꾸지 않으므로, 전송 전에 payload의 `ros-packages.txt`(`name=version`)를 로봇 이미지 릴리스의 `deb-packages.txt`(이미지 dist 사이드카, 또는 로봇의 `/opt/rosy/releases/<이미지 release id>/deb-packages.txt`)와 diff 한다. payload 자체의 `deb-packages.txt`는 러너 전체 목록이라 비교 대상이 아니다. 버전이 다르면 이미지 재빌드를 검토한다. 활성화 게이트는 없다(운영자 확인 사항).
+
+```powershell
+$img = Get-Content <image deb-packages.txt> | ? { $_ -like 'ros-jazzy-*' } | % { $_ -replace "`t", '=' }
+Compare-Object $img (Get-Content X:\payload\<id>\ros-packages.txt)
+```
+
 Tests: `python -m pytest test/test_payload_release_build.py test/test_native_payload_workflow.py -q`.
 
 ### Common Patterns

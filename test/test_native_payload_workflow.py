@@ -73,3 +73,15 @@ def test_uploads_unsigned_artifact_named_by_release_and_sha():
     assert upload["with"]["name"] == (
         "rosy-native-payload-unsigned-${{ inputs.release_id }}-${{ github.sha }}")
     assert upload["with"]["if-no-files-found"] == "error"
+
+
+def test_payload_records_the_ros_debs_it_was_built_against():
+    # D-225 review: the payload builds against the runner's current ROS debs,
+    # not the image's; ros-packages.txt lets the operator diff the two.
+    script = (ROOT / "deploy" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
+    deb = script.index('mv -f -- "$DEB_INVENTORY.tmp" "$DEB_INVENTORY"')
+    ros = script.index("awk -F'\\t' '$1 ~ /^ros-jazzy-/ { print $1 \"=\" $2 }' \"$DEB_INVENTORY\"")
+    assert deb < ros
+    assert '"$RELEASE_ROOT/ros-packages.txt"' in script
+    notes = (ROOT / "deploy" / "release" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "ros-packages.txt" in notes and "deb-packages.txt" in notes
