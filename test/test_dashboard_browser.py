@@ -203,6 +203,32 @@ window.fetch = async (input, options = {}) => {
       status: 200, headers: {'Content-Type': 'application/json'},
     });
   }
+  // D-247 6: rosy-hw-test ran at once and CORE recorded the answer.
+  if (method === 'POST' && path === '/api/v1/host/hardware/test') {
+    const device = parsed && parsed.device;
+    if (window.__rosyHardware) {
+      window.__rosyHardware.test = {
+        request_id: '00112233445566778899aabb', action: device, state: 'done',
+        detail: device === 'buzzer' ? 'BCM 4 · 2 kHz · duty 10 % · 3×150 ms' : '빨강→초록→파랑 1 s씩 · 8 LED · GPIO19 · 꺼짐',
+        finished_at: new Date().toISOString(),
+      };
+    }
+    return new Response(JSON.stringify({accepted: true, request_id: '00112233445566778899aabb', device,
+                                        detail: '부저를 울립니다. 들렸는지·보였는지 확인해 주세요.'}), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
+  if (method === 'POST' && path === '/api/v1/host/hardware/confirm') {
+    const row = window.__rosyHardware?.devices.find((device) => device.id === parsed.device);
+    if (row) {
+      Object.assign(row, parsed.observed
+        ? {state: 'ok', evidence: '사람 확인: 관리자 2026-09-26 05:00 UTC', source: 'human'}
+        : {state: 'no_response', evidence: '사람 확인: 들리지 않음 · 관리자 2026-09-26 05:00 UTC', source: 'human'});
+    }
+    return new Response(JSON.stringify({recorded: true, device: parsed.device, observed: parsed.observed}), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
   if (window.__rosyStateOverrides?.robot_state) {
     Object.assign(bodies['/api/v1/robot/state'], window.__rosyStateOverrides.robot_state);
   }
@@ -1651,8 +1677,8 @@ HARDWARE_INIT = """
          evidence: 'ETIMEDOUT — 로봇 전원을 완전히 껐다 켜세요', product: true},
         {id: 'lamp', label: 'LED 램프 (WS2812)', bus: 'GPIO BCM 19 PWM', state: 'driver_missing',
          evidence: '/dev/ws281x_pwm 없음', product: false},
-        {id: 'buzzer', label: '부저', bus: 'GPIO BCM 22', state: 'needs_human',
-         evidence: 'BCM 22 미확인', product: false},
+        {id: 'buzzer', label: '부저', bus: 'GPIO (ROSY_BUZZER_PIN, 기본 BCM 4)', state: 'needs_human',
+         evidence: 'BCM 4 · 꺼짐 (ROSY_BUZZER_ENABLED=false) · 소리는 사람이 확인', product: false},
         {id: 'lidar', label: 'LiDAR (RPLIDAR C1)', bus: 'UART0 /dev/ttyAMA0', state: 'not_measured',
          evidence: 'rosy-io 사용 중 — 토픽으로 판정', product: true, held_by: 'rosy-io.service'},
       ],
@@ -1742,6 +1768,108 @@ def test_no_probe_result_yet_is_said_not_blanked():
             "document.getElementById('hardware-card')?.dataset.available === 'false'")
         assert page.locator("#hardware-note").inner_text() == "장치 점검 결과가 아직 없습니다"
         assert page.locator("#hardware-list .device-row").count() == 0
+        browser.close()
+
+
+def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
+    """D-247 6: 울려 보기 -> 들림 goes to the two admin routes and turns the row to 정상."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
+        actions = page.evaluate(
+            "[...document.querySelectorAll('#hardware-list .device-actions')].map((box) => ({"
+            " device: box.closest('.device-row').dataset.device,"
+            " buttons: [...box.querySelectorAll('ui-button')].map((b) => [b.textContent, b.disabled]) }))"
+        )
+        assert actions == [{"device": "lamp", "buttons": [["켜 보기", True]]},
+                           {"device": "buzzer", "buttons": [["울려 보기", False]]}]
+
+        page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='test']").click()
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.method === 'POST'"
+            " && call.path === '/api/v1/host/hardware/test' && call.body?.device === 'buzzer')")
+        heard = page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='observed']")
+        heard.wait_for(timeout=10_000)
+        assert heard.inner_text() == "들림"
+        assert page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='not-observed']") \
+            .inner_text() == "안 들림"
+        assert page.locator("#hardware-list [data-device='buzzer'] .device-test").inner_text() == \
+            "BCM 4 · 2 kHz · duty 10 % · 3×150 ms"
+        # The lamp row shows no buzzer outcome.
+        assert page.locator("#hardware-list [data-device='lamp'] .device-test").count() == 0
+
+        heard.click()
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.method === 'POST'"
+            " && call.path === '/api/v1/host/hardware/confirm'"
+            " && call.body?.device === 'buzzer' && call.body?.observed === true)")
+        page.wait_for_function(
+            "document.querySelector(\"#hardware-list [data-device='buzzer'] .device-state\")"
+            "?.textContent === '정상'")
+        assert page.locator("#hardware-list [data-device='buzzer'] .device-evidence").inner_text() \
+            .startswith("사람 확인: ")
+        # No HTML is built from server text anywhere in the card.
+        assert page.evaluate("document.querySelectorAll('#hardware-list script, #hardware-list img').length") == 0
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        assert page.evaluate(OFF_SCALE_CENSUS) == []
+        assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+        browser.close()
+
+
+def test_a_viewer_gets_no_buzzer_or_lamp_test():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        assert page.locator("#hardware-list .device-actions").count() == 0
+        assert page.locator("#hardware-list [data-hw-action]").count() == 0
+        browser.close()
+
+
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport):
+    """D-201: the admin action rows wrap inside the card; nothing scrolls sideways."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    outcome = HARDWARE_INIT + (
+        "window.__rosyHardware.test = {request_id: '00112233445566778899aabb', action: 'buzzer',"
+        " state: 'done', detail: 'BCM 4 · 2 kHz · duty 10 % · 3×150 ms',"
+        " finished_at: new Date().toISOString()};"
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=outcome, width=viewport[0], height=viewport[1])
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function(
+            "document.querySelectorAll(\"#hardware-list [data-hw-action='observed']\").length === 1")
+        fit = page.evaluate(
+            "(() => { const card = document.getElementById('hardware-card').getBoundingClientRect();"
+            " const boxes = [...document.querySelectorAll('#hardware-list .device-actions > *')]"
+            "   .map((node) => node.getBoundingClientRect());"
+            " return { page: document.documentElement.scrollWidth - document.documentElement.clientWidth,"
+            "  outside: boxes.filter((box) => box.left < card.left - 1 || box.right > card.right + 1).length };"
+            "})()")
+        assert fit == {"page": 0, "outside": 0}, f"{viewport}: {fit}"
         browser.close()
 
 

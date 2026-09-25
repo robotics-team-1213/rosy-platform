@@ -927,7 +927,46 @@ function measuredLabel(payload) {
   return `측정 ${time} · ${ago} 전`;
 }
 
-function deviceRow(device) {
+// D-247 6: the two devices only a person can judge. The administrator starts
+// one short test, then says what happened; CORE records who and when.
+const HUMAN_TESTS = {
+  buzzer: {test: "울려 보기", yes: "들림", no: "안 들림"},
+  lamp: {test: "켜 보기", yes: "보임", no: "안 보임"},
+};
+
+function hardwareButton(text, action, deviceId) {
+  const button = document.createElement("ui-button");
+  button.setAttribute("kind", "quiet");
+  button.type = "button";
+  button.dataset.hwAction = action;
+  button.dataset.device = deviceId;
+  button.textContent = text;
+  return button;
+}
+
+function humanTestActions(device, test) {
+  const words = HUMAN_TESTS[device.id];
+  if (!words || !isAdmin()) return null;
+  const actions = document.createElement("div");
+  actions.className = "device-actions";
+  const start = hardwareButton(words.test, "test", device.id);
+  // The probe already says why it cannot work (no driver, wrong lamp channel).
+  start.disabled = device.state === "driver_missing";
+  actions.append(start);
+  if (test && test.action === device.id) {
+    const outcome = document.createElement("span");
+    outcome.className = "device-test";
+    outcome.textContent = test.detail;
+    actions.append(outcome);
+    if (test.state === "done") {
+      actions.append(hardwareButton(words.yes, "observed", device.id),
+        hardwareButton(words.no, "not-observed", device.id));
+    }
+  }
+  return actions;
+}
+
+function deviceRow(device, test) {
   const known = DEVICE_STATES[device.state] || DEVICE_STATES.not_measured;
   const item = document.createElement("li");
   item.className = "device-row";
@@ -955,6 +994,8 @@ function deviceRow(device) {
   evidence.className = "device-evidence";
   evidence.textContent = device.evidence;
   item.append(name, chip, evidence);
+  const actions = humanTestActions(device, test);
+  if (actions) item.append(actions);
   return item;
 }
 
@@ -973,7 +1014,7 @@ function renderHardware(payload) {
     card.dataset.available = "true";
     card.dataset.stale = payload.stale ? "true" : "false";
   }
-  if (list) list.replaceChildren(...(payload.devices || []).map(deviceRow));
+  if (list) list.replaceChildren(...(payload.devices || []).map((device) => deviceRow(device, payload.test)));
   setText("hardware-measured", measuredLabel(payload));
   setText("hardware-note", payload.stale
     ? "측정한 지 오래되었습니다. 관리자가 다시 점검하면 새로 잽니다."
@@ -1534,6 +1575,31 @@ elements["hardware-refresh"]?.addEventListener("click", async () => {
     setText("hardware-note", `장치 점검 요청 실패: ${error.message}`);
   } finally {
     setEnabled("hardware-refresh", isAdmin());
+  }
+});
+
+// D-247 6: buzzer / lamp test and the person's answer. CORE writes a request
+// file for the root rosy-hw-test; the outcome lands a moment later.
+elements["hardware-list"]?.addEventListener("click", async (event) => {
+  const button = event.target.closest?.("[data-hw-action]");
+  if (!button || button.disabled || !isAdmin()) return;
+  const device = button.dataset.device;
+  const action = button.dataset.hwAction;
+  button.disabled = true;
+  try {
+    if (action === "test") {
+      const reply = await api("/api/v1/host/hardware/test", {method: "POST", body: JSON.stringify({device})});
+      setText("hardware-note", reply.detail || "시험을 요청했습니다.");
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+    } else {
+      const observed = action === "observed";
+      await api("/api/v1/host/hardware/confirm", {method: "POST", body: JSON.stringify({device, observed})});
+      setText("hardware-note", "확인 결과를 기록했습니다.");
+    }
+    renderHardware(await api("/api/v1/host/hardware"));
+  } catch (error) {
+    setText("hardware-note", `장치 시험 실패: ${error.message}`);
+    button.disabled = false;
   }
 });
 

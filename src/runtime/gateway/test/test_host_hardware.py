@@ -531,6 +531,18 @@ def test_the_script_renders_six_states_and_the_motion_reason():
     assert "#" not in device_rules.split("*/", 1)[1] and "rgb" not in device_rules
 
 
+def test_the_script_wires_the_buzzer_and_lamp_test_for_administrators_only():
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    assert '"/api/v1/host/hardware/test", {method: "POST", body: JSON.stringify({device})}' in script
+    assert '"/api/v1/host/hardware/confirm", {method: "POST", body: JSON.stringify({device, observed})}' in script
+    for text in ("울려 보기", "켜 보기", "들림", "안 들림", "보임", "안 보임"):
+        assert f'"{text}"' in script, text
+    actions = script.split("function humanTestActions")[1].split("\nfunction ")[0]
+    assert "!isAdmin()" in actions
+    assert "innerHTML" not in actions and "outerHTML" not in actions
+    assert "textContent = test.detail" in actions
+
+
 # --- /commissioning: why the robot cannot move -------------------------------------
 
 
