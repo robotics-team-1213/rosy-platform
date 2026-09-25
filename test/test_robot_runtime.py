@@ -13,7 +13,7 @@ from robot_contracts import (
     runtime_launch_closure,
 )
 
-sys.path.insert(0, str(ROOT / "src" / "navigation" / "navigation"))
+sys.path.insert(0, str(ROOT / "src" / "runtime" / "navigation"))
 from navigation.profile_limits import load_motion_limits
 
 
@@ -96,6 +96,10 @@ def test_runtime_builds_distinct_targets_from_shared_dockerfile():
     assert "COPY --from=io-build /opt/rosy_ws/install" in dockerfile
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     assert "src/sim/description/meshes/**" in dockerignore
+    # D-196: the core stage copies the robot package CORE reads its profile from.
+    assert "COPY src/products/pinky_pro ./src/products/pinky_pro" in dockerfile
+    for allowed in ("!src/products/", "!src/products/pinky_pro/", "!src/products/pinky_pro/**"):
+        assert allowed in dockerignore.splitlines(), allowed
 
 
 def test_dockerignore_admits_every_source_path_the_dockerfile_copies():
@@ -144,7 +148,7 @@ def test_core_image_does_not_ship_the_absorbed_sensor_worker_runtime():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = dockerfile.split("FROM runtime-common AS io-runtime")[0]
 
-    assert "COPY src/core/control ./src/core/control" not in core
+    assert "COPY src/runtime/control ./src/runtime/control" not in core
     assert "python3-opencv" not in core
     assert "ros-jazzy-visualization-msgs" in core
     assert "ros-jazzy-tf2-ros" in core
@@ -156,10 +160,10 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     """The Device image ships the model-neutral OMX boundary without enabling hardware."""
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "COPY src/products/omx_adapter ./src/products/omx_adapter" in dockerfile
+    assert "COPY src/devices/omx/omx_adapter ./src/devices/omx/omx_adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
-        ROOT / "src" / "products" / "omx_adapter" / "config" / "omx.disabled.yaml"
+        ROOT / "src" / "devices" / "omx" / "omx_adapter" / "config" / "omx.disabled.yaml"
     ).read_text(encoding="utf-8")
     assert "enabled: false" in disabled
     assert "hardware_plugin: \"\"" in disabled
@@ -168,7 +172,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
 def test_initial_io_slice_disables_unavailable_adc_battery_driver():
     compose_command = compose()["services"]["rosy-io"]["command"]
     launch = (
-        ROOT / "src" / "devices" / "bringup" / "launch" / "bringup_robot.launch.py"
+        ROOT / "src" / "devices" / "pinky_pro" / "bringup" / "launch" / "bringup_robot.launch.py"
     ).read_text(encoding="utf-8")
 
     assert "enable_battery:=false" in compose_command
@@ -335,7 +339,7 @@ def test_core_reads_only_bounded_host_telemetry_paths():
 
 def test_core_image_prepares_dashboard_and_host_mount_directories():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
-    setup = (ROOT / "src" / "core" / "core" / "setup.py").read_text(encoding="utf-8")
+    setup = (ROOT / "src" / "runtime" / "core" / "setup.py").read_text(encoding="utf-8")
 
     assert (
         "mkdir -p /host/proc/net /host/etc /host/sys/class/thermal "
@@ -357,7 +361,7 @@ def test_systemd_unit_delegates_to_runtime_mode_wrapper():
 
 
 def test_teleop_watchdog_lives_in_safety_manager_not_a_stub():
-    safety = ROOT / "src" / "core" / "core_features" / "core_features" / "safety"
+    safety = ROOT / "src" / "runtime" / "core_features" / "core_features" / "safety"
     assert not (safety / "watchdog.py").is_file()
     assert "class TeleopWatchdog" in (safety / "manager.py").read_text(encoding="utf-8")
 

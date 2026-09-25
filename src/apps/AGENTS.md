@@ -1,3 +1,0 @@
-# apps
-
-This directory no longer holds a package. `control` is `src/core/control`. `emotion` is `src/face/emotion`. `games` is `src/site/games`. `omx_adapter` is `src/products/omx_adapter`.

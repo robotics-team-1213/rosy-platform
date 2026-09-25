@@ -22,7 +22,7 @@ None at this level. See `fleet/AGENTS.md`.
 ### Working In This Directory
 
 - `fleet` consumes the robot contract; it never modifies `core`. Missing contract pieces are an API-ref cycle, not a local patch.
-- Tests run without ROS: `conftest.py` puts `src/site/fleet`, `src/core/core_common`, and `src/core/core_features` on `sys.path`.
+- Tests run without ROS: `conftest.py` puts `src/site/fleet`, `src/contracts/core_common`, and `src/runtime/core_features` on `sys.path`.
 
 ### Testing Requirements
 

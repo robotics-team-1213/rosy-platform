@@ -3,7 +3,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCH = ROOT / "src" / "navigation" / "navigation" / "launch"
+LAUNCH = ROOT / "src" / "runtime" / "navigation" / "launch"
 
 _WEB_LAUNCHES = (
     "web_nav2.launch.xml",
@@ -27,7 +27,7 @@ def test_web_launches_start_core_instead():
 
 
 def test_navigation_package_does_not_install_flask():
-    cmake = (ROOT / "src" / "navigation" / "navigation" / "CMakeLists.txt").read_text(
+    cmake = (ROOT / "src" / "runtime" / "navigation" / "CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     assert "nav2_web_server.py" not in cmake

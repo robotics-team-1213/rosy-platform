@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SIGNAL = ROOT / "signal"
+SIGNAL = ROOT / "firmware" / "signal"
 README = SIGNAL / "README.md"
 
 COMMAND_MODES = {"manual", "cycle", "hold", "all_red", "flash_red"}

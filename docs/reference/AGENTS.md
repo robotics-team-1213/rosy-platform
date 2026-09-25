@@ -12,7 +12,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | File | Description |
 |------|-------------|
 | `ROSY API & Protocol Reference.md` | ROSY-API-REF-001 — only shared robot/fleet/SDK interface; `/api/v1`, envelope, events |
-| `ROSY ADR Log.md` | ROSY-ADR-001 — append-only decisions through D-229 (D-19 superseded by D-26, D-6 by D-33; gaps D-29, D-35, D-196, D-204, D-223) |
+| `ROSY ADR Log.md` | ROSY-ADR-001 — append-only decisions through D-229 (D-19 superseded by D-26, D-6 by D-33; gaps D-29, D-35, D-204, D-223) |
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
 
@@ -30,7 +30,7 @@ None.
 
 ### Testing Requirements
 
-Protocol tests: `src/core/core/test/test_protocol_schemas.py`. Host Agent: `test/test_host_agent.py`.
+Protocol tests: `src/runtime/core/test/test_protocol_schemas.py`. Host Agent: `test/test_host_agent.py`.
 
 ### Common Patterns
 
@@ -40,8 +40,8 @@ API versioning is path-based (`/api/v1`). Additive schema changes bump protocol 
 
 ### Internal
 
-- `src/core/core_common/core_common/protocol/schemas.py`
-- `src/core/core_api_web/core_api_web/api/`
+- `src/contracts/core_common/core_common/protocol/schemas.py`
+- `src/runtime/core_api_web/core_api_web/api/`
 - `deploy/release/host_agent.py`
 
 ### External

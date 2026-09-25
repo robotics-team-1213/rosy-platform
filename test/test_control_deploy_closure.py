@@ -138,7 +138,7 @@ def test_deployed_closure_runs_exactly_the_evidence_producers():
 
 
 def test_deployed_control_executables_are_installed_entry_points():
-    setup = (SRC / "core" / "control" / "setup.py").read_text(encoding="utf-8")
+    setup = (SRC / "runtime" / "control" / "setup.py").read_text(encoding="utf-8")
     missing = [exe for exe in DEPLOYED_CONTROL_EXECUTABLES if f"'{exe} =" not in setup and f'"{exe} =' not in setup]
     assert missing == [], missing
 
@@ -157,4 +157,4 @@ def test_exactly_one_package_provides_core_sensors():
         block = re.search(re.escape(PROVIDER_GROUP) + r"['\"]?\s*[:=]\s*\[?(.*?)(\]|\n\S)", text, re.S)
         if block and re.search(r"\b" + PROVIDER_NAME + r"\s*=", block.group(1)):
             registrants.append(path.relative_to(SRC).as_posix())
-    assert registrants == ["core/control/setup.py"], registrants
+    assert registrants == ["runtime/control/setup.py"], registrants

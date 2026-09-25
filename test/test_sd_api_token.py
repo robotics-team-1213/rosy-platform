@@ -401,7 +401,7 @@ def test_core_accepts_the_issued_credential_from_the_installed_overlay(tmp_path,
     from fastapi.testclient import TestClient
     from core_api_web.api.app import create_app
     from core_common import config as core_config
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
     root, _result = _provision(tmp_path, _issued())
@@ -410,9 +410,9 @@ def test_core_accepts_the_issued_credential_from_the_installed_overlay(tmp_path,
 
     def client():
         loaded = core_config.load_config()
-        config_dir = CORE_SRC / "core" / "config"
-        caps = yaml.safe_load((config_dir / "capabilities.yaml").read_text(encoding="utf-8"))
-        profile = RobotProfile.load(config_dir / "profile.pinky_pro.yaml")
+        robot_dir = robot_config_dir("pinky_pro")
+        caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
+        profile = RobotProfile.load(robot_dir / "profile.yaml")
         services = CoreServices.build(loaded, profile, caps, tmp_path / "wp.json")
         return TestClient(create_app(loaded, services))
 

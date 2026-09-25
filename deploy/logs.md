@@ -1073,6 +1073,13 @@
 - 결정: D-198 (D-197 후속)
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `.dockerignore`에 `!src/robots/`·`!src/robots/pinky_pro/`·`!src/robots/pinky_pro/**` 추가(없으면 Dockerfile core 단계의 `COPY src/robots/pinky_pro`가 실패). `test/test_robot_runtime.py`에 COPY와 허용 목록 문자열 가드. `deploy/robot/AGENTS.md`에 기존 결함 기록: core 단계는 `core_common`/`core_events`/`core_features`/`core_api_web`를 복사하지 않는다(이번에 고치지 않음). `.github/workflows/ci.yml` host pytest 단계에 `core/core_common/test robots/pinky_pro/test` 추가(`cd src` 기준, 로컬에서 같은 명령 1539 passed·14 skipped로 수집 확인), `.github/workflows/AGENTS.md` 동기화.
+- 증거: 가드 먼저 실패(`AssertionError: !src/robots/`) → 수정 후 `test/test_robot_runtime.py` 32 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
 ## 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
 
 - 변경: (1) `deploy/release/signing.py`가 PATH에 openssl이 없을 때 Git for Windows(`usr\bin`, `mingw64\bin`)를 찾는다 —

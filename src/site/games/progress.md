@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "package.xml, 경계 시험, overhead.py만 cv2. 이미지·슬라이스 미포함 (2026-09-18 Windows)"
-    cmd: "python -m pytest src/apps/games/test/test_games_boundaries.py test/test_rosy_games_surface.py -q"
+    cmd: "python -m pytest src/site/games/test/test_games_boundaries.py test/test_rosy_games_surface.py -q"
   LOCAL:
     state: GO
     evidence: "D-112 stair 1 visibility report; D-113 host track closed (2026-09-18 Windows)"
-    cmd: "python -m pytest src/apps/games/test test/test_rosy_games_surface.py -q"
+    cmd: "python -m pytest src/site/games/test test/test_rosy_games_surface.py -q"
   ROS-SIM:
     state: N/A
   ARTIFACT:

@@ -15,11 +15,17 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONTROL_ROOT = REPO_ROOT / "src/core/control"
+CONTROL_ROOT = REPO_ROOT / "src/runtime/control"
 if str(CONTROL_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_ROOT))
-for _package in ("core", "core_common", "core_events", "core_features"):
-    _path = str(REPO_ROOT / "src/core" / _package)
+_PACKAGE_ROOTS = {
+    "core": "src/runtime/core",
+    "core_common": "src/contracts/core_common",
+    "core_events": "src/runtime/core_events",
+    "core_features": "src/runtime/core_features",
+}
+for _package in _PACKAGE_ROOTS:
+    _path = str(REPO_ROOT / _PACKAGE_ROOTS[_package])
     if _path not in sys.path:
         sys.path.insert(0, _path)
 

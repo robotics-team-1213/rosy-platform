@@ -6,7 +6,7 @@ from the parking junction on west back to it), driven by one route
 follower in ONE launch. Usage (WSL, sourced overlay):
 
   python3 coverage_harness.py --out /rosy_mapv2_ws/evidence/tour_<id> \
-      --graph src/core/control/map/map_v2_fleet/lane_graph.yaml [--mode route_ab]
+      --graph src/runtime/control/map/map_v2_fleet/lane_graph.yaml [--mode route_ab]
 
 Launch map_v2_fleet_lane once at the tour start with the whole route in the
 existing `route` / `route_start` launch args, wait for readiness

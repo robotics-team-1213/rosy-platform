@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src"
-for name in ("site/fleet", "core/core_common", "core/core_events", "core/core_features"):
+for name in ("site/fleet", "contracts/core_common", "runtime/core_events", "runtime/core_features"):
     path = SRC / name
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))

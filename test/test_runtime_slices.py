@@ -15,7 +15,7 @@ from robot_contracts import DEPLOY, ROOT, board, board_caps, hardware_packages
 
 CORE = ROOT / "src" / "core"
 FORBIDDEN = ("omx_adapter", "control.camera", "moveit")
-sys.path.insert(0, str(ROOT / "src" / "core" / "core_common"))
+sys.path.insert(0, str(ROOT / "src" / "contracts" / "core_common"))
 
 
 def test_core_is_the_only_required_slice():
@@ -31,7 +31,7 @@ def test_core_slice_fallback_matches_board_presets():
 
     presets = board()["presets"]
     default = yaml.safe_load(
-        (ROOT / "src" / "core" / "core" / "config" / "rosy_default.yaml").read_text(encoding="utf-8")
+        (ROOT / "src" / "runtime" / "core" / "config" / "rosy_default.yaml").read_text(encoding="utf-8")
     )
     yaml_presets = default["runtime"]["presets"]
     for mode, slices in presets.items():
@@ -115,7 +115,7 @@ def test_core_and_io_images_do_not_copy_hardware_packages():
 def test_core_dockerfile_does_not_copy_control_or_opencv():
     text = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = text.split("FROM runtime-common AS io-runtime")[0]
-    assert "COPY src/core/control" not in core
+    assert "COPY src/runtime/control" not in core
     assert "python3-opencv" not in core
 
 

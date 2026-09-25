@@ -117,7 +117,7 @@ def test_mapping_route_keeps_the_pinky_envelope_clear_of_every_wall():
     mod = _mod()
     route = mod.mapping_route_world()
     walls = json.loads((
-        ROOT / "src" / "core" / "control" / "map" / "map_260905_update_v2"
+        ROOT / "src" / "runtime" / "control" / "map" / "map_260905_update_v2"
         / "reports" / "wall_geometry.json"
     ).read_text(encoding="utf-8"))
 

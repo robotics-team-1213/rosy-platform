@@ -33,7 +33,7 @@ def default_web_common() -> Path:
 
         return Path(get_package_share_directory("web_common"))
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[3] / "core" / "web_common"
+        return Path(__file__).resolve().parents[3] / "hmi" / "web_common"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

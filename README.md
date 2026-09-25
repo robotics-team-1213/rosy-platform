@@ -7,7 +7,7 @@
 
 ## 구조
 
-Rosy Control의 개발 기준은 이 저장소의 `src/core/control`로 통합했다.
+Rosy Control의 개발 기준은 이 저장소의 `src/runtime/control`로 통합했다.
 별도 Control 저장소·웹 서버를 새 운영 구성으로 사용하지 않는다.
 현재 소스 편입과 보정 노드 경계 정리는 완료했으며, 전체 runtime·안전 중재·이미지·Pi 인수는 진행 중이다.
 현황은 [흡수 실행 결과](docs/plans/2026-09-12-control-absorption-results.md),
@@ -17,21 +17,22 @@ Rosy Control의 개발 기준은 이 저장소의 `src/core/control`로 통합�
 rosy/ (이 리포지토리)
 ├── env.sh                    # 개발 PC: ROS와 워크스페이스를 읽는 유일한 루트 셸
 ├── docs/                     # 요구사항·ADR·계획·검증 기록
+│   ├── architecture/         # 목표 분산 OS 번호 문서
 │   └── reference/            # 살아 있는 API 계약과 ADR 로그
 ├── deploy/                   # 이미지·릴리스·로봇 설치 셸
 ├── tools/                    # tools/fix_ament_resource.sh, tools/run_fleet_sim.sh, tools/run_data.py
 ├── data/                     # data/teleop 확인 기록, data/drive 주행 기록. 세션은 커밋하지 않음
-├── dock/                     # 충전 도크 펌웨어
-├── signal/                   # 신호 제어 펌웨어
+├── firmware/                 # 충전 도크·신호 제어 펌웨어 (colcon 밖)
 ├── reference/                # 얼린 pinky_pro zip. 현재 코드가 아님
 ├── test/                     # 호스트 계약 시험
-└── src/                      # ROS 2 패키지 (도메인 그룹)
-    ├── core/                 # core·core_common·core_events·core_features·core_api_web·interfaces
-    ├── apps/                 # control·emotion·games·omx_adapter
-    ├── hardware/             # bringup·led·lamp_control·imu_bno055·sensor_adc
-    ├── navigation/           # Nav2/SLAM
+└── src/                      # ROS 2 패키지 (층)
+    ├── contracts/            # interfaces·core_common
+    ├── runtime/              # core·core_events·core_features·core_api_web·control·navigation
+    ├── devices/              # pinky_pro·common·omx
+    ├── products/             # pinky_pro 설정 패키지
+    ├── hmi/                  # emotion·web_common
     ├── sim/                  # description·gz_sim
-    └── site/                 # fleet
+    └── site/                 # fleet·games
 ```
 
 ## 문서 (거버넌스: docs/)

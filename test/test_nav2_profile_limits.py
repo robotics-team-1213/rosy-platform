@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from robot_contracts import ROOT
-sys.path.insert(0, str(ROOT / "src" / "navigation" / "navigation"))
+sys.path.insert(0, str(ROOT / "src" / "runtime" / "navigation"))
 
 from navigation.profile_limits import (
     MotionLimits,
@@ -18,7 +18,7 @@ from navigation.profile_limits import (
 
 
 PROFILE = ROOT / "deploy" / "robot" / "config" / "profile.hardware.yaml"
-NAV2 = ROOT / "src" / "navigation" / "navigation" / "params" / "nav2_params.yaml"
+NAV2 = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
 
 
 def test_costmaps_wait_for_amcl_before_activating():
@@ -73,10 +73,10 @@ def test_deployed_motor_defaults_match_the_hardware_profile():
 def test_pinky_profile_files_share_the_hardware_motion_ceilings():
     limits = load_motion_limits(PROFILE)
     paths = (
-        ROOT / "src" / "core" / "core" / "config" / "profile.pinky_pro.yaml",
+        ROOT / "src" / "products" / "pinky_pro" / "config" / "profile.yaml",
         ROOT / "deploy" / "robot" / "config" / "profile.core.yaml",
         ROOT / "deploy" / "robot" / "config" / "profile.motor.yaml",
-        ROOT / "src" / "core" / "core" / "config" / "rosy_default.yaml",
+        ROOT / "src" / "runtime" / "core" / "config" / "rosy_default.yaml",
     )
     for path in paths:
         if path.name == "rosy_default.yaml":

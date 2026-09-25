@@ -88,7 +88,7 @@ JSON request/response lines, schema version 1, bounded request size.
 ### Internal
 
 - Contract: `docs/reference/rosy-host-agent-contract.md`
-- Client: `src/core/core_api_web/core_api_web/api/host_agent_client.py`
+- Client: `src/runtime/core_api_web/core_api_web/api/host_agent_client.py`
 
 ### External
 
