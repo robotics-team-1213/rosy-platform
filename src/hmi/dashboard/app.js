@@ -1,4 +1,7 @@
 import { createFieldMap } from "./map.js";
+import { createHostCards } from "./host-cards.js";
+import { createRosNetwork } from "./ros-network.js";
+import { createVisionPreview } from "./vision.js";
 import { CORE_ONLY_REASON, CORE_ONLY_TEXT, triage } from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
@@ -93,133 +96,18 @@ function renderRobotInfo(info) {
 let triageSeen = {};
 let lineFollowPending = false;
 let trafficPolicyPending = false;
-let visionPending = false;
-let visionSequence = null;
-let visionObjectUrl = null;
-let visionTimer = null;
-let visionGeneration = 0;
-let visionAbortController = null;
 
-function releaseVisionObjectUrl() {
-  if (visionObjectUrl) URL.revokeObjectURL(visionObjectUrl);
-  visionObjectUrl = null;
-}
-
-function renderVisionUnavailable(status = {}, message = "카메라 프레임 수신 대기") {
-  const stale = status.stale === true;
-  elements["vision-stage"].dataset.state = stale ? "stale" : "waiting";
-  elements["vision-frame"].hidden = true;
-  elements["vision-empty"].hidden = false;
-  setText("vision-empty", message);
-  setText("vision-status", stale ? "STALE" : "WAITING");
-  setText("vision-source", status.source || "—");
-  setText("vision-resolution", status.width && status.height
-    ? `${status.width}×${status.height}` : "—");
-  setText("vision-age", Number.isFinite(Number(status.age_ms))
-    ? `${Math.round(Number(status.age_ms))} ms` : "—");
-  setText("vision-captured", Number.isFinite(Number(status.captured_at))
-    ? `${Number(status.captured_at).toFixed(3)} s` : "—");
-}
-
-async function refreshVisionPreview() {
-  if (visionPending || !session.token) return;
-  visionPending = true;
-  const generation = visionGeneration;
-  const controller = new AbortController();
-  visionAbortController = controller;
-  try {
-    const status = await api("/api/v1/vision/front/status", {
-      signal: controller.signal, cache: "no-store",
-    });
-    if (generation !== visionGeneration || !session.token) return;
-    if (!status.available) {
-      visionSequence = null;
-      releaseVisionObjectUrl();
-      renderVisionUnavailable(
-        status, status.stale ? "카메라 프레임 만료 · HOLD" : "카메라 프레임 수신 대기");
-      return;
-    }
-    if (visionSequence !== status.sequence) {
-      const response = await fetch(
-        `/api/v1/vision/front/frame?sequence=${encodeURIComponent(status.sequence)}`,
-        {
-          headers: authHeaders(), cache: "no-store", signal: controller.signal,
-        },
-      );
-      if (response.status === 409 || response.status === 429) {
-        visionSequence = null;
-        releaseVisionObjectUrl();
-        renderVisionUnavailable(
-          status,
-          response.status === 429
-            ? "카메라 속도 제한 · 재동기화 대기"
-            : "카메라 프레임 변경 · 재동기화 대기",
-        );
-        return;
-      }
-      if (!response.ok) throw new Error(`camera frame ${response.status}`);
-      if (response.headers.get("X-Rosy-Camera-Sequence") !== String(status.sequence)) {
-        return;
-      }
-      const nextUrl = URL.createObjectURL(await response.blob());
-      const candidate = new Image();
-      candidate.src = nextUrl;
-      try {
-        await candidate.decode();
-      } catch (error) {
-        URL.revokeObjectURL(nextUrl);
-        throw error;
-      }
-      if (generation !== visionGeneration || !session.token) {
-        URL.revokeObjectURL(nextUrl);
-        return;
-      }
-      elements["vision-frame"].src = nextUrl;
-      releaseVisionObjectUrl();
-      visionObjectUrl = nextUrl;
-      visionSequence = status.sequence;
-    }
-    if (generation !== visionGeneration || !session.token) return;
-    setText("vision-source", status.source || "UNKNOWN");
-    setText("vision-resolution", `${status.width || 0}×${status.height || 0}`);
-    setText("vision-age", `${Math.round(Number(status.age_ms) || 0)} ms`);
-    setText("vision-captured", Number.isFinite(Number(status.captured_at))
-      ? `${Number(status.captured_at).toFixed(3)} s` : "—");
-    elements["vision-frame"].hidden = false;
-    elements["vision-empty"].hidden = true;
-    elements["vision-stage"].dataset.state = "live";
-    setText("vision-status", "LIVE");
-  } catch (error) {
-    if (error.name === "AbortError" || generation !== visionGeneration) return;
-    visionSequence = null;
-    releaseVisionObjectUrl();
-    renderVisionUnavailable({}, `카메라 연결 확인 · ${error.message}`);
-  } finally {
-    if (visionAbortController === controller) {
-      visionAbortController = null;
-      visionPending = false;
-    }
-  }
-}
-
-function stopVisionPreview(message = "카메라 인증 대기") {
-  visionGeneration += 1;
-  visionAbortController?.abort();
-  visionAbortController = null;
-  clearInterval(visionTimer);
-  visionTimer = null;
-  visionPending = false;
-  visionSequence = null;
-  releaseVisionObjectUrl();
-  renderVisionUnavailable({}, message);
-}
-
-function startVisionPreview() {
-  stopVisionPreview("카메라 프레임 수신 대기");
-  if (!session.token || document.hidden) return;
-  refreshVisionPreview();
-  visionTimer = setInterval(refreshVisionPreview, 500);
-}
+// D-262: 카메라 미리보기는 vision.js 팩토리가 가진다. 셸은 시작·정지만 부른다.
+const visionPreview = createVisionPreview({
+  elements,
+  setText,
+  api,
+  authHeaders,
+  hasToken: () => !!session.token,
+  isHidden: () => document.hidden,
+});
+const stopVisionPreview = (message) => visionPreview.stop(message);
+const startVisionPreview = () => visionPreview.start();
 let trafficPolicyReadback = null;
 let trafficFormDirty = false;
 
@@ -442,147 +330,21 @@ function renderRuntime(runtime) {
     else delete tempCard.dataset.level;
   }
   setText("runtime-warning", runtime.unavailable?.length ? `읽을 수 없는 항목: ${runtime.unavailable.join(", ")}` : "");
-  renderRosNetwork(runtime);
+  rosNetwork.render(runtime);
 }
 
+// D-262: 아래 pushNetworkSample/renderSparkline/renderRosGraph/renderRosNetwork는
+// ros-network.js로 옮겼다. 셸은 rosNetwork.render(runtime) 한 줄만 부른다.
 
-function pushNetworkSample(series, value) {
-  const amount = metricNumber(value);
-  if (amount === null) return;
-  series.push(amount);
-  if (series.length > 30) series.splice(0, series.length - 30);
-}
-
-function renderSparkline(id, values) {
-  const svg = elements[id];
-  if (!svg) return;
-  svg.replaceChildren();
-  if (!values.length) return;
-  const width = 120;
-  const height = 36;
-  const peak = Math.max(...values, 1);
-  const step = values.length > 1 ? width / (values.length - 1) : width;
-  const points = values.map((value, index) => (
-    `${(index * step).toFixed(2)},${(height - (value / peak) * (height - 4) - 2).toFixed(2)}`
-  )).join(" ");
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-  line.setAttribute("points", points);
-  line.setAttribute("vector-effect", "non-scaling-stroke");
-  svg.append(line);
-}
-
-
-function renderRosGraph(graph) {
-  const svg = elements["ros-graph-map"];
-  if (!svg) return;
-  svg.replaceChildren();
-  const nodes = (graph.nodes || []).slice(0, 12);
-  const topics = (graph.topics || []).slice(0, 12);
-  if (!nodes.length && !topics.length) {
-    svg.append(svgText("ROS 그래프 데이터 없음", 400, 164, "graph-empty"));
-    return;
-  }
-
-  const nodePositions = new Map();
-  const topicPositions = new Map();
-  const positionRows = (items, x) => items.map((item, index) => ({
-    item,
-    x,
-    y: ((index + 1) * 300) / (items.length + 1) + 10,
-  }));
-  const nodeRows = positionRows(nodes, 150);
-  const topicRows = positionRows(topics, 650);
-  nodeRows.forEach(({ item, x, y }) => nodePositions.set(item.name, { x, y }));
-  topicRows.forEach(({ item, x, y }) => topicPositions.set(item.name, { x, y }));
-
-  (graph.edges || []).slice(0, 48).forEach((edge) => {
-    const start = nodePositions.get(edge.source) || topicPositions.get(edge.source);
-    const end = nodePositions.get(edge.target) || topicPositions.get(edge.target);
-    if (!start || !end) return;
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", start.x);
-    line.setAttribute("y1", start.y);
-    line.setAttribute("x2", end.x);
-    line.setAttribute("y2", end.y);
-    line.setAttribute("class", `graph-edge ${edge.kind}`);
-    svg.append(line);
-  });
-
-  nodeRows.forEach(({ item, x, y }) => {
-    const marker = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    marker.setAttribute("x", x - 108);
-    marker.setAttribute("y", y - 13);
-    marker.setAttribute("width", 216);
-    marker.setAttribute("height", 26);
-    marker.setAttribute("rx", 3);
-    marker.setAttribute("class", `graph-node${item.foreign ? " foreign" : ""}`);
-    svg.append(marker, svgText(item.name, x, y + 4, "graph-node-label"));
-  });
-  topicRows.forEach(({ item, x, y }) => {
-    const marker = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    marker.setAttribute("cx", x);
-    marker.setAttribute("cy", y);
-    marker.setAttribute("r", 8);
-    marker.setAttribute("class", "graph-topic");
-    svg.append(marker, svgText(item.name, x - 14, y - 14, "graph-topic-label"));
-  });
-}
-
-function renderRosNetwork(runtime) {
-  const graph = runtime.ros || {};
-  const throughput = runtime.network?.throughput || {};
-  const status = graph.status || "UNAVAILABLE";
-  setText("ros-graph-status", status);
-  elements["ros-graph-status"]?.setAttribute("data-status", status);
-  setText("ros-domain-id", graph.domain_id);
-  setText("ros-namespace", graph.namespace);
-  const isolationLabels = {
-    localhost_only: "LOOPBACK ONLY",
-    network_visible: "NETWORK VISIBLE",
-    unknown: "UNKNOWN",
-  };
-  setText("dds-isolation", isolationLabels[graph.isolation?.mode] || "—");
-  setText("dds-interface", graph.isolation?.interface ? `interface ${graph.isolation.interface}` : "인터페이스 확인 불가");
-  setText("dds-rmw", graph.rmw || "—");
-  setText("ros-node-count", graph.node_count);
-  setText("ros-topic-count", graph.topic_count);
-  setText("network-rx-rate", rate(throughput.rx_bytes_per_second));
-  setText("network-tx-rate", rate(throughput.tx_bytes_per_second));
-
-  pushNetworkSample(session.networkHistory.rx, throughput.rx_bytes_per_second);
-  pushNetworkSample(session.networkHistory.tx, throughput.tx_bytes_per_second);
-  renderSparkline("network-sparkline-rx", session.networkHistory.rx);
-  renderSparkline("network-sparkline-tx", session.networkHistory.tx);
-  renderRosGraph(graph);
-
-  const riskList = elements["ros-risk-list"];
-  if (!riskList) return;
-  riskList.replaceChildren();
-  const risks = graph.risks || [];
-  if (status === "UNAVAILABLE") {
-    const item = document.createElement("li");
-    item.className = "risk-unavailable";
-    item.textContent = "ROS 그래프 수집 불가 — 충돌 상태를 확인할 수 없습니다.";
-    riskList.append(item);
-    return;
-  }
-  if (!risks.length) {
-    const item = document.createElement("li");
-    item.className = "risk-clear";
-    item.textContent = "감지된 충돌 지표 없음";
-    riskList.append(item);
-    return;
-  }
-  risks.forEach((risk) => {
-    const item = document.createElement("li");
-    const code = document.createElement("strong");
-    const message = document.createElement("span");
-    code.textContent = risk.code || "UNKNOWN";
-    message.textContent = risk.message || "상세 정보 없음";
-    item.append(code, message);
-    riskList.append(item);
-  });
-}
+// D-262: ROS 통신 격리·연결 지도는 ros-network.js 팩토리가 그린다.
+const rosNetwork = createRosNetwork({
+  elements,
+  setText,
+  metricNumber,
+  rate,
+  svgText,
+  history: session.networkHistory,
+});
 
 function renderCapabilities(capabilities) {
   session.capabilities = capabilities;
@@ -776,216 +538,26 @@ function renderEvents(payload) {
 }
 
 
-// --- Device Runtime cards (WP-5) -------------------------------------------
-//
-// The rule these three share: when the Host Agent did not answer, say so.
-// Filling the fields with em dashes would render an unreachable agent and a
-// healthy device identically, and an operator reads an empty field as "fine".
-
-function setCardUnavailable(cardId, noteId, payload) {
-  const card = document.getElementById(cardId);
-  if (card) card.dataset.available = "false";
-  const note = document.getElementById(noteId);
-  if (note) {
-    const recovery = payload.recovery ? ` ${payload.recovery}` : "";
-    note.textContent = `${payload.detail || "정보를 가져올 수 없습니다."}${recovery}`;
-  }
-}
-
-function setChip(id, value) {
-  const chip = document.getElementById(id);
-  if (!chip) return;
-  const mode = value || "UNKNOWN";
-  chip.dataset.mode = mode;
-  chip.textContent = mode === "UNKNOWN" ? "—" : mode;
-}
-
-function renderHostNetwork(payload) {
-  const status = document.getElementById("host-agent-status");
-  if (status) {
-    status.dataset.status = payload.available ? "OK" : "UNAVAILABLE";
-    status.textContent = payload.available ? "Host Agent 연결됨" : "Host Agent 없음";
-  }
-
-  if (!payload.available) {
-    setChip("network-mode", "UNKNOWN");
-    setCardUnavailable("network-card", "network-note", payload);
-    setEnabled("network-apply", false);
-    setEnabled("network-ap-off", false);
-    setEnabled("network-ap-on", false);
-    setEnabled("network-connect", false);
-    return;
-  }
-
-  const card = document.getElementById("network-card");
-  if (card) card.dataset.available = "true";
-
-  const data = payload.data || {};
-  setChip("network-mode", data.mode);
-  // The SSID is displayable; a PSK never is, and the agent does not send one.
-  setText("network-ssid", data.ssid || "—");
-  setText("network-ap", data.ap_active === true ? "켜짐" : data.ap_active === false ? "꺼짐" : "—");
-  setText("network-ipv4", data.ipv4 || "—");
-  setText("network-route", data.default_route || "—");
-  setText("network-dns", (data.dns || []).join(", ") || "—");
-  setText("network-internet", data.internet ? "도달" : "도달 못함");
-  setText("network-peer", data.peer_reachable ? "가능" : "확인 필요");
-
-  const note = document.getElementById("network-note");
-  if (note) {
-    // Internet and peer reachability fail separately: a router with client
-    // isolation gives you the internet and no dashboard.
-    note.textContent = data.internet && !data.peer_reachable
-      ? "인터넷은 되지만 같은 WLAN 단말에서 접근되지 않습니다. 공유기의 client isolation 설정을 확인하십시오."
-      : (payload.detail || "");
-  }
-  const profile = elements["network-profile-id"];
-  if (profile && document.activeElement !== profile) {
-    profile.value = data.profile_id || data.mode || profile.value || "rosy-site-sta";
-  }
-  const ssidInput = elements["network-ssid-input"];
-  if (ssidInput && document.activeElement !== ssidInput && data.ssid) {
-    ssidInput.value = data.ssid;
-  }
-  const adminOn = isAdmin() && payload.available === true;
-  setEnabled("network-apply", adminOn);
-  setEnabled("network-ap-off", adminOn);
-  setEnabled("network-ap-on", adminOn);
-  setEnabled("network-connect", adminOn);
-}
-
-function renderHostRelease(payload) {
-  if (!payload.available) {
-    setChip("release-state", "UNKNOWN");
-    setCardUnavailable("release-card", "release-note", payload);
-    setActionsEnabled(false);
-    return;
-  }
-
-  const card = document.getElementById("release-card");
-  if (card) card.dataset.available = "true";
-
-  const data = payload.data || {};
-  setChip("release-state", data.state);
-  setText("release-current", data.current || "—");
-  setText("release-previous", data.previous || "없음");
-  setText("release-staged", data.staged || "없음");
-  setText("release-revision", (data.git_revision || "").slice(0, 12) || "—");
-  setText(
-    "release-schema",
-    data.config_schema != null ? `${data.config_schema} / ${data.data_schema}` : "—",
-  );
-  setText("release-failure", data.last_failure || "없음");
-
-  const note = document.getElementById("release-note");
-  if (note) note.textContent = data.detail || payload.detail || "";
-
-  // Rollback needs somewhere to go; clearing a hold needs a hold.
-  const held = data.state === "RECOVERY_HOLD";
-  setEnabled("release-rollback", session.role === "administrator" && Boolean(data.previous) && !held);
-  setEnabled("release-clear-hold", session.role === "administrator" && held);
-}
-
-function renderCommissioning(payload) {
-  setChip("commissioning-mode", payload.runtime_mode);
-  const note = document.getElementById("commissioning-note");
-  if (note) {
-    const holds = [
-      payload.motor_hold ? "MOTOR_HOLD" : null,
-      payload.lidar_hold ? "LIDAR_HOLD" : null,
-      payload.battery_hold ? "BATTERY_HOLD" : null,
-      payload.imu_hold ? "IMU_HOLD" : null,
-      payload.slam_hold ? "SLAM_HOLD" : null,
-      payload.fleet_hold ? "FLEET_HOLD" : null,
-    ].filter(Boolean);
-    const holdText = holds.length ? `${holds.join(" · ")}. ` : "";
-    note.textContent = `${holdText}${payload.detail || ""}`;
-  }
-  // D-247 7: the operate view says why the robot cannot move in these words.
-  session.motionReason = payload.motion_reason || "";
-  updateTeleopControls();
-}
-
-// D-247 3: six states, fixed. Colour comes from the shared [data-status]
-// vocabulary: OK is the nominal text colour, WARNING the warn text, ERROR the
-// crit fill; the two states a machine cannot judge carry no status at all.
-const DEVICE_STATES = {
-  ok: {text: "정상", status: "OK"},
-  no_response: {text: "응답 없음", status: "ERROR"},
-  bus_missing: {text: "버스 없음", status: "WARNING"},
-  driver_missing: {text: "드라이버 없음", status: "WARNING"},
-  needs_human: {text: "사람 확인 필요", status: null},
-  not_measured: {text: "측정 안 함", status: null},
-};
-
-function measuredLabel(payload) {
-  const stamp = Date.parse(payload.measured_at || "");
-  if (!Number.isFinite(stamp)) return "측정 시각 없음";
-  const time = new Date(stamp).toLocaleTimeString("ko-KR", {hour12: false});
-  const age = Math.max(0, Math.floor(Number(payload.age_s) || 0));
-  const ago = age < 60 ? `${age}초` : age < 3600 ? `${Math.floor(age / 60)}분` : `${Math.floor(age / 3600)}시간`;
-  return `측정 ${time} · ${ago} 전`;
-}
-
-function deviceRow(device) {
-  const known = DEVICE_STATES[device.state] || DEVICE_STATES.not_measured;
-  const item = document.createElement("li");
-  item.className = "device-row";
-  item.dataset.device = device.id;
-  item.dataset.state = device.state;
-  const name = document.createElement("span");
-  name.className = "device-name";
-  const label = document.createElement("strong");
-  label.textContent = device.label;
-  const bus = document.createElement("span");
-  bus.className = "device-bus";
-  bus.textContent = device.bus;
-  name.append(label, bus);
-  if (device.product === false) {
-    const bench = document.createElement("span");
-    bench.className = "machine-tag";
-    bench.textContent = "벤치 전용";
-    name.append(bench);
-  }
-  const chip = document.createElement("span");
-  chip.className = "mode-chip device-state";
-  chip.textContent = known.text;
-  if (known.status) chip.dataset.status = known.status;
-  const evidence = document.createElement("p");
-  evidence.className = "device-evidence";
-  evidence.textContent = device.evidence;
-  item.append(name, chip, evidence);
-  return item;
-}
-
-function renderHardware(payload) {
-  const card = document.getElementById("hardware-card");
-  const list = elements["hardware-list"];
-  setEnabled("hardware-refresh", isAdmin());
-  if (!payload || payload.available !== true) {
-    if (list) list.replaceChildren();
-    setText("hardware-measured", "측정 전");
-    if (card) card.dataset.stale = "false";
-    setCardUnavailable("hardware-card", "hardware-note", payload || {});
-    return;
-  }
-  if (card) {
-    card.dataset.available = "true";
-    card.dataset.stale = payload.stale ? "true" : "false";
-  }
-  if (list) list.replaceChildren(...(payload.devices || []).map(deviceRow));
-  setText("hardware-measured", measuredLabel(payload));
-  setText("hardware-note", payload.stale
-    ? "측정한 지 오래되었습니다. 관리자가 다시 점검하면 새로 잽니다."
-    : "벤치 전용 장치도 모두 보입니다. 제품 기능 여부는 기능 목록이 정합니다.");
-}
 
 
-function setActionsEnabled(enabled) {
-  setEnabled("release-rollback", enabled);
-  setEnabled("release-clear-hold", enabled);
-}
-
+// D-262: 호스트 카드 렌더는 host-cards.js 팩토리가 가진다. 역할 판단은
+// 셸의 isAdmin, 커미셔닝 후속(운전 불가 사유+teleop 갱신)은 셸이 주입한다.
+const hostCards = createHostCards({
+  elements,
+  setText,
+  setEnabled,
+  isAdmin,
+  onCommissioningRendered: (reason) => {
+    session.motionReason = reason;
+    updateTeleopControls();
+  },
+});
+const {
+  renderHostNetwork,
+  renderHostRelease,
+  renderCommissioning,
+  renderHardware,
+} = hostCards;
 
 function updateAdminControls() {
   setEnabled("limits-save", isAdmin());
