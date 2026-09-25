@@ -13,10 +13,12 @@ param(
     [string]$LogPath,
     [switch]$ResumeAfterWrite,
     [double]$WriterStallMinutes = 5,
+    [double]$WriterSoftStallMinutes = 2,
     [double]$ReadbackStallMinutes = 5,
     [double]$MinReadMBps = 10,
     [double]$AssumedWriteMBps = 0,
     [switch]$AcceptSlowMedia,
+    [switch]$NonInteractive,
     [switch]$Detach,
     [string]$ElevationLauncher
 )
@@ -90,10 +92,12 @@ if ($ReprovisionReceipt) { $arguments.ReprovisionReceipt = (Resolve-Path -Litera
 if ($Confirmation) { $arguments.Confirmation = $Confirmation }
 if ($ResumeAfterWrite) { $arguments.ResumeAfterWrite = $true }
 $arguments.WriterStallMinutes = $WriterStallMinutes
+$arguments.WriterSoftStallMinutes = $WriterSoftStallMinutes
 $arguments.ReadbackStallMinutes = $ReadbackStallMinutes
 $arguments.MinReadMBps = $MinReadMBps
 if ($AssumedWriteMBps -gt 0) { $arguments.AssumedWriteMBps = $AssumedWriteMBps }
 if ($AcceptSlowMedia) { $arguments.AcceptSlowMedia = $true }
+if ($NonInteractive) { $arguments.NonInteractive = $true }
 
 if (-not $LogPath) {
     $stamp = Get-Date -Format "yyyyMMddTHHmmss"
@@ -142,10 +146,12 @@ if ($ReprovisionReceipt) { $forward += @("-ReprovisionReceipt", "`"$($arguments.
 if ($Confirmation) { $forward += @("-Confirmation", "`"$Confirmation`"") }
 if ($ResumeAfterWrite) { $forward += "-ResumeAfterWrite" }
 $forward += @("-WriterStallMinutes", $WriterStallMinutes.ToString($invariant))
+$forward += @("-WriterSoftStallMinutes", $WriterSoftStallMinutes.ToString($invariant))
 $forward += @("-ReadbackStallMinutes", $ReadbackStallMinutes.ToString($invariant))
 $forward += @("-MinReadMBps", $MinReadMBps.ToString($invariant))
 if ($AssumedWriteMBps -gt 0) { $forward += @("-AssumedWriteMBps", $AssumedWriteMBps.ToString($invariant)) }
 if ($AcceptSlowMedia) { $forward += "-AcceptSlowMedia" }
+if ($NonInteractive) { $forward += "-NonInteractive" }
 
 # -ElevationLauncher is a test seam standing in for Start-Process: UAC cannot be
 # driven from a test, so a fixture script receives the same arguments.

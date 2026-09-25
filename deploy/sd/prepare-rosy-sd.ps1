@@ -34,11 +34,13 @@ param(
     [string]$ProgressPath,
     [switch]$ResumeAfterWrite,
     [double]$WriterStallMinutes = 5,
+    [double]$WriterSoftStallMinutes = 2,
     [double]$HeartbeatSeconds = 60,
     [double]$ReadbackStallMinutes = 5,
     [double]$MinReadMBps = 10,
     [double]$AssumedWriteMBps = 0,
     [switch]$AcceptSlowMedia,
+    [switch]$NonInteractive,
     [int64]$ProbeBytes = 134217728,
     [double]$ProbeSeconds = 120
 )
@@ -603,6 +605,8 @@ if (-not $DiskInventoryJson -and -not $ResumeAfterWrite -and [IO.Path]::GetExten
     Fail "-RpiImager must be the Raspberry Pi Imager .exe; a wrapper would hide the real writer from the stall watchdog"
 }
 if ($ReadbackStallMinutes -le 0 -or $WriterStallMinutes -le 0) { Fail "stall limits must be positive" }
+if ($WriterSoftStallMinutes -le 0) { Fail "stall limits must be positive" }
+if ($WriterSoftStallMinutes -gt $WriterStallMinutes) { Fail "-WriterSoftStallMinutes must not exceed -WriterStallMinutes" }
 
 $credentialPath = Get-CredentialPath $WifiProfile
 if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
@@ -901,15 +905,23 @@ if ($null -ne $readMBps -and $readMBps -lt $MinReadMBps) {
     if (-not $AcceptSlowMedia) {
         $slowFailure = "the card reads at {0:N1} MB/s, below -MinReadMBps {1:N1} (predicted about {2:N0} min)" -f $readMBps, $MinReadMBps, [Math]::Ceiling($preflight.predicted_total_seconds / 60)
         $slowNext = "$slowAdvice, then re-run; or re-run with -AcceptSlowMedia to write this card anyway"
-        # A non-interactive run (confirmation passed in, or no console) cannot be asked.
-        if ($Confirmation -or [Console]::IsInputRedirected) { Fail $slowFailure $slowNext }
+        # A non-interactive run (confirmation passed in, -NonInteractive, or no
+        # console) cannot be asked: fail closed instead of hanging on Read-Host.
+        if ($NonInteractive -or $Confirmation -or [Console]::IsInputRedirected) { Fail $slowFailure $slowNext }
         if ((Read-Host "Type SLOW to write this card anyway, anything else to stop") -cne "SLOW") { Fail $slowFailure $slowNext }
     }
 }
 
 Set-Stage "confirm" "untouched" ""
 $expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
-if (-not $Confirmation) { $Confirmation = Read-Host "Type exactly: $expectedConfirmation" }
+if (-not $Confirmation) {
+    # D-231: never block on Read-Host without a console to answer it. Agent,
+    # -Detach and CI runs must pass -Confirmation or fail here with a next step.
+    if ($NonInteractive -or [Console]::IsInputRedirected) {
+        Fail "no confirmation was supplied for the destructive write" "re-run with -Confirmation 'ERASE SERIAL <disk_serial> $DeviceName'"
+    }
+    $Confirmation = Read-Host "Type exactly: $expectedConfirmation"
+}
 if ($Confirmation -cne $expectedConfirmation) {
     Fail "confirmation did not match the selected physical disk and device`ntyped: '$Confirmation'" "re-run and type exactly: $expectedConfirmation"
 }
@@ -1011,34 +1023,118 @@ else {
     Set-Stage "write" "writing" "raw image $imageRawSize bytes" ([ordered]@{ total = $imageRawSize })
     # D-187: no Start-Process -Wait. Release 005 Imager wrote every byte, then sat
     # with 0 CPU and 0 I/O for 23 minutes while -Wait waited forever.
-    $writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -PassThru
+    # D-231: the writer's own stdout is captured and parsed for percent/byte
+    # progress. The WMI CPU+I/O tree sample (Get-WriterSample) stays only as a
+    # fallback: xz decompression and USB flush windows are legitimately idle for
+    # minutes, so a counter-only watchdog kills working writes (false stalls).
+    $writerStdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("rosy-writer-" + [guid]::NewGuid().ToString("N") + ".out")
+    $writerStderrPath = Join-Path ([IO.Path]::GetTempPath()) ("rosy-writer-" + [guid]::NewGuid().ToString("N") + ".err")
+    $script:writerStdoutOffset = [int64]0
+    $script:writerCliBytes = [int64]-1
+    $script:writerCliLast = [int64]-1
+    $script:writerCliSeen = $false
+    function Read-WriterCliProgress {
+        # Imager --cli prints percent lines (e.g. "48 %" / "48.2%") and, on some
+        # builds, byte counters ("12345678 bytes", "1.2 GB written"). Anything
+        # unrecognised is ignored; -1 means "no CLI progress seen yet".
+        if (-not (Test-Path -LiteralPath $writerStdoutPath -PathType Leaf)) { return [int64]-1 }
+        $stream = $null
+        try {
+            $stream = New-Object IO.FileStream($writerStdoutPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+            if ($stream.Length -le $script:writerStdoutOffset) { return [int64]-1 }
+            $null = $stream.Seek($script:writerStdoutOffset, [IO.SeekOrigin]::Begin)
+            $buffer = New-Object byte[] ($stream.Length - $script:writerStdoutOffset)
+            $count = $stream.Read($buffer, 0, $buffer.Length)
+            if ($count -le 0) { return [int64]-1 }
+            $script:writerStdoutOffset += $count
+            $text = [Text.Encoding]::UTF8.GetString($buffer, 0, $count)
+        }
+        catch { return [int64]-1 }
+        finally {
+            if ($stream) { $stream.Dispose() }
+        }
+        $best = [int64]-1
+        foreach ($line in $text.Split("`n")) {
+            $match = [regex]::Match($line, '(\d+(?:\.\d+)?)\s*%')
+            if ($match.Success -and $imageRawSize -gt 0) {
+                $percent = [double]::Parse($match.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
+                if ($percent -ge 0 -and $percent -le 100) {
+                    $candidate = [int64][Math]::Floor($imageRawSize * $percent / 100.0)
+                    if ($candidate -gt $best) { $best = $candidate }
+                }
+            }
+            $bmatch = [regex]::Match($line, '(\d[\d,]*)\s*(?:bytes|B)\b')
+            if ($bmatch.Success) {
+                try {
+                    $candidate = [int64]::Parse(($bmatch.Groups[1].Value -replace ',', ''), [Globalization.CultureInfo]::InvariantCulture)
+                    if ($candidate -ge 0 -and ($imageRawSize -le 0 -or $candidate -le $imageRawSize) -and $candidate -gt $best) { $best = $candidate }
+                }
+                catch { }
+            }
+        }
+        return $best
+    }
+    try {
+    $writerProcess = Start-Process -FilePath $RpiImager -ArgumentList $writerArguments -PassThru -NoNewWindow `
+        -RedirectStandardOutput $writerStdoutPath -RedirectStandardError $writerStderrPath
     $null = $writerProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
     $stallLimit = [TimeSpan]::FromMinutes($WriterStallMinutes)
+    # D-231 soft/hard split: the soft limit only warns (a heartbeat line the
+    # status command can already read), the hard limit kills. The soft limit is
+    # clamped to half the hard limit so short test timeouts keep working.
+    $softMinutes = [Math]::Min($WriterSoftStallMinutes, $WriterStallMinutes / 2)
+    $softLimit = [TimeSpan]::FromMinutes($softMinutes)
     $pollMilliseconds = [int][Math]::Max(200, [Math]::Min(5000, $stallLimit.TotalMilliseconds / 4))
     $lastKey = ""
     $lastChange = [DateTime]::UtcNow
     $lastBeat = [DateTime]::UtcNow
+    $softWarned = $false
     $written = [int64]0
     while (-not $writerProcess.WaitForExit($pollMilliseconds)) {
+        $cliBytes = Read-WriterCliProgress
+        if ($cliBytes -gt $script:writerCliBytes) { $script:writerCliBytes = $cliBytes }
         $sample = Get-WriterSample $writerProcess.Id
-        if ($null -eq $sample) { continue }
-        $written = [Math]::Max($written, $sample.Written)
+        if ($null -eq $sample -and $script:writerCliBytes -lt 0) { continue }
+        if ($null -ne $sample) { $written = [Math]::Max($written, $sample.Written) }
+        if ($script:writerCliBytes -gt $written) { $written = $script:writerCliBytes }
         $now = [DateTime]::UtcNow
-        if ($sample.Key -ne $lastKey) {
+        $advanced = $false
+        if ($null -ne $sample -and $sample.Key -ne $lastKey) {
             $lastKey = $sample.Key
-            $lastChange = $now
+            $advanced = $true
         }
-        elseif ($now - $lastChange -ge $stallLimit) {
-            if (-not (Stop-ProcessTree $writerProcess)) {
-                Fail ("image writer stalled after writing {0} of {1} bytes and could not be stopped" -f $written, $imageRawSize) "Imager could not be stopped: unplug the card reader and reboot the PC before anything else, then $fullWriteNext (do not resume)"
+        if ($script:writerCliBytes -ge 0) {
+            # CLI bytes are card-ward progress; any advance resets the clock even
+            # when the process tree looks idle.
+            if (-not $script:writerCliSeen) { $script:writerCliSeen = $true; $advanced = $true }
+            if ($script:writerCliBytes -gt $script:writerCliLast) { $advanced = $true }
+            $script:writerCliLast = $script:writerCliBytes
+        }
+        if ($advanced) {
+            $lastChange = $now
+            $softWarned = $false
+        }
+        else {
+            $idle = $now - $lastChange
+            if (-not $softWarned -and $idle -ge $softLimit) {
+                $softWarned = $true
+                # detail stays "heartbeat" so stage accounting is unchanged; the
+                # warning flag is what card-write-status.ps1 surfaces.
+                Add-ProgressLine "write" "writing" "heartbeat" $written ([ordered]@{ warning = "no writer progress for {0:N0} min (soft limit {1:N0} min); still watching until {2:N0} min" -f $idle.TotalMinutes, $softLimit.TotalMinutes, $stallLimit.TotalMinutes })
             }
-            # $written is a process I/O counter, not a card fact: it is only advisory
-            # here to pick the recommendation; the readback below is what decides.
-            if ($imageRawSize -gt 0 -and $written -ge ($imageRawSize * $ResumeThresholdFraction)) {
-                $script:cardState = "written-unverified"
-                Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize) $resumeNearCompleteNext
+            if ($idle -ge $stallLimit) {
+                if (-not (Stop-ProcessTree $writerProcess)) {
+                    Fail ("image writer stalled after writing {0} of {1} bytes and could not be stopped" -f $written, $imageRawSize) "Imager could not be stopped: unplug the card reader and reboot the PC before anything else, then $fullWriteNext (do not resume)"
+                }
+                # $written mixes the CLI byte count with a process I/O counter:
+                # advisory only, to pick the recommendation; the readback below
+                # is what decides.
+                if ($imageRawSize -gt 0 -and $written -ge ($imageRawSize * $ResumeThresholdFraction)) {
+                    $script:cardState = "written-unverified"
+                    Fail ("image writer stalled: no progress for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize) $resumeNearCompleteNext
+                }
+                Fail ("image writer stalled: no progress for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize)
             }
-            Fail ("image writer stalled: no CPU or I/O for {0} minutes after writing {1} of {2} bytes; it was stopped" -f $WriterStallMinutes, $written, $imageRawSize)
         }
         if ($now - $lastBeat -ge [TimeSpan]::FromSeconds($HeartbeatSeconds)) {
             $lastBeat = $now
@@ -1048,6 +1144,12 @@ else {
     $writerProcess.WaitForExit()
     $writerExitCode = $writerProcess.ExitCode
     if ($writerExitCode -ne 0) { Fail "image writer failed with exit code $writerExitCode" }
+    }
+    finally {
+        foreach ($writerFile in @($writerStdoutPath, $writerStderrPath)) {
+            if ($writerFile -and (Test-Path -LiteralPath $writerFile)) { Remove-Item -LiteralPath $writerFile -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }
 
 Set-Stage "readback" "written-unverified" "" ([ordered]@{ total = $imageRawSize })
