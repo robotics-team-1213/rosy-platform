@@ -13,7 +13,7 @@ import tarfile
 
 import pytest
 
-from build_payload_release import build_release, pack_release
+from build_payload_release import build_release, pack_release, seal_release
 from signing import sign_checksums
 
 
@@ -220,6 +220,72 @@ def test_build_refuses_existing_release_dir(tmp_path):
     out.mkdir()
     with pytest.raises(ValueError, match="RELEASE_DIR_EXISTS"):
         build_release(payload, RELEASE_ID, out)
+
+
+def _installed_factory_release(case) -> Path:
+    """What customize-rootfs.sh leaves at /opt/rosy/releases/<id>: payload minus image-overlay."""
+    _manager_type, _device, _key, _private, payload, release = case
+    shutil.copytree(payload, release)
+    shutil.rmtree(release / "image-overlay")
+    return release
+
+
+def test_sealed_factory_release_is_unsigned_until_its_signature_is_added(case):
+    """D-225 2.2: the image seals its factory release in place; signing is offline."""
+    manager_type, device, key, private, _payload, _release = case
+    release = _installed_factory_release(case)
+    before = {path.relative_to(release).as_posix(): path.read_bytes()
+              for path in release.rglob("*") if path.is_file()}
+
+    report = seal_release(release, RELEASE_ID, signing_key_id=KEY_ID)
+
+    assert report["ok"] is True and report["signed"] is False
+    after = {path.relative_to(release).as_posix(): path.read_bytes()
+             for path in release.rglob("*") if path.is_file()}
+    assert set(after) - set(before) == {"manifest.json", "SHA256SUMS"}
+    assert all(after[name] == data for name, data in before.items())  # payload untouched
+    manager = manager_type(root=device, public_key=key, runtime=lambda _a: None)
+    with pytest.raises(ValueError, match="SIGNATURE_MISSING"):
+        manager.verify(RELEASE_ID)
+    _sign(release, private)
+    assert manager.verify(RELEASE_ID)["release_id"] == RELEASE_ID
+
+
+def test_seal_output_matches_build_output(case, tmp_path):
+    """Sealing in place and building a copy give the same signed metadata."""
+    _manager_type, _device, _key, _private, payload, _release = case
+    release = _installed_factory_release(case)
+    seal_release(release, RELEASE_ID)
+    built = tmp_path / "built"
+    build_release(payload, RELEASE_ID, built)
+    for name in ("manifest.json", "SHA256SUMS"):
+        assert (release / name).read_bytes() == (built / name).read_bytes()
+
+
+@pytest.mark.parametrize("defect", ["image-overlay", "sealed", "wrong-id"])
+def test_seal_refuses_an_unfinished_resealed_or_foreign_release(case, defect):
+    release = _installed_factory_release(case)
+    if defect == "image-overlay":
+        (release / "image-overlay").mkdir()
+        expected, release_id = "PAYLOAD_IMAGE_LAYER", RELEASE_ID
+    elif defect == "sealed":
+        seal_release(release, RELEASE_ID)
+        expected, release_id = "PAYLOAD_METADATA_PRESENT", RELEASE_ID
+    else:
+        expected, release_id = "PAYLOAD_RELEASE_ID", "2026.09.25-002"
+    with pytest.raises(ValueError, match=expected):
+        seal_release(release, release_id)
+
+
+def test_seal_cli_reports_json(case):
+    release = _installed_factory_release(case)
+    completed = subprocess.run(
+        [sys.executable, str(BUILDER), "seal", "--release-dir", str(release), "--release-id", RELEASE_ID],
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert json.loads(completed.stdout)["signed"] is False
+    assert (release / "SHA256SUMS").is_file() and not (release / "SHA256SUMS.sig").exists()
 
 
 def _members(tarball: Path) -> list[tarfile.TarInfo]:

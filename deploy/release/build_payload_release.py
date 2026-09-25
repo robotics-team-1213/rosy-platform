@@ -109,15 +109,85 @@ def build_release(
     """Copy the payload into ``out_dir`` and write manifest.json + SHA256SUMS."""
     payload_root = Path(payload_root).resolve(strict=True)
     out_dir = Path(out_dir)
+    _check_identity(payload_root, release_id, signing_key_id)
+    if out_dir.exists() or out_dir.is_symlink():
+        raise ValueError(f"RELEASE_DIR_EXISTS: refusing to reuse {out_dir}")
+    files, revision = _checked_payload(payload_root, release_id)
+
+    out_dir.mkdir(parents=True)
+    try:
+        for relative in files:
+            source = payload_root / relative
+            target = out_dir / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+            executable = source.stat().st_mode & 0o111
+            os.chmod(target, 0o755 if executable else 0o644)
+        _write_metadata(out_dir, release_id, revision, files, signing_key_id)
+    except BaseException:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise
+    return {
+        "ok": True,
+        "release_dir": str(out_dir),
+        "release_id": release_id,
+        "git_revision": revision,
+        "files": len(files),
+        "signed": False,
+    }
+
+
+def seal_release(
+    release_dir: Path,
+    release_id: str,
+    *,
+    signing_key_id: str = DEFAULT_SIGNING_KEY_ID,
+) -> dict[str, object]:
+    """Write manifest.json + SHA256SUMS into an installed release, in place (D-225 2.2).
+
+    customize-rootfs.sh installs the factory release at
+    ``/opt/rosy/releases/<id>`` in the same payload shape; it is final only
+    once the image build has written its last file there. Sealing it in place
+    gives it the metadata native_release.py verify() reads. The signature is
+    not added here: the image stays unsigned, and first boot installs the
+    offline signature the SD bundle carries.
+    """
+    release_dir = Path(release_dir)
+    if release_dir.is_symlink() or not release_dir.is_dir():
+        raise ValueError("RELEASE_DIR: release directory must be a real directory")
+    release_dir = release_dir.resolve(strict=True)
+    _check_identity(release_dir, release_id, signing_key_id)
+    for name in IMAGE_ONLY:
+        if os.path.lexists(release_dir / name):
+            raise ValueError(f"PAYLOAD_IMAGE_LAYER: {name}/ must be removed before sealing")
+    files, revision = _checked_payload(release_dir, release_id)
+    try:
+        _write_metadata(release_dir, release_id, revision, files, signing_key_id)
+    except BaseException:
+        for name in (MANIFEST_FILENAME, CHECKSUM_FILENAME):
+            (release_dir / name).unlink(missing_ok=True)
+        raise
+    return {
+        "ok": True,
+        "release_dir": str(release_dir),
+        "release_id": release_id,
+        "git_revision": revision,
+        "files": len(files),
+        "signed": False,
+    }
+
+
+def _check_identity(payload_root: Path, release_id: str, signing_key_id: str) -> None:
     if not RELEASE_ID.fullmatch(release_id):
         raise ValueError("RELEASE_ID_INVALID: expected YYYY.MM.DD-NNN")
     if not re.fullmatch(r"[A-Za-z0-9._-]+", signing_key_id):
         raise ValueError("SIGNING_KEY_ID_INVALID: expected the public key file stem")
     if not payload_root.is_dir():
         raise ValueError("PAYLOAD_ROOT: payload root must be a directory")
-    if out_dir.exists() or out_dir.is_symlink():
-        raise ValueError(f"RELEASE_DIR_EXISTS: refusing to reuse {out_dir}")
 
+
+def _checked_payload(payload_root: Path, release_id: str) -> tuple[list[str], str]:
+    """The payload's file list and source revision, or the first reason it is unusable."""
     files = _payload_files(payload_root)
     missing = sorted(REQUIRED_PAYLOAD - set(files))
     if missing:
@@ -130,43 +200,28 @@ def build_release(
         raise ValueError("PAYLOAD_REVISION: source-revision.txt is not a full Git commit")
     if not RUNTIME_ID.fullmatch(_read_line(payload_root / "python-runtime.sha256")):
         raise ValueError("PAYLOAD_PYTHON_RUNTIME: python-runtime.sha256 is not a sha256")
+    return files, revision
 
-    out_dir.mkdir(parents=True)
-    try:
-        for relative in files:
-            source = payload_root / relative
-            target = out_dir / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-            executable = source.stat().st_mode & 0o111
-            os.chmod(target, 0o755 if executable else 0o644)
-        manifest = {
-            "schema_version": 1,
-            "release_id": release_id,
-            "git_revision": revision,
-            "target": dict(TARGET),
-            "runtime": dict(RUNTIME),
-            "signing_key_id": signing_key_id,
-            "files": [
-                {"path": relative, "sha256": sha256_file(out_dir / relative)}
-                for relative in files
-            ],
-        }
-        (out_dir / MANIFEST_FILENAME).write_bytes(
-            (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"))
-        (out_dir / CHECKSUM_FILENAME).write_bytes(
-            build_sha256sums(out_dir, [MANIFEST_FILENAME, *files]))
-    except BaseException:
-        shutil.rmtree(out_dir, ignore_errors=True)
-        raise
-    return {
-        "ok": True,
-        "release_dir": str(out_dir),
+
+def _write_metadata(
+    release_dir: Path, release_id: str, revision: str, files: list[str], signing_key_id: str,
+) -> None:
+    manifest = {
+        "schema_version": 1,
         "release_id": release_id,
         "git_revision": revision,
-        "files": len(files),
-        "signed": False,
+        "target": dict(TARGET),
+        "runtime": dict(RUNTIME),
+        "signing_key_id": signing_key_id,
+        "files": [
+            {"path": relative, "sha256": sha256_file(release_dir / relative)}
+            for relative in files
+        ],
     }
+    (release_dir / MANIFEST_FILENAME).write_bytes(
+        (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+    (release_dir / CHECKSUM_FILENAME).write_bytes(
+        build_sha256sums(release_dir, [MANIFEST_FILENAME, *files]))
 
 
 def _tar_members(release_dir: Path) -> list[tuple[str, Path]]:
@@ -291,6 +346,10 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--release-id", required=True)
     build.add_argument("--out", type=Path, required=True, help="release directory to create")
     build.add_argument("--signing-key-id", default=DEFAULT_SIGNING_KEY_ID)
+    seal = sub.add_parser("seal", help="installed release directory -> manifest.json + SHA256SUMS in place")
+    seal.add_argument("--release-dir", type=Path, required=True)
+    seal.add_argument("--release-id", required=True)
+    seal.add_argument("--signing-key-id", default=DEFAULT_SIGNING_KEY_ID)
     pack = sub.add_parser("pack", help="release directory -> deterministic .tar.gz")
     pack.add_argument("--release-dir", type=Path, required=True)
     pack.add_argument("--out", type=Path, required=True, help="tarball path to write")
@@ -304,6 +363,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "build":
             report = build_release(args.payload_root, args.release_id, args.out,
                                    signing_key_id=args.signing_key_id)
+        elif args.command == "seal":
+            report = seal_release(args.release_dir, args.release_id,
+                                  signing_key_id=args.signing_key_id)
         else:
             report = pack_release(args.release_dir, args.out, public_key=args.public_key,
                                   allow_unsigned=args.allow_unsigned,

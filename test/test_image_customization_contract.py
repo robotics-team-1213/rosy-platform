@@ -987,3 +987,18 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     assert args[args.index("--skip-keys") + 1].split() == ["sllidar_ros2"]
     bringup = (ROOT / "src/devices/bringup/package.xml").read_text(encoding="utf-8")
     assert "<exec_depend>sllidar_ros2</exec_depend>" in bringup
+
+
+def test_customizer_seals_the_factory_release_last_and_exports_it_unsigned():
+    """D-225 2.2: sealed after every write into the release, never signed in the image."""
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    seal = source.index('build_payload_release.py" seal')
+    assert '--release-dir "$RELEASE" --release-id "$RELEASE_ID"' in source[seal:seal + 200]
+    for earlier in ('> "$RELEASE/deb-packages.txt"', '> "$RELEASE/source-revision.txt"',
+                    'rm -rf -- "$RELEASE/image-overlay"', "probe-display-runtime.py'",
+                    'rm -rf -- "$ROOT/tmp/rosy-core-probe"'):
+        assert source.rindex(earlier) < seal, earlier
+    assert seal < source.index('cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"')
+    assert seal < source.index('verify-mounted-image.py" --root')
+    assert 'FACTORY_EXPORT="$PAYLOAD/factory-release"' in source
+    assert '[[ ! -e "$RELEASE/SHA256SUMS.sig" ]]' in source
