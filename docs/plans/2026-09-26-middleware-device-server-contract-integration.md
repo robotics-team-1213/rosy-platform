@@ -124,6 +124,15 @@ does not redispatch it. This does not complete Task 7 or accept D-268/D-177.
 3. actual ceiling phone + markers + surveyed map, actual CORE robot, network interruption, process restart, token revoke를 DEVICE/FIELD runbook에 따라 실행한다.
 4. automatic movement stays disabled until D-268 accepted contract and per-task false-trigger/freshness metrics pass. OMX pick, Pinky camera and robot-arm camera require separate ADRs and DEVICE goals.
 
+**Task 8 preparation status (LOCAL):** `deploy/site/build_candidate.py` now
+requires a clean source revision, builds commit-tagged `linux/amd64` images,
+generates per-image SPDX SBOMs with Docker Scout, and exports an image archive
+plus image/config checksums in `release.json`. The bundle carries only Compose,
+proxy, runbook, and placeholder config templates. Its clean-tree/platform/output
+guards have host pytest coverage. This prepares a reproducible transfer
+candidate; it does not establish Ubuntu RTX host access, GPU enablement, or
+SITE/DEVICE/FIELD acceptance.
+
 ## 완료 조건
 
 - API Ref/shared schemas/Android-Python protocol vectors와 producer-consumer test가 서로 일치한다.

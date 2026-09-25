@@ -7,7 +7,7 @@
 
 **Context:** 운영자는 RTX 5080 노트북을 현장에 상시 두고 Ubuntu에서 관제 서버, 데이터 처리, 영상 추론, 웹 접근을 운영하려 한다. 첫 영상 입력은 천장 스마트폰 카메라다. 이후 핑키 이동 로봇과 로봇암의 카메라를 추가한다. 검증된 인식 결과는 Fleet이 자동 작업을 시작하는 근거가 될 수 있고, 관제 PC에서도 같은 종류의 작업을 직접 요청할 수 있어야 한다.
 
-현재 `fleet console`은 로봇 CORE REST를 조회하고 목표·취소·정지를 내리는 v1이다(D-81). `SiteHub` 수신 코드와 CORE `FleetAgent` outbound 구현은 있으나 기본 설정에서 Agent는 비활성이며 Fleet 콘솔과 Hub의 운영 연결은 없다. 천장 카메라 수신 전용 어댑터는 있으나 영속 Mission Manager, 영상 인식→Fleet 연결, 사이트 Docker 산출물은 없다. D-257의 sighting 계약은 Proposed이고, OMX 집기 능력은 D-55의 장치 시험 전까지 비활성이다. 이 ADR은 그 부재를 구현 완료로 승격하지 않는다.
+이 문서 작성 당시 `fleet console`은 CORE REST 기반 관제였고 `SiteHub`, overhead frame adapter 및 site Compose는 운영 앱 경로에 연결되지 않았다. D-257 sighting과 자동 정책 입력도 Proposed였다. 아래 구현 현황은 이 초기 상태와 설계 승인을 구분한다.
 
 **Decision:**
 
@@ -20,6 +20,19 @@
 7. **추적과 고장.** Fleet은 작업 ID와 멱등 키, 원인 evidence ID, 로봇 명령 correlation ID, 수락/실행/완료·실패 결과를 따로 저장한다. 응답 유실 후 재접수는 기존 작업을 반환해야 하며, 재기동 뒤 미확인 명령을 새 명령처럼 재송신하지 않는다. 영상 서비스·GPU가 죽으면 해당 자동 조건을 닫고 상태를 `DEGRADED`로 표시한다. Fleet 전체가 꺼지면 사이트 자동화만 멈추고 로봇의 로컬 정지·deadman은 유지한다. 복구 뒤 움직임 재개는 현재 상태·명령 결과를 재조회한 후에만 허용한다.
 8. **단계적 활성화.** 1차는 천장 카메라 결과의 관측·대조와 기존 목표/취소 경로다. 자동 이동은 D-257 수용, 실제 카메라·지도 보정, 이벤트/명령 추적 및 현장 재현 시험 뒤 능력별로 활성화한다. 자동 집기는 D-55의 모델·장착·전원·hand-eye·충돌·payload·복구 장치 시험과 실제 파지/배치 검증 뒤 별도 정책으로 활성화한다. 핑키/팔 영상도 각각 전송 계약과 기기 실측을 거친다.
 
+**Implementation status (2026-09-27, LOCAL):** the current source now wires the
+CORE `FleetAgent` WebSocket and durable event audit into the site Fleet app,
+accepts overhead frames through the separate vision service, stores sightings,
+and exposes authenticated operator state/event/task readback. Operator
+navigation uses a durable idempotent task path; interrupted `REQUESTED` work
+recovers to `UNKNOWN`, while policy navigation remains `HOLD`. The Linux/amd64
+Compose stack and synthetic TLS camera/Fleet smoke have been exercised on Docker
+Desktop, including restart readback. No Ubuntu RTX host, NVIDIA container access,
+physical phone/CORE stream, surveyed calibration, or per-user Fleet RBAC has been
+accepted. D-177 command correlation/ACK reconciliation and D-268 policy evidence
+gates remain open; this implementation record does not change the Proposed
+status or authorize autonomous motion.
+
 **Alternatives:**
 
 - *Fleet 프로세스에 영상 처리와 GPU 모델을 합침* — 영상 장애가 명령·웹 경로에 전파되고 D-118/D-257 경계를 흐린다.
@@ -29,6 +42,6 @@
 
 **Validation / Transition:** 계획 문서의 SOURCE→LOCAL→ROS-SIM→ARTIFACT→DEVICE→FIELD 게이트를 각각 남긴다. Compose 기동과 호스트 GPU 인식은 사이트 배포 증거일 뿐 로봇 실기 집기 수용이 아니다. D-257·D-199의 Proposed 결정을 자동 실행의 승인으로 간주하지 않는다. 공개 저장소에는 실주소·토큰·영상 기록을 넣지 않는다(D-226).
 
-**References:** [사이트 역할 설계](../plans/2026-09-14-site-middleware-role-fabric-design.md), [Fleet SRS](../spec/ROSY%20FLEET%20SRS.md), [CORE SRS](../spec/ROSY%20CORE%20SRS.md), [D-55](D-55-mobile-manipulation-is-a-robot-local-mission-capability.md), [D-118](D-118-image-fleet-gz-multi.md), [D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md).
+**References:** [사이트 역할 설계](../plans/2026-09-14-site-middleware-role-fabric-design.md), [Fleet SRS](../spec/ROSY%20FLEET%20SRS.md), [CORE SRS](../spec/ROSY%20CORE%20SRS.md), [D-55](D-55-mobile-manipulation-is-a-robot-local-mission-capability.md), [D-118](D-118-image-fleet-gz-multi.md), [D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-269](D-269-device-server-contracts-and-ros-boundary.md).
 
 ---
