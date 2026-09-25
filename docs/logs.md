@@ -2125,3 +2125,9 @@
 - gate 변화: D-233·D-254 Proposed→Accepted. 디자인 시스템 작업 종료
 - 결정: 잔재 수정은 타 세션에 고지한다. D-233 결산으로 인벤토리 착지 확정
 - 교훈: 없음
+## 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
+- 변경: 새 ADR D-256(공개 무결성 값은 이름으로 지우고, 스캐너는 매처를 넓히지 않는다)+ADR 로그 행+progress adrs+생성 색인. harness gap의 낡은 예약 7건(D-234~D-240)을 사실로 고치고(66b0176c), D-251~D-253 예약은 실제 착지에 따라 해제(d22d2a17), 색인을 커밋 상태로 재생성(03e48ded)
+- 증거: 스캐너 프로브 3건 PASS — 무결성 맥락 없는 hex는 `high-entropy-token`, 무결성 이름은 침묵, 같은 줄의 `api_token`은 `credential`. `test_harness_contracts + test_release_boundary_guards + test_native_payload_workflow + test_module_scorecard + test_native_runtime_docs` 127 passed, lint 0 error (2026-09-26 Windows)
+- gate 변화: 없음. SOURCE GO 유지. CI의 `core domain suites` 7 failed는 src/runtime 레인(타 세션)이고 docs 게이트 단계는 그 전에 skip
+- 결정: D-256 Accepted — 값 단위 허용목록을 만들지 않고, 오탐은 호출 지점의 이름으로 고친다
+- 교훈: ADR 번호는 파일과 행을 한 번에 확보한다. D-255로 쓰려는 순간 타 세션이 같은 번호를 집어넣어 D-256으로 갈아탔다(오늘 세 번째 충돌). append-only 공유 파일은 인덱스만 스테이징해 상대의 행을 훔치지 않는다
