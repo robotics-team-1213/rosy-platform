@@ -63,6 +63,17 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  * - `config` from the adapter is applied and published through [status].
  * - Frames go out only while STREAMING and only when nothing is queued (latest-only);
  *   nothing is buffered while disconnected.
+ *
+ * Limits of latest-only and age_ms (measured on device in A3; no socket tuning until then):
+ * - The gate is OkHttp's `WebSocket.queueSize()`, i.e. bytes not yet written to the socket.
+ *   Once a frame is written it leaves that queue but can still sit in the kernel TCP send
+ *   buffer (and Wi-Fi driver queues), so on a slow link one or more earlier frames may still
+ *   be in flight when the next one is admitted. Latest-only therefore bounds the app-side
+ *   queue to one frame, not the end-to-end queue.
+ * - `age_ms` is measured when the frame is enqueued with `WebSocket.send`. It covers capture,
+ *   analysis and encoding but not time spent in the OkHttp writer, kernel send buffer or
+ *   network. The adapter's `captured_at = received - age_ms` is therefore later than the true
+ *   capture time by that transmit delay.
  * - Reconnects with [Backoff]; close 4400 or 4409 stops retrying.
  */
 class OverheadLink(
@@ -146,7 +157,8 @@ class OverheadLink(
 
     /**
      * Sends header + JPEG as one binary message. [captureNanos] is on the System.nanoTime clock;
-     * age_ms is measured at this moment so encoding time is included.
+     * age_ms is measured at enqueue time, so encoding is included but socket and network
+     * transmit time are not (see the class comment).
      */
     fun sendFrame(jpeg: ByteArray, length: Int, width: Int, height: Int, rotationDeg: Int, captureNanos: Long): Boolean {
         val maxBytes = _status.value.config.maxBytes
