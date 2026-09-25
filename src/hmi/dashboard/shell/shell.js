@@ -98,6 +98,7 @@ function refresh() {
 }
 
 document.getElementById("shell-estop").addEventListener("click", async () => {
+  window.dispatchEvent(new Event("rosy:stop-motion"));
   try {
     await api("/api/v1/safety/stop", { method: "POST" });
     notice.textContent = "비상 정지를 보냈습니다.";

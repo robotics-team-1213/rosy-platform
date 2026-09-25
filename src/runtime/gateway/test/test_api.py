@@ -703,6 +703,14 @@ class TestDockingStatus:
 
 
 class TestDockCrud:
+    def test_a_viewer_can_list_dock_types_for_setup(self, docking_client):
+        tc, services = docking_client
+        _register_dock(services)
+        response = tc.get("/api/v1/docking/types", headers=VIEWER)
+        assert response.status_code == 200
+        assert [item["name"] for item in response.json()["types"]] == ["rosy_v1"]
+        assert response.json()["types"][0]["detector"] == "simulated"
+
     def test_an_operator_can_register_and_list_a_dock(self, docking_client):
         tc, services = docking_client
         r = tc.post("/api/v1/docking/types", headers=ADMIN, json={

@@ -20,14 +20,14 @@ def main(argv: list[str] | None = None) -> int:
     if separator != 0 or len(args) < 2:
         raise SystemExit("unexpected secret bootstrap arguments")
     command = args[1:]
-    mapping_text = os.environ.pop("ROSY_SECRET_FILES", "{}")
+    mapping_text = os.environ.pop("ROSY_CREDENTIAL_PATHS", "{}")
     try:
-        secret_files = json.loads(mapping_text)
+        mounted_paths = json.loads(mapping_text)
     except json.JSONDecodeError as exc:
-        raise SystemExit("ROSY_SECRET_FILES must be a JSON object") from exc
-    if not isinstance(secret_files, dict):
-        raise SystemExit("ROSY_SECRET_FILES must be a JSON object")
-    for name, raw_path in secret_files.items():
+        raise SystemExit("ROSY_CREDENTIAL_PATHS must be a JSON object") from exc
+    if not isinstance(mounted_paths, dict):
+        raise SystemExit("ROSY_CREDENTIAL_PATHS must be a JSON object")
+    for name, raw_path in mounted_paths.items():
         if not isinstance(name, str) or not _ENV_NAME.fullmatch(name):
             raise SystemExit("secret environment names must be uppercase identifiers")
         try:

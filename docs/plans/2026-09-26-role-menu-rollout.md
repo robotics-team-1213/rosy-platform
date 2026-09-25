@@ -86,7 +86,9 @@
 - **추가 이관 단위 (2026-09-26):** `/device`에 시스템/기능 인벤토리, 네트워크·릴리스·커미셔닝 읽기, 토큰·안전 정책 패널을 등록했다. `/setup`에는 Operator API 계약을 따르는 초기 위치와 capability-gated SLAM 및 도킹 상태·teach/운전 조작 패널을 등록했다. 기존 `/dashboard`는 호환 화면으로 유지한다.
 - **추가 이관 단위 (2026-09-26):** `/device` Host Agent 네트워크 모드/프로파일/Wi-Fi 연결 및 release rollback/recovery-hold 해제를 확인·재확인 후 요청하게 했다. ROS 그래프는 현재 구현된 `/api/v1/system/runtime` 응답의 ROS snapshot에서 읽으며 `/api/v1/ros/*`는 API Ref에 미구현이라 호출하지 않는다.
 - **추가 이관 단위 (2026-09-26):** `/console`에 기존 점유지도/경로/비용지도 모듈을 기반으로 한 map 패널을 등록했다. Operator 이상에서만 capability가 확인된 목표/초기위치를 보낼 수 있고, 키보드 십자선도 유지한다. 패널 해제 시 지도 입력 리스너와 ResizeObserver를 정리한다.
-- **추가 이관 단위 (2026-09-26):** `/console`에 operator hold-to-drive(100ms 반복 + release/focus/visibility/unmount zero), 전방 카메라 lifecycle, capability-gated dock/undock/cancel 실행 패널을 등록했다. `/setup` 도킹 화면은 움직임 명령을 제거하고, pose fresh가 아니면 teach를 막도록 구성했다.
-- **남은 이관:** `/setup` 도크 종류·도크 등록 관리, `/console` 나머지 운영 모드·line-follow 및 traffic action 이전과 기존 `/dashboard` 호환·설정·인증 계약 검증이 남아 있다. 같은 기능의 회귀를 확인하기 전 기존 대시보드 동작을 제거하지 않는다.
+- **추가 이관 단위 (2026-09-26):** `/console`에 operator IDLE/MANUAL/NAVIGATION 모드 제어를 등록했다. navigation capability가 없으면 선택이 막히고, 모드 변경 전에 공유 stop-motion 이벤트가 hold teleop에 zero를 보내도록 한다.
+- **추가 이관 단위 (2026-09-26):** `/console`에 navigation capability에 따른 차선 추종 제어를 추가했다. capability가 빠져도 OFF 정지는 허용한다. `/setup`에는 Administrator 전용 도크 유형 조회·생성, 현재 pose 기반 등록 및 삭제 패널을 추가하고, 등록은 pose freshness와 유형 목록을 확인한 뒤에만 허용한다.
+- **추가 이관 단위 (2026-09-26):** `/setup`에 교통 정책 편집·검토본 저장·정지 확인 후 적용 패널을 추가했다. 시뮬레이션 신호 조작은 API가 제공하는 경우에만 노출한다. 기존 `/dashboard` 동작은 회귀 확인 전까지 보존한다.
+- **남은 이관:** 도크 등록, line-follow, 교통 정책 패널은 새 화면에 연결했다. 기존 `/dashboard` 진입·새로고침·뒤로가기, 설정·인증 보존을 회귀 시험으로 확인하고 기존 화면의 역할과 제거 가능 범위를 판정한다. 같은 기능의 회귀를 확인하기 전 기존 대시보드 동작을 제거하지 않는다.
 - **Task 4 카드 정리 남음:** 새 장치 화면의 readback은 추가됐지만 기존 `점검` 뷰 카드와 완전 동등하지 않으므로 기존 카드를 제거하지 않았다.
 - **수용 범위:** 현재 테스트는 Windows 호스트·로컬 Chromium까지다. ROS 2/Pi 설치·실기 운전과 물리 E-Stop은 확인하지 않았다.

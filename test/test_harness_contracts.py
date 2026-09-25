@@ -165,6 +165,11 @@ def test_valid_log_has_no_errors():
     assert [e.summary for e in harness.parse_log(GOOD_LOG)] == ["feat: first", "docs: second"]
 
 
+def test_append_only_logs_accept_legacy_evidence_label():
+    legacy = GOOD_LOG.replace("- 증거:", "- 근거:")
+    assert harness.validate_log(legacy) == []
+
+
 def test_headings_inside_code_fences_are_entry_text():
     assert harness.validate_log(GOOD_LOG + "\n```markdown\n## not an entry\n```\n") == []
 

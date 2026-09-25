@@ -61,13 +61,13 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             env_name = row[field]
             if not isinstance(env_name, str) or not _ENV_NAME.fullmatch(env_name):
                 raise ValueError(f"sources[{index}].{field} must name an uppercase environment variable")
-            secret = env.get(env_name)
-            if not isinstance(secret, str) or not secret:
+            token_value = env.get(env_name)
+            if not isinstance(token_value, str) or not token_value:
                 raise ValueError(f"vision token environment variable {env_name} is required")
-            if secret in all_tokens:
+            if token_value in all_tokens:
                 raise ValueError("phone and Fleet source credentials must be distinct")
-            all_tokens.add(secret)
-            secrets.append(secret)
+            all_tokens.add(token_value)
+            secrets.append(token_value)
         robot_ids = row["robot_ids"]
         robot_markers = row["robot_markers"]
         if (not isinstance(robot_ids, list) or not robot_ids

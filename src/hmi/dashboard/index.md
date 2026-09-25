@@ -28,7 +28,7 @@
 ## 최근 기록
 
 - 2026-09-26 · uncommitted · feat(dashboard): D-260 operate-view summary line
+- 2026-09-26 · uncommitted · feat(hmi): add administrator dock catalog and registration
+- 2026-09-26 · uncommitted · feat(hmi): add line-follow and traffic policy panels
+- 2026-09-26 · uncommitted · feat(hmi): add shared role-based mode control
 - 2026-09-26 · uncommitted · feat(hmi): move live control panels into console
-- 2026-09-26 · uncommitted · feat(hmi): add role-gated console map panel
-- 2026-09-26 · uncommitted · feat(hmi): add confirmed host recovery actions
-- 2026-09-26 · uncommitted · feat(hmi): add operator docking preparation panel

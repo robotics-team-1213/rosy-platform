@@ -19,6 +19,14 @@ panels:
     order: 20
     module: panels/console/map.js
     css: [panels/surface-panels.css]
+  - id: console.mode
+    title: 운전 모드
+    surface: console
+    slot: act
+    order: 20
+    min_role: operator
+    module: panels/console/mode.js
+    css: [panels/surface-panels.css]
   - id: console.teleop
     title: 수동 운전
     surface: console
@@ -41,6 +49,14 @@ panels:
     order: 40
     min_role: operator
     module: panels/console/docking.js
+    css: [panels/surface-panels.css]
+  - id: console.line_follow
+    title: 차선 추종
+    surface: console
+    slot: act
+    order: 50
+    min_role: operator
+    module: panels/console/line-follow.js
     css: [panels/surface-panels.css]
   - id: setup.waypoints
     title: 웨이포인트 준비
@@ -65,6 +81,22 @@ panels:
     order: 30
     min_role: operator
     module: panels/setup/docking.js
+    css: [panels/surface-panels.css]
+  - id: setup.dock_admin
+    title: 도크 종류 및 등록 관리
+    surface: setup
+    slot: main
+    order: 40
+    min_role: administrator
+    module: panels/setup/dock-admin.js
+    css: [panels/surface-panels.css]
+  - id: setup.traffic_policy
+    title: 교통 정책 준비
+    surface: setup
+    slot: main
+    order: 50
+    min_role: operator
+    module: panels/setup/traffic-policy.js
     css: [panels/surface-panels.css]
   - id: system.events
     title: 최근 이벤트

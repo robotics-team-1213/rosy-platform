@@ -28,6 +28,7 @@ GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
 REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
 LOG_FIELDS = ("변경", "증거", "gate 변화")
+LOG_FIELD_ALIASES = {"증거": ("근거",)}
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
 
@@ -230,7 +231,11 @@ def validate_log(text: str) -> list[str]:
                 # forbids reforming them — their field defects are recorded
                 # here, not fixable in place.
                 continue
-            if not re.search(rf"^- {re.escape(name)}:", entry.body, flags=re.MULTILINE):
+            accepted_names = (name, *LOG_FIELD_ALIASES.get(name, ()))
+            if not any(
+                re.search(rf"^- {re.escape(accepted)}:", entry.body, flags=re.MULTILINE)
+                for accepted in accepted_names
+            ):
                 errors.append(f"{entry.heading}: missing '- {name}:'")
         if previous is not None and entry.date < previous:
             errors.append(f"{entry.heading}: out of order (after {previous})")
