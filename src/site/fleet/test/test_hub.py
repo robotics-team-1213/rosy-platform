@@ -15,7 +15,8 @@ from fleet.hub.hub import SiteHub
 
 
 def _ep(robot_id: str = "rosy_01") -> RobotEndpoint:
-    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "pair-01")
+    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "rest-01",
+                         fleet_pairing_token="pair-01")
 
 
 def _hello(robot_id="rosy_01", token="pair-01") -> Envelope:
@@ -39,6 +40,31 @@ def test_hello_with_wrong_token_is_pairing_invalid_and_stays_offline():
     assert hub.registry.online_ids() == []
 
 
+def test_hello_with_unknown_protocol_major_is_rejected_before_pairing():
+    hub = SiteHub([_ep()])
+    env = _hello()
+    env.protocol_version = "2.0"
+
+    reply = hub.handle(env)
+
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "PROTOCOL_UNSUPPORTED"
+    assert hub.registry.online_ids() == []
+
+
+def test_rest_operator_token_cannot_pair_the_fleet_agent():
+    endpoint = RobotEndpoint("rosy_01", "https://robot.local", "rest-operator",
+                             fleet_pairing_token="agent-pairing")
+    hub = SiteHub([endpoint])
+
+    refused = hub.handle(_hello(token="rest-operator"))
+    accepted = hub.handle(_hello(token="agent-pairing"))
+
+    assert refused.type is EnvelopeType.ERROR
+    assert refused.payload["code"] == "PAIRING_INVALID"
+    assert accepted.type is EnvelopeType.WELCOME
+
+
 def _hello_with_identity(robot_id="rosy_01", token="pair-01",
                          device_uid="", device_name="",
                          model="", hardware_serial="") -> Envelope:
@@ -50,8 +76,10 @@ def _hello_with_identity(robot_id="rosy_01", token="pair-01",
 
 
 def test_second_robot_with_same_device_uid_is_duplicate_identity():
-    hub = SiteHub([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "pair-01"),
-                   RobotEndpoint("rosy_02", "http://127.0.0.1:8081", "pair-02")])
+    hub = SiteHub([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-01",
+                                 fleet_pairing_token="pair-01"),
+                   RobotEndpoint("rosy_02", "http://127.0.0.1:8081", "rest-02",
+                                 fleet_pairing_token="pair-02")])
     first = hub.handle(_hello_with_identity("rosy_01", "pair-01",
                                             device_uid="uid-shared"))
     assert first.type is EnvelopeType.WELCOME

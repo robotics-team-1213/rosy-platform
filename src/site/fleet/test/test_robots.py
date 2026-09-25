@@ -31,6 +31,26 @@ def test_write_then_load_round_trips(tmp_path):
     assert load_robots(p) == robots
 
 
+def test_fleet_agent_pairing_secret_round_trips_separately_from_rest_token(tmp_path):
+    p = tmp_path / "robots.yaml"
+    endpoint = RobotEndpoint("rosy_01", "https://robot.local", "rest-operator",
+                             fleet_pairing_token="agent-pairing")
+
+    write_robots(p, [endpoint])
+
+    assert load_robots(p) == [endpoint]
+    assert "rest-operator" in p.read_text(encoding="utf-8")
+    assert "agent-pairing" in p.read_text(encoding="utf-8")
+
+
+def test_fleet_pairing_secret_must_not_reuse_the_rest_operator_token(tmp_path):
+    p = tmp_path / "robots.yaml"
+    with pytest.raises(RobotsFileError, match="must differ"):
+        write_robots(p, [RobotEndpoint("rosy_01", "https://robot.local", "same-secret",
+                                       fleet_pairing_token="same-secret")])
+    assert not p.exists()
+
+
 @pytest.mark.parametrize("body", [
     "",
     "robots: []\n",

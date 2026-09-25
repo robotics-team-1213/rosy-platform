@@ -7,7 +7,8 @@ from fleet.swarm.robots import RobotEndpoint
 from fleet.hub.server import create_hub_app
 
 def _ep(robot_id: str = "rosy_01") -> RobotEndpoint:
-    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "pair-01")
+    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "rest-01",
+                         fleet_pairing_token="pair-01")
 
 def test_hub_websocket_accepts_hello_and_heartbeat():
     hub = SiteHub([_ep("rosy_01")])

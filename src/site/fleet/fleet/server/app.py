@@ -125,7 +125,7 @@ def _http_error(exc: BaseException) -> HTTPException:
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
-               web_common: Optional[Path] = None) -> FastAPI:
+               web_common: Optional[Path] = None, hub=None) -> FastAPI:
     app = FastAPI(
         title="ROSY Fleet",
         version="0.1.0",
@@ -133,6 +133,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     )
     app.state.console = console
     app.state.web_common = Path(web_common) if web_common is not None else None
+
+    if hub is not None:
+        from fleet.hub.server import install_hub_routes
+
+        install_hub_routes(app, hub, hub_token=console_token)
 
     def authorize(authorization: Optional[str] = Header(default=None)) -> None:
         if console_token is None:

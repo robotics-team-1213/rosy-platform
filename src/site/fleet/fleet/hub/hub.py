@@ -10,6 +10,7 @@ from core_common.protocol.schemas import (
     EventMessage,
     HeartbeatPayload,
     HelloPayload,
+    PROTOCOL_VERSION,
     SwarmFollowParams,
     SwarmReferenceSource,
     WelcomePayload,
@@ -19,6 +20,13 @@ from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient
 
 _FORBIDDEN_PAYLOAD_KEYS = frozenset({"cmd_vel", "image", "twist"})
+
+
+def _protocol_major(value: str) -> int | None:
+    parts = value.split(".")
+    if len(parts) != 2 or not all(part.isdecimal() for part in parts):
+        return None
+    return int(parts[0])
 
 
 class HubError(Exception):
@@ -38,13 +46,19 @@ class SiteHub:
         clients: Optional[dict[str, RobotClient]] = None,
         fleet_name: str = "rosy-site",
     ) -> None:
-        self._tokens = {e.robot_id: e.token for e in endpoints}
+        # CORE REST control tokens and FleetAgent pairing credentials have
+        # distinct authority. Missing pairing credentials leave the agent
+        # link unavailable for that robot; never fall back to the REST token.
+        self._tokens = {e.robot_id: e.fleet_pairing_token for e in endpoints
+                        if e.fleet_pairing_token is not None}
         self._clients = clients or {}
         self._paired: set[str] = set()
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
 
     def handle(self, envelope: Envelope) -> Envelope:
+        if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
+            return _error("PROTOCOL_UNSUPPORTED", "protocol major is not supported")
         if envelope.type is EnvelopeType.HELLO:
             return self._hello(envelope)
         if envelope.type is EnvelopeType.COMMAND:
@@ -73,6 +87,8 @@ class SiteHub:
             hello = HelloPayload.model_validate(envelope.payload)
         except Exception:
             return _error("PAIRING_INVALID", "bad hello")
+        if _protocol_major(hello.protocol_version) != _protocol_major(PROTOCOL_VERSION):
+            return _error("PROTOCOL_UNSUPPORTED", "hello protocol major is not supported")
         expected = self._tokens.get(hello.robot_id)
         if expected is None or expected != hello.pairing_token:
             return _error("PAIRING_INVALID", "unknown robot or token")
