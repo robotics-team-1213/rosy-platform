@@ -138,8 +138,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
 - 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
 - 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
 - 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
 - 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
-- 2026-09-25 · uncommitted · docs(design-system): D-250 Accepted (첫 L2 headless)
