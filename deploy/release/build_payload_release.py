@@ -66,6 +66,8 @@ TARGET = {
 RUNTIME = {"model": "native-systemd", "default_mode": "core"}
 # 2000-01-01T00:00:00Z. Any constant works; 0 trips some tar readers' warnings.
 FIXED_MTIME = 946684800
+# A Windows file system has no POSIX exec bits to read back (D-225 review).
+_WINDOWS = os.name == "nt"
 
 
 def _payload_files(payload_root: Path) -> list[str]:
@@ -233,6 +235,10 @@ def pack_release(
         rejections = verify_release_files(release_dir, Path(public_key))
         if rejections:
             raise ValueError(str(rejections[0]))
+    if signed and modes_from is None and _WINDOWS:
+        raise ValueError(
+            "PACK_MODES_REQUIRED: on Windows the local files carry no exec bits; pass "
+            "--modes-from <the unsigned Linux tarball> to re-pack a signed release")
 
     members = _tar_members(release_dir)
     modes = _modes_from(modes_from, members) if modes_from is not None else None

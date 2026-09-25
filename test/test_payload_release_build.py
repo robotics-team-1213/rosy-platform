@@ -244,10 +244,14 @@ def test_offline_signer_then_pack_yields_a_tarball_native_verify_accepts(case, t
     built = _run(BUILDER, "build", "--payload-root", payload, "--release-id", RELEASE_ID,
                  "--out", staging, "--signing-key-id", KEY_ID)
     assert built["ok"] is True, built
+    unsigned = tmp_path / "unsigned.tar.gz"
+    assert _run(BUILDER, "pack", "--release-dir", staging, "--out", unsigned,
+                "--allow-unsigned")["ok"] is True
     signed = _run(SIGNER, staging, "--private-key", private, "--public-key", key)
     assert signed["ok"] is True, signed
     tarball = tmp_path / f"{RELEASE_ID}.tar.gz"
-    packed = _run(BUILDER, "pack", "--release-dir", staging, "--out", tarball, "--public-key", key)
+    packed = _run(BUILDER, "pack", "--release-dir", staging, "--out", tarball, "--public-key", key,
+                  "--modes-from", unsigned)
     assert packed["ok"] is True and packed["signed"] is True, packed
 
     members = _members(tarball)
@@ -262,7 +266,8 @@ def test_offline_signer_then_pack_yields_a_tarball_native_verify_accepts(case, t
     manifest = manager_type(root=device, public_key=key).verify(RELEASE_ID)
     assert manifest["release_id"] == RELEASE_ID
 
-    again = _run(BUILDER, "pack", "--release-dir", staging, "--out", tmp_path / "again.tar.gz")
+    again = _run(BUILDER, "pack", "--release-dir", staging, "--out", tmp_path / "again.tar.gz",
+                 "--modes-from", unsigned)
     assert again["sha256"] == packed["sha256"]
 
 
@@ -290,6 +295,28 @@ def test_offline_signer_refuses_a_payload_changed_after_build(case, tmp_path):
     assert report["ok"] is False
     assert "CHECKSUM_UNLISTED_FILE" in report["error"]
     assert not (staging / "SHA256SUMS.sig").exists()
+
+
+@pytest.mark.parametrize("windows", [True, False])
+def test_pack_of_a_signed_release_on_windows_requires_modes_from(case, tmp_path, monkeypatch, windows):
+    import build_payload_release
+
+    _manager_type, _device, key, private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+    build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    unsigned = tmp_path / "unsigned.tar.gz"
+    pack_release(staging, unsigned, allow_unsigned=True)  # unsigned: never refused
+    _sign(staging, private)
+    monkeypatch.setattr(build_payload_release, "_WINDOWS", windows)
+
+    if windows:
+        with pytest.raises(ValueError, match="PACK_MODES_REQUIRED.*--modes-from"):
+            pack_release(staging, tmp_path / "x.tar.gz", public_key=key)
+        assert not (tmp_path / "x.tar.gz").exists()
+    else:
+        assert pack_release(staging, tmp_path / "x.tar.gz", public_key=key)["signed"] is True
+    assert pack_release(staging, tmp_path / "y.tar.gz", public_key=key,
+                        modes_from=unsigned)["signed"] is True
 
 
 def _with_exec_bit(source: Path, out: Path, name: str) -> None:
@@ -351,9 +378,11 @@ def test_real_unpack_helper_accepts_the_signed_tarball_and_native_verify_passes(
     manager_type, device, key, private, payload, _release = case
     staging = tmp_path / "staging" / RELEASE_ID
     build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    unsigned = tmp_path / "unsigned.tar.gz"
+    pack_release(staging, unsigned, allow_unsigned=True)
     _sign(staging, private)
     tarball = tmp_path / f"{RELEASE_ID}.tar.gz"
-    pack_release(staging, tarball, public_key=key)
+    pack_release(staging, tarball, public_key=key, modes_from=unsigned)
     releases = device / "opt" / "rosy" / "releases"
     releases.mkdir(parents=True)
     script = ROOT / "deploy" / "robot" / "rosy-release-unpack.sh"
