@@ -25,13 +25,14 @@ rosy/ (이 리포지토리)
 ├── firmware/                 # 충전 도크·신호 제어 펌웨어 (colcon 밖)
 ├── reference/                # 얼린 pinky_pro zip. 현재 코드가 아님
 ├── test/                     # 호스트 계약 시험
-└── src/                      # ROS 2 패키지 (도메인 그룹)
-    ├── core/                 # core·core_common·core_events·core_features·core_api_web·interfaces
-    ├── apps/                 # control·emotion·games·omx_adapter
-    ├── hardware/             # bringup·led·lamp_control·imu_bno055·sensor_adc
-    ├── navigation/           # Nav2/SLAM
+└── src/                      # ROS 2 패키지 (층)
+    ├── contracts/            # interfaces·core_common
+    ├── runtime/              # core·core_events·core_features·core_api_web·control·navigation
+    ├── devices/              # pinky_pro·common·omx
+    ├── products/             # pinky_pro 설정 패키지
+    ├── hmi/                  # emotion·web_common
     ├── sim/                  # description·gz_sim
-    └── site/                 # fleet
+    └── site/                 # fleet·games
 ```
 
 ## 문서 (거버넌스: docs/)

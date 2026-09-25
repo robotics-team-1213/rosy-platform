@@ -25,7 +25,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
-DOMAINS = {"core", "contracts", "runtime", "devices", "products", "face", "hmi", "navigation", "sim", "site"}
+DOMAINS = {"contracts", "runtime", "devices", "products", "hmi", "site", "sim"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -407,7 +407,8 @@ def test_direction_table_rows_for_devices_and_robots(src_domain, src_family, dst
         (("devices", "pinky_pro", "bringup"), "bringup", True),
         (("devices", "bringup"), "bringup", False),
         (("products", "pinky_pro"), "pinky_pro", True),
-        (("core", "control"), "control", True),
+        (("runtime", "control"), "control", True),
+        (("core", "control"), "control", False),
         (("apps", "x", "control"), "control", False),
     ],
 )

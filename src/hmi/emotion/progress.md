@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "F-01 수정(패키지 평탄화 + rosy_emotion.py→emotion.py) 후 현재 트리 재실행 — test_info_screen·test_info_screen_palette 22 passed (2026-09-21 Windows)"
-    cmd: "PYTHONPATH=src/apps/emotion python -m pytest src/apps/emotion/test/test_info_screen.py src/apps/emotion/test/test_info_screen_palette.py -q"
+    cmd: "PYTHONPATH=src/hmi/emotion python -m pytest src/hmi/emotion/test/test_info_screen.py src/hmi/emotion/test/test_info_screen_palette.py -q"
   LOCAL:
     state: GO
     evidence: "같은 실행 24 passed(F-04 회귀 + 캡처 재현 시험 포함) + info_screen 카드 PNG 4종 재생성(D-153 회차6, docs/validation/uiux-surfaces-2026-09-21)"
-    cmd: "PYTHONPATH=src/apps/emotion python -m pytest src/apps/emotion/test/test_info_screen.py src/apps/emotion/test/test_info_screen_palette.py src/apps/emotion/test/test_info_screen_capture.py -q"
+    cmd: "PYTHONPATH=src/hmi/emotion python -m pytest src/hmi/emotion/test/test_info_screen.py src/hmi/emotion/test/test_info_screen_palette.py src/hmi/emotion/test/test_info_screen_capture.py -q"
   ROS-SIM:
     state: HOLD
     blocker: "rclpy set_emotion 서비스 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행"

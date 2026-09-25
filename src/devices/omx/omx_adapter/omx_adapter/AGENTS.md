@@ -30,7 +30,7 @@ None.
 ### Testing Requirements
 
 ```bash
-python3 -m pytest src/apps/omx_adapter/test/test_omx_profile.py -v
+python3 -m pytest src/devices/omx/omx_adapter/test/test_omx_profile.py -v
 ```
 
 ### Common Patterns

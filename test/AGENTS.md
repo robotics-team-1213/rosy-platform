@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Host-side pytest for deploy/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/core/*/test` suites. `conftest.py` inserts `deploy/release` onto `sys.path` so modules shipped as scripts remain importable.
+Host-side pytest for deploy/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/runtime/*/test` suites. `conftest.py` inserts `deploy/release` onto `sys.path` so modules shipped as scripts remain importable.
 
 ## Key Files
 
@@ -75,7 +75,7 @@ python3 -m pytest test/test_motor_control.py test/test_host_agent.py -v
 
 ### Internal
 
-- `src/hardware/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
+- `src/devices/pinky_pro/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
 - `deploy/release/*`, `deploy/robot/*`, `deploy/image/*`
 
 ### External

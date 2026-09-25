@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "모듈 경계·흡수 소유권 계약 시험 통과 (2026-09-15, core suite와 test/ suite)"
-    cmd: "python3 -m pytest src/core/test/test_module_criteria.py test/test_control_absorption_package.py -q"
+    cmd: "python3 -m pytest src/runtime/core/test/test_module_criteria.py test/test_control_absorption_package.py -q"
   LOCAL:
     state: GO
     evidence: "1054 passed, 12 skipped (2026-09-22 Windows). D-162 scene context additive 수용(translate road_evidence, RoadEvidence 선택 필드, ros_bridge sensor snapshot) 포함 — D-137/D-151/D-152 회귀 없음"
-    cmd: "PYTHONPATH=src/core:src python3 -m pytest src/core/test -q"
+    cmd: "PYTHONPATH=src/runtime/core:src python3 -m pytest src/runtime/core/test -q"
   ROS-SIM:
     state: GO
     evidence: "2026-09-22 WSL Jazzy 재실행(581741e, cmd_vel_cycle·safety.watchdog·감사 로그 compaction 이후 트리): /cmd_vel Publisher count 1(node core), teleop 0.1→송신 중단 약 0.5 s 뒤 0 + safety.watchdog 감사 기록, logs/audit {events, log}, /metrics rosy_audit_* — docs/validation/ros-sim-core-2026-09-22b. SIGTERM 종료 1/6 회 rclpy context 경합 traceback(exit 1), logs.md 후속"

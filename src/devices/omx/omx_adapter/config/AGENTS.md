@@ -23,7 +23,7 @@ None.
 
 - Do not fill in a fake `hardware_plugin` so the stack looks enabled.
 - Selecting `omx-f` / `omx-ai` / `openmanipulator-x` is a measured-hardware decision, not a YAML tidy-up.
-- CLI: `python -m omx_adapter.cli src/apps/omx_adapter/config/omx.disabled.yaml` must print `{}`.
+- CLI: `python -m omx_adapter.cli src/devices/omx/omx_adapter/config/omx.disabled.yaml` must print `{}`.
 
 ### Testing Requirements
 

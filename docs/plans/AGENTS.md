@@ -109,7 +109,7 @@ Filename `YYYY-MM-DD-kebab.md`; design and execute are separate files.
 
 ### Internal
 
-- Code under `src/core/core`, `src/devices/bringup`, `deploy/`
+- Code under `src/runtime/core`, `src/devices/pinky_pro/bringup`, `deploy/`
 
 ### External
 

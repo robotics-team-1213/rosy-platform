@@ -3,7 +3,6 @@
 !deploy/robot/
 !deploy/robot/**
 !src/
-!src/core/
 !src/contracts/
 !src/contracts/interfaces/
 !src/runtime/
@@ -22,7 +21,6 @@
 !src/devices/pinky_pro/
 !src/devices/pinky_pro/bringup/
 !src/devices/pinky_pro/bringup/**
-!src/navigation/
 !src/runtime/navigation/
 !src/runtime/navigation/**
 !src/sim/

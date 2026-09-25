@@ -36,5 +36,5 @@ Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stay
 ### Testing Requirements
 
 ```bash
-python -m pytest src/apps/games/test test/test_rosy_games_surface.py -q
+python -m pytest src/site/games/test test/test_rosy_games_surface.py -q
 ```
