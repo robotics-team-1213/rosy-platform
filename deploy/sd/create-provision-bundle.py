@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from deploy.sd.personalization import (
+    RELEASE_ID_PATTERN,
     DeviceIdentity,
     create_provision_bundle,
     create_provision_receipt,
@@ -40,11 +41,43 @@ def _exclusive_json(path: Path, payload: dict, mode: int) -> None:
     os.chmod(path, mode)
 
 
+def load_factory_release(release_root: Path, public_key: Path, release_id: str) -> dict | None:
+    """The offline factory-release signature from a signed image release (D-225 2.2).
+
+    Returns None for an image built before D-225 2.2 (no factory-release/<id>),
+    whose factory release stays unsigned on the robot as before. Present but
+    unsigned, or signed by another key, is refused: the card would otherwise
+    carry a signature first boot is certain to throw away.
+    """
+    if str(REPO_ROOT / "deploy" / "release") not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT / "deploy" / "release"))
+    from signing import verify_signature
+
+    if not isinstance(release_id, str) or not RELEASE_ID_PATTERN.fullmatch(release_id):
+        raise ValueError("release_id is invalid")
+    factory = release_root / "factory-release" / release_id
+    if not factory.exists() and not factory.is_symlink():
+        return None
+    sums = factory / "SHA256SUMS"
+    signature = factory / "SHA256SUMS.sig"
+    if factory.is_symlink() or not sums.is_file() or not signature.is_file():
+        raise ValueError("factory release signature is missing")
+    encoded = "".join(signature.read_text(encoding="ascii").split())
+    if verify_signature(sums.read_bytes(), encoded, public_key):
+        raise ValueError("factory release signature does not verify")
+    return {"release_id": release_id, "sha256sums_sig_b64": encoded}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
+    # D-225 2.2: the verified image release, to carry its factory signature.
+    parser.add_argument("--release-root", type=Path)
+    parser.add_argument("--public-key", type=Path)
     args = parser.parse_args(argv)
+    if (args.release_root is None) != (args.public_key is None):
+        parser.error("--release-root and --public-key go together")
     try:
         raw = sys.stdin.read(65537)
         if len(raw) > 65536:
@@ -73,13 +106,16 @@ def main(argv: list[str] | None = None) -> int:
             ap_password=request.get("ap_password"),
             core_api_token=request["core_api_token"],
             core_api_token_id=request["core_api_token_id"],
+            factory_release=(
+                load_factory_release(args.release_root, args.public_key, request["release_id"])
+                if args.release_root is not None else None),
         )
         _exclusive_json(args.output, bundle, 0o600)
         _exclusive_json(args.receipt, create_provision_receipt(bundle), 0o600)
     except json.JSONDecodeError:
         print("bundle creation refused: JSONDecodeError", file=sys.stderr)
         return 1
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError) as exc:
         print(f"bundle creation refused: {type(exc).__name__}", file=sys.stderr)
         return 1
     print("BUNDLE_READY")

@@ -157,6 +157,23 @@ def _validate_core_api_record(record: Any) -> None:
         raise ValueError("core_api.record is invalid")
 
 
+# D-225 2.2: the offline Ed25519 signature over the in-image factory release's
+# SHA256SUMS. 64 bytes, base64. Public data: it proves, it does not unlock.
+FACTORY_RELEASE_KEYS = frozenset({"release_id", "sha256sums_sig_b64"})
+_FACTORY_SIGNATURE = re.compile(r"^[A-Za-z0-9+/]{86}==$")
+
+
+def validate_factory_release(value: Any, release_id: str) -> dict[str, str]:
+    """The bundle's factory release signature record, or raise."""
+    if (not isinstance(value, dict) or set(value) != FACTORY_RELEASE_KEYS
+            or value["release_id"] != release_id
+            or not isinstance(value["sha256sums_sig_b64"], str)
+            or not _FACTORY_SIGNATURE.fullmatch(value["sha256sums_sig_b64"])
+            or len(base64.b64decode(value["sha256sums_sig_b64"], validate=True)) != 64):
+        raise ValueError("factory_release is invalid")
+    return value
+
+
 def _checksum(payload: Mapping[str, Any]) -> str:
     canonical = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -181,6 +198,7 @@ def create_provision_bundle(
     ap_password: str | None = None,
     core_api_token: str,
     core_api_token_id: str,
+    factory_release: Mapping[str, str] | None = None,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -248,6 +266,8 @@ def create_provision_bundle(
         core_api_token, core_api_token_id,
         label=f"{identity.device_name} card admin", created_at=created_text,
     )}
+    if factory_release is not None:
+        bundle["factory_release"] = validate_factory_release(dict(factory_release), release_id)
     bundle["payload_checksum"] = _checksum(bundle)
     return validate_provision_bundle(bundle)
 
@@ -257,8 +277,12 @@ def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "schema_version", "device_identity", "release", "dds", "runtime",
         "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api",
     }
-    if set(bundle) - {"operator"} != expected_top:
+    if set(bundle) - {"operator", "factory_release"} != expected_top:
         raise ValueError("provision bundle keys are invalid")
+    if "factory_release" in bundle:
+        release = bundle["release"]
+        validate_factory_release(
+            bundle["factory_release"], release.get("release_id") if isinstance(release, dict) else None)
     # D-191: required. Without the card's own record CORE would fall back to
     # the shared rosy-dev-* credentials in its package defaults.
     if not isinstance(bundle["core_api"], dict) or set(bundle["core_api"]) != {"record"}:
@@ -360,6 +384,8 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
         **({"operator": {"ssh_key_fingerprints": [
             operator_key_fingerprint(key) for key in bundle["operator"]["ssh_authorized_keys"]
         ]}} if "operator" in bundle else {}),
+        **({"factory_release": {"release_id": bundle["factory_release"]["release_id"], "signed": True}}
+           if "factory_release" in bundle else {}),
         # D-191: the id and a short digest fingerprint name the card's credential.
         "core_api": {
             "token_id": bundle["core_api"]["record"]["id"],
