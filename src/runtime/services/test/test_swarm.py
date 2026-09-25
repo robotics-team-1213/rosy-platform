@@ -421,7 +421,7 @@ def test_the_follow_path_does_not_know_where_the_stream_comes_from():
     import ast
     from pathlib import Path
 
-    source = (Path(__file__).resolve().parents[2] / "core_features" / "core_features"
+    source = (Path(__file__).resolve().parents[2] / "services" / "core_features"
               / "swarm" / "manager.py").read_text(encoding="utf-8")
     imported: set[str] = set()
     for node in ast.walk(ast.parse(source)):

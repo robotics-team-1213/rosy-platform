@@ -185,7 +185,9 @@ class PaintMap:
     def from_bundle(cls, bundle_dir: str | Path | None = None) -> PaintMap:
         """The map_v2_fleet bundle: the source tree's by default, or an
         installed share/control/map/map_v2_fleet."""
-        bundle = (Path(__file__).resolve().parents[2] / "map" / "map_v2_fleet"
+        # D-242 role dirs: map/ sits beside control/, so the bundle is parents[3]
+        # (the sensing group dir), not parents[2] (the control role dir).
+        bundle = (Path(__file__).resolve().parents[3] / "map" / "map_v2_fleet"
                   if bundle_dir is None else Path(bundle_dir))
         return cls.from_scene(_load_stl_scene(bundle))
 
