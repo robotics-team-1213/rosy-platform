@@ -1,17 +1,17 @@
 <!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
 
-# web
+# dashboard
 
 ## Purpose
 
-Embedded operator dashboard (D-23). Served by FastAPI from this folder. No Node/Vite build step in the current tree (D-7 is not implemented here).
+Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this folder. No Node/Vite build step (D-7 is not implemented here).
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `__init__.py` | Package marker so setuptools includes the package |
+| `package.xml` / `CMakeLists.txt` | ament_cmake; installs the screens to `share/dashboard` |
 | `index.html` | Dashboard shell |
 | `styles.css` | Dashboard CSS (no inline styles in HTML) |
 | `app.js` | Shell: login, state/events WS, telemetry render, teleop, e-stop, host cards |
@@ -27,13 +27,13 @@ None.
 
 ### Working In This Directory
 
-- Assets are packaged via `setup.py` `package_data`. Keep filenames `index.html`, `styles.css`, `app.js`.
+- Assets install through `CMakeLists.txt`. Keep filenames `index.html`, `styles.css`, `app.js`.
 - CSP forbids inline script/style. Do not add `onclick=` handlers or `<style>` blocks.
 - Talk only to `/api/v1` and `/ws/*` on the same origin.
 
 ### Testing Requirements
 
-`src/runtime/gateway/test/test_dashboard.py`, `test_host_cards.py`; browser: `test/test_dashboard_browser.py`.
+`src/hmi/dashboard/test`, `src/runtime/gateway/test/test_dashboard.py`, `test_host_cards.py`; browser: `test/test_dashboard_browser.py`.
 
 ### Common Patterns
 

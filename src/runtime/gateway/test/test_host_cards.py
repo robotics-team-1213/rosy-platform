@@ -379,7 +379,7 @@ def test_core_only_sends_commands_the_agent_implements():
 # --- the rendered shell ----------------------------------------------------
 
 
-WEB = Path(__file__).parent.parent.parent / "core_api_web" / "core_api_web" / "web"
+WEB = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
 NEWLINE = chr(10)
 
 

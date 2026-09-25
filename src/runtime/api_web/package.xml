@@ -11,6 +11,7 @@
   <depend>core_features</depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>web_common</exec_depend>
+  <exec_depend>dashboard</exec_depend>
   <exec_depend>python3-fastapi</exec_depend>
 
   <test_depend>ament_copyright</test_depend>

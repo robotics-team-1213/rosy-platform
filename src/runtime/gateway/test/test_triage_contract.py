@@ -13,7 +13,8 @@ CI의 `node`는 ROS 노드 프로세스이지 Node.js 스텝이 아니며, 기�
 from pathlib import Path
 import re
 
-WEB_ROOT = Path(__file__).parent.parent.parent / "core_api_web" / "core_api_web" / "web"
+WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+API_PKG = Path(__file__).resolve().parents[2] / "api_web" / "core_api_web"
 TRIAGE = WEB_ROOT / "triage.js"
 STYLES = WEB_ROOT / "styles.css"
 
@@ -91,7 +92,7 @@ def test_triage_consumes_only_fields_the_server_already_sends():
 
 def test_the_module_is_served_and_imported():
     """allowlist에 없으면 404다. import만으로는 배포되지 않는다."""
-    api = (WEB_ROOT.parent / "api" / "app.py").read_text(encoding="utf-8")
+    api = (API_PKG / "api" / "app.py").read_text(encoding="utf-8")
     assert '"triage.js": "application/javascript"' in api
     app = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
     assert 'from "./triage.js"' in app

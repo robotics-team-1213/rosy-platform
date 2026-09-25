@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `contracts/` (messages and shared schemas), `runtime/` (gateway, sensing, navigation), `devices/` (buses and chips), `products/` (Pinky config package), `hmi/` (LCD and shared browser assets), `sim/`, `site/` (fleet and the game host). Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `pinky_pro`, `omx`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
+ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `contracts/` (messages and shared schemas), `runtime/` (gateway, sensing, navigation), `devices/` (buses and chips), `products/` (Pinky config package), `hmi/` (LCD, shared browser assets, and the operator screens), `sim/`, `site/` (fleet and the game host). Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `pinky_pro`, `omx`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`, `dashboard`.
 
 ## Key Files
 
@@ -19,7 +19,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `runtime/` | `gateway/` (package `core`), `events/` (`core_events`), `services/` (`core_features`, managers plus `decision/`), `api_web/` (`core_api_web`), `sensing/` (package `control`), `navigation`. Judgment does not publish `cmd_vel` |
 | `devices/` | Families: `pinky_pro/` (`bringup`, `adc/` package `sensor_adc`, `lamp/` package `lamp_control`, `led`), `common/` (`imu_bno055`), `omx/` (`adapter/` package `omx_adapter`) |
 | `products/` | Config only: `pinky_pro` (profile and capabilities for `robot.model`), `omx` (disabled arm profile) |
-| `hmi/` | `face/` (package `emotion`, robot LCD) and `web/` (package `web_common`, shared browser assets) |
+| `hmi/` | `face/` (package `emotion`, robot LCD), `web/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
 | `site/` | `fleet` (formation, SiteHub, console) and `games` (laptop match host, no `cmd_vel`) |
 
@@ -36,7 +36,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/services/test/ hmi/web/test/ runtime/sensing/test/ site/fleet/test devices/omx/adapter/test site/games/test -q
+python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/services/test/ hmi/web/test/ hmi/dashboard/test/ runtime/sensing/test/ site/fleet/test devices/omx/adapter/test site/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 

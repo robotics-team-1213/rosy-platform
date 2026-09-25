@@ -2044,3 +2044,16 @@
 - gate 변화: 없음
 - 결정: D-242
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(hmi): operator screens leave the API package (D-243)
+- 변경: D-243 Accepted. `core_api_web/web` 의 정적 파일을 `src/hmi/dashboard` 로 옮긴다. API 는 같은 프로세스에서 그 폴더를 읽는다. Fleet·게임·센싱 진단 화면은 각 패키지에 남긴다. `src/apps` 는 추적되지 않는 pytest 캐시만 있고, 잠금 때문에 지우지 못했다
+- 증거: `python -m pytest src/hmi/dashboard/test src/runtime/gateway/test/test_dashboard.py src/runtime/gateway/test/test_dashboard_no_bundler.py src/runtime/gateway/test/test_console_layout.py src/runtime/gateway/test/test_first_paint.py src/runtime/gateway/test/test_evidence_margin.py src/runtime/gateway/test/test_triage_contract.py src/runtime/gateway/test/test_host_cards.py src/runtime/api_web/test/test_ui_route.py src/hmi/web/test/test_ui_token_contracts.py src/hmi/web/test/test_shared_controls.py test/architecture/test_target_layout.py test/architecture/test_module_structure.py test/test_dashboard_browser.py test/test_web_dialog_contract.py test/test_rosy_games_surface.py -q` 188 passed, 46 skipped (2026-09-25 Windows)
+- gate 변화: 없음
+- 결정: D-243
+- 교훈: 없음
+## 2026-09-25 · uncommitted · docs(design-system): D-233 초안·롤아웃 계획·D-245 파일럿 Proposed
+- 변경: docs/adr/D-233-design-system-component-token-draft.md(신설, D-241·D-242·D-243 경로 이동 반영), docs/plans/2026-09-25-design-system-rollout-design.md(신설, 분할 D-245~D-251), docs/adr/D-245-estop-pilot-kind-question-role-note.md(신설 Proposed), ROSY ADR Log.md에 D-233·D-245 2행, Fleet 전체 정지 버튼에 범위 병기 1줄(src/site/fleet/fleet/server/web/index.html)
+- 증거: python -m pytest test/test_web_dialog_contract.py src/hmi/web/test src/hmi/dashboard/test -q 56 passed; ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -q 12 passed (2026-09-25 Windows). src/site/fleet/test 전수는 D-242 잔재 1건 실패(test_cli.py web_common 기본값, 깨끗한 HEAD 재현 확인 — 본 변경 무관)
+- gate 변화: 없음. D-245는 캡처 셀 남음이라 Proposed 유지
+- 결정: D-233·D-245 Proposed, D-244는 타 세션 선점으로 회피(D-245로 이명)
+- 교훈: 같은 날 다른 세션이 D-243·D-244를 배정 중이었음. 새 ADR 번호는 파일 실측 후 배정할 것

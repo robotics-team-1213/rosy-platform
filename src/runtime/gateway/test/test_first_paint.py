@@ -10,7 +10,8 @@
 from pathlib import Path
 import re
 
-WEB_ROOT = Path(__file__).parent.parent.parent / "core_api_web" / "core_api_web" / "web"
+WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+API_PKG = Path(__file__).resolve().parents[2] / "api_web" / "core_api_web"
 INDEX = WEB_ROOT / "index.html"
 DOM = WEB_ROOT / "dom.js"
 APP = WEB_ROOT / "app.js"
@@ -62,5 +63,5 @@ def test_the_flag_flips_only_after_a_real_fetch():
 def test_pre_auth_host_facts_are_not_exposed_here():
     """인증 전에 호스트·릴리스를 보여주는 것은 무인증 엔드포인트를 새로 여는
     일이고, 이 변경의 범위가 아니다 — 사람이 따로 결정한다."""
-    api = (WEB_ROOT.parent / "api" / "v1" / "system.py").read_text(encoding="utf-8")
+    api = (API_PKG / "api" / "v1" / "system.py").read_text(encoding="utf-8")
     assert "Depends(viewer)" in api, "system 라우트가 인증을 잃었다"

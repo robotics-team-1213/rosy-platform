@@ -90,8 +90,7 @@ done
 echo "========================================================="
 echo "Press Ctrl+C to stop all processes."
 
-python3 src/site/fleet/fleet/cli.py console --robots "$ROBOTS_YAML" \
-    --ui-tokens "$PWD/src/runtime/api_web/core_api_web/web/tokens.css"
+python3 src/site/fleet/fleet/cli.py console --robots "$ROBOTS_YAML"
 
 # Cleanup on exit
 kill $(jobs -p) 2>/dev/null || true

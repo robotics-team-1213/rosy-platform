@@ -5,7 +5,7 @@
 
 ## Purpose
 
-FastAPI app, `/api/v1` routers, dashboard static assets, host-agent client.
+FastAPI app, `/api/v1` routers, and the host-agent client. Operator screens are `src/hmi/dashboard`.
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
 
@@ -13,12 +13,11 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 
 | File | Description |
 |------|-------------|
-| `package.xml` | Declared deps: `core_common`, `core_features`, `web_common` |
+| `package.xml` | Declared deps: `core_common`, `core_features`, `web_common`, `dashboard` |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
-| `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/` |
-| `core_api_web/web/` | Dashboard static files; colour tokens come from `web_common` |
+| `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `src/hmi/dashboard`; tokens are `src/hmi/web` |
 
 ## For AI Agents
 
@@ -38,6 +37,6 @@ python -m pytest src/runtime/api_web/test -q
 
 ### Internal
 
-`core_common`, `core_features`, `web_common`
+`core_common`, `core_features`, `web_common`, `dashboard`
 
 <!-- MANUAL: -->

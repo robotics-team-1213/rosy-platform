@@ -115,6 +115,11 @@ modules:
     tests: [src/hmi/web/test/test_ui_token_contracts.py, src/hmi/web/test/test_palette_gates.py, src/hmi/web/test/test_headless_state.py]
     functional_kind: host-contract
     functional: [src/hmi/web/test/test_ui_token_contracts.py]
+  - name: dashboard
+    path: src/hmi/dashboard
+    tests: [src/hmi/dashboard/test]
+    functional_kind: host-contract
+    functional: [src/hmi/dashboard/test/test_dashboard_package.py]
   - name: omx_adapter
     path: src/devices/omx/adapter
     tests: [src/devices/omx/adapter/test]

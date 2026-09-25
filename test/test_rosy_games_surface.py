@@ -98,7 +98,7 @@ def test_deferred_soccer_track_is_not_in_the_tree():
 
 def test_games_board_is_not_the_core_dashboard():
     """D-101: 축구 보드는 노트북 게임 표면. CORE /dashboard 자산이 아니다."""
-    core_web = ROOT / "src" / "runtime" / "api_web" / "core_api_web" / "web"
+    core_web = ROOT / "src" / "hmi" / "dashboard"
     games_web = ROOT / "src" / "site" / "games" / "games" / "web"
     assert (games_web / "index.html").is_file()
     assert (games_web / "board.js").is_file()

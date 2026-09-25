@@ -17,7 +17,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 SURFACES = [
-    ROOT / "src" / "runtime" / "api_web" / "core_api_web" / "web",
+    ROOT / "src" / "hmi" / "dashboard",
     ROOT / "src" / "site" / "fleet" / "fleet" / "server" / "web",
     ROOT / "src" / "site" / "games" / "games" / "web",
 ]

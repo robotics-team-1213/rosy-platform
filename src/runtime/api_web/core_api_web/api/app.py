@@ -48,6 +48,21 @@ def _web_common_root() -> Path:
         return Path(get_package_share_directory("web_common"))
     except (ImportError, LookupError):
         return Path(__file__).resolve().parents[4] / "hmi" / "web"
+
+
+def _dashboard_root() -> Path:
+    """Operator screens live in hmi. The installed share wins; the source tree is the host fallback."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        share = Path(get_package_share_directory("dashboard"))
+        if (share / "index.html").is_file():
+            return share
+    except (ImportError, LookupError):
+        pass
+    return Path(__file__).resolve().parents[4] / "hmi" / "dashboard"
+
+
 from core_api_web.api.ws import ws_router
 
 
@@ -72,7 +87,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     register_exception_handlers(app)
 
-    web_root = Path(__file__).resolve().parent.parent / "web"
+    web_root = _dashboard_root()
     dashboard_assets = {
         # tokens.css는 색의 단일 출처다(D-72 L1). styles.css보다 먼저 링크된다.
         # 이 allowlist는 `{asset_name:path}`가 슬래시를 허용하므로 경로 순회를

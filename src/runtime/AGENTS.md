@@ -11,11 +11,11 @@
 
 | Directory | Purpose |
 |-----------|---------|
-| `core/` | gateway (see `core/AGENTS.md`) |
-| `core_events/` | event bus |
-| `core_features/` | managers and `decision/` |
-| `core_api_web/` | HTTP and dashboard |
-| `control/` | sensing, perception, calibration |
+| `gateway/` | package `core`. Final `cmd_vel` (see `gateway/AGENTS.md`) |
+| `events/` | package `core_events` |
+| `services/` | package `core_features`, managers and `decision/` |
+| `api_web/` | package `core_api_web`. HTTP only; screens are `src/hmi/dashboard` |
+| `sensing/` | package `control`. Perception, calibration, local safety policy |
 | `navigation/` | Nav2/SLAM launch |
 
 <!-- MANUAL: -->

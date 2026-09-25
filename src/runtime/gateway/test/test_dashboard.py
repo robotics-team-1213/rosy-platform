@@ -7,7 +7,7 @@ import pytest
 from core_api_web.api.app import create_app
 
 
-WEB_ROOT = Path(__file__).parent.parent.parent / "core_api_web" / "core_api_web" / "web"
+WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
 
 
 def dashboard_js(*, without: tuple[str, ...] = ()) -> str:
@@ -210,8 +210,11 @@ def test_root_redirects_to_operator_dashboard(dashboard_client):
     assert response.headers["location"] == "/dashboard"
 
 
-def test_dashboard_asset_directory_is_an_explicit_python_package():
-    assert (WEB_ROOT / "__init__.py").is_file()
+def test_dashboard_assets_are_their_own_package():
+    text = (WEB_ROOT / "package.xml").read_text(encoding="utf-8")
+    cmake = (WEB_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "<name>dashboard</name>" in text
+    assert "index.html" in cmake and "app.js" in cmake
 
 
 def test_dashboard_exposes_ros_domain_bandwidth_and_topology_panel():

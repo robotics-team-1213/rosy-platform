@@ -147,7 +147,7 @@ values `control/web/dashboard.html` draws must equal
 `sensing/map_raster.py` (BGR in the PNG, RGB in the CSS tokens). This is
 checked in `control` (`test_map_raster_color_contract.py`), not commented.
 
-`core_api_web/web/map.js` is a different pipeline. It paints `/api/v1/map` in the
+`src/hmi/dashboard/map.js` is a different pipeline. It paints `/api/v1/map` in the
 browser (four occupancy buckets, different thresholds) and is bound by the
 colour-set law only. A `tokens.css` ↔ `dashboard.html` assertion has no legal
 home under D-73: no harness module owns both packages. That limit is recorded

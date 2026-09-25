@@ -20,7 +20,7 @@ def main() -> None:
         page.goto(args.url)
         page.wait_for_load_state("networkidle")
         repo = Path(__file__).resolve().parents[4]
-        web = repo / "src/runtime/api_web/core_api_web/web"
+        web = repo / "src/hmi/dashboard"
         page.add_style_tag(path=str(web / "tokens.css"))
         page.add_style_tag(path=str(web / "styles.css"))
         page.locator('[data-line-mode="CAMERA_LINE"]').wait_for()

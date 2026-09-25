@@ -13,7 +13,7 @@ JS 실행 러너가 없으므로 바인딩이 DOM에 무엇을 노출하는지�
 from pathlib import Path
 import re
 
-WEB_ROOT = Path(__file__).parent.parent.parent / "core_api_web" / "core_api_web" / "web"
+WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
 DOM = WEB_ROOT / "dom.js"
 STYLES = WEB_ROOT / "styles.css"
 
