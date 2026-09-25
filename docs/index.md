@@ -95,6 +95,7 @@
 | D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 |
+| D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 |
 
 ## 계획·결과 문서
 
@@ -136,8 +137,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(runtime): 네이티브 우선을 문서 네곳에 명시하고 D-246으로 고정
+- 2026-09-25 · uncommitted · docs: 네이티브 런타임과 디자인 시스템 초안을 색인에 맞춘다 (D-246, D-233, D-245)
 - 2026-09-25 · uncommitted · docs(design-system): D-233 초안·롤아웃 계획·D-245 파일럿 Proposed
 - 2026-09-25 · uncommitted · refactor(hmi): operator screens leave the API package (D-243)
 - 2026-09-25 · uncommitted · refactor(layout): 나머지 역할 폴더 (D-242)
-- 2026-09-25 · uncommitted · refactor(runtime): core 계열 폴더를 역할 이름으로 (D-241)
-- 2026-09-25 · uncommitted · docs(adr): D-232 OMX 제품 설정은 products/omx

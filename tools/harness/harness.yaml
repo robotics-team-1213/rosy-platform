@@ -18,6 +18,7 @@ adr_gaps:
   D-238: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
   D-239: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
   D-240: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
 
 status: STATUS.md
 stale_after_commits: 5

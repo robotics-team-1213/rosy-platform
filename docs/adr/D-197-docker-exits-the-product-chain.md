@@ -62,3 +62,6 @@ Docker 경로에만 있고 native 빌드에는 없다. 제품 방향은 native�
 - 서명·검증 체계(manifest, Ed25519, readback)는 유지되며 바뀌는 것은 payload 표현뿐이다(OCI → install tree).
 - `verify-artifacts.sh`의 BUILD_GO는 2항 정리 변경에서 native layout 기준으로 다시 묶인다. 그 전까지 구 layout을
   게이트하므로 native 이미지를 통과시키지 못한다 — ARTIFACT HOLD와 모순되지 않는다.
+
+**See also:** D-246 — 컨테이너는 비안전·선언된 사이드카 워크로드에 한해 남고, 제어·안전 플레인과
+제품 payload 경로는 이 결정 그대로 네이티브다.

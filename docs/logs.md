@@ -2057,3 +2057,17 @@
 - gate 변화: 없음. D-245는 캡처 셀 남음이라 Proposed 유지
 - 결정: D-233·D-245 Proposed, D-244는 타 세션 선점으로 회피(D-245로 이명)
 - 교훈: 같은 날 다른 세션이 D-243·D-244를 배정 중이었음. 새 ADR 번호는 파일 실측 후 배정할 것
+
+## 2026-09-25 · uncommitted · docs: 네이티브 런타임과 디자인 시스템 초안을 색인에 맞춘다 (D-246, D-233, D-245)
+- 변경: README·Pi 런타임·배포 노트·아키텍처 15가 제품 런타임을 네이티브 systemd로 말한다. Docker는 개발·CI이고, 컨테이너는 안전 계획 밖 선언된 사이드카에만 남는다(D-246). D-161·D-197 색인 행이 그 범위를 가리킨다. D-233 본문과 롤아웃 계획을 색인에 두고, D-245는 Proposed로 Fleet 전체 정지 버튼에 범위 한 줄을 붙인다. D-244는 본문이 없는 번호라 adr_gaps에 둔다. 롤아웃의 다음 번호는 D-248이다. D-247은 장치 관측을 제품 기능과 나누는 Proposed이고, 코드는 없다
+- 증거: `python -m pytest test/test_native_runtime_docs.py test/test_web_dialog_contract.py src/hmi/web/test -q` 62 passed (2026-09-25 Windows)
+- gate 변화: 없음. D-245는 캡처 셀이 남아 Proposed
+- 결정: D-246 Accepted, D-233·D-245 Proposed
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(runtime): 네이티브 우선을 문서 네곳에 명시하고 D-246으로 고정
+- 변경: D-246 Accepted (`docs/adr/D-246-runtime-flexibility-native-default-container-sidecar-lane.md`). 제품 런타임은 네이티브 systemd가 기본이고 Docker는 개발·CI와 선언된 비안전 사이드카에만 허용되며, 장치별 차이는 profile/slice로만 표현한다 — 로봇 한 대를 Docker/네이티브로 갈라타는 옵션은 없다. D-161·D-197 색인 행에 qualifier 표기, D-197 본문 See also 추가. README `Raspberry Pi 5 런타임`에 선언 신설, `docs/deployment/raspberry-pi-runtime.md` 상단 선언 + §4 "development/CI Compose path" 라벨, `docs/deployment/AGENTS.md` Purpose 선언 + External 의존성 Product/Development 분리, `docs/architecture/15_ROSY_Ubuntu_Modular_Installation.md` §2 `Docker optional` 제거 + §11 `Runtime model: native by default` 신설. `docs/reference/AGENTS.md` ADR 범위 갱신. 함께 고친 상대 세션 결함 1건: `src/hmi/dashboard/AGENTS.md`에 하네스 기록 참조가 없어 계약 시험이 빨간색이었다.
+- 증거: `python -m pytest test/test_native_runtime_docs.py -q` 8 passed. mutation-proven 5건 — README 선언 부인, arch-15 §11 `Docker optional` 복원, runtime guide §4 라벨 제거, deployment AGENTS 선언 부인, ADR 색인 행 개명 각각 red 확인 후 복원하여 final green. 회귀 `test_ubuntu_native_runtime_contract` · `test_network_topology_contracts` · `test_harness_contracts` · `test_pi_wifi_deployment` · `test_pinky_commissioning` 재실행.
+- gate 변화: 없음 (SOURCE GO 유지, ARTIFACT/DEVICE HOLD 불변)
+- 결정: D-246
+- 교훈: 같은 트리의 동시 세션이 D-243·D-244·D-245·D-247을 연속 선점했다 — 새 ADR 번호는 파일·색인·origin 세 곳을 실측한 직후 바로 옮기고 즉시 커밋해야 한다 (`adr-numbers-collide-between-concurrent-sessions-2026-09-25`). 네이티브 전환 결정은 ADR(D-161·D-197)에만 있고 운영 문서가 Docker 시대 문구를 그대로 남기고 있었던 것은 계약 테스트로 박아야 고쳐졌다.

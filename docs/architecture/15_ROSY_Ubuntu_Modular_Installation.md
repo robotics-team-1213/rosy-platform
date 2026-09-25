@@ -16,7 +16,8 @@ Target:
 - ROS 2 Jazzy
 - systemd
 - apt / dpkg
-- Docker optional
+- Container runtime: **not installed by default** — opt-in only through a declared
+  profile (D-246)
 - Python / C++ / .NET modules as required
 
 ## 3. Package Layers
@@ -270,7 +271,25 @@ Recommended v1:
 - Debian packages for ROSY core/runtime
 - apt repository for distribution
 - profile packages as meta-packages
-- Docker only for workloads that benefit from container isolation
+- Container runtime only where a declared profile asks for it (D-246)
+
+### Runtime model: native by default (D-161 / D-197 / D-246)
+
+The product runtime is native systemd. This is not a per-device choice.
+
+- Control and safety plane — `rosy-core`, `rosy-io`, navigation, motor deadman,
+  DDS, the single `cmd_vel` publisher — runs natively on every device, always.
+- Docker is development/CI tooling plus one narrow lane: a **container sidecar
+  declared by the device profile** for workloads outside the safety plan
+  (vision/AI inference, vetted third-party runtimes).
+- A sidecar is admitted only if all four hold: it is not on the
+  `rosy-runtime.target` boot path, it owns no UART/GPIO/I2C/SPI/video device and
+  no `cmd_vel`, every safety gate (UART preflight, deadman, device readback)
+  still passes with the container runtime absent, and it is not a required item
+  of the product release payload.
+- Per-device difference is expressed with profiles and slices
+  (`rosy-profile-*`, `deploy/robot/config/board.yaml`), never by switching one
+  robot between two runtime mechanisms.
 
 Do not containerize low-level hardware control merely for consistency.
 

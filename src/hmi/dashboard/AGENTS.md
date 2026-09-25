@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-02 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-25 -->
 
 # dashboard
 
@@ -18,6 +18,9 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 | `dom.js` | `elements` registry, formatting (`number`/`bytes`/`duration`), small DOM setters, `bindFormSave` |
 | `client.js` | `session`, `authHeaders`, `api`/`apiMaybe`, `isAdmin`, token storage (`rememberToken`/`forgetToken`), `pairWithCode`, `logout`. The only module that stores the token |
 | `settings.js` | 현장 설정 panel: identity, tokens, waypoints, safety policy, SLAM, docks |
+| `progress.md` | Current gate snapshot (SOURCE→FIELD). Overwrite; state of record over this file |
+| `logs.md` | Append-only work journal, one entry per change |
+| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 
 ## Subdirectories
 
@@ -27,6 +30,7 @@ None.
 
 ### Working In This Directory
 
+- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Assets install through `CMakeLists.txt`. Keep filenames `index.html`, `styles.css`, `app.js`.
 - CSP forbids inline script/style. Do not add `onclick=` handlers or `<style>` blocks.
 - Talk only to `/api/v1` and `/ws/*` on the same origin.

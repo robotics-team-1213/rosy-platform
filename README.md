@@ -69,9 +69,16 @@ bash tools/run_fleet_sim.sh
 
 ## Raspberry Pi 5 런타임
 
-Raspberry Pi OS Lite 64-bit에서는 ROS 2 Jazzy 실행환경을 단계별 서비스로
-분리한다. `rosy-core`는 FastAPI/rclpy만 소유하고, `rosy-motor`는 LiDAR 없는
-벤치 커미셔닝, `rosy-io`는 승인된 모터·LiDAR 통합 운용에 사용한다.
+**로봇은 네이티브로 돈다.** 제품 런타임은 Docker가 아니라 Ubuntu Server 24.04
+arm64 위의 ROS 2 Jazzy + systemd다 (D-161). `rosy-runtime.target`이 CORE를 기본
+기동하고, I/O와 navigation은 승인 후 명시적으로 켠다. Docker/Compose는 개발·CI
+전용이며 제품 이미지에는 설치하지 않는다. 장치마다 컨테이너를 켜고 끄는 옵션은
+없고, 유연성은 프로필/slice로만 표현한다 — 컨테이너는 안전 계획 밖 비전·AI 같은
+선언된 사이드카 워크로드에만 허용된다 (D-197, D-246).
+
+런타임 슬라이스는 단계별로 나뉜다. `rosy-core`는 FastAPI/rclpy만 소유하고,
+`rosy-motor`는 LiDAR 없는 벤치 커미셔닝, `rosy-io`는 승인된 모터·LiDAR 통합
+운용에 사용한다.
 
 ```bash
 cd deploy/robot
