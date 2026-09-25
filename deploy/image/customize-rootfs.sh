@@ -54,6 +54,7 @@ CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
 DISPLAY_PROBE="$(dirname "$0")/probe-display-runtime.py"
 UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
+BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
@@ -66,6 +67,7 @@ UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
 [[ -f "$IO_PROBE" ]] || fail "hardware runtime probe is missing"
 [[ -f "$DISPLAY_PROBE" ]] || fail "boot display probe is missing"
 [[ -f "$UART_CONFIG" ]] || fail "UART4 motor bus configuration is missing"
+[[ -f "$BOOT_OVERLAY" ]] || fail "Pi 5 boot overlay configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
 [[ "$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware" ]] \
@@ -229,6 +231,12 @@ rm -rf -- "$RELEASE/image-overlay"
 # UART (rosy-pinky-e4us, release 2026.09.24-010).
 bash "$UART_CONFIG" --image-root "$ROOT" \
     || fail "could not enable the UART4 motor bus in the image"
+
+# D-247: the BNO055 IMU sits on I2C0 (GPIO0/GPIO1, 0x28). The Ubuntu base
+# enables only i2c_arm (/dev/i2c-1), so without this there is no /dev/i2c-0.
+# Verified on rosy_18 (Pi 5 rev 1.1, 6.8.0-1064-raspi) 2026-09-26: chip id
+# 0xA0. A runtime `dtoverlay` does not work on this kernel; config.txt only.
+bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=i2c0-pi5,pins_0_1"     --comment "Rosy IMU bus (BNO055) on Raspberry Pi 5 GPIO0/GPIO1"     || fail "could not enable the I2C0 IMU bus in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 

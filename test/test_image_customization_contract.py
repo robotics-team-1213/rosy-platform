@@ -145,7 +145,7 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
-        "dtoverlay=uart4-pi5\n", encoding="utf-8")
+        "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n", encoding="utf-8")
     # The bus UARTs carry no console (configure-uart-pi5.sh edits the Ubuntu line).
     (root / "boot/firmware/cmdline.txt").write_text(
         "console=ttyAMA10,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 root=LABEL=writable "
@@ -407,6 +407,18 @@ def test_mounted_image_verifier_requires_the_base_uart_and_i2c_settings(tmp_path
     completed = _verify(pi4_only)
     assert completed.returncode != 0
     assert "lost enable_uart=1" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_imu_bus(tmp_path):
+    # D-247: without dtoverlay=i2c0-pi5,pins_0_1 there is no /dev/i2c-0 for the BNO055.
+    for name, edit in (("missing", lambda text: text.replace("dtoverlay=i2c0-pi5,pins_0_1\n", "")),
+                       ("pi4", lambda text: text.replace("# Rosy IMU bus", "[pi4]"))):
+        root = _valid_root(tmp_path / name)
+        config = root / "boot/firmware/config.txt"
+        config.write_text(edit(config.read_text(encoding="utf-8")), encoding="utf-8")
+        completed = _verify(root)
+        assert completed.returncode != 0
+        assert "does not enable dtoverlay=i2c0-pi5,pins_0_1 for the Pi 5 (IMU bus)" in completed.stderr
 
 
 @pytest.mark.parametrize("console", ["console=serial0,115200", "console=ttyAMA0,115200",

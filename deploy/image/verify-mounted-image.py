@@ -34,6 +34,8 @@ MOTOR_OVERLAY = "dtoverlay=uart4-pi5"
 MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
 # D-190: the LCD is SPI0 CE0 (/dev/spidev0.0); the base image enables SPI.
 BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
+# D-247: customize-rootfs.sh adds the IMU bus (BNO055 on I2C0, /dev/i2c-0).
+IMU_OVERLAY = "dtoverlay=i2c0-pi5,pins_0_1"
 # The LiDAR (UART0) and motor (UART4) buses carry no kernel console or getty.
 # Ubuntu's console=serial0 is UART0 on the Pi 5 with enable_uart=1.
 BUS_CONSOLE = re.compile(r"console=(serial0|ttyAMA0|ttyAMA4)(,|$)")
@@ -170,6 +172,8 @@ def inspect(root: Path, release_id: str) -> list[str]:
         for line in BASE_BOOT_LINES:
             if not overlay_applies_to_pi5(text, line):
                 findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
+        if not overlay_applies_to_pi5(text, IMU_OVERLAY):
+            findings.append(f"boot/firmware/config.txt does not enable {IMU_OVERLAY} for the Pi 5 (IMU bus)")
     cmdline = root / "boot/firmware/cmdline.txt"
     if not cmdline.is_file():
         findings.append("missing kernel command line: boot/firmware/cmdline.txt")
