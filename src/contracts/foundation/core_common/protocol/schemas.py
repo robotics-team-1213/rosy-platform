@@ -372,3 +372,29 @@ class EventMessage(BaseModel):
 class AckPayload(BaseModel):
     status: AckStatus
     error: Optional[str] = None
+from pydantic import BaseModel
+
+
+class UiSurfaceLink(BaseModel):
+    id: str
+    title: str
+
+
+class UiPanelDescriptor(BaseModel):
+    id: str
+    title: str
+    slot: str
+    order: int
+    module: str
+    css: list[str]
+    state: str
+    reason: str | None = None
+
+
+class UiSurfaceManifest(BaseModel):
+    surface: str
+    grammar: str
+    role: str
+    surfaces: list[UiSurfaceLink]
+    panels: list[UiPanelDescriptor]
+    revision: str

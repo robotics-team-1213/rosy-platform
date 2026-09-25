@@ -1,0 +1,25 @@
+/* D-204 system.events — 이관 중 styles.css 의 같은 규칙과 공존한다(S2에서 그쪽을 지운다). */
+.event-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 var(--space-5); margin: 0; padding: 0; list-style: none; }
+.event-list li:not(:has(ui-empty)) {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--surface-line);
+}
+.event-time, .event-severity { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.event-type { overflow: hidden; font: var(--text-label)/1.4 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+/* info는 정상이므로 색이 없다. 경고와 오류만 색을 쓴다. */
+.event-severity.error, .event-severity.critical { color: var(--status-crit); }
+.event-severity.warning { color: var(--status-warn); }
+
+@media (max-width: 1080px) {
+  .event-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .event-list li:not(:has(ui-empty)) { grid-template-columns: 62px 1fr; }
+  .event-severity { grid-column: 2; }
+}

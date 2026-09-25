@@ -10,6 +10,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
+from core_api_web.api.ui_registry import load_registry
 
 from core_api_web.api.deps import CoreServicesLike, refused_token_count
 from core_api_web.api.errors import register_exception_handlers
@@ -37,6 +39,7 @@ from core_api_web.api.v1.routes import (
     waypoints_router,
     diagnostics_router,
     docking_router,
+    ui_router,
 )
 
 
@@ -88,6 +91,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     register_exception_handlers(app)
 
     web_root = _dashboard_root()
+    registry = load_registry(web_root / "panels.yaml", web_root)
+    app.state.ui_registry = registry
     dashboard_assets = {
         # tokens.css는 색의 단일 출처다(D-72 L1). styles.css보다 먼저 링크된다.
         # 이 allowlist는 `{asset_name:path}`가 슬래시를 허용하므로 경로 순회를
@@ -101,6 +106,13 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "client.js": "application/javascript",
         "settings.js": "application/javascript",
         "vision.js": "application/javascript",
+        "client.js": "application/javascript",
+        "dom.js": "application/javascript",
+        "shell/shell.js": "application/javascript",
+        "shell/store.js": "application/javascript",
+        "shell/mount.js": "application/javascript",
+        "shell/shell.css": "text/css",
+        **registry.assets(),
     }
 
     app.include_router(auth_router)
@@ -126,6 +138,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(host_router)
     app.include_router(intent_router)
     app.include_router(ws_router)
+    app.include_router(ui_router)
 
     @app.get("/api/v1", tags=["system"])
     def root() -> dict:
@@ -226,5 +239,24 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             raise HTTPException(status_code=404, detail="styleguide asset not found")
         return FileResponse(web_root / asset_name, media_type=media_type,
                             headers={"Cache-Control": "no-cache"})
+
+    @app.get("/assets/{asset_name:path}", include_in_schema=False)
+    def ui_asset(asset_name: str):
+        media_type = dashboard_assets.get(asset_name)
+        if media_type is None:
+            raise HTTPException(status_code=404, detail="UI asset not found")
+        return FileResponse(web_root / asset_name, media_type=media_type, headers={"Cache-Control": "no-cache"})
+
+    surface_template = (web_root / "surface.html").read_text(encoding="utf-8")
+    @app.get("/{surface}", include_in_schema=False)
+    def surface_page(surface: str):
+        definition = registry.surfaces.get(surface)
+        if definition is None:
+            raise HTTPException(status_code=404, detail="surface not found")
+        slots = "".join(f'<div class="surface-slot" data-slot="{slot}"></div>' for slot in definition.slots)
+        html = (surface_template.replace("{{title}}", definition.title)
+                .replace("{{surface}}", definition.id).replace("{{grammar}}", definition.grammar)
+                .replace("{{slots}}", slots))
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
     return app

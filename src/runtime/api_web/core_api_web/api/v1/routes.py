@@ -29,6 +29,7 @@ from core_api_web.api.v1.swarm import swarm_router
 from core_api_web.api.v1.system import system_router
 from core_api_web.api.v1.traffic import traffic_router
 from core_api_web.api.v1.vision import vision_router
+from core_api_web.api.v1.ui import ui_router
 from core_api_web.api.v1.waypoints import waypoints_router
 
 __all__ = [
@@ -55,6 +56,7 @@ __all__ = [
     "swarm_router",
     "system_router",
     "traffic_router",
+    "ui_router",
     "vision_router",
     "viewer",
     "waypoints_router",

@@ -2153,3 +2153,9 @@
 - 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; harness lint 0 error, 기존 last_verified 경고 19건. `generate`로 docs/index.md를 갱신했다.
 - gate 변화: 없음. 계획·ADR·SRS 계약만 바꿨고 D-204 화면 이관, 브라우저 동작, Pi 설치·실기 정지는 검증하지 않았다.
 - 결정: D-264는 다른 세션의 장치 진단 도구 ADR이 먼저 사용해 D-265로 기록했다. D-204 별도 브랜치의 보이는 패널 기반 메뉴 필터는 병합 전에 역할 기반 메뉴 필터로 고친다.
+## 2026-09-26 · uncommitted · feat(role-menu): 기반 화면 셸·매니페스트 S1
+- 변경: D-204 패널 레지스트리/매니페스트를 `src/runtime/api_web`와 `src/hmi/dashboard` 경계에 이식했다. `/console`, `/setup`, `/device` HTML·허용 자산·E-Stop 셸을 연결했고 `/device`에 최근 이벤트 패널을 등록했다. 역할이 허용하는 기반 메뉴는 빈 패널에서도 유지하며 직접 매니페스트 요청은 401/403/404로 구분한다.
+- 계약: API Ref v1.23과 `UiSurfaceManifest` REST 스키마를 함께 추가했다. Fleet↔Robot envelope `protocol_version`은 1.0 그대로다.
+- 증거: dashboard/API/gateway focused pytest 85 passed, 1 skipped; 추가 라우트/OpenAPI 검증 10 passed. 브라우저, 설치 패키지, Pi·실기 E-Stop은 아직 검증하지 않았다.
+- gate 변화: 없음. S1 구현 단계이며 WEB-002 전체 기능 이관과 브라우저/장치 수용은 남아 있다.
+- 브라우저 추가 증거: 로컬 FastAPI + Chromium에서 Viewer/Operator/Admin 메뉴를 확인했고, Viewer의 `/device` 직접 접근은 API 403 및 셸 권한 안내로 끝났다. Admin `/device`에서 `system.events` 패널 장착을 확인했다. 패널 JS를 강제로 404로 돌린 경우에도 E-Stop이 별도 `/api/v1/safety/stop` 요청을 보냈고 HTTP 수락을 받았다(물리 정지는 아님). 브라우저 콘솔 오류 0건.

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+﻿cmake_minimum_required(VERSION 3.8)
 project(dashboard)
 
 find_package(ament_cmake REQUIRED)
@@ -16,6 +16,18 @@ install(FILES
   settings.js
   triage.js
   vision.js
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(FILES
+  panels.yaml
+  surface.html
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  shell
+  panels
   DESTINATION share/${PROJECT_NAME}
 )
 

@@ -74,3 +74,26 @@ def test_no_pin_no_mismatch_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="core_api_web.api.app"):
         _client({})
     assert not [r for r in caplog.records if "ui tokens sha mismatch" in r.message.lower()]
+
+
+def test_role_surface_pages_and_allowlisted_assets_are_served():
+    client = _client()
+    assert client.get("/console").status_code == 200
+    assert "비상 정지" in client.get("/device").text
+    assert client.get("/garage").status_code == 404
+    assert client.get("/assets/panels/system/events.js").status_code == 200
+    assert client.get("/assets/shell/shell.js").status_code == 200
+    assert client.get("/assets/../../api/app.py").status_code == 404
+
+
+def test_ui_manifest_contract_is_registered_in_openapi():
+    schema = _client().get("/openapi.json").json()
+    operation = schema["paths"]["/api/v1/ui/surfaces/{surface}"]["get"]
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("UiSurfaceManifest")
+    assert "UiPanelDescriptor" in schema["components"]["schemas"]
+
+
+def test_surface_page_exposes_panel_mount_slots():
+    body = _client().get("/device").text
+    assert '<div class="surface-slot" data-slot="main"></div>' in body
+    assert "<ui-slot" not in body

@@ -1,0 +1,8 @@
+/* D-204 셸 — 배치만 정한다. 색과 크기는 토큰만 쓴다(D-129, D-203). */
+.surface-switch { display: flex; gap: var(--space-3); }
+.surface-switch a { color: var(--nominal-quiet); font: var(--text-label)/1.4 var(--body); text-decoration: none; }
+.surface-switch a[aria-current="page"] { color: inherit; text-decoration: underline; }
+.surface-main { display: grid; gap: var(--space-5); padding: var(--space-5); }
+.surface-slot { display: grid; gap: var(--space-5); min-width: 0; }
+.surface-slot:empty { display: none; }
+ui-section[data-failed="true"] { border-style: dashed; }
