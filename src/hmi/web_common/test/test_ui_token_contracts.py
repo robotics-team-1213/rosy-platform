@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-WEB_ROOT = Path(__file__).resolve().parents[3] / "runtime" / "core_api_web" / "core_api_web" / "web"
+WEB_ROOT = Path(__file__).resolve().parents[3] / "runtime" / "api_web" / "core_api_web" / "web"
 TOKENS = Path(__file__).parent.parent.parent / "web_common" / "tokens.css"
 
 COLOR_LITERAL = re.compile(

@@ -180,7 +180,7 @@ def _valid_root(tmp_path: Path) -> Path:
     _link(root / "usr/local/sbin/rosy-login-code", "/opt/rosy/native-runtime/rosy-login-code")
     defaults = release / "install/share/core/config/rosy_default.yaml"
     defaults.parent.mkdir(parents=True, exist_ok=True)
-    defaults.write_text((ROOT / "src/runtime/core/config/rosy_default.yaml").read_text(encoding="utf-8"),
+    defaults.write_text((ROOT / "src/runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8"),
                         encoding="utf-8")
     return root
 
@@ -647,8 +647,8 @@ def test_probe_reads_every_pin():
 
 def test_probe_follows_lazy_imports_of_the_core_entrypoints():
     probe = _probe_module()
-    node = (ROOT / "src/runtime/core/core/node.py").read_text(encoding="utf-8")
-    main = (ROOT / "src/runtime/core/core/main.py").read_text(encoding="utf-8")
+    node = (ROOT / "src/runtime/gateway/core/node.py").read_text(encoding="utf-8")
+    main = (ROOT / "src/runtime/gateway/core/main.py").read_text(encoding="utf-8")
 
     modules = set(probe.lazy_imports(node)) | set(probe.lazy_imports(main))
     # Function-level imports a flag-only --help never reaches.

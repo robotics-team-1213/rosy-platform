@@ -19,10 +19,10 @@ CONTROL_ROOT = REPO_ROOT / "src/runtime/control"
 if str(CONTROL_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_ROOT))
 _PACKAGE_ROOTS = {
-    "core": "src/runtime/core",
-    "core_common": "src/contracts/core_common",
-    "core_events": "src/runtime/core_events",
-    "core_features": "src/runtime/core_features",
+    "core": "src/runtime/gateway",
+    "core_common": "src/contracts/foundation",
+    "core_events": "src/runtime/events",
+    "core_features": "src/runtime/features",
 }
 for _package in _PACKAGE_ROOTS:
     _path = str(REPO_ROOT / _PACKAGE_ROOTS[_package])

@@ -9,14 +9,14 @@ ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by 
 
 ## Key Files
 
-No files at this level. Each package directory has its own `AGENTS.md` (e.g. `runtime/core/AGENTS.md`, `runtime/control/AGENTS.md`, `site/fleet/AGENTS.md`).
+No files at this level. Each package directory has its own `AGENTS.md` (e.g. `runtime/gateway/AGENTS.md`, `runtime/control/AGENTS.md`, `site/fleet/AGENTS.md`).
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `contracts/` | `interfaces` (custom srv) and `core_common` (protocol schemas, config, identity, profile) |
-| `runtime/` | `core` (gateway), `core_events`, `core_features` (managers plus `decision/`), `core_api_web`, `control` (sensing and `sensing/perception`), `navigation`. Judgment does not publish `cmd_vel` |
+| `contracts/` | `interfaces` (custom srv) and `foundation/` (package `core_common`: protocol schemas, config, identity, profile) |
+| `runtime/` | `gateway/` (package `core`), `events/` (`core_events`), `features/` (`core_features`, managers plus `decision/`), `api_web/` (`core_api_web`), `control` (sensing and `sensing/perception`), `navigation`. Judgment does not publish `cmd_vel` |
 | `devices/` | Families: `pinky_pro/` (`bringup`, `sensor_adc`, `lamp_control`, `led`), `common/` (`imu_bno055`), `omx/` (`omx_adapter`) |
 | `products/` | Config only: `pinky_pro` (profile and capabilities for `robot.model`), `omx` (disabled arm profile) |
 | `hmi/` | `emotion` (robot LCD) and `web_common` (shared browser assets) |
@@ -36,7 +36,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest contracts/core_common/test/ runtime/core/test/ runtime/core_events/test/ runtime/core_features/test/ hmi/web_common/test/ runtime/control/test/ site/fleet/test devices/omx/omx_adapter/test site/games/test -q
+python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/features/test/ hmi/web_common/test/ runtime/control/test/ site/fleet/test devices/omx/omx_adapter/test site/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 

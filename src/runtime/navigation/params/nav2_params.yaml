@@ -179,7 +179,7 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       # 이 값은 소비자에게 맞춘다. 대시보드는 5초에 한 번만 긁고
-      # (src/runtime/core/web/app.js:647 refreshSlowData),
+      # (src/runtime/gateway/web/app.js:647 refreshSlowData),
       # 게다가 local 스코프는 요청조차 하지 않는다 (map.js 는 scope=global 만).
       # 플래너 품질은 update_frequency 가 정하므로 여기는 무관하다.
       publish_frequency: 0.2
@@ -246,7 +246,7 @@ global_costmap:
       footprint_padding: 0.03
       update_frequency: 1.0
       # 대시보드의 5초 폴링에 맞춘 값이다
-      # (src/runtime/core/web/app.js:647). 1.0 Hz 는 소비자보다
+      # (src/runtime/gateway/web/app.js:647). 1.0 Hz 는 소비자보다
       # 다섯 배 빨랐고, 브라우저가 없어도 그대로 나갔다.
       # 더 신선한 맵이 필요하면 주기를 올리지 말고 수요 기반 충전으로 간다.
       publish_frequency: 0.2

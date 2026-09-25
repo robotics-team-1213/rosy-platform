@@ -11,6 +11,13 @@ adr_gaps:
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
   D-223: "skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)"
   D-204: "reserved by docs/plans/2026-09-24-role-surfaces-panel-composition-design.md (commit 1bb45943); remove once its ADR is written"
+  D-234: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-235: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-236: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-237: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-238: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-239: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
+  D-240: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md; remove once its ADR is written"
 
 status: STATUS.md
 stale_after_commits: 5
@@ -19,10 +26,10 @@ stale_after_commits: 5
 # shipped-code surface. Shared compose/Nav2 slice files are contracts only.
 modules:
   - name: core
-    path: src/runtime/core
-    tests: [src/runtime/core/test]
+    path: src/runtime/gateway
+    tests: [src/runtime/gateway/test]
     functional_kind: pytest
-    functional: [src/runtime/core/test]
+    functional: [src/runtime/gateway/test]
   - name: deploy
     path: deploy
     tests: [test]
@@ -84,25 +91,25 @@ modules:
     functional_kind: host-contract
     functional: [src/devices/pinky_pro/lamp_control/test/test_lamp_package_contract.py]
   - name: core_common
-    path: src/contracts/core_common
-    tests: [src/contracts/core_common/test]
+    path: src/contracts/foundation
+    tests: [src/contracts/foundation/test]
     functional_kind: pytest
-    functional: [src/contracts/core_common/test]
+    functional: [src/contracts/foundation/test]
   - name: core_events
-    path: src/runtime/core_events
-    tests: [src/runtime/core_events/test/test_audit.py, src/runtime/core/test/test_core_logic.py]
+    path: src/runtime/events
+    tests: [src/runtime/events/test/test_audit.py, src/runtime/gateway/test/test_core_logic.py]
     functional_kind: pytest
-    functional: [src/runtime/core_events/test/test_audit.py]
+    functional: [src/runtime/events/test/test_audit.py]
   - name: core_features
-    path: src/runtime/core_features
-    tests: [src/runtime/core/test/test_core_logic.py, src/runtime/core_features/test/test_docking.py, src/runtime/core_features/test/test_swarm.py, src/runtime/core/test/test_power.py, src/runtime/core/test/test_traffic_policy.py]
+    path: src/runtime/features
+    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/features/test/test_docking.py, src/runtime/features/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py]
     functional_kind: pytest
-    functional: [src/runtime/core/test/test_core_logic.py, src/runtime/core_features/test/test_docking.py]
+    functional: [src/runtime/gateway/test/test_core_logic.py, src/runtime/features/test/test_docking.py]
   - name: core_api_web
-    path: src/runtime/core_api_web
-    tests: [src/runtime/core_api_web/test]
+    path: src/runtime/api_web
+    tests: [src/runtime/api_web/test]
     functional_kind: pytest
-    functional: [src/runtime/core_api_web/test]
+    functional: [src/runtime/api_web/test]
   - name: web_common
     path: src/hmi/web_common
     tests: [src/hmi/web_common/test/test_ui_token_contracts.py, src/hmi/web_common/test/test_palette_gates.py, src/hmi/web_common/test/test_headless_state.py]
@@ -136,7 +143,7 @@ modules:
     functional: [src/sim/description/test/test_urdf_surface.py]
   - name: dock
     path: firmware/dock
-    tests: [test/test_dock_contract.py, src/runtime/core_features/test/test_docking.py]
+    tests: [test/test_dock_contract.py, src/runtime/features/test/test_docking.py]
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal

@@ -7,8 +7,8 @@
 !src/contracts/interfaces/
 !src/runtime/
 !src/contracts/interfaces/**
-!src/runtime/core/
-!src/runtime/core/**
+!src/runtime/gateway/
+!src/runtime/gateway/**
 !src/runtime/control/
 !src/runtime/control/**
 !src/products/

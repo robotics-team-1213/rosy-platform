@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: `core` (`src/runtime/core`) is the only external API gateway (FastAPI + rclpy in one process), supported by `core_common` (protocol schemas, config, identity), `core_events`, `core_features` (command/safety/navigation/power/docking/…), and `core_api_web` (REST/WS + dashboard) — plus hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi 5 deploy/release tooling, and charging-dock ESP32 firmware. `src/runtime/control` contains the absorbed Control package; its legacy final publisher must not run beside CORE. `src/site/fleet` contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. `src` packages are grouped by directory (`core` / `devices` / `products` / `face` / `navigation` / `sim` / `site`); upstream was pinky_pro, fully renamed (ADR D-16) and later regrouped out of flat `rosy_*` directories. License: Apache-2.0.
+ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: `core` (`src/runtime/gateway`) is the only external API gateway (FastAPI + rclpy in one process), supported by `core_common` (protocol schemas, config, identity), `core_events`, `core_features` (command/safety/navigation/power/docking/…), and `core_api_web` (REST/WS + dashboard) — plus hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi 5 deploy/release tooling, and charging-dock ESP32 firmware. `src/runtime/control` contains the absorbed Control package; its legacy final publisher must not run beside CORE. `src/site/fleet` contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. `src` packages are grouped by directory (`core` / `devices` / `products` / `face` / `navigation` / `sim` / `site`); upstream was pinky_pro, fully renamed (ADR D-16) and later regrouped out of flat `rosy_*` directories. License: Apache-2.0.
 
 ## Key Files
 
@@ -41,16 +41,16 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 ### Working In This Directory
 
-- Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`src/contracts/core_common/core_common/protocol/schemas.py`).
+- Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`src/contracts/foundation/core_common/protocol/schemas.py`).
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
 - Single process: main thread rclpy `MultiThreadedExecutor`, worker thread uvicorn+FastAPI (D-1). Entry point is `core=core.main:main` — `ros2 run core core`. Do not split into two processes.
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
-- Config merge order: `src/runtime/core/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
+- Config merge order: `src/runtime/gateway/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
 - This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
 - Hardware profile is YAML. In-tree Pinky full spec is `src/products/pinky_pro/config/profile.yaml`. The robot advertises `deploy/robot/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - Package names are grouped by directory: `src/{core,devices,products,face,navigation,sim,site}` (D-147, later regrouped). Do not reintroduce `rosy_*` or `pinky_*` package names. ci.yml was realigned to the domain tree (verified 2026-09-21); the CORE launch file still carries its legacy filename `rosy_core.launch.py` — README matches that file name.
-- Dashboard is FastAPI static files under `core_api_web` (`src/runtime/core_api_web/core_api_web/web/`), not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
+- Dashboard is FastAPI static files under `core_api_web` (`src/runtime/api_web/core_api_web/web/`), not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
 
 ### Testing Requirements
 
@@ -60,7 +60,7 @@ source env.sh
 cd src && colcon build --symlink-install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/runtime/core/test/ src/runtime/core_events/test/ src/runtime/core_features/test/ src/hmi/web_common/test/ -v
+python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/features/test/ src/hmi/web_common/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest src/site/fleet/test/ -v
@@ -87,7 +87,7 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 
 ### Internal
 
-- `src/runtime/core` depends on `src/contracts/core_common`, `src/runtime/core_events`, `src/runtime/core_features`, `src/runtime/core_api_web`, and `src/contracts/interfaces` (plus, at runtime, bringup/Nav2 topics).
+- `src/runtime/gateway` depends on `src/contracts/foundation`, `src/runtime/events`, `src/runtime/features`, `src/runtime/api_web`, and `src/contracts/interfaces` (plus, at runtime, bringup/Nav2 topics).
 - `deploy/` consumes `src/` via `deploy/robot/Dockerfile`.
 - `test/` imports `deploy/release` via `test/conftest.py` `sys.path`.
 

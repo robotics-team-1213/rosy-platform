@@ -15,7 +15,7 @@ from robot_contracts import DEPLOY, ROOT, board, board_caps, hardware_packages
 
 CORE = ROOT / "src" / "core"
 FORBIDDEN = ("omx_adapter", "control.camera", "moveit")
-sys.path.insert(0, str(ROOT / "src" / "contracts" / "core_common"))
+sys.path.insert(0, str(ROOT / "src" / "contracts" / "foundation"))
 
 
 def test_core_is_the_only_required_slice():
@@ -31,7 +31,7 @@ def test_core_slice_fallback_matches_board_presets():
 
     presets = board()["presets"]
     default = yaml.safe_load(
-        (ROOT / "src" / "runtime" / "core" / "config" / "rosy_default.yaml").read_text(encoding="utf-8")
+        (ROOT / "src" / "runtime" / "gateway" / "config" / "rosy_default.yaml").read_text(encoding="utf-8")
     )
     yaml_presets = default["runtime"]["presets"]
     for mode, slices in presets.items():

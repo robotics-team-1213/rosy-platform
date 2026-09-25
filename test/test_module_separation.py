@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-CORE = SRC / "core"
+CORE = SRC / "gateway"
 CONTROL_PKG = SRC / "runtime" / "control" / "control"
 FLEET = SRC / "site" / "fleet"
 
@@ -193,7 +193,7 @@ def test_cmd_vel_single_publisher():
                 line = text[: text.index(call)].count("\n") + 1
                 publishers.append(f"{path.relative_to(SRC).as_posix()}:{line}")
     assert len(publishers) == 1, publishers
-    assert publishers[0].startswith("runtime/core/core/bridge/ros_bridge.py:"), publishers
+    assert publishers[0].startswith("runtime/gateway/core/bridge/ros_bridge.py:"), publishers
 
 
 def test_fleet_prod_only_core_common():

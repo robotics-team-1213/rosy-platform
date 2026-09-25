@@ -16,7 +16,7 @@ FACE = ROOT / "hmi" / "emotion" / "emotion" / "info_screen.py"
 PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
 
 SURFACES = (
-    ROOT / "runtime" / "core_api_web" / "core_api_web" / "web",
+    ROOT / "runtime" / "api_web" / "core_api_web" / "web",
     ROOT / "site" / "fleet" / "fleet" / "server" / "web",
     ROOT / "site" / "games" / "games" / "web",
     ROOT / "runtime" / "control" / "web" / "dashboard.html",

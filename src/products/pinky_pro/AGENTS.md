@@ -38,7 +38,7 @@ Pinky Pro robot composition (D-196). Config only: the HWA-001 profile and CAP-00
 
 ```bash
 python -m pytest src/products/pinky_pro/test -q
-python -m pytest src/runtime/core/test src/contracts/core_common/test -q   # CORE reads this package via the source-tree fallback
+python -m pytest src/runtime/gateway/test src/contracts/foundation/test -q   # CORE reads this package via the source-tree fallback
 ```
 
 ## Dependencies

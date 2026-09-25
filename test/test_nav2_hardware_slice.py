@@ -66,7 +66,7 @@ def test_hardware_config_requires_runtime_readiness_evidence():
 
 
 def test_core_bridge_subscribes_to_lifecycle_and_motor_readiness_sources():
-    bridge = (ROOT / "src" / "runtime" / "core" / "core" / "bridge" / "ros_bridge.py").read_text(
+    bridge = (ROOT / "src" / "runtime" / "gateway" / "core" / "bridge" / "ros_bridge.py").read_text(
         encoding="utf-8"
     )
     for topic in (

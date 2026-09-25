@@ -407,11 +407,11 @@ def pack_repo(repo: Path, output: Path) -> None:
     """Tar the allowlisted source tree. Bytecode and foreign paths stay out."""
 
     mapping = {
-        "python/core": repo / "src" / "runtime" / "core" / "core",
-        "python/core_common": repo / "src" / "contracts" / "core_common" / "core_common",
-        "python/core_events": repo / "src" / "runtime" / "core_events" / "core_events",
-        "python/core_features": repo / "src" / "runtime" / "core_features" / "core_features",
-        "python/core_api_web": repo / "src" / "runtime" / "core_api_web" / "core_api_web",
+        "python/core": repo / "src" / "runtime" / "gateway" / "core",
+        "python/core_common": repo / "src" / "contracts" / "foundation" / "core_common",
+        "python/core_events": repo / "src" / "runtime" / "events" / "core_events",
+        "python/core_features": repo / "src" / "runtime" / "features" / "core_features",
+        "python/core_api_web": repo / "src" / "runtime" / "api_web" / "core_api_web",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(output, "w:gz") as tar:

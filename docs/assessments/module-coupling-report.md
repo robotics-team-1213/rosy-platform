@@ -35,7 +35,7 @@
 ## 3. 실제 코드 결합 (비테스트 Python import)
 
 - `runtime/control → core_*`: **0건**. `control` 내부 import만 존재. 선언과 일치하며, 흡수 원칙(CORE가 최종 명령 소유, control은 증거 생산) 유지.
-- `runtime/core → control`: `runtime/core/core/bridge/control_sensor_adapter.py` 1개 파일에서 `control.calibration_snapshot`, `control.control.command_gate`, `control.safety.node` import. **선언(`package.xml`)에는 `control`이 없음 = 미선언 결합.** opt-in 어댑터 의도와 일치하나 빌드 순서·단독 빌드 시 깨짐.
+- `runtime/gateway → control`: `runtime/gateway/core/bridge/control_sensor_adapter.py` 1개 파일에서 `control.calibration_snapshot`, `control.control.command_gate`, `control.safety.node` import. **선언(`package.xml`)에는 `control`이 없음 = 미선언 결합.** opt-in 어댑터 의도와 일치하나 빌드 순서·단독 빌드 시 깨짐.
 - `core_api_web → core_features/core_common`: v1 12개 모듈이 `command.arbitration, navigation.manager, docking.database, diagnostics.collector, maps, swarm, waypoints` + `protocol.schemas, config, identity`를 직접 참조. 선언과 일치하나 fan-out 최대(약 12개 하위 모듈).
 - `core_features → core_common`: `protocol.schemas/evidence`로만 수렴. 양호(스탬프 결합 수준).
 - `core_events → core_common.protocol.schemas`만. 양호.
@@ -46,7 +46,7 @@
 
 ## 4. ROS 통신 결합
 
-- 최종 `cmd_vel` 발행은 1곳: `src/runtime/core/core/bridge/ros_bridge.py` (`create_publisher(Twist, "cmd_vel")`). 단일 발행자 원칙 유지.
+- 최종 `cmd_vel` 발행은 1곳: `src/runtime/gateway/core/bridge/ros_bridge.py` (`create_publisher(Twist, "cmd_vel")`). 단일 발행자 원칙 유지.
 - `control`은 `cmd_vel_raw`, `wander/cmd`, `calib/*`, `camera/*` 발행, `scan/odom/imu_raw/us_sensor` 구독. 단, 레거시 잔재 2곳이 최종 토픽을 **구독**함:
   - `src/runtime/control/control/web_node.py:431` — `create_subscription(Twist, 'cmd_vel', ...)`
   - `src/runtime/control/control/wander/node.py:36` — 동일 패턴
@@ -77,7 +77,7 @@
 
 ## 7. 조치 제안 (우선순위순)
 
-1. `src/runtime/core/package.xml`에 `control` `exec_depend` 추가 **또는** 어댑터를 `core_features`/`core_api_web`과 같은 명시 경계로 이동. 현 상태는 빌드·패키징이 코드 실체를 거짓말함. (`runtime/core/core/bridge/control_sensor_adapter.py`)
+1. `src/runtime/gateway/package.xml`에 `control` `exec_depend` 추가 **또는** 어댑터를 `core_features`/`core_api_web`과 같은 명시 경계로 이동. 현 상태는 빌드·패키징이 코드 실체를 거짓말함. (`runtime/gateway/core/bridge/control_sensor_adapter.py`)
 2. `web_node.py:431`, `wander/node.py:36`의 `'cmd_vel'` 구독을 `cmd_vel_raw`/`session` 계열로 개명하거나 삭제하고, 운영 launch에 포함되지 않음을 계약 테스트로 고정.
 3. `fleet` `package.xml`의 `exec_depend: core`를 `core_common` 수준으로 축소 검토(실제 import와 일치). 중앙 Fleet 서버 미구현 상태와 정합.
 4. `gz_sim/scripts/swarm_bench.py`의 `fleet.swarm.*` 직접 import를 CLI/스키마 경유로 전환하거나, 시뮬 전용 스텁으로 격리.

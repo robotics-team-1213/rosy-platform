@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "--- 코어 프로세스 ---"
-ps aux | grep '[l]ib/runtime/core' | head -4
+ps aux | grep '[l]ib/runtime/gateway' | head -4
 echo "--- 18080/18081 청취 ---"
 ss -tlnp 2>/dev/null | grep -E '18080|18081' || echo "무청취"
 echo "--- yaml ---"

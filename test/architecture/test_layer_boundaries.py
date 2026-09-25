@@ -5,8 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PERCEPTION = ROOT / "src/runtime/control/control/sensing/perception"
-DECISION = ROOT / "src/runtime/core_features/core_features/decision"
-LINE = ROOT / "src/runtime/core_features/core_features/line_follow"
+DECISION = ROOT / "src/runtime/features/core_features/decision"
+LINE = ROOT / "src/runtime/features/core_features/line_follow"
 SENSING = ROOT / "src/runtime/control/control/sensing"
 
 

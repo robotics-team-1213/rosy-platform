@@ -37,7 +37,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
 | `test/fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session tests — no network |
 | `test/fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양을 고정 + `FakeObserver`/`observed_body()` (관측 v0.3 본문) |
-| `test/conftest.py` | Puts `src/site/fleet`, `src/contracts/core_common`, and `src/runtime/core_features` on `sys.path` so pytest runs without colcon install |
+| `test/conftest.py` | Puts `src/site/fleet`, `src/contracts/foundation`, and `src/runtime/features` on `sys.path` so pytest runs without colcon install |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
@@ -72,7 +72,7 @@ python -m pytest src/site/fleet/test -v
 python -m flake8 src/site/fleet --max-line-length=120
 ```
 
-No ROS required — `conftest.py` puts `src/contracts/core_common` on `sys.path` for the schema import.
+No ROS required — `conftest.py` puts `src/contracts/foundation` on `sys.path` for the schema import.
 
 ### Common Patterns
 

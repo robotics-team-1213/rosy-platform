@@ -93,12 +93,12 @@ SIZE_VERDICTS = {
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
-    "runtime/core_events/core_events/events/audit.py": (
+    "runtime/events/core_events/events/audit.py": (
         745,
-        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/core_events/test/test_audit.py; "
+        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
-    "runtime/core_features/core_features/docking/manager.py": (
+    "runtime/features/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
         "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
@@ -157,10 +157,22 @@ def _family(name: str):
     return parts[1] if len(parts) == 3 and parts[0] == "devices" else None
 
 
+# D-241: the ROS package name stays. These directories use the role name.
+ROLE_DIR = {
+    "core": ("runtime", "gateway"),
+    "core_events": ("runtime", "events"),
+    "core_features": ("runtime", "features"),
+    "core_api_web": ("runtime", "api_web"),
+    "core_common": ("contracts", "foundation"),
+}
+
+
 def layout_ok(rel: tuple, name: str) -> bool:
-    """P2(a) + D-196: src/<domain>/<package>, and src/devices/<family>/<package>."""
+    """P2(a) + D-196 + D-241: role folders for the core packages, family folders for devices."""
     if not rel or rel[0] not in DOMAINS:
         return False
+    if name in ROLE_DIR:
+        return rel == ROLE_DIR[name]
     if rel[0] == "devices":
         return len(rel) == 3 and rel[2] == name
     return len(rel) == 2 and rel[1] == name

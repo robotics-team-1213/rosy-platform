@@ -288,7 +288,7 @@ require_robot_identity() {
     # 오류로 죽는다. 010 이 10 인지 8 인지는 우리가 정할 일이 아니라 거절할 일이다.
     [[ "$number" =~ ^(0|[1-9][0-9]*)$ ]] || fail "ROSY_ROBOT_NUMBER must be a decimal integer with no leading zero, got '$number'"
     domain=$((40 + 10#$number))
-    # rosy_core 의 parse_domain_id (runtime/core/core/system/ros_graph.py) 가 주는 것과 같은 경계.
+    # rosy_core 의 parse_domain_id (runtime/gateway/core/system/ros_graph.py) 가 주는 것과 같은 경계.
     (( domain >= 0 && domain <= 101 )) || fail "ROS_DOMAIN_ID must be in the Linux-safe range 0 to 101; ROSY_ROBOT_NUMBER=$number gives $domain"
     namespace="$(printf 'rosy_%02d' "$number")"
 

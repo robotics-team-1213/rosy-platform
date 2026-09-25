@@ -21,9 +21,9 @@ import lane_sim
 
 REPO_ROOT = Path(__file__).parents[4]
 _PACKAGE_ROOTS = {
-    "core_common": "src/contracts/core_common",
-    "core_events": "src/runtime/core_events",
-    "core_features": "src/runtime/core_features",
+    "core_common": "src/contracts/foundation",
+    "core_events": "src/runtime/events",
+    "core_features": "src/runtime/features",
 }
 for _package in _PACKAGE_ROOTS:
     _path = str(REPO_ROOT / _PACKAGE_ROOTS[_package])

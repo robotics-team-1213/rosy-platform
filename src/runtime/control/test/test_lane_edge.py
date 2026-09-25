@@ -42,7 +42,7 @@ def drive(world, *, steps, pose=(0.0, 0.0, 0.0), follower=None, odom=True, stop=
 # --- CORE mapping ------------------------------------------------------------
 
 def test_core_law_mirror_matches_core_defaults():
-    config = (ROOT.parents[1] / "runtime/core/config/rosy_default.yaml").read_text(encoding="utf-8")
+    config = (ROOT.parents[1] / "runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8")
     block = config.split("line_follow:", 1)[1]
 
     def value(key):
@@ -52,7 +52,7 @@ def test_core_law_mirror_matches_core_defaults():
     assert value("steering_gain") == lane_bev.CORE_STEERING_GAIN
     assert value("min_confidence") == lane_bev.CORE_MIN_CONFIDENCE
     assert value("stale_after_s") == lane_bev.ODOM_MAX_SKEW_S
-    manager = (ROOT.parents[1] / "runtime/core_features/core_features/line_follow/manager.py"
+    manager = (ROOT.parents[1] / "runtime/features/core_features/line_follow/manager.py"
                ).read_text(encoding="utf-8")
     assert "max(0.2, 1.0 - 0.65 * abs(error))" in manager
     assert lane_bev.CORE_CURVE_SLOWDOWN == 0.65

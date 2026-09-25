@@ -284,14 +284,14 @@ guidance:
   (`src/runtime/control/test/test_map_raster_color_contract.py` — control
   pipeline only; see §6)
 - a `blocked` capability without a reason fails
-  (`src/runtime/core/test/test_capability_descriptors.py`)
+  (`src/runtime/gateway/test/test_capability_descriptors.py`)
 - evidence state is present on every rendered telemetry binding
-  (`src/runtime/core/test/test_dashboard.py`, `test_evidence.py`)
+  (`src/runtime/gateway/test/test_dashboard.py`, `test_evidence.py`)
 - a surface stylesheet declares no tokens of its own — no alias vocabulary
   beside the token file (`src/hmi/web_common/test/test_ui_token_contracts.py`, D-92)
 - spacing comes from `--space-*` and type size from `--text-*` (same)
 - the operate view does not scroll and the map keeps the observe region
-  (`src/runtime/core/test/test_console_layout.py`)
+  (`src/runtime/gateway/test/test_console_layout.py`)
 
 D-73: a test that opened both `web_common/tokens.css` and
 `control/web/dashboard.html` would have no owning module. Do not add one.

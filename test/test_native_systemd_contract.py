@@ -65,7 +65,7 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "SuccessExitStatus" not in unit
     # the other half of the contract lives in core.main: the escalation must not be a
     # signal death, or systemd would count it as a clean stop like any other
-    core_main = (ROOT / "src" / "runtime" / "core" / "core" / "main.py").read_text(
+    core_main = (ROOT / "src" / "runtime" / "gateway" / "core" / "main.py").read_text(
         encoding="utf-8")
     assert "STUCK_SHUTDOWN_EXIT_CODE = 2" in core_main
     assert "os._exit(STUCK_SHUTDOWN_EXIT_CODE)" in core_main
@@ -75,11 +75,11 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "--merge-install" in payload
     assert '--install-base "$INSTALL_ROOT"' in payload
     assert 'INSTALL_ROOT="$RELEASE_ROOT/install"' in payload
-    setup_cfg = (ROOT / "src" / "runtime" / "core" / "setup.cfg").read_text(encoding="utf-8")
+    setup_cfg = (ROOT / "src" / "runtime" / "gateway" / "setup.cfg").read_text(encoding="utf-8")
     assert "install_scripts=$base/lib/core" in setup_cfg
     # the script itself is generated from this entry point; a rename would leave a unit
     # pointing at a file nobody builds any more
-    setup_py = (ROOT / "src" / "runtime" / "core" / "setup.py").read_text(encoding="utf-8")
+    setup_py = (ROOT / "src" / "runtime" / "gateway" / "setup.py").read_text(encoding="utf-8")
     assert "'core=core.main:main'" in setup_py
 
 
@@ -392,12 +392,12 @@ PROGRAM_SOURCES = {
     # control sits under src/core since a93d5188 but runs its nodes as their own
     # processes, so only the modules CORE imports count (PROGRAM_EXCLUDES).
     "rosy-core.service": [
-        "src/runtime/core",
-        "src/runtime/core_events",
-        "src/runtime/core_features",
-        "src/runtime/core_api_web",
-        "src/contracts/core_common",
-        "imported-by:src/runtime/core:control:src/runtime/control",
+        "src/runtime/gateway",
+        "src/runtime/events",
+        "src/runtime/features",
+        "src/runtime/api_web",
+        "src/contracts/foundation",
+        "imported-by:src/runtime/gateway:control:src/runtime/control",
     ],
     "rosy-io.service": ["src/devices/pinky_pro/bringup"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
@@ -742,8 +742,8 @@ def test_contract_helpers_treat_dynamic_users_as_non_root():
 def test_core_program_scan_follows_imports_into_the_control_package():
     # CORE's production modules import no control module today (only its tests
     # do), so the scan adds nothing now; it picks them up the moment one does.
-    assert "imported-by:src/runtime/core:control:src/runtime/control" in PROGRAM_SOURCES["rosy-core.service"]
+    assert "imported-by:src/runtime/gateway:control:src/runtime/control" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
-                for path in _imported_modules("src/runtime/core/test", "control", "src/runtime/control")}
+                for path in _imported_modules("src/runtime/gateway/test", "control", "src/runtime/control")}
     assert "src/runtime/control/control/sensor_provider.py" in resolved
     assert "src/runtime/control/control/calibration_storage.py" in resolved

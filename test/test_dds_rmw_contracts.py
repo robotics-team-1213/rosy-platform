@@ -78,7 +78,7 @@ def test_scan_image_imu_use_sensor_data_qos():
     assert "qos_profile_sensor_data" in camera
     assert "create_publisher(Image, 'camera/front', qos_profile_sensor_data)" in camera
     bridge = (
-        ROOT / "src" / "runtime" / "core" / "core" / "bridge" / "ros_bridge.py"
+        ROOT / "src" / "runtime" / "gateway" / "core" / "bridge" / "ros_bridge.py"
     ).read_text(encoding="utf-8")
     assert "qos_profile_sensor_data" in bridge
     assert 'create_subscription(LaserScan, "scan", self._on_scan, qos_profile_sensor_data)' in bridge

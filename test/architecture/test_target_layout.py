@@ -11,12 +11,12 @@ MOVED = True
 # current directory -> target directory (package name is the last part of both).
 TARGET = {
     "contracts/interfaces": "contracts/interfaces",
-    "contracts/core_common": "contracts/core_common",
-    "runtime/core": "runtime/core",
-    "runtime/core_features": "runtime/core_features",
-    "runtime/core_events": "runtime/core_events",
+    "contracts/foundation": "contracts/foundation",
+    "runtime/gateway": "runtime/gateway",
+    "runtime/features": "runtime/features",
+    "runtime/events": "runtime/events",
     "runtime/control": "runtime/control",
-    "runtime/core_api_web": "runtime/core_api_web",
+    "runtime/api_web": "runtime/api_web",
     "runtime/navigation": "runtime/navigation",
     # Devices group by family (D-196 original plan): pinky_pro board, common chips, omx arm.
     "devices/pinky_pro/bringup": "devices/pinky_pro/bringup",

@@ -58,9 +58,9 @@ def test_ir_calibration_is_an_external_runtime_profile_not_an_image_rebuild():
 
 
 def test_bridge_checks_original_sensor_age_not_only_receipt_age():
-    bridge = (ROOT / "src/runtime/core/core/bridge/ros_bridge.py").read_text(
+    bridge = (ROOT / "src/runtime/gateway/core/bridge/ros_bridge.py").read_text(
         encoding="utf-8")
-    gate = (ROOT / "src/runtime/core/core/bridge/traffic_gate.py").read_text(
+    gate = (ROOT / "src/runtime/gateway/core/bridge/traffic_gate.py").read_text(
         encoding="utf-8")
     assert "self._node.get_clock().now().nanoseconds" in bridge
     assert "source_now=source_now" in bridge

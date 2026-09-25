@@ -28,14 +28,14 @@ None.
 
 ### Working In This Directory
 
-- Compose bind-mounts profile/capabilities over `/etc/rosy/`. Keep keys aligned with `src/runtime/core/config/` schemas.
+- Compose bind-mounts profile/capabilities over `/etc/rosy/`. Keep keys aligned with `src/runtime/gateway/config/` schemas.
 - Overlay YAML exists only for `core` / `motor` / `hardware`. Do not copy YAML for aliases.
 - Presets: `core` → `[core]`; `motor` → `[core, motor]`; `hardware` → `[core, motor, io, nav]`. vision/omx/ai are catalog-only (`enabled: false`); do not add overlay YAML or compose services for them.
 - Do not enable slam/swarm unless the hardware image actually launches those stacks. D-144 permits slam only through the dedicated hardware-mapping overlay; the normal hardware overlay remains localization-only.
 
 ### Testing Requirements
 
-Covered by `test/test_robot_runtime.py` and `src/runtime/core/test/test_runtime_config.py`.
+Covered by `test/test_robot_runtime.py` and `src/runtime/gateway/test/test_runtime_config.py`.
 
 ### Common Patterns
 
@@ -45,7 +45,7 @@ YAML only; no code.
 
 ### Internal
 
-- `src/runtime/core/config/rosy_default.yaml` structure
+- `src/runtime/gateway/config/rosy_default.yaml` structure
 - `deploy/robot/compose.yaml` volume mounts
 
 ### External

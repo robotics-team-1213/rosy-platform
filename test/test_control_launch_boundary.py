@@ -61,7 +61,7 @@ def test_core_launches_do_not_reference_the_control_stack():
     그래프에서 만난다. launch 파일 이름 개명(rosy_core → core)에도 견디도록
     디렉터리를 glob 한다.
     """
-    core_launch_dir = ROOT / "src" / "runtime" / "core" / "launch"
+    core_launch_dir = ROOT / "src" / "runtime" / "gateway" / "launch"
     launches = sorted(core_launch_dir.glob("*.launch.py"))
     assert launches, "core launch directory unexpectedly empty — guard lost its scope"
     offenders = []

@@ -2030,3 +2030,10 @@
 - gate 변화: 없음(문서+설정 패키지)
 - 결정: D-232
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(runtime): core 계열 폴더를 역할 이름으로 (D-241)
+- 변경: D-241 Accepted. 디렉터리만 `runtime/gateway`(`core`), `runtime/events`(`core_events`), `runtime/features`(`core_features`), `runtime/api_web`(`core_api_web`), `contracts/foundation`(`core_common`)로 옮긴다. `package.xml` 이름, 파이썬 import, `ros2 run core`, `install/lib/core/core` 는 유지한다. D-234–D-240 은 디자인 시스템 계획이 예약한 번호라 adr_gaps 에 둔다
+- 증거: `python -m pytest test/architecture/test_module_structure.py test/architecture/test_target_layout.py test/architecture/test_layer_boundaries.py src/contracts/foundation/test src/runtime/gateway/test/test_core_logic.py src/runtime/events/test src/runtime/features/test/test_decision.py src/runtime/api_web/test/test_ui_route.py -q` 184 passed (2026-09-25 Windows)
+- gate 변화: 없음
+- 결정: D-241
+- 교훈: 없음

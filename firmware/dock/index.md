@@ -24,7 +24,7 @@
 ## 시험
 
 - `test/test_dock_contract.py`
-- `src/runtime/core_features/test/test_docking.py`
+- `src/runtime/features/test/test_docking.py`
 
 ## 최근 기록
 
