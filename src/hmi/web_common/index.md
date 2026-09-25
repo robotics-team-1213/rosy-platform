@@ -26,14 +26,14 @@
 
 ## 시험
 
-- `src/core/web_common/test/test_ui_token_contracts.py`
-- `src/core/web_common/test/test_palette_gates.py`
-- `src/core/web_common/test/test_headless_state.py`
+- `src/hmi/web_common/test/test_ui_token_contracts.py`
+- `src/hmi/web_common/test/test_palette_gates.py`
+- `src/hmi/web_common/test/test_headless_state.py`
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · refactor(hmi): move web_common under src/hmi (D-231)
 - 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
 - 2026-09-24 · uncommitted · fix(web_common): ui-button small 기본 척급 규칙 (D-203)
 - 2026-09-24 · uncommitted · fix(web): 빈 목록과 증거 색을 공용 부품에 맞춘다
 - 2026-09-24 · uncommitted · feat(web): 화면 틀을 공용 UI로 둔다
-- 2026-09-24 · uncommitted · feat(web): 어휘 표의 나머지 다섯 부품을 만든다

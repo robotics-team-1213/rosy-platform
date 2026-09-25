@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src" / "site" / "fleet" / "fleet" / "server" / "web"
 #: D-129·D-1005 — 공용 L1 자산의 단일 파일. fleet 사본은 없다.
-CANONICAL_TOKENS = ROOT / "src" / "core" / "web_common" / "tokens.css"
+CANONICAL_TOKENS = ROOT / "src" / "hmi" / "web_common" / "tokens.css"
 
 from browser_harness import (  # noqa: E402
     DECLINE_CONFIRM,

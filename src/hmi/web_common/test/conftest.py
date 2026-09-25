@@ -9,8 +9,13 @@ move from core/test kept the same directory depth.
 from pathlib import Path
 import sys
 
-SRC = Path(__file__).resolve().parents[2]
-for _name in ("core_api_web", "core_features", "core_common"):
-    _path = str(SRC / _name)
+SRC = Path(__file__).resolve().parents[3]
+_ROOTS = {
+    "core_api_web": SRC / "runtime" / "core_api_web",
+    "core_features": SRC / "runtime" / "core_features",
+    "core_common": SRC / "contracts" / "core_common",
+}
+for _name in _ROOTS:
+    _path = str(_ROOTS[_name])
     if _path not in sys.path:
         sys.path.insert(0, _path)

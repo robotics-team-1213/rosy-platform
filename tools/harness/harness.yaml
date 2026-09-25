@@ -59,10 +59,10 @@ modules:
     functional_kind: pytest
     functional: [src/devices/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
-    path: src/face/emotion
-    tests: [src/face/emotion/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
+    path: src/hmi/emotion
+    tests: [src/hmi/emotion/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
-    functional: [src/face/emotion/test/test_info_screen.py]
+    functional: [src/hmi/emotion/test/test_info_screen.py]
   - name: led
     path: src/devices/led
     tests: [src/devices/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
@@ -104,10 +104,10 @@ modules:
     functional_kind: pytest
     functional: [src/runtime/core_api_web/test]
   - name: web_common
-    path: src/core/web_common
-    tests: [src/core/web_common/test/test_ui_token_contracts.py, src/core/web_common/test/test_palette_gates.py, src/core/web_common/test/test_headless_state.py]
+    path: src/hmi/web_common
+    tests: [src/hmi/web_common/test/test_ui_token_contracts.py, src/hmi/web_common/test/test_palette_gates.py, src/hmi/web_common/test/test_headless_state.py]
     functional_kind: host-contract
-    functional: [src/core/web_common/test/test_ui_token_contracts.py]
+    functional: [src/hmi/web_common/test/test_ui_token_contracts.py]
   - name: omx_adapter
     path: src/products/omx_adapter
     tests: [src/products/omx_adapter/test]

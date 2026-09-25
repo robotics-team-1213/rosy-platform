@@ -423,7 +423,7 @@ def pack_repo(repo: Path, output: Path) -> None:
                 member_allowed(arcname)
                 tar.add(path, arcname=arcname, recursive=False)
         for filename in SHARE_FILES:
-            source = repo / "src" / "core" / "web_common" / filename
+            source = repo / "src" / "hmi" / "web_common" / filename
             arcname = f"share/web_common/{filename}"
             member_allowed(arcname)
             tar.add(source, arcname=arcname, recursive=False)

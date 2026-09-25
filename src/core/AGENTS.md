@@ -34,7 +34,7 @@ None at this level. Each package directory has its own `AGENTS.md`.
 
 ```bash
 # from src/
-python3 -m pytest runtime/core/test/ runtime/core_events/test/ runtime/core_features/test/ core/web_common/test/ -v
+python3 -m pytest runtime/core/test/ runtime/core_events/test/ runtime/core_features/test/ hmi/web_common/test/ -v
 ```
 
 ### Common Patterns

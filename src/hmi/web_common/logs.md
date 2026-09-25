@@ -81,3 +81,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.
+
+## 2026-09-25 · uncommitted · refactor(hmi): move web_common under src/hmi (D-231)
+
+- 변경: src/hmi/web_common로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 hmi 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음

@@ -39,7 +39,7 @@ None.
 ### Testing Requirements
 
 ```bash
-PYTHONPATH=src/face/emotion python3 -m pytest src/face/emotion/test -v
+PYTHONPATH=src/hmi/emotion python3 -m pytest src/hmi/emotion/test -v
 ```
 
 ### Common Patterns

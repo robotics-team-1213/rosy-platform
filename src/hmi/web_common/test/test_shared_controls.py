@@ -12,7 +12,7 @@ COMMON = Path(__file__).parent.parent
 COMPONENTS = COMMON / "components.css"
 UI = COMMON / "ui.js"
 TOKENS = COMMON / "tokens.css"
-FACE = ROOT / "face" / "emotion" / "emotion" / "info_screen.py"
+FACE = ROOT / "hmi" / "emotion" / "emotion" / "info_screen.py"
 PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
 
 SURFACES = (

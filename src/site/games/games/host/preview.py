@@ -13,7 +13,7 @@ from games.field import Field
 from games.game import MatchState, Observation
 
 WEB = Path(__file__).resolve().parents[1] / "web"
-COMMON = Path(__file__).resolve().parents[4] / "core" / "web_common"
+COMMON = Path(__file__).resolve().parents[4] / "hmi" / "web_common"
 COMMON_ASSETS = {
     "tokens.css": ".css",
     "components.css": ".css",

@@ -1,6 +1,6 @@
 """concept 16 §10 / D-72 L1 — 표면 토큰 계약.
 
-색의 단일 출처는 `src/core/web_common/tokens.css`다. 이 시험은 공용 L1 자산과
+색의 단일 출처는 `src/hmi/web_common/tokens.css`다. 이 시험은 공용 L1 자산과
 단언한다(D-73). `control`의 맵 래스터 색 계약은 별개 파이프라인이며
 그 모듈의 시험이 소유한다.
 """
@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-WEB_ROOT = Path(__file__).parent.parent.parent / "core_api_web" / "core_api_web" / "web"
+WEB_ROOT = Path(__file__).resolve().parents[3] / "runtime" / "core_api_web" / "core_api_web" / "web"
 TOKENS = Path(__file__).parent.parent.parent / "web_common" / "tokens.css"
 
 COLOR_LITERAL = re.compile(

@@ -23,13 +23,13 @@
 
 ## 시험
 
-- `src/face/emotion/test/test_info_screen.py`
+- `src/hmi/emotion/test/test_info_screen.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · refactor(hmi): move emotion under src/hmi (D-231)
 - 2026-09-25 · uncommitted · test(emotion): 웨이크 카드 어휘 고정 (D-221, F-07 처분)
 - 2026-09-24 · uncommitted · fix(emotion): 경보 문장은 채움이다 — 얼굴 번역 (D-202)
 - 2026-09-24 · uncommitted · feat(emotion): stage-aware boot card for the LCD (D-190 S2)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
-- 2026-09-21 · uncommitted · feat(emotion): render operator-assistance request on the robot face

@@ -25,7 +25,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-DOMAINS = {"core", "contracts", "runtime", "devices", "products", "face", "navigation", "sim", "site"}
+DOMAINS = {"core", "contracts", "runtime", "devices", "products", "face", "hmi", "navigation", "sim", "site"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}

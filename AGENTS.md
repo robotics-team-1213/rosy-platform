@@ -60,7 +60,7 @@ source env.sh
 cd src && colcon build --symlink-install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/runtime/core/test/ src/runtime/core_events/test/ src/runtime/core_features/test/ src/core/web_common/test/ -v
+python3 -m pytest src/runtime/core/test/ src/runtime/core_events/test/ src/runtime/core_features/test/ src/hmi/web_common/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest src/site/fleet/test/ -v

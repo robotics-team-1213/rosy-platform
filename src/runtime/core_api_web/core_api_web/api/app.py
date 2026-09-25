@@ -47,7 +47,7 @@ def _web_common_root() -> Path:
 
         return Path(get_package_share_directory("web_common"))
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[4] / "core" / "web_common"
+        return Path(__file__).resolve().parents[4] / "hmi" / "web_common"
 from core_api_web.api.ws import ws_router
 
 
