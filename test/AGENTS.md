@@ -33,6 +33,9 @@ Host-side pytest for deploy/release/motor/network contracts. These tests do **no
 | `test_release_storage.py` | Release store / retention |
 | `test_release_updater.py` | Activate/rollback updater |
 | `robot_contracts.py` | Shared ROOT/DEPLOY/compose helpers |
+| `known_failures.txt` | Pre-existing failures on main (node id + reason). Delete a line in the commit that fixes it; never add one to hide your own failure |
+| `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure |
+| `test_known_failures.py` | The comparison and that every listed id names a real test |
 | `browser_harness.py` | Shared helpers for the optional Chromium regressions (launch/error-collection/confirm-stub/screenshot, D-153 capture tooling) |
 | `test_robot_runtime.py` | compose/D-22/D-27/runtime-mode contracts |
 | `test_nav2_hardware_slice.py` | Hardware Nav2 launch, D-2/D-4, packaging |
