@@ -27,6 +27,10 @@ Environment=HOME=/var/lib/rosy/io
 # (~/.profile, ~/.bash_profile) and no user site (~/.local, usercustomize);
 # the environment reaches ExecStartPost's python as well.
 Environment=PYTHONNOUSERSITE=1
+# D-225: never write .pyc under the release. The payload ships checked-hash
+# pycs that stay valid after pack fixes mtimes; a stray write would fail
+# under ProtectSystem=strict and must not change a signed release anyway.
+Environment=PYTHONDONTWRITEBYTECODE=1
 WorkingDirectory=/opt/rosy/current
 # D-192 review: only the exact words true/false. launch_ros would read "yes",
 # "1" or "True" as a boolean and drive; anything else stops the unit (fail closed).

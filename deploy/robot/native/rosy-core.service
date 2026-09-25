@@ -23,6 +23,10 @@ Environment=HOME=/var/lib/rosy/core
 # (~/.profile, ~/.bash_profile) and no user site (~/.local, usercustomize);
 # the environment reaches ExecStartPost's python as well.
 Environment=PYTHONNOUSERSITE=1
+# D-225: never write .pyc under the release. The payload ships checked-hash
+# pycs that stay valid after pack fixes mtimes; a stray write would fail
+# under ProtectSystem=strict and must not change a signed release anyway.
+Environment=PYTHONDONTWRITEBYTECODE=1
 # D-193 7: device mode even on a card whose runtime.env predates it (first boot
 # writes it too): no shared development or plaintext API tokens, ROSY_DEV_AUTH ignored.
 Environment=ROSY_DEPLOYMENT=device
