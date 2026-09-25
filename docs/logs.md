@@ -2211,3 +2211,11 @@
 - 증거: `python tools/harness/rosy_harness.py generate`가 `docs/index.md`를 갱신했다. `python tools/harness/rosy_harness.py lint`는 0 errors/기존 `last_verified` 19 warnings, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider --disable-warnings`는 70 passed다.
 - gate 변화: 없음. D-267/D-268 Proposed, 자동 이동 미수용, D-55 집기 장치 게이트 미통과 상태를 유지한다.
 - 결정: 자동화 문서 변경은 sighting endpoint와 로봇 DDS 경계를 열지 않는다.
+
+## 2026-09-26 · uncommitted · docs(plan): local Docker 영상 처리 smoke와 GPU gate 기록
+
+- 변경: Task 2.3에 deployable vision Dockerfile의 test target과 offline CPU fixture smoke를 추가했다. Windows/local CPU 처리와 Ubuntu RTX GPU 수용을 별도 증거로 구분했다.
+- 증거: Docker Desktop client/server 29.7.2, Linux amd64. 임시 `python:3.12-slim` + `opencv-contrib-python-headless` test image에서 `src/site/games/test/test_overhead.py` 6 passed (cv2 5.0.0, numpy 2.5.3). 입력 repository는 read-only mount, container는 `--read-only`, `/tmp`만 tmpfs, 네트워크는 `--network none`으로 실행했다. 입력은 테스트가 생성한 synthetic ArUco 프레임이다.
+- 제한: 현재 개발 PC 그래픽 장치는 AMD Radeon 860M이며 CUDA/RTX GPU 수용은 시험하지 않았다. 임시 probe image는 제품 Dockerfile/Compose/Android 실시간 스트림/Fleet 연동의 증거가 아니다.
+- gate 변화: 없음. CPU LOCAL pass는 Ubuntu NVIDIA Container Toolkit·RTX 모델 측정·DEVICE/FIELD 자동 이동 수용을 대신하지 않는다.
+- 결정: 마커/호모그래피의 초기 Docker 재현 시험은 CPU로 하고 GPU는 실제 Ubuntu RTX host에서 따로 수용한다.

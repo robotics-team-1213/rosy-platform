@@ -55,7 +55,7 @@
 
 1. 정적 계약 시험을 먼저 작성한다: `fleet console` 진입점, 읽기 전용 `robots.yaml`/신호 설정, 비밀 파일의 이미지 미포함, 포트·restart·health 설정, 로봇 DDS host network/privileged 불필요.
 2. `python -m pytest test/test_site_fleet_deploy.py -q`가 실패하는 것을 확인한 뒤 Fleet 이미지와 Compose를 최소 구현한다. 웹 정적 자산이 설치본에서 실제 서빙되는지 포함한다.
-3. `docker compose -f deploy/site/compose.yaml config`와 로컬 컨테이너 `/console`·인증된 `/api/fleet/state` 스모크를 Ubuntu 호스트에서 실행한다. Docker가 없는 Windows에서는 계약 시험만 LOCAL로 기록한다.
+3. `docker compose -f deploy/site/compose.yaml config`와 로컬 컨테이너 `/console`·인증된 `/api/fleet/state` 스모크를 Ubuntu 호스트에서 실행한다. Windows 개발 Docker는 compose 문법과 CPU 컨테이너 시험에 쓸 수 있지만, 실제 Ubuntu 네트워크·서비스 재시작·GPU 수용 근거로 승격하지 않는다.
 4. 운영 문서에 전원 복귀 자동 시작, 절전 비활성화, 유선망 우선, 시간 동기화, 백업/복원, 로그 상한, 비밀 파일 권한과 브라우저 HTTPS 진입점을 적는다. 백업에는 암호화/접근 권한/보존·삭제 기간과 복원 시 비밀 재주입 절차를 정하고 해당 파일만 commit한다.
 
 **Gate:** 이미지 빌드·Compose 기동은 사이트 ARTIFACT/LIVE 증거다. 로봇 실물 이동 승격 근거가 아니다.
@@ -89,11 +89,13 @@
 
 ### Task 2.3: RTX 작업자 배치와 확장 슬롯
 
-**Files:** Create `deploy/site/Dockerfile.vision`, `services/ai_worker/worker.py`, `services/ai_worker/test/test_worker.py`; modify `deploy/site/compose.yaml`. Read `docs/architecture/10_ROSY_Compute_Fabric.md`, D-118, D-231. GPU 서버는 colcon `src/site/`에 넣지 않는다.
+**Files:** Create `deploy/site/Dockerfile.vision` with a separate test target, `services/ai_worker/worker.py`, `services/ai_worker/test/test_worker.py`; modify `deploy/site/compose.yaml`. Read `docs/architecture/10_ROSY_Compute_Fabric.md`, D-118, D-231. GPU 서버는 colcon `src/site/`에 넣지 않는다.
 
 1. CPU 마커 처리와 GPU 고급 추론을 별도 worker로 나누는 계약 시험을 작성한다. GPU worker 중단·모델 revision 불일치·지연 결과가 정책 적격 증거를 만들지 못하는지 검증한다. 검출 품질은 Task 2.1에서 사전 합의한 labeled field set 기준으로 평가한다.
-2. Ubuntu 호스트 드라이버와 NVIDIA Container Toolkit에서 컨테이너 GPU 접근을 실제 확인하고, 모델/VRAM/지연 측정 후 필요한 worker만 GPU를 요청한다. 마커 인식에 GPU를 필수 조건으로 만들지 않는다.
-3. `python -m pytest services/ai_worker/test/test_worker.py -q` 및 Ubuntu의 GPU 컨테이너 스모크를 기록한 뒤 commit한다. GPU 스모크는 모델 정확도나 로봇 행동 수용이 아니다.
+2. 같은 Dockerfile의 `test` target을 LOCAL에서 빌드해 synthetic ArUco 프레임 및 fixture로 처리 시험을 실행한다. 입력 fixture는 read-only bind mount, 컨테이너 root filesystem은 read-only, `--network none`으로 실행한다. 결과는 구조화된 좌표/판정 JSON만 내고 Fleet·DDS·실제 로봇 명령과 연결하지 않는다. 기존 입력을 찾지 못하거나 코너·보정 조건이 불충분하면 결과가 없어야 한다.
+3. 개발 PC의 `linux/amd64` CPU 컨테이너에서 OpenCV 처리·파일 입출력·fixture 재현성을 확인한다. 이 결과는 LOCAL CPU 증거다. Windows Docker Desktop GPU 시험은 WSL2 backend와 NVIDIA GPU/driver가 있을 때만 선택한다. AMD 개발 PC에서 GPU pass로 기록하지 않는다.
+4. Ubuntu RTX 5080 사이트 호스트에서 NVIDIA Container Toolkit을 통해 같은 deployable image의 실제 GPU 접근을 확인하고, 모델/VRAM/end-to-end 지연을 측정한다. GPU request는 고급 모델 worker에만 둔다. 마커 인식에는 GPU를 필수로 만들지 않는다.
+5. `docker build --target test -f deploy/site/Dockerfile.vision -t rosy-vision:test .`, containerized `python -m pytest services/ai_worker/test/test_worker.py -q`, Ubuntu GPU smoke와 실제 모델 revision을 각각 기록한 뒤 해당 파일만 commit한다. CPU fixture 통과는 Ubuntu GPU, 모델 정확도, 카메라 DEVICE 또는 로봇 행동 수용이 아니다.
 
 ## 단계 3: 하나의 작업 경로와 이벤트 추적
 
@@ -145,4 +147,6 @@
 ## 외부 근거
 
 - [Docker Compose production](https://docs.docker.com/compose/how-tos/production/): 단일 서버 운영·재시작 정책.
+- [Docker Desktop GPU support for Windows](https://docs.docker.com/desktop/features/gpu/): Windows 컨테이너 GPU 시험은 WSL2와 NVIDIA GPU/driver를 요구한다.
+- [Docker multi-platform builds](https://docs.docker.com/build/building/multi-platform/): `linux/amd64`와 `linux/arm64` 이미지 아키텍처 선택 및 빌드.
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html): Ubuntu Docker GPU 접근. 실제 노트북 드라이버와 컨테이너 동작은 현장에서 별도 검증한다.
