@@ -53,11 +53,11 @@
       <h2 id="queues-heading">주의 및 개입 요망</h2>
       <div class="queues-container">
         <div class="queue warning-queue">
-          <h3>주의 요망 (Degraded)</h3>
+          <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
           <ul id="warning-list" class="issue-list"></ul>
         </div>
         <div class="queue critical-queue">
-          <h3>최우선 개입 요망 (HITL)</h3>
+          <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
           <ul id="critical-list" class="issue-list"></ul>
         </div>
       </div>

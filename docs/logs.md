@@ -2071,3 +2071,45 @@
 - gate 변화: 없음 (SOURCE GO 유지, ARTIFACT/DEVICE HOLD 불변)
 - 결정: D-246
 - 교훈: 같은 트리의 동시 세션이 D-243·D-244·D-245·D-247을 연속 선점했다 — 새 ADR 번호는 파일·색인·origin 세 곳을 실측한 직후 바로 옮기고 즉시 커밋해야 한다 (`adr-numbers-collide-between-concurrent-sessions-2026-09-25`). 네이티브 전환 결정은 ADR(D-161·D-197)에만 있고 운영 문서가 Docker 시대 문구를 그대로 남기고 있었던 것은 계약 테스트로 박아야 고쳐졌다.
+## 2026-09-25 · uncommitted · docs(design-system): D-245 Accepted (파일럿 착지)
+- 변경: Fleet 전체 정지 버튼 범위 병기 1줄, docs/validation/uiux-surfaces-2026-09-25/ (README + fleet-estop-note-1920x1080.png), D-245 Status Proposed→Accepted, ADR 로그 D-245 Accepted
+- 증거: 캡처 단언(라벨 개행 병기·박스 뷰포트 내·페이지 오류 0) 통과; python -m pytest test/test_web_dialog_contract.py src/hmi/web/test src/hmi/dashboard/test -q 56 passed; ROSY_RUN_BROWSER_TESTS=1 test_fleet_console_browser.py 12 passed (2026-09-25 Windows). 첫 캡처에서 /common/components.css·ui.js 미서빙으로 무스타일 렌더가 나왔고, 스크립트 수정 후 재산출 — 임시 스크립트는 X:/DevTemp/opencode/d245_capture.py (레포 밖)
+- gate 변화: D-245 Proposed→Accepted. 다음은 D-247(AuthBar) Proposed
+- 결정: D-245 Accepted
+- 교훈: 캡처용 임시 서버는 제품 시험 fixture의 경로 매핑을 그대로 복사할 것 (/common/* → src/hmi/web/*). fixture가 tokens.css만 매핑하는 이유는 DOM 단언에는 스타일이 필요 없기 때문 — 캡처에는 부족하다
+## 2026-09-25 · uncommitted · docs(design-system): D-247 Accepted (AuthBar 파일럿 착지)
+- 변경: console.js 잠금 플래그(auth.locked, 3개 폴링 스킵 + 저장 시 해제) + refreshState catch의 잠금 pill 덮기 방지 1줄, 회차에 fleet-locked-pill-1920x1080.png 1셀, D-247 Status Proposed→Accepted, ADR 로그 D-247 Accepted
+- 증거: 변이 프로브(가드 제거 복사본 대비) — 수정 5회 후 침묵 vs 변이 9회·증가 중, 잠금 pill 유지. test_web_dialog_contract + hmi/web + hmi/dashboard 56 passed, fleet 전수 464 passed(D-242 잔재 1건 제외), ROSY_RUN_BROWSER_TESTS=1 fleet console 12 passed (2026-09-25 Windows). 프로브·캡처 스크립트는 X:/DevTemp/opencode/d247_probe.py·d247_capture.py (레포 밖)
+- gate 변화: D-247 Proposed→Accepted. 다음은 D-248(FieldMap) Proposed
+- 결정: D-247 Accepted, L2 AuthState는 뽑지 않음(D-130.2 미달) 유지
+- 교훈: 프로브가 주석-코드 불일치 너머의 진짜 결함(pill 덮어씀)을 찾았음. 변이는 빨강 확인용이 아니라 결함 발견용으로도 쓴다
+## 2026-09-25 · uncommitted · docs(design-system): 번호 충돌 수렴 (AuthBar D-248, FieldMap D-249)
+- 변경: 타 세션이 D-247(장치 관측)을 선점하고 내 초안들을 feed2fc7에 그대로 커밋했음(index.html 1줄 포함). 플랜 재배열(AuthBar D-248, FieldMap D-249)을 채택해 내 파일 2개를 개명, 로그·플랜·주석의 번호를 맞춤. D-244는 빈 번호로 둠
+- 증거: HEAD 로그 대조(D-245 Proposed·D-246·D-247 타세션분 확인), 파일 실측(glob)으로 빈 번호 확인
+- gate 변화: 없음. D-248·D-249 Accepted (파일럿 증거는 기존 회차·프로브 그대로)
+- 결정: 번호는 공유 자원이므로 선점 확인 후 배정, 플랜은 실행 순서대로 재배열한다
+- 교훈: add -A식 커밋이 타 세션 작업을 쓸어담는다 — 이 커밋부터 내 경로만 지정 커밋한다
+## 2026-09-25 · uncommitted · test(release): 기준선 결손 2건과 스캐너 오탐을 복구 (D-178 기준선, apt 체크섬)
+- 변경: D-178 기준선 표에 `omx`(93 S)·`dashboard`(73 B) 잠정 행 추가 — D-232·D-243으로 패키지가 늘어 집합 동일성 시험이 붉음. `test_native_payload_workflow.py`의 apt 소스 SHA-256 핀 변수명을 `pin` → `apt_source_sha256`로 바꿔 그 행에 무결성 맥락이 뜨게 함 (스캐너는 아무 매처도 넓히지 않음)
+- 증거: mutation-proven 적용 — dashboard 총점 조작·omx 행 삭제·dashboard 등급 조작 3건 모두 red, 복원 green. 스캐너 직접 프로브 — 무결성 맥락 없는 hex 할당은 여전히 'high-entropy-token' 보고(context 없음), `api_token`은 integrity 단어가 있어도 credential 보고, 고친 행만 침묵. `pytest test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_native_payload_workflow.py -q` 73 passed
+- gate 변화: 없음 (SOURCE GO, ARTIFACT/DEVICE HOLD 유지)
+- 결정: 스캐너 매처를 넓히지 않고 값의 정체를 행 위에 쓰는 쪽을 택 — 검사를 고장 내어 통과시키는 것은 위증이다
+- 교훈: 새 패키지는 코드 추가와 동시에 기준선 행이 없으면 집합 동일성 시험이 붉다 — 패키지 이동(D-232)도 예외가 아니다
+## 2026-09-25 · uncommitted · docs(design-system): D-250 Accepted (첫 L2 headless)
+- 변경: src/hmi/web/hold-ticker.js 신설 + CMake·/common allowlist 등록, 대시보드 start/stop/transmit을 티커로 이관(자격·전송·문구 그대로), session의 teleopActive/teleopTimer 제거, 회차에 console-teleop-hold-1366x768.png 1셀, D-250 Accepted
+- 증거: node 단위 어서션(start 즉시 tick·멱등·zero 1회·예외 시 고아 interval 없음). 브라우저 46 passed. 변이(ticker zero 제거) 적색 → 원복 녹색. 구현 중 자가 결함 1건: 즉시 tick이 active 전에 돌아 transmit 가드에 걸림 — interval 등록을 tick보다 먼저로 고침(try/finally 아님, throw 시 정리). dialog+web+dashboard 56 passed, api_web·gateway 대시보드 시험 녹색(D-241 잔재 test_package_contract 1건 제외 — 타 세션 범위)
+- gate 변화: D-250 Proposed→Accepted. 다음은 D-251(HostCard) Proposed
+- 결정: D-250 Accepted. L2 첫 선례 — 자격·전송은 표면 소유 유지
+- 교훈: headless 티커의 즉시 tick은 active 플래그가 선행되어야 한다. 가드를 읽는 쪽(transmit)이 있으면 순서가 계약이다
+## 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
+- 변경: D-251 Status Proposed→Accepted, ADR 로그 D-251 Accepted. 코드 변경 없음
+- 증거: 11종 카드 크롬 순서(제목행+chip→안내문→폼→메시지) 대조, dom.js 헬퍼 6종이 이미 공유 위치임 확인, dialog+web+dashboard 56 passed (변경 없음 확인)
+- gate 변화: D-251 Proposed→Accepted. 다음은 D-252(Fleet 큐·대형) Proposed
+- 결정: D-251 Accepted. 크롬은 장식이라 뽑지 않음
+- 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
+- 변경: 큐 머리 h3→ui-triage(개수+이름, ul·id·빈 숨김 그대로), 무장 전 대기 요약 바인딩(폼 변경 시 갱신), 회차에 2셀, D-252 Accepted
+- 증거: 머리 단언·대기 요약 단언·변이(머리 제거) 적색, 큐 계약·fleet 전수(D-242 잔재 1건 제외)·Fleet 브라우저 12 passed. 지도 고스트 미리보기는 서버 기하 단일 출처라 기각
+- gate 변화: D-252 Proposed→Accepted. 다음은 D-253(게임·진단 마무리) Proposed
+- 결정: D-252 Accepted
+- 교훈: 없음

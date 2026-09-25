@@ -21,6 +21,8 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 // localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
+  // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
+  locked: false,
 };
 
 function authHeaders() {
@@ -28,6 +30,7 @@ function authHeaders() {
 }
 
 function markLocked() {
+  auth.locked = true;
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
@@ -35,6 +38,7 @@ function markLocked() {
 }
 
 function markUnlocked() {
+  auth.locked = false;
   el("console-token").classList.remove("locked");
 }
 
@@ -353,6 +357,7 @@ function drawOverlay() {
 }
 
 async function refreshMap() {
+  if (auth.locked) return;
   try {
     const grid = await call("/api/fleet/map");
     view.map = grid;
@@ -502,6 +507,15 @@ function card(robot, index) {
   return node;
 }
 
+// D-252: 큐 머리는 ui-triage. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로 둔다.
+function setTriageHead(id, label, list) {
+  const head = el(id);
+  if (!head) return;
+  const names = [...list.querySelectorAll("li b")].map((b) => b.textContent);
+  head.querySelector("b").textContent = `${label} ${names.length}`;
+  head.querySelector("small").textContent = names.join(" · ");
+}
+
 function render() {
   const roster = el("roster");
   roster.replaceChildren(...view.robots.map(card));
@@ -533,6 +547,9 @@ function render() {
       warningCount++;
     }
   }
+  // D-252: 큐 머리는 ui-triage 다. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로.
+  setTriageHead("warning-head", "주의 요망", warnList);
+  setTriageHead("critical-head", "최우선 개입 요망", critList);
 
   // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
   // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다
@@ -550,6 +567,7 @@ function render() {
 }
 
 async function refreshState() {
+  if (auth.locked) return;
   try {
     const snapshot = await call("/api/fleet/state");
     view.robots = snapshot.robots;
@@ -560,6 +578,8 @@ async function refreshState() {
     pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
     render();
   } catch (err) {
+    // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
+    if (auth.locked) return;
     const pill = el("online-pill");
     pill.textContent = "Fleet 서버 없음";
     pill.setAttribute("status", "crit");
@@ -675,6 +695,7 @@ function fillLeaders() {
     label.append(input, document.createTextNode(id));
     return label;
   }));
+  syncPendingSummary();
 }
 
 function renderFormation(status) {
@@ -692,7 +713,7 @@ function renderFormation(status) {
 
   const detail = el("formation-detail");
   if (!status.active) {
-    detail.textContent = "리더와 포함 로봇을 고르고 무장하면 선택된 로봇이 슬롯으로 따라붙습니다.";
+    syncPendingSummary();
     return;
   }
   const slots = Object.entries(status.assignment || {})
@@ -714,6 +735,20 @@ function renderFormation(status) {
   detail.textContent = lines.join(" — ");
 }
 
+// D-252: 무장 전 확인 문장. 슬롯 좌표는 서버 기하가 쥐고 있어 클라이언트가
+// 미리 그릴 수 없으므로, 폼 현재값을 문장으로 미리 말한다.
+function syncPendingSummary() {
+  if (view.formation && view.formation.active) return;
+  const leader = el("formation-leader").value;
+  const shape = el("formation-shape").value;
+  const spacing = Number(el("formation-spacing").value);
+  const members = [...el("formation-members").querySelectorAll("input:checked")]
+    .map((b) => b.value);
+  el("formation-detail").textContent = members.length
+    ? `리더 ${leader} · ${shape} ${spacing}m · ${members.length}대 — 무장하면 슬롯으로 따라붙습니다.`
+    : "포함 로봇을 고르세요.";
+}
+
 function applyFormation(status) {
   view.formation = status;
   renderFormation(status);
@@ -721,6 +756,7 @@ function applyFormation(status) {
 }
 
 async function refreshFormation() {
+  if (auth.locked) return;
   try {
     applyFormation(await call("/api/fleet/formation"));
   } catch (err) {
@@ -769,6 +805,12 @@ el("formation-resume").addEventListener("click", () =>
 
 el("formation-stop").addEventListener("click", () =>
   formationCall("/api/fleet/formation/stop", null, "해제"));
+
+// D-252: 폼이 바뀌면 대기 요약을 갱신한다. 무장 중에는 서버 상태가 주인이므로 건드리지 않는다.
+for (const id of ["formation-leader", "formation-shape", "formation-spacing", "formation-members"]) {
+  el(id).addEventListener("change", syncPendingSummary);
+  el(id).addEventListener("input", syncPendingSummary);
+}
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 // 램프 도트는 장치가 보고한 구동값(lamps)이다. failsafe 는 "고장 표시"이고 all_red 는
@@ -882,6 +924,8 @@ function tickClock() {
 el("console-token").value = auth.token;
 function saveToken() {
   auth.token = el("console-token").value.trim();
+  // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
+  markUnlocked();
   if (auth.token) {
     sessionStorage.setItem("rosy-console-token", auth.token);
   } else {

@@ -8,6 +8,7 @@ install(FILES
   components.css
   template.html
   core_ui_logic.js
+  hold-ticker.js
   ui.js
   DESTINATION share/${PROJECT_NAME}
 )

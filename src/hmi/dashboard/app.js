@@ -1,6 +1,7 @@
 import { createFieldMap } from "./map.js";
 import { CORE_ONLY_REASON, CORE_ONLY_TEXT, triage } from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
+import { createHoldTicker } from "/common/hold-ticker.js";
 import {
   bindFormSave,
   bytes,
@@ -364,7 +365,7 @@ function renderRobotState(state) {
   setConnection("online", "상태 스트림 연결");
   setText("last-sync", `마지막 동기화 ${new Date().toLocaleTimeString("ko-KR")}`);
   renderTriage();
-  if (session.teleopActive && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
+  if (holdTicker.active && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
   updateTeleopControls();
   fieldMap.setPose();
 }
@@ -661,7 +662,7 @@ function updateTeleopControls() {
     setText("teleop-message", "MANUAL 모드로 전환해야 합니다.");
   } else if (!elements["bench-safety-confirmed"]?.checked) {
     setText("teleop-message", "벤치 안전 확인이 필요합니다.");
-  } else if (!session.teleopActive) {
+  } else if (!holdTicker.active) {
     setText("teleop-message", "버튼을 누르고 있는 동안만 저속 명령을 보냅니다.");
   }
 }
@@ -694,44 +695,48 @@ function queueTerminalZero(immediate = false) {
 }
 
 function stopTeleop(message = "정지 명령을 전송했습니다.", immediate = false) {
-  const wasActive = session.teleopActive;
-  session.teleopActive = false;
-  clearInterval(session.teleopTimer);
-  session.teleopTimer = null;
+  // D-250: interval 수명과 zero 1회는 티커가 소유한다. 자격·전송·문구는 셸의 몫이다.
+  holdTicker.stop(immediate);
   document.querySelectorAll("[data-teleop]").forEach((button) => button.classList.remove("active"));
-  if (wasActive && session.token) {
-    queueTerminalZero(immediate);
-  }
   setText("teleop-message", message);
   updateTeleopControls();
 }
 
 async function transmitTeleop(linear, angular) {
-  if (!session.teleopActive || session.teleopPending) return;
+  if (!holdTicker.active || session.teleopPending) return;
   const request = sendTeleop(linear, angular);
   session.teleopPending = request;
   try {
     await request;
   } catch (error) {
-    if (session.teleopActive) stopTeleop(`주행 명령 실패: ${error.message}`);
+    if (holdTicker.active) stopTeleop(`주행 명령 실패: ${error.message}`);
   } finally {
     if (session.teleopPending === request) session.teleopPending = null;
   }
 }
 
+let teleopCommand = { linear: 0, angular: 0 };
+// D-250: 홀드-티커는 100ms 운율과 해제 zero만 낸다. 자격은 teleopEligible,
+// 전송은 transmitTeleop, zero 절차는 queueTerminalZero가 가진다.
+const holdTicker = createHoldTicker({
+  intervalMs: session.teleopIntervalMs,
+  onTick: () => transmitTeleop(teleopCommand.linear, teleopCommand.angular),
+  onZero: (immediate) => {
+    if (session.token) queueTerminalZero(immediate);
+  },
+});
+
 function startTeleop(button, event) {
   event.preventDefault();
-  if (!teleopEligible() || session.teleopActive) return;
+  if (!teleopEligible() || holdTicker.active) return;
   const linear = Number(button.dataset.linear);
   const angular = Number(button.dataset.angular);
   if (!Number.isFinite(linear) || !Number.isFinite(angular)) return;
 
-  session.teleopActive = true;
+  teleopCommand = { linear, angular };
   button.classList.add("active");
   setText("teleop-message", `${button.querySelector("small")?.textContent || "주행"} 명령 전송 중…`);
-  const transmit = () => transmitTeleop(linear, angular);
-  transmit();
-  session.teleopTimer = setInterval(transmit, session.teleopIntervalMs);
+  holdTicker.start();
 }
 
 function updateModeButtons() {

@@ -245,7 +245,13 @@
 | D-241 | core 계열 폴더는 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
 | D-242 | 나머지 폴더도 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
 | D-243 | 운용 화면은 hmi 에 두고 API 는 런타임에 둔다 | Accepted |
-| D-245 | E-Stop 파일럿 — 종류·물음형·권한 병기 | Proposed |
+| D-245 | E-Stop 파일럿 — 종류·물음형·권한 병기 | Accepted |
+| D-248 | AuthBar — 잠금 폴링 중단 | Accepted |
+| D-249 | FieldMap — spec 고정, 코드 미추출 | Accepted |
+| D-250 | TeleopHold — 홀드-티커 추출 | Accepted |
+| D-251 | 절차 카드 — 크롬 규칙 고정 | Accepted |
+| D-252 | Fleet 큐·대형 — 머리 triage·대기 요약 | Accepted |
+| D-254 | 디자인 철학과 토큰 전집 | Proposed |
 | D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 | Accepted |
 | D-247 | 대시보드는 보드의 모든 장치가 붙어 있고 응답하는지를 보여준다 — 장치 관측과 제품 기능을 가른다 | Proposed |
 ---
