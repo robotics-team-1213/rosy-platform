@@ -41,15 +41,36 @@ def _keys(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def _payload_tree(root: Path, release_id: str = RELEASE_ID) -> Path:
-    """The shape build-native-payload.sh leaves in --release-root."""
+    """The shape build-native-payload.sh leaves in --release-root.
+
+    A small --merge-install colcon tree: setup/local_setup files, an ament_python
+    entry script under lib/<pkg>/, share/<pkg>/package.xml and hooks,
+    site-packages with a checked-hash __pycache__ pyc, and a shared library.
+    """
     files = {
         "install/.rosy-release": release_id + "\n",
-        "install/setup.bash": "# setup\n",
-        "install/lib/core/core_node": "#!/usr/bin/env python3\n",
+        "install/setup.bash": "# generated from colcon_bash/shell/template/prefix_chain.bash.em\n",
+        "install/setup.sh": "# generated from colcon_core/shell/template/prefix_chain.sh.em\n",
+        "install/local_setup.bash": "# generated from colcon_bash/shell/template/prefix.bash.em\n",
+        "install/local_setup.sh": "# generated from colcon_core/shell/template/prefix.sh.em\n",
+        "install/_local_setup_util_sh.py": "# generated from colcon_core/shell/template/prefix_util.py.em\n",
+        "install/COLCON_IGNORE": "",
+        "install/lib/core/core": (
+            "#!/usr/bin/python3\nimport sys\nfrom core.main import main\nsys.exit(main())\n"),
+        "install/lib/python3.12/site-packages/core/__init__.py": "VERSION = '0.1.0'\n",
+        "install/share/core/package.xml": (
+            "<?xml version=\"1.0\"?>\n<package format=\"3\"><name>core</name>"
+            "<version>0.1.0</version></package>\n"),
+        "install/share/core/package.bash": "# generated from colcon_bash/shell/template/package.bash.em\n",
+        "install/share/core/package.dsv": "source;share/core/hook/pythonpath.dsv\n",
+        "install/share/core/hook/pythonpath.dsv": "prepend-non-duplicate;PYTHONPATH;lib/python3.12/site-packages\n",
+        "install/share/colcon-core/packages/core": "interfaces\n",
+        "install/share/ament_index/resource_index/packages/core": "",
         "deploy/robot/native/rosy-runtime.target": "[Unit]\nDescription=test\n",
         "deploy/robot/native/native_release.py": "# copy\n",
         "rosy-packages.txt": "core\ninterfaces\n",
-        "deb-packages.txt": "ros-jazzy-ros-base\t0.11\n",
+        "deb-packages.txt": "python3\t3.12.3-0ubuntu2\nros-jazzy-ros-base\t0.11.0-1noble\n",
+        "ros-packages.txt": "ros-jazzy-ros-base=0.11.0-1noble\n",
         "required-ros-packages.txt": "core\n",
         "source-revision.txt": REVISION + "\n",
         "python-runtime.sha256": IMAGE_RUNTIME + "\n",
@@ -59,6 +80,17 @@ def _payload_tree(root: Path, release_id: str = RELEASE_ID) -> Path:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8", newline="\n")
+    library = root / "install" / "lib" / "libinterfaces__rosidl_typesupport_c.so"
+    library.write_bytes(b"\x7fELF\x02\x01\x01\x00" + bytes(range(256)))
+    # What build-native-payload.sh's compileall leaves: a checked-hash pyc. A
+    # fixed dfile keeps the bytes independent of the fixture's tmp path.
+    package = root / "install" / "lib" / "python3.12" / "site-packages" / "core"
+    py_compile.compile(
+        str(package / "__init__.py"), cfile=str(package / "__pycache__" / "__init__.cpython-312.pyc"),
+        dfile="core/__init__.py", doraise=True,
+        invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)
+    for executable in (root / "install" / "lib" / "core" / "core", library):
+        executable.chmod(0o755)  # no effect on Windows; --modes-from covers that
     return root
 
 
@@ -103,8 +135,27 @@ def test_built_and_signed_payload_passes_native_verify(case):
     assert manifest["git_revision"] == REVISION
     assert manager.check_python_runtime(RELEASE_ID) == IMAGE_RUNTIME
     listed = {entry["path"] for entry in manifest["files"]}
-    assert "install/lib/core/core_node" in listed
+    assert {
+        "install/lib/core/core",
+        "install/local_setup.bash",
+        "install/share/core/package.xml",
+        "install/lib/python3.12/site-packages/core/__pycache__/__init__.cpython-312.pyc",
+        "install/lib/libinterfaces__rosidl_typesupport_c.so",
+        "ros-packages.txt",
+    } <= listed
     assert not any(path.startswith("image-overlay/") for path in listed)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX exec bits (Windows uses --modes-from)")
+def test_linux_pack_keeps_colcon_exec_bits(tmp_path):
+    report = build_release(_payload_tree(tmp_path / "p"), RELEASE_ID, tmp_path / "r")
+    pack_release(Path(report["release_dir"]), tmp_path / "a.tar.gz", allow_unsigned=True)
+    modes = {member.name: member.mode for member in _members(tmp_path / "a.tar.gz")}
+
+    assert modes["install/lib/core/core"] == 0o755
+    assert modes["install/lib/libinterfaces__rosidl_typesupport_c.so"] == 0o755
+    assert modes["install/lib/python3.12/site-packages/core/__pycache__/__init__.cpython-312.pyc"] == 0o644
+    assert modes["install/share/core/package.xml"] == 0o644
 
 
 def test_unsigned_payload_is_refused(case):
@@ -349,7 +400,7 @@ def test_repack_after_signing_keeps_exec_bits_from_the_unsigned_linux_tarball(ca
     plain = tmp_path / "plain.tar.gz"
     pack_release(staging, plain, allow_unsigned=True)
     unsigned = tmp_path / "unsigned.tar.gz"
-    _with_exec_bit(plain, unsigned, "install/lib/core/core_node")
+    _with_exec_bit(plain, unsigned, "install/lib/core/core")
     _sign(staging, private)
 
     signed = tmp_path / "signed.tar.gz"
@@ -358,7 +409,7 @@ def test_repack_after_signing_keeps_exec_bits_from_the_unsigned_linux_tarball(ca
 
     assert report["ok"] is True, report
     modes = {member.name: member.mode for member in _members(signed)}
-    assert modes["install/lib/core/core_node"] == 0o755
+    assert modes["install/lib/core/core"] == 0o755
     assert modes["install/setup.bash"] == 0o644
     assert modes["SHA256SUMS.sig"] == 0o644
 
