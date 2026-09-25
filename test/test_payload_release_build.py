@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 
 import pytest
@@ -181,3 +183,73 @@ def test_pack_refuses_unsigned_release_by_default(tmp_path):
     with pytest.raises(ValueError, match="SIGNATURE_MISSING"):
         pack_release(Path(report["release_dir"]), tmp_path / "x.tar.gz")
     assert not (tmp_path / "x.tar.gz").exists()
+
+
+# --- D-225 2.1 offline signing + pack (sign_image_release.py fits unchanged) ---
+
+SIGNER = ROOT / "deploy" / "release" / "sign_image_release.py"
+
+
+def _run(*args: object) -> dict:
+    completed = subprocess.run(
+        [sys.executable, *(str(arg) for arg in args)],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    report = json.loads(completed.stdout.strip().splitlines()[-1])
+    report["_returncode"] = completed.returncode
+    return report
+
+
+def test_offline_signer_then_pack_yields_a_tarball_native_verify_accepts(case, tmp_path):
+    manager_type, device, key, private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+
+    built = _run(BUILDER, "build", "--payload-root", payload, "--release-id", RELEASE_ID,
+                 "--out", staging, "--signing-key-id", KEY_ID)
+    assert built["ok"] is True, built
+    signed = _run(SIGNER, staging, "--private-key", private, "--public-key", key)
+    assert signed["ok"] is True, signed
+    tarball = tmp_path / f"{RELEASE_ID}.tar.gz"
+    packed = _run(BUILDER, "pack", "--release-dir", staging, "--out", tarball, "--public-key", key)
+    assert packed["ok"] is True and packed["signed"] is True, packed
+
+    members = _members(tarball)
+    assert "SHA256SUMS.sig" in [member.name for member in members]
+    assert all(member.isreg() or member.isdir() for member in members)
+
+    # What rosy-release-unpack.sh does: extract the members into releases/<id>.
+    target = device / "opt" / "rosy" / "releases" / RELEASE_ID
+    target.mkdir(parents=True)
+    with tarfile.open(tarball, "r:gz") as tar:
+        tar.extractall(target, filter="data")
+    manifest = manager_type(root=device, public_key=key).verify(RELEASE_ID)
+    assert manifest["release_id"] == RELEASE_ID
+
+    again = _run(BUILDER, "pack", "--release-dir", staging, "--out", tmp_path / "again.tar.gz")
+    assert again["sha256"] == packed["sha256"]
+
+
+def test_pack_refuses_a_release_whose_signature_does_not_verify(case, tmp_path):
+    _manager_type, _device, key, private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+    build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    _sign(staging, private)
+    (staging / "rosy-packages.txt").write_text("core\nevil\n", encoding="utf-8")
+
+    report = _run(BUILDER, "pack", "--release-dir", staging,
+                  "--out", tmp_path / "bad.tar.gz", "--public-key", key)
+    assert report["ok"] is False and report["_returncode"] == 2
+    assert "CHECKSUM_MISMATCH" in report["error"]
+    assert not (tmp_path / "bad.tar.gz").exists()
+
+
+def test_offline_signer_refuses_a_payload_changed_after_build(case, tmp_path):
+    _manager_type, _device, key, private, payload, _release = case
+    staging = tmp_path / "staging" / RELEASE_ID
+    build_release(payload, RELEASE_ID, staging, signing_key_id=KEY_ID)
+    (staging / "install" / "late.py").write_text("x = 1\n", encoding="utf-8")
+
+    report = _run(SIGNER, staging, "--private-key", private, "--public-key", key)
+    assert report["ok"] is False
+    assert "CHECKSUM_UNLISTED_FILE" in report["error"]
+    assert not (staging / "SHA256SUMS.sig").exists()
