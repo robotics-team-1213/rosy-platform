@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-SCHEMAS = ROOT / "src/core/core_common/core_common/protocol/schemas.py"
+SCHEMAS = ROOT / "src/contracts/core_common/core_common/protocol/schemas.py"
 API_APP = ROOT / "src/core/core_api_web/core_api_web/api/app.py"
 DOC = ROOT / "docs/reference/ROSY API & Protocol Reference.md"
 

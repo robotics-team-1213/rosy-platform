@@ -28,3 +28,11 @@
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 `git log -- src/interfaces`를 본다.
+
+## 2026-09-25 · uncommitted · refactor(contracts): move interfaces under src/contracts (D-231)
+
+- 변경: `src/contracts/interfaces`로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 구조 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음

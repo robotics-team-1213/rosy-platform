@@ -4,8 +4,9 @@
 !deploy/robot/**
 !src/
 !src/core/
-!src/core/interfaces/
-!src/core/interfaces/**
+!src/contracts/
+!src/contracts/interfaces/
+!src/contracts/interfaces/**
 !src/core/core/
 !src/core/core/**
 !src/core/control/

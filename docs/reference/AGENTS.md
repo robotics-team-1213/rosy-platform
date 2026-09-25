@@ -40,7 +40,7 @@ API versioning is path-based (`/api/v1`). Additive schema changes bump protocol 
 
 ### Internal
 
-- `src/core/core_common/core_common/protocol/schemas.py`
+- `src/contracts/core_common/core_common/protocol/schemas.py`
 - `src/core/core_api_web/core_api_web/api/`
 - `deploy/release/host_agent.py`
 

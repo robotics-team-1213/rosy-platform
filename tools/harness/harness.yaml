@@ -84,10 +84,10 @@ modules:
     functional_kind: host-contract
     functional: [src/devices/lamp_control/test/test_lamp_package_contract.py]
   - name: core_common
-    path: src/core/core_common
-    tests: [src/core/core_common/test]
+    path: src/contracts/core_common
+    tests: [src/contracts/core_common/test]
     functional_kind: pytest
-    functional: [src/core/core_common/test]
+    functional: [src/contracts/core_common/test]
   - name: core_events
     path: src/core/core_events
     tests: [src/core/core_events/test/test_audit.py, src/core/core/test/test_core_logic.py]
@@ -114,11 +114,11 @@ modules:
     functional_kind: pytest
     functional: [src/products/omx_adapter/test]
   - name: interfaces
-    path: src/core/interfaces
-    tests: [src/core/interfaces/test/test_srv_surface.py]
+    path: src/contracts/interfaces
+    tests: [src/contracts/interfaces/test/test_srv_surface.py]
     functional_kind: interface-only
-    functional: [src/core/interfaces/test/test_srv_surface.py]
-    artifacts: [src/core/interfaces/srv/SetLed.srv, src/core/interfaces/srv/SetLamp.srv, src/core/interfaces/srv/SetBrightness.srv, src/core/interfaces/srv/Emotion.srv]
+    functional: [src/contracts/interfaces/test/test_srv_surface.py]
+    artifacts: [src/contracts/interfaces/srv/SetLed.srv, src/contracts/interfaces/srv/SetLamp.srv, src/contracts/interfaces/srv/SetBrightness.srv, src/contracts/interfaces/srv/Emotion.srv]
   - name: pinky_pro
     path: src/products/pinky_pro
     tests: [src/products/pinky_pro/test]

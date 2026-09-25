@@ -54,7 +54,7 @@ RUN apt-get -o Acquire::Retries=5 update \
 
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
-COPY src/core/interfaces ./src/core/interfaces
+COPY src/contracts/interfaces ./src/contracts/interfaces
 COPY src/core/core ./src/core/core
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
 COPY src/products/pinky_pro ./src/products/pinky_pro
@@ -111,7 +111,7 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && cd src/sllidar_ros2 \
     && git checkout --detach ${SLLIDAR_COMMIT} \
     && rm -rf .git
-COPY src/core/interfaces ./src/core/interfaces
+COPY src/contracts/interfaces ./src/contracts/interfaces
 COPY src/sim/description ./src/sim/description
 COPY src/devices/bringup ./src/devices/bringup
 COPY src/navigation/navigation ./src/navigation/navigation

@@ -101,8 +101,8 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     assert result.returncode == 0, result.stderr
     paths = set(result.stdout.splitlines())
     for suffix in (
-        "/core/core", "/core/core_common", "/core/core_events",
-        "/core/core_features", "/core/core_api_web", "/core/interfaces",
+        "/core/core", "/contracts/core_common", "/core/core_events",
+        "/core/core_features", "/core/core_api_web", "/contracts/interfaces",
         "/devices/sensor_adc", "/devices/imu_bno055", "/devices/lamp_control",
     ):
         assert any(path.endswith(suffix) for path in paths)

@@ -6,11 +6,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "1 passed (2026-09-22 Windows)"
-    cmd: "python -m pytest src/core/core_common/test -q"
+    cmd: "python -m pytest src/contracts/core_common/test -q"
   LOCAL:
     state: GO
     evidence: "1 passed (2026-09-22 Windows)"
-    cmd: "python -m pytest src/core/core_common/test -q"
+    cmd: "python -m pytest src/contracts/core_common/test -q"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -26,7 +26,7 @@ plans:
 ## 지금 상태
 
 - 라이브러리·계약 등급(D-168 P2)이다. 프로세스가 없으므로 ROS-SIM~FIELD는 N/A이며, 그 판정은 이 패키지를 싣는 `core` 모듈의 gate가 소유한다.
-- 2026-09-22 harness에 처음 등록했다. 이전 이력은 `git log -- src/core/core_common`를 본다.
+- 2026-09-22 harness에 처음 등록했다. 이전 이력은 `git log -- src/contracts/core_common`를 본다.
 - 자체 `test/`가 있다.
 
 ## 다음 gate

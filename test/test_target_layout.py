@@ -10,8 +10,8 @@ MOVED = False
 
 # current directory -> target directory (package name is the last part of both).
 TARGET = {
-    "core/interfaces": "contracts/interfaces",
-    "core/core_common": "contracts/core_common",
+    "contracts/interfaces": "contracts/interfaces",
+    "contracts/core_common": "contracts/core_common",
     "core/core": "runtime/core",
     "core/core_features": "runtime/core_features",
     "core/core_events": "runtime/core_events",

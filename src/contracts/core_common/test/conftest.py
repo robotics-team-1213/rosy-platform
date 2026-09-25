@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE = Path(__file__).resolve().parents[1]  # .../src/core/core_common
+PACKAGE = Path(__file__).resolve().parents[1]  # .../src/contracts/core_common
 
 if str(PACKAGE) not in sys.path:
     sys.path.insert(0, str(PACKAGE))

@@ -25,7 +25,7 @@ None at this level. Each package directory has its own `AGENTS.md`.
 
 ### Working In This Directory
 
-- Almost every package here depends on `src/core/interfaces`.
+- Almost every package here depends on `src/contracts/interfaces`.
 - C++ drivers are ament_cmake and aarch64-only; keep host-safe test paths in the Python packages.
 
 ### Testing Requirements

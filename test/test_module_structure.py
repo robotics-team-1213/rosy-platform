@@ -25,7 +25,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-DOMAINS = {"core", "devices", "products", "face", "navigation", "sim", "site"}
+DOMAINS = {"core", "contracts", "devices", "products", "face", "navigation", "sim", "site"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -52,6 +52,7 @@ KNOWN_CHAIN_BACK_EDGES = {
     "core_common share or by having core pass the path in",
 }
 KNOWN_DIRECTION = {
+    ("core_common", "core"): "default config file lives in the core package share; the lookup stayed when core_common moved to contracts",
     ("navigation", "control"): "same edge; resolve by lifting line_follow into the deploy assembly",
     ("control", "imu_bno055"): "core/control -> devices/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
     ("navigation", "core"): "navigation -> core runtime; the web_* launches are assemblies, not navigation",

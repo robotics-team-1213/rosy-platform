@@ -44,7 +44,7 @@ core/control/tools/gz/rig_reload_navigation.py
 core/control/tools/gz/run_calibration_spaces.py
 core/control/tools/gz/track_run_monitor.py
 core/core/config/rosy_default.yaml
-core/core_common/core_common/profile.py
+contracts/core_common/core_common/profile.py
 devices/bringup/bringup/battery_publisher.py
 devices/bringup/bringup/bringup.py
 devices/bringup/bringup/pinky_pro_adapter.py

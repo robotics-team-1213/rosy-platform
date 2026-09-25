@@ -75,7 +75,7 @@ done
 
 # 5. Start Fleet Server
 echo "[3/3] Starting Fleet Console..."
-export PYTHONPATH="$PYTHONPATH:$(pwd)/src/site/fleet:$(pwd)/src/core/core_common:$(pwd)/src/core/core_features"
+export PYTHONPATH="$PYTHONPATH:$(pwd)/src/site/fleet:$(pwd)/src/contracts/core_common:$(pwd)/src/core/core_features"
 
 echo ""
 echo "========================================================="

@@ -54,3 +54,11 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 경로 폴백 시험은 ament를 가짜로 고정해야 한다 — 소싱된 상자에서는 진짜 share가 이겨 같은 시험이 붉어진다.
+
+## 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
+
+- 변경: `src/contracts/core_common`로 이동, 동작 변경 없음 (D-231)
+- 증거: 이 커밋의 core_common 시험
+- gate 변화: 없음
+- 결정: D-231
+- 교훈: 없음
