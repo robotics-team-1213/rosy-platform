@@ -53,6 +53,9 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # Inventory
     (release_dir / "required-ros-packages.txt").write_text("pkg_a", encoding="utf-8")
     (release_dir / "rosy-packages.txt").write_text("pkg_a\npkg_b", encoding="utf-8")
+    # D-225 2.2: the factory release is sealed in the image, not signed.
+    (release_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    (release_dir / "SHA256SUMS").write_text("mock", encoding="utf-8")
 
     # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
     (root / "usr/sbin").mkdir(parents=True, exist_ok=True)

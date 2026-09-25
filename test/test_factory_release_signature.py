@@ -288,6 +288,43 @@ def test_a_stale_invalid_signature_and_temporary_are_replaced(pipeline):
     assert _manager(pipeline, MemoryLinks(FACTORY_ID)).verify(FACTORY_ID)
 
 
+def _mounted_verifier():
+    spec = importlib.util.spec_from_file_location(
+        "verify_mounted_image_d225", ROOT / "deploy/image/verify-mounted-image.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("defect", [None, "image-changed", "dist-unsigned", "wrong-key", "image-signed"])
+def test_build_go_proves_the_image_release_verifies_with_the_dist_signature(pipeline, defect):
+    """verify-artifacts.sh step: unsigned in the image, verified with the dist's signature."""
+    verifier = _mounted_verifier()
+    key = pipeline["public"]
+    if defect == "image-changed":
+        (pipeline["release"] / "install/setup.bash").write_text("# changed\n", encoding="utf-8")
+    elif defect == "dist-unsigned":
+        (pipeline["dist"] / "factory-release" / FACTORY_ID / "SHA256SUMS.sig").unlink()
+    elif defect == "wrong-key":
+        _other, key = _keys(pipeline["tmp"] / "other", "other")
+
+    findings = verifier.verify_factory_release(pipeline["device"], FACTORY_ID, pipeline["dist"], key)
+    if defect == "image-signed":
+        shutil.copyfile(pipeline["dist"] / "factory-release" / FACTORY_ID / "SHA256SUMS.sig",
+                        pipeline["release"] / "SHA256SUMS.sig")
+        findings = verifier.inspect(pipeline["device"], FACTORY_ID)
+        assert any("must be unsigned in the image" in finding for finding in findings)
+        return
+
+    if defect is None:
+        assert findings == []
+        assert not (pipeline["release"] / "SHA256SUMS.sig").exists()  # the image was not touched
+    else:
+        expected = {"image-changed": "CHECKSUM_MISMATCH", "dist-unsigned": "no factory release signature",
+                    "wrong-key": "SIGNATURE_INVALID"}[defect]
+        assert findings and expected in findings[0]
+
+
 def test_a_bundle_without_a_factory_signature_changes_nothing(pipeline):
     result = _apply(pipeline, _bundle(None))
 
