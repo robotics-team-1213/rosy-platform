@@ -76,6 +76,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="source/map/calibration sighting config (secret values stay in env)")
     console.add_argument("--sightings-db", default=None, type=Path,
                          help="SQLite path for latest sightings and acceptance audit")
+    console.add_argument("--events-db", default=None, type=Path,
+                         help="SQLite path for durable CORE Agent event history")
     return parser.parse_args(argv)
 
 
@@ -291,8 +293,17 @@ def run_console(args: argparse.Namespace) -> None:
         _warn_if_world_readable(args.signals)
         signal_console = SignalConsole(signal_eps,
                                        [HttpSignalClient(ep) for ep in signal_eps])
+    event_store = None
+    events_db = getattr(args, "events_db", None)
+    if events_db is not None:
+        from fleet.server.core_event_store import CoreEventStore
+
+        event_store = CoreEventStore(events_db)
+    pairing_configured = any(ep.fleet_pairing_token is not None for ep in endpoints)
+    if pairing_configured and event_store is None:
+        sys.exit("--events-db is required when CORE Agent pairing is configured")
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
-                           signal_console=signal_console)
+                           signal_console=signal_console, event_store=event_store)
     sightings_db = getattr(args, "sightings_db", None)
     sightings_config = getattr(args, "sightings_config", None)
     if sightings_db is not None and sightings_config is None:
@@ -309,7 +320,7 @@ def run_console(args: argparse.Namespace) -> None:
         )
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
-    hub = console.hub if any(ep.fleet_pairing_token is not None for ep in endpoints) else None
+    hub = console.hub if pairing_configured else None
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""

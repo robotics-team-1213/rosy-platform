@@ -177,6 +177,69 @@ def test_events_are_kept_in_seq_order_and_gap_fill_reads_since_seq():
     assert [e.seq for e in filled] == [2, 3]
 
 
+def test_paired_core_events_are_written_to_the_durable_audit_store(tmp_path):
+    from fleet.server.core_event_store import CoreEventStore
+
+    path = tmp_path / "fleet.sqlite3"
+    store = CoreEventStore(path)
+    hub = SiteHub([_ep()], event_store=store)
+    assert hub.handle(_hello()).type is EnvelopeType.WELCOME
+    event = EventMessage(event_id="event-1", seq=1, robot_id="rosy_01",
+                         type="nav.completed", source="navigation",
+                         data={"goal_id": "goal-7"})
+
+    accepted = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                   payload=event.model_dump(mode="json")))
+    duplicate = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                    payload=event.model_dump(mode="json")))
+    records = CoreEventStore(path).read_events()
+
+    assert accepted.payload == {"accepted": True}
+    assert duplicate.payload == {"accepted": True}
+    assert len(records) == 1
+    assert len(hub.registry.record("rosy_01").events) == 1
+    assert records[0]["event"]["event_id"] == "event-1"
+    assert records[0]["robot_id"] == "rosy_01"
+
+
+def test_paired_core_event_with_secret_field_is_rejected_before_memory_or_disk(tmp_path):
+    from fleet.server.core_event_store import CoreEventStore
+
+    store = CoreEventStore(tmp_path / "fleet.sqlite3")
+    hub = SiteHub([_ep()], event_store=store)
+    hub.handle(_hello())
+    sensitive_field = "api_" + "token"
+    event = EventMessage(seq=1, robot_id="rosy_01", type="nav.completed",
+                         data={sensitive_field: "should-not-be-stored"})
+
+    reply = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                payload=event.model_dump(mode="json")))
+
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "EVENT_NOT_AUDITABLE"
+    assert hub.registry.events_since("rosy_01", 0) == []
+    assert store.read_events() == []
+
+
+def test_paired_core_event_is_not_acknowledged_when_durable_write_fails():
+    class UnavailableStore:
+        def append_event(self, _event):
+            import sqlite3
+
+            raise sqlite3.OperationalError("disk unavailable")
+
+    hub = SiteHub([_ep()], event_store=UnavailableStore())
+    hub.handle(_hello())
+    event = EventMessage(seq=1, robot_id="rosy_01", type="nav.completed")
+
+    reply = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                payload=event.model_dump(mode="json")))
+
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "EVENT_STORAGE_UNAVAILABLE"
+    assert hub.registry.events_since("rosy_01", 0) == []
+
+
 def test_event_robot_id_mismatch_after_hello_is_pairing_invalid():
     hub = SiteHub([_ep()])
     hub.handle(_hello())

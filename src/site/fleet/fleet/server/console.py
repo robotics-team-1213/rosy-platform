@@ -79,6 +79,7 @@ class FleetConsole:
         yield_keep_out_m: float = bays.YIELD_KEEP_OUT_M,
         relay_factory=None,
         signal_console=None,
+        event_store=None,
     ) -> None:
         if len(endpoints) != len(clients):
             raise ValueError("endpoints and clients must line up one for one")
@@ -124,7 +125,8 @@ class FleetConsole:
         self._relay_factory = relay_factory
         self.fleet_name = fleet_name
         # e-stop 은 hub 의 scatter 를 그대로 쓴다 — 흩뿌림의 규칙을 두 군데 두지 않는다.
-        self._hub = SiteHub(list(endpoints), dict(self._clients), fleet_name=fleet_name)
+        self._hub = SiteHub(list(endpoints), dict(self._clients), fleet_name=fleet_name,
+                            event_store=event_store)
         #: 신호등 컨트롤러(ROSY-SIGNAL-001). signals.yaml 이 없는 사이트도 같은 서버로
         #: 뜬다 — 없으면 신호등 기능은 조용히 비어 있다("signals": {}).
         self._signals = signal_console

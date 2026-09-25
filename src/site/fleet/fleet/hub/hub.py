@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Optional, Sequence
 
 from core_common.protocol.schemas import (
@@ -18,6 +19,7 @@ from core_common.protocol.schemas import (
 from fleet.hub.registry import RobotRegistry
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient
+from fleet.server.core_event_store import CoreEventStore, EventRejected
 
 _FORBIDDEN_PAYLOAD_KEYS = frozenset({"cmd_vel", "image", "twist"})
 
@@ -45,6 +47,7 @@ class SiteHub:
         endpoints: Sequence[RobotEndpoint],
         clients: Optional[dict[str, RobotClient]] = None,
         fleet_name: str = "rosy-site",
+        event_store: CoreEventStore | None = None,
     ) -> None:
         # CORE REST control tokens and FleetAgent pairing credentials have
         # distinct authority. Missing pairing credentials leave the agent
@@ -55,6 +58,7 @@ class SiteHub:
         self._paired: set[str] = set()
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
+        self.event_store = event_store
 
     def handle(self, envelope: Envelope) -> Envelope:
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
@@ -142,7 +146,16 @@ class SiteHub:
             return _error("SESSION_NOT_PAIRED", "hello first")
         if event.robot_id not in self._paired:
             return _error("PAIRING_INVALID", "robot mismatch")
+        is_new = True
+        if self.event_store is not None:
+            try:
+                is_new = self.event_store.append_event(event.model_dump(mode="json"))
+            except EventRejected:
+                return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
+            except (OSError, sqlite3.Error):
+                return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
         row = self.registry.record(event.robot_id)
-        row.events.append(event)
+        if is_new:
+            row.events.append(event)
         row.last_event_seq = max(row.last_event_seq, event.seq)
         return Envelope(type=EnvelopeType.EVENT, payload={"accepted": True})

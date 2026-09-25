@@ -10,10 +10,11 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
@@ -175,6 +176,28 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         @app.get("/api/fleet/sightings", dependencies=guard, tags=["sightings"])
         async def sighting_readback() -> dict:
             return sightings.snapshot()
+
+    if hub is not None and hub.event_store is not None:
+        @app.get("/api/fleet/events", dependencies=guard, tags=["fleet-events"])
+        def core_event_history(
+            after_id: int = Query(default=0, ge=0),
+            limit: int = Query(default=100, ge=1, le=200),
+            robot_id: Optional[str] = Query(default=None, min_length=1, max_length=96),
+        ) -> dict:
+            try:
+                rows = hub.event_store.read_events(after_id=after_id, limit=limit,
+                                                   robot_id=robot_id)
+            except (OSError, sqlite3.Error):
+                raise HTTPException(status_code=503, detail={
+                    "code": "EVENT_STORAGE_UNAVAILABLE",
+                    "message": "CORE event history is temporarily unavailable",
+                }) from None
+            page = rows[:limit]
+            return {
+                "events": page,
+                "next_cursor": page[-1]["audit_id"] if page else after_id,
+                "has_more": len(rows) > limit,
+            }
 
     @app.get("/api/fleet/state", dependencies=guard, tags=["fleet"])
     async def fleet_state() -> dict:

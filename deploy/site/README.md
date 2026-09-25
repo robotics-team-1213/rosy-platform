@@ -78,11 +78,14 @@ readback through the authenticated API with a surveyed source. Record image
 digests, config revision, calibration revision, backup location, and recovery
 test in the deployment record.
 
-Fleet stores sightings in the named SQLite volume with WAL and full synchronous
-commit. Back it up with `SightingStore.backup()` or a quiesced SQLite-aware
-backup; do not copy only the live main DB file while WAL is active. Protect the
-backup as operational data, test restore to a separate volume, and define site
-retention before production operation.
+Fleet stores sightings and authenticated CORE Agent event history in the same
+named SQLite volume with WAL and full synchronous commit. Pairing a CORE Agent
+requires `--events-db`; the Compose stack points it at
+`/var/lib/rosy/fleet.sqlite3`. Read the event audit through the authenticated
+`GET /api/fleet/events` cursor API. Back it up with `SightingStore.backup()` or
+a quiesced SQLite-aware backup; do not copy only the live main DB file while
+WAL is active. Protect the backup as operational data, test restore to a
+separate volume, and define site retention before production operation.
 
 ## Current acceptance boundary
 

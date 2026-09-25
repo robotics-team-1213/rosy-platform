@@ -8,6 +8,7 @@ import time
 
 import httpx
 import uvicorn
+import pytest
 from argparse import Namespace
 from fastapi.testclient import TestClient
 
@@ -16,6 +17,7 @@ from core_features.fleet_agent.agent import FleetAgent
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
+from fleet.server.core_event_store import CoreEventStore
 from fleet.swarm.robots import RobotEndpoint, write_robots
 import fleet.cli as cli
 
@@ -57,13 +59,14 @@ async def _until(predicate, *, timeout_s=4.0):
     raise AssertionError("condition did not become true before timeout")
 
 
-def test_core_agent_hello_heartbeat_and_event_reach_console_app():
+def test_core_agent_hello_heartbeat_and_event_reach_console_app(tmp_path):
     async def scenario():
         endpoint = RobotEndpoint(
             "rosy_01", "https://robot.local", "rest-operator",
             fleet_pairing_token="agent-pairing",
         )
-        console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
+        event_store = CoreEventStore(tmp_path / "fleet.sqlite3")
+        console = FleetConsole([endpoint], [FakeRobot("rosy_01")], event_store=event_store)
         app = create_app(console, console_token="console-token", hub=console.hub)
 
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -105,6 +108,8 @@ def test_core_agent_hello_heartbeat_and_event_reach_console_app():
                 unauthorized = await client.get("/registry")
                 registry = await client.get(
                     "/registry", headers={"Authorization": "Bearer console-token"})
+                history = await client.get(
+                    "/api/fleet/events", headers={"Authorization": "Bearer console-token"})
 
             assert unauthorized.status_code == 401
             assert registry.status_code == 200
@@ -112,6 +117,8 @@ def test_core_agent_hello_heartbeat_and_event_reach_console_app():
             assert row["online"] is True
             assert row["snapshot"]["seq"] == 4
             assert row["events"][0]["type"] == "nav.completed"
+            assert history.status_code == 200
+            assert history.json()["events"][0]["event"]["type"] == "nav.completed"
         finally:
             agent.stop()
             if agent._task is not None:
@@ -138,9 +145,32 @@ def test_console_cli_mounts_agent_routes_only_when_pairing_is_configured(tmp_pat
     cli.run_console(Namespace(
         host="127.0.0.1", port=8090, robots=robots_path,
         signals=None, token="console-token", web_common=None,
+        events_db=tmp_path / "events.sqlite3",
     ))
 
-    assert TestClient(captured["app"]).get("/registry").status_code == 401
+    client = TestClient(captured["app"])
+    assert client.get("/registry").status_code == 401
+    assert client.get("/api/fleet/events").status_code == 401
+    response = client.get("/api/fleet/events",
+                          headers={"Authorization": "Bearer console-token"})
+    assert response.status_code == 200
+    assert (tmp_path / "events.sqlite3").is_file()
+
+
+def test_console_cli_requires_durable_event_database_for_agent_pairing(tmp_path, monkeypatch):
+    monkeypatch.setattr(uvicorn, "run", lambda *args, **kwargs: pytest.fail("server must not start"))
+    robots_path = tmp_path / "robots.yaml"
+    write_robots(robots_path, [RobotEndpoint(
+        "rosy_01", "https://robot.local", "rest-operator",
+        fleet_pairing_token="agent-pairing",
+    )])
+
+    with pytest.raises(SystemExit, match="--events-db is required"):
+        cli.run_console(Namespace(
+            host="127.0.0.1", port=8090, robots=robots_path,
+            signals=None, token="console-token", web_common=None,
+            events_db=None,
+        ))
 
 
 def test_console_cli_keeps_agent_routes_disabled_without_pairing_config(tmp_path, monkeypatch):

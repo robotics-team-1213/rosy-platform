@@ -10,7 +10,7 @@
 2. 사이트 `fleet console`은 브라우저 요청을 `/api/fleet/*`로 받고 `robots.yaml`의 `RobotEndpoint`별 HTTP Bearer 토큰으로 CORE REST 상태·원자 명령을 호출한다. 콘솔 명령은 Fleet 서버가 중계하지만 최종 제어와 안전은 CORE가 소유한다.
 3. CORE의 `FleetAgent`와 사이트 `SiteHub`는 PRT Envelope의 `hello`, `heartbeat`, `event`를 사용한다. 현재 `fleet console` ASGI 앱에 WebSocket 경로가 결합되어 실제 Agent loopback 연결 시험을 통과했다. Agent 업링크가 없는 robot에서는 경로가 비활성이다.
 4. `SiteHub`는 선택적 `RobotEndpoint.fleet_pairing_token`만 `HelloPayload.pairing_token`과 대조한다. 값이 없으면 Agent 연결을 허용하지 않으며 CORE REST operator token을 대체 token으로 쓰지 않는다.
-5. 사이트 `fleet console`은 `--sightings-config` source allowlist와 별도 secret mount를 읽고 accepted sighting의 latest state와 append-only history를 SQLite에 저장할 수 있다. 로컬 Docker Compose는 Fleet·vision·Caddy를 TLS로 연결한다.
+5. 사이트 `fleet console`은 sighting의 latest/history와 paired CORE Agent 이벤트를 같은 영속 SQLite 파일에 저장한다. CORE 이벤트는 민감 필드·크기 검사를 통과해야 기록되며, operator Bearer로 audit cursor 조회가 가능하다. 저장 실패 시 이벤트를 성공 수신으로 응답하지 않는다. 로컬 Docker Compose는 Fleet·vision·Caddy를 TLS로 연결한다.
 6. 로봇 내부 DDS는 CORE와 로봇 런타임의 경계다. Fleet/브라우저가 DDS에 참여하지 않는다. D-118은 원본 `Image`가 Fleet 계약·브라우저 경로로 들어오는 것을 막는다.
 7. 로봇 전면 카메라의 CORE 로컬 preview, Pinky 카메라의 사이트 업링크, OMX 팔 영상·집기 명령은 서로 다른 기능이다. 현재 Fleet 서버가 이들을 사이트 영상 입력이나 원격 조작으로 연결하지 않는다.
 
@@ -22,7 +22,7 @@
    |---|---|---|---|
 | 브라우저 → Fleet 서버 | HTTPS, `/api/fleet/*`, console Bearer token via Caddy | Fleet API 구현; site Compose TLS path locally validated | 현장 DNS/CA·역할·CSRF/인증·실제 CORE 명령 readback |
    | Fleet 서버 → CORE | `/api/v1/*` HTTPS REST, 장비별 로봇 토큰 | `HttpRobotClient` 구현, 현재 gather는 REST 폴링 | 실제 CORE, 인증·timeout·stale·명령 상태 시험 |
-| CORE Agent → Fleet 서버 | WSS `/ws/robots`, API Ref PRT Envelope, hello/heartbeat/event | 운영 앱 결합·분리된 token·localhost reconnect 통합 LOCAL | 실제 CORE와 Ubuntu/TLS/LAN 연결, seq 누락·stale 운용 시험 |
+| CORE Agent → Fleet 서버 | WSS `/ws/robots`, API Ref PRT Envelope, hello/heartbeat/event | 운영 앱 결합·분리된 token·localhost reconnect; SQLite durable event audit와 인증 cursor API LOCAL | 실제 CORE와 Ubuntu/TLS/LAN 연결, seq 누락·stale 운용 시험 |
 | 천장 폰 → 사이트 수신기 | WSS `/overhead/v1/frames`, `rosy-overhead/1`, JPEG | source/token 결합, Android `tls=1` pairing, synthetic Docker WSS TLS smoke LOCAL | 실제 phone provisioning, site CA 신뢰, Wi-Fi/LAN 및 연속 freshness |
 | 사이트 영상 작업자 → Fleet | HTTPS `POST /api/fleet/sightings`, D-257 payload; D-268 별도 | source-scoped CLI config, CPU ArUco and SQLite; synthetic Docker readback LOCAL | surveyed geometry, real phone/robot identity, field latency and retention acceptance |
    | 로봇 내부 | ROS 2 DDS → CORE → 로컬 기능·장치 | 로봇 런타임 소유 | 장치별 DEVICE 절차; 사이트 서버는 DDS 참가자가 아님 |
@@ -43,6 +43,6 @@
 
 **Consequences:** 현장 호스트는 서비스 프로세스를 한 대에서 운영할 수 있지만, 폰 ingress·vision worker·Fleet API·CORE 연결·저장소는 분리된 설정과 상태로 관찰한다. 로컬 Hub 연결을 여는 첫 구현은 credential separation과 동일 앱 통합 시험을 포함한다. Pinky 카메라 및 로봇암은 이 결정만으로 활성화되지 않는다.
 
-**Validation / Transition:** [장비-서버 계약 감사 및 연동 계획](../plans/2026-09-26-middleware-device-server-contract-integration.md)의 단계별 수용을 실행한다. Windows LOCAL에서 실제 `FleetAgent`→동일 `fleet console` ASGI `/ws/robots` hello/heartbeat/event/reconnect와 분리 token, camera source/token 결합 및 Android 4401 처리를 검증했다. Ubuntu 24.04 Fleet·vision·Caddy images를 Docker로 빌드하고 Compose services health를 확인했다. 합성 JPEG를 신뢰 CA 기반 WSS로 전송해 CPU ArUco 4점 보정, source/seq/map/calibration lineage, Caddy HTTPS proxy, Fleet SQLite readback까지 검증했다. 품질은 정의된 측정식이 없어 `null`이며 표시 전용이다. 로컬 테스트 token/certificate 외의 운영 provisioning, 실제 Ubuntu host, site phone/CORE와 surveyed calibration 수용 전까지 DEVICE/FIELD 및 자동 실행은 HOLD다.
+**Validation / Transition:** [장비-서버 계약 감사 및 연동 계획](../plans/2026-09-26-middleware-device-server-contract-integration.md)의 단계별 수용을 실행한다. Windows LOCAL에서 실제 `FleetAgent` 구현체→동일 `fleet console` ASGI `/ws/robots` hello/heartbeat/event/reconnect와 분리 token, camera source/token 결합 및 Android 4401 처리를 검증했다. Ubuntu 24.04 Fleet·vision·Caddy images를 Docker로 빌드하고 Compose services health를 확인했다. 합성 JPEG를 신뢰 CA 기반 WSS로 전송해 CPU ArUco 4점 보정, source/seq/map/calibration lineage, Caddy HTTPS proxy, Fleet SQLite readback까지 검증했다. 추가로 Docker Caddy TLS를 통과한 `FleetAgent` 구현체가 CORE PRT 이벤트를 보내고 인증 API에서 보였으며, Fleet restart 뒤 sighting/event 둘 다 복구됐다. 이는 실제 CORE 장비나 Ubuntu 현장 수용 증거가 아니다. 품질은 정의된 측정식이 없어 `null`이며 표시 전용이다. 로컬 테스트 token/certificate 외의 운영 provisioning, 실제 Ubuntu host, site phone/CORE와 surveyed calibration 수용 전까지 DEVICE/FIELD 및 자동 실행은 HOLD다.
 
 **References:** [D-118](D-118-image-fleet-gz-multi.md), [D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-267](D-267-ubuntu-site-fleet-and-vision-workflow.md), [D-268](D-268-policy-eligible-vision-evidence-for-fleet-tasks.md), [ROSY API & Protocol Reference](../reference/ROSY%20API%20%26%20Protocol%20Reference.md).
