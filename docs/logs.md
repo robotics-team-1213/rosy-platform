@@ -2153,3 +2153,9 @@
 - 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; harness lint 0 error, 기존 last_verified 경고 19건. `generate`로 docs/index.md를 갱신했다.
 - gate 변화: 없음. 계획·ADR·SRS 계약만 바꿨고 D-204 화면 이관, 브라우저 동작, Pi 설치·실기 정지는 검증하지 않았다.
 - 결정: D-264는 다른 세션의 장치 진단 도구 ADR이 먼저 사용해 D-265로 기록했다. D-204 별도 브랜치의 보이는 패널 기반 메뉴 필터는 병합 전에 역할 기반 메뉴 필터로 고친다.
+## 2026-09-26 · uncommitted · docs(verification): 전수 시험 28 스위트로 확장 — 실패 전건을 레인별 판정
+- 변경: 코드 변경 없음. 전수 시험 결과를 기록만 한다(기준선 확장).
+- 증거: 2분할 실행 — run1 24 스위트 4994건(4841 passed/16 failed/137 skipped, 1602s) + run2 sensing·bringup·imu 3 스위트 2194건(2007 passed/96 failed/91 skipped + 7 errors, 344s), 합계 7188건. 실패 분류: (a) sd_writer 빈 exit code 플레이키 1건(문서화됨, 11회 중 7회째), (b) CI red와 정확히 같은 src/runtime 7건(test_core_main_shutdown·event_catalogue×2·executor_contracts×2·v1_import_boundary·swarm — 타 세션 레인), (c) host_cards×6·host_hardware×1·gz_sim×1 — 실행 창에 동료의 미커밋 dashboard/host 카드 분할이 작업 트리에 있었고 그 커밋 14645463이 시험 종료 27초 후(01:39:31 vs 01:39:58) 랜드, (d) sensing 96 failed + 7 errors — 이 호스트 최초 실행(제어 흡수 레인). 제 docs 변경의 문서 게이트는 lint 0 error + 계약 121 passed(HEAD 60520fb1 worktree 포함).
+- gate 변화: 없음(전수 시험 실패는 전부 타 레인/시점 예술 — 문서 게이트는 초록)
+- 결정: 전수 시험 기준선을 28 스위트/7188건으로 확장 기록. 한 번에 돌리면 test_battery·ament lint·test_package_contract basename 충돌로 수집이 중단되므로 2분할이 정본. sensing·host_cards 실패는 소유 레인에 보고만, 수정하지 않음
+- 교훈: 전수 시험은 동료가 미커밋 변경을 작업 트리에 두고 있는 창에 돌리면 실패 소유가 흐려진다 — 실패 파일의 git log와 커밋 타임스탬프를 시험 창과 겹쳐 봐야 판정이 선다. 상위 폴더 AGENTS의 시험 경로는 재그룹(D-147) 후 낡아 첫 실행이 즉시 죽었다(수정 완료)

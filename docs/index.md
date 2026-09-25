@@ -141,8 +141,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(verification): 전수 시험 28 스위트로 확장 — 실패 전건을 레인별 판정
 - 2026-09-26 · uncommitted · docs(plan/adr): 역할별 메뉴 이관 계획과 D-265
 - 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
 - 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
 - 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
-- 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
