@@ -11,7 +11,7 @@ D-255의 blocker B1을 치는 캡처다. 전부 LOCAL(Windows Chromium)이며 �
   `X:/DevTemp/opencode/round_fleet.py`
 - 게임: 실제 `PreviewServer` + 게시 페이로드. `X:/DevTemp/opencode/round_games.py`
 
-## 셀 (14)
+## 셀 (15)
 
 | # | 파일 | 표면·뷰포트·상태 |
 |---|---|---|
@@ -29,6 +29,7 @@ D-255의 blocker B1을 치는 캡처다. 전부 LOCAL(Windows Chromium)이며 �
 | 12 | games-play-1280x800.png | 게임 · 1280×800 · play |
 | 13 | games-lost-hold-1280x800.png | 게임 · 1280×800 · 유실 HOLD |
 | 14 | games-initial-1280x800.png | 게임 · 1280×800 · 최초 기동 |
+| 15 | console-map-crosshair-1366x768.png | 운용 지도 · 1366×768 · 키보드 십자선 (D-259) |
 
 ## 읽기
 

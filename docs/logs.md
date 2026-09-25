@@ -2131,3 +2131,9 @@
 - gate 변화: 없음. SOURCE GO 유지. CI의 `core domain suites` 7 failed는 src/runtime 레인(타 세션)이고 docs 게이트 단계는 그 전에 skip
 - 결정: D-256 Accepted — 값 단위 허용목록을 만들지 않고, 오탐은 호출 지점의 이름으로 고친다
 - 교훈: ADR 번호는 파일과 행을 한 번에 확보한다. D-255로 쓰려는 순간 타 세션이 같은 번호를 집어넣어 D-256으로 갈아탔다(오늘 세 번째 충돌). append-only 공유 파일은 인덱스만 스테이징해 상대의 행을 훔치지 않는다
+## 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
+- 변경: map.js에 commitPoint 추출 + 키보드 십자선(화살표·Enter·Escape, paper색 십자+원, --pin 미신설), canvas tabindex, 시험 1건(진짜 map.js 오버라이드), 회차에 1셀, D-259 Accepted
+- 증거: 키보드 확정 POST 단언 통과. 변이(핸들러 제거) 적색 → 원복 녹색. 구현 중 자가 결함 1건: 즉시 tick이 아니라 즉시 확정 — 십자선 초기화가 비정상 격자에서 NaN을 냄 → 유한성 검사 후 중앙 폴백. dialog+web+dashboard 56 passed
+- gate 변화: D-259 Proposed→Accepted
+- 결정: D-259 Accepted. D-224 약속표 추가는 이 문서가 대신한다(타 ADR 불편집)
+- 교훈: 시험이 map.js를 스텁으로 갈아낀다는 것을 모르고 빈 손으로 디버깅했다 — 실패가 어서션 위치가 아니라 import 위치를 가리킬 수 있다. _serve_module 주석이 경고済였는데 읽지 않았다
