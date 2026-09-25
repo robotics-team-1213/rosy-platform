@@ -14,6 +14,7 @@ install(FILES
   map.js
   settings.js
   triage.js
+  vision.js
   DESTINATION share/${PROJECT_NAME}
 )
 
