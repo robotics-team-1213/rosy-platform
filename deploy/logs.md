@@ -1198,3 +1198,12 @@
 - gate 변화: 없음(`UPDATE_GO` HOLD)
 - 결정: D-225
 - 교훈: 묶을 때 mtime을 고정하면 timestamp `.pyc`가 전부 낡은 것으로 보인다. 재현성과 `.pyc` 유효성을 같이 얻으려면 checked-hash로 컴파일한다. 첫 시도는 8시간 커밋 0건으로 멈췄다 — 단계별 커밋·제한 시간·커밋 감시로 다시 돌려 23분에 끝났다.
+
+## 2026-09-25 · 57e7e5d7 · feat(image,release,sd,first-boot): 이미지 안 공장 릴리스를 오프라인 서명해 첫 부팅에 설치 (D-225)
+
+- 변경: 이미지 안 공장 릴리스는 서명만 없던 게 아니라 `manifest.json`·`SHA256SUMS`도 없었다(`verify-artifacts.sh`의 확인이 통과할 수 없던 상태). `customize-rootfs.sh`가 마지막 쓰기 뒤 `build_payload_release.py seal`로 봉인하고 두 파일을 dist `factory-release/<id>/`로 내보낸다. `sign_image_release.py`가 공장 목록을 먼저 서명하고 그 `.sig`를 바깥 `SHA256SUMS`에 더한 뒤 바깥 목록을 서명한다(중간 실패 시 원상 복구, 재실행 거부). SD 번들에 `factory_release.sha256sums_sig_b64`(PC에서 신뢰 키로 검증). 첫 부팅이 서명을 넣고 `verify()`가 통과할 때만 남긴다(실패 시 제거·기록, 프로비저닝은 계속). BUILD_GO는 "이미지 안 서명 없음, dist 서명으로 scratch 복사본 verify 통과"를 요구한다. `prepare-rosy-sd.ps1`은 번들 생성 호출에 인자 2개만 추가.
+- 증거: 브랜치 437 passed, 12 skipped; 병합 뒤 main에서 공장 서명·오프라인 서명·첫 부팅·릴리스 전환·payload 86 passed, 1 skipped + SD writer 정지 판정 6 passed(D-230 병합 확인). 독립 리뷰(opus) MERGE, 0 CRITICAL/HIGH.
+- 미증명: ARM64 이미지 빌드, 실기 첫 부팅. 후속(리뷰 MEDIUM): Pi 5에서 첫 부팅 전체 해시 시간 측정(Wi-Fi 120 s와 같은 180 s 안), 서명된 dist로 SD writer 끝까지 도는 시험. LOW: 일시적 `verify()` 오류가 좋은 서명을 지울 수 있음, 서명기 강제 종료 뒤 수동 정리, 핸드오프 단계에 `factory-release/` 존재 확인 없음, `cp -a`가 CI uid 소유를 유지하는지 확인.
+- gate 변화: 없음(`UPDATE_GO` HOLD). 효과는 새 이미지(012)부터 — 011 카드에는 공장 서명이 없다.
+- 결정: D-225
+- 교훈: "서명 안 됨"으로 알던 결함이 실제로는 "봉인 자체가 없음"이었다. 검사기가 요구하는 산출물을 만드는 단계가 있는지부터 확인한다.

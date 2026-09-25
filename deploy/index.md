@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · 57e7e5d7 · feat(image,release,sd,first-boot): 이미지 안 공장 릴리스를 오프라인 서명해 첫 부팅에 설치 (D-225)
 - 2026-09-25 · 4107311c · feat(release): payload만 빌드·서명·묶는 경로와 리뷰 수정 (D-225)
 - 2026-09-25 · uncommitted · fix(sd): writer 멈춤은 두 단계로, 콘솔 없으면 묻지 않고 실패 (D-230)
 - 2026-09-25 · f9e52192 · feat(robot): 서명 payload를 SSH로 보내 전환하는 `rosy-release-push.ps1` (D-225)
 - 2026-09-25 · 4512c897 · feat(sd): 99.9% 이상에서 멈춘 기록은 재개부터, 느린 리더 안내 (D-225)
-- 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
