@@ -11,6 +11,7 @@ install(FILES
   app.js
   client.js
   dom.js
+  host-cards.js
   map.js
   ros-network.js
   settings.js
