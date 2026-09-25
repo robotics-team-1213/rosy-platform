@@ -251,6 +251,7 @@
 | D-250 | TeleopHold — 홀드-티커 추출 | Accepted |
 | D-251 | 절차 카드 — 크롬 규칙 고정 | Accepted |
 | D-252 | Fleet 큐·대형 — 머리 triage·대기 요약 | Accepted |
+| D-253 | 게임·진단 마무리 — 관전 없음·진단 동결 | Accepted |
 | D-254 | 디자인 철학과 토큰 전집 | Proposed |
 | D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 | Accepted |
 | D-247 | 대시보드는 보드의 모든 장치가 붙어 있고 응답하는지를 보여준다 — 장치 관측과 제품 기능을 가른다 | Proposed |

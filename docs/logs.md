@@ -2113,3 +2113,9 @@
 - gate 변화: D-252 Proposed→Accepted. 다음은 D-253(게임·진단 마무리) Proposed
 - 결정: D-252 Accepted
 - 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
+- 변경: D-253 Status Proposed→Accepted, ADR 로그 D-253 Accepted. 코드 변경 없음
+- 증거: 게임 브라우저 5 passed, hmi/web 51 passed (변경 없음 확인). 계획 §3-7의 관전 readonly를 실측 근거 3건(D-201 halt 게이트·근접=역할·정지 손이 많을수록 안전)으로 뒤집음
+- gate 변화: D-253 Proposed→Accepted. 롤아웃 7분할 종료
+- 결정: D-253 Accepted. 관전 모드 없음, ScoreBoard 미추출, 진단 동결
+- 교훈: 없음
