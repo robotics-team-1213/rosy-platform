@@ -51,6 +51,8 @@ _HTTP_BY_CODE = {
     "HW_TEST_COOLDOWN": 429,
     "HW_TEST_UNAVAILABLE": 503,
     "HW_CONFIRM_UNAVAILABLE": 503,
+    # D-247 6: an answer with no finished (done, < 5 min) test of that device to judge.
+    "HW_CONFIRM_NO_TEST": 409,
     "COMMAND_TIMEOUT": 504,
     "INTERNAL_ERROR": 500,
 }

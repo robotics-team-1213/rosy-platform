@@ -301,6 +301,16 @@ def _human_rows(tmp_path: Path, buzzer="needs_human", lamp="needs_human") -> Non
                       _device("camera", "no_response")])
 
 
+def _tested(tmp_path: Path, device: str, state: str = "done", age_s: float = 5.0,
+            request_id: str = "fedcba9876543210") -> None:
+    """What rosy-hw-test leaves after testing `device`, `age_s` seconds ago."""
+    finished = datetime.now(timezone.utc) - timedelta(seconds=age_s)
+    (tmp_path / "run/rosy-boot").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "run/rosy-boot/hw-test.json").write_text(json.dumps({
+        "schema": 1, "request_id": request_id, "action": device, "state": state, "detail": "d",
+        "finished_at": finished.isoformat(timespec="seconds")}), encoding="utf-8")
+
+
 def test_only_an_administrator_can_start_a_test(tmp_path):
     client = _client(_config(tmp_path))
     for token in (VIEWER_TOKEN, OPERATOR_TOKEN):
@@ -409,6 +419,7 @@ def test_a_malformed_test_outcome_is_not_shown(tmp_path, mutate):
 
 def test_only_an_administrator_can_record_an_answer(tmp_path):
     client = _client(_config(tmp_path))
+    _tested(tmp_path, "buzzer")
     for token in (VIEWER_TOKEN, OPERATOR_TOKEN):
         response = client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": True},
                                headers=_auth(token))
@@ -419,18 +430,23 @@ def test_only_an_administrator_can_record_an_answer(tmp_path):
 def test_heard_and_not_seen_turn_the_rows_into_ok_and_no_response(tmp_path):
     _human_rows(tmp_path)
     client = _client(_config(tmp_path))
+    _tested(tmp_path, "buzzer")
     heard = client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": True},
                         headers=_auth(ADMIN_TOKEN))
     assert heard.status_code == 200
     record = heard.json()
     assert record["recorded"] is True and record["observed"] is True and record["device"] == "buzzer"
     assert record["by"] and record["at"].endswith("+00:00")
+    assert "request_id" not in record
+    _tested(tmp_path, "lamp", request_id="0011223344556677")
     assert client.post("/api/v1/host/hardware/confirm", json={"device": "lamp", "observed": False},
                        headers=_auth(ADMIN_TOKEN)).status_code == 200
 
     stored = json.loads((tmp_path / "home/.rosy/hw-confirmations.json").read_text(encoding="utf-8"))
     assert stored["schema"] == 1 and set(stored["devices"]) == {"buzzer", "lamp"}
-    assert set(stored["devices"]["buzzer"]) == {"observed", "by", "label", "at"}
+    assert set(stored["devices"]["buzzer"]) == {"observed", "by", "label", "at", "request_id"}
+    assert stored["devices"]["buzzer"]["request_id"] == "fedcba9876543210"
+    assert stored["devices"]["lamp"]["request_id"] == "0011223344556677"
     assert not [p for p in (tmp_path / "home/.rosy").iterdir() if p.name.startswith(".")]
 
     rows = {row["id"]: row for row in client.get("/api/v1/host/hardware",
@@ -440,11 +456,13 @@ def test_heard_and_not_seen_turn_the_rows_into_ok_and_no_response(tmp_path):
     assert rows["lamp"]["state"] == "no_response"
     assert rows["lamp"]["evidence"].startswith("사람 확인: 보이지 않음")
     assert rows["camera"]["state"] == "no_response" and "source" not in rows["camera"]
+    assert not any("fedcba9876543210" in row["evidence"] for row in rows.values())
 
 
 def test_a_later_answer_replaces_the_earlier_one(tmp_path):
     _human_rows(tmp_path)
     client = _client(_config(tmp_path))
+    _tested(tmp_path, "buzzer")
     for observed in (False, True):
         client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": observed},
                     headers=_auth(ADMIN_TOKEN))
@@ -457,6 +475,7 @@ def test_a_later_answer_replaces_the_earlier_one(tmp_path):
 def test_an_answer_never_hides_a_missing_driver(tmp_path):
     _human_rows(tmp_path, lamp="driver_missing")
     client = _client(_config(tmp_path))
+    _tested(tmp_path, "lamp")
     client.post("/api/v1/host/hardware/confirm", json={"device": "lamp", "observed": True},
                 headers=_auth(ADMIN_TOKEN))
     rows = {row["id"]: row for row in client.get("/api/v1/host/hardware",
@@ -475,12 +494,106 @@ def test_an_answer_is_strictly_typed(tmp_path, body):
 
 def test_an_unwritable_state_directory_is_its_own_error(tmp_path):
     config = _config(tmp_path)
+    _tested(tmp_path, "lamp")
     blocker = tmp_path / "blocker"
     blocker.write_text("a file, not a directory", encoding="utf-8")
     config["hardware_probe"]["confirm_path"] = str(blocker / "hw-confirmations.json")
     response = _client(config).post("/api/v1/host/hardware/confirm", json={"device": "lamp", "observed": True},
                                     headers=_auth(ADMIN_TOKEN))
     assert response.status_code == 503 and response.json()["error"]["code"] == "HW_CONFIRM_UNAVAILABLE"
+
+
+def test_an_answer_without_a_test_is_a_409(tmp_path):
+    _human_rows(tmp_path)
+    response = _client(_config(tmp_path)).post("/api/v1/host/hardware/confirm",
+                                               json={"device": "buzzer", "observed": True},
+                                               headers=_auth(ADMIN_TOKEN))
+    assert response.status_code == 409 and response.json()["error"]["code"] == "HW_CONFIRM_NO_TEST"
+    assert not (tmp_path / "home/.rosy/hw-confirmations.json").exists()
+
+
+@pytest.mark.parametrize("device,state,age_s", [
+    ("buzzer", "busy", 5.0),
+    ("buzzer", "unavailable", 5.0),
+    ("buzzer", "failed", 5.0),
+    ("lamp", "done", 5.0),       # the last test was the other device
+    ("buzzer", "done", 301.0),   # stale
+    ("buzzer", "done", -60.0),   # finished in the future
+])
+def test_an_answer_needs_a_recent_finished_test_of_that_device(tmp_path, device, state, age_s):
+    _human_rows(tmp_path)
+    _tested(tmp_path, device, state=state, age_s=age_s)
+    client = _client(_config(tmp_path))
+    response = client.post("/api/v1/host/hardware/confirm", json={"device": "buzzer", "observed": True},
+                           headers=_auth(ADMIN_TOKEN))
+    assert response.status_code == 409 and response.json()["error"]["code"] == "HW_CONFIRM_NO_TEST"
+    assert not (tmp_path / "home/.rosy/hw-confirmations.json").exists()
+    rows = {row["id"]: row for row in client.get("/api/v1/host/hardware",
+                                                  headers=_auth(VIEWER_TOKEN)).json()["devices"]}
+    assert rows["buzzer"]["state"] == "needs_human"
+
+
+def test_concurrent_tests_accept_only_one(tmp_path):
+    import threading
+
+    from core_api_web.api.errors import ApiError
+
+    svc = SimpleNamespace(config=_config(tmp_path), state=None)
+    auth = SimpleNamespace(token_id="t", label="")
+    barrier = threading.Barrier(8)
+    outcomes: list[str] = []
+
+    def press():
+        barrier.wait()
+        try:
+            host_api.host_hardware_test(host_api.HardwareTestRequest(device="buzzer"), auth, svc)
+            outcomes.append("accepted")
+        except ApiError as exc:
+            outcomes.append(exc.code)
+
+    threads = [threading.Thread(target=press) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["HW_TEST_COOLDOWN"] * 7 + ["accepted"]
+
+
+def test_concurrent_answers_keep_both_devices(tmp_path):
+    import threading
+
+    config = _config(tmp_path)
+    svc = SimpleNamespace(config=config, state=None)
+    auth = SimpleNamespace(token_id="t", label="")
+    confirm_path = config["hardware_probe"]["confirm_path"]
+    real_read = host_api.read_test_result
+    barrier = threading.Barrier(2)
+
+    def fresh(device):
+        return {"request_id": f"{device}-run", "action": device, "state": "done", "detail": "d",
+                "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+    def answer(device):
+        barrier.wait()
+        host_api.host_hardware_confirm(host_api.HardwareConfirmRequest(device=device, observed=True), auth, svc)
+
+    lookups = {}
+    host_api.read_test_result = lambda _path: fresh(lookups[threading.current_thread().name])
+    try:
+        threads = []
+        for device in ("buzzer", "lamp"):
+            thread = threading.Thread(target=answer, args=(device,), name=f"answer-{device}")
+            lookups[thread.name] = device
+            threads.append(thread)
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        host_api.read_test_result = real_read
+    stored = host_api.read_confirmations(confirm_path)
+    assert set(stored) == {"buzzer", "lamp"}
+    assert stored["lamp"]["request_id"] == "lamp-run"
 
 
 def test_a_corrupt_answer_file_is_ignored_not_trusted(tmp_path):

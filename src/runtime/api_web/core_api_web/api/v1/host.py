@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import secrets
 import stat
+import threading
 import time
 from typing import Any, Literal, Optional
 
@@ -327,7 +328,15 @@ HW_TEST_COOLDOWN_S = 10.0
 MAX_SMALL_FILE_BYTES = 8 * 1024
 #: What a person answered, in the words of each device.
 NOT_OBSERVED = {"buzzer": "들리지 않음", "lamp": "보이지 않음"}
+#: An answer must follow a test of that device that rosy-hw-test finished this recently.
+HW_CONFIRM_WINDOW_S = 300.0
+#: rosy-hw-test and CORE share a clock; a finish time further ahead than this is not trusted.
+HW_CONFIRM_FUTURE_SKEW_S = 5.0
 _last_test: dict[str, float] = {}
+#: Two presses in the same instant must not both pass the cool-down check.
+_test_lock = threading.Lock()
+#: Two answers in the same instant must not drop each other's device.
+_confirm_lock = threading.Lock()
 
 
 def _hardware_paths(svc: CoreServicesLike) -> tuple[str, str]:
@@ -408,6 +417,9 @@ def read_confirmations(path: str) -> dict[str, dict[str, Any]]:
         if not all(isinstance(entry.get(key), str) and len(entry[key]) <= MAX_TEXT for key in ("by", "label")):
             continue
         clean[device] = {key: entry[key] for key in ("observed", "by", "label", "at")}
+        request_id = entry.get("request_id")
+        if isinstance(request_id, str) and len(request_id) <= MAX_TEXT:
+            clean[device]["request_id"] = request_id
     return clean
 
 
@@ -638,19 +650,21 @@ def host_hardware_test(
 ):
     """부저를 한 번 울리거나 램프를 한 번 켠다(D-247 6). CORE는 요청 파일만 쓰고 장치는 root가 다룬다."""
     request_path, _result, _confirm = _test_paths(svc)
-    now = time.monotonic()
-    last = _last_test.get(request_path)
-    if last is not None and now - last < HW_TEST_COOLDOWN_S:
-        raise ApiError("HW_TEST_COOLDOWN", 429, "방금 시험했습니다. 10초 뒤에 다시 누르세요.")
     request_id = secrets.token_hex(8)
     payload = json.dumps({"action": body.device, "request_id": request_id, "by": auth.token_id,
                           "requested_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
                          sort_keys=True) + "\n"
-    try:
-        _write_private(request_path, payload, 0o640, "hw-test.request")
-    except OSError as exc:
-        raise ApiError("HW_TEST_UNAVAILABLE", 503, "장치 시험을 요청하지 못했습니다") from exc
-    _last_test[request_path] = now
+    # Check, write and start the cool-down as one step: of two presses at once, one is accepted.
+    with _test_lock:
+        now = time.monotonic()
+        last = _last_test.get(request_path)
+        if last is not None and now - last < HW_TEST_COOLDOWN_S:
+            raise ApiError("HW_TEST_COOLDOWN", 429, "방금 시험했습니다. 10초 뒤에 다시 누르세요.")
+        try:
+            _write_private(request_path, payload, 0o640, "hw-test.request")
+        except OSError as exc:
+            raise ApiError("HW_TEST_UNAVAILABLE", 503, "장치 시험을 요청하지 못했습니다") from exc
+        _last_test[request_path] = now
     what = "부저를 울립니다" if body.device == "buzzer" else "램프를 켭니다"
     return {"accepted": True, "request_id": request_id, "device": body.device,
             "detail": f"{what}. 들렸는지·보였는지 확인해 주세요."}
@@ -662,16 +676,34 @@ def host_hardware_confirm(
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
-    """관리자가 들림·보임을 기록한다(D-247 6). 누가 언제 확인했는지 CORE 상태 디렉터리에 남는다."""
-    _request, _result, confirm_path = _test_paths(svc)
-    confirmations = read_confirmations(confirm_path)
+    """관리자가 들림·보임을 기록한다(D-247 6). 누가 언제 확인했는지 CORE 상태 디렉터리에 남는다.
+
+    답은 방금 끝난 그 장치의 시험에 대한 것이어야 한다: rosy-hw-test 가 같은 장치를
+    `done` 으로 5분 안에 끝낸 결과가 없으면 409 ``HW_CONFIRM_NO_TEST``. 울리지 않은
+    부저를 "들림" 으로 기록하지 않기 위해서다.
+    """
+    _request, result_path, confirm_path = _test_paths(svc)
+    test = read_test_result(result_path)
+    if test is None or test["action"] != body.device:
+        raise ApiError("HW_CONFIRM_NO_TEST", 409, "이 장치를 먼저 시험한 뒤에 답해 주세요.")
+    if test["state"] != "done":
+        raise ApiError("HW_CONFIRM_NO_TEST", 409, "마지막 시험이 끝나지 않았습니다. 다시 시험한 뒤에 답해 주세요.")
+    now = datetime.now(timezone.utc)
+    age = (now - datetime.fromisoformat(test["finished_at"])).total_seconds()
+    if not -HW_CONFIRM_FUTURE_SKEW_S <= age <= HW_CONFIRM_WINDOW_S:
+        raise ApiError("HW_CONFIRM_NO_TEST", 409, "마지막 시험이 5분보다 오래되었습니다. 다시 시험한 뒤에 답해 주세요.")
     entry = {"observed": body.observed, "by": auth.token_id, "label": (auth.label or "")[:MAX_TEXT],
-             "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    confirmations[body.device] = entry
-    payload = json.dumps({"schema": 1, "devices": confirmations}, ensure_ascii=False, sort_keys=True) + "\n"
-    try:
-        os.makedirs(os.path.dirname(confirm_path) or ".", mode=0o700, exist_ok=True)
-        _write_private(confirm_path, payload, 0o600, HW_CONFIRM_NAME)
-    except OSError as exc:
-        raise ApiError("HW_CONFIRM_UNAVAILABLE", 503, "확인 결과를 기록하지 못했습니다") from exc
+             "at": now.isoformat(timespec="seconds")}
+    # The test's request_id ties the answer to the run it judged. It stays in the 0600 file
+    # (audit); the response and the card do not carry it.
+    stored = {**entry, "request_id": test["request_id"]}
+    with _confirm_lock:
+        confirmations = read_confirmations(confirm_path)
+        confirmations[body.device] = stored
+        payload = json.dumps({"schema": 1, "devices": confirmations}, ensure_ascii=False, sort_keys=True) + "\n"
+        try:
+            os.makedirs(os.path.dirname(confirm_path) or ".", mode=0o700, exist_ok=True)
+            _write_private(confirm_path, payload, 0o600, HW_CONFIRM_NAME)
+        except OSError as exc:
+            raise ApiError("HW_CONFIRM_UNAVAILABLE", 503, "확인 결과를 기록하지 못했습니다") from exc
     return {"recorded": True, "device": body.device, **entry}
