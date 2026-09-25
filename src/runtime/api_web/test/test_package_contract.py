@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE = ROOT.parent / "core"
+CORE = ROOT.parent / "gateway"
 WEB_COMMON = ROOT.parents[1] / "hmi" / "web"
 FLEET = ROOT.parents[1] / "site" / "fleet"
 

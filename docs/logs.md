@@ -2119,3 +2119,9 @@
 - gate 변화: D-253 Proposed→Accepted. 롤아웃 7분할 종료
 - 결정: D-253 Accepted. 관전 모드 없음, ScoreBoard 미추출, 진단 동결
 - 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
+- 변경: D-233 결산 추가 후 Accepted, D-254 Accepted. 타 세션 영역 2줄 수정(test_cli 기대 디렉터리명 web, test_package_contract CORE 경로 gateway)
+- 증거: dialog+web+dashboard+fleet+api_web 474 passed 0 failed
+- gate 변화: D-233·D-254 Proposed→Accepted. 디자인 시스템 작업 종료
+- 결정: 잔재 수정은 타 세션에 고지한다. D-233 결산으로 인벤토리 착지 확정
+- 교훈: 없음

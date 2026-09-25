@@ -1,6 +1,7 @@
 ## D-233 디자인 시스템 초안 — 토큰 동결, 컴포넌트 3층, 표면이 레이아웃을 가진다
 
-**Status:** Proposed (2026-09-25, 초안). 이 ADR은 결정하지 않는다. D-92·D-130·D-157·D-194·D-195·D-201·D-218 위에 컴포넌트 인벤토리와 토큰 운용 규칙의 초안을 올리고, 첫 회차(D-153 G2) 전에 반례를 받는다.
+**Status:** Accepted (2026-09-26). D-254가 층 번호를 바로잡았고, 아래 결산이
+인벤토리의 착지를 기록한다.
 
 잇는 결정: [D-92](D-92-l2.md)(어휘 표) · [D-129](D-129-l1-d-92-1.md)(토큰 단일 파일) · [D-130](D-130-l2-headless.md)(문법 게이트 + headless 조건) · [D-153](D-153-ui-ux.md)(표면 단위 평가) · [D-157](D-157-shared-headless-ui-package-monorepo-web-decoupling.md)(중립 패키지) · [D-194](D-194-shared-browser-controls.md)(조작 부품 한 벌) · [D-195](D-195-measure-and-shared-palette.md)(치수 닫힌 집합) · [D-201](D-201-fixed-grammar-surfaces-fit-contract.md)(적합 계약) · [D-218](D-218-web-dialogs-name-the-action.md)(확인=네이티브) · [D-241](D-241-core-package-directories-use-role-names.md) · [D-242](D-242-remaining-role-directories.md)(역할 디렉터리 — 패키지 이름 유지) · [D-243](D-243-operator-screens-live-in-hmi.md)(운용 화면은 `src/hmi/dashboard`).
 
@@ -26,6 +27,12 @@
 **Alternatives:** 전면 공용 라이브러리(D-92 기각 유지 — 근거 미달). 표면별 완전 중복 유지(4벌 E-Stop의 문구 drift를 방치 — F-20 선례가 반증). 커스텀 모달 확인 컴포넌트(D-218이 비용으로 기각). 새 `ui-*` 패키지 신설(D-157·D-231에 위배).
 
 **Consequences (초안이 Accepted되면):** L1 추가는 어휘 표 + Styleguide + 게이트 시험을 같은 커밋에 동반한다. L2 추가는 두 표면의 사용처와 함께 온다. 토큰 변경은 전 표면 회차를 연다. 첫 회차 전까지 이 초안의 어떤 인벤토리도 GO가 아니다(D-153과 같은 논리).
+
+**결산 (2026-09-26):** 인벤토리는 이렇게 착지했다. EStopBlock→D-245(문구),
+AuthBar→D-248(잠금 플래그, headless 미추출), FieldMap→D-249(spec),
+TeleopHold→D-250(유일한 L2 추출), HostCard→D-251(크롬 규칙),
+Fleet→D-252(머리 triage+대기 요약), 게임·진단→D-253(동결). 층 번호는 D-254를
+따른다(concept L1/L1.5/L2/L3).
 
 **Validation / Transition:** `src/hmi/web/test/test_shared_controls.py` + `test_ui_token_contracts.py` + `test_palette_gates.py` 그대로(새 게이트 없음). 전이는 (1) 이 초안에 대한 반례 수집, (2) P0 중 `EStopBlock` 문구 통일 1건으로 파일럿, (3) `docs/validation/uiux-surfaces-<date>/` 회차에 캡처. `ROSY ADR Log.md`에 `D-233 | 디자인 시스템 초안 — 토큰 동결, 컴포넌트 3층 | Proposed` 1행 추가가 이 초안의 착지다.
 

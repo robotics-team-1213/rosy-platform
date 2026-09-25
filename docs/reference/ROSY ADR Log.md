@@ -241,7 +241,7 @@
 | D-231 | 소스 영역은 층으로 나눈다 — contracts·runtime·devices·products·hmi·site·sim과 firmware/, 디렉터리만 옮기고 패키지 이름은 유지, 제품 이름 런타임·src 안 AI 워커·원격 판단 경로·새 액션은 받지 않는다 | Accepted |
 | D-230 | SD writer 멈춤은 두 단계로 다룬다 — soft 경고, hard 중단, CLI 진행률 우선 | Accepted |
 | D-232 | OMX 제품 설정은 products/omx 이고, 보드 핀맵과 AI 자리는 그대로다 | Accepted |
-| D-233 | 디자인 시스템 초안 — 토큰 동결, 컴포넌트 3층 | Proposed |
+| D-233 | 디자인 시스템 초안 — 토큰 동결, 컴포넌트 3층 | Accepted |
 | D-241 | core 계열 폴더는 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
 | D-242 | 나머지 폴더도 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
 | D-243 | 운용 화면은 hmi 에 두고 API 는 런타임에 둔다 | Accepted |
@@ -252,7 +252,7 @@
 | D-251 | 절차 카드 — 크롬 규칙 고정 | Accepted |
 | D-252 | Fleet 큐·대형 — 머리 triage·대기 요약 | Accepted |
 | D-253 | 게임·진단 마무리 — 관전 없음·진단 동결 | Accepted |
-| D-254 | 디자인 철학과 토큰 전집 | Proposed |
+| D-254 | 디자인 철학과 토큰 전집 | Accepted |
 | D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 | Accepted |
 | D-247 | 대시보드는 보드의 모든 장치가 붙어 있고 응답하는지를 보여준다 — 장치 관측과 제품 기능을 가른다 | Proposed |
 ---
