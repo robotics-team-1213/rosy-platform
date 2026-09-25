@@ -80,3 +80,11 @@
 - gate 변화: 없음
 - 결정: D-247
 - 교훈: 없음
+
+## 2026-09-26 · 8e6902fd · feat(api): buzzer and lamp test and the person's answer (D-247 6)
+
+- 변경: `POST /api/v1/host/hardware/test`(admin, 10 s 쿨다운 `HW_TEST_COOLDOWN` 429, `HW_TEST_UNAVAILABLE` 503)는 `/run/rosy/hw-test.request`만 쓴다. `POST /api/v1/host/hardware/confirm`(admin, 엄격한 bool)은 `~/.rosy/hw-confirmations.json`에 원자적으로 기록한다(`HW_CONFIRM_UNAVAILABLE`). `GET /host/hardware`에 `test` 필드와 `needs_human` 부저·램프 행의 사람 확인 덮기(`source:"human"`)를 더했다. API Ref v1.23.
+- 증거: `src/runtime/gateway/test/test_host_hardware.py` 57 passed 1 skipped
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 없음

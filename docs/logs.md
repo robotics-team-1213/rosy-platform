@@ -2125,3 +2125,9 @@
 - gate 변화: D-233·D-254 Proposed→Accepted. 디자인 시스템 작업 종료
 - 결정: 잔재 수정은 타 세션에 고지한다. D-233 결산으로 인벤토리 착지 확정
 - 교훈: 없음
+## 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
+- 변경: D-247 Validation/Transition에 슬라이스 2를 적었다. 결정 6 구현, IMU 버스, 램프 드라이버 네 조건(커널 빌드와 `.remove_new`, 오버레이 경로와 gpio19 먹스, `pwm_channel=3`, rpihw rev 1.1)을 담았다. 부저는 BCM 4이고 D-169는 그대로다. D-190 Status에 날짜 붙은 부저 핀 확인과 표 두 행을 더했다(Decision 불변). API Ref v1.23에 시험·확인 경로와 에러 코드 세 개를 더했다.
+- 증거: `rosy_18` 2026-09-26 사람 입회 확인(부저 BCM 4 들림·BCM 22 조용, 램프 8 LED 점등). 시험 목록은 코드 로그에 있다.
+- gate 변화: 없음(D-247 Proposed 유지)
+- 결정: D-247, D-190
+- 교훈: 없음

@@ -137,8 +137,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
 - 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
 - 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
 - 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
 - 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
-- 2026-09-25 · uncommitted · docs(design-system): D-250 Accepted (첫 L2 headless)

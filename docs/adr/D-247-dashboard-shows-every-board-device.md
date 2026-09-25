@@ -92,6 +92,35 @@
 **Validation / Transition:**
 
 - **슬라이스.** 슬라이스 1은 결정 1–5·7만 구현한다. 결정 6(부저·램프 시험 동작과 확인 기록)은 슬라이스 2다; 그 전까지 두 행은 `사람 확인 필요`로 남는다.
+- **슬라이스 2 (2026-09-26, `feat/d247-slice2`).** 결정 6과, 결과(Consequences)의 이미지 결함 중 `i2c-0`과
+  `rp1_ws281x_pwm`을 구현한다. Decision은 바꾸지 않는다.
+  - *시험 동작.* root oneshot `rosy-hw-test`는 CORE가 쓴 `/run/rosy/hw-test.request`를 `rosy-hw-test.path`로 받는다.
+    `DeviceAllow`는 `/dev/gpiochip4`와 `/dev/ws281x_pwm`뿐이다. 부저는 `ROSY_BUZZER_PIN`에서 2 kHz, duty 10 %로
+    150 ms씩 세 번 울린다. `rosy-boot-display`가 `ROSY_BUZZER_ENABLED=true`로 그 선을 쥐고 있으면 울리지 않고 그렇다고
+    쓴다. 램프는 `lamp_selftest`로 빨강·초록·파랑을 1 s씩 켰다가 끈다. 이 C 도우미는 `lamp_control`과 같은 고정
+    `rpi_ws281x`로 빌드한다. `/dev/ws281x_pwm`는 쓰기 형식이 문서에 없어서 파이썬으로 직접 쓰지 않는다. 결과는
+    `/run/rosy-boot/hw-test.json`(root:rosy-core 0640)에 남는다. 모터, `cmd_vel`, ADC에는 닿지 않는다.
+  - *확인 기록.* `POST /host/hardware/test`와 `POST /host/hardware/confirm`은 관리자 전용이다. 확인은 누가(토큰 id·이름)
+    언제 확인했는지를 CORE 상태 디렉터리(`~/.rosy/hw-confirmations.json`)에 원자적으로 쓴다. `사람 확인 필요` 행은 들림·보임이면
+    `정상`, 안 들림·안 보임이면 `응답 없음`이 된다. 드라이버가 없는 행은 기록이 있어도 probe가 잰 그대로 남는다.
+  - *IMU 버스.* 이미지가 `config.txt`에 `dtoverlay=i2c0-pi5,pins_0_1`을 넣는다. 이 커널에서는 런타임 `dtoverlay`가 되지 않아
+    재부팅이 필요하다. `rosy_18`에서 BNO055 칩 ID `0xA0`을 확인했다.
+  - *램프 드라이버.* 네 가지를 모두 해야 램프가 켜진다. 모두 `rosy_18`(Pi 5 보드 `0xd04171` = 8 GB rev 1.1, 커널
+    `6.8.0-1064-raspi`)에서 확인했다.
+    - `rp1_ws281x_pwm`을 이미지 커널용으로 빌드한다. 6.11 전 커널에서는 `.remove`를 `.remove_new`로 바꿔야 빌드된다.
+    - 오버레이 대상을 `/axi/pcie@120000/rp1`로 바꾸고 gpio19를 `pwm0`으로 먹스한다. 원본은 `/axi/pcie@1000120000/rp1`이다.
+    - `pwm_channel=3`을 준다(`/etc/modprobe.d/rosy-ws281x.conf`). 기본값 2는 GPIO18, 곧 LCD 백라이트를 구동한다.
+    - `rpihw.c`에 Pi 5 rev 1.1 보드 ID를 더한다. 해시를 고정한 패치로 넣는다.
+
+    8 LED가 흰색·빨강·초록·파랑으로 켜지는 것을 사람이 봤다. probe는 채널이 3이 아니면 램프 행을 `드라이버 없음`으로 둔다.
+  - *부저 핀.* Pinky Pro 부저는 **BCM 4**다. 2026-09-26 `rosy_18`에서 사람이 귀로 확인했다. BCM 22는 조용했다.
+    `ROSY_BUZZER_PIN=4`로 부팅 표시의 `CORE_READY` 한 번 울림도 들렸다. 기본 핀을 4로 바꿨다. 기본으로 켤지
+    (`ROSY_BUZZER_ENABLED`)는 D-190이 정한다. 이 슬라이스는 켜 두지 않는다.
+  - *D-169는 그대로다.* 램프와 부저는 계속 벤치 전용이다. 시험 동작은 capability를 광고하지 않고, 제품 unit의 장치
+    표면도 넓히지 않는다(장치 표면 계약 시험).
+  - *남은 DEVICE 확인.* 새 이미지로 구운 카드에서 네 가지를 본다. `/dev/i2c-0`, `/dev/ws281x_pwm`, `pwm_channel=3`이
+    재부팅 뒤 자동으로 나타나는지 본다. 대시보드 버튼으로 부저와 램프가 동작하는지 본다. 들림·보임 기록이 재시작 뒤에도
+    남는지 본다. 이미지 커널이 바뀌면 모듈을 다시 빌드해야 하는지 본다(무인 업그레이드).
 
 - **호스트 시험.** probe를 가짜 `/dev`·sysfs·dmesg로 돌린다. 여섯 상태가 모두 나오는지, 죽은 버스에서
   시간 제한 안에 끝나는지 확인한다.

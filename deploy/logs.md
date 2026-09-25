@@ -1223,3 +1223,30 @@
 - gate 변화: 없음
 - 결정: D-247
 - 교훈: 2026-09-25 전원 재투입 사실 — IR·초음파 4095는 감지 없음(정상), 멈춘 ADC MCU는 Pi 재부팅으로 풀리지 않는다, BNO055는 켜진 뒤 CONFIG 모드라 가속도 0이 정상이다.
+
+## 2026-09-26 · 1d0c3420 · feat(image): enable the I2C0 IMU bus in config.txt (D-247)
+
+- 변경: `configure-boot-overlay-pi5.sh`(이미지·실기 공용, UART 스크립트와 같은 Pi 5 섹션 규칙·vfat 안전 교체)가 boot 줄 하나를 멱등으로 켠다. `customize-rootfs.sh`가 `dtoverlay=i2c0-pi5,pins_0_1`을 넣고 `verify-mounted-image.py`가 요구한다.
+- 증거: `test/test_boot_overlay_pi5.py`, 이미지 계약 통과. `rosy_18`에서 손으로 넣은 같은 줄로 BNO055 칩 ID 0xA0
+- 미증명: 새 이미지 카드에서 재부팅 뒤 `/dev/i2c-0`
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 이 커널(6.8.0-1064-raspi)에서는 런타임 `dtoverlay`가 되지 않는다. config.txt와 재부팅만 된다.
+
+## 2026-09-26 · b7d7b17a · feat(image): build the WS2812 lamp driver for the image kernel (D-247)
+
+- 변경: 이미지 chroot에서 고정 rpi_ws281x의 `rp1_ws281x_pwm`을 이미지 커널(`/lib/modules`의 유일한 항목 또는 `ROSY_IMAGE_KERNEL`) 헤더로 빌드한다. 6.11 전에는 `.remove_new`로 고친다. `/lib/modules/<kver>/extra`에 설치하고 depmod한다. `overlays/rosy-ws281x.dts`(`/axi/pcie@120000/rp1`, gpio19 `pwm0`)를 dtbo로 컴파일하고 `dtoverlay=rosy-ws281x`를 켠다. 페이로드가 `99-rosy-lamp.rules`와 `modprobe.d/rosy-ws281x.conf`(`pwm_channel=3`)를 싣는다. `install-pinky-hardware-deps.sh`는 해시 고정 패치(Pi 5 rev 1.1 보드 ID)를 lamp_control 빌드 전에 적용한다.
+- 증거: `test/test_lamp_driver_image.py` 17 passed. 패치가 잠긴 아카이브에 적용됨(호스트 `patch`). 모든 단계는 `rosy_18`에서 손으로 확인
+- 미증명: 네이티브 ARM64 빌드 호스트에서 이미지 빌드. 베이스 이미지 커널의 `linux-headers-<kver>`가 잠긴 apt suite에 아직 있는지. 새 카드에서 모듈 자동 로드와 `pwm_channel=3`
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: `pwm_channel` 기본값 2는 GPIO18(LCD 백라이트)이다. 모듈이 로드돼도 램프는 어둡다.
+
+## 2026-09-26 · 8e6902fd · feat(native,api): buzzer and lamp test with a person's answer (D-247 6)
+
+- 변경: root oneshot `rosy-hw-test.py`·`.service`·`.path`를 추가했다. `DeviceAllow`는 gpiochip4와 ws281x_pwm뿐이다. 페이로드가 싣고 이미지가 path unit만 켠다. 부저 기본 핀은 BCM 4다(`board.yaml`, `rosy-boot-display`). probe는 램프 `pwm_channel`을 본다.
+- 증거: `test/test_hw_test.py` 38 passed 2 skipped(Windows), native systemd·장치 표면·이미지·설치 배치·부팅 표시 계약 통과
+- 미증명: 실기에서 lgpio PWM이 unit 샌드박스(RuntimeDirectory, DeviceAllow) 안에서 도는지. lamp_selftest를 root로 돌렸을 때 램프가 켜지는지
+- gate 변화: 없음
+- 결정: D-247, D-190(부저 핀)
+- 교훈: 없음
