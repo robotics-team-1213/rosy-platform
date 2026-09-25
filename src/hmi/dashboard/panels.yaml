@@ -19,6 +19,29 @@ panels:
     order: 20
     module: panels/console/map.js
     css: [panels/surface-panels.css]
+  - id: console.teleop
+    title: 수동 운전
+    surface: console
+    slot: act
+    order: 30
+    min_role: operator
+    module: panels/console/teleop.js
+    css: [panels/surface-panels.css]
+  - id: console.camera
+    title: 전방 카메라
+    surface: console
+    slot: observe
+    order: 40
+    module: panels/console/camera.js
+    css: [panels/surface-panels.css]
+  - id: console.docking
+    title: 도킹 운용
+    surface: console
+    slot: act
+    order: 40
+    min_role: operator
+    module: panels/console/docking.js
+    css: [panels/surface-panels.css]
   - id: setup.waypoints
     title: 웨이포인트 준비
     surface: setup

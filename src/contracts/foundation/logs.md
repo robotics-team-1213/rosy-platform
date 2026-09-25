@@ -62,3 +62,10 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(core_common): D-260 robot state rule table
+- 변경: `core_common/robot_state.py` 신규 — 상태 다섯 개와 우선순위, 한국어·LCD(ASCII) 이유 줄, 할 일 규칙, 장치 요약. 표준 라이브러리만. D-247 7의 `MOTION_REASON`을 이리로 옮김. `test/test_robot_state.py` 36건
+- 증거: `python -m pytest src/contracts/foundation/test/test_robot_state.py -q` 36 passed; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed (구현, DEVICE 확인 남음)
+- 교훈: 부팅 화면 프로그램(rosy-display)과 CORE가 한 표를 쓰려면 패키지 `__init__`이 아무것도 import하지 않아야 한다 — 시험으로 고정

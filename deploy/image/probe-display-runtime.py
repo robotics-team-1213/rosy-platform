@@ -33,7 +33,8 @@ import sys
 
 APT_MODULES = ("spidev", "lgpio", "numpy", "PIL.Image")
 APT_PREFIX = "/usr/lib/python3/dist-packages"
-RELEASE_MODULES = ("rosylib", "rosylib.battery", "emotion.info_screen")
+# D-260: the boot display folds its inputs with the release's rule table.
+RELEASE_MODULES = ("rosylib", "rosylib.battery", "emotion.info_screen", "core_common.robot_state")
 FONT = "usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 UNIT = "rosy-boot-display.service"
 UNIT_RULES = (
@@ -41,7 +42,7 @@ UNIT_RULES = (
     "ProtectHome=true", "DevicePolicy=closed", "PrivateNetwork=true",
     "ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-display.py",
 )
-DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1")
+DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1", "/dev/ws281x_pwm")  # D-260 3: the lamp
 STAGES = ("BOOTING", "PROVISIONED", "CORE_READY", "FAILED:rosy-core")
 
 

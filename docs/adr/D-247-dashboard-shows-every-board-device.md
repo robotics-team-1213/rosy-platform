@@ -97,7 +97,8 @@
   - *시험 동작.* root oneshot `rosy-hw-test`는 CORE가 쓴 `/run/rosy/hw-test.request`를 `rosy-hw-test.path`로 받는다.
     `DeviceAllow`는 `/dev/gpiochip4`와 `/dev/ws281x_pwm`뿐이다. 부저는 `ROSY_BUZZER_PIN`에서 2 kHz, duty 10 %로
     150 ms씩 세 번 울린다. `rosy-boot-display`가 `ROSY_BUZZER_ENABLED=true`로 그 선을 쥐고 있으면 울리지 않고 그렇다고
-    쓴다. 램프는 `lamp_selftest`로 빨강·초록·파랑을 1 s씩 켰다가 끈다. 이 C 도우미는 `lamp_control`과 같은 고정
+    쓴다(2026-09-26 D-260 이후: `busy` 대신 시험을 부팅 화면 프로그램에 넘기고 그 결과를 쓴다. 결과 파일·`request_id`·확인 규칙은
+    그대로다. D-260 Validation 참고). 램프는 `lamp_selftest`로 빨강·초록·파랑을 1 s씩 켰다가 끈다. 이 C 도우미는 `lamp_control`과 같은 고정
     `rpi_ws281x`로 빌드한다. `/dev/ws281x_pwm`는 쓰기 형식이 문서에 없어서 파이썬으로 직접 쓰지 않는다. 결과는
     `/run/rosy-boot/hw-test.json`(root:rosy-core 0640)에 남는다. 모터, `cmd_vel`, ADC에는 닿지 않는다.
   - *확인 기록.* `POST /host/hardware/test`와 `POST /host/hardware/confirm`은 관리자 전용이다. 확인은 누가(토큰 id·이름)
@@ -115,7 +116,7 @@
     8 LED가 흰색·빨강·초록·파랑으로 켜지는 것을 사람이 봤다. probe는 채널이 3이 아니면 램프 행을 `드라이버 없음`으로 둔다.
   - *부저 핀.* Pinky Pro 부저는 **BCM 4**다. 2026-09-26 `rosy_18`에서 사람이 귀로 확인했다. BCM 22는 조용했다.
     `ROSY_BUZZER_PIN=4`로 부팅 표시의 `CORE_READY` 한 번 울림도 들렸다. 기본 핀을 4로 바꿨다. 기본으로 켤지
-    (`ROSY_BUZZER_ENABLED`)는 D-190이 정한다. 이 슬라이스는 켜 두지 않는다.
+    (`ROSY_BUZZER_ENABLED`)는 D-190이 정한다. 이 슬라이스는 켜 두지 않는다. (D-260 결정 2가 기본값을 켜짐으로 바꿨다.)
   - *D-169는 그대로다.* 램프와 부저는 계속 벤치 전용이다. 시험 동작은 capability를 광고하지 않고, 제품 unit의 장치
     표면도 넓히지 않는다(장치 표면 계약 시험).
   - *남은 DEVICE 확인.* 새 이미지로 구운 카드에서 네 가지를 본다. `/dev/i2c-0`, `/dev/ws281x_pwm`, `pwm_channel=3`이

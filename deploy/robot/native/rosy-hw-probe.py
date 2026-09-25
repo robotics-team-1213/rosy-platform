@@ -40,6 +40,9 @@ import time
 from typing import Callable, Optional
 
 sys.dont_write_bytecode = True
+# The shared switch parser (rosy_display_env.py) sits beside this program.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rosy_display_env  # noqa: E402
 
 SCHEMA = 1
 STATUS_DIR = "run/rosy-boot"
@@ -493,17 +496,15 @@ class Probe:
         return Row("lcd", NEEDS_HUMAN, "rosy-boot-display 멈춤 · 화면을 사람이 확인")
 
     def buzzer(self) -> Row:
-        enabled, pin = False, BUZZER_DEFAULT_PIN
+        # D-260 2: the boot display's switch, read as the display reads it (rosy_display_env).
         try:
             text = self.io.path(DISPLAY_ENV).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             text = ""
-        for line in text.splitlines():
-            key, _, value = line.strip().partition("=")
-            if key == "ROSY_BUZZER_ENABLED":
-                enabled = value.strip().lower() == "true"
-            elif key == "ROSY_BUZZER_PIN" and value.strip().isdigit():
-                pin = int(value.strip())
+        values = rosy_display_env.parse_env(text)
+        enabled, _valid = rosy_display_env.flag(values, rosy_display_env.BUZZER_KEY)
+        pin_text = values.get("ROSY_BUZZER_PIN", "")
+        pin = int(pin_text) if pin_text.isdigit() else BUZZER_DEFAULT_PIN
         switch = "켜짐" if enabled else "꺼짐 (ROSY_BUZZER_ENABLED=false)"
         return Row("buzzer", NEEDS_HUMAN, f"BCM {pin} · {switch} · 소리는 사람이 확인")
 

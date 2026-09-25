@@ -194,6 +194,8 @@ window.fetch = async (input, options = {}) => {
     '/api/v1/host/commissioning': {runtime_mode: 'core', fleet_hold: true, detail: 'core'},
     '/api/v1/host/hardware': window.__rosyHardware
       || {available: false, detail: '장치 점검 결과가 아직 없습니다', devices: []},
+    // D-260 5: the summary line; {} (no state) unless a test sets one.
+    '/api/v1/host/status-summary': window.__rosyStatusSummary || {},
   };
   if (window.__rosyCommissioningOverride) {
     Object.assign(bodies['/api/v1/host/commissioning'], window.__rosyCommissioningOverride);
@@ -1953,3 +1955,158 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         canvas.press("Escape")
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
+
+
+# --- D-260 5: the operate view's summary line ------------------------------------
+
+STATUS_SUMMARY_INIT = """
+    window.__rosyStatusSummary = {
+      state: 'caution', label: '주의', reason: '배터리 전압 (ADC) 응답 없음',
+      state_line: '주의: 배터리 전압 (ADC) 응답 없음',
+      motion_reason: '모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.',
+      runtime_mode: 'core', boot: {available: true, stage: 'CORE_READY'},
+      devices: {available: true, stale: false, ok: 12, total: 14, problems: [
+        {id: 'adc.battery', label: '배터리 전압 (ADC)', state: 'no_response', product: true},
+        {id: 'imu', label: 'IMU (BNO055)', state: 'bus_missing', product: false}]},
+      battery: {percent: 81.4, voltage: 7.93, warning_percent: 20, low: false},
+      temperature_c: 51.2,
+      todos: [
+        {id: 'adc_power_cycle', text: '로봇 전원을 완전히 껐다 켜세요 (ADC)', device: 'adc.battery'},
+        {id: 'promote_motor', text: '관리자가 모터 모드로 승격'},
+        {id: 'human_test', text: '<img src=x onerror=alert(1)>부저: 시험 동작으로 확인', device: 'buzzer'}],
+    };
+"""
+
+SUMMARY_PROBE = """() => {
+  const box = (id) => document.getElementById(id).getBoundingClientRect();
+  const summary = box('status-summary');
+  return {
+    page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    inside: ['summary-state', 'summary-devices', 'summary-power', 'summary-todo-toggle'].every((id) => {
+      const r = box(id);
+      return r.width > 0 && r.left >= summary.left - 1 && r.right <= summary.right + 1
+        && r.bottom <= window.innerHeight;
+    }),
+    height: Math.round(summary.height),
+  };
+}"""
+
+
+def _summary_page(playwright, extra_init, width=1366, height=768):
+    browser, page = _launch_page(playwright, extra_init=extra_init, width=width, height=height)
+    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    page.wait_for_function("document.getElementById('status-summary')?.dataset.state !== 'unknown'")
+    return browser, page
+
+
+def test_the_summary_line_says_state_devices_power_and_todos():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, STATUS_SUMMARY_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.locator("#summary-state").inner_text() == "주의"
+        assert page.locator("#summary-state").get_attribute("data-state") == "caution"
+        assert page.locator("#summary-reason").inner_text() == "배터리 전압 (ADC) 응답 없음"
+        assert page.locator("#summary-devices").inner_text() == "정상 12/14 · 배터리 전압 (ADC) 응답 없음"
+        assert page.locator("#summary-power").inner_text() == "81 % · 7.93 V · 51 °C"
+        toggle = page.locator("#summary-todo-toggle")
+        assert toggle.inner_text() == "할 일 3" and toggle.get_attribute("aria-expanded") == "false"
+        assert page.locator("#summary-todos").is_hidden()
+
+        toggle.click()
+        assert toggle.get_attribute("aria-expanded") == "true"
+        items = page.locator("#summary-todos li").all_inner_texts()
+        assert items[:2] == ["로봇 전원을 완전히 껐다 켜세요 (ADC)", "관리자가 모터 모드로 승격"]
+        # Server text is text: the list builds no element from it.
+        assert items[2].startswith("<img") and page.locator("#summary-todos img").count() == 0
+        # The open list overlays the console; nothing scrolls.
+        fit = page.evaluate(FIT_PROBE)
+        assert fit["docOverflow"] <= 0 and fit["actOverflow"] <= 1, fit
+        page.keyboard.press("Escape")
+        assert page.locator("#summary-todos").is_hidden()
+        # The line keeps the closed type scale and the contrast floor.
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        assert page.evaluate(OFF_SCALE_CENSUS) == []
+        assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+        # It is refreshed with the other slow data, as a viewer route.
+        assert any(call["path"] == "/api/v1/host/status-summary" and call["method"] == "GET"
+                   for call in page.evaluate("window.__apiCalls"))
+        browser.close()
+
+
+def test_the_device_summary_opens_the_device_card_at_the_first_problem():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, STATUS_SUMMARY_INIT + HARDWARE_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        page.locator("#summary-devices").click()
+        page.wait_for_function("document.body.dataset.view === 'inspect'")
+        assert page.locator("#view-inspect-panel").is_visible()
+        assert page.evaluate("document.activeElement?.dataset.device") == "adc.battery"
+        browser.close()
+
+
+@pytest.mark.parametrize("payload,chip", [
+    ("{state: 'failed', label: '실패', reason: 'rosy-core', todos: [{id: 'failed_unit',"
+     " text: '실패한 부팅 단계를 확인하세요 (rosy-core)'}], devices: {available: false}, battery: {}}", "실패"),
+    ("{state: 'ready', label: '준비됨', reason: '', todos: [], devices: {available: true, ok: 14,"
+     " total: 14, problems: []}, battery: {percent: 90, voltage: 8.1, low: false}, temperature_c: 48}", "준비됨"),
+])
+def test_failed_and_ready_render_without_a_list_to_open(payload, chip):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, f"window.__rosyStatusSummary = {payload};")
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.locator("#summary-state").inner_text() == chip
+        if chip == "준비됨":
+            assert page.locator("#summary-devices").inner_text() == "정상 14/14"
+            assert page.locator("#summary-todo-toggle").inner_text() == "할 일 0"
+            assert page.locator("#summary-todo-toggle").is_disabled()
+            # D-82: a ready robot shows nothing warm on the summary line.
+            warm = page.evaluate(WARM_SCAN)
+            assert not [hit for hit in warm if "summary" in hit], warm
+        else:
+            assert page.locator("#summary-devices").inner_text() == "장치 점검 전"
+            assert page.locator("#summary-power").inner_text() == "— % · — °C"
+        browser.close()
+
+
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_a_held_robot_s_long_reason_keeps_the_console_inside_the_screen(viewport):
+    """D-201: the held reason is the longest sentence; it is cut, never wraps or scrolls."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    held = STATUS_SUMMARY_INIT + (
+        "Object.assign(window.__rosyStatusSummary, {state: 'ready_held', label: '준비됨 — 못 움직임',"
+        " reason: 'CORE 전용 모드'});"
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, held + CONSOLE_STATE_INIT["safe-stop"],
+                                          width=viewport[0], height=viewport[1])
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.locator("#summary-state").inner_text() == "준비됨 — 못 움직임"
+        # Held: the reason is D-247 7's sentence, whole in the title when it is cut.
+        assert page.locator("#summary-reason").get_attribute("title").startswith("모터가 꺼진 CORE 전용 모드")
+        page.wait_for_timeout(300)
+        fit = page.evaluate(FIT_PROBE)
+        line = page.evaluate(SUMMARY_PROBE)
+        browser.close()
+
+    assert fit["docOverflow"] <= 0 and fit["actOverflow"] <= 1 and fit["estopInside"], f"{viewport}: {fit}"
+    assert line["page"] == 0 and line["inside"], f"{viewport}: {line}"

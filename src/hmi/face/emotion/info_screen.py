@@ -161,10 +161,16 @@ _BOOT_LAYOUT = {
     "detail": (76, 13),
     "address": (100, 20),
     "battery": (130, 20),
-    "ap_ssid": (166, 17),
-    "ap_login": (192, 22),
-    "login": (216, 20),
+    # D-260 4: the robot state line and the most urgent todo (the todo slot
+    # gives way to the AP rows, which a person needs first to reach the robot).
+    "robot_state": (154, 16),
+    "todo": (176, 15),
+    "ap_ssid": (176, 16),
+    "ap_login": (196, 20),
+    "login": (218, 18),
 }
+#: D-260: the state line's colour; failed is the alarm fill, like FAILED above.
+_STATE_COLOURS = {"failed": _CRIT, "caution": _WARN, "booting": _MUTED}
 
 
 def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
@@ -212,6 +218,14 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
     else:
         lines.append(("battery", f"{float(percent):.0f}%  {float(voltage):.2f} V",
                       battery_color(float(percent))))
+
+    # D-260 4: ``state_line`` / ``todo`` come from core_common.robot_state (LCD
+    # form, ASCII: the DejaVu card font has no Hangul). Absent on an old release.
+    if payload.get("state_line"):
+        lines.append(("robot_state", str(payload["state_line"]),
+                      _STATE_COLOURS.get(str(payload.get("robot_state")), _FG)))
+    if payload.get("todo") and not ap_mode:
+        lines.append(("todo", f"> {payload['todo']}", _FG))
 
     if ap_mode:
         lines.append(("ap_ssid", f"Wi-Fi {network.get('ssid') or '?'}", _FG))

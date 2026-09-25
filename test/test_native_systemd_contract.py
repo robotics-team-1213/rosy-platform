@@ -344,6 +344,8 @@ DECLARED_WRITES = {
         # D-247 6: the buzzer/lamp test request to rosy-hw-test.path (HW_TEST_REQUEST_FILE)
         # and the person's answers (HW_CONFIRM_FILE, beside the other CORE state).
         "/run/rosy/hw-test.request", "$HOME/.rosy/hw-confirmations.json",
+        # D-260 M1: the boot display's inputs only CORE knows (api/v1/host.py STATUS_INPUTS_FILE).
+        "/run/rosy/status-inputs.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-navigation.service": {
@@ -353,8 +355,11 @@ DECLARED_WRITES = {
     },
     "rosy-boot-display.service": {
         # lgpio (under rpi-lgpio's RPi.GPIO) keeps its notification files in
-        # LG_WD, which the unit points at HOME. The program itself writes nothing.
+        # LG_WD, which the unit points at HOME.
         "$HOME/.lgd-nfy0",
+        # D-260 / D-247 6: the outcome of a test rosy-hw-test handed over
+        # (rosy-boot-display.py TEST_RESULT), in the unit's RuntimeDirectory.
+        "/run/rosy-display/display-test.json",
     },
     "rosy-login-code.service": {
         # rosy-login-code.py CODE_FILE, DISPLAY_FILE, ISSUE_FILE, LOCK_FILE, BOOT_MARK (D-193).
@@ -371,6 +376,8 @@ DECLARED_WRITES = {
     "rosy-hw-test.service": {
         # rosy-hw-test.py RESULT, via a temporary file beside it (D-247 6).
         "/run/rosy-boot/hw-test.json",
+        # D-260: the hand-over to the boot display (HANDOFF_REQUEST), root:rosy-display 0640.
+        "/run/rosy-boot/display-test.request",
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
@@ -388,6 +395,8 @@ DECLARED_READS = {
         "/run/rosy-boot/hardware.json",
         # D-247 6: the root test's outcome, root:rosy-core 0640 (HW_TEST_RESULT_FILE).
         "/run/rosy-boot/hw-test.json",
+        # D-260 5: rosy-boot-status's stage for the summary line (BOOT_STATUS_FILE), 0644.
+        "/run/rosy-boot/boot-status.json",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
@@ -411,6 +420,8 @@ DECLARED_READS = {
     "rosy-hw-test.service": {
         "/run/rosy/hw-test.request", "/etc/rosy/boot-display.env",
         "/opt/rosy/current/install/lib/lamp_control/lamp_selftest",
+        # D-260: the boot display's answer to a hand-over (HANDOFF_RESULT).
+        "/run/rosy-display/display-test.json",
     },
 }
 
@@ -434,6 +445,8 @@ PROGRAM_SOURCES = {
     "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
+                                  # D-260: the rule table it imports from the release.
+                                  "src/contracts/foundation/core_common/robot_state.py",
                                   "src/hmi/face/emotion/info_screen.py",
                                   "src/hmi/face/emotion/rosy_lcd.py",
                                   "src/devices/pinky_pro/bringup/rosylib"],

@@ -15,6 +15,7 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -36,9 +37,15 @@ hw = _load()
 
 
 class FakeSystem(hw.System):
-    def __init__(self, root: Path, *, display="active", beep_error=None, lamp=(0, ""), trusted=True) -> None:
+    """``display`` is rosy-boot-display's ActiveState; ``answer`` its reply to a hand-over (None: real)."""
+
+    def __init__(self, root: Path, *, display="inactive", beep_error=None, lamp=(0, ""), trusted=True,
+                 answer=("done", "BCM 4 · 2 kHz · duty 10 % · 3×150 ms (부팅 표시가 울림)")) -> None:
         super().__init__(root)
         self.display = display
+        self.answer = answer
+        self.group = 962  # rosy-display, as on the image
+        self.handoffs: list[tuple[str, str]] = []
         self.trusted = trusted
         self.beep_error = beep_error
         self.lamp = lamp
@@ -56,6 +63,15 @@ class FakeSystem(hw.System):
 
     def helper_trusted(self, helper):
         return self.trusted
+
+    def display_group(self):
+        return self.group
+
+    def handoff(self, action, request_id):
+        self.handoffs.append((action, request_id))
+        if self.answer is None:
+            return super().handoff(action, request_id)
+        return self.answer
 
     def lamp_selftest(self, helper):
         self.lamps.append(helper)
@@ -179,16 +195,116 @@ def test_the_buzzer_defaults_to_the_pro_pin(tmp_path):
     assert system.beeps == [4] == [hw.BUZZER_DEFAULT_LINE]
 
 
-@pytest.mark.parametrize("display", ["active", "activating", None])
-def test_the_buzzer_is_left_to_the_boot_display_when_it_owns_the_line(tmp_path, display):
-    root = _root(tmp_path, env="ROSY_BUZZER_ENABLED=true\nROSY_BUZZER_PIN=4\n")
+@pytest.mark.parametrize("env", [None, "ROSY_BUZZER_ENABLED=true\nROSY_BUZZER_PIN=4\n"])
+@pytest.mark.parametrize("display", ["active"])
+def test_the_buzzer_test_is_handed_to_the_boot_display_when_it_owns_the_line(tmp_path, display, env):
+    # D-260 2: the display's buzzer is on by default; it plays the test, nothing beeps here.
+    root = _root(tmp_path, env=env)
     _request(root)
     system = FakeSystem(root, display=display)
     result = _run(root, system)
 
     assert system.beeps == []
-    assert result["state"] == "busy"
-    assert "부팅 표시" in result["detail"] and "ROSY_BUZZER_ENABLED=true" in result["detail"]
+    assert system.handoffs == [("buzzer", "00112233445566778899aabb")]
+    assert result["state"] == "done" and result["request_id"] == "00112233445566778899aabb"
+    assert result["detail"].endswith("(부팅 표시가 울림)")
+
+
+def test_a_display_without_the_buzzer_leaves_the_line_to_this_test(tmp_path):
+    root = _root(tmp_path)
+    _request(root)
+    system = FakeSystem(root, display="active", answer=("unavailable", "부팅 표시의 부저가 꺼져 있음"))
+    result = _run(root, system)
+
+    assert system.handoffs and system.beeps == [4] and result["state"] == "done"
+
+
+def test_a_display_that_does_not_answer_is_a_failure_and_nothing_is_driven(tmp_path):
+    root = _root(tmp_path)
+    _request(root)
+    system = FakeSystem(root, display="active", answer=None)
+    now = {"t": 0.0}
+    system.clock = lambda: now["t"]
+    system.sleep = lambda seconds: now.update(t=now["t"] + seconds)
+    result = _run(root, system)
+
+    assert result["state"] == "failed" and "답하지 않음" in result["detail"]
+    assert system.beeps == [] and now["t"] >= hw.HANDOFF_WAIT_S
+    assert not (root / hw.HANDOFF_REQUEST).exists()  # the hand-over is withdrawn
+
+
+def test_the_hand_over_speaks_the_boot_display_s_protocol(tmp_path):
+    """Both programs, one request: rosy-hw-test writes, the display plays and answers, D-247's result."""
+    display = _display_module()
+    root = _root(tmp_path)
+    _request(root)
+    system = FakeSystem(root, display="active", answer=None)
+    events: list[tuple] = []
+
+    class Pwm:
+        def start(self, duty):
+            events.append(("start", duty))
+
+        def stop(self):
+            events.append(("stop",))
+
+    class Gpio:
+        BCM, OUT = "BCM", "OUT"
+
+        def setwarnings(self, flag):
+            pass
+
+        def setmode(self, mode):
+            pass
+
+        def setup(self, pin, mode):
+            events.append(("setup", pin))
+
+        def PWM(self, pin, frequency):  # noqa: N802 - RPi.GPIO API
+            events.append(("pwm", pin, frequency))
+            return Pwm()
+
+    buzzer = display.Buzzer(Gpio(), 4, True, lambda _seconds: None)
+
+    def display_poll(_seconds):
+        request = display.read_test_request(root / display.TEST_REQUEST, time.time())
+        assert request is not None, "the display must accept rosy-hw-test's hand-over"
+        state, detail = buzzer.test()
+        display.write_test_result(root / display.TEST_RESULT, json.dumps(
+            {"schema": 1, "request_id": request["request_id"], "action": request["action"],
+             "state": state, "detail": detail}, ensure_ascii=False) + "\n")
+
+    system.sleep = display_poll
+    result = _run(root, system)
+
+    assert (hw.HANDOFF_REQUEST, hw.HANDOFF_RESULT) == (display.TEST_REQUEST, display.TEST_RESULT)
+    assert result["state"] == "done" and result["action"] == "buzzer"
+    assert result["request_id"] == "00112233445566778899aabb"
+    assert [event for event in events if event[0] == "start"] == [("start", 10)] * 3
+    assert ("pwm", 4, 2000) in events and system.beeps == []
+
+
+@pytest.mark.parametrize("content", [
+    None, "not json", json.dumps({"schema": 1, "request_id": "other", "state": "done", "detail": "x"}),
+    json.dumps({"schema": 1, "request_id": "00112233445566778899aabb", "state": "busy", "detail": "x"}),
+    json.dumps({"schema": 2, "request_id": "00112233445566778899aabb", "state": "done", "detail": "x"}),
+    json.dumps({"schema": 1, "request_id": "00112233445566778899aabb", "state": "done", "detail": 5}),
+    json.dumps({"schema": 1, "request_id": "00112233445566778899aabb", "state": "done", "detail": "x" * 2000}),
+])
+def test_only_the_display_s_answer_to_this_request_is_taken(tmp_path, content):
+    path = tmp_path / "display-test.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+
+    assert hw.read_handoff_result(path, "00112233445566778899aabb") is None
+
+
+def test_a_long_display_detail_is_cut_to_the_result_limit(tmp_path):
+    path = tmp_path / "display-test.json"
+    path.write_text(json.dumps({"schema": 1, "request_id": "00112233445566778899aabb", "state": "done",
+                                "detail": "x" * 300}), encoding="utf-8")
+
+    assert hw.read_handoff_result(path, "00112233445566778899aabb") == ("done", "x" * 200)
 
 
 @pytest.mark.parametrize("display", ["inactive", "failed"])
@@ -209,10 +325,15 @@ def test_a_pin_outside_the_display_allow_list_is_never_driven(tmp_path, pin):
     assert system.beeps == [] and result["state"] == "unavailable"
 
 
-def test_the_allow_list_is_the_boot_displays():
+def _display_module():
     spec = importlib.util.spec_from_file_location("boot_display_for_hw_test", NATIVE / "rosy-boot-display.py")
     display = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(display)
+    return display
+
+
+def test_the_allow_list_is_the_boot_displays():
+    display = _display_module()
     assert hw.BUZZER_LINES == display.BUZZER_LINES
     assert hw.BUZZER_DEFAULT_LINE == display.BUZZER_DEFAULT_LINE == 4
     assert hw.BUZZER_FREQUENCY_HZ == display.BUZZER_FREQUENCY_HZ
@@ -262,6 +383,30 @@ def test_the_real_beep_drives_three_short_quiet_tones(monkeypatch):
 
 
 # --- lamp -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("display", ["active"])
+def test_the_lamp_test_is_handed_to_the_boot_display_while_it_shows_the_state(tmp_path, display):
+    root = _root(tmp_path)
+    _request(root, "lamp")
+    system = FakeSystem(root, display=display,
+                        answer=("done", "빨강→초록→파랑 1 s씩 · 8 LED · GPIO19 · 꺼짐 (부팅 표시가 켬)"))
+    result = _run(root, system)
+
+    assert system.handoffs == [("lamp", "00112233445566778899aabb")] and system.lamps == []
+    assert result["state"] == "done" and result["detail"].endswith("(부팅 표시가 켬)")
+
+
+@pytest.mark.parametrize("env,answer", [("ROSY_LAMP_ENABLED=false\n", None),
+                                        (None, ("unavailable", "부팅 표시가 램프를 쓸 수 없음"))])
+def test_the_lamp_is_driven_here_when_the_display_does_not_hold_it(tmp_path, env, answer):
+    root = _root(tmp_path, env=env)
+    _request(root, "lamp")
+    system = FakeSystem(root, display="active", answer=answer or ("done", "never"))
+    result = _run(root, system)
+
+    assert system.lamps == [root / hw.LAMP_HELPER] and result["detail"].startswith("빨강→초록→파랑")
+    assert (system.handoffs == []) == (answer is None)
 
 
 def test_the_lamp_runs_the_release_helper(tmp_path):
@@ -353,3 +498,72 @@ def test_the_wrapper_path_and_help_run_without_root(tmp_path):
     completed = subprocess.run([sys.executable, "-I", "-B", str(NATIVE / "rosy-hw-test.py"), "--help"],
                                capture_output=True, text=True, check=False)
     assert completed.returncode == 0 and "rosy-hw-test" in completed.stdout
+
+
+# --- review M2 / L4: hand over only to a display that can take it ------------------
+
+
+@pytest.mark.parametrize("action", ["buzzer", "lamp"])
+@pytest.mark.parametrize("display", ["activating", "auto-restart", "deactivating", "reloading", None])
+def test_a_display_that_is_not_active_gets_no_hand_over(tmp_path, display, action):
+    root = _root(tmp_path)
+    _request(root, action)
+    system = FakeSystem(root, display=display)
+    result = _run(root, system)
+
+    assert system.handoffs == [] and result["state"] == "done"
+    assert (system.beeps, system.lamps) == (([4], []) if action == "buzzer" else ([], [root / hw.LAMP_HELPER]))
+
+
+def test_without_the_display_group_the_test_is_driven_here_and_said_once(tmp_path, capsys):
+    root = _root(tmp_path)
+    _request(root)
+    system = FakeSystem(root, display="active")
+    system.group = None
+    result = _run(root, system)
+
+    assert system.handoffs == [] and system.beeps == [4] and result["state"] == "done"
+    assert capsys.readouterr().err.count("no rosy-display group") == 1
+
+
+# --- review L1: one reading of the switches ------------------------------------------
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("", (True, True)), ("ROSY_BUZZER_ENABLED=true\n", (True, True)), ('ROSY_BUZZER_ENABLED="false"\n', (False, True)),
+    ("ROSY_BUZZER_ENABLED='true'\n", (True, True)), ("ROSY_BUZZER_ENABLED= false \n", (False, True)),
+    ("ROSY_BUZZER_ENABLED=yes\n", (False, False)), ("ROSY_BUZZER_ENABLED=TRUE\n", (False, False)),
+    ("ROSY_BUZZER_ENABLED=\n", (False, False)), ("# ROSY_BUZZER_ENABLED=false\n", (True, True)),
+])
+def test_the_switch_is_exact_after_quotes_and_anything_else_is_off(text, expected):
+    import rosy_display_env as switch
+
+    assert switch.flag(switch.parse_env(text), switch.BUZZER_KEY) == expected
+    assert hw.buzzer_settings(text)[0] is expected[0]
+
+
+@pytest.mark.parametrize("value", ["true", '"true"', "false", "'false'", "yes", "1", ""])
+def test_display_hw_test_and_probe_read_the_switch_the_same_way(tmp_path, value):
+    display = _display_module()
+    probe_spec = importlib.util.spec_from_file_location("probe_for_switch", NATIVE / "rosy-hw-probe.py")
+    probe = importlib.util.module_from_spec(probe_spec)
+    sys.modules[probe_spec.name] = probe  # its dataclasses look the module up
+    probe_spec.loader.exec_module(probe)
+    import rosy_display_env as switch
+
+    environ = {"ROSY_BUZZER_ENABLED": switch.unquote(value)}  # systemd strips the quotes itself
+    shown = display.buzzer_settings(environ, display.Log(lambda _line: None))[0]
+    tested = hw.buzzer_settings(f"ROSY_BUZZER_ENABLED={value}\n")[0]
+    root = tmp_path / "root"
+    (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/boot-display.env").write_text(f"ROSY_BUZZER_ENABLED={value}\n", encoding="utf-8")
+
+    class Io:
+        def path(self, relative):
+            return root / relative
+
+    probed = "켜짐" in probe.Probe(Io()).buzzer().evidence
+    assert shown == tested == probed
+    lamp_shown = display.lamp_enabled({"ROSY_LAMP_ENABLED": switch.unquote(value)},
+                                      display.Log(lambda _line: None))
+    assert lamp_shown == hw.lamp_owned(f"ROSY_LAMP_ENABLED={value}\n")

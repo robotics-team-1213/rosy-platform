@@ -45,3 +45,10 @@
 - gate 변화: 없음
 - 결정: D-247
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(lamp_control): D-260 lamp_pattern helper
+- 변경: `src/lamp_pattern.c` 신규(booting/ready/failed/caution/test/off, SIGTERM이면 끄고 종료), CMake 빌드·설치, 패키지 계약 시험
+- 증거: WSL gcc `-std=c11 -Wall -Wextra -Wpedantic` 구문 검사 통과, 가짜 ws2811로 무늬 시퀀스 확인(ready 3 s 뒤 꺼짐, test R→G→B, 잘못된 인자 64). ARM64 빌드·실기 점등은 미확인; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음

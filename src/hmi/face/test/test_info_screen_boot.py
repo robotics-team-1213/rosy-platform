@@ -158,3 +158,51 @@ def test_a_real_ssid_and_key_fit_whole():
 def test_the_info_card_is_unchanged():
     # render() (the emotion face's wake card) keeps its own layout.
     assert render({}).size == DEFAULT_SIZE
+
+
+# --- D-260 4: the robot state line and the top todo ---------------------------------
+
+from emotion.info_screen import _BOOT_LAYOUT  # noqa: E402
+
+
+@pytest.mark.parametrize("state,color", [("ready", _FG), ("ready_held", _FG), ("caution", _WARN),
+                                         ("failed", _CRIT), ("booting", _MUTED)])
+def test_the_state_line_takes_the_state_s_colour(state, color):
+    rows = _rows({**READY, "robot_state": state, "state_line": "Ready - cannot move: CORE only mode"})
+
+    assert rows["robot_state"] == ("Ready - cannot move: CORE only mode", color)
+
+
+def test_the_top_todo_is_its_own_line_below_the_state():
+    payload = {**READY, "robot_state": "caution", "state_line": "Caution: ADC no response",
+               "todo": "Power-cycle the robot (ADC)"}
+
+    rows = _rows(payload)
+    image = render_boot(payload)
+
+    assert rows["todo"] == ("> Power-cycle the robot (ADC)", _FG)
+    assert _has_ink(image, (0, 150, 320, 172)) and _has_ink(image, (0, 174, 320, 194))
+    assert _WARN in _colors(image, (0, 150, 320, 172))
+
+
+def test_the_ap_rows_take_the_todo_slot():
+    rows = _rows({**READY, "network": {"mode": "ap", "ssid": "rosy", "address": "10.42.0.1"},
+                  "ap_login": LOGIN, "state_line": "Ready", "robot_state": "ready", "todo": "Charge"})
+
+    assert "todo" not in rows and rows["ap_ssid"][0] == "Wi-Fi rosy"
+
+
+def test_an_old_release_view_without_a_state_draws_no_state_rows():
+    rows = _rows(READY)
+
+    assert "robot_state" not in rows and "todo" not in rows
+
+
+def test_the_new_rows_stay_inside_the_card_and_do_not_overlap():
+    slots = ["battery", "robot_state", "todo", "login"]
+    for upper, lower in zip(slots, slots[1:]):
+        y, size = _BOOT_LAYOUT[upper]
+        assert y + size <= _BOOT_LAYOUT[lower][0], (upper, lower)
+    assert _BOOT_LAYOUT["robot_state"][0] + _BOOT_LAYOUT["robot_state"][1] <= _BOOT_LAYOUT["ap_ssid"][0]
+    y, size = _BOOT_LAYOUT["login"]
+    assert y + size <= DEFAULT_SIZE[1]

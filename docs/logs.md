@@ -2234,3 +2234,11 @@
 - 제한: Windows loopback LOCAL 증거다. 실제 Ubuntu/TLS/LAN/폰/CORE DEVICE·FIELD, vision→Fleet, Docker site 배포는 검증하지 않았다.
 - gate 변화: 없음. D-269 Proposed 유지, automatic movement 및 vision policy HOLD.
 - harness: 계약 묶음 68 passed/2 failed. 모두 기존 `src/hmi/dashboard/logs.md` 4개 항목의 필수 `- 증거:` 누락에서 발생했다. `rosy_harness.py lint`도 동일한 4 errors와 19 `last_verified` warnings를 보고했다. append-only HMI 로그는 변경하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25
+
+- 변경: D-260 Validation/Transition에 구현 내용·최소 권한 선택·부저 시험 충돌 해소·DEVICE 확인 목록. D-247에 부저 기본값과 시험 넘김 메모. API Ref v1.25 행(`GET /host/status-summary`)과 변경 이력
+- 증거: 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음

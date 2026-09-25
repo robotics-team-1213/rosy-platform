@@ -44,8 +44,9 @@ BENCH_ONLY_FRAGMENTS = ("spidev", "i2c-0", "gpiomem", "pwm", "gpiochip",
                         "char-spi", "char-i2c", "char-gpio")
 NATIVE = ROOT / "deploy" / "robot" / "native"
 #: D-190: the one unit that may hold display devices, and exactly these.
+#: D-260 3 adds the lamp node (group rosy-display, 99-rosy-lamp.rules).
 DISPLAY_UNIT = "rosy-boot-display.service"
-DISPLAY_DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1")
+DISPLAY_DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1", "/dev/ws281x_pwm")
 #: D-247: the read-only probe; the lamp and LCD nodes are only checked for existence.
 PROBE_UNIT = "rosy-hw-probe.service"
 PROBE_DEVICES = {"/dev/rosy-motor": "rw", "/dev/ttyAMA0": "rw", "/dev/i2c-0": "rw", "/dev/i2c-1": "rw",

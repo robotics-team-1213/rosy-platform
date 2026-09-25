@@ -1250,3 +1250,17 @@
 - gate 변화: 없음
 - 결정: D-247, D-190(부저 핀)
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(deploy): D-260 boot display sound, lamp and LCD; test hand-over
+- 변경: `rosy-boot-display.py`: 규칙표 상태로 부저(상태 변경 때만, 300 s 반복 억제)·램프(`lamp_pattern`, 채널 3일 때만, fail-open)·LCD 두 줄, 부저·램프 기본 켜짐, `rosy-hw-test` 시험 넘겨받기. unit: `DeviceAllow=/dev/ws281x_pwm`, `RuntimeDirectory=rosy-display`. udev: `/dev/ws281x_pwm` root:rosy-display 0660. `rosy-boot-status`: `runtime_mode`와 장치 `id·state·product`를 boot-status.json에. `rosy-hw-test`: 부팅 화면 프로그램이 쥔 장치는 `busy` 대신 넘김(15 s 무응답 = failed). `rosy-hw-probe`: 부저 기본 켜짐. board.yaml lamp 절. 이미지 probe가 `core_common.robot_state` import와 램프 노드를 본다
+- 증거: `test_boot_display.py` 105 passed; `test_hw_test.py` 64 passed; `test_hw_probe.py` 41 passed; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음 — DEVICE 확인 전
+- 결정: D-260 Proposed
+- 교훈: 권한 없는 부팅 화면 프로그램이 못 읽는 입력(runtime.env 0600, hardware.json 0640)은 이미 root로 도는 표시기가 필요한 칸만 옮긴다
+
+## 2026-09-26 · uncommitted · fix(deploy): D-260 review M1 M2 L1-L4
+- 변경: `rosy-boot-status`가 CORE의 `/run/rosy/status-inputs.json`(SAF-005 경고 임계, 덮기를 거친 장치 상태)을 엄격히 읽어 boot-status.json에 옮기고 부팅 화면 프로그램이 그 임계를 쓴다. `rosy-hw-test`는 ActiveState가 정확히 `active`이고 `rosy-display` 그룹이 있을 때만 넘긴다. 스위치 해석기 `rosy_display_env.py` 공유. 주의 소리만 300 s 반복 억제. `rosy-hw-test.service` 주석 정정
+- 증거: `test_boot_display.py`·`test_hw_test.py`·`test_hw_probe.py`·native systemd·device surface 412 passed(gateway status-summary 포함, 2026-09-26 Windows); 두 경로 동등 시험 3건
+- gate 변화: 없음 — DEVICE 확인 전
+- 결정: D-260 Proposed
+- 교훈: 권한 없는 표시기가 CORE와 같은 판정을 하려면 입력을 CORE가 넘겨야 한다

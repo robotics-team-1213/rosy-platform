@@ -2,6 +2,7 @@ import { createFieldMap } from "./map.js";
 import { createHostCards } from "./host-cards.js";
 import { createRosNetwork } from "./ros-network.js";
 import { createVisionPreview } from "./vision.js";
+import { createStatusSummary } from "./status-summary.js";
 import { CORE_ONLY_REASON, CORE_ONLY_TEXT, triage } from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
@@ -559,6 +560,23 @@ const {
   renderHardware,
 } = hostCards;
 
+// D-260 5: the summary line. A device opens the inspect view at its card row.
+const statusSummary = createStatusSummary({
+  elements,
+  onOpenDevice: (deviceId) => {
+    showView("inspect");
+    const row = deviceId
+      ? elements["hardware-list"]?.querySelector(`[data-device="${CSS.escape(deviceId)}"]`)
+      : null;
+    const target = row || elements["hardware-card"];
+    target?.scrollIntoView({ block: "center" });
+    if (target) {
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+    }
+  },
+});
+
 function updateAdminControls() {
   setEnabled("limits-save", isAdmin());
   setEnabled("dock-register", isAdmin());
@@ -632,6 +650,7 @@ async function refreshSlowData() {
     [api("/api/v1/waypoints"), renderWaypoints],
     [api("/api/v1/docking/status"), renderDockingStatus],
     [api("/api/v1/host/hardware"), renderHardware],
+    [api("/api/v1/host/status-summary"), statusSummary.render],
     [api("/api/v1/docking/docks"), renderDocks],
     [isAdmin() ? api("/api/v1/system/tokens") : Promise.resolve({tokens: []}), renderTokens],
     [fieldMap.refresh(), () => {}],
