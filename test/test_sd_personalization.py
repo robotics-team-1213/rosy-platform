@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import re
 import json
 import subprocess
@@ -214,3 +215,119 @@ def test_bundle_cli_reads_secret_from_stdin_and_emits_only_redacted_receipt(tmp_
     rendered = completed.stdout + completed.stderr + json.dumps(redacted)
     assert "fixture-private-passphrase" not in rendered
     assert "wpa_psk" not in json.dumps(redacted)
+
+
+# --- D-225 2.2: the factory release signature rides in the bundle. -------------
+
+FACTORY_SIG = base64.b64encode(bytes(range(64))).decode("ascii")
+
+
+def test_bundle_carries_a_factory_release_signature_and_matches_the_schema():
+    bundle = _bundle(factory_release={"release_id": "2026.09.21-001", "sha256sums_sig_b64": FACTORY_SIG})
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+
+    Draft202012Validator(schema).validate(bundle)
+    assert validate_provision_bundle(bundle)["factory_release"]["sha256sums_sig_b64"] == FACTORY_SIG
+    receipt = create_provision_receipt(bundle)
+    assert receipt["factory_release"] == {"release_id": "2026.09.21-001", "signed": True}
+    assert FACTORY_SIG not in json.dumps(receipt)
+
+
+@pytest.mark.parametrize("record", [
+    {"release_id": "2026.09.21-002", "sha256sums_sig_b64": FACTORY_SIG},  # another release
+    {"release_id": "2026.09.21-001", "sha256sums_sig_b64": FACTORY_SIG[:-4] + "===="},
+    {"release_id": "2026.09.21-001", "sha256sums_sig_b64": base64.b64encode(b"x" * 63).decode()},
+    {"release_id": "2026.09.21-001"},
+    {"release_id": "2026.09.21-001", "sha256sums_sig_b64": FACTORY_SIG, "extra": 1},
+])
+def test_a_malformed_factory_release_record_is_refused(record):
+    with pytest.raises(ValueError, match="factory_release"):
+        _bundle(factory_release=record)
+    bundle = _bundle(factory_release={"release_id": "2026.09.21-001", "sha256sums_sig_b64": FACTORY_SIG})
+    bundle["factory_release"] = record
+    with pytest.raises(ValueError, match="factory_release"):
+        validate_provision_bundle(bundle)
+
+
+def _signing_keys(directory: Path, name: str) -> tuple[Path, Path]:
+    private, public = directory / f"{name}.private.pem", directory / f"{name}.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    return private, public
+
+
+def _cli_request(release_id: str) -> dict:
+    return {
+        "device_uid": "9d40feaa-871f-4fd3-975a-a704e82d3af9", "device_name": "rosy-pinky-k7m4",
+        "model": "pinky_pro", "release_id": release_id, "robot_number": 1,
+        "requested_preset": "core", "country_code": "KR", "ssid": "fixture-ssid",
+        "wifi_passphrase": "fixture-private-passphrase",
+        "fleet_endpoint": "https://fleet.fixture.invalid:8443", "fleet_trust_profile": "site-ca-2026",
+        "pairing_required": False,
+        "core_api_" + "token": "Rq" * 21 + "_", "core_api_" + "token_id": "0a1b2c3d4e5f",
+    }
+
+
+def _run_bundle_cli(tmp_path: Path, release_root: Path, public: Path, name: str = "p"):
+    output = tmp_path / f"{name}.json"
+    completed = subprocess.run(
+        [sys.executable, str(BUNDLE_CLI), "--output", str(output), "--receipt", str(tmp_path / f"{name}-r.json"),
+         "--release-root", str(release_root), "--public-key", str(public)],
+        input=json.dumps(_cli_request("2026.09.22-001")), capture_output=True, text=True, check=False,
+        timeout=60,
+    )
+    return completed, output
+
+
+@pytest.mark.parametrize("state", ["signed", "legacy", "unsigned", "wrong-key", "tampered-list"])
+def test_bundle_cli_carries_only_a_verified_factory_signature(tmp_path, state):
+    from signing import sign_checksums
+
+    private, public = _signing_keys(tmp_path, "release")
+    other_private, _ = _signing_keys(tmp_path, "other")
+    release_root = tmp_path / "release"
+    factory = release_root / "factory-release" / "2026.09.22-001"
+    release_root.mkdir()
+    sums = f"{'a' * 64}  manifest.json\n".encode()
+    if state != "legacy":
+        factory.mkdir(parents=True)
+        (factory / "SHA256SUMS").write_bytes(sums)
+    if state in {"signed", "wrong-key", "tampered-list"}:
+        key = other_private if state == "wrong-key" else private
+        (factory / "SHA256SUMS.sig").write_text(sign_checksums(sums, key) + "\n", encoding="ascii")
+    if state == "tampered-list":
+        (factory / "SHA256SUMS").write_bytes(sums.replace(b"a", b"b", 1))
+
+    completed, output = _run_bundle_cli(tmp_path, release_root, public)
+
+    if state in {"signed", "legacy"}:
+        assert completed.returncode == 0, completed.stderr
+        bundle = json.loads(output.read_text(encoding="utf-8"))
+        if state == "signed":
+            encoded = (factory / "SHA256SUMS.sig").read_text(encoding="ascii").strip()
+            assert bundle["factory_release"] == {"release_id": "2026.09.22-001", "sha256sums_sig_b64": encoded}
+        else:
+            assert "factory_release" not in bundle
+    else:
+        assert completed.returncode == 1
+        assert "bundle creation refused" in completed.stderr
+        assert not output.exists()
+
+
+def test_bundle_cli_needs_both_release_root_and_public_key(tmp_path):
+    completed = subprocess.run(
+        [sys.executable, str(BUNDLE_CLI), "--output", str(tmp_path / "p.json"),
+         "--receipt", str(tmp_path / "r.json"), "--release-root", str(tmp_path)],
+        input="{}", capture_output=True, text=True, check=False, timeout=60,
+    )
+    assert completed.returncode == 2
+    assert "go together" in completed.stderr
+
+
+def test_sd_writer_passes_the_verified_release_to_the_bundle_creator():
+    text = (ROOT / "deploy/sd/prepare-rosy-sd.ps1").read_text(encoding="utf-8")
+    call = next(line for line in text.splitlines() if "& $PythonExe $bundleTool" in line)
+    assert "--release-root $releaseRoot --public-key $ReleasePublicKey" in call
+    assert text.index("$releaseRoot = Split-Path -Parent $ImageSignaturePath") < text.index(call)

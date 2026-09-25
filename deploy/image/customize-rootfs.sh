@@ -24,6 +24,9 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 [[ -n "${ROSY_IMAGE_ROOT:-}" && -d "$ROSY_IMAGE_ROOT" ]] || fail "ROSY_IMAGE_ROOT is not mounted"
 [[ -n "${ROSY_IMAGE_BOOT:-}" && -d "$ROSY_IMAGE_BOOT" ]] || fail "ROSY_IMAGE_BOOT is not mounted"
 [[ -d "$PAYLOAD/install" && -d "$PAYLOAD/image-overlay" ]] || fail "native payload is incomplete"
+# D-225 2.2: where the sealed factory release metadata is exported for the dist.
+FACTORY_EXPORT="$PAYLOAD/factory-release"
+[[ ! -e "$FACTORY_EXPORT" ]] || fail "payload already holds a factory release export: $FACTORY_EXPORT"
 [[ -d "$SOURCE_TREE" ]] || fail "ROSY source tree is missing"
 [[ -f "$LOCK" ]] || fail "input lock is missing"
 [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]] || fail "release id is invalid"
@@ -321,6 +324,17 @@ chroot "$ROOT" setpriv --reuid=rosy-display --regid=rosy-display --clear-groups 
     bash --noprofile --norc -c 'cd /var/lib/rosy/display && exec python3 -B /tmp/rosy-core-probe/probe-display-runtime.py' \
     || fail "the boot display does not import inside the image"
 rm -rf -- "$ROOT/tmp/rosy-core-probe"
+
+# D-225 2.2: nothing writes into the factory release after this point, so seal
+# it (manifest.json + SHA256SUMS) and hand both files to create-image-manifest.py
+# through the payload workspace. The image stays unsigned; the offline signer
+# signs this SHA256SUMS and first boot installs that signature from the SD bundle.
+python3 "$(dirname "$0")/../release/build_payload_release.py" seal \
+    --release-dir "$RELEASE" --release-id "$RELEASE_ID" \
+    || fail "could not seal the factory release"
+[[ ! -e "$RELEASE/SHA256SUMS.sig" ]] || fail "the image must not carry a factory release signature"
+mkdir -p "$FACTORY_EXPORT"
+cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"
 
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

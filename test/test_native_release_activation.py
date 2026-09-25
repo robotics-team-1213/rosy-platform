@@ -221,8 +221,12 @@ def test_artifact_gate_can_verify_the_signed_native_release_before_media_write()
     verifier = (root / "deploy/image/verify-artifacts.sh").read_text(encoding="utf-8")
 
     assert "ROSY_NATIVE_RELEASE_ID" in verifier
-    assert "native_release.py" in verifier
-    assert " verify --release-id" in verifier
+    # D-225 2.2: unsigned in the image; verified with the dist's factory signature.
+    assert "verify-mounted-image.py" in verifier
+    assert '--factory-dist "$DIST"' in verifier
+    assert '--public-key "$NATIVE_PUBLIC_KEY"' in verifier
+    mounted = (root / "deploy/image/verify-mounted-image.py").read_text(encoding="utf-8")
+    assert "NativeReleaseManager(root=Path(scratch), public_key=public_key).verify(release_id)" in mounted
 
 
 # --- D-189: a release must match the image's CORE Python runtime -----------

@@ -234,6 +234,13 @@ def inspect(root: Path, release_id: str) -> list[str]:
         content = runtime.read_text(encoding="utf-8", errors="replace")
         if re.search(r"(?m)^(ROSY_NAMESPACE|ROSY_ROBOT_NUMBER|ROS_DOMAIN_ID)=.+$", content):
             findings.append("common image is not device-neutral: runtime identity is populated")
+    # D-225 2.2: the factory release is sealed in the image and unsigned; first
+    # boot installs the offline signature the SD bundle carries.
+    for name in ("manifest.json", "SHA256SUMS"):
+        if not (release / name).is_file():
+            findings.append(f"factory release is not sealed: missing {(release / name).relative_to(root)}")
+    if os.path.lexists(release / "SHA256SUMS.sig"):
+        findings.append("factory release must be unsigned in the image (first boot installs the signature)")
     complete = root / "var/lib/rosy/provisioning/complete.json"
     if complete.exists():
         findings.append(f"common image contains device-specific state: {complete.relative_to(root)}")
@@ -243,12 +250,61 @@ def inspect(root: Path, release_id: str) -> list[str]:
     return findings
 
 
+def verify_factory_release(root: Path, release_id: str, dist: Path, public_key: Path) -> list[str]:
+    """Would first boot's signature make native_release verify() accept the factory release?
+
+    The image is left untouched: its factory release is copied to a scratch
+    root, the offline signature from the signed dist
+    (``factory-release/<id>/SHA256SUMS.sig``) is added there, and the
+    checkout's native_release.py verifies it exactly as the robot will.
+    """
+    import shutil
+    import tempfile
+
+    repo = Path(__file__).resolve().parents[2]
+    for tools in (repo / "deploy/robot/native", repo / "deploy/release"):
+        if str(tools) not in sys.path:
+            sys.path.append(str(tools))
+    from native_release import NativeReleaseManager
+
+    release = root.resolve() / "opt/rosy/releases" / release_id
+    exported = dist / "factory-release" / release_id
+    signature = exported / "SHA256SUMS.sig"
+    if not signature.is_file():
+        return [f"signed dist has no factory release signature: {signature}"]
+    if not (release / "SHA256SUMS").is_file():
+        return [f"factory release is not sealed: {release / 'SHA256SUMS'}"]
+    findings = []
+    for name in ("SHA256SUMS", "manifest.json"):
+        if not (exported / name).is_file() or (exported / name).read_bytes() != (release / name).read_bytes():
+            findings.append(f"dist factory-release/{release_id}/{name} is not the image's")
+    if findings:
+        return findings
+    with tempfile.TemporaryDirectory(prefix="rosy-factory-verify-") as scratch:
+        copy = Path(scratch) / "opt/rosy/releases" / release_id
+        shutil.copytree(release, copy, symlinks=True)
+        shutil.copyfile(signature, copy / "SHA256SUMS.sig")
+        try:
+            NativeReleaseManager(root=Path(scratch), public_key=public_key).verify(release_id)
+        except (OSError, ValueError, RuntimeError) as exc:
+            return [f"factory release would not verify after first boot: {exc}"]
+    return []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--release-id", required=True)
+    # D-225 2.2 (BUILD_GO): the signed dist and the trusted key, to prove the
+    # factory release verifies once first boot adds the dist's signature.
+    parser.add_argument("--factory-dist", type=Path)
+    parser.add_argument("--public-key", type=Path)
     args = parser.parse_args()
+    if (args.factory_dist is None) != (args.public_key is None):
+        parser.error("--factory-dist and --public-key go together")
     findings = inspect(args.root, args.release_id)
+    if args.factory_dist is not None:
+        findings += verify_factory_release(args.root, args.release_id, args.factory_dist, args.public_key)
     if findings:
         for finding in findings:
             print(finding, file=sys.stderr)

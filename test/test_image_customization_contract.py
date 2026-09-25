@@ -114,6 +114,9 @@ def _valid_root(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (release / "rosy-packages.txt").write_text("control\ncore\n", encoding="utf-8")
+    # D-225 2.2: sealed, not signed.
+    (release / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (release / "SHA256SUMS").write_text(f"{'0' * 64}  manifest.json\n", encoding="utf-8")
     (root / "etc/rosy/motion_profiles.yaml").write_text("profiles: {}\n", encoding="utf-8")
     (root / "etc/rosy/cyclonedds.xml").write_text("<CycloneDDS/>\n", encoding="utf-8")
     (root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem").write_text(
@@ -263,6 +266,20 @@ def test_image_installs_enables_and_probes_the_login_code_issuer():
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"' in payload
     wrapper = (ROOT / "deploy/robot/native/rosy-login-code").read_text(encoding="utf-8")
     assert 'exec /usr/bin/python3 -I -B "$SCRIPT_DIR/rosy-login-code.py" "$@"' in wrapper
+
+
+@pytest.mark.parametrize("defect", ["signed", "unsealed"])
+def test_mounted_image_verifier_wants_the_factory_release_sealed_and_unsigned(tmp_path, defect):
+    """D-225 2.2: first boot adds the signature; the image never carries one."""
+    root = _valid_root(tmp_path)
+    release = root / "opt/rosy/releases/2026.09.22-001"
+    if defect == "signed":
+        (release / "SHA256SUMS.sig").write_text("sig\n", encoding="ascii")
+    else:
+        (release / "SHA256SUMS").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert "factory release" in completed.stderr
 
 
 def test_mounted_image_verifier_rejects_missing_required_package(tmp_path):
@@ -987,3 +1004,18 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     assert args[args.index("--skip-keys") + 1].split() == ["sllidar_ros2"]
     bringup = (ROOT / "src/devices/bringup/package.xml").read_text(encoding="utf-8")
     assert "<exec_depend>sllidar_ros2</exec_depend>" in bringup
+
+
+def test_customizer_seals_the_factory_release_last_and_exports_it_unsigned():
+    """D-225 2.2: sealed after every write into the release, never signed in the image."""
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    seal = source.index('build_payload_release.py" seal')
+    assert '--release-dir "$RELEASE" --release-id "$RELEASE_ID"' in source[seal:seal + 200]
+    for earlier in ('> "$RELEASE/deb-packages.txt"', '> "$RELEASE/source-revision.txt"',
+                    'rm -rf -- "$RELEASE/image-overlay"', "probe-display-runtime.py'",
+                    'rm -rf -- "$ROOT/tmp/rosy-core-probe"'):
+        assert source.rindex(earlier) < seal, earlier
+    assert seal < source.index('cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"')
+    assert seal < source.index('verify-mounted-image.py" --root')
+    assert 'FACTORY_EXPORT="$PAYLOAD/factory-release"' in source
+    assert '[[ ! -e "$RELEASE/SHA256SUMS.sig" ]]' in source

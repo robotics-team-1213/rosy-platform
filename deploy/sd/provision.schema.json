@@ -82,6 +82,15 @@
         }
       }
     },
+    "factory_release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_id", "sha256sums_sig_b64"],
+      "properties": {
+        "release_id": {"type": "string", "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}-[0-9]{3}$"},
+        "sha256sums_sig_b64": {"type": "string", "pattern": "^[A-Za-z0-9+/]{86}==$"}
+      }
+    },
     "operator": {
       "type": "object",
       "additionalProperties": false,

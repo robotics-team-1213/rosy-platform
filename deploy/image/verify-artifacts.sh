@@ -65,11 +65,16 @@ NATIVE_RELEASE_ID="${ROSY_NATIVE_RELEASE_ID:-}"
 [[ -n "$NATIVE_RELEASE_ID" ]] \
     || fail "ROSY_NATIVE_RELEASE_ID is required for the native product artifact"
 NATIVE_PUBLIC_KEY="${ROSY_NATIVE_RELEASE_PUBLIC_KEY:-$ROSY_IMAGE_MOUNT/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem}"
-echo "==> signed native release ($NATIVE_RELEASE_ID)"
-"$PYTHON" "$REPO_ROOT/deploy/robot/native/native_release.py" \
+# D-225 2.2: the factory release is unsigned in the image and signed after
+# first boot. The gate proves both halves: the image carries it sealed and
+# unsigned, and native_release.py verify() accepts a scratch copy of it with
+# the dist's offline factory-release/<id>/SHA256SUMS.sig added.
+echo "==> factory native release ($NATIVE_RELEASE_ID): unsigned in the image, signed after first boot"
+"$PYTHON" "$SCRIPT_DIR/verify-mounted-image.py" \
     --root "$ROSY_IMAGE_MOUNT" \
+    --release-id "$NATIVE_RELEASE_ID" \
+    --factory-dist "$DIST" \
     --public-key "$NATIVE_PUBLIC_KEY" \
-    verify --release-id "$NATIVE_RELEASE_ID" \
-    || fail "signed native release rejected"
+    || fail "factory native release rejected"
 
 echo "BUILD_GO checks passed for $DIST"

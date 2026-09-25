@@ -1328,7 +1328,8 @@ try {
         try {
             $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
             $env:PYTHONUTF8 = "1"
-            $bundleRequest | ConvertTo-Json -Compress | & $PythonExe $bundleTool --output $bundleTemp --receipt $bundleReceiptTemp
+            # D-225 2.2: the verified release carries the factory release signature into the bundle.
+            $bundleRequest | ConvertTo-Json -Compress | & $PythonExe $bundleTool --output $bundleTemp --receipt $bundleReceiptTemp --release-root $releaseRoot --public-key $ReleasePublicKey
             if ($LASTEXITCODE -ne 0) { Fail "provisioning bundle creation failed" }
         }
         finally {
