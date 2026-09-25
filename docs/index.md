@@ -96,6 +96,8 @@
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 |
 | D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 |
+| D-256 | 공개 무결성 값은 이름으로 지우고, 스캔는 매처를 넙히지 않는다 |
+| D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 |
 
 ## 계획·결과 문서
 
@@ -138,6 +140,10 @@
 ## 최근 기록
 
 - 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
+- 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
+- 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
+- 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
+- 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
 - 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
 - 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
 - 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)

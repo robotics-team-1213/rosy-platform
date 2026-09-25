@@ -1911,3 +1911,45 @@ def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport)
     # 1366x768 with the old sentence (2026-09-25, feed2fc7); the reason must not add to it.
     assert fit["actOverflow"] <= max(1, fits["before"]["actOverflow"]), (
         f"{viewport}: 이유 문장이 조작 열을 더 넘치게 한다(D-201): {fits}")
+
+
+def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
+    """D-259 — 지도 클릭 목표의 키보드 길. 진짜 map.js로 탄다(픽스처 스텁이 아님)."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        real_map = (WEB / "map.js").read_text(encoding="utf-8")
+        page.route(
+            "http://rosy.test/dashboard/assets/map.js",
+            lambda route: route.fulfill(
+                status=200, content_type="application/javascript",
+                body=real_map),
+        )
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded",
+                  timeout=5_000)
+        page.wait_for_function(
+            "document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+        page.wait_for_timeout(800)
+        canvas = page.locator("#map-canvas")
+        assert canvas.get_attribute("tabindex") == "0"
+        canvas.focus()
+        canvas.press("ArrowRight")
+        canvas.press("ArrowDown")
+        page.click('[data-map-click="goal"]')
+        canvas.focus()
+        canvas.press("Enter")
+        page.wait_for_function(
+            "() => window.__apiCalls.some((call) => call.path === "
+            "'/api/v1/navigation/goal' && call.method === 'POST')",
+            timeout=8000,
+        )
+        canvas.press("Escape")
+        assert not errors, f"페이지 오류: {errors}"
+        browser.close()

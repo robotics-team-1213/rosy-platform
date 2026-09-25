@@ -133,6 +133,11 @@ export function createFieldMap(options) {
 
   const layers = { occupancy: true, costmap: true, path: true };
   let clickMode = "pose";
+  // D-259: 키보드 십자선(캔버스 px). 색은 새로 열지 않고 paper를 쓰고 모양으로
+  // 구분한다(로봇 삼각 vs 십자+원) — Law 1. 확정은 클릭과 같은 confirm·API를 탄다.
+  let cross = null;
+  const CROSS_STEP = 12;
+  if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
   const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null };
   const ctx = canvas?.getContext("2d") || null;
 
@@ -193,6 +198,23 @@ export function createFieldMap(options) {
       ctx.strokeStyle = cssColor("route");
       ctx.lineWidth = 2;
       ctx.stroke();
+    }
+    if (cross) {
+      ctx.save();
+      ctx.strokeStyle = cssColor("pose");
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cross.x, cross.y, 9, 0, Math.PI * 2);
+      ctx.moveTo(cross.x - 14, cross.y);
+      ctx.lineTo(cross.x - 5, cross.y);
+      ctx.moveTo(cross.x + 5, cross.y);
+      ctx.lineTo(cross.x + 14, cross.y);
+      ctx.moveTo(cross.x, cross.y - 14);
+      ctx.lineTo(cross.x, cross.y - 5);
+      ctx.moveTo(cross.x, cross.y + 5);
+      ctx.lineTo(cross.x, cross.y + 14);
+      ctx.stroke();
+      ctx.restore();
     }
     const pose = getPose?.();
     if (!pose || !Number.isFinite(Number(pose.x))) return;
@@ -276,15 +298,13 @@ export function createFieldMap(options) {
     }).observe(canvas);
   }
 
-  canvas?.addEventListener("click", async (event) => {
+  // D-259: 클릭과 키보드 확정은 같은 길이다. 좌표→confirm→POST 전부가 여기 있다.
+  async function commitPoint(px, py) {
     if (!state.occupancy || !canvas) return;
     if (!canGoal?.()) {
       setStatus("이 프로필에서는 목표 전송이 꺼져 있습니다.");
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    const px = ((event.clientX - rect.left) / rect.width) * canvas.width;
-    const py = ((event.clientY - rect.top) / rect.height) * canvas.height;
     const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);
     const yaw = Number(getPose?.()?.yaw) || 0;
     const locating = clickMode === "pose";
@@ -303,6 +323,50 @@ export function createFieldMap(options) {
     } catch (error) {
       setStatus(`${label} 전송 실패: ${error.message}`);
     }
+  }
+
+  canvas?.addEventListener("click", async (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const py = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    cross = {
+      x: Math.min(Math.max(px, 0), canvas.width),
+      y: Math.min(Math.max(py, 0), canvas.height),
+    };
+    paint();
+    await commitPoint(cross.x, cross.y);
+  });
+
+  canvas?.addEventListener("keydown", async (event) => {
+    if (!state.occupancy || !canvas) return;
+    const step = event.shiftKey ? 2 : CROSS_STEP;
+    if (!cross) {
+      // 첫 진입은 로봇 자리, 모르면 한가운데 — 어디서 시작했는지 보이게 한다.
+      // 격자가 비정상이면 worldToCanvas 가 NaN 을 내므로 유한성까지 본다.
+      const pose = getPose?.();
+      let start = null;
+      if (pose && Number.isFinite(Number(pose.x))) {
+        const frame = new GridFrame(state.occupancy);
+        const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
+        if (Number.isFinite(point.x) && Number.isFinite(point.y)) start = point;
+      }
+      cross = start || { x: canvas.width / 2, y: canvas.height / 2 };
+      cross.x = Math.min(Math.max(cross.x, 0), canvas.width);
+      cross.y = Math.min(Math.max(cross.y, 0), canvas.height);
+    }
+    let moved = true;
+    if (event.key === "ArrowLeft") cross.x -= step;
+    else if (event.key === "ArrowRight") cross.x += step;
+    else if (event.key === "ArrowUp") cross.y -= step;
+    else if (event.key === "ArrowDown") cross.y += step;
+    else if (event.key === "Escape") { cross = null; paint(); return; }
+    else if (event.key === "Enter") { await commitPoint(cross.x, cross.y); return; }
+    else moved = false;
+    if (!moved) return;
+    event.preventDefault();
+    cross.x = Math.min(Math.max(cross.x, 0), canvas.width);
+    cross.y = Math.min(Math.max(cross.y, 0), canvas.height);
+    paint();
   });
 
   syncEmpty();

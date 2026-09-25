@@ -2131,3 +2131,27 @@
 - gate 변화: 없음(D-247 Proposed 유지)
 - 결정: D-247, D-190
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
+- 변경: 새 ADR D-256(공개 무결성 값은 이름으로 지우고, 스캐너는 매처를 넓히지 않는다)+ADR 로그 행+progress adrs+생성 색인. harness gap의 낡은 예약 7건(D-234~D-240)을 사실로 고치고(66b0176c), D-251~D-253 예약은 실제 착지에 따라 해제(d22d2a17), 색인을 커밋 상태로 재생성(03e48ded)
+- 증거: 스캐너 프로브 3건 PASS — 무결성 맥락 없는 hex는 `high-entropy-token`, 무결성 이름은 침묵, 같은 줄의 `api_token`은 `credential`. `test_harness_contracts + test_release_boundary_guards + test_native_payload_workflow + test_module_scorecard + test_native_runtime_docs` 127 passed, lint 0 error (2026-09-26 Windows)
+- gate 변화: 없음. SOURCE GO 유지. CI의 `core domain suites` 7 failed는 src/runtime 레인(타 세션)이고 docs 게이트 단계는 그 전에 skip
+- 결정: D-256 Accepted — 값 단위 허용목록을 만들지 않고, 오탐은 호출 지점의 이름으로 고친다
+- 교훈: ADR 번호는 파일과 행을 한 번에 확보한다. D-255로 쓰려는 순간 타 세션이 같은 번호를 집어넣어 D-256으로 갈아탔다(오늘 세 번째 충돌). append-only 공유 파일은 인덱스만 스테이징해 상대의 행을 훔치지 않는다
+## 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
+- 변경: map.js에 commitPoint 추출 + 키보드 십자선(화살표·Enter·Escape, paper색 십자+원, --pin 미신설), canvas tabindex, 시험 1건(진짜 map.js 오버라이드), 회차에 1셀, D-259 Accepted
+- 증거: 키보드 확정 POST 단언 통과. 변이(핸들러 제거) 적색 → 원복 녹색. 구현 중 자가 결함 1건: 즉시 tick이 아니라 즉시 확정 — 십자선 초기화가 비정상 격자에서 NaN을 냄 → 유한성 검사 후 중앙 폴백. dialog+web+dashboard 56 passed
+- gate 변화: D-259 Proposed→Accepted
+- 결정: D-259 Accepted. D-224 약속표 추가는 이 문서가 대신한다(타 ADR 불편집)
+- 교훈: 시험이 map.js를 스텁으로 갈아낀다는 것을 모르고 빈 손으로 디버깅했다 — 실패가 어서션 위치가 아니라 import 위치를 가리킬 수 있다. _serve_module 주석이 경고済였는데 읽지 않았다
+## 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
+- 변경: `docs/solutions/workflow-issues/`에 신규 2건 — (1) reprovision 테스트의 빈 exit code 플레이키(throw 지점 `deploy/sd/prepare-rosy-sd.ps1:1147-1148`, `$writerExitCode` null 초기화는 1008행, 원인 미확·D-230 레인 소관), (2) 동시 세션 공유 git 인덱스 규칙(amend/`reset --hard` 금지, `git commit -- <path>` 금지, append-only 공유 파일은 자기 행만 스테이징, 파일+행 원자적 페어링)
+- 증거: 단독 재현 10회 중 6회 FAIL(2026-09-26 3회 = FAIL/PASS/FAIL), `full_test.log` 동일 시그니처. ce-compound lightweight 기계 검사 `validate-doc-claims.py` 5 paths·3 SHAs 0 flags, `validate-frontmatter.py` 2건 OK
+- gate 변화: 없음(docs/solutions 신규 2건 — generate 후 lint 0 error 확인)
+- 결정: 플레이키는 원인 미확 상태로 판정 문서만 남기고 수정은 D-230 레인에 위임. git 규칙은 기존 ADR 번호 충돌 노트와 분리(번호 = 기획, git 메커니즘 = 실행)
+- 교훈: frontmatter 제목에 ': '가 있으면 따옴표 필수(파서가 중첩 매핑으로 오해). Windows에서 UTF-8 문서는 검사 스크립트가 cp949 기본인코딩으로 열어 실패하므로 `python -X utf8` 필요
+## 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
+- 변경: D-263 Accepted. 상단 메뉴는 사용자 질문을 가진 화면만 가리키고, 화면 메타데이터를 단일 출처로 쓴다. 역할·capability·inventory·API 권한을 분리하고 새 메뉴의 등록 조건과 화면 문법·검증 항목을 고정했다.
+- 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; `python -X utf8 tools/harness/rosy_harness.py lint` 0 error, 기존 last_verified 경고 19건. 최초 시험의 생성 색인 stale 2건은 `generate` 후 같은 명령 재실행으로 해소했다.
+- gate 변화: 없음. ADR은 설계 결정이며 D-204 화면 이관·기기 수용의 구현 증거가 아니다.
+- 결정: D-204 브랜치의 패널 조립 계약과 중복되는 메뉴 레지스트리를 만들지 않는다. D-243 이후 소유 경계로 이관 계획을 다시 맞춰야 한다.

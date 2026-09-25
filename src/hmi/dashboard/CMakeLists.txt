@@ -12,8 +12,10 @@ install(FILES
   client.js
   dom.js
   map.js
+  ros-network.js
   settings.js
   triage.js
+  vision.js
   DESTINATION share/${PROJECT_NAME}
 )
 
