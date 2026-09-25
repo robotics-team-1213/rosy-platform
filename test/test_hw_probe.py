@@ -186,7 +186,7 @@ def test_the_2026_09_25_rosy_18_board_shows_all_six_states(tmp_path):
     assert evidence["camera"] == "ov5647 10-0036 probe -121 · CSI 활성"
     assert "dtoverlay=i2c0-pi5,pins_0_1" in evidence["imu"]
     assert "rp1_ws281x_pwm" in evidence["lamp"]
-    assert evidence["buzzer"].startswith("BCM 4 · 꺼짐")
+    assert evidence["buzzer"].startswith("BCM 4 · 켜짐")  # on by default since D-260 2
     held = {row.id: row.held_by for row in rows if row.held_by}
     assert held == dict.fromkeys(["motor.1", "motor.2", "lidar", "adc.battery", "adc.ir0", "adc.ir1",
                                   "adc.ir2", "adc.ultrasonic"], "rosy-io.service")
@@ -452,6 +452,14 @@ def test_the_buzzer_defaults_to_the_pro_pin_heard_on_rosy_18(tmp_path):
     row = probe_module.Probe(FakeIo(_tree(tmp_path))).buzzer()
     assert probe_module.BUZZER_DEFAULT_PIN == 4
     assert row.state == "needs_human"
+    assert row.evidence == "BCM 4 · 켜짐 · 소리는 사람이 확인"
+
+
+def test_the_buzzer_is_off_only_when_the_display_environment_says_false(tmp_path):
+    root = _tree(tmp_path)
+    (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/boot-display.env").write_text("ROSY_BUZZER_ENABLED=false\n", encoding="utf-8")
+    row = probe_module.Probe(FakeIo(root)).buzzer()
     assert row.evidence == "BCM 4 · 꺼짐 (ROSY_BUZZER_ENABLED=false) · 소리는 사람이 확인"
 
 

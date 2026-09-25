@@ -493,7 +493,8 @@ class Probe:
         return Row("lcd", NEEDS_HUMAN, "rosy-boot-display 멈춤 · 화면을 사람이 확인")
 
     def buzzer(self) -> Row:
-        enabled, pin = False, BUZZER_DEFAULT_PIN
+        # D-260 2: the boot display's buzzer is on unless boot-display.env says false.
+        enabled, pin = True, BUZZER_DEFAULT_PIN
         try:
             text = self.io.path(DISPLAY_ENV).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -501,7 +502,7 @@ class Probe:
         for line in text.splitlines():
             key, _, value = line.strip().partition("=")
             if key == "ROSY_BUZZER_ENABLED":
-                enabled = value.strip().lower() == "true"
+                enabled = value.strip() != "false"
             elif key == "ROSY_BUZZER_PIN" and value.strip().isdigit():
                 pin = int(value.strip())
         switch = "켜짐" if enabled else "꺼짐 (ROSY_BUZZER_ENABLED=false)"

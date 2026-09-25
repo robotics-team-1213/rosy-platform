@@ -87,7 +87,8 @@ def test_the_driver_drives_gpio19_not_the_lcd_backlight():
              if line.strip() and not line.startswith("#")]
     assert lines == ["options rp1_ws281x_pwm pwm_channel=3"]
     rule = UDEV.read_text(encoding="utf-8")
-    assert 'SUBSYSTEM=="misc", KERNEL=="ws281x_pwm", OWNER="root", GROUP="root", MODE="0600"' in rule
+    # D-260 3: the boot display's own group, nobody else's (rosy-hw-test is root).
+    assert 'SUBSYSTEM=="misc", KERNEL=="ws281x_pwm", OWNER="root", GROUP="rosy-display", MODE="0660"' in rule
     assert "gpio" not in rule.split("ACTION==", 1)[1]
 
 

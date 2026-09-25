@@ -1,5 +1,5 @@
 [Unit]
-Description=ROSY boot display on the Pinky Pro LCD and buzzer (D-190)
+Description=ROSY boot display on the Pinky Pro LCD, buzzer and lamp (D-190, D-260)
 # Outside CORE (D-161) and not ordered after it: it shows BOOTING, PROVISIONED
 # and FAILED as well. It only reads /run/rosy-boot, which the root indicator
 # units write, and polls for it, so it needs no ordering on them either.
@@ -19,9 +19,10 @@ Group=rosy-display
 # 99-rosy-display.rules gives spidev0.0 to spi and gpiochip4 to gpio.
 SupplementaryGroups=dialout spi gpio
 # The Pro buzzer is BCM 4 (heard on rosy_18 2026-09-26; BCM 22 is silent there).
-# Off until ROSY_BUZZER_ENABLED=true (and any other ROSY_BUZZER_PIN) is written
-# into /etc/rosy/boot-display.env, which wins (D-190).
-Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=4
+# On by default since D-260 decision 2; ROSY_BUZZER_ENABLED=false (or another
+# ROSY_BUZZER_PIN) in /etc/rosy/boot-display.env wins. ROSY_LAMP_ENABLED=false
+# there leaves the D-260 lamp patterns out.
+Environment=ROSY_BUZZER_ENABLED=true ROSY_BUZZER_PIN=4 ROSY_LAMP_ENABLED=true
 EnvironmentFile=-/etc/rosy/boot-display.env
 # emotion.info_screen, emotion.rosy_lcd and rosylib come from the running release.
 Environment=PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages
@@ -40,6 +41,10 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 # refuses to drive the LCD when gpiochip4 is not labelled pinctrl-rp1.
 Environment=LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4
 WorkingDirectory=/var/lib/rosy/display
+# D-260 / D-247 6: the outcome of a buzzer or lamp test rosy-hw-test hands over
+# (display-test.json); root reads it. Nothing else is written here.
+RuntimeDirectory=rosy-display
+RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-display.py
 Restart=on-failure
 RestartSec=5
@@ -49,12 +54,15 @@ Nice=5
 
 NoNewPrivileges=true
 CapabilityBoundingSet=
-# The LCD, the buzzer line and the battery ADC, nothing else (D-181, D-190).
+# The LCD, the buzzer line, the battery ADC and the lamp, nothing else (D-181,
+# D-190, D-260). 99-rosy-lamp.rules gives /dev/ws281x_pwm to this unit's own
+# group rosy-display (0660); lamp_pattern, started per state, opens it.
 PrivateDevices=false
 DevicePolicy=closed
 DeviceAllow=/dev/spidev0.0 rw
 DeviceAllow=/dev/gpiochip4 rw
 DeviceAllow=/dev/i2c-1 rw
+DeviceAllow=/dev/ws281x_pwm rw
 # Everything it shows comes from files; it has no network of its own.
 PrivateNetwork=true
 RestrictAddressFamilies=AF_UNIX

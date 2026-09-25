@@ -353,8 +353,11 @@ DECLARED_WRITES = {
     },
     "rosy-boot-display.service": {
         # lgpio (under rpi-lgpio's RPi.GPIO) keeps its notification files in
-        # LG_WD, which the unit points at HOME. The program itself writes nothing.
+        # LG_WD, which the unit points at HOME.
         "$HOME/.lgd-nfy0",
+        # D-260 / D-247 6: the outcome of a test rosy-hw-test handed over
+        # (rosy-boot-display.py TEST_RESULT), in the unit's RuntimeDirectory.
+        "/run/rosy-display/display-test.json",
     },
     "rosy-login-code.service": {
         # rosy-login-code.py CODE_FILE, DISPLAY_FILE, ISSUE_FILE, LOCK_FILE, BOOT_MARK (D-193).
@@ -436,6 +439,8 @@ PROGRAM_SOURCES = {
     "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
+                                  # D-260: the rule table it imports from the release.
+                                  "src/contracts/foundation/core_common/robot_state.py",
                                   "src/hmi/face/emotion/info_screen.py",
                                   "src/hmi/face/emotion/rosy_lcd.py",
                                   "src/devices/pinky_pro/bringup/rosylib"],
