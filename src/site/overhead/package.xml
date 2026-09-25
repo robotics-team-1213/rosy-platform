@@ -8,6 +8,8 @@
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
+  <!-- Needs websockets>=14 (asyncio server API). Ubuntu 24.04 apt ships 10.x,
+       so install from pip/venv on the site PC; see AGENTS.md. -->
   <exec_depend>python3-websockets</exec_depend>
   <test_depend>python3-pytest</test_depend>
 

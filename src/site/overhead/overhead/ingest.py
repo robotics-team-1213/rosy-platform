@@ -14,17 +14,36 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
 import json
 import time
 from collections import deque
 from dataclasses import dataclass, field
 
 import websockets
-from websockets.asyncio.server import Server, ServerConnection, serve
+
+try:
+    from websockets.asyncio.server import Server, ServerConnection, serve
+except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
+    raise ImportError(
+        f"overhead needs websockets>=14 (found {websockets.__version__}); "
+        "install it with pip in the site-PC venv"
+    ) from exc
 
 from overhead import protocol
 
 STATUS_INTERVAL_S = 1.0
+# A peer that upgrades but never sends hello is closed after this long.
+HELLO_TIMEOUT_S = 5.0
+# Frames websockets may hold for one connection before it stops reading the
+# socket (D-136 6항: latest only, no backlog). TCP flow control does the rest.
+RECEIVE_QUEUE_FRAMES = 1
+# Room above max_bytes so an oversize frame reaches _handle_frame and is
+# dropped and counted instead of closing the connection with 1009.
+_MAX_SIZE_MARGIN = 64 * 1024
+# How long a replaced connection gets to finish its close handshake before
+# its transport is aborted. Runs in the background; never delays the new one.
+_REPLACED_CLOSE_TIMEOUT_S = 2.0
 _STATS_WINDOW_S = 1.0
 
 
@@ -96,6 +115,7 @@ class IngestServer:
         self.token = token
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
+        self._closing: set[asyncio.Task] = set()
 
     async def start(self, host: str, port: int) -> Server:
         return await serve(
@@ -103,6 +123,8 @@ class IngestServer:
             host,
             port,
             process_request=self._process_request,
+            max_size=self.config["max_bytes"] + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
+            max_queue=RECEIVE_QUEUE_FRAMES,
         )
 
     def source_names(self) -> list[str]:
@@ -122,7 +144,7 @@ class IngestServer:
         if request.path != protocol.WS_PATH:
             return connection.respond(404, "not found\n")
         auth = request.headers.get("Authorization")
-        if auth != f"Bearer {self.token}":
+        if not hmac.compare_digest(auth or "", f"Bearer {self.token}"):
             return connection.respond(401, "unauthorized\n")
         return None
 
@@ -131,7 +153,10 @@ class IngestServer:
     async def _handler(self, connection: ServerConnection) -> None:
         source_name: str | None = None
         try:
-            raw = await connection.recv()
+            raw = await asyncio.wait_for(connection.recv(), HELLO_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            await connection.close(protocol.CLOSE_BAD_PROTO, "no hello")
+            return
         except websockets.exceptions.ConnectionClosed:
             return
         if not isinstance(raw, str):
@@ -149,8 +174,11 @@ class IngestServer:
         src = _Source(name=source_name, connection=connection)
         self._sources[source_name] = src
         if replaced is not None:
-            with contextlib.suppress(websockets.exceptions.ConnectionClosed):
-                await replaced.connection.close(protocol.CLOSE_REPLACED, "replaced by new connection")
+            # Never await this inline: a half-open old peer (phone lost Wi-Fi)
+            # never answers the close frame and would stall the new connection.
+            task = asyncio.create_task(self._close_replaced(replaced.connection))
+            self._closing.add(task)
+            task.add_done_callback(self._closing.discard)
 
         try:
             await connection.send(json.dumps(protocol.make_config(**self.config)))
@@ -170,6 +198,16 @@ class IngestServer:
             with contextlib.suppress(asyncio.CancelledError):
                 await status_task
             self._drop_if_current(source_name, connection)
+
+    @staticmethod
+    async def _close_replaced(connection: ServerConnection) -> None:
+        try:
+            await asyncio.wait_for(
+                connection.close(protocol.CLOSE_REPLACED, "replaced by new connection"),
+                _REPLACED_CLOSE_TIMEOUT_S,
+            )
+        except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
+            connection.transport.abort()
 
     def _drop_if_current(self, source_name: str, connection: ServerConnection) -> None:
         current = self._sources.get(source_name)

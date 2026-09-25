@@ -198,3 +198,84 @@ async def test_captured_at_is_receive_time_minus_age_ms():
 
         latest = h.server.latest_frame("overhead-1")
         assert wall_before - 0.250 - 0.5 <= latest.captured_at <= wall_after - 0.250 + 0.5
+
+
+async def _half_open_peer(url: str, hello: dict):
+    """A raw-socket client that completes the upgrade, sends hello, then goes
+    silent without ever answering a close frame — a phone that lost Wi-Fi."""
+    import base64
+    import os
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    reader, writer = await asyncio.open_connection(parts.hostname, parts.port)
+    key = base64.b64encode(os.urandom(16)).decode()
+    writer.write(
+        (
+            f"GET {parts.path} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\n"
+            f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\nAuthorization: Bearer {TOKEN}\r\n\r\n"
+        ).encode()
+    )
+    await writer.drain()
+    await reader.readuntil(b"\r\n\r\n")
+    payload = json.dumps(hello).encode()
+    mask = os.urandom(4)
+    masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+    assert len(payload) < 65536
+    length = bytes([0x80 | len(payload)]) if len(payload) < 126 else bytes([0x80 | 126]) + len(payload).to_bytes(2, "big")
+    writer.write(bytes([0x81]) + length + mask + masked)
+    await writer.drain()
+    return reader, writer
+
+
+@run_async
+async def test_replacing_a_half_open_old_connection_does_not_stall_the_new_one():
+    """Design §3: a phone that reconnects after losing Wi-Fi must win at once.
+    The old socket never answers the close handshake; the new connection must
+    still get its config promptly, not after websockets' 10 s close timeout."""
+    async with _Harness() as h:
+        _, old_writer = await _half_open_peer(h.url, _hello())
+        await _wait_for(lambda: "overhead-1" in h.server.source_names())
+        new = await h.connect()
+        started = time.monotonic()
+        await new.send(json.dumps(_hello()))
+        config = json.loads(await asyncio.wait_for(new.recv(), timeout=5))
+        assert config["type"] == "config"
+        assert time.monotonic() - started < 1.0
+        await new.close()
+        old_writer.close()
+
+
+@run_async
+async def test_a_peer_that_never_sends_hello_is_closed_4400(monkeypatch):
+    monkeypatch.setattr("overhead.ingest.HELLO_TIMEOUT_S", 0.2)
+    async with _Harness() as h:
+        ws = await h.connect()
+        with pytest.raises(ConnectionClosed) as exc:
+            await asyncio.wait_for(ws.recv(), timeout=2)
+        assert exc.value.rcvd.code == protocol.CLOSE_BAD_PROTO
+
+
+@run_async
+async def test_frames_near_max_bytes_are_accepted_not_closed_1009():
+    """max_bytes above websockets' default 1 MiB max_size must still drop and
+    count oversize frames rather than closing the connection."""
+    config = {**protocol.DEFAULT_CONFIG, "max_bytes": 1_200_000}
+    async with _Harness(config=config) as h:
+        ws = await h.connect()
+        await ws.send(json.dumps(_hello()))
+        await ws.recv()
+        await ws.send(_frame(0, 5, jpeg=b"\xff" * 1_150_000))
+        await _wait_for(lambda: (h.server.stats("overhead-1") or {}).get("frames") == 1)
+        await ws.send(_frame(1, 5, jpeg=b"\xff" * 1_250_000))
+        await _wait_for(lambda: (h.server.stats("overhead-1") or {}).get("oversize") == 1)
+        await ws.close()
+
+
+def test_receive_queue_is_bounded_small():
+    """D-136 6항: the receiver must not buffer a backlog of frames inside
+    websockets while a handler is busy."""
+    from overhead.ingest import RECEIVE_QUEUE_FRAMES
+
+    assert RECEIVE_QUEUE_FRAMES <= 2
