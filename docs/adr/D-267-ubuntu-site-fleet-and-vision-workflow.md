@@ -20,7 +20,7 @@
 7. **추적과 고장.** Fleet은 작업 ID와 멱등 키, 원인 evidence ID, 로봇 명령 correlation ID, 수락/실행/완료·실패 결과를 따로 저장한다. 응답 유실 후 재접수는 기존 작업을 반환해야 하며, 재기동 뒤 미확인 명령을 새 명령처럼 재송신하지 않는다. 영상 서비스·GPU가 죽으면 해당 자동 조건을 닫고 상태를 `DEGRADED`로 표시한다. Fleet 전체가 꺼지면 사이트 자동화만 멈추고 로봇의 로컬 정지·deadman은 유지한다. 복구 뒤 움직임 재개는 현재 상태·명령 결과를 재조회한 후에만 허용한다.
 8. **단계적 활성화.** 1차는 천장 카메라 결과의 관측·대조와 기존 목표/취소 경로다. 자동 이동은 D-257 수용, 실제 카메라·지도 보정, 이벤트/명령 추적 및 현장 재현 시험 뒤 능력별로 활성화한다. 자동 집기는 D-55의 모델·장착·전원·hand-eye·충돌·payload·복구 장치 시험과 실제 파지/배치 검증 뒤 별도 정책으로 활성화한다. 핑키/팔 영상도 각각 전송 계약과 기기 실측을 거친다.
 
-**Implementation status (2026-09-27, LOCAL):** the current source now wires the
+**Implementation status (2026-09-26, LOCAL):** the current source now wires the
 CORE `FleetAgent` WebSocket and durable event audit into the site Fleet app,
 accepts overhead frames through the separate vision service, stores sightings,
 and exposes authenticated operator state/event/task readback. Operator
@@ -32,6 +32,13 @@ physical phone/CORE stream, surveyed calibration, or per-user Fleet RBAC has bee
 accepted. D-177 command correlation/ACK reconciliation and D-268 policy evidence
 gates remain open; this implementation record does not change the Proposed
 status or authorize autonomous motion.
+
+The current site candidate's vision worker is CPU ArUco and Compose does not
+reserve a GPU. An RTX 5080 host/container visibility check is a separate
+preflight; GPU inference acceptance requires a selected Blackwell-compatible
+model image plus measured VRAM, thermal behavior, and frame-to-sighting latency.
+Do not attach a GPU reservation to the CPU service or infer GPU acceptance from
+the host's GPU visibility alone.
 
 **Alternatives:**
 

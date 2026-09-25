@@ -141,3 +141,49 @@ and an approved network/firewall rule. Successful container health checks do
 not prove phone pairing, site calibration, CORE connectivity, robot behavior,
 or field acceptance. D-257/D-268 remain at their recorded status; autonomous
 movement and pick are disabled pending those gates.
+
+## RTX 5080 GPU preflight
+
+The current `vision` image runs the CPU ArUco pipeline. The site Compose file
+does not reserve a GPU, and the current candidate contains no CUDA inference
+model. Treat the following as a host/runtime preflight only; passing it does not
+accept vision accuracy, model latency, or autonomous-task evidence.
+
+On the target Ubuntu host, record the hostname, Ubuntu release, and the full
+`nvidia-smi` output. Confirm that it identifies the expected RTX 5080 and a
+loaded NVIDIA driver. Install the NVIDIA Container Toolkit using its official
+Ubuntu instructions, configure Docker, and restart the daemon:
+
+```sh
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+docker version
+docker compose version
+```
+
+Then verify that a container can see the GPU, using NVIDIA's
+[CUDA 12.8.1 Ubuntu 24.04 base image](https://hub.docker.com/r/nvidia/cuda/tags?name=12.8.1-base-ubuntu24.04):
+
+```sh
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+```
+
+Record the resolved test-image digest and output in the private host evidence.
+If the host or container cannot identify the GPU, stop the GPU deployment gate;
+do not mark the CPU vision service as GPU-accepted. NVIDIA documents the driver
+and Docker runtime setup in its [Container Toolkit install guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+
+Before adding a GPU reservation to Compose, select the inference framework,
+model, and immutable image revision. Confirm the deployed application contains
+[Blackwell-compatible GPU code](https://docs.nvidia.com/cuda/archive/12.8.1/pdf/Blackwell_Compatibility_Guide.pdf)
+(native cubin for compute capability 10.0 or compatible PTX), then record
+model/framework/CUDA versions, image digest, peak
+VRAM, thermal behavior, and measured frame-to-sighting latency under expected
+load. Docker Compose GPU device reservations require a GPU-capable host and
+configured daemon; add one only to the selected inference service, with an
+explicit GPU capability ([Docker Compose GPU support](https://docs.docker.com/compose/how-tos/gpu-support/)).
+Keep the current CPU ArUco sighting path distinct from any future GPU-model
+result. If the GPU/model is unavailable, mark GPU-dependent evidence `DEGRADED`
+and do not silently substitute CPU ArUco results. These measurements do not
+enable automatic movement; D-257/D-268 and the separate freshness and
+false-trigger gates still apply.

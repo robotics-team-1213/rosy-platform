@@ -120,9 +120,16 @@ does not redispatch it. This does not complete Task 7 or accept D-268/D-177.
 ## Task 8 — Ubuntu RTX host와 각 장비별 수용
 
 1. 접속 대상 hostname/OS/user, network/TLS termination, NVIDIA driver, Docker Engine/Compose, disk/data backup, time sync를 inventory하고 private evidence에 기록한다.
-2. revision-pinned images/build manifest/SBOM, GPU container access, model revision/VRAM, capture-to-Fleet latency, CPU/GPU fallback을 실측한다.
-3. actual ceiling phone + markers + surveyed map, actual CORE robot, network interruption, process restart, token revoke를 DEVICE/FIELD runbook에 따라 실행한다.
-4. automatic movement stays disabled until D-268 accepted contract and per-task false-trigger/freshness metrics pass. OMX pick, Pinky camera and robot-arm camera require separate ADRs and DEVICE goals.
+2. 먼저 호스트 `nvidia-smi`에서 RTX 5080과 driver를 확인한 다음 NVIDIA Container Toolkit으로 Docker runtime을 설정하고 `docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi`가 GPU를 읽는지 확인한다. test image digest와 출력을 private evidence에 남긴다. 이는 GPU runtime preflight이며 추론 수용이 아니다.
+3. revision-pinned images/build manifest/SBOM을 배포한다. 실제 모델/framework/image를 선택한 후 Blackwell 호환 GPU 코드, model revision, peak VRAM, thermal behavior, capture-to-Fleet latency를 실측한다. 현재 CPU ArUco sighting은 별도 관측 경로로 유지하고, GPU 의존 evidence가 불가할 때 정책 task를 닫는 동작을 검증한다. 이때 해당 vision 서비스에만 Compose GPU reservation을 부여한다.
+4. actual ceiling phone + markers + surveyed map, actual CORE robot, network interruption, process restart, token revoke를 DEVICE/FIELD runbook에 따라 실행한다.
+5. automatic movement stays disabled until D-268 accepted contract and per-task false-trigger/freshness metrics pass. OMX pick, Pinky camera and robot-arm camera require separate ADRs and DEVICE goals.
+
+**GPU preflight clarification:** CUDA 12.8 Blackwell compatibility requires the
+application binary to carry native Blackwell cubin or compatible PTX; the
+version label alone is not proof. The current candidate vision worker is CPU
+ArUco and has no GPU reservation/model. Therefore the container visibility test
+does not satisfy model, latency, or SITE/DEVICE acceptance.
 
 **Task 8 preparation status (LOCAL):** `deploy/site/build_candidate.py` now
 requires a clean source revision, builds commit-tagged `linux/amd64` images,
