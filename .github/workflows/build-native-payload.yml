@@ -1,0 +1,139 @@
+name: Build Pinky Pro native payload
+
+# D-225 Decision 2.1: payload-only build for updating an already-flashed robot
+# without a card rewrite. Same native ROS/rosdep/lock/hardware-deps steps as
+# build-pinky-image.yml, but no image: build-native-payload.sh builds install/,
+# build_payload_release.py assembles the unsigned release. Signing stays
+# offline (sign_image_release.py); this job never sees a private key.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Release ID (YYYY.MM.DD-NNN)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rosy-native-payload-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-unsigned-payload:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    env:
+      RELEASE_ID: ${{ inputs.release_id }}
+      PAYLOAD_WORK: /tmp/rosy-payload-work
+      DIST_ROOT: /tmp/rosy-payload-dist
+      RESOLVED_LOCK: /tmp/rosy-inputs.resolved.yaml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify native clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          test -z "$(git status --porcelain)"
+          [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]]
+          df -h /
+
+      - name: Install native ROS build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential cmake curl gpg python3-yaml
+          ros_source=/tmp/ros2-apt-source.deb
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --output "$ros_source" \
+            https://github.com/ros-infrastructure/ros-apt-source/releases/download/1.2.0/ros2-apt-source_1.2.0.noble_all.deb
+          ros_apt_source_sha256='0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5'
+          printf '%s  %s\n' "$ros_apt_source_sha256" "$ros_source" \
+            | sha256sum --check --strict
+          sudo dpkg -i "$ros_source"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            python3-colcon-common-extensions python3-rosdep \
+            ros-jazzy-ros-base ros-dev-tools
+          if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
+            sudo rosdep init
+          fi
+          sudo rosdep update --rosdistro jazzy
+
+      - name: Resolve and verify run-specific lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 deploy/image/resolve-build-lock.py \
+            --input deploy/image/inputs.lock.yaml \
+            --output "$RESOLVED_LOCK" \
+            --revision "$GITHUB_SHA"
+          deploy/image/verify-inputs.sh "$RESOLVED_LOCK"
+
+      - name: Install checksum-pinned Pinky Pro hardware build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo deploy/image/install-pinky-hardware-deps.sh --lock "$RESOLVED_LOCK"
+
+      - name: Build native payload tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo deploy/image/build-native-payload.sh \
+              --workspace "$GITHUB_WORKSPACE" \
+              --release-root "$PAYLOAD_WORK/root" \
+              --source-revision "$GITHUB_SHA" \
+              --release-id "$RELEASE_ID" \
+              --lock "$RESOLVED_LOCK" \
+            | tee /tmp/rosy-native-payload-build.log
+          sudo chown -R "$USER:$USER" "$PAYLOAD_WORK"
+          df -h /
+
+      - name: Assemble unsigned payload release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DIST_ROOT"
+          python3 deploy/release/build_payload_release.py build \
+            --payload-root "$PAYLOAD_WORK/root" \
+            --release-id "$RELEASE_ID" \
+            --out "$DIST_ROOT/$RELEASE_ID"
+          # Keeps the Linux exec bits the artifact zip drops; the offline
+          # re-pack after signing reads them back with --modes-from.
+          python3 deploy/release/build_payload_release.py pack \
+            --release-dir "$DIST_ROOT/$RELEASE_ID" \
+            --out "$DIST_ROOT/$RELEASE_ID.unsigned.tar.gz" \
+            --allow-unsigned
+
+      - name: Verify unsigned handoff shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="$DIST_ROOT/$RELEASE_ID"
+          test -f "$release/manifest.json"
+          test -f "$release/SHA256SUMS"
+          test ! -e "$release/SHA256SUMS.sig"
+          test ! -e "$release/image-overlay"
+          (cd "$release" && sha256sum --check --strict --quiet SHA256SUMS)
+          test -f "$DIST_ROOT/$RELEASE_ID.unsigned.tar.gz"
+
+      - name: Upload unsigned payload handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosy-native-payload-unsigned-${{ inputs.release_id }}-${{ github.sha }}
+          path: /tmp/rosy-payload-dist/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
