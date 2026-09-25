@@ -7,6 +7,9 @@
 .surface-form, .surface-inline-form, .surface-actions { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); }
 .surface-field { min-width: min(100%, 10rem); display: grid; gap: var(--space-1); }
 .surface-form input, .surface-form select, .surface-inline-form input, .surface-actions input { max-width: 100%; }
+.surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
+.surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
+.surface-map-frame ui-empty { position: absolute; inset: var(--space-3); pointer-events: none; }
 @media (max-width: 30rem) {
   .surface-readout { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
   .surface-readout dd { margin-bottom: var(--space-2); overflow-wrap: anywhere; }

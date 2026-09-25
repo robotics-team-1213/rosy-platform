@@ -129,3 +129,52 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
         page.evaluate("window.__unmount()")
         assert errors == []
         browser.close()
+
+
+def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+        map_source = (WEB / "map.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/map.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/map.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=map_source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/map.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {}; const stopped = [];
+          const store = {poll(path, _interval, onData) { callbacks[path] = onData; return () => stopped.push(path); }};
+          const calls = []; window.__calls = calls;
+          const api = async (path, options = {}) => {
+            calls.push({path, method: options.method || 'GET'});
+            if (path === '/api/v1/map') return {map_id:'map-a', width:2, height:2, resolution:1, origin:{x:0,y:0}, data:[0,0,0,0]};
+            if (path === '/api/v1/navigation/path') return {poses:[]};
+            if (path.startsWith('/api/v1/map/costmap')) return {data:[]};
+            return {};
+          };
+          window.__stopped = stopped;
+          window.__unmount = mount(root, {role:'viewer', api, store});
+          callbacks['/api/v1/robot/state']({pose:{x:0.5,y:0.5,yaw:0}, navigation:'IDLE'});
+          callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
+          window.confirm = () => { window.__confirmed = true; return true; };
+          const canvas = root.querySelector('canvas'); canvas.focus();
+          canvas.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}));
+          canvas.dispatchEvent(new MouseEvent('click', {clientX:20,clientY:20,bubbles:true}));
+        }""")
+        assert page.locator("canvas").get_attribute("tabindex") is not None
+        assert page.locator("canvas").get_attribute("aria-label")
+        assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
+        page.evaluate("window.__unmount()")
+        assert set(page.evaluate("window.__stopped")) == {"/api/v1/robot/state", "/api/v1/system/capabilities"}
+        assert errors == []
+        browser.close()

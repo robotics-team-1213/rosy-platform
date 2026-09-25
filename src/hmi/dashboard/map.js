@@ -128,6 +128,8 @@ export function createFieldMap(options) {
   const getNavigation = options.getNavigation;
   const canGoal = options.canGoal;
   const setAction = options.setAction;
+  const listenerController = new AbortController();
+  let resizeObserver = null;
   const layerButtons = [...(options.layerRoot?.querySelectorAll("[data-map-layer]") || [])];
   const clickButtons = [...(options.layerRoot?.querySelectorAll("[data-map-click]") || [])];
 
@@ -275,7 +277,7 @@ export function createFieldMap(options) {
       button.setAttribute("aria-pressed", layers[layer] ? "true" : "false");
       rebuildRaster();
       paint();
-    });
+    }, {signal: listenerController.signal});
   });
 
   clickButtons.forEach((button) => {
@@ -286,16 +288,17 @@ export function createFieldMap(options) {
       clickButtons.forEach((item) => {
         item.setAttribute("aria-pressed", item.dataset.mapClick === clickMode ? "true" : "false");
       });
-    });
+    }, {signal: listenerController.signal});
   });
 
   if (typeof ResizeObserver === "function" && canvas) {
-    new ResizeObserver(() => {
+    resizeObserver = new ResizeObserver(() => {
       if (fitCanvas()) {
         rebuildRaster();
         paint();
       }
-    }).observe(canvas);
+    });
+    resizeObserver.observe(canvas);
   }
 
   // D-259: 클릭과 키보드 확정은 같은 길이다. 좌표→confirm→POST 전부가 여기 있다.
@@ -335,7 +338,7 @@ export function createFieldMap(options) {
     };
     paint();
     await commitPoint(cross.x, cross.y);
-  });
+  }, {signal: listenerController.signal});
 
   canvas?.addEventListener("keydown", async (event) => {
     if (!state.occupancy || !canvas) return;
@@ -367,8 +370,15 @@ export function createFieldMap(options) {
     cross.x = Math.min(Math.max(cross.x, 0), canvas.width);
     cross.y = Math.min(Math.max(cross.y, 0), canvas.height);
     paint();
-  });
+  }, {signal: listenerController.signal});
 
   syncEmpty();
-  return { refresh, setPose };
+  return {
+    refresh,
+    setPose,
+    destroy() {
+      listenerController.abort();
+      resizeObserver?.disconnect();
+    },
+  };
 }
