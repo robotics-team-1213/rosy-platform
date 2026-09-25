@@ -1,6 +1,6 @@
 ## D-226 문서는 공개 여부를 먼저 가르고, 그다음 주인 폴더에 둔다
 
-**Status:** Proposed (2026-09-25). 기준만 정한다. 이 ADR로 옮긴 파일은 없다.
+**Status:** Accepted (2026-09-25). 이동은 9a83470e에서 했다. 경계는 `test/test_document_placement.py`가 CI에서 지킨다.
 
 **Context:** 저장소 `livsbittt/rosy-os`는 공개(PUBLIC)다. D-17은 계약 문서
 구조를, D-45는 `docs/`를 단일 기준 경로로, D-186 §4는 "모듈 설명은 그 모듈의
@@ -60,20 +60,38 @@
 - `src/` 아래 폴더 이동(refactor/multi-robot-structure, D-196 예약)과 겹치는
   경로는 그 이동이 끝난 뒤에 옮긴다.
 
-**현재 목록에 적용한 결과** (2026-09-25, 이동 없음):
+**현재 목록에 적용한 결과** (2026-09-25):
 
 | 경로 | 기준 | 판정 |
 |---|---|---|
 | `private/ROSY_Architecture_v0.4_Research_Enhanced.md` | 1 | `private/`에 둔다. 올리려면 검토와 결정이 필요하다 |
-| `src/core/control/docs/validation/` 날짜 폴더 3개와 날짜 문서 1개 | 4 | `docs/validation/`으로 옮긴다. 참조는 `docs/logs.md`와 인벤토리 CSV뿐이고 둘 다 기록 문서라 고칠 곳이 없다 |
+| `src/core/control/docs/validation/` 날짜 폴더 3개와 날짜 문서 1개 | 4, 2 | 옮겼다(9a83470e). 결과 세 건은 `docs/validation/`으로 갔다. `mapping-finish-2026-09-08`은 `test_straight_escape.py`가 읽는 데이터라서 `src/core/control/test/fixtures/`로 갔다 |
 | `src/core/control/docs/*.md` 3개 | 5 | 유지 |
 | `src/core/control/STEPS.txt` | 옮기는 규칙 | 유지. D-50이 이름으로 가리키는 runbook이다 |
 | `src/core/control/CLAUDE.md` | 5 | 유지 |
 | `map/map_260905_update_v2/` 전체 | 2, 6 | 유지. `reports/wall_geometry.json`은 `pinky_integrated_acceptance.launch.py`가 설치 경로에서 읽는 데이터다 |
 | `map/*/review/*.png`, `textures/` | 2, 6 | 유지 |
-| `src/devices/imu_bno055/INITIALIZATION.md` | 5 | `src/devices/imu_bno055/docs/`로 옮긴다. 참조 없음 |
+| `src/devices/imu_bno055/INITIALIZATION.md` | 5 | `src/devices/imu_bno055/docs/`로 옮겼다(9a83470e) |
 | `CONCEPTS.md`, `STATUS.md` | 루트 규칙 | 유지 |
-| `docs/validation/pinky-pro-evaluation-2026-09-24.md`의 장치 IP | 1 | 공개 이력에 있다. 다음에 고칠 때 자리표시로 바꾼다 |
+| `docs/validation/pinky-pro-evaluation-2026-09-24.md`의 장치 IP | 1 | `<robot-ip>`로 바꿨다. 옛 값은 공개 이력에 남는다 |
+
+**gitignore로 막는 것과 추적하는 것:** 기준 1을 파일 이름으로 옮긴 표다. 왼쪽은
+`.gitignore`가 막고, 오른쪽은 반드시 추적한다. 두 칸은 같은 곳에 나란히 있어서
+규칙이 넓어지면 템플릿이 함께 사라진다. 그래서 두 칸을 모두 시험한다.
+
+| 막는 것 (git에 들어가지 않는다) | 추적하는 것 (공개해도 되는 짝) |
+|---|---|
+| `/private/` 내부 초안·전략·벤더 자료·현장 메모 | `docs/` 공개 문서 |
+| `.env`, `.env.*`, `*.local.env`, `match.local.yaml` | `.env.example`, `deploy/robot/native/rosy-runtime.env` 비밀 없는 템플릿 |
+| `provision.json`, `rosy-config.yaml` 채운 장치 설정 | `provision.schema.json`, `rosy-config.template.yaml` |
+| `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ecdsa*`, `id_ed25519*` | `deploy/release/public-keys/*.pem` 공개키 |
+| `rosy-diag-*.tar.gz` 로봇에서 가져온 진단 번들 | `deploy/robot/native/rosy-diag` 수집 스크립트 |
+| `*.img*`, `*.iso`, `*.mcap`, `*.db3`, `rosbag2_*/`, `*.sqlite3`, `*.db` | 이미지를 만드는 절차(`deploy/image/`) |
+| `data/teleop/*`, `data/drive/**` 세션 기록 | `data/teleop/learning/` 학습용 영상 |
+| 빌드·캐시·에이전트 상태, `.worktrees/`, `.claude/worktrees/` | `.claude/settings.json`, `.omc/skills/` |
+
+새 비밀 종류가 생기면 왼쪽 칸과 `test/test_document_placement.py`의 `MUST_IGNORE`에,
+그 템플릿은 오른쪽 칸과 `MUST_TRACK`에 같은 변경에서 더한다.
 
 **Alternatives:**
 - 모든 문서를 `docs/`로 모으기. D-186 §4를 뒤집고, 코드와 함께 바뀌는 설명을
@@ -85,13 +103,16 @@
 **Consequences:**
 - 새 문서는 위 순서로 자리를 정한다.
 - 공개 여부 판정이 첫 질문이 된다. 장치 실측 문서는 주소를 자리표시로 적는다.
-- 옮길 대상은 두 건뿐이다(control 증거 폴더, imu 낱장 문서). 한 커밋으로 끝난다.
+- 옮긴 것은 control 날짜 결과, 시험이 읽는 맵 데이터, imu 낱장 문서다. 모두 9a83470e 한 커밋이다.
 
-**Validation / Transition:** Accepted 전에 소유자가 위 판정 표를 확인한다.
-Accepted 뒤 첫 커밋에서 두 건을 옮기고, `test/test_folder_layout.py`에 시험 세 개를 더한다.
-- `src/**/docs/validation/`에 날짜 폴더가 없다.
-- 모듈 루트에 허용 목록 밖의 `.md`/`.txt`가 없다. 자산 묶음과 D-50 runbook은 예외로 명시한다.
-- 저장소 루트에 허용 목록 밖의 문서가 없다.
+**Validation:** `test/test_document_placement.py`. CI(`ci.yml`의 `pytest test/`)가 push와 PR마다 돌린다.
+- 추적 파일 중 ignore 규칙에 걸리는 것이 없다(`git ls-files -ci`). 강제로 올린 비밀과, 템플릿까지 삼키는 규칙을 둘 다 잡는다.
+- `MUST_IGNORE`의 경로는 전부 ignore되고, `MUST_TRACK`은 전부 추적되며 ignore되지 않는다.
+- 저장소 루트에는 허용 목록 밖의 파일이 없다.
+- `src/**/docs/validation/` 아래에 날짜가 박힌 항목이 없다. 결과 양식은 예외다.
+- 모듈 루트에는 허용 목록 밖의 `.md`/`.txt`가 없다. D-50 runbook `STEPS.txt`는 명시한 예외다.
+
+변이 확인: `.gitignore`에서 `provision.json` 줄을 지우면 시험이 `deploy/sd/provision.json`을 들고 실패했다.
 
 `python tools/harness/rosy_harness.py lint`와 `git diff --check`를 통과시킨다.
 

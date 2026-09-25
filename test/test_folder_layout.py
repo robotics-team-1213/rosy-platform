@@ -48,7 +48,8 @@ def test_validation_shells_stay_inside_evidence():
 
 def test_module_gate_markdown_stays_on_the_module():
     modules = _modules()
-    skip = {".git", "build", "install", "log", "__pycache__"}
+    # Linked checkouts (.worktrees, .claude/worktrees) are other trees, not this one.
+    skip = {".git", ".worktrees", "worktrees", "build", "install", "log", "__pycache__"}
     stray = []
     for name in ("progress.md", "logs.md", "index.md"):
         for path in ROOT.rglob(name):

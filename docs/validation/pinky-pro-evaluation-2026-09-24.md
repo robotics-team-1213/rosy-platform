@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|---|
 | 1 | 부팅 | 전원 → 사용 가능 | 재부팅 후 PC에서 5 s 간격 관측(`boot-watch.sh`), `systemd-analyze` | 커널 4 s + 사용자 공간 19.5 s = 23.5 s. `--failed` 없음. **005의 응급 조치 상태 기준** | PASS(조건부) | US-002(006에서 조치 없이) |
 | 2 | 부팅 표시 시점 | 부팅 완료 시 부저·LCD | `/run/rosy-boot/boot-status.json` 단계 변화 시각 | CORE 준비는 ~20 s였는데 표시는 53-55 s(30 s 타이머). 런타임 뒤 판정 unit을 넣자 t+45 s(PC에서 처음 보이는 시점) | FAIL | US-003 |
-| 3 | 현장 Wi-Fi | `wifi_setup.sh` → netplan | NM 활성 프로필, mDNS | `rosy-site-sta:wlan0`, `rosy-pinky-e4us.local` → 10.160.175.16 | PASS | — |
+| 3 | 현장 Wi-Fi | `wifi_setup.sh` → netplan | NM 활성 프로필, mDNS | `rosy-site-sta:wlan0`, `rosy-pinky-e4us.local` → `<robot-ip>` | PASS | — |
 | 4 | 대체 AP | 항상 AP `pinky_XXXX` / `pinkypro` | 현장 Wi-Fi 없이 120 s 대기 | 미시험 | BLOCKED(현장 Wi-Fi 끄는 시험 필요) | US-007 |
 | 5 | 원격 접속 | SSH `pinky`/`1` | `ssh -i <operator key> rosy@` | 키 로그인 성공, 비밀번호 로그인 불가(D-174 F3 결정된 차이) | PASS | — |
 | 6 | CORE / API | (공식에 없음: Rosy 제품 API) | `/openapi.json`, 인증 경로 | 경로 72개. 인증 없는 요청은 401. **이미지 경로에서 토큰을 발급하지 않아** 대시보드·API에 아무도 로그인할 수 없다(`/etc/rosy/initial-credentials.txt`는 Docker 경로에만 있다) | FAIL | US-009 |
