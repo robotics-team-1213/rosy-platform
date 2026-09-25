@@ -47,12 +47,33 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = SettingsStore(applicationContext)
-        if (savedInstanceState == null) handlePairingIntent(intent)
+        if (savedInstanceState == null) {
+            handlePairingIntent(intent)
+        } else {
+            restorePendingPairing(savedInstanceState)
+        }
         setContent {
             OverheadTheme {
                 OverheadApp()
             }
         }
+    }
+
+    /**
+     * Keeps an unconfirmed deep link across rotation and other configuration changes. It is
+     * stored as the same rosyov:// text that arrived in the intent, which the system already holds.
+     */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingPairing.value?.let { outState.putString(KEY_PENDING_PAIRING, it.toUri()) }
+        deepLinkInvalid.value?.let { outState.putString(KEY_DEEP_LINK_INVALID, it) }
+    }
+
+    private fun restorePendingPairing(state: Bundle) {
+        state.getString(KEY_PENDING_PAIRING)?.let { uri ->
+            (PairingUri.parse(uri) as? PairingUri.Parsed.Valid)?.let { pendingPairing.value = it.pairing }
+        }
+        deepLinkInvalid.value = state.getString(KEY_DEEP_LINK_INVALID)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -159,6 +180,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+private const val KEY_PENDING_PAIRING = "pending_pairing"
+private const val KEY_DEEP_LINK_INVALID = "deep_link_invalid"
 
 @Composable
 private fun OverheadTheme(content: @Composable () -> Unit) {
