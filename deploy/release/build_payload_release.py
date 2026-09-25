@@ -87,7 +87,9 @@ def _payload_files(payload_root: Path) -> list[str]:
             continue
         if not path.is_file():
             raise ValueError(f"PAYLOAD_ENTRY_TYPE: {relative} is not a regular file")
-        if relative in METADATA:
+        # At any depth: a nested manifest.json or SHA256SUMS(.sig) reads as release
+        # metadata to anything that walks the unpacked tree (D-225 review).
+        if path.name in METADATA:
             raise ValueError(f"PAYLOAD_METADATA_PRESENT: {relative} must not be in the build tree")
         files.append(relative)
     return files

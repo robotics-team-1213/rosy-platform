@@ -150,6 +150,19 @@ def test_build_refuses_incomplete_or_mismatched_payload(tmp_path):
     assert not (tmp_path / "out-a").exists() and not (tmp_path / "out-b").exists()
 
 
+@pytest.mark.parametrize("relative", [
+    "manifest.json", "SHA256SUMS", "SHA256SUMS.sig",
+    "install/share/core/manifest.json", "install/lib/SHA256SUMS", "deploy/robot/native/SHA256SUMS.sig",
+])
+def test_build_refuses_metadata_names_at_any_depth(tmp_path, relative):
+    payload = _payload_tree(tmp_path / "payload")
+    (payload / relative).parent.mkdir(parents=True, exist_ok=True)
+    (payload / relative).write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="PAYLOAD_METADATA_PRESENT"):
+        build_release(payload, RELEASE_ID, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
 def test_build_refuses_existing_release_dir(tmp_path):
     payload = _payload_tree(tmp_path / "payload")
     out = tmp_path / "out"
