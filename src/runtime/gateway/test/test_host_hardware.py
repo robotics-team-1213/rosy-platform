@@ -18,7 +18,6 @@ from types import SimpleNamespace
 import pytest
 from core_api_web.api.app import create_app
 from core_api_web.api.v1 import host as host_api
-from core_features.state.manager import StateManager
 
 VIEWER_TOKEN = "viewer-token"
 OPERATOR_TOKEN = "operator-token"
@@ -176,6 +175,25 @@ def test_the_probe_output_passes_cores_validation(tmp_path):
 # --- topic overlay while rosy-io holds the buses ------------------------------------
 
 
+class FakeState:
+    """The two StateManager reads the overlay uses: snapshot().evidence/battery and get_sensor.
+
+    A fake, not StateManager, so this API test stays inside the gateway (D-184).
+    """
+
+    def __init__(self, *, velocity="unavailable", battery="unavailable", voltage=None, lidar_at=None):
+        self.evidence = {"velocity": SimpleNamespace(evidence=velocity),
+                         "battery": SimpleNamespace(evidence=battery)}
+        self.voltage = voltage
+        self.lidar_at = lidar_at
+
+    def snapshot(self):
+        return SimpleNamespace(evidence=self.evidence, battery=SimpleNamespace(voltage=self.voltage))
+
+    def get_sensor(self, key):
+        return {"received_at": self.lidar_at} if key == "lidar" and self.lidar_at is not None else None
+
+
 def _held(device_id: str) -> dict:
     return _device(device_id, "not_measured", held_by="rosy-io.service")
 
@@ -183,10 +201,7 @@ def _held(device_id: str) -> dict:
 def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path):
     import time
 
-    state = StateManager("rosy_18", sources_configured=True)
-    state.set_velocity(0.0, 0.0)
-    state.set_battery(80.0, voltage=8.49)
-    state.set_sensor("lidar", {"received_at": time.time()})
+    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=time.time())
     _write(tmp_path, [_held("motor.1"), _held("motor.2"), _held("lidar"), _held("adc.battery"),
                       _held("adc.ir0"), _device("camera", "no_response")])
     body = _client(_config(tmp_path, "hardware"), state).get(
@@ -205,11 +220,7 @@ def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path):
 def test_stale_topics_turn_held_rows_into_no_response(tmp_path):
     import time
 
-    clock = [1000.0]
-    state = StateManager("rosy_18", clock=lambda: clock[0], sources_configured=True)
-    state.set_velocity(0.0, 0.0)
-    clock[0] += 30.0
-    state.set_sensor("lidar", {"received_at": time.time() - 30.0})
+    state = FakeState(velocity="delayed", battery="disconnected", lidar_at=time.time() - 30.0)
     _write(tmp_path, [_held("motor.1"), _held("lidar"), _held("adc.battery")])
     body = _client(_config(tmp_path, "hardware"), state).get(
         "/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
@@ -221,8 +232,7 @@ def test_stale_topics_turn_held_rows_into_no_response(tmp_path):
 
 
 def test_a_probe_measurement_is_never_overwritten_by_topics(tmp_path):
-    state = StateManager("rosy_18", sources_configured=True)
-    state.set_velocity(0.0, 0.0)
+    state = FakeState(velocity="fresh")
     _write(tmp_path, [_device("motor.1", "no_response")])
     body = _client(_config(tmp_path, "hardware"), state).get(
         "/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()

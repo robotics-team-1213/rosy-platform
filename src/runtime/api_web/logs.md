@@ -72,3 +72,11 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-25 · 96654ed1 · feat(api): board device card API and motion reason (D-247)
+
+- 변경: `GET /api/v1/host/hardware`(viewer)가 root probe 결과를 엄격히 읽고(O_NOFOLLOW·정규 파일·64 KiB·스키마 1) `age_s`·`stale`을 더하며, rosy-io가 쥔 행은 토픽 신선도(odom·scan·battery)로 덮는다. `POST /api/v1/host/hardware/refresh`(admin)는 요청 파일만 쓴다(10 s 디바운스, subprocess 없음). `/commissioning`에 `motion_reason`. API Ref v1.22.
+- 증거: `src/runtime/gateway/test/test_host_hardware.py` 28 passed 1 skipped
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 없음

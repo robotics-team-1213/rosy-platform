@@ -1214,3 +1214,12 @@
 - gate 변화: 없음(`UPDATE_GO` HOLD). 효과는 새 이미지(012)부터 — 011 카드에는 공장 서명이 없다.
 - 결정: D-225
 - 교훈: "서명 안 됨"으로 알던 결함이 실제로는 "봉인 자체가 없음"이었다. 검사기가 요구하는 산출물을 만드는 단계가 있는지부터 확인한다.
+
+## 2026-09-25 · 17ef9af8 · feat(native): read-only root board device probe (D-247)
+
+- 변경: `rosy-hw-probe.py`(root, 읽기 전용, `--root` 시험)가 보드 장치 14행을 여섯 상태로 재서 `/run/rosy-boot/hardware.json`(root:rosy-core 0640)에 쓴다. `rosy-hw-probe.service`(oneshot, TimeoutStartSec=60, 장치 노드 6개만)와 `rosy-hw-probe.path`(CORE의 `/run/rosy/hw-probe.request`)를 이미지가 설치·활성화하고 `rosy-hw-probe` 명령을 PATH에 둔다. 장치 표면 계약(D-169)은 probe의 노드 집합을 정확히 고정한다.
+- 증거: `test/test_hw_probe.py` 24 passed 1 skipped(Windows), native systemd·장치 표면·이미지·설치 배치 계약 통과
+- 미증명: Pi 5 실기 실행(`/dev/kmsg` 권한, `DeviceAllow=/dev/rosy-motor` 심볼릭 링크 해석, RPLIDAR C1 GET_HEALTH 응답, 실제 소요 시간)
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 2026-09-25 전원 재투입 사실 — IR·초음파 4095는 감지 없음(정상), 멈춘 ADC MCU는 Pi 재부팅으로 풀리지 않는다, BNO055는 켜진 뒤 CONFIG 모드라 가속도 0이 정상이다.
