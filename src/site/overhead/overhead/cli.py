@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import AsyncExitStack
 import json
+import logging
 import os
 import secrets
+import ssl
 import socket
 import sys
 import time
@@ -21,6 +24,11 @@ from typing import Sequence
 
 from overhead import protocol
 from overhead.ingest import STATUS_INTERVAL_S, IngestServer
+from overhead.publish import SightingPublishError, SightingPublisher
+from overhead.vision_config import load_vision_sources
+from overhead.worker import VisionWorker
+
+logger = logging.getLogger("overhead.vision")
 
 
 def _detect_advertise_host(host: str) -> str:
@@ -50,6 +58,16 @@ def _print_pairing(uri: str) -> None:
     qr.print_ascii(invert=True)
 
 
+def _server_ssl_context(cert: Path | None, key: Path | None) -> ssl.SSLContext | None:
+    if bool(cert) != bool(key):
+        raise ValueError("--tls-cert and --tls-key must be provided together")
+    if cert is None:
+        return None
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile=str(cert), keyfile=str(key))
+    return context
+
+
 def _write_latest_jpeg(server: IngestServer, out_dir: Path) -> None:
     for source in server.source_names():
         frame = server.latest_frame(source)
@@ -76,9 +94,10 @@ async def _run_receive(args: argparse.Namespace) -> int:
         print(f"${args.token_env} is not set; generated a token for this run only")
 
     server = IngestServer({args.source_name: token})
-    ws_server = await server.start(args.host, args.port)
+    ws_server = await server.start(args.host, args.port, ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
     advertise_host = args.advertise_host or _detect_advertise_host(args.host)
-    uri = protocol.pairing_uri(advertise_host, args.port, token, args.source_name)
+    uri = protocol.pairing_uri(advertise_host, args.port, token, args.source_name,
+                               secure=bool(args.tls_cert))
     print(f"listening on {args.host}:{args.port}{protocol.WS_PATH}")
     _print_pairing(uri)
 
@@ -109,6 +128,43 @@ async def _run_receive(args: argparse.Namespace) -> int:
         await ws_server.wait_closed()
 
 
+async def _run_vision(args: argparse.Namespace) -> int:
+    configs = load_vision_sources(args.config)
+    ingest = IngestServer({config.camera.source_id: config.phone_token for config in configs})
+    workers = []
+    async with AsyncExitStack() as stack:
+        for config in configs:
+            publisher = await stack.enter_async_context(
+                SightingPublisher(config.fleet_base_url, config.sighting_token)
+            )
+            workers.append(VisionWorker(
+                source_id=config.camera.source_id,
+                ingest=ingest,
+                camera=config.camera,
+                publisher=publisher,
+            ))
+        ws_server = await ingest.start(args.host, args.port,
+                                       ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
+        print(f"vision pipeline listening on {args.host}:{args.port}{protocol.WS_PATH} "
+              f"for {len(workers)} configured sources", flush=True)
+        try:
+            while True:
+                for worker in workers:
+                    try:
+                        await worker.process_latest()
+                    except SightingPublishError as exc:
+                        logger.warning("sighting rejected status=%d code=%s",
+                                       exc.status_code, exc.code)
+                    except Exception as exc:
+                        # Do not log URLs, request bodies, headers, or arbitrary exception text.
+                        logger.error("vision frame failed error_type=%s", type(exc).__name__)
+                await asyncio.sleep(0.03)
+        finally:
+            ws_server.close()
+            await ws_server.wait_closed()
+    return 0
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="rosy_overhead")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -123,6 +179,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     receive.add_argument("--stats-jsonl", type=Path, default=None)
     receive.add_argument("--advertise-host", default=None)
     receive.add_argument("--save-latest", type=Path, default=None, metavar="DIR")
+    receive.add_argument("--tls-cert", type=Path, default=None)
+    receive.add_argument("--tls-key", type=Path, default=None)
+
+    vision = sub.add_parser("vision", help="receive camera frames and publish display-only sightings")
+    vision.add_argument("--config", required=True, type=Path, help="site-cameras.yaml")
+    vision.add_argument("--host", default="0.0.0.0")
+    vision.add_argument("--port", type=int, default=8095)
+    vision.add_argument("--tls-cert", type=Path, default=None)
+    vision.add_argument("--tls-key", type=Path, default=None)
 
     return parser.parse_args(argv)
 
@@ -132,6 +197,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "receive":
         try:
             asyncio.run(_run_receive(args))
+        except KeyboardInterrupt:
+            pass
+        return 0
+    if args.command == "vision":
+        try:
+            asyncio.run(_run_vision(args))
         except KeyboardInterrupt:
             pass
         return 0

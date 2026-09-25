@@ -32,3 +32,16 @@
 - 증거: API 35 에뮬레이터(가상 장면 카메라) → `rosy_overhead receive` 127.0.0.1:8095. 3 fps, `seq_gaps` 0, 헤더 불량 0, `age_ms` p50 11–177 ms, 약 0.4–0.6 Mbps. 수신기 종료 → 앱 "다시 연결 중" → 수신기 재기동 → 앱이 스스로 재접속해 32프레임. 딥링크 확인 대화상자가 가로/세로 회전 뒤에도 남고 취소하면 기존 페어링 유지. 정지 시 카메라 DISCONNECT 확인.
 - gate 변화: 없음. 에뮬레이터는 LOCAL이다(D-261 8항). DEVICE PARKED.
 
+## 2026-09-26 · uncommitted · feat(overhead): CPU vision worker to Fleet sighting contract (D-257/D-269)
+
+- 변경: `detect.py`가 JPEG에서 ArUco를 검출하고, `project.py`가 4개 map marker로 homography를 맞춰 지정 robot marker pose를 계산한다. `worker.py`는 configured source의 fresh latest frame만 처리하고 `publish.py`는 별도 source Bearer token으로 JPEG 없는 `SiteSightingPayload`를 Fleet에 보낸다. 측정식이 승인되지 않은 quality는 null이다.
+- 증거: `python -X utf8 -m pytest src/site/overhead/test -q -p no:cacheprovider` 60 passed. 포함된 실제 localhost 시험에서 합성 phone WebSocket frame → source/seq/map/calibration lineage → Uvicorn Fleet operator readback을 확인했다. corner 누락·stale frame은 sighting을 만들지 않았다. `src/site/fleet/test/test_sightings_api.py` 7 passed, `src/runtime/gateway/test/test_site_sightings.py` 15 passed.
+- gate 변화: SOURCE/LOCAL 코드·합성 localhost만 확인. config/CLI wiring, 지속 저장·재시작, Ubuntu/TLS/LAN, 실제 폰·로봇은 미수용이며 DEVICE/FIELD PARKED, D-268 자동 실행 HOLD.
+
+## 2026-09-26 · uncommitted · feat(site): TLS Docker path and durable sighting readback
+
+- 변경: Fleet console CLI now loads source permissions and SQLite-backed latest/history storage; overhead `vision` runs the receive→detect→project→publish worker. Android pairing supports explicit `tls=1` and `wss://`. Site Compose builds Ubuntu 24.04 Fleet and vision images plus a hardened Caddy TLS proxy; backend TLS and CA verification are enabled inside the stack.
+- 증거: overhead 70 passed, Fleet sighting/config/store/CLI/API 40 passed, gateway sighting 15 passed, Android `testDebugUnitTest` successful. Three local images built; Compose services healthy. With a synthetic ArUco JPEG sent over trusted WSS, Fleet API readback returned source `ceiling_north`, seq 77, pose `(2.0, 1.0)`, quality `null`; Fleet restart preserved the SQLite readback.
+- 조사/수정: upstream Caddy binary carries `cap_net_bind_service=ep`, which prevented exec under `cap_drop: ALL`; the site proxy image removes that unused file capability because it binds only 8443. Caddy config/data tmpfs are owned by uid/gid 10001.
+- gate 변화: LOCAL Docker integration GO. Real host install, site certificate/CA provisioning, real ceiling camera calibration, CORE/Pinky/arm hardware and field acceptance remain open. Sightings remain display-only; D-268 motion/pick HOLD.
+

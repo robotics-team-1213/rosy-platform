@@ -136,6 +136,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.console = console
     app.state.web_common = Path(web_common) if web_common is not None else None
 
+    @app.get("/healthz", include_in_schema=False)
+    async def healthz() -> dict:
+        """Minimal process liveness for local container supervision."""
+        return {"status": "ok"}
+
     if hub is not None:
         from fleet.hub.server import install_hub_routes
 

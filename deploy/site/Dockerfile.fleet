@@ -1,0 +1,31 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/opt/rosy-venv/bin:$PATH \
+    PYTHONPATH=/opt/rosy/src/site/fleet:/opt/rosy/src/contracts/foundation
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 rosy \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin rosy \
+    && install -d -o 10001 -g 10001 /var/lib/rosy /opt/rosy/src/site/fleet \
+       /opt/rosy/src/contracts/foundation /opt/rosy/web-common
+
+COPY deploy/site/requirements-fleet.txt /opt/rosy/requirements.txt
+COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
+COPY src/site/fleet/ /opt/rosy/src/site/fleet/
+COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
+COPY src/hmi/web/ /opt/rosy/web-common/
+
+RUN python3 -m venv /opt/rosy-venv \
+    && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \
+    && rm /opt/rosy/requirements.txt
+
+WORKDIR /opt/rosy
+EXPOSE 8090
+USER 0:0
+ENTRYPOINT ["python3", "/opt/rosy/secret_exec.py"]
+CMD ["--", "python3", "-m", "fleet.cli", "console", "--robots", "/run/rosy-config/robots.yaml", "--host", "0.0.0.0", "--port", "8090", "--web-common", "/opt/rosy/web-common", "--token-env", "ROSY_SITE_OPERATOR_TOKEN", "--sightings-config", "/run/rosy-config/site-cameras.yaml", "--sightings-db", "/var/lib/rosy/fleet.sqlite3"]

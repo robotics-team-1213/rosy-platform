@@ -96,7 +96,8 @@ def test_source_pattern_matches_the_vector():
 @pytest.mark.parametrize("vector", VECTORS["pairing_uris"]["valid"], ids=lambda v: v["uri"])
 def test_generated_pairing_uri_round_trips(vector):
     generated = protocol.pairing_uri(
-        vector["host"], vector["port"], vector["token"], vector["source"]
+        vector["host"], vector["port"], vector["token"], vector["source"],
+        secure=vector.get("secure", False),
     )
     parsed = protocol.parse_pairing_uri(generated)
     assert parsed["host"] == vector["host"]

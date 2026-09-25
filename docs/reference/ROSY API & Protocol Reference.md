@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.25
+**Version:** v1.28
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -789,10 +789,13 @@ listener·자격 증명이며 중앙 Fleet catalog의 구현 상태로 간주하
 
 ## 10.6 Site Fleet sighting (D-257 Proposed)
 
-Base: `http://<site-fleet-host>:8090`. 이 경로는 지도 위 표시·로봇 pose 대조용이다.
+Base: `https://<site-fqdn>:8443`. 이 경로는 지도 위 표시·로봇 pose 대조용이다.
 이미지나 자동 정책 입력이 아니며 source 설정이 없는 앱에는 경로를 등록하지 않는다.
-현재는 `create_app(..., sightings=...)`를 통해 설정된 LOCAL API이며 `fleet console` CLI의
-안전한 source/map/calibration 설정과 persistent store 연결은 아직 구현되지 않았다.
+`fleet console --sightings-config <site-cameras.yaml> --sightings-db <fleet.sqlite3>`로
+source/map/calibration 허용 목록과 SQLite 영속 저장을 설정한다. source token은 YAML이 아닌
+별도 secret mount에서 환경 변수로 읽는다. HTTPS/WSS 종단과 내부 upstream TLS는 `deploy/site`
+Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-end 경로를 확인했지만 현장
+인증서·실제 카메라·survey calibration은 별도 수용 gate다.
 
 | Method | Path | Credential | 요구사항 |
 |---|---|---|---|
@@ -812,10 +815,12 @@ Base: `http://<site-fleet-host>:8090`. 이 경로는 지도 위 표시·로봇 p
   "map_id": "lane-map:sha256:abc",
   "calibration_revision": "ceiling-1-v2",
   "processor_revision": "aruco-map-v1",
-  "quality": 0.98,
+  "quality": null,
   "corner_marker_ids": [30, 31, 32, 33]
 }
 ```
+
+`quality`가 `null`이면 측정하지 않은 상태다. 화면 표시에만 사용하며 D-268 정책 증거로 승격하지 않는다.
 
 `captured_at`은 UTC Unix seconds다. 서버가 `source_id`와 `received_at`을 붙인다. client가
 `source_id`, image/JPEG/URL 또는 policy 필드를 추가하면 422다. map/calibration/코너 설정
@@ -829,6 +834,8 @@ source token은 console/robot REST/CORE Agent token과 달라야 하고 이 cred
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.27 | 2026-09-26 | Additive(D-257 Proposed): Site Fleet sighting `quality`는 미측정 시 `null` 허용. 표시 전용이며 D-268 정책 증거로 사용하지 않음. envelope `protocol_version` 1.0 유지 |
+| v1.28 | 2026-09-26 | Clarify(D-257/D-269 Proposed): Fleet CLI source config와 SQLite latest/history storage, HTTPS API path 및 site Docker TLS boundaries. Synthetic Docker WSS→vision→Fleet readback은 LOCAL evidence만 제공; D-268/자동 실행 상태 불변 |
 | v1.26 | 2026-09-26 | Additive(D-257 Proposed): Site Fleet 전용 source-token `POST /api/fleet/sightings`, operator `GET` readback 및 `SiteSightingPayload` shared schema. 파생 pose만 전달하며 source identity는 서버가 token에서 결정. 1 s 표시 lease, D-268 자동 정책 경로는 계속 별도/HOLD |
 | v1.25 | 2026-09-26 | Additive(D-260 5): `GET /host/status-summary`(Viewer) 신설 — 로봇 상태 하나·이유·장치 요약·배터리·온도·할 일. 기존 필드 불변 — envelope `protocol_version` 1.0 유지 |
 | v1.24 | 2026-09-26 | Additive(D-263/D-265): 역할별 기반 화면 `GET /api/v1/ui/surfaces/{surface}` 및 `UiSurfaceManifest` REST 응답 스키마. 메뉴 노출은 패널 수와 독립이며 직접 요청은 역할에 따라 401/403/404. Fleet envelope `protocol_version` 1.0 유지 |

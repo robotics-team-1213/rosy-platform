@@ -2,16 +2,16 @@
 module: overhead
 logical_modules: []
 owner: SITE
-last_verified: { commit: "c6647a1e", date: 2026-09-26 }
+last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "protocol/ingest/cli modules, ROS-free, no cv2/rclpy (2026-09-26 Windows)"
+    evidence: "protocol/ingest + isolated CPU ArUco detector/projector/publisher/latest-only worker; ROS-free and no cmd_vel (2026-09-26 Windows)"
     cmd: "python -m pytest src/site/overhead/test -q"
   LOCAL:
     state: GO
-    evidence: "python 45 passed (vectors, real localhost websocket incl. half-open replacement, cli); android 72 JVM unit tests + assembleDebug; emulator API 35 e2e: 3 fps, 0 gaps, reconnect after receiver restart, pairing dialog survives rotation (2026-09-26 Windows)"
-    cmd: "python -m pytest src/site/overhead/test -q && (cd src/site/overhead/android && gradlew testDebugUnitTest assembleDebug)"
+    evidence: "python 69 passed; Android Gradle testDebugUnitTest succeeded; Ubuntu 24.04 Fleet/vision/proxy Docker images built and all Compose services healthy; TLS WSS synthetic JPEG → ArUco projection → HTTPS Fleet SQLite readback passed (2026-09-26 Windows Docker Desktop Linux containers)"
+    cmd: "python -m pytest src/site/overhead/test -q && (cd src/site/overhead/android && gradlew testDebugUnitTest --rerun-tasks --no-daemon) && docker compose -f deploy/site/compose.yaml build && docker compose -f deploy/site/compose.yaml up -d"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -20,15 +20,16 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261]
+adrs: [D-257, D-261, D-269]
 plans:
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
+  - docs/plans/2026-09-26-middleware-device-server-contract-integration.md
 ---
 ## 지금 상태
 
-- D-261 A1+A2 receive-only adapter. `overhead.protocol`(헤더/hello/config/pairing URI), `overhead.ingest`(WebSocket 수신, latest-only, per-source stats), `overhead.cli`(`rosy_overhead receive`).
+- D-261 ingest와 D-257 display-only CPU vision path. `protocol`/`ingest`는 source별 최신 JPEG를 보관하고 `detect`/`project`/`worker`가 fresh frame의 ArUco pose만 별도 Fleet sighting token으로 전송한다. automatic policy/motion path는 없다.
 - 안드로이드 앱(`android/`, D-261): CameraX → JPEG → WebSocket, 최신 1장, 포그라운드 camera 서비스, `rosyov://` 딥링크(확인 대화상자). 에뮬레이터에서 이 어댑터까지 실제 프레임 수신 확인.
-- 마커 인식·Fleet 연동 없음(D-257 3항은 열림). `status`의 `corners_seen`/`robots_seen`은 인식이 붙기 전까지 빈 목록이 실제 값이다.
+- Docker Compose로 Fleet, vision, Caddy를 띄우고 TLS로 보호된 WSS 프레임 수신→ArUco pose→Fleet API→SQLite 저장을 합성 JPEG로 검증했다. 이 증거는 현장 Ubuntu나 실제 천장 카메라 map calibration·연속 오차·token 운영 수용을 뜻하지 않는다.
 - DEVICE/FIELD는 실물 폰 + 현장 LAN 실측 전까지 PARKED.
 
 ## 다음 gate

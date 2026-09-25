@@ -74,7 +74,7 @@
 
 ## 4. 페어링
 
-어댑터가 기동 시 QR을 띄운다(터미널 + 로컬 HTML): `rosyov://<host>:<port>/?t=<token>&s=overhead-1`. 앱은 QR을 스캔해 주소·토큰·source 이름을 저장한다. 수동 입력도 둔다. 주소·토큰은 저장소에 넣지 않는다(공개 저장소).
+로컬 개발은 `rosyov://<host>:<port>/?t=<token>&s=overhead-1`, TLS reverse proxy가 있는 사이트는 여기에 `&tls=1`을 붙여 Android가 `wss://`를 쓰게 한다. 앱은 QR을 스캔해 주소·토큰·source 이름을 저장한다. 수동 입력도 둔다. 주소·토큰은 저장소에 넣지 않는다(공개 저장소).
 
 ## 5. 카메라와 폰 수명주기
 

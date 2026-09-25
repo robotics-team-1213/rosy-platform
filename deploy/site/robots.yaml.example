@@ -1,0 +1,6 @@
+# Copy outside the repository and replace each placeholder with the assigned
+# CORE endpoint and operator credential. This file contains a device secret.
+robots:
+  - robot_id: rosy_01
+    base_url: https://192.0.2.10:8443
+    token: replace-with-CORE-operator-token

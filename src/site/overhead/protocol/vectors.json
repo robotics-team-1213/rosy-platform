@@ -135,6 +135,15 @@
         "token": "x+y",
         "source": "cam-north",
         "ws_url": "ws://site-pc.local:9000/overhead/v1/frames"
+      },
+      {
+        "uri": "rosyov://fleet-site.local:443/?t=abc123&s=ceiling_north&tls=1",
+        "host": "fleet-site.local",
+        "port": 443,
+        "token": "abc123",
+        "source": "ceiling_north",
+        "secure": true,
+        "ws_url": "wss://fleet-site.local:443/overhead/v1/frames"
       }
     ],
     "invalid": [
@@ -161,6 +170,10 @@
       {
         "uri": "rosyov://192.0.2.10:8095/?t=abc&s=bad%20source",
         "reason": "source"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=maybe",
+        "reason": "tls"
       }
     ],
     "source_pattern": "^[A-Za-z0-9_-]{1,32}$"

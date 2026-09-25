@@ -5,10 +5,18 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[2]
+SITE = Path(__file__).resolve().parents[2]
+SRC = Path(__file__).resolve().parents[3]
 TEST = Path(__file__).resolve().parent
-entry = str(SRC / "overhead")
-if entry not in sys.path:
-    sys.path.insert(0, entry)
+for path in (
+    SITE / "overhead",
+    SITE / "fleet",
+    SRC / "runtime" / "services",
+    SRC / "contracts" / "foundation",
+    SRC / "site" / "games",
+):
+    entry = str(path)
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
 if str(TEST) not in sys.path:
     sys.path.insert(0, str(TEST))

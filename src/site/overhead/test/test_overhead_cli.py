@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from overhead import protocol
-from overhead.cli import _detect_advertise_host, parse_args
+from overhead.cli import _detect_advertise_host, _server_ssl_context, parse_args
 
 
 def test_receive_defaults_match_the_design_doc():
@@ -15,6 +17,7 @@ def test_receive_defaults_match_the_design_doc():
     assert args.stats_jsonl is None
     assert args.advertise_host is None
     assert args.save_latest is None
+    assert args.tls_cert is None and args.tls_key is None
 
 
 def test_receive_accepts_every_documented_flag(tmp_path):
@@ -48,6 +51,12 @@ def test_receive_accepts_every_documented_flag(tmp_path):
     assert args.save_latest == save_dir
 
 
+def test_tls_server_requires_a_certificate_and_key_pair(tmp_path):
+    assert _server_ssl_context(None, None) is None
+    with pytest.raises(ValueError, match="provided together"):
+        _server_ssl_context(tmp_path / "site.crt", None)
+
+
 def test_detect_advertise_host_keeps_an_explicit_non_wildcard_host():
     assert _detect_advertise_host("192.168.1.20") == "192.168.1.20"
 
@@ -65,5 +74,6 @@ def test_pairing_uri_from_cli_args_round_trips():
         "port": 8095,
         "token": "tok123",
         "source": "overhead-1",
+        "secure": False,
         "ws_url": f"ws://site-pc.local:8095{protocol.WS_PATH}",
     }

@@ -2,9 +2,12 @@
 
 import asyncio
 import io
+import time
 from pathlib import Path
 
 import pytest
+import yaml
+from fastapi.testclient import TestClient
 from fakes import run
 
 from fleet import cli
@@ -67,6 +70,54 @@ def test_console_defaults_to_the_installable_web_common_assets(tmp_path):
     assert args.web_common.name == "web"
     assert (args.web_common / "tokens.css").is_file()
     assert (args.web_common / "core_ui_logic.js").is_file()
+
+
+def test_console_loads_source_permissions_and_persistent_sighting_store(tmp_path, monkeypatch):
+    robots = _write(tmp_path)
+    config = tmp_path / "sightings.yaml"
+    config.write_text(yaml.safe_dump({"sources": [{
+        "source_id": "ceiling_north", "token_env": "ROSY_TEST_SIGHTING_TOKEN",
+        "phone_token_env": "ROSY_TEST_PHONE_TOKEN", "robot_ids": ["rosy_01"],
+        "map_id": "site-v1", "calibration_revision": "cal-v3",
+        "processor_revision": "aruco-v1", "corner_marker_ids": [30, 31, 32, 33],
+        "corner_world_m": [[0, 0], [4, 0], [4, 2], [0, 2]],
+        "robot_markers": {"rosy_01": 7},
+    }]}), encoding="utf-8")
+    monkeypatch.setenv("ROSY_TEST_SIGHTING_TOKEN", "source-secret")
+    monkeypatch.setenv("ROSY_TEST_PHONE_TOKEN", "phone-secret")
+    monkeypatch.setenv("ROSY_SITE_OPERATOR_TOKEN", "operator-secret")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: (captured.setdefault("app", app),
+                                                               captured.setdefault("kwargs", kwargs)))
+    certificate = tmp_path / "site.crt"
+    private_key = tmp_path / "site.key"
+    certificate.write_text("certificate", encoding="utf-8")
+    private_key.write_text("private-key", encoding="utf-8")
+    args = cli.parse_args(["console", "--robots", str(robots), "--token-env",
+                           "ROSY_SITE_OPERATOR_TOKEN",
+                           "--sightings-config", str(config), "--sightings-db",
+                           str(tmp_path / "fleet.sqlite3"), "--tls-cert", str(certificate),
+                           "--tls-key", str(private_key)])
+
+    cli.run_console(args)
+
+    client = TestClient(captured["app"])
+    accepted = client.post(
+        "/api/fleet/sightings",
+        json={"robot_id": "rosy_01", "x": 1.0, "y": 1.0, "yaw": 0.0,
+              "captured_at": time.time(), "seq": 5, "map_id": "site-v1",
+              "calibration_revision": "cal-v3", "processor_revision": "aruco-v1",
+              "quality": None, "corner_marker_ids": [30, 31, 32, 33]},
+        headers={"Authorization": "Bearer source-secret"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    readback = client.get("/api/fleet/sightings",
+                          headers={"Authorization": "Bearer operator-secret"})
+    assert readback.status_code == 200
+    assert readback.json()["sightings"][0]["seq"] == 5
+    assert captured["kwargs"]["ssl_certfile"] == str(certificate)
+    assert captured["kwargs"]["ssl_keyfile"] == str(private_key)
+    assert (tmp_path / "fleet.sqlite3").is_file()
 
 
 def test_console_commands_map_to_session_methods():

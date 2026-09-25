@@ -22,6 +22,14 @@ def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     return TestClient(create_app(console, console_token=token, web_common=web_common))
 
 
+def test_health_endpoint_reports_liveness_without_robot_or_auth_data():
+    response = _client(FakeRobot("rosy_01"), token="operator-secret").get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert "robot" not in response.text and "token" not in response.text
+
+
 def test_do_translates_a_goal_and_rejects_a_ros_word():
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
     client = _client(robot)

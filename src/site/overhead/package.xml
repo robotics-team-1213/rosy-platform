@@ -3,7 +3,7 @@
 <package format="3">
   <name>overhead</name>
   <version>0.1.0</version>
-  <description>Receive-only rosy-overhead/1 ingest adapter. No ROS, no cmd_vel, no marker detection.</description>
+  <description>ROS-free overhead camera ingest and display-only sighting worker.</description>
   <maintainer email="kyung133851@pinklab.art">ROSY</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,8 @@
   <!-- Needs websockets>=14 (asyncio server API). Ubuntu 24.04 apt ships 10.x,
        so install from pip/venv on the site PC; see AGENTS.md. -->
   <exec_depend>python3-websockets</exec_depend>
+  <exec_depend>games</exec_depend>
+  <exec_depend>core_common</exec_depend>
   <test_depend>python3-pytest</test_depend>
 
   <export>

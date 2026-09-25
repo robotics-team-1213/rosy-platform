@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,6 +43,7 @@ fun SettingsScreen(
     var port by remember(current) { mutableStateOf(current?.port?.toString() ?: "") }
     var token by remember(current) { mutableStateOf(current?.token ?: "") }
     var source by remember(current) { mutableStateOf(current?.source ?: "overhead-1") }
+    var secure by remember(current) { mutableStateOf(current?.secure ?: false) }
     var invalid by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
 
@@ -74,6 +76,7 @@ fun SettingsScreen(
                         port = parsed.pairing.port.toString()
                         token = parsed.pairing.token
                         source = parsed.pairing.source
+                        secure = parsed.pairing.secure
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -98,6 +101,10 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Field(source, { source = it; saved = false }, R.string.settings_source, invalid == "source")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Checkbox(checked = secure, onCheckedChange = { secure = it; saved = false })
+            Text(stringResource(R.string.settings_tls))
+        }
 
         invalid?.let { Text(invalidText(it), color = MaterialTheme.colorScheme.error) }
         if (saved) Text(stringResource(R.string.settings_saved), color = MaterialTheme.colorScheme.primary)
@@ -112,7 +119,7 @@ fun SettingsScreen(
                     val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim())
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim()))
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure))
                         saved = true
                     }
                 },
@@ -150,6 +157,7 @@ fun invalidText(reason: String): String = stringResource(
         "host" -> R.string.invalid_host
         "port" -> R.string.invalid_port
         "token" -> R.string.invalid_token
+        "tls" -> R.string.invalid_tls
         else -> R.string.invalid_source
     },
 )

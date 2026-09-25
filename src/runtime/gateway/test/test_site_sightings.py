@@ -29,6 +29,11 @@ def test_site_sighting_round_trips_only_small_derived_evidence():
     assert sighting.model_dump(mode="json") == _payload()
 
 
+def test_sighting_can_explicitly_report_unmeasured_quality_as_null():
+    sighting = SiteSightingPayload.model_validate(_payload(quality=None))
+    assert sighting.quality is None
+
+
 @pytest.mark.parametrize("changes", [
     {"x": float("nan")},
     {"y": float("inf")},

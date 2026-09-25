@@ -66,6 +66,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="공용 L1 웹 자산 디렉터리 — /common 아래로 서빙한다(D-1005)")
     console.add_argument("--token", default=None,
                          help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
+    console.add_argument("--token-env", default=None,
+                         help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
+    console.add_argument("--tls-cert", default=None, type=Path,
+                         help="HTTPS server certificate chain; pair with --tls-key")
+    console.add_argument("--tls-key", default=None, type=Path,
+                         help="HTTPS private key; mount as a runtime secret")
+    console.add_argument("--sightings-config", default=None, type=Path,
+                         help="source/map/calibration sighting config (secret values stay in env)")
+    console.add_argument("--sightings-db", default=None, type=Path,
+                         help="SQLite path for latest sightings and acceptance audit")
     return parser.parse_args(argv)
 
 
@@ -255,8 +265,21 @@ def run_console(args: argparse.Namespace) -> None:
 
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
+    from fleet.server.sightings import SightingService
 
-    if args.host not in LOOPBACK_HOSTS and not args.token:
+    tls_cert = getattr(args, "tls_cert", None)
+    tls_key = getattr(args, "tls_key", None)
+    if bool(tls_cert) != bool(tls_key):
+        sys.exit("--tls-cert and --tls-key must be provided together")
+    token_env = getattr(args, "token_env", None)
+    if args.token is not None and token_env is not None:
+        sys.exit("--token and --token-env cannot be combined")
+    console_token = args.token
+    if token_env is not None:
+        console_token = os.environ.get(token_env)
+        if not console_token:
+            sys.exit(f"operator token environment variable {token_env} is required")
+    if args.host not in LOOPBACK_HOSTS and not console_token:
         sys.exit("--token 없이 루프백 밖으로 열 수 없다: 이 포트는 현장의 모든 로봇을 움직인다")
     endpoints = load_robots(args.robots)
     _warn_if_world_readable(args.robots)
@@ -270,15 +293,32 @@ def run_console(args: argparse.Namespace) -> None:
                                        [HttpSignalClient(ep) for ep in signal_eps])
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
                            signal_console=signal_console)
+    sightings_db = getattr(args, "sightings_db", None)
+    sightings_config = getattr(args, "sightings_config", None)
+    if sightings_db is not None and sightings_config is None:
+        sys.exit("--sightings-db requires --sightings-config")
+    sighting_service = None
+    if sightings_config is not None:
+        from fleet.server.sighting_store import SightingStore
+        from fleet.server.sightings_config import load_sighting_sources
+
+        sources = load_sighting_sources(sightings_config)
+        store = SightingStore(sightings_db) if sightings_db is not None else None
+        sighting_service = SightingService(
+            sources, known_robot_ids=console.robot_ids, store=store,
+        )
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
     hub = console.hub if any(ep.fleet_pairing_token is not None for ep in endpoints) else None
-    app = create_app(console, console_token=args.token, web_common=args.web_common, hub=hub)
+    app = create_app(console, console_token=console_token, web_common=args.web_common,
+                     hub=hub, sightings=sighting_service)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(endpoints)} robots{signals_note})",
           flush=True)
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
+                   if tls_cert is not None else {})
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

@@ -54,6 +54,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 KNOWN_DIRECTION = {
     ("core_common", "core"): "default config file lives in the core package share; the lookup stayed when core_common moved to contracts",
     ("control", "imu_bno055"): "runtime/sensing -> devices/common/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
 
 #: P6 budgets.

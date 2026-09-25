@@ -28,7 +28,7 @@ class SiteSightingPayload(BaseModel):
     map_id: str = Field(min_length=1, max_length=160)
     calibration_revision: str = Field(min_length=1, max_length=128)
     processor_revision: str = Field(min_length=1, max_length=128)
-    quality: float = Field(ge=0.0, le=1.0)
+    quality: float | None = Field(default=None, ge=0.0, le=1.0)
     corner_marker_ids: tuple[int, int, int, int]
 
     @field_validator("robot_id")
@@ -54,7 +54,9 @@ class SiteSightingPayload(BaseModel):
 
     @field_validator("x", "y", "yaw", "captured_at", "quality")
     @classmethod
-    def _finite_numbers(cls, value: float) -> float:
+    def _finite_numbers(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
         if not math.isfinite(value):
             raise ValueError("sighting numbers must be finite")
         return value

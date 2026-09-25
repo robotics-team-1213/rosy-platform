@@ -1,0 +1,17 @@
+# Copy outside the repository to /etc/rosy/site/site-cameras.yaml.
+# Marker IDs, map dimensions and revisions below are illustrative; survey and
+# calibrate the real installation before accepting sightings.
+sources:
+  - source_id: ceiling_north
+    phone_token_env: ROSY_PHONE_CEILING_NORTH
+    token_env: ROSY_FLEET_CEILING_NORTH_TOKEN
+    fleet_base_url: https://proxy:8443
+    robot_ids: [rosy_01]
+    map_id: replace-with-surveyed-map-id
+    calibration_revision: replace-after-calibration
+    processor_revision: aruco-opencv-4.12
+    corner_marker_ids: [30, 31, 32, 33]
+    corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
+    robot_markers:
+      rosy_01: 7
+    heading_edge: [1, 2]

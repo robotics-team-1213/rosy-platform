@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from core_common.protocol.sightings import SiteSightingPayload
+from fleet.server.sighting_store import SightingStore
 
 SIGHTING_LEASE_S = 1.0
 MAX_FUTURE_S = 0.05
@@ -43,11 +44,13 @@ class SightingService:
         known_robot_ids: Sequence[str],
         clock: Callable[[], float] = time.time,
         lease_s: float = SIGHTING_LEASE_S,
+        store: SightingStore | None = None,
     ) -> None:
         self._clock = clock
         if not math.isfinite(lease_s) or lease_s <= 0:
             raise ValueError("sighting lease must be positive and finite")
         self.lease_s = lease_s
+        self._store = store
         known = set(known_robot_ids)
         self._sources: list[SightingSource] = list(sources)
         self._by_id: dict[str, SightingSource] = {}
@@ -74,7 +77,7 @@ class SightingService:
                 raise ValueError("sighting source needs four distinct non-negative corner ids")
             tokens.add(source.token)
             self._by_id[source.source_id] = source
-        self._latest: dict[str, dict] = {}
+        self._latest: dict[str, dict] = store.load_latest() if store is not None else {}
 
     @property
     def enabled(self) -> bool:
@@ -115,6 +118,8 @@ class SightingService:
 
         row = payload.model_dump(mode="json")
         row.update(source_id=source.source_id, received_at=now)
+        if self._store is not None:
+            self._store.save_sighting(row)
         self._latest[payload.robot_id] = row
         return self._render(row, now)
 

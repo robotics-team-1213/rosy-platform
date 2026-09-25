@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import hmac
 import json
+import ssl
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -128,7 +129,7 @@ class IngestServer:
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
 
-    async def start(self, host: str, port: int) -> Server:
+    async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
         return await serve(
             self._handler,
             host,
@@ -136,6 +137,7 @@ class IngestServer:
             process_request=self._process_request,
             max_size=self.config["max_bytes"] + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
             max_queue=RECEIVE_QUEUE_FRAMES,
+            ssl=ssl_context,
         )
 
     def source_names(self) -> list[str]:
@@ -152,6 +154,8 @@ class IngestServer:
     # -- handshake --------------------------------------------------------
 
     def _process_request(self, connection: ServerConnection, request):
+        if request.path == "/healthz" and request.method == "GET":
+            return connection.respond(200, '{"status":"ok"}\n')
         if request.path != protocol.WS_PATH:
             return connection.respond(404, "not found\n")
         auth = request.headers.get("Authorization")

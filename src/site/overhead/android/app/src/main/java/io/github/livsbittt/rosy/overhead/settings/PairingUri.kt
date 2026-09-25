@@ -13,18 +13,20 @@ data class PairingUri(
     val port: Int,
     val token: String,
     val source: String,
+    val secure: Boolean = false,
 ) {
     sealed interface Parsed {
         data class Valid(val pairing: PairingUri) : Parsed
         data class Invalid(val reason: String) : Parsed
     }
 
-    val wsUrl: String get() = "ws://${hostForUrl(host)}:$port${Protocol.WS_PATH}"
+    val wsUrl: String get() = "${if (secure) "wss" else "ws"}://${hostForUrl(host)}:$port${Protocol.WS_PATH}"
 
     /** Never prints the token: pairings end up in logs and crash reports. */
     override fun toString(): String = "PairingUri(host=$host, port=$port, token=<redacted>, source=$source)"
 
-    fun toUri(): String = "$SCHEME://${hostForUrl(host)}:$port/?t=${encode(token)}&s=${encode(source)}"
+    fun toUri(): String = "$SCHEME://${hostForUrl(host)}:$port/?t=${encode(token)}&s=${encode(source)}" +
+        if (secure) "&tls=1" else ""
 
     companion object {
         const val SCHEME = "rosyov"
@@ -58,9 +60,13 @@ data class PairingUri(
             }
             val token = decode(params["t"]) ?: return Parsed.Invalid("token")
             val source = decode(params["s"]) ?: return Parsed.Invalid("source")
+            val tls = params["tls"] ?: "0"
+            if (tls !in setOf("0", "1")) return Parsed.Invalid("tls")
 
             val reason = validate(host, port, token, source)
-            return if (reason == null) Parsed.Valid(PairingUri(host, port, token, source)) else Parsed.Invalid(reason)
+            return if (reason == null) {
+                Parsed.Valid(PairingUri(host, port, token, source, secure = tls == "1"))
+            } else Parsed.Invalid(reason)
         }
 
         /** Shared rules for deep links and manual entry. Returns the failing field, or null when valid. */

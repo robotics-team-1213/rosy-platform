@@ -18,7 +18,7 @@
 3. **applicationId는 `io.github.livsbittt.rosy.overhead`다.** 저장소 소유 GitHub 계정의 네임스페이스라 남의 도메인을 쓰지 않는다. 첫 외부 배포 전까지만 바꿀 수 있다.
 4. **배포는 디버그 APK 직접 설치다.** 스토어, 릴리스 서명, 자동 업데이트는 범위 밖이다. 릴리스 키는 저장소에 두지 않는다.
 5. **첫 버전 전송은 `ws://` + Bearer 토큰이다.** 현장 LAN 격리가 전제다. 토큰은 평문으로 흐르므로 공용망·인터넷 경유 운용은 금지한다. TLS는 후속 ADR로 연다.
-6. **페어링은 `rosyov://` 딥링크 + 수동 입력이다.** 어댑터가 QR로 `rosyov://<host>:<port>/?t=<token>&s=<source>`를 띄우면, 폰 기본 카메라 앱이 QR을 읽어 딥링크로 앱을 연다. 앱 안 QR 스캐너(ML Kit 등)는 넣지 않는다 — 의존성을 줄인다. 주소·토큰은 저장소에 넣지 않는다.
+6. **페어링은 `rosyov://` 딥링크 + 수동 입력이다.** 로컬 전용은 `rosyov://<host>:<port>/?t=<token>&s=<source>`를 사용한다. TLS reverse proxy를 통과하는 카메라는 `&tls=1`을 붙이며 Android는 이를 `wss://`로 변환한다. 평문 `ws://`는 trusted local development에 한정하고 현장 토큰 연결은 TLS를 요구한다. 폰 기본 카메라 앱이 QR을 읽어 딥링크로 앱을 연다. 앱 안 QR 스캐너(ML Kit 등)는 넣지 않는다 — 의존성을 줄인다. 주소·토큰은 저장소에 넣지 않는다.
 7. **골격 범위 (설계 문서 A1 + A2).**
    - A1: `vectors.json`, Kotlin `FrameHeader`·`PairingUri`, Python 헤더 파서와 `hello`/`config` 검증. 양쪽이 같은 벡터로 녹색.
    - A2: 앱이 미리보기 → fps 제한 → JPEG → WebSocket으로 보내고, `config`를 따르며, 최신 1장만 보낸다(송신 중이면 버리고 센다). 포그라운드 camera 서비스, 재연결 백오프. 어댑터 수신 전용 모드가 fps·크기·`age_ms`·드롭을 기록한다.

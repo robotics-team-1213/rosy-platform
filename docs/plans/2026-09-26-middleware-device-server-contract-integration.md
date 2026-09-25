@@ -13,8 +13,8 @@
 ## 0. 기준선과 범위
 
 - 코드는 `src/site/fleet`, `src/site/overhead`, `src/runtime/services/core_features/fleet_agent`, `src/contracts/foundation/core_common/protocol`이 각각 가진다. Fleet 패키지는 ROS-free를 유지한다.
-- 현재 LOCAL baseline: overhead 45 passed, Fleet 전체 409 passed/5 skipped, Hub/app 32 passed, CORE FleetAgent 8 passed (2026-09-26 Windows).
-- 현장 Ubuntu/RTX SSH 대상과 승인된 배포 revision은 아직 확인되지 않았다. 공개 저장소 `origin/main`보다 로컬 `main`이 17 commits 앞선 상태였으므로 해당 커밋 전체를 push하지 않는다.
+- 시작 시 LOCAL baseline은 overhead 45 passed, Fleet 409 passed/5 skipped, Hub/app 32 passed, CORE FleetAgent 8 passed였다. 아래 최신 LOCAL 결과와 구분한다.
+- 현장 Ubuntu/RTX host와 승인된 배포 revision은 아직 확인되지 않았다. 현재 실행 증거는 로컬 Windows Docker Desktop의 Linux containers다.
 - 초기 동작 연결은 로컬만 수행하며 합성 자격 증명을 쓴다. 실제 전화·로봇 토큰, IP, 프레임은 공개 저장소와 시험 fixture에 넣지 않는다.
 
 ## 진행 상태 (2026-09-26)
@@ -22,14 +22,13 @@
 - **Task 1 완료:** 현재 브라우저/Fleet, Fleet/CORE REST, CORE Agent/SiteHub, overhead phone/ingress, 내부 DDS 및 미정 Pinky/팔 경계를 D-269 Proposed와 ADR Log에 기록했다.
 - **Task 2 완료:** `robots.yaml`의 선택적 `fleet_pairing_token`을 추가하고 REST token 재사용을 거부한다. pairing token 미설정 robot은 Agent pairing 대상에서 제외된다. 자세한 실제 장비 secret provisioning 절차는 Ubuntu 배포 전용 후속 단계다.
 - **Task 3 완료 (LOCAL):** 실제 `FleetAgent`를 loopback Uvicorn으로 실행해 동일 `fleet console` 앱에서 hello/welcome, heartbeat, event, disconnect/offline, reconnect를 확인했다. `/registry`는 console token을 검사한다. protocol major mismatch도 pairing 전에 거부한다.
-- **Task 4 진행 중:** overhead 수신기는 source→token map을 요구하고 HTTP Authorization token과 hello의 source를 묶어 검증한다. token 미설정/다른 source/unknown source, token 재사용은 fail-closed다. CLI token은 `--source-name` 하나에만 귀속하며 unauthorized source는 shared vector `4401`로 거절하고 Android가 fatal `Unauthorized`로 표시한다. Python server 49 passed, Android unit test `:app:testDebugUnitTest` 통과 (LOCAL).
-- **Task 5 진행 중:** shared `SiteSightingPayload`와 API Ref §10.6, source-scoped `POST /api/fleet/sightings`, operator-only `GET` readback을 추가했다. source identity는 credential에서 서버가 정하고, source token은 console/robot REST/CORE Agent pairing token과 다르면 안 되도록 app 생성 때 검사한다. 잘못된 로봇/map/calibration/코너, stale/future/out-of-order 입력은 거부한다. 이미지/URL/policy/client source identity는 schema에서 금지한다. service/API 전체는 RAM latest-only이며 자동 작업과 연결되지 않는다. Fleet 423 passed/5 skipped, gateway 1325 passed/16 skipped, video-relay guard 2 passed (LOCAL).
-- **LOCAL 결과:** `src/site/fleet/test` 416 passed / 5 skipped, CORE FleetAgent 8 passed, overhead 45 passed, `git diff --check` 통과.
-- **문서 harness 제한:** `test/test_network_topology_contracts.py test/test_harness_contracts.py`는 68 passed / 2 failed다. 실패 2건 모두 기존 `src/hmi/dashboard/logs.md` 네 항목의 `- 증거:` 누락이고, `rosy_harness.py lint`도 동일한 4 errors와 19 기존 `last_verified` warnings를 보고했다. 해당 append-only 로그는 이 작업에서 수정하지 않았다.
-- **Task 4 남음:** 운영자용 token 발급·회전·폐기와 QR 비밀 전달 절차, Android emulator/실제 phone→receiver LAN 연결, 연속 frame freshness와 재시작 시험.
-- **Task 5 남음:** 설정을 실제 Fleet CLI/배포에 연결하고, 최신 overhead JPEG→vision worker→sighting publisher→Fleet readback의 source/seq/map/calibration lineage를 합성 프레임과 실제 localhost 서비스로 입증한다. D-268 policy evidence endpoint와 자동 실행은 이 경로에 넣지 않는다.
-- **아직 미수용:** vision worker 완성, 사이트 Compose/저장/복구, 사용자 역할·감사·공통 작업 수명주기, Ubuntu RTX/실물 CORE 시험은 Task 5–8이다. DEVICE/FIELD, 자동 이동, 집기, Pinky 및 팔 카메라 연동은 계속 HOLD다.
-- **배포/형상:** 현재 결과는 Windows localhost LOCAL 증거뿐이다. 현장 Ubuntu 호스트 수용이나 원격 배포 증거가 아니며, 원격 push/deploy는 호스트와 승인 revision이 확인될 때 별도 진행한다.
+- **Task 4 코드·LOCAL 완료:** source→token map과 hello identity 결합, TLS/WSS pairing `tls=1`, Android secure 설정이 연결됐다. 인증/다른 source/unknown source/token 재사용은 fail-closed다. overhead 69 tests와 Android `testDebugUnitTest` 통과. 실물 폰 LAN·인증서·장시간 신선도는 DEVICE gate다.
+- **Task 5 코드·LOCAL 완료:** shared `SiteSightingPayload`, CLI/config, 분리 credential, CPU ArUco detector/projector, latest-only worker, publisher, SQLite latest state와 accepted-event history/backup을 연결했다. 잘못된 map/calibration/코너와 stale/future/out-of-order 입력은 거부한다. quality는 미측정 `null`; 자동 작업과 연결되지 않는다.
+- **Task 6 LOCAL 완료:** Ubuntu 24.04 Fleet·vision·Caddy 이미지 세 개를 빌드하고 Compose를 기동했다. TLS healthcheck, Caddy upstream 인증서 검증, 합성 JPEG WSS→vision→HTTPS Fleet API→SQLite readback 및 Fleet restart 뒤 seq 78 복원을 확인했다. 최종 local image IDs는 Fleet `sha256:829b9f61…`, vision `sha256:380d18ac…`, proxy `sha256:b92f2f5a…`다.
+- **집중 회귀:** overhead 70 passed, Fleet sighting/config/store/CLI/API 40 passed와 FleetAgent/pairing 19 passed, gateway sighting contract 15 passed, Android Gradle `testDebugUnitTest` 성공, architecture/package/progress/API version 집중 검증 통과, 실제 Docker synthetic end-to-end 통과, 세 서비스 healthy, `git diff --check` 통과.
+- **저장소 전체 회귀 한계:** 전체 ROS-free 세트는 최초 실행 때 4,397 passed / 146 skipped / 16 failed였다. 이 변경과 연결된 CLI optional-argument, pairing fixture, package dependency, progress/log record 실패는 고치고 재검증했다. 별도로 남은 실패는 기존 `host.py` 파일 크기 verdict, dashboard 로그 5개 형식, Wi-Fi 입력 코드를 secret으로 잡는 scanner 오탐, 기존 `api_web` 테스트 파일 BOM이다. 이 경로들은 본 구현과 무관하다.
+- **운영 인계 전 남음:** 현장 host/hostname/CA·phone provisioning, surveyed geometry와 CORE endpoint/credentials, 백업 복구 리허설, host 방화벽 및 전원 복구 시험. 역할/감사와 공통 task lifecycle은 Task 7, RTX/GPU와 실물 CORE는 Task 8이다.
+- **수용 경계:** Docker 로컬 증거는 Ubuntu 배포나 DEVICE/FIELD 수용이 아니다. D-257/D-268 상태를 승격하지 않으며 자동 이동, 집기, Pinky 및 팔 카메라 연동은 계속 HOLD다.
 
 ## Task 1 — 현재 wire contract·권한 감사 고정
 
@@ -80,12 +79,12 @@
 
 ## Task 6 — 같은 사이트 호스트의 배포 산출물·상태 저장
 
-**Files:** `deploy/site/compose.yaml`, `Dockerfile.fleet`, `Dockerfile.vision`, site config template/runbook, persistent SQLite schema/backup tests.
+**Files:** `deploy/site/compose.yaml`, `Dockerfile.fleet`, `Dockerfile.vision`, `Dockerfile.proxy`, site config template/runbook, persistent SQLite schema/backup tests.
 
 1. loopback-only fixture smoke와 Compose contract test를 먼저 쓴다: least privilege, read-only rootfs, network separation, health/restart, secret mount, persistent data volume, retention, backup/restore.
-2. Fleet API, camera ingress, vision worker를 논리적으로 분리한다. GPU를 쓰지 않는 CPU detector smoke를 제공하고 Ubuntu RTX에 같은 container digest를 배포한다.
+2. Fleet API, camera ingress, vision worker를 논리적으로 분리한다. GPU를 쓰지 않는 CPU detector smoke를 제공하고 Ubuntu RTX에 같은 image digest를 배포한다.
 3. TLS reverse proxy, named volumes, preflight/rollback, log rotation, clock sync, restart-after-power-loss 절차를 문서화한다.
-4. Linux `amd64` CPU 이미지 build와 site Compose read-only validation을 수행한다. 이것은 ARTIFACT/DEVICE를 자동 승격하지 않는다.
+4. Linux `amd64` Ubuntu 24.04 Fleet·vision·proxy image build, Compose preflight 및 synthetic WSS→vision→HTTPS Fleet/SQLite smoke를 로컬 Docker에서 확인했다. 이것은 SITE/ARTIFACT/DEVICE를 자동 승격하지 않는다.
 
 ## Task 7 — 수동·자동 작업과 역할·이력
 

@@ -20,6 +20,7 @@ class PairingUriTest {
                 port = v.getInt("port"),
                 token = v.getString("token"),
                 source = v.getString("source"),
+                secure = v.optBoolean("secure", false),
             )
             assertEquals(v.getString("uri"), PairingUri.Parsed.Valid(expected), PairingUri.parse(v.getString("uri")))
             assertEquals(v.getString("ws_url"), expected.wsUrl)
@@ -90,6 +91,13 @@ class PairingUriTest {
     @Test
     fun toUriRoundTrips() {
         val original = PairingUri("site-pc.local", 9000, "x+y &z", "cam-north")
+        assertEquals(PairingUri.Parsed.Valid(original), PairingUri.parse(original.toUri()))
+    }
+
+    @Test
+    fun securePairingSelectsWssAndRoundTripsTlsFlag() {
+        val original = PairingUri("fleet-site.local", 443, "secret", "ceiling_north", secure = true)
+        assertTrue(original.wsUrl.startsWith("wss://"))
         assertEquals(PairingUri.Parsed.Valid(original), PairingUri.parse(original.toUri()))
     }
 

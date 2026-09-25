@@ -7,6 +7,7 @@ from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingService, SightingSource
+from fleet.server.sighting_store import SightingStore
 from fleet.swarm.robots import RobotEndpoint
 
 NOW = 1_790_000_000.0
@@ -40,7 +41,7 @@ def _payload(**changes):
     return body
 
 
-def _client(*, with_source=True, source_token=SOURCE_TOKEN):
+def _client(*, with_source=True, source_token=SOURCE_TOKEN, store_path=None):
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
     endpoints = [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-rest")]
     console = FleetConsole(endpoints, [robot])
@@ -53,7 +54,8 @@ def _client(*, with_source=True, source_token=SOURCE_TOKEN):
         calibration_revision="ceiling-1-v2",
         corner_marker_ids=(30, 31, 32, 33),
     )] if with_source else []
-    service = SightingService(sources, known_robot_ids=console.robot_ids, clock=clock)
+    store = SightingStore(store_path) if store_path is not None else None
+    service = SightingService(sources, known_robot_ids=console.robot_ids, clock=clock, store=store)
     app = create_app(console, console_token=OPERATOR_TOKEN, sightings=service)
     return TestClient(app), clock
 
@@ -159,3 +161,21 @@ def test_older_capture_cannot_replace_a_newer_readback():
                         headers=headers)
     assert older.status_code == 409
     assert older.json()["detail"]["code"] == "SIGHTING_OUT_OF_ORDER"
+
+
+def test_sighting_readback_survives_service_restart(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    writer, _ = _client(store_path=database)
+    accepted = writer.post("/api/fleet/sightings", json=_payload(),
+                           headers={"Authorization": f"Bearer {SOURCE_TOKEN}"})
+    assert accepted.status_code == 200
+
+    restarted, _ = _client(store_path=database)
+    readback = restarted.get("/api/fleet/sightings",
+                             headers={"Authorization": f"Bearer {OPERATOR_TOKEN}"})
+
+    assert readback.status_code == 200
+    row = readback.json()["sightings"][0]
+    assert (row["source_id"], row["seq"], row["map_id"]) == (
+        "ceiling-east", 42, "lane-map:sha256:abc")
+    assert SOURCE_TOKEN.encode() not in database.read_bytes()

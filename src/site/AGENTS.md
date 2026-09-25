@@ -16,7 +16,7 @@ None at this level. See `fleet/AGENTS.md`.
 | Directory | Purpose |
 |-----------|---------|
 | `fleet/` | Formation/relay/session/CLI + `fleet console` server and 관제 UI; depends on `core_common` schemas only (see `fleet/AGENTS.md`) |
-| `overhead/` | Receive-only `rosy-overhead/1` WebSocket ingest adapter; no marker detection yet (D-257, D-261; see `overhead/AGENTS.md`) |
+| `overhead/` | Receive-only `rosy-overhead/1` WebSocket ingest plus display-only ArUco-to-map sighting worker; no D-268 policy evidence or command path (D-257, D-261; see `overhead/AGENTS.md`) |
 
 ## For AI Agents
 

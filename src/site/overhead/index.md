@@ -11,9 +11,11 @@
 |---|---|
 | D-257 | 사이트 관제 지도는 차선 그래프 — 로봇 위치는 폰 천장 카메라가 보고, 영상은 Fleet 밖에서만 |
 | D-261 | 천장 카메라 안드로이드 앱 — 골격 범위·위치·기술·첫 버전 약속 |
+| D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
 
 ## 계획·결과 문서
 
+- [2026-09-26-middleware-device-server-contract-integration.md](../../../docs/plans/2026-09-26-middleware-device-server-contract-integration.md)
 - [2026-09-26-overhead-camera-android-app-design.md](../../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
 
 ## 교훈 (docs/solutions)
@@ -26,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(site): TLS Docker path and durable sighting readback
+- 2026-09-26 · uncommitted · feat(overhead): CPU vision worker to Fleet sighting contract (D-257/D-269)
 - 2026-09-26 · c6647a1e · 에뮬레이터 종단 확인 (안드로이드 앱 → 이 어댑터)
 - 2026-09-26 · 27b8f34e · fix(overhead): never stall a reconnecting phone behind a half-open old socket
 - 2026-09-26 · uncommitted · feat(overhead): rosy_overhead receive CLI + ament_python package (D-261 A2)
-- 2026-09-26 · uncommitted · feat(overhead): receive-only WebSocket ingest server (D-261 A2)
-- 2026-09-26 · uncommitted · feat(overhead): rosy-overhead/1 protocol module (D-261 A1)

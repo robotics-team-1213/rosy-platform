@@ -132,9 +132,10 @@ def make_config(
     }
 
 
-def pairing_uri(host: str, port: int, token: str, source: str) -> str:
+def pairing_uri(host: str, port: int, token: str, source: str, *, secure: bool = False) -> str:
     """Build a ``rosyov://`` pairing URI that :func:`parse_pairing_uri` round-trips."""
-    return f"rosyov://{host}:{port}/?t={quote(token, safe='')}&s={quote(source, safe='')}"
+    suffix = "&tls=1" if secure else ""
+    return f"rosyov://{host}:{port}/?t={quote(token, safe='')}&s={quote(source, safe='')}{suffix}"
 
 
 def parse_pairing_uri(uri: str) -> dict:
@@ -163,7 +164,11 @@ def parse_pairing_uri(uri: str) -> dict:
     source_values = query.get("s")
     if not source_values or not source_values[0]:
         raise PairingError("source", "source (s) is required")
+    tls_values = query.get("tls", ["0"])
+    if tls_values[0] not in {"0", "1"}:
+        raise PairingError("tls", "tls must be 0 or 1")
     source = source_values[0]
+    secure = tls_values[0] == "1"
     if not SOURCE_PATTERN.match(source):
         raise PairingError("source", f"source must match {SOURCE_PATTERN.pattern}")
     return {
@@ -171,5 +176,6 @@ def parse_pairing_uri(uri: str) -> dict:
         "port": port,
         "token": token_values[0],
         "source": source,
-        "ws_url": f"ws://{host}:{port}{WS_PATH}",
+        "secure": secure,
+        "ws_url": f"{'wss' if secure else 'ws'}://{host}:{port}{WS_PATH}",
     }

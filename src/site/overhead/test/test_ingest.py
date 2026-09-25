@@ -18,6 +18,7 @@ import json
 import time
 
 import pytest
+import httpx
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
@@ -139,6 +140,16 @@ async def test_wrong_path_is_rejected_with_404():
         with pytest.raises(InvalidStatus) as excinfo:
             await websockets.connect(wrong, additional_headers={"Authorization": f"Bearer {TOKEN}"})
         assert excinfo.value.response.status_code == 404
+
+
+@run_async
+async def test_local_health_endpoint_reports_liveness_without_source_data():
+    async with _Harness() as h:
+        base = h.url.split(protocol.WS_PATH)[0].replace("ws://", "http://")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{base}/healthz")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
 
 
 @run_async

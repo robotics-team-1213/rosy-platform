@@ -41,6 +41,7 @@
     <string name="settings_port">포트</string>
     <string name="settings_token">토큰</string>
     <string name="settings_source">카메라 이름 (source)</string>
+    <string name="settings_tls">TLS 사용 (wss://, 현장 네트워크)</string>
     <string name="settings_save">저장</string>
     <string name="settings_back">돌아가기</string>
     <string name="settings_saved">저장했습니다</string>
@@ -51,6 +52,7 @@
     <string name="invalid_port">포트는 1–65535 사이 숫자여야 합니다</string>
     <string name="invalid_token">토큰을 입력하세요</string>
     <string name="invalid_source">이름은 영문·숫자·_·- 1–32자여야 합니다</string>
+    <string name="invalid_tls">TLS 값은 0 또는 1이어야 합니다</string>
 
     <string name="pair_title">연결 정보를 바꿀까요?</string>
     <string name="pair_body">현장 PC %1$s:%2$d 에 카메라 이름 %3$s(으)로 연결합니다. 링크를 연 사람을 믿을 수 있을 때만 저장하세요.</string>

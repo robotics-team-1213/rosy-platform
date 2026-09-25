@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.IOException
@@ -30,7 +31,8 @@ class SettingsStore(context: Context) {
             val port = prefs[PORT] ?: return@map null
             val token = prefs[TOKEN] ?: return@map null
             val source = prefs[SOURCE] ?: return@map null
-            if (PairingUri.validate(host, port, token, source) != null) null else PairingUri(host, port, token, source)
+            if (PairingUri.validate(host, port, token, source) != null) null
+            else PairingUri(host, port, token, source, prefs[SECURE] ?: false)
         }
 
     suspend fun save(pairing: PairingUri) {
@@ -41,6 +43,7 @@ class SettingsStore(context: Context) {
             prefs[PORT] = pairing.port
             prefs[TOKEN] = pairing.token
             prefs[SOURCE] = pairing.source
+            prefs[SECURE] = pairing.secure
         }
     }
 
@@ -49,5 +52,6 @@ class SettingsStore(context: Context) {
         val PORT = intPreferencesKey("port")
         val TOKEN = stringPreferencesKey("token")
         val SOURCE = stringPreferencesKey("source")
+        val SECURE = booleanPreferencesKey("secure")
     }
 }
