@@ -28,6 +28,19 @@ D-92 제5항 · D-130.2.
 | `fleet console.js` | split: 로스터·대형·신호등·큐 렌더를 함수 다발이 아니라 모듈로. 단, Fleet 단일 표면이라 급하지 않다 — 600줄 판정의 첫 적용은 app.js부터 |
 | `dashboard/index.html` | accept: 마크업은 셸이 아니라 문서다. 줄 수보다 `test_shared_controls.py`(ui-shell 문법)가 지킨다 |
 
+**분해 실적 (2026-09-26, 제안이 실행으로):**
+
+| 모듈 | 원천 | 검증 |
+|---|---|---|
+| `dashboard/vision.js` | app.js 카메라 블록 | 브라우저 52 passed |
+| `dashboard/ros-network.js` | app.js 격리·그래프 블록 | 브라우저 ROS 경로 + 계약 단언(식별자 복원 1건) |
+| `dashboard/host-cards.js` | app.js 호스트 4카드 | 유닛 42 + 브라우저 52 passed |
+| `fleet/formation.js` | console.js 대형 패널 | 유닛 409 + 브라우저 12 + 변이 |
+| `fleet/signals.js` | console.js 신호등 카드 | 유닛 409 + 브라우저 12 + 변이 |
+
+남은 셸 코어(인증·세션·소켓·refresh·명렬·큐·토큰·폴링)는 분리 대상이 아니다.
+`hold-ticker.js`는 L2 추출(D-250)로 별도 관리한다.
+
 **Alternatives:** 웹을 예산에 넣지 않는 안 — 지금 상태 유지. 셸을 한 번에
  넷으로 가르는 안 — D-92 제5항(쓰이지 않는 분리) 위반 소지, 단계 분할이 맞다.
 줄 수 대신 복잡도로 재는 안 — 측정기가 없어 제안이 서지 않는다.
