@@ -27,6 +27,14 @@ panels:
     order: 90
     module: panels/system/events.js
     css: [panels/system/events.css]
+  - id: host.hardware
+    title: 보드 장치 상태
+    surface: device
+    slot: main
+    order: 80
+    min_role: administrator
+    module: panels/host/hardware.js
+    css: [panels/host/hardware.css]
   - id: system.diagnostics
     title: 진단 상태
     surface: device

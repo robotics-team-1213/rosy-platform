@@ -88,3 +88,11 @@
 - gate 변화: 없음
 - 결정: D-247
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(api): serve the device hardware panel through the UI registry
+
+- 변경: `panels.yaml`의 관리자 `host.hardware` 항목이 JS/CSS 자산과 패널 순서를 선언한다. API 자산 허용목록은 registry에서 파생한다.
+- 증거: `test_ui_route.py`가 자산 HTTP 응답과 관리자 패널 등록을 확인한다.
+- gate 변화: 없음. host API 시험은 실제 Pi probe 응답을 증명하지 않는다.
+- 결정: 새 REST 경로·필드는 추가하지 않았다.
+- 교훈: 없음

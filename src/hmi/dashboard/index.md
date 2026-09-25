@@ -27,6 +27,7 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): add administrator hardware observation panel
 - 2026-09-26 · 88fbbe7f · feat(hmi): buzzer and lamp test buttons on the device card (D-247 6)
 - 2026-09-25 · 96654ed1 · feat(hmi): device card and motion reason (D-247)
 - 2026-09-25 · uncommitted · refactor(hmi): operator screens leave the API package (D-243)

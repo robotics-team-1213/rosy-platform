@@ -2187,3 +2187,11 @@
 - gate 변화: 없음(ADR·게이트 문서 무변경). CI 붉음은 다음 push로 소멸 확인 대상
 - 회귀: worktree 재작성 후 내용 동일인데 `git status`가 ` M` 유지(stat 캐시 괴리) → `git add`로 stat 갱신 해소. phantom M은 `git diff`(내용 비교)로 검증할 것
 - 교훈: 폴더 이동은 테스트뿐 아니라 `.gitattributes` 규칙·핑 키·가드 제외 목록까지 낡게 만든다(2026-09-25 노트에 2차 파도 연장 기록). sensing 스위트는 CI에 없어 어디서도 자동으로 잡히지 않는다
+
+## 2026-09-26 · uncommitted · docs(plan): record the first device-screen migration slice
+
+- 변경: 역할별 화면 이관 계획에서 Task 4의 완료 범위와 미완료 패널을 구분해 기록했다.
+- 증거: dashboard/API 자산·매니페스트 계약, API hardware 회귀 시험, Chromium 패널 동작 시험을 실행한다.
+- gate 변화: 없음. 계획 상태 갱신은 Pi·실기 수용이 아니다.
+- 결정: 기존 `/dashboard` 카드 정리는 패널 동등성 확인 뒤로 둔다.
+- 교훈: 화면 이관은 항목별로 완료와 미완료를 나눠 기록한다.
