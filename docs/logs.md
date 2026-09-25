@@ -2203,3 +2203,11 @@
 - gate 변화: 없음. D-257 Proposed, D-55 OMX 비활성, 자동 이동/집기 FIELD HOLD 유지.
 - 결정: D-267 Proposed. D-118의 영상 경계와 D-170의 PRT-004 중앙 Fleet 동시 착수 조건을 유지한다.
 - 교훈: 현장 서버와 GPU 노트북이 같은 물리 장비여도 서비스 실패·명령권·영상 경로는 분리해 설계한다.
+
+## 2026-09-26 · uncommitted · docs(review): D-268 정책 증거 경계와 Ubuntu Fleet 실행 게이트 보강
+
+- 변경: 문서 재검토 결과를 반영해 Proposed D-268과 ADR Log 항목을 추가했다. sighting 표시·대조와 자동 정책 증거를 분리하고 freshness·오탐·출처 권한·작업자 권한·불명 상태 HOLD를 자동화 선행조건으로 기록했다.
+- 계획: 콘솔의 실제 ASGI 앱에 Hub WebSocket을 결합하는 작업/통합 시험, 사용자별 역할, 출처/대상/증거 유형에 묶인 회전·폐기 가능한 비전 자격 증명, 백업 보호/보존, operator의 작업 조건과 거절 상태 확인을 추가했다. 핑키/로봇암 카메라와 자동 집기는 별도 목표로 분리했다.
+- 증거: `python tools/harness/rosy_harness.py generate`가 `docs/index.md`를 갱신했다. `python tools/harness/rosy_harness.py lint`는 0 errors/기존 `last_verified` 19 warnings, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider --disable-warnings`는 70 passed다.
+- gate 변화: 없음. D-267/D-268 Proposed, 자동 이동 미수용, D-55 집기 장치 게이트 미통과 상태를 유지한다.
+- 결정: 자동화 문서 변경은 sighting endpoint와 로봇 DDS 경계를 열지 않는다.
