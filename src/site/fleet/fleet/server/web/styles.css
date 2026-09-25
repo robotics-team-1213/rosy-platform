@@ -282,10 +282,8 @@ main {
 .critical-queue {
   border-left: 4px solid var(--status-crit);
 }
-.queue h3 {
+.queue ui-triage {
   margin: 0 0 var(--space-2) 0;
-  font-size: var(--text-label);
-  color: var(--muted);
 }
 .issue-list {
   list-style: none;

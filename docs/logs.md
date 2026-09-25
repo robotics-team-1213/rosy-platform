@@ -2107,3 +2107,9 @@
 - gate 변화: D-251 Proposed→Accepted. 다음은 D-252(Fleet 큐·대형) Proposed
 - 결정: D-251 Accepted. 크롬은 장식이라 뽑지 않음
 - 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
+- 변경: 큐 머리 h3→ui-triage(개수+이름, ul·id·빈 숨김 그대로), 무장 전 대기 요약 바인딩(폼 변경 시 갱신), 회차에 2셀, D-252 Accepted
+- 증거: 머리 단언·대기 요약 단언·변이(머리 제거) 적색, 큐 계약·fleet 전수(D-242 잔재 1건 제외)·Fleet 브라우저 12 passed. 지도 고스트 미리보기는 서버 기하 단일 출처라 기각
+- gate 변화: D-252 Proposed→Accepted. 다음은 D-253(게임·진단 마무리) Proposed
+- 결정: D-252 Accepted
+- 교훈: 없음

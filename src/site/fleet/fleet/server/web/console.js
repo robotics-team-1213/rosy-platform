@@ -507,6 +507,15 @@ function card(robot, index) {
   return node;
 }
 
+// D-252: 큐 머리는 ui-triage. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로 둔다.
+function setTriageHead(id, label, list) {
+  const head = el(id);
+  if (!head) return;
+  const names = [...list.querySelectorAll("li b")].map((b) => b.textContent);
+  head.querySelector("b").textContent = `${label} ${names.length}`;
+  head.querySelector("small").textContent = names.join(" · ");
+}
+
 function render() {
   const roster = el("roster");
   roster.replaceChildren(...view.robots.map(card));
@@ -538,6 +547,9 @@ function render() {
       warningCount++;
     }
   }
+  // D-252: 큐 머리는 ui-triage 다. <b>는 범주+개수, <small>은 이름들이다. 행은 그대로.
+  setTriageHead("warning-head", "주의 요망", warnList);
+  setTriageHead("critical-head", "최우선 개입 요망", critList);
 
   // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
   // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다
@@ -683,6 +695,7 @@ function fillLeaders() {
     label.append(input, document.createTextNode(id));
     return label;
   }));
+  syncPendingSummary();
 }
 
 function renderFormation(status) {
@@ -700,7 +713,7 @@ function renderFormation(status) {
 
   const detail = el("formation-detail");
   if (!status.active) {
-    detail.textContent = "리더와 포함 로봇을 고르고 무장하면 선택된 로봇이 슬롯으로 따라붙습니다.";
+    syncPendingSummary();
     return;
   }
   const slots = Object.entries(status.assignment || {})
@@ -720,6 +733,20 @@ function renderFormation(status) {
     lines.push(`재개 차단: ${status.pending_triggers.map((t) => t.join(":")).join(", ")}`);
   }
   detail.textContent = lines.join(" — ");
+}
+
+// D-252: 무장 전 확인 문장. 슬롯 좌표는 서버 기하가 쥐고 있어 클라이언트가
+// 미리 그릴 수 없으므로, 폼 현재값을 문장으로 미리 말한다.
+function syncPendingSummary() {
+  if (view.formation && view.formation.active) return;
+  const leader = el("formation-leader").value;
+  const shape = el("formation-shape").value;
+  const spacing = Number(el("formation-spacing").value);
+  const members = [...el("formation-members").querySelectorAll("input:checked")]
+    .map((b) => b.value);
+  el("formation-detail").textContent = members.length
+    ? `리더 ${leader} · ${shape} ${spacing}m · ${members.length}대 — 무장하면 슬롯으로 따라붙습니다.`
+    : "포함 로봇을 고르세요.";
 }
 
 function applyFormation(status) {
@@ -778,6 +805,12 @@ el("formation-resume").addEventListener("click", () =>
 
 el("formation-stop").addEventListener("click", () =>
   formationCall("/api/fleet/formation/stop", null, "해제"));
+
+// D-252: 폼이 바뀌면 대기 요약을 갱신한다. 무장 중에는 서버 상태가 주인이므로 건드리지 않는다.
+for (const id of ["formation-leader", "formation-shape", "formation-spacing", "formation-members"]) {
+  el(id).addEventListener("change", syncPendingSummary);
+  el(id).addEventListener("input", syncPendingSummary);
+}
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 // 램프 도트는 장치가 보고한 구동값(lamps)이다. failsafe 는 "고장 표시"이고 all_red 는
