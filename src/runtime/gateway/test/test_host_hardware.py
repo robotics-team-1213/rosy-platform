@@ -631,13 +631,16 @@ def test_the_inspect_view_has_the_device_card_after_commissioning():
 
 
 def test_the_script_renders_six_states_and_the_motion_reason():
-    # The shell split (D-262) moved the card rendering into host-cards.js.
-    script = "\n".join((WEB / name).read_text(encoding="utf-8") for name in ("app.js", "host-cards.js"))
+    # D-262: host-card renderers live in host-cards.js; the shell only calls them.
+    script = "".join(
+        (WEB / name).read_text(encoding="utf-8")
+        for name in ("app.js", "host-cards.js")
+    )
     assert 'api("/api/v1/host/hardware")' in script
     assert '"/api/v1/host/hardware/refresh", {method: "POST"}' in script
     for text in ("정상", "응답 없음", "버스 없음", "드라이버 없음", "사람 확인 필요", "측정 안 함", "벤치 전용"):
         assert f'"{text}"' in script, text
-    # host-cards.js hands the reason to the shell through onCommissioningRendered.
+    # D-262: the reason now flows through the onCommissioningRendered callback.
     assert 'onCommissioningRendered(payload.motion_reason || "")' in script
     assert "session.motionReason = reason" in script
     assert 'setEnabled("hardware-refresh", isAdmin())' in script

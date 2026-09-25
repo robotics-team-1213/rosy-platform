@@ -42,7 +42,7 @@ def _sources() -> list[Path]:
 
 
 def _origin(path: Path) -> str:
-    """`core_features/core_features/docking/manager.py` 처럼 도메인 기준 경로."""
+    """`services/core_features/docking/manager.py` 처럼 도메인 기준 경로."""
     for package in PACKAGES:
         if path.is_relative_to(package):
             return path.relative_to(package.parent.parent).as_posix()
@@ -317,13 +317,13 @@ def fingerprint(node: ast.AST) -> str:
 #: 몸통이 이 지문과 같을 때에만 중계로 인정한다. 값을 손으로 고치는 것이
 #: 곧 "이 함수를 다시 읽었다"는 서명이다 — 그러라고 있는 목록이다.
 PINNED_RELAYS = {
-    ("core_features/core_features/docking/manager.py", "DockingManager._emit"):
+    ("services/core_features/docking/manager.py", "DockingManager._emit"):
         "15ae9dd72fa20f0b",
-    ("core_features/core_features/safety/manager.py", "SafetyManager._emit"):
+    ("services/core_features/safety/manager.py", "SafetyManager._emit"):
         "e0aca301e45601ff",
-    ("core_features/core_features/power/battery.py", "BatteryMonitor._emit_all"):
+    ("services/core_features/power/battery.py", "BatteryMonitor._emit_all"):
         "fdb020d71a91a47a",
-    ("core_features/core_features/power/manager.py", "PowerManager._emit_all"):
+    ("services/core_features/power/manager.py", "PowerManager._emit_all"):
         "da516d1499355bc6",
 }
 

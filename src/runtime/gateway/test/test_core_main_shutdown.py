@@ -321,10 +321,11 @@ def _entry_point_spans(source: str) -> list[tuple[int, int]]:
 def test_only_main_shuts_rclpy_down_in_core_production_code():
     """main 의 context-무효 판정은 다른 코드가 context 를 내리지 않는다는 불변식에 기댄다.
 
-    `control` 은 src/core 아래로 옮겨졌지만(a93d5188) 노드마다 자기 프로세스로 뜬다.
+    `control` 은 src/core 아래로 옮겨졌고(a93d5188) 지금은 src/runtime/sensing 아래다.
+    노드마다 자기 프로세스로 뜬다.
     그 노드의 `main()` 은 CORE 프로세스에서 불리지 않으므로 자기 context 를 내려도 된다.
     CORE 가 `control.sensor_provider` 로 import 하는 모듈 본문은 여전히 막는다.
-    `control/tools/` 는 설치되지 않는 시뮬레이션 스크립트다.
+    `sensing/tools/` 는 설치되지 않는 시뮬레이션 스크립트다.
     """
     import re
     from pathlib import Path
@@ -334,10 +335,10 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     offenders = []
     for path in src_core.rglob("*.py"):
         rel = path.relative_to(src_core).as_posix()
-        if "/test/" in f"/{rel}" or rel == "core/core/main.py" or rel.startswith("control/tools/"):
+        if "/test/" in f"/{rel}" or rel == "gateway/core/main.py" or rel.startswith("sensing/tools/"):
             continue
         source = path.read_text(encoding="utf-8-sig")
-        spans = _entry_point_spans(source) if rel.startswith("control/") else []
+        spans = _entry_point_spans(source) if rel.startswith("sensing/control/") else []
         for lineno, line in enumerate(source.splitlines(), 1):
             if pattern.search(line) and not any(a <= lineno <= b for a, b in spans):
                 offenders.append(f"{rel}:{lineno}: {line.strip()}")

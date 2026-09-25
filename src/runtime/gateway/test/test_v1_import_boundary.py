@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-V1 = Path(__file__).resolve().parents[2] / "core_api_web" / "core_api_web" / "api" / "v1"
+V1 = Path(__file__).resolve().parents[2] / "api_web" / "core_api_web" / "api" / "v1"
 
 DIRECT_FEATURES = re.compile(r"^\s*(?:from|import)\s+core_features\b", re.MULTILINE)
 

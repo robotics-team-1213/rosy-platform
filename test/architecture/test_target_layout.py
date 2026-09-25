@@ -32,6 +32,7 @@ TARGET = {
     "hmi/dashboard": "hmi/dashboard",
     "site/fleet": "site/fleet",
     "site/games": "site/games",
+    "site/overhead": "site/overhead",
     "sim/description": "sim/description",
     "sim/gz_sim": "sim/gz_sim",
 }

@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-FEATURES = Path(__file__).resolve().parents[2] / "core_features" / "core_features"
+FEATURES = Path(__file__).resolve().parents[2] / "services" / "core_features"
 PACKAGE = Path(__file__).resolve().parents[1] / "core"
 
 #: (contract module, Protocol class) -> the class expected to implement it.

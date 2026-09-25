@@ -10,6 +10,7 @@ symptoms:
   - "after that fix, CI failed test_declared_paths_account_for_every_write_root_in_the_program[rosy-core.service] on /root/pinky-dynamic-tracks.json"
   - "after excluding control from the directory scan, the same test failed on /etc/machine-id from a control node"
   - "the imported-by resolver for CORE returned every control module instead of the ones CORE imports"
+  - "second wave 2026-09-26: after the role-dir regroup, PINNED_RELAYS keys, .gitattributes rules, and guard exclusion lists still pointed at old paths — two CI failures, two Windows-only byte-compare failures, and 38 resurrected shutdown offenders"
 root_cause: logic_error
 resolution_type: test_fix
 severity: medium
@@ -59,6 +60,42 @@ entry points and scripts that never run inside CORE are excluded by rule, not by
   tests mean.
 - Run the full CI command set (`.github/workflows/ci.yml` steps) locally or on the branch before merging a
   move; three sequential post-merge failures cost three push cycles.
+
+## Second wave: the role-dir regroup (2026-09-26)
+
+The same invariant repeated a level deeper after the D-241/D-242 role-directory regroup moved the map
+bundle and core packages (`src/apps/…` → `src/runtime/{gateway,services,api_web,sensing,…}`), this
+time hiding in four places a folder-move grep of `test/` alone still misses:
+
+- **Path constants inside tests** — `test_executor_contracts` / `test_v1_import_boundary` /
+  `test_swarm` built `runtime/core_features/core_features` and `runtime/core_api_web/core_api_web`;
+  the gz contract test still walked `src/navigation/navigation/launch`; `PaintMap.from_bundle()`
+  computed `parents[2]/control/map/…`. Four `FileNotFoundError`s, one stale bringup path, and 96+7
+  sensing failures all traced to constants that named the old nesting.
+- **Path-keyed fingerprint pins** — `PINNED_RELAYS` keys `core_features/core_features/*.py` no longer
+  matched the scanner's `services/core_features/*.py`, so the relay exemption lookup missed *and* the
+  pin comparison failed: one stale key space produced two differently-worded CI failures. All four
+  hashes were identical — only the keys moved, and that equality is the evidence that no reviewed
+  relay body had changed.
+- **`.gitattributes` rules** — the byte-determinism rules for `map_v2_fleet` still pointed at
+  `src/apps/control/map/…`, so `core.autocrlf=true` checked the generated `.yaml`/`.world` out as
+  CRLF and two byte-compare tests failed on Windows while Linux CI stayed green (its checkout was
+  already LF). Attr paths are config: nothing executes them, only the comparison that reads bytes.
+- **Guard exclusion lists** — the shutdown guard's `core/core/main.py` / `control/tools/` /
+  `control/` prefixes stopped matching after the move, resurrecting 38 offenders from files that had
+  been exempt since this note's original fix: that fix was itself path-keyed, so the next move
+  unlatched it.
+
+## Prevention (extended 2026-09-26)
+
+- Grep the **source and destination prefixes of a move across all path-keyed state**, not just tests:
+  `.gitattributes`, fingerprint/pin maps (`PINNED_RELAYS`), exclusion allowlists, and `parents[...]`
+  constants. `rg '<old>/<old>/'` catches the double-nested era; `rg '<old-prefix>'` catches the rest.
+- Two blind spots compound: a suite no CI job runs (sensing before this date) fails only on developer
+  machines, and a byte-compare test fails only where the checkout mangles EOL. Run the full suite on
+  the platform that actually checks out the files before calling a move done.
+- When a pin's *value* is unchanged but its *key* moved, the fix is a key rename — no re-review of the
+  pinned body is required, and the equal hashes are the evidence for that claim.
 
 ## Related Issues
 - `docs/solutions/workflow-issues/installed-layout-import-passes-repo-tests-2026-09-22.md` (layout
