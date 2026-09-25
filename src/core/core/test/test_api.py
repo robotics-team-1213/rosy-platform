@@ -13,7 +13,7 @@ from pathlib import Path
 from core_api_web.api.app import create_app
 from core_features.command.manager import Twist
 from core_events.events.audit import FileAuditLog
-from core_common.profile import RobotProfile
+from core_common.profile import RobotProfile, robot_config_dir
 from core.services import CoreServices
 
 import yaml
@@ -29,8 +29,9 @@ def client(tmp_path, monkeypatch):
     config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
     config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
-    profile = RobotProfile.load(Path(__file__).parent.parent / "config" / "profile.pinky_pro.yaml")
-    caps = yaml.safe_load((Path(__file__).parent.parent / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
+    caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
     app = create_app(config, services)
     return TestClient(app), services
@@ -647,8 +648,9 @@ def docking_client(tmp_path, monkeypatch):
     config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
     config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
-    profile = RobotProfile.load(Path(__file__).parent.parent / "config" / "profile.pinky_pro.yaml")
-    caps = yaml.safe_load((Path(__file__).parent.parent / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
+    caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
     caps["docking"] = {"supported": True}
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
     app = create_app(config, services)

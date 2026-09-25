@@ -19,6 +19,7 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,6 +153,23 @@ def _domain(name: str) -> str:
     return PACKAGES[name]["dir"].relative_to(SRC).parts[0]
 
 
+def _family(name: str):
+    parts = PACKAGES[name]["dir"].relative_to(SRC).parts
+    return parts[1] if len(parts) == 3 and parts[0] == "devices" else None
+
+
+def layout_ok(rel: tuple, name: str) -> bool:
+    """P2(a) + D-196: src/<domain>/<package>, and src/devices/<family>/<package>.
+
+    Until the D-231 device-family move, src/devices/<package> still passes.
+    """
+    if not rel or rel[0] not in DOMAINS:
+        return False
+    if rel[0] == "devices" and len(rel) == 3:
+        return rel[2] == name
+    return len(rel) == 2 and rel[1] == name
+
+
 def _declared(name: str) -> set:
     return {
         (e.text or "").strip()
@@ -198,8 +216,8 @@ def _used(name: str) -> dict:
     return {top: site for top, site in used.items() if top in PACKAGES and top != name}
 
 
-def _allowed(source: str, target: str) -> bool:
-    src_domain, dst_domain = _domain(source), _domain(target)
+def edge_allowed(src_domain, src_family, dst_domain, dst_family, target) -> bool:
+    """P4 direction table (D-168, D-196). Pure, so rows are testable before packages move."""
     if target in CORE_CONTRACTS:
         return True
     if src_domain == "core":
@@ -207,10 +225,16 @@ def _allowed(source: str, target: str) -> bool:
     if src_domain == "sim":
         return True
     if src_domain == "devices":
-        return target == "description"
+        if dst_domain == "sim" and target == "description":
+            return True
+        return bool(src_family) and dst_domain == "devices" and dst_family in (src_family, "common")
     if src_domain == "navigation":
         return dst_domain == "devices"
     return False
+
+
+def _allowed(source: str, target: str) -> bool:
+    return edge_allowed(_domain(source), _family(source), _domain(target), _family(target), target)
 
 
 def _lines(path: Path) -> int:
@@ -223,11 +247,14 @@ def test_the_scan_sees_the_whole_tree():
 
 
 def test_every_package_sits_in_a_domain_group_under_its_own_name():
-    """P2(a) + D-147: src/<domain>/<package>/ with directory name = package name."""
+    """P2(a) + D-147 + D-196: src/<domain>/<package>/, directory name = package name.
+
+    devices nest one level deeper: src/devices/<family>/<package>/.
+    """
     bad = []
     for name, info in PACKAGES.items():
         rel = info["dir"].relative_to(SRC).parts
-        if len(rel) != 2 or rel[0] not in DOMAINS or rel[1] != name:
+        if not layout_ok(rel, name):
             bad.append(f"{name}: {'/'.join(rel)}")
     assert bad == [], bad
 
@@ -351,3 +378,38 @@ def test_size_verdicts_are_well_formed_and_current():
         if key in over and over[key] > at_verdict + REGROWTH_ALLOWANCE:
             bad.append(f"{key}: {over[key]} lines, grew past {at_verdict}+{REGROWTH_ALLOWANCE}; re-judge")
     assert bad == [], bad
+
+
+@pytest.mark.parametrize(
+    "src_domain, src_family, dst_domain, dst_family, target, ok",
+    [
+        ("devices", "pinky_pro", "devices", "pinky_pro", "description", True),
+        ("devices", "pinky_pro", "devices", "common", "imu_bno055", True),
+        ("devices", "pinky_pro", "devices", "omx", "omx_adapter", False),
+        ("devices", "omx", "devices", "pinky_pro", "description", False),
+        ("devices", "omx", "core", None, "core_common", True),
+        ("devices", "omx", "core", None, "core", False),
+        ("navigation", None, "devices", "pinky_pro", "bringup", True),
+        ("navigation", None, "hardware", None, "bringup", False),
+        ("navigation", None, "apps", None, "control", False),
+        ("apps", None, "devices", "common", "imu_bno055", False),
+    ],
+)
+def test_direction_table_rows_for_devices_and_robots(src_domain, src_family, dst_domain, dst_family, target, ok):
+    """D-196 P4 rows, checked before any package moves into them."""
+    assert edge_allowed(src_domain, src_family, dst_domain, dst_family, target) is ok
+
+
+@pytest.mark.parametrize(
+    "rel, name, ok",
+    [
+        (("devices", "pinky_pro", "bringup"), "bringup", True),
+        (("devices", "bringup"), "bringup", True),
+        (("products", "pinky_pro"), "pinky_pro", True),
+        (("core", "control"), "control", True),
+        (("apps", "x", "control"), "control", False),
+    ],
+)
+def test_layout_rule_allows_a_family_level_only_under_devices(rel, name, ok):
+    """P2(a) + D-196: src/<domain>/<package>, except src/devices/<family>/<package>."""
+    assert layout_ok(rel, name) is ok

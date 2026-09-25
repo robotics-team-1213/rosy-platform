@@ -484,6 +484,14 @@
 - 결정: 사용자 결정 2026-09-24를 따른다(기록만 하고, 분리는 인식 재설계 P1~P3에서).
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `README.md`·`CLAUDE.md` 빌드 예시를 `--packages-up-to core pinky_pro`로 — CORE가 읽는 로봇 프로필이 이제 `pinky_pro` 패키지에 있다(D-196).
+- 증거: 문서만. WSL Jazzy에서 같은 선택으로 빌드 8 packages finished (2026-09-24).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
 ## 2026-09-24 · uncommitted · docs(adr): D-199 camera perception contracts and backends
 - 변경: `docs/adr/D-199-camera-perception-contracts-and-backends.md` 추가(Proposed), ADR Log 표 D-199 행, `progress.md`의 `adrs`에 D-199. 실물 영상 기준선 `docs/validation/perception-real-video/2026-09-24/baseline.md`와 스틸 3장을 추가했다. 인식 설계 문서에 D-199 링크 한 줄. 코드 본문은 바꾸지 않았다.
 - 증거: 실물 영상 7개(4981프레임) 재생, REAL VIDEO REPLAY host only, DEVICE: NOT RUN. `centre` BOTH 13% · ONE 36% · MEMORY 14% · STOP 37%, 장치 기본 `line` 모드가 22%의 프레임에서 벽으로 조향, `road.py` 정지선 89.5%. 재생 스크립트는 저장소 밖이고 정답이 없다.

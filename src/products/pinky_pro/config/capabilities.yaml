@@ -1,5 +1,5 @@
 # CAP-001 Capability 정적 선언 (D-11)
-# Robot Profile(profile.pinky_pro.yaml)과 일치해야 한다 (HWA-003).
+# Robot Profile(profile.yaml)과 일치해야 한다 (HWA-003).
 capability_version: 1
 navigation:
   goal_navigation: true

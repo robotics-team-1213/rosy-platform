@@ -25,6 +25,7 @@ TARGET = {
     "devices/led": "devices/pinky_pro/led",
     "devices/imu_bno055": "devices/common/imu_bno055",
     "products/omx_adapter": "devices/omx/omx_adapter",
+    "products/pinky_pro": "products/pinky_pro",
     "face/emotion": "hmi/emotion",
     "core/web_common": "hmi/web_common",
     "site/fleet": "site/fleet",

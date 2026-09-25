@@ -56,9 +56,11 @@ WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
 COPY src/core/interfaces ./src/core/interfaces
 COPY src/core/core ./src/core/core
+# D-196: CORE reads the robot profile from share/<robot.model>/config.
+COPY src/products/pinky_pro ./src/products/pinky_pro
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
-    && colcon build --merge-install --packages-up-to core \
+    && colcon build --merge-install --packages-up-to core pinky_pro \
     && test -d /opt/rosy_ws/install
 
 FROM core-runtime AS core

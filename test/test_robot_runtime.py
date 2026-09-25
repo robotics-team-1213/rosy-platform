@@ -96,6 +96,10 @@ def test_runtime_builds_distinct_targets_from_shared_dockerfile():
     assert "COPY --from=io-build /opt/rosy_ws/install" in dockerfile
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     assert "src/sim/description/meshes/**" in dockerignore
+    # D-196: the core stage copies the robot package CORE reads its profile from.
+    assert "COPY src/products/pinky_pro ./src/products/pinky_pro" in dockerfile
+    for allowed in ("!src/products/", "!src/products/pinky_pro/", "!src/products/pinky_pro/**"):
+        assert allowed in dockerignore.splitlines(), allowed
 
 
 def test_dockerignore_admits_every_source_path_the_dockerfile_copies():

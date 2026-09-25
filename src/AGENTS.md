@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `core/` (runtime and sensing in `control/`), `devices/` (buses and chips), `products/` (manipulator profile), `face/` (LCD), `navigation/`, `sim/`, `site/` (fleet and the game host). `apps/` no longer holds a package. Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
+ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `core/` (runtime and sensing in `control/`), `devices/` (buses and chips), `products/` (manipulator profile and the Pinky config package), `face/` (LCD), `navigation/`, `sim/`, `site/` (fleet and the game host). `apps/` no longer holds a package. Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `pinky_pro`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`.
 
 ## Key Files
 
@@ -17,7 +17,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `co
 |-----------|---------|
 | `core/` | CORE domain: `core` (gateway kernel: bridge + system wiring), `core_common`, `core_events`, `core_features` (managers plus shared `decision/`), `core_api_web`, `web_common`, `interfaces`, and `control` (sensing geometry, `sensing/perception` camera and lane evidence, calibration, planning). Judgment does not publish `cmd_vel`. Legacy final publisher must not run beside `core` |
 | `devices/` | Device nodes that used to live in `hardware/`: `bringup`, `led`, `lamp_control`, `imu_bno055`, `sensor_adc`. Chip names are still the package names |
-| `products/` | `omx_adapter` — manipulator profile (`device_type: manipulator`), disabled. Not a second mobile base |
+| `products/` | `omx_adapter` — manipulator profile (`device_type: manipulator`), disabled. Not a second mobile base. `pinky_pro` — config-only package (profile and capabilities) selected by `robot.model` |
 | `face/` | `emotion` — robot-local LCD |
 | `navigation/` | `navigation` — Nav2/SLAM launch, maps, params |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |

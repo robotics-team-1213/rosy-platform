@@ -1830,6 +1830,49 @@
 - 결정: D-185 R8
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · docs(adr): D-196 robots are compositions of devices (Proposed)
+
+- 변경: `docs/adr/D-196-devices-and-robots-domains.md` 신규(Proposed). ADR Log에 D-196 표 행 추가.
+  `docs/reference/AGENTS.md`의 `append-only decisions through D-195`를 D-196으로. `docs/plans/2026-09-24-multi-robot-structure-draft.md`
+  Status를 "ADR로 승격됨"으로 갱신. `docs/plans/2026-09-22-control-package-split-design.md` §3에
+  D-196 개정(장치 코드는 devices로) 문단 추가
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_module_structure.py -q -p no:cacheprovider`,
+  `python tools/harness/rosy_harness.py generate && python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-196 Proposed — `src/devices/<계열>/`과 `src/robots/<robot>/` 도메인을 두고 로봇 지식을
+  그 안에만 둔다. D-147 §1·§2 일부와 D-168 P4 방향표를 대체
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(structure): D-196 devices/robots domains and direction rows
+- 변경: `test/test_module_structure.py`에 `devices`·`robots` 도메인, `layout_ok`(devices만 계열 한 단 허용), P4 방향표를 순수 함수 `edge_allowed`로 옮기고 D-196 행 추가. 매개변수 시험 15건
+- 증거: `python -m pytest test/test_module_structure.py -q` 통과 (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(structure): _family only reads the 3-level devices shape (D-196 review)
+
+- 변경: `_family`가 `src/devices/<계열>/<패키지>` 모양일 때만 계열을 돌려준다(짧은 경로에서 IndexError나 패키지명을 계열로 오인하지 않게). navigation 행에 hardware 허용·apps 거부 사례 추가
+- 증거: `python -m pytest test/test_module_structure.py -q` 28 passed (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(repo): D-196 pinky literals live in the pinky family
+
+- 변경: `test/test_robot_literals.py`와 `test/robot_literal_backlog.txt` 추가. src 제품 파일의 `pinky`는 `devices/pinky_pro/`·`robots/pinky_pro*` 안에만 두고, 현재 위반 72개를 백로그로 집합 동일성 검사
+- 증거: `python -m pytest test/test_robot_literals.py -q` 1 passed; 백로그에 가짜 줄을 넣으면 stale로 실패함을 확인 (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: D-178 Decision 5 "ROS 패키지 20개"에 `(2026-09-24: +pinky_pro 잠정, D-196)` 표기(분포 줄과 일치). `test/robot_literal_backlog.txt` 머리말을 "개수는 줄기만 한다; 계획된 D-196 이동은 줄을 옮길 수 있다(로그에 남김)"로 고쳤다 — 27226ac4의 `core_common/profile.py` 추가가 그 사례다.
+- 증거: `test/test_module_scorecard.py`·`test/test_robot_literals.py` 통과 (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-196 Proposed, D-178
+- 교훈: 없음
 ## 2026-09-24 · uncommitted · docs(adr): D-201·D-202·D-203 공예 계약과 UI/UX 회차
 
 - 변경: ADR 3건(고정 문법 적합 계약, 위험은 채움 ? 경보 텍스트 대비 계약, 계산 척급 폐쇄), concept 16 §4 계기 3행·§7.1/§7.3/§7.5 조항 보강, 검증 회차 폴더 `docs/validation/uiux-surfaces-2026-09-24/`(발견 F-12~F-16, 전후 계측, 게이트 변이 증명).

@@ -13,6 +13,8 @@
 !src/products/
 !src/products/omx_adapter/
 !src/products/omx_adapter/**
+!src/products/pinky_pro/
+!src/products/pinky_pro/**
 !src/devices/
 !src/devices/bringup/
 !src/devices/bringup/**

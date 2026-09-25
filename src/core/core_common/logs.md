@@ -30,3 +30,27 @@
 - gate 변화: 없음.
 - 결정: D-32, D-161. API Ref v1.18 (Corrective `percent: null`, Additive `withheld`·`caller_role`).
 - 교훈: 기본 설정의 자리표시 값은 신원이 아니다.
+
+## 2026-09-24 · uncommitted · feat(robots): CORE loads the robot profile from robots/<model> (D-196)
+
+- 변경: `profile.py`에 `DEFAULT_ROBOT = "pinky_pro"`와 `robot_config_dir(robot)`(ament share 우선, 소스 트리 `src/robots/<robot>/config` 폴백). `config.py` `load_config`가 `ROSY_ROBOT`을 `robot.model`로 싣고, 패키지 이름(`[a-z][a-z0-9_]*`)이 아니면 `ConfigError`. 호스트 pytest용 `test/conftest.py`(D-61 선례) 추가.
+- 증거: `test/test_robot_selection.py` 신규 8건 포함 `src/core/core_common/test` 9 passed (2026-09-24 Windows). 구현 전에는 `ImportError: cannot import name 'DEFAULT_ROBOT'`로 수집 실패.
+- gate 변화: 없음.
+- 결정: D-196 Proposed. `DEFAULT_ROBOT`의 `pinky` 리터럴은 P6까지 `test/robot_literal_backlog.txt`에 명시적으로 둔다.
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `robot_config_dir`가 `ImportError`(ament 없음)와 ament `PackageNotFoundError`만 소스 폴백으로 보내고, 그 밖의 예외는 그대로 올린다. 소스 폴백은 `src/robots/<robot>/config`가 있을 때만 쓰고, 없으면 로봇 이름·`robot.model`·`ROSY_ROBOT`·`colcon build --packages-up-to core <name>`을 담은 `ConfigError`를 낸다(`core_common.config`는 `profile`을 import하지 않아 순환 없음).
+- 증거: 실패 먼저 — `test_unknown_robot_names_the_package_and_how_to_fix_it` 1 failed(ConfigError 미발생). 수정 후 `src/core/core_common/test` 11 passed (2026-09-24 Windows). WSL Jazzy 설치 트리에서 `robot_config_dir('pinky_pro')` = `install/pinky_pro/share/pinky_pro/config`, `no_such_robot` → ConfigError 확인.
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 폴백은 대상이 실제로 있을 때만 폴백이다 — 없는 경로를 돌려주면 오류가 파일 읽기 시점의 엉뚱한 곳에서 난다.
+
+## 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
+
+- 변경: `robot_config_dir`가 ament는 import되지만 `AMENT_PREFIX_PATH`가 없어 `get_package_share_directory`가 `OSError`를 낼 때도 소스 폴백(없으면 `ConfigError`)으로 간다. `test/conftest.py`에 가짜 `ament_index_python.packages`를 까는 `fake_ament`·`no_ament_share` fixture를 두고, 소스 경로를 단언하는 시험을 그 위에서 돌려 호스트·ROS 소싱 환경 모두에서 결정적으로 만들었다. 신규 3건: OSError → 폴백, PackageNotFoundError → 폴백, share 반환 → share 우선.
+- 증거: 실패 먼저 — `test_unsourced_ament_falls_back_to_the_source_tree` 1 failed(OSError 전파). 수정 후 Windows host `src/core/core_common/test`·`test_core_node_robot_paths.py`·`src/robots/pinky_pro/test`·`test/test_module_structure.py` 48 passed; WSL Jazzy 소싱 상태(`ros2 pkg prefix pinky_pro` = install/pinky_pro)에서 같은 core_common·core·robots 시험 20 passed (2026-09-24).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 경로 폴백 시험은 ament를 가짜로 고정해야 한다 — 소싱된 상자에서는 진짜 share가 이겨 같은 시험이 붉어진다.

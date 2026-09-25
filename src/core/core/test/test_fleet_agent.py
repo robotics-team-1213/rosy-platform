@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from core_common.profile import RobotProfile
+from core_common.profile import RobotProfile, robot_config_dir
 from core.services import CoreServices
 from core_features.fleet_agent.agent import FleetAgent
 
@@ -90,9 +90,10 @@ def test_core_services_build_wires_disabled_fleet_agent(tmp_path):
     config = yaml.safe_load(
         (config_dir / "rosy_default.yaml").read_text(encoding="utf-8")
     )
-    profile = RobotProfile.load(config_dir / "profile.pinky_pro.yaml")
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
     capabilities = yaml.safe_load(
-        (config_dir / "capabilities.yaml").read_text(encoding="utf-8")
+        (robot_dir / "capabilities.yaml").read_text(encoding="utf-8")
     )
 
     services = CoreServices.build(

@@ -203,6 +203,7 @@
 | D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed |
 | D-194 | 브라우저 조작 부품은 한 벌이다 | Accepted |
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
+| D-196 | 로봇은 장치의 조합이다 — `src/devices/<계열>/`과 `src/robots/<robot>/`을 두고, 로봇 지식은 그 안에만 둔다 | Proposed |
 | D-197 | Docker는 제품 아티팩트 체인에서 퇴역한다 — 제품 경로의 신규 Docker 의존은 지금 금지하고, OCI·Compose 체인은 native payload가 ARTIFACT를 통과하면 한 변경으로 정리한다 | Accepted |
 | D-198 | Docker 시대의 장치 운영면을 철거한다 — 안전 검증 게이트의 native 대체는 지금 만들고, 설치기·모드 전환은 대체 없이 폐기한다 | Accepted |
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 | Proposed |
@@ -239,5 +240,4 @@
 | D-229 | 모듈 경계는 지금 폴더를 따라 한 방향으로만 흐른다 — 인식은 증거, 판단은 동작 id, 추종기는 FOLLOW 다음의 속도 | Accepted |
 | D-231 | 소스 영역은 층으로 나눈다 — contracts·runtime·devices·products·hmi·site·sim과 firmware/, 디렉터리만 옮기고 패키지 이름은 유지, 제품 이름 런타임·src 안 AI 워커·원격 판단 경로·새 액션은 받지 않는다 | Accepted |
 | D-230 | SD writer 멈춤은 두 단계로 다룬다 — soft 경고, hard 중단, CLI 진행률 우선 | Accepted |
-| D-231 | 소스 영역은 층으로 나눈다 — 디렉터리만 옮기고 패키지 이름은 그대로 둔다 | Accepted |
 ---

@@ -412,6 +412,29 @@
 - 결정: 없음. main 의 24b6d4bb(`bridge/observation.py`)와 같은 방식의 동작 보존 추출.
 - 교훈: 없음.
 
+## 2026-09-24 · uncommitted · feat(robots): CORE loads the robot profile from robots/<model> (D-196)
+
+- 변경: `config/profile.pinky_pro.yaml`·`config/capabilities.yaml`을 `src/robots/pinky_pro/config/{profile,capabilities}.yaml`로 옮겼다. `rosy_default.yaml`은 최상위 `profile:`/`capabilities:` 대신 `robot.model: pinky_pro`를 둔다. `core/node.py` `_resolve_path`는 네 번째 인자 `base_dir`(로봇 패키지 config)를 받고, 기본 경로는 `robot_config_dir(robot.model or DEFAULT_ROBOT)`다. 절대 경로 오버레이(`/etc/rosy/profile.yaml` 등)는 그대로 우선한다. 두 파일을 읽던 core 시험 11개(`conftest.py` 포함)는 `robot_config_dir("pinky_pro")`로 읽는다.
+- 증거: `src/core/core/test` 1199 passed·14 skipped, `src/robots/pinky_pro/test` 2 passed, `test/test_module_structure.py`·`test_robot_literals.py`·`test_harness_contracts.py` 통과, harness lint 0 errors (2026-09-24 Windows).
+- gate 변화: 없음. share 조회 경로는 ROS-SIM(WSL Jazzy colcon build + CORE 부팅)에서 아직 미확인.
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `core/node.py` `_resolve_path`를 순수 함수 `_robot_file_paths(config)`로 바꿨다. `profile`/`capabilities`가 둘 다 절대 경로(오버레이)면 로봇 패키지를 조회하지 않아 패키지가 없어도 부팅한다. 키가 없거나 상대 이름일 때만 `robot_config_dir(robot.model)`를 한 번 부른다. 신규 `test/test_core_node_robot_paths.py` 4건(가짜 rclpy로 호스트에서 검사, `test_core_node_teardown` 방식). 11개 시험 파일은 `robot_dir = robot_config_dir("pinky_pro")`를 한 번 묶어 120자 안으로.
+- 증거: 실패 먼저 — 4 failed(`AttributeError: _robot_file_paths`). 수정 후 대상 실행(core·core_common·robots 시험 + 구조·리터럴·harness·scorecard·payload·runtime 계약) 1339 passed·14 skipped. WSL Jazzy `ros2 run core core`가 오버레이 없이 `core up: robot_id=rosy_01 model=Pinky Pro`로 부팅(share/pinky_pro/config).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
+
+- 변경: `test/test_core_node_robot_paths.py`의 기본·상대·미설치 경우에 지역 `no_ament_share` fixture(가짜 `ament_index_python.packages`, PackageNotFoundError)를 걸어 소싱된 ROS 상자에서도 소스 폴백 경로를 단언하도록 했다.
+- 증거: WSL Jazzy 소싱 상태에서 core_common·이 파일·robots 시험 20 passed; Windows host 48 passed(대상 묶음) (2026-09-24).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
 ## 2026-09-24 · uncommitted · docs(adr): D-200 docking owns the DOCKING mode
 - 변경: `docs/adr/D-200-docking-owns-the-docking-mode.md` 추가(Accepted), ADR Log 표 D-200 행, `progress.md`의 `adrs`에 D-200. 주차 설계 문서에 D-200 링크 한 줄. 이미 main에 있는 구현(도킹 전용 슬롯, `route_nav_cmd_vel`, `take_docking_mode`/`release_docking_mode`/`leave_docking`, ModeMachine `expect`와 리스너 격리)을 기록했다. 코드 본문은 바꾸지 않았다.
 - 증거: 시험 `test_docking_mode_ownership`, `test_docking_mode_release`, `test_mode_listener_isolation`, `test_bridge_docking_executor`, `test_docking_parking*`, `core_features/test/test_docking_review_fixes`. Gazebo 미션 4/4(주차 오차 1.4–2.3 mm, 1.7° 이하)는 25° 세계의 ROS-SIM이고 장치 증거가 아니다.

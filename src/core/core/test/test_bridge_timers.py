@@ -163,7 +163,7 @@ class RecordingNode:
 def registered(tmp_path, monkeypatch):
     """Build a `RosBridge` against stubbed ROS. Returns node, bridge and services."""
     import core.bridge as bridge_pkg
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
     for name in _ROS_MODULES:
@@ -182,9 +182,11 @@ def registered(tmp_path, monkeypatch):
         return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
 
     config = read("rosy_default.yaml")
+    robot_dir = robot_config_dir("pinky_pro")
     services = CoreServices.build(
-        config, RobotProfile.load(CONFIG_DIR / "profile.pinky_pro.yaml"),
-        read("capabilities.yaml"), tmp_path / "wp.json")
+        config, RobotProfile.load(robot_dir / "profile.yaml"),
+        yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8")),
+        tmp_path / "wp.json")
 
     from core.bridge.ros_bridge import RosBridge
 

@@ -134,6 +134,12 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
         elif "number" in robot:
             robot["name"] = f"Rosy {int(robot['number']):02d}"
 
+    model = os.environ.get("ROSY_ROBOT", "").strip()
+    if model:
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", model):
+            raise ConfigError(f"ROSY_ROBOT must be a robot package name, got {model!r}")
+        robot["model"] = model
+
     mode = os.environ.get("ROSY_RUNTIME_MODE", "").strip()
     if mode:
         if mode not in RUNTIME_MODES:

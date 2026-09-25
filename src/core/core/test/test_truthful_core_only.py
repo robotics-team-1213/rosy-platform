@@ -83,11 +83,12 @@ def _info(tmp_path, config):
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
     from core_api_web.api.app import create_app
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    profile = RobotProfile.load(CONFIG_DIR / "profile.pinky_pro.yaml")
-    caps = yaml.safe_load((CONFIG_DIR / "capabilities.yaml").read_text(encoding="utf-8"))
+    robot_dir = robot_config_dir("pinky_pro")
+    profile = RobotProfile.load(robot_dir / "profile.yaml")
+    caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
     services = CoreServices.build(config, profile, caps, tmp_path / "wp.json")
     return TestClient(create_app(config, services)).get(
         "/api/v1/system/info", headers=VIEWER).json()
