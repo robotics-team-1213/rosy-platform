@@ -58,9 +58,10 @@ def test_setup_surface_contains_capability_gated_docking_preparation():
     assert panel["surface"] == "setup"
     assert panel["min_role"] == "operator"
     source = (WEB / panel["module"]).read_text(encoding="utf-8")
-    assert {"/api/v1/docking/status", "/api/v1/docking/docks", "/api/v1/docking/dock",
-            "/api/v1/docking/undock", "/api/v1/docking/cancel"} <= set(
-                __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+    assert {"/api/v1/robot/state", "/api/v1/docking/status", "/api/v1/docking/docks"} <= set(
+        __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+    assert "}/teach`" in source
+    assert all(path not in source for path in ("/api/v1/docking/dock\"", "/api/v1/docking/undock", "/api/v1/docking/cancel"))
 
 
 def test_console_surface_contains_a_keyboard_accessible_map_panel():
@@ -76,3 +77,40 @@ def test_console_surface_contains_a_keyboard_accessible_map_panel():
     assert 'tabIndex' in map_source
     assert {"/api/v1/map", "/api/v1/navigation/path"} <= set(
         __import__("re").findall(r'"(/api/v1/[^"?]+)', map_source))
+
+
+def test_console_surface_contains_operator_hold_to_drive_panel():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["console.teleop"]
+    assert panel["surface"] == "console"
+    assert panel["min_role"] == "operator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/safety/state",
+            "/api/v1/teleop", "/api/v1/mode"} <= set(
+                __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
+
+
+def test_console_surface_contains_a_stoppable_live_camera_panel():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["console.camera"]
+    assert panel["surface"] == "console"
+    assert panel.get("min_role", "viewer") == "viewer"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    vision = (WEB / "vision.js").read_text(encoding="utf-8")
+    assert "createVisionPreview" in source and "preview.stop" in source
+    assert "/api/v1/vision/front/status" in vision
+    assert "/api/v1/vision/front/frame" in vision
+
+
+def test_console_surface_contains_operator_docking_actions():
+    manifest = yaml.safe_load((WEB / "panels.yaml").read_text(encoding="utf-8"))
+    panels = {panel["id"]: panel for panel in manifest["panels"]}
+    panel = panels["console.docking"]
+    assert panel["surface"] == "console"
+    assert panel["min_role"] == "operator"
+    source = (WEB / panel["module"]).read_text(encoding="utf-8")
+    assert {"/api/v1/docking/status", "/api/v1/docking/docks", "/api/v1/docking/dock",
+            "/api/v1/docking/undock", "/api/v1/docking/cancel"} <= set(
+                __import__("re").findall(r'"(/api/v1/[^"?]+)', source))

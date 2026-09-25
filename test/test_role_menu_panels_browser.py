@@ -59,7 +59,7 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
         browser.close()
 
 
-def test_setup_docking_never_sends_motion_without_supported_capability():
+def test_setup_docking_refuses_teach_without_fresh_pose():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -71,8 +71,11 @@ def test_setup_docking_never_sends_motion_without_supported_capability():
         page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
             status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
         source = (WEB / "panels" / "setup" / "docking.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "src" / "hmi" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/docking.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
+        page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=state_logic))
         page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/setup/docking.js');
@@ -84,13 +87,48 @@ def test_setup_docking_never_sends_motion_without_supported_capability():
           window.__unmount = mount(root, {role: 'operator', store, api: async (path) => { apiCalls.push(path); }});
           callbacks['/api/v1/docking/status'].onData({supported: false, state: 'UNDOCKED'});
           callbacks['/api/v1/docking/docks'].onData({docks: [{id: 'dock-a', type: 'charger', map_id: 'map-a'}]});
+          callbacks['/api/v1/robot/state'].onData({pose:{x:1,y:1},evidence:{pose:{evidence:'disconnected'}}});
           window.confirm = () => true;
-          root.querySelector('[data-dock-id="dock-a"] ui-button:last-child').click();
-          root.querySelectorAll('.surface-actions ui-button').forEach(button => button.click());
+          root.querySelector('[data-dock-id="dock-a"] ui-button').click();
         }""")
-        assert "동작을 막았습니다" in page.locator("[role=status]").inner_text()
-        assert page.locator("[data-dock-id='dock-a'] ui-button:last-child").evaluate("node => node.disabled === true")
+        assert "최신이 아니어서" in page.locator("[role=status]").inner_text()
+        assert page.locator("[data-dock-id='dock-a'] ui-button").evaluate("node => node.disabled === true")
         assert page.evaluate("window.__apiCalls") == []
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
+
+
+def test_console_docking_blocks_motion_when_capability_is_missing():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "console" / "docking.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/docking.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/docking.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, _interval, onData) { callbacks[path] = onData; return () => {}; }};
+          const calls = []; window.__calls = calls;
+          window.__unmount = mount(root, {role:'operator',store,api:async path=>calls.push(path)});
+          callbacks['/api/v1/docking/status']({supported:false,state:'UNDOCKED'});
+          callbacks['/api/v1/docking/docks']({docks:[{id:'dock-a',type:'charger'}]});
+          window.confirm=()=>true;
+          root.querySelectorAll('ui-button').forEach(button=>button.click());
+        }""")
+        assert "막았습니다" in page.locator("[role=status]").inner_text()
+        assert page.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled===true)")
+        assert page.evaluate("window.__calls") == []
         page.evaluate("window.__unmount()")
         assert errors == []
         browser.close()
@@ -176,5 +214,89 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
         page.evaluate("window.__unmount()")
         assert set(page.evaluate("window.__stopped")) == {"/api/v1/robot/state", "/api/v1/system/capabilities"}
+        assert errors == []
+        browser.close()
+
+
+def test_console_teleop_sends_repeated_hold_and_terminal_zero():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "src" / "hmi" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "src" / "hmi" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=state_logic))
+        page.route("http://rosy.test/common/hold-ticker.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=ticker))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/teleop.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, _interval, onData, onError) { callbacks[path] = {onData,onError}; return () => {}; }};
+          const calls = []; window.__calls = calls;
+          const api = async (path, options) => { calls.push({path,body:JSON.parse(options.body)}); return {}; };
+          window.__unmount = mount(root, {role:'operator', api, store});
+          callbacks['/api/v1/robot/state'].onData({mode:'MANUAL', pose:{x:1,y:1}, velocity:{linear:0,angular:0}, evidence:{pose:{evidence:'fresh'},velocity:{evidence:'fresh'}}});
+          callbacks['/api/v1/system/capabilities'].onData({teleop:true});
+          callbacks['/api/v1/safety/state'].onData({estop:false});
+          const check = root.querySelector('input[type=checkbox]'); check.checked = true; check.dispatchEvent(new Event('change'));
+          window.__button = root.querySelector('.surface-teleop-controls ui-button');
+          window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1}));
+        }""")
+        page.wait_for_timeout(240)
+        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1}))")
+        page.wait_for_timeout(30)
+        calls = page.evaluate("window.__calls")
+        assert len(calls) >= 3
+        assert all(call["path"] == "/api/v1/teleop" for call in calls)
+        assert any(call["body"]["linear"] > 0 for call in calls)
+        assert calls[-1]["body"] == {"linear": 0, "angular": 0}
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
+
+
+def test_console_camera_preview_stops_on_hidden_document_and_unmount():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        module = (WEB / "panels" / "console" / "camera.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/camera.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/client.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body="export const session={token:'test'}; export const authHeaders=()=>({});"))
+        page.route("http://rosy.test/vision.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body="export function createVisionPreview(){return {start(){window.__started=(window.__started||0)+1;},stop(){window.__stopped=(window.__stopped||0)+1;}};}"))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/camera.js');
+          const root = document.createElement('main'); document.body.append(root);
+          window.__unmount = mount(root, {role:'viewer', api:async()=>({})});
+          Object.defineProperty(document, 'hidden', {configurable:true, value:true});
+          document.dispatchEvent(new Event('visibilitychange'));
+        }""")
+        assert page.locator("img#vision-frame").get_attribute("alt") == "전방 카메라 실시간 영상"
+        assert page.evaluate("window.__started") == 1
+        assert page.evaluate("window.__stopped") == 1
+        page.evaluate("window.__unmount()")
+        assert page.evaluate("window.__stopped") == 2
         assert errors == []
         browser.close()

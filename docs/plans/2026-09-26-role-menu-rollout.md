@@ -86,6 +86,7 @@
 - **추가 이관 단위 (2026-09-26):** `/device`에 시스템/기능 인벤토리, 네트워크·릴리스·커미셔닝 읽기, 토큰·안전 정책 패널을 등록했다. `/setup`에는 Operator API 계약을 따르는 초기 위치와 capability-gated SLAM 및 도킹 상태·teach/운전 조작 패널을 등록했다. 기존 `/dashboard`는 호환 화면으로 유지한다.
 - **추가 이관 단위 (2026-09-26):** `/device` Host Agent 네트워크 모드/프로파일/Wi-Fi 연결 및 release rollback/recovery-hold 해제를 확인·재확인 후 요청하게 했다. ROS 그래프는 현재 구현된 `/api/v1/system/runtime` 응답의 ROS snapshot에서 읽으며 `/api/v1/ros/*`는 API Ref에 미구현이라 호출하지 않는다.
 - **추가 이관 단위 (2026-09-26):** `/console`에 기존 점유지도/경로/비용지도 모듈을 기반으로 한 map 패널을 등록했다. Operator 이상에서만 capability가 확인된 목표/초기위치를 보낼 수 있고, 키보드 십자선도 유지한다. 패널 해제 시 지도 입력 리스너와 ResizeObserver를 정리한다.
-- **남은 이관:** `/setup`의 도크 종류·도크 등록 관리와 기존 설정 카드 정리, `/console`의 hold-to-drive 텔레옵·카메라·모드·통합 도킹 실행 이전이 남아 있다. 텔레옵 hold/포커스/연결 해제 zero 전송 동등성을 확보하기 전까지 기존 운전 화면을 제거하지 않는다.
+- **추가 이관 단위 (2026-09-26):** `/console`에 operator hold-to-drive(100ms 반복 + release/focus/visibility/unmount zero), 전방 카메라 lifecycle, capability-gated dock/undock/cancel 실행 패널을 등록했다. `/setup` 도킹 화면은 움직임 명령을 제거하고, pose fresh가 아니면 teach를 막도록 구성했다.
+- **남은 이관:** `/setup` 도크 종류·도크 등록 관리, `/console` 나머지 운영 모드·line-follow 및 traffic action 이전과 기존 `/dashboard` 호환·설정·인증 계약 검증이 남아 있다. 같은 기능의 회귀를 확인하기 전 기존 대시보드 동작을 제거하지 않는다.
 - **Task 4 카드 정리 남음:** 새 장치 화면의 readback은 추가됐지만 기존 `점검` 뷰 카드와 완전 동등하지 않으므로 기존 카드를 제거하지 않았다.
 - **수용 범위:** 현재 테스트는 Windows 호스트·로컬 Chromium까지다. ROS 2/Pi 설치·실기 운전과 물리 E-Stop은 확인하지 않았다.
