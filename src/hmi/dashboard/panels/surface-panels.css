@@ -10,6 +10,14 @@
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
 .surface-map-frame ui-empty { position: absolute; inset: var(--space-3); pointer-events: none; }
+.surface-teleop-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); max-width: 24rem; touch-action: none; }
+.surface-teleop-controls ui-button { min-height: 3.25rem; user-select: none; -webkit-user-select: none; }
+.surface-teleop-controls ui-button.active { outline: 2px solid var(--status-warn); outline-offset: 2px; }
+.surface-confirmation { display: flex; grid-auto-flow: column; align-items: center; justify-content: start; min-width: 0; }
+.surface-confirmation input { width: 1.25rem; height: 1.25rem; }
+.surface-camera-stage { position: relative; min-width: 0; min-height: 12rem; display: grid; place-items: center; background: var(--ground-deep); overflow: hidden; }
+.surface-camera-frame { display: block; width: 100%; max-height: 50vh; object-fit: contain; }
+.surface-camera-empty { padding: var(--space-4); text-align: center; }
 @media (max-width: 30rem) {
   .surface-readout { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
   .surface-readout dd { margin-bottom: var(--space-2); overflow-wrap: anywhere; }
