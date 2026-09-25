@@ -2148,3 +2148,8 @@
 - 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; `python -X utf8 tools/harness/rosy_harness.py lint` 0 error, 기존 last_verified 경고 19건. 최초 시험의 생성 색인 stale 2건은 `generate` 후 같은 명령 재실행으로 해소했다.
 - gate 변화: 없음. ADR은 설계 결정이며 D-204 화면 이관·기기 수용의 구현 증거가 아니다.
 - 결정: D-204 브랜치의 패널 조립 계약과 중복되는 메뉴 레지스트리를 만들지 않는다. D-243 이후 소유 경계로 이관 계획을 다시 맞춰야 한다.
+## 2026-09-26 · uncommitted · docs(plan/adr): 역할별 메뉴 이관 계획과 D-265
+- 변경: D-263 실행 계획을 현행 `src/hmi/dashboard`·`src/runtime/api_web` 경계로 작성했다. D-265 Accepted로 역할상 허용된 기반 화면을 패널 수와 분리하고, 매니페스트·패널 실패에서도 E-Stop API 요청 경로를 셸에 남겼다. WEB-002의 기존 이름을 세 화면 안의 항목으로 배치했다.
+- 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; harness lint 0 error, 기존 last_verified 경고 19건. `generate`로 docs/index.md를 갱신했다.
+- gate 변화: 없음. 계획·ADR·SRS 계약만 바꿨고 D-204 화면 이관, 브라우저 동작, Pi 설치·실기 정지는 검증하지 않았다.
+- 결정: D-264는 다른 세션의 장치 진단 도구 ADR이 먼저 사용해 D-265로 기록했다. D-204 별도 브랜치의 보이는 패널 기반 메뉴 필터는 병합 전에 역할 기반 메뉴 필터로 고친다.

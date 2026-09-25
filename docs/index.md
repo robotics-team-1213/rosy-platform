@@ -98,6 +98,7 @@
 | D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 |
 | D-256 | 공개 무결성 값은 이름으로 지우고, 스캔는 매처를 넙히지 않는다 |
 | D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 |
+| D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 |
 
 ## 계획·결과 문서
 
@@ -127,6 +128,7 @@
 - [2026-09-25-folder-map.md](plans/2026-09-25-folder-map.md)
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
 - [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
+- [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
 
 ## 교훈 (docs/solutions)
 
@@ -139,8 +141,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(plan/adr): 역할별 메뉴 이관 계획과 D-265
 - 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
 - 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
 - 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
 - 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
-- 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
