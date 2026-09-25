@@ -94,3 +94,38 @@ def test_setup_docking_never_sends_motion_without_supported_capability():
         page.evaluate("window.__unmount()")
         assert errors == []
         browser.close()
+
+
+def test_device_host_operations_block_writes_when_host_agent_is_absent():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        source = (WEB / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/host/operations.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/host/operations.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, _interval, onData, onError) { callbacks[path] = {onData, onError}; return () => {}; }};
+          const calls = []; window.__calls = calls;
+          window.__unmount = mount(root, {role: 'administrator', store, api: async (path) => calls.push(path)});
+          callbacks['/api/v1/host/network'].onData({available: false, detail: 'agent offline'});
+          callbacks['/api/v1/host/release'].onData({available: false, detail: 'agent offline'});
+          window.confirm = () => true;
+          root.querySelectorAll('ui-button').forEach(button => button.click());
+        }""")
+        assert "agent offline" in page.locator("[role=status]").all_inner_texts()[0]
+        assert page.locator("ui-button").evaluate_all("nodes => nodes.every(node => node.disabled === true)")
+        assert page.evaluate("window.__calls") == []
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()

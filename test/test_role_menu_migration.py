@@ -16,7 +16,9 @@ def test_device_surface_contains_system_and_host_readbacks():
         "host.system": {"/api/v1/system/runtime", "/api/v1/system/info",
                         "/api/v1/system/capabilities", "/api/v1/system/inventory"},
         "host.operations": {"/api/v1/host/network", "/api/v1/host/release",
-                            "/api/v1/host/commissioning"},
+                            "/api/v1/host/commissioning", "/api/v1/host/network/mode",
+                            "/api/v1/host/network/apply", "/api/v1/host/network/connect",
+                            "/api/v1/host/release/rollback", "/api/v1/host/release/clear-hold"},
     }
     for panel_id, endpoints in expected.items():
         panel = panels[panel_id]
