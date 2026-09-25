@@ -36,9 +36,10 @@ hw = _load()
 
 
 class FakeSystem(hw.System):
-    def __init__(self, root: Path, *, display="active", beep_error=None, lamp=(0, "")) -> None:
+    def __init__(self, root: Path, *, display="active", beep_error=None, lamp=(0, ""), trusted=True) -> None:
         super().__init__(root)
         self.display = display
+        self.trusted = trusted
         self.beep_error = beep_error
         self.lamp = lamp
         self.beeps: list[int] = []
@@ -52,6 +53,9 @@ class FakeSystem(hw.System):
         self.beeps.append(pin)
         if self.beep_error:
             raise self.beep_error
+
+    def helper_trusted(self, helper):
+        return self.trusted
 
     def lamp_selftest(self, helper):
         self.lamps.append(helper)
@@ -282,6 +286,34 @@ def test_the_lamp_is_not_driven_without_its_driver_on_gpio19(tmp_path, kwargs, t
     system = FakeSystem(root)
     result = _run(root, system)
     assert system.lamps == [] and result["state"] == "unavailable" and text in result["detail"]
+
+
+def test_an_untrusted_helper_is_never_run(tmp_path):
+    root = _root(tmp_path)
+    _request(root, "lamp")
+    system = FakeSystem(root, trusted=False)
+    result = _run(root, system)
+    assert system.lamps == [] and result["state"] == "unavailable"
+    assert "root 소유가 아니거나" in result["detail"] and len(result["detail"]) <= 200
+
+
+@pytest.mark.parametrize(("uid", "mode", "trusted"), [
+    (0, stat.S_IFREG | 0o755, True),
+    (0, stat.S_IFREG | 0o700, True),
+    (1000, stat.S_IFREG | 0o755, False),   # not root-owned
+    (0, stat.S_IFREG | 0o775, False),      # group-writable
+    (0, stat.S_IFREG | 0o757, False),      # other-writable
+    (0, stat.S_IFDIR | 0o755, False),      # not a regular file
+])
+def test_the_helper_must_be_root_owned_and_not_group_or_other_writable(tmp_path, monkeypatch, uid, mode,
+                                                                        trusted):
+    helper = tmp_path / "lamp_selftest"
+    monkeypatch.setattr(hw.os, "stat", lambda path: os.stat_result((mode, 0, 0, 1, uid, 0, 4, 0, 0, 0)))
+    assert hw.System(tmp_path).helper_trusted(helper) is trusted
+
+
+def test_a_missing_helper_is_not_trusted(tmp_path):
+    assert hw.System(tmp_path).helper_trusted(tmp_path / "absent") is False
 
 
 @pytest.mark.parametrize(("lamp", "text"), [

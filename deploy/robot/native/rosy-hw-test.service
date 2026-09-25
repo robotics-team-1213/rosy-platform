@@ -50,6 +50,8 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
 SystemCallArchitectures=native
-# chown the result to rosy-core; open the GPIO chip and the lamp node
-# regardless of their group (udev gives them to gpio).
-CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE
+SystemCallFilter=@system-service
+# chown the result to rosy-core; read CORE's request (/run/rosy is rosy-core's)
+# and open the GPIO chip (udev gives it to gpio) regardless of their owner. The
+# lamp node is root:root 0600. No CAP_FOWNER: it chmods only files it creates.
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE

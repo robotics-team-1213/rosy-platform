@@ -809,7 +809,8 @@ def test_the_hardware_test_is_a_bounded_root_oneshot_only_core_can_start():
     assert environment.get("RPI_LGPIO_CHIP") == "4"
     assert environment.get("LG_WD") == "/run/rosy-hw-test" == directives["WorkingDirectory"][-1]
     assert "/run/rosy-hw-test" in _managed(directives)
-    assert _words(directives, "CapabilityBoundingSet") == ["CAP_CHOWN", "CAP_FOWNER", "CAP_DAC_OVERRIDE"]
+    assert _words(directives, "CapabilityBoundingSet") == ["CAP_CHOWN", "CAP_DAC_OVERRIDE"]
+    assert directives["SystemCallFilter"] == ["@system-service"]
     assert directives["ExecStart"] == ["/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-test.py"]
     assert "Restart" not in directives
     text = _read("rosy-hw-test.service")

@@ -1340,7 +1340,22 @@ elements["hardware-refresh"]?.addEventListener("click", async () => {
 });
 
 // D-247 6: buzzer / lamp test and the person's answer. CORE writes a request
-// file for the root rosy-hw-test; the outcome lands a moment later.
+// file for the root rosy-hw-test; the outcome lands a moment later, so the card
+// is read until it shows this request's outcome (test.request_id), at most
+// HW_TEST_WAIT_MS, instead of a fixed pause that a slow run would outlast.
+const HW_TEST_WAIT_MS = 12000;
+const HW_TEST_POLL_MS = 1000;
+
+async function waitForHardwareTest(requestId) {
+  const deadline = Date.now() + HW_TEST_WAIT_MS;
+  let payload = await api("/api/v1/host/hardware");
+  while (payload?.test?.request_id !== requestId && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, HW_TEST_POLL_MS));
+    payload = await api("/api/v1/host/hardware");
+  }
+  return payload;
+}
+
 elements["hardware-list"]?.addEventListener("click", async (event) => {
   const button = event.target.closest?.("[data-hw-action]");
   if (!button || button.disabled || !isAdmin()) return;
@@ -1351,13 +1366,17 @@ elements["hardware-list"]?.addEventListener("click", async (event) => {
     if (action === "test") {
       const reply = await api("/api/v1/host/hardware/test", {method: "POST", body: JSON.stringify({device})});
       setText("hardware-note", reply.detail || "시험을 요청했습니다.");
-      await new Promise((resolve) => setTimeout(resolve, 4000));
-    } else {
-      const observed = action === "observed";
-      await api("/api/v1/host/hardware/confirm", {method: "POST", body: JSON.stringify({device, observed})});
-      setText("hardware-note", "확인 결과를 기록했습니다.");
+      const payload = await waitForHardwareTest(reply.request_id);
+      renderHardware(payload);
+      if (payload?.test?.request_id !== reply.request_id) {
+        setText("hardware-note", "시험 결과가 12초 안에 오지 않았습니다. 잠시 뒤 다시 시험하세요.");
+      }
+      return;
     }
+    const observed = action === "observed";
+    await api("/api/v1/host/hardware/confirm", {method: "POST", body: JSON.stringify({device, observed})});
     renderHardware(await api("/api/v1/host/hardware"));
+    setText("hardware-note", "확인 결과를 기록했습니다.");
   } catch (error) {
     setText("hardware-note", `장치 시험 실패: ${error.message}`);
     button.disabled = false;

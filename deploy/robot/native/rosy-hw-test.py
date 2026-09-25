@@ -165,6 +165,14 @@ class System:
         finally:
             gpio.cleanup(pin)
 
+    def helper_trusted(self, helper: Path) -> bool:
+        """Root runs lamp_selftest: only a regular file root owns and no group or other can write."""
+        try:
+            info = os.stat(helper)
+        except OSError:
+            return False
+        return stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
+
     def lamp_selftest(self, helper: Path) -> tuple[int, str]:
         done = subprocess.run([str(helper)], capture_output=True, text=True, timeout=LAMP_TIMEOUT_S,
                               check=False, env={"PATH": "/usr/bin:/bin"})
@@ -207,6 +215,8 @@ def run_lamp(system: System) -> tuple[str, str]:
     helper = system.path(LAMP_HELPER)
     if not helper.is_file():
         return UNAVAILABLE, "lamp_selftest 없음 (lamp_control 릴리스)"
+    if not system.helper_trusted(helper):
+        return UNAVAILABLE, "lamp_selftest 가 root 소유가 아니거나 그룹·다른 사용자가 쓸 수 있음 — 실행하지 않음"
     try:
         code, message = system.lamp_selftest(helper)
     except subprocess.TimeoutExpired:

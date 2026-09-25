@@ -654,6 +654,12 @@ def test_the_script_wires_the_buzzer_and_lamp_test_for_administrators_only():
     assert "!isAdmin()" in actions
     assert "innerHTML" not in actions and "outerHTML" not in actions
     assert "textContent = test.detail" in actions
+    # The card is read until it shows this request's outcome, bounded, not after a fixed pause.
+    assert "const HW_TEST_WAIT_MS = 12000;" in script
+    wait = script.split("async function waitForHardwareTest")[1].split("\n}\n")[0]
+    assert "payload?.test?.request_id !== requestId && Date.now() < deadline" in wait
+    assert "waitForHardwareTest(reply.request_id)" in script
+    assert "setTimeout(resolve, 4000)" not in script
 
 
 # --- /commissioning: why the robot cannot move -------------------------------------
