@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(api): serve the device hardware panel through the UI registry
 - 2026-09-26 · 8e6902fd · feat(api): buzzer and lamp test and the person's answer (D-247 6)
 - 2026-09-25 · 96654ed1 · feat(api): board device card API and motion reason (D-247)
 - 2026-09-25 · uncommitted · refactor(runtime): move core_api_web under src/runtime (D-231)
 - 2026-09-25 · uncommitted · fix(web): 점검 머신 태그의 위험은 채움 (D-214)
-- 2026-09-24 · uncommitted · fix(web): 운용 조작 열 적합 회복과 정책 편집 이동 (D-201, D-203)

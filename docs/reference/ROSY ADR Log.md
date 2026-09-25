@@ -267,4 +267,6 @@
 | D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 | Accepted |
 | D-264 | 장치 진단 도구는 이미지에 넣는다 — 읽기 도구(i2c-tools·pinctrl·gpiod·rpicam-apps)는 제품 이미지에, 커널 헤더는 디버그 프로필에만 | Proposed |
 | D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 | Accepted |
+| D-267 | Ubuntu 상시 관제 노트북은 Fleet·영상·GPU·저장을 분리하고 자동·수동 작업을 같은 검증 경로로 처리한다 | Proposed |
+| D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 | Proposed |
 ---

@@ -82,6 +82,8 @@ def test_role_surface_pages_and_allowlisted_assets_are_served():
     assert "비상 정지" in client.get("/device").text
     assert client.get("/garage").status_code == 404
     assert client.get("/assets/panels/system/events.js").status_code == 200
+    assert client.get("/assets/panels/host/hardware.js").status_code == 200
+    assert client.get("/assets/panels/host/hardware.css").status_code == 200
     assert client.get("/assets/panels/surface-panels.css").status_code == 200
     assert client.get("/assets/shell/shell.js").status_code == 200
     assert client.get("/assets/../../api/app.py").status_code == 404
@@ -107,5 +109,8 @@ def test_each_base_surface_has_its_role_panel_mounts():
     registry = load_registry(root / "panels.yaml", root)
     assert {panel.surface for panel in registry.panels} == {"console", "setup", "device"}
     assert {panel.id for panel in registry.panels} == {
-        "console.overview", "setup.waypoints", "system.events", "system.diagnostics",
+        "console.overview", "setup.waypoints", "host.hardware", "system.events", "system.diagnostics",
+        "host.system", "host.operations", "setup.localization", "system.security", "setup.docking",
     }
+    hardware = next(panel for panel in registry.panels if panel.id == "host.hardware")
+    assert (hardware.surface, hardware.slot, hardware.min_role) == ("device", "main", "administrator")
