@@ -97,6 +97,22 @@
           <h1 id="robot-heading"><span id="robot-name">Rosy</span><em id="robot-id">연결 대기</em></h1>
           <p id="hero-message">접속 키를 입력하면 Raspberry Pi와 로봇 상태를 확인합니다.</p>
         </div>
+        <!-- D-260 5: 로봇 상태 한 줄. LCD·램프·부저와 같은 규칙표(status-summary API)의 답이다.
+             상태 레일 안에 둔다 — 줄을 하나 더 쌓으면 그 높이만큼 조작 열이 넘친다(D-201). -->
+        <section id="status-summary" class="status-summary" aria-label="로봇 상태 요약" data-state="unknown">
+          <span class="summary-status">
+            <span id="summary-state" class="summary-state" data-state="unknown"></span>
+            <span id="summary-reason" class="summary-reason"></span>
+          </span>
+          <ui-button kind="quiet" type="button" id="summary-devices" class="summary-devices"
+                     title="점검 뷰의 장치 카드로">장치 점검 전</ui-button>
+          <span id="summary-power" class="summary-power" title="배터리 · 전압 · 온도"></span>
+          <span class="summary-todo">
+            <ui-button kind="quiet" type="button" id="summary-todo-toggle" aria-expanded="false"
+                       aria-controls="summary-todos" disabled>할 일 0</ui-button>
+            <ul id="summary-todos" class="summary-todos" aria-label="할 일" hidden></ul>
+          </span>
+        </section>
         <div class="hero-state">
           <span class="hero-label">CURRENT MODE</span>
           <strong id="robot-mode"></strong>

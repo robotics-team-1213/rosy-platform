@@ -68,6 +68,7 @@ def test_make_config_matches_the_default_vector():
 
 def test_close_codes_match_the_vector():
     assert protocol.CLOSE_BAD_PROTO == VECTORS["close_codes"]["bad_proto"]
+    assert protocol.CLOSE_UNAUTHORIZED == VECTORS["close_codes"]["unauthorized_source"]
     assert protocol.CLOSE_REPLACED == VECTORS["close_codes"]["replaced_by_same_source"]
 
 

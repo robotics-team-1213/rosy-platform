@@ -33,9 +33,17 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   target_include_directories(lamp_selftest PRIVATE /usr/local/include)
   target_link_libraries(lamp_selftest ws2811 m)
 
+  # D-260 decision 3: the boot display (user rosy-display) shows the robot
+  # state on the lamp through this helper, one process per pattern.
+  add_executable(lamp_pattern src/lamp_pattern.c)
+  set_target_properties(lamp_pattern PROPERTIES C_STANDARD 11)
+  target_include_directories(lamp_pattern PRIVATE /usr/local/include)
+  target_link_libraries(lamp_pattern ws2811 m)
+
   install(TARGETS
     main_node
     lamp_selftest
+    lamp_pattern
     DESTINATION lib/${PROJECT_NAME}
   )
 else()

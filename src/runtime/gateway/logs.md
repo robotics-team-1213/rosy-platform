@@ -456,3 +456,10 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(core): D-260 HostRuntimeProbe.temperature()
+- 변경: `core/system/runtime.py`에 온도만 읽는 공개 메서드. `snapshot()`은 CPU·네트워크 델타를 전진시키므로 두 번째 독자가 부르면 안 된다. `test_event_catalogue.py` not_events에 장치 id `pi.power`
+- 증거: `test_host_status_summary.py::test_the_runtime_probe_reads_only_the_temperature` 통과; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음

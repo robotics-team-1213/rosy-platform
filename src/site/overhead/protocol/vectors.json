@@ -115,6 +115,7 @@
   },
   "close_codes": {
     "bad_proto": 4400,
+    "unauthorized_source": 4401,
     "replaced_by_same_source": 4409
   },
   "pairing_uris": {

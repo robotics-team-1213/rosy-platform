@@ -152,6 +152,21 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun unauthorizedSourceCloseStopsRetrying() {
+        val side = ServerSide()
+        server.enqueue(MockResponse().withWebSocketUpgrade(side))
+        val l = newLink()
+        l.start()
+        side.opened.poll(5, TimeUnit.SECONDS)!!
+            .close(Protocol.CLOSE_UNAUTHORIZED, "source token mismatch")
+
+        val status = awaitStatus(l) { it.stopped }
+        assertEquals(LinkError.Unauthorized, status.error)
+        assertEquals(LinkState.DISCONNECTED, status.state)
+        assertNoReconnect("4401")
+    }
+
+    @Test
     fun unauthorizedIsReportedAndRetriedWithBackoff() {
         server.enqueue(MockResponse().setResponseCode(401))
         val side = ServerSide()

@@ -2219,3 +2219,34 @@
 - 제한: 현재 개발 PC 그래픽 장치는 AMD Radeon 860M이며 CUDA/RTX GPU 수용은 시험하지 않았다. 임시 probe image는 제품 Dockerfile/Compose/Android 실시간 스트림/Fleet 연동의 증거가 아니다.
 - gate 변화: 없음. CPU LOCAL pass는 Ubuntu NVIDIA Container Toolkit·RTX 모델 측정·DEVICE/FIELD 자동 이동 수용을 대신하지 않는다.
 - 결정: 마커/호모그래피의 초기 Docker 재현 시험은 CPU로 하고 GPU는 실제 Ubuntu RTX host에서 따로 수용한다.
+
+## 2026-09-26 · uncommitted · docs(architecture): D-269 device-server contract map and integration plan
+
+- 변경: D-269 Proposed에 브라우저/Fleet, Fleet/CORE REST, CORE Agent/SiteHub, overhead phone/ingress, 내부 DDS, 로봇 카메라·팔의 실제/목표 계약과 credential 경계를 기록했다. 상세한 one-by-one 계획을 추가했다.
+- 증거: baseline `src/site/overhead/test` 45 passed, Fleet 전체 409 passed/5 skipped, Hub/app 32 passed, CORE FleetAgent 8 passed (Windows LOCAL). 이는 기존 경로 단위시험이며 동일 운영 앱 end-to-end 연결을 증명하지 않는다.
+- gate 변화: 없음. D-269 Proposed, D-257/D-268 Proposed, overhead DEVICE/FIELD PARKED, Fleet outbound Hub 운영 연결과 vision→Fleet 부재 상태를 유지한다.
+- 결정: 새 연결 첫 작업은 REST operator token과 Agent pairing token 분리, 동일 ASGI 앱에서 CORE Agent가 heartbeat/event를 전달하는 실제 localhost integration test다. Pi 제품 Docker/Compose 경로에는 적용하지 않는다.
+
+## 2026-09-26 · uncommitted · feat(fleet): separate agent pairing and mount hub into console
+
+- 변경: `robots.yaml`의 optional `fleet_pairing_token`을 REST operator token과 분리하고, REST token fallback을 제거했다. 실제 FleetAgent hello/heartbeat/event WebSocket을 `fleet console` ASGI 앱에 결합했으며 `/registry`에는 console token을 적용했다. unsupported protocol major는 pairing 전에 거절한다.
+- 증거: Fleet 전체 416 passed/5 skipped, CORE FleetAgent 8 passed, overhead 45 passed; loopback Uvicorn과 실제 FleetAgent를 사용하는 동일 앱 왕복 통합 3 passed; `git diff --check` 통과.
+- 제한: Windows loopback LOCAL 증거다. 실제 Ubuntu/TLS/LAN/폰/CORE DEVICE·FIELD, vision→Fleet, Docker site 배포는 검증하지 않았다.
+- gate 변화: 없음. D-269 Proposed 유지, automatic movement 및 vision policy HOLD.
+- harness: 계약 묶음 68 passed/2 failed. 모두 기존 `src/hmi/dashboard/logs.md` 4개 항목의 필수 `- 증거:` 누락에서 발생했다. `rosy_harness.py lint`도 동일한 4 errors와 19 `last_verified` warnings를 보고했다. append-only HMI 로그는 변경하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25
+
+- 변경: D-260 Validation/Transition에 구현 내용·최소 권한 선택·부저 시험 충돌 해소·DEVICE 확인 목록. D-247에 부저 기본값과 시험 넘김 메모. API Ref v1.25 행(`GET /host/status-summary`)과 변경 이력
+- 증거: 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity
+
+- 변경: receiver가 source별 고유 Bearer token map만 받고, WebSocket Authorization과 `hello.source`를 연결 시 대조한다. CLI token은 선택한 source에만 발급한다. 잘못된/미등록 source는 shared protocol close `4401`로 거부하며 Android는 재시도 중단 `Unauthorized`로 표시한다.
+- 증거: Python overhead 전체 49 passed, `git diff --check` 통과; feature worktree Android `:app:testDebugUnitTest` BUILD SUCCESSFUL. TDD에서 cross-source token use와 empty/duplicate token 설정 테스트가 구현 전에 실패하고 수정 후 통과했다. unknown source 거부도 검증했다.
+- 제한: LOCAL 시험뿐이다. 운영 token 발급·회전·폐기 UX, 실제 phone/emulator LAN 연결, TLS 및 현장 freshness는 확인하지 않았다.
+- gate 변화: 없음. D-269 Proposed, camera DEVICE/FIELD와 vision→Fleet은 미수용이다.
+- 결정: QR/deep-link는 카메라 앱의 out-of-band provisioning으로만 다루고 로그/공유 화면은 secret-safe하게 유지해야 한다.

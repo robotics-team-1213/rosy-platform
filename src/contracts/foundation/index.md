@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(core_common): D-260 robot state rule table
 - 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
 - 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
 - 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
 - 2026-09-24 · uncommitted · feat(robots): CORE loads the robot profile from robots/<model> (D-196)
-- 2026-09-24 · uncommitted · fix(core_common): 결측은 결측으로, 신원은 프로비저닝에서, 광고는 지킬 수 있는 만큼 (US-010)

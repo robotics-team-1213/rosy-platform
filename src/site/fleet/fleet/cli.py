@@ -270,7 +270,10 @@ def run_console(args: argparse.Namespace) -> None:
                                        [HttpSignalClient(ep) for ep in signal_eps])
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
                            signal_console=signal_console)
-    app = create_app(console, console_token=args.token, web_common=args.web_common)
+    # The outbound CORE Agent route is enabled only for robots with a separate
+    # pairing credential. REST-only console configurations remain unchanged.
+    hub = console.hub if any(ep.fleet_pairing_token is not None for ep in endpoints) else None
+    app = create_app(console, console_token=args.token, web_common=args.web_common, hub=hub)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(endpoints)} robots{signals_note})",

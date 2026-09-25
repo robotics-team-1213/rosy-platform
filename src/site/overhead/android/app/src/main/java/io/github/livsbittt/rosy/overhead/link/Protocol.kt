@@ -39,6 +39,7 @@ object Protocol {
     const val PROTO = "rosy-overhead/1"
     const val WS_PATH = "/overhead/v1/frames"
     const val CLOSE_BAD_PROTO = 4400
+    const val CLOSE_UNAUTHORIZED = 4401
     const val CLOSE_REPLACED = 4409
 
     fun hello(

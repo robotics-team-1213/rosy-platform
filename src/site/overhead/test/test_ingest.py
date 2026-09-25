@@ -46,8 +46,9 @@ def run_async(fn):
 class _Harness:
     """Owns one IngestServer + the ws_server socket for one test."""
 
-    def __init__(self, config: dict | None = None):
-        self.server = IngestServer(TOKEN, config=config)
+    def __init__(self, config: dict | None = None, tokens: dict[str, str] | None = None):
+        self.tokens = tokens or {"overhead-1": TOKEN}
+        self.server = IngestServer(self.tokens, config=config)
         self.ws_server = None
         self.url = None
 
@@ -91,6 +92,44 @@ async def test_missing_token_is_rejected_with_401():
         with pytest.raises(InvalidStatus) as excinfo:
             await websockets.connect(h.url)
         assert excinfo.value.response.status_code == 401
+
+
+@run_async
+async def test_source_token_cannot_authenticate_another_source():
+    async with _Harness(tokens={"overhead-1": "camera-one", "overhead-2": "camera-two"}) as h:
+        conn = await h.connect("camera-two")
+        await conn.send(json.dumps(_hello("overhead-1")))
+        with pytest.raises(ConnectionClosed):
+            await conn.recv()
+        assert conn.close_code == protocol.CLOSE_UNAUTHORIZED
+        assert h.server.source_names() == []
+
+
+@run_async
+async def test_unknown_source_is_rejected_even_with_a_valid_source_token():
+    async with _Harness(tokens={"overhead-1": "camera-one"}) as h:
+        conn = await h.connect("camera-one")
+        await conn.send(json.dumps(_hello("overhead-unknown")))
+        with pytest.raises(ConnectionClosed):
+            await conn.recv()
+        assert conn.close_code == protocol.CLOSE_UNAUTHORIZED
+        assert h.server.source_names() == []
+
+
+@run_async
+async def test_source_token_authenticates_its_configured_source():
+    async with _Harness(tokens={"overhead-1": "camera-one", "overhead-2": "camera-two"}) as h:
+        conn = await h.connect("camera-two")
+        await conn.send(json.dumps(_hello("overhead-2")))
+        assert json.loads(await conn.recv()) == protocol.make_config()
+        assert h.server.source_names() == ["overhead-2"]
+
+
+def test_source_tokens_must_be_valid_and_unique():
+    with pytest.raises(ValueError, match="at least one source"):
+        IngestServer({})
+    with pytest.raises(ValueError, match="unique token"):
+        IngestServer({"overhead-1": "shared", "overhead-2": "shared"})
 
 
 @run_async

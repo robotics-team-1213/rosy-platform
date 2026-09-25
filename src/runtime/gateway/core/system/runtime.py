@@ -110,6 +110,17 @@ class HostRuntimeProbe:
                 return round(value / 1000.0 if abs(value) >= 1000.0 else value, 2)
         raise FileNotFoundError("thermal zone unavailable")
 
+    def temperature(self) -> Optional[float]:
+        """The SoC temperature alone, or None (D-260 summary line).
+
+        snapshot() also advances the CPU and network deltas; a second reader
+        calling it would halve the runtime card's sampling window.
+        """
+        try:
+            return self._temperature()
+        except (OSError, ValueError):
+            return None
+
     def _storage(self) -> dict[str, Optional[float | int | str]]:
         usage = shutil.disk_usage(self.data_path)
         return {

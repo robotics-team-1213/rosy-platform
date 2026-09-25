@@ -27,7 +27,7 @@ enum class LinkState { DISCONNECTED, CONNECTING, STREAMING }
 
 /** Why the link is not streaming. The UI maps these to Korean text. */
 sealed interface LinkError {
-    /** Upgrade refused with 401: the token does not match the adapter. */
+    /** Upgrade refused with 401 or close 4401: token is unknown or not allowed for this source. */
     data object Unauthorized : LinkError
 
     /** Close 4400: the adapter speaks another protocol version. Retrying cannot help. */
@@ -283,6 +283,7 @@ class OverheadLink(
         private fun handleClose(code: Int, reason: String) {
             when (code) {
                 Protocol.CLOSE_BAD_PROTO -> onLost(gen, LinkError.ProtocolMismatch, fatal = true)
+                Protocol.CLOSE_UNAUTHORIZED -> onLost(gen, LinkError.Unauthorized, fatal = true)
                 Protocol.CLOSE_REPLACED -> onLost(gen, LinkError.Replaced, fatal = true)
                 else -> onLost(gen, LinkError.Closed(code, reason), fatal = false)
             }

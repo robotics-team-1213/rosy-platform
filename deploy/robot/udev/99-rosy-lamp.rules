@@ -1,6 +1,8 @@
-# ROSY WS2812 lamp (D-247): /dev/ws281x_pwm from the rp1_ws281x_pwm kernel
-# module the image builds for its kernel. Only root units open it
-# (rosy-hw-test.service's lamp test through lamp_selftest, DeviceAllow), so the
-# node is root:root 0600: no service group can drive the lamp around that test.
+# ROSY WS2812 lamp (D-247, D-260): /dev/ws281x_pwm from the rp1_ws281x_pwm
+# kernel module the image builds for its kernel. Two units open it, each with
+# DeviceAllow: rosy-boot-display.service (user rosy-display) shows the robot
+# state through lamp_pattern (D-260 3), and root rosy-hw-test.service runs the
+# lamp test (D-247 6) when the boot display is not running. The group is the
+# display's own, 0660: no other service group can drive the lamp.
 # Installed by deploy/image.
-ACTION=="add|change", SUBSYSTEM=="misc", KERNEL=="ws281x_pwm", OWNER="root", GROUP="root", MODE="0600"
+ACTION=="add|change", SUBSYSTEM=="misc", KERNEL=="ws281x_pwm", OWNER="root", GROUP="rosy-display", MODE="0660"

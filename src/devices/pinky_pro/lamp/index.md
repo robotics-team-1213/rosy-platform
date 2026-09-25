@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(lamp_control): D-260 lamp_pattern helper
 - 2026-09-26 · 8e6902fd · feat(devices): lamp_selftest for the D-247 lamp test
 - 2026-09-25 · uncommitted · refactor(devices): move lamp_control under src/devices/pinky_pro/lamp_control (D-231)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-16 · uncommitted · docs(harness): regrade lamp_control gates after review
-- 2026-09-15 · uncommitted · docs(harness): start the lamp_control harness record

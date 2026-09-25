@@ -109,10 +109,27 @@ class RosyCoreNode(Node):
         self.get_logger().info(
             f"core up: robot_id={self.core.identity.robot_id} model={profile.model}")
         self._start_events()
+        # D-260: hand the boot display the inputs only CORE knows (SAF-005 warning,
+        # overlaid device states) so the LCD, lamp and buzzer say what the dashboard says.
+        from core_api_web.api.v1.host import STATUS_INPUTS_PERIOD_S
+        self._status_inputs_failed = False
+        self._status_inputs_timer = self.create_timer(STATUS_INPUTS_PERIOD_S, self._write_status_inputs)
         self.core.state.set_map_id(config.get("navigation", {}).get("map_id"))
         self.core.events.publish("system.boot", source="core",
                                  data={"version": SOFTWARE_VERSION})
         self._start_api()
+
+    def _write_status_inputs(self) -> None:
+        from core_api_web.api.v1.host import write_status_inputs
+
+        try:
+            write_status_inputs(self.core)
+        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the node
+            if not self._status_inputs_failed:
+                self.get_logger().warning(f"status inputs not written: {type(exc).__name__}: {exc}")
+            self._status_inputs_failed = True
+            return
+        self._status_inputs_failed = False
 
     def _start_events(self) -> None:
         def _on_event(event) -> None:

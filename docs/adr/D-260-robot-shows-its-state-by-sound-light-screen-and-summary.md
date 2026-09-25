@@ -110,6 +110,54 @@
 **Validation / Transition:**
 - **2026-09-26 발견 (결정 2 전제).** D-247 부저 시험 동작(`rosy-hw-test`)은 `rosy-boot-display`가 부저 선을 쥐고 있으면(`ROSY_BUZZER_ENABLED=true`) 충돌 방지로 `busy`를 내고 울리지 않는다. 부저 기본값을 켜기 전에 시험 요청을 부팅 화면 프로그램이 대신 울리도록 넘기거나, 시험 동안 부팅 화면 프로그램이 선을 놓게 해야 한다. 그 전까지는 부저 시험 때 부팅 부저를 잠시 끈다.
 
+- **구현 (2026-09-26, `feat/d260-status-signals`).** 1차와 2차를 한 가지에서 구현했다. Decision은 바꾸지 않았다.
+  - *규칙표 (결정 1·6·7).* `src/contracts/foundation/core_common/robot_state.py` 하나다. 표준 라이브러리만 쓰고 CORE·pydantic을
+    import하지 않는다(시험으로 고정). `core_common`은 릴리스 site-packages에 있어서 부팅 화면 프로그램이 `emotion`·`rosylib`과
+    같은 `PYTHONPATH`로 읽는다. 새 배포 경로가 필요 없어 여기에 두었다. 상태 다섯 개, 우선순위 실패 > 주의 > 준비됨 — 못 움직임 >
+    준비됨, CORE_READY 전(실패 아님)은 `부팅 중`이다. D-247 결정 7의 `motion_reason` 문장도 이 모듈로 옮겼고 CORE가 가져다 쓴다.
+    할 일 규칙: 부팅 실패 단계 확인, 배터리 충전, ADC 응답 없음 → 전원을 완전히 껐다 켜기, 카메라·LiDAR 케이블, 모터 케이블·전원,
+    제품 장치의 버스·드라이버 없음 → 장치 카드 확인, Pi 저전압 → 5 V 확인, CORE 전용 모드 → 관리자가 모터 모드로 승격,
+    부저·램프 `사람 확인 필요` → 시험 동작으로 확인.
+  - *LCD 말.* 부팅 카드 글꼴(DejaVu)에 한글이 없다. 그래서 LCD는 같은 규칙의 영어 짧은 말(`Ready - cannot move: CORE only mode`,
+    `Power-cycle the robot (ADC)`)을 쓴다. 두 말은 같은 표의 같은 칸에서 나온다. 한글 글꼴을 이미지에 넣는 일은 이 ADR 밖이다.
+  - *`GET /api/v1/host/status-summary` (API Ref v1.25).* viewer. `boot-status.json`을 다른 `/run/rosy-boot` 파일처럼 엄격히
+    읽는다. 파일이 없으면 CORE가 응답하고 있으므로 `CORE_READY`로 보고 `boot.available:false`를 싣는다. 장치 행은
+    `GET /host/hardware`와 같은 덮기(토픽 판정·사람 확인)를 거친다. 배터리는 채널이 fresh일 때만, 경고 임계는 SAF-005 현재값이다.
+  - *요약줄 (결정 5).* `src/hmi/dashboard/status-summary.js`(D-262 분해 모양). 상태 칩 위에 이유, 장치 요약(누르면 점검 뷰의 첫
+    문제 행), 배터리·전압·온도, 할 일 개수(누르면 겹쳐 펼침). 따로 한 줄을 쌓으면 1366×768에서 조작 열이 34 px 넘쳤다(D-201).
+    그래서 요약줄은 상태 레일의 한 칸이다. 보통 운용 데이터와 같은 5초 주기로 새로 읽는다.
+  - *부팅 화면 프로그램 입력 — CORE와 같은 입력.* `runtime.env`(0600)와 `hardware.json`(root:rosy-core 0640)은 `rosy-display`가
+    못 읽는다. CORE의 SAF-005 경고 임계와 장치 덮기(토픽 판정·사람 확인)도 CORE만 안다. 그래서 CORE가 10초마다
+    `/run/rosy/status-inputs.json`(경고 임계, 덮기를 거친 `id·state·product`)을 쓰고, `rosy-boot-status`(root, 30초 타이머)가
+    그 파일을 엄격히 읽어(링크·FIFO 거부, 16 KiB, 60초 안에 쓴 것만) `runtime_mode`와 함께 `boot-status.json`에 옮긴다. 근거
+    문장은 옮기지 않는다. 두 쪽이 같은 입력을 같은 표에 넣는지는 한 fixture를 두 경로에 흘리는 시험이 지킨다(임계·토픽 덮기·사람
+    확인). 남은 차이는 둘이다. (1) 지연: CORE 쓰기 10초 + 표시기 30초까지 LCD·램프가 늦을 수 있다. (2) CORE가 멈추거나 파일이
+    60초보다 오래되면 부팅 화면 프로그램은 probe 행과 기본 임계 20 %로 돌아간다. 배터리 값은 부팅 화면 프로그램이 ADC를 직접,
+    CORE가 토픽으로 읽지만 같은 센서다.
+  - *부저 (결정 2).* 기본값 켜짐(`Environment=ROSY_BUZZER_ENABLED=true`, 카드의 `boot-display.env`가 이긴다). 준비됨 두 상태는 한
+    소리다. 주의 소리만 300초 안에 다시 울리지 않는다. 배터리가 임계 근처에서 오르내릴 때 15초마다 울리지 않게 하려는 것이다.
+    준비됨과 실패는 실제로 바뀔 때마다 울린다. 주의는 800 Hz 두 번이다. `ROSY_BUZZER_ENABLED`·`ROSY_LAMP_ENABLED`는 세 프로그램이
+    같은 해석기(`deploy/robot/native/rosy_display_env.py`: 따옴표 제거, 정확히 true/false, 그 밖은 꺼짐)로 읽는다.
+  - *램프 (결정 3), 최소 권한.* `lamp_control`에 C 도우미 `lamp_pattern`을 더했다. 고정 `rpi_ws281x`로 빌드하고, 상태마다
+    프로세스 하나를 띄운다. SIGTERM을 받으면 램프를 끄고 끝낸다. `/dev/ws281x_pwm`은 udev가 root:**rosy-display** 0660으로 주고,
+    `DeviceAllow`는 부팅 화면 unit에만 더했다. root 도우미 unit은 두지 않았다: 권한 있는 상주 프로세스가 하나 늘고, 상태를 넘길
+    통로가 또 생기기 때문이다. 부팅 화면 프로그램은 `pwm_channel`이 3일 때만 램프를 켠다(2는 LCD 백라이트). 노드·채널·도우미 중
+    하나라도 없으면 한 번 기록하고 램프만 뺀다. `ROSY_LAMP_ENABLED=false`로 끌 수 있다.
+  - *부저 시험 충돌 해소.* 부팅 화면 프로그램이 부저나 램프를 쥐고 있으면 `rosy-hw-test`는 `busy`를 내지 않는다. 대신 시험을
+    넘긴다. `/run/rosy-boot/display-test.request`(root:rosy-display 0640, 같은 `request_id`)를 쓰면, 부팅 화면 프로그램이 D-247과
+    같은 무늬를 울리거나 켠다(램프는 상태 무늬를 멈췄다가 되살린다). 결과는 자기 `RuntimeDirectory`의
+    `/run/rosy-display/display-test.json`에 쓴다. `rosy-hw-test`가 이 결과를 `hw-test.json`에 옮긴다. D-247의 결과 파일,
+    `request_id`, 5분 확인 규칙은 그대로다. 부팅 화면 프로그램이 `unavailable`(그 장치를 쥐고 있지 않음)이라 답하면 예전처럼 직접
+    구동한다. 15초 안에 답이 없으면 `failed`이고 아무것도 구동하지 않는다. 넘기는 것은 부팅 화면 unit의 ActiveState가 정확히 `active`이고 `rosy-display` 그룹이 있을 때뿐이다(activating·auto-restart이거나 그룹이 없으면 예전처럼 직접 구동하고, 그룹 없음은 한 번 기록). 위 문단의 "그 전까지는 부저 시험 때 부팅 부저를 잠시
+    끈다"는 이제 필요 없다.
+  - *DEVICE 확인 (남음).* `rosy_18`에서 사람이 확인한다.
+    - 부팅 중 파랑 숨쉬기(25 %), 준비 완료 초록 3초 뒤 꺼짐과 한 번 울림.
+    - ADC를 멈춘 상태에서 주황 0.5 Hz, 낮은음 두 번, LCD 상태 줄 `Caution: ADC no response`와 할 일 줄.
+    - `rosy-display`로 `lamp_pattern`이 `/dev/ws281x_pwm`을 열 수 있는지 본다(udev 그룹, `DeviceAllow`). `rpi_ws281x`가 샌드박스
+      안에서 다른 노드를 요구하지 않는지도 본다.
+    - 대시보드의 부저·램프 시험이 부팅 화면 프로그램을 거쳐 울리고 켜지는지, 들림·보임 기록이 남는지 본다.
+    - 운용 화면 요약줄이 실기 값(배터리·온도·장치)으로 채워지는지 본다.
+
 - **1차.** 규칙표와 로봇 상태 계산, `status-summary` API, 운용 화면 요약줄.
 - **2차.** `rosy-boot-display`의 램프 패턴·부저 패턴·LCD 두 줄.
 - **DEVICE.** `rosy_18`에서 사람이 확인한다: 부팅 중 파랑, 준비 완료 초록 3초와 한 번 울림, ADC를

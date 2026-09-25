@@ -129,6 +129,11 @@ class FleetConsole:
     def robot_ids(self) -> list[str]:
         return list(self._order)
 
+    @property
+    def hub(self) -> SiteHub:
+        """CORE Agent link owned by this console; transport routes are installed by app.py."""
+        return self._hub
+
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
         if client is None:
