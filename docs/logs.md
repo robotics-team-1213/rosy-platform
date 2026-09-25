@@ -2101,3 +2101,9 @@
 - gate 변화: D-250 Proposed→Accepted. 다음은 D-251(HostCard) Proposed
 - 결정: D-250 Accepted. L2 첫 선례 — 자격·전송은 표면 소유 유지
 - 교훈: headless 티커의 즉시 tick은 active 플래그가 선행되어야 한다. 가드를 읽는 쪽(transmit)이 있으면 순서가 계약이다
+## 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
+- 변경: D-251 Status Proposed→Accepted, ADR 로그 D-251 Accepted. 코드 변경 없음
+- 증거: 11종 카드 크롬 순서(제목행+chip→안내문→폼→메시지) 대조, dom.js 헬퍼 6종이 이미 공유 위치임 확인, dialog+web+dashboard 56 passed (변경 없음 확인)
+- gate 변화: D-251 Proposed→Accepted. 다음은 D-252(Fleet 큐·대형) Proposed
+- 결정: D-251 Accepted. 크롬은 장식이라 뽑지 않음
+- 교훈: 없음
