@@ -2159,3 +2159,9 @@
 - 증거: dashboard/API/gateway focused pytest 85 passed, 1 skipped; 추가 라우트/OpenAPI 검증 10 passed. 브라우저, 설치 패키지, Pi·실기 E-Stop은 아직 검증하지 않았다.
 - gate 변화: 없음. S1 구현 단계이며 WEB-002 전체 기능 이관과 브라우저/장치 수용은 남아 있다.
 - 브라우저 추가 증거: 로컬 FastAPI + Chromium에서 Viewer/Operator/Admin 메뉴를 확인했고, Viewer의 `/device` 직접 접근은 API 403 및 셸 권한 안내로 끝났다. Admin `/device`에서 `system.events` 패널 장착을 확인했다. 패널 JS를 강제로 404로 돌린 경우에도 E-Stop이 별도 `/api/v1/safety/stop` 요청을 보냈고 HTTP 수락을 받았다(물리 정지는 아님). 브라우저 콘솔 오류 0건.
+## 2026-09-26 · uncommitted · feat(role-menu): 역할 화면별 첫 기능 패널
+- 변경: `/console`에 freshness를 반영한 상태 요약, `/setup`에 현재 pose 저장형 웨이포인트 준비 패널, `/device`에 진단 요약을 추가했다. 패널은 화면별 ES module이고 manifest의 정렬·역할·자산 등록만으로 확장한다.
+- 안전 경계: pose freshness가 `fresh`가 아니면 웨이포인트 저장 요청을 보내지 않는다. E-Stop은 공통 셸에 독립 유지.
+- 증거: dashboard/API/gateway focused pytest 88 passed, 1 skipped. Chromium에서 역할 메뉴 3종, 각 화면 패널, Viewer 403, 패널 JS 404 중 E-Stop 요청 접수를 확인했고 콘솔 오류는 없었다. API 수락은 물리 정지 증거가 아니다.
+- 남음: 레거시 Dashboard의 주행·지도·카메라, Setup의 SLAM·도킹, Device의 설정/네트워크/ROS 도구 이관 및 Pi·실기 검증.
+- gate 변화: 없음. 이관 단위가 시작됐으나 레거시 Dashboard 기능과 실기 수용이 남아 있어 전체 웹 메뉴 마이그레이션 완료로 보지 않는다.

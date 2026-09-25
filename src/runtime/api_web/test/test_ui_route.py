@@ -82,6 +82,7 @@ def test_role_surface_pages_and_allowlisted_assets_are_served():
     assert "비상 정지" in client.get("/device").text
     assert client.get("/garage").status_code == 404
     assert client.get("/assets/panels/system/events.js").status_code == 200
+    assert client.get("/assets/panels/surface-panels.css").status_code == 200
     assert client.get("/assets/shell/shell.js").status_code == 200
     assert client.get("/assets/../../api/app.py").status_code == 404
 
@@ -97,3 +98,14 @@ def test_surface_page_exposes_panel_mount_slots():
     body = _client().get("/device").text
     assert '<div class="surface-slot" data-slot="main"></div>' in body
     assert "<ui-slot" not in body
+
+
+def test_each_base_surface_has_its_role_panel_mounts():
+    from core_api_web.api.ui_registry import load_registry
+
+    root = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+    registry = load_registry(root / "panels.yaml", root)
+    assert {panel.surface for panel in registry.panels} == {"console", "setup", "device"}
+    assert {panel.id for panel in registry.panels} == {
+        "console.overview", "setup.waypoints", "system.events", "system.diagnostics",
+    }

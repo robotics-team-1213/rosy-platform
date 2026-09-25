@@ -141,8 +141,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(role-menu): 역할 화면별 첫 기능 패널
 - 2026-09-26 · uncommitted · feat(role-menu): 기반 화면 셸·매니페스트 S1
 - 2026-09-26 · uncommitted · docs(plan/adr): 역할별 메뉴 이관 계획과 D-265
 - 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
 - 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
-- 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
