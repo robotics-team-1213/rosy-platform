@@ -35,6 +35,11 @@ D-255의 blocker B1을 치는 캡처다. 전부 LOCAL(Windows Chromium)이며 �
 - 4(safestop): triage 적색 띠 + SAFE_STOP 모드가 선다. 히어로 SAFETY CIRCUIT
   표기와 triage가 어긋나 보이면 시험 fixture의 mock 불일치다(서버 계약이
   아니다) — triage가 정답이다.
+- 5(unauthorized): 로그아웃 상태에서 지도가 그려져 보이지만 하네스 인공물이다.
+  제품 `/api/v1/map`·`/map/costmap`은 viewer 이상을 요구한다(`v1/map.py:17,26`)
+  — 실서버에서는 빈 지도가 뜬다. 텔레메트리·기능 가용성의 빈 상태는 정상이다.
+- Fleet normal 셀 재측정: 문서 넘침 0, 신호 힌트 하단 839 < 1080 — D-201 적합.
+  접힘 아래로 보인 것은 패널 끝과 하단 고지문이다.
 - 11(empty): 큐 패널 없음·0/0 연결. "이상 없음"을 칠하지 않는다.
 - 13(lost-hold): 이유 문장 + HOLD. 색이 아니라 글로 말한다.
 
