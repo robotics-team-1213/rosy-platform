@@ -213,7 +213,8 @@ def test_a_wedged_adc_bus_ends_after_the_first_time_out(tmp_path):
     states = _states(rows)
     assert states["adc.battery"] == "no_response"
     assert "ETIMEDOUT" in _evidence(rows)["adc.battery"]
-    assert "전원을 완전히 껐다 켜세요" in _evidence(rows)["adc.battery"]
+    assert "로봇 전원을 완전히 껐다 켜세요" in _evidence(rows)["adc.battery"]
+    assert "Pi 재부팅으로는 풀리지 않습니다" in _evidence(rows)["adc.battery"]
     assert [states[f"adc.{name}"] for name in ("ir0", "ir1", "ir2", "ultrasonic")] == ["not_measured"] * 4
 
 
@@ -243,6 +244,32 @@ def test_an_out_of_range_battery_needs_a_person(tmp_path):
     rows = probe_module.Probe(FakeIo(root, i2c=replies, lidar=LIDAR_OK, motors=MOTORS_OK)).run()
     assert _states(rows)["adc.battery"] == "needs_human"
     assert "0.00 V" in _evidence(rows)["adc.battery"]
+
+
+def test_full_scale_ir_and_ultrasonic_mean_nothing_detected_not_a_fault(tmp_path):
+    """2026-09-25 hand test: 4095 is the idle/far reading of IR 0-2 and the ultrasonic."""
+    root = _tree(tmp_path)
+    replies = dict(HEALTHY_ADC)
+    for register in (0x88, 0xC8, 0x98, 0xD8):
+        replies[("dev/i2c-1", 0x08, register)] = _raw(4095)
+    rows = probe_module.Probe(FakeIo(root, i2c=replies, lidar=LIDAR_OK, motors=MOTORS_OK)).run()
+    for channel in ("adc.ir0", "adc.ir1", "adc.ir2", "adc.ultrasonic"):
+        assert _states(rows)[channel] == "ok"
+        assert _evidence(rows)[channel] == "4095 (감지 없음)"
+
+
+def test_imu_in_config_mode_is_judged_by_chip_id_and_sys_err(tmp_path):
+    """After power-on the BNO055 is in CONFIG mode (status 0, zero accel): that is fine."""
+    root = _tree(tmp_path, nodes=("i2c-0",))
+    config_mode = {("dev/i2c-0", 0x28, 0x00): bytes([0xA0]), ("dev/i2c-0", 0x28, 0x39): bytes([0]),
+                   ("dev/i2c-0", 0x28, 0x3A): bytes([0])}
+    io = FakeIo(root, i2c=config_mode)
+    assert probe_module.Probe(io).imu().state == "ok"
+    assert {item[3] for item in io.touched} == {0x00, 0x39, 0x3A}, "no accel or mode register"
+
+    config_mode[("dev/i2c-0", 0x28, 0x3A)] = bytes([3])
+    row = probe_module.Probe(FakeIo(root, i2c=config_mode)).imu()
+    assert row.state == "needs_human" and "시스템 오류 3" in row.evidence
 
 
 def test_a_wrong_imu_chip_id_is_no_response(tmp_path):

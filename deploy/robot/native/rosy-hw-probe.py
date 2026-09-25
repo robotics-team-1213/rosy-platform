@@ -76,6 +76,7 @@ ADC_ADDRESS = 0x08
 ADC_DELAY_S = 0.006
 ADC_CHANNELS = (("adc.battery", 0xF8), ("adc.ir0", 0x88), ("adc.ir1", 0xC8), ("adc.ir2", 0x98),
                 ("adc.ultrasonic", 0xD8))
+ADC_FULL_SCALE = 4095
 #: V = raw / 4096 * 4.096 / (13 / 28) (board divider).
 BATTERY_RANGE_V = (6.0, 8.8)
 LCD_SPI = "dev/spidev0.0"
@@ -256,6 +257,10 @@ def _adc_value(channel: str, raw: int) -> tuple[str, str]:
         if low <= volts <= high:
             return OK, f"{volts:.2f} V (raw {raw})"
         return NEEDS_HUMAN, f"{volts:.2f} V (raw {raw}) — 기대 범위 {low:.1f}–{high:.1f} V 밖"
+    # IR and ultrasonic read full scale with nothing in front or below (2026-09-25
+    # hand test: IR 1918-4095, ultrasonic 56-4095). Any reading is an answer.
+    if raw == ADC_FULL_SCALE:
+        return OK, f"{raw} (감지 없음)"
     return OK, f"raw {raw}"
 
 
@@ -332,6 +337,11 @@ class Probe:
             return Row("imu", NO_RESPONSE, f"{timeout} — 버스 멈춤")
         except OSError as failure:
             return Row("imu", NO_RESPONSE, _errno_text(failure))
+        # Judged by chip id and SYS_ERR only: after power-on the chip sits in
+        # CONFIG mode with zero acceleration, which is normal, and the probe
+        # never changes the mode to look further (D-247 5).
+        if error:
+            return Row("imu", NEEDS_HUMAN, f"칩 ID 0xA0 · 상태 {status} · 시스템 오류 {error}")
         return Row("imu", OK, f"칩 ID 0xA0 · 상태 {status} · 오류 {error}")
 
     def adc(self, owner: Optional[str]) -> list[Row]:
@@ -347,7 +357,7 @@ class Probe:
                 d0, d1 = self._i2c(ADC_BUS, ADC_ADDRESS, register, 2, ADC_DELAY_S)
             except BusTimeout as timeout:
                 rows.append(Row(channel, NO_RESPONSE,
-                                f"{timeout} — 버스 멈춤. Pi 재부팅으로 풀리지 않으면 전원을 완전히 껐다 켜세요"))
+                                f"{timeout} — ADC MCU 멈춤. Pi 재부팅으로는 풀리지 않습니다. 로봇 전원을 완전히 껐다 켜세요"))
                 rows += [Row(rest, NOT_MEASURED, "같은 버스가 시간 초과 — 측정 안 함")
                          for rest, _register in ADC_CHANNELS[index + 1:]]
                 break
