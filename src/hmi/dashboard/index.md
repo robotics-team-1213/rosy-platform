@@ -28,7 +28,7 @@
 ## 최근 기록
 
 - 2026-09-26 · uncommitted · feat(dashboard): D-260 operate-view summary line
+- 2026-09-26 · uncommitted · feat(hmi): add role-gated console map panel
+- 2026-09-26 · uncommitted · feat(hmi): add confirmed host recovery actions
 - 2026-09-26 · uncommitted · feat(hmi): add operator docking preparation panel
 - 2026-09-26 · uncommitted · feat(hmi): extend role-based device and setup panels
-- 2026-09-26 · uncommitted · feat(hmi): add administrator hardware observation panel
-- 2026-09-26 · 88fbbe7f · feat(hmi): buzzer and lamp test buttons on the device card (D-247 6)

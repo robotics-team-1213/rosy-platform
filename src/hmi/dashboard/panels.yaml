@@ -12,6 +12,13 @@ panels:
     order: 10
     module: panels/console/overview.js
     css: [panels/surface-panels.css]
+  - id: console.map
+    title: 지도 및 위치
+    surface: console
+    slot: observe
+    order: 20
+    module: panels/console/map.js
+    css: [panels/surface-panels.css]
   - id: setup.waypoints
     title: 웨이포인트 준비
     surface: setup

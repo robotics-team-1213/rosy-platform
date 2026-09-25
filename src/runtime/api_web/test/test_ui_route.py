@@ -111,6 +111,7 @@ def test_each_base_surface_has_its_role_panel_mounts():
     assert {panel.id for panel in registry.panels} == {
         "console.overview", "setup.waypoints", "host.hardware", "system.events", "system.diagnostics",
         "host.system", "host.operations", "setup.localization", "system.security", "setup.docking",
+        "console.map",
     }
     hardware = next(panel for panel in registry.panels if panel.id == "host.hardware")
     assert (hardware.surface, hardware.slot, hardware.min_role) == ("device", "main", "administrator")
