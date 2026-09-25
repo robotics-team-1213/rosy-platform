@@ -137,8 +137,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
+- 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
+- 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
+- 2026-09-25 · uncommitted · docs(design-system): D-250 Accepted (첫 L2 headless)
 - 2026-09-25 · uncommitted · test(release): 기준선 결손 2건과 스캐너 오탐을 복구 (D-178 기준선, apt 체크섬)
-- 2026-09-25 · uncommitted · docs(design-system): 번호 충돌 수렴 (AuthBar D-248, FieldMap D-249)
-- 2026-09-25 · uncommitted · docs(design-system): D-247 Accepted (AuthBar 파일럿 착지)
-- 2026-09-25 · uncommitted · docs(design-system): D-245 Accepted (파일럿 착지)
-- 2026-09-25 · uncommitted · docs(runtime): 네이티브 우선을 문서 네곳에 명시하고 D-246으로 고정

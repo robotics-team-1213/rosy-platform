@@ -19,8 +19,6 @@ adr_gaps:
   D-239: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-240: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
-  D-252: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md step 6 (Fleet queues / formation slots); remove once its ADR is written"
-  D-253: "reserved by docs/plans/2026-09-25-design-system-rollout-design.md step 7 (games / diagnostics finish); remove once its ADR is written"
 
 status: STATUS.md
 stale_after_commits: 5
