@@ -118,6 +118,7 @@
 - [2026-09-22-pinky-pro-flashable-image-design.md](plans/2026-09-22-pinky-pro-flashable-image-design.md)
 - [2026-09-22-pinky-pro-flashable-image.md](plans/2026-09-22-pinky-pro-flashable-image.md)
 - [2026-09-24-folder-layout.md](plans/2026-09-24-folder-layout.md)
+- [2026-09-25-decision-lane-recovery.md](plans/2026-09-25-decision-lane-recovery.md)
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
 
 ## 교훈 (docs/solutions)
@@ -131,8 +132,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs(plan): D-228 lane_recovery execution
 - 2026-09-25 · uncommitted · docs(adr): D-228 decision lives in core_features
 - 2026-09-25 · uncommitted · docs(adr): D-227 소유 이름은 지금 트리 위에 둔다
 - 2026-09-25 · uncommitted · docs(adr): D-224 surface keyboard vocabulary
 - 2026-09-25 · uncommitted · test+docs: BENCH 라이브 게이트 러너와 현행 체크리스트
-- 2026-09-25 · uncommitted · docs(adr): D-221 얼굴 어휘 — F-07 처분

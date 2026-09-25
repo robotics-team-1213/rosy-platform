@@ -1927,3 +1927,11 @@
 - gate 변화: 없음
 - 결정: D-228
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(plan): D-228 lane_recovery execution
+
+- 변경: `docs/plans/2026-09-25-decision-lane-recovery.md`. Task 1 은 `decision/lane.py` 의 FOLLOW/STOP. Task 2(추종기 연결)와 다른 판단 종류는 이번 실행에서 하지 않는다.
+- 증거: `python -m pytest src/core/core_features/test/test_lane_recovery.py src/core/core_features/test/test_decision.py -q` 15 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음

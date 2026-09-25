@@ -83,3 +83,11 @@
 - gate 변화: 없음
 - 결정: D-228
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · feat(core_features): lane_recovery returns FOLLOW or STOP
+
+- 변경: `decision/lane.py`. 신선한 가시 차선은 FOLLOW, 그 밖은 STOP. 속도는 만들지 않는다. line_follow.tick 은 그대로다.
+- 증거: `python -m pytest src/core/core_features/test/test_lane_recovery.py src/core/core_features/test/test_decision.py -q` 15 passed (2026-09-25 Windows). line_follow.tick 은 수정하지 않았다.
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음

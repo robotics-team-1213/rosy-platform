@@ -13,6 +13,7 @@ Shared judgment library (D-228). A product supplies an allowed action set and a 
 |------|-------------|
 | `contract.py` | `DecisionRequest`, `DecisionResult`, `DecisionStatus` |
 | `router.py` | Hard constraints, then one local rule |
+| `lane.py` | `lane_recovery`: `FOLLOW` or `STOP`, no velocity |
 
 ## Subdirectories
 
