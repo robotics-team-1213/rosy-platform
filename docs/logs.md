@@ -1966,3 +1966,10 @@
 - gate 변화: 없음(문서+시험)
 - 결정: D-226
 - 교훈: 넓은 ignore 규칙은 옆의 템플릿까지 삼킬 수 있다. 막는 칸과 추적하는 칸을 같이 시험한다
+
+## 2026-09-25 · uncommitted · docs+test(adr): D-231 소스 영역을 층으로 — 이름은 그대로, 이동은 한 번에
+- 변경: D-231 Accepted. 목표 영역 `contracts/runtime/devices/products/hmi/site/sim` + `firmware/`, `test/architecture/`, `docs/architecture/`. 패키지 20개의 지금 자리→목표 자리 표. 패키지 이름은 바꾸지 않는다(colcon은 package.xml로 찾는다). 소유자 스케치 중 제품 이름 런타임(`rosy_pinky_pro`), 원격 판단 경로, `src` 안 AI 워커, 새 액션, 빈 골격은 받지 않는다. D-168 영역 목록, D-227 결정 1, D-207 결정 5의 루트 위치를 대체한다. `test/test_target_layout.py` 신설: 모든 패키지가 표에 있고, 이름을 유지하며, 지금 자리나 목표 자리 한 곳에 있고, 제품 폴더에 코드가 없고, 금지 자리가 없다. 폴더 이동은 하지 않았다
+- 증거: `python -m pytest test/test_target_layout.py test/test_module_structure.py -q` 16 passed (2026-09-25 Windows). 변이: 표에 없는 패키지, `products/`의 `.py`, `src/site/rosy_ai_worker`를 넣자 세 시험이 실패, 원복 후 통과
+- gate 변화: 없음(문서+시험)
+- 결정: D-231
+- 교훈: 층 구조의 이득은 디렉터리 이동으로 얻고, 패키지 개명은 따로 비용을 따진다

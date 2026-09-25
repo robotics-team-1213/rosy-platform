@@ -135,8 +135,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · docs+test(adr): D-231 소스 영역을 층으로 — 이름은 그대로, 이동은 한 번에
 - 2026-09-25 · uncommitted · test+docs(layout): D-226 Accepted — CI가 공개 경계와 문서 자리를 지킨다
 - 2026-09-25 · uncommitted · docs(plans): gather root architecture notes
 - 2026-09-25 · uncommitted · docs(adr): D-229 layer boundaries
 - 2026-09-25 · uncommitted · refactor(control): split perception from sensing geometry
-- 2026-09-25 · uncommitted · docs(plan): D-228 lane_recovery execution
