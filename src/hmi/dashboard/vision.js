@@ -5,7 +5,7 @@ export function createVisionPreview({
   elements, setText, api, authHeaders, hasToken, isHidden,
 }) {
   let pending = false;
-  let sequence = null;
+  let visionSequence = null;
   let objectUrl = null;
   let timer = null;
   let generation = 0;
@@ -44,13 +44,13 @@ export function createVisionPreview({
       });
       if (gen !== generation || !hasToken()) return;
       if (!status.available) {
-        sequence = null;
+        visionSequence = null;
         releaseObjectUrl();
         renderUnavailable(
           status, status.stale ? "카메라 프레임 만료 · HOLD" : "카메라 프레임 수신 대기");
         return;
       }
-      if (sequence !== status.sequence) {
+      if (visionSequence !== status.sequence) {
         const response = await fetch(
           `/api/v1/vision/front/frame?sequence=${encodeURIComponent(status.sequence)}`,
           {
@@ -58,7 +58,7 @@ export function createVisionPreview({
           },
         );
         if (response.status === 409 || response.status === 429) {
-          sequence = null;
+          visionSequence = null;
           releaseObjectUrl();
           renderUnavailable(
             status,
@@ -88,7 +88,7 @@ export function createVisionPreview({
         elements["vision-frame"].src = nextUrl;
         releaseObjectUrl();
         objectUrl = nextUrl;
-        sequence = status.sequence;
+        visionSequence = status.sequence;
       }
       if (gen !== generation || !hasToken()) return;
       setText("vision-source", status.source || "UNKNOWN");
@@ -102,7 +102,7 @@ export function createVisionPreview({
       setText("vision-status", "LIVE");
     } catch (error) {
       if (error.name === "AbortError" || gen !== generation) return;
-      sequence = null;
+      visionSequence = null;
       releaseObjectUrl();
       renderUnavailable({}, `카메라 연결 확인 · ${error.message}`);
     } finally {
@@ -120,7 +120,7 @@ export function createVisionPreview({
     clearInterval(timer);
     timer = null;
     pending = false;
-    sequence = null;
+    visionSequence = null;
     releaseObjectUrl();
     renderUnavailable({}, message);
   }
