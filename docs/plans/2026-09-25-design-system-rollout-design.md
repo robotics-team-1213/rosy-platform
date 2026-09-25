@@ -52,7 +52,7 @@ D-245가 Accepted되기 전까지 D-248 이후는 설계만 있고 코드를 건
 
 ## 6. 위험
 
-* R1: 파일럿에서 L1/L2 경계가 흔들리면 — D-234 안에서 경계를 다시 긋고 D-233을
+* R1: 파일럿에서 L1/L2 경계가 흔들리면 — 해당 파일럿 안에서 경계를 다시 긋고 D-233을
   고친다. 뒤 ADR에 drift를 넘기지 않는다.
 * R2: Fleet/게임의 뷰포트 캡처 수단이 없으면 — 해당 ADR은 HOLD로 두고 앞 ADR과
   묶지 않는다(D-153: 찍지 못한 상태는 평가되지 않은 것이다).
@@ -62,4 +62,4 @@ D-245가 Accepted되기 전까지 D-248 이후는 설계만 있고 코드를 건
 ## References
 
 D-92, D-129, D-130, D-153, D-157, D-194, D-195, D-201, D-218, D-233,
-`src/hmi/web_common/template.html`, `docs/validation/` (회차 폴더).
+`src/hmi/web/template.html`, `docs/validation/` (회차 폴더).

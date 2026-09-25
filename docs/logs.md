@@ -2071,3 +2071,21 @@
 - gate 변화: 없음 (SOURCE GO 유지, ARTIFACT/DEVICE HOLD 불변)
 - 결정: D-246
 - 교훈: 같은 트리의 동시 세션이 D-243·D-244·D-245·D-247을 연속 선점했다 — 새 ADR 번호는 파일·색인·origin 세 곳을 실측한 직후 바로 옮기고 즉시 커밋해야 한다 (`adr-numbers-collide-between-concurrent-sessions-2026-09-25`). 네이티브 전환 결정은 ADR(D-161·D-197)에만 있고 운영 문서가 Docker 시대 문구를 그대로 남기고 있었던 것은 계약 테스트로 박아야 고쳐졌다.
+## 2026-09-25 · uncommitted · docs(design-system): D-245 Accepted (파일럿 착지)
+- 변경: Fleet 전체 정지 버튼 범위 병기 1줄, docs/validation/uiux-surfaces-2026-09-25/ (README + fleet-estop-note-1920x1080.png), D-245 Status Proposed→Accepted, ADR 로그 D-245 Accepted
+- 증거: 캡처 단언(라벨 개행 병기·박스 뷰포트 내·페이지 오류 0) 통과; python -m pytest test/test_web_dialog_contract.py src/hmi/web/test src/hmi/dashboard/test -q 56 passed; ROSY_RUN_BROWSER_TESTS=1 test_fleet_console_browser.py 12 passed (2026-09-25 Windows). 첫 캡처에서 /common/components.css·ui.js 미서빙으로 무스타일 렌더가 나왔고, 스크립트 수정 후 재산출 — 임시 스크립트는 X:/DevTemp/opencode/d245_capture.py (레포 밖)
+- gate 변화: D-245 Proposed→Accepted. 다음은 D-247(AuthBar) Proposed
+- 결정: D-245 Accepted
+- 교훈: 캡처용 임시 서버는 제품 시험 fixture의 경로 매핑을 그대로 복사할 것 (/common/* → src/hmi/web/*). fixture가 tokens.css만 매핑하는 이유는 DOM 단언에는 스타일이 필요 없기 때문 — 캡처에는 부족하다
+## 2026-09-25 · uncommitted · docs(design-system): D-247 Accepted (AuthBar 파일럿 착지)
+- 변경: console.js 잠금 플래그(auth.locked, 3개 폴링 스킵 + 저장 시 해제) + refreshState catch의 잠금 pill 덮기 방지 1줄, 회차에 fleet-locked-pill-1920x1080.png 1셀, D-247 Status Proposed→Accepted, ADR 로그 D-247 Accepted
+- 증거: 변이 프로브(가드 제거 복사본 대비) — 수정 5회 후 침묵 vs 변이 9회·증가 중, 잠금 pill 유지. test_web_dialog_contract + hmi/web + hmi/dashboard 56 passed, fleet 전수 464 passed(D-242 잔재 1건 제외), ROSY_RUN_BROWSER_TESTS=1 fleet console 12 passed (2026-09-25 Windows). 프로브·캡처 스크립트는 X:/DevTemp/opencode/d247_probe.py·d247_capture.py (레포 밖)
+- gate 변화: D-247 Proposed→Accepted. 다음은 D-248(FieldMap) Proposed
+- 결정: D-247 Accepted, L2 AuthState는 뽑지 않음(D-130.2 미달) 유지
+- 교훈: 프로브가 주석-코드 불일치 너머의 진짜 결함(pill 덮어씀)을 찾았음. 변이는 빨강 확인용이 아니라 결함 발견용으로도 쓴다
+## 2026-09-25 · uncommitted · docs(design-system): 번호 충돌 수렴 (AuthBar D-248, FieldMap D-249)
+- 변경: 타 세션이 D-247(장치 관측)을 선점하고 내 초안들을 feed2fc7에 그대로 커밋했음(index.html 1줄 포함). 플랜 재배열(AuthBar D-248, FieldMap D-249)을 채택해 내 파일 2개를 개명, 로그·플랜·주석의 번호를 맞춤. D-244는 빈 번호로 둠
+- 증거: HEAD 로그 대조(D-245 Proposed·D-246·D-247 타세션분 확인), 파일 실측(glob)으로 빈 번호 확인
+- gate 변화: 없음. D-248·D-249 Accepted (파일럿 증거는 기존 회차·프로브 그대로)
+- 결정: 번호는 공유 자원이므로 선점 확인 후 배정, 플랜은 실행 순서대로 재배열한다
+- 교훈: add -A식 커밋이 타 세션 작업을 쓸어담는다 — 이 커밋부터 내 경로만 지정 커밋한다

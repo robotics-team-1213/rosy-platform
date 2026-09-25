@@ -1,6 +1,6 @@
 ## D-245 E-Stop 파일럿 — 4벌 실측, 통일할 것은 종류·물음형·권한 병기뿐이다
 
-**Status:** Proposed (2026-09-25). 롤아웃 계획(`docs/plans/2026-09-25-design-system-rollout-design.md`) §3-1의 파일럿. 네 표면을 다시 설계하지 않는다. 코드 변경은 Fleet 전체 정지 버튼의 범위 병기 한 줄이다.
+**Status:** Accepted (2026-09-25). 파일럿 커밋(Fleet 범위 병기 1줄) + G2 셀 1개(`docs/validation/uiux-surfaces-2026-09-25/`) + 대화상자 계약 녹색으로 착지.
 
 잇는 결정: [D-218](D-218-web-dialogs-name-the-action.md)(확인=네이티브, PINNED 표) · [D-233](D-233-design-system-component-token-draft.md)(인벤토리 P0) · D-92 제5항 · concept 16 Law 3·Law 4.
 

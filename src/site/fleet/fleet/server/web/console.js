@@ -21,6 +21,8 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 // localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
+  // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
+  locked: false,
 };
 
 function authHeaders() {
@@ -28,6 +30,7 @@ function authHeaders() {
 }
 
 function markLocked() {
+  auth.locked = true;
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
@@ -35,6 +38,7 @@ function markLocked() {
 }
 
 function markUnlocked() {
+  auth.locked = false;
   el("console-token").classList.remove("locked");
 }
 
@@ -353,6 +357,7 @@ function drawOverlay() {
 }
 
 async function refreshMap() {
+  if (auth.locked) return;
   try {
     const grid = await call("/api/fleet/map");
     view.map = grid;
@@ -550,6 +555,7 @@ function render() {
 }
 
 async function refreshState() {
+  if (auth.locked) return;
   try {
     const snapshot = await call("/api/fleet/state");
     view.robots = snapshot.robots;
@@ -560,6 +566,8 @@ async function refreshState() {
     pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
     render();
   } catch (err) {
+    // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
+    if (auth.locked) return;
     const pill = el("online-pill");
     pill.textContent = "Fleet 서버 없음";
     pill.setAttribute("status", "crit");
@@ -721,6 +729,7 @@ function applyFormation(status) {
 }
 
 async function refreshFormation() {
+  if (auth.locked) return;
   try {
     applyFormation(await call("/api/fleet/formation"));
   } catch (err) {
@@ -882,6 +891,8 @@ function tickClock() {
 el("console-token").value = auth.token;
 function saveToken() {
   auth.token = el("console-token").value.trim();
+  // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
+  markUnlocked();
   if (auth.token) {
     sessionStorage.setItem("rosy-console-token", auth.token);
   } else {
