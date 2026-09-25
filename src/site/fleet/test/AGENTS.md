@@ -12,7 +12,7 @@ session, CLI, hub, and the import-boundary check. No ROS. Fakes only — no netw
 
 | File | Description |
 |------|-------------|
-| `conftest.py` | Puts `src/site/fleet`, `src/contracts/foundation`, `src/runtime/features` on `sys.path` so pytest runs without colcon install |
+| `conftest.py` | Puts `src/site/fleet`, `src/contracts/foundation`, `src/runtime/services` on `sys.path` so pytest runs without colcon install |
 | `fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session/hub tests — no network |
 | `fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양 고정 + `FakeObserver`/`observed_body()` (관측 `/observed` v0.3 본문) |
 | `test_server_signals.py` | signals.yaml 로더·상태 파서·`SignalConsole`(재단언·부분 실패·**3자 교차 검증 verify**)·`cross_check` 판정군·`/api/fleet/signals*` 엔드포인트 |

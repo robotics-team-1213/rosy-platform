@@ -668,7 +668,7 @@ def test_a_malformed_login_hand_off_shows_nothing(tmp_path, content):
 
 
 def test_the_boot_card_rows_for_the_login_line():
-    sys.path.insert(0, str(ROOT / "src/hmi/emotion"))
+    sys.path.insert(0, str(ROOT / "src/hmi/face"))
     info_screen = pytest.importorskip("emotion.info_screen")
     base = {"stage": "CORE_READY", "ipv4": ["192.168.1.201"], "battery_percent": 80, "battery_voltage": 7.9}
 
@@ -737,7 +737,7 @@ def test_emotion_is_bench_only_so_nothing_needs_a_conflict():
         if "emotion" in "".join(line for line in text.splitlines() if line.startswith("Exec")):
             assert "rosy-boot-display.service" in text, unit.name
     for launch in (ROOT / "src").rglob("*.launch.py"):
-        if "src/hmi/emotion" in launch.as_posix():
+        if "src/hmi/face" in launch.as_posix():
             continue
         text = launch.read_text(encoding="utf-8")
         assert "package='emotion'" not in text and 'package="emotion"' not in text, launch
@@ -848,7 +848,7 @@ def test_the_probe_requires_rpi_lgpio_to_honour_the_chip_variable(tmp_path):
 def test_the_probe_renders_every_stage_from_the_source_tree(tmp_path, monkeypatch):
     # The CI container has no Pillow; the image build runs this same render check in-image.
     pytest.importorskip("PIL")
-    monkeypatch.syspath_prepend(str(ROOT / "src/hmi/emotion"))
+    monkeypatch.syspath_prepend(str(ROOT / "src/hmi/face"))
     probe = _load("probe_display_runtime_render", IMAGE / "probe-display-runtime.py")
 
     failures = probe.check_render(tmp_path)

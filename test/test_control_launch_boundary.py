@@ -15,8 +15,8 @@ def _deploy_text_files():
 
 def test_operational_compose_does_not_launch_legacy_control_stack():
     text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
-    assert "runtime/control/launch" not in text
-    assert "runtime/control/launch/robot.launch.py" not in text
+    assert "runtime/sensing/launch" not in text
+    assert "runtime/sensing/launch/robot.launch.py" not in text
 
 
 def test_operational_compose_does_not_serve_the_control_console():
@@ -24,7 +24,7 @@ def test_operational_compose_does_not_serve_the_control_console():
     text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
     assert "web_node" not in text
     assert "dashboard.html" not in text
-    html = (ROOT / "src" / "runtime" / "control" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    html = (ROOT / "src" / "runtime" / "sensing" / "web" / "dashboard.html").read_text(encoding="utf-8")
     assert "<title>pinky console</title>" not in html
     assert "<title>Rosy control diagnostic</title>" in html
 
@@ -32,7 +32,7 @@ def test_operational_compose_does_not_serve_the_control_console():
 def test_hardware_launch_does_not_start_safety_as_final_publisher():
     nav = ROOT / "src" / "runtime" / "navigation" / "launch" / "hardware.launch.py"
     text = nav.read_text(encoding="utf-8")
-    assert "runtime/control" not in text
+    assert "runtime/sensing" not in text
     assert "safety_node" not in text
 
 
@@ -67,7 +67,7 @@ def test_core_launches_do_not_reference_the_control_stack():
     offenders = []
     for path in launches:
         text = path.read_text(encoding="utf-8")
-        for marker in ("package='control'", 'package="control"', "runtime/control"):
+        for marker in ("package='control'", 'package="control"', "runtime/sensing"):
             if marker in text:
                 offenders.append(f"{path.name}: {marker}")
     assert not offenders, (

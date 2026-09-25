@@ -11,9 +11,9 @@ ROOT = Path(__file__).parents[1]
 def test_io_image_contains_line_follow_runtime_without_polluting_core():
     dockerfile = (ROOT / "deploy/robot/Dockerfile").read_text(encoding="utf-8")
     core, io = dockerfile.split("FROM runtime-common AS io-runtime", 1)
-    assert "COPY src/runtime/control" not in core
+    assert "COPY src/runtime/sensing" not in core
     assert "python3-opencv" not in core
-    assert "COPY src/runtime/control ./src/runtime/control" in io
+    assert "COPY src/runtime/sensing ./src/runtime/sensing" in io
     assert "python3-opencv" in io
     assert "control" in io
 

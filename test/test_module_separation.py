@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
 CORE = SRC / "gateway"
-CONTROL_PKG = SRC / "runtime" / "control" / "control"
+CONTROL_PKG = SRC / "runtime" / "sensing" / "control"
 FLEET = SRC / "site" / "fleet"
 
 #: Other-domain tops that core production code must never import (S1).
@@ -55,7 +55,7 @@ FINAL_CMD_VEL = re.compile(r"""['"]cmd_vel['"]""")
 #: safety_node as the legacy final publisher). Everything else in control
 #: must not name the final topic.
 LEGACY_FINAL_PUBLISHER = (
-    "runtime/control/control/safety/node.py",
+    "runtime/sensing/control/safety/node.py",
     "self.declare_parameter('cmd_out', 'cmd_vel')",
 )
 
@@ -85,10 +85,10 @@ def _import_tops(path: Path):
 def test_core_imports_no_slice_code():
     """Guard 1 (S1): no slice imports in core production code.
 
-    ``control`` sits at ``src/runtime/control`` and imports itself. That package
+    ``control`` sits at ``src/runtime/sensing`` and imports itself. That package
     is not the core gateway importing a slice.
     """
-    control_root = (SRC / "runtime" / "control").resolve()
+    control_root = (SRC / "runtime" / "sensing").resolve()
     violations = []
     for path in _prod_py_files(CORE):
         if control_root in path.resolve().parents:

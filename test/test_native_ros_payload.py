@@ -102,8 +102,8 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     paths = set(result.stdout.splitlines())
     for suffix in (
         "/runtime/gateway", "/contracts/foundation", "/runtime/events",
-        "/runtime/features", "/runtime/api_web", "/contracts/interfaces",
-        "/devices/pinky_pro/sensor_adc", "/devices/common/imu_bno055", "/devices/pinky_pro/lamp_control",
+        "/runtime/services", "/runtime/api_web", "/contracts/interfaces",
+        "/devices/pinky_pro/adc", "/devices/common/imu_bno055", "/devices/pinky_pro/lamp",
     ):
         assert any(path.endswith(suffix) for path in paths)
     assert not any(path.endswith("/sim/gz_sim") for path in paths)
@@ -113,7 +113,7 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
 
 def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     source_root = tmp_path / "src"
-    real_package = source_root / "runtime" / "control"
+    real_package = source_root / "runtime" / "sensing"
     generated_package = source_root / "build" / "control"
     real_package.mkdir(parents=True)
     generated_package.mkdir(parents=True)
@@ -144,7 +144,7 @@ def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/runtime/control"]
+    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/runtime/sensing"]
 
 
 def test_required_package_file_matches_the_locked_offline_payload():

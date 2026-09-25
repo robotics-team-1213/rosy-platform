@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-GRAPH = ROOT.parents[1] / "runtime" / "control" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+GRAPH = ROOT.parents[1] / "runtime" / "sensing" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 
 
 def _mod():

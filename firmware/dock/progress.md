@@ -11,7 +11,7 @@ gates:
   LOCAL:
     state: GO
     evidence: "도크 계약 + 로봇측 DockingManager 상태기계·재시도·인터록 시험 107 passed (2026-09-15 Windows, 미커밋 WIP가 있는 src/rosy_core를 import)"
-    cmd: "python3 -m pytest test/test_dock_contract.py src/runtime/features/test/test_docking.py -q"
+    cmd: "python3 -m pytest test/test_dock_contract.py src/runtime/services/test/test_docking.py -q"
   ROS-SIM:
     state: HOLD
     blocker: "코스트맵 충돌 면제(docking/collision_exemption)는 실제 costmap 통합 시험 전까지 intent-only (Device 검증 계획 P1 §7). ROS 2 Jazzy 환경에서 도킹 시퀀스 시뮬레이션 미실행"

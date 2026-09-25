@@ -53,7 +53,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("core_common", "core"): "default config file lives in the core package share; the lookup stayed when core_common moved to contracts",
-    ("control", "imu_bno055"): "runtime/control -> devices/common/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/sensing -> devices/common/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
 }
 
 #: P6 budgets.
@@ -65,11 +65,11 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "runtime/control/control/startup_calibration_node.py": (
+    "runtime/sensing/control/startup_calibration_node.py": (
         954,
         f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
     ),
-    "runtime/control/control/calib_node.py": (
+    "runtime/sensing/control/calib_node.py": (
         640,
         f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
     ),
@@ -77,7 +77,7 @@ SIZE_VERDICTS = {
         621,
         "split: file store, HTTP client and observer are separate roles today (B2); owner fleet, unscheduled",
     ),
-    "runtime/control/control/safety/node.py": (
+    "runtime/sensing/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -85,11 +85,11 @@ SIZE_VERDICTS = {
         767,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
     ),
-    "runtime/control/control/sensing/perception/lane.py": (
+    "runtime/sensing/control/sensing/perception/lane.py": (
         611,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
     ),
-    "runtime/control/control/sensing/perception/lane_bev.py": (
+    "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
@@ -98,7 +98,7 @@ SIZE_VERDICTS = {
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
-    "runtime/features/core_features/docking/manager.py": (
+    "runtime/services/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
         "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
@@ -157,13 +157,19 @@ def _family(name: str):
     return parts[1] if len(parts) == 3 and parts[0] == "devices" else None
 
 
-# D-241: the ROS package name stays. These directories use the role name.
+# D-241 and D-242: the ROS package name stays. These directories use the role name.
 ROLE_DIR = {
     "core": ("runtime", "gateway"),
     "core_events": ("runtime", "events"),
-    "core_features": ("runtime", "features"),
+    "core_features": ("runtime", "services"),
     "core_api_web": ("runtime", "api_web"),
     "core_common": ("contracts", "foundation"),
+    "control": ("runtime", "sensing"),
+    "web_common": ("hmi", "web"),
+    "emotion": ("hmi", "face"),
+    "omx_adapter": ("devices", "omx", "adapter"),
+    "lamp_control": ("devices", "pinky_pro", "lamp"),
+    "sensor_adc": ("devices", "pinky_pro", "adc"),
 }
 
 
@@ -419,7 +425,8 @@ def test_direction_table_rows_for_devices_and_robots(src_domain, src_family, dst
         (("devices", "pinky_pro", "bringup"), "bringup", True),
         (("devices", "bringup"), "bringup", False),
         (("products", "pinky_pro"), "pinky_pro", True),
-        (("runtime", "control"), "control", True),
+        (("runtime", "sensing"), "control", True),
+        (("runtime", "control"), "control", False),
         (("core", "control"), "control", False),
         (("apps", "x", "control"), "control", False),
     ],

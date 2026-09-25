@@ -11,7 +11,7 @@ gates:
   LOCAL:
     state: GO
     evidence: "같은 호스트 시험이 이 파일을 읽고 통과 (2026-09-25 Windows)"
-    cmd: "python -m pytest src/products/omx/test src/devices/omx/omx_adapter/test -q"
+    cmd: "python -m pytest src/products/omx/test src/devices/omx/adapter/test -q"
   ROS-SIM:
     state: HOLD
     blocker: "colcon으로 share/omx/config 설치를 본 기록이 없다"
@@ -28,7 +28,7 @@ plans: []
 
 ## 지금 상태
 
-- 팔 설정은 여기 있다. 어댑터 코드는 `src/devices/omx/omx_adapter`다.
+- 팔 설정은 여기 있다. 어댑터 코드는 `src/devices/omx/adapter`다.
 - 모델은 비어 있다. `omx-f`와 `omx-ai`는 측정 뒤에 고르는 이름이다.
 
 ## 다음 gate

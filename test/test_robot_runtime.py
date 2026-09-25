@@ -148,7 +148,7 @@ def test_core_image_does_not_ship_the_absorbed_sensor_worker_runtime():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = dockerfile.split("FROM runtime-common AS io-runtime")[0]
 
-    assert "COPY src/runtime/control ./src/runtime/control" not in core
+    assert "COPY src/runtime/sensing ./src/runtime/sensing" not in core
     assert "python3-opencv" not in core
     assert "ros-jazzy-visualization-msgs" in core
     assert "ros-jazzy-tf2-ros" in core
@@ -160,7 +160,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     """The Device image ships the model-neutral OMX boundary without enabling hardware."""
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "COPY src/devices/omx/omx_adapter ./src/devices/omx/omx_adapter" in dockerfile
+    assert "COPY src/devices/omx/adapter ./src/devices/omx/adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
         ROOT / "src" / "products" / "omx" / "config" / "omx.disabled.yaml"
@@ -361,7 +361,7 @@ def test_systemd_unit_delegates_to_runtime_mode_wrapper():
 
 
 def test_teleop_watchdog_lives_in_safety_manager_not_a_stub():
-    safety = ROOT / "src" / "runtime" / "features" / "core_features" / "safety"
+    safety = ROOT / "src" / "runtime" / "services" / "core_features" / "safety"
     assert not (safety / "watchdog.py").is_file()
     assert "class TeleopWatchdog" in (safety / "manager.py").read_text(encoding="utf-8")
 

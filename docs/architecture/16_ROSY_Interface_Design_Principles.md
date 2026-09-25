@@ -278,17 +278,17 @@ These are contract tests, in the style the repository already uses, not review
 guidance:
 
 - surface stylesheets contain no raw colour outside the token file
-  (`src/hmi/web_common/test/test_ui_token_contracts.py`)
+  (`src/hmi/web/test/test_ui_token_contracts.py`)
 - a status colour never appears in a categorical position (same)
 - client map raster values equal the server renderer's values
-  (`src/runtime/control/test/test_map_raster_color_contract.py` — control
+  (`src/runtime/sensing/test/test_map_raster_color_contract.py` — control
   pipeline only; see §6)
 - a `blocked` capability without a reason fails
   (`src/runtime/gateway/test/test_capability_descriptors.py`)
 - evidence state is present on every rendered telemetry binding
   (`src/runtime/gateway/test/test_dashboard.py`, `test_evidence.py`)
 - a surface stylesheet declares no tokens of its own — no alias vocabulary
-  beside the token file (`src/hmi/web_common/test/test_ui_token_contracts.py`, D-92)
+  beside the token file (`src/hmi/web/test/test_ui_token_contracts.py`, D-92)
 - spacing comes from `--space-*` and type size from `--text-*` (same)
 - the operate view does not scroll and the map keeps the observe region
   (`src/runtime/gateway/test/test_console_layout.py`)

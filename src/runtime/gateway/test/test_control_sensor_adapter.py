@@ -326,7 +326,7 @@ def test_control_registers_the_sensor_provider_entry_point():
     Mutation-proven: delete the entry point line from control/setup.py and
     this test goes red while production silently loses its default worker.
     """
-    setup_path = Path(__file__).parents[3] / "runtime" / "control" / "setup.py"
+    setup_path = Path(__file__).parents[3] / "runtime" / "sensing" / "setup.py"
     tree = ast.parse(setup_path.read_text(encoding="utf-8"))
     setup_call = next(
         node for node in ast.walk(tree)

@@ -3,7 +3,7 @@
 
 Usage (WSL, sourced overlay):
   python3 junction_harness.py --mode centre --out /rosy_mapv2_ws/evidence/junctions_<id> \
-      --graph src/runtime/control/map/map_v2_fleet/lane_graph.yaml [--only NW]
+      --graph src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml [--only NW]
 Per scenario: launch map_v2_fleet_lane at the scenario start, wait for it to
 become ready (CORE's API answering and both /odom and /line/observation
 flowing) up to BOOT_S, enable CAMERA_LINE through CORE's API, record /odom

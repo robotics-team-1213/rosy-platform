@@ -32,7 +32,7 @@ PACKAGES = (
     SRC / "runtime" / "gateway" / "core",
     SRC / "contracts" / "foundation" / "core_common",
     SRC / "runtime" / "events" / "core_events",
-    SRC / "runtime" / "features" / "core_features",
+    SRC / "runtime" / "services" / "core_features",
     SRC / "runtime" / "api_web" / "core_api_web",
 )
 

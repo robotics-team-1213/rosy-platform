@@ -31,7 +31,7 @@ select a mode rather than starting containers by hand.
 
 ## Current package boundary
 
-The absorbed `src/runtime/control` package is part of the Rosy OS source tree and
+The absorbed `src/runtime/sensing` package is part of the Rosy OS source tree and
 is covered by the host and ROS graph tests. Its pure sensing, OpenCV, planning,
 calibration, and safety-policy code is reusable from the workspace. D-66 keeps
 it out of the `rosy-core` image; the opt-in sensor adapter is fail-closed

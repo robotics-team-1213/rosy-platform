@@ -9,12 +9,12 @@
 !src/contracts/interfaces/**
 !src/runtime/gateway/
 !src/runtime/gateway/**
-!src/runtime/control/
-!src/runtime/control/**
+!src/runtime/sensing/
+!src/runtime/sensing/**
 !src/products/
 !src/devices/omx/
-!src/devices/omx/omx_adapter/
-!src/devices/omx/omx_adapter/**
+!src/devices/omx/adapter/
+!src/devices/omx/adapter/**
 !src/products/pinky_pro/
 !src/products/pinky_pro/**
 !src/products/omx/

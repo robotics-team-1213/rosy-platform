@@ -394,17 +394,17 @@ PROGRAM_SOURCES = {
     "rosy-core.service": [
         "src/runtime/gateway",
         "src/runtime/events",
-        "src/runtime/features",
+        "src/runtime/services",
         "src/runtime/api_web",
         "src/contracts/foundation",
-        "imported-by:src/runtime/gateway:control:src/runtime/control",
+        "imported-by:src/runtime/gateway:control:src/runtime/sensing",
     ],
     "rosy-io.service": ["src/devices/pinky_pro/bringup"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
-                                  "src/hmi/emotion/emotion/info_screen.py",
-                                  "src/hmi/emotion/emotion/rosy_lcd.py",
+                                  "src/hmi/face/emotion/info_screen.py",
+                                  "src/hmi/face/emotion/rosy_lcd.py",
                                   "src/devices/pinky_pro/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
@@ -494,7 +494,7 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
 
 # Trees inside a directory source that are not part of that unit's program.
 PROGRAM_EXCLUDES = {
-    "rosy-core.service": ("src/runtime/control",),
+    "rosy-core.service": ("src/runtime/sensing",),
 }
 
 
@@ -742,8 +742,8 @@ def test_contract_helpers_treat_dynamic_users_as_non_root():
 def test_core_program_scan_follows_imports_into_the_control_package():
     # CORE's production modules import no control module today (only its tests
     # do), so the scan adds nothing now; it picks them up the moment one does.
-    assert "imported-by:src/runtime/gateway:control:src/runtime/control" in PROGRAM_SOURCES["rosy-core.service"]
+    assert "imported-by:src/runtime/gateway:control:src/runtime/sensing" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
-                for path in _imported_modules("src/runtime/gateway/test", "control", "src/runtime/control")}
-    assert "src/runtime/control/control/sensor_provider.py" in resolved
-    assert "src/runtime/control/control/calibration_storage.py" in resolved
+                for path in _imported_modules("src/runtime/gateway/test", "control", "src/runtime/sensing")}
+    assert "src/runtime/sensing/control/sensor_provider.py" in resolved
+    assert "src/runtime/sensing/control/calibration_storage.py" in resolved

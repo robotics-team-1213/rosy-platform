@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from core_api_web.api.app import create_app
 
 WEB_ROOT = Path(__file__).resolve().parents[1] / "core_api_web" / "web"
-TOKENS = Path(__file__).resolve().parents[3] / "hmi" / "web_common" / "tokens.css"
+TOKENS = Path(__file__).resolve().parents[3] / "hmi" / "web" / "tokens.css"
 
 #: D-92 어휘 표의 열 이름 — 갤러리가 이 목록과 어긋나면 표와 갤러리가 두 개의
 #: 사실이 된다(D-129 Consequences).

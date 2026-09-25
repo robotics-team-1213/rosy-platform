@@ -25,7 +25,7 @@ import pytest
 
 WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
 #: D-129 — 단일 L1 파일. 사본은 없다.
-CANON = Path(__file__).resolve().parents[3] / "hmi" / "web_common" / "tokens.css"
+CANON = Path(__file__).resolve().parents[3] / "hmi" / "web" / "tokens.css"
 
 COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d|hsla?\(\s*\d")
 ROBOTS = ("robot-1", "robot-2", "robot-3")

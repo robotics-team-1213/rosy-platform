@@ -59,13 +59,13 @@
 | 모듈 | py / 테스트 파일 | fan-out | fan-in | 자기 시험 | 예산 초과 (판정) | 구조 게이트 예외 |
 |---|---|---|---|---|---|---|
 | `contracts/interfaces` | 0 / 1 | 0 | 4(IDL) | O | – | – |
-| `hmi/web_common` | 0 / 0 | 0 | 2 | X | – | 시험 예외 1건 |
+| `hmi/web` | 0 / 0 | 0 | 2 | X | – | 시험 예외 1건 |
 | `contracts/foundation` | 16 / 1 | 0(+1 launch) | **5** | O | – | **역방향 1건** (`common→core` 설정 공유) |
 | `runtime/events` | 4 / 0 | 1 | 1 | X | 파일 745행(accept) | 시험 예외 1건 |
-| `runtime/features` | 37 / 0 | 1 | 2 | X | – | 시험 예외 1건 (29개 core 시험이 대신 소유 — 시험이 3곳에 분산) + **과잉선언 1건** (`core_events`, 어디서도 0회) |
+| `runtime/services` | 37 / 0 | 1 | 2 | X | – | 시험 예외 1건 (29개 core 시험이 대신 소유 — 시험이 3곳에 분산) + **과잉선언 1건** (`core_events`, 어디서도 0회) |
 | `runtime/api_web` | 25 / 3 | 2 | 1 | O | – | 과잉선언 1건 (`core_events`) |
 | `runtime/gateway` | 21 / **74** | 4 | 0 | O | `ros_bridge.py` 759행 (**split 재개**) | 동적 import 1건(D-126, 테스트 이음새) |
-| `runtime/control` | **200** / 164 | 0 | 0(code) | O | **패키지 28,159행 (split, 미일정)** + 600행 5건 (split 2·미일정 / accept 3) | launch 미선언 1건 (`control→imu_bno055`) |
+| `runtime/sensing` | **200** / 164 | 0 | 0(code) | O | **패키지 28,159행 (split, 미일정)** + 600행 5건 (split 2·미일정 / accept 3) | launch 미선언 1건 (`control→imu_bno055`) |
 | `site/fleet` | 23 / 27 | 1 | 1 | O | `signals.py` 621(split·미일정), `console.py` 767(accept) | – |
 | `sim/gz_sim` | 14 / 9 | 2 | 0 | O | – | launch 경유 `control`·`core`는 **실제 사용**(선언=실제), `navigation` 중복 선언 1건 |
 | `runtime/navigation` | 7 / 0 | launch 4 | 1 | X | – | **미선언 2건 + 방향 위반 2건** |
@@ -98,7 +98,7 @@
 | `sim/description` | 5 | 5 | 4 | 5 | 5 | **96** | S | fan-out 0, launch fan-in 3 (전파는 있으나 방향은 허용) |
 | `apps/games` | 5 | 5 | 5 | 3 | 5 | **94** | S | ROS 0, 단독 호스트. 단 `web_common` 밖이라 공용 규약 미적용 |
 | `apps/omx_adapter` | 5 | 4 | 5 | 4 | 5 | **92** | S | 좁은 경계 어댑터, 기본 비활성, fan-out 0 |
-| `hmi/web_common` | 4 | 5 | 4 | 5 | 5 | **91** | S | 0 fan-out 공용 자산 + 소비자 계약 테스트 4종 + 600/10k 예산 |
+| `hmi/web` | 4 | 5 | 4 | 5 | 5 | **91** | S | 0 fan-out 공용 자산 + 소비자 계약 테스트 4종 + 600/10k 예산 |
 | `products/pinky_pro` | 5 | 5 | 4 | 3 | 4 | **87** | A | D-196 신규(2026-09-24 잠정): config 전용·자기 시험 보유·fan-out 0. M4 — `deploy/robot/config/profile.*.yaml`이 속도 상한을 부분 복제(`test_nav2_profile_limits`가 일치 고정). M5 — core가 `robot.model`로 동적 조회(선언 없음, D-126과 같은 종류) |
 | `contracts/foundation` | 4 | 5 | 4 | 5 | 3 | **85** | A | fan-in 5의 공용 스키마, 그러나 기록된 역방향 1건 |
 | `runtime/api_web` | 4 | 4 | 4 | 5 | 3 | **80** | A | `deps` 파사드 + v1 직접 import 금지 게이트로 전파 반경 봉쇄, 과잉선언 1건 (`core_events` — 생산 코드 0회) |
@@ -109,8 +109,8 @@
 | `hardware/imu_bno055` | 3 | 5 | 3 | 4 | 3 | **73** | B | 역할은 명확하나 호스트 검증 불가 + control의 미선언 인바운드 — **기기 전용 ※** |
 | `sim/gz_sim` | 3 | 4 | 3 | 4 | 4 | **71** | B | fleet·navigation 설치 없이는 벤치 검증 불가(M1) + fan-out 2, 선언은 launch 경유 포함 실제 사용(과잉선언 아님 — 정정), `navigation` 중복 선언 1건 |
 | `runtime/gateway` | 3 | 3 | 3 | 4 | 4 | **66** | B | fan-out 4 + 시험 74개가 도메인 전체 소유 + 시험 시 control 소스 필요 |
-| `runtime/features` | 3 | 3 | 2 | 4 | 3 | **59** | **C** | 자기 시험 0(시험이 3곳 분산) + 13개 기능 공존(5.6k행, 예산 내) + 과잉선언 1건 — 고장 통보형 병목 |
-| `runtime/control` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
+| `runtime/services` | 3 | 3 | 2 | 4 | 3 | **59** | **C** | 자기 시험 0(시험이 3곳 분산) + 13개 기능 공존(5.6k행, 예산 내) + 과잉선언 1건 — 고장 통보형 병목 |
+| `runtime/sensing` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
 | `runtime/navigation` | 3 | 3 | 3 | 3 | 2 | **57** | **C** | 미선언 2건·방향 위반 2건, assembly(`web_*`)가 역할에 혼입 |
 
 **분포**: S 8개 · A 6개 · B 3개 · C 3개 · D 0개 / **전체 평균 81.5 (A)** (A 평균 81.3) — 2026-09-23 20개 기준. `products/pinky_pro`(2026-09-24, D-196 신설)는 잠정 행이며 분포·평균에 넣지 않았다(다음 회차 재채점)
@@ -179,7 +179,7 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 | 2 | §3 `control` | "600행 4건" | **5건** (split 2·미일정 / accept 3) | SIZE_VERDICTS: startup_calibration 965·calib_node 641 = split / safety/node 795·lane 611·lane_bev 611 = accept |
 | 3 | §3 `core_features` | "28개 core 시험이 대신 소유" | **29개** (그 외 fleet 1·루트 1 = 총 31) | 전역 AST 스캔(import 위치 무관). 시험이 **3곳에 분산** — M3=2 근거는 오히려 강화 |
 
-### 8.1 `runtime/control` (57, C) — 내부 군집 / 358 py·42,260행
+### 8.1 `runtime/sensing` (57, C) — 내부 군집 / 358 py·42,260행
 
 | 군집 | 파일 | 행 | 최대 파일 (행) | 성격 |
 |---|---|---|---|---|
@@ -204,7 +204,7 @@ D-178 Decision 5·착지 조건의 회차. 1차가 패키지를 재었다면 이
 
 **해석**: 충돌 전부가 **패키지 내부**(외부 fan-out 0) → D-171 split 실행 시 (a) 노드+launch (b) 내부 라이브러리 (c) sensing (d) planning (e) safety+wander (f) tools **여섯 스트림**이 각자 이미 존재하는 자기 시험과 함께 갈라진다. `core/test` 5파일·7모듈이 유일한 외부 접점 — split 미일정이 병렬성을 막는 유일한 요인이라는 뜻(§6 과제 1의 독립 증거).
 
-### 8.2 `runtime/features` (59, C) — 13기능 / 38 py·5,583행 (**예산 내**)
+### 8.2 `runtime/services` (59, C) — 13기능 / 38 py·5,583행 (**예산 내**)
 
 | 특징 | 수치 | 의미 |
 |---|---|---|

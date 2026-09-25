@@ -115,9 +115,9 @@ COPY src/contracts/interfaces ./src/contracts/interfaces
 COPY src/sim/description ./src/sim/description
 COPY src/devices/pinky_pro/bringup ./src/devices/pinky_pro/bringup
 COPY src/runtime/navigation ./src/runtime/navigation
-COPY src/devices/omx/omx_adapter ./src/devices/omx/omx_adapter
+COPY src/devices/omx/adapter ./src/devices/omx/adapter
 COPY src/products/omx ./src/products/omx
-COPY src/runtime/control ./src/runtime/control
+COPY src/runtime/sensing ./src/runtime/sensing
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \

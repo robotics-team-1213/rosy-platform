@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = ROOT / "src" / "sim" / "gz_sim" / "config" / "simulation_actuation.yaml"
 TREES = (
-    ROOT / "src" / "runtime" / "features" / "core_features" / "safety",
+    ROOT / "src" / "runtime" / "services" / "core_features" / "safety",
     ROOT / "src" / "runtime" / "gateway" / "core" / "bridge",
     ROOT / "src" / "runtime" / "navigation",
 )
@@ -34,6 +34,6 @@ def test_sim_identity_lives_only_in_the_profile_and_safety_does_not_name_it():
     text = PROFILE.read_text(encoding="utf-8")
     assert "pinky_calmap227" in text
     assert "227" in text
-    safety = (ROOT / "src" / "runtime" / "features" / "core_features" / "safety" / "manager.py").read_text(encoding="utf-8")
+    safety = (ROOT / "src" / "runtime" / "services" / "core_features" / "safety" / "manager.py").read_text(encoding="utf-8")
     assert "simulation_actuation.yaml" not in safety
     assert "ROSY_SIMULATION_ACTUATION" in safety

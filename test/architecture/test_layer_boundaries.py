@@ -4,10 +4,10 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PERCEPTION = ROOT / "src/runtime/control/control/sensing/perception"
-DECISION = ROOT / "src/runtime/features/core_features/decision"
-LINE = ROOT / "src/runtime/features/core_features/line_follow"
-SENSING = ROOT / "src/runtime/control/control/sensing"
+PERCEPTION = ROOT / "src/runtime/sensing/control/sensing/perception"
+DECISION = ROOT / "src/runtime/services/core_features/decision"
+LINE = ROOT / "src/runtime/services/core_features/line_follow"
+SENSING = ROOT / "src/runtime/sensing/control/sensing"
 
 
 def _imports(path: Path) -> list[str]:

@@ -12,7 +12,7 @@ if [ -n "$MAPY" ]; then
   else
     echo "맵 yaml 파일이 없다 ✗ — map_server 가 로드 실패 → /map 없음 → AMCL 불가 → map TF 없음 → PLANNING 정체"
     # 리포 트리에서 후보 탐색
-    find "$REPO/src/runtime/control/map" -name "*.yaml" 2>/dev/null | head -5
+    find "$REPO/src/runtime/sensing/map" -name "*.yaml" 2>/dev/null | head -5
   fi
 fi
 echo "--- lifecycle/lifecycle 미사용 여부: map_server 프로세스 ---"

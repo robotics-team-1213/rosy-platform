@@ -2037,3 +2037,10 @@
 - gate 변화: 없음
 - 결정: D-241
 - 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(layout): 나머지 역할 폴더 (D-242)
+- 변경: D-242 Accepted. `features`→`runtime/services`, `control`→`runtime/sensing`, `web_common`→`hmi/web`, `emotion`→`hmi/face`, `omx_adapter`→`devices/omx/adapter`, `lamp_control`→`devices/pinky_pro/lamp`, `sensor_adc`→`devices/pinky_pro/adc`. 패키지 이름과 import 는 유지한다. `bringup`, `led`, `navigation`, `description`, `gz_sim`, `fleet`, `games` 는 그대로다
+- 증거: 이 기록 직후 구조 시험과 face·web·omx 어댑터 호스트 시험
+- gate 변화: 없음
+- 결정: D-242
+- 교훈: 없음

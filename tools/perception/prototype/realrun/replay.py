@@ -1,6 +1,6 @@
 """Replay real teleop video through the CURRENT camera lane perception.
 
-Measurement only: imports repo modules read-only (src/runtime/control).
+Measurement only: imports repo modules read-only (src/runtime/sensing).
 Usage: python replay.py <part 1..7> [max_frames]
 Outputs go to ./out under the current working directory.
 Env: ROSY_CAMERA_PROFILE overrides the camera profile JSON.
@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
-sys.path.insert(0, REPO + "/src/runtime/control")
+sys.path.insert(0, REPO + "/src/runtime/sensing")
 
 from control.sensing.perception.camera_ground import simulation_ground_plane  # noqa: E402
 from control.sensing.perception.lane import detect_lane_error, detect_lane_centre, LANE_LINE_WIDTH_M  # noqa: E402

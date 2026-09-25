@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: `core` (`src/runtime/gateway`) is the only external API gateway (FastAPI + rclpy in one process), supported by `core_common` (protocol schemas, config, identity), `core_events`, `core_features` (command/safety/navigation/power/docking/…), and `core_api_web` (REST/WS + dashboard) — plus hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi 5 deploy/release tooling, and charging-dock ESP32 firmware. `src/runtime/control` contains the absorbed Control package; its legacy final publisher must not run beside CORE. `src/site/fleet` contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. `src` packages are grouped by directory (`core` / `devices` / `products` / `face` / `navigation` / `sim` / `site`); upstream was pinky_pro, fully renamed (ADR D-16) and later regrouped out of flat `rosy_*` directories. License: Apache-2.0.
+ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: `core` (`src/runtime/gateway`) is the only external API gateway (FastAPI + rclpy in one process), supported by `core_common` (protocol schemas, config, identity), `core_events`, `core_features` (command/safety/navigation/power/docking/…), and `core_api_web` (REST/WS + dashboard) — plus hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi 5 deploy/release tooling, and charging-dock ESP32 firmware. `src/runtime/sensing` contains the absorbed Control package; its legacy final publisher must not run beside CORE. `src/site/fleet` contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. `src` packages are grouped by directory (`core` / `devices` / `products` / `face` / `navigation` / `sim` / `site`); upstream was pinky_pro, fully renamed (ADR D-16) and later regrouped out of flat `rosy_*` directories. License: Apache-2.0.
 
 ## Key Files
 
@@ -60,7 +60,7 @@ source env.sh
 cd src && colcon build --symlink-install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/features/test/ src/hmi/web_common/test/ -v
+python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest src/site/fleet/test/ -v
@@ -87,7 +87,7 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 
 ### Internal
 
-- `src/runtime/gateway` depends on `src/contracts/foundation`, `src/runtime/events`, `src/runtime/features`, `src/runtime/api_web`, and `src/contracts/interfaces` (plus, at runtime, bringup/Nav2 topics).
+- `src/runtime/gateway` depends on `src/contracts/foundation`, `src/runtime/events`, `src/runtime/services`, `src/runtime/api_web`, and `src/contracts/interfaces` (plus, at runtime, bringup/Nav2 topics).
 - `deploy/` consumes `src/` via `deploy/robot/Dockerfile`.
 - `test/` imports `deploy/release` via `test/conftest.py` `sys.path`.
 

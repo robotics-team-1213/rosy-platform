@@ -17,7 +17,7 @@ WEB = ROOT / "src" / "runtime" / "api_web" / "core_api_web" / "web"
 #: mount — app.js imports `/common/core_ui_logic.js` absolutely, and a request
 #: with no route escapes to real DNS (rosy.test does not resolve) and kills the
 #: boot before the first assertion.
-WEB_COMMON = ROOT / "src" / "hmi" / "web_common"
+WEB_COMMON = ROOT / "src" / "hmi" / "web"
 
 from browser_harness import DECLINE_CONFIRM, accept_confirm, open_page  # noqa: E402
 

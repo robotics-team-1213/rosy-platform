@@ -24,7 +24,7 @@ import yaml
 SRC = Path(__file__).resolve().parents[2]
 
 for _path in (SRC / "gateway", SRC.parent / "contracts" / "foundation", SRC / "events",
-              SRC / "features", SRC / "api_web", SRC / "control"):
+              SRC / "services", SRC / "api_web", SRC / "sensing"):
     _entry = str(_path)
     if _entry not in sys.path:
         sys.path.insert(0, _entry)

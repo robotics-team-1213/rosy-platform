@@ -243,4 +243,5 @@
 | D-232 | OMX 제품 설정은 products/omx 이고, 보드 핀맵과 AI 자리는 그대로다 | Accepted |
 | D-233 | 디자인 시스템 초안 — 토큰 동결, 컴포넌트 3층 | Proposed |
 | D-241 | core 계열 폴더는 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
+| D-242 | 나머지 폴더도 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
 ---

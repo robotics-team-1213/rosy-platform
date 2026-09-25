@@ -136,8 +136,8 @@
 
 ## 최근 기록
 
+- 2026-09-25 · uncommitted · refactor(layout): 나머지 역할 폴더 (D-242)
 - 2026-09-25 · uncommitted · refactor(runtime): core 계열 폴더를 역할 이름으로 (D-241)
 - 2026-09-25 · uncommitted · docs(adr): D-232 OMX 제품 설정은 products/omx
 - 2026-09-25 · uncommitted · docs(plans): D-231 이동 묶음 계획, 장치는 계열로
 - 2026-09-25 · uncommitted · docs+test(adr): D-231 소스 영역을 층으로 — 이름은 그대로, 이동은 한 번에
-- 2026-09-25 · uncommitted · test+docs(layout): D-226 Accepted — CI가 공개 경계와 문서 자리를 지킨다

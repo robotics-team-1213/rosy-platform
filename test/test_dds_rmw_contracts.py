@@ -73,7 +73,7 @@ def test_fleet_and_games_do_not_import_sensor_image():
 def test_scan_image_imu_use_sensor_data_qos():
     """D-119: 생산 LaserScan/Imu/Image pub·sub 은 qos_profile_sensor_data."""
     camera = (
-        ROOT / "src" / "runtime" / "control" / "control" / "camera_detect_node.py"
+        ROOT / "src" / "runtime" / "sensing" / "control" / "camera_detect_node.py"
     ).read_text(encoding="utf-8")
     assert "qos_profile_sensor_data" in camera
     assert "create_publisher(Image, 'camera/front', qos_profile_sensor_data)" in camera

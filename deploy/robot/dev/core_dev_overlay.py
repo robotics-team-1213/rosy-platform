@@ -410,7 +410,7 @@ def pack_repo(repo: Path, output: Path) -> None:
         "python/core": repo / "src" / "runtime" / "gateway" / "core",
         "python/core_common": repo / "src" / "contracts" / "foundation" / "core_common",
         "python/core_events": repo / "src" / "runtime" / "events" / "core_events",
-        "python/core_features": repo / "src" / "runtime" / "features" / "core_features",
+        "python/core_features": repo / "src" / "runtime" / "services" / "core_features",
         "python/core_api_web": repo / "src" / "runtime" / "api_web" / "core_api_web",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -423,7 +423,7 @@ def pack_repo(repo: Path, output: Path) -> None:
                 member_allowed(arcname)
                 tar.add(path, arcname=arcname, recursive=False)
         for filename in SHARE_FILES:
-            source = repo / "src" / "hmi" / "web_common" / filename
+            source = repo / "src" / "hmi" / "web" / filename
             arcname = f"share/web_common/{filename}"
             member_allowed(arcname)
             tar.add(source, arcname=arcname, recursive=False)

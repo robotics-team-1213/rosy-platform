@@ -115,7 +115,7 @@ def test_core_and_io_images_do_not_copy_hardware_packages():
 def test_core_dockerfile_does_not_copy_control_or_opencv():
     text = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = text.split("FROM runtime-common AS io-runtime")[0]
-    assert "COPY src/runtime/control" not in core
+    assert "COPY src/runtime/sensing" not in core
     assert "python3-opencv" not in core
 
 

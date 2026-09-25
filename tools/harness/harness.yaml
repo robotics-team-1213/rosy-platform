@@ -36,10 +36,10 @@ modules:
     functional_kind: host-contract
     functional: [test/test_robot_runtime.py]
   - name: control
-    path: src/runtime/control
-    tests: [src/runtime/control/test, test/test_control_absorption_package.py]
+    path: src/runtime/sensing
+    tests: [src/runtime/sensing/test, test/test_control_absorption_package.py]
     functional_kind: pytest
-    functional: [src/runtime/control/test]
+    functional: [src/runtime/sensing/test]
   - name: fleet
     path: src/site/fleet
     tests: [src/site/fleet/test]
@@ -66,10 +66,10 @@ modules:
     functional_kind: pytest
     functional: [src/devices/pinky_pro/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
-    path: src/hmi/emotion
-    tests: [src/hmi/emotion/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
+    path: src/hmi/face
+    tests: [src/hmi/face/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
-    functional: [src/hmi/emotion/test/test_info_screen.py]
+    functional: [src/hmi/face/test/test_info_screen.py]
   - name: led
     path: src/devices/pinky_pro/led
     tests: [src/devices/pinky_pro/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
@@ -81,15 +81,15 @@ modules:
     functional_kind: host-contract
     functional: [src/devices/common/imu_bno055/test/test_package_contract.py]
   - name: sensor_adc
-    path: src/devices/pinky_pro/sensor_adc
-    tests: [src/devices/pinky_pro/sensor_adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/devices/pinky_pro/adc
+    tests: [src/devices/pinky_pro/adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/devices/pinky_pro/sensor_adc/test/test_adc_package_contract.py]
+    functional: [src/devices/pinky_pro/adc/test/test_adc_package_contract.py]
   - name: lamp_control
-    path: src/devices/pinky_pro/lamp_control
-    tests: [src/devices/pinky_pro/lamp_control/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/devices/pinky_pro/lamp
+    tests: [src/devices/pinky_pro/lamp/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/devices/pinky_pro/lamp_control/test/test_lamp_package_contract.py]
+    functional: [src/devices/pinky_pro/lamp/test/test_lamp_package_contract.py]
   - name: core_common
     path: src/contracts/foundation
     tests: [src/contracts/foundation/test]
@@ -101,25 +101,25 @@ modules:
     functional_kind: pytest
     functional: [src/runtime/events/test/test_audit.py]
   - name: core_features
-    path: src/runtime/features
-    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/features/test/test_docking.py, src/runtime/features/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py]
+    path: src/runtime/services
+    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py, src/runtime/services/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py]
     functional_kind: pytest
-    functional: [src/runtime/gateway/test/test_core_logic.py, src/runtime/features/test/test_docking.py]
+    functional: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py]
   - name: core_api_web
     path: src/runtime/api_web
     tests: [src/runtime/api_web/test]
     functional_kind: pytest
     functional: [src/runtime/api_web/test]
   - name: web_common
-    path: src/hmi/web_common
-    tests: [src/hmi/web_common/test/test_ui_token_contracts.py, src/hmi/web_common/test/test_palette_gates.py, src/hmi/web_common/test/test_headless_state.py]
+    path: src/hmi/web
+    tests: [src/hmi/web/test/test_ui_token_contracts.py, src/hmi/web/test/test_palette_gates.py, src/hmi/web/test/test_headless_state.py]
     functional_kind: host-contract
-    functional: [src/hmi/web_common/test/test_ui_token_contracts.py]
+    functional: [src/hmi/web/test/test_ui_token_contracts.py]
   - name: omx_adapter
-    path: src/devices/omx/omx_adapter
-    tests: [src/devices/omx/omx_adapter/test]
+    path: src/devices/omx/adapter
+    tests: [src/devices/omx/adapter/test]
     functional_kind: pytest
-    functional: [src/devices/omx/omx_adapter/test]
+    functional: [src/devices/omx/adapter/test]
   - name: interfaces
     path: src/contracts/interfaces
     tests: [src/contracts/interfaces/test/test_srv_surface.py]
@@ -143,7 +143,7 @@ modules:
     functional: [src/sim/description/test/test_urdf_surface.py]
   - name: dock
     path: firmware/dock
-    tests: [test/test_dock_contract.py, src/runtime/features/test/test_docking.py]
+    tests: [test/test_dock_contract.py, src/runtime/services/test/test_docking.py]
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal
