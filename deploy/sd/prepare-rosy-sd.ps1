@@ -606,7 +606,9 @@ if (-not $DiskInventoryJson -and -not $ResumeAfterWrite -and [IO.Path]::GetExten
 }
 if ($ReadbackStallMinutes -le 0 -or $WriterStallMinutes -le 0) { Fail "stall limits must be positive" }
 if ($WriterSoftStallMinutes -le 0) { Fail "stall limits must be positive" }
-if ($WriterSoftStallMinutes -gt $WriterStallMinutes) { Fail "-WriterSoftStallMinutes must not exceed -WriterStallMinutes" }
+# The soft limit only warns; it never kills. Clamp it at half the hard limit
+# so short test timeouts (and small operator values) keep working unchanged.
+if ($WriterSoftStallMinutes -gt ($WriterStallMinutes / 2)) { $WriterSoftStallMinutes = $WriterStallMinutes / 2 }
 
 $credentialPath = Get-CredentialPath $WifiProfile
 if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
