@@ -141,8 +141,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(review): D-268 정책 증거 경계와 Ubuntu Fleet 실행 게이트 보강
 - 2026-09-26 · uncommitted · docs(architecture): D-267 Ubuntu 사이트 Fleet·영상·자동 작업 설계
 - 2026-09-26 · uncommitted · docs(plan): record the first device-screen migration slice
 - 2026-09-26 · uncommitted · docs(verification): 전수 시험 붉음 전건 수리 — CI red 7·sensing 96+7·CRLF 2
 - 2026-09-26 · uncommitted · docs(verification): 전수 시험 28 스위트로 확장 — 실패 전건을 레인별 판정
-- 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
