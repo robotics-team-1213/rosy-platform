@@ -2675,3 +2675,9 @@
 - Change: exercised the current packaged Fleet WSS hub with a synthetic CORE Agent HELLO, heartbeat, and event, then checked authenticated event readback and SQLite persistence after Fleet restart.
 - Evidence: Fleet acknowledged the event; anonymous history was denied; the same `nav.completed` payload remained readable after restart. Exact Compose project and volume were removed and generated credentials were blanked.
 - Gate: packaged software-level CORE event ingestion is locally verified. Real CORE/robot, Ubuntu host, GPU, physical camera/network, dispatch/motion, and SITE/DEVICE/FIELD acceptance remain open.
+
+## 2026-09-27 · uncommitted · deploy(site): add guarded SQLite backup and restore
+
+- Change: bundle `/opt/rosy/site_db.py` with the Fleet image and document online backup, integrity verification, isolated-volume restore drills, stopped-service production restore, rollback snapshot, permissions, and retention evidence.
+- Evidence: 529 Fleet/deploy tests passed and 5 were skipped; deliberately replacing `integrity_check` with `foreign_key_check` made the WAL-backup test fail, then the original guard was restored. Container-package verification remains in progress.
+- Gate: no site recovery or field gate is claimed until the new candidate is exercised; Ubuntu host and production restore remain unverified. Automatic movement and picking remain HOLD.

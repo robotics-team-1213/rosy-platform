@@ -274,14 +274,87 @@ readback through the authenticated API with a surveyed source. Record image
 digests, config revision, calibration revision, backup location, and recovery
 test in the deployment record.
 
-Fleet stores sightings and authenticated CORE Agent event history in the same
-named SQLite volume with WAL and full synchronous commit. Pairing a CORE Agent
-requires `--events-db`; the Compose stack points it at
-`/var/lib/rosy/fleet.sqlite3`. Read the event audit through the authenticated
-`GET /api/fleet/events` cursor API. Back it up with `SightingStore.backup()` or
-a quiesced SQLite-aware backup; do not copy only the live main DB file while
-WAL is active. Protect the backup as operational data, test restore to a
-separate volume, and define site retention before production operation.
+Fleet stores sightings, authenticated CORE Agent event history, operator tasks,
+task status history, and mutation audit in the same named SQLite volume with
+WAL and full synchronous commit. Pairing a CORE Agent requires `--events-db`;
+the Compose stack points it at `/var/lib/rosy/fleet.sqlite3`. Read the event
+audit through the authenticated `GET /api/fleet/events` cursor API. The Fleet
+image bundles a SQLite-aware online backup and guarded restore command at
+`/opt/rosy/site_db.py`. Do not copy only the live main DB file while WAL is
+active.
+
+### Backup and restore operations
+
+Keep backups on a protected host filesystem or approved encrypted backup
+target. They contain operational history and task data. The utility creates
+new backups without overwriting an existing file, runs `PRAGMA integrity_check`
+before and after backup, and reports a SHA-256 digest. It runs as the Fleet
+UID/GID (`10001:10001`); prepare a private writable host directory and set the
+installed candidate tag and paths in `/etc/rosy/site/site.env` first:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
+BACKUP_DIR=/var/backups/rosy-site
+BACKUP_NAME="fleet-$(date -u +%Y%m%dT%H%M%SZ).sqlite3"
+compose() { docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py backup --destination "/backup/$BACKUP_NAME"
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py verify --path "/backup/$BACKUP_NAME"
+```
+
+Retain the command JSON output (including digest), backup filename, image
+digest, and timestamp in the site's deployment record; transfer copies using
+the approved encrypted path and verify them again after transfer. Define and
+enforce a site retention period before production operation.
+
+Before relying on recovery, test the backup against a separate Compose project
+so it receives a different named `sighting_data` volume. The installed site
+configuration and secret files must be available to Compose, but this one-off
+command does not start the services or contact robots:
+
+```sh
+restore_test() { docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
+restore_test run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py restore --source "/backup/$BACKUP_NAME"
+restore_test run --rm --no-deps --user 10001:10001 \
+  --entrypoint python3 fleet /opt/rosy/site_db.py verify \
+  --path /var/lib/rosy/fleet.sqlite3
+```
+
+Verify expected sightings, CORE events, tasks, status history, and audit rows
+through the restored database or an isolated authenticated Fleet readback before
+removing that test project. After recording the result, remove only the exact
+test project and its test volume with
+`docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml down --volumes`.
+Never run that command with the production project name.
+
+For a production restore, schedule a maintenance window and stop every writer
+and reader first. Mount the chosen verified backup read-only, preserve the
+printed pre-restore rollback path, and keep the same production Compose project
+name so the command targets the existing data volume:
+
+```sh
+compose stop proxy vision fleet
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py restore --source "/backup/$BACKUP_NAME" \
+  --destination /var/lib/rosy/fleet.sqlite3 --replace --assume-stopped
+compose run --rm --no-deps --user 10001:10001 \
+  --entrypoint python3 fleet /opt/rosy/site_db.py verify \
+  --path /var/lib/rosy/fleet.sqlite3
+compose up -d
+```
+
+`--assume-stopped` is an explicit operator assertion; the utility cannot prove
+that no other process has the volume open. If restore fails, it attempts to
+reinstate the pre-restore snapshot. Keep the site stopped and preserve both the
+backup and reported rollback file until authenticated API readback confirms the
+expected sightings, events, tasks, and audit history. Do not use `down --volumes`
+on the production project.
 
 The same named volume stores operator task requests, append-only task status
 history, and per-user mutation audit (`--tasks-db`). An externally reachable
