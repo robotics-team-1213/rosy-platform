@@ -173,6 +173,7 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.target" "$OVERLAY/etc/systemd/system/"
 # I/O ships as a target dependency in no-motion mode (D-192); navigation
 # remains explicitly approved. Neither hardware unit is enabled on its own.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-io.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-camera.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-navigation.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"

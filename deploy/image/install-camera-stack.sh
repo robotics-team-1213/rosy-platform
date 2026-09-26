@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # D-288: build the official Raspberry Pi PiSP stack inside the mounted ARM64 image.
 set -euo pipefail
 

@@ -361,6 +361,7 @@ DECLARED_WRITES = {
         "/run/rosy/status-inputs.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
+    "rosy-camera.service": {"/var/log/rosy-camera/launch.log"},
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
@@ -455,6 +456,9 @@ PROGRAM_SOURCES = {
         "imported-by:src/runtime/gateway:control:src/runtime/sensing",
     ],
     "rosy-io.service": ["src/devices/pinky_pro/bringup"],
+    "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
+                            "src/runtime/sensing/control/camera_detect_node.py",
+                            "src/runtime/sensing/control/road_observer_node.py"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
