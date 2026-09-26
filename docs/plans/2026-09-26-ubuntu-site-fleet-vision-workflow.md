@@ -155,7 +155,7 @@
 
 ## Implementation checkpoint and next execution order (2026-09-26)
 
-- D-288 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.37; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, booleans, and non-finite coordinates before CORE dispatch. Source/schema/doc alignment is guarded by `test_task_contract_docs.py`.
+- D-288 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.38; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, invalid value types, booleans, and non-finite coordinates before CORE dispatch. `/api/fleet/do` publishes a verb-specific bounded OpenAPI schema generated from the shared interpreter grammar; source/schema/doc alignment is contract-tested.
 - D-267, D-269, and D-282 remain Proposed. Their boundaries are implementation constraints for this plan, not an architecture approval or field acceptance.
 - Implemented LOCAL foundation: per-principal viewer/operator/policy-admin API authentication (D-276), authenticated manual navigation through the durable task service, persistent task/audit state, CORE Agent event ingestion, and ceiling-phone WSS → Vision → derived sighting.
 - Queue choice: SQLite remains the task ledger and scheduler. Gate A found no current independent-worker requirement, so RabbitMQ stays deferred; raw video and ROS messages do not enter the task queue.

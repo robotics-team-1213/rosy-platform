@@ -246,3 +246,11 @@
 - gate 변화: LOCAL 기존 GO; DEVICE/FIELD/PERSISTENCE 미수용.
 - 결정: D-257/D-268 Proposed 유지, sightings는 operator display/reconciliation 전용.
 - 교훈: sighting API를 추가해도 운영 CLI provisioning, persistent audit, vision publisher를 따로 검증해야 한다.
+
+## 2026-09-26 · uncommitted · feat(fleet): publish and enforce intent API types
+
+- 변경: `/api/fleet/do` OpenAPI now exposes verb-specific fields and the 1–8-step form from the shared interpreter grammar. Fleet rejects mismatched values before contacting CORE.
+- 증거: `python -m pytest src/site/fleet/test -q` 507 passed, 5 skipped; `python -m pytest src/runtime/gateway/test/test_intent.py -q` 18 passed; flake8 passed.
+- gate 변화: SOURCE/LOCAL API contract GO; Ubuntu/physical-device acceptance remains open.
+- 결정: D-288; site intent stays separate from the robot DDS/WSS envelope.
+- 교훈: API documentation must describe the same grammar that the dispatch interpreter accepts.

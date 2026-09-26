@@ -85,3 +85,11 @@
 - gate 변화: 없음. ROS/API runtime/device acceptance는 포함하지 않는다.
 - 결정: D-283 Accepted.
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
+
+- 변경: `core_common.intent.request_schema()` now generates the `/api/fleet/do` one-step or bounded-sequence OpenAPI grammar from the shared verb table. The interpreter rejects mismatched numeric, string, integer, and string-array values before scatter.
+- 증거: gateway intent tests 18 passed; Fleet API suite 507 passed, 5 skipped; touched Python files pass flake8.
+- gate 변화: SOURCE/LOCAL contract evidence only; this library has no runtime/device gate of its own.
+- 결정: D-288 API intent boundary; public robot PRT envelope remains unchanged.
+- 교훈: generated schemas and runtime interpretation must share the same verb and field definitions.

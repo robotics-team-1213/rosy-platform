@@ -2460,3 +2460,9 @@
 - 변경: D-283이 v1.36을 사용함에 따라 D-288의 API Reference 버전을 v1.37로 올리고 두 변경 이력을 함께 유지했다.
 - 근거: API contract test에서 현행 버전 v1.37과 D-288 intent 섹션을 확인한다. docs index는 harness로 재생성한다.
 - gate 변화: SOURCE/LOCAL 계약 문서 및 테스트만 갱신했다. Ubuntu, 실물 장치, GPU 및 DEVICE/FIELD 상태는 변하지 않았다.
+
+## 2026-09-26 · uncommitted · feat(site): publish and enforce `/api/fleet/do` grammar
+
+- 변경: D-288 follow-through로 Fleet OpenAPI에 동사별 필드와 최대 8단계 문법을 공개하고, 통역기가 스키마와 같은 타입 규칙을 dispatch 전에 적용한다. API Reference는 v1.38이다.
+- 증거: Fleet `507 passed, 5 skipped`; gateway intent `18 passed`; docs/network/harness `73 passed, 21 warnings`; harness lint `0 errors, 21 warnings`; touched Python files flake8 통과.
+- gate 변화: SOURCE/LOCAL API 계약을 검증했다. Ubuntu 배포, 실물 CORE/카메라, GPU 모델 추론 및 DEVICE/FIELD 수용은 별도 HOLD다.

@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "423 passed, 5 skipped (2026-09-26 Windows). source-token FleetAgent↔console WebSocket integration과 D-257 site sighting schema/API isolation 포함; Ubuntu/device 수용은 아님"
+    evidence: "507 passed, 5 skipped (2026-09-26 Windows). source-token FleetAgent↔console WebSocket integration, D-257 site sighting isolation, D-288 intent OpenAPI/runtime validation 포함; Ubuntu/device 수용은 아님"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD

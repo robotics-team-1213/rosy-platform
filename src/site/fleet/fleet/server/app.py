@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.sightings import SiteSightingPayload
-from core_common.intent import IntentError, interpret
+from core_common.intent import IntentError, interpret, request_schema
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingError
@@ -480,7 +480,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         except (HubError, SignalApiError, OSError) as exc:
             raise _http_error(exc) from exc
 
-    @app.post("/api/fleet/do", dependencies=operator_guard, tags=["fleet"])
+    @app.post(
+        "/api/fleet/do",
+        dependencies=operator_guard,
+        tags=["fleet"],
+        openapi_extra={
+            "requestBody": {
+                "content": {"application/json": {"schema": request_schema()}},
+            },
+        },
+    )
     async def fleet_do(
         body: dict,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
