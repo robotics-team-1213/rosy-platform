@@ -289,3 +289,4 @@
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 | Accepted |
 ---
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 | Accepted |
+| D-289 | Role console entry, action groups, and map readout | Accepted |
