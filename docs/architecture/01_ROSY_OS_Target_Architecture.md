@@ -1,5 +1,7 @@
 # 01. ROSY Platform Target Architecture
 
+**범위:** 장기 목표 그림이다. 현재 배포/외부 API의 정본은 [D-59](../adr/D-59-.md), [D-65](../adr/D-65-core-d-62.md), [D-269](../adr/D-269-device-server-contracts-and-ros-boundary.md), [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)과 API Reference다. 아래 `Control Plane`, `Compute Fabric`, 설치 프로파일 이름은 완성된 서비스·패키지를 뜻하지 않는다. 현재 실행 단위와 진입 조건은 [구조 간극 지도](../plans/2026-09-26-platform-structure-gap-map.md)에 구분한다.
+
 ## 1. Layer Model
 
 ```text
@@ -37,7 +39,7 @@ Responsibilities:
 
 ### ROSY Runtime
 
-Runs on every ROSY Node.
+Target role for each participating host. Today Pinky has its own CORE and fixed OMX has a disabled adapter/development runtime; there is no universal runtime process installed on every PC or camera.
 
 Responsibilities:
 
@@ -54,7 +56,7 @@ Responsibilities:
 
 ### ROSY Fabric
 
-Standardizes communication between ROSY nodes.
+Names the versioned contracts and adapters between roles (D-290). It is not one global DDS graph or a mandatory central broker. ROS 2 topics/services/actions below remain within each device's local control boundary; site-to-device links use admitted HTTPS REST/WSS contracts (D-269).
 
 Includes:
 
@@ -93,6 +95,8 @@ Provides:
 
 ## 3. Example Deployment
 
+The following GRAM/RTX and cross-node picture is a target concept, not the current site Compose or an approved ROS 2 connection between hosts. The currently implemented site entry and OMX placement candidates are described in the [role topology](../plans/2026-09-26-site-role-deployment-topology-design.md).
+
 ```text
                 ROSY CONTROL PLANE
                       GRAM-01
@@ -121,7 +125,7 @@ If the Control Plane is unavailable:
 
 ## 5. Profile-Based Deployment
 
-Supported profiles:
+Illustrative target profile names, not currently installable package names or a claim of supported combinations:
 
 - `rosy-profile-control`
 - `rosy-profile-pinky`
@@ -132,17 +136,7 @@ Supported profiles:
 - `rosy-profile-rfid`
 - `rosy-profile-dev`
 
-Profiles can be combined.
-
-Example:
-
-```yaml
-profiles:
-  - rosy-profile-pinky
-  - rosy-profile-omx
-```
-
-This allows Pinky and OMX to share one host if necessary.
+Target roles may eventually be combined on one host after their device and stop-path acceptance. Today's Pinky CORE stays on its Pi. One or two fixed OMX workcells may be candidates to share an Ubuntu host after D-281/D-282 acceptance. A physically mounted Pinky+OMX composite robot is a separate later product gate (D-55/D-71).
 
 ## 6. Non-Functional Requirements
 

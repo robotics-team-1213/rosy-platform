@@ -2,16 +2,16 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "abcbba13c5232a1991b96851ea54d4d59409ad88", date: 2026-09-26 }
+last_verified: { commit: "6ce05ff1", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
-    evidence: "HMI web + dashboard 97 passed with browser tests; API route/manifest 27 passed after latest-main integration (2026-09-26 Windows)"
+    evidence: "HMI web + dashboard 100 passed with browser tests; dashboard API route/manifest 29 passed after latest-main integration (2026-09-27 Windows)"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test -q"
   LOCAL:
     state: GO
-    evidence: "actual CORE TestClient API + visible Chromium: operator console/setup and administrator console/setup/device at 1366×768 and 390×844; E-stop visible, no positive horizontal overflow, 0 missing button kinds or page errors"
-    cmd: "X:\\DevTemp\\rosy-design-system-review\\visible_roles.py"
+    evidence: "actual CORE TestClient API + visible Chromium: styleguide, operator console/setup, administrator console/setup/device at 1366×768 and 390×844; focus ring and disabled treatment visible, no positive horizontal overflow, 0 missing button kinds or page errors"
+    cmd: "X:\\DevTemp\\rosy-design-system-polish\\visible_roles.py"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -21,10 +21,11 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-23, D-77, D-243, D-283, D-292]
+adrs: [D-23, D-77, D-243, D-283, D-292, D-294]
 plans:
   - docs/plans/2026-09-26-d283-console-action-groups.md
   - docs/plans/2026-09-26-rosy-tokenized-design-system.md
+  - docs/plans/2026-09-26-shared-typography-interaction-tokens.md
 ---
 
 ## 지금 상태

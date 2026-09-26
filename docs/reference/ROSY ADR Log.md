@@ -294,4 +294,5 @@
 | D-289 | Role console entry, action groups, and map readout | Accepted |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 | Accepted |
 | D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 | Accepted |
+| D-294 | Shared typography and interaction tokens use a closed scale | Accepted |
 | D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 | Accepted |

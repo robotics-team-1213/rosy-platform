@@ -1,16 +1,16 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "abcbba13c5232a1991b96851ea54d4d59409ad88", date: 2026-09-26 }
+last_verified: { commit: "6ce05ff1", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
-    evidence: "web-common + dashboard 97 passed with ROSY_RUN_BROWSER_TESTS=1; API route/manifest 27 passed (2026-09-26 Windows)"
+    evidence: "HMI web + dashboard 100 passed with browser tests; dashboard API route/manifest 29 passed (2026-09-27 Windows)"
     cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test -q\""
   LOCAL:
     state: GO
-    evidence: "실 CORE TestClient API + visible Chromium: operator /console·/setup, administrator /console·/setup·/device at 1366x768 and 390x844; D-292 token values computed, active rose menu, 0 missing kinds, 0 page errors, no positive horizontal overflow"
-    cmd: "X:\\DevTemp\\rosy-design-system-review\\visible_roles.py"
+    evidence: "실 CORE TestClient API + visible Chromium: styleguide, operator /console·/setup, administrator /console·/setup·/device at 1366x768 and 390x844; blue focus ring, disabled opacity 0.45, 0 missing kinds, 0 page errors, no positive horizontal overflow"
+    cmd: "X:\\DevTemp\\rosy-design-system-polish\\visible_roles.py"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -19,11 +19,12 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292]
+adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292, D-294]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-26-rosy-modern-brand-palette.md
   - docs/plans/2026-09-26-rosy-tokenized-design-system.md
+  - docs/plans/2026-09-26-shared-typography-interaction-tokens.md
 ---
 ## 지금 상태
 

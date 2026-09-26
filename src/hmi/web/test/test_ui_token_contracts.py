@@ -442,3 +442,70 @@ def test_a_danger_fill_carries_ink_not_dark_text():
             offenders.append(f"{selector.strip()[:50]} -> color {ink.group(1)}")
     assert not offenders, f"위험 면 위에 잉크가 아닌 색을 얹는다: {offenders}"
 
+
+def test_shared_type_and_interaction_tokens_are_closed_and_keep_current_metrics():
+    """D-294 — 반복되는 타이포그래피와 조작 피드백은 이름 있는 척도로 닫는다."""
+    declarations = dict(
+        re.findall(r"^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);", tokens_text(), re.MULTILINE)
+    )
+    expected = {
+        "--weight-medium": "500",
+        "--weight-label": "600",
+        "--weight-emphasis": "650",
+        "--weight-strong": "700",
+        "--leading-flat": "1",
+        "--leading-dense": "1.1",
+        "--leading-control": "1.2",
+        "--leading-label": "1.3",
+        "--leading-body": "1.4",
+        "--leading-copy": "1.5",
+        "--track-wide": "0.04em",
+        "--track-state": "0.06em",
+        "--focus-ring-width": "2px",
+        "--focus-ring-offset": "1px",
+        "--contract-mark-width": "2px",
+        "--contract-mark-offset": "2px",
+        "--disabled-opacity": "0.45",
+    }
+    missing = expected.keys() - declarations.keys()
+    assert not missing, f"D-294 토큰이 없다: {sorted(missing)}"
+    changed = {
+        token: (declarations[token].strip(), value)
+        for token, value in expected.items()
+        if declarations[token].strip() != value
+    }
+    assert not changed, f"기존 공용 컴포넌트 지표가 달라졌다: {changed}"
+    assert declarations.get("--track-label", "").strip() == "0.12em"
+
+
+def test_shared_components_consume_type_and_interaction_tokens():
+    """공용 컴포넌트에서 반복되는 값은 토큰으로만 바꿀 수 있다."""
+    css = (TOKENS.parent / "components.css").read_text(encoding="utf-8")
+    required = {
+        "--weight-medium", "--weight-label", "--weight-emphasis", "--weight-strong",
+        "--leading-flat", "--leading-dense", "--leading-control", "--leading-label",
+        "--leading-body", "--leading-copy", "--track-wide", "--track-state", "--track-label",
+        "--focus-ring-width", "--focus-ring-offset", "--contract-mark-width",
+        "--contract-mark-offset", "--disabled-opacity",
+    }
+    used = set(re.findall(r"var\((--[a-z0-9-]+)", css))
+    assert required <= used, f"components.css가 소비하지 않는 토큰: {sorted(required - used)}"
+
+    raw_values = re.findall(
+        r"(?:font-weight\s*:\s*\d+|font\s*:\s*\d+\s+[^;}]+/\s*[\d.]+|"
+        r"letter-spacing\s*:\s*(?:0|[\d.]+em)|outline\s*:\s*[\d.]+px|"
+        r"outline-offset\s*:\s*-?[\d.]+px|opacity\s*:\s*[\d.]+)",
+        css,
+    )
+    assert not raw_values, f"components.css에 원시 타이포그래피/상호작용 값: {raw_values}"
+
+
+def test_styleguide_renders_the_shared_type_and_interaction_contract():
+    """D-294의 실례는 문서 전용 CSS가 아닌 실제 공용 컴포넌트를 보여준다."""
+    html = (WEB_ROOT / "styleguide.html").read_text(encoding="utf-8")
+    css = (WEB_ROOT / "styleguide.css").read_text(encoding="utf-8")
+    assert 'class="entry" id="type-and-interaction"' in html
+    assert 'kind="quiet" type="button"' in html
+    assert "disabled" in html
+    assert "--focus-ring-width" in css and "--focus-ring-offset" in css
+

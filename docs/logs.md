@@ -2509,6 +2509,12 @@
 - 근거: 현행 Site Compose/Caddy 경로, Fleet 이동 작업·UNKNOWN 처리, D-281/D-290의 단일 소유권 경계를 대조했다.
 - gate 변화: 없음. 원격 Vision worker·OMX API·실물 호스트 이전은 아직 구현/수용되지 않았다.
 
+## 2026-09-26 · uncommitted · Platform 목표와 현재 경계 대조
+
+- 변경: 목표 구조 01/08/09/11/12에 현재 구현·ADR 게이트를 표시하고, Console/Fleet/Fabric/Vision/OMX/AI/Data/합성 장비의 구조 간극과 구현 순서를 기록했다.
+- 근거: D-12/D-55/D-59/D-65/D-71/D-268/D-269/D-290, 현행 Fleet task service, 사이트/OMX Compose와 모듈 진행 기록을 대조했다.
+- gate 변화: 없음. 목표 문서를 현재 API·설치·DEVICE 수용으로 승격하지 않았다.
+
 ## 2026-09-27 · uncommitted · Pinky native mapping gate truth and G4 diagnostic
 
 - 변경: D-295와 네이티브 systemd 맵핑 복구 절차를 기록했다. CORE의 실제 mode/backend에 따라 CAP-001 광고와 명령 게이트를 같이 제한하고, 대시보드 운전 도구의 CSP 대기 오류를 수정했다.
