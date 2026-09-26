@@ -6,7 +6,7 @@ last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "D-283 action_group 탭·capability 생략과 안전 이탈 확인을 추가; latest-main integration recheck: dashboard/API/gateway 118 passed, 2 skipped; foundation 50 passed; harness contracts 49 passed (2026-09-26 Windows)"
+    evidence: "D-283 action_group 탭·capability 생략과 안전 이탈 확인을 추가; latest-main integration recheck: dashboard/API/gateway 119 passed, 2 skipped; foundation+harness contracts 99 passed (2026-09-26 Windows)"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/dashboard/test src/runtime/api_web/test src/runtime/gateway/test/test_dashboard.py src/runtime/gateway/test/test_console_layout.py -q"
   LOCAL:
     state: GO

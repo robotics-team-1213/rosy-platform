@@ -32,4 +32,4 @@ At 1366×768, keep the body at zero scroll, sense internally scrollable, observe
 
 Append the dashboard work log, update progress only for demonstrated gates, regenerate harness indexes, and run dashboard/API tests, browser verification, harness lint, and `git diff --check`. Do not claim ROS-SIM, device, or field acceptance.
 
-**Verification:** after integrating the latest local `main`, dashboard/API/gateway related suite 118 passed, 2 skipped; foundation suite 50 passed; harness contract tests 49 passed; `git diff --check` passed. Four FastAPI+CoreServices browser captures cover administrator/operator at 1366×768 and 390×844. Harness generation completed and lint passed with 21 existing warnings.
+**Verification:** after integrating the latest local `main`, dashboard/API/gateway related suite 119 passed, 2 skipped; foundation and harness contract tests 99 passed, 21 existing warnings; `git diff --check` passed. Four FastAPI+CoreServices browser captures cover administrator/operator at 1366×768 and 390×844. Harness generation completed and lint passed with 21 existing warnings.
