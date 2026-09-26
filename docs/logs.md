@@ -2344,6 +2344,11 @@
 - gate 변화: 없음. ADR은 실행 책임 결정이며 native ARM64 산출물, Ubuntu 사이트, 실물 폰·로봇, 자동 작업 수용은 별도다.
 - 회귀: 문서 변경만 수행했고 제품 코드와 다른 작업 트리의 WIP는 수정하지 않았다.
 
+## 2026-09-26 · uncommitted · docs(validation): execute D-275 surface and video role plan
+- 변경: recorded D-275 source/local boundary results and remaining ARTIFACT/DEVICE/SITE/FIELD holds; linked the execution record from the plan
+- 증거: plan integration suite 205 passed, 2 skipped; dashboard browser 64 passed; focused contract suites and Compose config passed
+- gate 변화: source/local contracts confirmed; deployment, device, and field gates unchanged
+- 구현: none; no new Vision workload or API change
 ## 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
 
 - 변경: D-276에 따라 viewer/operator/policy-admin 역할을 분리하고, 개인별 SHA-256 bearer digest를 로드한다. Fleet API 변경 요청은 영속 SQLite에 INTENT를 먼저 기록하며, 기록 실패 시 CORE 명령을 보내지 않는다. RESULT에는 principal·role·경로·상태를 기록하고 bearer와 본문은 저장하지 않는다.
@@ -2742,3 +2747,15 @@
 - 변경: D-299의 ROS 운영 제어와 native LeRobot 직접 제어 분리를 후속 실행 계획으로 풀고, 현재 폴더와 단계별 목표 폴더를 구분했다.
 - 증거: 현행 OMX adapter·제품 설정·deploy/omx·작업대 구현 계획과 공식 LeRobot OMX 연결 절차를 대조했다. 모드 배타성, 데이터 검증, 정책 입력, Fleet API의 순서와 증거 게이트를 명시했다.
 - gate 변화: 없음. 신규 폴더는 계획상의 경로이며 실물 OMX 제어, LeRobot 실행, 원격 API는 활성화되지 않았다.
+
+## 2026-09-27 · uncommitted · plan(platform): place OMX LeRobot under ROSY Platform roles
+
+- 변경: D-290/D-296의 전체 제품 경계를 부모 계획으로 세우고, 앞서 작성한 OMX/LeRobot 계획을 장치·데이터 하위 트랙으로 명시했다. 플랫폼 전체의 계약·Fleet·장치·관측·AI/Data·화면·배포 폴더 역할과 첫 작업 경로를 그렸다.
+- 증거: 현재 `src/contracts`, `src/runtime`, `src/devices`, `src/site`, `src/hmi`, `deploy`와 구조 간극 지도·목표 구조·D-290/D-296/D-299를 대조했다. 새로운 폴더는 목표 표시로 구분하고 기존 Pinky/OMX 운영 gate를 유지했다.
+- gate 변화: 없음. 공통 계약 패키지, OMX 원격 API, AI/Data 운영 경로, 실물 수용은 후속 단계다.
+
+## 2026-09-27 · uncommitted · plan(platform): decide boundaries from owners and evidence
+
+- 변경: 플랫폼 부모 계획에 물리 명령 owner, 단일 미션 원장, 실제 교환 계약, 증거 승격, 폴더/배포의 순서 있는 판정 기준과 반례 표를 추가했다. OMX 실제 결과 전에 공통 schema를 고정하던 단계를 뒤로 옮기고 LeRobot bench를 이종 미션의 필수 선행에서 분리했다.
+- 증거: D-18/D-231/D-290/D-296/D-299, Fleet 수락 receipt와 OMX 비활성 action owner를 대조했다. 계약·장치·반례 관점의 독립 검토에서 공통 패키지 선행, 빈 AI/Data 폴더, 복합 장치 상호 인터록 누락을 확인했다.
+- gate 변화: 없음. 공통 계약, OMX 운영, LeRobot 실험, Pinky 탑재 동시 동작은 각각 실증 전 후보로 유지한다.

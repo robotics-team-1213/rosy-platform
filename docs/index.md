@@ -160,6 +160,7 @@
 - [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
 - [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
 - [2026-09-27-omx-lerobot-control-boundary-implementation-plan.md](plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md)
+- [2026-09-27-rosy-platform-role-and-contract-implementation-plan.md](plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -172,8 +173,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · plan(platform): decide boundaries from owners and evidence
+- 2026-09-27 · uncommitted · plan(platform): place OMX LeRobot under ROSY Platform roles
 - 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
 - 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
 - 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
-- 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
-- 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill

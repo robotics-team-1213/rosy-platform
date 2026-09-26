@@ -4,15 +4,15 @@
 
 **Goal:** OMX-AI 고정 작업대에서 ROS 운영 제어와 native LeRobot 실험을 배타적으로 실행하고, 데이터·정책 입력을 장치 로컬 제어 경계에 안전하게 연결할 수 있는 근거를 단계별로 확보한다.
 
-**Architecture:** 기존 `omx_adapter`의 단일 명령 소유 정책과 ROS action/camera 바인딩을 유지한다. OMX-F 직렬 버스는 한 시점에 하나의 작업대 인스턴스만 열며, ROS 운영 후보와 LeRobot 직접 제어 실험은 명시적 모드 전환을 거친다. Fleet은 미래의 Device Action만 요청하고 최종 trajectory와 하드웨어 정지는 OMX 로컬에 둔다. 이 문서는 [기존 작업대 구현 계획](2026-09-26-omx-ai-workstation-runtime.md)의 후속 경계 계획이며 이미 끝난 OCI/ROS-SIM 작업을 재수행하라는 뜻이 아니다.
+**Architecture:** 기존 `omx_adapter`의 단일 명령 소유 정책과 ROS action/camera 바인딩을 유지한다. OMX-F 직렬 버스는 한 시점에 하나의 작업대 인스턴스만 열며, ROS 운영 후보와 LeRobot 직접 제어 실험을 함께 사용할 때는 명시적 모드 전환을 거친다. Fleet은 미래의 Device Action만 요청하고 최종 trajectory와 하드웨어 정지는 OMX 로컬에 둔다. LeRobot bench·데이터 변환은 첫 이종 Mission의 필수 선행이 아니다. 이 문서는 [기존 작업대 구현 계획](2026-09-26-omx-ai-workstation-runtime.md)의 후속 경계 계획이며 이미 끝난 OCI/ROS-SIM 작업을 재수행하라는 뜻이 아니다.
 
 **Tech Stack:** Ubuntu 24.04, ROS 2 Jazzy, ROBOTIS `open_manipulator`/`ros2_control`, 기존 `omx_adapter` Python, systemd 운영 후보, 별도 고정 버전 LeRobot/Dynamixel SDK 실험 환경, rosbag2/LeRobotDataset 오프라인 데이터 검증.
 
-**상태:** 계획. D-273 Accepted(구현 순서), D-281/D-282/D-299 Proposed(OMX 실행·제어 배치). 이 계획의 작성으로 `omx.enabled: false`, 원격 OMX API, DEVICE/FIELD gate가 바뀌지 않는다.
+**상태:** [ROSY Platform 역할·계약 부모 계획](2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)의 OMX 장치·LeRobot 하위 트랙. D-273 Accepted(구현 순서), D-281/D-282/D-299 Proposed(OMX 실행·제어 배치). 이 계획의 작성으로 `omx.enabled: false`, 원격 OMX API, DEVICE/FIELD gate가 바뀌지 않는다.
 
 ---
 
-## 현재 폴더와 책임 (2026-09-27 checkout)
+## OMX 하위 트랙의 현재 폴더와 책임 (2026-09-27 checkout)
 
 ```text
 Rosy OS/
@@ -37,7 +37,7 @@ Rosy OS/
 
 현재 `command_owner.py`/`ros_runtime.py`는 실물 OMX 운영 승인이나 독립 물리 정지를 제공하지 않는다. `deploy/omx`의 OCI 하드웨어 셸은 개발 후보이며 D-246의 운영 actuator 배포 방식이 아니다. LeRobot 직접 제어 코드와 OMX 원격 작업 API는 이 트리에 아직 없다.
 
-## 목표 폴더 배치 (단계별 생성 제안)
+## OMX 하위 트랙의 목표 폴더 배치 (단계별 생성 제안)
 
 ```text
 Rosy OS/
@@ -57,14 +57,14 @@ Rosy OS/
 │  ├─ host_inventory.py · preflight.py            # 기존 host/장치 검사 재사용
 │  ├─ native/                                     # [제안] 작업대별 systemd 실행·정지 후보
 │  └─ lerobot/                                    # [제안] 독립 bench 환경 잠금·실행 안내
-├─ tools/omx/                                     # [후순위] 오프라인 bag→dataset 검증 도구
+├─ tools/perception/omx/                          # [후순위] 오프라인 bag→dataset 검증 도구
 └─ docs/
    ├─ adr/                                       # 제어권·API 결정
    ├─ plans/                                     # 실행 절차
    └─ validation/                                # ROS-SIM·DEVICE·FIELD별 증거
 ```
 
-`native/`, `lerobot/`, `tools/omx/`는 **아직 존재하지 않는 목표 경로**다. 저장소 밖의 실제 포트·보정·자격 정보는 호스트 `/etc/rosy/omx/` 등 비공개 설정에 둔다. 영상·학습 데이터와 모델 가중치도 소스 트리에 넣지 않고 ID·해시·보정 revision의 manifest만 추적한다. 이 단계에서 `src/runtime/` 아래에 범용 OMX 실행기나 Pinky `core_common` 전체를 새 공통 라이브러리로 복제하지 않는다(D-296).
+`native/`, `lerobot/`, `tools/perception/omx/`는 **아직 존재하지 않는 목표 경로**이며 실제 코드가 들어오는 커밋에서만 만든다(D-231). 저장소 밖의 실제 포트·보정·자격 정보는 호스트 `/etc/rosy/omx/` 등 비공개 설정에 둔다. 영상·학습 데이터와 모델 가중치도 소스 트리에 넣지 않고 ID·해시·보정 revision의 manifest만 추적한다. 이 단계에서 `src/runtime/` 아래에 범용 OMX 실행기나 Pinky `core_common` 전체를 새 공통 라이브러리로 복제하지 않는다(D-296).
 
 ## 실행 순서와 완료 조건
 
@@ -73,27 +73,27 @@ Rosy OS/
 | 0. 장비·버전 확정 | OMX-L/F 실물 리비전, 포트, 펌웨어, 전원·독립 정지 수단, ROS·LeRobot 버전 표 | serial/by-id·관절·그리퍼·카메라·보정 provenance | 실물 identity나 정지 수단 불명 |
 | 1. 모드/포트 배타성 | 작업대별 ROS/LeRobot/비활성 모드 전환 계약과 native runner 후보 | 중복 포트, 미종료 프로세스, 재시작, 포트 분리의 거부 시험 | 전환 후 이전 owner가 FD를 유지하거나 자동 재개 |
 | 2. ROS 운영 후보 | 기존 action owner와 vendor controller의 native 연결·시간 경계 | 단일 최종 trajectory, joint readback, 취소 최종 결과·stale/HOLD | 동시 writer, 가짜 피드백, cancel 응답만으로 정지 주장 |
-| 3. LeRobot bench | 고정 버전 독립 환경에서 leader/follower 실험 | ROS owner 종료 및 포트 반환 뒤 teleop·기록; 종료 후 재시작 금지 확인 | ROS·LeRobot 동시 접근 또는 무단 운영 capability 노출 |
-| 4. 데이터 호환 | rosbag2/LeRobot dataset 매핑·검증 도구 | 시각·단위·joint/gripper·카메라·보정·결과의 샘플 대조 | 누락/불일치 데이터가 조용히 학습 입력으로 승격 |
-| 5. 정책 입력 | 정책 출력을 유한한 제안으로 받는 어댑터 | 제한·fresh state·deadline·취소·fault·재시작 거부 | 정책이 최종 ROS action 또는 serial을 우회 호출 |
+| 3. LeRobot bench (선택) | 고정 버전 독립 환경에서 leader/follower 실험 | ROS owner 종료 및 포트 반환 뒤 teleop·기록; 종료 후 재시작 금지 확인 | ROS·LeRobot 동시 접근 또는 무단 운영 capability 노출 |
+| 4. 데이터 호환 (선택) | rosbag2/LeRobot dataset 매핑·검증 도구 | 시각·단위·joint/gripper·카메라·보정·결과의 샘플 대조 | 누락/불일치 데이터가 조용히 학습 입력으로 승격 |
+| 5. 정책 입력 (후속) | 정책 출력을 유한한 제안으로 받는 어댑터 | 제한·fresh state·deadline·취소·fault·재시작 거부 | 정책이 최종 ROS action 또는 serial을 우회 호출 |
 | 6. 사이트 연결 | 별도 승인된 OMX Device Action API와 Fleet Mission Step | ID 연결, 수락/완료/UNKNOWN, 인증·취소·readback | OMX를 기존 Pinky `robots.yaml`에 끼워 넣거나 Fleet이 arm을 직접 제어 |
 
-1–3의 SOURCE/LOCAL·ROS-SIM 통과와 4–5의 데이터/정책 검증은 DEVICE를 대체하지 않는다. 실제 팔 동작, 물리 정지, 전원 상실, 부하·보정은 DEVICE에서 측정하고 고정 작업대 작업 결과는 FIELD에서 별도로 판정한다. Pinky 탑재와 이동 조작은 이 계획의 단계 6 이후 별도 계약·FIELD 수용이다.
+1–2의 SOURCE/LOCAL·ROS-SIM 통과와 선택적인 3–5의 데이터/정책 검증은 DEVICE를 대체하지 않는다. 실제 팔 동작, 물리 정지, 전원 상실, 부하·보정은 DEVICE에서 측정하고 고정 작업대 작업 결과는 FIELD에서 별도로 판정한다. 6의 이종 미션은 LeRobot bench 없이도 OMX 운영 owner/API/DEVICE 게이트가 충족되면 설계할 수 있다. Pinky 탑재와 이동 조작은 별도 로컬 상호 인터록·계약·FIELD 수용 대상이다.
 
 ### Task 1: 실물 inventory와 두 런타임 잠금
 
-**Files:** Modify `deploy/omx/host-inventory.yaml.example`, `deploy/omx/stack.lock.yaml`(ROS 쪽 변경이 있을 때만), `deploy/omx/README.md`; Create `deploy/omx/lerobot/README.md`, `deploy/omx/lerobot/requirements.lock` 또는 동등한 해시 고정 파일; Test `test/test_omx_host_inventory.py` 및 잠금 검증 시험.
+**Files:** Modify `deploy/omx/host-inventory.yaml.example`, `deploy/omx/stack.lock.yaml`(ROS 쪽 변경이 있을 때만), `deploy/omx/README.md`; LeRobot 실험을 택한 경우에만 Create `deploy/omx/lerobot/README.md`, `deploy/omx/lerobot/requirements.lock` 또는 동등한 해시 고정 파일; Test `test/test_omx_host_inventory.py` 및 필요한 잠금 검증 시험.
 
 1. 실물 OMX-L/F 모델·리비전, serial/by-id, 모터·카메라 식별, 물리 정지 경로를 비공개 inventory와 증거에 기록한다. 공식 문서의 기본 장치명·공장 설정은 실물 readback을 대신하지 않는다.
-2. 선택한 LeRobot 릴리스/커밋과 Dynamixel 의존성을 재현 가능한 독립 환경으로 잠근다. 기존 ROS 벤더 소스 잠금과 혼합하지 않는다.
+2. LeRobot 실험을 택하면 그 릴리스/커밋과 Dynamixel 의존성을 재현 가능한 독립 환경으로 잠근다. 기존 ROS 벤더 소스 잠금과 혼합하지 않는다.
 3. 테스트에서 빈 값, 같은 follower/leader 포트, 두 작업대의 중복 포트, 버전 미고정을 거부하도록 한 뒤 최소 구현·재검증·커밋한다.
 4. Exit: 실제 하드웨어 owner 후보와 버전·정지 수단을 표로 설명할 수 있다. 실물 정보가 없으면 정적 설계만 완료로 기록하고 장치 실행은 대기한다.
 
-### Task 2: 모드 전환·단일 owner 계약
+### Task 2: 단일 owner와 사용 시 모드 전환 계약
 
 **Files:** Create `src/devices/omx/adapter/omx_adapter/control_mode.py`, `src/devices/omx/adapter/test/test_omx_control_mode.py`, `deploy/omx/native/`의 service/runner 후보; Modify `deploy/omx/preflight.py`, `deploy/omx/README.md` as needed.
 
-1. 먼저 ROS→LeRobot, LeRobot→ROS, 중단·크래시·USB 재연결·재부팅의 상태 전이표를 작성한다. 허용 조건은 신규 명령 차단, 동작/정지 readback, 이전 프로세스 종료 및 FD 해제, 포트·보정 재확인, 명시적 재승인이다.
+1. 단일 OMX-F writer와 중단·크래시·USB 재연결·재부팅의 상태 전이표를 작성한다. LeRobot을 같은 장치에 설치·사용하는 경우 ROS→LeRobot, LeRobot→ROS 전환을 추가한다. 허용 조건은 신규 명령 차단, 동작/정지 readback, 이전 프로세스 종료 및 FD 해제, 포트·보정 재확인, 명시적 재승인이다.
 2. 단위 시험을 먼저 추가해 중복 owner, stale 포트, owner 미종료, 전환 중 요청, 이전 명령 재생이 거부되는지 확인한다.
 3. 하나의 관리 진입점만 장치 접근 권한을 받아 선택한 모드를 실행하도록 구현한다. 파일 잠금만으로 임의 외부 프로세스의 포트 점유까지 방지한다고 주장하지 않는다; Linux 서비스 권한·프로세스 FD·장치 점유를 함께 시험한다.
 4. Exit: 소프트웨어 전환 계약 LOCAL 통과. 실제 포트 배타성과 정지는 DEVICE에서 검증할 때까지 비활성 유지.
@@ -107,7 +107,7 @@ Rosy OS/
 3. 실물 bench에서는 독립 정지 수단을 준비한 절차로 무부하·낮은 범위부터 실행하고, 포트 분리·전원·정지 후 실제 관절/드라이버 상태를 기록한다.
 4. Exit: SOURCE/ROS-SIM/DEVICE 증거를 각각 기록한다. 하나의 action 성공이나 software HOLD만으로 물리 정지를 주장하지 않는다.
 
-### Task 4: native LeRobot 격리 실험
+### Task 4: native LeRobot 격리 실험 (선택)
 
 **Files:** Create `deploy/omx/lerobot/README.md`와 실행 검증 스크립트(필요 시); Test `test/test_omx_lerobot_mode.py` 등 환경·모드 가드 시험; Store 실험 기록 under `docs/validation/`.
 
@@ -118,7 +118,7 @@ Rosy OS/
 
 ### Task 5: 데이터·정책 경계
 
-**Files:** Create `tools/omx/`의 오프라인 변환·검증 도구와 테스트; Add `src/devices/omx/adapter/omx_adapter/policy_input.py` 및 테스트는 규칙 기반 작업·데이터 기준선 후에만; Update 데이터 manifest 계약 문서.
+**Files:** Create `tools/perception/omx/`의 오프라인 변환·검증 도구와 테스트는 실제 변환 코드가 필요할 때만; Add `src/devices/omx/adapter/omx_adapter/policy_input.py` 및 테스트는 규칙 기반 작업·데이터 기준선 후에만; Update 데이터 manifest 계약 문서.
 
 1. 동일한 짧은 episode에서 ROS 관절/명령·카메라 시각과 LeRobot observation/action을 수작업 기준표로 먼저 매핑한다.
 2. 변환 시험은 누락 프레임, 시각 역전, 단위·joint 순서·그리퍼 부호·보정 revision 불일치를 거부한다. 결과 manifest에 원본 bag, 변환 도구, dataset 버전과 해시를 남긴다.
