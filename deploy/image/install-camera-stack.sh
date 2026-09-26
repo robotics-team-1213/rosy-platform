@@ -44,6 +44,10 @@ for entry in "${INPUTS[@]}"; do
     tar -xzf "$archive" --strip-components=1 -C "$BUILD/$name"
 done
 cp "$REQUIREMENTS" "$BUILD/camera-python-requirements.txt"
+# The pinned Picamera2 release imports DRM preview unconditionally. Noble has
+# no pykms, while this image uses only the NULL preview for headless capture.
+python3 "$(dirname "$0")/patch-picamera2-headless.py" \
+    "$BUILD/picamera2/picamera2/previews/__init__.py"
 
 # Keep runtime libraries and Python imports before taking the build-tool
 # snapshot. Only packages introduced afterwards may be purged.
