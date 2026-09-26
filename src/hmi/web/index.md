@@ -22,6 +22,7 @@
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
 | D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
 | D-294 | Shared typography and interaction tokens use a closed scale |
+| D-296 | Surface typography and focus feedback use shared tokens |
 
 ## 계획·결과 문서
 
@@ -42,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
 - 2026-09-27 · 6ce05ff1 · test(hmi): verify D-294 after latest-main integration
 - 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
 - 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption
-- 2026-09-26 · uncommitted · feat(hmi): share role readback sections (D-287)

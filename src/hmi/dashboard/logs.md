@@ -196,3 +196,9 @@
 - 변경: D-294 스타일가이드와 화면 수용 결과를 기록했다.
 - 증거: HMI browser-enabled suite 100 passed, dashboard API route/manifest 29 passed. Visible CORE Chromium reviewed styleguide, console/setup/device at desktop and mobile widths; 0 page errors and 0 positive horizontal overflow.
 - gate 변화: SOURCE/LOCAL remain GO. Dashboard ARTIFACT remains HOLD pending image installation evidence.
+
+## 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
+- 변경: dashboard의 반복 폰트 가중치, 행간, 자간 및 1px/2px 키보드 포커스 링을 공유 토큰에 연결했다. 1.35/1.45/1.55 고유 읽기 행간과 map canvas 3px 포커스 간격은 그대로 뒀다.
+- 증거: browser-enabled HMI 전체 102 passed; 표면 계약 40 passed.
+- gate 변화: SOURCE/LOCAL 유지. 이미지 설치·장치·필드 수용을 주장하지 않음.
+- 결정: D-296.

@@ -20,7 +20,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-90, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113]
+adrs: [D-90, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-296]
 plans:
   - docs/plans/2026-09-17-robot-soccer-game-host-design.md
   - docs/plans/2026-09-18-rosy-games-local-host.md

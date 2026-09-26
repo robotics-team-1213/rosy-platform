@@ -189,3 +189,9 @@
 - gate 변화: games G1 gains the Space browser gate.
 - 결정: D-224
 - 교훈: none.
+
+## 2026-09-27 · uncommitted · D-296 surface typography tokens
+- 변경: games board의 본문·제목 계층을 공유 weight/leading/track 토큰으로 이동하고 고유 kicker 자간은 보존했다.
+- 증거: Fleet+games host suite에서 games 포함 619 passed/5 skipped; D-296 browser run에서 games board 시나리오 통과. screenshot: X:\DevTemp\games_board_initial.png.
+- gate 변화: SOURCE/LOCAL 유지. 실제 경기·로봇 동작 수용은 아님.
+- 결정: D-296.

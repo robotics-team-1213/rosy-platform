@@ -257,3 +257,9 @@
 - 변경: Fleet이 로봇을 관찰하는 기존 경로에 더해, Ubuntu Fleet PC가 자기 HTTPS 서비스를 `_rosy-fleet._tcp`로 광고하고 설치 도구가 예상 호스트명·사이트 CA·`/healthz`를 확인한 뒤 URL을 내보내도록 준비했다.
 - 증거: 호스트 도구/후보 배포 집중 45 passed/2 skipped. 기존 FleetAgent의 자동 검색·등록은 아직 구현되지 않았다.
 - gate 변화: LOCAL 유지, Ubuntu Avahi/TLS 및 실제 로봇 연결은 FIELD 대기.
+
+## 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
+- 변경: Fleet console의 반복 가중치·자간을 공유 토큰에 연결했다. 1.15 brand 및 1.6/1.7 note/log 행간과 고유 kicker tracking은 보존했다.
+- 증거: base `0dc7e8a4`의 Fleet+games host suite 619 passed/5 skipped, 오래된 API 문서 버전 assertion 1건 실패(v1.35 기대값, 당시 참조 문서는 v1.39). 최신 main `2230d26e`에서 문서와 assertion이 v1.40으로 함께 갱신됨. browser suite 17 passed/2 failed; 두 Fleet keyboard/queued 대기 실패를 최신 main에서 재현. Fleet screenshot: X:\DevTemp\fleet_console_fit.png.
+- gate 변화: LOCAL 유지. 실패 항목은 D-296 수정 파일 밖이며 known_failures.txt에 추가하지 않음.
+- 결정: D-296.

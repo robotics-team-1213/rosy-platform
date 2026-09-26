@@ -9,8 +9,8 @@
   padding: var(--space-3) 0;
   border-top: 1px solid var(--surface-line);
 }
-.event-time, .event-severity { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
-.event-type { overflow: hidden; font: var(--text-label)/1.4 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.event-time, .event-severity { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
+.event-type { overflow: hidden; font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 /* info는 정상이므로 색이 없다. 경고와 오류만 색을 쓴다. */
 .event-severity.error, .event-severity.critical { color: var(--status-crit); }
 .event-severity.warning { color: var(--status-warn); }

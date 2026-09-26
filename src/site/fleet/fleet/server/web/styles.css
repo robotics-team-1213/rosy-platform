@@ -14,7 +14,7 @@ body {
 input, select { font: inherit; color: inherit; }
 
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
-.brand b { font-weight: 700; font-size: var(--text-value); letter-spacing: 0.04em; }
+.brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }
 
 .topbar .spacer { flex: 1; }
@@ -76,7 +76,7 @@ main {
   color: var(--nominal-quiet);
   margin: 0 0 var(--space-1);
 }
-.panel h2 { font-weight: 600; font-size: var(--text-value); margin: 0 0 var(--space-3); }
+.panel h2 { font-weight: var(--weight-label); font-size: var(--text-value); margin: 0 0 var(--space-3); }
 
 .map-head { display: flex; align-items: baseline; gap: var(--space-3); }
 .map-head .spacer { flex: 1; }
@@ -103,7 +103,7 @@ main {
   margin: var(--space-3) 0 0;
   font-size: var(--text-label);
   color: var(--muted);
-  line-height: 1.5;
+  line-height: var(--leading-copy);
 }
 
 .legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); }
@@ -133,7 +133,7 @@ main {
 .robot.offline { opacity: 0.55; }
 
 .robot-head { display: flex; align-items: center; gap: var(--space-2); }
-.robot-head b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: 0.04em; }
+.robot-head b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
 .robot-head .spacer { flex: 1; }
 
 .tag {
@@ -163,8 +163,8 @@ main {
   margin: var(--space-2) 0 var(--space-3);
 }
 .facts div { display: flex; flex-direction: column; gap: 0; }
-.facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: 0.12em; color: var(--muted); }
-.facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: 500; }
+.facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--muted); }
+.facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
 
 .robot-actions { display: flex; gap: var(--space-2); }
 .robot-actions ui-button { flex: 1; }
@@ -241,7 +241,7 @@ main {
 .formation-form label {
   font-family: var(--mono);
   font-size: var(--text-micro);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--track-label);
   color: var(--muted);
 }
 .formation-form select,

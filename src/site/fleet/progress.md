@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-296]
 plans:
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md

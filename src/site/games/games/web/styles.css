@@ -18,7 +18,7 @@ html, body {
   min-height: 100%;
   background: var(--field);
   color: var(--ink);
-  font: var(--text-body)/1.4 var(--body);
+  font: var(--weight-regular) var(--text-body)/var(--leading-body) var(--body);
 }
 
 .rail {
@@ -36,7 +36,7 @@ html, body {
 h1 {
   margin: var(--space-1) 0 0;
   font-size: var(--text-title);
-  font-weight: 650;
+  font-weight: var(--weight-emphasis);
 }
 
 #phase {

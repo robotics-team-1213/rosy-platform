@@ -6,7 +6,7 @@ body {
   margin: 0;
   color: var(--paper);
   background: var(--ground);
-  font: var(--text-body)/1.5 var(--body);
+  font: var(--weight-regular) var(--text-body)/var(--leading-copy) var(--body);
 }
 .surface-switch { display: flex; gap: var(--space-3); }
 .surface-switch a {
@@ -17,7 +17,7 @@ body {
   border: 1px solid transparent;
   border-radius: var(--radius-button);
   color: var(--nominal-quiet);
-  font: 600 var(--text-label)/1.2 var(--body);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -27,7 +27,7 @@ body {
   border-color: var(--brand-rose);
   background: var(--brand-rose-wash);
 }
-.surface-switch a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.surface-switch a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-auth-link {
   display: inline-flex;
   min-height: var(--target-secondary);
@@ -35,11 +35,11 @@ body {
   padding-inline: var(--space-2);
   border-radius: var(--radius-button);
   color: var(--brand-rose);
-  font-weight: 650;
+  font-weight: var(--weight-emphasis);
   text-underline-offset: 0.2em;
 }
 .surface-auth-link:hover { color: var(--paper); background: var(--brand-rose-wash); }
-.surface-auth-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
 .surface-main {
   display: grid;

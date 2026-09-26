@@ -156,3 +156,9 @@
 - 변경: D-294 검증 결과를 기록했다.
 - 증거: browser-enabled HMI suite 100 passed; dashboard route/manifest suite 29 passed. Visible CORE Chromium reviewed styleguide plus operator/admin pages at desktop/mobile; page errors 0, missing button kinds 0, horizontal overflow 0.
 - gate 변화: SOURCE/LOCAL remain GO. Pi/image/device/field acceptance is not claimed.
+
+## 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
+- 변경: 정규 가중치·1.25 압축 행간·2px 외곽 포커스 간격 토큰을 추가하고 dashboard/Fleet/games 표면에서 반복되는 타이포그래피와 표준 키보드 링을 공유 토큰으로 이동했다. 고유 자간과 장문 행간은 보존했다.
+- 증거: 토큰/표면 계약 40 passed; browser-enabled HMI 전체 102 passed.
+- gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용은 평가 범위 밖.
+- 결정: D-296.
