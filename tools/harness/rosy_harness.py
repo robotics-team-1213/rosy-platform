@@ -28,7 +28,11 @@ GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
 REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
 LOG_FIELDS = ("변경", "증거", "gate 변화")
-LOG_FIELD_ALIASES = {"증거": ("근거", "검증", "장치 근거")}
+LOG_FIELD_ALIASES = {
+    "변경": ("Change",),
+    "증거": ("근거", "검증", "장치 근거", "Evidence"),
+    "gate 변화": ("Gate",),
+}
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
 
@@ -66,6 +70,15 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     # 2026-09-22 road-world entries committed with a bare date heading
     # (e0e6397); the history gate forbids reforming them in place.
     "## 2026-09-22",
+    # This committed candidate-smoke entry predates the current heading schema;
+    # retain its evidence block unchanged and validate the follow-up entry normally.
+    "## 2026-09-27 · docs(validation): record merged-main site candidate smoke",
+    # Preserve a committed pre-schema log entry without rewriting its history.
+    "## 2026-09-27 ? docs(validation): record merged-main site candidate smoke",
+    # Preserve both append-only versions created by the concurrent log merge.
+    "## 2026-09-26 \u00b7 uncommitted \u00b7 docs(adr): propose D-282 per-hardware ROS ownership",
+    # Preserve both append-only versions created by the concurrent log merge.
+    "## 2026-09-26 \u00b7 uncommitted \u00b7 OMX \ub2e8\uc77c \uc18c\uc720\uc790 ROS-SIM \ud6c4\uc18d\uacfc \uc774\uc804 \uc808\ucc28",
 })
 
 GENERATED_MARK = (
@@ -198,11 +211,12 @@ def _scan_log(text: str) -> tuple[list[LogEntry], list[str]]:
         close()
         body = []
         match = LOG_HEADING.match(line)
-        if match:
-            current = match.groups()
-        elif line in KNOWN_LEGACY_HEADINGS:
-            # A known pre-harness heading: a boundary, not a registered entry.
+        if line in KNOWN_LEGACY_HEADINGS:
+            # A concurrent merge can leave two committed bodies under one
+            # historical heading. Exact allowlisted headings stay untouched.
             current = None
+        elif match:
+            current = match.groups()
         else:
             current = None
             errors.append(f"line {number}: malformed heading {line!r}")

@@ -2601,6 +2601,7 @@
 - 변경: Renumber the Site Fleet typed-intent ADR from D-289 to D-292 because current main assigns D-289 through D-291 to other accepted decisions. API Reference remains v1.40; camera capture and mDNS contracts remain intact.
 - 증거: Fleet 518/5 skipped; sensing 1660/78 skipped; OMX adapter 47/3 skipped; workstation 22 passed; API/UI 73/2 skipped; focused regression reruns 7 passed. Harness lint 0 errors/21 existing stale-evidence warnings.
 - gate 변화: SOURCE/LOCAL evidence only; physical Ubuntu, GPU, phone, CORE, and robot acceptance remain open.
+
 ## 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
 - 변경: 잠긴 vendor Gazebo action에 연결된 정책 소유자가 동시 leader 요청을 거부하는 후속 시험과 호스트 이전 runbook을 기록했다.
 - 근거: 재현 probe의 경쟁 요청 `busy`, 취소 최종 상태, 이전 launch의 leader topic 구독자 0, 장치 mount 거부를 확인했다.
@@ -2615,7 +2616,6 @@
 - 변경: Built and started the packaged `151607c0` linux/amd64 Site Fleet stack; verified TLS console/API, typed intent rejection, synthetic camera sighting, and durable task readback after Fleet restart.
 - 증거: Fleet 518/5 skipped; OMX/camera/system 192/4 skipped; API/docs/security 20 passed; harness lint 0 errors/21 existing warnings; all services healthy and candidate archive/SBOM hashes verified.
 - gate 변화: SOURCE/LOCAL only; no Ubuntu/RTX 5080/physical phone/CORE/robot proof, and automatic movement/picking remain HOLD.
-
 
 ## 2026-09-26 · uncommitted · 사이트 역할별 실행·배치 토폴로지 구체화
 
@@ -2639,3 +2639,27 @@
 - 변경: clarified the first rollout as fixed authenticated operator navigation with no policy mutation API, and made automatic-source approval require a versioned, preapproved record for quality, false-trigger, freshness, sample, and forbidden-dispatch criteria.
 - 증거: D-293 API boundary, Task 3.2, console workflow, and final SITE/DEVICE/FIELD gates now agree; missing numeric thresholds or evidence keep policy disabled.
 - gate 변화: none; automatic movement and picking remain HOLD until D-268 and measured field acceptance pass.
+
+## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
+- 변경: Add a proposed ownership boundary for per-robot and per-workcell ROS instances, unique physical-device admission, single actuator command authority, camera data ownership, and API-only inter-instance coordination.
+- 증거: Compare D-33, D-38, D-117, D-152, D-246, D-269, D-273, and proposed D-281; verify the ADR log and implementation sequence reference each independent runtime gate.
+- gate 변화: no runtime or device gate moved; D-282 is Proposed and does not enable actuator or camera capability.
+
+## 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
+
+- 변경: 잠긴 vendor Gazebo action에 연결된 정책 소유자가 동시 leader 요청을 거부하는 후속 시험과 호스트 이전 runbook을 기록했다.
+- 근거: 재현 probe의 경쟁 요청 `busy`, 취소 최종 상태, 이전 launch의 leader topic 구독자 0, 장치 mount 거부를 확인했다.
+- gate 변화: Task 3 전체는 HOLD. DDS 직접 접근 통제, native 단일 writer 프로세스, 실제 Ubuntu/OMX의 정지·복구 증거는 남았다.
+
+## 2026-09-27 · uncommitted · docs(validation): record current main integration gates
+
+- Change: preserved the last packaged LOCAL evidence at source `1e3de3e8`, then recorded the later `2543315d` main integration separately instead of attributing the old image to new source.
+- Evidence: post-integration Fleet 518 passed/5 skipped; capability/intent/D-293/HMI/document-placement contracts 73 passed; harness/D-293/HMI checks 92 passed. Harness lint 0 errors/19 existing freshness warnings; generated docs index refreshed. The current-main Docker build attempt stopped before build because Buildx config and Docker Engine access were denied; incomplete scratch output was removed.
+- Gate: `1e3de3e8` remains the last successful packaged smoke. No Docker package for `2543315d`, Ubuntu host, GPU, physical devices, motion, or SITE/DEVICE/FIELD acceptance is claimed; automatic movement/picking remain HOLD.
+
+## 2026-09-27 · uncommitted · Pinky native mapping gate truth and G4 diagnostic
+
+- 변경: D-295와 네이티브 systemd 맵핑 복구 절차를 기록했다. CORE의 실제 mode/backend에 따라 CAP-001 광고와 명령 게이트를 같이 제한하고, 대시보드 운전 도구의 CSP 대기 오류를 수정했다.
+- 실기 근거: 바퀴를 든 단일 전진 명령 약 0.53초, 0 명령 수락 뒤 API 0 속도까지 약 0.43초, 오도메트리 약 0.026m 변화, 현장 정상 방향 관찰. 종료 시 IDLE·속도 0, 임시 관리자 토큰 폐기.
+- 검증: 새 회귀 테스트의 실패를 먼저 확인한 뒤 관련 테스트 289개 통과, 1개 건너뜀. 장치에는 G4 기록과 승인 마커가 없고 SLAM/Nav2가 실행되지 않아 G4/G5 및 바닥 맵핑은 HOLD. 소스 수정은 새 서명 릴리스 설치 전까지 실기에 반영되지 않았다.
+- gate 변화: 소스에서 CAP-001과 명령 게이트가 일치하도록 수정했다. 실기 G4/G5 수용과 맵핑 승인은 HOLD다.
