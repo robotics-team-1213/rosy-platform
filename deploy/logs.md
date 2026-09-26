@@ -1276,3 +1276,9 @@
 - 근거: OMX 호스트 시험 8개 통과; Docker Linux/amd64 이미지 빌드 digest `sha256:8b4d2fdf534687132cc7d9fb8441b3db63c140edfaaba5164693fd56ca77d861`; 이미지에서 `open_manipulator_bringup` 및 `dynamixel_hardware_interface` 조회 성공; Compose 설정 검증 통과.
 - gate 변화: SOURCE/LOCAL 이미지 빌드 및 사전점검 GO; ROS-SIM/ARTIFACT HOLD; DEVICE/FIELD PARKED.
 - Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
+
+## 2026-09-26 · uncommitted · clarify OMX workstation packaging boundary
+
+- 변경: `deploy/omx/README.md`의 OCI 후보를 개발·빌드 셸로 명확히 하고, D-246을 따르는 native systemd 현장 제어 인스턴스와 한 호스트의 1~2개 배치 후보를 연결했다.
+- 근거: 현재 Compose는 비활성 단일 hardware/simulation 셸이며 실제 OMX 제어 서비스는 없다. D-281과 사이트 호스트 배치 설계에 검증 순서를 기록했다.
+- gate 변화: 없음. 장치 제어·정지·복구·동시 부하의 DEVICE/FIELD 증거는 없다.

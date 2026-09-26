@@ -6,7 +6,9 @@
 
 **Architecture:** Keep ROBOTIS `open_manipulator` as the actuator and robot-model authority; Rosy OS owns the workstation image, explicit device admission, profile validation, local camera/calibration data path, and later integration boundary. Build a separate amd64 workstation OCI image from immutable Jazzy source revisions; keep `deploy/robot`'s Raspberry Pi ARM64 product image unchanged.
 
-**Tech Stack:** ROS 2 Jazzy, ROBOTIS `open_manipulator` 5.1.2, `ros2_control`, Docker/Compose for development/workcell delivery, Python/YAML host contracts, UVC `usb_cam` candidate pending camera selection.
+**Tech Stack:** ROS 2 Jazzy, ROBOTIS `open_manipulator` 5.1.2, `ros2_control`, Docker/Compose for development/build candidate, Python/YAML host contracts, UVC `usb_cam` candidate pending camera selection. Field actuator packaging follows the D-246 gate below.
+
+**Host placement clarification (D-281 proposal, 2026-09-26):** The current OCI image and Compose hardware shell are development/ROS-SIM and build candidates, not an accepted field actuator runtime. Accepted D-246 keeps device control/safety native and restricts containers that directly own UART/video devices. For the first field candidate, plan one native systemd control instance per OMX-AI workcell; one Ubuntu host may run two instances if graph, device, stop/recovery, and concurrent-load tests pass. Before P1/DEVICE delivery, either document and implement that native path or make an explicit new ADR decision that supersedes D-246 for an OMX container, backed by physical stop/recovery evidence. See [host placement design](2026-09-26-site-host-placement-design.md). This clarification does not enable the disabled OMX profile.
 
 ---
 
@@ -16,7 +18,7 @@
 |---|---|---|---|
 | Install on Ubuntu 24.04 host | Direct USB/udev access and quickest diagnosis | Host package state drifts; mixes ROSY and vendor dependencies | Keep as a documented recovery/development fallback |
 | Use ROBOTIS's published container as-is | Closest to vendor guide and fast to start | Current Docker Hub tag trails the source release; vendor Docker recipe uses broad `/dev`, Zenoh, RealSense, and Physical AI services | Reference only; don't deploy unchanged |
-| Build a separate Rosy OMX workstation image from pinned upstream sources | Reproducible source set, narrow serial/camera device grants, keeps Pinky image and OMX workstation independent | Needs a Linux workstation build/runtime and an explicit RMW decision before cross-process ROS integration | **Recommended first delivery** |
+| Build a separate Rosy OMX workstation image from pinned upstream sources | Reproducible source set, narrow serial/camera device grants, keeps Pinky image and OMX workstation independent | Needs a Linux workstation build/runtime and an explicit RMW decision before cross-process ROS integration; hardware shell is not a D-246-approved field actuator runtime | **Recommended first development delivery** |
 
 Do not extend the current `deploy/robot` ARM64 `io` target into the OMX workstation image. That target serves Pinky Pro hardware, uses CycloneDDS, and has a different device/runtime boundary. The OMX workstation image is a separate OCI image; it is not a Raspberry Pi disk image. A native installed workstation can remain available for diagnosing container and USB permission problems.
 

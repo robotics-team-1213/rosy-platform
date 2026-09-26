@@ -105,6 +105,7 @@
 | D-274 | 로컬 브라우저 검토는 실제 CORE 경로를 쓰고 장치 수용은 분리한다 |
 | D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 |
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 |
+| D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 |
 
 ## 계획·결과 문서
 
@@ -135,6 +136,8 @@
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
 - [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
 - [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
+- [2026-09-26-site-host-placement-design.md](plans/2026-09-26-site-host-placement-design.md)
+- [2026-09-26-site-host-placement-implementation.md](plans/2026-09-26-site-host-placement-implementation.md)
 - [2026-09-26-site-task-scheduling-and-broker-design.md](plans/2026-09-26-site-task-scheduling-and-broker-design.md)
 - [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
 - [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
@@ -150,8 +153,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
+- 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
 - 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
 - 2026-09-26 · uncommitted · docs(design): D-280 기준선의 화면 경로 정정
 - 2026-09-26 · uncommitted · docs(design): D-280 제품 기준선 검토
-- 2026-09-26 · uncommitted · docs(adr): D-280 ROSY 제품 디자인 철학
-- 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
