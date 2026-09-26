@@ -2410,3 +2410,23 @@
 - 변경: API Ref v1.38과 현장 LAN 발견 규칙에 승인된 Agent 토큰, 예상 `.local` 사이트, 별도 CA, 재접속 시 재검증 경계를 기록했다. 로봇 WSS envelope는 바꾸지 않았다.
 - 증거: first-boot/Agent/Fleet 통합 58 passed; Ubuntu/Pi 현장 실측은 별도.
 - gate 변화: 문서/LOCAL 범위만 확인.
+
+## 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
+
+- 변경: 고정 작업대에서 실물 제어 기준선 → 상부 RGB/보정 → 규칙 기반 집기 → 손목 RGB/시범 → ACT 비교 순서와 진입·중단 게이트를 D-273에 기록했다. 기존 D-55·D-117·D-118·D-152·D-232·D-269 경계를 유지한다.
+- 증거: 보고서와 현재 비활성 OMX 프로필, 모듈 상태, 관련 Accepted ADR을 대조했다. `python tools/harness/rosy_harness.py lint` 0 error/20 기존 검증시점 warning, 문서 계약 시험 71 passed/20 warning (`--basetemp X:\DevTemp\rosy-d273-pytest`).
+- gate 변화: 없음. D-273 Accepted는 구현 순서 결정이며 실제 OMX·카메라·ARTIFACT/DEVICE/FIELD 수용은 별도다.
+- 회귀: 제품 코드 무변경. 기존 dashboard·secret-scan WIP와 보고서 원본은 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
+
+- 변경: `docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md`의 Goal/Architecture에 고정 작업대 OMX 팔·영상 목표를 포함하고, Task 6A에 P0–P5 실행 순서·선행 조건·수용 gate·Task 5/7/8/9 연결을 추가했다.
+- 근거: D-273, 현 비활성 OMX 프로필/adapter 상태와 기존 Device/ARTIFACT/FIELD 구분.
+- gate 변화: 없음. 계획 문서 갱신이며 코드·실물·release evidence는 추가하지 않았다.
+- 회귀: 해당 구현 계획과 로그만 변경했다. 기존 제품/UI WIP는 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
+
+- 변경: D-280의 제품 성격을 대표 장면 기준선, 공통 표현 규칙, 운용·설치 웹, Fleet, 로봇 얼굴, 문서·통합 평가의 순서로 실행할 계획을 `docs/plans/2026-09-26-d280-product-design-rollout.md`에 기록했다.
+- 근거: concept 16의 접점별 질문, D-153 G1/G2/G3, D-255의 LOCAL 기준선과 BENCH/진단 HOLD, D-279 별도 복구 계획, 실제 현행 화면 경로를 대조했다.
+- gate 변화: 없음. 계획만 작성했으며 화면 구현과 장치/현장 증거는 별도다.

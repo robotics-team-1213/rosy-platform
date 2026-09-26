@@ -157,8 +157,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
+- 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
+- 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
 - 2026-09-26 · uncommitted · paired robot outbound discovery contract
 - 2026-09-26 · uncommitted · SERION 현장 LAN 발견 규칙 v0.1
-- 2026-09-26 · uncommitted · feat(fleet): host Avahi discovery contract
-- 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
-- 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
