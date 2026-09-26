@@ -14,7 +14,7 @@ function unavailableLabel(code) {
 }
 
 function card(title, path, interval, ctx, describe) {
-  const wrap = el("section", "surface-readback");
+  const wrap = el("section", "ui-readback");
   wrap.append(el("h3", "", title));
   const body = el("dl", "ui-readout");
   const status = el("ui-status", "", "상태를 불러오는 중입니다.");
@@ -79,7 +79,7 @@ export function mount(root, ctx) {
   const commissioning = card("커미셔닝", "/api/v1/host/commissioning", 15_000, ctx, (data) => [["실행 모드", data.runtime_mode], ["동작 차단 사유", data.motion_reason], ["모터", data.motor_hold ? "승인 대기" : "확인됨"], ["LiDAR", data.lidar_hold ? "승인 대기" : "확인됨"], ["배터리", data.battery_hold ? "승인 대기" : "확인됨"], ["IMU", data.imu_hold ? "승인 대기" : "확인됨"], ["SLAM", data.slam_hold ? "승인 대기" : "확인됨"], ["Fleet", data.fleet_hold ? "승인 대기" : "확인됨"], ["세부 정보", data.detail]]);
   const cards = [network, release, commissioning];
 
-  const networkActions = el("div", "surface-readback");
+  const networkActions = el("div", "ui-readback");
   networkActions.append(el("h4", "", "네트워크 작업"));
   const modeActions = el("ui-actions", "surface-actions");
   const sta = el("ui-button", "", "사업장 Wi-Fi로 전환"); sta.setAttribute("kind", "quiet"); sta.type = "button";

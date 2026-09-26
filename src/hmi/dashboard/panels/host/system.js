@@ -7,7 +7,7 @@ function el(tag, cls, text) {
 }
 
 function section(title) {
-  const wrap = el("section", "surface-readback");
+  const wrap = el("section", "ui-readback");
   wrap.append(el("h3", "", title));
   const body = el("dl", "ui-readout");
   wrap.append(body);
