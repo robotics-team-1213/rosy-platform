@@ -13,6 +13,9 @@ authority. Unknown roles are treated as read-only.
 - Node role-control unit tests: `2 passed`.
 - `node --check` on `console.js`, targeted flake8, `git diff --check`, and the
   generated-record contract test passed.
+- The push-triggered CI exposed a stale CORE OpenAPI description version after
+  the API reference moved to v1.35. After synchronizing that description, the
+  same core/protocol suite used by CI passed locally: `1727 passed, 16 skipped`.
 - Built local `linux/amd64` image `rosy-fleet:site-role-ui`:
   `sha256:7ec34595ecea314ecc16643998c53c76093d1f549a17cd5b2827c36695030c70`.
 - Ran the built image's FastAPI app in a local container. No credential gave
