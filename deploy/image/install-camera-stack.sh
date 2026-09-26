@@ -77,7 +77,8 @@ meson_build libcamera -Dpipelines=rpi/pisp,rpi/vc4 -Dipas=rpi/pisp,rpi/vc4 \
     -Dtest=false -Dlc-compliance=disabled -Ddocumentation=disabled -Dv4l2=false
 meson_build rpicam-apps -Denable_libav=disabled -Denable_drm=disabled \
     -Denable_egl=disabled -Denable_qt=disabled -Denable_opencv=disabled \
-    -Denable_tflite=disabled -Denable_hailo=disabled -Denable_imx500=disabled
+    -Denable_tflite=disabled -Denable_hailo=disabled -Denable_imx500=false \
+    -Ddownload_hailo_models=false -Ddownload_imx500_models=false
 
 # Ubuntu's /usr/local/dist-packages precedes apt's /usr/lib/python3 path.
 # libcamera's Meson binding uses upstream site-packages, so expose that exact
