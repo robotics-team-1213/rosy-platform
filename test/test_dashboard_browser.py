@@ -485,7 +485,15 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
 
     assert commands[0] == {"linear": 0.05, "angular": 0}
     assert commands[-1] == {"linear": 0, "angular": 0}
-    assert not any(command != {"linear": 0, "angular": 0} for command in commands[1:])
+    # 부하에서 100ms 틱이 pointerup 전에 두 번째 drive를 쏠 수 있다. 계약은
+    # 순서다 — 해제 zero 뒤에 양수가 오면 안 된다. zero 뒤는 전부 zero다.
+    first_zero = next(
+        i for i, command in enumerate(commands)
+        if command == {"linear": 0, "angular": 0}
+    )
+    assert all(
+        command == {"linear": 0, "angular": 0} for command in commands[first_zero:]
+    )
 
 
 def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
