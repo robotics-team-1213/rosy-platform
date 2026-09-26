@@ -134,6 +134,33 @@
   --target-primary: 48px;
   --target-irreversible: 58px;
 
+  /* ---- 컴포넌트 간격 역할 — 기본 척도에 연결(D-292) ------------------ */
+  --inset-button: var(--space-3);
+  --inset-button-primary: var(--space-5);
+  --inset-button-irreversible: var(--space-2) var(--space-4);
+  --inset-field: var(--space-3);
+  --inset-tag: 0 var(--space-2);
+  --inset-grid-cell: var(--space-2) var(--space-3);
+  --inset-chip: var(--space-1) var(--space-3);
+  --inset-evidence-unavailable: var(--space-1) var(--space-3);
+  --gap-button-content: var(--space-2);
+  --gap-grid-cell: var(--space-1);
+  --gap-actions: var(--space-2);
+  --gap-form: var(--space-2);
+  --gap-field-label: var(--space-1);
+  --gap-readout: var(--space-2) var(--space-4);
+  --gap-readout-mobile: var(--space-1);
+  --gap-readback: var(--space-2);
+  --gap-heading: var(--space-2);
+  --gap-triage: var(--space-2);
+  --gap-topbar: var(--space-3);
+  --gap-brand: var(--space-3);
+  --gap-section: var(--space-3);
+  --inset-topbar: 0 var(--space-4);
+  --inset-topbar-focal: var(--space-4) var(--space-5) var(--space-2);
+  --gap-button-detail: var(--space-1);
+  --offset-readout-mobile: var(--space-2);
+
   /* 콘솔은 스크롤하지 않는다 — 남는 높이를 계산하려면 머리 높이가 토큰이어야 한다. */
   --topbar-height: 88px;
 

@@ -49,7 +49,28 @@ def test_camera_inputs_are_pinned_and_installed_before_image_verification():
     assert "-Dpipelines=rpi/pisp,rpi/vc4" in installer
     assert "-Denable_imx500=false" in installer
     assert "-Ddownload_hailo_models=false" in installer
+    assert 'patch-picamera2-headless.py"' in installer
     assert "--require-hashes" in installer
+
+
+def test_pinned_picamera2_headless_patch_is_exact_and_fails_closed(tmp_path):
+    import importlib.util
+
+    path = IMAGE / "patch-picamera2-headless.py"
+    spec = importlib.util.spec_from_file_location("headless_patch", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    source = tmp_path / "previews_init.py"
+    source.write_text(module.ORIGINAL, encoding="utf-8")
+    module.apply(source)
+    patched = source.read_text(encoding="utf-8")
+    assert "except ModuleNotFoundError as exc:" in patched
+    assert "exc.name not in ('kms', 'pykms')" in patched
+    assert "from .null_preview import NullPreview" in patched
+    assert "DRM preview is unavailable" in patched
+    import pytest
+    with pytest.raises(ValueError, match="review the source"):
+        module.apply(source)
 
 
 def test_camera_capture_and_preview_start_on_first_boot_without_motor_access():

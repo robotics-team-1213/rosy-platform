@@ -9,7 +9,7 @@
 **Decision:**
 
 1. 네이티브 ARM64 제품 이미지 빌드 중 Raspberry Pi 공식 `libpisp`, `libcamera`, `rpicam-apps`, `picamera2` 소스를 이 순서로 설치한다. 커밋과 아카이브 SHA-256은 `deploy/image/camera-sources.lock.json`에 고정한다. URL은 `codeload.github.com/raspberrypi/<프로젝트>`로 한정한다. PPA, 공급사 카드의 바이너리 복사, 장치 부팅 시 다운로드는 허용하지 않는다.
-2. Pi 5 `rpi/pisp` 파이프라인과 IPA, OV5647용 `rpi/vc4`를 빌드한다. Picamera2의 ARM64 Python 의존은 별도 해시 잠금 파일에 고정하고, 시스템 런타임 패키지는 잠긴 Noble apt에서 설치한다. 이미지에 소스 잠금 사본을 남긴다. 빌드 전용 컴파일러와 헤더는 설치 전 패키지 목록을 기준으로 제거한다.
+2. Pi 5 `rpi/pisp` 파이프라인과 IPA, OV5647용 `rpi/vc4`를 빌드한다. Picamera2의 ARM64 Python 의존은 별도 해시 잠금 파일에 고정하고, 시스템 런타임 패키지는 잠긴 Noble apt에서 설치한다. 고정된 Picamera2 버전은 사용하지 않는 DRM 미리보기의 `pykms`까지 import 때 요구하지만 Noble에는 없다. 해시 확인 후 정확한 원본 한 파일만 검증된 패치로 수정해 headless NULL 미리보기와 촬영은 유지하고 DRM 요청은 명시적으로 거부한다. 이미지에 소스 잠금 사본을 남긴다. 빌드 전용 컴파일러와 헤더는 설치 전 패키지 목록을 기준으로 제거한다.
 3. 빌드 실패, 입력 해시 불일치, Python import 또는 `rpicam-still --version` 실패 시 이미지를 생성하지 않는다. mounted-image 검증기는 카메라 실행 파일과 소스 잠금 기록을 확인한다. 실제 센서 열거와 JPEG 촬영은 새 SD로 부팅한 장치에서 별도 검증한다.
 4. D-264의 카메라 행에 적힌 “Noble 패키지가 없으면 생략하고 소스 빌드하지 않는다”는 제한을 이 결정으로 대체한다. D-264의 I2C·GPIO 진단 도구, 제품 이미지의 빌드 도구 제외, 사람 확인 원칙은 유지한다.
 5. 첫 부팅의 `rosy-runtime.target`은 `rosy-camera.service`도 시작한다. 이 별도 계정은 `video` 그룹과 카메라 장치군(video4linux, media, dma_heap)만 열며 모터 버스와 `cmd_vel`에는 접근하지 않는다. Picamera2를 지정한 카메라 노드가 `camera/front`를 내고 도로 관측 노드가 제한된 `camera/preview/compressed` JPEG를 CORE에 보낸다. 카메라 실패가 CORE와 무구동 I/O의 시작을 막지는 않는다. 실제 프레임, 웹 미리보기, 권한 분리 검증 전에는 제품 카메라를 사용 가능으로 판정하지 않는다.

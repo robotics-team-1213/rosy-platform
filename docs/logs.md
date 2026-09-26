@@ -2579,6 +2579,12 @@
 - 근거: D-275/D-290, Fleet `/console`, 사이트 Compose의 loopback 기본 바인딩과 Caddy 경로, D-276의 사용자별 역할을 대조했다.
 - gate 변화: 없음. 문서 정합성만 보완했으며 실제 Ubuntu 사이트와 장치 현장 접속은 별도 검증 대상이다.
 
+## 2026-09-26 · uncommitted · feat(hmi): apply D-292 semantic spacing roles
+
+- 변경: 공통 브라우저 컴포넌트의 반복 패딩·간격을 기본 `--space-*`에서 의미가 드러나는 컴포넌트 역할 토큰으로 옮겼다. 카메라 패널도 버튼 종류·상태·색상·액션 간격을 공통 계약에 맞췄다.
+- 근거: D-292와 공용 토큰/컨트롤 계약. `src/hmi/web/test/test_ui_token_contracts.py`, `test_shared_controls.py`, `src/hmi/dashboard/test/test_camera_capture.py` 및 HMI 전체 테스트.
+- gate 변화: 97 passed, 브라우저 옵트인 포함. 실제 CORE TestClient API를 연결한 visible Chromium에서 operator `/console`·`/setup`, administrator `/console`·`/setup`·`/device`를 1366×768 및 390×844로 확인했다. 0 page errors, missing button kinds, positive horizontal overflow. 캡처는 `X:\DevTemp\rosy-design-system-review`. ROS-SIM/ARTIFACT/DEVICE/FIELD 변경 없음.
+
 ## 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
 
 - 변경: 두 인스턴스 ROS-SIM 검증 기록에 vendor 비시뮬레이션 launch의 leader topic remap 제거와 개발 이미지 readback을 추가했다.
@@ -2594,18 +2600,34 @@
 - 근거: 재현 probe의 경쟁 요청 `busy`, 취소 최종 상태, 이전 launch의 leader topic 구독자 0, 장치 mount 거부를 확인했다.
 - gate 변화: Task 3 전체는 HOLD. DDS 직접 접근 통제, native 단일 writer 프로세스, 실제 Ubuntu/OMX의 정지·복구 증거는 남았다.
 
-
 ## 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
 - 변경: main adds the D-292 design-token ADR, so the Site Fleet intent ADR moves to D-293; API Reference v1.40 and contract tests are aligned.
 - 증거: rerun unique ADR numbering and API reference checks after the latest integration.
 - gate 변화: SOURCE/LOCAL only; Ubuntu, RTX 5080, physical cameras, CORE, and robot acceptance remain open.
-
 
 ## 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
 - 변경: Built and started the packaged `151607c0` linux/amd64 Site Fleet stack; verified TLS console/API, typed intent rejection, synthetic camera sighting, and durable task readback after Fleet restart.
 - 증거: Fleet 518/5 skipped; OMX/camera/system 192/4 skipped; API/docs/security 20 passed; harness lint 0 errors/21 existing warnings; all services healthy and candidate archive/SBOM hashes verified.
 - gate 변화: SOURCE/LOCAL only; no Ubuntu/RTX 5080/physical phone/CORE/robot proof, and automatic movement/picking remain HOLD.
 
+
+## 2026-09-26 · uncommitted · 사이트 역할별 실행·배치 토폴로지 구체화
+
+- 변경: Fleet·Vision·향후 AI/Data·Pinky·OMX의 실행 단위, 단일/분리 PC 배치 후보, 계약 방향, 작업·영상 원장, 장애 기본 동작과 검증 순서를 설계로 기록했다.
+- 근거: D-275/D-281/D-282/D-290, 현행 사이트/OMX Compose와 SOURCE/ROS-SIM 검증 기록을 대조했다.
+- gate 변화: 없음. 새 API·native OMX 서비스·현장 배치는 열지 않았고, D-281/D-268과 실제 SITE/DEVICE/FIELD 검증은 남아 있다.
+
+## 2026-09-26 · uncommitted · 사이트 배치 변경과 복구 권한 구체화
+
+- 변경: 역할 배치 설계에 고정 사이트 입구와 Vision 분리 방식, 설치/작업/장치 정본, SQLite 복원과 OMX 호스트 이전 순서를 추가했다.
+- 근거: 현행 Site Compose/Caddy 경로, Fleet 이동 작업·UNKNOWN 처리, D-281/D-290의 단일 소유권 경계를 대조했다.
+- gate 변화: 없음. 원격 Vision worker·OMX API·실물 호스트 이전은 아직 구현/수용되지 않았다.
+
+## 2026-09-26 · uncommitted · Platform 목표와 현재 경계 대조
+
+- 변경: 목표 구조 01/08/09/11/12에 현재 구현·ADR 게이트를 표시하고, Console/Fleet/Fabric/Vision/OMX/AI/Data/합성 장비의 구조 간극과 구현 순서를 기록했다.
+- 근거: D-12/D-55/D-59/D-65/D-71/D-268/D-269/D-290, 현행 Fleet task service, 사이트/OMX Compose와 모듈 진행 기록을 대조했다.
+- gate 변화: 없음. 목표 문서를 현재 API·설치·DEVICE 수용으로 승격하지 않았다.
 
 ## 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
 - 변경: clarified the first rollout as fixed authenticated operator navigation with no policy mutation API, and made automatic-source approval require a versioned, preapproved record for quality, false-trigger, freshness, sample, and forbidden-dispatch criteria.

@@ -12,7 +12,7 @@ export function mount(root, ctx) {
   stage.append(frame, empty);
   const status = el("ui-status", "", "WAITING"); status.id = "vision-status";
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
-  const storageLabel = el("label", "surface-camera-storage", "저장 위치");
+  const storageLabel = el("label", "ui-field-label surface-camera-storage", "저장 위치");
   const storage = el("select"); storage.id = "vision-storage";
   for (const [value, label] of [["pc", "이 PC"], ["robot", "로봇 SD"], ["both", "PC와 로봇 SD"]]) {
     const option = el("option", "", label); option.value = value;
@@ -21,17 +21,18 @@ export function mount(root, ctx) {
   }
   storageLabel.append(storage);
   const shot = el("ui-button", "", "스크린샷"); shot.id = "vision-screenshot";
+  shot.type = "button"; shot.setAttribute("kind", "quiet"); actions.append(shot);
   const start = el("ui-button", "", "녹화 시작"); start.id = "vision-record-start";
+  start.type = "button"; start.setAttribute("kind", "primary"); actions.append(start);
   const stop = el("ui-button", "", "녹화 중지"); stop.id = "vision-record-stop";
+  stop.type = "button"; stop.setAttribute("kind", "quiet"); actions.append(stop);
   const saveVideo = el("ui-button", "", "영상 다시 저장"); saveVideo.id = "vision-record-save";
+  saveVideo.type = "button"; saveVideo.setAttribute("kind", "quiet"); actions.append(saveVideo);
   const saveLog = el("ui-button", "", "조작 기록 저장"); saveLog.id = "vision-operations-save";
-  for (const [button, kind] of [[shot, "quiet"], [start, "primary"], [stop, "quiet"],
-    [saveVideo, "quiet"], [saveLog, "quiet"]]) {
-    button.type = "button"; button.setAttribute("kind", kind); actions.append(button);
-  }
+  saveLog.type = "button"; saveLog.setAttribute("kind", "quiet"); actions.append(saveLog);
   actions.prepend(storageLabel);
-  const captureStatus = el("p", "surface-message", "카메라 프레임 수신 대기");
-  captureStatus.id = "vision-capture-status"; captureStatus.setAttribute("role", "status");
+  const captureStatus = el("ui-status", "", "카메라 프레임 수신 대기");
+  captureStatus.id = "vision-capture-status";
   const library = el("details", "surface-camera-library");
   library.hidden = ctx.role === "viewer";
   let refreshLibrary = null;

@@ -135,7 +135,7 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
         assert f'ui-button[data-size="{size}"]' in css
         assert f"min-height: var(--{token})" in css
     assert "ui-actions" in script and "ui-actions" in css
-    assert "gap: var(--space-2)" in css[css.index("ui-actions {"):]
+    assert "gap: var(--gap-actions)" in css[css.index("ui-actions {"):]
     dashboard = ROOT / "hmi" / "dashboard" / "panels"
     owners = ("console/docking.js", "console/mode.js", "console/map.js", "host/operations.js", "setup/localization.js")
     for owner in owners:
@@ -156,7 +156,7 @@ def test_role_forms_use_shared_responsive_layout_and_field_labels():
     assert layout and "display: flex" in layout.group(1)
     assert "flex-wrap: wrap" in layout.group(1)
     assert "align-items: end" in layout.group(1)
-    assert "gap: var(--space-2)" in layout.group(1)
+    assert "gap: var(--gap-form)" in layout.group(1)
     assert field and "display: grid" in field.group(1)
     assert "min-width: min(100%, 10rem)" in field.group(1)
     assert ".ui-form > * { width: 100%; }" in css
@@ -180,7 +180,7 @@ def test_role_readouts_use_a_shared_semantic_definition_list_layout():
     readout = re.search(r"\.ui-readout\s*\{([^}]*)\}", css)
     assert readout and "display: grid" in readout.group(1)
     assert "grid-template-columns: minmax(7rem, 1fr) 2fr" in readout.group(1)
-    assert "gap: var(--space-2) var(--space-4)" in readout.group(1)
+    assert "gap: var(--gap-readout)" in readout.group(1)
     assert ".ui-readout dt { color: var(--nominal-quiet); }" in css
     assert ".ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }" in css
     assert ".surface-readout" not in panel_css
@@ -196,7 +196,7 @@ def test_role_readback_sections_use_shared_layout_primitives():
     section = re.search(r"\.ui-readback\s*\{([^}]*)\}", css)
     assert section and "min-width: 0" in section.group(1)
     assert "display: grid" in section.group(1)
-    assert "gap: var(--space-2)" in section.group(1)
+    assert "gap: var(--gap-readback)" in section.group(1)
     assert re.search(
         r"\.ui-readback > h3,\s*\.ui-readback > h4\s*\{\s*margin:\s*0;\s*\}",
         css,
