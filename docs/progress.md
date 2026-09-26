@@ -48,6 +48,7 @@ plans:
   - docs/plans/2026-09-26-web-surface-video-role-boundaries.md
   - docs/plans/2026-09-26-site-host-placement-design.md
   - docs/plans/2026-09-26-site-host-placement-implementation.md
+  - docs/plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md
 ---
 ## 지금 상태
 

@@ -2736,3 +2736,9 @@
 - 검토: D-299 Proposed로 공식 OMX LeRobot 직접 시리얼 제어와 ROS 운영 제어의 배타적 모드, 데이터/정책 어댑터의 검증 게이트를 기록했다.
 - 증거: 현행 Fleet 정지 HTTP 경로와 UI 응답을 추적하고 브라우저 회귀, Fleet 단위 시험, 문서 harness lint로 의미 정합을 확인했다.
 - gate 변화: 없음. 기존 `stopped` API 필드는 호환 유지하며 물리 정지, OMX 운영·DEVICE/FIELD 수용은 확인되지 않았다.
+
+## 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
+
+- 변경: D-299의 ROS 운영 제어와 native LeRobot 직접 제어 분리를 후속 실행 계획으로 풀고, 현재 폴더와 단계별 목표 폴더를 구분했다.
+- 증거: 현행 OMX adapter·제품 설정·deploy/omx·작업대 구현 계획과 공식 LeRobot OMX 연결 절차를 대조했다. 모드 배타성, 데이터 검증, 정책 입력, Fleet API의 순서와 증거 게이트를 명시했다.
+- gate 변화: 없음. 신규 폴더는 계획상의 경로이며 실물 OMX 제어, LeRobot 실행, 원격 API는 활성화되지 않았다.
