@@ -2326,3 +2326,9 @@
 - 검증: `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 71 passed/21 기존 검증시점 warning. harness lint 0 error/21 warning, `git diff --check` 통과. `docs/index.md`를 generate로 갱신해 D-275와 실행 계획이 색인에 표시된다.
 - gate 변화: 없음. ADR은 실행 책임 결정이며 native ARM64 산출물, Ubuntu 사이트, 실물 폰·로봇, 자동 작업 수용은 별도다.
 - 회귀: 문서 변경만 수행했고 제품 코드와 다른 작업 트리의 WIP는 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(validation): execute D-275 surface and video role plan
+- 변경: recorded D-275 source/local boundary results and remaining ARTIFACT/DEVICE/SITE/FIELD holds; linked the execution record from the plan
+- 증거: plan integration suite 205 passed, 2 skipped; dashboard browser 64 passed; focused contract suites and Compose config passed
+- gate 변화: source/local contracts confirmed; deployment, device, and field gates unchanged
+- 구현: none; no new Vision workload or API change
