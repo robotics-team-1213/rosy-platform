@@ -74,6 +74,54 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
     assert result["estop"]["right"] <= 390
 
 
+def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 1366, 768)
+        page.evaluate("""() => {
+          for (const slot of document.querySelectorAll('.surface-slot')) {
+            for (const panel of slot.querySelectorAll('ui-section')) panel.style.minHeight = '0';
+          }
+          const sense = document.querySelector('[data-slot=sense] ui-section');
+          sense.style.height = '60rem';
+          const observe = document.querySelector('[data-slot=observe] ui-section');
+          observe.style.height = '100%';
+          const act = document.querySelector('[data-slot=act]');
+          act.replaceChildren();
+          const tabs = document.createElement('div'); tabs.className = 'action-group-tabs';
+          tabs.setAttribute('role', 'tablist'); tabs.innerHTML = '<ui-button role="tab" aria-selected="true">운전</ui-button><ui-button role="tab">도킹</ui-button>';
+          const panel = document.createElement('div'); panel.className = 'action-group-panel';
+          panel.setAttribute('role', 'tabpanel'); panel.innerHTML = '<ui-section><h2>운전 모드</h2><ui-button>대기</ui-button></ui-section><ui-section><h2>저속 직접 제어</h2><ui-button>전진</ui-button></ui-section>';
+          act.append(tabs, panel);
+        }""")
+        result = page.evaluate("""() => {
+          const rect = (selector) => {
+            const {x, y, right, bottom} = document.querySelector(selector).getBoundingClientRect();
+            return {x, y, right, bottom};
+          };
+          return {
+            documentHeight: document.documentElement.scrollHeight,
+            bodyHeight: document.body.scrollHeight,
+            sense: rect('[data-slot=sense]'), observe: rect('[data-slot=observe]'),
+            act: rect('[data-slot=act]'), estop: rect('#shell-estop'), topbar: rect('ui-topbar'),
+            senseScrollable: document.querySelector('[data-slot=sense]').scrollHeight
+              > document.querySelector('[data-slot=sense]').clientHeight,
+            activeBottom: document.querySelector('.action-group-panel').getBoundingClientRect().bottom,
+          };
+        }""")
+        browser.close()
+
+    assert result["documentHeight"] == 768
+    assert result["bodyHeight"] == 768
+    assert result["senseScrollable"] is True
+    assert result["sense"]["y"] >= result["topbar"]["bottom"]
+    assert result["sense"]["bottom"] <= 768
+    assert result["sense"]["right"] <= result["observe"]["x"]
+    assert result["observe"]["right"] <= result["act"]["x"]
+    assert result["act"]["bottom"] <= 768
+    assert result["activeBottom"] <= result["act"]["bottom"]
+    assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
+
 def test_shared_role_form_layout_collapses_to_full_width_on_mobile():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -132,3 +180,34 @@ def test_shared_role_readout_stacks_label_value_pairs_on_mobile():
     assert results[390]["overflow"] == 0
     assert results[390]["columns"] == 1
     assert not results[390]["valueOverflow"]
+
+
+def test_shared_readback_section_preserves_heading_gap_at_mobile_width():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        results = {}
+        for width in (1440, 390):
+            page = _page(browser, width, 900)
+            page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
+              <section class='ui-readback' aria-label='시스템 읽기 결과'>
+                <h3>시스템 정보</h3>
+                <dl class='ui-readout'><dt>상태</dt><dd>정상</dd></dl>
+              </section>`; }""")
+            results[width] = page.locator(".ui-readback").evaluate("""section => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              width: section.getBoundingClientRect().width,
+              minWidth: getComputedStyle(section).minWidth,
+              display: getComputedStyle(section).display,
+              gap: getComputedStyle(section).rowGap,
+              titleMargin: getComputedStyle(section.querySelector('h3')).marginBlockStart,
+            })""")
+            page.close()
+        browser.close()
+
+    assert results[1440]["overflow"] == 0
+    assert results[1440]["display"] == "grid"
+    assert results[1440]["gap"] != "normal"
+    assert results[1440]["titleMargin"] == "0px"
+    assert results[390]["overflow"] == 0
+    assert results[390]["width"] <= 390
+    assert results[390]["minWidth"] == "0px"

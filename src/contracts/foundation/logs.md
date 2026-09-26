@@ -83,3 +83,11 @@
 - 변경: `VisionEvidenceRecord`와 `VisionEvidenceList`를 API Ref v1.36에 맞춰 추가했다.
 - 증거: 카메라 저장 API의 응답 모델과 저장·조회 시험.
 - gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
+
+- 변경: `UiPanelDescriptor.action_group` optional field를 추가해 console operation tabs를 API schema로 표현한다.
+- 근거: `python -m pytest src/contracts/foundation/test -q` 50 passed; API Ref v1.36와 동기화했다.
+- gate 변화: 없음. ROS/API runtime/device acceptance는 포함하지 않는다.
+- 결정: D-283 Accepted.
+- 교훈: 없음

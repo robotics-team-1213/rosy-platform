@@ -7,7 +7,7 @@ function el(tag, cls, text) {
 }
 
 function section(title) {
-  const wrap = el("section", "surface-readback");
+  const wrap = el("section", "ui-readback");
   wrap.append(el("h3", "", title));
   const body = el("dl", "ui-readout");
   wrap.append(body);
@@ -26,8 +26,7 @@ export function mount(root, ctx) {
   const runtime = section("호스트 런타임");
   const identity = section("로봇 신원");
   const capabilities = section("기능 인벤토리");
-  const message = el("p", "surface-message", "상태를 불러오는 중입니다.");
-  message.setAttribute("role", "status");
+  const message = el("ui-status", "", "상태를 불러오는 중입니다.");
   root.append(head, runtime.wrap, identity.wrap, capabilities.wrap, message);
 
   const stopRuntime = ctx.store.poll("/api/v1/system/runtime", 10_000, (data) => {

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env bash
-# D-287: build the official Raspberry Pi PiSP stack inside the mounted ARM64 image.
+# D-288: build the official Raspberry Pi PiSP stack inside the mounted ARM64 image.
 set -euo pipefail
 
 ROOT="${1:?mounted image root is required}"

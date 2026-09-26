@@ -72,6 +72,7 @@ ui-button[kind="segment"] {
 }
 
 ui-button[kind="segment"][aria-pressed="true"],
+ui-button[kind="segment"][aria-selected="true"],
 ui-button[kind="segment"].active {
   color: var(--paper);
   background: var(--ground-card-2);
@@ -294,6 +295,10 @@ ui-actions {
 
 .ui-readout dt { color: var(--nominal-quiet); }
 .ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.ui-readback { min-width: 0; display: grid; gap: var(--space-2); }
+.ui-readback > h3,
+.ui-readback > h4 { margin: 0; }
 
 @media (max-width: 30rem) {
   .ui-form { align-items: stretch; flex-direction: column; }

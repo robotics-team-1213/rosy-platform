@@ -1313,3 +1313,9 @@
 - 변경: Raspberry Pi 공식 libpisp, libcamera, rpicam-apps, Picamera2 소스를 커밋과 아카이브 SHA-256으로 고정하고 네이티브 ARM64 이미지 customizer에 설치 단계를 연결했다. mounted-image 검증기는 실행 파일, PiSP IPA, Python 패키지, 소스 기록을 확인한다.
 - 증거: 네 공식 아카이브와 ARM64 Python 배포물의 로컬 SHA-256 재확인, 잠금·설치 순서·검증기 호스트 계약 시험. 새 ARM64 이미지 빌드와 SD 촬영은 미실행.
 - gate 변화: SOURCE/LOCAL 구현만 추가. ARTIFACT와 새 SD의 DEVICE 촬영은 HOLD.
+
+## 2026-09-26 · uncommitted · docs(adr): renumber camera source-build decision
+
+- 변경: 메인 브랜치의 D-287 readback 결정을 보존하고 카메라 이미지 결정을 D-288로 기록했다.
+- 증거: ADR 색인과 이미지 잠금·설치·검증 시험의 D-288 참조 일치.
+- gate 변화: 없음. 새 ARM64 이미지와 SD 카메라 촬영은 미검증이다.

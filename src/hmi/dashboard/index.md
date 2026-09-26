@@ -16,7 +16,7 @@
 
 ## 계획·결과 문서
 
-- 없음
+- [2026-09-26-d283-console-action-groups.md](../../../docs/plans/2026-09-26-d283-console-action-groups.md)
 
 ## 교훈 (docs/solutions)
 
@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
 - 2026-09-26 · uncommitted · feat(dashboard): camera recording and screenshot controls
 - 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
 - 2026-09-26 · uncommitted · feat(hmi): role-aware map absence and Host Agent recovery (D-279)
 - 2026-09-26 · uncommitted · docs(adr): D-283 운용 조작 그룹 결정
-- 2026-09-26 · uncommitted · docs(hmi): compare operator console viewport by role

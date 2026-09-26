@@ -150,7 +150,7 @@ camera_runtime:
   python_requirements_sha256: c18879d5c285fa4dc4cc9d7944a867598812b6c3c6f1d82fab5ba2a926eac8ae
   verified: true
   note: >-
-    D-287. Official Raspberry Pi source archives and CPython 3.12 aarch64
+    D-288. Official Raspberry Pi source archives and CPython 3.12 aarch64
     Python packages are independently SHA-256 pinned. This verifies source
     identity, not an ARM64 image build or device capture.
 

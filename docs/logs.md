@@ -2400,3 +2400,15 @@
 - 변경: D-264의 카메라 소스 빌드 금지 조항을 D-287로 대체하고 공식 소스 고정, ARM64 이미지 빌드, mounted-image 검증, 새 SD 촬영 수용 조건을 기록했다.
 - 증거: ROSY SD의 OV5647 CAM1 probe와 임시 공급사 사용자 공간 JPEG 촬영, 잠긴 Noble apt의 카메라 패키지 부재, 공식 Raspberry Pi 소스 커밋과 아카이브 해시 확인.
 - gate 변화: D-287은 Proposed. 새 이미지 빌드 및 장치 촬영 전 ARTIFACT/DEVICE는 HOLD.
+
+## 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
+
+- 변경: D-283에 따라 `/console` 조작 패널을 운전·도킹·차선 추종 그룹으로 선택하게 하고, desktop 고정 3영역과 mobile 세로형 배치를 구현했다. 매니페스트 action_group 필드는 API Ref v1.36에 기록했다.
+- 근거: dashboard/API/gateway LOCAL suite 116 passed, 2 skipped, foundation 50 passed; 실제 FastAPI+CoreServices administrator/operator 4 viewport 캡처에서 desktop scroll 0, mobile horizontal overflow 0, E-stop visible. G1 line-follow/docking 요청 대기·활성 중 이탈 차단, terminal zero 실패 시 그룹 전환 및 unmountAll 차단, 성공 시 정지 확인 뒤 패널을 내리는 것을 브라우저 검증했다.
+- gate 변화: dashboard SOURCE/LOCAL GO. G3 8명 평가와 D-201 데스크톱 최종 수용은 HOLD; ROS-SIM/DEVICE/FIELD는 별도다.
+
+## 2026-09-26 · uncommitted · docs(camera): resolve ADR and API version conflicts
+
+- 변경: 메인의 D-287 readback ADR과 API Ref v1.36을 보존하고 카메라 이미지 결정은 D-288, 카메라 증거 API는 v1.37로 정렬했다.
+- 증거: ADR 색인, API 응답 schema, 이미지·대시보드 계약 시험.
+- gate 변화: 없음. ARM64 이미지 및 장치 촬영은 미검증이다.

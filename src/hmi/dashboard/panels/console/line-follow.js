@@ -2,7 +2,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "차선 추종");
-  const status = el("p", "surface-message", "차선 추종 상태를 읽는 중입니다."); status.setAttribute("role", "status");
+  const status = el("ui-status", "", "차선 추종 상태를 읽는 중입니다.");
   const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "추종 모드");
@@ -16,6 +16,7 @@ export function mount(root, ctx) {
   form.append(label, start, stop); root.append(head, status, facts, form);
 
   let current = {mode: "OFF"};
+  let statusKnown = false;
   let navigationAvailable = false;
   let pending = false;
   function render() {
@@ -28,8 +29,8 @@ export function mount(root, ctx) {
     start.disabled = pending || !navigationAvailable || current.mode !== "OFF";
     stop.disabled = pending || current.mode === "OFF";
   }
-  const stopState = ctx.store.poll("/api/v1/line-follow", 1_000, (data) => { current = data; status.textContent = `차선 추종 ${data.mode || "OFF"}`; render(); }, (error) => {
-    status.textContent = `차선 추종 상태를 읽지 못했습니다: ${error.message}`; current = {mode: "OFF"}; render();
+  const stopState = ctx.store.poll("/api/v1/line-follow", 1_000, (data) => { current = data; statusKnown = true; status.textContent = `차선 추종 ${data.mode || "OFF"}`; render(); }, (error) => {
+    statusKnown = false; status.textContent = `차선 추종 상태를 읽지 못했습니다: ${error.message}`; render();
   });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => {
     navigationAvailable = data?.navigation?.goal_navigation === true;
@@ -49,5 +50,13 @@ export function mount(root, ctx) {
   start.addEventListener("click", () => setMode(select.value));
   stop.addEventListener("click", () => setMode("OFF"));
   render();
-  return () => { stopState(); stopCapabilities(); };
+  return {
+    beforeHide() {
+      if (pending) return {message: "차선 추종 요청이 처리 중입니다. 상태 확인 뒤 조작 그룹을 바꾸세요."};
+      if (!statusKnown) return {message: "차선 추종 상태를 확인할 수 없어 조작 그룹을 유지합니다."};
+      if (current.mode !== "OFF") return {message: "차선 추종을 중지한 뒤 조작 그룹을 바꾸세요."};
+      return true;
+    },
+    unmount() { stopState(); stopCapabilities(); },
+  };
 }

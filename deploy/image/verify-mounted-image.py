@@ -164,7 +164,7 @@ def camera_configured_for_pi5(text: str) -> bool:
 
 
 def camera_stack_findings(root: Path) -> list[str]:
-    """D-287: source provenance and the minimum Pi 5 camera userspace payload."""
+    """D-288: source provenance and the minimum Pi 5 camera userspace payload."""
     findings = []
     record = root / CAMERA_SOURCE_RECORD
     if not record.is_file() or record.read_bytes() != CAMERA_SOURCE_LOCK.read_bytes():

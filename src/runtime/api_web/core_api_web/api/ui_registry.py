@@ -25,6 +25,7 @@ PANEL_ROOT = "panels"
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
 _PANEL_ID = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 _CAP_KEY = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
+_ACTION_GROUPS = frozenset({"drive", "docking", "line_follow"})
 _MEDIA = {".js": "application/javascript", ".css": "text/css"}
 
 
@@ -53,6 +54,7 @@ class Panel:
     min_role: str
     module: str
     css: tuple[str, ...]
+    action_group: str | None = None
 
 
 @dataclass(frozen=True)
@@ -153,6 +155,11 @@ def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path, panels_roo
     inventory = raw.get("inventory")
     if inventory is not None and (not isinstance(inventory, str) or not _PANEL_ID.fullmatch(inventory)):
         raise RegistryError(f"{where}: inventory must be a concept id like mobility.move")
+    action_group = raw.get("action_group")
+    if action_group is not None and (not isinstance(action_group, str) or action_group not in _ACTION_GROUPS):
+        raise RegistryError(f"{where}: action_group must be one of {sorted(_ACTION_GROUPS)}")
+    if action_group is not None and (surface.id != "console" or slot != "act"):
+        raise RegistryError(f"{where}: action_group is only valid for console act panels")
     css = raw.get("css", [])
     if not isinstance(css, list):
         raise RegistryError(f"{where}: css must be a list")
@@ -170,6 +177,7 @@ def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path, panels_roo
         min_role=_role(raw.get("min_role", surface.min_role), where),
         module=_asset(raw.get("module"), ".js", web_root, panels_root, where),
         css=tuple(css_paths),
+        action_group=action_group,
     )
 
 

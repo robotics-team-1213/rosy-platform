@@ -337,7 +337,7 @@ class VisionPreviewStatus(BaseModel):
 
 
 class VisionEvidenceRecord(BaseModel):
-    """Saved operator camera evidence on the robot SD (API Ref v1.36)."""
+    """Saved operator camera evidence on the robot SD (API Ref v1.37)."""
 
     id: str
     kind: str
@@ -418,6 +418,7 @@ class UiPanelDescriptor(BaseModel):
     order: int
     module: str
     css: list[str]
+    action_group: str | None = None
     state: str
     reason: str | None = None
 

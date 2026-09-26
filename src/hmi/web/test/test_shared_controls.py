@@ -105,6 +105,27 @@ def test_role_recovery_panels_use_shared_status_component():
     assert 'el("ui-status"' in host_operations
 
 
+def test_role_live_announcements_use_shared_status_component():
+    panels = ROOT / "hmi" / "dashboard" / "panels"
+    owners = (
+        "console/camera.js", "console/docking.js", "console/line-follow.js",
+        "console/mode.js", "console/teleop.js", "host/system.js",
+        "setup/docking.js", "setup/dock-admin.js", "setup/localization.js",
+        "setup/traffic-policy.js", "system/security.js",
+    )
+    for owner in owners:
+        source = (panels / owner).read_text(encoding="utf-8")
+        assert re.search(r'el\("ui-status",\s*"",\s*"', source), owner
+        assert 'el("p", "surface-message"' not in source, owner
+
+
+def test_selected_action_tabs_use_shared_segment_palette():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    shell_css = (ROOT / "hmi" / "dashboard" / "shell" / "shell.css").read_text(encoding="utf-8")
+    assert 'ui-button[kind="segment"][aria-selected="true"]' in css
+    assert ".action-group-tabs ui-button[aria-selected" not in shell_css
+
+
 def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
     css = COMPONENTS.read_text(encoding="utf-8")
     script = UI.read_text(encoding="utf-8")
@@ -167,6 +188,26 @@ def test_role_readouts_use_a_shared_semantic_definition_list_layout():
         path.read_text(encoding="utf-8")
         for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
     )
+
+
+def test_role_readback_sections_use_shared_layout_primitives():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    section = re.search(r"\.ui-readback\s*\{([^}]*)\}", css)
+    assert section and "min-width: 0" in section.group(1)
+    assert "display: grid" in section.group(1)
+    assert "gap: var(--space-2)" in section.group(1)
+    assert re.search(
+        r"\.ui-readback > h3,\s*\.ui-readback > h4\s*\{\s*margin:\s*0;\s*\}",
+        css,
+    )
+    assert ".surface-readback" not in panel_css
+    panel_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+    )
+    assert ".surface-readback" not in panel_source
+    assert 'el("section", "ui-readback")' in panel_source
 
 
 def test_browser_surfaces_use_the_type_scale():

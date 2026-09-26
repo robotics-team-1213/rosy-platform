@@ -12,6 +12,7 @@
 | D-61 | 모듈 상태는 progress·logs·생성 index로 기록하고 계약 시험으로 지킨다 |
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 
 ## 계획·결과 문서
 
@@ -27,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(core_api_web): add D-283 action group manifest metadata
 - 2026-09-26 · uncommitted · feat(core_api_web): bounded operator camera evidence storage
 - 2026-09-26 · uncommitted · fix(core_api_web): D-260 review M1 status inputs hand-over
 - 2026-09-26 · uncommitted · feat(core_api_web): D-260 GET /api/v1/host/status-summary (API Ref v1.25)
 - 2026-09-26 · uncommitted · feat(api): serve the device hardware panel through the UI registry
-- 2026-09-26 · 8e6902fd · feat(api): buzzer and lamp test and the person's answer (D-247 6)

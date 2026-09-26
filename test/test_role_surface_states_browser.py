@@ -313,7 +313,7 @@ def test_host_agent_recovery_is_text_only_and_unavailable_controls_stay_blocked(
           available:true,ok:false,code:'RECOVERY_HELD',detail:'release requires operator review',
           data:{previous:'r1'}
         })""")
-        release_status = page.locator("section.surface-readback").filter(has_text="릴리스").locator("[role=status]").first
+        release_status = page.locator("section.ui-readback").filter(has_text="릴리스").locator("[role=status]").first
         assert "확인이 필요한 상태" in release_status.inner_text()
         assert page.locator("details").filter(has_text="release requires operator review").count() == 1
 

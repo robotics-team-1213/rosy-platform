@@ -1,4 +1,4 @@
-"""D-287 camera image inputs and mounted-root acceptance checks."""
+"""D-288 camera image inputs and mounted-root acceptance checks."""
 
 from __future__ import annotations
 

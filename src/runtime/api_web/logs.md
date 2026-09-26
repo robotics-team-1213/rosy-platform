@@ -116,3 +116,11 @@
 - 변경: 인증된 카메라 파일 POST/목록/다운로드 API, 엄격한 메타데이터와 JPEG/WebM/MP4 검사, 원자 기록, 파일·총량·남은 공간 상한을 추가했다.
 - 증거: 저장 스트림·인증·다운로드 시험을 `src/runtime/api_web/test/`와 `src/runtime/gateway/test/test_vision_evidence_api.py`에서 검증했다.
 - gate 변화: 없음. PC 시험은 SD 수명·용량·실장 동작을 증명하지 않는다.
+
+## 2026-09-26 · uncommitted · feat(core_api_web): add D-283 action group manifest metadata
+
+- 변경: panel registry validates optional console-act `action_group`; surface descriptors and structural revision carry the field. Role/CAP-001/inventory filtering still removes unsupported panels before groups are built.
+- 근거: `python -m pytest src/runtime/api_web/test -q` 63 passed, 3 skipped; dashboard/CORE browser group also passed.
+- gate 변화: 없음. REST path is unchanged; additive optional descriptor field is documented in API Ref v1.36.
+- 결정: D-283 Accepted.
+- 교훈: 없음

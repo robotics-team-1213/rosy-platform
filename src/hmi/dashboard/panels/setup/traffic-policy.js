@@ -25,7 +25,7 @@ export function mount(root, ctx) {
   const apply = el("ui-button", "", "정지 상태에서 적용"); apply.setAttribute("kind", "quiet"); apply.type = "button"; apply.disabled = true;
   const signals = el("div", "traffic-policy-actions"); signals.setAttribute("role", "group"); signals.setAttribute("aria-label", "시뮬레이션 신호등 제어");
   const signalButtons = ["RED", "YELLOW", "GREEN"].map((colour) => { const button = el("ui-button", "", colour); button.setAttribute("kind", "quiet"); button.type = "button"; button.dataset.signal = colour; button.disabled = true; signals.append(button); return button; });
-  const message = el("p", "surface-message", "정책 readback 대기"); message.setAttribute("role", "status");
+  const message = el("ui-status", "", "정책 readback 대기");
   form.append(modeLabel, revision.label, approach.label, stop.label, dwell.label, confidence.label, stage, apply);
   root.append(head, state, form, signals, message);
 

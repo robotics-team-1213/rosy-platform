@@ -26,6 +26,7 @@ panels:
     order: 20
     min_role: operator
     module: panels/console/mode.js
+    action_group: drive
     css: [panels/surface-panels.css]
   - id: console.teleop
     title: 수동 운전
@@ -34,6 +35,9 @@ panels:
     order: 30
     min_role: operator
     module: panels/console/teleop.js
+    action_group: drive
+    requires: [teleop]
+    inventory: mobility.move
     css: [panels/surface-panels.css]
   - id: console.camera
     title: 전방 카메라
@@ -49,6 +53,9 @@ panels:
     order: 40
     min_role: operator
     module: panels/console/docking.js
+    action_group: docking
+    requires: [docking.supported]
+    inventory: mobility.dock
     css: [panels/surface-panels.css]
   - id: console.line_follow
     title: 차선 추종
@@ -57,6 +64,8 @@ panels:
     order: 50
     min_role: operator
     module: panels/console/line-follow.js
+    action_group: line_follow
+    requires: [navigation.goal_navigation]
     css: [panels/surface-panels.css]
   - id: setup.waypoints
     title: 웨이포인트 준비

@@ -9,9 +9,9 @@ function numberField(labelText, name, max = 100, min = 0.01) {
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "보안 및 안전 정책");
-  const notice = el("p", "surface-message", "설정을 불러오는 중입니다."); notice.setAttribute("role", "status");
+  const notice = el("ui-status", "", "설정을 불러오는 중입니다.");
 
-  const tokenSection = el("section", "surface-readback"); tokenSection.append(el("h3", "", "접근 토큰"));
+  const tokenSection = el("section", "ui-readback"); tokenSection.append(el("h3", "", "접근 토큰"));
   const tokenForm = el("form", "ui-form");
   const roleLabel = el("label", "ui-field-label", "역할");
   const role = el("select"); role.name = "role"; roleLabel.append(role);
@@ -21,7 +21,7 @@ export function mount(root, ctx) {
   const tokenList = el("ul", "diagnostic-list"); tokenList.setAttribute("aria-label", "접근 토큰 목록");
   tokenSection.append(tokenForm, tokenList);
 
-  const safetySection = el("section", "surface-readback"); safetySection.append(el("h3", "", "안전 정책 한계"));
+  const safetySection = el("section", "ui-readback"); safetySection.append(el("h3", "", "안전 정책 한계"));
   const safetyForm = el("form", "ui-form");
   const fields = [numberField("수동 선속도 (m/s)", "manual_linear", 10, 0), numberField("수동 각속도 (rad/s)", "manual_angular", 20, 0),
     numberField("배터리 경고 (%)", "battery_warning_percent"), numberField("배터리 위험 (%)", "battery_critical_percent"), numberField("배터리 심각 (%)", "battery_deep_percent")];

@@ -10,7 +10,7 @@ export function mount(root, ctx) {
   const frame = el("img", "surface-camera-frame"); frame.id = "vision-frame"; frame.alt = "전방 카메라 실시간 영상"; frame.hidden = true;
   const empty = el("ui-empty", "surface-camera-empty", "카메라 프레임 수신 대기"); empty.id = "vision-empty";
   stage.append(frame, empty);
-  const status = el("p", "surface-message", "WAITING"); status.id = "vision-status";
+  const status = el("ui-status", "", "WAITING"); status.id = "vision-status";
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const storageLabel = el("label", "surface-camera-storage", "저장 위치");
   const storage = el("select"); storage.id = "vision-storage";

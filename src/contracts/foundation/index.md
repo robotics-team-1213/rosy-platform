@@ -13,6 +13,7 @@
 | D-61 | 모듈 상태는 progress·logs·생성 index로 기록하고 계약 시험으로 지킨다 |
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 
 ## 계획·결과 문서
 
@@ -28,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
 - 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
 - 2026-09-26 · uncommitted · feat(core_common): D-257 SiteSightingPayload
 - 2026-09-26 · uncommitted · feat(core_common): D-260 robot state rule table
 - 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
-- 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
