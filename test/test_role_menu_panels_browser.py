@@ -184,7 +184,7 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         map_source = (WEB / "map.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
-        page.route("http://rosy.test/map.js", lambda route: route.fulfill(
+        page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=map_source))
         page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
         page.evaluate("""async () => {
@@ -281,9 +281,9 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
         module = (WEB / "panels" / "console" / "camera.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/camera.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
-        page.route("http://rosy.test/client.js", lambda route: route.fulfill(
+        page.route("http://rosy.test/assets/client.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body="export const session={token:'test'}; export const authHeaders=()=>({});"))
-        page.route("http://rosy.test/vision.js", lambda route: route.fulfill(
+        page.route("http://rosy.test/assets/vision.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body="export function createVisionPreview(){return {start(){window.__started=(window.__started||0)+1;},stop(){window.__stopped=(window.__stopped||0)+1;}};}"))
         page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
         page.evaluate("""async () => {
