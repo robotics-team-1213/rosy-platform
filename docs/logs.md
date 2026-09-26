@@ -2710,3 +2710,9 @@
 - Change: merged the latest local-main task-result evidence gate into the site integration worktree and corrected its Ruff findings while preserving the existing task-state assertions.
 - Evidence: current Fleet/deploy and contract test set passed `618 passed, 5 skipped`; Ruff passed on the touched Fleet, recovery, and deployment-contract files; harness lint reported 0 errors and 19 existing freshness warnings.
 - Gate: these are source/host tests. Packaged Compose recovery commands and Ubuntu field acceptance remain pending; automatic movement/picking remain HOLD.
+
+## 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
+
+- Change: exercised the documented one-off Compose commands from the exact candidate archive, including a live-source online backup, host bind-mount publication, read-only verification, and restore into the separate documented test project.
+- Evidence: backup and read-only integrity checks returned `ok`; separate-volume restore returned `ok` and read back synthetic sighting/task rows. Candidate source `05411e4d59959fa08130074d2d7d1051b8f45d74`, Fleet image `sha256:26ba610d7e9828bccfc59da1b585fbdbe9fb81fc177a558cd95aac3c6c3bb79b`, archive SHA-256 `7ffb83ef5aaed7b647ec25346abed5fd4d2f6c7df38e101e504b2a7b79d999e6`. Exact synthetic Compose projects and volumes were removed.
+- Gate: Windows Docker Desktop LOCAL software recovery is verified. Ubuntu host, production API readback/restore/reboot, GPU, physical devices, and SITE/DEVICE/FIELD acceptance remain open; automatic movement/picking remain HOLD.
