@@ -16,6 +16,12 @@ The smoke used temporary test credentials and a local test CA under
 | Operator task path | A goal against the reserved, unreachable test address `192.0.2.10` was persisted as `REQUESTED → UNKNOWN`. It did not claim robot acceptance or completion. |
 | Persistent state | After restarting Fleet, the CORE event, sighting, and task/history were readable from the Compose SQLite volume. By the delayed post-restart read, the sighting had correctly crossed its 1 s display lease and was `stale=true`; it remained stored and was not eligible for action. |
 
+## Browser console to test CORE
+
+A Playwright browser session exercised the rendered `/console` page through the local TLS proxy. An invalid operator token left the console locked; the valid test token showed `1/1` connected and loaded the 50 x 50 `e2e-map`. Selecting `rosy_01` and clicking the map submitted one goal to an isolated fake CORE HTTP endpoint. The fake endpoint logged `(2.55, 2.55, 0.0)` and returned `accepted=true`; Fleet persisted the task as `REQUESTED then ACCEPTED`, and the authenticated task readback returned the same actor (`site-console`) and history. The browser screenshot and raw run result remain under `X:\DevTemp\rosy-site-e2e-db857cb2` and are not repository artifacts.
+
+This proves the local browser-to-Fleet-to-test-endpoint flow only. The fake CORE has no actuator, and this does not prove an actual robot accepted or executed a command. Shared-token role identity, revocation, and physical-device acceptance remain open.
+
 ## Synthetic camera sample
 
 Twenty sequential frames were sent over one authenticated WSS connection at

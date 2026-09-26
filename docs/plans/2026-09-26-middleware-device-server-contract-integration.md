@@ -96,6 +96,8 @@
 3. **D-170 activation gate:** Accepted D-170은 `correlation_id` 생성·소비와 ACK 상태기를 FLEET SRS Phase 4 중앙 Fleet(10대) 착수와 같은 변경까지 보류한다. 현재 단일 사이트 Fleet 서버는 그 선행조건을 충족한다고 보지 않으므로 이 단계에서 correlation ID나 ACK를 구현하지 않는다. 본 사이트 rollout에서는 REST 접수와 완료를 구분하고 모호한 결과를 `UNKNOWN`으로 저장한다. Phase 4 착수 시 D-177에 따라 `core_common.protocol.schemas`, API Ref, FleetAgent 및 수신측을 한 변경으로 갱신하고 timeout은 자동 재시도 없이 `UNKNOWN/HOLD`로 남긴다.
 4. fail-closed stale/missing evidence, auth revocation, duplicate/replay, crash recovery와 storage migration 시험을 수행한다. automatic enable remains OFF.
 
+**Browser operator-flow evidence (LOCAL):** Playwright opened the rendered console through the Compose TLS proxy. Invalid token stayed locked; the valid test token showed one connected synthetic robot and its map. A map-click goal reached only an isolated fake CORE endpoint; the endpoint logged the goal and returned acceptance. Fleet stored `REQUESTED then ACCEPTED`, and authenticated task readback returned matching actor/history. This closes the browser auth/manual-request/readback slice for local synthetic verification. It does not establish per-user RBAC or revocation, nor actual CORE/actuator acceptance.
+
 **Task 7 implementation progress (LOCAL, partial):** the operator `/goal` route,
 navigation intents through `/api/fleet/do`, and internal policy entry point share
 configured-robot/finite-goal validation, SQLite
