@@ -558,7 +558,7 @@ class TestShutdownSentinel:
 def _shipped_config(name="config/rosy_default.yaml"):
     import pathlib
     import yaml
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[3] / "contracts" / "foundation"
     return yaml.safe_load((root / name).read_text(encoding="utf-8"))
 
 

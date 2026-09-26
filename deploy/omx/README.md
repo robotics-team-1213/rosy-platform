@@ -95,13 +95,33 @@ The preflight refuses guessed `/dev/tty*` paths, missing
 or non-character devices, inaccessible devices, and duplicate selections.
 Never use privileged mode or mount `/dev` wholesale.
 
-The `simulation` profile starts ROBOTIS's `omx_f_gazebo.launch.py` from the
+The `simulation` profile starts ROBOTIS's `omx_f_follower_ai_gazebo.launch.py` from the
 locked `open_manipulator` revision. That launch uses the vendor OMX-F URDF
 with `use_sim:=true`, Gazebo Sim, `gz_ros2_control`, the vendor controllers,
 and the `/clock` bridge. It has no serial or camera device grants. Its ROS
 domain is isolated from the workstation and remains software-only; it does
 not start the physical Dynamixel driver or claim device acceptance. A checked-in
-patch adds Gazebo's server-only flag so the simulation needs no GUI session.
+A checked-in patch selects Gazebo server mode and Bullet Featherstone physics
+for the gripper mimic constraint, makes simulated `ros2_control` synchronous,
+and enables the vendor controller manager's URDF command limits. These are
+simulation settings; the native actuator configuration remains unchanged.
+The simulation launch also removes the vendor's direct
+`/leader/joint_trajectory` remap. In a two-input probe, the leader topic moved
+`joint1` to `-0.2` rad while an action to `+0.2` rad reported success. The
+simulation therefore exposes the action path without that leader connection.
+This does not implement a general command owner for native control.
+Patch files are checked out with LF endings so `git apply` works in the Linux
+image even when the build context comes from a Windows checkout.
+
+The development image also removes the same direct leader trajectory remap
+from the vendor's non-simulation `omx_f_follower_ai.launch.py`. This prevents
+that particular topic from bypassing an accepted action goal when the inert
+hardware shell is used for diagnostics. The patch is copied into the installed
+launch after the vendor build. It is not a native systemd runtime or an
+admission boundary: other participants in the ROS graph can still address the
+controller action or trajectory topic. A per-workcell command owner, graph
+isolation, independent stop, and physical readback remain required before
+field actuator control (D-281/D-273).
 Start it on a Linux workstation with a working Docker engine:
 
 ```sh
@@ -118,3 +138,49 @@ The image tag is a local development tag, not an artifact identity. Record a
 content digest and dependency/build manifest before treating it as ARTIFACT
 acceptance. A successful host build does not prove ARM64 Pi compatibility,
 device access, arm motion, camera timing, or field acceptance.
+
+## Moving a workcell to another host
+
+This is a placement handoff sequence, not permission to start an actuator.
+Keep the same `workcell_id` and record a new host/config revision. For each
+workcell independently:
+
+1. Stop the old controller instance and verify its process has exited and its
+   selected serial/camera devices are no longer held. Mark work in progress
+   `UNKNOWN` or HOLD until the device result is independently read back; never
+   replay the prior trajectory on the new host.
+2. Verify the new host identity, locked vendor/runtime artifact digest, ROS
+   graph isolation, selected `/dev/serial/by-id/` devices, camera identity,
+   calibration revision, and host-specific credentials. Run
+   `resolve_host_devices()` on the new host before any vendor launch.
+3. Start the new instance in a no-command state. Read back controller and
+   physical stop state, then require an explicit operator decision before new
+   work. If either old ownership release or new readback is unclear, keep both
+   hosts from issuing commands.
+4. Record old/new host IDs, workcell/instance IDs, artifact and config
+   revisions, device identities, stop/readback evidence, operator, and time.
+   Keep Fleet task SQLite on its site host; do not share-mount it to the OMX
+   host or treat its task status as arm completion.
+
+No host transfer or two-arm load test has been performed on physical OMX-AI
+hardware. D-281's shared-host placement remains a candidate until measured.
+
+## Reproduce the owner-to-vendor simulation probe
+
+After building the development image from this checkout, run the probe with
+the checkout mounted read-only, no network, and no device grants. From the
+repository root in PowerShell:
+
+```powershell
+$omxCheckout = (Resolve-Path .).Path
+docker run --rm --network none `
+  --mount "type=bind,source=$omxCheckout,target=/repo,readonly" `
+  rosy-omx-workstation:native-action-only-local `
+  bash /repo/deploy/omx/probe_vendor_owner_sim.sh
+```
+
+The script starts the locked Gazebo follower, runs the opt-in ROS adapter
+test, and stops its launch on exit. It rejects serial/video device grants.
+The test checks action result/cancel, a competing policy owner, and the
+absence of a subscriber to the old leader trajectory topic. This is one
+container's ROS-SIM evidence, not a native systemd or physical stop test.

@@ -54,6 +54,11 @@ WS281X_SHA="$(lock_value hardware_dependencies rpi_ws281x_sha256)"
 LAMP_OVERLAY_SOURCE="$(dirname "$0")/overlays/rosy-ws281x.dts"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
+CAMERA_SOURCES="$(dirname "$0")/$(lock_value camera_runtime sources)"
+CAMERA_SOURCES_SHA="$(lock_value camera_runtime sources_sha256)"
+CAMERA_PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value camera_runtime python_requirements)"
+CAMERA_PYTHON_SHA="$(lock_value camera_runtime python_requirements_sha256)"
+CAMERA_INSTALLER="$(dirname "$0")/install-camera-stack.sh"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
 DISPLAY_PROBE="$(dirname "$0")/probe-display-runtime.py"
@@ -72,6 +77,14 @@ BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"
 [[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
+for pair in "$CAMERA_SOURCES:$CAMERA_SOURCES_SHA" "$CAMERA_PYTHON_REQUIREMENTS:$CAMERA_PYTHON_SHA"; do
+    camera_file="${pair%%:*}"
+    camera_sha="${pair#*:}"
+    [[ -f "$camera_file" && "$camera_sha" =~ ^[0-9a-f]{64}$ ]] || fail "camera lock input is missing or invalid"
+    [[ "$(sha256sum "$camera_file" | awk '{print $1}')" == "$camera_sha" ]] \
+        || fail "camera lock input does not match inputs.lock.yaml: $camera_file"
+done
+[[ -f "$CAMERA_INSTALLER" ]] || fail "camera stack installer is missing"
 [[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
 [[ -f "$IO_PROBE" ]] || fail "hardware runtime probe is missing"
 [[ -f "$DISPLAY_PROBE" ]] || fail "boot display probe is missing"
@@ -155,7 +168,8 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-pip python3-yaml \
+    avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base libnss-mdns locales network-manager \
+    openssh-server openssl python3 python3-pip python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 # D-190: the boot display (rosy-boot-display.service). RPi.GPIO on the Pi 5 is
 # the rpi-lgpio compatibility layer; spidev drives the ST7789; PIL, numpy and
@@ -209,6 +223,12 @@ chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 install -d -m 0755 "$ROOT/usr/local/share/rosy"
 printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+
+# D-288: install the pinned official PiSP userspace before taking the final
+# package inventory. This requires an ARM64 build and never touches a device SD.
+chroot "$ROOT" apt-get clean
+bash "$CAMERA_INSTALLER" "$ROOT" "$CAMERA_SOURCES" "$CAMERA_PYTHON_REQUIREMENTS" \
+    || fail "pinned Raspberry Pi camera userspace did not build"
 
 # D-247: the WS2812 lamp driver. rpi_ws281x drives the Pi 5 lamp only through
 # its rp1_ws281x_pwm kernel module (/dev/ws281x_pwm), which no Ubuntu package
@@ -303,6 +323,9 @@ chroot "$ROOT" getent passwd rosy-core >/dev/null 2>&1 || \
 chroot "$ROOT" getent group rosy-io >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 961 rosy-io
 chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 961 --gid 961 --system --no-create-home --shell /usr/sbin/nologin rosy-io
+chroot "$ROOT" getent group rosy-camera >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 963 rosy-camera
+chroot "$ROOT" getent passwd rosy-camera >/dev/null 2>&1 || \
+    chroot "$ROOT" useradd --uid 963 --gid 963 --system --no-create-home --shell /usr/sbin/nologin rosy-camera
 # D-190: the boot display's own account; no login shell, no home of its own
 # (the unit gives it HOME=/var/lib/rosy/display). SupplementaryGroups= in the
 # units names spi, gpio and i2c; systemd refuses to start a unit whose group
@@ -341,6 +364,12 @@ bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=i2c0-pi5,pins_0_1
 bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=rosy-ws281x" \
     --comment "Rosy WS2812 lamp (rp1_ws281x_pwm) on Raspberry Pi 5 GPIO19" \
     || fail "could not enable the WS2812 lamp overlay in the image"
+# Pinky Pro OV5647 is on CAM1. A Pi 5 rev d04170 did not enumerate it with
+# camera_auto_detect=1; the vendor card captured a real JPEG with the explicit
+# OV5647 overlay, and the ROSY card captured a real JPEG after the same change.
+bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=ov5647" \
+    --disable-camera-auto-detect --comment "Rosy OV5647 camera on Pi 5 CAM1" \
+    || fail "could not configure the OV5647 camera in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 

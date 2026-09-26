@@ -25,6 +25,12 @@ def test_default_robot_is_pinky_pro():
     assert DEFAULT_ROBOT == "pinky_pro"
 
 
+def test_default_config_belongs_to_the_foundation_package(no_ament_share):
+    assert config_module._find_default_config() == (
+        SRC / "contracts" / "foundation" / "config" / "rosy_default.yaml"
+    )
+
+
 def test_default_config_names_the_robot_model(monkeypatch, tmp_path):
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
     assert load_config()["robot"]["model"] == "pinky_pro"

@@ -128,3 +128,83 @@
 - gate 변화: ARTIFACT HOLD 유지.
 - 결정: 기존 IDN-003 응답 사용.
 - 교훈: DDS 번호는 설치 신원에서 파생되므로 일반 설정 폼에서 임의 수정하면 안 된다.
+## 2026-09-26 · uncommitted · feat(hmi): stabilize mobile /console topbar and capture current shell
+
+- 변경: 390px topbar를 브랜드/E-stop, 화면 전환, 역할/안내의 분리된 행으로 정렬한다. D-280 기준선에 현재 `/console` LOCAL 캡처 측정과 desktop no-scroll/act 밀도 HOLD를 기록한다.
+- 증거: Chromium 390×844에서 가로 overflow 0, 브랜드·탐색·역할·E-stop 겹침 0, E-stop viewport 내 표시; 실제 FastAPI+CoreServices CORE `/console`에서 브라우저 오류 0. 1366×768에서는 스크롤 823px, 조작 패널 경계 y=1017인 3열 후보는 하단 조작을 잘라 적용하지 않았다. 캡처는 X:\DevTemp에만 보관.
+- gate 변화: 없음. ROS/장치/벤치/현장 검증은 하지 않았다.
+- 결정: D-201 조작 영역을 스크롤 숨김으로 잘라내지 않는다. 역할과 실제 ROS 데이터별 패널 밀도를 확인한 뒤 desktop 배치를 다시 설계한다.
+
+## 2026-09-26 · uncommitted · docs(hmi): compare operator console viewport by role
+
+- 변경: D-280 기준선에 administrator/operator 두 역할의 현재 `/console` 캡처 결과와 데스크톱 초과의 원인을 기록한다.
+- 증거: 실제 FastAPI+CoreServices CORE fixture, Playwright 1366×768/390×844, 두 역할 모두 console panel 7개(4 act), desktop scroll 823px, mobile scroll 3057px, 가로 overflow 0, 브라우저 오류 0. 역할에 따른 panel 수가 같고 CSS가 act를 다음 행에 둔다. 실제 ROS/장치 입력은 연결하지 않았다.
+- gate 변화: 없음. D-201 layout 계약 위반을 확인했으나 새 배치는 승인/검증 전이다.
+- 결정: act를 잘라내거나 스크롤하게 만드는 CSS는 보류한다. 조작 panel 밀도와 접이식/탭 우선순위를 설계한 뒤 desktop 변경을 평가한다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-283 운용 조작 그룹 결정
+
+- 변경: D-283 Accepted와 docs/dashboard harness ADR 색인을 추가했다. 운전(모드+수동), 도킹, 차선 추종 그룹을 고정 act 영역에서 선택한다.
+- 근거: 실제 CORE 경로 admin/operator 캡처에서 현재 823px desktop scroll을 확인했다. 펼친 3열 후보는 조작을 잘라 concept 16 §7.1 및 D-201을 위반했다.
+- gate 변화: 없음. G1 정지 전환, G2 뷰포트 캡처, G3 운용자 평가와 ROS-SIM/DEVICE/FIELD 수용은 미실행이다.
+## 2026-09-26 · uncommitted · feat(hmi): role-aware map absence and Host Agent recovery (D-279)
+
+- 변경: preserve structured HTTP errors; only documented `404 / NOT_FOUND` becomes an empty map. Gate the `/setup` link by role and manifest. Render supplied Host Agent recovery as text and keep operations disabled while unavailable.
+- Structure: role panels use shared `ui-status`, `ui-actions`, and named `ui-button` sizes.
+- 증거: 241 passed, 2 skipped; visible CORE/Playwright review returned Viewer setup 403, Operator setup link only for an empty map, Administrator device 200; zero browser errors or 390px horizontal overflow.
+- gate 변화: unchanged. CORE browser proof does not establish ROS-SIM, ARM64, device, or field acceptance.
+- Decisions: D-279 behavior; D-284 shared components.
+- Rule: do not infer freshness, causes, recovery steps, or role grants beyond API evidence.
+
+## 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
+
+- 변경: re-run dashboard, shared UI, API, role browser, and device browser coverage after rebasing on current main.
+- 증거: 241 passed, 3 skipped; visible CORE review remains on `/device` with Viewer setup 403, Operator setup link only for an empty map, Administrator device 200, and no browser errors or 390px overflow.
+- gate 변화: unchanged. CORE browser proof does not establish ROS-SIM, ARM64 image, device, or field acceptance.
+- Decision: D-279 behavior and D-284 shared components.
+
+## 2026-09-26 · uncommitted · feat(dashboard): camera recording and screenshot controls
+
+- 변경: 전방 카메라 화면에 JPEG 스크린샷, 2 FPS 브라우저 영상 녹화, 운전 조작 타임라인, PC/로봇 SD/둘 다 저장 선택, 로봇 저장 파일 목록·다운로드를 추가했다.
+- 증거: `python -m pytest src/hmi/dashboard/test/ -q --basetemp X:/DevTemp/rosy-camera-capture`와 API 통합 시험. 실제 브라우저와 장치 저장 검증은 남아 있다.
+- gate 변화: 없음. native ARM64 이미지와 물리 카메라 연결 검증은 별도다.
+
+## 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
+
+- 변경: `운전`·`도킹`·`차선 추종`을 capability-filtered accessible tabs로 묶었다. 탭을 벗어나기 전 terminal zero 응답을 기다리고 실패 시 현재 그룹을 유지한다. desktop은 sense/observe/act 3열 viewport에 맞추고 sense만 내부 scroll, mobile은 기존 vertical scroll을 유지한다.
+- 근거: dashboard/API/gateway 관련 pytest 116 passed, 2 skipped; foundation 50 passed. 실제 FastAPI+`CoreServices` 브라우저에서 administrator/operator × 1366×768/390×844 4개 캡처, desktop page scroll 0, mobile horizontal overflow 0, E-stop visible. G1 active teleop zero → unmount, line-follow/docking 요청 대기·활성 중 그룹 이탈 차단, terminal zero 실패 시 전환과 unmountAll 차단, 재진입 후 자동 명령 없음 통과. 캡처 `X:\DevTemp\d283-console-core-browser`.
+- gate 변화: SOURCE/LOCAL 구현·브라우저 gate GO. G3 8명 조작자 평가 전 D-201 desktop 제품 수용은 HOLD; ROS-SIM/ARTIFACT/DEVICE/FIELD 증거 아님.
+- 결정: D-283 Accepted.
+- 교훈: 선택형 조작 화면은 숨길 때 스트림/폴링을 내리고, 재진입은 새 사용자 입력부터 시작한다.
+
+## 2026-09-26 · uncommitted · test(dashboard): real Chromium camera capture
+
+- 변경: Chromium의 실제 `MediaRecorder`로 미리보기 JPEG 스크린샷, WebM 녹화, 조작 JSON의 파일 형식·내용을 검증하고 카메라 패널의 역할별 버튼 상태 시험을 수정했다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_camera_capture_browser.py test/test_role_menu_panels_browser.py::test_console_camera_preview_stops_on_hidden_document_and_unmount -q` 2 passed.
+- gate 변화: 없음. 합성 프레임의 로컬 브라우저 증거이며 Pinky SD, 카메라 센서, ARM64 이미지 수용은 별도다.
+
+## 2026-09-26 · uncommitted · feat(hmi): apply D-292 shared component roles
+
+- 변경: 카메라 조작 버튼마다 실제 동작에 맞는 kind를 지정하고 라이브 안내를 ui-status로 통일했다. 액션 간격과 저장 필드 라벨은 공유 컴포넌트를 사용하며 캡처 오버레이 색상도 tokens.css에서 읽는다.
+- 증거: HMI web + dashboard browser-enabled suites — 97 passed; API route/manifest tests — 27 passed. Visible CORE Chromium reviewed operator /console·/setup and administrator /console·/setup·/device at desktop/mobile sizes; 0 page errors and missing button kinds.
+- gate 변화: SOURCE/LOCAL remain GO. ARM64 image, physical camera, DEVICE, and FIELD acceptance remain outside this UI review.
+- 결정: D-292.
+
+## 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)
+
+- 변경: 스타일가이드에 공용 제목·라벨·값, 키보드 포커스, 비활성 버튼을 추가하고 닫힌 타이포그래피/상호작용 토큰을 연결했다.
+- 증거: browser-enabled dashboard suite 포함 전체 HMI 100 passed; dashboard API route/manifest 29 passed. Visible Chromium에서 스타일가이드와 실제 operator/admin 화면을 desktop/mobile로 확인했다.
+- gate 변화: 없음. ARTIFACT는 설치 이미지 증거가 없어 HOLD이며, 브라우저 검토는 DEVICE/FIELD 수용을 대신하지 않는다.
+- 결정: D-294.
+
+## 2026-09-27 · 6ce05ff1 · test(dashboard): verify D-294 browser and asset contracts
+
+- 변경: D-294 스타일가이드와 화면 수용 결과를 기록했다.
+- 증거: HMI browser-enabled suite 100 passed, dashboard API route/manifest 29 passed. Visible CORE Chromium reviewed styleguide, console/setup/device at desktop and mobile widths; 0 page errors and 0 positive horizontal overflow.
+- gate 변화: SOURCE/LOCAL remain GO. Dashboard ARTIFACT remains HOLD pending image installation evidence.
+
+## 2026-09-27 · uncommitted · name role surfaces
+- Change: role surfaces have a focusable main landmark, skip link, H1 and panel H2 headings.
+- Evidence: role surface keyboard browser regression passed; full UI/Fleet run had 661 passes, 5 skips and one Fleet keyboard focus failure resolved separately.
+- Gate: SOURCE/LOCAL only; robot display acceptance remains unverified.
+- Follow-up: the complete Fleet Chromium suite passed (15 tests); no further role-surface code changed.

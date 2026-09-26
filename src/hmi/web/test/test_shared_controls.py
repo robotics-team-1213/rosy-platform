@@ -29,7 +29,7 @@ TAG = re.compile(r"<ui-button\b([^>]*)>", re.S)
 RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
 CONTROL = re.compile(
     r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
-    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty"
+    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 PAINT = re.compile(
@@ -72,13 +72,142 @@ def test_shared_controls_are_the_only_painted_components():
     names = (
         "ui-button", "ui-field", "ui-tag", "ui-text",
         "ui-head", "ui-grid", "ui-chip", "ui-triage", "ui-evidence",
-        "ui-shell", "ui-topbar", "ui-brand", "ui-section", "ui-empty",
+        "ui-shell", "ui-topbar", "ui-brand", "ui-section", "ui-empty", "ui-status", "ui-actions",
     )
     for name in names:
         assert name in css
         assert f'"{name}"' in script
     assert not RAW_COLOR.findall(css), "components.css에 원시 색이 있다"
     assert not RAW_SIZE.findall(css)
+
+
+def test_shared_status_component_owns_accessibility_and_palette_states():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    script = UI.read_text(encoding="utf-8")
+    states = {
+        "pending", "empty", "ready", "warning", "error", "unavailable", "forbidden",
+    }
+    declaration = re.search(r"const STATUS_STATES = \[(.*?)\];", script, re.S)
+    assert declaration
+    assert set(re.findall(r'"([a-z]+)"', declaration.group(1))) == states
+    assert 'if (!this.hasAttribute("role")) this.setAttribute("role", "status")' in script
+    assert 'if (!this.hasAttribute("aria-live")) this.setAttribute("aria-live", "polite")' in script
+    assert "ui-status[state=\"warning\"]" in css
+    assert "ui-status[hidden] { display: none; }" in css
+    assert "color: var(--status-warn)" in css
+    assert not RAW_COLOR.findall(css)
+
+
+def test_role_recovery_panels_use_shared_status_component():
+    console_map = (ROOT / "hmi" / "dashboard" / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+    host_operations = (ROOT / "hmi" / "dashboard" / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
+    assert 'el("ui-status"' in console_map
+    assert 'el("ui-status"' in host_operations
+
+
+def test_role_live_announcements_use_shared_status_component():
+    panels = ROOT / "hmi" / "dashboard" / "panels"
+    owners = (
+        "console/camera.js", "console/docking.js", "console/line-follow.js",
+        "console/mode.js", "console/teleop.js", "host/system.js",
+        "setup/docking.js", "setup/dock-admin.js", "setup/localization.js",
+        "setup/traffic-policy.js", "system/security.js",
+    )
+    for owner in owners:
+        source = (panels / owner).read_text(encoding="utf-8")
+        assert re.search(r'el\("ui-status",\s*"",\s*"', source), owner
+        assert 'el("p", "surface-message"' not in source, owner
+
+
+def test_selected_action_tabs_use_shared_segment_palette():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    shell_css = (ROOT / "hmi" / "dashboard" / "shell" / "shell.css").read_text(encoding="utf-8")
+    assert 'ui-button[kind="segment"][aria-selected="true"]' in css
+    assert ".action-group-tabs ui-button[aria-selected" not in shell_css
+
+
+def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    script = UI.read_text(encoding="utf-8")
+    assert 'const BUTTON_SIZES = ["secondary", "primary", "irreversible"]' in script
+    assert 'const KIND_SIZES = { primary: "primary", irreversible: "irreversible" }' in script
+    for size, token in (("secondary", "target-secondary"), ("primary", "target-primary"), ("irreversible", "target-irreversible")):
+        assert f'ui-button[data-size="{size}"]' in css
+        assert f"min-height: var(--{token})" in css
+    assert "ui-actions" in script and "ui-actions" in css
+    assert "gap: var(--gap-actions)" in css[css.index("ui-actions {"):]
+    dashboard = ROOT / "hmi" / "dashboard" / "panels"
+    owners = ("console/docking.js", "console/mode.js", "console/map.js", "host/operations.js", "setup/localization.js")
+    for owner in owners:
+        source = (dashboard / owner).read_text(encoding="utf-8")
+        assert 'el("ui-actions"' in source, owner
+    teleop = (dashboard / "console" / "teleop.js").read_text(encoding="utf-8")
+    assert 'setAttribute("size", "primary")' in teleop
+    panel_css = (dashboard / "surface-panels.css").read_text(encoding="utf-8")
+    teleop_rule = re.search(r"\.surface-teleop-controls ui-button\s*\{([^}]*)\}", panel_css)
+    assert teleop_rule and "min-height" not in teleop_rule.group(1)
+
+
+def test_role_forms_use_shared_responsive_layout_and_field_labels():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    layout = re.search(r"\.ui-form\s*\{([^}]*)\}", css)
+    field = re.search(r"\.ui-field-label\s*\{([^}]*)\}", css)
+    assert layout and "display: flex" in layout.group(1)
+    assert "flex-wrap: wrap" in layout.group(1)
+    assert "align-items: end" in layout.group(1)
+    assert "gap: var(--gap-form)" in layout.group(1)
+    assert field and "display: grid" in field.group(1)
+    assert "min-width: min(100%, 10rem)" in field.group(1)
+    assert ".ui-form > * { width: 100%; }" in css
+    assert ".surface-form" not in panel_css
+    assert ".surface-inline-form" not in panel_css
+    assert ".surface-field" not in panel_css
+
+    panels = ROOT / "hmi" / "dashboard" / "panels"
+    sources = [path.read_text(encoding="utf-8") for path in panels.rglob("*.js")]
+    role_forms = "\n".join(sources)
+    assert 'el("form", "ui-form")' in role_forms
+    assert 'el("label", "ui-field-label"' in role_forms
+    assert "surface-form" not in role_forms
+    assert "surface-inline-form" not in role_forms
+    assert "surface-field" not in role_forms
+
+
+def test_role_readouts_use_a_shared_semantic_definition_list_layout():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    readout = re.search(r"\.ui-readout\s*\{([^}]*)\}", css)
+    assert readout and "display: grid" in readout.group(1)
+    assert "grid-template-columns: minmax(7rem, 1fr) 2fr" in readout.group(1)
+    assert "gap: var(--gap-readout)" in readout.group(1)
+    assert ".ui-readout dt { color: var(--nominal-quiet); }" in css
+    assert ".ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }" in css
+    assert ".surface-readout" not in panel_css
+    assert ".surface-readout" not in "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+    )
+
+
+def test_role_readback_sections_use_shared_layout_primitives():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    section = re.search(r"\.ui-readback\s*\{([^}]*)\}", css)
+    assert section and "min-width: 0" in section.group(1)
+    assert "display: grid" in section.group(1)
+    assert "gap: var(--gap-readback)" in section.group(1)
+    assert re.search(
+        r"\.ui-readback > h3,\s*\.ui-readback > h4\s*\{\s*margin:\s*0;\s*\}",
+        css,
+    )
+    assert ".surface-readback" not in panel_css
+    panel_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+    )
+    assert ".surface-readback" not in panel_source
+    assert 'el("section", "ui-readback")' in panel_source
 
 
 def test_browser_surfaces_use_the_type_scale():

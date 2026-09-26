@@ -472,3 +472,13 @@
 - gate 변화: 없음; ROS-SIM/DEVICE/FIELD 범위 밖.
 - 결정: D-257 Proposed; schema-only pass는 카메라/vision worker 동작 증명이 아니다.
 - 교훈: 없음
+## 2026-09-26 · uncommitted · FleetAgent site discovery integration
+
+- 변경: CORE가 기존 직접 Fleet URL 경로를 유지하면서, 승인된 pairing token이 있는 경우에만 발견된 사이트로 outbound WSS를 연다. SD 등록용 일회성 값은 연결 토큰으로 쓰지 않는다.
+- 증거: gateway/Fleet/first-boot 집중 58 passed, 변경 Python flake8 통과. ROS-SIM/실제 Pi는 미실행.
+- gate 변화: LOCAL 검증만 추가.
+
+## 2026-09-27 · uncommitted · consume core_common configuration
+- Change: launch now resolves default YAML from core_common share; source fixtures follow the new owner.
+- Evidence: 1,812 gateway/config/image tests passed with 28 skipped; flake8 passed for changed runtime/config Python files.
+- Gate: LOCAL only; ROS-SIM, image and device runtime remain unverified.

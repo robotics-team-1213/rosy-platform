@@ -165,6 +165,22 @@ def test_valid_log_has_no_errors():
     assert [e.summary for e in harness.parse_log(GOOD_LOG)] == ["feat: first", "docs: second"]
 
 
+def test_logs_accept_english_field_labels():
+    english = """## 2026-09-27 · uncommitted · docs: local verification
+- Change: record the candidate
+- Evidence: smoke passed
+- Gate: field acceptance remains open
+"""
+    assert harness.validate_log(english) == []
+
+
+def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema():
+    legacy = """## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
+- 변경: one concurrent branch version
+"""
+    assert harness.validate_log(legacy) == []
+
+
 def test_append_only_logs_accept_legacy_evidence_label():
     legacy = GOOD_LOG.replace("- 증거:", "- 근거:")
     assert harness.validate_log(legacy) == []
@@ -172,6 +188,11 @@ def test_append_only_logs_accept_legacy_evidence_label():
 
 def test_append_only_logs_accept_validation_as_legacy_evidence_label():
     legacy = GOOD_LOG.replace("- 증거:", "- 검증:")
+    assert harness.validate_log(legacy) == []
+
+
+def test_append_only_logs_accept_device_evidence_as_legacy_label():
+    legacy = GOOD_LOG.replace("- 증거:", "- 장치 근거:")
     assert harness.validate_log(legacy) == []
 
 

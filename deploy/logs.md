@@ -1315,3 +1315,66 @@
 - 변경: xz 압축을 level 6으로 조정하고 CRC64, 전체 xz 검증, 카드 전체 읽기 검증은 유지한다.
 - 근거: 이전 ARM64 빌드의 압축 단계는 21분 38초였다. 같은 256 MiB rootfs 표본에서 level 6은 247.32초/253,463,064바이트, level 9 extreme은 403.30초/252,893,336바이트였다. 크기 차이는 0.23%였다.
 - gate 변화: 소스 최적화만 완료. 현재 018 빌드는 이전 압축 설정이며, 다음 ARM64 전체 빌드에서 총 시간과 이미지 크기를 검증한다.
+## 2026-09-26 · uncommitted · Pinky Pro OV5647 CAM1 장치 검증 및 이미지 부팅 설정
+
+- 변경: 이미지 customizer가 `camera_auto_detect=0`과 `dtoverlay=ov5647`을 CAM1에 적용하고 mounted-image verifier가 이 조건을 검사하도록 했다.
+- 증거: Pi 5 rev d04170의 ROSY SD에서 `ov5647 11-0036` probe 성공, 공급사 카메라 사용자 공간을 임시 실행해 2592×1944 JPEG 실제 촬영 및 화면 확인. rev d04171은 공급사 SD에서 CAM0/CAM1 모두 probe `-121`로 실패했다.
+- 제한: ROSY 제품 이미지에는 PiSP/Picamera2 촬영 런타임이 없고 기본 서비스는 CORE-only다. 임시 진단 촬영은 제품 스트림 수용이 아니다. 새 이미지 artifact 빌드와 `.201` 물리 접속 확인은 남았다.
+- gate 변화: 없음. SOURCE 수정과 장치 진단만 확인했으며 ARTIFACT/DEVICE는 HOLD 유지.
+
+## 2026-09-26 · uncommitted · harden optional OMX-AI simulation image
+- 변경: keep vendor patches LF on Windows, select the AI follower Gazebo launch with Bullet Featherstone and synchronous simulated hardware, enforce URDF command limits, and remove the direct leader-topic remap from simulation.
+- 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused tests and two-instance ROS-SIM probe in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
+- gate 변화: no field actuator or artifact gate promoted; native command owner and physical acceptance remain open.
+
+## 2026-09-26 · uncommitted · D-287 Pi 5 카메라 사용자 공간 이미지 빌드 경로
+
+- 변경: Raspberry Pi 공식 libpisp, libcamera, rpicam-apps, Picamera2 소스를 커밋과 아카이브 SHA-256으로 고정하고 네이티브 ARM64 이미지 customizer에 설치 단계를 연결했다. mounted-image 검증기는 실행 파일, PiSP IPA, Python 패키지, 소스 기록을 확인한다.
+- 증거: 네 공식 아카이브와 ARM64 Python 배포물의 로컬 SHA-256 재확인, 잠금·설치 순서·검증기 호스트 계약 시험. 새 ARM64 이미지 빌드와 SD 촬영은 미실행.
+- gate 변화: SOURCE/LOCAL 구현만 추가. ARTIFACT와 새 SD의 DEVICE 촬영은 HOLD.
+
+## 2026-09-26 · uncommitted · docs(adr): renumber camera source-build decision
+
+- 변경: 메인 브랜치의 D-287 readback 결정을 보존하고 카메라 이미지 결정을 D-288로 기록했다.
+- 증거: ADR 색인과 이미지 잠금·설치·검증 시험의 D-288 참조 일치.
+- gate 변화: 없음. 새 ARM64 이미지와 SD 카메라 촬영은 미검증이다.
+
+## 2026-09-26 · uncommitted · site LAN discovery profile and Fleet advertisement
+
+- 변경: ROSY 로봇 mDNS TXT에 공통 제품·역할·프로토콜 표시를 추가하고, Ubuntu Fleet `_rosy-fleet._tcp` Avahi 광고·검색 도구와 systemd 유닛을 사이트 배포 묶음에 넣었다.
+- 증거: Windows 집중 45 passed/2 skipped, 변경 파일 flake8 통과. Ubuntu Avahi 및 TLS 현장 연결은 아직 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL 범위만 확인, Ubuntu 사이트 ARTIFACT·DEVICE·FIELD 검증 대기.
+## 2026-09-26 · uncommitted · paired robot Fleet mDNS bootstrap
+
+- 변경: native image에 Avahi browse와 `.local` 이름 해석 의존성을 추가하고, 서명된 SD의 Fleet `.local` 예상 호스트와 trust profile에서 CORE 비공개 discovery 설정만 생성한다. 일회성 `pairing_credential`은 Agent 토큰으로 복사하지 않는다.
+- 증거: first-boot와 Agent 통합 집중 58 passed, 변경 파일 flake8 통과. 실제 native image 빌드와 Pi/Ubuntu TLS 연결은 미실행.
+- gate 변화: SOURCE/LOCAL 근거만 추가, ARTIFACT·DEVICE·FIELD 대기.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수
+
+- 변경: CORE와 무구동 I/O를 첫 부팅에 시작하고, 모터 구동은 장치별 커미셔닝 설정으로만 활성화한다. 이전 서명 이미지의 MEDIA 증거는 새 소스의 이미지로 재사용하지 않는다.
+- 근거: `2026.09.26-018`의 이미지와 카드 영수증은 이번 target 변경 이전 소스다. 새 ARM64 서명 이미지, 전체 카드 readback, Pi boot를 각기 확인한다.
+- gate 변화: 소스 계약은 검증 중이며 새 ARTIFACT/MEDIA는 빌드·기록 전까지 HOLD.
+
+## 2026-09-26 · uncommitted · site control console operator access guide
+
+- 변경: 사이트 서버, 운영자 브라우저, Pinky, OMX, 향후 GPU 호스트의 실행 책임과 LAN 바인딩·TLS·권한·작업 readback 점검 순서를 배포 설명에 추가했다.
+- 근거: `compose.yaml`의 기본 `127.0.0.1:8443`, Caddy의 Fleet 프록시, D-275/D-276/D-290을 대조했다.
+- gate 변화: 없음. SOURCE 문서 정리이며 실제 사이트 네트워크 및 장치 수용은 미실시.
+
+## 2026-09-26 · uncommitted · OMX development image action-only vendor launch
+
+- 변경: 잠긴 vendor 비시뮬레이션 follower launch에서 leader trajectory topic 직접 remap을 제거하고, 개발 이미지에 적용·설치하도록 했다.
+- 증거: 회귀 시험 실패→통과 및 mutation red, Docker Desktop amd64 빌드와 설치된 launch `remappings=[]` readback. 이미지 ID와 한계는 OMX 검증 기록에 남겼다.
+- gate 변화: SOURCE/LOCAL 보강. native systemd 산출물, 실제 OMX 장치와 현장 제어 승인은 여전히 HOLD.
+
+## 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff
+
+- 변경: 읽기 전용 checkout, 네트워크·장치 허가 없는 컨테이너에서 vendor Gazebo와 단일 소유자 시험을 재현하는 probe를 추가했다. OMX 호스트 이전의 점유 해제·무명령 기동·재승인 순서를 배포 설명에 적었다.
+- 증거: 잠긴 amd64 개발 이미지의 vendor action 시험 통과, 가짜 serial mount 거부(exit 2). 대상 Ubuntu 및 실물 장치 시험은 수행하지 않았다.
+- gate 변화: ROS-SIM 진단 근거만 보강. native 서비스·현장 배치 승인과 DEVICE/FIELD는 HOLD.
+
+## 2026-09-27 · uncommitted · update default-config image readback
+- Change: mounted-image validator now expects the default YAML in core_common share.
+- Evidence: image customization contract tests passed within the 1,812-test gateway/config/image run; built core_common wheel contains both YAML files.
+- Gate: host contract only; native ARM64 artifact and mounted device image remain unverified.

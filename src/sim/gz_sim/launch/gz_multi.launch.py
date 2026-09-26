@@ -48,7 +48,7 @@ from launch.substitutions import LaunchConfiguration
 import yaml
 
 
-#: 시뮬 로봇의 API 토큰. core 의 개발 토큰(`config/rosy_dev_auth.yaml`)이다. D-193 7 이후
+#: 시뮬 로봇의 API 토큰. core_common 의 개발 토큰(`config/rosy_dev_auth.yaml`)이다. D-193 7 이후
 #: 기본값에는 토큰이 없으므로 core 노드는 `ROSY_DEV_AUTH=1` 로 띄운다.
 SIM_OPERATOR_TOKEN = "rosy-dev-operator"
 

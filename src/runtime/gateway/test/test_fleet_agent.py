@@ -86,7 +86,7 @@ def test_hello_carries_real_identity():
 
 
 def test_core_services_build_wires_disabled_fleet_agent(tmp_path):
-    config_dir = Path(__file__).parent.parent / "config"
+    config_dir = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
     config = yaml.safe_load(
         (config_dir / "rosy_default.yaml").read_text(encoding="utf-8")
     )

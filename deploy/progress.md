@@ -22,7 +22,7 @@ gates:
     blocker: "Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음"
   FIELD:
     state: N/A
-adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179]
+adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291]
 plans:
   - docs/plans/2026-09-01-rosy-os-v1-image-release-design.md
   - docs/plans/2026-09-08-release-delivery-design.md
@@ -47,7 +47,7 @@ plans:
 ## 지금 상태
 
 - D-161 제품 기준선은 Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy다.
-  `rosy-runtime.target`은 CORE만 기본 시작하고 I/O/navigation은 승인 후 명시적으로 시작한다.
+  D-291에 따라 `rosy-runtime.target`은 CORE와 무구동 I/O를 기본 시작한다. 구동과 navigation은 별도 승인 뒤 활성화한다.
   Compose는 개발·CI 호환 경로일 뿐 제품 이미지 의존성이 아니다.
 - D-164 제품 배포 파일은 ISO가 아니라 Raspberry Pi Imager로 직접 기록하는 서명된
   `rosy-os-pinky-pro-<release-id>-arm64.img.xz`다. `.img`는 build workspace 밖으로

@@ -91,6 +91,7 @@ class FleetConsole:
         self._agent_pairing_tokens = tuple(ep.fleet_pairing_token for ep in endpoints
                                            if ep.fleet_pairing_token is not None)
         self._order = [ep.robot_id for ep in endpoints]
+        self._registered_endpoints = {ep.robot_id: ep.base_url for ep in endpoints}
         self._clock = clock
         self._map_ttl_s = map_ttl_s
         self._map: Optional[dict] = None
@@ -136,6 +137,10 @@ class FleetConsole:
     @property
     def robot_ids(self) -> list[str]:
         return list(self._order)
+
+    @property
+    def registered_endpoints(self) -> dict[str, str]:
+        return dict(self._registered_endpoints)
 
     def uses_rest_token(self, candidate: str) -> bool:
         """Check credential separation without exposing configured robot tokens."""
@@ -674,7 +679,7 @@ class FleetConsole:
         return result
 
     async def estop_all(self) -> dict:
-        """전 대상 정지. 한 대가 거절해도 나머지에 계속 내린다.
+        """전 대상 정지 요청. 한 대가 거절해도 나머지에 계속 내린다.
 
         빨리 실패하면 안 된다 — 닿지 않는 한 대 때문에 멈출 수 있었던 나머지가 계속
         움직이는 것이 이 버튼에서 가장 나쁜 결과다. 로봇 쪽 e-stop 과 deadman 은 관제와
@@ -699,14 +704,15 @@ class FleetConsole:
         rows = []
         for robot_id, result in zip(self._order, results):
             if isinstance(result, BaseException):
-                # 이 대는 서지 않았다. 목표를 지우면 화면에서 "아무 데도 안 간다"로 보이지만
-                # 실제로는 아직 가고 있을 수 있다 — 남겨 둔다.
+                # 응답을 받지 못했다. 실제로는 아직 가고 있을 수 있으므로 목표를 남긴다.
                 rows.append({"robot_id": robot_id, "stopped": False, "error": _error_of(result)})
             else:
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
                 self._queued.pop(robot_id, None)
                 self._yielding.pop(robot_id, None)
+                # legacy stopped=True는 CORE HTTP 응답 수신만 뜻한다.
+                # 실제 속도 0·물리 비상정지는 여기서 검증하지 않는다.
                 rows.append({"robot_id": robot_id, "stopped": True, "result": result})
         signal_result = None
         if signals_task is not None:

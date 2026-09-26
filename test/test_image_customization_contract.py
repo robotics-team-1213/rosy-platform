@@ -208,9 +208,9 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "etc/systemd/system/rosy-hw-test.service").write_text("[Unit]\n", encoding="utf-8")
     (root / "etc/systemd/system/rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
     (wants.parent / "rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
-    defaults = release / "install/share/core/config/rosy_default.yaml"
+    defaults = release / "install/share/core_common/config/rosy_default.yaml"
     defaults.parent.mkdir(parents=True, exist_ok=True)
-    defaults.write_text((ROOT / "src/runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8"),
+    defaults.write_text((ROOT / "src/contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8"),
                         encoding="utf-8")
     return root
 
@@ -247,7 +247,7 @@ def test_mounted_image_verifier_accepts_native_core_only_layout(tmp_path):
 def test_mounted_image_verifier_rejects_tokens_in_core_defaults(tmp_path):
     # D-193 7: a payload whose packaged defaults carry any token fails the build.
     root = _valid_root(tmp_path)
-    defaults = root / "opt/rosy/releases/2026.09.22-001/install/share/core/config/rosy_default.yaml"
+    defaults = root / "opt/rosy/releases/2026.09.22-001/install/share/core_common/config/rosy_default.yaml"
     defaults.write_text("auth:\n  tokens:\n    - token: rosy-dev-" + "admin\n      role: administrator\n",
                         encoding="utf-8")
     completed = _verify(root)

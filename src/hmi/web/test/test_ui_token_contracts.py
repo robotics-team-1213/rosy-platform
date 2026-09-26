@@ -218,6 +218,55 @@ def test_component_token_layer_exists():
     assert not missing, f"tokens.css에 없는 컴포넌트 토큰: {sorted(missing)}"
 
 
+def test_component_spacing_roles_are_closed_and_backed_by_the_base_scale():
+    """D-292 — 공용 간격 결정은 역할 이름으로 소비하고 기본 척도에 연결한다."""
+    text = tokens_text()
+    declarations = dict(
+        re.findall(r"^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);", text, re.MULTILINE)
+    )
+    roles = {
+        "--inset-button", "--inset-button-primary", "--inset-button-irreversible",
+        "--inset-field", "--inset-tag", "--inset-grid-cell", "--inset-chip",
+        "--inset-evidence-unavailable", "--gap-button-content", "--gap-grid-cell", "--gap-actions",
+        "--gap-form", "--gap-field-label", "--gap-readout", "--gap-readout-mobile",
+        "--gap-readback", "--gap-heading", "--gap-triage", "--gap-topbar",
+        "--gap-brand", "--gap-section", "--inset-topbar", "--inset-topbar-focal",
+        "--gap-button-detail", "--offset-readout-mobile",
+    }
+    missing = roles - declarations.keys()
+    assert not missing, f"D-292 컴포넌트 간격 역할 토큰이 없다: {sorted(missing)}"
+
+    base_scale = {f"--space-{i}" for i in range(1, 7)}
+    for role in roles:
+        refs = set(re.findall(r"var\((--[a-z0-9-]+)", declarations[role]))
+        assert refs and refs <= base_scale, (
+            f"{role}은 기본 간격 척도만 참조해야 한다: {declarations[role]}"
+        )
+
+
+def test_shared_components_consume_component_spacing_roles():
+    """레이아웃은 표면이 소유하고 반복되는 컴포넌트 간격은 공용이 소유한다."""
+    css = (TOKENS.parent / "components.css").read_text(encoding="utf-8")
+    expected = {
+        "--inset-button", "--inset-button-primary", "--inset-button-irreversible",
+        "--inset-field", "--inset-tag", "--inset-grid-cell", "--inset-chip",
+        "--inset-evidence-unavailable", "--gap-button-content", "--gap-grid-cell", "--gap-actions",
+        "--gap-form", "--gap-field-label", "--gap-readout", "--gap-readout-mobile",
+        "--gap-readback", "--gap-heading", "--gap-triage", "--gap-topbar",
+        "--gap-brand", "--gap-section", "--inset-topbar", "--inset-topbar-focal",
+        "--gap-button-detail", "--offset-readout-mobile",
+    }
+    used = set(re.findall(r"var\((--[a-z0-9-]+)", css))
+    assert expected <= used, f"components.css가 소비하지 않는 역할 토큰: {sorted(expected - used)}"
+
+    direct_spacing = re.findall(
+        r"(?<![-a-z])(padding|margin|gap|row-gap|column-gap)[a-z-]*:\s*([^;}]+)", css
+    )
+    offenders = [f"{prop}: {value.strip()}" for prop, value in direct_spacing
+                 if re.search(r"var\(--space-", value)]
+    assert not offenders, f"공용 컴포넌트가 기초 간격 대신 역할 토큰을 써야 한다: {offenders}"
+
+
 def test_focus_is_interaction_not_status():
     """포커스 링은 상태가 아니다. status 색을 쓰면 '주의'와 헷갈린다."""
     text = tokens_text()
@@ -392,4 +441,71 @@ def test_a_danger_fill_carries_ink_not_dark_text():
         if ink and ink.group(1) not in ("--paper", "--ink", "--nominal"):
             offenders.append(f"{selector.strip()[:50]} -> color {ink.group(1)}")
     assert not offenders, f"위험 면 위에 잉크가 아닌 색을 얹는다: {offenders}"
+
+
+def test_shared_type_and_interaction_tokens_are_closed_and_keep_current_metrics():
+    """D-294 — 반복되는 타이포그래피와 조작 피드백은 이름 있는 척도로 닫는다."""
+    declarations = dict(
+        re.findall(r"^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);", tokens_text(), re.MULTILINE)
+    )
+    expected = {
+        "--weight-medium": "500",
+        "--weight-label": "600",
+        "--weight-emphasis": "650",
+        "--weight-strong": "700",
+        "--leading-flat": "1",
+        "--leading-dense": "1.1",
+        "--leading-control": "1.2",
+        "--leading-label": "1.3",
+        "--leading-body": "1.4",
+        "--leading-copy": "1.5",
+        "--track-wide": "0.04em",
+        "--track-state": "0.06em",
+        "--focus-ring-width": "2px",
+        "--focus-ring-offset": "1px",
+        "--contract-mark-width": "2px",
+        "--contract-mark-offset": "2px",
+        "--disabled-opacity": "0.45",
+    }
+    missing = expected.keys() - declarations.keys()
+    assert not missing, f"D-294 토큰이 없다: {sorted(missing)}"
+    changed = {
+        token: (declarations[token].strip(), value)
+        for token, value in expected.items()
+        if declarations[token].strip() != value
+    }
+    assert not changed, f"기존 공용 컴포넌트 지표가 달라졌다: {changed}"
+    assert declarations.get("--track-label", "").strip() == "0.12em"
+
+
+def test_shared_components_consume_type_and_interaction_tokens():
+    """공용 컴포넌트에서 반복되는 값은 토큰으로만 바꿀 수 있다."""
+    css = (TOKENS.parent / "components.css").read_text(encoding="utf-8")
+    required = {
+        "--weight-medium", "--weight-label", "--weight-emphasis", "--weight-strong",
+        "--leading-flat", "--leading-dense", "--leading-control", "--leading-label",
+        "--leading-body", "--leading-copy", "--track-wide", "--track-state", "--track-label",
+        "--focus-ring-width", "--focus-ring-offset", "--contract-mark-width",
+        "--contract-mark-offset", "--disabled-opacity",
+    }
+    used = set(re.findall(r"var\((--[a-z0-9-]+)", css))
+    assert required <= used, f"components.css가 소비하지 않는 토큰: {sorted(required - used)}"
+
+    raw_values = re.findall(
+        r"(?:font-weight\s*:\s*\d+|font\s*:\s*\d+\s+[^;}]+/\s*[\d.]+|"
+        r"letter-spacing\s*:\s*(?:0|[\d.]+em)|outline\s*:\s*[\d.]+px|"
+        r"outline-offset\s*:\s*-?[\d.]+px|opacity\s*:\s*[\d.]+)",
+        css,
+    )
+    assert not raw_values, f"components.css에 원시 타이포그래피/상호작용 값: {raw_values}"
+
+
+def test_styleguide_renders_the_shared_type_and_interaction_contract():
+    """D-294의 실례는 문서 전용 CSS가 아닌 실제 공용 컴포넌트를 보여준다."""
+    html = (WEB_ROOT / "styleguide.html").read_text(encoding="utf-8")
+    css = (WEB_ROOT / "styleguide.css").read_text(encoding="utf-8")
+    assert 'class="entry" id="type-and-interaction"' in html
+    assert 'kind="quiet" type="button"' in html
+    assert "disabled" in html
+    assert "--focus-ring-width" in css and "--focus-ring-offset" in css
 

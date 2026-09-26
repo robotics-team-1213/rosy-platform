@@ -27,6 +27,11 @@
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
+| D-289 | Role console entry, action groups, and map readout |
+| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 
 ## 계획·결과 문서
 
@@ -49,8 +54,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · feat(fleet): D-257 source-scoped sighting API
-- 2026-09-25 · uncommitted · fix(fleet): roster keyboard vocabulary, queue render gates (D-224, D-219)
-- 2026-09-25 · uncommitted · fix(fleet): HITL 큐의 모의 조종 버튼 제거와 큐 계약 (D-218, D-219)
-- 2026-09-25 · uncommitted · fix(fleet): 선택 카드가 읽기를 희생하지 않는다 (D-214)
-- 2026-09-24 · uncommitted · fix(fleet): 관제 콘솔 적합·경보 채움 (D-201, D-202)
+- 2026-09-27 · uncommitted · secure roster and signal rendering
+- 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
+- 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
+- 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
+- 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293

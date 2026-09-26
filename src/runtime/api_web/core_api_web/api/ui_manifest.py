@@ -54,6 +54,7 @@ def build_manifest(
             "order": panel.order,
             "module": ASSET_PREFIX + panel.module,
             "css": [ASSET_PREFIX + path for path in panel.css],
+            "action_group": panel.action_group,
             "state": descriptor.get("state", "available"),
             "reason": descriptor.get("reason"),
         })
@@ -63,6 +64,11 @@ def build_manifest(
         "role": role,
         "surfaces": [{"id": s.id, "title": s.title} for s in registry.surfaces.values()
                       if ROLE_RANK.get(role, -1) >= ROLE_RANK[s.min_role]],
+        "action_groups": [
+            {"id": group.id, "title": group.title, "order": group.order}
+            for group in sorted(registry.action_groups, key=lambda item: item.order)
+            if any(panel.surface == surface.id and panel.action_group == group.id for panel in mine)
+        ],
         "panels": panels,
     }
     # revision은 조립 구조(어떤 패널이 어느 슬롯·순서에 있는가)만 본다. state/reason은
@@ -70,7 +76,7 @@ def build_manifest(
     # revision이 움직이면 셸이 매 폴링마다 전체 패널을 재mount하게 된다 — 셸은
     # revision으로 재조립 여부를 정하고 state는 그 자리에서 갱신한다.
     structural_panels = [
-        {key: panel[key] for key in ("id", "title", "slot", "order", "module", "css")}
+        {key: panel[key] for key in ("id", "title", "slot", "order", "module", "css", "action_group")}
         for panel in panels
     ]
     structural_body = {**body, "panels": structural_panels}

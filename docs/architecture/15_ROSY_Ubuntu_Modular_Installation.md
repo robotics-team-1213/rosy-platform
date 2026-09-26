@@ -1,5 +1,10 @@
 # 15. ROSY Ubuntu Modular Installation Architecture
 
+> **Target package sketch, not a current installer contract.** D-296 separates the
+> ROSY Platform, site Fleet, and each device's local middleware. Package names
+> below are proposed; no universal base package or identical ROS graph is
+> required on every host. D-281/D-282 remain Proposed for OMX deployment.
+
 ## 1. Purpose
 
 ROSY OS v1 targets Ubuntu.
@@ -47,7 +52,7 @@ Profiles
 
 ## 4. Minimal Common Package
 
-Every ROSY Node installs:
+An eligible host may install a small common host-management package:
 
 ```text
 rosy-runtime-base
@@ -64,7 +69,8 @@ Includes:
 - plugin loader
 - update agent
 
-It should remain lightweight.
+Its contents and necessity must be validated by host role. A Fleet-only or
+compute-only host does not inherit Pinky CORE, ROS control, or actuator access.
 
 ## 5. Optional Packages
 
@@ -193,7 +199,8 @@ Installs:
 
 ## 7. Combined Profiles
 
-A machine can have multiple profiles.
+A host may have multiple profiles only when each device instance has distinct
+identity, hardware binding, command owner, and stop/recovery path (D-281/D-282).
 
 Example:
 
@@ -206,7 +213,8 @@ profiles:
   - rosy-profile-omx
 ```
 
-Dependency resolver installs only the union of required packages.
+The example is not permission to merge Pinky and OMX into one ROS graph or one
+final command publisher. The dependency resolver remains a target design.
 
 ## 8. Node Manifest
 
@@ -277,8 +285,10 @@ Recommended v1:
 
 The product runtime is native systemd. This is not a per-device choice.
 
-- Control and safety plane — `rosy-core`, `rosy-io`, navigation, motor deadman,
-  DDS, the single `cmd_vel` publisher — runs natively on every device, always.
+- Pinky base control and safety plane — `rosy-core`, `rosy-io`, navigation,
+  motor deadman, DDS, the single final `cmd_vel` publisher — runs natively on
+  the Pinky device. OMX has its own proposed local arm controller and stop path;
+  Fleet/compute hosts do not install a Pinky motor publisher by default.
 - Docker is development/CI tooling plus one narrow lane: a **container sidecar
   declared by the device profile** for workloads outside the safety plan
   (vision/AI inference, vetted third-party runtimes).

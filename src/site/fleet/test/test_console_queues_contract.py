@@ -36,8 +36,8 @@ def test_degraded_capabilities_feed_the_warning_queue():
     source = console_source()
     assert "capabilities_degraded" in source
     assert "성능 저하" in source
-    # 저하 항목은 붙임 순서로 주의 큐로 간다 — 표기와 코드가 한 블록에 있다.
-    assert abs(source.index("성능 저하") - source.index("capabilities_degraded")) < 200
+    # 브라우저 계약이 실제 DOM 내용을 검증한다. 여기서는 큐 경로의 문구를 고정한다.
+    assert ": 성능 저하 [" in source
 
 
 def test_empty_queues_disappear_by_attribute_not_style():

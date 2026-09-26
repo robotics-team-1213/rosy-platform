@@ -101,6 +101,19 @@ def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
     assert "docker" not in unit.lower()
 
 
+def test_no_motion_io_follows_runtime_without_being_enabled_on_its_own():
+    unit = _read("rosy-io.service")
+    target = _read("rosy-runtime.target")
+    image = (ROOT / "deploy" / "image" / "customize-rootfs.sh").read_text(encoding="utf-8")
+
+    assert "PartOf=rosy-runtime.target" in unit
+    assert "Wants=rosy-io.service" in target
+    assert "After=" in target and "rosy-io.service" in target
+    assert 'core:false|motor:false|motor:true|hardware:false|hardware:true' in unit
+    assert "WantedBy=rosy-runtime.target" not in unit
+    assert "rosy-io.service" not in image.split('systemctl --root "$ROOT" enable', 1)[1].split("\n# D-174", 1)[0]
+
+
 def test_navigation_is_disabled_until_both_hardware_approvals_exist():
     unit = _read("rosy-navigation.service")
 
@@ -115,12 +128,12 @@ def test_navigation_is_disabled_until_both_hardware_approvals_exist():
     assert "WantedBy=rosy-runtime.target" not in unit
 
 
-def test_default_target_starts_core_only_after_recovery_and_provisioning():
+def test_default_target_starts_core_and_no_motion_io_after_recovery_and_provisioning():
     target = _read("rosy-runtime.target")
 
     assert "Requires=rosy-release-recover.service rosy-sd-provision.service" in target
     assert "Requires=rosy-core.service" in target
-    assert "rosy-io.service" not in target
+    assert "Wants=rosy-io.service" in target
     assert "rosy-navigation.service" not in target
     assert "WantedBy=multi-user.target" in target
 
@@ -348,6 +361,7 @@ DECLARED_WRITES = {
         "/run/rosy/status-inputs.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
+    "rosy-camera.service": {"/var/log/rosy-camera/launch.log"},
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
@@ -442,6 +456,9 @@ PROGRAM_SOURCES = {
         "imported-by:src/runtime/gateway:control:src/runtime/sensing",
     ],
     "rosy-io.service": ["src/devices/pinky_pro/bringup"],
+    "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
+                            "src/runtime/sensing/control/camera_detect_node.py",
+                            "src/runtime/sensing/control/road_observer_node.py"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",

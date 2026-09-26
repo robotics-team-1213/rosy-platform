@@ -1,15 +1,15 @@
 ---
 module: core_common
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "1 passed (2026-09-22 Windows)"
+    evidence: "50 passed; includes optional UiPanelDescriptor.action_group schema (2026-09-26 Windows)"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   LOCAL:
     state: GO
-    evidence: "1 passed (2026-09-22 Windows)"
+    evidence: "50 passed (2026-09-26 Windows)"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   ROS-SIM:
     state: N/A
@@ -19,7 +19,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-18]
+adrs: [D-61, D-147, D-168, D-18, D-283]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
 ---

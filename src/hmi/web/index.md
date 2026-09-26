@@ -16,11 +16,19 @@
 | D-194 | 브라우저 조작 부품은 한 벌이다 |
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 |
 | D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 |
+| D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
+| D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
+| D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
+| D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
+| D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
+| D-294 | Shared typography and interaction tokens use a closed scale |
 
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-26-rosy-modern-brand-palette.md](../../../docs/plans/2026-09-26-rosy-modern-brand-palette.md)
+- [2026-09-26-rosy-tokenized-design-system.md](../../../docs/plans/2026-09-26-rosy-tokenized-design-system.md)
+- [2026-09-26-shared-typography-interaction-tokens.md](../../../docs/plans/2026-09-26-shared-typography-interaction-tokens.md)
 
 ## 교훈 (docs/solutions)
 
@@ -34,8 +42,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · feat(hmi): ROSY 장미 브랜드 토큰과 동적 버튼 kind (D-277)
-- 2026-09-25 · uncommitted · refactor(hmi): move web_common under src/hmi (D-231)
-- 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
-- 2026-09-24 · uncommitted · fix(web_common): ui-button small 기본 척급 규칙 (D-203)
-- 2026-09-24 · uncommitted · fix(web): 빈 목록과 증거 색을 공용 부품에 맞춘다
+- 2026-09-27 · uncommitted · shared keyboard skip style
+- 2026-09-27 · 6ce05ff1 · test(hmi): verify D-294 after latest-main integration
+- 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
+- 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
+- 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption

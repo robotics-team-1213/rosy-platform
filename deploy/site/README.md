@@ -5,21 +5,142 @@ console and display-only sightings ingestion, plus camera frame reception and
 ArUco projection. It does not replace the ROS 2 Jazzy/Pi product runtime. Fleet
 does not join DDS, and sightings do not issue robot motion or pick commands.
 
+## Where the control console runs
+
+| Role | Installation and current responsibility |
+|---|---|
+| Ubuntu site host | Runs this Compose stack: Caddy, Fleet `/console` and task SQLite, and Vision. It is the current site control server. |
+| Operator PC | Opens `https://<site-fqdn>:8443/console` after the site endpoint is configured, using a named Fleet user credential and the site CA. It does not need Fleet, Docker, or ROS 2 installed. It may be the same physical PC as the site host. |
+| Pinky Pi | Runs local CORE and its own `/console` at the robot origin. Fleet submits accepted CORE API requests; CORE keeps final motion and stop authority. |
+| OMX workcell host | Local controller per arm/workcell remains a separate placement and acceptance gate (D-281/D-282). Current Fleet console does not operate OMX arms. |
+| Future GPU host | May run separate perception/inference workloads after a placement decision; it does not become the mission or console authority merely by hosting compute. |
+
+`ROSY Console` names the human-facing product surface (D-290). The running site
+screen is still the Fleet console; there is no separate Operations mission
+server, natural-language interpreter, or multi-device OMX mission UI. Browser
+and robot `/console` share a path segment but have different origins and
+credentials (D-275). A site outage removes site control visibility and new
+site work, while Pinky local CORE/stop must continue independently.
+
+For an operator PC on another machine, the default loopback bind in
+`.env.example` is insufficient. Before granting access, choose the approved
+site FQDN and LAN interface, issue a certificate with that FQDN, set
+`ROSY_SITE_BIND_ADDRESS` to the interface address in the private site env,
+limit TCP 8443 to approved operator/camera networks, and provision separate
+named user credentials. Keep Fleet 8090 and Vision 8095 unpublished. From the
+operator PC, verify the trusted `https://<site-fqdn>:8443/healthz`, open
+`/console`, confirm a viewer cannot submit work, and confirm an operator's
+request appears in task history with its real status. An HTTP acceptance is
+not proof of robot completion. Record the site host, client PC, image digest,
+certificate identity, config revision, and readback in the site validation
+record. These steps require the actual site host and devices for SITE/FIELD
+acceptance; local Compose checks establish only LOCAL behavior.
+
 ## Contract path
 
 ```text
 Ceiling phone -- WSS /overhead/v1/frames --> Vision (OpenCV + calibration)
 Browser -- HTTPS --> Caddy --> Fleet console / sighting API
 Vision -- HTTPS POST /api/fleet/sightings --> Caddy --> Fleet SQLite
-Fleet -- existing CORE REST/DDS contracts --> robot CORE
+Fleet -- existing CORE REST/WSS contracts --> robot CORE
 ```
 
+## Same-LAN ROSY discovery
+
+The shared service naming and trust rules are in
+[`site-lan-discovery-profile.md`](../../docs/reference/site-lan-discovery-profile.md).
+The robot and site host have separate DNS-SD service types. Other SERION
+middleware can adopt the same public TXT keys under its own service type; a
+discovered address does not enroll a device or grant a command path.
+
+Each robot's boot-status service already advertises `_rosy._tcp.local` through
+Avahi. The Ubuntu host runs `mdns-bridge.py` every 15 seconds and sends a full
+resolved scan to Fleet. Fleet expires that read-only scan after 45 seconds. A
+new device appears as **registration pending**; an endpoint already in
+`robots.yaml` appears as **pairing pending** until its separately authenticated
+FleetAgent HELLO confirms the same device name and an online device UID. A
+duplicate name or mismatch appears as **conflict**. Discovery never grants
+motion, changes a robot number, writes `robots.yaml`, or copies a token.
+
+Install `avahi-daemon` and `avahi-utils` on the Ubuntu site host. Create a
+distinct high-entropy `discovery_token` file in `${ROSY_SITE_SECRETS_DIR}`;
+the same file is mounted as a Compose secret and read by the host bridge.
+Keep it out of the checkout and grant read access only to root and the
+`rosy-mdns` group. The tracked
+`discovery-token.template.txt` describes its format, not its value. Install
+`mdns-bridge.py` at `/opt/rosy/site/mdns-bridge.py`, and copy the supplied
+`.service` and `.timer` files to `/etc/systemd/system/`. Create a system user
+and group `rosy-mdns` with no login shell. Grant that group read access to
+`discovery_token`; `site-ca.crt` is already public to the host service. Put
+only the TLS URL in `/etc/rosy/site/mdns-bridge.env`, for example:
+
+```ini
+ROSY_SITE_DISCOVERY_URL=https://<site-fqdn>:8443/api/fleet/discovery/scan
+```
+
+The site FQDN must resolve from the Ubuntu host, its certificate must match,
+and the Compose proxy must bind an address reachable through that FQDN.
+Check `avahi-browse -rtpk _rosy._tcp` on the host, then start the timer with
+`systemctl enable --now rosy-mdns-bridge.timer`. Check
+`systemctl status rosy-mdns-bridge.service` and the Fleet discovery panel.
+When Avahi or TLS fails, the bridge must not replace the last good scan with
+an empty result; Fleet marks the scanner offline after its lease expires.
+AP advertisements are excluded. On a VLAN or Wi-Fi with multicast/client
+isolation, use the existing manual endpoint and outbound FleetAgent path.
+
+For a 4–10 robot site, boot all cards on the same LAN and confirm one distinct
+row per device, no duplicate-name conflict, all configured devices eventually
+show **confirmed**, and newly initialized cards remain **registration pending**.
+Reboot one robot, change its DHCP address, disconnect the site host, then
+repeat the scan. A registered `.local` endpoint follows the changed address;
+an IP-pinned `robots.yaml` entry needs an operator update and is never
+silently rewritten from untrusted mDNS. The LAN test does not replace pairing, CORE health, or
+physical motion acceptance.
+
 All HTTPS hops verify the configured site CA. The same site certificate must
-contain these DNS SANs: the operator-facing FQDN, `proxy`, `fleet`, and
+contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
+`<hostname>.local`, `proxy`, `fleet`, and
 `vision`. The phone pairing link uses that FQDN and explicit TLS:
 `rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1`.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
+
+## Advertise and locate the Ubuntu Fleet PC
+
+Choose a stable Ubuntu hostname before issuing the certificate. Install
+`avahi-daemon` and `avahi-utils`, and check that TCP 8443 is reachable from
+the intended robot/operator LAN. The site proxy's
+`ROSY_SITE_BIND_ADDRESS` must name an approved LAN interface instead of
+loopback when LAN clients need access. Set the same
+`ROSY_SITE_HTTPS_PORT` in the private `/etc/rosy/site/.env` and the Compose
+environment. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`, copy
+`rosy-fleet-advertise.service` to `/etc/systemd/system/`, then run:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now avahi-daemon rosy-fleet-advertise.service
+avahi-browse -rtpk _rosy-fleet._tcp
+python3 /opt/rosy/site/fleet-mdns.py discover
+python3 /opt/rosy/site/fleet-mdns.py discover --expect-hostname <hostname>.local \
+  --ca-file /etc/rosy/site/secrets/site-ca.crt
+```
+
+The final command prints an HTTPS URL only if exactly one matching site is
+present and the certificate and `/healthz` response validate against the
+separately installed CA. It connects to the Avahi resolved IP with TLS SNI set
+to the expected hostname. Do not use the mDNS advertisement to supply the CA,
+the expected hostname, Fleet pairing credentials, SSH identity, or robot
+number. The SD's Fleet endpoint and trust profile populate only the robot's
+expected `.local` hostname and site CA path. The one-time SD
+`pairing_credential` is never a FleetAgent token. Install the separately
+issued site CA at `/etc/rosy/trust/<trust_profile>.crt`, then provision the
+same persistent pairing token as `fleet.pairing_token` in the robot CORE's
+private `/var/lib/rosy/core/.rosy/rosy.yaml` and `fleet_pairing_token` in the
+site's root-owned `robots.yaml`. Apply the token during a controlled CORE
+restart after pairing approval. With the token in place, FleetAgent discovers
+the site and reconnects over WSS automatically; without it, the robot stays
+in registration/pairing wait. If a site is unreachable or multicast is
+isolated, use the existing explicit endpoint.
 
 ## Prepare an Ubuntu host
 
@@ -153,14 +274,89 @@ readback through the authenticated API with a surveyed source. Record image
 digests, config revision, calibration revision, backup location, and recovery
 test in the deployment record.
 
-Fleet stores sightings and authenticated CORE Agent event history in the same
-named SQLite volume with WAL and full synchronous commit. Pairing a CORE Agent
-requires `--events-db`; the Compose stack points it at
-`/var/lib/rosy/fleet.sqlite3`. Read the event audit through the authenticated
-`GET /api/fleet/events` cursor API. Back it up with `SightingStore.backup()` or
-a quiesced SQLite-aware backup; do not copy only the live main DB file while
-WAL is active. Protect the backup as operational data, test restore to a
-separate volume, and define site retention before production operation.
+Fleet stores sightings, authenticated CORE Agent event history, operator tasks,
+task status history, and mutation audit in the same named SQLite volume with
+WAL and full synchronous commit. Pairing a CORE Agent requires `--events-db`;
+the Compose stack points it at `/var/lib/rosy/fleet.sqlite3`. Read the event
+audit through the authenticated `GET /api/fleet/events` cursor API. The Fleet
+image bundles a SQLite-aware online backup and guarded restore command at
+`/opt/rosy/site_db.py`. Do not copy only the live main DB file while WAL is
+active.
+
+### Backup and restore operations
+
+Keep backups on a protected host filesystem or approved encrypted backup
+target. They contain operational history and task data. The utility creates
+new backups without overwriting an existing file, runs `PRAGMA integrity_check`
+before and after backup, publishes a standalone SQLite `DELETE`-journal file
+without WAL sidecars, and reports a SHA-256 digest. The standalone file can be
+verified from a read-only mount. The tool runs as the Fleet UID/GID
+(`10001:10001`); prepare a private writable host directory and set the
+installed candidate tag and paths in `/etc/rosy/site/site.env` first:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
+BACKUP_DIR=/var/backups/rosy-site
+BACKUP_NAME="fleet-$(date -u +%Y%m%dT%H%M%SZ).sqlite3"
+compose() { docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py backup --destination "/backup/$BACKUP_NAME"
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py verify --path "/backup/$BACKUP_NAME"
+```
+
+Retain the command JSON output (including digest), backup filename, image
+digest, and timestamp in the site's deployment record; transfer copies using
+the approved encrypted path and verify them again after transfer. Define and
+enforce a site retention period before production operation.
+
+Before relying on recovery, test the backup against a separate Compose project
+so it receives a different named `sighting_data` volume. The installed site
+configuration and secret files must be available to Compose, but this one-off
+command does not start the services or contact robots:
+
+```sh
+restore_test() { docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
+restore_test run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py restore --source "/backup/$BACKUP_NAME" --assume-stopped
+restore_test run --rm --no-deps --user 10001:10001 \
+  --entrypoint python3 fleet /opt/rosy/site_db.py verify \
+  --path /var/lib/rosy/fleet.sqlite3
+```
+
+Verify expected sightings, CORE events, tasks, status history, and audit rows
+through the restored database or an isolated authenticated Fleet readback before
+removing that test project. After recording the result, remove only the exact
+test project and its test volume with
+`docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml down --volumes`.
+Never run that command with the production project name.
+
+For a production restore, schedule a maintenance window and stop every writer
+and reader first. Mount the chosen verified backup read-only, preserve the
+printed pre-restore rollback path, and keep the same production Compose project
+name so the command targets the existing data volume:
+
+```sh
+compose stop proxy vision fleet
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
+  /opt/rosy/site_db.py restore --source "/backup/$BACKUP_NAME" \
+  --destination /var/lib/rosy/fleet.sqlite3 --replace --assume-stopped
+compose run --rm --no-deps --user 10001:10001 \
+  --entrypoint python3 fleet /opt/rosy/site_db.py verify \
+  --path /var/lib/rosy/fleet.sqlite3
+compose up -d
+```
+
+`--assume-stopped` is an explicit operator assertion; the utility cannot prove
+that no other process has the volume open. If restore fails, it attempts to
+reinstate the pre-restore snapshot. Keep the site stopped and preserve both the
+backup and reported rollback file until authenticated API readback confirms the
+expected sightings, events, tasks, and audit history. Do not use `down --volumes`
+on the production project.
 
 The same named volume stores operator task requests, append-only task status
 history, and per-user mutation audit (`--tasks-db`). An externally reachable

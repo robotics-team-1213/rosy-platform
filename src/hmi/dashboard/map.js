@@ -124,8 +124,11 @@ export function createFieldMap(options) {
   const status = options.status;
   const api = options.api;
   const apiMaybe = options.apiMaybe;
+  const emptyRecoveryLink = options.emptyRecoveryLink;
+  const mayOpenSetup = options.mayOpenSetup === true;
   const getPose = options.getPose;
   const getNavigation = options.getNavigation;
+  const getMapSources = options.getMapSources;
   const canGoal = options.canGoal;
   const setAction = options.setAction;
   const listenerController = new AbortController();
@@ -138,13 +141,32 @@ export function createFieldMap(options) {
   // D-259: 키보드 십자선(캔버스 px). 색은 새로 열지 않고 paper를 쓰고 모양으로
   // 구분한다(로봇 삼각 vs 십자+원) — Law 1. 확정은 클릭과 같은 confirm·API를 탄다.
   let cross = null;
+  let targetReadoutTimer = null;
   const CROSS_STEP = 12;
   if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
-  const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null };
+  const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null, mapState: "loading" };
   const ctx = canvas?.getContext("2d") || null;
 
-  function setStatus(text) {
-    if (status) status.textContent = text;
+  function notifyTargetReadout() {
+    if (targetReadoutTimer) clearTimeout(targetReadoutTimer);
+    targetReadoutTimer = setTimeout(() => {
+      targetReadoutTimer = null;
+      if (!cross || !state.occupancy || !canvas) {
+        options.onTargetReadout?.({inside: false, unavailable: !state.occupancy});
+        return;
+      }
+      const frame = new GridFrame(state.occupancy);
+      const world = frame.canvasToWorld(cross.x, cross.y, canvas.width, canvas.height);
+      const inside = frame.worldToCell(world.x, world.y) !== null;
+      options.onTargetReadout?.({...world, inside, unavailable: false});
+    }, 140);
+  }
+
+  function setStatus(text, statusState = "ready") {
+    if (status) {
+      status.textContent = text;
+      status.setAttribute("state", statusState);
+    }
   }
 
   function syncClickButtons() {
@@ -158,7 +180,10 @@ export function createFieldMap(options) {
 
   function syncEmpty() {
     if (!empty) return;
-    empty.hidden = Boolean(state.occupancy);
+    const knownEmpty = state.mapState === "empty";
+    empty.hidden = !knownEmpty;
+    if (knownEmpty) empty.textContent = "지도 데이터가 아직 없습니다. 운용자가 작업 준비에서 지도를 설정해야 합니다.";
+    if (emptyRecoveryLink) emptyRecoveryLink.hidden = !(knownEmpty && mayOpenSetup);
   }
 
   function fitCanvas() {
@@ -260,23 +285,43 @@ export function createFieldMap(options) {
     paint();
   }
 
+  function wanted(key) {
+    const sources = getMapSources?.();
+    return !sources || sources[key] !== false;
+  }
+
   async function refresh() {
-    const [grid, path, costmap] = await Promise.all([
-      apiMaybe("/api/v1/map"),
-      apiMaybe("/api/v1/navigation/path"),
-      apiMaybe("/api/v1/map/costmap?scope=global"),
-    ]);
-    state.occupancy = grid;
-    state.path = path?.poses || [];
-    state.costmap = costmap;
-    syncEmpty();
-    syncCursor();
-    if (!grid) setStatus("맵 수신 대기");
-    else if (!Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height)))
-      setStatus(grid.map_id || "크기 미상");
-    else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
+    try {
+      const [grid, path, costmap] = await Promise.all([
+        wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
+        apiMaybe("/api/v1/navigation/path"),
+        wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
+      ]);
+      state.occupancy = grid;
+      state.path = path?.poses || [];
+      state.costmap = costmap;
+      state.mapState = grid ? "ready" : "empty";
+      syncEmpty();
+      syncCursor();
+      if (!grid) setStatus("지도가 아직 없습니다.", "empty");
+      else if (!Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height)))
+        setStatus(grid.map_id || "크기 미상");
+      else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
+    } catch (error) {
+      // Without a server freshness field, do not leave a previous snapshot looking current.
+      state.occupancy = null;
+      state.path = [];
+      state.costmap = null;
+      state.mapState = error.status === 403 ? "forbidden" : "error";
+      syncEmpty();
+      syncCursor();
+      setStatus(error.status === 403
+        ? "지도 데이터를 볼 권한이 없습니다."
+        : "최신 지도 데이터를 읽지 못했습니다. 연결 상태를 확인하고 다시 시도하십시오.", error.status === 403 ? "forbidden" : "error");
+    }
     rebuildRaster();
     paint();
+    if (cross) notifyTargetReadout();
   }
 
   layerButtons.forEach((button) => {
@@ -333,7 +378,7 @@ export function createFieldMap(options) {
       setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 전송`);
       setStatus(`${locating ? "pose" : "goal"} ${world.x.toFixed(2)}, ${world.y.toFixed(2)}`);
     } catch (error) {
-      setStatus(`${label} 전송 실패: ${error.message}`);
+      setStatus(`${label} 전송 실패: ${error.message}`, error.status === 403 ? "forbidden" : "error");
     }
   }
 
@@ -346,6 +391,7 @@ export function createFieldMap(options) {
       y: Math.min(Math.max(py, 0), canvas.height),
     };
     paint();
+    notifyTargetReadout();
     await commitPoint(cross.x, cross.y);
   }, {signal: listenerController.signal});
 
@@ -371,7 +417,7 @@ export function createFieldMap(options) {
     else if (event.key === "ArrowRight") cross.x += step;
     else if (event.key === "ArrowUp") cross.y -= step;
     else if (event.key === "ArrowDown") cross.y += step;
-    else if (event.key === "Escape") { cross = null; paint(); return; }
+    else if (event.key === "Escape") { cross = null; paint(); notifyTargetReadout(); return; }
     else if (event.key === "Enter") { await commitPoint(cross.x, cross.y); return; }
     else moved = false;
     if (!moved) return;
@@ -379,6 +425,7 @@ export function createFieldMap(options) {
     cross.x = Math.min(Math.max(cross.x, 0), canvas.width);
     cross.y = Math.min(Math.max(cross.y, 0), canvas.height);
     paint();
+    notifyTargetReadout();
   }, {signal: listenerController.signal});
 
   syncEmpty();
@@ -388,6 +435,7 @@ export function createFieldMap(options) {
     destroy() {
       listenerController.abort();
       resizeObserver?.disconnect();
+      if (targetReadoutTimer) clearTimeout(targetReadoutTimer);
     },
   };
 }

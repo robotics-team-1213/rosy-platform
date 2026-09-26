@@ -184,7 +184,7 @@
 | D-174 | 첫 실기 부팅 결함을 고치고, 부팅 상태는 CORE 밖의 표시 계층이 사람에게 알린다 | Accepted |
 | D-175 | 디버그 로그는 CORE가 죽어도, 네트워크가 없어도, 장비가 없어도 읽을 수 있어야 한다 | Accepted |
 | D-176 | 카드의 `rosy-config.yaml`로 기본 설정을 심고, 업링크가 없으면 카드별 비밀번호의 AP를 연다 | Accepted |
-| D-177 | correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현 — 활성화 시 설계를 선기록 | Proposed |
+| D-177 | correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현 — 활성화 시 설계를 선기록 | Superseded by D-297 |
 | D-178 | 모듈의 병렬 작업 가능성은 평가표로 측정한다 — 5개 판정 축(M1–M5), 컷 게이트, 기준선 | Accepted |
 | D-179 | 벤치 CORE 수정은 설치 트리 위의 읽기 전용 바인드이고, 그 장치는 릴리스로 세지 않는다 | Accepted |
 | D-180 | SD 카드 기록은 전체 readback 한 번으로만 검증하고, Imager 검증과 raw 해시 사전 패스는 끈다 | Accepted |
@@ -279,6 +279,24 @@
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 | Accepted |
 | D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 | Accepted |
 | D-278 | 역할별 표면은 작업 흐름으로 구분하고 색은 의미를 지킨다 | Accepted |
+| D-279 | 역할별 빈 상태와 복구 안내 | Accepted |
 | D-280 | ROSY 제품 디자인 철학은 차분한 지능에 은은한 따뜻함이다 | Accepted |
 | D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 | Proposed |
----
+| D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 | Proposed |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 | Accepted |
+| D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 | Accepted |
+| D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 | Accepted |
+| D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 | Accepted |
+| D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 | Accepted |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 | Proposed |
+| D-289 | Role console entry, action groups, and map readout | Accepted |
+| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 | Accepted |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 | Accepted |
+| D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 | Accepted |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 | Accepted |
+| D-294 | Shared typography and interaction tokens use a closed scale | Accepted |
+| D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 | Accepted |
+| D-296 | 장치 미들웨어와 사이트 조정 계층의 이름과 책임을 구분한다 | Accepted |
+| D-297 | 명령 ACK와 Fleet 추적 레코드를 분리한 PRT-004 활성화 설계 | Proposed |
+| D-298 | Fleet 미션·장치 액션·정지 증거의 용어를 분리한다 | Accepted |
+| D-299 | OMX LeRobot 실험 경로와 운영 팔 제어권을 분리한다 | Proposed |

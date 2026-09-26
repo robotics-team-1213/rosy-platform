@@ -90,7 +90,7 @@ def test_core_services_turns_the_gate_on_for_hardware_even_without_an_overlay(tm
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    config_dir = Path(__file__).parent.parent / "config"
+    config_dir = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["runtime"] = {"mode": "hardware"}
     config["navigation"].pop("readiness", None)
@@ -107,7 +107,7 @@ def test_mapping_backend_uses_slam_readiness_instead_of_amcl(tmp_path):
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    config_dir = Path(__file__).parent.parent / "config"
+    config_dir = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["runtime"] = {"mode": "hardware", "navigation_backend": "slam"}
     config["navigation"]["readiness"] = {

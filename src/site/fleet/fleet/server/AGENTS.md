@@ -13,7 +13,8 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | File | Description |
 |---|---|
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
-| `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — signals.yaml, `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
+| `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
+| `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
@@ -26,7 +27,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 - 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 준 map 프레임 값이다
   (`ros_bridge._map_frame = "map"`). `map` 은 사이트 공유 프레임이라 N대를 한 격자에 겹쳐
   그릴 수 있다 — 로봇별로 `rosy_XX/map` 을 만들면 이 화면도 CORE 의 목표 전달도 깨진다.
-- e-stop 은 부분 실패해도 200 이다. 5xx 로 접으면 어느 대가 섰는지 화면이 알 수 없다.
+- 전체 정지 요청은 부분 실패해도 200 이다. 레거시 `stopped`는 CORE HTTP 응답 수이며 실제 정지·물리 E-stop 확인이 아니다(D-298). 응답이 없는 대는 결과 불명으로 표시하고 장치 readback을 별도로 확인한다.
 - UI 는 CSP `style-src 'self'` 아래에서 돈다 — `style` 속성과 `el.style.x =` 는 적용되지
   않는다. 색과 배치는 클래스로만 준다.
 - 이 서버는 robots.yaml 의 운영자 토큰을 들고 있다. 기본 바인드는 루프백이고, 밖으로 열려면

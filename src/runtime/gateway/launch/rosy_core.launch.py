@@ -11,7 +11,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     default_config = os.path.join(
-        get_package_share_directory("core"), "config", "rosy_default.yaml"
+        get_package_share_directory("core_common"), "config", "rosy_default.yaml"
     )
 
     return LaunchDescription([

@@ -101,7 +101,19 @@ async function call(path, options = {}) {
 
 function render() {
   const rosterBox = el("roster");
+  const focused = document.activeElement;
+  const focusedCard = focused?.closest?.("#roster article");
+  const focusedId = focusedCard?.dataset.robotId;
+  const focusedButton = focusedCard && focused !== focusedCard
+    ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
   rosterBox.replaceChildren(...view.robots.map((robot, index) => roster.card(robot, index)));
+  if (focusedId) {
+    const nextCard = [...rosterBox.querySelectorAll("article")]
+      .find((card) => card.dataset.robotId === focusedId);
+    const nextFocused = focusedButton >= 0
+      ? nextCard?.querySelectorAll("ui-button")[focusedButton] : nextCard;
+    nextFocused?.focus({preventScroll: true});
+  }
   signals.render();
   roster.fillQueues();
 
@@ -134,6 +146,39 @@ async function refreshState() {
   }
 }
 
+const discoveryLabels = {
+  registration_pending: "등록 대기",
+  pairing_pending: "페어링 대기",
+  verified_online: "확인됨",
+  conflict: "신원 충돌",
+};
+
+async function refreshDiscovery() {
+  if (auth.locked) return;
+  try {
+    const snapshot = await call("/api/fleet/discovery");
+    const status = el("discovery-status");
+    status.textContent = snapshot.scanner_online
+      ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
+    status.setAttribute("status", snapshot.scanner_online ? "neutral" : "warn");
+    const rows = snapshot.devices.map((device) => {
+      const item = document.createElement("li");
+      const label = document.createElement("b");
+      label.textContent = device.name;
+      const detail = document.createElement("small");
+      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}`;
+      const state = document.createElement("span");
+      state.textContent = discoveryLabels[device.status] || "확인 필요";
+      state.className = `discovery-state ${device.status}`;
+      item.append(label, detail, state);
+      return item;
+    });
+    el("discovery-list").replaceChildren(...rows);
+  } catch (_err) {
+    if (!auth.locked) el("discovery-status").textContent = "발견 기능 미연결";
+  }
+}
+
 async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
@@ -144,6 +189,7 @@ async function refreshAuthorization() {
     el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     await refreshState();
+    await refreshDiscovery();
     await formation.refreshFormation();
     render();
   } catch (_err) {
@@ -246,9 +292,9 @@ el("estop").addEventListener("click", async () => {
   if (!window.confirm("등록된 모든 로봇을 정지시킵니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
-    log(`전체 정지: ${result.stopped}/${result.total}`, result.stopped === result.total ? "good" : "bad");
+    log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
     result.robots.filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 실패 — ${r.error.code}`, "bad"));
+      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
   } catch (err) {
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }
@@ -302,4 +348,5 @@ refreshAuthorization();
 mapView.refresh();
 setInterval(formation.refreshFormation, MAP_MS);
 setInterval(refreshState, STATE_MS);
+setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);

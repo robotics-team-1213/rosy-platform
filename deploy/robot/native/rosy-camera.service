@@ -1,0 +1,42 @@
+[Unit]
+Description=ROSY front camera and bounded preview
+Requires=rosy-core.service
+After=rosy-core.service
+PartOf=rosy-runtime.target
+
+[Service]
+Type=simple
+User=rosy-camera
+Group=rosy-camera
+SupplementaryGroups=video
+EnvironmentFile=/etc/rosy/runtime.env
+LogsDirectory=rosy-camera
+StateDirectory=rosy/camera
+StateDirectoryMode=0750
+Environment=ROS_HOME=/var/log/rosy-camera ROS_LOG_DIR=/var/log/rosy-camera
+Environment=HOME=/var/lib/rosy/camera
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/opt/rosy/current
+ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 launch control camera_preview.launch.py namespace:=${ROSY_NAMESPACE}'
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=10
+KillSignal=SIGINT
+UMask=0027
+
+NoNewPrivileges=true
+PrivateDevices=false
+DevicePolicy=closed
+DeviceAllow=char-video4linux rw
+DeviceAllow=char-media rw
+DeviceAllow=char-dma_heap rw
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

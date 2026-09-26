@@ -1,6 +1,6 @@
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function field(labelText, name, type = "number") {
-  const label = el("label", "surface-field", labelText); const control = el("input");
+  const label = el("label", "ui-field-label", labelText); const control = el("input");
   control.name = name; control.type = type; control.autocomplete = "off"; label.append(control);
   return {label, control};
 }
@@ -12,8 +12,8 @@ export function mount(root, ctx) {
   for (const [key, title] of [["state", "판정"], ["reason", "판정 사유"], ["signal", "신호"], ["stop", "정지선"], ["scene", "scene"], ["revision", "policy"]]) {
     const row = el("div", ""); row.append(el("dt", "", title)); facts[key] = el("dd", "", "—"); row.append(facts[key]); state.append(row);
   }
-  const form = el("form", "surface-form");
-  const modeLabel = el("label", "surface-field", "정책 모드"); const mode = el("select"); mode.name = "mode";
+  const form = el("form", "ui-form");
+  const modeLabel = el("label", "ui-field-label", "정책 모드"); const mode = el("select"); mode.name = "mode";
   for (const value of ["DISABLED", "ADVISORY", "ENFORCED"]) { const option = el("option", "", value); option.value = value; mode.append(option); }
   modeLabel.append(mode);
   const revision = field("정책 revision", "policy_revision", "text"); revision.control.maxLength = 80;
@@ -25,7 +25,7 @@ export function mount(root, ctx) {
   const apply = el("ui-button", "", "정지 상태에서 적용"); apply.setAttribute("kind", "quiet"); apply.type = "button"; apply.disabled = true;
   const signals = el("div", "traffic-policy-actions"); signals.setAttribute("role", "group"); signals.setAttribute("aria-label", "시뮬레이션 신호등 제어");
   const signalButtons = ["RED", "YELLOW", "GREEN"].map((colour) => { const button = el("ui-button", "", colour); button.setAttribute("kind", "quiet"); button.type = "button"; button.dataset.signal = colour; button.disabled = true; signals.append(button); return button; });
-  const message = el("p", "surface-message", "정책 readback 대기"); message.setAttribute("role", "status");
+  const message = el("ui-status", "", "정책 readback 대기");
   form.append(modeLabel, revision.label, approach.label, stop.label, dwell.label, confidence.label, stage, apply);
   root.append(head, state, form, signals, message);
 

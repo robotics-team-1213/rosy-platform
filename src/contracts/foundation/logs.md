@@ -77,3 +77,30 @@
 - gate 변화: 없음. D-257/D-268 Proposed.
 - 결정: schema는 operator sighting을 위한 것이며 automatic policy input이 아니다.
 - 교훈: source identity는 요청 본문이 아니라 Fleet credential configuration에서 결정한다.
+
+## 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
+
+- 변경: `VisionEvidenceRecord`와 `VisionEvidenceList`를 API Ref v1.36에 맞춰 추가했다.
+- 증거: 카메라 저장 API의 응답 모델과 저장·조회 시험.
+- gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
+
+- 변경: `UiPanelDescriptor.action_group` optional field를 추가해 console operation tabs를 API schema로 표현한다.
+- 근거: `python -m pytest src/contracts/foundation/test -q` 50 passed; API Ref v1.36와 동기화했다.
+- gate 변화: 없음. ROS/API runtime/device acceptance는 포함하지 않는다.
+- 결정: D-283 Accepted.
+- 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
+
+- 변경: `core_common.intent.request_schema()` now generates the `/api/fleet/do` one-step or bounded-sequence OpenAPI grammar from the shared verb table. The interpreter rejects mismatched numeric, string, integer, and string-array values before scatter.
+- 증거: gateway intent tests 18 passed; Fleet API suite 507 passed, 5 skipped; touched Python files pass flake8.
+- gate 변화: SOURCE/LOCAL contract evidence only; this library has no runtime/device gate of its own.
+- 결정: D-288 API intent boundary; public robot PRT envelope remains unchanged.
+- 교훈: generated schemas and runtime interpretation must share the same verb and field definitions.
+
+## 2026-09-27 · uncommitted · own default configuration
+- Change: moved both default YAML files into core_common, installed them in its package share, and removed the reverse CORE lookup.
+- Evidence: 1,812 gateway/config/image tests passed with 28 skipped; 51 architecture tests passed; the built core_common wheel contains both YAML files.
+- Gate: SOURCE/LOCAL evidence only; Pi installation and device launch remain unverified.
