@@ -1,5 +1,11 @@
 # docs logs
 
+## 2026-09-27 · docs(validation): record merged-main site candidate smoke
+
+- Change: record the current merged-main `1e3de3e8` site candidate hashes and packaged Docker LOCAL rerun, including auth/API, synthetic ceiling-camera sighting, task persistence after Fleet restart, and test results.
+- Evidence: Fleet 518 passed/5 skipped with an explicit X: basetemp; D-293 plus harness contract tests 52 passed; harness lint 0 errors/19 evidence-freshness warnings. Compose `--no-build` exercised the exact tagged image IDs. The default pytest temp root was inaccessible, and the explicit basetemp rerun passed.
+- Gate: SOURCE/LOCAL only. Ubuntu host/reboot, RTX 5080 GPU, physical phone/CORE/robot, dispatch/motion, and SITE/DEVICE/FIELD acceptance remain open; automatic movement/picking remain HOLD.
+
 추가만 한다. 형식: [module harness 설계](plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 `docs/reference/ROSY ADR Log.md`, `docs/plans/`의 날짜별 문서, `git log -- docs`를 본다.
 
