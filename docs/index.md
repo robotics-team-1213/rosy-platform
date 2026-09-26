@@ -118,6 +118,7 @@
 | D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 | D-294 | Shared typography and interaction tokens use a closed scale |
 | D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 |
+| D-296 | 장치 미들웨어와 사이트 조정 계층의 이름과 책임을 구분한다 |
 
 ## 계획·결과 문서
 
@@ -166,8 +167,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
 - 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates
 - 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
 - 2026-09-27 · uncommitted · deploy(site): add guarded SQLite backup and restore
 - 2026-09-27 · uncommitted · validation: exercise packaged CORE event ingestion
-- 2026-09-27 · uncommitted · validation: rebuild current site integration candidate

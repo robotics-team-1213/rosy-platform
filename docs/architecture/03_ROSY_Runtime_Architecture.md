@@ -2,9 +2,13 @@
 
 ## 1. Purpose
 
-ROSY Runtime is the common runtime installed on ROSY Nodes.
+ROSY Runtime is the target name for a node-local execution role (D-296), not
+one common process or package installed on every host. Today Pinky implements
+its device middleware in CORE; an OMX local controller has separate acceptance
+gates. Fleet owns site missions, not device-local final commands.
 
-The runtime itself is modular.
+The target runtime is modular. The package names and startup sequence below
+describe a future architecture; they are not the current v1 install contract.
 
 ## 2. Minimal Base Package
 

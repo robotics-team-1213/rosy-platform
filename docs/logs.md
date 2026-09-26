@@ -2693,3 +2693,10 @@
 - Change: recorded the completed backup/restore implementation and packaged verification in the Ubuntu site execution plan, including the integrated candidate identity, preserved local-main WIP, test evidence, and the remaining host, GPU, phone, CORE, and field steps.
 - Evidence: the checkpoint distinguishes Windows Docker Desktop software recovery from Ubuntu/site acceptance and retains the D-268 movement/pick HOLD.
 - Gate: no site, DEVICE, FIELD, GPU, phone, or real-CORE gate moved.
+
+## 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
+
+- Change: recorded D-296 and aligned the product definition, runtime target, CORE SRS, glossary, README, and ADR index around `ROSY Platform` / device middleware / site Fleet. Pinky CORE retains final base command authority; a future accepted OMX local controller retains final arm command authority even when mounted on Pinky.
+- Scope: naming and responsibility only. Existing API paths, package names, runtime deployment, and device acceptance are unchanged. D-281/D-282 operational gates remain Proposed.
+- 증거: D-296 본문·ADR 로그·용어집·제품 정의·SRS의 역할 표현을 대조하고 `rosy_harness.py generate`로 색인을 갱신했다.
+- gate 변화: 없음. 명명 정합만 기록했으며 OMX 및 복합 로봇 DEVICE/FIELD 수용은 별도다.

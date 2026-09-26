@@ -15,7 +15,7 @@
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
 | D-294 | Shared typography and interaction tokens use a closed scale |
-| D-296 | Surface typography and focus feedback use shared tokens |
+| D-297 | Surface typography and focus feedback use shared tokens |
 
 ## 계획·결과 문서
 
@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
-- 2026-09-27 · 9049bd37 · test(dashboard): verify D-296 after latest-main integration
-- 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
+- 2026-09-27 · 9049bd37 · test(dashboard): verify D-297 after latest-main integration
+- 2026-09-27 · uncommitted · D-297 surface typography and focus tokens
 - 2026-09-27 · 6ce05ff1 · test(dashboard): verify D-294 browser and asset contracts
 - 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): apply D-292 shared component roles
