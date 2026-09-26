@@ -157,8 +157,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(validation): Pinky camera capture readback
 - 2026-09-26 · uncommitted · docs(camera): resolve ADR and API version conflicts
 - 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
 - 2026-09-26 · uncommitted · docs(adr): D-287 Pinky Pi 5 camera userspace
 - 2026-09-26 · uncommitted · docs(api): v1.36 camera evidence contract
-- 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence

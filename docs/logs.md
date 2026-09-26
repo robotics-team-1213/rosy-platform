@@ -2412,3 +2412,9 @@
 - 변경: 메인의 D-287 readback ADR과 API Ref v1.36을 보존하고 카메라 이미지 결정은 D-288, 카메라 증거 API는 v1.37로 정렬했다.
 - 증거: ADR 색인, API 응답 schema, 이미지·대시보드 계약 시험.
 - gate 변화: 없음. ARM64 이미지 및 장치 촬영은 미검증이다.
+
+## 2026-09-26 · uncommitted · docs(validation): Pinky camera capture readback
+
+- 변경: `docs/validation/pinky-camera-capture-2026-09-26/README.md`에 현재 ROSY SD 센서 probe, 카메라 사용자 공간 부재, CORE API v1.33, 로컬 Chromium 녹화 증거를 분리해 기록했다.
+- 증거: 키 인증 읽기 전용 SSH의 커널·오버레이·서비스·OpenAPI readback과 실제 Chromium `MediaRecorder` 시험 2 passed.
+- gate 변화: 없음. 새 ARM64 이미지, 실물 JPEG, 제품 화면 녹화와 저장은 미검증이다.
