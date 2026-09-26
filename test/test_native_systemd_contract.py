@@ -109,6 +109,7 @@ def test_no_motion_io_follows_runtime_without_being_enabled_on_its_own():
     assert "PartOf=rosy-runtime.target" in unit
     assert "Wants=rosy-io.service" in target
     assert "After=" in target and "rosy-io.service" in target
+    assert 'core:false|motor:false|motor:true|hardware:false|hardware:true' in unit
     assert "WantedBy=rosy-runtime.target" not in unit
     assert "rosy-io.service" not in image.split('systemctl --root "$ROOT" enable', 1)[1].split("\n# D-174", 1)[0]
 

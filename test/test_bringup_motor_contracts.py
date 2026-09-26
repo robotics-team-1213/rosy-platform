@@ -168,6 +168,25 @@ def _drive_gate() -> str:
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash runs the unit's gate")
+@pytest.mark.parametrize(("mode", "drive", "starts"), [
+    ("core", "false", True), ("core", "true", False),
+    ("motor", "false", True), ("motor", "true", True),
+    ("hardware", "false", True), ("hardware", "true", True),
+    ("unknown", "false", False), ("", "false", False),
+])
+def test_io_refuses_a_stale_drive_flag_in_core_mode(mode, drive, starts):
+    unit = (ROOT / "deploy" / "robot" / "native" / "rosy-io.service").read_text(encoding="utf-8")
+    line = next(line for line in unit.splitlines() if "runtime mode and drive flag disagree" in line)
+    prefix = "ExecStartPre=/usr/bin/bash --noprofile --norc -c '"
+    assert line.startswith(prefix) and line.endswith("'")
+    body = line[len(prefix):-1].replace("$$", "$")
+    env = dict(os.environ, ROSY_RUNTIME_MODE=mode, ROSY_IO_DRIVE_ENABLED=drive)
+    completed = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", body],
+                               env=env, capture_output=True, text=True, check=False)
+    assert (completed.returncode == 0) is starts, completed.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash runs the unit's gate")
 @pytest.mark.parametrize(
     ("value", "starts"),
     [("true", True), ("false", True), ("yes", False), ("True", False), ("1", False),
