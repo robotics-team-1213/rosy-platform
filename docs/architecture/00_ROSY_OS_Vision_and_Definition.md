@@ -41,6 +41,14 @@ ROSY Platform manages:
 - update/deployment
 - composite robots
 
+This list is the target product scope, not a claim that every service is implemented or deployed.
+The current site control surface is Fleet's `/console` on the Ubuntu site host,
+reached from an operator browser through Caddy HTTPS. The operator PC is a client
+and may be the same physical machine as the site host. Pinky CORE retains its
+own local screen and final command authority. `ROSY Console` is the product name
+for the human interface; natural-language control and OMX remote task APIs are
+future gates under D-290, not current capabilities.
+
 ## 4. Platform Scope
 
 ### Supported in v1
