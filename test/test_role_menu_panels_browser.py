@@ -297,9 +297,9 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
         }""")
         assert page.locator("img#vision-frame").get_attribute("alt") == "전방 카메라 실시간 영상"
         assert page.locator("#vision-storage option").count() == 3
-        assert page.locator("#vision-storage option[value=robot]").is_disabled()
-        assert page.locator("#vision-screenshot").is_disabled()
-        assert page.locator("#vision-record-start").is_disabled()
+        assert page.locator("#vision-storage option[value=robot]").get_attribute("disabled") is not None
+        assert page.locator("#vision-screenshot").evaluate("el => el.disabled === true")
+        assert page.locator("#vision-record-start").evaluate("el => el.disabled === true")
         assert page.evaluate("window.__started") == 1
         assert page.evaluate("window.__stopped") == 1
         page.evaluate("window.__unmount()")
