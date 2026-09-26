@@ -2388,3 +2388,9 @@
 - 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
 - 증거: pinned ROBOTIS image built locally; two isolated Gazebo graphs, action, cancel, restart, and gripper direction observed. ROS-SIM remains HOLD overall; DEVICE/FIELD were not run.
 - gate 변화: docs governance gates unchanged; OMX ROS-SIM remains HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED.
+
+## 2026-09-26 · uncommitted · feat(fleet): host Avahi discovery contract
+
+- 변경: `_rosy._tcp`의 사이트 Fleet 수집과 신원 확인 상태를 API Reference v1.36과 구현 계획에 기록했다. 발견 광고는 등록/명령 권한이 아니며, 호스트 전용 credential로만 scan 입력을 허용한다.
+- 증거: Windows Fleet 510 passed/5 skipped와 Compose 정적 검증; Ubuntu 현장 mDNS와 4~10대 실제 연결은 아직 측정하지 않았다.
+- gate 변화: 문서/LOCAL 범위만 갱신, DEVICE/FIELD 불변.

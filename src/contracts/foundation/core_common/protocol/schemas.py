@@ -25,6 +25,12 @@ from core_common.protocol.evidence import ValueEvidence
 PROTOCOL_VERSION = "1.0"
 
 
+class DiscoveryScanPayload(BaseModel):
+    """Site Fleet only: untrusted resolved mDNS observations, never credentials."""
+
+    devices: list[dict[str, Any]] = Field(max_length=64)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 

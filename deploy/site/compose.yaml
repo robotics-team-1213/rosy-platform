@@ -20,6 +20,8 @@ services:
       - /opt/rosy/web-common
       - --token-env
       - ROSY_SITE_OPERATOR_TOKEN
+      - --discovery-token-env
+      - ROSY_SITE_DISCOVERY_TOKEN
       - --users-file
       - /run/rosy-config/site-users.yaml
       - --sightings-config
@@ -35,7 +37,7 @@ services:
       - --tls-key
       - /run/secrets/site_key
     environment:
-      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_OPERATOR_TOKEN":"/run/secrets/operator_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token"}'
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_OPERATOR_TOKEN":"/run/secrets/operator_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token"}'
       SSL_CERT_FILE: /run/secrets/site_ca
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
@@ -43,6 +45,7 @@ services:
     secrets:
       - operator_token
       - fleet_sighting_token
+      - discovery_token
       - site_cert
       - site_key
       - site_ca
@@ -170,6 +173,8 @@ secrets:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/phone_ingress_token
   fleet_sighting_token:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/fleet_sighting_token
+  discovery_token:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/discovery_token
   site_cert:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.crt
   site_key:

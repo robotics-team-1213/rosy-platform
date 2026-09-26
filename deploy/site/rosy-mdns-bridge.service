@@ -1,0 +1,17 @@
+[Unit]
+Description=Publish ROSY LAN mDNS observations to site Fleet
+Wants=avahi-daemon.service
+After=network-online.target avahi-daemon.service
+
+[Service]
+Type=oneshot
+User=rosy-mdns
+Group=rosy-mdns
+EnvironmentFile=/etc/rosy/site/mdns-bridge.env
+ExecStart=/usr/bin/python3 /opt/rosy/site/mdns-bridge.py --url ${ROSY_SITE_DISCOVERY_URL} --ca-file /etc/rosy/site/secrets/site-ca.crt --token-file /etc/rosy/site/secrets/discovery_token
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

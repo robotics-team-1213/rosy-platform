@@ -11,8 +11,54 @@ does not join DDS, and sightings do not issue robot motion or pick commands.
 Ceiling phone -- WSS /overhead/v1/frames --> Vision (OpenCV + calibration)
 Browser -- HTTPS --> Caddy --> Fleet console / sighting API
 Vision -- HTTPS POST /api/fleet/sightings --> Caddy --> Fleet SQLite
-Fleet -- existing CORE REST/DDS contracts --> robot CORE
+Fleet -- existing CORE REST/WSS contracts --> robot CORE
 ```
+
+## Same-LAN ROSY discovery
+
+Each robot's boot-status service already advertises `_rosy._tcp.local` through
+Avahi. The Ubuntu host runs `mdns-bridge.py` every 15 seconds and sends a full
+resolved scan to Fleet. Fleet expires that read-only scan after 45 seconds. A
+new device appears as **registration pending**; an endpoint already in
+`robots.yaml` appears as **pairing pending** until its separately authenticated
+FleetAgent HELLO confirms the same device name and an online device UID. A
+duplicate name or mismatch appears as **conflict**. Discovery never grants
+motion, changes a robot number, writes `robots.yaml`, or copies a token.
+
+Install `avahi-daemon` and `avahi-utils` on the Ubuntu site host. Create a
+distinct high-entropy `discovery_token` file in `${ROSY_SITE_SECRETS_DIR}`;
+the same file is mounted as a Compose secret and read by the host bridge.
+Keep it out of the checkout and grant read access only to root and the
+`rosy-mdns` group. The tracked
+`discovery-token.template.txt` describes its format, not its value. Install
+`mdns-bridge.py` at `/opt/rosy/site/mdns-bridge.py`, and copy the supplied
+`.service` and `.timer` files to `/etc/systemd/system/`. Create a system user
+and group `rosy-mdns` with no login shell. Grant that group read access to
+`discovery_token`; `site-ca.crt` is already public to the host service. Put
+only the TLS URL in `/etc/rosy/site/mdns-bridge.env`, for example:
+
+```ini
+ROSY_SITE_DISCOVERY_URL=https://<site-fqdn>:8443/api/fleet/discovery/scan
+```
+
+The site FQDN must resolve from the Ubuntu host, its certificate must match,
+and the Compose proxy must bind an address reachable through that FQDN.
+Check `avahi-browse -rtpk _rosy._tcp` on the host, then start the timer with
+`systemctl enable --now rosy-mdns-bridge.timer`. Check
+`systemctl status rosy-mdns-bridge.service` and the Fleet discovery panel.
+When Avahi or TLS fails, the bridge must not replace the last good scan with
+an empty result; Fleet marks the scanner offline after its lease expires.
+AP advertisements are excluded. On a VLAN or Wi-Fi with multicast/client
+isolation, use the existing manual endpoint and outbound FleetAgent path.
+
+For a 4–10 robot site, boot all cards on the same LAN and confirm one distinct
+row per device, no duplicate-name conflict, all configured devices eventually
+show **confirmed**, and newly initialized cards remain **registration pending**.
+Reboot one robot, change its DHCP address, disconnect the site host, then
+repeat the scan. A registered `.local` endpoint follows the changed address;
+an IP-pinned `robots.yaml` entry needs an operator update and is never
+silently rewritten from untrusted mDNS. The LAN test does not replace pairing, CORE health, or
+physical motion acceptance.
 
 All HTTPS hops verify the configured site CA. The same site certificate must
 contain these DNS SANs: the operator-facing FQDN, `proxy`, `fleet`, and

@@ -16,7 +16,9 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     site = root / "deploy" / "site"
     site.mkdir(parents=True)
     for name in ("compose.yaml", "Caddyfile", "README.md",
-                 "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example"):
+                 "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
+                 "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
+                 "discovery-token.template.txt"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     (site / "Dockerfile.fleet").write_text("FROM ubuntu", encoding="utf-8")
@@ -63,7 +65,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert packaged_names == {
         "compose.yaml", "Caddyfile", ".env.example", "README.md",
         "robots.yaml.example", "site-cameras.yaml.example",
-        "site-users.yaml.example",
+        "site-users.yaml.example", "mdns-bridge.py", "rosy-mdns-bridge.service",
+        "rosy-mdns-bridge.timer", "discovery-token.template.txt",
     }
     assert not list(output.rglob("*.key"))
 
@@ -95,6 +98,8 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
     site.mkdir(parents=True)
     for name in ("compose.yaml", "Caddyfile", ".env.example", "README.md",
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
+                 "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
+                 "discovery-token.template.txt",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
 

@@ -134,6 +134,39 @@ async function refreshState() {
   }
 }
 
+const discoveryLabels = {
+  registration_pending: "등록 대기",
+  pairing_pending: "페어링 대기",
+  verified_online: "확인됨",
+  conflict: "신원 충돌",
+};
+
+async function refreshDiscovery() {
+  if (auth.locked) return;
+  try {
+    const snapshot = await call("/api/fleet/discovery");
+    const status = el("discovery-status");
+    status.textContent = snapshot.scanner_online
+      ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
+    status.setAttribute("status", snapshot.scanner_online ? "neutral" : "warn");
+    const rows = snapshot.devices.map((device) => {
+      const item = document.createElement("li");
+      const label = document.createElement("b");
+      label.textContent = device.name;
+      const detail = document.createElement("small");
+      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}`;
+      const state = document.createElement("span");
+      state.textContent = discoveryLabels[device.status] || "확인 필요";
+      state.className = `discovery-state ${device.status}`;
+      item.append(label, detail, state);
+      return item;
+    });
+    el("discovery-list").replaceChildren(...rows);
+  } catch (_err) {
+    if (!auth.locked) el("discovery-status").textContent = "발견 기능 미연결";
+  }
+}
+
 async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
@@ -144,6 +177,7 @@ async function refreshAuthorization() {
     el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     await refreshState();
+    await refreshDiscovery();
     await formation.refreshFormation();
     render();
   } catch (_err) {
@@ -302,4 +336,5 @@ refreshAuthorization();
 mapView.refresh();
 setInterval(formation.refreshFormation, MAP_MS);
 setInterval(refreshState, STATE_MS);
+setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);

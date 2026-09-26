@@ -896,7 +896,8 @@ mutation endpoint exists yet. The separate `/registry` endpoint continues to
 use its own server-side credential.
 
 Authenticated `POST /api/fleet/*` requests other than source-authenticated
-`POST /api/fleet/sightings` append an `INTENT` and a `RESULT` row to the durable
+`POST /api/fleet/sightings` and read-only mDNS observation
+`POST /api/fleet/discovery/scan` append an `INTENT` and a `RESULT` row to the durable
 API audit. The rows contain principal, role, method, path, and response code,
 not the bearer token or request body. If the intent cannot be persisted, Fleet
 returns `503 AUDIT_STORAGE_UNAVAILABLE` before calling CORE. If the result row
@@ -912,10 +913,35 @@ ACK/final-result reconciliation remain separate required work.
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
+## 10.9 Site Fleet LAN discovery
+
+The Ubuntu host Avahi bridge resolves `_rosy._tcp.local` and submits one full
+scan every 15 seconds. `DiscoveryScanPayload.devices` contains at most 64
+objects with `name`, optional `hostname`, private LAN IPv4 `address`, `port`,
+`stage`, `release`, and `network=sta`. The host scanner has one dedicated Bearer
+credential, separate from site users, CORE REST, and FleetAgent pairing.
+
+| Method | Path | Authority | Result |
+|---|---|---|---|
+| POST | `/api/fleet/discovery/scan` | host scanner Bearer only | Replace the short-lived discovery scan; 401 invalid credential, 400 invalid observation |
+| GET | `/api/fleet/discovery` | site viewer+ | `{scanner_online, devices[]}` with status `registration_pending`, `pairing_pending`, `verified_online`, or `conflict` |
+
+The scan expires after 45 seconds. Empty successful scans remove prior rows;
+scanner failure sends nothing and later reads report `scanner_online=false`.
+Advertisement data is not identity evidence. `verified_online` requires an
+existing `robots.yaml` endpoint and an online authenticated FleetAgent HELLO
+with a device UID and matching device name while the advertised stage is
+`CORE_READY`. The endpoint is matched by advertised IP or `.local` hostname and
+port. A duplicate advertised name or identity mismatch is a conflict. The
+discovery routes never add an endpoint, assign a robot number, expose a token,
+or command CORE. Cross-VLAN, blocked multicast, and AP mode use manual endpoint
+configuration and the existing outbound FleetAgent path.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.36 | 2026-09-26 | Additive: site-only mDNS scan/readback and `DiscoveryScanPayload`; no robot envelope change. |
 | v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
 | v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |

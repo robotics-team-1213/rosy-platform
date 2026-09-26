@@ -33,11 +33,13 @@ MUST_IGNORE = [
     ".claude/worktrees/agent-x/README.md",
     ".worktrees/topic/README.md",
     "fleet.sqlite3",
+    "deploy/site/secrets/discovery_token",
 ]
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
 MUST_TRACK = [
     "deploy/robot/.env.example",
+    "deploy/site/discovery-token.template.txt",
     "deploy/robot/native/rosy-runtime.env",
     "deploy/robot/native/rosy-diag",
     "deploy/sd/rosy-config.template.yaml",

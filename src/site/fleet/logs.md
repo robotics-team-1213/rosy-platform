@@ -246,3 +246,9 @@
 - gate 변화: LOCAL 기존 GO; DEVICE/FIELD/PERSISTENCE 미수용.
 - 결정: D-257/D-268 Proposed 유지, sightings는 operator display/reconciliation 전용.
 - 교훈: sighting API를 추가해도 운영 CLI provisioning, persistent audit, vision publisher를 따로 검증해야 한다.
+
+## 2026-09-26 · uncommitted · feat(fleet): site mDNS discovery readback
+
+- 변경: Ubuntu 호스트 Avahi 브리지와 전용 scan 토큰, Fleet 45초 발견 lease, 등록/페어링/확인/충돌 읽기 전용 패널을 추가했다. mDNS가 `robots.yaml`이나 로봇 명령 대상을 바꾸지 않는다.
+- 증거: Windows Fleet 전체 510 passed/5 skipped, protocol 및 host bridge 집중 19 passed, `docker compose config --quiet` 통과. Ubuntu Avahi/Pi LAN 동작은 별도 계층이다.
+- gate 변화: LOCAL 기존 GO 유지, 실제 현장 호스트와 다중 Pi는 HOLD.
