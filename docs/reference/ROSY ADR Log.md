@@ -271,4 +271,5 @@
 | D-267 | Ubuntu 상시 관제 노트북은 Fleet·영상·GPU·저장을 분리하고 자동·수동 작업을 같은 검증 경로로 처리한다 | Proposed |
 | D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 | Proposed |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 | Proposed |
+| D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 | Accepted |
 ---

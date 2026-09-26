@@ -2258,3 +2258,9 @@
 - 제한: API는 programmatic app config로만 열리고 in-memory latest-only다. CLI provisioning, persistent/audit storage, JPEG→vision→Fleet publisher, browser display, Ubuntu/TLS/device는 미구현이다.
 - gate 변화: 없음. D-257/D-268 Proposed, automatic movement HOLD.
 - 결정: sighting은 표시·대조 데이터에만 사용한다. 자동 작업 경로와 D-268 policy evidence는 별도 승인 계약이다.
+## 2026-09-26 · uncommitted · docs(adr): D-271 site Fleet task scheduling and broker choice
+
+- 변경: D-271에서 Fleet의 영속 작업 원장·정책 우선순위·장비 자원 예약을 결정하고 RabbitMQ를 독립 worker 분리 시의 사이트 내부 전달 후보로 고정했다. 설계 문서와 기존 D-59/D-269 연결 계획을 정렬했다.
+- 증거: 기존 SQLite task/history, 메모리 교통 대기열, 현장 Compose 경로와 RabbitMQ/Kafka/NATS 공식 문서를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건.
+- 제한: 스케줄러·RabbitMQ·CORE 최종 결과 추적·Ubuntu 장비 배포는 이 문서 변경에 포함되지 않는다. D-268 자동 작업은 HOLD다.
+- gate 변화: 없음.

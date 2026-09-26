@@ -99,6 +99,7 @@
 | D-256 | 공개 무결성 값은 이름으로 지우고, 스캔는 매처를 넙히지 않는다 |
 | D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 |
 | D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 |
+| D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 |
 
 ## 계획·결과 문서
 
@@ -129,6 +130,7 @@
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
 - [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
 - [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
+- [2026-09-26-site-task-scheduling-and-broker-design.md](plans/2026-09-26-site-task-scheduling-and-broker-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -141,8 +143,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): D-271 site Fleet task scheduling and broker choice
 - 2026-09-26 · uncommitted · feat(fleet): add source-scoped site sighting contract
 - 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity
 - 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25
 - 2026-09-26 · uncommitted · feat(fleet): separate agent pairing and mount hub into console
-- 2026-09-26 · uncommitted · docs(architecture): D-269 device-server contract map and integration plan
