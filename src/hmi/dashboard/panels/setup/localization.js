@@ -25,7 +25,7 @@ export function mount(root, ctx) {
   const setPose = el("ui-button", "", "초기 위치 적용"); setPose.setAttribute("kind", "primary"); setPose.type = "submit";
   poseForm.append(x.label, y.label, yaw.label, setPose);
 
-  const slam = el("section", "surface-readback");
+  const slam = el("section", "ui-readback");
   slam.append(el("h3", "", "SLAM 맵 준비"));
   const mapName = el("input"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
   mapName.setAttribute("aria-label", "저장할 맵 이름");

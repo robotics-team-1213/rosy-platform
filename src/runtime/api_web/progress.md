@@ -1,15 +1,15 @@
 ---
 module: core_api_web
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "9 passed (2026-09-22 Windows)"
+    evidence: "63 passed, 3 skipped; includes D-283 action_group schema and capability-filtered manifest (2026-09-26 Windows)"
     cmd: "python -m pytest src/runtime/api_web/test -q"
   LOCAL:
     state: GO
-    evidence: "9 passed (2026-09-22 Windows)"
+    evidence: "63 passed, 3 skipped (2026-09-26 Windows)"
     cmd: "python -m pytest src/runtime/api_web/test -q"
   ROS-SIM:
     state: N/A
@@ -19,7 +19,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168]
+adrs: [D-61, D-147, D-168, D-283]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
 ---

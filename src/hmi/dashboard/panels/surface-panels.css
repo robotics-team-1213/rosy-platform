@@ -1,6 +1,4 @@
-﻿.surface-readback { min-width: 0; display: grid; gap: var(--space-2); }
-.surface-readback h3 { margin: 0; }
-.surface-message { overflow-wrap: anywhere; }
+﻿.surface-message { overflow-wrap: anywhere; }
 .surface-disclosure { min-width: 0; }
 .surface-disclosure summary {
   display: flex;

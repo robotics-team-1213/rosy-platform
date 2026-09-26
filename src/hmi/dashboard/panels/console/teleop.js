@@ -58,6 +58,7 @@ export function mount(root, ctx) {
     pending = terminal;
     terminal.catch((error) => { status.textContent = `정지 명령 전달 실패 · 서버 watchdog 대기: ${error.message}`; })
       .finally(() => { if (pending === terminal) pending = null; });
+    return terminal;
   }
   async function tick() {
     if (!ticker.active) return;
@@ -75,6 +76,7 @@ export function mount(root, ctx) {
     activeButton?.classList.remove("active"); activeButton = null;
     buttons.forEach((button) => { button.disabled = !eligible(); });
     status.textContent = message;
+    return pending || Promise.resolve();
   }
   function start(button, event) {
     event.preventDefault();
@@ -100,12 +102,25 @@ export function mount(root, ctx) {
   window.addEventListener("blur", () => stop("창 포커스를 잃어 정지했습니다.", true), {signal: listeners.signal});
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop("화면이 숨겨져 정지했습니다.", true); }, {signal: listeners.signal});
   confirmed.addEventListener("change", update, {signal: listeners.signal});
-  window.addEventListener("rosy:stop-motion", () => stop("공유 운전 제어에서 정지했습니다.", true), {signal: listeners.signal});
+  window.addEventListener("rosy:stop-motion", (event) => {
+    const wasActive = ticker.active;
+    const pendingStop = stop("공유 운전 제어에서 정지했습니다.", true);
+    if (Array.isArray(event.detail?.waits)) {
+      event.detail.waits.push(wasActive ? pendingStop : terminalZero(true));
+    }
+  }, {signal: listeners.signal});
 
   const stopState = ctx.store.poll("/api/v1/robot/state", 500, (data) => { state = data; update(); }, (error) => { state = null; status.textContent = `로봇 상태를 읽지 못해 운전을 막았습니다: ${error.message}`; stop("상태 연결이 끊겨 정지했습니다.", true); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; update(); }, (error) => { capabilities = null; status.textContent = `운전 capability 확인 실패: ${error.message}`; update(); });
   const stopSafety = ctx.store.poll("/api/v1/safety/state", 500, (data) => { safety = data; update(); }, (error) => { safety = null; status.textContent = `안전 상태 연결 실패: ${error.message}`; stop("안전 상태를 확인할 수 없어 정지했습니다.", true); });
   update();
 
-  return () => { stop("운전 패널을 닫아 정지했습니다.", true); listeners.abort(); stopState(); stopCapabilities(); stopSafety(); };
+  return {
+    async beforeHide() {
+      if (ticker.active) await stop("조작 그룹을 바꾸기 위해 정지했습니다.", true);
+      else await terminalZero(true);
+      return true;
+    },
+    unmount() { stop("운전 패널을 닫아 정지했습니다.", true); listeners.abort(); stopState(); stopCapabilities(); stopSafety(); },
+  };
 }
