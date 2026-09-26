@@ -163,4 +163,3 @@
 - 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
 - 2026-09-26 · uncommitted · feat(hmi): apply D-292 semantic spacing roles
 - 2026-09-26 · uncommitted · docs(site): 관제 서버와 운영자 단말의 배치 명시
-- 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
