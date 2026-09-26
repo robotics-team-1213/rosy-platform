@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): apply D-292 shared component roles
 - 2026-09-26 · uncommitted · test(dashboard): real Chromium camera capture
 - 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
 - 2026-09-26 · uncommitted · feat(dashboard): camera recording and screenshot controls
-- 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase

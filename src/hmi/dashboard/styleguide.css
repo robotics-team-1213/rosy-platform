@@ -13,7 +13,7 @@ body {
   color: var(--paper);
   font-family: var(--body);
   font-size: var(--text-body);
-  line-height: 1.5;
+  line-height: var(--leading-copy);
 }
 
 .page-head {
@@ -23,6 +23,8 @@ body {
 
 h1 {
   font-size: var(--text-title);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-control);
   margin: 0 0 var(--space-2);
 }
 
@@ -42,6 +44,8 @@ main {
 
 h2 {
   font-size: var(--text-value);
+  font-weight: var(--weight-label);
+  line-height: var(--leading-control);
   margin: 0 0 var(--space-1);
 }
 
@@ -61,6 +65,7 @@ h2 {
 
 .demo-wide { display: flex; width: 100%; }
 .demo-row { flex-wrap: wrap; }
+.type-demo { align-items: baseline; flex-wrap: wrap; }
 
 .gate {
   color: var(--nominal-quiet);
@@ -156,9 +161,9 @@ h2 {
   min-height: var(--target-secondary);
 }
 
-.demo-field:focus {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+.demo-field:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .demo-tag {

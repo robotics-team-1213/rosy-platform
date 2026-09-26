@@ -85,6 +85,22 @@
       <code>test_focus_is_interaction_not_status</code></p>
     </section>
 
+    <section class="entry" id="type-and-interaction">
+      <h2>글자 위계와 조작 피드백</h2>
+      <p class="rule">제목·라벨·계기 값은 공용 글자 토큰을 쓰고, 키보드 포커스와 비활성은 상태색과 구분한다.</p>
+      <div class="demo demo-wide type-demo">
+        <ui-text scale="title">운용 상태</ui-text>
+        <ui-text scale="label">BATTERY</ui-text>
+        <ui-text scale="value">84%</ui-text>
+      </div>
+      <div class="demo demo-row">
+        <ui-button kind="quiet" type="button">키보드로 포커스</ui-button>
+        <ui-button kind="primary" type="button" disabled>사용할 수 없음</ui-button>
+      </div>
+      <p class="gate">게이트: <code>test_shared_type_and_interaction_tokens_are_closed_and_keep_current_metrics</code>,
+      <code>test_shared_components_consume_type_and_interaction_tokens</code></p>
+    </section>
+
     <section class="entry">
       <h2>태그</h2>
       <p class="rule">상태 어휘는 중립·주의·위험 셋뿐. 뱃지·기계 태그·모드 칩·이벤트 심각도가 같은 셋을 쓴다.</p>

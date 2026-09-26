@@ -40,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
 - 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption
 - 2026-09-26 · uncommitted · feat(hmi): share role readback sections (D-287)
 - 2026-09-26 · uncommitted · feat(hmi): share semantic role readout layout (D-286)
-- 2026-09-26 · uncommitted · feat(hmi): share role form layout and field labels (D-285)
