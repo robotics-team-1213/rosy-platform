@@ -1,12 +1,12 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-26 }
+last_verified: { commit: "abcbba13c5232a1991b96851ea54d4d59409ad88", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "web-common + dashboard 85 passed with ROSY_RUN_BROWSER_TESTS=1 (2026-09-26 Windows)"
-    cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -m pytest src/hmi/web/test src/hmi/dashboard/test -q\""
+    evidence: "web-common + dashboard 97 passed with ROSY_RUN_BROWSER_TESTS=1; API route/manifest 27 passed (2026-09-26 Windows)"
+    cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test -q\""
   LOCAL:
     state: GO
     evidence: "실 CORE TestClient API + visible Chromium: operator /console·/setup, administrator /console·/setup·/device at 1366x768 and 390x844; D-292 token values computed, active rose menu, 0 missing kinds, 0 page errors, no positive horizontal overflow"

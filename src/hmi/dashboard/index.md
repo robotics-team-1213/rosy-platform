@@ -13,10 +13,12 @@
 | D-77 | 운용자 콘솔은 CORE `/dashboard` 하나다 |
 | D-243 | 운용 화면은 hmi 에 두고 API 는 런타임에 둔다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
+| D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
 
 ## 계획·결과 문서
 
 - [2026-09-26-d283-console-action-groups.md](../../../docs/plans/2026-09-26-d283-console-action-groups.md)
+- [2026-09-26-rosy-tokenized-design-system.md](../../../docs/plans/2026-09-26-rosy-tokenized-design-system.md)
 
 ## 교훈 (docs/solutions)
 
@@ -28,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): apply D-292 shared component roles
 - 2026-09-26 · uncommitted · test(dashboard): real Chromium camera capture
 - 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
 - 2026-09-26 · uncommitted · feat(dashboard): camera recording and screenshot controls
 - 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
-- 2026-09-26 · uncommitted · feat(hmi): role-aware map absence and Host Agent recovery (D-279)

@@ -2,16 +2,16 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "uncommitted", date: 2026-09-26 }
+last_verified: { commit: "abcbba13c5232a1991b96851ea54d4d59409ad88", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "D-283 action_group 탭·capability 생략과 안전 이탈 확인을 추가; latest-main integration recheck: dashboard/API/gateway 119 passed, 2 skipped; foundation+harness contracts 99 passed (2026-09-26 Windows)"
-    cmd: "ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/dashboard/test src/runtime/api_web/test src/runtime/gateway/test/test_dashboard.py src/runtime/gateway/test/test_console_layout.py -q"
+    evidence: "HMI web + dashboard 97 passed with browser tests; API route/manifest 27 passed after latest-main integration (2026-09-26 Windows)"
+    cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test -q"
   LOCAL:
     state: GO
-    evidence: "G1 safe tab switching passed; actual FastAPI+CoreServices admin/operator at 1366×768 and 390×844: desktop scroll 0, mobile horizontal overflow 0, E-stop visible (2026-09-26 Windows)"
-    cmd: "ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/dashboard/test src/runtime/api_web/test src/runtime/gateway/test/test_dashboard.py src/runtime/gateway/test/test_console_layout.py -q"
+    evidence: "actual CORE TestClient API + visible Chromium: operator console/setup and administrator console/setup/device at 1366×768 and 390×844; E-stop visible, no positive horizontal overflow, 0 missing button kinds or page errors"
+    cmd: "X:\\DevTemp\\rosy-design-system-review\\visible_roles.py"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -21,9 +21,10 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-23, D-77, D-243, D-283]
+adrs: [D-23, D-77, D-243, D-283, D-292]
 plans:
   - docs/plans/2026-09-26-d283-console-action-groups.md
+  - docs/plans/2026-09-26-rosy-tokenized-design-system.md
 ---
 
 ## 지금 상태
