@@ -154,8 +154,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(site): rerun packaged candidate 46b7465b
 - 2026-09-26 · uncommitted · docs(site): align implementation plan with current ADR status
 - 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
 - 2026-09-26 · uncommitted · test(site): 관제 Docker stack 종단 간 합성 smoke
 - 2026-09-26 · uncommitted · docs(site): Ubuntu 관제·장비 경계 아키텍처 승인 기록
-- 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획

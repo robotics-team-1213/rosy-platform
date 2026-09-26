@@ -2399,3 +2399,10 @@
 - 변경: D-267/D-269/D-282의 현재 Proposed 상태를 계획과 맞추고 첫 배포를 인증된 operator navigation으로 한정했다. freshness, detection/false-trigger 기준, 정책 조건 관리가 수용되기 전 automatic source는 계속 닫는다.
 - 근거: Task 2.1의 D-257 300 ms freshness 및 사전 승인 검출·오탐 표본 기준, Task 3.2의 역할별 정책 조건/증거/거절 사유 표시와 감사 요구를 재확인했다. 기존 합성 Docker smoke는 LOCAL 증거로 유지하고 Ubuntu/GPU/실물 수용과 분리했다.
 - gate 변화: 없음. 자동 이동/집기와 Ubuntu SITE/DEVICE/FIELD는 HOLD다.
+
+## 2026-09-26 · uncommitted · test(site): rerun packaged candidate 46b7465b
+- 변경: 최신 main 병합 revision으로 site candidate를 빌드하고 배포 archive 그대로 local Compose smoke를 재실행했다.
+- 증거: Fleet/Vision/proxy image ID와 linux/amd64, SBOM/deploy hashes, `images.tar` SHA-256을 manifest와 비교하고 archive를 load했다. 세 서비스 healthy, synthetic phone WSS→Vision ArUco→Fleet HTTPS/SQLite sighting과 authenticated operator `REQUESTED → QUEUED` readback을 확인했다.
+- 제한/정리: Windows Docker Desktop, synthetic credentials/cert/config, CPU ArUco; CORE unreachable, physical robot/GPU 없음. 전용 Compose project/volume/networks만 제거하고 후보는 `X:\DevTemp\rosy-site-candidate-46b7465b`에 남겼다. Ubuntu SITE, DEVICE/FIELD 및 자동 실행 gate는 변하지 않는다.
+- gate 변화: SOURCE/LOCAL candidate smoke만 확인했다. Ubuntu/SITE/GPU, 실물 DEVICE/FIELD, 자동 이동·집기는 계속 HOLD다.
+- 자세한 재현·hash: `docs/validation/2026-09-26-site-stack-container-smoke.md`.
