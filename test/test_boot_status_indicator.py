@@ -88,6 +88,8 @@ def test_the_first_card_failure_is_visible_on_every_sink(tmp_path):
     avahi = (root / "etc/avahi/services/rosy.service").read_text(encoding="utf-8")
     xml.dom.minidom.parseString(avahi)
     assert "<type>_rosy._tcp</type>" in avahi
+    assert "product=rosy" in avahi and "role=robot" in avahi
+    assert "proto=core-v1" in avahi and "tls=none" in avahi
     assert "stage=FAILED:rosy-release-recover" in avahi
     assert ["agetty", "--reload"] in calls
 

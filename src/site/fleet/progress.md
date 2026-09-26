@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "bcc7b138", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "423 passed, 5 skipped (2026-09-26 Windows). source-token FleetAgent↔console WebSocket integration과 D-257 site sighting schema/API isolation 포함; Ubuntu/device 수용은 아님"
+    evidence: "2026-09-26 Windows Fleet 510 passed/5 skipped. 기존 FleetAgent 페어링과 전용 host scanner 토큰 분리; Ubuntu Avahi/LAN 실측은 아님"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -32,6 +32,7 @@ plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-21-fleet-signals-integration-design.md
   - docs/plans/2026-09-22-fleet-signals-integration.md
+  - docs/plans/2026-09-26-site-mdns-discovery.md
 ---
 ## 지금 상태
 
@@ -40,6 +41,7 @@ plans:
 - **Fleet 서버 v1 있음**: `fleet console --robots robots.yaml` 이 N대를 한 화면에 모으고 로봇별 목표·취소와 전체 정지를 내린다(site-fabric 설계 §2, 전환 순서 3단계). WSL ROS 2 Jazzy + Gazebo 2대 위에서 지도 클릭 미션 하달 → 양쪽 `ARRIVED` 확인(2026-09-17).
 - **신호등 연동 있음(G-S3)**: `fleet console --signals signals.yaml` 이 ROSY-SIGNAL-001 장치를 snapshot 에 모으고(`/api/fleet/signals*`), e-stop 때 전 기기 `all_red` 를 병렬로 흩뿌린다. `mode=failsafe` 를 보면 마지막 의도를 한 번 재단언한다. 신호등은 표시 장치지 안전 인터록이 아니다 — `traffic.py` 판정은 건드리지 않았다.
 - CORE Agent outbound `FleetAgent`는 `robots.yaml`의 별도 `fleet_pairing_token`이 설정된 경우 `fleet console` ASGI 앱 `/ws/robots`에 연결한다. loopback hello/heartbeat/event/offline/reconnect는 LOCAL 검증됐으며 기존 snapshot은 여전히 REST 폴링이다.
+- 사이트 호스트의 `mdns-bridge.py`가 Avahi `_rosy._tcp`를 Fleet 전용 scan API로 전달할 수 있다. 관제 UI는 미등록·페어링 대기·확인됨·충돌을 읽기 전용으로 보여 준다. `robots.yaml` 토큰이나 명령 대상은 mDNS로 자동 변경하지 않는다. Ubuntu 호스트의 Avahi/타이머 및 다중 Pi 실측은 대기 중이다.
 - D-257 Proposed sighting API는 `create_app(..., sightings=...)`로만 활성화되는 programmatic LOCAL 경로다. CLI source/map/calibration provisioning, overhead JPEG→vision→Fleet publisher, durable audit storage, browser display는 아직 없다. D-268 자동 policy input은 별도이며 비활성이다.
 - 축구 매치 시작 버튼은 없다 (D-106). `games`를 import하지 않는다. `reset()`은 games.
 - 물리 대형(FAT-06 등) 실측은 아직 없다. D-35(전체 HOLD는 릴레이를 끊는 것)는 sim bench 실측 대기 중인 후보이며 ADR log에는 의도적으로 미등재다(`adr_gaps`).

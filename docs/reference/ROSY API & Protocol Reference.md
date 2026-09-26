@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.37
+**Version:** v1.39
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -434,7 +434,7 @@ Camera preview transfer rules (v1.12, D-152):
 - Successful JPEG responses include `X-Rosy-Camera-Sequence`,
   `X-Rosy-Camera-Captured-At`, and `X-Rosy-Camera-Source`.
 
-Operator camera capture (v1.37): `/console`의 카메라 화면은 인증된 preview JPEG만 최대 2 FPS로 기록한다. 스크린샷은 해당 JPEG 그대로, 영상은 브라우저 canvas의 녹화 형식(WebM 또는 MP4)으로 만든다. 조작 기록은 정해진 운전·도킹·정지 API의 작업 이름, 요청 접수/실패, 녹화 시작 후 경과 시간만 포함하며 토큰·명령 본문·IP를 포함하지 않는다. 화면에서 `이 PC`, `로봇 SD`, `PC와 로봇 SD`를 고를 수 있다. PC 저장은 브라우저 다운로드이며 CORE 저장 API를 호출하지 않는다.
+Operator camera capture (v1.39): `/console`의 카메라 화면은 인증된 preview JPEG만 최대 2 FPS로 기록한다. 스크린샷은 해당 JPEG 그대로, 영상은 브라우저 canvas의 녹화 형식(WebM 또는 MP4)으로 만든다. 조작 기록은 정해진 운전·도킹·정지 API의 작업 이름, 요청 접수/실패, 녹화 시작 후 경과 시간만 포함하며 토큰·명령 본문·IP를 포함하지 않는다. 화면에서 `이 PC`, `로봇 SD`, `PC와 로봇 SD`를 고를 수 있다. PC 저장은 브라우저 다운로드이며 CORE 저장 API를 호출하지 않는다.
 
 로봇 SD 저장의 `POST` 본문은 `application/octet-stream`: little-endian unsigned 32-bit JSON 길이(최대 32,768바이트), UTF-8 JSON, 미디어 바이트 순서다. JSON은 `schema_version:1`, `kind:screenshot|video`, `mime_type`, 저장 또는 시작·종료 UTC 시각을 포함한다. screenshot은 `saved_at`, `sequence`, `source`, video는 `started_at`, `stopped_at`, `frame_count`와 최대 200개의 `{action,result,elapsed_ms}` 항목을 요구한다. JPEG는 1 MiB, 영상은 64 MiB, 전체 저장 미디어는 512 MiB 상한이며 CORE의 HOME 아래 `captures/`에 원자 기록한다(네이티브 `/var/lib/rosy/core/captures`, 컨테이너 `/var/lib/rosy/captures`). 한도를 넘으면 413/507로 실패하고 부분 파일은 삭제한다. 저장 응답은 `{id,kind,file_name,mime_type,bytes,sha256,created_at}`이다. 이 기능은 Control의 고속 원본 영상 캡처나 장치 카메라 활성화를 의미하지 않는다.
 
@@ -544,6 +544,7 @@ Fleet 타임아웃(기본 10초) 내 ack 없으면 `COMMAND_TIMEOUT`.
 ## 7.6 재접속 (로봇 측 의무)
 
 - Exponential backoff: 1s → 2s → 4s → ... 최대 30s
+- `fleet.discovery`를 설정한 로봇은 재접속마다 예상 `.local` 호스트의 `_rosy-fleet._tcp` 광고를 조회하고 별도 설치된 사이트 CA로 TLS health를 확인한다. mDNS 광고만으로 토큰을 발급하거나 연결 대상을 바꾸지 않는다. 승인된 `fleet.pairing_token`이 없으면 Agent를 시작하지 않는다.
 - 재접속 즉시 `hello` → 마지막 전송 `seq` 이후 이벤트 재전송
 - 접속 단절 시 SAF-003 정책 적용
 
@@ -903,7 +904,8 @@ mutation endpoint exists yet. The separate `/registry` endpoint continues to
 use its own server-side credential.
 
 Authenticated `POST /api/fleet/*` requests other than source-authenticated
-`POST /api/fleet/sightings` append an `INTENT` and a `RESULT` row to the durable
+`POST /api/fleet/sightings` and read-only mDNS observation
+`POST /api/fleet/discovery/scan` append an `INTENT` and a `RESULT` row to the durable
 API audit. The rows contain principal, role, method, path, and response code,
 not the bearer token or request body. If the intent cannot be persisted, Fleet
 returns `503 AUDIT_STORAGE_UNAVAILABLE` before calling CORE. If the result row
@@ -919,11 +921,37 @@ ACK/final-result reconciliation remain separate required work.
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
+## 10.9 Site Fleet LAN discovery
+
+The Ubuntu host Avahi bridge resolves `_rosy._tcp.local` and submits one full
+scan every 15 seconds. `DiscoveryScanPayload.devices` contains at most 64
+objects with `name`, optional `hostname`, private LAN IPv4 `address`, `port`,
+`stage`, `release`, and `network=sta`. The host scanner has one dedicated Bearer
+credential, separate from site users, CORE REST, and FleetAgent pairing.
+
+| Method | Path | Authority | Result |
+|---|---|---|---|
+| POST | `/api/fleet/discovery/scan` | host scanner Bearer only | Replace the short-lived discovery scan; 401 invalid credential, 400 invalid observation |
+| GET | `/api/fleet/discovery` | site viewer+ | `{scanner_online, devices[]}` with status `registration_pending`, `pairing_pending`, `verified_online`, or `conflict` |
+
+The scan expires after 45 seconds. Empty successful scans remove prior rows;
+scanner failure sends nothing and later reads report `scanner_online=false`.
+Advertisement data is not identity evidence. `verified_online` requires an
+existing `robots.yaml` endpoint and an online authenticated FleetAgent HELLO
+with a device UID and matching device name while the advertised stage is
+`CORE_READY`. The endpoint is matched by advertised IP or `.local` hostname and
+port. A duplicate advertised name or identity mismatch is a conflict. The
+discovery routes never add an endpoint, assign a robot number, expose a token,
+or command CORE. Cross-VLAN, blocked multicast, and AP mode use manual endpoint
+configuration and the existing outbound FleetAgent path.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.37 | 2026-09-26 | Additive: Operator camera preview screenshot/video evidence upload, list, download and bounded `VisionEvidenceRecord`/`VisionEvidenceList`. Browser PC storage stays local. Robot DDS/WSS envelope version remains 1.0. |
+| v1.39 | 2026-09-26 | Additive: Operator camera preview screenshot/video evidence upload, list, download and bounded `VisionEvidenceRecord`/`VisionEvidenceList`. Browser PC storage stays local. Robot DDS/WSS envelope version remains 1.0. |
+| v1.38 | 2026-09-26 | Robot FleetAgent location: paired robots may resolve a pinned site over mDNS with CA/TLS verification; no envelope change. |
+| v1.37 | 2026-09-26 | Additive: site-only mDNS scan/readback and `DiscoveryScanPayload`; no robot envelope change. |
 | v1.36 | 2026-09-26 | Additive(D-283): `UiPanelDescriptor.action_group` optional field exposes console operation groups. Only role-, capability-, and inventory-visible panels are included; unsupported action groups are absent. |
 | v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
 | v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |

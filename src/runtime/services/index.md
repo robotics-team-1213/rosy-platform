@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · FleetAgent pinned mDNS location
 - 2026-09-25 · uncommitted · refactor(runtime): move core_features under src/runtime (D-231)
 - 2026-09-25 · uncommitted · feat(line_follow): track only when lane_recovery says FOLLOW
 - 2026-09-25 · uncommitted · feat(core_features): lane_recovery returns FOLLOW or STOP
 - 2026-09-25 · uncommitted · feat(core_features): D-228 decision library under core_features
-- 2026-09-24 · uncommitted · refactor(docking): 주차형 단계를 `docking/parking_phases.py` 전략으로 분리 (D-168 P6)

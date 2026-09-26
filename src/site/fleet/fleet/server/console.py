@@ -91,6 +91,7 @@ class FleetConsole:
         self._agent_pairing_tokens = tuple(ep.fleet_pairing_token for ep in endpoints
                                            if ep.fleet_pairing_token is not None)
         self._order = [ep.robot_id for ep in endpoints]
+        self._registered_endpoints = {ep.robot_id: ep.base_url for ep in endpoints}
         self._clock = clock
         self._map_ttl_s = map_ttl_s
         self._map: Optional[dict] = None
@@ -136,6 +137,10 @@ class FleetConsole:
     @property
     def robot_ids(self) -> list[str]:
         return list(self._order)
+
+    @property
+    def registered_endpoints(self) -> dict[str, str]:
+        return dict(self._registered_endpoints)
 
     def uses_rest_token(self, candidate: str) -> bool:
         """Check credential separation without exposing configured robot tokens."""

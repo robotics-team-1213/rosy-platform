@@ -13,7 +13,7 @@ credentials, login code, and media are intentionally absent from this public rec
   not an independently saved image on the current SD.
 - Active CORE release is `2026.09.26-017`; `rosy-core` is active and `rosy-io`
   is inactive. Running OpenAPI description is v1.33 and exposes only the front
-  status/JPEG endpoints, not the v1.37 evidence endpoints.
+  status/JPEG endpoints, not the v1.39 evidence endpoints.
 - `rpicam-hello`, `rpicam-still`, `libcamera-hello`, `libcamera-still`, and the
   `picamera2` Python import are unavailable on this SD. No `captures/` directory
   exists yet. D-288's source-built image has not been deployed.

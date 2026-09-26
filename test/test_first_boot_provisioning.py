@@ -28,7 +28,7 @@ def _module():
     return module
 
 
-def _bundle() -> dict:
+def _bundle(fleet_endpoint: str = "https://fleet.fixture.invalid:8443") -> dict:
     return create_provision_bundle(
         identity=DeviceIdentity(
             device_uid="9d40feaa-871f-4fd3-975a-a704e82d3af9",
@@ -42,7 +42,7 @@ def _bundle() -> dict:
         country_code="KR",
         ssid="fixture-wifi",
         wifi_passphrase="fixture-pass-9384",
-        fleet_endpoint="https://fleet.fixture.invalid:8443",
+        fleet_endpoint=fleet_endpoint,
         fleet_trust_profile="site-ca-2026",
         pairing_required=True,
         pairing_credential="fixture-one-time-pairing-credential",
@@ -52,11 +52,11 @@ def _bundle() -> dict:
     )
 
 
-def _case(tmp_path: Path):
+def _case(tmp_path: Path, fleet_endpoint: str = "https://fleet.fixture.invalid:8443"):
     root = tmp_path / "root"
     bundle = root / "boot/firmware/rosy-provision/provision.json"
     bundle.parent.mkdir(parents=True)
-    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+    bundle.write_text(json.dumps(_bundle(fleet_endpoint)), encoding="utf-8")
     return root, bundle
 
 
@@ -100,6 +100,49 @@ def test_valid_bundle_personalizes_ubuntu_and_is_consumed_once(tmp_path):
     source = (FIRST_BOOT / "rosy-first-boot.py").read_text(encoding="utf-8")
     assert "network_path, self._network_profile(payload), 0o600" in source
     assert '"etc/rosy/fleet-bootstrap.json"), payload["fleet"], 0o600' in source
+
+
+def test_first_boot_uses_sd_site_identity_without_copying_one_time_pairing_secret():
+    module = _module()
+    bootstrap = {"endpoint": "https://fleet-a.local:8443",
+                 "trust_profile": "site-ca-2026", "pairing_required": True,
+                 "pairing_credential": "one-time-enrollment-value"}
+    rendered = module.FirstBootProvisioner._merge_core_overlay(
+        None, {"id": "card"}, bootstrap)
+    import yaml
+    config = yaml.safe_load(rendered)
+    assert config["fleet"] == {"discovery": {
+        "expected_hostname": "fleet-a.local",
+        "ca_file": "/etc/rosy/trust/site-ca-2026.crt"}}
+    assert "one-time-enrollment-value" not in rendered
+    assert "pairing_token" not in config["fleet"]
+
+
+def test_provisioned_local_site_reaches_private_core_config_without_a_token(tmp_path):
+    module = _module()
+    root, bundle = _case(tmp_path, "https://fleet-a.local:8443")
+    result = module.FirstBootProvisioner(
+        root=root, network_activate=lambda _profile: True).apply(
+            bundle=bundle, hardware_serial="10000000abcdef01")
+    assert result["ok"] is True
+    import yaml
+    overlay = yaml.safe_load((root / "var/lib/rosy/core/.rosy/rosy.yaml").read_text(
+        encoding="utf-8"))
+    assert overlay["fleet"]["discovery"] == {
+        "expected_hostname": "fleet-a.local",
+        "ca_file": "/etc/rosy/trust/site-ca-2026.crt",
+    }
+    assert "pairing_token" not in overlay["fleet"]
+
+
+def test_first_boot_skips_unsafe_mdns_site_metadata():
+    module = _module()
+    import yaml
+    for profile in ("../other", "site/ca"):
+        rendered = module.FirstBootProvisioner._merge_core_overlay(
+            None, {"id": "card"}, {"endpoint": "https://fleet-a.local",
+                                   "trust_profile": profile})
+        assert "fleet" not in yaml.safe_load(rendered)
 
 
 def test_wrong_wifi_returns_to_provisioning_hold_without_consuming_bundle(tmp_path):

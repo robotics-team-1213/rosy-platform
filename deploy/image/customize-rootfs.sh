@@ -168,7 +168,8 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates chrony dnsmasq-base locales network-manager openssh-server openssl python3 python3-pip python3-yaml \
+    avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base libnss-mdns locales network-manager \
+    openssh-server openssl python3 python3-pip python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
 # D-190: the boot display (rosy-boot-display.service). RPi.GPIO on the Pi 5 is
 # the rpi-lgpio compatibility layer; spidev drives the ST7789; PIL, numpy and

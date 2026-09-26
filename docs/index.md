@@ -157,8 +157,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · docs(validation): Pinky camera capture readback
-- 2026-09-26 · uncommitted · docs(camera): resolve ADR and API version conflicts
-- 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
-- 2026-09-26 · uncommitted · docs(adr): D-287 Pinky Pi 5 camera userspace
-- 2026-09-26 · uncommitted · docs(api): v1.36 camera evidence contract
+- 2026-09-26 · uncommitted · docs(api): merge camera capture with LAN discovery
+- 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
+- 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
+- 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
+- 2026-09-26 · uncommitted · paired robot outbound discovery contract
