@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
+ListControllers = pytest.importorskip("controller_manager_msgs.srv").ListControllers
 
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
@@ -31,7 +32,7 @@ def test_runtime_forwards_bounded_noop_goal_to_locked_vendor_simulation():
         # This is only a narrow test admission interval around the starting pose.
         # The vendor controller also enforces its own URDF command limits.
         position_limits={joint_name: (-0.1, 0.1)},
-        allowed_owners=("rule_based",),
+        allowed_owners=("rule_based", "leader_teleop"),
         calibration_revision="simulation-only",
         max_joint_state_age_s=0.5,
         max_goal_duration_s=3.0,
@@ -47,11 +48,29 @@ def test_runtime_forwards_bounded_noop_goal_to_locked_vendor_simulation():
         trajectory_action=action_name,
         poll_period_s=0.01,
     )
+    controllers_client = node.create_client(ListControllers, "/controller_manager/list_controllers")
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=1)
     spinning = spinner.submit(executor.spin)
     try:
+        deadline = time.monotonic() + 20.0
+        controllers_future = None
+        while time.monotonic() < deadline:
+            if controllers_future is None and controllers_client.service_is_ready():
+                controllers_future = controllers_client.call_async(ListControllers.Request())
+            if controllers_future is not None and controllers_future.done():
+                result = controllers_future.result()
+                if result is not None and any(
+                    controller.name == "arm_controller" and controller.state == "active"
+                    for controller in result.controller
+                ):
+                    break
+                controllers_future = None
+            time.sleep(0.05)
+        else:
+            pytest.fail("vendor arm_controller did not become active")
+
         deadline = time.monotonic() + 10.0
         while time.monotonic() < deadline:
             if runtime.action_port.server_is_ready() and runtime.latest_joint_state is not None:
@@ -59,6 +78,7 @@ def test_runtime_forwards_bounded_noop_goal_to_locked_vendor_simulation():
             time.sleep(0.02)
         assert runtime.action_port.server_is_ready()
         assert runtime.latest_joint_state is not None
+        assert node.count_subscribers("/leader/joint_trajectory") == 0
 
         state = runtime.latest_joint_state
         current_position = state.positions[joint_name]
@@ -103,6 +123,21 @@ def test_runtime_forwards_bounded_noop_goal_to_locked_vendor_simulation():
             calibration_revision=config.calibration_revision,
         )
         assert runtime.submit(cancellable).accepted
+        active_handle = runtime.action_port.last_handle
+        competing = TrajectoryCommand(
+            workcell_id=config.workcell_id,
+            instance_id=config.instance_id,
+            command_id="vendor-sim-competing-leader",
+            session_id=runtime.owner.session_id,
+            owner="leader_teleop",
+            positions={joint_name: current_position - 0.02},
+            duration_s=0.2,
+            source_state_sequence=fresh_state.sequence,
+            calibration_revision=config.calibration_revision,
+        )
+        rejected = runtime.submit(competing)
+        assert not rejected.accepted and rejected.reason == "busy"
+        assert runtime.action_port.last_handle is active_handle
         time.sleep(0.1)
         cancellation = runtime.cancel(command_id="vendor-sim-cancel", owner="rule_based")
         assert cancellation.reason == "cancel_requested"
@@ -122,5 +157,6 @@ def test_runtime_forwards_bounded_noop_goal_to_locked_vendor_simulation():
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
         runtime.destroy()
+        node.destroy_client(controllers_client)
         node.destroy_node()
         rclpy.shutdown()

@@ -24,7 +24,7 @@
 
 The pinned vendor AI simulation launch remapped the controller's trajectory topic to `/leader/joint_trajectory` while also exposing its action. In the first image, a 10-second action goal for `joint1=+0.2` rad was accepted, then a leader topic message requested `joint1=-0.2` rad. The action still returned `SUCCEEDED` (status 4, error code 0), while a later joint-state sample read `-0.1999996` rad. The two inputs therefore cannot be admitted concurrently as a single command owner.
 
-`omx-ai-sim-action-only.patch` removes the direct leader remap from the **simulation launch**. In the v2 image, the same probe found zero subscribers on `/leader/joint_trajectory`; the action returned `SUCCEEDED`, and a later joint-state sample read `+0.2000002` rad. The native follower launch has not been changed or approved for field control. The action server is still directly reachable by any participant in its ROS graph, so this patch alone is not a native command admission service.
+`omx-ai-sim-action-only.patch` removes the direct leader remap from the **simulation launch**. In the v2 image, the same probe found zero subscribers on `/leader/joint_trajectory`; the action returned `SUCCEEDED`, and a later joint-state sample read `+0.2000002` rad. At this first probe the non-simulation follower launch was unchanged; the follow-up below records its later development-image patch. Neither launch is approved for field control. The action server is still directly reachable by any participant in its ROS graph, so this patch alone is not a native command admission service.
 
 ## Gate conclusion
 
@@ -50,3 +50,31 @@ physical arm. The image is not a published or native systemd artifact.
 the action or normal trajectory topic. A deployed single-writer runtime,
 freshness/timeout HOLD, stop-path evidence, and two-instance target-host
 measurement are still needed before Task 4's native service is admitted.
+
+## Follow-up: policy owner against the locked vendor simulation
+
+In an isolated `--network none` container using the local image above, the
+existing `RosArmCommandRuntime` test ran against the locked Gazebo action. The
+test was extended to admit `rule_based` and `leader_teleop` as policy owners:
+while a rule-based action was active, a competing leader request returned
+`busy` and the action-client handle did not change. The test also observed
+zero subscribers on `/leader/joint_trajectory`, then received cancellation
+acknowledgement and terminal `CANCELED` status for the first action. The
+extended probe passed twice; one run printed an intermittent rclpy cleanup
+exception after pytest reported success, while the repeat was clean. This is
+in-process policy and ROS-SIM evidence only. There is still no deployed
+single-writer process, DDS admission boundary, independent physical stop, or
+target Ubuntu workstation timing record.
+
+The repeatable entry point is now `deploy/omx/probe_vendor_owner_sim.sh`.
+Running it in the same image with a read-only checkout, `--network none`, and
+no device grants passed the extended vendor test. A separate diagnostic run
+with a fake `/dev/serial/by-id` bind mount exited with status 2 before launch,
+as intended. The probe does not make the image a field artifact.
+
+One run under concurrent host load exposed a startup race: the action server
+was discoverable before `arm_controller` became active and rejected the first
+goal. The probe now waits for `/controller_manager/list_controllers` to report
+`arm_controller` as `active` before submitting. Two subsequent isolated runs
+passed. Readiness here is a simulator controller state, not physical actuator
+readiness.
