@@ -2340,6 +2340,27 @@
 - gate 변화: 없음(ADR 신설·Status 변경 없음 — 계획 문서의 결정 기입이며, ROSY-SIGNAL-001 v2 계약 개정은 §7 2단계의 별도 변경)
 - 회귀: 없음(코드·펌웨어 무변경. 동료 WIP 파일 미스테이징 유지)
 - 교훈: "이 문서의 유일한 질문"으로 표시된 결정은 표의 옵션 수만큼 답이 필요하다 — 채택만 적고 기각·별도 항목을 비워 두면 나중에 같은 질문이 다시 올라온다. 그리고 승인은 코드 착수 신호이므로 "v1은 언제까지 건드려도 되는가"를 같은 답에 함께 적어야 한다
+## 2026-09-26 · uncommitted · docs(adr): D-280 ROSY 제품 디자인 철학
+
+- 변경: `차분한 지능에 은은한 따뜻함`을 제품 전체 디자인 기준으로 Accepted 기록했다. 게임 호스트와 부팅음·LED·LCD 같은 실제 접점을 명시하고, D-266에 따라 진단은 PARKED로 남겼다.
+- 근거: 사용자와 제품 전체 범위, 은은한 따뜻함, 얼굴의 더 큰 표현 폭을 합의했다. concept 16 및 D-254/D-277/D-278과 대조했다.
+- gate 변화: 없음. 제품 성격의 결정이며 화면·장치의 수용 증거가 아니다.
+
+## 2026-09-26 · uncommitted · docs(design): D-280 제품 기준선 검토
+
+- 변경: D-280 적용 전에 현행 운용·점검·Fleet·게임 캡처를 검토하고 얼굴/장치 표시/진단/설치 문서의 평가 공백을 기록했다. 대화면 운용 헤더 밀도, Fleet 0/0 지도 비중, 게임 overhead 프레임 자산, LCD 실기 증거를 후속 확인 대상으로 남겼다. 근거는 `docs/validation/d280-product-design-baseline-2026-09-26/README.md`다.
+- 증거: D-255 LOCAL 캡처 중 8개를 직접 확인하고 15셀의 메타데이터 및 D-260/D-266의 상태를 대조했다. 물리 장치나 실제 운영 데이터 판정은 하지 않았다.
+- gate 변화: 없음. D-153 UI/UX 표면 판정은 여전히 기존 회차의 범위와 상태를 따른다.
+
+## 2026-09-26 · uncommitted · docs(design): D-280 기준선의 화면 경로 정정
+- 변경: 9월 26일 UI 캡처가 구형 `/dashboard`의 화면임을 명시하고, 이를 현재 역할별 `/console`의 시각 근거로 승계하지 않도록 `docs/validation/d280-product-design-baseline-2026-09-26/README.md`를 바로잡았다. 현재 `/console` 라우트, 셸, 패널 구성은 소스 근거로 별도 기록했으며 실제 렌더 평가는 HOLD로 남겼다.
+- 근거: `core_api_web/api/app.py`는 `/{surface}`에서 `src/hmi/dashboard/surface.html`을 제공하고, `shell/shell.js`는 역할 manifest에 따라 패널을 조립한다. 확인한 D-255 캡처는 ROSY Field runtime/감지·관측·조작 레이아웃의 구형 `/dashboard` 화면이다.
+- gate 변화: 없음. 현재 `/console`의 렌더 캡처와 D-153 평가는 아직 없다.
+
+## 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
+- 변경: optional overhead JPEG가 없거나 로드되지 않을 때 `<img hidden>`이 실제로 감춰지도록 `#frame[hidden] { display: none; }`를 추가하고 브라우저 회귀를 고정했다.
+- 근거: 수정 전 Chromium에서 `has_frame=false`인데도 `#frame`이 `display:block`으로 보여 깨진 아이콘/alt 텍스트를 렌더했다. 새 테스트는 이 동작으로 실패했고, 수정 후 `python -X utf8 -m pytest test/test_games_board_browser.py -q`(ROSY_RUN_BROWSER_TESTS=1) 6개 통과. API·경기 상태·정지 동작은 바꾸지 않았다.
+- gate 변화: 없음. 해당 결함 수정의 LOCAL 브라우저 증거이며 게임 표면 D-153 G2/G3 전체 평가는 열려 있다.
 
 ## 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
 

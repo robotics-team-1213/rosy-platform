@@ -157,4 +157,4 @@
 - 2026-09-26 · uncommitted · feat(sd): stage new identity when a personalized card moves boards
 - 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
 - 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
-- 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
+- 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음

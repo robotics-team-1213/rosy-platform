@@ -21,16 +21,16 @@
 
 **Files:** Create `deploy/omx/host_inventory.py`, `deploy/omx/host-inventory.yaml.example`, `test/test_omx_host_inventory.py`; update `deploy/omx/README.md`.
 
-1. 시험에서 순수 함수 `load_inventory(text: str) -> Inventory`와 `InventoryError`를 먼저 요구한다. `schema: rosy.omx-host-inventory.v1`, 비어 있지 않은 `site_id`, 호스트 목록, 작업대 목록이 기본 입력이다. 각 작업대는 `workcell_id`, `instance_id`, 기존 `host_id` 참조, follower/leader의 절대 `/dev/serial/by-id/<한 항목>` 선택값을 가진다. 선택 전 카메라는 `null`로 둔다.
-2. 성공 사례는 한 호스트의 OMX 1대/2대와 두 호스트의 OMX 2대다. 실패 사례는 중복 `workcell_id`·`instance_id`·`host_id`, 알 수 없는 호스트, 한 호스트에서 중복 serial/camera 선택값, follower=leader, `/dev/ttyACM*` 추측 경로, 활성 설정의 예시 placeholder와 빈 장치값이다. 호스트 간 같은 경로 문자열만으로 충돌을 단정하지 않는다. 장치의 실제 동일성 검사는 Task 2가 맡는다.
-3. 최소 구현은 YAML 자료 검증과 불변 객체 생성만 한다. 장치 파일 열기, ROS import, Fleet 등록, 네트워크 연결, secret 로깅은 넣지 않는다. 템플릿에는 가짜 주소·토큰·실제 serial을 기록하지 않고 `enabled: false`를 둔다. 채워진 현장 인벤토리는 gitignored `private/` 또는 호스트 `/etc/rosy/omx/`에만 둔다.
+1. 시험에서 순수 함수 `load_inventory(text: str) -> Inventory`와 `InventoryError`를 먼저 요구한다. `schema: rosy.omx-host-inventory.v1`, 비어 있지 않은 `site_id`, 호스트 목록, 작업대 목록이 기본 입력이다. 각 작업대는 `workcell_id`, `instance_id`, 기존 `host_id` 참조와 명시적인 `enabled` 불리언을 가진다. `enabled: true`인 작업대는 follower/leader 각각에 실제로 선택한 절대 `/dev/serial/by-id/<한 항목>` 경로가 필수다. `enabled: false`인 작업대는 두 경로를 생략하거나 `null`로 둘 수 있다. 비활성 작업대에 경로를 미리 기록했다면 경로 형식은 동일하게 검증한다. 선택 전 카메라는 `null`로 둔다.
+2. 성공 사례는 장치 ID가 없는 비활성 작업대, 한 호스트의 활성 OMX 1대/2대와 두 호스트의 활성 OMX 2대다. 실패 사례는 중복 `workcell_id`·`instance_id`·`host_id`, 알 수 없는 호스트, 한 호스트의 활성 작업대 간 중복 serial/camera 선택값, 활성 작업대의 follower=leader, `/dev/ttyACM*` 추측 경로, 활성 설정의 예시 placeholder와 누락·빈 장치값이다. 호스트 간 같은 경로 문자열만으로 충돌을 단정하지 않는다. 장치의 실제 동일성 검사는 Task 2가 맡는다.
+3. 최소 구현은 YAML 자료 검증과 불변 객체 생성만 한다. 장치 파일 열기, ROS import, Fleet 등록, 네트워크 연결, secret 로깅은 넣지 않는다. 템플릿에는 가짜 주소·토큰·실제 serial을 기록하지 않고 `enabled: false`와 생략되거나 `null`인 장치 ID를 둔다. 채워진 현장 인벤토리는 gitignored `private/` 또는 호스트 `/etc/rosy/omx/`에만 둔다.
 4. `python -X utf8 -m pytest test/test_omx_host_inventory.py -q -p no:cacheprovider --basetemp X:\DevTemp\rosy-omx-inventory`로 실패→구현→통과를 확인한다. 인벤토리 파일이 현행 Compose에 자동 투입된다고 주장하지 않는다. 해당 경로만 커밋한다.
 
 ## Task 2: 호스트의 실제 장치 배타성 사전점검
 
 **Files:** Modify `deploy/omx/preflight.py`; create `test/test_omx_multi_preflight.py`; update `deploy/omx/README.md`.
 
-1. 기존 `resolve_devices()`의 주입형 probe를 재사용해 `resolve_host_devices(inventory, host_id, probe=...)`를 시험으로 먼저 정의한다. enabled 작업대의 follower/leader가 존재하는 읽기·쓰기 가능한 character device인지 확인하고, symlink를 해석한 **실제 경로**가 한 호스트의 다른 작업대와 겹치면 거부한다.
+1. 기존 `resolve_devices()`의 주입형 probe를 재사용해 `resolve_host_devices(inventory, host_id, probe=...)`를 시험으로 먼저 정의한다. 해당 호스트의 활성 작업대만 검사하고, 비활성 작업대의 장치는 열거나 예약하지 않는다. 활성 작업대의 follower/leader가 존재하는 읽기·쓰기 가능한 character device인지 확인하고, symlink를 해석한 **실제 경로**가 한 호스트의 다른 활성 작업대와 겹치면 거부한다.
 2. 한 작업대 누락·권한 거부·동일 포트·두 작업대의 다른 by-id가 같은 실제 장치를 가리키는 사례를 거절한다. 한 작업대의 실패가 다른 작업대의 장치를 대체 선택하지 않게 한다. 카메라가 아직 선정되지 않았으면 카메라 장치 접근을 열지 않는다.
 3. 출력에는 작업대별 검증된 장치 경로만 포함한다. 토큰·원본 영상·현재 `ttyACM` 번호 추측을 로그에 쓰지 않는다. Windows 단위시험에는 fake probe만 쓰고, 실제 Linux readback은 별도로 기록한다.
 4. `python -X utf8 -m pytest test/test_omx_workstation.py test/test_omx_multi_preflight.py -q -p no:cacheprovider --basetemp X:\DevTemp\rosy-omx-preflight`로 회귀를 확인하고 해당 경로만 커밋한다.

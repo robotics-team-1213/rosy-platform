@@ -1296,3 +1296,16 @@
 - gate 변화: DEVICE의 단일 Pi 재등록 경로를 관측했으나 이미지/다중 카드 gate는 HOLD 유지.
 - 결정: D-154 새 장치 처리.
 - 교훈: 원래 카드로 재등록할 때는 기존 CORE 홈을 먼저 격리해야 API 토큰·설정이 새 신원으로 섞이지 않는다.
+
+## 2026-09-26 · uncommitted · feat(omx): add isolated vendor simulation and Pinky-aware ROS settings
+- 변경: Run the pinned ROBOTIS OMX-F Gazebo launch in an optional headless, hardware-free Compose profile; allow workstation ROS domain/discovery configuration, keep simulation on its own LOCALHOST domain, fix RMW to CycloneDDS per D-117, and document Pinky identity/integration boundaries under D-33 and D-273.
+- 증거: 13 focused OMX workstation/vendor lock tests passed; simulation policy mutation was rejected; Docker image rebuilt as `sha256:2e5a65940cb7ec6964c3b75081878c4e520b4aea597cdcc7e1fbc86b1f850159`; image resolves CycloneDDS and ROBOTIS bringup. Headless Gazebo showed `/clock`, `/joint_states`, and active controllers.
+- Limits: ROS-SIM remains HOLD due to virtualized timing overruns, unsupported gripper mimic constraint, and disabled URDF command limits; bounded motion/fault acceptance and device/Pinky integration remain open.
+- gate 변화: no product capability enabled.
+- Decision: D-273 remains governing boundary; implementation plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
+
+## 2026-09-26 · uncommitted · OMX 호스트 인벤토리와 다중 장치 사전점검
+
+- 변경: D-281의 호스트·작업대 ID를 비활성 기본 YAML 인벤토리로 표현하고, 활성 작업대의 follower/leader by-id 선택 및 호스트 내 중복 할당을 정적으로 검증한다. 호스트 사전점검은 활성 작업대별 실제 character device·읽기/쓰기 권한과 symlink 별칭 충돌을 거절한다.
+- 근거: Windows fake probe와 기존 단일 OMX 사전점검을 사용한 집중 계약 시험. 활성 프로필·장치 연결·Fleet API·Compose 자동 투입은 포함하지 않았다.
+- gate 변화: SOURCE/LOCAL 계약 준비만 확대. ROS-SIM/ARTIFACT HOLD 및 DEVICE/FIELD PARKED 유지.
