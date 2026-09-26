@@ -20,7 +20,7 @@ severity: medium
 
 ## Problem
 
-The Pinky Pro lamp is 8 WS2812 LEDs (GBR order) on GPIO19. On a Pi 5 the pinned
+The Pinky Pro lamp is 8 WS2812 LEDs (GRB order; the vendor code's GBR swaps red and blue, found 2026-09-26) on GPIO19. On a Pi 5 the pinned
 `rpi_ws281x` library (the upstream snapshot pinned as `rpi_ws281x_commit` in `deploy/image/inputs.lock.yaml`) does not drive
 the pin itself. It writes pixel data to `/dev/ws281x_pwm`, which the out-of-tree kernel
 module `rp1_ws281x_pwm` provides, and the module sends that data through RP1 PWM0 and DMA.

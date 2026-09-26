@@ -20,7 +20,7 @@ ws2811_t ledstring =
             .gpionum = 19,
             .invert = 0,
             .count = 8,
-            .strip_type = WS2811_STRIP_GBR,
+            .strip_type = WS2811_STRIP_GRB,
             .brightness = 255,
         },
     },

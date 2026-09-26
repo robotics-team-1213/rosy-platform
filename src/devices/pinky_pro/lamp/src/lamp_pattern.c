@@ -7,7 +7,7 @@
  * node /dev/ws281x_pwm is granted to that unit alone (udev group rosy-display,
  * DeviceAllow); the colour-setting lamp_control service stays bench-only
  * (D-169). No ROS. Same pinned rpi_ws281x and strip settings as main_node and
- * lamp_selftest (8 LEDs, GPIO19, GBR, rp1_ws281x_pwm pwm_channel=3).
+ * lamp_selftest (8 LEDs, GPIO19, GRB, rp1_ws281x_pwm pwm_channel=3).
  *
  *   booting  blue, breathing, 2 s period, at most 25 % brightness
  *   ready    green for 3 s, then off and exit
@@ -61,7 +61,7 @@ static ws2811_return_t fill(ws2811_t *lamp, ws2811_led_t color)
 
 static ws2811_led_t rgb(int red, int green, int blue)
 {
-    /* 0xWWRRGGBB; the library reorders for the GBR strip. */
+    /* 0xWWRRGGBB; the library reorders for the GRB strip (D-260: GBR swapped red and blue on the Pro). */
     return ((ws2811_led_t)red << 16) | ((ws2811_led_t)green << 8) | (ws2811_led_t)blue;
 }
 
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
                 .gpionum = LAMP_GPIO,
                 .invert = 0,
                 .count = LAMP_COUNT,
-                .strip_type = WS2811_STRIP_GBR,
+                .strip_type = WS2811_STRIP_GRB,
                 .brightness = 255,
             },
         },
