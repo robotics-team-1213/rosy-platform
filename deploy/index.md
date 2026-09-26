@@ -58,13 +58,13 @@
 
 ## 최근 기록
 
-- 2026-09-27 · uncommitted · update default-config image readback
-- 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff
-- 2026-09-26 · uncommitted · OMX development image action-only vendor launch
-- 2026-09-26 · uncommitted · site control console operator access guide
-- 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수
 - 2026-09-26 · uncommitted · speed up image compression for multi-card production
 - 2026-09-26 · uncommitted · OMX 호스트 인벤토리와 다중 장치 사전점검
 - 2026-09-26 · uncommitted · feat(omx): add isolated vendor simulation and Pinky-aware ROS settings
 - 2026-09-26 · uncommitted · feat(sd): recover a moved Pi with a fresh identity
 - 2026-09-26 · uncommitted · feat(sd): fail closed on board transfer and expose setup status
+- 2026-09-27 · uncommitted · update default-config image readback
+- 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff
+- 2026-09-26 · uncommitted · OMX development image action-only vendor launch
+- 2026-09-26 · uncommitted · site control console operator access guide
+- 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수

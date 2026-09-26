@@ -171,13 +171,13 @@
 
 ## 최근 기록
 
-- 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
-- 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
-- 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
-- 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
-- 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
 - 2026-09-26 · uncommitted · docs(sd): record operator rebind and sequential multi-card Fleet onboarding
 - 2026-09-26 · uncommitted · feat(sd): stage new identity when a personalized card moves boards
 - 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
 - 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
 - 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
+- 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
+- 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
+- 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
+- 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
+- 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
