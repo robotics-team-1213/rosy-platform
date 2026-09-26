@@ -2681,3 +2681,9 @@
 - Change: bundle `/opt/rosy/site_db.py` with the Fleet image and document online backup, integrity verification, isolated-volume restore drills, stopped-service production restore, rollback snapshot, permissions, and retention evidence.
 - Evidence: 529 Fleet/deploy tests passed and 5 were skipped; deliberately replacing `integrity_check` with `foreign_key_check` made the WAL-backup test fail, then the original guard was restored. Container-package verification remains in progress.
 - Gate: no site recovery or field gate is claimed until the new candidate is exercised; Ubuntu host and production restore remain unverified. Automatic movement and picking remain HOLD.
+
+## 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
+
+- Change: built the commit-pinned `linux/amd64` site candidate for `5e638935d773fafe84075a2be04ff6dcaa53b9b4` and ran the bundled utility from the Fleet image against isolated Docker volumes.
+- Evidence: online backup and `integrity_check` passed; restore to a separate volume passed integrity and read back one synthetic row each for sightings, CORE events, tasks, task history, and mutation audit. Fleet image ID `sha256:e56b18c4c9a6dbebd68523ed1e2b4ec570a9553934c7f8d355d7a00a3825f462`; `images.tar` SHA-256 `deb8823f8f05af4dfa048e1e9fb75bfc0647278eea037a9aaa8ad2e2be582385`. The three exact test volumes were removed.
+- Gate: packaged software recovery is verified on Windows Docker Desktop's Linux/amd64 engine only. This is not Ubuntu host, encrypted off-host backup, Fleet API readback, physical site, or production restore acceptance; automatic movement/picking remain HOLD.

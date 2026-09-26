@@ -166,8 +166,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
 - 2026-09-27 · uncommitted · deploy(site): add guarded SQLite backup and restore
 - 2026-09-27 · uncommitted · validation: exercise packaged CORE event ingestion
 - 2026-09-27 · uncommitted · validation: rebuild current site integration candidate
 - 2026-09-27 · uncommitted · Pinky native mapping gate truth and G4 diagnostic
-- 2026-09-27 · uncommitted · docs(validation): record current main integration gates
