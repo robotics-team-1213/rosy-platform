@@ -34,6 +34,24 @@ def test_health_endpoint_reports_liveness_without_robot_or_auth_data():
     assert "robot" not in response.text and "token" not in response.text
 
 
+def test_goal_openapi_contract_exposes_only_domain_intent_fields():
+    app = create_app(FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+        [FakeRobot("rosy_01")],
+    ))
+
+    operation = app.openapi()["paths"]["/api/fleet/robots/{robot_id}/goal"]["post"]
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"] == "#/components/schemas/GoalRequest"
+
+    goal_schema = app.openapi()["components"]["schemas"]["GoalRequest"]
+    assert goal_schema["required"] == ["x", "y"]
+    assert set(goal_schema["properties"]) == {"x", "y", "yaw"}
+    assert goal_schema["additionalProperties"] is False
+    assert all(goal_schema["properties"][name]["type"] == "number"
+               for name in ("x", "y", "yaw"))
+
+
 def test_do_translates_a_goal_and_rejects_a_ros_word():
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
     client = _client(robot)
