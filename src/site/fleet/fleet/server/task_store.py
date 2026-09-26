@@ -7,9 +7,10 @@ import os
 import re
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
+from uuid import uuid4
 
 _SENSITIVE_FIELD = re.compile(
     r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
@@ -17,12 +18,14 @@ _SENSITIVE_FIELD = re.compile(
     re.IGNORECASE,
 )
 _TASK_TRANSITIONS = {
-    "REQUESTED": {"ACCEPTED", "FAILED", "UNKNOWN", "HOLD"},
+    "REQUESTED": {"QUEUED", "ACCEPTED", "FAILED", "UNKNOWN", "HOLD"},
+    "QUEUED": {"ACCEPTED", "FAILED", "UNKNOWN", "HOLD", "CANCELED", "EXPIRED"},
     "ACCEPTED": {"RUNNING", "COMPLETED", "FAILED", "UNKNOWN", "HOLD"},
     "RUNNING": {"COMPLETED", "FAILED", "UNKNOWN", "HOLD"},
     "UNKNOWN": {"ACCEPTED", "RUNNING", "COMPLETED", "FAILED", "HOLD"},
-    "FAILED": set(), "COMPLETED": set(), "HOLD": set(),
+    "FAILED": set(), "COMPLETED": set(), "HOLD": set(), "CANCELED": set(), "EXPIRED": set(),
 }
+_PRIORITY_CLASSES = {0, 1, 2}
 
 
 class IdempotencyConflict(ValueError):
@@ -46,8 +49,9 @@ def _safe_json(value: object) -> str:
 
     inspect(value)
     try:
-        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"),
-                           allow_nan=False, sort_keys=True)
+        text = json.dumps(
+            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False, sort_keys=True
+        )
     except (TypeError, ValueError) as exc:
         raise ValueError("task data must be finite JSON") from exc
     if len(text.encode("utf-8")) > 64 * 1024:
@@ -101,8 +105,14 @@ class FleetTaskStore:
                 );
                 CREATE INDEX IF NOT EXISTS fleet_task_history_task
                     ON fleet_task_history(task_id, audit_id);
+                CREATE TABLE IF NOT EXISTS fleet_robot_reservations (
+                    robot_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL UNIQUE REFERENCES fleet_tasks(task_id),
+                    reserved_at TEXT NOT NULL
+                );
                 """
             )
+            self._migrate_task_columns(connection)
         if os.name != "nt":
             self.path.chmod(0o600)
 
@@ -146,6 +156,160 @@ class FleetTaskStore:
             connection.commit()
         return {"created": True, "task": self._task_dict(row)}
 
+    def enqueue(self, task_id: str, *, priority_class: int, expires_at: str | None = None,
+                actor_id: str = "site-scheduler", source: str = "scheduler") -> dict:
+        """Durably move a validated request into the dispatchable queue."""
+        if priority_class not in _PRIORITY_CLASSES:
+            raise ValueError("priority_class must be operator=0, accepted-policy=1, background=2")
+        if expires_at is not None:
+            expires_at = _parse_time(expires_at).isoformat(timespec="milliseconds")
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
+                                         (task_id,)).fetchone()
+            if current is None:
+                raise KeyError(task_id)
+            if current["status"] != "REQUESTED":
+                raise InvalidTaskTransition(f"{current['status']} cannot transition to QUEUED")
+            connection.execute(
+                """UPDATE fleet_tasks SET status='QUEUED', priority_class=?, queued_at=?,
+                   expires_at=?, reason=NULL, updated_at=? WHERE task_id=?""",
+                (priority_class, now, expires_at, now, task_id),
+            )
+            self._append_history(connection, task_id, "QUEUED", source, actor_id, now)
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
+                                     (task_id,)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
+    def claim_next(self, *, worker_id: str, available_robot_ids: set[str],
+                   lease_seconds: float = 30.0) -> dict | None:
+        """Atomically claim the highest-priority eligible task and reserve its robot."""
+        if not worker_id or len(worker_id) > 96:
+            raise ValueError("invalid worker_id")
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        robot_ids = sorted(set(available_robot_ids))
+        if not robot_ids:
+            return None
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat(timespec="milliseconds")
+        lease_until = (now_dt + timedelta(seconds=lease_seconds)).isoformat(timespec="milliseconds")
+        placeholders = ",".join("?" for _ in robot_ids)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            expired = connection.execute(
+                """SELECT task_id, source, actor_id FROM fleet_tasks
+                   WHERE status='QUEUED' AND expires_at IS NOT NULL AND expires_at <= ?""",
+                (now,),
+            ).fetchall()
+            for row in expired:
+                connection.execute(
+                    "UPDATE fleet_tasks SET status='EXPIRED', reason='TASK_EXPIRED', updated_at=? "
+                    "WHERE task_id=? AND status='QUEUED'", (now, row["task_id"]),
+                )
+                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
+                                   (row["task_id"],))
+                self._append_history(connection, row["task_id"], "EXPIRED", "scheduler",
+                                     "site-scheduler", now, "TASK_EXPIRED")
+            stale_claims = connection.execute(
+                """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
+                   AND dispatch_phase='READY' AND lease_until IS NOT NULL AND lease_until <= ?""",
+                (now,),
+            ).fetchall()
+            for row in stale_claims:
+                connection.execute(
+                    "UPDATE fleet_tasks SET lease_owner=NULL, lease_until=NULL "
+                    "WHERE task_id=?", (row["task_id"],),
+                )
+                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
+                                   (row["task_id"],))
+            selected = connection.execute(
+                f"""SELECT t.task_id, t.robot_id FROM fleet_tasks AS t
+                    WHERE t.status='QUEUED' AND t.robot_id IN ({placeholders})
+                      AND (t.lease_until IS NULL OR t.lease_until <= ?)
+                      AND NOT EXISTS (SELECT 1 FROM fleet_robot_reservations r
+                                      WHERE r.robot_id=t.robot_id)
+                    ORDER BY t.priority_class ASC, t.queued_at ASC, t.task_id ASC LIMIT 1""",
+                (*robot_ids, now),
+            ).fetchone()
+            if selected is None:
+                connection.commit()
+                return None
+            connection.execute(
+                "UPDATE fleet_tasks SET lease_owner=?, lease_until=?, updated_at=? WHERE task_id=?",
+                (worker_id, lease_until, now, selected["task_id"]),
+            )
+            connection.execute(
+                "INSERT INTO fleet_robot_reservations(robot_id, task_id, reserved_at) VALUES (?, ?, ?)",
+                (selected["robot_id"], selected["task_id"], now),
+            )
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                     (selected["task_id"],)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
+    def mark_dispatching(self, task_id: str, *, worker_id: str) -> dict:
+        """Persist an attempt ID before a CORE call; its presence forbids blind replay."""
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                         (task_id,)).fetchone()
+            if current is None:
+                raise KeyError(task_id)
+            if (current["status"] != "QUEUED" or current["lease_owner"] != worker_id
+                    or current["dispatch_phase"] != "READY"
+                    or current["lease_until"] is None or current["lease_until"] <= now):
+                raise InvalidTaskTransition("task is not held by this active dispatch lease")
+            attempt_id = str(uuid4())
+            connection.execute(
+                """UPDATE fleet_tasks SET dispatch_phase='DISPATCHING', attempt_id=?,
+                   attempt_seq=attempt_seq+1, updated_at=? WHERE task_id=?""",
+                (attempt_id, now, task_id),
+            )
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                     (task_id,)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
+    def recover_interrupted_work(self) -> int:
+        """Requeue only work proven not sent; ambiguous CORE calls become UNKNOWN."""
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                """SELECT task_id, source, actor_id, status, dispatch_phase FROM fleet_tasks
+                   WHERE status='REQUESTED' OR (status='QUEUED' AND dispatch_phase='DISPATCHING')"""
+            ).fetchall()
+            recovered = 0
+            for row in rows:
+                if row["status"] == "REQUESTED":
+                    status, reason = "UNKNOWN", "PROCESS_RESTARTED_WITH_REQUESTED_TASK"
+                else:
+                    status, reason = "UNKNOWN", "PROCESS_RESTARTED_DURING_DISPATCH"
+                connection.execute(
+                    "UPDATE fleet_tasks SET status=?, reason=?, updated_at=? WHERE task_id=?",
+                    (status, reason, now, row["task_id"]),
+                )
+                self._append_history(connection, row["task_id"], status, "system",
+                                     "fleet-recovery", now, reason)
+                recovered += 1
+            safe = connection.execute(
+                """SELECT task_id FROM fleet_tasks
+                   WHERE status='QUEUED' AND dispatch_phase='READY'"""
+            ).fetchall()
+            for row in safe:
+                connection.execute(
+                    "UPDATE fleet_tasks SET lease_owner=NULL, lease_until=NULL, updated_at=? "
+                    "WHERE task_id=?", (now, row["task_id"]),
+                )
+                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
+                                   (row["task_id"],))
+            connection.commit()
+        return recovered
+
     def transition(self, task_id: str, status: str, *, actor_id: str,
                    source: str, reason: str | None = None,
                    receipt: Mapping | None = None) -> dict:
@@ -173,6 +337,9 @@ class FleetTaskStore:
             )
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
                                      (task_id,)).fetchone()
+            if status in {"FAILED", "COMPLETED", "HOLD", "CANCELED", "EXPIRED"}:
+                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
+                                   (task_id,))
             connection.commit()
         return self._task_dict(row)
 
@@ -235,6 +402,14 @@ class FleetTaskStore:
             "receipt": json.loads(row["receipt_json"]) if row["receipt_json"] else None,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "priority_class": row["priority_class"],
+            "queued_at": row["queued_at"],
+            "expires_at": row["expires_at"],
+            "lease_owner": row["lease_owner"],
+            "lease_until": row["lease_until"],
+            "dispatch_phase": row["dispatch_phase"],
+            "attempt_id": row["attempt_id"],
+            "attempt_seq": row["attempt_seq"],
         }
 
     def _connect(self) -> sqlite3.Connection:
@@ -242,3 +417,46 @@ class FleetTaskStore:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
+
+    @staticmethod
+    def _append_history(connection, task_id: str, status: str, source: str,
+                        actor_id: str, now: str, reason: str | None = None) -> None:
+        connection.execute(
+            """INSERT INTO fleet_task_history
+               (task_id, status, source, actor_id, reason, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (task_id, status, source, actor_id, reason, now),
+        )
+
+    @staticmethod
+    def _migrate_task_columns(connection: sqlite3.Connection) -> None:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(fleet_tasks)")}
+        additions = {
+            "priority_class": "INTEGER NOT NULL DEFAULT 0",
+            "queued_at": "TEXT",
+            "expires_at": "TEXT",
+            "lease_owner": "TEXT",
+            "lease_until": "TEXT",
+            "dispatch_phase": "TEXT NOT NULL DEFAULT 'READY'",
+            "attempt_id": "TEXT",
+            "attempt_seq": "INTEGER NOT NULL DEFAULT 0",
+        }
+        connection.execute("BEGIN IMMEDIATE")
+        for name, definition in additions.items():
+            if name not in columns:
+                connection.execute(f"ALTER TABLE fleet_tasks ADD COLUMN {name} {definition}")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS fleet_tasks_queue_order "
+            "ON fleet_tasks(status, priority_class, queued_at, task_id)"
+        )
+        connection.commit()
+
+
+def _parse_time(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("expires_at must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("expires_at must include a timezone")
+    return parsed.astimezone(timezone.utc)

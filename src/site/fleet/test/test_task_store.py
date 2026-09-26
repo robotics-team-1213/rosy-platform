@@ -1,3 +1,5 @@
+import sqlite3
+
 from fleet.server.task_store import FleetTaskStore, IdempotencyConflict, InvalidTaskTransition
 
 
@@ -77,3 +79,109 @@ def test_task_store_refuses_credentials_and_oversized_evidence(tmp_path):
         assert "64 KiB" in str(exc)
     else:
         raise AssertionError("task evidence size must remain bounded")
+
+
+def test_existing_database_is_migrated_without_losing_task_history(tmp_path):
+    path = tmp_path / "fleet.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.executescript("""
+            CREATE TABLE fleet_tasks (
+                task_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, task_type TEXT NOT NULL,
+                source TEXT NOT NULL, actor_id TEXT NOT NULL, request_key TEXT NOT NULL,
+                status TEXT NOT NULL, reason TEXT, request_json TEXT NOT NULL,
+                evidence_json TEXT, receipt_json TEXT, created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL, UNIQUE(source, actor_id, request_key)
+            );
+            CREATE TABLE fleet_task_history (
+                audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL REFERENCES fleet_tasks(task_id), status TEXT NOT NULL,
+                source TEXT NOT NULL, actor_id TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL
+            );
+            INSERT INTO fleet_tasks VALUES (
+                'legacy', 'rosy_01', 'navigate', 'operator', 'site-console', 'legacy-1',
+                'REQUESTED', NULL, '{"goal":{"x":1,"y":2,"yaw":0}}', NULL, NULL,
+                '2026-09-01T00:00:00+00:00', '2026-09-01T00:00:00+00:00'
+            );
+            INSERT INTO fleet_task_history(task_id, status, source, actor_id, created_at)
+            VALUES ('legacy', 'REQUESTED', 'operator', 'site-console', '2026-09-01T00:00:00+00:00');
+        """)
+
+    migrated = FleetTaskStore(path)
+    task = migrated.get_task("legacy")
+    with sqlite3.connect(path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(fleet_tasks)")}
+
+    assert task["status"] == "REQUESTED"
+    assert [row["status"] for row in migrated.history("legacy")] == ["REQUESTED"]
+    assert {"priority_class", "queued_at", "expires_at", "lease_owner",
+            "lease_until", "dispatch_phase", "attempt_id", "attempt_seq"} <= columns
+
+
+def test_queue_claim_obeys_priority_and_reserves_each_robot_once(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    for task_id, robot_id, priority in (
+        ("background", "rosy_01", 2),
+        ("operator", "rosy_02", 0),
+        ("accepted-policy", "rosy_03", 1),
+    ):
+        store.create_task(
+            task_id=task_id, robot_id=robot_id, task_type="navigate",
+            source="operator", actor_id="site-console", request_key=task_id,
+            request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+        )
+        store.enqueue(task_id, priority_class=priority)
+
+    first = store.claim_next(worker_id="worker-a", available_robot_ids={
+        "rosy_01", "rosy_02", "rosy_03",
+    })
+    second = store.claim_next(worker_id="worker-b", available_robot_ids={
+        "rosy_01", "rosy_02", "rosy_03",
+    })
+
+    assert first["task_id"] == "operator"
+    assert second["task_id"] == "accepted-policy"
+    assert second["robot_id"] != first["robot_id"]
+    assert store.get_task("operator")["status"] == "QUEUED"
+
+
+def test_dispatch_attempt_is_stable_and_restart_never_requeues_ambiguous_send(tmp_path):
+    path = tmp_path / "fleet.sqlite3"
+    store = FleetTaskStore(path)
+    store.create_task(
+        task_id="dispatching", robot_id="rosy_01", task_type="navigate",
+        source="operator", actor_id="site-console", request_key="dispatch-1",
+        request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+    )
+    store.enqueue("dispatching", priority_class=0)
+    store.claim_next(worker_id="worker-a", available_robot_ids={"rosy_01"})
+    attempt = store.mark_dispatching("dispatching", worker_id="worker-a")
+
+    restarted = FleetTaskStore(path)
+    restarted.recover_interrupted_work()
+
+    task = restarted.get_task("dispatching")
+    assert task["status"] == "UNKNOWN"
+    assert task["attempt_id"] == attempt["attempt_id"]
+    assert task["attempt_seq"] == 1
+    assert restarted.claim_next(worker_id="worker-b", available_robot_ids={"rosy_01"}) is None
+
+
+def test_expired_pre_dispatch_lease_can_be_claimed_safely_again(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    store.create_task(
+        task_id="ready", robot_id="rosy_01", task_type="navigate",
+        source="operator", actor_id="site-console", request_key="ready-1",
+        request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+    )
+    store.enqueue("ready", priority_class=0)
+    store.claim_next(worker_id="worker-a", available_robot_ids={"rosy_01"})
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE fleet_tasks SET lease_until='2000-01-01T00:00:00+00:00' WHERE task_id='ready'"
+        )
+
+    reclaimed = store.claim_next(worker_id="worker-b", available_robot_ids={"rosy_01"})
+
+    assert reclaimed["task_id"] == "ready"
+    assert reclaimed["lease_owner"] == "worker-b"
+    assert reclaimed["dispatch_phase"] == "READY"
