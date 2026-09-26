@@ -12,16 +12,19 @@ SURFACES = {
 }
 
 
-def _panel(pid, surface="console", slot="act", order=10, requires=(), inventory=None, min_role="viewer"):
+def _panel(pid, surface="console", slot="act", order=10, requires=(), inventory=None, min_role="viewer",
+           action_group=None):
     return Panel(pid, pid, surface, slot, order, tuple(requires), inventory, min_role,
-                 f"panels/{pid.replace('.', '/')}.js", ())
+                 f"panels/{pid.replace('.', '/')}.js", (), action_group)
 
 
 REGISTRY = Registry(SURFACES, (
-    _panel("drive.teleop", order=40, requires=["teleop"], inventory="mobility.move", min_role="operator"),
+    _panel("drive.teleop", order=40, requires=["teleop"], inventory="mobility.move", min_role="operator",
+           action_group="drive"),
     _panel("safety.hero", slot="sense", order=10),
     _panel("vision.front", slot="observe", order=10, requires=["vision.enabled"]),
-    _panel("docking.run", order=50, requires=["docking.supported"], inventory="mobility.dock"),
+    _panel("docking.run", order=50, requires=["docking.supported"], inventory="mobility.dock", min_role="operator",
+           action_group="docking"),
     _panel("nav.slam", surface="setup", slot="main", requires=["slam"], min_role="operator"),
     _panel("system.events", surface="device", slot="main", order=90, min_role="administrator"),
 ))
@@ -48,6 +51,11 @@ def test_a_lower_role_does_not_see_the_panel():
     assert "drive.teleop" not in ids(build_manifest(REGISTRY, "console", "viewer", CAPS, []))
 
 
+def test_a_viewer_gets_no_operator_action_group():
+    manifest = build_manifest(REGISTRY, "console", "viewer", CAPS, [])
+    assert all(panel["action_group"] is None for panel in manifest["panels"])
+
+
 def test_an_inventory_descriptor_carries_state_and_reason():
     descriptors = [{"id": "mobility.move", "state": "blocked", "reason": "runtime_mode:core"}]
     manifest = build_manifest(REGISTRY, "console", "operator", CAPS, descriptors)
@@ -55,6 +63,19 @@ def test_an_inventory_descriptor_carries_state_and_reason():
     assert (teleop["state"], teleop["reason"]) == ("blocked", "runtime_mode:core")
     hero = next(p for p in manifest["panels"] if p["id"] == "safety.hero")
     assert (hero["state"], hero["reason"]) == ("available", None)
+    assert teleop["action_group"] == "drive"
+
+
+def test_an_unsupported_capability_removes_its_action_group_panel():
+    manifest = build_manifest(REGISTRY, "console", "operator", {**CAPS, "docking": {"supported": False}}, [])
+    assert "docking.run" not in ids(manifest)
+
+
+def test_only_groups_from_visible_capability_panels_are_returned():
+    manifest = build_manifest(REGISTRY, "console", "operator", CAPS, [])
+    groups = {panel["action_group"] for panel in manifest["panels"] if panel["action_group"]}
+    assert groups == {"drive", "docking"}
+    assert all(panel["action_group"] is None for panel in manifest["panels"] if panel["id"] == "safety.hero")
 
 
 def test_a_not_provided_descriptor_is_omitted():

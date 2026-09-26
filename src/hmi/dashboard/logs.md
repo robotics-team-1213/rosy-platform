@@ -156,3 +156,11 @@
 - 증거: 241 passed, 3 skipped; visible CORE review remains on `/device` with Viewer setup 403, Operator setup link only for an empty map, Administrator device 200, and no browser errors or 390px overflow.
 - gate 변화: unchanged. CORE browser proof does not establish ROS-SIM, ARM64 image, device, or field acceptance.
 - Decision: D-279 behavior and D-284 shared components.
+
+## 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
+
+- 변경: `운전`·`도킹`·`차선 추종`을 capability-filtered accessible tabs로 묶었다. 탭을 벗어나기 전 terminal zero 응답을 기다리고 실패 시 현재 그룹을 유지한다. desktop은 sense/observe/act 3열 viewport에 맞추고 sense만 내부 scroll, mobile은 기존 vertical scroll을 유지한다.
+- 근거: dashboard/API/gateway 관련 pytest 116 passed, 2 skipped; foundation 50 passed. 실제 FastAPI+`CoreServices` 브라우저에서 administrator/operator × 1366×768/390×844 4개 캡처, desktop page scroll 0, mobile horizontal overflow 0, E-stop visible. G1 active teleop zero → unmount, line-follow/docking 요청 대기·활성 중 그룹 이탈 차단, terminal zero 실패 시 전환과 unmountAll 차단, 재진입 후 자동 명령 없음 통과. 캡처 `X:\DevTemp\d283-console-core-browser`.
+- gate 변화: SOURCE/LOCAL 구현·브라우저 gate GO. G3 8명 조작자 평가 전 D-201 desktop 제품 수용은 HOLD; ROS-SIM/ARTIFACT/DEVICE/FIELD 증거 아님.
+- 결정: D-283 Accepted.
+- 교훈: 선택형 조작 화면은 숨길 때 스트림/폴링을 내리고, 재진입은 새 사용자 입력부터 시작한다.

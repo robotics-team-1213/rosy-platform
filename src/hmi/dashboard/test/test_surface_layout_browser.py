@@ -72,3 +72,52 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
     assert result["nav"]["right"] <= 390
     assert result["nav"]["bottom"] <= result["role"]["y"]
     assert result["estop"]["right"] <= 390
+
+
+def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 1366, 768)
+        page.evaluate("""() => {
+          for (const slot of document.querySelectorAll('.surface-slot')) {
+            for (const panel of slot.querySelectorAll('ui-section')) panel.style.minHeight = '0';
+          }
+          const sense = document.querySelector('[data-slot=sense] ui-section');
+          sense.style.height = '60rem';
+          const observe = document.querySelector('[data-slot=observe] ui-section');
+          observe.style.height = '100%';
+          const act = document.querySelector('[data-slot=act]');
+          act.replaceChildren();
+          const tabs = document.createElement('div'); tabs.className = 'action-group-tabs';
+          tabs.setAttribute('role', 'tablist'); tabs.innerHTML = '<ui-button role="tab" aria-selected="true">운전</ui-button><ui-button role="tab">도킹</ui-button>';
+          const panel = document.createElement('div'); panel.className = 'action-group-panel';
+          panel.setAttribute('role', 'tabpanel'); panel.innerHTML = '<ui-section><h2>운전 모드</h2><ui-button>대기</ui-button></ui-section><ui-section><h2>저속 직접 제어</h2><ui-button>전진</ui-button></ui-section>';
+          act.append(tabs, panel);
+        }""")
+        result = page.evaluate("""() => {
+          const rect = (selector) => {
+            const {x, y, right, bottom} = document.querySelector(selector).getBoundingClientRect();
+            return {x, y, right, bottom};
+          };
+          return {
+            documentHeight: document.documentElement.scrollHeight,
+            bodyHeight: document.body.scrollHeight,
+            sense: rect('[data-slot=sense]'), observe: rect('[data-slot=observe]'),
+            act: rect('[data-slot=act]'), estop: rect('#shell-estop'), topbar: rect('ui-topbar'),
+            senseScrollable: document.querySelector('[data-slot=sense]').scrollHeight
+              > document.querySelector('[data-slot=sense]').clientHeight,
+            activeBottom: document.querySelector('.action-group-panel').getBoundingClientRect().bottom,
+          };
+        }""")
+        browser.close()
+
+    assert result["documentHeight"] == 768
+    assert result["bodyHeight"] == 768
+    assert result["senseScrollable"] is True
+    assert result["sense"]["y"] >= result["topbar"]["bottom"]
+    assert result["sense"]["bottom"] <= 768
+    assert result["sense"]["right"] <= result["observe"]["x"]
+    assert result["observe"]["right"] <= result["act"]["x"]
+    assert result["act"]["bottom"] <= 768
+    assert result["activeBottom"] <= result["act"]["bottom"]
+    assert result["estop"]["bottom"] <= result["topbar"]["bottom"]

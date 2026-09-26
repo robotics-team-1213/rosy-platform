@@ -77,3 +77,11 @@
 - gate 변화: 없음. D-257/D-268 Proposed.
 - 결정: schema는 operator sighting을 위한 것이며 automatic policy input이 아니다.
 - 교훈: source identity는 요청 본문이 아니라 Fleet credential configuration에서 결정한다.
+
+## 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
+
+- 변경: `UiPanelDescriptor.action_group` optional field를 추가해 console operation tabs를 API schema로 표현한다.
+- 근거: `python -m pytest src/contracts/foundation/test -q` 50 passed; API Ref v1.36와 동기화했다.
+- gate 변화: 없음. ROS/API runtime/device acceptance는 포함하지 않는다.
+- 결정: D-283 Accepted.
+- 교훈: 없음

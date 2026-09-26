@@ -2383,3 +2383,9 @@
 - 변경: D-283 Accepted를 추가해 선언 desktop에서 sense/observe/act 3영역, 고정 E-stop, 선택형 운전·도킹·차선 추종 그룹을 정했다.
 - 근거: D-201 및 D-280 기준선과 administrator/operator 실제 CORE 캡처. desktop scroll 823px이며 평면 3열 후보는 act 내용이 y=1017까지 내려가 잘린다.
 - gate 변화: 없음. 구현 전 ADR이며 G1/G2/G3와 ROS/장치 수용은 남아 있다.
+
+## 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
+
+- 변경: D-283에 따라 `/console` 조작 패널을 운전·도킹·차선 추종 그룹으로 선택하게 하고, desktop 고정 3영역과 mobile 세로형 배치를 구현했다. 매니페스트 action_group 필드는 API Ref v1.36에 기록했다.
+- 근거: dashboard/API/gateway LOCAL suite 116 passed, 2 skipped, foundation 50 passed; 실제 FastAPI+CoreServices administrator/operator 4 viewport 캡처에서 desktop scroll 0, mobile horizontal overflow 0, E-stop visible. G1 line-follow/docking 요청 대기·활성 중 이탈 차단, terminal zero 실패 시 그룹 전환 및 unmountAll 차단, 성공 시 정지 확인 뒤 패널을 내리는 것을 브라우저 검증했다.
+- gate 변화: dashboard SOURCE/LOCAL GO. G3 8명 평가와 D-201 데스크톱 최종 수용은 HOLD; ROS-SIM/DEVICE/FIELD는 별도다.

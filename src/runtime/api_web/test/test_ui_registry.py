@@ -53,6 +53,26 @@ def test_a_minimal_panel_takes_the_surface_role_and_no_requirements(tmp_path):
     assert registry.assets() == {"panels/a/one.js": "application/javascript"}
 
 
+def test_a_panel_can_declare_a_valid_console_action_group(tmp_path):
+    text = ONE.replace("surface: device", "surface: console").replace("slot: main", "slot: act")
+    text += "    action_group: drive\n"
+    registry = load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)
+    assert registry.panels[0].action_group == "drive"
+
+
+def test_an_invalid_action_group_refuses_to_load(tmp_path):
+    text = ONE + "    action_group: [drive]\n"
+    with pytest.raises(RegistryError, match="action_group"):
+        load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)
+
+
+def test_an_action_group_is_limited_to_console_act_panels(tmp_path):
+    text = ONE.replace("surface: device", "surface: console").replace("slot: main", "slot: sense")
+    text += "    action_group: drive\n"
+    with pytest.raises(RegistryError, match="console act"):
+        load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)
+
+
 def test_css_is_listed_as_an_asset(tmp_path):
     text = ONE + "    css: [panels/a/one.css]\n"
     registry = load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)

@@ -54,6 +54,7 @@ def build_manifest(
             "order": panel.order,
             "module": ASSET_PREFIX + panel.module,
             "css": [ASSET_PREFIX + path for path in panel.css],
+            "action_group": panel.action_group,
             "state": descriptor.get("state", "available"),
             "reason": descriptor.get("reason"),
         })
@@ -70,7 +71,7 @@ def build_manifest(
     # revision이 움직이면 셸이 매 폴링마다 전체 패널을 재mount하게 된다 — 셸은
     # revision으로 재조립 여부를 정하고 state는 그 자리에서 갱신한다.
     structural_panels = [
-        {key: panel[key] for key in ("id", "title", "slot", "order", "module", "css")}
+        {key: panel[key] for key in ("id", "title", "slot", "order", "module", "css", "action_group")}
         for panel in panels
     ]
     structural_body = {**body, "panels": structural_panels}
