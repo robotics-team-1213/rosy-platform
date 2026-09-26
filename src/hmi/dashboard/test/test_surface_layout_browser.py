@@ -103,3 +103,32 @@ def test_shared_role_form_layout_collapses_to_full_width_on_mobile():
     assert results[390]["overflow"] == 0
     assert results[390]["direction"] == "column"
     assert results[390]["firstFieldWidth"] == results[390]["formWidth"]
+
+
+def test_shared_role_readout_stacks_label_value_pairs_on_mobile():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        results = {}
+        for width in (1440, 390):
+            page = _page(browser, width, 900)
+            page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
+              <dl class='ui-readout' aria-label='로봇 상태'>
+                <dt>연결 상태</dt><dd>정상</dd>
+                <dt>현재 위치</dt><dd>123.456, -78.910</dd>
+                <dt>장치 식별자</dt><dd>ROSYROBOTIDENTIFIER0123456789ABCDEFGHIJKL</dd>
+              </dl>`; }""")
+            results[width] = page.locator(".ui-readout").evaluate("""readout => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              columns: getComputedStyle(readout).gridTemplateColumns.split(' ').length,
+              numberStyle: getComputedStyle(readout.querySelector('dd')).fontVariantNumeric,
+              valueOverflow: readout.lastElementChild.scrollWidth > readout.lastElementChild.clientWidth,
+            })""")
+            page.close()
+        browser.close()
+
+    assert results[1440]["overflow"] == 0
+    assert results[1440]["columns"] == 2
+    assert results[1440]["numberStyle"] == "tabular-nums"
+    assert results[390]["overflow"] == 0
+    assert results[390]["columns"] == 1
+    assert not results[390]["valueOverflow"]

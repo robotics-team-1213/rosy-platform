@@ -19,7 +19,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 | `test/` | Token, palette, headless, and shared-control contract tests |
 | `tokens.css` | Colour and type scale — the only palette and size source |
-| `components.css` | Shared text, head, grid, button, field, form layout, tag, chip, triage, evidence |
+| `components.css` | Shared text, head, grid, button, field, form, readout, tag, chip, triage, evidence |
 | `ui.js` | Custom elements for those controls; no build step |
 | `core_ui_logic.js` | Evidence-state adapter; contains no clock math |
 | `CMakeLists.txt` | Installs the shared files to share |
