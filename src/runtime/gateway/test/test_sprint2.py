@@ -26,7 +26,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 
 
 @pytest.fixture

@@ -207,3 +207,9 @@
 - 증거: games 101 passed.
 - Gate: SOURCE/LOCAL remain GO; no device or field acceptance claimed.
 - Decision: D-300.
+
+## 2026-09-27 · 9ca7bc26 · verify games host suite
+- 변경: latest main 통합 후 D-300 surface token contract와 함께 games styles를 검증했다.
+- 증거: games host suite 101 passed.
+- gate 변화: SOURCE/LOCAL 유지. device/field acceptance는 포함하지 않는다.
+- 결정: D-300.

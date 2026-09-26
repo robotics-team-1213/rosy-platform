@@ -31,6 +31,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
   function card(robot, index) {
     const node = document.createElement("article");
     node.className = `robot s${index % view.colors.length}`;
+    node.dataset.robotId = robot.robot_id;
     if (!robot.online) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");
     // D-224 — ↑/↓ 순회의 착지점. tabindex -1 은 프로그램 포커스만 허용한다
@@ -44,7 +45,11 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
 
     const head = document.createElement("div");
     head.className = "robot-head";
-    head.innerHTML = `<b>${robot.robot_id}</b><span class="spacer"></span>`;
+    const robotName = document.createElement("b");
+    robotName.textContent = robot.robot_id;
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+    head.append(robotName, spacer);
     const mode = document.createElement("span");
     mode.className = "tag";
     mode.textContent = robot.online ? (state.mode || "—") : "OFFLINE";
@@ -78,7 +83,11 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     ];
     rows.forEach(([label, value]) => {
       const cellEl = document.createElement("div");
-      cellEl.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label;
+      const valueEl = document.createElement("strong");
+      valueEl.textContent = value;
+      cellEl.append(labelEl, valueEl);
       facts.appendChild(cellEl);
     });
     node.appendChild(facts);
@@ -177,12 +186,16 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
         // 능력이다 — 못 하는 조작을 모의 버튼으로 걸어 두면 경보가 거짓말을
         // 한다(D-218, F-20). 진짜 개입은 그 로봇의 대시보드에서 일어난다.
         const li = document.createElement("li");
-        li.innerHTML = `<b>${r.robot_id}</b>: 개입 필요 — 로봇 화면에서 확인`;
+        const name = document.createElement("b");
+        name.textContent = r.robot_id;
+        li.append(name, document.createTextNode(": 개입 필요 — 로봇 화면에서 확인"));
         critList.appendChild(li);
         criticalCount++;
       } else if (r.state.capabilities_degraded && r.state.capabilities_degraded.length > 0) {
         const li = document.createElement("li");
-        li.innerHTML = `<b>${r.robot_id}</b>: 성능 저하 [${r.state.capabilities_degraded.join(", ")}]`;
+        const name = document.createElement("b");
+        name.textContent = r.robot_id;
+        li.append(name, document.createTextNode(`: 성능 저하 [${r.state.capabilities_degraded.join(", ")}]`));
         warnList.appendChild(li);
         warningCount++;
       }

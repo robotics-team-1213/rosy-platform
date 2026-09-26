@@ -99,3 +99,8 @@
 - gate 변화: SOURCE/LOCAL contract evidence only; this library has no runtime/device gate of its own.
 - 결정: D-288 API intent boundary; public robot PRT envelope remains unchanged.
 - 교훈: generated schemas and runtime interpretation must share the same verb and field definitions.
+
+## 2026-09-27 · uncommitted · own default configuration
+- Change: moved both default YAML files into core_common, installed them in its package share, and removed the reverse CORE lookup.
+- Evidence: 1,812 gateway/config/image tests passed with 28 skipped; 51 architecture tests passed; the built core_common wheel contains both YAML files.
+- Gate: SOURCE/LOCAL evidence only; Pi installation and device launch remain unverified.

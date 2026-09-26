@@ -1,4 +1,4 @@
-## D-298 Surface typography and focus feedback use shared tokens
+## D-300 Surface typography and focus feedback use shared tokens
 
 **Status:** Accepted (2026-09-27). Extends D-292 and D-294 to repeated typography and keyboard-focus rules in the HMI dashboard, Fleet console, and games board. This decision covers browser UI only; it does not change robot, image, device, or field acceptance.
 
@@ -10,11 +10,11 @@ D-294 closed the shared component vocabulary, but application-owned CSS still re
 
 ## Decision
 
-1. Extend `src/hmi/web/tokens.css` with `--weight-regular: 400` and `--focus-ring-offset-outer: 2px`. Existing weights, leading values, and tracking values from D-294 remain the canonical shared vocabulary.
+1. Extend `src/hmi/web/tokens.css` with `--weight-regular: 400`, `--leading-compact: 1.25`, and `--focus-ring-offset-outer: 2px`. Existing weights, leading values, and tracking values from D-294 remain the canonical shared vocabulary.
 2. Migrate repeated surface declarations in the HMI dashboard, Fleet console, and games board to the existing semantic tokens, preserving their computed values. Font shorthands that rely on the browser's implicit regular weight use `--weight-regular` explicitly.
 3. Migrate 2px blue `:focus-visible` rings to the shared focus width and outer offset. Keep the existing 1px shared offset where already used. The dashboard map canvas retains its 3px focus offset because the larger gap separates its large, spatial viewport from surrounding controls; the warning-colored active teleoperation outline remains operational state feedback, not keyboard focus.
 4. Keep unique brand/kicker tracking and longer Fleet log/note leading surface-owned where no repeated role justifies a shared token. Specifically, Fleet brand leading `1.15`, dashboard copy `1.35`, `1.45`, and `1.55`, and Fleet note/log leading `1.6` and `1.7` remain explicit reading roles. Keep status, stale-data, overlay, and disabled-state opacity semantics separate. Do not change the Rosy palette, spacing, layout, or surface information hierarchy.
-5. Add a contract test for the three surface CSS domains. It rejects un-tokenized repeated weights, shared line heights/tracking values, and standard keyboard focus dimensions while documenting the narrow surface exceptions above.
+5. Add a contract test for shared HMI component styles and the three surface CSS domains, including the keyboard skip-link border. It rejects un-tokenized repeated weights, shared line heights/tracking values, and standard keyboard focus dimensions while documenting the narrow surface exceptions above.
 
 ## Consequences
 

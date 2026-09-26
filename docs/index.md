@@ -120,6 +120,8 @@
 | D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 |
 | D-296 | 장치 미들웨어와 사이트 조정 계층의 이름과 책임을 구분한다 |
 | D-297 | 명령 ACK와 Fleet 추적 레코드를 분리한 PRT-004 활성화 설계 |
+| D-298 | Fleet 미션·장치 액션·정지 증거의 용어를 분리한다 |
+| D-299 | OMX LeRobot 실험 경로와 운영 팔 제어권을 분리한다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
 
 ## 계획·결과 문서
@@ -157,6 +159,7 @@
 - [2026-09-26-site-task-scheduling-and-broker-design.md](plans/2026-09-26-site-task-scheduling-and-broker-design.md)
 - [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
 - [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
+- [2026-09-27-omx-lerobot-control-boundary-implementation-plan.md](plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -169,8 +172,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
+- 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
 - 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
 - 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
 - 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
-- 2026-09-27 · uncommitted · validation(site): integrate current Fleet evidence gate
-- 2026-09-27 · uncommitted · docs(site): require stopped assertion in isolated restore drill

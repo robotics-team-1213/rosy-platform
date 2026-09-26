@@ -9,7 +9,7 @@ from core_api_web.api.app import create_app
 from core_common.profile import RobotProfile, robot_config_dir
 from core.services import CoreServices
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}

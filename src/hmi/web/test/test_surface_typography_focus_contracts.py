@@ -1,4 +1,4 @@
-"""D-298 contracts for recurring typography and focus rules on product surfaces."""
+"""D-300 contracts for recurring typography and focus rules on product surfaces."""
 
 import re
 from pathlib import Path
@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 SURFACES = (
+    ROOT / "src/hmi/web",
     ROOT / "src/hmi/dashboard",
     ROOT / "src/site/fleet/fleet/server/web",
     ROOT / "src/site/games/games/web",
@@ -40,7 +41,7 @@ def test_surface_repeated_weights_leading_and_tracking_use_shared_tokens():
             violations.extend(f"{path.relative_to(ROOT)}: {match.group(0)}" for match in pattern.finditer(css))
         surface_exceptions.update(match.group(1) for match in surface_leading.finditer(css))
 
-    assert not violations, "반복 타이포그래피 규칙은 D-298 토큰을 사용해야 합니다:\n" + "\n".join(violations)
+    assert not violations, "반복 타이포그래피 규칙은 D-300 토큰을 사용해야 합니다:\n" + "\n".join(violations)
     assert surface_exceptions <= {"1.15", "1.35", "1.45", "1.55", "1.6", "1.7"}, (
         "예외로 허용한 고유 읽기 줄 간격만 표면 CSS에 남길 수 있습니다: "
         + str(sorted(surface_exceptions))
@@ -54,7 +55,7 @@ def test_standard_keyboard_focus_rings_use_shared_dimensions():
         css = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.DOTALL)
         for selector, declarations in focus_rule.findall(css):
             if "canvas" in selector:
-                continue  # D-298 keeps a larger, viewport-specific map focus gap.
+                continue  # D-300 keeps a larger, viewport-specific map focus gap.
             if "outline:" not in declarations:
                 continue
             if "var(--focus-ring-width)" not in declarations:
@@ -63,3 +64,12 @@ def test_standard_keyboard_focus_rings_use_shared_dimensions():
                 violations.append(f"{path.relative_to(ROOT)} {selector.strip()}: focus offset")
 
     assert not violations, "표준 키보드 포커스 링은 공유 치수를 사용해야 합니다:\n" + "\n".join(violations)
+
+
+def test_skip_link_focus_border_uses_the_shared_focus_width_token():
+    css = (ROOT / "src/hmi/web/components.css").read_text(encoding="utf-8")
+    block = re.search(r"\.skip-link\s*\{([^{}]*)\}", css, re.DOTALL)
+    assert block, "skip-link style should exist"
+    assert "border: var(--focus-ring-width) solid var(--focus-ring)" in block.group(1), (
+        "keyboard skip-link border should use shared focus tokens"
+    )

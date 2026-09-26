@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 BOOT_ID = "7d4c1f0e-0a52-4a8e-9a3e-2f6f1b1c0d11"
 CODE = "7KXM" + "P3QA"  # assembled: the tracked-file scanner sees no literal
 OTHER_CODE = "HJ4N" + "WR9B"

@@ -29,7 +29,7 @@ for _path in (SRC / "gateway", SRC.parent / "contracts" / "foundation", SRC / "e
     if _entry not in sys.path:
         sys.path.insert(0, _entry)
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 
 
 @pytest.fixture

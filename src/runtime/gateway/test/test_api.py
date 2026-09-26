@@ -26,9 +26,9 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
-    config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
-    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
+    config.update(yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     robot_dir = robot_config_dir("pinky_pro")
     profile = RobotProfile.load(robot_dir / "profile.yaml")
     caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
@@ -196,7 +196,10 @@ def test_inventory_is_booting_before_diagnostics_arrive(client):
     by_id = {item["id"]: item for item in body["descriptors"]}
     assert by_id["mobility.move"]["available"] is False
     assert by_id["mobility.move"]["state"] == "blocked"
-    assert by_id["mobility.move"]["reason"] == "device_state:BOOTING"
+    # No hardware has reported yet (CORE-only fixture): that reason outlives
+    # BOOTING, so it comes first and BOOTING follows (v1.21).
+    assert by_id["mobility.move"]["reason"] == "runtime_mode:core"
+    assert by_id["mobility.move"]["reasons"] == ["runtime_mode:core", "device_state:BOOTING"]
     robot = tc.get("/api/v1/robot/state", headers=VIEWER)
     assert robot.status_code == 200
     assert robot.json()["mode"] == "IDLE"
@@ -645,9 +648,9 @@ def docking_client(tmp_path, monkeypatch):
 
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
-    config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
-    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
+    config.update(yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     robot_dir = robot_config_dir("pinky_pro")
     profile = RobotProfile.load(robot_dir / "profile.yaml")
     caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))

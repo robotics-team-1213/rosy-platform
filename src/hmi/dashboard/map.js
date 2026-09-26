@@ -128,6 +128,7 @@ export function createFieldMap(options) {
   const mayOpenSetup = options.mayOpenSetup === true;
   const getPose = options.getPose;
   const getNavigation = options.getNavigation;
+  const getMapSources = options.getMapSources;
   const canGoal = options.canGoal;
   const setAction = options.setAction;
   const listenerController = new AbortController();
@@ -284,12 +285,17 @@ export function createFieldMap(options) {
     paint();
   }
 
+  function wanted(key) {
+    const sources = getMapSources?.();
+    return !sources || sources[key] !== false;
+  }
+
   async function refresh() {
     try {
       const [grid, path, costmap] = await Promise.all([
-        apiMaybe("/api/v1/map"),
+        wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
         apiMaybe("/api/v1/navigation/path"),
-        apiMaybe("/api/v1/map/costmap?scope=global"),
+        wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
       ]);
       state.occupancy = grid;
       state.path = path?.poses || [];

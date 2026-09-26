@@ -249,6 +249,9 @@ window.fetch = async (input, options = {}) => {
   if (window.__rosyInventoryOverride) {
     bodies['/api/v1/system/inventory'] = window.__rosyInventoryOverride;
   }
+  if (window.__rosySafetyOverride) {
+    Object.assign(bodies['/api/v1/safety/state'], window.__rosySafetyOverride);
+  }
   if (window.__rosyHostNetworkOverride) {
     Object.assign(bodies['/api/v1/host/network'], window.__rosyHostNetworkOverride);
   }
@@ -367,7 +370,7 @@ window.fetch = async (input, options = {}) => {
 """
 
 
-def _launch_page(playwright, extra_init="", width=390, height=844):
+def _launch_page(playwright, extra_init="", width=390, height=844, real_map=False):
     browser, page, _errors = open_page(playwright, width, height)
     html = (WEB / "index.html").read_text(encoding="utf-8")
     page.route(
@@ -397,7 +400,7 @@ def _launch_page(playwright, extra_init="", width=390, height=844):
         rather than the missing import.
         """
         name = Path(urlparse(route.request.url).path).name
-        if name == "map.js":
+        if name == "map.js" and not real_map:
             body = MAP_STUB
         else:
             source = WEB / name
@@ -1126,6 +1129,145 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
         )
         assert page.locator("#safety-label").inner_text() == "UNVERIFIED"
         assert page.locator("#safety-source").inner_text() == "안전 회로 수신 끊김"
+        browser.close()
+
+
+# Release 2026.09.24-010, rosy-pinky-e4us: CORE-only image, operator started
+# rosy-io in no-motion mode. Battery and odometry flowed, motor/ready was
+# false. The page said "HW OFF" and 5 / 5 motion capabilities available.
+NO_MOTION_INIT = """
+    window.__rosyInfoOverride = {robot_name: 'rosy-pinky-e4us', runtime_mode: 'core'};
+    const fresh = (stale) => ({received_at: '2026-09-24T00:00:00.000Z', evidence: 'fresh', stale_after_s: stale});
+    window.__rosyStateOverrides = {robot_state: {
+      battery: {percent: 100, voltage: 8.69},
+      evidence: {
+        pose: fresh(2.0), velocity: fresh(0.5), battery: fresh(5.0),
+        navigation: {received_at: null, evidence: 'unavailable', stale_after_s: 2.0},
+        safety: {received_at: null, evidence: 'unavailable', stale_after_s: 0.2},
+      },
+    }};
+    const drive = 'drive_disabled:no_motion';
+    window.__rosyCapabilitiesOverride = {
+      teleop: false, slam: false, docking: {supported: false},
+      navigation: {goal_navigation: false, return_home: false},
+      swarm: {follow: false, lead: false},
+      withheld: {
+        flags: ['teleop', 'navigation.goal_navigation', 'swarm.follow', 'swarm.lead',
+                'slam', 'navigation.return_home'],
+        reason: drive,
+        reasons: {teleop: drive, 'navigation.goal_navigation': drive, 'swarm.follow': drive,
+                  'swarm.lead': drive, slam: 'navigation_absent', 'navigation.return_home': drive},
+      },
+      runtime: {mode: 'core', hardware: 'on', evidence: ['odometry', 'battery'],
+                drive: 'disabled', navigation: 'absent',
+                maps: {occupancy: false, global_costmap: false}},
+    };
+    const row = (id, reason) => ({id, available: false, state: 'blocked', reason, reasons: [reason]});
+    window.__rosyInventoryOverride = {
+      device_state: 'READY',
+      descriptors: [row('mobility.move', drive), row('mobility.navigate', drive),
+                    row('mobility.follow', drive), row('mobility.lead', drive),
+                    row('perception.localize', 'navigation_absent')],
+    };
+"""
+
+
+def test_no_motion_hardware_runtime_is_on_and_says_the_drive_is_off():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=NO_MOTION_INIT, real_map=True)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "document.getElementById('safety-label')?.textContent === 'NO DRIVE'"
+        )
+        page.wait_for_function(
+            "document.getElementById('capability-count')?.textContent === '0 / 5'"
+        )
+        page.wait_for_timeout(300)
+
+        # 1. the runtime is on; only the drive is off, so not "HW OFF"
+        assert page.locator("#safety-source").inner_text() == "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)"
+        # 2. motion is withheld with its own reason, told once, without alarm colour
+        capabilities = page.locator("#capability-list").inner_text()
+        assert "구동 꺼짐 (무동작)" in capabilities
+        assert "내비게이션 스택 없음" in capabilities
+        assert page.locator('#capability-list [data-cause="runtime"]').count() == 5
+        assert page.locator("#triage-title").inner_text() == "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)"
+        assert page.locator("#triage").get_attribute("data-category") == "observation"
+        assert "내비게이션 스택 없음" in page.locator("#triage-context").inner_text()
+        warm = page.evaluate(WARM_SCAN)
+        assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, warm
+        # 3. teleop is off and says why
+        assert page.locator('[data-teleop="forward"]').is_disabled()
+        assert "구동 꺼짐" in page.locator("#teleop-message").inner_text()
+        # 4. no map source: the real map module does not ask for one (no 404s)
+        paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
+        assert "/api/v1/system/capabilities" in paths
+        assert "/api/v1/map" not in paths
+        assert "/api/v1/map/costmap" not in paths
+        browser.close()
+
+
+def test_map_snapshots_are_asked_for_when_the_server_has_them():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = NO_MOTION_INIT + """
+    window.__rosyCapabilitiesOverride.runtime.maps = {occupancy: true, global_costmap: true};
+    """
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=init, real_map=True)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.path === '/api/v1/map/costmap')"
+        )
+        paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
+        assert "/api/v1/map" in paths
+        browser.close()
+
+
+def test_api_estop_does_not_claim_a_motor_power_cut():
+    """An API e-stop is a software stop; the banner must not say power was cut."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = CORE_ONLY_VIEWER_INIT + """
+    window.__rosyStateOverrides.robot_state.safety = {estop: true};
+    window.__rosySafetyOverride = {estop: true, source: 'api:operator'};
+    const both = (id) => ({id, available: false, state: 'blocked', reason: 'runtime_mode:core',
+                           reasons: ['runtime_mode:core', 'device_state:SAFE_STOP']});
+    window.__rosyInventoryOverride = {
+      device_state: 'SAFE_STOP',
+      descriptors: ['mobility.move', 'mobility.navigate', 'mobility.follow',
+                    'mobility.lead', 'perception.localize'].map(both),
+    };
+    """
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "document.getElementById('triage-title')?.textContent === 'API 비상정지 (operator)'"
+        )
+        banner = page.locator("#triage").inner_text()
+        assert "모터 전원이 끊겼" not in banner
+        assert "현장에서 해제" not in banner
+        assert "소프트웨어 정지" in page.locator("#triage-detail").inner_text()
+        assert page.locator("#safety-label").inner_text() == "STOPPED"
+        assert page.locator("#safety-source").inner_text() == "API 비상정지 (operator)"
+        # The runtime reason comes first and SAFE_STOP is still shown.
+        capabilities = page.locator("#capability-list").inner_text()
+        assert "하드웨어 런타임 꺼짐 (CORE-only) · 정지 상태" in capabilities
         browser.close()
 
 

@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9ca7bc26 · verify D-300 on latest main
 - 2026-09-27 · f4f15776 · verify D-300 after latest main integration
 - 2026-09-27 · 9049bd37 · test(hmi): verify D-300 after latest-main integration
 - 2026-09-27 · uncommitted · D-300 surface typography and focus tokens
-- 2026-09-27 · 6ce05ff1 · test(hmi): verify D-294 after latest-main integration
-- 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
+- 2026-09-27 · uncommitted · shared keyboard skip style

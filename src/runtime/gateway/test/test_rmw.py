@@ -70,7 +70,7 @@ def rmw_client(tmp_path, monkeypatch):
     overlay = tmp_path / "rosy.yaml"
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", overlay)
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
-    config_dir = ROOT / "config"
+    config_dir = ROOT.parents[1] / "contracts" / "foundation" / "config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
     config.update(yaml.safe_load((config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))

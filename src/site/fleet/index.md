@@ -55,8 +55,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9ca7bc26 · verify Fleet keyboard flows and host suite
 - 2026-09-27 · f4f15776 · verify Fleet after latest main integration
 - 2026-09-27 · 9049bd37 · test(fleet): verify D-300 after latest-main integration
 - 2026-09-27 · bb58221b · D-300 surface typography and focus tokens
-- 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
-- 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
+- 2026-09-27 · uncommitted · secure roster and signal rendering

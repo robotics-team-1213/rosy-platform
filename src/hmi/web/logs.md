@@ -98,8 +98,6 @@
 - 결정: D-277
 - 교훈: 브랜드 강조와 안전 의미색은 별도 토큰 집합이어야 한다.
 
-
-
 ## 2026-09-26 · uncommitted · feat(hmi): shared button sizes, action groups, and status UI (D-284)
 
 - 변경: map button kinds to the 44/48/58px size tokens; add responsive `ui-actions` and accessible `ui-status`; use existing neutral palette tokens for selected segments and scrollbars.
@@ -157,6 +155,11 @@
 - 증거: browser-enabled HMI suite 100 passed; dashboard route/manifest suite 29 passed. Visible CORE Chromium reviewed styleguide plus operator/admin pages at desktop/mobile; page errors 0, missing button kinds 0, horizontal overflow 0.
 - gate 변화: SOURCE/LOCAL remain GO. Pi/image/device/field acceptance is not claimed.
 
+## 2026-09-27 · uncommitted · shared keyboard skip style
+- Change: added shared visually hidden heading and skip-link styles with a z-index token.
+- Evidence: focused browser skip-link regressions passed; UI token and architecture checks passed (29 tests).
+- Gate: SOURCE/LOCAL only; device display is unverified.
+
 ## 2026-09-27 · uncommitted · D-300 surface typography and focus tokens
 - 변경: 정규 가중치·1.25 압축 행간·2px 외곽 포커스 간격 토큰을 추가하고 dashboard/Fleet/games 표면에서 반복되는 타이포그래피와 표준 키보드 링을 공유 토큰으로 이동했다. 고유 자간과 장문 행간은 보존했다.
 - 증거: 토큰/표면 계약 40 passed; browser-enabled HMI 전체 102 passed.
@@ -174,3 +177,9 @@
 - 증거: surface 40 passed, HMI web 77 passed; harness lint 0 errors and 17 existing warnings.
 - Gate: SOURCE/LOCAL remain GO; no device or field acceptance claimed.
 - Decision: D-300.
+
+## 2026-09-27 · 9ca7bc26 · verify D-300 on latest main
+- 변경: D-300 토큰 계약을 최신 HMI component와 dashboard CSS에 적용하고 skip-link 포커스 테두리도 공용 너비 토큰을 사용하게 했다.
+- 증거: surface 계약 41 passed, HMI web 78 passed, visible Chromium에서 page error 0 및 가로 넘침 0.
+- gate 변화: SOURCE/LOCAL 유지. 장치·현장 수용은 주장하지 않는다.
+- 결정: D-300.

@@ -283,18 +283,15 @@
 - 증거: Fleet 518/5 skipped; sensing 1660/78 skipped; OMX adapter 47/3 skipped; workstation 22 passed; API/UI 73/2 skipped; focused regression reruns 7 passed. Harness lint 0 errors/21 existing stale-evidence warnings.
 - gate 변화: SOURCE/LOCAL evidence only; physical Ubuntu, GPU, phone, CORE, and robot acceptance remain open.
 
-
 ## 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
 - 변경: moved the Site Fleet intent ADR and contract references to D-293 to avoid main's D-292 design-token ADR.
 - 증거: rerun Fleet API contract tests after the latest integration.
 - gate 변화: SOURCE/LOCAL only; Ubuntu, GPU, physical phone, CORE, and robot acceptance remain open.
 
-
 ## 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
 - 변경: Built the `151607c0` linux/amd64 candidate and exercised the packaged console, typed intent API, persistent task record, and synthetic camera-to-sighting path.
 - 증거: Fleet 518 passed/5 skipped; OMX/camera/system contracts 192 passed/4 skipped; API/docs/security regression 20 passed; Compose services healthy; task history survived Fleet restart; archive and three SPDX hashes matched the manifest.
 - gate 변화: SOURCE/LOCAL only. Ubuntu, RTX 5080 GPU inference, physical phone, CORE, robot, and FIELD acceptance remain open; no robot command was dispatched.
-
 
 ## 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
 - 변경: clarified the first rollout as fixed authenticated operator navigation with no policy mutation API, and made automatic-source approval require a versioned, preapproved record for quality, false-trigger, freshness, sample, and forbidden-dispatch criteria.
@@ -306,6 +303,12 @@
 - 변경: 범용 task transition에서 `ACCEPTED`는 명시적 positive CORE receipt를 요구하고, receipt나 `UNKNOWN`만으로 `RUNNING`·`COMPLETED`를 기록하지 못하게 했다. D-177 활성화 때 별도 검증된 결과 전이가 필요하다.
 - 근거: D-170/D-293의 접수·수락·실행·완료 구분과 실패 후 통과한 8개 회귀 벡터를 대조했다.
 - gate 변화: 없음. Fleet의 현재 CORE 최종 결과 상관관계는 여전히 미구현이며 실물 완료를 주장하지 않는다.
+
+## 2026-09-27 · uncommitted · secure roster and signal rendering
+- Change: dynamic labels use DOM text; keyboard focus survives roster polling; signal YAML parsing and writing moved to signal_config.py.
+- Evidence: DOM injection and keyboard browser regressions passed; signal/module structure subset passed (75 tests); full UI/Fleet run had 661 passes, 5 skips and one keyboard focus failure, which was reproduced and fixed afterward.
+- Gate: LOCAL only; live site/device operation remains unverified.
+- Follow-up: complete Fleet Chromium suite passed (15 tests) after the polling-focus and blocked-port fixes.
 
 ## 2026-09-27 · bb58221b · D-300 surface typography and focus tokens
 - 변경: Fleet console의 반복 가중치·자간을 공유 토큰에 연결했다. 1.15 brand 및 1.6/1.7 note/log 행간과 고유 kicker tracking은 보존했다.
@@ -324,3 +327,9 @@
 - 증거: Fleet 526 passed/5 skipped; site database/task-queue 8 passed.
 - Gate: SOURCE/LOCAL remain GO; no robot or field acceptance claimed.
 - Decision: D-300.
+
+## 2026-09-27 · 9ca7bc26 · verify Fleet keyboard flows and host suite
+- 변경: main의 Fleet keyboard-focus 보완과 D-300 typography/focus 규칙을 통합 검증했다.
+- 증거: Fleet host 526 passed/5 skipped; keyboard roster/goal 및 queued navigation/cancel browser regressions 2 passed; site DB/task queue tests 8 passed.
+- gate 변화: SOURCE/LOCAL 유지. 로봇 및 현장 수용은 별도다.
+- 결정: D-300.

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Default robot config. Installed to `share/core/config`. Local override is `~/.rosy/rosy.yaml` (not in this folder). The robot profile and capabilities now live in `src/products/<model>/config/` (D-196); `robot.model` (default `pinky_pro`, env `ROSY_ROBOT`) picks the package.
+Default robot config. Installed to `share/core_common/config`. Local override is `~/.rosy/rosy.yaml` (not in this folder). The robot profile and capabilities now live in `src/products/<model>/config/` (D-196); `robot.model` (default `pinky_pro`, env `ROSY_ROBOT`) picks the package.
 
 ## Key Files
 
@@ -40,7 +40,7 @@ Deep-merge; missing keys keep dataclass defaults. Runtime settings (SAF-004 limi
 
 ### Internal
 
-- Loaded by `core.config.load_config` and `RosyCoreNode`
+- Loaded by `core_common.config.load_config` and `RosyCoreNode`
 
 ### External
 

@@ -23,7 +23,11 @@ def _surface_client(role=None):
         Path(__file__).resolve().parents[3] / "hmi" / "dashboard",
     )
     app.state.core = SimpleNamespace(
-        config={"runtime": {"mode": "full"}}, state=SimpleNamespace(), capability=_Capability(), inventory=lambda: {"descriptors": []},
+        config={"runtime": {"mode": "full"}},
+        # CAP-001 임계값 계약: `runtime_truth()` 는 state.received_age() 를 본다 (D-32).
+        # 이 스텁은 샘플을 주지 않으므로 "아직 온 샘플 없음"으로 응답한다.
+        state=SimpleNamespace(received_age=lambda channel: None),
+        capability=_Capability(), inventory=lambda: {"descriptors": []},
     )
     def auth():
         if role is None:

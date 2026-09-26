@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9ca7bc26 · verify games host suite
 - 2026-09-27 · f4f15776 · verify games after latest main integration
 - 2026-09-27 · 9049bd37 · test(games): verify D-300 after latest-main integration
 - 2026-09-27 · uncommitted · D-300 surface typography tokens
 - 2026-09-25 · uncommitted · fix(games): the Space promise is real (D-224)
-- 2026-09-24 · uncommitted · fix(games): 경기 보드 정지 행 가시 (D-201)

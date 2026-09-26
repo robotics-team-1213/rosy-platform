@@ -10,6 +10,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/config',
+            ['config/rosy_default.yaml', 'config/rosy_dev_auth.yaml']),
     ],
     install_requires=['setuptools', 'pydantic>=2.0'],
     zip_safe=True,

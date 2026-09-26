@@ -52,16 +52,13 @@ def _find_default_config() -> Path:
     try:
         from ament_index_python.packages import get_package_share_directory
 
-        share = Path(get_package_share_directory("core")) / "config"
+        share = Path(get_package_share_directory("core_common")) / "config"
         if (share / DEFAULT_CONFIG_NAME).exists():
             return share / DEFAULT_CONFIG_NAME
     except Exception:
         pass
-    # 소스 트리 실행 (colcon install 미사용) 폴백 — 기본 설정 파일은 core 패키지의
-    # config/ 에 산다 (설치 시에도 core share 로 들어간다). core_common/config.py 는
-    # src/contracts/foundation/ 에서 두 단계 위, src/ 가 기준이다.
-    return (Path(__file__).resolve().parents[3] / "runtime" / "gateway" / "config"
-            / DEFAULT_CONFIG_NAME)
+    # 소스 트리 실행 (colcon install 미사용) 폴백. 기본 설정은 이 패키지가 소유한다.
+    return Path(__file__).resolve().parents[1] / "config" / DEFAULT_CONFIG_NAME
 
 
 def dev_auth_enabled() -> bool:

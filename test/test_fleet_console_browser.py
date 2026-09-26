@@ -23,8 +23,8 @@ pytestmark = pytest.mark.skipif(
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src" / "site" / "fleet" / "fleet" / "server" / "web"
-#: D-129·D-1005 — 공용 L1 자산의 단일 파일. fleet 사본은 없다.
-CANONICAL_TOKENS = ROOT / "src" / "hmi" / "web" / "tokens.css"
+#: D-129·D-1005 — 공용 자산의 단일 파일. Fleet 사본은 없다.
+WEB_COMMON = ROOT / "src" / "hmi" / "web"
 
 from browser_harness import (  # noqa: E402
     DECLINE_CONFIRM,
@@ -90,8 +90,10 @@ def console_url():
             super().__init__(*args, directory=str(WEB), **kwargs)
 
         def translate_path(self, path: str) -> str:
-            if path == "/common/tokens.css":
-                return str(CANONICAL_TOKENS)
+            if path.startswith("/common/"):
+                name = path.removeprefix("/common/")
+                if name in {"tokens.css", "components.css", "ui.js", "core_ui_logic.js"}:
+                    return str(WEB_COMMON / name)
             if path.startswith("/console/assets/"):
                 path = "/" + path[len("/console/assets/"):]
             return super().translate_path(path)
@@ -99,7 +101,16 @@ def console_url():
         def log_message(self, *args):  # 시험 출력을 조용히
             pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    # Windows may assign Chromium-blocked ports (for example 10080) for port 0.
+    for port in range(40000, 40100):
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        except OSError:
+            continue
+        else:
+            break
+    else:
+        raise RuntimeError("could not allocate a browser-safe local port")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
@@ -158,6 +169,8 @@ def _open_console(playwright, api, posts=None, init_script=""):
         if posts is not None:
             posts.append((route.request.method, path))
         entry = api.get(path)
+        if entry is None and path == "/api/fleet/session" and path not in api:
+            entry = {"principal_id": "test-operator", "role": "operator"}
         if entry is None:
             route.fulfill(status=404, json={"detail": "no such api"})
             return
@@ -168,6 +181,48 @@ def _open_console(playwright, api, posts=None, init_script=""):
     if init_script:
         page.add_init_script(init_script)
     return browser, page, errors
+
+
+def test_fleet_labels_are_rendered_as_text(console_url):
+    """Identifiers and device-reported faults must never create markup in the roster."""
+    from playwright.sync_api import sync_playwright
+
+    marker = "<img src=x onerror=alert(1)>"
+    robot = _robot(marker, {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["state"]["capabilities_degraded"] = [marker]
+    snapshot = {
+        "fleet": {"name": "site", "online": 1, "total": 1},
+        "robots": [robot],
+        "signals": {marker: {"signal_id": marker, "mode": "manual", "online": True, "lamps": {}}},
+        "ts": 0.0,
+    }
+    api = {"/api/fleet/state": snapshot, "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": False, "state": "IDLE"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 1")
+        assert page.locator("#roster b").first.text_content() == marker
+        assert page.locator("#warning-list b").first.text_content() == marker
+        assert page.locator("#signal-cards b").first.text_content() == marker
+        assert page.locator("#roster img, #warning-list img, #signal-cards img").count() == 0
+        assert not errors
+        browser.close()
+
+
+def test_fleet_keyboard_can_skip_to_named_main_content(console_url):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.keyboard.press("Tab")
+        assert page.locator(":focus").get_attribute("href") == "#fleet-main"
+        page.keyboard.press("Enter")
+        assert page.locator(":focus").get_attribute("id") == "fleet-main"
+        assert page.get_by_role("heading", level=1).count() == 1
+        assert not errors
+        browser.close()
 
 
 EMPTY_SNAPSHOT = {
@@ -252,6 +307,7 @@ def test_fleet_estop_requires_confirm_and_decline_blocks_it(console_url):
                 break
             page.wait_for_timeout(100)
         confirms = page.evaluate("window.__confirms")
+        page.get_by_text("정지 요청 응답: 3/3 · 물리 정지 미확인").wait_for()
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
 
@@ -380,6 +436,12 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
         page.wait_for_function(
             "() => document.activeElement"
             " && document.activeElement.matches('#roster article')"
+            " && document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
+        )
+        page.evaluate("() => { window.__focusedCard = document.activeElement; }")
+        page.wait_for_function("() => !window.__focusedCard.isConnected", timeout=3000)
+        assert page.evaluate(
+            "() => document.activeElement.matches('#roster article')"
             " && document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("ArrowDown")

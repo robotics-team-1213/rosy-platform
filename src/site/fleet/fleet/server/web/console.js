@@ -101,7 +101,19 @@ async function call(path, options = {}) {
 
 function render() {
   const rosterBox = el("roster");
+  const focused = document.activeElement;
+  const focusedCard = focused?.closest?.("#roster article");
+  const focusedId = focusedCard?.dataset.robotId;
+  const focusedButton = focusedCard && focused !== focusedCard
+    ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
   rosterBox.replaceChildren(...view.robots.map((robot, index) => roster.card(robot, index)));
+  if (focusedId) {
+    const nextCard = [...rosterBox.querySelectorAll("article")]
+      .find((card) => card.dataset.robotId === focusedId);
+    const nextFocused = focusedButton >= 0
+      ? nextCard?.querySelectorAll("ui-button")[focusedButton] : nextCard;
+    nextFocused?.focus({preventScroll: true});
+  }
   signals.render();
   roster.fillQueues();
 
@@ -280,9 +292,9 @@ el("estop").addEventListener("click", async () => {
   if (!window.confirm("등록된 모든 로봇을 정지시킵니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
-    log(`전체 정지: ${result.stopped}/${result.total}`, result.stopped === result.total ? "good" : "bad");
+    log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
     result.robots.filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 실패 — ${r.error.code}`, "bad"));
+      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
   } catch (err) {
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }

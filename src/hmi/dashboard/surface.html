@@ -12,6 +12,7 @@
   <script type="module" src="/assets/shell/shell.js"></script>
 </head>
 <body data-surface="{{surface}}">
+  <a class="skip-link" href="#surface-main">본문으로 건너뛰기</a>
   <ui-shell grammar="{{grammar}}">
     <ui-topbar>
       <ui-brand><b>ROSY</b><small>{{title}}</small></ui-brand>
@@ -21,7 +22,8 @@
       <ui-tag id="shell-role">인증 대기</ui-tag>
       <ui-button kind="irreversible" id="shell-estop" type="button">비상 정지</ui-button>
     </ui-topbar>
-    <main id="surface-main" class="surface-main">
+    <main id="surface-main" class="surface-main" tabindex="-1">
+      <h1 class="sr-only">Rosy OS — {{title}}</h1>
       <ui-empty id="surface-status">화면을 불러오는 중입니다.</ui-empty>
 {{slots}}
     </main>

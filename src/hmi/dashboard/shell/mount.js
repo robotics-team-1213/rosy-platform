@@ -47,6 +47,10 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     section.dataset.panel = panel.id;
     section.dataset.state = panel.state;
     section.setAttribute("aria-label", panel.title);
+    const heading = document.createElement("h2");
+    heading.className = "sr-only";
+    heading.textContent = panel.title;
+    section.append(heading);
     slot.append(section);
     const ctx = contextFor(panel);
     const handle = {section, ctx, unmount: null, actionGroup: panel.action_group || null};
