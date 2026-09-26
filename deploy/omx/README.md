@@ -10,12 +10,17 @@ immutable revisions. It is not part of the Raspberry Pi product image.
 - Runtime profile: disabled; no joint map, hardware plugin, serial identity,
   camera identity, or motion command is configured.
 - Vendor entry point: official ROBOTIS `open_manipulator` ROS 2 packages.
-- Candidate deployment: a dedicated workstation OCI image, initially amd64.
-  Keep it separate from `deploy/robot`'s Pinky Pro ARM64 product image.
+- Development/build candidate: a dedicated workstation OCI image, initially
+  amd64. Keep it separate from `deploy/robot`'s Pinky Pro ARM64 product image.
+- Field control candidate: one native systemd instance per workcell under
+  D-246. One Ubuntu host may run two instances after graph, device, stop,
+  recovery, and concurrent-load validation. The OCI shell below is not an
+  accepted field actuator runtime.
 - Camera source: unselected. Choose a camera and driver before adding camera
   packages to the runtime image.
 
 See [the implementation plan](../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
+and [host placement design](../../docs/plans/2026-09-26-site-host-placement-design.md)
 for deployment trade-offs, RMW boundaries, and P0-P3 acceptance gates.
 
 ## Build and shell profiles
