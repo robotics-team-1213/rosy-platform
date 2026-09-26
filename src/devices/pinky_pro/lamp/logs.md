@@ -52,3 +52,10 @@
 - gate 변화: 없음
 - 결정: D-260 Proposed
 - 교훈: 없음
+## 2026-09-26 · uncommitted · fix(lamp_control): strip order GRB, not GBR
+- 변경: `lamp_pattern.c`, `lamp_selftest.c`, `main_node.cpp`의 `strip_type`을 `WS2811_STRIP_GRB`로 바꿨다. 패키지 계약 시험도 같이 바꿨다
+- 증거: rosy_18(release 016)에서 부팅 표시가 파랑 대신 빨강, 주황(주의) 대신 파란 계열로 보였다. 같은 라이브러리로 GRB 빨강→초록→파랑을 3 s씩 켜자 사람이 "빨초파"로 확인했다
+- 미증명: 수정한 바이너리의 실기 점등(다음 release)
+- gate 변화: 없음
+- 결정: D-260
+- 교훈: 제조사 코드의 색 순서를 그대로 믿지 말고 사람이 단색을 보고 확인한다

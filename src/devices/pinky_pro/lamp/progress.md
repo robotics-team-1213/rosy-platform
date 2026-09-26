@@ -31,7 +31,7 @@ plans:
 
 - C++ WS2811 lamp 드라이버. GPIO 19 / DMA 10에 8개 LED, `SetLamp` 서비스와 `ColorRGBA` 구독을 제공한다. Gazebo 대응은 `gz_sim/plugins/gz_lamp_control_plugin.cpp`.
 - 모듈 경로는 clean이지만 SOURCE 증거 시험이 미커밋 WIP가 있는 `deploy/image/ 빌더`을 읽으므로 `last_verified`는 `uncommitted`다.
-- Strip type `WS2811_STRIP_GBR`, 8 pixels — 개수/GPIO 변경은 하드웨어 계약이다.
+- Strip type `WS2811_STRIP_GRB`, 8 pixels — 개수/GPIO 변경은 하드웨어 계약이다.
 - `deploy/image/ 빌더`에는 core/io 두 이미지만 있고 lamp_control을 포함하지 않는다. `rpi_ws281x`(`ws2811.h`)는 desktop에 없어 빌드되지 않는다.
 
 ## 다음 gate

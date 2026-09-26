@@ -5,7 +5,7 @@
  * Run as root by rosy-hw-test.service when an administrator presses the lamp
  * test on the dashboard; a person then says whether the light was seen. No ROS,
  * no arguments. It uses the same rpi_ws281x library and the same strip settings
- * as main_node (8 LEDs, GPIO19, GBR). On the Pi 5 the library drives the lamp
+ * as main_node (8 LEDs, GPIO19, GRB). On the Pi 5 the library drives the lamp
  * through /dev/ws281x_pwm (the rp1_ws281x_pwm kernel module, pwm_channel=3).
  *
  * Exit codes: 0 shown and turned off, 2 the library would not start, 3 a frame
@@ -61,7 +61,7 @@ int main(void)
                 .gpionum = LAMP_GPIO,
                 .invert = 0,
                 .count = LAMP_COUNT,
-                .strip_type = WS2811_STRIP_GBR,
+                .strip_type = WS2811_STRIP_GRB,
                 .brightness = 255,
             },
         },

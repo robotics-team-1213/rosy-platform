@@ -21,7 +21,7 @@ None.
 
 ### Working In This Directory
 
-GPIO 19, DMA 10, 8 LEDs, GBR strip. Sim equivalent is `gz_sim/plugins`.
+GPIO 19, DMA 10, 8 LEDs, GRB strip. Sim equivalent is `gz_sim/plugins`.
 
 ### Testing Requirements
 

@@ -29,7 +29,7 @@ C++ WS2811 lamp driver (`lamp_control`): 8 LEDs on GPIO 19 / DMA 10, `SetLamp` s
 ### Working In This Directory
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
-- Strip type `WS2811_STRIP_GBR`, 8 pixels. Changing count/GPIO is a hardware contract.
+- Strip type `WS2811_STRIP_GRB` (GBR swapped red and blue on the real lamp, 2026-09-26), 8 pixels. Changing count/GPIO is a hardware contract.
 - Needs rpi_ws281x (`ws2811.h`); will not run on a desktop without that stack.
 
 ### Testing Requirements
