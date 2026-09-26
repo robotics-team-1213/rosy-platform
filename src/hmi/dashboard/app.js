@@ -349,6 +349,9 @@ const rosNetwork = createRosNetwork({
 
 function renderCapabilities(capabilities) {
   session.capabilities = capabilities;
+  // The map is mounted before the first capability read. Re-evaluate its
+  // role/freshness-gated actions as soon as Navigation capability is known.
+  fieldMap.setPose();
   const slamOn = capabilities?.slam === true;
   const slamChip = elements["slam-capability"];
   if (slamChip) {
