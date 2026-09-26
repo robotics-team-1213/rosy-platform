@@ -2693,3 +2693,9 @@
 - Change: recorded the completed backup/restore implementation and packaged verification in the Ubuntu site execution plan, including the integrated candidate identity, preserved local-main WIP, test evidence, and the remaining host, GPU, phone, CORE, and field steps.
 - Evidence: the checkpoint distinguishes Windows Docker Desktop software recovery from Ubuntu/site acceptance and retains the D-268 movement/pick HOLD.
 - Gate: no site, DEVICE, FIELD, GPU, phone, or real-CORE gate moved.
+
+## 2026-09-27 · uncommitted · fix(site): make Fleet backups standalone for read-only verification
+
+- Change: normalize the online backup output to SQLite `DELETE` journal mode before publishing it, so the protected backup is a single file without `-wal`/`-shm` sidecars and can be integrity-checked on a read-only mount.
+- Evidence: the Compose runbook reproduced `unable to open database file` for its read-only verification step when the backup retained WAL mode; reopening the same file read-write showed `journal_mode=wal` and healthy integrity. A WAL-source regression test first failed on that mode, then passed after normalization; Fleet/deploy tests passed 529/5 skipped.
+- Gate: packaged read-only bind-mount recheck is pending. No Ubuntu/site restore, GPU, phone, CORE, or field gate moved; automatic movement/picking remain HOLD.

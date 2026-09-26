@@ -288,8 +288,10 @@ active.
 Keep backups on a protected host filesystem or approved encrypted backup
 target. They contain operational history and task data. The utility creates
 new backups without overwriting an existing file, runs `PRAGMA integrity_check`
-before and after backup, and reports a SHA-256 digest. It runs as the Fleet
-UID/GID (`10001:10001`); prepare a private writable host directory and set the
+before and after backup, publishes a standalone SQLite `DELETE`-journal file
+without WAL sidecars, and reports a SHA-256 digest. The standalone file can be
+verified from a read-only mount. The tool runs as the Fleet UID/GID
+(`10001:10001`); prepare a private writable host directory and set the
 installed candidate tag and paths in `/etc/rosy/site/site.env` first:
 
 ```sh
