@@ -416,12 +416,22 @@ function Get-ApPassword([string]$Device, [string]$Uid) {
     $file = Join-Path $env:LOCALAPPDATA "Rosy\ap\$Device.credential.xml"
     $stored = Read-BoundCredential $file $Uid "AP password"
     if ($stored) { return $stored.Value }
-    $alphabet = "abcdefghjkmnpqrstuvwxyz" + "ABCDEFGHJKLMNPQRSTUVWXYZ" + "23456789"
-    $bytes = New-Object byte[] 14
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $password = -join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })
-    Save-BoundCredential $file $Device $Uid $password
-    return $password
+    # Readable form, same as deploy/release/network.py SETUP_PSK_PATTERN:
+    # "rosy-" and two groups of four from lowercase letters and digits without
+    # 0 o 1 l i (8 random symbols of 31, about 39.6 bits; the prefix adds none).
+    # Bytes >= 248 are dropped so each symbol is equally likely (248 = 8 * 31).
+    $alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $symbols = New-Object System.Collections.Generic.List[char]
+    $byte = New-Object byte[] 1
+    while ($symbols.Count -lt 8) {
+        $random.GetBytes($byte)
+        if ($byte[0] -lt 248) { $symbols.Add($alphabet[$byte[0] % 31]) }
+    }
+    $text = -join $symbols
+    $generated = "rosy-{0}-{1}" -f $text.Substring(0, 4), $text.Substring(4, 4)
+    Save-BoundCredential $file $Device $Uid $generated
+    return $generated
 }
 
 # D-191: each card gets its own CORE API administrator credential, in the format

@@ -18,6 +18,9 @@ from pathlib import Path
 import pytest
 from network import (  # via test/conftest.py
     MIN_SETUP_PSK_LENGTH,
+    READABLE_ALPHABET,
+    READABLE_SETUP_KEY,
+    SETUP_PSK_LENGTH,
     RECOVERY_MARKER_NAME,
     NetworkProvisioner,
     NetworkState,
@@ -124,7 +127,39 @@ def test_the_setup_passphrase_is_per_device_and_long_enough(tmp_path, backend):
 
 def test_a_short_setup_passphrase_is_refused():
     with pytest.raises(ValueError, match="at least"):
-        generate_setup_psk(8)
+        generate_setup_psk(1)
+
+
+def test_the_setup_passphrase_is_rosy_and_two_readable_groups():
+    """rosy-xxxx-xxxx from 31 symbols without 0 o 1 l i: easy to read off the LCD and type."""
+    assert READABLE_ALPHABET == "abcdefghjkmnpqrstuvwxyz23456789"
+    assert not set("0o1li") & set(READABLE_ALPHABET)
+    for _ in range(200):
+        value = generate_setup_psk()
+        assert READABLE_SETUP_KEY.fullmatch(value), value
+        assert len(value) == MIN_SETUP_PSK_LENGTH == 14
+        prefix, *groups = value.split("-")
+        assert prefix == "rosy"
+        assert [len(group) for group in groups] == [4, 4]
+        assert set("".join(groups)) <= set(READABLE_ALPHABET)
+    assert 8 <= MIN_SETUP_PSK_LENGTH <= 63  # WPA2 passphrase bounds
+    assert SETUP_PSK_LENGTH == len("rosy-") + 4 + 1 + 4
+    # The pattern's class is exactly the alphabet.
+    assert "".join(c for c in map(chr, range(128)) if READABLE_SETUP_KEY.fullmatch(f"rosy-{c * 4}-{c * 4}"))         == "".join(sorted(READABLE_ALPHABET))
+
+
+def test_the_setup_passphrase_entropy_is_the_eight_random_symbols():
+    import math
+
+    # The fixed prefix adds nothing; 8 symbols of 31 are ~39.6 bits (D-176 amendment).
+    assert round(8 * math.log2(len(READABLE_ALPHABET)), 1) == 39.6
+    seen = set()
+    values = {generate_setup_psk() for _ in range(500)}
+    for value in values:
+        seen |= set(value.removeprefix("rosy-").replace("-", ""))
+    assert len(values) == 500, "two of 500 generated passphrases collided"
+    assert seen == set(READABLE_ALPHABET)
+    assert READABLE_SETUP_KEY.fullmatch(generate_setup_psk(3))  # longer on request
 
 
 def test_the_setup_passphrase_is_never_logged(tmp_path, backend):
