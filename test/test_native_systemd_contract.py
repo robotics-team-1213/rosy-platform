@@ -101,6 +101,18 @@ def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
     assert "docker" not in unit.lower()
 
 
+def test_no_motion_io_follows_runtime_without_being_enabled_on_its_own():
+    unit = _read("rosy-io.service")
+    target = _read("rosy-runtime.target")
+    image = (ROOT / "deploy" / "image" / "customize-rootfs.sh").read_text(encoding="utf-8")
+
+    assert "PartOf=rosy-runtime.target" in unit
+    assert "Wants=rosy-io.service" in target
+    assert "After=" in target and "rosy-io.service" in target
+    assert "WantedBy=rosy-runtime.target" not in unit
+    assert "rosy-io.service" not in image.split('systemctl --root "$ROOT" enable', 1)[1].split("\n# D-174", 1)[0]
+
+
 def test_navigation_is_disabled_until_both_hardware_approvals_exist():
     unit = _read("rosy-navigation.service")
 
@@ -115,12 +127,12 @@ def test_navigation_is_disabled_until_both_hardware_approvals_exist():
     assert "WantedBy=rosy-runtime.target" not in unit
 
 
-def test_default_target_starts_core_only_after_recovery_and_provisioning():
+def test_default_target_starts_core_and_no_motion_io_after_recovery_and_provisioning():
     target = _read("rosy-runtime.target")
 
     assert "Requires=rosy-release-recover.service rosy-sd-provision.service" in target
     assert "Requires=rosy-core.service" in target
-    assert "rosy-io.service" not in target
+    assert "Wants=rosy-io.service" in target
     assert "rosy-navigation.service" not in target
     assert "WantedBy=multi-user.target" in target
 

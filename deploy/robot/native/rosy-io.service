@@ -3,6 +3,7 @@ Description=ROSY native Pinky Pro I/O runtime
 Requires=rosy-core.service
 After=rosy-core.service
 Conflicts=rosy-navigation.service
+PartOf=rosy-runtime.target
 
 [Service]
 Type=simple

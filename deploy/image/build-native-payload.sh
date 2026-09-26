@@ -170,8 +170,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/s
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-runtime.target" "$OVERLAY/etc/systemd/system/"
-# D-192 US-005: the hardware runtimes ship installed but not enabled; the
-# default target stays CORE-only (D-161). An operator starts one by hand.
+# I/O ships as a target dependency in no-motion mode (D-192); navigation
+# remains explicitly approved. Neither hardware unit is enabled on its own.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-io.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-navigation.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/system/"

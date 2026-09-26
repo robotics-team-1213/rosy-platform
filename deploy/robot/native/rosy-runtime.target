@@ -1,8 +1,9 @@
 [Unit]
-Description=ROSY native product runtime (CORE-only default)
+Description=ROSY native product runtime (CORE and no-motion I/O default)
 Requires=rosy-release-recover.service rosy-sd-provision.service
 Requires=rosy-core.service
-After=rosy-release-recover.service rosy-sd-provision.service rosy-core.service
+Wants=rosy-io.service
+After=rosy-release-recover.service rosy-sd-provision.service rosy-core.service rosy-io.service
 AllowIsolate=yes
 
 [Install]
