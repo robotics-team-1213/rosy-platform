@@ -155,6 +155,26 @@ def test_viewer_can_read_fleet_state_but_cannot_issue_robot_commands(tmp_path):
     assert audits[2]["principal_id"] == "alice" and audits[2]["status_code"] == 403
 
 
+def test_site_session_returns_only_the_authenticated_principal_and_role(tmp_path):
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+                           [FakeRobot("rosy_01")])
+    task_service = FleetTaskService(
+        FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        console, task_service=task_service,
+        site_users={sha256(b"viewer-token").hexdigest(): {
+            "principal_id": "alice", "role": "viewer",
+        }},
+    ))
+
+    assert client.get("/api/fleet/session").status_code == 401
+    response = client.get("/api/fleet/session",
+                          headers={"Authorization": "Bearer viewer-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"principal_id": "alice", "role": "viewer"}
+
+
 def test_per_user_authorization_requires_persistent_audit_storage():
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
                            [FakeRobot("rosy_01")])
@@ -212,7 +232,9 @@ def test_console_page_and_its_assets_are_served():
     page = client.get("/console")
     assert page.status_code == 200 and "ROSY FLEET" in page.text
     assert client.get("/console/assets/console.js").status_code == 200
+    assert client.get("/console/assets/authorization.js").status_code == 200
     assert client.get("/console/assets/styles.css").status_code == 200
+    assert 'id="user-role"' in page.text
     assert 'href="/common/tokens.css"' in page.text
 
 

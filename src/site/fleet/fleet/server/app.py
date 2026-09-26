@@ -73,6 +73,7 @@ async def _robot_call(console: FleetConsole, call) -> dict:
 CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
+    "authorization.js": "application/javascript",
     "formation.js": "application/javascript",
     "map-view.js": "application/javascript",
     "roster.js": "application/javascript",
@@ -344,6 +345,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
         return await console.snapshot()
+
+    @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
+    def fleet_session(request: Request) -> dict:
+        principal: SitePrincipal = request.state.site_principal
+        return {"principal_id": principal.principal_id, "role": principal.role}
 
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:

@@ -16,7 +16,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.34" in reference
+    assert "**Version:** v1.35" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference

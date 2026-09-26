@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.34
+**Version:** v1.35
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -856,6 +856,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 
 | Method | Path | Credential | Requirement |
 |---|---|---|---|
+| GET | `/api/fleet/session` | any configured site-user bearer | Returns only the authenticated `principal_id` and role for the current console session. |
 | POST | `/api/fleet/robots/{robot_id}/goal` | `operator` bearer + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
 | POST | `/api/fleet/do` (when `do` is `navigate`) | `operator` bearer + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
 | GET | `/api/fleet/tasks/{task_id}` | any configured user bearer | Returns the durable task projection and append-only status history. |
@@ -915,6 +916,7 @@ On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
 | v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |
 | v1.33 | 2026-09-26 | Additive(D-271): Fleet console queued-task feedback/readback/cancel and cancel/stop/E-Stop queue coordination. |

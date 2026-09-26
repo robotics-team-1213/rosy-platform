@@ -150,7 +150,8 @@
 - Authenticated API mutations are recorded in the durable task SQLite database before dispatch, with principal, role, method, path, and response code. If the audit write fails, the route returns `503` before issuing a CORE request. Operator task history now uses the authenticated principal ID.
 - `deploy/site/compose.yaml` requires `/run/rosy-config/site-users.yaml`. The tracked example contains placeholders only. Legacy `--token` is retained for the separate CORE registry endpoint and does not replace individual API credentials.
 - `policy-admin` mutation routes do not exist yet; automatic policy submissions remain `HOLD`. Token replacement/revocation requires updating the protected config and restarting Fleet.
-- This implementation checkpoint is source/local evidence only. Ubuntu host rollout, individual token handoff/revocation exercise, real CORE readback, and browser UI role affordances remain open.
+- This implementation checkpoint is source/local evidence only. Ubuntu host rollout, individual token handoff/revocation exercise, real CORE readback, and browser visual/device acceptance remain open.
+- The console now reads `/api/fleet/session`, displays the authenticated principal and role, and locks operator controls unless the role is `operator`; API authorization remains authoritative. Node role-control tests, FastAPI session endpoint tests, and an in-container API/static-asset smoke cover this local behavior. Browser visual/device acceptance remains open; see `docs/validation/2026-09-26-site-role-ui.md`.
 
 ## 외부 근거
 

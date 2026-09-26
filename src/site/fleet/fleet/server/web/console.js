@@ -4,6 +4,7 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createSignals } from "./signals.js";
+import { applyRoleToControls } from "./authorization.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -22,6 +23,7 @@ const LOG_MAX = 40;
 // localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
+  role: null,
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
   locked: false,
 };
@@ -32,6 +34,10 @@ function authHeaders() {
 
 function markLocked() {
   auth.locked = true;
+  auth.role = null;
+  el("user-role").textContent = "인증 필요";
+  el("user-role").setAttribute("status", "crit");
+  applyRoleToControls(null, operatorControls());
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
@@ -41,6 +47,10 @@ function markLocked() {
 function markUnlocked() {
   auth.locked = false;
   el("console-token").classList.remove("locked");
+}
+
+function operatorControls() {
+  return document.querySelectorAll("ui-button:not(#token-save), main input, main select");
 }
 
 const view = {
@@ -97,6 +107,7 @@ function render() {
 
   formation.fillLeaders();
   mapView.draw();
+  applyRoleToControls(auth.role, operatorControls());
   const hint = el("hint");
   hint.textContent = view.selected
     ? `${view.selected}에게 보낼 목표를 지도에서 찍으세요. 다시 누르면 취소됩니다.`
@@ -120,6 +131,23 @@ async function refreshState() {
     const pill = el("online-pill");
     pill.textContent = "Fleet 서버 없음";
     pill.setAttribute("status", "crit");
+  }
+}
+
+async function refreshAuthorization() {
+  try {
+    const identity = await call("/api/fleet/session");
+    auth.role = identity.role;
+    const roleName = identity.role === "operator" ? "운영자" :
+      identity.role === "viewer" ? "조회 전용" :
+        identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
+    el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
+    el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+    await refreshState();
+    await formation.refreshFormation();
+    render();
+  } catch (_err) {
+    if (!auth.locked) markLocked();
   }
 }
 
@@ -252,14 +280,14 @@ el("console-token").value = auth.token;
 function saveToken() {
   auth.token = el("console-token").value.trim();
   // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
-  markUnlocked();
+  auth.role = null;
+  applyRoleToControls(null, operatorControls());
   if (auth.token) {
     sessionStorage.setItem("rosy-console-token", auth.token);
   } else {
     sessionStorage.removeItem("rosy-console-token");
   }
-  refreshState();
-  formation.refreshFormation();
+  refreshAuthorization();
 }
 el("token-save").addEventListener("click", saveToken);
 el("console-token").addEventListener("keydown", (event) => {
@@ -269,9 +297,9 @@ el("console-token").addEventListener("keydown", (event) => {
 view.colors = [css("--robot-1"), css("--robot-2"), css("--robot-3")];
 tickClock();
 setInterval(tickClock, 1000);
-refreshState();
+applyRoleToControls(null, operatorControls());
+refreshAuthorization();
 mapView.refresh();
-formation.refreshFormation();
 setInterval(formation.refreshFormation, MAP_MS);
 setInterval(refreshState, STATE_MS);
 setInterval(() => mapView.refresh(), MAP_MS);
