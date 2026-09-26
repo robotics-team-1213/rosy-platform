@@ -161,6 +161,7 @@
 - Next implementation order: (1) preserve the current v1 scope as authenticated operator navigation through Fleet's durable task service; the 571-test source/local suite found no reason to add an unapproved command/schema; (2) build and verify a clean revision-pinned Ubuntu site bundle and backup/recovery runbook; (3) on the approved RTX 5080 Ubuntu host, verify TLS, credentials, storage, reboot recovery, and NVIDIA container visibility; (4) commission the actual phone and CORE links separately; (5) measure GPU model and field policy evidence before considering D-268 acceptance.
 - Do not enable automatic movement/pick while D-257/D-268 or task-specific freshness/false-trigger acceptance is open. D-177 result correlation, Pinky/arm media, and manipulation remain separate gates.
 - The current checkout has no approved Ubuntu host identity or physical phone/CORE evidence. Workstation tests and a candidate bundle cannot advance those SITE/DEVICE/FIELD gates.
+- Local candidate Docker smoke evidence (healthy Fleet/Vision/HTTPS proxy, synthetic phone WSS through Vision into Fleet/SQLite, and authenticated operator task enqueue/readback) is recorded in `docs/validation/2026-09-26-site-stack-container-smoke.md`. It does not establish Ubuntu/GPU/physical-device or motion acceptance.
 
 ## 외부 근거
 

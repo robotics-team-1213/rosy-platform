@@ -2347,3 +2347,12 @@
 - 제한: D-257/D-268의 자동 실행 증거, D-177 명령 결과 상관관계, 실제 Ubuntu·GPU·폰·CORE·FIELD 수용은 계속 별도 HOLD다. 자동 이동·집기 경로는 활성화하지 않았다.
 - 검증: `src/site/fleet/test`, `test_network_topology_contracts`, `test_harness_contracts` 571 passed/5 skipped. `rosy_harness.py generate`와 `lint` 통과(0 error, 21 기존 warning), `git diff --check` 통과.
 - gate 변화: SOURCE/LOCAL 아키텍처 기록만 갱신. SITE/ARTIFACT/DEVICE/FIELD 승격 없음.
+
+## 2026-09-26 · uncommitted · test(site): 관제 Docker stack 종단 간 합성 smoke
+
+- 변경: source revision candidate의 로컬 Compose 종단 간 검증과 운영 경계 기록을 추가했다.
+- 증거: 커밋 `a99c7671ea7042d61d4b0d1fa25313768d0f4052`로 candidate bundle을 만들고 기록된 이미지 ID·SBOM·archive SHA-256을 대조했다. Compose에서 Fleet/Vision/HTTPS proxy 세 서비스가 모두 healthy가 됐다. 합성 천장 폰 WSS 프레임이 Vision ArUco를 거쳐 Fleet HTTPS/SQLite sighting으로 확인됐다.
+- API: 임시 operator principal로 session을 확인하고 idempotency key를 넣은 navigation intent를 제출했다. task와 REQUESTED→QUEUED history를 읽었다. CORE 주소는 의도적으로 연결되지 않는 fixture라 실제 dispatch나 로봇 움직임 증거는 아니다.
+- 제한: Windows Docker Desktop Linux/amd64, CPU ArUco 기반이다. Ubuntu RTX 5080·GPU inference·현장 인증서/credential·장시간 폰·실 CORE/로봇·재부팅 복원·DEVICE/FIELD는 검증하지 않았다. 자동 이동/집기는 계속 HOLD.
+- gate 변화: SOURCE/LOCAL container smoke만 확인했다. Ubuntu/SITE/RTX GPU/DEVICE/FIELD와 자동 이동·집기 상태는 바뀌지 않았고 계속 HOLD다.
+- 재현 및 정확한 결과: `docs/validation/2026-09-26-site-stack-container-smoke.md`. 테스트 Compose project와 named volume은 읽기 확인 뒤 제거했고 candidate/image는 `X:\DevTemp`에 남겼다.

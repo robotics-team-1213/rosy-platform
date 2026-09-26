@@ -152,8 +152,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(site): 관제 Docker stack 종단 간 합성 smoke
 - 2026-09-26 · uncommitted · docs(site): Ubuntu 관제·장비 경계 아키텍처 승인 기록
 - 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
 - 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
 - 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
-- 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리

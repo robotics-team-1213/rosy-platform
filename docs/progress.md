@@ -80,3 +80,10 @@ plans:
 - Broker decision: Gate A has no measured independent-worker/backlog requirement. Keep SQLite and defer RabbitMQ.
 - Ubuntu/SITE/TLS, full Compose, real CORE, robot, GPU, DEVICE, and FIELD acceptance remain open. Automatic policy dispatch remains HOLD.
 - Detailed record: `docs/validation/2026-09-26-site-task-scheduler-local.md`.
+
+## Local site-stack Docker smoke (2026-09-26)
+
+- The revision-pinned `linux/amd64` candidate ran Fleet, Vision, and HTTPS proxy containers with all three healthchecks healthy.
+- A synthetic phone frame traversed WSS → Vision/ArUco → authenticated HTTPS Fleet → SQLite. An authenticated operator also submitted a navigation intent and read its durable `QUEUED` task history.
+- No robot was connected; the CORE endpoint was synthetic and unreachable. This proves local service and API/task wiring only. Ubuntu/RTX 5080, GPU model inference, real credentials/TLS, real phone/CORE, reboot recovery, robot motion, and FIELD gates remain open. Automatic movement/picking stays HOLD.
+- Detailed evidence and exact limits: `docs/validation/2026-09-26-site-stack-container-smoke.md`.
