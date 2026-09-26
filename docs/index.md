@@ -160,8 +160,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
 - 2026-09-26 · uncommitted · test(site): final D-287 contract verification
 - 2026-09-26 · uncommitted · docs(adr): define Site Fleet intent and message contracts
 - 2026-09-26 · uncommitted · test(site): verify D-287 intent contracts
 - 2026-09-26 · uncommitted · test(site): rerun latest candidate 7bd81cf3
-- 2026-09-26 · uncommitted · docs(adr): accept D-286 shared role readout layout

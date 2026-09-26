@@ -2438,3 +2438,8 @@
 - 변경: 직전 기록 뒤 추가한 `/api/fleet/do` 입력 거부와 API 설명을 포함해 계약 검사를 다시 실행했다.
 - 증거: Fleet 전체 `504 passed, 5 skipped`; intent·D-287·하네스/network suite `86 passed, 21 warnings`; touched Python 파일 flake8 `--max-line-length=120` 통과.
 - gate 변화: SOURCE/LOCAL만. 로컬 시험은 Ubuntu 설치, 실물 연결, GPU inference 또는 자동 작업 승인으로 승격하지 않는다.
+
+## 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
+- 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
+- 증거: pinned ROBOTIS image built locally; two isolated Gazebo graphs, action, cancel, restart, and gripper direction observed. ROS-SIM remains HOLD overall; DEVICE/FIELD were not run.
+- gate 변화: docs governance gates unchanged; OMX ROS-SIM remains HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED.

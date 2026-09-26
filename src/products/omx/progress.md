@@ -14,7 +14,7 @@ gates:
     cmd: "PYTHONPATH=src/devices/omx/adapter python -m omx_adapter.cli src/products/omx/config/omx.disabled.yaml"
   ROS-SIM:
     state: HOLD
-    blocker: "Image package installation is verified; vendor launch graph, simulator/mock path, and camera stream are not exercised"
+    blocker: "Two isolated AI follower Gazebo instances, action/cancel, and restart were observed; native single-command ownership, target-workstation timing, timeout HOLD policy, and camera stream remain unverified (docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md)"
   ARTIFACT:
     state: HOLD
     blocker: "No OMX workstation image digest or package inventory"

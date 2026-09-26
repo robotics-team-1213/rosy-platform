@@ -1,0 +1,12 @@
+diff --git a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
+--- a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
++++ b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
+@@ -119,8 +119,6 @@ def generate_launch_description():
+         executable='spawner',
+         arguments=[
+             'arm_controller',
+-            '--controller-ros-args',
+-            '-r /arm_controller/joint_trajectory:=/leader/joint_trajectory',
+         ],
+         parameters=[robot_description],
+     )
