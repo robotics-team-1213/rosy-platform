@@ -20,7 +20,7 @@ from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
 from core_common.domain.adapters import AdapterRegistry
 
-from core_common.domain.capabilities import hardware_runtime_reason
+from core_common.domain.capabilities import hardware_runtime_reason, runtime_capability_data
 from core_common.domain.model import inventory_from_config, slices_from_config
 from core_common.protocol.schemas import HealthState, RobotMode
 from core_events.events.audit import FileAuditLog
@@ -308,7 +308,9 @@ class CoreServices:
             capability_data = dict(capability_data)
             capability_data["docking"] = dict(capability_data.get("docking") or {},
                                               supported=True)
-        capability = Capability(capability_data)
+        capability = Capability(runtime_capability_data(
+            capability_data, mode=runtime_mode, navigation_backend=navigation_backend,
+            deployment=str((config.get("runtime") or {}).get("deployment", ""))))
         evidence_cfg = (config.get("state") or {}).get("evidence") or {}
         stale_after = dict(CHANNEL_STALE_AFTER_S)
         if isinstance(evidence_cfg, dict):

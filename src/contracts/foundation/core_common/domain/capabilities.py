@@ -70,6 +70,34 @@ HARDWARE_FLAGS: tuple[str, ...] = tuple(
 ) + ("navigation.return_home",)
 
 
+def runtime_capability_data(data: Mapping[str, Any], *, mode: str,
+                            navigation_backend: str,
+                            deployment: str = "") -> dict[str, Any]:
+    """Limit product-profile flags to the stack selected on this device.
+
+    The product profile describes installed features. CORE uses this effective
+    copy both for CAP-001 responses and command admission, so the two cannot
+    disagree when only the motor bench or localization stack is running.
+    """
+    result = {key: dict(value) if isinstance(value, dict) else value
+              for key, value in data.items()}
+    if mode == "core" and deployment == "device":
+        return withhold_hardware_flags(result, CORE_ONLY_REASON)
+    if mode == "motor":
+        navigation = dict(result.get("navigation") or {})
+        navigation["goal_navigation"] = False
+        navigation["return_home"] = False
+        result["navigation"] = navigation
+        swarm = dict(result.get("swarm") or {})
+        swarm["follow"] = False
+        swarm["lead"] = False
+        result["swarm"] = swarm
+        result["slam"] = False
+    elif mode == "hardware" and navigation_backend != "slam":
+        result["slam"] = False
+    return result
+
+
 def withhold_hardware_flags(data: Mapping[str, Any], reason: str) -> dict[str, Any]:
     """CAP-001 as this runtime can actually keep it (D-32).
 

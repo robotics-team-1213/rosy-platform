@@ -52,7 +52,13 @@ def open_dashboard(playwright, base_url: str, token: str, width: int = 1366, hei
     # "load", never "networkidle": the dashboard polls and streams, so the
     # network is never idle and networkidle waits until the timeout.
     page.goto(base_url.rstrip("/") + "/dashboard", wait_until="load")
-    page.wait_for_function("document.getElementById('robot-mode')?.textContent?.trim()")
+    mode = page.locator("#robot-mode")
+    mode.wait_for(state="visible")
+    deadline = time.monotonic() + 5.0
+    while not mode.inner_text().strip() and time.monotonic() < deadline:
+        page.wait_for_timeout(100)
+    if not mode.inner_text().strip():
+        raise TimeoutError("dashboard robot mode did not load")
     return browser, page
 
 
@@ -93,8 +99,11 @@ def teleop(page, direction: str, seconds: float, stop_timeout_s: float = 3.0) ->
     """Hold a teleop button like a person does, then measure how fast the robot stops."""
     page.locator("#bench-safety-confirmed").check()
     button = page.locator(f'[data-teleop="{direction}"]')
-    page.wait_for_function(
-        f"!document.querySelector('[data-teleop=\"{direction}\"]')?.disabled", timeout=5_000)
+    deadline = time.monotonic() + 5.0
+    while not button.is_enabled() and time.monotonic() < deadline:
+        page.wait_for_timeout(100)
+    if not button.is_enabled():
+        raise TimeoutError(f"teleop {direction} did not become enabled")
     button.hover()
     samples = []
     started = time.monotonic()

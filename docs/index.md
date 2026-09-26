@@ -110,6 +110,7 @@
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
+| D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 |
 
 ## 계획·결과 문서
 
@@ -158,8 +159,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · Pinky native mapping gate truth and G4 diagnostic
 - 2026-09-26 · uncommitted · 사이트 배치 변경과 복구 권한 구체화
 - 2026-09-26 · uncommitted · 사이트 역할별 실행·배치 토폴로지 구체화
 - 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
 - 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
-- 2026-09-26 · uncommitted · feat(hmi): apply D-292 semantic spacing roles
