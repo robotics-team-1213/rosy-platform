@@ -2264,3 +2264,10 @@
 - 증거: 기존 SQLite task/history, 메모리 교통 대기열, 현장 Compose 경로와 RabbitMQ/Kafka/NATS 공식 문서를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건.
 - 제한: 스케줄러·RabbitMQ·CORE 최종 결과 추적·Ubuntu 장비 배포는 이 문서 변경에 포함되지 않는다. D-268 자동 작업은 HOLD다.
 - gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · docs(plan): D-271 task scheduler implementation sequence
+
+- 변경: D-271 설계를 SQLite 작업 큐·교통 대기열 정합·취소/정지·관제·Docker LOCAL·조건부 RabbitMQ·Ubuntu/DEVICE 수용으로 나눈 실행 계획을 추가했다.
+- 증거: 현재 FleetTaskService/Store, FleetConsole._queued, API Ref §10.8, Compose와 기존 단위·브라우저 시험 경로를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건, `git diff --check` 통과.
+- 제한: 계획만 추가했으며 스케줄러나 RabbitMQ를 구현·배포하지 않았다. 자동 정책 제출은 D-268 전까지 HOLD다.
+- gate 변화: 없음.

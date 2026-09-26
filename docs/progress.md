@@ -43,6 +43,7 @@ plans:
   - docs/plans/2026-09-22-pinky-pro-flashable-image.md
   - docs/plans/2026-09-26-role-menu-rollout.md
   - docs/plans/2026-09-26-site-task-scheduling-and-broker-design.md
+  - docs/plans/2026-09-26-site-task-scheduling-and-broker-implementation.md
 ---
 ## 지금 상태
 

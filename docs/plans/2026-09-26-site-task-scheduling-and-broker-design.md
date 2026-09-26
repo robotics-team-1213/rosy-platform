@@ -44,7 +44,7 @@ CORE WSS event/상태 ───────────────────�
 3. **우선순위:** e-stop은 로컬 안전, 원격 stop/cancel은 대기 작업과 별도 즉시 요청 경로다. 일반 작업 후보 사이에서는 `operator` > 수용된 `policy` > `background` 기본 등급을 적용한다. 사용자가 임의 등급을 제출해 승격할 수 없다. 같은 등급은 접수 순서와 기한을 고려하고, 운영자가 정한 대기 상한·aging/할당량으로 낮은 등급의 기아를 관찰·완화한다. 구체 수치와 실행 중 선점 가능 여부는 작업별 수용 계획에서 고정한다.
 4. **예약/실행:** 로봇마다 활성 모션 작업은 한 개로 제한하고, 팔·충전대·공유 통로는 명시적 자원 점유를 사용한다. 높은 등급도 이미 실행 중인 안전 동작을 브로커 전달만으로 선점하지 않는다. 단계 사이의 재계획/취소만 검증된 로컬 cancel 계약으로 수행한다. 장비가 offline 또는 busy면 작업을 보류하고 사유를 보여준다.
 5. **상태:** `REQUESTED`, `HOLD`, `ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`, `UNKNOWN`은 기존/목표 의미를 구분한다. 미래의 `QUEUED`·`RESERVED`·`DISPATCHING`은 **설계 후보**이며 아직 외부 계약/현행 `FleetTaskStore` 전이가 아니다. 구현 전에 D-18에 따라 API Ref와 공유 schema/테스트를 함께 갱신한다. REST receipt는 수락/거절에만 사용하고 실제 완료는 D-170/D-177 활성화 이후 검증된 CORE 최종 결과와 연결한다. 그 전에는 완료를 추정하지 않는다.
-6. **메시지 최소 계약(내부 후보):** `schema_version`, `message_id`, `task_id`, `idempotency_key`, `actor/source`, `action/target`, `parameters`, `priority_class`(서버 계산), `expires_at`, `evidence_ref`와 측정 시각/revision, `event_seq`, `occurred_at`, `status/reason`. 외부 API에 필드를 추가하거나 기존 PRT Envelope를 확장하는 결정은 아니다. 인증 토큰·원본 영상·전체 DDS 메시지는 넣지 않는다.
+6. **메시지 최소 계약(내부 후보):** 작업 원장/상태 이벤트에는 `schema_version`, `message_id`, `task_id`, `idempotency_key`, `actor/source`, `action/target`, `parameters`, `priority_class`(서버 계산), `expires_at`, `evidence_ref`와 측정 시각/revision, `event_seq`, `occurred_at`, `status/reason`을 구분해 기록한다. 후속 RabbitMQ 실행 알림은 `schema_version`, `message_id`, `task_id`, `attempt_id`, `expires_at`만 싣는다. 같은 호스트의 Fleet 서비스가 DB를 재조회하고, 다른 호스트 worker는 별도 인증된 Fleet 내부 계약으로 작업을 조회·claim한다. SQLite 파일을 장비 간 공유하지 않는다. 외부 API에 필드를 추가하거나 기존 PRT Envelope를 확장하는 결정은 아니다. 인증 토큰·원본 영상·전체 DDS 메시지는 넣지 않는다.
 
 ## 저장과 전달 장애
 
@@ -64,3 +64,5 @@ CORE WSS event/상태 ───────────────────�
 | 4. 장비/현장 수용 | CORE 최종 결과 연계, 팔/Pinky 개별 계약, 정책 증거의 실측 승인 | 장비별 DEVICE/FIELD 기록; 자동 실행은 D-268 수용 전 계속 HOLD |
 
 문서·로컬 Docker·합성 이벤트는 실제 장비 명령/영상·현장 안전의 대체 증거가 아니다.
+
+작업·시험·커밋 순서는 [구현 계획](2026-09-26-site-task-scheduling-and-broker-implementation.md)에 기록한다.
