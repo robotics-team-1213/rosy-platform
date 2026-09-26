@@ -155,7 +155,7 @@
 
 ## Implementation checkpoint and next execution order (2026-09-26)
 
-- D-288 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.38; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, invalid value types, booleans, and non-finite coordinates before CORE dispatch. `/api/fleet/do` publishes a verb-specific bounded OpenAPI schema generated from the shared interpreter grammar; source/schema/doc alignment is contract-tested.
+- D-288 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.39; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, invalid value types, booleans, and non-finite coordinates before CORE dispatch. `/api/fleet/do` publishes a verb-specific bounded OpenAPI schema generated from the shared interpreter grammar; invalid types and sequences over eight steps are documented and rejected before dispatch; source/schema/doc alignment is contract-tested.
 - D-267, D-269, and D-282 remain Proposed. Their boundaries are implementation constraints for this plan, not an architecture approval or field acceptance.
 - Implemented LOCAL foundation: per-principal viewer/operator/policy-admin API authentication (D-276), authenticated manual navigation through the durable task service, persistent task/audit state, CORE Agent event ingestion, and ceiling-phone WSS → Vision → derived sighting.
 - Queue choice: SQLite remains the task ledger and scheduler. Gate A found no current independent-worker requirement, so RabbitMQ stays deferred; raw video and ROS messages do not enter the task queue.
@@ -171,3 +171,9 @@
 - [Docker Desktop GPU support for Windows](https://docs.docker.com/desktop/features/gpu/): Windows 컨테이너 GPU 시험은 WSL2와 NVIDIA GPU/driver를 요구한다.
 - [Docker multi-platform builds](https://docs.docker.com/build/building/multi-platform/): `linux/amd64`와 `linux/arm64` 이미지 아키텍처 선택 및 빌드.
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html): Ubuntu Docker GPU 접근. 실제 노트북 드라이버와 컨테이너 동작은 현장에서 별도 검증한다.
+
+## Packaged local verification checkpoint (2026-09-26)
+
+- Revision `01a3946c` was built as a `linux/amd64` candidate, its archive/image/SBOM/deployment hashes were checked, and the exact archive was loaded. Fleet, Vision, and HTTPS proxy reached healthy in an isolated local Compose project.
+- Packaged OpenAPI matched all 13 interpreter verbs and the 8-step cap. Authenticated API checks rejected mistyped fields (`INVALID_NUMBER`) and a 9-step sequence (`TOO_LONG`) before CORE dispatch. A synthetic ceiling-phone WSS frame passed through CPU ArUco Vision into authenticated Fleet/SQLite sighting readback.
+- This is Windows Docker Desktop LOCAL evidence only. The host exposed AMD Radeon 860M, not the target RTX 5080. Ubuntu host/reboot, GPU inference, physical phone/CORE/robot, and DEVICE/FIELD remain unverified; automatic movement and picking remain HOLD. Detailed hashes and limits are in `docs/validation/2026-09-26-site-stack-container-smoke.md`.

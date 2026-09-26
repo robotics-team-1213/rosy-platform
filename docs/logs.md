@@ -2466,3 +2466,10 @@
 - 변경: D-288 follow-through로 Fleet OpenAPI에 동사별 필드와 최대 8단계 문법을 공개하고, 통역기가 스키마와 같은 타입 규칙을 dispatch 전에 적용한다. API Reference는 v1.38이다.
 - 증거: Fleet `507 passed, 5 skipped`; gateway intent `18 passed`; docs/network/harness `73 passed, 21 warnings`; harness lint `0 errors, 21 warnings`; touched Python files flake8 통과.
 - gate 변화: SOURCE/LOCAL API 계약을 검증했다. Ubuntu 배포, 실물 CORE/카메라, GPU 모델 추론 및 DEVICE/FIELD 수용은 별도 HOLD다.
+
+## 2026-09-26 · uncommitted · test(site): package and exercise typed Fleet API
+
+- 변경: D-288 typed API와 합성 ceiling-phone 흐름을 격리 Compose candidate에서 검증했다. 실행하며 확인한 `TOO_LONG` 오류를 D-288/API Reference v1.39에 명시했다.
+- 증거: source `01a3946c`; packaged `linux/amd64` archive/SBOM/deployment hash와 image ID 일치. Fleet/Vision/proxy healthy, TLS 검증·인증 session·anonymous 401·13개 verb schema/runtime 일치·타입 오류와 9단계 거부를 확인했다. 합성 WSS JPEG가 Vision ArUco를 거쳐 Fleet SQLite sighting으로 조회됐다.
+- 제한: Windows Docker Desktop, 합성 자격증명·인증서·카메라·지도; robot endpoint는 unreachable fixture였다. 현재 호스트에 AMD Radeon 860M만 노출됐고 RTX 5080/GPU inference, Ubuntu reboot, 실제 폰/CORE/로봇 및 DEVICE/FIELD는 확인하지 못했다.
+- gate 변화: SOURCE/LOCAL 패키지/API/합성 카메라 경로만 확인했다. GPU·Ubuntu·실물 수용과 자동 이동/집기는 HOLD다. 재현/hash: `docs/validation/2026-09-26-site-stack-container-smoke.md`.

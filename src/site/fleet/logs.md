@@ -254,3 +254,11 @@
 - gate 변화: SOURCE/LOCAL API contract GO; Ubuntu/physical-device acceptance remains open.
 - 결정: D-288; site intent stays separate from the robot DDS/WSS envelope.
 - 교훈: API documentation must describe the same grammar that the dispatch interpreter accepts.
+
+## 2026-09-26 · uncommitted · test(fleet): exercise packaged intent and camera paths
+
+- 변경: revision `01a3946c` candidate를 `--no-build` 격리 Compose로 기동하고, `/api/fleet/do` OpenAPI·입력 거부와 합성 phone WSS -> Vision -> Fleet/SQLite를 확인했다.
+- 증거: Fleet/Vision/proxy healthy; manifest archive, SBOM, deployment hash 및 이미지 ID 모두 일치. 13개 verb가 interpreter와 일치하고 8-step 제한, `INVALID_NUMBER`, `TOO_LONG`, TLS/operator session, anonymous 401을 확인했다. 합성 sighting seq 78이 약 `[2.0, 1.0]`로 저장됐다.
+- 제한: mock credentials/camera/calibration 및 unreachable CORE 주소; GPU·Ubuntu·실물 장비·로봇 명령 수용은 아니다. 검증/hash: `docs/validation/2026-09-26-site-stack-container-smoke.md`.
+- gate 변화: SOURCE/LOCAL 패키지, API, 합성 카메라 경로만 확인; GPU·Ubuntu·DEVICE/FIELD는 HOLD.
+- 결정: D-288; over-limit request는 `400 TOO_LONG`.

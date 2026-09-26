@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.38
+**Version:** v1.39
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -113,6 +113,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 | `UNKNOWN_FIELD` | 400 | intent 동사에서 허용하지 않는 필드 | Fleet |
 | `INVALID_NUMBER` | 400 | 유한한 JSON 숫자가 필요한 위치의 잘못된 값 | Fleet |
 | `INVALID_FIELD_TYPE` | 400 | 문자열·정수·문자열 배열 필드의 값 타입 불일치 | Fleet |
+| `TOO_LONG` | 400 | `/api/fleet/do` ?? ??? ??? ?? 8?? ?? | Fleet |
 | `MISSING` | 400 | intent 동작에 필요한 값 누락 | Fleet |
 | `FORBIDDEN` | 400 | raw ROS/video payload 또는 분산 follow source 등 금지 입력 | Fleet |
 | `ROBOT_MUST_BE_STOPPED` | 409 | staged 주행 정책 적용 전에 IDLE/EMERGENCY, 0 속도, line-follow OFF 조건이 충족되지 않음 | 로봇 |
@@ -943,8 +944,9 @@ from the same verb table used by `interpret()`. Before dispatch, the interpreter
 checks field types: non-finite or non-numeric values (including booleans in
 numeric fields) return `400 INVALID_NUMBER`; mismatched string, integer, or
 string-array fields return `400 INVALID_FIELD_TYPE`. Omit optional fields rather
-than sending `null`. Verb-specific required fields and forbidden values remain
-checked by the interpreter; OpenAPI does not replace those runtime checks.
+than sending `null`. More than eight steps returns `400 TOO_LONG` before any CORE
+dispatch. Verb-specific required fields and forbidden values remain checked by
+the interpreter; OpenAPI does not replace those runtime checks.
 
 The decision path is:
 
@@ -999,9 +1001,10 @@ authorizes navigation or picking.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.36 | 2026-09-26 | Additive(D-283): `UiPanelDescriptor.action_group` optional field exposes console operation groups. Only role-, capability-, and inventory-visible panels are included; unsupported action groups are absent. |
+| v1.39 | 2026-09-26 | D-288: document the existing `400 TOO_LONG` response when `/api/fleet/do` exceeds the eight-step intent limit. No runtime behavior changed. |
 | v1.38 | 2026-09-26 | D-288: generated OpenAPI now publishes the `/api/fleet/do` verb-specific intent grammar and bounded step sequence. Fleet rejects mismatched field types before scatter. No public path or robot envelope field changed. |
 | v1.37 | 2026-09-26 | D-288 Accepted: 외부 API는 typed intent를 받고 Fleet이 identity/priority/dispatch를 해석한다. 미선언 필드·boolean·비유한 목표값을 dispatch 전에 거절한다. Site 전송 경계를 고정하며 유효한 public path/body field와 robot envelope version은 바뀌지 않음. |
+| v1.36 | 2026-09-26 | Additive(D-283): `UiPanelDescriptor.action_group` optional field exposes console operation groups. Only role-, capability-, and inventory-visible panels are included; unsupported action groups are absent. |
 | v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
 | v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |

@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "507 passed, 5 skipped (2026-09-26 Windows). source-token FleetAgent↔console WebSocket integration, D-257 site sighting isolation, D-288 intent OpenAPI/runtime validation 포함; Ubuntu/device 수용은 아님"
+    evidence: "507 passed, 5 skipped (2026-09-26 Windows). D-288 OpenAPI/runtime contract와 source-token FleetAgent↔console/WebSocket, D-257 sighting isolation 포함. Revision 01a3946c packaged linux/amd64 Docker smoke에서 3 services healthy, TLS/API intent와 합성 WSS→Vision→SQLite sighting readback 확인; Windows/CPU/합성 데이터뿐이며 Ubuntu/GPU/실물 device 수용은 아님 (docs/validation/2026-09-26-site-stack-container-smoke.md)"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD

@@ -84,3 +84,46 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
 - Windows Docker Desktop Linux/amd64 with temporary test config and certificates.
   Removed only Compose project `rosy-site-smoke-7bd81cf3`, its volume, and its
   networks; retained the candidate bundle and images under `X:\DevTemp`.
+
+## Revision `01a3946c` rerun: typed intent API and camera pipeline (LOCAL)
+
+- Source commit: `01a3946c3b77bb04ab4338b7b0d976312e8d7429`; platform:
+  `linux/amd64`. Candidate: `X:\DevTemp\rosy-site-candidate-01a3946c`.
+- Candidate archive SHA-256:
+  `687cbac06242dc3cac0beb0022280c24af291e0c1e7d3c07d656029b712b3f34`.
+  Fleet image: `sha256:d16108bb1b0779f313aca101e24534ebbe6fd1baa6d93056144db74cb5d18908`;
+  Vision: `sha256:a7c83be2e0051fb2328758a2bd1cfa1faed2ea885c841dd838db94417449ad66`;
+  proxy: `sha256:92285397b659eb03fbe532a76d061738d5f9b0f7f45027a68c662caa44276c3f`.
+  Manifest archive/image/SBOM/deployment hashes and loaded image IDs all matched.
+- Started the packaged Compose stack with `--no-build` under isolated project
+  `rosy-site-smoke-01a3946c`; Fleet, Vision, and HTTPS proxy all reached
+  `healthy`. The proxy bound only to `127.0.0.1:18443`; the smoke certificate
+  was self-signed and trusted only by the local test client.
+- Verified authenticated session and anonymous `401`; fetched packaged
+  `/openapi.json` over certificate-verified HTTPS. All 13 published `do` verbs
+  matched the interpreter, and `steps.maxItems` was 8. A mistyped motion value
+  returned `400 INVALID_NUMBER`; a nine-step request returned `400 TOO_LONG`.
+  The robot URL was synthetic and unreachable (`127.0.0.1:1`); no motion was
+  dispatched.
+- Sent a synthetic ArUco JPEG over the phone WSS protocol while keeping its
+  latest-only connection open. Vision projected and posted the sighting; the
+  authenticated Fleet API read it back from SQLite (`ceiling_north`, `rosy_01`,
+  sequence `78`, pose approximately `[2.0, 1.0]`, calibration `cal-smoke-v1`).
+  The sighting path emitted no robot command.
+- Test-harness corrections: the first fixture reused the site-user token as
+  the CORE-registry token and Fleet correctly refused startup; credentials were
+  separated. The first camera probe closed WSS before the latest-only worker
+  processed the frame; keeping the phone session open produced the readback.
+  The oversized-request oracle was aligned to the observed `TOO_LONG` contract,
+  which is now listed in D-288/API Reference v1.39.
+- This was Windows Docker Desktop `linux/amd64` with synthetic credentials,
+  camera, TLS, and calibration. The host enumerated only AMD Radeon 860M; the
+  target RTX 5080 was not exposed, and the current Vision image uses CPU ArUco.
+  GPU inference, Ubuntu installation/reboot, physical phone, CORE, robot motion,
+  and DEVICE/FIELD acceptance remain unverified. Automatic movement and picking
+  remain HOLD.
+- After readback, removed only this Compose project's containers, networks, and
+  test volume. The revision-pinned candidate remains under `X:\DevTemp`. The
+  environment policy rejected recursive deletion of the verified scratch
+  directory, so its synthetic bearer/CORE token files were blanked; non-secret
+  test config and scripts remain under `X:\DevTemp\rosy-site-smoke-01a3946c`.

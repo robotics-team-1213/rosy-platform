@@ -161,8 +161,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(site): package and exercise typed Fleet API
 - 2026-09-26 · uncommitted · feat(site): publish and enforce `/api/fleet/do` grammar
 - 2026-09-26 · uncommitted · docs(site): advance API Reference after D-283
 - 2026-09-26 · uncommitted · docs(site): resolve Fleet ADR number collision and pin OpenAPI schema
 - 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
-- 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
