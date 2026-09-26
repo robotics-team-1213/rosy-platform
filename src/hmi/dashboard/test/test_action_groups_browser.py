@@ -90,6 +90,7 @@ class _Handler(SimpleHTTPRequestHandler):
                 <div class='surface-slot' data-slot='act'></div>
               </main>
               <script type='module'>
+                import '/common/ui.js';
                 import {mountPanels} from '/src/hmi/dashboard/shell/mount.js';
                 const panels = [
                   {id:'console.teleop', title:'수동 운전', slot:'act', order:30,
@@ -156,6 +157,34 @@ class _Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, *_args):
         return
+
+
+def test_action_group_keeps_only_the_selected_tab_in_the_tab_order():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"http://127.0.0.1:{server.server_port}/__d283")
+            page.wait_for_selector("#action-group-drive:not([hidden])")
+            assert page.locator('[role="tab"][tabindex="0"]').count() == 1
+            page.get_by_role("tab", name="도킹").click()
+            page.wait_for_selector("#action-group-docking:not([hidden])")
+            page.wait_for_function("() => [...document.querySelectorAll('[role=tab]')].every(tab => !tab.disabled)")
+            assert page.locator('[role="tab"][tabindex="0"]').count() == 1
+            assert page.get_by_role("tab", name="도킹").get_attribute("tabindex") == "0"
+            page.get_by_role("tab", name="도킹").focus()
+            page.keyboard.press("ArrowRight")
+            page.wait_for_selector("#action-group-line_follow:not([hidden])")
+            assert page.evaluate("document.activeElement.id") == "action-tab-line_follow"
+            assert page.locator('[role="tab"][tabindex="0"]').count() == 1
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motion():

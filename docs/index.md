@@ -173,8 +173,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(ui): review role and Fleet layout repairs
 - 2026-09-27 · uncommitted · plan(platform): decide boundaries from owners and evidence
 - 2026-09-27 · uncommitted · plan(platform): place OMX LeRobot under ROSY Platform roles
 - 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
 - 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
-- 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record

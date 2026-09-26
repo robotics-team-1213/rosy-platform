@@ -53,6 +53,16 @@ body {
 .surface-slot { display: grid; gap: var(--space-5); min-width: 0; }
 .surface-slot:empty { display: none; }
 ui-section[data-failed="true"] { border-style: dashed; }
+body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] {
+  align-items: start;
+  gap: var(--space-4);
+}
+body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
+  padding: var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-flat);
+}
 
 @media (min-width: 64rem) {
   body[data-surface="console"] {
@@ -92,7 +102,7 @@ ui-section[data-failed="true"] { border-style: dashed; }
   body[data-surface="console"] .surface-slot[data-slot="observe"] {
     grid-area: observe;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 2fr) minmax(7rem, 0.4fr);
+    grid-template-rows: minmax(0, 1fr);
     align-content: stretch;
     min-height: 0;
     overflow: hidden;
@@ -126,12 +136,12 @@ ui-section[data-failed="true"] { border-style: dashed; }
     min-height: 0;
     max-height: none;
   }
-  body[data-surface="console"] .surface-slot[data-slot="observe"] .surface-camera-stage {
+  body[data-surface="console"] .surface-slot[data-slot="sense"] .surface-camera-stage {
     min-height: 0;
-    height: clamp(5rem, 11vh, 8rem);
+    height: clamp(9rem, 24vh, 14rem);
   }
-  body[data-surface="console"] .surface-slot[data-slot="observe"] .surface-camera-frame {
-    max-height: 11vh;
+  body[data-surface="console"] .surface-slot[data-slot="sense"] .surface-camera-frame {
+    max-height: 24vh;
   }
   body[data-surface="console"] .surface-slot[data-slot="act"] .action-group-panel {
     display: grid;

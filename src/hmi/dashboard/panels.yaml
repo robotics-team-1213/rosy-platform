@@ -46,7 +46,7 @@ panels:
   - id: console.camera
     title: 전방 카메라
     surface: console
-    slot: observe
+    slot: sense
     order: 40
     module: panels/console/camera.js
     css: [panels/surface-panels.css]

@@ -333,3 +333,8 @@
 - 증거: Fleet host 526 passed/5 skipped; keyboard roster/goal 및 queued navigation/cancel browser regressions 2 passed; site DB/task queue tests 8 passed.
 - gate 변화: SOURCE/LOCAL 유지. 로봇 및 현장 수용은 별도다.
 - 결정: D-300.
+## 2026-09-27 · uncommitted · fix(ui): rebalance Fleet map and intervention area
+
+- 변경: 지도와 개입 영역의 폭을 재배분하고 목록과 사이트 조작을 분리했다. 모바일 320/390px 상단과 로봇 태그 줄바꿈을 정리했다. 관제 범위 설명은 지도 아래 disclosure로 옮겼다.
+- 증거: `test/test_fleet_console_browser.py` 17 passed, 실제 Chromium 1920/390/320 캡처. 세부 판정은 `docs/validation/uiux-surfaces-2026-09-27/README.md`.
+- gate 변화: LOCAL 근거 보강. SITE/DEVICE/FIELD 승격 없음.

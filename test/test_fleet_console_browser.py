@@ -568,6 +568,8 @@ FLEET_FIT_PROBE = """() => {
     signals: inside('.signals'),
     formation: inside('.formation'),
     rosterPanel: inside('main > .panel[aria-labelledby="roster-heading"]'),
+    roster: inside('#roster'),
+    rosterHeading: inside('#roster-heading'),
     vh: window.innerHeight,
   };
 }"""
@@ -601,6 +603,34 @@ def test_console_fits_the_declared_viewport(console_url):
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
+    assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
+
+
+@pytest.mark.parametrize("width", [320, 390])
+def test_mobile_console_has_no_horizontal_overflow(console_url, width):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
+        layout = page.evaluate("""() => ({
+          overflow: document.documentElement.scrollWidth - innerWidth,
+          outside: [...document.querySelectorAll('*')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
+            .slice(0, 8).map(node => ({tag:node.tagName, className:String(node.className),
+              right:node.getBoundingClientRect().right})),
+          brand: document.querySelector('ui-brand').getBoundingClientRect().toJSON(),
+          stop: document.querySelector('#estop').getBoundingClientRect().toJSON(),
+          status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
+        })""")
+        browser.close()
+    assert errors == []
+    assert layout["overflow"] == 0, layout["outside"]
+    assert layout["stop"]["right"] <= width, layout
+    assert layout["status"]["right"] <= width, layout
+    assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
 
 
 # --- D-202: 위험은 채움이다 — 따뜻한 글자는 4.5:1 이상이어야 읽힌다 ----------

@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(ui): clarify role-screen spatial and procedure layouts
 - 2026-09-27 · 9ca7bc26 · inspect dashboard in visible Chromium
 - 2026-09-27 · f4f15776 · verify dashboard surface tokens after latest main integration
 - 2026-09-27 · 9049bd37 · test(dashboard): verify D-300 after latest-main integration
 - 2026-09-27 · uncommitted · D-300 surface typography and focus tokens
-- 2026-09-27 · uncommitted · name role surfaces

@@ -145,7 +145,8 @@ def test_map_uses_remaining_desktop_observe_height_and_stays_within_mobile_width
                 <a>작업 준비</a><ui-status>지도 상태</ui-status><ui-status>작업 결과</ui-status>`;
               const camera = document.createElement('ui-section');
               camera.innerHTML = `<ui-head>전방 카메라</ui-head><div class="surface-camera-stage">카메라</div>`;
-              observe.append(map, camera);
+              observe.append(map);
+              document.querySelector('[data-slot=sense]').append(camera);
               const act = document.querySelector('[data-slot=act]');
               act.replaceChildren();
               const tabs = document.createElement('div'); tabs.className = 'action-group-tabs';

@@ -27,6 +27,7 @@
 .surface-slot input:not([type="checkbox"]):not([type="radio"]),
 .surface-slot select,
 .surface-slot textarea {
+  box-sizing: border-box;
   min-height: var(--target-secondary);
   min-width: 0;
   max-width: 100%;

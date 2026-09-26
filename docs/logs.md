@@ -2772,3 +2772,8 @@
 - 변경: 플랫폼 부모 계획에 물리 명령 owner, 단일 미션 원장, 실제 교환 계약, 증거 승격, 폴더/배포의 순서 있는 판정 기준과 반례 표를 추가했다. OMX 실제 결과 전에 공통 schema를 고정하던 단계를 뒤로 옮기고 LeRobot bench를 이종 미션의 필수 선행에서 분리했다.
 - 증거: D-18/D-231/D-290/D-296/D-299, Fleet 수락 receipt와 OMX 비활성 action owner를 대조했다. 계약·장치·반례 관점의 독립 검토에서 공통 패키지 선행, 빈 AI/Data 폴더, 복합 장치 상호 인터록 누락을 확인했다.
 - gate 변화: 없음. 공통 계약, OMX 운영, LeRobot 실험, Pinky 탑재 동시 동작은 각각 실증 전 후보로 유지한다.
+## 2026-09-27 · uncommitted · validation(ui): review role and Fleet layout repairs
+
+- 변경: `docs/validation/uiux-surfaces-2026-09-27/README.md`에 겹침·밀도 수정 전후, 배치 결정, D-153 G3 8항의 확인 범위와 미검증 계층을 기록했다.
+- 증거: 실제 CORE/Fleet Chromium 캡처와 G1 브라우저 계약 시험. 일회성 스크린샷은 드라이브 규칙에 따라 X:에만 둔다.
+- gate 변화: 제품 전체 UI/UX HOLD 유지. D-255 B2/B3와 물리 장치 수용은 별도다.

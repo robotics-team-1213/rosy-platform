@@ -51,9 +51,14 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     heading.className = "sr-only";
     heading.textContent = panel.title;
     section.append(heading);
-    slot.append(section);
+    const container = panel.slot === "main" ? document.createElement("div") : section;
+    if (container !== section) {
+      container.className = "procedure-panel";
+      container.append(section);
+    }
+    slot.append(container);
     const ctx = contextFor(panel);
-    const handle = {section, ctx, unmount: null, actionGroup: panel.action_group || null};
+    const handle = {section, container, ctx, unmount: null, actionGroup: panel.action_group || null};
     handles.push(handle);
     try {
       const module = await import(panel.module);
@@ -122,7 +127,7 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
       for (const handle of groupHandles.get(id) || []) {
         try { if (handle.unmount) handle.unmount(); } catch (_error) { /* Keep other panels tear-down independent. */ }
         handle.ctx.store.stopAll();
-        handle.section.remove();
+        handle.container.remove();
         const index = handles.indexOf(handle);
         if (index >= 0) handles.splice(index, 1);
       }
@@ -162,6 +167,7 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
 
     async function selectGroup(id) {
       if (!groups.has(id) || switching || id === selectedGroup) return;
+      const focusStartedOnTab = document.activeElement === tabs.get(id);
       switching = true;
       for (const tab of tabs.values()) tab.disabled = true;
       try {
@@ -175,7 +181,14 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
         await mountGroup(id);
       } finally {
         switching = false;
-        for (const tab of tabs.values()) tab.disabled = false;
+        for (const [groupId, tab] of tabs) {
+          tab.disabled = false;
+          tab.tabIndex = groupId === selectedGroup ? 0 : -1;
+        }
+        if (focusStartedOnTab && (document.activeElement === document.body
+            || document.activeElement === tabs.get(id))) {
+          tabs.get(selectedGroup)?.focus();
+        }
       }
     }
 
@@ -203,14 +216,14 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
       if (selectedGroup) {
         if (!await canLeaveGroup(selectedGroup)) throw new Error("현재 조작 작업이 끝나지 않아 화면을 유지합니다.");
       }
-      for (const { section, ctx, unmount } of handles) {
+      for (const { container, ctx, unmount } of handles) {
         try {
           if (unmount) unmount();
         } catch (_error) {
           // A broken unmount must not keep the next panel mounted.
         }
         ctx.store.stopAll();
-        section.remove();
+        container.remove();
       }
       for (const element of actionGroupElements) element.remove();
     },

@@ -74,6 +74,7 @@ def _capture(page, path: Path, token: str, width: int, height: int):
         observeSections: [...document.querySelectorAll('[data-slot="observe"] > ui-section')].map((node) => {
           const {bottom}=node.getBoundingClientRect(); return {title:node.getAttribute('aria-label'),bottom};
         }),
+        cameraSlot: document.querySelector('[data-panel="console.camera"]')?.parentElement?.dataset.slot,
         actionGroups: [...document.querySelectorAll('[role="tab"]')].map((node) => ({name:node.textContent, selected:node.getAttribute('aria-selected')})),
         horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
         verticalOverflow: document.documentElement.scrollHeight - innerHeight,
@@ -112,6 +113,7 @@ def test_real_core_console_fits_desktop_and_mobile_for_operator_and_administrato
             assert desktop["actionPanel"]["scrollHeight"] <= desktop["actionPanel"]["clientHeight"], desktop
             assert all(section["bottom"] <= desktop["act"]["bottom"] for section in desktop["actionPanel"]["sections"]), desktop
             assert all(section["bottom"] <= desktop["observe"]["bottom"] for section in desktop["observeSections"]), desktop
+            assert desktop["cameraSlot"] == "sense", desktop
 
             mobile = _capture(page, capture_dir / f"{role}-390x844.png", token, 390, 844)
             assert mobile["horizontalOverflow"] == 0, mobile
@@ -120,3 +122,54 @@ def test_real_core_console_fits_desktop_and_mobile_for_operator_and_administrato
             assert browser_errors == [], browser_errors
             context.close()
         browser.close()
+
+
+@pytest.mark.parametrize("surface", ["setup", "device"])
+@pytest.mark.parametrize("width,height", [(1366, 768), (390, 844)])
+def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, height):
+    client = _core_client(tmp_path)
+    capture_dir = Path("X:/DevTemp/rosy-uiux-current-surfaces")
+    token = TOKENS["administrator"]
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        def serve(route):
+            response = client.get(urlsplit(route.request.url).path,
+                                  headers={"Authorization": f"Bearer {token}"})
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+                "cache-control": "no-store",
+            }, body=response.content)
+
+        page.route("**/*", serve)
+        page.add_init_script(f"sessionStorage.setItem('rosy.dashboard.token', {token!r})")
+        page.goto(f"http://rosy.test/{surface}")
+        page.wait_for_function("() => document.querySelectorAll('ui-section[data-panel]').length > 0")
+        page.wait_for_timeout(500)
+        capture_dir.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(capture_dir / f"{surface}-{width}x{height}.png"), full_page=True)
+        layout = page.evaluate("""() => {
+          const sections = [...document.querySelectorAll('ui-section[data-panel]')]
+            .map(node => ({id:node.dataset.panel, rect:node.getBoundingClientRect()}));
+          const overlaps = [];
+          for (let i = 0; i < sections.length; i++) for (let j = i + 1; j < sections.length; j++) {
+            const a = sections[i].rect, b = sections[j].rect;
+            if (a.left < b.right - 1 && b.left < a.right - 1
+                && a.top < b.bottom - 1 && b.top < a.bottom - 1)
+              overlaps.push([sections[i].id, sections[j].id]);
+          }
+          return {overlaps, horizontalOverflow:document.documentElement.scrollWidth - innerWidth,
+            sectionCount:sections.length,
+            procedureCards:document.querySelectorAll('.procedure-panel > ui-section[data-panel]').length,
+            outside: [...document.querySelectorAll('*')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
+              .slice(0, 12).map(node => ({tag:node.tagName, className:String(node.className),
+                outer:node.outerHTML.slice(0, 180), right:node.getBoundingClientRect().right}))};
+        }""")
+        browser.close()
+    assert layout["horizontalOverflow"] == 0, layout
+    assert layout["overlaps"] == [], layout
+    assert layout["procedureCards"] == layout["sectionCount"], layout
+    assert errors == []

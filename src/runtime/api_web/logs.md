@@ -131,3 +131,9 @@
 - gate 변화: 없음. REST path is unchanged; additive optional descriptor field is documented in API Ref v1.36.
 - 결정: D-283 Accepted.
 - 교훈: 없음
+
+## 2026-09-27 · uncommitted · test(ui): verify real CORE role surfaces at desktop and mobile widths
+
+- 변경: 실제 TestClient 라우트로 설치·정비 화면의 패널 교차, 래퍼 구성, 가로 넘침과 브라우저 오류를 검증한다. 운용 화면은 카메라가 상태 영역에 있는지 확인한다.
+- 증거: `test_d283_console_browser.py` 5 passed 및 절차 4셀 변경 후 재실행 통과. 캡처는 X:에 보관한다.
+- gate 변화: LOCAL 근거 보강. API 계약 및 장치 수용 변화 없음.
