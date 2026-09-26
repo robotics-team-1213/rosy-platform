@@ -2663,3 +2663,9 @@
 - 실기 근거: 바퀴를 든 단일 전진 명령 약 0.53초, 0 명령 수락 뒤 API 0 속도까지 약 0.43초, 오도메트리 약 0.026m 변화, 현장 정상 방향 관찰. 종료 시 IDLE·속도 0, 임시 관리자 토큰 폐기.
 - 검증: 새 회귀 테스트의 실패를 먼저 확인한 뒤 관련 테스트 289개 통과, 1개 건너뜀. 장치에는 G4 기록과 승인 마커가 없고 SLAM/Nav2가 실행되지 않아 G4/G5 및 바닥 맵핑은 HOLD. 소스 수정은 새 서명 릴리스 설치 전까지 실기에 반영되지 않았다.
 - gate 변화: 소스에서 CAP-001과 명령 게이트가 일치하도록 수정했다. 실기 G4/G5 수용과 맵핑 승인은 HOLD다.
+
+## 2026-09-27 · uncommitted · validation: rebuild current site integration candidate
+
+- Change: built current clean source `4c2b46b21b8ad77d010aa37e03c084bbe6716cc0` into a commit-pinned Ubuntu site candidate under X: scratch; verified manifest, deployment, archive, SBOM, and loaded image identities; recorded packaged LOCAL smoke and focused tests.
+- Evidence: Fleet/Vision/proxy healthy; authenticated TLS/OpenAPI checks, synthetic phone WSS to SQLite, task persistence through Fleet restart; Fleet 518 passed/5 skipped and CORE/Fleet integration 47 passed.
+- Gate: local artifact packaging advanced for this revision. Ubuntu host/reboot, RTX 5080 GPU inference, real phone/CORE, dispatch/motion, and SITE/DEVICE/FIELD remain unverified; automatic movement/picking remain HOLD.
