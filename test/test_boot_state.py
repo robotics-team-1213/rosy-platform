@@ -63,6 +63,16 @@ def test_the_earliest_failed_unit_in_boot_order_wins():
     assert stage.failed_unit == "rosy-first-boot.service"
 
 
+def test_moved_card_setup_is_reported_before_the_expected_first_boot_failure():
+    units = dict(ALL_ACTIVE)
+    units["rosy-first-boot.service"] = "failed"
+    units["rosy-core.service"] = "inactive"
+    stage = _module().classify(units, {"state": "NEW_DEVICE_SETUP", "reason": "hardware_changed"})
+    assert stage.name == "SETUP"
+    assert stage.label == "SETUP"
+    assert stage.detail == "new device registration required"
+
+
 @pytest.mark.parametrize("state", ["PROVISIONING_AP", "PROVISIONING_HOLD"])
 def test_a_held_personalization_is_a_failure_with_its_reason(state):
     units = dict(ALL_ACTIVE, **{"rosy-core.service": "inactive", "rosy-runtime.target": "inactive"})

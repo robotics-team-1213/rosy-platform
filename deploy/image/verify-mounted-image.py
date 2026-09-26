@@ -13,6 +13,7 @@ import sys
 
 REQUIRED_UNITS = (
     "rosy-first-boot.service",
+    "rosy-new-device-setup.service",
     "rosy-release-recover.service",
     "rosy-sd-provision.service",
     "rosy-core.service",
@@ -193,6 +194,7 @@ def inspect(root: Path, release_id: str) -> list[str]:
         root / "etc/rosy/motion_profiles.yaml",
         root / "etc/rosy/cyclonedds.xml",
         root / "opt/rosy/first-boot/rosy-first-boot.py",
+        root / "opt/rosy/first-boot/rosy-new-device-setup.py",
         root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
         root / "opt/rosy/native-runtime/native_release.py",
         root / "opt/rosy/native-runtime/recover-release.sh",

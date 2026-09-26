@@ -197,6 +197,17 @@ def evaluate(stage: Any = None, devices: Optional[Iterable[Any]] = None, *, batt
     whatever else holds. Missing or malformed inputs never raise.
     """
     kind = stage_kind(stage)
+    if kind == "SETUP":
+        action = _todo("new_device_setup", "새 장치를 등록하세요", "Register new device")
+        return {
+            "state": CAUTION,
+            "label": LABELS[CAUTION],
+            "lcd_label": LCD_LABELS[CAUTION],
+            "reason": "새 장치 등록 대기",
+            "lcd_reason": "register new device",
+            "motion_reason": "",
+            "todos": [action],
+        }
     items = todos(stage, devices, battery_percent=battery_percent,
                   battery_warning_percent=battery_warning_percent, runtime_mode=runtime_mode,
                   failed_unit=failed_unit)

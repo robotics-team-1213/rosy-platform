@@ -70,6 +70,33 @@ def _render(module, root, units):
     return record, errors, calls
 
 
+def test_moved_card_status_shows_provisional_name_and_setup_stage(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    pending = root / "var/lib/rosy/provisioning/new-device-setup.json"
+    pending.write_text(json.dumps({"device_identity": {"device_name": "rosy-pinky-k7m4"}}), encoding="utf-8")
+    (root / "var/lib/rosy/provisioning/state.json").write_text(
+        '{"state":"NEW_DEVICE_SETUP","reason":"hardware_changed"}', encoding="utf-8"
+    )
+    units = dict(FAILED_CARD_UNITS, **{"rosy-release-recover.service": "active\n",
+                                        "rosy-first-boot.service": "failed\n"})
+    record, _errors, _calls = _render(module, root, units)
+    assert record["stage"] == "SETUP"
+    assert record["device_name"] == "rosy-pinky-k7m4"
+
+
+def test_setup_bound_to_another_board_does_not_advertise_the_provisional_name(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    pending = root / "var/lib/rosy/provisioning/new-device-setup.json"
+    pending.write_text(json.dumps({"device_identity": {"device_name": "rosy-pinky-k7m4"}}), encoding="utf-8")
+    (root / "var/lib/rosy/provisioning/state.json").write_text(
+        '{"state":"PROVISIONING_HOLD","reason":"setup_bound_to_different_board"}', encoding="utf-8"
+    )
+    facts = module.gather(root, _runner(FAILED_CARD_UNITS, []))
+    assert facts["device_name"] == "rosy-pinky-e4us"
+
+
 def test_the_first_card_failure_is_visible_on_every_sink(tmp_path):
     module = _module()
     root = _device(tmp_path)

@@ -1276,3 +1276,10 @@
 - 근거: OMX 호스트 시험 8개 통과; Docker Linux/amd64 이미지 빌드 digest `sha256:8b4d2fdf534687132cc7d9fb8441b3db63c140edfaaba5164693fd56ca77d861`; 이미지에서 `open_manipulator_bringup` 및 `dynamixel_hardware_interface` 조회 성공; Compose 설정 검증 통과.
 - gate 변화: SOURCE/LOCAL 이미지 빌드 및 사전점검 GO; ROS-SIM/ARTIFACT HOLD; DEVICE/FIELD PARKED.
 - Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
+
+## 2026-09-26 · feat(sd): fail closed on board transfer and expose setup status
+- 변경: first-boot가 보드 이동을 감지해 새 임시 신원을 준비하고 CORE 시작을 막는다. 상태 서버는 8080에서 읽기 전용 안내만 제공한다.
+- 증거: 관련 호스트 시험 439 passed, 8 skipped; arm64 이미지 및 Pi 검증 전.
+- gate 변화: ARTIFACT/DEVICE HOLD 유지.
+- 결정: D-154.
+- 교훈: 등록 권한 없이 로봇 번호를 자동 배정하지 않는다.

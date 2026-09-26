@@ -235,3 +235,10 @@ def test_the_module_is_standard_library_only():
                  if isinstance(node, ast.ImportFrom) and node.module}
     assert imported <= set(sys.stdlib_module_names) | {"__future__"}, imported
     assert (MODULE.parent / "__init__.py").read_text(encoding="utf-8").strip() == ""
+
+
+def test_moved_card_setup_is_caution_with_registration_action():
+    result = rs.evaluate("SETUP")
+    assert result["state"] == "caution"
+    assert result["lcd_reason"] == "register new device"
+    assert result["todos"][0]["id"] == "new_device_setup"

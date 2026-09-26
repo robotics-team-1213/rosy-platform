@@ -1,0 +1,22 @@
+[Unit]
+Description=ROSY moved-card registration status (no CORE commands)
+ConditionPathExists=/var/lib/rosy/provisioning/new-device-setup.json
+After=network.target rosy-first-boot.service
+
+[Service]
+Type=simple
+User=rosy
+Group=rosy
+ExecStart=/usr/bin/python3 -B /opt/rosy/first-boot/rosy-new-device-setup.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

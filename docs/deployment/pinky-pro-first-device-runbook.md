@@ -311,6 +311,43 @@ the release/runtime commands below need root. For the Local console path, use
 `--connection console`. Never attach a password, token, credential, private
 key, or `.env` file.
 
+### Moving a personalized SD to another Pi
+
+A different Raspberry Pi serial makes this a **new device**. On an image that
+includes the moved-card setup path, first boot creates a root-only provisional
+identity in `/var/lib/rosy/provisioning/new-device-setup.json` and reports
+`NEW_DEVICE_SETUP`. Site Wi-Fi and key-only SSH stay available. The old
+robot number, API credential, Fleet pairing, and motion runtime stay blocked:
+`http://<robot-ip>:8080/dashboard` shows registration instructions, while
+`/api/v1` returns HTTP 503. The setup page is read-only.
+
+1. Check the physical Pi identity and the SD label. Keep the old SD unchanged
+   as the previous device's data archive; use a blank card for the new device.
+   If there is no spare card, take and verify a full private image backup under
+   `X:\DevTemp\` before considering a rewrite. A diagnostic extract is not a
+   full backup.
+2. Read the root-only setup record through the operator SSH key. Its
+   `device_identity.device_name` and `device_uid` are provisional. Do not
+   publish the old board serial or UID from that record.
+3. On the Windows writer PC, run the existing signed-image `-PlanOnly`
+   workflow for a **new** device, optionally passing the provisional
+   `-DeviceName` and `-DeviceUid`. Do not pass `-ReprovisionReceipt`;
+   that option intentionally keeps the prior device identity. The writer
+   checks the registry, allocates a free robot number, and creates new API
+   and Fleet credentials. If the provisional name is already registered,
+   let the writer generate another name.
+4. Review the plan, write and read back the blank card with `write-card.ps1`,
+   then boot this Pi. Verify its hardware serial, new UID/name, robot number,
+   CORE `/api/v1` and dashboard responses, and the signed release revision.
+   Keep motor and navigation promotion separate from this registration.
+5. Restore only reviewed maps or settings from the archived card. Never copy
+   old device identity, runtime environment, CORE auth, Fleet bootstrap, or
+   provisioning records into the new installation.
+
+An image without this setup path, including the currently observed
+`2026.09.26-017` installation, remains in `PROVISIONING_HOLD` on a new
+Pi and does not serve port 8080. A source change alone does not update it.
+
 ### Changing the site Wi-Fi on the card (D-176)
 
 Power the robot off and put the card in a PC. The boot partition holds

@@ -32,6 +32,7 @@ def test_inspect_passes_with_valid_image(tmp_path):
         "etc/rosy/motion_profiles.yaml",
         "etc/rosy/cyclonedds.xml",
         "opt/rosy/first-boot/rosy-first-boot.py",
+        "opt/rosy/first-boot/rosy-new-device-setup.py",
         "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
         "opt/rosy/native-runtime/native_release.py",
         "opt/rosy/native-runtime/recover-release.sh",
@@ -150,6 +151,8 @@ def test_inspect_requires_both_installed_native_runtime_copies(tmp_path):
     (root / "opt/rosy/releases" / release_id).mkdir(parents=True)
 
     findings = verify_mounted_image.inspect(root, release_id)
+    assert any("rosy-new-device-setup.py" in finding for finding in findings)
+    assert any("rosy-new-device-setup.service" in finding for finding in findings)
 
     missing = {Path(f.split(": ", 1)[1]).as_posix() for f in findings
                if f.startswith("missing required image path")}

@@ -1,6 +1,7 @@
 [Unit]
 Description=ROSY one-time Pinky Pro personalization
 OnFailure=rosy-boot-status.service
+OnFailure=rosy-new-device-setup.service
 Requires=local-fs.target NetworkManager.service
 After=local-fs.target NetworkManager.service
 Before=network-online.target rosy-sd-provision.service rosy-runtime.target

@@ -37,10 +37,14 @@ class Stage:
 
 def classify(units: dict[str, str], provisioning: dict | None) -> Stage:
     """Map systemd ActiveState values and the first-boot state to one stage."""
+    if units.get("rosy-release-recover.service") == "failed":
+        return Stage("FAILED", "rosy-release-recover.service")
+    state = (provisioning or {}).get("state")
+    if state == "NEW_DEVICE_SETUP":
+        return Stage("SETUP", detail="new device registration required")
     for unit in BOOT_UNITS:
         if units.get(unit) == "failed":
             return Stage("FAILED", unit)
-    state = (provisioning or {}).get("state")
     if state in HELD_STATES:
         reason = (provisioning or {}).get("reason", "unknown")
         return Stage("FAILED", "rosy-first-boot.service", f"{state}: {reason}")

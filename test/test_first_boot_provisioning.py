@@ -5,6 +5,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -165,8 +167,100 @@ def test_hardware_serial_change_is_a_fail_closed_identity_mismatch(tmp_path):
     provisioner = module.FirstBootProvisioner(root=root, network_activate=lambda _profile: True)
     provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
 
-    with pytest.raises(ValueError, match="hardware serial"):
+    result = provisioner.apply(bundle=bundle, hardware_serial="10000000deadbeef")
+
+    assert result["ok"] is False
+    assert result["state"] == "NEW_DEVICE_SETUP"
+    assert result["device_name"] != "rosy-pinky-k7m4"
+    pending_path = root / "var/lib/rosy/provisioning/new-device-setup.json"
+    pending = json.loads(pending_path.read_text(encoding="utf-8"))
+    assert pending["hardware_serial"] == "10000000deadbeef"
+    assert pending["device_identity"]["device_name"] == result["device_name"]
+    assert pending["device_identity"]["device_uid"] != _bundle()["device_identity"]["device_uid"]
+    assert json.loads((root / "var/lib/rosy/provisioning/complete.json").read_text())["hardware_serial"] == (
+        "10000000abcdef01"
+    )
+    assert json.loads((root / "var/lib/rosy/provisioning/hardware-binding.json").read_text())["hardware_serial"] == (
+        "10000000abcdef01"
+    )
+    assert (root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection").exists()
+    assert json.loads((root / "var/lib/rosy/provisioning/state.json").read_text())["state"] == "NEW_DEVICE_SETUP"
+    if os.name == "posix":
+        assert pending_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_moved_card_setup_identity_is_stable_and_old_board_cannot_resume(tmp_path):
+    module = _module()
+    root, bundle = _case(tmp_path)
+    provisioner = module.FirstBootProvisioner(root=root, network_activate=lambda _profile: True)
+    provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+
+    first = provisioner.apply(bundle=bundle, hardware_serial="10000000deadbeef")
+    (root / "var/lib/rosy/provisioning/state.json").write_text(
+        '{"state":"PROVISIONED"}', encoding="utf-8"
+    )
+    second = provisioner.apply(bundle=bundle, hardware_serial="10000000deadbeef")
+
+    assert second == first
+    assert json.loads((root / "var/lib/rosy/provisioning/state.json").read_text()) == {
+        "state": "NEW_DEVICE_SETUP", "reason": "hardware_changed"
+    }
+    with pytest.raises(ValueError, match="different board"):
+        provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+    assert json.loads((root / "var/lib/rosy/provisioning/state.json").read_text()) == {
+        "state": "PROVISIONING_HOLD", "reason": "setup_bound_to_different_board"
+    }
+    with pytest.raises(ValueError, match="different board"):
+        provisioner.apply(bundle=bundle, hardware_serial="10000000feedface")
+
+
+def test_moved_card_entrypoint_exits_nonzero_for_the_systemd_setup_handoff(tmp_path):
+    root, bundle = _case(tmp_path)
+    _module().FirstBootProvisioner(root=root, network_activate=lambda _profile: True).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01"
+    )
+    run = subprocess.run(
+        [sys.executable, "-B", str(FIRST_BOOT / "rosy-first-boot.py"),
+         "--root", str(root), "--bundle", str(bundle),
+         "--hardware-serial", "10000000deadbeef"],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": str(ROOT)},
+    )
+    assert run.returncode == 1, run.stderr
+    result = json.loads(run.stdout)
+    assert result["state"] == "NEW_DEVICE_SETUP"
+    assert result["ok"] is False
+    assert "10000000abcdef01" not in run.stdout
+
+
+def test_moved_card_setup_cannot_be_laundered_by_removing_completion_record(tmp_path):
+    module = _module()
+    root, bundle = _case(tmp_path)
+    provisioner = module.FirstBootProvisioner(root=root, network_activate=lambda _profile: True)
+    provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+    provisioner.apply(bundle=bundle, hardware_serial="10000000deadbeef")
+    (root / "var/lib/rosy/provisioning/complete.json").unlink()
+    (root / "var/lib/rosy/provisioning/hardware-binding.json").unlink()
+    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="completion record"):
         provisioner.apply(bundle=bundle, hardware_serial="10000000deadbeef")
+    assert (root / "var/lib/rosy/provisioning/new-device-setup.json").exists()
+
+
+def test_moved_card_refuses_a_tampered_previous_public_identity(tmp_path):
+    module = _module()
+    root, bundle = _case(tmp_path)
+    provisioner = module.FirstBootProvisioner(root=root, network_activate=lambda _profile: True)
+    provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+    identity_path = root / "etc/rosy/device-identity.json"
+    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    identity["hostname"] = "rosy-pinky-aaaa"
+    identity_path.write_text(json.dumps(identity), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="previous device identity"):
+        provisioner.apply(bundle=bundle, hardware_serial="10000000deadbeef")
+    assert not (root / "var/lib/rosy/provisioning/new-device-setup.json").exists()
 
 
 def test_first_boot_unit_orders_personalization_before_network_and_runtime():

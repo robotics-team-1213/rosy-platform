@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -166,6 +167,15 @@ def gather(root: Path, run: Runner) -> dict:
     for unit in BOOT_UNITS:
         units[unit] = run(["systemctl", "show", "--property=ActiveState", "--value", unit]).strip() or "unknown"
     identity = _read_json(root / "etc/rosy/device-identity.json") or {}
+    provisioning = _read_json(root / "var/lib/rosy/provisioning/state.json")
+    setup = {}
+    if (provisioning or {}).get("state") == "NEW_DEVICE_SETUP":
+        setup = _read_json(root / "var/lib/rosy/provisioning/new-device-setup.json") or {}
+    pending_identity = setup.get("device_identity")
+    if isinstance(pending_identity, dict):
+        pending_name = pending_identity.get("device_name")
+        if isinstance(pending_name, str) and re.fullmatch(r"rosy-pinky-[a-hj-km-np-z2-9]{4}", pending_name):
+            identity = pending_identity
     current = root / "opt/rosy/current"
     try:
         release_id = os.readlink(current).rsplit("/", 1)[-1]
@@ -179,7 +189,7 @@ def gather(root: Path, run: Runner) -> dict:
         boot_id = None
     return {
         "units": units,
-        "provisioning": _read_json(root / "var/lib/rosy/provisioning/state.json"),
+        "provisioning": provisioning,
         "device_name": identity.get("device_name") or identity.get("hostname"),
         "release_id": release_id,
         "ipv4": ipv4,

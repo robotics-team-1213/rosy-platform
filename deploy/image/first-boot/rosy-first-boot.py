@@ -18,10 +18,16 @@ from typing import Callable
 
 
 try:
-    from deploy.sd.personalization import operator_key_fingerprint, validate_provision_bundle
+    from deploy.sd.personalization import (
+        DeviceIdentity, generate_device_identity, operator_key_fingerprint,
+        validate_device_identity, validate_provision_bundle,
+    )
 except ModuleNotFoundError:  # Installed image layout.
     sys.path.insert(0, "/opt/rosy")
-    from deploy.sd.personalization import operator_key_fingerprint, validate_provision_bundle
+    from deploy.sd.personalization import (
+        DeviceIdentity, generate_device_identity, operator_key_fingerprint,
+        validate_device_identity, validate_provision_bundle,
+    )
 
 
 SERIAL = re.compile(r"^[0-9a-f]{8,32}$")
@@ -282,24 +288,90 @@ class FirstBootProvisioner:
         self.complete = self.state_dir / "complete.json"
         self.state = self.state_dir / "state.json"
         self.binding = self.state_dir / "hardware-binding.json"
+        self.new_device_setup = self.state_dir / "new-device-setup.json"
 
     def _inside(self, relative: str) -> Path:
         return self.root / relative.lstrip("/")
 
     def _existing(self, hardware_serial: str) -> dict | None:
         if not self.complete.is_file():
+            if self.new_device_setup.exists():
+                raise ValueError("new-device setup is missing its previous completion record")
             return None
         try:
             data = json.loads(self.complete.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("provisioning completion record is unreadable") from exc
+        if self.new_device_setup.is_file():
+            try:
+                pending = json.loads(self.new_device_setup.read_text(encoding="utf-8"))
+                identity = validate_device_identity(DeviceIdentity(**pending["device_identity"]))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                raise ValueError("new-device setup record is unreadable or invalid") from exc
+            if (pending.get("schema_version") != 1
+                    or pending.get("prior_device_uid") != data.get("device_uid")
+                    or pending.get("prior_hardware_serial") != data.get("hardware_serial")):
+                raise ValueError("new-device setup does not match the previous device")
+            if pending.get("hardware_serial") != hardware_serial:
+                _json_atomic(
+                    self.state,
+                    {"state": "PROVISIONING_HOLD", "reason": "setup_bound_to_different_board"},
+                    0o600,
+                )
+                raise ValueError("new-device setup is bound to a different board")
+            held = {"state": "NEW_DEVICE_SETUP", "reason": "hardware_changed"}
+            try:
+                current_state = json.loads(self.state.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                current_state = None
+            if current_state != held:
+                _json_atomic(self.state, held, 0o600)
+            return {"ok": False, "state": "NEW_DEVICE_SETUP", "device_name": identity.device_name}
         if data.get("hardware_serial") != hardware_serial:
-            raise ValueError("hardware serial does not match the provisioned device")
+            return self._stage_new_device(data, hardware_serial)
         return {
             "ok": True,
             "state": "ALREADY_PROVISIONED",
             "device_name": data.get("device_name"),
         }
+
+    def _stage_new_device(self, previous: dict, hardware_serial: str) -> dict:
+        """Keep the previous installation inert and stage a fresh identity.
+
+        The existing CORE gate still fails until the operator registers the new
+        robot on a verified card. Site Wi-Fi and SSH remain available for that
+        handoff; no old robot number, API token or Fleet credential is reused.
+        """
+        try:
+            binding = json.loads(self.binding.read_text(encoding="utf-8"))
+            raw_identity = json.loads(self._inside("etc/rosy/device-identity.json").read_text(encoding="utf-8"))
+            identity = validate_device_identity(DeviceIdentity(**raw_identity))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise ValueError("previous device identity cannot be verified") from exc
+        if (binding != {"hardware_serial": previous.get("hardware_serial"),
+                        "device_uid": previous.get("device_uid")}
+                or identity.device_uid != previous.get("device_uid")
+                or identity.device_name != previous.get("device_name")
+                or identity.model != "pinky_pro"):
+            raise ValueError("previous device identity cannot be verified")
+        if not self._inside(SITE_PROFILE_PATH).is_file():
+            raise ValueError("site Wi-Fi profile is unavailable for new-device setup")
+        fresh = generate_device_identity("pinky_pro", registered_names={previous["device_name"]})
+        pending = {
+            "schema_version": 1,
+            "hardware_serial": hardware_serial,
+            "prior_hardware_serial": previous["hardware_serial"],
+            "prior_device_uid": previous["device_uid"],
+            "device_identity": {
+                "device_uid": fresh.device_uid,
+                "device_name": fresh.device_name,
+                "hostname": fresh.hostname,
+                "model": fresh.model,
+            },
+        }
+        _json_atomic(self.new_device_setup, pending, 0o600)
+        _json_atomic(self.state, {"state": "NEW_DEVICE_SETUP", "reason": "hardware_changed"}, 0o600)
+        return {"ok": False, "state": "NEW_DEVICE_SETUP", "device_name": fresh.device_name}
 
     def _hostname(self, hostname: str) -> None:
         _write_atomic(self._inside("etc/hostname"), hostname + "\n", 0o644)
