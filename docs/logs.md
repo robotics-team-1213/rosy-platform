@@ -2423,3 +2423,18 @@
 - 제한: Windows Docker Desktop linux/amd64, synthetic config/cert, CPU ArUco; CORE unreachable, GPU/실물 장비 없음. 전용 Compose project/volume/networks 제거. Ubuntu SITE/DEVICE/FIELD와 자동 실행 gate는 계속 HOLD.
 - gate 변화: SOURCE/LOCAL candidate smoke만 확인했다. 실제 배포나 로봇 동작 수용은 확인하지 않았다.
 - 자세한 결과/hash: `docs/validation/2026-09-26-site-stack-container-smoke.md`.
+
+## 2026-09-26 · uncommitted · test(site): verify D-287 intent contracts
+- 변경: direct goal schema와 `/api/fleet/do` 통역기가 client scheduler field, boolean 및 비유한 좌표를 CORE dispatch 전에 거절하도록 검증했다.
+- 증거: Fleet 전체 `504 passed, 5 skipped`; CORE intent + docs harness/network 계약 `83 passed, 21 warnings`; harness lint `0 errors, 21 warnings`.
+- gate 변화: SOURCE/LOCAL API 계약만 검증했다. Ubuntu host, 실제 CORE/카메라, automatic policy, DEVICE/FIELD 수용은 확인하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(adr): define Site Fleet intent and message contracts
+- 변경: D-287 Accepted와 API Reference v1.36을 추가했다. 외부 API는 typed intent만 받고 Fleet이 identity·priority·eligibility·dispatch를 계산하며, Site REST·camera WSS·CORE PRT WSS·CORE REST 계약을 분리한다.
+- 증거: `test_task_contract_docs.py`는 ADR/API Ref/GoalRequest/SiteSightingPayload/FleetTaskStatus/PRT version 정렬을 확인한다. D-287은 기존 public path/body나 robot envelope field를 추가하지 않는다.
+- gate 변화: SOURCE/LOCAL 계약 게이트만 대상이다. Ubuntu/TLS/실물 CORE·카메라, D-177 최종 결과 상관관계와 D-268 자동 정책 증거는 별도 HOLD다.
+
+## 2026-09-26 · uncommitted · test(site): final D-287 contract verification
+- 변경: 직전 기록 뒤 추가한 `/api/fleet/do` 입력 거부와 API 설명을 포함해 계약 검사를 다시 실행했다.
+- 증거: Fleet 전체 `504 passed, 5 skipped`; intent·D-287·하네스/network suite `86 passed, 21 warnings`; touched Python 파일 flake8 `--max-line-length=120` 통과.
+- gate 변화: SOURCE/LOCAL만. 로컬 시험은 Ubuntu 설치, 실물 연결, GPU inference 또는 자동 작업 승인으로 승격하지 않는다.

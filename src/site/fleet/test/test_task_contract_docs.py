@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import pytest
 from core_common.protocol import schemas
+from core_common.protocol.sightings import SiteSightingPayload
+from fleet.server.app import GoalRequest
+from pydantic import ValidationError
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -16,7 +20,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.35" in reference
+    assert "**Version:** v1.36" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference
@@ -54,3 +58,34 @@ def test_task_path_does_not_enable_automatic_policy_dispatch_by_default():
     assert "POLICY_DISPATCH_ENABLED = False" in source
     assert "POLICY_NOT_ACCEPTED" in source
     assert "Task 7" in plan
+
+
+def test_site_fleet_intent_and_message_boundaries_are_governed_together():
+    reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
+        encoding="utf-8")
+    adr = (ROOT / "docs/adr/D-287-site-fleet-intent-api-contracts.md").read_text(
+        encoding="utf-8")
+
+    assert "**Version:** v1.36" in reference
+    assert "## 10.9 Site Fleet intent interpretation and message boundaries (D-287 Accepted)" in reference
+    assert "D-287" in reference
+    assert "**Status:** Accepted (2026-09-26)" in adr
+    assert "클라이언트가 `priority_class`" in adr
+    assert "priority_class" in adr
+    assert "`protocol_version`은 `1.0`으로 유지" in adr
+    assert "RabbitMQ" in adr
+
+    # Public request schemas carry only domain intent. Fleet derives identity,
+    # priority and dispatch state from authenticated server-side context.
+    assert set(GoalRequest.model_fields) == {"x", "y", "yaw"}
+    assert not {"source", "actor_id", "priority_class", "worker_id"}.intersection(
+        GoalRequest.model_fields)
+    with pytest.raises(ValidationError):
+        GoalRequest.model_validate({"x": 1.0, "y": 2.0, "priority_class": 0})
+    with pytest.raises(ValidationError):
+        GoalRequest.model_validate({"x": True, "y": 2.0})
+    with pytest.raises(ValidationError):
+        GoalRequest.model_validate({"x": float("inf"), "y": 2.0})
+    assert not {"source_id", "source", "jpeg", "image", "image_url", "policy"}.intersection(
+        SiteSightingPayload.model_fields)
+    assert schemas.PROTOCOL_VERSION == "1.0"

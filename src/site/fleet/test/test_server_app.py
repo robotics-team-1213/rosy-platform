@@ -47,6 +47,25 @@ def test_do_translates_a_goal_and_rejects_a_ros_word():
     assert refused.json()["detail"]["code"] == "FORBIDDEN"
 
 
+def test_do_rejects_client_priority_and_boolean_goal_without_dispatch():
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    client = _client(robot)
+
+    priority = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": 1.0, "y": 2.0,
+        "priority_class": 0,
+    })
+    boolean_goal = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": True, "y": 2.0,
+    })
+
+    assert priority.status_code == 400
+    assert priority.json()["detail"]["code"] == "UNKNOWN_FIELD"
+    assert boolean_goal.status_code == 400
+    assert boolean_goal.json()["detail"]["code"] == "INVALID_NUMBER"
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
+
+
 def test_state_lists_the_roster():
     client = _client(FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"}),
                      FakeRobot("rosy_02", state={"robot_id": "rosy_02", "mode": "NAVIGATION"}))
@@ -72,6 +91,19 @@ def test_goal_to_an_unknown_robot_is_404_not_502():
                                               json={"x": 0.0, "y": 0.0})
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "UNKNOWN_ROBOT"
+
+
+@pytest.mark.parametrize("body", [
+    {"x": 1.0, "y": 2.0, "priority_class": 0},
+    {"x": 1.0, "y": 2.0, "source": "policy"},
+    {"x": True, "y": 2.0},
+])
+def test_goal_rejects_non_intent_dispatch_fields_and_invalid_numbers(body):
+    robot = FakeRobot("rosy_01")
+    response = _client(robot).post("/api/fleet/robots/rosy_01/goal", json=body)
+
+    assert response.status_code == 422
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
 
 
 def test_a_goal_the_robot_refuses_comes_back_as_502_with_the_robot_code():

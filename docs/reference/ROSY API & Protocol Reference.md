@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.35
+**Version:** v1.36
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -912,10 +912,77 @@ ACK/final-result reconciliation remain separate required work.
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
+## 10.9 Site Fleet intent interpretation and message boundaries (D-287 Accepted)
+
+The site API accepts a domain intent and lets Fleet interpret it. For the current
+navigation request, `GoalRequest` contains only `x`, `y`, and `yaw`; the
+authenticated principal supplies the actor identity. Fleet derives source,
+priority, task ID, eligibility, and dispatch state from server configuration
+and policy. Clients cannot submit `priority_class`, worker identity, arbitrary
+source identity, ROS/DDS topics, `cmd_vel`, raw camera frames, or a claimed
+execution result. `GoalRequest` is not a general command envelope.
+
+Goal coordinates must be finite JSON numbers; booleans and non-finite values
+are invalid. The direct `/api/fleet/robots/{robot_id}/goal` route rejects
+undeclared body fields with HTTP `422`. `/api/fleet/do` rejects unknown intent
+fields with HTTP `400` (`UNKNOWN_FIELD`) and invalid navigation numbers with
+HTTP `400` (`INVALID_NUMBER`). These requests are rejected before a CORE
+navigation call.
+
+The decision path is:
+
+```text
+authenticated intent
+  -> role and typed-input validation
+  -> append-only API audit + durable SQLite task
+  -> Fleet-derived eligibility and priority
+  -> existing per-robot CORE HTTPS REST contract
+  -> explicit CORE receipt or UNKNOWN reconciliation
+```
+
+`QUEUED` means Fleet durably recorded the request and has not dispatched it.
+`ACCEPTED` means CORE explicitly acknowledged receipt, not that execution began
+or finished. `RUNNING` and `COMPLETED` require CORE execution/final-result
+evidence correlated to the same task; D-177 correlation is not yet active for
+this site workflow. Any ambiguous result after dispatch stays `UNKNOWN` and is
+not automatically retried. Fleet SQLite and append-only history remain the
+source of truth. Priority is server-derived and never a public request field.
+
+Transport and payload ownership remain separate:
+
+| Producer → consumer | Contract | Carries | Does not carry |
+|---|---|---|---|
+| Browser/operator → Site Fleet | HTTPS `/api/fleet/*`, per-principal Bearer (D-276) | typed task intent, idempotency key | DDS, command priority, raw video |
+| Ceiling phone → overhead ingress | `rosy-overhead/1` WSS | latest JPEG frame, source-scoped credential | Fleet task or CORE command |
+| Vision → Site Fleet | HTTPS sighting REST, `SiteSightingPayload` (D-257) | derived pose and map/calibration lineage | image bytes, caller-selected source, policy approval |
+| CORE Agent → Site Fleet | existing PRT WebSocket `Envelope` | CORE heartbeat/event protocol | Site task queue state |
+| Site Fleet → robot CORE | configured CORE HTTPS REST | CORE-supported robot request | direct DDS participation |
+
+The PRT envelope's `protocol_version` remains `1.0`. `SiteSightingPayload` and
+`FleetTaskStatus` are typed contracts but do not make their REST fields part of
+the robot envelope. DDS remains inside CORE and robot runtime (D-59/D-269).
+
+The current single-host dispatcher uses SQLite; there is no RabbitMQ API or
+queue service in this release (D-271). If independent workers later require a
+broker, its versioned message must identify the task and dispatch attempt, have
+an expiry, and cause the consumer to re-read the authoritative task row.
+Publisher confirmation/outbox recovery and consumer ACK ownership must be
+specified and tested before deployment. A broker ACK is never a CORE receipt or
+robot completion. Video frames, DDS streams, secrets, and raw physical command
+payloads stay outside the generic work queue.
+
+An API or message contract change updates this reference, the typed schema or
+generated OpenAPI surface, implementation, and contract tests together. Add a
+new PRT field only when the robot/Fleet protocol itself changes; do not version
+the robot envelope for a site-only REST change. D-268 and field acceptance remain
+prerequisites for any automatic source; a displayed sighting alone never
+authorizes navigation or picking.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.36 | 2026-09-26 | D-287 Accepted: 외부 API는 typed intent를 받고 Fleet이 identity/priority/dispatch를 해석한다. 미선언 필드·boolean·비유한 목표값을 dispatch 전에 거절한다. Site 전송 경계를 고정하며 유효한 public path/body field와 robot envelope version은 바뀌지 않음. |
 | v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
 | v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |

@@ -7,6 +7,7 @@ ROS 토픽 이름은 받지 않는다. 기본 API(/api/v1/..., /api/fleet/...)�
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 
 FORBIDDEN_KEYS = frozenset({"cmd_vel", "image", "twist"})
@@ -126,6 +127,14 @@ def _require(verb: str, body: dict) -> None:
         has_point = body.get("x") is not None and body.get("y") is not None
         if not has_point and not body.get("waypoint"):
             raise IntentError("MISSING", "navigate needs x and y, or a waypoint")
+        if has_point:
+            for field in ("x", "y", "yaw"):
+                if field not in body:
+                    continue
+                value = body[field]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) \
+                        or not math.isfinite(value):
+                    raise IntentError("INVALID_NUMBER", f"{field} must be a finite number")
     if verb == "follow" and not body.get("target_robot_id"):
         raise IntentError("MISSING", "follow needs target_robot_id")
     if verb == "follow" and body.get("source") == "peer":

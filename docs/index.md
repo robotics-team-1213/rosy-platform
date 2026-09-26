@@ -111,6 +111,7 @@
 | D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
 | D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
 | D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
+| D-287 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 
 ## 계획·결과 문서
 
@@ -159,8 +160,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(site): final D-287 contract verification
+- 2026-09-26 · uncommitted · docs(adr): define Site Fleet intent and message contracts
+- 2026-09-26 · uncommitted · test(site): verify D-287 intent contracts
 - 2026-09-26 · uncommitted · test(site): rerun latest candidate 7bd81cf3
 - 2026-09-26 · uncommitted · docs(adr): accept D-286 shared role readout layout
-- 2026-09-26 · uncommitted · docs(adr): D-283 console action groups fit the fixed grammar
-- 2026-09-26 · uncommitted · test(site): rerun packaged candidate 46b7465b
-- 2026-09-26 · uncommitted · docs(site): align implementation plan with current ADR status

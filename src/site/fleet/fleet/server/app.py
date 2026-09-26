@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import math
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ from typing import Mapping, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.intent import IntentError, interpret
@@ -93,9 +94,18 @@ class SitePrincipal:
 
 
 class GoalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     x: float
     y: float
     yaw: float = 0.0
+
+    @field_validator("x", "y", "yaw", mode="before")
+    @classmethod
+    def _finite_numeric_goal(cls, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError("goal coordinates must be finite numbers")
+        return value
 
 
 class FormationRequest(BaseModel):
