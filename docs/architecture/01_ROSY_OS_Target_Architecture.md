@@ -1,4 +1,4 @@
-# 01. ROSY OS Target Architecture
+# 01. ROSY Platform Target Architecture
 
 ## 1. Layer Model
 

@@ -288,5 +288,6 @@
 | D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 | Accepted |
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 | Accepted |
 | D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 | Proposed |
+| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 | Accepted |
 ---
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 | Accepted |

@@ -157,8 +157,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): D-290 ROSY Platform 명명과 현장 의도 경계
 - 2026-09-26 · uncommitted · docs(api): merge camera capture with LAN discovery
 - 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
 - 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
 - 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
-- 2026-09-26 · uncommitted · paired robot outbound discovery contract

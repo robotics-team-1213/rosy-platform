@@ -2460,3 +2460,9 @@
 - 변경: preserve site mDNS API v1.37 and paired robot Fleet location v1.38; assign camera evidence upload/list/download to v1.39. Align the API reference, server banner, schema description, contract test, and device validation note.
 - 증거: reviewed merge conflicts and ran focused camera, discovery, and documentation contract tests. Earlier log entries retain their branch-local version history.
 - gate 변화: SOURCE/LOCAL only. New ARM64 image and physical camera capture remain unverified.
+
+## 2026-09-26 · uncommitted · docs(adr): D-290 ROSY Platform 명명과 현장 의도 경계
+
+- 변경: 전체 제품명은 ROSY Platform으로 정하고, Fleet의 현장 Mission DSL 소유권(D-12)을 유지한다. Operations는 현재 별도 실행기/DB가 아닌 운영 화면·기능 영역의 목표 이름이며 Fabric은 역할별 계약과 어댑터다.
+- 근거: 현재 Fleet의 원자 navigation 작업 이력, 구조화된 /api/fleet/do, D-269의 REST/WSS 경계, D-170의 명령 추적 유예, D-268·D-273·D-281·D-282의 수용 상태를 대조했다.
+- gate 변화: 없음. 명명·권한 ADR과 목표 문서만 갱신했고 자연어 실행, OMX 원격 API, AI 정책 및 DEVICE/FIELD 수용은 추가하지 않았다.
