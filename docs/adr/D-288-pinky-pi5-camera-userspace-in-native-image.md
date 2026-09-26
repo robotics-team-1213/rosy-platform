@@ -12,12 +12,12 @@
 2. Pi 5 `rpi/pisp` 파이프라인과 IPA, OV5647용 `rpi/vc4`를 빌드한다. Picamera2의 ARM64 Python 의존은 별도 해시 잠금 파일에 고정하고, 시스템 런타임 패키지는 잠긴 Noble apt에서 설치한다. 이미지에 소스 잠금 사본을 남긴다. 빌드 전용 컴파일러와 헤더는 설치 전 패키지 목록을 기준으로 제거한다.
 3. 빌드 실패, 입력 해시 불일치, Python import 또는 `rpicam-still --version` 실패 시 이미지를 생성하지 않는다. mounted-image 검증기는 카메라 실행 파일과 소스 잠금 기록을 확인한다. 실제 센서 열거와 JPEG 촬영은 새 SD로 부팅한 장치에서 별도 검증한다.
 4. D-264의 카메라 행에 적힌 “Noble 패키지가 없으면 생략하고 소스 빌드하지 않는다”는 제한을 이 결정으로 대체한다. D-264의 I2C·GPIO 진단 도구, 제품 이미지의 빌드 도구 제외, 사람 확인 원칙은 유지한다.
-5. 사용자 공간 설치는 CORE-only 기본 부팅을 바꾸지 않는다. `rosy-io` 카메라 노드 활성화, 장치 ACL, 대시보드 영상 전달은 별도 운용 검증 뒤 결정한다. CLI 사진 촬영 가능성과 제품 스트림 수용을 혼동하지 않는다.
+5. 첫 부팅의 `rosy-runtime.target`은 `rosy-camera.service`도 시작한다. 이 별도 계정은 `video` 그룹과 카메라 장치군(video4linux, media, dma_heap)만 열며 모터 버스와 `cmd_vel`에는 접근하지 않는다. Picamera2를 지정한 카메라 노드가 `camera/front`를 내고 도로 관측 노드가 제한된 `camera/preview/compressed` JPEG를 CORE에 보낸다. 카메라 실패가 CORE와 무구동 I/O의 시작을 막지는 않는다. 실제 프레임, 웹 미리보기, 권한 분리 검증 전에는 제품 카메라를 사용 가능으로 판정하지 않는다.
 
 **Alternatives:** Noble apt만 사용하면 현재 잠긴 소스에서 카메라 사용자 공간을 채울 수 없다. 공급사 SD의 라이브러리 복사는 출처·ABI·재현성을 제품 이미지에서 검증할 수 없다. 장치별 설치는 SD를 바꿀 때마다 같은 결함을 되풀이한다.
 
 **Consequences:** 이미지 빌드 시간과 산출물 크기가 늘어난다. PiSP/libcamera ABI가 함께 바뀌므로 네 소스의 커밋을 한 묶음으로 검증하고 갱신한다. 해시 고정은 소스 무결성의 근거이며 빌드·촬영 성공의 증거는 아니다.
 
-**Validation / Transition:** 호스트에서 잠금·호출 순서·검증기 계약 시험과 문서 lint를 통과시킨다. 이후 네이티브 ARM64 빌드에서 입력 검증, 이미지 검증, 패키지 목록, 크기를 기록한다. 새 이미지로 기록한 Pinky에서 `rpicam-hello --list-cameras`, `rpicam-still` 실제 JPEG, Picamera2 캡처를 확인하고 촬영 파일의 해시·치수·장치 상태를 `docs/validation/`에 남긴 뒤 Accepted 여부를 판단한다.
+**Validation / Transition:** 호스트에서 잠금·호출 순서·검증기 계약 시험과 문서 lint를 통과시킨다. 이후 네이티브 ARM64 빌드에서 입력 검증, 이미지 검증, 패키지 목록, 크기를 기록한다. 새 이미지로 기록한 Pinky에서 `rpicam-hello --list-cameras`, `rpicam-still` 실제 JPEG, Picamera2 캡처, `rosy-camera.service`, `camera/front` 및 `camera/preview/compressed`의 실제 프레임과 인증된 웹 미리보기를 확인한다. 촬영 파일의 해시·치수·장치 상태를 `docs/validation/`에 남긴 뒤 Accepted 여부를 판단한다.
 
 **References:** [Raspberry Pi camera software](https://www.raspberrypi.com/documentation/computers/camera_software.html), [official libcamera fork](https://github.com/raspberrypi/libcamera), [official rpicam-apps](https://github.com/raspberrypi/rpicam-apps), D-161, D-165, D-192, D-264.

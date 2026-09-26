@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # Install ROS 2 Jazzy and the native ROSY payload into a mounted Ubuntu Pi image.
 set -euo pipefail
 
@@ -323,6 +323,9 @@ chroot "$ROOT" getent passwd rosy-core >/dev/null 2>&1 || \
 chroot "$ROOT" getent group rosy-io >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 961 rosy-io
 chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 961 --gid 961 --system --no-create-home --shell /usr/sbin/nologin rosy-io
+chroot "$ROOT" getent group rosy-camera >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 963 rosy-camera
+chroot "$ROOT" getent passwd rosy-camera >/dev/null 2>&1 || \
+    chroot "$ROOT" useradd --uid 963 --gid 963 --system --no-create-home --shell /usr/sbin/nologin rosy-camera
 # D-190: the boot display's own account; no login shell, no home of its own
 # (the unit gives it HOME=/var/lib/rosy/display). SupplementaryGroups= in the
 # units names spi, gpio and i2c; systemd refuses to start a unit whose group

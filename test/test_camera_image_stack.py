@@ -37,6 +37,7 @@ def test_camera_inputs_are_pinned_and_installed_before_image_verification():
     assert all(re.fullmatch(r"[0-9a-f]{40}", pin["commit"]) for pin in pins)
     assert all(re.fullmatch(r"[0-9a-f]{64}", pin["sha256"]) for pin in pins)
     customizer = (IMAGE / "customize-rootfs.sh").read_text(encoding="utf-8")
+    assert (IMAGE / "customize-rootfs.sh").read_bytes().startswith(b"#!/usr/bin/env bash")
     assert customizer.index('bash "$CAMERA_INSTALLER"') < customizer.index('verify-mounted-image.py" --root')
     installer = (IMAGE / "install-camera-stack.sh").read_text(encoding="utf-8")
     assert (IMAGE / "install-camera-stack.sh").read_bytes().startswith(b"#!/usr/bin/env bash")
@@ -47,6 +48,25 @@ def test_camera_inputs_are_pinned_and_installed_before_image_verification():
     assert installer.index('meson_build libcamera') < installer.index('meson_build rpicam-apps')
     assert "-Dpipelines=rpi/pisp,rpi/vc4" in installer
     assert "--require-hashes" in installer
+
+
+def test_camera_capture_and_preview_start_on_first_boot_without_motor_access():
+    unit = (ROOT / "deploy/robot/native/rosy-camera.service").read_text(encoding="utf-8")
+    target = (ROOT / "deploy/robot/native/rosy-runtime.target").read_text(encoding="utf-8")
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+    launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    assert "Wants=rosy-io.service rosy-camera.service" in target
+    assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-camera.service"' in payload
+    assert "User=rosy-camera" in unit
+    assert "SupplementaryGroups=video" in unit
+    assert "DevicePolicy=closed" in unit
+    assert "DeviceAllow=char-video4linux rw" in unit
+    assert "DeviceAllow=char-media rw" in unit
+    assert "DeviceAllow=char-dma_heap rw" in unit
+    assert "dialout" not in unit and "rosy-motor" not in unit and "cmd_vel" not in launch
+    assert "camera_backend': 'picamera2'" in launch
+    assert "camera_detect_node" in launch and "road_observer_node" in launch
+    assert "line_observer_node" not in launch and "ir_adc_node" not in launch
 
 
 def test_camera_stack_verifier_rejects_missing_payload_and_changed_provenance(tmp_path):
