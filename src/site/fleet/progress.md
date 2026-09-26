@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "bcc7b138", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
