@@ -2333,3 +2333,10 @@
 - 검증: Fleet·사이트 배포 집중 테스트 527 passed/5 skipped, Compose 설정 검사 통과. Linux/amd64 Fleet/Vision/Proxy 이미지를 빌드했고, 로컬 HTTPS synthetic RBAC 요청과 SQLite 감사 readback을 검증했다. 세부 digest와 응답 코드는 `docs/validation/2026-09-26-site-rbac-local.md`에 기록했다.
 - gate 변화: SOURCE/LOCAL만 통과. Ubuntu 호스트 배포, 실제 사용자 교체·폐기, CORE/로봇 readback, 브라우저 역할 UI와 DEVICE/FIELD 검증은 열려 있다. 자동 이동·집기 권한은 계속 HOLD다.
 - 회귀: 요청된 D-276 파일만 통합한다. 기존 Signals·D-273 및 dashboard·secret-scan WIP는 별도 변경으로 유지.
+## 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
+
+- 변경: `docs/plans/2026-09-22-signals-button-contract-v2-proposal.md`의 유일한 질문(§4 F 등급)에 답 기입. Status행을 "결정 완료 (2026-09-26): F1 + F2 채택"으로 갱신하고 §8 결정을 추가 — ① F1(렌즈 방향 RGB 색 센서로 실측)+F2(건전지 라인 직렬 MOSFET 강제 소등) 채택(권장안 그대로, 닫힌 고리: 실측→불일치 시 계산→불확실 시 소등) ② F-EXT는 `signal/observer/` 설계로 이미 착지한 비침습 교차 검증이라 별도 유지 ③ F0 기각(건전지 교체·손버튼 후 영구 불일치 = "추정이 아니라 측정"과 충돌) ④ v1 페일세이프 재정의 전제(관제 침묵→적색 유지, 상태 불확실→F2 소등) 명시 ⑤ 현 v1 구현은 2단계(본 문서 확정판+README v2 개정+계약 시험)가 끝날 때까지 손대지 않음, 다음 순서는 §7 그대로. `docs/plans/AGENTS.md` 해당 행의 "결정 대기" 문구도 갱신
+- 증거: §4 표가 F0·F1·F-EXT·F2 4옵션 구조라 답이 전부를 다룬다(채택·별도 유지·기각). 문서는 계획 문서라 ADR Status·계약 코드·펌웨어를 건드리지 않았고, `git diff`는 해당 2문서 + logs 3파일뿐. harness lint 0 error, 문서 계약 시험(test_harness_contracts·test_network_topology_contracts) 초록
+- gate 변화: 없음(ADR 신설·Status 변경 없음 — 계획 문서의 결정 기입이며, ROSY-SIGNAL-001 v2 계약 개정은 §7 2단계의 별도 변경)
+- 회귀: 없음(코드·펌웨어 무변경. 동료 WIP 파일 미스테이징 유지)
+- 교훈: "이 문서의 유일한 질문"으로 표시된 결정은 표의 옵션 수만큼 답이 필요하다 — 채택만 적고 기각·별도 항목을 비워 두면 나중에 같은 질문이 다시 올라온다. 그리고 승인은 코드 착수 신호이므로 "v1은 언제까지 건드려도 되는가"를 같은 답에 함께 적어야 한다
