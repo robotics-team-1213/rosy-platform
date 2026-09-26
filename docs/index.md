@@ -161,8 +161,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(site): advance API Reference after D-283
 - 2026-09-26 · uncommitted · docs(site): resolve Fleet ADR number collision and pin OpenAPI schema
 - 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
+- 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
 - 2026-09-26 · uncommitted · test(site): final D-287 contract verification
-- 2026-09-26 · uncommitted · docs(adr): define Site Fleet intent and message contracts
-- 2026-09-26 · uncommitted · test(site): verify D-287 intent contracts

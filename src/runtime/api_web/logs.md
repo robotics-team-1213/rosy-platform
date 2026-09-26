@@ -110,3 +110,11 @@
 - gate 변화: 없음
 - 결정: D-260 Proposed
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(core_api_web): add D-283 action group manifest metadata
+
+- 변경: panel registry validates optional console-act `action_group`; surface descriptors and structural revision carry the field. Role/CAP-001/inventory filtering still removes unsupported panels before groups are built.
+- 근거: `python -m pytest src/runtime/api_web/test -q` 63 passed, 3 skipped; dashboard/CORE browser group also passed.
+- gate 변화: 없음. REST path is unchanged; additive optional descriptor field is documented in API Ref v1.36.
+- 결정: D-283 Accepted.
+- 교훈: 없음

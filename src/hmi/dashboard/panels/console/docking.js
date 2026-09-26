@@ -16,21 +16,29 @@ export function mount(root, ctx) {
 
   let supported = false;
   let hasDocks = false;
+  let statusKnown = false;
+  let currentState = null;
+  let pendingCommands = 0;
   function enableActions() {
     const enabled = supported;
     dock.disabled = !enabled || !hasDocks || !select.value;
     undock.disabled = cancel.disabled = !enabled;
   }
-  const stopStatus = ctx.store.poll("/api/v1/docking/status", 1_000, (data) => {
-    supported = data.supported === true;
+  function renderStatus(data) {
+    if (typeof data.supported === "boolean") supported = data.supported;
+    statusKnown = true;
+    currentState = data.state;
     facts.replaceChildren(el("dt", "", "기능 지원"), el("dd", "", supported ? "사용 가능" : "제한 또는 미지원"),
       el("dt", "", "상태"), el("dd", "", data.state || "—"),
       el("dt", "", "현재 도크"), el("dd", "", data.dock_id || "—"),
       el("dt", "", "단계"), el("dd", "", data.phase || "—"),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));
-    message.textContent = supported ? "도킹 capability가 활성화되어 있습니다." : "도킹 capability가 없어서 주행 명령을 막았습니다.";
     enableActions();
-  }, (error) => { supported = false; message.textContent = `도킹 상태를 확인할 수 없어 명령을 막았습니다: ${error.message}`; enableActions(); });
+  }
+  const stopStatus = ctx.store.poll("/api/v1/docking/status", 1_000, (data) => {
+    renderStatus(data);
+    message.textContent = supported ? "도킹 capability가 활성화되어 있습니다." : "도킹 capability가 없어서 주행 명령을 막았습니다.";
+  }, (error) => { supported = false; statusKnown = false; message.textContent = `도킹 상태를 확인할 수 없어 명령을 막았습니다: ${error.message}`; enableActions(); });
   const stopDocks = ctx.store.poll("/api/v1/docking/docks", 10_000, (data) => {
     const docks = data.docks || [];
     hasDocks = docks.length > 0;
@@ -41,10 +49,15 @@ export function mount(root, ctx) {
 
   async function run(button, path, body, prompt, success) {
     if (!supported || button.disabled || !window.confirm(prompt)) return;
+    pendingCommands += 1;
     button.disabled = true;
-    try { await ctx.api(path, {method: "POST", ...(body ? {body: JSON.stringify(body)} : {})}); message.textContent = success; }
+    try {
+      const result = await ctx.api(path, {method: "POST", ...(body ? {body: JSON.stringify(body)} : {})});
+      if (typeof result?.state === "string") renderStatus(result);
+      message.textContent = success;
+    }
     catch (error) { message.textContent = `도킹 요청 실패: ${error.message}`; }
-    finally { enableActions(); }
+    finally { pendingCommands -= 1; enableActions(); }
   }
   dock.addEventListener("click", () => {
     const id = select.value;
@@ -54,5 +67,13 @@ export function mount(root, ctx) {
   select.addEventListener("change", enableActions);
   undock.addEventListener("click", () => run(undock, "/api/v1/docking/undock", null, "언도크할까요?", "언도크 요청을 CORE가 받았습니다."));
   cancel.addEventListener("click", () => run(cancel, "/api/v1/docking/cancel", null, "도킹을 취소할까요?", "도킹 취소 요청을 CORE가 받았습니다."));
-  return () => { stopStatus(); stopDocks(); };
+  return {
+    beforeHide() {
+      if (pendingCommands > 0) return {message: "도킹 요청이 처리 중입니다. 상태 확인 뒤 조작 그룹을 바꾸세요."};
+      if (!statusKnown) return {message: "도킹 상태를 확인할 수 없어 조작 그룹을 유지합니다."};
+      if (["DOCKING", "UNDOCKING"].includes(currentState)) return {message: "도킹 작업이 끝나거나 취소 상태를 확인한 뒤 조작 그룹을 바꾸세요."};
+      return true;
+    },
+    unmount() { stopStatus(); stopDocks(); },
+  };
 }

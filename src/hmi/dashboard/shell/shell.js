@@ -55,9 +55,9 @@ async function assemble() {
     showStatus(manifest.panels.length ? "" : "이 역할로 이 화면에 보일 패널이 없습니다.");
     return;
   }
+  if (mounted) await mounted.unmountAll();
   revision = manifest.revision;
   renderSwitch(manifest.surfaces);
-  if (mounted) mounted.unmountAll();
   mounted = await mountPanels(document, manifest.panels, (panel) => ({
     api,
     store: store.scope(),
@@ -71,11 +71,16 @@ async function assemble() {
 // 매니페스트를 못 받아도 이미 뜬 패널은 그대로 둔다 — 각 패널이 자기 폴링
 // 오류를 스스로 보고한다(store.js). revision도 지우지 않는다: 다음 성공
 // 응답이 구조 그대로면 불필요한 재mount를 하지 않는다.
-function onManifestError(error) {
+async function onManifestError(error) {
   if (error.status === 401) {
     if (intervalId) clearInterval(intervalId);
     intervalId = null;
-    if (mounted) mounted.unmountAll();
+    try {
+      if (mounted) await mounted.unmountAll();
+    } catch (stopError) {
+      showStatus(`로그인이 만료되었습니다. ${stopError.message}`);
+      return;
+    }
     mounted = null;
     revision = null;
     document.getElementById("shell-role").textContent = "인증 대기";

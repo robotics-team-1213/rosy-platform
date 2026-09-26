@@ -2438,6 +2438,11 @@
 - 변경: 직전 기록 뒤 추가한 `/api/fleet/do` 입력 거부와 API 설명을 포함해 계약 검사를 다시 실행했다.
 - 증거: Fleet 전체 `504 passed, 5 skipped`; intent·D-287·하네스/network suite `86 passed, 21 warnings`; touched Python 파일 flake8 `--max-line-length=120` 통과.
 - gate 변화: SOURCE/LOCAL만. 로컬 시험은 Ubuntu 설치, 실물 연결, GPU inference 또는 자동 작업 승인으로 승격하지 않는다.
+## 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
+
+- 변경: D-283에 따라 `/console` 조작 패널을 운전·도킹·차선 추종 그룹으로 선택하게 하고, desktop 고정 3영역과 mobile 세로형 배치를 구현했다. 매니페스트 action_group 필드는 API Ref v1.36에 기록했다.
+- 근거: dashboard/API/gateway LOCAL suite 116 passed, 2 skipped, foundation 50 passed; 실제 FastAPI+CoreServices administrator/operator 4 viewport 캡처에서 desktop scroll 0, mobile horizontal overflow 0, E-stop visible. G1 line-follow/docking 요청 대기·활성 중 이탈 차단, terminal zero 실패 시 그룹 전환 및 unmountAll 차단, 성공 시 정지 확인 뒤 패널을 내리는 것을 브라우저 검증했다.
+- gate 변화: dashboard SOURCE/LOCAL GO. G3 8명 평가와 D-201 데스크톱 최종 수용은 HOLD; ROS-SIM/DEVICE/FIELD는 별도다.
 
 ## 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
 - 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
@@ -2449,3 +2454,9 @@
 - 변경: 최신 main에 이미 존재하는 D-287 역할 패널 readback 결정을 유지하고, 사이트 Fleet intent/API 경계 ADR을 D-288로 번호 조정했다. ADR 로그, API Reference, 진행 계획 및 계약 테스트 참조를 동기화했다.
 - 검증: `/api/fleet/robots/{robot_id}/goal`의 생성 OpenAPI 스키마가 `x`, `y`, `yaw`만 노출하고 추가 필드를 금지하는 테스트를 추가했다. Fleet API 전체 504 passed, 5 skipped; 대시보드 readback 관련 17 passed, 4 skipped.
 - gate 변화: SOURCE/LOCAL 계약 테스트만 확인했다. Ubuntu 배포, 실제 CORE/카메라, GPU 추론 및 DEVICE/FIELD 수용은 진행하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(site): advance API Reference after D-283
+
+- 변경: D-283이 v1.36을 사용함에 따라 D-288의 API Reference 버전을 v1.37로 올리고 두 변경 이력을 함께 유지했다.
+- 근거: API contract test에서 현행 버전 v1.37과 D-288 intent 섹션을 확인한다. docs index는 harness로 재생성한다.
+- gate 변화: SOURCE/LOCAL 계약 문서 및 테스트만 갱신했다. Ubuntu, 실물 장치, GPU 및 DEVICE/FIELD 상태는 변하지 않았다.

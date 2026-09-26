@@ -402,6 +402,7 @@ class UiPanelDescriptor(BaseModel):
     order: int
     module: str
     css: list[str]
+    action_group: str | None = None
     state: str
     reason: str | None = None
 

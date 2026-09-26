@@ -20,7 +20,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.36" in reference
+    assert "**Version:** v1.37" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference
@@ -66,7 +66,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-288-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.36" in reference
+    assert "**Version:** v1.37" in reference
     assert "## 10.9 Site Fleet intent interpretation and message boundaries (D-288 Accepted)" in reference
     assert "D-288" in reference
     assert "**Status:** Accepted (2026-09-26)" in adr
