@@ -153,6 +153,22 @@ def test_role_forms_use_shared_responsive_layout_and_field_labels():
     assert "surface-field" not in role_forms
 
 
+def test_role_readouts_use_a_shared_semantic_definition_list_layout():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    readout = re.search(r"\.ui-readout\s*\{([^}]*)\}", css)
+    assert readout and "display: grid" in readout.group(1)
+    assert "grid-template-columns: minmax(7rem, 1fr) 2fr" in readout.group(1)
+    assert "gap: var(--space-2) var(--space-4)" in readout.group(1)
+    assert ".ui-readout dt { color: var(--nominal-quiet); }" in css
+    assert ".ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }" in css
+    assert ".surface-readout" not in panel_css
+    assert ".surface-readout" not in "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+    )
+
+
 def test_browser_surfaces_use_the_type_scale():
     offenders = {}
     for path in _surface_texts():

@@ -6,7 +6,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "도크 위치 준비");
   const status = el("p", "surface-message", "로봇 pose와 도크 목록을 불러오는 중입니다."); status.setAttribute("role", "status");
-  const facts = el("dl", "surface-readout");
+  const facts = el("dl", "ui-readout");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "등록된 도크 위치");
   root.append(head, status, facts, list);
 

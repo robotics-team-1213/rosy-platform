@@ -120,3 +120,9 @@
 - 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 73 passed (2026-09-26 Windows).
 - gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
 - 결정: D-285.
+
+## 2026-09-26 · uncommitted · feat(hmi): share semantic role readout layout (D-286)
+- 변경: Added `.ui-readout` to shared styles, migrated read-only fact lists across console/setup/host panels, and removed the dashboard-local duplicate layout.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 75 passed (2026-09-26 Windows).
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
+- 결정: D-286.

@@ -10,7 +10,7 @@ export function mount(root, ctx) {
   const empty = el("ui-empty", "surface-camera-empty", "카메라 프레임 수신 대기"); empty.id = "vision-empty";
   stage.append(frame, empty);
   const status = el("p", "surface-message", "WAITING"); status.id = "vision-status";
-  const facts = el("dl", "surface-readout");
+  const facts = el("dl", "ui-readout");
   const source = el("dd", "", "—"); source.id = "vision-source";
   const resolution = el("dd", "", "—"); resolution.id = "vision-resolution";
   const age = el("dd", "", "—"); age.id = "vision-age";

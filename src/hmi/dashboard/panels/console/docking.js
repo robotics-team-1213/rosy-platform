@@ -4,7 +4,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "도킹 운용");
   const message = el("p", "surface-message", "도킹 지원 여부를 확인하는 중입니다."); message.setAttribute("role", "status");
-  const facts = el("dl", "surface-readout");
+  const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "도킹 위치");
   const select = el("select"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);

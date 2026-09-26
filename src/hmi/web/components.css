@@ -286,9 +286,20 @@ ui-actions {
 .ui-form textarea,
 .ui-actions input { max-width: 100%; }
 
+.ui-readout {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) 2fr;
+  gap: var(--space-2) var(--space-4);
+}
+
+.ui-readout dt { color: var(--nominal-quiet); }
+.ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }
+
 @media (max-width: 30rem) {
   .ui-form { align-items: stretch; flex-direction: column; }
   .ui-form > * { width: 100%; }
+  .ui-readout { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .ui-readout dd { margin-bottom: var(--space-2); overflow-wrap: anywhere; }
 }
 
 ui-status[state="warning"],

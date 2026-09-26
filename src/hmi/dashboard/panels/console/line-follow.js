@@ -3,7 +3,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "차선 추종");
   const status = el("p", "surface-message", "차선 추종 상태를 읽는 중입니다."); status.setAttribute("role", "status");
-  const facts = el("dl", "surface-readout");
+  const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "추종 모드");
   const select = el("select"); select.setAttribute("aria-label", "차선 추종 모드");

@@ -9,7 +9,7 @@ function el(tag, cls, text) {
 function section(title) {
   const wrap = el("section", "surface-readback");
   wrap.append(el("h3", "", title));
-  const body = el("dl", "surface-readout");
+  const body = el("dl", "ui-readout");
   wrap.append(body);
   return {wrap, body};
 }
