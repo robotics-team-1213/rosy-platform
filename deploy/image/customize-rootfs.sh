@@ -226,6 +226,7 @@ chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 
 # D-288: install the pinned official PiSP userspace before taking the final
 # package inventory. This requires an ARM64 build and never touches a device SD.
+chroot "$ROOT" apt-get clean
 bash "$CAMERA_INSTALLER" "$ROOT" "$CAMERA_SOURCES" "$CAMERA_PYTHON_REQUIREMENTS" \
     || fail "pinned Raspberry Pi camera userspace did not build"
 

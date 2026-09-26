@@ -39,6 +39,9 @@ def test_camera_inputs_are_pinned_and_installed_before_image_verification():
     customizer = (IMAGE / "customize-rootfs.sh").read_text(encoding="utf-8")
     assert customizer.index('bash "$CAMERA_INSTALLER"') < customizer.index('verify-mounted-image.py" --root')
     installer = (IMAGE / "install-camera-stack.sh").read_text(encoding="utf-8")
+    assert (IMAGE / "install-camera-stack.sh").read_bytes().startswith(b"#!/usr/bin/env bash")
+    assert customizer.index('chroot "$ROOT" apt-get clean') < customizer.index('bash "$CAMERA_INSTALLER"')
+    assert yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))["product_artifact"]["rootfs_expansion_mib"] >= 8192
     assert "https://codeload.github.com/raspberrypi/$name/tar.gz/$commit" in installer
     assert installer.index('meson_build libpisp') < installer.index('meson_build libcamera')
     assert installer.index('meson_build libcamera') < installer.index('meson_build rpicam-apps')
