@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
+from contextlib import asynccontextmanager
 from hashlib import sha256
 from pathlib import Path
 from typing import Optional
@@ -132,10 +134,27 @@ def _http_error(exc: BaseException) -> HTTPException:
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                web_common: Optional[Path] = None, hub=None, sightings=None,
-               task_service: Optional[FleetTaskService] = None) -> FastAPI:
+               task_service: Optional[FleetTaskService] = None,
+               start_task_dispatcher: bool = True) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app):
+        dispatcher = None
+        if task_service is not None and start_task_dispatcher:
+            dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
+        try:
+            yield
+        finally:
+            if dispatcher is not None:
+                dispatcher.cancel()
+                try:
+                    await dispatcher
+                except asyncio.CancelledError:
+                    pass
+
     app = FastAPI(
         title="ROSY Fleet",
         version="0.1.0",
+        lifespan=lifespan,
         description="사이트 오케스트레이터 — 모음과 원자 액션 흩뿌림 (D-59)",
     )
     app.state.console = console
@@ -217,9 +236,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         return grid
 
     @app.post("/api/fleet/robots/{robot_id}/goal", dependencies=guard, tags=["fleet"])
-    async def fleet_goal(robot_id: str, body: GoalRequest,
-                         idempotency_key: Optional[str] = Header(default=None,
-                                                                  alias="Idempotency-Key")) -> dict:
+    async def fleet_goal(
+        robot_id: str, body: GoalRequest,
+        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    ) -> dict:
         try:
             if task_service is not None:
                 if not idempotency_key:
@@ -230,9 +250,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 task = await task_service.submit_navigation(
                     robot_id=robot_id, x=body.x, y=body.y, yaw=body.yaw,
                     source="operator", actor_id="site-console", request_key=idempotency_key,
-                    dispatch=lambda: console.goal(robot_id, body.x, body.y, body.yaw),
                 )
-                return {"accepted": task["status"] == "ACCEPTED", "task": task}
+                return {"accepted": task["status"] == "ACCEPTED",
+                        "queued": task["status"] == "QUEUED", "task": task}
             return await console.goal(robot_id, body.x, body.y, body.yaw)
         except IdempotencyConflict as exc:
             raise HTTPException(status_code=409, detail={
@@ -307,9 +327,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             raise _http_error(exc) from exc
 
     @app.post("/api/fleet/do", dependencies=guard, tags=["fleet"])
-    async def fleet_do(body: dict,
-                       idempotency_key: Optional[str] = Header(default=None,
-                                                                alias="Idempotency-Key")) -> dict:
+    async def fleet_do(
+        body: dict,
+        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    ) -> dict:
         """같은 통역기. 로봇 일은 그 로봇 API로, 현장 말은 이 서버가 실행한다."""
         try:
             calls = interpret(body)
@@ -337,9 +358,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                             robot_id=call.robot, x=float(call.body["x"]),
                             y=float(call.body["y"]), yaw=float(call.body.get("yaw") or 0.0),
                             source="operator", actor_id="site-console", request_key=child_key,
-                            dispatch=lambda: _robot_call(console, call),
                         )
-                        result = {"accepted": task["status"] == "ACCEPTED", "task": task}
+                        result = {"accepted": task["status"] == "ACCEPTED",
+                                  "queued": task["status"] == "QUEUED", "task": task}
                     else:
                         result = await _robot_call(console, call)
             except IdempotencyConflict as exc:
@@ -353,7 +374,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             except (HubError, RobotApiError, OSError) as exc:
                 raise _http_error(exc) from exc
             steps.append({"do": call.verb, "robot": call.robot, "path": call.path, "result": result})
-        return {"accepted": True, "steps": steps}
+        return {
+            "accepted": all(step["result"].get("accepted", True) for step in steps),
+            "queued": any(step["result"].get("queued", False) for step in steps),
+            "steps": steps,
+        }
 
     @app.post("/api/fleet/estop", dependencies=guard, tags=["fleet"])
     async def fleet_estop() -> dict:
@@ -412,3 +437,29 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                             headers={"Cache-Control": "no-cache"})
 
     return app
+
+
+async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService) -> None:
+    """Dispatch one eligible task at a time from the app-owned background worker."""
+    while True:
+        try:
+            snapshot = await console.snapshot()
+            available = {
+                row["robot_id"] for row in snapshot["robots"]
+                if row["online"] and row["queued"] is None and row["goal"] is None
+                and row["state"] is not None
+                and row["state"].get("navigation") == "IDLE"
+            }
+            await task_service.dispatch_next(
+                available,
+                dispatch=lambda task: console.goal(
+                    task["robot_id"], task["request"]["goal"]["x"],
+                    task["request"]["goal"]["y"], task["request"]["goal"]["yaw"],
+                ),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # A status read failure cannot establish availability. Leave work queued.
+            pass
+        await asyncio.sleep(0.25)
