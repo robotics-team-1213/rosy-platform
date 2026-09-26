@@ -2793,3 +2793,13 @@
 - 변경: D-302와 Compose 설정을 추가해 CORE `/registry`에는 별도 `registry_token`/`ROSY_SITE_REGISTRY_TOKEN`을 사용하고, 브라우저 운영자 bearer는 `site-users.yaml` digest에만 연결했다. Fleet Dockerfile 기본 인자와 운영 runbook도 같은 구분으로 수정했다.
 - 근거: 오류 로그에서 Fleet의 `site user credentials must differ from the CORE registry credential` 시작 실패를 재현했다. 새 회귀 시험 RED 후 3 passed. 수정 Compose에서 Fleet/Vision/proxy가 모두 healthy였고, unauthenticated 401, viewer command 403, operator task·idempotency·readback·queued cancel을 확인했다. CORE 주소는 미할당 TEST-NET `192.0.2.10`만 사용했다.
 - gate 변화: 소스/LOCAL 계약과 worktree 설정 통합이 진전됐다. 현재 검증은 기존 3b 이미지에 새 Compose 파일을 조합한 LOCAL 실행이다. 새 immutable candidate 재빌드/서명 및 그 artifact로 재검증은 남아 있다. Ubuntu, 실제 CORE/phone/RTX, FIELD는 계속 미검증이다.\n
+## 2026-09-27 · uncommitted · validation(site): signed candidate full-compose and camera path
+
+- 변경: clean source `9aa985e96eee981b876990b3a57a0db64b803054`로 후보를 다시 만들었다. `linux/amd64` archive SHA-256 `fc54ecad2146e0672e1a0736dffb4539e0c15cc7db9a0a61b9c526e9f957b942`; X: 임시 Ed25519 키 서명, Docker load 전 서명/파일 검사, load 후 세 image ID/platform 확인 모두 통과.
+- 근거: 후보 Compose 기준 Fleet/Vision/proxy가 모두 healthy. unauthenticated 401, viewer 403 command, operator task/idempotency/readback/cancel, Compose 재생성 후 SQLite task readback을 확인했다. synthetic TLS WebSocket frame 102가 `ceiling_north` sighting으로 `(1.9999999999999998, 1.0)`에 기록됐고, 누락 corner frame과 1600 ms stale frame은 거절됐다. raw image는 API에서 반환되지 않았다.
+- gate 변화: D-302 credential 충돌을 고친 후보의 LOCAL packaged/Compose/phone-protocol 증거를 확보했다. Ubuntu/RTX/production key/physical phone/real CORE/robot/FIELD 게이트는 열려 있다. 임시 프로젝트는 종료했다.
+## 2026-09-27 · uncommitted · validation(site): synthetic CORE event persistence
+
+- 변경: D-302 exact candidate에 synthetic CORE Agent를 TLS WebSocket으로 연결해 PRT 1.0 HELLO와 `nav.progress` 이벤트 수신을 확인했다.
+- 근거: 별도 registry token만 `/registry`에서 허용되고 사용자 토큰은 거부됐다. viewer 이벤트 이력, 동일 이벤트 ID 중복 제거, Fleet 재시작 후 SQLite 이벤트 readback이 확인됐다. 재사용 ID의 내용 변경은 `EVENT_NOT_AUDITABLE`로 거부됐다.
+- gate 변화: 패키징된 로컬 전송·인증·지속성 경로의 LOCAL 증거를 추가했다. 실제 CORE 자격 증명, 현장 TLS/DNS·시계·재접속, Ubuntu/RTX, 물리 장비와 FIELD 검증은 미완료다.
