@@ -22,6 +22,18 @@ A Playwright browser session exercised the rendered `/console` page through the 
 
 This proves the local browser-to-Fleet-to-test-endpoint flow only. The fake CORE has no actuator, and this does not prove an actual robot accepted or executed a command. Shared-token role identity, revocation, and physical-device acceptance remain open.
 
+## Latest revision candidate replay
+
+The exact source revision `64cdb3041f04ac6ca5b04ac8a127850242e7f0c6` was built as a clean `linux/amd64` candidate, including three SPDX SBOMs. The manifest, deployment-file hashes, SBOM hashes, and `images.tar` SHA-256 were checked. The archive was loaded into Docker and its packaged Compose file was started with `--no-build`; Fleet, Vision, and Caddy all became healthy. On that revision, `/healthz` returned 200, unauthenticated Fleet state returned 401, and authenticated state returned 200. The rendered console stayed locked for an invalid token and unlocked for the valid test token. Its single configured robot showed offline because the config intentionally points to the reserved unreachable test address; no physical CORE was contacted.
+
+- Source commit: `64cdb3041f04ac6ca5b04ac8a127850242e7f0c6`
+- `images.tar` SHA-256: `831279b60d6f69aa844d32016310e92e1119dbfbebf83d69a0ed2de9eaa7702b`
+- Fleet image ID: `sha256:f49d130ae020d50418ebf820b6b4b96202865ce8bef2df4239800e7f1829f425`
+- Vision image ID: `sha256:77e3014ccc90bd434f6fb7f82fa6e69222b8727df458422160ae2c9374a7ed97`
+- Proxy image ID: `sha256:92285397b659eb03fbe532a76d061738d5f9b0f7f45027a68c662caa44276c3f`
+
+The candidate and test-only screenshots/configuration remain under `X:\DevTemp`; they contain no provisioned site credentials. This still runs on Docker Desktop's Linux/amd64 engine, not on the Ubuntu RTX 5080 target.
+
 ## Synthetic camera sample
 
 Twenty sequential frames were sent over one authenticated WSS connection at

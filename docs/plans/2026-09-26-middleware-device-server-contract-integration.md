@@ -130,6 +130,8 @@ site-host rollout.
 4. actual ceiling phone + markers + surveyed map, actual CORE robot, network interruption, process restart, token revoke를 DEVICE/FIELD runbook에 따라 실행한다.
 5. automatic movement stays disabled until D-268 accepted contract and per-task false-trigger/freshness metrics pass. OMX pick, Pinky camera and robot-arm camera require separate ADRs and DEVICE goals.
 
+**Latest candidate replay (LOCAL, 2026-09-26):** The committed source revision `64cdb3041f04ac6ca5b04ac8a127850242e7f0c6` was rebuilt into a clean `linux/amd64` candidate with per-image SPDX SBOMs, archive/config hash verification, and image IDs recorded in the validation result. The archive was loaded and Compose was run with `--no-build`; Fleet, vision, and proxy became healthy. TLS health and browser/API token gates passed. This remains workstation evidence; no Ubuntu host or physical device was used.
+
 **GPU preflight clarification:** CUDA 12.8 Blackwell compatibility requires the
 application binary to carry native Blackwell cubin or compatible PTX; the
 version label alone is not proof. The current candidate vision worker is CPU
