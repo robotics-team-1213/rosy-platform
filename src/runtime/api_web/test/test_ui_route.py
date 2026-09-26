@@ -89,6 +89,17 @@ def test_role_surface_pages_and_allowlisted_assets_are_served():
     assert client.get("/assets/../../api/app.py").status_code == 404
 
 
+
+def test_root_redirect_and_legacy_dashboard_entry_are_compatible():
+    client = _client()
+    redirect = client.get("/", follow_redirects=False)
+    assert redirect.status_code == 307
+    assert redirect.headers["location"] == "/dashboard"
+    legacy = client.get("/dashboard")
+    assert legacy.status_code == 200
+    assert legacy.headers["cache-control"] == "no-cache"
+    assert 'id="dashboard-main"' in legacy.text
+
 def test_ui_manifest_contract_is_registered_in_openapi():
     schema = _client().get("/openapi.json").json()
     operation = schema["paths"]["/api/v1/ui/surfaces/{surface}"]["get"]

@@ -10,7 +10,10 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
     app = (ROOT / "src/site/fleet/fleet/server/app.py").read_text(encoding="utf-8")
-    web = (ROOT / "src/site/fleet/fleet/server/web/console.js").read_text(encoding="utf-8")
+    web_root = ROOT / "src/site/fleet/fleet/server/web"
+    web = (web_root / "console.js").read_text(encoding="utf-8")
+    roster = (web_root / "roster.js").read_text(encoding="utf-8")
+    web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
     assert "**Version:** v1.33" in reference
@@ -32,9 +35,9 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert 'alias="Idempotency-Key"' in app
     assert 'call.verb == "navigate"' in app
     assert '"Idempotency-Key": crypto.randomUUID()' in web
-    assert 'task.status === "QUEUED"' in web
-    assert 'task.status === "UNKNOWN"' in web
-    assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web
+    assert 'task.status === "QUEUED"' in web_contract
+    assert 'task.status === "UNKNOWN"' in web_contract
+    assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web_contract
     assert "--tasks-db" in compose
 
 

@@ -2276,3 +2276,24 @@
 - 변경: Persisted and scheduled Fleet tasks; carried task identity across traffic waits; added expiry and pre-dispatch cancellation; exposed queued status and task cancellation in the console; kept policy tasks on HOLD.
 - 증거: `python -m pytest src/site/fleet/test/ -q` — 484 passed, 5 skipped; browser harness — 13 passed; Compose config validation passed; `rosy-site-fleet:local` built and API task readback survived container restart with the same named volume.
 - gate 변화: LOCAL task queue evidence advanced. Full Compose, Ubuntu host, TLS/secrets, real CORE/robot, GPU, DEVICE, FIELD and automatic policy acceptance remain open. RabbitMQ remains deferred because no measured split-worker or pressure requirement was established.
+
+## 2026-09-26 · uncommitted · docs(verification): 낡은 배치 잔재 3건 수리 — deployment·domain 단계 붉음 해소
+- 변경: 낡은 배치 잔재 3건 수리. ① `test/test_sd_api_token.py` — `CORE_SRC = src/core`(중첩 그룹 시대)를 패키지별 부모 맵 `PKG_PARENT`로 교체(D-231/D-241: core→`runtime/gateway`, core_api_web→`runtime/api_web`, core_common→`contracts/foundation`, core_events→`runtime/events`, core_features→`runtime/services`), 사용처 3곳(`sys.path` 2·subprocess `PYTHONPATH` 1) 갱신 ② `core_api_web/api/app.py` — 계약 문서가 v1.31(9541086c)로 올라갔는데 FastAPI description 배너가 v1.30 — D-18의 절반 갱신을 완결 ③ `gz_sim/scripts/coverage_harness.py` — `tour_plan`의 bare `control` import에 worktree 폴백 부재(CI install space가 은폐) → 저장소의 `live_view_model._control_sensing` 패턴 미러링
+- 증거: ① 해당 파일 29 passed/6 skipped(수정 전 2 failed), posix subprocess 건은 Windows 스킵 → push 후 CI로 확인 ② protocol 계약 3 passed ③ gz 스위트 263 passed/1 skipped(수정 전 6 failed+6 errors), 세 파일 flake8 0. fleet 461·hardware safety 454도 초록(CI skip 구간 로컬 보강). 직전 push `2a22ad63`의 CI: domain suites 7건 초록(3회 연속 레드 해소), deployment contracts 단계에서 ①만 붉음(2178 passed 중); 동료 최신 런은 domain에서 ②로 붉음. 계약 게이트 잔여 1 failed = `test_module_structure::test_over_budget_code_has_a_recorded_verdict`(host.py 813>600, verdict 없음) — D-260 커밋 557191a6/ca5fb4fd(03:02–03:45)이 넘긴 타 레인이라 판정만 기록. 성장 중인 파일의 판정 기록은 다음 커밋에 stale-red를 만들므로 기록 주체는 해당 레인
+- gate 변화: 없음(ADR·게이트 문서 무변경)
+- 회귀: 전체 `test/` 로컬 실행은 15분 탄 아웃(네트워크/장비 대기 추정) — 이 단계의 정본은 CI. 로컬은 변경 파일 단독 검증으로 대체
+- 교훈: 앞 단계 붉음이 뒤 단계를 skip하면 가려진 레인이 하나씩 드러난다. 첫 붉음을 고칠 때 `grep src/core`처럼 낡은 경로를 전 구간 선판정할 것 — "skip은 통과가 아니다"
+## 2026-09-26 · uncommitted · docs(verification): known_failures 갱신 + BOM 제거 — deployment 잔여 4건 장부화
+- 변경: ① `test/known_failures.txt` — 내가 고친 7개 nodeid 삭제(파일 규칙: 고친 커밋에서 지워라. 목록 검증 9fb4b7a1(01:22)이 내 수정 2a22ad63(02:31)보다 앞섰고 7건 전부 현재 7 passed) + 현 main 선재 4건 기록(헤더 검증 SHA 769e2f28) ② `src/runtime/api_web/test/conftest.py` — UTF-8 BOM 3바이트 제거(a4970791 02:06 유입, test_source_encoding이 CI·로컬 동시 붉음)
+- 증거: test_known_failures+test_source_encoding 6 passed. deployment 잔여 4건 전건 동료 소유 판정 완료: (a) boot 가드 — ca5fb4fd(D-260 M1)가 `run/rosy/status-inputs.json`을 읽는데 Review-H1 가드는 `run/rosy/` 문자열 자체를 금지(로컬 통과는 Windows symlink privilege skip, Linux CI에서만 발동) (b) secrets — 문서 커밋SHA 2·operations.js psk 5(D-262), 동료가 test_secret_scan.py로 scanner 대응 중 (c) RegistryError — 12ca0469(12:20)의 `_asset` resolve 가드 vs CI install share 심볼릭 링크 (d) 예산 — host.py 813(D-260). 4건 모두 진행 중 시리즈라 판정·장부화까지만
+- gate 변화: 없음
+- 회귀: 없음(동료 WIP 5파일 미스테이징 유지)
+- 교훈: 같은 main에서도 OS가 판정을 가른다 — Windows의 symlink privilege skip이 Linux-only 보안 가드를 숨긴다("skip=통과 아님"의 Windows 판). 그리고 앞단계 붉음이 뒤단계를 skip하면 잔여 실패가 무더기로 숨는다(deployment 2178→2373 passed, 실패 1→5)
+
+## 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신
+
+- 변경: ① `test/known_failures.txt` 10행 — RegistryError 원인을 `12ca0469`(패널 import 경로 수정, ui_registry.py 미변경)로 잘못 지목한 내 기록을 `a4970791`(ui_registry.py의 유일한 커밋, resolve() 가드 도입)으로 정정하고, 가드가 걸리는 css 항목 출처 `ff603832`(8분 후) 병기 ② 헤더 검증 SHA `769e2f28` → `986a81ca`(CI 런 213이 4건 전부 재확인) ③ 8행 boot 가드에 Review-H1 guard 도입 커밋 `9f256c73` 병기
+- 증거: CI 런 213(head `986a81ca`) deployment = 4 failed / 2374 passed, 실패 nodeid 4건이 런 212와 장부 8–11행과 1:1 일치. `git log -S allowed_root` = `a4970791` 단일 커밋, `12ca0469..HEAD`에 ui_registry.py/panels.yaml/panels/ 후속 커밋 없음. 로컬 `test_known_failures`+`test_source_encoding` 6 passed, `src/runtime/api_web/test/test_ui_registry.py` 33 passed/1 skipped
+- gate 변화: 없음(ADR·게이트 문서 무변경)
+- 회귀: 없음(동료 WIP 2파일 `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지, HEAD `986a81ca`로 동기)
+- 교훈: 붉은 가드의 귀속은 "관련 경로를 만진 최근 커밋"이 아니라 `git log -S <가드 조건>`으로 "가드 자체를 넣은 커밋"을 찾을 것 — 같은 시리즈라 해도 귀속은 커밋 단위로 검증해야 한다(오늘 내 장부가 12ca0469를 원인으로 잘못 지목함). 남이 소유한 가드는 소유자가 시리즈를 마칠 때까지 기록만 — a4970791·ff603832 모두 pl3의 role-panel 시리즈로 오늘도 활성이다

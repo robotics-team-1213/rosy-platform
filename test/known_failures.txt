@@ -4,11 +4,6 @@
 #   python test/known_failures.py X:/DevTemp/run.txt
 # Exit 1 means a failure that is NOT listed here: that one is yours.
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
-# a failure your branch introduced. Verified failing on main 7cfc09b8 (2026-09-26).
-src/runtime/gateway/test/test_event_catalogue.py::test_no_emit_site_hides_its_name_from_the_guard  # services/core_features/docking/manager.py:662 emits an event name the guard cannot read statically
-src/runtime/gateway/test/test_event_catalogue.py::test_the_relay_bodies_that_get_the_exemption_are_the_ones_we_reviewed  # PINNED_RELAYS bodies changed after the D-241/D-242 folder moves and were not re-reviewed
-src/runtime/gateway/test/test_core_main_shutdown.py::test_only_main_shuts_rclpy_down_in_core_production_code  # absorbed sensing/control code still calls rclpy.shutdown()
-src/runtime/gateway/test/test_executor_contracts.py::test_ros_bridge_implements_every_declared_contract_member[DockingExecutor]  # reads the pre-D-241 path src/runtime/core_features/.../docking/model.py
-src/runtime/gateway/test/test_executor_contracts.py::test_ros_bridge_implements_every_declared_contract_member[NavExecutor]  # reads the pre-D-241 path src/runtime/core_features/.../navigation/manager.py
-src/runtime/gateway/test/test_v1_import_boundary.py::test_deps_still_owns_the_domain_type_surface  # reads the pre-D-241 path src/runtime/core_api_web/.../api/deps.py
-src/runtime/services/test/test_swarm.py::test_the_follow_path_does_not_know_where_the_stream_comes_from  # reads the pre-D-241 path src/runtime/core_features/.../swarm/manager.py
+# a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
+test/test_boot_status_indicator.py::test_indicator_writes_only_to_a_root_owned_directory_and_never_follows_links  # ca5fb4fd (D-260 M1) reads run/rosy/status-inputs.json; the Review-H1 guard (9f256c73) bans any run/rosy/ in the script - the D-260 owner must reconcile
+test/test_sd_api_token.py::test_core_accepts_the_issued_credential_from_the_installed_overlay  # ui_registry._asset resolve() guard (a4970791, the file's only commit) rejects CI's install-share symlinked panels/ from get_package_share_directory; the css entries it trips on landed 8 min later in ff603832

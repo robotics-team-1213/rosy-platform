@@ -144,8 +144,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신
+- 2026-09-26 · uncommitted · docs(verification): known_failures 갱신 + BOM 제거 — deployment 잔여 4건 장부화
+- 2026-09-26 · uncommitted · docs(verification): 낡은 배치 잔재 3건 수리 — deployment·domain 단계 붉음 해소
 - 2026-09-26 · uncommitted · feat(fleet): durable site task queue implementation
 - 2026-09-26 · uncommitted · docs(plan): D-271 task scheduler implementation sequence
-- 2026-09-26 · uncommitted · docs(adr): D-271 site Fleet task scheduling and broker choice
-- 2026-09-26 · uncommitted · feat(fleet): add source-scoped site sighting contract
-- 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity

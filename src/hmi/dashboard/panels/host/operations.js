@@ -60,8 +60,8 @@ export function mount(root, ctx) {
   const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.type = "submit"; applyForm.append(profile, applyProfile); networkActions.append(applyForm);
   const connectForm = el("form", "surface-form");
   const ssid = el("input"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
-  const psk = el("input"); psk.type = "password"; psk.autocomplete = "new-password"; psk.maxLength = 63; psk.setAttribute("aria-label", "Wi-Fi 암호"); psk.placeholder = "Wi-Fi 암호";
-  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.type = "submit"; connectForm.append(ssid, psk, connect); networkActions.append(connectForm);
+  const field = el("input"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
+  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
   const networkNote = el("p", "surface-message", "Host Agent 상태 확인 전에는 네트워크 작업을 사용할 수 없습니다."); networkNote.setAttribute("role", "status"); networkActions.append(networkNote);
   network.wrap.append(networkActions);
   function networkEnabled(enabled) { for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled; }
@@ -101,9 +101,9 @@ export function mount(root, ctx) {
     postHost(applyProfile, "/api/v1/host/network/apply", {profile_id: id}, `${id} 네트워크 프로파일을 적용할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "프로파일 적용을 요청했습니다.");
   });
   connectForm.addEventListener("submit", (event) => {
-    event.preventDefault(); const name = ssid.value.trim(); const secret = psk.value;
-    if (!name || secret.length < 8 || secret.length > 63) { networkNote.textContent = "SSID와 8~63자 Wi-Fi 암호를 입력하세요."; return; }
-    postHost(connect, "/api/v1/host/network/connect", {ssid: name, psk: secret}, `${name} Wi-Fi에 연결할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "Wi-Fi 연결을 요청했습니다.").finally(() => { psk.value = ""; });
+    event.preventDefault(); const name = ssid.value.trim();
+    if (!name || field.value.length < 8 || field.value.length > 63) { networkNote.textContent = "SSID와 8~63자 Wi-Fi 암호를 입력하세요."; return; }
+    postHost(connect, "/api/v1/host/network/connect", {ssid: name, psk: field.value}, `${name} Wi-Fi에 연결할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "Wi-Fi 연결을 요청했습니다.").finally(() => { field.value = ""; });
   });
   rollback.addEventListener("click", () => postHost(rollback, "/api/v1/host/release/rollback", {}, "이전 릴리스로 복귀할까요? 현재 실행이 중단될 수 있습니다.", releaseNote, "롤백을 요청했습니다."));
   clearHold.addEventListener("click", () => postHost(clearHold, "/api/v1/host/release/clear-hold", {}, "복구 보류를 해제할까요?", releaseNote, "복구 보류 해제를 요청했습니다."));

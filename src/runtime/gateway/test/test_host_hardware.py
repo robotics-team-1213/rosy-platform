@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 from core_api_web.api.app import create_app
-from core_api_web.api.v1 import host as host_api
+from core_api_web.api.v1 import host_hardware as host_api
 
 VIEWER_TOKEN = "viewer-token"
 OPERATOR_TOKEN = "operator-token"

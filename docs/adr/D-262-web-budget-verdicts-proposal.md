@@ -37,6 +37,8 @@ D-92 제5항 · D-130.2.
 | `dashboard/host-cards.js` | app.js 호스트 4카드 | 유닛 42 + 브라우저 52 passed |
 | `fleet/formation.js` | console.js 대형 패널 | 유닛 409 + 브라우저 12 + 변이 |
 | `fleet/signals.js` | console.js 신호등 카드 | 유닛 409 + 브라우저 12 + 변이 |
+| `fleet/roster.js` | console.js 명렬·큐 | 유닛 461 + 브라우저 12 + 변이 |
+| `fleet/map-view.js` | console.js 지도·오버레이 | 유닛 461 + 브라우저 12 + 변이(폴링 상수는 셸로 복귀 1건) |
 
 남은 셸 코어(인증·세션·소켓·refresh·명렬·큐·토큰·폴링)는 분리 대상이 아니다.
 `hold-ticker.js`는 L2 추출(D-250)로 별도 관리한다.
