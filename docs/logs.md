@@ -2389,3 +2389,13 @@
 - 제한: Windows Docker Desktop Linux/amd64, CPU ArUco 기반이다. Ubuntu RTX 5080·GPU inference·현장 인증서/credential·장시간 폰·실 CORE/로봇·재부팅 복원·DEVICE/FIELD는 검증하지 않았다. 자동 이동/집기는 계속 HOLD.
 - gate 변화: SOURCE/LOCAL container smoke만 확인했다. Ubuntu/SITE/RTX GPU/DEVICE/FIELD와 자동 이동·집기 상태는 바뀌지 않았고 계속 HOLD다.
 - 재현 및 정확한 결과: `docs/validation/2026-09-26-site-stack-container-smoke.md`. 테스트 Compose project와 named volume은 읽기 확인 뒤 제거했고 candidate/image는 `X:\DevTemp`에 남겼다.
+
+## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
+- 변경: 로봇/작업대별 ROS 실행 인스턴스의 장치 배타 소유, 단일 actuator 명령 소유자, 카메라 관측 경계, 인스턴스 간 API 조정을 Proposed ADR로 기록했다.
+- 근거: D-33, D-38, D-117, D-152, D-246, D-269, D-273, D-281 및 독립 runtime gate를 대조했다.
+- gate 변화: 없음. D-282 Proposed이며 actuator, camera capability, DDS bridge 또는 배포를 승인하지 않는다.
+
+## 2026-09-26 · uncommitted · docs(site): align implementation plan with current ADR status
+- 변경: D-267/D-269/D-282의 현재 Proposed 상태를 계획과 맞추고 첫 배포를 인증된 operator navigation으로 한정했다. freshness, detection/false-trigger 기준, 정책 조건 관리가 수용되기 전 automatic source는 계속 닫는다.
+- 근거: Task 2.1의 D-257 300 ms freshness 및 사전 승인 검출·오탐 표본 기준, Task 3.2의 역할별 정책 조건/증거/거절 사유 표시와 감사 요구를 재확인했다. 기존 합성 Docker smoke는 LOCAL 증거로 유지하고 Ubuntu/GPU/실물 수용과 분리했다.
+- gate 변화: 없음. 자동 이동/집기와 Ubuntu SITE/DEVICE/FIELD는 HOLD다.

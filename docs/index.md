@@ -99,8 +99,6 @@
 | D-256 | 공개 무결성 값은 이름으로 지우고, 스캔는 매처를 넙히지 않는다 |
 | D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 |
 | D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 |
-| D-267 | Ubuntu 상시 관제 노트북은 Fleet·영상·GPU·저장을 분리하고 자동·수동 작업을 같은 검증 경로로 처리한다 |
-| D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
 | D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 |
 | D-272 | AP 비밀번호는 로봇마다 다르되 읽기 쉬운 형식과 LCD QR로 보여준다 |
 | D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
@@ -108,6 +106,7 @@
 | D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 |
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 |
 | D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 |
+| D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
 
 ## 계획·결과 문서
 
@@ -155,8 +154,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(site): align implementation plan with current ADR status
+- 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
 - 2026-09-26 · uncommitted · test(site): 관제 Docker stack 종단 간 합성 smoke
 - 2026-09-26 · uncommitted · docs(site): Ubuntu 관제·장비 경계 아키텍처 승인 기록
 - 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
-- 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
-- 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
