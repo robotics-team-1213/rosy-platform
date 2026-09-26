@@ -16,6 +16,12 @@ Fleet -- existing CORE REST/WSS contracts --> robot CORE
 
 ## Same-LAN ROSY discovery
 
+The shared service naming and trust rules are in
+[`site-lan-discovery-profile.md`](../../docs/reference/site-lan-discovery-profile.md).
+The robot and site host have separate DNS-SD service types. Other SERION
+middleware can adopt the same public TXT keys under its own service type; a
+discovered address does not enroll a device or grant a command path.
+
 Each robot's boot-status service already advertises `_rosy._tcp.local` through
 Avahi. The Ubuntu host runs `mdns-bridge.py` every 15 seconds and sends a full
 resolved scan to Fleet. Fleet expires that read-only scan after 45 seconds. A
@@ -61,11 +67,41 @@ silently rewritten from untrusted mDNS. The LAN test does not replace pairing, C
 physical motion acceptance.
 
 All HTTPS hops verify the configured site CA. The same site certificate must
-contain these DNS SANs: the operator-facing FQDN, `proxy`, `fleet`, and
+contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
+`<hostname>.local`, `proxy`, `fleet`, and
 `vision`. The phone pairing link uses that FQDN and explicit TLS:
 `rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1`.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
+
+## Advertise and locate the Ubuntu Fleet PC
+
+Choose a stable Ubuntu hostname before issuing the certificate. Install
+`avahi-daemon` and `avahi-utils`, and check that TCP 8443 is reachable from
+the intended robot/operator LAN. The site proxy's
+`ROSY_SITE_BIND_ADDRESS` must name an approved LAN interface instead of
+loopback when LAN clients need access. Set the same
+`ROSY_SITE_HTTPS_PORT` in the private `/etc/rosy/site/.env` and the Compose
+environment. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`, copy
+`rosy-fleet-advertise.service` to `/etc/systemd/system/`, then run:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now avahi-daemon rosy-fleet-advertise.service
+avahi-browse -rtpk _rosy-fleet._tcp
+python3 /opt/rosy/site/fleet-mdns.py discover
+python3 /opt/rosy/site/fleet-mdns.py discover --expect-hostname <hostname>.local \
+  --ca-file /etc/rosy/site/secrets/site-ca.crt
+```
+
+The final command prints an HTTPS URL only if exactly one matching site is
+present and the certificate and `/healthz` response validate against the
+separately installed CA. It connects to the Avahi resolved IP with TLS SNI set
+to the expected hostname. Do not use the mDNS advertisement to supply the CA,
+the expected hostname, Fleet pairing credentials, SSH identity, or robot
+number. FleetAgent does not yet read a discovered site URL at boot; pass the
+verified URL through the existing reviewed provisioning path. If a site is
+unreachable or multicast is isolated, use the existing explicit endpoint.
 
 ## Prepare an Ubuntu host
 

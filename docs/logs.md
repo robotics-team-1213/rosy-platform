@@ -2400,3 +2400,8 @@
 - 변경: `_rosy._tcp`의 사이트 Fleet 수집과 신원 확인 상태를 API Reference v1.36과 구현 계획에 기록했다. 발견 광고는 등록/명령 권한이 아니며, 호스트 전용 credential로만 scan 입력을 허용한다.
 - 증거: Windows Fleet 510 passed/5 skipped와 Compose 정적 검증; Ubuntu 현장 mDNS와 4~10대 실제 연결은 아직 측정하지 않았다.
 - gate 변화: 문서/LOCAL 범위만 갱신, DEVICE/FIELD 불변.
+## 2026-09-26 · uncommitted · SERION 현장 LAN 발견 규칙 v0.1
+
+- 변경: 제품·역할별 DNS-SD 종류, 공개 TXT 필드, 예상 호스트명 및 CA/TLS 검증, 중복/불일치 거부, 페어링 경계를 `docs/reference/site-lan-discovery-profile.md`에 정리했다.
+- 증거: ROSY 로봇 광고와 Ubuntu Fleet 도구 및 사이트 배포 파일로 두 역할을 대조했다. 다른 SERION 제품은 각 저장소의 API·신원 계약 승인 후 적용한다.
+- gate 변화: 문서·로컬 계약 범위만 확인. 실제 Ubuntu 호스트/다중 로봇 LAN 검증 대기.

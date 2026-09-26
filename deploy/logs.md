@@ -1307,3 +1307,8 @@
 - 변경: keep vendor patches LF on Windows, select the AI follower Gazebo launch with Bullet Featherstone and synchronous simulated hardware, enforce URDF command limits, and remove the direct leader-topic remap from simulation.
 - 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused tests and two-instance ROS-SIM probe in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
 - gate 변화: no field actuator or artifact gate promoted; native command owner and physical acceptance remain open.
+## 2026-09-26 · uncommitted · site LAN discovery profile and Fleet advertisement
+
+- 변경: ROSY 로봇 mDNS TXT에 공통 제품·역할·프로토콜 표시를 추가하고, Ubuntu Fleet `_rosy-fleet._tcp` Avahi 광고·검색 도구와 systemd 유닛을 사이트 배포 묶음에 넣었다.
+- 증거: Windows 집중 45 passed/2 skipped, 변경 파일 flake8 통과. Ubuntu Avahi 및 TLS 현장 연결은 아직 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL 범위만 확인, Ubuntu 사이트 ARTIFACT·DEVICE·FIELD 검증 대기.

@@ -42,3 +42,13 @@
 1. Document host Avahi installation, dedicated secret generation, periodic bridge execution, TLS URL, and 4–10 robot acceptance checks.
 2. Run focused and Fleet suites, flake8, Compose config, and `git diff --check`.
 3. Record the SOURCE-level evidence and any device/site-host gaps. Do not claim field acceptance without two or more live Pis.
+
+### Task 5: Define common LAN service rules and discover the future Ubuntu Fleet host
+
+**Files:** `docs/reference/site-lan-discovery-profile.md`, `deploy/robot/native/rosy-boot-status.py`, `deploy/site/fleet-mdns.py`, `deploy/site/rosy-fleet-advertise.service`, `test/test_site_fleet_mdns.py`, `deploy/site/build_candidate.py`, `deploy/site/README.md`
+
+1. Write failing tests for the advertised DNS-SD service, parsing tenanted `_rosy-fleet._tcp` candidates, and refusal to select an unknown or ambiguous host.
+2. Define a product/role/protocol/TLS TXT profile, preserve existing robot service compatibility, and implement a boot-time Avahi service publisher using the actual Ubuntu hostname and configured HTTPS port. TXT carries protocol metadata only.
+3. Implement a locator that lists candidates and returns an endpoint only after an operator-supplied expected `.local` hostname and site-CA TLS health probe.
+4. Include publisher, locator, and unit in the site delivery candidate. Test packaging and document certificate SAN, operator bootstrap, and the unimplemented enrollment boundary.
+5. Keep other SERION products as a catalog extension: each product needs its own service type and approved identity/API adapter before it joins this discovery profile.
