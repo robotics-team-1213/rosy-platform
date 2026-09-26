@@ -9,7 +9,7 @@ function numberField(labelText, name, max = 100, min = 0.01) {
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "보안 및 안전 정책");
-  const notice = el("p", "surface-message", "설정을 불러오는 중입니다."); notice.setAttribute("role", "status");
+  const notice = el("ui-status", "", "설정을 불러오는 중입니다.");
 
   const tokenSection = el("section", "ui-readback"); tokenSection.append(el("h3", "", "접근 토큰"));
   const tokenForm = el("form", "ui-form");

@@ -13,6 +13,7 @@
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
+| D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
 
 ## 계획·결과 문서
 
@@ -29,5 +30,7 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · fix(omx): report cancellation evidence precisely (D-282 P3)
+- 2026-09-26 · uncommitted · feat(omx): add single-owner arm command policy (D-282 P3)
 - 2026-09-25 · uncommitted · refactor(devices): move omx_adapter under src/devices/omx/omx_adapter (D-231)
 - 2026-09-22 · uncommitted · docs(harness): register omx_adapter under D-168

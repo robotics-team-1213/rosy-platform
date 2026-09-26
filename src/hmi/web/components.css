@@ -72,6 +72,7 @@ ui-button[kind="segment"] {
 }
 
 ui-button[kind="segment"][aria-pressed="true"],
+ui-button[kind="segment"][aria-selected="true"],
 ui-button[kind="segment"].active {
   color: var(--paper);
   background: var(--ground-card-2);
