@@ -1307,3 +1307,9 @@
 - 변경: keep vendor patches LF on Windows, select the AI follower Gazebo launch with Bullet Featherstone and synchronous simulated hardware, enforce URDF command limits, and remove the direct leader-topic remap from simulation.
 - 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused tests and two-instance ROS-SIM probe in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
 - gate 변화: no field actuator or artifact gate promoted; native command owner and physical acceptance remain open.
+
+## 2026-09-26 · uncommitted · D-287 Pi 5 카메라 사용자 공간 이미지 빌드 경로
+
+- 변경: Raspberry Pi 공식 libpisp, libcamera, rpicam-apps, Picamera2 소스를 커밋과 아카이브 SHA-256으로 고정하고 네이티브 ARM64 이미지 customizer에 설치 단계를 연결했다. mounted-image 검증기는 실행 파일, PiSP IPA, Python 패키지, 소스 기록을 확인한다.
+- 증거: 네 공식 아카이브와 ARM64 Python 배포물의 로컬 SHA-256 재확인, 잠금·설치 순서·검증기 호스트 계약 시험. 새 ARM64 이미지 빌드와 SD 촬영은 미실행.
+- gate 변화: SOURCE/LOCAL 구현만 추가. ARTIFACT와 새 SD의 DEVICE 촬영은 HOLD.

@@ -16,6 +16,8 @@ src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml text eol=lf
 deploy/robot/native/rosy-diag text eol=lf
 # D-189: inputs.lock.yaml pins this file by SHA-256; its bytes must not change per checkout.
 deploy/image/device-python-requirements.txt text eol=lf
+deploy/image/camera-sources.lock.json text eol=lf
+deploy/image/camera-python-requirements.txt text eol=lf
 # D-247: inputs.lock.yaml pins the rpi_ws281x patch by SHA-256; the overlay and
 # the udev/modprobe files go into the image byte for byte.
 deploy/image/patches/*.patch text eol=lf

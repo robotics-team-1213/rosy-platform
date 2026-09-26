@@ -2394,3 +2394,9 @@
 - 변경: Operator 카메라 증거 업로드·목록·다운로드, PC 저장 선택, 파일 형식·용량·메타데이터 계약을 API reference에 기록했다.
 - 증거: 응답 schema와 FastAPI 경로·저장 시험을 함께 수정했다.
 - gate 변화: 없음. 브라우저·ARM64 이미지·장치 현장 수용은 별도다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-287 Pinky Pi 5 camera userspace
+
+- 변경: D-264의 카메라 소스 빌드 금지 조항을 D-287로 대체하고 공식 소스 고정, ARM64 이미지 빌드, mounted-image 검증, 새 SD 촬영 수용 조건을 기록했다.
+- 증거: ROSY SD의 OV5647 CAM1 probe와 임시 공급사 사용자 공간 JPEG 촬영, 잠긴 Noble apt의 카메라 패키지 부재, 공식 Raspberry Pi 소스 커밋과 아카이브 해시 확인.
+- gate 변화: D-287은 Proposed. 새 이미지 빌드 및 장치 촬영 전 ARTIFACT/DEVICE는 HOLD.

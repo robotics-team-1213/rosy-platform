@@ -1,4 +1,4 @@
-# ROSY OS v1 product-image inputs (D-161)
+﻿# ROSY OS v1 product-image inputs (D-161)
 #
 # The product target is Ubuntu Server 24.04 LTS arm64 with native ROS 2 Jazzy.
 # Any `null` or `verified: false` value is an explicit release blocker. Replace
@@ -142,6 +142,17 @@ python_runtime:
     2026-09-24 by a --require-hashes download for both platforms.
     D-192 added the rosy-io set (dynamixel-sdk 3.8.4, pyserial 3.5) to the
     same file, so native_release.py's runtime check covers it too.
+
+camera_runtime:
+  sources: camera-sources.lock.json
+  sources_sha256: 7ebd9965f2600b5f4fc0a157926cf01299d5d0327d6192686a858b47cc025b0e
+  python_requirements: camera-python-requirements.txt
+  python_requirements_sha256: c18879d5c285fa4dc4cc9d7944a867598812b6c3c6f1d82fab5ba2a926eac8ae
+  verified: true
+  note: >-
+    D-287. Official Raspberry Pi source archives and CPython 3.12 aarch64
+    Python packages are independently SHA-256 pinned. This verifies source
+    identity, not an ARM64 image build or device capture.
 
 containers:
   role: development-and-ci-only

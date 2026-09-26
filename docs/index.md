@@ -157,8 +157,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): D-287 Pinky Pi 5 camera userspace
 - 2026-09-26 · uncommitted · docs(api): v1.36 camera evidence contract
 - 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
 - 2026-09-26 · uncommitted · docs(adr): D-283 console action groups fit the fixed grammar
 - 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
-- 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획

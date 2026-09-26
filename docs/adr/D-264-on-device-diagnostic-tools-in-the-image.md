@@ -59,3 +59,5 @@ root 셸을 얻은 공격자는 이 도구 없이도 같은 일을 할 수 있�
 `docs/validation/`에 남긴다. 그때 Accepted로 올린다.
 
 **References:** D-161, D-165, D-190, D-192, D-225, D-247.
+
+**2026-09-26 후속 결정:** 카메라 `rpicam-apps`의 Noble apt 부재 시 생략·소스 빌드 금지 조항은 [D-287](D-287-pinky-pi5-camera-userspace-in-native-image.md)로 대체한다. 다른 진단 도구와 빌드 도구 정책은 이 ADR을 따른다.
