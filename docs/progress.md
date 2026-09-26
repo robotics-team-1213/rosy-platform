@@ -2,16 +2,16 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "uncommitted", date: 2026-09-23 }
+last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "D-61 Accepted, D-72/D-77/D-153/D-154 본문·색인 일치. SD 개인화 설계/실행 계획 정렬; focused ADR/network 계약 검증 (2026-09-21 Windows); D-169/D-170 추가 (2026-09-22); D-177/D-181 Proposed 추가 (2026-09-23, 구 D-176은 origin과 번호 충돌로 이명 — D-180은 perf/sd-single-verify 브랜치 선점); D-178 Accepted 승격 — 2차 회차 완료+기준선 갱신 (2026-09-23)"
+    evidence: "D-61 Accepted, D-72/D-77/D-153/D-154 본문·색인 일치. D-267/D-269 Accepted for architecture only; D-268 remains Proposed. 571 Fleet/API/network/harness tests passed, 5 skipped (2026-09-26 Windows); actual Ubuntu/GPU/phone/CORE SITE/DEVICE/FIELD gates remain open."
     cmd: "python tools/harness/rosy_harness.py lint"
   LOCAL:
     state: GO
-    evidence: "85 passed (2026-09-23 Windows). test_network_topology_contracts + test_harness_contracts + test_module_scorecard + test_module_structure"
-    cmd: "python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py test/test_module_scorecard.py test/architecture/test_module_structure.py -q"
+    evidence: "571 passed, 5 skipped (2026-09-26 Windows). src/site/fleet/test + test_network_topology_contracts + test_harness_contracts"
+    cmd: "python -X utf8 -m pytest src/site/fleet/test/ test/test_network_topology_contracts.py test/test_harness_contracts.py -q"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -20,7 +20,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281]
+adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-267, D-269, D-271, D-272, D-273, D-274, D-275, D-276, D-281]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-17-interface-design-implementation-design.md
@@ -82,3 +82,10 @@ plans:
 - Broker decision: Gate A has no measured independent-worker/backlog requirement. Keep SQLite and defer RabbitMQ.
 - Ubuntu/SITE/TLS, full Compose, real CORE, robot, GPU, DEVICE, and FIELD acceptance remain open. Automatic policy dispatch remains HOLD.
 - Detailed record: `docs/validation/2026-09-26-site-task-scheduler-local.md`.
+
+## Local site-stack Docker smoke (2026-09-26)
+
+- The revision-pinned `linux/amd64` candidate ran Fleet, Vision, and HTTPS proxy containers with all three healthchecks healthy.
+- A synthetic phone frame traversed WSS → Vision/ArUco → authenticated HTTPS Fleet → SQLite. An authenticated operator also submitted a navigation intent and read its durable `QUEUED` task history.
+- No robot was connected; the CORE endpoint was synthetic and unreachable. This proves local service and API/task wiring only. Ubuntu/RTX 5080, GPU model inference, real credentials/TLS, real phone/CORE, reboot recovery, robot motion, and FIELD gates remain open. Automatic movement/picking stays HOLD.
+- Detailed evidence and exact limits: `docs/validation/2026-09-26-site-stack-container-smoke.md`.

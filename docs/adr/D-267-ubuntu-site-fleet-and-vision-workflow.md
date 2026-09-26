@@ -1,6 +1,6 @@
 ## D-267 Ubuntu 현장 서버가 Fleet과 영상 작업을 나눠 운영하고, 자동·수동 작업은 같은 검증 경로를 쓴다
 
-**Status:** Proposed (2026-09-26). 현장 배치와 향후 작업 자동화의 설계 방향이다. 코드·Ubuntu 배포·GPU 실행·로봇암 DEVICE/FIELD 수용을 뜻하지 않는다.
+**Status:** Accepted (2026-09-26, architecture only). Ubuntu 사이트 호스트와 서비스 책임 경계를 승인한다. 코드 완성, Ubuntu/GPU 배포, 자동 작업 정책, 로봇암 DEVICE/FIELD 수용을 뜻하지 않는다.
 
 잇는 결정: D-5, D-12, D-33, D-55, D-59, D-81, D-118, D-170, D-177(Proposed), D-199(Proposed), D-231, D-257(Proposed), D-261.
 실행 계획: [2026-09-26-ubuntu-site-fleet-vision-workflow.md](../plans/2026-09-26-ubuntu-site-fleet-vision-workflow.md).
@@ -39,6 +39,16 @@ preflight; GPU inference acceptance requires a selected Blackwell-compatible
 model image plus measured VRAM, thermal behavior, and frame-to-sighting latency.
 Do not attach a GPU reservation to the CPU service or infer GPU acceptance from
 the host's GPU visibility alone.
+
+**Architecture acceptance addendum (2026-09-26):** The operator confirmed the
+always-on Ubuntu site host, browser-based operator requests, Fleet-owned
+high-level task interpretation, and device-local execution/safety boundary.
+D-276 separately accepts per-principal site API roles, and D-271 accepts the
+durable SQLite scheduler with RabbitMQ deferred by Gate A. These decisions
+complete architecture approval only. D-268 policy evidence and D-257 site
+observation acceptance remain Proposed; automatic movement/pick stays disabled.
+Ubuntu host, NVIDIA inference, phone, CORE device, and FIELD evidence remain
+separate gates.
 
 **Alternatives:**
 

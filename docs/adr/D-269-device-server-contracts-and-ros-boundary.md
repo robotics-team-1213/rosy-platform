@@ -1,6 +1,6 @@
 ## D-269 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다
 
-**Status:** Proposed (2026-09-26). 코드와 문서의 계약 경계를 대조한 제안이며 synthetic local Docker 통합까지 검증했다. 현장 장비·운영 절차 검증 전에는 정책 승인이나 DEVICE/FIELD 수용으로 간주하지 않는다.
+**Status:** Accepted (2026-09-26, architecture only). 장비별 통신·권한과 ROS/DDS 경계를 승인한다. synthetic local Docker 검증은 실제 현장 장비·운영 절차 또는 DEVICE/FIELD 수용을 뜻하지 않는다.
 
 잇는 결정: D-18, D-30, D-59, D-81, D-118, D-136, D-170, D-177, D-193, D-246, D-257, D-261, D-267, D-268.
 
@@ -48,5 +48,15 @@
 **Validation / Transition:** [장비-서버 계약 감사 및 연동 계획](../plans/2026-09-26-middleware-device-server-contract-integration.md)의 단계별 수용을 실행한다. Windows LOCAL에서 실제 `FleetAgent` 구현체→동일 `fleet console` ASGI `/ws/robots` hello/heartbeat/event/reconnect와 분리 token, camera source/token 결합 및 Android 4401 처리를 검증했다. Ubuntu 24.04 Fleet·vision·Caddy images를 Docker로 빌드하고 Compose services health를 확인했다. 합성 JPEG를 신뢰 CA 기반 WSS로 전송해 CPU ArUco 4점 보정, source/seq/map/calibration lineage, Caddy HTTPS proxy, Fleet SQLite readback까지 검증했다. 추가로 Docker Caddy TLS를 통과한 `FleetAgent` 구현체가 CORE PRT 이벤트를 보내고 인증 API에서 보였으며, Fleet restart 뒤 sighting/event 둘 다 복구됐다. 이는 실제 CORE 장비나 Ubuntu 현장 수용 증거가 아니다. 품질은 정의된 측정식이 없어 `null`이며 표시 전용이다. 로컬 테스트 token/certificate 외의 운영 provisioning, 실제 Ubuntu host, site phone/CORE와 surveyed calibration 수용 전까지 DEVICE/FIELD 및 자동 실행은 HOLD다.
 
 **Browser-flow evidence addendum (2026-09-26, LOCAL):** Rendered `/console` rejected an invalid operator token, displayed one connected synthetic robot for the valid test token, and submitted a map-click goal. An isolated fake CORE endpoint logged the goal and returned acceptance; Fleet recorded `REQUESTED then ACCEPTED` and authenticated task readback returned its history. This validates the browser-to-Fleet contract path only. It does not prove physical CORE acceptance, per-user RBAC/revocation, or actuator motion.
+
+**Architecture acceptance addendum (2026-09-26):** The operator confirmed that
+the site web console is a browser surface, Fleet is the high-level intent and
+task interpreter, and each robot CORE remains the only ROS/DDS and final
+actuation/safety owner. D-276 accepts per-principal `viewer`, `operator`, and
+`policy-admin` API roles; this does not claim field credential handoff or
+revocation testing. Fleet uses authenticated site contracts and the camera and
+Agent paths remain separately credentialed. D-268 automatic policy evidence,
+Ubuntu SITE deployment, physical phone/CORE operation, and FIELD acceptance
+remain open.
 
 **References:** [D-118](D-118-image-fleet-gz-multi.md), [D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-267](D-267-ubuntu-site-fleet-and-vision-workflow.md), [D-268](D-268-policy-eligible-vision-evidence-for-fleet-tasks.md), [ROSY API & Protocol Reference](../reference/ROSY%20API%20%26%20Protocol%20Reference.md).

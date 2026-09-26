@@ -8,7 +8,7 @@
 
 **Tech Stack:** Ubuntu 24.04 x86_64, Docker Compose, Python/FastAPI, 기존 `fleet`/`overhead` 패키지, SQLite 초기 저장소, 별도 OpenCV·NVIDIA GPU worker. GPU 컨테이너는 호스트 드라이버·NVIDIA Container Toolkit 조합을 실측해 선택한다.
 
-**Decision:** [D-267](../adr/D-267-ubuntu-site-fleet-and-vision-workflow.md) Proposed. [D-268](../adr/D-268-policy-eligible-vision-evidence-for-fleet-tasks.md)는 sighting과 자동 정책 증거의 경계를 제안하며 Proposed 동안 자동 source를 열지 않는다. D-55의 manipulation 장치 수용은 집기 활성화의 별도 필수 게이트다.
+**Decision:** [D-267](../adr/D-267-ubuntu-site-fleet-and-vision-workflow.md) Accepted for architecture and service ownership only. [D-268](../adr/D-268-policy-eligible-vision-evidence-for-fleet-tasks.md)는 sighting과 자동 정책 증거의 경계를 제안하며 Proposed 동안 자동 source를 열지 않는다. D-55의 manipulation 장치 수용은 집기 활성화의 별도 필수 게이트다.
 
 **현재 목표 범위:** 이번 목표는 단계 0~3과 천장 카메라 기반 자동 이동의 승인된 현장 게이트까지다. 단계 4의 핑키/로봇암 영상과 자동 집기는 별도 ADR·계획·goal로 추적한다. 이 단계들은 현재 목표의 완료를 막지 않으며, 집기 경로는 D-55 수용 전 비활성이다.
 
@@ -152,6 +152,16 @@
 - `policy-admin` mutation routes do not exist yet; automatic policy submissions remain `HOLD`. Token replacement/revocation requires updating the protected config and restarting Fleet.
 - This implementation checkpoint is source/local evidence only. Ubuntu host rollout, individual token handoff/revocation exercise, real CORE readback, and browser visual/device acceptance remain open.
 - The console now reads `/api/fleet/session`, displays the authenticated principal and role, and locks operator controls unless the role is `operator`; API authorization remains authoritative. Node role-control tests, FastAPI session endpoint tests, and an in-container API/static-asset smoke cover this local behavior. Browser visual/device acceptance remains open; see `docs/validation/2026-09-26-site-role-ui.md`.
+
+## Architecture approval and next execution order (2026-09-26)
+
+- D-267 and D-269 are Accepted for architecture only: the Ubuntu site host owns Fleet orchestration and separated Vision/GPU/storage services; browsers call Fleet over HTTPS; robots retain ROS 2/DDS, final actuation, and local safety inside CORE.
+- Implemented LOCAL foundation: per-principal viewer/operator/policy-admin API authentication (D-276), authenticated manual navigation through the durable task service, persistent task/audit state, CORE Agent event ingestion, and ceiling-phone WSS → Vision → derived sighting.
+- Queue choice: SQLite remains the task ledger and scheduler. Gate A found no current independent-worker requirement, so RabbitMQ stays deferred; raw video and ROS messages do not enter the task queue.
+- Next implementation order: (1) preserve the current v1 scope as authenticated operator navigation through Fleet's durable task service; the 571-test source/local suite found no reason to add an unapproved command/schema; (2) build and verify a clean revision-pinned Ubuntu site bundle and backup/recovery runbook; (3) on the approved RTX 5080 Ubuntu host, verify TLS, credentials, storage, reboot recovery, and NVIDIA container visibility; (4) commission the actual phone and CORE links separately; (5) measure GPU model and field policy evidence before considering D-268 acceptance.
+- Do not enable automatic movement/pick while D-257/D-268 or task-specific freshness/false-trigger acceptance is open. D-177 result correlation, Pinky/arm media, and manipulation remain separate gates.
+- The current checkout has no approved Ubuntu host identity or physical phone/CORE evidence. Workstation tests and a candidate bundle cannot advance those SITE/DEVICE/FIELD gates.
+- Local candidate Docker smoke evidence (healthy Fleet/Vision/HTTPS proxy, synthetic phone WSS through Vision into Fleet/SQLite, and authenticated operator task enqueue/readback) is recorded in `docs/validation/2026-09-26-site-stack-container-smoke.md`. It does not establish Ubuntu/GPU/physical-device or motion acceptance.
 
 ## 외부 근거
 
