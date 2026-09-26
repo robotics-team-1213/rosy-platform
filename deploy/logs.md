@@ -1302,3 +1302,8 @@
 - 장치 근거: Pi 5 rev d04170의 ROSY SD에서 `ov5647 11-0036` probe 성공, 공급사 카메라 사용자 공간을 임시 실행해 2592×1944 JPEG 실제 촬영 및 화면 확인. rev d04171은 공급사 SD에서 CAM0/CAM1 모두 probe `-121`로 실패했다.
 - 제한: ROSY 제품 이미지에는 PiSP/Picamera2 촬영 런타임이 없고 기본 서비스는 CORE-only다. 임시 진단 촬영은 제품 스트림 수용이 아니다. 새 이미지 artifact 빌드와 `.201` 물리 접속 확인은 남았다.
 - gate 변화: 없음. SOURCE 수정과 장치 진단만 확인했으며 ARTIFACT/DEVICE는 HOLD 유지.
+
+## 2026-09-26 · uncommitted · harden optional OMX-AI simulation image
+- 변경: keep vendor patches LF on Windows, select the AI follower Gazebo launch with Bullet Featherstone and synchronous simulated hardware, enforce URDF command limits, and remove the direct leader-topic remap from simulation.
+- 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused tests and two-instance ROS-SIM probe in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
+- gate 변화: no field actuator or artifact gate promoted; native command owner and physical acceptance remain open.

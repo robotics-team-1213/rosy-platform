@@ -24,4 +24,5 @@ services:
       ROS_DOMAIN_ID: "${OMX_SIM_DOMAIN_ID:-31}"
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
-    command: ["ros2", "launch", "open_manipulator_bringup", "omx_f_gazebo.launch.py"]
+      GZ_SIM_PHYSICS_ENGINE_PATH: /opt/ros/jazzy/opt/gz_physics_vendor/lib
+    command: ["ros2", "launch", "open_manipulator_bringup", "omx_f_follower_ai_gazebo.launch.py"]

@@ -21,6 +21,10 @@ COPY patches/omx-f-gazebo-headless.patch /tmp/omx-f-gazebo-headless.patch
 RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-f-gazebo-headless.patch \
     && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-f-gazebo-headless.patch
 
+COPY patches/omx-ai-sim-gates.patch /tmp/omx-ai-sim-gates.patch
+RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-sim-gates.patch \
+    && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-ai-sim-gates.patch
+
 RUN apt-get update \
     && source /opt/ros/${ROS_DISTRO}/setup.bash \
     && rosdep install \
@@ -42,6 +46,15 @@ RUN apt-get update \
         om_joint_trajectory_command_broadcaster \
         dynamixel_hardware_interface dynamixel_interfaces \
         dynamixel_sdk dynamixel_sdk_custom_interfaces robotis_interfaces
+
+# The vendor AI sim launch connects the leader trajectory topic directly to the
+# controller. Its messages can override an accepted action goal while the
+# action still reports success. Keep this software-only profile action-only.
+COPY patches/omx-ai-sim-action-only.patch /tmp/omx-ai-sim-action-only.patch
+RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-sim-action-only.patch \
+    && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-ai-sim-action-only.patch \
+    && cp /opt/omx_ws/src/open_manipulator/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py \
+      /opt/omx_ws/install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
 
 # D-117: workstation ROS graphs use the same RMW implementation as Rosy OS.
 RUN apt-get update \

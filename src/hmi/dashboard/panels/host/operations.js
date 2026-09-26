@@ -16,7 +16,7 @@ function unavailableLabel(code) {
 function card(title, path, interval, ctx, describe) {
   const wrap = el("section", "surface-readback");
   wrap.append(el("h3", "", title));
-  const body = el("dl", "surface-readout");
+  const body = el("dl", "ui-readout");
   const status = el("ui-status", "", "상태를 불러오는 중입니다.");
   status.setAttribute("state", "pending");
   const detail = el("details", "surface-disclosure");
@@ -85,10 +85,10 @@ export function mount(root, ctx) {
   const sta = el("ui-button", "", "사업장 Wi-Fi로 전환"); sta.setAttribute("kind", "quiet"); sta.type = "button";
   const relay = el("ui-button", "", "릴레이 AP 켜기"); relay.setAttribute("kind", "quiet"); relay.type = "button";
   modeActions.append(sta, relay); networkActions.append(modeActions);
-  const applyForm = el("form", "surface-form");
+  const applyForm = el("form", "ui-form");
   const profile = el("input"); profile.maxLength = 64; profile.autocomplete = "off"; profile.setAttribute("aria-label", "네트워크 프로파일 ID"); profile.placeholder = "프로파일 ID";
   const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.setAttribute("kind", "primary"); applyProfile.type = "submit"; applyForm.append(profile, applyProfile); networkActions.append(applyForm);
-  const connectForm = el("form", "surface-form");
+  const connectForm = el("form", "ui-form");
   const ssid = el("input"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
   const field = el("input"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
   const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);

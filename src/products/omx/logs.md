@@ -15,3 +15,8 @@
 - Evidence: focused profile/product/vendor-lock suite: 13 passed; disabled CLI output: `{}`.
 - Gate change: SOURCE/LOCAL evidence refreshed; ROS-SIM and ARTIFACT remain HOLD; DEVICE/FIELD remain PARKED.
 - Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
+
+## 2026-09-26 · uncommitted · verify two isolated OMX-AI simulator instances
+- 변경: lock the AI follower Gazebo simulation to server-only Bullet Featherstone, synchronous simulated hardware, enforced URDF limits, and an action-only command path after finding direct leader-topic interference.
+- 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused host tests passed; two isolated ROS domains, bounded action, cancel, restart, and gripper mimic observed in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
+- gate 변화: ROS-SIM remains HOLD overall; native command ownership, target-workstation timing, camera, and physical stop remain open. ARTIFACT HOLD and DEVICE/FIELD PARKED.

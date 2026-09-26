@@ -1,7 +1,4 @@
-﻿.surface-readout { display: grid; grid-template-columns: minmax(7rem, 1fr) 2fr; gap: var(--space-2) var(--space-4); }
-.surface-readout dt { color: var(--nominal-quiet); }
-.surface-readout dd { margin: 0; font-variant-numeric: tabular-nums; }
-.surface-readback { min-width: 0; display: grid; gap: var(--space-2); }
+﻿.surface-readback { min-width: 0; display: grid; gap: var(--space-2); }
 .surface-readback h3 { margin: 0; }
 .surface-message { overflow-wrap: anywhere; }
 .surface-disclosure { min-width: 0; }
@@ -29,8 +26,6 @@
 .surface-link:hover { background: var(--brand-rose-wash); }
 .surface-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .surface-link[hidden] { display: none; }
-.surface-form, .surface-inline-form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); }
-.surface-field { min-width: min(100%, 10rem); display: grid; gap: var(--space-1); }
 .surface-slot input:not([type="checkbox"]):not([type="radio"]),
 .surface-slot select,
 .surface-slot textarea {
@@ -49,7 +44,6 @@
 .surface-slot textarea::placeholder { color: var(--nominal-quiet); opacity: 1; }
 .surface-slot input[type="checkbox"],
 .surface-slot input[type="radio"] { accent-color: var(--focus-ring); }
-.surface-form input, .surface-form select, .surface-inline-form input, ui-actions input { max-width: 100%; }
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
 .surface-map-frame:has(ui-empty:not([hidden])) canvas { height: 16rem; }
@@ -64,9 +58,7 @@
 .surface-camera-frame[hidden] { display: none; }
 .surface-camera-empty { padding: var(--space-4); text-align: center; }
 @media (max-width: 30rem) {
-  .surface-readout { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
-  .surface-readout dd { margin-bottom: var(--space-2); overflow-wrap: anywhere; }
-  .surface-form, .surface-inline-form, ui-actions { align-items: stretch; flex-direction: column; }
-  .surface-form > *, ui-actions > * { width: 100%; }
+  ui-actions { align-items: stretch; flex-direction: column; }
+  ui-actions > * { width: 100%; }
 }
 .diagnostic-list, .waypoint-list { display: grid; gap: var(--space-2); padding-inline-start: var(--space-5); }
