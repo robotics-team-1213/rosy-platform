@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import stat
 from pathlib import Path
 
@@ -117,6 +116,15 @@ def test_native_follower_launch_cannot_keep_vendor_leader_topic_bypass():
     assert "+        remappings=[]," in patch
     assert "git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-native-action-only.patch" in dockerfile
     assert "install/share/open_manipulator_bringup/launch/omx_f_follower_ai.launch.py" in dockerfile
+
+
+def test_vendor_owner_probe_uses_simulation_and_cleans_up_its_launch():
+    script = (OMX / "probe_vendor_owner_sim.sh").read_text(encoding="utf-8")
+    assert "omx_f_follower_ai_gazebo.launch.py" in script
+    assert "test_omx_ros_runtime_vendor_sim.py" in script
+    assert "trap cleanup EXIT" in script
+    assert "--basetemp /tmp/rosy-owner-pytest" in script
+    assert "omx_f_follower_ai.launch.py" not in script
 
 
 def test_simulation_profile_runs_pinned_robotis_gazebo_launch_without_hardware_access():

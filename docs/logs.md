@@ -2490,3 +2490,9 @@
 - 변경: 두 인스턴스 ROS-SIM 검증 기록에 vendor 비시뮬레이션 launch의 leader topic remap 제거와 개발 이미지 readback을 추가했다.
 - 근거: 기존 dual-input 시뮬레이션의 action false-success, 잠긴 ROBOTIS launch의 직접 remap, 새 이미지의 설치된 launch를 대조했다.
 - gate 변화: 없음. 단일 writer 런타임과 실제 정지·복구가 없어 ROS-SIM 전체 및 DEVICE/FIELD는 HOLD다.
+
+## 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
+
+- 변경: 잠긴 vendor Gazebo action에 연결된 정책 소유자가 동시 leader 요청을 거부하는 후속 시험과 호스트 이전 runbook을 기록했다.
+- 근거: 재현 probe의 경쟁 요청 `busy`, 취소 최종 상태, 이전 launch의 leader topic 구독자 0, 장치 mount 거부를 확인했다.
+- gate 변화: Task 3 전체는 HOLD. DDS 직접 접근 통제, native 단일 writer 프로세스, 실제 Ubuntu/OMX의 정지·복구 증거는 남았다.

@@ -81,3 +81,5 @@
 - Task 1·2의 인벤토리와 장치 배타성 구현은 현재 `main`에 있다. 이번 점검에서 관련 ROS-free 시험 47개가 통과했다. 이 결과는 실제 `/dev/serial/by-id/` 장치 readback이 아니다.
 - Task 3의 두 격리 Gazebo 인스턴스, action/cancel, 재시작 관측은 [ROS-SIM 기록](../validation/omx-two-instance-ros-sim-2026-09-26/README.md)에 있다. vendor의 비시뮬레이션 launch에도 있던 leader topic 직접 remap을 개발 이미지에서 제거하고 설치 파일을 확인했다. 그러나 단일 명령 소유자와 native 실행 연결, target Ubuntu에서의 graph·정지·부하 관측은 남았다. 따라서 Task 3의 전체 gate는 HOLD다.
 - Task 4의 native 서비스·산출물과 Task 5의 실물 제어는 아직 착수하지 않는다. Task 4의 명시적 선행 조건인 Task 3의 단일 명령 소유권과 D-281 native 배치 결정이 충족되지 않았다. 다음 작업은 하나의 workcell에 대한 단일 writer 실행 경로, DDS graph 접근 범위, 독립 정지와 timeout HOLD를 시뮬레이션에서 검증하는 것이다. 그 전에는 `omx.enabled: false`를 유지한다.
+- 후속 ROS-SIM probe에서 기존 `RosArmCommandRuntime`이 잠긴 vendor action에 no-op/cancel을 제출하고, 활성 작업 중 다른 정책 소유자의 요청을 `busy`로 거절하는 것을 확인했다. 이것은 프로세스 내부 정책 검증이다. 다른 DDS 참여자의 직접 action 호출을 막는 배포 경계와 native 서비스는 아직 없다. 대상 Ubuntu·실물 OMX에 접근할 수 없어 Task 4의 host/ARTIFACT 및 Task 5·6의 SITE/DEVICE/FIELD 시험은 계속 HOLD다.
+- Task 6의 호스트 이전 순서는 `deploy/omx/README.md`에 작성했다. 이전 인스턴스 종료·장치 점유 해제 → 새 호스트의 식별자/산출물/보정/자격 증명 검증 → 무명령 기동·독립 readback → 운영자 재승인으로 제한한다. 실물 이전 수행 증거는 아니다.

@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · owner competition in locked vendor simulation
 - 2026-09-26 · uncommitted · OMX ROS arm and calibrated camera runtime
 - 2026-09-26 · uncommitted · fix(omx): report cancellation evidence precisely (D-282 P3)
 - 2026-09-26 · uncommitted · feat(omx): add single-owner arm command policy (D-282 P3)
 - 2026-09-25 · uncommitted · refactor(devices): move omx_adapter under src/devices/omx/omx_adapter (D-231)
-- 2026-09-22 · uncommitted · docs(harness): register omx_adapter under D-168
