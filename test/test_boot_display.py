@@ -595,6 +595,35 @@ def test_the_display_shows_the_key_and_never_logs_it(tmp_path, capsys):
     assert AP_VALUE not in output.out + output.err
 
 
+def test_the_lcd_draws_the_join_qr_only_while_the_ap_is_open_and_never_logs_it(tmp_path, capsys):
+    sys.path.insert(0, str(ROOT / "src/hmi/face"))
+    info_screen = pytest.importorskip("emotion.info_screen")
+    module = _display()
+    _status(tmp_path, "CORE_READY")
+    network_json = tmp_path / "run/rosy-boot/network.json"
+    network_json.write_text(
+        json.dumps({"mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}), encoding="utf-8")
+    (tmp_path / "run/rosy-boot/ap-display.txt").write_text(f"rosy-pinky-e4us\n{AP_VALUE}\n", encoding="utf-8")
+    logs: list[str] = []
+    display, lcd, _clock, _battery, _rendered, _ = _loop(
+        module, tmp_path, voltages=(OSError(5, "I/O error"),), logs=logs)
+    display._render = info_screen.render_boot
+    qr_area = (160, info_screen._QR_TOP, 320, 176)
+
+    display.step()
+    opened = lcd.shown[-1]
+    network_json.write_text(json.dumps({"mode": "sta"}), encoding="utf-8")
+    display.step()
+    closed = lcd.shown[-1]
+
+    colours = lambda image: {c for _n, c in image.crop(qr_area).getcolors(1 << 16)}  # noqa: E731
+    assert info_screen._QR_LIGHT in colours(opened)
+    assert info_screen._QR_LIGHT not in colours(closed)
+    output = capsys.readouterr()
+    for text in logs + [output.out + output.err]:
+        assert AP_VALUE not in text and "WIFI" + ":" not in text
+
+
 def test_a_stale_handoff_is_not_shown_in_station_mode(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY")
