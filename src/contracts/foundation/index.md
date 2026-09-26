@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
 - 2026-09-26 · uncommitted · feat(core_common): D-257 SiteSightingPayload
 - 2026-09-26 · uncommitted · feat(core_common): D-260 robot state rule table
 - 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
 - 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
-- 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)

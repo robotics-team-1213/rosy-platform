@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(core_api_web): bounded operator camera evidence storage
 - 2026-09-26 · uncommitted · fix(core_api_web): D-260 review M1 status inputs hand-over
 - 2026-09-26 · uncommitted · feat(core_api_web): D-260 GET /api/v1/host/status-summary (API Ref v1.25)
 - 2026-09-26 · uncommitted · feat(api): serve the device hardware panel through the UI registry
 - 2026-09-26 · 8e6902fd · feat(api): buzzer and lamp test and the person's answer (D-247 6)
-- 2026-09-25 · 96654ed1 · feat(api): board device card API and motion reason (D-247)

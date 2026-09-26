@@ -285,6 +285,8 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
             status=200, content_type="application/javascript", body="export const session={token:'test'}; export const authHeaders=()=>({});"))
         page.route("http://rosy.test/assets/vision.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body="export function createVisionPreview(){return {start(){window.__started=(window.__started||0)+1;},stop(){window.__stopped=(window.__stopped||0)+1;}};}"))
+        page.route("http://rosy.test/assets/camera-capture.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body="export function createCameraCapture(){return {state(){return {ready:false,recording:false,saved:false,supported:false,message:'WAITING'};},unavailable(){},recordAction(){},dispose(){}};} export function evidenceBody(){} export function saveCameraFile(){}"))
         page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/camera.js');
@@ -294,6 +296,10 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
           document.dispatchEvent(new Event('visibilitychange'));
         }""")
         assert page.locator("img#vision-frame").get_attribute("alt") == "전방 카메라 실시간 영상"
+        assert page.locator("#vision-storage option").count() == 3
+        assert page.locator("#vision-storage option[value=robot]").is_disabled()
+        assert page.locator("#vision-screenshot").is_disabled()
+        assert page.locator("#vision-record-start").is_disabled()
         assert page.evaluate("window.__started") == 1
         assert page.evaluate("window.__stopped") == 1
         page.evaluate("window.__unmount()")

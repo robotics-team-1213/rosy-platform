@@ -1,6 +1,7 @@
 // 세션과 인증된 fetch. 토큰이 사는 유일한 곳이다.
 
 import { elements } from "./dom.js";
+import { classifyOperation } from "./camera-capture.js";
 
 // D-193 6 storage rule. A token without an expiry (card, manual) lives only in
 // sessionStorage. A paired token may go to localStorage, and only when the
@@ -229,10 +230,19 @@ async function httpError(response) {
 
 export async function api(path, options = {}) {
   if (!session.token) throw new Error("접속 키가 필요합니다.");
-  const response = await fetch(path, {
-    ...options,
-    headers: { ...authHeaders(), ...(options.headers || {}) },
-  });
+  const method = (options.method || "GET").toUpperCase();
+  const noteOperation = (status) => {
+    const detail = classifyOperation(method, path, status);
+    if (detail) window.dispatchEvent(new CustomEvent("rosy:operator-action", {detail}));
+  };
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: { ...authHeaders(), ...(options.headers || {}) },
+    });
+  } catch (error) { noteOperation(0); throw error; }
+  noteOperation(response.status);
   if (!response.ok) throw await httpError(response);
   if (response.status === 204) return null;
   return response.json();

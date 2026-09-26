@@ -57,6 +57,10 @@
 .surface-camera-frame { display: block; width: 100%; max-height: 50vh; object-fit: contain; }
 .surface-camera-frame[hidden] { display: none; }
 .surface-camera-empty { padding: var(--space-4); text-align: center; }
+.surface-camera-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: end; }
+.surface-camera-storage { display: grid; gap: var(--space-1); }
+.surface-camera-library { margin-block: var(--space-2); }
+.surface-camera-files { display: grid; gap: var(--space-2); padding-inline-start: var(--space-5); }
 @media (max-width: 30rem) {
   ui-actions { align-items: stretch; flex-direction: column; }
   ui-actions > * { width: 100%; }

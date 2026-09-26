@@ -336,6 +336,22 @@ class VisionPreviewStatus(BaseModel):
     sequence: int = 0
 
 
+class VisionEvidenceRecord(BaseModel):
+    """Saved operator camera evidence on the robot SD (API Ref v1.36)."""
+
+    id: str
+    kind: str
+    file_name: str
+    mime_type: str
+    bytes: int
+    sha256: str
+    created_at: str
+
+
+class VisionEvidenceList(BaseModel):
+    records: list[VisionEvidenceRecord] = Field(default_factory=list)
+
+
 class StateSnapshot(BaseModel):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 

@@ -156,3 +156,9 @@
 - 증거: 241 passed, 3 skipped; visible CORE review remains on `/device` with Viewer setup 403, Operator setup link only for an empty map, Administrator device 200, and no browser errors or 390px overflow.
 - gate 변화: unchanged. CORE browser proof does not establish ROS-SIM, ARM64 image, device, or field acceptance.
 - Decision: D-279 behavior and D-284 shared components.
+
+## 2026-09-26 · uncommitted · feat(dashboard): camera recording and screenshot controls
+
+- 변경: 전방 카메라 화면에 JPEG 스크린샷, 2 FPS 브라우저 영상 녹화, 운전 조작 타임라인, PC/로봇 SD/둘 다 저장 선택, 로봇 저장 파일 목록·다운로드를 추가했다.
+- 증거: `python -m pytest src/hmi/dashboard/test/ -q --basetemp X:/DevTemp/rosy-camera-capture`와 API 통합 시험. 실제 브라우저와 장치 저장 검증은 남아 있다.
+- gate 변화: 없음. native ARM64 이미지와 물리 카메라 연결 검증은 별도다.

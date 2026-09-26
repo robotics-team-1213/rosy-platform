@@ -2388,3 +2388,9 @@
 - 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
 - 증거: pinned ROBOTIS image built locally; two isolated Gazebo graphs, action, cancel, restart, and gripper direction observed. ROS-SIM remains HOLD overall; DEVICE/FIELD were not run.
 - gate 변화: docs governance gates unchanged; OMX ROS-SIM remains HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED.
+
+## 2026-09-26 · uncommitted · docs(api): v1.36 camera evidence contract
+
+- 변경: Operator 카메라 증거 업로드·목록·다운로드, PC 저장 선택, 파일 형식·용량·메타데이터 계약을 API reference에 기록했다.
+- 증거: 응답 schema와 FastAPI 경로·저장 시험을 함께 수정했다.
+- gate 변화: 없음. 브라우저·ARM64 이미지·장치 현장 수용은 별도다.
