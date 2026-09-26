@@ -2669,3 +2669,9 @@
 - Change: built current clean source `4c2b46b21b8ad77d010aa37e03c084bbe6716cc0` into a commit-pinned Ubuntu site candidate under X: scratch; verified manifest, deployment, archive, SBOM, and loaded image identities; recorded packaged LOCAL smoke and focused tests.
 - Evidence: Fleet/Vision/proxy healthy; authenticated TLS/OpenAPI checks, synthetic phone WSS to SQLite, task persistence through Fleet restart; Fleet 518 passed/5 skipped and CORE/Fleet integration 47 passed.
 - Gate: local artifact packaging advanced for this revision. Ubuntu host/reboot, RTX 5080 GPU inference, real phone/CORE, dispatch/motion, and SITE/DEVICE/FIELD remain unverified; automatic movement/picking remain HOLD.
+
+## 2026-09-27 · uncommitted · validation: exercise packaged CORE event ingestion
+
+- Change: exercised the current packaged Fleet WSS hub with a synthetic CORE Agent HELLO, heartbeat, and event, then checked authenticated event readback and SQLite persistence after Fleet restart.
+- Evidence: Fleet acknowledged the event; anonymous history was denied; the same `nav.completed` payload remained readable after restart. Exact Compose project and volume were removed and generated credentials were blanked.
+- Gate: packaged software-level CORE event ingestion is locally verified. Real CORE/robot, Ubuntu host, GPU, physical camera/network, dispatch/motion, and SITE/DEVICE/FIELD acceptance remain open.

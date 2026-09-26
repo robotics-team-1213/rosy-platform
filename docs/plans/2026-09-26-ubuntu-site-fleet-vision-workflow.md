@@ -201,3 +201,6 @@ Freeze thresholds and the holdout set before measurement. Do not tune thresholds
 - Fresh tests on this source: Fleet `518 passed, 5 skipped`; CORE/Fleet integration `47 passed`. This closes the previously open local package rebuild step only.
 - Next: apply the pinned bundle on the approved Ubuntu 24.04 RTX 5080 host; record host/image/config identity; verify NVIDIA Container Toolkit and GPU visibility; test backup/restore and power reboot; then separately commission the physical overhead phone and authenticated CORE event/readback path. Do not infer any of these from Windows LOCAL evidence.
 - No approved host identity or live-device credentials were available in this checkout. Automatic movement/picking remain HOLD pending the accepted D-268/policy-evidence contract and measured freshness/false-trigger criteria; arm pickup and Pinky camera remain separately gated.
+
+
+- Follow-up LOCAL packaged CORE check: synthetic Agent HELLO, heartbeat, and event traversed Fleet's WSS hub; authenticated history readback and event persistence across Fleet restart passed. This verifies the packaged software path only. Real CORE credentials, network/TLS identity, clock/session behavior, event continuity, and physical-device acceptance remain unverified.

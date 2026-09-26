@@ -172,3 +172,10 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
 - Fleet suite: `518 passed, 5 skipped`. CORE/Fleet hub, API, console integration, event API/store and CORE Agent tests: `47 passed`. Docker Desktop Engine and packaged services ran locally on Windows; the host did not expose a usable `nvidia-smi` command.
 - Test setup initially encountered exhausted Docker default IPAM pools and an empty `robots.yaml` copied from an old scratch fixture. The isolated smoke used the existing explicit test CIDRs and a non-empty fake robot at `https://127.0.0.1:1`; no tracked runtime source changed for these fixture corrections.
 - This remains LOCAL Windows Docker Desktop evidence. No Ubuntu installation/reboot, RTX 5080/GPU inference, production CA, physical phone, real CORE readback, robot dispatch/motion, or SITE/DEVICE/FIELD acceptance was performed. Automatic movement and picking remain HOLD. The candidate and generated synthetic credentials are in X: scratch storage; credentials are not recorded here.
+
+
+## Revision `4c2b46b2`: packaged CORE Agent event path (LOCAL, 2026-09-27)
+
+- Started the same revision-pinned Fleet/Vision/proxy images on an isolated Compose project with a synthetic robot identity, distinct REST and Fleet pairing credentials, loopback TLS, and unreachable REST endpoint `https://127.0.0.1:1`.
+- A synthetic CORE Agent sent HELLO, heartbeat (`seq=4`), and `nav.completed` event (`seq=1`) over `wss://localhost:18446/ws/robots`. Fleet accepted the event; anonymous event-history access returned `401`; the named operator read the event and its payload through authenticated HTTPS.
+- Restarted Fleet and read the same event from SQLite, confirming event persistence over service restart. No physical CORE or robot was connected and no command/motion was issued. Generated credentials were blanked after the exact smoke project and volume were removed.

@@ -166,8 +166,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation: exercise packaged CORE event ingestion
 - 2026-09-27 · uncommitted · validation: rebuild current site integration candidate
 - 2026-09-27 · uncommitted · Pinky native mapping gate truth and G4 diagnostic
 - 2026-09-27 · uncommitted · docs(validation): record current main integration gates
 - 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
-- 2026-09-26 · uncommitted · Platform 목표와 현재 경계 대조
