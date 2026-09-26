@@ -35,7 +35,7 @@ from core_features.navigation.manager import NavigationError
 from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
-from core_common.protocol.schemas import VisionPreviewStatus
+from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceRecord, VisionEvidenceList
 
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
 __all__ = [
@@ -50,6 +50,8 @@ __all__ = [
     "SwarmError",
     "Waypoint",
     "VisionPreviewStatus",
+    "VisionEvidenceRecord",
+    "VisionEvidenceList",
     "VisionFrameAdvanced",
     "VisionPullRateLimited",
 ]

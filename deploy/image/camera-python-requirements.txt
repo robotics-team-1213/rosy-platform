@@ -1,0 +1,6 @@
+# Raspberry Pi 5 / Ubuntu Noble CPython 3.12 aarch64 camera dependencies.
+# Picamera2 itself is installed from the pinned official source archive.
+av==13.1.0 --hash=sha256:f3b4d3ca159eceab97e3c0fb08fe756520fb95508417f76e48198fda2a5b0806
+simplejpeg==1.7.6 --hash=sha256:12319e9045f7f5ae5d3af985aeed86bd438e240a1feb348f5535f7f3fb14c9d0
+v4l2-python3==0.3.5 --hash=sha256:5a6f88c0b5101dd11c6093599adb75d0d42179cf8e9789925f201338294c1f54
+PiDNG==4.0.9 --hash=sha256:560eb008086f8a715fd9e1ab998817a7d4c8500a7f161b9ce6af5ab27501f82c

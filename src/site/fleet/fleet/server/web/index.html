@@ -69,6 +69,15 @@
       <h2 id="roster-heading">등록 로봇</h2>
       <div id="roster" class="roster"></div>
 
+      <section class="discovery" aria-labelledby="discovery-heading">
+        <div class="robot-head">
+          <b id="discovery-heading">같은 네트워크에서 발견</b>
+          <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
+        </div>
+        <p class="hint">발견된 주소는 접속 힌트입니다. Fleet 페어링을 확인한 로봇만 등록된 작업 대상으로 사용합니다.</p>
+        <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
+      </section>
+
       <div class="formation" aria-labelledby="formation-heading">
         <div class="robot-head">
           <b id="formation-heading">대형</b>

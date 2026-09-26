@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS-free tests for OMX profile normalization and the standard controller-name contract. Must not open serial devices or claim physical OMX availability.
+ROS-free policy/contract tests plus opt-in ROS message/action integration tests. Must not open serial devices or claim physical OMX availability.
 
 ## Key Files
 

@@ -38,6 +38,7 @@
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-21-fleet-signals-integration-design.md](../../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
 - [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
+- [2026-09-26-site-mdns-discovery.md](../../../docs/plans/2026-09-26-site-mdns-discovery.md)
 
 ## 교훈 (docs/solutions)
 
@@ -49,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · reciprocal site discovery preparation
+- 2026-09-26 · uncommitted · feat(fleet): site mDNS discovery readback
 - 2026-09-26 · uncommitted · feat(fleet): D-257 source-scoped sighting API
 - 2026-09-25 · uncommitted · fix(fleet): roster keyboard vocabulary, queue render gates (D-224, D-219)
 - 2026-09-25 · uncommitted · fix(fleet): HITL 큐의 모의 조종 버튼 제거와 큐 계약 (D-218, D-219)
-- 2026-09-25 · uncommitted · fix(fleet): 선택 카드가 읽기를 희생하지 않는다 (D-214)
-- 2026-09-24 · uncommitted · fix(fleet): 관제 콘솔 적합·경보 채움 (D-201, D-202)

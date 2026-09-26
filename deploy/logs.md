@@ -1307,3 +1307,38 @@
 - 변경: keep vendor patches LF on Windows, select the AI follower Gazebo launch with Bullet Featherstone and synchronous simulated hardware, enforce URDF command limits, and remove the direct leader-topic remap from simulation.
 - 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused tests and two-instance ROS-SIM probe in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
 - gate 변화: no field actuator or artifact gate promoted; native command owner and physical acceptance remain open.
+
+## 2026-09-26 · uncommitted · D-287 Pi 5 카메라 사용자 공간 이미지 빌드 경로
+
+- 변경: Raspberry Pi 공식 libpisp, libcamera, rpicam-apps, Picamera2 소스를 커밋과 아카이브 SHA-256으로 고정하고 네이티브 ARM64 이미지 customizer에 설치 단계를 연결했다. mounted-image 검증기는 실행 파일, PiSP IPA, Python 패키지, 소스 기록을 확인한다.
+- 증거: 네 공식 아카이브와 ARM64 Python 배포물의 로컬 SHA-256 재확인, 잠금·설치 순서·검증기 호스트 계약 시험. 새 ARM64 이미지 빌드와 SD 촬영은 미실행.
+- gate 변화: SOURCE/LOCAL 구현만 추가. ARTIFACT와 새 SD의 DEVICE 촬영은 HOLD.
+
+## 2026-09-26 · uncommitted · docs(adr): renumber camera source-build decision
+
+- 변경: 메인 브랜치의 D-287 readback 결정을 보존하고 카메라 이미지 결정을 D-288로 기록했다.
+- 증거: ADR 색인과 이미지 잠금·설치·검증 시험의 D-288 참조 일치.
+- gate 변화: 없음. 새 ARM64 이미지와 SD 카메라 촬영은 미검증이다.
+
+## 2026-09-26 · uncommitted · site LAN discovery profile and Fleet advertisement
+
+- 변경: ROSY 로봇 mDNS TXT에 공통 제품·역할·프로토콜 표시를 추가하고, Ubuntu Fleet `_rosy-fleet._tcp` Avahi 광고·검색 도구와 systemd 유닛을 사이트 배포 묶음에 넣었다.
+- 증거: Windows 집중 45 passed/2 skipped, 변경 파일 flake8 통과. Ubuntu Avahi 및 TLS 현장 연결은 아직 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL 범위만 확인, Ubuntu 사이트 ARTIFACT·DEVICE·FIELD 검증 대기.
+## 2026-09-26 · uncommitted · paired robot Fleet mDNS bootstrap
+
+- 변경: native image에 Avahi browse와 `.local` 이름 해석 의존성을 추가하고, 서명된 SD의 Fleet `.local` 예상 호스트와 trust profile에서 CORE 비공개 discovery 설정만 생성한다. 일회성 `pairing_credential`은 Agent 토큰으로 복사하지 않는다.
+- 증거: first-boot와 Agent 통합 집중 58 passed, 변경 파일 flake8 통과. 실제 native image 빌드와 Pi/Ubuntu TLS 연결은 미실행.
+- gate 변화: SOURCE/LOCAL 근거만 추가, ARTIFACT·DEVICE·FIELD 대기.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수
+
+- 변경: CORE와 무구동 I/O를 첫 부팅에 시작하고, 모터 구동은 장치별 커미셔닝 설정으로만 활성화한다. 이전 서명 이미지의 MEDIA 증거는 새 소스의 이미지로 재사용하지 않는다.
+- 근거: `2026.09.26-018`의 이미지와 카드 영수증은 이번 target 변경 이전 소스다. 새 ARM64 서명 이미지, 전체 카드 readback, Pi boot를 각기 확인한다.
+- gate 변화: 소스 계약은 검증 중이며 새 ARTIFACT/MEDIA는 빌드·기록 전까지 HOLD.
+
+## 2026-09-26 · uncommitted · site control console operator access guide
+
+- 변경: 사이트 서버, 운영자 브라우저, Pinky, OMX, 향후 GPU 호스트의 실행 책임과 LAN 바인딩·TLS·권한·작업 readback 점검 순서를 배포 설명에 추가했다.
+- 근거: `compose.yaml`의 기본 `127.0.0.1:8443`, Caddy의 Fleet 프록시, D-275/D-276/D-290을 대조했다.
+- gate 변화: 없음. SOURCE 문서 정리이며 실제 사이트 네트워크 및 장치 수용은 미실시.

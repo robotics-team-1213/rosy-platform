@@ -2384,13 +2384,97 @@
 - 근거: D-201 및 D-280 기준선과 administrator/operator 실제 CORE 캡처. desktop scroll 823px이며 평면 3열 후보는 act 내용이 y=1017까지 내려가 잘린다.
 - gate 변화: 없음. 구현 전 ADR이며 G1/G2/G3와 ROS/장치 수용은 남아 있다.
 
+## 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
+- 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
+- 증거: pinned ROBOTIS image built locally; two isolated Gazebo graphs, action, cancel, restart, and gripper direction observed. ROS-SIM remains HOLD overall; DEVICE/FIELD were not run.
+- gate 변화: docs governance gates unchanged; OMX ROS-SIM remains HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED.
+
+## 2026-09-26 · uncommitted · docs(api): v1.36 camera evidence contract
+
+- 변경: Operator 카메라 증거 업로드·목록·다운로드, PC 저장 선택, 파일 형식·용량·메타데이터 계약을 API reference에 기록했다.
+- 증거: 응답 schema와 FastAPI 경로·저장 시험을 함께 수정했다.
+- gate 변화: 없음. 브라우저·ARM64 이미지·장치 현장 수용은 별도다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-287 Pinky Pi 5 camera userspace
+
+- 변경: D-264의 카메라 소스 빌드 금지 조항을 D-287로 대체하고 공식 소스 고정, ARM64 이미지 빌드, mounted-image 검증, 새 SD 촬영 수용 조건을 기록했다.
+- 증거: ROSY SD의 OV5647 CAM1 probe와 임시 공급사 사용자 공간 JPEG 촬영, 잠긴 Noble apt의 카메라 패키지 부재, 공식 Raspberry Pi 소스 커밋과 아카이브 해시 확인.
+- gate 변화: D-287은 Proposed. 새 이미지 빌드 및 장치 촬영 전 ARTIFACT/DEVICE는 HOLD.
+
 ## 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups
 
 - 변경: D-283에 따라 `/console` 조작 패널을 운전·도킹·차선 추종 그룹으로 선택하게 하고, desktop 고정 3영역과 mobile 세로형 배치를 구현했다. 매니페스트 action_group 필드는 API Ref v1.36에 기록했다.
 - 근거: dashboard/API/gateway LOCAL suite 116 passed, 2 skipped, foundation 50 passed; 실제 FastAPI+CoreServices administrator/operator 4 viewport 캡처에서 desktop scroll 0, mobile horizontal overflow 0, E-stop visible. G1 line-follow/docking 요청 대기·활성 중 이탈 차단, terminal zero 실패 시 그룹 전환 및 unmountAll 차단, 성공 시 정지 확인 뒤 패널을 내리는 것을 브라우저 검증했다.
 - gate 변화: dashboard SOURCE/LOCAL GO. G3 8명 평가와 D-201 데스크톱 최종 수용은 HOLD; ROS-SIM/DEVICE/FIELD는 별도다.
 
-## 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
-- 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
-- 증거: pinned ROBOTIS image built locally; two isolated Gazebo graphs, action, cancel, restart, and gripper direction observed. ROS-SIM remains HOLD overall; DEVICE/FIELD were not run.
-- gate 변화: docs governance gates unchanged; OMX ROS-SIM remains HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED.
+## 2026-09-26 · uncommitted · docs(camera): resolve ADR and API version conflicts
+
+- 변경: 메인의 D-287 readback ADR과 API Ref v1.36을 보존하고 카메라 이미지 결정은 D-288, 카메라 증거 API는 v1.37로 정렬했다.
+- 증거: ADR 색인, API 응답 schema, 이미지·대시보드 계약 시험.
+- gate 변화: 없음. ARM64 이미지 및 장치 촬영은 미검증이다.
+
+## 2026-09-26 · uncommitted · docs(validation): Pinky camera capture readback
+
+- 변경: `docs/validation/pinky-camera-capture-2026-09-26/README.md`에 현재 ROSY SD 센서 probe, 카메라 사용자 공간 부재, CORE API v1.33, 로컬 Chromium 녹화 증거를 분리해 기록했다.
+- 증거: 키 인증 읽기 전용 SSH의 커널·오버레이·서비스·OpenAPI readback과 실제 Chromium `MediaRecorder` 시험 2 passed.
+- gate 변화: 없음. 새 ARM64 이미지, 실물 JPEG, 제품 화면 녹화와 저장은 미검증이다.
+
+## 2026-09-26 · uncommitted · feat(fleet): host Avahi discovery contract
+
+- 변경: `_rosy._tcp`의 사이트 Fleet 수집과 신원 확인 상태를 API Reference v1.36과 구현 계획에 기록했다. 발견 광고는 등록/명령 권한이 아니며, 호스트 전용 credential로만 scan 입력을 허용한다.
+- 증거: Windows Fleet 510 passed/5 skipped와 Compose 정적 검증; Ubuntu 현장 mDNS와 4~10대 실제 연결은 아직 측정하지 않았다.
+- gate 변화: 문서/LOCAL 범위만 갱신, DEVICE/FIELD 불변.
+## 2026-09-26 · uncommitted · SERION 현장 LAN 발견 규칙 v0.1
+
+- 변경: 제품·역할별 DNS-SD 종류, 공개 TXT 필드, 예상 호스트명 및 CA/TLS 검증, 중복/불일치 거부, 페어링 경계를 `docs/reference/site-lan-discovery-profile.md`에 정리했다.
+- 증거: ROSY 로봇 광고와 Ubuntu Fleet 도구 및 사이트 배포 파일로 두 역할을 대조했다. 다른 SERION 제품은 각 저장소의 API·신원 계약 승인 후 적용한다.
+- gate 변화: 문서·로컬 계약 범위만 확인. 실제 Ubuntu 호스트/다중 로봇 LAN 검증 대기.
+## 2026-09-26 · uncommitted · paired robot outbound discovery contract
+
+- 변경: API Ref v1.38과 현장 LAN 발견 규칙에 승인된 Agent 토큰, 예상 `.local` 사이트, 별도 CA, 재접속 시 재검증 경계를 기록했다. 로봇 WSS envelope는 바꾸지 않았다.
+- 증거: first-boot/Agent/Fleet 통합 58 passed; Ubuntu/Pi 현장 실측은 별도.
+- gate 변화: 문서/LOCAL 범위만 확인.
+
+## 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
+
+- 변경: 고정 작업대에서 실물 제어 기준선 → 상부 RGB/보정 → 규칙 기반 집기 → 손목 RGB/시범 → ACT 비교 순서와 진입·중단 게이트를 D-273에 기록했다. 기존 D-55·D-117·D-118·D-152·D-232·D-269 경계를 유지한다.
+- 증거: 보고서와 현재 비활성 OMX 프로필, 모듈 상태, 관련 Accepted ADR을 대조했다. `python tools/harness/rosy_harness.py lint` 0 error/20 기존 검증시점 warning, 문서 계약 시험 71 passed/20 warning (`--basetemp X:\DevTemp\rosy-d273-pytest`).
+- gate 변화: 없음. D-273 Accepted는 구현 순서 결정이며 실제 OMX·카메라·ARTIFACT/DEVICE/FIELD 수용은 별도다.
+- 회귀: 제품 코드 무변경. 기존 dashboard·secret-scan WIP와 보고서 원본은 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
+
+- 변경: `docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md`의 Goal/Architecture에 고정 작업대 OMX 팔·영상 목표를 포함하고, Task 6A에 P0–P5 실행 순서·선행 조건·수용 gate·Task 5/7/8/9 연결을 추가했다.
+- 근거: D-273, 현 비활성 OMX 프로필/adapter 상태와 기존 Device/ARTIFACT/FIELD 구분.
+- gate 변화: 없음. 계획 문서 갱신이며 코드·실물·release evidence는 추가하지 않았다.
+- 회귀: 해당 구현 계획과 로그만 변경했다. 기존 제품/UI WIP는 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
+
+- 변경: D-280의 제품 성격을 대표 장면 기준선, 공통 표현 규칙, 운용·설치 웹, Fleet, 로봇 얼굴, 문서·통합 평가의 순서로 실행할 계획을 `docs/plans/2026-09-26-d280-product-design-rollout.md`에 기록했다.
+- 근거: concept 16의 접점별 질문, D-153 G1/G2/G3, D-255의 LOCAL 기준선과 BENCH/진단 HOLD, D-279 별도 복구 계획, 실제 현행 화면 경로를 대조했다.
+- gate 변화: 없음. 계획만 작성했으며 화면 구현과 장치/현장 증거는 별도다.
+
+## 2026-09-26 · uncommitted · docs(api): merge camera capture with LAN discovery
+
+- 변경: preserve site mDNS API v1.37 and paired robot Fleet location v1.38; assign camera evidence upload/list/download to v1.39. Align the API reference, server banner, schema description, contract test, and device validation note.
+- 증거: reviewed merge conflicts and ran focused camera, discovery, and documentation contract tests. Earlier log entries retain their branch-local version history.
+- gate 변화: SOURCE/LOCAL only. New ARM64 image and physical camera capture remain unverified.
+
+## 2026-09-26 · uncommitted · docs(adr): D-290 ROSY Platform 명명과 현장 의도 경계
+
+- 변경: 전체 제품명은 ROSY Platform으로 정하고, Fleet의 현장 Mission DSL 소유권(D-12)을 유지한다. Operations는 현재 별도 실행기/DB가 아닌 운영 화면·기능 영역의 목표 이름이며 Fabric은 역할별 계약과 어댑터다.
+- 근거: 현재 Fleet의 원자 navigation 작업 이력, 구조화된 /api/fleet/do, D-269의 REST/WSS 경계, D-170의 명령 추적 유예, D-268·D-273·D-281·D-282의 수용 상태를 대조했다.
+- gate 변화: 없음. 명명·권한 ADR과 목표 문서만 갱신했고 자연어 실행, OMX 원격 API, AI 정책 및 DEVICE/FIELD 수용은 추가하지 않았다.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
+
+- 변경: 새 카드는 CORE와 토크를 끈 I/O를 함께 부팅하고, 검증된 장치만 Move 구동 설정을 보존한다. 해당 소스 커밋에서 새 ARM64 이미지를 빌드·서명해 카드 전체 readback 후 장치별 provisioning을 수행한다.
+- 근거: 기존 `2026.09.26-018` 서명 이미지의 소스는 I/O 기본 부팅 변경 이전이다. 이 이미지가 이미 기록된 카드의 성공 영수증은 새 이미지의 증거가 아니다.
+- gate 변화: ADR Accepted. 새 이미지와 SD 카드 기록 결과는 별도 검증 전까지 HOLD.
+
+## 2026-09-26 · uncommitted · docs(site): 관제 서버와 운영자 단말의 배치 명시
+
+- 변경: 제품 진입 문서와 목표 정의에 ROSY Console의 현재 Fleet 구현 위치를 명시하고, 사이트 배포 설명에 호스트별 설치 책임과 원격 운영자 접속 검증 순서를 추가했다.
+- 근거: D-275/D-290, Fleet `/console`, 사이트 Compose의 loopback 기본 바인딩과 Caddy 경로, D-276의 사용자별 역할을 대조했다.
+- gate 변화: 없음. 문서 정합성만 보완했으며 실제 Ubuntu 사이트와 장치 현장 접속은 별도 검증 대상이다.

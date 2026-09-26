@@ -1,0 +1,17 @@
+[Unit]
+Description=Advertise the ROSY Fleet site through Avahi DNS-SD
+Wants=network-online.target avahi-daemon.service
+After=network-online.target avahi-daemon.service
+
+[Service]
+Type=oneshot
+Environment=ROSY_SITE_HTTPS_PORT=8443
+EnvironmentFile=-/etc/rosy/site/.env
+ExecStart=/usr/bin/python3 /opt/rosy/site/fleet-mdns.py publish --port ${ROSY_SITE_HTTPS_PORT} --output /etc/avahi/services/rosy-fleet.service
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

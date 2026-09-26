@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from core_common.protocol.sightings import SiteSightingPayload
+from core_common.protocol.schemas import DiscoveryScanPayload
 from core_common.intent import IntentError, interpret
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
@@ -147,9 +148,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                web_common: Optional[Path] = None, hub=None, sightings=None,
                task_service: Optional[FleetTaskService] = None,
                start_task_dispatcher: bool = True,
-               site_users: Optional[Mapping[str, Mapping[str, str]]] = None) -> FastAPI:
+               site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
+               discovery=None, discovery_token: Optional[str] = None) -> FastAPI:
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
+    if bool(discovery) != bool(discovery_token):
+        raise ValueError("discovery and its dedicated credential must be configured together")
+    if discovery_token is not None and (discovery_token == console_token
+                                        or console.uses_rest_token(discovery_token)
+                                        or console.uses_agent_pairing_token(discovery_token)):
+        raise ValueError("discovery credential must differ from Fleet and robot credentials")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -285,6 +293,31 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     read_guard = [Depends(require_viewer)]
     operator_guard = [Depends(require_operator)]
+
+    if discovery is not None:
+        if principals and any(hmac.compare_digest(
+                sha256(discovery_token.encode("utf-8")).hexdigest(), digest)
+                for digest in principals):
+            raise ValueError("discovery credential must differ from site user credentials")
+
+        @app.post("/api/fleet/discovery/scan", tags=["fleet-discovery"])
+        def discovery_scan(body: DiscoveryScanPayload,
+                           authorization: Optional[str] = Header(default=None)) -> dict:
+            expected = f"Bearer {discovery_token}"
+            if not authorization or not hmac.compare_digest(authorization, expected):
+                raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED"})
+            try:
+                discovery.replace_scan(body.devices)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail={"code": "INVALID_SCAN",
+                                                             "message": str(exc)}) from exc
+            return {"accepted": True}
+
+        @app.get("/api/fleet/discovery", dependencies=read_guard,
+                 tags=["fleet-discovery"])
+        def discovery_readback() -> dict:
+            identities = hub.registry.identity_snapshot() if hub is not None else {}
+            return discovery.snapshot(console.registered_endpoints, identities)
 
     def cancel_pending_task_queue(robot_id: Optional[str] = None, *,
                                   actor_id: str = "site-console") -> None:

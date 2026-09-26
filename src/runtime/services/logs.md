@@ -107,3 +107,8 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+## 2026-09-26 · uncommitted · FleetAgent pinned mDNS location
+
+- 변경: `fleet_agent`가 승인된 지속 연결 토큰과 예상 호스트·사이트 CA가 있을 때만 Avahi 후보를 조회하고 TLS health를 확인한다. 실패하면 CORE를 막지 않고 재시도하며, 연결 단절 후에도 재조회한다.
+- 증거: Agent·first-boot·Fleet 통합 집중 58 passed, 변경 Python flake8 통과. 실제 Pi/Ubuntu 네트워크는 미검증.
+- gate 변화: LOCAL 범위만 추가.

@@ -42,6 +42,7 @@ dist/
 # site notes, real device addresses) goes in /private/, which never leaves this
 # machine. What moves from there into docs/ is decided by ADR.
 /private/
+/deploy/site/secrets/discovery_token
 
 # Local overrides that carry robot URLs or tokens (games robots.py overlay)
 match.local.yaml

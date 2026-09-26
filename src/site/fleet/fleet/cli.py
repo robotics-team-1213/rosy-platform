@@ -68,6 +68,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
     console.add_argument("--token-env", default=None,
                          help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
+    console.add_argument("--discovery-token-env", default=None,
+                         help="host mDNS scanner credential environment variable")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--tls-cert", default=None, type=Path,
@@ -285,6 +287,12 @@ def run_console(args: argparse.Namespace) -> None:
         console_token = os.environ.get(token_env)
         if not console_token:
             sys.exit(f"operator token environment variable {token_env} is required")
+    discovery_token_env = getattr(args, "discovery_token_env", None)
+    discovery_token = None
+    if discovery_token_env is not None:
+        discovery_token = os.environ.get(discovery_token_env)
+        if not discovery_token:
+            sys.exit(f"discovery token environment variable {discovery_token_env} is required")
     users_file = getattr(args, "users_file", None)
     site_users = None
     if users_file is not None:
@@ -345,9 +353,13 @@ def run_console(args: argparse.Namespace) -> None:
 
         task_service = FleetTaskService(FleetTaskStore(tasks_db),
                                         robot_ids=console.robot_ids)
+    from fleet.server.discovery import DiscoveryStore
+
+    discovery = DiscoveryStore() if discovery_token is not None else None
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
-                     site_users=site_users)
+                     site_users=site_users, discovery=discovery,
+                     discovery_token=discovery_token)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(endpoints)} robots{signals_note})",

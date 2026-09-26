@@ -25,6 +25,12 @@ from core_common.protocol.evidence import ValueEvidence
 PROTOCOL_VERSION = "1.0"
 
 
+class DiscoveryScanPayload(BaseModel):
+    """Site Fleet only: untrusted resolved mDNS observations, never credentials."""
+
+    devices: list[dict[str, Any]] = Field(max_length=64)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
@@ -334,6 +340,22 @@ class VisionPreviewStatus(BaseModel):
     height: int = 0
     overlay: str = "none"
     sequence: int = 0
+
+
+class VisionEvidenceRecord(BaseModel):
+    """Saved operator camera evidence on the robot SD (API Ref v1.39)."""
+
+    id: str
+    kind: str
+    file_name: str
+    mime_type: str
+    bytes: int
+    sha256: str
+    created_at: str
+
+
+class VisionEvidenceList(BaseModel):
+    records: list[VisionEvidenceRecord] = Field(default_factory=list)
 
 
 class StateSnapshot(BaseModel):

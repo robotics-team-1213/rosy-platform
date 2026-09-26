@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh ROSY LAN service discovery
+
+[Timer]
+OnBootSec=10s
+OnUnitInactiveSec=15s
+Unit=rosy-mdns-bridge.service
+
+[Install]
+WantedBy=timers.target
