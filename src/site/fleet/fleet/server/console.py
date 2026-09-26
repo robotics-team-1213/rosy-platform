@@ -26,8 +26,6 @@ import math
 import time
 from typing import Any, Callable, Optional, Sequence
 
-logger = logging.getLogger("fleet.console")
-
 from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
@@ -40,6 +38,8 @@ from fleet.swarm.session import (
 )
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError, RobotClient
+
+logger = logging.getLogger("fleet.console")
 
 #: 맵은 로봇마다 다시 받을 이유가 없다 — 한 사이트는 한 맵을 공유한다. 그래도 SLAM 으로
 #: 맵이 바뀔 수 있으므로 무한정 붙들지는 않는다.
@@ -102,6 +102,7 @@ class FleetConsole:
         self._claims: dict[str, list] = {}
         #: 남의 경로와 부딪혀 아직 못 내려간 미션. 앞이 비면 그대로 다시 내려간다.
         self._queued: dict[str, dict] = {}
+        self._task_queue_release_callback: Optional[Callable[[dict], Any]] = None
         self._clearance_m = clearance_m
         self._yield_keep_out_m = yield_keep_out_m
         #: 비켜서라고 한 뒤 "안 움직인다"고 판단하기까지 참아 주는 스냅샷 수. 목표를 막
@@ -225,7 +226,12 @@ class FleetConsole:
 
     # --- scatter --------------------------------------------------------------
 
-    async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0) -> dict:
+    def set_task_queue_release_callback(self, callback: Optional[Callable[[dict], Any]]) -> None:
+        self._task_queue_release_callback = callback
+
+    async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
+                   task_id: str | None = None, attempt_id: str | None = None,
+                   attempt_seq: int | None = None) -> dict:
         """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
         내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -247,11 +253,15 @@ class FleetConsole:
         if yielding is not None:
             # 이 로봇은 남을 지나가게 하려고 비켜서는 중이다. 지금 다른 데로 보내면 방금
             # 비운 통로를 다시 막고, 그 통로를 기다리던 미션은 영영 못 나간다. 세워 둔다.
-            self._queued[robot_id] = {"x": x, "y": y, "yaw": yaw,
-                                      "blocked_by": yielding["for"],
-                                      "waiting_on": [yielding["for"]], "reason": "YIELDED"}
-            return {"accepted": True, "queued": True, "blocked_by": yielding["for"],
-                    "reason": "YIELDED"}
+            mission = self._task_mission(
+                x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                attempt_seq=attempt_seq, blocked_by=yielding["for"],
+                waiting_on=[yielding["for"]], reason="YIELDED",
+            )
+            self._queued[robot_id] = mission
+            return {"accepted": False, "queued": True, "dispatch_attempted": False,
+                    "cancel_confirmed": False, "blocked_by": yielding["for"],
+                    "waiting_on": [yielding["for"]], "reason": "YIELDED"}
         result = await self._client(robot_id).navigation_goal(x, y, yaw)
         # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
         # 않을 곳으로 로봇이 간다고 읽는다.
@@ -261,25 +271,53 @@ class FleetConsole:
         route = await self._route_of(robot_id)
         blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
         if blocker is not None:
-            await self._client(robot_id).navigation_cancel()
+            cancel_receipt = await self._client(robot_id).navigation_cancel()
+            if not self._cancel_confirmed(cancel_receipt):
+                raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
             self._claims.pop(robot_id, None)
-            self._queued[robot_id] = {"x": x, "y": y, "yaw": yaw, "blocked_by": blocker,
-                                      "waiting_on": [blocker], "reason": "ROUTE_CONFLICT",
+            self._queued[robot_id] = self._task_mission(
+                                      x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                                      attempt_seq=attempt_seq, blocked_by=blocker,
+                                      waiting_on=[blocker], reason="ROUTE_CONFLICT",
                                       # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는
                                       # 이 경로 위의 남은 거리로 재 단다. 취소하면 로봇이
                                       # 경로를 잃으므로 여기에 묻어 둔다.
-                                      "route": list(route)}
-            return {"accepted": True, "queued": True, "blocked_by": blocker}
+                                      route=list(route),
+            )
+            return {"accepted": False, "queued": True, "dispatch_attempted": True,
+                    "cancel_confirmed": True, "blocked_by": blocker,
+                    "waiting_on": [blocker], "reason": "ROUTE_CONFLICT"}
 
         await self._observe()
         intended = self._intended_route(robot_id, route, x, y)
         grid = bays.Grid.from_payload(await self.map())
         standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
         if standing:
-            return await self._make_room(robot_id, x, y, yaw, intended, standing)
+            return await self._make_room(
+                robot_id, x, y, yaw, intended, standing,
+                task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+            )
         self._claims[robot_id] = route
         return result
+
+    @staticmethod
+    def _cancel_confirmed(receipt: Any) -> bool:
+        return (isinstance(receipt, dict)
+                and (receipt.get("canceled") is True or receipt.get("navigation") == "CANCELED"))
+
+    @staticmethod
+    def _task_mission(x: float, y: float, yaw: float, *, task_id: str | None,
+                      attempt_id: str | None, attempt_seq: int | None,
+                      **details) -> dict:
+        mission = {"x": x, "y": y, "yaw": yaw, **details}
+        if task_id is not None:
+            mission["task_id"] = task_id
+        if attempt_id is not None:
+            mission["attempt_id"] = attempt_id
+        if attempt_seq is not None:
+            mission["attempt_seq"] = attempt_seq
+        return mission
 
     def _intended_route(self, mover: str, route: Sequence, x: float, y: float) -> list:
         """계획 경로. 아직 없으면 지금 자리에서 목표까지 직선으로 대신한다.
@@ -349,7 +387,9 @@ class FleetConsole:
         return out
 
     async def _make_room(self, mover: str, x: float, y: float, yaw: float,
-                         route: Sequence, standing: Sequence[str]) -> dict:
+                         route: Sequence, standing: Sequence[str], *,
+                         task_id: str | None = None, attempt_id: str | None = None,
+                         attempt_seq: int | None = None) -> dict:
         """길을 막고 선 로봇들을 비켜세우고, 미션은 자리가 날 때까지 세워 둔다.
 
         미션을 실패로 돌려주지 않는 이유가 있다. 비켜서기는 몇 초짜리 동작이고, 그 몇 초
@@ -371,16 +411,21 @@ class FleetConsole:
             await self._send_to_bay(robot_id, bay, mover)
             yielded.append(robot_id)
 
-        await self._client(mover).navigation_cancel()
+        cancel_receipt = await self._client(mover).navigation_cancel()
+        if not self._cancel_confirmed(cancel_receipt):
+            raise RuntimeError("navigation goal cancellation was not confirmed")
         self._goals.pop(mover, None)
         self._claims.pop(mover, None)
         reason = "NO_YIELD_SPACE" if no_space else "YIELDING"
         blocked_by = (no_space or yielded)[0]
-        self._queued[mover] = {"x": x, "y": y, "yaw": yaw, "blocked_by": blocked_by,
-                               "waiting_on": list(standing), "reason": reason,
-                               "route": list(route)}
-        return {"accepted": True, "queued": True, "blocked_by": blocked_by,
-                "reason": reason, "yielding": yielded, "no_space": no_space}
+        self._queued[mover] = self._task_mission(
+            x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+            blocked_by=blocked_by, waiting_on=list(standing), reason=reason, route=list(route),
+        )
+        return {"accepted": False, "queued": True, "dispatch_attempted": True,
+                "cancel_confirmed": True, "blocked_by": blocked_by,
+                "waiting_on": list(standing), "reason": reason,
+                "yielding": yielded, "no_space": no_space}
 
     async def _send_to_bay(self, robot_id: str, bay: tuple, mover: str) -> None:
         """한 대를 비켜설 자리로. 제 미션이 있었다면 대기열에 넣어 돌아오게 한다."""
@@ -467,6 +512,9 @@ class FleetConsole:
                     self._claims.pop(robot_id, None)
                     target = mission or goal
                     if target:
+                        if target.get("task_id") is not None:
+                            self._queued[robot_id] = target
+                            continue
                         # Find an idle alternative
                         for alt_row in robots:
                             alt_id = alt_row["robot_id"]
@@ -503,6 +551,15 @@ class FleetConsole:
         for robot_id in self._release_order(release_candidates):
             mission = self._queued[robot_id]
             self._queued.pop(robot_id, None)
+            if mission.get("task_id") is not None:
+                if self._task_queue_release_callback is None:
+                    self._queued[robot_id] = mission
+                    continue
+                try:
+                    await self._task_queue_release_callback(dict(mission))
+                except Exception:
+                    self._queued[robot_id] = mission
+                continue
             try:
                 await self.goal(robot_id, mission["x"], mission["y"], mission["yaw"])
             except Exception:

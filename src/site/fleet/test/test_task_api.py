@@ -41,7 +41,9 @@ def test_console_goal_creates_authenticated_persistent_operator_task(tmp_path):
 
 def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_separate(tmp_path):
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
-    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "navigation": "IDLE"})
+    robot = FakeRobot("rosy_01", state={
+        "robot_id": "rosy_01", "navigation": "IDLE", "mode": "IDLE",
+    })
     dispatched = Event()
     original_goal = robot.navigation_goal
 

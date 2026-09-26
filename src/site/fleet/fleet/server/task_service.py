@@ -75,6 +75,29 @@ class FleetTaskService:
             if not isinstance(raw_receipt, Mapping):
                 raise RuntimeError("invalid robot receipt")
             accepted = raw_receipt.get("accepted")
+            if raw_receipt.get("queued") is True:
+                dispatch_attempted = raw_receipt.get("dispatch_attempted") is True
+                cancel_confirmed = raw_receipt.get("cancel_confirmed") is True
+                if dispatch_attempted and not cancel_confirmed:
+                    return self.store.transition(
+                        task["task_id"], "UNKNOWN", actor_id=task["actor_id"],
+                        source=task["source"], reason="TRAFFIC_CANCEL_UNCONFIRMED",
+                    )
+                reason = raw_receipt.get("reason")
+                allowed_reasons = {"YIELDED", "ROUTE_CONFLICT", "YIELDING", "NO_YIELD_SPACE"}
+                if reason not in allowed_reasons:
+                    reason = "TRAFFIC_WAIT"
+                blocked_by = raw_receipt.get("blocked_by")
+                if blocked_by not in self.robot_ids:
+                    blocked_by = None
+                waiting_on = [robot_id for robot_id in raw_receipt.get("waiting_on", [])
+                              if robot_id in self.robot_ids][:32]
+                return self.store.wait_for_traffic(
+                    task["task_id"], worker_id=self.scheduler.worker_id,
+                    reason=reason, blocked_by=blocked_by, waiting_on=waiting_on,
+                    dispatch_attempted=dispatch_attempted,
+                    cancel_confirmed=cancel_confirmed,
+                )
             if accepted is True and raw_receipt.get("queued") is not True:
                 receipt = {key: raw_receipt[key] for key in ("accepted", "queued")
                            if key in raw_receipt and isinstance(raw_receipt[key], bool)}
@@ -106,3 +129,6 @@ class FleetTaskService:
             # Once dispatch begins, any unclassified result is ambiguous. Do not retry it.
             return self.store.transition(task["task_id"], "UNKNOWN", actor_id=task["actor_id"],
                                          source=task["source"], reason="COMMAND_RESULT_UNKNOWN")
+
+    def traffic_queue_released(self, task_id: str) -> dict:
+        return self.store.release_traffic_wait(task_id)

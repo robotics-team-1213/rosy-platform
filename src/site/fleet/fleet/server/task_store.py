@@ -227,7 +227,8 @@ class FleetTaskStore:
                                    (row["task_id"],))
             selected = connection.execute(
                 f"""SELECT t.task_id, t.robot_id FROM fleet_tasks AS t
-                    WHERE t.status='QUEUED' AND t.robot_id IN ({placeholders})
+                    WHERE t.status='QUEUED' AND t.dispatch_phase='READY'
+                      AND t.robot_id IN ({placeholders})
                       AND (t.lease_until IS NULL OR t.lease_until <= ?)
                       AND NOT EXISTS (SELECT 1 FROM fleet_robot_reservations r
                                       WHERE r.robot_id=t.robot_id)
@@ -274,6 +275,62 @@ class FleetTaskStore:
             connection.commit()
         return self._task_dict(row)
 
+    def wait_for_traffic(self, task_id: str, *, worker_id: str, reason: str,
+                         blocked_by: str | None, waiting_on: list[str],
+                         dispatch_attempted: bool, cancel_confirmed: bool) -> dict:
+        """Persist a queued traffic wait only when no goal remains active on the robot."""
+        if dispatch_attempted and not cancel_confirmed:
+            raise ValueError("traffic wait requires confirmed cancellation")
+        if not reason or len(reason) > 64 or len(waiting_on) > 32:
+            raise ValueError("invalid traffic wait details")
+        waiting_json = _safe_json(list(waiting_on))
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                         (task_id,)).fetchone()
+            if current is None:
+                raise KeyError(task_id)
+            if (current["status"] != "QUEUED" or current["dispatch_phase"] != "DISPATCHING"
+                    or current["lease_owner"] != worker_id):
+                raise InvalidTaskTransition("task is not held by this dispatch attempt")
+            connection.execute(
+                """UPDATE fleet_tasks SET dispatch_phase='WAITING_TRAFFIC', reason=?,
+                   blocked_by=?, waiting_on_json=?, lease_owner=NULL, lease_until=NULL,
+                   updated_at=? WHERE task_id=?""",
+                (reason, blocked_by, waiting_json, now, task_id),
+            )
+            connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?", (task_id,))
+            self._append_history(connection, task_id, "QUEUED", current["source"],
+                                 current["actor_id"], now, reason)
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                     (task_id,)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
+    def release_traffic_wait(self, task_id: str) -> dict:
+        """Make a confirmed-canceled traffic wait eligible for a fresh attempt."""
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                         (task_id,)).fetchone()
+            if current is None:
+                raise KeyError(task_id)
+            if current["status"] != "QUEUED" or current["dispatch_phase"] != "WAITING_TRAFFIC":
+                raise InvalidTaskTransition("task is not waiting for traffic release")
+            connection.execute(
+                """UPDATE fleet_tasks SET dispatch_phase='READY', reason=NULL, blocked_by=NULL,
+                   waiting_on_json='[]', queued_at=?, updated_at=? WHERE task_id=?""",
+                (now, now, task_id),
+            )
+            self._append_history(connection, task_id, "QUEUED", "scheduler",
+                                 "site-scheduler", now, "TRAFFIC_QUEUE_RELEASED")
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                     (task_id,)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
     def recover_interrupted_work(self) -> int:
         """Requeue only work proven not sent; ambiguous CORE calls become UNKNOWN."""
         now = _now()
@@ -298,11 +355,12 @@ class FleetTaskStore:
                 recovered += 1
             safe = connection.execute(
                 """SELECT task_id FROM fleet_tasks
-                   WHERE status='QUEUED' AND dispatch_phase='READY'"""
+                   WHERE status='QUEUED' AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"""
             ).fetchall()
             for row in safe:
                 connection.execute(
-                    "UPDATE fleet_tasks SET lease_owner=NULL, lease_until=NULL, updated_at=? "
+                    """UPDATE fleet_tasks SET dispatch_phase='READY', reason=NULL, blocked_by=NULL,
+                       waiting_on_json='[]', lease_owner=NULL, lease_until=NULL, updated_at=? """
                     "WHERE task_id=?", (now, row["task_id"]),
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
@@ -410,6 +468,8 @@ class FleetTaskStore:
             "dispatch_phase": row["dispatch_phase"],
             "attempt_id": row["attempt_id"],
             "attempt_seq": row["attempt_seq"],
+            "blocked_by": row["blocked_by"],
+            "waiting_on": json.loads(row["waiting_on_json"]),
         }
 
     def _connect(self) -> sqlite3.Connection:
@@ -440,6 +500,8 @@ class FleetTaskStore:
             "dispatch_phase": "TEXT NOT NULL DEFAULT 'READY'",
             "attempt_id": "TEXT",
             "attempt_seq": "INTEGER NOT NULL DEFAULT 0",
+            "blocked_by": "TEXT",
+            "waiting_on_json": "TEXT NOT NULL DEFAULT '[]'",
         }
         connection.execute("BEGIN IMMEDIATE")
         for name, definition in additions.items():

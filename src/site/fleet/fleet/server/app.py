@@ -160,6 +160,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.console = console
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
+    if task_service is not None:
+        async def release_traffic_task(mission: dict) -> None:
+            task_service.traffic_queue_released(mission["task_id"])
+
+        console.set_task_queue_release_callback(release_traffic_task)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict:
@@ -448,13 +453,18 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 row["robot_id"] for row in snapshot["robots"]
                 if row["online"] and row["queued"] is None and row["goal"] is None
                 and row["state"] is not None
-                and row["state"].get("navigation") == "IDLE"
+                and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
+                and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
+                and not row["state"].get("capabilities_degraded")
+                and not row["state"].get("safety", {}).get("estop")
             }
             await task_service.dispatch_next(
                 available,
                 dispatch=lambda task: console.goal(
                     task["robot_id"], task["request"]["goal"]["x"],
                     task["request"]["goal"]["y"], task["request"]["goal"]["yaw"],
+                    task_id=task["task_id"], attempt_id=task["attempt_id"],
+                    attempt_seq=task["attempt_seq"],
                 ),
             )
         except asyncio.CancelledError:

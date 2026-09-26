@@ -51,6 +51,62 @@ def test_dispatcher_records_attempt_before_core_receipt_and_dispatches_once(tmp_
     assert len(attempts) == 1
 
 
+def test_task_waits_on_traffic_queue_and_only_retries_after_release_callback(tmp_path):
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01", "rosy_02"})
+    run(service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, source="operator",
+        actor_id="site-console", request_key="traffic-1",
+    ))
+    replies = iter((
+        {"accepted": False, "queued": True, "dispatch_attempted": True,
+         "cancel_confirmed": True, "blocked_by": "rosy_02", "waiting_on": ["rosy_02"]},
+        {"accepted": True},
+    ))
+    dispatched = []
+
+    async def dispatch(task):
+        dispatched.append(task["attempt_id"])
+        return next(replies)
+
+    waiting = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    no_retry = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    service.traffic_queue_released(waiting["task_id"])
+    accepted = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+
+    assert waiting["status"] == "QUEUED"
+    assert waiting["dispatch_phase"] == "WAITING_TRAFFIC"
+    assert waiting["blocked_by"] == "rosy_02"
+    assert waiting["waiting_on"] == ["rosy_02"]
+    assert no_retry is None
+    assert accepted["status"] == "ACCEPTED"
+    assert accepted["attempt_seq"] == 2
+    assert dispatched[0] != dispatched[1]
+
+
+def test_traffic_queue_without_confirmed_cancel_becomes_unknown_and_is_not_retried(tmp_path):
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    run(service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, source="operator",
+        actor_id="site-console", request_key="traffic-uncertain-1",
+    ))
+    calls = []
+
+    async def dispatch(task):
+        calls.append(task["attempt_id"])
+        return {"accepted": False, "queued": True, "dispatch_attempted": True,
+                "cancel_confirmed": False}
+
+    first = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    second = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+
+    assert first["status"] == "UNKNOWN"
+    assert first["reason"] == "TRAFFIC_CANCEL_UNCONFIRMED"
+    assert second is None
+    assert len(calls) == 1
+
+
 def test_policy_navigation_uses_same_validation_but_holds_before_dispatch(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     service = FleetTaskService(store, robot_ids={"rosy_01"})

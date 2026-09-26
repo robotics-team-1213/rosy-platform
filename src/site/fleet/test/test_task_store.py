@@ -114,7 +114,8 @@ def test_existing_database_is_migrated_without_losing_task_history(tmp_path):
     assert task["status"] == "REQUESTED"
     assert [row["status"] for row in migrated.history("legacy")] == ["REQUESTED"]
     assert {"priority_class", "queued_at", "expires_at", "lease_owner",
-            "lease_until", "dispatch_phase", "attempt_id", "attempt_seq"} <= columns
+            "lease_until", "dispatch_phase", "attempt_id", "attempt_seq",
+            "blocked_by", "waiting_on_json"} <= columns
 
 
 def test_queue_claim_obeys_priority_and_reserves_each_robot_once(tmp_path):
@@ -185,3 +186,35 @@ def test_expired_pre_dispatch_lease_can_be_claimed_safely_again(tmp_path):
     assert reclaimed["task_id"] == "ready"
     assert reclaimed["lease_owner"] == "worker-b"
     assert reclaimed["dispatch_phase"] == "READY"
+
+
+def test_confirmed_traffic_cancel_holds_task_until_release_then_allows_new_attempt(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    store.create_task(
+        task_id="traffic", robot_id="rosy_01", task_type="navigate",
+        source="operator", actor_id="site-console", request_key="traffic-1",
+        request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+    )
+    store.enqueue("traffic", priority_class=0)
+    store.claim_next(worker_id="worker-a", available_robot_ids={"rosy_01"})
+    attempt = store.mark_dispatching("traffic", worker_id="worker-a")
+    waiting = store.wait_for_traffic(
+        "traffic", worker_id="worker-a", reason="ROUTE_CONFLICT", blocked_by="rosy_02",
+        waiting_on=["rosy_02"], dispatch_attempted=True, cancel_confirmed=True,
+    )
+
+    assert waiting["status"] == "QUEUED"
+    assert waiting["dispatch_phase"] == "WAITING_TRAFFIC"
+    assert waiting["attempt_id"] == attempt["attempt_id"]
+    assert waiting["blocked_by"] == "rosy_02"
+    assert store.claim_next(worker_id="worker-b", available_robot_ids={"rosy_01"}) is None
+
+    released = store.release_traffic_wait("traffic")
+    claimed = store.claim_next(worker_id="worker-b", available_robot_ids={"rosy_01"})
+
+    assert released["dispatch_phase"] == "READY"
+    assert released["blocked_by"] is None
+    assert claimed["task_id"] == "traffic"
+    assert [row["status"] for row in store.history("traffic")] == [
+        "REQUESTED", "QUEUED", "QUEUED", "QUEUED",
+    ]
