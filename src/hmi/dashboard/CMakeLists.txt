@@ -16,8 +16,10 @@ install(FILES
   ros-network.js
   settings.js
   status-summary.js
+  surface-navigation.js
   triage.js
   vision.js
+  camera-capture.js
   DESTINATION share/${PROJECT_NAME}
 )
 

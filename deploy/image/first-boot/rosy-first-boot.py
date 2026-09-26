@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 from typing import Callable
+from urllib.parse import urlsplit
 
 
 try:
@@ -360,7 +361,7 @@ class FirstBootProvisioner:
         _json_atomic(self.binding, expected, 0o640)
 
     @staticmethod
-    def _merge_core_overlay(text: str | None, record: dict) -> str:
+    def _merge_core_overlay(text: str | None, record: dict, fleet_bootstrap: dict | None = None) -> str:
         """Return CORE's overlay with the card's record as its only credential.
 
         Other overlay keys are kept. The overlay's auth.tokens list replaces the
@@ -391,9 +392,29 @@ class FirstBootProvisioner:
             raise ValueError("CORE config overlay already holds another API credential")
         # D-193 5: the card's credential is listed (and whoami answers) as `card`.
         overlay["auth"] = {**auth, "tokens": [{**record, "source": "card"}]}
+        if fleet_bootstrap:
+            try:
+                endpoint = urlsplit(fleet_bootstrap.get("endpoint", ""))
+            except ValueError:
+                endpoint = urlsplit("")
+            hostname = (endpoint.hostname or "").lower()
+            profile = fleet_bootstrap.get("trust_profile", "")
+            if (endpoint.scheme == "https" and hostname.endswith(".local")
+                    and re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local", hostname)
+                    and isinstance(profile, str)
+                    and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", profile)):
+                fleet = overlay.get("fleet") or {}
+                if not isinstance(fleet, dict):
+                    raise ValueError("CORE config overlay fleet is not a mapping")
+                # The SD's one-time pairing_credential is never an Agent token.
+                fleet["discovery"] = {
+                    "expected_hostname": hostname,
+                    "ca_file": f"/etc/rosy/trust/{profile}.crt",
+                }
+                overlay["fleet"] = fleet
         return yaml.safe_dump(overlay, allow_unicode=True, sort_keys=False)
 
-    def _core_api(self, record: dict) -> None:
+    def _core_api(self, record: dict, fleet_bootstrap: dict | None = None) -> None:
         """Install the card's CORE API record into CORE's persisted overlay (D-191).
 
         CORE's HOME belongs to rosy-core, so every step below works on
@@ -405,7 +426,7 @@ class FirstBootProvisioner:
         owner = (account["uid"], account["gid"]) if account and account.get("uid") is not None else None
         if not _NOFOLLOW_FS:
             # Fixture hosts without O_NOFOLLOW/dir_fd (Windows); the device never takes this path.
-            self._core_api_by_path(record)
+            self._core_api_by_path(record, fleet_bootstrap)
             return
         opened: list[int] = []
         try:
@@ -417,7 +438,8 @@ class FirstBootProvisioner:
                 opened.append(directory)
             home_fd, rosy_fd = opened[-2], opened[-1]
             name = parts[-1]
-            new_text = self._merge_core_overlay(_read_regular(name, rosy_fd), record)
+            new_text = self._merge_core_overlay(_read_regular(name, rosy_fd), record,
+                                                fleet_bootstrap)
             # The same owner and mode StateDirectory=rosy/core gives CORE's HOME.
             for fd in (home_fd, rosy_fd):
                 os.fchmod(fd, 0o750)
@@ -446,7 +468,7 @@ class FirstBootProvisioner:
             for fd in reversed(opened):
                 os.close(fd)
 
-    def _core_api_by_path(self, record: dict) -> None:
+    def _core_api_by_path(self, record: dict, fleet_bootstrap: dict | None = None) -> None:
         path = self._inside(CORE_OVERLAY)
         home = self._inside(CORE_HOME)
         for candidate in (*reversed(path.relative_to(self.root).parents), path.relative_to(self.root)):
@@ -457,7 +479,7 @@ class FirstBootProvisioner:
             if not path.is_file():
                 raise ValueError("CORE config overlay is not a regular file")
             text = _decode_overlay(path.read_bytes())
-        new_text = self._merge_core_overlay(text, record)
+        new_text = self._merge_core_overlay(text, record, fleet_bootstrap)
         path.parent.mkdir(parents=True, exist_ok=True)
         for directory in (home, path.parent):
             os.chmod(directory, 0o750)
@@ -609,7 +631,7 @@ class FirstBootProvisioner:
             # D-176: the fallback AP and the console banner read this root-only file.
             _json_atomic(self._inside("etc/rosy/ap-credentials.json"), payload["network"]["ap"], 0o600)
         # D-191: validate_provision_bundle already refused a bundle without one.
-        self._core_api(payload["core_api"]["record"])
+        self._core_api(payload["core_api"]["record"], payload["fleet"])
         factory = self._factory_signature(payload.get("factory_release"))
 
         if not self.network_activate(SITE_PROFILE):

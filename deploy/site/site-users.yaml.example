@@ -1,0 +1,9 @@
+users:
+  - principal_id: operator-1
+    role: operator
+    token_sha256: replace-with-64-lowercase-hex-characters
+  - principal_id: viewer-1
+    role: viewer
+    token_sha256: replace-with-64-lowercase-hex-characters
+  # policy-admin may edit policy conditions only after those endpoints exist
+  # and D-268's acceptance gates have passed.

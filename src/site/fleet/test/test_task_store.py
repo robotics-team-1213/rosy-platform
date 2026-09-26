@@ -1,6 +1,11 @@
 import sqlite3
 
-from fleet.server.task_store import FleetTaskStore, IdempotencyConflict, InvalidTaskTransition
+import pytest
+from fleet.server.task_store import (
+    FleetTaskStore,
+    IdempotencyConflict,
+    InvalidTaskTransition,
+)
 
 
 def test_task_history_is_append_only_and_survives_reopen(tmp_path):
@@ -46,9 +51,9 @@ def test_readback_reports_server_order_for_queued_tasks_only(tmp_path):
 
 def test_idempotency_key_reuses_same_task_and_rejects_changed_intent(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    args = dict(task_id="task-1", robot_id="rosy_01", task_type="navigate",
-                source="operator", actor_id="site-console", request_key="click-1",
-                request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None)
+    args = {"task_id": "task-1", "robot_id": "rosy_01", "task_type": "navigate",
+                "source": "operator", "actor_id": "site-console", "request_key": "click-1",
+                "request": {"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, "evidence": None}
     first = store.create_task(**args)
 
     duplicate = store.create_task(**{**args, "task_id": "task-2"})
@@ -77,11 +82,52 @@ def test_illegal_task_transition_is_rejected(tmp_path):
         raise AssertionError("REQUESTED cannot skip acceptance or execution")
 
 
+@pytest.mark.parametrize("receipt", [
+    None, {"accepted": False}, {"queued": True}, {"accepted": True, "queued": True},
+])
+def test_acceptance_requires_an_explicit_positive_core_receipt(tmp_path, receipt):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    store.create_task(task_id="task-1", robot_id="rosy_01", task_type="navigate",
+                      source="operator", actor_id="site-console", request_key="click-1",
+                      request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None)
+
+    with pytest.raises(InvalidTaskTransition, match="positive CORE receipt"):
+        store.transition("task-1", "ACCEPTED", actor_id="site-console",
+                         source="operator", receipt=receipt)
+
+    assert store.get_task("task-1")["status"] == "REQUESTED"
+    assert [row["status"] for row in store.history("task-1")] == ["REQUESTED"]
+
+
+@pytest.mark.parametrize("current_status", ["ACCEPTED", "UNKNOWN"])
+@pytest.mark.parametrize("unverified_status", ["RUNNING", "COMPLETED"])
+def test_receipt_cannot_be_promoted_to_unverified_execution_result(
+    tmp_path, current_status, unverified_status,
+):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    store.create_task(task_id="task-1", robot_id="rosy_01", task_type="navigate",
+                      source="operator", actor_id="site-console", request_key="click-1",
+                      request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None)
+    store.transition("task-1", "ACCEPTED", actor_id="site-console",
+                     source="operator", receipt={"accepted": True})
+    if current_status == "UNKNOWN":
+        store.transition("task-1", "UNKNOWN", actor_id="site-console",
+                         source="operator", reason="COMMAND_RESULT_UNKNOWN")
+    history_before = store.history("task-1")
+
+    with pytest.raises(InvalidTaskTransition, match="verified CORE result"):
+        store.transition("task-1", unverified_status, actor_id="site-console",
+                         source="operator", receipt={"accepted": True})
+
+    assert store.get_task("task-1")["status"] == current_status
+    assert store.history("task-1") == history_before
+
+
 def test_task_store_refuses_credentials_and_oversized_evidence(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    args = dict(task_id="task-safe", robot_id="rosy_01", task_type="navigate",
-                source="operator", actor_id="site-console", request_key="safe-1",
-                request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}})
+    args = {"task_id": "task-safe", "robot_id": "rosy_01", "task_type": "navigate",
+                "source": "operator", "actor_id": "site-console", "request_key": "safe-1",
+                "request": {"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}}
 
     try:
         store.create_task(**args, evidence={"source": ({"access_token": "never-store"},)})

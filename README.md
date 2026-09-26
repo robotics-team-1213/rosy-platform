@@ -1,9 +1,27 @@
-# ROSY — Robot Middleware & Fleet Control Platform
+# ROSY Platform — 장치 미들웨어와 현장 Fleet
 
 **Rosy** (ROS + Pinky 계보) — Pinky Pro 하드웨어(첫 구현)를 시작으로, 어떤 로봇이든
 웹·표준 API로 제어하고 중앙 Fleet에서 군집 관리하는 범용 로봇 플랫폼.
 
 > Upstream: [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 기반 포크 — 전면 리네임(D-16), Apache-2.0.
+
+`ROSY Platform`은 전체 제품이다. 장치 미들웨어는 각 장치에서 API·상태·안전·최종
+명령을 소유하며, 현장 `Fleet`은 미션 순서와 작업 원장을 소유한다([D-296](docs/adr/D-296-device-middleware-and-site-orchestration-terminology.md)).
+Pinky 주행은 CORE, OMX 팔은 장치 수용을 마친 OMX 로컬 제어기가 최종 명령을 맡는다.
+`src/runtime/`은 소스 분류이며 모든 장비가 공유하는 실행기나 배포 단위가 아니다.
+
+## 관제 배치
+
+현장 Ubuntu PC가 Fleet·Vision·Caddy 서비스를 실행하고, 관제 PC는 HTTPS로 Fleet의
+`/console`을 여는 브라우저 단말이다. 두 역할은 한 물리 PC에 함께 놓을 수도 있다.
+Pinky의 화면과 최종 주행·정지 판단은 각 로봇의 CORE에 남는다. OMX-AI 작업대 제어는
+별도 로컬 인스턴스의 수용 절차가 필요하다. 현재 화면은 Fleet 콘솔이며,
+`ROSY Console`은 사람의 화면·대화 접점에 쓰는 제품 이름이다. 자연어 명령과
+OMX 원격 작업은 아직 수용된 기능이 아니다.
+
+배치 결정은 [D-275](docs/adr/D-275-web-surface-and-video-runtime-ownership.md)와
+[D-290](docs/adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md),
+현장 접속 절차는 [사이트 배포 설명](deploy/site/README.md)을 따른다.
 
 ## 구조
 

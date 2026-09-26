@@ -42,7 +42,7 @@ def drive(world, *, steps, pose=(0.0, 0.0, 0.0), follower=None, odom=True, stop=
 # --- CORE mapping ------------------------------------------------------------
 
 def test_core_law_mirror_matches_core_defaults():
-    config = (ROOT.parents[1] / "runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8")
+    config = (ROOT.parents[1] / "contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8")
     block = config.split("line_follow:", 1)[1]
 
     def value(key):

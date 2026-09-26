@@ -12,6 +12,7 @@
   <script type="module" src="/console/assets/console.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#fleet-main">본문으로 건너뛰기</a>
   <ui-shell grammar="exception">
   <ui-topbar>
     <ui-brand><b>ROSY FLEET</b><small id="fleet-name">SITE CONSOLE</small></ui-brand>
@@ -19,12 +20,14 @@
     <input id="console-token" class="token" type="password" placeholder="관제 토큰"
            autocomplete="off" aria-label="관제 토큰">
     <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
+    <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" class="estop" type="button"><span>전체 정지</span><small>등록된 모든 로봇</small></ui-button>
   </ui-topbar>
 
-  <main>
+  <main id="fleet-main" tabindex="-1">
+    <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
         <div>
@@ -67,6 +70,15 @@
       <p class="eyebrow">ROBOTS</p>
       <h2 id="roster-heading">등록 로봇</h2>
       <div id="roster" class="roster"></div>
+
+      <section class="discovery" aria-labelledby="discovery-heading">
+        <div class="robot-head">
+          <b id="discovery-heading">같은 네트워크에서 발견</b>
+          <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
+        </div>
+        <p class="hint">발견된 주소는 접속 힌트입니다. Fleet 페어링을 확인한 로봇만 등록된 작업 대상으로 사용합니다.</p>
+        <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
+      </section>
 
       <div class="formation" aria-labelledby="formation-heading">
         <div class="robot-head">

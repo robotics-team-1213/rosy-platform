@@ -3,7 +3,7 @@
 **Date:** 2026-09-26
 **Plan:** [D-275 implementation plan](../../plans/2026-09-26-web-surface-video-role-boundaries.md)
 **Decision:** [D-275](../../adr/D-275-web-surface-and-video-runtime-ownership.md)
-**Checkout:** Windows host, branch `docs/d275-runtime-roles`, based on `07ca4c690bb5011a3f652a506ec329d6a18392f5`.
+**Checkout:** Windows host, branch `docs/d275-runtime-roles`, based on `07ca4c6`.
 
 ## Result
 
@@ -43,3 +43,8 @@ The focused suites exercise installed asset mapping, auth and same-origin routes
 ## Follow-up decision gate
 
 Before adding another Vision workload, record its source and provenance, output contract, freshness/quality limits, placement options (robot edge, site CPU/GPU, or separate compute), resource budget, failure behavior, and independent acceptance evidence. Training and model rollout remain separate from live inference and Fleet policy. No new Fleet video relay or autonomous motion path is authorized by D-275.
+
+
+## Recheck on current main during integration
+
+The D-275 focused source suite on the then-current main worktree completed **158 passed, 2 skipped**. The full plan suite completed **202 passed, 3 failed, 2 skipped**. The three failures were harness checks in unrelated current-main state: invalid `omx`/`omx_adapter` progress dates, a malformed `deploy/logs.md` heading, and D-276 `docs/logs.md` append-only/evidence validation. `rosy_harness.py lint` reported 7 errors in those same non-D-275 records. The D-275 plan and validation files pass `git diff --check`; no D-275 source test failed.

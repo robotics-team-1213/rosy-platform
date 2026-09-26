@@ -22,6 +22,7 @@ CUSTOMIZER = ROOT / "deploy" / "image" / "customize-rootfs.sh"
 VERIFIER = ROOT / "deploy" / "image" / "verify-mounted-image.py"
 BASH = shutil.which("bash")
 IMU = "dtoverlay=i2c0-pi5,pins_0_1"
+CAMERA = "dtoverlay=ov5647"
 UBUNTU_CONFIG = (
     "[all]\nkernel=vmlinuz\ncmdline=cmdline.txt\n\n[pi4]\nmax_framebuffers=2\n\n"
     "[all]\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[cm4]\ndtoverlay=dwc2,dr_mode=host\n\n[all]\n"
@@ -69,6 +70,30 @@ def test_the_image_enables_the_imu_bus_through_the_script():
 def test_the_probe_names_the_line_the_image_adds():
     probe = (ROOT / "deploy/robot/native/rosy-hw-probe.py").read_text(encoding="utf-8")
     assert f"config.txt {IMU}" in probe
+
+
+@pytest.mark.skipif(BASH is None, reason="bash runs the overlay script")
+def test_image_configures_ov5647_on_cam1_instead_of_auto_detection(tmp_path):
+    root = _image(tmp_path, UBUNTU_CONFIG.replace(
+        "dtparam=i2c_arm=on", "camera_auto_detect=1\ndtparam=i2c_arm=on"))
+
+    completed = _run(root, "--overlay", CAMERA, "--disable-camera-auto-detect")
+    assert completed.returncode == 0, completed.stderr
+    config = (root / "boot/firmware/config.txt").read_text(encoding="utf-8")
+    assert "camera_auto_detect=0" in config
+    assert "camera_auto_detect=1" not in config
+    assert _verifier().overlay_applies_to_pi5(config, CAMERA)
+    assert _verifier().camera_configured_for_pi5(config)
+
+    again = _run(root, "--overlay", CAMERA, "--disable-camera-auto-detect")
+    assert again.returncode == 0, again.stderr
+    assert (root / "boot/firmware/config.txt").read_text(encoding="utf-8") == config
+
+
+def test_native_image_builder_requests_the_verified_camera_configuration():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    assert 'bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=ov5647" \\' in source
+    assert '--disable-camera-auto-detect' in source
 
 
 @pytest.mark.skipif(BASH is None, reason="bash runs the overlay script")

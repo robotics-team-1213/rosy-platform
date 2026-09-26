@@ -2,7 +2,7 @@
 // 주기·시퀀스·중단 상태는 이 모듈이 가진다. map.js 와 같은 팩토리 모양이다.
 
 export function createVisionPreview({
-  elements, setText, api, authHeaders, hasToken, isHidden,
+  elements, setText, api, authHeaders, hasToken, isHidden, onFrame, onUnavailable,
 }) {
   const hasNumber = (value) => typeof value === "number" && Number.isFinite(value);
   let pending = false;
@@ -18,6 +18,7 @@ export function createVisionPreview({
   }
 
   function renderUnavailable(status = {}, message = "카메라 프레임 수신 대기") {
+    onUnavailable?.(message);
     const stale = status.stale === true;
     elements["vision-stage"].dataset.state = stale ? "stale" : "waiting";
     elements["vision-frame"].hidden = true;
@@ -73,7 +74,8 @@ export function createVisionPreview({
         if (response.headers.get("X-Rosy-Camera-Sequence") !== String(status.sequence)) {
           return;
         }
-        const nextUrl = URL.createObjectURL(await response.blob());
+        const blob = await response.blob();
+        const nextUrl = URL.createObjectURL(blob);
         const candidate = new Image();
         candidate.src = nextUrl;
         try {
@@ -90,6 +92,10 @@ export function createVisionPreview({
         releaseObjectUrl();
         objectUrl = nextUrl;
         visionSequence = status.sequence;
+        try {
+          onFrame?.({image: candidate, blob, sequence: status.sequence,
+            source: status.source, capturedAt: status.captured_at});
+        } catch (_error) { /* Recording cannot interrupt the live preview. */ }
       }
       if (gen !== generation || !hasToken()) return;
       setText("vision-source", status.source || "UNKNOWN");

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS-native OMX profile boundary. Validates a model-neutral YAML profile and emits the standard `ros2_control` / MoveIt controller contract (joint-state broadcaster + `JointTrajectoryController`). It must not open a serial port, publish base `cmd_vel`, bypass CORE safety, or advertise an arm capability while the OMX model, driver, mount, power, hand-eye calibration, payload, and recovery procedure are unaccepted.
+ROS-native OMX-AI profile boundary. Validates the selected model and emits the standard `ros2_control` / MoveIt controller contract (joint-state broadcaster + `JointTrajectoryController`). It must not open a serial port, publish base `cmd_vel`, bypass CORE safety, or advertise an arm capability while the hardware revision, driver, mount, power, hand-eye calibration, payload, and recovery procedure are unaccepted.
 
 ## Key Files
 
@@ -33,7 +33,7 @@ ROS-native OMX profile boundary. Validates a model-neutral YAML profile and emit
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Keep vendor transport behind this profile. Do not add a fake hardware plugin or joint-state publisher "so MoveIt has something to talk to."
-- Model aliases in `profile.py` (`omx-f` / `omx-ai` / `openmanipulator-x`) are names only until a measured driver is selected.
+- `omx_ai` is the selected workcell target. Empty joints/plugin and `enabled: false` remain until the physical revision and integration are accepted.
 - A non-empty `ros2_control_contract()` is not physical acceptance.
 
 ### Testing Requirements

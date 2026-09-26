@@ -43,11 +43,10 @@ runtime/sensing/tools/gz/rig_rate.py
 runtime/sensing/tools/gz/rig_reload_navigation.py
 runtime/sensing/tools/gz/run_calibration_spaces.py
 runtime/sensing/tools/gz/track_run_monitor.py
-runtime/gateway/config/rosy_default.yaml
+contracts/foundation/config/rosy_default.yaml
 contracts/foundation/core_common/profile.py
 runtime/navigation/launch/hardware.launch.py
 runtime/navigation/params/nav2_params.yaml
-products/omx/config/omx.disabled.yaml
 sim/gz_sim/config/simulation_actuation.yaml
 sim/gz_sim/config/worlds.yaml
 sim/gz_sim/launch/gz_multi.launch.py

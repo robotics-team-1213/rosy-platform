@@ -5,13 +5,14 @@
 
 ## Purpose
 
-ROS-free tests for OMX profile normalization and the standard controller-name contract. Must not open serial devices or claim physical OMX availability.
+ROS-free policy/contract tests plus opt-in ROS message/action integration tests. Must not open serial devices or claim physical OMX availability.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `test_omx_profile.py` | Disabled profile is valid but not capable; enabled profile emits joint-state broadcaster + JointTrajectoryController names |
+| `test_omx_command_owner.py` | ROS-free single-writer, identity, freshness, bounds, timeout/HOLD, and explicit recovery policy |
 
 ## Subdirectories
 
@@ -23,16 +24,17 @@ None.
 
 - Keep these tests hardware-free. A test that talks to `/dev` or Dynamixel is out of scope for this package.
 - Empty contract from the disabled profile is the expected commissioning result.
+- Command-owner policy tests do not exercise a ROS action server, vendor driver, real stop, or physical recovery.
 
 ### Testing Requirements
 
 ```bash
-python3 -m pytest src/devices/omx/adapter/test/test_omx_profile.py -v
+python3 -m pytest src/devices/omx/adapter/test/ -v
 ```
 
 ### Common Patterns
 
-`OmxAdapterProfile.from_mapping({...})` then assert on `capability_enabled` and `ros2_control_contract()`.
+`OmxAdapterProfile.from_mapping({...})` then assert on `capability_enabled` and `ros2_control_contract()`. For command policy, use fake in-memory action ports only.
 
 ## Dependencies
 

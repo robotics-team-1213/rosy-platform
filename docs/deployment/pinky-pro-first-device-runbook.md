@@ -10,6 +10,13 @@ own physical evidence exists. Do not copy Gazebo geometry, robot diameter,
 speed, stopping distance, or `map_260905_update_v2` results into a device
 certificate.
 
+> **Native systemd device (D-295):** The G4/G5 commands below use the older
+> Docker Compose runtime and must not be run on a native Pinky release. Use
+> [pinky-native-mapping-recovery.md](pinky-native-mapping-recovery.md) for the
+> native service and approval sequence. The G4/G5 evidence criteria below still
+> apply; a missing approval or trial record is a HOLD, not an instruction to
+> create an empty marker.
+
 ## 0. Build and sign the G0 release
 
 Do this before powering the target robot. The image build host must be a native

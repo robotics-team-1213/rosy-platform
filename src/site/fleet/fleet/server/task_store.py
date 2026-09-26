@@ -6,10 +6,10 @@ import json
 import os
 import re
 import sqlite3
+from collections.abc import Mapping
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Mapping
 from uuid import uuid4
 
 _SENSITIVE_FIELD = re.compile(
@@ -105,6 +105,18 @@ class FleetTaskStore:
                 );
                 CREATE INDEX IF NOT EXISTS fleet_task_history_task
                     ON fleet_task_history(task_id, audit_id);
+                CREATE TABLE IF NOT EXISTS fleet_api_audit (
+                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    principal_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    method TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    status_code INTEGER,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(request_id, event_type)
+                );
                 CREATE TABLE IF NOT EXISTS fleet_robot_reservations (
                     robot_id TEXT PRIMARY KEY,
                     task_id TEXT NOT NULL UNIQUE REFERENCES fleet_tasks(task_id),
@@ -115,6 +127,54 @@ class FleetTaskStore:
             self._migrate_task_columns(connection)
         if os.name != "nt":
             self.path.chmod(0o600)
+
+    def begin_api_audit(self, *, principal_id: str, role: str,
+                        method: str, path: str) -> str:
+        if (not principal_id or len(principal_id) > 96 or any(ord(char) < 32 for char in principal_id)
+                or role not in {"viewer", "operator", "policy-admin"}
+                or method != "POST" or not path.startswith("/api/fleet/")
+                or path == "/api/fleet/sightings"):
+            raise ValueError("invalid site API audit entry")
+        request_id = uuid4().hex
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """INSERT INTO fleet_api_audit
+                   (request_id, event_type, principal_id, role, method, path, created_at)
+                   VALUES (?, 'INTENT', ?, ?, ?, ?, ?)""",
+                (request_id, principal_id, role, method, path, _now()),
+            )
+            connection.commit()
+            return request_id
+
+    def finish_api_audit(self, request_id: str, *, status_code: int) -> None:
+        with closing(self._connect()) as connection:
+            intent = connection.execute(
+                """SELECT principal_id, role, method, path FROM fleet_api_audit
+                   WHERE request_id = ? AND event_type = 'INTENT'""",
+                (request_id,),
+            ).fetchone()
+            if intent is None:
+                raise KeyError("site API audit intent was not found")
+            connection.execute(
+                """INSERT INTO fleet_api_audit
+                   (request_id, event_type, principal_id, role, method, path, status_code, created_at)
+                   VALUES (?, 'RESULT', ?, ?, ?, ?, ?, ?)""",
+                (request_id, intent["principal_id"], intent["role"], intent["method"],
+                 intent["path"], int(status_code), _now()),
+            )
+            connection.commit()
+
+    def api_audit(self, *, limit: int = 100) -> list[dict]:
+        if not 1 <= limit <= 1000:
+            raise ValueError("audit limit must be between 1 and 1000")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT audit_id, request_id, event_type, principal_id, role,
+                          method, path, status_code, created_at
+                   FROM fleet_api_audit ORDER BY audit_id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def create_task(self, *, task_id: str, robot_id: str, task_type: str,
                     source: str, actor_id: str, request_key: str,
@@ -418,6 +478,15 @@ class FleetTaskStore:
     def transition(self, task_id: str, status: str, *, actor_id: str,
                    source: str, reason: str | None = None,
                    receipt: Mapping | None = None) -> dict:
+        # D-170/D-293: this generic path has no correlated CORE final result.
+        # D-177 activation must introduce a separate verified-result transition.
+        if status in {"RUNNING", "COMPLETED"}:
+            raise InvalidTaskTransition("verified CORE result is required for execution status")
+        if status == "ACCEPTED" and (
+            receipt is None or receipt.get("accepted") is not True
+            or receipt.get("queued") is True
+        ):
+            raise InvalidTaskTransition("positive CORE receipt is required for acceptance")
         receipt_json = None if receipt is None else _safe_json(dict(receipt))
         now = _now()
         with closing(self._connect()) as connection:

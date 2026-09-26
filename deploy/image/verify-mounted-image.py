@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,10 @@ MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
 BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
 # D-247: customize-rootfs.sh adds the IMU bus (BNO055 on I2C0, /dev/i2c-0).
 IMU_OVERLAY = "dtoverlay=i2c0-pi5,pins_0_1"
+CAMERA_OVERLAY = "dtoverlay=ov5647"
+CAMERA_SOURCE_LOCK = Path(__file__).with_name("camera-sources.lock.json")
+CAMERA_SOURCE_RECORD = "usr/local/share/rosy/camera-sources.lock.json"
+CAMERA_PYTHON_RECORD = "usr/local/share/rosy/camera-python-runtime.sha256"
 # D-247: the WS2812 lamp driver customize-rootfs.sh builds for the image kernel.
 LAMP_OVERLAY = "dtoverlay=rosy-ws281x"
 LAMP_DTBO = "boot/firmware/overlays/rosy-ws281x.dtbo"
@@ -51,7 +56,7 @@ BUS_CONSOLE = re.compile(r"console=(serial0|ttyAMA0|ttyAMA4)(,|$)")
 RECOVERY_CONSOLE = re.compile(r"console=ttyAMA10(,|$)")
 BUS_GETTY_MASKS = ("etc/systemd/system/serial-getty@ttyAMA0.service",
                    "etc/systemd/system/serial-getty@ttyAMA4.service")
-HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service")
+HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service", "rosy-camera.service")
 SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
 DISPLAY_UNIT = "rosy-boot-display.service"
 DISPLAY_UDEV_RULE = "etc/udev/rules.d/99-rosy-display.rules"
@@ -69,7 +74,7 @@ HW_PROBE_COMMAND = "usr/local/sbin/rosy-hw-probe"
 # D-247 6: the buzzer/lamp test: the service is started only by its path unit.
 HW_TEST_SERVICE = "rosy-hw-test.service"
 HW_TEST_PATH = "rosy-hw-test.path"
-CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
+CORE_DEFAULTS = "install/share/core_common/config/rosy_default.yaml"
 
 
 def default_config_tokens(text: str) -> bool | None:
@@ -138,6 +143,49 @@ def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
         if active and line == overlay:
             return True
     return False
+
+
+def camera_configured_for_pi5(text: str) -> bool:
+    """The Pinky OV5647 CAM1 overlay needs auto detection disabled."""
+    active = True
+    disabled = False
+    enabled = False
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if re.fullmatch(r"\[[^]]+\]", stripped):
+            active = re.sub(r"\s", "", stripped) in {"[all]", "[pi5]"}
+            continue
+        line = re.sub(r"\s*#.*", "", raw).strip()
+        if active and line == "camera_auto_detect=0":
+            disabled = True
+        if active and line == "camera_auto_detect=1":
+            enabled = True
+    return disabled and not enabled and overlay_applies_to_pi5(text, CAMERA_OVERLAY)
+
+
+def camera_stack_findings(root: Path) -> list[str]:
+    """D-288: source provenance and the minimum Pi 5 camera userspace payload."""
+    findings = []
+    record = root / CAMERA_SOURCE_RECORD
+    if not record.is_file() or record.read_bytes() != CAMERA_SOURCE_LOCK.read_bytes():
+        findings.append("camera source record is missing or differs from the pinned lock")
+    python_lock = Path(__file__).with_name("camera-python-requirements.txt")
+    expected_python_sha = hashlib.sha256(python_lock.read_bytes()).hexdigest()
+    python_record = root / CAMERA_PYTHON_RECORD
+    if not python_record.is_file() or python_record.read_text(encoding="utf-8").strip() != expected_python_sha:
+        findings.append("camera Python runtime record is missing or differs from the pinned lock")
+    for command in ("rpicam-hello", "rpicam-still"):
+        if not (root / "usr/local/bin" / command).is_file():
+            findings.append(f"camera executable is missing: {command}")
+    local_lib = root / "usr/local/lib/aarch64-linux-gnu"
+    for pattern in ("libpisp.so*", "libcamera.so*", "libcamera/ipa_rpi_pisp.so"):
+        if not any(path.is_file() for path in local_lib.glob(pattern)):
+            findings.append(f"camera library is missing: {pattern}")
+    if not any(path.is_dir() for path in (root / "usr/local/lib").glob("**/python3.12/*-packages/libcamera")):
+        findings.append("libcamera Python binding is missing")
+    if not any(path.is_dir() for path in (root / "usr/local/lib").glob("**/python3.12/*-packages/picamera2")):
+        findings.append("Picamera2 Python package is missing")
+    return findings
 
 
 def lamp_driver_findings(root: Path) -> list[str]:
@@ -251,9 +299,12 @@ def inspect(root: Path, release_id: str) -> list[str]:
                 findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
         if not overlay_applies_to_pi5(text, IMU_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {IMU_OVERLAY} for the Pi 5 (IMU bus)")
+        if not camera_configured_for_pi5(text):
+            findings.append("boot/firmware/config.txt does not enable OV5647 CAM1 with camera_auto_detect=0")
         if not overlay_applies_to_pi5(text, LAMP_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {LAMP_OVERLAY} for the Pi 5 (lamp driver)")
     findings += lamp_driver_findings(root)
+    findings += camera_stack_findings(root)
     cmdline = root / "boot/firmware/cmdline.txt"
     if not cmdline.is_file():
         findings.append("missing kernel command line: boot/firmware/cmdline.txt")

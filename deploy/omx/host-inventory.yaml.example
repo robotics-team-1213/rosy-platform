@@ -1,0 +1,22 @@
+# Inert placement example. Keep selected serial/camera identities in private/
+# or /etc/rosy/omx/ on the control host, never in this tracked template.
+schema: rosy.omx-host-inventory.v1
+site_id: site_01
+hosts:
+  site_pc_01:
+    roles: [fleet, overhead_vision, omx_control]
+workcells:
+  omx_01:
+    instance_id: omx_01_control
+    host_id: site_pc_01
+    enabled: false
+    follower: null
+    leader: null
+    camera: null
+  omx_02:
+    instance_id: omx_02_control
+    host_id: site_pc_01
+    enabled: false
+    follower: null
+    leader: null
+    camera: null

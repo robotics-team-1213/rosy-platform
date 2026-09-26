@@ -7,11 +7,31 @@ from omx_adapter.profile import OmxAdapterProfile
 
 
 def test_unselected_omx_is_valid_but_not_capable():
-    profile = OmxAdapterProfile.from_mapping({"enabled": False})
+    profile = OmxAdapterProfile.from_mapping(
+        {
+            "enabled": False,
+            "model": "omx-ai",
+            "joint_names": [],
+        }
+    )
 
-    assert profile.model == ""
+    assert profile.model == "omx_ai"
+    assert profile.joint_names == ()
     assert profile.capability_enabled is False
     assert profile.ros2_control_contract() == {}
+
+
+def test_enabled_omx_ai_requires_measured_joint_mapping():
+    with pytest.raises(ValueError, match="joint_names"):
+        OmxAdapterProfile.from_mapping(
+            {
+                "enabled": True,
+                "model": "omx-ai",
+                "driver_package": "open_manipulator_bringup",
+                "hardware_plugin": "vendor-plugin-pending-measurement",
+                "joint_names": [],
+            }
+        )
 
 
 def test_enabled_profile_emits_standard_joint_trajectory_contract():

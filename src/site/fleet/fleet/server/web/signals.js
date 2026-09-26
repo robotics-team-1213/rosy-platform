@@ -34,7 +34,11 @@ export function createSignals({ el, view, log, call, refreshState }) {
 
     const head = document.createElement("div");
     head.className = "robot-head";
-    head.innerHTML = `<b>${row.signal_id}</b><span class="spacer"></span>`;
+    const signalName = document.createElement("b");
+    signalName.textContent = row.signal_id;
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+    head.append(signalName, spacer);
     const info = SIGNAL_MODE_TAG[row.mode] || { text: row.mode || "—", cls: "" };
     const tag = document.createElement("span");
     tag.className = `tag ${!row.online ? "crit" : info.cls}`;

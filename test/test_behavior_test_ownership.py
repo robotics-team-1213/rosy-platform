@@ -23,6 +23,7 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_domain_model.py",
     "src/runtime/gateway/test/test_evidence.py",
     "src/runtime/gateway/test/test_fleet_agent.py",
+    "src/runtime/gateway/test/test_fleet_agent_mdns.py",
     "src/runtime/gateway/test/test_initial_pose.py",
     "src/runtime/gateway/test/test_line_follow.py",
     "src/runtime/gateway/test/test_line_follow_api.py",

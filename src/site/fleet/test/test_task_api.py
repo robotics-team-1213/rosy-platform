@@ -1,4 +1,5 @@
 from threading import Event
+from hashlib import sha256
 
 import pytest
 from fastapi.testclient import TestClient
@@ -39,6 +40,38 @@ def test_console_goal_creates_authenticated_persistent_operator_task(tmp_path):
                           headers={"Authorization": "Bearer operator-console"})
     assert readback.status_code == 200
     assert readback.json()["history"][-1]["status"] == "QUEUED"
+
+
+def test_task_history_records_the_authenticated_operator_principal(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    task_store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    task_service = FleetTaskService(task_store, robot_ids={"rosy_01"})
+    console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
+    app = create_app(
+        console, task_service=task_service, start_task_dispatcher=False,
+        site_users={sha256(b"operator-token").hexdigest(): {
+            "principal_id": "operator-17", "role": "operator",
+        }},
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/fleet/robots/rosy_01/goal",
+        json={"x": 1.0, "y": 2.0, "yaw": 0.0},
+        headers={"Authorization": "Bearer operator-token", "Idempotency-Key": "request-17"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["task"]["actor_id"] == "operator-17"
+    audit = task_store.api_audit()
+    assert [row["event_type"] for row in audit] == ["RESULT", "INTENT"]
+    result = audit[0]
+    assert result["principal_id"] == "operator-17"
+    assert result["role"] == "operator"
+    assert result["method"] == "POST"
+    assert result["path"] == "/api/fleet/robots/rosy_01/goal"
+    assert result["status_code"] == 200
+    assert "operator-token" not in str(audit)
 
 
 def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_separate(tmp_path):

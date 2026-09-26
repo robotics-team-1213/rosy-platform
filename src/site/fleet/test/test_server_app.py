@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+
 import pytest
 from fastapi.testclient import TestClient
+from core_common.intent import MAX_STEPS, verbs
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
 
@@ -30,6 +35,51 @@ def test_health_endpoint_reports_liveness_without_robot_or_auth_data():
     assert "robot" not in response.text and "token" not in response.text
 
 
+def test_goal_openapi_contract_exposes_only_domain_intent_fields():
+    app = create_app(FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+        [FakeRobot("rosy_01")],
+    ))
+
+    operation = app.openapi()["paths"]["/api/fleet/robots/{robot_id}/goal"]["post"]
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"] == "#/components/schemas/GoalRequest"
+
+    goal_schema = app.openapi()["components"]["schemas"]["GoalRequest"]
+    assert goal_schema["required"] == ["x", "y"]
+    assert set(goal_schema["properties"]) == {"x", "y", "yaw"}
+    assert goal_schema["additionalProperties"] is False
+    assert all(goal_schema["properties"][name]["type"] == "number"
+               for name in ("x", "y", "yaw"))
+
+
+def test_do_openapi_contract_matches_intent_verbs_and_bounded_sequences():
+    app = create_app(FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+        [FakeRobot("rosy_01")],
+    ))
+
+    operation = app.openapi()["paths"]["/api/fleet/do"]["post"]
+    schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    single_step, sequence = schema["oneOf"]
+    step_schemas = single_step["oneOf"]
+
+    assert {item["properties"]["do"]["const"] for item in step_schemas} == set(verbs())
+    assert all(item["additionalProperties"] is False for item in step_schemas)
+    navigate = next(item for item in step_schemas
+                    if item["properties"]["do"]["const"] == "navigate")
+    assert navigate["properties"]["x"]["type"] == "number"
+    assert navigate["properties"]["waypoint"]["type"] == "string"
+    assert "priority_class" not in navigate["properties"]
+
+    steps = sequence["properties"]["steps"]
+    assert sequence["required"] == ["steps"]
+    assert sequence["additionalProperties"] is False
+    assert steps["minItems"] == 1
+    assert steps["maxItems"] == MAX_STEPS
+    assert steps["items"] == single_step
+
+
 def test_do_translates_a_goal_and_rejects_a_ros_word():
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
     client = _client(robot)
@@ -41,6 +91,38 @@ def test_do_translates_a_goal_and_rejects_a_ros_word():
     refused = client.post("/api/fleet/do", json={"do": "navigate", "x": 0, "y": 0, "twist": {}})
     assert refused.status_code == 400
     assert refused.json()["detail"]["code"] == "FORBIDDEN"
+
+
+def test_do_rejects_client_priority_and_boolean_goal_without_dispatch():
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    client = _client(robot)
+
+    priority = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": 1.0, "y": 2.0,
+        "priority_class": 0,
+    })
+    boolean_goal = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": True, "y": 2.0,
+    })
+
+    assert priority.status_code == 400
+    assert priority.json()["detail"]["code"] == "UNKNOWN_FIELD"
+    assert boolean_goal.status_code == 400
+    assert boolean_goal.json()["detail"]["code"] == "INVALID_NUMBER"
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
+
+
+def test_do_rejects_mistyped_motion_values_before_robot_dispatch():
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    client = _client(robot)
+
+    response = client.post("/api/fleet/do", json={
+        "do": "move", "robot": "rosy_01", "linear": "fast", "angular": 0.0,
+    })
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_NUMBER"
+    assert not robot.calls
 
 
 def test_state_lists_the_roster():
@@ -68,6 +150,19 @@ def test_goal_to_an_unknown_robot_is_404_not_502():
                                               json={"x": 0.0, "y": 0.0})
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "UNKNOWN_ROBOT"
+
+
+@pytest.mark.parametrize("body", [
+    {"x": 1.0, "y": 2.0, "priority_class": 0},
+    {"x": 1.0, "y": 2.0, "source": "policy"},
+    {"x": True, "y": 2.0},
+])
+def test_goal_rejects_non_intent_dispatch_fields_and_invalid_numbers(body):
+    robot = FakeRobot("rosy_01")
+    response = _client(robot).post("/api/fleet/robots/rosy_01/goal", json=body)
+
+    assert response.status_code == 422
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
 
 
 def test_a_goal_the_robot_refuses_comes_back_as_502_with_the_robot_code():
@@ -106,12 +201,131 @@ def test_console_token_guards_the_site_api(path):
     assert method(path, headers={"Authorization": "Bearer secret"}).status_code == 200
 
 
+def test_viewer_can_read_fleet_state_but_cannot_issue_robot_commands(tmp_path):
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+                           [robot])
+    task_service = FleetTaskService(
+        FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        console,
+        task_service=task_service,
+        site_users={
+            sha256(b"viewer-token").hexdigest(): {"principal_id": "alice", "role": "viewer"},
+            sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
+            sha256(b"policy-token").hexdigest(): {
+                "principal_id": "carol", "role": "policy-admin",
+            },
+        },
+    ))
+
+    viewer = {"Authorization": "Bearer viewer-token"}
+    operator = {"Authorization": "Bearer operator-token"}
+    policy_admin = {"Authorization": "Bearer policy-token"}
+    assert client.get("/api/fleet/state").status_code == 401
+    assert client.get("/api/fleet/state", headers={
+        "Authorization": "Bearer unlisted-token",
+    }).status_code == 401
+    assert client.get("/api/fleet/state", headers=viewer).status_code == 200
+    assert client.get("/api/fleet/state", headers=policy_admin).status_code == 200
+    denied_goal = client.post(
+        "/api/fleet/robots/rosy_01/goal", json={"x": 1.0, "y": 2.0},
+        headers={**viewer, "Idempotency-Key": "viewer-must-not-move"},
+    )
+    assert denied_goal.status_code == 403
+    denied = client.post("/api/fleet/estop", headers=viewer)
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "FORBIDDEN"
+    assert client.post("/api/fleet/estop", headers=policy_admin).status_code == 403
+    assert client.post("/api/fleet/estop", headers=operator).status_code == 200
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
+    audits = [row for row in task_service.store.api_audit() if row["event_type"] == "RESULT"]
+    assert [(row["principal_id"], row["status_code"]) for row in audits[:2]] == [
+        ("bob", 200), ("carol", 403),
+    ]
+    assert audits[2]["principal_id"] == "alice" and audits[2]["status_code"] == 403
+
+
+def test_site_session_returns_only_the_authenticated_principal_and_role(tmp_path):
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+                           [FakeRobot("rosy_01")])
+    task_service = FleetTaskService(
+        FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        console, task_service=task_service,
+        site_users={sha256(b"viewer-token").hexdigest(): {
+            "principal_id": "alice", "role": "viewer",
+        }},
+    ))
+
+    assert client.get("/api/fleet/session").status_code == 401
+    response = client.get("/api/fleet/session",
+                          headers={"Authorization": "Bearer viewer-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"principal_id": "alice", "role": "viewer"}
+
+
+def test_per_user_authorization_requires_persistent_audit_storage():
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+                           [FakeRobot("rosy_01")])
+    with pytest.raises(ValueError, match="persistent task/audit storage"):
+        create_app(console, site_users={
+            sha256(b"viewer-token").hexdigest(): {"principal_id": "alice", "role": "viewer"},
+        })
+
+
+@pytest.mark.parametrize("shared_secret, pairing_token", [
+    ("robot-rest", None),
+    ("agent-pairing", "agent-pairing"),
+])
+def test_site_user_credentials_cannot_be_reused_for_robot_services(
+        tmp_path, shared_secret, pairing_token):
+    endpoint = RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-rest",
+                             fleet_pairing_token=pairing_token)
+    console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
+    task_service = FleetTaskService(
+        FleetTaskStore(tmp_path / f"{sha256(shared_secret.encode()).hexdigest()}.sqlite3"),
+        robot_ids={"rosy_01"})
+
+    with pytest.raises(ValueError, match="site user credentials must differ from robot credentials"):
+        create_app(console, task_service=task_service, site_users={
+            sha256(shared_secret.encode()).hexdigest(): {
+                "principal_id": "user-1", "role": "operator",
+            },
+        })
+
+
+def test_command_is_not_sent_when_audit_storage_cannot_record_the_principal(tmp_path, monkeypatch):
+    robot = FakeRobot("rosy_01")
+    task_store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    task_service = FleetTaskService(task_store, robot_ids={"rosy_01"})
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")], [robot])
+    client = TestClient(create_app(
+        console, task_service=task_service,
+        site_users={sha256(b"operator-token").hexdigest(): {
+            "principal_id": "operator-1", "role": "operator",
+        }},
+    ))
+
+    def fail_audit(**_kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(task_store, "begin_api_audit", fail_audit)
+    response = client.post("/api/fleet/estop", headers={"Authorization": "Bearer operator-token"})
+
+    assert response.status_code == 503
+    assert not any(call[0] == "estop" for call in robot.calls)
+
+
 def test_console_page_and_its_assets_are_served():
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console")
     assert page.status_code == 200 and "ROSY FLEET" in page.text
     assert client.get("/console/assets/console.js").status_code == 200
+    assert client.get("/console/assets/authorization.js").status_code == 200
     assert client.get("/console/assets/styles.css").status_code == 200
+    assert 'id="user-role"' in page.text
     assert 'href="/common/tokens.css"' in page.text
 
 

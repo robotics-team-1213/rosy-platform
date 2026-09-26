@@ -104,6 +104,24 @@
 | D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
 | D-274 | 로컬 브라우저 검토는 실제 CORE 경로를 쓰고 장치 수용은 분리한다 |
 | D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 |
+| D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 |
+| D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 |
+| D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
+| D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
+| D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
+| D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
+| D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
+| D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
+| D-294 | Shared typography and interaction tokens use a closed scale |
+| D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 |
+| D-296 | 장치 미들웨어와 사이트 조정 계층의 이름과 책임을 구분한다 |
+| D-297 | 명령 ACK와 Fleet 추적 레코드를 분리한 PRT-004 활성화 설계 |
+| D-298 | Fleet 미션·장치 액션·정지 증거의 용어를 분리한다 |
+| D-299 | OMX LeRobot 실험 경로와 운영 팔 제어권을 분리한다 |
 
 ## 계획·결과 문서
 
@@ -133,10 +151,14 @@
 - [2026-09-25-folder-map.md](plans/2026-09-25-folder-map.md)
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
 - [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
+- [2026-09-26-role-aware-empty-state-recovery-plan.md](plans/2026-09-26-role-aware-empty-state-recovery-plan.md)
 - [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
+- [2026-09-26-site-host-placement-design.md](plans/2026-09-26-site-host-placement-design.md)
+- [2026-09-26-site-host-placement-implementation.md](plans/2026-09-26-site-host-placement-implementation.md)
 - [2026-09-26-site-task-scheduling-and-broker-design.md](plans/2026-09-26-site-task-scheduling-and-broker-design.md)
 - [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
 - [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
+- [2026-09-27-omx-lerobot-control-boundary-implementation-plan.md](plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -154,3 +176,8 @@
 - 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
 - 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
 - 2026-09-26 · uncommitted · feat(fleet): expose server queue position
+- 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
+- 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
+- 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
+- 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
+- 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill

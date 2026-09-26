@@ -1,16 +1,16 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-24 }
+last_verified: { commit: "6ce05ff1", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
-    evidence: "공유 조작 부품 포함 web_common·표면 계약 — 120 passed (2026-09-24 Windows)"
-    cmd: "python -m pytest src/hmi/web/test -q"
+    evidence: "HMI web + dashboard 100 passed with browser tests; dashboard API route/manifest 29 passed (2026-09-27 Windows)"
+    cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test -q\""
   LOCAL:
     state: GO
-    evidence: "120 passed, 공유 부품 경로 포함 (2026-09-24 Windows)"
-    cmd: "python -m pytest src/hmi/web/test -q"
+    evidence: "실 CORE TestClient API + visible Chromium: styleguide, operator /console·/setup, administrator /console·/setup·/device at 1366x768 and 390x844; blue focus ring, disabled opacity 0.45, 0 missing kinds, 0 page errors, no positive horizontal overflow"
+    cmd: "X:\\DevTemp\\rosy-design-system-polish\\visible_roles.py"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -19,9 +19,12 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-72, D-194, D-195]
+adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292, D-294]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
+  - docs/plans/2026-09-26-rosy-modern-brand-palette.md
+  - docs/plans/2026-09-26-rosy-tokenized-design-system.md
+  - docs/plans/2026-09-26-shared-typography-interaction-tokens.md
 ---
 ## 지금 상태
 
@@ -31,7 +34,7 @@ plans:
 
 ## 다음 gate
 
-1. 시험 범위를 공개면(팔레트·토큰) 계약으로 넓힌다.
+1. 새 메뉴/페이지는 D-292에 따라 작업 질문·URL·역할·표면 소유를 먼저 정하고, 공통 셸·토큰·컴포넌트 계약에 연결한다. 표면별 레이아웃과 제품 질문은 유지한다.
 
 ## 현재 유효한 금지사항
 

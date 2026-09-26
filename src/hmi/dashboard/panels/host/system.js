@@ -7,9 +7,9 @@ function el(tag, cls, text) {
 }
 
 function section(title) {
-  const wrap = el("section", "surface-readback");
+  const wrap = el("section", "ui-readback");
   wrap.append(el("h3", "", title));
-  const body = el("dl", "surface-readout");
+  const body = el("dl", "ui-readout");
   wrap.append(body);
   return {wrap, body};
 }
@@ -26,8 +26,7 @@ export function mount(root, ctx) {
   const runtime = section("호스트 런타임");
   const identity = section("로봇 신원");
   const capabilities = section("기능 인벤토리");
-  const message = el("p", "surface-message", "상태를 불러오는 중입니다.");
-  message.setAttribute("role", "status");
+  const message = el("ui-status", "", "상태를 불러오는 중입니다.");
   root.append(head, runtime.wrap, identity.wrap, capabilities.wrap, message);
 
   const stopRuntime = ctx.store.poll("/api/v1/system/runtime", 10_000, (data) => {
@@ -48,10 +47,10 @@ export function mount(root, ctx) {
     fields(identity.body, [["로봇 ID", data.robot_id], ["표시 이름", data.robot_name || data.name],
       ["하드웨어 모델", data.hardware_model], ["실행 모드", data.runtime_mode]]);
     if (ctx.role === "administrator" && !identity.body.querySelector("form")) {
-      const form = el("form", "surface-inline-form");
+      const form = el("form", "ui-form");
       const input = el("input"); input.name = "robot_name"; input.maxLength = 64;
       input.value = data.robot_name || data.name || ""; input.setAttribute("aria-label", "로봇 표시 이름");
-      const save = el("ui-button", "", "이름 저장"); save.type = "submit";
+      const save = el("ui-button", "", "이름 저장"); save.setAttribute("kind", "primary"); save.type = "submit";
       form.append(input, save);
       form.addEventListener("submit", async (event) => {
         event.preventDefault(); save.disabled = true;

@@ -50,6 +50,80 @@ const BATTERY_FAULT = {
 // configuration rather than a failure, so it is told once and without colour.
 export const CORE_ONLY_REASON = "runtime_mode:core";
 export const CORE_ONLY_TEXT = "하드웨어 런타임 꺼짐 (CORE-only)";
+// rosy-io in no-motion mode (D-192): battery/odometry flow, motor/ready is
+// false, torque is off and cmd_vel has no subscriber.
+export const DRIVE_DISABLED_REASON = "drive_disabled:no_motion";
+export const DRIVE_DISABLED_TEXT = "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)";
+export const NAVIGATION_ABSENT_REASON = "navigation_absent";
+export const NAVIGATION_ABSENT_TEXT = "내비게이션 스택 없음";
+
+// Server reason codes (API Ref §9.1, v1.21) in operator words. Unknown codes
+// are shown as sent.
+const REASON_TEXT = {
+  [CORE_ONLY_REASON]: CORE_ONLY_TEXT,
+  [DRIVE_DISABLED_REASON]: DRIVE_DISABLED_TEXT,
+  [NAVIGATION_ABSENT_REASON]: NAVIGATION_ABSENT_TEXT,
+  drive_absent: "모터 드라이버 보고 없음 (motor/ready 미수신)",
+  drive_lease_expired: "모터 준비 신호 끊김",
+  hardware_silent: "하드웨어 런타임 신호 끊김",
+  "device_state:SAFE_STOP": "정지 상태",
+  "device_state:BOOTING": "기동 중",
+  "device_state:FAULT": "고장",
+};
+
+export function reasonText(reason) {
+  return REASON_TEXT[reason] || reason;
+}
+
+// Configurations, not faults: each is told once, without colour, however
+// many descriptors it blocks.
+export const CONFIGURED_REASONS = {
+  [CORE_ONLY_REASON]: {
+    id: "runtime.core_only",
+    title: CORE_ONLY_TEXT,
+    detail: "모터·센서 출처가 구성되지 않아 이동과 위치 추정을 제공하지 않습니다.",
+  },
+  [DRIVE_DISABLED_REASON]: {
+    id: "runtime.drive_disabled",
+    title: DRIVE_DISABLED_TEXT,
+    detail: "배터리·주행계는 들어오지만 motor/ready가 false입니다. torque가 꺼져 있고 cmd_vel을 받지 않아 이동을 제공하지 않습니다.",
+  },
+  [NAVIGATION_ABSENT_REASON]: {
+    id: "runtime.navigation_absent",
+    title: NAVIGATION_ABSENT_TEXT,
+    detail: "Nav2/SLAM 노드가 활성으로 보고되지 않아 목표 주행과 위치 추정을 제공하지 않습니다.",
+  },
+};
+
+// Every e-stop CORE knows of is a software stop: CORE holds cmd_vel at zero.
+// None of them is a physical motor power cut, so none may claim one.
+export function estopFault(source) {
+  const text = String(source || "");
+  if (text.startsWith("api:")) {
+    return {
+      title: `API 비상정지 (${text.slice(4) || "?"})`,
+      detail: "소프트웨어 정지입니다. CORE가 이동 명령을 0으로 막고 있습니다. 모터 전원을 끊은 것은 아닙니다. 해제 권한이 있는 운용자가 해제합니다.",
+    };
+  }
+  if (text.startsWith("battery")) {
+    return {
+      title: "배터리 보호 정지",
+      detail: "배터리 정책이 건 소프트웨어 정지입니다. 충전 뒤 해제하세요.",
+    };
+  }
+  if (text.startsWith("control:")) {
+    return {
+      title: "제어 정책 정지",
+      detail: `정책(${text.slice(8) || "?"})이 건 소프트웨어 정지입니다. 원인을 확인한 뒤 해제하세요.`,
+    };
+  }
+  return {
+    title: "비상정지",
+    detail: text
+      ? `CORE가 이동 명령을 0으로 막고 있습니다(출처: ${text}).`
+      : "CORE가 이동 명령을 0으로 막고 있습니다.",
+  };
+}
 
 const BLOCKING_NAVIGATION = {
   BLOCKED: "경로를 찾지 못했습니다. 목표를 바꾸거나 장애물을 치우세요.",
@@ -61,16 +135,11 @@ function evidenceOf(state, channel) {
 }
 
 /** 지금 살아 있는 고장을 모은다. 순서는 매기지 않는다. */
-function collectFaults({ state, inventory } = {}) {
+function collectFaults({ state, inventory, safetySource } = {}) {
   const faults = [];
 
   if (state?.safety?.estop) {
-    faults.push({
-      id: "safety.estop",
-      category: "hazard",
-      title: "비상정지",
-      detail: "모터 전원이 끊겼습니다. 현장에서 해제해야 합니다.",
-    });
+    faults.push({ id: "safety.estop", category: "hazard", ...estopFault(safetySource) });
   }
 
   const level = state?.battery_status?.level;
@@ -99,27 +168,22 @@ function collectFaults({ state, inventory } = {}) {
     });
   }
 
-  let coreOnly = false;
+  const configured = new Set();
   for (const row of inventory?.descriptors || []) {
     if (row?.state !== "blocked") continue;
-    if (row.reason === CORE_ONLY_REASON) {
-      coreOnly = true;
+    if (CONFIGURED_REASONS[row.reason]) {
+      configured.add(row.reason);
       continue;
     }
     faults.push({
       id: `capability.${row.id}`,
       category: "blocked",
       title: `${row.id} 사용 불가`,
-      detail: row.reason ? `이유: ${row.reason}` : "서버가 이유를 주지 않았습니다.",
+      detail: row.reason ? `이유: ${reasonText(row.reason)}` : "서버가 이유를 주지 않았습니다.",
     });
   }
-  if (coreOnly) {
-    faults.push({
-      id: "runtime.core_only",
-      category: "observation",
-      title: CORE_ONLY_TEXT,
-      detail: "모터·센서 출처가 구성되지 않아 이동과 위치 추정을 제공하지 않습니다.",
-    });
+  for (const reason of configured) {
+    faults.push({ category: "observation", ...CONFIGURED_REASONS[reason] });
   }
 
   return faults;
@@ -147,8 +211,8 @@ function trackSeen(faults, seenAt, now) {
   return next;
 }
 
-export function triage({ state, inventory, seenAt = {}, now = Date.now() } = {}) {
-  const faults = collectFaults({ state, inventory });
+export function triage({ state, inventory, safetySource, seenAt = {}, now = Date.now() } = {}) {
+  const faults = collectFaults({ state, inventory, safetySource });
   const tracked = trackSeen(faults, seenAt, now);
   const ordered = orderFaults(faults, tracked);
   return { headline: ordered[0] || null, context: ordered.slice(1), seenAt: tracked };

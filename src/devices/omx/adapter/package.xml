@@ -11,8 +11,12 @@
   <exec_depend>python3-yaml</exec_depend>
   <test_depend>python3-pytest</test_depend>
 
-  <!-- Runtime ROS dependencies are added when a measured OMX driver is selected.
-       The disabled profile must remain installable without vendor hardware. -->
+  <!-- Optional generic ROS bindings; no OMX driver or device is selected. -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
   <export>
     <build_type>ament_python</build_type>
   </export>

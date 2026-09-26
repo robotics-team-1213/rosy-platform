@@ -242,7 +242,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .brand { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--paper); text-decoration: none; }
-.brand b { display: block; font: 700 var(--text-value)/1 var(--mono); letter-spacing: 0.18em; }
+.brand b { display: block; color: var(--brand-rose); font: 700 var(--text-value)/1 var(--mono); letter-spacing: 0.18em; }
 .brand small { display: block; margin-top: var(--space-1); color: var(--muted); font: var(--text-micro)/1 var(--mono); letter-spacing: var(--track-label); }
 /* 마크는 로고이지 계기가 아니다 — 상태색을 쓰지 않는다. 화면에서 유일하게
    색이 있어야 할 것은 지금 잘못된 것 하나다. */
@@ -1053,7 +1053,13 @@ body[data-view="operate"] .page-footer { display: none; }
   .status-summary { flex: 1 0 100%; flex-wrap: wrap; padding: var(--space-2) 0; border-left: 0; }
   .summary-reason { white-space: normal; }
   .hero-copy { flex: 1 0 100%; max-width: none; }
-  .hero-state, .hero-safety { flex: 1 0 auto; border-left: 0; padding-left: 0; }
+  .hero-state, .hero-safety { flex: 1 1 100%; min-width: 0; border-left: 0; padding-left: 0; }
+  .hero-safety { flex-wrap: wrap; }
+  .hero-safety > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .triage { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding-inline: var(--space-4); }
+  .triage-context { min-width: 0; flex-wrap: wrap; }
+  .triage-context li { max-width: 100%; }
+  .triage-context li:nth-child(n + 2) { display: none; }
   .system-identity, .meter-stack, .network-traffic-grid, .settings-grid { grid-template-columns: 1fr; }
   .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ros-network-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }

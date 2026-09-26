@@ -1,0 +1,28 @@
+services:
+  omx-hardware-shell:
+    profiles: ["hardware"]
+    image: rosy-omx-workstation:local
+    build: .
+    init: true
+    environment:
+      ROS_DOMAIN_ID: "${OMX_ROS_DOMAIN_ID:-30}"
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_AUTOMATIC_DISCOVERY_RANGE: "${OMX_ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}"
+    stdin_open: true
+    tty: true
+    devices:
+      - "${OMX_FOLLOWER_DEVICE:?run the host preflight}:${OMX_FOLLOWER_DEVICE:?run the host preflight}"
+      - "${OMX_LEADER_DEVICE:?run the host preflight}:${OMX_LEADER_DEVICE:?run the host preflight}"
+    command: ["bash"]
+
+  omx-simulation:
+    profiles: ["simulation"]
+    image: rosy-omx-workstation:local
+    build: .
+    init: true
+    environment:
+      ROS_DOMAIN_ID: "${OMX_SIM_DOMAIN_ID:-31}"
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+      GZ_SIM_PHYSICS_ENGINE_PATH: /opt/ros/jazzy/opt/gz_physics_vendor/lib
+    command: ["ros2", "launch", "open_manipulator_bringup", "omx_f_follower_ai_gazebo.launch.py"]

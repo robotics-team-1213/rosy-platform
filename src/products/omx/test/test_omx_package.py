@@ -7,11 +7,11 @@ import yaml
 CONFIG = Path(__file__).resolve().parents[1] / "config"
 
 
-def test_the_shipped_arm_is_disabled_until_it_is_measured():
+def test_the_shipped_target_is_omx_ai_but_arm_remains_disabled():
     document = yaml.safe_load((CONFIG / "omx.disabled.yaml").read_text(encoding="utf-8"))
     arm = document["omx"]
     assert arm["enabled"] is False
-    assert arm["model"] == ""
+    assert arm["model"] == "omx_ai"
     assert arm["driver_package"] == ""
     assert arm["hardware_plugin"] == ""
-    assert len(arm["joint_names"]) >= 4
+    assert arm["joint_names"] == []

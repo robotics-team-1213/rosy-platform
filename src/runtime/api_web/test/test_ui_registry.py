@@ -15,6 +15,10 @@ version: 1
 surfaces:
   console: {title: 운용, min_role: viewer, grammar: spatial, slots: [banner, sense, observe, act]}
   device: {title: 설치·정비, min_role: administrator, grammar: procedure, slots: [main]}
+action_groups:
+  - {id: drive, title: 운전, order: 10}
+  - {id: docking, title: 도킹, order: 20}
+  - {id: line_follow, title: 차선 추종, order: 30}
 """
 
 
@@ -51,6 +55,26 @@ def test_a_minimal_panel_takes_the_surface_role_and_no_requirements(tmp_path):
     assert panel.requires == ()
     assert panel.css == ()
     assert registry.assets() == {"panels/a/one.js": "application/javascript"}
+
+
+def test_a_panel_can_declare_a_valid_console_action_group(tmp_path):
+    text = ONE.replace("surface: device", "surface: console").replace("slot: main", "slot: act")
+    text += "    action_group: drive\n"
+    registry = load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)
+    assert registry.panels[0].action_group == "drive"
+
+
+def test_an_invalid_action_group_refuses_to_load(tmp_path):
+    text = ONE + "    action_group: [drive]\n"
+    with pytest.raises(RegistryError, match="action_group"):
+        load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)
+
+
+def test_an_action_group_is_limited_to_console_act_panels(tmp_path):
+    text = ONE.replace("surface: device", "surface: console").replace("slot: main", "slot: sense")
+    text += "    action_group: drive\n"
+    with pytest.raises(RegistryError, match="console act"):
+        load_registry(_web(tmp_path, text) / "panels.yaml", tmp_path)
 
 
 def test_css_is_listed_as_an_asset(tmp_path):

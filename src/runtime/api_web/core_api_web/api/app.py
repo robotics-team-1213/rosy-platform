@@ -73,7 +73,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.33)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.40)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -107,7 +107,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "client.js": "application/javascript",
         "settings.js": "application/javascript",
         "vision.js": "application/javascript",
+        "camera-capture.js": "application/javascript",
         "status-summary.js": "application/javascript",
+        "surface-navigation.js": "application/javascript",
         "client.js": "application/javascript",
         "dom.js": "application/javascript",
         "shell/shell.js": "application/javascript",

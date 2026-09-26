@@ -5,6 +5,7 @@
 import { api, session } from "../client.js";
 import { mountPanels } from "./mount.js";
 import { createStore } from "./store.js";
+import { dashboardLoginHref } from "../surface-navigation.js";
 
 const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
@@ -19,6 +20,15 @@ let intervalId = null;
 function showStatus(text) {
   status.hidden = !text;
   status.textContent = text || "";
+}
+
+function showLoginStatus(text) {
+  status.hidden = false;
+  const link = document.createElement("a");
+  link.className = "surface-auth-link";
+  link.href = dashboardLoginHref(`/${surface}`);
+  link.textContent = "같은 탭에서 로그인";
+  status.replaceChildren(document.createTextNode(`${text} `), link);
 }
 
 function renderSwitch(surfaces) {
@@ -55,30 +65,36 @@ async function assemble() {
     showStatus(manifest.panels.length ? "" : "이 역할로 이 화면에 보일 패널이 없습니다.");
     return;
   }
+  if (mounted) await mounted.unmountAll();
   revision = manifest.revision;
   renderSwitch(manifest.surfaces);
-  if (mounted) mounted.unmountAll();
   mounted = await mountPanels(document, manifest.panels, (panel) => ({
     api,
     store: store.scope(),
     role: manifest.role,
+    surfaces: manifest.surfaces,
     panel,
-  }));
+  }), manifest.action_groups || []);
   showStatus(manifest.panels.length ? "" : "이 역할로 이 화면에 보일 패널이 없습니다.");
 }
 
 // 매니페스트를 못 받아도 이미 뜬 패널은 그대로 둔다 — 각 패널이 자기 폴링
 // 오류를 스스로 보고한다(store.js). revision도 지우지 않는다: 다음 성공
 // 응답이 구조 그대로면 불필요한 재mount를 하지 않는다.
-function onManifestError(error) {
+async function onManifestError(error) {
   if (error.status === 401) {
     if (intervalId) clearInterval(intervalId);
     intervalId = null;
-    if (mounted) mounted.unmountAll();
+    try {
+      if (mounted) await mounted.unmountAll();
+    } catch (stopError) {
+      showStatus(`로그인이 만료되었습니다. ${stopError.message}`);
+      return;
+    }
     mounted = null;
     revision = null;
     document.getElementById("shell-role").textContent = "인증 대기";
-    showStatus("로그인이 만료되었습니다. 같은 탭에서 /dashboard 로 다시 로그인한 뒤 이 화면을 다시 여세요.");
+    showLoginStatus("로그인이 만료되었습니다.");
     return;
   }
   if (error.status === 403) {
@@ -108,7 +124,7 @@ document.getElementById("shell-estop").addEventListener("click", async () => {
 });
 
 if (!session.token) {
-  showStatus("로그인이 필요합니다. 같은 탭에서 /dashboard 로 로그인한 뒤 이 화면을 다시 여세요.");
+  showLoginStatus("로그인이 필요합니다.");
 } else {
   refresh();
   intervalId = setInterval(refresh, REFRESH_MS);

@@ -31,7 +31,7 @@ def test_core_slice_fallback_matches_board_presets():
 
     presets = board()["presets"]
     default = yaml.safe_load(
-        (ROOT / "src" / "runtime" / "gateway" / "config" / "rosy_default.yaml").read_text(encoding="utf-8")
+        (ROOT / "src" / "contracts" / "foundation" / "config" / "rosy_default.yaml").read_text(encoding="utf-8")
     )
     yaml_presets = default["runtime"]["presets"]
     for mode, slices in presets.items():

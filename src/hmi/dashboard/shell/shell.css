@@ -23,11 +23,24 @@ body {
 }
 .surface-switch a:hover { color: var(--paper); background: var(--ground-soft); }
 .surface-switch a[aria-current="page"] {
-  color: var(--paper);
-  border-color: var(--surface-line);
-  background: var(--ground-raise);
+  color: var(--brand-rose);
+  border-color: var(--brand-rose);
+  background: var(--brand-rose-wash);
 }
 .surface-switch a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.surface-auth-link {
+  display: inline-flex;
+  min-height: var(--target-secondary);
+  align-items: center;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-button);
+  color: var(--brand-rose);
+  font-weight: 650;
+  text-underline-offset: 0.2em;
+}
+.surface-auth-link:hover { color: var(--paper); background: var(--brand-rose-wash); }
+.surface-auth-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+#shell-estop { flex: none; white-space: nowrap; }
 .surface-main {
   display: grid;
   grid-auto-rows: min-content;
@@ -42,27 +55,101 @@ body {
 ui-section[data-failed="true"] { border-style: dashed; }
 
 @media (min-width: 64rem) {
+  body[data-surface="console"] {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body[data-surface="console"] ui-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  body[data-surface="console"] ui-topbar { flex: none; }
   body[data-surface="console"] .surface-main {
-    grid-template-columns: minmax(18rem, 0.78fr) minmax(0, 1.22fr);
+    flex: 1;
+    grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.35fr) minmax(20rem, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:
-      "status status"
-      "banner banner"
-      "sense observe"
-      "act act";
-    align-items: start;
+      "status status status"
+      "banner banner banner"
+      "sense observe act";
+    align-items: stretch;
+    gap: var(--space-3);
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--space-3);
   }
   body[data-surface="console"] #surface-status { grid-area: status; }
   body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
-  body[data-surface="console"] .surface-slot[data-slot="sense"] { grid-area: sense; }
+  body[data-surface="console"] .surface-slot[data-slot="sense"] {
+    grid-area: sense;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
   body[data-surface="console"] .surface-slot[data-slot="observe"] {
     grid-area: observe;
-    grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(7rem, 0.4fr);
+    align-content: stretch;
+    min-height: 0;
+    overflow: hidden;
   }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
     grid-area: act;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: start;
+    min-height: 0;
+    overflow: hidden;
+  }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] > ui-section,
+  body[data-surface="console"] .surface-slot[data-slot="act"] > .action-group-panel {
+    min-height: 0;
+    overflow: hidden;
+  }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] .surface-map-frame {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] ui-section:has(.surface-map-frame) {
+    display: grid;
+    grid-template-rows: repeat(5, min-content) minmax(0, 1fr) repeat(3, min-content);
+    align-content: stretch;
+    gap: var(--space-1);
+  }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] .surface-map-frame canvas {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] .surface-camera-stage {
+    min-height: 0;
+    height: clamp(5rem, 11vh, 8rem);
+  }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] .surface-camera-frame {
+    max-height: 11vh;
+  }
+  body[data-surface="console"] .surface-slot[data-slot="act"] .action-group-panel {
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+  }
+  body[data-surface="console"] .surface-slot[data-slot="act"] .action-group-panel[hidden] {
+    display: none;
+  }
+  .action-group-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: var(--space-1);
+    min-width: 0;
+  }
+  .action-group-tabs ui-button {
+    min-width: 0;
+    white-space: nowrap;
   }
   body[data-surface="setup"] .surface-slot[data-slot="main"],
   body[data-surface="device"] .surface-slot[data-slot="main"] {
@@ -72,8 +159,27 @@ ui-section[data-failed="true"] { border-style: dashed; }
 }
 
 @media (max-width: 30rem) {
+  ui-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand estop" "nav nav" "notice role";
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+  ui-brand { grid-area: brand; }
+  #surface-switch { grid-area: nav; flex-wrap: wrap; gap: var(--space-1); }
+  #shell-notice { grid-area: notice; min-width: 0; }
+  #shell-role { grid-area: role; justify-self: end; }
+  #shell-estop { grid-area: estop; }
+  ui-topbar [data-spacer] { display: none; }
+  ui-brand small { display: none; }
+  .surface-switch a { padding-inline: var(--space-2); }
   .surface-main { gap: var(--space-4); padding: var(--space-3); }
-  .surface-switch { flex-wrap: wrap; gap: var(--space-1); }
+  body[data-surface="console"] { height: auto; min-height: 100vh; overflow: auto; }
+  body[data-surface="console"] ui-shell { display: block; height: auto; }
+  body[data-surface="console"] .surface-main { overflow: visible; }
+  .surface-actions.map-layer-actions { flex-direction: row; width: 100%; }
+  .surface-actions.map-layer-actions > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--space-1); }
 }
 
 @media (min-width: 30.01rem) and (max-width: 63.99rem) {

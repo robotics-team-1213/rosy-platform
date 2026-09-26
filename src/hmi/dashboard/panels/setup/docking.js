@@ -5,8 +5,8 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "도크 위치 준비");
-  const status = el("p", "surface-message", "로봇 pose와 도크 목록을 불러오는 중입니다."); status.setAttribute("role", "status");
-  const facts = el("dl", "surface-readout");
+  const status = el("ui-status", "", "로봇 pose와 도크 목록을 불러오는 중입니다.");
+  const facts = el("dl", "ui-readout");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "등록된 도크 위치");
   root.append(head, status, facts, list);
 
@@ -19,7 +19,7 @@ export function mount(root, ctx) {
     for (const dock of docks) {
       const row = el("li", ""); row.dataset.dockId = dock.id;
       const detail = el("span", "", `${dock.id} · ${dock.type || "유형 없음"} · 맵 ${dock.map_id || "미지정"}`);
-      const teach = el("ui-button", "", "현재 위치 기록"); teach.type = "button"; teach.disabled = !poseFresh;
+      const teach = el("ui-button", "", "현재 위치 기록"); teach.setAttribute("kind", "primary"); teach.type = "button"; teach.disabled = !poseFresh;
       teach.setAttribute("aria-label", `${dock.id}에 현재 로봇 위치 기록`);
       teach.addEventListener("click", async () => {
         if (!poseFresh || !window.confirm(`현재 위치를 ${dock.id} 도크 포즈로 기록할까요? 실제 도킹 위치에 로봇을 맞춘 뒤 진행하세요.`)) return;

@@ -19,7 +19,8 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 | `core_common/protocol/` | `schemas.py` — wire schema source of truth; change with `docs/reference/ROSY API & Protocol Reference.md` (D-18) |
 | `core_common/domain/` | Domain model types |
-| `core_common/config.py` | Default config loader. Reads the `core` share for `config/rosy.yaml` — a known back-edge (D-168 `KNOWN_CHAIN_BACK_EDGES`) |
+| `core_common/config.py` | Default config loader. Reads this package's `config/` share |
+| `config/` | Shipped defaults and development authentication overlay |
 | `core_common/identity.py`, `profile.py`, `capability.py`, `rmw.py` | Identity, hardware profile, capability manifest, RMW settings |
 
 ## For AI Agents

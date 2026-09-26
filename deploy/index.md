@@ -24,6 +24,7 @@
 | D-164 | Pinky Pro 제품 산출물은 ISO가 아니라 서명된 Raspberry Pi 디스크 이미지다 |
 | D-165 | Pinky Pro 네이티브 ROS 패키지의 하드웨어 의존성도 이미지 입력으로 고정한다 |
 | D-179 | 벤치 CORE 수정은 설치 트리 위의 읽기 전용 바인드이고, 그 장치는 릴리스로 세지 않는다 |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
 
 ## 계획·결과 문서
 
@@ -57,8 +58,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · fix(deploy): D-260 review M1 M2 L1-L4
-- 2026-09-26 · uncommitted · feat(deploy): D-260 boot display sound, lamp and LCD; test hand-over
-- 2026-09-26 · 8e6902fd · feat(native,api): buzzer and lamp test with a person's answer (D-247 6)
-- 2026-09-26 · b7d7b17a · feat(image): build the WS2812 lamp driver for the image kernel (D-247)
-- 2026-09-26 · 1d0c3420 · feat(image): enable the I2C0 IMU bus in config.txt (D-247)
+- 2026-09-27 · uncommitted · update default-config image readback
+- 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff
+- 2026-09-26 · uncommitted · OMX development image action-only vendor launch
+- 2026-09-26 · uncommitted · site control console operator access guide
+- 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수

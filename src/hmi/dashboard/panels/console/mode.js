@@ -7,11 +7,11 @@ const MODES = [
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "운전 모드");
-  const status = el("p", "surface-message", "현재 모드를 불러오는 중입니다."); status.setAttribute("role", "status");
-  const controls = el("div", "surface-actions");
+  const status = el("ui-status", "", "현재 모드를 불러오는 중입니다.");
+  const controls = el("ui-actions", "surface-actions");
   const buttons = new Map();
   for (const mode of MODES) {
-    const button = el("ui-button", "", mode.label); button.type = "button";
+    const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
     button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.disabled = true;
     controls.append(button); buttons.set(mode.id, button);
   }

@@ -1,35 +1,59 @@
 /* 브라우저 표면이 같이 쓰는 조작 부품. 색·크기·간격은 tokens.css만 읽는다.
  * 레이아웃(어디 놓을지)은 각 표면 시트에 남긴다.
- * 요소: ui-button, ui-field, ui-tag, ui-text.
+ * 요소: ui-button, ui-field, ui-tag, ui-text, ui-status, ui-actions.
  */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--inset-skip-link);
+  color: var(--paper);
+  background: var(--ground);
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-button);
+  transform: translateY(-150%);
+}
+.skip-link:focus-visible { transform: none; }
 
 ui-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  gap: var(--space-2);
+  gap: var(--gap-button-content);
   min-height: var(--target-secondary);
   margin: 0;
-  padding: 0 var(--space-3);
+  padding: 0 var(--inset-button);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-button);
   color: var(--paper);
   background: transparent;
-  font: 600 var(--text-body)/1.2 var(--body);
-  letter-spacing: 0;
+  font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
   text-align: center;
   cursor: pointer;
   user-select: none;
 }
 
 ui-button[kind="primary"] {
-  min-height: var(--target-primary);
-  padding: 0 var(--space-5);
+  padding: 0 var(--inset-button-primary);
   border-color: transparent;
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
-  font-weight: 700;
+  font-weight: var(--weight-strong);
 }
 
 ui-button[kind="quiet"],
@@ -37,16 +61,17 @@ a.docs-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--target-secondary);
-  padding: 0 var(--space-3);
+  padding: 0 var(--inset-button);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-button);
   color: var(--nominal-quiet);
   background: transparent;
-  font: 600 var(--text-label)/1.2 var(--body);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
   text-decoration: none;
   cursor: pointer;
 }
+
+a.docs-link { min-height: var(--target-secondary); }
 
 ui-button[kind="quiet"]:hover,
 a.docs-link:hover {
@@ -55,31 +80,36 @@ a.docs-link:hover {
 }
 
 ui-button[kind="irreversible"] {
-  min-height: var(--target-irreversible);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--inset-button-irreversible);
   border-color: transparent;
   color: var(--button-irreversible-ink);
   background: var(--button-irreversible-bg);
-  font: 700 var(--text-value)/1.2 var(--body);
+  font: var(--weight-strong) var(--text-value)/var(--leading-control) var(--body);
 }
 
 ui-button[kind="segment"] {
-  min-height: var(--target-secondary);
   border: 0;
   border-radius: 0;
   color: var(--nominal-quiet);
   background: transparent;
-  font: 600 var(--text-label)/1 var(--mono);
-  letter-spacing: 0.06em;
+  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
+  letter-spacing: var(--track-state);
 }
 
 ui-button[kind="segment"][aria-pressed="true"],
-ui-button[kind="segment"].active,
+ui-button[kind="segment"][aria-selected="true"],
+ui-button[kind="segment"].active {
+  color: var(--paper);
+  background: var(--ground-card-2);
+  border-color: transparent;
+  font-weight: var(--weight-strong);
+}
+
 ui-button[kind="quiet"].arming {
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
   border-color: transparent;
-  font-weight: 700;
+  font-weight: var(--weight-strong);
 }
 
 ui-button[kind="toggle"].active,
@@ -87,8 +117,12 @@ ui-button[kind="toggle"][data-active="true"] {
   color: var(--button-primary-ink);
   background: var(--series-primary);
   border-color: transparent;
-  font-weight: 700;
+  font-weight: var(--weight-strong);
 }
+
+ui-button[data-size="secondary"] { min-height: var(--target-secondary); }
+ui-button[data-size="primary"] { min-height: var(--target-primary); }
+ui-button[data-size="irreversible"] { min-height: var(--target-irreversible); }
 
 ui-button[kind="toggle"] small,
 ui-button[kind="irreversible"] small {
@@ -99,7 +133,7 @@ ui-button[kind="irreversible"] small {
    UA 기본값(smaller)은 16px 맥락에서 13.33px을 만들고, 14px 맥락에서는
    11.67px을 만든다. 둘 다 닫힌 여섯 단계 밖이다. */
 ui-button small {
-  font: 500 var(--text-micro)/1.3 var(--body);
+  font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body);
 }
 
 ui-button[kind="toggle"].active small,
@@ -108,32 +142,36 @@ ui-button[kind="toggle"][data-active="true"] small {
 }
 
 ui-button[data-kind-missing] {
-  outline: 2px solid var(--status-crit);
+  outline: var(--contract-mark-width) solid var(--status-crit);
+}
+
+ui-button[data-size-missing] {
+  outline: var(--contract-mark-width) solid var(--status-crit);
 }
 
 ui-button[disabled] {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }
 
 ui-button:focus-visible,
 ui-field:focus-visible,
 ui-field input:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 ui-button[kind="irreversible"] span {
   display: block;
-  font: 700 var(--text-value)/1.2 var(--mono);
-  letter-spacing: 0.04em;
+  font: var(--weight-strong) var(--text-value)/var(--leading-control) var(--mono);
+  letter-spacing: var(--track-wide);
 }
 
 ui-button[kind="irreversible"] small {
   display: block;
-  margin-top: var(--space-1);
+  margin-top: var(--gap-button-detail);
   color: var(--paper);
-  font: 500 var(--text-label)/1.3 var(--body);
+  font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
 ui-field,
@@ -145,12 +183,12 @@ textarea.ui-field {
   box-sizing: border-box;
   min-height: var(--target-secondary);
   margin: 0;
-  padding: 0 var(--space-3);
+  padding: 0 var(--inset-field);
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
   color: var(--paper);
   background: var(--field-bg);
-  font: 500 var(--text-body)/1.2 var(--mono);
+  font: var(--weight-medium) var(--text-body)/var(--leading-control) var(--mono);
 }
 
 ui-field { width: 100%; }
@@ -176,13 +214,13 @@ ui-tag {
   display: inline-flex;
   align-items: center;
   min-height: var(--space-6);
-  padding: 0 var(--space-2);
+  padding: var(--inset-tag);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-flag);
   color: var(--nominal-quiet);
   background: transparent;
-  font: 600 var(--text-label)/1 var(--mono);
-  letter-spacing: 0.06em;
+  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
+  letter-spacing: var(--track-state);
   white-space: nowrap;
 }
 
@@ -198,44 +236,118 @@ ui-tag[status="crit"] {
 }
 
 ui-text {
-  font: 500 var(--text-body)/1.4 var(--body);
+  font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
   color: var(--paper);
 }
 
 ui-text[scale="unit"] {
-  font: 500 var(--text-micro)/1.2 var(--mono);
+  font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono);
   letter-spacing: var(--track-label);
   color: var(--nominal-quiet);
 }
 
 ui-text[scale="label"] {
-  font: 600 var(--text-label)/1.2 var(--body);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
   letter-spacing: var(--track-label);
   text-transform: uppercase;
   color: var(--nominal-quiet);
 }
 
 ui-text[scale="value"] {
-  font: 650 var(--text-value)/1.1 var(--mono);
+  font: var(--weight-emphasis) var(--text-value)/var(--leading-dense) var(--mono);
   font-variant-numeric: tabular-nums;
   color: var(--paper);
 }
 
 ui-text[scale="title"] {
-  font: 700 var(--text-title)/1.2 var(--body);
+  font: var(--weight-strong) var(--text-title)/var(--leading-control) var(--body);
   color: var(--paper);
 }
 
 ui-text[scale="display"] {
-  font: 650 var(--text-display)/1 var(--mono);
+  font: var(--weight-emphasis) var(--text-display)/var(--leading-flat) var(--mono);
   font-variant-numeric: tabular-nums;
   color: var(--paper);
+}
+
+ui-status {
+  display: block;
+  min-width: 0;
+  color: var(--nominal-quiet);
+  font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
+  overflow-wrap: anywhere;
+}
+
+:root {
+  scrollbar-color: var(--ground-card-2) var(--ground);
+  scrollbar-width: thin;
+}
+
+ui-status[hidden] { display: none; }
+
+ui-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--gap-actions);
+}
+
+/* Native form elements keep submission and label behavior; the shared classes
+   provide only field grouping and responsive placement. */
+.ui-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--gap-form);
+}
+
+.ui-field-label {
+  display: grid;
+  gap: var(--gap-field-label);
+  min-width: min(100%, 10rem);
+}
+
+.ui-form input,
+.ui-form select,
+.ui-form textarea,
+.ui-actions input { max-width: 100%; }
+
+.ui-readout {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) 2fr;
+  gap: var(--gap-readout);
+}
+
+.ui-readout dt { color: var(--nominal-quiet); }
+.ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.ui-readback { min-width: 0; display: grid; gap: var(--gap-readback); }
+.ui-readback > h3,
+.ui-readback > h4 { margin: 0; }
+
+@media (max-width: 30rem) {
+  .ui-form { align-items: stretch; flex-direction: column; }
+  .ui-form > * { width: 100%; }
+  .ui-readout { grid-template-columns: minmax(0, 1fr); gap: var(--gap-readout-mobile); }
+  .ui-readout dd { margin-bottom: var(--offset-readout-mobile); overflow-wrap: anywhere; }
+}
+
+ui-status[state="warning"],
+ui-status[state="error"],
+ui-status[state="unavailable"],
+ui-status[state="forbidden"] {
+  color: var(--status-warn);
+}
+
+ui-status[data-state-missing] {
+  outline: var(--contract-mark-width) solid var(--status-crit);
+  outline-offset: var(--contract-mark-offset);
 }
 
 ui-head {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--gap-heading);
   width: 100%;
   min-width: 0;
 }
@@ -258,32 +370,32 @@ ui-grid[columns="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 ui-grid > * {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--gap-grid-cell);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--inset-grid-cell);
   background: var(--surface-flat);
 }
 
 ui-chip {
   display: inline-flex;
   align-items: center;
-  padding: var(--space-1) var(--space-3);
+  padding: var(--inset-chip);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
   color: var(--paper);
   background: var(--scrim);
-  font: 600 var(--text-label)/1.2 var(--mono);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--mono);
   letter-spacing: var(--track-label);
 }
 
 ui-triage {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--gap-triage);
   width: 100%;
   margin: 0;
   color: var(--paper);
-  font: 650 var(--text-body)/1.2 var(--body);
+  font: var(--weight-emphasis) var(--text-body)/var(--leading-control) var(--body);
 }
 
 ui-triage::before {
@@ -301,14 +413,14 @@ ui-triage[status="crit"]::before { background: var(--status-crit); }
 ui-triage small {
   margin-left: auto;
   color: var(--nominal-quiet);
-  font: 500 var(--text-label)/1.3 var(--body);
+  font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
 ui-evidence {
   display: inline-flex;
   align-items: center;
   color: var(--paper);
-  font: 500 var(--text-label)/1.3 var(--body);
+  font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
 ui-evidence[state="fresh"] { color: var(--nominal-quiet); }
@@ -317,14 +429,14 @@ ui-evidence[state="delayed"],
 ui-evidence[state="disconnected"] { color: var(--nominal-quiet); }
 
 ui-evidence[state="unavailable"] {
-  padding: var(--space-1) var(--space-3);
+  padding: var(--inset-evidence-unavailable);
   border: 1px dashed var(--surface-line);
   border-radius: var(--radius-control);
   color: var(--nominal-quiet);
 }
 
 ui-evidence[data-state-missing] {
-  outline: 2px solid var(--status-crit);
+  outline: var(--contract-mark-width) solid var(--status-crit);
 }
 
 /* 화면 틀. 다음 페이지는 template.html 을 복사해서 이 안에 내용을 넣는다. */
@@ -341,25 +453,25 @@ ui-shell {
 }
 
 ui-shell[data-grammar-missing] {
-  outline: 2px solid var(--status-crit);
+  outline: var(--contract-mark-width) solid var(--status-crit);
 }
 
 ui-topbar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--gap-topbar);
   position: sticky;
   z-index: 10;
   top: 0;
   min-height: var(--topbar-height);
-  padding: 0 var(--space-4);
+  padding: var(--inset-topbar);
   border-bottom: 1px solid var(--surface-line);
   background: var(--ground-deep);
 }
 
 ui-shell[grammar="focal"] ui-topbar {
   align-items: flex-end;
-  padding: var(--space-4) var(--space-5) var(--space-2);
+  padding: var(--inset-topbar-focal);
 }
 
 ui-topbar [data-spacer],
@@ -375,31 +487,32 @@ ui-brand {
 ui-brand a {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--gap-brand);
   color: inherit;
   text-decoration: none;
 }
 
 ui-brand b {
-  font: 700 var(--text-title)/1.1 var(--body);
-  letter-spacing: 0.04em;
+  color: var(--brand-rose);
+  font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body);
+  letter-spacing: var(--track-wide);
 }
 
 ui-brand small {
   color: var(--nominal-quiet);
-  font: 500 var(--text-micro)/1.2 var(--mono);
+  font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono);
   letter-spacing: var(--track-label);
 }
 
 ui-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--gap-section);
   min-width: 0;
 }
 
 ui-empty {
   margin: 0;
   color: var(--nominal-quiet);
-  font: 500 var(--text-label)/1.5 var(--body);
+  font: var(--weight-medium) var(--text-label)/var(--leading-copy) var(--body);
 }

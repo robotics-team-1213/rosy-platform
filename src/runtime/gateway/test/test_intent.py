@@ -38,6 +38,19 @@ def test_ros_payloads_are_not_a_sentence():
     assert caught.value.code == "FORBIDDEN"
 
 
+@pytest.mark.parametrize("value", [True, float("nan"), float("inf")])
+def test_navigation_intent_rejects_boolean_and_non_finite_coordinates(value):
+    with pytest.raises(IntentError) as caught:
+        interpret({"do": "navigate", "x": value, "y": 2.0})
+    assert caught.value.code == "INVALID_NUMBER"
+
+
+def test_navigation_intent_rejects_client_supplied_scheduler_fields():
+    with pytest.raises(IntentError) as caught:
+        interpret({"do": "navigate", "x": 1.0, "y": 2.0, "priority_class": 0})
+    assert caught.value.code == "UNKNOWN_FIELD"
+
+
 def test_unknown_verb_and_missing_fields_fail():
     with pytest.raises(IntentError) as unknown:
         interpret({"do": "fly"})
@@ -62,3 +75,20 @@ def test_every_public_verb_has_a_path():
     for name in verbs():
         call = interpret({"do": name, **extras.get(name, {})})[0]
         assert call.path.startswith("/api/")
+
+
+@pytest.mark.parametrize(("document", "code"), [
+    ({"do": "move", "linear": "quick", "angular": 0.0}, "INVALID_NUMBER"),
+    ({"do": "move", "linear": True, "angular": 0.0}, "INVALID_NUMBER"),
+    ({"do": "move", "linear": 10 ** 1000, "angular": 0.0}, "INVALID_NUMBER"),
+    ({"do": "follow", "target_robot_id": True}, "INVALID_FIELD_TYPE"),
+    ({"do": "follow", "robot": None, "target_robot_id": "rosy_02"}, "INVALID_FIELD_TYPE"),
+    ({"do": "follow", "target_robot_id": "rosy_02", "stream_timeout_ms": 12.5},
+     "INVALID_FIELD_TYPE"),
+    ({"do": "formation_start", "leader": "rosy_01", "members": "rosy_02"},
+     "INVALID_FIELD_TYPE"),
+])
+def test_intent_rejects_values_that_disagree_with_the_public_schema(document, code):
+    with pytest.raises(IntentError) as caught:
+        interpret(document)
+    assert caught.value.code == code

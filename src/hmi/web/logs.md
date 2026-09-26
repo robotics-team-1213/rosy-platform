@@ -89,3 +89,75 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(hmi): ROSY 장미 브랜드 토큰과 동적 버튼 kind (D-277)
+
+- 변경: `--brand-rose`와 `--brand-rose-wash`를 토큰화하고 워드마크·선택 역할 메뉴에 한정했다. 브라우저 테마색을 중립 바탕과 맞추고, JS 헬퍼가 만든 버튼도 의미에 맞는 `kind`를 명시하게 했다.
+- 증거: `src/hmi/web/test src/hmi/dashboard/test` 64 passed, `src/runtime/gateway/test/test_dashboard.py` 27 passed. 실제 CORE `/console`를 visible Playwright로 1440px·390px에서 확인: ROSY 워드마크와 현재 메뉴의 장미 토큰, 누락 kind 0, 가로 넘침 0, 페이지 오류 0. `rosy_harness.py lint`: 0 error, 21 pre-existing last-verified warnings.
+- gate 변화: SOURCE GO, LOCAL GO; ROS-SIM~FIELD N/A (이 변경 범위에 장치 수용은 없음).
+- 결정: D-277
+- 교훈: 브랜드 강조와 안전 의미색은 별도 토큰 집합이어야 한다.
+
+
+
+## 2026-09-26 · uncommitted · feat(hmi): shared button sizes, action groups, and status UI (D-284)
+
+- 변경: map button kinds to the 44/48/58px size tokens; add responsive `ui-actions` and accessible `ui-status`; use existing neutral palette tokens for selected segments and scrollbars.
+- 증거: shared-control and palette gates plus browser component contract passed; focused dashboard/shared/API/map/host/browser suite: 241 passed, 2 skipped.
+- gate 변화: unchanged. No ROS-SIM/device/field acceptance claimed.
+- Decision: D-284.
+- Rule: surfaces compose shared controls and do not repaint them; ROSY rose stays brand identity.
+
+## 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
+
+- 변경: re-run shared UI, API, role browser, and device browser coverage after rebasing on current main.
+- 증거: 241 passed, 3 skipped; `rosy_harness.py lint` reported 0 errors and 21 unrelated last-verified evidence warnings.
+- gate 변화: unchanged. No ROS-SIM, ARM64 image, device, or field acceptance claimed.
+- Decision: D-279 and D-284 remain the role recovery and shared component contracts.
+
+## 2026-09-26 · uncommitted · feat(hmi): share role form layout and field labels (D-285)
+- 변경: Added `.ui-form` and `.ui-field-label` to shared `components.css`, migrated repeated role-panel form and label classes, and kept all controls as native HTML. Added a form-layout contract and desktop/mobile browser coverage.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 73 passed (2026-09-26 Windows).
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
+- 결정: D-285.
+
+## 2026-09-26 · uncommitted · feat(hmi): share semantic role readout layout (D-286)
+- 변경: Added `.ui-readout` to shared styles, migrated read-only fact lists across console/setup/host panels, and removed the dashboard-local duplicate layout.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 75 passed (2026-09-26 Windows).
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
+- 결정: D-286.
+
+## 2026-09-26 · uncommitted · feat(hmi): share role readback sections (D-287)
+- 변경: Added `.ui-readback` for read-only section grouping and migrated host, setup, and system panels. Kept labels, values, headings, and actions panel-owned.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 77 passed (2026-09-26 Windows).
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
+- 결정: D-287.
+
+## 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption
+
+- 변경: Migrate remaining role-panel live announcements to `ui-status`; route selected action-tab paint through the shared segment palette and remove the shell override.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` — 85 passed; action-group browser tests — 5 passed.
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field acceptance is claimed.
+- 결정: D-284 governs the shared status contract; D-283 governs action-group tabs.
+
+## 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
+- 변경: 컴포넌트 의미 간격 역할을 닫힌 집합으로 추가하고 공용 컨트롤·셸에 적용했다. 새 계약 시험은 모든 역할 별칭의 기본 간격 참조, 공용 사용, 반복 원시 간격 금지를 확인한다.
+- 증거: `src/hmi/web/test/test_ui_token_contracts.py`, `test_shared_controls.py`, `src/hmi/dashboard/test/test_camera_capture.py`; HMI 전체 `ROSY_RUN_BROWSER_TESTS=1` — 97 passed (2026-09-26 Windows).
+- gate 변화: SOURCE/LOCAL remain GO. Visible CORE Chromium reviewed operator console/setup and administrator console/setup/device at desktop and mobile widths; zero page errors or missing button kinds. Captures are under `X:\DevTemp\rosy-design-system-review`. No robot or field acceptance is claimed.
+- 결정: D-292.
+
+## 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
+- 변경: 공용 글자 굵기·줄 높이·자간·포커스 링·컴포넌트 진단선·비활성 농도를 토큰화하고, 스타일가이드에 실제 공용 부품 예시를 추가했다. 렌더링 값은 이전과 같고 1px 실선 규칙은 유지한다.
+- 증거: 토큰 계약 38 passed; HMI 전체 browser-enabled 100 passed; CORE route/manifest 29 passed. 실제 CORE API + visible Chromium으로 스타일가이드와 operator/admin console·setup·device를 확인했다. 화면 오류 0, 버튼 kind 누락 0, 모바일 가로 넘침 0; 포커스 링 파랑과 비활성 opacity 0.45를 확인했다. 캡처는 `X:\DevTemp\rosy-design-system-polish`.
+- gate 변화: SOURCE/LOCAL remain GO. ROS-SIM·ARTIFACT·DEVICE·FIELD 증거는 이 UI 변경으로 주장하지 않는다.
+- 결정: D-294.
+
+## 2026-09-27 · 6ce05ff1 · test(hmi): verify D-294 after latest-main integration
+- 변경: D-294 검증 결과를 기록했다.
+- 증거: browser-enabled HMI suite 100 passed; dashboard route/manifest suite 29 passed. Visible CORE Chromium reviewed styleguide plus operator/admin pages at desktop/mobile; page errors 0, missing button kinds 0, horizontal overflow 0.
+- gate 변화: SOURCE/LOCAL remain GO. Pi/image/device/field acceptance is not claimed.
+
+## 2026-09-27 · uncommitted · shared keyboard skip style
+- Change: added shared visually hidden heading and skip-link styles with a z-index token.
+- Evidence: focused browser skip-link regressions passed; UI token and architecture checks passed (29 tests).
+- Gate: SOURCE/LOCAL only; device display is unverified.
