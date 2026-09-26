@@ -12,11 +12,12 @@ Scope: Windows host + Docker Desktop Linux engine, synthetic unreachable CORE en
 - `docker compose -f deploy/site/compose.yaml config --quiet`: passed with the
   required config/secrets directory variables set to temporary paths.
 - `docker compose -f deploy/site/compose.yaml build fleet`: passed. Image ID:
-  `sha256:15c904da62dbf5518f2b16d954ad50602409c71b9d9d6aa74cba0d483d7bced9`.
+  `sha256:1f322bd307ca611085a1ba75927294654912046b2a14dbcdd803be6f18987d67`.
 - Ran that image as a local container bound only to `127.0.0.1`, using a named
   Docker volume for `/var/lib/rosy`. Submitted a navigation intent through the
   HTTP API, read it as `QUEUED`, stopped and restarted the container with the
-  same volume, and read the same task ID and `QUEUED` history afterward.
+  same volume, and read task `14b965d7-6021-4664-8bf3-7f2948293947` and its
+  `QUEUED` history afterward.
 - Removed the smoke container and named volume after readback. The locally built
   image remains available as `rosy-site-fleet:local`.
 
