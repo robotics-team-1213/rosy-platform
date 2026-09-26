@@ -2484,3 +2484,9 @@
 - 변경: 공통 브라우저 컴포넌트의 반복 패딩·간격을 기본 `--space-*`에서 의미가 드러나는 컴포넌트 역할 토큰으로 옮겼다. 카메라 패널도 버튼 종류·상태·색상·액션 간격을 공통 계약에 맞췄다.
 - 근거: D-292와 공용 토큰/컨트롤 계약. `src/hmi/web/test/test_ui_token_contracts.py`, `test_shared_controls.py`, `src/hmi/dashboard/test/test_camera_capture.py` 및 HMI 전체 테스트.
 - gate 변화: 97 passed, 브라우저 옵트인 포함. 실제 CORE TestClient API를 연결한 visible Chromium에서 operator `/console`·`/setup`, administrator `/console`·`/setup`·`/device`를 1366×768 및 390×844로 확인했다. 0 page errors, missing button kinds, positive horizontal overflow. 캡처는 `X:\DevTemp\rosy-design-system-review`. ROS-SIM/ARTIFACT/DEVICE/FIELD 변경 없음.
+
+## 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
+
+- 변경: 두 인스턴스 ROS-SIM 검증 기록에 vendor 비시뮬레이션 launch의 leader topic remap 제거와 개발 이미지 readback을 추가했다.
+- 근거: 기존 dual-input 시뮬레이션의 action false-success, 잠긴 ROBOTIS launch의 직접 remap, 새 이미지의 설치된 launch를 대조했다.
+- gate 변화: 없음. 단일 writer 런타임과 실제 정지·복구가 없어 ROS-SIM 전체 및 DEVICE/FIELD는 HOLD다.

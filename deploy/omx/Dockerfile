@@ -56,6 +56,14 @@ RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-sim-action
     && cp /opt/omx_ws/src/open_manipulator/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py \
       /opt/omx_ws/install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
 
+# The vendor native follower launch has the same direct leader topic path.
+# Remove that bypass in the development image; this does not admit field control.
+COPY patches/omx-ai-native-action-only.patch /tmp/omx-ai-native-action-only.patch
+RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-native-action-only.patch \
+    && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-ai-native-action-only.patch \
+    && cp /opt/omx_ws/src/open_manipulator/open_manipulator_bringup/launch/omx_f_follower_ai.launch.py \
+      /opt/omx_ws/install/share/open_manipulator_bringup/launch/omx_f_follower_ai.launch.py
+
 # D-117: workstation ROS graphs use the same RMW implementation as Rosy OS.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

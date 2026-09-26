@@ -1342,3 +1342,9 @@
 - 변경: 사이트 서버, 운영자 브라우저, Pinky, OMX, 향후 GPU 호스트의 실행 책임과 LAN 바인딩·TLS·권한·작업 readback 점검 순서를 배포 설명에 추가했다.
 - 근거: `compose.yaml`의 기본 `127.0.0.1:8443`, Caddy의 Fleet 프록시, D-275/D-276/D-290을 대조했다.
 - gate 변화: 없음. SOURCE 문서 정리이며 실제 사이트 네트워크 및 장치 수용은 미실시.
+
+## 2026-09-26 · uncommitted · OMX development image action-only vendor launch
+
+- 변경: 잠긴 vendor 비시뮬레이션 follower launch에서 leader trajectory topic 직접 remap을 제거하고, 개발 이미지에 적용·설치하도록 했다.
+- 증거: 회귀 시험 실패→통과 및 mutation red, Docker Desktop amd64 빌드와 설치된 launch `remappings=[]` readback. 이미지 ID와 한계는 OMX 검증 기록에 남겼다.
+- gate 변화: SOURCE/LOCAL 보강. native systemd 산출물, 실제 OMX 장치와 현장 제어 승인은 여전히 HOLD.

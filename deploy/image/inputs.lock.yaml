@@ -19,7 +19,7 @@ product_artifact:
   compression: xz
   filename_template: rosy-os-pinky-pro-{release_id}-arm64.img.xz
   intermediate_suffix: .img
-  rootfs_expansion_mib: 4096
+  rootfs_expansion_mib: 8192
   raspberry_pi_imager_compatible: true
   contains_partition_table: true
   device_neutral: true

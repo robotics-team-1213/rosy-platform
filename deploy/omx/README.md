@@ -112,6 +112,16 @@ simulation therefore exposes the action path without that leader connection.
 This does not implement a general command owner for native control.
 Patch files are checked out with LF endings so `git apply` works in the Linux
 image even when the build context comes from a Windows checkout.
+
+The development image also removes the same direct leader trajectory remap
+from the vendor's non-simulation `omx_f_follower_ai.launch.py`. This prevents
+that particular topic from bypassing an accepted action goal when the inert
+hardware shell is used for diagnostics. The patch is copied into the installed
+launch after the vendor build. It is not a native systemd runtime or an
+admission boundary: other participants in the ROS graph can still address the
+controller action or trajectory topic. A per-workcell command owner, graph
+isolation, independent stop, and physical readback remain required before
+field actuator control (D-281/D-273).
 Start it on a Linux workstation with a working Docker engine:
 
 ```sh
