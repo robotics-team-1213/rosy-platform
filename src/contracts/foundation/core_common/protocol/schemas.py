@@ -74,6 +74,21 @@ class AckStatus(str, enum.Enum):
     FAILED = "FAILED"
 
 
+class FleetTaskStatus(str, enum.Enum):
+    """Site Fleet task lifecycle; separate from a robot command ACK."""
+
+    REQUESTED = "REQUESTED"
+    QUEUED = "QUEUED"
+    ACCEPTED = "ACCEPTED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+    HOLD = "HOLD"
+    CANCELED = "CANCELED"
+    EXPIRED = "EXPIRED"
+
+
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
 
 class EnvelopeType(str, enum.Enum):

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from core_common.protocol.schemas import FleetTaskStatus
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -21,7 +22,7 @@ def test_console_goal_creates_authenticated_persistent_operator_task(tmp_path):
                            json={"x": 1.0, "y": 2.0, "yaw": 0.0}, headers=headers)
     assert response.status_code == 200, response.text
     task = response.json()["task"]
-    assert task["status"] == "ACCEPTED"
+    assert task["status"] == FleetTaskStatus.ACCEPTED.value
     assert task["source"] == "operator"
     assert task["actor_id"] == "site-console"
 
