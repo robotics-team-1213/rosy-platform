@@ -450,6 +450,12 @@
 - 결정: D-205 Proposed. D-200 최종 리뷰의 core 후속 넷을 이어받는다.
 - 교훈: 없음. 후속: (MED) 라인 추종 `PUT`과 `dock()` 경합, 정지·해제 경합 시 잠금 없는 EMERGENCY, 잠금 없는 `on_battery_level`, `cmd_vel_cycle` 오류 로그 폭주. API 문서의 `LINE_FOLLOW_ACTIVE`·`NO_ODOMETRY` "(v1.18)" 표기는 v1.20이 맞다.
 
+## 2026-09-24 · uncommitted · fix(core): inventory 가 런타임 증거(readiness 포함)로 descriptor 를 막는다 (D-32)
+- 변경: `services.py` `inventory()` 가 `runtime_truth(config, state, readiness).reasons` 를 넘긴다. 시험 `test/test_hardware_runtime_truth.py` 신규(무동작 `rosy-io`, 배터리만, 끊김, lease 만료, 시뮬 벤치, SAFE_STOP 순서, 맵 존재). `test_truthful_core_only.py` 하드웨어 모드는 motor adapter·Nav2 보고 뒤에만 광고. `test_api.py` BOOTING 보다 런타임 이유가 먼저.
+- 증거: `python -m pytest src/core/core/test -q` 초록 (2026-09-24 Windows, 위 1553 passed 에 포함).
+- gate 변화: 없음 (DEVICE 재검증 필요).
+- 결정: D-32, D-192.
+- 교훈: 없음
 ## 2026-09-25 · uncommitted · refactor(runtime): move core under src/runtime (D-231)
 
 - 변경: src/runtime/core로 이동, 동작 변경 없음 (D-231)
@@ -472,3 +478,4 @@
 - gate 변화: 없음; ROS-SIM/DEVICE/FIELD 범위 밖.
 - 결정: D-257 Proposed; schema-only pass는 카메라/vision worker 동작 증명이 아니다.
 - 교훈: 없음
+

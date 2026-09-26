@@ -31,5 +31,5 @@
 - 2026-09-26 · uncommitted · feat(core_common): D-257 SiteSightingPayload
 - 2026-09-26 · uncommitted · feat(core_common): D-260 robot state rule table
 - 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
+- 2026-09-24 · uncommitted · fix(core_common): 하드웨어 존재·구동 준비를 살아 있는 증거로 판정 (D-32, D-192), 계약 v1.21
 - 2026-09-24 · uncommitted · fix(core_common): no-ament-env falls back too; path tests hold on a sourced ROS box (D-196 review)
-- 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)

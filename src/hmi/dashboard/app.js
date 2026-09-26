@@ -3,7 +3,14 @@ import { createHostCards } from "./host-cards.js";
 import { createRosNetwork } from "./ros-network.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
-import { CORE_ONLY_REASON, CORE_ONLY_TEXT, triage } from "./triage.js";
+import {
+  CONFIGURED_REASONS,
+  CORE_ONLY_TEXT,
+  DRIVE_DISABLED_TEXT,
+  estopFault,
+  reasonText,
+  triage,
+} from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
 import {
@@ -60,6 +67,9 @@ const fieldMap = createFieldMap({
   apiMaybe,
   getPose: () => session.robotState?.pose,
   getNavigation: () => session.robotState?.navigation,
+  // v1.21: the server says which snapshots exist; asking for a missing one is
+  // a 404 in the console. Absent block (older CORE): ask as before.
+  getMapSources: () => session.capabilities?.runtime?.maps,
   canGoal: () => session.capabilities?.navigation?.goal_navigation === true
     && new HeadlessState(session.robotState).isFresh("pose"),
   setAction: (text) => setText("action-message", text),
@@ -198,6 +208,7 @@ function renderTriage() {
   const { headline, context, seenAt } = triage({
     state: session.robotState,
     inventory: session.inventory,
+    safetySource: session.safetySource,
     seenAt: triageSeen,
   });
   triageSeen = seenAt;
@@ -261,17 +272,25 @@ function renderRobotState(state) {
 
 // The hero and the triage banner read the same server evidence, so they cannot
 // disagree: READY only while the safety channel is fresh. A channel with no
-// source at all (CORE-only, D-161) says why instead of claiming a live circuit.
-function safetyHero(state, runtimeMode, source) {
+// source at all says why instead of claiming a live circuit. Whether hardware
+// runs comes from live evidence (`capabilities.runtime`, v1.21), not from the
+// configured mode string: rosy-io is started by hand under `core` (D-192).
+function safetyHero(state, runtimeMode, source, runtime) {
   if (state?.safety?.estop) {
-    return { tone: "danger", label: "STOPPED", source: source || "비상정지 활성" };
+    return { tone: "danger", label: "STOPPED", source: estopFault(source).title };
   }
   const judged = evidenceOf(state, "safety");
   if (judged === "fresh") return { tone: "safe", label: "READY", source: "주행 회로 정상" };
   if (judged === "unavailable") {
-    return runtimeMode === "core"
-      ? { tone: "unverified", label: "HW OFF", source: CORE_ONLY_TEXT }
-      : { tone: "unverified", label: "NO SOURCE", source: "안전 회로 출처 없음" };
+    const hardware = runtime?.hardware ?? (runtimeMode === "core" ? "off" : "on");
+    if (hardware === "off") return { tone: "unverified", label: "HW OFF", source: CORE_ONLY_TEXT };
+    if (hardware === "silent") {
+      return { tone: "unverified", label: "HW SILENT", source: "하드웨어 런타임 신호 끊김" };
+    }
+    if (runtime?.drive === "disabled") {
+      return { tone: "unverified", label: "NO DRIVE", source: DRIVE_DISABLED_TEXT };
+    }
+    return { tone: "unverified", label: "NO SOURCE", source: "안전 회로 출처 없음" };
   }
   return {
     tone: "unverified",
@@ -282,7 +301,9 @@ function safetyHero(state, runtimeMode, source) {
 
 function renderSafetyHero() {
   if (!session.robotState) return;
-  const hero = safetyHero(session.robotState, session.runtimeMode, session.safetySource);
+  const hero = safetyHero(
+    session.robotState, session.runtimeMode, session.safetySource, session.capabilities?.runtime,
+  );
   elements["safety-indicator"].className = `hero-safety ${hero.tone}`;
   setText("safety-label", hero.label);
   setText("safety-source", hero.source);
@@ -295,6 +316,7 @@ function renderSafety(safety) {
   };
   session.safetySource = safety.source || null;
   renderSafetyHero();
+  renderTriage();
   fillSafetyForm(safety);
   updateTeleopControls();
   updateLineFollowButtons();
@@ -349,6 +371,7 @@ const rosNetwork = createRosNetwork({
 
 function renderCapabilities(capabilities) {
   session.capabilities = capabilities;
+  renderSafetyHero();
   const slamOn = capabilities?.slam === true;
   const slamChip = elements["slam-capability"];
   if (slamChip) {
@@ -373,7 +396,7 @@ function renderInventory(inventory) {
     const item = document.createElement("div");
     item.className = "capability-item";
     item.dataset.state = row.state;
-    if (row.reason === CORE_ONLY_REASON) item.dataset.cause = "runtime";
+    if (CONFIGURED_REASONS[row.reason]) item.dataset.cause = "runtime";
     const label = document.createElement("span");
     label.textContent = row.id;
     const state = document.createElement("b");
@@ -381,7 +404,10 @@ function renderInventory(inventory) {
     item.append(label, state);
     if (row.reason) {
       const reason = document.createElement("small");
-      reason.textContent = row.reason === CORE_ONLY_REASON ? CORE_ONLY_TEXT : row.reason;
+      // Every reason, most basic first (v1.21): a robot without a drive stays
+      // without one after the e-stop is released.
+      const reasons = row.reasons?.length ? row.reasons : [row.reason];
+      reason.textContent = reasons.map(reasonText).join(" · ");
       item.append(reason);
     }
     elements["capability-list"].append(item);
@@ -412,9 +438,13 @@ function updateTeleopControls() {
   } else if (session.capabilities && session.capabilities.teleop !== true) {
     // D-247 7: a runtime mode that holds the motors is not a permission problem.
     const byMode = String(session.capabilities.withheld?.reason || "").startsWith("runtime_mode:");
+    // v1.21: otherwise say which reason withholds teleop, in operator words.
+    const withheld = session.capabilities.withheld?.reasons?.teleop;
     setText("teleop-message", byMode && session.motionReason
       ? session.motionReason
-      : "현재 하드웨어 프로필에서 teleop을 사용할 수 없습니다.");
+      : withheld
+        ? `teleop 사용 불가: ${reasonText(withheld)}`
+        : "현재 하드웨어 프로필에서 teleop을 사용할 수 없습니다.");
   } else if (session.robotState?.safety?.estop) {
     setText("teleop-message", "비상정지가 활성화되어 있습니다.");
   } else if (motionEvidenceBlocks(session.robotState)) {
@@ -653,7 +683,6 @@ async function refreshSlowData() {
     [api("/api/v1/host/status-summary"), statusSummary.render],
     [api("/api/v1/docking/docks"), renderDocks],
     [isAdmin() ? api("/api/v1/system/tokens") : Promise.resolve({tokens: []}), renderTokens],
-    [fieldMap.refresh(), () => {}],
   ];
   const [requiredResults, optionalResults] = await Promise.all([
     Promise.allSettled(required.map((item) => item[0])),
@@ -665,6 +694,8 @@ async function refreshSlowData() {
   optionalResults.forEach((result, index) => {
     if (result.status === "fulfilled") optional[index][1](result.value);
   });
+  // After capabilities: its `runtime.maps` says which map snapshots exist.
+  await fieldMap.refresh().catch(() => {});
   const failed = requiredResults.find((result) => result.status === "rejected");
   if (failed) throw failed.reason;
 }

@@ -55,6 +55,12 @@
 - 결정: D-196 Proposed
 - 교훈: 경로 폴백 시험은 ament를 가짜로 고정해야 한다 — 소싱된 상자에서는 진짜 share가 이겨 같은 시험이 붉어진다.
 
+## 2026-09-24 · uncommitted · fix(core_common): 하드웨어 존재·구동 준비를 살아 있는 증거로 판정 (D-32, D-192), 계약 v1.21
+- 변경: `domain/capabilities.py` `hardware_runtime_reason` → `runtime_truth(config, state, readiness)`. 하드웨어 존재는 `runtime.mode` 문자열이 아니라 오도메트리(pose·velocity)·배터리 표본의 나이(15 s)로 `on`/`silent`/`off`, 구동은 readiness 게이트의 `motor_adapter` 보고(`motor/ready`)로 `ready`/`disabled`/`stale`/`unknown`, 내비게이션은 게이트가 required 이거나 bringup 이 보고했을 때만 lifecycle 로 `ready`/`absent`. 플래그별 이유 `runtime_mode:core` > `hardware_silent` > `drive_disabled:no_motion`·`drive_lease_expired`·`drive_absent` > `navigation_absent`. `withhold_hardware_flags` 는 플래그별 이유를 받고 `withheld.reasons` 를 싣는다. descriptor 는 런타임 이유를 `device_state` 보다 먼저 두고 `reasons` 에 둘 다 싣는다. `domain/model.py` `runtime_reasons` 전달, descriptor `reasons`.
+- 증거: `src/core/core/test/test_hardware_runtime_truth.py` 19 passed, `python -m pytest src/core/core/test src/core/core_events/test src/core/core_features/test src/core/web_common/test -q` 1553 passed, 14 skipped (2026-09-24 Windows).
+- gate 변화: 없음 (DEVICE 재검증 필요 — 무동작 `rosy-io` 에서 overlay 로 확인).
+- 결정: D-32, D-192, D-161. API Ref v1.21. 신규 ADR 없음.
+- 교훈: 네이티브 이미지에서 `runtime.mode` 는 unit 을 켜고 끄지 않는다(D-192) — 설정 문자열로 하드웨어 존재를 추론하면 운용자가 손으로 켠 런타임을 못 본다.
 ## 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
 
 - 변경: `src/contracts/core_common`로 이동, 동작 변경 없음 (D-231)
@@ -77,3 +83,4 @@
 - gate 변화: 없음. D-257/D-268 Proposed.
 - 결정: schema는 operator sighting을 위한 것이며 automatic policy input이 아니다.
 - 교훈: source identity는 요청 본문이 아니라 Fleet credential configuration에서 결정한다.
+

@@ -38,4 +38,4 @@
 - 2026-09-25 · uncommitted · feat(line_follow): track only when lane_recovery says FOLLOW
 - 2026-09-25 · uncommitted · feat(core_features): lane_recovery returns FOLLOW or STOP
 - 2026-09-25 · uncommitted · feat(core_features): D-228 decision library under core_features
-- 2026-09-24 · uncommitted · refactor(docking): 주차형 단계를 `docking/parking_phases.py` 전략으로 분리 (D-168 P6)
+- 2026-09-24 · uncommitted · feat(core_features): readiness `component_state`, state `received_age` (D-32)

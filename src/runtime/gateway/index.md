@@ -73,5 +73,5 @@
 - 2026-09-26 · uncommitted · test(core): D-257 site sighting schema coverage
 - 2026-09-26 · uncommitted · feat(core): D-260 HostRuntimeProbe.temperature()
 - 2026-09-25 · uncommitted · refactor(runtime): move core under src/runtime (D-231)
+- 2026-09-24 · uncommitted · fix(core): inventory 가 런타임 증거(readiness 포함)로 descriptor 를 막는다 (D-32)
 - 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
-- 2026-09-24 · uncommitted · docs(adr): D-200 docking owns the DOCKING mode
