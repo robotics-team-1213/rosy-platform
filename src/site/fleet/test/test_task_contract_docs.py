@@ -63,12 +63,12 @@ def test_task_path_does_not_enable_automatic_policy_dispatch_by_default():
 def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    adr = (ROOT / "docs/adr/D-287-site-fleet-intent-api-contracts.md").read_text(
+    adr = (ROOT / "docs/adr/D-288-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
     assert "**Version:** v1.36" in reference
-    assert "## 10.9 Site Fleet intent interpretation and message boundaries (D-287 Accepted)" in reference
-    assert "D-287" in reference
+    assert "## 10.9 Site Fleet intent interpretation and message boundaries (D-288 Accepted)" in reference
+    assert "D-288" in reference
     assert "**Status:** Accepted (2026-09-26)" in adr
     assert "클라이언트가 `priority_class`" in adr
     assert "priority_class" in adr

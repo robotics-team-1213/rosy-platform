@@ -912,7 +912,7 @@ ACK/final-result reconciliation remain separate required work.
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
-## 10.9 Site Fleet intent interpretation and message boundaries (D-287 Accepted)
+## 10.9 Site Fleet intent interpretation and message boundaries (D-288 Accepted)
 
 The site API accepts a domain intent and lets Fleet interpret it. For the current
 navigation request, `GoalRequest` contains only `x`, `y`, and `yaw`; the
@@ -982,7 +982,7 @@ authorizes navigation or picking.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.36 | 2026-09-26 | D-287 Accepted: 외부 API는 typed intent를 받고 Fleet이 identity/priority/dispatch를 해석한다. 미선언 필드·boolean·비유한 목표값을 dispatch 전에 거절한다. Site 전송 경계를 고정하며 유효한 public path/body field와 robot envelope version은 바뀌지 않음. |
+| v1.36 | 2026-09-26 | D-288 Accepted: 외부 API는 typed intent를 받고 Fleet이 identity/priority/dispatch를 해석한다. 미선언 필드·boolean·비유한 목표값을 dispatch 전에 거절한다. Site 전송 경계를 고정하며 유효한 public path/body field와 robot envelope version은 바뀌지 않음. |
 | v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
 | v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |

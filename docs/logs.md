@@ -2443,3 +2443,9 @@
 - 변경: record the vendor action/topic conflict, simulation-only correction, and remaining D-281 command-owner gate in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md and the OMX runtime plan.
 - 증거: pinned ROBOTIS image built locally; two isolated Gazebo graphs, action, cancel, restart, and gripper direction observed. ROS-SIM remains HOLD overall; DEVICE/FIELD were not run.
 - gate 변화: docs governance gates unchanged; OMX ROS-SIM remains HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED.
+
+## 2026-09-26 · uncommitted · docs(site): resolve Fleet ADR number collision and pin OpenAPI schema
+
+- 변경: 최신 main에 이미 존재하는 D-287 역할 패널 readback 결정을 유지하고, 사이트 Fleet intent/API 경계 ADR을 D-288로 번호 조정했다. ADR 로그, API Reference, 진행 계획 및 계약 테스트 참조를 동기화했다.
+- 검증: `/api/fleet/robots/{robot_id}/goal`의 생성 OpenAPI 스키마가 `x`, `y`, `yaw`만 노출하고 추가 필드를 금지하는 테스트를 추가했다. Fleet API 전체 504 passed, 5 skipped; 대시보드 readback 관련 17 passed, 4 skipped.
+- gate 변화: SOURCE/LOCAL 계약 테스트만 확인했다. Ubuntu 배포, 실제 CORE/카메라, GPU 추론 및 DEVICE/FIELD 수용은 진행하지 않았다.
