@@ -168,3 +168,9 @@
 - 증거: 표면 계약 40 passed, browser-enabled HMI 전체 102 passed.
 - gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용은 범위 밖.
 - 결정: D-298.
+
+## 2026-09-27 · f4f15776 · verify D-298 after latest main integration
+- 변경: latest main에 D-298 surface typography/focus token contract를 반영했다.
+- 증거: surface 40 passed, HMI web 77 passed; harness lint 0 errors and 17 existing warnings.
+- Gate: SOURCE/LOCAL remain GO; no device or field acceptance claimed.
+- Decision: D-298.

@@ -30,3 +30,11 @@ Apply the shared typography and keyboard-focus vocabulary consistently to repeat
 - Fleet/games browser suite: 17 passed, 2 known Fleet keyboard/queued interaction failures deselected; both reproduce on latest unmodified `main`.
 - Harness generation and lint: 0 errors, 17 existing warnings.
 - Feature commit: `bb58221b`; latest-main integration commit: `9049bd37`. Concurrent main work accepted D-296 for device-middleware terminology and D-297 for command ACK and Fleet activation, so this surface decision is D-298. Local `main` fast-forward is the final repository integration step.
+
+## Latest-main integration (2026-09-27)
+
+- Integrated latest local main `f4f15776`, including accepted D-296 and proposed D-297; this surface contract is D-298.
+- Verification on the integrated tree: D-298 surface contracts 40 passed; HMI web tests 77 passed; Fleet host tests 526 passed, 5 skipped; games host tests 101 passed; site database/task-queue tests 8 passed; harness lint 0 errors and 17 existing warnings.
+- The broader gateway/runtime host invocations were interrupted with Windows exit code `-1073741510` before a summary. Scoped HMI, Fleet, games, and site tests completed successfully.
+- Browser evidence remains the earlier 17 passed with 2 known Fleet keyboard/queued failures deselected and reproduced on the then-current main. No new browser run or device/field acceptance is claimed for this integration.
+- No remote push was performed.

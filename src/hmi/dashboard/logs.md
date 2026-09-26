@@ -208,3 +208,9 @@
 - 증거: browser-enabled HMI 전체 102 passed; D-298 표면 계약 40 passed.
 - gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용을 주장하지 않음.
 - 결정: D-298.
+
+## 2026-09-27 · f4f15776 · verify dashboard surface tokens after latest main integration
+- 변경: latest main 통합을 확인했다. dashboard 코드는 변경되지 않았다.
+- 증거: HMI web 77 passed; browser-enabled HMI의 이전 검증은 102 passed.
+- Gate: SOURCE/LOCAL remain GO; device and field acceptance are separate.
+- Decision: D-298.

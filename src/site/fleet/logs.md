@@ -318,3 +318,9 @@
 - 증거: Fleet+games host suite 636 passed/5 skipped; Fleet/games browser suite 17 passed/2 baseline tests deselected. 두 deselected keyboard/queued 시나리오는 최신 main에서 재현했다.
 - gate 변화: SOURCE/LOCAL 유지. browser baseline interaction failures는 별도 기존 결함으로 남는다.
 - 결정: D-298.
+
+## 2026-09-27 · f4f15776 · verify Fleet after latest main integration
+- 변경: latest main의 Fleet 변경을 통합하고 관련 host test를 실행했다.
+- 증거: Fleet 526 passed/5 skipped; site database/task-queue 8 passed.
+- Gate: SOURCE/LOCAL remain GO; no robot or field acceptance claimed.
+- Decision: D-298.

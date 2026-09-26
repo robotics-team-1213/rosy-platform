@@ -201,3 +201,9 @@
 - 증거: Fleet+games host suite 636 passed/5 skipped; games browser 시나리오를 포함한 Fleet/games browser run은 17 passed, 2 known-main cases deselected.
 - gate 변화: SOURCE/LOCAL 유지. 경기장/실물 로봇 수용은 아님.
 - 결정: D-298.
+
+## 2026-09-27 · f4f15776 · verify games after latest main integration
+- 변경: latest main 통합 상태에서 games host test를 실행했다.
+- 증거: games 101 passed.
+- Gate: SOURCE/LOCAL remain GO; no device or field acceptance claimed.
+- Decision: D-298.
