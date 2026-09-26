@@ -43,6 +43,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import junction_harness  # noqa: E402
 import junction_score  # noqa: E402
 
+# --------------------------------------------------------------------------
+# `control` import: the sourced install first, the worktree's source second
+# (mirrors live_view_model._control_sensing)
+# --------------------------------------------------------------------------
+
+_WORKTREE_CONTROL = Path(__file__).resolve().parents[3] / "runtime" / "sensing"
+
+
+def _lane_coverage():
+    """lane_coverage from the sourced install; when it is not sourced (a
+    host pytest run) or lacks the module, the worktree's own
+    src/runtime/sensing is used so the plan stage imports without ROS 2."""
+    try:
+        from control.sensing.perception import lane_coverage
+        return lane_coverage
+    except ImportError:
+        pass
+    for name in [n for n in sys.modules if n == "control" or n.startswith("control.")]:
+        del sys.modules[name]
+    sys.path.insert(0, str(_WORKTREE_CONTROL))
+    from control.sensing.perception import lane_coverage
+    return lane_coverage
+
+
 #: CORE line_follow cruise (LineFollowConfig); the tour budget is the tour
 #: length at BUDGET_SPEED_FRACTION of it. Offline the hybrid drove the
 #: 16.874 m tour in 339 s of simulated time (0.62 of cruise).
@@ -65,7 +89,9 @@ END_TOLERANCE_M = 0.005
 def tour_plan(graph, start_xy=None):
     """(keys, start pose, length m) of lane_coverage's tour from `start_xy`
     (default: the parking spur's junction point, graph["parking"])."""
-    from control.sensing.perception.lane_coverage import coverage_route, tour_length, tour_start_pose
+    lane_coverage = _lane_coverage()
+    coverage_route, tour_length, tour_start_pose = (
+        lane_coverage.coverage_route, lane_coverage.tour_length, lane_coverage.tour_start_pose)
 
     start_xy = tuple(graph["parking"]["points"][0]) if start_xy is None else tuple(start_xy)
     keys = coverage_route(graph, start_xy)

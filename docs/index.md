@@ -141,8 +141,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(verification): 낡은 배치 잔재 3건 수리 — deployment·domain 단계 붉음 해소
 - 2026-09-26 · uncommitted · feat(fleet): add source-scoped site sighting contract
 - 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity
 - 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25
 - 2026-09-26 · uncommitted · feat(fleet): separate agent pairing and mount hub into console
-- 2026-09-26 · uncommitted · docs(architecture): D-269 device-server contract map and integration plan
