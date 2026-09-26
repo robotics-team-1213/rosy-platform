@@ -21,7 +21,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-23, D-77, D-243, D-283, D-292, D-294, D-297]
+adrs: [D-23, D-77, D-243, D-283, D-292, D-294, D-298]
 plans:
   - docs/plans/2026-09-26-d283-console-action-groups.md
   - docs/plans/2026-09-26-rosy-tokenized-design-system.md
