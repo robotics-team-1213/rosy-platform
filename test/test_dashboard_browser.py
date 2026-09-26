@@ -651,6 +651,29 @@ def test_live_camera_preview_is_visible_beside_the_map():
     assert frame_call["search"] == "?sequence=7"
 
 
+def test_unavailable_camera_keeps_missing_timestamps_missing():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(
+                playwright,
+                extra_init="window.__rosyVisionOverride = {available: false, stale: false, "
+                "source: null, width: null, height: null, age_ms: null, captured_at: null};",
+            )
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "window.__apiCalls?.some((call) => call.path === '/api/v1/vision/front/status')"
+        )
+        page.wait_for_timeout(100)
+        assert page.locator("#vision-age").inner_text() == "\u2014"
+        assert page.locator("#vision-captured").inner_text() == "\u2014"
+        browser.close()
+
+
 def test_camera_preview_is_cleared_when_reauthentication_fails():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

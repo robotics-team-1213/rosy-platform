@@ -4,6 +4,7 @@
 export function createVisionPreview({
   elements, setText, api, authHeaders, hasToken, isHidden,
 }) {
+  const hasNumber = (value) => typeof value === "number" && Number.isFinite(value);
   let pending = false;
   let visionSequence = null;
   let objectUrl = null;
@@ -26,9 +27,9 @@ export function createVisionPreview({
     setText("vision-source", status.source || "—");
     setText("vision-resolution", status.width && status.height
       ? `${status.width}×${status.height}` : "—");
-    setText("vision-age", Number.isFinite(Number(status.age_ms))
+    setText("vision-age", hasNumber(status.age_ms)
       ? `${Math.round(Number(status.age_ms))} ms` : "—");
-    setText("vision-captured", Number.isFinite(Number(status.captured_at))
+    setText("vision-captured", hasNumber(status.captured_at)
       ? `${Number(status.captured_at).toFixed(3)} s` : "—");
   }
 
@@ -93,8 +94,9 @@ export function createVisionPreview({
       if (gen !== generation || !hasToken()) return;
       setText("vision-source", status.source || "UNKNOWN");
       setText("vision-resolution", `${status.width || 0}×${status.height || 0}`);
-      setText("vision-age", `${Math.round(Number(status.age_ms) || 0)} ms`);
-      setText("vision-captured", Number.isFinite(Number(status.captured_at))
+      setText("vision-age", hasNumber(status.age_ms)
+        ? `${Math.round(status.age_ms)} ms` : "—");
+      setText("vision-captured", hasNumber(status.captured_at)
         ? `${Number(status.captured_at).toFixed(3)} s` : "—");
       elements["vision-frame"].hidden = false;
       elements["vision-empty"].hidden = true;

@@ -27,6 +27,7 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): 실제 CORE 경로 연결과 화면 상태 보정
 - 2026-09-26 · uncommitted · feat(dashboard): D-260 operate-view summary line
 - 2026-09-26 · uncommitted · feat(hmi): add administrator dock catalog and registration
 - 2026-09-26 · uncommitted · feat(hmi): add line-follow and traffic policy panels
