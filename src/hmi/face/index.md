@@ -24,6 +24,8 @@
 ## 시험
 
 - `src/hmi/face/test/test_info_screen.py`
+- `src/hmi/face/test/test_info_screen_boot.py`
+- `src/hmi/face/test/test_wifi_qr.py`
 - `test/test_nav2_hardware_slice.py`
 
 ## 최근 기록

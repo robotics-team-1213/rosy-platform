@@ -958,6 +958,8 @@ def test_each_card_gets_a_stored_random_ap_password_and_a_settings_template(writ
     bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
     ap = bundle["network"]["ap"]
     assert ap["ssid"] == "rosy-pinky-k7m4" and len(ap["password"]) == 14
+    # The readable per-card form shared with deploy/release/network.py.
+    assert re.fullmatch(r"rosy-[a-hj-km-np-z2-9]{4}-[a-hj-km-np-z2-9]{4}", ap["password"])
     store = Path(writer_case["env"]["LOCALAPPDATA"]) / "Rosy/ap/rosy-pinky-k7m4.credential.xml"
     assert store.is_file() and ap["password"] not in store.read_text(encoding="utf-16")  # DPAPI, not plaintext
     receipt_text = writer_case["receipt"].read_text(encoding="utf-8-sig")

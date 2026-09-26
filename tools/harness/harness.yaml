@@ -73,7 +73,7 @@ modules:
     functional: [src/devices/pinky_pro/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
     path: src/hmi/face
-    tests: [src/hmi/face/test/test_info_screen.py, test/test_nav2_hardware_slice.py]
+    tests: [src/hmi/face/test/test_info_screen.py, src/hmi/face/test/test_info_screen_boot.py, src/hmi/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
     functional: [src/hmi/face/test/test_info_screen.py]
   - name: led

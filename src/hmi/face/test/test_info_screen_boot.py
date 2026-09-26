@@ -206,3 +206,66 @@ def test_the_new_rows_stay_inside_the_card_and_do_not_overlap():
     assert _BOOT_LAYOUT["robot_state"][0] + _BOOT_LAYOUT["robot_state"][1] <= _BOOT_LAYOUT["ap_ssid"][0]
     y, size = _BOOT_LAYOUT["login"]
     assert y + size <= DEFAULT_SIZE[1]
+
+
+# --- the AP's Wi-Fi join QR ---------------------------------------------------
+
+from emotion.info_screen import _QR_LIGHT, _QR_TOP, ap_qr  # noqa: E402
+
+AP_NETWORK = {"mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}
+QR_AREA = (160, _QR_TOP, 320, 176)
+
+
+def test_an_open_ap_draws_its_join_qr_beside_the_text():
+    payload = {**READY, "network": AP_NETWORK, "ap_login": LOGIN}
+
+    image = render_boot(payload)
+
+    assert ap_qr(payload) is not None
+    assert _QR_LIGHT in _colors(image, QR_AREA)
+    # The key stays readable as text, full width below the code.
+    assert _rows(payload)["ap_login"] == (f"PW {LOGIN}", _FG)
+    assert _has_ink(image, (0, 196, 320, 218))
+
+
+@pytest.mark.parametrize("payload", [
+    READY,                                                      # station mode
+    {**READY, "ap_login": LOGIN},                               # a stale key, AP closed
+    {**READY, "network": {"mode": "sta", "ssid": "site"}, "ap_login": LOGIN},
+    {**READY, "network": AP_NETWORK},                           # AP open, key unknown
+    {**READY, "network": {"mode": "ap"}, "ap_login": LOGIN},     # AP open, SSID unknown
+])
+def test_no_qr_unless_the_ap_is_open_with_a_known_ssid_and_key(payload):
+    assert ap_qr(payload) is None
+    assert _QR_LIGHT not in _colors(render_boot(payload), QR_AREA)
+
+
+def test_a_payload_too_long_for_the_code_shows_the_text_alone():
+    payload = {**READY, "network": {**AP_NETWORK, "ssid": "s" * 32}, "ap_login": "k" * 63}
+
+    assert ap_qr(payload) is None
+    assert _rows(payload)["ap_login"] == ("PW " + "k" * 63, _FG)
+
+
+def test_the_drawn_code_decodes_to_the_ap_join_string():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    from emotion.wifi_qr import wifi_payload
+
+    payload = {**READY, "network": AP_NETWORK, "ap_login": LOGIN}
+    image = np.array(render_boot(payload).convert("L"))
+    detectors = [cv2.QRCodeDetector()] + (
+        [cv2.QRCodeDetectorAruco()] if hasattr(cv2, "QRCodeDetectorAruco") else [])
+
+    assert {d.detectAndDecode(image)[0] for d in detectors} - {""} == {wifi_payload("rosy-pinky-e4us", LOGIN)}
+
+
+def test_rows_beside_the_code_keep_left_of_it():
+    payload = {**READY, "network": AP_NETWORK, "ap_login": LOGIN,
+               "state_line": "Ready - cannot move: CORE only mode " * 3, "robot_state": "ready"}
+    image = render_boot(payload)
+    left = 320 - 4 - 148
+
+    # Nothing but the code's own black and white right of the gap, beside the code.
+    assert _colors(image, (left, _QR_TOP, 320 - 4, 176)) <= {(0, 0, 0), _QR_LIGHT}
+    assert _colors(image, (left - 6, 100, left, 176)) == {_BG}

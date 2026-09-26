@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageFont
 
+from . import wifi_qr
+
 DEFAULT_SIZE = (320, 240)
 
 # concept 16 L1 / D-82 / D-194 — 색은 토큰과 같은 값이다. 이 모듈은 파일을
@@ -169,6 +171,16 @@ _BOOT_LAYOUT = {
     "ap_login": (196, 20),
     "login": (218, 18),
 }
+#: While the AP is open the card also draws its Wi-Fi join QR (wifi_qr), right-aligned
+#: between the header and the AP rows: black on white with a 2-module quiet zone, at
+#: the largest whole pixels per module that fit _QR_BOX (a version-4 code: 4 px, 148 px,
+#: about 22 mm on the 2.4-inch panel). Rows beside it keep to the left column.
+_QR_BOX = 148
+_QR_QUIET = 2
+_QR_TOP = 28
+_QR_GAP = 6
+_QR_DARK = (0, 0, 0)
+_QR_LIGHT = (255, 255, 255)
 #: D-260: the state line's colour; failed is the alarm fill, like FAILED above.
 _STATE_COLOURS = {"failed": _CRIT, "caution": _WARN, "booting": _MUTED}
 
@@ -244,6 +256,38 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
     return lines
 
 
+def ap_qr(payload: dict) -> list[list[bool]] | None:
+    """The AP's Wi-Fi join matrix, only while the AP is open and its SSID and key are known.
+
+    None otherwise, and for a payload too long for the encoder (the text rows
+    still show it). Holds the key: drawn, never logged.
+    """
+    network = payload.get("network") or {}
+    login, ssid = payload.get("ap_login"), network.get("ssid")
+    if network.get("mode") != "ap" or not login or not ssid:
+        return None
+    try:
+        return wifi_qr.encode(wifi_qr.wifi_payload(str(ssid), str(login)))
+    except ValueError:
+        return None
+
+
+def _draw_qr(draw: ImageDraw.ImageDraw, matrix: list[list[bool]], width: int) -> tuple[int, int]:
+    """Draw ``matrix`` right-aligned below the header; (left x, bottom y) of its box."""
+    modules = len(matrix) + 2 * _QR_QUIET
+    scale = max(1, _QR_BOX // modules)
+    side = modules * scale
+    left = width - 4 - side
+    draw.rectangle((left, _QR_TOP, left + side - 1, _QR_TOP + side - 1), fill=_QR_LIGHT)
+    origin_x, origin_y = left + _QR_QUIET * scale, _QR_TOP + _QR_QUIET * scale
+    for row, line in enumerate(matrix):
+        for column, dark in enumerate(line):
+            if dark:
+                x, y = origin_x + column * scale, origin_y + row * scale
+                draw.rectangle((x, y, x + scale - 1, y + scale - 1), fill=_QR_DARK)
+    return left, _QR_TOP + side
+
+
 def _fit(draw: ImageDraw.ImageDraw, text: str, size: int, width: int):
     """(font, text): the largest font up to ``size`` that fits ``width``.
 
@@ -262,10 +306,12 @@ def _fit(draw: ImageDraw.ImageDraw, text: str, size: int, width: int):
 
 
 def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
-    """Boot card: name, release, stage (failed unit), address, battery, AP."""
+    """Boot card: name, release, stage (failed unit), address, battery, AP (and its QR)."""
     width, _height = size
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
+    matrix = ap_qr(payload)
+    qr_left, qr_bottom = _draw_qr(draw, matrix, width) if matrix else (width, 0)
     for slot, text, color in boot_lines(payload):
         y, font_size = _BOOT_LAYOUT[slot]
         if slot == "release":
@@ -273,6 +319,8 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Im
             draw.text((width - 12, y), text, font=font, fill=color, anchor="ra")
             continue
         limit = width // 2 if slot == "name" else width - 32
+        if slot != "name" and y < qr_bottom:
+            limit = min(limit, qr_left - _QR_GAP - 16)
         font, text = _fit(draw, text, font_size, limit)
         if color == _CRIT:
             # D-202 — 부팅 카드의 위험 문장(FAILED·실패 유닛·코드 소각)도 채움.

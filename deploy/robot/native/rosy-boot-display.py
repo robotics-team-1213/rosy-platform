@@ -11,7 +11,9 @@ Inputs, all read-only:
   (rosy-boot-status, root);
 * /run/rosy-boot/network.json - AP mode, SSID, address (rosy-network, root);
 * /run/rosy-boot/ap-display.txt - the AP SSID and key, root:rosy-display 0640,
-  written by rosy-network only while the AP is up (D-176). Never logged;
+  written by rosy-network only while the AP is up (D-176). Never logged. The
+  card draws them as text and as a Wi-Fi join QR (emotion.wifi_qr), which
+  holds the key too and is likewise only drawn;
 * /run/rosy-boot/login-display.txt - the one-time dashboard login code and its
   role, or BURNED, root:rosy-display 0640, written by rosy-login-code (D-193).
   Shown only at CORE_READY. Never logged;
