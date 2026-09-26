@@ -1,8 +1,11 @@
 import sqlite3
 
 import pytest
-
-from fleet.server.task_store import FleetTaskStore, IdempotencyConflict, InvalidTaskTransition
+from fleet.server.task_store import (
+    FleetTaskStore,
+    IdempotencyConflict,
+    InvalidTaskTransition,
+)
 
 
 def test_task_history_is_append_only_and_survives_reopen(tmp_path):
@@ -48,9 +51,9 @@ def test_readback_reports_server_order_for_queued_tasks_only(tmp_path):
 
 def test_idempotency_key_reuses_same_task_and_rejects_changed_intent(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    args = dict(task_id="task-1", robot_id="rosy_01", task_type="navigate",
-                source="operator", actor_id="site-console", request_key="click-1",
-                request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None)
+    args = {"task_id": "task-1", "robot_id": "rosy_01", "task_type": "navigate",
+                "source": "operator", "actor_id": "site-console", "request_key": "click-1",
+                "request": {"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, "evidence": None}
     first = store.create_task(**args)
 
     duplicate = store.create_task(**{**args, "task_id": "task-2"})
@@ -122,9 +125,9 @@ def test_receipt_cannot_be_promoted_to_unverified_execution_result(
 
 def test_task_store_refuses_credentials_and_oversized_evidence(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    args = dict(task_id="task-safe", robot_id="rosy_01", task_type="navigate",
-                source="operator", actor_id="site-console", request_key="safe-1",
-                request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}})
+    args = {"task_id": "task-safe", "robot_id": "rosy_01", "task_type": "navigate",
+                "source": "operator", "actor_id": "site-console", "request_key": "safe-1",
+                "request": {"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}}
 
     try:
         store.create_task(**args, evidence={"source": ({"access_token": "never-store"},)})

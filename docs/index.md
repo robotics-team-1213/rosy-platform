@@ -170,6 +170,6 @@
 
 - 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
 - 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
-- 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates
-- 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
-- 2026-09-27 · uncommitted · deploy(site): add guarded SQLite backup and restore
+- 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
+- 2026-09-27 · uncommitted · validation(site): integrate current Fleet evidence gate
+- 2026-09-27 · uncommitted · docs(site): require stopped assertion in isolated restore drill
