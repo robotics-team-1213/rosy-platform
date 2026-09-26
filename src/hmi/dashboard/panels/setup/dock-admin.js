@@ -9,7 +9,7 @@ function input(labelText, name, type = "text") {
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "도크 유형 및 위치 관리");
-  const status = el("p", "surface-message", "pose와 도크 목록을 불러오는 중입니다."); status.setAttribute("role", "status");
+  const status = el("ui-status", "", "pose와 도크 목록을 불러오는 중입니다.");
   const form = el("form", "ui-form");
   const idField = input("새 도크 ID", "dock_id"); idField.control.maxLength = 64;
   const typeField = input("도크 유형 이름 (기존 유형은 재사용)", "dock_type"); typeField.control.maxLength = 64;

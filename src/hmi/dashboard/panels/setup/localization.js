@@ -16,8 +16,7 @@ function field(labelText, name, value = "0") {
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "위치 설정 및 맵 준비");
-  const note = el("p", "surface-message", "기능 지원 여부를 확인하는 중입니다.");
-  note.setAttribute("role", "status");
+  const note = el("ui-status", "", "기능 지원 여부를 확인하는 중입니다.");
 
   const poseForm = el("form", "ui-form");
   poseForm.append(el("h3", "", "초기 위치 설정"));
