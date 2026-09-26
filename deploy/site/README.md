@@ -99,9 +99,17 @@ present and the certificate and `/healthz` response validate against the
 separately installed CA. It connects to the Avahi resolved IP with TLS SNI set
 to the expected hostname. Do not use the mDNS advertisement to supply the CA,
 the expected hostname, Fleet pairing credentials, SSH identity, or robot
-number. FleetAgent does not yet read a discovered site URL at boot; pass the
-verified URL through the existing reviewed provisioning path. If a site is
-unreachable or multicast is isolated, use the existing explicit endpoint.
+number. The SD's Fleet endpoint and trust profile populate only the robot's
+expected `.local` hostname and site CA path. The one-time SD
+`pairing_credential` is never a FleetAgent token. Install the separately
+issued site CA at `/etc/rosy/trust/<trust_profile>.crt`, then provision the
+same persistent pairing token as `fleet.pairing_token` in the robot CORE's
+private `/var/lib/rosy/core/.rosy/rosy.yaml` and `fleet_pairing_token` in the
+site's root-owned `robots.yaml`. Apply the token during a controlled CORE
+restart after pairing approval. With the token in place, FleetAgent discovers
+the site and reconnects over WSS automatically; without it, the robot stays
+in registration/pairing wait. If a site is unreachable or multicast is
+isolated, use the existing explicit endpoint.
 
 ## Prepare an Ubuntu host
 

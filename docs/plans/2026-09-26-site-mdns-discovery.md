@@ -52,3 +52,12 @@
 3. Implement a locator that lists candidates and returns an endpoint only after an operator-supplied expected `.local` hostname and site-CA TLS health probe.
 4. Include publisher, locator, and unit in the site delivery candidate. Test packaging and document certificate SAN, operator bootstrap, and the unimplemented enrollment boundary.
 5. Keep other SERION products as a catalog extension: each product needs its own service type and approved identity/API adapter before it joins this discovery profile.
+
+### Task 6: Let paired ROSY robots reconnect to the pinned site
+
+**Files:** `src/runtime/services/core_features/fleet_agent/{agent,discovery}.py`, `deploy/image/{customize-rootfs.sh,first-boot/rosy-first-boot.py}`, `src/runtime/gateway/test/test_fleet_agent_mdns.py`, `test/test_first_boot_provisioning.py`
+
+1. Derive only the expected `.local` site hostname and CA path from the checksum-validated SD personalization bundle into CORE's private overlay. Never copy the one-time `pairing_credential` into `fleet.pairing_token`.
+2. Keep Agent disabled without a separately approved persistent pairing token. With one, browse the expected `_rosy-fleet._tcp` service at startup and every reconnect; refuse absent, duplicate, malformed, or TLS-invalid candidates.
+3. Use the provisioned CA for outbound WSS and keep discovery failures off the CORE startup critical path. Install Avahi command and `.local` resolver dependencies in the native image.
+4. Test parser, trust refusal, bootstrap boundary, URL selection, retry wiring, existing direct URL behavior, and host contract suites. Ubuntu/Pi and real Fleet acceptance remain separate.

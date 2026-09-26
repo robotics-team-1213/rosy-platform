@@ -2405,3 +2405,8 @@
 - 변경: 제품·역할별 DNS-SD 종류, 공개 TXT 필드, 예상 호스트명 및 CA/TLS 검증, 중복/불일치 거부, 페어링 경계를 `docs/reference/site-lan-discovery-profile.md`에 정리했다.
 - 증거: ROSY 로봇 광고와 Ubuntu Fleet 도구 및 사이트 배포 파일로 두 역할을 대조했다. 다른 SERION 제품은 각 저장소의 API·신원 계약 승인 후 적용한다.
 - gate 변화: 문서·로컬 계약 범위만 확인. 실제 Ubuntu 호스트/다중 로봇 LAN 검증 대기.
+## 2026-09-26 · uncommitted · paired robot outbound discovery contract
+
+- 변경: API Ref v1.38과 현장 LAN 발견 규칙에 승인된 Agent 토큰, 예상 `.local` 사이트, 별도 CA, 재접속 시 재검증 경계를 기록했다. 로봇 WSS envelope는 바꾸지 않았다.
+- 증거: first-boot/Agent/Fleet 통합 58 passed; Ubuntu/Pi 현장 실측은 별도.
+- gate 변화: 문서/LOCAL 범위만 확인.

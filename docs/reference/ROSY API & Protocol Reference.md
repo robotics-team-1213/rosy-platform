@@ -537,6 +537,7 @@ Fleet 타임아웃(기본 10초) 내 ack 없으면 `COMMAND_TIMEOUT`.
 ## 7.6 재접속 (로봇 측 의무)
 
 - Exponential backoff: 1s → 2s → 4s → ... 최대 30s
+- `fleet.discovery`를 설정한 로봇은 재접속마다 예상 `.local` 호스트의 `_rosy-fleet._tcp` 광고를 조회하고 별도 설치된 사이트 CA로 TLS health를 확인한다. mDNS 광고만으로 토큰을 발급하거나 연결 대상을 바꾸지 않는다. 승인된 `fleet.pairing_token`이 없으면 Agent를 시작하지 않는다.
 - 재접속 즉시 `hello` → 마지막 전송 `seq` 이후 이벤트 재전송
 - 접속 단절 시 SAF-003 정책 적용
 
@@ -941,6 +942,7 @@ configuration and the existing outbound FleetAgent path.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.38 | 2026-09-26 | Robot FleetAgent location: paired robots may resolve a pinned site over mDNS with CA/TLS verification; no envelope change. |
 | v1.37 | 2026-09-26 | Additive: site-only mDNS scan/readback and `DiscoveryScanPayload`; no robot envelope change. |
 | v1.36 | 2026-09-26 | Additive(D-283): `UiPanelDescriptor.action_group` optional field exposes console operation groups. Only role-, capability-, and inventory-visible panels are included; unsupported action groups are absent. |
 | v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |

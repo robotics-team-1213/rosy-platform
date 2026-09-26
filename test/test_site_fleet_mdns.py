@@ -17,6 +17,15 @@ def _module():
     return module
 
 
+def _robot_module():
+    path = (Path(__file__).resolve().parents[1]
+            / "src/runtime/services/core_features/fleet_agent/discovery.py")
+    spec = importlib.util.spec_from_file_location("rosy_robot_fleet_mdns", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _row(host="fleet-a.local", address="192.168.1.20", port=8443,
          txt='"product=rosy" "role=fleet" "proto=site-v1" "tls=required"'):
     return (f'=;eth0;IPv4;ROSY Fleet;_rosy-fleet._tcp;local;{host};'
@@ -62,6 +71,7 @@ def test_parser_accepts_site_fleet_and_deduplicates_interfaces():
         {"hostname": "fleet-a.local", "address": "192.168.1.20", "port": 8443},
         {"hostname": "fleet-b.local", "address": "192.168.1.21", "port": 8443},
     ]
+    assert _robot_module().parse_avahi(rows) == _module().parse_avahi(rows)
 
 
 def test_selection_requires_explicit_hostname_and_rejects_ambiguity():

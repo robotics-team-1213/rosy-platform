@@ -1312,3 +1312,8 @@
 - 변경: ROSY 로봇 mDNS TXT에 공통 제품·역할·프로토콜 표시를 추가하고, Ubuntu Fleet `_rosy-fleet._tcp` Avahi 광고·검색 도구와 systemd 유닛을 사이트 배포 묶음에 넣었다.
 - 증거: Windows 집중 45 passed/2 skipped, 변경 파일 flake8 통과. Ubuntu Avahi 및 TLS 현장 연결은 아직 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL 범위만 확인, Ubuntu 사이트 ARTIFACT·DEVICE·FIELD 검증 대기.
+## 2026-09-26 · uncommitted · paired robot Fleet mDNS bootstrap
+
+- 변경: native image에 Avahi browse와 `.local` 이름 해석 의존성을 추가하고, 서명된 SD의 Fleet `.local` 예상 호스트와 trust profile에서 CORE 비공개 discovery 설정만 생성한다. 일회성 `pairing_credential`은 Agent 토큰으로 복사하지 않는다.
+- 증거: first-boot와 Agent 통합 집중 58 passed, 변경 파일 flake8 통과. 실제 native image 빌드와 Pi/Ubuntu TLS 연결은 미실행.
+- gate 변화: SOURCE/LOCAL 근거만 추가, ARTIFACT·DEVICE·FIELD 대기.

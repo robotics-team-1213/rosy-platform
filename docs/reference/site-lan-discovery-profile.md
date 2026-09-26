@@ -31,6 +31,6 @@
 4. 연결은 발견한 IP로 시도하되 TLS SNI와 인증서 호스트명 검사는 예상 호스트명으로 한다. 별도로 배포된 사이트 CA가 필요하다. Fleet은 `/healthz`가 `200`과 `{"status":"ok"}`를 반환해야 주소로 채택한다.
 5. 주소 검증 이후에도 등록과 권한 부여는 기존 페어링·토큰 절차를 거친다. 신원 불일치, 다중 후보, TLS 오류, 서비스 종료는 대기/오류 상태로 표시하고 다른 장치로 자동 전환하지 않는다.
 
-로봇 CORE는 현재 HTTP 계약이므로 광고만으로 명령 주소를 바꾸지 않는다. Fleet의 로봇 발견 화면도 등록 전 관찰용이다. 로봇에서 사이트 Fleet을 자동 검색해 FleetAgent를 시작하는 경로는 아직 없다. 이번 도구가 제공하는 검증된 URL은 설치 자료를 만들 때 사용할 후보이며, 현장 호스트와 Pi에서 실제 연결은 별도 검증이 필요하다.
+로봇 CORE는 현재 HTTP 계약이므로 광고만으로 명령 주소를 바꾸지 않는다. Fleet의 로봇 발견 화면도 등록 전 관찰용이다. 로봇 FleetAgent는 승인된 지속 연결 `pairing_token`, 예상 `.local` 호스트명, 별도로 설치된 사이트 CA가 모두 있을 때만 `_rosy-fleet._tcp`를 찾아 outbound WSS로 연결한다. 재접속할 때마다 광고와 TLS health를 다시 확인한다. SD의 `pairing_credential`은 일회성 등록 값이므로 Agent 토큰으로 사용하지 않는다. 현장 호스트와 Pi에서 실제 연결은 별도 검증이 필요하다.
 
 Ubuntu Fleet PC에는 안정적인 호스트명을 지정하고 `<hostname>.local`을 사이트 TLS 인증서 SAN에 넣는다. Compose의 HTTPS 포트를 LAN에서 접근 가능한 주소에 바인딩한다. `rosy-fleet-advertise.service`는 Avahi XML을 설치하며, 서비스 생존 여부는 광고와 별도로 TLS health로 검사한다. 광고만으로 SSH 계정·호스트 키·배포 권한을 찾거나 생성하지 않는다.
