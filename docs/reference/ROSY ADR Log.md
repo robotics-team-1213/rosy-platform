@@ -278,4 +278,5 @@
 | D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 | Accepted |
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 | Accepted |
 | D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 | Accepted |
+| D-278 | 역할별 표면은 작업 흐름으로 구분하고 색은 의미를 지킨다 | Accepted |
 ---

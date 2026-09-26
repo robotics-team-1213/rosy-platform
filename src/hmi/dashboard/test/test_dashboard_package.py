@@ -26,6 +26,20 @@ def test_the_summary_line_builds_no_markup_from_server_text():
     assert '"/api/v1/host/status-summary"' in (ROOT / "app.js").read_text(encoding="utf-8")
 
 
+def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
+    script = (ROOT / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+    shell = (ROOT / "shell" / "shell.css").read_text(encoding="utf-8")
+    assert 'ctx.role === "operator" || ctx.role === "administrator"' in script
+    assert 'button.disabled = !enabled' in script
+    assert 'button.setAttribute("aria-describedby", clickReason.id)' in script
+    assert "위치·주행 목표 설정에는 운용자 권한이 필요합니다." in script
+    assert "canGoal: () => ctx.role !== \"viewer\"" in script
+    assert 'el("div", "surface-actions map-layer-actions")' in script
+    assert ".map-layer-actions ui-button[aria-pressed=\"true\"]" in shell
+    assert "#shell-estop { flex: none; white-space: nowrap; }" in shell
+    assert ".surface-actions.map-layer-actions > ui-button { flex: 1;" in shell
+
+
 def test_every_module_the_shell_imports_is_installed_and_served():
     # A module missing from either list 404s on the robot and the page dies at import.
     import re

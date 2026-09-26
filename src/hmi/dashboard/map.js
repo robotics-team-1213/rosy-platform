@@ -147,6 +147,15 @@ export function createFieldMap(options) {
     if (status) status.textContent = text;
   }
 
+  function syncClickButtons() {
+    const allowed = canGoal?.() === true;
+    clickButtons.forEach((button) => {
+      button.disabled = !allowed;
+      if (allowed) button.setAttribute("aria-pressed", button.dataset.mapClick === clickMode ? "true" : "false");
+      else button.removeAttribute("aria-pressed");
+    });
+  }
+
   function syncEmpty() {
     if (!empty) return;
     empty.hidden = Boolean(state.occupancy);
@@ -235,6 +244,7 @@ export function createFieldMap(options) {
   }
 
   function setPose() {
+    syncClickButtons();
     const nav = getNavigation?.();
     if (nav && nav !== state.lastNav) {
       state.lastNav = nav;
@@ -282,14 +292,13 @@ export function createFieldMap(options) {
 
   clickButtons.forEach((button) => {
     const mode = button.dataset.mapClick;
-    button.setAttribute("aria-pressed", clickMode === mode ? "true" : "false");
     button.addEventListener("click", () => {
+      if (button.disabled || canGoal?.() !== true) return;
       clickMode = mode;
-      clickButtons.forEach((item) => {
-        item.setAttribute("aria-pressed", item.dataset.mapClick === clickMode ? "true" : "false");
-      });
+      syncClickButtons();
     }, {signal: listenerController.signal});
   });
+  syncClickButtons();
 
   if (typeof ResizeObserver === "function" && canvas) {
     resizeObserver = new ResizeObserver(() => {
