@@ -194,7 +194,8 @@ def test_indicator_writes_only_to_a_root_owned_directory_and_never_follows_links
     assert victim.read_text(encoding="utf-8") == "keep me"
     assert not (root / "run/rosy").exists()
     source = (NATIVE / "rosy-boot-status.py").read_text(encoding="utf-8")
-    assert "mkstemp" in source and "run/rosy/" not in source
+    assert "tempfile.mkstemp(dir=path.parent" in source
+    assert 'STATUS_DIR = "run/rosy-boot"' in source
 
 
 def test_unchanged_status_does_not_rewrite_or_reload(tmp_path):

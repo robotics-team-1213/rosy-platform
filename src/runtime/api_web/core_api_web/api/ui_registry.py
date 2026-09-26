@@ -77,7 +77,7 @@ def _role(value: Any, where: str) -> str:
     return value
 
 
-def _asset(value: Any, suffix: str, web_root: Path, where: str) -> str:
+def _asset(value: Any, suffix: str, web_root: Path, panels_root: Path, where: str) -> str:
     if not isinstance(value, str):
         raise RegistryError(f"{where}: asset path must be a string")
     # 백슬래시는 PurePosixPath에서 구분자가 아니라 리터럴 문자지만, Windows에서
@@ -97,7 +97,7 @@ def _asset(value: Any, suffix: str, web_root: Path, where: str) -> str:
     # 심볼릭 링크는 존재·접미사 검사를 통과하고도 panels/ 밖 실제 파일을 가리킬 수
     # 있다 — resolve() 뒤 포함 관계로 다시 확인한다.
     real = (web_root / value).resolve()
-    allowed_root = (web_root / PANEL_ROOT).resolve()
+    allowed_root = panels_root.resolve()
     if allowed_root not in real.parents and real != allowed_root:
         raise RegistryError(f"{where}: {value!r} is outside panels/")
     return value
@@ -126,7 +126,7 @@ def _surface(sid: str, raw: Any) -> Surface:
     return Surface(sid, title, _role(raw.get("min_role"), where), grammar, tuple(slots))
 
 
-def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path) -> Panel:
+def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path, panels_root: Path) -> Panel:
     if not isinstance(raw, dict):
         raise RegistryError("panel entries must be mappings")
     pid = raw.get("id")
@@ -156,7 +156,7 @@ def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path) -> Panel:
     css = raw.get("css", [])
     if not isinstance(css, list):
         raise RegistryError(f"{where}: css must be a list")
-    css_paths = [_asset(item, ".css", web_root, where) for item in css]
+    css_paths = [_asset(item, ".css", web_root, panels_root, where) for item in css]
     if len(css_paths) != len(set(css_paths)):
         raise RegistryError(f"{where}: duplicate css entry")
     return Panel(
@@ -168,13 +168,17 @@ def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path) -> Panel:
         requires=tuple(requires),
         inventory=inventory,
         min_role=_role(raw.get("min_role", surface.min_role), where),
-        module=_asset(raw.get("module"), ".js", web_root, where),
+        module=_asset(raw.get("module"), ".js", web_root, panels_root, where),
         css=tuple(css_paths),
     )
 
 
 def load_registry(path: Path, web_root: Path) -> Registry:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # colcon --symlink-install keeps panels.yaml and each asset linked to the
+    # package source tree. Use the resolved registry's sibling panels directory
+    # as the asset boundary so those links stay inside the same panel tree.
+    panels_root = path.resolve().parent / PANEL_ROOT
     if not isinstance(raw, dict):
         raise RegistryError("panels.yaml: document must be a mapping")
     if raw.get("version") != 1:
@@ -192,7 +196,7 @@ def load_registry(path: Path, web_root: Path) -> Registry:
     seen_ids: set[str] = set()
     seen_orders: set[tuple[str, str, int]] = set()
     for entry in raw_panels:
-        panel = _panel(entry, surfaces, web_root)
+        panel = _panel(entry, surfaces, web_root, panels_root)
         if panel.id in seen_ids:
             raise RegistryError(f"panel {panel.id!r}: duplicate id")
         key = (panel.surface, panel.slot, panel.order)

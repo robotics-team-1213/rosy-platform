@@ -107,6 +107,34 @@ def test_a_symlink_that_escapes_panels_refuses_to_load(tmp_path):
         load_registry(web / "panels.yaml", web)
 
 
+def test_colcon_symlink_install_keeps_assets_within_the_source_panels_root(tmp_path):
+    import os
+
+    source = _web(tmp_path / "source" / "dashboard", ONE + "    css: [panels/a/one.css]\n")
+    installed = tmp_path / "install" / "share" / "dashboard"
+    (installed / "panels" / "a").mkdir(parents=True)
+    try:
+        os.symlink(source / "panels.yaml", installed / "panels.yaml")
+        for name in ("panels/a/one.js", "panels/a/one.css"):
+            os.symlink(source / name, installed / name)
+    except OSError:
+        pytest.skip("symlinks are not permitted in this environment")
+
+    registry = load_registry(installed / "panels.yaml", installed)
+
+    assert registry.assets() == {
+        "panels/a/one.js": "application/javascript",
+        "panels/a/one.css": "text/css",
+    }
+
+    outside = tmp_path / "outside.js"
+    outside.write_text("export function mount() {}\n", encoding="utf-8")
+    (source / "panels/a/one.js").unlink()
+    os.symlink(outside, source / "panels/a/one.js")
+    with pytest.raises(RegistryError, match="outside panels/"):
+        load_registry(installed / "panels.yaml", installed)
+
+
 def test_a_non_string_role_refuses_to_load_without_crashing(tmp_path):
     with pytest.raises(RegistryError, match="unknown role"):
         load_registry(_web(tmp_path, ONE + "    min_role: [operator]\n") / "panels.yaml", tmp_path)
