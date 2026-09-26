@@ -47,6 +47,8 @@ def test_camera_inputs_are_pinned_and_installed_before_image_verification():
     assert installer.index('meson_build libpisp') < installer.index('meson_build libcamera')
     assert installer.index('meson_build libcamera') < installer.index('meson_build rpicam-apps')
     assert "-Dpipelines=rpi/pisp,rpi/vc4" in installer
+    assert "-Denable_imx500=false" in installer
+    assert "-Ddownload_hailo_models=false" in installer
     assert "--require-hashes" in installer
 
 
