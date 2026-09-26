@@ -2508,3 +2508,9 @@
 - 변경: 역할 배치 설계에 고정 사이트 입구와 Vision 분리 방식, 설치/작업/장치 정본, SQLite 복원과 OMX 호스트 이전 순서를 추가했다.
 - 근거: 현행 Site Compose/Caddy 경로, Fleet 이동 작업·UNKNOWN 처리, D-281/D-290의 단일 소유권 경계를 대조했다.
 - gate 변화: 없음. 원격 Vision worker·OMX API·실물 호스트 이전은 아직 구현/수용되지 않았다.
+
+## 2026-09-26 · uncommitted · Platform 목표와 현재 경계 대조
+
+- 변경: 목표 구조 01/08/09/11/12에 현재 구현·ADR 게이트를 표시하고, Console/Fleet/Fabric/Vision/OMX/AI/Data/합성 장비의 구조 간극과 구현 순서를 기록했다.
+- 근거: D-12/D-55/D-59/D-65/D-71/D-268/D-269/D-290, 현행 Fleet task service, 사이트/OMX Compose와 모듈 진행 기록을 대조했다.
+- gate 변화: 없음. 목표 문서를 현재 API·설치·DEVICE 수용으로 승격하지 않았다.
