@@ -4,6 +4,19 @@
 
 **ROSY Platform** (D-290; 기존 `ROSY OS`는 저장소·문서·배포 이름에 남은 이력 이름)
 
+### 역할 이름 (D-296)
+
+| 이름 | 책임 | 현재 범위 |
+|---|---|---|
+| `ROSY Platform` | 장치 실행·사이트 조정·관측·화면·AI·데이터·배포를 포괄하는 제품 | 전체 제품명; 단일 실행기 이름이 아님 |
+| 장치 미들웨어 | 장치 API와 내부 ROS/드라이버 사이에서 요청 수용, 상태·capability 공개, 안전 중재, 결과·장애 처리를 소유 | Pinky는 CORE가 구현; OMX 로컬 제어기는 장치 수용 전 |
+| `Fleet` | 현장 미션 순서·장치 간 인계·작업 원장을 소유하고 장치 API에 작업을 요청 | 사이트 조정 계층; 장치의 최종 물리 명령을 소유하지 않음 |
+| `ROSY Runtime` | 장기 목표 문서의 노드별 로컬 실행 역할 | 모든 호스트의 공통 프로세스나 필수 설치 패키지를 뜻하지 않음 |
+
+Pinky 주행의 최종 명령은 CORE, OMX 팔의 최종 명령은 장치 수용을 마친 OMX 로컬
+제어기가 소유한다. Pinky에 OMX를 장착해도 이 경계는 유지한다. 공유하는 것은
+먼저 계약이며, 공통 실행 코드는 실제 중복과 검증 필요가 확인될 때만 추출한다.
+
 ## 2. Technical Definition
 
 ROSY Platform is a:
@@ -161,7 +174,7 @@ ROSY Platform shall standardize, orchestrate, and manage them.
 
 ROSY Platform should evolve from:
 
-> device middleware
+> device middleware (장치 로컬 실행·안전 경계)
 
 to:
 

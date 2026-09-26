@@ -2716,3 +2716,16 @@
 - Change: exercised the documented one-off Compose commands from the exact candidate archive, including a live-source online backup, host bind-mount publication, read-only verification, and restore into the separate documented test project.
 - Evidence: backup and read-only integrity checks returned `ok`; separate-volume restore returned `ok` and read back synthetic sighting/task rows. Candidate source `05411e4d59959fa08130074d2d7d1051b8f45d74`, Fleet image `sha256:26ba610d7e9828bccfc59da1b585fbdbe9fb81fc177a558cd95aac3c6c3bb79b`, archive SHA-256 `7ffb83ef5aaed7b647ec25346abed5fd4d2f6c7df38e101e504b2a7b79d999e6`. Exact synthetic Compose projects and volumes were removed.
 - Gate: Windows Docker Desktop LOCAL software recovery is verified. Ubuntu host, production API readback/restore/reboot, GPU, physical devices, and SITE/DEVICE/FIELD acceptance remain open; automatic movement/picking remain HOLD.
+
+## 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
+
+- Change: recorded D-296 and aligned the product definition, runtime target, CORE SRS, glossary, README, and ADR index around `ROSY Platform` / device middleware / site Fleet. Pinky CORE retains final base command authority; a future accepted OMX local controller retains final arm command authority even when mounted on Pinky.
+- Scope: naming and responsibility only. Existing API paths, package names, runtime deployment, and device acceptance are unchanged. D-281/D-282 operational gates remain Proposed.
+- 증거: D-296 본문·ADR 로그·용어집·제품 정의·SRS의 역할 표현을 대조하고 `rosy_harness.py generate`로 색인을 갱신했다.
+- gate 변화: 없음. 명명 정합만 기록했으며 OMX 및 복합 로봇 DEVICE/FIELD 수용은 별도다.
+
+## 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
+
+- 변경: D-177의 `AckPayload.TIMEOUT` 설계 충돌을 D-297 Proposed로 대체하고, API Reference §7.5·§9.5를 D-215와 정합했다. 로봇 ACK 4상태, Fleet 전용 `TIMEOUT`, Site Fleet 작업의 `UNKNOWN`과 결과 검증 조건을 분리했다.
+- 근거: D-170/D-215/D-293, `AckStatus` 4값, 현행 Site Fleet의 receipt/상태 전이를 대조했다.
+- gate 변화: 없음. PRT-004 활성화와 실물 최종 결과 수용은 중앙 Fleet 착수 및 DEVICE/FIELD 검증 대기다.

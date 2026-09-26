@@ -533,11 +533,12 @@ Robot → Fleet (WS):    { "type": "ack", "correlation_id": "...",
                                       "error": "..." } }
 ```
 
-Fleet 타임아웃(기본 10초) 내 ack 없으면 `COMMAND_TIMEOUT`.
+Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMAND_TIMEOUT`을 남긴다.
 
 > **상태 (v1.15, ADR D-170)**: 위 추적 흐름의 **로봇 측 구현**(ack 송신,
-> `correlation_id` 설정·소비, `AckPayload`의 `TIMEOUT`·`issued_by`·
-> `ts_issued/ts_final` 필드)은 중앙 Fleet 서버 착수와 함께 제공된다.
+> `correlation_id` 설정·소비, 로봇 ACK의 실행 상태와 Fleet 추적 레코드)는
+> 중앙 Fleet 서버 착수와 함께 제공된다(D-297). `TIMEOUT`은 Fleet 기록
+> 전용이며 로봇 `AckPayload`에 추가하지 않는다(D-215).
 > 그 전까지 `correlation_id`는 계약 전용 필드이며, 명령 추적은 REST
 > 요청/응답과 이벤트 `seq`로 대체된다. 로봇 스키마 변경은 없다.
 
@@ -729,6 +730,8 @@ profile:
 ```
 
 `TIMEOUT`은 Fleet 측 레코드 전용이며 로봇 ack에는 나타나지 않는다 (D-215).
+타임아웃은 로봇의 정지나 실패 증거가 아니다. 늦은 ACK는 동일
+`correlation_id`로 조정하고, 타임아웃만으로 물리 명령을 재발행하지 않는다(D-297).
 
 ---
 

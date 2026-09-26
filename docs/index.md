@@ -118,6 +118,8 @@
 | D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 | D-294 | Shared typography and interaction tokens use a closed scale |
 | D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 |
+| D-296 | 장치 미들웨어와 사이트 조정 계층의 이름과 책임을 구분한다 |
+| D-297 | 명령 ACK와 Fleet 추적 레코드를 분리한 PRT-004 활성화 설계 |
 
 ## 계획·결과 문서
 
@@ -166,8 +168,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
+- 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
 - 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
 - 2026-09-27 · uncommitted · validation(site): integrate current Fleet evidence gate
 - 2026-09-27 · uncommitted · docs(site): require stopped assertion in isolated restore drill
-- 2026-09-27 · uncommitted · fix(site): make Fleet backups standalone for read-only verification
-- 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates

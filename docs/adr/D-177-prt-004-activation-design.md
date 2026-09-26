@@ -1,6 +1,8 @@
 ## D-177 correlation_id 3단계 추적과 AckPayload 확장은 중앙 Fleet 착수와 같은 변경에서 함께 구현한다 — 활성화 시의 설계를 선기록한다
 
-**Status:** Proposed (2026-09-23). D-170이 정한 편입 조건(FLEET SRS Phase 4 중앙
+**Status:** Superseded by D-297 (2026-09-27). 아래 활성화 절차는 더 이상 적용하지 않고 원래 결정과 근거만 이력으로 보존한다.
+
+D-170이 정한 편입 조건(FLEET SRS Phase 4 중앙
 Fleet 서버 착수)이 아직 없다. 이 ADR은 활성화 시의 설계를 선기록하여, 착수 시 별도
 합의 없이 같은 변경에 담을 수 있게 한다. 조건 충족 시 Status를 `Accepted`로 바꾸고
 착수 커밋을 증거로 남긴다 — 새 번호를 발급하지 않는다.
