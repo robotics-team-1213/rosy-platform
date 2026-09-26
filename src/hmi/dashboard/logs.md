@@ -183,3 +183,16 @@
 - 증거: HMI web + dashboard browser-enabled suites — 97 passed; API route/manifest tests — 27 passed. Visible CORE Chromium reviewed operator /console·/setup and administrator /console·/setup·/device at desktop/mobile sizes; 0 page errors and missing button kinds.
 - gate 변화: SOURCE/LOCAL remain GO. ARM64 image, physical camera, DEVICE, and FIELD acceptance remain outside this UI review.
 - 결정: D-292.
+
+## 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)
+
+- 변경: 스타일가이드에 공용 제목·라벨·값, 키보드 포커스, 비활성 버튼을 추가하고 닫힌 타이포그래피/상호작용 토큰을 연결했다.
+- 증거: browser-enabled dashboard suite 포함 전체 HMI 100 passed; dashboard API route/manifest 29 passed. Visible Chromium에서 스타일가이드와 실제 operator/admin 화면을 desktop/mobile로 확인했다.
+- gate 변화: 없음. ARTIFACT는 설치 이미지 증거가 없어 HOLD이며, 브라우저 검토는 DEVICE/FIELD 수용을 대신하지 않는다.
+- 결정: D-294.
+
+## 2026-09-27 · 6ce05ff1 · test(dashboard): verify D-294 browser and asset contracts
+
+- 변경: D-294 스타일가이드와 화면 수용 결과를 기록했다.
+- 증거: HMI browser-enabled suite 100 passed, dashboard API route/manifest 29 passed. Visible CORE Chromium reviewed styleguide, console/setup/device at desktop and mobile widths; 0 page errors and 0 positive horizontal overflow.
+- gate 변화: SOURCE/LOCAL remain GO. Dashboard ARTIFACT remains HOLD pending image installation evidence.
