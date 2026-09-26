@@ -27,6 +27,27 @@ class _Handler(SimpleHTTPRequestHandler):
         pass
 
 
+def test_role_surface_keyboard_can_skip_to_named_main_content():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"http://127.0.0.1:{server.server_port}/src/hmi/dashboard/surface.html")
+            page.keyboard.press("Tab")
+            assert page.locator(":focus").get_attribute("href") == "#surface-main"
+            page.keyboard.press("Enter")
+            assert page.locator(":focus").get_attribute("id") == "surface-main"
+            assert page.get_by_role("heading", level=1).count() == 1
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def test_auth_return_target_allows_only_registered_local_surfaces():
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     thread = Thread(target=server.serve_forever, daemon=True)

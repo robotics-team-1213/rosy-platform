@@ -18,7 +18,7 @@ import core_common.config as config_module
 ADMIN = {"Authorization": "Bearer rosy-dev-admin"}
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 HARDWARE = {"runtime": {"mode": "hardware", "navigation_backend": "localization"}}
 MOTION_IDS = {
     "mobility.move", "mobility.navigate", "mobility.follow", "mobility.lead",

@@ -12,6 +12,7 @@
   <script type="module" src="/console/assets/console.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#fleet-main">본문으로 건너뛰기</a>
   <ui-shell grammar="exception">
   <ui-topbar>
     <ui-brand><b>ROSY FLEET</b><small id="fleet-name">SITE CONSOLE</small></ui-brand>
@@ -25,7 +26,8 @@
     <ui-button kind="irreversible" id="estop" class="estop" type="button"><span>전체 정지</span><small>등록된 모든 로봇</small></ui-button>
   </ui-topbar>
 
-  <main>
+  <main id="fleet-main" tabindex="-1">
+    <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
         <div>

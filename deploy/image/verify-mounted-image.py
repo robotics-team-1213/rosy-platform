@@ -74,7 +74,7 @@ HW_PROBE_COMMAND = "usr/local/sbin/rosy-hw-probe"
 # D-247 6: the buzzer/lamp test: the service is started only by its path unit.
 HW_TEST_SERVICE = "rosy-hw-test.service"
 HW_TEST_PATH = "rosy-hw-test.path"
-CORE_DEFAULTS = "install/share/core/config/rosy_default.yaml"
+CORE_DEFAULTS = "install/share/core_common/config/rosy_default.yaml"
 
 
 def default_config_tokens(text: str) -> bool | None:

@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · shared keyboard skip style
 - 2026-09-27 · 6ce05ff1 · test(hmi): verify D-294 after latest-main integration
 - 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
 - 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption
-- 2026-09-26 · uncommitted · feat(hmi): share role readback sections (D-287)

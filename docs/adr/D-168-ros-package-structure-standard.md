@@ -103,3 +103,10 @@ ADR은 방향표에 명시 허용으로만 둔다. 모든 라이브러리 패키
 `docs/assessments/module-coupling-report.md`.
 
 ---
+
+### 2026-09-27 implementation record: `core_common → core` exception resolved
+
+- **Decision:** `core_common` owns its default and development-auth YAML alongside its config loader. Its installed lookup uses `share/core_common/config`; the source-tree fallback stays inside `src/contracts/foundation`. `core` launch consumes that installed path. The architecture test no longer allows this reverse edge.
+- **Scope:** Move the two unchanged YAML files, update `core_common` and `core` package data and launch paths, adjust image readback and source-based test fixtures. No policy values or credential content change.
+- **Validation:** Host config/gateway/image regression passed (1,812 passed, 28 skipped); architecture suite passed (51 passed); a built `core_common` wheel contains both YAML files at `share/core_common/config`.
+- **Risk and rollback:** Device image installation and Pi launch are still unverified. If the installed lookup fails there, revert this unit together: package data, loader, launch path, image readback and file move. Reverting only the file move would leave installed CORE without its default config.

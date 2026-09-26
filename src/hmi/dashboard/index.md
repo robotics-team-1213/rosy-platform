@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · name role surfaces
 - 2026-09-27 · 6ce05ff1 · test(dashboard): verify D-294 browser and asset contracts
 - 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): apply D-292 shared component roles
 - 2026-09-26 · uncommitted · test(dashboard): real Chromium camera capture
-- 2026-09-26 · uncommitted · feat(hmi): implement D-283 console action groups

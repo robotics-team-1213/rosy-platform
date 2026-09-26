@@ -196,3 +196,9 @@
 - 변경: D-294 스타일가이드와 화면 수용 결과를 기록했다.
 - 증거: HMI browser-enabled suite 100 passed, dashboard API route/manifest 29 passed. Visible CORE Chromium reviewed styleguide, console/setup/device at desktop and mobile widths; 0 page errors and 0 positive horizontal overflow.
 - gate 변화: SOURCE/LOCAL remain GO. Dashboard ARTIFACT remains HOLD pending image installation evidence.
+
+## 2026-09-27 · uncommitted · name role surfaces
+- Change: role surfaces have a focusable main landmark, skip link, H1 and panel H2 headings.
+- Evidence: role surface keyboard browser regression passed; full UI/Fleet run had 661 passes, 5 skips and one Fleet keyboard focus failure resolved separately.
+- Gate: SOURCE/LOCAL only; robot display acceptance remains unverified.
+- Follow-up: the complete Fleet Chromium suite passed (15 tests); no further role-surface code changed.

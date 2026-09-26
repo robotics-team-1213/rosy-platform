@@ -26,9 +26,9 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
-    config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
-    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
+    config.update(yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     robot_dir = robot_config_dir("pinky_pro")
     profile = RobotProfile.load(robot_dir / "profile.yaml")
     caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
@@ -648,9 +648,9 @@ def docking_client(tmp_path, monkeypatch):
 
     monkeypatch.setattr("core_common.config.LOCAL_CONFIG_PATH", tmp_path / "rosy.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
-    config = yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_default.yaml").read_text(encoding="utf-8"))
     # D-193 7: the dev tokens left the defaults; tests opt in like ROSY_DEV_AUTH=1.
-    config.update(yaml.safe_load((Path(__file__).parent.parent / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
+    config.update(yaml.safe_load((Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" / "rosy_dev_auth.yaml").read_text(encoding="utf-8")))
     robot_dir = robot_config_dir("pinky_pro")
     profile = RobotProfile.load(robot_dir / "profile.yaml")
     caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))

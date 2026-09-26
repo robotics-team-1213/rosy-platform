@@ -30,7 +30,7 @@ def _core_client(tmp_path):
     from core.services import CoreServices
 
     root = Path(__file__).resolve().parents[4]
-    config_dir = root / "src" / "runtime" / "gateway" / "config"
+    config_dir = root / "src" / "contracts" / "foundation" / "config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))['auth']}

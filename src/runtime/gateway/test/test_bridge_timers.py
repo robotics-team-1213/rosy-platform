@@ -44,7 +44,7 @@ from typing import Any
 import pytest
 import yaml
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 
 #: The ROS modules `ros_bridge` imports. Each is replaced by a module whose every
 #: attribute is a distinct dummy class — enough for `create_publisher(Twist, ...)`

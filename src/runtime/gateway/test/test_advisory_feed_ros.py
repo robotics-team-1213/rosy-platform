@@ -14,7 +14,7 @@ import pytest
 
 pytest.importorskip("rclpy")
 
-CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
+CONFIG_DIR = Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config"
 
 
 def _build_services(tmp_path):

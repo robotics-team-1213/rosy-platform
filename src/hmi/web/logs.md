@@ -156,3 +156,8 @@
 - 변경: D-294 검증 결과를 기록했다.
 - 증거: browser-enabled HMI suite 100 passed; dashboard route/manifest suite 29 passed. Visible CORE Chromium reviewed styleguide plus operator/admin pages at desktop/mobile; page errors 0, missing button kinds 0, horizontal overflow 0.
 - gate 변화: SOURCE/LOCAL remain GO. Pi/image/device/field acceptance is not claimed.
+
+## 2026-09-27 · uncommitted · shared keyboard skip style
+- Change: added shared visually hidden heading and skip-link styles with a z-index token.
+- Evidence: focused browser skip-link regressions passed; UI token and architecture checks passed (29 tests).
+- Gate: SOURCE/LOCAL only; device display is unverified.

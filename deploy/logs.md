@@ -1354,3 +1354,8 @@
 - 변경: 읽기 전용 checkout, 네트워크·장치 허가 없는 컨테이너에서 vendor Gazebo와 단일 소유자 시험을 재현하는 probe를 추가했다. OMX 호스트 이전의 점유 해제·무명령 기동·재승인 순서를 배포 설명에 적었다.
 - 증거: 잠긴 amd64 개발 이미지의 vendor action 시험 통과, 가짜 serial mount 거부(exit 2). 대상 Ubuntu 및 실물 장치 시험은 수행하지 않았다.
 - gate 변화: ROS-SIM 진단 근거만 보강. native 서비스·현장 배치 승인과 DEVICE/FIELD는 HOLD.
+
+## 2026-09-27 · uncommitted · update default-config image readback
+- Change: mounted-image validator now expects the default YAML in core_common share.
+- Evidence: image customization contract tests passed within the 1,812-test gateway/config/image run; built core_common wheel contains both YAML files.
+- Gate: host contract only; native ARM64 artifact and mounted device image remain unverified.

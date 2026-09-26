@@ -101,7 +101,19 @@ async function call(path, options = {}) {
 
 function render() {
   const rosterBox = el("roster");
+  const focused = document.activeElement;
+  const focusedCard = focused?.closest?.("#roster article");
+  const focusedId = focusedCard?.dataset.robotId;
+  const focusedButton = focusedCard && focused !== focusedCard
+    ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
   rosterBox.replaceChildren(...view.robots.map((robot, index) => roster.card(robot, index)));
+  if (focusedId) {
+    const nextCard = [...rosterBox.querySelectorAll("article")]
+      .find((card) => card.dataset.robotId === focusedId);
+    const nextFocused = focusedButton >= 0
+      ? nextCard?.querySelectorAll("ui-button")[focusedButton] : nextCard;
+    nextFocused?.focus({preventScroll: true});
+  }
   signals.render();
   roster.fillQueues();
 

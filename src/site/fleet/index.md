@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · secure roster and signal rendering
 - 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
 - 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
 - 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
 - 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
-- 2026-09-26 · uncommitted · docs(adr): renumber Site Fleet API contract after main advances

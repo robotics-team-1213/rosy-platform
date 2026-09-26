@@ -41,18 +41,14 @@ KNOWN_WITHOUT_OWN_TESTS = {
 #: P3/P4 exceptions as (source package, target package).
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
-    ("core_common", "core"): "config._find_default_config reads the core share (same edge as below)",
     ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
     ("navigation", "core"): "web_nav2/web_slam(+gz_) launch XML starts the core node",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
 KNOWN_CHAIN_BACK_EDGES = {
-    "core_common -> core": "default config file lives in core/config; resolve by moving it to a "
-    "core_common share or by having core pass the path in",
 }
 KNOWN_DIRECTION = {
-    ("core_common", "core"): "default config file lives in the core package share; the lookup stayed when core_common moved to contracts",
     ("control", "imu_bno055"): "runtime/sensing -> devices/common/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
@@ -81,10 +77,6 @@ SIZE_VERDICTS = {
     "runtime/sensing/control/calib_node.py": (
         640,
         f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
-    ),
-    "site/fleet/fleet/server/signals.py": (
-        621,
-        "split: file store, HTTP client and observer are separate roles today (B2); owner fleet, unscheduled",
     ),
     "runtime/sensing/control/safety/node.py": (
         795,
