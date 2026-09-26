@@ -123,6 +123,7 @@
 | D-298 | Fleet 미션·장치 액션·정지 증거의 용어를 분리한다 |
 | D-299 | OMX LeRobot 실험 경로와 운영 팔 제어권을 분리한다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
+| D-301 | Site Fleet 후보 묶음은 오프라인 Ed25519 서명으로 발행자를 인증한다 |
 
 ## 계획·결과 문서
 
@@ -161,6 +162,7 @@
 - [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
 - [2026-09-27-omx-lerobot-control-boundary-implementation-plan.md](plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md)
 - [2026-09-27-rosy-platform-role-and-contract-implementation-plan.md](plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)
+- [2026-09-27-site-candidate-signing.md](plans/2026-09-27-site-candidate-signing.md)
 
 ## 교훈 (docs/solutions)
 
@@ -173,8 +175,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · deploy(site): authenticate candidate manifests offline
 - 2026-09-27 · uncommitted · validation(ui): review role and Fleet layout repairs
 - 2026-09-27 · uncommitted · plan(platform): decide boundaries from owners and evidence
 - 2026-09-27 · uncommitted · plan(platform): place OMX LeRobot under ROSY Platform roles
 - 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
-- 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner

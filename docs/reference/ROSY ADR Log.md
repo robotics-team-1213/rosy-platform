@@ -302,3 +302,4 @@
 | D-299 | OMX LeRobot 실험 경로와 운영 팔 제어권을 분리한다 | Proposed |
 
 | D-300 | Surface typography and focus feedback use shared tokens | Accepted |
+| D-301 | Site Fleet 후보 묶음은 오프라인 Ed25519 서명으로 발행자를 인증한다 | Accepted |

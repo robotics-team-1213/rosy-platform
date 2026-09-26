@@ -2,7 +2,7 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "uncommitted", date: 2026-09-23 }
+last_verified: { commit: "uncommitted", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
@@ -20,7 +20,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300]
+adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-17-interface-design-implementation-design.md
@@ -50,6 +50,7 @@ plans:
   - docs/plans/2026-09-26-site-host-placement-implementation.md
   - docs/plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md
   - docs/plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md
+  - docs/plans/2026-09-27-site-candidate-signing.md
 ---
 ## 지금 상태
 
@@ -85,3 +86,9 @@ plans:
 - Broker decision: Gate A has no measured independent-worker/backlog requirement. Keep SQLite and defer RabbitMQ.
 - Ubuntu/SITE/TLS, full Compose, real CORE, robot, GPU, DEVICE, and FIELD acceptance remain open. Automatic policy dispatch remains HOLD.
 - Detailed record: `docs/validation/2026-09-26-site-task-scheduler-local.md`.
+
+## Site candidate publisher authentication (2026-09-27)
+
+- D-301 records detached Ed25519 signing of the exact candidate manifest. The Ubuntu verifier and public key must be enrolled independently of the candidate; no production site key is present.
+- Focused candidate/signature tests: 27 passed on Windows. Signature-only verification is required before Docker image load; the post-load verifier checks exact image IDs and platforms.
+- Build/sign/verify against a packaged Docker candidate, approved host key provisioning, Ubuntu host activation, and FIELD acceptance remain HOLD until the artifact and site trust anchor are validated on the target.

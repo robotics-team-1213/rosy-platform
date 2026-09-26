@@ -2777,3 +2777,8 @@
 - 변경: `docs/validation/uiux-surfaces-2026-09-27/README.md`에 겹침·밀도 수정 전후, 배치 결정, D-153 G3 8항의 확인 범위와 미검증 계층을 기록했다.
 - 증거: 실제 CORE/Fleet Chromium 캡처와 G1 브라우저 계약 시험. 일회성 스크린샷은 드라이브 규칙에 따라 X:에만 둔다.
 - gate 변화: 제품 전체 UI/UX HOLD 유지. D-255 B2/B3와 물리 장치 수용은 별도다.
+## 2026-09-27 · uncommitted · deploy(site): authenticate candidate manifests offline
+
+- 변경: D-301은 후보 `release.json`의 정확한 바이트를 사이트 전용 Ed25519 키로 서명하고, Ubuntu는 후보 외부에 설치한 검증기·공개키·키 ID로 Docker 이미지 로드 전에 확인하도록 정했다. Pinky 런타임 릴리스 키 재사용은 금지하며 운영 키 프로비저닝 전까지 현장 활성화는 HOLD다.
+- 근거: 오프라인 서명 CLI, 서명 필수 호스트 검증기, 이미지 로드 전 서명/파일 검사, 로드 후 이미지 ID/플랫폼 검사를 후보 패키지에 포함했다. 검증에 사용한 manifest 바이트를 재사용하고 서명 직전 콘텐츠를 재검사한다. 후보 생성/검증/서명 집중 테스트 27 passed (Windows, 2026-09-27).
+- gate 변화: 소스 계약과 LOCAL 집중 검증만 확인했다. RTX 호스트, Docker 후보 패키지 실증, 운영 키, 카메라/CORE 연결, FIELD 동작은 여전히 미검증이다. 현장 서명 후보 생성, Ubuntu 키 등록, 대상 호스트 배포는 수행하지 않았다.

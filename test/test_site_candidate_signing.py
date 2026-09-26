@@ -1,0 +1,220 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from deploy.site.build_candidate import DEPLOY_FILES, DOC_FILES
+from deploy.site import sign_candidate as signer_module
+from deploy.site.candidate_signing import (
+    CandidateSignatureError,
+    sign_manifest_bytes,
+    verify_manifest_signature,
+)
+from deploy.site.sign_candidate import sign_candidate
+from deploy.site.verify_candidate import verify_candidate
+
+COMMIT = "a" * 40
+TEST_KEY_ID = "rosy-site-test-1"
+SERVICES = ("fleet", "vision", "proxy")
+
+
+def _generate_key(directory: Path, name: str) -> tuple[Path, Path]:
+    private = directory / f"{name}.key"
+    public = directory / f"{name}.pub.pem"
+    subprocess.run(
+        ["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+        check=True, capture_output=True,
+    )
+    return private, public
+
+
+@pytest.fixture(scope="module")
+def site_keys(tmp_path_factory) -> tuple[Path, Path, Path, Path]:
+    directory = tmp_path_factory.mktemp("site-signing-keys")
+    private, public = _generate_key(directory, "site")
+    other_private, other_public = _generate_key(directory, "other")
+    return private, public, other_private, other_public
+
+
+def _make_candidate(root: Path) -> dict[str, str]:
+    deploy = root / "deploy" / "site"
+    deploy.mkdir(parents=True)
+    for name in DEPLOY_FILES:
+        path = deploy / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f"ROSY_SITE_IMAGE_TAG={COMMIT}\n" if name == ".env.example" else f"fixture:{name}\n",
+            encoding="utf-8",
+        )
+    for name in DOC_FILES:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"fixture:{name}\n", encoding="utf-8")
+
+    images = {}
+    image_ids = {}
+    for index, service in enumerate(SERVICES, start=1):
+        image_id = "sha256:" + str(index) * 64
+        image_ids[service] = image_id
+        sbom = root / "sbom" / f"{service}.spdx"
+        sbom.parent.mkdir(parents=True, exist_ok=True)
+        sbom.write_text(f"SPDX {service}\n", encoding="utf-8")
+        import hashlib
+
+        images[service] = {
+            "reference": f"rosy-site-{service}:{COMMIT}",
+            "image_id": image_id,
+            "platform": "linux/amd64",
+            "sbom": f"sbom/{service}.spdx",
+            "sbom_sha256": hashlib.sha256(sbom.read_bytes()).hexdigest(),
+        }
+    archive = root / "images.tar"
+    archive.write_bytes(b"candidate image archive")
+    import hashlib
+    import json
+
+    manifest = {
+        "manifest_version": 1,
+        "source_commit": COMMIT,
+        "image_tag": COMMIT,
+        "platform": "linux/amd64",
+        "images": images,
+        "image_archive": "images.tar",
+        "image_archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        "deployment_file_sha256": {
+            name: hashlib.sha256((deploy / name).read_bytes()).hexdigest()
+            for name in DEPLOY_FILES
+        } | {
+            name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+            for name in DOC_FILES
+        },
+    }
+    (root / "release.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8",
+    )
+    return image_ids
+
+
+def test_detached_signature_round_trips_exact_manifest_bytes(site_keys):
+    private, public, _, _ = site_keys
+    manifest = b'{"source_commit":"abc"}\n'
+
+    envelope = sign_manifest_bytes(
+        manifest, key_id="rosy-site-test-1", private_key=private, public_key=public,
+    )
+
+    verify_manifest_signature(
+        manifest, envelope, trusted_key_id="rosy-site-test-1", public_key=public,
+    )
+
+
+def test_signature_binds_trusted_key_id(site_keys):
+    private, public, _, _ = site_keys
+    manifest = b'{"source_commit":"abc"}\n'
+    envelope = sign_manifest_bytes(
+        manifest, key_id="rosy-site-test-1", private_key=private, public_key=public,
+    )
+
+    with pytest.raises(CandidateSignatureError, match="key ID mismatch"):
+        verify_manifest_signature(
+            manifest, envelope, trusted_key_id="rosy-site-test-2", public_key=public,
+        )
+
+
+def test_signature_rejects_manifest_byte_changes(site_keys):
+    private, public, _, _ = site_keys
+    manifest = b'{"source_commit":"abc"}\n'
+    envelope = sign_manifest_bytes(
+        manifest, key_id="rosy-site-test-1", private_key=private, public_key=public,
+    )
+
+    with pytest.raises(CandidateSignatureError, match="signature verification failed"):
+        verify_manifest_signature(
+            manifest + b" ", envelope,
+            trusted_key_id="rosy-site-test-1", public_key=public,
+        )
+
+
+def test_signer_refuses_a_public_key_that_does_not_match(site_keys):
+    private, _, _, other_public = site_keys
+
+    with pytest.raises(CandidateSignatureError, match="signature verification failed"):
+        sign_manifest_bytes(
+            b"manifest", key_id="rosy-site-test-1",
+            private_key=private, public_key=other_public,
+        )
+
+
+@pytest.mark.parametrize("envelope", [b"", b"not json", b'{"signature_version":1}'])
+def test_verifier_rejects_missing_or_malformed_envelopes(site_keys, envelope):
+    _, public, _, _ = site_keys
+
+    with pytest.raises(CandidateSignatureError):
+        verify_manifest_signature(
+            b"manifest", envelope, trusted_key_id="rosy-site-test-1", public_key=public,
+        )
+
+
+def test_offline_signer_and_host_verifier_round_trip_a_candidate(tmp_path, site_keys):
+    private, public, _, _ = site_keys
+    root = tmp_path / "candidate"
+    root.mkdir()
+    image_ids = _make_candidate(root)
+
+    signed = sign_candidate(
+        root, key_id=TEST_KEY_ID, private_key=private, public_key=public,
+    )
+    assert signed["signing_key_id"] == TEST_KEY_ID
+
+    def runner(args, **kwargs):
+        if "pkeyutl" in args:
+            return subprocess.run(args, **kwargs)
+        reference = args[-1]
+        service = reference.split(":", 1)[0].removeprefix("rosy-site-")
+        return SimpleNamespace(stdout=f"{image_ids[service]}|linux|amd64\n")
+
+    verified = verify_candidate(
+        root, trusted_key_id=TEST_KEY_ID, trusted_public_key=public, runner=runner,
+    )
+    assert verified["source_commit"] == COMMIT
+    assert verified["image_ids"] == image_ids
+
+    with pytest.raises(ValueError, match="signature already exists"):
+        sign_candidate(root, key_id=TEST_KEY_ID, private_key=private, public_key=public)
+
+
+def test_offline_signer_refuses_corrupt_contents_without_creating_signature(tmp_path, site_keys):
+    private, public, _, _ = site_keys
+    root = tmp_path / "candidate"
+    root.mkdir()
+    _make_candidate(root)
+    (root / "images.tar").write_bytes(b"tampered archive")
+
+    with pytest.raises(ValueError, match="image archive hash mismatch"):
+        sign_candidate(root, key_id=TEST_KEY_ID, private_key=private, public_key=public)
+    assert not (root / "release.json.sig").exists()
+
+
+def test_offline_signer_rechecks_contents_after_signature_creation(tmp_path, site_keys, monkeypatch):
+    private, public, _, _ = site_keys
+    root = tmp_path / "candidate"
+    root.mkdir()
+    _make_candidate(root)
+
+    def race_mutation(*args, **kwargs):
+        (root / "deploy/site/compose.yaml").write_text("changed after initial check")
+        return b"signature envelope"
+
+    monkeypatch.setattr(signer_module, "sign_manifest_bytes", race_mutation)
+    with pytest.raises(ValueError, match="compose.yaml"):
+        signer_module.sign_candidate(
+            root, key_id=TEST_KEY_ID, private_key=private, public_key=public,
+        )
+    assert not (root / "release.json.sig").exists()

@@ -22,7 +22,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
-                 "rosy-site-stack.service", "verify_candidate.py",
+                 "rosy-site-stack.service", "candidate_signing.py", "sign_candidate.py",
+                 "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
@@ -87,6 +88,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "site-users.yaml.example", "mdns-bridge.py", "rosy-mdns-bridge.service",
         "rosy-mdns-bridge.timer", "fleet-mdns.py", "rosy-fleet-advertise.service",
         "rosy-site-stack.service", "verify_candidate.py",
+        "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
@@ -133,7 +135,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
-                 "verify_candidate.py",
+                 "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
@@ -158,3 +160,19 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
 def test_candidate_builder_and_host_verifier_share_required_bundle_inventory():
     assert set(DEPLOY_FILES) | {"verify_candidate.py"} == set(REQUIRED_DEPLOYMENT_FILES)
     assert set(DOC_FILES) == set(REQUIRED_DOCUMENT_FILES)
+
+
+def test_host_runbook_verifies_site_signature_before_docker_load():
+    root = Path(__file__).resolve().parents[1]
+    readme = (root / "deploy/site/README.md").read_text(encoding="utf-8")
+    adr = (root / "docs/adr/D-301-site-candidate-signatures.md").read_text(encoding="utf-8")
+    adr_log = (root / "docs/reference/ROSY ADR Log.md").read_text(encoding="utf-8")
+
+    signature_check = readme.index("--signature-only")
+    docker_load = readme.index("docker image load --input images.tar")
+    full_check = readme.index("python3 /usr/local/lib/rosy-site/verify_candidate.py", docker_load)
+    assert signature_check < docker_load < full_check
+    assert "Do not run the verifier copied from the candidate" in readme
+    assert "/etc/rosy/site/trust/site-release-ed25519.pub.pem" in readme
+    assert "separate from the Pinky runtime release key" in adr
+    assert "| D-301 |" in adr_log
