@@ -208,3 +208,6 @@ G.setup(22, G.OUT); p=G.PWM(22, 2000); p.start(10); time.sleep(0.2); p.stop(); G
 - 앞으로 장치 응급 조치는 ADR 기록 없이는 하지 않는다.
 
 **실행 계획:** [`docs/plans/2026-09-24-vendor-parity-boot-display.md`](../plans/2026-09-24-vendor-parity-boot-display.md)
+
+**D-272 개정 (2026-09-26):** AP가 열려 있으면 LCD는 `Wi-Fi <SSID>`·`PW <비밀번호>` 두 줄과 함께 Wi-Fi 접속 QR
+(`WIFI:T:WPA;S:<ssid>;P:<psk>;;`)을 오른쪽에 그린다. QR도 비밀번호와 같이 화면에만 그리고 로그에 남기지 않는다.

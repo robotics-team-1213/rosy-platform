@@ -78,3 +78,6 @@ D-154 결정 6의 "후보를 폐기"를 대체한다. (3) `rosy-first-boot-retry
 `rosy-runtime.target`을 시작한다. `rosy-first-boot.service`에 `Restart=`를 쓰지 않는 이유는, 재시작 대기 중에는 시작
 job이 끝나지 않아 뒤에 정렬된 `rosy-config`·`rosy-network`(fallback AP)가 묶이기 때문이다. 첫 부팅 예산만큼 AP가
 늦게 열릴 수 있다(최악 약 +120 s).
+
+**D-272 개정 (2026-09-26):** 결정 4의 생성 비밀번호는 "12자 이상 랜덤" 대신 로봇마다 다른 `rosy-xxxx-xxxx`
+(헷갈리는 문자를 뺀 소문자·숫자 31자 중 무작위 8자, 약 39.6비트)이다. 위협 판단과 LCD QR은 D-272에 있다.
