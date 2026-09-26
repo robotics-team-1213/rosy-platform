@@ -44,6 +44,10 @@ def test_backup_captures_committed_wal_data_and_is_integrity_checked(tmp_path):
     assert result.integrity == "ok"
     assert result.sha256
     assert verify_database(backup) == "ok"
+    with closing(sqlite3.connect(backup)) as backup_connection:
+        assert backup_connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
+    assert not Path(str(backup) + "-wal").exists()
+    assert not Path(str(backup) + "-shm").exists()
     assert _value(backup) == "committed-in-wal"
     if os.name != "nt":
         assert backup.stat().st_mode & 0o077 == 0

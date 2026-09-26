@@ -52,6 +52,9 @@ def _copy_database(source: Path, destination: Path) -> None:
         with (closing(sqlite3.connect(source, timeout=10.0)) as source_db,
               closing(sqlite3.connect(destination, timeout=10.0)) as destination_db):
             source_db.backup(destination_db, pages=256, sleep=0.05)
+            journal_mode = destination_db.execute("PRAGMA journal_mode=DELETE").fetchone()
+            if journal_mode is None or journal_mode[0].lower() != "delete":
+                raise sqlite3.DatabaseError("backup could not be made self-contained")
     except sqlite3.Error as exc:
         raise DatabaseError("SQLite online backup failed") from exc
 

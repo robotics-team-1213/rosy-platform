@@ -173,5 +173,5 @@
 - 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
 - 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
 - 2026-09-27 · uncommitted · docs(architecture): name device middleware and site Fleet separately
-- 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates
-- 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
+- 2026-09-27 · uncommitted · validation(site): execute packaged Compose backup and restore drill
+- 2026-09-27 · uncommitted · validation(site): integrate current Fleet evidence gate

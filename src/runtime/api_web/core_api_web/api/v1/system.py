@@ -31,7 +31,7 @@ from core_api_web.api.deps import (
 )
 from core_api_web.api.errors import ApiError
 from core_common.config import ConfigError, patch_local_config
-from core_common.domain.capabilities import hardware_runtime_reason, withhold_hardware_flags
+from core_common.domain.capabilities import runtime_truth, withhold_hardware_flags
 from core_common.identity import validate_robot_id, validate_robot_name
 
 
@@ -181,9 +181,20 @@ def relabel_token(token_id: str, body: TokenLabelRequest, auth: AuthContext = De
 
 @system_router.get("/capabilities")
 def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    data = svc.capability.to_dict()
-    reason = hardware_runtime_reason(svc.config, svc.state)
-    return withhold_hardware_flags(data, reason) if reason else data
+    truth = runtime_truth(svc.config, svc.state, svc.readiness)
+    data = withhold_hardware_flags(svc.capability.to_dict(), truth.reasons)
+    # `runtime` (v1.21 additive): what live evidence says runs right now, so a
+    # client does not infer hardware from the configured mode string (D-192:
+    # `rosy-io` is started by hand while `runtime.mode` stays `core`). `maps`
+    # tells it which map snapshots exist before it asks for them.
+    data["runtime"] = {
+        **truth.to_dict(),
+        "maps": {
+            "occupancy": svc.maps.get_map() is not None,
+            "global_costmap": svc.maps.get_costmap("global") is not None,
+        },
+    }
+    return data
 
 
 def _jsonable(value: Any) -> Any:

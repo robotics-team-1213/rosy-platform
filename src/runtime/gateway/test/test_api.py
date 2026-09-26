@@ -196,7 +196,10 @@ def test_inventory_is_booting_before_diagnostics_arrive(client):
     by_id = {item["id"]: item for item in body["descriptors"]}
     assert by_id["mobility.move"]["available"] is False
     assert by_id["mobility.move"]["state"] == "blocked"
-    assert by_id["mobility.move"]["reason"] == "device_state:BOOTING"
+    # No hardware has reported yet (CORE-only fixture): that reason outlives
+    # BOOTING, so it comes first and BOOTING follows (v1.21).
+    assert by_id["mobility.move"]["reason"] == "runtime_mode:core"
+    assert by_id["mobility.move"]["reasons"] == ["runtime_mode:core", "device_state:BOOTING"]
     robot = tc.get("/api/v1/robot/state", headers=VIEWER)
     assert robot.status_code == 200
     assert robot.json()["mode"] == "IDLE"
