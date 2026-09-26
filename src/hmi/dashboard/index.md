@@ -12,6 +12,7 @@
 | D-23 | Rosy OS 화면: FastAPI 내장 대시보드 + 읽기 전용 호스트 텔레메트리 |
 | D-77 | 운용자 콘솔은 CORE `/dashboard` 하나다 |
 | D-243 | 운용 화면은 hmi 에 두고 API 는 런타임에 둔다 |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 
 ## 계획·결과 문서
 
@@ -27,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): D-283 운용 조작 그룹 결정
 - 2026-09-26 · uncommitted · docs(hmi): compare operator console viewport by role
 - 2026-09-26 · uncommitted · feat(hmi): stabilize mobile /console topbar and capture current shell
 - 2026-09-26 · uncommitted · fix(hmi): role-gate map selection and compact mobile controls (D-278)
 - 2026-09-26 · uncommitted · feat(hmi): 실제 CORE 경로 연결과 화면 상태 보정
-- 2026-09-26 · uncommitted · feat(dashboard): D-260 operate-view summary line

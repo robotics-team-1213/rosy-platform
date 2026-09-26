@@ -107,6 +107,7 @@
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 |
 | D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 |
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 
 ## 계획·결과 문서
 
@@ -154,8 +155,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): D-283 console action groups fit the fixed grammar
 - 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
 - 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
 - 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
 - 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
-- 2026-09-26 · uncommitted · docs(design): D-280 기준선의 화면 경로 정정

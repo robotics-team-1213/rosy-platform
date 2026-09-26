@@ -2378,3 +2378,8 @@
 - 변경: Add a proposed ownership boundary for per-robot and per-workcell ROS instances, unique physical-device admission, single actuator command authority, camera data ownership, and API-only inter-instance coordination.
 - 증거: Compare D-33, D-38, D-117, D-152, D-246, D-269, D-273, and proposed D-281; verify the ADR log and implementation sequence reference each independent runtime gate.
 - gate 변화: no runtime or device gate moved; D-282 is Proposed and does not enable actuator or camera capability.
+
+## 2026-09-26 · uncommitted · docs(adr): D-283 console action groups fit the fixed grammar
+- 변경: D-283 Accepted를 추가해 선언 desktop에서 sense/observe/act 3영역, 고정 E-stop, 선택형 운전·도킹·차선 추종 그룹을 정했다.
+- 근거: D-201 및 D-280 기준선과 administrator/operator 실제 CORE 캡처. desktop scroll 823px이며 평면 3열 후보는 act 내용이 y=1017까지 내려가 잘린다.
+- gate 변화: 없음. 구현 전 ADR이며 G1/G2/G3와 ROS/장치 수용은 남아 있다.
