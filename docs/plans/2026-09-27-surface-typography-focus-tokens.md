@@ -1,6 +1,6 @@
 # ROSY surface typography and focus token plan
 
-**Decision:** [D-296](../adr/D-296-surface-typography-and-focus-token-contract.md)
+**Decision:** [D-297](../adr/D-297-surface-typography-and-focus-token-contract.md)
 **Status:** Complete
 
 ## Goal
@@ -29,4 +29,4 @@ Apply the shared typography and keyboard-focus vocabulary consistently to repeat
 - After latest-main integration `9049bd37`: surface/token contracts 40 passed; browser-enabled HMI suite 102 passed; Fleet and games host suite 636 passed, 5 skipped. The updated API reference v1.40 contract passes.
 - Fleet/games browser suite: 17 passed, 2 known Fleet keyboard/queued interaction failures deselected; both reproduce on latest unmodified `main`.
 - Harness generation and lint: 0 errors, 17 existing warnings.
-- Feature commit: `bb58221b`; latest-main integration commit: `9049bd37`. Local `main` fast-forward is the final repository integration step.
+- Feature commit: `bb58221b`; latest-main integration commit: `9049bd37`. Concurrent main work reserved D-296 for the device-middleware terminology ADR, so this decision is D-297. Local `main` fast-forward is the final repository integration step.

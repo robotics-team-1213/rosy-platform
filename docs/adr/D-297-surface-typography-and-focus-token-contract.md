@@ -1,4 +1,4 @@
-## D-296 Surface typography and focus feedback use shared tokens
+## D-297 Surface typography and focus feedback use shared tokens
 
 **Status:** Accepted (2026-09-27). Extends D-292 and D-294 to repeated typography and keyboard-focus rules in the HMI dashboard, Fleet console, and games board. This decision covers browser UI only; it does not change robot, image, device, or field acceptance.
 
