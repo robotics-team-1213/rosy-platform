@@ -69,7 +69,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-21-fleet-signals-integration-design.md` | G-S3 설계: Fleet 콘솔이 ROSY-SIGNAL-001 장치를 gather/scatter — signals.yaml, SignalConsole(재단언·all_red scatter), snapshot/UI 통합 |
 | `2026-09-22-fleet-signals-integration.md` | G-S3 실행 계획: T-S3-1~6. 상시 폴링 루프를 throttled refresh 로 바꾼 변경 기록 |
 | `2026-09-22-signals-acceptance-plan.md` | 신호등 실물 수용 계획 — 증거 등급(E1–E3), 수용 기준 AC-01~26(정량 합격선, AC-24~26은 속도 설계에서 승격), 고장 주입 S-01~12, 벤치 절차 B0–B7, 구조적 약점 W1–W9, 버튼 맵핑 갈래·특성화 시트(방전 조건·cross-talk·분리비 ≥3배 포함) |
-| `2026-09-22-signals-button-contract-v2-proposal.md` | ROSY-SIGNAL-001 v2 제안 — 모드 사이클 버튼용 펄스 프리미티브, 피드백 등급 F0/F1/F2/F-EXT 결정 대기, 페일세이프 재정의 |
+| `2026-09-22-signals-button-contract-v2-proposal.md` | ROSY-SIGNAL-001 v2 제안 — 모드 사이클 버튼용 펄스 프리미티브, 피드백 등급 F1+F2 채택(2026-09-26 결정, F-EXT 별도·F0 기각), 페일세이프 재정의 |
 | `2026-09-22-signal-observer-vision-design.md` | 신호등 관측 평면 설계 — 카메라+OpenCV(고전 분할 v1)/YOLO(선택 v2)를 제어와 분리한 읽기 전용 관측 서비스, 명령↔컨트롤러↔실측 3자 교차 검증 |
 | `2026-09-22-signal-speed-pi-design.md` | 속도 평면 설계 — 라즈베리파이 배치(picamera2 소스), 오도메트리 1차+카메라 검증의 과속 판정, 감속 루프(Fleet 판정·신호 표시), AC-24~26(2026-09-22 수용 계획 §3 으로 승격 완료 — 판정의 기록 위치는 거기), D-166(과속 반응 기록 전용) |
 | `2026-09-22-scene-context-road-design.md` | D-162 장면 상황 프로파일 설계 — 닫힌 context 집합, 오프라인 리비전 프로파일, 제네릭 보수 폴백, 첫 소비자는 도로 인식 파라미터 |
@@ -77,6 +77,12 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-23-core-dev-overlay-design.md` | D-179 설계: 벤치 CORE는 `/var/lib/rosy-dev` 읽기 전용 바인드. `/opt/rosy`·서명 릴리스·GitHub 설치와 분리 |
 | `2026-09-23-core-dev-overlay.md` | D-179 실행: 허용 목록·해시 성공·readback HOLD·네이티브 drop-in·Windows 호출. 두 번째부터는 재시작만, 재부팅은 이미지로 복귀, compose 프로젝트는 `rosy-runtime` |
 | `2026-09-24-folder-layout.md` | D-186 실행: 루트는 `env.sh`만, 벤치·설치 셸은 `tools/`와 `deploy/`, 텔레옵·주행 기록은 `data/` |
+| `2026-09-25-ownership-naming-control-plane.md` | D-227: 여섯 책임은 지금 트리의 이름. 목표 루트·명령 봉투·AI 워커는 열지 않는다 |
+| `2026-09-25-decision-lane-recovery.md` | D-228 실행: 차선 판단은 FOLLOW/STOP id. 속도는 line_follow 에 남긴다 |
+| `2026-09-25-ownership-naming-input-v0.2.md` | 입력 노트. D-227이 채택한 범위만 실행 기준이다 |
+| `2026-09-25-decision-fabric-input-v0.8.md` | 입력 노트. 판단 경계는 D-228·D-229다. `src/runtime` 트리는 폴더가 아니다 |
+| `2026-09-25-folder-map.md` | D-229 이후의 현재 폴더를 읽는 지도 |
+| `2026-09-25-d231-layered-move.md` | D-231 실행 기록. 층 이동은 로컬 main `a3eca209`에 있다. OMX 제품 설정은 D-232 |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 ## Subdirectories
@@ -103,7 +109,7 @@ Filename `YYYY-MM-DD-kebab.md`; design and execute are separate files.
 
 ### Internal
 
-- Code under `src/core/core`, `src/hardware/bringup`, `deploy/`
+- Code under `src/runtime/core`, `src/devices/pinky_pro/bringup`, `deploy/`
 
 ### External
 

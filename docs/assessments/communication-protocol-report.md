@@ -2,7 +2,7 @@
 
 작성일: 2026-09-22 / 대상: `Rosy OS` 작업 트리 (src 6도메인 + deploy + dock + signal)
 범위: **전송·규약 관점** — 물리 버스 → ROS 그래프(QoS) → 프로세스 내/호스트 → 로봇 API → 사이트/함대 → ESP32 장비 계약 → 배포 네트워크. 모듈 import 결합도는 `module-coupling-report.md`(2026-09-21)이 이미 다루므로 제외.
-계약 원천: `docs/reference/ROSY API & Protocol Reference.md`(v1.12), `rosy-host-agent-contract.md`, `dock/README.md`(ROSY-DOCK-001), `signal/README.md`(ROSY-SIGNAL-001), ADR Log(D-1~D-168), CORE/FLEET SRS.
+계약 원천: `docs/reference/ROSY API & Protocol Reference.md`(v1.12), `rosy-host-agent-contract.md`, `firmware/dock/README.md`(ROSY-DOCK-001), `firmware/signal/README.md`(ROSY-SIGNAL-001), ADR Log(D-1~D-168), CORE/FLEET SRS.
 
 ## 1. 통신 계층 지도
 

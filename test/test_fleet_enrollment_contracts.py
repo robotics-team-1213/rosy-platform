@@ -4,9 +4,15 @@ from fleet.hub.hub import SiteHub
 from fleet.swarm.robots import RobotEndpoint
 
 def _ep(robot_id: str = "rosy_01") -> RobotEndpoint:
-    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "pair-01")
+    suffix = robot_id.rsplit("_", 1)[-1]
+    return RobotEndpoint(
+        robot_id, "http://127.0.0.1:8080", f"rest-{suffix}",
+        fleet_pairing_token=f"pair-{suffix}",
+    )
 
-def _hello(robot_id="rosy_01", token="pair-01", uid="uuid-1", name="rosy-pinky-a1b2", serial="sn-1"):
+def _hello(robot_id="rosy_01", token=None, uid="uuid-1", name="rosy-pinky-a1b2", serial="sn-1"):
+    suffix = robot_id.rsplit("_", 1)[-1]
+    token = token or f"pair-{suffix}"
     payload = HelloPayload(
         robot_id=robot_id, 
         pairing_token=token, 
@@ -22,7 +28,7 @@ def test_two_pinky_devices_register_as_two_robots():
     reply1 = hub.handle(_hello(robot_id="rosy_01", token="pair-01", uid="uuid-1", name="rosy-pinky-aaaa", serial="sn-1"))
     assert reply1.type is EnvelopeType.WELCOME
     
-    reply2 = hub.handle(_hello(robot_id="rosy_02", token="pair-01", uid="uuid-2", name="rosy-pinky-bbbb", serial="sn-2"))
+    reply2 = hub.handle(_hello(robot_id="rosy_02", token="pair-02", uid="uuid-2", name="rosy-pinky-bbbb", serial="sn-2"))
     assert reply2.type is EnvelopeType.WELCOME
     
     assert set(hub.registry.online_ids()) == {"rosy_01", "rosy_02"}

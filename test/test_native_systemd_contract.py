@@ -65,7 +65,7 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "SuccessExitStatus" not in unit
     # the other half of the contract lives in core.main: the escalation must not be a
     # signal death, or systemd would count it as a clean stop like any other
-    core_main = (ROOT / "src" / "core" / "core" / "core" / "main.py").read_text(
+    core_main = (ROOT / "src" / "runtime" / "gateway" / "core" / "main.py").read_text(
         encoding="utf-8")
     assert "STUCK_SHUTDOWN_EXIT_CODE = 2" in core_main
     assert "os._exit(STUCK_SHUTDOWN_EXIT_CODE)" in core_main
@@ -75,11 +75,11 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "--merge-install" in payload
     assert '--install-base "$INSTALL_ROOT"' in payload
     assert 'INSTALL_ROOT="$RELEASE_ROOT/install"' in payload
-    setup_cfg = (ROOT / "src" / "core" / "core" / "setup.cfg").read_text(encoding="utf-8")
+    setup_cfg = (ROOT / "src" / "runtime" / "gateway" / "setup.cfg").read_text(encoding="utf-8")
     assert "install_scripts=$base/lib/core" in setup_cfg
     # the script itself is generated from this entry point; a rename would leave a unit
     # pointing at a file nobody builds any more
-    setup_py = (ROOT / "src" / "core" / "core" / "setup.py").read_text(encoding="utf-8")
+    setup_py = (ROOT / "src" / "runtime" / "gateway" / "setup.py").read_text(encoding="utf-8")
     assert "'core=core.main:main'" in setup_py
 
 
@@ -339,6 +339,13 @@ DECLARED_WRITES = {
         "/var/log/rosy-core/core.log", "/run/rosy/host-agent.sock",
         # D-193: CORE's used/burned signal to rosy-login-code (api/v1/auth.py STATE_FILE).
         "/run/rosy/login-code-state.json",
+        # D-247: CORE's refresh request to rosy-hw-probe.path (api/v1/host.py HW_REQUEST_FILE).
+        "/run/rosy/hw-probe.request",
+        # D-247 6: the buzzer/lamp test request to rosy-hw-test.path (HW_TEST_REQUEST_FILE)
+        # and the person's answers (HW_CONFIRM_FILE, beside the other CORE state).
+        "/run/rosy/hw-test.request", "$HOME/.rosy/hw-confirmations.json",
+        # D-260 M1: the boot display's inputs only CORE knows (api/v1/host.py STATUS_INPUTS_FILE).
+        "/run/rosy/status-inputs.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-navigation.service": {
@@ -348,8 +355,11 @@ DECLARED_WRITES = {
     },
     "rosy-boot-display.service": {
         # lgpio (under rpi-lgpio's RPi.GPIO) keeps its notification files in
-        # LG_WD, which the unit points at HOME. The program itself writes nothing.
+        # LG_WD, which the unit points at HOME.
         "$HOME/.lgd-nfy0",
+        # D-260 / D-247 6: the outcome of a test rosy-hw-test handed over
+        # (rosy-boot-display.py TEST_RESULT), in the unit's RuntimeDirectory.
+        "/run/rosy-display/display-test.json",
     },
     "rosy-login-code.service": {
         # rosy-login-code.py CODE_FILE, DISPLAY_FILE, ISSUE_FILE, LOCK_FILE, BOOT_MARK (D-193).
@@ -358,6 +368,18 @@ DECLARED_WRITES = {
         "/run/rosy-boot/.login-boot-issued",
         # `agetty --reload` opens it for writing (ExecStartPre=+ creates it first).
         "/run/agetty.reload",
+    },
+    "rosy-hw-probe.service": {
+        # rosy-hw-probe.py OUTPUT, via a temporary file beside it (D-247).
+        "/run/rosy-boot/hardware.json",
+    },
+    "rosy-hw-test.service": {
+        # rosy-hw-test.py RESULT, via a temporary file beside it (D-247 6).
+        "/run/rosy-boot/hw-test.json",
+        # D-260: the hand-over to the boot display (HANDOFF_REQUEST), root:rosy-display 0640.
+        "/run/rosy-boot/display-test.request",
+        # lgpio's notification files in LG_WD (the unit's own runtime directory).
+        "/run/rosy-hw-test/.lgd-nfy0",
     },
 }
 
@@ -369,6 +391,12 @@ DECLARED_READS = {
         "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
         # D-193: the root issuer's verifier, root:rosy-core 0640. CORE never writes there (D-161).
         "/run/rosy-boot/login-code.json",
+        # D-247: the root probe's result, root:rosy-core 0640 (api/v1/host.py HARDWARE_FILE).
+        "/run/rosy-boot/hardware.json",
+        # D-247 6: the root test's outcome, root:rosy-core 0640 (HW_TEST_RESULT_FILE).
+        "/run/rosy-boot/hw-test.json",
+        # D-260 5: rosy-boot-status's stage for the summary line (BOOT_STATUS_FILE), 0644.
+        "/run/rosy-boot/boot-status.json",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
@@ -381,6 +409,20 @@ DECLARED_READS = {
         "/run/rosy-boot/boot-status.json", "/run/rosy/login-code-state.json",
         "/etc/rosy/defaults.yaml", "/etc/rosy/login-policy.json",
     },
+    # D-247: the boot id, the CSI node status, the kernel log and the buzzer
+    # settings of the boot display. Devices are opened, never written to disk.
+    "rosy-hw-probe.service": {
+        "/proc/sys/kernel/random/boot_id", "/proc/device-tree", "/dev/kmsg",
+        "/etc/rosy/boot-display.env",
+    },
+    # D-247 6: CORE's request (read strictly, never followed), the buzzer pin of
+    # the boot display, the lamp driver's channel and the release's lamp helper.
+    "rosy-hw-test.service": {
+        "/run/rosy/hw-test.request", "/etc/rosy/boot-display.env",
+        "/opt/rosy/current/install/lib/lamp_control/lamp_selftest",
+        # D-260: the boot display's answer to a hand-over (HANDOFF_RESULT).
+        "/run/rosy-display/display-test.json",
+    },
 }
 
 # Program sources scanned for write roots, per unit.
@@ -389,17 +431,32 @@ PROGRAM_SOURCES = {
                                      "deploy/robot/native/recover-release.sh"],
     "rosy-sd-provision.service": [],
     # CORE also imports modules of the control package (sensor adapter, gate).
-    "rosy-core.service": ["src/core", "imported-by:src/core:control:src/apps/control"],
-    "rosy-io.service": ["src/hardware/bringup"],
-    "rosy-navigation.service": ["src/navigation", "src/hardware/bringup"],
+    # control sits under src/core since a93d5188 but runs its nodes as their own
+    # processes, so only the modules CORE imports count (PROGRAM_EXCLUDES).
+    "rosy-core.service": [
+        "src/runtime/gateway",
+        "src/runtime/events",
+        "src/runtime/services",
+        "src/runtime/api_web",
+        "src/contracts/foundation",
+        "imported-by:src/runtime/gateway:control:src/runtime/sensing",
+    ],
+    "rosy-io.service": ["src/devices/pinky_pro/bringup"],
+    "rosy-navigation.service": ["src/runtime/navigation", "src/devices/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
-                                  "src/apps/emotion/emotion/info_screen.py",
-                                  "src/apps/emotion/emotion/rosy_lcd.py",
-                                  "src/hardware/bringup/rosylib"],
+                                  # D-260: the rule table it imports from the release.
+                                  "src/contracts/foundation/core_common/robot_state.py",
+                                  "src/hmi/face/emotion/info_screen.py",
+                                  "src/hmi/face/emotion/rosy_lcd.py",
+                                  "src/devices/pinky_pro/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
                                 "deploy/robot/native/rosy_config.py"],
+    # D-247: the probe is standard library only (dynamixel_sdk is imported lazily).
+    "rosy-hw-probe.service": ["deploy/robot/native/rosy-hw-probe.py"],
+    # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
+    "rosy-hw-test.service": ["deploy/robot/native/rosy-hw-test.py"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
@@ -465,7 +522,12 @@ IMPORT_OF = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", re.MULTILINE)
 def _imported_modules(importer: str, package: str, package_root: str) -> list[Path]:
     """Files of `package` (rooted at package_root) that `importer` sources import."""
     found: set[Path] = set()
+    own = ROOT / package_root
     for source in _source_files(importer):
+        # The package's own imports are not the importer's: control sits inside
+        # src/core since a93d5188, and would otherwise pull in all of itself.
+        if source.is_relative_to(own):
+            continue
         for name in IMPORT_OF.findall(source.read_text(encoding="utf-8", errors="replace")):
             parts = name.split(".")
             if parts[0] != package:
@@ -476,6 +538,12 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
                     if candidate.is_file():
                         found.add(candidate)
     return sorted(found)
+
+
+# Trees inside a directory source that are not part of that unit's program.
+PROGRAM_EXCLUDES = {
+    "rosy-core.service": ("src/runtime/sensing",),
+}
 
 
 def _source_files(relative: str) -> list[Path]:
@@ -496,8 +564,12 @@ def _source_files(relative: str) -> list[Path]:
 def _write_roots(unit: str) -> set[str]:
     """Absolute paths and HOME use the unit's program source names."""
     found: set[str] = set()
+    excluded = [ROOT / item for item in PROGRAM_EXCLUDES.get(unit, ())]
     for relative in PROGRAM_SOURCES[unit]:
         for path in _source_files(relative):
+            if not relative.startswith("imported-by:") and any(
+                    path.is_relative_to(item) for item in excluded):
+                continue
             text = path.read_text(encoding="utf-8", errors="replace")
             found.update(PATH_LITERAL.findall(text))
             for match in SEGMENT_CHAIN.finditer(text):
@@ -668,6 +740,21 @@ def test_every_home_unit_is_covered_by_the_startup_hook_rule():
         assert "bash -lc" not in _read(unit), unit
 
 
+@pytest.mark.parametrize("unit", [
+    "rosy-core.service", "rosy-io.service", "rosy-navigation.service", "rosy-boot-display.service",
+])
+def test_python_units_never_write_bytecode_into_the_release(unit):
+    # D-225: the payload ships checked-hash pycs (valid after pack fixes mtimes);
+    # the runtime must not add or rewrite any under the signed release.
+    assert _environment(_directives(unit)).get("PYTHONDONTWRITEBYTECODE") == "1", unit
+
+
+def test_payload_build_rewrites_pycs_as_checked_hash():
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    compile_at = payload.index("python3 -m compileall -q -f --invalidation-mode checked-hash")
+    assert payload.index("colcon build") < compile_at < payload.index('"$INSTALL_ROOT/.rosy-release"')
+
+
 def test_the_login_code_issuer_is_a_root_sandbox_without_network():
     # D-193 2: root outside CORE, no network, only /run/rosy-boot writable.
     directives = _directives("rosy-login-code.service")
@@ -687,6 +774,69 @@ def test_the_login_code_issuer_is_a_root_sandbox_without_network():
     assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
 
 
+def test_the_hardware_probe_is_a_bounded_root_oneshot_without_network():
+    # D-247 4: root outside CORE, run once after boot and on CORE's request;
+    # only /run/rosy-boot writable, never /run/rosy (CORE's; D-161).
+    directives = _directives("rosy-hw-probe.service")
+    assert not _non_root(directives)
+    for key, value in (("Type", "oneshot"), ("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
+                       ("ProtectSystem", "strict"), ("ProtectHome", "true"), ("NoNewPrivileges", "true"),
+                       ("DevicePolicy", "closed"), ("StartLimitIntervalSec", "0")):
+        assert directives.get(key, [""])[-1] == value, key
+    timeout = int(directives["TimeoutStartSec"][-1])
+    assert 0 < timeout <= 120
+    assert _words(directives, "ReadWritePaths") == ["/run/rosy-boot"]
+    assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
+    assert _environment(directives).get("PYTHONNOUSERSITE") == "1"
+    assert "rosy-core.service" in _words(directives, "After")
+    # A hardware runtime started during a probe waits for it (review 2026-09-25 A1).
+    assert {"rosy-io.service", "rosy-navigation.service"} <= set(_words(directives, "Before"))
+    assert "CAP_SYS_PTRACE" in _words(directives, "CapabilityBoundingSet")
+    assert directives["ExecStart"] == ["/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-probe.py"]
+    assert "Restart" not in directives
+    assert "bash" not in _read("rosy-hw-probe.service")
+
+    path = _read("rosy-hw-probe.path")
+    assert "PathChanged=/run/rosy/hw-probe.request" in path
+    assert "Unit=rosy-hw-probe.service" in path
+    assert "WantedBy=multi-user.target" in path
+    # CORE writes the request file in its own RuntimeDirectory.
+    assert "RuntimeDirectory=rosy" in _read("rosy-core.service")
+
+
+def test_the_hardware_test_is_a_bounded_root_oneshot_only_core_can_start():
+    # D-247 6: root outside CORE, started only by the path unit on CORE's request;
+    # only /run/rosy-boot (and its own runtime directory) writable, never /run/rosy.
+    directives = _directives("rosy-hw-test.service")
+    assert not _non_root(directives)
+    for key, value in (("Type", "oneshot"), ("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
+                       ("ProtectSystem", "strict"), ("ProtectHome", "true"), ("NoNewPrivileges", "true"),
+                       ("DevicePolicy", "closed"), ("StartLimitIntervalSec", "0"),
+                       ("ProtectKernelModules", "true"), ("ProtectKernelLogs", "true")):
+        assert directives.get(key, [""])[-1] == value, key
+    assert 0 < int(directives["TimeoutStartSec"][-1]) <= 60
+    assert _words(directives, "ReadWritePaths") == ["/run/rosy-boot"]
+    assert not any(_under(path, "/run/rosy") for path, _optional in _writable(directives))
+    environment = _environment(directives)
+    assert environment.get("PYTHONNOUSERSITE") == "1"
+    assert environment.get("RPI_LGPIO_CHIP") == "4"
+    assert environment.get("LG_WD") == "/run/rosy-hw-test" == directives["WorkingDirectory"][-1]
+    assert "/run/rosy-hw-test" in _managed(directives)
+    assert _words(directives, "CapabilityBoundingSet") == ["CAP_CHOWN", "CAP_DAC_OVERRIDE"]
+    assert directives["SystemCallFilter"] == ["@system-service"]
+    assert directives["ExecStart"] == ["/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-test.py"]
+    assert "Restart" not in directives
+    text = _read("rosy-hw-test.service")
+    assert "bash" not in text
+    # Never enabled on its own: only the path unit starts it.
+    assert "[Install]" not in text
+
+    path = _read("rosy-hw-test.path")
+    assert "PathChanged=/run/rosy/hw-test.request" in path
+    assert "Unit=rosy-hw-test.service" in path
+    assert "WantedBy=multi-user.target" in path
+
+
 def test_recovery_journal_is_private_to_root():
     directives = _directives("rosy-release-recover.service")
     assert directives.get("StateDirectoryMode") == ["0700"]
@@ -703,8 +853,8 @@ def test_contract_helpers_treat_dynamic_users_as_non_root():
 def test_core_program_scan_follows_imports_into_the_control_package():
     # CORE's production modules import no control module today (only its tests
     # do), so the scan adds nothing now; it picks them up the moment one does.
-    assert PROGRAM_SOURCES["rosy-core.service"][1] == "imported-by:src/core:control:src/apps/control"
+    assert "imported-by:src/runtime/gateway:control:src/runtime/sensing" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
-                for path in _imported_modules("src/core/core/test", "control", "src/apps/control")}
-    assert "src/apps/control/control/sensor_provider.py" in resolved
-    assert "src/apps/control/control/calibration_storage.py" in resolved
+                for path in _imported_modules("src/runtime/gateway/test", "control", "src/runtime/sensing")}
+    assert "src/runtime/sensing/control/sensor_provider.py" in resolved
+    assert "src/runtime/sensing/control/calibration_storage.py" in resolved

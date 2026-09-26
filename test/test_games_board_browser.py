@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "apps" / "games"))
+sys.path.insert(0, str(ROOT / "src" / "site" / "games"))
 
 from browser_harness import open_page, save_temp_screenshot  # noqa: E402
 
@@ -151,6 +151,84 @@ def test_match_board_initial_state_before_any_publish():
             assert page.locator("#markers li").count() == 0
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, "games_board_initial.png")
+            browser.close()
+    finally:
+        server.close()
+
+
+# --- D-201: 초점 문법의 적합 계약 — 정지 행은 선언 뷰포트(1280×800) 안에 있다.
+
+GAMES_FIT_PROBE = """() => {
+  const halt = document.getElementById('halt').getBoundingClientRect();
+  return {
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    halt: { top: Math.round(halt.top), bottom: Math.round(halt.bottom) },
+    vh: window.innerHeight,
+  };
+}"""
+
+
+def test_halt_row_stays_inside_the_declared_viewport():
+    """정지 버튼이 접힘 아래로 내려가면 스페이스를 알아도 손이 못 쓴다."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function(
+                "document.getElementById('phase')?.textContent === 'play'"
+            )
+            page.wait_for_timeout(400)
+            fit = page.evaluate(GAMES_FIT_PROBE)
+            assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()
+
+    assert fit["docOverflow"] <= 0, (
+        f"보드가 {fit['docOverflow']}px 스크롤된다 — 초점 문법 위반(D-201): {fit}"
+    )
+    assert fit["halt"]["bottom"] <= fit["vh"] and fit["halt"]["top"] >= 0, (
+        f"정지 행이 뷰포트 밖이다(D-201): {fit}"
+    )
+
+
+def test_the_space_bar_promise_is_real():
+    """D-224 — "스페이스도 양쪽을 세운다"가 참이어야 한다(Law 0).
+
+    2026-09-25 까지 이 약속은 글자뿐이었다 — board.js 에 키보드 처리가 없어
+    힌트가 거짓말을 했다. 몸에 포커스가 있을 때 Space 는 /stop 을 친다.
+    """
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function(
+                "document.getElementById('phase')?.textContent === 'play'"
+            )
+            stops: list[str] = []
+
+            def serve_stop(route):
+                stops.append(route.request.method)
+                route.fulfill(status=200, json={"ok": True})
+
+            page.route("**/stop", serve_stop)
+            page.evaluate("document.body.focus(); null")
+            page.keyboard.press("Space")
+            page.wait_for_timeout(250)
+            assert stops == ["POST"], f"스페이스가 /stop 을 치지 않는다: {stops}"
+            assert not errors, f"페이지 오류: {errors}"
             browser.close()
     finally:
         server.close()

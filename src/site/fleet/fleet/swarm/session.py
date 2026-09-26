@@ -83,7 +83,8 @@ class FormationSession:
                  assigner: Optional[SlotAssigner] = None,
                  policy: HoldPolicy = HoldPolicy.HOLD,
                  relay_factory: Callable[..., Relay] = Relay,
-                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
+                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 member_order: Optional[Sequence[str]] = None) -> None:
         follower_ids = [f.robot_id for f in followers]
         if len(set(follower_ids)) != len(follower_ids):
             # 릴레이도 같은 검사를 하지만 그때는 이미 팔로워가 무장돼 있다. 세션이 먼저 본다.
@@ -112,6 +113,7 @@ class FormationSession:
         #: reform 이 끝나며 잘라내므로, 무장 중에 같은 `(사유, id)` 가 다시 오면 그것은
         #: 중복이 아니라 새 사건이다 — 잘려 나갈 항목에 묻어 사라지면 안 된다.
         self._carried = 0
+        self._member_order = list(member_order) if member_order else None
 
     # --- 운영자 명령 --------------------------------------------------------------
 
@@ -408,10 +410,13 @@ class FormationSession:
                 await self._disarm(armed)
                 raise SessionError("session stopped while arming")
             offset = assignment[follower.robot_id]
+            order = self._member_order or [
+                self._leader.robot_id, *[robot.robot_id for robot in self._followers]]
             params = SwarmFollowParams(
                 target_robot_id=self._leader.robot_id,
                 distance=offset.distance, lateral=offset.lateral,
                 max_speed=spec.max_speed, stream_timeout_ms=spec.stream_timeout_ms,
+                members=order,
             )
             try:
                 await follower.follow(params)

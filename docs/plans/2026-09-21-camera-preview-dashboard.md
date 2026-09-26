@@ -41,11 +41,11 @@
 ### Task 3: Control 오버레이 preview
 
 **Files:**
-- Modify: `src/apps/control/control/sensing/road.py`
-- Modify: `src/apps/control/control/road_observer_node.py`
-- Modify: `src/apps/control/config/line_follow.yaml`
-- Modify: `src/apps/control/test/test_road_perception.py`
-- Modify: `src/apps/control/test/test_road_observer_wiring.py`
+- Modify: `src/core/control/control/sensing/road.py`
+- Modify: `src/core/control/control/road_observer_node.py`
+- Modify: `src/core/control/config/line_follow.yaml`
+- Modify: `src/core/control/test/test_road_perception.py`
+- Modify: `src/core/control/test/test_road_observer_wiring.py`
 
 1. 차선·정지선·횡단보도·신호 표시와 압축 발행 계약 테스트를 작성해 RED를 확인한다.
 2. 원본 판정을 바꾸지 않는 오버레이와 2 FPS JPEG 발행을 구현한다.
@@ -55,7 +55,7 @@
 
 **Files:**
 - Modify: `src/sim/gz_sim/launch/launch_sim.launch.xml`
-- Create: `src/apps/control/launch/semantic_road_dashboard.launch.py`
+- Create: `src/core/control/launch/semantic_road_dashboard.launch.py`
 - Modify: `test/test_dds_rmw_contracts.py`
 - Modify: `test/test_line_follow_runtime.py`
 

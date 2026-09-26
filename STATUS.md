@@ -5,29 +5,33 @@
 
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
-| [core](src/core/core/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [core](src/runtime/gateway/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | uncommitted (2026-09-22) | GO | GO | N/A | HOLD | HOLD | N/A |
-| [control](src/apps/control/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [control](src/runtime/sensing/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | uncommitted (2026-09-22) | GO | GO | HOLD | PARKED | PARKED | PARKED |
-| [games](src/apps/games/progress.md) | GAMES | 411a303 (2026-09-18) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [games](src/site/games/progress.md) | GAMES | 411a303 (2026-09-18) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [overhead](src/site/overhead/progress.md) | SITE | uncommitted (2026-09-26) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
-| [navigation](src/navigation/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [bringup](src/hardware/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [emotion](src/apps/emotion/progress.md) | 장치 | uncommitted (2026-09-21) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [led](src/hardware/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [imu_bno055](src/hardware/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [sensor_adc](src/hardware/sensor_adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [lamp_control](src/hardware/lamp_control/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [core_common](src/core/core_common/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_events](src/core/core_events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_features](src/core/core_features/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_api_web](src/core/core_api_web/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](src/core/web_common/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
-| [omx_adapter](src/apps/omx_adapter/progress.md) | 장치 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | PARKED | PARKED |
-| [interfaces](src/core/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
+| [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [bringup](src/devices/pinky_pro/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [emotion](src/hmi/face/progress.md) | 장치 | uncommitted (2026-09-21) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [led](src/devices/pinky_pro/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [imu_bno055](src/devices/common/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [sensor_adc](src/devices/pinky_pro/adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [lamp_control](src/devices/pinky_pro/lamp/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [core_common](src/contracts/foundation/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_events](src/runtime/events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_features](src/runtime/services/progress.md) | CORE | uncommitted (2026-09-25) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_api_web](src/runtime/api_web/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](src/hmi/web/progress.md) | CORE | uncommitted (2026-09-26) | GO | GO | N/A | N/A | N/A | N/A |
+| [dashboard](src/hmi/dashboard/progress.md) | 화면 | uncommitted (2026-09-25) | GO | GO | N/A | HOLD | N/A | N/A |
+| [omx_adapter](src/devices/omx/adapter/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
+| [pinky_pro](src/products/pinky_pro/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [omx](src/products/omx/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |
-| [dock](dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [signal](signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
+| [dock](firmware/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [signal](firmware/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
 | [docs](docs/progress.md) | 거버넌스 | uncommitted (2026-09-23) | GO | GO | N/A | N/A | N/A | N/A |
 
 ## HOLD blockers
@@ -56,9 +60,15 @@
 - sensor_adc ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
-- omx_adapter ARTIFACT: deploy/image/required-ros-packages.txt에 포함되나 서명 manifest와 immutable digest 발행 전
+- dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
+- omx_adapter ROS-SIM: Image package installation was verified; vendor launch graph, simulator/mock path, and camera stream are not exercised
+- omx_adapter ARTIFACT: No workstation image digest or dependency inventory exists; source lock is not an artifact
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
+- pinky_pro ARTIFACT: required-ros-packages.txt에 pinky_pro를 올린 뒤의 이미지 빌드와 package inventory(ros2 pkg prefix pinky_pro) 증거 없음
+- pinky_pro DEVICE: 새 이미지에서 CORE_READY와 GET /system/capabilities readback 증거 없음
+- omx ROS-SIM: Image package installation is verified; vendor launch graph, simulator/mock path, and camera stream are not exercised
+- omx ARTIFACT: No OMX workstation image digest or package inventory
 - description ARTIFACT: io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/description`, `--packages-select`에 포함; meshes는 `RUN mkdir -p`로 빈 폴더만 생성). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - description DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
 - dock ROS-SIM: 코스트맵 충돌 면제(docking/collision_exemption)는 실제 costmap 통합 시험 전까지 intent-only (Device 검증 계획 P1 §7). ROS 2 Jazzy 환경에서 도킹 시퀀스 시뮬레이션 미실행

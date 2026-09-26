@@ -32,6 +32,12 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   (`rosy-diag` wrapper -> `rosy_diag_collect.py`, stdlib only, bounded 50 MiB, never overwrites,
   never reads a denied path). Test from the installed layout, not only the repo path.
 
+- `rosy-hw-probe.service` (D-247) is the one root unit that opens board devices for
+  observation: read-only, known addresses only, its exact `DeviceAllow` set is pinned in
+  `test/test_device_surface_contract.py`. It writes only `/run/rosy-boot/hardware.json`;
+  `rosy-hw-probe.path` reruns it when CORE writes `/run/rosy/hw-probe.request`.
+  While `rosy-io`/`rosy-navigation` run it never opens their buses.
+
 ## Tests
 
 ```bash

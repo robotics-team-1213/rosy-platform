@@ -1,0 +1,135 @@
+:root {
+  --pitch: #17351f;
+  --line: #e8f4ea;
+  --ball: #f27a1a;
+  --home: #7ec8ff;
+  --away: #ffb3c7;
+  --ink: #f4f1ea;
+  --mute: #9aa894;
+  --lost: #e24a4a;
+  --chip: #24422c;
+  --field: #0c160f;
+  --score-gap: #1c2c1f;
+  --score-well: #122018;
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--field);
+  color: var(--ink);
+  font: var(--text-body)/1.4 var(--body);
+}
+
+.rail {
+  padding: var(--space-4) var(--space-5) var(--space-2);
+}
+
+.kicker {
+  margin: 0;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: var(--text-label);
+  color: var(--mute);
+}
+
+h1 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-title);
+  font-weight: 650;
+}
+
+#phase {
+  margin: var(--space-1) 0 0;
+  color: var(--mute);
+}
+
+.score {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 0 var(--space-5) var(--space-3);
+  background: var(--score-gap);
+}
+
+.score div {
+  background: var(--score-well);
+  padding: var(--space-3) var(--space-4);
+}
+
+.score span {
+  display: block;
+  font-size: var(--text-label);
+  color: var(--mute);
+}
+
+.score strong {
+  font-size: var(--text-display);
+  font-variant-numeric: tabular-nums;
+}
+
+#pitch {
+  display: block;
+  /* D-201 — 초점 문법: 초점 물체는 줄어들 수 있어도 정지 행을 밀어낼 수는
+     없다. 종횡비를 유지한 채 선언 뷰포트(1280×800)에 맞는다. */
+  width: auto;
+  max-width: calc(100% - 44px);
+  height: auto;
+  max-height: calc(100dvh - 25.5rem);
+  margin: 0 var(--space-5);
+  background: var(--pitch);
+  border-radius: var(--radius-button);
+}
+
+#frame {
+  display: block;
+  width: auto;
+  max-width: calc(100% - 44px);
+  height: auto;
+  max-height: calc(100dvh - 25.5rem);
+  margin: var(--space-3) var(--space-5) 0;
+  border-radius: var(--radius-button);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  margin: var(--space-3) var(--space-5) var(--space-2);
+  padding: 0;
+}
+
+.chips li {
+  background: var(--chip);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.chips li.on {
+  background: var(--line);
+  color: var(--score-well);
+}
+
+#stair1 {
+  margin: 0 var(--space-5) var(--space-2);
+  color: var(--mute);
+  font-size: var(--text-body);
+}
+
+.lost {
+  margin: 0 var(--space-5) var(--space-5);
+  color: var(--lost);
+}
+
+.halt-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 var(--space-5) var(--space-5);
+  color: var(--mute);
+  font-size: var(--text-body);
+}
+
+#halt { min-width: 96px; }

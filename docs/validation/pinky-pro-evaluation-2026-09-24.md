@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|---|
 | 1 | 부팅 | 전원 → 사용 가능 | 재부팅 후 PC에서 5 s 간격 관측(`boot-watch.sh`), `systemd-analyze` | 커널 4 s + 사용자 공간 19.5 s = 23.5 s. `--failed` 없음. **005의 응급 조치 상태 기준** | PASS(조건부) | US-002(006에서 조치 없이) |
 | 2 | 부팅 표시 시점 | 부팅 완료 시 부저·LCD | `/run/rosy-boot/boot-status.json` 단계 변화 시각 | CORE 준비는 ~20 s였는데 표시는 53-55 s(30 s 타이머). 런타임 뒤 판정 unit을 넣자 t+45 s(PC에서 처음 보이는 시점) | FAIL | US-003 |
-| 3 | 현장 Wi-Fi | `wifi_setup.sh` → netplan | NM 활성 프로필, mDNS | `rosy-site-sta:wlan0`, `rosy-pinky-e4us.local` → 10.160.175.16 | PASS | — |
+| 3 | 현장 Wi-Fi | `wifi_setup.sh` → netplan | NM 활성 프로필, mDNS | `rosy-site-sta:wlan0`, `rosy-pinky-e4us.local` → `<robot-ip>` | PASS | — |
 | 4 | 대체 AP | 항상 AP `pinky_XXXX` / `pinkypro` | 현장 Wi-Fi 없이 120 s 대기 | 미시험 | BLOCKED(현장 Wi-Fi 끄는 시험 필요) | US-007 |
 | 5 | 원격 접속 | SSH `pinky`/`1` | `ssh -i <operator key> rosy@` | 키 로그인 성공, 비밀번호 로그인 불가(D-174 F3 결정된 차이) | PASS | — |
 | 6 | CORE / API | (공식에 없음: Rosy 제품 API) | `/openapi.json`, 인증 경로 | 경로 72개. 인증 없는 요청은 401. **이미지 경로에서 토큰을 발급하지 않아** 대시보드·API에 아무도 로그인할 수 없다(`/etc/rosy/initial-credentials.txt`는 Docker 경로에만 있다) | FAIL | US-009 |
@@ -22,7 +22,7 @@
 | 8 | 권한 경계 D-161 | — | `/var/lib/rosy` 소유, unit 환경 | 005는 CORE가 전체를 소유했다. 응급 조치로 root로 되돌렸다. 수정은 006에 있다 | FAIL→006 | US-002 |
 | 9 | 모터 버스 | DYNAMIXEL XL330 ×2, `/dev/ttyAMA4` 1 Mbaud (`pinky_bringup/bringup.py` 23-24행) | `/dev/ttyAMA4`, `/dev/rosy-motor` | **둘 다 없음.** udev 규칙은 `ttyAMA4`를 기대하지만 `config.txt`에 `dtoverlay=uart4-pi5`가 없다. 저장소의 `configure-uart-pi5.sh`는 이미지에 반영되지 않는다 | FAIL | US-004 |
 | 10 | 모터 SDK | `dynamixel_sdk` 사전 설치(package.xml 미선언) | `import dynamixel_sdk` | 없음(Docker 경로만 `dynamixel-sdk==3.8.4`를 pip로 설치) | FAIL | US-005 |
-| 11 | 라이다 | RPLIDAR C1, `/dev/ttyAMA0`, `sllidar_ros2` 외부 패키지 | 장치 노드, `ros2 pkg prefix sllidar_ros2` | `ttyAMA0` 있음. **`sllidar_ros2` 없음**(Docker 경로만 고정 커밋으로 빌드) | FAIL | US-005 |
+| 11 | 라이다 | RPLIDAR C1, `/dev/ttyAMA0`, `sllidar_ros2` 외부 패키지 | 장치 노드, `ros2 pkg prefix sllidar_ros2` | `ttyAMA0` 있음. **`sllidar_ros2` 없음**(Docker 경로만 고정 커밋으로 빌드). **010 카드(2026-09-24):** 드라이버는 있으나 `sllidar_node`가 `SL_RESULT_OPERATION_TIMEOUT`, getty를 멈춘 뒤 `0x80008004`. Ubuntu `cmdline.txt`의 `console=serial0,115200`이 `enable_uart=1`에서 `ttyAMA0`이 되어 커널 콘솔과 `serial-getty@ttyAMA0`(agetty)이 포트를 잡았다. 장치에서 그 항목을 지우고 재부팅하자 getty 없음, `health status : OK`, DenseBoost 10 Hz. 소스 수정: `configure-uart-pi5.sh`가 이미지와 장치 모두에서 버스 UART 콘솔을 디버그 UART `ttyAMA10`으로 옮기고 getty를 mask, `verify-mounted-image.py`·`verify-pi.sh`가 검사 | FAIL → 소스 수정, 장치 PASS(현장 cmdline 수정 뒤), 이미지 미확인 | US-005 |
 | 12 | 배터리(하드웨어) | ADC I2C-1 0x08 ch4, `pinkylib.Battery` | ADC 직접 읽기(읽기 전용) | 8.665-8.682 V, 5회 안정. `BatteryCurve.default()` 100 % | PASS | — |
 | 13 | 배터리(소프트웨어) | `battery_publisher`(pinkylib) → `/battery/*` | `import rosylib`, `rosy-io` | **`rosylib` 없음**(pinkylib를 이름만 바꿔 import했고, 공개 소스가 없다). `rosy-io` unit이 이미지에 없다 | FAIL | US-005 |
 | 14 | 하드웨어 런타임 | bringup_robot(description, sllidar, bringup, battery_publisher) | `rosy-io.service` 설치 여부 | 릴리스 안에 unit 파일은 있으나 이미지 overlay와 enable에 없다(D-189 열린 항목) | FAIL | US-005 |

@@ -29,7 +29,7 @@ themselves proof of zero coupling.
 - **Problem**: Static imports can be clean while ROS 2 topics remain global. An
   application node could accidentally publish the operational final
   `cmd_vel`, violating D-2.
-- **Decision**: Define and test a topic-ownership allowlist. `apps/control`
+- **Decision**: Define and test a topic-ownership allowlist. `core/control`
   publishes evidence/sensor topics only; CORE owns operational state, intent
   and final `cmd_vel`. A launch/graph check must verify actual publishers before
   this proposal can become Accepted.

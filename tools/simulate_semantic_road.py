@@ -15,15 +15,21 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONTROL_ROOT = REPO_ROOT / "src/apps/control"
+CONTROL_ROOT = REPO_ROOT / "src/runtime/sensing"
 if str(CONTROL_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_ROOT))
-for _package in ("core", "core_common", "core_events", "core_features"):
-    _path = str(REPO_ROOT / "src/core" / _package)
+_PACKAGE_ROOTS = {
+    "core": "src/runtime/gateway",
+    "core_common": "src/contracts/foundation",
+    "core_events": "src/runtime/events",
+    "core_features": "src/runtime/services",
+}
+for _package in _PACKAGE_ROOTS:
+    _path = str(REPO_ROOT / _PACKAGE_ROOTS[_package])
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from control.sensing.road import (  # noqa: E402
+from control.sensing.perception.road import (  # noqa: E402
     detect_road_observation,
     render_road_preview,
     road_observation_payload,

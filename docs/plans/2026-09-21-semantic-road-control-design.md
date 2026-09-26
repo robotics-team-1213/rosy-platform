@@ -20,7 +20,7 @@ evidence만 만들고 CORE가 정책을 판단한다. CORE Command Manager는 �
 
 ### 1. `road_scene`
 
-- 소유 위치: `src/apps/control/map/map_260905_update_v2/semantic/`
+- 소유 위치: `src/core/control/map/map_260905_update_v2/semantic/`
 - 원본 16개 벽과 occupancy map을 변경하지 않는다.
 - `road_scene.yaml`에 lane polyline, stop line, crosswalk polygon/stripes,
   traffic signal pose/orientation/controlled zone을 기록한다.
@@ -31,7 +31,7 @@ evidence만 만들고 CORE가 정책을 판단한다. CORE Command Manager는 �
 
 ### 2. `road_perception`
 
-- 소유 위치: `src/apps/control/control/sensing/road.py`
+- 소유 위치: `src/core/control/control/sensing/road.py`
 - OpenCV 고전 CV로 lane, stop line, crosswalk, traffic light를 독립 검출한다.
 - 출력은 source timestamp, detection kind, normalized image location, estimated
   distance, confidence, signal ID hint/color를 포함한다.

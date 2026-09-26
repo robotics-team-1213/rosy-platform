@@ -337,7 +337,7 @@ def test_uart4_configuration_is_explicit_idempotent_and_does_not_move_motors():
 
 def test_motor_preflight_checks_uart_and_runs_torque_free_dynamixel_probe():
     script = _text(MOTOR_VERIFY)
-    probe = _text(ROOT / "src" / "hardware" / "bringup" / "bringup" / "dynamixel_probe.py")
+    probe = _text(ROOT / "src" / "devices" / "pinky_pro" / "bringup" / "bringup" / "dynamixel_probe.py")
 
     assert "/proc/device-tree/model" in script
     assert "dtoverlay=uart4-pi5" in script

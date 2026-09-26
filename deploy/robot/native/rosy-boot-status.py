@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
@@ -50,16 +51,114 @@ def _read_json(path: Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def _api_port(root: Path) -> int:
-    """Advertise the port CORE actually uses (wait-core-ready honours it too)."""
+RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
+#: hardware.json rows copied for the boot display (D-260): id, state and product flag only.
+HARDWARE_FILE = f"{STATUS_DIR}/hardware.json"
+DEVICE_STATES = frozenset({"ok", "no_response", "bus_missing", "driver_missing", "needs_human", "not_measured"})
+MAX_DEVICES = 64
+MAX_DEVICE_ID = 64
+
+
+def _runtime_env(root: Path, key: str) -> str | None:
+    """One value of /etc/rosy/runtime.env (0600, root reads it for the boot display)."""
     try:
         for line in (root / "etc/rosy/runtime.env").read_text(encoding="utf-8").splitlines():
-            key, _, value = line.partition("=")
-            if key.strip() == "ROSY_API_PORT" and value.strip().isdigit():
-                return int(value.strip())
+            name, _, value = line.partition("=")
+            if name.strip() == key:
+                return value.strip()
     except (OSError, UnicodeDecodeError):
         pass
-    return DEFAULT_API_PORT
+    return None
+
+
+def _api_port(root: Path) -> int:
+    """Advertise the port CORE actually uses (wait-core-ready honours it too)."""
+    value = _runtime_env(root, "ROSY_API_PORT")
+    return int(value) if value and value.isdigit() else DEFAULT_API_PORT
+
+
+def _runtime_mode(root: Path) -> str | None:
+    """D-260: CORE's runtime mode, for the boot display that cannot read runtime.env."""
+    value = _runtime_env(root, "ROSY_RUNTIME_MODE")
+    return value if value in RUNTIME_MODES else None
+
+
+#: D-260 M1: CORE's hand-over (api/v1/host.py STATUS_INPUTS_FILE) in rosy-core's /run/rosy.
+STATUS_INPUTS_FILE = "run/rosy/status-inputs.json"
+MAX_STATUS_INPUTS_BYTES = 16 * 1024
+#: CORE rewrites it every 10 s; older than this means CORE is not running it any more.
+STATUS_INPUTS_FRESH_S = 60.0
+
+
+def _read_core_file(path: Path) -> dict | None:
+    """A small JSON object CORE wrote: no symlink, no FIFO, bounded. CORE is less trusted than root."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_STATUS_INPUTS_BYTES:
+            return None
+        raw = os.read(descriptor, MAX_STATUS_INPUTS_BYTES + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(descriptor)
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _core_inputs(root: Path, now: datetime) -> dict | None:
+    """D-260 M1: CORE's live SAF-005 warning and its overlaid device states, when fresh and valid."""
+    data = _read_core_file(root / STATUS_INPUTS_FILE)
+    if data is None or data.get("schema") != 1:
+        return None
+    try:
+        written = datetime.fromisoformat(str(data.get("written_at")))
+    except ValueError:
+        return None
+    if written.tzinfo is None or not -5.0 <= (now - written).total_seconds() <= STATUS_INPUTS_FRESH_S:
+        return None
+    warning = data.get("battery_warning_percent")
+    if isinstance(warning, bool) or not isinstance(warning, (int, float)) or not 0 < warning <= 100:
+        return None
+    devices = _valid_rows(data.get("devices"))
+    if devices is None:
+        return None
+    return {"battery_warning_percent": float(warning), "devices": devices}
+
+
+def _device_states(root: Path) -> list[dict]:
+    """D-260: the probe's rows reduced to id/state/product, for rosy-display (hardware.json is 0640).
+
+    Evidence text stays in hardware.json. A row that does not validate drops the whole list.
+    """
+    data = _read_json(root / HARDWARE_FILE) or {}
+    if data.get("schema") != 1:
+        return []
+    return _valid_rows(data.get("devices")) or []
+
+
+def _valid_rows(devices) -> list[dict] | None:
+    """id/state/product rows, or None when any row does not validate."""
+    if not isinstance(devices, list) or len(devices) > MAX_DEVICES:
+        return None
+    rows = []
+    for device in devices:
+        if not isinstance(device, dict):
+            return None
+        device_id, state, product = device.get("id"), device.get("state"), device.get("product")
+        if not isinstance(device_id, str) or not device_id or len(device_id) > MAX_DEVICE_ID:
+            return None
+        if state not in DEVICE_STATES or type(product) is not bool:
+            return None
+        rows.append({"id": device_id, "state": state, "product": product})
+    return rows
 
 
 def gather(root: Path, run: Runner) -> dict:
@@ -86,6 +185,11 @@ def gather(root: Path, run: Runner) -> dict:
         "ipv4": ipv4,
         "boot_id": boot_id,
         "api_port": _api_port(root),
+        "runtime_mode": _runtime_mode(root),
+        # D-260 M1: CORE's inputs win while it keeps them fresh; otherwise the probe's rows
+        # and the SAF-005 default (the display's), e.g. when CORE is down.
+        **(_core_inputs(root, datetime.now(timezone.utc))
+           or {"battery_warning_percent": None, "devices": _device_states(root)}),
         # D-176: written by rosy-network.py; mode/ssid/address only, never a secret.
         "network": {key: value for key, value in (_read_json(root / STATUS_DIR / "network.json") or {}).items()
                     if key in {"mode", "ssid", "address"}},
@@ -104,6 +208,10 @@ def status_record(facts: dict, stage: Stage, now: datetime) -> dict:
         "boot_id": facts.get("boot_id"),
         "api_port": facts.get("api_port", DEFAULT_API_PORT),
         "network": facts.get("network") or {},
+        # D-260: the boot display's other two inputs, which it cannot read itself.
+        "runtime_mode": facts.get("runtime_mode"),
+        "devices": facts.get("devices") or [],
+        "battery_warning_percent": facts.get("battery_warning_percent"),
         "units": facts.get("units") or {},
         "updated_at": now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
     }

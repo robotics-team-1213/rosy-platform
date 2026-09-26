@@ -53,6 +53,9 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # Inventory
     (release_dir / "required-ros-packages.txt").write_text("pkg_a", encoding="utf-8")
     (release_dir / "rosy-packages.txt").write_text("pkg_a\npkg_b", encoding="utf-8")
+    # D-225 2.2: the factory release is sealed in the image, not signed.
+    (release_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    (release_dir / "SHA256SUMS").write_text("mock", encoding="utf-8")
 
     # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
     (root / "usr/sbin").mkdir(parents=True, exist_ok=True)
@@ -69,6 +72,14 @@ def test_inspect_passes_with_valid_image(tmp_path):
     (root / "boot/firmware").mkdir(parents=True)
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\ndtoverlay=uart4-pi5\n", encoding="utf-8")
+    # The LiDAR/motor UARTs carry no console; their gettys are masked.
+    (root / "boot/firmware/cmdline.txt").write_text("console=ttyAMA10,115200 console=tty1 rootwait\n",
+                                                    encoding="utf-8")
+    for mask in verify_mounted_image.BUS_GETTY_MASKS:
+        try:
+            (root / mask).symlink_to("/dev/null")
+        except OSError:
+            pytest.skip("no symlink rights on this host; a getty mask must be a /dev/null symlink")
     (root / "etc/udev/rules.d").mkdir(parents=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text("mock", encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.

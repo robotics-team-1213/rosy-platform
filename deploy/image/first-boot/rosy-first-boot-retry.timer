@@ -1,0 +1,13 @@
+[Unit]
+Description=Retry ROSY first boot while the site Wi-Fi is not yet up
+# A provisioned card never starts the timer.
+ConditionPathExists=!/var/lib/rosy/provisioning/complete.json
+
+[Timer]
+# rosy-first-boot's own budget ends about 140 s after boot; check every 30 s after.
+OnBootSec=150s
+OnUnitInactiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

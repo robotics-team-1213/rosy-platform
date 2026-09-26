@@ -86,9 +86,9 @@ Nav2 Velocity Smoother는 velocity/acceleration/deceleration/deadband/timeout을
 
 관련 파일:
 
-- `src/apps/control/control/startup_calibration_node.py`
-- `src/apps/control/control/control/{calibration.py,round_trip.py,rotation_trial.py,rotation_envelope.py,calibration_profile.py,space_speed.py}`
-- `src/apps/control/control/{calibration_record.py,calibration_storage.py}`
+- `src/core/control/control/startup_calibration_node.py`
+- `src/core/control/control/control/{calibration.py,round_trip.py,rotation_trial.py,rotation_envelope.py,calibration_profile.py,space_speed.py}`
+- `src/core/control/control/{calibration_record.py,calibration_storage.py}`
 - `src/hardware/imu_bno055/src/{main_node.cpp,bno055_device.cpp}`
 - `src/hardware/bringup/bringup/bringup.py`
 - `src/navigation/navigation/params/nav2_params.yaml`

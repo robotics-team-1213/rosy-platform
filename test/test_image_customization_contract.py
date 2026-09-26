@@ -114,6 +114,9 @@ def _valid_root(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (release / "rosy-packages.txt").write_text("control\ncore\n", encoding="utf-8")
+    # D-225 2.2: sealed, not signed.
+    (release / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (release / "SHA256SUMS").write_text(f"{'0' * 64}  manifest.json\n", encoding="utf-8")
     (root / "etc/rosy/motion_profiles.yaml").write_text("profiles: {}\n", encoding="utf-8")
     (root / "etc/rosy/cyclonedds.xml").write_text("<CycloneDDS/>\n", encoding="utf-8")
     (root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem").write_text(
@@ -142,10 +145,34 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware").mkdir(parents=True, exist_ok=True)
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
-        "dtoverlay=uart4-pi5\n", encoding="utf-8")
+        "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n\n[all]\n# Rosy lamp\n"
+        "dtoverlay=rosy-ws281x\n", encoding="utf-8")
+    # D-247: the WS2812 lamp driver built for the image kernel.
+    kernel = "6.8.0-1064-raspi"
+    (root / "lib/modules" / kernel / "kernel").mkdir(parents=True, exist_ok=True)
+    (root / "lib/modules" / kernel / "extra").mkdir(parents=True, exist_ok=True)
+    (root / "lib/modules" / kernel / "extra/rp1_ws281x_pwm.ko").write_bytes(
+        b"\x7fELF\0license=GPL\0vermagic=" + kernel.encode() + b" SMP preempt mod_unload aarch64\0")
+    (root / "lib/modules" / kernel / "modules.alias").write_text(
+        "alias of:N*T*Crp1-ws281x-pwm rp1_ws281x_pwm\n", encoding="utf-8")
+    (root / "usr/local/share/rosy").mkdir(parents=True, exist_ok=True)
+    (root / "usr/local/share/rosy/lamp-driver-kernel").write_text(kernel + "\n", encoding="utf-8")
+    (root / "boot/firmware/overlays").mkdir(parents=True, exist_ok=True)
+    (root / "boot/firmware/overlays/rosy-ws281x.dtbo").write_bytes(b"\xd0\x0d\xfe\xed")
+    (root / "etc/modprobe.d").mkdir(parents=True, exist_ok=True)
+    (root / "etc/modprobe.d/rosy-ws281x.conf").write_bytes(
+        (ROOT / "deploy/robot/modprobe/rosy-ws281x.conf").read_bytes())
+    # The bus UARTs carry no console (configure-uart-pi5.sh edits the Ubuntu line).
+    (root / "boot/firmware/cmdline.txt").write_text(
+        "console=ttyAMA10,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 root=LABEL=writable "
+        "rootfstype=ext4 rootwait fixrtc\n",
+        encoding="utf-8")
+    for tty in ("ttyAMA0", "ttyAMA4"):
+        _link(root / f"etc/systemd/system/serial-getty@{tty}.service", "/dev/null")
     (root / "etc/udev/rules.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/udev/rules.d/99-rosy-motor.rules").write_text(
         'KERNEL=="ttyAMA4", SYMLINK+="rosy-motor"\n', encoding="utf-8")
+    (root / "etc/udev/rules.d/99-rosy-lamp.rules").write_text('KERNEL=="ws281x_pwm"\n', encoding="utf-8")
     # D-192 US-005: hardware units installed (not enabled) and the LiDAR driver.
     for unit in ("rosy-io.service", "rosy-navigation.service"):
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
@@ -161,16 +188,29 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "var/lib/dpkg/status").write_text("".join(
         f"Package: {name}\nStatus: install ok installed\nVersion: 1\n\n"
         for name in ("python3-spidev", "python3-rpi-lgpio", "python3-numpy", "python3-pil",
-                     "fonts-dejavu-core")), encoding="utf-8")
+                     "fonts-dejavu-core")) + "".join(
+        # D-247: the kernel the lamp driver was built for is held.
+        f"Package: {name}\nStatus: hold ok installed\nVersion: 1\n\n"
+        for name in ("linux-image-6.8.0-1064-raspi", "linux-modules-6.8.0-1064-raspi", "linux-raspi")),
+        encoding="utf-8")
     # D-193: the login-code issuer (enabled), its banner link and command, and
     # CORE defaults without tokens.
     (root / "etc/systemd/system/rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
     (wants.parent / "rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
     _link(root / "etc/issue.d/60-rosy-login.issue", "/run/rosy-boot/login.issue")
     _link(root / "usr/local/sbin/rosy-login-code", "/opt/rosy/native-runtime/rosy-login-code")
+    # D-247: the board device probe and its refresh watch (enabled), and its command.
+    for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
+        (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
+        (wants.parent / unit).write_text("[Unit]\n", encoding="utf-8")
+    _link(root / "usr/local/sbin/rosy-hw-probe", "/opt/rosy/native-runtime/rosy-hw-probe")
+    # D-247 6: the buzzer/lamp test service and its enabled path unit.
+    (root / "etc/systemd/system/rosy-hw-test.service").write_text("[Unit]\n", encoding="utf-8")
+    (root / "etc/systemd/system/rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-hw-test.path").write_text("[Unit]\n", encoding="utf-8")
     defaults = release / "install/share/core/config/rosy_default.yaml"
     defaults.parent.mkdir(parents=True, exist_ok=True)
-    defaults.write_text((ROOT / "src/core/core/config/rosy_default.yaml").read_text(encoding="utf-8"),
+    defaults.write_text((ROOT / "src/runtime/gateway/config/rosy_default.yaml").read_text(encoding="utf-8"),
                         encoding="utf-8")
     return root
 
@@ -197,6 +237,8 @@ def _verify(root: Path) -> subprocess.CompletedProcess[str]:
 
 def test_mounted_image_verifier_accepts_native_core_only_layout(tmp_path):
     root = _valid_root(tmp_path)
+    if not _bus_masks_are_symlinks(root):
+        pytest.skip("no symlink rights on this host; the verifier accepts only a real /dev/null mask")
     completed = _verify(root)
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["ok"] is True
@@ -233,6 +275,53 @@ def test_mounted_image_verifier_requires_the_login_code_issuer(tmp_path):
     assert "missing systemd unit: rosy-login-code.service" in _verify(root).stderr
 
 
+def test_mounted_image_verifier_requires_the_hardware_probe(tmp_path):
+    root = _valid_root(tmp_path)
+    (root / "etc/systemd/system/multi-user.target.wants/rosy-hw-probe.path").unlink()
+    (root / "usr/local/sbin/rosy-hw-probe").unlink()
+    (root / "etc/systemd/system/rosy-hw-probe.service").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    for finding in ("rosy-hw-probe.path is not enabled", "missing hardware probe command",
+                    "missing systemd unit: rosy-hw-probe.service"):
+        assert finding in completed.stderr, finding
+
+
+def test_image_installs_enables_and_probes_the_hardware_probe():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("mkdir -p \"$ROOT/etc/issue.d\"")]
+    assert "rosy-hw-probe.service rosy-hw-probe.path" in enable
+    assert 'ln -sfn /opt/rosy/native-runtime/rosy-hw-probe "$ROOT/usr/local/sbin/rosy-hw-probe"' in source
+    loop = source[source.index("for entrypoint in rosy-boot-status.py"):]
+    assert "rosy-hw-probe.py" in loop[:loop.index("; do")]
+    after = loop[loop.index("done"):]
+    assert """chroot "$ROOT" python3 -I -c 'import dynamixel_sdk'""" in after[:400]
+    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+
+
+def test_mounted_image_verifier_requires_the_hardware_test(tmp_path):
+    root = _valid_root(tmp_path)
+    (root / "etc/systemd/system/multi-user.target.wants/rosy-hw-test.path").unlink()
+    (root / "etc/systemd/system/rosy-hw-test.service").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    for finding in ("rosy-hw-test.path is not enabled", "missing systemd unit: rosy-hw-test.service"):
+        assert finding in completed.stderr
+
+
+def test_image_installs_and_enables_the_hardware_test_path_only():
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("# D-174 T0")]
+    assert "rosy-hw-test.path" in enable and "rosy-hw-test.service" not in enable
+    loop = source[source.index("for entrypoint in"):]
+    assert "rosy-hw-test.py" in loop[:loop.index("; do")]
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+    for unit in ("rosy-hw-test.service", "rosy-hw-test.path"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need a privilege on Windows")
 def test_mounted_image_verifier_rejects_a_banner_link_to_elsewhere(tmp_path):
     root = _valid_root(tmp_path)
@@ -254,6 +343,20 @@ def test_image_installs_enables_and_probes_the_login_code_issuer():
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"' in payload
     wrapper = (ROOT / "deploy/robot/native/rosy-login-code").read_text(encoding="utf-8")
     assert 'exec /usr/bin/python3 -I -B "$SCRIPT_DIR/rosy-login-code.py" "$@"' in wrapper
+
+
+@pytest.mark.parametrize("defect", ["signed", "unsealed"])
+def test_mounted_image_verifier_wants_the_factory_release_sealed_and_unsigned(tmp_path, defect):
+    """D-225 2.2: first boot adds the signature; the image never carries one."""
+    root = _valid_root(tmp_path)
+    release = root / "opt/rosy/releases/2026.09.22-001"
+    if defect == "signed":
+        (release / "SHA256SUMS.sig").write_text("sig\n", encoding="ascii")
+    else:
+        (release / "SHA256SUMS").unlink()
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert "factory release" in completed.stderr
 
 
 def test_mounted_image_verifier_rejects_missing_required_package(tmp_path):
@@ -350,6 +453,83 @@ def test_mounted_image_verifier_requires_the_base_uart_and_i2c_settings(tmp_path
     completed = _verify(pi4_only)
     assert completed.returncode != 0
     assert "lost enable_uart=1" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_imu_bus(tmp_path):
+    # D-247: without dtoverlay=i2c0-pi5,pins_0_1 there is no /dev/i2c-0 for the BNO055.
+    for name, edit in (("missing", lambda text: text.replace("dtoverlay=i2c0-pi5,pins_0_1\n", "")),
+                       ("pi4", lambda text: text.replace("# Rosy IMU bus", "[pi4]"))):
+        root = _valid_root(tmp_path / name)
+        config = root / "boot/firmware/config.txt"
+        config.write_text(edit(config.read_text(encoding="utf-8")), encoding="utf-8")
+        completed = _verify(root)
+        assert completed.returncode != 0
+        assert "does not enable dtoverlay=i2c0-pi5,pins_0_1 for the Pi 5 (IMU bus)" in completed.stderr
+
+
+@pytest.mark.parametrize("console", ["console=serial0,115200", "console=ttyAMA0,115200",
+                                     "console=ttyAMA4,115200", "console=ttyAMA0"])
+def test_mounted_image_verifier_rejects_a_console_on_a_robot_bus_uart(tmp_path, console):
+    # rosy-pinky-e4us 2026-09-24: Ubuntu's console=serial0,115200 is ttyAMA0 with
+    # enable_uart=1; the kernel console and agetty held the RPLIDAR C1 port.
+    root = _valid_root(tmp_path)
+    cmdline = root / "boot/firmware/cmdline.txt"
+    cmdline.write_text(f"{console} " + cmdline.read_text(encoding="utf-8"), encoding="utf-8")
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert f"routes a console to a robot bus UART: {console}" in completed.stderr
+
+
+def _bus_masks_are_symlinks(root: Path) -> bool:
+    return all((root / f"etc/systemd/system/serial-getty@{tty}.service").is_symlink()
+               for tty in ("ttyAMA0", "ttyAMA4"))
+
+
+def test_mounted_image_verifier_accepts_the_screen_and_debug_uart_consoles(tmp_path):
+    root = _valid_root(tmp_path)
+    if not _bus_masks_are_symlinks(root):
+        pytest.skip("no symlink rights on this host; the verifier accepts only a real /dev/null mask")
+    completed = _verify(root)
+    assert "cmdline.txt" not in completed.stderr
+    assert "serial getty" not in completed.stderr
+
+
+def test_mounted_image_verifier_requires_the_recovery_console(tmp_path):
+    root = _valid_root(tmp_path)
+    cmdline = root / "boot/firmware/cmdline.txt"
+    cmdline.write_text(cmdline.read_text(encoding="utf-8").replace("console=ttyAMA10,115200 ", ""),
+                       encoding="utf-8")
+    completed = _verify(root)
+    assert completed.returncode != 0
+    assert "no recovery console on the debug UART (console=ttyAMA10)" in completed.stderr
+
+
+def test_mounted_image_verifier_requires_cmdline_and_masked_bus_gettys(tmp_path):
+    no_cmdline = _valid_root(tmp_path / "nocmdline")
+    (no_cmdline / "boot/firmware/cmdline.txt").unlink()
+    assert "missing kernel command line: boot/firmware/cmdline.txt" in _verify(no_cmdline).stderr
+
+    for tty in ("ttyAMA0", "ttyAMA4"):
+        mask = f"etc/systemd/system/serial-getty@{tty}.service"
+        missing = _valid_root(tmp_path / tty)
+        (missing / mask).unlink()
+        completed = _verify(missing)
+        assert completed.returncode != 0
+        assert f"serial getty is not masked: {mask}" in completed.stderr
+
+        # A regular file is not a mask, whatever it contains.
+        regular = _valid_root(tmp_path / f"{tty}-file")
+        (regular / mask).unlink()
+        (regular / mask).write_text("/dev/null\n", encoding="utf-8")
+        assert f"serial getty is not masked: {mask}" in _verify(regular).stderr
+
+        elsewhere = _valid_root(tmp_path / f"{tty}-link")
+        (elsewhere / mask).unlink()
+        try:
+            (elsewhere / mask).symlink_to("/lib/systemd/system/serial-getty@.service")
+        except OSError:
+            continue  # no symlink rights: the two cases above still hold
+        assert f"serial getty is not masked: {mask}" in _verify(elsewhere).stderr
 
 
 def test_customizer_executes_native_entrypoints_inside_the_image():
@@ -556,8 +736,8 @@ def test_probe_reads_every_pin():
 
 def test_probe_follows_lazy_imports_of_the_core_entrypoints():
     probe = _probe_module()
-    node = (ROOT / "src/core/core/core/node.py").read_text(encoding="utf-8")
-    main = (ROOT / "src/core/core/core/main.py").read_text(encoding="utf-8")
+    node = (ROOT / "src/runtime/gateway/core/node.py").read_text(encoding="utf-8")
+    main = (ROOT / "src/runtime/gateway/core/main.py").read_text(encoding="utf-8")
 
     modules = set(probe.lazy_imports(node)) | set(probe.lazy_imports(main))
     # Function-level imports a flag-only --help never reaches.
@@ -760,8 +940,8 @@ def test_vendor_preparation_refuses_a_used_destination(tmp_path):
 
 
 def test_the_bringup_launch_includes_the_driver_the_image_builds():
-    launch = (ROOT / "src/hardware/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
-    package = (ROOT / "src/hardware/bringup/package.xml").read_text(encoding="utf-8")
+    launch = (ROOT / "src/devices/pinky_pro/bringup/launch/bringup_robot.launch.py").read_text(encoding="utf-8")
+    package = (ROOT / "src/devices/pinky_pro/bringup/package.xml").read_text(encoding="utf-8")
     assert "get_package_share_directory('sllidar_ros2')" in launch
     assert "'sllidar_c1_launch.py'" in launch
     assert "<exec_depend>sllidar_ros2</exec_depend>" in package
@@ -901,7 +1081,7 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     snippet = source[start:end]
     script = ('fail() { echo "FAIL $*" >&2; exit 1; }\n'
               'chroot() { shift; printf "%s\n" "$@"; }\n'
-              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/src/hardware/bringup)\n' + snippet)
+              'ROOT=/image; ROSDEP_SOURCE_PATHS=(/tmp/rosy-src/src/devices/pinky_pro/bringup)\n' + snippet)
 
     completed = subprocess.run([_BASH, "-c", script, _posix(CUSTOMIZER)],
                                capture_output=True, text=True, check=False)
@@ -911,5 +1091,20 @@ def test_chroot_rosdep_skips_the_vendor_keys_the_release_builds_itself():
     assert args[:3] == ["rosdep", "install", "--from-paths"]
     assert "-r" in args and "--ignore-src" in args
     assert args[args.index("--skip-keys") + 1].split() == ["sllidar_ros2"]
-    bringup = (ROOT / "src/hardware/bringup/package.xml").read_text(encoding="utf-8")
+    bringup = (ROOT / "src/devices/pinky_pro/bringup/package.xml").read_text(encoding="utf-8")
     assert "<exec_depend>sllidar_ros2</exec_depend>" in bringup
+
+
+def test_customizer_seals_the_factory_release_last_and_exports_it_unsigned():
+    """D-225 2.2: sealed after every write into the release, never signed in the image."""
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    seal = source.index('build_payload_release.py" seal')
+    assert '--release-dir "$RELEASE" --release-id "$RELEASE_ID"' in source[seal:seal + 200]
+    for earlier in ('> "$RELEASE/deb-packages.txt"', '> "$RELEASE/source-revision.txt"',
+                    'rm -rf -- "$RELEASE/image-overlay"', "probe-display-runtime.py'",
+                    'rm -rf -- "$ROOT/tmp/rosy-core-probe"'):
+        assert source.rindex(earlier) < seal, earlier
+    assert seal < source.index('cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"')
+    assert seal < source.index('verify-mounted-image.py" --root')
+    assert 'FACTORY_EXPORT="$PAYLOAD/factory-release"' in source
+    assert '[[ ! -e "$RELEASE/SHA256SUMS.sig" ]]' in source

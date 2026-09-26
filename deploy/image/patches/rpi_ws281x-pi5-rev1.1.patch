@@ -1,0 +1,35 @@
+D-247: rpi_ws281x 1396df4f (Pi 5 branch) has no Pi 5 rev 1.1 board ids, so
+ws2811_init() says "Hardware revision is not supported" on 0xd04171 (rosy_18,
+8 GB rev 1.1, 2026-09-26). Same entries as rev 1.0: kernel driver, no bases.
+Applied by deploy/image/install-pinky-hardware-deps.sh before lamp_control links it.
+
+--- a/rpihw.c
++++ b/rpihw.c
+@@ -568,6 +568,27 @@
+     // Pi 5
+     //
+     {
++        .hwver  = 0xd04171,
++        .type = RPI_HWVER_TYPE_PI5,
++        .periph_base = 0,           // uses kernel driver
++        .videocore_base = 0,        // uses kernel driver
++        .desc = "Model 5B rev 1.1 - 8GB",
++    },
++    {
++        .hwver  = 0xc04171,
++        .type = RPI_HWVER_TYPE_PI5,
++        .periph_base = 0,           // uses kernel driver
++        .videocore_base = 0,        // uses kernel driver
++        .desc = "Model 5B rev 1.1 - 4GB",
++    },
++    {
++        .hwver  = 0xb04171,
++        .type = RPI_HWVER_TYPE_PI5,
++        .periph_base = 0,           // uses kernel driver
++        .videocore_base = 0,        // uses kernel driver
++        .desc = "Model 5B rev 1.1 - 2GB",
++    },
++    {
+         .hwver  = 0xd04170,
+         .type = RPI_HWVER_TYPE_PI5,
+         .periph_base = 0,           // uses kernel driver

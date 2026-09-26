@@ -1,0 +1,68 @@
+[Unit]
+Description=ROSY read-only board device probe (D-247)
+# Root and outside CORE (D-161): CORE only reads the result this writes to
+# /run/rosy-boot/hardware.json and never opens a device. Runs once after boot
+# (CORE ready, udev settled) and again whenever rosy-hw-probe.path sees CORE's
+# refresh request. The probe checks rosy-io itself and leaves its buses alone.
+After=rosy-core.service rosy-boot-status.service systemd-udevd.service local-fs.target
+# A hardware runtime started while the probe runs waits for it: the probe never
+# shares a UART with rosy-io or rosy-navigation (D-247 4).
+Before=rosy-io.service rosy-navigation.service
+# CORE debounces refresh requests; a burst must never fail the path unit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+# -I: no PYTHONPATH, no user site, no script-directory surprises in a root process.
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-hw-probe.py
+# Per-device limits live in the program (wedged I2C ~1 s, UART 1 s, commands
+# 3 s); this bounds the whole run.
+TimeoutStartSec=60
+Nice=10
+# No login shell, no user site (D-189).
+Environment=PYTHONNOUSERSITE=1
+UMask=0077
+# Same root-owned directory as rosy-boot-status.service; never /run/rosy,
+# which rosy-core owns (D-161). The request file there is only watched.
+RuntimeDirectory=rosy-boot
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/run/rosy-boot
+
+# Exactly the nodes the probe opens (D-247 5). spidev0.0 and ws281x_pwm are
+# only checked for existence; /dev/kmsg is read for the camera's probe result.
+PrivateDevices=false
+DevicePolicy=closed
+DeviceAllow=/dev/rosy-motor rw
+DeviceAllow=/dev/ttyAMA0 rw
+DeviceAllow=/dev/i2c-0 rw
+DeviceAllow=/dev/i2c-1 rw
+DeviceAllow=/dev/vcio rw
+DeviceAllow=/dev/kmsg r
+# /dev/kmsg is the kernel log; ProtectKernelLogs=true would hide it.
+ProtectKernelLogs=false
+
+NoNewPrivileges=true
+PrivateNetwork=true
+# systemctl is-active talks to systemd over a UNIX socket.
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# chown the result to rosy-core; read the kernel log (dmesg_restrict); open
+# the device nodes regardless of their group; list other users' /proc/<pid>/fd
+# to see who holds a UART (read access only; the probe attaches to nothing).
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_SYSLOG CAP_SYS_PTRACE
+
+[Install]
+WantedBy=multi-user.target

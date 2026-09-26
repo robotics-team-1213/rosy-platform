@@ -15,7 +15,7 @@ SRC = Path(__file__).resolve().parents[3]
 # Each entry is the *outer* ROS-package dir, so the inner Python package
 # (which owns __init__.py) resolves: fleet, core_common (prod, D-126 S3),
 # core_features (test_geometry.py follow_goal cross-check only, D-60).
-for path in (SRC / "site" / "fleet", SRC / "core" / "core_common", SRC / "core" / "core_features"):
+for path in (SRC / "site" / "fleet", SRC / "contracts" / "foundation", SRC / "runtime" / "services"):
     entry = str(path)
     if entry not in sys.path:
         sys.path.insert(0, entry)

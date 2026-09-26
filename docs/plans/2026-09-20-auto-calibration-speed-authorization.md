@@ -13,8 +13,8 @@
 ### Task 1: Geometry and sensor certificate contract
 
 **Files:**
-- Create: `src/apps/control/control/control/commissioning_certificate.py`
-- Create: `src/apps/control/test/test_commissioning_certificate.py`
+- Create: `src/core/control/control/control/commissioning_certificate.py`
+- Create: `src/core/control/test/test_commissioning_certificate.py`
 
 **Step 1: Write the failing tests**
 
@@ -22,7 +22,7 @@ Cover finite bounded wheel multipliers, uncertainty fields, excitation rank, raw
 
 **Step 2: Run tests to verify they fail**
 
-Run: `python -m pytest src/apps/control/test/test_commissioning_certificate.py -q -p no:cacheprovider`
+Run: `python -m pytest src/core/control/test/test_commissioning_certificate.py -q -p no:cacheprovider`
 
 Expected: collection failure because `control.control.commissioning_certificate` does not exist.
 
@@ -32,16 +32,16 @@ Implement canonical SHA-256 digesting, `make_geometry_candidate`, `promote_geome
 
 **Step 4: Run tests to verify they pass**
 
-Run: `python -m pytest src/apps/control/test/test_commissioning_certificate.py -q -p no:cacheprovider`
+Run: `python -m pytest src/core/control/test/test_commissioning_certificate.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
 ### Task 2: Motion envelope certificate and adaptive governor
 
 **Files:**
-- Modify: `src/apps/control/control/control/commissioning_certificate.py`
-- Create: `src/apps/control/control/control/adaptive_speed.py`
-- Create: `src/apps/control/test/test_adaptive_speed.py`
+- Modify: `src/core/control/control/control/commissioning_certificate.py`
+- Create: `src/core/control/control/control/adaptive_speed.py`
+- Create: `src/core/control/test/test_adaptive_speed.py`
 
 **Step 1: Write the failing tests**
 
@@ -49,7 +49,7 @@ Specify direction-specific speed bins with `command_to_decel_p99_s`, positive co
 
 **Step 2: Run tests to verify they fail**
 
-Run: `python -m pytest src/apps/control/test/test_adaptive_speed.py -q -p no:cacheprovider`
+Run: `python -m pytest src/core/control/test/test_adaptive_speed.py -q -p no:cacheprovider`
 
 Expected: collection failure because the governor API does not exist.
 
@@ -59,18 +59,18 @@ Add motion-envelope candidate/promotion validation and implement `OperatingCondi
 
 **Step 4: Run tests to verify they pass**
 
-Run: `python -m pytest src/apps/control/test/test_adaptive_speed.py src/apps/control/test/test_commissioning_certificate.py -q -p no:cacheprovider`
+Run: `python -m pytest src/core/control/test/test_adaptive_speed.py src/core/control/test/test_commissioning_certificate.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
 ### Task 3: Carry the live speed cap through the Control-to-CORE handoff
 
 **Files:**
-- Modify: `src/apps/control/control/control/command_gate.py`
-- Modify: `src/apps/control/control/control/policy_handoff.py`
-- Modify: `src/apps/control/control/safety/node.py`
-- Modify: `src/apps/control/test/test_command_gate.py`
-- Modify: `src/apps/control/test/test_policy_handoff.py`
+- Modify: `src/core/control/control/control/command_gate.py`
+- Modify: `src/core/control/control/control/policy_handoff.py`
+- Modify: `src/core/control/control/safety/node.py`
+- Modify: `src/core/control/test/test_command_gate.py`
+- Modify: `src/core/control/test/test_policy_handoff.py`
 - Modify: `src/core/core/test/test_control_policy_link.py`
 
 **Step 1: Write the failing tests**
@@ -79,7 +79,7 @@ Add tests that a finite nonnegative `linear_limit` is snapshot-bound, cannot enl
 
 **Step 2: Run tests to verify they fail**
 
-Run: `python -m pytest src/apps/control/test/test_command_gate.py src/apps/control/test/test_policy_handoff.py src/core/core/test/test_control_policy_link.py -q -p no:cacheprovider`
+Run: `python -m pytest src/core/control/test/test_command_gate.py src/core/control/test/test_policy_handoff.py src/core/core/test/test_control_policy_link.py -q -p no:cacheprovider`
 
 Expected: failures showing the handoff has no live numeric cap.
 
@@ -125,8 +125,8 @@ Expected: package tests pass; injected driver tests skip unless `BNO055_TEST_EXE
 ### Task 5: Documentation, harness, and regression verification
 
 **Files:**
-- Modify: `src/apps/control/logs.md`
-- Modify: `src/apps/control/progress.md`
+- Modify: `src/core/control/logs.md`
+- Modify: `src/core/control/progress.md`
 - Modify: `src/hardware/imu_bno055/logs.md`
 - Modify: `src/hardware/imu_bno055/progress.md`
 - Modify: `docs/logs.md`

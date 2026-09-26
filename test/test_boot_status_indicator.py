@@ -194,7 +194,8 @@ def test_indicator_writes_only_to_a_root_owned_directory_and_never_follows_links
     assert victim.read_text(encoding="utf-8") == "keep me"
     assert not (root / "run/rosy").exists()
     source = (NATIVE / "rosy-boot-status.py").read_text(encoding="utf-8")
-    assert "mkstemp" in source and "run/rosy/" not in source
+    assert "tempfile.mkstemp(dir=path.parent" in source
+    assert 'STATUS_DIR = "run/rosy-boot"' in source
 
 
 def test_unchanged_status_does_not_rewrite_or_reload(tmp_path):
@@ -411,3 +412,58 @@ def test_station_mode_shows_no_ap_lines(tmp_path):
     issue = (root / "run/rosy-boot/issue").read_text(encoding="utf-8")
     assert "Wi-Fi AP" not in issue
     assert "network=sta" in (root / "etc/avahi/services/rosy.service").read_text(encoding="utf-8")
+
+
+# --- D-260: the boot display's inputs it cannot read itself ---------------------
+
+READY_UNITS = {unit: "active\n" for unit in FAILED_CARD_UNITS}
+
+
+def test_the_record_carries_the_runtime_mode_and_the_device_states(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/runtime.env").write_text("ROSY_API_PORT=8081\nROSY_RUNTIME_MODE=motor\n", encoding="utf-8")
+    (root / "run/rosy-boot").mkdir(parents=True)
+    (root / "run/rosy-boot/hardware.json").write_text(json.dumps({"schema": 1, "devices": [
+        {"id": "camera", "state": "no_response", "product": True, "evidence": "CSI -121", "label": "카메라"},
+        {"id": "imu", "state": "bus_missing", "product": False, "evidence": "x"}]}), encoding="utf-8")
+
+    record, errors, _calls = _render(module, root, READY_UNITS)
+
+    assert errors == [] and record["api_port"] == 8081
+    assert record["runtime_mode"] == "motor"
+    # Evidence and labels stay in the 0640 hardware.json.
+    assert record["devices"] == [{"id": "camera", "state": "no_response", "product": True},
+                                 {"id": "imu", "state": "bus_missing", "product": False}]
+    written = json.loads((root / "run/rosy-boot/boot-status.json").read_text(encoding="utf-8"))
+    assert written["devices"] == record["devices"] and written["runtime_mode"] == "motor"
+
+
+@pytest.mark.parametrize("hardware", [
+    None, "not json", {"schema": 2, "devices": []},
+    {"schema": 1, "devices": [{"id": "camera", "state": "broken", "product": True}]},
+    {"schema": 1, "devices": [{"id": "camera", "state": "ok", "product": "yes"}]},
+    {"schema": 1, "devices": [{"id": "x" * 65, "state": "ok", "product": True}]},
+    {"schema": 1, "devices": [{"id": "d", "state": "ok", "product": True}] * 65},
+])
+def test_an_absent_or_malformed_probe_result_copies_no_device(tmp_path, hardware):
+    module = _module()
+    root = _device(tmp_path)
+    if hardware is not None:
+        (root / "run/rosy-boot").mkdir(parents=True)
+        (root / "run/rosy-boot/hardware.json").write_text(
+            hardware if isinstance(hardware, str) else json.dumps(hardware), encoding="utf-8")
+
+    record, _errors, _calls = _render(module, root, READY_UNITS)
+
+    assert record["devices"] == []
+
+
+@pytest.mark.parametrize("line,expected", [("ROSY_RUNTIME_MODE=hardware", "hardware"),
+                                           ("ROSY_RUNTIME_MODE=turbo", None), ("", None)])
+def test_only_a_known_runtime_mode_is_copied(tmp_path, line, expected):
+    module = _module()
+    root = _device(tmp_path)
+    (root / "etc/rosy/runtime.env").write_text(line + "\n", encoding="utf-8")
+
+    assert module.gather(root, _runner(READY_UNITS, []))["runtime_mode"] == expected

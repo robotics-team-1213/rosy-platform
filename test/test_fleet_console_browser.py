@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src" / "site" / "fleet" / "fleet" / "server" / "web"
 #: D-129·D-1005 — 공용 L1 자산의 단일 파일. fleet 사본은 없다.
-CANONICAL_TOKENS = ROOT / "src" / "core" / "web_common" / "tokens.css"
+CANONICAL_TOKENS = ROOT / "src" / "hmi" / "web" / "tokens.css"
 
 from browser_harness import (  # noqa: E402
     DECLINE_CONFIRM,
@@ -215,7 +215,7 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
             "() => document.getElementById('online-pill')?.textContent"
             " === 'Fleet 서버 없음'"
         )
-        assert "bad" in page.locator("#online-pill").get_attribute("class")
+        assert page.locator("#online-pill").get_attribute("status") == "crit"
         assert not errors
         save_temp_screenshot(page, "fleet_console_gather-error.png")
         browser.close()
@@ -358,3 +358,352 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
         browser.close()
+
+
+# --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
+
+def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        page.keyboard.press("ArrowDown")
+        page.wait_for_function(
+            "() => document.activeElement"
+            " && document.activeElement.matches('#roster article')"
+            " && document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
+        )
+        page.keyboard.press("ArrowDown")
+        page.wait_for_function(
+            "() => document.activeElement.querySelector('b')?.textContent === 'rosy_02'"
+        )
+        page.keyboard.press("Enter")
+        page.wait_for_function(
+            "() => document.querySelectorAll('.robot.selected').length === 1"
+            " && document.querySelector('.robot.selected b')?.textContent === 'rosy_02'"
+        )
+        page.keyboard.press("Escape")
+        page.wait_for_function(
+            "() => document.querySelectorAll('.robot.selected').length === 0"
+        )
+        assert not errors, f"페이지 오류: {errors}"
+        browser.close()
+
+
+def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
+    from playwright.sync_api import sync_playwright
+
+    posts: list[tuple[str, str]] = []
+    task = {"task_id": "task-queued-123", "status": "QUEUED", "attempt_seq": 0,
+            "reason": "ROUTE_CONFLICT", "waiting_on": ["rosy_02"], "queue_position": 1}
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+        "/api/fleet/robots/rosy_01/goal": {"accepted": False, "queued": True, "task": task},
+        "/api/fleet/tasks/task-queued-123": {"task": task},
+        "/api/fleet/tasks/task-queued-123/cancel": {"task": {**task, "status": "CANCELED"}},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, posts=posts)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
+        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
+        canvas_box = page.locator("#map-canvas").bounding_box()
+        assert canvas_box
+        page.mouse.click(canvas_box["x"] + canvas_box["width"] / 2,
+                         canvas_box["y"] + canvas_box["height"] / 2)
+        page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
+        assert "QUEUED" in page.inner_text("#log")
+        assert "#1" in page.inner_text("#log")
+        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").nth(1).click()
+        page.wait_for_timeout(200)
+        assert not errors
+        browser.close()
+
+    assert ("POST", "/api/fleet/tasks/task-queued-123/cancel") in posts
+
+
+# --- D-219: 큐의 렌더 계약 — HITL 과 성능 저하가 보이고, 비면 사라진다 ---------
+
+def _with_state(robot: dict, **state_extra) -> dict:
+    row = {**robot, "state": {**robot["state"], **state_extra}}
+    return row
+
+
+def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
+    from playwright.sync_api import sync_playwright
+
+    degraded = {
+        "fleet": {"name": "site", "online": 3, "total": 3},
+        "robots": [
+            _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0}),
+            _with_state(_robot("rosy_02", {"x": 0.45, "y": 1.0, "yaw": 0.0}),
+                        hitl_requested=True),
+            _with_state(_robot("rosy_03", {"x": 0.45, "y": 0.4, "yaw": 0.0}),
+                        capabilities_degraded=["lidar", "docking"]),
+        ],
+        "ts": 0.0,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, {
+            "/api/fleet/state": degraded,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelectorAll('#critical-list li').length === 1"
+            " && document.querySelectorAll('#warning-list li').length === 1"
+        )
+        crit = page.inner_text("#critical-list")
+        warn = page.inner_text("#warning-list")
+        assert "rosy_02" in crit and "개입 필요" in crit
+        assert "로봇 화면에서 확인" in crit  # 정직한 경로(D-218, F-20)
+        assert "rosy_03" in warn and "lidar" in warn
+        assert page.locator(".queues-panel").is_visible()
+        assert not errors, f"페이지 오류: {errors}"
+        save_temp_screenshot(page, "fleet_console_queues.png")
+        browser.close()
+
+    with sync_playwright() as p:
+        browser, page, _errors = _open_console(p, {
+            "/api/fleet/state": SNAPSHOT,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": FORMATION,
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
+        assert page.locator(".queues-panel").is_hidden()
+        browser.close()
+
+
+# --- D-201: 예외 문법의 적합 계약 — 선언 뷰포트(사이트 PC 1920×1080)에서
+#     문서가 스크롤되지 않고 신호등·대형이 뷰포트 안에 있다. -------------------
+
+FLEET_FIT_PROBE = """() => {
+  const inside = (sel) => {
+    const n = document.querySelector(sel);
+    if (!n) return null;
+    const b = n.getBoundingClientRect();
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom) };
+  };
+  return {
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    signals: inside('.signals'),
+    formation: inside('.formation'),
+    rosterPanel: inside('main > .panel[aria-labelledby="roster-heading"]'),
+    vh: window.innerHeight,
+  };
+}"""
+
+
+def test_console_fits_the_declared_viewport(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        fit = page.evaluate(FLEET_FIT_PROBE)
+        assert not errors
+        save_temp_screenshot(page, "fleet_console_fit.png")
+        browser.close()
+
+    assert fit["docOverflow"] <= 0, (
+        f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
+        " 보인다(D-201): " + str(fit)
+    )
+    for name in ("signals", "formation", "rosterPanel"):
+        box = fit[name]
+        assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
+            f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
+        )
+
+
+# --- D-202: 위험은 채움이다 — 따뜻한 글자는 4.5:1 이상이어야 읽힌다 ----------
+
+WARM_TEXT_CONTRAST = """() => {
+  const cs = getComputedStyle(document.documentElement);
+  const ctx = document.createElement('canvas').getContext('2d');
+  const norm = (v) => { ctx.fillStyle = v.trim(); return ctx.fillStyle; };
+  const warm = new Set([norm(cs.getPropertyValue('--status-warn')),
+                        norm(cs.getPropertyValue('--status-crit'))]);
+  const effBg = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const s = getComputedStyle(node);
+      const m = s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+      if (m && (m[1].split(',').length < 4 || Number(m[1].split(',')[3]) === 1)) {
+        return norm(s.backgroundColor);
+      }
+      node = node.parentElement;
+    }
+    return norm(cs.getPropertyValue('--ground'));
+  };
+  const lum = (c) => {
+    let r, g, b;
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.replace(/[^#]/g, (x) => x + x) : c;
+      r = parseInt(h.slice(1, 3), 16); g = parseInt(h.slice(3, 5), 16);
+      b = parseInt(h.slice(5, 7), 16);
+    } else {
+      const m = c.match(/rgba?\\(([^)]+)\\)/);
+      if (!m) return null;
+      [r, g, b] = m[1].split(',').map(Number);
+    }
+    const f = (v) => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const offenders = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const s = getComputedStyle(el);
+    const color = norm(s.color);
+    if (!warm.has(color)) continue;
+    const la = lum(color), lb = lum(effBg(el));
+    if (la === null || lb === null) continue;
+    const ratio = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    if (ratio < 4.5) {
+      offenders.push(`${el.tagName.toLowerCase()}.${(el.className || '').toString()}"
+        ${ratio.toFixed(2)}:1 "${el.textContent.trim().slice(0, 16)}"`);
+    }
+  }
+  return offenders;
+}"""
+
+
+def test_warm_coloured_text_stays_readable(console_url):
+    """D-202 — crit 글자(2.24:1) 같은 읽히지 않는 경보를 금지한다."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        offenders = page.evaluate(WARM_TEXT_CONTRAST)
+        assert not errors
+        browser.close()
+
+    assert offenders == [], (
+        "따뜻한 색 글자가 4.5:1 미만이다 — 위험은 채움이다(D-202): "
+        + "; ".join(offenders[:6])
+    )
+
+
+# --- D-214: 텍스트 대비의 바닥 — 색이 아니라 청중의 계약 ---------------------
+
+TEXT_CONTRAST_FLOOR = """() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  const effBg = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const s = getComputedStyle(node);
+      const m = s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+      if (m && (m[1].split(',').length < 4 || Number(m[1].split(',')[3]) === 1)) {
+        return s.backgroundColor;
+      }
+      node = node.parentElement;
+    }
+    return getComputedStyle(document.documentElement).getPropertyValue('--ground');
+  };
+  const lum = (c) => {
+    let r, g, b;
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.replace(/[^#]/g, (x) => x + x) : c;
+      r = parseInt(h.slice(1, 3), 16); g = parseInt(h.slice(3, 5), 16);
+      b = parseInt(h.slice(5, 7), 16);
+    } else {
+      const m = c.match(/rgba?\\(([^)]+)\\)/);
+      if (!m) return null;
+      [r, g, b] = m[1].split(',').map(Number);
+    }
+    const f = (v) => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const offenders = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const s = getComputedStyle(el);
+    const la = lum(s.color), lb = lum(effBg(el));
+    if (la === null || lb === null) continue;
+    const ratio = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    // 24px 이상의 디스플레이 값은 크기가 대비를 보상한다(D-214).
+    const floor = parseFloat(s.fontSize) >= 24 ? 3.0 : 4.5;
+    if (ratio < floor) {
+      offenders.push(`${el.tagName.toLowerCase()}.${(el.className || '').toString()}`
+        + ` ${ratio.toFixed(2)}:1 <${floor} "${el.textContent.trim().slice(0, 14)}"`);
+    }
+  }
+  return offenders;
+}"""
+
+
+def test_visible_text_meets_the_contrast_floor(console_url):
+    """D-214 — 보이는 모든 글자는 4.5:1(큰 값 3.0:1) 바닥 위에 있다.
+
+    선택된 로봇 카드의 muted 라벨(4.11:1)이 이 게이트의 첫 적발이다.
+    """
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        # 로스터의 선택 상태를 만든다 — 바닥 붕괴는 선택 카드에서 났다.
+        # 선택은 카드가 아니라 '목표 지정' 버튼으로 일어난다(console.js).
+        page.locator("#roster article ui-button", has_text="목표 지정").first.click()
+        # 경합 하에서 기본 5초를 넘기는 것은 대기의 문제지 대비의 문제가 아니다
+        # — 계약은 센서스가 지킨다(2026-09-25 재검증 노트의 플레이크와 같은 계열).
+        page.wait_for_function(
+            "() => document.querySelectorAll('.robot.selected').length === 1",
+            timeout=20_000,
+        )
+        offenders = page.evaluate(TEXT_CONTRAST_FLOOR)
+        assert not errors
+        browser.close()
+
+    assert offenders == [], (
+        "바닥 아래 텍스트가 있다 — 선택도 읽기를 희생하지 않는다(D-214): "
+        + "; ".join(offenders[:6])
+    )

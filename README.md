@@ -7,7 +7,7 @@
 
 ## 구조
 
-Rosy Control의 개발 기준은 이 저장소의 `src/apps/control`로 통합했다.
+Rosy Control의 개발 기준은 이 저장소의 `src/runtime/sensing`로 통합했다.
 별도 Control 저장소·웹 서버를 새 운영 구성으로 사용하지 않는다.
 현재 소스 편입과 보정 노드 경계 정리는 완료했으며, 전체 runtime·안전 중재·이미지·Pi 인수는 진행 중이다.
 현황은 [흡수 실행 결과](docs/plans/2026-09-12-control-absorption-results.md),
@@ -17,21 +17,22 @@ Rosy Control의 개발 기준은 이 저장소의 `src/apps/control`로 통합�
 rosy/ (이 리포지토리)
 ├── env.sh                    # 개발 PC: ROS와 워크스페이스를 읽는 유일한 루트 셸
 ├── docs/                     # 요구사항·ADR·계획·검증 기록
+│   ├── architecture/         # 목표 분산 OS 번호 문서
 │   └── reference/            # 살아 있는 API 계약과 ADR 로그
 ├── deploy/                   # 이미지·릴리스·로봇 설치 셸
 ├── tools/                    # tools/fix_ament_resource.sh, tools/run_fleet_sim.sh, tools/run_data.py
 ├── data/                     # data/teleop 확인 기록, data/drive 주행 기록. 세션은 커밋하지 않음
-├── dock/                     # 충전 도크 펌웨어
-├── signal/                   # 신호 제어 펌웨어
+├── firmware/                 # 충전 도크·신호 제어 펌웨어 (colcon 밖)
 ├── reference/                # 얼린 pinky_pro zip. 현재 코드가 아님
 ├── test/                     # 호스트 계약 시험
-└── src/                      # ROS 2 패키지 (도메인 그룹)
-    ├── core/                 # core·core_common·core_events·core_features·core_api_web·interfaces
-    ├── apps/                 # control·emotion·games·omx_adapter
-    ├── hardware/             # bringup·led·lamp_control·imu_bno055·sensor_adc
-    ├── navigation/           # Nav2/SLAM
+└── src/                      # ROS 2 패키지 (층)
+    ├── contracts/            # interfaces·core_common
+    ├── runtime/              # core·core_events·core_features·core_api_web·control·navigation
+    ├── devices/              # pinky_pro·common·omx
+    ├── products/             # pinky_pro 설정 패키지
+    ├── hmi/                  # emotion·web_common
     ├── sim/                  # description·gz_sim
-    └── site/                 # fleet
+    └── site/                 # fleet·games
 ```
 
 ## 문서 (거버넌스: docs/)
@@ -68,9 +69,16 @@ bash tools/run_fleet_sim.sh
 
 ## Raspberry Pi 5 런타임
 
-Raspberry Pi OS Lite 64-bit에서는 ROS 2 Jazzy 실행환경을 단계별 서비스로
-분리한다. `rosy-core`는 FastAPI/rclpy만 소유하고, `rosy-motor`는 LiDAR 없는
-벤치 커미셔닝, `rosy-io`는 승인된 모터·LiDAR 통합 운용에 사용한다.
+**로봇은 네이티브로 돈다.** 제품 런타임은 Docker가 아니라 Ubuntu Server 24.04
+arm64 위의 ROS 2 Jazzy + systemd다 (D-161). `rosy-runtime.target`이 CORE를 기본
+기동하고, I/O와 navigation은 승인 후 명시적으로 켠다. Docker/Compose는 개발·CI
+전용이며 제품 이미지에는 설치하지 않는다. 장치마다 컨테이너를 켜고 끄는 옵션은
+없고, 유연성은 프로필/slice로만 표현한다 — 컨테이너는 안전 계획 밖 비전·AI 같은
+선언된 사이드카 워크로드에만 허용된다 (D-197, D-246).
+
+런타임 슬라이스는 단계별로 나뉜다. `rosy-core`는 FastAPI/rclpy만 소유하고,
+`rosy-motor`는 LiDAR 없는 벤치 커미셔닝, `rosy-io`는 승인된 모터·LiDAR 통합
+운용에 사용한다.
 
 ```bash
 cd deploy/robot

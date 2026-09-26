@@ -1,0 +1,406 @@
+/* 브라우저 표면이 같이 쓰는 조작 부품. 색·크기·간격은 tokens.css만 읽는다.
+ * 레이아웃(어디 놓을지)은 각 표면 시트에 남긴다.
+ * 요소: ui-button, ui-field, ui-tag, ui-text.
+ */
+
+ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  gap: var(--space-2);
+  min-height: var(--target-secondary);
+  margin: 0;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+  color: var(--paper);
+  background: transparent;
+  font: 600 var(--text-body)/1.2 var(--body);
+  letter-spacing: 0;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+ui-button[kind="primary"] {
+  min-height: var(--target-primary);
+  padding: 0 var(--space-5);
+  border-color: transparent;
+  color: var(--button-primary-ink);
+  background: var(--button-primary-bg);
+  font-weight: 700;
+}
+
+ui-button[kind="quiet"],
+a.docs-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+  color: var(--nominal-quiet);
+  background: transparent;
+  font: 600 var(--text-label)/1.2 var(--body);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+ui-button[kind="quiet"]:hover,
+a.docs-link:hover {
+  color: var(--paper);
+  border-color: var(--paper);
+}
+
+ui-button[kind="irreversible"] {
+  min-height: var(--target-irreversible);
+  padding: var(--space-2) var(--space-4);
+  border-color: transparent;
+  color: var(--button-irreversible-ink);
+  background: var(--button-irreversible-bg);
+  font: 700 var(--text-value)/1.2 var(--body);
+}
+
+ui-button[kind="segment"] {
+  min-height: var(--target-secondary);
+  border: 0;
+  border-radius: 0;
+  color: var(--nominal-quiet);
+  background: transparent;
+  font: 600 var(--text-label)/1 var(--mono);
+  letter-spacing: 0.06em;
+}
+
+ui-button[kind="segment"][aria-pressed="true"],
+ui-button[kind="segment"].active,
+ui-button[kind="quiet"].arming {
+  color: var(--button-primary-ink);
+  background: var(--button-primary-bg);
+  border-color: transparent;
+  font-weight: 700;
+}
+
+ui-button[kind="toggle"].active,
+ui-button[kind="toggle"][data-active="true"] {
+  color: var(--button-primary-ink);
+  background: var(--series-primary);
+  border-color: transparent;
+  font-weight: 700;
+}
+
+ui-button[kind="toggle"] small,
+ui-button[kind="irreversible"] small {
+  display: block;
+}
+
+/* small은 각주다 — 종류가 크기를 지정하지 않아도 계단 안에 든다(D-203).
+   UA 기본값(smaller)은 16px 맥락에서 13.33px을 만들고, 14px 맥락에서는
+   11.67px을 만든다. 둘 다 닫힌 여섯 단계 밖이다. */
+ui-button small {
+  font: 500 var(--text-micro)/1.3 var(--body);
+}
+
+ui-button[kind="toggle"].active small,
+ui-button[kind="toggle"][data-active="true"] small {
+  color: var(--button-primary-ink);
+}
+
+ui-button[data-kind-missing] {
+  outline: 2px solid var(--status-crit);
+}
+
+ui-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+ui-button:focus-visible,
+ui-field:focus-visible,
+ui-field input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+ui-button[kind="irreversible"] span {
+  display: block;
+  font: 700 var(--text-value)/1.2 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+ui-button[kind="irreversible"] small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--paper);
+  font: 500 var(--text-label)/1.3 var(--body);
+}
+
+ui-field,
+input.ui-field,
+select.ui-field,
+textarea.ui-field {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--target-secondary);
+  margin: 0;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius-control);
+  color: var(--paper);
+  background: var(--field-bg);
+  font: 500 var(--text-body)/1.2 var(--mono);
+}
+
+ui-field { width: 100%; }
+
+ui-field input,
+ui-field select,
+ui-field textarea {
+  width: 100%;
+  min-height: var(--target-secondary);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+ui-field[invalid] {
+  border-color: var(--field-invalid);
+}
+
+ui-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-6);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-flag);
+  color: var(--nominal-quiet);
+  background: transparent;
+  font: 600 var(--text-label)/1 var(--mono);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+ui-tag[status="warn"] {
+  color: var(--status-warn);
+  border-color: var(--status-warn);
+}
+
+ui-tag[status="crit"] {
+  color: var(--paper);
+  border-color: transparent;
+  background: var(--status-crit);
+}
+
+ui-text {
+  font: 500 var(--text-body)/1.4 var(--body);
+  color: var(--paper);
+}
+
+ui-text[scale="unit"] {
+  font: 500 var(--text-micro)/1.2 var(--mono);
+  letter-spacing: var(--track-label);
+  color: var(--nominal-quiet);
+}
+
+ui-text[scale="label"] {
+  font: 600 var(--text-label)/1.2 var(--body);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--nominal-quiet);
+}
+
+ui-text[scale="value"] {
+  font: 650 var(--text-value)/1.1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+ui-text[scale="title"] {
+  font: 700 var(--text-title)/1.2 var(--body);
+  color: var(--paper);
+}
+
+ui-text[scale="display"] {
+  font: 650 var(--text-display)/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+ui-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+ui-head [data-rule] {
+  flex: 1;
+  border-top: 1px solid var(--surface-line);
+}
+
+ui-grid {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  background: var(--surface-line);
+}
+
+ui-grid[columns="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ui-grid[columns="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+ui-grid[columns="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+ui-grid > * {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-flat);
+}
+
+ui-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  color: var(--paper);
+  background: var(--scrim);
+  font: 600 var(--text-label)/1.2 var(--mono);
+  letter-spacing: var(--track-label);
+}
+
+ui-triage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  color: var(--paper);
+  font: 650 var(--text-body)/1.2 var(--body);
+}
+
+ui-triage::before {
+  content: "";
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-flag);
+  background: var(--muted-line);
+}
+
+ui-triage[status="warn"]::before { background: var(--status-warn); }
+ui-triage[status="crit"]::before { background: var(--status-crit); }
+
+ui-triage small {
+  margin-left: auto;
+  color: var(--nominal-quiet);
+  font: 500 var(--text-label)/1.3 var(--body);
+}
+
+ui-evidence {
+  display: inline-flex;
+  align-items: center;
+  color: var(--paper);
+  font: 500 var(--text-label)/1.3 var(--body);
+}
+
+ui-evidence[state="fresh"] { color: var(--nominal-quiet); }
+
+ui-evidence[state="delayed"],
+ui-evidence[state="disconnected"] { color: var(--nominal-quiet); }
+
+ui-evidence[state="unavailable"] {
+  padding: var(--space-1) var(--space-3);
+  border: 1px dashed var(--surface-line);
+  border-radius: var(--radius-control);
+  color: var(--nominal-quiet);
+}
+
+ui-evidence[data-state-missing] {
+  outline: 2px solid var(--status-crit);
+}
+
+/* 화면 틀. 다음 페이지는 template.html 을 복사해서 이 안에 내용을 넣는다. */
+
+ui-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100vh;
+  color: var(--paper);
+  background: var(--ground);
+  font-family: var(--body);
+  font-size: var(--text-body);
+}
+
+ui-shell[data-grammar-missing] {
+  outline: 2px solid var(--status-crit);
+}
+
+ui-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  min-height: var(--topbar-height);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--surface-line);
+  background: var(--ground-deep);
+}
+
+ui-shell[grammar="focal"] ui-topbar {
+  align-items: flex-end;
+  padding: var(--space-4) var(--space-5) var(--space-2);
+}
+
+ui-topbar [data-spacer],
+ui-topbar .spacer { flex: 1; }
+
+ui-brand {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--paper);
+}
+
+ui-brand a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+ui-brand b {
+  color: var(--brand-rose);
+  font: 700 var(--text-title)/1.1 var(--body);
+  letter-spacing: 0.04em;
+}
+
+ui-brand small {
+  color: var(--nominal-quiet);
+  font: 500 var(--text-micro)/1.2 var(--mono);
+  letter-spacing: var(--track-label);
+}
+
+ui-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+ui-empty {
+  margin: 0;
+  color: var(--nominal-quiet);
+  font: 500 var(--text-label)/1.5 var(--body);
+}

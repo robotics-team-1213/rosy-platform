@@ -19,7 +19,13 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/native"
-CORE_SRC = ROOT / "src/core"
+CORE_SRC = {
+    "core": ROOT / "src/runtime/gateway",
+    "core_common": ROOT / "src/contracts/foundation",
+    "core_events": ROOT / "src/runtime/events",
+    "core_features": ROOT / "src/runtime/services",
+    "core_api_web": ROOT / "src/runtime/api_web",
+}
 BOOT_ID = "0b1f5d2e-8c3a-4f6e-9d7b-1a2b3c4d5e6f"
 POSIX = pytest.mark.skipif(os.name != "posix", reason="POSIX modes, groups, symlinks and FIFOs")
 #: scrypt(N=2^14, r=8, p=1, dklen=32) of "ABCD2345" with salt 00..0f: CORE and the issuer agree on it.
@@ -94,7 +100,7 @@ def test_codes_use_only_the_unambiguous_alphabet(issuer_module):
 
 
 def test_issuer_and_core_share_the_scrypt_vector_and_the_alphabet(issuer_module):
-    sys.path[:0] = [str(CORE_SRC / name) for name in (
+    sys.path[:0] = [str(CORE_SRC[name]) for name in (
         "core", "core_common", "core_events", "core_features", "core_api_web")]
     from core_api_web.api.v1 import auth as core_auth
 
@@ -109,7 +115,7 @@ def test_issuer_and_core_share_the_scrypt_vector_and_the_alphabet(issuer_module)
 
 
 def test_core_reads_what_the_issuer_writes_and_the_code_verifies(issuer_module, tmp_path):
-    sys.path[:0] = [str(CORE_SRC / name) for name in (
+    sys.path[:0] = [str(CORE_SRC[name]) for name in (
         "core", "core_common", "core_events", "core_features", "core_api_web")]
     from core_api_web.api.v1 import auth as core_auth
 

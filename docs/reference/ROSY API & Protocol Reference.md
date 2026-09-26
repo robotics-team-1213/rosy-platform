@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.21
+**Version:** v1.35
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -124,6 +124,11 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 | `LINE_FOLLOW_ACTIVE` | 409 | 라인 추종이 켜져 있어 도킹/언도킹을 시작하지 않음 — `line-follow/mode` 를 `OFF` 로 먼저 (v1.18) | 로봇 |
 | `NO_ODOMETRY` | 409 | 오도메트리가 없어 언도킹 후진 거리를 잴 수 없음 (v1.18) | 로봇 |
 | `ROBOT_OFFLINE` | 503 | 대상 로봇 미접속 | Fleet |
+| `HW_PROBE_UNAVAILABLE` | 503 | 장치 점검 요청 파일을 쓰지 못함 (`POST /host/hardware/refresh`, D-247) | 로봇 |
+| `HW_TEST_COOLDOWN` | 429 | 부저·램프 시험을 10초 안에 다시 요청함 (`POST /host/hardware/test`, D-247 6, v1.23) | 로봇 |
+| `HW_TEST_UNAVAILABLE` | 503 | 부저·램프 시험 요청 파일을 쓰지 못함 (`POST /host/hardware/test`, v1.23) | 로봇 |
+| `HW_CONFIRM_UNAVAILABLE` | 503 | 들림·보임 기록을 쓰지 못함 (`POST /host/hardware/confirm`, v1.23) | 로봇 |
+| `HW_CONFIRM_NO_TEST` | 409 | 그 장치를 `done`으로 5분 안에 끝낸 시험이 없는데 들림·보임을 답함 — 시험 없음·`busy`·`unavailable`·`failed`·다른 장치·5분 초과 (`POST /host/hardware/confirm`, v1.23) | 로봇 |
 | `COMMAND_TIMEOUT` | 504 | 명령 추적 타임아웃 (PRT-004) | Fleet |
 | `PAIRING_INVALID` | 401 | 페어링 토큰 무효/만료 | Fleet |
 | `IDEMPOTENCY_CONFLICT` | 409 | 동일 key·다른 내용 | Fleet |
@@ -186,6 +191,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 | PATCH | `/api/v1/system/tokens/{id}` | Admin | SEC-101 (payload: `{label}`, 64자 이하) — 이름표만 바꾼다. 응답은 목록 항목 한 개. 없거나 만료된 id 는 404 (v1.19) |
 | POST | `/api/v1/auth/pair` | 없음 | D-193 (payload: `{code, label?}`, 본문 1 KiB 이하, 넘으면 413) — 로그인 코드 `ABCD-EFGH`(하이픈·대소문자 무시) → `201 {id, token, role, label, source, expires_at}`, `Cache-Control: no-store`. 원문 토큰은 이때 한 번만 싣는다. 출발지는 RFC 1918·루프백만(그 밖 403), IP 마다 60 s 5회·전체 60 s 30회(넘으면 429 + `Retry-After`). 형식이 아닌 코드는 400, 틀리거나 만료·사용된 코드와 발급된 코드가 없는 경우는 모두 같은 401 이다. 한 코드에 틀린 시도가 5회 쌓이면 코드를 폐기하고, 그 5번째 요청의 401 만 `error.detail = {"burned": true}` 를 싣는다(대시보드가 새 코드를 받으라고 안내한다) 토큰 수명은 `auth.pairing.token_lifetime_hours`(기본 operator·viewer 168 h, administrator 24 h, 설정해도 168 h 를 넘지 않는다) — 만료 없는 토큰은 나오지 않는다 |
 | GET | `/api/v1/auth/whoami` | Viewer | D-193 — `{id, role, label, source, created_at, expires_at}`. 대시보드가 역할을 추측하지 않고 묻는다 |
+| GET | `/api/v1/ui/surfaces/{surface}` | Viewer+ | D-263/D-265 — 역할별 화면 매니페스트. `console`/`setup`/`device`; 해당 화면 최소 역할보다 낮으면 403, 인증 실패 401, 미등록 화면 404. 응답은 현재 역할이 열 수 있는 기반 화면 목록과 현재 화면의 CAP-001·inventory 필터 패널, 구조 revision. 메뉴는 패널 수와 독립이다. REST 응답 모델 `UiSurfaceManifest`; Fleet envelope `protocol_version`은 1.0 유지 |
 | POST | `/api/v1/auth/logout` | Viewer | D-193 — 호출자 자신의 `pair-*` 토큰을 지운다(204). 다른 출처의 토큰은 409 — 설정 화면에서 회수한다 |
 | POST | `/api/v1/auth/enrollment-codes` | Admin | D-193 (payload: `{role}`, 기본 `operator`) — 다른 기기용 로그인 코드 `201 {code, code_id, role, expires_in_s}`, 5분, CORE 메모리에만. 역할은 호출자 이하(넘으면 403). 이 코드로 받은 토큰의 출처는 `pair-admin` 이고 만료는 발급자 토큰의 만료를 넘지 않는다. 발급자 토큰이 회수·만료되면 코드도 무효다 |
 
@@ -243,7 +249,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 |---|---|---|---|
 | POST | `/api/v1/teleop` | Operator | §11 |
 | POST | `/api/v1/mode` | Operator | `{mode: MANUAL\|NAVIGATION\|IDLE}` |
-| POST | `/api/v1/swarm/follow` | Operator | SWM-002 `{target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source}`. `source: fleet(기본)\|peer(예약, D-21 — 요청하면 501)`. `max_speed` 는 SAF-004 상한을 넘으면 400 이고, 추종 구간 동안 실제 상한으로 적용된다 — Nav2 가 무엇을 내보내든 `cmd_vel` 은 이 값으로 클리핑된다(D-31). 적용 중인 값은 `GET /safety/state` 의 `limits.session_linear` 에 보인다. 미지원 로봇은 501 `CAPABILITY_NOT_SUPPORTED` (SWM-005/CAP-003), 도킹/언도킹 중에는 409 `DOCKING_ACTIVE`, 맵핑 세션 중에는 409 `MAPPING_ACTIVE`, E-Stop 중에는 409 `EMERGENCY_ACTIVE`. 추종 중 `POST /navigation/cancel` 이나 MANUAL 전환은 대형을 끝내고 `swarm.aborted` 를 낸다 |
+| POST | `/api/v1/swarm/follow` | Operator | SWM-002 `{target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source, members}`. `source: fleet(기본)\|peer(예약, D-21 — 요청하면 501)`. `members` 는 대형 명단을 `robots.yaml` 순서로 — 비어 있으면 리더 승계를 하지 않고, 있으면 리더 상실 시 `swarm.succession` 을 낸 뒤 follow 를 끝낸다. `max_speed` 는 SAF-004 상한을 넘으면 400 이고, 추종 구간 동안 실제 상한으로 적용된다 — Nav2 가 무엇을 내보내든 `cmd_vel` 은 이 값으로 클리핑된다(D-31). 적용 중인 값은 `GET /safety/state` 의 `limits.session_linear` 에 보인다. 미지원 로봇은 501 `CAPABILITY_NOT_SUPPORTED` (SWM-005/CAP-003), 도킹/언도킹 중에는 409 `DOCKING_ACTIVE`, 맵핑 세션 중에는 409 `MAPPING_ACTIVE`, E-Stop 중에는 409 `EMERGENCY_ACTIVE`. 추종 중 `POST /navigation/cancel` 이나 MANUAL 전환은 대형을 끝내고 `swarm.aborted` 를 낸다 |
 | POST | `/api/v1/swarm/cancel` | Operator | SWM-002 |
 | GET | `/api/v1/swarm/state` | Viewer | SWM-006 — `{role, formation, active, holding, target_robot_id, source, max_speed, map_mismatch, stream_age_s}`. `map_mismatch` 는 거부 중인 리더의 `map_id` 다. 상태 스냅샷의 `swarm` 필드는 그중 `role`·`formation`·`active` 다 |
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나) |
@@ -267,6 +273,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 | POST | `/api/v1/docking/cancel` | Operator | DNC-003 |
 | GET | `/api/v1/docking/status` | Viewer | DNC-003 — **capability 무관 항상 200**, `supported` 포함 |
 | GET | `/api/v1/docking/docks` | Viewer | DNC-005 |
+| GET | `/api/v1/docking/types` | Viewer | DNC-005 도크 유형·검출기 설정 목록 조회 |
 | POST | `/api/v1/docking/types` | Admin | DNC-005 도크 기종 등록. v1.18 선택 필드(생략 시 기존 충전 도크 동작): `tag_id`, `tag_size_m`, `staging`(기본 true), `approach`(`bearing` 기본 \| `pose`), `settle`(`agent` 기본 \| `pose`), `tag_offset_m`, `acquire_creep_m`, `backoff_m`, `undock_turn_rad` — 주차형 도크 (docs/plans/2026-09-23-lane-network-parking-design.md) |
 | POST | `/api/v1/docking/docks` | Admin | DNC-005 도크 개체 등록 |
 | DELETE | `/api/v1/docking/docks/{id}` | Admin | DNC-005 |
@@ -285,7 +292,12 @@ CORE 는 이 경로들을 처리하지 않고 unix 소켓으로 Host Agent 에 �
 | POST | `/api/v1/host/release/install` | Admin | OPS — 서명 검증된 릴리스 설치 |
 | POST | `/api/v1/host/release/rollback` | Admin | OPS — previous 로 복귀 |
 | POST | `/api/v1/host/release/clear-hold` | Admin | OPS — RECOVERY HOLD 해제 |
-| GET | `/api/v1/host/commissioning` | Viewer | HWA-001 — runtime mode 와 hardware 재승인 사유 |
+| GET | `/api/v1/host/commissioning` | Viewer | HWA-001 — runtime mode 와 hardware 재승인 사유. v1.22 `motion_reason`: 로봇이 왜 못 움직이는지 한 문장(D-247 7, 권한 문구와 구별). hardware 모드는 `""` |
+| GET | `/api/v1/host/hardware` | Viewer | D-247 — 보드 장치 관측. Host Agent가 아니라 root `rosy-hw-probe`가 쓴 `/run/rosy-boot/hardware.json`을 엄격히 읽는다. `{available, schema:1, measured_at, age_s, stale(600 s 초과), boot_id, devices:[{id, label, bus, state, evidence, product, held_by?, source?}], detail}`. `state` ∈ `ok`·`no_response`·`bus_missing`·`driver_missing`·`needs_human`·`not_measured`. `held_by` 행은 CORE가 토픽 신선도로 판정해 덮고 `source:"topic"`을 단다. 결과가 없으면 200 `{available:false, detail:"장치 점검 결과가 아직 없습니다", devices:[]}`. v1.23: `test`(마지막 부저·램프 시험 `{request_id, action, state ∈ done·busy·unavailable·failed, detail, finished_at}` 또는 `null`), 그리고 `needs_human`인 `buzzer`·`lamp` 행은 기록된 답으로 덮는다 — 들림·보임이면 `ok`·근거 `사람 확인: <이름> <시각>`, 아니면 `no_response`·`사람 확인: 들리지 않음/보이지 않음 · …`, 둘 다 `source:"human"`. 다른 상태의 행은 덮지 않는다 |
+| GET | `/api/v1/host/status-summary` | Viewer | D-260 5 (v1.25) — 운용 화면 요약줄. 부팅 표시와 같은 규칙표(`core_common.robot_state`)를 `/run/rosy-boot/boot-status.json`(엄격히 읽음; 없으면 CORE가 응답 중이므로 `CORE_READY`로 보고 `boot.available:false`), `GET /host/hardware`와 같은 덮기를 거친 장치 행, 배터리(채널이 fresh일 때만)와 SAF-005 경고 임계, runtime mode에 적용한다. `{state ∈ booting·failed·caution·ready_held·ready, label(부팅 중·실패·주의·준비됨 — 못 움직임·준비됨), reason, state_line, motion_reason, runtime_mode, boot:{available, stage}, devices:{available, stale, ok, total, problems:[{id, label, state, product}]}, battery:{percent, voltage, warning_percent, low}, temperature_c, todos:[{id, text, device?}]}`. 우선순위 실패 > 주의 > 준비됨 — 못 움직임 > 준비됨, CORE_READY 전은 부팅 중. 할 일은 급한 순서 |
+| POST | `/api/v1/host/hardware/refresh` | Admin | D-247 — `/run/rosy/hw-probe.request`를 써서 `rosy-hw-probe.path`가 probe를 다시 돌리게 한다. 10초 안의 재요청은 `{accepted:false}`. 요청 파일을 못 쓰면 503 `HW_PROBE_UNAVAILABLE` |
+| POST | `/api/v1/host/hardware/test` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp"}`, 다른 키 거부) — `/run/rosy/hw-test.request` `{action, request_id, requested_at, by}`를 써서 root `rosy-hw-test`가 부저를 150 ms×3 울리거나 램프를 빨강·초록·파랑 1 s씩 켜게 한다. subprocess 없음. 200 `{accepted:true, request_id, device, detail}`. 10초 안 재요청은 429 `HW_TEST_COOLDOWN`, 요청 파일을 못 쓰면 503 `HW_TEST_UNAVAILABLE`. 결과는 `GET /host/hardware`의 `test` |
+| POST | `/api/v1/host/hardware/confirm` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp", observed: bool}`, 엄격한 bool) — 사람의 답을 `{observed, by(토큰 id), label, at}`로 CORE 상태 디렉터리 `~/.rosy/hw-confirmations.json`(0600, 원자적 교체)에 기록한다. `rosy-hw-test`의 마지막 결과가 같은 장치·`state:"done"`·5분 안에 끝난 것이어야 하며, 아니면 409 `HW_CONFIRM_NO_TEST`. 기록에는 그 시험의 `request_id`가 함께 남는다(파일에만, 응답·카드에는 싣지 않음). 장치마다 마지막 답 하나. 200 `{recorded:true, device, observed, by, label, at}`. 쓰지 못하면 503 `HW_CONFIRM_UNAVAILABLE` |
 
 ---
 
@@ -486,6 +498,8 @@ WS Teleop에도 Watchdog·감사 로그가 동일 적용된다(SAF-002).
                "api_versions": ["v1"], "protocol_version": "1.0" } }
 ```
 
+추가 선택 필드(additive, 없어도 유효): `device_uid`, `device_name`, `model`, `hardware_serial`.
+
 Fleet 응답: `welcome`(성공, 장기 토큰 발급) / `error(PAIRING_INVALID)`.
 
 ## 7.3 Heartbeat (PRT-003)
@@ -625,6 +639,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, reference_source, by}` |
 | `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) |
 | `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` |
+| `swarm.succession` | warning | 로봇 | `{leader, dead, role, by}` — 명단이 공유된 대형에서 리더(`dead`)를 잃은 팔로워가 follow 를 끝내고 낸다. `leader` 는 `next_leader` 규칙이 고른 다음 리더(없으면 `null`), `role` 은 이 로봇의 새 역할, `by`: `followers` |
 
 ---
 
@@ -747,6 +762,8 @@ profile:
   "ts_issued": "...", "ts_final": "..." }
 ```
 
+`TIMEOUT`은 Fleet 측 레코드 전용이며 로봇 ack에는 나타나지 않는다 (D-215).
+
 ---
 
 # 10. Fleet REST API 카탈로그
@@ -758,6 +775,9 @@ Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:80
 > 시드(`fleet console`)로, **`:8090`의 `/api/fleet/*`**(경로도 다르다 — 사이트
 > 것과 로봇 계약을 섞지 않으려는 의도)와 SiteHub gather/scatter 뿐이다. 로봇↔
 > 시드 콘솔 사이의 실제 프로토콜은 §5~§7 을 따른다.
+
+사이트 시드의 추가 경로는 §10.6에 기록한다. 이 API는 로봇 `/api/v1/*`와 다른
+listener·자격 증명이며 중앙 Fleet catalog의 구현 상태로 간주하지 않는다.
 
 ## 10.1 로봇·페어링
 
@@ -810,12 +830,149 @@ Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:80
 | GET | `/api/v1/fleet/events?robot_id=&type=&since=` | Viewer | 통합 이벤트 조회 (OBS-202) |
 | GET | `/api/v1/fleet/audit` | Admin | Fleet 감사 로그 |
 
+## 10.6 Site Fleet sighting (D-257 Proposed)
+
+Base: `https://<site-fqdn>:8443`. 이 경로는 지도 위 표시·로봇 pose 대조용이다.
+이미지나 자동 정책 입력이 아니며 source 설정이 없는 앱에는 경로를 등록하지 않는다.
+`fleet console --sightings-config <site-cameras.yaml> --sightings-db <fleet.sqlite3>`로
+source/map/calibration 허용 목록과 SQLite 영속 저장을 설정한다. source token은 YAML이 아닌
+별도 secret mount에서 환경 변수로 읽는다. HTTPS/WSS 종단과 내부 upstream TLS는 `deploy/site`
+Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-end 경로를 확인했지만 현장
+인증서·실제 카메라·survey calibration은 별도 수용 gate다.
+
+| Method | Path | Credential | 요구사항 |
+|---|---|---|---|
+| POST | `/api/fleet/sightings` | source 전용 Bearer token | vision worker가 `SiteSightingPayload`를 제출. 토큰 설정이 허용한 source/robot/map/calibration만 수용 |
+| GET | `/api/fleet/sightings` | console Bearer token | 로봇별 최신 sighting, server-derived source, capture/receive age 및 1 s lease stale 상태 |
+
+`POST` body `SiteSightingPayload`:
+
+```json
+{
+  "robot_id": "rosy_01",
+  "x": 1.25,
+  "y": -0.5,
+  "yaw": 0.2,
+  "captured_at": 1790000000.25,
+  "seq": 42,
+  "map_id": "lane-map:sha256:abc",
+  "calibration_revision": "ceiling-1-v2",
+  "processor_revision": "aruco-map-v1",
+  "quality": null,
+  "corner_marker_ids": [30, 31, 32, 33]
+}
+```
+
+`quality`가 `null`이면 측정하지 않은 상태다. 화면 표시에만 사용하며 D-268 정책 증거로 승격하지 않는다.
+
+`captured_at`은 UTC Unix seconds다. 서버가 `source_id`와 `received_at`을 붙인다. client가
+`source_id`, image/JPEG/URL 또는 policy 필드를 추가하면 422다. map/calibration/코너 설정
+불일치, 1 s 초과 stale/future/out-of-order 입력은 409, 허가되지 않은 robot은 403이다.
+source token은 console/robot REST/CORE Agent token과 달라야 하고 이 credential로 명령
+경로를 호출할 수 없다. D-268 policy evidence 및 자동 실행은 이 API에 포함되지 않는다.
+
+## 10.7 Site Fleet CORE Agent event history (D-269 Proposed)
+
+CORE Agent WebSocket의 pairing 및 `EventMessage` 검증을 통과한 이벤트는 Fleet SQLite의
+`core_event_audit`에 append-only로 기록한다. `event_id` 재전송은 멱등이며 동일 ID에 다른
+내용이 오면 거절한다. 자격 증명 필드, private key 또는 64 KiB 초과 payload는 저장하지 않는다.
+SQLite `audit_id`는 재시작 뒤에도 유지되는 페이지 커서다. `--events-db`는 `--sightings-db`와
+같은 영속 파일로 설정할 수 있다. CORE Agent pairing을 켠 CLI는 `--events-db`를 요구한다.
+
+| Method | Path | Credential | 요구사항 |
+|---|---|---|---|
+| GET | `/api/fleet/events?after_id=&limit=&robot_id=` | console Bearer token | 인증된 CORE 이벤트 감사 기록을 audit cursor 순으로 조회. `limit` 1–200, 기본 100 |
+
+조회 응답은 `events`, `next_cursor`, `has_more`를 포함한다. 이벤트 수신/저장은 DDS 접근이나
+동작 명령을 수행하지 않는다. SQLite 쓰기 실패 시 Agent 이벤트를 성공 수신으로 응답하지 않는다.
+
 ---
+
+# 10.8 Site Fleet task submission, role authorization, and readback (D-276 Accepted)
+
+When durable task storage is configured, the operator navigation route creates a
+persistent task before contacting CORE. The browser sends a fresh
+`Idempotency-Key`; repeating the same request with the same authenticated
+operator identity returns the original task without issuing another robot
+command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT`.
+
+| Method | Path | Credential | Requirement |
+|---|---|---|---|
+| GET | `/api/fleet/session` | any configured site-user bearer | Returns only the authenticated `principal_id` and role for the current console session. |
+| POST | `/api/fleet/robots/{robot_id}/goal` | `operator` bearer + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
+| POST | `/api/fleet/do` (when `do` is `navigate`) | `operator` bearer + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
+| GET | `/api/fleet/tasks/{task_id}` | any configured user bearer | Returns the durable task projection and append-only status history. |
+| POST | `/api/fleet/tasks/{task_id}/cancel` | `operator` bearer | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
+
+Task status is the shared `FleetTaskStatus` enum: `REQUESTED`, `QUEUED`,
+`ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`, `UNKNOWN`, `HOLD`, `CANCELED`,
+or `EXPIRED`. The normal path is `REQUESTED` → `QUEUED` → `ACCEPTED`; a queued
+task may instead become `CANCELED` or `EXPIRED`, and dispatch uncertainty is
+`UNKNOWN`. `QUEUED` means Fleet durably recorded the request and has not yet
+dispatched it. `ACCEPTED` means CORE returned an explicit receipt; it does not
+mean the task started or completed. `RUNNING` and `COMPLETED` require separate
+CORE status/final-result evidence. `CANCELED` and `EXPIRED` apply only before
+dispatch. An ambiguous post-dispatch result is `UNKNOWN` and is never retried
+automatically. This Fleet task enum does not change the robot DDS/WSS envelope
+`protocol_version`.
+
+The browser treats `QUEUED` as durably accepted by Fleet and shows the task ID,
+server-computed `queue_position`, wait reason, blockers when available, and
+queued-only cancellation. The position orders queued `READY` and
+`WAITING_TRAFFIC` tasks by server priority and FIFO timestamp; it is not an
+execution-time estimate and does not override robot availability or traffic
+eligibility. Before cancelling, the browser reads the authenticated task
+projection again; if the task has
+already left `QUEUED`, the operator action uses the robot cancel route. Robot
+cancel/stop and site E-Stop remove undispatched queued work before sending the
+CORE safety request. An `UNKNOWN` task is shown as requiring manual CORE status
+verification; the UI never turns a command receipt into completion.
+
+The site Compose configuration loads an individual `site-users.yaml` registry.
+Each row binds a unique `principal_id` and role (`viewer`, `operator`, or
+`policy-admin`) to a SHA-256 digest of one high-entropy bearer token. The raw
+token is delivered separately and is never stored in that file. `viewer` may
+read Fleet state, evidence, and task history. `operator` may also request,
+cancel, and stop work. `policy-admin` may not issue robot commands; no policy
+mutation endpoint exists yet. The separate `/registry` endpoint continues to
+use its own server-side credential.
+
+Authenticated `POST /api/fleet/*` requests other than source-authenticated
+`POST /api/fleet/sightings` append an `INTENT` and a `RESULT` row to the durable
+API audit. The rows contain principal, role, method, path, and response code,
+not the bearer token or request body. If the intent cannot be persisted, Fleet
+returns `503 AUDIT_STORAGE_UNAVAILABLE` before calling CORE. If the result row
+cannot be written after an action, the intent remains pending and the outcome
+must be reconciled; it is not safe to infer failure or retry.
+
+The legacy shared `--token` mode is not per-user authorization and does not
+satisfy D-276. Site Compose requires `--users-file`; replacing or removing a
+digest and restarting Fleet rotates or revokes that user. Policy submissions
+remain `HOLD` with `POLICY_NOT_ACCEPTED` while D-268 is Proposed. A command timeout or unclassified post-dispatch error becomes
+`UNKNOWN`; the server does not retry it. D-177 command correlation and CORE
+ACK/final-result reconciliation remain separate required work.
+On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
+`fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.35 | 2026-09-26 | Additive(D-276): authenticated Fleet session identity endpoint for the console role cue. Robot DDS/WSS envelope version remains 1.0. |
+| v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
+| v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |
+| v1.33 | 2026-09-26 | Additive(D-271): Fleet console queued-task feedback/readback/cancel and cancel/stop/E-Stop queue coordination. |
+| v1.31 | 2026-09-26 | Additive(D-269 Proposed): operator navigation `Idempotency-Key`, durable task status/history, authenticated `/api/fleet/tasks/{task_id}` readback. Policy work remains `HOLD`; D-177 command ACK and per-user identity are not implemented. |
+| v1.30 | 2026-09-26 | Additive(D-269 Proposed): paired CORE Agent 이벤트를 credential-free bounded SQLite audit history에 저장, 중복 `event_id` 멱등 처리, 인증된 cursor 기반 `/api/fleet/events` 조회. 이는 자동 작업 승인이나 D-177 command ACK 구현을 뜻하지 않음 |
+| v1.29 | 2026-09-26 | Clarify(D-257/D-269 Proposed): Fleet CLI source config와 SQLite latest/history storage, HTTPS API path 및 site Docker TLS boundaries. Synthetic Docker WSS→vision→Fleet readback은 LOCAL evidence만 제공; D-268/자동 실행 상태 불변 |
+| v1.28 | 2026-09-26 | Additive(D-257 Proposed): Site Fleet sighting `quality`는 미측정 시 `null` 허용. 표시 전용이며 D-268 정책 증거로 사용하지 않음. envelope `protocol_version` 1.0 유지 |
+| v1.26 | 2026-09-26 | Additive(D-257 Proposed): Site Fleet 전용 source-token `POST /api/fleet/sightings`, operator `GET` readback 및 `SiteSightingPayload` shared schema. 파생 pose만 전달하며 source identity는 서버가 token에서 결정. 1 s 표시 lease, D-268 자동 정책 경로는 계속 별도/HOLD |
+| v1.25 | 2026-09-26 | Additive(D-260 5): `GET /host/status-summary`(Viewer) 신설 — 로봇 상태 하나·이유·장치 요약·배터리·온도·할 일. 기존 필드 불변 — envelope `protocol_version` 1.0 유지 |
+| v1.24 | 2026-09-26 | Additive(D-263/D-265): 역할별 기반 화면 `GET /api/v1/ui/surfaces/{surface}` 및 `UiSurfaceManifest` REST 응답 스키마. 메뉴 노출은 패널 수와 독립이며 직접 요청은 역할에 따라 401/403/404. Fleet envelope `protocol_version` 1.0 유지 |
+| v1.27 | 2026-09-26 | Additive: `GET /api/v1/docking/types` 는 Viewer가 설정된 도크 검출기 유형을 조회한다. `/types`의 POST 권한은 계속 Admin이며 도크 유형 구성 응답만 추가한다. |
+| v1.23 | 2026-09-26 | Additive(D-247 6): `POST /host/hardware/test`·`POST /host/hardware/confirm`(Admin) 신설, `HW_TEST_COOLDOWN`(429)·`HW_TEST_UNAVAILABLE`(503)·`HW_CONFIRM_UNAVAILABLE`(503)·`HW_CONFIRM_NO_TEST`(409), `GET /host/hardware`의 `test` 필드와 `source:"human"` 행 덮기 추가. 기존 필드 불변 — envelope `protocol_version` 1.0 유지 |
+| v1.22 | 2026-09-25 | Additive(D-247): `GET /host/hardware`(Viewer)·`POST /host/hardware/refresh`(Admin) 신설, 에러 코드 `HW_PROBE_UNAVAILABLE`(503) 신설, `GET /host/commissioning` 에 `motion_reason` 필드 추가. 기존 필드 불변 — envelope `protocol_version` 1.0 유지 |
+| v1.21 | 2026-09-25 | Additive: 이벤트 `swarm.succession`(warning) `{leader, dead, role, by}` 문서화 — 공유 명단 대형에서 죽은 리더를 교체할 때 이미 발행되고 있었으나 §8 에 없었다. 스키마 변경 없음 — envelope `protocol_version` 1.0 유지 |
 | v1.21 | 2026-09-24 | Corrective + Additive, 실기(rosy-pinky-e4us, release 2026.09.24-010, CORE-only 이미지 + 무동작 `rosy-io`) 근거. **Corrective**: CAP-001 `withheld` 판정이 설정 문자열 대신 살아 있는 증거를 쓴다 — 무동작 모드(`motor/ready: false`)에서 `teleop`·이동 플래그를 광고하던 것(D-32 위반)을 `drive_disabled:no_motion` 으로 내린다. 새 이유 `hardware_silent`·`drive_lease_expired`·`drive_absent`·`navigation_absent`. inventory descriptor 의 `reason` 은 런타임 이유가 `device_state` 보다 먼저다(≠v1.18). **Additive**: `withheld.reasons`(플래그별), `capabilities.runtime`(`hardware`·`evidence`·`drive`·`navigation`·`maps`), descriptor `reasons`. envelope `protocol_version` 1.0 유지 |
 | v1.20 | 2026-09-24 | Additive + Corrective. **Additive**: 에러 코드 `LINE_FOLLOW_ACTIVE`(409)·`NO_ODOMETRY`(409) 신설. `POST /docking/dock` 는 라인 추종 중 409 `LINE_FOLLOW_ACTIVE`, DOCKING 모드를 쥘 수 없으면 409 `MODE_CONFLICT`; `POST /docking/undock` 는 여기에 오도메트리 부재 시 409 `NO_ODOMETRY`. `PUT /line-follow/mode` 는 도킹/언도킹 중 409 `DOCKING_ACTIVE`. `POST /docking/types` 에 주차형 도크 선택 필드(`tag_id`·`tag_size_m`·`staging`·`approach`·`settle`·`tag_offset_m`·`acquire_creep_m`·`backoff_m`·`undock_turn_rad`) — 생략하면 기존 동작. **Corrective**(코드를 고친 것): 내비게이션의 `DOCKING_ACTIVE` 거부가 HTTP 매핑이 없어 400 으로 나가던 것을 문서대로 409 로(409≠400). 스키마 변경 없음 — envelope `protocol_version` 1.0 유지 |
 | v1.19 | 2026-09-24 | Additive(D-193): `auth/pair`·`auth/whoami`·`auth/logout`·`auth/enrollment-codes`, `PATCH system/tokens/{id}`. 토큰 목록에 `expires_at`·`source`·`current`·`last_used_at`, 생성 응답에 `expires_at`·`source`. 이벤트 `auth.paired`·`auth.code_burned`·`auth.enrollment_code_issued`·`auth.credentials_refused`. `whoami` 가 신원의 정본이고 `system/info.caller_role`(v1.18)은 호환용으로 남는다. WebSocket 첫 메시지 인증(`?token=` 은 한 릴리스 동안 유지). S3: `auth/pair` 의 코드를 폐기시킨 401 에 `error.detail.burned`, 대시보드는 첫 메시지 인증만 쓴다. **동작 변경**: 만료된 토큰은 401, 마지막 관리자 규칙은 만료 없는 administrator 만 센다, 장치 기본값에 토큰이 없다(개발 토큰은 `ROSY_DEV_AUTH=1` 일 때만, 장치 모드는 거부) |
@@ -824,7 +981,7 @@ Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:80
 | v1.16 | 2026-09-22 | 상태 표기·계약 명확화: §10 Fleet REST 카탈로그에 **미구현** 표기(시드는 :8090 `/api/fleet/*`), §1 `Deprecation`/`Sunset` 헤더 구현 시점 명시, §2 AUTH-103 CORS 미제공 제약, §4 enum 대소문자 표. 스키마 변경 없음 — envelope `protocol_version` 1.0 유지 |
 | v1.15 | 2026-09-22 | 상태 표기 정정: §7.5 PRT-004 로봇 측 구현(correlation_id 소비·AckPayload 확장)을 중앙 Fleet 서버 착수 조건부로 명시 (ADR D-170). 스키마 변경 없음 — envelope `protocol_version` 1.0 유지 |
 | v1.14 | 2026-09-22 | Additive: `logs/audit` 응답에 `log` (기록 상태 — `writable`·`write_failures`·`write_failures_total`·`prune_failures`·`prune_skipped`·`serialize_failures`·`last_write_error`·`last_prune_error`·`last_skip_reason`·`last_serialize_error`), `/metrics` 에 `rosy_audit_write_failures_consecutive`(gauge)·`rosy_audit_write_failures_total`·`rosy_audit_prune_failures_total`·`rosy_audit_prune_skipped_total`·`rosy_audit_serialize_failures_total`(counter). 감사 기록 실패는 EventBus 가 삼켜 어디에도 남지 않았다. 조회는 이제 파일을 재작성하지 않고 메모리에서 걸러 답한다 — 보존 약속(30 일)은 그대로고, 이벤트 목록의 모양도 그대로다 |
-| v1.13 | 2026-09-22 | Corrective + Additive. **Corrective**: 이벤트 카탈로그(§8)가 실제 발행과 갈라져 있던 것을 맞춤. payload 키명 — `nav.stuck` 은 `timeout_s`(≠`timeout_ms`), `mode.changed` 는 `by`(≠`source`), `nav.started` 는 `{goal, by}`(≠`{goal\|waypoint}`), `nav.completed`·`system.shutdown` 은 payload 없음(≠기존 표기), `nav.lane_lost` 는 `{mode, reason, lost_after_s}`(≠`{lost_ms}`), `slam.*`·`presence.*` 는 이벤트별로 다름. 심각도 — 문서를 고친 것: `nav.lane_lost` 는 warning(≠error). 코드를 고친 것: `config.changed`·`swarm.aborted` 는 문서대로 warning 을 실제로 싣는다(≠기본값 info). 문서를 그대로 읽은 소비자는 이 목록만큼 이미 깨져 있었다. **Additive**: 구현돼 있지만 적혀 있지 않던 `docking.*` 11 종, `battery.deep`(D-27), `battery.shutdown_request_failed`, `localization.initialpose`, `nav.line_mode_changed`(D-143), `nav.traffic_policy_staged/applied/reset`(D-151), `sim.traffic_signal_changed` 신규 문서화, `config.changed` key 에 `dds.rmw`. `safety.watchdog` 은 v1.0 부터 약속만 있었고 이제 실제로 발행된다(SAF-002). `nav.blocked` 는 미구현 표시. 카탈로그와 발행 지점의 일치는 `src/core/core/test/test_event_catalogue.py` 가 고정한다 |
+| v1.13 | 2026-09-22 | Corrective + Additive. **Corrective**: 이벤트 카탈로그(§8)가 실제 발행과 갈라져 있던 것을 맞춤. payload 키명 — `nav.stuck` 은 `timeout_s`(≠`timeout_ms`), `mode.changed` 는 `by`(≠`source`), `nav.started` 는 `{goal, by}`(≠`{goal\|waypoint}`), `nav.completed`·`system.shutdown` 은 payload 없음(≠기존 표기), `nav.lane_lost` 는 `{mode, reason, lost_after_s}`(≠`{lost_ms}`), `slam.*`·`presence.*` 는 이벤트별로 다름. 심각도 — 문서를 고친 것: `nav.lane_lost` 는 warning(≠error). 코드를 고친 것: `config.changed`·`swarm.aborted` 는 문서대로 warning 을 실제로 싣는다(≠기본값 info). 문서를 그대로 읽은 소비자는 이 목록만큼 이미 깨져 있었다. **Additive**: 구현돼 있지만 적혀 있지 않던 `docking.*` 11 종, `battery.deep`(D-27), `battery.shutdown_request_failed`, `localization.initialpose`, `nav.line_mode_changed`(D-143), `nav.traffic_policy_staged/applied/reset`(D-151), `sim.traffic_signal_changed` 신규 문서화, `config.changed` key 에 `dds.rmw`. `safety.watchdog` 은 v1.0 부터 약속만 있었고 이제 실제로 발행된다(SAF-002). `nav.blocked` 는 미구현 표시. 카탈로그와 발행 지점의 일치는 `src/runtime/gateway/test/test_event_catalogue.py` 가 고정한다 |
 | v1.12 | 2026-09-21 | Additive: 인증된 front camera preview status/JPEG API. latest-only bounded frame, source/overlay/sequence 메타데이터, stale 시 404, raw image의 상태 WebSocket·Fleet·명령 경로 제외 |
 | v1.11 | 2026-09-21 | Additive: semantic road `traffic_policy` 상태와 §6.1.1 vision `DetectionEvidence.inference_ms`(선택). map/scene/policy revision과 camera evidence를 결합한 fail-closed traffic policy, 추론 지연 메타, `core_common.protocol.detections`와 control 생산 스냅샷 동기 계약을 추가. envelope `protocol_version`은 1.0 유지 |
 | v1.10 | 2026-09-21 | Additive: D-143 `line-follow` 조회·모드 선택 API와 상태 스냅샷 `line_follow`. IR/카메라 소스는 상호 배타적이며 stale·저신뢰·형식 오류는 0 명령, 3초 손실은 재선택 전까지 `LOST` latch |

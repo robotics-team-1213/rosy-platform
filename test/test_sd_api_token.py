@@ -28,7 +28,15 @@ from deploy.sd.personalization import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "deploy/sd/provision.schema.json").read_text(encoding="utf-8"))
-CORE_SRC = ROOT / "src" / "core"
+# D-231/D-241: src/core/<group>/<group>/<pkg> became one role dir per package.
+# These are each package's *import parent* — the dir whose child is the package.
+PKG_PARENT = {
+    "core": ROOT / "src" / "runtime" / "gateway",
+    "core_api_web": ROOT / "src" / "runtime" / "api_web",
+    "core_common": ROOT / "src" / "contracts" / "foundation",
+    "core_events": ROOT / "src" / "runtime" / "events",
+    "core_features": ROOT / "src" / "runtime" / "services",
+}
 
 # Secret-shaped keywords and values are assembled at runtime so the tracked-file
 # secret scanner (test_no_secrets_in_tracked_files) sees no literal.
@@ -102,7 +110,8 @@ def test_the_bundle_carries_only_cores_record_and_matches_the_schema():
 
 def test_the_record_uses_cores_own_digest():
     fastapi = pytest.importorskip("fastapi")  # noqa: F841
-    sys.path[:0] = [str(CORE_SRC / name) for name in ("core_api_web", "core_features", "core_common", "core_events")]
+    sys.path[:0] = [str(PKG_PARENT[name]) for name in
+                    ("core_api_web", "core_features", "core_common", "core_events")]
     from core_api_web.api.deps import token_digest
 
     assert _issued()["core_api"]["record"]["sha256"] == token_digest(VALUE)
@@ -381,7 +390,7 @@ def test_core_under_the_unit_environment_reads_the_installed_file(tmp_path):
     root, _result = _provision(tmp_path, _issued())
     env = {key: value for key, value in os.environ.items() if key != "ROSY_CONFIG"}
     env["HOME"] = str(root / "var/lib/rosy/core")
-    env["PYTHONPATH"] = str(CORE_SRC / "core_common")
+    env["PYTHONPATH"] = str(PKG_PARENT["core_common"])
     probe = ("from core_common import config; "
              "print(config.overlay_path()); print(config.LOCAL_CONFIG_PATH)")
 
@@ -396,12 +405,12 @@ def test_core_under_the_unit_environment_reads_the_installed_file(tmp_path):
 
 def test_core_accepts_the_issued_credential_from_the_installed_overlay(tmp_path, monkeypatch):
     pytest.importorskip("httpx")
-    sys.path[:0] = [str(CORE_SRC / name) for name in (
+    sys.path[:0] = [str(PKG_PARENT[name]) for name in (
         "core", "core_common", "core_events", "core_features", "core_api_web")]
     from fastapi.testclient import TestClient
     from core_api_web.api.app import create_app
     from core_common import config as core_config
-    from core_common.profile import RobotProfile
+    from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
     root, _result = _provision(tmp_path, _issued())
@@ -410,9 +419,9 @@ def test_core_accepts_the_issued_credential_from_the_installed_overlay(tmp_path,
 
     def client():
         loaded = core_config.load_config()
-        config_dir = CORE_SRC / "core" / "config"
-        caps = yaml.safe_load((config_dir / "capabilities.yaml").read_text(encoding="utf-8"))
-        profile = RobotProfile.load(config_dir / "profile.pinky_pro.yaml")
+        robot_dir = robot_config_dir("pinky_pro")
+        caps = yaml.safe_load((robot_dir / "capabilities.yaml").read_text(encoding="utf-8"))
+        profile = RobotProfile.load(robot_dir / "profile.yaml")
         services = CoreServices.build(loaded, profile, caps, tmp_path / "wp.json")
         return TestClient(create_app(loaded, services))
 

@@ -1,0 +1,151 @@
+# core 기본 설정 (CFG-001) — 로컬 오버라이드: ~/.rosy/rosy.yaml
+robot:
+  id: rosy_01
+  name: Rosy 01
+  model: pinky_pro            # D-196 robots/<model> 패키지 — ROSY_ROBOT 가 덮는다
+  frame_prefix: ""            # namespace 런치 시 rosy_01/ 로 주입 (§6.1)
+
+network:
+  api_host: 0.0.0.0
+  api_port: 8080
+
+state:
+  rate_hz: 10                 # CORE-001 스냅샷/푸시 주기
+  evidence:                   # 채널별 stale 초. 코드 기본은 protocol.evidence
+    pose: 2.0
+    velocity: 0.5
+    battery: 5.0
+    navigation: 2.0
+    safety: 0.2
+    docking: 2.0
+
+runtime:
+  mode: core                      # ROSY_RUNTIME_MODE overrides on the robot
+  navigation_backend: localization # ROSY_NAVIGATION_BACKEND; slam requires hardware
+  presets:                        # board.yaml presets와 같아야 한다
+    core: [core]
+    motor: [core, motor]
+    hardware: [core, motor, io, nav]
+
+adapters:
+  manifests: []                   # host default; device overlay may list YAML paths
+
+control:
+  sensor_adapter:
+    enabled: false                # explicit opt-in; CORE remains stationary until enabled
+    required: [lidar, imu, ir]
+    max_age: 0.5                   # policy evidence lease, seconds
+    parameters: {}                 # validated ROS SafetyNode overrides
+    calibration:
+      required: false              # enable only after Device generation/readback is GO
+      path: ""                     # /var/lib/rosy/data-working/<generation>/calibration/...
+      data_root: /var/lib/rosy
+      active_generation: ""        # supplied by the mounted Device runtime
+      context: {}                   # exact robot/model/geometry/sensor/generation identity
+
+auth:                         # SEC-101 / D-193 7: 장치 기본값에는 로그인이 없다 (fail closed)
+  tokens: []                  # 개발·시뮬 토큰은 rosy_dev_auth.yaml (ROSY_DEV_AUTH=1 일 때만)
+  pairing:                    # D-193: 로그인 코드로 받는 브라우저 토큰의 수명 (시간). 만료 없는 값은 없다
+    token_lifetime_hours:
+      viewer: 168
+      operator: 168
+      administrator: 24
+
+safety:
+  teleop_timeout_ms: 500          # SAF-002
+  battery_warning_percent: 20     # SAF-005
+  battery_critical_percent: 10    # SAF-005
+  battery_critical_policy: RETURN_HOME
+  battery_deep_percent: 5         # SAF-005 하위 신설 — 모터 정지 후 셧다운 (D-27)
+  battery_deep_dwell_s: 60        # DEEP을 이만큼 유지해야 셧다운이 무장된다 (s)
+  battery_shutdown_grace_s: 120   # 센티넬에 적어 호스트 유닛에 넘길 유예 (s)
+  battery_filter_tau_s: 5.0       # 전압 저역통과 시상수 — 모터 새그 제거
+  battery_enter_samples: 3        # 한 단계 내려가는 데 필요한 연속 표본
+  battery_exit_samples: 5         # 한 단계 올라오는 데 필요한 연속 표본
+  battery_hysteresis_percent: 3.0 # 복귀는 임계 + 이 마진을 넘어야 시작된다
+  battery_curve:                  # 2S Li-ion OCV (팩 전압, percent). 없으면 아래 스팬 사용
+    - [8.40, 100]
+    - [8.12, 90]
+    - [7.96, 80]
+    - [7.84, 70]
+    - [7.74, 60]
+    - [7.64, 50]
+    - [7.58, 40]
+    - [7.50, 30]
+    - [7.42, 20]
+    - [7.32, 10]
+    - [6.60, 5]
+    - [6.40, 0]
+  battery_full_voltage: 8.4      # 전압→퍼센트 선형 변환 (HWA Profile 참조)
+  battery_empty_voltage: 6.4
+  fleet_loss_policy: STOP         # SAF-003
+  stuck_timeout_s: 30             # NAV-006
+  manual_linear: 0.15
+  manual_angular: 0.60
+  fleet_linear: 0.20
+  fleet_angular: 0.80
+
+line_follow:                       # D-143 selected-source, fail-closed policy
+  cruise_speed: 0.08               # straight-line target; reduced by curve/confidence
+  max_linear: 0.10                 # conservative Pinky Pro host default (m/s)
+  steering_gain: 0.80
+  max_angular: 0.70
+  min_confidence: 0.35
+  stale_after_s: 0.30              # stop immediately when evidence lease expires
+  lost_after_s: 3.0                # latch LOST; operator must explicitly reselect
+
+traffic_policy:                    # D-151 semantic road evidence gate
+  mode: DISABLED                   # DISABLED | MONITOR_ONLY | ENFORCED
+  map_id: map_260905_update_v2
+  scene_revision: road-scene-v1
+  policy_revision: traffic-policy-v1
+  approach_distance_m: 0.35
+  stop_distance_m: 0.12
+  stop_dwell_s: 0.50
+  stale_after_s: 0.40
+  min_confidence: 0.50
+  proceed_speed_scale: 0.50
+  simulation_signal_control: false  # simulation runtime에서만 true 허용
+
+vision:                            # authenticated, latest-only dashboard preview
+  preview_max_bytes: 512000         # reject oversized JPEG frames before storage
+  preview_stale_after_s: 2.0        # hide frames after the local receipt lease expires
+  preview_min_pull_interval_s: 0.4  # authenticated viewer cap (<= 2.5 pulls/s)
+
+navigation:
+  max_linear_velocity: 0.20       # HWA-001에서 주입 (여기值은 폴백)
+  max_angular_velocity: 0.80
+  readiness:
+    required: false
+    stale_after_s: 2.0
+    required_components: [amcl, map_server, controller_server, local_costmap, global_costmap, motor_adapter]
+    profiles:
+      localization: [amcl, map_server, controller_server, local_costmap, global_costmap, motor_adapter]
+      slam: [slam_toolbox, controller_server, local_costmap, global_costmap, motor_adapter]
+  # map_id: warehouse_a           # 설정 or slam/save 로 갱신 (MAP-001, D-13)
+
+power:                            # PWR-001~004 절전/근접 웨이크 (D-24)
+  enabled: true                   # false 이면 항상 ACTIVE — 기존 동작과 동일
+  idle_after_s: 60                # 무활동 이 시간 후 IDLE
+  standby_after_s: 300            # 무활동 이 시간 후 STANDBY
+  info_hold_s: 15                 # 웨이크 후 정보 화면 유지 시간 (s)
+  active_rate_hz: 20              # sensor_adc ADC 폴링 주기 (모드별)
+  idle_rate_hz: 5
+  standby_rate_hz: 2
+  presence:                       # 초음파 프레즌스 판정 (단위 m / 표본 수)
+    near_m: 0.25                  # 이보다 가까우면 접근
+    contact_m: 0.05               # 이보다 가까우면 접촉으로 간주
+    hysteresis_m: 0.10            # near_m + 이 값을 넘어야 해제 판정 시작
+    detect_samples: 2             # 검출에 필요한 연속 표본 수
+    release_samples: 3            # 해제에 필요한 연속 표본 수
+    min_valid_m: 0.02             # 센서 min_range — 미만은 무효 표본
+    max_valid_m: 3.0              # 센서 max_range — 초과는 무효 표본
+  lidar:                          # PWR-005 STANDBY LiDAR 모터 정지
+    standby_stop: false           # 벤치 승인(Nav2 영향 확인) 후 true 로 전환
+    spinup_s: 2.0                 # start_motor 후 스캔을 신뢰하기까지의 시간
+
+events:
+  ring_buffer_size: 1000          # EVT-004
+
+fleet:
+  enabled: false                  # P4-2에서 활성화 (PRT)

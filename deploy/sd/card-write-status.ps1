@@ -51,8 +51,10 @@ function Get-NextByCardState([string]$CardState) {
     switch ($CardState) {
         "untouched" { return "re-run the same write-card.ps1 command" }
         "writing" { return "re-run the full write (without -ResumeAfterWrite)" }
-        "written-unverified" { return "re-run the same command with -ResumeAfterWrite" }
-        "verified-no-bundle" { return "re-run the same command with -ResumeAfterWrite" }
+        # D-225 3.2: the readback that -ResumeAfterWrite triggers is authoritative
+        # (re-verifies every byte); say so, and name the fallback if it fails.
+        "written-unverified" { return "re-run the same command with -ResumeAfterWrite; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, re-run the full write (without -ResumeAfterWrite)" }
+        "verified-no-bundle" { return "re-run the same command with -ResumeAfterWrite; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, re-run the full write (without -ResumeAfterWrite)" }
         "bundle-partial" { return "re-run the full write (a partial bundle cannot be resumed)" }
         "complete" { return "check the registry for this device, then re-run the full write" }
         default { return "re-run the full write (without -ResumeAfterWrite)" }
@@ -133,6 +135,7 @@ $status = [ordered]@{
     last_heartbeat_age_seconds = $null
     stalled = $false
     stall_reason = $null
+    warning = $null
     waiting_for = $null
     stall_limit_seconds = [int]$stallLimit.TotalSeconds
     exit_code = $exitCode
@@ -287,6 +290,16 @@ else {
         if ($status.stalled) {
             $status.next = "if the write window is gone or frozen, close it, then: " + (Get-NextByCardState $status.card_state)
         }
+        # D-231 soft stall warning: the writer reported no progress for the soft
+        # limit but is still being watched until the hard limit. Surface it so
+        # the operator stops guessing between "slow" and "stuck".
+        $softWarning = $null
+        for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+            $candidate = Get-Field $lines[$i] "warning"
+            if ($candidate) { $softWarning = [string]$candidate; break }
+            if ((Get-Field $lines[$i] "detail") -notin @("heartbeat", "measured")) { break }
+        }
+        if ($softWarning -and -not $status.stalled) { $status.warning = $softWarning }
     }
 }
 
@@ -332,6 +345,7 @@ if ($null -ne $status.last_heartbeat_age_seconds) {
     Write-Output ("Last progress line: {0} s ago" -f $status.last_heartbeat_age_seconds)
 }
 if ($status.waiting_for) { Write-Output "Waiting for: $($status.waiting_for)" }
+if ($status.warning) { Write-Output "WARNING: $($status.warning)" }
 if ($status.stalled) { Write-Output "STALLED: $($status.stall_reason)" }
 switch ($status.result) {
     "complete" { Write-Output "Result: COMPLETE" }

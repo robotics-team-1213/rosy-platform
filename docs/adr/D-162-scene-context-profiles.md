@@ -43,7 +43,7 @@ CORE→Control 하향 채널을 새로 만들어야 하므로 v0로 거절한다
 소비하는 CORE 정책 파라미터 테이블은 별도 슬라이스에서 gate를 다시
 탄다.
 
-**Validation / Transition:** `src/apps/control/test/test_scene_context.py`가
+**Validation / Transition:** `src/core/control/test/test_scene_context.py`가
 프로파일 경계, store 계약(닫힌 집합·중복 금지·generic 필수·미등록
 KeyError), 히스테리시스(진입/이탈 프레임, conflict 동결, 우선순위,
 reset)를 고정한다. 이후 순서: road_observer_node wiring과 additive
@@ -53,3 +53,7 @@ DEVICE 조명·시간대 유지율 측정 후 D-162를 Accepted로 뒤집는다.
 **References:** D-47, D-48, D-137, D-139, D-143, D-151,
 `docs/plans/2026-09-22-scene-context-road-design.md`,
 `docs/plans/2026-09-22-scene-context-road.md`.
+
+**부분 검증 기록 (2026-09-25, Proposed 유지):** D-162 슬라이스(road_observer_node + scene context)가
+2026-09-22 노드 그래프 검증을 통과했다(STATUS 기록). 단 본 ADR의 Accepted 조건(DEVICE 조명·시간대 유지율 측정)은
+미충족이므로 뒤집지 않는다.

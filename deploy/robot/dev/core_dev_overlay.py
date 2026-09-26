@@ -407,11 +407,11 @@ def pack_repo(repo: Path, output: Path) -> None:
     """Tar the allowlisted source tree. Bytecode and foreign paths stay out."""
 
     mapping = {
-        "python/core": repo / "src" / "core" / "core" / "core",
-        "python/core_common": repo / "src" / "core" / "core_common" / "core_common",
-        "python/core_events": repo / "src" / "core" / "core_events" / "core_events",
-        "python/core_features": repo / "src" / "core" / "core_features" / "core_features",
-        "python/core_api_web": repo / "src" / "core" / "core_api_web" / "core_api_web",
+        "python/core": repo / "src" / "runtime" / "gateway" / "core",
+        "python/core_common": repo / "src" / "contracts" / "foundation" / "core_common",
+        "python/core_events": repo / "src" / "runtime" / "events" / "core_events",
+        "python/core_features": repo / "src" / "runtime" / "services" / "core_features",
+        "python/core_api_web": repo / "src" / "runtime" / "api_web" / "core_api_web",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(output, "w:gz") as tar:
@@ -423,7 +423,7 @@ def pack_repo(repo: Path, output: Path) -> None:
                 member_allowed(arcname)
                 tar.add(path, arcname=arcname, recursive=False)
         for filename in SHARE_FILES:
-            source = repo / "src" / "core" / "web_common" / filename
+            source = repo / "src" / "hmi" / "web" / filename
             arcname = f"share/web_common/{filename}"
             member_allowed(arcname)
             tar.add(source, arcname=arcname, recursive=False)

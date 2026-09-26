@@ -36,7 +36,7 @@ Comments in `ci.yml` document why extra steps exist (root `test/` used to be ski
 
 ### Internal
 
-- Builds `src/`, tests the core-domain suites (`src/core/{core,core_events,core_features,web_common}/test`) and repo-root `test/`
+- Builds `src/`, tests the runtime suites (`src/runtime/{core,core_events,core_features}/test`, `src/hmi/web/test`) and repo-root `test/`
 
 ### External
 

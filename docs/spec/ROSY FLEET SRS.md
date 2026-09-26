@@ -257,6 +257,8 @@ LINE | COLUMN | GRID | V | CIRCLE | FOLLOW
 
 Formation Parameter: Center Position / Orientation / Robot Spacing / Robot Selection / Leader Robot.
 
+`FOLLOW`는 단일 추종자 전용이다 (2대 이상은 `COLUMN` 사용) — `fleet/formation/geometry.py`가 강제한다.
+
 ### FOR-002 Formation Slot Assignment
 
 대형 변경 시 로봇 위치와 목표 Slot 간 비용을 계산해 효율적으로 배정한다. 초기 구현은 거리 기반 배정이며, 배정 알고리즘은 인터페이스 뒤로 격리해 Hungarian Algorithm 등으로 교체 가능해야 한다.

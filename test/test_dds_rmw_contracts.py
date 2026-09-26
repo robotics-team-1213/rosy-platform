@@ -10,7 +10,7 @@ def test_robot_and_dev_envs_pin_cyclonedds():
     compose = (ROOT / "deploy" / "robot" / "compose.yaml").read_text(encoding="utf-8")
     env_sh = (ROOT / "env.sh").read_text(encoding="utf-8")
     rosy_env = (
-        ROOT / "src" / "hardware" / "bringup" / "scripts" / "rosy_env.sh"
+        ROOT / "src" / "devices" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh"
     ).read_text(encoding="utf-8")
     dockerfile = (ROOT / "deploy" / "robot" / "Dockerfile").read_text(encoding="utf-8")
     assert "RMW_IMPLEMENTATION: rmw_cyclonedds_cpp" in compose
@@ -61,7 +61,7 @@ def test_gz_bridges_do_not_carry_raw_images():
 
 def test_fleet_and_games_do_not_import_sensor_image():
     """D-118: 관제·게임 호스트는 Image 를 import 하지 않는다."""
-    games = ROOT / "src" / "apps" / "games" / "games"
+    games = ROOT / "src" / "site" / "games" / "games"
     fleet = ROOT / "src" / "site" / "fleet" / "fleet"
     for folder in (games, fleet):
         for path in folder.rglob("*.py"):
@@ -73,12 +73,12 @@ def test_fleet_and_games_do_not_import_sensor_image():
 def test_scan_image_imu_use_sensor_data_qos():
     """D-119: 생산 LaserScan/Imu/Image pub·sub 은 qos_profile_sensor_data."""
     camera = (
-        ROOT / "src" / "apps" / "control" / "control" / "camera_detect_node.py"
+        ROOT / "src" / "runtime" / "sensing" / "control" / "camera_detect_node.py"
     ).read_text(encoding="utf-8")
     assert "qos_profile_sensor_data" in camera
     assert "create_publisher(Image, 'camera/front', qos_profile_sensor_data)" in camera
     bridge = (
-        ROOT / "src" / "core" / "core" / "core" / "bridge" / "ros_bridge.py"
+        ROOT / "src" / "runtime" / "gateway" / "core" / "bridge" / "ros_bridge.py"
     ).read_text(encoding="utf-8")
     assert "qos_profile_sensor_data" in bridge
     assert 'create_subscription(LaserScan, "scan", self._on_scan, qos_profile_sensor_data)' in bridge

@@ -166,25 +166,25 @@ Run: `python -m pytest "src/core/core/test/" -q` → `python tools/harness/rosy_
 ### T12: tools/gz 절대 토픽 정리
 
 **Files:**
-- Modify: `src/apps/control/tools/gz/driver.py:91` (`'/cmd_vel'`→`'cmd_vel'` 상대화 + "core와 병행 금지" 주석)
-- Test: `src/apps/control/test/test_gz_tools_topics.py` (신규)
+- Modify: `src/core/control/tools/gz/driver.py:91` (`'/cmd_vel'`→`'cmd_vel'` 상대화 + "core와 병행 금지" 주석)
+- Test: `src/core/control/test/test_gz_tools_topics.py` (신규)
 
 **Step 1 — 실패 시험.** `tools/gz/*.py` 전체 스캔: `create_publisher` 첫 인자 토픽 문자열이 `/`로 시작하면 실패(절대 토픽 발행 금지 — 구독은 제외, `rendered_camera_adapter.py:40`의 `/pinky/rendered_camera` **구독**은 허용하되 주석 요구).
 **Step 2 — 적색 → Step 3 — 구현** (driver.py 상대화; 필요 시 노드 namespace 파라미터 통과).
-**Step 4 — 통과.** Run: `python -m pytest "src/apps/control/test/test_gz_tools_topics.py" -q`
+**Step 4 — 통과.** Run: `python -m pytest "src/core/control/test/test_gz_tools_topics.py" -q`
 **Step 5 — 커밋.** `control tools: gz drivers publish relative topics only`
 
 ### T13: QoS 잠복 리스크 고정
 
 **Files:**
-- Modify: `src/apps/control/control/startup_calibration_node.py:90` (`imu_raw` d10→`qos_profile_sensor_data`)
-- Modify: `src/apps/control/control/safety/node.py:221-226` (`us_sensor/range`·`ir_sensor/range` d10→SENSOR)
-- Modify: `src/apps/control/control/AGENTS.md` 또는 `STEPS.txt` (estop 운영자 발행 예시: `ros2 topic pub --qos-durability transient_local --qos-reliability reliable ...`)
-- Test: `src/apps/control/test/test_os_calibration_graph.py` (+ wiring 계약에 QoS 패턴 주장)
+- Modify: `src/core/control/control/startup_calibration_node.py:90` (`imu_raw` d10→`qos_profile_sensor_data`)
+- Modify: `src/core/control/control/safety/node.py:221-226` (`us_sensor/range`·`ir_sensor/range` d10→SENSOR)
+- Modify: `src/core/control/control/AGENTS.md` 또는 `STEPS.txt` (estop 운영자 발행 예시: `ros2 topic pub --qos-durability transient_local --qos-reliability reliable ...`)
+- Test: `src/core/control/test/test_os_calibration_graph.py` (+ wiring 계약에 QoS 패턴 주장)
 
 **Step 1 — 실패 시험.** 대상 구독문이 `qos_profile_sensor_data`를 쓰는지 문자열 패턴 주장. 호환성 근거: 발행 측은 RELIABLE(≥구독 BEST_EFFORT 요구)이라 매칭 유지, 센서 유실 시계에서 소비자 정책만 통일.
 **Step 2 — 적색 → Step 3 — 구현** (`map` 소비자 3정책은 동작 변경 없이 `bridge/AGENTS.md`에 현행 매칭 표로 고정 — T11과 병합 가능).
-**Step 4 — 통과.** Run: `python -m pytest "src/apps/control/test/" -q`
+**Step 4 — 통과.** Run: `python -m pytest "src/core/control/test/" -q`
 **Step 5 — 커밋.** `control: unify sensor-topic subscriber QoS (D-119 consumer side)`
 
 ### T14: wait-core-ready 포트 파라미터화 + chrony 계약
@@ -207,7 +207,7 @@ Run: `python -m pytest test/test_native_systemd_contract.py test/test_verify_mou
 **Step 1.** control/fleet/core(deploy)/sensor_adc 각 `logs.md`에 이번 변경 append, 게이트가 움직인 것만 `progress.md` 갱신.
 **Step 2.** repo root에서 `python tools/harness/rosy_harness.py lint` → `generate`.
 **Step 3.** 전체 회귀:
-Run: `python -m pytest "src/core/core/test/" "src/apps/control/test/" "src/site/fleet/test" "src/apps/omx_adapter/test" "src/apps/games/test" test/ -q`
+Run: `python -m pytest "src/core/core/test/" "src/core/control/test/" "src/site/fleet/test" "src/apps/omx_adapter/test" "src/apps/games/test" test/ -q`
 Expected: 전체 PASS (Windows host 범위).
 **Step 4 — 커밋.** `harness: refresh module gates after protocol-remediation pass`
 
@@ -239,7 +239,7 @@ Expected: 전체 PASS (Windows host 범위).
 ## 검증 명령 요약 (Windows host, repo root `Rosy OS`)
 
 ```bash
-python -m pytest "src/core/core/test/" "src/apps/control/test/" "src/site/fleet/test" "src/apps/omx_adapter/test" "src/apps/games/test" test/ -q
+python -m pytest "src/core/core/test/" "src/core/control/test/" "src/site/fleet/test" "src/apps/omx_adapter/test" "src/apps/games/test" test/ -q
 python tools/harness/rosy_harness.py lint
 ```
 

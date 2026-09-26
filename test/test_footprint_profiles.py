@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "navigation" / "navigation"))
+sys.path.insert(0, str(ROOT / "src" / "runtime" / "navigation"))
 
 from navigation.footprint_profile import (  # noqa: E402
     FootprintProfile,
@@ -17,7 +17,7 @@ from navigation.params_rewrite import write_prefixed_nav2_params  # noqa: E402
 
 
 MOTION_PROFILES = ROOT / "deploy" / "robot" / "config" / "motion_profiles.yaml"
-NAV2 = ROOT / "src" / "navigation" / "navigation" / "params" / "nav2_params.yaml"
+NAV2 = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
 
 
 def measured_mapping():

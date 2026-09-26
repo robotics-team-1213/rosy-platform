@@ -11,13 +11,13 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "core" / "core_api_web" / "core_api_web" / "web"
+WEB = ROOT / "src" / "hmi" / "dashboard"
 #: Production serves `/common/*` from the web_common package (core_api_web
 #: mounts it; `test_ui_route.py` pins the 200s). The harness must mirror that
 #: mount — app.js imports `/common/core_ui_logic.js` absolutely, and a request
 #: with no route escapes to real DNS (rosy.test does not resolve) and kills the
 #: boot before the first assertion.
-WEB_COMMON = ROOT / "src" / "core" / "web_common"
+WEB_COMMON = ROOT / "src" / "hmi" / "web"
 
 from browser_harness import DECLINE_CONFIRM, accept_confirm, open_page  # noqa: E402
 
@@ -192,7 +192,45 @@ window.fetch = async (input, options = {}) => {
     '/api/v1/host/network': {available: false, detail: 'no agent'},
     '/api/v1/host/release': {available: false, detail: 'no agent'},
     '/api/v1/host/commissioning': {runtime_mode: 'core', fleet_hold: true, detail: 'core'},
+    '/api/v1/host/hardware': window.__rosyHardware
+      || {available: false, detail: '장치 점검 결과가 아직 없습니다', devices: []},
+    // D-260 5: the summary line; {} (no state) unless a test sets one.
+    '/api/v1/host/status-summary': window.__rosyStatusSummary || {},
   };
+  if (window.__rosyCommissioningOverride) {
+    Object.assign(bodies['/api/v1/host/commissioning'], window.__rosyCommissioningOverride);
+  }
+  if (method === 'POST' && path === '/api/v1/host/hardware/refresh') {
+    return new Response(JSON.stringify({accepted: true, detail: '장치 점검을 요청했습니다.'}), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
+  // D-247 6: rosy-hw-test ran at once and CORE recorded the answer.
+  if (method === 'POST' && path === '/api/v1/host/hardware/test') {
+    const device = parsed && parsed.device;
+    if (window.__rosyHardware) {
+      window.__rosyHardware.test = {
+        request_id: '00112233445566778899aabb', action: device, state: 'done',
+        detail: device === 'buzzer' ? 'BCM 4 · 2 kHz · duty 10 % · 3×150 ms' : '빨강→초록→파랑 1 s씩 · 8 LED · GPIO19 · 꺼짐',
+        finished_at: new Date().toISOString(),
+      };
+    }
+    return new Response(JSON.stringify({accepted: true, request_id: '00112233445566778899aabb', device,
+                                        detail: '부저를 울립니다. 들렸는지·보였는지 확인해 주세요.'}), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
+  if (method === 'POST' && path === '/api/v1/host/hardware/confirm') {
+    const row = window.__rosyHardware?.devices.find((device) => device.id === parsed.device);
+    if (row) {
+      Object.assign(row, parsed.observed
+        ? {state: 'ok', evidence: '사람 확인: 관리자 2026-09-26 05:00 UTC', source: 'human'}
+        : {state: 'no_response', evidence: '사람 확인: 들리지 않음 · 관리자 2026-09-26 05:00 UTC', source: 'human'});
+    }
+    return new Response(JSON.stringify({recorded: true, device: parsed.device, observed: parsed.observed}), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
   if (window.__rosyStateOverrides?.robot_state) {
     Object.assign(bodies['/api/v1/robot/state'], window.__rosyStateOverrides.robot_state);
   }
@@ -332,8 +370,8 @@ window.fetch = async (input, options = {}) => {
 """
 
 
-def _launch_page(playwright, extra_init="", real_map=False):
-    browser, page, _errors = open_page(playwright, 390, 844)
+def _launch_page(playwright, extra_init="", width=390, height=844, real_map=False):
+    browser, page, _errors = open_page(playwright, width, height)
     html = (WEB / "index.html").read_text(encoding="utf-8")
     page.route(
         "http://rosy.test/dashboard",
@@ -450,7 +488,15 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
 
     assert commands[0] == {"linear": 0.05, "angular": 0}
     assert commands[-1] == {"linear": 0, "angular": 0}
-    assert not any(command != {"linear": 0, "angular": 0} for command in commands[1:])
+    # 부하에서 100ms 틱이 pointerup 전에 두 번째 drive를 쏠 수 있다. 계약은
+    # 순서다 — 해제 zero 뒤에 양수가 오면 안 된다. zero 뒤는 전부 zero다.
+    first_zero = next(
+        i for i, command in enumerate(commands)
+        if command == {"linear": 0, "angular": 0}
+    )
+    assert all(
+        command == {"linear": 0, "angular": 0} for command in commands[first_zero:]
+    )
 
 
 def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
@@ -535,6 +581,8 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
             wait_until="domcontentloaded",
             timeout=5_000,
         )
+        # D-201 — 정책 편집은 점검 뷰(절차 문법)의 현장 설정 카드에 산다.
+        page.locator("#view-inspect").click()
         page.locator("#traffic-policy-revision-input").fill(
             "traffic-policy-v2")
         page.locator("#traffic-policy-mode").select_option("ENFORCED")
@@ -551,7 +599,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
         if screenshot := os.environ.get("ROSY_DASHBOARD_SCREENSHOT"):
             output = Path(screenshot)
             output.parent.mkdir(parents=True, exist_ok=True)
-            page.locator(".traffic-policy-control").screenshot(
+            page.locator(".settings-card[aria-labelledby='traffic-policy-heading']").screenshot(
                 path=str(output))
         calls = page.evaluate("window.__apiCalls")
         browser.close()
@@ -604,6 +652,29 @@ def test_live_camera_preview_is_visible_beside_the_map():
         if call["path"] == "/api/v1/vision/front/frame"
     )
     assert frame_call["search"] == "?sequence=7"
+
+
+def test_unavailable_camera_keeps_missing_timestamps_missing():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(
+                playwright,
+                extra_init="window.__rosyVisionOverride = {available: false, stale: false, "
+                "source: null, width: null, height: null, age_ms: null, captured_at: null};",
+            )
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "window.__apiCalls?.some((call) => call.path === '/api/v1/vision/front/status')"
+        )
+        page.wait_for_timeout(100)
+        assert page.locator("#vision-age").inner_text() == "\u2014"
+        assert page.locator("#vision-captured").inner_text() == "\u2014"
+        browser.close()
 
 
 def test_camera_preview_is_cleared_when_reauthentication_fails():
@@ -1205,6 +1276,240 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
 NO_TOKEN_INIT = "sessionStorage.removeItem('rosy.dashboard.token');"
 
 
+# --- D-201: 적합 계약 — 고정 문법 표면은 선언 뷰포트에서 스크롤도 분쇄도 없다 ---
+
+FIT_PROBE = """() => {
+  const act = document.querySelector('.region-act');
+  const mode = document.querySelector('.mode-control');
+  const estop = document.getElementById('emergency-stop').getBoundingClientRect();
+  return {
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    actOverflow: act.scrollHeight - act.clientHeight,
+    modeHeight: Math.round(mode.getBoundingClientRect().height),
+    estopInside: estop.top >= 0 && estop.bottom <= window.innerHeight,
+  };
+}"""
+
+#: 공간 문법의 선언 최소 뷰포트. 1366×768 이 상용 노트북 바닥이고
+#: 1536×864 는 회차 1이 전화만 찍고 비운 자리다(D-201).
+FIT_VIEWPORTS = [(1536, 864), (1366, 768)]
+
+
+@pytest.mark.parametrize(
+    "state", ["", CONSOLE_STATE_INIT["safe-stop"]]
+)
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_operate_view_fits_and_does_not_crush(viewport, state):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(
+                playwright, extra_init=state,
+                width=viewport[0], height=viewport[1])
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.wait_for_function(
+            "document.getElementById('robot-mode')?.textContent !== undefined"
+        )
+        page.wait_for_timeout(700)
+        fit = page.evaluate(FIT_PROBE)
+        browser.close()
+
+    assert fit["docOverflow"] <= 0, (
+        f"{viewport}: 운용 뷰 문서가 스크롤된다 — 공간 문법 위반(D-201): {fit}"
+    )
+    assert fit["actOverflow"] <= 1, (
+        f"{viewport}: 조작 열이 프레임을 넘는다 — 관측·조작은 고정(D-201): {fit}"
+    )
+    assert fit["modeHeight"] >= 40, (
+        f"{viewport}: 모드 분절 제어가 분쇄됐다 — min-height 44의 조작 요소가"
+        f" {fit['modeHeight']}px로 눌렸다(D-201): {fit}"
+    )
+    assert fit["estopInside"], f"{viewport}: 즉시 정지가 뷰포트 밖이다: {fit}"
+
+
+# --- D-203: 계산 척급 폐쇄 — 보이는 계산 크기는 토큰 단계뿐이다 ---------------
+
+TYPE_STEPS = "new Set(['12px', '14px', '16px', '18px', '20px', '32px'])"
+
+OFF_SCALE_CENSUS = """() => {
+  const steps = STEPS;
+  const off = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const size = getComputedStyle(el).fontSize;
+    if (!steps.has(size)) {
+      off.push(`${size} <${el.tagName.toLowerCase()}#${el.id || '-'}>`
+               + `.${(el.className || '').toString().split(' ')[0] || '-'}`);
+    }
+  }
+  return off;
+}"""
+
+
+@pytest.mark.parametrize("state_init", ["", CONSOLE_STATE_INIT["delayed"]])
+def test_visible_type_scale_is_closed(state_init):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=state_init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        off = page.evaluate(OFF_SCALE_CENSUS)
+        # 점검 뷰(절차 문법)도 같은 계단을 쓴다 — 편집 UI가 살고 있는 곳이다.
+        page.locator("#view-inspect").click()
+        page.wait_for_timeout(300)
+        off += page.evaluate(OFF_SCALE_CENSUS)
+        browser.close()
+
+    assert off == [], (
+        "계단 밖 계산 크기가 화면에 있다 — 닫힌 여섯 단계 밖이다(D-203): "
+        + "; ".join(off[:6])
+    )
+
+
+# --- D-214: 텍스트 대비의 바닥 — 보이는 모든 글자가 읽혀야 한다 ---------------
+
+TEXT_FLOOR_CENSUS = """() => {
+  const effBg = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const s = getComputedStyle(node);
+      const m = s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+      if (m && (m[1].split(',').length < 4 || Number(m[1].split(',')[3]) === 1)) {
+        return s.backgroundColor;
+      }
+      node = node.parentElement;
+    }
+    return getComputedStyle(document.documentElement).getPropertyValue('--ground');
+  };
+  const lum = (c) => {
+    let r, g, b;
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.replace(/[^#]/g, (x) => x + x) : c;
+      r = parseInt(h.slice(1, 3), 16); g = parseInt(h.slice(3, 5), 16);
+      b = parseInt(h.slice(5, 7), 16);
+    } else {
+      const m = c.match(/rgba?\\(([^)]+)\\)/);
+      if (!m) return null;
+      [r, g, b] = m[1].split(',').map(Number);
+    }
+    const f = (v) => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const offenders = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (!(el.textContent.trim() && el.children.length === 0)) continue;
+    const s = getComputedStyle(el);
+    const la = lum(s.color), lb = lum(effBg(el));
+    if (la === null || lb === null) continue;
+    const ratio = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    const floor = parseFloat(s.fontSize) >= 24 ? 3.0 : 4.5;
+    if (ratio < floor) {
+      offenders.push(`${el.tagName.toLowerCase()}#${el.id || '-'}`
+        + ` ${ratio.toFixed(2)}:1 "${el.textContent.trim().slice(0, 14)}"`);
+    }
+  }
+  return offenders;
+}"""
+
+
+@pytest.mark.parametrize("state_init", ["", CONSOLE_STATE_INIT["safe-stop"]])
+def test_visible_text_meets_the_contrast_floor(state_init):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=state_init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.wait_for_timeout(700)
+        offenders = page.evaluate(TEXT_FLOOR_CENSUS)
+        page.locator("#view-inspect").click()
+        page.wait_for_timeout(300)
+        offenders += page.evaluate(TEXT_FLOOR_CENSUS)
+        browser.close()
+
+    assert offenders == [], (
+        "바닥(4.5:1, 큰 값 3.0:1) 아래 텍스트가 있다(D-214): "
+        + "; ".join(offenders[:6])
+    )
+
+
+# --- D-220: 정지 계약 — 움직임 예산은 0이다 -----------------------------------
+
+MOTION_CENSUS = """() => {
+  const moving = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const s = getComputedStyle(el);
+    if ((s.transitionDuration !== '0s' && s.transitionProperty !== 'none')
+        || s.animationName !== 'none') {
+      moving.push(`${el.tagName.toLowerCase()}#${el.id || '-'}`
+        + `.${(el.className || '').toString().split(' ')[0] || '-'}`
+        + ` t=${s.transitionDuration}/${s.transitionProperty}`
+        + ` a=${s.animationName}`);
+    }
+  }
+  return moving;
+}"""
+
+
+def test_no_visible_element_moves():
+    """D-220 — 상태 변화는 점프 컷이다. 보간은 없는 값을 있는 것처럼 보이게 한다."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto(
+            "http://rosy.test/dashboard",
+            wait_until="domcontentloaded",
+            timeout=5_000,
+        )
+        page.wait_for_timeout(700)
+        moving = page.evaluate(MOTION_CENSUS)
+        page.locator("#view-inspect").click()
+        page.wait_for_timeout(300)
+        moving += page.evaluate(MOTION_CENSUS)
+        browser.close()
+
+    assert moving == [], (
+        "움직이는 요소가 있다 — 예산은 0이다, 예외는 ADR 로만(D-220): "
+        + "; ".join(moving[:6])
+    )
+
+
 def _open_dashboard(playwright, extra_init=""):
     browser, page = _launch_page(playwright, extra_init=extra_init)
     page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
@@ -1217,6 +1522,24 @@ def _storage(page):
         " local: localStorage.getItem('rosy.dashboard.paired')})"
     )
 
+
+
+def test_legacy_dashboard_refresh_and_back_keep_the_tab_token():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
+        page.reload(wait_until="domcontentloaded", timeout=5_000)
+        page.go_back(wait_until="domcontentloaded", timeout=5_000)
+        assert page.url == "http://rosy.test/dashboard"
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
+        browser.close()
 
 def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
     pytest.importorskip("playwright.sync_api")
@@ -1529,3 +1852,452 @@ def test_a_socket_that_sends_one_frame_then_closes_still_backs_off():
         count = page.evaluate("window.__sockets.length")
         assert 2 <= count <= 3, count
         browser.close()
+
+
+# --- D-247: the inspect view's device card and the operate view's motion reason ---
+
+#: rosy_18 as checked by hand on 2026-09-25, one row per state.
+HARDWARE_INIT = """
+    window.__rosyHardware = {
+      available: true, schema: 1, measured_at: new Date(Date.now() - 42000).toISOString(),
+      age_s: 42, stale: false, boot_id: 'b', detail: '',
+      devices: [
+        {id: 'motor.1', label: '구동 모터 1 (XL330)', bus: 'UART4 /dev/rosy-motor', state: 'ok',
+         evidence: 'odom 수신 중 (토픽 판정)', product: true, held_by: 'rosy-io.service', source: 'topic'},
+        {id: 'imu', label: 'IMU (BNO055)', bus: 'I2C0 /dev/i2c-0 0x28', state: 'bus_missing',
+         evidence: '/dev/i2c-0 없음', product: false},
+        {id: 'adc.battery', label: '배터리 전압 (ADC)', bus: 'I2C1 /dev/i2c-1 0x08', state: 'no_response',
+         evidence: 'ETIMEDOUT — 로봇 전원을 완전히 껐다 켜세요', product: true},
+        {id: 'lamp', label: 'LED 램프 (WS2812)', bus: 'GPIO BCM 19 PWM', state: 'driver_missing',
+         evidence: '/dev/ws281x_pwm 없음', product: false},
+        {id: 'buzzer', label: '부저', bus: 'GPIO (ROSY_BUZZER_PIN, 기본 BCM 4)', state: 'needs_human',
+         evidence: 'BCM 4 · 꺼짐 (ROSY_BUZZER_ENABLED=false) · 소리는 사람이 확인', product: false},
+        {id: 'lidar', label: 'LiDAR (RPLIDAR C1)', bus: 'UART0 /dev/ttyAMA0', state: 'not_measured',
+         evidence: 'rosy-io 사용 중 — 토픽으로 판정', product: true, held_by: 'rosy-io.service'},
+      ],
+    };
+"""
+
+
+def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        rows = page.evaluate(
+            "[...document.querySelectorAll('#hardware-list .device-row')].map((row) => ({"
+            " id: row.dataset.device,"
+            " chip: row.querySelector('.device-state').textContent,"
+            " status: row.querySelector('.device-state').dataset.status || null,"
+            " bench: Boolean([...row.querySelectorAll('.machine-tag')]"
+            "   .find((tag) => tag.textContent === '벤치 전용')),"
+            " bus: getComputedStyle(row.querySelector('.device-bus')).fontFamily }))"
+        )
+        assert [(row["id"], row["chip"], row["status"], row["bench"]) for row in rows] == [
+            ("motor.1", "정상", "OK", False),
+            ("imu", "버스 없음", "WARNING", True),
+            ("adc.battery", "응답 없음", "ERROR", False),
+            ("lamp", "드라이버 없음", "WARNING", True),
+            ("buzzer", "사람 확인 필요", None, True),
+            ("lidar", "측정 안 함", None, False),
+        ]
+        assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower() for row in rows), rows
+        assert page.locator("#hardware-card").get_attribute("data-available") == "true"
+        assert page.locator("#hardware-measured").inner_text().endswith("42초 전")
+        assert "전원을 완전히 껐다 켜세요" in page.locator("#hardware-list").inner_text()
+        # The populated card keeps the closed type scale and the contrast floor.
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        assert page.evaluate(OFF_SCALE_CENSUS) == []
+        assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+
+        # An administrator can ask for a new run; it goes to the refresh route only.
+        refresh = page.locator("#hardware-refresh")
+        assert refresh.is_enabled()
+        refresh.click()
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.method === 'POST'"
+            " && call.path === '/api/v1/host/hardware/refresh')"
+        )
+        page.wait_for_function(
+            "document.getElementById('hardware-note')?.textContent === '장치 점검을 요청했습니다.'")
+        browser.close()
+
+
+def test_a_viewer_sees_the_device_card_but_cannot_rerun_the_probe():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        assert page.locator("#hardware-refresh").is_disabled()
+        browser.close()
+
+
+def test_no_probe_result_yet_is_said_not_blanked():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function(
+            "document.getElementById('hardware-card')?.dataset.available === 'false'")
+        assert page.locator("#hardware-note").inner_text() == "장치 점검 결과가 아직 없습니다"
+        assert page.locator("#hardware-list .device-row").count() == 0
+        browser.close()
+
+
+def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
+    """D-247 6: 울려 보기 -> 들림 goes to the two admin routes and turns the row to 정상."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
+        actions = page.evaluate(
+            "[...document.querySelectorAll('#hardware-list .device-actions')].map((box) => ({"
+            " device: box.closest('.device-row').dataset.device,"
+            " buttons: [...box.querySelectorAll('ui-button')].map((b) => [b.textContent, b.disabled]) }))"
+        )
+        assert actions == [{"device": "lamp", "buttons": [["켜 보기", True]]},
+                           {"device": "buzzer", "buttons": [["울려 보기", False]]}]
+
+        page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='test']").click()
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.method === 'POST'"
+            " && call.path === '/api/v1/host/hardware/test' && call.body?.device === 'buzzer')")
+        heard = page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='observed']")
+        heard.wait_for(timeout=10_000)
+        assert heard.inner_text() == "들림"
+        assert page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='not-observed']") \
+            .inner_text() == "안 들림"
+        assert page.locator("#hardware-list [data-device='buzzer'] .device-test").inner_text() == \
+            "BCM 4 · 2 kHz · duty 10 % · 3×150 ms"
+        # The lamp row shows no buzzer outcome.
+        assert page.locator("#hardware-list [data-device='lamp'] .device-test").count() == 0
+
+        heard.click()
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.method === 'POST'"
+            " && call.path === '/api/v1/host/hardware/confirm'"
+            " && call.body?.device === 'buzzer' && call.body?.observed === true)")
+        page.wait_for_function(
+            "document.querySelector(\"#hardware-list [data-device='buzzer'] .device-state\")"
+            "?.textContent === '정상'")
+        assert page.locator("#hardware-list [data-device='buzzer'] .device-evidence").inner_text() \
+            .startswith("사람 확인: ")
+        # No HTML is built from server text anywhere in the card.
+        assert page.evaluate("document.querySelectorAll('#hardware-list script, #hardware-list img').length") == 0
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        assert page.evaluate(OFF_SCALE_CENSUS) == []
+        assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+        browser.close()
+
+
+def test_a_viewer_gets_no_buzzer_or_lamp_test():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        assert page.locator("#hardware-list .device-actions").count() == 0
+        assert page.locator("#hardware-list [data-hw-action]").count() == 0
+        browser.close()
+
+
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport):
+    """D-201: the admin action rows wrap inside the card; nothing scrolls sideways."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    outcome = HARDWARE_INIT + (
+        "window.__rosyHardware.test = {request_id: '00112233445566778899aabb', action: 'buzzer',"
+        " state: 'done', detail: 'BCM 4 · 2 kHz · duty 10 % · 3×150 ms',"
+        " finished_at: new Date().toISOString()};"
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=outcome, width=viewport[0], height=viewport[1])
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.locator("#view-inspect").click()
+        page.wait_for_function(
+            "document.querySelectorAll(\"#hardware-list [data-hw-action='observed']\").length === 1")
+        fit = page.evaluate(
+            "(() => { const card = document.getElementById('hardware-card').getBoundingClientRect();"
+            " const boxes = [...document.querySelectorAll('#hardware-list .device-actions > *')]"
+            "   .map((node) => node.getBoundingClientRect());"
+            " return { page: document.documentElement.scrollWidth - document.documentElement.clientWidth,"
+            "  outside: boxes.filter((box) => box.left < card.left - 1 || box.right > card.right + 1).length };"
+            "})()")
+        assert fit == {"page": 0, "outside": 0}, f"{viewport}: {fit}"
+        browser.close()
+
+
+MOTION_REASON = "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다."
+
+
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport):
+    """D-247 7 + D-201: the reason replaces the vague profile line without scrolling the console."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    reason = CORE_ONLY_VIEWER_INIT + (
+        "window.__rosyCommissioningOverride = {runtime_mode: 'core', motor_hold: true,"
+        f" motion_reason: '{MOTION_REASON}'}};"
+    )
+    fits = {}
+    with sync_playwright() as playwright:
+        for label, init in (("before", CORE_ONLY_VIEWER_INIT), ("reason", reason)):
+            try:
+                browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
+            except Exception as error:
+                pytest.skip(f"Playwright Chromium unavailable: {error}")
+            page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+            page.wait_for_function(
+                "document.getElementById('capability-count')?.textContent === '0 / 5'")
+            if label == "reason":
+                page.wait_for_function(
+                    f"document.getElementById('teleop-message')?.textContent === '{MOTION_REASON}'")
+                assert "권한" not in page.locator("#teleop-message").inner_text()
+            page.wait_for_timeout(300)
+            fits[label] = page.evaluate(FIT_PROBE)
+            browser.close()
+
+    fit = fits["reason"]
+    assert fit["docOverflow"] <= 0, f"{viewport}: 이유 문장이 운용 뷰를 스크롤시킨다(D-201): {fits}"
+    assert fit["estopInside"], fits
+    # The CORE-only viewer state already overflows the act column by a few px at
+    # 1366x768 with the old sentence (2026-09-25, feed2fc7); the reason must not add to it.
+    assert fit["actOverflow"] <= max(1, fits["before"]["actOverflow"]), (
+        f"{viewport}: 이유 문장이 조작 열을 더 넘치게 한다(D-201): {fits}")
+
+
+def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
+    """D-259 — 지도 클릭 목표의 키보드 길. 진짜 map.js로 탄다(픽스처 스텁이 아님)."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        real_map = (WEB / "map.js").read_text(encoding="utf-8")
+        page.route(
+            "http://rosy.test/dashboard/assets/map.js",
+            lambda route: route.fulfill(
+                status=200, content_type="application/javascript",
+                body=real_map),
+        )
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded",
+                  timeout=5_000)
+        page.wait_for_function(
+            "document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+        page.wait_for_timeout(800)
+        canvas = page.locator("#map-canvas")
+        assert canvas.get_attribute("tabindex") == "0"
+        canvas.focus()
+        canvas.press("ArrowRight")
+        canvas.press("ArrowDown")
+        page.click('[data-map-click="goal"]')
+        canvas.focus()
+        canvas.press("Enter")
+        page.wait_for_function(
+            "() => window.__apiCalls.some((call) => call.path === "
+            "'/api/v1/navigation/goal' && call.method === 'POST')",
+            timeout=8000,
+        )
+        canvas.press("Escape")
+        assert not errors, f"페이지 오류: {errors}"
+        browser.close()
+
+
+# --- D-260 5: the operate view's summary line ------------------------------------
+
+STATUS_SUMMARY_INIT = """
+    window.__rosyStatusSummary = {
+      state: 'caution', label: '주의', reason: '배터리 전압 (ADC) 응답 없음',
+      state_line: '주의: 배터리 전압 (ADC) 응답 없음',
+      motion_reason: '모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.',
+      runtime_mode: 'core', boot: {available: true, stage: 'CORE_READY'},
+      devices: {available: true, stale: false, ok: 12, total: 14, problems: [
+        {id: 'adc.battery', label: '배터리 전압 (ADC)', state: 'no_response', product: true},
+        {id: 'imu', label: 'IMU (BNO055)', state: 'bus_missing', product: false}]},
+      battery: {percent: 81.4, voltage: 7.93, warning_percent: 20, low: false},
+      temperature_c: 51.2,
+      todos: [
+        {id: 'adc_power_cycle', text: '로봇 전원을 완전히 껐다 켜세요 (ADC)', device: 'adc.battery'},
+        {id: 'promote_motor', text: '관리자가 모터 모드로 승격'},
+        {id: 'human_test', text: '<img src=x onerror=alert(1)>부저: 시험 동작으로 확인', device: 'buzzer'}],
+    };
+"""
+
+SUMMARY_PROBE = """() => {
+  const box = (id) => document.getElementById(id).getBoundingClientRect();
+  const summary = box('status-summary');
+  return {
+    page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    inside: ['summary-state', 'summary-devices', 'summary-power', 'summary-todo-toggle'].every((id) => {
+      const r = box(id);
+      return r.width > 0 && r.left >= summary.left - 1 && r.right <= summary.right + 1
+        && r.bottom <= window.innerHeight;
+    }),
+    height: Math.round(summary.height),
+  };
+}"""
+
+
+def _summary_page(playwright, extra_init, width=1366, height=768):
+    browser, page = _launch_page(playwright, extra_init=extra_init, width=width, height=height)
+    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    page.wait_for_function("document.getElementById('status-summary')?.dataset.state !== 'unknown'")
+    return browser, page
+
+
+def test_the_summary_line_says_state_devices_power_and_todos():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, STATUS_SUMMARY_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.locator("#summary-state").inner_text() == "주의"
+        assert page.locator("#summary-state").get_attribute("data-state") == "caution"
+        assert page.locator("#summary-reason").inner_text() == "배터리 전압 (ADC) 응답 없음"
+        assert page.locator("#summary-devices").inner_text() == "정상 12/14 · 배터리 전압 (ADC) 응답 없음"
+        assert page.locator("#summary-power").inner_text() == "81 % · 7.93 V · 51 °C"
+        toggle = page.locator("#summary-todo-toggle")
+        assert toggle.inner_text() == "할 일 3" and toggle.get_attribute("aria-expanded") == "false"
+        assert page.locator("#summary-todos").is_hidden()
+
+        toggle.click()
+        assert toggle.get_attribute("aria-expanded") == "true"
+        items = page.locator("#summary-todos li").all_inner_texts()
+        assert items[:2] == ["로봇 전원을 완전히 껐다 켜세요 (ADC)", "관리자가 모터 모드로 승격"]
+        # Server text is text: the list builds no element from it.
+        assert items[2].startswith("<img") and page.locator("#summary-todos img").count() == 0
+        # The open list overlays the console; nothing scrolls.
+        fit = page.evaluate(FIT_PROBE)
+        assert fit["docOverflow"] <= 0 and fit["actOverflow"] <= 1, fit
+        page.keyboard.press("Escape")
+        assert page.locator("#summary-todos").is_hidden()
+        # The line keeps the closed type scale and the contrast floor.
+        page.evaluate(f"window.STEPS = {TYPE_STEPS}")
+        assert page.evaluate(OFF_SCALE_CENSUS) == []
+        assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+        # It is refreshed with the other slow data, as a viewer route.
+        assert any(call["path"] == "/api/v1/host/status-summary" and call["method"] == "GET"
+                   for call in page.evaluate("window.__apiCalls"))
+        browser.close()
+
+
+def test_the_device_summary_opens_the_device_card_at_the_first_problem():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, STATUS_SUMMARY_INIT + HARDWARE_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
+        page.locator("#summary-devices").click()
+        page.wait_for_function("document.body.dataset.view === 'inspect'")
+        assert page.locator("#view-inspect-panel").is_visible()
+        assert page.evaluate("document.activeElement?.dataset.device") == "adc.battery"
+        browser.close()
+
+
+@pytest.mark.parametrize("payload,chip", [
+    ("{state: 'failed', label: '실패', reason: 'rosy-core', todos: [{id: 'failed_unit',"
+     " text: '실패한 부팅 단계를 확인하세요 (rosy-core)'}], devices: {available: false}, battery: {}}", "실패"),
+    ("{state: 'ready', label: '준비됨', reason: '', todos: [], devices: {available: true, ok: 14,"
+     " total: 14, problems: []}, battery: {percent: 90, voltage: 8.1, low: false}, temperature_c: 48}", "준비됨"),
+])
+def test_failed_and_ready_render_without_a_list_to_open(payload, chip):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, f"window.__rosyStatusSummary = {payload};")
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.locator("#summary-state").inner_text() == chip
+        if chip == "준비됨":
+            assert page.locator("#summary-devices").inner_text() == "정상 14/14"
+            assert page.locator("#summary-todo-toggle").inner_text() == "할 일 0"
+            assert page.locator("#summary-todo-toggle").is_disabled()
+            # D-82: a ready robot shows nothing warm on the summary line.
+            warm = page.evaluate(WARM_SCAN)
+            assert not [hit for hit in warm if "summary" in hit], warm
+        else:
+            assert page.locator("#summary-devices").inner_text() == "장치 점검 전"
+            assert page.locator("#summary-power").inner_text() == "— % · — °C"
+        browser.close()
+
+
+@pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
+def test_a_held_robot_s_long_reason_keeps_the_console_inside_the_screen(viewport):
+    """D-201: the held reason is the longest sentence; it is cut, never wraps or scrolls."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    held = STATUS_SUMMARY_INIT + (
+        "Object.assign(window.__rosyStatusSummary, {state: 'ready_held', label: '준비됨 — 못 움직임',"
+        " reason: 'CORE 전용 모드'});"
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _summary_page(playwright, held + CONSOLE_STATE_INIT["safe-stop"],
+                                          width=viewport[0], height=viewport[1])
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.locator("#summary-state").inner_text() == "준비됨 — 못 움직임"
+        # Held: the reason is D-247 7's sentence, whole in the title when it is cut.
+        assert page.locator("#summary-reason").get_attribute("title").startswith("모터가 꺼진 CORE 전용 모드")
+        page.wait_for_timeout(300)
+        fit = page.evaluate(FIT_PROBE)
+        line = page.evaluate(SUMMARY_PROBE)
+        browser.close()
+
+    assert fit["docOverflow"] <= 0 and fit["actOverflow"] <= 1 and fit["estopInside"], f"{viewport}: {fit}"
+    assert line["page"] == 0 and line["inside"], f"{viewport}: {line}"

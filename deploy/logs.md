@@ -1073,6 +1073,13 @@
 - 결정: D-198 (D-197 후속)
 - 교훈: 없음
 
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: `.dockerignore`에 `!src/robots/`·`!src/robots/pinky_pro/`·`!src/robots/pinky_pro/**` 추가(없으면 Dockerfile core 단계의 `COPY src/robots/pinky_pro`가 실패). `test/test_robot_runtime.py`에 COPY와 허용 목록 문자열 가드. `deploy/robot/AGENTS.md`에 기존 결함 기록: core 단계는 `core_common`/`core_events`/`core_features`/`core_api_web`를 복사하지 않는다(이번에 고치지 않음). `.github/workflows/ci.yml` host pytest 단계에 `core/core_common/test robots/pinky_pro/test` 추가(`cd src` 기준, 로컬에서 같은 명령 1539 passed·14 skipped로 수집 확인), `.github/workflows/AGENTS.md` 동기화.
+- 증거: 가드 먼저 실패(`AssertionError: !src/robots/`) → 수정 후 `test/test_robot_runtime.py` 32 passed (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
 ## 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
 
 - 변경: (1) `deploy/release/signing.py`가 PATH에 openssl이 없을 때 Git for Windows(`usr\bin`, `mingw64\bin`)를 찾는다 —
@@ -1088,3 +1095,184 @@
 - 결정: D-187/D-188 보완
 - 교훈: 시험 conftest가 환경을 고쳐 주면 실제 운영 경로의 같은 결함을 가린다 — 보정은 제품 코드에 두고 시험은 그 보정을 검증한다.
   카드 신원은 Windows 캐시와 원시 섹터가 다를 수 있으니, 실패 시 섹터를 먼저 덤프해 추측을 끝낸다.
+
+## 2026-09-24 · uncommitted · fix(first-boot): retry the site Wi-Fi and self-heal a held first boot
+
+- 변경: `deploy/image/first-boot/rosy-first-boot.py`의 현장 Wi-Fi 활성화가 한 번 실패하면 곧바로 `PROVISIONING_AP`로 끝나고
+  `rosy-site-sta.nmconnection`을 지우던 것을 고쳤다. (1) `activate_site_wifi`: 최대 3회, 회당 `--wait 30`, 사이 15초, 합계 120초
+  (단조 시계 기준) 안에서 재시도하고, 매 시도 전에 `GENERAL.STATE`로 NM autoconnect가 이미 붙였는지 확인한다. 유닛
+  `TimeoutStartSec`는 90→180. (2) 예산을 다 써도 프로필은 남긴다. (3) 새 `rosy-first-boot-retry.timer`/`.service`가 부팅 150초 뒤부터
+  30초마다 `--network check`(연결을 올리지 않고 상태만 확인)로 재실행하고, 성공하면 `rosy-runtime.target`을 시작하고 타이머를 멈춘다.
+  이미지 payload·enable 목록에 두 유닛을 추가했다.
+- 증거: 실기 저널(release `2026.09.24-010`, `rosy-pinky-e4us`): 18.7 s 활성화 시작, 44.0 s 실패 → 첫 부팅 즉시
+  `site_wifi_unreachable`, LCD `FAILED:rosy-first-boot`; 77.6 s NM 재시도, 84.9 s 연결. Wi-Fi가 붙은 뒤 수동
+  `systemctl start rosy-first-boot`가 PROVISIONED, 재부팅 후 CORE_READY — `apply()`는 재진입 가능. 시험:
+  `python -m pytest test/test_first_boot_provisioning.py test/test_sd_api_token.py test/test_sd_ap_credentials.py test/test_sd_operator_access.py test/test_boot_state.py test/test_boot_status_indicator.py test/test_boot_blackbox.py test/test_image_customization_contract.py test/test_native_systemd_contract.py test/test_rosy_network_fallback.py test/test_network_topology_contracts.py deploy/image/test -q`
+  307 passed, 10 skipped, 1 failed(`test_verify_mounted_image.py::test_inspect_passes_with_valid_image` — origin/main에서도 같은 실패, 이번 변경과 무관).
+  실기 재현은 아직 없음.
+- gate 변화: 없음 (SOURCE만. DEVICE 재검증 필요: 느린 핫스팟으로 첫 부팅, 잘못된 SSID로 AP 개방 후 핫스팟 복구 시 자동 PROVISIONED)
+- 결정: D-176 보완 노트(2026-09-24), D-154 결정 6의 "후보 폐기"를 이 범위에서 대체
+- 교훈: 한 번의 연결 실패를 영구 실패로 다루고 복구 수단(프로필)까지 지우면, 하위 계층(NM autoconnect)이 스스로 회복해도 상위가
+  따라오지 못한다. oneshot의 `Restart=`는 시작 job을 붙잡아 뒤 유닛을 막으므로, 재시도는 별도 타이머로 한다.
+
+## 2026-09-24 · uncommitted · fix(first-boot): PR #38 review — held retry changes nothing, one run at a time
+
+- 변경: (1) `--network check`는 `complete.json`이 없고 사이트 프로필이 활성이 아니면 `apply()`에 들어가기 전에 held JSON만
+  출력하고 1로 끝난다 — 30초마다 state.json·hostname·avahi 재시작·runtime.env/프로필/authorized_keys/sudoers/CORE overlay를
+  다시 쓰던 것을 없앴다. 확인 전에 남겨 둔 프로필을 `nmcli connection load <path>`로 다시 읽힌다(라디오는 건드리지 않음).
+  (2) `rosy-first-boot.sh`를 `flock -w 200 /run/rosy-first-boot.lock`으로 감싸고, `_write_atomic`은 같은 디렉터리의
+  `tempfile.mkstemp`를 쓴다(고정 `.tmp` 이름 충돌 제거). 재시도 유닛 `TimeoutStartSec` 240.
+  (3) `rosy-first-boot.service`가 성공하면(`ExecStartPost`) 재시도 타이머를 멈춘다. (4) 재시도 성공 시
+  `rosy-boot-status-ready.service`도 시작해 CORE_READY를 바로 표시한다. (5) `GENERAL.STATE`가 `activating`이면 `up`을 내지
+  않고 5초씩 기다린다(예산 안에서) — 2026-09-24에는 첫 부팅 1.7초 만에 NM이 이미 연결 중이었다. (6) D-154 결정 6에 D-176 노트 포인터.
+- 증거: `python -m pytest test/test_first_boot_provisioning.py test/test_sd_api_token.py test/test_sd_ap_credentials.py test/test_sd_operator_access.py test/test_boot_state.py test/test_boot_status_indicator.py test/test_boot_blackbox.py test/test_image_customization_contract.py test/test_native_systemd_contract.py test/test_rosy_network_fallback.py test/test_network_topology_contracts.py -q`
+  306 passed, 10 skipped (first-boot 23). held 확인은 state.json·프로필·runtime.env·hostname·CORE overlay의 mtime·내용과 파일 목록이
+  그대로이고 hostnamectl/systemctl 호출이 없음을 확인한다. 실기 재현은 아직 없음.
+- gate 변화: 없음
+- 결정: 없음 (D-176 보완 노트 유지)
+- 교훈: 주기 재시도는 "아무것도 안 바뀌었으면 아무것도 쓰지 않는다"가 기본이어야 한다 — 전체 적용 경로를 그대로 돌리면 부작용이 주기가 된다.
+- 후속(미처리): fallback AP의 "업링크 있음" 규칙이 사이트 프로필 대신 아무 연결이나 인정하는 점, 재시도 동안
+  `rosy-first-boot.service`가 failed로 남아 부팅 표시가 FAILED를 보이는 잡음, 재시도 유닛 샌드박스 강화.
+
+## 2026-09-24 · uncommitted · fix(image,uart): keep the kernel console and getty off the LiDAR UART
+
+- 변경: `configure-uart-pi5.sh`(이미지·장치 공통)가 `cmdline.txt`에서 `console=serial0|ttyAMA0|ttyAMA4[,baud]`만 지우고
+  (`console=tty1`, 디버그 UART `ttyAMA10`은 유지) `serial-getty@ttyAMA0`·`@ttyAMA4`를 `/dev/null`로 mask한다. 멱등.
+  `verify-mounted-image.py`는 `cmdline.txt` 누락·버스 UART 콘솔·mask 누락이면 빌드를 멈추고, `verify-pi.sh`에 `UART` 검사
+  (`/proc/cmdline`, 활성 `serial-getty@ttyAMA0`)를 더했다.
+- 증거: 실기 `rosy-pinky-e4us`, release 2026.09.24-010. Ubuntu `cmdline.txt`의 `console=serial0,115200`이 `enable_uart=1`에서
+  `/proc/cmdline`의 `console=ttyAMA0,115200`이 되어 agetty가 RPLIDAR C1 포트를 잡았다. `sllidar_node`는
+  `SL_RESULT_OPERATION_TIMEOUT`, getty 정지 뒤 `0x80008004`(커널 콘솔). 항목을 지우고 재부팅하자 getty 없음,
+  `health status : OK`, DenseBoost 10 Hz. host: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py
+  test/test_pi_wifi_deployment.py test/test_device_readback.py test/test_pinky_flashable_image_contract.py test/test_pinky_user_validation.py -q`
+- gate 변화: 평가표 11행 FAIL → 소스 수정. DEVICE는 현장 cmdline 수정으로 LiDAR PASS, 새 이미지로는 미확인(ARTIFACT HOLD)
+- 결정: D-192 보완(2026-09-24)
+- 교훈: 기반 이미지가 "이미 준다"고 본 장치 노드도 그 노드를 누가 잡고 있는지까지 확인한다. `enable_uart=1`은 포트를 만들지만
+  `console=serial0`과 짝지어지면 그 포트를 콘솔에 넘긴다.
+
+## 2026-09-24 · uncommitted · fix(image,uart): recovery console on the debug UART, strict getty masks (PR #39 review)
+
+- 변경: 바로 위 항목의 보완. `configure-uart-pi5.sh`가 버스 UART 콘솔을 지운 뒤 복구용 시리얼 콘솔
+  `console=ttyAMA10,115200`(Pi 5 디버그 3핀 UART, 로봇 버스 없음)이 없으면 앞에 넣는다(`console=tty1`은 마지막에 유지) —
+  위 항목대로면 시리얼 콘솔이 하나도 남지 않았다. `verify-mounted-image.py`는 `ttyAMA10` 콘솔이 없어도 빌드를 멈추고,
+  getty mask는 `/dev/null` symlink만 인정한다(일반 파일 거부). 두 임시 파일을 지우는 EXIT trap을 편집 전에 두고,
+  `cmdline.txt`를 사전 검사하고, `REBOOT_REQUIRED`는 한 번만 출력한다. `verify-pi.sh`는 `serial-getty@ttyAMA0`·`@ttyAMA4`의
+  활성과 masked 상태를 함께 본다. `pi5-acceptance-checklist.md`의 UART 콘솔은 디버그 UART로 명시했다.
+- 증거: `python -m pytest test/test_rosy_motor_udev.py test/test_image_customization_contract.py deploy/image/test -q`
+- gate 변화: 없음(평가표 11행 그대로, 이미지 미확인)
+- 결정: D-192 보완(2026-09-24) 문구 갱신
+- 교훈: 콘솔을 치울 때는 복구 경로가 남는지 먼저 본다. 검사기가 Windows 시험 편의를 위해 느슨해지면 실제 이미지에서도 느슨하다 —
+  시험 쪽을 skip한다.
+
+## 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
+
+- 변경: a93d5188 경로 재편이 2026-09-21 test(deploy) 항목(D-149)의 `apps/control`을 `core/control`로 고쳐 쓴 것을 원문으로 복원했다. 로그는 append-only고 역사 항목은 당시 경로를 말해야 한다. 현재 경로는 이 시점 기준 `src/core/control`이다.
+- 증거: `python tools/harness/rosy_harness.py lint` — 3a17a0aa 기준 append-only 오류 소멸(커밋 뒤 HEAD 기준도 통과).
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.
+
+## 2026-09-25 · 4512c897 · feat(sd): 99.9% 이상에서 멈춘 기록은 재개부터, 느린 리더 안내 (D-225)
+
+- 변경: `prepare-rosy-sd.ps1`이 Imager 정지 시 기록량이 원본의 99.9% 이상이면 전체 재기록 대신 `-ResumeAfterWrite`를 먼저 안내한다(readback이 모든 바이트를 다시 비교하고, 덜 쓰인 카드는 bundle·receipt 전에 실패한다는 문구 포함). preflight `read_mbps < 30`이면 `reader_hint`를 progress JSON과 경고로 남긴다(실패 아님, 하한 10 MB/s 유지). `card-write-status.ps1`도 같은 안내를 낸다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py -q` 142 passed(99.95%에서 자른 카드로 재개 → readback 실패·기록 없음 포함); 이전 커밋 기준 SD 묶음 184 passed(2026-09-25 Windows). 독립 리뷰 MERGE.
+- 실기: 같은 날 release 2026.09.25-011을 `rosy-pinky-e4us`(18)에 재기록 — Imager exit 0, readback 8,574,867,968 B verified(부트 파티션은 Windows `System Volume Information` 때문에 파일 단위 비교 371개). readback 18분은 동시 실행 작업의 CPU 경합 탓(010은 7분).
+- gate 변화: 없음(MEDIA 증거만, BOOT/DEVICE HOLD)
+- 결정: D-225
+- 교훈: 010은 99.9%에서 멈춘 기록을 전체 재기록으로 되돌려 37분을 잃었다. 판정은 readback이 하므로 안내는 재개부터 한다. 카드 readback은 xz 압축 해제가 CPU를 써서, 기록 중에는 무거운 병렬 작업을 피한다.
+
+## 2026-09-25 · f9e52192 · feat(robot): 서명 payload를 SSH로 보내 전환하는 `rosy-release-push.ps1` (D-225)
+
+- 변경: `deploy/robot/rosy-release-push.ps1`이 Linux에서 만든 서명 payload tarball을 운영 PC에서 먼저 검증(`signing.py` verify, 저장소 공개키)하고 scp로 보낸 뒤, `rosy-release-unpack.sh`로 `/opt/rosy/releases/<id>`에 풀고(임시 폴더 → `mv -T`, `sync`), `activate-release.sh`와 CORE 준비 확인을 실행한다. `-Rollback`, `-PrintCommands`(원격 명령 전체를 실행 없이 출력) 지원. 풀기 전 python `tarfile`로 전 항목을 읽어 일반 파일·폴더만 허용하고(심볼릭·하드링크·FIFO·장치, 절대경로, `..`, 제어문자 거부), `--no-same-owner --no-same-permissions` 뒤 root 소유·`go-w,u-s,g-s`로 고정한다. 같은 id가 있으면 `sha256sum -c`로 다시 검증해 손상 시 `RELEASE_DAMAGED`. `-ReleaseDir` 실전송은 거부(Windows tar가 실행 비트를 잃음).
+- 증거: `test_release_push_entrypoint.py` + `test_release_unpack_helper.py`(bash로 helper 실행) + `test_native_release_activation.py` + `test_robot_runtime.py` 78 passed, 1 skipped(NTFS에서 setuid 비트 확인 불가 — Linux에서 실행). 독립 리뷰 → 수정 2회 → 재검증 MERGE. 로봇 접속 없음.
+- gate 변화: 없음(`UPDATE_GO` HOLD 유지 — e4us에서 activate·rollback·recover 실증 전)
+- 결정: D-225
+- 교훈: root로 tar를 풀면 서명이 보장하지 않는 소유자·권한·항목 종류가 그대로 들어온다. 서명 검증과 별개로 풀기 전 항목 허용 목록과 풀고 난 뒤 권한 고정이 필요하다. 첫 부팅이 운영자 계정에 `NOPASSWD:ALL`을 준다 — 좁히는 일은 후속 과제.
+
+## 2026-09-25 · uncommitted · fix(sd): writer 멈춤은 두 단계로, 콘솔 없으면 묻지 않고 실패 (D-230)
+
+- 변경: `prepare-rosy-sd.ps1` 쓰기 감시가 Imager `--cli` stdout를 캡처해 `%`·바이트 진행률을 파싱하고, 진행이 있으면 WMI CPU/I/O가 idle이어도 stall 시계를 리셋한다(파서 출력이 없으면 기존 `Get-WriterSample` 폴백). stall은 soft(`-WriterSoftStallMinutes` 기본 2, hard 절반으로 clamp — 경고 heartbeat `warning` 필드만, stage 집계 불변)와 hard(`-WriterStallMinutes` 기본 5 — 기존 kill·card_state·99.9% resume 안내 그대로)로 분리했다. `-NonInteractive`는 저속 미디어·ERASE 확인의 `Read-Host`를 묻지 않고 fail-closed로 바꾼다. `write-card.ps1`이 두 파라미터를 전달하고, `card-write-status.ps1`이 soft 경고를 `WARNING:` 줄·JSON `warning`으로 보인다.
+- 증거: `python -m pytest test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_sd_personalization.py test/test_media_readback.py -q` **245 passed** (2026-09-25 Windows). 도중 계약 테스트가 작은 hard 값(`-WriterStallMinutes 0.05`)에서 기본 soft와 충돌하는 것을 잡아 clamp로 고쳤다 — 기본값 검증을 `Fail`이 아니라 clamp로 해야 기존 호출이 깨지지 않는다.
+- gate 변화: 없음(MEDIA 절차 개선, BOOT/DEVICE HOLD)
+- 결정: D-230
+- 교훈: stall 한도는 "죽이는 값" 하나가 아니라 "알리는 값 + 죽이는 값" 두 개다. 알리는 값을 실패로 만들면(기본 soft > 작은 hard) 기존 호출자가 먼저 깨진다 — 경고 한도는 clamp한다.
+
+## 2026-09-25 · 4107311c · feat(release): payload만 빌드·서명·묶는 경로와 리뷰 수정 (D-225)
+
+- 변경: `deploy/release/build_payload_release.py`(`build` → `native_release.py verify()`가 받는 manifest·SHA256SUMS 릴리스 폴더, `pack` → 정렬·고정 mtime·root 소유·일반 파일/폴더만 담은 재현 가능한 tarball, `--modes-from`으로 Linux 실행 비트 유지), `.github/workflows/build-native-payload.yml`(ubuntu-24.04-arm, 서명 안 된 payload artifact). 오프라인 서명은 기존 `sign_image_release.py` 그대로. 리뷰 수정: colcon 뒤 `compileall --invalidation-mode checked-hash`로 고정 mtime에서도 `.pyc` 유효, 네 unit에 `PYTHONDONTWRITEBYTECODE=1`(서명 릴리스에 목록 밖 `.pyc`가 생기지 않게, `verify()`는 약화하지 않음), Windows에서 서명된 재묶음은 `--modes-from` 필수, `ros-packages.txt` 기록(활성화 게이트 없음 — 운영자가 이미지 `deb-packages.txt`와 비교), 메타데이터 이름은 모든 깊이에서 거부.
+- 증거: 재검증 244 passed, 6 skipped(`test_payload_release_build`, `test_native_payload_workflow`, `test_native_release_activation`, `test_release_unpack_helper`, `test_native_systemd_contract`, `test_robot_runtime`, `test_image_customization_contract`, `test_flashable_image_layout`). 묶은 tarball이 실제 `rosy-release-unpack.sh`를 지나 `verify()` 통과. 독립 리뷰 → 수정 → 재검증 PASS.
+- 미증명: workflow를 ARM64에서 실행한 적 없음, 실제 colcon 설치 트리로 `build` 미실행, e4us activate·rollback·recover 미실증.
+- gate 변화: 없음(`UPDATE_GO` HOLD)
+- 결정: D-225
+- 교훈: 묶을 때 mtime을 고정하면 timestamp `.pyc`가 전부 낡은 것으로 보인다. 재현성과 `.pyc` 유효성을 같이 얻으려면 checked-hash로 컴파일한다. 첫 시도는 8시간 커밋 0건으로 멈췄다 — 단계별 커밋·제한 시간·커밋 감시로 다시 돌려 23분에 끝났다.
+
+## 2026-09-25 · 57e7e5d7 · feat(image,release,sd,first-boot): 이미지 안 공장 릴리스를 오프라인 서명해 첫 부팅에 설치 (D-225)
+
+- 변경: 이미지 안 공장 릴리스는 서명만 없던 게 아니라 `manifest.json`·`SHA256SUMS`도 없었다(`verify-artifacts.sh`의 확인이 통과할 수 없던 상태). `customize-rootfs.sh`가 마지막 쓰기 뒤 `build_payload_release.py seal`로 봉인하고 두 파일을 dist `factory-release/<id>/`로 내보낸다. `sign_image_release.py`가 공장 목록을 먼저 서명하고 그 `.sig`를 바깥 `SHA256SUMS`에 더한 뒤 바깥 목록을 서명한다(중간 실패 시 원상 복구, 재실행 거부). SD 번들에 `factory_release.sha256sums_sig_b64`(PC에서 신뢰 키로 검증). 첫 부팅이 서명을 넣고 `verify()`가 통과할 때만 남긴다(실패 시 제거·기록, 프로비저닝은 계속). BUILD_GO는 "이미지 안 서명 없음, dist 서명으로 scratch 복사본 verify 통과"를 요구한다. `prepare-rosy-sd.ps1`은 번들 생성 호출에 인자 2개만 추가.
+- 증거: 브랜치 437 passed, 12 skipped; 병합 뒤 main에서 공장 서명·오프라인 서명·첫 부팅·릴리스 전환·payload 86 passed, 1 skipped + SD writer 정지 판정 6 passed(D-230 병합 확인). 독립 리뷰(opus) MERGE, 0 CRITICAL/HIGH.
+- 미증명: ARM64 이미지 빌드, 실기 첫 부팅. 후속(리뷰 MEDIUM): Pi 5에서 첫 부팅 전체 해시 시간 측정(Wi-Fi 120 s와 같은 180 s 안), 서명된 dist로 SD writer 끝까지 도는 시험. LOW: 일시적 `verify()` 오류가 좋은 서명을 지울 수 있음, 서명기 강제 종료 뒤 수동 정리, 핸드오프 단계에 `factory-release/` 존재 확인 없음, `cp -a`가 CI uid 소유를 유지하는지 확인.
+- gate 변화: 없음(`UPDATE_GO` HOLD). 효과는 새 이미지(012)부터 — 011 카드에는 공장 서명이 없다.
+- 결정: D-225
+- 교훈: "서명 안 됨"으로 알던 결함이 실제로는 "봉인 자체가 없음"이었다. 검사기가 요구하는 산출물을 만드는 단계가 있는지부터 확인한다.
+
+## 2026-09-25 · 17ef9af8 · feat(native): read-only root board device probe (D-247)
+
+- 변경: `rosy-hw-probe.py`(root, 읽기 전용, `--root` 시험)가 보드 장치 14행을 여섯 상태로 재서 `/run/rosy-boot/hardware.json`(root:rosy-core 0640)에 쓴다. `rosy-hw-probe.service`(oneshot, TimeoutStartSec=60, 장치 노드 6개만)와 `rosy-hw-probe.path`(CORE의 `/run/rosy/hw-probe.request`)를 이미지가 설치·활성화하고 `rosy-hw-probe` 명령을 PATH에 둔다. 장치 표면 계약(D-169)은 probe의 노드 집합을 정확히 고정한다.
+- 증거: `test/test_hw_probe.py` 24 passed 1 skipped(Windows), native systemd·장치 표면·이미지·설치 배치 계약 통과
+- 미증명: Pi 5 실기 실행(`/dev/kmsg` 권한, `DeviceAllow=/dev/rosy-motor` 심볼릭 링크 해석, RPLIDAR C1 GET_HEALTH 응답, 실제 소요 시간)
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 2026-09-25 전원 재투입 사실 — IR·초음파 4095는 감지 없음(정상), 멈춘 ADC MCU는 Pi 재부팅으로 풀리지 않는다, BNO055는 켜진 뒤 CONFIG 모드라 가속도 0이 정상이다.
+
+## 2026-09-26 · 1d0c3420 · feat(image): enable the I2C0 IMU bus in config.txt (D-247)
+
+- 변경: `configure-boot-overlay-pi5.sh`(이미지·실기 공용, UART 스크립트와 같은 Pi 5 섹션 규칙·vfat 안전 교체)가 boot 줄 하나를 멱등으로 켠다. `customize-rootfs.sh`가 `dtoverlay=i2c0-pi5,pins_0_1`을 넣고 `verify-mounted-image.py`가 요구한다.
+- 증거: `test/test_boot_overlay_pi5.py`, 이미지 계약 통과. `rosy_18`에서 손으로 넣은 같은 줄로 BNO055 칩 ID 0xA0
+- 미증명: 새 이미지 카드에서 재부팅 뒤 `/dev/i2c-0`
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: 이 커널(6.8.0-1064-raspi)에서는 런타임 `dtoverlay`가 되지 않는다. config.txt와 재부팅만 된다.
+
+## 2026-09-26 · b7d7b17a · feat(image): build the WS2812 lamp driver for the image kernel (D-247)
+
+- 변경: 이미지 chroot에서 고정 rpi_ws281x의 `rp1_ws281x_pwm`을 이미지 커널(`/lib/modules`의 유일한 항목 또는 `ROSY_IMAGE_KERNEL`) 헤더로 빌드한다. 6.11 전에는 `.remove_new`로 고친다. `/lib/modules/<kver>/extra`에 설치하고 depmod한다. `overlays/rosy-ws281x.dts`(`/axi/pcie@120000/rp1`, gpio19 `pwm0`)를 dtbo로 컴파일하고 `dtoverlay=rosy-ws281x`를 켠다. 페이로드가 `99-rosy-lamp.rules`와 `modprobe.d/rosy-ws281x.conf`(`pwm_channel=3`)를 싣는다. `install-pinky-hardware-deps.sh`는 해시 고정 패치(Pi 5 rev 1.1 보드 ID)를 lamp_control 빌드 전에 적용한다.
+- 증거: `test/test_lamp_driver_image.py` 17 passed. 패치가 잠긴 아카이브에 적용됨(호스트 `patch`). 모든 단계는 `rosy_18`에서 손으로 확인
+- 미증명: 네이티브 ARM64 빌드 호스트에서 이미지 빌드. 베이스 이미지 커널의 `linux-headers-<kver>`가 잠긴 apt suite에 아직 있는지. 새 카드에서 모듈 자동 로드와 `pwm_channel=3`
+- gate 변화: 없음
+- 결정: D-247
+- 교훈: `pwm_channel` 기본값 2는 GPIO18(LCD 백라이트)이다. 모듈이 로드돼도 램프는 어둡다.
+
+## 2026-09-26 · 8e6902fd · feat(native,api): buzzer and lamp test with a person's answer (D-247 6)
+
+- 변경: root oneshot `rosy-hw-test.py`·`.service`·`.path`를 추가했다. `DeviceAllow`는 gpiochip4와 ws281x_pwm뿐이다. 페이로드가 싣고 이미지가 path unit만 켠다. 부저 기본 핀은 BCM 4다(`board.yaml`, `rosy-boot-display`). probe는 램프 `pwm_channel`을 본다.
+- 증거: `test/test_hw_test.py` 38 passed 2 skipped(Windows), native systemd·장치 표면·이미지·설치 배치·부팅 표시 계약 통과
+- 미증명: 실기에서 lgpio PWM이 unit 샌드박스(RuntimeDirectory, DeviceAllow) 안에서 도는지. lamp_selftest를 root로 돌렸을 때 램프가 켜지는지
+- gate 변화: 없음
+- 결정: D-247, D-190(부저 핀)
+- 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(deploy): D-260 boot display sound, lamp and LCD; test hand-over
+- 변경: `rosy-boot-display.py`: 규칙표 상태로 부저(상태 변경 때만, 300 s 반복 억제)·램프(`lamp_pattern`, 채널 3일 때만, fail-open)·LCD 두 줄, 부저·램프 기본 켜짐, `rosy-hw-test` 시험 넘겨받기. unit: `DeviceAllow=/dev/ws281x_pwm`, `RuntimeDirectory=rosy-display`. udev: `/dev/ws281x_pwm` root:rosy-display 0660. `rosy-boot-status`: `runtime_mode`와 장치 `id·state·product`를 boot-status.json에. `rosy-hw-test`: 부팅 화면 프로그램이 쥔 장치는 `busy` 대신 넘김(15 s 무응답 = failed). `rosy-hw-probe`: 부저 기본 켜짐. board.yaml lamp 절. 이미지 probe가 `core_common.robot_state` import와 램프 노드를 본다
+- 증거: `test_boot_display.py` 105 passed; `test_hw_test.py` 64 passed; `test_hw_probe.py` 41 passed; 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음(foundation·gateway·api_web·hmi web/dashboard/face·lamp·boot display·hw-test·hw-probe·boot-status·native systemd·device surface·image customization·lamp image·harness) 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음 — DEVICE 확인 전
+- 결정: D-260 Proposed
+- 교훈: 권한 없는 부팅 화면 프로그램이 못 읽는 입력(runtime.env 0600, hardware.json 0640)은 이미 root로 도는 표시기가 필요한 칸만 옮긴다
+
+## 2026-09-26 · uncommitted · fix(deploy): D-260 review M1 M2 L1-L4
+- 변경: `rosy-boot-status`가 CORE의 `/run/rosy/status-inputs.json`(SAF-005 경고 임계, 덮기를 거친 장치 상태)을 엄격히 읽어 boot-status.json에 옮기고 부팅 화면 프로그램이 그 임계를 쓴다. `rosy-hw-test`는 ActiveState가 정확히 `active`이고 `rosy-display` 그룹이 있을 때만 넘긴다. 스위치 해석기 `rosy_display_env.py` 공유. 주의 소리만 300 s 반복 억제. `rosy-hw-test.service` 주석 정정
+- 증거: `test_boot_display.py`·`test_hw_test.py`·`test_hw_probe.py`·native systemd·device surface 412 passed(gateway status-summary 포함, 2026-09-26 Windows); 두 경로 동등 시험 3건
+- gate 변화: 없음 — DEVICE 확인 전
+- 결정: D-260 Proposed
+- 교훈: 권한 없는 표시기가 CORE와 같은 판정을 하려면 입력을 CORE가 넘겨야 한다
+
+## 2026-09-26 - prepare selected OMX-AI workcell target
+- Change: record OMX-AI as selected but keep runtime disabled; remove the unmeasured six-joint default; lock official ROBOTIS Jazzy source revisions and add a separate workstation image plan.
+- Evidence: focused profile/product/vendor-lock suite: 13 passed; disabled CLI output: `{}`.
+- Gate change: SOURCE/LOCAL evidence refreshed; ROS-SIM and ARTIFACT remain HOLD; DEVICE/FIELD remain PARKED.
+- Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
+
+## 2026-09-26 · uncommitted · build locked OMX-AI workstation image and serial admission
+- 변경: full-SHA ROBOTIS 잠금으로 ROS Jazzy OCI 워크스테이션 이미지를 만들고, 팔 bringup/description/Dynamixel 패키지 집합과 동작하지 않는 hardware/software 셸 프로필을 추가했다. Linux by-id 사전점검은 서로 다른 follower/leader character device와 read/write 권한을 요구한다.
+- 근거: OMX 호스트 시험 8개 통과; Docker Linux/amd64 이미지 빌드 digest `sha256:8b4d2fdf534687132cc7d9fb8441b3db63c140edfaaba5164693fd56ca77d861`; 이미지에서 `open_manipulator_bringup` 및 `dynamixel_hardware_interface` 조회 성공; Compose 설정 검증 통과.
+- gate 변화: SOURCE/LOCAL 이미지 빌드 및 사전점검 GO; ROS-SIM/ARTIFACT HOLD; DEVICE/FIELD PARKED.
+- Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.

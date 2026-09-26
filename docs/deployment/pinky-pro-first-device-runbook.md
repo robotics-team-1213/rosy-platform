@@ -221,8 +221,10 @@ LCD는 CORE 밖의 `rosy-boot-display.service`가 그린다. 전원을 넣고 �
 | `FAILED`(빨강) + unit 이름 | 그 unit이 실패했다 | `journalctl -b -u <unit>`, 또는 카드의 `rosy-diag/` |
 
 - 둘째 줄부터: `IP:포트`(IP가 없으면 `no IP address`), 배터리 %·전압(ADC를 못 읽으면 `battery --`).
-- 현장 Wi-Fi 없이 120 s가 지나 AP가 열리면 `Wi-Fi rosy-pinky-xxxx`와 `PW <비밀번호>`, 주소 `10.42.0.1:8080`이 뜬다.
-  비밀번호는 카드별이고(D-176), 화면에만 나오며 로그에는 남지 않는다. 업링크가 돌아오면 사라진다.
+- 현장 Wi-Fi 없이 120 s가 지나 AP가 열리면 `Wi-Fi rosy-pinky-xxxx`와 `PW <비밀번호>`, 주소 `10.42.0.1:8080`, 그리고
+  오른쪽에 Wi-Fi 접속 QR이 뜬다. 폰은 기본 카메라로 QR을 찍으면 바로 붙고, 노트북은 비밀번호를 친다.
+  비밀번호는 카드별이고(D-176) `rosy-` 뒤에 4자씩 두 묶음(소문자·숫자, `0 o 1 l i` 없음)이다(D-272). 화면에만
+  나오며 로그에는 남지 않는다. 업링크가 돌아오면 사라진다. 이 형식 이전에 구운 카드는 옛 형식을 그대로 쓴다.
 - 부저는 **기본으로 꺼져 있다.** Pro의 부저 핀이 아직 확인되지 않았기 때문이다(D-190 "부저 핀 확인"). 확인한 뒤
   `/etc/rosy/boot-display.env`에 `ROSY_BUZZER_ENABLED=true`(핀이 22가 아니면 `ROSY_BUZZER_PIN=<BCM>`도)를 쓰고
   `sudo systemctl restart rosy-boot-display` 한다. 그러면 `READY`에 한 번, `FAILED`에 세 번 짧게 울린다.

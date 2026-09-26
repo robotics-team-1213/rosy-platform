@@ -40,6 +40,36 @@ def test_arming_reports_the_slots_each_follower_was_given():
     assert status["relay"]["paused"] is False
 
 
+def test_a_dead_leader_is_replaced_by_the_next_living_robot():
+    """관제가 명단 순서의 다음 생존자로 대형을 다시 연다. 팔로워는 다른 리더를 안 뽑는다."""
+    robots = _fleet(3)
+    console = _console(*robots)
+    run(console.formation_start("rosy_01", "COLUMN", 0.6))
+    robots[0].state_error = ConnectionError("leader down")
+
+    run(console.snapshot())
+
+    status = console.formation_status()
+    assert status["active"] is True
+    assert status["leader"] == "rosy_02"
+    assert set(status["assignment"]) == {"rosy_03"}
+    assert any(call[0] == "swarm_cancel" for call in robots[1].calls)
+    assert any(call[0] == "follow" for call in robots[2].calls)
+    assert not any(call[0] == "follow" for call in robots[0].calls)
+
+
+def test_a_dead_leader_with_one_survivor_ends_the_formation():
+    robots = _fleet(2)
+    console = _console(*robots)
+    run(console.formation_start("rosy_01"))
+    robots[0].state_error = ConnectionError("leader down")
+
+    run(console.snapshot())
+
+    assert console.formation_status()["active"] is False
+    assert any(call[0] == "swarm_cancel" for call in robots[1].calls)
+
+
 def test_a_second_formation_is_refused_instead_of_replacing_the_first():
     """조용히 갈아치우면 앞 세션의 팔로워가 무장된 채 남아, 아무도 안 보내는 참조를 기다린다."""
     console = _console(*_fleet(2))

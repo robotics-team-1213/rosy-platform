@@ -227,7 +227,7 @@ GET /api/v1/system/capabilities
   "sensors": ["lidar", "imu", "battery", "encoder"],
   "events": ["nav.*", "safety.*", "mission.assigned", "system.*"],
   "api_versions": ["v1"],
-  "protocol_version": "1"
+  "protocol_version": "1.0"
 }
 ```
 
@@ -795,9 +795,19 @@ Web UI는 모바일 브라우저에서 반응형으로 동작해야 하며, Joys
 
 ### WEB-002 메뉴
 
-최소 다음 메뉴를 지원한다.
+로봇 로컬 웹의 상단 메뉴는 `운용`(`/console`), `작업 준비`(`/setup`),
+`장치·정비`(`/device`)의 역할별 화면을 지원한다(D-263, D-265). 다음 기존
+정보·작업 항목은 각 화면에서 계속 도달 가능해야 한다. 같은 항목의 조회와
+변경은 API 권한에 따라 다른 역할에 보일 수 있다.
 
-Dashboard / Control / Navigation / Map / Sensors / Devices / Diagnostics / Network / ROS / System / Settings / **Events** / **Waypoints**
+| 화면 | 기존 항목 |
+|---|---|
+| 운용 | Dashboard, Control, Navigation, Map, Sensors |
+| 작업 준비 | Waypoints |
+| 장치·정비 | Devices, Events, Diagnostics, Network, ROS, System, Settings |
+
+패널이 하나도 없는 기반 화면도 역할상 허용되면 메뉴에서 사라지지 않고 빈 이유를
+표시한다. Fleet·게임·센싱 진단은 이 로봇 로컬 메뉴의 항목이 아니다.
 
 ---
 
@@ -979,7 +989,7 @@ Fleet 접속 주소, 토큰, 단절 정책(SAF-003)을 설정할 수 있어야 �
 
 ### SEC-102 전송 보안
 
-HTTPS/WSS는 리버스 프록시(caddy) 옵션으로 지원하고, 초기 폐쇄형 LAN에서는 HTTP 허용을 배포 정책으로 설정할 수 있다. CORS 제어를 지원한다.
+HTTPS/WSS는 리버스 프록시(caddy) 옵션으로 지원하고, 초기 폐쇄형 LAN에서는 HTTP 허용을 배포 정책으로 설정할 수 있다. 로봇 API는 CORS 헤더를 제공하지 않는다(AUTH-103). 브라우저 직접 접속이 필요하면 호출자 출신의 리버스 프록시가 CORS를 처리한다.
 
 ### SEC-103 Fleet 간 인증
 

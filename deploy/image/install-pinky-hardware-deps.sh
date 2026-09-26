@@ -43,8 +43,16 @@ SLLIDAR_SHA256="$(lock_value hardware_dependencies sllidar_ros2_sha256)"
     || fail "sllidar_ros2_url must use HTTPS and name the locked commit"
 [[ "$SLLIDAR_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "sllidar_ros2_sha256 is invalid"
 VENDOR_ARCHIVES="${ROSY_VENDOR_ARCHIVES:-/usr/local/src/rosy-vendor}"
+# D-247: the pinned rpi_ws281x has no Pi 5 rev 1.1 board ids (0xd04171 on
+# rosy_18), so lamp_control, which links it statically, would fail ws2811_init.
+WS281X_PATCH="$(dirname "$0")/$(lock_value hardware_dependencies rpi_ws281x_pi5_patch)"
+WS281X_PATCH_SHA256="$(lock_value hardware_dependencies rpi_ws281x_pi5_patch_sha256)"
+[[ -f "$WS281X_PATCH" ]] || fail "rpi_ws281x Pi 5 patch is missing: $WS281X_PATCH"
+[[ "$WS281X_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "rpi_ws281x_pi5_patch_sha256 is invalid"
+[[ "$(sha256sum "$WS281X_PATCH" | awk '{print $1}')" == "$WS281X_PATCH_SHA256" ]] \
+    || fail "rpi_ws281x Pi 5 patch does not match inputs.lock.yaml"
 
-for command in apt-get curl sha256sum dpkg tar cmake; do
+for command in apt-get curl sha256sum dpkg tar cmake patch; do
     command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
 done
 
@@ -64,6 +72,9 @@ curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
 printf '%s  %s\n' "$WS281X_SHA256" "$WS281X_ARCHIVE" | sha256sum --check --strict
 mkdir "$WORK/source"
 tar -xzf "$WS281X_ARCHIVE" --strip-components=1 -C "$WORK/source"
+patch --directory="$WORK/source" --strip=1 --forward --batch < "$WS281X_PATCH" \
+    || fail "rpi_ws281x Pi 5 patch does not apply to the locked archive"
+grep -q '0xd04171' "$WORK/source/rpihw.c" || fail "rpi_ws281x still lacks the Pi 5 rev 1.1 board id"
 cmake -S "$WORK/source" -B "$WORK/build" -DBUILD_SHARED=OFF -DBUILD_TEST=OFF
 cmake --build "$WORK/build" --parallel
 cmake --install "$WORK/build"

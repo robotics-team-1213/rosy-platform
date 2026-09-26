@@ -31,23 +31,23 @@ import numpy as np
 # `control` import: the sourced install first, the worktree's source second
 # --------------------------------------------------------------------------
 
-_WORKTREE_CONTROL = Path(__file__).resolve().parents[3] / "apps" / "control"
+_WORKTREE_CONTROL = Path(__file__).resolve().parents[3] / "runtime" / "sensing"
 
 
 def _control_sensing():
-    """(lane_coverage, lane_route) from `control.sensing`. The sourced
+    """(lane_coverage, lane_route) from `control.sensing.perception`. The sourced
     install is preferred; when it lacks these modules (an install older
     than lane_coverage) or is not sourced, the worktree's own
-    src/apps/control is used so the viewer runs straight from source."""
+    src/runtime/sensing is used so the viewer runs straight from source."""
     try:
-        from control.sensing import lane_coverage, lane_route
+        from control.sensing.perception import lane_coverage, lane_route
         return lane_coverage, lane_route
     except ImportError:
         pass
     for name in [n for n in sys.modules if n == "control" or n.startswith("control.")]:
         del sys.modules[name]
     sys.path.insert(0, str(_WORKTREE_CONTROL))
-    from control.sensing import lane_coverage, lane_route
+    from control.sensing.perception import lane_coverage, lane_route
     return lane_coverage, lane_route
 
 

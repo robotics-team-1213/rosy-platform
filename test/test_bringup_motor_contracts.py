@@ -10,7 +10,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BRINGUP = ROOT / "src" / "hardware" / "bringup"
+BRINGUP = ROOT / "src" / "devices" / "pinky_pro" / "bringup"
 
 
 def test_launch_exposes_all_motor_limits_to_the_node():

@@ -1,0 +1,178 @@
+services:
+  fleet:
+    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/site/Dockerfile.fleet
+    command:
+      - --
+      - python3
+      - -m
+      - fleet.cli
+      - console
+      - --robots
+      - /run/rosy-config/robots.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8090"
+      - --web-common
+      - /opt/rosy/web-common
+      - --token-env
+      - ROSY_SITE_OPERATOR_TOKEN
+      - --users-file
+      - /run/rosy-config/site-users.yaml
+      - --sightings-config
+      - /run/rosy-config/site-cameras.yaml
+      - --sightings-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --events-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --tasks-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --tls-cert
+      - /run/secrets/site_cert
+      - --tls-key
+      - /run/secrets/site_key
+    environment:
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_OPERATOR_TOKEN":"/run/secrets/operator_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token"}'
+      SSL_CERT_FILE: /run/secrets/site_ca
+    volumes:
+      - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
+      - sighting_data:/var/lib/rosy
+    secrets:
+      - operator_token
+      - fleet_sighting_token
+      - site_cert
+      - site_key
+      - site_ca
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://fleet:8090/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks: [site_backend, robot_egress]
+
+  vision:
+    image: rosy-site-vision:${ROSY_SITE_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/site/Dockerfile.vision
+    command:
+      - --
+      - python3
+      - -m
+      - overhead.cli
+      - vision
+      - --config
+      - /run/rosy-config/site-cameras.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8095"
+      - --tls-cert
+      - /run/secrets/site_cert
+      - --tls-key
+      - /run/secrets/site_key
+    environment:
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token"}'
+      SSL_CERT_FILE: /run/secrets/site_ca
+    volumes:
+      - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
+    secrets:
+      - phone_ingress_token
+      - fleet_sighting_token
+      - site_cert
+      - site_key
+      - site_ca
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /run:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://vision:8095/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks: [site_backend]
+
+  proxy:
+    image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    user: "10001:10001"
+    ports:
+      - "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    secrets:
+      - site_cert
+      - site_key
+      - site_ca
+    environment:
+      XDG_CONFIG_HOME: /config
+      XDG_DATA_HOME: /data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+      - /config:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+      - /data:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, caddy, validate, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      fleet:
+        condition: service_healthy
+      vision:
+        condition: service_healthy
+    networks:
+      site_backend:
+        aliases: [proxy]
+      site_edge: {}
+
+volumes:
+  sighting_data:
+
+networks:
+  site_backend:
+    internal: true
+  robot_egress:
+  site_edge:
+
+secrets:
+  operator_token:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/operator_token
+  phone_ingress_token:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/phone_ingress_token
+  fleet_sighting_token:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/fleet_sighting_token
+  site_cert:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.crt
+  site_key:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.key
+  site_ca:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site-ca.crt

@@ -1,0 +1,9 @@
+# Pre-existing host pytest failures on main. One node id per line, then "  # reason".
+# Compare a run against this list (run pytest from the repo root):
+#   python -m pytest <paths> -q -rfE -p no:cacheprovider > X:/DevTemp/run.txt
+#   python test/known_failures.py X:/DevTemp/run.txt
+# Exit 1 means a failure that is NOT listed here: that one is yours.
+# Remove a line in the same commit that makes the test pass. Never add a line to hide
+# a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
+test/test_boot_status_indicator.py::test_indicator_writes_only_to_a_root_owned_directory_and_never_follows_links  # ca5fb4fd (D-260 M1) reads run/rosy/status-inputs.json; the Review-H1 guard (9f256c73) bans any run/rosy/ in the script - the D-260 owner must reconcile
+test/test_sd_api_token.py::test_core_accepts_the_issued_credential_from_the_installed_overlay  # ui_registry._asset resolve() guard (a4970791, the file's only commit) rejects CI's install-share symlinked panels/ from get_package_share_directory; the css entries it trips on landed 8 min later in ff603832

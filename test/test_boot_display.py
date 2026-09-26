@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,11 +19,15 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/native"
 IMAGE = ROOT / "deploy/image"
 UNIT = NATIVE / "rosy-boot-display.service"
+FOUNDATION = ROOT / "src/contracts/foundation"
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
 AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
 
 
 def _load(name: str, path: Path):
+    # D-260: the display imports core_common.robot_state from the release; here, the source tree.
+    if str(FOUNDATION) not in sys.path:
+        sys.path.insert(0, str(FOUNDATION))
     sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -82,6 +87,9 @@ class FakePWM:
 
     def stop(self):
         self.events.append(("stop",))
+
+    def ChangeFrequency(self, frequency):  # noqa: N802 - RPi.GPIO API
+        self.events.append(("change", frequency))
 
 
 class FakeGPIO:
@@ -236,13 +244,14 @@ def test_no_battery_library_draws_dashes(tmp_path):
 # --- buzzer ---------------------------------------------------------------
 
 
-def test_the_buzzer_is_off_by_default(tmp_path):
+def test_the_buzzer_is_on_by_default_since_d260(tmp_path):
     module = _display()
     lines: list[str] = []
 
-    assert module.buzzer_settings({}, module.Log(lines.append)) == (False, 22)
+    assert module.buzzer_settings({}, module.Log(lines.append)) == (True, 4)
+    assert module.buzzer_settings({"ROSY_BUZZER_ENABLED": "false"}, module.Log(lines.append)) == (False, 4)
     unit = UNIT.read_text(encoding="utf-8")
-    assert "Environment=ROSY_BUZZER_ENABLED=false ROSY_BUZZER_PIN=22" in unit
+    assert "Environment=ROSY_BUZZER_ENABLED=true ROSY_BUZZER_PIN=4 ROSY_LAMP_ENABLED=true" in unit
     assert lines == []
 
 
@@ -300,11 +309,11 @@ def test_a_second_failed_unit_does_not_beep_again(tmp_path):
 
 
 @pytest.mark.parametrize("environ,expected", [
-    ({"ROSY_BUZZER_ENABLED": "true"}, (True, 22)),
+    ({"ROSY_BUZZER_ENABLED": "true"}, (True, 4)),
     ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "23"}, (True, 23)),
-    ({"ROSY_BUZZER_ENABLED": "yes"}, (False, 22)),
-    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "18"}, (False, 22)),  # the backlight
-    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "x"}, (False, 22)),
+    ({"ROSY_BUZZER_ENABLED": "yes"}, (False, 4)),
+    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "18"}, (False, 4)),  # the backlight
+    ({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": "x"}, (False, 4)),
 ])
 def test_buzzer_settings_are_strict(environ, expected):
     module = _display()
@@ -321,7 +330,7 @@ def test_the_buzzer_never_takes_a_line_something_else_owns(pin):
     enabled = module.buzzer_settings({"ROSY_BUZZER_ENABLED": "true", "ROSY_BUZZER_PIN": pin},
                                      module.Log(lines.append))
 
-    assert enabled == (False, 22) and "not a free header BCM line" in lines[0]
+    assert enabled == (False, 4) and "not a free header BCM line" in lines[0]
 
 
 def test_the_buzzer_lines_are_exactly_the_board_s_free_lines():
@@ -414,7 +423,7 @@ def test_a_gpio_chip_that_is_not_rp1_is_never_driven():
     assert "not the RP1 header" in lines[0]
 
 
-def _main_with(module, monkeypatch, root, *, lcd=None, lcd_import=None, gpio_import=None):
+def _main_with(module, monkeypatch, root, *, lcd=None, lcd_import=None, gpio_import=None, buzzer="false"):
     class _GPIO:
         @staticmethod
         def cleanup():
@@ -434,7 +443,9 @@ def _main_with(module, monkeypatch, root, *, lcd=None, lcd_import=None, gpio_imp
     monkeypatch.setattr(module, "_gpio_module", gpio_module)
     monkeypatch.setattr(module, "_lcd_factory", lcd_factory)
     monkeypatch.setattr(module, "open_lcd", lambda factory, *_args, **_kw: factory())
-    monkeypatch.delenv("ROSY_BUZZER_ENABLED", raising=False)
+    # The buzzer is on by default (D-260 2); these cases are about the panel.
+    monkeypatch.setenv("ROSY_BUZZER_ENABLED", buzzer)
+    monkeypatch.delenv("ROSY_LAMP_ENABLED", raising=False)
     return module.main(["--root", str(root)])
 
 
@@ -584,6 +595,35 @@ def test_the_display_shows_the_key_and_never_logs_it(tmp_path, capsys):
     assert AP_VALUE not in output.out + output.err
 
 
+def test_the_lcd_draws_the_join_qr_only_while_the_ap_is_open_and_never_logs_it(tmp_path, capsys):
+    sys.path.insert(0, str(ROOT / "src/hmi/face"))
+    info_screen = pytest.importorskip("emotion.info_screen")
+    module = _display()
+    _status(tmp_path, "CORE_READY")
+    network_json = tmp_path / "run/rosy-boot/network.json"
+    network_json.write_text(
+        json.dumps({"mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}), encoding="utf-8")
+    (tmp_path / "run/rosy-boot/ap-display.txt").write_text(f"rosy-pinky-e4us\n{AP_VALUE}\n", encoding="utf-8")
+    logs: list[str] = []
+    display, lcd, _clock, _battery, _rendered, _ = _loop(
+        module, tmp_path, voltages=(OSError(5, "I/O error"),), logs=logs)
+    display._render = info_screen.render_boot
+    qr_area = (160, info_screen._QR_TOP, 320, 176)
+
+    display.step()
+    opened = lcd.shown[-1]
+    network_json.write_text(json.dumps({"mode": "sta"}), encoding="utf-8")
+    display.step()
+    closed = lcd.shown[-1]
+
+    colours = lambda image: {c for _n, c in image.crop(qr_area).getcolors(1 << 16)}  # noqa: E731
+    assert info_screen._QR_LIGHT in colours(opened)
+    assert info_screen._QR_LIGHT not in colours(closed)
+    output = capsys.readouterr()
+    for text in logs + [output.out + output.err]:
+        assert AP_VALUE not in text and "WIFI" + ":" not in text
+
+
 def test_a_stale_handoff_is_not_shown_in_station_mode(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY")
@@ -668,7 +708,7 @@ def test_a_malformed_login_hand_off_shows_nothing(tmp_path, content):
 
 
 def test_the_boot_card_rows_for_the_login_line():
-    sys.path.insert(0, str(ROOT / "src/apps/emotion"))
+    sys.path.insert(0, str(ROOT / "src/hmi/face"))
     info_screen = pytest.importorskip("emotion.info_screen")
     base = {"stage": "CORE_READY", "ipv4": ["192.168.1.201"], "battery_percent": 80, "battery_voltage": 7.9}
 
@@ -699,12 +739,15 @@ def _directives() -> dict[str, list[str]]:
     return values
 
 
-def test_the_unit_is_an_unprivileged_sandbox_with_exactly_three_devices():
+def test_the_unit_is_an_unprivileged_sandbox_with_exactly_four_devices():
     directives = _directives()
 
     assert directives["User"] == ["rosy-display"] and directives["Group"] == ["rosy-display"]
     assert directives["DevicePolicy"] == ["closed"]
-    assert sorted(directives["DeviceAllow"]) == ["/dev/gpiochip4 rw", "/dev/i2c-1 rw", "/dev/spidev0.0 rw"]
+    assert sorted(directives["DeviceAllow"]) == ["/dev/gpiochip4 rw", "/dev/i2c-1 rw", "/dev/spidev0.0 rw",
+                                                 "/dev/ws281x_pwm rw"]
+    # D-260 / D-247 6: the only other thing it writes is the handed-over test outcome.
+    assert directives["RuntimeDirectory"] == ["rosy-display"]
     for key, value in (("ProtectSystem", "strict"), ("ProtectHome", "true"), ("NoNewPrivileges", "true"),
                        ("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
                        ("CapabilityBoundingSet", ""), ("Restart", "on-failure")):
@@ -737,7 +780,7 @@ def test_emotion_is_bench_only_so_nothing_needs_a_conflict():
         if "emotion" in "".join(line for line in text.splitlines() if line.startswith("Exec")):
             assert "rosy-boot-display.service" in text, unit.name
     for launch in (ROOT / "src").rglob("*.launch.py"):
-        if "src/apps/emotion" in launch.as_posix():
+        if "src/hmi/face" in launch.as_posix():
             continue
         text = launch.read_text(encoding="utf-8")
         assert "package='emotion'" not in text and 'package="emotion"' not in text, launch
@@ -788,11 +831,17 @@ def test_the_board_profile_matches_the_unit_and_no_capability_advertises_it():
     board = yaml.safe_load((ROOT / "deploy/robot/config/board.yaml").read_text(encoding="utf-8"))
     display = board["boot_display"]
     declared = {display["lcd"]["spi"], display["lcd"]["gpiochip"], display["buzzer"]["gpiochip"],
-                display["battery_adc"]["bus"]}
+                display["battery_adc"]["bus"], display["lamp"]["node"]}
     allowed = {value.split()[0] for value in _directives()["DeviceAllow"]}
     assert declared == allowed
     assert display["unit"] == "rosy-boot-display.service"
-    assert display["buzzer"]["bcm_line"] == 22 and display["buzzer"]["enabled_by_default"] is False
+    # BCM 4: heard on rosy_18 on 2026-09-26 (D-190 table); on by default since D-260 2.
+    assert display["buzzer"]["bcm_line"] == _display().BUZZER_DEFAULT_LINE == 4
+    assert display["buzzer"]["enabled_by_default"] is True
+    lamp = display["lamp"]
+    module = _display()
+    assert str(lamp["pwm_channel"]) == module.LAMP_PWM_CHANNEL and lamp["bcm_line"] == 19
+    assert module.LAMP_HELPER.endswith(lamp["helper"]) and lamp["enabled_by_default"] is True
     # the true grant, not what the program chooses to do with it (security review M2)
     assert display["battery_adc"]["access"] == "rw-any-address"
     assert display["battery_adc"]["lock"] == "advisory-flock"
@@ -807,7 +856,8 @@ def test_the_probe_checks_the_modules_and_the_unit(tmp_path):
 
     assert set(probe.APT_MODULES) >= {"spidev", "lgpio"}
     assert set(probe.RELEASE_MODULES) >= {"rosylib", "emotion.info_screen"}
-    assert probe.DEVICES == ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1")
+    assert probe.DEVICES == ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1", "/dev/ws281x_pwm")
+    assert "core_common.robot_state" in probe.RELEASE_MODULES
     failures = probe.check_unit(tmp_path)
     assert failures == ["missing systemd unit: rosy-boot-display.service"]
     system = tmp_path / "etc/systemd/system"
@@ -848,9 +898,418 @@ def test_the_probe_requires_rpi_lgpio_to_honour_the_chip_variable(tmp_path):
 def test_the_probe_renders_every_stage_from_the_source_tree(tmp_path, monkeypatch):
     # The CI container has no Pillow; the image build runs this same render check in-image.
     pytest.importorskip("PIL")
-    monkeypatch.syspath_prepend(str(ROOT / "src/apps/emotion"))
+    monkeypatch.syspath_prepend(str(ROOT / "src/hmi/face"))
     probe = _load("probe_display_runtime_render", IMAGE / "probe-display-runtime.py")
 
     failures = probe.check_render(tmp_path)
 
     assert failures == [f"missing font: /{probe.FONT}"]  # no DejaVu under tmp_path; the card still drew
+
+
+# --- D-260: one robot state on the buzzer, the lamp and the LCD ------------------
+
+
+class FakeProcess:
+    def __init__(self, command, code=None):
+        self.command = command
+        self.returncode = code
+        self.terminated = 0
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated += 1
+        self.returncode = 0
+
+    def kill(self):
+        self.returncode = -9
+
+    def wait(self, timeout=None):
+        if self.returncode is None:
+            self.returncode = 0
+        return self.returncode
+
+
+class FakeSpawn:
+    def __init__(self, code=None, error=None):
+        self.code, self.error = code, error
+        self.processes: list[FakeProcess] = []
+
+    def __call__(self, command):
+        if self.error:
+            raise self.error
+        process = FakeProcess(command, self.code if command[-1] != "test" else 0)
+        self.processes.append(process)
+        return process
+
+    @property
+    def patterns(self):
+        return [process.command[-1] for process in self.processes]
+
+
+def _lamp_tree(root: Path, channel: str = "3", helper: bool = True, node: bool = True) -> None:
+    if node:
+        (root / "dev").mkdir(parents=True, exist_ok=True)
+        (root / "dev/ws281x_pwm").write_text("", encoding="utf-8")
+    params = root / "sys/module/rp1_ws281x_pwm/parameters"
+    params.mkdir(parents=True, exist_ok=True)
+    (params / "pwm_channel").write_text(channel + "\n", encoding="ascii")
+    if helper:
+        path = root / "opt/rosy/current/install/lib/lamp_control/lamp_pattern"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+
+def _state_loop(module, root, *, gpio=None, spawn=None, voltages=(8.2,), logs=None, wall=None):
+    display, lcd, clock, battery, rendered, lines = _loop(module, root, gpio=gpio, buzzer_on=gpio is not None,
+                                                          voltages=voltages, logs=logs)
+    lamp = module.Lamp(root, True, module.Log(lines.append), spawn=spawn or FakeSpawn())
+    display = module.BootDisplay(root, lcd=lcd, render=display._render, battery=display._battery,
+                                 buzzer=display._buzzer, clock=clock, lamp=lamp,
+                                 wall=wall or (lambda: 1_000_000.0))
+    return display, lamp, clock, rendered, lines
+
+
+def _starts(gpio):
+    return [event for event in gpio.events if event[0] == "start"]
+
+
+def test_the_view_carries_the_rule_table_s_state_line_and_top_todo(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="core",
+            devices=[{"id": "adc.battery", "state": "no_response", "product": True}])
+
+    view = module.read_view(tmp_path, None)
+
+    assert view["robot_state"] == "caution"
+    assert view["state_line"] == "Caution: ADC no response"
+    assert view["todo"] == "Power-cycle the robot (ADC)"
+
+
+def test_a_held_robot_shows_why_and_what_to_do(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="core", devices=[])
+
+    view = module.read_view(tmp_path, (80.0, 8.0))
+
+    assert view["state_line"] == "Ready - cannot move: CORE only mode"
+    assert view["todo"] == "Admin: promote to motor mode"
+
+
+def test_the_battery_the_display_reads_itself_feeds_the_state(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+
+    assert module.read_view(tmp_path, (12.0, 6.6))["state_line"] == "Caution: battery 12 %"
+    assert module.read_view(tmp_path, None)["robot_state"] == "ready"
+
+
+def test_without_the_rule_table_the_card_and_the_stage_sounds_stay(tmp_path, monkeypatch):
+    # An older release has no core_common.robot_state: no state rows, stage-only sounds.
+    module = _display()
+    monkeypatch.setattr(module, "robot_state", None)
+    gpio = FakeGPIO()
+    _status(tmp_path, "CORE_READY")
+    display, _lamp, _clock, rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+
+    display.step()
+
+    assert "state_line" not in rendered[-1] and len(_starts(gpio)) == 1
+
+
+def test_caution_is_two_low_tones_and_held_ready_one(tmp_path):
+    module = _display()
+    gpio = FakeGPIO()
+    gpio.events.clear()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    display.step()
+    assert _starts(gpio) == []
+
+    _status(tmp_path, "CORE_READY", runtime_mode="core")
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == 1 and ("pwm", 22, module.BUZZER_FREQUENCY_HZ) in gpio.events
+
+    _status(tmp_path, "CORE_READY", runtime_mode="core",
+            devices=[{"id": "camera", "state": "no_response", "product": True}])
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == 3
+    assert ("change", module.BUZZER_LOW_HZ) in gpio.events
+
+
+def test_caution_is_not_repeated_within_the_window_but_ready_and_failed_always_sound(tmp_path):
+    # A battery hovering at the threshold must not beep caution every 15 s (review L2:
+    # only caution is limited; ready and failed are real news on every transition).
+    module = _display()
+    gpio = FakeGPIO()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    display.step()  # ready: one beep
+    caution = [{"id": "camera", "state": "no_response", "product": True}]
+    for _ in range(3):
+        _status(tmp_path, "CORE_READY", runtime_mode="hardware", devices=caution)
+        clock.now += 20
+        display.step()
+        _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+        clock.now += 20
+        display.step()
+    assert len(_starts(gpio)) == 1 + 2 + 3  # caution once (two tones), ready on each return
+
+    for _ in range(2):
+        _status(tmp_path, "FAILED:rosy-core")
+        clock.now += 1
+        display.step()
+        _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+        clock.now += 1
+        display.step()
+    assert len(_starts(gpio)) == 6 + 2 * (3 + 1)  # failed and ready both sound every time
+
+    clock.now += module.BUZZER_REPEAT_S
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", devices=caution)
+    display.step()
+    assert len(_starts(gpio)) == 16
+
+
+def test_ready_and_held_ready_share_one_sound(tmp_path):
+    module = _display()
+    gpio = FakeGPIO()
+    _status(tmp_path, "CORE_READY", runtime_mode="core")
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    display.step()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")  # promoted
+    clock.now += 1
+    display.step()
+
+    assert len(_starts(gpio)) == 1
+
+
+@pytest.mark.parametrize("stage,extra,pattern", [
+    ("BOOTING", {}, "booting"),
+    ("PROVISIONED", {}, "booting"),
+    ("CORE_READY", {"runtime_mode": "hardware"}, "ready"),
+    ("CORE_READY", {"runtime_mode": "core"}, "ready"),
+    ("FAILED:rosy-core", {}, "failed"),
+    ("CORE_READY", {"devices": [{"id": "adc.ir0", "state": "no_response", "product": True}]}, "caution"),
+])
+def test_each_state_starts_its_lamp_pattern(tmp_path, stage, extra, pattern):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, stage, **extra)
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+
+    display.step()
+
+    assert spawn.patterns == [pattern]
+    assert Path(spawn.processes[0].command[0]).as_posix().endswith("lib/lamp_control/lamp_pattern")
+    assert lamp.pattern == pattern
+
+
+def test_a_new_state_stops_the_old_pattern_first_and_an_unchanged_state_keeps_it(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    clock.now += 1
+    display.step()
+    assert spawn.patterns == ["booting"]
+
+    _status(tmp_path, "FAILED:rosy-core")
+    clock.now += 1
+    display.step()
+
+    assert spawn.patterns == ["booting", "failed"]
+    assert spawn.processes[0].terminated == 1
+
+
+@pytest.mark.parametrize("tree,message", [
+    ({"node": False}, "no /dev/ws281x_pwm"),
+    ({"channel": "2"}, "would drive the LCD backlight"),
+    ({"channel": ""}, "pwm_channel=?"),
+    ({"helper": False}, "no lamp_pattern in the release"),
+])
+def test_a_missing_or_unsafe_lamp_is_left_out_and_the_boot_goes_on(tmp_path, tree, message):
+    module = _display()
+    _lamp_tree(tmp_path, **tree)
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    logs: list[str] = []
+    display, _lamp, clock, rendered, _lines = _state_loop(module, tmp_path, spawn=spawn, logs=logs)
+
+    assert display.step() is True  # the LCD still draws
+    _status(tmp_path, "CORE_READY")
+    clock.now += 1
+    display.step()
+
+    assert spawn.patterns == []
+    assert sum(message in line for line in logs) == 1, logs
+    assert rendered[-1]["stage"] == "CORE_READY"
+
+
+def test_a_helper_that_fails_is_logged_once_and_not_restarted_every_poll(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn(code=2)
+    logs: list[str] = []
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn, logs=logs)
+
+    for _ in range(3):
+        display.step()
+        clock.now += 1
+
+    assert spawn.patterns == ["booting"]
+    assert sum("ended with 2" in line for line in logs) == 1
+
+
+def test_a_helper_that_cannot_start_is_left_out(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "BOOTING")
+    logs: list[str] = []
+    display, lamp, _clock, _rendered, _lines = _state_loop(
+        module, tmp_path, spawn=FakeSpawn(error=PermissionError(13, "Permission denied")), logs=logs)
+
+    display.step()
+
+    assert lamp.show("booting") is False
+    assert sum("would not start" in line for line in logs) == 1
+
+
+@pytest.mark.parametrize("environ,expected", [({}, True), ({"ROSY_LAMP_ENABLED": "false"}, False),
+                                              ({"ROSY_LAMP_ENABLED": "no"}, False)])
+def test_the_lamp_is_on_by_default_and_can_be_turned_off(environ, expected):
+    module = _display()
+
+    assert module.lamp_enabled(environ, module.Log(lambda _line: None)) is expected
+
+
+def test_a_disabled_lamp_never_starts_the_helper(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    spawn = FakeSpawn()
+    lamp = module.Lamp(tmp_path, False, module.Log(lambda _line: None), spawn=spawn)
+
+    assert lamp.show("booting") is False and spawn.patterns == []
+
+
+def test_the_display_keeps_running_for_the_lamp_without_a_panel_or_buzzer(tmp_path, monkeypatch):
+    module = _display()
+    _lamp_tree(tmp_path)
+    built = []
+
+    def display(*_args, **kwargs):
+        built.append(kwargs)
+        raise SystemExit(7)  # reaching the loop is the point
+
+    monkeypatch.setattr(module, "_release_modules", lambda: SimpleNamespace(render_boot=lambda view: view))
+    monkeypatch.setattr(module, "BootDisplay", display)
+    monkeypatch.setenv("ROSY_BUZZER_ENABLED", "false")
+    monkeypatch.delenv("ROSY_LAMP_ENABLED", raising=False)
+
+    with pytest.raises(SystemExit):
+        module.main(["--root", str(tmp_path)])
+
+    assert built and built[0]["lamp"].available() and built[0]["lcd"] is None
+
+
+# --- D-260 / D-247 6: a buzzer or lamp test handed over by rosy-hw-test -----------
+
+REQUEST_ID = "00112233445566778899aabb"
+
+
+def _hand_over(root: Path, action: str = "buzzer", request_id: str = REQUEST_ID, *, at: float = 1_000_000.0,
+               **extra) -> None:
+    path = root / "run/rosy-boot/display-test.request"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"action": action, "request_id": request_id, "requested_at": at, **extra}),
+                    encoding="utf-8")
+
+
+def _answer(root: Path):
+    path = root / "run/rosy-display/display-test.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
+def test_the_display_plays_a_handed_over_buzzer_test_once(tmp_path):
+    module = _display()
+    gpio = FakeGPIO()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    display.step()
+    _hand_over(tmp_path)
+
+    display.step()
+    clock.now += 1
+    display.step()  # the same request id again: nothing more
+
+    starts = _starts(gpio)
+    assert starts == [("start", module.BUZZER_DUTY)] * module.TEST_BEEPS
+    assert _answer(tmp_path) == {"schema": 1, "request_id": REQUEST_ID, "action": "buzzer", "state": "done",
+                                 "detail": "BCM 22 · 2 kHz · duty 10 % · 3×150 ms (부팅 표시가 울림)"}
+
+
+def test_a_display_with_the_buzzer_off_answers_unavailable(tmp_path):
+    module = _display()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path)
+    _hand_over(tmp_path)
+
+    assert display.handle_test() == "unavailable"
+    assert _answer(tmp_path)["state"] == "unavailable"
+
+
+def test_a_handed_over_lamp_test_pauses_the_state_pattern_and_resumes_it(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    _hand_over(tmp_path, "lamp")
+
+    assert display.handle_test() == "done"
+
+    assert spawn.patterns == ["booting", "test", "booting"]
+    assert spawn.processes[0].terminated == 1 and lamp.pattern == "booting"
+    assert _answer(tmp_path)["detail"].endswith("(부팅 표시가 켬)")
+
+
+def test_a_lamp_test_without_a_usable_lamp_answers_unavailable(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path, channel="2")
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    display, _lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    _hand_over(tmp_path, "lamp")
+
+    assert display.handle_test() == "unavailable" and spawn.patterns == []
+
+
+@pytest.mark.parametrize("change", [
+    {"action": "motor"}, {"request_id": "../../etc"}, {"request_id": 7}, {"at": 1_000_000.0 - 60},
+    {"at": 1_000_000.0 + 60}, {"extra": 1}, {"at": True},
+])
+def test_anything_but_a_fresh_exact_hand_over_is_ignored(tmp_path, change):
+    module = _display()
+    gpio = FakeGPIO()
+    _status(tmp_path, "BOOTING")
+    display, _lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio)
+    arguments = {"action": "buzzer", "request_id": REQUEST_ID, "at": 1_000_000.0}
+    arguments.update(change)
+    _hand_over(tmp_path, arguments.pop("action"), arguments.pop("request_id"), **arguments)
+
+    assert display.handle_test() is None
+    assert _starts(gpio) == [] and _answer(tmp_path) is None
+
+
+def test_an_oversized_hand_over_is_not_read(tmp_path):
+    module = _display()
+    _hand_over(tmp_path, pad="x" * 600)
+
+    assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is None

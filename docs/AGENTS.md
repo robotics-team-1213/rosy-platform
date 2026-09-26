@@ -28,6 +28,7 @@ Content lives in the subdirectories below; at this root only the harness records
 | `test/` | P1 test report (see `test/AGENTS.md`) |
 | `solutions/` | Durable learnings from reviews and bugs, YAML frontmatter, by category (see `solutions/AGENTS.md`) |
 | `assets/` | Architecture and product images (see `assets/AGENTS.md`) |
+| `architecture/` | Numbered target-OS documents |
 
 ## For AI Agents
 
@@ -57,7 +58,7 @@ python3 tools/harness/rosy_harness.py lint
 
 ### Internal
 
-- Implementation: `src/core/core`, `src/hardware/bringup`, `deploy/`
+- Implementation: `src/runtime/gateway`, `src/devices/pinky_pro/bringup`, `deploy/`
 - Traceability matrix in Implementation Plan §11
 
 ### External

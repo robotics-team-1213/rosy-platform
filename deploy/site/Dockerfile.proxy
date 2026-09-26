@@ -1,0 +1,8 @@
+FROM caddy:2.10.2-alpine
+
+# The upstream binary has cap_net_bind_service set as a file capability.
+# Linux rejects exec when that file capability is outside a container's empty
+# capability bounding set, even though this proxy listens only on 8443.
+RUN apk add --no-cache libcap \
+    && setcap -r /usr/bin/caddy \
+    && apk del libcap

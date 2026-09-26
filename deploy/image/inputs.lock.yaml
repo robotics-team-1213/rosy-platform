@@ -110,6 +110,8 @@ hardware_dependencies:
   rpi_ws281x_commit: 1396df4f35a86de0f7e5eda91d94d4539eef1727
   rpi_ws281x_url: https://codeload.github.com/jgarff/rpi_ws281x/tar.gz/1396df4f35a86de0f7e5eda91d94d4539eef1727
   rpi_ws281x_sha256: 18896f9576848944a7f53834b4e329aaeb1961d2cadf7bf67aecf1f9df91aaa6
+  rpi_ws281x_pi5_patch: patches/rpi_ws281x-pi5-rev1.1.patch
+  rpi_ws281x_pi5_patch_sha256: 528d7fa414c9ea2d869f1d971fae78869139a42904724470d793a42bdaeabcb2
   sllidar_ros2_commit: 34300099fadfc772965962dec837bf436706188f
   sllidar_ros2_url: https://codeload.github.com/Slamtec/sllidar_ros2/tar.gz/34300099fadfc772965962dec837bf436706188f
   sllidar_ros2_sha256: 6a57c289a235a37dce0b07ef6fdc3ee003e646140d3fdc982988e7bf652367a7
@@ -117,7 +119,10 @@ hardware_dependencies:
   note: >-
     Pinky Pro native ARM64 build inputs. WiringPi is installed both on the
     build host and in the target rootfs; rpi_ws281x is linked statically into
-    lamp_control from the pinned Pi 5 branch snapshot.
+    lamp_control from the pinned Pi 5 branch snapshot, with the in-tree
+    rpi_ws281x_pi5_patch (Pi 5 rev 1.1 board ids, D-247) applied first.
+    The same archive's rp1_ws281x_pwm/ kernel module is built in the image
+    chroot against the image kernel's headers (customize-rootfs.sh, D-247).
     sllidar_ros2 (RPLIDAR C1 driver, D-192) is built from source into the
     release payload at the commit the Docker io image used; the archive
     hash was checked 2026-09-24 by two independent downloads.
@@ -146,6 +151,7 @@ rosy_packages:
   required:
     - interfaces
     - core
+    - pinky_pro
     - bringup
     - description
     - navigation

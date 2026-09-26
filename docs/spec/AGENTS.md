@@ -39,7 +39,7 @@ Both docs inherited PKY-* IDs and were renamed ROSY (D-15/D-16).
 ### Internal
 
 - `docs/reference/ROSY API & Protocol Reference.md` for the shared contract
-- `src/core/core` implements CORE SRS
+- `src/runtime/gateway` implements CORE SRS
 
 ### External
 

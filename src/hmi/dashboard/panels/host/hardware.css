@@ -1,0 +1,16 @@
+.hardware-facts { display: grid; gap: var(--space-2); margin: 0; }
+.hardware-measured { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.hardware-measured dt { color: var(--nominal-quiet); }
+.hardware-measured dd { margin: 0; font-variant-numeric: tabular-nums; }
+.hardware-note { margin: 0; color: var(--nominal-quiet); line-height: 1.5; }
+.hardware-facts[data-stale="true"] + .hardware-note { color: var(--status-warn); }
+.hardware-facts[data-available="false"] + .hardware-note { color: var(--status-warn); }
+.hardware-device-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.hardware-device { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1) var(--space-3); padding-block: var(--space-2); border-top: 1px solid var(--surface-line); }
+.hardware-device-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.hardware-device-identity strong { overflow-wrap: anywhere; }
+.hardware-device-bus { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.hardware-device-evidence { grid-column: 1 / -1; margin: 0; color: var(--nominal-quiet); line-height: 1.5; overflow-wrap: anywhere; }
+.hardware-device-state { align-self: start; }
+.hardware-facts[data-stale="true"] ~ .hardware-device-list { opacity: 0.72; }
+.hardware-refresh { justify-self: start; }

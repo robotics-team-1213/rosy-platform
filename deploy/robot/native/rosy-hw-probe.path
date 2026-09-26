@@ -1,0 +1,11 @@
+[Unit]
+Description=ROSY board device probe on an administrator's request (D-247)
+# CORE writes /run/rosy/hw-probe.request (its own RuntimeDirectory) through
+# POST /api/v1/host/hardware/refresh; the root probe reads nothing from it.
+
+[Path]
+PathChanged=/run/rosy/hw-probe.request
+Unit=rosy-hw-probe.service
+
+[Install]
+WantedBy=multi-user.target

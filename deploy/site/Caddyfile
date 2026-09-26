@@ -1,0 +1,21 @@
+{
+	admin localhost:2019
+}
+
+:8443 {
+	tls /run/secrets/site_cert /run/secrets/site_key
+
+	@camera path /overhead/v1/frames
+	reverse_proxy @camera https://vision:8095 {
+		transport http {
+			tls_trust_pool file /run/secrets/site_ca
+			tls_server_name vision
+		}
+	}
+	reverse_proxy https://fleet:8090 {
+		transport http {
+			tls_trust_pool file /run/secrets/site_ca
+			tls_server_name fleet
+		}
+	}
+}

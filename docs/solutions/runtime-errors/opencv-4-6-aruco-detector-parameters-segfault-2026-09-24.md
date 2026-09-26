@@ -2,7 +2,7 @@
 title: OpenCV 4.6의 bare aruco.DetectorParameters()는 널 포인터라 필드 하나만 써도 import에서 segfault가 난다
 date: 2026-09-24
 category: runtime-errors
-module: apps/control (sensing/dock_tag, dock_observer_node)
+module: core/control (sensing/dock_tag, dock_observer_node)
 problem_type: runtime_error
 component: development_workflow
 severity: high
@@ -24,7 +24,7 @@ tags: [opencv, aruco, segfault, api-version, import-time, host-vs-device, dock-t
 
 Ubuntu 24.04의 apt `python3-opencv`는 4.6이다. 이 버전에서 `cv2.aruco.DetectorParameters()`를
 인자 없이 만들면 널 포인터를 감싼 객체가 나오고, 필드 하나(`cornerRefinementMethod`)만 설정해도
-인터프리터가 native crash로 죽는다. `src/apps/control/control/sensing/dock_tag.py`는 모듈 import
+인터프리터가 native crash로 죽는다. `src/core/control/control/sensing/dock_tag.py`는 모듈 import
 시점에 검출기를 만들기 때문에(`_DETECT_MARKERS = _marker_detector(cv2.aruco)`),
 `dock_observer_node`가 로그를 남기기도 전에 exit -11로 죽었다.
 
@@ -63,7 +63,7 @@ def _marker_detector(aruco):
   `aruco.detectMarkers()`로 한다(4.6에는 `ArucoDetector`가 없다).
 - 4.7 이후: `DetectorParameters()`와 `ArucoDetector`를 쓴다.
 
-가드 테스트는 `src/apps/control/test/test_dock_tag.py`에 있다.
+가드 테스트는 `src/core/control/test/test_dock_tag.py`에 있다.
 
 - `test_the_module_imports_in_a_fresh_interpreter` — `python -X faulthandler -c "import
   control.sensing.dock_tag"`를 자식 인터프리터로 돌려 returncode 0을 요구한다. import 시점의

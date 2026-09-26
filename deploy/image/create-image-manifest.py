@@ -24,6 +24,46 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
+FACTORY_DIR = "factory-release"
+FACTORY_FILES = ("SHA256SUMS", "manifest.json")
+
+
+def export_factory_release(payload: Path, dist: Path, release_id: str) -> list[str]:
+    """Copy the sealed in-image release's metadata into the dist (D-225 2.2).
+
+    customize-rootfs.sh exports ``manifest.json`` and ``SHA256SUMS`` of
+    ``/opt/rosy/releases/<id>`` to ``<payload>/factory-release/``. They go to
+    ``factory-release/<id>/`` here and into the outer SHA256SUMS, so the
+    outer offline signature covers them and the offline signer can sign the
+    factory list with the same key. Returns the dist-relative paths.
+    """
+    source = payload / FACTORY_DIR
+    target = dist / FACTORY_DIR / release_id
+    for name in FACTORY_FILES:
+        path = source / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"missing factory release export: {path}")
+    if (target / "SHA256SUMS.sig").exists():
+        raise ValueError("factory release signature already present; the dist must be unsigned")
+    try:
+        manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"factory release manifest is unreadable: {exc}") from exc
+    if not isinstance(manifest, dict) or manifest.get("release_id") != release_id:
+        raise ValueError("factory release manifest names another release")
+    listed = {}
+    for line in (source / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        hexdigest, sep, name = line.partition("  ")
+        if sep:
+            listed[name] = hexdigest
+    if listed.get("manifest.json") != digest(source / "manifest.json"):
+        raise ValueError("factory release SHA256SUMS does not cover its manifest.json")
+    target.mkdir(parents=True, exist_ok=True)
+    for name in FACTORY_FILES:
+        shutil.copyfile(source / name, target / name)
+    return [f"{FACTORY_DIR}/{release_id}/{name}" for name in FACTORY_FILES]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, required=True)
@@ -42,6 +82,11 @@ def main() -> int:
         if not source.is_file():
             parser.error(f"missing payload inventory: {source}")
         shutil.copyfile(source, dist / name)
+
+    try:
+        factory = export_factory_release(payload, dist, args.release_id)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     image_sha = digest(image)
     manifest = {
@@ -97,10 +142,11 @@ def main() -> int:
         encoding="utf-8", newline="\n",
     )
 
-    names = sorted(
-        path.name for path in dist.iterdir()
-        if path.is_file() and path.name not in {"SHA256SUMS", "SHA256SUMS.sig"}
-    )
+    names = sorted([
+        *(path.name for path in dist.iterdir()
+          if path.is_file() and path.name not in {"SHA256SUMS", "SHA256SUMS.sig"}),
+        *factory,
+    ])
     sums = "".join(f"{digest(dist / name)}  {name}\n" for name in names)
     (dist / "SHA256SUMS").write_text(sums, encoding="utf-8", newline="\n")
     print(json.dumps({"ok": True, "image": image.name, "sha256": image_sha}, sort_keys=True))

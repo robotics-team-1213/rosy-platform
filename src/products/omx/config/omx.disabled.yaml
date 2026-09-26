@@ -1,0 +1,12 @@
+# OMX-AI is the selected fixed-workbench target. Runtime remains disabled until
+# the physical revision, driver, mount, power, payload, ports, and recovery are
+# measured and accepted. This file contains no fake hardware plugin.
+omx:
+  enabled: false
+  model: omx_ai
+  driver_package: ""
+  hardware_plugin: ""
+  joint_names: []
+  base_frame: base_link
+  arm_base_frame: omx_base_link
+  update_rate_hz: 100.0

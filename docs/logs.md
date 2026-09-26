@@ -1829,3 +1829,514 @@
 - gate 변화: 없음.
 - 결정: D-185 R8
 - 교훈: 없음
+
+## 2026-09-24 · uncommitted · docs(adr): D-196 robots are compositions of devices (Proposed)
+
+- 변경: `docs/adr/D-196-devices-and-robots-domains.md` 신규(Proposed). ADR Log에 D-196 표 행 추가.
+  `docs/reference/AGENTS.md`의 `append-only decisions through D-195`를 D-196으로. `docs/plans/2026-09-24-multi-robot-structure-draft.md`
+  Status를 "ADR로 승격됨"으로 갱신. `docs/plans/2026-09-22-control-package-split-design.md` §3에
+  D-196 개정(장치 코드는 devices로) 문단 추가
+- 증거: `python -m pytest test/test_harness_contracts.py test/test_module_structure.py -q -p no:cacheprovider`,
+  `python tools/harness/rosy_harness.py generate && python tools/harness/rosy_harness.py lint`
+- gate 변화: 없음
+- 결정: D-196 Proposed — `src/devices/<계열>/`과 `src/robots/<robot>/` 도메인을 두고 로봇 지식을
+  그 안에만 둔다. D-147 §1·§2 일부와 D-168 P4 방향표를 대체
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(structure): D-196 devices/robots domains and direction rows
+- 변경: `test/test_module_structure.py`에 `devices`·`robots` 도메인, `layout_ok`(devices만 계열 한 단 허용), P4 방향표를 순수 함수 `edge_allowed`로 옮기고 D-196 행 추가. 매개변수 시험 15건
+- 증거: `python -m pytest test/test_module_structure.py -q` 통과 (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(structure): _family only reads the 3-level devices shape (D-196 review)
+
+- 변경: `_family`가 `src/devices/<계열>/<패키지>` 모양일 때만 계열을 돌려준다(짧은 경로에서 IndexError나 패키지명을 계열로 오인하지 않게). navigation 행에 hardware 허용·apps 거부 사례 추가
+- 증거: `python -m pytest test/test_module_structure.py -q` 28 passed (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · test(repo): D-196 pinky literals live in the pinky family
+
+- 변경: `test/test_robot_literals.py`와 `test/robot_literal_backlog.txt` 추가. src 제품 파일의 `pinky`는 `devices/pinky_pro/`·`robots/pinky_pro*` 안에만 두고, 현재 위반 72개를 백로그로 집합 동일성 검사
+- 증거: `python -m pytest test/test_robot_literals.py -q` 1 passed; 백로그에 가짜 줄을 넣으면 stale로 실패함을 확인 (2026-09-24 Windows)
+- gate 변화: 없음
+- 결정: D-196 Proposed
+- 교훈: 없음
+
+## 2026-09-24 · uncommitted · fix(core,robots): clear error for a missing robot package; ship robots in docker/ci (D-196 review)
+
+- 변경: D-178 Decision 5 "ROS 패키지 20개"에 `(2026-09-24: +pinky_pro 잠정, D-196)` 표기(분포 줄과 일치). `test/robot_literal_backlog.txt` 머리말을 "개수는 줄기만 한다; 계획된 D-196 이동은 줄을 옮길 수 있다(로그에 남김)"로 고쳤다 — 27226ac4의 `core_common/profile.py` 추가가 그 사례다.
+- 증거: `test/test_module_scorecard.py`·`test/test_robot_literals.py` 통과 (2026-09-24 Windows).
+- gate 변화: 없음
+- 결정: D-196 Proposed, D-178
+- 교훈: 없음
+## 2026-09-24 · uncommitted · docs(adr): D-201·D-202·D-203 공예 계약과 UI/UX 회차
+
+- 변경: ADR 3건(고정 문법 적합 계약, 위험은 채움 ? 경보 텍스트 대비 계약, 계산 척급 폐쇄), concept 16 §4 계기 3행·§7.1/§7.3/§7.5 조항 보강, 검증 회차 폴더 `docs/validation/uiux-surfaces-2026-09-24/`(발견 F-12~F-16, 전후 계측, 게이트 변이 증명).
+- 증거: 브라우저 묶음 56 passed + 단위 563 passed(2026-09-24 Windows HOST).
+- gate 변화: 표면 3종 G1 브라우저 게이트 5종 신설(전부 변이 증명).
+- 결정: D-201, D-202, D-203
+- 교훈: 문법은 배치로만 지켜지지 않는다 ? 프레임·대비·계산 크기까지 계약이어야 게이트가 지킨다.
+
+
+## 2026-09-24 · uncommitted · docs(adr): D-202 얼굴 번역 문단, 회차 폴더 얼굴 추가
+
+- 변경: D-202에 얼굴 번역 문단(픽셀 게이트로 지키는 채움 법), concept 16 §7.4 조항, 검증 회차 폴더에 로봇 얼굴 발견(F-17)·게이트·캡처(웨이크 4+부팅 2) 추가. 얼굴 AGENTS 시험 경로 3건을 src/face/emotion 로 갱신(재편 aac8efe2 잔류).
+- 증거: src/face/emotion/test 47 passed(변이 증명 포함).
+- gate 변화: 없음(문서).
+- 결정: D-202
+- 교훈: 없음.
+
+## 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
+
+- 변경: a93d5188 경로 재편이 과거 항목 6곳의 `src/apps/control` 경로를 `src/core/control`로 고쳐 쓴 것을 원문으로 복원했다(2026-09-20 맵 번들 교차 검증의 result.md 경로, 2026-09-22 scene-context 증거의 logs.md 경로, 장치 표면 계획 증거의 pytest 명령 2줄, D-182·D-183·D-184 증거의 test_watch 경로, D-186 증거의 rig_script_references 경로). 로그는 append-only고 역사 항목은 당시 경로를 말해야 한다. 현재 경로는 이 시점 기준 `src/core/control`이다(재편 a93d5188).
+- 증거: `python tools/harness/rosy_harness.py lint` — 3a17a0aa 기준 append-only 오류 소멸(커밋 뒤 HEAD 기준도 통과).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 경로 재편 커밋이 로그 원문을 같이 고쳐 쓰지 않는다. 하네스 lint가 잡는다.
+
+
+## 2026-09-25 · 743a707f · docs(validation): 재검증 — 동시 커밋 6건 이후 전 게이트 초록
+
+- 변경: 없음(재검증 회차). 브라우저 43+13 passed, 단위 565 passed(fleet succession 신규 시험 2종 포함), 얼굴 47 passed, harness lint 0 오류(1eca4409가 append-only 이력 복구). 플레이크 1회(test_warm_coloured_text_stays_readable, 최대 경합 조합 실행) — 재현 4회 시도 없음, F-02 선례대로 종결 기록.
+- 증거: 회차 README 재검증 노트(2026-09-25).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 실패 출력은 전문 보존 후 필터한다 — 위반 목록을 버리면 플레이크가 미스터리가 된다.
+
+
+## 2026-09-25 · uncommitted · docs(adr): D-214 텍스트 대비의 바닥
+
+- 변경: D-214(모든 보이는 글자 4.5:1, 24px+ 값 3.0:1 — 선택도 읽기를 희생하지 않는다), concept 16 계기 표 1행, ADR 로그 등록, 회차 문서에 바닥 회차(F-18·F-19) 추가.
+- 증거: 브라우저 45+14 passed, 단위 501 passed(2026-09-25 Windows HOST).
+- gate 변화: 표면 2종에 전 텍스트 바닥 게이트(변이 증명 완료).
+- 결정: D-214
+- 교훈: 없음.
+
+
+## 2026-09-25 · uncommitted · docs(adr): D-218 확인 졸업 · D-219 D-159 승격 · D-220 정지 계약
+
+- 변경: ADR 3건 + D-159 상태 승격 + concept 16 계기 3행·§7 선언 뷰포트 열 + 대화 상자 계약 시험(test_web_dialog_contract.py, 변이: alert 주입 → 적성) + 콘솔 움직임 센서스 게이트(변이: 전이 주입 → 0.24s 적색) + 회차 문서 어휘 회차(F-20).
+- 증거: 단위 412 passed(fleet+dialog), 브라우저 묶음 별도 실행.
+- gate 변화: 웹 대화 상자 계약·움직임 센서스·Fleet 큐 계약 신설(전부 변이 증명).
+- 결정: D-218, D-219, D-220
+- 교훈: 측정이 먼저다 — 움직임 예산은 0개 실측 후에 계약이 됐다.
+
+
+## 2026-09-25 · uncommitted · docs(adr): D-221 얼굴 어휘 — F-07 처분
+
+- 변경: D-221(라벨은 기계 약어, 폰트 의존 금지, BENCH 질문 재정의), concept 16 §7.4 어휘 문장, ADR 로그 등록, 회차 문서 F-07 처분 기록.
+- 증거: 얼굴 49 passed(변이 증명 포함).
+- gate 변화: 없음(문서+시험).
+- 결정: D-221
+- 교훈: 없음.
+
+
+## 2026-09-25 · uncommitted · test+docs: BENCH 라이브 게이트 러너와 현행 체크리스트
+
+- 변경: (1) test/test_live_surface_gates.py — 공예 계약 센서스(바닥·warm·척급·정지)를 실물 주소(ROSY_LIVE_*_URL)로 그대로 도. 픽스처·오버라이드 없음 — 법은 어떤 상태에서나 성립. 콘솔은 양 뷰. (2) 회차 폴더에 현행 bench-checklist(2026-09-21 판 계승·대체): 라이브 게이트 명령, 실물 뷰포트 셀, 실물 값, 재정의된 F-07 질문(비문자 채널 가독), 서명란.
+- 증거: 로컬 정적 미러에서 라이브 게이트 통과 + 변이 증명(전이 주입 → 0.24s 적색 → 원복 → 녹색).
+- gate 변화: BENCH용 라이브 게이트 신설(옵트인, ROSY_LIVE_DASHBOARD_URL).
+- 결정: D-201/202/203/214/220의 실물 집행 수단
+- 교훈: BENCH를 기다리게 하는 게 아니라 BENCH가 명령 하나가 되게 한다.
+
+## 2026-09-25 · uncommitted · docs(adr): D-224 surface keyboard vocabulary
+
+- 변경: D-224 (promised keys work: fleet roster traversal/goal/clear,
+  games Space fires /stop once, tabindex -1 landings), ADR log row,
+  round README keyboard session (F-21, F-22). Harness default wait
+  5s -> 15s with the contention-flake post-mortem in the ADR.
+- 증거: browser 3 new gates green + mutation red/green, dialog +
+  queues contracts 8 passed, harness lint clean.
+- gate 변화: none (docs).
+- 결정: D-224
+- 교훈: none.
+
+## 2026-09-25 · uncommitted · docs(adr): D-227 소유 이름은 지금 트리 위에 둔다
+
+- 변경: D-227 Proposed. 여섯 책임은 현재 폴더를 읽는 이름이고, foundation/runtime/hmi 루트와 명령 봉투와 site AI 워커는 만들지 않는다. 실행 순서는 `docs/plans/2026-09-25-ownership-naming-control-plane.md`. 색인 행과 reference·plans 안내를 D-227 까지로 맞췄다. 입력 원문은 저장소 밖 v0.2 이고 이 커밋에 넣지 않았다.
+- 증거: 문서 결정. 패키지 이동 없음. `python tools/harness/rosy_harness.py lint` 0 errors, 16 warnings(기존 last_verified). `python -m pytest test/test_harness_contracts.py::test_repository_adr_log_is_contiguous_and_indexed -q` 1 passed (2026-09-25 Windows). generate 로 `docs/index.md` 갱신.
+- gate 변화: 없음
+- 결정: D-227
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(adr): D-228 decision lives in core_features
+
+- 변경: D-228 Accepted. 판단 폴더는 `core_features/decision`. `src/runtime`·`rosy_pinky_pro`·`src/site/rosy_ai_worker` 는 만들지 않는다. 차선 코드는 옮기지 않는다.
+- 증거: `python -m pytest src/core/core_features/test -q` 218 passed (2026-09-25 Windows). 패키지 개명 없음.
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(plan): D-228 lane_recovery execution
+
+- 변경: `docs/plans/2026-09-25-decision-lane-recovery.md`. Task 1 은 `decision/lane.py` 의 FOLLOW/STOP. Task 2(추종기 연결)와 다른 판단 종류는 이번 실행에서 하지 않는다.
+- 증거: `python -m pytest src/core/core_features/test/test_lane_recovery.py src/core/core_features/test/test_decision.py -q` 15 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-228
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(control): split perception from sensing geometry
+
+- 변경: 카메라·차선 증거를 `sensing/perception`으로 나누고, 차선 추종 속도는 `lane_recovery` 가 FOLLOW 일 때만 계산한다. 라이다·차체·도크와 `src/runtime` 은 그대로다.
+- 증거: 인식 폴더·차선·카메라·구조 시험 131 passed. 추종 시계·lane_recovery 30 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-209, D-228
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(adr): D-229 layer boundaries
+
+- 변경: D-229 Accepted. 인식은 증거, 판단은 동작 id, 추종기는 FOLLOW 다음의 속도. `sensing` 입구는 영상을 다시 내보내지 않는다. `test/test_layer_boundaries.py` 가 import 를 잠근다.
+- 증거: `python -m pytest test/test_layer_boundaries.py src/core/control/test/test_lane_edge.py src/core/control/test/test_camera_ground.py src/core/control/test/test_perception_folder.py -q` 91 passed (2026-09-25 Windows).
+- gate 변화: 없음
+- 결정: D-229
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(plans): gather root architecture notes
+
+- 변경: 래퍼 루트의 v0.2·v0.8 입력을 `docs/plans/2026-09-25-ownership-naming-input-v0.2.md` 와 `2026-09-25-decision-fabric-input-v0.8.md` 로 모았다. 현재 폴더 지도는 `2026-09-25-folder-map.md`. 실행 기준은 D-227·D-228·D-229 다.
+- 증거: 문서 이동. 패키지 변경 없음.
+- gate 변화: 없음
+- 결정: D-226, D-229
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · test+docs(layout): D-226 Accepted — CI가 공개 경계와 문서 자리를 지킨다
+- 변경: D-226 Proposed → Accepted. ADR에 "gitignore로 막는 것 / 추적하는 것" 짝 표를 더했다. `test/test_document_placement.py` 신설(추적 파일이 ignore 규칙에 걸리지 않음, 비밀·내부 경로 21개 ignore, 템플릿·공개키 8개 추적, 루트 파일 허용 목록, `src/**/docs/validation` 날짜 항목 금지, 모듈 루트 문서 허용 목록). `test_folder_layout.py`가 `.worktrees/`·`.claude/worktrees/` 링크 체크아웃을 훑지 않게 했다. `pinky-pro-evaluation-2026-09-24.md`의 실제 장치 IP를 `<robot-ip>`로 바꿨다. 루트 AGENTS.md에 D-226 한 줄을 더했다. 이동 자체는 9a83470e
+- 증거: `python -m pytest test/test_document_placement.py test/test_folder_layout.py src/core/control/test/test_straight_escape.py -q` 28 passed (2026-09-25 Windows). 변이: `.gitignore`에서 `provision.json`을 지우자 `deploy/sd/provision.json`으로 실패, 원복 후 통과
+- gate 변화: 없음(문서+시험)
+- 결정: D-226
+- 교훈: 넓은 ignore 규칙은 옆의 템플릿까지 삼킬 수 있다. 막는 칸과 추적하는 칸을 같이 시험한다
+
+## 2026-09-25 · uncommitted · docs+test(adr): D-231 소스 영역을 층으로 — 이름은 그대로, 이동은 한 번에
+- 변경: D-231 Accepted. 목표 영역 `contracts/runtime/devices/products/hmi/site/sim` + `firmware/`, `test/architecture/`, `docs/architecture/`. 패키지 20개의 지금 자리→목표 자리 표. 패키지 이름은 바꾸지 않는다(colcon은 package.xml로 찾는다). 소유자 스케치 중 제품 이름 런타임(`rosy_pinky_pro`), 원격 판단 경로, `src` 안 AI 워커, 새 액션, 빈 골격은 받지 않는다. D-168 영역 목록, D-227 결정 1, D-207 결정 5의 루트 위치를 대체한다. `test/test_target_layout.py` 신설: 모든 패키지가 표에 있고, 이름을 유지하며, 지금 자리나 목표 자리 한 곳에 있고, 제품 폴더에 코드가 없고, 금지 자리가 없다. 폴더 이동은 하지 않았다
+- 증거: `python -m pytest test/test_target_layout.py test/test_module_structure.py -q` 16 passed (2026-09-25 Windows). 변이: 표에 없는 패키지, `products/`의 `.py`, `src/site/rosy_ai_worker`를 넣자 세 시험이 실패, 원복 후 통과
+- gate 변화: 없음(문서+시험)
+- 결정: D-231
+- 교훈: 층 구조의 이득은 디렉터리 이동으로 얻고, 패키지 개명은 따로 비용을 따진다
+
+## 2026-09-25 · uncommitted · docs(plans): D-231 이동 묶음 계획, 장치는 계열로
+- 변경: 소유자 결정으로 장치 패키지를 계열로 묶는다(D-196 원안): `devices/pinky_pro/{bringup,sensor_adc,lamp_control,led}`, `devices/common/imu_bno055`, `devices/omx/omx_adapter`. D-231 표와 `test_target_layout.py`의 `TARGET`을 맞췄다. 제품 폴더는 코드 없는 설정 패키지(`package.xml`+`CMakeLists.txt`, 자체 `test/`)를 허용한다(D-196 `pinky_pro`). 실행 계획 `docs/plans/2026-09-25-d231-layered-move.md` 신설(단계 0 D-196 브랜치 통합과 충돌 15개 푸는 법 → 1 firmware → 2 contracts → 3 runtime → 4 hmi → 5 devices 계열 → 6 test/docs architecture → 7 시험 전환·colcon·벤치·이미지). 옛 D-196 계획의 Task 6–8에 대체 표시. 폴더는 옮기지 않았다
+- 증거: `python -m pytest test/test_target_layout.py -q` 5 passed (2026-09-25 Windows). `git merge-tree`로 D-196 브랜치 충돌 15개 확인. 경로별 살아 있는 참조 수를 `git grep`으로 셌다
+- gate 변화: 없음(문서+시험)
+- 결정: D-231
+- 교훈: 영역 이름만 바뀌는 이동은 깊이가 같아 `parents[N]`을 고치지 않는다. 깊이 변경은 계열 폴더로 들어가는 장치에 한정된다
+
+## 2026-09-25 · uncommitted · docs(adr): D-232 OMX 제품 설정은 products/omx
+- 변경: D-232 Accepted. `omx.disabled.yaml`을 `src/products/omx`로 옮긴다. 어댑터 코드와 `adapter.manifest.yaml`은 `devices/omx/omx_adapter`에 남긴다. `omx-ai`는 모델 이름이다. 판단·perception·`tools/perception` 자리는 그대로고 AI 워커 폴더는 만들지 않는다. Pinky 보드 핀맵(`bringup`, `sensor_adc`, `lamp_control`, `led`)은 `devices/pinky_pro`에 남긴다. URDF는 `sim/description`에 남긴다
+- 증거: 이 기록 직후 `python -m pytest src/products/omx/test src/devices/omx/omx_adapter/test test/architecture/test_target_layout.py test/architecture/test_module_structure.py test/test_robot_runtime.py -q`
+- gate 변화: 없음(문서+설정 패키지)
+- 결정: D-232
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(runtime): core 계열 폴더를 역할 이름으로 (D-241)
+- 변경: D-241 Accepted. 디렉터리만 `runtime/gateway`(`core`), `runtime/events`(`core_events`), `runtime/features`(`core_features`), `runtime/api_web`(`core_api_web`), `contracts/foundation`(`core_common`)로 옮긴다. `package.xml` 이름, 파이썬 import, `ros2 run core`, `install/lib/core/core` 는 유지한다. D-234–D-240 은 디자인 시스템 계획이 예약한 번호라 adr_gaps 에 둔다
+- 증거: `python -m pytest test/architecture/test_module_structure.py test/architecture/test_target_layout.py test/architecture/test_layer_boundaries.py src/contracts/foundation/test src/runtime/gateway/test/test_core_logic.py src/runtime/events/test src/runtime/features/test/test_decision.py src/runtime/api_web/test/test_ui_route.py -q` 184 passed (2026-09-25 Windows)
+- gate 변화: 없음
+- 결정: D-241
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(layout): 나머지 역할 폴더 (D-242)
+- 변경: D-242 Accepted. `features`→`runtime/services`, `control`→`runtime/sensing`, `web_common`→`hmi/web`, `emotion`→`hmi/face`, `omx_adapter`→`devices/omx/adapter`, `lamp_control`→`devices/pinky_pro/lamp`, `sensor_adc`→`devices/pinky_pro/adc`. 패키지 이름과 import 는 유지한다. `bringup`, `led`, `navigation`, `description`, `gz_sim`, `fleet`, `games` 는 그대로다
+- 증거: 이 기록 직후 구조 시험과 face·web·omx 어댑터 호스트 시험
+- gate 변화: 없음
+- 결정: D-242
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · refactor(hmi): operator screens leave the API package (D-243)
+- 변경: D-243 Accepted. `core_api_web/web` 의 정적 파일을 `src/hmi/dashboard` 로 옮긴다. API 는 같은 프로세스에서 그 폴더를 읽는다. Fleet·게임·센싱 진단 화면은 각 패키지에 남긴다. `src/apps` 는 추적되지 않는 pytest 캐시만 있고, 잠금 때문에 지우지 못했다
+- 증거: `python -m pytest src/hmi/dashboard/test src/runtime/gateway/test/test_dashboard.py src/runtime/gateway/test/test_dashboard_no_bundler.py src/runtime/gateway/test/test_console_layout.py src/runtime/gateway/test/test_first_paint.py src/runtime/gateway/test/test_evidence_margin.py src/runtime/gateway/test/test_triage_contract.py src/runtime/gateway/test/test_host_cards.py src/runtime/api_web/test/test_ui_route.py src/hmi/web/test/test_ui_token_contracts.py src/hmi/web/test/test_shared_controls.py test/architecture/test_target_layout.py test/architecture/test_module_structure.py test/test_dashboard_browser.py test/test_web_dialog_contract.py test/test_rosy_games_surface.py -q` 188 passed, 46 skipped (2026-09-25 Windows)
+- gate 변화: 없음
+- 결정: D-243
+- 교훈: 없음
+## 2026-09-25 · uncommitted · docs(design-system): D-233 초안·롤아웃 계획·D-245 파일럿 Proposed
+- 변경: docs/adr/D-233-design-system-component-token-draft.md(신설, D-241·D-242·D-243 경로 이동 반영), docs/plans/2026-09-25-design-system-rollout-design.md(신설, 분할 D-245~D-251), docs/adr/D-245-estop-pilot-kind-question-role-note.md(신설 Proposed), ROSY ADR Log.md에 D-233·D-245 2행, Fleet 전체 정지 버튼에 범위 병기 1줄(src/site/fleet/fleet/server/web/index.html)
+- 증거: python -m pytest test/test_web_dialog_contract.py src/hmi/web/test src/hmi/dashboard/test -q 56 passed; ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -q 12 passed (2026-09-25 Windows). src/site/fleet/test 전수는 D-242 잔재 1건 실패(test_cli.py web_common 기본값, 깨끗한 HEAD 재현 확인 — 본 변경 무관)
+- gate 변화: 없음. D-245는 캡처 셀 남음이라 Proposed 유지
+- 결정: D-233·D-245 Proposed, D-244는 타 세션 선점으로 회피(D-245로 이명)
+- 교훈: 같은 날 다른 세션이 D-243·D-244를 배정 중이었음. 새 ADR 번호는 파일 실측 후 배정할 것
+
+## 2026-09-25 · uncommitted · docs: 네이티브 런타임과 디자인 시스템 초안을 색인에 맞춘다 (D-246, D-233, D-245)
+- 변경: README·Pi 런타임·배포 노트·아키텍처 15가 제품 런타임을 네이티브 systemd로 말한다. Docker는 개발·CI이고, 컨테이너는 안전 계획 밖 선언된 사이드카에만 남는다(D-246). D-161·D-197 색인 행이 그 범위를 가리킨다. D-233 본문과 롤아웃 계획을 색인에 두고, D-245는 Proposed로 Fleet 전체 정지 버튼에 범위 한 줄을 붙인다. D-244는 본문이 없는 번호라 adr_gaps에 둔다. 롤아웃의 다음 번호는 D-248이다. D-247은 장치 관측을 제품 기능과 나누는 Proposed이고, 코드는 없다
+- 증거: `python -m pytest test/test_native_runtime_docs.py test/test_web_dialog_contract.py src/hmi/web/test -q` 62 passed (2026-09-25 Windows)
+- gate 변화: 없음. D-245는 캡처 셀이 남아 Proposed
+- 결정: D-246 Accepted, D-233·D-245 Proposed
+- 교훈: 없음
+
+## 2026-09-25 · uncommitted · docs(runtime): 네이티브 우선을 문서 네곳에 명시하고 D-246으로 고정
+- 변경: D-246 Accepted (`docs/adr/D-246-runtime-flexibility-native-default-container-sidecar-lane.md`). 제품 런타임은 네이티브 systemd가 기본이고 Docker는 개발·CI와 선언된 비안전 사이드카에만 허용되며, 장치별 차이는 profile/slice로만 표현한다 — 로봇 한 대를 Docker/네이티브로 갈라타는 옵션은 없다. D-161·D-197 색인 행에 qualifier 표기, D-197 본문 See also 추가. README `Raspberry Pi 5 런타임`에 선언 신설, `docs/deployment/raspberry-pi-runtime.md` 상단 선언 + §4 "development/CI Compose path" 라벨, `docs/deployment/AGENTS.md` Purpose 선언 + External 의존성 Product/Development 분리, `docs/architecture/15_ROSY_Ubuntu_Modular_Installation.md` §2 `Docker optional` 제거 + §11 `Runtime model: native by default` 신설. `docs/reference/AGENTS.md` ADR 범위 갱신. 함께 고친 상대 세션 결함 1건: `src/hmi/dashboard/AGENTS.md`에 하네스 기록 참조가 없어 계약 시험이 빨간색이었다.
+- 증거: `python -m pytest test/test_native_runtime_docs.py -q` 8 passed. mutation-proven 5건 — README 선언 부인, arch-15 §11 `Docker optional` 복원, runtime guide §4 라벨 제거, deployment AGENTS 선언 부인, ADR 색인 행 개명 각각 red 확인 후 복원하여 final green. 회귀 `test_ubuntu_native_runtime_contract` · `test_network_topology_contracts` · `test_harness_contracts` · `test_pi_wifi_deployment` · `test_pinky_commissioning` 재실행.
+- gate 변화: 없음 (SOURCE GO 유지, ARTIFACT/DEVICE HOLD 불변)
+- 결정: D-246
+- 교훈: 같은 트리의 동시 세션이 D-243·D-244·D-245·D-247을 연속 선점했다 — 새 ADR 번호는 파일·색인·origin 세 곳을 실측한 직후 바로 옮기고 즉시 커밋해야 한다 (`adr-numbers-collide-between-concurrent-sessions-2026-09-25`). 네이티브 전환 결정은 ADR(D-161·D-197)에만 있고 운영 문서가 Docker 시대 문구를 그대로 남기고 있었던 것은 계약 테스트로 박아야 고쳐졌다.
+## 2026-09-25 · uncommitted · docs(design-system): D-245 Accepted (파일럿 착지)
+- 변경: Fleet 전체 정지 버튼 범위 병기 1줄, docs/validation/uiux-surfaces-2026-09-25/ (README + fleet-estop-note-1920x1080.png), D-245 Status Proposed→Accepted, ADR 로그 D-245 Accepted
+- 증거: 캡처 단언(라벨 개행 병기·박스 뷰포트 내·페이지 오류 0) 통과; python -m pytest test/test_web_dialog_contract.py src/hmi/web/test src/hmi/dashboard/test -q 56 passed; ROSY_RUN_BROWSER_TESTS=1 test_fleet_console_browser.py 12 passed (2026-09-25 Windows). 첫 캡처에서 /common/components.css·ui.js 미서빙으로 무스타일 렌더가 나왔고, 스크립트 수정 후 재산출 — 임시 스크립트는 X:/DevTemp/opencode/d245_capture.py (레포 밖)
+- gate 변화: D-245 Proposed→Accepted. 다음은 D-247(AuthBar) Proposed
+- 결정: D-245 Accepted
+- 교훈: 캡처용 임시 서버는 제품 시험 fixture의 경로 매핑을 그대로 복사할 것 (/common/* → src/hmi/web/*). fixture가 tokens.css만 매핑하는 이유는 DOM 단언에는 스타일이 필요 없기 때문 — 캡처에는 부족하다
+## 2026-09-25 · uncommitted · docs(design-system): D-247 Accepted (AuthBar 파일럿 착지)
+- 변경: console.js 잠금 플래그(auth.locked, 3개 폴링 스킵 + 저장 시 해제) + refreshState catch의 잠금 pill 덮기 방지 1줄, 회차에 fleet-locked-pill-1920x1080.png 1셀, D-247 Status Proposed→Accepted, ADR 로그 D-247 Accepted
+- 증거: 변이 프로브(가드 제거 복사본 대비) — 수정 5회 후 침묵 vs 변이 9회·증가 중, 잠금 pill 유지. test_web_dialog_contract + hmi/web + hmi/dashboard 56 passed, fleet 전수 464 passed(D-242 잔재 1건 제외), ROSY_RUN_BROWSER_TESTS=1 fleet console 12 passed (2026-09-25 Windows). 프로브·캡처 스크립트는 X:/DevTemp/opencode/d247_probe.py·d247_capture.py (레포 밖)
+- gate 변화: D-247 Proposed→Accepted. 다음은 D-248(FieldMap) Proposed
+- 결정: D-247 Accepted, L2 AuthState는 뽑지 않음(D-130.2 미달) 유지
+- 교훈: 프로브가 주석-코드 불일치 너머의 진짜 결함(pill 덮어씀)을 찾았음. 변이는 빨강 확인용이 아니라 결함 발견용으로도 쓴다
+## 2026-09-25 · uncommitted · docs(design-system): 번호 충돌 수렴 (AuthBar D-248, FieldMap D-249)
+- 변경: 타 세션이 D-247(장치 관측)을 선점하고 내 초안들을 feed2fc7에 그대로 커밋했음(index.html 1줄 포함). 플랜 재배열(AuthBar D-248, FieldMap D-249)을 채택해 내 파일 2개를 개명, 로그·플랜·주석의 번호를 맞춤. D-244는 빈 번호로 둠
+- 증거: HEAD 로그 대조(D-245 Proposed·D-246·D-247 타세션분 확인), 파일 실측(glob)으로 빈 번호 확인
+- gate 변화: 없음. D-248·D-249 Accepted (파일럿 증거는 기존 회차·프로브 그대로)
+- 결정: 번호는 공유 자원이므로 선점 확인 후 배정, 플랜은 실행 순서대로 재배열한다
+- 교훈: add -A식 커밋이 타 세션 작업을 쓸어담는다 — 이 커밋부터 내 경로만 지정 커밋한다
+## 2026-09-25 · uncommitted · test(release): 기준선 결손 2건과 스캐너 오탐을 복구 (D-178 기준선, apt 체크섬)
+- 변경: D-178 기준선 표에 `omx`(93 S)·`dashboard`(73 B) 잠정 행 추가 — D-232·D-243으로 패키지가 늘어 집합 동일성 시험이 붉음. `test_native_payload_workflow.py`의 apt 소스 SHA-256 핀 변수명을 `pin` → `apt_source_sha256`로 바꿔 그 행에 무결성 맥락이 뜨게 함 (스캐너는 아무 매처도 넓히지 않음)
+- 증거: mutation-proven 적용 — dashboard 총점 조작·omx 행 삭제·dashboard 등급 조작 3건 모두 red, 복원 green. 스캐너 직접 프로브 — 무결성 맥락 없는 hex 할당은 여전히 'high-entropy-token' 보고(context 없음), `api_token`은 integrity 단어가 있어도 credential 보고, 고친 행만 침묵. `pytest test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_native_payload_workflow.py -q` 73 passed
+- gate 변화: 없음 (SOURCE GO, ARTIFACT/DEVICE HOLD 유지)
+- 결정: 스캐너 매처를 넓히지 않고 값의 정체를 행 위에 쓰는 쪽을 택 — 검사를 고장 내어 통과시키는 것은 위증이다
+- 교훈: 새 패키지는 코드 추가와 동시에 기준선 행이 없으면 집합 동일성 시험이 붉다 — 패키지 이동(D-232)도 예외가 아니다
+## 2026-09-25 · uncommitted · docs(design-system): D-250 Accepted (첫 L2 headless)
+- 변경: src/hmi/web/hold-ticker.js 신설 + CMake·/common allowlist 등록, 대시보드 start/stop/transmit을 티커로 이관(자격·전송·문구 그대로), session의 teleopActive/teleopTimer 제거, 회차에 console-teleop-hold-1366x768.png 1셀, D-250 Accepted
+- 증거: node 단위 어서션(start 즉시 tick·멱등·zero 1회·예외 시 고아 interval 없음). 브라우저 46 passed. 변이(ticker zero 제거) 적색 → 원복 녹색. 구현 중 자가 결함 1건: 즉시 tick이 active 전에 돌아 transmit 가드에 걸림 — interval 등록을 tick보다 먼저로 고침(try/finally 아님, throw 시 정리). dialog+web+dashboard 56 passed, api_web·gateway 대시보드 시험 녹색(D-241 잔재 test_package_contract 1건 제외 — 타 세션 범위)
+- gate 변화: D-250 Proposed→Accepted. 다음은 D-251(HostCard) Proposed
+- 결정: D-250 Accepted. L2 첫 선례 — 자격·전송은 표면 소유 유지
+- 교훈: headless 티커의 즉시 tick은 active 플래그가 선행되어야 한다. 가드를 읽는 쪽(transmit)이 있으면 순서가 계약이다
+## 2026-09-26 · uncommitted · docs(design-system): D-251 Accepted (절차 카드)
+- 변경: D-251 Status Proposed→Accepted, ADR 로그 D-251 Accepted. 코드 변경 없음
+- 증거: 11종 카드 크롬 순서(제목행+chip→안내문→폼→메시지) 대조, dom.js 헬퍼 6종이 이미 공유 위치임 확인, dialog+web+dashboard 56 passed (변경 없음 확인)
+- gate 변화: D-251 Proposed→Accepted. 다음은 D-252(Fleet 큐·대형) Proposed
+- 결정: D-251 Accepted. 크롬은 장식이라 뽑지 않음
+- 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): D-252 Accepted (Fleet 큐·대형)
+- 변경: 큐 머리 h3→ui-triage(개수+이름, ul·id·빈 숨김 그대로), 무장 전 대기 요약 바인딩(폼 변경 시 갱신), 회차에 2셀, D-252 Accepted
+- 증거: 머리 단언·대기 요약 단언·변이(머리 제거) 적색, 큐 계약·fleet 전수(D-242 잔재 1건 제외)·Fleet 브라우저 12 passed. 지도 고스트 미리보기는 서버 기하 단일 출처라 기각
+- gate 변화: D-252 Proposed→Accepted. 다음은 D-253(게임·진단 마무리) Proposed
+- 결정: D-252 Accepted
+- 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): D-253 Accepted (게임·진단 마무리)
+- 변경: D-253 Status Proposed→Accepted, ADR 로그 D-253 Accepted. 코드 변경 없음
+- 증거: 게임 브라우저 5 passed, hmi/web 51 passed (변경 없음 확인). 계획 §3-7의 관전 readonly를 실측 근거 3건(D-201 halt 게이트·근접=역할·정지 손이 많을수록 안전)으로 뒤집음
+- gate 변화: D-253 Proposed→Accepted. 롤아웃 7분할 종료
+- 결정: D-253 Accepted. 관전 모드 없음, ScoreBoard 미추출, 진단 동결
+- 교훈: 없음
+## 2026-09-26 · uncommitted · docs(design-system): 잔재 정리 — D-233·D-254 Accepted, D-241·D-242 시험 수정
+- 변경: D-233 결산 추가 후 Accepted, D-254 Accepted. 타 세션 영역 2줄 수정(test_cli 기대 디렉터리명 web, test_package_contract CORE 경로 gateway)
+- 증거: dialog+web+dashboard+fleet+api_web 474 passed 0 failed
+- gate 변화: D-233·D-254 Proposed→Accepted. 디자인 시스템 작업 종료
+- 결정: 잔재 수정은 타 세션에 고지한다. D-233 결산으로 인벤토리 착지 확정
+- 교훈: 없음
+## 2026-09-26 · uncommitted · docs(release): 스캐너 무결성 명명 규칙을 ADR로 고정 (D-256), 예약 번호 정리
+- 변경: 새 ADR D-256(공개 무결성 값은 이름으로 지우고, 스캐너는 매처를 넓히지 않는다)+ADR 로그 행+progress adrs+생성 색인. harness gap의 낡은 예약 7건(D-234~D-240)을 사실로 고치고(66b0176c), D-251~D-253 예약은 실제 착지에 따라 해제(d22d2a17), 색인을 커밋 상태로 재생성(03e48ded)
+- 증거: 스캐너 프로브 3건 PASS — 무결성 맥락 없는 hex는 `high-entropy-token`, 무결성 이름은 침묵, 같은 줄의 `api_token`은 `credential`. `test_harness_contracts + test_release_boundary_guards + test_native_payload_workflow + test_module_scorecard + test_native_runtime_docs` 127 passed, lint 0 error (2026-09-26 Windows)
+- gate 변화: 없음. SOURCE GO 유지. CI의 `core domain suites` 7 failed는 src/runtime 레인(타 세션)이고 docs 게이트 단계는 그 전에 skip
+- 결정: D-256 Accepted — 값 단위 허용목록을 만들지 않고, 오탐은 호출 지점의 이름으로 고친다
+- 교훈: ADR 번호는 파일과 행을 한 번에 확보한다. D-255로 쓰려는 순간 타 세션이 같은 번호를 집어넣어 D-256으로 갈아탔다(오늘 세 번째 충돌). append-only 공유 파일은 인덱스만 스테이징해 상대의 행을 훔치지 않는다
+## 2026-09-26 · uncommitted · docs(design-system): D-259 Accepted (지도 키보드 조작)
+- 변경: map.js에 commitPoint 추출 + 키보드 십자선(화살표·Enter·Escape, paper색 십자+원, --pin 미신설), canvas tabindex, 시험 1건(진짜 map.js 오버라이드), 회차에 1셀, D-259 Accepted
+- 증거: 키보드 확정 POST 단언 통과. 변이(핸들러 제거) 적색 → 원복 녹색. 구현 중 자가 결함 1건: 즉시 tick이 아니라 즉시 확정 — 십자선 초기화가 비정상 격자에서 NaN을 냄 → 유한성 검사 후 중앙 폴백. dialog+web+dashboard 56 passed
+- gate 변화: D-259 Proposed→Accepted
+- 결정: D-259 Accepted. D-224 약속표 추가는 이 문서가 대신한다(타 ADR 불편집)
+- 교훈: 시험이 map.js를 스텁으로 갈아낀다는 것을 모르고 빈 손으로 디버깅했다 — 실패가 어서션 위치가 아니라 import 위치를 가리킬 수 있다. _serve_module 주석이 경고済였는데 읽지 않았다
+## 2026-09-26 · uncommitted · docs(solutions): 플레이키 2건 기록 — sd_writer 빈 exit code flake, 동시 세션 git 인덱스 규율
+- 변경: `docs/solutions/workflow-issues/`에 신규 2건 — (1) reprovision 테스트의 빈 exit code 플레이키(throw 지점 `deploy/sd/prepare-rosy-sd.ps1:1147-1148`, `$writerExitCode` null 초기화는 1008행, 원인 미확·D-230 레인 소관), (2) 동시 세션 공유 git 인덱스 규칙(amend/`reset --hard` 금지, `git commit -- <path>` 금지, append-only 공유 파일은 자기 행만 스테이징, 파일+행 원자적 페어링)
+- 증거: 단독 재현 10회 중 6회 FAIL(2026-09-26 3회 = FAIL/PASS/FAIL), `full_test.log` 동일 시그니처. ce-compound lightweight 기계 검사 `validate-doc-claims.py` 5 paths·3 SHAs 0 flags, `validate-frontmatter.py` 2건 OK
+- gate 변화: 없음(docs/solutions 신규 2건 — generate 후 lint 0 error 확인)
+- 결정: 플레이키는 원인 미확 상태로 판정 문서만 남기고 수정은 D-230 레인에 위임. git 규칙은 기존 ADR 번호 충돌 노트와 분리(번호 = 기획, git 메커니즘 = 실행)
+- 교훈: frontmatter 제목에 ': '가 있으면 따옴표 필수(파서가 중첩 매핑으로 오해). Windows에서 UTF-8 문서는 검사 스크립트가 cp949 기본인코딩으로 열어 실패하므로 `python -X utf8` 필요
+## 2026-09-26 · uncommitted · docs(adr): D-263 메뉴 확장과 화면 책임
+- 변경: D-263 Accepted. 상단 메뉴는 사용자 질문을 가진 화면만 가리키고, 화면 메타데이터를 단일 출처로 쓴다. 역할·capability·inventory·API 권한을 분리하고 새 메뉴의 등록 조건과 화면 문법·검증 항목을 고정했다.
+- 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; `python -X utf8 tools/harness/rosy_harness.py lint` 0 error, 기존 last_verified 경고 19건. 최초 시험의 생성 색인 stale 2건은 `generate` 후 같은 명령 재실행으로 해소했다.
+- gate 변화: 없음. ADR은 설계 결정이며 D-204 화면 이관·기기 수용의 구현 증거가 아니다.
+- 결정: D-204 브랜치의 패널 조립 계약과 중복되는 메뉴 레지스트리를 만들지 않는다. D-243 이후 소유 경계로 이관 계획을 다시 맞춰야 한다.
+## 2026-09-26 · uncommitted · docs(plan/adr): 역할별 메뉴 이관 계획과 D-265
+- 변경: D-263 실행 계획을 현행 `src/hmi/dashboard`·`src/runtime/api_web` 경계로 작성했다. D-265 Accepted로 역할상 허용된 기반 화면을 패널 수와 분리하고, 매니페스트·패널 실패에서도 E-Stop API 요청 경로를 셸에 남겼다. WEB-002의 기존 이름을 세 화면 안의 항목으로 배치했다.
+- 증거: `python -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q --disable-warnings` 70 passed; harness lint 0 error, 기존 last_verified 경고 19건. `generate`로 docs/index.md를 갱신했다.
+- gate 변화: 없음. 계획·ADR·SRS 계약만 바꿨고 D-204 화면 이관, 브라우저 동작, Pi 설치·실기 정지는 검증하지 않았다.
+- 결정: D-264는 다른 세션의 장치 진단 도구 ADR이 먼저 사용해 D-265로 기록했다. D-204 별도 브랜치의 보이는 패널 기반 메뉴 필터는 병합 전에 역할 기반 메뉴 필터로 고친다.
+## 2026-09-26 · uncommitted · feat(role-menu): 기반 화면 셸·매니페스트 S1
+- 변경: D-204 패널 레지스트리/매니페스트를 `src/runtime/api_web`와 `src/hmi/dashboard` 경계에 이식했다. `/console`, `/setup`, `/device` HTML·허용 자산·E-Stop 셸을 연결했고 `/device`에 최근 이벤트 패널을 등록했다. 역할이 허용하는 기반 메뉴는 빈 패널에서도 유지하며 직접 매니페스트 요청은 401/403/404로 구분한다.
+- 계약: API Ref v1.23과 `UiSurfaceManifest` REST 스키마를 함께 추가했다. Fleet↔Robot envelope `protocol_version`은 1.0 그대로다.
+- 증거: dashboard/API/gateway focused pytest 85 passed, 1 skipped; 추가 라우트/OpenAPI 검증 10 passed. 브라우저, 설치 패키지, Pi·실기 E-Stop은 아직 검증하지 않았다.
+- gate 변화: 없음. S1 구현 단계이며 WEB-002 전체 기능 이관과 브라우저/장치 수용은 남아 있다.
+- 브라우저 추가 증거: 로컬 FastAPI + Chromium에서 Viewer/Operator/Admin 메뉴를 확인했고, Viewer의 `/device` 직접 접근은 API 403 및 셸 권한 안내로 끝났다. Admin `/device`에서 `system.events` 패널 장착을 확인했다. 패널 JS를 강제로 404로 돌린 경우에도 E-Stop이 별도 `/api/v1/safety/stop` 요청을 보냈고 HTTP 수락을 받았다(물리 정지는 아님). 브라우저 콘솔 오류 0건.
+## 2026-09-26 · uncommitted · feat(role-menu): 역할 화면별 첫 기능 패널
+- 변경: `/console`에 freshness를 반영한 상태 요약, `/setup`에 현재 pose 저장형 웨이포인트 준비 패널, `/device`에 진단 요약을 추가했다. 패널은 화면별 ES module이고 manifest의 정렬·역할·자산 등록만으로 확장한다.
+- 안전 경계: pose freshness가 `fresh`가 아니면 웨이포인트 저장 요청을 보내지 않는다. E-Stop은 공통 셸에 독립 유지.
+- 증거: dashboard/API/gateway focused pytest 88 passed, 1 skipped. Chromium에서 역할 메뉴 3종, 각 화면 패널, Viewer 403, 패널 JS 404 중 E-Stop 요청 접수를 확인했고 콘솔 오류는 없었다. API 수락은 물리 정지 증거가 아니다.
+- 남음: 레거시 Dashboard의 주행·지도·카메라, Setup의 SLAM·도킹, Device의 설정/네트워크/ROS 도구 이관 및 Pi·실기 검증.
+- gate 변화: 없음. 이관 단위가 시작됐으나 레거시 Dashboard 기능과 실기 수용이 남아 있어 전체 웹 메뉴 마이그레이션 완료로 보지 않는다.
+
+## 2026-09-26 · uncommitted · docs(adr,api): D-247 slice 2 기록, D-190 부저 핀 BCM 4, API Ref v1.23
+- 변경: D-247 Validation/Transition에 슬라이스 2를 적었다. 결정 6 구현, IMU 버스, 램프 드라이버 네 조건(커널 빌드와 `.remove_new`, 오버레이 경로와 gpio19 먹스, `pwm_channel=3`, rpihw rev 1.1)을 담았다. 부저는 BCM 4이고 D-169는 그대로다. D-190 Status에 날짜 붙은 부저 핀 확인과 표 두 행을 더했다(Decision 불변). API Ref v1.23에 시험·확인 경로와 에러 코드 세 개를 더했다.
+- 증거: `rosy_18` 2026-09-26 사람 입회 확인(부저 BCM 4 들림·BCM 22 조용, 램프 8 LED 점등). 시험 목록은 코드 로그에 있다.
+- gate 변화: 없음(D-247 Proposed 유지)
+- 결정: D-247, D-190
+- 교훈: 없음
+
+
+## 2026-09-26 · uncommitted · docs(verification): 전수 시험 28 스위트로 확장 — 실패 전건을 레인별 판정
+- 변경: 코드 변경 없음. 전수 시험 결과를 기록만 한다(기준선 확장).
+- 증거: 2분할 실행 — run1 24 스위트 4994건(4841 passed/16 failed/137 skipped, 1602s) + run2 sensing·bringup·imu 3 스위트 2194건(2007 passed/96 failed/91 skipped + 7 errors, 344s), 합계 7188건. 실패 분류: (a) sd_writer 빈 exit code 플레이키 1건(문서화됨, 11회 중 7회째), (b) CI red와 정확히 같은 src/runtime 7건(test_core_main_shutdown·event_catalogue×2·executor_contracts×2·v1_import_boundary·swarm — 타 세션 레인), (c) host_cards×6·host_hardware×1·gz_sim×1 — 실행 창에 동료의 미커밋 dashboard/host 카드 분할이 작업 트리에 있었고 그 커밋 14645463이 시험 종료 27초 후(01:39:31 vs 01:39:58) 랜드, (d) sensing 96 failed + 7 errors — 이 호스트 최초 실행(제어 흡수 레인). 제 docs 변경의 문서 게이트는 lint 0 error + 계약 121 passed(HEAD 60520fb1 worktree 포함).
+- gate 변화: 없음(전수 시험 실패는 전부 타 레인/시점 예술 — 문서 게이트는 초록)
+- 결정: 전수 시험 기준선을 28 스위트/7188건으로 확장 기록. 한 번에 돌리면 test_battery·ament lint·test_package_contract basename 충돌로 수집이 중단되므로 2분할이 정본. sensing·host_cards 실패는 소유 레인에 보고만, 수정하지 않음
+- 교훈: 전수 시험은 동료가 미커밋 변경을 작업 트리에 두고 있는 창에 돌리면 실패 소유가 흐려진다 — 실패 파일의 git log와 커밋 타임스탬프를 시험 창과 겹쳐 봐야 판정이 선다. 상위 폴더 AGENTS의 시험 경로는 재그룹(D-147) 후 낡아 첫 실행이 즉시 죽었다(수정 완료)
+
+## 2026-09-26 · uncommitted · docs(verification): 전수 시험 붉음 전건 수리 — CI red 7·sensing 96+7·CRLF 2
+- 변경: 9 파일. `paint_localizer.from_bundle` parents[2]→[3](`sensing/map/` 정본), `test_gz_package_contract` bringup 경로 `runtime/navigation/launch`, `test_host_hardware` D-262 분할 반영(host-cards.js 병합 읽기·motionReason 콜백 체인 assert), `test_executor_contracts`·`test_v1_import_boundary`·`test_swarm` role 디렉터리 경로(`services/`·`api_web/`), `test_core_main_shutdown` 가드 매핑(`gateway/core/main.py` 제외·`sensing/tools/` 제외·`sensing/control/` span), `test_event_catalogue` PINNED_RELAYS 키 4건 `core_features/core_features/`→`services/core_features/`(해시 동일=본문 무변경), `.gitattributes` map_v2_fleet 6경로 `src/apps/control`→`src/runtime/sensing` 재지정 + worktree LF 재작성
+- 증거: 변경 7 시험 파일 181 passed/1 skipped, sensing 전체 1658 passed(잔여 2건=CRLF) 후 EOL 수리 2 passed, docs 게이트 lint 0 error + 계약 121 passed. CI red 7건 전건 초록 확인
+- gate 변화: 없음(ADR·게이트 문서 무변경). CI 붉음은 다음 push로 소멸 확인 대상
+- 회귀: worktree 재작성 후 내용 동일인데 `git status`가 ` M` 유지(stat 캐시 괴리) → `git add`로 stat 갱신 해소. phantom M은 `git diff`(내용 비교)로 검증할 것
+- 교훈: 폴더 이동은 테스트뿐 아니라 `.gitattributes` 규칙·핑 키·가드 제외 목록까지 낡게 만든다(2026-09-25 노트에 2차 파도 연장 기록). sensing 스위트는 CI에 없어 어디서도 자동으로 잡히지 않는다
+
+## 2026-09-26 · uncommitted · docs(plan): record the first device-screen migration slice
+
+- 변경: 역할별 화면 이관 계획에서 Task 4의 완료 범위와 미완료 패널을 구분해 기록했다.
+- 증거: dashboard/API 자산·매니페스트 계약, API hardware 회귀 시험, Chromium 패널 동작 시험을 실행한다.
+- gate 변화: 없음. 계획 상태 갱신은 Pi·실기 수용이 아니다.
+- 결정: 기존 `/dashboard` 카드 정리는 패널 동등성 확인 뒤로 둔다.
+- 교훈: 화면 이관은 항목별로 완료와 미완료를 나눠 기록한다.
+
+## 2026-09-26 · uncommitted · docs(architecture): D-267 Ubuntu 사이트 Fleet·영상·자동 작업 설계
+
+- 변경: D-267 Proposed, ADR Log 행, Ubuntu RTX 상시 호스트의 Fleet/영상/GPU/저장 역할과 자동·수동 공통 작업 검증 경로 실행 계획을 기록했다.
+- 증거: `test_network_topology_contracts.py` + `test_harness_contracts.py` 70 passed, `rosy_harness.py lint` 0 errors/기존 last_verified 19 warnings, 상대 링크 누락 0건. 코드·Ubuntu 배포·실물 카메라/로봇 검증은 수행되지 않았다.
+- gate 변화: 없음. D-257 Proposed, D-55 OMX 비활성, 자동 이동/집기 FIELD HOLD 유지.
+- 결정: D-267 Proposed. D-118의 영상 경계와 D-170의 PRT-004 중앙 Fleet 동시 착수 조건을 유지한다.
+- 교훈: 현장 서버와 GPU 노트북이 같은 물리 장비여도 서비스 실패·명령권·영상 경로는 분리해 설계한다.
+
+## 2026-09-26 · uncommitted · docs(review): D-268 정책 증거 경계와 Ubuntu Fleet 실행 게이트 보강
+
+- 변경: 문서 재검토 결과를 반영해 Proposed D-268과 ADR Log 항목을 추가했다. sighting 표시·대조와 자동 정책 증거를 분리하고 freshness·오탐·출처 권한·작업자 권한·불명 상태 HOLD를 자동화 선행조건으로 기록했다.
+- 계획: 콘솔의 실제 ASGI 앱에 Hub WebSocket을 결합하는 작업/통합 시험, 사용자별 역할, 출처/대상/증거 유형에 묶인 회전·폐기 가능한 비전 자격 증명, 백업 보호/보존, operator의 작업 조건과 거절 상태 확인을 추가했다. 핑키/로봇암 카메라와 자동 집기는 별도 목표로 분리했다.
+- 증거: `python tools/harness/rosy_harness.py generate`가 `docs/index.md`를 갱신했다. `python tools/harness/rosy_harness.py lint`는 0 errors/기존 `last_verified` 19 warnings, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider --disable-warnings`는 70 passed다.
+- gate 변화: 없음. D-267/D-268 Proposed, 자동 이동 미수용, D-55 집기 장치 게이트 미통과 상태를 유지한다.
+- 결정: 자동화 문서 변경은 sighting endpoint와 로봇 DDS 경계를 열지 않는다.
+
+## 2026-09-26 · uncommitted · docs(plan): local Docker 영상 처리 smoke와 GPU gate 기록
+
+- 변경: Task 2.3에 deployable vision Dockerfile의 test target과 offline CPU fixture smoke를 추가했다. Windows/local CPU 처리와 Ubuntu RTX GPU 수용을 별도 증거로 구분했다.
+- 증거: Docker Desktop client/server 29.7.2, Linux amd64. 임시 `python:3.12-slim` + `opencv-contrib-python-headless` test image에서 `src/site/games/test/test_overhead.py` 6 passed (cv2 5.0.0, numpy 2.5.3). 입력 repository는 read-only mount, container는 `--read-only`, `/tmp`만 tmpfs, 네트워크는 `--network none`으로 실행했다. 입력은 테스트가 생성한 synthetic ArUco 프레임이다.
+- 제한: 현재 개발 PC 그래픽 장치는 AMD Radeon 860M이며 CUDA/RTX GPU 수용은 시험하지 않았다. 임시 probe image는 제품 Dockerfile/Compose/Android 실시간 스트림/Fleet 연동의 증거가 아니다.
+- gate 변화: 없음. CPU LOCAL pass는 Ubuntu NVIDIA Container Toolkit·RTX 모델 측정·DEVICE/FIELD 자동 이동 수용을 대신하지 않는다.
+- 결정: 마커/호모그래피의 초기 Docker 재현 시험은 CPU로 하고 GPU는 실제 Ubuntu RTX host에서 따로 수용한다.
+
+## 2026-09-26 · uncommitted · docs(architecture): D-269 device-server contract map and integration plan
+
+- 변경: D-269 Proposed에 브라우저/Fleet, Fleet/CORE REST, CORE Agent/SiteHub, overhead phone/ingress, 내부 DDS, 로봇 카메라·팔의 실제/목표 계약과 credential 경계를 기록했다. 상세한 one-by-one 계획을 추가했다.
+- 증거: baseline `src/site/overhead/test` 45 passed, Fleet 전체 409 passed/5 skipped, Hub/app 32 passed, CORE FleetAgent 8 passed (Windows LOCAL). 이는 기존 경로 단위시험이며 동일 운영 앱 end-to-end 연결을 증명하지 않는다.
+- gate 변화: 없음. D-269 Proposed, D-257/D-268 Proposed, overhead DEVICE/FIELD PARKED, Fleet outbound Hub 운영 연결과 vision→Fleet 부재 상태를 유지한다.
+- 결정: 새 연결 첫 작업은 REST operator token과 Agent pairing token 분리, 동일 ASGI 앱에서 CORE Agent가 heartbeat/event를 전달하는 실제 localhost integration test다. Pi 제품 Docker/Compose 경로에는 적용하지 않는다.
+
+## 2026-09-26 · uncommitted · feat(fleet): separate agent pairing and mount hub into console
+
+- 변경: `robots.yaml`의 optional `fleet_pairing_token`을 REST operator token과 분리하고, REST token fallback을 제거했다. 실제 FleetAgent hello/heartbeat/event WebSocket을 `fleet console` ASGI 앱에 결합했으며 `/registry`에는 console token을 적용했다. unsupported protocol major는 pairing 전에 거절한다.
+- 증거: Fleet 전체 416 passed/5 skipped, CORE FleetAgent 8 passed, overhead 45 passed; loopback Uvicorn과 실제 FleetAgent를 사용하는 동일 앱 왕복 통합 3 passed; `git diff --check` 통과.
+- 제한: Windows loopback LOCAL 증거다. 실제 Ubuntu/TLS/LAN/폰/CORE DEVICE·FIELD, vision→Fleet, Docker site 배포는 검증하지 않았다.
+- gate 변화: 없음. D-269 Proposed 유지, automatic movement 및 vision policy HOLD.
+- harness: 계약 묶음 68 passed/2 failed. 모두 기존 `src/hmi/dashboard/logs.md` 4개 항목의 필수 `- 증거:` 누락에서 발생했다. `rosy_harness.py lint`도 동일한 4 errors와 19 `last_verified` warnings를 보고했다. append-only HMI 로그는 변경하지 않았다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25
+
+- 변경: D-260 Validation/Transition에 구현 내용·최소 권한 선택·부저 시험 충돌 해소·DEVICE 확인 목록. D-247에 부저 기본값과 시험 넘김 메모. API Ref v1.25 행(`GET /host/status-summary`)과 변경 이력
+- 증거: 2026-09-26 Windows, `feat/d260-status-signals`: 호스트 묶음 2051 passed, 32 skipped, 2 failed — 둘 다 main의 `src/hmi/dashboard/logs.md` 두 항목(`- 근거:`)이 원인이고 깨끗한 main worktree에서도 같게 실패한다. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py` 62 passed
+- gate 변화: 없음
+- 결정: D-260 Proposed
+- 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity
+
+- 변경: receiver가 source별 고유 Bearer token map만 받고, WebSocket Authorization과 `hello.source`를 연결 시 대조한다. CLI token은 선택한 source에만 발급한다. 잘못된/미등록 source는 shared protocol close `4401`로 거부하며 Android는 재시도 중단 `Unauthorized`로 표시한다.
+- 증거: Python overhead 전체 49 passed, `git diff --check` 통과; feature worktree Android `:app:testDebugUnitTest` BUILD SUCCESSFUL. TDD에서 cross-source token use와 empty/duplicate token 설정 테스트가 구현 전에 실패하고 수정 후 통과했다. unknown source 거부도 검증했다.
+- 제한: LOCAL 시험뿐이다. 운영 token 발급·회전·폐기 UX, 실제 phone/emulator LAN 연결, TLS 및 현장 freshness는 확인하지 않았다.
+- gate 변화: 없음. D-269 Proposed, camera DEVICE/FIELD와 vision→Fleet은 미수용이다.
+- 결정: QR/deep-link는 카메라 앱의 out-of-band provisioning으로만 다루고 로그/공유 화면은 secret-safe하게 유지해야 한다.
+
+## 2026-09-26 · uncommitted · feat(fleet): add source-scoped site sighting contract
+
+- 변경: shared `SiteSightingPayload`, API Ref §10.6, configured-only `POST /api/fleet/sightings`와 operator-authenticated latest readback을 추가했다. 허용 source/robot/map/calibration/corners를 config로 제한하고 server derives `source_id`; stale/future/out-of-order 및 mismatched map/calibration은 fail-closed다. image/policy/client source identity는 거부한다.
+- 증거: Fleet 423 passed/5 skipped, gateway 1325 passed/16 skipped, `test_no_video_relay.py` 2 passed, 새 schema 14 tests 및 sighting HTTP 7 tests 통과. 새/수정 Python 파일은 flake8 (기존 console.py logger-before-import E402는 제외)과 diff check 통과.
+- 제한: API는 programmatic app config로만 열리고 in-memory latest-only다. CLI provisioning, persistent/audit storage, JPEG→vision→Fleet publisher, browser display, Ubuntu/TLS/device는 미구현이다.
+- gate 변화: 없음. D-257/D-268 Proposed, automatic movement HOLD.
+- 결정: sighting은 표시·대조 데이터에만 사용한다. 자동 작업 경로와 D-268 policy evidence는 별도 승인 계약이다.
+## 2026-09-26 · uncommitted · docs(adr): D-271 site Fleet task scheduling and broker choice
+
+- 변경: D-271에서 Fleet의 영속 작업 원장·정책 우선순위·장비 자원 예약을 결정하고 RabbitMQ를 독립 worker 분리 시의 사이트 내부 전달 후보로 고정했다. 설계 문서와 기존 D-59/D-269 연결 계획을 정렬했다.
+- 증거: 기존 SQLite task/history, 메모리 교통 대기열, 현장 Compose 경로와 RabbitMQ/Kafka/NATS 공식 문서를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건.
+- 제한: 스케줄러·RabbitMQ·CORE 최종 결과 추적·Ubuntu 장비 배포는 이 문서 변경에 포함되지 않는다. D-268 자동 작업은 HOLD다.
+- gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · docs(plan): D-271 task scheduler implementation sequence
+
+- 변경: D-271 설계를 SQLite 작업 큐·교통 대기열 정합·취소/정지·관제·Docker LOCAL·조건부 RabbitMQ·Ubuntu/DEVICE 수용으로 나눈 실행 계획을 추가했다.
+- 증거: 현재 FleetTaskService/Store, FleetConsole._queued, API Ref §10.8, Compose와 기존 단위·브라우저 시험 경로를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건, `git diff --check` 통과.
+- 제한: 계획만 추가했으며 스케줄러나 RabbitMQ를 구현·배포하지 않았다. 자동 정책 제출은 D-268 전까지 HOLD다.
+- gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · feat(fleet): durable site task queue implementation
+- 변경: Persisted and scheduled Fleet tasks; carried task identity across traffic waits; added expiry and pre-dispatch cancellation; exposed queued status and task cancellation in the console; kept policy tasks on HOLD.
+- 증거: `python -m pytest src/site/fleet/test/ -q` — 484 passed, 5 skipped; browser harness — 13 passed; Compose config validation passed; `rosy-site-fleet:local` built and API task readback survived container restart with the same named volume.
+- gate 변화: LOCAL task queue evidence advanced. Full Compose, Ubuntu host, TLS/secrets, real CORE/robot, GPU, DEVICE, FIELD and automatic policy acceptance remain open. RabbitMQ remains deferred because no measured split-worker or pressure requirement was established.
+
+## 2026-09-26 · uncommitted · docs(verification): 낡은 배치 잔재 3건 수리 — deployment·domain 단계 붉음 해소
+- 변경: 낡은 배치 잔재 3건 수리. ① `test/test_sd_api_token.py` — `CORE_SRC = src/core`(중첩 그룹 시대)를 패키지별 부모 맵 `PKG_PARENT`로 교체(D-231/D-241: core→`runtime/gateway`, core_api_web→`runtime/api_web`, core_common→`contracts/foundation`, core_events→`runtime/events`, core_features→`runtime/services`), 사용처 3곳(`sys.path` 2·subprocess `PYTHONPATH` 1) 갱신 ② `core_api_web/api/app.py` — 계약 문서가 v1.31(9541086c)로 올라갔는데 FastAPI description 배너가 v1.30 — D-18의 절반 갱신을 완결 ③ `gz_sim/scripts/coverage_harness.py` — `tour_plan`의 bare `control` import에 worktree 폴백 부재(CI install space가 은폐) → 저장소의 `live_view_model._control_sensing` 패턴 미러링
+- 증거: ① 해당 파일 29 passed/6 skipped(수정 전 2 failed), posix subprocess 건은 Windows 스킵 → push 후 CI로 확인 ② protocol 계약 3 passed ③ gz 스위트 263 passed/1 skipped(수정 전 6 failed+6 errors), 세 파일 flake8 0. fleet 461·hardware safety 454도 초록(CI skip 구간 로컬 보강). 직전 push `2a22ad63`의 CI: domain suites 7건 초록(3회 연속 레드 해소), deployment contracts 단계에서 ①만 붉음(2178 passed 중); 동료 최신 런은 domain에서 ②로 붉음. 계약 게이트 잔여 1 failed = `test_module_structure::test_over_budget_code_has_a_recorded_verdict`(host.py 813>600, verdict 없음) — D-260 커밋 557191a6/ca5fb4fd(03:02–03:45)이 넘긴 타 레인이라 판정만 기록. 성장 중인 파일의 판정 기록은 다음 커밋에 stale-red를 만들므로 기록 주체는 해당 레인
+- gate 변화: 없음(ADR·게이트 문서 무변경)
+- 회귀: 전체 `test/` 로컬 실행은 15분 탄 아웃(네트워크/장비 대기 추정) — 이 단계의 정본은 CI. 로컬은 변경 파일 단독 검증으로 대체
+- 교훈: 앞 단계 붉음이 뒤 단계를 skip하면 가려진 레인이 하나씩 드러난다. 첫 붉음을 고칠 때 `grep src/core`처럼 낡은 경로를 전 구간 선판정할 것 — "skip은 통과가 아니다"
+## 2026-09-26 · uncommitted · docs(verification): known_failures 갱신 + BOM 제거 — deployment 잔여 4건 장부화
+- 변경: ① `test/known_failures.txt` — 내가 고친 7개 nodeid 삭제(파일 규칙: 고친 커밋에서 지워라. 목록 검증 9fb4b7a1(01:22)이 내 수정 2a22ad63(02:31)보다 앞섰고 7건 전부 현재 7 passed) + 현 main 선재 4건 기록(헤더 검증 SHA 769e2f28) ② `src/runtime/api_web/test/conftest.py` — UTF-8 BOM 3바이트 제거(a4970791 02:06 유입, test_source_encoding이 CI·로컬 동시 붉음)
+- 증거: test_known_failures+test_source_encoding 6 passed. deployment 잔여 4건 전건 동료 소유 판정 완료: (a) boot 가드 — ca5fb4fd(D-260 M1)가 `run/rosy/status-inputs.json`을 읽는데 Review-H1 가드는 `run/rosy/` 문자열 자체를 금지(로컬 통과는 Windows symlink privilege skip, Linux CI에서만 발동) (b) secrets — 문서 커밋SHA 2·operations.js psk 5(D-262), 동료가 test_secret_scan.py로 scanner 대응 중 (c) RegistryError — 12ca0469(12:20)의 `_asset` resolve 가드 vs CI install share 심볼릭 링크 (d) 예산 — host.py 813(D-260). 4건 모두 진행 중 시리즈라 판정·장부화까지만
+- gate 변화: 없음
+- 회귀: 없음(동료 WIP 5파일 미스테이징 유지)
+- 교훈: 같은 main에서도 OS가 판정을 가른다 — Windows의 symlink privilege skip이 Linux-only 보안 가드를 숨긴다("skip=통과 아님"의 Windows 판). 그리고 앞단계 붉음이 뒤단계를 skip하면 잔여 실패가 무더기로 숨는다(deployment 2178→2373 passed, 실패 1→5)
+
+## 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신
+
+- 변경: ① `test/known_failures.txt` 10행 — RegistryError 원인을 `12ca0469`(패널 import 경로 수정, ui_registry.py 미변경)로 잘못 지목한 내 기록을 `a4970791`(ui_registry.py의 유일한 커밋, resolve() 가드 도입)으로 정정하고, 가드가 걸리는 css 항목 출처 `ff603832`(8분 후) 병기 ② 헤더 검증 SHA `769e2f28` → `986a81ca`(CI 런 213이 4건 전부 재확인) ③ 8행 boot 가드에 Review-H1 guard 도입 커밋 `9f256c73` 병기
+- 증거: CI 런 213(head `986a81ca`) deployment = 4 failed / 2374 passed, 실패 nodeid 4건이 런 212와 장부 8–11행과 1:1 일치. `git log -S allowed_root` = `a4970791` 단일 커밋, `12ca0469..HEAD`에 ui_registry.py/panels.yaml/panels/ 후속 커밋 없음. 로컬 `test_known_failures`+`test_source_encoding` 6 passed, `src/runtime/api_web/test/test_ui_registry.py` 33 passed/1 skipped
+- gate 변화: 없음(ADR·게이트 문서 무변경)
+- 회귀: 없음(동료 WIP 2파일 `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지, HEAD `986a81ca`로 동기)
+- 교훈: 붉은 가드의 귀속은 "관련 경로를 만진 최근 커밋"이 아니라 `git log -S <가드 조건>`으로 "가드 자체를 넣은 커밋"을 찾을 것 — 같은 시리즈라 해도 귀속은 커밋 단위로 검증해야 한다(오늘 내 장부가 12ca0469를 원인으로 잘못 지목함). 남이 소유한 가드는 소유자가 시리즈를 마칠 때까지 기록만 — a4970791·ff603832 모두 pl3의 role-panel 시리즈로 오늘도 활성이다
+
+## 2026-09-26 · uncommitted · feat(fleet): expose server queue position
+- 변경: Added a server-computed position for unleased queued tasks in priority/FIFO order and showed it with task ID, blockers, wait reason, and queued-only cancel in the console.
+- 증거: Fleet suite 485 passed/5 skipped; Chromium browser suite 13 passed; Docker image `sha256:0c207e85fa8269cf753a505be14eaf2041babb09999bfd0de29929f3e9625ffb` returned `queue_position: 1`, which remained in authenticated readback after container restart.
+- gate 변화: LOCAL UI and container restart evidence now includes the displayed queue order. Ubuntu, full Compose, real CORE/robot, GPU, DEVICE, FIELD, and policy dispatch remain open.
+
+## 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
+
+- 변경: `docs/plans/2026-09-26-role-gating-model-joint.md` 하단에 규정대로 날짜·세션 답 기입. 재촉 3항에 대한 답변: (1) 이견 없음 — 조작 표면(운용 콘솔·Fleet 관제·게임)은 B, 절차 표면(setup·device)은 A로 확정하고 7일 자동 승격 조건을 사전 인정 (2) 혼재 허용, 경계는 표면 선언(panels.yaml `min_role` + 신규 표면의 모델 선언)에 기재 (3) 전부 A/전부 B 기각 — 각각 철거 범위를 답에 쓰지 않았고 Law 0·절차 격리와 충돌. ADR Log의 D-270 Status는 발의한 UI 세션 몫으로 유지(승격은 확인 후)
+- 증거: 문서 하단(47행)이 "답은 이 문서 하단에 날짜와 함께" 공란 상태였고, 기입된 답변이 26행 결정 요청 3개·38행 재촉 3개와 1:1로 대응한다. `git diff --check`와 harness lint(0 error)로 문서 형식 확인 — 계약 시험은 docs 로그·index 규칙만 보므로 답 본문은 게이트에 영향 없음
+- gate 변화: 없음(D-270 Proposed 유지, Accepted 승격은 발의 세션)
+- 회귀: 없음(코드 무변경. 동료 WIP `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지)
+- 교훈: 재촉이 붙은 결정 요청은 "7일 내 무반례 자동 승격"이라는 시한이 걸린 계약이다 — 물음 위치(문서 하단)·서명(날짜+세션)이 정해져 있으니 그 자리를 그대로 쓰고, ADR 표 Status는 발의 세션 몫이라 넘겨 쓰지 않는다
+
+## 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
+
+- 변경: `src/runtime/api_web/core_api_web/api/app.py` 76행 description `ROSY-API-REF-001 (v1.31)` → `(v1.33)`. `527d4c87`(fleet queued-task, D-271)가 API Ref 헤더를 v1.33으로 올렸는데 배너는 손대지 않아 `test_protocol_version_alignment::test_app_description_names_the_live_contract_version`이 CI 첫 pytest 단계를 붉힘(core domain 1 failed/1729 passed, deployment 단계는 skip이라 기존 4건은 미평가) — 769e2f28의 v1.30→v1.31과 같은 D-18 절반 갱신 잔재이며 타 레인 active WIP이 아닌 기계적 드리프트
+- 증거: 로컬 `python -X utf8 -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q -rfE` 초록 확인(계약 헤더 v1.33 ↔ 배너 v1.33 문자열 일치). `git diff --check` 통과
+- gate 변화: 없음(ADR·계약 문서 무변경 — 버전 표기는 문서가 이미 v1.33)
+- 회귀: 없음(배너 문자열 외 무변경. 동료 WIP 2파일 미스테이징 유지)
+- 교훈: API Ref 버전을 올린 커밋은 같은 변경에서 배너 문자열도 같이 올린다 — D-18의 "문서와 코드를 한 변경"에는 FastAPI description이 포함된다. 안 그러면 첫 pytest 단계가 붉어 뒤 단계 전부를 skip시킨다
+
+## 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
+
+- 변경: 로봇 CORE 화면, 사이트 Fleet 콘솔, 관제 브라우저, 로봇 preview, 천장 폰 입력, Control 진단 화면의 코드·실행·명령 소유자를 D-275와 실행 계획에 기록했다. Vision은 천장 카메라 전용 이름이 아니라 향후 edge/사이트 GPU/별도 compute의 관측·추론 책임으로 두고, 현재 Fleet과 같은 호스트에서 별도 서비스로 운영하는 경계를 명시했다.
+- 근거: 현행 `core_api_web`·Fleet FastAPI 라우트, 사이트 Compose, `overhead` 구현과 D-118/D-152/D-197/D-243/D-267/D-268/D-269를 대조했다. Fleet은 파생 결과와 작업 정책을 처리할 수 있으나 원본 영상·GPU 추론·학습을 현행 Fleet 프로세스에 넣지 않는다.
+- 검증: `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 71 passed/21 기존 검증시점 warning. harness lint 0 error/21 warning, `git diff --check` 통과. `docs/index.md`를 generate로 갱신해 D-275와 실행 계획이 색인에 표시된다.
+- gate 변화: 없음. ADR은 실행 책임 결정이며 native ARM64 산출물, Ubuntu 사이트, 실물 폰·로봇, 자동 작업 수용은 별도다.
+- 회귀: 문서 변경만 수행했고 제품 코드와 다른 작업 트리의 WIP는 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
+
+- 변경: D-276에 따라 viewer/operator/policy-admin 역할을 분리하고, 개인별 SHA-256 bearer digest를 로드한다. Fleet API 변경 요청은 영속 SQLite에 INTENT를 먼저 기록하며, 기록 실패 시 CORE 명령을 보내지 않는다. RESULT에는 principal·role·경로·상태를 기록하고 bearer와 본문은 저장하지 않는다.
+- 검증: Fleet·사이트 배포 집중 테스트 527 passed/5 skipped, Compose 설정 검사 통과. Linux/amd64 Fleet/Vision/Proxy 이미지를 빌드했고, 로컬 HTTPS synthetic RBAC 요청과 SQLite 감사 readback을 검증했다. 세부 digest와 응답 코드는 `docs/validation/2026-09-26-site-rbac-local.md`에 기록했다.
+- gate 변화: SOURCE/LOCAL만 통과. Ubuntu 호스트 배포, 실제 사용자 교체·폐기, CORE/로봇 readback, 브라우저 역할 UI와 DEVICE/FIELD 검증은 열려 있다. 자동 이동·집기 권한은 계속 HOLD다.
+- 회귀: 요청된 D-276 파일만 통합한다. 기존 Signals·D-273 및 dashboard·secret-scan WIP는 별도 변경으로 유지.
+## 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
+
+- 변경: `docs/plans/2026-09-22-signals-button-contract-v2-proposal.md`의 유일한 질문(§4 F 등급)에 답 기입. Status행을 "결정 완료 (2026-09-26): F1 + F2 채택"으로 갱신하고 §8 결정을 추가 — ① F1(렌즈 방향 RGB 색 센서로 실측)+F2(건전지 라인 직렬 MOSFET 강제 소등) 채택(권장안 그대로, 닫힌 고리: 실측→불일치 시 계산→불확실 시 소등) ② F-EXT는 `signal/observer/` 설계로 이미 착지한 비침습 교차 검증이라 별도 유지 ③ F0 기각(건전지 교체·손버튼 후 영구 불일치 = "추정이 아니라 측정"과 충돌) ④ v1 페일세이프 재정의 전제(관제 침묵→적색 유지, 상태 불확실→F2 소등) 명시 ⑤ 현 v1 구현은 2단계(본 문서 확정판+README v2 개정+계약 시험)가 끝날 때까지 손대지 않음, 다음 순서는 §7 그대로. `docs/plans/AGENTS.md` 해당 행의 "결정 대기" 문구도 갱신
+- 증거: §4 표가 F0·F1·F-EXT·F2 4옵션 구조라 답이 전부를 다룬다(채택·별도 유지·기각). 문서는 계획 문서라 ADR Status·계약 코드·펌웨어를 건드리지 않았고, `git diff`는 해당 2문서 + logs 3파일뿐. harness lint 0 error, 문서 계약 시험(test_harness_contracts·test_network_topology_contracts) 초록
+- gate 변화: 없음(ADR 신설·Status 변경 없음 — 계획 문서의 결정 기입이며, ROSY-SIGNAL-001 v2 계약 개정은 §7 2단계의 별도 변경)
+- 회귀: 없음(코드·펌웨어 무변경. 동료 WIP 파일 미스테이징 유지)
+- 교훈: "이 문서의 유일한 질문"으로 표시된 결정은 표의 옵션 수만큼 답이 필요하다 — 채택만 적고 기각·별도 항목을 비워 두면 나중에 같은 질문이 다시 올라온다. 그리고 승인은 코드 착수 신호이므로 "v1은 언제까지 건드려도 되는가"를 같은 답에 함께 적어야 한다

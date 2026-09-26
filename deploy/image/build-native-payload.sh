@@ -76,9 +76,11 @@ NATIVE_RUNTIME_SOURCE="$WORKSPACE/deploy/robot/native"
 FIRST_BOOT_SOURCE="$WORKSPACE/deploy/image/first-boot"
 SD_TOOLS_SOURCE="$WORKSPACE/deploy/sd"
 ROBOT_CONFIG_SOURCE="$WORKSPACE/deploy/robot/config"
-CYCLONEDDS_SOURCE="$WORKSPACE/src/hardware/bringup/config/cyclonedds_localhost.xml"
+CYCLONEDDS_SOURCE="$WORKSPACE/src/devices/pinky_pro/bringup/config/cyclonedds_localhost.xml"
 UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-motor.rules"
 DISPLAY_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-display.rules"
+LAMP_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-lamp.rules"
+LAMP_MODPROBE_SOURCE="$WORKSPACE/deploy/robot/modprobe/rosy-ws281x.conf"
 RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.pem"
 [[ -d "$NATIVE_RUNTIME_SOURCE" ]] \
     || fail "native runtime support is missing: deploy/robot/native"
@@ -90,6 +92,10 @@ RELEASE_PUBLIC_KEY="$WORKSPACE/deploy/release/public-keys/rosy-release-2026-01.p
     || fail "motor udev rule is missing: deploy/robot/udev/99-rosy-motor.rules"
 [[ -f "$DISPLAY_UDEV_RULE_SOURCE" ]] \
     || fail "display udev rule is missing: deploy/robot/udev/99-rosy-display.rules"
+[[ -f "$LAMP_UDEV_RULE_SOURCE" ]] \
+    || fail "lamp udev rule is missing: deploy/robot/udev/99-rosy-lamp.rules"
+[[ -f "$LAMP_MODPROBE_SOURCE" ]] \
+    || fail "lamp driver options are missing: deploy/robot/modprobe/rosy-ws281x.conf"
 [[ ! -e "$RELEASE_ROOT/deploy/robot/native" ]] \
     || fail "release root already contains native runtime support"
 [[ -f "$RELEASE_PUBLIC_KEY" ]] \
@@ -110,8 +116,24 @@ rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
     colcon list --base-paths src "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"
+# D-225: build_payload_release.py pack sets every member's mtime to
+# 2000-01-01, so a timestamp-validated .pyc from colcon no longer matches its
+# source on the robot and Python recompiles (or, read-only, re-reads) it on
+# every start. Rewrite them as checked-hash pycs, valid by source hash alone.
+# Explicit rather than SOURCE_DATE_EPOCH: it covers every compiler path.
+shopt -s nullglob
+PYTHON_DIRS=("$INSTALL_ROOT"/lib/python3*/site-packages "$INSTALL_ROOT"/local/lib/python3*/dist-packages)
+shopt -u nullglob
+if [[ ${#PYTHON_DIRS[@]} -gt 0 ]]; then
+    python3 -m compileall -q -f --invalidation-mode checked-hash "${PYTHON_DIRS[@]}"
+fi
 dpkg-query -W -f='${Package}\t${Version}\n' | LC_ALL=C sort > "$DEB_INVENTORY.tmp"
 mv -f -- "$DEB_INVENTORY.tmp" "$DEB_INVENTORY"
+# D-225: the ROS debs this payload was built against (the runner's current
+# apt state, not a lock). A payload-only update keeps the robot's image debs,
+# so the operator diffs this against the image's deb-packages.txt.
+awk -F'\t' '$1 ~ /^ros-jazzy-/ { print $1 "=" $2 }' "$DEB_INVENTORY" > "$RELEASE_ROOT/ros-packages.txt.tmp"
+mv -f -- "$RELEASE_ROOT/ros-packages.txt.tmp" "$RELEASE_ROOT/ros-packages.txt"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE_ROOT/source-revision.txt"
 # D-189: the CORE Python runtime this release was built and tested against.
 # native_release.py refuses to activate it on an image with a different one.
@@ -137,7 +159,13 @@ cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
 # D-190: the boot display's LCD and GPIO chip groups.
 cp "$DISPLAY_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
+# D-247: the WS2812 lamp driver node and its GPIO19 channel (pwm_channel=3).
+cp "$LAMP_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
+mkdir -p "$OVERLAY/etc/modprobe.d"
+cp "$LAMP_MODPROBE_SOURCE" "$OVERLAY/etc/modprobe.d/rosy-ws281x.conf"
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot.service" "$OVERLAY/etc/systemd/system/"
+cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.service" "$OVERLAY/etc/systemd/system/"
+cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
@@ -157,6 +185,12 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"
 # D-193: the root login-code issuer (no network), enabled by the image.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"
+# D-247: the read-only root board device probe and CORE's refresh request watch.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.path" "$OVERLAY/etc/systemd/system/"
+# D-247 6: the buzzer/lamp test an administrator starts through CORE.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.path" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"

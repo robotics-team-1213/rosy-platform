@@ -14,7 +14,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "coverage_harness.py"
 LAUNCH = ROOT / "launch" / "map_v2_fleet_lane.launch.py"
-GRAPH_PATH = ROOT.parents[1] / "apps" / "control" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+GRAPH_PATH = ROOT.parents[1] / "runtime" / "sensing" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 CMAKE = ROOT / "CMakeLists.txt"
 
 

@@ -12,7 +12,7 @@ ROS-free pure logic first (T1–T2), node wiring next (T3), CORE 수용 last
 - `SceneContextStore`: 닫힌 집합(`generic`, `lane_follow`, `stop_line`,
   `crosswalk`), 중복 id/revision 거부, `generic` 필수, 알 수 없는 id는
   KeyError.
-- Test: `src/apps/control/test/test_scene_context.py`
+- Test: `src/core/control/test/test_scene_context.py`
   - 경계 검증 (bright_threshold 1–254, fraction (0,1], 픽셀/바 수, bool 가드)
   - store 계약 4케이스 + `perception_config()` 등가성
 
@@ -41,7 +41,7 @@ ROS-free pure logic first (T1–T2), node wiring next (T3), CORE 수용 last
 
 ## T4 — 모듈 하네스 갱신
 
-- `src/apps/control/logs.md` append, `progress.md` LOCAL evidence 갱신,
+- `src/core/control/logs.md` append, `progress.md` LOCAL evidence 갱신,
   `python tools/harness/rosy_harness.py generate`.
 
 ## T5 — CORE 수용 (하위 슬라이스로 분리 가능)

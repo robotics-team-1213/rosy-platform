@@ -1,0 +1,146 @@
+﻿# D-204 — CORE base screens; each panel declares one job, role, and asset.
+version: 1
+surfaces:
+  console: {title: 운용, min_role: viewer, grammar: spatial, slots: [banner, sense, observe, act]}
+  setup: {title: 작업 준비, min_role: operator, grammar: procedure, slots: [main]}
+  device: {title: 설치·정비, min_role: administrator, grammar: procedure, slots: [main]}
+panels:
+  - id: console.overview
+    title: 로봇 상태
+    surface: console
+    slot: sense
+    order: 10
+    module: panels/console/overview.js
+    css: [panels/surface-panels.css]
+  - id: console.map
+    title: 지도 및 위치
+    surface: console
+    slot: observe
+    order: 20
+    module: panels/console/map.js
+    css: [panels/surface-panels.css]
+  - id: console.mode
+    title: 운전 모드
+    surface: console
+    slot: act
+    order: 20
+    min_role: operator
+    module: panels/console/mode.js
+    css: [panels/surface-panels.css]
+  - id: console.teleop
+    title: 수동 운전
+    surface: console
+    slot: act
+    order: 30
+    min_role: operator
+    module: panels/console/teleop.js
+    css: [panels/surface-panels.css]
+  - id: console.camera
+    title: 전방 카메라
+    surface: console
+    slot: observe
+    order: 40
+    module: panels/console/camera.js
+    css: [panels/surface-panels.css]
+  - id: console.docking
+    title: 도킹 운용
+    surface: console
+    slot: act
+    order: 40
+    min_role: operator
+    module: panels/console/docking.js
+    css: [panels/surface-panels.css]
+  - id: console.line_follow
+    title: 차선 추종
+    surface: console
+    slot: act
+    order: 50
+    min_role: operator
+    module: panels/console/line-follow.js
+    css: [panels/surface-panels.css]
+  - id: setup.waypoints
+    title: 웨이포인트 준비
+    surface: setup
+    slot: main
+    order: 10
+    min_role: operator
+    module: panels/setup/waypoints.js
+    css: [panels/surface-panels.css]
+  - id: setup.localization
+    title: 위치 설정 및 맵 준비
+    surface: setup
+    slot: main
+    order: 20
+    min_role: operator
+    module: panels/setup/localization.js
+    css: [panels/surface-panels.css]
+  - id: setup.docking
+    title: 도킹 준비 및 상태
+    surface: setup
+    slot: main
+    order: 30
+    min_role: operator
+    module: panels/setup/docking.js
+    css: [panels/surface-panels.css]
+  - id: setup.dock_admin
+    title: 도크 종류 및 등록 관리
+    surface: setup
+    slot: main
+    order: 40
+    min_role: administrator
+    module: panels/setup/dock-admin.js
+    css: [panels/surface-panels.css]
+  - id: setup.traffic_policy
+    title: 교통 정책 준비
+    surface: setup
+    slot: main
+    order: 50
+    min_role: operator
+    module: panels/setup/traffic-policy.js
+    css: [panels/surface-panels.css]
+  - id: system.events
+    title: 최근 이벤트
+    surface: device
+    slot: main
+    order: 90
+    module: panels/system/events.js
+    css: [panels/system/events.css]
+  - id: host.hardware
+    title: 보드 장치 상태
+    surface: device
+    slot: main
+    order: 80
+    min_role: administrator
+    module: panels/host/hardware.js
+    css: [panels/host/hardware.css]
+  - id: host.system
+    title: 시스템 및 기능 상태
+    surface: device
+    slot: main
+    order: 20
+    min_role: administrator
+    module: panels/host/system.js
+    css: [panels/surface-panels.css]
+  - id: host.operations
+    title: 네트워크 및 장치 운영 상태
+    surface: device
+    slot: main
+    order: 30
+    min_role: administrator
+    module: panels/host/operations.js
+    css: [panels/surface-panels.css]
+  - id: system.diagnostics
+    title: 진단 상태
+    surface: device
+    slot: main
+    order: 100
+    module: panels/system/diagnostics.js
+    css: [panels/surface-panels.css]
+  - id: system.security
+    title: 보안 및 안전 정책
+    surface: device
+    slot: main
+    order: 40
+    min_role: administrator
+    module: panels/system/security.js
+    css: [panels/surface-panels.css]

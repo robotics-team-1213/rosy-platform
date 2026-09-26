@@ -42,7 +42,7 @@ hardware_packages:
   - lamp_control
   - emotion
   - imu_bno055
-# D-190 / D-181: host devices of the boot display, outside CORE and every
+# D-190 / D-181 / D-260: host devices of the boot display, outside CORE and every
 # runtime mode. rosy-boot-display.service is their only user (its DeviceAllow
 # is exactly this set; test_device_surface_contract.py). They are not CORE
 # capabilities: the API cannot drive them, so no capabilities.*.yaml
@@ -57,11 +57,20 @@ boot_display:
     bcm_lines: {rst: 27, dc: 25, backlight: 18}
   buzzer:
     gpiochip: /dev/gpiochip4
-    bcm_line: 22
-    # Sibling boards' pin; unconfirmed on the Pro until heard on the device.
-    enabled_by_default: false
+    bcm_line: 4
+    # Heard by a person on rosy_18 on 2026-09-26 (D-190 table, D-247); BCM 22,
+    # the sibling boards' pin, is silent on the Pro. On by default since D-260 decision 2.
+    enabled_by_default: true
     # ROSY_BUZZER_PIN accepts only these (rosy-boot-display.py BUZZER_LINES).
     allowed_bcm_lines: [4, 5, 6, 16, 17, 20, 21, 22, 23, 24, 26]
+  # D-260 decision 3: the WS2812 lamp shows the robot state (boot display only;
+  # lamp_control's colour service stays bench-only, D-169).
+  lamp:
+    node: /dev/ws281x_pwm
+    pwm_channel: 3
+    bcm_line: 19
+    helper: lib/lamp_control/lamp_pattern
+    enabled_by_default: true
   battery_adc:
     bus: /dev/i2c-1
     address: 0x08
@@ -87,6 +96,6 @@ boot_display:
     14: uart0 TX (LiDAR)
     15: uart0 RX (LiDAR)
     18: LCD backlight
-    19: WS2812 lamp (bench)
+    19: WS2812 lamp (boot display state, D-260)
     25: LCD DC
     27: LCD RST

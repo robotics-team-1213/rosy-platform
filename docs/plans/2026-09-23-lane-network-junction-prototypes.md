@@ -23,8 +23,8 @@
 - 작업 디렉터리: `F:\Dev\Control\Robot\ROS\Rosy\.worktrees\lane-network-junctions` (브랜치 `feat/lane-network-junctions`, HEAD `cce234a`). `git stash`는 쓰지 않는다.
 - Windows 호스트 시험:
   ```powershell
-  $env:PYTHONPATH = "src/apps/control;src/core/core;src"
-  python -m pytest src/apps/control/test/ src/sim/gz_sim/test/ -q
+  $env:PYTHONPATH = "src/core/control;src/core/core;src"
+  python -m pytest src/core/control/test/ src/sim/gz_sim/test/ -q
   ```
   기준선은 1,437 passed, 29 skipped다. 매 작업 뒤 줄어들면 안 된다.
 - 커밋 메시지 끝에 넣는다: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
@@ -35,18 +35,18 @@
 
 | 파일 | 책임 |
 |---|---|
-| Create `src/apps/control/test/lane_scenarios.py` | 오프라인 12 시나리오 폐루프 실행기(시험 전용 도우미) |
-| Create `src/apps/control/test/test_lane_scenarios.py` | 실행기 자체 시험 + 가운데선 모드 기준선 재현 |
-| Create `src/apps/control/control/sensing/lane_route.py` | ROS-free 경로 모델: 방향 구간 순서, 진행도, 다음 노드까지 거리, 출구 접선 |
-| Create `src/apps/control/test/test_lane_route.py` | 경로 모델 시험 |
-| Create `src/apps/control/control/sensing/route_camera.py` | 시제품 A: 경로 기반 교차 기동 + `LaneBoundaryTracker` |
-| Create `src/apps/control/test/test_route_camera.py` | A 시험(12 시나리오 오프라인 포함) |
-| Create `src/apps/control/control/sensing/paint_localizer.py` | 시제품 B: 도색 지도 입자 필터 |
-| Create `src/apps/control/test/test_paint_localizer.py` | B 위치 추정 시험 |
-| Create `src/apps/control/control/sensing/route_map.py` | 시제품 B: 추정 자세 + 계획 경로 pure pursuit |
-| Create `src/apps/control/test/test_route_map.py` | B 시험(12 시나리오 오프라인 포함) |
-| Modify `src/apps/control/control/line_observer_node.py` | 모드 `route_a`, `route_b`, 파라미터 `lane_graph_path`, `route`, `route_start` |
-| Modify `src/apps/control/config/line_follow.yaml` | 새 파라미터 기본값(빈 값, 기존 동작 유지) |
+| Create `src/core/control/test/lane_scenarios.py` | 오프라인 12 시나리오 폐루프 실행기(시험 전용 도우미) |
+| Create `src/core/control/test/test_lane_scenarios.py` | 실행기 자체 시험 + 가운데선 모드 기준선 재현 |
+| Create `src/core/control/control/sensing/lane_route.py` | ROS-free 경로 모델: 방향 구간 순서, 진행도, 다음 노드까지 거리, 출구 접선 |
+| Create `src/core/control/test/test_lane_route.py` | 경로 모델 시험 |
+| Create `src/core/control/control/sensing/route_camera.py` | 시제품 A: 경로 기반 교차 기동 + `LaneBoundaryTracker` |
+| Create `src/core/control/test/test_route_camera.py` | A 시험(12 시나리오 오프라인 포함) |
+| Create `src/core/control/control/sensing/paint_localizer.py` | 시제품 B: 도색 지도 입자 필터 |
+| Create `src/core/control/test/test_paint_localizer.py` | B 위치 추정 시험 |
+| Create `src/core/control/control/sensing/route_map.py` | 시제품 B: 추정 자세 + 계획 경로 pure pursuit |
+| Create `src/core/control/test/test_route_map.py` | B 시험(12 시나리오 오프라인 포함) |
+| Modify `src/core/control/control/line_observer_node.py` | 모드 `route_a`, `route_b`, 파라미터 `lane_graph_path`, `route`, `route_start` |
+| Modify `src/core/control/config/line_follow.yaml` | 새 파라미터 기본값(빈 값, 기존 동작 유지) |
 | Modify `src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py` | `route`, `route_start` launch 인자 |
 | Modify `src/sim/gz_sim/scripts/junction_harness.py` | `--mode route_a|route_b`일 때 시나리오의 경로와 시작 자세를 노드에 전달 |
 | Create `docs/validation/lane-junction-spike/<날짜>/comparison.md` | Gazebo 12 시나리오 × A/B 결과와 결정 |
@@ -56,8 +56,8 @@
 ### Task 1: 오프라인 시나리오 실행기
 
 **Files:**
-- Create: `src/apps/control/test/lane_scenarios.py`
-- Test: `src/apps/control/test/test_lane_scenarios.py`
+- Create: `src/core/control/test/lane_scenarios.py`
+- Test: `src/core/control/test/test_lane_scenarios.py`
 
 Gazebo 한 바퀴는 20분이다. 같은 12개를 합성 카메라로 돌리면 초 단위다. Plan 1의 `stl_world`(STL 도색 래스터 역투영)와 `junction_score`(방향 인식 판정)를 잇는다.
 
@@ -108,7 +108,7 @@ def test_centre_mode_reproduces_the_gazebo_baseline_shape():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_scenarios.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_scenarios.py -q`
 Expected: FAIL (`ModuleNotFoundError: lane_scenarios`)
 
 - [ ] **Step 3: 구현**
@@ -187,13 +187,13 @@ def summary(results):
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_scenarios.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_scenarios.py -q`
 Expected: 3 passed. 오프라인과 Gazebo의 "시작 못 함" 개수가 다르면(예: 오프라인은 8개) 그 차이를 시험 docstring에 적고 이유를 조사한다. 렌더러 차이(벽 바닥면을 도색으로 보는 점)일 수 있다.
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/test/lane_scenarios.py src/apps/control/test/test_lane_scenarios.py
+git add src/core/control/test/lane_scenarios.py src/core/control/test/test_lane_scenarios.py
 git commit -m "test(control): offline closed loop for the 12 junction scenarios"
 ```
 
@@ -202,8 +202,8 @@ git commit -m "test(control): offline closed loop for the 12 junction scenarios"
 ### Task 2: 경로 모델 (ROS-free)
 
 **Files:**
-- Create: `src/apps/control/control/sensing/lane_route.py`
-- Test: `src/apps/control/test/test_lane_route.py`
+- Create: `src/core/control/control/sensing/lane_route.py`
+- Test: `src/core/control/test/test_lane_route.py`
 
 A와 B가 함께 쓴다. "지금 어느 방향 구간의 어디쯤이고, 다음 노드까지 몇 m이며, 거기서 나갈 방향은 어디인가"를 답한다.
 
@@ -276,7 +276,7 @@ def test_route_rejects_a_ring_arc_driven_backwards():
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `python -m pytest src/apps/control/test/test_lane_route.py -q`
+Run: `python -m pytest src/core/control/test/test_lane_route.py -q`
 Expected: FAIL (`ModuleNotFoundError`)
 
 - [ ] **Step 3: 구현**
@@ -295,10 +295,10 @@ Expected: FAIL (`ModuleNotFoundError`)
 
 - [ ] **Step 4: 통과 확인 후 커밋**
 
-Run: `python -m pytest src/apps/control/test/test_lane_route.py -q` → 7 passed
+Run: `python -m pytest src/core/control/test/test_lane_route.py -q` → 7 passed
 
 ```bash
-git add src/apps/control/control/sensing/lane_route.py src/apps/control/test/test_lane_route.py
+git add src/core/control/control/sensing/lane_route.py src/core/control/test/test_lane_route.py
 git commit -m "feat(control): directed lane route model over the 260919 graph"
 ```
 
@@ -307,8 +307,8 @@ git commit -m "feat(control): directed lane route model over the 260919 graph"
 ### Task 3: 시제품 A — 경로 기반 교차 기동
 
 **Files:**
-- Create: `src/apps/control/control/sensing/route_camera.py`
-- Test: `src/apps/control/test/test_route_camera.py`
+- Create: `src/core/control/control/sensing/route_camera.py`
+- Test: `src/core/control/test/test_route_camera.py`
 
 A의 규칙:
 - 구간 안에서는 `LaneBoundaryTracker`의 출력을 그대로 쓴다(가운데선, 강등 사다리).
@@ -367,7 +367,7 @@ def test_the_route_forbids_the_wrong_way_round_the_ring():
 
 - [ ] **Step 2: 실패 확인 → Step 3: 구현 → Step 4: 12개 통과**
 
-Run: `python -m pytest src/apps/control/test/test_route_camera.py -q`
+Run: `python -m pytest src/core/control/test/test_route_camera.py -q`
 Expected: 최종 14 passed (12 파라미터 + 2)
 
 구현 중 지켜야 할 것:
@@ -378,7 +378,7 @@ Expected: 최종 14 passed (12 파라미터 + 2)
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/control/sensing/route_camera.py src/apps/control/test/test_route_camera.py
+git add src/core/control/control/sensing/route_camera.py src/core/control/test/test_route_camera.py
 git commit -m "feat(control): prototype A, route-driven junction manoeuvres"
 ```
 
@@ -387,8 +387,8 @@ git commit -m "feat(control): prototype A, route-driven junction manoeuvres"
 ### Task 4: 시제품 B — 도색 지도 위치 추정
 
 **Files:**
-- Create: `src/apps/control/control/sensing/paint_localizer.py`
-- Test: `src/apps/control/test/test_paint_localizer.py`
+- Create: `src/core/control/control/sensing/paint_localizer.py`
+- Test: `src/core/control/test/test_paint_localizer.py`
 
 입자 필터. 예측은 odometry 증분에 잡음을 더하고, 갱신은 BEV 도색 격자를 STL 도색 거리장에 맞춘 점수로 한다.
 
@@ -477,7 +477,7 @@ def test_covariance_grows_without_paint_and_shrinks_with_it():
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/control/sensing/paint_localizer.py src/apps/control/test/test_paint_localizer.py
+git add src/core/control/control/sensing/paint_localizer.py src/core/control/test/test_paint_localizer.py
 git commit -m "feat(control): prototype B, particle filter over the paint map"
 ```
 
@@ -486,8 +486,8 @@ git commit -m "feat(control): prototype B, particle filter over the paint map"
 ### Task 5: 시제품 B — 계획 경로 추종
 
 **Files:**
-- Create: `src/apps/control/control/sensing/route_map.py`
-- Test: `src/apps/control/test/test_route_map.py`
+- Create: `src/core/control/control/sensing/route_map.py`
+- Test: `src/core/control/test/test_route_map.py`
 
 - [ ] **Step 1: 실패하는 시험 작성**
 
@@ -555,7 +555,7 @@ def test_camera_lane_disagreement_stops_the_follower():
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add src/apps/control/control/sensing/route_map.py src/apps/control/test/test_route_map.py
+git add src/core/control/control/sensing/route_map.py src/core/control/test/test_route_map.py
 git commit -m "feat(control): prototype B, planned-route pursuit from the localised pose"
 ```
 
@@ -564,11 +564,11 @@ git commit -m "feat(control): prototype B, planned-route pursuit from the locali
 ### Task 6: 노드와 하네스 배선
 
 **Files:**
-- Modify: `src/apps/control/control/line_observer_node.py`
-- Modify: `src/apps/control/config/line_follow.yaml`
+- Modify: `src/core/control/control/line_observer_node.py`
+- Modify: `src/core/control/config/line_follow.yaml`
 - Modify: `src/sim/gz_sim/launch/map_v2_fleet_lane.launch.py`
 - Modify: `src/sim/gz_sim/scripts/junction_harness.py`
-- Test: `src/apps/control/test/test_line_observer_wiring.py`, `src/sim/gz_sim/test/test_map_v2_fleet_launch.py`, `src/sim/gz_sim/test/test_junction_harness_contract.py`
+- Test: `src/core/control/test/test_line_observer_wiring.py`, `src/sim/gz_sim/test/test_map_v2_fleet_launch.py`, `src/sim/gz_sim/test/test_junction_harness_contract.py`
 
 - [ ] **Step 1: 실패하는 시험 추가**
 
@@ -597,7 +597,7 @@ def test_route_modes_need_a_graph_and_a_route():
 
 - [ ] **Step 5: 통과 확인과 커밋**
 
-Run: `python -m pytest src/apps/control/test/ src/sim/gz_sim/test/ -q`
+Run: `python -m pytest src/core/control/test/ src/sim/gz_sim/test/ -q`
 
 ```bash
 git add -u && git commit -m "feat(sim): route_a and route_b modes wired through launch and harness"

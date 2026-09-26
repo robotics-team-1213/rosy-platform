@@ -1,0 +1,1098 @@
+/* rosy_core 표면 규칙 — concept 16, D-72, D-82.
+ *
+ * 이 파일의 법:
+ *
+ *   1. 색은 tokens.css가 소유한다. 여기에 원시 색은 없다. 별칭 층도 두지
+ *      않는다 — `--line`, `--signal-danger` 같은 두 번째 어휘가 있으면 같은
+ *      것을 부르는 이름이 둘이 되고, 게이트는 한쪽만 본다.
+ *   2. 치수는 여섯 단계(--space-*), 모서리는 네 단계, 글자는 다섯 단계다.
+ *      임의 값을 쓰지 않는다.
+ *   3. 장식하지 않는다. 그라디언트·글로우·드롭섀도·등장 애니메이션은 임계
+ *      경보가 쓸 대비와 주의를 먼저 써버린다. 깊이는 면과 실선으로만 준다.
+ *   4. 표면마다 문법이 다르다(D-72). 운용 콘솔은 **공간**이고 점검은
+ *      **절차**다. 그래서 콘솔 규칙은 `.console .x`로 덮어쓰지 않고 제자리에
+ *      쓴다 — 콘솔이 이 화면의 기본형이고, 카드는 카드가 맞는 점검 뷰에만
+ *      준다. 덮어쓰기로 쌓으면 어느 규칙이 사는지 아무도 모른다.
+ *   5. 제목은 상자의 뚜껑이 아니라 **줄**이다. 콘솔에 있는 것은 전부 같은
+ *      로봇의 같은 순간이므로 테두리로 조각내지 않고 면과 실선으로 나눈다.
+ */
+
+:root { color-scheme: dark; }
+
+/* ===========================================================================
+   0. 기본
+   ======================================================================== */
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; background: var(--ground-deep); }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--paper);
+  background: var(--ground);
+  font-family: var(--body);
+  font-size: var(--text-body);
+  text-rendering: optimizeLegibility;
+}
+
+input, select { font: inherit; }
+ui-button, a { -webkit-tap-highlight-color: transparent; }
+
+/* 포커스는 상태가 아니라 상호작용이다 — 어디서나 같은 링이다. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* `display`를 지정한 요소에는 [hidden]의 display:none이 지고 만다. 숨긴 뷰가
+   그대로 레이아웃을 차지해 콘솔이 스크롤하게 되는 고전적 버그다. */
+[hidden] { display: none !important; }
+
+/* ---- 증거 — 값은 자기가 얼마나 믿을 만한지 같이 말한다(D-72 S4) ---------- */
+[data-evidence="delayed"],
+[data-evidence="disconnected"],
+[data-evidence="unavailable"] { color: var(--nominal-quiet); }
+/* 낡은 값은 나이를 달고 다닌다. 임계값은 title에 있고 신선한 값에는 아무것도
+   붙지 않는다. 블록으로 쌓이면 칸이 무너지므로 인라인이다. 크기는 상대(em)를
+   쓰지 않는다 — 계산 결과가 계단 밖으로 샌다(D-203). */
+[data-evidence="delayed"][data-age]::after {
+  content: " " attr(data-age) "초";
+  display: inline;
+  color: var(--nominal-quiet);
+  font-size: var(--text-micro);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+   1. 공용 어휘 — 이 화면이 아는 조작과 표시는 이게 전부다
+   ======================================================================== */
+
+/* 라벨: 작은 대문자. 값이 아니라 값의 이름이다. */
+.hero-label,
+.region-head h2,
+.panel-heading h2,
+.panel-heading h3,
+.teleop-copy h3,
+.line-follow-copy h3,
+.telemetry-grid span,
+.navigation-line span,
+.system-identity span,
+.ros-network-facts span,
+.traffic-card span,
+.settings-card label,
+.host-card label,
+.auth-drawer label {
+  color: var(--nominal-quiet);
+  font: 600 var(--text-micro)/1 var(--body);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+/* 값: 변하는 숫자는 전부 등폭이다. 갱신될 때 자릿수가 흔들리면 못 읽는다. */
+.telemetry-grid strong,
+.navigation-line b,
+.meter header b,
+.temperature-card strong,
+.traffic-card strong,
+.hero-state strong,
+.hero-safety strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 버튼의 얼굴은 components.css 의 ui-button 이다. 여기는 자리만 정한다. */
+.host-actions ui-button,
+.waypoint-actions ui-button { flex: 1 1 auto; }
+
+/* ---- 필드 — 입력은 파인 면이다 ------------------------------------------ */
+.auth-row input,
+.settings-card input,
+.settings-card select,
+.host-card input {
+  min-height: var(--target-secondary);
+  min-width: 0;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius-control);
+  color: var(--paper);
+  background: var(--field-bg);
+  font-family: var(--mono);
+  font-size: var(--text-body);
+}
+.auth-row input:focus-visible,
+.settings-card input:focus-visible,
+.settings-card select:focus-visible,
+.host-card input:focus-visible { border-color: var(--focus-ring); }
+.auth-row input:invalid { border-color: var(--field-invalid); }
+
+/* ---- 태그 — 기계가 말한 짧은 값 ----------------------------------------- */
+.status-badge, .machine-tag, .mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-flag);
+  color: var(--nominal-quiet);
+  font: var(--text-micro)/1.4 var(--mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.status-badge i { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: currentColor; }
+/* 상태 어휘는 셋뿐이다: 중립(기본) · 주의(글자) · 위험(채움).
+   같은 셋을 뱃지·기계 태그·모드 칩·[data-status]가 함께 쓴다 — 표면마다
+   다른 색 규칙을 만들면 그게 곧 세 번째 팔레트다.
+   위험은 채움이다(D-202/D-214): crit 글자는 점검 패널 위에서 2.68:1로
+   읽히지 않는다 — 종이 잉크 + 위험 채움. */
+.status-online, [data-status="OK"] { color: var(--nominal); }
+[data-status="WARNING"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
+.status-error,
+[data-status="ERROR"], [data-status="UNAVAILABLE"] {
+  color: var(--paper);
+  background: var(--status-crit);
+  border-color: transparent;
+}
+
+.mode-chip[data-mode="SITE_STA"],
+.mode-chip[data-mode="ACTIVATED_CORE_ONLY"],
+.mode-chip[data-mode="core"] { color: var(--nominal); }
+.mode-chip[data-mode="RELAY_AP_STA"],
+.mode-chip[data-mode="PROVISIONING_AP"],
+.mode-chip[data-mode="RECOVERY_AP"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
+.mode-chip[data-mode="NETWORK_HOLD"],
+.mode-chip[data-mode="RECOVERY_HOLD"],
+.mode-chip[data-mode="motor"],
+.mode-chip[data-mode="hardware"] { color: var(--status-crit); border-color: var(--status-crit-a45); }
+
+
+
+/* ---- 묶음 제목 — 줄이지 상자의 뚜껑이 아니다 -----------------------------
+   작은 대문자 라벨, 이어지는 실선, 오른쪽 끝의 기계 값. 아래 내용과 붙어
+   하나로 읽힌다. 제목이 상자를 만들면 화면이 목차처럼 읽힌다. */
+.panel-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  min-height: var(--space-4);
+}
+.panel-heading > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-heading > div::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--surface-line);
+}
+.panel-heading h2, .panel-heading h3 { margin: 0; flex: none; }
+.panel-heading .machine-tag { flex: none; }
+
+/* 패널은 기본적으로 그릇이 아니다 — 같은 면 위의 묶음일 뿐이다.
+   카드 대접은 카드가 맞는 점검 뷰에서만 준다(§4). */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.panel > * { margin: 0; }
+
+/* ===========================================================================
+   2. 껍질 — 두 문법이 공유하는 테두리
+   ======================================================================== */
+
+.skip-link {
+  position: fixed;
+  z-index: 20;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-button);
+  transform: translateY(-150%);
+  color: var(--button-primary-ink);
+  background: var(--button-primary-bg);
+}
+.skip-link:focus { transform: translateY(0); }
+
+.topbar {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--topbar-height);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--surface-line);
+  background: var(--ground-deep);
+}
+
+.brand { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--paper); text-decoration: none; }
+.brand b { display: block; color: var(--brand-rose); font: 700 var(--text-value)/1 var(--mono); letter-spacing: 0.18em; }
+.brand small { display: block; margin-top: var(--space-1); color: var(--muted); font: var(--text-micro)/1 var(--mono); letter-spacing: var(--track-label); }
+/* 마크는 로고이지 계기가 아니다 — 상태색을 쓰지 않는다. 화면에서 유일하게
+   색이 있어야 할 것은 지금 잘못된 것 하나다. */
+.brand-mark { display: grid; grid-template-columns: repeat(3, 4px); align-items: end; gap: var(--space-1); height: 22px; }
+.brand-mark i { display: block; width: 4px; border-radius: var(--radius-flag); background: var(--muted); }
+.brand-mark i:nth-child(1) { height: 10px; }
+.brand-mark i:nth-child(2) { height: 22px; background: var(--paper); }
+.brand-mark i:nth-child(3) { height: 15px; }
+
+.topbar-status { display: flex; align-items: center; gap: var(--space-3); }
+.clock { color: var(--muted); font: var(--text-label)/1 var(--mono); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+
+.view-switch { display: inline-flex; border: 1px solid var(--surface-line); border-radius: var(--radius-button); overflow: hidden; }
+.view-tab {
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--nominal-quiet);
+  font-size: var(--text-label);
+  cursor: pointer;
+}
+.view-tab[aria-pressed="true"],
+.view-tab[aria-selected="true"] { background: var(--paper); color: var(--button-primary-ink); font-weight: 700; }
+
+.auth-drawer {
+  position: fixed;
+  z-index: 30;
+  top: calc(var(--topbar-height) + var(--space-3));
+  right: var(--space-5);
+  display: none;
+  width: min(460px, calc(100vw - var(--space-6)));
+  padding: var(--space-5);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+.auth-drawer.open { display: grid; gap: var(--space-4); }
+.auth-drawer h2 { margin: 0 0 var(--space-2); font: 600 var(--text-title)/1.2 var(--body); }
+.auth-drawer p { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: 1.55; }
+.auth-drawer label { display: block; margin-bottom: var(--space-2); }
+.auth-row { display: flex; gap: var(--space-2); }
+.auth-row input { flex: 1; }
+.auth-drawer form { display: grid; gap: var(--space-2); }
+.auth-drawer form[hidden] { display: none; }
+.auth-tabs { justify-self: start; }
+/* The checkbox row keeps its sentence case inside the drawer's label rule. */
+.auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.auth-row input#code-input { text-transform: uppercase; letter-spacing: 0.12em; }
+.whoami-badge b { color: var(--paper); }
+.drawer-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  min-height: var(--target-secondary);
+  min-width: var(--target-secondary);
+  border: 0;
+  border-radius: var(--radius-button);
+  color: var(--muted);
+  background: none;
+  font-size: var(--text-title);
+  cursor: pointer;
+}
+.form-message { min-height: 1.4em; margin: var(--space-2) 0 0; font: var(--text-label)/1.4 var(--mono); }
+
+/* 레이아웃은 뷰가 소유한다 — 컨테이너가 열을 정하면 두 문법이 섞인다. */
+.dashboard { display: block; width: 100%; margin: 0; }
+
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5) var(--space-6);
+  color: var(--muted);
+  font: var(--text-micro)/1.4 var(--mono);
+  letter-spacing: 0.08em;
+}
+/* 콘솔은 고정 프레임이다. 꼬리말은 스크롤하는 점검 뷰의 것이므로 운용에서는
+   자리를 내주지 않는다 — 64px이면 지도가 그만큼 줄어든다. 클래스 셀렉터여야
+   한다(`#page-footer`는 존재하지 않는다). */
+body[data-view="operate"] .page-footer { display: none; }
+
+/* ===========================================================================
+   3. 운용 콘솔 — 공간 문법(concept 16 §7.1)
+   ---------------------------------------------------------------------------
+   고정 프레임. 페이지는 스크롤하지 않는다 — 운용자가 외우는 것은 값이 아니라
+   자리다. 넘치면 감지만 스크롤하고 관측·조작은 그대로 있다.
+   ======================================================================== */
+
+.console {
+  height: calc(100vh - var(--topbar-height));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- 요약줄 — 로봇 상태 하나(D-260 5) --------------------------------------
+   상태 레일의 한 칸이다. 따로 한 줄을 쌓으면 그 높이(44px)만큼 1366×768에서
+   조작 열이 넘쳤다(D-201). 상태 칩과 이유, 장치 요약, 배터리·온도, 할 일
+   개수가 가로로 붙고, 이유만 줄어든다(말줄임, 전문은 title). 할 일 목록은
+   아래로 겹쳐 펼쳐지므로 콘솔 높이를 바꾸지 않는다. */
+.status-summary {
+  flex: 1 1 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0 var(--space-4);
+  border-left: 1px solid var(--surface-line);
+  font-size: var(--text-label);
+}
+/* 상태 칩 위, 이유 아래 — 두 줄이 레일 높이(44px 조작 부품) 안에 든다.
+   한 줄로 펴면 1366에서 이유가 0px로 눌렸다. */
+.summary-status { flex: 1 1 auto; display: grid; justify-items: start; min-width: 8rem; }
+.summary-state {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font: 700 var(--text-label)/1.3 var(--body);
+  white-space: nowrap;
+}
+/* 첫 요청 전에는 빈칸이다(값 자리에 em dash를 싣지 않는다). */
+.summary-state:empty { display: none; }
+.summary-state[data-state="ready"] { color: var(--nominal); }
+.summary-state[data-state="ready_held"], .summary-state[data-state="booting"] { color: var(--paper); }
+/* 주의는 글자, 실패는 채움이다(Law 3, 분류 줄과 같은 문법). */
+.summary-state[data-state="caution"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
+.summary-state[data-state="failed"] { color: var(--paper); background: var(--status-crit); border-color: var(--status-crit); }
+.summary-reason {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--paper);
+  font-size: var(--text-micro);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.summary-devices { flex: 0 1 auto; min-width: 9ch; max-width: 26ch; white-space: nowrap; overflow: hidden; }
+.summary-power { flex: none; color: var(--muted); font: var(--text-label)/1.4 var(--mono); white-space: nowrap; }
+.summary-power[data-low="true"] { color: var(--status-warn); }
+.summary-todo { flex: none; position: relative; }
+.summary-todos {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: 48ch;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--ground-raise);
+  color: var(--paper);
+  font-size: var(--text-label);
+  line-height: 1.4;
+  list-style: decimal inside;
+}
+.summary-todos[hidden] { display: none; }
+
+/* ---- 분류 — 한 줄이다(Law 1) ---------------------------------------------
+   머리에 하나, 나머지는 색 없는 맥락. 세로로 쌓으면 160px을 가져가고 그만큼
+   지도가 준다 — 고장 하나가 화면의 1/4을 먹을 이유는 없다. */
+.triage {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--surface-line);
+  background: var(--surface-flat);
+}
+/* 물리적 위험과 이동 차단은 채운다 — 되돌릴 수 없는 것과 같은 범주다(Law 3). */
+.triage[data-category="hazard"], .triage[data-category="blocked"] {
+  color: var(--paper);
+  background: var(--status-crit);
+  border-bottom-color: var(--status-crit);
+}
+/* 임무 위협은 글자다. 아직 갈 수는 있다. */
+.triage[data-category="mission"] {
+  color: var(--status-warn);
+  border-bottom-color: var(--status-warn);
+}
+.triage-head { min-width: 0; }
+.triage-copy { display: flex; align-items: baseline; gap: var(--space-3); min-width: 0; }
+.triage-copy h2 { flex: none; margin: 0; font: 700 var(--text-body)/1.4 var(--body); }
+/* 설명은 제목 옆에 붙는다. 넘치면 자른다 — 전문은 분류 머리가 아니라 이벤트
+   기록의 몫이다. */
+.triage-copy p {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: 1.4;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.triage-context {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* 맥락은 "또 무엇이 잘못됐나"를 말한다. 제목은 끝까지 보이고 설명은 자리가
+   남는 만큼만 보인다 — DOM에는 남으므로 화면 낭독기는 전문을 읽는다. */
+.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--paper); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
+.triage-context b { flex-shrink: 0; font-weight: 600; }
+.triage-context span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.triage-context:empty { display: none; }
+/* 맥락이 셋을 넘으면 읽지 않는다. 자리를 늘리는 대신 접는다. */
+.triage-context li:nth-child(n + 4) { display: none; }
+
+/* ---- 상태 레일 — 로봇이 지금 무엇인가 -------------------------------------
+   넓은 카드용 hero가 아니라 계기 레일이다. 라벨과 값이 가로로 붙고 칸마다
+   실선으로 갈린다. 세로로 쌓으면 210px이고 그건 지도에서 빼 온 높이다. */
+.hero-strip {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--surface-line);
+  background: var(--ground-deep);
+}
+.hero-strip > div { padding: var(--space-3) var(--space-4); }
+.hero-copy { flex: 0 1 auto; max-width: 14rem; min-width: 0; display: flex; align-items: center; padding-left: 0; }
+.hero-copy h1 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  font: 600 var(--text-value)/1.25 var(--body);
+}
+/* 식별자는 제목 아래가 아니라 옆이다 — 한 줄에서 이름과 계보를 같이 읽는다. */
+.hero-copy h1 em {
+  min-width: 0;
+  color: var(--muted);
+  font: var(--text-label)/1 var(--mono);
+  letter-spacing: 0.06em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 설명 문장은 콘솔에 두지 않는다. 읽는 글은 점검 뷰의 것이다. */
+.hero-strip p { display: none; }
+.hero-state, .hero-safety {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  border-left: 1px solid var(--surface-line);
+}
+.hero-label { flex: none; }
+.hero-state strong, .hero-safety strong { font-size: var(--text-value); font-weight: 600; letter-spacing: 0.02em; }
+.hero-state .sequence, .hero-safety > span:last-child { color: var(--muted); font: var(--text-micro)/1.3 var(--mono); }
+.hero-safety.safe strong { color: var(--nominal); }
+.hero-safety.danger strong { color: var(--status-crit); }
+.hero-safety.unverified strong { color: var(--muted); }
+
+/* ---- 영역 셋 --------------------------------------------------------------
+   폭은 역할이 정한다. 감지는 숫자 세 칸이 들어갈 만큼, 조작은 되돌릴 수 없는
+   버튼이 가로로 눕지 않을 만큼, 나머지는 전부 관측이다. */
+.regions {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr) 320px;
+}
+.region {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  font-size: var(--text-label);
+}
+/* D-201 분쇄 방지 — 고정 프레임의 flex 열이 넘치면 스크롤이나 넘침으로
+   드러나야 한다. shrink 기본값(1)은 저항 없는 블록을 조용히 눌러 없앴다
+   (모드 분절 제어가 44px에서 2px로 분쇄된 것이 실측 사례). */
+.region-sense > .panel,
+.region-act > .panel { flex: none; }
+.control-panel > * { flex: none; }
+/* 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다(Law 2).
+   관측은 창이므로 가장 어둡다 — 지도 래스터가 그 위에 뜬다. */
+.region-sense { background: var(--surface-flat); border-right: 1px solid var(--surface-line); overflow-y: auto; }
+.region-observe { background: var(--ground-deep); }
+.region-act {
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  background: var(--surface-raised);
+  border-left: 1px solid var(--surface-line);
+  overflow-y: auto;
+}
+
+/* 영역 머리는 제목이 아니라 레일이다 — 이름과 역할이 한 줄에 붙고 아래로
+   실선이 지난다. 이 한 줄이 "여기는 무엇을 보는 칸인가"를 고정한다. */
+.region-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--surface-line);
+}
+.region-head h2 { margin: 0; color: var(--paper); font-size: var(--text-label); letter-spacing: 0.14em; }
+.region-head span {
+  min-width: 0;
+  color: var(--nominal-quiet);
+  font-size: var(--text-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 감지 — 값 격자는 선으로 짠다 -----------------------------------------
+   칸마다 테두리와 모서리를 주면 여섯 개의 작은 카드가 된다. 1px 간격에 바탕을
+   깔아 진짜 격자로 만든다 — 자릿수가 세로로 정렬되고 눈이 표로 읽는다. */
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--surface-line);
+  overflow: hidden;
+}
+.telemetry-grid article { min-width: 0; padding: var(--space-2); background: var(--ground); }
+.telemetry-grid span, .telemetry-grid strong, .telemetry-grid small { display: block; }
+/* 잘린 좌표는 좌표가 아니다. 낡은 값에는 나이가 따라붙어 칸보다 길어지므로
+   자르지 않고 접는다 — 감지 영역에는 남는 높이가 있고, 없는 것은 폭이다. */
+.telemetry-grid strong {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-value);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.telemetry-grid small { margin-top: var(--space-1); color: var(--nominal-quiet); font: var(--text-micro)/1 var(--mono); }
+
+/* 한 줄짜리 값도 같은 격자다 — 라벨 왼쪽, 값 오른쪽, 위로 실선. */
+.navigation-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--surface-line);
+}
+.navigation-line b { color: var(--series-primary); font-size: var(--text-body); text-align: right; }
+.navigation-line small { color: var(--nominal-quiet); font: var(--text-micro)/1 var(--mono); }
+
+.capability-list { display: grid; }
+.capability-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0 var(--space-3);
+  min-height: var(--target-secondary);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--surface-line);
+}
+.capability-item span { min-width: 0; overflow: hidden; font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
+.capability-item b { font: var(--text-micro)/1 var(--mono); letter-spacing: 0.06em; }
+.capability-item small { grid-column: 1 / -1; color: var(--paper); font-size: var(--text-label); line-height: 1.4; }
+/* 가용은 정상이므로 색이 없다. 제약과 차단만 색을 쓴다(D-82). */
+.capability-item[data-state="constrained"] b { color: var(--status-warn); }
+.capability-item[data-state="blocked"] b { color: var(--status-crit); }
+/* CORE-only은 설정이지 고장이 아니다 — 차단이어도 색을 쓰지 않는다(D-161, D-82). */
+.capability-item[data-cause="runtime"] b { color: var(--muted); }
+
+/* ---- 관측 — 지도가 영역을 전부 쓴다 ---------------------------------------
+   보조 요소는 전부 지도 위로 올린다. 흐름에 두면 툴바 두 줄·범례·안내가
+   264px을 먼저 가져가고 지도는 남는 것을 받는다 — 순서가 거꾸로다. */
+.field-map-panel { flex: 1; min-height: 0; }
+.vision-panel { flex: none; gap: var(--space-2); }
+.vision-heading { align-items: center; }
+.vision-stage {
+  position: relative;
+  height: clamp(190px, 31vh, 290px);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--ground-deep);
+  overflow: hidden;
+}
+.vision-stage::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+.vision-stage[data-state="live"]::before { border-color: color-mix(in srgb, var(--nominal) 52%, transparent); }
+.vision-stage[data-state="stale"]::before { border-color: color-mix(in srgb, var(--status-warn) 62%, transparent); }
+#vision-frame { width: 100%; height: 100%; display: block; object-fit: contain; background: var(--ground-deep); }
+.vision-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  font: var(--text-label)/1.5 var(--mono);
+  letter-spacing: 0.04em;
+}
+.vision-reticle { position: absolute; z-index: 3; inset: 0; pointer-events: none; opacity: 0.42; }
+.vision-reticle i { position: absolute; display: block; background: var(--nominal); }
+.vision-reticle i:first-child { left: 50%; top: 42%; width: 1px; height: 16%; }
+.vision-reticle i:last-child { left: 46%; top: 50%; width: 8%; height: 1px; }
+.vision-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; background: var(--surface-line); }
+.vision-meta div { min-width: 0; padding: var(--space-1) var(--space-2); background: var(--ground); }
+.vision-meta dt { color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
+.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--paper); font: 700 var(--text-micro)/1.2 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.map-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--ground-deep);
+  overflow: hidden;
+}
+#map-canvas { display: block; width: 100%; height: 100%; }
+.map-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  font: var(--text-label)/1.5 var(--mono);
+  pointer-events: none;
+}
+
+/* 지도 위에 얹는 것은 전부 같은 칩이다 — 장막 바탕에 실선 테두리. 점유 격자가
+   밝든 어둡든 그 위에서 읽힌다. */
+.map-controls { position: absolute; z-index: 2; top: var(--space-2); left: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.map-toolbar, .map-hint, .map-legend {
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+  background: var(--scrim);
+}
+.map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: var(--space-1); }
+/* 안내는 클릭 모드 툴바를 설명하는 글이다 — 그 아래 붙여 둔다. */
+.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--paper); font-size: var(--text-label); line-height: 1.45; }
+/* 범례는 지도의 색을 설명한다 — 지도 위가 제자리다. */
+.map-legend {
+  position: absolute;
+  z-index: 2;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  list-style: none;
+  color: var(--muted);
+  font: var(--text-micro)/1.4 var(--mono);
+}
+.map-legend li { display: flex; align-items: center; gap: var(--space-2); }
+.map-legend li::before { content: ""; width: 10px; height: 10px; border: 1px solid var(--surface-line); }
+/* 견본은 map.js가 실제로 칠하는 토큰과 같아야 한다. 다르면 범례가 거짓말이다. */
+.map-legend [data-swatch="free"]::before { background: var(--raster-free); }
+.map-legend [data-swatch="occupied"]::before { background: var(--raster-occupied); }
+.map-legend [data-swatch="unknown"]::before { background: var(--raster-unknown); }
+.map-legend [data-swatch="cost"]::before { background: var(--status-warn); }
+.map-legend [data-swatch="path"]::before { background: var(--series-primary); }
+.map-legend [data-swatch="robot"]::before { background: var(--paper); }
+
+/* ---- 조작 — 크기가 위험도다(Law 3) ----------------------------------------
+   되돌릴 수 없는 것이 가장 크고 맨 위이며 언제나 같은 자리에 있다.
+   가로로 넓다 — 글자가 세로로 눕는 순간 못 읽는다.
+   간격은 최소 단계(8)다 — 조작 열은 선언 최소 뷰포트(1366×768)에서
+   분류 띠까지 떠도 전부 들어와야 한다(D-201). */
+.control-panel { gap: var(--space-2); }
+.safety-actions { display: grid; gap: var(--space-2); }
+.safety-actions ui-button {
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+/* 모드는 셋 중 하나다 — 분절 제어. 지금 어디에 있는지가 채운 칸으로 보인다. */
+.mode-control {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.mode-control ui-button { border-right: 1px solid var(--surface-line); }
+.mode-control ui-button:last-child { border-right: 0; }
+
+.line-follow-control { display: flex; flex-direction: column; gap: var(--space-2); }
+.line-follow-copy { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.line-follow-copy h3 { margin: 0; }
+.line-follow-copy span { color: var(--nominal-quiet); font: var(--text-micro)/1.3 var(--mono); }
+.line-follow-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.line-follow-modes ui-button { border-right: 1px solid var(--surface-line); }
+.line-follow-modes ui-button:last-child { border-right: 0; }
+.line-follow-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--text-label)/1.4 var(--body); }
+
+/* 사실 격자는 감지 영역(272px)에 산다 — 두 단으로 좁힌다(D-201). 칸 규칙은
+   운용·점검 어디서든 같은 모양이다. */
+.line-follow-facts, .traffic-policy-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); margin: 0; }
+.line-follow-facts div, .traffic-policy-facts div { min-width: 0; padding: var(--space-1); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
+.line-follow-facts dt, .traffic-policy-facts dt { color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
+.line-follow-facts dd, .traffic-policy-facts dd { overflow: hidden; margin: var(--space-1) 0 0; font: 700 var(--text-label)/1.2 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+
+.traffic-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.traffic-policy-grid label { display: grid; gap: var(--space-1); color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
+.traffic-policy-grid input, .traffic-policy-grid select { min-width: 0; min-height: var(--target-secondary); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--paper); background: var(--ground); padding: 0 var(--space-2); }
+.traffic-policy-actions, .simulation-signal-controls { display: flex; align-items: center; gap: var(--space-1); }
+.traffic-policy-actions ui-button { flex: 1; }
+.simulation-signal-controls span { margin-right: auto; color: var(--nominal-quiet); font: var(--text-micro)/1.2 var(--mono); }
+
+
+/* 저속 직접 제어도 카드가 아니다 — 같은 면 위의 묶음이다. */
+.teleop-commissioning { display: flex; flex-direction: column; gap: var(--space-2); }
+/* 묶음 안의 묶음도 같은 줄이다 — 소제목만 다른 모양이면 위계가 아니라 예외가
+   하나 더 생긴 것이다. */
+.teleop-copy { display: flex; align-items: center; gap: var(--space-2); }
+.teleop-copy > div { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
+.teleop-copy > div::after { content: ""; flex: 1; height: 1px; background: var(--surface-line); }
+.teleop-copy h3 { flex: none; margin: 0; }
+.teleop-copy > span { flex: none; color: var(--nominal-quiet); font: var(--text-micro)/1.3 var(--mono); text-align: right; }
+.bench-confirmation {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-secondary);
+  color: var(--nominal-quiet);
+  font-size: var(--text-micro);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.bench-confirmation input { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--focus-ring); }
+.teleop-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
+.teleop-pad ui-button { touch-action: none; user-select: none; }
+
+.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--text-label)/1.4 var(--body); }
+
+/* ===========================================================================
+   4. 점검 — 절차 문법(concept 16 §7.2)
+   ---------------------------------------------------------------------------
+   여기서만 스크롤이 허용된다. 스크롤이 곧 절차이고 순서는 기동 순서다.
+   카드를 그만두는 것은 운용의 규칙이다 — 점검은 한 항목씩 확인하고 넘어가는
+   화면이라 카드가 맞다. 두 문법을 섞지 않는다.
+   ======================================================================== */
+
+.inspect {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+/* 읽는 폭은 1100px에서 끊는다 — 절차는 위에서 아래로 읽는 글이고, 한 줄이
+   길어지면 다음 줄을 놓친다. */
+.inspect > .panel { width: 100%; max-width: 1100px; }
+/* 예외 둘. 여기서는 폭이 곧 정보다 — 다섯 칸 사실 띠와 위상 그래프, 그리고
+   설정 카드 줄은 읽기 폭에 갇히면 칸이 뭉개진다. */
+.ros-network-panel, .field-settings-panel { max-width: 1440px; }
+.inspect .panel {
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-flat);
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-3));
+}
+.inspect .panel h2 { font-size: var(--text-title); letter-spacing: 0; text-transform: none; color: var(--paper); }
+.inspect .panel h3 { font-size: var(--text-body); letter-spacing: 0; text-transform: none; color: var(--paper); }
+
+.system-identity { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-5); }
+.system-identity div { min-width: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--surface-line); }
+.system-identity span, .system-identity strong { display: block; }
+.system-identity span { margin-bottom: var(--space-1); }
+.system-identity strong { overflow: hidden; font: var(--text-body)/1.3 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+
+.meter-stack { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.meter { padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
+.meter header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.meter header b { font-size: var(--text-title); }
+/* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다(D-82). */
+.meter-rail { height: 4px; margin: var(--space-3) 0 var(--space-2); border-radius: var(--radius-flag); background: var(--gauge-track); overflow: hidden; }
+.meter-rail i { display: block; width: var(--meter, 0%); height: 100%; background: var(--paper); }
+.meter footer { overflow: hidden; color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.temperature-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--space-3);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+}
+.temperature-card span, .temperature-card small { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.temperature-card strong { margin: var(--space-1) 0; font-size: var(--text-title); }
+.temperature-card[data-level="warn"] strong { color: var(--status-warn); }
+.temperature-card[data-level="crit"] strong { color: var(--status-crit); }
+.runtime-warning { min-height: 1.2em; margin: 0; color: var(--status-warn); font: var(--text-micro)/1.5 var(--mono); }
+
+/* 기동 단계는 한 줄에 하나다 — 순서가 곧 절차이고, 나란히 놓으면 순서가
+   사라진다. */
+.host-card-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+.host-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+/* 절차에는 번호가 있다 — 이 카드가 몇 번째인지가 곧 순서다. */
+.host-card[data-step]::before { content: attr(data-step); color: var(--nominal-quiet); font: var(--text-micro)/1 var(--mono); letter-spacing: 0.14em; }
+.host-card > header, .settings-card > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.host-card h3, .settings-card h3 { margin: 0; font: 600 var(--text-body)/1.3 var(--body); }
+/* 값이 오지 않은 카드는 흐려지고 그렇게 말한다. 아무 말 없는 정상 카드처럼
+   보이면 안 된다. */
+.host-card[data-available="false"] { border-style: dashed; opacity: 0.72; }
+.host-card[data-available="false"] .host-facts,
+.host-card[data-available="false"] .device-list { display: none; }
+.host-card[data-available="false"] .host-note { color: var(--status-warn); }
+.host-facts { display: grid; gap: var(--space-1); margin: 0; }
+.host-facts > div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-label); }
+.host-facts dt { color: var(--nominal-quiet); }
+.host-facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.host-note { margin: 0; color: var(--nominal-quiet); font-size: var(--text-label); line-height: 1.5; }
+.host-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
+.host-actions ui-button { flex: 1 1 auto; }
+.host-card form { display: grid; gap: var(--space-2); }
+
+/* D-247 장치 카드 — 한 줄에 장치 하나. 상태 칩은 공용 [data-status] 어휘를
+   그대로 쓴다: 정상=OK(평상 글자색), 버스·드라이버 없음=WARNING(주의 글자),
+   응답 없음=ERROR(위험 채움), 사람 확인·측정 안 함=속성 없음(칩 기본색).
+   새 색은 없다. */
+.device-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.device-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--surface-line);
+  font-size: var(--text-label);
+}
+.device-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.device-bus { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.device-evidence { grid-column: 1 / -1; margin: 0; color: var(--nominal-quiet); line-height: 1.5; }
+/* D-247 6 부저·램프 시험: 관리자만 보이는 한 줄. 버튼은 공용 ui-button. */
+.device-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.device-test { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+/* 오래된 측정은 흐리다 — 판정은 서버가 내린 `stale`이다(D-72 S4). */
+.host-card[data-stale="true"] .device-list { opacity: 0.72; }
+
+.ros-network-facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--surface-line);
+  overflow: hidden;
+}
+.ros-network-facts article { min-width: 0; padding: var(--space-3); background: var(--ground); }
+.ros-network-facts strong { display: block; margin-top: var(--space-2); overflow: hidden; font: var(--text-value)/1.2 var(--body); text-overflow: ellipsis; white-space: nowrap; }
+.ros-network-facts small { display: block; margin-top: var(--space-1); color: var(--nominal-quiet); font: var(--text-micro)/1.3 var(--mono); }
+
+.network-traffic-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+.traffic-card {
+  position: relative;
+  min-height: 106px;
+  padding: var(--space-3);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.traffic-card header { position: relative; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.traffic-card strong { font-size: var(--text-value); }
+.network-sparkline { position: absolute; inset: auto var(--space-3) var(--space-2) var(--space-3); height: 52px; overflow: visible; }
+.network-sparkline polyline { fill: none; stroke-width: 2; stroke-linecap: square; stroke-linejoin: bevel; }
+/* 받는 것과 보내는 것은 다른 종류가 아니라 같은 계열의 둘이다 — 색상이 아니라
+   밝기로 가른다(D-82). */
+.traffic-rx .network-sparkline polyline { stroke: var(--series-primary); }
+.traffic-tx .network-sparkline polyline { stroke: var(--series-secondary); }
+
+.ros-graph-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 0.72fr); gap: var(--space-3); }
+.graph-stage, .risk-tape { border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground); }
+.graph-stage { position: relative; min-height: 330px; padding: var(--space-5) var(--space-2) var(--space-2); }
+.graph-legend { position: absolute; top: var(--space-2); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); color: var(--nominal-quiet); font: var(--text-micro)/1 var(--mono); letter-spacing: 0.1em; }
+.graph-legend i { width: 32px; height: 1px; background: var(--surface-line); }
+.ros-graph-map { width: 100%; height: 300px; }
+.graph-edge { stroke: var(--muted-line); stroke-width: 1; }
+.graph-edge.publishes { stroke: var(--series-primary); }
+.graph-edge.subscribes { stroke-dasharray: 4 4; }
+.graph-node { fill: var(--ground-raise); stroke: var(--surface-line); stroke-width: 1; }
+.graph-node.foreign { fill: var(--status-crit-a10); stroke: var(--status-crit); }
+.graph-topic { fill: var(--series-primary); stroke: var(--ground); stroke-width: 3; }
+.graph-node-label, .graph-topic-label, .graph-empty { fill: var(--paper); font: var(--text-label) var(--mono); text-anchor: middle; }
+.graph-topic-label { fill: var(--muted); text-anchor: end; }
+.graph-empty { fill: var(--muted); }
+
+.risk-tape { padding: var(--space-4); }
+.risk-tape h3 { margin: 0 0 var(--space-3); font: 600 var(--text-body)/1.3 var(--body); }
+.risk-tape ul { display: grid; gap: var(--space-2); min-height: 150px; margin: 0; padding: 0; list-style: none; }
+.risk-tape li { padding: var(--space-2); border-left: 2px solid var(--status-crit); background: var(--status-crit-a07); }
+.risk-tape li strong, .risk-tape li span { display: block; }
+.risk-tape li strong { color: var(--status-crit); font: var(--text-micro)/1 var(--mono); letter-spacing: 0.08em; }
+.risk-tape li span { margin-top: var(--space-1); color: var(--paper); font: var(--text-label)/1.45 var(--mono); }
+/* 위험이 없을 때는 색도 테두리도 쓰지 않는다 — 정상에는 색이 없다. */
+.risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--surface-line); background: transparent; font: var(--text-label)/1.5 var(--mono); }
+.risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--text-label)/1.5 var(--mono); }
+.risk-tape > p { margin: var(--space-4) 0 0; color: var(--nominal-quiet); font: var(--text-micro)/1.5 var(--mono); }
+
+.settings-grid { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+  background: var(--ground);
+}
+.settings-card form { display: grid; gap: var(--space-2); }
+.settings-row { display: flex; gap: var(--space-2); }
+.settings-row input { flex: 1 1 auto; }
+
+.waypoint-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.waypoint-list li:not(:has(ui-empty)) {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--surface-line);
+}
+.waypoint-list strong { font: var(--text-body)/1.3 var(--mono); }
+.waypoint-list span { grid-column: 1; color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.waypoint-actions { display: flex; align-items: start; gap: var(--space-1); }
+
+.event-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 var(--space-5); margin: 0; padding: 0; list-style: none; }
+.event-list li:not(:has(ui-empty)) {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--surface-line);
+}
+.event-time, .event-severity { color: var(--nominal-quiet); font: var(--text-micro)/1.4 var(--mono); }
+.event-type { overflow: hidden; font: var(--text-label)/1.4 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+/* info는 정상이므로 색이 없다. 경고와 오류만 색을 쓴다. */
+.event-severity.error, .event-severity.critical { color: var(--status-crit); }
+.event-severity.warning { color: var(--status-warn); }
+
+/* ===========================================================================
+   5. 좁은 화면
+   ---------------------------------------------------------------------------
+   고정 3분할은 현장 콘솔의 약속이다. 휴대폰에는 그 프레임 자체가 없으므로
+   운용 뷰도 세로로 쌓고 스크롤을 허용한다 — 규칙을 어기는 게 아니라, 규칙이
+   전제하는 화면이 아니라는 뜻이다.
+   ======================================================================== */
+
+@media (max-width: 1080px) {
+  /* 폭이 줄어도 셋의 자리는 그대로다. 조작을 아래 줄로 돌려 봤더니 그 칸이
+     제 내용만큼(412px) 가져가고 지도가 37px로 눌렸다 — 자리를 옮기는 것은
+     공간 문법을 버리는 것이고, 얻는 것도 없었다. 레일만 좁힌다. */
+  .regions { grid-template-columns: 216px minmax(0, 1fr) 272px; }
+  .region { padding: var(--space-2) var(--space-3) var(--space-3); }
+  .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .map-hint { max-width: 188px; }
+  .ros-network-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ros-graph-layout { grid-template-columns: 1fr; }
+  .event-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .console { height: auto; overflow: visible; }
+  .regions { grid-template-columns: 1fr; grid-template-rows: none; }
+  .region { grid-column: auto; grid-row: auto; overflow: visible; }
+  .region-observe { min-height: 60vh; }
+  .region-act { border-top: 1px solid var(--surface-line); }
+  body[data-view="operate"] .page-footer { display: flex; }
+  .topbar { min-height: 66px; padding: 0 var(--space-4); }
+  .clock, .status-badge span, .whoami-badge span { display: none; }
+  .status-badge { justify-content: center; }
+  .hero-strip { flex-wrap: wrap; padding: 0 var(--space-4); }
+  .status-summary { flex: 1 0 100%; flex-wrap: wrap; padding: var(--space-2) 0; border-left: 0; }
+  .summary-reason { white-space: normal; }
+  .hero-copy { flex: 1 0 100%; max-width: none; }
+  .hero-state, .hero-safety { flex: 1 1 100%; min-width: 0; border-left: 0; padding-left: 0; }
+  .hero-safety { flex-wrap: wrap; }
+  .hero-safety > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .triage { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding-inline: var(--space-4); }
+  .triage-context { min-width: 0; flex-wrap: wrap; }
+  .triage-context li { max-width: 100%; }
+  .triage-context li:nth-child(n + 2) { display: none; }
+  .system-identity, .meter-stack, .network-traffic-grid, .settings-grid { grid-template-columns: 1fr; }
+  .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ros-network-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .teleop-pad { grid-template-columns: repeat(2, 1fr); }
+  .event-list li:not(:has(ui-empty)) { grid-template-columns: 62px 1fr; }
+  .event-severity { grid-column: 2; }
+  .page-footer { flex-direction: column; gap: var(--space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* ADR-999: HITL Escalation */
+.hitl-escalation {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--status-crit-a10);
+  border-left: var(--space-1) solid var(--status-crit);
+  border-radius: var(--radius-control);
+}
+.hitl-escalation[hidden] { display: none; }
+.hitl-escalation h3 {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--status-crit);
+  font-size: var(--text-value);
+}
+.hitl-escalation p {
+  margin: 0 0 var(--space-4) 0;
+  color: var(--paper);
+  font-size: var(--text-body);
+}

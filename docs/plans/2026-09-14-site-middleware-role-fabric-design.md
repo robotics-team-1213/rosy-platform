@@ -113,3 +113,7 @@ Device 검증 계획의 ARTIFACT → DEVICE → FIELD를 이 설계가 앞지르
 - 메시지 가드: 최종 `cmd_vel` publisher 수 = 1, swarm 릴레이는 바이트 그대로, 스트림 단절은 0 Hz.
 - 로컬 우선: Fleet 프로세스 없이 CORE teleop/e-stop 시험이 통과한다.
 - 이 설계의 호스트 시험 통과는 Pi 서명 이미지·물리 주행 인수가 아니다.
+
+## 2026-09-26 보충: 사이트 작업 스케줄러와 선택적 브로커
+
+[D-271](../adr/D-271-site-fleet-task-scheduling-and-broker.md)과 [사이트 작업 스케줄링 설계](2026-09-26-site-task-scheduling-and-broker-design.md)는 이 문서의 **Fleet 서버 내부 구현**을 구체화한다. D-59의 로봇 compose 브로커 금지는 유지한다. Fleet은 사용자/API의 허용된 목표를 SQLite 작업 원장에 기록하고, 서버 정책으로 우선순위·장비·자원 점유를 결정한다. 독립 worker 분리 필요가 실측되면 사이트 내부 RabbitMQ를 실행 전달 계층으로 도입한다. 브로커가 생겨도 장비는 기존 CORE REST/WSS 계약을 사용하고 DDS·속도·영상 원본은 큐를 지나지 않는다. 현재 메모리 교통 대기열과 SQLite task history를 영속 우선순위 스케줄러 구현으로 간주하지 않는다.

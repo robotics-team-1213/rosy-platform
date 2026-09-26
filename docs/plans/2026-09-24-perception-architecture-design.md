@@ -3,6 +3,8 @@
 - 작성: 2026-09-24
 - 상태: 사용자 검토 대기
 - 증거 등급: 설계 문서. 이 문서 자체로는 어떤 합격도 주장하지 않는다.
+- 결정: [D-199](../adr/D-199-camera-perception-contracts-and-backends.md)(Proposed)가 이 설계의 계약과 백엔드 구조를 기록한다. 폴더 자리는 [D-209](../adr/D-209-perception-folder-and-learned-backend.md)(Accepted)가 정한다.
+- 실행 순서: [D-205](../adr/D-205-real-lane-mission-transition-order.md)(Proposed)가 P0–P6 단계, 게이트, 인계 절차를 정한다.
 - 관련 문서: D-137(YOLO 보조 검출 계약), D-138(provider), D-143(차선 관측), D-162(장면 문맥), D-136/D-152(영상 대역·CORE는 영상 바이트를 다루지 않음), `2026-09-22-lane-network-junction-spike-design.md`, `2026-09-23-lane-network-parking-design.md`
 
 ## 1. 왜 다시 설계하나

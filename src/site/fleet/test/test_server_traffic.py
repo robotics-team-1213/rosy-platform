@@ -97,6 +97,64 @@ def test_a_conflicting_mission_is_cancelled_and_queued():
     assert row["goal"] is None          # 아직 가지 않는 곳을 목표로 그리지 않는다
 
 
+def test_task_traffic_queue_preserves_task_attempt_and_waits_for_scheduler_release():
+    first = FakeRobot("rosy_01", state=_navigating("rosy_01"))
+    first._path = _line(-2.0, 0, 2.0, 0)
+    second = FakeRobot("rosy_02", state=_navigating("rosy_02"))
+    second._path = _line(2.0, 0.1, -2.0, 0.1)
+    console = _console(first, second)
+    released = []
+    console.set_task_queue_release_callback(lambda mission: _record_release(released, mission))
+    run(console.goal("rosy_01", 2.0, 0.0))
+
+    result = run(console.goal(
+        "rosy_02", -2.0, 0.1, task_id="task-42", attempt_id="attempt-1", attempt_seq=1,
+    ))
+
+    assert result["accepted"] is False
+    assert result["queued"] is True
+    assert result["cancel_confirmed"] is True
+    assert console._queued["rosy_02"]["task_id"] == "task-42"
+    assert console._queued["rosy_02"]["attempt_id"] == "attempt-1"
+    assert sum(1 for call in second.calls if call[0] == "navigation_goal") == 1
+
+    first._state = _arrived("rosy_01")
+    run(console.snapshot())
+
+    assert len(released) == 1
+    assert released[0]["task_id"] == "task-42"
+    assert sum(1 for call in second.calls if call[0] == "navigation_goal") == 1
+
+
+async def _record_release(rows, mission):
+    rows.append(dict(mission))
+
+
+def test_task_traffic_queue_requires_confirmed_cancel_before_waiting():
+    first = FakeRobot("rosy_01", state=_navigating("rosy_01"))
+    first._path = _line(-2.0, 0, 2.0, 0)
+    second = FakeRobot("rosy_02", state=_navigating("rosy_02"))
+    second._path = _line(2.0, 0.1, -2.0, 0.1)
+
+    async def ambiguous_cancel():
+        second._record("navigation_cancel")
+        return {"navigation": "IDLE"}
+
+    second.navigation_cancel = ambiguous_cancel
+    console = _console(first, second)
+    run(console.goal("rosy_01", 2.0, 0.0))
+
+    try:
+        run(console.goal("rosy_02", -2.0, 0.1, task_id="task-ambiguous"))
+    except RuntimeError as exc:
+        assert "cancellation" in str(exc)
+    else:
+        raise AssertionError("traffic wait requires a positive cancellation receipt")
+
+    assert "rosy_02" not in console._queued
+    assert console._goals["rosy_02"] == {"x": -2.0, "y": 0.1, "yaw": 0.0}
+
+
 def test_the_queued_mission_goes_out_once_the_blocker_stops_navigating():
     first = FakeRobot("rosy_01", state=_navigating("rosy_01"))
     first._path = _line(-2.0, 0, 2.0, 0)

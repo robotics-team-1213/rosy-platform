@@ -15,7 +15,8 @@ from fleet.hub.hub import SiteHub
 
 
 def _ep(robot_id: str = "rosy_01") -> RobotEndpoint:
-    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "pair-01")
+    return RobotEndpoint(robot_id, "http://127.0.0.1:8080", "rest-01",
+                         fleet_pairing_token="pair-01")
 
 
 def _hello(robot_id="rosy_01", token="pair-01") -> Envelope:
@@ -39,6 +40,31 @@ def test_hello_with_wrong_token_is_pairing_invalid_and_stays_offline():
     assert hub.registry.online_ids() == []
 
 
+def test_hello_with_unknown_protocol_major_is_rejected_before_pairing():
+    hub = SiteHub([_ep()])
+    env = _hello()
+    env.protocol_version = "2.0"
+
+    reply = hub.handle(env)
+
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "PROTOCOL_UNSUPPORTED"
+    assert hub.registry.online_ids() == []
+
+
+def test_rest_operator_token_cannot_pair_the_fleet_agent():
+    endpoint = RobotEndpoint("rosy_01", "https://robot.local", "rest-operator",
+                             fleet_pairing_token="agent-pairing")
+    hub = SiteHub([endpoint])
+
+    refused = hub.handle(_hello(token="rest-operator"))
+    accepted = hub.handle(_hello(token="agent-pairing"))
+
+    assert refused.type is EnvelopeType.ERROR
+    assert refused.payload["code"] == "PAIRING_INVALID"
+    assert accepted.type is EnvelopeType.WELCOME
+
+
 def _hello_with_identity(robot_id="rosy_01", token="pair-01",
                          device_uid="", device_name="",
                          model="", hardware_serial="") -> Envelope:
@@ -50,8 +76,10 @@ def _hello_with_identity(robot_id="rosy_01", token="pair-01",
 
 
 def test_second_robot_with_same_device_uid_is_duplicate_identity():
-    hub = SiteHub([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "pair-01"),
-                   RobotEndpoint("rosy_02", "http://127.0.0.1:8081", "pair-02")])
+    hub = SiteHub([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-01",
+                                 fleet_pairing_token="pair-01"),
+                   RobotEndpoint("rosy_02", "http://127.0.0.1:8081", "rest-02",
+                                 fleet_pairing_token="pair-02")])
     first = hub.handle(_hello_with_identity("rosy_01", "pair-01",
                                             device_uid="uid-shared"))
     assert first.type is EnvelopeType.WELCOME
@@ -147,6 +175,69 @@ def test_events_are_kept_in_seq_order_and_gap_fill_reads_since_seq():
         hub.handle(Envelope(type=EnvelopeType.EVENT, payload=event.model_dump(mode="json")))
     filled = hub.registry.events_since("rosy_01", since_seq=1)
     assert [e.seq for e in filled] == [2, 3]
+
+
+def test_paired_core_events_are_written_to_the_durable_audit_store(tmp_path):
+    from fleet.server.core_event_store import CoreEventStore
+
+    path = tmp_path / "fleet.sqlite3"
+    store = CoreEventStore(path)
+    hub = SiteHub([_ep()], event_store=store)
+    assert hub.handle(_hello()).type is EnvelopeType.WELCOME
+    event = EventMessage(event_id="event-1", seq=1, robot_id="rosy_01",
+                         type="nav.completed", source="navigation",
+                         data={"goal_id": "goal-7"})
+
+    accepted = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                   payload=event.model_dump(mode="json")))
+    duplicate = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                    payload=event.model_dump(mode="json")))
+    records = CoreEventStore(path).read_events()
+
+    assert accepted.payload == {"accepted": True}
+    assert duplicate.payload == {"accepted": True}
+    assert len(records) == 1
+    assert len(hub.registry.record("rosy_01").events) == 1
+    assert records[0]["event"]["event_id"] == "event-1"
+    assert records[0]["robot_id"] == "rosy_01"
+
+
+def test_paired_core_event_with_secret_field_is_rejected_before_memory_or_disk(tmp_path):
+    from fleet.server.core_event_store import CoreEventStore
+
+    store = CoreEventStore(tmp_path / "fleet.sqlite3")
+    hub = SiteHub([_ep()], event_store=store)
+    hub.handle(_hello())
+    sensitive_field = "api_" + "token"
+    event = EventMessage(seq=1, robot_id="rosy_01", type="nav.completed",
+                         data={sensitive_field: "should-not-be-stored"})
+
+    reply = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                payload=event.model_dump(mode="json")))
+
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "EVENT_NOT_AUDITABLE"
+    assert hub.registry.events_since("rosy_01", 0) == []
+    assert store.read_events() == []
+
+
+def test_paired_core_event_is_not_acknowledged_when_durable_write_fails():
+    class UnavailableStore:
+        def append_event(self, _event):
+            import sqlite3
+
+            raise sqlite3.OperationalError("disk unavailable")
+
+    hub = SiteHub([_ep()], event_store=UnavailableStore())
+    hub.handle(_hello())
+    event = EventMessage(seq=1, robot_id="rosy_01", type="nav.completed")
+
+    reply = hub.handle(Envelope(type=EnvelopeType.EVENT,
+                                payload=event.model_dump(mode="json")))
+
+    assert reply.type is EnvelopeType.ERROR
+    assert reply.payload["code"] == "EVENT_STORAGE_UNAVAILABLE"
+    assert hub.registry.events_since("rosy_01", 0) == []
 
 
 def test_event_robot_id_mismatch_after_hello_is_pairing_invalid():

@@ -141,7 +141,7 @@ pytest가 import할 수 없다. 그 모듈 안의 판단은 09-06 C1의 정의 �
   `tools/gz/run_track260905.sh`는 흡수 때 빠져서, 보관된 옛 Rosy Control 저장소에만 있었다. 이 스크립트를
   live 경로(`rosy_control/`을 `control/`로)에 맞춰 이식했다. 한 프로세스 모드(`RIG_SINGLE_PROCESS=1`)와
   비상정지 음성 사례(`RIG_ESTOP_PROBE=1`, `rig_estop_probe.py`)도 추가했다.
-  `src/apps/control/test/test_rig_script_references.py`는 rig가 없는 스크립트를 참조하면 적색이 된다.
+  `src/core/control/test/test_rig_script_references.py`는 rig가 없는 스크립트를 참조하면 적색이 된다.
 - **rig는 ext4에서 돌린다.** WSL `/mnt/f`(Windows 파일 시스템)에서 돌린 첫 실행은 시험 주행 시작 시
   오도메트리 나이 0.22 s(허용 0.2 s)로 실패했다. 같은 코드를 `/tmp` 복사본에서 돌리면 통과한다.
   `/mnt/f`에서는 기준본을 돌리지 않았으므로 원인을 파일 시스템 지연으로 확정하지는 않는다.

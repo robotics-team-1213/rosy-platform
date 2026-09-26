@@ -1,0 +1,65 @@
+cmake_minimum_required(VERSION 3.8)
+project(lamp_control)
+
+set(CMAKE_CXX_STANDARD 20)
+
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(interfaces REQUIRED)
+
+
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  add_executable(main_node src/main_node.cpp)
+  ament_target_dependencies(main_node rclcpp std_msgs interfaces)
+  target_include_directories(main_node
+    PUBLIC
+    /usr/local/include
+  )
+  target_link_libraries(main_node
+    ws2811
+  )
+
+  # D-247 decision 6: the lamp test rosy-hw-test.service runs as root. No ROS;
+  # the same statically linked, Pi 5 patched rpi_ws281x as main_node.
+  add_executable(lamp_selftest src/lamp_selftest.c)
+  set_target_properties(lamp_selftest PROPERTIES C_STANDARD 11)
+  target_include_directories(lamp_selftest PRIVATE /usr/local/include)
+  target_link_libraries(lamp_selftest ws2811 m)
+
+  # D-260 decision 3: the boot display (user rosy-display) shows the robot
+  # state on the lamp through this helper, one process per pattern.
+  add_executable(lamp_pattern src/lamp_pattern.c)
+  set_target_properties(lamp_pattern PROPERTIES C_STANDARD 11)
+  target_include_directories(lamp_pattern PRIVATE /usr/local/include)
+  target_link_libraries(lamp_pattern ws2811 m)
+
+  install(TARGETS
+    main_node
+    lamp_selftest
+    lamp_pattern
+    DESTINATION lib/${PROJECT_NAME}
+  )
+else()
+  message(STATUS "${PROJECT_NAME} build only for ARM64. Skip building.")
+endif()
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  # the following line skips the linter which checks for copyrights
+  # comment the line when a copyright and license is added to all source files
+  set(ament_cmake_copyright_FOUND TRUE)
+  # the following line skips cpplint (only works in a git repo)
+  # comment the line when this package is in a git repo and when
+  # a copyright and license is added to all source files
+  set(ament_cmake_cpplint_FOUND TRUE)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_package()

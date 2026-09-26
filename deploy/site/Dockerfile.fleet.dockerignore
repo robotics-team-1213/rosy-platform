@@ -1,0 +1,16 @@
+**
+!src
+!src/site
+!src/site/fleet
+!src/site/fleet/**
+!src/contracts
+!src/contracts/foundation
+!src/contracts/foundation/core_common
+!src/contracts/foundation/core_common/**
+!src/hmi
+!src/hmi/web
+!src/hmi/web/**
+!deploy
+!deploy/site
+!deploy/site/requirements-fleet.txt
+!deploy/site/secret_exec.py

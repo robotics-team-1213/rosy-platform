@@ -5,6 +5,8 @@
 Gazebo(map_v2_fleet)이며, 이 문서가 다루는 것은 3단계와 그것을 1·2단계에 잇는
 미션 시퀀스(언도킹 → 투어 → 도킹)다.
 
+결정: 도킹의 DOCKING 모드·전용 명령 슬롯 소유는 [D-200](../adr/D-200-docking-owns-the-docking-mode.md)(Accepted)이 기록한다.
+
 ## 1. 사용자 결정 (고정)
 
 | 항목 | 결정 |

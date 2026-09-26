@@ -4,6 +4,11 @@
 D-169(v1 장치 표면)·D-181(장치 편입 조건)·D-161(CORE 비특권)을 그대로 따른다.
 **S1·S2 완료(2026-09-24, US-006, 브랜치 `feat/boot-display-lcd`):** 저장소 구현과 host 시험이 끝났다. 아래
 "S1·S2 구현 기록"을 본다. S3(새 이미지로 구운 카드의 실기 확인)과 부저 핀 확인이 남았다.
+**부저 핀 확인(2026-09-26, `rosy_18`, D-247 슬라이스 2):** Pinky Pro 부저는 BCM 4다. 사람이 귀로 확인했다. BCM 22는
+2 kHz PWM에서도 상시 high에서도 조용했다. 허용 목록 {4, 5, 6, 16, 17, 20, 21, 23, 24, 26}을 차례로 울려 찾았다.
+`/etc/rosy/boot-display.env`에 `ROSY_BUZZER_ENABLED=true`와 `ROSY_BUZZER_PIN=4`를 쓰고 표시를 다시 띄우자
+`CORE_READY` 한 번 울림(2 kHz, duty 10 %)이 들렸다. 그래서 기본 핀을 4로 바꿨다(`board.yaml`, unit, 프로그램).
+기본으로 켤지는 아래 절차대로 별도 변경으로 정한다. 지금은 꺼져 있다.
 
 **Context:** 공식 Pinky Pro OS는 전원을 넣으면 부저가 울리고 LCD(ST7789)에 Wi-Fi 이름과
 비밀번호가 뜬다(`docs/plans/2026-09-21-pinky-pro-os-research.md` §4). Rosy OS는 D-174 T0로
@@ -183,6 +188,8 @@ G.setup(22, G.OUT); p=G.PWM(22, 2000); p.start(10); time.sleep(0.2); p.stop(); G
 | 날짜 | 이미지 | 장치 | BCM | 들렸는가 | 확인자 |
 |---|---|---|---|---|---|
 | (미확인) | | | 22 | | |
+| 2026-09-26 | release 012 | `rosy_18` (`rosy-pinky-e4us`) | 22 | 아니오(PWM 2 kHz·상시 high 모두) | 사람 입회 |
+| 2026-09-26 | release 012 | `rosy_18` (`rosy-pinky-e4us`) | 4 | 예(500 Hz 50 %, 부팅 표시 2 kHz 10 %) | 사람 입회 |
 
 **Alternatives:**
 
@@ -201,3 +208,6 @@ G.setup(22, G.OUT); p=G.PWM(22, 2000); p.start(10); time.sleep(0.2); p.stop(); G
 - 앞으로 장치 응급 조치는 ADR 기록 없이는 하지 않는다.
 
 **실행 계획:** [`docs/plans/2026-09-24-vendor-parity-boot-display.md`](../plans/2026-09-24-vendor-parity-boot-display.md)
+
+**D-272 개정 (2026-09-26):** AP가 열려 있으면 LCD는 `Wi-Fi <SSID>`·`PW <비밀번호>` 두 줄과 함께 Wi-Fi 접속 QR
+(`WIFI:T:WPA;S:<ssid>;P:<psk>;;`)을 오른쪽에 그린다. QR도 비밀번호와 같이 화면에만 그리고 로그에 남기지 않는다.

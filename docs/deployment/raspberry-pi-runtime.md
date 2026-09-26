@@ -1,5 +1,16 @@
 # Raspberry Pi 5 Robot Runtime
 
+> **Runtime model — native, not Docker (D-161, D-197, D-246).**
+> The product runtime is Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy under
+> systemd. `rosy-runtime.target` starts CORE; I/O and navigation are explicit,
+> commissioned modes. **Docker and Compose are development/CI tooling only** and
+> are not installed in the product image — every `docker compose` command in this
+> document belongs to that development path, not to the product boot path.
+> Per-device variation is expressed with profiles and slices; one robot is never
+> switched between two runtime mechanisms. A container sidecar is admitted only
+> for a profile-declared workload outside the safety plan (vision/AI), and only
+> while every safety gate below still passes with the container runtime absent.
+
 For the first physical Pinky Pro connection, use the ordered, evidence-bound
 [G0-G5 commissioning runbook](pinky-pro-first-device-runbook.md). This runtime
 reference does not replace its E-stop, lifted-wheel, or physical HOLD gates.
@@ -14,8 +25,10 @@ Pinky Pro is the first board. Mode-specific capability overlays and the
 commissioning order are in
 [Pinky Pro board support](pinky-pro-board-support.md).
 
-This deployment keeps Raspberry Pi OS as the host and runs the ROS 2 Jazzy
-userland in isolated containers. `rosy-core` owns the FastAPI/rclpy middleware
+This deployment keeps Raspberry Pi OS as the host for the **development/CI
+Compose path** and runs the ROS 2 Jazzy userland in isolated containers. The
+product path is native — see the runtime model above. In both, `rosy-core` owns
+the FastAPI/rclpy middleware
 and has no device access. `rosy-motor` owns only the motor bus for commissioning,
 while `rosy-io` owns the Pinky Pro motor, LiDAR, and Nav2 adapters in full hardware mode.
 
@@ -191,7 +204,12 @@ register value, accepted only from 1 through 32767. It is not an SI acceleration
 measurement. Tune it only on the lifted-wheel bench and record the accepted
 value for the exact motor model and load.
 
-## 4. Build and start
+## 4. Build and start (development/CI Compose path)
+
+> The commands below drive `docker compose`. They are the bench/CI path
+> (D-197 1·4항: development and CI only). On a product robot the equivalent is
+> `systemctl start rosy-runtime.target` with `deploy/robot/native/` units — no
+> Docker daemon, no compose.
 
 Keep `ROSY_RUNTIME_MODE=core` until the UART read-only preflight passes. It
 checks the Pi model, `uart4-pi5`, serial-console conflicts, device node, IDs,

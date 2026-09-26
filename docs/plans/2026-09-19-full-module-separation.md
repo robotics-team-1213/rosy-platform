@@ -21,8 +21,8 @@ S1은 D-63이 예고한 토픽 경계 이행이며 D-64의 `ALLOWED` 집합을 �
 | 파일 | 책임 |
 |---|---|
 | `test/test_module_separation.py` | S0~S5 가드 5개 (신 경로 기준). 구 `test_runtime_slices.py`의 D-64 검사를 대체한다 |
-| `src/apps/control/control/web_node.py` | S2: 최종 `cmd_vel` 구독 제거 |
-| `src/apps/control/control/wander/node.py` | S2: 최종 `cmd_vel` 구독 제거 |
+| `src/core/control/control/web_node.py` | S2: 최종 `cmd_vel` 구독 제거 |
+| `src/core/control/control/wander/node.py` | S2: 최종 `cmd_vel` 구독 제거 |
 | `src/site/fleet/package.xml` | S3: `exec_depend: core` → `core_common` (+ `test_depend: core_features`) |
 | `src/sim/gz_sim/package.xml` | S4: `fleet`(유지 확인) + `navigation` `exec_depend` 선언으로 고정 |
 | `src/core/core/core/bridge/control_sensor_adapter.py` | S1: `control.*` import 3건 제거, 증거 토픽 구독으로 전환 |
@@ -38,7 +38,7 @@ S1은 D-63이 예고한 토픽 경계 이행이며 D-64의 `ALLOWED` 집합을 �
 가드 5개 (전부 AST·문자열 검사, ROS 불필요):
 
 1. `test_core_imports_no_slice_code`: `src/core/**` 생산 코드에 `control/fleet/bringup/navigation/emotion/omx_adapter/games` import 0건. 지금은 S1 때문에 FAIL.
-2. `test_control_has_no_final_cmd_vel`: `src/apps/control/**` 생산 코드에 `'cmd_vel'`·`"cmd_vel"` 정확 일치 0건. 지금은 S2 2곳 때문에 FAIL. (`cmd_vel_raw`는 허용 — 정규식으로 단어 경계를 맞춘다.)
+2. `test_control_has_no_final_cmd_vel`: `src/core/control/**` 생산 코드에 `'cmd_vel'`·`"cmd_vel"` 정확 일치 0건. 지금은 S2 2곳 때문에 FAIL. (`cmd_vel_raw`는 허용 — 정규식으로 단어 경계를 맞춘다.)
 3. `test_package_xml_covers_imports`: 19개 `package.xml`의 의존 집합이 같은 패키지의 코드 import 집합을 덮는다. 지금은 S1(`core`→`control` 미선언) 때문에 FAIL.
 4. `test_cmd_vel_single_publisher`: `Twist, "cmd_vel"`/`'cmd_vel'` 발행이 `src/core/core/core/bridge/ros_bridge.py` 1곳뿐. 지금 PASS (잠금).
 5. `test_fleet_prod_only_core_common`: `src/site/fleet` 비테스트 코드의 `core_*` 참조는 `core_common`만. 지금 PASS (잠금).
@@ -54,14 +54,14 @@ S1은 D-63이 예고한 토픽 경계 이행이며 D-64의 `ALLOWED` 집합을 �
 
 ### Task 1: S2 — control의 최종 `cmd_vel` 구독 잔재 제거
 
-**Files:** `src/apps/control/control/web_node.py:431`, `src/apps/control/control/wander/node.py:36`
+**Files:** `src/core/control/control/web_node.py:431`, `src/core/control/control/wander/node.py:36`
 
 - [ ] **Step 1:** 가드 2가 빨강임을 확인 (Task 0에서 이미).
 - [ ] **Step 2:** 두 구독을 세션·원시 계열로 옮긴다. 운영 토픽명(`cmd_vel`)을 소비하지 않게 한다.
   발행이 아니라 구독이므로 로봇 동작은 그대로이나, 토픽명 공유가 단일 발행자(D-2) 추론을 깨뜨린다.
   `control/safety/node.py:88`의 레거시 비교 그래프 발행자 기본값은 parity 계약(`test_os_control_graph.py`)이
   고정하므로 유지하고, 가드 2에 정확히 1곳으로 핀한다.
-- [ ] **Step 3:** `python -m pytest test/test_module_separation.py::test_control_has_no_final_cmd_vel src/apps/control/test -q` PASS.
+- [ ] **Step 3:** `python -m pytest test/test_module_separation.py::test_control_has_no_final_cmd_vel src/core/control/test -q` PASS.
 - [ ] **Step 4:** 관련 control 회귀 전체 PASS. 운영 launch에 두 노드가 최종 토픽으로 묶이지 않음을 `launch/` grep으로 확인.
 - [ ] **Step 5: Commit:** `git commit -m "refactor(control): stop subscribing to the final cmd_vel"`
 
@@ -99,7 +99,7 @@ S1은 D-63이 예고한 토픽 경계 이행이며 D-64의 `ALLOWED` 집합을 �
 
 ### Task 4: S1 — provider 역전으로 어댑터의 `control` import 제거 (완료)
 
-**Files:** `src/core/core/core/bridge/control_sensor_adapter.py`, `src/apps/control/control/sensor_provider.py` (신규), `src/apps/control/setup.py`, `src/core/core/test/test_control_sensor_adapter.py`, `src/core/core/test/conftest.py`
+**Files:** `src/core/core/core/bridge/control_sensor_adapter.py`, `src/core/control/control/sensor_provider.py` (신규), `src/core/control/setup.py`, `src/core/core/test/test_control_sensor_adapter.py`, `src/core/core/test/conftest.py`
 
 당초 "증거 토픽 소비"안은 worker 생성·보정 바인딩이 스트림이 아니라 조립이라 토픽으로 바꿀 수 없고,
 ROS 없이는 검증도 불가능하므로 폐기했다. 대신 provider 역전:
@@ -132,7 +132,7 @@ ROS 없이는 검증도 불가능하므로 폐기했다. 대신 provider 역전:
 
 - [ ] **Step 1:** 아래 스위트를 **각각 별도 호출**로 PASS (한 호출에 합치면 fleet/games의 동명
   테스트 파일(`test_cli.py` 등)이 수집 충돌을 일으킨다 — 기존 조건, D-126과 무관).
-  `src/core/core/test`, `src/apps/control/test`, `src/site/fleet/test`,
+  `src/core/core/test`, `src/core/control/test`, `src/site/fleet/test`,
   `src/apps/omx_adapter/test`, `src/apps/games/test`, `src/sim/gz_sim/test`,
   `test/test_module_separation.py` + `test/` (Windows는 rclpy 불필요 분만).
   기존 환경성 실패(별도 기록, D-126 변경과 무관한 것만)는 D-126을 막지 않는다.

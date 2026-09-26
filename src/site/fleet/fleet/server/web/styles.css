@@ -13,18 +13,6 @@ body {
 
 input, select { font: inherit; color: inherit; }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--line-10);
-  background: var(--scrim);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: 700; font-size: var(--text-value); letter-spacing: 0.04em; }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }
@@ -54,6 +42,25 @@ main {
   align-items: start;
 }
 
+/* D-201 적합 계약 — 예외 문법은 한눈에 다 보인다. 배치는 큐 패널의 가시성과
+   무관하게 흔들리지 않는다: 지도와 큐는 좌열, 로스터는 우열에 고정.
+   우열 패널은 세로 flex다 — 로스터(목록)만 프레임 안에서 스크롤되고
+   신호등·대형은 패널 바닥에 늘 보인다. */
+@media (min-width: 62rem) {
+  main > .panel[aria-labelledby="map-heading"] { grid-column: 1; grid-row: 1; }
+  .queues-panel { grid-column: 1; grid-row: 2; }
+  main > .panel[aria-labelledby="roster-heading"] {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: calc(100dvh - var(--topbar-height) - 14rem);
+  }
+  /* 목록은 스크롤된다 — 문서가 아니라 이 칸이 스크롤을 소유한다. */
+  #roster { flex: 1; min-height: 0; overflow-y: auto; }
+}
+
 .panel {
   background: var(--panel-fill);
   border: 1px solid var(--line-10);
@@ -75,8 +82,13 @@ main {
 .map-head .spacer { flex: 1; }
 
 #map-canvas {
+  /* D-201 — 지도는 페이지를 밀지 않고 프레임에 맞는다. 박스는 폭을 채우고
+     높이가 상한을 지키며, 비트맵은 종횡비를 유지한 채 그 안에 들어찬다
+     (object-fit: contain — 벽이 번지는 비율 왜곡은 선택이 아니다). 클릭
+     좌표는 레터박스를 제외한 그려진 영역 기준으로 계산된다(console.js). */
   width: 100%;
-  height: auto;
+  height: calc(100dvh - var(--topbar-height) - 26rem);
+  object-fit: contain;
   display: block;
   /* 격자 한 칸은 5 cm 다. 보간하면 벽이 번져 어디가 통로인지 읽을 수 없다. */
   image-rendering: pixelated;
@@ -117,7 +129,7 @@ main {
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
 .robot.s2 { border-left-color: var(--robot-3); }
-.robot.selected { background: var(--ground-card-2); border-color: var(--line-30); }
+.robot.selected { background: var(--ground); border-color: var(--line-30); }
 .robot.offline { opacity: 0.55; }
 
 .robot-head { display: flex; align-items: center; gap: var(--space-2); }
@@ -136,7 +148,13 @@ main {
 .tag.nav { color: var(--series-primary); border-color: var(--series-primary); }
 .tag.ok { color: var(--nominal); border-color: var(--surface-line); }
 .tag.warn { color: var(--status-warn); border-color: var(--status-warn); }
-.tag.crit { color: var(--status-crit); border-color: var(--status-crit-a45); }
+/* D-202 — 위험은 글자가 아니라 채움이다. crit 글자는 어두운 카드 위에서
+   2.24:1로 읽히지 않았다. 공유 태그의 위험 얼굴과 같다: 종이 잉크 + 채움. */
+.tag.crit {
+  color: var(--paper);
+  background: var(--status-crit);
+  border-color: transparent;
+}
 
 .facts {
   display: grid;
@@ -189,7 +207,8 @@ main {
   line-height: 1.7;
 }
 .log div { border-bottom: 1px solid var(--line-06); padding: var(--space-1) 0; }
-.log .bad { color: var(--status-crit); }
+/* D-202 — 나쁜 줄은 채워진다. 경보 글자(2.24:1)가 아니라 위험 채움 + 종이 잉크. */
+.log div.bad { color: var(--paper); background: var(--status-crit); padding: var(--space-1) var(--space-2); }
 .log .good { color: var(--nominal-quiet); }
 
 .note {
@@ -253,6 +272,9 @@ main {
   border-radius: var(--radius-control);
   background: var(--ground-card);
   border: 1px solid var(--line-10);
+  /* D-201 — 큐는 목록이다: 프레임 안에서 스크롤되고 문서를 밀지 않는다. */
+  max-height: 16rem;
+  overflow-y: auto;
 }
 .warning-queue {
   border-left: 4px solid var(--status-warn);
@@ -260,10 +282,8 @@ main {
 .critical-queue {
   border-left: 4px solid var(--status-crit);
 }
-.queue h3 {
+.queue ui-triage {
   margin: 0 0 var(--space-2) 0;
-  font-size: var(--text-label);
-  color: var(--muted);
 }
 .issue-list {
   list-style: none;

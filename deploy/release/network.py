@@ -29,16 +29,29 @@ from __future__ import annotations
 
 import re
 import secrets
-import string
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
-#: WPA2 needs 8; the design asks for at least 16 on a per-device random key.
-SETUP_PSK_LENGTH = 20
-MIN_SETUP_PSK_LENGTH = 16
+#: Generated AP passphrases (setup, recovery, relay; D-176 per device, never
+#: shared): "rosy-" and two groups of four from lowercase letters and digits
+#: without the look-alikes 0 o 1 l i, e.g. rosy-xxxx-xxxx. Only the 8 random
+#: symbols count: 31**8 is about 39.6 bits; the prefix adds none. A person
+#: reads it off the LCD (or scans its QR) and types it on a phone.
+#: (Names without psk: the release secret scanner reads NAME = "literal" as one.)
+SETUP_PSK_PREFIX = "rosy-"
+READABLE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+SETUP_PSK_GROUPS = 2
+SETUP_PSK_GROUP_LENGTH = 4
+SETUP_PSK_LENGTH = 14  # "rosy-" + 4 + "-" + 4
+#: The generator's floor. WPA2 itself needs 8; a human-set passphrase from
+#: rosy-config.yaml is validated there, not here.
+MIN_SETUP_PSK_GROUPS = 2
+MIN_SETUP_PSK_LENGTH = 14
+#: What generate_setup_psk returns (more groups on request).
+READABLE_SETUP_KEY = re.compile(r"^rosy-[a-hj-km-np-z2-9]{4}(?:-[a-hj-km-np-z2-9]{4})+$")
 
 #: The setup endpoint closes itself if nobody is provisioning.
 SETUP_IDLE_TIMEOUT_S = 20 * 60
@@ -165,17 +178,30 @@ class NetworkBackend(Protocol):
     def delete_profile(self, name: str) -> None: ...
 
 
-def generate_setup_psk(length: int = SETUP_PSK_LENGTH) -> str:
-    """A per-device random setup passphrase.
+def generate_setup_psk(groups: int = SETUP_PSK_GROUPS) -> str:
+    """A per-device random setup passphrase, ``rosy-xxxx-xxxx`` (READABLE_SETUP_KEY).
 
     Shown on the LCD for a bounded time and nowhere else — not in a log, not
     in an API response. A device without a working LCD provisions at flash
     time instead.
     """
-    if length < MIN_SETUP_PSK_LENGTH:
-        raise ValueError(f"a setup PSK must be at least {MIN_SETUP_PSK_LENGTH} characters")
-    alphabet = string.ascii_letters + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(length))
+    if groups < MIN_SETUP_PSK_GROUPS:
+        raise ValueError(
+            f"a setup PSK must have at least {MIN_SETUP_PSK_GROUPS} groups "
+            f"({MIN_SETUP_PSK_LENGTH} characters)")
+    return SETUP_PSK_PREFIX + "-".join(
+        "".join(secrets.choice(READABLE_ALPHABET) for _ in range(SETUP_PSK_GROUP_LENGTH))
+        for _ in range(groups)
+    )
+
+
+def generate_relay_psk() -> str:
+    """The relay AP's passphrase (D-272).
+
+    The relay AP stays up the whole time the robot runs and nobody types its
+    key, so it gets four groups (~79 bits) instead of the setup AP's two.
+    """
+    return generate_setup_psk(groups=4)
 
 
 @dataclass
@@ -377,7 +403,7 @@ class NetworkProvisioner:
             self._backend.add_relay_profile(
                 self.RELAY_PROFILE,
                 ssid=f"ROSY-{request.robot_id}",
-                psk=generate_setup_psk(),
+                psk=generate_relay_psk(),
                 country=request.country,
             )
             self._backend.activate(self.RELAY_PROFILE)

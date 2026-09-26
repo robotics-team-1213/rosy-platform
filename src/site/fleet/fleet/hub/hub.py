@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Optional, Sequence
 
 from core_common.protocol.schemas import (
@@ -10,6 +11,7 @@ from core_common.protocol.schemas import (
     EventMessage,
     HeartbeatPayload,
     HelloPayload,
+    PROTOCOL_VERSION,
     SwarmFollowParams,
     SwarmReferenceSource,
     WelcomePayload,
@@ -17,8 +19,16 @@ from core_common.protocol.schemas import (
 from fleet.hub.registry import RobotRegistry
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient
+from fleet.server.core_event_store import CoreEventStore, EventRejected
 
 _FORBIDDEN_PAYLOAD_KEYS = frozenset({"cmd_vel", "image", "twist"})
+
+
+def _protocol_major(value: str) -> int | None:
+    parts = value.split(".")
+    if len(parts) != 2 or not all(part.isdecimal() for part in parts):
+        return None
+    return int(parts[0])
 
 
 class HubError(Exception):
@@ -37,14 +47,22 @@ class SiteHub:
         endpoints: Sequence[RobotEndpoint],
         clients: Optional[dict[str, RobotClient]] = None,
         fleet_name: str = "rosy-site",
+        event_store: CoreEventStore | None = None,
     ) -> None:
-        self._tokens = {e.robot_id: e.token for e in endpoints}
+        # CORE REST control tokens and FleetAgent pairing credentials have
+        # distinct authority. Missing pairing credentials leave the agent
+        # link unavailable for that robot; never fall back to the REST token.
+        self._tokens = {e.robot_id: e.fleet_pairing_token for e in endpoints
+                        if e.fleet_pairing_token is not None}
         self._clients = clients or {}
         self._paired: set[str] = set()
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
+        self.event_store = event_store
 
     def handle(self, envelope: Envelope) -> Envelope:
+        if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
+            return _error("PROTOCOL_UNSUPPORTED", "protocol major is not supported")
         if envelope.type is EnvelopeType.HELLO:
             return self._hello(envelope)
         if envelope.type is EnvelopeType.COMMAND:
@@ -73,6 +91,8 @@ class SiteHub:
             hello = HelloPayload.model_validate(envelope.payload)
         except Exception:
             return _error("PAIRING_INVALID", "bad hello")
+        if _protocol_major(hello.protocol_version) != _protocol_major(PROTOCOL_VERSION):
+            return _error("PROTOCOL_UNSUPPORTED", "hello protocol major is not supported")
         expected = self._tokens.get(hello.robot_id)
         if expected is None or expected != hello.pairing_token:
             return _error("PAIRING_INVALID", "unknown robot or token")
@@ -126,7 +146,16 @@ class SiteHub:
             return _error("SESSION_NOT_PAIRED", "hello first")
         if event.robot_id not in self._paired:
             return _error("PAIRING_INVALID", "robot mismatch")
+        is_new = True
+        if self.event_store is not None:
+            try:
+                is_new = self.event_store.append_event(event.model_dump(mode="json"))
+            except EventRejected:
+                return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
+            except (OSError, sqlite3.Error):
+                return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
         row = self.registry.record(event.robot_id)
-        row.events.append(event)
+        if is_new:
+            row.events.append(event)
         row.last_event_seq = max(row.last_event_seq, event.seq)
         return Envelope(type=EnvelopeType.EVENT, payload={"accepted": True})

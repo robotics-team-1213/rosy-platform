@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 흡수된 `rosy_control` 기능을 Rosy OS의 단일 명령·안전 경로에 연결하고, 자동화 시험에서 ARM64 이미지·Device 설치·readback·Pinky Pro 현장 인수까지 재현 가능한 증거 사슬을 만든다.
+**Goal:** 흡수된 `rosy_control` 기능을 Rosy OS의 단일 명령·안전 경로에 연결하고 ARM64 이미지·Device 설치·readback의 증거 사슬을 만든다. D-273을 실행 목표로 포함해 고정 작업대 OMX 팔 제어와 상부·손목 카메라 스트림을 단계별로 연결하고, 규칙 기반 집기 기준선까지 검증한다.
 
-**Architecture:** `rosy_core`는 FastAPI/rclpy와 최종 `cmd_vel` 발행자로 남긴다. `rosy_control`은 ROS 의존성이 낮은 worker와 sensor-only typed evidence를 제공한다. Device는 Raspberry Pi OS Lite 64-bit 호스트에서 서명된 ROS 2 Jazzy ARM64 컨테이너를 실행하며, `core`를 먼저 고정 운용하고 이후 `motor`와 `hardware` 프로필을 순서대로 승격한다.
+**Architecture:** `rosy_core`는 FastAPI/rclpy와 최종 `cmd_vel` 발행자로 남긴다. `rosy_control`은 ROS 의존성이 낮은 worker와 sensor-only typed evidence를 제공한다. OMX 실증은 Pinky 주행과 분리된 고정 작업대에서 시작한다. 팔 드라이버/관절 피드백을 먼저 검증한 뒤 상부 RGB·보정·규칙 기반 집기, 손목 RGB와 시범 데이터 순으로 확장한다. OMX capability와 Device profile은 실제 모델·드라이버·정지·하중·보정 gate가 통과하기 전까지 비활성으로 유지한다.
 
 **Tech Stack:** ROS 2 Jazzy, Python 3.12, rclpy, FastAPI, pytest, NumPy/OpenCV, colcon, Docker Buildx, Raspberry Pi OS Lite 64-bit, systemd, Docker Compose, signed release tooling.
 
@@ -109,6 +109,23 @@ calibration snapshot/storage, `rosy_control/safety/node.py`, CORE profile/manage
 Nav2와 absorbed Control backend를 동일한 scenario fixture로 비교하고 한 번에 하나의 backend만 활성화한다. cancel, timeout, stale route, obstacle detour, stop distance 결과를 동일한 evidence schema로 기록한다.
 
 OMX는 robot-local action capability로만 둔다. 모델(신형 OMX-F/OMX-AI 또는 구형 RM-X52-TNM), mount, payload, 전원 budget, hand-eye calibration, collision/interlock, recovery가 모두 정해지고 물리 시험을 통과하기 전에는 capability와 Device profile을 disabled로 유지한다. Pinky Pro에 실을 박스의 크기·질량·무게중심은 측정값으로 대체하기 전까지 요구사항 가정으로만 표시한다.
+
+### Task 6A — D-273 고정 작업대 OMX 팔·카메라 경로를 순서대로 구현한다
+
+실행 결정은 [D-273](../adr/D-273-omx-camera-stream-and-arm-control-order.md), 조사 입력은 [OMX-AI 카메라 보고서](../reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md)다. 이 경로는 기존 Pinky 주행 카메라·사이트 카메라와 분리된 작업 셀이다. 단계 실패 시 다음 단계와 capability 승격을 중단한다.
+
+| 단계 | 구현 범위 | 진입/완료 gate |
+|---|---|---|
+| P0 — 장치·통신 기준선 | OMX 실물 모델/리비전, 제어 호스트, 제조사 드라이버 버전, 전원·포트 소유자, ROS/RMW, 물리 정지 수단을 기록한다. D-117 CycloneDDS와 벤더 기본 통신이 맞지 않으면 명시적 adapter/bridge 결정과 시험 전까지 HOLD한다. | 선택한 OMX와 재현 가능한 버전 입력이 기록되고, 직렬 장치 단독 소유 및 사람의 정지 절차가 확인됨 |
+| P1 — 팔 제어 기준선 | `src/devices/omx/adapter` 경계에서 실측 드라이버를 연결하고 관절 상태와 표준 trajectory 계약을 확인한다. 리더 조작·MoveIt·후속 정책 중 명령 writer 하나만 허용한다. stale 상태, 범위 초과, 링크 손실, 재시작은 HOLD로 처리하며 재접속 후 이전 명령을 재생하지 않는다. | 무하중·저속 동작, 관절 순서/단위/그리퍼 readback, 한계·통신 상실·정지·재시작 결과 기록. 가짜 `joint_states`나 plugin은 허용하지 않음 |
+| P2 — 상부 RGB·보정 | 지속 식별되는 작업 카메라를 로컬 인식/기록 경로에 연결한다. 촬영 시각, `CameraInfo`, frame/profile/calibration revision, 유실·지연을 묶고 bounded latest-frame 처리와 stale 거부를 둔다. 카메라 위치·작업면·팔/TCP 좌표를 별도 보정한다. | 재부팅 후 역할 식별, 연속 30분 프레임/지연 기록, 3×3 기준점 오차 및 보정 revision readback. 실제 허용 오차는 부품의 측정된 파지 여유로 정함 |
+| P3 — 규칙 기반 집기 | 한 종류의 가벼운 부품과 고정 시작 구역·트레이로 `검출 → 좌표검증 → 접근 → 파지 → 이송 → 놓기 → 확인`을 실행하고 작업 ID별 실패·개입·정지 원인을 기록한다. | 별도 평가 조건 30회 중 27회 성공은 초기 목표다. 성공률만으로 안전이나 생산 신뢰도를 판정하지 않고 stale/카메라 중단/그리퍼 불명확/USB 분리 때 HOLD를 입증 |
+| P4 — 손목 RGB·시범 기록 | P3 DEVICE gate 이후 브래킷 포함 질량, 자세별 간섭·케이블 당김·부하를 확인한다. 카메라 추가 후 새 보정 revision을 발행하고 영상·관절·명령의 시각 정합을 검사한다. | pilot 10개 에피소드의 누락·중복·순서·세션 분리를 검사. 미통과 시 데이터 수집 확대 금지 |
+| P5 — ACT 및 선택 확장 | 모델 학습/평가는 팔 제어와 분리한다. 승인된 policy도 P1의 단일 writer·한계·stale·stop 검증을 거쳐 shadow 비교부터 시작한다. 깊이 카메라, Pinky 연계는 측정된 병목이 있을 때 별도 gate를 연다. | 새 시작 조건에서 P3 규칙 기반 기준선과 성공률·사이클 시간·개입률·지연 비교. 이 결과만으로 자동 운전 또는 FIELD를 GO로 승격하지 않음 |
+
+**영상 노출 계약:** 원본 스트림은 OMX 제어 호스트 안에서 처리·기록하고 Pinky `camera/front`를 재사용하지 않는다. CORE 화면 표시가 필요하면 D-152의 인증된 최신 JPEG 한 장, 최대 2 FPS·640 px 경계를 따른다. 고속 브라우저 스트림/원격 팔 조작은 별도 미디어·권한·stop 계약 ADR 없이는 구현하지 않는다. 원본 영상이나 DDS를 Fleet/사이트 서버에 중계하지 않는다(D-118, D-269).
+
+**기존 Task 연결:** Task 5는 재사용 가능한 카메라 전처리/계측 기반을 제공하되 semantic grasp 판정으로 취급하지 않는다. P0/P1은 SOURCE·LOCAL·ROS-SIM에 반영하고 실제 장치 P1/P2/P3/P4 결과는 Task 9 commissioning의 별도 DEVICE evidence로 남긴다. Task 7/8은 검증된 profile·드라이버·카메라 의존성이 선택형 산출물에 포함되는지 검증할 때만 갱신한다. OMX 전용 작업 호스트가 기존 Pi 이미지와 다른 경우 동일 산출물로 간주하지 않고 별도 ARTIFACT/DEVICE 체인을 만든다. 모든 단계의 evidence에는 source revision, 장치/설정/calibration revision, 명령, 결과와 다음 gate를 기록한다.
 
 ### Task 7 — linux/arm64 artifact를 재현 가능하게 만든다
 
@@ -630,7 +647,7 @@ DEVICE/FIELD HOLD gates.
 
 ## 2026-09-24 device measurement checkpoint: control hot paths (D-185 R8)
 
-`src/apps/control/tools/device/hotpath_measure.py` produces the Pi numbers D-185
+`src/core/control/tools/device/hotpath_measure.py` produces the Pi numbers D-185
 marks HOLD. The full procedure is in the tool's module docstring. In short:
 
 1. On the Pinky Pro, check out the revision under test (or copy the single file and
@@ -638,7 +655,7 @@ marks HOLD. The full procedure is in the tool's module docstring. In short:
    measure the deployed `control`).
 2. Stack stopped, about 1-2 min:
    `python3 tools/device/hotpath_measure.py bench --iterations 50 --label <rev> --out ~/rosy-measure/bench-<ts>.json`
-   (from `src/apps/control`).
+   (from `src/core/control`).
 3. Stack running in the scenario to measure, about 600 s:
    `python3 tools/device/hotpath_measure.py watch --duration 600 --interval 2 --label <scenario> --out ~/rosy-measure/watch-<ts>.json`
 4. Copy `~/rosy-measure/*.json` back and cite it in the D-185 R8 record.

@@ -49,4 +49,8 @@ advisory로만 반영), unknown revision fail-closed, 단독 버스트 트리거
 **References:** D-2, D-38, D-47, D-136, AIV-001
 (`2026-09-05-vision-accelerator-shield-design.md`), FOR-004.
 
+**부분 구현 기록 (2026-09-25, Proposed 유지):** SAF-006 자문역 일부가 구현됐다
+(`core_features/safety/manager.py:92` `person` 자문, `person_advisory_from`, API Ref §6.1.1 `DetectionEvidence`).
+단 본 ADR의 Transition(계약 시험 + ROS-SIM 거짓음성 주입 + 실행 계획)은 미완이므로 Accepted로 뒤집지 않는다.
+
 ---

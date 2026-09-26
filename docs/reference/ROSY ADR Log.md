@@ -166,16 +166,16 @@
 | D-156 | ROS 2 Namespace Strict Segregation (Runtime Guard) | Proposed |
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) | Accepted |
 | D-158 | UI Component Consistency: Strict Outline Borders (Law 2) | Accepted |
-| D-159 | State Summary Visibility: Management by Exception (Law 0) | Proposed |
+| D-159 | State Summary Visibility: Management by Exception (Law 0) | Accepted |
 | D-160 | Games Domain Strict Decoupling (AST Validation) | Accepted |
-| D-161 | Ubuntu Server 24.04 + ROS 2 Jazzy 네이티브 제품 런타임으로 즉시 전환 | Accepted (supersedes D-22 runtime mechanism) |
+| D-161 | Ubuntu Server 24.04 + ROS 2 Jazzy 네이티브 제품 런타임으로 즉시 전환 | Accepted (supersedes D-22 runtime mechanism; 5항 컨테이너 범위는 D-246로 명시) |
 | D-162 | 학습된 장면은 설정이지 권한이 아니다 — 장면 상황 프로파일은 등록·리비전·보수 폴백으로만 적용한다 | Proposed |
 | D-163 | 신호등 관측은 제어와 분리된 읽기 전용 평면이며, 카메라 역할은 표시·계측·상태관측 셋으로 나눈다 | Accepted |
 | D-164 | Pinky Pro 제품 산출물은 ISO가 아니라 서명된 Raspberry Pi 디스크 이미지다 | Accepted |
 | D-165 | Pinky Pro 네이티브 ROS 패키지의 하드웨어 의존성도 이미지 입력으로 고정한다 | Accepted |
 | D-166 | 과속 반응은 기록 전용이며, 자동 감속은 로봇 계약 확인과 판정 검증 후에만 상향한다 | Accepted |
 | D-167 | 미들웨어 목표는 평가표로 측정한다 — 8개 판정 축과 기준선 | Proposed |
-| D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 | Accepted |
+| D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 | Accepted (영역 목록은 Superseded by D-231) |
 | D-169 | v1 제품 장치 표면은 모터·LiDAR·카메라·I2C-1 ADC로 고정한다 — emotion/lamp/led/imu는 벤치 전용을 소급 공식화 | Accepted |
 | D-170 | PRT-004 명령 추적 확장은 중앙 Fleet 착수와 함께 간다 — 그 전까지 correlation_id는 계약 전용 필드 | Accepted |
 | D-171 | control 구조 개선은 host 시험 가능한 판단 비율로 재고, ROS 경계 → 노드 판단 추출 → 패키지 분리 순서로 한다 | Accepted |
@@ -203,6 +203,80 @@
 | D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed |
 | D-194 | 브라우저 조작 부품은 한 벌이다 | Accepted |
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
-| D-197 | Docker는 제품 아티팩트 체인에서 퇴역한다 — 제품 경로의 신규 Docker 의존은 지금 금지하고, OCI·Compose 체인은 native payload가 ARTIFACT를 통과하면 한 변경으로 정리한다 | Accepted |
+| D-196 | 로봇은 장치의 조합이다 — `src/devices/<계열>/`과 `src/robots/<robot>/`을 두고, 로봇 지식은 그 안에만 둔다 | Proposed |
+| D-197 | Docker는 제품 아티팩트 체인에서 퇴역한다 — 제품 경로의 신규 Docker 의존은 지금 금지하고, OCI·Compose 체인은 native payload가 ARTIFACT를 통과하면 한 변경으로 정리한다 | Accepted (비안전 사이드카 레인은 D-246가 한정 허용) |
 | D-198 | Docker 시대의 장치 운영면을 철거한다 — 안전 검증 게이트의 native 대체는 지금 만들고, 설치기·모드 전환은 대체 없이 폐기한다 | Accepted |
+| D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 | Proposed |
+| D-200 | 도킹은 DOCKING 모드와 전용 명령 슬롯을 쥔다 — 모든 도크 기종이 처음부터 끝까지 DOCKING에서 움직인다 | Accepted |
+| D-201 | 고정 문법 표면의 적합 계약 — 스크롤도 아니고 분쇄도 아니다: 선언 뷰포트에서 문서가 스크롤되지 않고 조작이 눌려 사라지지 않으며, 목록만 프레임 안에서 스크롤되고 안전 조작은 항상 보인다 | Accepted |
+| D-202 | 위험은 채움이다 — 경보 텍스트의 대비 계약: status-crit는 글자색으로 쓰지 않고, 따뜻한 색 글자는 4.5:1 이상이어야 한다 | Accepted |
+| D-203 | 계산 척급 폐쇄 — 화면에 보이는 계산 폰트 크기는 토큰 여섯 단계뿐이다: 선언이 아니라 렌더 결과가 닫혀 있어야 한다 | Accepted |
+| D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 | Proposed |
+| D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 | Proposed |
+| D-207 | 제품과 장치 종류는 주인이 하나다 — 제품 기록은 src/products, 새 칩은 종류 안의 구현, 조명 두 서비스와 현장 펌웨어와 맵은 부르는 쪽에 둔다 | Proposed (결정 5의 루트 위치는 Superseded by D-231) |
+| D-208 | 감지 프로파일은 속도를 발행하지 않는다 — full만 D-149의 단독 최종 발행 예외이고 sensing은 safety_node와 Twist 발행자를 만들지 않는다 | Accepted |
+| D-209 | 인식과 학습 백엔드의 자리 — 몸통 인식은 control/sensing/perception, VLA는 backend_learned, 재생과 학습 세트는 로봇 이미지 밖 | Accepted |
+| D-210 | 실사용 1차 범위 — 2대 관제+군집을 실물 1대+시뮬 1대로 닫는다 | Proposed |
+| D-211 | ROS-SIM 재실행 묶음 — 현재 트리에서 2대 관제+군집을 증명한다 | Proposed |
+| D-212 | ARTIFACT 네이티브 경로 — Pi 5에서 서명 이미지까지만 간다 | Proposed |
+| D-213 | DEVICE→FIELD 승격 순서 — 실물 1대 stationary부터 2대(실물+sim) 현장 반복까지 | Proposed |
+| D-214 | 텍스트 대비의 바닥 — 모든 보이는 글자는 4.5:1(큰 값 3.0:1) 이상이다: 팔레트는 표면의 자유지만 읽힘은 청중의 권리이며 선택도 읽기를 희생하지 않는다 | Accepted |
+| D-215 | 명령 추적 `TIMEOUT`은 Fleet 기록 전용 상태다 — 로봇 ack enum에 넣지 않는다 | Accepted |
+| D-216 | CAP-001 예시의 `protocol_version` 오타를 고친다 — `"1"`이 아니라 `"1.0"`이다 | Accepted |
+| D-217 | SEC-102의 CORS 문장을 좁힌다 — 로봇 API는 CORS를 제공하지 않는다 | Accepted |
+| D-222 | First-boot 소비자는 `rosy-first-boot.py` 하나다 — `apply-sd-provision.py` stub을 폐기한다 | Accepted |
+| D-225 | 카드 재기록은 마지막 수단이다 — 기존 로봇은 서명 payload 전환으로 갱신하고, 남는 재기록은 리더·재개·이미지 크기로 줄인다 | Proposed |
+| D-218 | 확인 문법의 졸업 — 네이티브 window.confirm이 공유 컴포넌트다: 거부는 호출 0회, alert/prompt는 금지, 확인 문장은 결과를 묻는 평문이다 | Accepted |
+| D-219 | 운용 요약 어휘의 실행 계약 — 콘솔 분류 범주와 Fleet 큐가 닫힌 선언적 표로 고정되며 D-159가 승격된다: 빈 큐는 부재다, 초록이 아니다 | Accepted |
+| D-220 | 정지 계약 — 움직임 예산은 0이다: 상태 변화는 점프 컷이며 보간은 없는 값을 있는 것처럼 보이게 한다, 예외는 ADR로만 | Accepted |
+| D-218 | 확인 문법의 졸업 — 네이티브 confirm이 공유 컴포넌트다. alert/prompt 금지, confirm은 핀된 횟수, 없는 조종은 버튼이 아니다 | Accepted |
+| D-219 | 운용 요약 어휘의 실행 계약 — D-159를 Accepted로 승격하고 Fleet 큐 규칙을 콘솔 분류와 같이 고정한다 | Accepted |
+| D-220 | 정지 계약 — 움직임 예산은 0이다. 보이는 요소의 전이와 애니메이션은 없다 | Accepted |
+| D-221 | 얼굴 웨이크 카드의 어휘 — 라벨은 기계 약어로 남는다: 행인의 채널은 형태·색·만료이지 글자가 아니며, 폰트 의존(이미지에 CJK 폰트 없음)과 enum 값 번역 없는 라벨 번역은 다 이득이 없다 | Accepted |
+| D-224 | 표면의 키보드 어휘 — 약속한 키는 동작한다: Fleet 로스터 ↑/↓ 순회·Enter 목표·Escape 해소, 게임 스페이스는 /stop 1회, 카드 착지점은 tabindex -1 | Accepted |
+| D-226 | 문서는 공개 여부를 먼저 가르고, 그다음 주인 폴더에 둔다 — 비밀·식별·권리 불명·전략 초안은 private/, 코드가 읽으면 데이터, 날짜 증거는 docs/validation, 모듈 설명은 모듈 docs/ 하나, 출처 있는 자산 묶음은 통째로 | Accepted |
+| D-227 | 여섯 책임은 지금 트리 위의 이름이다 — 새 루트와 명령 봉투와 AI 워커는 만들지 않는다 | Proposed (결정 1은 Superseded by D-231) |
+| D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 | Accepted |
+| D-229 | 모듈 경계는 지금 폴더를 따라 한 방향으로만 흐른다 — 인식은 증거, 판단은 동작 id, 추종기는 FOLLOW 다음의 속도 | Accepted |
+| D-231 | 소스 영역은 층으로 나눈다 — contracts·runtime·devices·products·hmi·site·sim과 firmware/, 디렉터리만 옮기고 패키지 이름은 유지, 제품 이름 런타임·src 안 AI 워커·원격 판단 경로·새 액션은 받지 않는다 | Accepted |
+| D-230 | SD writer 멈춤은 두 단계로 다룬다 — soft 경고, hard 중단, CLI 진행률 우선 | Accepted |
+| D-232 | OMX 제품 설정은 products/omx 이고, 보드 핀맵과 AI 자리는 그대로다 | Accepted |
+| D-233 | 디자인 시스템 초안 — 토큰 동결, 컴포넌트 3층 | Accepted |
+| D-241 | core 계열 폴더는 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
+| D-242 | 나머지 폴더도 역할 이름을 쓴다 — 패키지 이름과 import 는 유지한다 | Accepted |
+| D-243 | 운용 화면은 hmi 에 두고 API 는 런타임에 둔다 | Accepted |
+| D-245 | E-Stop 파일럿 — 종류·물음형·권한 병기 | Accepted |
+| D-248 | AuthBar — 잠금 폴링 중단 | Accepted |
+| D-249 | FieldMap — spec 고정, 코드 미추출 | Accepted |
+| D-250 | TeleopHold — 홀드-티커 추출 | Accepted |
+| D-251 | 절차 카드 — 크롬 규칙 고정 | Accepted |
+| D-252 | Fleet 큐·대형 — 머리 triage·대기 요약 | Accepted |
+| D-253 | 게임·진단 마무리 — 관전 없음·진단 동결 | Accepted |
+| D-254 | 디자인 철학과 토큰 전집 | Accepted |
+| D-255 | UI/UX 평가 회차 2 | Accepted |
+| D-258 | 디자인 리뷰 루프 | Accepted |
+| D-259 | 지도 키보드 조작 | Accepted |
+| D-270 | 역할 게이팅은 표면이 정한다 | Accepted |
+| D-266 | 진단 PARKED 해제 조건 | Proposed |
+| D-262 | 웹 예산 판정 제안 | Proposed |
+| D-260 | 로봇은 부팅음·LED·LCD·운용 화면 요약줄 네 곳에서 같은 상태를 같은 말로 보여준다 | Proposed |
+| D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 | Accepted |
+| D-247 | 대시보드는 보드의 모든 장치가 붙어 있고 응답하는지를 보여준다 — 장치 관측과 제품 기능을 가른다 | Proposed |
+| D-256 | 공개 무결성 값은 이름으로 지우고, 스캔는 매처를 넙히지 않는다 | Accepted |
+| D-257 | 사이트 관제 지도는 차선 그래프 — 로봇 위치는 폰 천장 카메라가 보고, 영상은 Fleet 밖에서만 | Proposed |
+| D-261 | 천장 카메라 안드로이드 앱 — 골격 범위·위치·기술·첫 버전 약속 | Accepted |
+| D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 | Accepted |
+| D-264 | 장치 진단 도구는 이미지에 넣는다 — 읽기 도구(i2c-tools·pinctrl·gpiod·rpicam-apps)는 제품 이미지에, 커널 헤더는 디버그 프로필에만 | Proposed |
+| D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 | Accepted |
+| D-267 | Ubuntu 상시 관제 노트북은 Fleet·영상·GPU·저장을 분리하고 자동·수동 작업을 같은 검증 경로로 처리한다 | Proposed |
+| D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 | Proposed |
+| D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 | Proposed |
+| D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 | Accepted |
+| D-272 | AP 비밀번호는 로봇마다 다르되 읽기 쉬운 형식과 LCD QR로 보여준다 | Accepted |
+| D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 | Accepted |
+| D-274 | 로컬 브라우저 검토는 실제 CORE 경로를 쓰고 장치 수용은 분리한다 | Accepted |
+| D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 | Accepted |
+| D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 | Accepted |
+| D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 | Accepted |
+| D-278 | 역할별 표면은 작업 흐름으로 구분하고 색은 의미를 지킨다 | Accepted |
 ---

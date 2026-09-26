@@ -14,6 +14,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `fix_ament_resource.sh` | Recreate `resource/<pkg>` markers under the domain groups |
 | `run_fleet_sim.sh` | Start multi-robot Gazebo and the Fleet console from the repo root |
 | `run_data.py` | Create `data/teleop` and `data/drive` sessions |
+| `dashboard_drive.py` | Headless Playwright driver for the CORE dashboard: `status`, `mode`, `teleop` (stop latency), `screenshot` (skill `rosy-dashboard-drive`) |
 | `harness/` | Module index generator (`rosy_harness.py`) |
 
 ## Subdirectories
@@ -22,6 +23,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` |
 | `sim/` | Local sim probes and `sim_verify.sh`. Not a second product tree |
+| `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool |
 
 ## For AI Agents
 
@@ -34,7 +36,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 ### Testing Requirements
 
 ```bash
-python -m pytest test/test_folder_layout.py test/test_run_data.py -q
+python -m pytest test/architecture/test_folder_layout.py test/test_run_data.py -q
 ```
 
 ### Common Patterns

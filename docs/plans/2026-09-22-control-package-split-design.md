@@ -55,13 +55,21 @@ P1(b) 계약 소유와 P1(c) 장애 격리는 발화하지 않는다. 이미 노
 | `control_safety` | `safety/*`, `control.control`의 안전 폐쇄(`command_gate`, `lidar_guard`, `obstacle_risk`, `motion_sweep`, `footprint_*`, `rotation_*`, `actuation`, `policy_handoff`, `escape_space`, `safety_profile`, `calibration_profile/certificate`, `route`), `calibration_{record,storage,lock,snapshot}`, `sensor_provider` + 진입점, `safety_node` | `control_sensing` |
 | `control` (잔류) | wander, goal, planning, 나머지 `control.control`, 교정 노드 2개, web/watch, `control_node`, `tools/`, 레거시 launch, maps | `control_safety`, `control_sensing` |
 
-결과: io 이미지는 `control_sensing`만 복사하면 된다. core가 provider를 쓸 때는
+결과: io 이미지는 `control_sensing`만 복사하면 된다. (2026-09-24 D-196 개정으로 바뀌었다 — 아래 개정 참고.) core가 provider를 쓸 때는
 `control_safety`까지만 필요하다. 잔류 `control`은 개발·교정·레거시 비교용이다.
 
 **4번째 `control_calibration`은 지금 만들지 않는다.** `startup_calibration`이 `planning`을
 import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`을 import한다.
 그래서 지금 떼어 내면 패키지 사이클이 생긴다. `planning`·`path_follow`·`pursuit`·`escape_budget`을
 라이브러리로 먼저 뽑은 다음에 재검토한다(X3: 예정된 작업이 없으면 만들지 않는다).
+
+**개정 (2026-09-24, D-196):** `control_sensing`에 넣기로 했던 것 중 장치 코드는 devices로 간다.
+- `ir_adc_node`와 `sensing/ir_adc.py`는 `devices/pinky_pro`로 간다. D-192 §4의 0x08 독자를 한 계열에 모으기 위해서다.
+- `camera_detect_node`의 캡처부와 `sensing/camera_controls.py`는 `devices/common/camera`로 간다.
+- `control_sensing`에는 알고리즘만 남는다. line/road/dock observer는 `Image`를 구독하고, 카메라
+  기하는 프로필/TF에서 받는다.
+
+이 개정은 트랙 3의 첫 단계에서 함께 실행한다. io 이미지 폐쇄는 `devices/pinky_pro` + `devices/common/camera` + `control_sensing`이 된다.
 
 ## 4. 파일 단위 분리 (P6 `split` 판정 3건)
 
@@ -91,7 +99,7 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
    (`control.control` 66, `sensing` 43, `planning` 15). 36개는 경로로 소스를 읽는다.
 5. **패키지 이름 참조.** 외부 launch·시험에 9곳이 있다(hardware.launch 1, gz_sim 6, 시험 2).
    배포 쪽은 `gz_sim/package.xml`, `deploy/image/required-ros-packages.txt:7`,
-   `inputs.lock.yaml:130`, `deploy/robot/Dockerfile:117,122`이다. 문서의 `apps/control`
+   `inputs.lock.yaml:130`, `deploy/robot/Dockerfile:117,122`이다. 문서의 `core/control`
    언급은 24개 파일에 124곳이다.
 6. **X6 — 경합 확인.** 브랜치 `map-v2-fleet-world`가 `sensing/lane.py`, `sensing/lane_bev.py`,
    `line_observer_node.py`를 고치고 있었다. 2026-09-22 local main `5207531`에 병합되어 해소됐다.
@@ -106,7 +114,7 @@ import하고 `tools/gz/calibration_mapping_rig`가 다시 `startup_calibration`�
    덧붙였다. `test/test_control_deploy_closure.py`가 systemd 유닛·compose에서 include 사슬을
    따라 배포 실행 파일을 도출해 네 개와 집합 동일성으로 고정하고, `rosy.sensor_provider:control`
    등록자가 정확히 1개임을 검사한다(변이 증명 3건). 3단계에서 진입점을 옮길 때 이 시험의
-   기대 경로(`apps/control/setup.py`)를 같은 커밋에서 바꾼다.
+   기대 경로(`core/control/setup.py`)를 같은 커밋에서 바꾼다.
 1. **파일 단위 분리(§4)** — `web_node.py` 완료(`web_state`/`web_http`/`web_render`/`web_map_control`, `test_web_http.py`). 교정 파일 2개는 남음. 패키지 경계를 바꾸지 않으므로 먼저 해도 되며, 이후 이동할 모듈 크기가
    줄어든다. `SIZE_VERDICTS`의 해당 항목은 파일이 600줄 아래로 내려가면 삭제한다(시험이 삭제를
    강제한다).

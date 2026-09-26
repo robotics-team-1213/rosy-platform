@@ -50,4 +50,4 @@ jobs:
         run: |
           source /opt/ros/jazzy/setup.sh
           source src/install/setup.sh
-          python3 -m pytest src/core/core/test/ -q
+          python3 -m pytest src/runtime/gateway/test/ -q

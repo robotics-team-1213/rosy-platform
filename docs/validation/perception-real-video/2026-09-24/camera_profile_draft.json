@@ -1,0 +1,50 @@
+{
+  "status": "DRAFT estimate from teleop video, pending P0 physical measurements (D-205). Not a CameraProfile contract; do not load it on the robot.",
+  "revision": "draft-2026-09-24",
+  "source": "teleop_20260919_151213_part01..07.mp4 (4981 frames, 8 fps, 320x240), map_v2_fleet 260919 track",
+  "frames_already_rotated": true,
+  "rotate_deg": 180,
+  "rotate_note": "Recorded frames are upright (floor at bottom); the 180 deg rotation from camera.yaml/line_follow.yaml was already applied before recording. Apply rotate_deg=180 to RAW sensor frames only; do not rotate the recorded mp4 again.",
+  "width": 320,
+  "height": 240,
+  "fx": 281.6,
+  "fy": 281.6,
+  "cx": 160.0,
+  "cy": 120.0,
+  "hfov_deg": 59.3,
+  "vfov_deg": 46.2,
+  "pitch_rad": 0.1396,
+  "pitch_deg": 8.0,
+  "pitch_sign": "positive = optical axis below horizontal (URDF rpy pitch convention)",
+  "horizon_row_px": 80.3,
+  "roll_rad": 0.0157,
+  "roll_deg": 0.9,
+  "roll_sign": "camera x-axis (image right) tilted up by +roll; horizon row increases ~1.6 px per 100 px to the right",
+  "height_m": 0.067,
+  "x_offset_m": 0.034,
+  "x_offset_note": "prior from sim URDF, not measured",
+  "distortion": {"model": "plumb_bob", "k1": -0.04, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0, "note": "mild barrel, <=~2 px at the image corners; safe to ignore at 320x240"},
+  "uncertainty_1sigma": {
+    "fx_px": 12, "hfov_deg": 2.3,
+    "pitch_deg_horizon_equivalent": 0.4,
+    "pitch_deg_mechanical_if_cy_unknown": 2.0,
+    "roll_deg": 0.3,
+    "height_m": 0.003
+  },
+  "ground_footprint_m": {
+    "nearest_visible_ground_ahead_of_camera": 0.11,
+    "width_at_bottom_row": 0.136,
+    "image_centre_row_distance": 0.48,
+    "width_at_centre_row": 0.55,
+    "row_100_distance": 0.97,
+    "row_90_distance": 2.0
+  },
+  "confidence_notes": [
+    "fx: fitted to 54 crosswalk frames (216 corners, RMS 1.08 px) with the CAD bar proportions (26x121 mm, 40 mm pitch). Leave-one-group-out 280-284 px. Ring-circularity check on 93 frames gives 250-310 px, best-quality frames 280-285.",
+    "fy: the ground plane cannot separate it from pitch and height (first-order degeneracy). fx = fy (square pixels) is assumed, because libcamera crops to keep the aspect ratio.",
+    "horizon: 1707 per-frame lane vanishing points give a median row of 80.7, robust sd 2.6 px. The crosswalk poses give row 80.0. For a sim camera with a centred principal point, use pitch = atan((120 - 80.3) / fx).",
+    "cx, cy: not observable from this data (a free principal-point fit diverged). Centre is assumed. The mechanical pitch is then uncertain by about +-2 deg, but the horizon row, and so the ground mapping, is not.",
+    "height: scale-dependent. Crosswalk at 40 mm pitch gives 69.4 mm. The 155 mm wall gives 66 mm (near walls 66-69). The CAD lane c-c of 185 mm gives 63.7 mm. The physical mat's lane c-c to bar-pitch ratio is 5.1, against 4.62 in CAD, so the mat does not match the CAD exactly. One tape-measure reading of the lens height would resolve this.",
+    "sim URDF differs: 0.0602 m height (real is about 0.067 m), 66 deg hfov (real 59 deg), and the lane launches set cam_tilt_deg=25 (real is about 8 deg)."
+  ]
+}

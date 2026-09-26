@@ -95,6 +95,16 @@
 | D-183 | 그래프 감시는 제품 그래프와 control 단독 그래프를 나눈다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-186 | 스크립트와 수집 데이터는 주인 폴더에만 둔다 |
+| D-246 | 런타임 유연성 — 네이티브가 기본값이고 컨테이너는 선언된 비안전 워크로드에만, 장치별 차이는 profile/slice로만 |
+| D-256 | 공개 무결성 값은 이름으로 지우고, 스캔는 매처를 넙히지 않는다 |
+| D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 |
+| D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 |
+| D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 |
+| D-272 | AP 비밀번호는 로봇마다 다르되 읽기 쉬운 형식과 LCD QR로 보여준다 |
+| D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
+| D-274 | 로컬 브라우저 검토는 실제 CORE 경로를 쓰고 장치 수용은 분리한다 |
+| D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 |
+| D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 |
 
 ## 계획·결과 문서
 
@@ -118,6 +128,16 @@
 - [2026-09-22-pinky-pro-flashable-image-design.md](plans/2026-09-22-pinky-pro-flashable-image-design.md)
 - [2026-09-22-pinky-pro-flashable-image.md](plans/2026-09-22-pinky-pro-flashable-image.md)
 - [2026-09-24-folder-layout.md](plans/2026-09-24-folder-layout.md)
+- [2026-09-25-d231-layered-move.md](plans/2026-09-25-d231-layered-move.md)
+- [2026-09-25-decision-fabric-input-v0.8.md](plans/2026-09-25-decision-fabric-input-v0.8.md)
+- [2026-09-25-decision-lane-recovery.md](plans/2026-09-25-decision-lane-recovery.md)
+- [2026-09-25-folder-map.md](plans/2026-09-25-folder-map.md)
+- [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
+- [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
+- [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
+- [2026-09-26-site-task-scheduling-and-broker-design.md](plans/2026-09-26-site-task-scheduling-and-broker-design.md)
+- [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
+- [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
 
 ## 교훈 (docs/solutions)
 
@@ -130,8 +150,8 @@
 
 ## 최근 기록
 
-- 2026-09-24 · uncommitted · docs(adr): D-185 R8 실기 bench
-- 2026-09-24 · uncommitted · docs(adr): D-185 R3 rig A/B, R7 원인 메모
-- 2026-09-24 · uncommitted · docs(adr): D-185 R6 구현 메모
-- 2026-09-24 · uncommitted · docs(adr): D-185 R2 구현 메모
-- 2026-09-24 · uncommitted · docs(adr): D-185 R5 구현 메모
+- 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
+- 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
+- 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
+- 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
+- 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정

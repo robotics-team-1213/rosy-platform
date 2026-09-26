@@ -91,12 +91,23 @@ _ASSIGNMENT = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
+# Pytest node IDs in test/known_failures.txt are identifiers, not assignments.
+# A test name can contain terms such as "api_token" or "credential" and its
+# `::` delimiter otherwise looks like a key/value separator to _ASSIGNMENT.
+_PYTEST_NODE_ID = re.compile(
+    r"^\s*test/[A-Za-z0-9_./-]+::test_[A-Za-z0-9_]+(?=\s{2}#|\s*$)"
+)
+
 _PRIVATE_KEY = re.compile(
     r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----"
 )
 
 # wpa_supplicant.conf style, which does not always use a secret-ish name.
 _WPA_PSK = re.compile(r"^\s*psk\s*=\s*(?P<value>\S+)", re.IGNORECASE | re.MULTILINE)
+
+# A Wi-Fi join QR payload (WIFI:T:WPA;S:<ssid>;P:<psk>;;) carries the AP
+# passphrase itself; the boot LCD draws one and nothing may write it down.
+_WIFI_QR = re.compile(r"WIFI:[^\n]*?(?<![A-Za-z])P:(?P<value>(?:\\.|[^;\\\n])+)", re.IGNORECASE)
 
 # A bare high-entropy token on its own, e.g. a leaked hex API token.
 _BARE_TOKEN = re.compile(r"\b(?P<value>[A-Fa-f0-9]{40,}|[A-Za-z0-9+/]{50,}={0,2})\b")
@@ -324,21 +335,29 @@ def scan_text(path: str, text: str) -> list[Finding]:
             and not _is_placeholder(wpa.group("value"))
             # A wpa_supplicant.conf never says psk=self.setup_psk; source that
             # passes a passphrase along must not read as one.
-            and not _CODE_REFERENCE.match(wpa.group("value").rstrip(","))
+            and not _CODE_REFERENCE.match(wpa.group("value").rstrip(",}"))
         ):
             findings.append(Finding(path, number, "wifi-psk", stripped[:120]))
             continue
 
+        qr = _WIFI_QR.search(line)
+        if qr and not _is_placeholder(qr.group("value")):
+            findings.append(Finding(path, number, "wifi-qr", stripped[:120]))
+            continue
+
+        node_id = (_PYTEST_NODE_ID.match(line)
+                   if path.replace("\\", "/").endswith("test/known_failures.txt") else None)
+        assignment_line = line[node_id.end():] if node_id else line
         matched_assignment = False
-        for match in _ASSIGNMENT.finditer(line):
+        for match in _ASSIGNMENT.finditer(assignment_line):
             value = (match.group("quoted") or match.group("squoted")
                      or match.group("value") or match.group("call"))
             if (
                 _is_placeholder(value)
                 or _TYPE_EXPRESSION.match(value)
-                or _CODE_REFERENCE.match(value)
+                or _CODE_REFERENCE.match(value.rstrip(",}"))
                 or (_CODE_EXPRESSION.match(value)
-                    and _call_holds_no_literal(line, match.end(), match.group("name")))
+                    and _call_holds_no_literal(assignment_line, match.end(), match.group("name")))
             ):
                 continue
             # A reference to another variable or a path is not a literal secret.

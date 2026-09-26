@@ -1,0 +1,28 @@
+# Resolved from ROBOTIS official release/source metadata on 2026-09-26.
+# This is a source lock for a separate OMX workstation image, not an enable flag.
+schema: rosy.omx-vendor-stack-lock.v1
+target:
+  model: omx_ai
+  ros_distro: jazzy
+  workstation_arch: amd64
+vendor:
+  repository: https://github.com/ROBOTIS-GIT/open_manipulator.git
+  release: "5.1.2"
+  revision: 0a4af6a923b8b7d80b8c20506d1839c54d2e993e
+  repositories:
+    - name: dynamixel_hardware_interface
+      repository: https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface.git
+      source_branch: jazzy
+      revision: 3375b3d0c99c5bcdab11b2dc15c89a2923e2bca2
+    - name: dynamixel_interfaces
+      repository: https://github.com/ROBOTIS-GIT/dynamixel_interfaces.git
+      source_branch: jazzy
+      revision: 3392e1214c62c7ee9e05ccc811e3e829c063bae8
+    - name: DynamixelSDK
+      repository: https://github.com/ROBOTIS-GIT/DynamixelSDK.git
+      source_branch: jazzy
+      revision: 516ae8632c593d7c84afd2bdee2a2fac965305cc
+    - name: robotis_interfaces
+      repository: https://github.com/ROBOTIS-GIT/robotis_interfaces.git
+      source_branch: jazzy
+      revision: 7a5670cb3fb3f42b479a1fbf17c1e767b43db067

@@ -1,0 +1,91 @@
+/* D-204 셸 — 배치만 정한다. 색과 크기는 토큰만 쓴다(D-129, D-203). */
+html { min-height: 100%; background: var(--ground); }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--paper);
+  background: var(--ground);
+  font: var(--text-body)/1.5 var(--body);
+}
+.surface-switch { display: flex; gap: var(--space-3); }
+.surface-switch a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  color: var(--nominal-quiet);
+  font: 600 var(--text-label)/1.2 var(--body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.surface-switch a:hover { color: var(--paper); background: var(--ground-soft); }
+.surface-switch a[aria-current="page"] {
+  color: var(--brand-rose);
+  border-color: var(--brand-rose);
+  background: var(--brand-rose-wash);
+}
+.surface-switch a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+#shell-estop { flex: none; white-space: nowrap; }
+.surface-main {
+  display: grid;
+  grid-auto-rows: min-content;
+  gap: var(--space-5);
+  max-width: 96rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: var(--space-5);
+}
+.surface-slot { display: grid; gap: var(--space-5); min-width: 0; }
+.surface-slot:empty { display: none; }
+ui-section[data-failed="true"] { border-style: dashed; }
+
+@media (min-width: 64rem) {
+  body[data-surface="console"] .surface-main {
+    grid-template-columns: minmax(18rem, 0.78fr) minmax(0, 1.22fr);
+    grid-template-areas:
+      "status status"
+      "banner banner"
+      "sense observe"
+      "act act";
+    align-items: start;
+  }
+  body[data-surface="console"] #surface-status { grid-area: status; }
+  body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
+  body[data-surface="console"] .surface-slot[data-slot="sense"] { grid-area: sense; }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] {
+    grid-area: observe;
+    grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
+    align-items: start;
+  }
+  body[data-surface="console"] .surface-slot[data-slot="act"] {
+    grid-area: act;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  body[data-surface="setup"] .surface-slot[data-slot="main"],
+  body[data-surface="device"] .surface-slot[data-slot="main"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 30rem) {
+  ui-topbar { gap: var(--space-1); padding-inline: var(--space-2); }
+  ui-brand small { display: none; }
+  .surface-switch a { padding-inline: var(--space-2); }
+  .surface-main { gap: var(--space-4); padding: var(--space-3); }
+  .surface-switch { flex-wrap: wrap; gap: var(--space-1); }
+  .surface-actions.map-layer-actions { flex-direction: row; width: 100%; }
+  .surface-actions.map-layer-actions > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--space-1); }
+}
+
+@media (min-width: 30.01rem) and (max-width: 63.99rem) {
+  .surface-main { padding: var(--space-4); }
+  body[data-surface="console"] .surface-slot[data-slot="act"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}

@@ -8,8 +8,8 @@
 ### Task 1: Define the pure calibration contract
 
 **Files:**
-- Create: `src/apps/control/control/sensing/camera_homography.py`
-- Test: `src/apps/control/test/test_camera_homography.py`
+- Create: `src/core/control/control/sensing/camera_homography.py`
+- Test: `src/core/control/test/test_camera_homography.py`
 
 1. Write failing tests for approximate profiles, recomputed residuals, independent validation, image-contract mismatch, bottom-centre range, singularities, and board-relative lateral coordinates.
 2. Run the focused test and confirm the missing module/API failure.
@@ -19,9 +19,9 @@
 ### Task 2: Wire the camera node and tunable parameters
 
 **Files:**
-- Modify: `src/apps/control/control/camera_detect_node.py`
-- Modify: `src/apps/control/config/camera.yaml`
-- Test: `src/apps/control/test/test_camera_homography_wiring.py`
+- Modify: `src/core/control/control/camera_detect_node.py`
+- Modify: `src/core/control/config/camera.yaml`
+- Test: `src/core/control/test/test_camera_homography_wiring.py`
 
 1. Write failing source-contract tests for parameters, transient status, command topic, and default pinhole behavior.
 2. Add bounded thresholds, profile loading, latched status publication, and session enable/disable commands.
@@ -30,9 +30,9 @@
 ### Task 3: Add dashboard status and switch
 
 **Files:**
-- Modify: `src/apps/control/control/web_node.py`
-- Modify: `src/apps/control/web/dashboard.html`
-- Test: `src/apps/control/test/test_camera_homography_wiring.py`
+- Modify: `src/core/control/control/web_node.py`
+- Modify: `src/core/control/web/dashboard.html`
+- Test: `src/core/control/test/test_camera_homography_wiring.py`
 
 1. Extend failing tests for the web relay and read-only checks.
 2. Subscribe to the camera calibration status and expose only `enable`/`disable` POST commands.
@@ -42,9 +42,9 @@
 ### Task 4: Document and verify
 
 **Files:**
-- Modify: `src/apps/control/docs/camera-ground-calibration.md`
-- Modify: `src/apps/control/logs.md`
-- Modify: `src/apps/control/progress.md`
+- Modify: `src/core/control/docs/camera-ground-calibration.md`
+- Modify: `src/core/control/logs.md`
+- Modify: `src/core/control/progress.md`
 
 1. Document ChArUco capture, intrinsic calibration, fixed-mount ground validation, schema, and operator workflow.
 2. Run focused camera tests, wider Control tests, and the repository harness generate/lint commands.

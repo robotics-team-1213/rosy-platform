@@ -43,7 +43,7 @@ Accepted 조건은 가드 5+1 초록과 관련 회귀 전체 PASS다. SOURCE/LOC
 ARTIFACT/DEVICE/FIELD gate는 변하지 않는다.
 
 **Validation / Transition:** `test/test_module_separation.py`, `src/core/core/test`,
-`src/apps/control/test`, `src/site/fleet/test`, `src/sim/gz_sim/test`.
+`src/core/control/test`, `src/site/fleet/test`, `src/sim/gz_sim/test`.
 
 **References:** D-1, D-2, D-38, D-62, D-63, D-64, D-125.
 설계: `docs/plans/2026-09-19-full-module-separation-design.md`,

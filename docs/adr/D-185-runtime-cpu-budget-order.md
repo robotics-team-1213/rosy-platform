@@ -91,7 +91,7 @@
    - control 패키지 크기(D-168 P6)는 split 판정을 유지한 채 기준만 28,476줄로 재판정했다.
 
    **R8 구현 메모 (2026-09-24).**
-   - `src/apps/control/tools/device/hotpath_measure.py`를 만들었다. ROS 없이 돌고, 하위 명령마다 JSON 보고서
+   - `src/core/control/tools/device/hotpath_measure.py`를 만들었다. ROS 없이 돌고, 하위 명령마다 JSON 보고서
      하나(`rosy.control.hotpath_measure/1`)를 쓴다.
    - `bench`는 `wall_tracker._segments`(720-ray), `match_motion`(180점, 10° 회전), `inflate`(200×200, 반경
      5셀)의 median·p90·max를 잰다. 입력은 동등성 테스트 생성기와 같은 형태다.

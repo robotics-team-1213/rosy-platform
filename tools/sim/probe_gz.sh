@@ -6,4 +6,4 @@ ls -t /tmp/rosy_gz_multi_*/robots.yaml 2>/dev/null | head -2
 echo "--- gz 프로세스 생존? ---"
 ps aux | grep -E '[g]z sim|[g]zserver|[g]z_multi' | awk '{print $2, $11, $12}' | head -4
 echo "--- 코어 프로세스 ---"
-ps aux | grep '[l]ib/core/core' | wc -l
+ps aux | grep '[l]ib/runtime/gateway' | wc -l

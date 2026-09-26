@@ -191,7 +191,7 @@ enrollment, heartbeat, mission arbitration and group emergency stop before FLEET
 Run from the repository root:
 
 ```bash
-python3 -m pytest src/core/core/test/ src/apps/control/test/ src/site/fleet/test \
+python3 -m pytest src/core/core/test/ src/core/control/test/ src/site/fleet/test \
   src/apps/omx_adapter/test src/apps/games/test test/ -q
 ```
 
