@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.32
+**Version:** v1.33
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -873,6 +873,14 @@ dispatch. An ambiguous post-dispatch result is `UNKNOWN` and is never retried
 automatically. This Fleet task enum does not change the robot DDS/WSS envelope
 `protocol_version`.
 
+The browser treats `QUEUED` as durably accepted by Fleet and shows the task ID,
+wait reason, blockers when available, and queued-only cancellation. Before
+cancelling, it reads the authenticated task projection again; if the task has
+already left `QUEUED`, the operator action uses the robot cancel route. Robot
+cancel/stop and site E-Stop remove undispatched queued work before sending the
+CORE safety request. An `UNKNOWN` task is shown as requiring manual CORE status
+verification; the UI never turns a command receipt into completion.
+
 The current console maps the shared operator token to the
 auditable principal `site-console`; individual operator identity and role
 management are not implemented. Policy submissions use the same validation and
@@ -888,6 +896,7 @@ On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |
+| v1.33 | 2026-09-26 | Additive(D-271): Fleet console queued-task feedback/readback/cancel and cancel/stop/E-Stop queue coordination. |
 | v1.31 | 2026-09-26 | Additive(D-269 Proposed): operator navigation `Idempotency-Key`, durable task status/history, authenticated `/api/fleet/tasks/{task_id}` readback. Policy work remains `HOLD`; D-177 command ACK and per-user identity are not implemented. |
 | v1.30 | 2026-09-26 | Additive(D-269 Proposed): paired CORE Agent 이벤트를 credential-free bounded SQLite audit history에 저장, 중복 `event_id` 멱등 처리, 인증된 cursor 기반 `/api/fleet/events` 조회. 이는 자동 작업 승인이나 D-177 command ACK 구현을 뜻하지 않음 |
 | v1.29 | 2026-09-26 | Clarify(D-257/D-269 Proposed): Fleet CLI source config와 SQLite latest/history storage, HTTPS API path 및 site Docker TLS boundaries. Synthetic Docker WSS→vision→Fleet readback은 LOCAL evidence만 제공; D-268/자동 실행 상태 불변 |

@@ -13,7 +13,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web = (ROOT / "src/site/fleet/fleet/server/web/console.js").read_text(encoding="utf-8")
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.32" in reference
+    assert "**Version:** v1.33" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference
@@ -32,6 +32,9 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert 'alias="Idempotency-Key"' in app
     assert 'call.verb == "navigate"' in app
     assert '"Idempotency-Key": crypto.randomUUID()' in web
+    assert 'task.status === "QUEUED"' in web
+    assert 'task.status === "UNKNOWN"' in web
+    assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web
     assert "--tasks-db" in compose
 
 

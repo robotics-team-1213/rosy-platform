@@ -399,6 +399,40 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
         browser.close()
 
 
+def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
+    from playwright.sync_api import sync_playwright
+
+    posts: list[tuple[str, str]] = []
+    task = {"task_id": "task-queued-123", "status": "QUEUED", "attempt_seq": 0,
+            "reason": "ROUTE_CONFLICT", "waiting_on": ["rosy_02"]}
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+        "/api/fleet/robots/rosy_01/goal": {"accepted": False, "queued": True, "task": task},
+        "/api/fleet/tasks/task-queued-123": {"task": task},
+        "/api/fleet/tasks/task-queued-123/cancel": {"task": {**task, "status": "CANCELED"}},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, posts=posts)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
+        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
+        canvas_box = page.locator("#map-canvas").bounding_box()
+        assert canvas_box
+        page.mouse.click(canvas_box["x"] + canvas_box["width"] / 2,
+                         canvas_box["y"] + canvas_box["height"] / 2)
+        page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
+        assert "QUEUED" in page.inner_text("#log")
+        page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").nth(1).click()
+        page.wait_for_timeout(200)
+        assert not errors
+        browser.close()
+
+    assert ("POST", "/api/fleet/tasks/task-queued-123/cancel") in posts
+
+
 # --- D-219: 큐의 렌더 계약 — HITL 과 성능 저하가 보이고, 비면 사라진다 ---------
 
 def _with_state(robot: dict, **state_extra) -> dict:

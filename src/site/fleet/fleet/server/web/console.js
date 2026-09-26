@@ -51,6 +51,7 @@ const view = {
   colors: [],
   formation: null,
   signals: {},    // ROSY-SIGNAL-001 — snapshot 의 signals 캐시
+  pendingTasks: {},
 };
 
 function log(text, kind) {
@@ -498,6 +499,18 @@ function card(robot, index) {
   cancel.disabled = !robot.online;
   cancel.addEventListener("click", async () => {
     try {
+      const pending = view.pendingTasks[robot.robot_id];
+      if (pending) {
+        const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
+        if (readback.task?.status === "QUEUED") {
+          await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
+          delete view.pendingTasks[robot.robot_id];
+          render();
+          log(`${robot.robot_id} task ${pending.task_id} QUEUED 취소`, "good");
+          return;
+        }
+        delete view.pendingTasks[robot.robot_id];
+      }
       await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
       log(`${robot.robot_id} 항법 취소`, "good");
     } catch (err) {
@@ -647,10 +660,23 @@ el("map-canvas").addEventListener("click", async (event) => {
       body: JSON.stringify({ x: point.x, y: point.y, yaw: 0 }),
     });
     const task = result && result.task ? result.task : null;
-    if (task && task.status !== "ACCEPTED") {
-      log(`${robotId} 작업 상태 ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
+    if (task && task.status === "QUEUED") {
+      view.pendingTasks[robotId] = task;
+      const why = task.reason || result.reason || "READY";
+      const blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
+      log(`${robotId} task ${task.task_id} QUEUED · ${why}${blockedBy} · 취소 가능`, "good");
       return;
     }
+    if (task && task.status === "UNKNOWN") {
+      view.pendingTasks[robotId] = task;
+      log(`${robotId} task ${task.task_id} UNKNOWN · CORE 결과 수동 확인 필요`, "bad");
+      return;
+    }
+    if (task && task.status !== "ACCEPTED") {
+      log(`${robotId} task ${task.task_id} ${task.status}${task.reason ? ` · ${task.reason}` : ""}`, "bad");
+      return;
+    }
+    if (task) delete view.pendingTasks[robotId];
     const receipt = task ? task.receipt : result;
     const where = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
     if (receipt && receipt.queued) {
