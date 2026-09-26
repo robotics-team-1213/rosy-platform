@@ -100,7 +100,10 @@
 | D-263 | 메뉴는 사용자의 질문을 찾는 길이다 — 화면 책임과 확장 규칙 |
 | D-265 | 기반 화면은 패널 수와 무관하게 남는다 — 메뉴·정지 진입 계약 |
 | D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 |
+| D-272 | AP 비밀번호는 로봇마다 다르되 읽기 쉬운 형식과 LCD QR로 보여준다 |
+| D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
 | D-274 | 로컬 브라우저 검토는 실제 CORE 경로를 쓰고 장치 수용은 분리한다 |
+| D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 |
 
 ## 계획·결과 문서
 
@@ -133,6 +136,7 @@
 - [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
 - [2026-09-26-site-task-scheduling-and-broker-design.md](plans/2026-09-26-site-task-scheduling-and-broker-design.md)
 - [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
+- [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
 
 ## 교훈 (docs/solutions)
 
@@ -145,8 +149,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
+- 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
+- 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
+- 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
 - 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
-- 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
-- 2026-09-26 · uncommitted · feat(fleet): expose server queue position
-- 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신
-- 2026-09-26 · uncommitted · docs(verification): known_failures 갱신 + BOM 제거 — deployment 잔여 4건 장부화

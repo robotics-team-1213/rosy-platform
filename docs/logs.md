@@ -2318,3 +2318,11 @@
 - gate 변화: 없음(ADR·계약 문서 무변경 — 버전 표기는 문서가 이미 v1.33)
 - 회귀: 없음(배너 문자열 외 무변경. 동료 WIP 2파일 미스테이징 유지)
 - 교훈: API Ref 버전을 올린 커밋은 같은 변경에서 배너 문자열도 같이 올린다 — D-18의 "문서와 코드를 한 변경"에는 FastAPI description이 포함된다. 안 그러면 첫 pytest 단계가 붉어 뒤 단계 전부를 skip시킨다
+
+## 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
+
+- 변경: 로봇 CORE 화면, 사이트 Fleet 콘솔, 관제 브라우저, 로봇 preview, 천장 폰 입력, Control 진단 화면의 코드·실행·명령 소유자를 D-275와 실행 계획에 기록했다. Vision은 천장 카메라 전용 이름이 아니라 향후 edge/사이트 GPU/별도 compute의 관측·추론 책임으로 두고, 현재 Fleet과 같은 호스트에서 별도 서비스로 운영하는 경계를 명시했다.
+- 근거: 현행 `core_api_web`·Fleet FastAPI 라우트, 사이트 Compose, `overhead` 구현과 D-118/D-152/D-197/D-243/D-267/D-268/D-269를 대조했다. Fleet은 파생 결과와 작업 정책을 처리할 수 있으나 원본 영상·GPU 추론·학습을 현행 Fleet 프로세스에 넣지 않는다.
+- 검증: `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 71 passed/21 기존 검증시점 warning. harness lint 0 error/21 warning, `git diff --check` 통과. `docs/index.md`를 generate로 갱신해 D-275와 실행 계획이 색인에 표시된다.
+- gate 변화: 없음. ADR은 실행 책임 결정이며 native ARM64 산출물, Ubuntu 사이트, 실물 폰·로봇, 자동 작업 수용은 별도다.
+- 회귀: 문서 변경만 수행했고 제품 코드와 다른 작업 트리의 WIP는 수정하지 않았다.
