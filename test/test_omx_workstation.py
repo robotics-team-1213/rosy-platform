@@ -107,3 +107,71 @@ def test_dockerfile_builds_only_from_locked_sources_and_remains_inert():
     assert "colcon build" in dockerfile
     assert "CMD" in dockerfile
     assert "open_manipulator" in dockerfile
+
+
+def test_simulation_profile_runs_pinned_robotis_gazebo_launch_without_hardware_access():
+    import yaml
+
+    compose = yaml.safe_load((OMX / "compose.yaml").read_text(encoding="utf-8"))
+    service = compose["services"]["omx-simulation"]
+
+    assert service["profiles"] == ["simulation"]
+    assert service["command"] == [
+        "ros2",
+        "launch",
+        "open_manipulator_bringup",
+        "omx_f_gazebo.launch.py",
+    ]
+    assert "devices" not in service
+    assert "privileged" not in service
+    assert service["environment"] == {
+        "ROS_DOMAIN_ID": "${OMX_SIM_DOMAIN_ID:-31}",
+        "RMW_IMPLEMENTATION": "rmw_cyclonedds_cpp",
+        "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
+    }
+
+
+def test_dockerfile_installs_gazebo_runtime_dependencies_for_vendor_simulation():
+    dockerfile = (OMX / "Dockerfile").read_text(encoding="utf-8")
+    skip_line = next(line for line in dockerfile.splitlines() if "--skip-keys" in line)
+
+    assert not any(
+        package in skip_line
+        for package in ("ros_gz_bridge", "ros_gz_sim", "ros_gz_image", "gz_ros2_control")
+    )
+
+
+def test_simulation_build_patches_vendor_launch_to_use_gazebo_server_only():
+    dockerfile = (OMX / "Dockerfile").read_text(encoding="utf-8")
+    patch = (OMX / "patches" / "omx-f-gazebo-headless.patch").read_text(encoding="utf-8")
+
+    assert "omx-f-gazebo-headless.patch" in dockerfile
+    assert " apply --check " in dockerfile
+    assert "-v 1 -s" in patch
+    assert "omx_f_gazebo.launch.py" in patch
+
+
+def test_omx_runtime_domain_is_configurable_but_simulation_discovery_stays_local():
+    import yaml
+
+    compose = yaml.safe_load((OMX / "compose.yaml").read_text(encoding="utf-8"))
+    hardware = compose["services"]["omx-hardware-shell"]["environment"]
+    simulation = compose["services"]["omx-simulation"]["environment"]
+
+    assert hardware == {
+        "ROS_DOMAIN_ID": "${OMX_ROS_DOMAIN_ID:-30}",
+        "RMW_IMPLEMENTATION": "rmw_cyclonedds_cpp",
+        "ROS_AUTOMATIC_DISCOVERY_RANGE": "${OMX_ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}",
+    }
+    assert simulation["ROS_DOMAIN_ID"] == "${OMX_SIM_DOMAIN_ID:-31}"
+    assert simulation["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"
+    assert simulation["RMW_IMPLEMENTATION"] == "rmw_cyclonedds_cpp"
+    dockerfile = (OMX / "Dockerfile").read_text(encoding="utf-8")
+    assert "ros-jazzy-rmw-cyclonedds-cpp" in dockerfile
+    assert "ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" in dockerfile
+
+
+def test_omx_entrypoint_uses_discovery_range_without_legacy_localhost_override():
+    entrypoint = (OMX / "entrypoint.sh").read_text(encoding="utf-8")
+
+    assert "unset ROS_LOCALHOST_ONLY" in entrypoint

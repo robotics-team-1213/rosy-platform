@@ -1,0 +1,11 @@
+diff --git a/open_manipulator_bringup/launch/omx_f_gazebo.launch.py b/open_manipulator_bringup/launch/omx_f_gazebo.launch.py
+index 18b5231..c0a0fd4 100644
+--- a/open_manipulator_bringup/launch/omx_f_gazebo.launch.py
++++ b/open_manipulator_bringup/launch/omx_f_gazebo.launch.py
+@@ -66,5 +66,5 @@ def generate_launch_description():
+         ]),
+         launch_arguments=[
+-            ('gz_args', [LaunchConfiguration('world'), '.sdf', ' -v 1', ' -r'])
++            ('gz_args', [LaunchConfiguration('world'), '.sdf', ' -v 1 -s', ' -r'])
+         ],
+     )

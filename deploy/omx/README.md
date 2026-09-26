@@ -51,6 +51,20 @@ this preflight.
 
 ## Build and shell profiles
 
+The hardware profile takes `OMX_ROS_DOMAIN_ID` and
+`OMX_ROS_AUTOMATIC_DISCOVERY_RANGE` from the Compose environment; defaults are
+domain 30 and `SUBNET`. Copy `.env.example` to `.env` beside this README to set
+them, then pass it with `--env-file deploy/omx/.env` when running Compose from
+the repository root. RMW is fixed to `rmw_cyclonedds_cpp` by D-117. The
+simulation profile uses a separate configurable domain (default 31) and forces
+`LOCALHOST` discovery.
+
+Pinky's domain is derived at device provisioning from `ROSY_ROBOT_NUMBER`
+(D-33), so never change Pinky's identity to match the workstation. Matching an
+OMX domain to Pinky's value alone does not authorize or guarantee a connection:
+the D-273 ROS/RMW and control-boundary decision remains required. Do not use
+this workstation profile to join Pinky's actuation graph directly.
+
 Build on a Linux ROS 2 workstation with Docker:
 
 ```sh
@@ -74,19 +88,31 @@ Pass the resulting `OMX_FOLLOWER_DEVICE` and `OMX_LEADER_DEVICE` values as
 environment variables to:
 
 ```sh
-docker compose --profile hardware run --rm omx-hardware-shell
+docker compose --env-file deploy/omx/.env --profile hardware run --rm omx-hardware-shell
 ```
 
 The preflight refuses guessed `/dev/tty*` paths, missing
 or non-character devices, inaccessible devices, and duplicate selections.
 Never use privileged mode or mount `/dev` wholesale.
 
-The `simulation` profile is currently an isolated software-only shell: it has
-no serial or camera grants and does not start a simulator or mock hardware.
-Vendor mock bringup stays gated until the exact OMX-AI launch and mock package
-set are verified in ROS-SIM. Neither shell profile starts vendor nodes or
-motion by default. Camera packages and device grants remain deferred until a
-camera model and persistent identity are selected.
+The `simulation` profile starts ROBOTIS's `omx_f_gazebo.launch.py` from the
+locked `open_manipulator` revision. That launch uses the vendor OMX-F URDF
+with `use_sim:=true`, Gazebo Sim, `gz_ros2_control`, the vendor controllers,
+and the `/clock` bridge. It has no serial or camera device grants. Its ROS
+domain is isolated from the workstation and remains software-only; it does
+not start the physical Dynamixel driver or claim device acceptance. A checked-in
+patch adds Gazebo's server-only flag so the simulation needs no GUI session.
+Start it on a Linux workstation with a working Docker engine:
+
+```sh
+docker compose --env-file deploy/omx/.env -f deploy/omx/compose.yaml --profile simulation up --build omx-simulation
+```
+
+Stop with Ctrl-C. Verify `/joint_states`, controller state, and `/clock` from
+inside the container before treating the run as ROS-SIM evidence. This profile
+does not yet include a camera simulation, arm command-safety adapter, or
+automated stop/fault acceptance. Camera packages and grants remain deferred
+until a camera model and persistent identity are selected.
 
 The image tag is a local development tag, not an artifact identity. Record a
 content digest and dependency/build manifest before treating it as ARTIFACT

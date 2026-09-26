@@ -58,7 +58,7 @@
 ## 최근 기록
 
 - 2026-09-26 · uncommitted · OMX 호스트 인벤토리와 다중 장치 사전점검
+- 2026-09-26 · uncommitted · feat(omx): add isolated vendor simulation and Pinky-aware ROS settings
 - 2026-09-26 · uncommitted · clarify OMX workstation packaging boundary
 - 2026-09-26 · uncommitted · build locked OMX-AI workstation image and serial admission
 - 2026-09-26 · uncommitted · fix(deploy): D-260 review M1 M2 L1-L4
-- 2026-09-26 · uncommitted · feat(deploy): D-260 boot display sound, lamp and LCD; test hand-over

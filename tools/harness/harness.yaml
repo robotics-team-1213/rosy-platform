@@ -8,7 +8,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
   D-279: "reserved by the concurrent role-aware empty-state recovery draft; remove when that ADR lands"
-  D-280: "reserved by the concurrent product design philosophy draft; remove when that ADR lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
   D-223: "skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)"
@@ -21,6 +20,7 @@ adr_gaps:
   D-239: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-240: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
+  D-279: "reserved by docs/plans/2026-09-26-role-aware-empty-state-recovery-plan.md; its ADR is written in that separate work"
 
 status: STATUS.md
 stale_after_commits: 5

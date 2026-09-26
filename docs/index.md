@@ -155,6 +155,6 @@
 
 - 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
 - 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
-- 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
-- 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
-- 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
+- 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
+- 2026-09-26 · uncommitted · docs(design): D-280 기준선의 화면 경로 정정
+- 2026-09-26 · uncommitted · docs(design): D-280 제품 기준선 검토

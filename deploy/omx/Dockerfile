@@ -17,6 +17,9 @@ WORKDIR /opt/omx_ws
 COPY stack.lock.yaml /opt/omx_ws/stack.lock.yaml
 COPY fetch_sources.py /usr/local/bin/fetch_omx_sources.py
 RUN python3 /usr/local/bin/fetch_omx_sources.py /opt/omx_ws/stack.lock.yaml /opt/omx_ws/src
+COPY patches/omx-f-gazebo-headless.patch /tmp/omx-f-gazebo-headless.patch
+RUN git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-f-gazebo-headless.patch \
+    && git -C /opt/omx_ws/src/open_manipulator apply /tmp/omx-f-gazebo-headless.patch
 
 RUN apt-get update \
     && source /opt/ros/${ROS_DISTRO}/setup.bash \
@@ -31,7 +34,7 @@ RUN apt-get update \
         src/DynamixelSDK/ros/dynamixel_sdk_custom_interfaces \
         src/robotis_interfaces \
       --ignore-src --rosdistro ${ROS_DISTRO} -r -y \
-      --skip-keys "ros_gz_bridge ros_gz_sim ros_gz_image gz_ros2_control rviz2 realsense2_description joint_state_publisher_gui" \
+      --skip-keys "rviz2 realsense2_description joint_state_publisher_gui" \
     && colcon build --merge-install --install-base /opt/omx_ws/install \
       --packages-select \
         open_manipulator_bringup \
@@ -39,6 +42,14 @@ RUN apt-get update \
         om_joint_trajectory_command_broadcaster \
         dynamixel_hardware_interface dynamixel_interfaces \
         dynamixel_sdk dynamixel_sdk_custom_interfaces robotis_interfaces
+
+# D-117: workstation ROS graphs use the same RMW implementation as Rosy OS.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      ros-jazzy-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
 COPY entrypoint.sh /usr/local/bin/omx-entrypoint
 RUN chmod 0755 /usr/local/bin/omx-entrypoint
