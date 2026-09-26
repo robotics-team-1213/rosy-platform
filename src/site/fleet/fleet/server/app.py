@@ -28,7 +28,7 @@ from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
 from fleet.server.task_service import FleetTaskService
-from fleet.server.task_store import IdempotencyConflict
+from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
@@ -185,6 +185,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     guard = [Depends(authorize)]
 
+    def cancel_pending_task_queue(robot_id: Optional[str] = None) -> None:
+        if task_service is None:
+            return
+        canceled = (task_service.cancel_all_queued() if robot_id is None else
+                    task_service.cancel_queued_for_robot(robot_id))
+        console.discard_task_queue_entries(set(canceled))
+
     if sightings is not None and sightings.enabled:
         if console_token is not None and sightings.uses_token(console_token):
             raise ValueError("sighting source credentials must differ from the console token")
@@ -278,12 +285,29 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 raise HTTPException(status_code=404, detail={"code": "TASK_NOT_FOUND"})
             return {"task": task, "history": task_service.store.history(task_id)}
 
+        @app.post("/api/fleet/tasks/{task_id}/cancel", dependencies=guard,
+                  tags=["fleet-tasks"])
+        def fleet_task_cancel(task_id: str) -> dict:
+            try:
+                task = task_service.cancel_queued_task(task_id)
+            except KeyError:
+                raise HTTPException(status_code=404, detail={"code": "TASK_NOT_FOUND"}) from None
+            except InvalidTaskTransition:
+                raise HTTPException(status_code=409, detail={
+                    "code": "TASK_ALREADY_DISPATCHED",
+                    "message": "only a task not yet dispatched can be canceled here",
+                }) from None
+            console.discard_task_queue_entries({task_id})
+            return {"task": task}
+
     @app.post("/api/fleet/robots/{robot_id}/cancel", dependencies=guard, tags=["fleet"])
     async def fleet_cancel(robot_id: str) -> dict:
+        cancel_pending_task_queue(robot_id)
         try:
-            return await console.cancel(robot_id)
+            result = await console.cancel(robot_id)
         except (HubError, RobotApiError, OSError) as exc:
             raise _http_error(exc) from exc
+        return result
 
     @app.get("/api/fleet/formation", dependencies=guard, tags=["formation"])
     async def formation_state() -> dict:
@@ -345,10 +369,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         for call in calls:
             try:
                 if call.scope == "site":
+                    if call.verb == "estop":
+                        cancel_pending_task_queue()
                     result = await _site_call(console, call)
                 else:
                     if not call.robot:
                         raise HubError("ROBOT_REQUIRED", call.verb)
+                    if call.verb in {"cancel", "stop"}:
+                        cancel_pending_task_queue(call.robot)
                     if task_service is not None and call.verb == "navigate":
                         if not idempotency_key:
                             raise HTTPException(status_code=400, detail={
@@ -389,6 +417,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     async def fleet_estop() -> dict:
         # 이쪽은 한 대가 거절해도 200 이다 — 어느 대가 섰고 어느 대가 못 섰는지는 본문에
         # 다 들어 있고, 화면은 그 목록을 보여 줘야 한다.
+        cancel_pending_task_queue()
         return await console.estop_all()
 
     @app.get("/", include_in_schema=False)
@@ -448,7 +477,9 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
     """Dispatch one eligible task at a time from the app-owned background worker."""
     while True:
         try:
+            task_service.scheduler.expire_queued()
             snapshot = await console.snapshot()
+            console.prune_task_queue_entries(task_service.store.queued_task_ids())
             available = {
                 row["robot_id"] for row in snapshot["robots"]
                 if row["online"] and row["queued"] is None and row["goal"] is None

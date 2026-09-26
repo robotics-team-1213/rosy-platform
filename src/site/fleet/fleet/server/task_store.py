@@ -191,22 +191,22 @@ class FleetTaskStore:
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
         robot_ids = sorted(set(available_robot_ids))
-        if not robot_ids:
-            return None
         now_dt = datetime.now(timezone.utc)
         now = now_dt.isoformat(timespec="milliseconds")
-        lease_until = (now_dt + timedelta(seconds=lease_seconds)).isoformat(timespec="milliseconds")
-        placeholders = ",".join("?" for _ in robot_ids)
+        lease_until = (now_dt + timedelta(seconds=lease_seconds)).isoformat(
+            timespec="milliseconds")
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             expired = connection.execute(
                 """SELECT task_id, source, actor_id FROM fleet_tasks
-                   WHERE status='QUEUED' AND expires_at IS NOT NULL AND expires_at <= ?""",
+                   WHERE status='QUEUED' AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
+                     AND expires_at IS NOT NULL AND expires_at <= ?""",
                 (now,),
             ).fetchall()
             for row in expired:
                 connection.execute(
-                    "UPDATE fleet_tasks SET status='EXPIRED', reason='TASK_EXPIRED', updated_at=? "
+                    """UPDATE fleet_tasks SET status='EXPIRED', dispatch_phase='EXPIRED',
+                       reason='TASK_EXPIRED', blocked_by=NULL, waiting_on_json='[]', updated_at=? """
                     "WHERE task_id=? AND status='QUEUED'", (now, row["task_id"]),
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
@@ -225,16 +225,19 @@ class FleetTaskStore:
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
-            selected = connection.execute(
-                f"""SELECT t.task_id, t.robot_id FROM fleet_tasks AS t
-                    WHERE t.status='QUEUED' AND t.dispatch_phase='READY'
-                      AND t.robot_id IN ({placeholders})
-                      AND (t.lease_until IS NULL OR t.lease_until <= ?)
-                      AND NOT EXISTS (SELECT 1 FROM fleet_robot_reservations r
-                                      WHERE r.robot_id=t.robot_id)
-                    ORDER BY t.priority_class ASC, t.queued_at ASC, t.task_id ASC LIMIT 1""",
-                (*robot_ids, now),
-            ).fetchone()
+            selected = None
+            if robot_ids:
+                placeholders = ",".join("?" for _ in robot_ids)
+                selected = connection.execute(
+                    f"""SELECT t.task_id, t.robot_id FROM fleet_tasks AS t
+                        WHERE t.status='QUEUED' AND t.dispatch_phase='READY'
+                          AND t.robot_id IN ({placeholders})
+                          AND (t.lease_until IS NULL OR t.lease_until <= ?)
+                          AND NOT EXISTS (SELECT 1 FROM fleet_robot_reservations r
+                                          WHERE r.robot_id=t.robot_id)
+                        ORDER BY t.priority_class ASC, t.queued_at ASC, t.task_id ASC LIMIT 1""",
+                    (*robot_ids, now),
+                ).fetchone()
             if selected is None:
                 connection.commit()
                 return None
@@ -330,6 +333,50 @@ class FleetTaskStore:
                                      (task_id,)).fetchone()
             connection.commit()
         return self._task_dict(row)
+
+    def cancel_queued(self, task_id: str, *, actor_id: str) -> dict:
+        """Cancel only a task that has not entered its CORE dispatch attempt."""
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                         (task_id,)).fetchone()
+            if current is None:
+                raise KeyError(task_id)
+            if current["status"] == "CANCELED":
+                connection.commit()
+                return self._task_dict(current)
+            if (current["status"] != "QUEUED"
+                    or current["dispatch_phase"] not in {"READY", "WAITING_TRAFFIC"}):
+                raise InvalidTaskTransition("only a task not yet dispatched can be canceled here")
+            connection.execute(
+                """UPDATE fleet_tasks SET status='CANCELED', dispatch_phase='CANCELED',
+                   reason='OPERATOR_CANCELED_BEFORE_DISPATCH', blocked_by=NULL,
+                   waiting_on_json='[]', lease_owner=NULL, lease_until=NULL, updated_at=?
+                   WHERE task_id=?""",
+                (now, task_id),
+            )
+            connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?", (task_id,))
+            self._append_history(connection, task_id, "CANCELED", "operator", actor_id, now,
+                                 "OPERATOR_CANCELED_BEFORE_DISPATCH")
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                     (task_id,)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
+    def cancel_queued_for_robot(self, robot_id: str, *, actor_id: str) -> list[str]:
+        return self._cancel_queued_tasks(actor_id=actor_id, robot_id=robot_id)
+
+    def cancel_all_queued(self, *, actor_id: str) -> list[str]:
+        return self._cancel_queued_tasks(actor_id=actor_id)
+
+    def queued_task_ids(self) -> set[str]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
+                   AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"""
+            ).fetchall()
+        return {row["task_id"] for row in rows}
 
     def recover_interrupted_work(self) -> int:
         """Requeue only work proven not sent; ambiguous CORE calls become UNKNOWN."""
@@ -487,6 +534,37 @@ class FleetTaskStore:
                VALUES (?, ?, ?, ?, ?, ?)""",
             (task_id, status, source, actor_id, reason, now),
         )
+
+    def _cancel_queued_tasks(self, *, actor_id: str, robot_id: str | None = None) -> list[str]:
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if robot_id is None:
+                rows = connection.execute(
+                    """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
+                       AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"""
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
+                       AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC') AND robot_id=?""",
+                    (robot_id,),
+                ).fetchall()
+            task_ids = [row["task_id"] for row in rows]
+            for task_id in task_ids:
+                connection.execute(
+                    """UPDATE fleet_tasks SET status='CANCELED', dispatch_phase='CANCELED',
+                       reason='OPERATOR_CANCELED_BEFORE_DISPATCH', blocked_by=NULL,
+                       waiting_on_json='[]', lease_owner=NULL, lease_until=NULL, updated_at=?
+                       WHERE task_id=?""",
+                    (now, task_id),
+                )
+                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
+                                   (task_id,))
+                self._append_history(connection, task_id, "CANCELED", "operator", actor_id, now,
+                                     "OPERATOR_CANCELED_BEFORE_DISPATCH")
+            connection.commit()
+        return task_ids
 
     @staticmethod
     def _migrate_task_columns(connection: sqlite3.Connection) -> None:

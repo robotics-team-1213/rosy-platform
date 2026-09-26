@@ -132,3 +132,12 @@ class FleetTaskService:
 
     def traffic_queue_released(self, task_id: str) -> dict:
         return self.store.release_traffic_wait(task_id)
+
+    def cancel_queued_task(self, task_id: str, *, actor_id: str = "site-console") -> dict:
+        return self.store.cancel_queued(task_id, actor_id=actor_id)
+
+    def cancel_queued_for_robot(self, robot_id: str, *, actor_id: str = "site-console") -> list[str]:
+        return self.store.cancel_queued_for_robot(robot_id, actor_id=actor_id)
+
+    def cancel_all_queued(self, *, actor_id: str = "site-console") -> list[str]:
+        return self.store.cancel_all_queued(actor_id=actor_id)

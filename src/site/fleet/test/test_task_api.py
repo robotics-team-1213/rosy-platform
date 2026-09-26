@@ -1,9 +1,10 @@
 from threading import Event
 
+import pytest
 from fastapi.testclient import TestClient
 
 from core_common.protocol.schemas import FleetTaskStatus
-from fakes import FakeRobot
+from fakes import FakeRobot, run
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
@@ -179,3 +180,172 @@ def test_intent_navigation_requires_idempotency_key_when_task_store_is_enabled(t
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "IDEMPOTENCY_KEY_REQUIRED"
     assert not robot.calls
+
+
+def test_task_cancel_only_cancels_queued_task_and_never_calls_core(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "cancel-me"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    assert client.post(f"/api/fleet/tasks/{task_id}/cancel").status_code == 401
+    canceled = client.post(f"/api/fleet/tasks/{task_id}/cancel",
+                           headers={"Authorization": "Bearer operator-console"})
+    repeated = client.post(f"/api/fleet/tasks/{task_id}/cancel",
+                           headers={"Authorization": "Bearer operator-console"})
+
+    assert canceled.status_code == repeated.status_code == 200
+    assert canceled.json()["task"]["status"] == FleetTaskStatus.CANCELED.value
+    assert not robot.calls
+
+
+def test_robot_cancel_cancels_pending_tasks_then_calls_core_immediately(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "stop-me"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    stopped = client.post("/api/fleet/robots/rosy_01/cancel",
+                          headers={"Authorization": "Bearer operator-console"})
+    readback = client.get(f"/api/fleet/tasks/{task_id}",
+                          headers={"Authorization": "Bearer operator-console"})
+
+    assert stopped.status_code == 200
+    assert readback.json()["task"]["status"] == FleetTaskStatus.CANCELED.value
+    assert robot.calls == [("navigation_cancel",)]
+
+
+def test_estop_cancels_pending_tasks_after_sending_robot_stop(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "estop-queue"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    stopped = client.post("/api/fleet/estop",
+                          headers={"Authorization": "Bearer operator-console"})
+    readback = client.get(f"/api/fleet/tasks/{task_id}",
+                          headers={"Authorization": "Bearer operator-console"})
+
+    assert stopped.status_code == 200
+    assert readback.json()["task"]["status"] == FleetTaskStatus.CANCELED.value
+    assert ("estop",) in robot.calls
+
+
+def test_dispatched_task_cannot_use_queued_cancel_endpoint(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "running"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    async def accepted(_task):
+        return {"accepted": True}
+
+    run(service.dispatch_next({"rosy_01"}, dispatch=accepted))
+    response = client.post(f"/api/fleet/tasks/{task_id}/cancel",
+                           headers={"Authorization": "Bearer operator-console"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "TASK_ALREADY_DISPATCHED"
+    assert service.store.get_task(task_id)["status"] == FleetTaskStatus.ACCEPTED.value
+
+
+def test_robot_cancel_failure_still_prevents_queued_task_dispatch(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+
+    async def ambiguous_cancel():
+        raise TimeoutError("cancel response lost")
+
+    robot.navigation_cancel = ambiguous_cancel
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "stop-fail"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    stopped = client.post("/api/fleet/robots/rosy_01/cancel",
+                          headers={"Authorization": "Bearer operator-console"})
+
+    assert stopped.status_code == 502
+    assert service.store.get_task(task_id)["status"] == FleetTaskStatus.CANCELED.value
+
+
+@pytest.mark.parametrize("verb", ["cancel", "stop"])
+def test_intent_cancel_and_stop_cancel_queued_tasks_before_robot_action(tmp_path, verb):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "intent-stop"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    stopped = client.post("/api/fleet/do", json={"do": verb, "robot": "rosy_01"},
+                          headers=headers)
+
+    assert stopped.status_code == 200
+    assert service.store.get_task(task_id)["status"] == FleetTaskStatus.CANCELED.value
+    assert (("navigation_cancel",) if verb == "cancel" else ("estop",)) in robot.calls
+
+
+def test_intent_site_estop_cancels_all_queued_tasks_after_robot_stop(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    robot = FakeRobot("rosy_01")
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        task_service=service, start_task_dispatcher=False,
+    ))
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "intent-estop"}
+    submitted = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                            headers=headers)
+    task_id = submitted.json()["task"]["task_id"]
+
+    stopped = client.post("/api/fleet/do", json={"do": "estop"}, headers=headers)
+
+    assert stopped.status_code == 200
+    assert service.store.get_task(task_id)["status"] == FleetTaskStatus.CANCELED.value
+    assert ("estop",) in robot.calls

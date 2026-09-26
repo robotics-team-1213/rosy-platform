@@ -229,6 +229,17 @@ class FleetConsole:
     def set_task_queue_release_callback(self, callback: Optional[Callable[[dict], Any]]) -> None:
         self._task_queue_release_callback = callback
 
+    def discard_task_queue_entries(self, task_ids: set[str]) -> None:
+        for robot_id, mission in list(self._queued.items()):
+            if mission.get("task_id") in task_ids:
+                self._queued.pop(robot_id, None)
+
+    def prune_task_queue_entries(self, active_task_ids: set[str]) -> None:
+        for robot_id, mission in list(self._queued.items()):
+            task_id = mission.get("task_id")
+            if task_id is not None and task_id not in active_task_ids:
+                self._queued.pop(robot_id, None)
+
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
                    attempt_seq: int | None = None) -> dict:

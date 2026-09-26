@@ -47,3 +47,7 @@ class FleetTaskScheduler:
 
     def recover(self) -> int:
         return self.store.recover_interrupted_work()
+
+    def expire_queued(self) -> None:
+        """Expire queued work even when no robot is currently dispatchable."""
+        self.store.claim_next(worker_id=self.worker_id, available_robot_ids=set())

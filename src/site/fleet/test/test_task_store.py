@@ -218,3 +218,61 @@ def test_confirmed_traffic_cancel_holds_task_until_release_then_allows_new_attem
     assert [row["status"] for row in store.history("traffic")] == [
         "REQUESTED", "QUEUED", "QUEUED", "QUEUED",
     ]
+
+
+def test_queued_task_can_be_cancelled_without_core_command_or_cancelling_dispatch(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    store.create_task(
+        task_id="cancel-me", robot_id="rosy_01", task_type="navigate",
+        source="operator", actor_id="site-console", request_key="cancel-1",
+        request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+    )
+    store.enqueue("cancel-me", priority_class=0)
+    canceled = store.cancel_queued("cancel-me", actor_id="site-console")
+    replay = store.cancel_queued("cancel-me", actor_id="site-console")
+
+    assert canceled["status"] == "CANCELED"
+    assert replay["status"] == "CANCELED"
+    assert store.claim_next(worker_id="worker", available_robot_ids={"rosy_01"}) is None
+
+    store.create_task(
+        task_id="dispatching-cannot-cancel", robot_id="rosy_02", task_type="navigate",
+        source="operator", actor_id="site-console", request_key="cancel-2",
+        request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+    )
+    store.enqueue("dispatching-cannot-cancel", priority_class=0)
+    store.claim_next(worker_id="worker", available_robot_ids={"rosy_02"})
+    store.mark_dispatching("dispatching-cannot-cancel", worker_id="worker")
+    try:
+        store.cancel_queued("dispatching-cannot-cancel", actor_id="site-console")
+    except InvalidTaskTransition:
+        pass
+    else:
+        raise AssertionError("an in-flight command cannot be canceled as a queued task")
+
+
+def test_expiry_releases_only_tasks_that_are_confirmed_pre_dispatch(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    for task_id in ("expired", "dispatching"):
+        store.create_task(
+            task_id=task_id, robot_id=f"{task_id}-robot", task_type="navigate",
+            source="operator", actor_id="site-console", request_key=task_id,
+            request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+        )
+        store.enqueue(
+            task_id, priority_class=0,
+            expires_at=None if task_id == "dispatching" else "2000-01-01T00:00:00+00:00",
+        )
+    store.claim_next(worker_id="worker", available_robot_ids={"dispatching-robot"})
+    store.mark_dispatching("dispatching", worker_id="worker")
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE fleet_tasks SET expires_at='2000-01-01T00:00:00+00:00' "
+            "WHERE task_id='dispatching'"
+        )
+
+    store.claim_next(worker_id="worker-2", available_robot_ids={"expired-robot"})
+
+    assert store.get_task("expired")["status"] == "EXPIRED"
+    assert store.get_task("dispatching")["status"] == "QUEUED"
+    assert store.get_task("dispatching")["dispatch_phase"] == "DISPATCHING"
