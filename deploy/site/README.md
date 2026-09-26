@@ -250,15 +250,19 @@ the site's controlled transfer path and verify its archive hash against
 cd /opt/rosy/candidate
 sha256sum images.tar
 docker image load --input images.tar
+python3 deploy/site/verify_candidate.py --candidate-dir /opt/rosy/candidate
 cp deploy/site/.env.example /etc/rosy/site/site.env
 ```
 
 Set the image tag and private config paths in the operator-managed env file,
 then run Compose with `--no-build` so the host uses the exact loaded candidate.
-The bundle hash detects transfer damage; it does not authenticate the bundle's
-origin. Do not treat this workstation-built candidate as field accepted until
-the target host's loaded image IDs, GPU, phone, CORE robot, and recovery checks
-are recorded.
+The verifier checks the archive, packaged files and SBOMs against `release.json`,
+then compares the loaded Fleet, Vision, and proxy image IDs and platforms. These
+checks detect inconsistency or damage; because the manifest is unsigned, they
+do not authenticate the bundle's origin or protect against replacement of both
+the bundle and its manifest. Do not treat this workstation-built candidate as
+field accepted until the target host's identity, loaded image IDs, GPU, phone,
+CORE robot, and recovery checks are recorded.
 
 Install the boot unit from that same verified candidate after its configuration
 and secrets are ready:

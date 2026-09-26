@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from deploy.site.build_candidate import build_candidate
+from deploy.site.build_candidate import DOC_FILES, DEPLOY_FILES, build_candidate
+from deploy.site.verify_candidate import REQUIRED_DEPLOYMENT_FILES, REQUIRED_DOCUMENT_FILES
 
 COMMIT = "9541086c550c0c1142f7aefecc903987e149f9e2"
 
@@ -21,7 +22,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
-                 "rosy-site-stack.service",
+                 "rosy-site-stack.service", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
@@ -85,7 +86,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "robots.yaml.example", "site-cameras.yaml.example",
         "site-users.yaml.example", "mdns-bridge.py", "rosy-mdns-bridge.service",
         "rosy-mdns-bridge.timer", "fleet-mdns.py", "rosy-fleet-advertise.service",
-        "rosy-site-stack.service",
+        "rosy-site-stack.service", "verify_candidate.py",
         "discovery-token.template.txt", "site_db.py",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
@@ -132,6 +133,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
+                 "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
@@ -151,3 +153,8 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
     with pytest.raises(RuntimeError, match="expected linux/amd64"):
         build_candidate(root, tmp_path / "release", runner=wrong_arch_runner)
     assert not (tmp_path / "release" / "release.json").exists()
+
+
+def test_candidate_builder_and_host_verifier_share_required_bundle_inventory():
+    assert set(DEPLOY_FILES) | {"verify_candidate.py"} == set(REQUIRED_DEPLOYMENT_FILES)
+    assert set(DOC_FILES) == set(REQUIRED_DOCUMENT_FILES)
