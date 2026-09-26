@@ -452,7 +452,24 @@ class FleetTaskStore:
         with closing(self._connect()) as connection:
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
                                      (task_id,)).fetchone()
-        return self._task_dict(row) if row is not None else None
+            if row is None:
+                return None
+            task = self._task_dict(row)
+            if (task["status"] == "QUEUED"
+                    and task["lease_owner"] is None
+                    and task["dispatch_phase"] in {"READY", "WAITING_TRAFFIC"}):
+                ahead = connection.execute(
+                    """SELECT COUNT(*) FROM fleet_tasks
+                       WHERE status='QUEUED' AND lease_owner IS NULL
+                         AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
+                       AND (priority_class < ? OR
+                            (priority_class = ? AND queued_at < ?) OR
+                            (priority_class = ? AND queued_at = ? AND task_id < ?))""",
+                    (task["priority_class"], task["priority_class"], task["queued_at"],
+                     task["priority_class"], task["queued_at"], task_id),
+                ).fetchone()[0]
+                task["queue_position"] = int(ahead) + 1
+        return task
 
     def history(self, task_id: str) -> list[dict]:
         with closing(self._connect()) as connection:
@@ -517,6 +534,7 @@ class FleetTaskStore:
             "attempt_seq": row["attempt_seq"],
             "blocked_by": row["blocked_by"],
             "waiting_on": json.loads(row["waiting_on_json"]),
+            "queue_position": None,
         }
 
     def _connect(self) -> sqlite3.Connection:

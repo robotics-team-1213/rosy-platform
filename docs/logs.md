@@ -2297,3 +2297,8 @@
 - gate 변화: 없음(ADR·게이트 문서 무변경)
 - 회귀: 없음(동료 WIP 2파일 `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지, HEAD `986a81ca`로 동기)
 - 교훈: 붉은 가드의 귀속은 "관련 경로를 만진 최근 커밋"이 아니라 `git log -S <가드 조건>`으로 "가드 자체를 넣은 커밋"을 찾을 것 — 같은 시리즈라 해도 귀속은 커밋 단위로 검증해야 한다(오늘 내 장부가 12ca0469를 원인으로 잘못 지목함). 남이 소유한 가드는 소유자가 시리즈를 마칠 때까지 기록만 — a4970791·ff603832 모두 pl3의 role-panel 시리즈로 오늘도 활성이다
+
+## 2026-09-26 · uncommitted · feat(fleet): expose server queue position
+- 변경: Added a server-computed position for unleased queued tasks in priority/FIFO order and showed it with task ID, blockers, wait reason, and queued-only cancel in the console.
+- 증거: Fleet suite 485 passed/5 skipped; Chromium browser suite 13 passed; Docker image `sha256:0c207e85fa8269cf753a505be14eaf2041babb09999bfd0de29929f3e9625ffb` returned `queue_position: 1`, which remained in authenticated readback after container restart.
+- gate 변화: LOCAL UI and container restart evidence now includes the displayed queue order. Ubuntu, full Compose, real CORE/robot, GPU, DEVICE, FIELD, and policy dispatch remain open.

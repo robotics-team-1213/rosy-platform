@@ -38,6 +38,8 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
     assert '`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`' in web_contract
+    assert "`queue_position`" in reference
+    assert "task.queue_position" in web
     assert "--tasks-db" in compose
 
 
