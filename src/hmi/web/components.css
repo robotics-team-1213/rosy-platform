@@ -266,6 +266,31 @@ ui-actions {
   gap: var(--space-2);
 }
 
+/* Native form elements keep submission and label behavior; the shared classes
+   provide only field grouping and responsive placement. */
+.ui-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.ui-field-label {
+  display: grid;
+  gap: var(--space-1);
+  min-width: min(100%, 10rem);
+}
+
+.ui-form input,
+.ui-form select,
+.ui-form textarea,
+.ui-actions input { max-width: 100%; }
+
+@media (max-width: 30rem) {
+  .ui-form { align-items: stretch; flex-direction: column; }
+  .ui-form > * { width: 100%; }
+}
+
 ui-status[state="warning"],
 ui-status[state="error"],
 ui-status[state="unavailable"],

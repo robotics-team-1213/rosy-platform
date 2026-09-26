@@ -48,7 +48,7 @@ export function mount(root, ctx) {
     fields(identity.body, [["로봇 ID", data.robot_id], ["표시 이름", data.robot_name || data.name],
       ["하드웨어 모델", data.hardware_model], ["실행 모드", data.runtime_mode]]);
     if (ctx.role === "administrator" && !identity.body.querySelector("form")) {
-      const form = el("form", "surface-inline-form");
+      const form = el("form", "ui-form");
       const input = el("input"); input.name = "robot_name"; input.maxLength = 64;
       input.value = data.robot_name || data.name || ""; input.setAttribute("aria-label", "로봇 표시 이름");
       const save = el("ui-button", "", "이름 저장"); save.setAttribute("kind", "primary"); save.type = "submit";

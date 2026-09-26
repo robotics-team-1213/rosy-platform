@@ -7,7 +7,7 @@ function el(tag, cls, text) {
 }
 
 function field(labelText, name, value = "0") {
-  const label = el("label", "surface-field", labelText);
+  const label = el("label", "ui-field-label", labelText);
   const input = el("input");
   input.type = "number"; input.step = "any"; input.required = true; input.name = name; input.value = value;
   label.append(input);
@@ -19,7 +19,7 @@ export function mount(root, ctx) {
   const note = el("p", "surface-message", "기능 지원 여부를 확인하는 중입니다.");
   note.setAttribute("role", "status");
 
-  const poseForm = el("form", "surface-form");
+  const poseForm = el("form", "ui-form");
   poseForm.append(el("h3", "", "초기 위치 설정"));
   const x = field("X (m)", "x"); const y = field("Y (m)", "y"); const yaw = field("방향 (rad)", "yaw");
   const setPose = el("ui-button", "", "초기 위치 적용"); setPose.setAttribute("kind", "primary"); setPose.type = "submit";
