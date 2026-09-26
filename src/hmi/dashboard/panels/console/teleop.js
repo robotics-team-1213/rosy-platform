@@ -13,7 +13,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "수동 운전");
-  const status = el("p", "surface-message", "운전 자격을 확인하는 중입니다."); status.setAttribute("role", "status");
+  const status = el("ui-status", "", "운전 자격을 확인하는 중입니다.");
   const confirmLabel = el("label", "ui-field-label surface-confirmation", "주변과 바퀴가 안전한지 확인했습니다.");
   const confirmed = el("input"); confirmed.type = "checkbox"; confirmLabel.prepend(confirmed);
   const controls = el("div", "surface-teleop-controls"); controls.setAttribute("aria-label", "누르는 동안만 움직이는 저속 운전");

@@ -130,11 +130,6 @@ ui-section[data-failed="true"] { border-style: dashed; }
     min-width: 0;
     white-space: nowrap;
   }
-  .action-group-tabs ui-button[aria-selected="true"] {
-    color: var(--brand-rose);
-    border-color: var(--brand-rose);
-    background: var(--brand-rose-wash);
-  }
   body[data-surface="setup"] .surface-slot[data-slot="main"],
   body[data-surface="device"] .surface-slot[data-slot="main"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));

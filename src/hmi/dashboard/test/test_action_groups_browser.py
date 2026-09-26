@@ -163,6 +163,18 @@ def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motio
             page.goto(f"http://127.0.0.1:{server.server_port}/__d283")
             page.wait_for_function("window.__mounted && document.querySelector('[data-panel=\"console.teleop\"]')")
             assert page.get_by_role("tab").count() == 3
+            tab_background = page.locator('[role="tab"][aria-selected="true"]').evaluate(
+                "node => getComputedStyle(node).backgroundColor"
+            )
+            token_background = page.evaluate("""() => {
+              const probe = document.createElement('i');
+              probe.style.backgroundColor = 'var(--ground-card-2)';
+              document.body.append(probe);
+              const value = getComputedStyle(probe).backgroundColor;
+              probe.remove();
+              return value;
+            }""")
+            assert tab_background == token_background
             page.locator("[data-panel='console.teleop'] input[type=checkbox]").check()
             page.locator("[data-panel='console.teleop'] ui-button").first.dispatch_event("pointerdown")
             page.wait_for_function("window.__timeline.some((item) => item.path === '/api/v1/teleop' && item.body?.linear > 0)")

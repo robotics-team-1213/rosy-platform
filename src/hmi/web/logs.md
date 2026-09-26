@@ -132,3 +132,10 @@
 - 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 77 passed (2026-09-26 Windows).
 - gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
 - 결정: D-287.
+
+## 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption
+
+- 변경: Migrate remaining role-panel live announcements to `ui-status`; route selected action-tab paint through the shared segment palette and remove the shell override.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` — 85 passed; action-group browser tests — 5 passed.
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field acceptance is claimed.
+- 결정: D-284 governs the shared status contract; D-283 governs action-group tabs.

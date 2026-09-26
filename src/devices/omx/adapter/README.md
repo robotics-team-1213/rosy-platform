@@ -23,3 +23,13 @@ or build/source the ROS workspace first.
 
 The empty JSON contract from the disabled profile is expected. A non-empty
 contract is not a physical acceptance result.
+
+`omx_adapter.command_owner` provides a ROS-free, disabled-by-default policy
+boundary for one arm command writer. It checks workcell and runtime-session
+identity, owner admission, fresh monotonic joint-state sequence, calibration
+revision, bounded goals, and configured joint limits. Action timeout, cancel,
+or fault latches a software HOLD and requires explicit operator recovery with
+new feedback. This policy is not connected to a ROS/vendor action server and
+does not prove that hardware stopped. Keep ROS-SIM, DEVICE, and FIELD gates
+closed until their separate action, fault, physical-stop, and recovery evidence
+exists.

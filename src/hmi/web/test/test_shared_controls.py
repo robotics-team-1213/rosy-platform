@@ -105,6 +105,27 @@ def test_role_recovery_panels_use_shared_status_component():
     assert 'el("ui-status"' in host_operations
 
 
+def test_role_live_announcements_use_shared_status_component():
+    panels = ROOT / "hmi" / "dashboard" / "panels"
+    owners = (
+        "console/camera.js", "console/docking.js", "console/line-follow.js",
+        "console/mode.js", "console/teleop.js", "host/system.js",
+        "setup/docking.js", "setup/dock-admin.js", "setup/localization.js",
+        "setup/traffic-policy.js", "system/security.js",
+    )
+    for owner in owners:
+        source = (panels / owner).read_text(encoding="utf-8")
+        assert re.search(r'el\("ui-status",\s*"",\s*"', source), owner
+        assert 'el("p", "surface-message"' not in source, owner
+
+
+def test_selected_action_tabs_use_shared_segment_palette():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    shell_css = (ROOT / "hmi" / "dashboard" / "shell" / "shell.css").read_text(encoding="utf-8")
+    assert 'ui-button[kind="segment"][aria-selected="true"]' in css
+    assert ".action-group-tabs ui-button[aria-selected" not in shell_css
+
+
 def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
     css = COMPONENTS.read_text(encoding="utf-8")
     script = UI.read_text(encoding="utf-8")
