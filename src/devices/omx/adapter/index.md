@@ -12,10 +12,12 @@
 | D-61 | 모듈 상태는 progress·logs·생성 index로 기록하고 계약 시험으로 지킨다 |
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
 
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-26-omx-ai-workstation-runtime.md](../../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
 
 ## 교훈 (docs/solutions)
 

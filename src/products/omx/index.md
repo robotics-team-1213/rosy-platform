@@ -12,10 +12,11 @@
 | D-196 | 로봇은 장치의 조합이다 — `src/devices/<계열>/`과 `src/robots/<robot>/`을 두고, 로봇 지식은 그 안에만 둔다 |
 | D-231 | 소스 영역은 층으로 나눈다 — contracts·runtime·devices·products·hmi·site·sim과 firmware/, 디렉터리만 옮기고 패키지 이름은 유지, 제품 이름 런타임·src 안 AI 워커·원격 판단 경로·새 액션은 받지 않는다 |
 | D-232 | OMX 제품 설정은 products/omx 이고, 보드 핀맵과 AI 자리는 그대로다 |
+| D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
 
 ## 계획·결과 문서
 
-- 없음
+- [2026-09-26-omx-ai-workstation-runtime.md](../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
 
 ## 교훈 (docs/solutions)
 

@@ -23,7 +23,7 @@ None.
 
 ### Working In This Directory
 
-- Disabled + empty model is valid and **not capable**. Contract is `{}`.
+- Disabled + selected `omx_ai` model and empty measured joint map is valid and **not capable**. Contract is `{}`.
 - Enabled profile requires a known model alias, driver package, hardware plugin, ≥4 unique joint names, frames, and finite positive `update_rate_hz`.
 - Do not open hardware from `cli.py`. It is a validator.
 
