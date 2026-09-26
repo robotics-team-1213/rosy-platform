@@ -66,6 +66,10 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "site/fleet/fleet/server/app.py": (
+        622,
+        "accept: compose Fleet routes and shared authentication/audit dependencies in one HTTP boundary; split by route group only when an independent auth and lifecycle boundary exists",
+    ),
     "site/fleet/fleet/server/task_store.py": (
         620,
         "accept: keep SQLite task, history, lease, and reservation transactions together; split only if this cohesive store grows further",

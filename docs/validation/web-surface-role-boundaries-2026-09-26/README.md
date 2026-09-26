@@ -3,7 +3,7 @@
 **Date:** 2026-09-26
 **Plan:** [D-275 implementation plan](../../plans/2026-09-26-web-surface-video-role-boundaries.md)
 **Decision:** [D-275](../../adr/D-275-web-surface-and-video-runtime-ownership.md)
-**Checkout:** Windows host, branch `docs/d275-runtime-roles`, based on `07ca4c690bb5011a3f652a506ec329d6a18392f5`.
+**Checkout:** Windows host, branch `docs/d275-runtime-roles`, based on `07ca4c6`.
 
 ## Result
 

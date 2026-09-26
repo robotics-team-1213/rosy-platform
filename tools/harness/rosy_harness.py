@@ -28,7 +28,7 @@ GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
 REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
 LOG_FIELDS = ("변경", "증거", "gate 변화")
-LOG_FIELD_ALIASES = {"증거": ("근거",)}
+LOG_FIELD_ALIASES = {"증거": ("근거", "검증")}
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
 
