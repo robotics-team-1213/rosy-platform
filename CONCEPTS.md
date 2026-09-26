@@ -2,6 +2,26 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## Platform and execution roles
+
+### ROSY Platform
+
+The whole product: device-local execution, site coordination, observation, human interfaces, and future AI/data/deployment roles. It is not one operating-system replacement or one process. `ROSY OS` remains a historical repository and artifact name (D-290, D-296).
+
+### Device middleware
+
+The local contract and control boundary of one robot or workcell. It validates and accepts permitted requests, exposes observed state and effective capability, arbitrates the single final command owner, and handles loss or stale state locally. Pinky CORE implements this role for the mobile base. An OMX local controller must own final arm commands after its separate device acceptance; mounting OMX on Pinky does not transfer that authority to CORE or Fleet (D-296).
+
+*Avoid:* using `middleware` alone to mean both this local role and the site Fleet service.
+
+### Fleet
+
+The site mission coordinator and durable task ledger. It selects and sequences admitted device actions through device APIs, records handoffs and evidence, and distinguishes acceptance from completion. It does not publish final base velocity or arm trajectory (D-12, D-290, D-293, D-296).
+
+### ROSY Runtime
+
+A target-architecture name for node-local execution. It does not imply a universal `rosy-runtime-base` package, one process, or a shared ROS graph on all hosts (D-296). The source directory `src/runtime/` is a code grouping, not a deployment unit.
+
 ## Robot commissioning
 
 ### Robot number
