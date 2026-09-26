@@ -128,6 +128,7 @@ export function createFieldMap(options) {
   const mayOpenSetup = options.mayOpenSetup === true;
   const getPose = options.getPose;
   const getNavigation = options.getNavigation;
+  const getMapSources = options.getMapSources;
   const canGoal = options.canGoal;
   const setAction = options.setAction;
   const listenerController = new AbortController();
@@ -282,6 +283,11 @@ export function createFieldMap(options) {
     const path = await apiMaybe("/api/v1/navigation/path");
     state.path = path?.poses || [];
     paint();
+  }
+
+  function wanted(key) {
+    const sources = getMapSources?.();
+    return !sources || sources[key] !== false;
   }
 
   async function refresh() {
