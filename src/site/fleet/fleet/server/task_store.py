@@ -478,6 +478,15 @@ class FleetTaskStore:
     def transition(self, task_id: str, status: str, *, actor_id: str,
                    source: str, reason: str | None = None,
                    receipt: Mapping | None = None) -> dict:
+        # D-170/D-293: this generic path has no correlated CORE final result.
+        # D-177 activation must introduce a separate verified-result transition.
+        if status in {"RUNNING", "COMPLETED"}:
+            raise InvalidTaskTransition("verified CORE result is required for execution status")
+        if status == "ACCEPTED" and (
+            receipt is None or receipt.get("accepted") is not True
+            or receipt.get("queued") is True
+        ):
+            raise InvalidTaskTransition("positive CORE receipt is required for acceptance")
         receipt_json = None if receipt is None else _safe_json(dict(receipt))
         now = _now()
         with closing(self._connect()) as connection:
