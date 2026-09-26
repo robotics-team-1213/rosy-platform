@@ -13,11 +13,13 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
 CONSOLE = WEB / "console.js"
+ROSTER = WEB / "roster.js"
 INDEX = WEB / "index.html"
 
 
 def console_source() -> str:
-    return CONSOLE.read_text(encoding="utf-8")
+    # 큐 렌더는 roster.js 팩토리가 가진다. 셸(console.js)은 호출만 남겼다.
+    return CONSOLE.read_text(encoding="utf-8") + ROSTER.read_text(encoding="utf-8")
 
 
 def test_hitl_names_the_robot_and_the_honest_path():

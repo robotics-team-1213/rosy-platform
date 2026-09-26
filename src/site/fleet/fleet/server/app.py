@@ -70,6 +70,7 @@ CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
     "formation.js": "application/javascript",
+    "roster.js": "application/javascript",
     "signals.js": "application/javascript",
 }
 
