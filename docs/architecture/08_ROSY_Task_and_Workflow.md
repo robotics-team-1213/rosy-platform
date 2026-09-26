@@ -1,23 +1,22 @@
-# 08. ROSY Task & Workflow Specification
+# 08. ROSY Mission and Device Action Model
 
-**범위:** 장기 작업 모델 예시다. 현재 `CONCEPTS.md`의 `TaskKind`는 로봇 원자 액션이고, Fleet의 영속 작업은 로봇별 이동 요청 중심이다. 아래 `Transport`/Workflow와 상태 목록은 현행 `/api/fleet/tasks/*` schema나 중앙 다장치 미션 실행기가 아니다. 첫 이종 장비 미션을 구현할 때 [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)과 D-18에 따라 Intent 후보 → Fleet Mission → 장치 Action → Episode의 identity/상태를 API Reference와 공유 schema에서 함께 결정한다.
+**범위:** 장기 작업 모델 예시다. 현재 `CONCEPTS.md`의 `TaskKind`는 로봇 원자 액션이고, Fleet의 영속 작업은 로봇별 이동 요청 중심이다. 아래 `Transport`와 상태 목록은 현행 `/api/fleet/tasks/*` schema나 중앙 다장치 미션 실행기가 아니다. 첫 이종 장비 미션을 구현할 때 [D-298](../adr/D-298-mission-action-and-stop-evidence-terminology.md)과 D-18에 따라 Intent 후보 → Fleet Mission → Mission Step → Device Action → Local Transaction → Episode의 identity/상태를 API Reference와 공유 schema에서 함께 결정한다.
 
-## 1. Task
+## 1. Device Action
 
-A Task is a requested unit of work.
+A Device Action is a bounded request accepted by one device-local controller.
 
 Examples:
 
 - Navigate
 - Pick
 - Place
-- Transport
 - Inspect
 - Dock
 
-## 2. Workflow
+## 2. Fleet Mission
 
-A Workflow combines multiple Tasks.
+A Fleet Mission sequences Mission Steps and records cross-device handoffs. `TransportObject` is a proposed Mission, not an atomic device action.
 
 Example:
 
@@ -33,7 +32,7 @@ TransportObject
   -> VerifyPlace
 ```
 
-## 3. Task State
+## 3. Proposed Mission State
 
 ```text
 PENDING
@@ -45,9 +44,9 @@ CANCELLED
 BLOCKED
 ```
 
-## 4. Task Requirements
+## 4. Mission Requirements
 
-A Task may declare:
+A Mission may declare:
 
 - capabilities
 - deadline
@@ -57,8 +56,8 @@ A Task may declare:
 - safety class
 - retry policy
 
-## 5. Task Execution Boundary
+## 5. Execution Boundary
 
 Low-level safety and actuator loops remain local.
 
-ROSY Task orchestration issues higher-level commands.
+Fleet issues Device Actions through public APIs. A Local Transaction may sequence approach, grasp and placement within one accepted action; it does not own final actuator publication. The Mission state and Local Transaction state require separate IDs and result evidence.

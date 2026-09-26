@@ -2706,3 +2706,10 @@
 - 변경: D-177의 `AckPayload.TIMEOUT` 설계 충돌을 D-297 Proposed로 대체하고, API Reference §7.5·§9.5를 D-215와 정합했다. 로봇 ACK 4상태, Fleet 전용 `TIMEOUT`, Site Fleet 작업의 `UNKNOWN`과 결과 검증 조건을 분리했다.
 - 근거: D-170/D-215/D-293, `AckStatus` 4값, 현행 Site Fleet의 receipt/상태 전이를 대조했다.
 - gate 변화: 없음. PRT-004 활성화와 실물 최종 결과 수용은 중앙 Fleet 착수 및 DEVICE/FIELD 검증 대기다.
+
+## 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
+
+- 변경: D-298 Accepted로 Fleet Mission/Step, Device Action, Local Transaction과 정지 증거 단계를 분리하고 용어집·목표 작업/설치 문서·Fleet 콘솔 문구·현행 API 설명을 정렬했다.
+- 검토: D-299 Proposed로 공식 OMX LeRobot 직접 시리얼 제어와 ROS 운영 제어의 배타적 모드, 데이터/정책 어댑터의 검증 게이트를 기록했다.
+- 증거: 현행 Fleet 정지 HTTP 경로와 UI 응답을 추적하고 브라우저 회귀, Fleet 단위 시험, 문서 harness lint로 의미 정합을 확인했다.
+- gate 변화: 없음. 기존 `stopped` API 필드는 호환 유지하며 물리 정지, OMX 운영·DEVICE/FIELD 수용은 확인되지 않았다.

@@ -252,6 +252,7 @@ def test_fleet_estop_requires_confirm_and_decline_blocks_it(console_url):
                 break
             page.wait_for_timeout(100)
         confirms = page.evaluate("window.__confirms")
+        page.get_by_text("정지 요청 응답: 3/3 · 물리 정지 미확인").wait_for()
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
 

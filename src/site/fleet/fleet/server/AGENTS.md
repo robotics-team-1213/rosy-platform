@@ -26,7 +26,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 - 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 준 map 프레임 값이다
   (`ros_bridge._map_frame = "map"`). `map` 은 사이트 공유 프레임이라 N대를 한 격자에 겹쳐
   그릴 수 있다 — 로봇별로 `rosy_XX/map` 을 만들면 이 화면도 CORE 의 목표 전달도 깨진다.
-- e-stop 은 부분 실패해도 200 이다. 5xx 로 접으면 어느 대가 섰는지 화면이 알 수 없다.
+- 전체 정지 요청은 부분 실패해도 200 이다. 레거시 `stopped`는 CORE HTTP 응답 수이며 실제 정지·물리 E-stop 확인이 아니다(D-298). 응답이 없는 대는 결과 불명으로 표시하고 장치 readback을 별도로 확인한다.
 - UI 는 CSP `style-src 'self'` 아래에서 돈다 — `style` 속성과 `el.style.x =` 는 적용되지
   않는다. 색과 배치는 클래스로만 준다.
 - 이 서버는 robots.yaml 의 운영자 토큰을 들고 있다. 기본 바인드는 루프백이고, 밖으로 열려면

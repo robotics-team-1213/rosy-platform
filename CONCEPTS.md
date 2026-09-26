@@ -18,6 +18,14 @@ The local contract and control boundary of one robot or workcell. It validates a
 
 The site mission coordinator and durable task ledger. It selects and sequences admitted device actions through device APIs, records handoffs and evidence, and distinguishes acceptance from completion. It does not publish final base velocity or arm trajectory (D-12, D-290, D-293, D-296).
 
+### Fleet Mission, Mission Step, Device Action, Local Transaction
+
+A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. These are target terms; the current Fleet `/api/fleet/tasks/*` tracks durable navigation requests, not a general Mission engine (D-298).
+
+### Stop evidence
+
+Request sent, device response, local safety latch, zero-motion readback, and physical E-stop/driver interlock are distinct observations. The current Fleet `estop` response's legacy `stopped` count means HTTP response received from CORE, not verified physical stop. A missing response leaves the result unknown (D-298).
+
 ### ROSY Runtime
 
 A target-architecture name for node-local execution. It does not imply a universal `rosy-runtime-base` package, one process, or a shared ROS graph on all hosts (D-296). The source directory `src/runtime/` is a code grouping, not a deployment unit.
@@ -32,7 +40,7 @@ Everything else about a unit's identity derives from it, so it is the only ident
 ### Robot identity
 The pair of a robot's DDS domain and its ROS namespace, derived together from one Robot number.
 
-*Avoid:* robot id
+*Avoid:* confusing the ROS identity pair with API `robot_id`, which is the existing public robot key.
 
 The two halves must agree, because separating robots by domain alone still leaves their topic names colliding. Identity is device state, not repository content: no template, installer default, or compose default supplies it, and a missing identity stops the runtime rather than being filled in — a default is what once shipped every unit with the same one. Re-provisioning a unit under a different number fails loudly instead of renumbering it in place, and all derived values are validated before any of them is written, so a unit is never left half-migrated.
 
@@ -66,6 +74,8 @@ The physical robot CORE manages. Its `device_id` is the ROS namespace derived fr
 
 *Avoid:* treating Nav2, a driver, or a compose service as a Device.
 
+For proposed OMX workcells, `Device` means an independently assigned control/stop boundary. A host may run multiple device instances; a mounted OMX arm does not inherit Pinky's final arm command owner (D-282, D-296).
+
 ### Component
 A functional part of a Device — drivetrain, lidar, encoder, and the rest listed from the mounted hardware YAML or capabilities.
 
@@ -91,6 +101,8 @@ An atomic REST action the robot will run (`TaskKind`: move, navigate, follow, do
 *Code:* `TaskKind`
 
 *Avoid:* workflow or mission — those belong to Fleet (D-12).
+
+The current `/api/fleet/tasks/*` uses `task` for its durable navigation request. State which API or layer is meant; future cross-device work uses Fleet Mission / Mission Step / Device Action (D-298).
 
 ## Swarm formation
 

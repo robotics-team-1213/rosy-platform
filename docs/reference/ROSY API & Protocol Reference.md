@@ -764,6 +764,13 @@ listener·자격 증명이며 중앙 Fleet catalog의 구현 상태로 간주하
 
 ## 10.2 명령
 
+현행 Site Fleet 구현의 `POST /api/fleet/estop`은 각 등록 로봇의
+`POST /api/v1/safety/stop`에 요청을 보낸다. 응답의 레거시 `stopped` 및 로봇별
+`stopped`는 CORE HTTP 응답을 받은 수/여부다. CORE 안전 래치, 속도 0,
+물리 E-stop 또는 드라이버 인터록의 확인 결과가 아니다. 응답 실패 대상의 실제
+정지 상태는 `UNKNOWN`으로 취급하며 현장 readback을 따로 확인한다(D-298).
+아래 `/api/v1/fleet/*`는 목표 계약이며 현행 `/api/fleet/*`와 혼동하지 않는다.
+
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
 | POST | `/api/v1/fleet/commands` | Operator | 다중 로봇 명령 `{robot_ids, action, params}` (CTR-001, PRT-004) |
