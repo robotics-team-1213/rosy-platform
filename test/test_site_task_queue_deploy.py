@@ -12,6 +12,9 @@ def test_site_compose_persists_task_database_and_keeps_core_on_rest():
 
     assert "--tasks-db" in compose
     assert "--tasks-db\n      - /var/lib/rosy/fleet.sqlite3" in compose
+    assert "--users-file\n      - /run/rosy-config/site-users.yaml" in compose
+    assert "site-users.yaml.example" in (ROOT / "deploy/site/README.md").read_text(
+        encoding="utf-8")
     assert 'sighting_data:/var/lib/rosy' in compose
     assert "sighting_data:" in compose
     assert "--robots\n      - /run/rosy-config/robots.yaml" in compose

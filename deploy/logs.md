@@ -1264,3 +1264,9 @@
 - gate 변화: 없음 — DEVICE 확인 전
 - 결정: D-260 Proposed
 - 교훈: 권한 없는 표시기가 CORE와 같은 판정을 하려면 입력을 CORE가 넘겨야 한다
+
+## 2026-09-26 - prepare selected OMX-AI workcell target
+- Change: record OMX-AI as selected but keep runtime disabled; remove the unmeasured six-joint default; lock official ROBOTIS Jazzy source revisions and add a separate workstation image plan.
+- Evidence: focused profile/product/vendor-lock suite: 13 passed; disabled CLI output: `{}`.
+- Gate change: SOURCE/LOCAL evidence refreshed; ROS-SIM and ARTIFACT remain HOLD; DEVICE/FIELD remain PARKED.
+- Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.

@@ -22,7 +22,7 @@ _ALIASES = {
     "rm-x52-tnm": "openmanipulator_x",
 }
 _KNOWN_MODELS = frozenset(_ALIASES.values())
-_DEFAULT_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
+_DEFAULT_JOINTS: tuple[str, ...] = ()
 
 
 def _finite_positive(name: str, value: Any) -> float:
@@ -49,10 +49,12 @@ def _normalize_model(value: Any) -> str:
         raise ValueError(f"unsupported OMX model: {value!r}") from exc
 
 
-def _joints(value: Any) -> tuple[str, ...]:
+def _joints(value: Any, *, required: bool) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)):
         raise ValueError("joint_names must be a list of unique names")
     names = tuple(value)
+    if not names and not required:
+        return names
     if len(names) < 4 or any(
         not isinstance(name, str) or not name.strip() or name != name.strip()
         for name in names
@@ -94,7 +96,7 @@ class OmxAdapterProfile:
             raise ValueError("OMX package, plugin and frame names must be strings")
         base_frame = _frame("base_frame", base_frame)
         arm_base_frame = _frame("arm_base_frame", arm_base_frame)
-        names = _joints(values.get("joint_names", _DEFAULT_JOINTS))
+        names = _joints(values.get("joint_names", _DEFAULT_JOINTS), required=enabled)
         update_rate = _finite_positive("update_rate_hz", values.get("update_rate_hz", 100.0))
 
         if enabled:

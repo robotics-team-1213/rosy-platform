@@ -80,3 +80,11 @@ python -X utf8 tools/harness/rosy_harness.py lint
 - SOURCE 완료는 라우트·소유 경계·금지 경로의 시험 통과다. ARTIFACT 완료는 native ARM64와 사이트 이미지 각각의 정확한 revision/digest다. DEVICE/SITE 완료는 실제 Pi·Ubuntu·폰의 프로세스와 네트워크 readback이다. FIELD 완료는 현장 장애·복구와 작업 결과까지 확인한 상태다.
 - 단일 단계의 증거로 다른 단계를 승격하지 않는다. D-257/D-268 자동 실행과 D-273 OMX 카메라/집기는 이 계획의 완료 조건에 포함하지 않는다.
 - Task 5는 후속 workload가 생길 때 수행하는 결정 게이트다. 현재 `overhead` 구현만으로 Vision의 학습·복잡한 추론·자동 판단이 완성됐다고 표기하지 않는다.
+
+
+## Execution record - 2026-09-26
+
+- Tasks 1-3 source/local checks completed. Task 4 local contract/error cases were covered by tests; device/site process failure injection remains open because no target host or device was available. Existing routes and ownership boundaries matched D-275; no implementation or protocol change was required.
+- Task 5 remains a future workload decision gate. No training, GPU inference, or decision workload was added.
+- SOURCE/LOCAL: GO for the checked contracts and tests. ARTIFACT: HOLD pending native aarch64 build and verified inputs. DEVICE/SITE/FIELD: HOLD pending actual host, device, and physical acceptance evidence.
+- Detailed commands, results, and gate limits: [validation record](../validation/web-surface-role-boundaries-2026-09-26/README.md).

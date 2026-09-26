@@ -1,41 +1,35 @@
 ---
 module: omx
 logical_modules: []
-owner: 로봇 통합
-last_verified: { commit: "uncommitted", date: 2026-09-25 }
+owner: OMX workcell
+last_verified: { commit: "uncommitted", date: "2026-09-26" }
 gates:
   SOURCE:
     state: GO
-    evidence: "omx.disabled.yaml이 어댑터 패키지에서 이 설정 패키지로 옮겨졌고, enabled false·빈 모델 시험이 통과 (2026-09-25)"
-    cmd: "python -m pytest src/products/omx/test -q"
+    evidence: "13 focused tests pass; model is selected as omx_ai while runtime, plugin, and joint map remain empty/disabled"
+    cmd: "python -m pytest src/products/omx/test src/devices/omx/adapter/test test/test_omx_vendor_stack_lock.py -q"
   LOCAL:
     state: GO
-    evidence: "같은 호스트 시험이 이 파일을 읽고 통과 (2026-09-25 Windows)"
-    cmd: "python -m pytest src/products/omx/test src/devices/omx/adapter/test -q"
+    evidence: "Disabled OMX-AI profile CLI prints {}"
+    cmd: "PYTHONPATH=src/devices/omx/adapter python -m omx_adapter.cli src/products/omx/config/omx.disabled.yaml"
   ROS-SIM:
     state: HOLD
-    blocker: "colcon으로 share/omx/config 설치를 본 기록이 없다"
+    blocker: "Vendor source is pinned; workstation image and installed ROS graph are not built"
   ARTIFACT:
     state: HOLD
-    blocker: "io 이미지가 이 패키지를 포함한 뒤의 package inventory가 없다"
+    blocker: "No OMX workstation image digest or package inventory"
   DEVICE:
-    state: N/A
+    state: PARKED
+    blocker: "No OMX-AI hardware or workcell cameras available for measured commissioning"
   FIELD:
-    state: N/A
-adrs: [D-196, D-231, D-232]
-plans: []
+    state: PARKED
+adrs: [D-196, D-231, D-232, D-273]
+plans:
+  - docs/plans/2026-09-26-omx-ai-workstation-runtime.md
 ---
 
-## 지금 상태
-
-- 팔 설정은 여기 있다. 어댑터 코드는 `src/devices/omx/adapter`다.
-- 모델은 비어 있다. `omx-f`와 `omx-ai`는 측정 뒤에 고르는 이름이다.
-
-## 다음 gate
-
-1. ROS-SIM: `colcon build --packages-select omx` 뒤 `share/omx/config/omx.disabled.yaml`이 설치된다.
-
-## 현재 유효한 금지사항
-
-- 이 폴더에 Python 실행 코드나 launch를 두지 않는다.
-- `hardware_plugin`을 가짜 값으로 채우지 않는다.
+OMX-AI is the chosen fixed-workbench target. It is not enabled. The official
+source revisions are locked in `deploy/omx/stack.lock.yaml`; leader/follower
+ports, measured joints, plugin configuration, and camera selection remain
+unset. The OMX-AI workstation image is planned separately from the Pinky Pro
+ARM64 product image.

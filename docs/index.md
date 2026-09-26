@@ -104,6 +104,7 @@
 | D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
 | D-274 | 로컬 브라우저 검토는 실제 CORE 경로를 쓰고 장치 수용은 분리한다 |
 | D-275 | 웹 화면과 영상 처리는 실행 위치와 권한별로 나눈다 |
+| D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 |
 
 ## 계획·결과 문서
 
@@ -149,8 +150,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
 - 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
 - 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
 - 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
 - 2026-09-26 · uncommitted · feat(fleet): expose server queue position
-- 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신

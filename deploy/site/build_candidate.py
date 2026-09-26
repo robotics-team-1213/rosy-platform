@@ -16,7 +16,7 @@ from typing import Callable
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_FILES = (
     "compose.yaml", "Caddyfile", ".env.example", "README.md",
-    "robots.yaml.example", "site-cameras.yaml.example",
+    "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
 )
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]

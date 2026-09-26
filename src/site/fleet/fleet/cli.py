@@ -68,6 +68,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
     console.add_argument("--token-env", default=None,
                          help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
+    console.add_argument("--users-file", default=None, type=Path,
+                         help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--tls-cert", default=None, type=Path,
                          help="HTTPS server certificate chain; pair with --tls-key")
     console.add_argument("--tls-key", default=None, type=Path,
@@ -283,9 +285,17 @@ def run_console(args: argparse.Namespace) -> None:
         console_token = os.environ.get(token_env)
         if not console_token:
             sys.exit(f"operator token environment variable {token_env} is required")
-    if args.host not in LOOPBACK_HOSTS and not console_token:
-        sys.exit("--token 없이 루프백 밖으로 열 수 없다: 이 포트는 현장의 모든 로봇을 움직인다")
+    users_file = getattr(args, "users_file", None)
+    site_users = None
+    if users_file is not None:
+        from fleet.server.site_users import load_site_users
+
+        site_users = load_site_users(users_file)
     tasks_db = getattr(args, "tasks_db", None)
+    if site_users is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with --users-file for persistent audit")
+    if args.host not in LOOPBACK_HOSTS and not (console_token or site_users):
+        sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
     endpoints = load_robots(args.robots)
@@ -307,6 +317,8 @@ def run_console(args: argparse.Namespace) -> None:
     pairing_configured = any(ep.fleet_pairing_token is not None for ep in endpoints)
     if pairing_configured and event_store is None:
         sys.exit("--events-db is required when CORE Agent pairing is configured")
+    if pairing_configured and not console_token:
+        sys.exit("--token or --token-env is required to protect the CORE registry endpoint")
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
                            signal_console=signal_console, event_store=event_store)
     sightings_db = getattr(args, "sightings_db", None)
@@ -334,7 +346,8 @@ def run_console(args: argparse.Namespace) -> None:
         task_service = FleetTaskService(FleetTaskStore(tasks_db),
                                         robot_ids=console.robot_ids)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
-                     hub=hub, sightings=sighting_service, task_service=task_service)
+                     hub=hub, sightings=sighting_service, task_service=task_service,
+                     site_users=site_users)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(endpoints)} robots{signals_note})",
