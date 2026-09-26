@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(hmi): compare operator console viewport by role
 - 2026-09-26 · uncommitted · feat(hmi): stabilize mobile /console topbar and capture current shell
 - 2026-09-26 · uncommitted · fix(hmi): role-gate map selection and compact mobile controls (D-278)
 - 2026-09-26 · uncommitted · feat(hmi): 실제 CORE 경로 연결과 화면 상태 보정
 - 2026-09-26 · uncommitted · feat(dashboard): D-260 operate-view summary line
-- 2026-09-26 · uncommitted · feat(hmi): add administrator dock catalog and registration
