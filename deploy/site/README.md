@@ -51,6 +51,30 @@ private key readable only to root and group `10001` (`0440`, group `10001`),
 and make the certificate and CA readable by UID/GID `10001` (`0444`). Never
 commit these files. Provision the CA on ceiling phones and operator browsers.
 
+## Durable task queue smoke check
+
+Fleet stores operator tasks in SQLite at `/var/lib/rosy/fleet.sqlite3`, on the
+same named `sighting_data` volume used by the site Compose service. The Compose
+command passes this path with `--tasks-db`; do not move the SQLite file onto a
+network share or mount it into a second writer.
+
+On a development host, validate the rendered Compose configuration and build
+the Fleet image before exercising an isolated local container:
+
+```sh
+docker compose -f deploy/site/compose.yaml config --quiet
+docker compose -f deploy/site/compose.yaml build fleet
+```
+
+The 2026-09-26 Windows/Docker Desktop smoke test also started the built Fleet
+image bound to loopback, submitted a task against a synthetic unreachable CORE
+endpoint, restarted the container with the same named volume, and read the same
+task back as `QUEUED`. This confirms local image startup, HTTP task intake, and
+SQLite persistence across container restart. It does not prove full Compose,
+Ubuntu, TLS, camera, real CORE, robot, GPU, or field acceptance. See
+[`2026-09-26-site-task-scheduler-local.md`](../../docs/validation/2026-09-26-site-task-scheduler-local.md)
+for the bounded evidence record.
+
 Copy `.env.example` to a private operator-controlled env file and set
 `ROSY_SITE_CONFIG_DIR` and `ROSY_SITE_SECRETS_DIR`. Leave the bind address at
 `127.0.0.1` when access is through a local trusted reverse proxy or SSH tunnel;

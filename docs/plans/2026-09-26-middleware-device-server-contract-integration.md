@@ -158,6 +158,8 @@ unidentified, and GPU/model/latency acceptance remains open.
 
 ## 완료 조건
 
+작업 우선순위·내부 메시지 전달은 [사이트 작업 스케줄링 설계](2026-09-26-site-task-scheduling-and-broker-design.md)와 D-271을 따른다. 이 계획의 현재 LOCAL 연결 검증은 영속 작업 스케줄러 또는 RabbitMQ 배포 증거가 아니다.
+
 - API Ref/shared schemas/Android-Python protocol vectors와 producer-consumer test가 서로 일치한다.
 - local integration에서 해당 장치 credential로만 연결되고 허용하지 않은 호출은 fail closed다.
 - 운영 앱에서 상태/event, source/seq/freshness, operator action receipt와 최종 결과가 한 correlation trail로 읽힌다.

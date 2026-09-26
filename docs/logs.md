@@ -2258,6 +2258,25 @@
 - 제한: API는 programmatic app config로만 열리고 in-memory latest-only다. CLI provisioning, persistent/audit storage, JPEG→vision→Fleet publisher, browser display, Ubuntu/TLS/device는 미구현이다.
 - gate 변화: 없음. D-257/D-268 Proposed, automatic movement HOLD.
 - 결정: sighting은 표시·대조 데이터에만 사용한다. 자동 작업 경로와 D-268 policy evidence는 별도 승인 계약이다.
+## 2026-09-26 · uncommitted · docs(adr): D-271 site Fleet task scheduling and broker choice
+
+- 변경: D-271에서 Fleet의 영속 작업 원장·정책 우선순위·장비 자원 예약을 결정하고 RabbitMQ를 독립 worker 분리 시의 사이트 내부 전달 후보로 고정했다. 설계 문서와 기존 D-59/D-269 연결 계획을 정렬했다.
+- 증거: 기존 SQLite task/history, 메모리 교통 대기열, 현장 Compose 경로와 RabbitMQ/Kafka/NATS 공식 문서를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건.
+- 제한: 스케줄러·RabbitMQ·CORE 최종 결과 추적·Ubuntu 장비 배포는 이 문서 변경에 포함되지 않는다. D-268 자동 작업은 HOLD다.
+- gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · docs(plan): D-271 task scheduler implementation sequence
+
+- 변경: D-271 설계를 SQLite 작업 큐·교통 대기열 정합·취소/정지·관제·Docker LOCAL·조건부 RabbitMQ·Ubuntu/DEVICE 수용으로 나눈 실행 계획을 추가했다.
+- 증거: 현재 FleetTaskService/Store, FleetConsole._queued, API Ref §10.8, Compose와 기존 단위·브라우저 시험 경로를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건, `git diff --check` 통과.
+- 제한: 계획만 추가했으며 스케줄러나 RabbitMQ를 구현·배포하지 않았다. 자동 정책 제출은 D-268 전까지 HOLD다.
+- gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · feat(fleet): durable site task queue implementation
+- 변경: Persisted and scheduled Fleet tasks; carried task identity across traffic waits; added expiry and pre-dispatch cancellation; exposed queued status and task cancellation in the console; kept policy tasks on HOLD.
+- 증거: `python -m pytest src/site/fleet/test/ -q` — 484 passed, 5 skipped; browser harness — 13 passed; Compose config validation passed; `rosy-site-fleet:local` built and API task readback survived container restart with the same named volume.
+- gate 변화: LOCAL task queue evidence advanced. Full Compose, Ubuntu host, TLS/secrets, real CORE/robot, GPU, DEVICE, FIELD and automatic policy acceptance remain open. RabbitMQ remains deferred because no measured split-worker or pressure requirement was established.
+
 ## 2026-09-26 · uncommitted · docs(verification): 낡은 배치 잔재 3건 수리 — deployment·domain 단계 붉음 해소
 - 변경: 낡은 배치 잔재 3건 수리. ① `test/test_sd_api_token.py` — `CORE_SRC = src/core`(중첩 그룹 시대)를 패키지별 부모 맵 `PKG_PARENT`로 교체(D-231/D-241: core→`runtime/gateway`, core_api_web→`runtime/api_web`, core_common→`contracts/foundation`, core_events→`runtime/events`, core_features→`runtime/services`), 사용처 3곳(`sys.path` 2·subprocess `PYTHONPATH` 1) 갱신 ② `core_api_web/api/app.py` — 계약 문서가 v1.31(9541086c)로 올라갔는데 FastAPI description 배너가 v1.30 — D-18의 절반 갱신을 완결 ③ `gz_sim/scripts/coverage_harness.py` — `tour_plan`의 bare `control` import에 worktree 폴백 부재(CI install space가 은폐) → 저장소의 `live_view_model._control_sensing` 패턴 미러링
 - 증거: ① 해당 파일 29 passed/6 skipped(수정 전 2 failed), posix subprocess 건은 Windows 스킵 → push 후 CI로 확인 ② protocol 계약 3 passed ③ gz 스위트 263 passed/1 skipped(수정 전 6 failed+6 errors), 세 파일 flake8 0. fleet 461·hardware safety 454도 초록(CI skip 구간 로컬 보강). 직전 push `2a22ad63`의 CI: domain suites 7건 초록(3회 연속 레드 해소), deployment contracts 단계에서 ①만 붉음(2178 passed 중); 동료 최신 런은 domain에서 ②로 붉음. 계약 게이트 잔여 1 failed = `test_module_structure::test_over_budget_code_has_a_recorded_verdict`(host.py 813>600, verdict 없음) — D-260 커밋 557191a6/ca5fb4fd(03:02–03:45)이 넘긴 타 레인이라 판정만 기록. 성장 중인 파일의 판정 기록은 다음 커밋에 stale-red를 만들므로 기록 주체는 해당 레인

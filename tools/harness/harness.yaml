@@ -19,7 +19,6 @@ adr_gaps:
   D-239: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-240: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
-  D-271: "reserved by branches docs/site-task-queue-adr and feat/site-task-scheduler (site fleet task scheduling ADR, not on main yet); remove once it lands"
 
 status: STATUS.md
 stale_after_commits: 5

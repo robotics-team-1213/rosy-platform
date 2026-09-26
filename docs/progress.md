@@ -20,7 +20,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265]
+adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-17-interface-design-implementation-design.md
@@ -42,6 +42,8 @@ plans:
   - docs/plans/2026-09-22-pinky-pro-flashable-image-design.md
   - docs/plans/2026-09-22-pinky-pro-flashable-image.md
   - docs/plans/2026-09-26-role-menu-rollout.md
+  - docs/plans/2026-09-26-site-task-scheduling-and-broker-design.md
+  - docs/plans/2026-09-26-site-task-scheduling-and-broker-implementation.md
 ---
 ## 지금 상태
 
@@ -69,3 +71,11 @@ plans:
 - API 경로·envelope 변경은 `reference/ROSY API & Protocol Reference.md`와 `rosy_core/protocol/schemas.py`를 함께 바꾼다(D-18).
 - `docs/`에 구현 코드를 두지 않는다.
 - 모듈 `index.md`와 루트 `STATUS.md`는 생성물이다. `tools/harness/rosy_harness.py generate`로만 갱신한다.
+
+## Site Fleet task scheduler (2026-09-26)
+
+- Durable SQLite task acceptance, single-dispatcher claims, traffic-wait identity, expiry, queued cancellation, and console readback are implemented under D-271.
+- Evidence: 484 Fleet tests passed, 5 skipped; 13 Chromium browser tests passed. Docker Compose config validated, Fleet image built, and a loopback container preserved a queued task across restart on its named volume.
+- Broker decision: Gate A has no measured independent-worker/backlog requirement. Keep SQLite and defer RabbitMQ.
+- Ubuntu/SITE/TLS, full Compose, real CORE, robot, GPU, DEVICE, and FIELD acceptance remain open. Automatic policy dispatch remains HOLD.
+- Detailed record: `docs/validation/2026-09-26-site-task-scheduler-local.md`.

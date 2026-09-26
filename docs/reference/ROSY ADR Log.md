@@ -256,7 +256,7 @@
 | D-255 | UI/UX 평가 회차 2 | Accepted |
 | D-258 | 디자인 리뷰 루프 | Accepted |
 | D-259 | 지도 키보드 조작 | Accepted |
-| D-270 | 역할 게이팅은 표면이 정한다 | Proposed |
+| D-270 | 역할 게이팅은 표면이 정한다 | Accepted |
 | D-266 | 진단 PARKED 해제 조건 | Proposed |
 | D-262 | 웹 예산 판정 제안 | Proposed |
 | D-260 | 로봇은 부팅음·LED·LCD·운용 화면 요약줄 네 곳에서 같은 상태를 같은 말로 보여준다 | Proposed |
@@ -271,5 +271,6 @@
 | D-267 | Ubuntu 상시 관제 노트북은 Fleet·영상·GPU·저장을 분리하고 자동·수동 작업을 같은 검증 경로로 처리한다 | Proposed |
 | D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 | Proposed |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 | Proposed |
+| D-271 | 사이트 Fleet이 작업 순서를 소유하고 브로커는 실행 전달에만 쓴다 | Accepted |
 | D-272 | AP 비밀번호는 로봇마다 다르되 읽기 쉬운 형식과 LCD QR로 보여준다 | Accepted |
 ---

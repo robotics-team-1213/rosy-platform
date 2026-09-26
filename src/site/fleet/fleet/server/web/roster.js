@@ -128,6 +128,18 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     cancel.disabled = !robot.online;
     cancel.addEventListener("click", async () => {
       try {
+        const pending = view.pendingTasks[robot.robot_id];
+        if (pending) {
+          const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
+          if (readback.task?.status === "QUEUED") {
+            await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
+            delete view.pendingTasks[robot.robot_id];
+            render();
+            log(`${robot.robot_id} task ${pending.task_id} QUEUED 취소`, "good");
+            return;
+          }
+          delete view.pendingTasks[robot.robot_id];
+        }
         await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
         log(`${robot.robot_id} 항법 취소`, "good");
       } catch (err) {
@@ -186,5 +198,5 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
   }
 
-  return { card, fillQueues };
+  return { card, fillQueues, queuedReason };
 }
