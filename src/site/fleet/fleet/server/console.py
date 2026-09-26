@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+from hashlib import sha256
 import logging
 import math
 import time
@@ -148,6 +149,15 @@ class FleetConsole:
         matched = False
         for token in self._agent_pairing_tokens:
             matched |= hmac.compare_digest(candidate, token)
+        return matched
+
+    def user_credential_overlaps_robot_secret(self, user_token_digests: Sequence[str]) -> bool:
+        """Reject user tokens reused for CORE REST or Agent pairing credentials."""
+        matched = False
+        for token in (*self._rest_tokens, *self._agent_pairing_tokens):
+            digest = sha256(token.encode("utf-8")).hexdigest()
+            for user_digest in user_token_digests:
+                matched |= hmac.compare_digest(digest, user_digest)
         return matched
 
     @property

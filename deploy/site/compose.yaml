@@ -20,6 +20,8 @@ services:
       - /opt/rosy/web-common
       - --token-env
       - ROSY_SITE_OPERATOR_TOKEN
+      - --users-file
+      - /run/rosy-config/site-users.yaml
       - --sightings-config
       - /run/rosy-config/site-cameras.yaml
       - --sightings-db

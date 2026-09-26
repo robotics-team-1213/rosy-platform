@@ -1,6 +1,7 @@
 """D-257 sighting ingress is source-scoped, stale-aware, and cannot issue commands."""
 
 from fastapi.testclient import TestClient
+from hashlib import sha256
 import pytest
 
 from fakes import FakeRobot
@@ -8,6 +9,8 @@ from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingService, SightingSource
 from fleet.server.sighting_store import SightingStore
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 
 NOW = 1_790_000_000.0
@@ -76,6 +79,27 @@ def test_sighting_source_can_write_derived_pose_but_cannot_read_or_command():
                       headers={"Authorization": f"Bearer {SOURCE_TOKEN}"}).status_code == 401
     assert client.post("/api/fleet/estop",
                        headers={"Authorization": f"Bearer {SOURCE_TOKEN}"}).status_code == 401
+
+
+def test_site_user_token_cannot_be_reused_as_a_sighting_source_credential(tmp_path):
+    robot = FakeRobot("rosy_01")
+    console = FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-rest")], [robot])
+    sightings = SightingService(
+        [SightingSource("ceiling-east", SOURCE_TOKEN, ("rosy_01",),
+                        "lane-map:sha256:abc", "ceiling-1-v2", (30, 31, 32, 33))],
+        known_robot_ids=console.robot_ids,
+    )
+    task_service = FleetTaskService(
+        FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
+
+    with pytest.raises(ValueError, match="site user and sighting credentials must differ"):
+        create_app(
+            console, sightings=sightings, task_service=task_service,
+            site_users={sha256(SOURCE_TOKEN.encode()).hexdigest(): {
+                "principal_id": "viewer-1", "role": "viewer",
+            }},
+        )
 
 
 def test_console_and_robot_tokens_cannot_write_sightings():

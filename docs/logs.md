@@ -2326,3 +2326,10 @@
 - 검증: `test/test_network_topology_contracts.py`와 `test/test_harness_contracts.py` 71 passed/21 기존 검증시점 warning. harness lint 0 error/21 warning, `git diff --check` 통과. `docs/index.md`를 generate로 갱신해 D-275와 실행 계획이 색인에 표시된다.
 - gate 변화: 없음. ADR은 실행 책임 결정이며 native ARM64 산출물, Ubuntu 사이트, 실물 폰·로봇, 자동 작업 수용은 별도다.
 - 회귀: 문서 변경만 수행했고 제품 코드와 다른 작업 트리의 WIP는 수정하지 않았다.
+
+## 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
+
+- 변경: D-276에 따라 viewer/operator/policy-admin 역할을 분리하고, 개인별 SHA-256 bearer digest를 로드한다. Fleet API 변경 요청은 영속 SQLite에 INTENT를 먼저 기록하며, 기록 실패 시 CORE 명령을 보내지 않는다. RESULT에는 principal·role·경로·상태를 기록하고 bearer와 본문은 저장하지 않는다.
+- 검증: Fleet·사이트 배포 집중 테스트 527 passed/5 skipped, Compose 설정 검사 통과. Linux/amd64 Fleet/Vision/Proxy 이미지를 빌드했고, 로컬 HTTPS synthetic RBAC 요청과 SQLite 감사 readback을 검증했다. 세부 digest와 응답 코드는 `docs/validation/2026-09-26-site-rbac-local.md`에 기록했다.
+- gate 변화: SOURCE/LOCAL만 통과. Ubuntu 호스트 배포, 실제 사용자 교체·폐기, CORE/로봇 readback, 브라우저 역할 UI와 DEVICE/FIELD 검증은 열려 있다. 자동 이동·집기 권한은 계속 HOLD다.
+- 회귀: 요청된 D-276 파일만 통합한다. 기존 Signals·D-273 및 dashboard·secret-scan WIP는 별도 변경으로 유지.

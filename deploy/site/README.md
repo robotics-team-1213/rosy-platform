@@ -31,18 +31,36 @@ host with a stable address and managed power; set host startup to run
 the robot Pi or enable robot motion through this stack.
 
 Create `/etc/rosy/site` and `/etc/rosy/site/secrets` outside the checkout. Copy
-`site-cameras.yaml.example` and `robots.yaml.example` there, then replace every
-map/calibration/device placeholder with reviewed site data. `robots.yaml`
-contains CORE credentials and must be owned by root with mode `0600`.
-Keep configuration read-only to the containers.
+`site-cameras.yaml.example`, `robots.yaml.example`, and
+`site-users.yaml.example` there, then replace every map/calibration/device
+placeholder with reviewed site data. `robots.yaml` contains CORE credentials
+and must be owned by root with mode `0600`. Keep configuration read-only to the
+containers. `site-users.yaml` contains only SHA-256 digests of individual user
+tokens, never raw tokens; keep it owned by root and readable only by the Fleet
+service group (`0440`, group `10001`).
 
-Generate three independent high-entropy credentials with the approved secret
-manager: operator-console, phone-ingress, and vision-to-Fleet. Set each token
+Provision one independent high-entropy bearer token per named person through the
+approved secret manager. Record that person's `principal_id`, one of `viewer`,
+`operator`, or `policy-admin`, and the lowercase SHA-256 digest of the token in
+`site-users.yaml`. Deliver each raw token through the secret manager; do not put
+it in YAML, `.env`, command arguments, images, or logs. Rotate or revoke a user
+by replacing or removing their digest and restarting Fleet. The API hashes the
+presented bearer token and compares it against the configured digests. A viewer
+can read Fleet state and task history. An operator can request, cancel, and stop
+work. `policy-admin` is reserved for future policy endpoints; no policy mutation
+route is exposed yet. All roles remain subject to CORE's local safety checks.
+
+Generate independent high-entropy credentials with the approved secret
+manager: Fleet registry access, phone-ingress, and vision-to-Fleet. Set each token
 to a different value. Write one token per file (`operator_token`,
 `phone_ingress_token`, `fleet_sighting_token`) without a trailing newline.
 Tokens are mounted as Compose secrets; the process bootstrap reads them before
 dropping to UID/GID `10001`. Do not put secret values in YAML, `.env`, command
 arguments, images, or logs.
+
+The `operator_token` protects the separate CORE registry readback endpoint. It
+does not grant browser access to Fleet control APIs when `site-users.yaml` is
+configured. The browser uses the individual token assigned to its user.
 
 Issue a site TLS certificate and private key from the site's trusted CA. Include
 the FQDN and service SANs above. Store `site.crt`, `site.key`, and
@@ -144,17 +162,17 @@ a quiesced SQLite-aware backup; do not copy only the live main DB file while
 WAL is active. Protect the backup as operational data, test restore to a
 separate volume, and define site retention before production operation.
 
-The same named volume stores operator task requests and append-only status
-history (`--tasks-db`). An externally reachable Fleet console requires both an
-operator token and this persistent task database. Browser navigation requests
-to `/api/fleet/robots/{robot_id}/goal` or navigation intents through
-`/api/fleet/do` include an `Idempotency-Key`; read status and audit history through the
-authenticated `GET /api/fleet/tasks/{task_id}` route. The shared console token
-is currently recorded as `site-console`, so this does not provide per-user
-identity or role based access. Ambiguous command results remain `UNKNOWN` and
-are never retried automatically. Policy generated navigation remains `HOLD`
-until the D-268 acceptance contract is approved; D-177 command correlation and
-CORE ACK/final-result reconciliation are still outstanding.
+The same named volume stores operator task requests, append-only task status
+history, and per-user mutation audit (`--tasks-db`). An externally reachable
+Fleet console requires `site-users.yaml` and this persistent database. Browser
+navigation requests to `/api/fleet/robots/{robot_id}/goal` or navigation intents
+through `/api/fleet/do` include an `Idempotency-Key`; read task status and
+history through `GET /api/fleet/tasks/{task_id}`. Mutations are audited before
+dispatch; an audit storage failure blocks the CORE request. Ambiguous command
+results remain `UNKNOWN` and are never retried automatically. Policy-generated
+navigation remains `HOLD` until the D-268 acceptance contract is approved;
+D-177 command correlation and CORE ACK/final-result reconciliation remain
+outstanding.
 
 ## Current acceptance boundary
 

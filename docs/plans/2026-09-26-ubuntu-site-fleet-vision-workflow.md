@@ -144,6 +144,14 @@
 - **DEVICE/FIELD:** 천장 폰의 장시간 송신, capture-to-Fleet age, 신선 증거 가용성, 검출 품질/오탐, 로봇 실제 위치 오차, 현장 무선 대역·지연, 자동 목표의 실제 도착 결과를 각각 기록한다. 자동 이동은 D-268을 Accepted로 전환하고 승인된 acceptance 기준을 모두 통과한 뒤에만 켠다. 자동 집기와 후속 카메라는 별도 goal이며 D-55 독립 실기 게이트가 통과할 때까지 HOLD다.
 - **운영 인계:** 관제/영상/GPU 각 서비스의 시작·중단·업데이트·롤백, 비밀 회전, 장애별 축소 상태, 작업 재조회와 수동 중단 절차를 `deploy/site/README.md`에 남긴다.
 
+## Implementation checkpoint (2026-09-26): per-principal site API gate
+
+- D-276 establishes individual SHA-256 token digests and the `viewer` / `operator` / `policy-admin` role matrix. Fleet API read routes accept configured principals; command routes require `operator`.
+- Authenticated API mutations are recorded in the durable task SQLite database before dispatch, with principal, role, method, path, and response code. If the audit write fails, the route returns `503` before issuing a CORE request. Operator task history now uses the authenticated principal ID.
+- `deploy/site/compose.yaml` requires `/run/rosy-config/site-users.yaml`. The tracked example contains placeholders only. Legacy `--token` is retained for the separate CORE registry endpoint and does not replace individual API credentials.
+- `policy-admin` mutation routes do not exist yet; automatic policy submissions remain `HOLD`. Token replacement/revocation requires updating the protected config and restarting Fleet.
+- This implementation checkpoint is source/local evidence only. Ubuntu host rollout, individual token handoff/revocation exercise, real CORE readback, and browser UI role affordances remain open.
+
 ## 외부 근거
 
 - [Docker Compose production](https://docs.docker.com/compose/how-tos/production/): 단일 서버 운영·재시작 정책.

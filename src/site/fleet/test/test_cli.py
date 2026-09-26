@@ -1,6 +1,7 @@
 """CLI 는 파싱과 배선만 한다. 실제 로봇은 Task 14 의 시뮬 계측이 본다."""
 
 import asyncio
+from hashlib import sha256
 import io
 import time
 from pathlib import Path
@@ -97,6 +98,39 @@ def test_console_wires_configured_task_database_into_authenticated_app(tmp_path,
     }
 
 
+def test_console_loads_individual_site_users_for_the_api(tmp_path, monkeypatch):
+    robots = _write(tmp_path)
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [
+        {"principal_id": "viewer-1", "role": "viewer",
+         "token_sha256": sha256(b"viewer-token").hexdigest()},
+    ]}), encoding="utf-8")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args(["console", "--robots", str(robots), "--users-file", str(users),
+                           "--tasks-db", str(tmp_path / "fleet.sqlite3")])
+
+    cli.run_console(args)
+
+    client = TestClient(captured["app"])
+    headers = {"Authorization": "Bearer viewer-token"}
+    assert client.get("/api/fleet/state", headers=headers).status_code == 200
+    assert client.post("/api/fleet/estop", headers=headers).status_code == 403
+
+
+def test_console_refuses_individual_site_users_without_durable_audit_database(tmp_path):
+    robots = _write(tmp_path)
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [{
+        "principal_id": "viewer-1", "role": "viewer",
+        "token_sha256": sha256(b"viewer-token").hexdigest(),
+    }]}), encoding="utf-8")
+    args = cli.parse_args(["console", "--robots", str(robots), "--users-file", str(users)])
+
+    with pytest.raises(SystemExit, match="--tasks-db is required with --users-file"):
+        cli.run_console(args)
+
+
 def test_console_loads_source_permissions_and_persistent_sighting_store(tmp_path, monkeypatch):
     robots = _write(tmp_path)
     config = tmp_path / "sightings.yaml"
@@ -112,8 +146,12 @@ def test_console_loads_source_permissions_and_persistent_sighting_store(tmp_path
     monkeypatch.setenv("ROSY_TEST_PHONE_TOKEN", "phone-secret")
     monkeypatch.setenv("ROSY_SITE_OPERATOR_TOKEN", "operator-secret")
     captured = {}
-    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: (captured.setdefault("app", app),
-                                                               captured.setdefault("kwargs", kwargs)))
+
+    def capture_run(app, **kwargs):
+        captured["app"] = app
+        captured["kwargs"] = kwargs
+
+    monkeypatch.setattr("uvicorn.run", capture_run)
     certificate = tmp_path / "site.crt"
     private_key = tmp_path / "site.key"
     certificate.write_text("certificate", encoding="utf-8")

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.33
+**Version:** v1.34
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -846,7 +846,7 @@ SQLite `audit_id`는 재시작 뒤에도 유지되는 페이지 커서다. `--ev
 
 ---
 
-# 10.8 Site Fleet task submission and readback (D-269 Proposed)
+# 10.8 Site Fleet task submission, role authorization, and readback (D-276 Accepted)
 
 When durable task storage is configured, the operator navigation route creates a
 persistent task before contacting CORE. The browser sends a fresh
@@ -856,10 +856,10 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 
 | Method | Path | Credential | Requirement |
 |---|---|---|---|
-| POST | `/api/fleet/robots/{robot_id}/goal` | console Bearer token + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
-| POST | `/api/fleet/do` (when `do` is `navigate`) | console Bearer token + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
-| GET | `/api/fleet/tasks/{task_id}` | console Bearer token | Returns the durable task projection and append-only status history. |
-| POST | `/api/fleet/tasks/{task_id}/cancel` | console Bearer token | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
+| POST | `/api/fleet/robots/{robot_id}/goal` | `operator` bearer + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
+| POST | `/api/fleet/do` (when `do` is `navigate`) | `operator` bearer + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
+| GET | `/api/fleet/tasks/{task_id}` | any configured user bearer | Returns the durable task projection and append-only status history. |
+| POST | `/api/fleet/tasks/{task_id}/cancel` | `operator` bearer | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
 
 Task status is the shared `FleetTaskStatus` enum: `REQUESTED`, `QUEUED`,
 `ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`, `UNKNOWN`, `HOLD`, `CANCELED`,
@@ -885,11 +885,27 @@ cancel/stop and site E-Stop remove undispatched queued work before sending the
 CORE safety request. An `UNKNOWN` task is shown as requiring manual CORE status
 verification; the UI never turns a command receipt into completion.
 
-The current console maps the shared operator token to the
-auditable principal `site-console`; individual operator identity and role
-management are not implemented. Policy submissions use the same validation and
-storage service, but remain `HOLD` with `POLICY_NOT_ACCEPTED` while D-268 is
-Proposed. A command timeout or unclassified post-dispatch error becomes
+The site Compose configuration loads an individual `site-users.yaml` registry.
+Each row binds a unique `principal_id` and role (`viewer`, `operator`, or
+`policy-admin`) to a SHA-256 digest of one high-entropy bearer token. The raw
+token is delivered separately and is never stored in that file. `viewer` may
+read Fleet state, evidence, and task history. `operator` may also request,
+cancel, and stop work. `policy-admin` may not issue robot commands; no policy
+mutation endpoint exists yet. The separate `/registry` endpoint continues to
+use its own server-side credential.
+
+Authenticated `POST /api/fleet/*` requests other than source-authenticated
+`POST /api/fleet/sightings` append an `INTENT` and a `RESULT` row to the durable
+API audit. The rows contain principal, role, method, path, and response code,
+not the bearer token or request body. If the intent cannot be persisted, Fleet
+returns `503 AUDIT_STORAGE_UNAVAILABLE` before calling CORE. If the result row
+cannot be written after an action, the intent remains pending and the outcome
+must be reconciled; it is not safe to infer failure or retry.
+
+The legacy shared `--token` mode is not per-user authorization and does not
+satisfy D-276. Site Compose requires `--users-file`; replacing or removing a
+digest and restarting Fleet rotates or revokes that user. Policy submissions
+remain `HOLD` with `POLICY_NOT_ACCEPTED` while D-268 is Proposed. A command timeout or unclassified post-dispatch error becomes
 `UNKNOWN`; the server does not retry it. D-177 command correlation and CORE
 ACK/final-result reconciliation remain separate required work.
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
@@ -899,6 +915,7 @@ On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.34 | 2026-09-26 | Clarify(D-276 Accepted): individual site-user token digests, viewer/operator/policy-admin API roles, operator task actor identity, and pre-dispatch append-only mutation audit. Robot DDS/WSS envelope version remains 1.0. |
 | v1.32 | 2026-09-26 | Additive(D-271): Fleet task `QUEUED` lifecycle, status/receipt semantics, shared `FleetTaskStatus`, and queued-only cancel contract. Robot DDS/WSS envelope version remains 1.0. |
 | v1.33 | 2026-09-26 | Additive(D-271): Fleet console queued-task feedback/readback/cancel and cancel/stop/E-Stop queue coordination. |
 | v1.31 | 2026-09-26 | Additive(D-269 Proposed): operator navigation `Idempotency-Key`, durable task status/history, authenticated `/api/fleet/tasks/{task_id}` readback. Policy work remains `HOLD`; D-177 command ACK and per-user identity are not implemented. |
