@@ -190,20 +190,20 @@
 - 결정: D-224
 - 교훈: none.
 
-## 2026-09-27 · uncommitted · D-298 surface typography tokens
+## 2026-09-27 · uncommitted · D-300 surface typography tokens
 - 변경: games board의 본문·제목 계층을 공유 weight/leading/track 토큰으로 이동하고 고유 kicker 자간은 보존했다.
-- 증거: Fleet+games host suite에서 games 포함 619 passed/5 skipped; D-298 browser run에서 games board 시나리오 통과. screenshot: X:\DevTemp\games_board_initial.png.
+- 증거: Fleet+games host suite에서 games 포함 619 passed/5 skipped; D-300 browser run에서 games board 시나리오 통과. screenshot: X:\DevTemp\games_board_initial.png.
 - gate 변화: SOURCE/LOCAL 유지. 실제 경기·로봇 동작 수용은 아님.
-- 결정: D-298.
+- 결정: D-300.
 
-## 2026-09-27 · 9049bd37 · test(games): verify D-298 after latest-main integration
+## 2026-09-27 · 9049bd37 · test(games): verify D-300 after latest-main integration
 - 변경: games board typography 토큰 변경을 최신 main 기준에서 검증했다.
 - 증거: Fleet+games host suite 636 passed/5 skipped; games browser 시나리오를 포함한 Fleet/games browser run은 17 passed, 2 known-main cases deselected.
 - gate 변화: SOURCE/LOCAL 유지. 경기장/실물 로봇 수용은 아님.
-- 결정: D-298.
+- 결정: D-300.
 
 ## 2026-09-27 · f4f15776 · verify games after latest main integration
 - 변경: latest main 통합 상태에서 games host test를 실행했다.
 - 증거: games 101 passed.
 - Gate: SOURCE/LOCAL remain GO; no device or field acceptance claimed.
-- Decision: D-298.
+- Decision: D-300.

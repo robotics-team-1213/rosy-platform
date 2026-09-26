@@ -197,20 +197,20 @@
 - 증거: HMI browser-enabled suite 100 passed, dashboard API route/manifest 29 passed. Visible CORE Chromium reviewed styleguide, console/setup/device at desktop and mobile widths; 0 page errors and 0 positive horizontal overflow.
 - gate 변화: SOURCE/LOCAL remain GO. Dashboard ARTIFACT remains HOLD pending image installation evidence.
 
-## 2026-09-27 · uncommitted · D-298 surface typography and focus tokens
+## 2026-09-27 · uncommitted · D-300 surface typography and focus tokens
 - 변경: dashboard의 반복 폰트 가중치, 행간, 자간 및 1px/2px 키보드 포커스 링을 공유 토큰에 연결했다. 1.35/1.45/1.55 고유 읽기 행간과 map canvas 3px 포커스 간격은 그대로 뒀다.
 - 증거: browser-enabled HMI 전체 102 passed; 표면 계약 40 passed.
 - gate 변화: SOURCE/LOCAL 유지. 이미지 설치·장치·필드 수용을 주장하지 않음.
-- 결정: D-298.
+- 결정: D-300.
 
-## 2026-09-27 · 9049bd37 · test(dashboard): verify D-298 after latest-main integration
+## 2026-09-27 · 9049bd37 · test(dashboard): verify D-300 after latest-main integration
 - 변경: 최신 main 통합 뒤 dashboard typography/focus 소비 계약을 재검증했다.
-- 증거: browser-enabled HMI 전체 102 passed; D-298 표면 계약 40 passed.
+- 증거: browser-enabled HMI 전체 102 passed; D-300 표면 계약 40 passed.
 - gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용을 주장하지 않음.
-- 결정: D-298.
+- 결정: D-300.
 
 ## 2026-09-27 · f4f15776 · verify dashboard surface tokens after latest main integration
 - 변경: latest main 통합을 확인했다. dashboard 코드는 변경되지 않았다.
 - 증거: HMI web 77 passed; browser-enabled HMI의 이전 검증은 102 passed.
 - Gate: SOURCE/LOCAL remain GO; device and field acceptance are separate.
-- Decision: D-298.
+- Decision: D-300.

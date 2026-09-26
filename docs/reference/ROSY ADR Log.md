@@ -299,4 +299,4 @@
 | D-296 | 장치 미들웨어와 사이트 조정 계층의 이름과 책임을 구분한다 | Accepted |
 | D-297 | 명령 ACK와 Fleet 추적 레코드를 분리한 PRT-004 활성화 설계 | Proposed |
 
-| D-298 | Surface typography and focus feedback use shared tokens | Accepted |
+| D-300 | Surface typography and focus feedback use shared tokens | Accepted |
