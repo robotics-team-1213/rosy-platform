@@ -6,12 +6,35 @@ import os
 from pathlib import Path
 
 import pytest
-
 from browser_harness import open_page
-
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src" / "hmi" / "dashboard"
+
+
+def _route_panel_test(page) -> None:
+    """Load shared elements used by the dashboard shell."""
+    ui_source = (ROOT / "src" / "hmi" / "web" / "ui.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=ui_source))
+    document = (
+        '<!doctype html><html><head>'
+        '<script type="module" src="/common/ui.js"></script>'
+        '</head><body></body></html>'
+    )
+    page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
+        status=200, content_type="text/html",
+        body=document))
+
+
+def _unmount_panel(page) -> None:
+    page.evaluate("""() => {
+      const mounted = window.__unmount;
+      if (typeof mounted === 'function') return mounted();
+      if (typeof mounted?.unmount === 'function') return mounted.unmount();
+      throw new Error('panel mount did not return a cleanup handle');
+    }""")
+
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
@@ -28,12 +51,11 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "localization.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/localization.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/setup/localization.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -53,7 +75,7 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
         assert page.locator("ui-button").evaluate_all("nodes => nodes.every(node => node.disabled)")
         assert "사용할 수 없는 기능" in page.locator("[role=status]").inner_text()
         assert page.evaluate("window.__apiCalls") == []
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert page.evaluate("window.__stopped") is True
         assert errors == []
         browser.close()
@@ -68,15 +90,14 @@ def test_setup_docking_refuses_teach_without_fresh_pose():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "docking.js").read_text(encoding="utf-8")
         state_logic = (ROOT / "src" / "hmi" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/docking.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=state_logic))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/setup/docking.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -94,7 +115,7 @@ def test_setup_docking_refuses_teach_without_fresh_pose():
         assert "최신이 아니어서" in page.locator("[role=status]").inner_text()
         assert page.locator("[data-dock-id='dock-a'] ui-button").evaluate("node => node.disabled === true")
         assert page.evaluate("window.__apiCalls") == []
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -108,12 +129,11 @@ def test_console_docking_blocks_motion_when_capability_is_missing():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "console" / "docking.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/docking.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/docking.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -129,7 +149,7 @@ def test_console_docking_blocks_motion_when_capability_is_missing():
         assert "막았습니다" in page.locator("[role=status]").inner_text()
         assert page.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled===true)")
         assert page.evaluate("window.__calls") == []
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -143,12 +163,11 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/host/operations.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/host/operations.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -161,10 +180,13 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
           window.confirm = () => true;
           root.querySelectorAll('ui-button').forEach(button => button.click());
         }""")
-        assert "agent offline" in page.locator("[role=status]").all_inner_texts()[0]
+        assert "Host Agent" in page.locator("[role=status]").all_inner_texts()[0]
+        page.locator(".surface-disclosure summary").first.click()
+        details = page.locator(".surface-disclosure .surface-message").all_inner_texts()
+        assert any("agent offline" in text for text in details)
         assert page.locator("ui-button").evaluate_all("nodes => nodes.every(node => node.disabled === true)")
         assert page.evaluate("window.__calls") == []
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -178,15 +200,14 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
         map_source = (WEB / "map.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=map_source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/map.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -212,7 +233,7 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         assert page.locator("canvas").get_attribute("tabindex") is not None
         assert page.locator("canvas").get_attribute("aria-label")
         assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert set(page.evaluate("window.__stopped")) == {"/api/v1/robot/state", "/api/v1/system/capabilities"}
         assert errors == []
         browser.close()
@@ -227,8 +248,7 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
         state_logic = (ROOT / "src" / "hmi" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         ticker = (ROOT / "src" / "hmi" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
@@ -238,7 +258,7 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero():
             status=200, content_type="application/javascript", body=state_logic))
         page.route("http://rosy.test/common/hold-ticker.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=ticker))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/teleop.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -262,7 +282,7 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero():
         assert all(call["path"] == "/api/v1/teleop" for call in calls)
         assert any(call["body"]["linear"] > 0 for call in calls)
         assert calls[-1]["body"] == {"linear": 0, "angular": 0}
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -276,8 +296,7 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         module = (WEB / "panels" / "console" / "camera.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/camera.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
@@ -287,7 +306,7 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
             status=200, content_type="application/javascript", body="export function createVisionPreview(){return {start(){window.__started=(window.__started||0)+1;},stop(){window.__stopped=(window.__stopped||0)+1;}};}"))
         page.route("http://rosy.test/assets/camera-capture.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body="export function createCameraCapture(){return {state(){return {ready:false,recording:false,saved:false,supported:false,message:'WAITING'};},unavailable(){},recordAction(){},dispose(){}};} export function evidenceBody(){} export function saveCameraFile(){}"))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/camera.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -302,7 +321,7 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
         assert page.locator("#vision-record-start").evaluate("el => el.disabled === true")
         assert page.evaluate("window.__started") == 1
         assert page.evaluate("window.__stopped") == 1
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert page.evaluate("window.__stopped") == 2
         assert errors == []
         browser.close()
@@ -317,12 +336,11 @@ def test_console_mode_requires_navigation_capability_and_stops_held_motion():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "console" / "mode.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/mode.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/mode.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -347,7 +365,7 @@ def test_console_mode_requires_navigation_capability_and_stops_held_motion():
         page.wait_for_timeout(30)
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"NAVIGATION"}}]
         assert page.evaluate("window.__stoppedMotion") == 1
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -361,12 +379,11 @@ def test_line_follow_keeps_stop_available_when_navigation_capability_is_missing(
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "console" / "line-follow.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/console/line-follow.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -380,7 +397,7 @@ def test_line_follow_keeps_stop_available_when_navigation_capability_is_missing(
         }""")
         page.wait_for_timeout(20)
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/line-follow/mode","method":"PUT","body":{"mode":"OFF"}}]
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -394,15 +411,14 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "dock-admin.js").read_text(encoding="utf-8")
         logic = (WEB.parent / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/dock-admin.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=logic))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount} = await import('/assets/panels/setup/dock-admin.js');
           const root = document.createElement('main'); document.body.append(root);
@@ -431,7 +447,7 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
             "path":"/api/v1/docking/docks","method":"POST",
             "body":{"id":"dock-1","type":"test_type","x":1,"y":2,"yaw":0.5,"map_id":"map-1"},
         }]
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
 
@@ -445,12 +461,11 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
             browser, page, errors = open_page(playwright, 390, 844)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.route("http://rosy.test/panel-test", lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><html><body></body></html>"))
+        _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "traffic-policy.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/traffic-policy.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
-        page.goto("http://rosy.test/panel-test", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
         page.evaluate("""async () => {
           const {mount}=await import('/assets/panels/setup/traffic-policy.js');
           const root=document.createElement('main');document.body.append(root);
@@ -473,6 +488,6 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
         page.locator("ui-button").filter(has_text="정지 상태에서 적용").click()
         page.wait_for_function("window.__calls.length === 2")
         assert page.evaluate("window.__calls[1].path") == "/api/v1/traffic/policy/apply"
-        page.evaluate("window.__unmount()")
+        _unmount_panel(page)
         assert errors == []
         browser.close()
