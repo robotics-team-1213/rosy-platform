@@ -2700,3 +2700,9 @@
 - Scope: naming and responsibility only. Existing API paths, package names, runtime deployment, and device acceptance are unchanged. D-281/D-282 operational gates remain Proposed.
 - 증거: D-296 본문·ADR 로그·용어집·제품 정의·SRS의 역할 표현을 대조하고 `rosy_harness.py generate`로 색인을 갱신했다.
 - gate 변화: 없음. 명명 정합만 기록했으며 OMX 및 복합 로봇 DEVICE/FIELD 수용은 별도다.
+
+## 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record
+
+- 변경: D-177의 `AckPayload.TIMEOUT` 설계 충돌을 D-297 Proposed로 대체하고, API Reference §7.5·§9.5를 D-215와 정합했다. 로봇 ACK 4상태, Fleet 전용 `TIMEOUT`, Site Fleet 작업의 `UNKNOWN`과 결과 검증 조건을 분리했다.
+- 근거: D-170/D-215/D-293, `AckStatus` 4값, 현행 Site Fleet의 receipt/상태 전이를 대조했다.
+- gate 변화: 없음. PRT-004 활성화와 실물 최종 결과 수용은 중앙 Fleet 착수 및 DEVICE/FIELD 검증 대기다.
