@@ -218,6 +218,55 @@ def test_component_token_layer_exists():
     assert not missing, f"tokens.css에 없는 컴포넌트 토큰: {sorted(missing)}"
 
 
+def test_component_spacing_roles_are_closed_and_backed_by_the_base_scale():
+    """D-292 — 공용 간격 결정은 역할 이름으로 소비하고 기본 척도에 연결한다."""
+    text = tokens_text()
+    declarations = dict(
+        re.findall(r"^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);", text, re.MULTILINE)
+    )
+    roles = {
+        "--inset-button", "--inset-button-primary", "--inset-button-irreversible",
+        "--inset-field", "--inset-tag", "--inset-grid-cell", "--inset-chip",
+        "--inset-evidence-unavailable", "--gap-button-content", "--gap-grid-cell", "--gap-actions",
+        "--gap-form", "--gap-field-label", "--gap-readout", "--gap-readout-mobile",
+        "--gap-readback", "--gap-heading", "--gap-triage", "--gap-topbar",
+        "--gap-brand", "--gap-section", "--inset-topbar", "--inset-topbar-focal",
+        "--gap-button-detail", "--offset-readout-mobile",
+    }
+    missing = roles - declarations.keys()
+    assert not missing, f"D-292 컴포넌트 간격 역할 토큰이 없다: {sorted(missing)}"
+
+    base_scale = {f"--space-{i}" for i in range(1, 7)}
+    for role in roles:
+        refs = set(re.findall(r"var\((--[a-z0-9-]+)", declarations[role]))
+        assert refs and refs <= base_scale, (
+            f"{role}은 기본 간격 척도만 참조해야 한다: {declarations[role]}"
+        )
+
+
+def test_shared_components_consume_component_spacing_roles():
+    """레이아웃은 표면이 소유하고 반복되는 컴포넌트 간격은 공용이 소유한다."""
+    css = (TOKENS.parent / "components.css").read_text(encoding="utf-8")
+    expected = {
+        "--inset-button", "--inset-button-primary", "--inset-button-irreversible",
+        "--inset-field", "--inset-tag", "--inset-grid-cell", "--inset-chip",
+        "--inset-evidence-unavailable", "--gap-button-content", "--gap-grid-cell", "--gap-actions",
+        "--gap-form", "--gap-field-label", "--gap-readout", "--gap-readout-mobile",
+        "--gap-readback", "--gap-heading", "--gap-triage", "--gap-topbar",
+        "--gap-brand", "--gap-section", "--inset-topbar", "--inset-topbar-focal",
+        "--gap-button-detail", "--offset-readout-mobile",
+    }
+    used = set(re.findall(r"var\((--[a-z0-9-]+)", css))
+    assert expected <= used, f"components.css가 소비하지 않는 역할 토큰: {sorted(expected - used)}"
+
+    direct_spacing = re.findall(
+        r"(?<![-a-z])(padding|margin|gap|row-gap|column-gap)[a-z-]*:\s*([^;}]+)", css
+    )
+    offenders = [f"{prop}: {value.strip()}" for prop, value in direct_spacing
+                 if re.search(r"var\(--space-", value)]
+    assert not offenders, f"공용 컴포넌트가 기초 간격 대신 역할 토큰을 써야 한다: {offenders}"
+
+
 def test_focus_is_interaction_not_status():
     """포커스 링은 상태가 아니다. status 색을 쓰면 '주의'와 헷갈린다."""
     text = tokens_text()

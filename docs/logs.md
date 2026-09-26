@@ -2478,3 +2478,9 @@
 - 변경: 제품 진입 문서와 목표 정의에 ROSY Console의 현재 Fleet 구현 위치를 명시하고, 사이트 배포 설명에 호스트별 설치 책임과 원격 운영자 접속 검증 순서를 추가했다.
 - 근거: D-275/D-290, Fleet `/console`, 사이트 Compose의 loopback 기본 바인딩과 Caddy 경로, D-276의 사용자별 역할을 대조했다.
 - gate 변화: 없음. 문서 정합성만 보완했으며 실제 Ubuntu 사이트와 장치 현장 접속은 별도 검증 대상이다.
+
+## 2026-09-26 · uncommitted · feat(hmi): apply D-292 semantic spacing roles
+
+- 변경: 공통 브라우저 컴포넌트의 반복 패딩·간격을 기본 `--space-*`에서 의미가 드러나는 컴포넌트 역할 토큰으로 옮겼다. 카메라 패널도 버튼 종류·상태·색상·액션 간격을 공통 계약에 맞췄다.
+- 근거: D-292와 공용 토큰/컨트롤 계약. `src/hmi/web/test/test_ui_token_contracts.py`, `test_shared_controls.py`, `src/hmi/dashboard/test/test_camera_capture.py` 및 HMI 전체 테스트.
+- gate 변화: 97 passed, 브라우저 옵트인 포함. 실제 CORE TestClient API를 연결한 visible Chromium에서 operator `/console`·`/setup`, administrator `/console`·`/setup`·`/device`를 1366×768 및 390×844로 확인했다. 0 page errors, missing button kinds, positive horizontal overflow. 캡처는 `X:\DevTemp\rosy-design-system-review`. ROS-SIM/ARTIFACT/DEVICE/FIELD 변경 없음.

@@ -158,8 +158,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): apply D-292 semantic spacing roles
 - 2026-09-26 · uncommitted · docs(site): 관제 서버와 운영자 단말의 배치 명시
 - 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
 - 2026-09-26 · uncommitted · docs(adr): D-290 ROSY Platform 명명과 현장 의도 경계
 - 2026-09-26 · uncommitted · docs(api): merge camera capture with LAN discovery
-- 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서

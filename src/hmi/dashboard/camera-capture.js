@@ -94,15 +94,17 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
   const state = () => ({ready: Boolean(ready()), recording: Boolean(active()), uploading,
     saved: Boolean(completed), supported: Boolean(recordingType()), message});
   const notify = () => onChange(state());
+  const tokenColor = (name) => getComputedStyle(document.documentElement)
+    .getPropertyValue(name).trim();
   function draw() {
     if (!frame || !context) return;
     context.drawImage(frame.image, 0, 0, canvas.width, canvas.height);
     const last = timeline.snapshot().at(-1);
     if (last && now() - startedAt - last.elapsed_ms < 3_000) {
       const height = Math.max(28, Math.round(canvas.height * 0.13));
-      context.fillStyle = "rgba(0, 0, 0, 0.78)";
+      context.fillStyle = tokenColor("--scrim");
       context.fillRect(0, canvas.height - height, canvas.width, height);
-      context.fillStyle = "white";
+      context.fillStyle = tokenColor("--paper");
       context.font = `${Math.max(14, Math.round(height * 0.48))}px sans-serif`;
       context.fillText(`${(last.elapsed_ms / 1000).toFixed(1)}s  ${last.action} · ${last.result === "accepted" ? "접수" : "실패"}`,
         8, canvas.height - Math.round(height * 0.28), canvas.width - 16);

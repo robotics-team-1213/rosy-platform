@@ -20,11 +20,13 @@
 | D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
 | D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
+| D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
 
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-26-rosy-modern-brand-palette.md](../../../docs/plans/2026-09-26-rosy-modern-brand-palette.md)
+- [2026-09-26-rosy-tokenized-design-system.md](../../../docs/plans/2026-09-26-rosy-tokenized-design-system.md)
 
 ## 교훈 (docs/solutions)
 
@@ -38,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
 - 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption
 - 2026-09-26 · uncommitted · feat(hmi): share role readback sections (D-287)
 - 2026-09-26 · uncommitted · feat(hmi): share semantic role readout layout (D-286)
 - 2026-09-26 · uncommitted · feat(hmi): share role form layout and field labels (D-285)
-- 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase

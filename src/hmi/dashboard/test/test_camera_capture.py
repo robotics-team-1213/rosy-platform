@@ -80,6 +80,8 @@ globalThis.MediaRecorder = class {
   start() { this.state = 'recording'; }
   stop() { this.state = 'inactive'; this.ondataavailable({data:new Blob(['WEBM'])}); this.onstop(); }
 };
+globalThis.getComputedStyle = () => ({getPropertyValue(name) { return ({
+  '--scrim':'rgba(8, 9, 11, 0.84)', '--paper':'#eeeeef'}[name] || ''); }});
 globalThis.document = {createElement() { return {
   getContext() { return {drawImage(){},fillRect(){},fillText(){}}; },
   captureStream() { return {getTracks(){ return [{stop(){}}]; }}; }
