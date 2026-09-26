@@ -508,10 +508,16 @@
               <h3 id="identity-heading">로봇 신원</h3>
               <span class="mode-chip" data-mode="LOCAL">LOCAL YAML</span>
             </header>
-            <p class="host-note">로봇 ID는 설치 번호에서 나오며 바꿀 수 없습니다. 관리자는 표시 이름만 저장합니다.</p>
+            <p class="host-note">로봇 번호·ROS Domain ID·namespace는 장치 등록 때 정해집니다. 관리자는 표시 이름을 저장할 수 있습니다.</p>
             <form id="identity-form">
               <label for="robot-id-input">로봇 ID</label>
               <input id="robot-id-input" name="robot_id" maxlength="64" placeholder="rosy_01" autocomplete="off" readonly>
+              <label for="robot-number-input">로봇 번호</label>
+              <input id="robot-number-input" readonly>
+              <label for="ros-domain-input">ROS Domain ID</label>
+              <input id="ros-domain-input" readonly>
+              <label for="ros-namespace-input">ROS namespace</label>
+              <input id="ros-namespace-input" readonly>
               <label for="robot-name-input">이름</label>
               <input id="robot-name-input" name="robot_name" maxlength="64" placeholder="Rosy 01" autocomplete="off">
               <ui-button kind="primary" type="button" id="identity-save" class="primary-button" disabled>신원 적용</ui-button>

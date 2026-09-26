@@ -1,7 +1,7 @@
 # Moved SD card: new-device setup
 
 Date: 2026-09-26
-Status: source implementation; image and device validation pending
+Status: source implementation; same-card operator rebind validated on one Pi; image validation pending
 Decision: D-154 new-device path
 
 ## Intent
@@ -22,7 +22,10 @@ maps, settings, and logs remain available for later selective restoration.
    third board or an inconsistent old record remains a hard failure.
 3. It writes `NEW_DEVICE_SETUP` to the boot state. `rosy-sd-provision` and
    CORE remain blocked. The old data remains on the card but cannot be
-   served by CORE; no automatic deletion or transfer occurs.
+   served by CORE; no automatic deletion or transfer occurs. An operator with
+   a separately validated new-device bundle may run `rosy-rebind-board.py` to
+   archive the old CORE home, logs and identity records on that SD, then apply
+   the new registration. The existing site Wi-Fi profile remains in place.
 4. The read-only setup server owns port 8080 while CORE is absent.
    `/dashboard` explains the next step; `/api/v1/*` returns 503. It has no
    registration write endpoint and reads only the public boot-status record.

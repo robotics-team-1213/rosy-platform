@@ -121,3 +121,10 @@
 - gate 변화: 없음. ROS-SIM, Pi 장치, 현장 동작은 검증하지 않았다.
 - 결정: D-278
 - 교훈: 조작 화면의 capability 제한은 API 게이트만으로 충분하지 않다. 비활성 이유를 실제 조작 가까이에 표시하고 직접 클릭·키보드 경로도 같은 조건을 검사한다.
+
+## 2026-09-26 · uncommitted · feat(hmi): show provisioned ROS identity in settings
+- 변경: 현장 설정의 신원 카드와 장치 시스템 신원에 로봇 번호, ROS Domain ID, namespace 읽기 전용 표시를 추가했다. 표시 이름 수정은 기존 관리자 계약을 유지한다.
+- 증거: 대시보드 관련 호스트 시험 78 passed; Chromium 현장 설정 시험 1 passed. 실제 Pi API는 19/59/rosy_19를 반환했으나 새 UI 산출물은 아직 장치에 설치되지 않았다.
+- gate 변화: ARTIFACT HOLD 유지.
+- 결정: 기존 IDN-003 응답 사용.
+- 교훈: DDS 번호는 설치 신원에서 파생되므로 일반 설정 폼에서 임의 수정하면 안 된다.

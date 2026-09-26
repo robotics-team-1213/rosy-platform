@@ -33,6 +33,7 @@ def test_inspect_passes_with_valid_image(tmp_path):
         "etc/rosy/cyclonedds.xml",
         "opt/rosy/first-boot/rosy-first-boot.py",
         "opt/rosy/first-boot/rosy-new-device-setup.py",
+        "opt/rosy/first-boot/rosy-rebind-board.py",
         "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem",
         "opt/rosy/native-runtime/native_release.py",
         "opt/rosy/native-runtime/recover-release.sh",

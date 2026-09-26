@@ -397,6 +397,8 @@ chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/n
     || fail "installed first-boot entrypoint does not run"
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-new-device-setup.py --help >/dev/null \
     || fail "installed new-device setup entrypoint does not run"
+chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-rebind-board.py --help >/dev/null \
+    || fail "installed board-rebind entrypoint does not run"
 for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-boot-display.py \
     rosy-hw-probe.py rosy-hw-test.py rosy-login-code.py; do
     chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \

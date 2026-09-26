@@ -46,7 +46,9 @@ export function mount(root, ctx) {
 
   const stopIdentity = ctx.store.poll("/api/v1/system/info", 30_000, (data) => {
     fields(identity.body, [["로봇 ID", data.robot_id], ["표시 이름", data.robot_name || data.name],
-      ["하드웨어 모델", data.hardware_model], ["실행 모드", data.runtime_mode]]);
+      ["로봇 번호", data.robot_number], ["ROS Domain ID", data.ros_domain_id],
+      ["ROS namespace", data.ros_namespace], ["하드웨어 모델", data.hardware_model],
+      ["실행 모드", data.runtime_mode]]);
     if (ctx.role === "administrator" && !identity.body.querySelector("form")) {
       const form = el("form", "surface-inline-form");
       const input = el("input"); input.name = "robot_name"; input.maxLength = 64;

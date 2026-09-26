@@ -91,7 +91,7 @@ function renderRobotInfo(info) {
   const name = info.robot_name || info.name || "Rosy";
   setText("robot-name", name);
   setText("robot-id", `${info.robot_id || "—"} / ${info.hardware_model || "unknown model"} / ${info.runtime_mode || "core"}`);
-  fillIdentityForm(info.robot_id, name);
+  fillIdentityForm(info);
 }
 
 let triageSeen = {};

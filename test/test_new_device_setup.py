@@ -89,3 +89,4 @@ def test_setup_server_starts_only_for_a_moved_card_and_is_in_the_image():
     assert "rosy-new-device-setup.service" in payload
     assert "rosy-new-device-setup.py" in setup_unit
     assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-new-device-setup.py --help' in customizer
+    assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-rebind-board.py --help' in customizer

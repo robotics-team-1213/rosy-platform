@@ -44,9 +44,12 @@ export function fillSafetyForm(safety) {
 }
 
 /** 신원 카드의 입력값. */
-export function fillIdentityForm(robotId, robotName) {
-  fillTextInput("robot-id-input", robotId);
-  fillTextInput("robot-name-input", robotName);
+export function fillIdentityForm(info) {
+  fillTextInput("robot-id-input", info.robot_id);
+  fillTextInput("robot-number-input", info.robot_number);
+  fillTextInput("ros-domain-input", info.ros_domain_id);
+  fillTextInput("ros-namespace-input", info.ros_namespace);
+  fillTextInput("robot-name-input", info.robot_name || info.name);
 }
 
 export function renderTokens(payload) {

@@ -2353,9 +2353,16 @@
 - 근거: D-281 설계와 현행 `deploy/omx/preflight.py`·비활성 Compose·D-246 native 결정. 실물 식별·vendor graph·카메라가 미확정이므로 해당 단계는 측정 뒤에만 진행한다.
 - gate 변화: 없음. 이 문서는 제품 런타임·Fleet API·OMX capability를 활성화하지 않는다.
 
-## 2026-09-26 · feat(sd): stage new identity when a personalized card moves boards
+## 2026-09-26 · uncommitted · feat(sd): stage new identity when a personalized card moves boards
 - 변경: 기존 Pi 신원 검증 후 새 보드에 임시 신원을 생성하고, 기존 CORE/Fleet/구동을 차단한 상태에서 Wi-Fi와 읽기 전용 등록 안내를 유지한다. 이전 SD 데이터는 보존하고 새 카드 등록 후 선택 복원 절차를 문서화했다.
 - 증거: 이동 SD 및 부팅 상태 관련 호스트 시험 439 passed, 8 skipped; 실제 장치 이미지/기동 검증은 미실행.
 - gate 변화: SOURCE 검증, ARTIFACT/DEVICE HOLD 유지.
 - 결정: D-154 새 장치 경로.
 - 교훈: 보드 시리얼 불일치를 기존 로봇 신원으로 수용하지 않는다.
+
+## 2026-09-26 · uncommitted · docs(sd): record operator rebind and sequential multi-card Fleet onboarding
+- 변경: 이동 SD의 same-card 재등록 조건과 보관 경로, 카드별 receipt 뒤 다음 plan을 만드는 순서, Fleet `robots.yaml` 개별 등록을 runbook과 설계에 반영했다.
+- 증거: 실제 Pi `rosy_19` API·Fleet snapshot 온라인 확인; signed image와 현재 PC SD reader의 쓰기 검증은 미완료.
+- gate 변화: 없음.
+- 결정: D-154.
+- 교훈: Fleet endpoint를 SD bundle에 적는 것만으로 사이트 관제 목록에 등록되지 않는다.

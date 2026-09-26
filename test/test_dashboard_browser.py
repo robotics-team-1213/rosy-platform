@@ -162,6 +162,7 @@ window.fetch = async (input, options = {}) => {
     },
     '/api/v1/system/info': {
       name: 'Rosy', robot_id: 'rosy_01', hardware_model: 'test',
+      robot_number: 1, ros_domain_id: 41, ros_namespace: 'rosy_01',
       runtime_mode: 'hardware', caller_role: window.__callerRole || 'administrator',
     },
     '/api/v1/system/capabilities': {
@@ -511,6 +512,11 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
         )
         page.locator("#view-inspect").click()
         page.locator("#field-settings-panel").scroll_into_view_if_needed()
+
+        assert page.locator("#robot-number-input").input_value() == "1"
+        assert page.locator("#ros-domain-input").input_value() == "41"
+        assert page.locator("#ros-namespace-input").input_value() == "rosy_01"
+        assert page.locator("#ros-domain-input").get_attribute("readonly") is not None
 
         page.wait_for_function(
             "document.querySelector('#waypoint-list ui-empty')?.textContent?.includes('없습니다')"

@@ -1283,9 +1283,16 @@
 - 근거: 현재 Compose는 비활성 단일 hardware/simulation 셸이며 실제 OMX 제어 서비스는 없다. D-281과 사이트 호스트 배치 설계에 검증 순서를 기록했다.
 - gate 변화: 없음. 장치 제어·정지·복구·동시 부하의 DEVICE/FIELD 증거는 없다.
 
-## 2026-09-26 · feat(sd): fail closed on board transfer and expose setup status
+## 2026-09-26 · uncommitted · feat(sd): fail closed on board transfer and expose setup status
 - 변경: first-boot가 보드 이동을 감지해 새 임시 신원을 준비하고 CORE 시작을 막는다. 상태 서버는 8080에서 읽기 전용 안내만 제공한다.
 - 증거: 관련 호스트 시험 439 passed, 8 skipped; arm64 이미지 및 Pi 검증 전.
 - gate 변화: ARTIFACT/DEVICE HOLD 유지.
 - 결정: D-154.
 - 교훈: 등록 권한 없이 로봇 번호를 자동 배정하지 않는다.
+
+## 2026-09-26 · uncommitted · feat(sd): recover a moved Pi with a fresh identity
+- 변경: 이전 프로비저닝·CORE 홈·로그·장치 신원을 root-only 보관 경로로 옮기는 재등록 도구를 추가했다. 같은 현장 Wi-Fi를 유지하고 새 UID·번호·토큰 bundle만 적용한다. 4~10장 순차 작성과 Fleet 개별 등록 절차를 runbook에 명시했다.
+- 증거: `test/test_rebind_board.py` 4 passed; 네트워크 Pi에서 새 19번/Domain 59로 CORE·dashboard·인증 API HTTP 200, Fleet snapshot 1/1 online. 원본 감사 기록은 보관 경로에 남고 새 기록과 다르다. 새 서명 이미지·SD 쓰기는 미완료.
+- gate 변화: DEVICE의 단일 Pi 재등록 경로를 관측했으나 이미지/다중 카드 gate는 HOLD 유지.
+- 결정: D-154 새 장치 처리.
+- 교훈: 원래 카드로 재등록할 때는 기존 CORE 홈을 먼저 격리해야 API 토큰·설정이 새 신원으로 섞이지 않는다.

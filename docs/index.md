@@ -153,8 +153,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(sd): record operator rebind and sequential multi-card Fleet onboarding
+- 2026-09-26 · uncommitted · feat(sd): stage new identity when a personalized card moves boards
 - 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
 - 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
 - 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
-- 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
-- 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리

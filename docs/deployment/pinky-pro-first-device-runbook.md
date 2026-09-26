@@ -321,11 +321,12 @@ robot number, API credential, Fleet pairing, and motion runtime stay blocked:
 `http://<robot-ip>:8080/dashboard` shows registration instructions, while
 `/api/v1` returns HTTP 503. The setup page is read-only.
 
-1. Check the physical Pi identity and the SD label. Keep the old SD unchanged
-   as the previous device's data archive; use a blank card for the new device.
-   If there is no spare card, take and verify a full private image backup under
-   `X:\DevTemp\` before considering a rewrite. A diagnostic extract is not a
-   full backup.
+1. Check the physical Pi identity and the SD label. A blank card written from
+   a signed image is the normal new-device path. An already booted Pi can use
+   the operator-only `rosy-rebind-board.py` path below on the same SD; it moves
+   the previous provisioning, CORE data and logs to a root-only archive before
+   applying a separately validated new bundle. That archive is logical
+   isolation on the same SD, not an off-card backup.
 2. Read the root-only setup record through the operator SSH key. Its
    `device_identity.device_name` and `device_uid` are provisional. Do not
    publish the old board serial or UID from that record.
@@ -333,8 +334,8 @@ robot number, API credential, Fleet pairing, and motion runtime stay blocked:
    workflow for a **new** device, optionally passing the provisional
    `-DeviceName` and `-DeviceUid`. Do not pass `-ReprovisionReceipt`;
    that option intentionally keeps the prior device identity. The writer
-   checks the registry, allocates a free robot number, and creates new API
-   and Fleet credentials. If the provisional name is already registered,
+   checks the registry, allocates a free robot number, and creates a new CORE
+   API credential and Fleet endpoint/trust record. If the provisional name is already registered,
    let the writer generate another name.
 4. Review the plan, write and read back the blank card with `write-card.ps1`,
    then boot this Pi. Verify its hardware serial, new UID/name, robot number,
@@ -344,9 +345,41 @@ robot number, API credential, Fleet pairing, and motion runtime stay blocked:
    old device identity, runtime environment, CORE auth, Fleet bootstrap, or
    provisioning records into the new installation.
 
-An image without this setup path, including the currently observed
-`2026.09.26-017` installation, remains in `PROVISIONING_HOLD` on a new
-Pi and does not serve port 8080. A source change alone does not update it.
+For an already booted Pi, stop CORE, I/O and navigation before rebind. The
+root-only new-device bundle must have a new UID, name, robot number, CORE
+credential and the *same* site Wi-Fi. `rosy-rebind-board.py --bundle <root-only
+bundle>` checks the old binding and bundle, then archives the previous
+`provisioning/`, CORE home, logs and identity files under
+`/var/lib/rosy/previous-devices/<old-uid>/`. It calls first boot to apply the
+new identity. Re-run with the same bundle after an interrupted move; never
+manually clear `complete.json` or copy an old CORE overlay into the new home.
+After success, reset the old first-boot failure and start `rosy-runtime.target`.
+Verify the new serial, number, `ros_domain_id`, namespace, authenticated CORE
+API, dashboard and Fleet readback. Only then register the new identity in the
+writer PC's shared registry. The archived data is restored selectively later.
+
+An image without the automatic moved-card setup path fails at first boot on a
+different Pi; the operator rebind procedure can recover a booted Pi with SSH.
+The automatic status page still requires a newly built, signed image.
+
+### Preparing 4–10 cards for one Fleet
+
+Use one shared identity registry for the whole site. For each labelled card,
+create a fresh `-PlanOnly` plan from the verified signed image, review the disk
+identity and robot number, run `write-card.ps1`, and wait for its full media
+readback, receipt and registry update **before planning the next card**. Plans
+do not reserve numbers, and parallel card writers can race on the registry.
+The writer issues a different UID, robot number, CORE credential and fallback
+AP credential per card. A reader with no disk serial is refused; replace it
+with an identifying reader before using the writer. Do not infer card identity
+from a drive letter or the reader's shared USB ID.
+
+After each card boots, verify the robot's `/api/v1/system/info` number, Domain
+ID (`40 + number`) and namespace, then add its own REST credential and address
+to the site's private `robots.yaml`. The Fleet console can gather N robot
+endpoints; the card's Fleet endpoint/trust fields alone do not enroll a robot.
+Keep `robots.yaml` private because it contains live CORE tokens. Test a Fleet
+snapshot for the expected total and online count before enabling group actions.
 
 ### Changing the site Wi-Fi on the card (D-176)
 
