@@ -2264,3 +2264,9 @@
 - gate 변화: 없음(ADR·게이트 문서 무변경)
 - 회귀: 전체 `test/` 로컬 실행은 15분 탄 아웃(네트워크/장비 대기 추정) — 이 단계의 정본은 CI. 로컬은 변경 파일 단독 검증으로 대체
 - 교훈: 앞 단계 붉음이 뒤 단계를 skip하면 가려진 레인이 하나씩 드러난다. 첫 붉음을 고칠 때 `grep src/core`처럼 낡은 경로를 전 구간 선판정할 것 — "skip은 통과가 아니다"
+## 2026-09-26 · uncommitted · docs(verification): known_failures 갱신 + BOM 제거 — deployment 잔여 4건 장부화
+- 변경: ① `test/known_failures.txt` — 내가 고친 7개 nodeid 삭제(파일 규칙: 고친 커밋에서 지워라. 목록 검증 9fb4b7a1(01:22)이 내 수정 2a22ad63(02:31)보다 앞섰고 7건 전부 현재 7 passed) + 현 main 선재 4건 기록(헤더 검증 SHA 769e2f28) ② `src/runtime/api_web/test/conftest.py` — UTF-8 BOM 3바이트 제거(a4970791 02:06 유입, test_source_encoding이 CI·로컬 동시 붉음)
+- 증거: test_known_failures+test_source_encoding 6 passed. deployment 잔여 4건 전건 동료 소유 판정 완료: (a) boot 가드 — ca5fb4fd(D-260 M1)가 `run/rosy/status-inputs.json`을 읽는데 Review-H1 가드는 `run/rosy/` 문자열 자체를 금지(로컬 통과는 Windows symlink privilege skip, Linux CI에서만 발동) (b) secrets — 문서 커밋SHA 2·operations.js psk 5(D-262), 동료가 test_secret_scan.py로 scanner 대응 중 (c) RegistryError — 12ca0469(12:20)의 `_asset` resolve 가드 vs CI install share 심볼릭 링크 (d) 예산 — host.py 813(D-260). 4건 모두 진행 중 시리즈라 판정·장부화까지만
+- gate 변화: 없음
+- 회귀: 없음(동료 WIP 5파일 미스테이징 유지)
+- 교훈: 같은 main에서도 OS가 판정을 가른다 — Windows의 symlink privilege skip이 Linux-only 보안 가드를 숨긴다("skip=통과 아님"의 Windows 판). 그리고 앞단계 붉음이 뒤단계를 skip하면 잔여 실패가 무더기로 숨는다(deployment 2178→2373 passed, 실패 1→5)

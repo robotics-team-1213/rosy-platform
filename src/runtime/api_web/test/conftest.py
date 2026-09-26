@@ -1,4 +1,4 @@
-﻿"""Host pytest imports for the split API and gateway packages."""
+"""Host pytest imports for the split API and gateway packages."""
 
 import sys
 from pathlib import Path
