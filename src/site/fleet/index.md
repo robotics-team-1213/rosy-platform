@@ -54,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
 - 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
 - 2026-09-26 · uncommitted · docs(adr): renumber Site Fleet API contract after main advances
 - 2026-09-26 · uncommitted · merge(site): preserve camera/mDNS and typed intent contracts
 - 2026-09-26 · uncommitted · reciprocal site discovery preparation
-- 2026-09-26 · uncommitted · feat(fleet): site mDNS discovery readback

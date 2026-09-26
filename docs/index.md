@@ -164,8 +164,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
 - 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
 - 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
 - 2026-09-26 · uncommitted · docs(adr): renumber Site Fleet API contract after main advances
 - 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
-- 2026-09-26 · uncommitted · docs(site): 관제 서버와 운영자 단말의 배치 명시

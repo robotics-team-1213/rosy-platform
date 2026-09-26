@@ -2599,3 +2599,9 @@
 - 변경: main adds the D-292 design-token ADR, so the Site Fleet intent ADR moves to D-293; API Reference v1.40 and contract tests are aligned.
 - 증거: rerun unique ADR numbering and API reference checks after the latest integration.
 - gate 변화: SOURCE/LOCAL only; Ubuntu, RTX 5080, physical cameras, CORE, and robot acceptance remain open.
+
+
+## 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
+- 변경: Built and started the packaged `151607c0` linux/amd64 Site Fleet stack; verified TLS console/API, typed intent rejection, synthetic camera sighting, and durable task readback after Fleet restart.
+- 증거: Fleet 518/5 skipped; OMX/camera/system 192/4 skipped; API/docs/security 20 passed; harness lint 0 errors/21 existing warnings; all services healthy and candidate archive/SBOM hashes verified.
+- gate 변화: SOURCE/LOCAL only; no Ubuntu/RTX 5080/physical phone/CORE/robot proof, and automatic movement/picking remain HOLD.

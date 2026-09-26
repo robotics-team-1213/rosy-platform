@@ -127,3 +127,17 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
   environment policy rejected recursive deletion of the verified scratch
   directory, so its synthetic bearer/CORE token files were blanked; non-secret
   test config and scripts remain under `X:\DevTemp\rosy-site-smoke-01a3946c`.
+
+
+## Revision `151607c0` rerun: typed API, console, task persistence, and camera path (LOCAL)
+
+- Source commit: `151607c06c32df87028536196a9439b80fcf3e15`; platform: `linux/amd64`; candidate: `X:\DevTemp\rosy-site-candidate-151607c0`.
+- `release.json` SHA-256: `567f4538d4f36b175c291a5b306e7d1ddbf9a26a05de96f4a937b7670ff6e687`; `images.tar` SHA-256: `835ee5eed70111f3dffa8425e2c96653bbfd04036b61403d749e70c54cbb3ab4`.
+- Fleet image ID: `sha256:923e3259938c872af2d963d4eff202eedb7413682ada63a0c490d2e7cd6701dc`; Vision: `sha256:14fa6ca7c7deb14e43251c3fb15c9c2b5a118d34f237cb3e8917a28a4d881b27`; proxy: `sha256:92285397b659eb03fbe532a76d061738d5f9b0f7f45027a68c662caa44276c3f`. Independently recomputed archive and all three SPDX SBOM hashes matched `release.json`.
+- Packaged Compose config passed and all three services became healthy under isolated project `rosy-site-smoke-151607c0`, bound only to `127.0.0.1:18443`. TLS CA verification passed for `/healthz` and `/console`; anonymous session returned 401 and the named operator session succeeded.
+- Packaged OpenAPI exposed all 13 runtime intent verbs and the eight-step maximum. Mistyped numeric input returned `400 INVALID_NUMBER`; a nine-step sequence returned `400 TOO_LONG`; the configured CORE URL was synthetic and unreachable, so no robot command was dispatched.
+- Synthetic ceiling-camera WSS JPEG passed through Vision ArUco projection and Fleet HTTPS into SQLite (`ceiling_north`, `rosy_01`, sequence `78`, pose approximately `[2.0, 1.0]`). The sighting path generated no robot command.
+- A navigation intent to the unreachable synthetic CORE was recorded `REQUESTED -> QUEUED`; after restarting the Fleet container, the same task and history were read back from the persistent Compose volume.
+- The first local fixture attempts correctly failed closed for a missing robot credential and for reusing the CORE registry token as a browser user token. The fixture was corrected with a distinct, ephemeral test credential for each boundary. No tracked application change was needed.
+- This was Windows Docker Desktop Linux/amd64, using CPU ArUco, synthetic camera data, temporary credentials, and a local test certificate. The site host's RTX 5080 was not available to Docker. Ubuntu installation/reboot, production CA, physical phone/CORE/robot, GPU inference, and SITE/DEVICE/FIELD acceptance remain unverified; automatic movement and picking remain HOLD.
+- Docker Scout emitted a temporary archive cleanup warning while writing the Fleet and Vision SBOMs, but both reports were produced and their recorded hashes verified. Candidate images and bundle remain under `X:\DevTemp` for inspection.
