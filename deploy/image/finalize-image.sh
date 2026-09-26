@@ -43,7 +43,10 @@ losetup --detach "$LOOP"
 LOOP=""
 
 bmaptool create -o "${OUTPUT%.xz}.bmap" "$RAW"
-xz --threads=0 --check=crc64 -9e --stdout -- "$RAW" > "$OUTPUT.part"
+# The image contains already-compressed packages. A 256 MiB rootfs sample took
+# 247 s with -6 versus 403 s with -9e for only 0.23% less output (2026-09-26).
+# Keep the same CRC64 and full post-compression test; favor build throughput.
+xz --threads=0 --check=crc64 -6 --stdout -- "$RAW" > "$OUTPUT.part"
 xz --test "$OUTPUT.part"
 mv -- "$OUTPUT.part" "$OUTPUT"
 rm -f -- "$RAW"

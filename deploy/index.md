@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · speed up image compression for multi-card production
 - 2026-09-26 · uncommitted · OMX 호스트 인벤토리와 다중 장치 사전점검
 - 2026-09-26 · uncommitted · feat(omx): add isolated vendor simulation and Pinky-aware ROS settings
 - 2026-09-26 · uncommitted · feat(sd): recover a moved Pi with a fresh identity
 - 2026-09-26 · uncommitted · feat(sd): fail closed on board transfer and expose setup status
-- 2026-09-26 · uncommitted · clarify OMX workstation packaging boundary

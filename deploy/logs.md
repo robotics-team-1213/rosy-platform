@@ -1309,3 +1309,9 @@
 - 변경: D-281의 호스트·작업대 ID를 비활성 기본 YAML 인벤토리로 표현하고, 활성 작업대의 follower/leader by-id 선택 및 호스트 내 중복 할당을 정적으로 검증한다. 호스트 사전점검은 활성 작업대별 실제 character device·읽기/쓰기 권한과 symlink 별칭 충돌을 거절한다.
 - 근거: Windows fake probe와 기존 단일 OMX 사전점검을 사용한 집중 계약 시험. 활성 프로필·장치 연결·Fleet API·Compose 자동 투입은 포함하지 않았다.
 - gate 변화: SOURCE/LOCAL 계약 준비만 확대. ROS-SIM/ARTIFACT HOLD 및 DEVICE/FIELD PARKED 유지.
+
+## 2026-09-26 · uncommitted · speed up image compression for multi-card production
+
+- 변경: xz 압축을 level 6으로 조정하고 CRC64, 전체 xz 검증, 카드 전체 읽기 검증은 유지한다.
+- 근거: 이전 ARM64 빌드의 압축 단계는 21분 38초였다. 같은 256 MiB rootfs 표본에서 level 6은 247.32초/253,463,064바이트, level 9 extreme은 403.30초/252,893,336바이트였다. 크기 차이는 0.23%였다.
+- gate 변화: 소스 최적화만 완료. 현재 018 빌드는 이전 압축 설정이며, 다음 ARM64 전체 빌드에서 총 시간과 이미지 크기를 검증한다.
