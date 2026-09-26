@@ -36,6 +36,7 @@ MOTOR_UDEV_RULE = "etc/udev/rules.d/99-rosy-motor.rules"
 BASE_BOOT_LINES = ("enable_uart=1", "dtparam=i2c_arm=on", "dtparam=spi=on")
 # D-247: customize-rootfs.sh adds the IMU bus (BNO055 on I2C0, /dev/i2c-0).
 IMU_OVERLAY = "dtoverlay=i2c0-pi5,pins_0_1"
+CAMERA_OVERLAY = "dtoverlay=ov5647"
 # D-247: the WS2812 lamp driver customize-rootfs.sh builds for the image kernel.
 LAMP_OVERLAY = "dtoverlay=rosy-ws281x"
 LAMP_DTBO = "boot/firmware/overlays/rosy-ws281x.dtbo"
@@ -138,6 +139,24 @@ def overlay_applies_to_pi5(text: str, overlay: str = MOTOR_OVERLAY) -> bool:
         if active and line == overlay:
             return True
     return False
+
+
+def camera_configured_for_pi5(text: str) -> bool:
+    """The Pinky OV5647 CAM1 overlay needs auto detection disabled."""
+    active = True
+    disabled = False
+    enabled = False
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if re.fullmatch(r"\[[^]]+\]", stripped):
+            active = re.sub(r"\s", "", stripped) in {"[all]", "[pi5]"}
+            continue
+        line = re.sub(r"\s*#.*", "", raw).strip()
+        if active and line == "camera_auto_detect=0":
+            disabled = True
+        if active and line == "camera_auto_detect=1":
+            enabled = True
+    return disabled and not enabled and overlay_applies_to_pi5(text, CAMERA_OVERLAY)
 
 
 def lamp_driver_findings(root: Path) -> list[str]:
@@ -251,6 +270,8 @@ def inspect(root: Path, release_id: str) -> list[str]:
                 findings.append(f"boot/firmware/config.txt lost {line} for the Pi 5 (base image changed?)")
         if not overlay_applies_to_pi5(text, IMU_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {IMU_OVERLAY} for the Pi 5 (IMU bus)")
+        if not camera_configured_for_pi5(text):
+            findings.append("boot/firmware/config.txt does not enable OV5647 CAM1 with camera_auto_detect=0")
         if not overlay_applies_to_pi5(text, LAMP_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {LAMP_OVERLAY} for the Pi 5 (lamp driver)")
     findings += lamp_driver_findings(root)

@@ -27,6 +27,8 @@ D-161(CORE-only 기본 target, 단일 `cmd_vel` 발행자), D-169(v1 장치 표�
 | I2C-1 ADC | `pinky_sensor_adc/src/main_node.cpp` 16·21행: `/dev/i2c-1`, 0x08. 배터리는 `battery_publisher.py`가 `pinkylib.Battery`로 5 s마다 | `rosylib.Battery`가 같은 공개 프로토콜로 읽는다. 장치 실측 8.665-8.682 V. `dtparam=i2c_arm=on`은 Ubuntu raspi 기본 `config.txt`에 있고 장치에 `/dev/i2c-1`이 있었다 |
 | 카메라 | 공급사 ROS 저장소에 실기 카메라 노드가 없다(URDF `front_camera_link`와 Gazebo 브리지뿐). 공급사는 ROS 밖에서 `pinkylib.Camera`(Jupyter, Pinky Studio 스트리밍)를 썼다. 조사 문서 §6.6 | **BLOCKED.** 장치에서 센서가 열거되지 않았다. overlay(`camera_auto_detect`/`dtoverlay=ov5647` 등)는 추측하지 않는다. unit의 `DeviceAllow=/dev/video0`(D-169)는 그대로 둔다 |
 
+**2026-09-26 장치 재검증:** 위 카메라 행의 센서 미열거 판단은 당시 상태다. Pi 5 rev d04170의 같은 OV5647 카메라에서 공급사 SD는 `camera_auto_detect=0`, `dtoverlay=ov5647`(CAM1)로 2592×1944 JPEG를 촬영했다. ROSY SD에도 같은 부팅 설정을 적용한 뒤 `ov5647 11-0036` 커널 probe와 2592×1944 JPEG 촬영을 확인했다. 따라서 CAM1 부팅 설정은 추측이 아니다. 현재 ROSY SD에는 `rpicam-still`, Picamera2 및 PiSP 사용자 공간이 설치되지 않았고 기본 런타임은 CORE-only다. 촬영은 공급사 사용자 공간을 임시로 실행한 진단이며, 제품 영상 발행과 대시보드 스트림의 DEVICE 수용은 여전히 열려 있다. 다른 개체(rev d04171)는 공급사 SD에서도 CAM0/CAM1 모두 센서 probe `-121`로 실패하여 물리 연결 확인이 필요하다.
+
 **Decision:**
 
 1. **US-003 — 런타임 target 직후 한 번 더 판정한다.** `rosy-boot-status-ready.service`(oneshot, root, 같은
