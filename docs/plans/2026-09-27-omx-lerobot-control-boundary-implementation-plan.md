@@ -8,11 +8,11 @@
 
 **Tech Stack:** Ubuntu 24.04, ROS 2 Jazzy, ROBOTIS `open_manipulator`/`ros2_control`, 기존 `omx_adapter` Python, systemd 운영 후보, 별도 고정 버전 LeRobot/Dynamixel SDK 실험 환경, rosbag2/LeRobotDataset 오프라인 데이터 검증.
 
-**상태:** 계획. D-273 Accepted(구현 순서), D-281/D-282/D-299 Proposed(OMX 실행·제어 배치). 이 계획의 작성으로 `omx.enabled: false`, 원격 OMX API, DEVICE/FIELD gate가 바뀌지 않는다.
+**상태:** [ROSY Platform 역할·계약 부모 계획](2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)의 OMX 장치·LeRobot 하위 트랙. D-273 Accepted(구현 순서), D-281/D-282/D-299 Proposed(OMX 실행·제어 배치). 이 계획의 작성으로 `omx.enabled: false`, 원격 OMX API, DEVICE/FIELD gate가 바뀌지 않는다.
 
 ---
 
-## 현재 폴더와 책임 (2026-09-27 checkout)
+## OMX 하위 트랙의 현재 폴더와 책임 (2026-09-27 checkout)
 
 ```text
 Rosy OS/
@@ -37,7 +37,7 @@ Rosy OS/
 
 현재 `command_owner.py`/`ros_runtime.py`는 실물 OMX 운영 승인이나 독립 물리 정지를 제공하지 않는다. `deploy/omx`의 OCI 하드웨어 셸은 개발 후보이며 D-246의 운영 actuator 배포 방식이 아니다. LeRobot 직접 제어 코드와 OMX 원격 작업 API는 이 트리에 아직 없다.
 
-## 목표 폴더 배치 (단계별 생성 제안)
+## OMX 하위 트랙의 목표 폴더 배치 (단계별 생성 제안)
 
 ```text
 Rosy OS/
