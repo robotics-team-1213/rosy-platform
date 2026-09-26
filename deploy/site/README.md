@@ -321,7 +321,7 @@ command does not start the services or contact robots:
 restore_test() { docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
 restore_test run --rm --no-deps --user 10001:10001 \
   -v "$BACKUP_DIR:/backup:ro" --entrypoint python3 fleet \
-  /opt/rosy/site_db.py restore --source "/backup/$BACKUP_NAME"
+  /opt/rosy/site_db.py restore --source "/backup/$BACKUP_NAME" --assume-stopped
 restore_test run --rm --no-deps --user 10001:10001 \
   --entrypoint python3 fleet /opt/rosy/site_db.py verify \
   --path /var/lib/rosy/fleet.sqlite3

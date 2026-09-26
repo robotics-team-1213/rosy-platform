@@ -6,10 +6,10 @@ import json
 import os
 import re
 import sqlite3
+from collections.abc import Mapping
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Mapping
 from uuid import uuid4
 
 _SENSITIVE_FIELD = re.compile(

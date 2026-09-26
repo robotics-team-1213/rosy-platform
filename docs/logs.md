@@ -2699,3 +2699,14 @@
 - Change: normalize the online backup output to SQLite `DELETE` journal mode before publishing it, so the protected backup is a single file without `-wal`/`-shm` sidecars and can be integrity-checked on a read-only mount.
 - Evidence: the Compose runbook reproduced `unable to open database file` for its read-only verification step when the backup retained WAL mode; reopening the same file read-write showed `journal_mode=wal` and healthy integrity. A WAL-source regression test first failed on that mode, then passed after normalization; Fleet/deploy tests passed 529/5 skipped.
 - Gate: packaged read-only bind-mount recheck is pending. No Ubuntu/site restore, GPU, phone, CORE, or field gate moved; automatic movement/picking remain HOLD.
+
+## 2026-09-27 · uncommitted · docs(site): require stopped assertion in isolated restore drill
+
+- Change: added the utility's required `--assume-stopped` assertion to the isolated-volume restore command and pinned both runbook restore examples in the deployment contract test.
+- Evidence: the utility requires this operator assertion for every restore, including a newly created test volume; the prior drill command omitted it. Exact packaged Compose runbook recheck is in progress.
+- Gate: no field gate moved; automatic movement/picking remain HOLD.
+## 2026-09-27 · uncommitted · validation(site): integrate current Fleet evidence gate
+
+- Change: merged the latest local-main task-result evidence gate into the site integration worktree and corrected its Ruff findings while preserving the existing task-state assertions.
+- Evidence: current Fleet/deploy and contract test set passed `618 passed, 5 skipped`; Ruff passed on the touched Fleet, recovery, and deployment-contract files; harness lint reported 0 errors and 19 existing freshness warnings.
+- Gate: these are source/host tests. Packaged Compose recovery commands and Ubuntu field acceptance remain pending; automatic movement/picking remain HOLD.

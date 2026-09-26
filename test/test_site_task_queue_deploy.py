@@ -35,4 +35,5 @@ def test_site_image_bundles_guarded_sqlite_backup_and_restore_tool():
     assert "--assume-stopped" in utility and "--replace" in utility
     assert "site_db.py backup" in runbook and "site_db.py restore" in runbook
     assert "verified from a read-only mount" in runbook
+    assert runbook.count("--assume-stopped") >= 2
     assert "pre-restore" in runbook and "sighting_data" in runbook

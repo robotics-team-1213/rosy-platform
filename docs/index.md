@@ -166,8 +166,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(site): integrate current Fleet evidence gate
+- 2026-09-27 · uncommitted · docs(site): require stopped assertion in isolated restore drill
 - 2026-09-27 · uncommitted · fix(site): make Fleet backups standalone for read-only verification
 - 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates
 - 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
-- 2026-09-27 · uncommitted · deploy(site): add guarded SQLite backup and restore
-- 2026-09-27 · uncommitted · validation: exercise packaged CORE event ingestion
