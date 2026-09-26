@@ -2340,3 +2340,10 @@
 - gate 변화: 없음(ADR 신설·Status 변경 없음 — 계획 문서의 결정 기입이며, ROSY-SIGNAL-001 v2 계약 개정은 §7 2단계의 별도 변경)
 - 회귀: 없음(코드·펌웨어 무변경. 동료 WIP 파일 미스테이징 유지)
 - 교훈: "이 문서의 유일한 질문"으로 표시된 결정은 표의 옵션 수만큼 답이 필요하다 — 채택만 적고 기각·별도 항목을 비워 두면 나중에 같은 질문이 다시 올라온다. 그리고 승인은 코드 착수 신호이므로 "v1은 언제까지 건드려도 되는가"를 같은 답에 함께 적어야 한다
+
+## 2026-09-26 · uncommitted · docs(site): Ubuntu 관제·장비 경계 아키텍처 승인 기록
+
+- 변경: 사용자 확인에 따라 D-267과 D-269를 architecture-only Accepted로 전환했다. Ubuntu Fleet은 고수준 작업 요청·정책·큐·감사를 맡고, 각 CORE는 DDS·최종 동작·로컬 안전을 소유한다. D-276의 개인별 역할과 D-271의 SQLite 우선/ RabbitMQ Gate A 보류를 실행 계획에 연결했다.
+- 제한: D-257/D-268의 자동 실행 증거, D-177 명령 결과 상관관계, 실제 Ubuntu·GPU·폰·CORE·FIELD 수용은 계속 별도 HOLD다. 자동 이동·집기 경로는 활성화하지 않았다.
+- 검증: `src/site/fleet/test`, `test_network_topology_contracts`, `test_harness_contracts` 571 passed/5 skipped. `rosy_harness.py generate`와 `lint` 통과(0 error, 21 기존 warning), `git diff --check` 통과.
+- gate 변화: SOURCE/LOCAL 아키텍처 기록만 갱신. SITE/ARTIFACT/DEVICE/FIELD 승격 없음.
