@@ -162,3 +162,9 @@
 - 증거: 토큰/표면 계약 40 passed; browser-enabled HMI 전체 102 passed.
 - gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용은 평가 범위 밖.
 - 결정: D-296.
+
+## 2026-09-27 · 9049bd37 · test(hmi): verify D-296 after latest-main integration
+- 변경: 최신 main 통합 뒤 공유 타입/포커스 계약을 다시 검증했다.
+- 증거: 표면 계약 40 passed, browser-enabled HMI 전체 102 passed.
+- gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용은 범위 밖.
+- 결정: D-296.

@@ -195,3 +195,9 @@
 - 증거: Fleet+games host suite에서 games 포함 619 passed/5 skipped; D-296 browser run에서 games board 시나리오 통과. screenshot: X:\DevTemp\games_board_initial.png.
 - gate 변화: SOURCE/LOCAL 유지. 실제 경기·로봇 동작 수용은 아님.
 - 결정: D-296.
+
+## 2026-09-27 · 9049bd37 · test(games): verify D-296 after latest-main integration
+- 변경: games board typography 토큰 변경을 최신 main 기준에서 검증했다.
+- 증거: Fleet+games host suite 636 passed/5 skipped; games browser 시나리오를 포함한 Fleet/games browser run은 17 passed, 2 known-main cases deselected.
+- gate 변화: SOURCE/LOCAL 유지. 경기장/실물 로봇 수용은 아님.
+- 결정: D-296.

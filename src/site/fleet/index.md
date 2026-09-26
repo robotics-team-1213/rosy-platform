@@ -55,8 +55,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9049bd37 · test(fleet): verify D-296 after latest-main integration
 - 2026-09-27 · bb58221b · D-296 surface typography and focus tokens
 - 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
 - 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
 - 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
-- 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293

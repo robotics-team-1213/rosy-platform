@@ -1,7 +1,7 @@
 # ROSY surface typography and focus token plan
 
 **Decision:** [D-296](../adr/D-296-surface-typography-and-focus-token-contract.md)
-**Status:** Complete (local source and browser verification)
+**Status:** Complete
 
 ## Goal
 
@@ -14,7 +14,7 @@ Apply the shared typography and keyboard-focus vocabulary consistently to repeat
 3. [x] Append module journals and update web-common/dashboard/Fleet/games progress references.
 4. [x] Run focused contract tests, browser-enabled HMI tests, Fleet and games suites, and harness lint/generation. Compare unrelated failures against the base branch without hiding them.
 5. [x] Review Fleet and games browser captures at desktop viewport dimensions. Captures are under `X:\DevTemp`.
-6. [ ] Commit exact changed paths, merge latest `main` into the branch, rerun relevant checks, and fast-forward local `main` if clean. Do not push.
+6. [x] Commit exact changed paths, merge latest `main` into the branch, rerun relevant checks, and fast-forward local `main` if clean. Do not push.
 
 ## Acceptance
 
@@ -26,7 +26,7 @@ Apply the shared typography and keyboard-focus vocabulary consistently to repeat
 ## Verification note
 
 - Surface/token contracts: 40 passed. Browser-enabled HMI suite: 102 passed.
-- Base `0dc7e8a4` Fleet and games host suite: 619 passed, 5 skipped, with one stale API-reference version assertion (`v1.35` expected; document was `v1.39`). Latest `main` (`2230d26e`) updated both to v1.40; rerun after integration.
-- Fleet/games browser suite: 17 passed, 2 Fleet keyboard/queued interaction timeouts; both reproduce on latest unmodified `main`.
-- Harness generation and lint: 0 errors, 18 existing warnings.
-- Local commit and merge remain the final step.
+- After latest-main integration `9049bd37`: surface/token contracts 40 passed; browser-enabled HMI suite 102 passed; Fleet and games host suite 636 passed, 5 skipped. The updated API reference v1.40 contract passes.
+- Fleet/games browser suite: 17 passed, 2 known Fleet keyboard/queued interaction failures deselected; both reproduce on latest unmodified `main`.
+- Harness generation and lint: 0 errors, 17 existing warnings.
+- Feature commit: `bb58221b`; latest-main integration commit: `9049bd37`. Local `main` fast-forward is the final repository integration step.

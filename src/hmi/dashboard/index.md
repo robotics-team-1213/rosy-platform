@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9049bd37 · test(dashboard): verify D-296 after latest-main integration
 - 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
 - 2026-09-27 · 6ce05ff1 · test(dashboard): verify D-294 browser and asset contracts
 - 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): apply D-292 shared component roles
-- 2026-09-26 · uncommitted · test(dashboard): real Chromium camera capture

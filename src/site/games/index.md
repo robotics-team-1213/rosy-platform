@@ -50,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9049bd37 · test(games): verify D-296 after latest-main integration
 - 2026-09-27 · uncommitted · D-296 surface typography tokens
 - 2026-09-25 · uncommitted · fix(games): the Space promise is real (D-224)
 - 2026-09-24 · uncommitted · fix(games): 경기 보드 정지 행 가시 (D-201)
 - 2026-09-22 · uncommitted · test(games): unique test basenames; fix the gate cmd spec
-- 2026-09-18 · uncommitted · feat(games): stair 1 visibility report; close host track (D-112, D-113)

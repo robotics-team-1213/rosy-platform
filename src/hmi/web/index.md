@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9049bd37 · test(hmi): verify D-296 after latest-main integration
 - 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
 - 2026-09-27 · 6ce05ff1 · test(hmi): verify D-294 after latest-main integration
 - 2026-09-26 · uncommitted · feat(hmi): close typography and interaction tokens (D-294)
 - 2026-09-26 · uncommitted · feat(hmi): name shared component spacing roles (D-292)
-- 2026-09-26 · uncommitted · feat(hmi): complete shared live-status adoption

@@ -1,7 +1,7 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "6ce05ff1", date: 2026-09-27 }
+last_verified: { commit: "9049bd37", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO

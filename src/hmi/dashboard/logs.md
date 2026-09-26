@@ -202,3 +202,9 @@
 - 증거: browser-enabled HMI 전체 102 passed; 표면 계약 40 passed.
 - gate 변화: SOURCE/LOCAL 유지. 이미지 설치·장치·필드 수용을 주장하지 않음.
 - 결정: D-296.
+
+## 2026-09-27 · 9049bd37 · test(dashboard): verify D-296 after latest-main integration
+- 변경: 최신 main 통합 뒤 dashboard typography/focus 소비 계약을 재검증했다.
+- 증거: browser-enabled HMI 전체 102 passed; D-296 표면 계약 40 passed.
+- gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용을 주장하지 않음.
+- 결정: D-296.
