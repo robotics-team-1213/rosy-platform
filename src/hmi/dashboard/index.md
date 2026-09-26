@@ -32,4 +32,3 @@
 - 2026-09-26 · uncommitted · feat(hmi): add administrator dock catalog and registration
 - 2026-09-26 · uncommitted · feat(hmi): add line-follow and traffic policy panels
 - 2026-09-26 · uncommitted · feat(hmi): add shared role-based mode control
-- 2026-09-26 · uncommitted · feat(hmi): move live control panels into console

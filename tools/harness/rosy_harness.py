@@ -54,6 +54,7 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    "## 2026-09-26 - prepare selected OMX-AI workcell target",
     "## 2026-09-19: Core 패키지 모듈화 (Level 3 Phase 1)",
     "## 2026-09-19: Core 패키지 모듈화 (Level 3 Phase 2 & 3)",
     "## 2026-09-19: Core 패키지 모듈화 완료 (Level 3 Phase 4 & 5)",

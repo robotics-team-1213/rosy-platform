@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · build locked OMX-AI workstation image and serial admission
 - 2026-09-26 · uncommitted · fix(deploy): D-260 review M1 M2 L1-L4
 - 2026-09-26 · uncommitted · feat(deploy): D-260 boot display sound, lamp and LCD; test hand-over
 - 2026-09-26 · 8e6902fd · feat(native,api): buzzer and lamp test with a person's answer (D-247 6)
 - 2026-09-26 · b7d7b17a · feat(image): build the WS2812 lamp driver for the image kernel (D-247)
-- 2026-09-26 · 1d0c3420 · feat(image): enable the I2C0 IMU bus in config.txt (D-247)
