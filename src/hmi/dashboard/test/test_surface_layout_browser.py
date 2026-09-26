@@ -180,3 +180,34 @@ def test_shared_role_readout_stacks_label_value_pairs_on_mobile():
     assert results[390]["overflow"] == 0
     assert results[390]["columns"] == 1
     assert not results[390]["valueOverflow"]
+
+
+def test_shared_readback_section_preserves_heading_gap_at_mobile_width():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        results = {}
+        for width in (1440, 390):
+            page = _page(browser, width, 900)
+            page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
+              <section class='ui-readback' aria-label='시스템 읽기 결과'>
+                <h3>시스템 정보</h3>
+                <dl class='ui-readout'><dt>상태</dt><dd>정상</dd></dl>
+              </section>`; }""")
+            results[width] = page.locator(".ui-readback").evaluate("""section => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              width: section.getBoundingClientRect().width,
+              minWidth: getComputedStyle(section).minWidth,
+              display: getComputedStyle(section).display,
+              gap: getComputedStyle(section).rowGap,
+              titleMargin: getComputedStyle(section.querySelector('h3')).marginBlockStart,
+            })""")
+            page.close()
+        browser.close()
+
+    assert results[1440]["overflow"] == 0
+    assert results[1440]["display"] == "grid"
+    assert results[1440]["gap"] != "normal"
+    assert results[1440]["titleMargin"] == "0px"
+    assert results[390]["overflow"] == 0
+    assert results[390]["width"] <= 390
+    assert results[390]["minWidth"] == "0px"

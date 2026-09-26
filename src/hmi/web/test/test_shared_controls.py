@@ -169,6 +169,26 @@ def test_role_readouts_use_a_shared_semantic_definition_list_layout():
     )
 
 
+def test_role_readback_sections_use_shared_layout_primitives():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    section = re.search(r"\.ui-readback\s*\{([^}]*)\}", css)
+    assert section and "min-width: 0" in section.group(1)
+    assert "display: grid" in section.group(1)
+    assert "gap: var(--space-2)" in section.group(1)
+    assert re.search(
+        r"\.ui-readback > h3,\s*\.ui-readback > h4\s*\{\s*margin:\s*0;\s*\}",
+        css,
+    )
+    assert ".surface-readback" not in panel_css
+    panel_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+    )
+    assert ".surface-readback" not in panel_source
+    assert 'el("section", "ui-readback")' in panel_source
+
+
 def test_browser_surfaces_use_the_type_scale():
     offenders = {}
     for path in _surface_texts():
