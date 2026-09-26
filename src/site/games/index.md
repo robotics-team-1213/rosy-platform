@@ -30,6 +30,7 @@
 | D-111 | `--stair 1–5`는 호스트 프리셋이며 FIELD GO가 아니다 |
 | D-112 | 계단 1 가시성은 호스트 보고이며 FIELD GO가 아니다 |
 | D-113 | D-96 남은 실행은 현장 실측이며 LOCAL 호스트 트랙은 닫힌다 |
+| D-300 | Surface typography and focus feedback use shared tokens |
 
 ## 계획·결과 문서
 
@@ -49,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9ca7bc26 · verify games host suite
+- 2026-09-27 · f4f15776 · verify games after latest main integration
+- 2026-09-27 · 9049bd37 · test(games): verify D-300 after latest-main integration
+- 2026-09-27 · uncommitted · D-300 surface typography tokens
 - 2026-09-25 · uncommitted · fix(games): the Space promise is real (D-224)
-- 2026-09-24 · uncommitted · fix(games): 경기 보드 정지 행 가시 (D-201)
-- 2026-09-22 · uncommitted · test(games): unique test basenames; fix the gate cmd spec
-- 2026-09-18 · uncommitted · feat(games): stair 1 visibility report; close host track (D-112, D-113)
-- 2026-09-18 · uncommitted · feat(games): first-contact 0.10 cap and --stair 1-5 (D-110, D-111)

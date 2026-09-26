@@ -1,11 +1,11 @@
-# ROSY OS Architecture Documentation v0.1
+# ROSY Platform Architecture Documentation v0.1
 
-ROSY OS is a **Distributed Robotics & Physical AI Operating Platform** built initially for **Ubuntu + ROS 2**.
+ROSY Platform is a **Distributed Robotics & Physical AI Platform** built initially for **Ubuntu + ROS 2**. `ROSY OS` remains the repository and historical artifact name (D-290).
 
 ## Core Principles
 
-1. ROSY OS is not a replacement for Ubuntu.
-2. ROSY OS is a distributed runtime and orchestration layer above Ubuntu + ROS 2.
+1. ROSY Platform runs above Ubuntu; it does not replace it.
+2. ROSY Platform spans device-local control, site coordination, observation, AI/data, and human interfaces above Ubuntu + ROS 2.
 3. Every node installs only the ROSY components it actually needs.
 4. Device, Edge, Compute, AI, and Control roles are separated through installable profiles.
 5. ROSY must continue safe local operation even when the central control plane is unavailable.

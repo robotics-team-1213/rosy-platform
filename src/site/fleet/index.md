@@ -32,6 +32,7 @@
 | D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
 | D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
+| D-300 | Surface typography and focus feedback use shared tokens |
 
 ## 계획·결과 문서
 
@@ -54,8 +55,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 9ca7bc26 · verify Fleet keyboard flows and host suite
+- 2026-09-27 · f4f15776 · verify Fleet after latest main integration
+- 2026-09-27 · 9049bd37 · test(fleet): verify D-300 after latest-main integration
+- 2026-09-27 · bb58221b · D-300 surface typography and focus tokens
 - 2026-09-27 · uncommitted · secure roster and signal rendering
-- 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
-- 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
-- 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
-- 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293

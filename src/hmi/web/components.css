@@ -23,7 +23,7 @@
   padding: var(--inset-skip-link);
   color: var(--paper);
   background: var(--ground);
-  border: 2px solid var(--focus-ring);
+  border: var(--focus-ring-width) solid var(--focus-ring);
   border-radius: var(--radius-button);
   transform: translateY(-150%);
 }

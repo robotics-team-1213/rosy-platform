@@ -1,6 +1,6 @@
 # 01. ROSY Platform Target Architecture
 
-**범위:** 장기 목표 그림이다. 현재 배포/외부 API의 정본은 [D-59](../adr/D-59-.md), [D-65](../adr/D-65-core-d-62.md), [D-269](../adr/D-269-device-server-contracts-and-ros-boundary.md), [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md), [D-296](../adr/D-296-device-middleware-and-site-orchestration-terminology.md)과 API Reference다. 아래 `Control Plane`, `Compute Fabric`, 설치 프로파일 이름은 완성된 서비스·패키지를 뜻하지 않는다. 현재 실행 단위와 진입 조건은 [구조 간극 지도](../plans/2026-09-26-platform-structure-gap-map.md)에 구분한다.
+**범위:** 장기 목표 그림이다. 현재 배포/외부 API의 정본은 [D-59](../adr/D-59-.md), [D-65](../adr/D-65-core-d-62.md), [D-269](../adr/D-269-device-server-contracts-and-ros-boundary.md), [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md), [D-296](../adr/D-296-device-middleware-and-site-orchestration-terminology.md)과 API Reference다. 아래 `Control Plane`, `Compute Fabric`, 설치 프로파일 이름은 완성된 서비스·패키지를 뜻하지 않는다. 현재 실행 단위와 진입 조건은 [구조 간극 지도](../plans/2026-09-26-platform-structure-gap-map.md), 순차 구현과 폴더 역할은 [ROSY Platform 부모 계획](../plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)에 구분한다.
 
 ## 1. Layer Model
 

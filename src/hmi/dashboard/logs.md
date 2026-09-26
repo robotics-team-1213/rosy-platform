@@ -147,6 +147,7 @@
 - 변경: D-283 Accepted와 docs/dashboard harness ADR 색인을 추가했다. 운전(모드+수동), 도킹, 차선 추종 그룹을 고정 act 영역에서 선택한다.
 - 근거: 실제 CORE 경로 admin/operator 캡처에서 현재 823px desktop scroll을 확인했다. 펼친 3열 후보는 조작을 잘라 concept 16 §7.1 및 D-201을 위반했다.
 - gate 변화: 없음. G1 정지 전환, G2 뷰포트 캡처, G3 운용자 평가와 ROS-SIM/DEVICE/FIELD 수용은 미실행이다.
+
 ## 2026-09-26 · uncommitted · feat(hmi): role-aware map absence and Host Agent recovery (D-279)
 
 - 변경: preserve structured HTTP errors; only documented `404 / NOT_FOUND` becomes an empty map. Gate the `/setup` link by role and manifest. Render supplied Host Agent recovery as text and keep operations disabled while unavailable.
@@ -208,3 +209,27 @@
 - Evidence: role surface keyboard browser regression passed; full UI/Fleet run had 661 passes, 5 skips and one Fleet keyboard focus failure resolved separately.
 - Gate: SOURCE/LOCAL only; robot display acceptance remains unverified.
 - Follow-up: the complete Fleet Chromium suite passed (15 tests); no further role-surface code changed.
+
+## 2026-09-27 · uncommitted · D-300 surface typography and focus tokens
+- 변경: dashboard의 반복 폰트 가중치, 행간, 자간 및 1px/2px 키보드 포커스 링을 공유 토큰에 연결했다. 1.35/1.45/1.55 고유 읽기 행간과 map canvas 3px 포커스 간격은 그대로 뒀다.
+- 증거: browser-enabled HMI 전체 102 passed; 표면 계약 40 passed.
+- gate 변화: SOURCE/LOCAL 유지. 이미지 설치·장치·필드 수용을 주장하지 않음.
+- 결정: D-300.
+
+## 2026-09-27 · 9049bd37 · test(dashboard): verify D-300 after latest-main integration
+- 변경: 최신 main 통합 뒤 dashboard typography/focus 소비 계약을 재검증했다.
+- 증거: browser-enabled HMI 전체 102 passed; D-300 표면 계약 40 passed.
+- gate 변화: SOURCE/LOCAL 유지. 장치·필드 수용을 주장하지 않음.
+- 결정: D-300.
+
+## 2026-09-27 · f4f15776 · verify dashboard surface tokens after latest main integration
+- 변경: latest main 통합을 확인했다. dashboard 코드는 변경되지 않았다.
+- 증거: HMI web 77 passed; browser-enabled HMI의 이전 검증은 102 passed.
+- Gate: SOURCE/LOCAL remain GO; device and field acceptance are separate.
+- Decision: D-300.
+
+## 2026-09-27 · 9ca7bc26 · inspect dashboard in visible Chromium
+- 변경: latest main의 skip-link와 포커스 변경을 실제 브라우저에서 확인했다.
+- 증거: 1366×900 visible Chromium에서 `/dashboard` 표시, 첫 Tab이 skip-link에 도달; page error 0, scroll width 1366. screenshot: X:\DevTemp\rosy-surface-d300-visible-dashboard.png.
+- gate 변화: SOURCE/LOCAL 유지. API는 test fixture mock이며 실물 장치 확인은 아니다.
+- 결정: D-300.

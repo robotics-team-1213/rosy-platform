@@ -2,7 +2,7 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "6ce05ff1", date: 2026-09-27 }
+last_verified: { commit: "9049bd37", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
@@ -21,7 +21,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-23, D-77, D-243, D-283, D-292, D-294]
+adrs: [D-23, D-77, D-243, D-283, D-292, D-294, D-300]
 plans:
   - docs/plans/2026-09-26-d283-console-action-groups.md
   - docs/plans/2026-09-26-rosy-tokenized-design-system.md

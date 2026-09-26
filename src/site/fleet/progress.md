@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "9049bd37", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300]
 plans:
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md

@@ -449,12 +449,14 @@ def test_shared_type_and_interaction_tokens_are_closed_and_keep_current_metrics(
         re.findall(r"^\s*(--[a-z0-9-]+)\s*:\s*([^;]+);", tokens_text(), re.MULTILINE)
     )
     expected = {
+        "--weight-regular": "400",
         "--weight-medium": "500",
         "--weight-label": "600",
         "--weight-emphasis": "650",
         "--weight-strong": "700",
         "--leading-flat": "1",
         "--leading-dense": "1.1",
+        "--leading-compact": "1.25",
         "--leading-control": "1.2",
         "--leading-label": "1.3",
         "--leading-body": "1.4",
@@ -463,6 +465,7 @@ def test_shared_type_and_interaction_tokens_are_closed_and_keep_current_metrics(
         "--track-state": "0.06em",
         "--focus-ring-width": "2px",
         "--focus-ring-offset": "1px",
+        "--focus-ring-offset-outer": "2px",
         "--contract-mark-width": "2px",
         "--contract-mark-offset": "2px",
         "--disabled-opacity": "0.45",

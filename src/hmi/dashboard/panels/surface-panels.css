@@ -7,7 +7,7 @@
   cursor: pointer;
   color: var(--nominal-quiet);
 }
-.surface-disclosure summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.surface-disclosure summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-disclosure p { margin: var(--space-1) 0 var(--space-2); overflow-wrap: anywhere; }
 .surface-link {
   display: inline-flex;
@@ -22,7 +22,7 @@
   overflow-wrap: anywhere;
 }
 .surface-link:hover { background: var(--brand-rose-wash); }
-.surface-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.surface-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-link[hidden] { display: none; }
 .surface-slot input:not([type="checkbox"]):not([type="radio"]),
 .surface-slot select,
@@ -36,7 +36,7 @@
   color: var(--paper);
   background: var(--field-bg);
   color-scheme: dark;
-  font: var(--text-label)/1.3 var(--body);
+  font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
 }
 .surface-slot input::placeholder,
 .surface-slot textarea::placeholder { color: var(--nominal-quiet); opacity: 1; }

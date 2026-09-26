@@ -283,18 +283,15 @@
 - 증거: Fleet 518/5 skipped; sensing 1660/78 skipped; OMX adapter 47/3 skipped; workstation 22 passed; API/UI 73/2 skipped; focused regression reruns 7 passed. Harness lint 0 errors/21 existing stale-evidence warnings.
 - gate 변화: SOURCE/LOCAL evidence only; physical Ubuntu, GPU, phone, CORE, and robot acceptance remain open.
 
-
 ## 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
 - 변경: moved the Site Fleet intent ADR and contract references to D-293 to avoid main's D-292 design-token ADR.
 - 증거: rerun Fleet API contract tests after the latest integration.
 - gate 변화: SOURCE/LOCAL only; Ubuntu, GPU, physical phone, CORE, and robot acceptance remain open.
 
-
 ## 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
 - 변경: Built the `151607c0` linux/amd64 candidate and exercised the packaged console, typed intent API, persistent task record, and synthetic camera-to-sighting path.
 - 증거: Fleet 518 passed/5 skipped; OMX/camera/system contracts 192 passed/4 skipped; API/docs/security regression 20 passed; Compose services healthy; task history survived Fleet restart; archive and three SPDX hashes matched the manifest.
 - gate 변화: SOURCE/LOCAL only. Ubuntu, RTX 5080 GPU inference, physical phone, CORE, robot, and FIELD acceptance remain open; no robot command was dispatched.
-
 
 ## 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
 - 변경: clarified the first rollout as fixed authenticated operator navigation with no policy mutation API, and made automatic-source approval require a versioned, preapproved record for quality, false-trigger, freshness, sample, and forbidden-dispatch criteria.
@@ -312,3 +309,27 @@
 - Evidence: DOM injection and keyboard browser regressions passed; signal/module structure subset passed (75 tests); full UI/Fleet run had 661 passes, 5 skips and one keyboard focus failure, which was reproduced and fixed afterward.
 - Gate: LOCAL only; live site/device operation remains unverified.
 - Follow-up: complete Fleet Chromium suite passed (15 tests) after the polling-focus and blocked-port fixes.
+
+## 2026-09-27 · bb58221b · D-300 surface typography and focus tokens
+- 변경: Fleet console의 반복 가중치·자간을 공유 토큰에 연결했다. 1.15 brand 및 1.6/1.7 note/log 행간과 고유 kicker tracking은 보존했다.
+- 증거: base dc7e8a4의 Fleet+games host suite 619 passed/5 skipped, 당시 API 문서 버전 assertion 1건 실패(v1.35 기대값, 참조 문서는 v1.39). 최신 main 2230d26e에서 문서와 assertion이 v1.40으로 함께 갱신됨. browser suite 17 passed/2 failed; 두 Fleet keyboard/queued 대기 실패를 최신 main에서 재현. Fleet screenshot: X:\DevTemp\fleet_console_fit.png.
+- gate 변화: LOCAL 유지. main 병합 뒤 host suite 재실행 예정.
+- 결정: D-300.
+
+## 2026-09-27 · 9049bd37 · test(fleet): verify D-300 after latest-main integration
+- 변경: 최신 main의 v1.40 API 문서/계약 업데이트와 typography 토큰 변경을 함께 검증했다.
+- 증거: Fleet+games host suite 636 passed/5 skipped; Fleet/games browser suite 17 passed/2 baseline tests deselected. 두 deselected keyboard/queued 시나리오는 최신 main에서 재현했다.
+- gate 변화: SOURCE/LOCAL 유지. browser baseline interaction failures는 별도 기존 결함으로 남는다.
+- 결정: D-300.
+
+## 2026-09-27 · f4f15776 · verify Fleet after latest main integration
+- 변경: latest main의 Fleet 변경을 통합하고 관련 host test를 실행했다.
+- 증거: Fleet 526 passed/5 skipped; site database/task-queue 8 passed.
+- Gate: SOURCE/LOCAL remain GO; no robot or field acceptance claimed.
+- Decision: D-300.
+
+## 2026-09-27 · 9ca7bc26 · verify Fleet keyboard flows and host suite
+- 변경: main의 Fleet keyboard-focus 보완과 D-300 typography/focus 규칙을 통합 검증했다.
+- 증거: Fleet host 526 passed/5 skipped; keyboard roster/goal 및 queued navigation/cancel browser regressions 2 passed; site DB/task queue tests 8 passed.
+- gate 변화: SOURCE/LOCAL 유지. 로봇 및 현장 수용은 별도다.
+- 결정: D-300.
