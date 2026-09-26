@@ -1330,3 +1330,9 @@
 - 변경: native image에 Avahi browse와 `.local` 이름 해석 의존성을 추가하고, 서명된 SD의 Fleet `.local` 예상 호스트와 trust profile에서 CORE 비공개 discovery 설정만 생성한다. 일회성 `pairing_credential`은 Agent 토큰으로 복사하지 않는다.
 - 증거: first-boot와 Agent 통합 집중 58 passed, 변경 파일 flake8 통과. 실제 native image 빌드와 Pi/Ubuntu TLS 연결은 미실행.
 - gate 변화: SOURCE/LOCAL 근거만 추가, ARTIFACT·DEVICE·FIELD 대기.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수
+
+- 변경: CORE와 무구동 I/O를 첫 부팅에 시작하고, 모터 구동은 장치별 커미셔닝 설정으로만 활성화한다. 이전 서명 이미지의 MEDIA 증거는 새 소스의 이미지로 재사용하지 않는다.
+- 근거: `2026.09.26-018`의 이미지와 카드 영수증은 이번 target 변경 이전 소스다. 새 ARM64 서명 이미지, 전체 카드 readback, Pi boot를 각기 확인한다.
+- gate 변화: 소스 계약은 검증 중이며 새 ARTIFACT/MEDIA는 빌드·기록 전까지 HOLD.

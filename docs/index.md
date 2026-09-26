@@ -109,6 +109,7 @@
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
 
 ## 계획·결과 문서
 
@@ -157,8 +158,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
 - 2026-09-26 · uncommitted · docs(adr): D-290 ROSY Platform 명명과 현장 의도 경계
 - 2026-09-26 · uncommitted · docs(api): merge camera capture with LAN discovery
 - 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
 - 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
-- 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서

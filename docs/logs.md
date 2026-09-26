@@ -2466,3 +2466,9 @@
 - 변경: 전체 제품명은 ROSY Platform으로 정하고, Fleet의 현장 Mission DSL 소유권(D-12)을 유지한다. Operations는 현재 별도 실행기/DB가 아닌 운영 화면·기능 영역의 목표 이름이며 Fabric은 역할별 계약과 어댑터다.
 - 근거: 현재 Fleet의 원자 navigation 작업 이력, 구조화된 /api/fleet/do, D-269의 REST/WSS 경계, D-170의 명령 추적 유예, D-268·D-273·D-281·D-282의 수용 상태를 대조했다.
 - gate 변화: 없음. 명명·권한 ADR과 목표 문서만 갱신했고 자연어 실행, OMX 원격 API, AI 정책 및 DEVICE/FIELD 수용은 추가하지 않았다.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
+
+- 변경: 새 카드는 CORE와 토크를 끈 I/O를 함께 부팅하고, 검증된 장치만 Move 구동 설정을 보존한다. 해당 소스 커밋에서 새 ARM64 이미지를 빌드·서명해 카드 전체 readback 후 장치별 provisioning을 수행한다.
+- 근거: 기존 `2026.09.26-018` 서명 이미지의 소스는 I/O 기본 부팅 변경 이전이다. 이 이미지가 이미 기록된 카드의 성공 영수증은 새 이미지의 증거가 아니다.
+- gate 변화: ADR Accepted. 새 이미지와 SD 카드 기록 결과는 별도 검증 전까지 HOLD.
