@@ -2788,3 +2788,8 @@
 - 변경: `3b983c31ee0579208229e9f768be8c7acd340cd2`에서 `linux/amd64` 후보를 빌드하고 X:의 throwaway Ed25519 키로 서명했다. archive SHA-256: `30d0c64e7398517394cefb4ee52e8d532ca28ef62233670dfbc8db6bce9126c8`.
 - 근거: 이미지 로드 전 signature-only 검사 통과, Docker 이미지 3개 로드, 사후 서명·manifest·SBOM·archive·image ID·platform 검증 통과. 앞선 후보 집중 시험 27 passed, 문서 placement/harness 계약 84 passed, flake8/Compose 설정 통과.
 - gate 변화: 로컬 Docker 패키지 왕복 증거를 추가했다. 운영 사이트 키, Ubuntu 신뢰 등록/활성화, RTX/phone/CORE, 로봇 동작과 FIELD 수용은 미검증 상태다.\n
+## 2026-09-27 · uncommitted · fix(site): separate registry and user credentials
+
+- 변경: D-302와 Compose 설정을 추가해 CORE `/registry`에는 별도 `registry_token`/`ROSY_SITE_REGISTRY_TOKEN`을 사용하고, 브라우저 운영자 bearer는 `site-users.yaml` digest에만 연결했다. Fleet Dockerfile 기본 인자와 운영 runbook도 같은 구분으로 수정했다.
+- 근거: 오류 로그에서 Fleet의 `site user credentials must differ from the CORE registry credential` 시작 실패를 재현했다. 새 회귀 시험 RED 후 3 passed. 수정 Compose에서 Fleet/Vision/proxy가 모두 healthy였고, unauthenticated 401, viewer command 403, operator task·idempotency·readback·queued cancel을 확인했다. CORE 주소는 미할당 TEST-NET `192.0.2.10`만 사용했다.
+- gate 변화: 소스/LOCAL 계약과 worktree 설정 통합이 진전됐다. 현재 검증은 기존 3b 이미지에 새 Compose 파일을 조합한 LOCAL 실행이다. 새 immutable candidate 재빌드/서명 및 그 artifact로 재검증은 남아 있다. Ubuntu, 실제 CORE/phone/RTX, FIELD는 계속 미검증이다.\n

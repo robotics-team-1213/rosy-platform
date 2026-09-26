@@ -124,6 +124,7 @@
 | D-299 | OMX LeRobot 실험 경로와 운영 팔 제어권을 분리한다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-301 | Site Fleet 후보 묶음은 오프라인 Ed25519 서명으로 발행자를 인증한다 |
+| D-302 | Site Fleet 사용자 API와 CORE registry 자격 증명을 분리한다 |
 
 ## 계획·결과 문서
 
@@ -163,6 +164,7 @@
 - [2026-09-27-omx-lerobot-control-boundary-implementation-plan.md](plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md)
 - [2026-09-27-rosy-platform-role-and-contract-implementation-plan.md](plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)
 - [2026-09-27-site-candidate-signing.md](plans/2026-09-27-site-candidate-signing.md)
+- [2026-09-27-site-registry-credential-separation.md](plans/2026-09-27-site-registry-credential-separation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -175,8 +177,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(site): separate registry and user credentials
 - 2026-09-27 · uncommitted · validation(site): packaged Docker candidate signature round trip
 - 2026-09-27 · uncommitted · deploy(site): authenticate candidate manifests offline
 - 2026-09-27 · uncommitted · validation(ui): review role and Fleet layout repairs
 - 2026-09-27 · uncommitted · plan(platform): decide boundaries from owners and evidence
-- 2026-09-27 · uncommitted · plan(platform): place OMX LeRobot under ROSY Platform roles

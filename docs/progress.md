@@ -20,7 +20,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301]
+adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301, D-302]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-17-interface-design-implementation-design.md
@@ -51,6 +51,7 @@ plans:
   - docs/plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md
   - docs/plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md
   - docs/plans/2026-09-27-site-candidate-signing.md
+  - docs/plans/2026-09-27-site-registry-credential-separation.md
 ---
 ## 지금 상태
 
@@ -92,3 +93,9 @@ plans:
 - D-301 records detached Ed25519 signing of the exact candidate manifest. The Ubuntu verifier and public key must be enrolled independently of the candidate; no production site key is present.
 - Focused candidate/signature tests: 27 passed; document-placement/harness contract tests: 84 passed; harness lint: 0 errors (19 unrelated evidence-freshness warnings); Compose config and changed-file flake8 passed. A clean `linux/amd64` Docker candidate was built, signed with an X:-only throwaway test key, verified before load, loaded, then verified against all image IDs/platforms.
 - Approved site key provisioning, Ubuntu host activation, RTX/GPU, phone/CORE connection, and FIELD acceptance remain HOLD until the production trust anchor and target are validated. LOCAL artifact checks do not advance those gates.
+
+## Site registry credential separation (2026-09-27)
+
+- D-302 clarifies D-276: each named user's API bearer is distinct from the CORE `/registry` credential. Compose uses a separate `registry_token` secret and `ROSY_SITE_REGISTRY_TOKEN`.
+- Root cause reproduced in Docker: Compose reused the operator token for both `site-users.yaml` and `--token-env`, so Fleet refused startup. With separate throwaway credentials, all three local Compose services became healthy; unauthenticated API returned 401, viewer command returned 403, operator task submission/idempotency/readback/cancel worked.
+- This pre-package integration used the prior image candidate with the corrected worktree Compose file. Rebuild and repeat against the new signed candidate before recording package validation. Target Ubuntu, production credentials, physical devices, and FIELD remain open.

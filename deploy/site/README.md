@@ -175,16 +175,20 @@ work. `policy-admin` is reserved for future policy endpoints; no policy mutation
 route is exposed yet. All roles remain subject to CORE's local safety checks.
 
 Generate independent high-entropy credentials with the approved secret
-manager: Fleet registry access, phone-ingress, and vision-to-Fleet. Set each token
-to a different value. Write one token per file (`operator_token`,
-`phone_ingress_token`, `fleet_sighting_token`) without a trailing newline.
-Tokens are mounted as Compose secrets; the process bootstrap reads them before
-dropping to UID/GID `10001`. Do not put secret values in YAML, `.env`, command
-arguments, images, or logs.
+manager: one user API bearer per named person, the CORE registry credential,
+phone-ingress, and vision-to-Fleet. Set every credential to a different value.
+Store only each user's SHA-256 digest in `site-users.yaml`; deliver that user's
+raw bearer separately. Write the service credentials to `registry_token`,
+`phone_ingress_token`, and `fleet_sighting_token` files without trailing
+newlines. Tokens are mounted as Compose secrets; the process bootstrap reads
+them before dropping to UID/GID `10001`. Do not put secret values in YAML,
+`.env`, command arguments, images, or logs.
 
-The `operator_token` protects the separate CORE registry readback endpoint. It
-does not grant browser access to Fleet control APIs when `site-users.yaml` is
-configured. The browser uses the individual token assigned to its user.
+The `registry_token` protects the separate CORE registry readback endpoint via
+`ROSY_SITE_REGISTRY_TOKEN`. It is not a user API bearer and must differ from
+every digest-backed `site-users.yaml` credential. The browser uses only the
+individual token assigned to its user; Compose never reuses that token for the
+CORE registry.
 
 Issue a site TLS certificate and private key from the site's trusted CA. Include
 the FQDN and service SANs above. Store `site.crt`, `site.key`, and
