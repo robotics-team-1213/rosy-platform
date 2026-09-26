@@ -64,6 +64,27 @@ Do not extend the current `deploy/robot` ARM64 `io` target into the OMX workstat
 3. Save intrinsics, table plane, camera-to-arm/TCP transforms, and independent 3x3 validation results under a calibration revision.
 4. Keep raw local workcell video out of CORE dashboard and Fleet paths.
 
+**2026-09-26 local implementation progress:** the generic `RosCameraStreamRuntime`
+now pairs `sensor_msgs/Image` and `CameraInfo` by exact acquisition stamp, uses
+sensor-data QoS, bounds unmatched messages, and exposes one latest accepted
+pair. Its ROS-free frame gate requires configured camera identity, optical
+frame, dimensions, calibration revision, freshness, and an expected SHA-256
+fingerprint over every CameraInfo calibration field. This prevents an arbitrary
+nonzero intrinsic matrix from being relabeled with a configured revision.
+ROS 2 Jazzy publisher/subscriber integration and rejection cases pass in the
+locked workstation image. No physical camera is selected or connected, and
+format/FPS/drop/latency remain unmeasured; P2 device acceptance remains open.
+
+**2026-09-26 local P1 integration progress:** `RosArmCommandRuntime` now binds
+one `ArmCommandOwner` to the pinned vendor `FollowJointTrajectory` action,
+filters `/joint_states` to configured arm joints, and invokes timeout/fault
+polling from a ROS steady-clock timer. Action cancellation records both server
+acknowledgement and final action status separately from software HOLD. The
+ROS action-server test and isolated vendor Gazebo no-op/readback/cancel test
+pass. This is Docker Desktop amd64 simulation evidence only; target Linux
+workstation timing, physical stop/recovery, and the D-246 native systemd field
+runtime path remain unverified.
+
 ### P3+ — Pick, wrist camera, and learning
 
 Follow D-273: rule-based fixed workcell pick first, then wrist RGB and synchronized demo data, then ACT comparison. No Pinky mounting or mobile manipulation in this plan.

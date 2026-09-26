@@ -61,7 +61,7 @@
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
-- omx_adapter ROS-SIM: ArmCommandOwner is not wired to ROS/vendor actions. Timeout is checked only when a caller invokes poll(); no bounded runtime scheduler or cancellation-result path is integrated. Target-workstation timing and camera topics remain unverified.
+- omx_adapter ROS-SIM: Simulation evidence is Docker Desktop amd64 only. Target Linux workstation timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
 - omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음

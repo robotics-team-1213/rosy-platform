@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Pure profile validation and a CLI that prints the `ros2_control` contract as JSON. No serial, no joint-state publisher, no `cmd_vel`.
+Disabled-by-default profile validation plus optional ROS action and camera adapters. No serial access, fake joint-state publisher, or `cmd_vel`.
 
 ## Key Files
 
