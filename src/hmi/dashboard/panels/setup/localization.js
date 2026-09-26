@@ -22,7 +22,7 @@ export function mount(root, ctx) {
   const poseForm = el("form", "surface-form");
   poseForm.append(el("h3", "", "초기 위치 설정"));
   const x = field("X (m)", "x"); const y = field("Y (m)", "y"); const yaw = field("방향 (rad)", "yaw");
-  const setPose = el("ui-button", "", "초기 위치 적용"); setPose.type = "submit";
+  const setPose = el("ui-button", "", "초기 위치 적용"); setPose.setAttribute("kind", "primary"); setPose.type = "submit";
   poseForm.append(x.label, y.label, yaw.label, setPose);
 
   const slam = el("section", "surface-readback");
@@ -30,9 +30,9 @@ export function mount(root, ctx) {
   const mapName = el("input"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
   mapName.setAttribute("aria-label", "저장할 맵 이름");
   const actions = el("div", "surface-actions");
-  const start = el("ui-button", "", "맵핑 시작"); start.type = "button";
-  const stop = el("ui-button", "", "맵핑 중지"); stop.type = "button";
-  const save = el("ui-button", "", "맵 저장"); save.type = "button";
+  const start = el("ui-button", "", "맵핑 시작"); start.setAttribute("kind", "primary"); start.type = "button";
+  const stop = el("ui-button", "", "맵핑 중지"); stop.setAttribute("kind", "quiet"); stop.type = "button";
+  const save = el("ui-button", "", "맵 저장"); save.setAttribute("kind", "quiet"); save.type = "button";
   actions.append(start, stop, mapName, save); slam.append(actions);
   root.append(head, note, poseForm, slam);
 

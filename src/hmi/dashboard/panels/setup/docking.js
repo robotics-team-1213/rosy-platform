@@ -19,7 +19,7 @@ export function mount(root, ctx) {
     for (const dock of docks) {
       const row = el("li", ""); row.dataset.dockId = dock.id;
       const detail = el("span", "", `${dock.id} · ${dock.type || "유형 없음"} · 맵 ${dock.map_id || "미지정"}`);
-      const teach = el("ui-button", "", "현재 위치 기록"); teach.type = "button"; teach.disabled = !poseFresh;
+      const teach = el("ui-button", "", "현재 위치 기록"); teach.setAttribute("kind", "primary"); teach.type = "button"; teach.disabled = !poseFresh;
       teach.setAttribute("aria-label", `${dock.id}에 현재 로봇 위치 기록`);
       teach.addEventListener("click", async () => {
         if (!poseFresh || !window.confirm(`현재 위치를 ${dock.id} 도크 포즈로 기록할까요? 실제 도킹 위치에 로봇을 맞춘 뒤 진행하세요.`)) return;

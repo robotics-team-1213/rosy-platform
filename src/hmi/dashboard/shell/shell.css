@@ -23,9 +23,9 @@ body {
 }
 .surface-switch a:hover { color: var(--paper); background: var(--ground-soft); }
 .surface-switch a[aria-current="page"] {
-  color: var(--paper);
-  border-color: var(--surface-line);
-  background: var(--ground-raise);
+  color: var(--brand-rose);
+  border-color: var(--brand-rose);
+  background: var(--brand-rose-wash);
 }
 .surface-switch a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .surface-main {

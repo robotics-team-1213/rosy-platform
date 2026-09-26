@@ -150,7 +150,7 @@
 ## 최근 기록
 
 - 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
-- 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결
-- 2026-09-26 · uncommitted · docs(adr): D-273 OMX 카메라 스트림·팔 제어 구현 순서
-- 2026-09-26 · uncommitted · docs(signals): 신호등 v2 피드백 등급 결정 — F1+F2 채택
 - 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
+- 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
+- 2026-09-26 · uncommitted · feat(fleet): expose server queue position
+- 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신

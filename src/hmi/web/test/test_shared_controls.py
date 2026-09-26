@@ -21,7 +21,7 @@ SURFACES = (
     ROOT / "site" / "games" / "games" / "web",
     ROOT / "runtime" / "sensing" / "web" / "dashboard.html",
 )
-STYLE_SUFFIXES = {".css", ".html"}
+STYLE_SUFFIXES = {".css", ".html", ".js"}
 
 RAW_SIZE = re.compile(r"font-size:\s*[0-9.]+(?:px|rem)")
 RAW_COLOR = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d")
@@ -36,7 +36,11 @@ PAINT = re.compile(
     r"(?<![-a-z])(background|color|font-size|font-weight|font|opacity|border-radius|border-color|border)\s*:"
 )
 CREATE = re.compile(r"""createElement\(\s*["']ui-button["']\s*\)""")
+HELPER_CREATE = re.compile(r"""(?:\bel|\bnode)\(\s*["']ui-button["']\s*,""")
 KIND_ATTR = re.compile(r"""setAttribute\(\s*["']kind["']\s*,\s*["']([a-z]+)["']\s*\)""")
+HELPER_ASSIGNMENT = re.compile(
+    r"""\b(?:const|let|var)\s+([a-zA-Z_$][\w$]*)\s*=\s*(?:el|node)\(\s*["']ui-button["']"""
+)
 FACE_COLOUR = {
     "--ground": "_BG",
     "--paper": "_FG",
@@ -114,6 +118,32 @@ def test_every_button_names_its_kind():
             if not found or found.group(1) not in allowed:
                 invented.append(f"{path.name}:{index + 1}")
     assert not invented, invented
+
+
+def test_helper_created_buttons_name_their_kind():
+    """Factory helpers must not bypass the kind contract for dynamic panels."""
+    allowed = _kinds()
+    missing = []
+    for path in _surface_texts():
+        if path.suffix != ".js":
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if not HELPER_CREATE.search(line):
+                continue
+            assigned = HELPER_ASSIGNMENT.search(line)
+            if not assigned:
+                missing.append(f"{path.name}:{index + 1} (button variable not explicit)")
+                continue
+            variable = re.escape(assigned.group(1))
+            kind = re.compile(
+                rf"\b{variable}\.setAttribute\(\s*['\"]kind['\"]\s*,\s*['\"]([a-z]+)['\"]"
+            )
+            window = "\n".join(lines[index:index + 8])
+            found = kind.search(window)
+            if not found or found.group(1) not in allowed:
+                missing.append(f"{path.name}:{index + 1}")
+    assert not missing, "\n".join(missing)
     evidence = re.search(
         r"const EVIDENCE = \[(.*?)\];", UI.read_text(encoding="utf-8"), re.S
     )

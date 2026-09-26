@@ -89,3 +89,11 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-26 · uncommitted · feat(hmi): ROSY 장미 브랜드 토큰과 동적 버튼 kind (D-277)
+
+- 변경: `--brand-rose`와 `--brand-rose-wash`를 토큰화하고 워드마크·선택 역할 메뉴에 한정했다. 브라우저 테마색을 중립 바탕과 맞추고, JS 헬퍼가 만든 버튼도 의미에 맞는 `kind`를 명시하게 했다.
+- 증거: `src/hmi/web/test src/hmi/dashboard/test` 64 passed, `src/runtime/gateway/test/test_dashboard.py` 27 passed. 실제 CORE `/console`를 visible Playwright로 1440px·390px에서 확인: ROSY 워드마크와 현재 메뉴의 장미 토큰, 누락 kind 0, 가로 넘침 0, 페이지 오류 0. `rosy_harness.py lint`: 0 error, 21 pre-existing last-verified warnings.
+- gate 변화: SOURCE GO, LOCAL GO; ROS-SIM~FIELD N/A (이 변경 범위에 장치 수용은 없음).
+- 결정: D-277
+- 교훈: 브랜드 강조와 안전 의미색은 별도 토큰 집합이어야 한다.

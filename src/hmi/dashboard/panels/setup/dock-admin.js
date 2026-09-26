@@ -22,7 +22,7 @@ export function mount(root, ctx) {
   detectorLabel.append(detector);
   const tag = input("태그 ID (태그 관측)", "tag_id", "number"); tag.control.min = "0"; tag.control.step = "1";
   const tagSize = input("태그 크기 m (태그 관측)", "tag_size_m", "number"); tagSize.control.min = "0.001"; tagSize.control.step = "any";
-  const add = el("ui-button", "", "현재 위치에 도크 등록"); add.type = "submit";
+  const add = el("ui-button", "", "현재 위치에 도크 등록"); add.setAttribute("kind", "primary"); add.type = "submit";
   add.disabled = true;
   form.append(idField.label, typeField.label, detectorLabel, tag.label, tagSize.label, add);
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "도크 유형과 등록 위치");
@@ -43,7 +43,7 @@ export function mount(root, ctx) {
     for (const item of docks) {
       const row = el("li", ""); row.dataset.dockId = item.id;
       row.append(el("span", "", `${item.id} · ${item.type} · ${item.map_id || "맵 없음"}`));
-      const remove = el("ui-button", "", "삭제"); remove.type = "button";
+      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button";
       remove.addEventListener("click", async () => {
         if (!window.confirm(`${item.id} 도크를 삭제할까요? 되돌릴 수 없습니다.`)) return;
         remove.disabled = true;

@@ -21,10 +21,10 @@ export function mount(root, ctx) {
   const stop = field("정지 거리 (m)", "stop_distance_m"); stop.control.min = "0.01"; stop.control.max = "2.9"; stop.control.step = "0.01";
   const dwell = field("정지 대기 (s)", "stop_dwell_s"); dwell.control.min = "0.1"; dwell.control.max = "10"; dwell.control.step = "0.1";
   const confidence = field("최소 신뢰도", "min_confidence"); confidence.control.min = "0.01"; confidence.control.max = "1"; confidence.control.step = "0.01";
-  const stage = el("ui-button", "", "정책 검토본 저장"); stage.type = "button";
-  const apply = el("ui-button", "", "정지 상태에서 적용"); apply.type = "button"; apply.disabled = true;
+  const stage = el("ui-button", "", "정책 검토본 저장"); stage.setAttribute("kind", "primary"); stage.type = "button";
+  const apply = el("ui-button", "", "정지 상태에서 적용"); apply.setAttribute("kind", "quiet"); apply.type = "button"; apply.disabled = true;
   const signals = el("div", "traffic-policy-actions"); signals.setAttribute("role", "group"); signals.setAttribute("aria-label", "시뮬레이션 신호등 제어");
-  const signalButtons = ["RED", "YELLOW", "GREEN"].map((colour) => { const button = el("ui-button", "", colour); button.type = "button"; button.dataset.signal = colour; button.disabled = true; signals.append(button); return button; });
+  const signalButtons = ["RED", "YELLOW", "GREEN"].map((colour) => { const button = el("ui-button", "", colour); button.setAttribute("kind", "quiet"); button.type = "button"; button.dataset.signal = colour; button.disabled = true; signals.append(button); return button; });
   const message = el("p", "surface-message", "정책 readback 대기"); message.setAttribute("role", "status");
   form.append(modeLabel, revision.label, approach.label, stop.label, dwell.label, confidence.label, stage, apply);
   root.append(head, state, form, signals, message);

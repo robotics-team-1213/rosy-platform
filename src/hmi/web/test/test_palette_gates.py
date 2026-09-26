@@ -20,6 +20,8 @@ import re
 import pytest
 
 TOKENS = Path(__file__).parent.parent.parent / "web" / "tokens.css"
+WEB_COMPONENTS = TOKENS.parent / "components.css"
+DASHBOARD = TOKENS.parent.parent / "dashboard"
 
 # 신호 색은 현대 다크 UI 액센트 대역에 있어야 한다. 대역은 취향이 아니라
 # 실측이다 — Radix 9, Tailwind 500, Linear, Vercel의 액센트가 모두
@@ -27,10 +29,11 @@ TOKENS = Path(__file__).parent.parent.parent / "web" / "tokens.css"
 MIN_SIGNAL_CHROMA = 0.133
 
 SIGNAL = ("status-warn", "status-crit", "series-primary", "route-dim", "series-goal")
+BRAND = ("brand-rose", "brand-rose-wash")
 STATUS = ("status-warn", "status-crit")
 SERIES = ("series-primary", "route-dim", "series-goal")
 RASTER = ("raster-unknown", "raster-free", "raster-uncertain", "raster-occupied")
-READS_AS_TEXT = ("paper", "muted", "status-warn", "series-primary", "series-goal")
+READS_AS_TEXT = ("paper", "muted", "status-warn", "series-primary", "series-goal", "brand-rose")
 
 
 # ---- 색 공간 -------------------------------------------------------------
@@ -94,7 +97,7 @@ def palette() -> dict[str, str]:
 
 
 def test_every_named_token_exists(palette):
-    expected = {"ground", "paper", *SIGNAL, *RASTER}
+    expected = {"ground", "paper", *SIGNAL, *BRAND, *RASTER}
     missing = expected - palette.keys()
     assert not missing, f"tokens.css에 없는 토큰: {sorted(missing)}"
 
@@ -161,6 +164,52 @@ def test_status_is_warm_and_series_is_cool(palette):
     for name in SERIES:
         hue = oklch(palette[name])[2]
         assert 150 <= hue <= 330, f"{name} 색상 {hue:.0f} — series는 차가운 띠여야 한다"
+
+
+def test_rosy_brand_uses_a_readable_magenta_rose_distinct_from_critical(palette):
+    """ROSY identity is a brand role, separate from status and data-series meaning."""
+    lightness, chroma, hue = oklch(palette["brand-rose"])
+    assert 0.74 <= lightness <= 0.84, f"brand rose 밝기 {lightness:.3f}"
+    assert 0.133 <= chroma <= 0.20, f"brand rose 채도 {chroma:.3f}"
+    assert 320 <= hue <= 340, f"brand rose 색상 {hue:.1f} — rose-magenta 대역 밖"
+    assert contrast(palette["brand-rose"], palette["ground"]) >= 4.5
+    simulated = contrast(
+        deuteranope(palette["brand-rose"]),
+        deuteranope(palette["status-crit"]),
+    )
+    assert simulated >= 1.8, f"브랜드와 위험 색약 대비 {simulated:.2f}:1"
+    assert "brand-rose" not in STATUS and "brand-rose" not in SERIES
+
+
+def test_rosy_brand_wash_is_a_subtle_tinted_surface(palette):
+    lightness, chroma, hue = oklch(palette["brand-rose-wash"])
+    rose_hue = oklch(palette["brand-rose"])[2]
+    hue_delta = abs(hue - rose_hue)
+    hue_delta = min(hue_delta, 360 - hue_delta)
+    assert 0.18 <= lightness <= 0.28, f"brand wash 밝기 {lightness:.3f}"
+    assert 0.015 <= chroma <= 0.05, f"brand wash 채도 {chroma:.3f}"
+    assert hue_delta <= 12, f"brand wash 색상 방향이 rose와 {hue_delta:.1f}° 다름"
+
+
+def test_rosy_brand_tokens_are_used_by_wordmark_and_surface_navigation():
+    components = WEB_COMPONENTS.read_text(encoding="utf-8")
+    legacy_shell = (DASHBOARD / "styles.css").read_text(encoding="utf-8")
+    role_shell = (DASHBOARD / "shell" / "shell.css").read_text(encoding="utf-8")
+    assert "ui-brand b" in components and "color: var(--brand-rose)" in components
+    assert ".brand b" in legacy_shell and "color: var(--brand-rose)" in legacy_shell
+    active = role_shell.split('.surface-switch a[aria-current="page"]', 1)[1].split("}", 1)[0]
+    assert "color: var(--brand-rose)" in active
+    assert "background: var(--brand-rose-wash)" in active
+
+
+def test_browser_theme_colour_matches_the_neutral_page_ground(palette):
+    for name in ("surface.html", "index.html"):
+        source = (DASHBOARD / name).read_text(encoding="utf-8")
+        match = re.search(r'<meta\s+name="theme-color"\s+content="(#[0-9a-fA-F]{6})"', source)
+        assert match, f"{name}: theme-color meta 없음"
+        assert match.group(1).lower() == palette["ground"].lower(), (
+            f"{name}: 브라우저 색 {match.group(1)} != ground {palette['ground']}"
+        )
 
 
 def test_raster_ramp_is_achromatic_and_monotonic(palette):

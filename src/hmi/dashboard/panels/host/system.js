@@ -51,7 +51,7 @@ export function mount(root, ctx) {
       const form = el("form", "surface-inline-form");
       const input = el("input"); input.name = "robot_name"; input.maxLength = 64;
       input.value = data.robot_name || data.name || ""; input.setAttribute("aria-label", "로봇 표시 이름");
-      const save = el("ui-button", "", "이름 저장"); save.type = "submit";
+      const save = el("ui-button", "", "이름 저장"); save.setAttribute("kind", "primary"); save.type = "submit";
       form.append(input, save);
       form.addEventListener("submit", async (event) => {
         event.preventDefault(); save.disabled = true;

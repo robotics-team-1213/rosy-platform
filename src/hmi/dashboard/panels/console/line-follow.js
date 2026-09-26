@@ -11,8 +11,8 @@ export function mount(root, ctx) {
     const option = el("option", "", text); option.value = value; select.append(option);
   }
   label.append(select);
-  const start = el("ui-button", "", "추종 시작"); start.type = "button";
-  const stop = el("ui-button", "", "추종 중지"); stop.type = "button";
+  const start = el("ui-button", "", "추종 시작"); start.setAttribute("kind", "primary"); start.type = "button";
+  const stop = el("ui-button", "", "추종 중지"); stop.setAttribute("kind", "quiet"); stop.type = "button";
   form.append(label, start, stop); root.append(head, status, facts, form);
 
   let current = {mode: "OFF"};

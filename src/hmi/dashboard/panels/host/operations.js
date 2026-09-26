@@ -52,16 +52,16 @@ export function mount(root, ctx) {
   const networkActions = el("div", "surface-readback");
   networkActions.append(el("h4", "", "네트워크 작업"));
   const modeActions = el("div", "surface-actions");
-  const sta = el("ui-button", "", "사업장 Wi-Fi로 전환"); sta.type = "button";
-  const relay = el("ui-button", "", "릴레이 AP 켜기"); relay.type = "button";
+  const sta = el("ui-button", "", "사업장 Wi-Fi로 전환"); sta.setAttribute("kind", "quiet"); sta.type = "button";
+  const relay = el("ui-button", "", "릴레이 AP 켜기"); relay.setAttribute("kind", "quiet"); relay.type = "button";
   modeActions.append(sta, relay); networkActions.append(modeActions);
   const applyForm = el("form", "surface-form");
   const profile = el("input"); profile.maxLength = 64; profile.autocomplete = "off"; profile.setAttribute("aria-label", "네트워크 프로파일 ID"); profile.placeholder = "프로파일 ID";
-  const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.type = "submit"; applyForm.append(profile, applyProfile); networkActions.append(applyForm);
+  const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.setAttribute("kind", "primary"); applyProfile.type = "submit"; applyForm.append(profile, applyProfile); networkActions.append(applyForm);
   const connectForm = el("form", "surface-form");
   const ssid = el("input"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
   const field = el("input"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
-  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
+  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
   const networkNote = el("p", "surface-message", "Host Agent 상태 확인 전에는 네트워크 작업을 사용할 수 없습니다."); networkNote.setAttribute("role", "status"); networkActions.append(networkNote);
   network.wrap.append(networkActions);
   function networkEnabled(enabled) { for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled; }
@@ -69,8 +69,8 @@ export function mount(root, ctx) {
   networkEnabled(network.wrap.dataset.available === "true");
 
   const releaseActions = el("div", "surface-actions");
-  const rollback = el("ui-button", "", "이전 릴리스로 복귀"); rollback.type = "button";
-  const clearHold = el("ui-button", "", "복구 보류 해제"); clearHold.type = "button";
+  const rollback = el("ui-button", "", "이전 릴리스로 복귀"); rollback.setAttribute("kind", "quiet"); rollback.type = "button";
+  const clearHold = el("ui-button", "", "복구 보류 해제"); clearHold.setAttribute("kind", "quiet"); clearHold.type = "button";
   rollback.disabled = clearHold.disabled = true; releaseActions.append(rollback, clearHold); release.wrap.append(releaseActions);
   const releaseNote = el("p", "surface-message", "Host Agent 상태 확인 전에는 릴리스 작업을 사용할 수 없습니다."); releaseNote.setAttribute("role", "status"); release.wrap.append(releaseNote);
   function syncReleaseActions() {

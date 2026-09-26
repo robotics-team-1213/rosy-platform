@@ -58,6 +58,7 @@ export function mount(el, ctx) {
   const list = node("ul", "hardware-device-list");
   list.setAttribute("aria-label", "보드 장치별 상태와 근거");
   const refresh = node("ui-button", "hardware-refresh", "다시 점검");
+  refresh.setAttribute("kind", "quiet");
   refresh.type = "button";
   refresh.disabled = ctx.role !== "administrator";
   refresh.setAttribute("aria-label", "관리자 보드 장치 점검 요청");

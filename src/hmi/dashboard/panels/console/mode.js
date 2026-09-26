@@ -11,7 +11,7 @@ export function mount(root, ctx) {
   const controls = el("div", "surface-actions");
   const buttons = new Map();
   for (const mode of MODES) {
-    const button = el("ui-button", "", mode.label); button.type = "button";
+    const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
     button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.disabled = true;
     controls.append(button); buttons.set(mode.id, button);
   }

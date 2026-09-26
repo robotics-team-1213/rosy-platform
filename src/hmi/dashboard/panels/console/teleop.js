@@ -18,7 +18,7 @@ export function mount(root, ctx) {
   const confirmed = el("input"); confirmed.type = "checkbox"; confirmLabel.prepend(confirmed);
   const controls = el("div", "surface-teleop-controls"); controls.setAttribute("aria-label", "누르는 동안만 움직이는 저속 운전");
   const buttons = COMMANDS.map((command) => {
-    const button = el("ui-button", "", command.label); button.type = "button"; button.dataset.linear = String(command.linear); button.dataset.angular = String(command.angular); button.disabled = true;
+    const button = el("ui-button", "", command.label); button.setAttribute("kind", "toggle"); button.type = "button"; button.dataset.linear = String(command.linear); button.dataset.angular = String(command.angular); button.disabled = true;
     button.setAttribute("aria-label", `${command.label}. 누르는 동안에만 저속으로 움직입니다.`); controls.append(button); return button;
   });
   root.append(head, status, confirmLabel, controls);

@@ -17,7 +17,7 @@ export function mount(root, ctx) {
   const role = el("select"); role.name = "role"; roleLabel.append(role);
   for (const value of ["viewer", "operator", "administrator"]) { const option = el("option", "", value); option.value = value; role.append(option); }
   const label = el("input"); label.name = "label"; label.maxLength = 64; label.setAttribute("aria-label", "토큰 이름표"); label.placeholder = "이름표";
-  const add = el("ui-button", "", "새 토큰 생성"); add.type = "submit"; tokenForm.append(roleLabel, label, add);
+  const add = el("ui-button", "", "새 토큰 생성"); add.setAttribute("kind", "primary"); add.type = "submit"; tokenForm.append(roleLabel, label, add);
   const tokenList = el("ul", "diagnostic-list"); tokenList.setAttribute("aria-label", "접근 토큰 목록");
   tokenSection.append(tokenForm, tokenList);
 
@@ -31,7 +31,7 @@ export function mount(root, ctx) {
   for (const value of ["STOP", "RETURN_HOME"]) { const option = el("option", "", value); option.value = value; batteryPolicy.append(option); }
   const fleetLabel = el("label", "surface-field", "연결 끊김 정책"); fleetLabel.append(fleet);
   const batteryLabel = el("label", "surface-field", "배터리 위험 정책"); batteryLabel.append(batteryPolicy);
-  const save = el("ui-button", "", "정책 저장"); save.type = "submit";
+  const save = el("ui-button", "", "정책 저장"); save.setAttribute("kind", "primary"); save.type = "submit";
   safetyForm.append(...fields.map((item) => item.label), fleetLabel, batteryLabel, save);
   safetySection.append(safetyForm); root.append(head, notice, tokenSection, safetySection);
 
@@ -42,7 +42,7 @@ export function mount(root, ctx) {
     for (const token of tokens) {
       const row = el("li", ""); row.dataset.tokenId = token.id;
       row.append(el("span", "", [token.label || token.id, token.role, token.source, token.current ? "이 기기" : ""].filter(Boolean).join(" · ")));
-      const remove = el("ui-button", "", "삭제"); remove.type = "button"; remove.disabled = token.current === true;
+      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button"; remove.disabled = token.current === true;
       remove.addEventListener("click", async () => {
         if (remove.disabled || !window.confirm("이 토큰을 삭제할까요? 되돌릴 수 없습니다.")) return;
         try { await ctx.api(`/api/v1/system/tokens/${encodeURIComponent(token.id)}`, {method: "DELETE"}); await loadTokens(); }

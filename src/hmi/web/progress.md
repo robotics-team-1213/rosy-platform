@@ -1,16 +1,16 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-24 }
+last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "공유 조작 부품 포함 web_common·표면 계약 — 120 passed (2026-09-24 Windows)"
+    evidence: "palette/shared-control/dashboard 64 passed + CORE dashboard API 27 passed (2026-09-26 Windows)"
     cmd: "python -m pytest src/hmi/web/test -q"
   LOCAL:
     state: GO
-    evidence: "120 passed, 공유 부품 경로 포함 (2026-09-24 Windows)"
-    cmd: "python -m pytest src/hmi/web/test -q"
+    evidence: "실 CORE /console: visible Playwright desktop 1440px·mobile 390px, rose brand/menu, 0 missing kinds, no horizontal overflow, 0 page errors"
+    cmd: "X:\\DevTemp\\rosy-modern-palette\\visible_review.py"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -19,9 +19,10 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-72, D-194, D-195]
+adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
+  - docs/plans/2026-09-26-rosy-modern-brand-palette.md
 ---
 ## 지금 상태
 
@@ -31,7 +32,7 @@ plans:
 
 ## 다음 gate
 
-1. 시험 범위를 공개면(팔레트·토큰) 계약으로 넓힌다.
+1. D-277: 브랜드색은 ROSY 워드마크와 현재 역할 메뉴에만 쓰고, 상태·포커스·데이터 색과 분리한다.
 
 ## 현재 유효한 금지사항
 

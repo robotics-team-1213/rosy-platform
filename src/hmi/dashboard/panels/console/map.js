@@ -7,11 +7,11 @@ export function mount(root, ctx) {
   const status = el("p", "surface-message", "지도를 불러오는 중입니다."); status.setAttribute("role", "status");
   const layers = el("div", "surface-actions"); layers.setAttribute("aria-label", "지도 레이어");
   for (const [id, label] of [["occupancy", "점유 지도"], ["costmap", "비용 지도"], ["path", "경로"]]) {
-    const button = el("ui-button", "", label); button.type = "button"; button.dataset.mapLayer = id; layers.append(button);
+    const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapLayer = id; layers.append(button);
   }
   const clicks = el("div", "surface-actions"); clicks.setAttribute("aria-label", "지도 작업");
   for (const [id, label] of [["pose", "초기 위치 설정"], ["goal", "주행 목표 설정"]]) {
-    const button = el("ui-button", "", label); button.type = "button"; button.dataset.mapClick = id; clicks.append(button);
+    const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapClick = id; clicks.append(button);
   }
   const empty = el("ui-empty", "", "맵 데이터를 기다리는 중입니다.");
   const canvas = el("canvas", "surface-map-canvas"); canvas.setAttribute("aria-label", "점유 지도. 화살표 키로 십자선을 이동하고 Enter 키로 위치를 선택합니다.");
