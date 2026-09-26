@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import math
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -21,11 +22,11 @@ from typing import Mapping, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.schemas import DiscoveryScanPayload
-from core_common.intent import IntentError, interpret
+from core_common.intent import IntentError, interpret, request_schema
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingError
@@ -94,9 +95,18 @@ class SitePrincipal:
 
 
 class GoalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     x: float
     y: float
     yaw: float = 0.0
+
+    @field_validator("x", "y", "yaw", mode="before")
+    @classmethod
+    def _finite_numeric_goal(cls, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError("goal coordinates must be finite numbers")
+        return value
 
 
 class FormationRequest(BaseModel):
@@ -503,7 +513,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         except (HubError, SignalApiError, OSError) as exc:
             raise _http_error(exc) from exc
 
-    @app.post("/api/fleet/do", dependencies=operator_guard, tags=["fleet"])
+    @app.post(
+        "/api/fleet/do",
+        dependencies=operator_guard,
+        tags=["fleet"],
+        openapi_extra={
+            "requestBody": {
+                "content": {"application/json": {"schema": request_schema()}},
+            },
+        },
+    )
     async def fleet_do(
         body: dict,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),

@@ -1299,7 +1299,7 @@
 ## 2026-09-26 · uncommitted · Pinky Pro OV5647 CAM1 장치 검증 및 이미지 부팅 설정
 
 - 변경: 이미지 customizer가 `camera_auto_detect=0`과 `dtoverlay=ov5647`을 CAM1에 적용하고 mounted-image verifier가 이 조건을 검사하도록 했다.
-- 장치 근거: Pi 5 rev d04170의 ROSY SD에서 `ov5647 11-0036` probe 성공, 공급사 카메라 사용자 공간을 임시 실행해 2592×1944 JPEG 실제 촬영 및 화면 확인. rev d04171은 공급사 SD에서 CAM0/CAM1 모두 probe `-121`로 실패했다.
+- 증거: Pi 5 rev d04170의 ROSY SD에서 `ov5647 11-0036` probe 성공, 공급사 카메라 사용자 공간을 임시 실행해 2592×1944 JPEG 실제 촬영 및 화면 확인. rev d04171은 공급사 SD에서 CAM0/CAM1 모두 probe `-121`로 실패했다.
 - 제한: ROSY 제품 이미지에는 PiSP/Picamera2 촬영 런타임이 없고 기본 서비스는 CORE-only다. 임시 진단 촬영은 제품 스트림 수용이 아니다. 새 이미지 artifact 빌드와 `.201` 물리 접속 확인은 남았다.
 - gate 변화: 없음. SOURCE 수정과 장치 진단만 확인했으며 ARTIFACT/DEVICE는 HOLD 유지.
 

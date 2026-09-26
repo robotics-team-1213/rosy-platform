@@ -109,7 +109,15 @@
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
+| D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
+| D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
+| D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
+| D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
+| D-294 | Shared typography and interaction tokens use a closed scale |
+| D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 |
 
 ## 계획·결과 문서
 
@@ -158,8 +166,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · Platform 목표와 현재 경계 대조
-- 2026-09-26 · uncommitted · 사이트 배치 변경과 복구 권한 구체화
-- 2026-09-26 · uncommitted · 사이트 역할별 실행·배치 토폴로지 구체화
-- 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
-- 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
+- 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates
+- 2026-09-27 · uncommitted · validation: exercise packaged Fleet database recovery
+- 2026-09-27 · uncommitted · deploy(site): add guarded SQLite backup and restore
+- 2026-09-27 · uncommitted · validation: exercise packaged CORE event ingestion
+- 2026-09-27 · uncommitted · validation: rebuild current site integration candidate

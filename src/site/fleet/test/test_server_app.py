@@ -6,6 +6,7 @@ from hashlib import sha256
 
 import pytest
 from fastapi.testclient import TestClient
+from core_common.intent import MAX_STEPS, verbs
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -34,6 +35,51 @@ def test_health_endpoint_reports_liveness_without_robot_or_auth_data():
     assert "robot" not in response.text and "token" not in response.text
 
 
+def test_goal_openapi_contract_exposes_only_domain_intent_fields():
+    app = create_app(FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+        [FakeRobot("rosy_01")],
+    ))
+
+    operation = app.openapi()["paths"]["/api/fleet/robots/{robot_id}/goal"]["post"]
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"] == "#/components/schemas/GoalRequest"
+
+    goal_schema = app.openapi()["components"]["schemas"]["GoalRequest"]
+    assert goal_schema["required"] == ["x", "y"]
+    assert set(goal_schema["properties"]) == {"x", "y", "yaw"}
+    assert goal_schema["additionalProperties"] is False
+    assert all(goal_schema["properties"][name]["type"] == "number"
+               for name in ("x", "y", "yaw"))
+
+
+def test_do_openapi_contract_matches_intent_verbs_and_bounded_sequences():
+    app = create_app(FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
+        [FakeRobot("rosy_01")],
+    ))
+
+    operation = app.openapi()["paths"]["/api/fleet/do"]["post"]
+    schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    single_step, sequence = schema["oneOf"]
+    step_schemas = single_step["oneOf"]
+
+    assert {item["properties"]["do"]["const"] for item in step_schemas} == set(verbs())
+    assert all(item["additionalProperties"] is False for item in step_schemas)
+    navigate = next(item for item in step_schemas
+                    if item["properties"]["do"]["const"] == "navigate")
+    assert navigate["properties"]["x"]["type"] == "number"
+    assert navigate["properties"]["waypoint"]["type"] == "string"
+    assert "priority_class" not in navigate["properties"]
+
+    steps = sequence["properties"]["steps"]
+    assert sequence["required"] == ["steps"]
+    assert sequence["additionalProperties"] is False
+    assert steps["minItems"] == 1
+    assert steps["maxItems"] == MAX_STEPS
+    assert steps["items"] == single_step
+
+
 def test_do_translates_a_goal_and_rejects_a_ros_word():
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
     client = _client(robot)
@@ -45,6 +91,38 @@ def test_do_translates_a_goal_and_rejects_a_ros_word():
     refused = client.post("/api/fleet/do", json={"do": "navigate", "x": 0, "y": 0, "twist": {}})
     assert refused.status_code == 400
     assert refused.json()["detail"]["code"] == "FORBIDDEN"
+
+
+def test_do_rejects_client_priority_and_boolean_goal_without_dispatch():
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    client = _client(robot)
+
+    priority = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": 1.0, "y": 2.0,
+        "priority_class": 0,
+    })
+    boolean_goal = client.post("/api/fleet/do", json={
+        "do": "navigate", "robot": "rosy_01", "x": True, "y": 2.0,
+    })
+
+    assert priority.status_code == 400
+    assert priority.json()["detail"]["code"] == "UNKNOWN_FIELD"
+    assert boolean_goal.status_code == 400
+    assert boolean_goal.json()["detail"]["code"] == "INVALID_NUMBER"
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
+
+
+def test_do_rejects_mistyped_motion_values_before_robot_dispatch():
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
+    client = _client(robot)
+
+    response = client.post("/api/fleet/do", json={
+        "do": "move", "robot": "rosy_01", "linear": "fast", "angular": 0.0,
+    })
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_NUMBER"
+    assert not robot.calls
 
 
 def test_state_lists_the_roster():
@@ -72,6 +150,19 @@ def test_goal_to_an_unknown_robot_is_404_not_502():
                                               json={"x": 0.0, "y": 0.0})
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "UNKNOWN_ROBOT"
+
+
+@pytest.mark.parametrize("body", [
+    {"x": 1.0, "y": 2.0, "priority_class": 0},
+    {"x": 1.0, "y": 2.0, "source": "policy"},
+    {"x": True, "y": 2.0},
+])
+def test_goal_rejects_non_intent_dispatch_fields_and_invalid_numbers(body):
+    robot = FakeRobot("rosy_01")
+    response = _client(robot).post("/api/fleet/robots/rosy_01/goal", json=body)
+
+    assert response.status_code == 422
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
 
 
 def test_a_goal_the_robot_refuses_comes_back_as_502_with_the_robot_code():

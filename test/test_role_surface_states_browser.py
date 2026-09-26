@@ -107,6 +107,7 @@ def test_dashboard_api_preserves_structured_http_errors_and_network_failures():
             browser, page, errors = _module_page(playwright, {
                 "/assets/client.js": WEB / "client.js",
                 "/assets/dom.js": WEB / "dom.js",
+                "/assets/camera-capture.js": WEB / "camera-capture.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

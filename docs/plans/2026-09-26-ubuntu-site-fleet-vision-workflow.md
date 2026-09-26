@@ -8,7 +8,7 @@
 
 **Tech Stack:** Ubuntu 24.04 x86_64, Docker Compose, Python/FastAPI, 기존 `fleet`/`overhead` 패키지, SQLite 초기 저장소, 별도 OpenCV·NVIDIA GPU worker. GPU 컨테이너는 호스트 드라이버·NVIDIA Container Toolkit 조합을 실측해 선택한다.
 
-**Decision:** [D-267](../adr/D-267-ubuntu-site-fleet-and-vision-workflow.md) Proposed. [D-268](../adr/D-268-policy-eligible-vision-evidence-for-fleet-tasks.md)는 sighting과 자동 정책 증거의 경계를 제안하며 Proposed 동안 자동 source를 열지 않는다. D-55의 manipulation 장치 수용은 집기 활성화의 별도 필수 게이트다.
+**Decision:** D-267, D-269, D-282는 현재 Proposed다. 이 계획은 구현·LOCAL 검증 순서를 정하지만 ADR 승인이나 Ubuntu/DEVICE/FIELD 수용을 대신하지 않는다. D-268도 Proposed이며 sighting과 자동 정책 증거를 분리한다. 각 ADR이 수용되기 전 automatic source는 닫고, D-55 장치 수용 전 집기는 비활성으로 둔다.
 
 **현재 목표 범위:** 이번 목표는 단계 0~3과 천장 카메라 기반 자동 이동의 승인된 현장 게이트까지다. 단계 4의 핑키/로봇암 영상과 자동 집기는 별도 ADR·계획·goal로 추적한다. 이 단계들은 현재 목표의 완료를 막지 않으며, 집기 경로는 D-55 수용 전 비활성이다.
 
@@ -118,6 +118,21 @@
 
 **Gate:** D-268 수용, 사용자/서비스 권한 시험, 동일 console 앱의 Hub 통합, 시뮬과 입회 실기에서 관측·작업 추적·freshness·검출 품질을 닫기 전 자동 이동을 활성화하지 않는다. 한 조건이라도 `UNKNOWN`, stale, 불일치 또는 미수용이면 automatic source는 비활성이다.
 
+### Automatic-source acceptance record (required before D-268 approval)
+
+The first rollout is the fixed authenticated operator-navigation workflow described above. It has no policy-condition editor or automatic trigger API; `policy-admin` cannot mutate policy until those routes, audit records, console readback, and denial reasons are implemented and contract-tested. Empty or unconfigured policy state always means disabled.
+
+Before any automatic-source field trial, create and approve a versioned acceptance record under `docs/validation/` with all of the following values. Missing values are a failed gate, not operator discretion at runtime:
+
+- site, camera/source identity, surveyed map and calibration revisions, detector/model revision, task type, operating zone, and the exact policy-condition revision under test;
+- dataset revision and split, independently labelled positive and negative examples, lighting/occlusion/out-of-zone/disconnected/stale/ambiguous cases, sample counts, and the people responsible for labels and witness review;
+- numeric minimum detection-quality targets and a numeric maximum false-trigger rate per operating hour or equivalent exposure unit, with the chosen confidence-bound method and its pass threshold fixed before the holdout run;
+- end-to-end evidence-age ceiling (at most the accepted 300 ms contract), minimum share of eligible fresh evidence over the trial, and numeric p95/max latency and availability limits;
+- explicit zero-dispatch cases for stale or missing evidence, duplicate/replayed sequence, unknown source/target, map/calibration/model revision mismatch, ambiguous detection, out-of-zone target, robot busy, revoked identity, and disconnected or unsynchronized clocks;
+- evidence-retention location, test start/stop criteria, operator stop procedure, approver, witness, timestamp, and the exact implementation/configuration/image digests.
+
+Freeze thresholds and the holdout set before measurement. Do not tune thresholds against holdout results. Report false triggers per exposure unit with the preselected confidence bound, quality metrics per task/scenario, fresh-evidence availability, and p50/p95/max latency. Any threshold miss, forbidden dispatch, missing trace, or post hoc threshold change keeps automatic source `HOLD`; repeat with a newly versioned acceptance record and holdout set. Only an approved, passing record plus the D-268 and SITE/DEVICE/FIELD gates can authorize an explicit policy enable action. A passing image-only/local test cannot authorize physical movement.
+
 ## 단계 4: 후속 카메라와 집기
 
 ### Task 4.1: 후속 목표 — 핑키·로봇암 카메라의 전용 미디어 계약
@@ -153,9 +168,49 @@
 - This implementation checkpoint is source/local evidence only. Ubuntu host rollout, individual token handoff/revocation exercise, real CORE readback, and browser visual/device acceptance remain open.
 - The console now reads `/api/fleet/session`, displays the authenticated principal and role, and locks operator controls unless the role is `operator`; API authorization remains authoritative. Node role-control tests, FastAPI session endpoint tests, and an in-container API/static-asset smoke cover this local behavior. Browser visual/device acceptance remains open; see `docs/validation/2026-09-26-site-role-ui.md`.
 
+## Implementation checkpoint and next execution order (2026-09-26)
+
+- D-293 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.40; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, invalid value types, booleans, and non-finite coordinates before CORE dispatch. `/api/fleet/do` publishes a verb-specific bounded OpenAPI schema generated from the shared interpreter grammar; invalid types and sequences over eight steps are documented and rejected before dispatch; source/schema/doc alignment is contract-tested.
+- D-267, D-269, and D-282 remain Proposed. Their boundaries are implementation constraints for this plan, not an architecture approval or field acceptance.
+- Implemented LOCAL foundation: per-principal viewer/operator/policy-admin API authentication (D-276), authenticated manual navigation through the durable task service, persistent task/audit state, CORE Agent event ingestion, and ceiling-phone WSS → Vision → derived sighting.
+- Queue choice: SQLite remains the task ledger and scheduler. Gate A found no current independent-worker requirement, so RabbitMQ stays deferred; raw video and ROS messages do not enter the task queue.
+- Next implementation order: (1) preserve the current v1 scope as authenticated operator navigation through Fleet's durable task service; the 571-test source/local suite found no reason to add an unapproved command/schema; (2) build and verify a clean revision-pinned Ubuntu site bundle and backup/recovery runbook; (3) on the approved RTX 5080 Ubuntu host, verify TLS, credentials, storage, reboot recovery, and NVIDIA container visibility; (4) commission the actual phone and CORE links separately; (5) measure GPU model and field policy evidence before considering D-268 acceptance.
+- Do not enable automatic movement/pick while D-257/D-268 or task-specific freshness/false-trigger acceptance is open. D-177 result correlation, Pinky/arm media, and manipulation remain separate gates.
+- The first rollout remains authenticated operator navigation. The console has no policy-condition editor in this rollout; adding one and exposing automatic triggers requires the D-268, role, evidence-display, freshness, false-trigger, and field gates above.
+- The current checkout has no approved Ubuntu host identity or physical phone/CORE evidence. Workstation tests and a candidate bundle cannot advance those SITE/DEVICE/FIELD gates.
+- Candidate commit `7bd81cf3919b11c769094a5d7798aaf79eca5b91` was rebuilt and re-smoked from the packaged `linux/amd64` archive: Fleet/Vision/HTTPS proxy healthy, synthetic phone WSS through Vision into Fleet/SQLite, and authenticated operator task enqueue/readback. Evidence and hashes: `docs/validation/2026-09-26-site-stack-container-smoke.md`. This does not establish Ubuntu/GPU/physical-device or motion acceptance.
+
 ## 외부 근거
 
 - [Docker Compose production](https://docs.docker.com/compose/how-tos/production/): 단일 서버 운영·재시작 정책.
 - [Docker Desktop GPU support for Windows](https://docs.docker.com/desktop/features/gpu/): Windows 컨테이너 GPU 시험은 WSL2와 NVIDIA GPU/driver를 요구한다.
 - [Docker multi-platform builds](https://docs.docker.com/build/building/multi-platform/): `linux/amd64`와 `linux/arm64` 이미지 아키텍처 선택 및 빌드.
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html): Ubuntu Docker GPU 접근. 실제 노트북 드라이버와 컨테이너 동작은 현장에서 별도 검증한다.
+
+## Packaged local verification checkpoint (2026-09-26)
+
+- Revision `01a3946c` was built as a `linux/amd64` candidate, its archive/image/SBOM/deployment hashes were checked, and the exact archive was loaded. Fleet, Vision, and HTTPS proxy reached healthy in an isolated local Compose project.
+- Packaged OpenAPI matched all 13 interpreter verbs and the 8-step cap. Authenticated API checks rejected mistyped fields (`INVALID_NUMBER`) and a 9-step sequence (`TOO_LONG`) before CORE dispatch. A synthetic ceiling-phone WSS frame passed through CPU ArUco Vision into authenticated Fleet/SQLite sighting readback.
+- This is Windows Docker Desktop LOCAL evidence only. The host exposed AMD Radeon 860M, not the target RTX 5080. Ubuntu host/reboot, GPU inference, physical phone/CORE/robot, and DEVICE/FIELD remain unverified; automatic movement and picking remain HOLD. Detailed hashes and limits are in `docs/validation/2026-09-26-site-stack-container-smoke.md`.
+- Latest merged-main LOCAL candidate `1e3de3e8f08217b725e0bcf9771fea8f005b0cc0` was rebuilt and its matching images exercised through packaged Compose without rebuilding at startup. TLS/auth/OpenAPI, synthetic camera-to-sighting, task persistence across Fleet restart, 518 Fleet tests, and D-293/harness contracts passed. Full hashes and the explicit Ubuntu/GPU/physical-field limits are in the validation record linked above.
+- Main later advanced to `2543315d9f014060eeeb9d2ee2a1ae2c6fb4e562` and was merged into this branch. Fleet 518/5 skipped and the changed capability/intent/HMI/document contracts 72 passed. Rebuilding that newer source was blocked before Docker's first build step by denied Buildx config and Engine access; `1e3de3e8` remains the last packaged smoke. See the validation record for exact limits.
+
+## Implementation checkpoint (2026-09-27): rebuilt current integration candidate
+
+- Rebuilt source `4c2b46b21b8ad77d010aa37e03c084bbe6716cc0` as a clean `linux/amd64` candidate. Manifest/archive/deployment/SBOM hashes were independently checked; the exact archive was loaded and the packaged Compose stack passed authenticated TLS, typed-intent, synthetic phone-to-Fleet sighting, operator task persistence, and Fleet restart readback. Evidence: `docs/validation/2026-09-26-site-stack-container-smoke.md`.
+- Fresh tests on this source: Fleet `518 passed, 5 skipped`; CORE/Fleet integration `47 passed`. This closes the previously open local package rebuild step only.
+- Next: apply the pinned bundle on the approved Ubuntu 24.04 RTX 5080 host; record host/image/config identity; verify NVIDIA Container Toolkit and GPU visibility; test backup/restore and power reboot; then separately commission the physical overhead phone and authenticated CORE event/readback path. Do not infer any of these from Windows LOCAL evidence.
+- No approved host identity or live-device credentials were available in this checkout. Automatic movement/picking remain HOLD pending the accepted D-268/policy-evidence contract and measured freshness/false-trigger criteria; arm pickup and Pinky camera remain separately gated.
+
+
+- Follow-up LOCAL packaged CORE check: synthetic Agent HELLO, heartbeat, and event traversed Fleet's WSS hub; authenticated history readback and event persistence across Fleet restart passed. This verifies the packaged software path only. Real CORE credentials, network/TLS identity, clock/session behavior, event continuity, and physical-device acceptance remain unverified.
+
+## Packaged database recovery checkpoint (2026-09-27)
+
+- Added `/opt/rosy/site_db.py` to the Fleet image: online SQLite backup, read-only integrity verification, guarded stopped-service restore, pre-restore rollback snapshot, no-overwrite backup creation, and digest reporting. The site runbook now gives the host-volume backup, isolated Compose-project restore drill, and production maintenance-window procedure.
+- Source commit `5e638935d773fafe84075a2be04ff6dcaa53b9b4` was built as a `linux/amd64` candidate. In the packaged Fleet image, synthetic sightings, CORE events, tasks, task history, and mutation audit rows were backed up, integrity-checked, restored to a separate volume, and read back. Fleet image ID: `sha256:e56b18c4c9a6dbebd68523ed1e2b4ec570a9553934c7f8d355d7a00a3825f462`.
+- The candidate was rebuilt from the integrated local-main HEAD `8291bd4ca0bbd3278c34a9f6e1de9aacff5bd444`; its Fleet image ID is identical and its `images.tar` SHA-256 is `a55b7bf28a3db380100c93a7f02e9357185c5368a14332641847a7d666b1b3b3`. Candidate: `X:\DevTemp\rosy-site-candidate-8291bd4c`.
+- Current local verification: Fleet/deploy `529 passed, 5 skipped`; focused D-293/harness/document-placement contracts `92 passed` before the final log-only update and `81 passed` after it; Ruff passed. Harness lint reports 0 errors and 19 existing evidence-freshness warnings. The recovery guard was mutation-proven by changing `integrity_check` to `foreign_key_check`, observing the WAL-backup test fail, and restoring the guard.
+- The feature branch fast-forwarded into local `main` at `8291bd4c`. Existing main edits in `deploy/release/test/test_secret_scan.py` and `.impeccable/` remain present. No remote push or host deployment was performed.
+- Next: on the approved Ubuntu 24.04 RTX 5080 host, verify the pinned candidate hash and loaded IDs, configure the trusted CA and operator/camera credentials, then test host-path backup, separate-volume restore, API readback, reboot recovery, and NVIDIA container visibility. Separately commission the physical ceiling phone and CORE WSS/event path and collect the planned freshness, false-trigger, clock, and camera-health measurements.
+- These results are Windows Docker Desktop LOCAL evidence only. Ubuntu/site recovery, GPU inference, production credentials/TLS, phone, real CORE, DEVICE/FIELD, dispatch, and motion acceptance remain open. Automatic movement/picking remain HOLD; Pinky/arm cameras and manipulation remain separately gated.

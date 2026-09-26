@@ -18,7 +18,7 @@ DEPLOY_FILES = (
     "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
     "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
     "fleet-mdns.py", "rosy-fleet-advertise.service",
-    "discovery-token.template.txt",
+    "discovery-token.template.txt", "site_db.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")

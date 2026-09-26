@@ -283,17 +283,18 @@
 | D-280 | ROSY 제품 디자인 철학은 차분한 지능에 은은한 따뜻함이다 | Accepted |
 | D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 | Proposed |
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 | Proposed |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 | Accepted |
 | D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 | Accepted |
 | D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 | Accepted |
 | D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 | Accepted |
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 | Accepted |
 | D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 | Proposed |
-| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 | Accepted |
----
-| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 | Accepted |
 | D-289 | Role console entry, action groups, and map readout | Accepted |
+| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 | Accepted |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 | Accepted |
 | D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 | Accepted |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 | Accepted |
 | D-294 | Shared typography and interaction tokens use a closed scale | Accepted |
+| D-295 | 네이티브 Pinky의 주행·맵핑 능력은 실행 모드와 검증 기록에 맞춰 공개한다 | Accepted |
 
 | D-296 | Surface typography and focus feedback use shared tokens | Accepted |

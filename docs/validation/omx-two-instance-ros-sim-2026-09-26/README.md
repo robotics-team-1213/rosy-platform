@@ -3,7 +3,7 @@
 ## Inputs and environment
 
 - Source checkout: `feat/omx-sim-gates`, based on `4c6dc965`; the exact result commit is recorded by the integration history.
-- Vendor source lock: `deploy/omx/stack.lock.yaml`, ROBOTIS `open_manipulator` 5.1.2 at `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`.
+- Vendor source lock: `deploy/omx/stack.lock.yaml`, ROBOTIS `open_manipulator` 5.1.2 at commit `0a4af6a923b8`.
 - Built local Linux/amd64 Docker image: `rosy-omx-workstation:sim-gates-v2`, image ID `sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954`.
 - Host: Windows Docker Desktop Linux engine. This is not the intended Ubuntu field workstation or an immutable published artifact.
 - Each probe container had `--network none`, no device grants, `rmw_cyclonedds_cpp`, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, and its own `ROS_DOMAIN_ID` (`71` for `omx_01`, `72` for `omx_02`). The container names were `rosy-omx-sim-gates-01` and `rosy-omx-sim-gates-02`.

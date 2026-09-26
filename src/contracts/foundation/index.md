@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
 - 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
 - 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
 - 2026-09-26 · uncommitted · feat(core_common): D-257 SiteSightingPayload
 - 2026-09-26 · uncommitted · feat(core_common): D-260 robot state rule table
-- 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)

@@ -163,6 +163,12 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     else:
         config["runtime"].setdefault("navigation_backend", "localization")
 
+    # The native service sets this independently of editable robot YAML.  A
+    # core-only device can publish odometry through read-only I/O; that sample
+    # must not make motion, navigation or SLAM executable.
+    if os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device":
+        config["runtime"]["deployment"] = "device"
+
     return config
 
 

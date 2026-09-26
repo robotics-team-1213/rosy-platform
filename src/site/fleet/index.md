@@ -27,6 +27,11 @@
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
+| D-289 | Role console entry, action groups, and map readout |
+| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 | D-296 | Surface typography and focus feedback use shared tokens |
 
 ## 계획·결과 문서
@@ -39,7 +44,6 @@
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-21-fleet-signals-integration-design.md](../../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
 - [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
-- [2026-09-26-site-mdns-discovery.md](../../../docs/plans/2026-09-26-site-mdns-discovery.md)
 
 ## 교훈 (docs/solutions)
 
@@ -51,8 +55,8 @@
 
 ## 최근 기록
 
-- 2026-09-27 · uncommitted · D-296 surface typography and focus tokens
-- 2026-09-26 · uncommitted · reciprocal site discovery preparation
-- 2026-09-26 · uncommitted · feat(fleet): site mDNS discovery readback
-- 2026-09-26 · uncommitted · feat(fleet): D-257 source-scoped sighting API
-- 2026-09-25 · uncommitted · fix(fleet): roster keyboard vocabulary, queue render gates (D-224, D-219)
+- 2026-09-27 · bb58221b · D-296 surface typography and focus tokens
+- 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
+- 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
+- 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke
+- 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293

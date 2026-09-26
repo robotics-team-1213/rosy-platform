@@ -6,7 +6,6 @@ import pytest
 
 from deploy.site.build_candidate import build_candidate
 
-
 COMMIT = "9541086c550c0c1142f7aefecc903987e149f9e2"
 
 
@@ -22,7 +21,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
-                 "discovery-token.template.txt"):
+                 "discovery-token.template.txt", "site_db.py"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     (site / "Dockerfile.fleet").write_text("FROM ubuntu", encoding="utf-8")
@@ -74,7 +73,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "robots.yaml.example", "site-cameras.yaml.example",
         "site-users.yaml.example", "mdns-bridge.py", "rosy-mdns-bridge.service",
         "rosy-mdns-bridge.timer", "fleet-mdns.py", "rosy-fleet-advertise.service",
-        "discovery-token.template.txt",
+        "discovery-token.template.txt", "site_db.py",
     }
     assert not list(output.rglob("*.key"))
 
@@ -111,7 +110,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
-                 "discovery-token.template.txt",
+                 "discovery-token.template.txt", "site_db.py",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
 
