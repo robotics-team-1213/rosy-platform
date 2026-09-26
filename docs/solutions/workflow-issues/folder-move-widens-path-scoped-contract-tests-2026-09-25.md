@@ -71,7 +71,13 @@ time hiding in four places a folder-move grep of `test/` alone still misses:
   `test_swarm` built `runtime/core_features/core_features` and `runtime/core_api_web/core_api_web`;
   the gz contract test still walked `src/navigation/navigation/launch`; `PaintMap.from_bundle()`
   computed `parents[2]/control/map/…`. Four `FileNotFoundError`s, one stale bringup path, and 96+7
-  sensing failures all traced to constants that named the old nesting.
+  sensing failures all traced to constants that named the old nesting. `test/test_sd_api_token.py`
+  carried the same rot in `test/` (`CORE_SRC = src/core`, five packages) and stayed invisible for
+  three CI runs: the deployment step was skipped behind the domain-suite red, so fixing the first
+  red surfaced the next one — a hidden step is not a passing step. `gz_sim/coverage_harness.tour_plan`
+  was the same rot in a script: its bare `control` import had no worktree fallback and the gz contract
+  tests passed only in CI's install space — `live_view_model` already carried the install-first,
+  source-second helper, and the harness now mirrors it.
 - **Path-keyed fingerprint pins** — `PINNED_RELAYS` keys `core_features/core_features/*.py` no longer
   matched the scanner's `services/core_features/*.py`, so the relay exemption lookup missed *and* the
   pin comparison failed: one stale key space produced two differently-worded CI failures. All four
