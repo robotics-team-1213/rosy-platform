@@ -416,19 +416,16 @@ function Get-ApPassword([string]$Device, [string]$Uid) {
     $file = Join-Path $env:LOCALAPPDATA "Rosy\ap\$Device.credential.xml"
     $stored = Read-BoundCredential $file $Uid "AP password"
     if ($stored) { return $stored.Value }
-    # Readable form, same as deploy/release/network.py SETUP_PSK_PATTERN:
+    # Readable form, same as deploy/release/network.py READABLE_SETUP_KEY (D-272):
     # "rosy-" and two groups of four from lowercase letters and digits without
     # 0 o 1 l i (8 random symbols of 31, about 39.6 bits; the prefix adds none).
-    # Bytes >= 248 are dropped so each symbol is equally likely (248 = 8 * 31).
+    # Bytes >= 248 are dropped so each symbol is equally likely (248 = 8 * 31);
+    # 32 bytes leave fewer than 8 with a probability far below 1e-30.
     $alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
-    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-    $symbols = New-Object System.Collections.Generic.List[char]
-    $byte = New-Object byte[] 1
-    while ($symbols.Count -lt 8) {
-        $random.GetBytes($byte)
-        if ($byte[0] -lt 248) { $symbols.Add($alphabet[$byte[0] % 31]) }
-    }
-    $text = -join $symbols
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $text = -join (@($bytes | Where-Object { $_ -lt 248 } | Select-Object -First 8) | ForEach-Object { $alphabet[$_ % 31] })
+    if ($text.Length -ne 8) { Fail "could not draw an AP password" }
     $generated = "rosy-{0}-{1}" -f $text.Substring(0, 4), $text.Substring(4, 4)
     Save-BoundCredential $file $Device $Uid $generated
     return $generated

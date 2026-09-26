@@ -2,7 +2,7 @@
 
 A minimal QR Code encoder (ISO/IEC 18004): byte mode, error correction level M,
 versions 1-5 (21-37 modules, up to 84 bytes). That is enough for a ROSY AP:
-the join string for ``rosy-pinky-xxxx`` and a
+the join string for a 15-character device-name SSID and a
 ``rosy-xxxx-xxxx`` key is 47 bytes (version 4).
 A longer payload (a human-set 63-character passphrase and a 32-byte SSID) is
 refused with ValueError and the card shows the text alone.
