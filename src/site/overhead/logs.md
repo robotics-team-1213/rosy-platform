@@ -45,3 +45,8 @@
 - 조사/수정: upstream Caddy binary carries `cap_net_bind_service=ep`, which prevented exec under `cap_drop: ALL`; the site proxy image removes that unused file capability because it binds only 8443. Caddy config/data tmpfs are owned by uid/gid 10001.
 - gate 변화: LOCAL Docker integration GO. Real host install, site certificate/CA provisioning, real ceiling camera calibration, CORE/Pinky/arm hardware and field acceptance remain open. Sightings remain display-only; D-268 motion/pick HOLD.
 
+## 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)
+
+- 변경: Android 소스 변경 없이 immutable Site candidate를 재빌드하고 synthetic ceiling-phone JPEG를 packaged WSS → Vision CPU ArUco → Fleet HTTPS/SQLite로 전송했다.
+- 근거: overhead `70 passed`; source `ceiling_north`, sequence 78, pose `[2.0, 1.0]`; Fleet 재시작 후 sighting readback 통과. `quality: null`이며 physical phone/freshness/calibration 수용은 아니다.
+- gate 변화: SOURCE/LOCAL 유지. Android phone, Ubuntu/RTX GPU, DEVICE/FIELD는 PARKED; D-268 automatic movement/picking은 HOLD.

@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "9049bd37", date: 2026-09-27 }
+last_verified: { commit: "778bbd31", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "507 passed, 5 skipped (2026-09-26 Windows); mDNS host scanner integration later passed 510/5 in the main-line run. D-293 OpenAPI/runtime contract와 source-token FleetAgent↔console/WebSocket, D-257 sighting isolation 포함. Revision 01a3946c packaged linux/amd64 Docker smoke에서 3 services healthy, TLS/API intent와 합성 WSS→Vision→SQLite sighting readback 확인; Windows/CPU/합성 데이터뿐이며 Ubuntu/GPU/실물 device 수용은 아님 (docs/validation/2026-09-26-site-stack-container-smoke.md)"
+    evidence: "526 passed, 5 skipped (Windows, 2026-09-27). Revision 778bbd31 linux/amd64 packaged Compose smoke: 3 services healthy; TLS-authenticated browser/API; 13 intent verbs and 8-step limit; invalid inputs rejected; operator task and synthetic CORE HELLO/heartbeat/event persisted in SQLite; synthetic phone sighting persisted after Fleet restart. Local Windows/CPU/synthetic fixtures only; Ubuntu, GPU, physical devices, dispatch and field acceptance remain unverified (docs/validation/2026-09-26-site-stack-container-smoke.md)"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -33,24 +33,21 @@ plans:
   - docs/plans/2026-09-21-fleet-signals-integration-design.md
   - docs/plans/2026-09-22-fleet-signals-integration.md
 ---
-## 지금 상태
+## 현재 상태 (2026-09-27)
 
-- Formation geometry(FOR-001)·slot assignment(FOR-002)는 순수 함수다. 리더→팔로워 pose 릴레이는 바이트 그대로 팬아웃하고 새 프레임을 합성하지 않는다(D-31). FOR-004 세션(arm→relay→watch→hold)과 SiteHub 계약 gather(hello/heartbeat/event)·REST scatter(e-stop)(D-59)까지 구현·시험됨.
-- `test_boundaries.py`가 패키지 전체 `rclpy` 금지와 `hub/`의 `core.protocol.schemas` 외 CORE import 금지를 강제한다(D-18).
-- **Fleet 서버 v1 있음**: `fleet console --robots robots.yaml` 이 N대를 한 화면에 모으고 로봇별 목표·취소와 전체 정지를 내린다(site-fabric 설계 §2, 전환 순서 3단계). WSL ROS 2 Jazzy + Gazebo 2대 위에서 지도 클릭 미션 하달 → 양쪽 `ARRIVED` 확인(2026-09-17).
-- **신호등 연동 있음(G-S3)**: `fleet console --signals signals.yaml` 이 ROSY-SIGNAL-001 장치를 snapshot 에 모으고(`/api/fleet/signals*`), e-stop 때 전 기기 `all_red` 를 병렬로 흩뿌린다. `mode=failsafe` 를 보면 마지막 의도를 한 번 재단언한다. 신호등은 표시 장치지 안전 인터록이 아니다 — `traffic.py` 판정은 건드리지 않았다.
-- CORE Agent outbound `FleetAgent`는 `robots.yaml`의 별도 `fleet_pairing_token`이 설정된 경우 `fleet console` ASGI 앱 `/ws/robots`에 연결한다. loopback hello/heartbeat/event/offline/reconnect는 LOCAL 검증됐으며 기존 snapshot은 여전히 REST 폴링이다.
-- D-257 Proposed sighting API는 `create_app(..., sightings=...)`로만 활성화되는 programmatic LOCAL 경로다. CLI source/map/calibration provisioning, overhead JPEG→vision→Fleet publisher, durable audit storage, browser display는 아직 없다. D-268 자동 policy input은 별도이며 비활성이다.
-- 축구 매치 시작 버튼은 없다 (D-106). `games`를 import하지 않는다. `reset()`은 games.
-- 물리 대형(FAT-06 등) 실측은 아직 없다. D-35(전체 HOLD는 릴레이를 끊는 것)는 sim bench 실측 대기 중인 후보이며 ADR log에는 의도적으로 미등재다(`adr_gaps`).
-- LOCAL suite evidence는 Windows host 기준이다. Ubuntu 24.04/RTX, 실물 phone/CORE, TLS/LAN, DEVICE/FIELD는 검증하지 않았다.
+- Formation geometry(FOR-001), slot assignment(FOR-002), relay(D-31), formation session(FOR-004), 그리고 SiteHub의 HELLO/HEARTBEAT/EVENT 수집과 REST scatter(D-59)는 CORE API 경계를 유지한다. Browser/SiteHub는 DDS/ROS에 직접 연결하지 않는다.
+- G-S3 신호등 연동은 상태 수집과 명령 표시를 제공하지만 안전 인터록은 아니다. CORE의 로컬 stop/safety 책임을 대체하지 않는다.
+- 별도 `fleet_pairing_token`으로 연결된 CORE Agent의 HELLO/HEARTBEAT/EVENT 경로를 candidate에서 확인했다. 이벤트는 authenticated API로 조회되며 SQLite에서 Fleet restart 이후에도 유지된다.
+- Operator web/API와 task queue를 검증했다. navigation 요청은 `REQUESTED → QUEUED`에서 멈췄다. 합성 `nav.completed`는 별도 synthetic event이므로 task의 실제 완료나 로봇 동작으로 해석하지 않는다.
+- Overhead WSS → CPU ArUco → Fleet sighting 경로와 SQLite restart 보존을 확인했다. 합성 sighting의 `quality`는 `null`이므로 D-268 policy evidence가 아니다. 자동 이동/집기는 HOLD다.
+- 자세한 candidate image/hash와 실행 범위는 `docs/validation/2026-09-26-site-stack-container-smoke.md`에 기록했다. LOCAL 증거는 Windows Docker Desktop `linux/amd64` 및 synthetic fixture 한정이다. Ubuntu/RTX 5080/GPU, 현장 TLS/LAN, 실물 phone/CORE/robot은 아직 미검증이다.
 
 ## 다음 gate
 
-1. 진행 중인 WIP를 커밋하고 LOCAL을 커밋 기준으로 재실행해 `last_verified.commit`을 채운다.
-2. `swarm-formation-slice-results.md` Task 14 sim bench(`gz_multi robots:=N mode:=nav core:=true`)를 ROS box에서 실행해 `relay_tx_hz`/`slot_err_m`/HOLD latency를 실측하고 D-35 등록 여부를 결정한다.
-3. `FleetAgent` outbound(WS hello/heartbeat/event)를 열어 관제 gather 를 폴링에서 밀어내기(설계 §3).
-4. 실물 2대 FAT-06 변형 필드 시험(`capabilities.hardware.yaml`의 `swarm.follow/lead` 점등 포함) 후 FIELD를 승격한다.
+1. Ubuntu 24.04 현장 호스트에 immutable candidate를 설치하고 Docker/Compose, 재부팅 복구, loaded image ID, TLS/FQDN/firewall 및 RTX 5080 driver를 확인한다.
+2. 실제 CORE와 천장 phone을 연결해 pairing/authentication, reconnect, event/task correlation, timestamp/freshness 및 sighting 품질을 관찰·기록한다.
+3. D-268 evidence 형식과 freshness/false-trigger 수치를 합의·측정하기 전까지 자동 policy task 생성을 비활성으로 둔다. 통과 이후에도 운영자 승인과 CORE 안전 조건을 확인하는 별도 제한 시험이 필요하다.
+4. 로봇암 집기와 Pinky/로봇 onboard camera는 각각 별도 계약과 장치 gate로 검증한다.
 
 ## 현재 유효한 금지사항
 
