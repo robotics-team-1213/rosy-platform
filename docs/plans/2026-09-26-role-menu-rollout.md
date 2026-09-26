@@ -89,6 +89,8 @@
 - **추가 이관 단위 (2026-09-26):** `/console`에 operator IDLE/MANUAL/NAVIGATION 모드 제어를 등록했다. navigation capability가 없으면 선택이 막히고, 모드 변경 전에 공유 stop-motion 이벤트가 hold teleop에 zero를 보내도록 한다.
 - **추가 이관 단위 (2026-09-26):** `/console`에 navigation capability에 따른 차선 추종 제어를 추가했다. capability가 빠져도 OFF 정지는 허용한다. `/setup`에는 Administrator 전용 도크 유형 조회·생성, 현재 pose 기반 등록 및 삭제 패널을 추가하고, 등록은 pose freshness와 유형 목록을 확인한 뒤에만 허용한다.
 - **추가 이관 단위 (2026-09-26):** `/setup`에 교통 정책 편집·검토본 저장·정지 확인 후 적용 패널을 추가했다. 시뮬레이션 신호 조작은 API가 제공하는 경우에만 노출한다. 기존 `/dashboard` 동작은 회귀 확인 전까지 보존한다.
-- **남은 이관:** 도크 등록, line-follow, 교통 정책 패널은 새 화면에 연결했다. 기존 `/dashboard` 진입·새로고침·뒤로가기, 설정·인증 보존을 회귀 시험으로 확인하고 기존 화면의 역할과 제거 가능 범위를 판정한다. 같은 기능의 회귀를 확인하기 전 기존 대시보드 동작을 제거하지 않는다.
+- **Remaining migration:** Role-based dock registration, line-follow, traffic policy panels, and legacy `/dashboard` compatibility passed local regression. Existing inspection cards remain because full parity has not been established; reassess removal after WEB-002 feature mapping and per-card role, error, and empty-state parity are covered.
+- **Compatibility regression (2026-09-26):** API tests pin `/` redirecting to `/dashboard` and the legacy HTML response/cache policy. Opt-in Chromium verified `/dashboard` entry, refresh, back navigation, and tab-token preservation. The existing Dashboard browser regression (62 tests) and one device-panel test passed, including settings and token persistence.
+- **Structure cleanup (2026-09-26):** Moved board hardware probe, test, and administrator confirmation APIs from `api/v1/host.py` to `host_hardware.py`. Existing `/api/v1/host/hardware*` paths and role policy are preserved and covered by API tests.
 - **Task 4 카드 정리 남음:** 새 장치 화면의 readback은 추가됐지만 기존 `점검` 뷰 카드와 완전 동등하지 않으므로 기존 카드를 제거하지 않았다.
 - **수용 범위:** 현재 테스트는 Windows 호스트·로컬 Chromium까지다. ROS 2/Pi 설치·실기 운전과 물리 E-Stop은 확인하지 않았다.

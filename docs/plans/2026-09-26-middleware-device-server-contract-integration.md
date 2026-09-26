@@ -143,13 +143,12 @@ requires a clean source revision, builds commit-tagged `linux/amd64` images,
 generates per-image SPDX SBOMs with Docker Scout, and exports an image archive
 plus image/config checksums in `release.json`. The bundle carries only Compose,
 proxy, runbook, and placeholder config templates. Its clean-tree/platform/output
-guards have host pytest coverage (3 passed). Candidate `845a266a47721453d281d3566fbce76ac8d468bd`
+guards have host pytest coverage (3 passed). Candidate commit `845a266a47721453d281d3566fbce76ac8d468bd`
 was built on Windows 11 through Docker Desktop's Linux/amd64 engine. Fleet,
 vision, and proxy image IDs are respectively `sha256:7e61ff41f61859177bc7244474fd585d837d03dde557c1e822b71f3ebb5d0c12`,
 `sha256:db17cd53e028d2e884609d7773f975300aadb9bb4ad211f98809059bbdccfd00`,
 and `sha256:92285397b659eb03fbe532a76d061738d5f9b0f7f45027a68c662caa44276c3f`.
-The `images.tar` SHA-256 is
-`35af4954fde65ba8da42bfb21ebaa6098caed254e9121b65b3fab2463ce44315`; all
+The `images.tar` SHA-256 digest is `35af4954fde65ba8da42bfb21ebaa6098caed254e9121b65b3fab2463ce44315`; all
 three SPDX reports were generated. The archive was loaded, then its packaged
 Compose file was started with `--no-build`; Fleet, vision, and proxy became
 healthy. An authenticated operator task survived Fleet restart and same-host
