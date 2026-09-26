@@ -2687,3 +2687,9 @@
 - Change: built the commit-pinned `linux/amd64` site candidate for `5e638935d773fafe84075a2be04ff6dcaa53b9b4` and ran the bundled utility from the Fleet image against isolated Docker volumes.
 - Evidence: online backup and `integrity_check` passed; restore to a separate volume passed integrity and read back one synthetic row each for sightings, CORE events, tasks, task history, and mutation audit. Fleet image ID `sha256:e56b18c4c9a6dbebd68523ed1e2b4ec570a9553934c7f8d355d7a00a3825f462`; `images.tar` SHA-256 `deb8823f8f05af4dfa048e1e9fb75bfc0647278eea037a9aaa8ad2e2be582385`. The three exact test volumes were removed.
 - Gate: packaged software recovery is verified on Windows Docker Desktop's Linux/amd64 engine only. This is not Ubuntu host, encrypted off-host backup, Fleet API readback, physical site, or production restore acceptance; automatic movement/picking remain HOLD.
+
+## 2026-09-27 · uncommitted · plan(site): checkpoint packaged recovery and next field gates
+
+- Change: recorded the completed backup/restore implementation and packaged verification in the Ubuntu site execution plan, including the integrated candidate identity, preserved local-main WIP, test evidence, and the remaining host, GPU, phone, CORE, and field steps.
+- Evidence: the checkpoint distinguishes Windows Docker Desktop software recovery from Ubuntu/site acceptance and retains the D-268 movement/pick HOLD.
+- Gate: no site, DEVICE, FIELD, GPU, phone, or real-CORE gate moved.
