@@ -171,16 +171,6 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · docs(sd): record operator rebind and sequential multi-card Fleet onboarding
-- 2026-09-26 · uncommitted · feat(sd): stage new identity when a personalized card moves boards
-- 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
-- 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
-- 2026-09-26 · uncommitted · fix(games): 숨김 상태의 카메라 프레임을 렌더하지 않음
-- 2026-09-26 · uncommitted · docs(validation): execute D-275 surface and video role plan
-- 2026-09-26 · uncommitted · docs(adr): D-275 웹·Vision 실행 위치와 권한 분리
-- 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
-- 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
-- 2026-09-26 · uncommitted · feat(fleet): expose server queue position
 - 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement
 - 2026-09-27 · uncommitted · docs(architecture): distinguish mission, stop evidence, and OMX LeRobot owner
 - 2026-09-27 · uncommitted · docs(protocol): separate robot ACK from Fleet timeout record

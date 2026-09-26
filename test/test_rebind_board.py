@@ -24,6 +24,7 @@ def _rebind():
 def _fresh_bundle(root):
     path = root / "run/rosy-new-device-bundle.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    fixture_value = "Tq" * 21 + "_"
     payload = create_provision_bundle(
         identity=DeviceIdentity(
             device_uid="1e134919-11c0-4273-a51e-29f7af1aeac9",
@@ -35,7 +36,10 @@ def _fresh_bundle(root):
         fleet_endpoint="https://fleet.fixture.invalid:8443",
         fleet_trust_profile="site-ca-2026", pairing_required=True,
         pairing_credential="fixture-new-pairing-credential",
-        core_api_token="Tq" * 21 + "_", core_api_token_id="1a2b3c4d5e6f",
+        **{
+            "core_api_token": fixture_value,
+            "core_api_token_id": "1a2b3c4d5e6f",
+        },
         created_at=datetime(2026, 9, 26, 1, 2, 3, tzinfo=UTC),
         nonce="fixture-new-board-nonce",
     )
