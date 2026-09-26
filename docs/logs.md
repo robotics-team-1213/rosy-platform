@@ -2270,3 +2270,11 @@
 - gate 변화: 없음
 - 회귀: 없음(동료 WIP 5파일 미스테이징 유지)
 - 교훈: 같은 main에서도 OS가 판정을 가른다 — Windows의 symlink privilege skip이 Linux-only 보안 가드를 숨긴다("skip=통과 아님"의 Windows 판). 그리고 앞단계 붉음이 뒤단계를 skip하면 잔여 실패가 무더기로 숨는다(deployment 2178→2373 passed, 실패 1→5)
+
+## 2026-09-26 · uncommitted · docs(verification): known_failures 귀속 정정 — 가드 도입 커밋으로 재지목 + 헤더 검증 SHA 갱신
+
+- 변경: ① `test/known_failures.txt` 10행 — RegistryError 원인을 `12ca0469`(패널 import 경로 수정, ui_registry.py 미변경)로 잘못 지목한 내 기록을 `a4970791`(ui_registry.py의 유일한 커밋, resolve() 가드 도입)으로 정정하고, 가드가 걸리는 css 항목 출처 `ff603832`(8분 후) 병기 ② 헤더 검증 SHA `769e2f28` → `986a81ca`(CI 런 213이 4건 전부 재확인) ③ 8행 boot 가드에 Review-H1 guard 도입 커밋 `9f256c73` 병기
+- 증거: CI 런 213(head `986a81ca`) deployment = 4 failed / 2374 passed, 실패 nodeid 4건이 런 212와 장부 8–11행과 1:1 일치. `git log -S allowed_root` = `a4970791` 단일 커밋, `12ca0469..HEAD`에 ui_registry.py/panels.yaml/panels/ 후속 커밋 없음. 로컬 `test_known_failures`+`test_source_encoding` 6 passed, `src/runtime/api_web/test/test_ui_registry.py` 33 passed/1 skipped
+- gate 변화: 없음(ADR·게이트 문서 무변경)
+- 회귀: 없음(동료 WIP 2파일 `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지, HEAD `986a81ca`로 동기)
+- 교훈: 붉은 가드의 귀속은 "관련 경로를 만진 최근 커밋"이 아니라 `git log -S <가드 조건>`으로 "가드 자체를 넣은 커밋"을 찾을 것 — 같은 시리즈라 해도 귀속은 커밋 단위로 검증해야 한다(오늘 내 장부가 12ca0469를 원인으로 잘못 지목함). 남이 소유한 가드는 소유자가 시리즈를 마칠 때까지 기록만 — a4970791·ff603832 모두 pl3의 role-panel 시리즈로 오늘도 활성이다

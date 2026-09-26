@@ -1350,6 +1350,24 @@ def _storage(page):
     )
 
 
+
+def test_legacy_dashboard_refresh_and_back_keep_the_tab_token():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_dashboard(playwright)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
+        page.reload(wait_until="domcontentloaded", timeout=5_000)
+        page.go_back(wait_until="domcontentloaded", timeout=5_000)
+        assert page.url == "http://rosy.test/dashboard"
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
+        browser.close()
+
 def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
