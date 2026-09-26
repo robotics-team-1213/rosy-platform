@@ -124,8 +124,9 @@
 # Implementation checkpoint (2026-09-26)
 
 Tasks 0–6 have been implemented on `feat/site-task-scheduler`. Task 0–5 source,
-contract, scheduler, API, traffic-queue, expiry/cancel, and console checks are
-covered by 484 Fleet tests (5 skipped) and 13 Chromium browser tests. Task 6
+contract, scheduler, API, traffic-queue, expiry/cancel, queue-position readback,
+and console checks are covered by 485 Fleet tests (5 skipped) and 13 Chromium
+browser tests. Task 6
 passed Compose configuration validation, a Fleet image build, and a local
 container/API/SQLite restart smoke test. The full Compose stack and a real CORE
 were not exercised; SITE, Ubuntu, DEVICE, and FIELD acceptance remain open.
@@ -134,5 +135,6 @@ Gate A found no measured need for a separate worker or broker: the deployment
 still has one Fleet dispatcher and one local SQLite writer. Task 7 is therefore
 intentionally deferred; RabbitMQ is not added. Task 8's local evidence is in
 [`2026-09-26-site-task-scheduler-local.md`](../validation/2026-09-26-site-task-scheduler-local.md).
-The remaining integration step is a fresh ancestry/overlap review against the
-current `main`; its unrelated dirty files must remain untouched.
+The branch was integrated into local `main` at `4855b758`. Ubuntu/site deploy,
+real CORE, device, GPU, and field acceptance remain open; current unrelated
+dirty files in the main worktree were preserved.

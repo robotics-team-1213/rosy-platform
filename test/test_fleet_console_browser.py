@@ -404,7 +404,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
 
     posts: list[tuple[str, str]] = []
     task = {"task_id": "task-queued-123", "status": "QUEUED", "attempt_seq": 0,
-            "reason": "ROUTE_CONFLICT", "waiting_on": ["rosy_02"]}
+            "reason": "ROUTE_CONFLICT", "waiting_on": ["rosy_02"], "queue_position": 1}
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
@@ -425,6 +425,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                          canvas_box["y"] + canvas_box["height"] / 2)
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
         assert "QUEUED" in page.inner_text("#log")
+        assert "#1" in page.inner_text("#log")
         page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").nth(1).click()
         page.wait_for_timeout(200)
         assert not errors

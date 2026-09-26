@@ -75,7 +75,7 @@ plans:
 ## Site Fleet task scheduler (2026-09-26)
 
 - Durable SQLite task acceptance, single-dispatcher claims, traffic-wait identity, expiry, queued cancellation, and console readback are implemented under D-271.
-- Evidence: 484 Fleet tests passed, 5 skipped; 13 Chromium browser tests passed. Docker Compose config validated, Fleet image built, and a loopback container preserved a queued task across restart on its named volume.
+- Evidence: 485 Fleet tests passed, 5 skipped; 13 Chromium browser tests passed. Docker Compose config validated, Fleet image built, and a loopback container preserved a queued task across restart on its named volume.
 - Broker decision: Gate A has no measured independent-worker/backlog requirement. Keep SQLite and defer RabbitMQ.
 - Ubuntu/SITE/TLS, full Compose, real CORE, robot, GPU, DEVICE, and FIELD acceptance remain open. Automatic policy dispatch remains HOLD.
 - Detailed record: `docs/validation/2026-09-26-site-task-scheduler-local.md`.

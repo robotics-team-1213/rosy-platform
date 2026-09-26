@@ -50,16 +50,17 @@ class FleetTaskService:
         )
         task = created["task"]
         if not created["created"]:
-            return task
+            return self.store.get_task(task["task_id"]) or task
 
         if source == "policy" and not self.POLICY_DISPATCH_ENABLED:
             return self.store.transition(task["task_id"], "HOLD", actor_id=actor_id,
                                          source=source, reason="POLICY_NOT_ACCEPTED")
 
         priority_class = 0 if source == "operator" else 1
-        return self.scheduler.enqueue(
+        queued = self.scheduler.enqueue(
             task["task_id"], priority_class=priority_class, actor_id=actor_id, source=source
         )
+        return self.store.get_task(task["task_id"]) or queued
 
     async def dispatch_next(
         self, available_robot_ids: set[str], *,

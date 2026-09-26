@@ -186,7 +186,8 @@ el("map-canvas").addEventListener("click", async (event) => {
       view.pendingTasks[robotId] = task;
       const why = task.reason || result.reason || "READY";
       const blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
-      log(`${robotId} task ${task.task_id} QUEUED · ${why}${blockedBy} · 취소 가능`, "good");
+      const position = task.queue_position ? `#${task.queue_position}` : "순번 대기";
+      log(`${robotId} task ${task.task_id} QUEUED · ${position} · ${why}${blockedBy} · 취소 가능`, "good");
       return;
     }
     if (task && task.status === "UNKNOWN") {

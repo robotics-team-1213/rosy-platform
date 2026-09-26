@@ -2297,3 +2297,24 @@
 - gate 변화: 없음(ADR·게이트 문서 무변경)
 - 회귀: 없음(동료 WIP 2파일 `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지, HEAD `986a81ca`로 동기)
 - 교훈: 붉은 가드의 귀속은 "관련 경로를 만진 최근 커밋"이 아니라 `git log -S <가드 조건>`으로 "가드 자체를 넣은 커밋"을 찾을 것 — 같은 시리즈라 해도 귀속은 커밋 단위로 검증해야 한다(오늘 내 장부가 12ca0469를 원인으로 잘못 지목함). 남이 소유한 가드는 소유자가 시리즈를 마칠 때까지 기록만 — a4970791·ff603832 모두 pl3의 role-panel 시리즈로 오늘도 활성이다
+
+## 2026-09-26 · uncommitted · feat(fleet): expose server queue position
+- 변경: Added a server-computed position for unleased queued tasks in priority/FIFO order and showed it with task ID, blockers, wait reason, and queued-only cancel in the console.
+- 증거: Fleet suite 485 passed/5 skipped; Chromium browser suite 13 passed; Docker image `sha256:0c207e85fa8269cf753a505be14eaf2041babb09999bfd0de29929f3e9625ffb` returned `queue_position: 1`, which remained in authenticated readback after container restart.
+- gate 변화: LOCAL UI and container restart evidence now includes the displayed queue order. Ubuntu, full Compose, real CORE/robot, GPU, DEVICE, FIELD, and policy dispatch remain open.
+
+## 2026-09-26 · uncommitted · docs(adr): D-270 합동 검토에 답 기입 — 조작=B·절차=A 확정
+
+- 변경: `docs/plans/2026-09-26-role-gating-model-joint.md` 하단에 규정대로 날짜·세션 답 기입. 재촉 3항에 대한 답변: (1) 이견 없음 — 조작 표면(운용 콘솔·Fleet 관제·게임)은 B, 절차 표면(setup·device)은 A로 확정하고 7일 자동 승격 조건을 사전 인정 (2) 혼재 허용, 경계는 표면 선언(panels.yaml `min_role` + 신규 표면의 모델 선언)에 기재 (3) 전부 A/전부 B 기각 — 각각 철거 범위를 답에 쓰지 않았고 Law 0·절차 격리와 충돌. ADR Log의 D-270 Status는 발의한 UI 세션 몫으로 유지(승격은 확인 후)
+- 증거: 문서 하단(47행)이 "답은 이 문서 하단에 날짜와 함께" 공란 상태였고, 기입된 답변이 26행 결정 요청 3개·38행 재촉 3개와 1:1로 대응한다. `git diff --check`와 harness lint(0 error)로 문서 형식 확인 — 계약 시험은 docs 로그·index 규칙만 보므로 답 본문은 게이트에 영향 없음
+- gate 변화: 없음(D-270 Proposed 유지, Accepted 승격은 발의 세션)
+- 회귀: 없음(코드 무변경. 동료 WIP `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지)
+- 교훈: 재촉이 붙은 결정 요청은 "7일 내 무반례 자동 승격"이라는 시한이 걸린 계약이다 — 물음 위치(문서 하단)·서명(날짜+세션)이 정해져 있으니 그 자리를 그대로 쓰고, ADR 표 Status는 발의 세션 몫이라 넘겨 쓰지 않는다
+
+## 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
+
+- 변경: `src/runtime/api_web/core_api_web/api/app.py` 76행 description `ROSY-API-REF-001 (v1.31)` → `(v1.33)`. `527d4c87`(fleet queued-task, D-271)가 API Ref 헤더를 v1.33으로 올렸는데 배너는 손대지 않아 `test_protocol_version_alignment::test_app_description_names_the_live_contract_version`이 CI 첫 pytest 단계를 붉힘(core domain 1 failed/1729 passed, deployment 단계는 skip이라 기존 4건은 미평가) — 769e2f28의 v1.30→v1.31과 같은 D-18 절반 갱신 잔재이며 타 레인 active WIP이 아닌 기계적 드리프트
+- 증거: 로컬 `python -X utf8 -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q -rfE` 초록 확인(계약 헤더 v1.33 ↔ 배너 v1.33 문자열 일치). `git diff --check` 통과
+- gate 변화: 없음(ADR·계약 문서 무변경 — 버전 표기는 문서가 이미 v1.33)
+- 회귀: 없음(배너 문자열 외 무변경. 동료 WIP 2파일 미스테이징 유지)
+- 교훈: API Ref 버전을 올린 커밋은 같은 변경에서 배너 문자열도 같이 올린다 — D-18의 "문서와 코드를 한 변경"에는 FastAPI description이 포함된다. 안 그러면 첫 pytest 단계가 붉어 뒤 단계 전부를 skip시킨다

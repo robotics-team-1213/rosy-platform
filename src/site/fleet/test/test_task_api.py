@@ -27,6 +27,7 @@ def test_console_goal_creates_authenticated_persistent_operator_task(tmp_path):
     assert response.status_code == 200, response.text
     task = response.json()["task"]
     assert task["status"] == FleetTaskStatus.QUEUED.value
+    assert task["queue_position"] == 1
     assert response.json()["accepted"] is False
     assert response.json()["queued"] is True
     assert not console._client("rosy_01").calls

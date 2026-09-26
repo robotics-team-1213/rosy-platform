@@ -874,8 +874,12 @@ automatically. This Fleet task enum does not change the robot DDS/WSS envelope
 `protocol_version`.
 
 The browser treats `QUEUED` as durably accepted by Fleet and shows the task ID,
-wait reason, blockers when available, and queued-only cancellation. Before
-cancelling, it reads the authenticated task projection again; if the task has
+server-computed `queue_position`, wait reason, blockers when available, and
+queued-only cancellation. The position orders queued `READY` and
+`WAITING_TRAFFIC` tasks by server priority and FIFO timestamp; it is not an
+execution-time estimate and does not override robot availability or traffic
+eligibility. Before cancelling, the browser reads the authenticated task
+projection again; if the task has
 already left `QUEUED`, the operator action uses the robot cancel route. Robot
 cancel/stop and site E-Stop remove undispatched queued work before sending the
 CORE safety request. An `UNKNOWN` task is shown as requiring manual CORE status

@@ -27,6 +27,23 @@ def test_task_history_is_append_only_and_survives_reopen(tmp_path):
     assert task["receipt"] == {"accepted": True}
 
 
+def test_readback_reports_server_order_for_queued_tasks_only(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    for task_id in ("background", "operator"):
+        store.create_task(
+            task_id=task_id, robot_id="rosy_01", task_type="navigate",
+            source="operator", actor_id="site-console", request_key=task_id,
+            request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None,
+        )
+    store.enqueue("background", priority_class=2)
+    store.enqueue("operator", priority_class=0)
+
+    assert store.get_task("operator")["queue_position"] == 1
+    assert store.get_task("background")["queue_position"] == 2
+    store.claim_next(worker_id="dispatcher", available_robot_ids={"rosy_01"})
+    assert store.get_task("operator")["queue_position"] is None
+
+
 def test_idempotency_key_reuses_same_task_and_rejects_changed_intent(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     args = dict(task_id="task-1", robot_id="rosy_01", task_type="navigate",
