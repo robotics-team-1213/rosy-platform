@@ -1,0 +1,35 @@
+diff --git a/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro b/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro
+--- a/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro
++++ b/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro
+@@ -1,7 +1,7 @@
+ <?xml version="1.0"?>
+ <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+   <xacro:macro name="omx_f_system" params="name prefix port_name:=^|/dev/ttyACM1 use_sim:=^|false use_mock_hardware:=^|false mock_sensor_commands:=^|false">
+-    <ros2_control name="${name}" type="system" is_async="true">
++    <ros2_control name="${name}" type="system" is_async="${'false' if str(use_sim).lower() == 'true' else 'true'}">
+       <xacro:if value="$(arg use_sim)">
+         <hardware>
+           <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+diff --git a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
+--- a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
++++ b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
+@@ -61,7 +61,7 @@ def generate_launch_description():
+                     ('gz_args', [
+                         world,
+                         '.sdf',
+-                        ' -v 1',
++                        ' -v 1 -s --physics-engine gz-physics-bullet-featherstone-plugin',
+                         ' -r'
+                     ])
+                 ]
+diff --git a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml b/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
+--- a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
++++ b/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
+@@ -2,6 +2,7 @@
+   controller_manager:
+     ros__parameters:
+       update_rate: 100  # Hz
++      enforce_command_limits: true
+ 
+       joint_state_broadcaster:
+         type: joint_state_broadcaster/JointStateBroadcaster

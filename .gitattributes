@@ -19,6 +19,7 @@ deploy/image/device-python-requirements.txt text eol=lf
 # D-247: inputs.lock.yaml pins the rpi_ws281x patch by SHA-256; the overlay and
 # the udev/modprobe files go into the image byte for byte.
 deploy/image/patches/*.patch text eol=lf
+deploy/omx/patches/*.patch text eol=lf whitespace=-blank-at-eol
 deploy/image/overlays/*.dts text eol=lf
 deploy/robot/udev/*.rules text eol=lf
 deploy/robot/modprobe/*.conf text eol=lf

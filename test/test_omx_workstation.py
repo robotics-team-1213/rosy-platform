@@ -120,7 +120,7 @@ def test_simulation_profile_runs_pinned_robotis_gazebo_launch_without_hardware_a
         "ros2",
         "launch",
         "open_manipulator_bringup",
-        "omx_f_gazebo.launch.py",
+        "omx_f_follower_ai_gazebo.launch.py",
     ]
     assert "devices" not in service
     assert "privileged" not in service
@@ -128,6 +128,7 @@ def test_simulation_profile_runs_pinned_robotis_gazebo_launch_without_hardware_a
         "ROS_DOMAIN_ID": "${OMX_SIM_DOMAIN_ID:-31}",
         "RMW_IMPLEMENTATION": "rmw_cyclonedds_cpp",
         "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
+        "GZ_SIM_PHYSICS_ENGINE_PATH": "/opt/ros/jazzy/opt/gz_physics_vendor/lib",
     }
 
 
@@ -175,3 +176,29 @@ def test_omx_entrypoint_uses_discovery_range_without_legacy_localhost_override()
     entrypoint = (OMX / "entrypoint.sh").read_text(encoding="utf-8")
 
     assert "unset ROS_LOCALHOST_ONLY" in entrypoint
+
+
+def test_ai_simulation_patch_selects_supported_mimic_engine_and_sync_hardware():
+    dockerfile = (OMX / "Dockerfile").read_text(encoding="utf-8")
+    patch = (OMX / "patches" / "omx-ai-sim-gates.patch").read_text(encoding="utf-8")
+    assert "git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-sim-gates.patch" in dockerfile
+    assert "omx_f_follower_ai_gazebo.launch.py" in patch
+    assert "gz-physics-bullet-featherstone-plugin" in patch
+    assert "is_async=\"${'false' if str(use_sim).lower() == 'true' else 'true'}\"" in patch
+    assert "enforce_command_limits: true" in patch
+    assert "omx_f_follower_ai/hardware_controller_manager.yaml" in patch
+
+
+def test_vendor_patches_keep_lf_endings_in_windows_build_context():
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "deploy/omx/patches/*.patch text eol=lf" in attributes
+    for patch in (OMX / "patches").glob("*.patch"):
+        assert b"\r\n" not in patch.read_bytes()
+
+
+def test_ai_simulation_excludes_direct_leader_trajectory_input():
+    dockerfile = (OMX / "Dockerfile").read_text(encoding="utf-8")
+    patch = (OMX / "patches" / "omx-ai-sim-action-only.patch").read_text(encoding="utf-8")
+    assert "apply --check /tmp/omx-ai-sim-action-only.patch" in dockerfile
+    assert "install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py" in dockerfile
+    assert "-            '-r /arm_controller/joint_trajectory:=/leader/joint_trajectory'," in patch

@@ -67,7 +67,7 @@
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
 - pinky_pro ARTIFACT: required-ros-packages.txt에 pinky_pro를 올린 뒤의 이미지 빌드와 package inventory(ros2 pkg prefix pinky_pro) 증거 없음
 - pinky_pro DEVICE: 새 이미지에서 CORE_READY와 GET /system/capabilities readback 증거 없음
-- omx ROS-SIM: Image package installation is verified; vendor launch graph, simulator/mock path, and camera stream are not exercised
+- omx ROS-SIM: Two isolated AI follower Gazebo instances, action/cancel, and restart were observed; native single-command ownership, target-workstation timing, timeout HOLD policy, and camera stream remain unverified (docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md)
 - omx ARTIFACT: No OMX workstation image digest or package inventory
 - description ARTIFACT: io 이미지에 포함된다(deploy/image/ 빌더 `COPY src/description`, `--packages-select`에 포함; meshes는 `RUN mkdir -p`로 빈 폴더만 생성). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - description DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
