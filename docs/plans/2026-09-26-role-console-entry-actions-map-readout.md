@@ -33,4 +33,4 @@ Make the role-oriented console the clear continuation of authentication, make ac
 - [x] Keyboard and pointer map readout announces valid world coordinates and out-of-map state; crosshair movement sends no command.
 - [x] Desktop and mobile browser checks pass at 1366×768, 1440×900, and 390×844; visible captures are under `X:\DevTemp\rosy-uiux-followup\`.
 - [x] Targeted combined API, HMI, and foundation suites pass: 136 passed, 2 skipped, 0 new known failures.
-- [ ] Commit is integrated into local `main`; remote push and device acceptance remain separate gates.
+- [x] Commit `deb6c476` is integrated into local `main`; remote push and device acceptance remain separate gates.
