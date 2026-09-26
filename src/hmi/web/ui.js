@@ -2,12 +2,14 @@
 // 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
 
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
+const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
+const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
 
 class UiButton extends HTMLElement {
   static formAssociated = true;
 
   static get observedAttributes() {
-    return ["disabled"];
+    return ["disabled", "kind", "size"];
   }
 
   constructor() {
@@ -69,6 +71,11 @@ class UiButton extends HTMLElement {
   }
 
   _sync() {
+    const kind = this.getAttribute("kind");
+    const size = this.getAttribute("size") || KIND_SIZES[kind] || "secondary";
+    this.dataset.size = BUTTON_SIZES.includes(size) ? size : "secondary";
+    if (BUTTON_SIZES.includes(size)) delete this.dataset.sizeMissing;
+    else this.dataset.sizeMissing = "true";
     const off = this.disabled;
     this.tabIndex = off ? -1 : 0;
     this.setAttribute("aria-disabled", off ? "true" : "false");
@@ -177,6 +184,33 @@ class UiSection extends HTMLElement {
 
 class UiEmpty extends HTMLElement {}
 
+class UiActions extends HTMLElement {}
+
+const STATUS_STATES = ["pending", "empty", "ready", "warning", "error", "unavailable", "forbidden"];
+
+class UiStatus extends HTMLElement {
+  static get observedAttributes() { return ["state"]; }
+
+  connectedCallback() {
+    if (!this.hasAttribute("role")) this.setAttribute("role", "status");
+    if (!this.hasAttribute("aria-live")) this.setAttribute("aria-live", "polite");
+    this._syncState();
+  }
+
+  attributeChangedCallback() { this._syncState(); }
+
+  _syncState() {
+    const state = this.getAttribute("state") || "pending";
+    if (STATUS_STATES.includes(state)) {
+      this.dataset.state = state;
+      delete this.dataset.stateMissing;
+    } else {
+      delete this.dataset.state;
+      this.dataset.stateMissing = "true";
+    }
+  }
+}
+
 class UiEvidence extends HTMLElement {
   connectedCallback() {
     if (!EVIDENCE.includes(this.getAttribute("state"))) {
@@ -200,6 +234,8 @@ for (const [name, ctor] of [
   ["ui-brand", UiBrand],
   ["ui-section", UiSection],
   ["ui-empty", UiEmpty],
+  ["ui-actions", UiActions],
+  ["ui-status", UiStatus],
 ]) {
   if (!customElements.get(name)) customElements.define(name, ctor);
 }

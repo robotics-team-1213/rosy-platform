@@ -1,6 +1,6 @@
 /* 브라우저 표면이 같이 쓰는 조작 부품. 색·크기·간격은 tokens.css만 읽는다.
  * 레이아웃(어디 놓을지)은 각 표면 시트에 남긴다.
- * 요소: ui-button, ui-field, ui-tag, ui-text.
+ * 요소: ui-button, ui-field, ui-tag, ui-text, ui-status, ui-actions.
  */
 
 ui-button {
@@ -24,7 +24,6 @@ ui-button {
 }
 
 ui-button[kind="primary"] {
-  min-height: var(--target-primary);
   padding: 0 var(--space-5);
   border-color: transparent;
   color: var(--button-primary-ink);
@@ -37,7 +36,6 @@ a.docs-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--target-secondary);
   padding: 0 var(--space-3);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-button);
@@ -48,6 +46,8 @@ a.docs-link {
   cursor: pointer;
 }
 
+a.docs-link { min-height: var(--target-secondary); }
+
 ui-button[kind="quiet"]:hover,
 a.docs-link:hover {
   color: var(--paper);
@@ -55,7 +55,6 @@ a.docs-link:hover {
 }
 
 ui-button[kind="irreversible"] {
-  min-height: var(--target-irreversible);
   padding: var(--space-2) var(--space-4);
   border-color: transparent;
   color: var(--button-irreversible-ink);
@@ -64,7 +63,6 @@ ui-button[kind="irreversible"] {
 }
 
 ui-button[kind="segment"] {
-  min-height: var(--target-secondary);
   border: 0;
   border-radius: 0;
   color: var(--nominal-quiet);
@@ -74,7 +72,13 @@ ui-button[kind="segment"] {
 }
 
 ui-button[kind="segment"][aria-pressed="true"],
-ui-button[kind="segment"].active,
+ui-button[kind="segment"].active {
+  color: var(--paper);
+  background: var(--ground-card-2);
+  border-color: transparent;
+  font-weight: 700;
+}
+
 ui-button[kind="quiet"].arming {
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
@@ -89,6 +93,10 @@ ui-button[kind="toggle"][data-active="true"] {
   border-color: transparent;
   font-weight: 700;
 }
+
+ui-button[data-size="secondary"] { min-height: var(--target-secondary); }
+ui-button[data-size="primary"] { min-height: var(--target-primary); }
+ui-button[data-size="irreversible"] { min-height: var(--target-irreversible); }
 
 ui-button[kind="toggle"] small,
 ui-button[kind="irreversible"] small {
@@ -108,6 +116,10 @@ ui-button[kind="toggle"][data-active="true"] small {
 }
 
 ui-button[data-kind-missing] {
+  outline: 2px solid var(--status-crit);
+}
+
+ui-button[data-size-missing] {
   outline: 2px solid var(--status-crit);
 }
 
@@ -230,6 +242,40 @@ ui-text[scale="display"] {
   font: 650 var(--text-display)/1 var(--mono);
   font-variant-numeric: tabular-nums;
   color: var(--paper);
+}
+
+ui-status {
+  display: block;
+  min-width: 0;
+  color: var(--nominal-quiet);
+  font: 500 var(--text-body)/1.4 var(--body);
+  overflow-wrap: anywhere;
+}
+
+:root {
+  scrollbar-color: var(--ground-card-2) var(--ground);
+  scrollbar-width: thin;
+}
+
+ui-status[hidden] { display: none; }
+
+ui-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+ui-status[state="warning"],
+ui-status[state="error"],
+ui-status[state="unavailable"],
+ui-status[state="forbidden"] {
+  color: var(--status-warn);
+}
+
+ui-status[data-state-missing] {
+  outline: 2px solid var(--status-crit);
+  outline-offset: 2px;
 }
 
 ui-head {

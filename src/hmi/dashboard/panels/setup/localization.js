@@ -29,7 +29,7 @@ export function mount(root, ctx) {
   slam.append(el("h3", "", "SLAM 맵 준비"));
   const mapName = el("input"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
   mapName.setAttribute("aria-label", "저장할 맵 이름");
-  const actions = el("div", "surface-actions");
+  const actions = el("ui-actions", "surface-actions");
   const start = el("ui-button", "", "맵핑 시작"); start.setAttribute("kind", "primary"); start.type = "button";
   const stop = el("ui-button", "", "맵핑 중지"); stop.setAttribute("kind", "quiet"); stop.type = "button";
   const save = el("ui-button", "", "맵 저장"); save.setAttribute("kind", "quiet"); save.type = "button";

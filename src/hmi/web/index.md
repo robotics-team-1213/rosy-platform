@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
+- 2026-09-26 · uncommitted · feat(hmi): shared button sizes, action groups, and status UI (D-284)
 - 2026-09-26 · uncommitted · feat(hmi): ROSY 장미 브랜드 토큰과 동적 버튼 kind (D-277)
 - 2026-09-25 · uncommitted · refactor(hmi): move web_common under src/hmi (D-231)
 - 2026-09-24 · uncommitted · fix(harness): 과거 로그 항목 원문 복원(append-only)
-- 2026-09-24 · uncommitted · fix(web_common): ui-button small 기본 척급 규칙 (D-203)
-- 2026-09-24 · uncommitted · fix(web): 빈 목록과 증거 색을 공용 부품에 맞춘다

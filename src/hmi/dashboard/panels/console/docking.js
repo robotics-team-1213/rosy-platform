@@ -9,7 +9,7 @@ export function mount(root, ctx) {
   const label = el("label", "surface-field", "도킹 위치");
   const select = el("select"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);
   const dock = el("ui-button", "", "도킹 시작"); dock.setAttribute("kind", "primary"); dock.type = "button"; dock.disabled = true;
-  const actions = el("div", "surface-actions");
+  const actions = el("ui-actions", "surface-actions");
   const undock = el("ui-button", "", "언도크"); undock.setAttribute("kind", "quiet"); undock.type = "button";
   const cancel = el("ui-button", "", "도킹 취소"); cancel.setAttribute("kind", "quiet"); cancel.type = "button";
   actions.append(undock, cancel); form.append(label, dock); root.append(head, message, facts, form, actions);

@@ -29,7 +29,7 @@ TAG = re.compile(r"<ui-button\b([^>]*)>", re.S)
 RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
 CONTROL = re.compile(
     r"ui-button|ui-field|ui-tag|ui-text|ui-head|ui-grid|ui-chip|ui-triage|ui-evidence|"
-    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty"
+    r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
 PAINT = re.compile(
@@ -72,13 +72,59 @@ def test_shared_controls_are_the_only_painted_components():
     names = (
         "ui-button", "ui-field", "ui-tag", "ui-text",
         "ui-head", "ui-grid", "ui-chip", "ui-triage", "ui-evidence",
-        "ui-shell", "ui-topbar", "ui-brand", "ui-section", "ui-empty",
+        "ui-shell", "ui-topbar", "ui-brand", "ui-section", "ui-empty", "ui-status", "ui-actions",
     )
     for name in names:
         assert name in css
         assert f'"{name}"' in script
     assert not RAW_COLOR.findall(css), "components.css에 원시 색이 있다"
     assert not RAW_SIZE.findall(css)
+
+
+def test_shared_status_component_owns_accessibility_and_palette_states():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    script = UI.read_text(encoding="utf-8")
+    states = {
+        "pending", "empty", "ready", "warning", "error", "unavailable", "forbidden",
+    }
+    declaration = re.search(r"const STATUS_STATES = \[(.*?)\];", script, re.S)
+    assert declaration
+    assert set(re.findall(r'"([a-z]+)"', declaration.group(1))) == states
+    assert 'if (!this.hasAttribute("role")) this.setAttribute("role", "status")' in script
+    assert 'if (!this.hasAttribute("aria-live")) this.setAttribute("aria-live", "polite")' in script
+    assert "ui-status[state=\"warning\"]" in css
+    assert "ui-status[hidden] { display: none; }" in css
+    assert "color: var(--status-warn)" in css
+    assert not RAW_COLOR.findall(css)
+
+
+def test_role_recovery_panels_use_shared_status_component():
+    console_map = (ROOT / "hmi" / "dashboard" / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+    host_operations = (ROOT / "hmi" / "dashboard" / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
+    assert 'el("ui-status"' in console_map
+    assert 'el("ui-status"' in host_operations
+
+
+def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    script = UI.read_text(encoding="utf-8")
+    assert 'const BUTTON_SIZES = ["secondary", "primary", "irreversible"]' in script
+    assert 'const KIND_SIZES = { primary: "primary", irreversible: "irreversible" }' in script
+    for size, token in (("secondary", "target-secondary"), ("primary", "target-primary"), ("irreversible", "target-irreversible")):
+        assert f'ui-button[data-size="{size}"]' in css
+        assert f"min-height: var(--{token})" in css
+    assert "ui-actions" in script and "ui-actions" in css
+    assert "gap: var(--space-2)" in css[css.index("ui-actions {"):]
+    dashboard = ROOT / "hmi" / "dashboard" / "panels"
+    owners = ("console/docking.js", "console/mode.js", "console/map.js", "host/operations.js", "setup/localization.js")
+    for owner in owners:
+        source = (dashboard / owner).read_text(encoding="utf-8")
+        assert 'el("ui-actions"' in source, owner
+    teleop = (dashboard / "console" / "teleop.js").read_text(encoding="utf-8")
+    assert 'setAttribute("size", "primary")' in teleop
+    panel_css = (dashboard / "surface-panels.css").read_text(encoding="utf-8")
+    teleop_rule = re.search(r"\.surface-teleop-controls ui-button\s*\{([^}]*)\}", panel_css)
+    assert teleop_rule and "min-height" not in teleop_rule.group(1)
 
 
 def test_browser_surfaces_use_the_type_scale():

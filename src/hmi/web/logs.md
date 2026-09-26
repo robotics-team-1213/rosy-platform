@@ -97,3 +97,20 @@
 - gate 변화: SOURCE GO, LOCAL GO; ROS-SIM~FIELD N/A (이 변경 범위에 장치 수용은 없음).
 - 결정: D-277
 - 교훈: 브랜드 강조와 안전 의미색은 별도 토큰 집합이어야 한다.
+
+
+
+## 2026-09-26 · uncommitted · feat(hmi): shared button sizes, action groups, and status UI (D-284)
+
+- 변경: map button kinds to the 44/48/58px size tokens; add responsive `ui-actions` and accessible `ui-status`; use existing neutral palette tokens for selected segments and scrollbars.
+- 증거: shared-control and palette gates plus browser component contract passed; focused dashboard/shared/API/map/host/browser suite: 241 passed, 2 skipped.
+- gate 변화: unchanged. No ROS-SIM/device/field acceptance claimed.
+- Decision: D-284.
+- Rule: surfaces compose shared controls and do not repaint them; ROSY rose stays brand identity.
+
+## 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
+
+- 변경: re-run shared UI, API, role browser, and device browser coverage after rebasing on current main.
+- 증거: 241 passed, 3 skipped; `rosy_harness.py lint` reported 0 errors and 21 unrelated last-verified evidence warnings.
+- gate 변화: unchanged. No ROS-SIM, ARM64 image, device, or field acceptance claimed.
+- Decision: D-279 and D-284 remain the role recovery and shared component contracts.

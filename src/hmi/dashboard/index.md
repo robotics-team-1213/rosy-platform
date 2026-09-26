@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
+- 2026-09-26 · uncommitted · feat(hmi): role-aware map absence and Host Agent recovery (D-279)
 - 2026-09-26 · uncommitted · docs(adr): D-283 운용 조작 그룹 결정
 - 2026-09-26 · uncommitted · docs(hmi): compare operator console viewport by role
 - 2026-09-26 · uncommitted · feat(hmi): stabilize mobile /console topbar and capture current shell
-- 2026-09-26 · uncommitted · fix(hmi): role-gate map selection and compact mobile controls (D-278)
-- 2026-09-26 · uncommitted · feat(hmi): 실제 CORE 경로 연결과 화면 상태 보정

@@ -108,6 +108,7 @@
 | D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 |
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
+| D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 |
 
 ## 계획·결과 문서
 
@@ -137,6 +138,7 @@
 - [2026-09-25-folder-map.md](plans/2026-09-25-folder-map.md)
 - [2026-09-25-ownership-naming-control-plane.md](plans/2026-09-25-ownership-naming-control-plane.md)
 - [2026-09-25-ownership-naming-input-v0.2.md](plans/2026-09-25-ownership-naming-input-v0.2.md)
+- [2026-09-26-role-aware-empty-state-recovery-plan.md](plans/2026-09-26-role-aware-empty-state-recovery-plan.md)
 - [2026-09-26-role-menu-rollout.md](plans/2026-09-26-role-menu-rollout.md)
 - [2026-09-26-site-host-placement-design.md](plans/2026-09-26-site-host-placement-design.md)
 - [2026-09-26-site-host-placement-implementation.md](plans/2026-09-26-site-host-placement-implementation.md)

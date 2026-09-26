@@ -6,13 +6,30 @@ function el(tag, cls, text) {
   return node;
 }
 
+function unavailableLabel(code) {
+  if (code === "HOST_AGENT_TIMEOUT") return "Host Agent 응답 시간이 초과되었습니다.";
+  if (code === "HOST_AGENT_UNREADABLE_RESPONSE") return "Host Agent 응답을 읽지 못했습니다.";
+  if (code === "HOST_AGENT_UNAVAILABLE") return "Host Agent에 연결할 수 없습니다.";
+  return "Host Agent 상태를 확인할 수 없습니다.";
+}
+
 function card(title, path, interval, ctx, describe) {
   const wrap = el("section", "surface-readback");
   wrap.append(el("h3", "", title));
   const body = el("dl", "surface-readout");
-  const status = el("p", "surface-message", "상태를 불러오는 중입니다.");
-  status.setAttribute("role", "status");
-  wrap.append(body, status);
+  const status = el("ui-status", "", "상태를 불러오는 중입니다.");
+  status.setAttribute("state", "pending");
+  const detail = el("details", "surface-disclosure");
+  detail.append(el("summary", "", "응답 세부 정보"));
+  const detailText = el("p", "surface-message");
+  detail.append(detailText);
+  const recovery = el("details", "surface-disclosure");
+  recovery.append(el("summary", "", "복구 안내"));
+  const recoveryText = el("p", "surface-message");
+  recovery.append(recoveryText);
+  detail.hidden = true;
+  recovery.hidden = true;
+  wrap.append(body, status, detail, recovery);
   let currentData = {};
   let onUpdate = () => {};
   const stop = ctx.store.poll(path, interval, (payload) => {
@@ -20,7 +37,12 @@ function card(title, path, interval, ctx, describe) {
     const commissioning = path === "/api/v1/host/commissioning";
     if (!commissioning && payload?.available !== true) {
       body.append(el("dt", "", "상태"), el("dd", "", "확인할 수 없음"));
-      status.textContent = payload?.detail || "Host Agent 상태를 받지 못했습니다.";
+      status.textContent = unavailableLabel(payload?.code);
+      status.setAttribute("state", "unavailable");
+      detailText.textContent = payload?.detail || "";
+      detail.hidden = !payload?.detail;
+      recoveryText.textContent = payload?.recovery || "";
+      recovery.hidden = !payload?.recovery;
       wrap.dataset.available = "false";
       onUpdate();
       return;
@@ -28,15 +50,23 @@ function card(title, path, interval, ctx, describe) {
     wrap.dataset.available = "true";
     const data = commissioning ? payload : (payload.data || {});
     currentData = data;
+    detailText.textContent = payload?.detail || "";
+    detail.hidden = !payload?.detail;
+    recoveryText.textContent = payload?.recovery || "";
+    recovery.hidden = !payload?.recovery;
     for (const [label, value] of describe(data)) {
       body.append(el("dt", "", label), el("dd", "", value == null || value === "" ? "—" : String(value)));
     }
-    status.textContent = payload.ok === false ? (payload.detail || "호스트 상태에 문제가 있습니다.") : (payload.detail || "서버가 보고한 상태입니다.");
+    status.textContent = payload.ok === false
+      ? "Host Agent가 확인이 필요한 상태를 보고했습니다."
+      : "Host Agent 상태를 확인했습니다.";
+    status.setAttribute("state", payload.ok === false ? "warning" : "ready");
     onUpdate();
   }, (error) => {
     currentData = {};
     wrap.dataset.available = "false";
     status.textContent = error.status === 403 ? "이 상태를 볼 권한이 없습니다." : `상태를 가져오지 못했습니다: ${error.message}`;
+    status.setAttribute("state", error.status === 403 ? "forbidden" : "error");
     onUpdate();
   });
   return {wrap, stop, get data() { return currentData; }, onUpdate(callback) { onUpdate = callback; }};
@@ -51,7 +81,7 @@ export function mount(root, ctx) {
 
   const networkActions = el("div", "surface-readback");
   networkActions.append(el("h4", "", "네트워크 작업"));
-  const modeActions = el("div", "surface-actions");
+  const modeActions = el("ui-actions", "surface-actions");
   const sta = el("ui-button", "", "사업장 Wi-Fi로 전환"); sta.setAttribute("kind", "quiet"); sta.type = "button";
   const relay = el("ui-button", "", "릴레이 AP 켜기"); relay.setAttribute("kind", "quiet"); relay.type = "button";
   modeActions.append(sta, relay); networkActions.append(modeActions);
@@ -62,21 +92,25 @@ export function mount(root, ctx) {
   const ssid = el("input"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
   const field = el("input"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
   const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
-  const networkNote = el("p", "surface-message", "Host Agent 상태 확인 전에는 네트워크 작업을 사용할 수 없습니다."); networkNote.setAttribute("role", "status"); networkActions.append(networkNote);
+  const networkNote = el("ui-status", "", "Host Agent 상태 확인 전에는 네트워크 작업을 사용할 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
   network.wrap.append(networkActions);
-  function networkEnabled(enabled) { for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled; }
+  function networkEnabled(enabled) {
+    for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled;
+    networkNote.hidden = enabled;
+  }
   network.onUpdate(() => networkEnabled(network.wrap.dataset.available === "true"));
   networkEnabled(network.wrap.dataset.available === "true");
 
-  const releaseActions = el("div", "surface-actions");
+  const releaseActions = el("ui-actions", "surface-actions");
   const rollback = el("ui-button", "", "이전 릴리스로 복귀"); rollback.setAttribute("kind", "quiet"); rollback.type = "button";
   const clearHold = el("ui-button", "", "복구 보류 해제"); clearHold.setAttribute("kind", "quiet"); clearHold.type = "button";
   rollback.disabled = clearHold.disabled = true; releaseActions.append(rollback, clearHold); release.wrap.append(releaseActions);
-  const releaseNote = el("p", "surface-message", "Host Agent 상태 확인 전에는 릴리스 작업을 사용할 수 없습니다."); releaseNote.setAttribute("role", "status"); release.wrap.append(releaseNote);
+  const releaseNote = el("ui-status", "", "Host Agent 상태 확인 전에는 릴리스 작업을 사용할 수 없습니다."); releaseNote.setAttribute("state", "pending"); release.wrap.append(releaseNote);
   function syncReleaseActions() {
     const held = release.data.state === "RECOVERY_HOLD";
     rollback.disabled = release.wrap.dataset.available !== "true" || !release.data.previous || held;
     clearHold.disabled = release.wrap.dataset.available !== "true" || !held;
+    releaseNote.hidden = release.wrap.dataset.available === "true";
   }
   release.onUpdate(syncReleaseActions);
   syncReleaseActions();
