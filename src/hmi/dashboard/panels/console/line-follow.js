@@ -4,8 +4,8 @@ export function mount(root, ctx) {
   const head = el("ui-head", "", "차선 추종");
   const status = el("p", "surface-message", "차선 추종 상태를 읽는 중입니다."); status.setAttribute("role", "status");
   const facts = el("dl", "surface-readout");
-  const form = el("div", "surface-form");
-  const label = el("label", "surface-field", "추종 모드");
+  const form = el("div", "ui-form");
+  const label = el("label", "ui-field-label", "추종 모드");
   const select = el("select"); select.setAttribute("aria-label", "차선 추종 모드");
   for (const [value, text] of [["IR_LINE", "적외선 센서"], ["CAMERA_LINE", "카메라"]]) {
     const option = el("option", "", text); option.value = value; select.append(option);

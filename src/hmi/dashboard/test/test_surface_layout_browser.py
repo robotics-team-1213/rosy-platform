@@ -72,3 +72,34 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
     assert result["nav"]["right"] <= 390
     assert result["nav"]["bottom"] <= result["role"]["y"]
     assert result["estop"]["right"] <= 390
+
+
+def test_shared_role_form_layout_collapses_to_full_width_on_mobile():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        results = {}
+        for width in (1440, 390):
+            page = _page(browser, width, 900)
+            page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
+              <form class='ui-form' aria-label='로봇 설정'>
+                <label class='ui-field-label'>로봇 이름<input aria-label='로봇 이름'></label>
+                <label class='ui-field-label'>이름표<input aria-label='이름표'></label>
+                <ui-button kind='primary'>저장</ui-button>
+              </form>`; }""")
+            results[width] = page.locator(".ui-form").evaluate("""form => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              direction: getComputedStyle(form).flexDirection,
+              firstFieldWidth: form.firstElementChild.getBoundingClientRect().width,
+              formWidth: form.getBoundingClientRect().width,
+              labelDisplay: getComputedStyle(form.firstElementChild).display,
+              gap: getComputedStyle(form).rowGap,
+            })""")
+            page.close()
+        browser.close()
+
+    assert results[1440]["overflow"] == 0
+    assert results[1440]["direction"] == "row"
+    assert results[1440]["labelDisplay"] == "grid"
+    assert results[390]["overflow"] == 0
+    assert results[390]["direction"] == "column"
+    assert results[390]["firstFieldWidth"] == results[390]["formWidth"]

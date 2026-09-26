@@ -127,6 +127,32 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
     assert teleop_rule and "min-height" not in teleop_rule.group(1)
 
 
+def test_role_forms_use_shared_responsive_layout_and_field_labels():
+    css = COMPONENTS.read_text(encoding="utf-8")
+    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    layout = re.search(r"\.ui-form\s*\{([^}]*)\}", css)
+    field = re.search(r"\.ui-field-label\s*\{([^}]*)\}", css)
+    assert layout and "display: flex" in layout.group(1)
+    assert "flex-wrap: wrap" in layout.group(1)
+    assert "align-items: end" in layout.group(1)
+    assert "gap: var(--space-2)" in layout.group(1)
+    assert field and "display: grid" in field.group(1)
+    assert "min-width: min(100%, 10rem)" in field.group(1)
+    assert ".ui-form > * { width: 100%; }" in css
+    assert ".surface-form" not in panel_css
+    assert ".surface-inline-form" not in panel_css
+    assert ".surface-field" not in panel_css
+
+    panels = ROOT / "hmi" / "dashboard" / "panels"
+    sources = [path.read_text(encoding="utf-8") for path in panels.rglob("*.js")]
+    role_forms = "\n".join(sources)
+    assert 'el("form", "ui-form")' in role_forms
+    assert 'el("label", "ui-field-label"' in role_forms
+    assert "surface-form" not in role_forms
+    assert "surface-inline-form" not in role_forms
+    assert "surface-field" not in role_forms
+
+
 def test_browser_surfaces_use_the_type_scale():
     offenders = {}
     for path in _surface_texts():

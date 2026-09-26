@@ -114,3 +114,9 @@
 - 증거: 241 passed, 3 skipped; `rosy_harness.py lint` reported 0 errors and 21 unrelated last-verified evidence warnings.
 - gate 변화: unchanged. No ROS-SIM, ARM64 image, device, or field acceptance claimed.
 - Decision: D-279 and D-284 remain the role recovery and shared component contracts.
+
+## 2026-09-26 · uncommitted · feat(hmi): share role form layout and field labels (D-285)
+- 변경: Added `.ui-form` and `.ui-field-label` to shared `components.css`, migrated repeated role-panel form and label classes, and kept all controls as native HTML. Added a form-layout contract and desktop/mobile browser coverage.
+- 증거: `python -m pytest src/hmi/web/test src/hmi/dashboard/test -q` with `ROSY_RUN_BROWSER_TESTS=1` ? 73 passed (2026-09-26 Windows).
+- gate 변화: SOURCE remains GO; no ROS-SIM, artifact, device, or field claim is added.
+- 결정: D-285.

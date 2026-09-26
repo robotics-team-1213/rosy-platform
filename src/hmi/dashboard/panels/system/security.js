@@ -2,7 +2,7 @@
 // rendered once in a live status node and are never persisted by this module.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function numberField(labelText, name, max = 100, min = 0.01) {
-  const label = el("label", "surface-field", labelText); const input = el("input");
+  const label = el("label", "ui-field-label", labelText); const input = el("input");
   input.type = "number"; input.min = String(min); input.max = String(max); input.step = "any"; input.name = name; label.append(input);
   return {label, input};
 }
@@ -12,8 +12,8 @@ export function mount(root, ctx) {
   const notice = el("p", "surface-message", "설정을 불러오는 중입니다."); notice.setAttribute("role", "status");
 
   const tokenSection = el("section", "surface-readback"); tokenSection.append(el("h3", "", "접근 토큰"));
-  const tokenForm = el("form", "surface-form");
-  const roleLabel = el("label", "surface-field", "역할");
+  const tokenForm = el("form", "ui-form");
+  const roleLabel = el("label", "ui-field-label", "역할");
   const role = el("select"); role.name = "role"; roleLabel.append(role);
   for (const value of ["viewer", "operator", "administrator"]) { const option = el("option", "", value); option.value = value; role.append(option); }
   const label = el("input"); label.name = "label"; label.maxLength = 64; label.setAttribute("aria-label", "토큰 이름표"); label.placeholder = "이름표";
@@ -22,15 +22,15 @@ export function mount(root, ctx) {
   tokenSection.append(tokenForm, tokenList);
 
   const safetySection = el("section", "surface-readback"); safetySection.append(el("h3", "", "안전 정책 한계"));
-  const safetyForm = el("form", "surface-form");
+  const safetyForm = el("form", "ui-form");
   const fields = [numberField("수동 선속도 (m/s)", "manual_linear", 10, 0), numberField("수동 각속도 (rad/s)", "manual_angular", 20, 0),
     numberField("배터리 경고 (%)", "battery_warning_percent"), numberField("배터리 위험 (%)", "battery_critical_percent"), numberField("배터리 심각 (%)", "battery_deep_percent")];
   const fleet = el("select"); fleet.name = "fleet_loss_policy"; fleet.setAttribute("aria-label", "연결 끊김 정책");
   for (const value of ["STOP", "HOLD", "RETURN_HOME", "CONTINUE"]) { const option = el("option", "", value); option.value = value; fleet.append(option); }
   const batteryPolicy = el("select"); batteryPolicy.name = "battery_critical_policy"; batteryPolicy.setAttribute("aria-label", "배터리 위험 정책");
   for (const value of ["STOP", "RETURN_HOME"]) { const option = el("option", "", value); option.value = value; batteryPolicy.append(option); }
-  const fleetLabel = el("label", "surface-field", "연결 끊김 정책"); fleetLabel.append(fleet);
-  const batteryLabel = el("label", "surface-field", "배터리 위험 정책"); batteryLabel.append(batteryPolicy);
+  const fleetLabel = el("label", "ui-field-label", "연결 끊김 정책"); fleetLabel.append(fleet);
+  const batteryLabel = el("label", "ui-field-label", "배터리 위험 정책"); batteryLabel.append(batteryPolicy);
   const save = el("ui-button", "", "정책 저장"); save.setAttribute("kind", "primary"); save.type = "submit";
   safetyForm.append(...fields.map((item) => item.label), fleetLabel, batteryLabel, save);
   safetySection.append(safetyForm); root.append(head, notice, tokenSection, safetySection);

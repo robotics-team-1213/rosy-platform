@@ -5,8 +5,8 @@ export function mount(root, ctx) {
   const head = el("ui-head", "", "도킹 운용");
   const message = el("p", "surface-message", "도킹 지원 여부를 확인하는 중입니다."); message.setAttribute("role", "status");
   const facts = el("dl", "surface-readout");
-  const form = el("div", "surface-form");
-  const label = el("label", "surface-field", "도킹 위치");
+  const form = el("div", "ui-form");
+  const label = el("label", "ui-field-label", "도킹 위치");
   const select = el("select"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);
   const dock = el("ui-button", "", "도킹 시작"); dock.setAttribute("kind", "primary"); dock.type = "button"; dock.disabled = true;
   const actions = el("ui-actions", "surface-actions");
