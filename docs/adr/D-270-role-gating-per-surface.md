@@ -1,7 +1,7 @@
 ## D-270 역할 게이팅은 표면이 정한다 — 조작은 말고 설정은 숨긴다
 
-**Status:** Proposed (2026-09-26). 합동 검토(`docs/plans/2026-09-26-role-gating-model-joint.md`)의
-제안안이다. role-menu 세션의 반례를 받는다.
+**Status:** Accepted (2026-09-26). 합동 검토에서 이견 없음(조작=B·절차=A 확정,
+혼재 허용·경계 선언). 7일 조건 조기 충족으로 승격한다.
 
 잇는 결정: D-193(자격 수명) · D-247(AuthBar) · D-251(절차 카드 크롬) ·
 concept 16 Law 0·Law 4.
