@@ -77,4 +77,8 @@ Decision: keep `/console`, `/setup`, and `/device` as role-aware task surfaces w
 
 ## Completion notes
 
-- Role matrix, palette and responsive behavior reviewed in visible CORE Playwright. Map action permission cues and mobile controls improved. Automated verification, source generation, lint, commit and safe local integration remain.
+- Role matrix, palette and responsive behavior reviewed in visible CORE Playwright. Map action permission cues and mobile controls improved. The generated dashboard index was refreshed.
+- Final focused suite after local integration: 42 passed; `git diff --check` passed. Visible CORE browser checks showed no page errors, the expected role navigation/panels, and direct surface responses of viewer/setup 403, operator/device 403, administrator/device 200.
+- `rosy_harness lint` on the rebased, clean feature tree reports 1 pre-existing `docs/logs.md` heading missing `-증거:` and 21 verification-date warnings. This task did not change `docs/logs.md`.
+- Commit `fix(hmi): gate map actions and refine mobile role UX` is integrated into local `main`. Local `main` is 4 commits ahead of `origin/main`; this work did not push it. `deploy/release/test/test_secret_scan.py`, `docs/index.md`, and `docs/logs.md` remain as pre-existing main WIP.
+- CORE-only browser review is complete; ROS-SIM, ARM64 artifact, physical device and field acceptance were not performed.
