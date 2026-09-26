@@ -2416,3 +2416,10 @@
 - 변경: Accepted D-286으로 dashboard 역할 패널의 semantic label/value readout 배치 규칙을 공용 UI contract에 등록했다.
 - 근거: 공용 dashboard readout styles와 D-194/D-254/D-278/D-285 경계를 확인하고 ADR Log 및 `progress.md` ADR 색인을 동기화했다.
 - gate 변화: 없음. 시각·브라우저·기기 수용은 해당 UI gate에서 별도 확인한다.
+
+## 2026-09-26 · uncommitted · test(site): rerun latest candidate 7bd81cf3
+- 변경: 최신 main merge revision의 site candidate를 revision-pinned archive로 만들고 로컬 Compose smoke를 반복했다.
+- 증거: 이미지 ID/platform, SPDX SBOM·배포 파일·archive hashes를 manifest와 대조하고 archive를 로드했다. Fleet/Vision/proxy healthy, synthetic phone WSS→Vision ArUco→Fleet HTTPS/SQLite sighting, authenticated operator task `REQUESTED → QUEUED` readback 확인.
+- 제한: Windows Docker Desktop linux/amd64, synthetic config/cert, CPU ArUco; CORE unreachable, GPU/실물 장비 없음. 전용 Compose project/volume/networks 제거. Ubuntu SITE/DEVICE/FIELD와 자동 실행 gate는 계속 HOLD.
+- gate 변화: SOURCE/LOCAL candidate smoke만 확인했다. 실제 배포나 로봇 동작 수용은 확인하지 않았다.
+- 자세한 결과/hash: `docs/validation/2026-09-26-site-stack-container-smoke.md`.

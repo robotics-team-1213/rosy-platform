@@ -159,8 +159,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · test(site): rerun latest candidate 7bd81cf3
 - 2026-09-26 · uncommitted · docs(adr): accept D-286 shared role readout layout
 - 2026-09-26 · uncommitted · docs(adr): D-283 console action groups fit the fixed grammar
 - 2026-09-26 · uncommitted · test(site): rerun packaged candidate 46b7465b
 - 2026-09-26 · uncommitted · docs(site): align implementation plan with current ADR status
-- 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership

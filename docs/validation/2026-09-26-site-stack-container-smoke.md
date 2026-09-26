@@ -64,3 +64,23 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
   GPU inference. It proves local service/API wiring only. Removed only Compose
   project `rosy-site-smoke-46b7465b`, its volume, and its networks; retained
   candidate images and bundle under `X:\DevTemp`.
+
+## Revision `7bd81cf3` rerun (LOCAL)
+
+- Source commit: `7bd81cf3919b11c769094a5d7798aaf79eca5b91`; platform:
+  `linux/amd64`. Candidate: `X:\DevTemp\rosy-site-candidate-7bd81cf3`.
+- Manifest SHA-256: `7649671f758a36fbfa28e9a0b62b78b9b48f9505665f7114a4bf19d1fa6315d7`.
+  Image archive SHA-256: `541cf3df0d5633d04c0ef613163fe4a52e75e794ebc510425301fdfba004409f`.
+  Fleet image ID: `sha256:0d33e83ad88be9faab88e668f3efd9f6602a06ce85f57756f958207599eec34b`;
+  Vision: `sha256:1e59f75b923c90095e75e77e03af1235efebc813495d812e8478cf35274aac49`;
+  proxy: `sha256:92285397b659eb03fbe532a76d061738d5f9b0f7f45027a68c662caa44276c3f`.
+- Verified all image IDs/platforms, SPDX SBOM hashes, packaged deployment-file
+  hashes, archive hash, and candidate Compose config. Loaded that exact archive;
+  all three services became healthy.
+- Repeated synthetic WSS camera input through Vision/ArUco to Fleet HTTPS/SQLite
+  (`ceiling_north`, seq `78`, pose approximately `[2.0, 1.0]`, quality `null`).
+  Authenticated `test-operator` submitted a goal and read `REQUESTED -> QUEUED`
+  task history. CORE was unreachable and no robot or GPU inference was present.
+- Windows Docker Desktop Linux/amd64 with temporary test config and certificates.
+  Removed only Compose project `rosy-site-smoke-7bd81cf3`, its volume, and its
+  networks; retained the candidate bundle and images under `X:\DevTemp`.
