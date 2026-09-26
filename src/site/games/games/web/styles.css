@@ -91,6 +91,8 @@ h1 {
   border-radius: var(--radius-button);
 }
 
+#frame[hidden] { display: none; }
+
 .chips {
   display: flex;
   flex-wrap: wrap;

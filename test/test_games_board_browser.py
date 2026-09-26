@@ -156,6 +156,29 @@ def test_match_board_initial_state_before_any_publish():
         server.close()
 
 
+def test_missing_camera_frame_does_not_render_broken_image_placeholder():
+    """An absent optional camera image stays absent even when CSS styles the img."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function(
+                "document.getElementById('phase')?.textContent === 'play'"
+            )
+            assert page.locator("#frame").is_hidden()
+            assert page.locator("#frame").evaluate("el => getComputedStyle(el).display") == "none"
+            assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()
+
+
 # --- D-201: 초점 문법의 적합 계약 — 정지 행은 선언 뷰포트(1280×800) 안에 있다.
 
 GAMES_FIT_PROBE = """() => {

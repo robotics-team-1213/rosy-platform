@@ -279,4 +279,5 @@
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 | Accepted |
 | D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 | Accepted |
 | D-278 | 역할별 표면은 작업 흐름으로 구분하고 색은 의미를 지킨다 | Accepted |
+| D-280 | ROSY 제품 디자인 철학은 차분한 지능에 은은한 따뜻함이다 | Accepted |
 ---
