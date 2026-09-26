@@ -57,5 +57,6 @@ Run the focused candidate/signature tests, document-placement contract, and Comp
 
 - Tasks 1–3 implemented; D-301 accepted for the source contract. Added exact-manifest-byte reuse between signature verification and parsing, plus a second content check immediately before the offline signer writes the signature.
 - Focused tests: 27 passed (`test_site_candidate.py`, `test_site_candidate_verifier.py`, `test_site_candidate_signing.py`). Tests used a fresh `X:\DevTemp` basetemp and throwaway keys.
-- Remaining plan work: document-placement/harness checks, Compose validation, and a clean packaged Docker build/sign/verify loop. These are not proven by unit tests and must remain open until run.
+- Completed verification: document-placement + harness contract checks (84 passed), harness lint (0 errors, 19 repository evidence-freshness warnings), Compose config validation, changed-file flake8, and the clean packaged Docker build/sign/verify loop.
+- Packaged LOCAL candidate: source commit `3b983c31ee0579208229e9f768be8c7acd340cd2`; archive SHA-256 `30d0c64e7398517394cefb4ee52e8d532ca28ef62233670dfbc8db6bce9126c8`; all three `linux/amd64` image IDs matched after `docker image load`. A throwaway test key under `X:\DevTemp` signed it; the private key is not part of the candidate or repository.
 - No site production key, target Ubuntu trust enrollment, remote activation, robot command, or field test was performed.

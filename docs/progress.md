@@ -90,5 +90,5 @@ plans:
 ## Site candidate publisher authentication (2026-09-27)
 
 - D-301 records detached Ed25519 signing of the exact candidate manifest. The Ubuntu verifier and public key must be enrolled independently of the candidate; no production site key is present.
-- Focused candidate/signature tests: 27 passed on Windows. Signature-only verification is required before Docker image load; the post-load verifier checks exact image IDs and platforms.
-- Build/sign/verify against a packaged Docker candidate, approved host key provisioning, Ubuntu host activation, and FIELD acceptance remain HOLD until the artifact and site trust anchor are validated on the target.
+- Focused candidate/signature tests: 27 passed; document-placement/harness contract tests: 84 passed; harness lint: 0 errors (19 unrelated evidence-freshness warnings); Compose config and changed-file flake8 passed. A clean `linux/amd64` Docker candidate was built, signed with an X:-only throwaway test key, verified before load, loaded, then verified against all image IDs/platforms.
+- Approved site key provisioning, Ubuntu host activation, RTX/GPU, phone/CORE connection, and FIELD acceptance remain HOLD until the production trust anchor and target are validated. LOCAL artifact checks do not advance those gates.

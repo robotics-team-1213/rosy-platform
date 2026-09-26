@@ -175,8 +175,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(site): packaged Docker candidate signature round trip
 - 2026-09-27 · uncommitted · deploy(site): authenticate candidate manifests offline
 - 2026-09-27 · uncommitted · validation(ui): review role and Fleet layout repairs
 - 2026-09-27 · uncommitted · plan(platform): decide boundaries from owners and evidence
 - 2026-09-27 · uncommitted · plan(platform): place OMX LeRobot under ROSY Platform roles
-- 2026-09-27 · uncommitted · plan(omx): stage LeRobot mode boundary and show folder placement

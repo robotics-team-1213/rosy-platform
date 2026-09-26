@@ -2782,3 +2782,9 @@
 - 변경: D-301은 후보 `release.json`의 정확한 바이트를 사이트 전용 Ed25519 키로 서명하고, Ubuntu는 후보 외부에 설치한 검증기·공개키·키 ID로 Docker 이미지 로드 전에 확인하도록 정했다. Pinky 런타임 릴리스 키 재사용은 금지하며 운영 키 프로비저닝 전까지 현장 활성화는 HOLD다.
 - 근거: 오프라인 서명 CLI, 서명 필수 호스트 검증기, 이미지 로드 전 서명/파일 검사, 로드 후 이미지 ID/플랫폼 검사를 후보 패키지에 포함했다. 검증에 사용한 manifest 바이트를 재사용하고 서명 직전 콘텐츠를 재검사한다. 후보 생성/검증/서명 집중 테스트 27 passed (Windows, 2026-09-27).
 - gate 변화: 소스 계약과 LOCAL 집중 검증만 확인했다. RTX 호스트, Docker 후보 패키지 실증, 운영 키, 카메라/CORE 연결, FIELD 동작은 여전히 미검증이다. 현장 서명 후보 생성, Ubuntu 키 등록, 대상 호스트 배포는 수행하지 않았다.
+
+## 2026-09-27 · uncommitted · validation(site): packaged Docker candidate signature round trip
+
+- 변경: `3b983c31ee0579208229e9f768be8c7acd340cd2`에서 `linux/amd64` 후보를 빌드하고 X:의 throwaway Ed25519 키로 서명했다. archive SHA-256: `30d0c64e7398517394cefb4ee52e8d532ca28ef62233670dfbc8db6bce9126c8`.
+- 근거: 이미지 로드 전 signature-only 검사 통과, Docker 이미지 3개 로드, 사후 서명·manifest·SBOM·archive·image ID·platform 검증 통과. 앞선 후보 집중 시험 27 passed, 문서 placement/harness 계약 84 passed, flake8/Compose 설정 통과.
+- gate 변화: 로컬 Docker 패키지 왕복 증거를 추가했다. 운영 사이트 키, Ubuntu 신뢰 등록/활성화, RTX/phone/CORE, 로봇 동작과 FIELD 수용은 미검증 상태다.\n
