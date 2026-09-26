@@ -118,6 +118,21 @@
 
 **Gate:** D-268 수용, 사용자/서비스 권한 시험, 동일 console 앱의 Hub 통합, 시뮬과 입회 실기에서 관측·작업 추적·freshness·검출 품질을 닫기 전 자동 이동을 활성화하지 않는다. 한 조건이라도 `UNKNOWN`, stale, 불일치 또는 미수용이면 automatic source는 비활성이다.
 
+### Automatic-source acceptance record (required before D-268 approval)
+
+The first rollout is the fixed authenticated operator-navigation workflow described above. It has no policy-condition editor or automatic trigger API; `policy-admin` cannot mutate policy until those routes, audit records, console readback, and denial reasons are implemented and contract-tested. Empty or unconfigured policy state always means disabled.
+
+Before any automatic-source field trial, create and approve a versioned acceptance record under `docs/validation/` with all of the following values. Missing values are a failed gate, not operator discretion at runtime:
+
+- site, camera/source identity, surveyed map and calibration revisions, detector/model revision, task type, operating zone, and the exact policy-condition revision under test;
+- dataset revision and split, independently labelled positive and negative examples, lighting/occlusion/out-of-zone/disconnected/stale/ambiguous cases, sample counts, and the people responsible for labels and witness review;
+- numeric minimum detection-quality targets and a numeric maximum false-trigger rate per operating hour or equivalent exposure unit, with the chosen confidence-bound method and its pass threshold fixed before the holdout run;
+- end-to-end evidence-age ceiling (at most the accepted 300 ms contract), minimum share of eligible fresh evidence over the trial, and numeric p95/max latency and availability limits;
+- explicit zero-dispatch cases for stale or missing evidence, duplicate/replayed sequence, unknown source/target, map/calibration/model revision mismatch, ambiguous detection, out-of-zone target, robot busy, revoked identity, and disconnected or unsynchronized clocks;
+- evidence-retention location, test start/stop criteria, operator stop procedure, approver, witness, timestamp, and the exact implementation/configuration/image digests.
+
+Freeze thresholds and the holdout set before measurement. Do not tune thresholds against holdout results. Report false triggers per exposure unit with the preselected confidence bound, quality metrics per task/scenario, fresh-evidence availability, and p50/p95/max latency. Any threshold miss, forbidden dispatch, missing trace, or post hoc threshold change keeps automatic source `HOLD`; repeat with a newly versioned acceptance record and holdout set. Only an approved, passing record plus the D-268 and SITE/DEVICE/FIELD gates can authorize an explicit policy enable action. A passing image-only/local test cannot authorize physical movement.
+
 ## 단계 4: 후속 카메라와 집기
 
 ### Task 4.1: 후속 목표 — 핑키·로봇암 카메라의 전용 미디어 계약

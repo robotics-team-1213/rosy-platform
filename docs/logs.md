@@ -2605,3 +2605,9 @@
 - 변경: Built and started the packaged `151607c0` linux/amd64 Site Fleet stack; verified TLS console/API, typed intent rejection, synthetic camera sighting, and durable task readback after Fleet restart.
 - 증거: Fleet 518/5 skipped; OMX/camera/system 192/4 skipped; API/docs/security 20 passed; harness lint 0 errors/21 existing warnings; all services healthy and candidate archive/SBOM hashes verified.
 - gate 변화: SOURCE/LOCAL only; no Ubuntu/RTX 5080/physical phone/CORE/robot proof, and automatic movement/picking remain HOLD.
+
+
+## 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
+- 변경: clarified the first rollout as fixed authenticated operator navigation with no policy mutation API, and made automatic-source approval require a versioned, preapproved record for quality, false-trigger, freshness, sample, and forbidden-dispatch criteria.
+- 증거: D-293 API boundary, Task 3.2, console workflow, and final SITE/DEVICE/FIELD gates now agree; missing numeric thresholds or evidence keep policy disabled.
+- gate 변화: none; automatic movement and picking remain HOLD until D-268 and measured field acceptance pass.
