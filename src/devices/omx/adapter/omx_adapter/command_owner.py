@@ -182,6 +182,7 @@ class CommandDecision:
     state: str
     reason: str
     command_id: str | None = None
+    cancel_outcome: str | None = None
 
 
 class ArmCommandOwner:
@@ -228,8 +229,14 @@ class ArmCommandOwner:
             command.calibration_revision,
         )
 
-    def _decision(self, accepted: bool, reason: str, command_id: str | None = None) -> CommandDecision:
-        return CommandDecision(accepted, self._state, reason, command_id)
+    def _decision(
+        self,
+        accepted: bool,
+        reason: str,
+        command_id: str | None = None,
+        cancel_outcome: str | None = None,
+    ) -> CommandDecision:
+        return CommandDecision(accepted, self._state, reason, command_id, cancel_outcome)
 
     def _fresh_joint_state(self, now: float) -> bool:
         snapshot = self._joint_state
@@ -237,25 +244,32 @@ class ArmCommandOwner:
             return False
         return now - snapshot.received_at <= self.config.max_joint_state_age_s
 
-    def _cancel_active(self) -> None:
+    def _cancel_active(self) -> str | None:
         active, self._active = self._active, None
         if active is None:
-            return
+            return None
         handle = active[1]
         try:
-            if not handle.done():
-                handle.cancel()
+            if handle.done():
+                return "already_done"
         except Exception:
-            # HOLD remains latched; cancellation failure is not standstill proof.
+            # Try cancellation even if the completion probe failed.
             pass
+        try:
+            handle.cancel()
+        except Exception:
+            # HOLD remains latched; dispatch failure is not standstill proof.
+            return "call_failed"
+        # The method returning is not proof the action server accepted cancellation.
+        return "call_returned"
 
-    def _enter_hold(self, reason: str) -> None:
+    def _enter_hold(self, reason: str) -> str | None:
         if self._state == "disabled":
-            return
+            return None
         self._hold_reason = reason
         self._hold_sequence = self._highest_observed_sequence
         self._state = "hold"
-        self._cancel_active()
+        return self._cancel_active()
 
     def observe_joint_state(self, snapshot: JointStateSnapshot) -> bool:
         with self._lock:
@@ -265,6 +279,9 @@ class ArmCommandOwner:
                 self._enter_hold("joint_state_sequence_not_increasing")
                 return False
             self._highest_observed_sequence = snapshot.sequence
+            if snapshot.received_at > self._monotonic():
+                self._enter_hold("joint_state_from_future")
+                return False
             if set(snapshot.positions) != set(self.config.joint_names):
                 self._enter_hold("joint_state_joint_map_mismatch")
                 return False
@@ -334,6 +351,12 @@ class ArmCommandOwner:
             return self._decision(True, "submitted", command_id)
 
     def poll(self) -> CommandDecision:
+        """Check current action/feedback state; the runtime must call this periodically.
+
+        This policy object has no scheduler or ROS executor. A caller that does
+        not arrange a bounded periodic invocation gets no autonomous timeout
+        enforcement from this method.
+        """
         with self._lock:
             if self._state == "disabled":
                 return self._decision(False, "disabled")
@@ -344,11 +367,13 @@ class ArmCommandOwner:
             command, handle, started_at = self._active
             now = self._monotonic()
             if not self._fresh_joint_state(now):
-                self._enter_hold("joint_state_stale")
-                return self._decision(False, "joint_state_stale", command.command_id)
+                cancel_outcome = self._enter_hold("joint_state_stale")
+                return self._decision(
+                    False, "joint_state_stale", command.command_id, cancel_outcome
+                )
             if now - started_at >= self.config.action_timeout_s:
-                self._enter_hold("action_timeout")
-                return self._decision(False, "action_timeout", command.command_id)
+                cancel_outcome = self._enter_hold("action_timeout")
+                return self._decision(False, "action_timeout", command.command_id, cancel_outcome)
             try:
                 if not handle.done():
                     return self._decision(True, "active", command.command_id)
@@ -369,8 +394,9 @@ class ArmCommandOwner:
             active_command = self._active[0]
             if active_command.command_id != command_id or active_command.owner != owner:
                 return self._decision(False, "active_command_mismatch", command_id)
-            self._enter_hold("cancel_requested")
-            return self._decision(False, "cancel_requested", command_id)
+            cancel_outcome = self._enter_hold("cancel_requested")
+            reason = "cancel_call_failed" if cancel_outcome == "call_failed" else "cancel_requested"
+            return self._decision(False, reason, command_id, cancel_outcome)
 
     def recover(self, *, operator_confirmed: bool, observed_sequence: int) -> CommandDecision:
         with self._lock:

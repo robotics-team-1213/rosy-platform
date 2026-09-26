@@ -19,11 +19,14 @@ SESSION = "session-01"
 class FakeHandle:
     def __init__(self):
         self.cancel_calls = 0
+        self.cancel_error = None
         self.finished = False
         self.success = False
 
     def cancel(self):
         self.cancel_calls += 1
+        if self.cancel_error:
+            raise self.cancel_error
 
     def done(self):
         return self.finished
@@ -204,6 +207,16 @@ def test_joint_feedback_outside_configured_position_bounds_latches_hold():
     assert owner.state == "hold"
 
 
+def test_future_dated_joint_feedback_is_rejected_and_latches_hold():
+    clock = [100.0]
+    owner, _ = owner_at(clock)
+
+    accepted = owner.observe_joint_state(make_state(received_at=100.1))
+
+    assert not accepted
+    assert owner.state == "hold"
+
+
 def test_duplicate_command_id_is_idempotent_but_cannot_change_payload():
     clock = [100.0]
     owner, action = owner_at(clock)
@@ -262,6 +275,7 @@ def test_timeout_requests_cancel_and_latches_hold_until_explicit_fresh_recovery(
 
     assert not timeout.accepted and timeout.reason == "action_timeout"
     assert timeout.state == "hold"
+    assert timeout.cancel_outcome == "call_returned"
     assert action.handles[0].cancel_calls == 1
     assert not blocked.accepted and blocked.reason == "hold_latched"
     assert not no_confirmation.accepted and no_confirmation.reason == "operator_confirmation_required"
@@ -286,6 +300,23 @@ def test_cancel_latches_hold_and_does_not_claim_physical_standstill():
     assert not cancelled.accepted
     assert cancelled.state == "hold"
     assert cancelled.reason == "cancel_requested"
+    assert cancelled.cancel_outcome == "call_returned"
+    assert action.handles[0].cancel_calls == 1
+
+
+def test_cancel_dispatch_failure_is_reported_while_hold_remains_latched():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state())
+    owner.submit(make_command())
+    action.handles[0].cancel_error = RuntimeError("transport unavailable")
+
+    cancelled = owner.cancel(command_id="cmd-1", owner="moveit")
+
+    assert not cancelled.accepted
+    assert cancelled.state == "hold"
+    assert cancelled.reason == "cancel_call_failed"
+    assert cancelled.cancel_outcome == "call_failed"
     assert action.handles[0].cancel_calls == 1
 
 
