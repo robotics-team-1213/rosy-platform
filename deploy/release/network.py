@@ -195,6 +195,15 @@ def generate_setup_psk(groups: int = SETUP_PSK_GROUPS) -> str:
     )
 
 
+def generate_relay_psk() -> str:
+    """The relay AP's passphrase (D-272).
+
+    The relay AP stays up the whole time the robot runs and nobody types its
+    key, so it gets four groups (~79 bits) instead of the setup AP's two.
+    """
+    return generate_setup_psk(groups=4)
+
+
 @dataclass
 class RecoveryRequest:
     """A one-shot request to open the recovery AP on the next boot."""
@@ -394,7 +403,7 @@ class NetworkProvisioner:
             self._backend.add_relay_profile(
                 self.RELAY_PROFILE,
                 ssid=f"ROSY-{request.robot_id}",
-                psk=generate_setup_psk(),
+                psk=generate_relay_psk(),
                 country=request.country,
             )
             self._backend.activate(self.RELAY_PROFILE)

@@ -13,7 +13,7 @@ D-190의 AP 표시 내용(`Wi-Fi <SSID>`·`PW <비밀번호>` 두 줄)을 아래
 
 1. **생성 형식은 `rosy-xxxx-xxxx`다.** 접두어 `rosy-`와 4자씩 두 묶음이다. 문자는 소문자와 숫자에서 헷갈리는
    `0 o 1 l i`를 뺀 31자(`abcdefghjkmnpqrstuvwxyz23456789`)다. 전체 14자다(WPA2 하한 8자 이상).
-   - 설정 AP·복구 AP·relay AP: `deploy/release/network.py`의 `generate_setup_psk`(`secrets.choice`),
+   - 설정 AP·복구 AP: `deploy/release/network.py`의 `generate_setup_psk`(`secrets.choice`). relay AP는 로봇이 켜져 있는 동안 계속 열리고 사람이 입력하지 않으므로 4묶음(`groups=4`, 약 79비트)을 쓴다(리뷰 반영).
      형식은 `READABLE_SETUP_KEY`.
    - 카드별 fallback AP: `deploy/sd/prepare-rosy-sd.ps1`의 `Get-ApPassword`(`RandomNumberGenerator`, 248 이상 바이트는
      버려 문자마다 확률이 같다).

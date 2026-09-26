@@ -19,6 +19,7 @@ import pytest
 from network import (  # via test/conftest.py
     MIN_SETUP_PSK_LENGTH,
     READABLE_ALPHABET,
+    generate_relay_psk,
     READABLE_SETUP_KEY,
     SETUP_PSK_LENGTH,
     RECOVERY_MARKER_NAME,
@@ -509,3 +510,11 @@ def test_the_refusal_still_spends_the_request(tmp_path):
 
     later = _provisioner(tmp_path, backend, boot_id="boot-3")
     assert not any(e["event"] == "network.recovery_request_consumed" for e in later.log)
+
+
+def test_the_relay_ap_key_is_four_groups_because_it_stays_up():
+    """D-272 review: the relay AP is up for hours and never typed, so ~79 bits."""
+    key = generate_relay_psk()
+    prefix, *groups = key.split("-")
+    assert prefix == "rosy" and len(groups) == 4
+    assert all(len(group) == 4 and set(group) <= set(READABLE_ALPHABET) for group in groups)
