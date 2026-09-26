@@ -70,7 +70,11 @@ class _Handler(SimpleHTTPRequestHandler):
                     if (path === '/api/v1/docking/cancel') return {state:'UNDOCKED'};
                     return {};
                   },
-                }));
+                }), [
+                  {id:'drive', title:'운전', order:10},
+                  {id:'docking', title:'도킹', order:20},
+                  {id:'line_follow', title:'차선 추종', order:30},
+                ]);
               </script>
             </body></html>""".encode("utf-8")
             self.send_response(200)
@@ -117,7 +121,11 @@ class _Handler(SimpleHTTPRequestHandler):
                     if (window.__failZero && path === '/api/v1/teleop' && body?.linear === 0) throw new Error('offline');
                     return {};
                   },
-                }));
+                }), [
+                  {id:'drive', title:'운전', order:10},
+                  {id:'docking', title:'도킹', order:20},
+                  {id:'line_follow', title:'차선 추종', order:30},
+                ]);
               </script>
             </body></html>""".encode("utf-8")
             self.send_response(200)
