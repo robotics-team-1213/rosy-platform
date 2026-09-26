@@ -109,6 +109,16 @@ def test_dockerfile_builds_only_from_locked_sources_and_remains_inert():
     assert "open_manipulator" in dockerfile
 
 
+def test_native_follower_launch_cannot_keep_vendor_leader_topic_bypass():
+    patch = (OMX / "patches" / "omx-ai-native-action-only.patch").read_text(encoding="utf-8")
+    dockerfile = (OMX / "Dockerfile").read_text(encoding="utf-8")
+    assert "open_manipulator_bringup/launch/omx_f_follower_ai.launch.py" in patch
+    assert "-        remappings=[('/arm_controller/joint_trajectory', '/leader/joint_trajectory')]," in patch
+    assert "+        remappings=[]," in patch
+    assert "git -C /opt/omx_ws/src/open_manipulator apply --check /tmp/omx-ai-native-action-only.patch" in dockerfile
+    assert "install/share/open_manipulator_bringup/launch/omx_f_follower_ai.launch.py" in dockerfile
+
+
 def test_simulation_profile_runs_pinned_robotis_gazebo_launch_without_hardware_access():
     import yaml
 

@@ -75,3 +75,9 @@
 - **SOURCE/LOCAL:** 인벤토리와 장치 배타성 테스트, native unit/manifest 정적 검사, 사이트와 OMX의 런타임 경계 확인.
 - **ROS-SIM/ARTIFACT:** 두 OMX graph 격리와 잠긴 native amd64 산출물 각각의 증거.
 - **DEVICE/SITE/FIELD:** 한 대와 두 대의 정지·복구·동시 부하·호스트 장애 및 실제 작업 결과. 이 단계의 실패 원인으로 공유 호스트/분리 호스트를 선택한다.
+
+## 실행 기록 — 2026-09-26
+
+- Task 1·2의 인벤토리와 장치 배타성 구현은 현재 `main`에 있다. 이번 점검에서 관련 ROS-free 시험 47개가 통과했다. 이 결과는 실제 `/dev/serial/by-id/` 장치 readback이 아니다.
+- Task 3의 두 격리 Gazebo 인스턴스, action/cancel, 재시작 관측은 [ROS-SIM 기록](../validation/omx-two-instance-ros-sim-2026-09-26/README.md)에 있다. vendor의 비시뮬레이션 launch에도 있던 leader topic 직접 remap을 개발 이미지에서 제거하고 설치 파일을 확인했다. 그러나 단일 명령 소유자와 native 실행 연결, target Ubuntu에서의 graph·정지·부하 관측은 남았다. 따라서 Task 3의 전체 gate는 HOLD다.
+- Task 4의 native 서비스·산출물과 Task 5의 실물 제어는 아직 착수하지 않는다. Task 4의 명시적 선행 조건인 Task 3의 단일 명령 소유권과 D-281 native 배치 결정이 충족되지 않았다. 다음 작업은 하나의 workcell에 대한 단일 writer 실행 경로, DDS graph 접근 범위, 독립 정지와 timeout HOLD를 시뮬레이션에서 검증하는 것이다. 그 전에는 `omx.enabled: false`를 유지한다.

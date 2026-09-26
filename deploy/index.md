@@ -58,8 +58,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · OMX development image action-only vendor launch
 - 2026-09-26 · uncommitted · site control console operator access guide
 - 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수
 - 2026-09-26 · uncommitted · paired robot Fleet mDNS bootstrap
 - 2026-09-26 · uncommitted · site LAN discovery profile and Fleet advertisement
-- 2026-09-26 · uncommitted · docs(adr): renumber camera source-build decision
