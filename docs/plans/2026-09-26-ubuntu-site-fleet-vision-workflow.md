@@ -155,7 +155,7 @@
 
 ## Implementation checkpoint and next execution order (2026-09-26)
 
-- D-288 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.39; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, invalid value types, booleans, and non-finite coordinates before CORE dispatch. `/api/fleet/do` publishes a verb-specific bounded OpenAPI schema generated from the shared interpreter grammar; invalid types and sequences over eight steps are documented and rejected before dispatch; source/schema/doc alignment is contract-tested.
+- D-289 Accepted closes the SOURCE contract boundary: Site Fleet APIs take typed intent; Fleet derives identity, priority, eligibility, and dispatch. The API Reference is v1.40; no valid public path/body field or robot PRT envelope changed. Direct goal and `/api/fleet/do` reject scheduler fields, invalid value types, booleans, and non-finite coordinates before CORE dispatch. `/api/fleet/do` publishes a verb-specific bounded OpenAPI schema generated from the shared interpreter grammar; invalid types and sequences over eight steps are documented and rejected before dispatch; source/schema/doc alignment is contract-tested.
 - D-267, D-269, and D-282 remain Proposed. Their boundaries are implementation constraints for this plan, not an architecture approval or field acceptance.
 - Implemented LOCAL foundation: per-principal viewer/operator/policy-admin API authentication (D-276), authenticated manual navigation through the durable task service, persistent task/audit state, CORE Agent event ingestion, and ceiling-phone WSS → Vision → derived sighting.
 - Queue choice: SQLite remains the task ledger and scheduler. Gate A found no current independent-worker requirement, so RabbitMQ stays deferred; raw video and ROS messages do not enter the task queue.
@@ -163,7 +163,7 @@
 - Do not enable automatic movement/pick while D-257/D-268 or task-specific freshness/false-trigger acceptance is open. D-177 result correlation, Pinky/arm media, and manipulation remain separate gates.
 - The first rollout remains authenticated operator navigation. The console has no policy-condition editor in this rollout; adding one and exposing automatic triggers requires the D-268, role, evidence-display, freshness, false-trigger, and field gates above.
 - The current checkout has no approved Ubuntu host identity or physical phone/CORE evidence. Workstation tests and a candidate bundle cannot advance those SITE/DEVICE/FIELD gates.
-- Candidate `7bd81cf3919b11c769094a5d7798aaf79eca5b91` was rebuilt and re-smoked from the packaged `linux/amd64` archive: Fleet/Vision/HTTPS proxy healthy, synthetic phone WSS through Vision into Fleet/SQLite, and authenticated operator task enqueue/readback. Evidence and hashes: `docs/validation/2026-09-26-site-stack-container-smoke.md`. This does not establish Ubuntu/GPU/physical-device or motion acceptance.
+- Candidate commit `7bd81cf3919b11c769094a5d7798aaf79eca5b91` was rebuilt and re-smoked from the packaged `linux/amd64` archive: Fleet/Vision/HTTPS proxy healthy, synthetic phone WSS through Vision into Fleet/SQLite, and authenticated operator task enqueue/readback. Evidence and hashes: `docs/validation/2026-09-26-site-stack-container-smoke.md`. This does not establish Ubuntu/GPU/physical-device or motion acceptance.
 
 ## 외부 근거
 

@@ -107,7 +107,8 @@ def request_schema() -> dict:
             "additionalProperties": False,
         }
         if verb == "navigate":
-            variant["anyOf"] = [{"required": ["x", "y"]}, {"required": ["waypoint"]}]
+            variant["anyOf"] = [{"required": list(required)}
+                                for required in (("x", "y"), ("waypoint",))]
         elif verb == "follow":
             variant["required"].append("target_robot_id")
         elif verb == "formation_start":

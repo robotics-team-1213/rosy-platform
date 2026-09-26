@@ -90,7 +90,7 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
 - Source commit: `01a3946c3b77bb04ab4338b7b0d976312e8d7429`; platform:
   `linux/amd64`. Candidate: `X:\DevTemp\rosy-site-candidate-01a3946c`.
 - Candidate archive SHA-256:
-  `687cbac06242dc3cac0beb0022280c24af291e0c1e7d3c07d656029b712b3f34`.
+  SHA-256: `687cbac06242dc3cac0beb0022280c24af291e0c1e7d3c07d656029b712b3f34`.
   Fleet image: `sha256:d16108bb1b0779f313aca101e24534ebbe6fd1baa6d93056144db74cb5d18908`;
   Vision: `sha256:a7c83be2e0051fb2328758a2bd1cfa1faed2ea885c841dd838db94417449ad66`;
   proxy: `sha256:92285397b659eb03fbe532a76d061738d5f9b0f7f45027a68c662caa44276c3f`.
@@ -115,7 +115,7 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
   separated. The first camera probe closed WSS before the latest-only worker
   processed the frame; keeping the phone session open produced the readback.
   The oversized-request oracle was aligned to the observed `TOO_LONG` contract,
-  which is now listed in D-288/API Reference v1.39.
+  which is now listed in D-289/API Reference v1.40.
 - This was Windows Docker Desktop `linux/amd64` with synthetic credentials,
   camera, TLS, and calibration. The host enumerated only AMD Radeon 860M; the
   target RTX 5080 was not exposed, and the current Vision image uses CPU ArUco.

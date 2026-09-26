@@ -1,6 +1,7 @@
 ---
 title: Pinky Pro OV5647 needs an explicit CAM1 boot overlay on the ROSY SD
 date: 2026-09-26
+last_updated: 2026-09-26
 category: runtime-errors
 module: deploy/image and deploy/robot on Pinky Pro
 problem_type: runtime_error
@@ -56,7 +57,10 @@ The explicit overlay selects the sensor on the connection that worked on the sam
 - Compare failing and working SD cards on the **same board and camera**, then test each CSI port separately with a reversible config change. A second robot may have a separate hardware fault.
 - Verify kernel sensor registration **and** a real frame. Keep those results distinct from product video publication and dashboard streaming.
 - Keep the boot setting in image customization and the matching mounted-image check. A source change alone does not validate an ARM64 image artifact or a newly written card.
-- Do not count this diagnostic JPEG as product camera support: the current ROSY image has no PiSP/Picamera2 capture runtime, and its default CORE-only service does not publish a live camera stream. Proposed [D-264](../../adr/D-264-on-device-diagnostic-tools-in-the-image.md) would add `rpicam-apps` from locked Ubuntu noble only if available with Pi 5 support; it disallows a substitute source otherwise.
+- Do not count the diagnostic JPEG as product camera support. It used temporary supplier userspace; the running ROSY SD did not supply PiSP/Picamera2 capture or a product live stream.
+- Keep the camera userspace separate from the boot overlay fix. [D-288](../../adr/D-288-pinky-pi5-camera-userspace-in-native-image.md) supersedes D-264's camera-only source-build prohibition and pins the official PiSP/libcamera/rpicam-apps/Picamera2 sources for a future native ARM64 image. The source and host checks pass, but no new ARM64 image or SD capture has yet passed acceptance.
+
+The [2026-09-26 readback](../../validation/pinky-camera-capture-2026-09-26/README.md) shows the same boundary on the running ROSY SD: `ov5647 11-0036` is registered, while `rpicam-still` and Picamera2 are absent and the running CORE API is v1.33. A sensor probe therefore cannot stand in for a product screenshot or video.
 
 ## Related Issues
 

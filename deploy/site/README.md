@@ -11,15 +11,105 @@ does not join DDS, and sightings do not issue robot motion or pick commands.
 Ceiling phone -- WSS /overhead/v1/frames --> Vision (OpenCV + calibration)
 Browser -- HTTPS --> Caddy --> Fleet console / sighting API
 Vision -- HTTPS POST /api/fleet/sightings --> Caddy --> Fleet SQLite
-Fleet -- existing CORE REST/DDS contracts --> robot CORE
+Fleet -- existing CORE REST/WSS contracts --> robot CORE
 ```
 
+## Same-LAN ROSY discovery
+
+The shared service naming and trust rules are in
+[`site-lan-discovery-profile.md`](../../docs/reference/site-lan-discovery-profile.md).
+The robot and site host have separate DNS-SD service types. Other SERION
+middleware can adopt the same public TXT keys under its own service type; a
+discovered address does not enroll a device or grant a command path.
+
+Each robot's boot-status service already advertises `_rosy._tcp.local` through
+Avahi. The Ubuntu host runs `mdns-bridge.py` every 15 seconds and sends a full
+resolved scan to Fleet. Fleet expires that read-only scan after 45 seconds. A
+new device appears as **registration pending**; an endpoint already in
+`robots.yaml` appears as **pairing pending** until its separately authenticated
+FleetAgent HELLO confirms the same device name and an online device UID. A
+duplicate name or mismatch appears as **conflict**. Discovery never grants
+motion, changes a robot number, writes `robots.yaml`, or copies a token.
+
+Install `avahi-daemon` and `avahi-utils` on the Ubuntu site host. Create a
+distinct high-entropy `discovery_token` file in `${ROSY_SITE_SECRETS_DIR}`;
+the same file is mounted as a Compose secret and read by the host bridge.
+Keep it out of the checkout and grant read access only to root and the
+`rosy-mdns` group. The tracked
+`discovery-token.template.txt` describes its format, not its value. Install
+`mdns-bridge.py` at `/opt/rosy/site/mdns-bridge.py`, and copy the supplied
+`.service` and `.timer` files to `/etc/systemd/system/`. Create a system user
+and group `rosy-mdns` with no login shell. Grant that group read access to
+`discovery_token`; `site-ca.crt` is already public to the host service. Put
+only the TLS URL in `/etc/rosy/site/mdns-bridge.env`, for example:
+
+```ini
+ROSY_SITE_DISCOVERY_URL=https://<site-fqdn>:8443/api/fleet/discovery/scan
+```
+
+The site FQDN must resolve from the Ubuntu host, its certificate must match,
+and the Compose proxy must bind an address reachable through that FQDN.
+Check `avahi-browse -rtpk _rosy._tcp` on the host, then start the timer with
+`systemctl enable --now rosy-mdns-bridge.timer`. Check
+`systemctl status rosy-mdns-bridge.service` and the Fleet discovery panel.
+When Avahi or TLS fails, the bridge must not replace the last good scan with
+an empty result; Fleet marks the scanner offline after its lease expires.
+AP advertisements are excluded. On a VLAN or Wi-Fi with multicast/client
+isolation, use the existing manual endpoint and outbound FleetAgent path.
+
+For a 4–10 robot site, boot all cards on the same LAN and confirm one distinct
+row per device, no duplicate-name conflict, all configured devices eventually
+show **confirmed**, and newly initialized cards remain **registration pending**.
+Reboot one robot, change its DHCP address, disconnect the site host, then
+repeat the scan. A registered `.local` endpoint follows the changed address;
+an IP-pinned `robots.yaml` entry needs an operator update and is never
+silently rewritten from untrusted mDNS. The LAN test does not replace pairing, CORE health, or
+physical motion acceptance.
+
 All HTTPS hops verify the configured site CA. The same site certificate must
-contain these DNS SANs: the operator-facing FQDN, `proxy`, `fleet`, and
+contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
+`<hostname>.local`, `proxy`, `fleet`, and
 `vision`. The phone pairing link uses that FQDN and explicit TLS:
 `rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1`.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
+
+## Advertise and locate the Ubuntu Fleet PC
+
+Choose a stable Ubuntu hostname before issuing the certificate. Install
+`avahi-daemon` and `avahi-utils`, and check that TCP 8443 is reachable from
+the intended robot/operator LAN. The site proxy's
+`ROSY_SITE_BIND_ADDRESS` must name an approved LAN interface instead of
+loopback when LAN clients need access. Set the same
+`ROSY_SITE_HTTPS_PORT` in the private `/etc/rosy/site/.env` and the Compose
+environment. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`, copy
+`rosy-fleet-advertise.service` to `/etc/systemd/system/`, then run:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now avahi-daemon rosy-fleet-advertise.service
+avahi-browse -rtpk _rosy-fleet._tcp
+python3 /opt/rosy/site/fleet-mdns.py discover
+python3 /opt/rosy/site/fleet-mdns.py discover --expect-hostname <hostname>.local \
+  --ca-file /etc/rosy/site/secrets/site-ca.crt
+```
+
+The final command prints an HTTPS URL only if exactly one matching site is
+present and the certificate and `/healthz` response validate against the
+separately installed CA. It connects to the Avahi resolved IP with TLS SNI set
+to the expected hostname. Do not use the mDNS advertisement to supply the CA,
+the expected hostname, Fleet pairing credentials, SSH identity, or robot
+number. The SD's Fleet endpoint and trust profile populate only the robot's
+expected `.local` hostname and site CA path. The one-time SD
+`pairing_credential` is never a FleetAgent token. Install the separately
+issued site CA at `/etc/rosy/trust/<trust_profile>.crt`, then provision the
+same persistent pairing token as `fleet.pairing_token` in the robot CORE's
+private `/var/lib/rosy/core/.rosy/rosy.yaml` and `fleet_pairing_token` in the
+site's root-owned `robots.yaml`. Apply the token during a controlled CORE
+restart after pairing approval. With the token in place, FleetAgent discovers
+the site and reconnects over WSS automatically; without it, the robot stays
+in registration/pairing wait. If a site is unreachable or multicast is
+isolated, use the existing explicit endpoint.
 
 ## Prepare an Ubuntu host
 

@@ -241,6 +241,10 @@ def render_issue(record: dict, ap_secret: str | None = None) -> str:
 
 def render_avahi(record: dict) -> str:
     txt = {
+        "product": "rosy",
+        "role": "robot",
+        "proto": "core-v1",
+        "tls": "none",
         "stage": str(record["stage"]),
         "release": str(record.get("release_id") or ""),
         "name": str(record.get("device_name") or ""),

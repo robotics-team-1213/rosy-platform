@@ -8,7 +8,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -17,7 +16,11 @@ ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_FILES = (
     "compose.yaml", "Caddyfile", ".env.example", "README.md",
     "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
+    "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
+    "fleet-mdns.py", "rosy-fleet-advertise.service",
+    "discovery-token.template.txt",
 )
+DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -69,6 +72,10 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         source = site / name
         target = deploy_dir / name
         shutil.copyfile(source, target)
+    for name in DOC_FILES:
+        target = output / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / name, target)
     env_path = deploy_dir / ".env.example"
     env_text = env_path.read_text(encoding="utf-8")
     env_path.write_text(env_text.replace("ROSY_SITE_IMAGE_TAG=local",
@@ -121,6 +128,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         name: _sha256(deploy_dir / name)
         for name in DEPLOY_FILES
     }
+    config_hashes.update({name: _sha256(output / name) for name in DOC_FILES})
     manifest = {
         "manifest_version": 1,
         "source_commit": commit,

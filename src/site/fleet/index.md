@@ -27,6 +27,7 @@
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
+| D-289 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 
 ## 계획·결과 문서
 
@@ -49,8 +50,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · merge(site): preserve camera/mDNS and typed intent contracts
+- 2026-09-26 · uncommitted · reciprocal site discovery preparation
+- 2026-09-26 · uncommitted · feat(fleet): site mDNS discovery readback
 - 2026-09-26 · uncommitted · test(fleet): exercise packaged intent and camera paths
 - 2026-09-26 · uncommitted · feat(fleet): publish and enforce intent API types
-- 2026-09-26 · uncommitted · feat(fleet): D-257 source-scoped sighting API
-- 2026-09-25 · uncommitted · fix(fleet): roster keyboard vocabulary, queue render gates (D-224, D-219)
-- 2026-09-25 · uncommitted · fix(fleet): HITL 큐의 모의 조종 버튼 제거와 큐 계약 (D-218, D-219)

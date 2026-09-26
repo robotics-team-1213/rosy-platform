@@ -48,6 +48,12 @@ class RobotRegistry:
             for rid, row in self._robots.items()
         }
 
+    def identity_snapshot(self) -> dict[str, dict]:
+        """Authenticated HELLO identity, with credentials and serials omitted."""
+        return {rid: {"online": row.online, "device_uid": row.device_uid,
+                      "device_name": row.device_name}
+                for rid, row in self._robots.items()}
+
     def events_since(self, robot_id: str, since_seq: int) -> list[EventMessage]:
         row = self._robots.get(robot_id)
         if row is None:

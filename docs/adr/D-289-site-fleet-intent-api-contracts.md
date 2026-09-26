@@ -1,4 +1,4 @@
-## D-288 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다
+## D-289 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다
 
 **Status:** Accepted (2026-09-26). API와 메시지 경계의 소스 계약이다. Ubuntu 현장 배포, 장비 동작 또는 자동 작업을 승인하지 않는다.
 
@@ -16,7 +16,7 @@
 6. **자동 source는 같은 검증 경로를 사용하되 별도로 승인한다.** operator와 policy가 task service/상태 원장을 공유해도 policy source는 D-268 증거 계약·freshness·false-trigger 기준과 SITE/DEVICE/FIELD 수용 전까지 `HOLD`다. sighting은 지도 표시/대조 자료이며 단독으로 이동·집기 작업을 만들지 않는다. arm/Pinky 카메라와 manipulation은 별도 장비 계약을 통과해야 한다.
 7. **계약 변경은 함께 버전 관리한다.** 외부 API path/body/response/status, 인증 권한, message field 또는 retry/ACK 의미를 바꿀 때는 이 ADR 및 해당 결정의 갱신 여부를 확인하고, `ROSY API & Protocol Reference.md`, 실제 typed schema/OpenAPI, 구현, contract tests를 같은 변경으로 맞춘다(D-18). 새 async consumer/broker 계약은 schema version, identity/correlation, expiry, duplicate/replay, ACK ownership, authorization와 recovery를 명시하기 전 구현하지 않는다. 문서 예시만으로 구현 계약을 확장하지 않는다.
 
-**Consequences:** API Reference §10.6–10.9가 사이트 브라우저, camera-derived sighting, CORE event audit, task API의 외부 계약을 구분한다. `SiteSightingPayload`와 `FleetTaskStatus`는 기존 공유 타입을 유지하며, 이 ADR은 새 endpoint·public message field·RabbitMQ 의존성을 추가하지 않는다. API receipt는 물리 작업 성공 증거가 아니다.
+**Consequences:** API Reference §10.6–10.10가 사이트 브라우저, camera-derived sighting, CORE event audit, task API의 외부 계약을 구분한다. `SiteSightingPayload`와 `FleetTaskStatus`는 기존 공유 타입을 유지하며, 이 ADR은 새 endpoint·public message field·RabbitMQ 의존성을 추가하지 않는다. API receipt는 물리 작업 성공 증거가 아니다.
 
 **Alternatives:** 모든 장비를 DDS로 연결하는 방식은 CORE 단일 gateway·장치 인증 경계를 깨므로 기각한다. 모든 데이터를 하나의 WebSocket envelope로 합치는 방식은 영상과 명령의 권한·크기·수명 의미를 혼합하므로 기각한다. API 요청에 priority/dispatch 상태를 받는 방식은 클라이언트가 스케줄러 정책을 우회할 수 있어 기각한다.
 

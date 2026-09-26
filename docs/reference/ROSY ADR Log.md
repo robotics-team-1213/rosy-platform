@@ -1,4 +1,4 @@
-# ROSY ADR Log
+﻿# ROSY ADR Log
 ## Architecture Decision Records
 
 **Document ID:** ROSY-ADR-001
@@ -288,5 +288,6 @@
 | D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 | Accepted |
 | D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 | Accepted |
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 | Accepted |
-| D-288 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 | Accepted |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 | Proposed |
+| D-289 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 | Accepted |
 ---

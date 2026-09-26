@@ -112,7 +112,7 @@
 | D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
 | D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
-| D-288 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
 
 ## 계획·결과 문서
 
@@ -161,8 +161,8 @@
 
 ## 최근 기록
 
-- 2026-09-26 · uncommitted · test(site): package and exercise typed Fleet API
-- 2026-09-26 · uncommitted · feat(site): publish and enforce `/api/fleet/do` grammar
-- 2026-09-26 · uncommitted · docs(site): advance API Reference after D-283
-- 2026-09-26 · uncommitted · docs(site): resolve Fleet ADR number collision and pin OpenAPI schema
-- 2026-09-26 · uncommitted · OMX-AI two-instance ROS-SIM evidence
+- 2026-09-26 · uncommitted · merge(site): preserve camera/mDNS and typed intent contracts
+- 2026-09-26 · uncommitted · docs(adr): D-290 ROSY Platform 명명과 현장 의도 경계
+- 2026-09-26 · uncommitted · docs(api): merge camera capture with LAN discovery
+- 2026-09-26 · uncommitted · docs(plan): D-280 제품 디자인 철학 적용 순서
+- 2026-09-26 · uncommitted · docs(plan): D-273 목표를 Device 구현 계약에 연결

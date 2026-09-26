@@ -78,6 +78,12 @@
 - 결정: schema는 operator sighting을 위한 것이며 automatic policy input이 아니다.
 - 교훈: source identity는 요청 본문이 아니라 Fleet credential configuration에서 결정한다.
 
+## 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
+
+- 변경: `VisionEvidenceRecord`와 `VisionEvidenceList`를 API Ref v1.36에 맞춰 추가했다.
+- 증거: 카메라 저장 API의 응답 모델과 저장·조회 시험.
+- gate 변화: 없음.
+
 ## 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
 
 - 변경: `UiPanelDescriptor.action_group` optional field를 추가해 console operation tabs를 API schema로 표현한다.
