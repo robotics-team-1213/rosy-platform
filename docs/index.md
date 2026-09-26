@@ -158,8 +158,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · Platform 목표와 현재 경계 대조
 - 2026-09-26 · uncommitted · 사이트 배치 변경과 복구 권한 구체화
 - 2026-09-26 · uncommitted · 사이트 역할별 실행·배치 토폴로지 구체화
 - 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
 - 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
-- 2026-09-26 · uncommitted · feat(hmi): apply D-292 semantic spacing roles
