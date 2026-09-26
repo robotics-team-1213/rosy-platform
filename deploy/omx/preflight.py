@@ -60,6 +60,29 @@ def resolve_devices(
     return {"OMX_FOLLOWER_DEVICE": follower_path, "OMX_LEADER_DEVICE": leader_path}
 
 
+def resolve_host_devices(inventory, host_id: str, *, probe=None) -> dict[str, dict[str, str]]:
+    """Resolve all enabled workcells on one host and reject shared real devices."""
+    if host_id not in {host.host_id for host in inventory.hosts}:
+        raise ValueError(f"unknown host_id: {host_id}")
+    resolved_by_workcell = {}
+    owners: dict[str, str] = {}
+    for workcell in inventory.workcells:
+        if workcell.host_id != host_id or not workcell.enabled:
+            continue
+        try:
+            devices = resolve_devices(workcell.follower, workcell.leader, probe=probe)
+        except ValueError as exc:
+            raise ValueError(f"workcell {workcell.workcell_id}: {exc}") from exc
+        for path in devices.values():
+            if path in owners:
+                raise ValueError(
+                    f"device is shared by workcells {owners[path]} and {workcell.workcell_id}"
+                )
+            owners[path] = workcell.workcell_id
+        resolved_by_workcell[workcell.workcell_id] = devices
+    return resolved_by_workcell
+
+
 def render_env(devices: dict[str, str]) -> str:
     return "".join(f"{key}={devices[key]}\n" for key in ("OMX_FOLLOWER_DEVICE", "OMX_LEADER_DEVICE"))
 
