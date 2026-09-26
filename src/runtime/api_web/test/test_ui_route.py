@@ -86,6 +86,7 @@ def test_role_surface_pages_and_allowlisted_assets_are_served():
     assert client.get("/assets/panels/host/hardware.css").status_code == 200
     assert client.get("/assets/panels/surface-panels.css").status_code == 200
     assert client.get("/assets/shell/shell.js").status_code == 200
+    assert client.get("/dashboard/assets/surface-navigation.js").status_code == 200
     assert client.get("/assets/../../api/app.py").status_code == 404
 
 

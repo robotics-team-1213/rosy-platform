@@ -26,12 +26,11 @@ Make the role-oriented console the clear continuation of authentication, make ac
 
 ## Acceptance checklist
 
-- [ ] ADR D-289 and ADR Log row pass repository harness lint.
-- [ ] Authentication returns to the allowed requested surface for both supported login methods.
-- [ ] Direct `/dashboard` compatibility behavior remains covered.
-- [ ] Registry and browser consume the same ordered action-group catalog.
-- [ ] Keyboard and pointer map readout announces valid world coordinates and out-of-map state.
-- [ ] No command is sent without explicit confirmation.
-- [ ] Desktop and mobile visible-browser layout passes the D-283 affordance constraints.
-- [ ] Targeted and combined tests pass with no new known failures.
+- [x] ADR D-289 and ADR Log row pass repository harness lint; D-288 is declared skipped because two concurrent branches already claim it.
+- [x] Authentication return paths are restricted to `/console`, `/setup`, and `/device`; token and pairing-code flows both share the tested successful `connect()` continuation.
+- [x] Direct `/dashboard` remains the fallback when no valid return target exists.
+- [x] Registry and browser consume the same ordered action-group catalog.
+- [x] Keyboard and pointer map readout announces valid world coordinates and out-of-map state; crosshair movement sends no command.
+- [x] Desktop and mobile browser checks pass at 1366×768, 1440×900, and 390×844; visible captures are under `X:\DevTemp\rosy-uiux-followup\`.
+- [x] Targeted combined API, HMI, and foundation suites pass: 136 passed, 2 skipped, 0 new known failures.
 - [ ] Commit is integrated into local `main`; remote push and device acceptance remain separate gates.

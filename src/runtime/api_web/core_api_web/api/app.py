@@ -108,6 +108,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "settings.js": "application/javascript",
         "vision.js": "application/javascript",
         "status-summary.js": "application/javascript",
+        "surface-navigation.js": "application/javascript",
         "client.js": "application/javascript",
         "dom.js": "application/javascript",
         "shell/shell.js": "application/javascript",

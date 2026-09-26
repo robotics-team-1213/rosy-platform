@@ -3,6 +3,7 @@ import { createHostCards } from "./host-cards.js";
 import { createRosNetwork } from "./ros-network.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
+import { completeDashboardAuthentication } from "./surface-navigation.js";
 import { CORE_ONLY_REASON, CORE_ONLY_TEXT, triage } from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
@@ -820,6 +821,7 @@ async function connect() {
   session.refreshTimer = setInterval(() => refreshSlowData().catch(showConnectionError), 5000);
   startVisionPreview();
   elements["auth-drawer"].classList.remove("open");
+  completeDashboardAuthentication();
 }
 
 elements["auth-form"].addEventListener("submit", async (event) => {

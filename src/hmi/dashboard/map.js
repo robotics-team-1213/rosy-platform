@@ -140,10 +140,26 @@ export function createFieldMap(options) {
   // D-259: 키보드 십자선(캔버스 px). 색은 새로 열지 않고 paper를 쓰고 모양으로
   // 구분한다(로봇 삼각 vs 십자+원) — Law 1. 확정은 클릭과 같은 confirm·API를 탄다.
   let cross = null;
+  let targetReadoutTimer = null;
   const CROSS_STEP = 12;
   if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
   const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null, mapState: "loading" };
   const ctx = canvas?.getContext("2d") || null;
+
+  function notifyTargetReadout() {
+    if (targetReadoutTimer) clearTimeout(targetReadoutTimer);
+    targetReadoutTimer = setTimeout(() => {
+      targetReadoutTimer = null;
+      if (!cross || !state.occupancy || !canvas) {
+        options.onTargetReadout?.({inside: false, unavailable: !state.occupancy});
+        return;
+      }
+      const frame = new GridFrame(state.occupancy);
+      const world = frame.canvasToWorld(cross.x, cross.y, canvas.width, canvas.height);
+      const inside = frame.worldToCell(world.x, world.y) !== null;
+      options.onTargetReadout?.({...world, inside, unavailable: false});
+    }, 140);
+  }
 
   function setStatus(text, statusState = "ready") {
     if (status) {
@@ -299,6 +315,7 @@ export function createFieldMap(options) {
     }
     rebuildRaster();
     paint();
+    if (cross) notifyTargetReadout();
   }
 
   layerButtons.forEach((button) => {
@@ -368,6 +385,7 @@ export function createFieldMap(options) {
       y: Math.min(Math.max(py, 0), canvas.height),
     };
     paint();
+    notifyTargetReadout();
     await commitPoint(cross.x, cross.y);
   }, {signal: listenerController.signal});
 
@@ -393,7 +411,7 @@ export function createFieldMap(options) {
     else if (event.key === "ArrowRight") cross.x += step;
     else if (event.key === "ArrowUp") cross.y -= step;
     else if (event.key === "ArrowDown") cross.y += step;
-    else if (event.key === "Escape") { cross = null; paint(); return; }
+    else if (event.key === "Escape") { cross = null; paint(); notifyTargetReadout(); return; }
     else if (event.key === "Enter") { await commitPoint(cross.x, cross.y); return; }
     else moved = false;
     if (!moved) return;
@@ -401,6 +419,7 @@ export function createFieldMap(options) {
     cross.x = Math.min(Math.max(cross.x, 0), canvas.width);
     cross.y = Math.min(Math.max(cross.y, 0), canvas.height);
     paint();
+    notifyTargetReadout();
   }, {signal: listenerController.signal});
 
   syncEmpty();
@@ -410,6 +429,7 @@ export function createFieldMap(options) {
     destroy() {
       listenerController.abort();
       resizeObserver?.disconnect();
+      if (targetReadoutTimer) clearTimeout(targetReadoutTimer);
     },
   };
 }

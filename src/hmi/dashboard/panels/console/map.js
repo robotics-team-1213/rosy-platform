@@ -22,13 +22,20 @@ export function mount(root, ctx) {
   const empty = el("ui-empty", "", "지도 데이터를 불러오는 중입니다.");
   empty.hidden = true;
   const canvas = el("canvas", "surface-map-canvas"); canvas.setAttribute("aria-label", "점유 지도. 화살표 키로 십자선을 이동하고 Enter 키로 위치를 선택합니다.");
+  const targetReadout = el("dl", "ui-readout surface-map-readout");
+  const targetLabel = el("dt", "", "선택 좌표");
+  const targetValue = el("dd", "", "지도를 키보드로 선택하세요.");
+  targetValue.setAttribute("role", "status");
+  targetValue.setAttribute("aria-live", "polite");
+  targetValue.setAttribute("aria-atomic", "true");
+  targetReadout.append(targetLabel, targetValue);
   const mapStatus = el("ui-status", "", ""); mapStatus.setAttribute("state", "pending");
   mapStatus.id = "map-status";
   const setupLink = el("a", "surface-link", "작업 준비에서 지도 확인");
   setupLink.href = "/setup";
   setupLink.hidden = true;
   const action = el("ui-status", "", ""); action.setAttribute("state", "ready");
-  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(empty, canvas);
+  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(empty, canvas, targetReadout);
   root.append(head, status, layers, clickReason, clicks, mapFrame, setupLink, mapStatus, action);
 
   let state = null;
@@ -64,6 +71,13 @@ export function mount(root, ctx) {
     getNavigation: () => state?.navigation,
     canGoal: () => ctx.role !== "viewer" && capabilities?.navigation?.goal_navigation === true,
     setAction: (text) => { action.textContent = text; },
+    onTargetReadout: (target) => {
+      targetValue.textContent = target.unavailable
+        ? "지도 데이터가 없습니다."
+        : target.inside
+          ? `X ${target.x.toFixed(2)} m · Y ${target.y.toFixed(2)} m`
+          : "지도 영역 밖";
+    },
   });
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (payload) => { state = payload; map.setPose(); }, (error) => { state = null; mapStatus.setAttribute("state", "error"); mapStatus.textContent = `로봇 상태를 읽지 못했습니다: ${error.message}`; map.setPose(); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 10_000, (payload) => { capabilities = payload; syncMapActions(); map.setPose(); }, (error) => { capabilities = null; syncMapActions(); mapStatus.setAttribute("state", "error"); mapStatus.textContent = `Navigation 지원을 확인하지 못해 지도 조작을 막았습니다: ${error.message}`; map.setPose(); });
