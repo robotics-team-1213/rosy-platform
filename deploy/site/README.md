@@ -148,8 +148,11 @@ Install Docker Engine and the Compose plugin from the approved Ubuntu package
 source. Check `docker version` and `docker compose version`, then build the
 two project images and pull the pinned Caddy image. Keep this deployment on a
 host with a stable address and managed power; set host startup to run
-`docker compose up -d` after Docker is ready. Do not install the site stack on
-the robot Pi or enable robot motion through this stack.
+the packaged `rosy-site-stack.service` after Docker and network-online are
+ready. Do not install the site stack on the robot Pi or enable robot motion
+through this stack. The unit starts the immutable loaded images with
+`--no-build`; stopping it runs Compose `down` and preserves the named SQLite
+volume. It does not authorize robot motion.
 
 Create `/etc/rosy/site` and `/etc/rosy/site/secrets` outside the checkout. Copy
 `site-cameras.yaml.example`, `robots.yaml.example`, and
@@ -256,6 +259,28 @@ The bundle hash detects transfer damage; it does not authenticate the bundle's
 origin. Do not treat this workstation-built candidate as field accepted until
 the target host's loaded image IDs, GPU, phone, CORE robot, and recovery checks
 are recorded.
+
+Install the boot unit from that same verified candidate after its configuration
+and secrets are ready:
+
+```sh
+sudo install -o root -g root -m 0644 \
+  deploy/site/rosy-site-stack.service /etc/systemd/system/rosy-site-stack.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now rosy-site-stack.service
+sudo systemctl status rosy-site-stack.service --no-pager
+docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env \
+  -f /opt/rosy/candidate/deploy/site/compose.yaml ps
+```
+
+On a planned stop or reboot, systemd stops the Compose project without deleting
+its named volume. After reboot, verify the unit is active and all three
+containers report healthy before accepting camera or operator traffic. For a
+reboot acceptance, record that existing task/event/sighting rows remain
+readable; a healthy container alone does not prove SQLite recovery. A failed
+boot start is retried by systemd; inspect `journalctl -u rosy-site-stack` and
+correct the Docker, env-file, or candidate-path cause before clearing the
+failure.
 
 For a local workstation smoke test, the commands below build the images in
 place and start the local Compose stack:

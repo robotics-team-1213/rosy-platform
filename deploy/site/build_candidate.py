@@ -17,7 +17,7 @@ DEPLOY_FILES = (
     "compose.yaml", "Caddyfile", ".env.example", "README.md",
     "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
     "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
-    "fleet-mdns.py", "rosy-fleet-advertise.service",
+    "fleet-mdns.py", "rosy-fleet-advertise.service", "rosy-site-stack.service",
     "discovery-token.template.txt", "site_db.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)

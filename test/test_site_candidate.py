@@ -21,8 +21,20 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
+                 "rosy-site-stack.service",
                  "discovery-token.template.txt", "site_db.py"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
+    (site / "rosy-site-stack.service").write_text(
+        "Requires=docker.service\n"
+        "After=docker.service network-online.target\n"
+        "WantedBy=multi-user.target\n"
+        "ExecStart=/usr/bin/docker compose --project-name rosy-site "
+        "--env-file /etc/rosy/site/site.env -f "
+        "/opt/rosy/candidate/deploy/site/compose.yaml up -d --no-build\n"
+        "ExecStop=/usr/bin/docker compose --project-name rosy-site "
+        "--env-file /etc/rosy/site/site.env -f "
+        "/opt/rosy/candidate/deploy/site/compose.yaml down\n",
+        encoding="utf-8")
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     (site / "Dockerfile.fleet").write_text("FROM ubuntu", encoding="utf-8")
     (site / "Dockerfile.vision").write_text("FROM ubuntu", encoding="utf-8")
@@ -73,8 +85,18 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "robots.yaml.example", "site-cameras.yaml.example",
         "site-users.yaml.example", "mdns-bridge.py", "rosy-mdns-bridge.service",
         "rosy-mdns-bridge.timer", "fleet-mdns.py", "rosy-fleet-advertise.service",
+        "rosy-site-stack.service",
         "discovery-token.template.txt", "site_db.py",
     }
+    stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
+        encoding="utf-8")
+    assert "Requires=docker.service" in stack_unit
+    assert "After=docker.service network-online.target" in stack_unit
+    assert "WantedBy=multi-user.target" in stack_unit
+    assert "--project-name rosy-site" in stack_unit
+    assert "up -d --no-build" in stack_unit
+    assert " down\n" in stack_unit
+    assert "--volumes" not in stack_unit
     assert not list(output.rglob("*.key"))
 
 
@@ -113,6 +135,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "discovery-token.template.txt", "site_db.py",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
+    (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
 
     def wrong_arch_runner(args, **kwargs):
         if args[:2] == ["git", "status"]:
