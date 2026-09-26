@@ -2,8 +2,8 @@
 
 > **Runtime model — native, not Docker (D-161, D-197, D-246).**
 > The product runtime is Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy under
-> systemd. `rosy-runtime.target` starts CORE; I/O and navigation are explicit,
-> commissioned modes. **Docker and Compose are development/CI tooling only** and
+> systemd. `rosy-runtime.target` starts CORE and no-motion I/O; navigation is an
+> explicit commissioned mode. **Docker and Compose are development/CI tooling only** and
 > are not installed in the product image — every `docker compose` command in this
 > document belongs to that development path, not to the product boot path.
 > Per-device variation is expressed with profiles and slices; one robot is never
@@ -14,6 +14,22 @@
 For the first physical Pinky Pro connection, use the ordered, evidence-bound
 [G0-G5 commissioning runbook](pinky-pro-first-device-runbook.md). This runtime
 reference does not replace its E-stop, lifted-wheel, or physical HOLD gates.
+
+### Commissioned native motor boot
+
+The factory image starts CORE and `rosy-io.service` with
+`ROSY_RUNTIME_MODE=core` and `ROSY_IO_DRIVE_ENABLED=false`. I/O publishes
+device observations while motor torque stays off, `cmd_vel` is not subscribed,
+and `motor/ready` stays false. A device that has passed the lifted-wheel motor
+and command-loss checks can retain manual control across reboots: back up
+`/etc/rosy/runtime.env`, set `ROSY_RUNTIME_MODE=motor` and
+`ROSY_IO_DRIVE_ENABLED=true`, then restart CORE and I/O. Verify
+`motor/ready`, a bounded low-speed hold, and the zero command/deadman response.
+The target starts I/O again on subsequent boots and after a signed release
+switch; `PartOf=` stops I/O with CORE during that switch. To withdraw drive,
+set `ROSY_IO_DRIVE_ENABLED=false` and `ROSY_RUNTIME_MODE=core`, then restart
+CORE and I/O. Do not set the drive flag merely to clear a dashboard warning;
+first confirm the wheels, stop path, motor IDs, and measured command-loss stop.
 
 **Target:** Raspberry Pi 5 8GB, Raspberry Pi OS Lite 64-bit, ROSY Phase 1
 
