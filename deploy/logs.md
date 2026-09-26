@@ -1348,3 +1348,9 @@
 - 변경: 잠긴 vendor 비시뮬레이션 follower launch에서 leader trajectory topic 직접 remap을 제거하고, 개발 이미지에 적용·설치하도록 했다.
 - 증거: 회귀 시험 실패→통과 및 mutation red, Docker Desktop amd64 빌드와 설치된 launch `remappings=[]` readback. 이미지 ID와 한계는 OMX 검증 기록에 남겼다.
 - gate 변화: SOURCE/LOCAL 보강. native systemd 산출물, 실제 OMX 장치와 현장 제어 승인은 여전히 HOLD.
+
+## 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff
+
+- 변경: 읽기 전용 checkout, 네트워크·장치 허가 없는 컨테이너에서 vendor Gazebo와 단일 소유자 시험을 재현하는 probe를 추가했다. OMX 호스트 이전의 점유 해제·무명령 기동·재승인 순서를 배포 설명에 적었다.
+- 증거: 잠긴 amd64 개발 이미지의 vendor action 시험 통과, 가짜 serial mount 거부(exit 2). 대상 Ubuntu 및 실물 장치 시험은 수행하지 않았다.
+- gate 변화: ROS-SIM 진단 근거만 보강. native 서비스·현장 배치 승인과 DEVICE/FIELD는 HOLD.

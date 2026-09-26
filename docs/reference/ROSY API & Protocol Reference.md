@@ -946,7 +946,7 @@ or command CORE. Cross-VLAN, blocked multicast, and AP mode use manual endpoint
 configuration and the existing outbound FleetAgent path.
 
 
-## 10.10 Site Fleet intent interpretation and message boundaries (D-292 Accepted)
+## 10.10 Site Fleet intent interpretation and message boundaries (D-293 Accepted)
 
 The site API accepts a domain intent and lets Fleet interpret it. For the current
 navigation request, `GoalRequest` contains only `x`, `y`, and `yaw`; the
@@ -1030,7 +1030,7 @@ authorizes navigation or picking.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.40 | 2026-09-26 | Additive (D-292): typed Site Fleet intent/OpenAPI grammar, server-derived priority and identity, durable task/audit semantics, and purpose-specific message boundaries. No robot PRT envelope change. |
+| v1.40 | 2026-09-26 | Additive (D-293): typed Site Fleet intent/OpenAPI grammar, server-derived priority and identity, durable task/audit semantics, and purpose-specific message boundaries. No robot PRT envelope change. |
 | v1.39 | 2026-09-26 | Additive: Operator camera preview screenshot/video evidence upload, list, download and bounded `VisionEvidenceRecord`/`VisionEvidenceList`. Browser PC storage stays local. Robot DDS/WSS envelope version remains 1.0. |
 | v1.38 | 2026-09-26 | Robot FleetAgent location: paired robots may resolve a pinned site over mDNS with CA/TLS verification; no envelope change. |
 | v1.37 | 2026-09-26 | Additive: site-only mDNS scan/readback and `DiscoveryScanPayload`; no robot envelope change. |

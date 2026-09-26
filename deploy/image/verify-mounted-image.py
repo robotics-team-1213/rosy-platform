@@ -56,7 +56,7 @@ BUS_CONSOLE = re.compile(r"console=(serial0|ttyAMA0|ttyAMA4)(,|$)")
 RECOVERY_CONSOLE = re.compile(r"console=ttyAMA10(,|$)")
 BUS_GETTY_MASKS = ("etc/systemd/system/serial-getty@ttyAMA0.service",
                    "etc/systemd/system/serial-getty@ttyAMA4.service")
-HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service")
+HARDWARE_UNITS =("rosy-io.service", "rosy-navigation.service", "rosy-camera.service")
 SLLIDAR_FILES = ("lib/sllidar_ros2/sllidar_node", "share/sllidar_ros2/launch/sllidar_c1_launch.py")
 DISPLAY_UNIT = "rosy-boot-display.service"
 DISPLAY_UDEV_RULE = "etc/udev/rules.d/99-rosy-display.rules"

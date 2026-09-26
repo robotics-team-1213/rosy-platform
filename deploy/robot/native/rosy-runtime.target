@@ -2,8 +2,8 @@
 Description=ROSY native product runtime (CORE and no-motion I/O default)
 Requires=rosy-release-recover.service rosy-sd-provision.service
 Requires=rosy-core.service
-Wants=rosy-io.service
-After=rosy-release-recover.service rosy-sd-provision.service rosy-core.service rosy-io.service
+Wants=rosy-io.service rosy-camera.service
+After=rosy-release-recover.service rosy-sd-provision.service rosy-core.service rosy-io.service rosy-camera.service
 AllowIsolate=yes
 
 [Install]

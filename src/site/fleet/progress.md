@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "507 passed, 5 skipped (2026-09-26 Windows); mDNS host scanner integration later passed 510/5 in the main-line run. D-292 OpenAPI/runtime contract와 source-token FleetAgent↔console/WebSocket, D-257 sighting isolation 포함. Revision 01a3946c packaged linux/amd64 Docker smoke에서 3 services healthy, TLS/API intent와 합성 WSS→Vision→SQLite sighting readback 확인; Windows/CPU/합성 데이터뿐이며 Ubuntu/GPU/실물 device 수용은 아님 (docs/validation/2026-09-26-site-stack-container-smoke.md)"
+    evidence: "507 passed, 5 skipped (2026-09-26 Windows); mDNS host scanner integration later passed 510/5 in the main-line run. D-293 OpenAPI/runtime contract와 source-token FleetAgent↔console/WebSocket, D-257 sighting isolation 포함. Revision 01a3946c packaged linux/amd64 Docker smoke에서 3 services healthy, TLS/API intent와 합성 WSS→Vision→SQLite sighting readback 확인; Windows/CPU/합성 데이터뿐이며 Ubuntu/GPU/실물 device 수용은 아님 (docs/validation/2026-09-26-site-stack-container-smoke.md)"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-292]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293]
 plans:
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md

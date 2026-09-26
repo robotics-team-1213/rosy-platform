@@ -114,7 +114,8 @@
 | D-287 | 역할 패널의 읽기 전용 섹션은 공용 readback 배치를 사용한다 |
 | D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
-| D-292 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
+| D-292 | Design tokens and shared component layout contract |
+| D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 
 ## 계획·결과 문서
 
@@ -163,8 +164,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): move Site Fleet intent contract to D-293
+- 2026-09-26 · uncommitted · OMX 단일 소유자 ROS-SIM 후속과 이전 절차
 - 2026-09-26 · uncommitted · docs(adr): renumber Site Fleet API contract after main advances
 - 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
 - 2026-09-26 · uncommitted · docs(site): 관제 서버와 운영자 단말의 배치 명시
-- 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
-- 2026-09-26 · uncommitted · merge(site): preserve camera/mDNS and typed intent contracts
