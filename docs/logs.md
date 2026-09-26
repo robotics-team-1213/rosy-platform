@@ -2310,3 +2310,11 @@
 - gate 변화: 없음(D-270 Proposed 유지, Accepted 승격은 발의 세션)
 - 회귀: 없음(코드 무변경. 동료 WIP `deploy/release/test/test_secret_scan.py`·`docs/reference/OMX_AI_ROS2_Camera_Report_2026-09-26.md` 미스테이징 유지)
 - 교훈: 재촉이 붙은 결정 요청은 "7일 내 무반례 자동 승격"이라는 시한이 걸린 계약이다 — 물음 위치(문서 하단)·서명(날짜+세션)이 정해져 있으니 그 자리를 그대로 쓰고, ADR 표 Status는 발의 세션 몫이라 넘겨 쓰지 않는다
+
+## 2026-09-26 · uncommitted · fix(api): description 배너를 계약 v1.33으로 동기화 — CI 신규 붉음 즉시 처리
+
+- 변경: `src/runtime/api_web/core_api_web/api/app.py` 76행 description `ROSY-API-REF-001 (v1.31)` → `(v1.33)`. `527d4c87`(fleet queued-task, D-271)가 API Ref 헤더를 v1.33으로 올렸는데 배너는 손대지 않아 `test_protocol_version_alignment::test_app_description_names_the_live_contract_version`이 CI 첫 pytest 단계를 붉힘(core domain 1 failed/1729 passed, deployment 단계는 skip이라 기존 4건은 미평가) — 769e2f28의 v1.30→v1.31과 같은 D-18 절반 갱신 잔재이며 타 레인 active WIP이 아닌 기계적 드리프트
+- 증거: 로컬 `python -X utf8 -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q -rfE` 초록 확인(계약 헤더 v1.33 ↔ 배너 v1.33 문자열 일치). `git diff --check` 통과
+- gate 변화: 없음(ADR·계약 문서 무변경 — 버전 표기는 문서가 이미 v1.33)
+- 회귀: 없음(배너 문자열 외 무변경. 동료 WIP 2파일 미스테이징 유지)
+- 교훈: API Ref 버전을 올린 커밋은 같은 변경에서 배너 문자열도 같이 올린다 — D-18의 "문서와 코드를 한 변경"에는 FastAPI description이 포함된다. 안 그러면 첫 pytest 단계가 붉어 뒤 단계 전부를 skip시킨다
