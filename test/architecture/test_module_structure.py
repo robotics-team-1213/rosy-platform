@@ -66,6 +66,10 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "site/fleet/fleet/server/task_store.py": (
+        620,
+        "accept: keep SQLite task, history, lease, and reservation transactions together; split only if this cohesive store grows further",
+    ),
     "runtime/sensing/control/startup_calibration_node.py": (
         954,
         f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
