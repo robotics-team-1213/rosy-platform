@@ -2373,3 +2373,8 @@
 - 변경: 사이트·OMX 인벤토리/장치 배타성, 두 인스턴스 ROS-SIM, native 서비스·산출물, 한 대/두 대 DEVICE 및 호스트 이전을 순서와 선행 게이트로 기록했다.
 - 근거: D-281 설계와 현행 `deploy/omx/preflight.py`·비활성 Compose·D-246 native 결정. 실물 식별·vendor graph·카메라가 미확정이므로 해당 단계는 측정 뒤에만 진행한다.
 - gate 변화: 없음. 이 문서는 제품 런타임·Fleet API·OMX capability를 활성화하지 않는다.
+
+## 2026-09-26 · uncommitted · docs(adr): propose D-282 per-hardware ROS ownership
+- 변경: Add a proposed ownership boundary for per-robot and per-workcell ROS instances, unique physical-device admission, single actuator command authority, camera data ownership, and API-only inter-instance coordination.
+- 증거: Compare D-33, D-38, D-117, D-152, D-246, D-269, D-273, and proposed D-281; verify the ADR log and implementation sequence reference each independent runtime gate.
+- gate 변화: no runtime or device gate moved; D-282 is Proposed and does not enable actuator or camera capability.
