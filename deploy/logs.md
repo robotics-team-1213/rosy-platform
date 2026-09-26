@@ -1270,3 +1270,9 @@
 - Evidence: focused profile/product/vendor-lock suite: 13 passed; disabled CLI output: `{}`.
 - Gate change: SOURCE/LOCAL evidence refreshed; ROS-SIM and ARTIFACT remain HOLD; DEVICE/FIELD remain PARKED.
 - Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
+
+## 2026-09-26 · uncommitted · build locked OMX-AI workstation image and serial admission
+- 변경: full-SHA ROBOTIS 잠금으로 ROS Jazzy OCI 워크스테이션 이미지를 만들고, 팔 bringup/description/Dynamixel 패키지 집합과 동작하지 않는 hardware/software 셸 프로필을 추가했다. Linux by-id 사전점검은 서로 다른 follower/leader character device와 read/write 권한을 요구한다.
+- 근거: OMX 호스트 시험 8개 통과; Docker Linux/amd64 이미지 빌드 digest `sha256:8b4d2fdf534687132cc7d9fb8441b3db63c140edfaaba5164693fd56ca77d861`; 이미지에서 `open_manipulator_bringup` 및 `dynamixel_hardware_interface` 조회 성공; Compose 설정 검증 통과.
+- gate 변화: SOURCE/LOCAL 이미지 빌드 및 사전점검 GO; ROS-SIM/ARTIFACT HOLD; DEVICE/FIELD PARKED.
+- Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.

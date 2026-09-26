@@ -36,14 +36,14 @@ Do not extend the current `deploy/robot` ARM64 `io` target into the OMX workstat
 1. Pin the upstream repositories in `deploy/omx/stack.lock.yaml` and add a host test that rejects missing/non-immutable revisions.
 2. Set the selected target to `omx_ai` while keeping `enabled: false`, empty joint mapping, driver plugin, serial identity, and capability contract.
 3. Keep the generic adapter's disabled profile valid with an empty joint map; enabled configurations still require a complete unique joint mapping, package, and hardware plugin.
-4. Build a workstation-specific Dockerfile from ROS Jazzy using only the locked vendor sources and camera dependencies selected later. Do not copy the upstream recipe's broad `/dev`, RealSense, AI training, agent, or Zenoh defaults without a need and a separate decision.
+4. **Implemented locally:** build a workstation-specific Dockerfile from ROS Jazzy using only the locked vendor sources. It resolves full commit SHAs, installs ROS dependencies and runs `colcon`; it does not copy the upstream recipe's broad `/dev`, RealSense, AI training, agent, or Zenoh defaults. Camera packages remain deferred until hardware selection.
 
 ### P0b — Runtime admission and ROS graph
 
-1. Add a Linux preflight that resolves separate leader/follower serial IDs, rejects identical devices, verifies character-device type and permissions, and emits a bounded runtime config. Never guess `/dev/ttyACM*`.
-2. Bind only those serial devices and explicitly selected camera nodes; prohibit privileged mode and wildcard `/dev/video*` access.
-3. Add an opt-in hardware Compose profile with no default startup motion, mock hardware disabled, separate persistent data/config paths, and an explicit ROS domain/RMW. Keep simulation in a separate profile without serial or camera device grants; enable vendor mock hardware only there.
-4. Run official follower/leader launch in ROS-SIM using that separate mock profile. Validate the graph and command ownership without claiming DEVICE acceptance.
+1. **Implemented locally:** Linux preflight resolves separate leader/follower by-id entries, rejects identical devices, verifies character-device type and read/write access, and emits only the two resolved paths. It never guesses `/dev/ttyACM*`.
+2. **Implemented locally for serial only:** the opt-in hardware Compose shell binds those two exact devices, with no privileged mode or wildcard `/dev` access. Camera grants remain deferred until a camera identity is selected.
+3. **Implemented locally as shells only:** separate opt-in hardware and software-only Compose profiles are inert interactive shells. No vendor driver, mock hardware, or simulator starts yet. Keep vendor mock bringup gated until exact ROS-SIM dependencies and launch behavior are verified.
+4. Run official follower/leader launch in ROS-SIM after proving the supported mock path. Validate the graph and command ownership without claiming DEVICE acceptance.
 
 ### P1 — Arm command/control baseline
 

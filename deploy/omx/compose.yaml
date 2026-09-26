@@ -1,0 +1,21 @@
+services:
+  omx-hardware-shell:
+    profiles: ["hardware"]
+    image: rosy-omx-workstation:local
+    build: .
+    init: true
+    stdin_open: true
+    tty: true
+    devices:
+      - "${OMX_FOLLOWER_DEVICE:?run the host preflight}:${OMX_FOLLOWER_DEVICE:?run the host preflight}"
+      - "${OMX_LEADER_DEVICE:?run the host preflight}:${OMX_LEADER_DEVICE:?run the host preflight}"
+    command: ["bash"]
+
+  omx-simulation-shell:
+    profiles: ["simulation"]
+    image: rosy-omx-workstation:local
+    build: .
+    init: true
+    stdin_open: true
+    tty: true
+    command: ["bash"]
