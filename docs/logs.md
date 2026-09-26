@@ -2502,3 +2502,9 @@
 - 변경: Fleet·Vision·향후 AI/Data·Pinky·OMX의 실행 단위, 단일/분리 PC 배치 후보, 계약 방향, 작업·영상 원장, 장애 기본 동작과 검증 순서를 설계로 기록했다.
 - 근거: D-275/D-281/D-282/D-290, 현행 사이트/OMX Compose와 SOURCE/ROS-SIM 검증 기록을 대조했다.
 - gate 변화: 없음. 새 API·native OMX 서비스·현장 배치는 열지 않았고, D-281/D-268과 실제 SITE/DEVICE/FIELD 검증은 남아 있다.
+
+## 2026-09-26 · uncommitted · 사이트 배치 변경과 복구 권한 구체화
+
+- 변경: 역할 배치 설계에 고정 사이트 입구와 Vision 분리 방식, 설치/작업/장치 정본, SQLite 복원과 OMX 호스트 이전 순서를 추가했다.
+- 근거: 현행 Site Compose/Caddy 경로, Fleet 이동 작업·UNKNOWN 처리, D-281/D-290의 단일 소유권 경계를 대조했다.
+- gate 변화: 없음. 원격 Vision worker·OMX API·실물 호스트 이전은 아직 구현/수용되지 않았다.
