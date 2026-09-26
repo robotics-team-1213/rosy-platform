@@ -2340,3 +2340,15 @@
 - gate 변화: 없음(ADR 신설·Status 변경 없음 — 계획 문서의 결정 기입이며, ROSY-SIGNAL-001 v2 계약 개정은 §7 2단계의 별도 변경)
 - 회귀: 없음(코드·펌웨어 무변경. 동료 WIP 파일 미스테이징 유지)
 - 교훈: "이 문서의 유일한 질문"으로 표시된 결정은 표의 옵션 수만큼 답이 필요하다 — 채택만 적고 기각·별도 항목을 비워 두면 나중에 같은 질문이 다시 올라온다. 그리고 승인은 코드 착수 신호이므로 "v1은 언제까지 건드려도 되는가"를 같은 답에 함께 적어야 한다
+
+## 2026-09-26 · uncommitted · docs(architecture): D-281 사이트·OMX 호스트 배치 설계
+
+- 변경: Pinky 온보드 CORE, 사이트 Fleet/Vision, OMX 작업대의 장비 ID·실행 인스턴스·물리 호스트를 분리하고, 한 PC 공유 배치와 호스트 분리 배치를 D-281 및 설계 문서에 기록했다.
+- 근거: 현행 사이트/OMX Compose, Fleet CORE `robots.yaml`, D-55/D-246/D-273/D-275와 OMX 비활성 프로필을 대조했다. D-246의 native 제어 결정과 OMX OCI 개발 계획의 경계를 기존 계획에도 보충했다. 동시 작업의 D-279/D-280 번호를 예약해 D-281과 충돌하지 않게 했다. OMX 두 대 동시 실행과 Fleet workcell 명령은 현재 구현이 아니다.
+- gate 변화: 없음. D-281은 Proposed이며 SOURCE/LOCAL 문서 검증은 물리 안전·동시 부하·DEVICE/FIELD를 수용하지 않는다.
+
+## 2026-09-26 · uncommitted · docs(plan): D-281 호스트 배치 실행 계획
+
+- 변경: 사이트·OMX 인벤토리/장치 배타성, 두 인스턴스 ROS-SIM, native 서비스·산출물, 한 대/두 대 DEVICE 및 호스트 이전을 순서와 선행 게이트로 기록했다.
+- 근거: D-281 설계와 현행 `deploy/omx/preflight.py`·비활성 Compose·D-246 native 결정. 실물 식별·vendor graph·카메라가 미확정이므로 해당 단계는 측정 뒤에만 진행한다.
+- gate 변화: 없음. 이 문서는 제품 런타임·Fleet API·OMX capability를 활성화하지 않는다.
