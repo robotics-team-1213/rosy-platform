@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {"name": "libpisp", "commit": "28196ed6edcfeda88d23cc5f213d51aa6fa17bb3", "sha256": "9256a5e43279cd5ec8cb70805751a79effe6d0ed41128f80860468f48ddc729c"},
+    {"name": "libcamera", "commit": "1230f78d2f6d38d812568fd27f7b985b9ff19e39", "sha256": "c177923dd3e92ce9ebe3c46f4dd91f7029ca507571f985da49e839a997c97a87"},
+    {"name": "rpicam-apps", "commit": "6318ac74e44ad973d5170540c3818016a31bb94c", "sha256": "4caa2834d54be866dc75c0eebb4d8a93230c8f738f7766b0f8d44fde7bf83033"},
+    {"name": "picamera2", "commit": "533c6c15f0d1d117d0d547123f0f72c964e26e39", "sha256": "28fa2df0e9c398bd8484b51847183ef3b15a725c8ceffc27c4383609c96b388a"}
+  ]
+}

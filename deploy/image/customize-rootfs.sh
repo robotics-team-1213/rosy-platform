@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # Install ROS 2 Jazzy and the native ROSY payload into a mounted Ubuntu Pi image.
 set -euo pipefail
 
@@ -54,6 +54,11 @@ WS281X_SHA="$(lock_value hardware_dependencies rpi_ws281x_sha256)"
 LAMP_OVERLAY_SOURCE="$(dirname "$0")/overlays/rosy-ws281x.dts"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
+CAMERA_SOURCES="$(dirname "$0")/$(lock_value camera_runtime sources)"
+CAMERA_SOURCES_SHA="$(lock_value camera_runtime sources_sha256)"
+CAMERA_PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value camera_runtime python_requirements)"
+CAMERA_PYTHON_SHA="$(lock_value camera_runtime python_requirements_sha256)"
+CAMERA_INSTALLER="$(dirname "$0")/install-camera-stack.sh"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
 DISPLAY_PROBE="$(dirname "$0")/probe-display-runtime.py"
@@ -72,6 +77,14 @@ BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"
 [[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
+for pair in "$CAMERA_SOURCES:$CAMERA_SOURCES_SHA" "$CAMERA_PYTHON_REQUIREMENTS:$CAMERA_PYTHON_SHA"; do
+    camera_file="${pair%%:*}"
+    camera_sha="${pair#*:}"
+    [[ -f "$camera_file" && "$camera_sha" =~ ^[0-9a-f]{64}$ ]] || fail "camera lock input is missing or invalid"
+    [[ "$(sha256sum "$camera_file" | awk '{print $1}')" == "$camera_sha" ]] \
+        || fail "camera lock input does not match inputs.lock.yaml: $camera_file"
+done
+[[ -f "$CAMERA_INSTALLER" ]] || fail "camera stack installer is missing"
 [[ -f "$CORE_PROBE" ]] || fail "CORE runtime probe is missing"
 [[ -f "$IO_PROBE" ]] || fail "hardware runtime probe is missing"
 [[ -f "$DISPLAY_PROBE" ]] || fail "boot display probe is missing"
@@ -209,6 +222,11 @@ chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 install -d -m 0755 "$ROOT/usr/local/share/rosy"
 printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+
+# D-287: install the pinned official PiSP userspace before taking the final
+# package inventory. This requires an ARM64 build and never touches a device SD.
+bash "$CAMERA_INSTALLER" "$ROOT" "$CAMERA_SOURCES" "$CAMERA_PYTHON_REQUIREMENTS" \
+    || fail "pinned Raspberry Pi camera userspace did not build"
 
 # D-247: the WS2812 lamp driver. rpi_ws281x drives the Pi 5 lamp only through
 # its rp1_ws281x_pwm kernel module (/dev/ws281x_pwm), which no Ubuntu package

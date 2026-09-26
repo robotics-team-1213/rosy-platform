@@ -1300,5 +1300,12 @@
 
 - 변경: 이미지 customizer가 `camera_auto_detect=0`과 `dtoverlay=ov5647`을 CAM1에 적용하고 mounted-image verifier가 이 조건을 검사하도록 했다.
 - 장치 근거: Pi 5 rev d04170의 ROSY SD에서 `ov5647 11-0036` probe 성공, 공급사 카메라 사용자 공간을 임시 실행해 2592×1944 JPEG 실제 촬영 및 화면 확인. rev d04171은 공급사 SD에서 CAM0/CAM1 모두 probe `-121`로 실패했다.
+- 증거: 위 센서 probe와 JPEG 촬영의 장치 진단 기록. 제품 이미지의 사용자 공간 검증은 후속 D-287에 따른다.
 - 제한: ROSY 제품 이미지에는 PiSP/Picamera2 촬영 런타임이 없고 기본 서비스는 CORE-only다. 임시 진단 촬영은 제품 스트림 수용이 아니다. 새 이미지 artifact 빌드와 `.201` 물리 접속 확인은 남았다.
 - gate 변화: 없음. SOURCE 수정과 장치 진단만 확인했으며 ARTIFACT/DEVICE는 HOLD 유지.
+
+## 2026-09-26 · uncommitted · D-287 Pi 5 카메라 사용자 공간 이미지 빌드 경로
+
+- 변경: Raspberry Pi 공식 libpisp, libcamera, rpicam-apps, Picamera2 소스를 커밋과 아카이브 SHA-256으로 고정하고 네이티브 ARM64 이미지 customizer에 설치 단계를 연결했다. mounted-image 검증기는 실행 파일, PiSP IPA, Python 패키지, 소스 기록을 확인한다.
+- 증거: 네 공식 아카이브와 ARM64 Python 배포물의 로컬 SHA-256 재확인, 잠금·설치 순서·검증기 호스트 계약 시험. 새 ARM64 이미지 빌드와 SD 촬영은 미실행.
+- gate 변화: SOURCE/LOCAL 구현만 추가. ARTIFACT와 새 SD의 DEVICE 촬영은 HOLD.
