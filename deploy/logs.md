@@ -1277,6 +1277,12 @@
 - gate 변화: SOURCE/LOCAL 이미지 빌드 및 사전점검 GO; ROS-SIM/ARTIFACT HOLD; DEVICE/FIELD PARKED.
 - Decision: D-273; execution plan: `docs/plans/2026-09-26-omx-ai-workstation-runtime.md`.
 
+## 2026-09-26 · uncommitted · clarify OMX workstation packaging boundary
+
+- 변경: `deploy/omx/README.md`의 OCI 후보를 개발·빌드 셸로 명확히 하고, D-246을 따르는 native systemd 현장 제어 인스턴스와 한 호스트의 1~2개 배치 후보를 연결했다.
+- 근거: 현재 Compose는 비활성 단일 hardware/simulation 셸이며 실제 OMX 제어 서비스는 없다. D-281과 사이트 호스트 배치 설계에 검증 순서를 기록했다.
+- gate 변화: 없음. 장치 제어·정지·복구·동시 부하의 DEVICE/FIELD 증거는 없다.
+
 ## 2026-09-26 · feat(sd): fail closed on board transfer and expose setup status
 - 변경: first-boot가 보드 이동을 감지해 새 임시 신원을 준비하고 CORE 시작을 막는다. 상태 서버는 8080에서 읽기 전용 안내만 제공한다.
 - 증거: 관련 호스트 시험 439 passed, 8 skipped; arm64 이미지 및 Pi 검증 전.
