@@ -16,7 +16,7 @@ function unavailableLabel(code) {
 function card(title, path, interval, ctx, describe) {
   const wrap = el("section", "surface-readback");
   wrap.append(el("h3", "", title));
-  const body = el("dl", "surface-readout");
+  const body = el("dl", "ui-readout");
   const status = el("ui-status", "", "상태를 불러오는 중입니다.");
   status.setAttribute("state", "pending");
   const detail = el("details", "surface-disclosure");

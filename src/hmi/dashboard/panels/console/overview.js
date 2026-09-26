@@ -4,7 +4,7 @@ export function mount(el, ctx) {
   const head = document.createElement("ui-head");
   head.textContent = "로봇 상태";
   const summary = document.createElement("dl");
-  summary.className = "surface-readout";
+  summary.className = "ui-readout";
   const fields = ["mode", "navigation", "pose", "battery"];
   function render(state) {
     summary.replaceChildren();

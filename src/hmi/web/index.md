@@ -17,6 +17,7 @@
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 |
 | D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 |
 | D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 |
+| D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 |
 
 ## 계획·결과 문서
 
@@ -35,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(hmi): share semantic role readout layout (D-286)
 - 2026-09-26 · uncommitted · feat(hmi): share role form layout and field labels (D-285)
 - 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
 - 2026-09-26 · uncommitted · feat(hmi): shared button sizes, action groups, and status UI (D-284)
 - 2026-09-26 · uncommitted · feat(hmi): ROSY 장미 브랜드 토큰과 동적 버튼 kind (D-277)
-- 2026-09-25 · uncommitted · refactor(hmi): move web_common under src/hmi (D-231)
