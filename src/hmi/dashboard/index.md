@@ -37,6 +37,8 @@
 - 2026-09-26 · uncommitted · feat(hmi): 실제 CORE 경로 연결과 화면 상태 보정
 - 2026-09-26 · uncommitted · feat(dashboard): D-260 operate-view summary line
 - 2026-09-26 · uncommitted · feat(hmi): add administrator dock catalog and registration
+- 2026-09-26 · uncommitted · feat(hmi): add line-follow and traffic policy panels
+- 2026-09-26 · uncommitted · feat(hmi): add shared role-based mode control
 - 2026-09-27 · uncommitted · name role surfaces
 - 2026-09-27 · 6ce05ff1 · test(dashboard): verify D-294 browser and asset contracts
 - 2026-09-26 · uncommitted · feat(hmi): document typography and interaction specimens (D-294)

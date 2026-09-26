@@ -2344,6 +2344,11 @@
 - gate 변화: 없음. ADR은 실행 책임 결정이며 native ARM64 산출물, Ubuntu 사이트, 실물 폰·로봇, 자동 작업 수용은 별도다.
 - 회귀: 문서 변경만 수행했고 제품 코드와 다른 작업 트리의 WIP는 수정하지 않았다.
 
+## 2026-09-26 · uncommitted · docs(validation): execute D-275 surface and video role plan
+- 변경: recorded D-275 source/local boundary results and remaining ARTIFACT/DEVICE/SITE/FIELD holds; linked the execution record from the plan
+- 증거: plan integration suite 205 passed, 2 skipped; dashboard browser 64 passed; focused contract suites and Compose config passed
+- gate 변화: source/local contracts confirmed; deployment, device, and field gates unchanged
+- 구현: none; no new Vision workload or API change
 ## 2026-09-26 · uncommitted · feat(fleet): 사이트 API 사용자별 권한과 변경 감사
 
 - 변경: D-276에 따라 viewer/operator/policy-admin 역할을 분리하고, 개인별 SHA-256 bearer digest를 로드한다. Fleet API 변경 요청은 영속 SQLite에 INTENT를 먼저 기록하며, 기록 실패 시 CORE 명령을 보내지 않는다. RESULT에는 principal·role·경로·상태를 기록하고 bearer와 본문은 저장하지 않는다.
