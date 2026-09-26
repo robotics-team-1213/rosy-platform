@@ -2406,3 +2406,13 @@
 - 제한/정리: Windows Docker Desktop, synthetic credentials/cert/config, CPU ArUco; CORE unreachable, physical robot/GPU 없음. 전용 Compose project/volume/networks만 제거하고 후보는 `X:\DevTemp\rosy-site-candidate-46b7465b`에 남겼다. Ubuntu SITE, DEVICE/FIELD 및 자동 실행 gate는 변하지 않는다.
 - gate 변화: SOURCE/LOCAL candidate smoke만 확인했다. Ubuntu/SITE/GPU, 실물 DEVICE/FIELD, 자동 이동·집기는 계속 HOLD다.
 - 자세한 재현·hash: `docs/validation/2026-09-26-site-stack-container-smoke.md`.
+
+## 2026-09-26 · uncommitted · docs(adr): D-283 console action groups fit the fixed grammar
+- 변경: D-283 Accepted를 추가해 선언 desktop에서 sense/observe/act 3영역, 고정 E-stop, 선택형 운전·도킹·차선 추종 그룹을 정했다.
+- 근거: D-201 및 D-280 기준선과 administrator/operator 실제 CORE 캡처. desktop scroll 823px이며 평면 3열 후보는 act 내용이 y=1017까지 내려가 잘린다.
+- gate 변화: 없음. 구현 전 ADR이며 G1/G2/G3와 ROS/장치 수용은 남아 있다.
+
+## 2026-09-26 · uncommitted · docs(adr): accept D-286 shared role readout layout
+- 변경: Accepted D-286으로 dashboard 역할 패널의 semantic label/value readout 배치 규칙을 공용 UI contract에 등록했다.
+- 근거: 공용 dashboard readout styles와 D-194/D-254/D-278/D-285 경계를 확인하고 ADR Log 및 `progress.md` ADR 색인을 동기화했다.
+- gate 변화: 없음. 시각·브라우저·기기 수용은 해당 UI gate에서 별도 확인한다.

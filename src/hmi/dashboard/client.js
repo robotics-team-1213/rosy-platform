@@ -211,24 +211,29 @@ export function expiryLabel(expiresAt) {
   return `만료 ${stamp.toLocaleString("ko-KR", { hour12: false })}`;
 }
 
+async function httpError(response) {
+  let message = `${response.status} ${response.statusText}`;
+  let code = null;
+  try {
+    const body = await response.json();
+    message = body.error?.message || body.detail || message;
+    code = typeof body.error?.code === "string" ? body.error.code : null;
+  } catch (_error) {
+    // The HTTP status remains the safest fallback.
+  }
+  const error = new Error(message);
+  error.status = response.status;
+  if (code) error.code = code;
+  return error;
+}
+
 export async function api(path, options = {}) {
   if (!session.token) throw new Error("접속 키가 필요합니다.");
   const response = await fetch(path, {
     ...options,
     headers: { ...authHeaders(), ...(options.headers || {}) },
   });
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-    try {
-      const body = await response.json();
-      message = body.error?.message || body.detail || message;
-    } catch (_error) {
-      // The HTTP status remains the safest fallback.
-    }
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
+  if (!response.ok) throw await httpError(response);
   if (response.status === 204) return null;
   return response.json();
 }
@@ -236,16 +241,10 @@ export async function api(path, options = {}) {
 export async function apiMaybe(path) {
   if (!session.token) return null;
   const response = await fetch(path, { headers: authHeaders() });
-  if (response.status === 404) return null;
   if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-    try {
-      const body = await response.json();
-      message = body.error?.message || message;
-    } catch (_error) {
-      // Keep the status text.
-    }
-    throw new Error(message);
+    const error = await httpError(response);
+    if (response.status === 404 && error.code === "NOT_FOUND") return null;
+    throw error;
   }
   return response.json();
 }

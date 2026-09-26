@@ -17,6 +17,7 @@ umask 077
 IMAGE_ROOT=""
 OVERLAY=""
 COMMENT="Rosy board device (D-247)"
+DISABLE_CAMERA_AUTO_DETECT=false
 
 fail() {
     echo "FAIL BOOT_OVERLAY $*" >&2
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
         --image-root) IMAGE_ROOT="${2:-}"; shift 2 ;;
         --overlay) OVERLAY="${2:-}"; shift 2 ;;
         --comment) COMMENT="${2:-}"; shift 2 ;;
+        --disable-camera-auto-detect) DISABLE_CAMERA_AUTO_DETECT=true; shift ;;
         *) fail "unknown argument: $1" ;;
     esac
 done
@@ -35,6 +37,8 @@ done
 # One config.txt line: key=value, no spaces, no comment, no section header.
 [[ "$OVERLAY" =~ ^(dtoverlay|dtparam)=[A-Za-z0-9_.,=-]+$ ]] || fail "--overlay must be one dtoverlay=/dtparam= line"
 [[ "$COMMENT" != *$'\n'* ]] || fail "--comment must be one line"
+[[ "$DISABLE_CAMERA_AUTO_DETECT" == false || "$OVERLAY" == "dtoverlay=ov5647" ]] \
+    || fail "--disable-camera-auto-detect requires dtoverlay=ov5647"
 
 if [[ -n "$IMAGE_ROOT" ]]; then
     [[ "$IMAGE_ROOT" == /* && -d "$IMAGE_ROOT" ]] \
@@ -69,7 +73,29 @@ applies_to_pi5() {
     ' "$1"
 }
 
-if applies_to_pi5 "$CONFIG_FILE"; then
+camera_auto_detect_disabled() {
+    awk '
+        BEGIN { active = 1; disabled = 0; enabled = 0 }
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+            section = $0
+            gsub(/[[:space:]]/, "", section)
+            active = (section == "[all]" || section == "[pi5]")
+            next
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            sub(/[[:space:]]*#.*/, "", line)
+            gsub(/[[:space:]]/, "", line)
+            if (active && line == "camera_auto_detect=0") disabled = 1
+            if (active && line == "camera_auto_detect=1") enabled = 1
+        }
+        END { exit(disabled && !enabled ? 0 : 1) }
+    ' "$1"
+}
+
+if applies_to_pi5 "$CONFIG_FILE" && \
+    { [[ "$DISABLE_CAMERA_AUTO_DETECT" == false ]] || camera_auto_detect_disabled "$CONFIG_FILE"; }; then
     echo "PASS BOOT_OVERLAY $OVERLAY is already configured"
     exit 0
 fi
@@ -78,8 +104,19 @@ staged="$(mktemp --tmpdir="$(dirname "$CONFIG_FILE")" .rosy-boot-overlay.XXXXXX)
 trap 'rm -f "$staged"' EXIT
 cat "$CONFIG_FILE" >"$staged"
 chmod --reference="$CONFIG_FILE" "$staged" 2>/dev/null || true
-printf '\n[all]\n# %s\n%s\n' "$COMMENT" "$OVERLAY" >>"$staged"
+if [[ "$DISABLE_CAMERA_AUTO_DETECT" == true ]]; then
+    sed -i -E 's/^([[:space:]]*)camera_auto_detect=1([[:space:]]*(#.*)?)$/\1camera_auto_detect=0\2/' "$staged"
+    if ! camera_auto_detect_disabled "$staged"; then
+        printf '\n[all]\ncamera_auto_detect=0\n' >>"$staged"
+    fi
+fi
+if ! applies_to_pi5 "$staged"; then
+    printf '\n[all]\n# %s\n%s\n' "$COMMENT" "$OVERLAY" >>"$staged"
+fi
 applies_to_pi5 "$staged" || fail "unable to stage $OVERLAY"
+if [[ "$DISABLE_CAMERA_AUTO_DETECT" == true ]]; then
+    camera_auto_detect_disabled "$staged" || fail "unable to disable camera auto detection"
+fi
 if [[ -z "$IMAGE_ROOT" && ! -e "${CONFIG_FILE}.rosy-backup" ]]; then
     cp "$CONFIG_FILE" "${CONFIG_FILE}.rosy-backup"
 fi

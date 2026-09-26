@@ -8,7 +8,7 @@ const MODES = [
 export function mount(root, ctx) {
   const head = el("ui-head", "", "운전 모드");
   const status = el("p", "surface-message", "현재 모드를 불러오는 중입니다."); status.setAttribute("role", "status");
-  const controls = el("div", "surface-actions");
+  const controls = el("ui-actions", "surface-actions");
   const buttons = new Map();
   for (const mode of MODES) {
     const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";

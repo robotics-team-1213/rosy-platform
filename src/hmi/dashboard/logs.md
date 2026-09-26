@@ -128,3 +128,31 @@
 - 증거: Chromium 390×844에서 가로 overflow 0, 브랜드·탐색·역할·E-stop 겹침 0, E-stop viewport 내 표시; 실제 FastAPI+CoreServices CORE `/console`에서 브라우저 오류 0. 1366×768에서는 스크롤 823px, 조작 패널 경계 y=1017인 3열 후보는 하단 조작을 잘라 적용하지 않았다. 캡처는 X:\DevTemp에만 보관.
 - gate 변화: 없음. ROS/장치/벤치/현장 검증은 하지 않았다.
 - 결정: D-201 조작 영역을 스크롤 숨김으로 잘라내지 않는다. 역할과 실제 ROS 데이터별 패널 밀도를 확인한 뒤 desktop 배치를 다시 설계한다.
+
+## 2026-09-26 · uncommitted · docs(hmi): compare operator console viewport by role
+
+- 변경: D-280 기준선에 administrator/operator 두 역할의 현재 `/console` 캡처 결과와 데스크톱 초과의 원인을 기록한다.
+- 증거: 실제 FastAPI+CoreServices CORE fixture, Playwright 1366×768/390×844, 두 역할 모두 console panel 7개(4 act), desktop scroll 823px, mobile scroll 3057px, 가로 overflow 0, 브라우저 오류 0. 역할에 따른 panel 수가 같고 CSS가 act를 다음 행에 둔다. 실제 ROS/장치 입력은 연결하지 않았다.
+- gate 변화: 없음. D-201 layout 계약 위반을 확인했으나 새 배치는 승인/검증 전이다.
+- 결정: act를 잘라내거나 스크롤하게 만드는 CSS는 보류한다. 조작 panel 밀도와 접이식/탭 우선순위를 설계한 뒤 desktop 변경을 평가한다.
+
+## 2026-09-26 · uncommitted · docs(adr): D-283 운용 조작 그룹 결정
+
+- 변경: D-283 Accepted와 docs/dashboard harness ADR 색인을 추가했다. 운전(모드+수동), 도킹, 차선 추종 그룹을 고정 act 영역에서 선택한다.
+- 근거: 실제 CORE 경로 admin/operator 캡처에서 현재 823px desktop scroll을 확인했다. 펼친 3열 후보는 조작을 잘라 concept 16 §7.1 및 D-201을 위반했다.
+- gate 변화: 없음. G1 정지 전환, G2 뷰포트 캡처, G3 운용자 평가와 ROS-SIM/DEVICE/FIELD 수용은 미실행이다.
+## 2026-09-26 · uncommitted · feat(hmi): role-aware map absence and Host Agent recovery (D-279)
+
+- 변경: preserve structured HTTP errors; only documented `404 / NOT_FOUND` becomes an empty map. Gate the `/setup` link by role and manifest. Render supplied Host Agent recovery as text and keep operations disabled while unavailable.
+- Structure: role panels use shared `ui-status`, `ui-actions`, and named `ui-button` sizes.
+- 증거: 241 passed, 2 skipped; visible CORE/Playwright review returned Viewer setup 403, Operator setup link only for an empty map, Administrator device 200; zero browser errors or 390px horizontal overflow.
+- gate 변화: unchanged. CORE browser proof does not establish ROS-SIM, ARM64, device, or field acceptance.
+- Decisions: D-279 behavior; D-284 shared components.
+- Rule: do not infer freshness, causes, recovery steps, or role grants beyond API evidence.
+
+## 2026-09-26 · uncommitted · test(hmi): verify role UI after current-main rebase
+
+- 변경: re-run dashboard, shared UI, API, role browser, and device browser coverage after rebasing on current main.
+- 증거: 241 passed, 3 skipped; visible CORE review remains on `/device` with Viewer setup 403, Operator setup link only for an empty map, Administrator device 200, and no browser errors or 390px overflow.
+- gate 변화: unchanged. CORE browser proof does not establish ROS-SIM, ARM64 image, device, or field acceptance.
+- Decision: D-279 behavior and D-284 shared components.

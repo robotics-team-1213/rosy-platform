@@ -1,4 +1,4 @@
-﻿# ROSY ADR Log
+# ROSY ADR Log
 ## Architecture Decision Records
 
 **Document ID:** ROSY-ADR-001
@@ -279,7 +279,12 @@
 | D-276 | 사이트 Fleet API는 개인별 credential과 역할로 요청을 인가한다 | Accepted |
 | D-277 | ROSY 이름 색은 장미색 토큰으로 식별한다 | Accepted |
 | D-278 | 역할별 표면은 작업 흐름으로 구분하고 색은 의미를 지킨다 | Accepted |
+| D-279 | 역할별 빈 상태와 복구 안내 | Accepted |
 | D-280 | ROSY 제품 디자인 철학은 차분한 지능에 은은한 따뜻함이다 | Accepted |
 | D-281 | 장비·실행 인스턴스·호스트를 분리해 OMX 한두 대의 공유/분리 배치를 검증한다 | Proposed |
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 | Proposed |
+| D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 | Accepted |
+| D-284 | 역할 화면의 상태·복구 표현은 공용 UI 부품과 Rosy 토큰을 사용한다 | Accepted |
+| D-285 | 역할별 패널은 공용 폼 배치와 필드 라벨 패턴을 사용한다 | Accepted |
+| D-286 | 역할 패널의 라벨·값 목록은 공용 readout 배치를 사용한다 | Accepted |
 ---

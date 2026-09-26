@@ -341,6 +341,12 @@ bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=i2c0-pi5,pins_0_1
 bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=rosy-ws281x" \
     --comment "Rosy WS2812 lamp (rp1_ws281x_pwm) on Raspberry Pi 5 GPIO19" \
     || fail "could not enable the WS2812 lamp overlay in the image"
+# Pinky Pro OV5647 is on CAM1. A Pi 5 rev d04170 did not enumerate it with
+# camera_auto_detect=1; the vendor card captured a real JPEG with the explicit
+# OV5647 overlay, and the ROSY card captured a real JPEG after the same change.
+bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "dtoverlay=ov5647" \
+    --disable-camera-auto-detect --comment "Rosy OV5647 camera on Pi 5 CAM1" \
+    || fail "could not configure the OV5647 camera in the image"
 printf '%s\n' "$SOURCE_REVISION" > "$RELEASE/source-revision.txt"
 chroot "$ROOT" dpkg-query -W '-f=${Package}\t${Version}\n' | LC_ALL=C sort > "$RELEASE/deb-packages.txt"
 

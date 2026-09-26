@@ -124,6 +124,8 @@ export function createFieldMap(options) {
   const status = options.status;
   const api = options.api;
   const apiMaybe = options.apiMaybe;
+  const emptyRecoveryLink = options.emptyRecoveryLink;
+  const mayOpenSetup = options.mayOpenSetup === true;
   const getPose = options.getPose;
   const getNavigation = options.getNavigation;
   const canGoal = options.canGoal;
@@ -140,11 +142,14 @@ export function createFieldMap(options) {
   let cross = null;
   const CROSS_STEP = 12;
   if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
-  const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null };
+  const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null, mapState: "loading" };
   const ctx = canvas?.getContext("2d") || null;
 
-  function setStatus(text) {
-    if (status) status.textContent = text;
+  function setStatus(text, statusState = "ready") {
+    if (status) {
+      status.textContent = text;
+      status.setAttribute("state", statusState);
+    }
   }
 
   function syncClickButtons() {
@@ -158,7 +163,10 @@ export function createFieldMap(options) {
 
   function syncEmpty() {
     if (!empty) return;
-    empty.hidden = Boolean(state.occupancy);
+    const knownEmpty = state.mapState === "empty";
+    empty.hidden = !knownEmpty;
+    if (knownEmpty) empty.textContent = "지도 데이터가 아직 없습니다. 운용자가 작업 준비에서 지도를 설정해야 합니다.";
+    if (emptyRecoveryLink) emptyRecoveryLink.hidden = !(knownEmpty && mayOpenSetup);
   }
 
   function fitCanvas() {
@@ -261,20 +269,34 @@ export function createFieldMap(options) {
   }
 
   async function refresh() {
-    const [grid, path, costmap] = await Promise.all([
-      apiMaybe("/api/v1/map"),
-      apiMaybe("/api/v1/navigation/path"),
-      apiMaybe("/api/v1/map/costmap?scope=global"),
-    ]);
-    state.occupancy = grid;
-    state.path = path?.poses || [];
-    state.costmap = costmap;
-    syncEmpty();
-    syncCursor();
-    if (!grid) setStatus("맵 수신 대기");
-    else if (!Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height)))
-      setStatus(grid.map_id || "크기 미상");
-    else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
+    try {
+      const [grid, path, costmap] = await Promise.all([
+        apiMaybe("/api/v1/map"),
+        apiMaybe("/api/v1/navigation/path"),
+        apiMaybe("/api/v1/map/costmap?scope=global"),
+      ]);
+      state.occupancy = grid;
+      state.path = path?.poses || [];
+      state.costmap = costmap;
+      state.mapState = grid ? "ready" : "empty";
+      syncEmpty();
+      syncCursor();
+      if (!grid) setStatus("지도가 아직 없습니다.", "empty");
+      else if (!Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height)))
+        setStatus(grid.map_id || "크기 미상");
+      else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
+    } catch (error) {
+      // Without a server freshness field, do not leave a previous snapshot looking current.
+      state.occupancy = null;
+      state.path = [];
+      state.costmap = null;
+      state.mapState = error.status === 403 ? "forbidden" : "error";
+      syncEmpty();
+      syncCursor();
+      setStatus(error.status === 403
+        ? "지도 데이터를 볼 권한이 없습니다."
+        : "최신 지도 데이터를 읽지 못했습니다. 연결 상태를 확인하고 다시 시도하십시오.", error.status === 403 ? "forbidden" : "error");
+    }
     rebuildRaster();
     paint();
   }
@@ -333,7 +355,7 @@ export function createFieldMap(options) {
       setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 전송`);
       setStatus(`${locating ? "pose" : "goal"} ${world.x.toFixed(2)}, ${world.y.toFixed(2)}`);
     } catch (error) {
-      setStatus(`${label} 전송 실패: ${error.message}`);
+      setStatus(`${label} 전송 실패: ${error.message}`, error.status === 403 ? "forbidden" : "error");
     }
   }
 

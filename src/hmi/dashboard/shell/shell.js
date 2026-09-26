@@ -62,6 +62,7 @@ async function assemble() {
     api,
     store: store.scope(),
     role: manifest.role,
+    surfaces: manifest.surfaces,
     panel,
   }));
   showStatus(manifest.panels.length ? "" : "이 역할로 이 화면에 보일 패널이 없습니다.");
