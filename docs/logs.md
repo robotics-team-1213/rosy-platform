@@ -2566,4 +2566,26 @@
 - 변경: Latest main changes are integrated with the D-289 typed intent contract and API Reference v1.40.
 - 증거: Fleet suite 518 passed/5 skipped; sensing 1660 passed/78 skipped; 7 aggregate failures were fixed and all 7 focused reruns passed. Harness lint 0 errors/21 existing stale-evidence warnings; Compose config and diff checks passed.
 - gate 변화: SOURCE/LOCAL only; Ubuntu, RTX 5080 inference, phone/CORE/robot physical acceptance remain open.
-- Gate: SOURCE/LOCAL only; Ubuntu, RTX 5080 inference, phone/CORE/robot physical acceptance remain open.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 첫 부팅과 이미지·SD 기록 결정
+
+- 변경: 새 카드는 CORE와 토크를 끈 I/O를 함께 부팅하고, 검증된 장치만 Move 구동 설정을 보존한다. 해당 소스 커밋에서 새 ARM64 이미지를 빌드·서명해 카드 전체 readback 후 장치별 provisioning을 수행한다.
+- 근거: 기존 `2026.09.26-018` 서명 이미지의 소스는 I/O 기본 부팅 변경 이전이다. 이 이미지가 이미 기록된 카드의 성공 영수증은 새 이미지의 증거가 아니다.
+- gate 변화: ADR Accepted. 새 이미지와 SD 카드 기록 결과는 별도 검증 전까지 HOLD.
+
+## 2026-09-26 · uncommitted · docs(site): 관제 서버와 운영자 단말의 배치 명시
+
+- 변경: 제품 진입 문서와 목표 정의에 ROSY Console의 현재 Fleet 구현 위치를 명시하고, 사이트 배포 설명에 호스트별 설치 책임과 원격 운영자 접속 검증 순서를 추가했다.
+- 근거: D-275/D-290, Fleet `/console`, 사이트 Compose의 loopback 기본 바인딩과 Caddy 경로, D-276의 사용자별 역할을 대조했다.
+- gate 변화: 없음. 문서 정합성만 보완했으며 실제 Ubuntu 사이트와 장치 현장 접속은 별도 검증 대상이다.
+
+## 2026-09-26 · uncommitted · OMX native vendor launch 직접 입력 경로 제거
+
+- 변경: 두 인스턴스 ROS-SIM 검증 기록에 vendor 비시뮬레이션 launch의 leader topic remap 제거와 개발 이미지 readback을 추가했다.
+- 근거: 기존 dual-input 시뮬레이션의 action false-success, 잠긴 ROBOTIS launch의 직접 remap, 새 이미지의 설치된 launch를 대조했다.
+- gate 변화: 없음. 단일 writer 런타임과 실제 정지·복구가 없어 ROS-SIM 전체 및 DEVICE/FIELD는 HOLD다.
+
+## 2026-09-26 · uncommitted · docs(adr): renumber Site Fleet API contract after main advances
+- 변경: Renumber the Site Fleet typed-intent ADR from D-289 to D-292 because current main assigns D-289 through D-291 to other accepted decisions. API Reference remains v1.40; camera capture and mDNS contracts remain intact.
+- 증거: Fleet 518/5 skipped; sensing 1660/78 skipped; OMX adapter 47/3 skipped; workstation 22 passed; API/UI 73/2 skipped; focused regression reruns 7 passed. Harness lint 0 errors/21 existing stale-evidence warnings.
+- gate 변화: SOURCE/LOCAL evidence only; physical Ubuntu, GPU, phone, CORE, and robot acceptance remain open.

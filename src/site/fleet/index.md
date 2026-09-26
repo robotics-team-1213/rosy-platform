@@ -27,7 +27,11 @@
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
-| D-289 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
+| D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
+| D-289 | Role console entry, action groups, and map readout |
+| D-290 | ROSY Platform 이름과 현장 대화·미션·통신 책임을 구분한다 |
+| D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
+| D-292 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 
 ## 계획·결과 문서
 
@@ -50,8 +54,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · docs(adr): renumber Site Fleet API contract after main advances
 - 2026-09-26 · uncommitted · merge(site): preserve camera/mDNS and typed intent contracts
 - 2026-09-26 · uncommitted · reciprocal site discovery preparation
 - 2026-09-26 · uncommitted · feat(fleet): site mDNS discovery readback
 - 2026-09-26 · uncommitted · test(fleet): exercise packaged intent and camera paths
-- 2026-09-26 · uncommitted · feat(fleet): publish and enforce intent API types

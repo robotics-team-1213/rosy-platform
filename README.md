@@ -1,9 +1,22 @@
-# ROSY — Robot Middleware & Fleet Control Platform
+# ROSY Platform — Robot Middleware & Fleet Control
 
 **Rosy** (ROS + Pinky 계보) — Pinky Pro 하드웨어(첫 구현)를 시작으로, 어떤 로봇이든
 웹·표준 API로 제어하고 중앙 Fleet에서 군집 관리하는 범용 로봇 플랫폼.
 
 > Upstream: [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 기반 포크 — 전면 리네임(D-16), Apache-2.0.
+
+## 관제 배치
+
+현장 Ubuntu PC가 Fleet·Vision·Caddy 서비스를 실행하고, 관제 PC는 HTTPS로 Fleet의
+`/console`을 여는 브라우저 단말이다. 두 역할은 한 물리 PC에 함께 놓을 수도 있다.
+Pinky의 화면과 최종 주행·정지 판단은 각 로봇의 CORE에 남는다. OMX-AI 작업대 제어는
+별도 로컬 인스턴스의 수용 절차가 필요하다. 현재 화면은 Fleet 콘솔이며,
+`ROSY Console`은 사람의 화면·대화 접점에 쓰는 제품 이름이다. 자연어 명령과
+OMX 원격 작업은 아직 수용된 기능이 아니다.
+
+배치 결정은 [D-275](docs/adr/D-275-web-surface-and-video-runtime-ownership.md)와
+[D-290](docs/adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md),
+현장 접속 절차는 [사이트 배포 설명](deploy/site/README.md)을 따른다.
 
 ## 구조
 

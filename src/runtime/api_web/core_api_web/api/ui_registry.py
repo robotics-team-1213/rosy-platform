@@ -25,7 +25,6 @@ PANEL_ROOT = "panels"
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
 _PANEL_ID = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 _CAP_KEY = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
-_ACTION_GROUPS = frozenset({"drive", "docking", "line_follow"})
 _MEDIA = {".js": "application/javascript", ".css": "text/css"}
 
 
@@ -58,9 +57,17 @@ class Panel:
 
 
 @dataclass(frozen=True)
+class ActionGroup:
+    id: str
+    title: str
+    order: int
+
+
+@dataclass(frozen=True)
 class Registry:
     surfaces: Mapping[str, Surface]
     panels: tuple[Panel, ...]
+    action_groups: tuple[ActionGroup, ...] = ()
 
     def assets(self) -> dict[str, str]:
         """`web/` 기준 상대 경로 → media type. 허용목록에 그대로 합쳐진다."""
@@ -128,7 +135,8 @@ def _surface(sid: str, raw: Any) -> Surface:
     return Surface(sid, title, _role(raw.get("min_role"), where), grammar, tuple(slots))
 
 
-def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path, panels_root: Path) -> Panel:
+def _panel(raw: Any, surfaces: Mapping[str, Surface], action_groups: Mapping[str, ActionGroup],
+           web_root: Path, panels_root: Path) -> Panel:
     if not isinstance(raw, dict):
         raise RegistryError("panel entries must be mappings")
     pid = raw.get("id")
@@ -156,8 +164,8 @@ def _panel(raw: Any, surfaces: Mapping[str, Surface], web_root: Path, panels_roo
     if inventory is not None and (not isinstance(inventory, str) or not _PANEL_ID.fullmatch(inventory)):
         raise RegistryError(f"{where}: inventory must be a concept id like mobility.move")
     action_group = raw.get("action_group")
-    if action_group is not None and (not isinstance(action_group, str) or action_group not in _ACTION_GROUPS):
-        raise RegistryError(f"{where}: action_group must be one of {sorted(_ACTION_GROUPS)}")
+    if action_group is not None and (not isinstance(action_group, str) or action_group not in action_groups):
+        raise RegistryError(f"{where}: action_group must reference a declared action group")
     if action_group is not None and (surface.id != "console" or slot != "act"):
         raise RegistryError(f"{where}: action_group is only valid for console act panels")
     css = raw.get("css", [])
@@ -195,6 +203,28 @@ def load_registry(path: Path, web_root: Path) -> Registry:
     if not isinstance(raw_surfaces, dict):
         raise RegistryError("panels.yaml: surfaces must be a mapping")
     surfaces = {sid: _surface(sid, body) for sid, body in raw_surfaces.items()}
+    raw_groups = raw.get("action_groups", [])
+    if not isinstance(raw_groups, list):
+        raise RegistryError("panels.yaml: action_groups must be a list")
+    action_groups: list[ActionGroup] = []
+    groups_by_id: dict[str, ActionGroup] = {}
+    seen_group_orders: set[int] = set()
+    for entry in raw_groups:
+        if not isinstance(entry, dict):
+            raise RegistryError("action_groups entries must be mappings")
+        group_id, title, order = entry.get("id"), entry.get("title"), entry.get("order")
+        if not isinstance(group_id, str) or not _ID.fullmatch(group_id):
+            raise RegistryError("action_group id must be a valid id")
+        if group_id in groups_by_id:
+            raise RegistryError(f"action_group {group_id!r}: duplicate id")
+        if not isinstance(title, str) or not title.strip():
+            raise RegistryError(f"action_group {group_id!r}: title is required")
+        if not isinstance(order, int) or isinstance(order, bool) or order in seen_group_orders:
+            raise RegistryError(f"action_group {group_id!r}: order must be a unique integer")
+        group = ActionGroup(group_id, title, order)
+        groups_by_id[group_id] = group
+        action_groups.append(group)
+        seen_group_orders.add(order)
     raw_panels = raw.get("panels")
     if raw_panels is None:
         raw_panels = []
@@ -204,7 +234,7 @@ def load_registry(path: Path, web_root: Path) -> Registry:
     seen_ids: set[str] = set()
     seen_orders: set[tuple[str, str, int]] = set()
     for entry in raw_panels:
-        panel = _panel(entry, surfaces, web_root, panels_root)
+        panel = _panel(entry, surfaces, groups_by_id, web_root, panels_root)
         if panel.id in seen_ids:
             raise RegistryError(f"panel {panel.id!r}: duplicate id")
         key = (panel.surface, panel.slot, panel.order)
@@ -213,4 +243,4 @@ def load_registry(path: Path, web_root: Path) -> Registry:
         seen_ids.add(panel.id)
         seen_orders.add(key)
         panels.append(panel)
-    return Registry(surfaces=surfaces, panels=tuple(panels))
+    return Registry(surfaces=surfaces, panels=tuple(panels), action_groups=tuple(action_groups))

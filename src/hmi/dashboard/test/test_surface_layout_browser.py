@@ -26,6 +26,7 @@ def _page(browser, width: int, height: int):
             WEB_COMMON / "tokens.css",
             WEB_COMMON / "components.css",
             ROOT / "shell" / "shell.css",
+            ROOT / "panels" / "surface-panels.css",
         )
     )
     page.set_content(
@@ -121,6 +122,65 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
     assert result["act"]["bottom"] <= 768
     assert result["activeBottom"] <= result["act"]["bottom"]
     assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
+
+
+def test_map_uses_remaining_desktop_observe_height_and_stays_within_mobile_width():
+    with sync_playwright() as playwright:
+        visible = os.environ.get("ROSY_VISIBLE_BROWSER") == "1"
+        browser = playwright.chromium.launch(headless=not visible)
+        desktop_results = {}
+        for width, height in ((1366, 768), (1440, 900)):
+            page = _page(browser, width, height)
+            page.evaluate("""() => {
+              for (const slot of document.querySelectorAll('.surface-slot')) {
+                for (const panel of slot.querySelectorAll('ui-section')) panel.style.minHeight = '0';
+              }
+              const observe = document.querySelector('[data-slot=observe]');
+              observe.replaceChildren();
+              const map = document.createElement('ui-section');
+              map.innerHTML = `<ui-head>지도 및 위치</ui-head><ui-status>100×100</ui-status>
+                <ui-actions>레이어</ui-actions><p>지도 안내</p><ui-actions>지도 작업</ui-actions>
+                <div class="surface-map-frame"><canvas class="surface-map-canvas"></canvas>
+                  <dl class="ui-readout surface-map-readout"><dt>선택 좌표</dt><dd role="status">X 0.00 m · Y 0.00 m</dd></dl></div>
+                <a>작업 준비</a><ui-status>지도 상태</ui-status><ui-status>작업 결과</ui-status>`;
+              const camera = document.createElement('ui-section');
+              camera.innerHTML = `<ui-head>전방 카메라</ui-head><div class="surface-camera-stage">카메라</div>`;
+              observe.append(map, camera);
+              const act = document.querySelector('[data-slot=act]');
+              act.replaceChildren();
+              const tabs = document.createElement('div'); tabs.className = 'action-group-tabs';
+              tabs.innerHTML = '<ui-button role="tab">운전</ui-button><ui-button role="tab">도킹</ui-button><ui-button role="tab">차선 추종</ui-button>';
+              const panel = document.createElement('div'); panel.className = 'action-group-panel';
+              panel.innerHTML = '<ui-section><ui-head>운전</ui-head><ui-button>정지</ui-button></ui-section>';
+              act.append(tabs, panel);
+            }""")
+            desktop_results[width] = page.evaluate("""() => ({
+              canvas: document.querySelector('.surface-map-canvas').getBoundingClientRect().height,
+              frame: document.querySelector('.surface-map-frame').getBoundingClientRect().height,
+              mapPanel: document.querySelector('[data-slot=observe] ui-section').getBoundingClientRect(),
+              actPanel: document.querySelector('.action-group-panel').getBoundingClientRect(),
+              overflow: document.documentElement.scrollHeight - innerHeight,
+              estopBottom: document.querySelector('#shell-estop').getBoundingClientRect().bottom,
+              topbarBottom: document.querySelector('ui-topbar').getBoundingClientRect().bottom,
+              viewportHeight: innerHeight,
+            })""")
+            if visible:
+                screenshot_dir = Path(os.environ.get("ROSY_SCREENSHOT_DIR", r"X:\DevTemp\rosy-uiux-followup"))
+                screenshot_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(screenshot_dir / f"console-map-{width}x{height}.png"), full_page=True)
+                page.wait_for_timeout(1500)
+            page.close()
+        mobile = _page(browser, 390, 844)
+        mobile_overflow = mobile.evaluate("Math.max(0, document.documentElement.scrollWidth - innerWidth)")
+        browser.close()
+
+    for result in desktop_results.values():
+        assert result["canvas"] > 200, desktop_results
+        assert result["frame"] > result["canvas"]
+        assert result["overflow"] == 0
+        assert result["actPanel"]["bottom"] <= result["viewportHeight"]
+        assert result["estopBottom"] <= result["topbarBottom"]
+    assert mobile_overflow == 0
 
 def test_shared_role_form_layout_collapses_to_full_width_on_mobile():
     with sync_playwright() as playwright:

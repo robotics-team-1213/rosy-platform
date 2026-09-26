@@ -1,18 +1,18 @@
-# 00. ROSY OS Vision & Definition
+# 00. ROSY Platform Vision & Definition
 
 ## 1. Product Name
 
-**ROSY OS**
+**ROSY Platform** (D-290; 기존 `ROSY OS`는 저장소·문서·배포 이름에 남은 이력 이름)
 
 ## 2. Technical Definition
 
-ROSY OS is a:
+ROSY Platform is a:
 
-> **Distributed Robotics & Physical AI Operating Platform**
+> **Distributed Robotics & Physical AI Platform**
 
-ROSY OS is not a replacement for Ubuntu or the Linux kernel.
+ROSY Platform is not a replacement for Ubuntu or the Linux kernel.
 
-ROSY OS is an upper software layer installed on top of:
+ROSY Platform is an upper software layer installed on top of:
 
 - Ubuntu
 - ROS 2
@@ -24,7 +24,7 @@ and provides a unified operating model for robots, robot arms, edge computers, s
 
 ## 3. Initial Scope
 
-ROSY OS manages:
+ROSY Platform manages:
 
 - node identity
 - device discovery
@@ -40,6 +40,14 @@ ROSY OS manages:
 - logging
 - update/deployment
 - composite robots
+
+This list is the target product scope, not a claim that every service is implemented or deployed.
+The current site control surface is Fleet's `/console` on the Ubuntu site host,
+reached from an operator browser through Caddy HTTPS. The operator PC is a client
+and may be the same physical machine as the site host. Pinky CORE retains its
+own local screen and final command authority. `ROSY Console` is the product name
+for the human interface; natural-language control and OMX remote task APIs are
+future gates under D-290, not current capabilities.
 
 ## 4. Platform Scope
 
@@ -67,7 +75,7 @@ These may be supported later through gateways or platform-specific runtimes.
 
 ## 5. Modular Installation Principle
 
-ROSY OS must **not** be installed identically on every device.
+ROSY Platform must **not** be installed identically on every device.
 
 Each node installs only:
 
@@ -139,7 +147,7 @@ Do not install:
 
 ## 7. Product Boundary
 
-ROSY OS shall not replace:
+ROSY Platform shall not replace:
 
 - Linux kernel
 - Ubuntu package management
@@ -147,11 +155,11 @@ ROSY OS shall not replace:
 - ros2_control
 - vendor hardware drivers
 
-ROSY OS shall standardize, orchestrate, and manage them.
+ROSY Platform shall standardize, orchestrate, and manage them.
 
 ## 8. Strategic Direction
 
-ROSY OS should evolve from:
+ROSY Platform should evolve from:
 
 > device middleware
 

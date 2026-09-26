@@ -429,10 +429,17 @@ class UiPanelDescriptor(BaseModel):
     reason: str | None = None
 
 
+class UiActionGroup(BaseModel):
+    id: str
+    title: str
+    order: int
+
+
 class UiSurfaceManifest(BaseModel):
     surface: str
     grammar: str
     role: str
     surfaces: list[UiSurfaceLink]
+    action_groups: list[UiActionGroup]
     panels: list[UiPanelDescriptor]
     revision: str

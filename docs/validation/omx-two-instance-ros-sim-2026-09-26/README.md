@@ -32,3 +32,21 @@ The pinned vendor AI simulation launch remapped the controller's trajectory topi
 - **ARTIFACT: HOLD.** The local image ID is recorded for reproducibility; no registry digest, dependency manifest, or signed native amd64 runtime exists.
 - **DEVICE/FIELD: PARKED.** No OMX-AI device, serial interface, camera, physical stop, or site acceptance was tested.
 - **Next implementation:** make the native instance runner admit exactly one selected command mode and route commands through a bounded owner before enabling an OMX workcell. Re-test simultaneous leader/action input, fault/timeout HOLD, and stop/recovery on the intended Linux workstation, then on the physical arm.
+
+## Follow-up: vendor non-simulation launch in the development image
+
+The pinned vendor `omx_f_follower_ai.launch.py` also directly remapped
+`/arm_controller/joint_trajectory` to `/leader/joint_trajectory`. A focused
+regression test was red before adding `omx-ai-native-action-only.patch`. Docker
+then applied the patch to the locked source and copied the result into the
+installed launch. The local Linux/amd64 image
+`rosy-omx-workstation:native-action-only-local` has image ID
+`sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`;
+readback of its installed launch showed `remappings=[]` and no leader topic
+remap. This was a Docker Desktop source/build check, with no serial grants or
+physical arm. The image is not a published or native systemd artifact.
+
+**Gate remains HOLD:** an arbitrary ROS graph participant can still address
+the action or normal trajectory topic. A deployed single-writer runtime,
+freshness/timeout HOLD, stop-path evidence, and two-instance target-host
+measurement are still needed before Task 4's native service is admitted.

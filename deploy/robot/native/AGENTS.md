@@ -10,8 +10,10 @@ Jazzy. This directory is copied into every offline ROSY release payload.
 
 ## Rules
 
-- `rosy-runtime.target` starts CORE only. Hardware services require explicit
-  commissioning and must never be added to the default target.
+- `rosy-runtime.target` starts CORE and `rosy-io.service` on first boot. The
+  image has `ROSY_IO_DRIVE_ENABLED=false`, so I/O observes devices with motor
+  torque off. Enabling drive requires lifted-wheel commissioning; navigation
+  still requires explicit approvals and never joins the default target.
 - `rosy-core.service` has no `DeviceAllow`; keep `PrivateDevices=true`.
 - `rosy-core.service` execs the core entry script (`install/lib/core/core`), not
   `ros2 run`, so systemd supervises the node directly; do not add `SuccessExitStatus`.

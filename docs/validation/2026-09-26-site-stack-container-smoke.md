@@ -115,7 +115,7 @@ Scope: Windows host with Docker Desktop Linux `linux/amd64`, synthetic fixtures.
   separated. The first camera probe closed WSS before the latest-only worker
   processed the frame; keeping the phone session open produced the readback.
   The oversized-request oracle was aligned to the observed `TOO_LONG` contract,
-  which is now listed in D-289/API Reference v1.40.
+  which is now listed in D-292/API Reference v1.40.
 - This was Windows Docker Desktop `linux/amd64` with synthetic credentials,
   camera, TLS, and calibration. The host enumerated only AMD Radeon 860M; the
   target RTX 5080 was not exposed, and the current Vision image uses CPU ArUco.

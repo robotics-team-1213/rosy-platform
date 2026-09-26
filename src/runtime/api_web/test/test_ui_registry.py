@@ -15,6 +15,10 @@ version: 1
 surfaces:
   console: {title: 운용, min_role: viewer, grammar: spatial, slots: [banner, sense, observe, act]}
   device: {title: 설치·정비, min_role: administrator, grammar: procedure, slots: [main]}
+action_groups:
+  - {id: drive, title: 운전, order: 10}
+  - {id: docking, title: 도킹, order: 20}
+  - {id: line_follow, title: 차선 추종, order: 30}
 """
 
 

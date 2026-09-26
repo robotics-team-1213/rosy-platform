@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from core_api_web.api.ui_manifest import build_manifest
-from core_api_web.api.ui_registry import Panel, Registry, Surface
+from core_api_web.api.ui_registry import Panel, Registry, Surface, load_registry
 
 SURFACES = {
     "console": Surface("console", "운용", "viewer", "spatial", ("banner", "sense", "observe", "act")),
@@ -76,6 +78,22 @@ def test_only_groups_from_visible_capability_panels_are_returned():
     groups = {panel["action_group"] for panel in manifest["panels"] if panel["action_group"]}
     assert groups == {"drive", "docking"}
     assert all(panel["action_group"] is None for panel in manifest["panels"] if panel["id"] == "safety.hero")
+
+
+def test_console_manifest_uses_the_ordered_action_group_catalog_from_panels_yaml():
+    root = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+    registry = load_registry(root / "panels.yaml", root)
+    manifest = build_manifest(registry, "console", "operator", {
+        "teleop": True,
+        "docking": {"supported": True},
+        "navigation": {"goal_navigation": True},
+    }, [])
+
+    assert manifest["action_groups"] == [
+        {"id": "drive", "title": "운전", "order": 10},
+        {"id": "docking", "title": "도킹", "order": 20},
+        {"id": "line_follow", "title": "차선 추종", "order": 30},
+    ]
 
 
 def test_a_not_provided_descriptor_is_omitted():

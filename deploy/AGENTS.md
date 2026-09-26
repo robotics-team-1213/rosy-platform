@@ -34,7 +34,7 @@ Three sibling pipelines below; at this level only the harness records.
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - CORE is internet-facing and unprivileged. Do not add `nmcli`, `reboot`, or docker-compose control inside `core`.
-- Product runtime: `robot/native/rosy-runtime.target` starts CORE only. I/O and navigation are explicit, mutually exclusive hardware modes.
+- Product runtime: `robot/native/rosy-runtime.target` starts CORE and no-motion I/O. Motor drive needs commissioned device mode and an explicit drive flag; navigation remains separately approved and mutually exclusive with I/O.
 - Compose services remain test/development compatibility only; do not install Docker in a D-161 product image.
 - Release images must be built on native arm64, not x86 QEMU (`deploy/image/build-image.sh`).
 - `test/` at repo root is the contract suite for this tree; `test/conftest.py` puts `deploy/release` on `sys.path`.

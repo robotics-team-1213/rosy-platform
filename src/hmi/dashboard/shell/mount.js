@@ -18,8 +18,6 @@ function failure(section, panel, error) {
   section.dataset.failed = "true";
 }
 
-const ACTION_GROUPS = Object.freeze({drive: "운전", docking: "도킹", line_follow: "차선 추종"});
-
 function actionGroupPanel(id, title) {
   const panel = document.createElement("div");
   panel.className = "action-group-panel";
@@ -29,16 +27,19 @@ function actionGroupPanel(id, title) {
   return panel;
 }
 
-export async function mountPanels(root, panels, contextFor) {
+export async function mountPanels(root, panels, contextFor, actionGroups = []) {
   const handles = [];
   const actionGroupElements = [];
   const actionPanels = panels.filter((panel) => panel.slot === "act" && panel.action_group);
   const groups = new Map();
   for (const panel of actionPanels) {
-    if (!ACTION_GROUPS[panel.action_group]) continue;
+    if (!actionGroups.some((group) => group.id === panel.action_group)) continue;
     if (!groups.has(panel.action_group)) groups.set(panel.action_group, []);
     groups.get(panel.action_group).push(panel);
   }
+  const orderedGroups = actionGroups
+    .filter((group) => groups.has(group.id))
+    .sort((left, right) => left.order - right.order);
 
   async function mountOne(panel, slot) {
     for (const href of panel.css || []) linkStyle(href);
@@ -81,8 +82,7 @@ export async function mountPanels(root, panels, contextFor) {
     actionGroupElements.push(tablist);
     const tabs = new Map();
     const containers = new Map();
-    for (const id of groups.keys()) {
-      const title = ACTION_GROUPS[id];
+    for (const {id, title} of orderedGroups) {
       const tab = document.createElement("ui-button");
       tab.type = "button";
       tab.setAttribute("kind", "segment");

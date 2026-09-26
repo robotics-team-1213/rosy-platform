@@ -1330,3 +1330,21 @@
 - 변경: native image에 Avahi browse와 `.local` 이름 해석 의존성을 추가하고, 서명된 SD의 Fleet `.local` 예상 호스트와 trust profile에서 CORE 비공개 discovery 설정만 생성한다. 일회성 `pairing_credential`은 Agent 토큰으로 복사하지 않는다.
 - 증거: first-boot와 Agent 통합 집중 58 passed, 변경 파일 flake8 통과. 실제 native image 빌드와 Pi/Ubuntu TLS 연결은 미실행.
 - gate 변화: SOURCE/LOCAL 근거만 추가, ARTIFACT·DEVICE·FIELD 대기.
+
+## 2026-09-26 · uncommitted · D-291 Pinky I/O 기본 부팅과 새 이미지·SD 인수
+
+- 변경: CORE와 무구동 I/O를 첫 부팅에 시작하고, 모터 구동은 장치별 커미셔닝 설정으로만 활성화한다. 이전 서명 이미지의 MEDIA 증거는 새 소스의 이미지로 재사용하지 않는다.
+- 근거: `2026.09.26-018`의 이미지와 카드 영수증은 이번 target 변경 이전 소스다. 새 ARM64 서명 이미지, 전체 카드 readback, Pi boot를 각기 확인한다.
+- gate 변화: 소스 계약은 검증 중이며 새 ARTIFACT/MEDIA는 빌드·기록 전까지 HOLD.
+
+## 2026-09-26 · uncommitted · site control console operator access guide
+
+- 변경: 사이트 서버, 운영자 브라우저, Pinky, OMX, 향후 GPU 호스트의 실행 책임과 LAN 바인딩·TLS·권한·작업 readback 점검 순서를 배포 설명에 추가했다.
+- 근거: `compose.yaml`의 기본 `127.0.0.1:8443`, Caddy의 Fleet 프록시, D-275/D-276/D-290을 대조했다.
+- gate 변화: 없음. SOURCE 문서 정리이며 실제 사이트 네트워크 및 장치 수용은 미실시.
+
+## 2026-09-26 · uncommitted · OMX development image action-only vendor launch
+
+- 변경: 잠긴 vendor 비시뮬레이션 follower launch에서 leader trajectory topic 직접 remap을 제거하고, 개발 이미지에 적용·설치하도록 했다.
+- 증거: 회귀 시험 실패→통과 및 mutation red, Docker Desktop amd64 빌드와 설치된 launch `remappings=[]` readback. 이미지 ID와 한계는 OMX 검증 기록에 남겼다.
+- gate 변화: SOURCE/LOCAL 보강. native systemd 산출물, 실제 OMX 장치와 현장 제어 승인은 여전히 HOLD.

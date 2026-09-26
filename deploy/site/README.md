@@ -5,6 +5,37 @@ console and display-only sightings ingestion, plus camera frame reception and
 ArUco projection. It does not replace the ROS 2 Jazzy/Pi product runtime. Fleet
 does not join DDS, and sightings do not issue robot motion or pick commands.
 
+## Where the control console runs
+
+| Role | Installation and current responsibility |
+|---|---|
+| Ubuntu site host | Runs this Compose stack: Caddy, Fleet `/console` and task SQLite, and Vision. It is the current site control server. |
+| Operator PC | Opens `https://<site-fqdn>:8443/console` after the site endpoint is configured, using a named Fleet user credential and the site CA. It does not need Fleet, Docker, or ROS 2 installed. It may be the same physical PC as the site host. |
+| Pinky Pi | Runs local CORE and its own `/console` at the robot origin. Fleet submits accepted CORE API requests; CORE keeps final motion and stop authority. |
+| OMX workcell host | Local controller per arm/workcell remains a separate placement and acceptance gate (D-281/D-282). Current Fleet console does not operate OMX arms. |
+| Future GPU host | May run separate perception/inference workloads after a placement decision; it does not become the mission or console authority merely by hosting compute. |
+
+`ROSY Console` names the human-facing product surface (D-290). The running site
+screen is still the Fleet console; there is no separate Operations mission
+server, natural-language interpreter, or multi-device OMX mission UI. Browser
+and robot `/console` share a path segment but have different origins and
+credentials (D-275). A site outage removes site control visibility and new
+site work, while Pinky local CORE/stop must continue independently.
+
+For an operator PC on another machine, the default loopback bind in
+`.env.example` is insufficient. Before granting access, choose the approved
+site FQDN and LAN interface, issue a certificate with that FQDN, set
+`ROSY_SITE_BIND_ADDRESS` to the interface address in the private site env,
+limit TCP 8443 to approved operator/camera networks, and provision separate
+named user credentials. Keep Fleet 8090 and Vision 8095 unpublished. From the
+operator PC, verify the trusted `https://<site-fqdn>:8443/healthz`, open
+`/console`, confirm a viewer cannot submit work, and confirm an operator's
+request appears in task history with its real status. An HTTP acceptance is
+not proof of robot completion. Record the site host, client PC, image digest,
+certificate identity, config revision, and readback in the site validation
+record. These steps require the actual site host and devices for SITE/FIELD
+acceptance; local Compose checks establish only LOCAL behavior.
+
 ## Contract path
 
 ```text

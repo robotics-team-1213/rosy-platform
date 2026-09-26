@@ -63,12 +63,12 @@ def test_task_path_does_not_enable_automatic_policy_dispatch_by_default():
 def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    adr = (ROOT / "docs/adr/D-289-site-fleet-intent-api-contracts.md").read_text(
+    adr = (ROOT / "docs/adr/D-292-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
     assert "**Version:** v1.40" in reference
-    assert "## 10.10 Site Fleet intent interpretation and message boundaries (D-289 Accepted)" in reference
-    assert "D-289" in reference
+    assert "## 10.10 Site Fleet intent interpretation and message boundaries (D-292 Accepted)" in reference
+    assert "D-292" in reference
     assert "`core_common.intent.request_schema()`" in reference
     assert "1 through 8 steps" in reference
     assert "`400 INVALID_FIELD_TYPE`" in reference
