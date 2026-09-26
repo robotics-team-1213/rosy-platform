@@ -2271,3 +2271,8 @@
 - 증거: 현재 FleetTaskService/Store, FleetConsole._queued, API Ref §10.8, Compose와 기존 단위·브라우저 시험 경로를 대조했다. Windows 문서 계약 시험 71 passed, harness lint 0 errors/기존 last_verified 경고 20건, `git diff --check` 통과.
 - 제한: 계획만 추가했으며 스케줄러나 RabbitMQ를 구현·배포하지 않았다. 자동 정책 제출은 D-268 전까지 HOLD다.
 - gate 변화: 없음.
+
+## 2026-09-26 · uncommitted · feat(fleet): durable site task queue implementation
+- 변경: Persisted and scheduled Fleet tasks; carried task identity across traffic waits; added expiry and pre-dispatch cancellation; exposed queued status and task cancellation in the console; kept policy tasks on HOLD.
+- 증거: `python -m pytest src/site/fleet/test/ -q` — 484 passed, 5 skipped; browser harness — 13 passed; Compose config validation passed; `rosy-site-fleet:local` built and API task readback survived container restart with the same named volume.
+- gate 변화: LOCAL task queue evidence advanced. Full Compose, Ubuntu host, TLS/secrets, real CORE/robot, GPU, DEVICE, FIELD and automatic policy acceptance remain open. RabbitMQ remains deferred because no measured split-worker or pressure requirement was established.

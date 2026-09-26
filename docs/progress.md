@@ -71,3 +71,11 @@ plans:
 - API 경로·envelope 변경은 `reference/ROSY API & Protocol Reference.md`와 `rosy_core/protocol/schemas.py`를 함께 바꾼다(D-18).
 - `docs/`에 구현 코드를 두지 않는다.
 - 모듈 `index.md`와 루트 `STATUS.md`는 생성물이다. `tools/harness/rosy_harness.py generate`로만 갱신한다.
+
+## Site Fleet task scheduler (2026-09-26)
+
+- Durable SQLite task acceptance, single-dispatcher claims, traffic-wait identity, expiry, queued cancellation, and console readback are implemented under D-271.
+- Evidence: 484 Fleet tests passed, 5 skipped; 13 Chromium browser tests passed. Docker Compose config validated, Fleet image built, and a loopback container preserved a queued task across restart on its named volume.
+- Broker decision: Gate A has no measured independent-worker/backlog requirement. Keep SQLite and defer RabbitMQ.
+- Ubuntu/SITE/TLS, full Compose, real CORE, robot, GPU, DEVICE, and FIELD acceptance remain open. Automatic policy dispatch remains HOLD.
+- Detailed record: `docs/validation/2026-09-26-site-task-scheduler-local.md`.

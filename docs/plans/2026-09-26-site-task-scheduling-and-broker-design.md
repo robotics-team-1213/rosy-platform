@@ -66,3 +66,9 @@ CORE WSS event/상태 ───────────────────�
 문서·로컬 Docker·합성 이벤트는 실제 장비 명령/영상·현장 안전의 대체 증거가 아니다.
 
 작업·시험·커밋 순서는 [구현 계획](2026-09-26-site-task-scheduling-and-broker-implementation.md)에 기록한다.
+
+## Implementation outcome (2026-09-26)
+
+D-271 is now implemented through the single-host SQLite scheduler and Fleet task API. Tasks are persisted before dispatch; accepted CORE receipt remains separate from execution completion; interrupted or ambiguous physical dispatch remains `UNKNOWN`; policy sources remain `HOLD`. Robot traffic waits preserve task identity, and stop/cancel/E-Stop paths remove undispatched work. The browser displays queue status and only offers queued-task cancellation after authenticated readback.
+
+The existing Compose deployment persists the task database on its site data volume. Windows Docker Desktop built and ran the Fleet image, and an API task remained `QUEUED` across container restart. These local results do not certify the complete Compose stack or Ubuntu/site/device operation. Gate A measured no need for an independent broker worker; RabbitMQ remains deferred until actual backlog, pressure, or process-separation evidence supports it.

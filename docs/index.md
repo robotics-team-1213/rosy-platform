@@ -144,8 +144,8 @@
 
 ## 최근 기록
 
+- 2026-09-26 · uncommitted · feat(fleet): durable site task queue implementation
 - 2026-09-26 · uncommitted · docs(plan): D-271 task scheduler implementation sequence
 - 2026-09-26 · uncommitted · docs(adr): D-271 site Fleet task scheduling and broker choice
 - 2026-09-26 · uncommitted · feat(fleet): add source-scoped site sighting contract
 - 2026-09-26 · uncommitted · feat(overhead): bind camera credentials to source identity
-- 2026-09-26 · uncommitted · docs(adr): D-260 implementation transition, D-247 note, API Ref v1.25

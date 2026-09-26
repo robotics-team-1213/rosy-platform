@@ -121,3 +121,18 @@
 | DEVICE/FIELD | 실제 CORE·폰 및 작업별 안전/신선도 | 미검증; 자동 실행 HOLD |
 
 이 계획의 파일 경로는 D-271 전용 worktree의 현재 코드 기준이다. 실행 직전에 최신 `main`과 병합 상태를 확인하고 파일 이동·다른 작업의 변경을 반영한다.
+# Implementation checkpoint (2026-09-26)
+
+Tasks 0–6 have been implemented on `feat/site-task-scheduler`. Task 0–5 source,
+contract, scheduler, API, traffic-queue, expiry/cancel, and console checks are
+covered by 484 Fleet tests (5 skipped) and 13 Chromium browser tests. Task 6
+passed Compose configuration validation, a Fleet image build, and a local
+container/API/SQLite restart smoke test. The full Compose stack and a real CORE
+were not exercised; SITE, Ubuntu, DEVICE, and FIELD acceptance remain open.
+
+Gate A found no measured need for a separate worker or broker: the deployment
+still has one Fleet dispatcher and one local SQLite writer. Task 7 is therefore
+intentionally deferred; RabbitMQ is not added. Task 8's local evidence is in
+[`2026-09-26-site-task-scheduler-local.md`](../validation/2026-09-26-site-task-scheduler-local.md).
+The remaining integration step is a fresh ancestry/overlap review against the
+current `main`; its unrelated dirty files must remain untouched.
