@@ -287,9 +287,9 @@ export function createFieldMap(options) {
   async function refresh() {
     try {
       const [grid, path, costmap] = await Promise.all([
-        apiMaybe("/api/v1/map"),
+        wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
         apiMaybe("/api/v1/navigation/path"),
-        apiMaybe("/api/v1/map/costmap?scope=global"),
+        wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
       ]);
       state.occupancy = grid;
       state.path = path?.poses || [];
