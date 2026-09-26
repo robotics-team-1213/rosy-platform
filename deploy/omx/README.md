@@ -23,6 +23,32 @@ See [the implementation plan](../../docs/plans/2026-09-26-omx-ai-workstation-run
 and [host placement design](../../docs/plans/2026-09-26-site-host-placement-design.md)
 for deployment trade-offs, RMW boundaries, and P0-P3 acceptance gates.
 
+## Host inventory and multi-workcell preflight
+
+`host-inventory.yaml.example` is a disabled placement template for one or two
+workcells on one host. `host_inventory.load_inventory()` parses the static
+`rosy.omx-host-inventory.v1` YAML contract. `hosts` and `workcells` are keyed by
+their IDs; every workcell needs an `instance_id`, a known `host_id`, and an
+explicit boolean `enabled`. A disabled workcell may omit `follower` and
+`leader` or set them to `null`. An enabled workcell needs two distinct,
+operator-selected `/dev/serial/by-id/` entries. A selected `camera` identity
+is optional until a camera is chosen. Enabled workcells on the same host may
+not select the same serial or camera identity.
+
+Keep a filled host inventory in gitignored `private/` or `/etc/rosy/omx/` on
+that host. Do not put real serial identities, camera IDs, addresses, or tokens
+in the tracked example. The parser does not open devices or register OMX in
+Fleet. It is not wired into site Compose or an operational control service.
+
+`preflight.resolve_host_devices(inventory, host_id, probe=...)` reuses the
+single-workcell serial preflight for every enabled workcell assigned to one
+host. It checks that selected entries resolve to readable and writable
+character devices, then rejects real-path aliasing across workcells. Disabled
+workcells and workcells on other hosts are not probed or reserved. This is a
+software admission check; only a later, separately validated native control
+runner may consume the returned per-workcell paths. No camera is opened by
+this preflight.
+
 ## Build and shell profiles
 
 Build on a Linux ROS 2 workstation with Docker:
