@@ -2834,3 +2834,9 @@
 - 근거: 두 차례 읽기 검토를 D-55/D-231/D-282/D-298 및 플랫폼 부모 계획의 P0~P3와 대조했다. P0 SOURCE/LOCAL와 DEVICE, P1 SOURCE/ROS-SIM와 ARTIFACT/DEVICE, P2 현재 감사와 실물 OMX 후 추출, 고정 OMX 인계와 탑재형·드론 게이트를 분리했다. D-231의 순수 소스 이동 조건과 설치/이미지 변경 조건도 구분했다.
 - 증거: 문서 하네스 lint 0 errors/19 기존 메타데이터 warnings; network/harness 계약 시험 76 passed/19 warnings (Windows). 실물·이미지·현장 수용은 수행하지 않았다.
 - gate 변화: 구조 판정 기준과 독립 검증 출구만 Accepted. 새 OMX·복합·드론 운영 capability, 인터록 구현, 공개 계약·폴더 이동·배포 변경은 각각 HOLD다.
+
+## 2026-09-27 · uncommitted · docs(uiux): fix surface ownership and closure criteria
+
+- 변경: D-306를 Accepted로 기록하고 `2026-09-27-uiux-surface-closure.md` 실행 계획을 연결했다. 기존 D-153 평가, D-218 확인, D-253 진단 동결, D-280 시각 정체성을 유지한다. Orca CLI가 현재 PowerShell에서 인식되지 않아 세션 간 직접 인계는 미완료이며 경로별 owner를 계획에 기록했다.
+- 증거: 2026-09-27 LOCAL 코드·캡처 검토 및 기존 회차와 ADR 대조.
+- gate 변화: 문서 결정만으로 G2/G3, LCD 실물 판독, 장치/현장 수용을 승격하지 않는다.

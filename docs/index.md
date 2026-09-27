@@ -127,6 +127,7 @@
 | D-302 | Site Fleet 사용자 API와 CORE registry 자격 증명을 분리한다 |
 | D-304 | 플랫폼 확장은 제어권·계약·배포 증거로 경계를 결정한다 |
 | D-305 | 플랫폼 경계는 안전 결과 불변식과 독립 검증 게이트로 판정한다 |
+| D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -167,6 +168,7 @@
 - [2026-09-27-rosy-platform-role-and-contract-implementation-plan.md](plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)
 - [2026-09-27-site-candidate-signing.md](plans/2026-09-27-site-candidate-signing.md)
 - [2026-09-27-site-registry-credential-separation.md](plans/2026-09-27-site-registry-credential-separation.md)
+- [2026-09-27-uiux-surface-closure.md](plans/2026-09-27-uiux-surface-closure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -179,8 +181,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · docs(uiux): fix surface ownership and closure criteria
 - 2026-09-27 · uncommitted · adr(platform): separate safety invariant and evidence exits
 - 2026-09-27 · uncommitted · adr(platform): fix expansion boundary and evidence criteria
 - 2026-09-27 · uncommitted · test(platform): keep uncorrelated CORE events out of Fleet completion
 - 2026-09-27 · uncommitted · validation(platform): retain OMX DEVICE gate after source review
-- 2026-09-27 · uncommitted · validation(platform): trace Fleet task to CORE result boundary
