@@ -177,8 +177,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · test(platform): keep uncorrelated CORE events out of Fleet completion
 - 2026-09-27 · uncommitted · validation(platform): retain OMX DEVICE gate after source review
 - 2026-09-27 · uncommitted · validation(platform): trace Fleet task to CORE result boundary
 - 2026-09-27 · uncommitted · validation(site): synthetic CORE event persistence
 - 2026-09-27 · uncommitted · validation(site): signed candidate full-compose and camera path
-- 2026-09-27 · uncommitted · fix(site): separate registry and user credentials

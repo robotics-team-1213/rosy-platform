@@ -4,10 +4,11 @@ from hashlib import sha256
 import pytest
 from fastapi.testclient import TestClient
 
-from core_common.protocol.schemas import FleetTaskStatus
+from core_common.protocol.schemas import Envelope, EnvelopeType, EventMessage, FleetTaskStatus, HelloPayload
 from fakes import FakeRobot, run
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
+from fleet.server.core_event_store import CoreEventStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -109,6 +110,58 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
     assert readback.json()["task"]["status"] == FleetTaskStatus.ACCEPTED.value
     assert readback.json()["task"]["receipt"] == {"accepted": True}
     assert [row["status"] for row in readback.json()["history"]] == [
+        "REQUESTED", "QUEUED", "ACCEPTED",
+    ]
+
+
+def test_uncorrelated_core_completion_event_cannot_complete_a_fleet_task(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token",
+                             fleet_pairing_token="agent-token")
+    console = FleetConsole([endpoint], [FakeRobot("rosy_01")],
+                           event_store=CoreEventStore(database))
+    service = FleetTaskService(FleetTaskStore(database), robot_ids={"rosy_01"})
+    app = create_app(console, console_token="operator-console", hub=console.hub,
+                     task_service=service,
+                     start_task_dispatcher=False)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "move-1"}
+
+    response = client.post("/api/fleet/robots/rosy_01/goal",
+                           json={"x": 1.0, "y": 2.0}, headers=headers)
+    assert response.status_code == 200
+    task_id = response.json()["task"]["task_id"]
+
+    async def accept(_attempt):
+        return {"accepted": True}
+
+    assert run(service.dispatch_next({"rosy_01"}, dispatch=accept))["status"] == "ACCEPTED"
+    hello = HelloPayload(robot_id="rosy_01", pairing_token="agent-token")
+    assert console.hub.handle(Envelope(
+        type=EnvelopeType.HELLO, payload=hello.model_dump(),
+    )).type is EnvelopeType.WELCOME
+    event = EventMessage(event_id="completion-1", seq=1, robot_id="rosy_01",
+                         type="nav.completed", source="navigation_manager")
+    assert console.hub.handle(Envelope(
+        type=EnvelopeType.EVENT, payload=event.model_dump(mode="json"),
+    )).payload == {"accepted": True}
+    # Event data is an audit payload, not proof that Fleet issued this task as
+    # the corresponding robot command. A claimed task ID must not bypass D-297.
+    claimed = EventMessage(event_id="completion-2", seq=2, robot_id="rosy_01",
+                           type="nav.completed", source="navigation_manager",
+                           data={"task_id": task_id})
+    assert console.hub.handle(Envelope(
+        type=EnvelopeType.EVENT, payload=claimed.model_dump(mode="json"),
+    )).payload == {"accepted": True}
+
+    history = client.get(f"/api/fleet/tasks/{task_id}", headers=headers)
+    audited = client.get("/api/fleet/events", headers=headers)
+    assert audited.status_code == history.status_code == 200
+    assert [row["event"]["event_id"] for row in audited.json()["events"]] == [
+        "completion-1", "completion-2",
+    ]
+    assert history.json()["task"]["status"] == "ACCEPTED"
+    assert [row["status"] for row in history.json()["history"]] == [
         "REQUESTED", "QUEUED", "ACCEPTED",
     ]
 

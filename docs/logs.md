@@ -2815,3 +2815,9 @@
 - 변경: OMX P1의 정적 inventory, 단일 owner, joint-state 수신 시각, 취소/정지 및 선택적 LeRobot 경계를 검토한 표를 추가했다.
 - 증거: adapter/product/벤더 잠금/호스트 inventory/다중 preflight/DDS identity 집중 시험 107 passed, 3 skipped (Windows). 현재 `JointState` snapshot의 시간·보정은 로컬 수신·설정 출처이며 실물 하드웨어 provenance는 아니다.
 - gate 변화: SOURCE/LOCAL 근거만 추가. OMX 실물 identity·Ubuntu FD/graph owner·독립 정지와 readback 없이 운영 capability, DEVICE 또는 첫 이종 미션을 승인하지 않는다.
+
+## 2026-09-27 · uncommitted · test(platform): keep uncorrelated CORE events out of Fleet completion
+
+- 변경: Fleet이 긍정적 CORE 수락을 기록한 뒤 합성 `nav.completed` 두 건(빈 payload와 임의 `task_id` 주장)이 Agent/Hub 감사 경로에 들어와도 작업을 완료로 승격하지 않는 통합 시험을 추가했다. P0 추적 기록에는 첫 Pinky 운반·고정 OMX 인계의 물리 결과 후보와 미정 계측값을 명시했다.
+- 증거: Fleet task API/event/store 집중 시험 39 passed, 변경 시험 flake8 통과 (Windows). 현재 이벤트 감사 ID와 Fleet 작업 ID 사이의 발행·실행 연결은 없다.
+- gate 변화: SOURCE/LOCAL 회귀 보호만 추가. D-297 ACK 활성화, OMX Device Action과 첫 이종 미션의 DEVICE/FIELD 수용은 계속 미승인이다.

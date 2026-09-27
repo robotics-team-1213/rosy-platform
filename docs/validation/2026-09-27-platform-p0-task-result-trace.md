@@ -31,6 +31,27 @@ is the proposed activation design; D-177 is superseded. No command
 | Device final result | CORE local `nav.completed`/`nav.failed` exists, without task or command ID. | No DEVICE result/readback trace. | `open` for cross-device correlation and Fleet completion. |
 | Stop evidence | Software cancel/event path exists. | Hardware stop/readback unverified. | `open` for physical standstill in both cases. |
 
+## First heterogeneous mission candidate and physical result
+
+The existing mobile manipulation research stages **Pinky transport plus a fixed
+OMX workcell** after a fixed OMX pick/place baseline. A bounded first mission
+candidate is: Pinky carries one registered test object in a defined transfer
+fixture to the workcell, stops at a validated handoff pose, then the fixed OMX
+transfers that object from the fixture to a designated output location. The
+mission result is **the identified object physically at that output location**,
+with a separately evidenced Pinky stop and OMX arm/gripper state. Fleet owns the
+order and handoff record; Pinky CORE and OMX local control retain their final
+motion commands and stop decisions.
+
+This is a **candidate acceptance case**, not an enabled Mission/Step contract.
+Object mass and dimensions, fixture geometry, pose tolerance, work envelope,
+stop/readback method, object-presence sensor, fault recovery and who confirms
+the final placement require the selected hardware and FIELD procedure. A CORE
+arrival event, OMX action success, camera detection or Fleet receipt alone
+cannot declare the physical mission result. If the fixture or stationary
+handoff cannot be validated, the first mission must be reselected before a
+shared schema is approved. Pinky-mounted OMX is a separate local-interlock case.
+
 ## Required counterexamples for the next contract change
 
 1. Two consecutive goals with identical coordinates: a `nav.completed` event
@@ -63,4 +84,6 @@ actual motion and stop behavior independently.
 `src/site/fleet/fleet/{server/console,swarm/transport}.py`,
 `src/runtime/api_web/core_api_web/api/v1/navigation.py`,
 `src/runtime/services/core_features/navigation/manager.py`,
-`src/contracts/foundation/core_common/protocol/schemas.py`, D-297, D-298.
+`src/contracts/foundation/core_common/protocol/schemas.py`,
+`docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md`,
+`docs/plans/2026-09-12-mobile-manipulation-research.md`, D-297, D-298.
