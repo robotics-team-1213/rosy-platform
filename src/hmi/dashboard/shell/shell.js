@@ -23,14 +23,15 @@ function renderSafetyMode(state) {
   if (!safetyStatus || !["setup", "device"].includes(surface)) return;
   if (state?.mode === "SAFE_STOP" || state?.safety?.estop === true) {
     safetyStatus.hidden = false;
-    safetyStatus.setAttribute("status", "warn");
+    safetyStatus.setAttribute("state", "warning");
     safetyStatus.textContent = "안전 정지 · CORE가 정지 상태를 보고했습니다. 이동은 CORE가 차단합니다. 해제와 물리 상태는 별도로 확인하세요.";
   } else if (typeof state?.mode === "string" && state?.safety?.estop === false) {
     safetyStatus.hidden = true;
+    safetyStatus.removeAttribute("state");
     safetyStatus.textContent = "";
   } else {
     safetyStatus.hidden = false;
-    safetyStatus.setAttribute("status", "warn");
+    safetyStatus.setAttribute("state", "warning");
     safetyStatus.textContent = "안전 상태 확인 불가 · 이동 가능 여부를 판단할 수 없습니다.";
   }
 }
@@ -176,6 +177,11 @@ document.getElementById("shell-estop").addEventListener("click", async () => {
 if (!session.token) {
   showLoginStatus("로그인이 필요합니다.");
 } else {
+  if (["setup", "device"].includes(surface) && safetyStatus) {
+    safetyStatus.hidden = false;
+    safetyStatus.setAttribute("state", "pending");
+    safetyStatus.textContent = "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.";
+  }
   refresh();
   intervalId = setInterval(refresh, REFRESH_MS);
   if (["setup", "device"].includes(surface)) {

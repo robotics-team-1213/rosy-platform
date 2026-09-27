@@ -32,7 +32,7 @@
 
 ## 미촬영·미검증 셀과 다음 작업
 
-- **최초 기동 진행 상태**: 비동기 응답이 도착하기 전 화면을 별도 촬영하지 않았다.
+- **최초 기동 진행 상태**: 아래 후속 회차에서 6셀을 촬영했다. 현재 화면에는 안전 상태 확인 중 문구를 표시한다.
 - **네이티브 확인창 이미지**: Playwright의 dialog 이벤트와 취소·POST 0건은 기록했지만 OS 대화상자를 PNG에 포함하지 못했다.
 - **`/device` 지연·연결 끊김**: Host Agent API는 이번 fixture에서 `available`/오류로만 구분했다. 시각·나이 증거와 실제 재연결 흐름은 검증하지 않았다.
 - **SAFE_STOP 물리 결과**: `/setup`과 `/device`의 공통 셸 표시를 LOCAL에서 캡처했다. 물리 정지, 해제, 재출발 가능 여부는 별도 장치 readback이 필요하다.
@@ -51,4 +51,8 @@
 
 - 현재 브라우저 fixture는 관리자 `/device` SAFE_STOP 2셀을 포함해 총 56셀을 캡처한다. `matrix.json`에서 페이지 오류와 가로 넘침은 모두 0건이다.
 - Host Agent 요청 중 상태 조회가 갱신되면 네트워크·릴리스 버튼이 다시 활성화되어 두 번째 POST가 가능했다. 각 절차의 요청 완료까지 버튼을 잠그고, 상태 조회와 요청 완료 시점에 다시 평가한다. `test_host_operations_browser.py`는 지연된 POST 중 GET 갱신을 재현해 중복 요청이 없음을 확인한다.
-- 최초 기동 전체 화면과 `/device` 값별 지연·끊김 셀은 별도 G2 근거가 없다. Host Agent API의 값별 시각·나이 계약 없이는 화면이 임의로 `fresh`나 `delayed`를 판정하지 않는다. 실제 Host Agent 적용·롤백, SAFE_STOP 물리 정지, G3 사람 평가는 HOLD다.
+- `/device` 값별 지연·끊김 셀은 별도 G2 근거가 없다. Host Agent API의 값별 시각·나이 계약 없이는 화면이 임의로 `fresh`나 `delayed`를 판정하지 않는다. 실제 Host Agent 적용·롤백, SAFE_STOP 물리 정지, G3 사람 평가는 HOLD다.
+
+## 첫 기동 전체 화면 LOCAL 셀
+
+실제 FastAPI `create_app` + `CoreServices`에서 정적 화면을 받고, 브라우저에서 매니페스트와 로봇 상태 fetch만 응답 전으로 보류했다. 운영자·관리자 `/setup`, 관리자 `/device`를 각각 1366×768·390×844로 촬영했다. `X:\DevTemp\rosy-uiux-d306-roles-g2\first-boot-matrix.json`과 PNG 6장이 일회성 원본이다. 모두 패널 0개, `화면을 불러오는 중입니다`, `안전 상태 확인 중`, E-stop 가시성, 가로 넘침 0, pageerror 0을 확인했다. 인증 토큰이 없는 `/setup`·`/device`에서는 안전 상태 문구와 패널을 노출하지 않았다. 이는 첫 응답 전 UI만 증명하며 CORE 상태나 물리 안전을 증명하지 않는다.

@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · test(roles): capture first boot before API responses
 - 2026-09-27 · uncommitted · fix(device): keep Host Agent actions locked during request
 - 2026-09-27 · uncommitted · test(ui): align action-group fixture with teleop eligibility
 - 2026-09-27 · uncommitted · fix(device): keep Host Agent action results visible
 - 2026-09-27 · 804dda61 · fix(console): bound supervised web motion
-- 2026-09-27 · uncommitted · fix(ui): clarify role-screen spatial and procedure layouts

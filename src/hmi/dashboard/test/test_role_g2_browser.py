@@ -184,3 +184,85 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     context.close()
         browser.close()
     (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_role_procedure_first_boot_full_screen(tmp_path):
+    """Capture the real shell while manifest and safety responses have not arrived."""
+    client = _core_client(tmp_path)
+    CAPTURES.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for role, surface in (("operator", "setup"), ("administrator", "setup"),
+                              ("administrator", "device")):
+            for width, height in ((1366, 768), (390, 844)):
+                context = browser.new_context(viewport={"width": width, "height": height})
+                page = context.new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                token = TOKENS[role]
+                init_script = """() => {
+                  sessionStorage.setItem('rosy.dashboard.token', __TOKEN__);
+                  window.__pendingRequests = [];
+                  const originalFetch = window.fetch.bind(window);
+                  window.fetch = (input, options) => {
+                    const path = String(input);
+                    if (path.includes('/api/v1/ui/surfaces/') || path.includes('/api/v1/robot/state')) {
+                      window.__pendingRequests.push(path);
+                      return new Promise(() => {});
+                    }
+                    return originalFetch(input, options);
+                  };
+                }"""
+                page.add_init_script(f"({init_script.replace('__TOKEN__', json.dumps(token))})()")
+
+                def serve(route):
+                    path = urlsplit(route.request.url).path
+                    response = _response(client, path, token, "normal", surface)
+                    route.fulfill(status=response.status_code, headers={
+                        "content-type": response.headers.get("content-type", "application/octet-stream"),
+                        "cache-control": "no-store",
+                    }, body=response.content if hasattr(response, "content") else response.body)
+
+                page.route("**/*", serve)
+                page.goto(f"http://rosy.test/{surface}", wait_until="domcontentloaded")
+                page.wait_for_function("window.__pendingRequests?.some(path => path.includes('/api/v1/ui/surfaces/'))")
+                page.wait_for_function("window.__pendingRequests?.some(path => path.includes('/api/v1/robot/state'))")
+                filename = f"{role}-{surface}-first-boot-{width}x{height}.png"
+                page.screenshot(path=str(CAPTURES / filename), full_page=True)
+                measured = page.evaluate("""() => ({
+                  loading: document.querySelector('#surface-status')?.textContent || '',
+                  safety: document.querySelector('#safety-mode-status')?.textContent || '',
+                  safetyVisible: !document.querySelector('#safety-mode-status')?.hidden,
+                  panelCount: document.querySelectorAll('ui-section[data-panel]').length,
+                  overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+                  eStopVisible: document.querySelector('#shell-estop').getBoundingClientRect().right <= innerWidth,
+                })""")
+                records.append({"role": role, "surface": surface, "viewport": f"{width}x{height}",
+                                "image": filename, "pending": page.evaluate("window.__pendingRequests"),
+                                "errors": errors, **measured})
+                assert "불러오는 중" in measured["loading"], records[-1]
+                assert "안전 상태 확인 중" in measured["safety"] and measured["safetyVisible"], records[-1]
+                assert measured["panelCount"] == 0 and measured["overflowX"] == 0, records[-1]
+                assert measured["eStopVisible"] and errors == [], records[-1]
+                context.close()
+        for surface in ("setup", "device"):
+            context = browser.new_context()
+            page = context.new_page()
+
+            def serve_anonymous(route):
+                path = urlsplit(route.request.url).path
+                response = _response(client, path, TOKENS["operator"], "normal", surface)
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve_anonymous)
+            page.goto(f"http://rosy.test/{surface}", wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelector('#surface-status')?.textContent.includes('로그인이 필요')")
+            assert page.locator("#safety-mode-status").is_hidden()
+            assert page.locator("ui-section[data-panel]").count() == 0
+            context.close()
+        browser.close()
+    (CAPTURES / "first-boot-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
