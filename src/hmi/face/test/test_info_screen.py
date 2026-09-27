@@ -5,7 +5,7 @@ import pytest
 from PIL import ImageChops
 from pathlib import Path
 
-from emotion.info_screen import DEFAULT_SIZE, _CRIT, _FG, _WARN, battery_color, render
+from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, render
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -135,3 +135,18 @@ class TestRender:
 
         assert ImageChops.difference(normal, hitl).getbbox() is not None
         assert ImageChops.difference(estop, estop_and_hitl).getbbox() is None
+
+    @pytest.mark.parametrize("field,strip", [
+        ("robot_id", (304, 8, 320, 34)),
+        ("mode", (304, 140, 320, 165)),
+        ("navigation", (304, 164, 320, 189)),
+        ("health", (304, 188, 320, 213)),
+        ("address", (304, 215, 320, 240)),
+    ])
+    def test_long_dynamic_text_preserves_right_margin(self, field, strip):
+        image = render(self._payload(**{field: "LONG_VALUE_" * 20}))
+        empty = render(self._payload(**{field: ""}))
+        assert ImageChops.difference(image, empty).getbbox() is not None
+        assert image.crop(strip).getcolors(maxcolors=1 << 16) == [
+            ((strip[2] - strip[0]) * (strip[3] - strip[1]), _BG),
+        ]

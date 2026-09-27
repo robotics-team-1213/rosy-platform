@@ -125,3 +125,10 @@
 - gate 변화: 없음
 - 결정: D-260 Proposed
 - 교훈: DejaVu에 한글이 없어 LCD는 같은 규칙의 영어 짧은 말을 쓴다
+
+## 2026-09-27 · uncommitted · fix(emotion): D-306 정보 카드 긴 문자열 경계
+
+- 변경: `render()`의 로봇 ID·MODE/NAV/HEALTH 값·주소에 부팅 카드의 기존 `_fit`을 적용해 320×240 경계에서 말줄임과 16px 오른쪽 여백을 유지한다. E-STOP 경고·색·AP QR 배치는 그대로 둔다.
+- 증거: Windows ROS-free PIL 시험 128 passed, 캡처 시험 1 passed. `X:\DevTemp\rosy-uiux-lcd-2026-09-27`에 부팅/AP QR/실패/긴 문자열 및 wake 카드 4종 PNG 320×240을 생성하고 시각 확인했다.
+- gate 변화: SOURCE/LOCAL GO의 증거 갱신. DEVICE/BENCH와 FIELD는 실물 사진·거리·각도·조명 관찰이 없어 승격하지 않는다.
+- 결정: D-306, D-153.

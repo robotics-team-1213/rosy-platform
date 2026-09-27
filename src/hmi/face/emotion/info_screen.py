@@ -92,8 +92,9 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     percent = float(raw_percent) if has_percent else 0.0
     color = battery_color(percent) if has_percent else _MUTED
 
-    draw.text((16, 10), str(payload.get("robot_id") or "rosy"),
-              font=_font(18), fill=_MUTED)
+    robot_id = str(payload.get("robot_id") or "rosy")
+    robot_font, robot_id = _fit(draw, robot_id, 18, width - 32)
+    draw.text((16, 10), robot_id, font=robot_font, fill=_MUTED)
 
     if has_percent:
         if color == _CRIT:
@@ -130,12 +131,14 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         if value == "E-STOP":
             _draw_alarm(draw, (92, y), value, _font(16))
         else:
-            draw.text((92, y), value, font=_font(16), fill=_FG)
+            value_font, value = _fit(draw, value, 16, width - 108)
+            draw.text((92, y), value, font=value_font, fill=_FG)
 
     address = str(payload.get("address") or "")
     if address:
+        address_font, address = _fit(draw, address, 14, width - 32)
         draw.text((width // 2, height - 14), address,
-                  font=_font(14), fill=_MUTED, anchor="ms")
+                  font=address_font, fill=_MUTED, anchor="ms")
 
     return image
 

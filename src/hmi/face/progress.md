@@ -2,16 +2,16 @@
 module: emotion
 logical_modules: [M02]
 owner: 장치
-last_verified: { commit: "uncommitted", date: 2026-09-21 }
+last_verified: { commit: "uncommitted", date: 2026-09-27 }
 gates:
   SOURCE:
     state: GO
-    evidence: "F-01 수정(패키지 평탄화 + rosy_emotion.py→emotion.py) 후 현재 트리 재실행 — test_info_screen·test_info_screen_palette 22 passed (2026-09-21 Windows)"
-    cmd: "PYTHONPATH=src/hmi/face python -m pytest src/hmi/face/test/test_info_screen.py src/hmi/face/test/test_info_screen_palette.py -q"
+    evidence: "F-01 수정 후 현재 트리 재실행. 정보 카드 긴 문자열 가장자리 회귀 포함 info/boot/palette/Wi-Fi QR 128 passed (2026-09-27 Windows)"
+    cmd: "PYTHONPATH=src/hmi/face python -X utf8 -m pytest src/hmi/face/test/test_info_screen.py src/hmi/face/test/test_info_screen_boot.py src/hmi/face/test/test_info_screen_palette.py src/hmi/face/test/test_wifi_qr.py -q -p no:cacheprovider"
   LOCAL:
     state: GO
-    evidence: "같은 실행 24 passed(F-04 회귀 + 캡처 재현 시험 포함) + info_screen 카드 PNG 4종 재생성(D-153 회차6, docs/validation/uiux-surfaces-2026-09-21)"
-    cmd: "PYTHONPATH=src/hmi/face python -m pytest src/hmi/face/test/test_info_screen.py src/hmi/face/test/test_info_screen_palette.py src/hmi/face/test/test_info_screen_capture.py -q"
+    evidence: "호스트 PIL 렌더 128 passed, 캡처 시험 1 passed. 부팅/AP QR/실패/긴 문자열 및 wake 카드 4종 320×240 PNG를 X:\\DevTemp\\rosy-uiux-lcd-2026-09-27에 저장. 실물 판독성 증거 아님"
+    cmd: "PYTHONPATH=src/hmi/face ROSY_FACE_CAPTURE_DIR=X:\\DevTemp\\rosy-uiux-lcd-2026-09-27 python -X utf8 -m pytest src/hmi/face/test/test_info_screen_capture.py -q -p no:cacheprovider"
   ROS-SIM:
     state: HOLD
     blocker: "rclpy set_emotion 서비스 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행"
@@ -22,14 +22,16 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-57, D-153]
+adrs: [D-57, D-153, D-306]
 plans:
   - docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md
   - docs/plans/2026-09-15-module-harness-design.md
+  - docs/plans/2026-09-27-uiux-surface-closure.md
 ---
 ## 지금 상태
 
 - `set_emotion` 서비스(LCD GIF)와 PWR-003 info-card 렌더러(`info_screen.py`, ROS-free PIL)를 제공한다.
+- D-306 LCD 점검: 320×240 호스트 카드의 긴 동적 문자열은 기존 부팅 카드의 `_fit`으로 화면 안에 맞추고 말줄임을 표시한다. 부팅/AP QR/실패 캡처는 LOCAL 증거다. 실물 LCD의 거리·각도·조명 판독성은 미확인이라 DEVICE/BENCH GO가 아니다.
 - **F-01 해결 (2026-09-21, D-153 회차2):** 재편(9b77daa)이 선언만 `emotion.*`로 바꾸고 파일을 `rosy_emotion/`에 남겨둔 불일치를 닫았다 — 파이썬 파일을 `emotion/`으로 평탄화하고 `rosy_emotion.py`는 `emotion.py`로 환원했으며 마커 `resource/rosy_emotion`를 지웠다. SOURCE/LOCAL 재실행 22 passed로 GO 복원.
 - `test/test_copyright.py`·`test_flake8.py`·`test_pep257.py`는 ament_copyright/flake8/pep257을 import한다. 이 호스트에는 설치되어 있지 않아(`ModuleNotFoundError`) 실행할 수 없고, 시도해도 증거로 세지 않는다.
 - `deploy/image/ 빌더`에는 core/io 두 이미지만 있고 emotion을 포함하지 않는다. 하드웨어(LED/lamp/IMU/ADC/emotion) 프로필은 아직 배선되지 않았다.

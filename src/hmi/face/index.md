@@ -11,11 +11,13 @@
 |---|---|
 | D-57 | ROS-native first; board and vendor differences stay in adapters |
 | D-153 | UI/UX 평가는 세 계층이고 판정 단위는 표면이다 |
+| D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 
 ## 계획·결과 문서
 
 - [2026-09-12-rosy-os-module-evaluation-maintenance-design.md](../../../docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md)
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -30,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(emotion): D-306 정보 카드 긴 문자열 경계
 - 2026-09-26 · uncommitted · feat(emotion): D-260 boot card state line and top todo
 - 2026-09-25 · uncommitted · refactor(hmi): move emotion under src/hmi (D-231)
 - 2026-09-25 · uncommitted · test(emotion): 웨이크 카드 어휘 고정 (D-221, F-07 처분)
 - 2026-09-24 · uncommitted · fix(emotion): 경보 문장은 채움이다 — 얼굴 번역 (D-202)
-- 2026-09-24 · uncommitted · feat(emotion): stage-aware boot card for the LCD (D-190 S2)
