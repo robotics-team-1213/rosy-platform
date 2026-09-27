@@ -93,8 +93,9 @@ def set_mode(page, mode: str, timeout_s: float = 5.0) -> dict:
 
 def _moving(state: dict) -> bool:
     velocity = state.get("velocity") or {}
-    return (abs(float(velocity.get("linear") or 0.0)) > 0.002
-            or abs(float(velocity.get("angular") or 0.0)) > 0.02)
+    linear = abs(float(velocity.get("linear") or 0.0))
+    angular = abs(float(velocity.get("angular") or 0.0))
+    return linear > 0.002 or angular > 0.02
 
 
 def teleop(page, direction: str, seconds: float, stop_timeout_s: float = 3.0) -> dict:
