@@ -2935,3 +2935,9 @@
 - 변경: D-311과 네이티브 G4 번들·원시 odom·승인 검증 절차를 기록했다. 빈 마커로는 기동하지 않으며 새 서명 이미지와 SD 갱신이 필요하다.
 - 검증: 네이티브 승인 계약 시험과 harness lint를 실행한다. 실제 장치 G4/G5는 HOLD다.
 - gate 변화: SOURCE/LOCAL 검증 경로를 추가했다. ARTIFACT/DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
+
+- 변경: D-312에서 G4의 바퀴 들기 필수 조건을 제거하고 지면 시험의 누적 이동 10 cm 한계를 정했다.
+- 검증: 원시 odom의 이동량·속도·정지·방향을 검증하는 호스트 계약 시험을 실행한다.
+- gate 변화: SOURCE/LOCAL 계약을 수정했다. 실제 G4/G5·서명 이미지 판정은 별도다.

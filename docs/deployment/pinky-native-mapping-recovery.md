@@ -15,16 +15,19 @@ sudo -n ls -l /etc/rosy/approvals
 sudo -n find /var/lib/rosy/commissioning -maxdepth 3 -type f
 ```
 
-`motor` + `drive=true`는 바퀴를 든 벤치 제어다. LiDAR 프로세스나 옛 `map_id`가
+`motor` + `drive=true`는 G4 제한 제어다. LiDAR 프로세스나 옛 `map_id`가
 보여도 SLAM 실행을 뜻하지 않는다. `ros2 node list`에서 `slam_toolbox`, Nav2
 controller, 양쪽 costmap을 확인하고 `/api/v1/navigation/state`의 필수 readiness를
 읽는다. `cmd_vel`은 `ros2 topic info /<namespace>/cmd_vel -v`에서 CORE 발행자
 하나여야 한다. 하나라도 불명확하면 바닥 주행은 HOLD다.
 
-## 2. G4: 바퀴를 든 상태의 정지 수용
+## 2. G4: 제한된 지면 이동과 정지 수용
 
-현장 조작자와 독립 전원 차단 담당자 두 명, 바퀴를 든 받침대, 유효한 배터리 및
-물리 정지 경로가 필요하다. 방향별 전진·후진·좌회전·우회전을 각각 두 번 실시한다.
+현장 조작자와 독립 전원 차단 담당자 두 명, 유효한 배터리 및
+물리 정지 경로가 필요하다. `test_surface=floor`를 기록하고 각 시험에서
+누적 이동 길이 10 cm, 선속도 0.03 m/s, 각속도 0.10 rad/s를 넘지 않는다.
+바퀴를 들어 올린 배치도 `test_surface=lifted`로 기록할 수 있다.
+방향별 전진·후진·좌회전·우회전을 각각 두 번 실시한다.
 각 시험은 시작 전 `motor/ready`, `odom`, E-Stop과 단일 최종 publisher를 읽고
 대시보드의 홀드 제어로 최저 속도를 준다. 놓는 순간과 CORE 중지/명령 소실에서
 오도메트리의 지속 0 도달 시간을 별도로 기록한다. 각각 0.65초 이내여야 한다.
@@ -35,14 +38,14 @@ API의 `accepted` 응답만으로 G4를 완료하지 않는다.
 
 네이티브 번들은 `mapping_approval.py`의 `schema_version=1` 형식을 따른다.
 `robot_number`, `release_id`, `source_revision`, 서로 다른 `operator`·
-`safety_operator`, `wheels_lifted=true`, `hardware_cut_reachable=true`,
+`safety_operator`, `test_surface=floor|lifted`, `hardware_cut_reachable=true`,
 `motor_preflight`의 파일명·SHA-256, `trials` 8개의 방향·정지 원인·파일명·
 SHA-256·`observed_direction=true`를 기록한다. 사전 점검 원시 JSON은
 `configured_ids`와 `responded_ids`가 `[1,2]`이고 `torque_free=true`여야 한다.
 각 시험의 원시 JSON에는 `direction`, `stop_cause`, `requested_linear_mps`,
 `requested_angular_rps`, `stop_requested_at`, `samples`를 둔다. 각 샘플은 같은
 단조 시간축의 `t`, `linear`, `angular`, odom `x`, `y`, `yaw`를 담는다.
-중지 전 실제 운동, 중지 후 지속 0 속도와 오도메트리 방향을 검증한다.
+중지 전 실제 운동, 중지 후 지속 0 속도, 오도메트리 방향과 누적 이동 길이를 검증한다.
 원시 파일은 현장 측정에서 가져오고 서명 릴리스와 장치 ID를 별도 readback한다.
 
 ## 3. 승인과 네이티브 전환

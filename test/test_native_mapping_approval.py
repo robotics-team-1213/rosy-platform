@@ -78,7 +78,7 @@ def _candidate(tmp_path: Path) -> tuple[dict, Path]:
         "schema_version": 1, "robot_number": 19,
         "release_id": RELEASE, "source_revision": REVISION,
         "operator": "operator-a", "safety_operator": "operator-b",
-        "wheels_lifted": True, "hardware_cut_reachable": True,
+        "test_surface": "floor", "hardware_cut_reachable": True,
         "motor_preflight": {
             "evidence_file": "motor-preflight.json",
             "sha256": hashlib.sha256(preflight_bytes).hexdigest(),
@@ -103,6 +103,14 @@ def test_approval_seals_eight_measured_trials_and_navigation_checks_them(tmp_pat
     )
     with pytest.raises(ValueError, match="digest"):
         approval.check(root, runtime_mode="hardware")
+
+
+def test_floor_trials_do_not_require_lifted_wheels(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _candidate(tmp_path)
+    assert "wheels_lifted" not in bundle
+    assert approval.approve(root, bundle, evidence, reviewer="reviewer-c")["ready"]
 
 
 def test_empty_or_stale_markers_cannot_start_navigation(tmp_path):
@@ -165,6 +173,7 @@ def test_navigation_rechecks_both_marker_identity_and_drive_configuration(tmp_pa
     ("speed_overrun", "speed"),
     ("same_operator", "different"),
     ("wrong_odom_direction", "odom direction"),
+    ("over_10cm", "travel"),
 ])
 def test_invalid_g4_measurements_never_create_approval(tmp_path, change, reason):
     approval = _module()
@@ -180,6 +189,10 @@ def test_invalid_g4_measurements_never_create_approval(tmp_path, change, reason)
         if change == "slow_stop":
             raw["samples"][-2]["t"] = 1.7
             raw["samples"][-1]["t"] = 1.8
+        elif change == "over_10cm":
+            raw["samples"][1]["x"] = 0.06
+            raw["samples"][2]["x"] = -0.06
+            raw["samples"][3]["x"] = 0.005
         else:
             if change == "speed_overrun":
                 raw["samples"][0]["linear"] = 0.0311
