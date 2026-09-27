@@ -184,8 +184,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(uiux): show CORE safe stop on role surfaces
 - 2026-09-27 · uncommitted · fix(fleet): keep server rate decision with D-309
 - 2026-09-27 · uncommitted · fix(games): label board age from host evidence
 - 2026-09-27 · uncommitted · feat(fleet): show intervention robots first
 - 2026-09-27 · uncommitted · fix(fleet): server judges relay stream evidence
-- 2026-09-27 · uncommitted · adr(uiux): clarify frontend and backend ownership

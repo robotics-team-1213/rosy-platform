@@ -28,7 +28,7 @@ TOKENS = {"operator": "rosy-dev-operator", "administrator": "rosy-dev-admin"}
 CAPTURES = Path("X:/DevTemp/rosy-uiux-d306-roles-g2")
 SCENARIOS = {
     "setup": ("normal", "empty", "delayed", "disconnected", "unavailable", "unsupported", "forbidden", "error", "safe_stop", "confirm_cancel"),
-    "device": ("normal", "empty", "unavailable", "forbidden", "error", "confirm_cancel"),
+    "device": ("normal", "empty", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
 }
 
 
@@ -138,6 +138,10 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     else:
                         page.wait_for_function("document.querySelectorAll('ui-section[data-panel]').length > 0")
                     page.wait_for_timeout(500)
+                    if scenario == "safe_stop":
+                        page.wait_for_function("document.querySelector('#safety-mode-status')?.textContent.includes('안전 정지')")
+                        assert page.locator("#safety-mode-status").is_visible()
+                        assert "물리 상태는 별도로" in page.locator("#safety-mode-status").inner_text()
                     if scenario == "confirm_cancel":
                         def dismiss(dialog):
                             dialogs.append(dialog.message)

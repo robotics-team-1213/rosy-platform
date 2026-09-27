@@ -40,3 +40,9 @@
 - **G3 사람 평가·장치**: 운영자·설치자 평가, BENCH/DEVICE/FIELD 캡처, 실물 E-stop·도크·네트워크 전환 결과가 없다. 따라서 어떤 표면도 D-153 GO가 아니다.
 
 이번 수정 범위는 `src/hmi/dashboard/panels/setup/docking.js`, `dock-admin.js`, `shell/shell.js`와 브라우저 시험이다. 공용 토큰·API·서버 권한·D-283 3영역은 바꾸지 않았다. 되돌릴 때 이 커밋의 역할 화면 파일과 회차 시험을 함께 되돌리면 된다.
+
+## 2026-09-27 D-309 역할 화면 안전 상태 보완
+
+- `/setup`와 `/device`의 공통 셸이 CORE `/api/v1/robot/state`를 읽어 `SAFE_STOP` 또는 `safety.estop=true`를 상단에 표시한다. 상태 필드가 없거나 조회가 실패하면 `안전 상태 확인 불가`로 표시하며 이전 정상 상태를 재사용하지 않는다.
+- 설정·호스트 관리 조회와 복구 조작은 유지한다. 이동 명령의 최종 허용은 CORE API가 담당한다. 상단 비상 정지 응답은 요청 접수, CORE 상태 재조회, 물리 정지를 구분한다.
+- 역할 화면 로컬 매트릭스에 관리자 `/device` 안전 정지를 추가했다. 역할 매트릭스·진입·패키지 시험 8 passed (Windows LOCAL). 새 캡처는 X:의 일회성 증거이며 실물/물리 정지 검증이 아니다. 화면 전체 G2/G3와 DEVICE/FIELD는 HOLD다.

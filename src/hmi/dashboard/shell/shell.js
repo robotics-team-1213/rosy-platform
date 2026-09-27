@@ -11,11 +11,33 @@ const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
 const status = document.getElementById("surface-status");
 const notice = document.getElementById("shell-notice");
+const safetyStatus = document.getElementById("safety-mode-status");
 const store = createStore(api);
 let mounted = null;
 let revision = null;
 let inflight = null;
 let intervalId = null;
+let stopSafety = null;
+
+function renderSafetyMode(state) {
+  if (!safetyStatus || !["setup", "device"].includes(surface)) return;
+  if (state?.mode === "SAFE_STOP" || state?.safety?.estop === true) {
+    safetyStatus.hidden = false;
+    safetyStatus.setAttribute("status", "warn");
+    safetyStatus.textContent = "안전 정지 · CORE가 정지 상태를 보고했습니다. 이동은 CORE가 차단합니다. 해제와 물리 상태는 별도로 확인하세요.";
+  } else if (typeof state?.mode === "string" && state?.safety?.estop === false) {
+    safetyStatus.hidden = true;
+    safetyStatus.textContent = "";
+  } else {
+    safetyStatus.hidden = false;
+    safetyStatus.setAttribute("status", "warn");
+    safetyStatus.textContent = "안전 상태 확인 불가 · 이동 가능 여부를 판단할 수 없습니다.";
+  }
+}
+
+function onSafetyModeError() {
+  renderSafetyMode(null);
+}
 
 function showStatus(text) {
   status.hidden = !text;
@@ -92,6 +114,7 @@ async function assemble() {
 // 응답이 구조 그대로면 불필요한 재mount를 하지 않는다.
 async function onManifestError(error) {
   if (error.status === 401) {
+    if (stopSafety) { stopSafety(); stopSafety = null; }
     if (intervalId) clearInterval(intervalId);
     intervalId = null;
     try {
@@ -107,6 +130,8 @@ async function onManifestError(error) {
     return;
   }
   if (error.status === 403) {
+    if (stopSafety) { stopSafety(); stopSafety = null; }
+    if (safetyStatus) safetyStatus.hidden = true;
     if (intervalId) clearInterval(intervalId);
     intervalId = null;
     if (mounted) await mounted.unmountAll();
@@ -133,7 +158,16 @@ document.getElementById("shell-estop").addEventListener("click", async () => {
   window.dispatchEvent(new Event("rosy:stop-motion"));
   try {
     await api("/api/v1/safety/stop", { method: "POST" });
-    notice.textContent = "비상 정지를 보냈습니다.";
+    let readback = null;
+    try {
+      readback = await api("/api/v1/robot/state");
+      renderSafetyMode(readback);
+    } catch (_error) {
+      onSafetyModeError();
+    }
+    notice.textContent = readback?.safety?.estop === true || readback?.mode === "SAFE_STOP"
+      ? "\uBE44\uC0C1 \uC815\uC9C0 \uC694\uCCAD \uC811\uC218 \u00B7 CORE \uC815\uC9C0 \uC0C1\uD0DC \uD655\uC778. \uBB3C\uB9AC \uC815\uC9C0\uB294 \uBCC4\uB3C4\uB85C \uD655\uC778\uD558\uC138\uC694."
+      : "\uBE44\uC0C1 \uC815\uC9C0 \uC694\uCCAD \uC811\uC218 \u00B7 \uC0C1\uD0DC \uD655\uC778 \uBD88\uAC00. \uC2E4\uC81C \uC815\uC9C0\uB97C \uD655\uC778\uD558\uC138\uC694.";
   } catch (error) {
     notice.textContent = `비상 정지 실패: ${error.message}`;
   }
@@ -144,4 +178,7 @@ if (!session.token) {
 } else {
   refresh();
   intervalId = setInterval(refresh, REFRESH_MS);
+  if (["setup", "device"].includes(surface)) {
+    stopSafety = store.scope().poll("/api/v1/robot/state", 1_000, renderSafetyMode, onSafetyModeError);
+  }
 }

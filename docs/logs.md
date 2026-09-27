@@ -2904,3 +2904,9 @@
 - 변경: Fleet 서버가 마지막 표본 나이와 함께 두 표본 이상에서 2 Hz 미만인 송수신 빈도를 `delayed`로 판정한다. 첫 송신은 빈도 미정으로 취급한다. 화면은 서버 이유만 문구화한다.
 - 검증: Fleet relay/formation 44 passed, 관련 Playwright 2 passed (Windows LOCAL), 문서 계약 동기화.
 - gate 변화: 코드·계약 일치 LOCAL 확인이다. 변경 후 화면 캡처와 DEVICE/FIELD는 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(uiux): show CORE safe stop on role surfaces
+
+- 변경: `/setup`와 `/device`의 공통 셸이 CORE 상태 readback에서 SAFE_STOP과 상태 미확인을 상단에 표시한다. E-stop 문구는 요청 접수와 상태·물리 결과를 구분한다.
+- 검증: 역할 G2 로컬 매트릭스·진입·패키지 8 passed (Windows LOCAL). 관리자 `/device` SAFE_STOP 사례를 추가했다.
+- gate 변화: 상태 표시의 로컬 경로만 확인했다. 전체 화면 G2/G3, 장치 물리 정지와 FIELD는 HOLD다.
