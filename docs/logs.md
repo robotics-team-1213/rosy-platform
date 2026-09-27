@@ -3024,3 +3024,10 @@
 - 변경: D-314에 따라 G4 schema v2를 방향별 버튼 해제 4회와 명령 소실 1회로 줄이고 별도 안전 담당자·검토자 필드를 제거했다. 기존 v1 승인은 계속 검증한다. 두 대시보드의 반복 확인 체크박스도 제거했다.
 - 검증: v1/v2 원시 기록·승인 해시·누락·변조 계약 시험과 브라우저의 홀드·해제 정지를 확인한다.
 - gate 변화: SOURCE/LOCAL 절차를 간소화했다. 전원이 꺼진 장치의 새 릴리스 적용, 실물 정지 시험 및 맵핑은 HOLD다.
+
+## 2026-09-28 · uncommitted · docs(layout): define source-folder responsibility in D-315
+
+- 변경: D-315와 실행 계획을 추가하고 README·root/src/site/hmi 안내를 실제 트리에 맞췄다. 폴더 역할과 ROS package명, 실행 프로세스, 최종 writer, 배포 closure를 별도 축으로 설명한다.
+- 근거: 현행 package.xml, deploy consumers, CORE/Fleet/Overhead/HMI 경로를 소스에서 대조했다. 패키지 경로·이름, API, 배포 설정과 로컬 ignored residue는 변경하지 않았다.
+- 검증: generate 성공. ADR/harness 계약 시험은 73 passed, 3 failed이며 모두 기준 커밋의 dashboard 진행/로그 형식 오류(날짜, HOLD blocker, 증거 항목)다. harness lint도 동일 3 errors와 기존 메타데이터 warning 19건을 보고했다. 새 D-315 경로는 index에 생성됐다.
+- gate 변화: 문서 SOURCE 설명을 명확히 했다. runtime/sensing 분할은 별도 경계 감사 후속이며 native ARM64/Jazzy artifact, 장치와 현장 수용은 이번 작업 범위가 아니다.

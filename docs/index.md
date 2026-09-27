@@ -136,6 +136,7 @@
 | D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 | D-313 | 전면 카메라 고장 시 관제 영상과 로컬 센서로 제한된 시연을 선택한다 |
 | D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 |
+| D-315 | 소스 폴더 책임은 소스 분류이며 실행 권한·배포 단위를 대신하지 않는다 |
 
 ## 계획·결과 문서
 
@@ -192,8 +193,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · docs(layout): define source-folder responsibility in D-315
 - 2026-09-28 · uncommitted · fix(native): simplify measured grounded G4 and direct teleop
 - 2026-09-28 · uncommitted · docs(camera-fault): record D-313 and implementation gates
 - 2026-09-27 · f7dae4d2 · validate D-310 IO artifact comparison
 - 2026-09-27 · a72d040 · validate D-310 CORE artifact comparison
-- 2026-09-27 · e8878189 · refactor(layout): D-310 isolated source candidate

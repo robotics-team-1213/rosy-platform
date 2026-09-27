@@ -25,33 +25,50 @@ OMX 원격 작업은 아직 수용된 기능이 아니다.
 
 ## 구조
 
-Rosy Control의 개발 기준은 이 저장소의 `src/runtime/sensing`로 통합했다.
-별도 Control 저장소·웹 서버를 새 운영 구성으로 사용하지 않는다.
-현재 소스 편입과 보정 노드 경계 정리는 완료했으며, 전체 runtime·안전 중재·이미지·Pi 인수는 진행 중이다.
-현황은 [흡수 실행 결과](docs/plans/2026-09-12-control-absorption-results.md),
-결정은 [ADR D-37~D-65](docs/reference/ROSY%20ADR%20Log.md)를 따른다.
+D-315는 폴더의 뜻을 **소스 책임 분류**로 한정한다. 디렉터리 경로, ROS 패키지명,
+실행 프로세스, 최종 명령 writer, 설치 호스트·이미지 단위는 각각 별도 증거로 판단한다.
+따라서 products/가 최종 명령을 소유한다고 보거나, runtime/을 모든 제품이 공유하는
+엔진으로 보거나, site/·hmi/ 경로만으로 PC 배치를 추론하지 않는다.
+실제 패키지 소비와 설치 묶음은 deploy/ 및 각 package.xml에서 확인한다.
+상세 판정은 [D-315](docs/adr/D-315-source-folder-responsibility-and-runtime-authority.md),
+실행과 후속 감사 범위는 [계획](docs/plans/2026-09-28-source-folder-roles-and-runtime-audit.md)에 기록했다.
 
-```text
-rosy/ (이 리포지토리)
-├── env.sh                    # 개발 PC: ROS와 워크스페이스를 읽는 유일한 루트 셸
-├── docs/                     # 요구사항·ADR·계획·검증 기록
-│   ├── architecture/         # 목표 분산 OS 번호 문서
-│   └── reference/            # 살아 있는 API 계약과 ADR 로그
-├── deploy/                   # 이미지·릴리스·로봇 설치 셸
-├── tools/                    # tools/fix_ament_resource.sh, tools/run_fleet_sim.sh, tools/run_data.py
-├── data/                     # data/teleop 확인 기록, data/drive 주행 기록. 세션은 커밋하지 않음
-├── firmware/                 # 충전 도크·신호 제어 펌웨어 (colcon 밖)
-├── reference/                # 얼린 pinky_pro zip. 현재 코드가 아님
-├── test/                     # 호스트 계약 시험
-└── src/                      # ROS 2 패키지 (층)
-    ├── contracts/            # interfaces·core_common
-    ├── runtime/              # core·core_events·core_features·core_api_web·control·navigation
-    ├── devices/              # pinky_pro·common·omx
-    ├── products/             # pinky_pro 설정 패키지
-    ├── hmi/                  # emotion·web_common
-    ├── sim/                  # description·gz_sim
-    └── site/                 # fleet·games
-```
+runtime/sensing의 ROS 패키지 이름은 control이며, 현재 센싱·보정·계획·안전·진단 경로가
+함께 있다. 이 혼합만으로 즉시 디렉터리를 나누지 않는다. 별도 소비자·시험·설치 경계가
+확인될 때 별도 ADR로 판단한다. CORE(runtime/gateway)는 Pinky 최종 cmd_vel 경계다.
+폴더 배치 변경은 writer 권한이나 장치 수용을 뜻하지 않는다.
+
+    src/
+    ├── contracts/
+    │   ├── foundation/            # core_common 공유 타입·프로토콜·설정
+    │   └── interfaces/            # ROS 인터페이스
+    ├── runtime/
+    │   ├── gateway/               # package: core
+    │   ├── services/              # package: core_features
+    │   ├── events/                # package: core_events
+    │   ├── api_web/               # package: core_api_web
+    │   ├── navigation/            # navigation
+    │   └── sensing/               # package: control (혼합 runtime 경로)
+    ├── products/
+    │   ├── pinky_pro/             # profile, bringup, ADC, lamp, LED
+    │   └── omx/                   # profile, adapter
+    ├── drivers/imu_bno055/        # 칩 드라이버
+    ├── site/
+    │   ├── fleet/                 # 현장 미션·작업 원장·콘솔 서버
+    │   ├── overhead/              # overhead 입력·sighting 처리
+    │   └── games/                 # 게임 호스트
+    ├── hmi/
+    │   ├── dashboard/             # CORE API가 제공하는 operator 화면
+    │   ├── face/                  # package: emotion
+    │   └── web/                   # package: web_common 공유 웹 자산
+    └── sim/
+        ├── description/
+        └── gz_sim/
+
+폴더명과 ROS 패키지 이름은 항상 같지 않다. 예를 들어 hmi/web은 web_common,
+site/overhead는 overhead다. products/omx/adapter는 소스 위치를 말할 뿐,
+OMX 장치의 운영 writer 수용 완료를 뜻하지 않는다. Fleet console은 site/fleet 서버가
+제공하고, 브라우저 관제 PC는 별도 배치가 가능하다. 영상 경계는 [D-275](docs/adr/D-275-web-surface-and-video-runtime-ownership.md)를 따른다.
 
 ## 문서 (거버넌스: docs/)
 

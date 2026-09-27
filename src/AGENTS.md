@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories are grouped by role: `contracts/` (messages and shared schemas), `runtime/` (gateway, sensing, navigation), `products/` (Pinky and OMX specific packages and profiles), `drivers/` (product-independent chip drivers), `hmi/` (LCD, shared browser assets, and operator screens), `sim/`, `site/` (fleet and game host). Build with `colcon build --symlink-install` from this directory. ament_python: `core`, `core_common`, `core_events`, `core_features`, `core_api_web`, `control`, `emotion`, `games`, `omx_adapter`, `fleet`, `bringup`, `led`. ament_cmake: `interfaces`, `pinky_pro`, `omx`, `navigation`, `description`, `gz_sim`, `lamp_control`, `imu_bno055`, `sensor_adc`, `dashboard`.
+ROS 2 colcon workspace. Package names are unchanged. Directories group source by role: contracts (messages and shared schemas), runtime (gateway, events, services, API web, navigation, sensing), products (Pinky Pro and OMX source), drivers (chip drivers), site (Fleet, Overhead, Games), hmi (dashboard and shared interfaces), and sim. These are source groupings only; ROS package identity, running process, final writer, and deployment closure are separate facts under D-315. Build with colcon build --symlink-install from this directory. ament_python: core, core_common, core_events, core_features, core_api_web, control, emotion, games, omx_adapter, fleet, bringup, led. ament_cmake: interfaces, pinky_pro, omx, navigation, description, gz_sim, lamp_control, imu_bno055, sensor_adc, dashboard.
 
 ## Key Files
 
@@ -21,13 +21,13 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `drivers/` | `imu_bno055` chip driver; product reuse is verified separately |
 | `hmi/` | `face/` (package `emotion`, robot LCD), `web/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
-| `site/` | `fleet` (formation, SiteHub, console) and `games` (laptop match host, no `cmd_vel`) |
+| `site/` | `fleet/` (site mission/task ledger and console), `overhead/` (camera-derived sighting input), and `games/` (game host) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- Package names stay `control`, `bringup`, and the rest. Directories are `contracts/`, `runtime/`, `products/`, `drivers/`, `hmi/`, `sim/`, and `site/`. Do not reintroduce `pinky_*` or flat `rosy_*` package names. `rosy_control` lives at `runtime/sensing`, `rosy_bringup` at `products/pinky_pro/bringup`, `rosy_fleet` at `site/fleet`. Product folders are source ownership, not command authority or image closure.
+- Package names stay `control`, `bringup`, and the rest. Source roots are `contracts/`, `runtime/`, `products/`, `drivers/`, `site/`, `hmi/`, and `sim/`. Do not reintroduce `pinky_*` or flat `rosy_*` package names. `runtime/gateway` (ROS package `core`) owns Pinky final `cmd_vel`; `products/omx/adapter` is only a source location and does not establish an accepted OMX operational writer. ROS package identity, process placement, and image closure are separate evidence (D-315).
 - After editing `package.xml` / `setup.py` / `CMakeLists.txt`, rebuild with colcon.
 - `resource/<pkg>` is an ament index marker — do not delete; no need for AGENTS.md there (`tools/fix_ament_resource.sh` can recreate them).
 - Do not check in `src/build`, `src/install`, `src/log`.

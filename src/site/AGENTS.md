@@ -1,45 +1,46 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-20 | Updated: 2026-09-20 -->
+<!-- Generated: 2026-09-20 | Updated: 2026-09-28 -->
 
 # site
 
 ## Purpose
 
-Fleet/site layer. One package today: `fleet` — formation geometry (FOR-001), slot assignment (FOR-002), the reference-stream relay (D-31), the FOR-004 session, the CLI, and the Fleet console v1 (D-59 SiteHub gather/scatter). No ROS imports anywhere in the package.
+Site-facing and non-robot-hosted source groups. Folder location alone does not identify which physical PC runs a service; deployment is defined by deploy/ and the selected package closure. Fleet owns site mission/task records and its console server, while robot-side final command authority remains with the local owner.
 
 ## Key Files
 
-None at this level. See `fleet/AGENTS.md`.
+None at this level. See each package AGENTS.md.
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `fleet/` | Formation/relay/session/CLI + `fleet console` server and 관제 UI; depends on `core_common` schemas only (see `fleet/AGENTS.md`) |
-| `overhead/` | Receive-only `rosy-overhead/1` WebSocket ingest plus display-only ArUco-to-map sighting worker; no D-268 policy evidence or command path (D-257, D-261; see `overhead/AGENTS.md`) |
+| fleet/ | Fleet formation, relay, session, CLI, and console server; consumes shared contracts and does not own robot final commands |
+| overhead/ | ROS package overhead: receive-only image ingest and sighting derivation; sighting is not a robot command |
+| games/ | ROS package games and match host; game coordination is not a cmd_vel writer |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- `fleet` consumes the robot contract; it never modifies `core`. Missing contract pieces are an API-ref cycle, not a local patch.
-- Tests run without ROS: `conftest.py` puts `src/site/fleet`, `src/contracts/foundation`, and `src/runtime/services` on `sys.path`.
+- fleet consumes the robot contract; it never modifies CORE. Missing contract pieces require an API reference cycle.
+- Keep the overhead sighting stream separate from robot front-camera preview and OMX task cameras (D-275).
+- Do not infer server host placement from this source directory. Check deploy/site/ and its current composition.
+- Fleet tests run without ROS; do not generalize that property to every package under site/.
 
 ### Testing Requirements
 
-```bash
-# from src/ (or repo root)
-python3 -m pytest site/fleet/test -v
-```
+    python3 -m pytest src/site/fleet/test/ -v
 
 ## Dependencies
 
 ### Internal
 
-- `core_common.protocol.schemas` (D-18); colcon build order via `exec_depend` (D-126).
+- Fleet consumes core_common.protocol.schemas (D-18); colcon build order via exec_depend (D-126).
+- Overhead package contracts and deployment are documented in its package-level guidance.
 
 ### External
 
-- fastapi, uvicorn, httpx, websockets ≥ 14, PyYAML, pydantic
+Fleet: fastapi, uvicorn, httpx, websockets >= 14, PyYAML, pydantic. Other packages have their own manifests.
 
 <!-- MANUAL: -->

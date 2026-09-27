@@ -85,6 +85,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-25-d231-layered-move.md` | D-231 실행 기록. 층 이동은 로컬 main `a3eca209`에 있다. OMX 제품 설정은 D-232 |
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
+| 2026-09-28-source-folder-roles-and-runtime-audit.md | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
 ## Subdirectories
 
 None.

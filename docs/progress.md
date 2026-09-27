@@ -2,7 +2,7 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "uncommitted", date: 2026-09-27 }
+last_verified: { commit: "uncommitted", date: "2026-09-28" }
 gates:
   SOURCE:
     state: GO
@@ -20,7 +20,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301, D-302, D-304, D-305, D-306, D-307, D-308, D-309, D-310, D-311, D-312, D-313, D-314]
+adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301, D-302, D-304, D-305, D-306, D-307, D-308, D-309, D-310, D-311, D-312, D-313, D-314, D-315]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-17-interface-design-implementation-design.md
@@ -67,6 +67,7 @@ plans:
 - UI/UX 평가 기준은 D-153(세 계층 G1/G2/G3, 판정 단위 표면)이다. 첫 회차(`docs/validation/uiux-surfaces-<date>/`) 전에는 표면 UI/UX 판정을 GO로 쓰지 않는다.
 - D-306는 화면별 소유권과 개선 종료 조건을 고정한다. Fleet 키보드 목표·역할 `/device` 결과·게임 상태/정지·LCD 긴 문자열·Gazebo 뷰어 탭을 SOURCE/LOCAL에서 개선했다. 전체 G2/G3와 실물·현장 증거는 남았고 sensing 진단은 D-266 해제 전 PARKED다.
 - D-309는 CORE/Fleet/게임 호스트의 판정·권한·안전 소유권과 프론트의 표시·입력 책임을 고정한다. Fleet 디스패치 안전·송신 시간 서버 판정·예외 우선 목록, 게임 보드 생성 시각·지연 표시, 역할 화면 SAFE_STOP 표시는 LOCAL 검증됐고 변경 후 로컬 캡처를 확인했다. 화면별 전체 G2/G3와 물리 수용은 HOLD다.
+- D-315는 현재 소스 폴더를 코드 책임 분류로 해석하며, 경로·ROS package·실행 프로세스·최종 writer·배포 closure를 별도 증거로 본다. README와 하위 AGENTS를 현행 트리에 맞췄다. runtime/sensing(package control) 분리는 소비자·launch·writer·시험·설치 경계를 추가 감사한 뒤 별도 ADR로 결정한다. SOURCE 문서 검증은 이번 변경에서 수행하며 ROS-SIM/ARTIFACT/DEVICE/FIELD 수용을 주장하지 않는다.
 - D-310은 제품 전용 기존 패키지 여덟 개의 `products/<모델>`·`drivers/` 소스 배치를 Accepted로 결정했다. 격리 후보의 SOURCE/LOCAL·WSL Jazzy 빌드와 이동 전 기준선 대비 CORE/IO ARM64 OCI 설치 closure 동등성을 확인하고, 사용자 요청에 따라 로컬 `main`에 소스 경로를 통합한다. 실제 aarch64/Jazzy native payload 비교는 NOT_RUN이므로 전체 ARTIFACT 동등성, 이미지 발행, 장치·현장 수용은 HOLD다. D-231·D-305의 충돌하는 위치 조항만 부분 대체한다.
 - 남은 게이트는 D-78–D-81이 가른다. ARTIFACT는 네이티브 Pi(D-78). 옛 ROS-SIM GO는 무효(D-79). Fleet 콘솔 v1 gather는 REST(D-81).
 - D-154는 공통 Pinky 이미지와 장치별 identity/Wi-Fi/Fleet bootstrap을 분리한다. 현재 CORE `FleetAgent`와 Hub listen 경로는 미구현이므로 두 대 실기 등록·heartbeat·명령·재접속·단절 HOLD를 보기 전까지 FLEET은 HOLD다.

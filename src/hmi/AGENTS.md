@@ -1,17 +1,24 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-09-25 -->
+<!-- Generated: 2026-09-25 | Updated: 2026-09-28 -->
 
 # hmi
 
 ## Purpose
 
-로봇이 직접 보여주는 화면. `emotion`은 얼굴 LCD, `web_common`은 브라우저가 공유하는 자산이다. 패키지 이름은 바꾸지 않는다.
+Human-facing screens and shared browser assets. These source locations do not identify a separate server process or deployment host. The CORE dashboard is served in-process by core_api_web; web_common assets are shared by browser surfaces.
 
 ## Subdirectories
 
-| Directory | Purpose |
-|-----------|---------|
-| `emotion/` | LCD wake card and alarm fill (see `emotion/AGENTS.md`) |
-| `web_common/` | tokens, shared controls (see `web_common/AGENTS.md`) |
+| Directory | ROS package / purpose |
+|-----------|-----------------------|
+| dashboard/ | Operator screens served by the CORE FastAPI process (core_api_web); static screens, not a Node server |
+| face/ | ROS package emotion; Pinky LCD face and status surfaces |
+| web/ | ROS package web_common; shared browser tokens and controls |
+
+## For AI Agents
+
+- Keep the physical source directory distinct from the ROS package name (web/ is web_common).
+- The browser workstation may differ from the host running Fleet or CORE. Follow D-275 and deployment configuration.
+- Do not infer final command authority from an HMI asset or screen.
 
 <!-- MANUAL: -->
