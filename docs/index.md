@@ -184,8 +184,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · feat(fleet): show intervention robots first
 - 2026-09-27 · uncommitted · fix(fleet): server judges relay stream evidence
 - 2026-09-27 · uncommitted · adr(uiux): clarify frontend and backend ownership
 - 2026-09-27 · uncommitted · validation(uiux): expand surface G2/G3 evidence
 - 2026-09-27 · uncommitted · adr(platform): separate site intent from device action interpretation
-- 2026-09-27 · uncommitted · validation(uiux): record D-306 local surface slices

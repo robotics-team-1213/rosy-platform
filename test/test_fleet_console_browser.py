@@ -154,6 +154,9 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         assert "끊김" in roster, "연결이 끊긴 팔로워의 증거 태그가 없다"
         assert "지연" not in roster, "정상 스트림(4.8 Hz)에 지연 태그가 붙었다 — 정상은 무색이어야 한다"
         assert "0.60m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
+        assert [card.get_attribute("data-robot-id") for card in page.locator("#roster article").all()] == ["rosy_03"]
+        page.locator("#roster-toggle").click()
+        assert page.locator("#roster-toggle").get_attribute("aria-expanded") == "true"
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기
         # warn)에만 몰리고 정상 로봇은 무색이다("one coloured row").
         per_robot = page.evaluate(
@@ -165,6 +168,32 @@ def test_the_console_renders_what_swarm_control_says(console_url):
 
         assert not errors, f"페이지 오류: {errors}"
         save_temp_screenshot(page, "fleet_console_overlay.png")
+        browser.close()
+
+
+def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
+    from playwright.sync_api import sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    api = {
+        "/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                             "robots": [robot], "ts": 0.0},
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        assert "개입할 로봇 없음" in page.inner_text("#roster")
+        assert page.locator("#roster article").count() == 0
+        toggle = page.locator("#roster-toggle")
+        assert toggle.get_attribute("aria-expanded") == "false"
+        toggle.focus()
+        page.keyboard.press("Enter")
+        assert toggle.get_attribute("aria-expanded") == "true"
+        assert page.locator("#roster article").count() == 1
+        assert page.locator("#roster article").get_attribute("data-robot-id") == "rosy_01"
+        assert not errors
         browser.close()
 
 
@@ -453,6 +482,7 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
         page.locator("ui-button[data-goal-robot-id='rosy_01']").click()
         assert page.locator(".robot.selected").count() == 1
         robot["state"]["safety"] = None
@@ -506,6 +536,8 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
+        page.locator("#roster-toggle").click()
+        page.locator("#roster-toggle").evaluate("node => node.blur()")
         page.keyboard.press("ArrowDown")
         page.wait_for_function(
             "() => document.activeElement"
@@ -550,6 +582,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         aim = page.locator("#roster article").filter(has_text="rosy_02").locator("ui-button").first
         aim.click()
@@ -596,6 +629,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         browser, page, errors = _open_console(p, api, posts=posts,
                                               init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
         page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
@@ -732,6 +766,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         browser, page, errors = _open_console(playwright, API)
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
         page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
         layout = page.evaluate("""() => ({

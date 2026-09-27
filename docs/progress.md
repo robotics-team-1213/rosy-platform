@@ -63,7 +63,7 @@ plans:
 - D-265는 역할상 허용된 기반 화면을 패널 수와 분리하고 WEB-002의 기존 항목을 새 화면에 배치한다. 구현 순서는 `2026-09-26-role-menu-rollout.md`에 있다.
 - UI/UX 평가 기준은 D-153(세 계층 G1/G2/G3, 판정 단위 표면)이다. 첫 회차(`docs/validation/uiux-surfaces-<date>/`) 전에는 표면 UI/UX 판정을 GO로 쓰지 않는다.
 - D-306는 화면별 소유권과 개선 종료 조건을 고정한다. Fleet 키보드 목표·역할 `/device` 결과·게임 상태/정지·LCD 긴 문자열·Gazebo 뷰어 탭을 SOURCE/LOCAL에서 개선했다. 전체 G2/G3와 실물·현장 증거는 남았고 sensing 진단은 D-266 해제 전 PARKED다.
-- D-309는 CORE/Fleet/게임 호스트의 판정·권한·안전 소유권과 프론트의 표시·입력 책임을 고정한다. Fleet 작업 디스패처의 안전 상태 누락은 대기열 유지로 수정했다. Fleet 팔로워 송신 경과 시간과 서버 판정은 LOCAL 검증됐다. 게임 시간 증거와 화면별 G2/G3, 물리 수용은 HOLD다.
+- D-309는 CORE/Fleet/게임 호스트의 판정·권한·안전 소유권과 프론트의 표시·입력 책임을 고정한다. Fleet 작업 디스패처의 안전 상태 누락, 팔로워 송신 경과 시간·서버 판정, 예외 우선 목록은 LOCAL 검증됐다. 새 화면 캡처, 게임 시간 증거와 화면별 G2/G3, 물리 수용은 HOLD다.
 - 남은 게이트는 D-78–D-81이 가른다. ARTIFACT는 네이티브 Pi(D-78). 옛 ROS-SIM GO는 무효(D-79). Fleet 콘솔 v1 gather는 REST(D-81).
 - D-154는 공통 Pinky 이미지와 장치별 identity/Wi-Fi/Fleet bootstrap을 분리한다. 현재 CORE `FleetAgent`와 Hub listen 경로는 미구현이므로 두 대 실기 등록·heartbeat·명령·재접속·단절 HOLD를 보기 전까지 FLEET은 HOLD다.
 - D-164는 Pinky Pro 제품 파일을 ISO가 아닌 서명된 Raspberry Pi raw disk image

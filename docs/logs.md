@@ -2886,3 +2886,9 @@
 - 변경: D-309 Task 1의 팔로워 마지막 송신 경과 시간과 per-robot `stream_evidence`를 Fleet 응답에 추가하고, 브라우저의 Hz 임계값 판정을 제거했다.
 - 검증: Fleet 서버 focused 44 passed, Fleet Playwright 21 passed (Windows LOCAL). 이전 화면 캡처는 변경 전 기록이다.
 - gate 변화: 팔로워 시간 증거의 코드 위반은 LOCAL에서 해결했다. 화면별 G2/G3 전체와 물리 수용은 HOLD다.
+
+## 2026-09-27 · uncommitted · feat(fleet): show intervention robots first
+
+- 변경: Fleet 기본 로스터를 개입 대상 중심으로 구성하고 정상 로봇은 접근 가능한 전체 보기 토글로 열었다. 선택 중인 로봇은 유지하고 지도 데이터는 필터링하지 않았다.
+- 검증: Fleet Playwright 22 passed (Windows LOCAL), 320/390px 가로 넘침 0. 기존 PNG는 변경 전 자료로 남겼다.
+- gate 변화: 코드와 브라우저 경로는 LOCAL 확인이다. 새 캡처, 전체 G2/G3와 DEVICE/FIELD는 HOLD다.

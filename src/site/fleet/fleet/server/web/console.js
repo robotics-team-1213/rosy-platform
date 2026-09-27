@@ -50,12 +50,13 @@ function markUnlocked() {
 }
 
 function operatorControls() {
-  return document.querySelectorAll("ui-button:not(#token-save), main input, main select");
+  return document.querySelectorAll("ui-button:not(#token-save):not(#roster-toggle), main input, main select");
 }
 
 const view = {
   map: null,
   robots: [],
+  showAllRobots: false,
   selected: null, // 목표 지정을 기다리는 robot_id
   cursor: null, // 지도 좌표계의 col/row, 아래쪽 행이 0
   colors: [],
@@ -109,8 +110,22 @@ function render() {
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
     ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
-  if (view.robots.length) {
-    rosterBox.replaceChildren(...view.robots.map((robot, index) => roster.card(robot, index)));
+  const attention = view.robots.filter((robot) => roster.needsAttention(robot));
+  const normalCount = view.robots.length - attention.length;
+  const toggle = el("roster-toggle");
+  toggle.hidden = normalCount === 0;
+  toggle.setAttribute("aria-expanded", String(view.showAllRobots));
+  toggle.textContent = view.showAllRobots ? "개입 대상만 보기" : `전체 로봇 보기 · 정상 ${normalCount}대`;
+  const shown = view.showAllRobots ? view.robots : view.robots.filter((robot) =>
+    roster.needsAttention(robot) || robot.robot_id === view.selected);
+  if (shown.length) {
+    rosterBox.replaceChildren(...shown.map((robot) => roster.card(robot, view.robots.indexOf(robot))));
+  } else if (view.robots.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.setAttribute("role", "status");
+    empty.textContent = `개입할 로봇 없음 · 정상 ${normalCount}대`;
+    rosterBox.replaceChildren(empty);
   } else {
     const message = view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
       : view.stateLoaded ? "등록된 로봇이 없습니다. 발견 목록에서 페어링 상태를 확인하세요."
@@ -400,6 +415,10 @@ const mapView = createMapView({ el, view, css, auth, call });
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 const roster = createRoster({ el, view, log, call, render, streamEvidence: mapView.streamEvidence });
+el("roster-toggle").addEventListener("click", () => {
+  view.showAllRobots = !view.showAllRobots;
+  render();
+});
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });

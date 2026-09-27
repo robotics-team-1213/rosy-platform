@@ -2,6 +2,14 @@
 // 주의/개입 큐를 그린다. formation/signals 팩토리와 같은 모양이다.
 
 export function createRoster({ el, view, log, call, render, streamEvidence }) {
+  function needsAttention(robot) {
+    const state = robot.state;
+    const evidence = streamEvidence(view.formation, robot.robot_id);
+    return view.stateUnavailable || !robot.online || !state || state.safety?.estop !== false
+      || state.hitl_requested === true || Boolean(state.capabilities_degraded?.length)
+      || state.navigation === "FAILED" || Boolean(robot.queued) || Boolean(robot.yielding)
+      || (evidence !== null && evidence.cls !== "");
+  }
   function navTag(state) {
     const nav = state && state.navigation;
     if (!nav) return { text: "—", cls: "" };
@@ -234,5 +242,5 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
   }
 
-  return { card, fillQueues, queuedReason };
+  return { card, fillQueues, queuedReason, needsAttention };
 }

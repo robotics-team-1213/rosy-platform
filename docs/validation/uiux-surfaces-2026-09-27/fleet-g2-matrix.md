@@ -43,3 +43,9 @@ LOCAL 캡처는 장치 단일 publisher, 실제 E-STOP, 로봇 움직임, 현장
 - 이전 27개 PNG는 변경 전 화면의 로컬 기록이다. 현재 화면의 새 캡처로 대체하지 않았으므로 시각 G2/G3 전체를 통과 처리하지 않는다.
 - 서버 릴레이의 `follower_last_tx_age_s`와 `stream_evidence`가 추가됐다. 서버가 경과 시간 1초를 판정하고 화면은 `delayed`의 나이, `disconnected`, `unavailable`을 표시한다. 송신은 팔로워 수신·물리 추종 증거가 아니다.
 - 검증: Fleet 서버 focused 44 passed, Fleet Playwright 21 passed (Windows LOCAL). 이전 표의 팔로워 시간 필드 위반은 코드와 테스트 범위에서 해결됐다. 예외 우선 목록과 현재 캡처, DEVICE/FIELD는 HOLD다.
+
+## 2026-09-27 D-309 Fleet 예외 우선 목록 보완
+
+- 기본 로스터에는 연결 단절, 안전 상태 미확인·E-STOP, 개입 요청, 성능 저하, 주행 실패, 대기·양보, 릴레이 문제 로봇만 표시한다. 선택 중인 로봇은 계속 보인다.
+- 정상 로봇은 `전체 로봇 보기`로 접근하며, 토글은 `aria-expanded`를 제공한다. 전체 지도의 로봇 표시는 유지한다. 정상 카드의 장식 색은 중립으로 바꿨다.
+- Fleet Playwright 22 passed (Windows LOCAL). 기존 27개 PNG는 변경 전 캡처이며 신규 시각 수용으로 재사용하지 않는다. DEVICE/FIELD와 Fleet 전체 G2/G3는 HOLD다.
