@@ -117,3 +117,9 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - 대상 로봇의 현재 주소를 받아 SSH host key와 전용 operator key로 접속하고 Pi 5, `rosy-pinky-ufcz`, boot ID, 실행 릴리스 `2026.09.26-017`, 소스 `b093fe45` 및 manifest SHA-256을 확인했다. 원시 요약은 `X:\DevTemp\rosy-uiux-d309-device-readback.json`에 보관한다. 주소와 인증 값은 저장소에 기록하지 않는다.
 - CORE·IO·부팅 표시 서비스는 active, navigation은 inactive였다. 인증된 CORE `/api/v1/robot/state`는 조회 시점에 `IDLE`, `estop=false`를 반환했다. 이는 명령 실행이나 물리 정지 확인이 아니다.
 - 이 릴리스는 현재 `main`보다 270커밋 이전이고 Host Agent unit·socket이 없다. `/api/v1/host/network`와 `/release`는 둘 다 `HOST_AGENT_UNAVAILABLE`을 반환했다. 신규 UI·Host 증거 계약과 LCD 카드 수정은 이 장치에 설치되지 않았으므로 DEVICE 검증으로 승격하지 않는다. Fleet 서버 주소, 새 이미지 digest, 실물 화면·움직임·사람 평가는 계속 HOLD다.
+
+## 2026-09-27 로컬 사이트 Docker 스택
+
+- 사이트 Fleet·Vision·HTTPS proxy는 `deploy/site/compose.yaml`의 Docker Compose 서비스다. 이 PC에서 `a1e4f3bc` 소스를 `rosy-site-{fleet,vision,proxy}:local-uiux`로 빌드하고 별도 `rosy-uiux-local` 프로젝트로 시작했다. Docker 기본 주소 풀이 소진돼 X: 전용 override에 충돌 없는 3개 네트워크 대역을 지정했다. 다른 프로젝트의 네트워크는 건드리지 않았다.
+- Fleet·Vision·proxy 모두 healthy, 루프백 `https://localhost:18445/healthz` 200, 인증된 `/api/fleet/session` 200(operator), `/api/fleet/state` 200을 확인했다. 실제 컨테이너의 `/console`을 1280×800으로 캡처해 페이지 오류·가로 넘침 0을 확인했다. 설정, throwaway 인증 값, 자가서명 인증서, PNG는 `X:\DevTemp\rosy-uiux-local-site\`에만 있다.
+- 등록 `demo_01`은 의도적으로 연결되지 않는 가상 대상이며 실제 로봇 자격을 사용하지 않았다. 이 PC의 서비스는 루프백에만 노출된다. 사이트의 고정 주소·신뢰 CA·로봇 페어링·천장 카메라·현장 접근성·물리 readback은 미완료다. Docker healthy를 Fleet↔로봇 DEVICE 수용으로 승격하지 않는다.

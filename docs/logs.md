@@ -2954,6 +2954,12 @@
 - 검증: Pi 5/릴리스 `2026.09.26-017`/소스 `b093fe45`, CORE·IO·부팅 표시 active, navigation inactive, CORE `IDLE`/`estop=false`; Host Agent unit·socket 없음과 두 GET의 `HOST_AGENT_UNAVAILABLE`을 확인했다. X: 일회성 JSON에 시각·digest를 기록했다.
 - gate 변화: 연결·현행 릴리스 관찰만 DEVICE 증거다. 신규 UI·Host 계약, LCD·물리 정지·Fleet·G3 수용은 HOLD다.
 
+## 2026-09-27 · uncommitted · validation(uiux): run local site Compose stack
+
+- 변경: 사이트 Fleet·Vision·HTTPS proxy를 이 PC의 Docker Compose `rosy-uiux-local` 프로젝트로 빌드·실행했다. X: 전용 설정과 가상 `demo_01`을 사용하고 루프백 포트에만 노출했다.
+- 검증: 3개 서비스 healthy, HTTPS health·인증 session/state API 200, 실제 컨테이너 Fleet 화면 1280×800 페이지 오류·가로 넘침 0. Docker 이미지·설정·캡처의 세부 근거는 D-309 실행 계획에 기록했다.
+- gate 변화: LOCAL 사이트 UI 실행만 확인했다. 로봇 페어링·카메라·고정 사이트 주소·현장 네트워크와 물리 수용은 HOLD다.
+
 ## 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
 
 - 변경: D-312에서 G4의 바퀴 들기 필수 조건을 제거하고 지면 시험의 누적 이동 10 cm 한계를 정했다.

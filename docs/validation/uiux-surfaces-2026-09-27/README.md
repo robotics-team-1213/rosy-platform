@@ -124,3 +124,5 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 인증된 `/setup`·`/device`에서 첫 상태 응답을 기다리는 6개 역할·뷰포트 셀을 전체 화면으로 캡처했다. [역할 G2 카드](roles-g2-matrix.md)에 `X:\DevTemp\rosy-uiux-d306-roles-g2\first-boot-matrix.json`과 PNG 경로, 익명 세션 비노출 시험을 기록했다. 병합 후 첫 기동 브라우저 시험 1 passed다. 이는 CORE의 첫 상태 응답 전 화면 표시만 검증하며, 실물 SAFE_STOP 또는 Host Agent 결과는 증명하지 않는다.
 
 2026-09-27 실물 로봇에 읽기 전용으로 접속해 릴리스 `2026.09.26-017`(소스 `b093fe45`)과 CORE·IO·부팅 표시 active를 확인했다. Host Agent는 설치되지 않아 네트워크·릴리스 GET이 `HOST_AGENT_UNAVAILABLE`이다. 현재 main의 UI/LCD 수정은 이 이미지에 없으며, 로봇 주소·인증 값은 카드에 남기지 않는다. 실물 화면 판독·물리 정지·Fleet 연동은 미검증이다.
+
+사이트 Fleet·Vision·HTTPS proxy를 이 PC의 Docker Compose에서 별도 `rosy-uiux-local` 프로젝트로 실행했다. 3개 서비스 healthy, 인증된 Fleet API 200, 실제 컨테이너 화면 1280×800의 페이지 오류·가로 넘침 0을 확인했다. 로컬 접근은 `https://localhost:18445/console`이며 인증 값·자가서명 CA·캡처는 `X:\DevTemp\rosy-uiux-local-site\`에 있다. 등록 로봇은 연결되지 않는 `demo_01`이므로 실제 로봇 페어링·카메라·현장 수용은 HOLD다.
