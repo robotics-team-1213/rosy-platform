@@ -184,6 +184,7 @@ def test_core_mode_with_odometry_is_a_bench_and_keeps_its_capabilities(core_clie
     """gz_multi runs CORE in `core` mode against simulated odometry."""
     tc, svc = core_client()
     svc.state.set_pose(0.0, 0.0, 0.0)
+    svc.state.set_velocity(0.0, 0.0)  # odometry callback writes both
     caps = tc.get("/api/v1/system/capabilities", headers=VIEWER).json()
     assert caps["teleop"] is True
     assert caps["swarm"] == {"follow": True, "lead": True}

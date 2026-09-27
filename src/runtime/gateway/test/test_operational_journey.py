@@ -21,6 +21,7 @@ class NavigationPort:
 
 def test_boot_teleop_disconnect_navigation_estop_and_restart(core_client):
     client, services = core_client()
+    services.state.set_velocity(0.0, 0.0)  # attached base odometry
     port = NavigationPort()
     services.nav.executor = port
     assert client.get("/api/v1/system/info", headers=VIEWER).status_code == 200

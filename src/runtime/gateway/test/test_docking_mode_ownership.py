@@ -235,6 +235,7 @@ def navigating_robot(core_client):
     client, services = core_client(config_overrides=sim_overrides())
     services.docking.executor = DrivingExecutor(services)
     services.state.set_pose(-1.2696, 0.0, math.pi / 2)
+    services.state.set_velocity(0.0, 0.0)  # odometry required for capability
     nav_exec = NavExecutor()
     services.nav.executor = nav_exec
     services.modes.transition(Mode.NAVIGATION)

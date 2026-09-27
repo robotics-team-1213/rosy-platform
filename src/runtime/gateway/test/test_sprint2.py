@@ -155,6 +155,7 @@ class TestNewApi:
 
     def test_slam_flow(self, client):
         tc, svc = client
+        svc.state.set_velocity(0.0, 0.0)  # attached base odometry
         assert tc.post("/api/v1/slam/start", headers=OPERATOR).json()["mapping"] is True
         goal = tc.post("/api/v1/navigation/goal", json={"x": 1, "y": 1}, headers=OPERATOR)
         assert goal.status_code == 409 and goal.json()["error"]["code"] == "MAPPING_ACTIVE"
