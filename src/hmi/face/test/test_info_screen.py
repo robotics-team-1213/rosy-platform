@@ -116,6 +116,30 @@ class TestRender:
     def test_estop_payload_renders(self):
         assert render(self._payload(estop=True)).size == DEFAULT_SIZE
 
+    def test_estop_owns_the_primary_glance_area_without_hiding_battery(self):
+        stopped = render(self._payload(estop=True))
+        upper_alarm = stopped.crop((12, 28, 220, 80))
+        assert sum(count for count, color in upper_alarm.getcolors(maxcolors=1 << 16)
+                   if color == _CRIT) > 2000
+        assert _FG in {color for _count, color in upper_alarm.getcolors(maxcolors=1 << 16)}
+
+        # Once the stop message takes the large type, the measured battery
+        # still has a dedicated line above the unchanged gauge.
+        lower_percent = render(self._payload(estop=True, battery_percent=37.0))
+        battery_line = (12, 78, 130, 102)
+        assert ImageChops.difference(stopped.crop(battery_line),
+                                     lower_percent.crop(battery_line)).getbbox() is not None
+
+    def test_estop_battery_line_distinguishes_measured_low_from_missing(self):
+        measured_low = render(self._payload(estop=True, battery_percent=19.0))
+        missing = render(self._payload(estop=True, battery_percent=None))
+        measured_colors = {color for _count, color in measured_low.crop(
+            (12, 76, 190, 103)).getcolors(maxcolors=1 << 16)}
+        missing_colors = {color for _count, color in missing.crop(
+            (12, 76, 190, 103)).getcolors(maxcolors=1 << 16)}
+        assert _CRIT in measured_colors and _FG in measured_colors
+        assert _CRIT not in missing_colors
+
     def test_row_labels_are_the_pinned_machine_acronyms(self):
         # D-221(F-07 처분) — 행 라벨은 기계 약어로 고정이다. 행인의 채널은
         # 글자가 아니라 형태·색·만료이고(§7.4), 라벨만 번역하면 값(enum)과

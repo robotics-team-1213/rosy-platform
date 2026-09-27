@@ -123,14 +123,26 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     robot_font, robot_id = _fit(draw, robot_id, 18, width - 32)
     draw.text((16, 10), robot_id, font=robot_font, fill=_MUTED)
 
-    if has_percent:
-        if color == _CRIT:
-            _draw_alarm(draw, (16, 36), f"{percent:.0f}%", _font(56))
+    if payload.get("estop"):
+        # A stopped robot must be recognized before its charge level. Keep
+        # the measured battery on a separate line above the existing gauge.
+        _draw_alarm(draw, (16, 34), "E-STOP", _font(36))
+        battery_text = f"BATTERY {percent:.0f}%" if has_percent else "BATTERY --"
+        if has_percent and color == _CRIT:
+            _draw_alarm(draw, (16, 80), battery_text, _font(18))
         else:
-            draw.text((16, 36), f"{percent:.0f}%", font=_font(56), fill=color)
+            draw.text((16, 80), battery_text, font=_font(18), fill=color)
+        voltage_y = 95
     else:
-        draw.text((16, 36), "--", font=_font(56), fill=_MUTED)
-    draw.text((width - 16, 60), "--" if voltage is None else f"{float(voltage):.2f} V",
+        if has_percent:
+            if color == _CRIT:
+                _draw_alarm(draw, (16, 36), f"{percent:.0f}%", _font(56))
+            else:
+                draw.text((16, 36), f"{percent:.0f}%", font=_font(56), fill=color)
+        else:
+            draw.text((16, 36), "--", font=_font(56), fill=_MUTED)
+        voltage_y = 60
+    draw.text((width - 16, voltage_y), "--" if voltage is None else f"{float(voltage):.2f} V",
               font=_font(20), fill=_MUTED, anchor="rs")
 
     # 배터리 게이지

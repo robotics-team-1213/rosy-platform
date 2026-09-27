@@ -139,3 +139,10 @@
 - 증거: 실제 `display_info_callback`→`power_mode_callback`→`timer_callback`를 ROS/LCD stub으로 연결한 시험은 수정 전 idle dim·standby sleep으로 적색, 수정 후 face 160 passed/4 skipped와 공유 색 계약 19 passed. `X:\DevTemp\rosy-uiux-lcd-card-mode\`에 카드 유지/만료 후 의도 화면 LOCAL PIL 캡처를 생성했다.
 - gate 변화: SOURCE/LOCAL 회귀 근거 추가. 실제 Pi 백라이트, 화면 판독, 만료 전환은 DEVICE/BENCH HOLD.
 - 결정: D-309, D-153.
+
+## 2026-09-27 · uncommitted · fix(face): E-STOP 정보 카드의 우선순위와 배터리 줄
+
+- 변경: 320×240 웨이크 카드에서 E-STOP일 때 큰 위험색 채움 경보를 상단 주시 영역에 놓고, 측정 배터리·전압을 게이지 위의 별도 줄에 보존한다. 정상 카드와 기존 D-280/D-202 상태색은 유지한다.
+- 증거: 상단 경보와 저전압/결측 배터리 줄의 적색→녹색 회귀; ROS-free 관련 시험 162 passed. `X:\DevTemp\rosy-lcd-visual-g3\`의 before/after 정상·E-STOP·E-STOP 저전압 PNG를 320×240에서 대조했고 정상 카드는 픽셀 동일했다.
+- gate 변화: SOURCE/LOCAL 검증 근거 추가. 실제 Pi LCD의 거리·각도·조명 판독은 DEVICE/BENCH HOLD.
+- 결정: D-280, D-306, D-309.
