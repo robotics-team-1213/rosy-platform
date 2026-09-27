@@ -128,3 +128,14 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 사이트 Fleet·Vision·HTTPS proxy를 이 PC의 Docker Compose에서 별도 `rosy-uiux-local` 프로젝트로 실행했다. 3개 서비스 healthy, 인증된 Fleet API 200, 실제 컨테이너 화면 1280×800의 페이지 오류·가로 넘침 0을 확인했다. 로컬 접근은 `https://localhost:18445/console`이며 인증 값·자가서명 CA·캡처는 `X:\DevTemp\rosy-uiux-local-site\`에 있다. 등록 로봇은 연결되지 않는 `demo_01`이므로 실제 로봇 페어링·카메라·현장 수용은 HOLD다.
 
 역할 `/device`의 [G2 카드](roles-g2-matrix.md)는 Host Agent 원본 조회 시각을 CORE가 판정하는 계약과 60셀 매트릭스를 반영한다. 첫 기동 6셀은 별도 캡처다. 현재 실물 로봇에는 Host Agent가 설치되지 않았으므로 계약 구현과 LOCAL 화면 검증만 완료했고 DEVICE는 HOLD다.
+
+## 후속 상태 표시 회귀 — LOCAL
+
+| 표면 | 이번 화면 회귀 | 확인 범위 | 남은 수용 |
+|---|---|---|---|
+| Fleet | 대형/발견 조회가 끊기면 과거 릴레이·지도 슬롯·장치 주소를 지우고, 회복하면 새 서버 결과를 표시 | Chromium 실패→복구 2건, 서버 관련 시험 50+40건 | 실제 페어링·목표·정지 readback |
+| `/setup`·`/device` | 도크 기존 유형 재사용 시 숨은 새 유형 입력을 제외; Host 403/503 뒤 과거 SSID·버전을 지우고 조작 잠금 | 역할/Host Chromium 2+4건, 관련 계약 24+62건 | 실물 Host Agent 결과, 권한별 전체 G2, G3 사람 평가 |
+| 게임 | 지연·끊김 때 필드 위치·점수·경기 단계를 마지막 수신값으로 표기하고 fresh 회복 시 해제 | 게임 호스트 111건, 최신 전체 Chromium 14건 | 실제 카메라·양쪽 로봇 정지 |
+| LCD | 비정상 배터리값은 `--`; 카드 중 standby/idle이 와도 카드 만료까지 백라이트 유지 | face 160 passed/4 skipped, 색 19건 | Pi LCD 폰트·거리·각도·조도·실물 만료 |
+
+이 표는 후속 커밋의 LOCAL 회귀를 요약한다. 이전 27/60/13셀 캡처를 새 HEAD에서 전부 다시 찍은 결과가 아니므로 D-153 G2/G3 GO로 올리지 않는다. 로컬 Fleet 이미지를 이번 소스에서 재빌드해 Fleet·Vision·proxy healthy, 인증된 API 200, `console.js` 해시 일치, 1280×800 화면 페이지 오류·가로 넘침 0을 확인했다. `X:\DevTemp\rosy-uiux-local-site\fleet-console.png`는 일회성 캡처이며 실제 로봇/현장 결과가 아니다.

@@ -130,3 +130,12 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - 관련 시험은 담당 회차에서 Host 서버·프로토콜 276 passed/13 skipped, 문서 82 passed, Chromium Host 집중 3 passed 및 역할 60셀 오류·가로 넘침 0이었다. 로컬 사이트 Compose 3서비스는 healthy이며 인증 GET 두 경로와 화면 캡처를 확인했다.
 - 다음 DEVICE 게이트는 서명된 새 로봇 이미지의 버전·digest, Host Agent 설치, 실제 네트워크/릴리스 결과 readback, LCD 거리·각도·조도와 카드 만료, Fleet 고정 주소·TLS·페어링, 카메라와 양쪽 로봇 정지다. G3 사람 평가는 그 후 별도 기록한다. 현재 장치 릴리스와 로컬 Docker demo는 이 게이트를 대신하지 않는다.
 - 최종 병합 `fc28c6f3`에서 Fleet 이미지를 다시 빌드해 `sha256:294d6cf79f87ad3fefec2027ca6ca51b7f4891db8faf2b829a4bfeb4b1900232`로 교체했다. Compose 재기동 후 Fleet·Vision·proxy healthy와 인증된 health/session/state 200을 재확인했다. Vision·proxy 이미지는 앞선 사이트 소스 빌드를 유지했다.
+
+## 2026-09-27 후속 화면 상태 정직성 회귀 (LOCAL)
+
+- Fleet: 대형 GET 실패 시 과거 RUNNING·릴레이·지도 슬롯을 현재 증거로 남기지 않고 회복 시 서버 상태를 다시 그린다(`39126920`). 발견 목록 GET 실패 또는 인증 만료 시에도 마지막 장치 주소를 지우고 재접속 뒤 새 목록을 받는다(`af5c8f3e`). 각각 실제 Chromium 실패→회복 시험 2 passed/1 passed, Fleet 서버 관련 시험 50 passed/40 passed다.
+- 역할 절차: `/setup`의 기존 도크 유형 선택은 새 유형의 검출기·태그 입력을 실제로 숨기고 숨은 값으로 등록을 막지 않는다(`95a8ab5a`). `/device` Host 조회가 403/503이면 과거 SSID·릴리스 값을 지우고 조작을 잠그며 복구 시 새 readback을 표시한다(`09c9f30c`). 역할·Host 집중 브라우저 2 passed/4 passed, 관련 계약 24 passed/62 passed다.
+- 게임: 필드 좌표·점수와 경기 단계가 지연/끊김 때 마지막 수신 기록임을 명시하고 fresh 회복 시 제거한다(`6b72567d`, `54953297`). 게임 호스트 111 passed, 최신 단계 회귀의 전체 브라우저 14 passed다.
+- LCD: 비정상 배터리 표본을 `--`로 표현하고, 정보 카드 중 idle/standby 입력은 만료 때까지 백라이트에 적용하지 않는다(`53b39b49`, `abac1c67`). face 시험 160 passed/4 skipped, 공통 색 시험 19 passed다.
+- 현재 `main`의 Fleet를 `rosy-site-fleet:local-uiux`로 다시 빌드했다(이미지 `sha256:1edad949e64b0f59fe995cf32fc59bad1969229464b6d7c72a8ead617c58eff4`). `rosy-uiux-local` Fleet만 재생성한 뒤 Fleet·Vision·proxy healthy, 인증된 health/session/state 200, 컨테이너 `console.js`와 현재 소스의 SHA-256 일치, 1280×800 실제 컨테이너 화면의 페이지 오류·가로 넘침 0을 확인했다. 가짜 `demo_01`을 쓰는 로컬 Docker 증거다.
+- 이 회귀는 가짜 API·호스트/PIL과 로컬 Docker의 LOCAL 근거다. 저장된 G2 전체 셀과 G3 사람 평가, 실물 Pi/LCD·Host Agent·Fleet 페어링·물리 정지는 별도 게이트다. D-153 화면별 GO와 DEVICE/FIELD는 HOLD를 유지한다.
