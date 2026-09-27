@@ -49,6 +49,7 @@
 
 - **LCD owner:** `src/hmi/face`. 코드 렌더 시험은 `python -X utf8 -m pytest src/hmi/face/test/test_info_screen.py -q`. 320×240 이미지의 코드·경고·긴 문자열·빈 네트워크 상태를 확인하고, 실물 사진에서 거리·각도·조명 판독성을 기록한다. 실물 증거 없이 DEVICE/BENCH GO를 쓰지 않는다.
 - **진단 owner:** `src/runtime/sensing`. 먼저 D-266의 sensing 소유 판단, 인라인 스크립트의 D-218 계약 편입, G2 감지·관측·조작 셀을 해결한다. 그 전에는 `dashboard.html`을 대규모 컴포넌트화하거나 운영 화면으로 배포하지 않는다. PARKED를 유지하고 터치 취소·키보드·지도 입력 문제는 해제 작업의 명시적 목록으로 둔다.
+- **Gazebo viewer owner:** `src/sim/gz_sim`. `scripts/lane_live_view.html`은 D-257의 1대·ROS 관측 전용 디버그 화면이다. `src/sim/gz_sim/test/test_lane_live_view_v2.py`와 데모에서 카메라·인지·진행·끊김을 확인하되, Fleet 또는 실물 운용 화면으로 간주하지 않는다. `src/hmi/dashboard/styleguide.html`·`src/hmi/web/template.html`은 운영 화면이 아닌 컴포넌트 계약 자료로 유지한다.
 
 ## Task 5: 표면별 회차와 통합
 

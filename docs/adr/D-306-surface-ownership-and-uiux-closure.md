@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-09-27). 이 결정은 개선의 소유권과 판정 절차를 고정한다. 개별 화면의 UI/UX GO 또는 실물 수용을 선언하지 않는다.
 
-잇는 결정: [D-153](D-153-ui-ux.md) · [D-218](D-218-web-dialogs-name-the-action.md) · [D-224](D-224-surface-keyboard-vocabulary.md) · [D-253](D-253-game-board-and-diagnostic-freeze.md) · [D-258](D-258-design-review-loop.md) · [D-265](D-265-base-surfaces-and-stop-access.md) · [D-280](D-280-calm-intelligence-product-design-philosophy.md) · [D-292](D-292-design-tokens-and-component-layout-contract.md).
+잇는 결정: [D-153](D-153-ui-ux.md) · [D-218](D-218-web-dialogs-name-the-action.md) · [D-224](D-224-surface-keyboard-vocabulary.md) · [D-253](D-253-game-board-and-diagnostic-freeze.md) · [D-257](D-257-site-lane-map-and-overhead-sightings.md) · [D-258](D-258-design-review-loop.md) · [D-265](D-265-base-surfaces-and-stop-access.md) · [D-280](D-280-calm-intelligence-product-design-philosophy.md) · [D-292](D-292-design-tokens-and-component-layout-contract.md).
 
 **Context:**
 
@@ -10,12 +10,13 @@
 
 **Decision:**
 
-1. 화면마다 소유자와 질문을 고정한다. CORE 역할 화면은 `src/hmi/dashboard`가 운용·작업 준비·설치/정비를, Fleet은 `src/site/fleet/fleet/server/web`이 사이트 예외·로봇 목록·목표를, 게임은 `src/site/games/games/web`이 경기 가시성과 정지를, LCD는 `src/hmi/face`가 부팅·접속·경고를 소유한다. `src/runtime/sensing/web/dashboard.html`은 진단 전용 PARKED로 유지한다. 공통 조작·상태 표현만 `src/hmi/web`이 소유한다.
+1. 화면마다 소유자와 질문을 고정한다. CORE 역할 화면은 `src/hmi/dashboard`가 운용·작업 준비·설치/정비를, Fleet은 `src/site/fleet/fleet/server/web`이 사이트 예외·로봇 목록·목표를, 게임은 `src/site/games/games/web`이 경기 가시성과 정지를, LCD는 `src/hmi/face`가 부팅·접속·경고를 소유한다. `src/sim/gz_sim/scripts/lane_live_view.html`은 D-257의 Gazebo 전용 읽기 화면으로 `src/sim/gz_sim`이 소유하고, `src/runtime/sensing/web/dashboard.html`은 진단 전용 PARKED로 유지한다. `src/hmi/dashboard/styleguide.html`과 `src/hmi/web/template.html`은 컴포넌트 참고 화면이며 운영 표면이 아니다. 공통 조작·상태 표현만 `src/hmi/web`이 소유한다.
 2. 공유 부품은 둘 이상의 실제 화면에서 같은 의미와 동작을 반복할 때만 추출한다. 버튼·상태·폼·읽기 영역의 색·크기·포커스는 기존 토큰과 공통 컴포넌트를 쓴다. 지도 좌표계, 경기장, LCD 픽셀 배치, 화면별 정보 순서와 그리드는 해당 소유자에게 남긴다. 전체 화면을 하나의 카드 레이아웃이나 새 프레임워크로 이관하지 않는다.
 3. 세계를 바꾸는 조작은 대상·좌표·결과를 전송 전에 읽을 수 있어야 하고, 실패·대기·반영 상태를 구분한다. Fleet 지도 목표 지정에는 마우스 외에 키보드 좌표 선택과 명시적 확인 경로를 제공한다. D-218의 `window.confirm` 인벤토리와 거부 시 API 0회 시험을 함께 갱신한다. 비상정지·해제와 게임 정지의 기존 확인 예외는 이 결정으로 변경하지 않는다.
 4. 절차 화면은 현재 상태, 다음 조치, 적용 결과의 순서를 드러낸다. 로봇이 제공하지 않는 기능은 비활성 사유를 함께 표시한다. 모바일에서는 긴 절차 스크롤을 허용하되 긴급 정지와 현재 단계의 행동을 찾을 수 있어야 한다. 운용 데스크톱의 D-283 고정 3영역과 Fleet의 예외 중심 문법은 유지한다.
 5. 각 표면은 D-153의 G1/G2/G3으로 별도 판정한다. 역할 화면은 운영자·관리자와 1366×768/390×844, Fleet은 1920×1080/390×844/320×844, 게임은 1280×800, LCD는 실제 320×240 장치, 진단은 D-266 승인 후 선언한 뷰포트를 기본으로 한다. 증거 `fresh/delayed/disconnected/unavailable`, 빈 상태, 최초 기동, 거부·오류, SAFE_STOP, 확인 취소/승인의 해당 셀을 기록한다. 호스트 Chromium은 LOCAL, Gazebo는 SIM, 실물 화면·LCD 사진은 DEVICE/BENCH, 현장 관측은 FIELD로 분리한다.
 6. 세션 간 인계는 화면 소유 경로, 변경 파일, 기준 commit, 검증 명령, 남은 셀을 적은 문서와 worktree로 한다. 서로 다른 세션이 같은 화면 파일을 동시에 고치지 않는다. Orca 세션 통신이 가능한 환경에서는 해당 세션에 이 ADR과 실행 계획을 전달하고 맡은 파일을 확인한다. 통신이 불가능하면 전달 완료를 주장하지 않고 독립 worktree에서 충돌 없는 범위만 진행한다.
+7. Gazebo 라이브 뷰어는 관측 전용 디버그 도구로 시험한다. 시뮬레이션의 카메라·인지·진행 상태를 읽을 수 있는지와 오류·단절 표시를 `src/sim/gz_sim` 범위에서 검증하고, 그 결과를 실물 로봇의 운용 UI/UX 수용으로 승격하지 않는다.
 
 **Alternatives:** 모든 화면을 공통 카드/토큰으로 재구성하면 화면별 질문과 지도·LCD 제약을 잃는다. 진단을 즉시 운영 화면으로 승격하면 D-253·D-266의 확인·캡처 계약을 건너뛴다. LOCAL 스크린샷만으로 전체 UI/UX GO를 선언하면 D-153의 상태 행렬과 실물 증거 경계를 깨뜨린다.
 
