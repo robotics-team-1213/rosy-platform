@@ -2,10 +2,11 @@ import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
 
 const TELEOP_INTERVAL_MS = 100;
+const MAX_HOLD_MS = 3_000;
 const COMMANDS = [
-  {label: "전진", linear: 0.05, angular: 0},
+  {label: "전진", linear: 0.03, angular: 0},
   {label: "좌회전", linear: 0, angular: 0.35},
-  {label: "후진", linear: -0.05, angular: 0},
+  {label: "후진", linear: -0.03, angular: 0},
   {label: "우회전", linear: 0, angular: -0.35},
 ];
 
@@ -14,7 +15,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "수동 운전");
   const status = el("ui-status", "", "운전 자격을 확인하는 중입니다.");
-  const confirmLabel = el("label", "ui-field-label surface-confirmation", "주변과 바퀴가 안전한지 확인했습니다.");
+  const confirmLabel = el("label", "ui-field-label surface-confirmation", "실행 모드를 확인하는 중입니다.");
   const confirmed = el("input"); confirmed.type = "checkbox"; confirmLabel.prepend(confirmed);
   const controls = el("div", "surface-teleop-controls"); controls.setAttribute("aria-label", "누르는 동안만 움직이는 저속 운전");
   const buttons = COMMANDS.map((command) => {
@@ -26,23 +27,35 @@ export function mount(root, ctx) {
   let state = null;
   let capabilities = null;
   let safety = null;
+  let commissioning = null;
   let pending = null;
   let activeButton = null;
+  let holdTimeout = null;
   function eligible() {
-    if (ctx.role === "viewer" || capabilities?.teleop !== true || safety?.estop === true || state?.mode !== "MANUAL" || !confirmed.checked) return false;
+    if (ctx.role === "viewer" || capabilities?.teleop !== true || safety?.estop !== false || state?.mode !== "MANUAL" || !confirmed.checked) return false;
+    if (!["motor", "hardware"].includes(commissioning?.runtime_mode)) return false;
     const evidence = new HeadlessState(state);
     return evidence.isFresh("pose") && evidence.isFresh("velocity");
   }
   function describeHold() {
     if (ctx.role === "viewer") return "Operator 권한이 필요합니다.";
     if (capabilities && capabilities.teleop !== true) return `현재 runtime/profile에서 teleop을 사용할 수 없습니다${capabilities.withheld?.reason ? ` · ${capabilities.withheld.reason}` : ""}.`;
+    if (!commissioning) return "장치 실행 모드를 확인할 수 없어 운전을 막았습니다.";
+    if (!["motor", "hardware"].includes(commissioning.runtime_mode)) return commissioning.motion_reason || "현재 실행 모드에서 운전할 수 없습니다.";
     if (safety?.estop === true) return "비상정지가 활성화되어 있습니다.";
+    if (!safety) return "비상정지 상태를 확인하는 중입니다.";
     if (!state || !new HeadlessState(state).isFresh("pose") || !new HeadlessState(state).isFresh("velocity")) return "pose와 velocity의 최신 상태를 기다립니다.";
     if (state.mode !== "MANUAL") return "저속 운전 전에 MANUAL 모드로 전환하세요.";
-    if (!confirmed.checked) return "주변 안전 확인이 필요합니다.";
-    return "버튼을 누르는 동안만 100ms 간격으로 저속 명령을 보냅니다.";
+    if (!confirmed.checked) return commissioning.runtime_mode === "motor" ? "바퀴를 띄운 점검인지 확인하세요." : "통제 구역과 현장 담당자를 확인하세요.";
+    return "전진·후진 최대 0.03m/s · 한 번에 최대 3초. 놓으면 정지합니다.";
   }
   function update() {
+    const hardware = commissioning?.runtime_mode === "hardware";
+    confirmLabel.lastChild.textContent = hardware
+      ? "통제 구역과 현장 담당자, 물리 전원 차단 준비를 확인했습니다."
+      : commissioning?.runtime_mode === "motor"
+        ? "바퀴를 띄우고 주변과 비상정지 수단을 확인했습니다. 바닥 주행은 금지됩니다."
+        : "장치 실행 모드를 확인하는 중입니다.";
     const can = eligible();
     buttons.forEach((button) => { button.disabled = !can && button !== activeButton; });
     if (!can && ticker.active) stop("운전 조건이 바뀌어 정지했습니다.");
@@ -72,6 +85,7 @@ export function mount(root, ctx) {
   }
   const ticker = createHoldTicker({intervalMs: TELEOP_INTERVAL_MS, onTick: tick, onZero: terminalZero});
   function stop(message = "정지 명령을 보냈습니다.", immediate = false) {
+    if (holdTimeout !== null) { clearTimeout(holdTimeout); holdTimeout = null; }
     ticker.stop(immediate);
     activeButton?.classList.remove("active"); activeButton = null;
     buttons.forEach((button) => { button.disabled = !eligible(); });
@@ -87,6 +101,7 @@ export function mount(root, ctx) {
     activeButton = button; button.classList.add("active");
     status.textContent = `${button.getAttribute("aria-label").split(".")[0]} 명령 전송 중 · 놓으면 정지합니다.`;
     ticker.start();
+    holdTimeout = setTimeout(() => stop("3초 한도에 도달해 정지했습니다.", true), MAX_HOLD_MS);
   }
 
   const listeners = new AbortController();
@@ -113,6 +128,12 @@ export function mount(root, ctx) {
   const stopState = ctx.store.poll("/api/v1/robot/state", 500, (data) => { state = data; update(); }, (error) => { state = null; status.textContent = `로봇 상태를 읽지 못해 운전을 막았습니다: ${error.message}`; stop("상태 연결이 끊겨 정지했습니다.", true); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; update(); }, (error) => { capabilities = null; status.textContent = `운전 capability 확인 실패: ${error.message}`; update(); });
   const stopSafety = ctx.store.poll("/api/v1/safety/state", 500, (data) => { safety = data; update(); }, (error) => { safety = null; status.textContent = `안전 상태 연결 실패: ${error.message}`; stop("안전 상태를 확인할 수 없어 정지했습니다.", true); });
+  const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (data) => {
+    const previousMode = commissioning?.runtime_mode;
+    commissioning = data;
+    if (previousMode !== data.runtime_mode) confirmed.checked = false;
+    update();
+  }, () => { commissioning = null; confirmed.checked = false; stop("장치 실행 모드를 확인할 수 없어 정지했습니다.", true); });
   update();
 
   return {
@@ -121,6 +142,6 @@ export function mount(root, ctx) {
       else await terminalZero(true);
       return true;
     },
-    unmount() { stop("운전 패널을 닫아 정지했습니다.", true); listeners.abort(); stopState(); stopCapabilities(); stopSafety(); },
+    unmount() { stop("운전 패널을 닫아 정지했습니다.", true); listeners.abort(); stopState(); stopCapabilities(); stopSafety(); stopCommissioning(); },
   };
 }

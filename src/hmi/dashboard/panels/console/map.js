@@ -40,14 +40,18 @@ export function mount(root, ctx) {
 
   let state = null;
   let capabilities = null;
+  let commissioning = null;
   const syncMapActions = () => {
     const operator = ctx.role === "operator" || ctx.role === "administrator";
     const supported = capabilities?.navigation?.goal_navigation === true;
-    const enabled = operator && supported;
+    const hardware = commissioning?.runtime_mode === "hardware";
+    const enabled = operator && supported && hardware;
     clickReason.textContent = enabled
       ? "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다."
       : operator
-        ? "이 로봇 프로필은 위치·주행 목표 설정용 Navigation 기능을 제공하지 않습니다."
+        ? !hardware
+          ? "바닥 주행과 지도 목표 조작은 승인된 hardware 모드에서만 가능합니다. 현재 지도를 볼 수는 있습니다."
+          : "이 로봇 프로필은 위치·주행 목표 설정용 Navigation 기능을 제공하지 않습니다."
         : "위치·주행 목표 설정에는 운용자 권한이 필요합니다.";
     for (const button of clicks.querySelectorAll("[data-map-click]")) {
       button.disabled = !enabled;
@@ -69,7 +73,7 @@ export function mount(root, ctx) {
     },
     getPose: () => state?.pose,
     getNavigation: () => state?.navigation,
-    canGoal: () => ctx.role !== "viewer" && capabilities?.navigation?.goal_navigation === true,
+    canGoal: () => ctx.role !== "viewer" && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware",
     setAction: (text) => { action.textContent = text; },
     onTargetReadout: (target) => {
       targetValue.textContent = target.unavailable
@@ -81,6 +85,7 @@ export function mount(root, ctx) {
   });
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (payload) => { state = payload; map.setPose(); }, (error) => { state = null; mapStatus.setAttribute("state", "error"); mapStatus.textContent = `로봇 상태를 읽지 못했습니다: ${error.message}`; map.setPose(); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 10_000, (payload) => { capabilities = payload; syncMapActions(); map.setPose(); }, (error) => { capabilities = null; syncMapActions(); mapStatus.setAttribute("state", "error"); mapStatus.textContent = `Navigation 지원을 확인하지 못해 지도 조작을 막았습니다: ${error.message}`; map.setPose(); });
+  const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (payload) => { commissioning = payload; syncMapActions(); }, () => { commissioning = null; syncMapActions(); });
   let loading = false;
   const refresh = async () => {
     if (loading) return;
@@ -91,5 +96,5 @@ export function mount(root, ctx) {
   };
   refresh();
   const timer = setInterval(refresh, 10_000);
-  return () => { clearInterval(timer); stopState(); stopCapabilities(); map.destroy(); };
+  return () => { clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
 }

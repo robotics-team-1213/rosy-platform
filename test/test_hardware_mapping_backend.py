@@ -1,6 +1,7 @@
 """Fail-closed contracts for the physical hardware mapping backend (D-144)."""
 
 from pathlib import Path
+from xml.etree import ElementTree
 
 import yaml
 
@@ -72,6 +73,21 @@ def test_hardware_launch_has_mutually_exclusive_localization_and_mapping_graphs(
     assert "map_building.launch.xml" in mapping
     assert "navigation_launch.xml" in mapping
     assert "localization_launch.xml" not in mapping
+
+
+def test_mapping_scopes_absolute_map_topics_to_robot_namespace():
+    mapping = ElementTree.parse(NAV_LAUNCH / "mapping_bringup_launch.xml")
+    assert any(
+        {
+            (remap.attrib["from"], remap.attrib["to"])
+            for remap in group.findall("set_remap")
+        } >= {("/map", "map"), ("/map_metadata", "map_metadata")}
+        and any(
+            "map_building.launch.xml" in include.attrib.get("file", "")
+            for include in group.findall("include")
+        )
+        for group in mapping.findall(".//group")
+    )
 
 
 def test_mapper_params_are_rewritten_for_the_robot_namespace(tmp_path):

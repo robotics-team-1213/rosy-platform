@@ -42,9 +42,15 @@
             <arg name="container_name" value="$(var namespace)/$(var container_name)"/>
             <arg name="lifecycle_nodes" value="$(var lifecycle_nodes_nav)"/>
         </include>
-        <include file="$(find-pkg-share navigation)/launch/map_building.launch.xml">
-            <arg name="slam_params_file" value="$(var slam_params_file)"/>
-            <arg name="use_sim_time" value="$(var use_sim_time)"/>
-        </include>
+        <!-- slam_toolbox publishes absolute /map by default. Remap it into the
+             robot namespace so CORE and the web map subscribe to the same grid. -->
+        <group>
+            <set_remap from="/map" to="map"/>
+            <set_remap from="/map_metadata" to="map_metadata"/>
+            <include file="$(find-pkg-share navigation)/launch/map_building.launch.xml">
+                <arg name="slam_params_file" value="$(var slam_params_file)"/>
+                <arg name="use_sim_time" value="$(var use_sim_time)"/>
+            </include>
+        </group>
     </group>
 </launch>

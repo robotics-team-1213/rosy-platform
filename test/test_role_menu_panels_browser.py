@@ -234,12 +234,51 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
         assert page.locator("canvas").get_attribute("aria-label")
         assert page.evaluate("window.__calls.filter(call => call.method === 'POST')") == []
         _unmount_panel(page)
-        assert set(page.evaluate("window.__stopped")) == {"/api/v1/robot/state", "/api/v1/system/capabilities"}
+        assert set(page.evaluate("window.__stopped")) == {
+            "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning",
+        }
         assert errors == []
         browser.close()
 
 
-def test_console_teleop_sends_repeated_hold_and_terminal_zero():
+def test_console_map_actions_require_hardware_runtime():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844)
+        _route_panel_test(page)
+        module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+        map_source = (WEB / "map.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/map.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=map_source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        disabled = page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/map.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, _interval, onData) { callbacks[path] = onData; return () => {}; }};
+          const api = async (path) => path === '/api/v1/map'
+            ? {map_id:'map-a', width:2, height:2, resolution:1, origin:{x:0,y:0}, data:[0,0,0,0]}
+            : {};
+          window.__unmount = mount(root, {role:'operator', api, store});
+          callbacks['/api/v1/system/capabilities']({navigation:{goal_navigation:true}});
+          callbacks['/api/v1/host/commissioning']({runtime_mode:'motor'});
+          const button = root.querySelector('[data-map-click="goal"]');
+          const motor = button.disabled;
+          callbacks['/api/v1/host/commissioning']({runtime_mode:'hardware'});
+          return [motor, button.disabled];
+        }""")
+        assert disabled == [True, False]
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("hold_ms,release", [(240, True), (3_150, False)])
+def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -270,18 +309,23 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero():
           callbacks['/api/v1/robot/state'].onData({mode:'MANUAL', pose:{x:1,y:1}, velocity:{linear:0,angular:0}, evidence:{pose:{evidence:'fresh'},velocity:{evidence:'fresh'}}});
           callbacks['/api/v1/system/capabilities'].onData({teleop:true});
           callbacks['/api/v1/safety/state'].onData({estop:false});
+          callbacks['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
           const check = root.querySelector('input[type=checkbox]'); check.checked = true; check.dispatchEvent(new Event('change'));
           window.__button = root.querySelector('.surface-teleop-controls ui-button');
           window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1}));
         }""")
-        page.wait_for_timeout(240)
-        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1}))")
+        page.wait_for_timeout(hold_ms)
+        if release:
+            page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1}))")
         page.wait_for_timeout(30)
         calls = page.evaluate("window.__calls")
         assert len(calls) >= 3
         assert all(call["path"] == "/api/v1/teleop" for call in calls)
         assert any(call["body"]["linear"] > 0 for call in calls)
+        assert all(abs(call["body"]["linear"]) <= 0.03 for call in calls)
         assert calls[-1]["body"] == {"linear": 0, "angular": 0}
+        if not release:
+            assert "3초" in page.locator("ui-status").inner_text()
         _unmount_panel(page)
         assert errors == []
         browser.close()
