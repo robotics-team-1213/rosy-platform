@@ -16,12 +16,14 @@
 | D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
 | D-294 | Shared typography and interaction tokens use a closed scale |
 | D-300 | Surface typography and focus feedback use shared tokens |
+| D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 
 ## 계획·결과 문서
 
 - [2026-09-26-d283-console-action-groups.md](../../../docs/plans/2026-09-26-d283-console-action-groups.md)
 - [2026-09-26-rosy-tokenized-design-system.md](../../../docs/plans/2026-09-26-rosy-tokenized-design-system.md)
 - [2026-09-26-shared-typography-interaction-tokens.md](../../../docs/plans/2026-09-26-shared-typography-interaction-tokens.md)
+- [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -33,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(device): keep Host Agent action results visible
 - 2026-09-27 · 804dda61 · fix(console): bound supervised web motion
 - 2026-09-27 · uncommitted · fix(ui): clarify role-screen spatial and procedure layouts
 - 2026-09-27 · 9ca7bc26 · inspect dashboard in visible Chromium
 - 2026-09-27 · f4f15776 · verify dashboard surface tokens after latest main integration
-- 2026-09-27 · 9049bd37 · test(dashboard): verify D-300 after latest-main integration

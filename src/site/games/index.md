@@ -31,6 +31,7 @@
 | D-112 | 계단 1 가시성은 호스트 보고이며 FIELD GO가 아니다 |
 | D-113 | D-96 남은 실행은 현장 실측이며 LOCAL 호스트 트랙은 닫힌다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
+| D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -38,6 +39,7 @@
 - [2026-09-18-rosy-games-local-host.md](../../../docs/plans/2026-09-18-rosy-games-local-host.md)
 - [2026-09-18-rosy-games-overhead-plan.md](../../../docs/plans/2026-09-18-rosy-games-overhead-plan.md)
 - [2026-09-18-rosy-games-remaining-adr-plan.md](../../../docs/plans/2026-09-18-rosy-games-remaining-adr-plan.md)
+- [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -50,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(games): readable match and stop request states
 - 2026-09-27 · 9ca7bc26 · verify games host suite
 - 2026-09-27 · f4f15776 · verify games after latest main integration
 - 2026-09-27 · 9049bd37 · test(games): verify D-300 after latest-main integration
 - 2026-09-27 · uncommitted · D-300 surface typography tokens
-- 2026-09-25 · uncommitted · fix(games): the Space promise is real (D-224)
