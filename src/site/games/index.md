@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(games): 마지막 경기 단계 구분 (D-306/D-309)
 - 2026-09-27 · uncommitted · fix(games): 마지막 필드 위치 구분 (D-306/D-309)
 - 2026-09-27 · uncommitted · fix(games): readable match and stop request states
 - 2026-09-27 · 9ca7bc26 · verify games host suite
 - 2026-09-27 · f4f15776 · verify games after latest main integration
-- 2026-09-27 · 9049bd37 · test(games): verify D-300 after latest-main integration

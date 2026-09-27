@@ -57,6 +57,16 @@ function setFieldEvidence(evidence) {
   scoreEvidence.hidden = !stale;
 }
 
+function setPhaseEvidence(evidence, phaseCode) {
+  const phase = document.getElementById("phase");
+  if (phaseCode !== undefined) phase.dataset.phase = phaseCode || "";
+  if (!hasMatch) return;
+  const label = PHASE_LABEL[phase.dataset.phase] || "단계 미확인";
+  const text = evidence === "fresh" ? label : `마지막 수신 단계 · ${label}`;
+  setTextIfChanged(phase, text);
+  return text;
+}
+
 function draw(payload) {
   const field = payload.field || { length_m: 2, width_m: 1.4, goal_width_m: 0.35 };
   const w = canvas.width;
@@ -153,6 +163,7 @@ async function tick() {
       connection.dataset.evidence = "unavailable";
       lastEvidence = "unavailable";
       setFieldEvidence("unavailable");
+      setPhaseEvidence("unavailable");
       setTextIfChanged(connection, hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
       if (hasMatch) {
         setTextIfChanged(announcement, "경기 데이터 대기 중. 표시된 경기 정보는 마지막 수신 값입니다.");
@@ -177,10 +188,7 @@ async function tick() {
     }
     const homeScore = payload.score?.[payload.field.home_id] ?? "—";
     const awayScore = payload.score?.[payload.field.away_id] ?? "—";
-    const phase = document.getElementById("phase");
-    const phaseLabel = PHASE_LABEL[payload.phase] || "단계 미확인";
-    phase.dataset.phase = payload.phase || "";
-    phase.textContent = phaseLabel;
+    const phaseLabel = setPhaseEvidence(evidence, payload.phase);
     document.getElementById("home-name").textContent = payload.field.home_id;
     document.getElementById("away-name").textContent = payload.field.away_id;
     document.getElementById("home-score").textContent = homeScore;
@@ -215,6 +223,7 @@ async function tick() {
     connection.dataset.evidence = "disconnected";
     lastEvidence = "disconnected";
     setFieldEvidence("disconnected");
+    setPhaseEvidence("disconnected");
     setTextIfChanged(connection, hasMatch ? "호스트 연결 오류 · 마지막 경기 정보" : "호스트 연결 오류 · 경기 정보 없음");
     setTextIfChanged(announcement, hasMatch
       ? "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다."
