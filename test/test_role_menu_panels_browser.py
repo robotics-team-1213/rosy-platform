@@ -17,6 +17,9 @@ def _route_panel_test(page) -> None:
     ui_source = (ROOT / "src" / "hmi" / "web" / "ui.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
+    pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/assets/panels/setup/pose-evidence.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=pose_source))
     document = (
         '<!doctype html><html><head>'
         '<script type="module" src="/common/ui.js"></script>'
