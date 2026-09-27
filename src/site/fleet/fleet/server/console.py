@@ -31,6 +31,9 @@ from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.server import bays, traffic
+from fleet.server.console_view import (
+    _error_of, _formation_stream_evidence, _shown, _stream_evidence,  # noqa: F401
+)
 from fleet.swarm.session import (
     FormationSession,
     FormationSpec,
@@ -38,52 +41,13 @@ from fleet.swarm.session import (
     SessionState,
 )
 from fleet.swarm.robots import RobotEndpoint
-from fleet.swarm.transport import RobotApiError, RobotClient
+from fleet.swarm.transport import RobotClient
 
 logger = logging.getLogger("fleet.console")
 
 #: 맵은 로봇마다 다시 받을 이유가 없다 — 한 사이트는 한 맵을 공유한다. 그래도 SLAM 으로
 #: 맵이 바뀔 수 있으므로 무한정 붙들지는 않는다.
 MAP_TTL_S = 10.0
-
-
-#: 대기 미션에서 화면에 보내지 않는 것. `route` 는 폴리라인이라 매 폴링마다 실어 보내면
-#: 스냅샷이 통째로 불어나고, `settled_ticks` 는 양보가 멈췄는지 세는 내부 계수기다.
-_INTERNAL_MISSION_KEYS = ("route", "settled_ticks")
-
-STREAM_STALE_AFTER_S = 1.0
-STREAM_RATE_FLOOR_HZ = 2.0
-
-
-def _stream_evidence(age_s: Optional[float], *, connected: bool,
-                     error: Optional[str], source: str,
-                     rate_hz: Optional[float] = None, sample_count: int = 0) -> dict:
-    """Judge relay observations on the server; send age is not robot receipt."""
-    if error or not connected:
-        state, reason = "disconnected", "stream_error" if error else "transport_down"
-    elif age_s is None:
-        state, reason = "unavailable", "no_sample"
-    elif age_s > STREAM_STALE_AFTER_S:
-        state, reason = "delayed", "sample_too_old"
-    elif sample_count >= 2 and rate_hz is not None and rate_hz < STREAM_RATE_FLOOR_HZ:
-        state, reason = "delayed", "rate_below_floor"
-    else:
-        state, reason = "fresh", "sample_within_limit"
-    return {"state": state, "age_s": age_s, "reason": reason,
-            "stale_after_s": STREAM_STALE_AFTER_S, "source": source}
-
-
-def _shown(mission: Optional[dict]) -> Optional[dict]:
-    if mission is None:
-        return None
-    return {k: v for k, v in mission.items() if k not in _INTERNAL_MISSION_KEYS}
-
-
-def _error_of(exc: BaseException) -> dict:
-    """예외를 UI 가 그대로 읽을 수 있는 모양으로. 로봇이 거절한 것과 닿지 못한 것을 가른다."""
-    if isinstance(exc, RobotApiError):
-        return {"reachable": True, "code": exc.code, "message": str(exc)}
-    return {"reachable": False, "code": type(exc).__name__, "message": str(exc) or type(exc).__name__}
 
 
 class FleetConsole:
@@ -784,21 +748,9 @@ class FleetConsole:
         if session is None:
             return {"active": False, "state": "IDLE"}
         stats = session.relay.stats() if session.relay is not None else None
-        stream_evidence = {}
-        if stats is not None:
-            stream_evidence[self._formation_leader] = _stream_evidence(
-                stats.leader_age_s, connected=stats.leader_last_error is None,
-                error=stats.leader_last_error, source="leader_rx",
-                rate_hz=stats.leader_rx_hz, sample_count=stats.leader_frames,
-            )
-            for rid in session.assignment:
-                stream_evidence[rid] = _stream_evidence(
-                    stats.follower_last_tx_age_s.get(rid),
-                    connected=stats.follower_connected.get(rid) is True,
-                    error=stats.follower_last_error.get(rid), source="follower_tx",
-                    rate_hz=stats.follower_tx_hz.get(rid),
-                    sample_count=stats.follower_tx.get(rid, 0),
-                )
+        stream_evidence = _formation_stream_evidence(
+            stats, self._formation_leader, session.assignment,
+        )
         return {
             "active": session.state in (SessionState.ARMING, SessionState.RUNNING,
                                         SessionState.HOLDING),
