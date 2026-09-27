@@ -60,8 +60,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · b0609dc6 · verify development CORE image closure on ARM64
+- 2026-09-27 · uncommitted · repair development CORE image package closure
 - 2026-09-27 · uncommitted · feat(host-agent): stamp complete status reads
 - 2026-09-27 · uncommitted · fix(native): accept floor G4 evidence
 - 2026-09-27 · uncommitted · fix(native): verify G4 on navigation start
-- 2026-09-27 · uncommitted · update default-config image readback
-- 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff

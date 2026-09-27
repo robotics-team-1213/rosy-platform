@@ -1395,3 +1395,15 @@
 - 변경: Host Agent가 네트워크·릴리스 동기 조회 완료 직후 UTC를 응답에 붙인다. nmcli 부분 실패, 릴리스 상태 JSON·필수 필드 실패는 성공으로 꾸미지 않는다.
 - 검증: Host Agent 거부·명령 계약 132 passed. 기존 장치에는 Agent 서비스/소켓이 없어 DEVICE는 HOLD다.
 - gate 변화: SOURCE/LOCAL 계약 근거만 추가했다. 새 이미지 설치와 실물 readback이 필요하다.
+
+## 2026-09-27 · uncommitted · repair development CORE image package closure
+
+- Change: copy the six missing CORE and web packages into the Docker build, select the web asset packages, and probe installed imports and assets in the final CORE image.
+- Evidence: the new closure tests failed twice on the old Dockerfile, then 48 CORE image/runtime/API host tests passed after the fix. ARM64 image execution is pending independent verification.
+- Gate: SOURCE/LOCAL candidate only. ARTIFACT, DEVICE, and FIELD acceptance remain unchanged.
+
+## 2026-09-27 · b0609dc6 · verify development CORE image closure on ARM64
+
+- Change: verify the final image at clean source revision b0609dc68ed727a1ed15e57e7c3e029001ab0a8f; no device deployment or release publication.
+- Evidence: ARM64 OCI build exit 0; final installed import, dashboard/web_common asset and route probe passed. Installed ament overlay contains exactly core, core_api_web, core_common, core_events, core_features, dashboard, interfaces, pinky_pro, web_common. OCI manifest sha256:4eeccfd3105bee2e5b4ecf7326af292b8d3eb41dcc372b6d1915207d2fba4e29; raw logs on X: (rosy-d310-core-closure-fix-b060.log, rosy-d310-core-inventory-b060.log).
+- Gate: CORE development image ARTIFACT evidence at this source SHA only. IO/native, deployed image signer/digest, DEVICE and FIELD remain HOLD.
