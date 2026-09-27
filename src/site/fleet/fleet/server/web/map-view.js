@@ -4,7 +4,7 @@
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
 
-export function createMapView({ el, view, css, auth, call }) {
+export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUnavailable }) {
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
@@ -310,9 +310,26 @@ export function createMapView({ el, view, css, auth, call }) {
     try {
       const grid = await call("/api/fleet/map");
       view.map = grid;
+      el("map-stage").dataset.mapState = "ready";
+      el("map-empty").hidden = true;
+      el("map-canvas").removeAttribute("aria-hidden");
+      el("map-legend").hidden = false;
       draw();
+      onMapChanged();
     } catch (err) {
+      view.map = null;
+      const canvas = el("map-canvas");
+      canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+      canvas.setAttribute("aria-hidden", "true");
+      canvas.tabIndex = -1;
+      canvas.classList.add("idle");
+      el("map-stage").dataset.mapState = "unavailable";
+      el("map-empty-title").textContent = "지도를 확인할 수 없습니다";
+      el("map-empty-detail").textContent = "Fleet 지도 연결과 등록 로봇 상태를 확인하세요.";
+      el("map-empty").hidden = false;
+      el("map-legend").hidden = true;
       el("map-tag").textContent = "맵 없음";
+      onMapUnavailable();
     }
   }
 

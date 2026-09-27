@@ -160,7 +160,9 @@ function render() {
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
   const nextHint = point
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
-    : "오른쪽에서 로봇의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.";
+    : view.map
+      ? "오른쪽에서 로봇의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다."
+      : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
 }
 
@@ -432,7 +434,16 @@ const formation = createFormation({ el, view, log, call, render });
 formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
-const mapView = createMapView({ el, view, css, auth, call });
+const mapView = createMapView({
+  el, view, css, auth, call,
+  onMapChanged: render,
+  onMapUnavailable: () => {
+    const selected = view.selected;
+    if (selected) disarmGoal("지도를 확인할 수 없어 목표 지정 취소");
+    render();
+    if (selected) focusGoalButton(selected);
+  },
+});
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 const roster = createRoster({ el, view, log, call, render, streamEvidence: mapView.streamEvidence });

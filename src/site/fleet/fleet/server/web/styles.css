@@ -83,6 +83,26 @@ main {
 .map-head { display: flex; align-items: baseline; gap: var(--space-3); }
 .map-head .spacer { flex: 1; }
 
+.map-stage { position: relative; }
+.map-stage[data-map-state="unavailable"] #map-canvas { height: min(30vh, 18rem); }
+.map-empty {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-button);
+  background: var(--ground-deep);
+  text-align: center;
+  pointer-events: none;
+}
+.map-empty[hidden], .legend[hidden] { display: none; }
+.map-empty strong { color: var(--paper); font-size: var(--text-title); font-weight: var(--weight-emphasis); }
+.map-empty p { max-width: 34ch; margin: 0; color: var(--muted); font-size: var(--text-label); line-height: var(--leading-copy); }
+
 #map-canvas {
   /* D-201 — 지도는 페이지를 밀지 않고 프레임에 맞는다. 박스는 폭을 채우고
      높이가 상한을 지키며, 비트맵은 종횡비를 유지한 채 그 안에 들어찬다
@@ -249,6 +269,7 @@ main {
   main { gap: var(--space-3); padding: var(--space-3); }
   .panel { padding: var(--space-3); }
   #map-canvas { height: min(74vw, 22rem); }
+  .map-stage[data-map-state="unavailable"] #map-canvas { height: 11rem; }
   .queues-container { flex-direction: column; }
 }
 

@@ -682,6 +682,48 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
         browser.close()
 
 
+def test_map_surface_explains_missing_map_and_recovers_without_stale_canvas(console_url):
+    """The map area must explain why it cannot be used instead of showing a blank slab."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#map-tag')?.textContent === '맵 없음'")
+        assert page.locator("#map-empty").is_visible()
+        assert "지도를 확인할 수 없습니다" in page.inner_text("#map-empty")
+        assert page.locator("#map-canvas").get_attribute("aria-hidden") == "true"
+        assert page.locator(".legend").is_hidden()
+        assert "지도가 수신되면" in page.inner_text("#hint")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_map_unavailable_1920.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.locator("#map-empty").is_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_map_unavailable_390.png")
+        page.set_viewport_size({"width": 1920, "height": 1080})
+
+        api["/api/fleet/map"] = MAP_GRID
+        page.wait_for_function("() => document.querySelector('#map-empty')?.hidden === true", timeout=7000)
+        assert page.locator(".legend").is_visible()
+        assert page.locator("#map-canvas").get_attribute("aria-hidden") is None
+        assert "지도를 찍으면" in page.inner_text("#hint")
+
+        api["/api/fleet/map"] = (503, {"detail": {"code": "MAP_UNAVAILABLE"}})
+        page.wait_for_function("() => document.querySelector('#map-empty')?.hidden === false", timeout=7000)
+        assert page.locator(".legend").is_hidden()
+        assert page.locator("#map-canvas").get_attribute("aria-hidden") == "true"
+        assert page.evaluate("document.querySelector('#map-canvas').getContext('2d').getImageData(0, 0, 1, 1).data[3]") == 0
+        assert "지도가 수신되면" in page.inner_text("#hint")
+        assert errors == []
+        browser.close()
+
+
 # --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
 
 def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):

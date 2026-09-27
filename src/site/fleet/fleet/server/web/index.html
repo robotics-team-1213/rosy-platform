@@ -36,10 +36,16 @@
         <div class="spacer"></div>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
-      <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
-              role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
+      <div class="map-stage" id="map-stage" data-map-state="loading">
+        <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
+                role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
+        <div class="map-empty" id="map-empty" role="status">
+          <strong id="map-empty-title">지도 불러오는 중</strong>
+          <p id="map-empty-detail">Fleet에서 현장 지도를 확인하고 있습니다.</p>
+        </div>
+      </div>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
-      <div class="legend">
+      <div class="legend" id="map-legend" hidden>
         <span><i class="sw free"></i>자유</span>
         <span><i class="sw occupied"></i>점유</span>
         <span><i class="sw unknown"></i>미지</span>
