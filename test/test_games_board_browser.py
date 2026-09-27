@@ -99,6 +99,12 @@ def test_match_board_names_server_judged_delay():
             now[0] += 3.0
             page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
             assert page.locator("#home-score").inner_text() == "2"
+            assert "마지막 수신" in page.locator("#connection").inner_text()
+            assert page.locator("#field-evidence").is_visible()
+            assert "현재 위치 아님" in page.locator("#field-evidence").inner_text()
+            assert page.locator("#pitch").get_attribute("aria-describedby") == "field-evidence"
+            assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
+            assert page.locator("#score-evidence").is_visible()
             announcement = page.locator("#match-announcement")
             page.wait_for_function("document.getElementById('match-announcement')?.textContent.includes('지연')")
             assert "마지막 생성 3.0초 전" in announcement.inner_text()
@@ -165,6 +171,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             assert "경기 정보 없음" in page.locator("#connection").inner_text()
             assert "마지막 수신 값" not in page.locator("#match-announcement").inner_text()
             assert page.locator("#home-score").inner_text() == "—"
+            assert page.locator("#score-evidence").is_hidden()
             assert page.evaluate(
                 "document.documentElement.scrollWidth <= innerWidth && "
                 "document.documentElement.scrollHeight <= innerHeight"
@@ -451,8 +458,21 @@ def test_overlay_failure_marks_last_received_match_as_stale():
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.wait_for_function("document.getElementById('connection')?.textContent.includes('연결 오류')")
             assert page.locator("#home-score").inner_text() == "2"
+            assert page.locator("#field-evidence").is_visible()
+            assert "현재 위치 아님" in page.locator("#field-evidence").inner_text()
+            assert page.locator("#pitch").get_attribute("aria-describedby") == "field-evidence"
+            assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
+            assert page.locator("#score-evidence").is_visible()
+            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert "마지막 수신 값" in page.locator("#match-announcement").inner_text()
             save_temp_screenshot(page, "games_board_host_disconnected.png")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("document.getElementById('connection')?.dataset.evidence === 'fresh'")
+            assert page.locator("#field-evidence").is_hidden()
+            assert page.locator("#pitch").get_attribute("aria-describedby") is None
+            assert page.locator("#score-evidence").is_hidden()
+            assert page.locator(".score").get_attribute("aria-label") == "점수"
             assert not errors, f"페이지 오류: {errors}"
             browser.close()
     finally:

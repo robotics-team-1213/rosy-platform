@@ -21,6 +21,7 @@
     <p id="connection">경기 데이터 대기 중</p>
   </ui-topbar>
   <section class="score" aria-label="점수">
+    <span id="score-evidence" hidden>마지막 수신 점수</span>
     <div>
       <span id="home-name">홈</span>
       <strong id="home-score">—</strong>
@@ -31,7 +32,10 @@
     </div>
   </section>
   <p id="match-announcement" class="sr-only" role="status" aria-live="polite"></p>
-  <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드"></canvas>
+  <div class="pitch-wrap" id="pitch-wrap">
+    <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드"></canvas>
+    <p id="field-evidence" hidden></p>
+  </div>
   <img id="frame" alt="천장 프레임" hidden>
   <ul id="markers" class="chips" aria-label="보이는 마커"></ul>
   <p id="stair1">계단 1 아직 (FIELD GO 아님)</p>

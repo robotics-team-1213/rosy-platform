@@ -21,6 +21,11 @@ const announcement = document.getElementById("match-announcement");
 const connection = document.getElementById("connection");
 const halt = document.getElementById("halt");
 const haltStatus = document.getElementById("halt-status");
+const pitchWrap = document.getElementById("pitch-wrap");
+const fieldEvidence = document.getElementById("field-evidence");
+const score = document.querySelector(".score");
+const scoreEvidence = document.getElementById("score-evidence");
+const frame = document.getElementById("frame");
 let polling = false;
 let hasMatch = false;
 let lastEvidence = null;
@@ -28,6 +33,28 @@ let evidenceAnnouncement = "";
 
 function setTextIfChanged(element, value) {
   if (element.textContent !== value) element.textContent = value;
+}
+
+function setFieldEvidence(evidence) {
+  const stale = hasMatch && evidence !== "fresh";
+  const message = evidence === "delayed"
+    ? "지연 · 마지막 수신 위치 · 현재 위치 아님"
+    : evidence === "disconnected"
+      ? "연결 오류 · 마지막 수신 위치 · 현재 위치 아님"
+      : "데이터 대기 · 마지막 수신 위치 · 현재 위치 아님";
+  fieldEvidence.hidden = !stale;
+  if (stale) {
+    setTextIfChanged(fieldEvidence, message);
+    canvas.setAttribute("aria-describedby", "field-evidence");
+    pitchWrap.dataset.evidence = evidence;
+    frame.dataset.evidence = evidence;
+  } else {
+    canvas.removeAttribute("aria-describedby");
+    delete pitchWrap.dataset.evidence;
+    delete frame.dataset.evidence;
+  }
+  score.setAttribute("aria-label", stale ? "마지막 수신 점수" : "점수");
+  scoreEvidence.hidden = !stale;
 }
 
 function draw(payload) {
@@ -125,6 +152,7 @@ async function tick() {
     if (!payload.field) {
       connection.dataset.evidence = "unavailable";
       lastEvidence = "unavailable";
+      setFieldEvidence("unavailable");
       setTextIfChanged(connection, hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
       if (hasMatch) {
         setTextIfChanged(announcement, "경기 데이터 대기 중. 표시된 경기 정보는 마지막 수신 값입니다.");
@@ -133,12 +161,13 @@ async function tick() {
     }
     hasMatch = true;
     const evidence = payload.evidence || "unavailable";
+    setFieldEvidence(evidence);
     connection.dataset.evidence = evidence;
     if (payload.evidence === "fresh") {
       setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
     } else if (payload.evidence === "delayed") {
       const age = typeof payload.age_s === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${payload.age_s.toFixed(1)}\uCD08 \uC804` : "";
-      setTextIfChanged(connection, `\uC9C0\uC5F0${age}`);
+      setTextIfChanged(connection, `\uC9C0\uC5F0 \u00B7 \uB9C8\uC9C0\uB9C9 \uC218\uC2E0 \uACBD\uAE30 \uC815\uBCF4${age}`);
     } else {
       setTextIfChanged(connection, "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
     }
@@ -171,7 +200,6 @@ async function tick() {
         ? "계단 1 마커 보임 (FIELD GO 아님)"
         : "계단 1 아직 (FIELD GO 아님)";
     }
-    const frame = document.getElementById("frame");
     if (!payload.has_frame) {
       frame.hidden = true;
       return;
@@ -186,6 +214,7 @@ async function tick() {
   } catch (_error) {
     connection.dataset.evidence = "disconnected";
     lastEvidence = "disconnected";
+    setFieldEvidence("disconnected");
     setTextIfChanged(connection, hasMatch ? "호스트 연결 오류 · 마지막 경기 정보" : "호스트 연결 오류 · 경기 정보 없음");
     setTextIfChanged(announcement, hasMatch
       ? "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다."

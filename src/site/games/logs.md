@@ -220,3 +220,10 @@
 - 증거: Chromium 1280×800 게임 보드 9 passed; 게임 호스트 110 passed; 공유 UI/대화 상자 계약 58 passed. 실패·연결 오류 LOCAL 캡처는 `X:\DevTemp\games_board_stop_retry.png`, `X:\DevTemp\games_board_host_disconnected.png`.
 - gate 변화: 모듈 SOURCE/LOCAL GO 유지. 게임 UI/UX G2 전체 셀 미완료로 HOLD; DEVICE/FIELD PARKED.
 - 결정: D-306.
+
+## 2026-09-27 · uncommitted · fix(games): 마지막 필드 위치 구분 (D-306/D-309)
+
+- 변경: 서버가 판정한 `delayed`/`unavailable` 또는 호스트 연결 오류 때 필드 좌표와 천장 프레임을 감광하고, 필드 중앙에 `마지막 수신 위치 · 현재 위치 아님`을 표시한다. 점수에도 마지막 수신 표지를 붙인다. 정상 수신으로 회복하면 표지와 보조기기 설명 참조를 제거한다. 점수·경기 식별은 마지막 기록으로 남고 `/stop` 경로는 유지한다.
+- 증거: Chromium 1280×800 최초 오류·HOLD·지연·끊김 4 passed, 최초 대기·정지 실패 2 passed, 정지 행 뷰포트 단독 재실행 1 passed. `src/site/games/test`와 `test/test_rosy_games_surface.py` 111 passed. 전체 브라우저 묶음은 중간 편집 후 중단했고, 추가 회차의 Chromium launch 10초 timeout 1건은 단독 재실행에서 통과했다. LOCAL 캡처 `X:\DevTemp\games_board_delayed.png`, `X:\DevTemp\games_board_host_disconnected.png`.
+- gate 변화: SOURCE/LOCAL GO 유지. UI/UX G2 전체 셀·DEVICE/FIELD 실측 수용은 이 변경으로 완료되지 않는다.
+- 결정: D-306, D-309. 물리 정지 GO 근거 아님.
