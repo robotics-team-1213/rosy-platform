@@ -262,6 +262,127 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
         browser.close()
 
 
+def test_admin_security_preserves_token_and_safety_action_feedback_across_polling():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "system" / "security.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/system/security.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/system/security.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {}; const calls = [];
+          const store = {poll(path, interval, onData, onError) {
+            callbacks[path] = {interval, onData, onError}; return () => {};
+          }};
+          const api = (path, options = {}) => {
+            calls.push({path, method: options.method || 'GET'});
+            if (path === '/api/v1/system/tokens' && !options.method) {
+              return Promise.reject(new Error('fixture token list offline'));
+            }
+            if (options.method === 'DELETE') return Promise.resolve({deleted: true});
+            if (options.method === 'POST') return Promise.resolve({token: 'fixture-one-time-secret'});
+            if (options.method === 'PUT') return new Promise(resolve => { window.__resolveSafety = resolve; });
+            throw new Error(`unexpected request ${options.method} ${path}`);
+          };
+          window.__callbacks = callbacks; window.__calls = calls;
+          window.__unmount = mount(root, {role:'administrator', store, api});
+          window.confirm = () => true;
+        }""")
+        assert page.evaluate("window.__callbacks['/api/v1/system/tokens'].interval") == 30_000
+        assert page.evaluate("window.__callbacks['/api/v1/safety/state'].interval") == 15_000
+        page.evaluate("""window.__callbacks['/api/v1/system/tokens'].onData({tokens:[
+          {id:'old-token',label:'old',role:'operator',source:'test',current:false}
+        ]})""")
+        page.evaluate("""window.__callbacks['/api/v1/safety/state'].onData({
+          limits:{manual_linear:0.4,manual_angular:1.2},
+          battery:{warning_percent:30,critical_percent:20,deep_percent:10,critical_policy:'STOP'},
+          fleet_loss_policy:'HOLD'
+        })""")
+
+        token_section = page.locator("main > section.ui-readback").nth(0)
+        token_status = token_section.locator("ui-status").nth(0)
+        credential_status = token_section.locator("ui-status").nth(1)
+        read_status = token_section.locator("ui-status").nth(2)
+        token_list = token_section.locator("ul[aria-label]")
+        assert token_list.is_visible() and "old" in token_list.inner_text()
+        page.evaluate("window.__callbacks['/api/v1/system/tokens'].onError(new Error('fixture token poll failed'))")
+        assert token_list.is_hidden() and token_list.locator("li").count() == 0
+        assert "fixture token poll failed" in read_status.inner_text()
+
+        page.evaluate("""window.__callbacks['/api/v1/system/tokens'].onData({tokens:[
+          {id:'delete-token',label:'delete-me',role:'operator',source:'test',current:false}
+        ]})""")
+        page.locator('[data-token-id="delete-token"] ui-button').click()
+        page.wait_for_function("""document.querySelector(
+          'main > section.ui-readback ui-status[role=status]'
+        )?.textContent.includes('삭제했습니다')""")
+        assert token_list.is_hidden()
+        assert "delete-me" in token_status.inner_text() and "삭제했습니다" in token_status.inner_text()
+        assert "fixture token list offline" in read_status.inner_text()
+
+        page.locator('main > section.ui-readback').nth(0).locator('[name="label"]').fill('new-secret')
+        page.locator('main > section.ui-readback').nth(0).locator('form').evaluate(
+            "node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+        page.wait_for_function("""document.querySelectorAll(
+          'main > section.ui-readback'
+        )[0].querySelectorAll('[role=status]')[1]?.textContent.includes('fixture-one-time-secret')""")
+        secret = credential_status.inner_text()
+        assert "fixture-one-time-secret" in secret
+        assert "fixture token list offline" in read_status.inner_text()
+        assert "CORE" in token_status.inner_text()
+
+        safety_section = page.locator("main > section.ui-readback").nth(1)
+        safety_form = safety_section.locator("form")
+        safety_read_status = safety_section.locator("ui-status").nth(0)
+        safety_action_status = safety_section.locator("ui-status").nth(1)
+        safety_form.locator('[name="manual_linear"]').fill('0.8')
+        page.evaluate("""window.__callbacks['/api/v1/safety/state'].onData({
+          limits:{manual_linear:0.55,manual_angular:1.6},
+          battery:{warning_percent:33,critical_percent:23,deep_percent:13,critical_policy:'RETURN_HOME'},
+          fleet_loss_policy:'STOP'
+        })""")
+        assert safety_form.locator('[name="manual_linear"]').input_value() == '0.8'
+        assert "수정 중" in safety_read_status.inner_text()
+        assert credential_status.inner_text() == secret
+
+        safety_form.evaluate("node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+        assert safety_form.locator('input,select,ui-button').evaluate_all("nodes => nodes.every(node => node.disabled)")
+        assert "보내는 중" in safety_action_status.inner_text()
+        page.evaluate("""window.__callbacks['/api/v1/safety/state'].onData({
+          limits:{manual_linear:0.6,manual_angular:1.8},
+          battery:{warning_percent:35,critical_percent:25,deep_percent:15,critical_policy:'STOP'},
+          fleet_loss_policy:'RETURN_HOME'
+        })""")
+        assert safety_form.locator('[name="manual_linear"]').input_value() == '0.8'
+        assert safety_form.locator('input,select,ui-button').evaluate_all("nodes => nodes.every(node => node.disabled)")
+        page.evaluate("""window.__resolveSafety({
+          limits:{manual_linear:0.7,manual_angular:1.1},
+          battery:{warning_percent:31,critical_percent:21,deep_percent:11,critical_policy:'RETURN_HOME'},
+          fleet_loss_policy:'HOLD'
+        })""")
+        page.wait_for_function("""document.querySelector(
+          'main > section.ui-readback:nth-of-type(2) input[name=manual_linear]'
+        )?.value === '0.7'""")
+        assert safety_form.locator('[name="manual_linear"]').input_value() == '0.7'
+        assert safety_form.locator('[name="manual_angular"]').input_value() == '1.1'
+        assert safety_form.locator('[name="fleet_loss_policy"]').input_value() == 'HOLD'
+        assert "CORE" in safety_action_status.inner_text()
+        assert credential_status.inner_text() == secret
+        assert len([call for call in page.evaluate("window.__calls") if call["method"] == "PUT"]) == 1
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
 def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

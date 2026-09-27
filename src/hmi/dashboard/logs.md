@@ -359,3 +359,10 @@
 - Change: Added panel regression for capability polling during pending initial-pose and SLAM-start actions, including lock and duplicate-POST checks. Refreshed administrator `/setup` full-shell captures at 1366x768 and 390x844.
 - Evidence: Panel Chromium suite 14 passed. Role G2 5 passed; 60 cells, overflow 0, pageerror 0, E-stop visible 60/60, canceled confirmation POST 0. Screenshots and matrix JSON are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. `git diff --check` passed.
 - Gate: SOURCE/LOCAL browser regression and captures checked for `b3d8e6cd`. Actual pose/SLAM readback, physical E-stop, G3, D-153, D-255, DEVICE/FIELD remain HOLD.
+
+
+## 2026-09-28 - uiux/device-security-feedback-evidence - fix: clear stale token list after mutation refresh failure
+
+- Change: Token list reload failures after successful token create/delete now use the shared unavailable handler, clearing and hiding the old inventory while keeping create/delete outcome and the one-time secret in separate status regions. Added regression for token polling, mutation refresh, safety polling, dirty form preservation, save locking, and CORE PUT response values.
+- Evidence: Focused security regression 1 passed; full panel Chromium suite 15 passed. Current-main G2 5 passed, 60 cells, overflow/pageerror 0, E-stop visible 60/60, confirmation-cancel POST 0. Admin `/device` captures at 1366x768 and 390x844 are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. Impeccable `[]`; `git diff --check` passed.
+- Gate: SOURCE/LOCAL follow-up verified. Actual Host Agent, physical safety readback/E-stop, G3 and broader D-153 DEVICE/FIELD remain HOLD.

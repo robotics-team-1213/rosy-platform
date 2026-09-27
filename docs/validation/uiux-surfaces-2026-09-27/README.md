@@ -157,3 +157,12 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 The follow-up in `b3d8e6cd` was checked for the 10-second capability poll, repeated initial-pose submission while pending, and repeated SLAM start while pending. The focused panel browser regression passed, and the full panel browser suite passed **14 tests**. The complete role G2 matrix was refreshed: **60 cells**, overflow 0, pageerror 0, E-stop visible 70/70, and canceled confirmation POST 0.
 
 The administrator `/setup` full-shell captures at 1366x768 and 390x844 were visually inspected. PNGs and `matrix.json` are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. This is LOCAL browser evidence with mocked/local API responses. Physical localization/SLAM readback, physical E-stop, and G3 evaluation were not performed; D-153 and D-255 B2/B3 remain **HOLD**.
+
+
+## 2026-09-28 administrator device security feedback - LOCAL
+
+The `6b0aaaa7` administrator `/device` security follow-up was exercised in Chromium. The panel regression covers token list loss on both polling and post-create/post-delete refresh, preserved create/delete outcomes, one-time secret visibility across token failures and safety polling, dirty safety form preservation during the 15-second readback, save-time field locking, and applying values from the CORE PUT response. The full panel browser suite passed **15 tests**.
+
+The current-main role G2 matrix passed **5 tests** and generated **60 cells** across 1366x768 and 390x844: overflow 0, pageerror 0, E-stop visible 60/60, canceled-confirmation POST 0. Administrator `/device` screenshots were visually inspected at both viewports. PNGs and `matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`. Impeccable detector returned `[]`; `git diff --check` passed.
+
+The regression found that a token-list GET failure after a successful create/delete left the previous list visible. Those refresh failures now use the same stale-list clearing path as poll failures, while preserving the independent mutation result and one-time secret. This completes the SOURCE/LOCAL follow-up check. Actual Host Agent, CORE safety readback, physical E-stop, and G3 evaluation are separate; broader D-153, DEVICE, and FIELD acceptance remain **HOLD**.

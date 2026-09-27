@@ -69,3 +69,10 @@
 After `b3d8e6cd`, a panel browser regression verified that the 10-second localization capability poll preserves pose/SLAM pending locks and action feedback, and repeated requests do not issue duplicate POSTs. The full panel suite passed **14 tests**. Role G2 passed **5 tests** and refreshed 60 cells: overflow 0, pageerror 0, E-stop visible 70/70, canceled confirmation POST 0. Administrator `/setup` full-shell captures at 1366x768 and 390x844 were visually inspected. PNGs and `matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
 
 These are browser and mock/local API results. Actual pose/SLAM readback, physical E-stop, and user G3 evaluation remain separate; product acceptance, DEVICE, and FIELD stay **HOLD**.
+
+
+## 2026-09-28 administrator /device security follow-up
+
+The focused security-panel Chromium regression verified token-list clearing after poll and mutation-triggered GET failures, independent create/delete feedback, one-time secret retention across token-list and safety polls, dirty-form retention on the 15-second safety readback, save-time controls locked, and fields updated from the CORE PUT response. It exposed a stale-list case after successful create/delete followed by failed list refresh; the panel now clears/hides that list through the shared unavailable handler. The full panel suite passed **15 tests**.
+
+Current-main role G2 passed **5 tests** with 60 cells, overflow 0, pageerror 0, E-stop visible 60/60, canceled confirmation POST 0. Administrator `/device` full-shell captures at 1366x768 and 390x844 were visually inspected. JSON/PNGs are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. This is LOCAL browser evidence; real Host Agent, safety CORE/device readback, physical E-stop, and G3 remain separate.

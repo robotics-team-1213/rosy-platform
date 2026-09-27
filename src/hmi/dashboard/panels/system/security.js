@@ -75,7 +75,7 @@ export function mount(root, ctx) {
           await ctx.api(`/api/v1/system/tokens/${encodeURIComponent(token.id)}`, {method: "DELETE"});
           setStatus(tokenActionStatus, `${token.label || token.id} 토큰을 삭제했습니다.`);
           try { await loadTokens(); }
-          catch (error) { setStatus(tokenReadStatus, `삭제 요청 후 목록을 새로 읽지 못했습니다. 다시 확인 중입니다: ${error.message}`); }
+          catch (error) { tokensUnavailable(error, "삭제 결과는 유지하고 이전 목록은 숨긴 뒤 다시 확인 중입니다"); }
         } catch (error) { setStatus(tokenActionStatus, `토큰 삭제 실패: ${error.message}`); }
         finally { tokenMutationPending = false; syncTokenControls(); }
       }); row.append(remove); tokenList.append(row);
@@ -83,9 +83,9 @@ export function mount(root, ctx) {
     syncTokenControls();
   }
   async function loadTokens() { renderTokens(await ctx.api("/api/v1/system/tokens")); }
-  function tokensUnavailable(error) {
+  function tokensUnavailable(error, context = "이전 목록은 숨기고 다시 확인 중입니다") {
     tokens = []; tokenList.replaceChildren(); tokenList.hidden = true;
-    setStatus(tokenReadStatus, `토큰 목록을 읽지 못했습니다. 이전 목록은 숨기고 다시 확인 중입니다: ${error.message}`);
+    setStatus(tokenReadStatus, `토큰 목록을 읽지 못했습니다. ${context}: ${error.message}`);
   }
   const stopTokens = ctx.store.poll("/api/v1/system/tokens", 30_000, renderTokens, tokensUnavailable);
   tokenForm.addEventListener("submit", async (event) => {
@@ -102,7 +102,7 @@ export function mount(root, ctx) {
       setStatus(tokenActionStatus, "토큰 생성 요청을 CORE가 처리했습니다.");
       label.value = "";
       try { await loadTokens(); }
-      catch (error) { setStatus(tokenReadStatus, `토큰은 생성됐지만 목록을 새로 읽지 못했습니다. 비밀값은 위에 표시되어 있습니다: ${error.message}`); }
+      catch (error) { tokensUnavailable(error, "토큰 생성 결과와 비밀값은 위에 유지하고 이전 목록은 숨깁니다. 다시 확인 중입니다"); }
     } catch (error) { setStatus(tokenActionStatus, `토큰 생성 실패: ${error.message}`); }
     finally { tokenMutationPending = false; syncTokenControls(); }
   });
