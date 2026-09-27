@@ -167,9 +167,9 @@ class RosyEmotion(Node):
         self._lcd('set_backlight', self._backlight_for('active'))
 
     def _frame_size(self):
-        with self.gif_lock:
-            frames = self.gif_frames
-        return frames[0].size if frames else (self.lcd.h, self.lcd.w)
+        # GIF assets are 1000x750, but the information card's pixel layout is
+        # for the LCD. Drawing it at GIF size shrinks every label on img_show.
+        return self.lcd.h, self.lcd.w
 
     def timer_callback(self):
         now = time.monotonic()
