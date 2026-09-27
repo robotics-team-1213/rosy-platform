@@ -2935,3 +2935,9 @@
 - Change: moved eight existing ROS packages under product families or `src/drivers/imu_bno055`; kept ROS package and entry-point names. Updated Docker/native/CI/harness and live path consumers. Main is unchanged.
 - Evidence: root host suite 2,715 passed/158 skipped; WSL Jazzy colcon built 24 packages and installed ament inventory matched 24 source package names. Details: `docs/validation/d310-source-candidate-2026-09-27.md`.
 - Gate: SOURCE_CANDIDATE only. Pre-move CORE ARM64 image had missing `core_common` import; separate fix c31a6769 awaits ARM64 probe. IO and native aarch64/Jazzy baselines are incomplete. D-310 remains Proposed; ARTIFACT/DEVICE/FIELD and main integration HOLD.
+
+## 2026-09-27 · a72d040 · validate D-310 CORE artifact comparison
+
+- Change: combined the pre-move CORE dependency fix with the isolated D-310 product source candidate; local main still retains the pre-move folder layout.
+- Evidence: both pinned ARM64 CORE OCI builds exited 0, final import/dashboard probes passed, installed overlay package sets matched exactly at nine names, and installed Pinky profile YAML hashes and core executable matched. Details: `docs/validation/d310-core-artifact-comparison-2026-09-27.md`.
+- Gate: CORE artifact equivalence only at the two recorded source SHAs. IO/native comparison, whole D-310 ARTIFACT, DEVICE and FIELD remain HOLD; D-310 remains Proposed.
