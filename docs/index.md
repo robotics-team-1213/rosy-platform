@@ -131,6 +131,7 @@
 | D-307 | 장치 최종 결과와 물리 정지 증거를 별도로 판정한다 |
 | D-308 | 의도 해석과 장치별 Action 해석의 책임을 분리한다 |
 | D-309 | UI/UX의 프론트·백엔드 책임과 시간·예외·안전 증거를 분리한다 |
+| D-310 | 제품 전용 소스와 장치 로컬 실행 소스를 구분한다 |
 
 ## 계획·결과 문서
 
@@ -168,6 +169,7 @@
 - [2026-09-26-site-task-scheduling-and-broker-implementation.md](plans/2026-09-26-site-task-scheduling-and-broker-implementation.md)
 - [2026-09-26-web-surface-video-role-boundaries.md](plans/2026-09-26-web-surface-video-role-boundaries.md)
 - [2026-09-27-omx-lerobot-control-boundary-implementation-plan.md](plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md)
+- [2026-09-27-product-source-layout-migration.md](plans/2026-09-27-product-source-layout-migration.md)
 - [2026-09-27-rosy-platform-role-and-contract-implementation-plan.md](plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)
 - [2026-09-27-site-candidate-signing.md](plans/2026-09-27-site-candidate-signing.md)
 - [2026-09-27-site-registry-credential-separation.md](plans/2026-09-27-site-registry-credential-separation.md)
@@ -184,8 +186,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · plan(platform): define product source layout migration
 - 2026-09-27 · uncommitted · validation(uiux): inspect changed Fleet, game and role captures
 - 2026-09-27 · uncommitted · fix(uiux): show CORE safe stop on role surfaces
 - 2026-09-27 · uncommitted · fix(fleet): keep server rate decision with D-309
 - 2026-09-27 · uncommitted · fix(games): label board age from host evidence
-- 2026-09-27 · uncommitted · feat(fleet): show intervention robots first

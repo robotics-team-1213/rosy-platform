@@ -2916,3 +2916,10 @@
 - 변경: Fleet 기본 로스터의 중립 테두리와 게임 지연 문구의 경고색을 보완했다. 변경 후 X: 캡처를 시각 점검하고 표면별 LOCAL 판정 표를 갱신했다.
 - 검증: Fleet 전체 532 passed/5 skipped, Fleet 브라우저 22 passed, 게임 전체 102 passed, 게임 브라우저 12 passed, 역할 매트릭스 56셀의 넘침·pageerror 0 (Windows LOCAL). 역할 매트릭스와 Fleet Chromium을 동시에 실행한 회차는 브라우저 종료로 실패했으며 단독 재실행은 통과했다.
 - gate 변화: LOCAL 코드·브라우저·시각 근거를 보충했다. 실제 로봇·Pi LCD·카메라·현장 정지 및 전체 G2/G3는 HOLD다.
+
+## 2026-09-27 · uncommitted · plan(platform): define product source layout migration
+
+- 변경: D-310 Proposed와 제품 전용 소스 배치 이행 계획을 추가했다. 기존 Pinky·OMX 패키지와 독립 IMU의 목표 경로, CORE/IO Docker COPY, package closure 동등성, 후속 runtime adapter의 별도 게이트를 기록했다.
+- 근거: D-231·D-303·D-305 및 현재 `core` 프로필 로딩, `omx_adapter` 후보 owner, Docker CORE/IO와 native 필수 패키지 경로를 읽기 대조했다.
+- 검증: D-310·계획 상대 링크 0건 누락, network/harness 계약 시험 76 passed, harness lint 0 errors/20 기존 메타데이터 warnings (Windows LOCAL).
+- gate 변화: 문서 SOURCE/LOCAL 정합성만 확인했다. ADR 수용, 실제 폴더 이동, ROS 빌드·이미지 빌드·장치 readback은 아직 수행하지 않았다.
