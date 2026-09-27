@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import runpy
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -105,3 +106,12 @@ def test_core_build_probes_imports_and_installed_web_assets(tmp_path):
     (common / "ui.js").unlink()
     with pytest.raises(FileNotFoundError, match="web_common.*ui.js"):
         verify_assets(dashboard, common)
+
+
+def test_core_probe_skips_included_routers_without_a_path():
+    verify_dashboard_route = runpy.run_path(str(PROBE))["verify_dashboard_route"]
+    included_router = SimpleNamespace(routes=[SimpleNamespace(path="/api/v1")])
+    verify_dashboard_route(SimpleNamespace(routes=[included_router, SimpleNamespace(path="/dashboard")]))
+
+    with pytest.raises(RuntimeError, match="dashboard route"):
+        verify_dashboard_route(SimpleNamespace(routes=[included_router]))
