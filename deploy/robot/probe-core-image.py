@@ -15,6 +15,12 @@ def verify_assets(dashboard: Path, web_common: Path) -> None:
                 raise FileNotFoundError(f"{package}: missing installed asset {name}")
 
 
+def verify_dashboard_route(app: object) -> None:
+    # Included routers in FastAPI's route list need not expose ``path``.
+    if not any(getattr(route, "path", None) == "/dashboard" for route in app.routes):
+        raise RuntimeError("CORE dashboard route was not registered")
+
+
 def main() -> None:
     # Import the same modules the CORE entry point and API need before ROS spins.
     import core.main  # noqa: F401
@@ -31,8 +37,7 @@ def main() -> None:
         raise RuntimeError("CORE web_common resolved outside installed share")
 
     app = create_app({}, SimpleNamespace())
-    if not any(route.path == "/dashboard" for route in app.routes):
-        raise RuntimeError("CORE dashboard route was not registered")
+    verify_dashboard_route(app)
 
 
 if __name__ == "__main__":
