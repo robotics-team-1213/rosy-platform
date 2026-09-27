@@ -45,6 +45,23 @@
         </div>
       </div>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
+      <section class="vision-preview" aria-labelledby="vision-heading">
+        <div class="map-head">
+          <h2 id="vision-heading">관제 카메라</h2>
+          <span class="spacer"></span>
+          <ui-tag id="vision-state" status="neutral">인증 대기</ui-tag>
+        </div>
+        <div class="vision-controls">
+          <label for="vision-source">카메라</label>
+          <select id="vision-source" disabled aria-label="관제 카메라 선택"></select>
+          <ui-button kind="quiet" id="vision-refresh" type="button">영상 새로고침</ui-button>
+        </div>
+        <div class="vision-frame" id="vision-frame" data-state="waiting">
+          <img id="vision-image" alt="선택한 관제 카메라의 최신 영상" hidden>
+          <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
+        </div>
+        <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
+      </section>
       <div class="legend" id="map-legend" hidden>
         <span><i class="sw free"></i>자유</span>
         <span><i class="sw occupied"></i>점유</span>

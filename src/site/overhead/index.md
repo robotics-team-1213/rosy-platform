@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · serve authorized latest-frame preview
 - 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)
 - 2026-09-26 · uncommitted · feat(site): TLS Docker path and durable sighting readback
 - 2026-09-26 · uncommitted · feat(overhead): CPU vision worker to Fleet sighting contract (D-257/D-269)
 - 2026-09-26 · c6647a1e · 에뮬레이터 종단 확인 (안드로이드 앱 → 이 어댑터)
-- 2026-09-26 · 27b8f34e · fix(overhead): never stall a reconnecting phone behind a half-open old socket

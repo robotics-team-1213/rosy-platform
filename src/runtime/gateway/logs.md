@@ -488,3 +488,8 @@
 - Change: launch now resolves default YAML from core_common share; source fixtures follow the new owner.
 - Evidence: 1,812 gateway/config/image tests passed with 28 skipped; flake8 passed for changed runtime/config Python files.
 - Gate: LOCAL only; ROS-SIM, image and device runtime remain unverified.
+## 2026-09-28 · uncommitted · report camera-line observation hold
+
+- Change: selected CAMERA_LINE missing/stale/invalid evidence keeps the existing fail-closed zero command candidate and adds a camera-specific reason. Source changes still discard old evidence; no IR auto-switch was added.
+- Evidence: line-follow and simulation-clock regression suites 27 passed. Full gateway suite: 1,384 passed, 16 skipped, 5 failures; failures include unrelated event catalogue/API-reference alignment and two outdated camera-state expectations, which were corrected and rechecked in the focused suites.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, device, or field acceptance.

@@ -159,6 +159,10 @@ class FakeRobot:
         self._record("navigation_goal", x, y, yaw)
         return {"accepted": True}
 
+    async def line_follow_mode(self, mode: str) -> dict:
+        self._record("line_follow_mode", mode)
+        return {"mode": mode, "state": "WAITING" if mode == "IR_LINE" else "OFF"}
+
     async def estop(self) -> dict:
         self._record("estop")
         return {"estop": True}

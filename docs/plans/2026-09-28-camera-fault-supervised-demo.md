@@ -1,5 +1,11 @@
 # Camera Fault Supervised Demo Implementation Plan
 
+## Execution status (2026-09-28)
+
+- Implemented in source: camera-line stale/missing/invalid evidence keeps a zero command candidate and adds a camera-specific reason; the ROS-free eligibility evaluator checks matching IR calibration revisions, fresh valid IR-line evidence, and action-specific sensor/deadman freshness; Fleet has an explicit IR selection control and forwards it through CORE's operator API. CORE refuses a camera-fault switch unless camera loss is latched and the calibrated sensor-only safety policy is bound. The resulting IR mode begins at zero in WAITING and subsequent commands remain subject to CORE's command-time sensor policy. Vision serves a signed, short-lived, rate-limited latest-frame lease directly to Fleet.
+- Remaining implementation gap: the generic eligibility evaluator is not yet populated from live per-sensor/commissioning evidence for Nav2 or teleop; those actions are not exposed by this Fleet fallback control. Physical zero-velocity readback, G4/G5, IR lane calibration, and site camera coverage remain commissioning gates, not host-test claims.
+- Verification boundary: host Python tests, Docker Compose configuration parsing, and Caddyfile adaptation. Packaged site/TLS routing, browser walkthrough, real camera coverage, Pinky sensor calibration, G4/G5, physical stop readback, and field demo remain unverified.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Pinky 전면 카메라 고장 시 관제 PC가 현장 전체 영상을 보고, 살아 있는 로컬 센서와 수용된 기능에 맞는 제한된 시연 작업을 지시·확인한다.

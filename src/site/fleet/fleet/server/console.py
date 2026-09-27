@@ -240,6 +240,12 @@ class FleetConsole:
             if task_id is not None and task_id not in active_task_ids:
                 self._queued.pop(robot_id, None)
 
+    async def line_follow_mode(self, robot_id: str, mode: str) -> dict:
+        """Forward an explicit bounded line-follow selection to CORE."""
+        if mode not in {"IR_LINE", "OFF"}:
+            raise ValueError("unsupported Fleet line-follow mode")
+        return await self._client(robot_id).line_follow_mode(mode)
+
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
                    attempt_seq: int | None = None) -> dict:

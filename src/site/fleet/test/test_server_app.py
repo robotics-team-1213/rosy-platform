@@ -7,6 +7,7 @@ from hashlib import sha256
 import pytest
 from fastapi.testclient import TestClient
 from core_common.intent import MAX_STEPS, verbs
+from core_common.protocol.vision_preview import VisionLeaseSigner
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -35,6 +36,60 @@ def test_health_endpoint_reports_liveness_without_robot_or_auth_data():
     assert "robot" not in response.text and "token" not in response.text
 
 
+def test_vision_lease_is_source_scoped_and_fleet_returns_no_frame_bytes():
+    robots = [FakeRobot("rosy_01")]
+    console = FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-token")], robots)
+    client = TestClient(create_app(
+        console, vision_lease_secret="v" * 32, vision_sources=("ceiling-north",)))
+
+    response = client.post("/api/fleet/vision/lease", json={"source_id": "ceiling-north"})
+    rejected = client.post("/api/fleet/vision/lease", json={"source_id": "other"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["frame_path"] == "/api/vision/sources/ceiling-north/frame"
+    assert body["expires_in_s"] == 60
+    assert VisionLeaseSigner("v" * 32).verify(
+        body["lease"], source_id="ceiling-north")["scope"] == "frame:read"
+    assert "jpeg" not in body and "image" not in body
+    assert rejected.status_code == 404
+
+
+def test_vision_lease_endpoint_fails_closed_when_preview_is_not_configured():
+    client = _client(FakeRobot("rosy_01"))
+
+    response = client.post("/api/fleet/vision/lease", json={"source_id": "ceiling-north"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "VISION_PREVIEW_DISABLED"
+
+
+def test_preview_asset_is_served_from_the_allowlist_and_csp_allows_its_blob_frames():
+    client = _client(FakeRobot("rosy_01"))
+
+    asset = client.get("/console/assets/vision-view.js")
+    page = client.get("/console")
+
+    assert asset.status_code == 200
+    assert "createVisionView" in asset.text
+    assert "img-src 'self' data: blob:" in page.headers["content-security-policy"]
+
+
+def test_preview_secret_cannot_be_reused_as_a_named_user_credential(tmp_path):
+    secret = "v" * 64
+    console = FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-token")],
+        [FakeRobot("rosy_01")],
+    )
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=("rosy_01",))
+    users = {sha256(secret.encode("utf-8")).hexdigest():
+             {"principal_id": "viewer", "role": "viewer"}}
+
+    with pytest.raises(ValueError, match="vision preview secret must differ from site user"):
+        create_app(console, site_users=users, task_service=tasks, vision_lease_secret=secret)
+
+
 def test_goal_openapi_contract_exposes_only_domain_intent_fields():
     app = create_app(FleetConsole(
         [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")],
@@ -51,6 +106,20 @@ def test_goal_openapi_contract_exposes_only_domain_intent_fields():
     assert goal_schema["additionalProperties"] is False
     assert all(goal_schema["properties"][name]["type"] == "number"
                for name in ("x", "y", "yaw"))
+
+
+def test_camera_fault_ir_selection_is_forwarded_only_as_explicit_operator_intent():
+    robot = FakeRobot("rosy_01")
+    client = _client(robot)
+
+    selected = client.post("/api/fleet/robots/rosy_01/line-follow", json={"mode": "IR_LINE"})
+    invalid = client.post("/api/fleet/robots/rosy_01/line-follow", json={"mode": "CAMERA_LINE"})
+
+    assert selected.status_code == 200
+    assert selected.json()["result"] == {"mode": "IR_LINE", "state": "WAITING"}
+    assert ("line_follow_mode", "IR_LINE") in robot.calls
+    assert invalid.status_code == 400
+    assert sum(call[0] == "line_follow_mode" for call in robot.calls) == 1
 
 
 def test_do_openapi_contract_matches_intent_verbs_and_bounded_sequences():

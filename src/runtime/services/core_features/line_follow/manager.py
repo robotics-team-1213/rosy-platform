@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import re
 import math
 import threading
 import time
@@ -27,6 +28,8 @@ class LineObservation:
     visible: bool
     error: Optional[float]
     confidence: float
+    ir_calibrated: bool = False
+    calibration_revision: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.source is LineFollowMode.OFF:
@@ -40,6 +43,11 @@ class LineObservation:
                 raise ValueError("visible observation error must be in [-1, 1]")
         elif self.error is not None:
             raise ValueError("invisible observation cannot carry an error")
+        if type(self.ir_calibrated) is not bool:
+            raise ValueError("IR calibration marker must be a boolean")
+        if self.ir_calibrated and (not isinstance(self.calibration_revision, str)
+                                   or not self.calibration_revision.strip()):
+            raise ValueError("calibrated IR evidence requires a revision")
 
 
 @dataclass(frozen=True)
@@ -51,6 +59,7 @@ class LineFollowConfig:
     min_confidence: float = 0.35
     stale_after_s: float = 0.3
     lost_after_s: float = 3.0
+    ir_calibration_revision: Optional[str] = None
 
     def __post_init__(self) -> None:
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
@@ -66,6 +75,10 @@ class LineFollowConfig:
             raise ValueError("min_confidence must be in (0, 1]")
         if self.stale_after_s <= 0 or self.lost_after_s <= 0:
             raise ValueError("line-follow timeouts must be positive")
+        if (self.ir_calibration_revision is not None
+                and (not isinstance(self.ir_calibration_revision, str)
+                     or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):
+            raise ValueError("IR calibration revision must be a lowercase SHA-256 digest")
 
 
 @dataclass(frozen=True)
@@ -94,6 +107,8 @@ class LineFollowManager:
         self._evidence_revision = 0
         self._observation: Optional[LineObservation] = None
         self._received_at: Optional[float] = None
+        self._ir_observation: Optional[LineObservation] = None
+        self._ir_received_at: Optional[float] = None
         self._loss_started_at: Optional[float] = None
         self._lost_latched = False
         self._invalid_observation = False
@@ -110,6 +125,10 @@ class LineFollowManager:
     def mode(self) -> LineFollowMode:
         with self._lock:
             return self._mode
+
+    @property
+    def config(self) -> LineFollowConfig:
+        return self._config
 
     @property
     def active(self) -> bool:
@@ -157,6 +176,9 @@ class LineFollowManager:
                 raise ValueError("observation timestamp is in the future")
             effective_received_at -= max(0.0, source_age)
         with self._lock:
+            if observation.source is LineFollowMode.IR_LINE:
+                self._ir_observation = observation
+                self._ir_received_at = effective_received_at
             if observation.source is not self._mode:
                 return False
             self._invalid_observation = False
@@ -169,6 +191,35 @@ class LineFollowManager:
             elif self._loss_started_at is None:
                 self._loss_started_at = float(now)
             return True
+
+    def ir_fallback_readiness(self, *, now: Optional[float] = None) -> tuple[bool, tuple[str, ...]]:
+        """Return current CORE-owned evidence for an operator-selected IR fallback."""
+        current = self._clock() if now is None else now
+        if not _finite(current):
+            raise ValueError("IR readiness time must be finite")
+        with self._lock:
+            observation = self._ir_observation
+            received_at = self._ir_received_at
+            reasons: set[str] = set()
+            expected = self._config.ir_calibration_revision
+            if expected is None:
+                reasons.add("IR_CALIBRATION_REVISION_NOT_CONFIGURED")
+            if observation is None or received_at is None:
+                reasons.add("IR_EVIDENCE_MISSING")
+            else:
+                age = float(current) - received_at
+                if age < 0.0 or age > self._config.stale_after_s:
+                    reasons.add("IR_EVIDENCE_STALE")
+                if not observation.ir_calibrated:
+                    reasons.add("IR_NOT_CALIBRATED")
+                if (expected is not None
+                        and observation.calibration_revision != expected):
+                    reasons.add("IR_CALIBRATION_REVISION_MISMATCH")
+                if not observation.visible:
+                    reasons.add("IR_LINE_NOT_VISIBLE")
+                if observation.confidence < self._config.min_confidence:
+                    reasons.add("IR_LINE_CONFIDENCE_LOW")
+            return not reasons, tuple(sorted(reasons))
 
     def invalidate(self, received_at: Optional[float] = None) -> bool:
         """Replace an active command candidate with explicit invalid evidence."""
@@ -187,6 +238,18 @@ class LineFollowManager:
             if self._loss_started_at is None:
                 self._loss_started_at = float(now)
             return True
+
+    def invalidate_ir(self, received_at: Optional[float] = None) -> None:
+        """Invalidate the cached IR fallback evidence without changing camera state."""
+        now = self._clock() if received_at is None else received_at
+        if not _finite(now):
+            raise ValueError("received_at must be finite")
+        with self._lock:
+            self._ir_observation = LineObservation(
+                source=LineFollowMode.IR_LINE, stamp=float(now), visible=False,
+                error=None, confidence=0.0, ir_calibrated=False,
+            )
+            self._ir_received_at = float(now)
 
     def status(self) -> LineFollowStatus:
         with self._lock:
@@ -220,7 +283,10 @@ class LineFollowManager:
             if self._mode is LineFollowMode.OFF:
                 return self._stop_decision("OFF", "mode_off")
             if self._lost_latched:
-                return self._stop_decision("LOST", "reselection_required")
+                reason = ("camera_reselection_required"
+                          if self._mode is LineFollowMode.CAMERA_LINE
+                          else "reselection_required")
+                return self._stop_decision("LOST", reason)
 
             observation = self._observation
             age = None if self._received_at is None else current - self._received_at
@@ -295,6 +361,8 @@ class LineFollowManager:
 
     def _loss_or_stop(self, now: float, state: str, reason: str,
                       age: Optional[float]) -> LineFollowDecision:
+        if self._mode is LineFollowMode.CAMERA_LINE:
+            reason = f"camera_{reason}"
         if self._loss_started_at is None:
             self._loss_started_at = now
         if now - self._loss_started_at > self._config.lost_after_s:

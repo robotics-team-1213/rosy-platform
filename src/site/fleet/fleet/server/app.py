@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.sightings import SiteSightingPayload
+from core_common.protocol.vision_preview import VisionLeaseSigner
 from core_common.protocol.schemas import DiscoveryScanPayload
 from core_common.intent import IntentError, interpret, request_schema
 from fleet.hub.hub import HubError
@@ -80,10 +81,11 @@ CONSOLE_ASSETS = {
     "map-view.js": "application/javascript",
     "roster.js": "application/javascript",
     "signals.js": "application/javascript",
+    "vision-view.js": "application/javascript",
 }
 
 CONSOLE_CSP = (
-    "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+    "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; "
     "style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 )
 
@@ -109,6 +111,12 @@ class GoalRequest(BaseModel):
         return value
 
 
+class LineFollowModeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mode: str
+
+
 class FormationRequest(BaseModel):
     leader: str
     formation: str = "COLUMN"
@@ -129,6 +137,11 @@ class SignalCommandRequest(BaseModel):
     mode: str
     lamps: Optional[dict[str, bool]] = None
     cycle: Optional[dict[str, int]] = None
+
+
+class VisionLeaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    source_id: str
 
 
 def _http_error(exc: BaseException) -> HTTPException:
@@ -159,7 +172,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                task_service: Optional[FleetTaskService] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
-               discovery=None, discovery_token: Optional[str] = None) -> FastAPI:
+               discovery=None, discovery_token: Optional[str] = None,
+               vision_lease_secret: Optional[str] = None,
+               vision_sources: tuple[str, ...] = ()) -> FastAPI:
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
@@ -168,6 +183,24 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                         or console.uses_rest_token(discovery_token)
                                         or console.uses_agent_pairing_token(discovery_token)):
         raise ValueError("discovery credential must differ from Fleet and robot credentials")
+    vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
+    if vision_signer is not None:
+        if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
+            raise ValueError("vision preview secret must differ from Fleet credentials")
+        if (console.uses_rest_token(vision_lease_secret)
+                or console.uses_agent_pairing_token(vision_lease_secret)):
+            raise ValueError("vision preview secret must differ from robot credentials")
+        if discovery_token is not None and hmac.compare_digest(vision_lease_secret, discovery_token):
+            raise ValueError("vision preview secret must differ from discovery credentials")
+        if sightings is not None and sightings.uses_token(vision_lease_secret):
+            raise ValueError("vision preview secret must differ from sighting credentials")
+        vision_secret_digest = sha256(vision_lease_secret.encode("utf-8")).hexdigest()
+        if site_users is not None and any(
+                hmac.compare_digest(vision_secret_digest, digest) for digest in site_users):
+            raise ValueError("vision preview secret must differ from site user credentials")
+        if len(set(vision_sources)) != len(vision_sources) or any(
+                not isinstance(source, str) or not source for source in vision_sources):
+            raise ValueError("vision preview sources must be unique non-empty ids")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -394,6 +427,25 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         principal: SitePrincipal = request.state.site_principal
         return {"principal_id": principal.principal_id, "role": principal.role}
 
+    @app.get("/api/fleet/vision/sources", dependencies=read_guard, tags=["vision-preview"])
+    def vision_preview_sources() -> dict:
+        if vision_signer is None:
+            raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
+        return {"sources": list(vision_sources)}
+
+    @app.post("/api/fleet/vision/lease", dependencies=read_guard, tags=["vision-preview"])
+    def vision_preview_lease(body: VisionLeaseRequest,
+                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
+        if vision_signer is None:
+            raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
+        if body.source_id not in vision_sources:
+            raise HTTPException(status_code=404, detail={"code": "UNKNOWN_VISION_SOURCE"})
+        token = vision_signer.issue(principal_id=principal.principal_id,
+                                    source_id=body.source_id, ttl_s=60)
+        return {"source_id": body.source_id, "lease": token,
+                "frame_path": f"/api/vision/sources/{body.source_id}/frame",
+                "expires_in_s": 60}
+
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:
         grid = await console.map()
@@ -430,6 +482,20 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             code = str(exc)
             status = 404 if code == "UNKNOWN_ROBOT" else 400
             raise HTTPException(status_code=status, detail={"code": code}) from exc
+        except (HubError, RobotApiError, OSError) as exc:
+            raise _http_error(exc) from exc
+
+    @app.post("/api/fleet/robots/{robot_id}/line-follow", dependencies=operator_guard,
+              tags=["fleet"])
+    async def fleet_line_follow_mode(
+        robot_id: str, body: LineFollowModeRequest,
+        principal: SitePrincipal = Depends(require_operator),
+    ) -> dict:
+        try:
+            result = await console.line_follow_mode(robot_id, body.mode)
+            return {"robot_id": robot_id, "actor_id": principal.principal_id, "result": result}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail={"code": "INVALID_MODE"}) from exc
         except (HubError, RobotApiError, OSError) as exc:
             raise _http_error(exc) from exc
 

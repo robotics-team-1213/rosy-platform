@@ -26,6 +26,7 @@ import websockets
 
 try:
     from websockets.asyncio.server import Server, ServerConnection, serve
+    from websockets.http11 import Headers, Response
 except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
     raise ImportError(
         f"overhead needs websockets>=14 (found {websockets.__version__}); "
@@ -33,6 +34,7 @@ except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
     ) from exc
 
 from overhead import protocol
+from core_common.protocol.vision_preview import VisionLeaseError, VisionLeaseSigner
 
 STATUS_INTERVAL_S = 1.0
 # A peer that upgrades but never sends hello is closed after this long.
@@ -113,7 +115,9 @@ class _Source:
 class IngestServer:
     """One ``rosy-overhead/1`` receive-only endpoint. Latest-frame-per-source only."""
 
-    def __init__(self, source_tokens: Mapping[str, str], config: dict | None = None) -> None:
+    def __init__(self, source_tokens: Mapping[str, str], config: dict | None = None,
+                 *, preview_signer: VisionLeaseSigner | None = None,
+                 preview_max_age_s: float = 1.0) -> None:
         if not source_tokens:
             raise ValueError("at least one source token is required")
         tokens = dict(source_tokens)
@@ -125,6 +129,11 @@ class IngestServer:
         if len(set(tokens.values())) != len(tokens):
             raise ValueError("each source must have a unique token")
         self.source_tokens = tokens
+        self.preview_signer = preview_signer
+        if not isinstance(preview_max_age_s, (int, float)) or preview_max_age_s <= 0:
+            raise ValueError("preview_max_age_s must be positive")
+        self.preview_max_age_s = float(preview_max_age_s)
+        self._preview_last_sent: dict[tuple[str, str], float] = {}
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -156,6 +165,10 @@ class IngestServer:
     def _process_request(self, connection: ServerConnection, request):
         if request.path == "/healthz" and request.method == "GET":
             return connection.respond(200, '{"status":"ok"}\n')
+        if request.path.startswith("/api/vision/sources/"):
+            if request.method != "GET":
+                return _http_response(404, b"not found\n")
+            return self._preview_response(request.path, request.headers.get("Authorization"))
         if request.path != protocol.WS_PATH:
             return connection.respond(404, "not found\n")
         auth = request.headers.get("Authorization")
@@ -165,6 +178,45 @@ class IngestServer:
         if not authorized:
             return connection.respond(401, "unauthorized\n")
         return None
+
+    def _preview_response(self, path: str, authorization: str | None) -> Response:
+        """Serve one authorized latest JPEG directly from Vision, never from Fleet."""
+        prefix = "/api/vision/sources/"
+        suffix = "/frame"
+        source = path[len(prefix):-len(suffix)] if path.startswith(prefix) and path.endswith(suffix) else ""
+        if not source or "/" in source or self.preview_signer is None:
+            return _http_response(404, b"not found\n")
+        bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
+        try:
+            lease = self.preview_signer.verify(bearer, source_id=source)
+        except VisionLeaseError:
+            return _http_response(401, b"unauthorized\n")
+        now_mono = time.monotonic()
+        key = (str(lease["sub"]), source)
+        previous = self._preview_last_sent.get(key)
+        if previous is not None and now_mono - previous < 0.2:
+            return _http_response(429, b"rate limited\n", extra={"Retry-After": "1"})
+        if len(self._preview_last_sent) >= 512:
+            self._preview_last_sent = {
+                item: stamp for item, stamp in self._preview_last_sent.items()
+                if now_mono - stamp < 10.0
+            }
+            if len(self._preview_last_sent) >= 512 and key not in self._preview_last_sent:
+                return _http_response(429, b"preview capacity reached\n",
+                                      extra={"Retry-After": "1"})
+        self._preview_last_sent[key] = now_mono
+        frame = self.latest_frame(source)
+        if frame is None:
+            return _http_response(404, b"frame unavailable\n")
+        age = max(0.0, time.time() - frame.captured_at)
+        if age > self.preview_max_age_s:
+            return _http_response(404, b"frame stale\n", extra={"X-Frame-State": "stale"})
+        return _http_response(200, frame.jpeg, extra={
+            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
+            "X-Frame-Seq": str(frame.header.seq),
+            "X-Frame-Age-Ms": str(round(age * 1000)),
+            "X-Frame-Captured-At": str(frame.captured_at),
+        })
 
     # -- per-connection lifecycle ------------------------------------------
 
@@ -261,10 +313,17 @@ class IngestServer:
         except protocol.HeaderError:
             src.stats.dropped_bad_header += 1
             return
-        jpeg = message[protocol.HEADER_SIZE :]
+        jpeg = message[protocol.HEADER_SIZE:]
         if len(jpeg) > self.config["max_bytes"]:
             src.stats.oversize += 1
             return
         captured_at = now - header.age_ms / 1000.0
         src.latest = LatestFrame(header=header, jpeg=jpeg, captured_at=captured_at, received_at=now)
         src.stats.record_frame(now, len(jpeg), header.age_ms, header.seq)
+
+
+def _http_response(status: int, body: bytes, *, extra: Mapping[str, str] | None = None) -> Response:
+    reason = {200: "OK", 401: "Unauthorized", 404: "Not Found", 429: "Too Many Requests"}[status]
+    headers = Headers({"Content-Length": str(len(body)), "X-Content-Type-Options": "nosniff",
+                       "Cache-Control": "no-store", **dict(extra or {})})
+    return Response(status, reason, headers, body)

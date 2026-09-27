@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · add direct Vision preview leases
 - 2026-09-27 · uncommitted · fix(ui): give the empty map a readable screen state
 - 2026-09-27 · uncommitted · fix(ui): clear discovery addresses when readback is unavailable
 - 2026-09-27 · uncommitted · fix(ui): make formation read loss explicit
 - 2026-09-27 · uncommitted · fix(ui): make Fleet map goal operable by keyboard
-- 2026-09-27 · 778bbd31 · verify packaged Site Fleet host path (LOCAL)

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import time
 import math
+import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -68,6 +70,16 @@ class IRLineCalibration:
         if any(abs(float(white) - float(black)) < self.min_span
                for black, white in zip(self.black, self.white)):
             raise ValueError("IR calibration endpoints are not physically separated")
+
+    @property
+    def revision(self) -> str:
+        """Stable digest of the exact per-robot endpoints used to normalize IR."""
+        payload = json.dumps({
+            "black": [float(value) for value in self.black],
+            "white": [float(value) for value in self.white],
+            "min_span": float(self.min_span),
+        }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     def normalize(self, values) -> tuple[float, float, float]:
         if len(values) != 3:
@@ -541,13 +553,24 @@ class LaneCornerTracker:
 
 
 def line_observation_payload(source: str, stamp: float,
-                             observation: LaneObservation | None) -> dict:
+                             observation: LaneObservation | None, *,
+                             ir_calibrated: bool = False,
+                             calibration_revision: str | None = None) -> dict:
     """One compact wire shape shared by IR and camera publishers."""
     if source not in ("IR_LINE", "CAMERA_LINE"):
         raise ValueError("unsupported line observation source")
     if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) \
             or not math.isfinite(float(stamp)):
         raise ValueError("line observation stamp must be finite")
+    if source == "IR_LINE":
+        if type(ir_calibrated) is not bool:
+            raise ValueError("IR calibrated marker must be a boolean")
+        if ir_calibrated and (not isinstance(calibration_revision, str)
+                              or not calibration_revision.strip()):
+            raise ValueError("calibrated IR evidence requires a revision")
+    metadata = ({"ir_calibrated": ir_calibrated,
+                 "calibration_revision": calibration_revision}
+                if source == "IR_LINE" else {})
     if observation is None:
         return {
             "source": source,
@@ -555,6 +578,7 @@ def line_observation_payload(source: str, stamp: float,
             "visible": False,
             "error": None,
             "confidence": 0.0,
+            **metadata,
         }
     return {
         "source": source,
@@ -562,6 +586,7 @@ def line_observation_payload(source: str, stamp: float,
         "visible": True,
         "error": float(observation.error),
         "confidence": float(observation.confidence),
+        **metadata,
     }
 
 

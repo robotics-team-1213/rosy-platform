@@ -152,6 +152,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         min_confidence=float(raw.get("min_confidence", defaults.min_confidence)),
         stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
         lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
+        ir_calibration_revision=raw.get("ir_calibration_revision") or None,
     )
 
 

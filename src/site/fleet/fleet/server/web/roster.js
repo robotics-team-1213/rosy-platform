@@ -1,7 +1,7 @@
 // 명렬 카드 + 큐 채우기 (Fleet 분해 3). 로봇 한 대의 상태·증거·조작과
 // 주의/개입 큐를 그린다. formation/signals 팩토리와 같은 모양이다.
 
-export function createRoster({ el, view, log, call, render, streamEvidence }) {
+export function createRoster({ el, view, log, call, render, streamEvidence, isOperator }) {
   function needsAttention(robot) {
     const state = robot.state;
     const evidence = streamEvidence(view.formation, robot.robot_id);
@@ -141,7 +141,9 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     aim.dataset.goalRobotId = robot.robot_id;
     aim.textContent = view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정";
     if (view.selected === robot.robot_id) aim.classList.add("arming");
-    aim.disabled = view.stateUnavailable || !robot.online || !view.map || estop !== false;
+    const currentLineFollow = state.line_follow || {};
+    const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
+    aim.disabled = view.stateUnavailable || !robot.online || !view.map || estop !== false || lineFollowActive;
     aim.addEventListener("click", () => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
       view.cursor = view.selected && view.map
@@ -180,12 +182,43 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
         log(`${robot.robot_id} 취소 실패 — ${err.message}`, "bad");
       }
     });
+    const lineFollow = state.line_follow || {};
+    const cameraFaultLatched = lineFollow.mode === "CAMERA_LINE"
+      && lineFollow.state === "LOST"
+      && lineFollow.reason === "camera_reselection_required";
+    if (cameraFaultLatched || lineFollow.mode === "IR_LINE") {
+      const fallback = document.createElement("ui-button");
+      fallback.setAttribute("kind", "quiet");
+      fallback.type = "button";
+      fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
+      fallback.disabled = view.stateUnavailable || !robot.online || !isOperator();
+      fallback.addEventListener("click", async () => {
+        const mode = lineFollow.mode === "IR_LINE" ? "OFF" : "IR_LINE";
+        if (mode === "IR_LINE" && !window.confirm(`${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`)) return;
+        try {
+          const result = await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode }),
+          });
+          log(`${robot.robot_id} ${mode === "IR_LINE" ? "IR 추적 요청" : "IR 추적 중지"} · ${result.result?.state || "CORE 응답 확인"}`, "good");
+        } catch (err) {
+          log(`${robot.robot_id} IR 추적 거부 · ${err.message}`, "bad");
+        }
+      });
+      actions.append(fallback);
+    }
     actions.append(aim, cancel);
     node.appendChild(actions);
     if (goalSafetyReason) {
       const why = document.createElement("p");
       why.className = "hint";
       why.textContent = goalSafetyReason;
+      node.appendChild(why);
+    }
+    if (lineFollowActive) {
+      const why = document.createElement("p");
+      why.className = "hint";
+      why.textContent = "선택된 line-follow가 CORE motion을 소유합니다. 먼저 중지해야 Nav2 목표를 받을 수 있습니다.";
       node.appendChild(why);
     }
     return node;

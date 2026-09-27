@@ -93,6 +93,7 @@ class LineObserverNode(Node):
         self.declare_parameter('route_start', Parameter.Type.DOUBLE_ARRAY, _READ_ONLY)
 
         self._ir_calibration = None
+        self._ir_calibration_revision = None
         self._camera_controls_stable = False
         self._simulation_ground_key = None
         self._simulation_ground = None
@@ -134,6 +135,7 @@ class LineObserverNode(Node):
                 white=tuple(self.get_parameter('ir_white').value),
                 min_span=float(self.get_parameter('ir_min_span').value),
             )
+            self._ir_calibration_revision = self._ir_calibration.revision
 
         self.observation_pub = self.create_publisher(String, 'line/observation', 10)
         self.create_subscription(
@@ -223,7 +225,11 @@ class LineObserverNode(Node):
 
     def _publish(self, source, observation, *, stamp=None) -> None:
         payload = line_observation_payload(
-            source, self._stamp() if stamp is None else stamp, observation)
+            source, self._stamp() if stamp is None else stamp, observation,
+            ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
+            calibration_revision=(self._ir_calibration_revision
+                                  if source == 'IR_LINE' else None),
+        )
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _on_ir(self, msg: UInt16MultiArray) -> None:

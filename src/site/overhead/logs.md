@@ -50,3 +50,8 @@
 - 변경: Android 소스 변경 없이 immutable Site candidate를 재빌드하고 synthetic ceiling-phone JPEG를 packaged WSS → Vision CPU ArUco → Fleet HTTPS/SQLite로 전송했다.
 - 근거: overhead `70 passed`; source `ceiling_north`, sequence 78, pose `[2.0, 1.0]`; Fleet 재시작 후 sighting readback 통과. `quality: null`이며 physical phone/freshness/calibration 수용은 아니다.
 - gate 변화: SOURCE/LOCAL 유지. Android phone, Ubuntu/RTX GPU, DEVICE/FIELD는 PARKED; D-268 automatic movement/picking은 HOLD.
+## 2026-09-28 · uncommitted · serve authorized latest-frame preview
+
+- Change: Vision validates Fleet HMAC leases, serves only the latest fresh JPEG directly to the browser, caps each principal/source at 5 requests/second, and returns explicit missing/stale/rate-limit responses. Compose mounts a dedicated read-only secret and Caddy routes preview traffic directly to Vision.
+- Evidence: overhead suite 76 passed with the HTTP preview route and rate cap. Compose config parses and Caddy adapts with the Vision preview route. Packaged stack/TLS/browser smoke was not run.
+- Gate: local tests/config only; device, calibrated view, site host, and field gates remain parked.

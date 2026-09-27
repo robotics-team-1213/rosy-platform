@@ -115,6 +115,23 @@ def test_navigation_goal_posts_x_y_yaw():
     assert seen["body"] == {"x": 1.0, "y": 2.0, "yaw": 0.5}
 
 
+def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"mode": "IR_LINE", "state": "WAITING"})
+
+    client = _client(handler)
+    assert run(client.line_follow_mode("IR_LINE"))["state"] == "WAITING"
+    assert seen == {"method": "PUT", "path": "/api/v1/line-follow/mode",
+                    "body": {"mode": "IR_LINE"}}
+    with pytest.raises(ValueError):
+        run(client.line_follow_mode("CAMERA_LINE"))
+
+
 def test_socket_urls_point_at_the_robot():
     c = _client(lambda r: httpx.Response(200, json={}))
     assert c.pose_url() == "ws://robot:8080/ws/swarm/pose?token=op-token"

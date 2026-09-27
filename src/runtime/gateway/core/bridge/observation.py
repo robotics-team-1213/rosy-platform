@@ -14,7 +14,7 @@ file hiding a decision → extract a ROS-free sibling).
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Callable
 
 from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
@@ -28,17 +28,25 @@ Warn = Callable[[str], None]
 def line_observation(services, raw: str, *, source_now: float,
                      received_at: float) -> None:
     """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
+    source = None
     try:
         data = json.loads(raw)
+        source = LineFollowMode(data["source"])
         if type(data.get("visible")) is not bool:
             raise ValueError("visible must be a boolean")
         visible = data["visible"]
+        calibrated = data.get("ir_calibrated", False)
+        revision = data.get("calibration_revision")
+        if source is LineFollowMode.IR_LINE and type(calibrated) is not bool:
+            raise ValueError("IR calibrated marker must be a boolean")
         observation = LineObservation(
-            source=LineFollowMode(data["source"]),
+            source=source,
             stamp=float(data["stamp"]),
             visible=visible,
             error=(float(data["error"]) if visible else None),
             confidence=float(data["confidence"]),
+            ir_calibrated=calibrated if source is LineFollowMode.IR_LINE else False,
+            calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)
@@ -46,9 +54,13 @@ def line_observation(services, raw: str, *, source_now: float,
             "valid": True,
             "accepted": accepted,
             "source": observation.source.value,
+            "ir_calibrated": observation.ir_calibrated,
+            "calibration_revision": observation.calibration_revision,
         })
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        if services.line_follow.invalidate(received_at=received_at):
+        if source is LineFollowMode.IR_LINE:
+            services.line_follow.invalidate_ir(received_at=received_at)
+        elif services.line_follow.invalidate(received_at=received_at):
             services.command.clear_navigation()
             services.line_follow.tick(received_at)
             services.state.set_line_follow(services.line_follow.status())

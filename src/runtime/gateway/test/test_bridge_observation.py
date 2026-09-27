@@ -54,6 +54,7 @@ def _services():
             active=False,
             observe=_sink(calls, "line_follow.observe", returns=True),
             invalidate=_sink(calls, "line_follow.invalidate", returns=True),
+            invalidate_ir=_sink(calls, "line_follow.invalidate_ir"),
             tick=_sink(calls, "line_follow.tick"),
             status=_sink(calls, "line_follow.status", returns="STATUS"),
         ),
@@ -96,7 +97,8 @@ def _logger(calls: list) -> SimpleNamespace:
 
 def _line_payload(**overrides) -> str:
     payload = {"source": "IR_LINE", "stamp": 12.5, "visible": True,
-               "error": 0.25, "confidence": 0.9}
+               "error": 0.25, "confidence": 0.9,
+               "ir_calibrated": True, "calibration_revision": "e" * 64}
     payload.update(overrides)
     return json.dumps(payload)
 
@@ -111,7 +113,10 @@ def test_a_well_formed_observation_reaches_the_manager_with_both_clocks():
     _name, _args, kwargs = _calls(calls, "line_follow.observe")[0]
     assert kwargs == {"received_at": 50.0, "source_now": 100.0}
     mirror = _calls(calls, "state.set_sensor")[0][1][1]
-    assert mirror == {"valid": True, "accepted": True, "source": "IR_LINE"}
+    assert mirror == {
+        "valid": True, "accepted": True, "source": "IR_LINE",
+        "ir_calibrated": True, "calibration_revision": "e" * 64,
+    }
     assert _calls(calls, "command.clear_navigation") == []
 
 
@@ -123,12 +128,12 @@ def test_a_string_visible_is_rejected_not_coerced():
                          source_now=1.0, received_at=2.0)
 
     assert _calls(calls, "line_follow.observe") == []
-    assert _calls(calls, "line_follow.invalidate")[0][2] == {"received_at": 2.0}
+    assert _calls(calls, "line_follow.invalidate_ir")[0][2] == {"received_at": 2.0}
     mirror = _calls(calls, "state.set_sensor")[0][1][1]
     assert mirror["valid"] is False
     assert mirror["reason"] == "invalid_observation"
     assert "visible must be a boolean" in mirror["detail"]
-    assert _calls(calls, "command.clear_navigation"), "invalidate returned True"
+    assert _calls(calls, "command.clear_navigation") == []
 
 
 def test_a_rejection_that_is_already_handled_does_not_clear_again():

@@ -367,6 +367,18 @@ def test_a_goal_enters_navigation_mode_so_nav_cmd_vel_reaches_the_wheels(client)
     assert svc.command.select_output(now=now).linear == pytest.approx(0.12)
 
 
+def test_navigation_goal_is_refused_while_line_follow_owns_motion(client):
+    tc, svc = client
+    selected = tc.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=OPERATOR)
+    assert selected.status_code == 200
+
+    response = tc.post("/api/v1/navigation/goal", json={"x": 0.5, "y": 0.0}, headers=OPERATOR)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "LINE_FOLLOW_ACTIVE"
+    assert svc.nav.nav_state.value == "IDLE"
+
+
 def test_safety_stop_release_cycle(client):
     tc, svc = client
     assert tc.post("/api/v1/safety/stop", headers=VIEWER).status_code == 200   # 누구나 (SAF-001)

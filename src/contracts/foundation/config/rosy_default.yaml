@@ -93,6 +93,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   min_confidence: 0.35
   stale_after_s: 0.30              # stop immediately when evidence lease expires
   lost_after_s: 3.0                # latch LOST; operator must explicitly reselect
+  ir_calibration_revision: null    # must match the configured IR line-observer digest
 
 traffic_policy:                    # D-151 semantic road evidence gate
   mode: DISABLED                   # DISABLED | MONITOR_ONLY | ENFORCED

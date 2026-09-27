@@ -24,6 +24,9 @@ class GoalRequest(BaseModel):
 @navigation_router.post("/navigation/goal")
 def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
+    if svc.line_follow.active:
+        raise ApiError("LINE_FOLLOW_ACTIVE", 409,
+                       "stop the selected line-follow mode before accepting a navigation goal")
     TaskKind.NAVIGATE.require(svc.capability)
     require_kept(svc, "navigation.goal_navigation")
     spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
@@ -46,6 +49,9 @@ def navigation_cancel(auth: AuthContext = Depends(operator),
 @navigation_router.post("/navigation/home")
 def navigation_home(auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
+    if svc.line_follow.active:
+        raise ApiError("LINE_FOLLOW_ACTIVE", 409,
+                       "stop the selected line-follow mode before accepting a return-home request")
     TaskKind.RETURN_HOME.require(svc.capability)
     require_kept(svc, "navigation.return_home")
     enter_navigation_mode(svc, auth)

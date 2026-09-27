@@ -61,6 +61,31 @@ def set_line_follow_mode(body: LineFollowModeRequest,
     if svc.nav.mapping_active:
         raise ApiError("MAPPING_ACTIVE", 409, "mapping session owns navigation")
 
+    if selected is LineFollowMode.IR_LINE and svc.line_follow.mode is LineFollowMode.CAMERA_LINE:
+        # D-313: IR is an explicit recovery selection after a latched camera
+        # failure. The normal CORE safety policy must also be bound to the
+        # calibrated sensor-only worker; its command-time checks remain the
+        # final authority for fresh IR/LiDAR evidence.
+        camera_status = svc.line_follow.status()
+        adapter = svc.control_adapter
+        if (camera_status.state != "LOST"
+                or camera_status.reason != "camera_reselection_required"
+                or adapter is None
+                or not getattr(adapter, "enabled", False)
+                or not getattr(adapter, "calibration_revision", None)
+                or not svc.safety.policy_required):
+            raise ApiError(
+                "IR_FALLBACK_NOT_READY", 409,
+                "camera failure must be latched and calibrated IR/LiDAR safety policy must be active",
+            )
+        ir_ready, ir_reasons = svc.line_follow.ir_fallback_readiness()
+        if not ir_ready:
+            raise ApiError(
+                "IR_FALLBACK_NOT_READY", 409,
+                "fresh IR line evidence must match the CORE-configured calibration revision",
+                detail={"reasons": list(ir_reasons)},
+            )
+
     TaskKind.NAVIGATE.require(svc.capability)
     svc.nav.cancel(source=f"line_follow:{auth.role}")
     svc.command.clear_navigation()

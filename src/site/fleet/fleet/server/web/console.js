@@ -4,6 +4,7 @@ import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createSignals } from "./signals.js";
+import { createVisionView } from "./vision-view.js";
 import { applyRoleToControls } from "./authorization.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -51,7 +52,8 @@ function markUnlocked() {
 }
 
 function operatorControls() {
-  return document.querySelectorAll("ui-button:not(#token-save):not(#roster-toggle), main input, main select");
+  return document.querySelectorAll(
+    "ui-button:not(#token-save):not(#roster-toggle):not(#vision-refresh), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -446,7 +448,8 @@ const mapView = createMapView({
 });
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
-const roster = createRoster({ el, view, log, call, render, streamEvidence: mapView.streamEvidence });
+const roster = createRoster({ el, view, log, call, render,
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
 el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;
   render();
@@ -454,6 +457,7 @@ el("roster-toggle").addEventListener("click", () => {
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });
+const visionView = createVisionView({ el, call, auth, authHeaders });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
@@ -473,7 +477,9 @@ function saveToken() {
   } else {
     sessionStorage.removeItem("rosy-console-token");
   }
+  visionView.reset();
   refreshAuthorization();
+  visionView.refreshSources();
 }
 el("token-save").addEventListener("click", saveToken);
 el("console-token").addEventListener("keydown", (event) => {
@@ -486,8 +492,10 @@ setInterval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
 render();
 refreshAuthorization();
+visionView.refreshSources();
 mapView.refresh();
 setInterval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 setInterval(refreshState, STATE_MS);
 setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);
+setInterval(() => visionView.refreshFrame(), 1500);

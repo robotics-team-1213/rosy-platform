@@ -27,6 +27,7 @@ from overhead.ingest import STATUS_INTERVAL_S, IngestServer
 from overhead.publish import SightingPublishError, SightingPublisher
 from overhead.vision_config import load_vision_sources
 from overhead.worker import VisionWorker
+from core_common.protocol.vision_preview import VisionLeaseSigner
 
 logger = logging.getLogger("overhead.vision")
 
@@ -130,7 +131,15 @@ async def _run_receive(args: argparse.Namespace) -> int:
 
 async def _run_vision(args: argparse.Namespace) -> int:
     configs = load_vision_sources(args.config)
-    ingest = IngestServer({config.camera.source_id: config.phone_token for config in configs})
+    preview_secret = os.environ.get("ROSY_VISION_PREVIEW_SECRET")
+    if preview_secret and any(
+            preview_secret in {config.phone_token, config.sighting_token} for config in configs):
+        raise ValueError("vision preview secret must differ from phone and sighting credentials")
+    preview_signer = VisionLeaseSigner(preview_secret) if preview_secret else None
+    ingest = IngestServer(
+        {config.camera.source_id: config.phone_token for config in configs},
+        preview_signer=preview_signer,
+    )
     workers = []
     async with AsyncExitStack() as stack:
         for config in configs:

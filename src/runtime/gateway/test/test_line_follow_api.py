@@ -111,3 +111,77 @@ def test_off_does_not_cancel_an_unrelated_navigation_session(core_client):
 
     assert disabled.status_code == 200
     assert services.modes.mode is Mode.NAVIGATION
+
+
+def test_ir_fallback_requires_confirmed_camera_hold_and_calibrated_control(core_client):
+    revision = "a" * 64
+    client, services = core_client(config_overrides={
+        "line_follow": {"ir_calibration_revision": revision},
+    })
+    services.line_follow.set_mode(LineFollowMode.CAMERA_LINE)
+    services.line_follow._status = services.line_follow.status().model_copy(
+        update={"state": "LOST", "reason": "camera_reselection_required"}
+    )
+
+    blocked = client.put("/api/v1/line-follow/mode", json={"mode": "IR_LINE"}, headers=OPERATOR)
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "IR_FALLBACK_NOT_READY"
+    assert services.line_follow.mode is LineFollowMode.CAMERA_LINE
+
+    services.control_adapter = type("Adapter", (), {
+        "enabled": True, "calibration_revision": "ir-calibration-r1",
+    })()
+    services.safety.policy_required = True
+    services.line_follow.observe(LineObservation(
+        source=LineFollowMode.IR_LINE, stamp=1.0, visible=True,
+        error=0.05, confidence=0.95, ir_calibrated=True,
+        calibration_revision=revision,
+    ))
+
+    accepted = client.put("/api/v1/line-follow/mode", json={"mode": "IR_LINE"}, headers=OPERATOR)
+    assert accepted.status_code == 200
+    assert accepted.json()["mode"] == "IR_LINE"
+    assert accepted.json()["state"] == "WAITING"
+    assert services.command.select_output().linear == 0.0
+
+
+def test_ir_fallback_refuses_missing_or_mismatched_line_calibration(core_client):
+    revision = "b" * 64
+    client, services = core_client(config_overrides={
+        "line_follow": {"ir_calibration_revision": revision},
+    })
+    services.line_follow.set_mode(LineFollowMode.CAMERA_LINE)
+    services.line_follow._status = services.line_follow.status().model_copy(
+        update={"state": "LOST", "reason": "camera_reselection_required"}
+    )
+    services.control_adapter = type("Adapter", (), {
+        "enabled": True, "calibration_revision": "sensor-policy-r1",
+    })()
+    services.safety.policy_required = True
+    services.line_follow.observe(LineObservation(
+        source=LineFollowMode.IR_LINE, stamp=1.0, visible=True,
+        error=0.05, confidence=0.95, ir_calibrated=True,
+        calibration_revision="c" * 64,
+    ))
+
+    rejected = client.put("/api/v1/line-follow/mode", json={"mode": "IR_LINE"}, headers=OPERATOR)
+
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["detail"]["reasons"] == [
+        "IR_CALIBRATION_REVISION_MISMATCH",
+    ]
+    assert services.line_follow.mode is LineFollowMode.CAMERA_LINE
+
+
+def test_ir_fallback_is_not_automatic_and_requires_camera_failure(core_client):
+    client, services = core_client()
+    services.control_adapter = type("Adapter", (), {
+        "enabled": True, "calibration_revision": "ir-calibration-r1",
+    })()
+    services.safety.policy_required = True
+    client.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=OPERATOR)
+    services.line_follow.tick()
+    rejected = client.put("/api/v1/line-follow/mode", json={"mode": "IR_LINE"}, headers=OPERATOR)
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "IR_FALLBACK_NOT_READY"
+    assert services.line_follow.mode is LineFollowMode.CAMERA_LINE

@@ -95,7 +95,7 @@ def test_backwards_sim_jump_is_not_fresh():
     sim.sim -= 0.5  # /clock reset or rewind
     decision = manager.tick(clock())
     assert manager.status().state == "HOLD"
-    assert manager.status().reason == "observation_stale"
+    assert manager.status().reason == "camera_observation_stale"
     assert decision.linear == 0.0 and decision.angular == 0.0
 
 

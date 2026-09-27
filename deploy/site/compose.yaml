@@ -22,6 +22,8 @@ services:
       - ROSY_SITE_REGISTRY_TOKEN
       - --discovery-token-env
       - ROSY_SITE_DISCOVERY_TOKEN
+      - --vision-preview-secret-env
+      - ROSY_VISION_PREVIEW_SECRET
       - --users-file
       - /run/rosy-config/site-users.yaml
       - --sightings-config
@@ -37,7 +39,7 @@ services:
       - --tls-key
       - /run/secrets/site_key
     environment:
-      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token"}'
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret"}'
       SSL_CERT_FILE: /run/secrets/site_ca
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
@@ -46,6 +48,7 @@ services:
       - registry_token
       - fleet_sighting_token
       - discovery_token
+      - vision_preview_secret
       - site_cert
       - site_key
       - site_ca
@@ -88,13 +91,14 @@ services:
       - --tls-key
       - /run/secrets/site_key
     environment:
-      ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token"}'
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret"}'
       SSL_CERT_FILE: /run/secrets/site_ca
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
     secrets:
       - phone_ingress_token
       - fleet_sighting_token
+      - vision_preview_secret
       - site_cert
       - site_key
       - site_ca
@@ -175,6 +179,8 @@ secrets:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/fleet_sighting_token
   discovery_token:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/discovery_token
+  vision_preview_secret:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/vision_preview_secret
   site_cert:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.crt
   site_key:

@@ -70,6 +70,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
     console.add_argument("--discovery-token-env", default=None,
                          help="host mDNS scanner credential environment variable")
+    console.add_argument("--vision-preview-secret-env", default=None,
+                         help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--tls-cert", default=None, type=Path,
@@ -334,11 +336,13 @@ def run_console(args: argparse.Namespace) -> None:
     if sightings_db is not None and sightings_config is None:
         sys.exit("--sightings-db requires --sightings-config")
     sighting_service = None
+    vision_sources = ()
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_sighting_sources
 
         sources = load_sighting_sources(sightings_config)
+        vision_sources = tuple(source.source_id for source in sources)
         store = SightingStore(sightings_db) if sightings_db is not None else None
         sighting_service = SightingService(
             sources, known_robot_ids=console.robot_ids, store=store,
@@ -356,10 +360,17 @@ def run_console(args: argparse.Namespace) -> None:
     from fleet.server.discovery import DiscoveryStore
 
     discovery = DiscoveryStore() if discovery_token is not None else None
+    vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
+    vision_preview_secret = (os.environ.get(vision_preview_secret_env)
+                             if vision_preview_secret_env else None)
+    if vision_preview_secret_env and not vision_preview_secret:
+        sys.exit("vision preview secret environment variable is required")
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      site_users=site_users, discovery=discovery,
-                     discovery_token=discovery_token)
+                     discovery_token=discovery_token,
+                     vision_lease_secret=vision_preview_secret,
+                     vision_sources=vision_sources)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(endpoints)} robots{signals_note})",

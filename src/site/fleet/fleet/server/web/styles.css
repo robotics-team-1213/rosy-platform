@@ -13,6 +13,14 @@ body {
 
 input, select { font: inherit; color: inherit; }
 
+.vision-preview { margin-top: var(--space-4); }
+.vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.vision-controls select { min-width: 0; flex: 1; padding: var(--space-2); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.vision-frame { display: grid; place-items: center; min-height: 12rem; aspect-ratio: 16 / 9; overflow: hidden; background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
+.vision-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.vision-frame img[hidden] { display: none; }
+.vision-frame p { margin: var(--space-3); color: var(--muted); text-align: center; }
+
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }

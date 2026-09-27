@@ -81,8 +81,10 @@ def test_camera_threshold_and_roi_are_tunable_with_bounded_inputs():
 
 def test_common_payload_marks_missing_line_as_not_visible():
     missing = line_observation_payload("CAMERA_LINE", 12.5, None)
+    ir_calibration = calibration()
     present = line_observation_payload(
-        "IR_LINE", 12.6, detect_ir_line((500, 2900, 500), calibration()))
+        "IR_LINE", 12.6, detect_ir_line((500, 2900, 500), ir_calibration),
+        ir_calibrated=True, calibration_revision=ir_calibration.revision)
 
     assert missing == {
         "source": "CAMERA_LINE",
@@ -94,3 +96,5 @@ def test_common_payload_marks_missing_line_as_not_visible():
     assert present["visible"] is True
     assert present["error"] == pytest.approx(0.0, abs=0.05)
     assert 0.0 < present["confidence"] <= 1.0
+    assert present["ir_calibrated"] is True
+    assert present["calibration_revision"] == ir_calibration.revision

@@ -69,6 +69,29 @@ def test_only_the_selected_source_can_drive(rig):
     assert manager.status().source == "IR_LINE"
 
 
+def test_ir_fallback_readiness_uses_fresh_valid_matching_calibration_while_camera_selected(rig):
+    now, _events, _manager = rig
+    revision = "d" * 64
+    manager = LineFollowManager(
+        _events,
+        config=LineFollowConfig(ir_calibration_revision=revision),
+        clock=lambda: now[0],
+    )
+    manager.set_mode(LineFollowMode.CAMERA_LINE)
+    ir = LineObservation(
+        source=LineFollowMode.IR_LINE, stamp=100.0, visible=True,
+        error=0.1, confidence=0.9, ir_calibrated=True,
+        calibration_revision=revision,
+    )
+    assert manager.observe(ir, received_at=now[0]) is False
+    assert manager.ir_fallback_readiness() == (True, ())
+
+    now[0] += 0.31
+    ready, reasons = manager.ir_fallback_readiness()
+    assert not ready
+    assert reasons == ("IR_EVIDENCE_STALE",)
+
+
 def test_speed_is_capped_and_adapts_to_error_and_confidence(rig):
     now, _events, manager = rig
     manager.set_mode(LineFollowMode.CAMERA_LINE)
@@ -102,6 +125,21 @@ def test_low_confidence_missing_and_stale_observations_stop_immediately(rig):
     assert manager.status().reason == "observation_stale"
 
 
+def test_camera_loss_is_reported_as_camera_hold_and_never_reuses_previous_command(rig):
+    now, _events, manager = rig
+    manager.set_mode(LineFollowMode.CAMERA_LINE)
+    manager.observe(observation("CAMERA_LINE", error=0.4), now[0])
+    assert manager.tick().linear > 0.0
+
+    now[0] += 0.31
+    decision = manager.tick()
+
+    assert decision.linear == 0.0
+    assert decision.angular == 0.0
+    assert manager.status().state == "HOLD"
+    assert manager.status().reason == "camera_observation_stale"
+
+
 def test_three_second_loss_latches_and_emits_one_event_until_reselected(rig):
     now, events, manager = rig
     manager.set_mode(LineFollowMode.CAMERA_LINE)
@@ -117,7 +155,7 @@ def test_three_second_loss_latches_and_emits_one_event_until_reselected(rig):
 
     manager.observe(observation("CAMERA_LINE"), now[0])
     assert manager.tick().linear == 0.0
-    assert manager.status().reason == "reselection_required"
+    assert manager.status().reason == "camera_reselection_required"
 
     manager.set_mode(LineFollowMode.OFF)
     manager.set_mode(LineFollowMode.CAMERA_LINE)
@@ -135,7 +173,7 @@ def test_switching_source_discards_old_observation_and_command(rig):
     decision = manager.tick()
     assert decision.linear == 0.0
     assert decision.angular == 0.0
-    assert manager.status().reason == "no_observation"
+    assert manager.status().reason == "camera_no_observation"
 
 
 @pytest.mark.parametrize("changes", [
@@ -194,7 +232,7 @@ def test_source_timestamp_age_can_make_a_just_received_sample_stale(rig):
     )
 
     assert manager.tick(now[0]).linear == 0.0
-    assert manager.status().reason == "observation_stale"
+    assert manager.status().reason == "camera_observation_stale"
 
 
 def test_future_source_timestamp_is_rejected(rig):
