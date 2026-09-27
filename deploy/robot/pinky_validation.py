@@ -38,7 +38,19 @@ def build_summary(
     actual_robot_number = str(identity.get("robot_number") or "")
     actual_revision = str(artifact.get("git_revision") or "").lower()
     expected_revision = expected_revision.lower()
+    expected_domain = str(40 + expected_robot_number)
+    expected_namespace = f"rosy_{expected_robot_number:02d}"
     checks = [
+        _check(
+            "connection_schema",
+            connection.get("schema_version") == 1,
+            f"expected=1 actual={connection.get('schema_version', 'missing')}",
+        ),
+        _check(
+            "readback_schema",
+            readback_data.get("schema_version") == 1,
+            f"expected=1 actual={readback_data.get('schema_version', 'missing')}",
+        ),
         _check(
             "lan_peer",
             connection.get("outcome") == "GO",
@@ -53,6 +65,17 @@ def build_summary(
             "robot_identity",
             actual_robot_number == str(expected_robot_number),
             f"expected={expected_robot_number} actual={actual_robot_number or 'missing'}",
+        ),
+        _check(
+            "derived_identity",
+            str(identity.get("ros_domain_id") or "") == expected_domain
+            and str(identity.get("namespace") or "") == expected_namespace,
+            (
+                f"expected_domain={expected_domain} actual_domain="
+                f"{identity.get('ros_domain_id') or 'missing'} "
+                f"expected_namespace={expected_namespace} actual_namespace="
+                f"{identity.get('namespace') or 'missing'}"
+            ),
         ),
         _check(
             "source_revision",

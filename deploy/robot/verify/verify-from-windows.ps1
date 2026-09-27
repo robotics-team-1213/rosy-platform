@@ -7,6 +7,8 @@ param(
     [int]$ApiPort = 8080,
     [ValidateRange(1, 60)]
     [int]$ConnectTimeoutSec = 5,
+    [ValidateRange(1, 300)]
+    [int]$CommandTimeoutSec = 15,
     [switch]$BatchMode,
     [string]$EvidencePath = ""
 )
@@ -97,6 +99,77 @@ function Write-ConnectionEvidence {
     }
 }
 
+function Invoke-BoundedSshProcess {
+    param(
+        [Parameter(Mandatory)][string]$Executable,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [Parameter(Mandatory)][int]$TimeoutSec,
+        [Parameter(Mandatory)][string]$ScratchDirectory
+    )
+
+    $executablePayload = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes($Executable)
+    )
+    $argumentJson = ConvertTo-Json -Compress -InputObject @($Arguments)
+    $argumentPayload = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes($argumentJson)
+    )
+    $childScript = @"
+`$executable = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$executablePayload'))
+`$argumentJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$argumentPayload'))
+`$childArguments = @(ConvertFrom-Json -InputObject `$argumentJson)
+`$output = (& `$executable @childArguments 2>&1 | Out-String).Trim()
+`$exitCode = `$LASTEXITCODE
+if (`$output) { [Console]::Out.Write(`$output) }
+if (`$null -eq `$exitCode) { exit 255 }
+exit [int]`$exitCode
+"@
+    $encodedChild = [Convert]::ToBase64String(
+        [Text.Encoding]::Unicode.GetBytes($childScript)
+    )
+    $hostExecutable = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    $stdoutPath = Join-Path $ScratchDirectory ".ssh-$([Guid]::NewGuid().ToString('N')).stdout"
+    $stderrPath = Join-Path $ScratchDirectory ".ssh-$([Guid]::NewGuid().ToString('N')).stderr"
+    $process = $null
+    try {
+        $process = Start-Process -FilePath $hostExecutable `
+            -ArgumentList @("-NoProfile", "-NonInteractive", "-EncodedCommand", $encodedChild) `
+            -PassThru `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+        $null = $process.Handle
+        if (-not $process.WaitForExit($TimeoutSec * 1000)) {
+            if ($env:OS -eq "Windows_NT") {
+                & taskkill.exe /PID $process.Id /T /F 2>&1 | Out-Null
+            }
+            elseif (-not $process.HasExited) {
+                $process.Kill()
+            }
+            $process.WaitForExit()
+            return [pscustomobject]@{
+                TimedOut = $true
+                ExitCode = $null
+                Output = ""
+            }
+        }
+        $stdout = (Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue)
+        $stderr = (Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue)
+        return [pscustomobject]@{
+            TimedOut = $false
+            ExitCode = $process.ExitCode
+            Output = ($stdout | Out-String).Trim()
+            Error = ($stderr | Out-String).Trim()
+        }
+    }
+    finally {
+        if ($null -ne $process) {
+            $process.Dispose()
+        }
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $verificationFailed = $false
 $remoteTarget = "${PiUser}@${PiHost}"
 $sshArguments = @(
@@ -116,21 +189,24 @@ function Invoke-RosySsh {
         [Parameter(Mandatory)][string]$FailureDetail
     )
 
-    $previousPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = "Continue"
-        $output = (& ssh @sshArguments $Command 2>&1 | Out-String).Trim()
-        $exitCode = $LASTEXITCODE
+    $result = Invoke-BoundedSshProcess `
+        -Executable $sshExecutable `
+        -Arguments @($sshArguments + $Command) `
+        -TimeoutSec $CommandTimeoutSec `
+        -ScratchDirectory $(if ($EvidencePath) { Split-Path -Parent $EvidencePath } else { [IO.Path]::GetTempPath() })
+    if ($result.TimedOut) {
+        Add-ConnectionCheck -Name $CheckName -Outcome "HOLD"
+        Set-ConnectionFailure `
+            -Code "SSH_COMMAND_TIMEOUT" `
+            -Detail "The SSH command exceeded the wall-clock limit."
+        throw "The SSH command exceeded the wall-clock limit."
     }
-    finally {
-        $ErrorActionPreference = $previousPreference
-    }
-    if ($exitCode -ne 0) {
+    if ($result.ExitCode -ne 0) {
         Add-ConnectionCheck -Name $CheckName -Outcome "HOLD"
         Set-ConnectionFailure -Code $FailureCode -Detail $FailureDetail
         throw $FailureDetail
     }
-    return $output
+    return $result.Output
 }
 
 function Test-RosyHttp {
@@ -158,10 +234,12 @@ function Test-RosyHttp {
 }
 
 try {
-    if (-not (Get-Command "ssh" -ErrorAction SilentlyContinue)) {
+    $sshCommand = Get-Command "ssh" -ErrorAction SilentlyContinue
+    if (-not $sshCommand) {
         Set-ConnectionFailure -Code "SSH_UNAVAILABLE" -Detail "Required ssh command is unavailable."
         throw "Required command is unavailable: ssh"
     }
+    $sshExecutable = $sshCommand.Source
 
     $interfaceWasAutomatic = $NetworkInterface -eq "auto"
     if ($interfaceWasAutomatic) {

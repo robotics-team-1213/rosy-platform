@@ -98,6 +98,44 @@ def test_revision_or_field_scope_mismatch_is_an_actionable_hold():
     assert summary["operator_message"] == "HOLD: fix the named checks; do not enable motors."
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("ros_domain_id", "99"), ("namespace", "attacker")],
+)
+def test_robot_number_must_match_its_derived_identity(field, value):
+    connection, readback, revision = _go_evidence()
+    readback["identity"][field] = value
+
+    summary = _module().build_summary(
+        connection,
+        readback,
+        expected_robot_number=1,
+        expected_revision=revision,
+    )
+
+    assert summary["outcome"] == "HOLD"
+    assert "derived_identity" in summary["failed_checks"]
+
+
+@pytest.mark.parametrize("evidence_name", ["connection", "readback"])
+def test_unknown_evidence_schema_is_rejected(evidence_name):
+    connection, readback, revision = _go_evidence()
+    if evidence_name == "connection":
+        connection["schema_version"] = 999
+    else:
+        readback["schema_version"] = 999
+
+    summary = _module().build_summary(
+        connection,
+        readback,
+        expected_robot_number=1,
+        expected_revision=revision,
+    )
+
+    assert summary["outcome"] == "HOLD"
+    assert f"{evidence_name}_schema" in summary["failed_checks"]
+
+
 def test_dashboard_url_uses_the_verified_api_port():
     connection, readback, revision = _go_evidence()
 
@@ -193,6 +231,7 @@ def test_windows_validator_collects_only_stationary_evidence_and_hashes_it():
     for required in (
         "ExpectedRobotNumber",
         "ExpectedRevision",
+        "CommandTimeoutSec",
         "EvidenceDirectory",
         "verify-from-windows.ps1",
         "device-readback.sh --json",
@@ -200,6 +239,7 @@ def test_windows_validator_collects_only_stationary_evidence_and_hashes_it():
         "Get-FileHash",
         "SHA256SUMS.txt",
         "motion_authorized",
+        "FileMode]::CreateNew",
     ):
         assert required in script
     for forbidden in (
@@ -210,6 +250,7 @@ def test_windows_validator_collects_only_stationary_evidence_and_hashes_it():
         "StrictHostKeyChecking=no",
         "password",
         "token",
+        "Set-Content",
     ):
         assert forbidden.lower() not in script.lower()
 
@@ -256,6 +297,53 @@ def test_windows_validator_keeps_actionable_hold_evidence_when_ssh_fails(tmp_pat
     assert "user-validation-summary.json" in hashes
 
 
+def test_windows_validator_times_out_a_stuck_ssh_and_records_hold(tmp_path):
+    powershell = shutil.which("pwsh") or shutil.which("powershell")
+    if not powershell:
+        pytest.skip("PowerShell is required for the Windows operator flow")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "slow_ssh.py").write_text(
+        "import time\ntime.sleep(5)\nraise SystemExit(1)\n",
+        encoding="utf-8",
+    )
+    (fake_bin / "ssh.cmd").write_text(
+        '@echo off\r\npython "%~dp0slow_ssh.py" %*\r\n',
+        encoding="ascii",
+    )
+    evidence = tmp_path / "timeout-evidence"
+    environment = os.environ.copy()
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", str(WINDOWS_VALIDATOR),
+            "-PiHost", "pinky.invalid",
+            "-ExpectedRobotNumber", "1",
+            "-ExpectedRevision", "a" * 40,
+            "-EvidenceDirectory", str(evidence),
+            "-ConnectTimeoutSec", "1",
+            "-CommandTimeoutSec", "1",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=environment,
+        check=False,
+        timeout=8,
+    )
+
+    assert result.returncode != 0
+    connection = json.loads((evidence / "G0-connection.json").read_text(encoding="utf-8-sig"))
+    assert connection["failure"]["code"] == "SSH_COMMAND_TIMEOUT"
+    summary = json.loads((evidence / "user-validation-summary.json").read_text(encoding="utf-8"))
+    assert summary["outcome"] == "HOLD"
+
+
 def test_windows_validator_runs_the_complete_stationary_go_path(tmp_path):
     powershell = shutil.which("pwsh") or shutil.which("powershell")
     if not powershell:
@@ -280,11 +368,11 @@ def test_windows_validator_runs_the_complete_stationary_go_path(tmp_path):
     (fake_bin / "readback.json").write_text(json.dumps(readback), encoding="utf-8")
     (fake_bin / "fake_ssh.py").write_text(
         """import pathlib, sys
-command = sys.argv[-1]
-if command == 'ip -4 -o addr show dev eth0 scope global':
+command = ' '.join(sys.argv[1:])
+if command.endswith('ip -4 -o addr show dev eth0 scope global'):
     print('2: eth0    inet 127.0.0.1/8 scope global eth0')
     raise SystemExit(0)
-if command == 'sudo -n /opt/rosy/deploy/robot/verify/device-readback.sh --json':
+if command.endswith('sudo -n /opt/rosy/deploy/robot/verify/device-readback.sh --json'):
     print((pathlib.Path(__file__).parent / 'readback.json').read_text(encoding='utf-8'))
     raise SystemExit(0)
 raise SystemExit(1)
@@ -326,7 +414,7 @@ raise SystemExit(1)
         server.server_close()
         thread.join(timeout=5)
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     summary = json.loads((evidence / "user-validation-summary.json").read_text(encoding="utf-8"))
     assert summary["outcome"] == "GO"
     assert summary["motion_authorized"] is False
@@ -343,10 +431,12 @@ def test_runbook_has_a_copyable_user_validation_command_and_scope():
         "validate-pinky-from-windows.ps1",
         "-ExpectedRobotNumber",
         "-ExpectedRevision",
+        "-CommandTimeoutSec",
         "user-validation-summary.json",
         "SHA256SUMS.txt",
         "motion_authorized",
         "G3_SENSOR_ONLY",
+        "integrity manifest, not a signature",
     ):
         assert phrase in runbook
     assert "GO != motion authorization" in runbook

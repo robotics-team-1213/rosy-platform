@@ -11,6 +11,8 @@ param(
     [string]$ExpectedRevision,
     [ValidateRange(1, 60)]
     [int]$ConnectTimeoutSec = 5,
+    [ValidateRange(1, 300)]
+    [int]$CommandTimeoutSec = 15,
     [ValidateRange(1, 65535)]
     [int]$ApiPort = 8080,
     [string]$EvidenceDirectory = ""
@@ -29,9 +31,11 @@ if ($NetworkInterface -ne "auto" -and
     $NetworkInterface -notmatch '^[A-Za-z0-9_.:-]+$') {
     throw "NetworkInterface must be auto or a safe Linux interface name."
 }
-if (-not (Get-Command "ssh" -ErrorAction SilentlyContinue)) {
+$sshCommand = Get-Command "ssh" -ErrorAction SilentlyContinue
+if (-not $sshCommand) {
     throw "Required command is unavailable: ssh"
 }
+$sshExecutable = $sshCommand.Source
 if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
     throw "Required command is unavailable: python"
 }
@@ -64,6 +68,100 @@ $readbackPath = Join-Path $EvidenceDirectory "G2-device-readback.json"
 $summaryPath = Join-Path $EvidenceDirectory "user-validation-summary.json"
 $hashPath = Join-Path $EvidenceDirectory "SHA256SUMS.txt"
 
+function Invoke-BoundedSshProcess {
+    param(
+        [Parameter(Mandatory)][string]$Executable,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [Parameter(Mandatory)][int]$TimeoutSec,
+        [Parameter(Mandatory)][string]$ScratchDirectory
+    )
+
+    $executablePayload = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes($Executable)
+    )
+    $argumentJson = ConvertTo-Json -Compress -InputObject @($Arguments)
+    $argumentPayload = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes($argumentJson)
+    )
+    $childScript = @"
+`$executable = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$executablePayload'))
+`$argumentJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$argumentPayload'))
+`$childArguments = @(ConvertFrom-Json -InputObject `$argumentJson)
+`$output = (& `$executable @childArguments 2>&1 | Out-String).Trim()
+`$exitCode = `$LASTEXITCODE
+if (`$output) { [Console]::Out.Write(`$output) }
+if (`$null -eq `$exitCode) { exit 255 }
+exit [int]`$exitCode
+"@
+    $encodedChild = [Convert]::ToBase64String(
+        [Text.Encoding]::Unicode.GetBytes($childScript)
+    )
+    $hostExecutable = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    $stdoutPath = Join-Path $ScratchDirectory ".ssh-$([Guid]::NewGuid().ToString('N')).stdout"
+    $stderrPath = Join-Path $ScratchDirectory ".ssh-$([Guid]::NewGuid().ToString('N')).stderr"
+    $process = $null
+    try {
+        $process = Start-Process -FilePath $hostExecutable `
+            -ArgumentList @("-NoProfile", "-NonInteractive", "-EncodedCommand", $encodedChild) `
+            -PassThru `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+        $null = $process.Handle
+        if (-not $process.WaitForExit($TimeoutSec * 1000)) {
+            if ($env:OS -eq "Windows_NT") {
+                & taskkill.exe /PID $process.Id /T /F 2>&1 | Out-Null
+            }
+            elseif (-not $process.HasExited) {
+                $process.Kill()
+            }
+            $process.WaitForExit()
+            return [pscustomobject]@{
+                TimedOut = $true
+                ExitCode = $null
+                Output = ""
+            }
+        }
+        $stdout = (Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue)
+        $stderr = (Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue)
+        return [pscustomobject]@{
+            TimedOut = $false
+            ExitCode = $process.ExitCode
+            Output = ($stdout | Out-String).Trim()
+            Error = ($stderr | Out-String).Trim()
+        }
+    }
+    finally {
+        if ($null -ne $process) {
+            $process.Dispose()
+        }
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Write-NewTextFile {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][Text.Encoding]$Encoding
+    )
+
+    $bytes = $Encoding.GetBytes($Text)
+    $stream = [IO.File]::Open(
+        $Path,
+        [IO.FileMode]::CreateNew,
+        [IO.FileAccess]::Write,
+        [IO.FileShare]::None
+    )
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush()
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 $connectionPassed = $false
 try {
     & $peerVerifier `
@@ -72,6 +170,7 @@ try {
         -NetworkInterface $NetworkInterface `
         -ApiPort $ApiPort `
         -ConnectTimeoutSec $ConnectTimeoutSec `
+        -CommandTimeoutSec $CommandTimeoutSec `
         -BatchMode `
         -EvidencePath $connectionPath
     $connectionPassed = $true
@@ -90,19 +189,22 @@ if ($connectionPassed) {
         $remoteTarget,
         "sudo -n /opt/rosy/deploy/robot/verify/device-readback.sh --json"
     )
-    $previousPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = "Continue"
-        $readbackText = (& ssh @sshArguments 2>&1 | Out-String).Trim()
-        $readbackExitCode = $LASTEXITCODE
+    $readbackResult = Invoke-BoundedSshProcess `
+        -Executable $sshExecutable `
+        -Arguments $sshArguments `
+        -TimeoutSec $CommandTimeoutSec `
+        -ScratchDirectory $EvidenceDirectory
+    if ($readbackResult.TimedOut) {
+        Write-Warning "Device readback exceeded the wall-clock limit; the result remains HOLD."
     }
-    finally {
-        $ErrorActionPreference = $previousPreference
-    }
-    if ($readbackExitCode -eq 0) {
+    elseif ($readbackResult.ExitCode -eq 0) {
+        $readbackText = $readbackResult.Output
         try {
             $null = $readbackText | ConvertFrom-Json
-            Set-Content -LiteralPath $readbackPath -Value $readbackText -Encoding utf8
+            Write-NewTextFile `
+                -Path $readbackPath `
+                -Text $readbackText `
+                -Encoding ([Text.UTF8Encoding]::new($false))
             $readbackAvailable = $true
         }
         catch {
@@ -139,7 +241,10 @@ $hashLines = foreach ($path in $evidenceFiles) {
     $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
     "$digest  $([IO.Path]::GetFileName($path))"
 }
-Set-Content -LiteralPath $hashPath -Value $hashLines -Encoding ascii
+Write-NewTextFile `
+    -Path $hashPath `
+    -Text (($hashLines -join [Environment]::NewLine) + [Environment]::NewLine) `
+    -Encoding ([Text.Encoding]::ASCII)
 
 $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
 if ($summary.motion_authorized -ne $false) {

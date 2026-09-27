@@ -285,16 +285,19 @@ does not change runtime mode or send motor commands.
 
 ```powershell
 $Revision = "<signed-manifest-full-40-character-git-revision>"
-$Evidence = Join-Path $PWD ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$Evidence = Join-Path 'X:\DevTemp' ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 ./deploy/robot/verify/validate-pinky-from-windows.ps1 `
   -PiHost pinky-01.local -PiUser rosy -NetworkInterface eth0 `
   -ExpectedRobotNumber 1 -ExpectedRevision $Revision `
+  -CommandTimeoutSec 15 `
   -EvidenceDirectory $Evidence
 ```
 
 The directory contains raw `G0-connection.json`, `G2-device-readback.json` when
 collection succeeds, final `user-validation-summary.json`, and
-`SHA256SUMS.txt`. Existing evidence is never replaced. If
+`SHA256SUMS.txt`. Existing evidence is never replaced.
+`SHA256SUMS.txt` is an integrity manifest, not a signature; verify the signed
+release manifest separately before treating the revision as trusted. If
 `summary.outcome=HOLD`, repair the named `failed_checks`. If non-interactive
 `sudo` is unavailable over SSH, the tool still records HOLD evidence and the
 operator switches to the Pi local-console procedure.
