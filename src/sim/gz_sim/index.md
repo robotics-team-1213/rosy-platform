@@ -22,6 +22,7 @@
 | D-152 | CORE 관제의 카메라 표시는 저주기 최신 1장 preview 예외다 |
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
+| D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -33,6 +34,7 @@
 - [2026-09-21-camera-preview-dashboard.md](../../../docs/plans/2026-09-21-camera-preview-dashboard.md)
 - [2026-09-21-semantic-road-control-design.md](../../../docs/plans/2026-09-21-semantic-road-control-design.md)
 - [2026-09-21-semantic-road-control.md](../../../docs/plans/2026-09-21-semantic-road-control.md)
+- [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -44,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(sim-ui): complete Gazebo viewer tab keyboard contract
 - 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · fix(ci): install python3-opencv for the lane live viewer
 - 2026-09-24 · uncommitted · chore(sim): `navigation` exec_depend 중복 제거
 - 2026-09-24 · uncommitted · docs(sim): D-182 simulation actuation profile
-- 2026-09-21 · uncommitted · fix(sim): validate the actual Gazebo camera path headlessly (D-152)

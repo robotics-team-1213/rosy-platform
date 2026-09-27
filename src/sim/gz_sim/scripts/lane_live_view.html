@@ -55,6 +55,7 @@ button { font: inherit; color: inherit; }
                cursor: pointer; color: var(--muted); font-weight: 600; }
 .tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text);
                                      box-shadow: inset 0 0 0 1px var(--line-2); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .clock { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .kv { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 10px;
       border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
@@ -294,8 +295,8 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
 <header class="top">
   <div class="brand"><b>ROSY</b><span>라이브 미션</span></div>
   <nav class="tabs" role="tablist" aria-label="보기">
-    <button role="tab" id="tab-live" aria-selected="true" data-tab="live">라이브</button>
-    <button role="tab" id="tab-results" aria-selected="false" data-tab="results">지난 결과</button>
+    <button role="tab" id="tab-live" aria-controls="live" aria-selected="true" tabindex="0" data-tab="live">라이브</button>
+    <button role="tab" id="tab-results" aria-controls="results" aria-selected="false" tabindex="-1" data-tab="results">지난 결과</button>
   </nav>
   <div class="clock">
     <span class="kv"><small>SIM</small><span class="num" id="simTime">--</span></span>
@@ -315,7 +316,7 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
 </div>
 
 <main>
-<section id="live">
+<section id="live" role="tabpanel" aria-labelledby="tab-live" tabindex="0">
   <div class="banner" id="offline" role="status">
     <span class="dot"></span>
     <div><strong id="offlineTitle">주행 중이 아님 — Gazebo가 꺼져 있습니다</strong>
@@ -438,7 +439,7 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   </div>
 </section>
 
-<section id="results">
+<section id="results" role="tabpanel" aria-labelledby="tab-results" aria-hidden="true" tabindex="0">
   <div class="runs-grid">
     <div class="card">
       <h2>지난 실행 <span class="src" id="evPath"></span></h2>
@@ -486,12 +487,34 @@ function setHp(id, cls, text) { const n = $(id); n.className = "hp " + cls; n.qu
 
 /* ---------- tabs ---------- */
 function showTab(tab) {
+  if (tab !== "live" && tab !== "results") tab = "live";
   document.body.classList.toggle("tab-results", tab === "results");
-  for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  for (const b of document.querySelectorAll(".tabs button")) {
+    const selected = b.dataset.tab === tab;
+    b.setAttribute("aria-selected", String(selected));
+    b.tabIndex = selected ? 0 : -1;
+  }
+  $("live").setAttribute("aria-hidden", String(tab !== "live"));
+  $("results").setAttribute("aria-hidden", String(tab !== "results"));
   if (tab === "results") loadRuns();
   try { localStorage.setItem("rosyTab", tab); } catch (e) { /* storage unavailable */ }
 }
-for (const b of document.querySelectorAll(".tabs button")) b.addEventListener("click", () => showTab(b.dataset.tab));
+for (const b of document.querySelectorAll(".tabs button")) {
+  b.addEventListener("click", () => showTab(b.dataset.tab));
+  b.addEventListener("keydown", (event) => {
+    const tabs = [...document.querySelectorAll(".tabs button")];
+    const current = tabs.indexOf(b);
+    const target = event.key === "Home" ? tabs[0]
+      : event.key === "End" ? tabs[tabs.length - 1]
+      : event.key === "ArrowRight" ? tabs[(current + 1) % tabs.length]
+      : event.key === "ArrowLeft" ? tabs[(current - 1 + tabs.length) % tabs.length]
+      : null;
+    if (!target) return;
+    event.preventDefault();
+    showTab(target.dataset.tab);
+    target.focus();
+  });
+}
 
 /* ---------- map geometry ---------- */
 function bounds(g) {

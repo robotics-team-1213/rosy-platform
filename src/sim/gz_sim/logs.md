@@ -140,3 +140,9 @@
 - gate 변화: 없음.
 - 결정: D-205 Proposed. P4에서 세계 revision을 올린다(프로필 카메라, 흰 무광 벽과 파란 테이프, 카펫, 실측 매트, GroundTruthLabeler·채점기·데이터셋 기록기). P5에서 같은 기준으로 다시 합격받는다.
 - 교훈: 없음. 후속: `map_v2_fleet_lane.launch.py`의 line_observer `camera_x_offset_m` 0.034(참값 0.028481)는 코너 튜닝을 다시 잰 뒤 고친다.
+
+## 2026-09-27 · uncommitted · fix(sim-ui): complete Gazebo viewer tab keyboard contract
+
+- 변경: D-306의 Gazebo 전용 라이브 뷰어 탭에 패널 연결, 방향키·Home·End 조작, 선택 탭 포커스 순서와 보이는 포커스 링을 추가했다. 관측 데이터·제어 경로는 변경하지 않았다.
+- 증거: 새 Chromium 브라우저 시험을 변경 전 실패, 변경 후 통과로 확인했다. 기존 viewer v2 계약과 합쳐 59 passed (Windows). 1280×800 라이브·지난 결과 캡처는 `X:\\DevTemp\\rosy-uiux-d306\\`에만 저장했고 가로 넘침·페이지 오류가 없었다.
+- gate 변화: LOCAL 키보드 조작 근거를 추가했다. Gazebo 카메라·인지의 실제 실행과 DEVICE/FIELD 수용은 이 시험으로 증명하지 않는다.

@@ -22,7 +22,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-4, D-33, D-49, D-79, D-114, D-115, D-117, D-118, D-120, D-151, D-152, D-199, D-205]
+adrs: [D-4, D-33, D-49, D-79, D-114, D-115, D-117, D-118, D-120, D-151, D-152, D-199, D-205, D-306]
 plans:
   - docs/plans/2026-09-08-swarm-formation-slice-design.md
   - docs/plans/2026-09-08-swarm-formation-slice.md
@@ -32,9 +32,11 @@ plans:
   - docs/plans/2026-09-21-semantic-road-control.md
   - docs/plans/2026-09-21-camera-preview-dashboard-design.md
   - docs/plans/2026-09-21-camera-preview-dashboard.md
+  - docs/plans/2026-09-27-uiux-surface-closure.md
 ---
 ## 지금 상태
 
+- D-306의 Gazebo 라이브 뷰어는 읽기 전용 디버그 화면이다. 두 탭에 키보드 방향키/Home/End 이동, 선택 탭만 Tab 순서에 남기는 규칙, 탭과 패널 관계를 추가했다. 호스트 브라우저와 기존 viewer 계약 59건을 검증했고 1280×800 라이브/결과 캡처에서 가로 넘침과 페이지 오류가 없었다. 실제 Gazebo 또는 실물 로봇 증거로 승격하지 않는다.
 - `gz_multi.launch.py`로 N대 네임스페이스 로봇을 띄운다. 도메인 하나 + ros_gz_bridge (D-114). `domain_bridge` 없음.
 - `mode:=nav` 는 spawn 좌표를 `{ns}/initialpose` 로 심는다 (D-115). odom (0,0) 을 관제 pose 로 쓰지 않는다.
 - `world_to_map.py`가 박스 충돌체에서 정답 점유 격자를 만든다. Gazebo 없이 Windows에서 돈다.
