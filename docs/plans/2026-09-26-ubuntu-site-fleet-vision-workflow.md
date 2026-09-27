@@ -145,7 +145,7 @@ Freeze thresholds and the holdout set before measurement. Do not tune thresholds
 
 ### Task 4.2: 후속 목표 — 로봇 로컬 manipulation 능력 수용 후 Fleet 단계 연결
 
-**Files:** Follow `docs/adr/D-55-mobile-manipulation-is-a-robot-local-mission-capability.md`, `src/devices/omx/adapter/`, robot capability/API Ref, future manipulation tests; update Fleet task tests only after robot contract exists.
+**Files:** Follow `docs/adr/D-55-mobile-manipulation-is-a-robot-local-mission-capability.md`, `src/products/omx/adapter/`, robot capability/API Ref, future manipulation tests; update Fleet task tests only after robot contract exists.
 
 1. OMX/MoveIt 모델, 장착, 전원, hand-eye, 충돌, payload, 재시작/링크 단절 HOLD와 파지/배치 실물 결과를 먼저 계측한다.
 2. 로봇이 수용한 하나의 로컬 manipulation 액션을 별도 목표에서 Fleet 단계로 호출한다. 로컬 action/state machine이 approach·perception·grasp·transport·placement transaction과 recovery를 소유한다. Fleet은 작업 orchestration과 단계 추적을 맡고 관절 경로·그리퍼 폐루프 또는 베이스 `cmd_vel`을 만들지 않는다.
