@@ -301,6 +301,7 @@ def test_auth_roles(client):
 
 def test_teleop_flow_and_watchdog_zero(client):
     tc, svc = client
+    svc.state.set_velocity(0.0, 0.0)  # simulate a live base for the write gate
     assert tc.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
     r = tc.post("/api/v1/teleop", json={"linear": 0.1, "angular": 0.0}, headers=OPERATOR)
     assert r.status_code == 200
@@ -336,6 +337,7 @@ def test_navigation_mode_requires_capability_and_clears_stale_twist(client):
 
 def test_a_goal_enters_navigation_mode_so_nav_cmd_vel_reaches_the_wheels(client):
     tc, svc = client
+    svc.state.set_velocity(0.0, 0.0)
 
     class LocalExecutor:
         def send_goal(self, spec):
@@ -539,6 +541,7 @@ def test_admin_speed_limits_persist_to_local_overlay(client, tmp_path, monkeypat
 
 def test_waypoints_crud_and_goal(client):
     tc, svc = client
+    svc.state.set_velocity(0.0, 0.0)
     wp = {"name": "zone_a", "x": 1.5, "y": 2.5, "yaw": 0.0, "map_id": None, "metadata": {}}
     assert tc.post("/api/v1/waypoints", json=wp, headers=OPERATOR).status_code == 201
     dup = tc.post("/api/v1/waypoints", json=wp, headers=OPERATOR)

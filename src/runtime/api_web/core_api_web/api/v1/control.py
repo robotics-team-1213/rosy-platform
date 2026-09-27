@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import operator
+from core_api_web.api.v1.common import operator, require_kept
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -55,6 +55,7 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
            svc: CoreServicesLike = Depends(get_services)):
     TaskKind.MOVE.require(svc.capability)
+    require_kept(svc, "teleop")
     accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
     if not accepted:
         raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE") else 400,

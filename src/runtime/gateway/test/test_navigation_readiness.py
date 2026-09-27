@@ -156,6 +156,7 @@ def test_navigation_request_is_rejected_before_mode_change_when_hardware_is_held
         headers={"Authorization": "Bearer rosy-dev-operator"},
     )
 
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "HARDWARE_NOT_READY"
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CAPABILITY_WITHHELD"
+    assert response.json()["error"]["detail"]["capability"] == "navigation.goal_navigation"
     assert services.modes.mode is Mode.IDLE

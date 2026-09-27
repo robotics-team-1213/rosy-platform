@@ -15,6 +15,7 @@ import time
 import pytest
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
+OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 NAV_COMPONENTS = ("amcl", "map_server", "controller_server", "local_costmap", "global_costmap")
 
 
@@ -33,6 +34,39 @@ def _caps(tc):
 def _rows(tc):
     body = tc.get("/api/v1/system/inventory", headers=VIEWER).json()
     return {row["id"]: row for row in body["descriptors"]}
+
+
+def _assert_withheld(response, capability: str, reason: str):
+    assert response.status_code == 409, response.text
+    assert response.json()["error"] == {
+        "code": "CAPABILITY_WITHHELD",
+        "message": f"{capability} withheld: {reason}",
+        "detail": {"capability": capability, "reason": reason},
+    }
+
+
+def test_write_actions_refuse_flags_withheld_by_the_capability_readout(core_client):
+    tc, svc = core_client()
+    _no_motion_io(svc)
+    assert tc.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    reasons = _caps(tc)["withheld"]["reasons"]
+    actions = (
+        ("teleop", "/api/v1/teleop", {"linear": 0.1, "angular": 0.0}),
+        ("navigation.goal_navigation", "/api/v1/navigation/goal", {"x": 1.0, "y": 0.0}),
+        ("navigation.return_home", "/api/v1/navigation/home", None),
+    )
+    for flag, path, body in actions:
+        response = tc.post(path, json=body, headers=OPERATOR)
+        _assert_withheld(response, flag, reasons[flag])
+    assert svc.command.select_output().linear == 0.0
+    assert svc.modes.mode.value == "MANUAL"
+
+
+def test_unsupported_teleop_still_returns_501_before_runtime_withholding(core_client):
+    tc, _svc = core_client(capabilities={"teleop": False})
+    assert tc.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    response = tc.post("/api/v1/teleop", json={"linear": 0.1}, headers=OPERATOR)
+    assert response.status_code == 501
 
 
 # --- 1. presence: the mode string is not evidence ----------------------------
@@ -65,6 +99,8 @@ def test_battery_alone_proves_the_runtime_but_not_a_drive(core_client):
     assert caps["runtime"]["evidence"] == ["battery"]
     assert caps["teleop"] is False
     assert caps["withheld"]["reasons"]["teleop"] == "drive_absent"
+    assert caps["slam"] is False
+    assert caps["withheld"]["reasons"]["slam"] == "drive_absent"
 
 
 def test_pose_without_odometry_does_not_prove_a_running_base(core_client):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import enter_navigation_mode, operator, viewer
+from core_api_web.api.v1.common import enter_navigation_mode, operator, require_kept, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.domain.tasks import TaskKind
@@ -25,6 +25,7 @@ class GoalRequest(BaseModel):
 def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
     TaskKind.NAVIGATE.require(svc.capability)
+    require_kept(svc, "navigation.goal_navigation")
     spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
     enter_navigation_mode(svc, auth)
     svc.nav.goal(spec, source=f"api:{auth.role}")
@@ -46,6 +47,7 @@ def navigation_cancel(auth: AuthContext = Depends(operator),
 def navigation_home(auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
     TaskKind.RETURN_HOME.require(svc.capability)
+    require_kept(svc, "navigation.return_home")
     enter_navigation_mode(svc, auth)
     svc.nav.home(source=f"api:{auth.role}")
     return {"accepted": True, "mode": svc.modes.mode.value}

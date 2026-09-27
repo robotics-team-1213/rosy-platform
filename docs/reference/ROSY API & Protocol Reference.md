@@ -118,6 +118,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 | `NAVIGATION_ACTIVE` | 409 | 이미 진행 중 (재정의 필요 시 cancel 먼저) | 로봇 |
 | `WAYPOINT_EXISTS` | 409 | Waypoint 이름 충돌 | 로봇/Fleet |
 | `CAPABILITY_NOT_SUPPORTED` | 501 | 로봇이 미지원하는 기능 (CAP-003) | 로봇 |
+| `CAPABILITY_WITHHELD` | 409 | 로봇이 지원하지만 현재 런타임이 보류한 기능. `detail: {capability, reason}`의 이유는 `GET /system/capabilities`의 `withheld.reasons`와 같다. 미지원 판정(501)이 우선한다 | 로봇 |
 | `MAP_MISMATCH` | 409 | Goal의 map_id 불일치 (MAP-002) | 로봇 |
 | `MAPPING_ACTIVE` | 409 | 매핑 세션 중 명령 거부 (NAV-005) | 로봇 |
 | `DOCKING_ACTIVE` | 409 | 도킹/언도킹이 주행을 쥐고 있다 (DNC-003, §8.1 DOCKING > NAVIGATION) | 로봇 |
@@ -213,9 +214,9 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
-| POST | `/api/v1/navigation/goal` | Operator | NAV-001 (payload: `{x,y,yaw}` 또는 `{waypoint}`) |
+| POST | `/api/v1/navigation/goal` | Operator | NAV-001 (payload: `{x,y,yaw}` 또는 `{waypoint}`). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD` |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
-| POST | `/api/v1/navigation/home` | Operator | NAV-003 |
+| POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD` |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003 |
 | GET | `/api/v1/line-follow` | Viewer | D-143 — 선택 모드, 상태, 증거 신뢰도·나이, 최종 선속도·각속도와 사유 |
@@ -250,7 +251,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
-| POST | `/api/v1/teleop` | Operator | §11 |
+| POST | `/api/v1/teleop` | Operator | §11. 기능 보류 시 409 `CAPABILITY_WITHHELD` |
 | POST | `/api/v1/mode` | Operator | `{mode: MANUAL\|NAVIGATION\|IDLE}` |
 | POST | `/api/v1/swarm/follow` | Operator | SWM-002 `{target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source, members}`. `source: fleet(기본)\|peer(예약, D-21 — 요청하면 501)`. `members` 는 대형 명단을 `robots.yaml` 순서로 — 비어 있으면 리더 승계를 하지 않고, 있으면 리더 상실 시 `swarm.succession` 을 낸 뒤 follow 를 끝낸다. `max_speed` 는 SAF-004 상한을 넘으면 400 이고, 추종 구간 동안 실제 상한으로 적용된다 — Nav2 가 무엇을 내보내든 `cmd_vel` 은 이 값으로 클리핑된다(D-31). 적용 중인 값은 `GET /safety/state` 의 `limits.session_linear` 에 보인다. 미지원 로봇은 501 `CAPABILITY_NOT_SUPPORTED` (SWM-005/CAP-003), 도킹/언도킹 중에는 409 `DOCKING_ACTIVE`, 맵핑 세션 중에는 409 `MAPPING_ACTIVE`, E-Stop 중에는 409 `EMERGENCY_ACTIVE`. 추종 중 `POST /navigation/cancel` 이나 MANUAL 전환은 대형을 끝내고 `swarm.aborted` 를 낸다 |
 | POST | `/api/v1/swarm/cancel` | Operator | SWM-002 |
@@ -692,15 +693,19 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 
 | 이유 | 조건 | 대상 플래그 |
 |---|---|---|
-| `runtime_mode:core` | `runtime.mode: core` 이고 오도메트리(pose·velocity)·배터리 표본이 한 번도 없음 | 전부 |
-| `hardware_silent` | 표본이 온 적은 있으나 15 s 안에 없음 | 전부 |
+| `runtime_mode:core` | `runtime.mode: core` 이고 오도메트리(velocity)·배터리 표본이 한 번도 없음 | 전부 |
+| `hardware_silent` | 표본이 온 적은 있으나 단조 시계 기준 15 s 안에 없음 | 전부 |
 | `drive_disabled:no_motion` | bringup 이 `motor/ready: false` 를 보고(D-192 무동작: torque off, `cmd_vel` 미구독) | `slam` 을 뺀 전부 |
 | `drive_lease_expired` | `motor/ready: true` 였으나 lease(`navigation.readiness.stale_after_s`)가 지남 | `slam` 을 뺀 전부 |
-| `drive_absent` | `motor/ready` 보고가 없고, readiness 게이트가 motor adapter 를 요구하거나 오도메트리가 살아 있지 않음 | `slam` 을 뺀 전부 |
+| `drive_absent` | `motor/ready` 보고가 없고, readiness 게이트가 motor adapter 를 요구하거나 오도메트리가 살아 있지 않음. `slam`도 오도메트리 없이 배터리만 들어오면 보류 | 이동 플래그 및 오도메트리 없는 `slam` |
 | `navigation_absent` | readiness 게이트가 required 이거나 bringup 이 `motor/ready` 를 보고했는데, 백엔드 프로파일의 Nav2/SLAM lifecycle 노드가 모두 active 로 보고하지 않음 | `navigation.goal_navigation`, `navigation.return_home`, `slam` |
+| `readiness_hold:<missing>` | 필수 하드웨어 준비 게이트가 HOLD | 이동 플래그 및 `slam` |
 
 `motor/ready` 없이 오도메트리만 오는 시뮬 벤치(gz_multi, CORE-only)는 종전대로 광고를 유지한다. 명령 경로의
-CAP-003 게이트는 이 변경으로 바뀌지 않는다.
+CAP-003 게이트는 이 변경으로 바뀌지 않는다. `POST /teleop`, `/navigation/goal`,
+`/navigation/home`은 지원 여부를 먼저 확인한 뒤 현재 보류된 기능을 409
+`CAPABILITY_WITHHELD`와 동일한 `reason`으로 거절한다. 준비 상태가 판정과 전송 사이에
+변하면 기존 503 `HARDWARE_NOT_READY`가 발생할 수 있다.
 
 **`runtime` (v1.21 additive)**: 위 판정의 근거. 대시보드는 하드웨어 존재를 `runtime_mode` 문자열이 아니라 이것으로 읽는다.
 

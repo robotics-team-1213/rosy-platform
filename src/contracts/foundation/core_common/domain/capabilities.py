@@ -242,6 +242,9 @@ def runtime_truth(config: Mapping[str, Any], state: Any, readiness: Any = None) 
             reasons[flag] = HARDWARE_SILENT_REASON
         elif flag in _DRIVE_FLAGS and drive_reason:
             reasons[flag] = drive_reason
+        elif flag == "slam" and "odometry" not in evidence:
+            # A battery sample proves IO is alive, not that a base can localize.
+            reasons[flag] = drive_reason or DRIVE_ABSENT_REASON
         elif flag in _NAVIGATION_FLAGS and navigation == "absent":
             reasons[flag] = NAVIGATION_ABSENT_REASON
         elif hold_reason:

@@ -9,11 +9,22 @@ from __future__ import annotations
 from core_api_web.api.deps import AuthContext, require_role, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode, NavigationError
+from core_common.domain.capabilities import runtime_truth
 from core_common.protocol.schemas import RobotMode
 
 viewer = require_role("viewer")
 operator = require_role("operator")
 admin = require_role("administrator")
+
+
+def require_kept(svc: CoreServicesLike, flag: str) -> None:
+    """Reject a write that the live CAP-001 readout currently withholds."""
+    reason = runtime_truth(svc.config, svc.state, svc.readiness).reasons.get(flag)
+    if reason:
+        raise ApiError(
+            "CAPABILITY_WITHHELD", 409, f"{flag} withheld: {reason}",
+            detail={"capability": flag, "reason": reason},
+        )
 
 
 def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
