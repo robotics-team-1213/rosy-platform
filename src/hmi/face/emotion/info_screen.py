@@ -10,11 +10,25 @@ LCD는 이 이미지를 회전/리사이즈해 출력하므로 여기서는 GIF 
 
 from __future__ import annotations
 
+import math
+
 from PIL import Image, ImageDraw, ImageFont
 
 from . import wifi_qr
 
 DEFAULT_SIZE = (320, 240)
+DEFAULT_HOLD_S = 15.0
+
+
+def hold_duration(raw: object) -> float:
+    """Return a finite positive wake-card duration; malformed input gets the default."""
+    if isinstance(raw, bool):
+        return DEFAULT_HOLD_S
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_HOLD_S
+    return duration if math.isfinite(duration) and duration > 0 else DEFAULT_HOLD_S
 
 # concept 16 L1 / D-82 / D-194 — 색은 토큰과 같은 값이다. 이 모듈은 파일을
 # 읽지 않고 튜플만 가진다. 숫자가 토큰과 어긋나면
