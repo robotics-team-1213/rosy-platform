@@ -1378,3 +1378,9 @@
 - Change: mounted-image validator now expects the default YAML in core_common share.
 - Evidence: image customization contract tests passed within the 1,812-test gateway/config/image run; built core_common wheel contains both YAML files.
 - Gate: host contract only; native ARM64 artifact and mounted device image remain unverified.
+
+## 2026-09-27 · uncommitted · repair development CORE image package closure
+
+- Change: copy the six missing CORE and web packages into the Docker build, select the web asset packages, and probe installed imports and assets in the final CORE image.
+- Evidence: the new closure tests failed twice on the old Dockerfile, then 48 CORE image/runtime/API host tests passed after the fix. ARM64 image execution is pending independent verification.
+- Gate: SOURCE/LOCAL candidate only. ARTIFACT, DEVICE, and FIELD acceptance remain unchanged.

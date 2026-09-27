@@ -52,6 +52,13 @@ RUN apt-get -o Acquire::Retries=5 update \
     && rm -f /tmp/restore-hollow-toolchain.sh \
     && rm -rf /var/lib/apt/lists/*
 
+COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
+COPY src/runtime/events /opt/rosy_ws/src/runtime/events
+COPY src/runtime/services /opt/rosy_ws/src/runtime/services
+COPY src/runtime/api_web /opt/rosy_ws/src/runtime/api_web
+COPY src/hmi/web /opt/rosy_ws/src/hmi/web
+COPY src/hmi/dashboard /opt/rosy_ws/src/hmi/dashboard
+
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
 COPY src/contracts/interfaces ./src/contracts/interfaces
@@ -60,12 +67,18 @@ COPY src/runtime/gateway ./src/runtime/gateway
 COPY src/products/pinky_pro/profile ./src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
-    && colcon build --merge-install --packages-up-to core pinky_pro \
+    && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard \
     && test -d /opt/rosy_ws/install
 
 FROM core-runtime AS core
 
 COPY --from=core-build /opt/rosy_ws/install /opt/rosy_ws/install
+COPY deploy/robot/probe-core-image.py /tmp/probe-core-image.py
+RUN set -eo pipefail \
+    && source /opt/ros/jazzy/setup.bash \
+    && source /opt/rosy_ws/install/setup.bash \
+    && python3 /tmp/probe-core-image.py \
+    && rm -f /tmp/probe-core-image.py
 COPY deploy/robot/entrypoint.sh /usr/local/bin/rosy-entrypoint
 RUN chmod 0755 /usr/local/bin/rosy-entrypoint
 ENV HOME=/var/lib/rosy \
