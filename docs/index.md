@@ -135,6 +135,7 @@
 | D-311 | 네이티브 G4 실측 증거를 내비게이션 기동 조건으로 검증한다 |
 | D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 | D-313 | 전면 카메라 고장 시 관제 영상과 로컬 센서로 제한된 시연을 선택한다 |
+| D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 |
 
 ## 계획·결과 문서
 
@@ -191,8 +192,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(native): simplify measured grounded G4 and direct teleop
 - 2026-09-28 · uncommitted · docs(camera-fault): record D-313 and implementation gates
 - 2026-09-27 · uncommitted · docs(uiux): record D-309 follow-up surface regressions
 - 2026-09-27 · uncommitted · validation(native): pause grounded G4 after operator power-off
 - 2026-09-27 · uncommitted · feat(host-evidence): Host Agent source age contract
-- 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials

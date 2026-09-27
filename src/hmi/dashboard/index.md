@@ -18,6 +18,7 @@
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 | D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
+| D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 |
 
 ## 계획·결과 문서
 
@@ -36,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(teleop): remove repeated confirmation gate
 - 2026-09-28 · uncommitted · fix(device): bring current state and next action into view
 - 2026-09-27 · uncommitted · fix(device): clear stale Host Agent readouts after read failure
 - 2026-09-27 · uncommitted · fix(setup): reuse dock type after detector selection
 - 2026-09-27 · uncommitted · fix(teleop): align grounded G4 controls
-- 2026-09-27 · uncommitted · feat(device): display Host Agent source evidence
