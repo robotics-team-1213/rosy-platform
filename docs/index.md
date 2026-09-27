@@ -193,8 +193,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(harness): finish D-315 documentation gate
 - 2026-09-28 · uncommitted · docs(layout): define source-folder responsibility in D-315
 - 2026-09-28 · uncommitted · fix(native): simplify measured grounded G4 and direct teleop
 - 2026-09-28 · uncommitted · docs(camera-fault): record D-313 and implementation gates
 - 2026-09-27 · f7dae4d2 · validate D-310 IO artifact comparison
-- 2026-09-27 · a72d040 · validate D-310 CORE artifact comparison

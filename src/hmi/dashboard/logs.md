@@ -328,3 +328,9 @@
 - 변경: `/setup` localization 패널에서 capability readback과 초기 위치/SLAM 요청 결과를 별도 상태로 보여준다. 10초 기능 폴링이 진행 중인 위치·SLAM 요청 버튼을 다시 활성화하지 않도록 pending 잠금을 적용하고, 반복 요청을 막는다.
 - 정적 확인: capability 성공/실패와 요청 진행/접수/오류 상태 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀 및 새 뷰포트 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. SLAM 서버 동작과 초기 위치의 로봇 readback은 검증하지 않았다.
+
+## 2026-09-28 · uncommitted · fix(docs): validate dashboard source hold record
+
+- 변경: package progress의 YAML 날짜 형식을 계약에 맞추고, dashboard SOURCE HOLD blocker를 최신 도크·웨이포인트·위치 설정 변경에 맞춰 구체화했다. 기존 작업 로그 본문은 보존한다.
+- 증거: network/harness 계약 시험 77 passed; harness lint 0 errors, 기존 메타데이터 warning 19건. 도크·웨이포인트 브라우저 회귀와 새 화면 캡처는 이 변경에서 실행하지 않았다.
+- gate 변화: SOURCE와 LOCAL은 계속 HOLD이며, browser 회귀와 관리자 화면 readback이 다음 출구다. ARTIFACT는 별도 이미지 검증 전 HOLD다.
