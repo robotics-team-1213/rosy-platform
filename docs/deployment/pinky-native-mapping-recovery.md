@@ -30,25 +30,52 @@ controller, 양쪽 costmap을 확인하고 `/api/v1/navigation/state`의 필수 
 오도메트리의 지속 0 도달 시간을 별도로 기록한다. 각각 0.65초 이내여야 한다.
 예상 밖 방향·진동·소음·ID 유실 또는 정지 실패는 즉시 물리 차단하고 G4를 HOLD로
 남긴다. 시험당 원시 odom과 명령 시각, 중지 시각, 결과를 서로 다른 파일로 보존해
-`commission-pinky.py`의 G4 레코드와 해시 목록을 만든다. 한 번의 정상 전진이나
+네이티브 G4 번들과 해시 목록을 만든다. 한 번의 정상 전진이나
 API의 `accepted` 응답만으로 G4를 완료하지 않는다.
+
+네이티브 번들은 `mapping_approval.py`의 `schema_version=1` 형식을 따른다.
+`robot_number`, `release_id`, `source_revision`, 서로 다른 `operator`·
+`safety_operator`, `wheels_lifted=true`, `hardware_cut_reachable=true`,
+`motor_preflight`의 파일명·SHA-256, `trials` 8개의 방향·정지 원인·파일명·
+SHA-256·`observed_direction=true`를 기록한다. 사전 점검 원시 JSON은
+`configured_ids`와 `responded_ids`가 `[1,2]`이고 `torque_free=true`여야 한다.
+각 시험의 원시 JSON에는 `direction`, `stop_cause`, `requested_linear_mps`,
+`requested_angular_rps`, `stop_requested_at`, `samples`를 둔다. 각 샘플은 같은
+단조 시간축의 `t`, `linear`, `angular`, odom `x`, `y`, `yaw`를 담는다.
+중지 전 실제 운동, 중지 후 지속 0 속도와 오도메트리 방향을 검증한다.
+원시 파일은 현장 측정에서 가져오고 서명 릴리스와 장치 ID를 별도 readback한다.
 
 ## 3. 승인과 네이티브 전환
 
-G4 레코드와 장치 readback, 서명 릴리스가 같은 장치/세대임을 검토한 승인 담당자가
-`hardware.approved`와 `navigation.approved`를 생성한다. marker는 단순한 파일 존재
-조건이므로 **내용 없는 marker를 시험 대신 만들지 않는다**. 승인 기록에는 장치 ID,
-릴리스 ID, G4 레코드 해시, 승인자와 시각을 남긴다. 승인과 설정 변경 전에는
+G4 레코드와 장치 readback, 서명 릴리스가 같은 장치/세대임을 검토한 독립 담당자가
+`motor` 모드에서 다음 명령으로 봉인한다. 이 도구는 주행을 명령하거나
+자료를 자동 채집하지 않는다.
+
+```bash
+sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
+  --bundle /var/lib/rosy/commissioning/g4.bundle.json \
+  --evidence-dir /var/lib/rosy/commissioning/g4-evidence \
+  --reviewer '<independent-reviewer>'
+```
+
+명령은 현재 장치·릴리스, 8개 시험의 속도·방향·정지 지연·원시 해시를 검증하고
+`hardware.approved`와 `navigation.approved`를 마지막에 생성한다.
+`rosy-navigation.service`는 기동마다 봉인된 원시 자료와 두 승인 기록을 다시
+검증한다. **내용 없는 marker를 시험 대신 만들지 않는다.** 검토와 설정 변경 전에는
 `/etc/rosy/runtime.env`를 장치에서 백업한다.
 
 다음 전환은 G4 수용 후 현장 감독 아래에서만 한다. `rosy-navigation.service`는
 `rosy-io.service`와 `Conflicts=` 관계이며 기본 target에는 없다. 따라서
 `runtime.env`를 `ROSY_RUNTIME_MODE=hardware`, `ROSY_NAVIGATION_BACKEND=slam`,
-검증된 구동 플래그로 맞추고, `rosy-io`를 내린 후 CORE와 navigation을 순서대로
+`ROSY_IO_DRIVE_ENABLED=true`로 맞추고, `rosy-io`를 내린 후 CORE와 navigation을 순서대로
 시작한다. 각 단계에서 `systemctl` 결과, 실제 ROS graph, SLAM lifecycle,
 최신 `/scan`·`/odom`, readiness, 단일 publisher와 최종 0 속도를 확인한다.
 조건이 실패하면 navigation을 내리고 이전 설정으로 복귀한다. 설정만 바꾸거나
 마커만 생성한 사실은 장치 동작 증거가 아니다.
+
+이 `ExecCondition`은 네이티브 이미지 소속 unit에 들어간다. 기존 설치 장치에는
+새 서명 이미지와 SD 갱신을 완료하기 전까지 적용되지 않는다. 봉인 도구가
+릴리스 payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
 
 ## 4. G5: 짧은 바닥 맵핑
 

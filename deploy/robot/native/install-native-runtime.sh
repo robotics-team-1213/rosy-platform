@@ -13,6 +13,10 @@ RELEASE_TOOLS="$(cd "$SCRIPT_DIR/../../release" && pwd)"
 [[ ! -e "$DESTINATION" ]] || { echo "destination already exists: $DESTINATION" >&2; exit 1; }
 mkdir -p "$(dirname "$DESTINATION")"
 cp -a "$SCRIPT_DIR" "$DESTINATION"
+[[ -f "$DESTINATION/mapping_approval.py" ]] || {
+    echo "native mapping_approval.py is missing" >&2
+    exit 1
+}
 find "$DESTINATION" -name '__pycache__' -type d -prune -exec rm -rf {} +
 # Build-time only: it resolves ../../release, which does not exist on a device.
 rm -f -- "$DESTINATION/install-native-runtime.sh"

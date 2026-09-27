@@ -2929,3 +2929,9 @@
 - 변경: D-309 후속으로 Fleet 마지막 위치 노출(`0bfc6656`), 역할 waypoint 저장 신선도·중복 요청(`05266ddc`), 게임 지연 알림·첫 연결 실패 문구(`8a0b6569`), LCD 카드 유지 시간(`23bc45e2`)을 각 전용 분기에서 검증해 로컬 main에 통합했다.
 - 검증: Fleet 브라우저 23 passed 및 상실·복구 1 passed, 역할 담당 세션 Chromium 4 passed 및 신규 단독 1 passed, 게임 브라우저 13 passed 및 영향 시험 3 passed, LCD 호스트 137 passed/4 skipped. X:의 Fleet·게임 캡처는 LOCAL 시각 확인에만 사용했다.
 - gate 변화: D-309 책임 경계의 LOCAL 표시·조작 결함을 보완했다. 로봇·LCD·카메라 실물 readback과 D-153의 표면별 전체 G2/G3는 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(native): seal G4 evidence before navigation
+
+- 변경: D-311과 네이티브 G4 번들·원시 odom·승인 검증 절차를 기록했다. 빈 마커로는 기동하지 않으며 새 서명 이미지와 SD 갱신이 필요하다.
+- 검증: 네이티브 승인 계약 시험과 harness lint를 실행한다. 실제 장치 G4/G5는 HOLD다.
+- gate 변화: SOURCE/LOCAL 검증 경로를 추가했다. ARTIFACT/DEVICE/FIELD 수용은 HOLD다.
