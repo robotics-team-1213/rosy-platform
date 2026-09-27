@@ -31,8 +31,9 @@ python tools/dashboard_drive.py $T screenshot --view inspect --out X:/DevTemp/in
 ```
 
 `teleop` prints velocity samples while held and `stop_latency_s`: time from release until
-`/api/v1/robot/state` reports zero velocity. **Wheels lifted** and a person at the robot
-before any teleop (motor mode: rosy-hw-bringup). Hold is capped at 5 s.
+`/api/v1/robot/state` reports zero velocity. For a grounded G4 trial, confirm the
+controlled area, an on-site operator, physical power cut access, and the 10 cm/
+0.03 m/s envelope before teleop (D-312). Hold is capped at 2 s.
 
 ## Element map
 
@@ -40,7 +41,7 @@ before any teleop (motor mode: rosy-hw-bringup). Hold is capped at 5 s.
 |---|---|
 | Mode buttons | `.mode-control [data-mode="IDLE"\|"MANUAL"\|"NAVIGATION"]` (other `data-mode` chips exist) |
 | Shown mode | `#robot-mode` |
-| Bench safety tick (teleop gate) | `#bench-safety-confirmed` |
+| Site confirmation tick (teleop gate) | `#bench-safety-confirmed` (legacy DOM id) |
 | Teleop pad | `[data-teleop="forward"\|"backward"\|"left"\|"right"]` |
 | Views | `#view-operate`, `#view-inspect` |
 | Device card (D-247) | `#hardware-card` (inspect view) |
