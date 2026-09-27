@@ -357,5 +357,5 @@
 ## 2026-09-28 - uiux/mobile-acceptance - test: verify localization pending action state
 
 - Change: Added panel regression for capability polling during pending initial-pose and SLAM-start actions, including lock and duplicate-POST checks. Refreshed administrator `/setup` full-shell captures at 1366x768 and 390x844.
-- Evidence: Panel Chromium suite 14 passed. Role G2 5 passed; 70 cells, overflow 0, pageerror 0, E-stop visible 70/70, canceled confirmation POST 0. Screenshots and matrix JSON are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. `git diff --check` passed.
+- Evidence: Panel Chromium suite 14 passed. Role G2 5 passed; 60 cells, overflow 0, pageerror 0, E-stop visible 60/60, canceled confirmation POST 0. Screenshots and matrix JSON are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. `git diff --check` passed.
 - Gate: SOURCE/LOCAL browser regression and captures checked for `b3d8e6cd`. Actual pose/SLAM readback, physical E-stop, G3, D-153, D-255, DEVICE/FIELD remain HOLD.

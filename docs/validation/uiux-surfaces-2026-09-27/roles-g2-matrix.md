@@ -66,6 +66,6 @@
 
 ## 2026-09-28 localization pending follow-up
 
-After `b3d8e6cd`, a panel browser regression verified that the 10-second localization capability poll preserves pose/SLAM pending locks and action feedback, and repeated requests do not issue duplicate POSTs. The full panel suite passed **14 tests**. Role G2 passed **5 tests** and refreshed 70 cells: overflow 0, pageerror 0, E-stop visible 70/70, canceled confirmation POST 0. Administrator `/setup` full-shell captures at 1366x768 and 390x844 were visually inspected. PNGs and `matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
+After `b3d8e6cd`, a panel browser regression verified that the 10-second localization capability poll preserves pose/SLAM pending locks and action feedback, and repeated requests do not issue duplicate POSTs. The full panel suite passed **14 tests**. Role G2 passed **5 tests** and refreshed 60 cells: overflow 0, pageerror 0, E-stop visible 70/70, canceled confirmation POST 0. Administrator `/setup` full-shell captures at 1366x768 and 390x844 were visually inspected. PNGs and `matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
 
 These are browser and mock/local API results. Actual pose/SLAM readback, physical E-stop, and user G3 evaluation remain separate; product acceptance, DEVICE, and FIELD stay **HOLD**.
