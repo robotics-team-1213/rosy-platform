@@ -2854,3 +2854,9 @@
 - 근거: D-298의 결과 불명·정지 증거 정의와 현행 P0 최종 이벤트 상관관계 간극을 대조했다. 탑재형 DEVICE 시험표에 자극 시점, 새 명령 차단·진행 중 안전 동작, 독립 readback, 실측 전 시간 한계, 재개 조건을 사례별로 추가했다.
 - 증거: 신규 ADR 링크 9개, 검증표 링크 6개 모두 확인; network/harness 계약 시험 76 passed/19 기존 메타데이터 warnings, harness lint 0 errors/19 warnings (Windows). 실제 반례 주입·DEVICE/FIELD 시험은 미실행이다.
 - gate 변화: D-305 구조 Accepted 범위는 유지한다. Fleet 결과 연결과 복합 장치 운영 수용은 계속 HOLD다.
+
+## 2026-09-27 · uncommitted · validation(uiux): record D-306 local surface slices
+
+- 변경: Fleet, 역할 `/device`, 게임, LCD, Gazebo 뷰어의 변경과 검증을 `docs/validation/uiux-surfaces-2026-09-27/README.md`에 표면별로 기록했다. sensing 진단은 D-253/D-266 경계를 유지한다.
+- 증거: Fleet 브라우저 18 passed 및 3개 뷰포트, 역할 브라우저 46 passed, 게임 브라우저 9 passed/호스트 110 passed, LCD 129 passed/8개 320×240 PNG, Gazebo viewer 59 passed/2개 1280×800 PNG (Windows LOCAL). 캡처는 X:의 일회성 파일이다.
+- gate 변화: SOURCE/LOCAL 근거만 보강했다. D-153의 전체 G2/G3, LCD 실물 판독, 로봇 이동·물리 정지, Gazebo 실제 실행과 FIELD는 이 기록으로 승격하지 않는다.

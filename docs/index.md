@@ -182,8 +182,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(uiux): record D-306 local surface slices
 - 2026-09-27 · uncommitted · adr(platform): keep final action outcome distinct from stop readback
 - 2026-09-27 · uncommitted · validation(platform): pin mounted interlock and drone counterexamples
 - 2026-09-27 · uncommitted · docs(uiux): fix surface ownership and closure criteria
 - 2026-09-27 · uncommitted · adr(platform): separate safety invariant and evidence exits
-- 2026-09-27 · uncommitted · adr(platform): fix expansion boundary and evidence criteria

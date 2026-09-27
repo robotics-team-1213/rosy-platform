@@ -64,3 +64,15 @@ Fleet 지도에서 `rosy_02` 목표를 선택하고 방향키로 한 칸 이동�
 | Fleet 목표 선택 320×844 | 동일 | `X:\DevTemp\rosy-uiux-d306\fleet_goal_viewport_320x844.png` |
 
 Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표 지정·확인 계약 집중 회귀는 4 passed였다. 확인 취소 시 목표 API 0회, 승인 시 지정 로봇에 1회가 시험되었다. X: 캡처는 장기 보존 증거가 아니며 빈 지도·지연·연결 끊김·권한 거부 등 전체 G2 셀, G3 최종 판정, 실제 로봇 이동은 HOLD다.
+
+## D-306 후속 확인: 다른 표면의 LOCAL 개선
+
+| 표면 | 이번 변경과 LOCAL 증거 | 남은 판정 |
+|---|---|---|
+| `/device` Host Agent 절차 | 네트워크·릴리스 요청의 대기·거부·오류·접수 문구를 해당 조작 옆에 유지한다. Host Agent를 잃으면 과거 성공 문구를 가린다. 현재 teleop 자격을 빠뜨린 기존 시험 fixture를 정렬한 뒤 dashboard·역할 브라우저 46 passed. | `/setup`·`/device`의 지연·연결 끊김·권한 거부 등 전체 G2와 G3는 미완료. 장치 결과 readback은 별도. |
+| 게임 보드 1280×800 | 최초 데이터 전 점수는 `—`이며 단계·점수·유실 변화만 보조기기에 알린다. `/stop`의 요청 중·접수·실패 및 재시도, 연결 오류의 마지막 수신값을 표시한다. 브라우저 9 passed, 게임 호스트 110 passed, 공유 UI 계약 58 passed. | 접수 문구는 물리 정지 증거가 아니다. 전체 G2·실제 경기/장치 정지는 HOLD. |
+| LCD 320×240 | 긴 로봇 ID·상태·주소를 화면 여백 안에서 말줄임한다. PIL/QR 129 passed, 8개 LOCAL PNG를 육안으로 확인했다. | 거리·각도·조명에서 실물 LCD 판독성이 없어 DEVICE/BENCH HOLD. |
+| Gazebo 읽기 전용 뷰어 1280×800 | 두 탭을 방향키·Home·End로 전환하고 포커스 및 탭·패널 관계를 표시한다. viewer 시험 59 passed, 라이브/지난 결과 캡처에서 가로 넘침·페이지 오류 0. | 데모/호스트 화면 증거로 실제 Gazebo 카메라·인지, 실물 운용을 증명하지 않는다. |
+| 레거시 sensing 진단 | D-253의 PARKED와 D-266의 해제 조건을 유지했다. | 소유·보안·상태 행렬 승인 전 운영 화면 G2/GO에 포함하지 않는다. |
+
+일회성 캡처는 저장소 밖 `X:\DevTemp\games_board_stop_retry.png`, `X:\DevTemp\games_board_host_disconnected.png`, `X:\DevTemp\rosy-uiux-lcd-2026-09-27\`, `X:\DevTemp\rosy-uiux-d306\gazebo_viewer_{live,results}_1280x800.png`에 있다. 이 회차는 상태별 전체 캡처와 독립 수용이 없어 D-153의 표면별 최종 GO를 선언하지 않는다.
