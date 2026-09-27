@@ -89,7 +89,8 @@ def test_architecture_15_no_longer_says_docker_is_optional():
     )
     assert "### Runtime model: native by default (D-161 / D-197 / D-246)" in arch
     assert "The product runtime is native systemd. This is not a per-device choice." in arch
-    assert "runs natively on every device, always." in arch
+    assert "runs natively on\n  the Pinky device" in arch
+    assert "Fleet/compute hosts do not install a Pinky motor publisher by default." in arch
     assert "Container runtime only where a declared profile asks for it (D-246)" in arch
     assert "not installed by default" in arch
 

@@ -4,8 +4,8 @@
 
 | 파일 | SHA-256 |
 |---|---|
-| `config.txt` | `734af55d885ebd7b9b41a035f5e19be3e2509f6bfd8984f1cb22fb03d051f1da` |
-| `cmdline.txt` | `03d2de5f6ca3a25c8c8f6bf6698828fd3b7553bd293542e6cdfd28bd9f570782` |
+| `config.txt` | SHA-256 `734af55d885ebd7b9b41a035f5e19be3e2509f6bfd8984f1cb22fb03d051f1da` |
+| `cmdline.txt` | SHA-256 `03d2de5f6ca3a25c8c8f6bf6698828fd3b7553bd293542e6cdfd28bd9f570782` |
 
 검증: 원본 작업 트리의 두 파일과 이 사본의 SHA-256을 비교한다. `.gitattributes`가 Git의 줄바꿈 변환을 막는다.
 

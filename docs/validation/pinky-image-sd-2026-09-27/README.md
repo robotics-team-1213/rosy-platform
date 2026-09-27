@@ -2,7 +2,7 @@
 
 ## Image and signature
 
-- Native ARM64 [GitHub Actions run 36249680735](https://github.com/livsbittt/rosy-os/actions/runs/36249680735) completed successfully from source `e511afe3fc442e1bb38adb3c54351870c5a63480`. The run passed the unsigned image build, `xz --test`, `sha256sum --check`, and artifact upload.
+- Native ARM64 [GitHub Actions run 36249680735](https://github.com/livsbittt/rosy-os/actions/runs/36249680735) completed successfully from source revision `e511afe3fc442e1bb38adb3c54351870c5a63480`. The run passed the unsigned image build, `xz --test`, `sha256sum --check`, and artifact upload.
 - The downloaded ZIP is 2,574,767,191 bytes with SHA-256 `8bb9a68c7892fbadc37eefb6c423d5a7e9259e7509dd9af7ecdb9335faf61c2f`, matching the Actions artifact record. The image is `rosy-os-pinky-pro-2026.09.26-023-arm64.img.xz`, SHA-256 `c5bc26c6e8be6e98c60e173867794e442926082fce5e28398786b625fba3d88f`.
 - The offline signer verified all 15 unsigned files and signed both the outer release and embedded factory release. `verify-image-release.py` then verified the signature, manifest identity, and image hash with `rosy-release-2026-01.pem`.
 - The image build imported `libcamera` and Picamera2 and ran `rpicam-still --version` inside the ARM64 rootfs. It added `dtoverlay=ov5647`. These are image checks, not camera capture on a Pinky.

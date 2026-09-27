@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -101,7 +102,8 @@ def _valid_root(tmp_path: Path) -> Path:
         path.mkdir(parents=True, exist_ok=True)
     (root / "opt/ros/jazzy/setup.bash").write_text("# fixture\n", encoding="utf-8")
     (release / "install/setup.bash").write_text("# fixture\n", encoding="utf-8")
-    (root / "opt/rosy/first-boot/rosy-first-boot.py").write_text("# fixture\n", encoding="utf-8")
+    for name in ("rosy-first-boot.py", "rosy-new-device-setup.py", "rosy-rebind-board.py"):
+        (root / "opt/rosy/first-boot" / name).write_text("# fixture\n", encoding="utf-8")
     for runtime, names in (
         (root / "opt/rosy/native-runtime", ("native_release.py", "recover-release.sh", "signing.py")),
         (release / "deploy/robot/native", ("native_release.py", "signing.py")),
@@ -129,6 +131,8 @@ def _valid_root(tmp_path: Path) -> Path:
         "rosy-sd-provision.service",
         "rosy-core.service",
         "rosy-runtime.target",
+        "rosy-new-device-setup.service",
+        "rosy-camera.service",
     ):
         (root / "etc/systemd/system" / unit).write_text("[Unit]\n", encoding="utf-8")
     # chrony ships enabled (CORE SRS §25 premise, verifier-checked).
@@ -146,7 +150,24 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware/config.txt").write_text(
         "[all]\nkernel=vmlinuz\nenable_uart=1\ndtparam=i2c_arm=on\ndtparam=spi=on\n\n[all]\n# Rosy motor bus\n"
         "dtoverlay=uart4-pi5\n\n[all]\n# Rosy IMU bus\ndtoverlay=i2c0-pi5,pins_0_1\n\n[all]\n# Rosy lamp\n"
-        "dtoverlay=rosy-ws281x\n", encoding="utf-8")
+        "dtoverlay=rosy-ws281x\n\n[all]\n# Pinky camera\ncamera_auto_detect=0\n"
+        "dtoverlay=ov5647\n", encoding="utf-8")
+    camera_lock = IMAGE / "camera-sources.lock.json"
+    (root / "usr/local/share/rosy").mkdir(parents=True, exist_ok=True)
+    (root / "usr/local/share/rosy/camera-sources.lock.json").write_bytes(camera_lock.read_bytes())
+    python_lock = IMAGE / "camera-python-requirements.txt"
+    (root / "usr/local/share/rosy/camera-python-runtime.sha256").write_text(
+        hashlib.sha256(python_lock.read_bytes()).hexdigest() + "\n", encoding="utf-8")
+    for command in ("rpicam-hello", "rpicam-still"):
+        path = root / "usr/local/bin" / command
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# fixture\n", encoding="utf-8")
+    for relative in ("libpisp.so.1", "libcamera.so.1", "libcamera/ipa_rpi_pisp.so"):
+        path = root / "usr/local/lib/aarch64-linux-gnu" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# fixture\n", encoding="utf-8")
+    for package in ("libcamera", "picamera2"):
+        (root / "usr/local/lib/python3.12/site-packages" / package).mkdir(parents=True, exist_ok=True)
     # D-247: the WS2812 lamp driver built for the image kernel.
     kernel = "6.8.0-1064-raspi"
     (root / "lib/modules" / kernel / "kernel").mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-﻿"""SQLite online backup and guarded restore for the site Fleet data volume."""
+"""SQLite online backup and guarded restore for the site Fleet data volume."""
 
 from __future__ import annotations
 
