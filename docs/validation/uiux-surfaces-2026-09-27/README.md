@@ -52,3 +52,15 @@
 `/console`의 로봇 상태 패널에서 위치·배터리 `delayed`·`disconnected`·`unavailable`이 모두 “수신 대기”로 표시되는 결함을 확인했다. 서버의 증거 판정을 바꾸지 않고, 현재 역할 화면에서 각각 “지연 · 마지막 수신 후 경과 시간”, “연결 끊김”, “정보 없음”으로 구분했다. `fresh`인데 값이 비어 있는 경우도 0으로 대체하지 않는다.
 
 실제 FastAPI 앱과 CORE 서비스 fixture를 통과하는 Chromium 시험은 세 상태 × 1366×768·390×844의 6셀에서 문구, `data-evidence`, 가로 넘침, 페이지 오류를 검사한다. 캡처는 드라이브 규칙에 따라 `X:\DevTemp\rosy-uiux-evidence-matrix\`에만 생성한다. 이 6셀은 **LOCAL 브라우저 증거**이며, 저장소에 보존된 전체 G2 행렬이나 BENCH/DEVICE 증거로 세지 않는다. D-153의 나머지 상태·표면 셀, G3 8항 최종 판정, D-255 B2/B3는 계속 별도 게이트다.
+
+## D-306 후속 확인: Fleet 지도 목표 지정
+
+Fleet 지도에서 `rosy_02` 목표를 선택하고 방향키로 한 칸 이동한 상태를 Windows Chromium의 1920×1080, 390×844, 320×844에서 캡처했다. 세 뷰포트 모두 가로 넘침과 페이지 오류가 없었고, 실제 포커스는 `map-canvas`였다. 대상과 현재 좌표 `(1.07, 1.03) m`, 방향키·Enter·Escape 안내가 보였다. 모바일 뷰포트에서 지도 포커스 링, 상단 전체 정지, 지도 아래 로봇 목록을 육안으로 확인했다.
+
+| 셀 | LOCAL 결과 | 캡처 (일회성, X:) |
+|---|---|---|
+| Fleet 목표 선택 1920×1080 | 포커스·좌표 안내·가로 넘침 0·페이지 오류 0 | `X:\DevTemp\rosy-uiux-d306\fleet_goal_viewport_1920x1080.png` |
+| Fleet 목표 선택 390×844 | 동일 | `X:\DevTemp\rosy-uiux-d306\fleet_goal_viewport_390x844.png` |
+| Fleet 목표 선택 320×844 | 동일 | `X:\DevTemp\rosy-uiux-d306\fleet_goal_viewport_320x844.png` |
+
+Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표 지정·확인 계약 집중 회귀는 4 passed였다. 확인 취소 시 목표 API 0회, 승인 시 지정 로봇에 1회가 시험되었다. X: 캡처는 장기 보존 증거가 아니며 빈 지도·지연·연결 끊김·권한 거부 등 전체 G2 셀, G3 최종 판정, 실제 로봇 이동은 HOLD다.
