@@ -256,3 +256,9 @@
 - 변경: 기존 조작 그룹 브라우저 fixture의 `/api/v1/host/commissioning` 응답에 `motor` 실행 모드를 제공한다. 실제 teleop 자격·속도·정지 코드는 변경하지 않았다.
 - 증거: 수정 전 단독 시험이 양의 `/api/v1/teleop` 호출을 기다리다 30초 timeout으로 실패했다. fixture 정렬 후 해당 파일 6 passed, dashboard + 역할 브라우저 확장 회귀 46 passed (Windows Chromium).
 - gate 변화: 앞선 SOURCE HOLD의 유일한 재현 실패를 닫아 SOURCE GO를 복원했다. `/setup`·`/device` G2 전체 상태·G3·장치/현장 증거는 여전히 미완료다.
+
+## 2026-09-27 · uncommitted · fix(device): keep Host Agent actions locked during request
+
+- 변경: 네트워크·릴리스 작업 중 상태 조회가 도착해도 해당 절차의 모든 버튼을 비활성화하고 두 번째 POST를 막는다. 요청 완료 시 현재 Host Agent 상태로 버튼을 다시 판단한다.
+- 근거: 지연된 POST 중 새 GET과 두 번째 클릭으로 2 POST를 재현했고 수정 후 브라우저 시험 2 passed. 역할 G2 FastAPI+Chromium 매트릭스 56셀은 오류·가로 넘침 0건이다.
+- gate 변화: SOURCE/LOCAL 근거 보강. Host Agent 적용·롤백 readback과 G3 사람 판단, DEVICE/FIELD는 HOLD다.

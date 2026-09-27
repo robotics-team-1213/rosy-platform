@@ -101,3 +101,59 @@ def test_network_action_reports_rejection_and_success_beside_controls():
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_host_actions_stay_locked_during_request_and_status_poll():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            page.evaluate("""async () => {
+              const {mount} = await import('/src/hmi/dashboard/panels/host/operations.js');
+              const root = document.createElement('main'); document.body.append(root);
+              const callbacks = {}; window.__callbacks = callbacks;
+              const store = {poll(path, _interval, onData, onError) {
+                callbacks[path] = {onData, onError}; return () => {};
+              }};
+              window.__calls = []; window.__resolve = null;
+              window.__unmount = mount(root, {role:'administrator', store,
+                api: async (path, options) => {
+                  window.__calls.push({path, method: options.method});
+                  return await new Promise(resolve => {window.__resolve = resolve;});
+                }});
+              window.confirm = () => true;
+              callbacks['/api/v1/host/network'].onData({available:true,ok:true,data:{mode:'SITE_STA'}});
+              callbacks['/api/v1/host/release'].onData({available:true,ok:true,data:{state:'IDLE',previous:'r1'}});
+            }""")
+            page.get_by_text("사업장 Wi-Fi로 전환", exact=True).click()
+            page.evaluate("""() => {
+              window.__callbacks['/api/v1/host/network'].onData({available:true,ok:true,data:{mode:'SITE_STA'}});
+              [...document.querySelectorAll('ui-button')].find(x => x.textContent === '릴레이 AP 켜기').click();
+            }""")
+            assert page.evaluate("window.__calls.length") == 1
+            assert page.evaluate("[...document.querySelectorAll('ui-button')].filter(x => ['사업장 Wi-Fi로 전환','릴레이 AP 켜기'].includes(x.textContent)).every(x => x.disabled)")
+            page.evaluate("window.__resolve({available:true,ok:true})")
+            page.wait_for_function("[...document.querySelectorAll('ui-button')].find(x => x.textContent === '릴레이 AP 켜기').disabled === false")
+
+            page.get_by_text("이전 릴리스로 복귀", exact=True).click()
+            page.evaluate("""() => {
+              window.__callbacks['/api/v1/host/release'].onData({available:true,ok:true,data:{state:'IDLE',previous:'r1'}});
+              [...document.querySelectorAll('ui-button')].find(x => x.textContent === '이전 릴리스로 복귀').click();
+            }""")
+            assert page.evaluate("window.__calls.length") == 2
+            assert page.evaluate("[...document.querySelectorAll('ui-button')].find(x => x.textContent === '이전 릴리스로 복귀').disabled")
+            page.evaluate("window.__resolve({available:true,ok:true})")
+            page.wait_for_function("[...document.querySelectorAll('ui-button')].find(x => x.textContent === '이전 릴리스로 복귀').disabled === false")
+            assert errors == []
+            page.evaluate("window.__unmount()")
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

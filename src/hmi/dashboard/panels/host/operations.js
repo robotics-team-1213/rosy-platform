@@ -95,14 +95,15 @@ export function mount(root, ctx) {
   const networkNote = el("ui-status", "", "Host Agent 상태 확인 전에는 네트워크 작업을 사용할 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
   network.wrap.append(networkActions);
   let networkHasResult = false;
+  let networkPending = false;
   function networkEnabled(enabled) {
-    for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled;
-    if (!enabled) {
+    for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled || networkPending;
+    if (!enabled && !networkPending) {
       networkHasResult = false;
       networkNote.textContent = "Host Agent 상태를 확인할 수 없어 네트워크 작업을 막았습니다.";
       networkNote.setAttribute("state", "unavailable");
     }
-    networkNote.hidden = enabled && !networkHasResult;
+    networkNote.hidden = enabled && !networkHasResult && !networkPending;
   }
   network.onUpdate(() => networkEnabled(network.wrap.dataset.available === "true"));
   networkEnabled(network.wrap.dataset.available === "true");
@@ -113,23 +114,28 @@ export function mount(root, ctx) {
   rollback.disabled = clearHold.disabled = true; releaseActions.append(rollback, clearHold); release.wrap.append(releaseActions);
   const releaseNote = el("ui-status", "", "Host Agent 상태 확인 전에는 릴리스 작업을 사용할 수 없습니다."); releaseNote.setAttribute("state", "pending"); release.wrap.append(releaseNote);
   let releaseHasResult = false;
+  let releasePending = false;
   function syncReleaseActions() {
     const held = release.data.state === "RECOVERY_HOLD";
-    rollback.disabled = release.wrap.dataset.available !== "true" || !release.data.previous || held;
-    clearHold.disabled = release.wrap.dataset.available !== "true" || !held;
-    if (release.wrap.dataset.available !== "true") {
+    rollback.disabled = releasePending || release.wrap.dataset.available !== "true" || !release.data.previous || held;
+    clearHold.disabled = releasePending || release.wrap.dataset.available !== "true" || !held;
+    if (release.wrap.dataset.available !== "true" && !releasePending) {
       releaseHasResult = false;
       releaseNote.textContent = "Host Agent 상태를 확인할 수 없어 릴리스 작업을 막았습니다.";
       releaseNote.setAttribute("state", "unavailable");
     }
-    releaseNote.hidden = release.wrap.dataset.available === "true" && !releaseHasResult;
+    releaseNote.hidden = release.wrap.dataset.available === "true" && !releaseHasResult && !releasePending;
   }
   release.onUpdate(syncReleaseActions);
   syncReleaseActions();
 
   async function postHost(button, path, body, confirmText, note, success) {
-    if (button.disabled || !window.confirm(confirmText)) return;
-    button.disabled = true;
+    const isNetwork = note === networkNote;
+    if ((isNetwork ? networkPending : releasePending) || button.disabled || !window.confirm(confirmText)) return;
+    if (isNetwork) networkPending = true;
+    else releasePending = true;
+    if (isNetwork) networkEnabled(network.wrap.dataset.available === "true");
+    else syncReleaseActions();
     note.hidden = false;
     note.textContent = "요청 결과를 기다리는 중입니다.";
     note.setAttribute("state", "pending");
@@ -142,8 +148,8 @@ export function mount(root, ctx) {
       note.setAttribute("state", result.available === false ? "unavailable" : result.ok === false ? "error" : "ready");
     } catch (error) { note.textContent = `요청 실패: ${error.message}`; note.setAttribute("state", "error"); }
     finally {
-      if ([sta, relay, applyProfile, connect].includes(button)) networkEnabled(network.wrap.dataset.available === "true");
-      else syncReleaseActions();
+      if (isNetwork) { networkPending = false; networkEnabled(network.wrap.dataset.available === "true"); }
+      else { releasePending = false; syncReleaseActions(); }
     }
   }
   sta.addEventListener("click", () => postHost(sta, "/api/v1/host/network/mode", {mode: "SITE_STA"}, "사업장 Wi-Fi로 전환할까요? 연결이 잠시 끊길 수 있습니다.", networkNote, "네트워크 모드 전환을 요청했습니다."));
