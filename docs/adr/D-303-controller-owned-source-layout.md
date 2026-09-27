@@ -6,7 +6,7 @@
 
 **판정 순서:** (1) 최종 actuator 명령과 정지를 소유하는 제어기, (2) Fleet 미션 정본, (3) 실제로 교환하는 버전된 데이터, (4) 독립 배포·시험 단위, (5) 호스트와 제품 구성. 같은 호스트에 놓이는지는 1~4를 바꾸지 않는다. Pinky 탑재 OMX도 base와 arm의 최종 writer를 각각 유지하고 로컬 상호 인터록을 별도로 판정한다.
 
-**선택:** 소스의 최상위 경계는 **`controllers / site / contracts / products / sim`** 으로 잡는다. `controllers` 아래는 물리 권한별로 `base`와 `arm`을 둔다. `base`는 로봇 로컬 미들웨어와 현재 Pinky 하드웨어 적응·로컬 화면을 포함한다. `arm/omx`는 OMX 로컬 제어기 후보만 포함하며 운영 capability는 기존 게이트 전까지 비활성이다. `site`는 Fleet 원장과 Overhead 관측, Games를 유지한다. `contracts`는 실제 독립 소유자 사이의 교환 모델만 담는다. 제품 폴더는 설정·조립만 담는다. `ROSY Platform`은 이 집합의 제품 이름이며 프로세스나 `src/platform` 패키지 이름이 아니다.
+**선택:** 소스의 최상위 경계는 **`controllers / site / contracts / shared_ui / products / sim`** 으로 잡는다. `controllers` 아래는 물리 권한별로 `base`와 `arm`을 둔다. `base`는 로봇 로컬 미들웨어와 현재 Pinky 하드웨어 적응·로컬 화면을 포함한다. `arm/omx`는 OMX 로컬 제어기 후보만 포함하며 운영 capability는 기존 게이트 전까지 비활성이다. `site`는 Fleet 원장과 Overhead 관측, Games를 유지한다. `contracts`는 실제 독립 소유자 사이의 교환 모델만 담는다. `shared_ui`는 CORE와 Fleet이 실제로 함께 설치하는 시각 자산 `web_common`을 소유하며 제어 권한이 없다. 제품 폴더는 설정·조립만 담는다. `ROSY Platform`은 이 집합의 제품 이름이며 프로세스나 `src/platform` 패키지 이름이 아니다.
 
 ```text
 src/
@@ -21,9 +21,10 @@ src/
 │  │  ├─ sensing/          # control, 최종 명령 중복 발행 금지
 │  │  ├─ navigation/
 │  │  ├─ hardware/{pinky_pro,common}/
-│  │  └─ hmi/{dashboard,face,web}/
+│  │  └─ hmi/{dashboard,face}/
 │  └─ arm/omx/adapter/    # 현행 omx_adapter
 ├─ site/{fleet,overhead,games}/
+├─ shared_ui/web/        # CORE와 Fleet이 소비하는 web_common
 ├─ contracts/             # 실제 교환 계약을 추출할 때 생성
 │  ├─ robot_link/         # Fleet↔base 기존 wire 의미만
 │  └─ site_sighting/      # Overhead↔Fleet 관측 의미만
