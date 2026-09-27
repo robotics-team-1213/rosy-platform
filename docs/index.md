@@ -132,6 +132,7 @@
 | D-308 | 의도 해석과 장치별 Action 해석의 책임을 분리한다 |
 | D-309 | UI/UX의 프론트·백엔드 책임과 시간·예외·안전 증거를 분리한다 |
 | D-310 | 제품 전용 소스와 장치 로컬 실행 소스를 구분한다 |
+| D-311 | 네이티브 G4 실측 증거를 내비게이션 기동 조건으로 검증한다 |
 
 ## 계획·결과 문서
 
@@ -186,8 +187,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(native): seal G4 evidence before navigation
 - 2026-09-27 · uncommitted · validation(uiux): close remaining local surface gaps
 - 2026-09-27 · uncommitted · fix(uiux): close stale display and action gaps
 - 2026-09-27 · uncommitted · plan(platform): define product source layout migration
 - 2026-09-27 · uncommitted · validation(uiux): inspect changed Fleet, game and role captures
-- 2026-09-27 · uncommitted · fix(uiux): show CORE safe stop on role surfaces

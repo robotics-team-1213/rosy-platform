@@ -1378,3 +1378,8 @@
 - Change: mounted-image validator now expects the default YAML in core_common share.
 - Evidence: image customization contract tests passed within the 1,812-test gateway/config/image run; built core_common wheel contains both YAML files.
 - Gate: host contract only; native ARM64 artifact and mounted device image remain unverified.
+## 2026-09-27 · uncommitted · fix(native): verify G4 on navigation start
+
+- 변경: `mapping_approval.py`가 G4 원시 odom과 해시를 봉인하고 `rosy-navigation.service`의 `ExecCondition`이 매 기동마다 현재 장치·릴리스와 승인 기록을 다시 검증한다.
+- 검증: Windows 호스트 계약 시험. ARM64 이미지·설치 장치·물리 G4/G5는 HOLD다.
+- gate 변화: SOURCE/LOCAL 검증 경로를 추가했다. ARTIFACT/DEVICE/FIELD 수용은 HOLD다.

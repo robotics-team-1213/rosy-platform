@@ -2935,3 +2935,9 @@
 - 변경: Fleet의 첫 조회 중복 폴링·빈 경보/토글·지도 주석 확대를 고치고 최신 27셀 캡처 및 네이티브 확인 이벤트를 표면 카드에 반영했다. 게임 13셀, 역할 56셀, LCD 노드 경로 후속 결과도 D-309 표면 카드/계획에 연결했다.
 - 검증: Fleet 브라우저 24 passed·24상태 셀 오류/가로 넘침 0, 게임 브라우저 14 passed·13셀 넘침/오류 0, 역할 신규 Chromium 2 passed·G2 56셀 넘침/오류 0, face 호스트 139 passed/4 skipped. X: 캡처는 LOCAL 일회성 자료다.
 - gate 변화: 로컬 재현 결함은 보완했다. 실제 장치 식별·이미지 digest·로봇/카메라/LCD readback 및 G3 사람 평가는 미확인으로 BENCH/DEVICE/FIELD HOLD다.
+
+## 2026-09-27 · uncommitted · fix(native): seal G4 evidence before navigation
+
+- 변경: D-311과 네이티브 G4 번들·원시 odom·승인 검증 절차를 기록했다. 빈 마커로는 기동하지 않으며 새 서명 이미지와 SD 갱신이 필요하다.
+- 검증: 네이티브 승인 계약 시험과 harness lint를 실행한다. 실제 장치 G4/G5는 HOLD다.
+- gate 변화: SOURCE/LOCAL 검증 경로를 추가했다. ARTIFACT/DEVICE/FIELD 수용은 HOLD다.

@@ -15,6 +15,9 @@ SupplementaryGroups=dialout i2c video gpio spi
 # ${...} expands to an empty launch argument. runtime.env still wins.
 Environment=ROSY_NAVIGATION_BACKEND=localization ROSY_MAP=/var/lib/rosy/maps/site.yaml
 EnvironmentFile=/etc/rosy/runtime.env
+# Empty marker files cannot authorize navigation. Recheck sealed G4 evidence,
+# the active release and robot identity at every service start.
+ExecCondition=/usr/bin/python3 -B /opt/rosy/native-runtime/mapping_approval.py check
 # D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
 LogsDirectory=rosy-navigation
 Environment=ROS_HOME=/var/log/rosy-navigation ROS_LOG_DIR=/var/log/rosy-navigation
