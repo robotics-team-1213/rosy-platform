@@ -150,3 +150,10 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 | LCD E-STOP | 비상 정지 경보를 화면 상단 36px 배지로 올려 배터리 수치보다 먼저 읽히게 한다. 정상 화면은 픽셀 동일하다. | `5792e551`; 320×240 전후 이미지, face 162건 통과. `X:\DevTemp\rosy-lcd-visual-g3\` | 실제 Pi LCD 거리·각도·조도 판독과 물리 정지 HOLD |
 
 위 결과는 화면 구현과 LOCAL 표시 회귀다. Docker demo 로봇과 호스트 브라우저 캡처는 D-153의 DEVICE/FIELD 또는 G3 사람 평가를 대신하지 않는다.
+
+
+## 2026-09-28 localization pending action regression - LOCAL
+
+The follow-up in `b3d8e6cd` was checked for the 10-second capability poll, repeated initial-pose submission while pending, and repeated SLAM start while pending. The focused panel browser regression passed, and the full panel browser suite passed **14 tests**. The complete role G2 matrix was refreshed: **70 cells**, overflow 0, pageerror 0, E-stop visible 70/70, and canceled confirmation POST 0.
+
+The administrator `/setup` full-shell captures at 1366x768 and 390x844 were visually inspected. PNGs and `matrix.json` are in `X:\DevTemp\rosy-uiux-d306-roles-g2\`. This is LOCAL browser evidence with mocked/local API responses. Physical localization/SLAM readback, physical E-stop, and G3 evaluation were not performed; D-153 and D-255 B2/B3 remain **HOLD**.

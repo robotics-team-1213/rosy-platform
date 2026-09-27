@@ -62,3 +62,10 @@
 `network.status`는 Host Agent에서 활성 연결·Wi-Fi 프로파일·wlan0을 동기 조회하고, `release.status`는 `rosy-release status --json`을 동기 조회한다. 각 명령이 완전한 결과를 낸 직후 Host Agent가 `observed_at` UTC를 기록한다. 부분 nmcli 실패나 릴리스 상태의 파싱·필수 필드 실패는 정상 결과가 아니다. CORE는 각 응답의 원본 시각을 검증해 15초 이내 `fresh`, 15초 초과 `delayed`, 소켓 미연결·타임아웃 `disconnected`, 시각 누락·파싱 실패·미래 시각 `unavailable`을 판정하고 나이를 전달한다. 브라우저는 판정과 나이만 표시한다.
 
 관리자 `/device`의 지연·연결 끊김·정보 없음 × 1366×768·390×844 6셀을 기존 매트릭스에 더해 총 60셀이다. `matrix.json`에서 pageerror·가로 넘침은 0건이고 세 상태 모두 네트워크 작업이 비활성이다. fixture는 정상 API 응답을 받아 상태 부분만 합성했으므로 실제 Host Agent readback이 아니다. 별도 실물 점검에서 기존 로봇 릴리스에는 `rosy-host-agent.service` unit과 소켓이 없고 CORE 두 GET은 `HOST_AGENT_UNAVAILABLE`이었다. 새 이미지·서비스 배포와 실물 네트워크/릴리스 결과는 **DEVICE HOLD**다. G3 사람 평가도 HOLD다.
+
+
+## 2026-09-28 localization pending follow-up
+
+After `b3d8e6cd`, a panel browser regression verified that the 10-second localization capability poll preserves pose/SLAM pending locks and action feedback, and repeated requests do not issue duplicate POSTs. The full panel suite passed **14 tests**. Role G2 passed **5 tests** and refreshed 70 cells: overflow 0, pageerror 0, E-stop visible 70/70, canceled confirmation POST 0. Administrator `/setup` full-shell captures at 1366x768 and 390x844 were visually inspected. PNGs and `matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
+
+These are browser and mock/local API results. Actual pose/SLAM readback, physical E-stop, and user G3 evaluation remain separate; product acceptance, DEVICE, and FIELD stay **HOLD**.

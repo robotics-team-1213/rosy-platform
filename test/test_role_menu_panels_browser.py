@@ -84,6 +84,74 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
         browser.close()
 
 
+
+def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capability_poll():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "setup" / "localization.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/setup/localization.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/setup/localization.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {}; const calls = [];
+          const store = {poll(path, interval, onData, onError) {
+            callbacks[path] = {interval, onData, onError}; return () => {};
+          }};
+          const pending = {};
+          const api = (path, options) => {
+            calls.push({path, method: options.method});
+            return new Promise((resolve, reject) => { pending[path] = {resolve, reject}; });
+          };
+          window.__callbacks = callbacks; window.__calls = calls; window.__pending = pending;
+          window.__unmount = mount(root, {role:'operator', store, api});
+          callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true});
+          window.confirm = () => true;
+        }""")
+        assert page.evaluate("window.__callbacks['/api/v1/system/capabilities'].interval") == 10_000
+        page.locator("main form").evaluate("node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+        page.wait_for_function("window.__calls.length === 1")
+        pose_button = page.locator("main form ui-button[type=submit]")
+        assert pose_button.is_disabled()
+        pose_status = page.locator("main > ui-status[role=status]").nth(1)
+        pending_pose_feedback = pose_status.inner_text()
+        page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true})")
+        page.locator("main form").evaluate("node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+        assert pose_button.is_disabled()
+        assert pose_status.inner_text() == pending_pose_feedback
+        assert page.evaluate("window.__calls") == [{"path": "/api/v1/localization/initialpose", "method": "POST"}]
+        page.evaluate("window.__pending['/api/v1/localization/initialpose'].resolve({accepted:true})")
+        page.wait_for_function("document.querySelector('main form ui-button[type=submit]').disabled === false")
+
+        slam_buttons = page.locator("main section.ui-readback ui-button")
+        start = slam_buttons.nth(0)
+        start.click()
+        page.wait_for_function("window.__calls.length === 2")
+        pending_slam_feedback = pose_status.inner_text()
+        assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
+        page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true})")
+        start.dispatch_event("click")
+        assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
+        assert pose_status.inner_text() == pending_slam_feedback
+        assert page.evaluate("window.__calls") == [
+            {"path": "/api/v1/localization/initialpose", "method": "POST"},
+            {"path": "/api/v1/slam/start", "method": "POST"},
+        ]
+        page.evaluate("window.__pending['/api/v1/slam/start'].resolve({accepted:true})")
+        page.wait_for_function("[...document.querySelectorAll('main section.ui-readback ui-button')].every(node => !node.disabled)")
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
 def test_setup_docking_refuses_teach_without_fresh_pose():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
