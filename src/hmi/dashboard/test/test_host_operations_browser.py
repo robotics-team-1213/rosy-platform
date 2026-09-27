@@ -211,6 +211,21 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                     assert result["disabled"] is not enabled, result
                     if label == "지연":
                         assert "지연" in result["actionNote"], result
+            page.evaluate("""() => {
+              const fresh = {available:true, ok:true, detail:'old detail', recovery:'old recovery',
+                evidence:{evidence:'fresh', age_s:0}, data:{mode:'SITE_STA',ssid:'old-ssid',state:'IDLE',previous:'old-release'}};
+              window.__callbacks['/api/v1/host/network'].onData(fresh);
+              window.__callbacks['/api/v1/host/release'].onData(fresh);
+              window.__callbacks['/api/v1/host/network'].onError({status:503,message:'read failed'});
+              window.__callbacks['/api/v1/host/release'].onError({status:403,message:'forbidden'});
+            }""")
+            for section in page.locator("section.ui-readback").all()[:2]:
+                assert "old-" not in section.inner_text()
+                assert "확인할 수 없음" in section.locator("dl").inner_text()
+                assert section.locator("details").first.is_hidden()
+                assert section.locator("details").nth(1).is_hidden()
+            assert "Host Agent 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
+            assert "관리자 권한을 확인" in page.locator("section.ui-readback").nth(1).inner_text()
             assert errors == []
             page.evaluate("window.__unmount()")
             browser.close()

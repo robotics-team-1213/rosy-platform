@@ -266,6 +266,44 @@ def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
         browser.close()
 
 
+def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
+    """A later denied read must not leave an earlier Host Agent result on screen."""
+    client = _core_client(tmp_path)
+    phase = {"scenario": "normal"}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-admin')")
+
+        def serve(route):
+            path = urlsplit(route.request.url).path
+            response = _response(client, path, TOKENS["administrator"], phase["scenario"], "device")
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+                "cache-control": "no-store",
+            }, body=response.content if hasattr(response, "content") else response.body)
+
+        page.route("**/*", serve)
+        page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+        cards = page.locator('[data-panel="host.operations"] section.ui-readback')
+        page.get_by_text("site-fixture", exact=True).wait_for()
+        assert page.get_by_text("r1", exact=True).count() == 1
+        phase["scenario"] = "forbidden"
+        page.wait_for_function("""() => [...document.querySelectorAll('[data-panel="host.operations"] section.ui-readback')]
+          .slice(0, 2).every(card => card.querySelector('ui-status')?.textContent.includes('권한'))""", timeout=30_000)
+        assert "site-fixture" not in cards.nth(0).locator("dl").inner_text()
+        assert "r1" not in cards.nth(1).locator("dl").inner_text()
+        assert page.get_by_text("사업장 Wi-Fi로 전환", exact=True).is_disabled()
+        assert page.get_by_text("이전 릴리스로 복귀", exact=True).is_disabled()
+        phase["scenario"] = "normal"
+        page.get_by_text("site-fixture", exact=True).wait_for(timeout=30_000)
+        page.get_by_text("r1", exact=True).wait_for(timeout=30_000)
+        assert errors == []
+        browser.close()
+
+
 def test_role_procedure_first_boot_full_screen(tmp_path):
     """Capture the real shell while manifest and safety responses have not arrived."""
     client = _core_client(tmp_path)

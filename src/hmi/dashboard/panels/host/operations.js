@@ -32,13 +32,17 @@ function card(title, path, interval, ctx, describe) {
   wrap.append(body, status, detail, recovery);
   let currentData = {};
   let onUpdate = () => {};
+  function clearReadout() {
+    currentData = {};
+    body.replaceChildren(el("dt", "", "상태"), el("dd", "", "확인할 수 없음"));
+  }
   const stop = ctx.store.poll(path, interval, (payload) => {
     body.replaceChildren();
     const commissioning = path === "/api/v1/host/commissioning";
     const evidence = commissioning ? null : payload?.evidence?.evidence || "unavailable";
     if (!commissioning) wrap.dataset.evidence = evidence;
     if (!commissioning && (payload?.available !== true || !["fresh", "delayed"].includes(evidence))) {
-      body.append(el("dt", "", "상태"), el("dd", "", "확인할 수 없음"));
+      clearReadout();
       status.textContent = evidence === "disconnected"
         ? `연결 끊김 · ${unavailableLabel(payload?.code)}`
         : `정보 없음 · ${payload?.evidence?.reason || unavailableLabel(payload?.code)}`;
@@ -69,10 +73,15 @@ function card(title, path, interval, ctx, describe) {
     status.setAttribute("state", evidence === "delayed" || payload.ok === false ? "warning" : "ready");
     onUpdate();
   }, (error) => {
-    currentData = {};
+    clearReadout();
     wrap.dataset.available = "false";
     wrap.dataset.evidence = "unavailable";
-    status.textContent = error.status === 403 ? "이 상태를 볼 권한이 없습니다." : `상태를 가져오지 못했습니다: ${error.message}`;
+    detailText.textContent = "";
+    detail.hidden = true;
+    recoveryText.textContent = "";
+    recovery.hidden = true;
+    status.textContent = error.status === 403 ? "이 상태를 볼 권한이 없습니다. 관리자 권한을 확인하세요."
+      : `상태를 가져오지 못했습니다: ${error.message}. 다음 조회를 기다리거나 Host Agent 연결을 확인하세요.`;
     status.setAttribute("state", error.status === 403 ? "forbidden" : "error");
     onUpdate();
   });

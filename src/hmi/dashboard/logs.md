@@ -286,3 +286,9 @@
 - 변경: `/setup`에서 기존 도크 유형을 선택하면 새 유형의 검출기·태그 필드를 실제로 숨기고 그 값으로 기존 유형의 등록을 막지 않는다. 새 유형으로 돌아오면 입력값은 유지한다.
 - 근거: 실제 FastAPI 정적 화면 + Chromium에서 새 유형의 태그 관측 선택 → 기존 유형 선택 → 숨긴 필드 비우기 → 도크 등록 1건과 유형 생성 0건을 확인했다. 도크 흐름·첫 기동 집중 브라우저 2 passed, dashboard/shared controls 24 passed.
 - gate 변화: LOCAL 작업 흐름 결함을 닫았다. 운영자/관리자 G3 사람 평가와 장치 등록 결과는 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(device): clear stale Host Agent readouts after read failure
+
+- 변경: `/device` 네트워크·릴리스 상태가 뒤이은 권한 거부·읽기 오류·증거 없음으로 바뀌면 이전 SSID·릴리스 값과 세부/복구 문구를 비우고 확인 불가·다음 행동을 표시한다. 다음 정상 조회가 오면 새 값을 다시 표시한다.
+- 근거: 실제 FastAPI+Chromium에서 정상→403→정상 전이를 재현하고, Host 카드 브라우저에서 503·403·원본 증거 없음의 값·조작 잠금 상태를 확인했다. 집중 브라우저 4 passed, dashboard/Host 계약 62 passed.
+- gate 변화: LOCAL에서 이전 값을 현재 readback으로 오인하는 결함을 닫았다. Host Agent 실물 재연결과 G3 사람 평가, DEVICE/FIELD는 HOLD다.
