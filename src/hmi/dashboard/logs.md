@@ -292,3 +292,9 @@
 - 변경: `/device` 네트워크·릴리스 상태가 뒤이은 권한 거부·읽기 오류·증거 없음으로 바뀌면 이전 SSID·릴리스 값과 세부/복구 문구를 비우고 확인 불가·다음 행동을 표시한다. 다음 정상 조회가 오면 새 값을 다시 표시한다.
 - 근거: 실제 FastAPI+Chromium에서 정상→403→정상 전이를 재현하고, Host 카드 브라우저에서 503·403·원본 증거 없음의 값·조작 잠금 상태를 확인했다. 집중 브라우저 4 passed, dashboard/Host 계약 62 passed.
 - gate 변화: LOCAL에서 이전 값을 현재 readback으로 오인하는 결함을 닫았다. Host Agent 실물 재연결과 G3 사람 평가, DEVICE/FIELD는 HOLD다.
+
+## 2026-09-28 · uncommitted · fix(teleop): remove repeated confirmation gate
+
+- 변경: 기존 `/dashboard`와 새 `/console` 수동 운전에서 반복 확인 체크박스를 제거했다. 인증·MANUAL·E-Stop·최신 상태·runtime capability와 홀드/0 명령 전송은 유지한다.
+- 검증: 새 패널의 그룹 전환 0 명령, 레거시 홀드/해제 0 명령 브라우저 시험을 실행한다.
+- gate 변화: LOCAL 조작 단계만 줄였다. 장치 적용과 물리 이동은 별도다.

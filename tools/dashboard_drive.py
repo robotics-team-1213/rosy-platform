@@ -7,9 +7,7 @@ Examples (the token file holds one API or paired token; keep it outside the repo
     python tools/dashboard_drive.py ... teleop --direction forward --seconds 1.0
     python tools/dashboard_drive.py ... screenshot --view inspect --out X:/DevTemp/inspect.png
 
-`teleop` moves a real robot. Confirm the controlled area and physical power cut;
-the command ticks `#bench-safety-confirmed`
-for you only because you asked for motion. It prints the measured stop latency: the time
+`teleop` moves a real robot. It prints the measured stop latency: the time
 from releasing the button until `/api/v1/robot/state` reports zero velocity.
 """
 
@@ -100,7 +98,6 @@ def _moving(state: dict) -> bool:
 
 def teleop(page, direction: str, seconds: float, stop_timeout_s: float = 3.0) -> dict:
     """Hold a teleop button like a person does, then measure how fast the robot stops."""
-    page.locator("#bench-safety-confirmed").check()
     button = page.locator(f'[data-teleop="{direction}"]')
     deadline = time.monotonic() + 5.0
     while not button.is_enabled() and time.monotonic() < deadline:

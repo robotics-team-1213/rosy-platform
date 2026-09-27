@@ -15,14 +15,12 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "수동 운전");
   const status = el("ui-status", "", "운전 자격을 확인하는 중입니다.");
-  const confirmLabel = el("label", "ui-field-label surface-confirmation", "실행 모드를 확인하는 중입니다.");
-  const confirmed = el("input"); confirmed.type = "checkbox"; confirmLabel.prepend(confirmed);
   const controls = el("div", "surface-teleop-controls"); controls.setAttribute("aria-label", "누르는 동안만 움직이는 저속 운전");
   const buttons = COMMANDS.map((command) => {
     const button = el("ui-button", "", command.label); button.setAttribute("kind", "toggle"); button.setAttribute("size", "primary"); button.type = "button"; button.dataset.linear = String(command.linear); button.dataset.angular = String(command.angular); button.disabled = true;
     button.setAttribute("aria-label", `${command.label}. 누르는 동안에만 저속으로 움직입니다.`); controls.append(button); return button;
   });
-  root.append(head, status, confirmLabel, controls);
+  root.append(head, status, controls);
 
   let state = null;
   let capabilities = null;
@@ -32,7 +30,7 @@ export function mount(root, ctx) {
   let activeButton = null;
   let holdTimeout = null;
   function eligible() {
-    if (ctx.role === "viewer" || capabilities?.teleop !== true || safety?.estop !== false || state?.mode !== "MANUAL" || !confirmed.checked) return false;
+    if (ctx.role === "viewer" || capabilities?.teleop !== true || safety?.estop !== false || state?.mode !== "MANUAL") return false;
     if (!["motor", "hardware"].includes(commissioning?.runtime_mode)) return false;
     const evidence = new HeadlessState(state);
     return evidence.isFresh("pose") && evidence.isFresh("velocity");
@@ -46,13 +44,9 @@ export function mount(root, ctx) {
     if (!safety) return "비상정지 상태를 확인하는 중입니다.";
     if (!state || !new HeadlessState(state).isFresh("pose") || !new HeadlessState(state).isFresh("velocity")) return "pose와 velocity의 최신 상태를 기다립니다.";
     if (state.mode !== "MANUAL") return "저속 운전 전에 MANUAL 모드로 전환하세요.";
-    if (!confirmed.checked) return "통제 구역과 현장 담당자, 물리 전원 차단 준비를 확인하세요.";
     return "전진·후진 최대 0.03m/s · 회전 최대 0.10rad/s · 한 번에 최대 2초. 놓으면 정지합니다.";
   }
   function update() {
-    confirmLabel.lastChild.textContent = ["motor", "hardware"].includes(commissioning?.runtime_mode)
-      ? "통제 구역과 현장 담당자, 물리 전원 차단 준비를 확인했습니다."
-      : "장치 실행 모드를 확인하는 중입니다.";
     const can = eligible();
     buttons.forEach((button) => { button.disabled = !can && button !== activeButton; });
     if (!can && ticker.active) stop("운전 조건이 바뀌어 정지했습니다.");
@@ -113,7 +107,6 @@ export function mount(root, ctx) {
   }
   window.addEventListener("blur", () => stop("창 포커스를 잃어 정지했습니다.", true), {signal: listeners.signal});
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop("화면이 숨겨져 정지했습니다.", true); }, {signal: listeners.signal});
-  confirmed.addEventListener("change", update, {signal: listeners.signal});
   window.addEventListener("rosy:stop-motion", (event) => {
     const wasActive = ticker.active;
     const pendingStop = stop("공유 운전 제어에서 정지했습니다.", true);
@@ -126,11 +119,9 @@ export function mount(root, ctx) {
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; update(); }, (error) => { capabilities = null; status.textContent = `운전 capability 확인 실패: ${error.message}`; update(); });
   const stopSafety = ctx.store.poll("/api/v1/safety/state", 500, (data) => { safety = data; update(); }, (error) => { safety = null; status.textContent = `안전 상태 연결 실패: ${error.message}`; stop("안전 상태를 확인할 수 없어 정지했습니다.", true); });
   const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (data) => {
-    const previousMode = commissioning?.runtime_mode;
     commissioning = data;
-    if (previousMode !== data.runtime_mode) confirmed.checked = false;
     update();
-  }, () => { commissioning = null; confirmed.checked = false; stop("장치 실행 모드를 확인할 수 없어 정지했습니다.", true); });
+  }, () => { commissioning = null; stop("장치 실행 모드를 확인할 수 없어 정지했습니다.", true); });
   update();
 
   return {

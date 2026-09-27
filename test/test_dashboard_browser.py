@@ -469,9 +469,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
         assert page.locator("#network-tx-rate").inner_text() == "—"
         assert "그래프 수집 불가" in page.locator("#ros-risk-list").inner_text()
         assert page.locator("#ros-risk-list .risk-clear").count() == 0
-        page.locator("#bench-safety-confirmed").check()
-        assert "바퀴를 띄" not in page.locator("label[for='bench-safety-confirmed']").inner_text()
-        assert "물리 전원 차단" in page.locator("label[for='bench-safety-confirmed']").inner_text()
+        assert page.locator("#bench-safety-confirmed").count() == 0
         assert page.locator('[data-teleop="left"]').get_attribute("data-angular") == "0.1"
         forward = page.locator('[data-teleop="forward"]')
         page.wait_for_function(

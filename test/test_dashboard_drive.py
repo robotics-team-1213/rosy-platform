@@ -86,7 +86,7 @@ def test_teleop_holds_then_releases_to_zero(page):
     assert commands[0] == {"linear": 0.03, "angular": 0}
     assert commands[-1] == {"linear": 0, "angular": 0}
     assert result["samples"] and result["stop_latency_s"] is not None
-    assert page.locator("#bench-safety-confirmed").is_checked()
+    assert page.locator("#bench-safety-confirmed").count() == 0
 
 
 def test_screenshot_of_the_inspect_view(page, tmp_path):

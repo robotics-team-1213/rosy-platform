@@ -88,6 +88,73 @@ def _candidate(tmp_path: Path) -> tuple[dict, Path]:
     return bundle, evidence
 
 
+def _automatic_candidate(tmp_path: Path) -> tuple[dict, Path]:
+    bundle, evidence = _candidate(tmp_path)
+    bundle["schema_version"] = 2
+    bundle.pop("safety_operator")
+    bundle.pop("hardware_cut_reachable")
+    required = {
+        ("forward", "button_release"), ("reverse", "button_release"),
+        ("cw", "button_release"), ("ccw", "button_release"),
+        ("forward", "command_loss"),
+    }
+    bundle["trials"] = [
+        {key: value for key, value in trial.items() if key != "observed_direction"}
+        for trial in bundle["trials"]
+        if (trial["direction"], trial["stop_cause"]) in required
+    ]
+    return bundle, evidence
+
+
+def test_automatic_g4_seals_five_measured_trials_without_second_operator(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    result = approval.approve(root, bundle, evidence)
+    assert result["ready"] is True
+    assert result["trials"] == 5
+    assert approval.check(root, runtime_mode="hardware")["ready"] is True
+
+
+def test_automatic_g4_still_requires_command_loss_stop(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    bundle["trials"].pop()
+    with pytest.raises(ValueError, match="five|command_loss"):
+        approval.approve(root, bundle, evidence)
+    assert not (root / "etc/rosy/approvals/hardware.approved").exists()
+
+
+def test_automatic_g4_rejects_a_repeated_trial_in_place_of_command_loss(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    lost = next(t for t in bundle["trials"] if t["stop_cause"] == "command_loss")
+    lost["stop_cause"] = "button_release"
+    with pytest.raises(ValueError, match="required direction and stop cause"):
+        approval.approve(root, bundle, evidence)
+
+
+def test_automatic_g4_rechecks_operator_and_raw_digest_at_navigation_start(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    marker = root / "etc/rosy/approvals/navigation.approved"
+    record = json.loads(marker.read_text())
+    record["operator"] = "someone-else"
+    marker.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="operator differs"):
+        approval.check(root, runtime_mode="hardware")
+    record["operator"] = bundle["operator"]
+    marker.write_text(json.dumps(record))
+    raw = root / "etc/rosy/approvals/g4-evidence/forward-command_loss.json"
+    raw.write_text("{}")
+    with pytest.raises(ValueError, match="digest"):
+        approval.check(root, runtime_mode="hardware")
+
+
 def test_approval_seals_eight_measured_trials_and_navigation_checks_them(tmp_path):
     approval = _module()
     root = _device(tmp_path)

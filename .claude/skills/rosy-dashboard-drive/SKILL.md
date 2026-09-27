@@ -31,9 +31,9 @@ python tools/dashboard_drive.py $T screenshot --view inspect --out X:/DevTemp/in
 ```
 
 `teleop` prints velocity samples while held and `stop_latency_s`: time from release until
-`/api/v1/robot/state` reports zero velocity. For a grounded G4 trial, confirm the
-controlled area, an on-site operator, physical power cut access, and the 10 cm/
-0.03 m/s envelope before teleop (D-312). Hold is capped at 2 s.
+`/api/v1/robot/state` reports zero velocity. The controls use authenticated MANUAL mode,
+fresh pose/velocity, E-Stop state, and runtime capability; there is no repeated
+confirmation checkbox (D-314). Hold is capped at 2 s and 0.03 m/s.
 
 ## Element map
 
@@ -41,14 +41,13 @@ controlled area, an on-site operator, physical power cut access, and the 10 cm/
 |---|---|
 | Mode buttons | `.mode-control [data-mode="IDLE"\|"MANUAL"\|"NAVIGATION"]` (other `data-mode` chips exist) |
 | Shown mode | `#robot-mode` |
-| Site confirmation tick (teleop gate) | `#bench-safety-confirmed` (legacy DOM id) |
 | Teleop pad | `[data-teleop="forward"\|"backward"\|"left"\|"right"]` |
 | Views | `#view-operate`, `#view-inspect` |
 | Device card (D-247) | `#hardware-card` (inspect view) |
 | Teleop reason line | `#teleop-message` — read it when buttons stay disabled |
 
 Teleop is enabled only when: token set, `capabilities.teleop`, mode `MANUAL`, no E-Stop,
-fresh pose/velocity evidence, and the bench tick. In `core` runtime mode it never enables —
+fresh pose/velocity evidence. In `core` runtime mode it never enables —
 `#teleop-message` shows the `motion_reason`.
 
 ## Read-only APIs worth reading directly
