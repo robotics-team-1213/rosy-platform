@@ -1,4 +1,4 @@
-"""D-101 노트북 경기 보드의 브라우저 렌더 계약 (옵트인).
+﻿"""D-101 노트북 경기 보드의 브라우저 렌더 계약 (옵트인).
 
 ROSY_RUN_BROWSER_TESTS=1 로 실행한다. games.host.preview 의 실제 서버와
 games/web 의 실제 자산을 띄워, publish 한 상태가 보드에 그려지는지 단언한다.
@@ -66,11 +66,12 @@ def test_match_board_renders_published_play_state():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.textContent === 'play'"
+                "document.getElementById('phase')?.dataset.phase === 'play'"
             )
             page.wait_for_function(
                 "document.getElementById('home-score')?.textContent === '2'"
             )
+            assert page.locator("#phase").inner_text() == "경기 진행"
             assert page.locator("#away-score").inner_text() == "1"
             assert page.locator("#lost").is_hidden()
             assert "아직" in page.locator("#stair1").inner_text()
@@ -120,11 +121,13 @@ def test_match_board_shows_lost_hold_state():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.textContent === 'hold'"
+                "document.getElementById('phase')?.dataset.phase === 'hold'"
             )
             assert page.locator("#lost").is_visible()
+            assert page.locator("#phase").inner_text() == "경기 보류"
             assert "공을 잃음" in page.locator("#lost").inner_text()
             assert page.locator("#markers li.on").count() == 0
+            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, "games_board_lost.png")
             browser.close()
@@ -170,7 +173,7 @@ def test_missing_camera_frame_does_not_render_broken_image_placeholder():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.textContent === 'play'"
+                "document.getElementById('phase')?.dataset.phase === 'play'"
             )
             assert page.locator("#frame").is_hidden()
             assert page.locator("#frame").evaluate("el => getComputedStyle(el).display") == "none"
@@ -205,7 +208,7 @@ def test_halt_row_stays_inside_the_declared_viewport():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.textContent === 'play'"
+                "document.getElementById('phase')?.dataset.phase === 'play'"
             )
             page.wait_for_timeout(400)
             fit = page.evaluate(GAMES_FIT_PROBE)
@@ -239,7 +242,7 @@ def test_the_space_bar_promise_is_real():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.textContent === 'play'"
+                "document.getElementById('phase')?.dataset.phase === 'play'"
             )
             stops: list[str] = []
 
@@ -270,7 +273,7 @@ def test_match_state_is_announced_only_when_it_changes():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             announcement = page.locator("#match-announcement")
-            page.wait_for_function("document.getElementById('phase')?.textContent === 'play'")
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
             assert announcement.get_attribute("role") == "status"
             assert "rosy_01 2" in announcement.inner_text()
             assert "rosy_02 1" in announcement.inner_text()
@@ -284,7 +287,7 @@ def test_match_state_is_announced_only_when_it_changes():
             page.wait_for_timeout(700)
             assert page.evaluate("window.__announcements") == []
             board.publish(_lost_payload(), jpeg=None)
-            page.wait_for_function("document.getElementById('phase')?.textContent === 'hold'")
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'hold'")
             assert "공을 잃음" in announcement.inner_text()
             assert len(page.evaluate("window.__announcements")) == 1
             assert not errors, f"페이지 오류: {errors}"
@@ -304,7 +307,7 @@ def test_stop_failure_is_visible_and_can_be_retried():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.textContent === 'play'")
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
             calls = []
 
             def serve_stop(route):
@@ -322,9 +325,11 @@ def test_stop_failure_is_visible_and_can_be_retried():
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
             assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             save_temp_screenshot(page, "games_board_stop_retry.png")
-            page.locator("#halt").click()
+            page.locator("#halt").focus()
+            page.keyboard.press("Space")
             page.wait_for_function("document.getElementById('halt-status')?.dataset.state === 'sent'")
             assert "접수" in page.locator("#halt-status").inner_text()
+            assert page.evaluate("document.activeElement?.id") == "halt"
             assert calls == ["POST", "POST"]
             assert not errors, f"페이지 오류: {errors}"
             browser.close()
@@ -343,12 +348,66 @@ def test_overlay_failure_marks_last_received_match_as_stale():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.textContent === 'play'")
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.wait_for_function("document.getElementById('connection')?.textContent.includes('연결 오류')")
             assert page.locator("#home-score").inner_text() == "2"
             assert "마지막 수신 값" in page.locator("#match-announcement").inner_text()
             save_temp_screenshot(page, "games_board_host_disconnected.png")
+            assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()
+
+
+def test_missing_overlay_after_play_marks_cached_score_as_last_received():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            board.publish({}, jpeg=None)
+            page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 경기 정보')")
+            assert page.locator("#home-score").inner_text() == "2"
+            assert "마지막 수신 값" in page.locator("#match-announcement").inner_text()
+            assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()
+
+
+def test_stalled_stop_request_recovers_for_retry():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.evaluate("""() => {
+              const original = window.fetch;
+              window.fetch = (url, options) => url === '/stop'
+                ? new Promise((resolve, reject) => options?.signal?.addEventListener(
+                    'abort', () => reject(new DOMException('Aborted', 'AbortError'))))
+                : original(url, options);
+            }""")
+            page.locator("#halt").click()
+            page.wait_for_function(
+                "document.getElementById('halt-status')?.dataset.state === 'error'",
+                timeout=8_000,
+            )
+            assert "시간 초과" in page.locator("#halt-status").inner_text()
+            assert page.locator("#halt").get_attribute("aria-disabled") == "false"
             assert not errors, f"페이지 오류: {errors}"
             browser.close()
     finally:

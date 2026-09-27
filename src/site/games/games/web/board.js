@@ -11,11 +11,18 @@ const MARKER_LABEL = {
   20: "골",
   21: "골",
 };
+const PHASE_LABEL = {
+  kickoff: "시작 준비",
+  play: "경기 진행",
+  hold: "경기 보류",
+  goal: "득점",
+};
 const announcement = document.getElementById("match-announcement");
 const connection = document.getElementById("connection");
 const halt = document.getElementById("halt");
 const haltStatus = document.getElementById("halt-status");
 let polling = false;
+let hasMatch = false;
 
 function setTextIfChanged(element, value) {
   if (element.textContent !== value) element.textContent = value;
@@ -114,13 +121,20 @@ async function tick() {
     if (!res.ok) throw new Error(`overlay ${res.status}`);
     const payload = await res.json();
     if (!payload.field) {
-      setTextIfChanged(connection, "경기 데이터 대기 중");
+      setTextIfChanged(connection, hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
+      if (hasMatch) {
+        setTextIfChanged(announcement, "경기 데이터 대기 중. 표시된 경기 정보는 마지막 수신 값입니다.");
+      }
       return;
     }
+    hasMatch = true;
     setTextIfChanged(connection, "호스트 연결됨");
     const homeScore = payload.score?.[payload.field.home_id] ?? "—";
     const awayScore = payload.score?.[payload.field.away_id] ?? "—";
-    document.getElementById("phase").textContent = payload.phase || "—";
+    const phase = document.getElementById("phase");
+    const phaseLabel = PHASE_LABEL[payload.phase] || "단계 미확인";
+    phase.dataset.phase = payload.phase || "";
+    phase.textContent = phaseLabel;
     document.getElementById("home-name").textContent = payload.field.home_id;
     document.getElementById("away-name").textContent = payload.field.away_id;
     document.getElementById("home-score").textContent = homeScore;
@@ -129,7 +143,7 @@ async function tick() {
     const lostElement = document.getElementById("lost");
     lostElement.hidden = !lost;
     lostElement.textContent = payload.reason || (payload.lost_ball ? "공을 잃음" : "로봇을 잃음");
-    const matchSummary = `${payload.phase || "단계 미확인"} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
+    const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);
     chips(payload);
@@ -162,19 +176,26 @@ async function tick() {
 
 halt.addEventListener("click", async () => {
   if (halt.disabled) return;
+  const restoreFocus = document.activeElement === halt;
   halt.disabled = true;
   haltStatus.dataset.state = "pending";
   setTextIfChanged(haltStatus, "정지 요청 중");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch("/stop", { method: "POST" });
+    const res = await fetch("/stop", { method: "POST", signal: controller.signal });
     if (!res.ok) throw new Error(`stop ${res.status}`);
     haltStatus.dataset.state = "sent";
     setTextIfChanged(haltStatus, "정지 요청 접수 · 실제 정지 확인 중");
-  } catch (_error) {
+  } catch (error) {
     haltStatus.dataset.state = "error";
-    setTextIfChanged(haltStatus, "정지 요청 실패 · 다시 눌러 재시도하세요");
+    setTextIfChanged(haltStatus, error.name === "AbortError"
+      ? "정지 요청 시간 초과 · 다시 눌러 재시도하세요"
+      : "정지 요청 실패 · 다시 눌러 재시도하세요");
   } finally {
+    clearTimeout(timeout);
     halt.disabled = false;
+    if (restoreFocus) halt.focus();
   }
 });
 
