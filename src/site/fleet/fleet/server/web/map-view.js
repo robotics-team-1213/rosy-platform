@@ -12,10 +12,11 @@ export function createMapView({ el, view, css, auth, call }) {
   function paintGrid(grid) {
     const canvas = el("map-canvas");
     const { width, height } = grid;
-    // 캔버스의 고유 크기는 이 속성이다. CSS 가 `width:100%; height:auto` 라 비율은 여기서
-    // 따라온다 — style 속성을 쓰지 않는 이유는 CSP(`style-src 'self'`)가 그것을 막기 때문이다.
-    canvas.width = width;
-    canvas.height = height;
+    // Occupancy cells stay pixelated, while map labels need enough backing pixels
+    // to remain legible when a small grid is stretched across the console.
+    const scale = Math.min(10, Math.max(1, Math.floor(1600 / Math.max(width, height))));
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     const image = ctx.createImageData(width, height);
@@ -35,7 +36,12 @@ export function createMapView({ el, view, css, auth, call }) {
         image.data[pixel + 3] = 255;
       }
     }
-    ctx.putImageData(image, 0, 0);
+    const cells = document.createElement("canvas");
+    cells.width = width;
+    cells.height = height;
+    cells.getContext("2d").putImageData(image, 0, 0);
+    ctx.drawImage(cells, 0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale); // following geometry keeps using map-cell coordinates
   }
 
   function hexToRgb(value) {
@@ -92,24 +98,33 @@ export function createMapView({ el, view, css, auth, call }) {
   }
 
   function drawChip(ctx, grid, cx, cy, text, tone) {
-    const fontSize = Math.max(9, Math.round(Math.min(grid.width, grid.height) * 0.035));
+    const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
+    const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
+    const fontSize = Math.max(10, Math.round(12 * ctx.canvas.width / displayedWidth));
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.font = `${fontSize}px ${css("--mono") || "monospace"}`;
     const padding = fontSize * 0.4;
+    const maxTextWidth = Math.max(fontSize, ctx.canvas.width - padding * 2 - 8);
+    while (ctx.measureText(text).width > maxTextWidth && text.length > 1) {
+      text = `${text.slice(0, -2)}…`;
+    }
     const width = ctx.measureText(text).width + padding * 2;
     const height = fontSize + padding * 2;
-    ctx.save();
+    const x = Math.max(width / 2 + 4, Math.min(ctx.canvas.width - width / 2 - 4, point.x));
+    const y = Math.max(height / 2 + 4, Math.min(ctx.canvas.height - height / 2 - 4, point.y));
     ctx.globalAlpha = 0.92;
     ctx.fillStyle = css("--scrim");
-    ctx.fillRect(cx - width / 2, cy - height / 2, width, height);
+    ctx.fillRect(x - width / 2, y - height / 2, width, height);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = css("--surface-line");
     ctx.lineWidth = 0.4;
-    ctx.strokeRect(cx - width / 2, cy - height / 2, width, height);
+    ctx.strokeRect(x - width / 2, y - height / 2, width, height);
     ctx.fillStyle = tone === "crit" ? css("--status-crit")
       : tone === "warn" ? css("--status-warn") : css("--paper");
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, cx, cy);
+    ctx.fillText(text, x, y);
     ctx.restore();
   }
 

@@ -316,6 +316,51 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
         browser.close()
 
 
+def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
+    """The loading state keeps one state request in flight until it resolves."""
+    from playwright.sync_api import sync_playwright
+
+    delayed_state = """(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.__stateCalls = 0;
+      window.fetch = (input, options) => {
+        if (String(input) === '/api/fleet/state') {
+          window.__stateCalls += 1;
+          if (window.__stateCalls === 1) {
+            return new Promise(resolve => {
+              window.__releaseState = snapshot => resolve(new Response(JSON.stringify(snapshot), {
+                status: 200, headers: {'Content-Type': 'application/json'}
+              }));
+            });
+          }
+        }
+        return originalFetch(input, options);
+      };
+    })();"""
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, init_script=delayed_state)
+        page.goto(console_url, wait_until="domcontentloaded")
+        page.wait_for_function("() => window.__stateCalls === 1")
+        assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
+        page.wait_for_timeout(1400)
+        assert page.evaluate("window.__stateCalls") == 1
+        assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
+        assert page.locator(".queues-panel").is_hidden()
+        assert page.locator("#roster-toggle").is_hidden()
+        save_temp_screenshot(page, "fleet_console_slow_loading.png")
+        page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
+        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
+        assert "rosy_03" in page.inner_text("#roster")
+        save_temp_screenshot(page, "fleet_console_slow_recovered.png")
+        assert not errors
+        browser.close()
+
+
 def test_gather_loss_removes_last_known_robot_position(console_url):
     """A failed refresh must not present the last snapshot as a live position."""
     from playwright.sync_api import sync_playwright
@@ -338,6 +383,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
         assert not errors
         assert "1.00" not in page.inner_text("#roster")
         assert "상태 확인 불가" in page.inner_text("#roster")
+        assert page.locator("#roster-toggle").is_hidden()
         assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
         assert page.locator("#roster article ui-button").first.is_disabled()
@@ -371,6 +417,7 @@ def test_fleet_estop_requires_confirm_and_decline_blocks_it(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
+        save_temp_screenshot(page, "fleet_estop_preconfirm.png")
         page.locator("#estop").click()
         page.wait_for_function("() => window.__confirms.length === 1")
         declined = [post for post in posts if post[1] == "/api/fleet/estop"]
@@ -627,6 +674,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         page.keyboard.press("ArrowRight")
         assert "rosy_02" in page.inner_text("#hint")
         assert "Enter" in page.inner_text("#hint")
+        save_temp_screenshot(page, "fleet_goal_preconfirm.png")
         page.keyboard.press("Enter")
         assert page.evaluate("window.__confirms.length") == 1
         assert "rosy_02" in page.evaluate("window.__confirms[0]")

@@ -162,8 +162,10 @@ function render() {
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
 }
 
+let statePollInFlight = false;
 async function refreshState() {
-  if (auth.locked) return;
+  if (auth.locked || statePollInFlight) return;
+  statePollInFlight = true;
   try {
     const snapshot = await call("/api/fleet/state");
     view.robots = snapshot.robots;
@@ -190,6 +192,8 @@ async function refreshState() {
     const pill = el("online-pill");
     pill.textContent = "Fleet 서버 없음";
     pill.setAttribute("status", "crit");
+  } finally {
+    statePollInFlight = false;
   }
 }
 
@@ -452,6 +456,7 @@ view.colors = [css("--robot-1"), css("--robot-2"), css("--robot-3")];
 tickClock();
 setInterval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
+render();
 refreshAuthorization();
 mapView.refresh();
 setInterval(formation.refreshFormation, MAP_MS);
