@@ -139,3 +139,14 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 | LCD | 비정상 배터리값은 `--`; 카드 중 standby/idle이 와도 카드 만료까지 백라이트 유지 | face 160 passed/4 skipped, 색 19건 | Pi LCD 폰트·거리·각도·조도·실물 만료 |
 
 이 표는 후속 커밋의 LOCAL 회귀를 요약한다. 이전 27/60/13셀 캡처를 새 HEAD에서 전부 다시 찍은 결과가 아니므로 D-153 G2/G3 GO로 올리지 않는다. 로컬 Fleet 이미지를 이번 소스에서 재빌드해 Fleet·Vision·proxy healthy, 인증된 API 200, `console.js` 해시 일치, 1280×800 화면 페이지 오류·가로 넘침 0을 확인했다. `X:\DevTemp\rosy-uiux-local-site\fleet-console.png`는 일회성 캡처이며 실제 로봇/현장 결과가 아니다.
+
+## 실제 화면 배치 개선 — LOCAL (2026-09-28)
+
+| 화면 | 변경 | 검증 | 남은 수용 |
+|---|---|---|---|
+| Fleet 지도 | 지도가 없을 때 빈 캔버스 대신 중앙 안내를 표시하고, 사용할 수 없는 지도 영역의 높이를 줄인다. 실패 시 오래된 픽셀과 목표 선택 상태를 지우며 회복 시 지도를 다시 표시한다. | `2768216f`; 1920/390px Chromium 실패→회복 회귀와 로컬 Docker Fleet 재빌드. Fleet·Vision·proxy healthy, 인증된 health/session/state 200, 화면 pageerror·가로 넘침 0. `X:\DevTemp\fleet_map_unavailable_{1920,390}.png`, `X:\DevTemp\rosy-uiux-local-site\fleet-console.png` | 실제 사이트 지도·로봇 페어링·목표 이동 readback HOLD |
+| `/device` Host 작업 | 핵심 상태와 증거, 조작·결과를 먼저 배치하고 상세 진단을 펼침 영역으로 옮긴다. 모바일 작업 시작 위치는 2395px에서 508px로, 문서 높이는 6661px에서 3346px로 줄었다. | `0656555d`; 1366/390px 전후 캡처, 관련 브라우저 집중 5건·호스트 62건 통과, pageerror·가로 넘침 0. `X:\DevTemp\rosy-role-visual-flow\` | 실물 Host Agent readback·권한별 전체 G2·G3 사람 평가 HOLD |
+| 게임 보드 | 1280px 필드 너비를 588px에서 720px로 늘리고 관측 정보를 옆 패널로 이동한다. 390px 상단 배지 겹침을 해소하고 600px 세로 스크롤에서도 정지 행이 보이게 한다. | `ad90287d`; 1280/390/600px 핵심 Chromium 4건·호스트 111건 통과, 가로 넘침 0. 전체 Chromium 15건 중 처음 2건은 시간 의존 테스트 fixture 때문에 실패했고 clock 고정 후 집중 재시험 2건 통과. `X:\DevTemp\rosy-games-layout\` | 실제 양측 로봇·카메라·정지 readback HOLD |
+| LCD E-STOP | 비상 정지 경보를 화면 상단 36px 배지로 올려 배터리 수치보다 먼저 읽히게 한다. 정상 화면은 픽셀 동일하다. | `5792e551`; 320×240 전후 이미지, face 162건 통과. `X:\DevTemp\rosy-lcd-visual-g3\` | 실제 Pi LCD 거리·각도·조도 판독과 물리 정지 HOLD |
+
+위 결과는 화면 구현과 LOCAL 표시 회귀다. Docker demo 로봇과 호스트 브라우저 캡처는 D-153의 DEVICE/FIELD 또는 G3 사람 평가를 대신하지 않는다.

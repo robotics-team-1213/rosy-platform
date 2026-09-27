@@ -139,3 +139,9 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - LCD: 비정상 배터리 표본을 `--`로 표현하고, 정보 카드 중 idle/standby 입력은 만료 때까지 백라이트에 적용하지 않는다(`53b39b49`, `abac1c67`). face 시험 160 passed/4 skipped, 공통 색 시험 19 passed다.
 - 현재 `main`의 Fleet를 `rosy-site-fleet:local-uiux`로 다시 빌드했다(이미지 `sha256:1edad949e64b0f59fe995cf32fc59bad1969229464b6d7c72a8ead617c58eff4`). `rosy-uiux-local` Fleet만 재생성한 뒤 Fleet·Vision·proxy healthy, 인증된 health/session/state 200, 컨테이너 `console.js`와 현재 소스의 SHA-256 일치, 1280×800 실제 컨테이너 화면의 페이지 오류·가로 넘침 0을 확인했다. 가짜 `demo_01`을 쓰는 로컬 Docker 증거다.
 - 이 회귀는 가짜 API·호스트/PIL과 로컬 Docker의 LOCAL 근거다. 저장된 G2 전체 셀과 G3 사람 평가, 실물 Pi/LCD·Host Agent·Fleet 페어링·물리 정지는 별도 게이트다. D-153 화면별 GO와 DEVICE/FIELD는 HOLD를 유지한다.
+
+## 2026-09-28 화면 배치 후속 (LOCAL)
+
+문구와 상태 계약을 고친 뒤 실제 화면 우선순위를 재점검했다. Fleet 빈 지도 영역을 축소하고 안내를 중앙에 배치했다(`2768216f`). `/device`는 현재 상태·증거·조작을 상세 진단보다 먼저 보여 준다(`0656555d`). 게임 보드는 경기 필드를 키우고 모바일 상단 겹침과 스크롤 중 정지 행을 고쳤다(`ad90287d`). LCD는 E-STOP 경보를 배터리보다 먼저 보이게 했다(`5792e551`). 화면별 전후 캡처, 테스트와 제한은 [검증 카드](../validation/uiux-surfaces-2026-09-27/README.md)에 기록한다.
+
+네 변경은 로컬 main에 병합했다. Fleet Docker 이미지는 지도 변경까지 재빌드했고 demo 화면·인증 API를 확인했다. 로봇 이미지 배포, 실제 Fleet 연결, Host Agent readback, LCD 실물 판독 및 물리 정지, G3 사람 평가는 이 회차에서 수행되지 않았으며 각 DEVICE/FIELD 게이트는 HOLD다.
