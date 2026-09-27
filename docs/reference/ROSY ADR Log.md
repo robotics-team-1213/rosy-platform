@@ -304,4 +304,4 @@
 | D-300 | Surface typography and focus feedback use shared tokens | Accepted |
 | D-301 | Site Fleet 후보 묶음은 오프라인 Ed25519 서명으로 발행자를 인증한다 | Accepted |
 | D-302 | Site Fleet 사용자 API와 CORE registry 자격 증명을 분리한다 | Accepted |
-| D-303 | 소스 폴더는 로컬 제어 권한과 사이트 정본을 먼저 드러낸다 | Proposed |
+| D-303 | 소스 폴더는 로컬 제어 권한과 사이트 정본을 먼저 드러낸다 | Rejected (D-231 유지; 제품별 실행 루트·배포 개명 보류) |
