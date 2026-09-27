@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import threading
+import time
+from datetime import datetime, timezone
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from games.field import Field
 from games.game import MatchState, Observation
@@ -76,9 +78,16 @@ def overlay_payload(
     }
 
 
+BOARD_STALE_AFTER_S = 2.0
+
+
 class PreviewBoard:
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] = time.monotonic,
+                 utcnow: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self._lock = threading.Lock()
+        self._clock = clock
+        self._utcnow = utcnow
+        self._published_at: float | None = None
         self.overlay: dict[str, Any] = {}
         self.jpeg: bytes | None = None
         self.stop = False
@@ -89,12 +98,17 @@ class PreviewBoard:
 
     def publish(self, payload: dict[str, Any], jpeg: bytes | None = None) -> None:
         with self._lock:
-            self.overlay = payload
+            self.overlay = {**payload, "generated_at": self._utcnow().isoformat().replace("+00:00", "Z")}
+            self._published_at = self._clock()
             self.jpeg = jpeg
 
     def snapshot(self) -> tuple[dict[str, Any], bytes | None]:
         with self._lock:
-            return dict(self.overlay), self.jpeg
+            age_s = None if self._published_at is None else max(0.0, self._clock() - self._published_at)
+            evidence = "unavailable" if age_s is None else (
+                "delayed" if age_s > BOARD_STALE_AFTER_S else "fresh")
+            return {**self.overlay, "age_s": age_s, "stale_after_s": BOARD_STALE_AFTER_S,
+                    "evidence": evidence}, self.jpeg
 
 
 class PreviewServer:

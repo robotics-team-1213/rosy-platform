@@ -37,3 +37,9 @@
 | 8. 표면 문법 | 단일 피치 중심 화면, 모든 캡처에서 넘침 0·정지 접근 가능. `#halt` 포커스 링과 완료 후 복귀 확인 | LOCAL 충족 |
 
 G1 관련 게임 호스트·공용 UI·대화상자·문법 시험은 168 passed, 브라우저 11 passed, gateway 증거 시험 7 passed였다. **G2의 `delayed` 셀과 G3 색 예외 판단이 남아 표면 GO를 선언하지 않는다.** DEVICE/FIELD는 실제 천장 카메라, 로봇, 물리 정지 확인 전까지 PARKED다.
+
+## 2026-09-27 D-309 게임 보드 시간 증거 보완
+
+- `PreviewBoard.publish()`가 실제 보드 갱신의 UTC `generated_at`과 monotonic 시각을 기록한다. `/overlay.json`은 서버 시계로 `age_s`, `stale_after_s=2.0`, `evidence`를 반환하며 반복 조회만으로 시각을 새로 만들지 않는다.
+- 보드는 서버가 판정한 `delayed`와 마지막 생성 경과 시간을 표시한다. HTTP 실패는 별도 연결 오류로 유지한다. 팀 구분의 분홍색은 차분한 회청색으로 바꾸고 공의 주황색은 D-309의 경기 데이터 예외로 유지했다.
+- 검증: 게임 서버 102 passed, 브라우저 12 passed (Windows LOCAL). 위 10개 PNG는 변경 전 기록이다. 새 시각 캡처, 실제 카메라·로봇·정지 증거는 HOLD다.

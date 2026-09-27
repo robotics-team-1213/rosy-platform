@@ -57,18 +57,18 @@ function draw(payload) {
   const gw = field.goal_width_m / 2;
   ctx.strokeStyle = "#7ec8ff";
   ctx.strokeRect(X(-field.length_m / 2) - 10, Y(gw), 10, field.goal_width_m * s);
-  ctx.strokeStyle = "#ffb3c7";
+  ctx.strokeStyle = "#b6c1cf";
   ctx.strokeRect(X(field.length_m / 2), Y(gw), 10, field.goal_width_m * s);
   if (payload.home_goal) {
     strokePoly(payload.home_goal, X, Y, "#7ec8ff");
   }
   if (payload.away_goal) {
-    strokePoly(payload.away_goal, X, Y, "#ffb3c7");
+    strokePoly(payload.away_goal, X, Y, "#b6c1cf");
   }
   const robots = payload.robots || {};
   const homeId = field.home_id;
   Object.entries(robots).forEach(([id, pose]) => {
-    ctx.fillStyle = id === homeId ? "#7ec8ff" : "#ffb3c7";
+    ctx.fillStyle = id === homeId ? "#7ec8ff" : "#b6c1cf";
     wedge(X(pose.x), Y(pose.y), pose.yaw, 11);
     ctx.fillStyle = "#f4f1ea";
     ctx.font = "11px sans-serif";
@@ -128,7 +128,14 @@ async function tick() {
       return;
     }
     hasMatch = true;
-    setTextIfChanged(connection, "호스트 연결됨");
+    if (payload.evidence === "fresh") {
+      setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
+    } else if (payload.evidence === "delayed") {
+      const age = typeof payload.age_s === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${payload.age_s.toFixed(1)}\uCD08 \uC804` : "";
+      setTextIfChanged(connection, `\uC9C0\uC5F0${age}`);
+    } else {
+      setTextIfChanged(connection, "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
+    }
     const homeScore = payload.score?.[payload.field.home_id] ?? "—";
     const awayScore = payload.score?.[payload.field.away_id] ?? "—";
     const phase = document.getElementById("phase");

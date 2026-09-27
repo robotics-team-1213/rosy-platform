@@ -2892,3 +2892,9 @@
 - 변경: Fleet 기본 로스터를 개입 대상 중심으로 구성하고 정상 로봇은 접근 가능한 전체 보기 토글로 열었다. 선택 중인 로봇은 유지하고 지도 데이터는 필터링하지 않았다.
 - 검증: Fleet Playwright 22 passed (Windows LOCAL), 320/390px 가로 넘침 0. 기존 PNG는 변경 전 자료로 남겼다.
 - gate 변화: 코드와 브라우저 경로는 LOCAL 확인이다. 새 캡처, 전체 G2/G3와 DEVICE/FIELD는 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(games): label board age from host evidence
+
+- 변경: 게임 호스트가 보드 생성 시각과 경과 시간을 판정하고 브라우저는 그 결과를 표시한다. 원정 팀의 분홍 장식은 회청색으로 조정했다.
+- 검증: 게임 서버 102 passed, 브라우저 12 passed (Windows LOCAL). 이전 PNG는 변경 전 증거다.
+- gate 변화: 보드 지연 판정은 LOCAL 확인이다. 새 캡처와 실제 카메라·로봇·물리 정지 수용은 HOLD다.

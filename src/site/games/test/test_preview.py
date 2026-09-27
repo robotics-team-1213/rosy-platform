@@ -1,5 +1,8 @@
 """Laptop match board. No OpenCV, no CORE dashboard."""
 
+from datetime import datetime, timezone
+import pytest
+
 from games.field import Field, Pose2D
 from games.game import Observation, Phase
 from games.game.state import MatchState
@@ -16,6 +19,27 @@ def test_preview_board_clears_jpeg_when_the_frame_is_lost():
     board.publish({"phase": "hold"}, jpeg=None)
     _, jpeg = board.snapshot()
     assert jpeg is None
+
+
+def test_preview_board_judges_age_without_refreshing_generation_time():
+    from games.host.preview import PreviewBoard
+
+    now = [100.0]
+    board = PreviewBoard(clock=lambda: now[0],
+                         utcnow=lambda: datetime(2026, 9, 27, tzinfo=timezone.utc))
+    assert board.snapshot()[0]["evidence"] == "unavailable"
+    board.publish({"phase": "play"})
+    initial = board.snapshot()[0]
+    assert initial["evidence"] == "fresh"
+    assert initial["age_s"] == 0.0
+    assert initial["generated_at"] == "2026-09-27T00:00:00Z"
+    now[0] += 2.1
+    delayed = board.snapshot()[0]
+    assert delayed["evidence"] == "delayed"
+    assert delayed["age_s"] == pytest.approx(2.1)
+    assert delayed["generated_at"] == initial["generated_at"]
+    board.publish({"phase": "hold"})
+    assert board.snapshot()[0]["evidence"] == "fresh"
 
 
 def test_overlay_payload_is_field_metres_not_pixels():

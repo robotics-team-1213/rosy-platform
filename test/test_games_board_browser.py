@@ -83,6 +83,28 @@ def test_match_board_renders_published_play_state():
         server.close()
 
 
+def test_match_board_names_server_judged_delay():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    now = [100.0]
+    board = PreviewBoard(clock=lambda: now[0])
+    board.publish(_play_payload())
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            now[0] += 3.0
+            page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
+            assert page.locator("#home-score").inner_text() == "2"
+            assert not errors
+            browser.close()
+    finally:
+        server.close()
+
+
 def _lost_payload() -> dict:
     field = Field(length_m=2.0, width_m=1.4)
     observation = Observation(
