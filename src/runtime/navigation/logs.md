@@ -85,3 +85,9 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-27 · 804dda61 · fix(mapping): scope the occupancy map to the robot namespace
+
+- Change: remap slam_toolbox /map and /map_metadata within the SLAM launch group.
+- Local evidence: mapping contract and dashboard package tests passed on main. The prior web-drive worktree recorded an independent Pinky sensor probe with explicit map remapping; this integration did not repeat that probe or deploy the changed launch file.
+- Gate: SOURCE/LOCAL only. Runtime map and physical G5 acceptance remain unverified.

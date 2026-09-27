@@ -238,3 +238,9 @@
 - 변경: 카메라를 상태 열로 옮기고 지도 관측 영역의 잘림을 없앴다. 절차 화면은 패널 래퍼로 그룹을 구분하고 모바일 입력의 6px 넘침을 수정했다. 조작 탭은 선택된 하나만 Tab 순서에 남긴다.
 - 증거: HMI web/dashboard Chromium 포함 102 passed, 실제 CORE 절차 4셀 및 운용 역할/폭 1시험 통과. 캡처와 한계는 `docs/validation/uiux-surfaces-2026-09-27/README.md`.
 - gate 변화: SOURCE/LOCAL 근거 보강. ARTIFACT·DEVICE·FIELD 승격 없음.
+
+## 2026-09-27 · 804dda61 · fix(console): bound supervised web motion
+
+- Change: limit forward/reverse to 0.03 m/s and one hold to 3 seconds. Require a confirmed motor or hardware runtime for teleop, and hardware runtime for map goals.
+- Local evidence: browser panel suite 13 passed; dashboard package and mapping contracts 13 passed on main. The prior web-drive worktree recorded a Pinky motor-mode observation and no device deployment; that observation was not repeated during this integration.
+- Gate: SOURCE/LOCAL only. Device motion and field acceptance remain unverified.
