@@ -97,10 +97,12 @@ def test_dashboard_assets_are_local_and_reference_runtime_contract(dashboard_cli
     assert "teleopIntervalMs: 100" in bundle
 
 
-def test_dashboard_requires_local_bench_acknowledgement_for_motion():
+def test_dashboard_exposes_bounded_hold_controls_without_repeated_acknowledgement():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
 
-    assert 'id="bench-safety-confirmed"' in html
+    assert 'id="bench-safety-confirmed"' not in html
+    assert 'data-linear="0.03"' in html
+    assert 'data-angular="0.1"' in html
     assert 'data-teleop="forward"' in html
     assert 'data-teleop="backward"' in html
     assert 'data-teleop="left"' in html

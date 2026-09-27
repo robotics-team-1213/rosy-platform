@@ -2989,6 +2989,7 @@
 - 변경: 지면 G4 시도의 실제 순서, 서명 payload 설치 readback, 대시보드 인증 대기, 사용자 전원 종료 및 다음 실행 교훈을 `validation/pinky-native-commissioning-2026-09-27/pause-and-lessons.md`에 기록했다.
 - 검증: 설치 직후 릴리스 `2026.09.27-019`와 CORE active를 확인했다. 이후 장치가 꺼져 SSH·API 접속은 실패했다.
 - gate 변화: 실물 이동, G4 승인, SLAM/Nav2 기동, 지도·MCAP은 확인되지 않아 G4/G5 HOLD다.
+
 ## 2026-09-27 · uncommitted · docs(uiux): record D-309 follow-up surface regressions
 
 - 변경: Fleet·역할·게임·LCD의 후속 상태 표시 수정을 D-309 실행 계획과 표면별 LOCAL 카드에 연결했다. 이전 G2 캡처 전체가 새 HEAD에서 재검증된 것으로 표시하지 않는다.
@@ -3000,3 +3001,9 @@
 - 변경: 전면 카메라 장애 시 관제 전체 영상과 IR/LiDAR 기반 제한 시연을 D-313으로 결정하고 파일별 구현·시험·배포·롤백 계획을 연결했다. 기존 D-257 sighting은 표시·대조용으로 유지한다.
 - 증거: ADR/계획/계약 정합을 확인했다. CORE/Fleet/Vision 생산 코드, 배포, 실물 주행은 변경하지 않았다.
 - gate 변화: 구조 결정은 Accepted; 구현·장치 설치·G4/G5·현장 시연은 HOLD.
+
+## 2026-09-28 · uncommitted · fix(native): simplify measured grounded G4 and direct teleop
+
+- 변경: D-314에 따라 G4 schema v2를 방향별 버튼 해제 4회와 명령 소실 1회로 줄이고 별도 안전 담당자·검토자 필드를 제거했다. 기존 v1 승인은 계속 검증한다. 두 대시보드의 반복 확인 체크박스도 제거했다.
+- 검증: v1/v2 원시 기록·승인 해시·누락·변조 계약 시험과 브라우저의 홀드·해제 정지를 확인한다.
+- gate 변화: SOURCE/LOCAL 절차를 간소화했다. 전원이 꺼진 장치의 새 릴리스 적용, 실물 정지 시험 및 맵핑은 HOLD다.

@@ -298,3 +298,9 @@
 - 변경: `/device`의 호스트 신원·기능·런타임은 항상 보이는 짧은 요약과 접을 수 있는 세부 정보로 나눈다. 네트워크·릴리스·커미셔닝은 핵심 조회값과 증거를 먼저, 조작과 요청 결과를 다음에, 전체 readout을 펼침 영역에 둔다. 패널의 DOM·초점 순서, 매니페스트 순서, 권한/API 경계는 유지한다.
 - 근거: 실제 FastAPI+Chromium 관리자 1366×768·390×844 전후 캡처 `X:\DevTemp\rosy-role-visual-flow\`에서 모바일 `/device` Host 작업 시작 y=2395→508px, 문서 높이 6661→3346px, 두 뷰포트 가로 넘침·pageerror 0. 핵심 요약·조작 위치·초점 표시와 운영자 `/device` 권한 제한을 브라우저에서 확인했다. Host/역할 집중 5건 각각 통과, dashboard/레이아웃/Host 계약 62 passed·6 skipped. Impeccable layout detect `[]`.
 - gate 변화: LOCAL 시각 위계 결함을 보완했다. 실제 Host Agent readback·장치 결과와 D-153 G3 사람 평가는 HOLD다.
+
+## 2026-09-28 · uncommitted · fix(teleop): remove repeated confirmation gate
+
+- 변경: 기존 `/dashboard`와 새 `/console` 수동 운전에서 반복 확인 체크박스를 제거했다. 인증·MANUAL·E-Stop·최신 상태·runtime capability와 홀드/0 명령 전송은 유지한다.
+- 검증: 새 패널의 그룹 전환 0 명령, 레거시 홀드/해제 0 명령 브라우저 시험을 실행한다.
+- gate 변화: LOCAL 조작 단계만 줄였다. 장치 적용과 물리 이동은 별도다.

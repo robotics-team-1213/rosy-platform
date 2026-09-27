@@ -220,13 +220,19 @@ def _validate_trial(raw, direction, cause):
 
 def validate_candidate(root, bundle, evidence_dir):
     """Verify a native G4 bundle against the current device and raw files."""
-    _object(bundle, (
+    schema = bundle.get("schema_version") if isinstance(bundle, dict) else None
+    common_fields = (
         "schema_version", "robot_number", "release_id", "source_revision",
-        "operator", "safety_operator", "test_surface", "hardware_cut_reachable",
-        "motor_preflight", "trials",
-    ), "G4 bundle")
+        "operator", "test_surface", "motor_preflight", "trials",
+    )
+    if schema == 1:
+        _object(bundle, (*common_fields, "safety_operator", "hardware_cut_reachable"), "G4 bundle")
+    elif schema == 2:
+        _object(bundle, common_fields, "G4 bundle")
+    else:
+        raise ValueError("G4 bundle schema is invalid")
     device = _device_identity(root)
-    if bundle["schema_version"] != 1 or type(bundle["robot_number"]) is not int:
+    if type(bundle["robot_number"]) is not int:
         raise ValueError("G4 bundle schema or robot number is invalid")
     for name in ("robot_number", "release_id", "source_revision"):
         if bundle[name] != device[name]:
@@ -235,27 +241,33 @@ def validate_candidate(root, bundle, evidence_dir):
         raise ValueError("G4 approval requires a motor or hardware runtime")
     if bundle["test_surface"] not in ("floor", "lifted"):
         raise ValueError("G4 test surface must be floor or lifted")
-    if bundle["hardware_cut_reachable"] is not True:
-        raise ValueError("G4 hardware cut must be reachable")
     operator = _text(bundle["operator"], "operator")
-    safety_operator = _text(bundle["safety_operator"], "safety operator")
-    if operator == safety_operator:
-        raise ValueError("G4 requires two different operators")
+    if schema == 1:
+        if bundle["hardware_cut_reachable"] is not True:
+            raise ValueError("G4 hardware cut must be reachable")
+        safety_operator = _text(bundle["safety_operator"], "safety operator")
+        if operator == safety_operator:
+            raise ValueError("G4 requires two different operators")
     preflight = _object(bundle["motor_preflight"], ("evidence_file", "sha256"), "motor preflight reference")
     raw, _ = _read_evidence(evidence_dir, preflight["evidence_file"], preflight["sha256"])
     _validate_preflight(raw)
     trials = bundle["trials"]
-    if not isinstance(trials, list) or len(trials) != 8:
-        raise ValueError("G4 requires eight trials")
+    required = ({(direction, cause) for direction in DIRECTIONS for cause in CAUSES}
+                if schema == 1 else
+                {(direction, "button_release") for direction in DIRECTIONS}
+                | {("forward", "command_loss")})
+    if not isinstance(trials, list) or len(trials) != len(required):
+        raise ValueError(f"G4 requires {'eight' if schema == 1 else 'five'} trials")
     seen = set()
     files = {preflight["evidence_file"]}
     digests = {preflight["sha256"]}
     for trial in trials:
-        _object(trial, ("direction", "stop_cause", "evidence_file", "sha256", "observed_direction"), "trial reference")
+        fields = ("direction", "stop_cause", "evidence_file", "sha256")
+        _object(trial, (*fields, "observed_direction") if schema == 1 else fields, "trial reference")
         key = (trial["direction"], trial["stop_cause"])
-        if key not in {(direction, cause) for direction in DIRECTIONS for cause in CAUSES} or key in seen:
-            raise ValueError("G4 trials need each direction and stop cause once")
-        if trial["observed_direction"] is not True:
+        if key not in required or key in seen:
+            raise ValueError("G4 trials need each required direction and stop cause once")
+        if schema == 1 and trial["observed_direction"] is not True:
             raise ValueError("G4 trial direction was not observed")
         if trial["evidence_file"] in files or trial["sha256"] in digests:
             raise ValueError("G4 trials must use distinct raw evidence")
@@ -288,15 +300,16 @@ def _canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def approve(root, bundle, evidence_dir, *, reviewer):
+def approve(root, bundle, evidence_dir, *, reviewer=None):
     """Seal a verified, reviewed G4 bundle; marker files are written last."""
     root = Path(root)
     evidence_dir = Path(evidence_dir)
-    reviewer = _text(reviewer, "reviewer")
     if _device_identity(root)["runtime_mode"] != "motor":
         raise ValueError("G4 approval requires motor runtime commissioning mode")
-    if reviewer in (bundle.get("operator"), bundle.get("safety_operator")):
-        raise ValueError("reviewer must be different from both operators")
+    if bundle.get("schema_version") == 1:
+        reviewer = _text(reviewer, "reviewer")
+        if reviewer in (bundle.get("operator"), bundle.get("safety_operator")):
+            raise ValueError("reviewer must be different from both operators")
     result = validate_candidate(root, bundle, evidence_dir)
     if root == Path("/") and os.geteuid() != 0:
         raise ValueError("approval must run as root")
@@ -318,14 +331,17 @@ def approve(root, bundle, evidence_dir, *, reviewer):
     bundle_bytes = _canonical(bundle)
     _atomic_write(approvals / "g4.bundle.json", bundle_bytes, group_id=group_id)
     common = {
-        "schema_version": 1,
+        "schema_version": bundle["schema_version"],
         "robot_number": bundle["robot_number"],
         "release_id": bundle["release_id"],
         "source_revision": bundle["source_revision"],
         "bundle_sha256": _sha256(bundle_bytes),
-        "reviewer": reviewer,
         "approved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+    if bundle["schema_version"] == 1:
+        common["reviewer"] = reviewer
+    else:
+        common["operator"] = bundle["operator"]
     for kind in ("hardware", "navigation"):
         _atomic_write(approvals / f"{kind}.approved", _canonical({**common, "kind": kind}), group_id=group_id)
     return result
@@ -352,20 +368,26 @@ def check(root=Path("/"), *, runtime_mode=None):
         path = approvals / f"{kind}.approved"
         if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"{kind} approval is missing or empty")
-        marker = _object(_read_json(path), (
+        marker_fields = (
             "schema_version", "kind", "robot_number", "release_id",
-            "source_revision", "bundle_sha256", "reviewer", "approved_at",
-        ), f"{kind} approval")
-        if marker["schema_version"] != 1 or marker["kind"] != kind:
+            "source_revision", "bundle_sha256", "approved_at",
+        )
+        marker = _object(_read_json(path), (*marker_fields, "reviewer")
+                         if bundle.get("schema_version") == 1 else (*marker_fields, "operator"),
+                         f"{kind} approval")
+        if marker["schema_version"] != bundle.get("schema_version") or marker["kind"] != kind:
             raise ValueError(f"{kind} approval is invalid")
         if marker["bundle_sha256"] != _sha256(bundle_bytes):
             raise ValueError(f"{kind} approval bundle digest differs")
         for name in ("robot_number", "release_id", "source_revision"):
             if marker[name] != device[name]:
                 raise ValueError(f"{kind} approval {name} differs from the active release")
-        _text(marker["reviewer"], "reviewer")
+        identity = "reviewer" if bundle["schema_version"] == 1 else "operator"
+        _text(marker[identity], identity)
+        if identity == "operator" and marker[identity] != bundle["operator"]:
+            raise ValueError(f"{kind} approval operator differs from bundle")
         _text(marker["approved_at"], "approved_at")
-        marker_review = (marker["reviewer"], marker["approved_at"])
+        marker_review = (marker[identity], marker["approved_at"])
         if review is not None and marker_review != review:
             raise ValueError("hardware and navigation approvals require the same review")
         review = marker_review
@@ -381,7 +403,7 @@ def main(argv=None):
     approved = commands.add_parser("approve", help="review and seal measured G4 evidence")
     approved.add_argument("--bundle", required=True, type=Path)
     approved.add_argument("--evidence-dir", required=True, type=Path)
-    approved.add_argument("--reviewer", required=True)
+    approved.add_argument("--reviewer", help="required only for legacy schema v1")
     args = parser.parse_args(argv)
     try:
         if args.command == "approve":

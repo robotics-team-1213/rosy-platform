@@ -16,31 +16,35 @@ sudo -n find /var/lib/rosy/commissioning -maxdepth 3 -type f
 ```
 
 `motor` + `drive=true`는 G4 제한 제어다. LiDAR 프로세스나 옛 `map_id`가
-보여도 SLAM 실행을 뜻하지 않는다. `ros2 node list`에서 `slam_toolbox`, Nav2
-controller, 양쪽 costmap을 확인하고 `/api/v1/navigation/state`의 필수 readiness를
-읽는다. `cmd_vel`은 `ros2 topic info /<namespace>/cmd_vel -v`에서 CORE 발행자
-하나여야 한다. 하나라도 불명확하면 바닥 주행은 HOLD다.
+보여도 SLAM 실행을 뜻하지 않는다. G4의 제한 수동 운전은 motor 모드에서
+CORE·IO·odom·E-Stop과 단일 최종 `cmd_vel` 발행자를 확인한다. SLAM/Nav2는
+G4의 선행 조건이 아니다. G5 맵핑 전에는 `ros2 node list`에서
+`slam_toolbox`, Nav2 controller, 양쪽 costmap을 확인하고
+`/api/v1/navigation/state`의 필수 readiness를 읽는다. `cmd_vel`은
+`ros2 topic info /<namespace>/cmd_vel -v`에서 CORE 발행자 하나여야 한다.
 
 ## 2. G4: 제한된 지면 이동과 정지 수용
 
-현장 조작자와 독립 전원 차단 담당자 두 명, 유효한 배터리 및
-물리 정지 경로가 필요하다. `test_surface=floor`를 기록하고 각 시험에서
+현장 조작자와 물리 정지 경로를 확보한다. `test_surface=floor`를 기록하고 각 시험에서
 누적 이동 길이 10 cm, 선속도 0.03 m/s, 각속도 0.10 rad/s를 넘지 않는다.
 바퀴를 들어 올린 배치도 `test_surface=lifted`로 기록할 수 있다.
-방향별 전진·후진·좌회전·우회전을 각각 두 번 실시한다.
+schema v2에서는 전진·후진·좌회전·우회전의 버튼 해제 정지와 전진의
+명령 소실 정지를 각 한 번씩, 총 다섯 번 실시한다. 기존 schema v1 기록은
+8개 시험과 별도 검토자 조건으로 계속 검증한다.
 각 시험은 시작 전 `motor/ready`, `odom`, E-Stop과 단일 최종 publisher를 읽고
-대시보드의 홀드 제어로 최저 속도를 준다. 놓는 순간과 CORE 중지/명령 소실에서
-오도메트리의 지속 0 도달 시간을 별도로 기록한다. 각각 0.65초 이내여야 한다.
+대시보드의 홀드 제어로 최저 속도를 준다. 네 방향에서는 버튼 해제 순간,
+전진 추가 시험에서는 명령 소실 순간부터 오도메트리의 지속 0 도달 시간을
+기록한다. 각각 0.65초 이내여야 한다.
 예상 밖 방향·진동·소음·ID 유실 또는 정지 실패는 즉시 물리 차단하고 G4를 HOLD로
 남긴다. 시험당 원시 odom과 명령 시각, 중지 시각, 결과를 서로 다른 파일로 보존해
 네이티브 G4 번들과 해시 목록을 만든다. 한 번의 정상 전진이나
 API의 `accepted` 응답만으로 G4를 완료하지 않는다.
 
-네이티브 번들은 `mapping_approval.py`의 `schema_version=1` 형식을 따른다.
-`robot_number`, `release_id`, `source_revision`, 서로 다른 `operator`·
-`safety_operator`, `test_surface=floor|lifted`, `hardware_cut_reachable=true`,
-`motor_preflight`의 파일명·SHA-256, `trials` 8개의 방향·정지 원인·파일명·
-SHA-256·`observed_direction=true`를 기록한다. 사전 점검 원시 JSON은
+새 번들은 `mapping_approval.py`의 `schema_version=2` 형식을 따른다.
+`robot_number`, `release_id`, `source_revision`, `operator`,
+`test_surface=floor|lifted`, `motor_preflight`의 파일명·SHA-256,
+`trials` 5개의 방향·정지 원인·파일명·SHA-256을 기록한다.
+사전 점검 원시 JSON은
 `configured_ids`와 `responded_ids`가 `[1,2]`이고 `torque_free=true`여야 한다.
 각 시험의 원시 JSON에는 `direction`, `stop_cause`, `requested_linear_mps`,
 `requested_angular_rps`, `stop_requested_at`, `samples`를 둔다. 각 샘플은 같은
@@ -50,18 +54,17 @@ SHA-256·`observed_direction=true`를 기록한다. 사전 점검 원시 JSON은
 
 ## 3. 승인과 네이티브 전환
 
-G4 레코드와 장치 readback, 서명 릴리스가 같은 장치/세대임을 검토한 독립 담당자가
+G4 레코드와 장치 readback, 서명 릴리스가 같은 장치/세대임을 확인한 뒤
 `motor` 모드에서 다음 명령으로 봉인한다. 이 도구는 주행을 명령하거나
 자료를 자동 채집하지 않는다.
 
 ```bash
 sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
   --bundle /var/lib/rosy/commissioning/g4.bundle.json \
-  --evidence-dir /var/lib/rosy/commissioning/g4-evidence \
-  --reviewer '<independent-reviewer>'
+  --evidence-dir /var/lib/rosy/commissioning/g4-evidence
 ```
 
-명령은 현재 장치·릴리스, 8개 시험의 속도·방향·정지 지연·원시 해시를 검증하고
+명령은 현재 장치·릴리스, 5개 시험의 속도·방향·정지 지연·원시 해시를 검증하고
 `hardware.approved`와 `navigation.approved`를 마지막에 생성한다.
 `rosy-navigation.service`는 기동마다 봉인된 원시 자료와 두 승인 기록을 다시
 검증한다. **내용 없는 marker를 시험 대신 만들지 않는다.** 검토와 설정 변경 전에는
@@ -76,13 +79,14 @@ sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
 조건이 실패하면 navigation을 내리고 이전 설정으로 복귀한다. 설정만 바꾸거나
 마커만 생성한 사실은 장치 동작 증거가 아니다.
 
-이 `ExecCondition`은 네이티브 이미지 소속 unit에 들어간다. 기존 설치 장치에는
-새 서명 이미지와 SD 갱신을 완료하기 전까지 적용되지 않는다. 봉인 도구가
-릴리스 payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
+이 `ExecCondition`은 네이티브 이미지 소속 unit에 들어간다. 기존 설치 장치는
+새 서명 이미지 또는 기록된 벤치 설치로 unit·승인 도구를 함께 갱신하고
+파일 해시와 `systemd-analyze verify`를 읽어 확인한다. 봉인 도구가 릴리스
+payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
 
 ## 4. G5: 짧은 바닥 맵핑
 
-확보된 구역에 로봇을 내리고 현장 전원 차단 담당자가 지켜본다. 실제 크기와
+확보된 구역에서 실제 크기와
 여유 공간, 속도·시간 한계, 중단 조건을 먼저 기록한다. E-Stop을 유지한 채
 SLAM/Nav2와 LiDAR가 준비된 것을 확인한 뒤 운영자가 해제한다. CORE의
 `/api/v1/slam/start` 응답 이후에도 `/map` 갱신, scan/odom/TF와 최종 `cmd_vel`을

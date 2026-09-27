@@ -425,8 +425,7 @@ function teleopEligible() {
     session.token
     && session.capabilities?.teleop === true
     && session.robotState?.mode === "MANUAL"
-    && session.robotState?.safety?.estop !== true
-    && elements["bench-safety-confirmed"]?.checked
+    && session.robotState?.safety?.estop === false
     && !motionEvidenceBlocks(session.robotState),
   );
 }
@@ -456,8 +455,6 @@ function updateTeleopControls() {
     setText("teleop-message", `pose ${pose} · velocity ${velocity}`);
   } else if (session.robotState?.mode !== "MANUAL") {
     setText("teleop-message", "MANUAL 모드로 전환해야 합니다.");
-  } else if (!elements["bench-safety-confirmed"]?.checked) {
-    setText("teleop-message", "통제 구역과 현장 담당자, 물리 전원 차단 준비를 확인하세요.");
   } else if (!holdTicker.active) {
     setText("teleop-message", "버튼을 누르고 있는 동안만 저속 명령을 보냅니다.");
   }
@@ -1078,12 +1075,6 @@ document.querySelectorAll("[data-teleop]").forEach((button) => {
 
 elements["teleop-override"].addEventListener("click", () => {
   elements["teleop-heading"].scrollIntoView({ behavior: "smooth", block: "center" });
-  elements["bench-safety-confirmed"].focus();
-});
-
-elements["bench-safety-confirmed"].addEventListener("change", () => {
-  if (!elements["bench-safety-confirmed"].checked) stopTeleop("안전 확인이 해제되어 정지했습니다.");
-  updateTeleopControls();
 });
 window.addEventListener("pointerup", () => stopTeleop());
 window.addEventListener("blur", () => stopTeleop("화면 포커스가 해제되어 정지했습니다."));
