@@ -2923,3 +2923,9 @@
 - 근거: D-231·D-303·D-305 및 현재 `core` 프로필 로딩, `omx_adapter` 후보 owner, Docker CORE/IO와 native 필수 패키지 경로를 읽기 대조했다.
 - 검증: D-310·계획 상대 링크 0건 누락, network/harness 계약 시험 76 passed, harness lint 0 errors/20 기존 메타데이터 warnings (Windows LOCAL).
 - gate 변화: 문서 SOURCE/LOCAL 정합성만 확인했다. ADR 수용, 실제 폴더 이동, ROS 빌드·이미지 빌드·장치 readback은 아직 수행하지 않았다.
+
+## 2026-09-27 · uncommitted · fix(uiux): close stale display and action gaps
+
+- 변경: D-309 후속으로 Fleet 마지막 위치 노출(`0bfc6656`), 역할 waypoint 저장 신선도·중복 요청(`05266ddc`), 게임 지연 알림·첫 연결 실패 문구(`8a0b6569`), LCD 카드 유지 시간(`23bc45e2`)을 각 전용 분기에서 검증해 로컬 main에 통합했다.
+- 검증: Fleet 브라우저 23 passed 및 상실·복구 1 passed, 역할 담당 세션 Chromium 4 passed 및 신규 단독 1 passed, 게임 브라우저 13 passed 및 영향 시험 3 passed, LCD 호스트 137 passed/4 skipped. X:의 Fleet·게임 캡처는 LOCAL 시각 확인에만 사용했다.
+- gate 변화: D-309 책임 경계의 LOCAL 표시·조작 결함을 보완했다. 로봇·LCD·카메라 실물 readback과 D-153의 표면별 전체 G2/G3는 HOLD다.

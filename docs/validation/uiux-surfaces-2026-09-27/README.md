@@ -100,3 +100,12 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 | LCD | 기존 PIL 148 passed와 320×240 캡처 9개. 이번 코드 변경 없음. | Pi 실물 가독성·만료·각도·조도는 HOLD. |
 
 위 X: 파일은 일회성 로컬 캡처이며 저장소 증거 아카이브나 DEVICE/FIELD 수용을 대신하지 않는다. D-153의 화면별 G2/G3 GO는 선언하지 않는다.
+
+## D-309 후속 회귀 (LOCAL)
+
+- Fleet 상태 조회 상실 후 마지막 좌표를 가리고 목표·취소 조작을 막는다. 복구 시 새 조회값으로 돌아온다. 브라우저 23 passed, 상실·복구 단독 1 passed. 캡처: `X:\DevTemp\fleet_console_gather-lost-after-live.png`.
+- `/setup` waypoint는 서버가 준 pose 증거가 fresh이고 좌표가 유효할 때만 저장을 연다. 전송 중 중복 요청과 끊김 뒤 재활성화를 막는다. 담당 세션 Chromium 4 passed, 신규 단독 1 passed.
+- 게임 보드는 지연 상태 전환을 보조기기에 알리고 첫 연결 실패 때 경기 정보 없음으로 말한다. 브라우저 13 passed, 영향 시험 3 passed. 캡처: `X:\DevTemp\games_board_delayed.png`, `games_board_first_error.png`.
+- LCD는 잘못된 카드 유지 시간을 기본 15초로 되돌린다. 호스트 시험 137 passed/4 skipped. 실제 LCD 카드 만료·GIF 복귀와 현장 가독성은 미검증이다.
+
+이 회귀는 화면별 LOCAL 범위만 보강한다. 기존 표면별 HOLD와 DEVICE/FIELD 수용 대기는 유지한다.

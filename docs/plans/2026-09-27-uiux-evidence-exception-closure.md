@@ -86,3 +86,14 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - Task 4 추가: 역할 화면 `SAFE_STOP`/상태 미확인 상단 문구와 정지 요청 후 CORE readback 안내를 로컬 매트릭스로 확인했다. 역할별 전체 G2/G3와 실제 물리 정지는 계속 HOLD다.
 
 - Task 5 LOCAL: Fleet 기본/전체 목록과 320/390px, 게임 정상/지연, 역할 SAFE_STOP의 변경 후 X: 캡처를 확인하고 표면 카드에 보충했다. Fleet 532 passed/5 skipped, 게임 102 passed, Fleet 브라우저 22 passed, 게임 브라우저 12 passed, 역할 매트릭스 56셀(가로 넘침·pageerror 0). 장치·현장 근거가 없어 D-153의 표면별 전체 G2/G3는 HOLD다.
+
+## 2026-09-27 후속 세션 통합
+
+| 표면 | 결함과 반영 | LOCAL 재검증 | 남은 게이트 |
+|---|---|---|---|
+| Fleet | 상태 조회 실패 뒤 마지막 로봇 좌표·주행 상태가 현재값처럼 남던 경로를 `0bfc6656`에서 차단했다. 등록 이름은 남기고 카드·지도에서 위치를 숨긴다. | 브라우저 전체 23 passed, 병합 후 상태 상실·복구 1 passed. `X:\DevTemp\fleet_console_gather-lost-after-live.png` 시각 확인. | 실제 Fleet/CORE 단절·복구 및 목표 이동 readback은 DEVICE/FIELD HOLD. |
+| 역할 `/setup` | 위치 증거가 최초·지연·끊김·좌표 없음일 때 waypoint 저장을 막고 전송 중 중복 POST를 차단했다(`05266ddc`). 서버 권한·좌표 검사는 유지한다. | 담당 세션 Chromium 4 passed, 최신 main 병합 전 신규 회귀 1 passed. | 실제 pose 신선도·저장 결과 readback은 DEVICE HOLD. |
+| 게임 보드 | 지연 증거를 상태 알림에 한 번 전달하고 첫 연결 실패의 허위 '마지막 경기 정보' 문구를 고쳤다(`8a0b6569`, 패치 동등 원본 `2d30e461`). | 브라우저 전체 13 passed, 병합 후 영향 시험 3 passed. `X:\DevTemp\games_board_delayed.png`, `games_board_first_error.png`는 LOCAL 캡처다. | 실제 경기·카메라·물리 정지는 DEVICE/FIELD HOLD. |
+| LCD | 잘못된 `hold_s`를 기본 15초로 정규화해 카드 만료 경로를 보호했다(`23bc45e2`). | LCD 호스트 시험 137 passed/4 skipped; 담당 세션 관련 묶음 157 passed. | 실제 LCD 만료·GIF 복귀와 거리·조도 판독은 DEVICE/BENCH HOLD. |
+
+위 통합은 로컬 `main`의 코드·브라우저 근거다. D-153 화면별 G2/G3 전체 GO 또는 장치 수용으로 승격하지 않는다.
