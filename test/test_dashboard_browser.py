@@ -470,6 +470,9 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
         assert "그래프 수집 불가" in page.locator("#ros-risk-list").inner_text()
         assert page.locator("#ros-risk-list .risk-clear").count() == 0
         page.locator("#bench-safety-confirmed").check()
+        assert "바퀴를 띄" not in page.locator("label[for='bench-safety-confirmed']").inner_text()
+        assert "물리 전원 차단" in page.locator("label[for='bench-safety-confirmed']").inner_text()
+        assert page.locator('[data-teleop="left"]').get_attribute("data-angular") == "0.1"
         forward = page.locator('[data-teleop="forward"]')
         page.wait_for_function(
             "!document.querySelector('[data-teleop=\"forward\"]')?.disabled"
@@ -487,7 +490,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
         commands = page.evaluate("window.__teleopCommands")
         browser.close()
 
-    assert commands[0] == {"linear": 0.05, "angular": 0}
+    assert commands[0] == {"linear": 0.03, "angular": 0}
     assert commands[-1] == {"linear": 0, "angular": 0}
     # 부하에서 100ms 틱이 pointerup 전에 두 번째 drive를 쏠 수 있다. 계약은
     # 순서다 — 해제 zero 뒤에 양수가 오면 안 된다. zero 뒤는 전부 zero다.

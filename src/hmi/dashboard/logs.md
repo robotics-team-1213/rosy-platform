@@ -262,3 +262,9 @@
 - 변경: 네트워크·릴리스 작업 중 상태 조회가 도착해도 해당 절차의 모든 버튼을 비활성화하고 두 번째 POST를 막는다. 요청 완료 시 현재 Host Agent 상태로 버튼을 다시 판단한다.
 - 근거: 지연된 POST 중 새 GET과 두 번째 클릭으로 2 POST를 재현했고 수정 후 브라우저 시험 2 passed. 역할 G2 FastAPI+Chromium 매트릭스 56셀은 오류·가로 넘침 0건이다.
 - gate 변화: SOURCE/LOCAL 근거 보강. Host Agent 적용·롤백 readback과 G3 사람 판단, DEVICE/FIELD는 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(teleop): align grounded G4 controls
+
+- 변경: 두 수동 운전 화면에서 바퀴 들기 확인 문구를 제거하고 현장 확인 문구를 표시한다. 버튼 속도는 선속도 0.03 m/s·각속도 0.10 rad/s, 홀드는 최대 2초로 맞췄다.
+- 검증: Chromium에서 새 패널의 문구·버튼 값과 그룹 전환 정지 명령을 확인하고, 레거시 화면의 명령 값을 계약 시험으로 확인한다.
+- gate 변화: 화면 SOURCE/LOCAL 구현 근거를 보완했다. 설치 로봇 화면과 물리 이동 결과는 별도다.

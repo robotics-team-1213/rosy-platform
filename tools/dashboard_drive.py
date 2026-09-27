@@ -7,7 +7,8 @@ Examples (the token file holds one API or paired token; keep it outside the repo
     python tools/dashboard_drive.py ... teleop --direction forward --seconds 1.0
     python tools/dashboard_drive.py ... screenshot --view inspect --out X:/DevTemp/inspect.png
 
-`teleop` moves a real robot. Lift the wheels first; the command ticks `#bench-safety-confirmed`
+`teleop` moves a real robot. Confirm the controlled area and physical power cut;
+the command ticks `#bench-safety-confirmed`
 for you only because you asked for motion. It prints the measured stop latency: the time
 from releasing the button until `/api/v1/robot/state` reports zero velocity.
 """
@@ -143,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode = actions.add_parser("mode", help="click a mode button (confirm is accepted)")
     mode.add_argument("mode", choices=MODES)
     mode.add_argument("--timeout", type=float, default=5.0)
-    drive = actions.add_parser("teleop", help="hold a teleop button; wheels must be lifted")
+    drive = actions.add_parser("teleop", help="hold a teleop button in a controlled area")
     drive.add_argument("--direction", choices=DIRECTIONS, required=True)
     drive.add_argument("--seconds", type=float, required=True)
     shot = actions.add_parser("screenshot", help="save a full-page screenshot")
@@ -154,8 +155,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.action == "teleop" and not 0 < args.seconds <= 5:
-        print("--seconds must be in (0, 5]", file=sys.stderr)
+    if args.action == "teleop" and not 0 < args.seconds <= 2:
+        print("--seconds must be in (0, 2]", file=sys.stderr)
         return 2
     token = args.token_file.read_text(encoding="utf-8").strip()
     from playwright.sync_api import sync_playwright
