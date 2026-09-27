@@ -132,3 +132,10 @@
 - 증거: Windows ROS-free PIL 시험 128 passed, 캡처 시험 1 passed. `X:\DevTemp\rosy-uiux-lcd-2026-09-27`에 부팅/AP QR/실패/긴 문자열 및 wake 카드 4종 PNG 320×240을 생성하고 시각 확인했다.
 - gate 변화: SOURCE/LOCAL GO의 증거 갱신. DEVICE/BENCH와 FIELD는 실물 사진·거리·각도·조명 관찰이 없어 승격하지 않는다.
 - 결정: D-306, D-153.
+
+## 2026-09-27 · uncommitted · fix(face): 웨이크 카드 중 power/mode 전환 유예 (D-309)
+
+- 변경: `display/info` 카드가 살아 있는 동안 새 `power/mode`는 최신 값으로 저장하되 백라이트·sleep 전환을 카드 만료까지 유예한다. 만료 시 저장된 idle/standby 모드를 적용한다.
+- 증거: 실제 `display_info_callback`→`power_mode_callback`→`timer_callback`를 ROS/LCD stub으로 연결한 시험은 수정 전 idle dim·standby sleep으로 적색, 수정 후 face 160 passed/4 skipped와 공유 색 계약 19 passed. `X:\DevTemp\rosy-uiux-lcd-card-mode\`에 카드 유지/만료 후 의도 화면 LOCAL PIL 캡처를 생성했다.
+- gate 변화: SOURCE/LOCAL 회귀 근거 추가. 실제 Pi 백라이트, 화면 판독, 만료 전환은 DEVICE/BENCH HOLD.
+- 결정: D-309, D-153.

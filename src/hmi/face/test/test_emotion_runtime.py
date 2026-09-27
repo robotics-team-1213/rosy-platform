@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import sys
 import threading
 from pathlib import Path
@@ -79,7 +80,8 @@ def face(monkeypatch):
     node.info_until = 0.0
     node._shown_info = None
     node._backlight_for = lambda mode: {"active": 100, "idle": 30, "standby": 0}[mode]
-    node.get_logger = lambda: SimpleNamespace(warn=lambda _msg: None, error=lambda _msg: None)
+    node.get_logger = lambda: SimpleNamespace(info=lambda _msg: None, warn=lambda _msg: None,
+                                              error=lambda _msg: None)
     return node, clock
 
 
@@ -89,6 +91,14 @@ def _send(node, **overrides):
                "health": "OK", "hold_s": 2.0}
     payload.update(overrides)
     node.display_info_callback(SimpleNamespace(data=json.dumps(payload)))
+
+
+def _capture(image, name):
+    capture_dir = os.environ.get("ROSY_FACE_RUNTIME_CAPTURE_DIR")
+    if capture_dir:
+        destination = Path(capture_dir)
+        destination.mkdir(parents=True, exist_ok=True)
+        image.save(destination / name)
 
 
 def test_live_node_renders_at_lcd_resolution_then_returns_to_intent(face):
@@ -129,3 +139,34 @@ def test_last_republished_card_expires_and_standby_restores_backlight(face):
     assert node.display_sleeping is True
     assert ("set_backlight", 0) in node.lcd.events
     assert node.lcd.events[-1] == ("sleep",)
+
+
+@pytest.mark.parametrize("next_mode,restored_backlight", [("idle", 30), ("standby", 0)])
+def test_power_mode_during_wake_card_waits_for_expiry(face, next_mode, restored_backlight):
+    node, clock = face
+    _send(node, hold_s=2.0)
+    node.timer_callback()
+    card = node.info_image
+
+    clock[0] = 101.0
+    node.power_mode_callback(SimpleNamespace(data=next_mode))
+    assert node.power_mode == next_mode
+    assert node.display_sleeping is False
+    assert ("sleep",) not in node.lcd.events
+    assert node.lcd.events[-1] == ("img_show", card)
+    _capture(card, f"wake_card_during_{next_mode}_320x240_local.png")
+
+    clock[0] = 101.5
+    node.timer_callback()
+    assert node.lcd.events[-1] == ("img_show", card)
+
+    clock[0] = 102.0
+    node.timer_callback()
+    assert node.info_image is None
+    assert ("set_backlight", restored_backlight) in node.lcd.events
+    if next_mode == "standby":
+        assert node.lcd.events[-1] == ("sleep",)
+    else:
+        assert node.lcd.events[-1] == ("img_show", node.gif_frames[0])
+        _capture(node.gif_frames[0].resize((320, 240), Image.Resampling.LANCZOS),
+                 "intent_after_idle_expiry_320x240_local.png")

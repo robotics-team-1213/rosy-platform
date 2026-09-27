@@ -138,7 +138,12 @@ class RosyEmotion(Node):
 
         self.power_mode = mode
         self.get_logger().info(f"power mode -> {mode}")
-        self._apply_power_mode(mode)
+        with self.gif_lock:
+            card_visible = self.info_image is not None and time.monotonic() < self.info_until
+        # The latest mode still wins after expiry, but the wake card must stay
+        # visible at active backlight until then, even if standby arrives later.
+        if not card_visible:
+            self._apply_power_mode(mode)
 
     def display_info_callback(self, msg):
         try:
