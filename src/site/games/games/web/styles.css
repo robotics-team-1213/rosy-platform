@@ -44,6 +44,12 @@ h1 {
   color: var(--mute);
 }
 
+#connection {
+  margin: var(--space-1) 0 0 auto;
+  color: var(--mute);
+  font-size: var(--text-label);
+}
+
 .score {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -133,5 +139,10 @@ h1 {
   color: var(--mute);
   font-size: var(--text-body);
 }
+
+#halt-status[data-state="pending"],
+#halt-status[data-state="sent"] { color: var(--ink); }
+
+#halt-status[data-state="error"] { color: var(--lost); }
 
 #halt { min-width: 96px; }

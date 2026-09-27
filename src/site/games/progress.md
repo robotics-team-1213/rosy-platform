@@ -20,18 +20,20 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-90, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-300]
+adrs: [D-90, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-300, D-306]
 plans:
   - docs/plans/2026-09-17-robot-soccer-game-host-design.md
   - docs/plans/2026-09-18-rosy-games-local-host.md
   - docs/plans/2026-09-18-rosy-games-overhead-plan.md
   - docs/plans/2026-09-18-rosy-games-remaining-adr-plan.md
+  - docs/plans/2026-09-27-uiux-surface-closure.md
 ---
 ## 지금 상태
 
 - 노트북 게임 호스트 (D-90). CORE 모드 아님. 최종 `cmd_vel` 없음.
 - LOCAL 호스트 트랙 닫힘 (D-113). 계단 1 가시성 보고 (D-112). `--stair 1–5` (D-111). linear ≤ 0.10 (D-110).
 - DEVICE/FIELD는 실제 천장 웹캠·마커 실측. `ready`와 pytest는 현장 GO가 아니다.
+- D-306 게임 보드: 최초 데이터 전 점수는 `—`, 경기 상태 변화는 중복 없이 보조기기에 안내한다. `/stop` 요청 실패와 재시도, 호스트 연결 오류를 1280×800 Chromium LOCAL에서 확인했다. G2 전체 상태 셀과 실제 경기·물리 정지는 아직 미검증이므로 게임 UI/UX 판정은 HOLD다.
 
 ## 다음 gate
 

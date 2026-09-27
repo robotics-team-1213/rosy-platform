@@ -11,6 +11,15 @@ const MARKER_LABEL = {
   20: "골",
   21: "골",
 };
+const announcement = document.getElementById("match-announcement");
+const connection = document.getElementById("connection");
+const halt = document.getElementById("halt");
+const haltStatus = document.getElementById("halt-status");
+let polling = false;
+
+function setTextIfChanged(element, value) {
+  if (element.textContent !== value) element.textContent = value;
+}
 
 function draw(payload) {
   const field = payload.field || { length_m: 2, width_m: 1.4, goal_width_m: 0.35 };
@@ -98,43 +107,75 @@ function chips(payload) {
 }
 
 async function tick() {
-  const res = await fetch("/overlay.json", { cache: "no-store" });
-  if (!res.ok) return;
-  const payload = await res.json();
-  if (!payload.field) return;
-  document.getElementById("phase").textContent = payload.phase || "—";
-  document.getElementById("home-name").textContent = payload.field.home_id;
-  document.getElementById("away-name").textContent = payload.field.away_id;
-  document.getElementById("home-score").textContent = payload.score?.[payload.field.home_id] ?? 0;
-  document.getElementById("away-score").textContent = payload.score?.[payload.field.away_id] ?? 0;
-  const lost = payload.lost_ball || (payload.lost_robots || []).length;
-  document.getElementById("lost").hidden = !lost;
-  document.getElementById("lost").textContent = payload.reason || (payload.lost_ball ? "공을 잃음" : "로봇을 잃음");
-  draw(payload);
-  chips(payload);
-  const vis = payload.visibility || {};
-  const stair1 = document.getElementById("stair1");
-  if (stair1) {
-    stair1.textContent = vis.ready
-      ? "계단 1 마커 보임 (FIELD GO 아님)"
-      : "계단 1 아직 (FIELD GO 아님)";
+  if (polling) return;
+  polling = true;
+  try {
+    const res = await fetch("/overlay.json", { cache: "no-store" });
+    if (!res.ok) throw new Error(`overlay ${res.status}`);
+    const payload = await res.json();
+    if (!payload.field) {
+      setTextIfChanged(connection, "경기 데이터 대기 중");
+      return;
+    }
+    setTextIfChanged(connection, "호스트 연결됨");
+    const homeScore = payload.score?.[payload.field.home_id] ?? "—";
+    const awayScore = payload.score?.[payload.field.away_id] ?? "—";
+    document.getElementById("phase").textContent = payload.phase || "—";
+    document.getElementById("home-name").textContent = payload.field.home_id;
+    document.getElementById("away-name").textContent = payload.field.away_id;
+    document.getElementById("home-score").textContent = homeScore;
+    document.getElementById("away-score").textContent = awayScore;
+    const lost = payload.lost_ball || (payload.lost_robots || []).length;
+    const lostElement = document.getElementById("lost");
+    lostElement.hidden = !lost;
+    lostElement.textContent = payload.reason || (payload.lost_ball ? "공을 잃음" : "로봇을 잃음");
+    const matchSummary = `${payload.phase || "단계 미확인"} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
+    setTextIfChanged(announcement, matchSummary);
+    draw(payload);
+    chips(payload);
+    const vis = payload.visibility || {};
+    const stair1 = document.getElementById("stair1");
+    if (stair1) {
+      stair1.textContent = vis.ready
+        ? "계단 1 마커 보임 (FIELD GO 아님)"
+        : "계단 1 아직 (FIELD GO 아님)";
+    }
+    const frame = document.getElementById("frame");
+    if (!payload.has_frame) {
+      frame.hidden = true;
+      return;
+    }
+    frame.onerror = () => {
+      frame.hidden = true;
+    };
+    frame.onload = () => {
+      frame.hidden = false;
+    };
+    frame.src = `/frame.jpg?t=${Date.now()}`;
+  } catch (_error) {
+    setTextIfChanged(connection, "호스트 연결 오류 · 마지막 경기 정보");
+    setTextIfChanged(announcement, "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다.");
+  } finally {
+    polling = false;
   }
-  const frame = document.getElementById("frame");
-  if (!payload.has_frame) {
-    frame.hidden = true;
-    return;
-  }
-  frame.onerror = () => {
-    frame.hidden = true;
-  };
-  frame.onload = () => {
-    frame.hidden = false;
-  };
-  frame.src = `/frame.jpg?t=${Date.now()}`;
 }
 
-document.getElementById("halt").addEventListener("click", async () => {
-  await fetch("/stop", { method: "POST" });
+halt.addEventListener("click", async () => {
+  if (halt.disabled) return;
+  halt.disabled = true;
+  haltStatus.dataset.state = "pending";
+  setTextIfChanged(haltStatus, "정지 요청 중");
+  try {
+    const res = await fetch("/stop", { method: "POST" });
+    if (!res.ok) throw new Error(`stop ${res.status}`);
+    haltStatus.dataset.state = "sent";
+    setTextIfChanged(haltStatus, "정지 요청 접수 · 실제 정지 확인 중");
+  } catch (_error) {
+    haltStatus.dataset.state = "error";
+    setTextIfChanged(haltStatus, "정지 요청 실패 · 다시 눌러 재시도하세요");
+  } finally {
+    halt.disabled = false;
+  }
 });
 
 // 초점 문법의 키보드 약속(D-224) — "스페이스도 양쪽을 세운다"가 이제 참이다.
@@ -144,7 +185,7 @@ document.addEventListener("keydown", (event) => {
   if (event.code !== "Space" || event.repeat) return;
   if (event.target.closest("button, ui-button, input, select, textarea, a")) return;
   event.preventDefault();
-  document.getElementById("halt").click();
+  halt.click();
 });
 
 setInterval(tick, 250);

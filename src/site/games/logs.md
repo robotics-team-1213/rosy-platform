@@ -213,3 +213,10 @@
 - 증거: games host suite 101 passed.
 - gate 변화: SOURCE/LOCAL 유지. device/field acceptance는 포함하지 않는다.
 - 결정: D-300.
+
+## 2026-09-27 · uncommitted · fix(games): readable match and stop request states
+
+- 변경: 최초 수신 전 점수를 결측으로 표시하고, 경기 단계·점수·유실을 변화 시에만 `role=status`로 안내한다. 호스트 연결 오류 시 마지막 수신 정보임을 표시한다. `/stop` 요청은 대기·접수·실패를 보여주며 실패 뒤 재시도할 수 있다. D-218·D-253의 즉시 정지와 Space 경로는 유지한다.
+- 증거: Chromium 1280×800 게임 보드 9 passed; 게임 호스트 110 passed; 공유 UI/대화 상자 계약 58 passed. 실패·연결 오류 LOCAL 캡처는 `X:\DevTemp\games_board_stop_retry.png`, `X:\DevTemp\games_board_host_disconnected.png`.
+- gate 변화: 모듈 SOURCE/LOCAL GO 유지. 게임 UI/UX G2 전체 셀 미완료로 HOLD; DEVICE/FIELD PARKED.
+- 결정: D-306.
