@@ -17,6 +17,7 @@
 | D-294 | Shared typography and interaction tokens use a closed scale |
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
+| D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 
 ## 계획·결과 문서
 
@@ -35,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(teleop): align grounded G4 controls
 - 2026-09-27 · uncommitted · feat(device): display Host Agent source evidence
 - 2026-09-27 · uncommitted · test(roles): capture first boot before API responses
 - 2026-09-27 · uncommitted · fix(device): keep Host Agent actions locked during request
 - 2026-09-27 · uncommitted · test(ui): align action-group fixture with teleop eligibility
-- 2026-09-27 · uncommitted · fix(device): keep Host Agent action results visible

@@ -2,12 +2,12 @@ import { HeadlessState } from "/common/core_ui_logic.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
 
 const TELEOP_INTERVAL_MS = 100;
-const MAX_HOLD_MS = 3_000;
+const MAX_HOLD_MS = 2_000;
 const COMMANDS = [
   {label: "전진", linear: 0.03, angular: 0},
-  {label: "좌회전", linear: 0, angular: 0.35},
+  {label: "좌회전", linear: 0, angular: 0.10},
   {label: "후진", linear: -0.03, angular: 0},
-  {label: "우회전", linear: 0, angular: -0.35},
+  {label: "우회전", linear: 0, angular: -0.10},
 ];
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
@@ -46,16 +46,13 @@ export function mount(root, ctx) {
     if (!safety) return "비상정지 상태를 확인하는 중입니다.";
     if (!state || !new HeadlessState(state).isFresh("pose") || !new HeadlessState(state).isFresh("velocity")) return "pose와 velocity의 최신 상태를 기다립니다.";
     if (state.mode !== "MANUAL") return "저속 운전 전에 MANUAL 모드로 전환하세요.";
-    if (!confirmed.checked) return commissioning.runtime_mode === "motor" ? "바퀴를 띄운 점검인지 확인하세요." : "통제 구역과 현장 담당자를 확인하세요.";
-    return "전진·후진 최대 0.03m/s · 한 번에 최대 3초. 놓으면 정지합니다.";
+    if (!confirmed.checked) return "통제 구역과 현장 담당자, 물리 전원 차단 준비를 확인하세요.";
+    return "전진·후진 최대 0.03m/s · 회전 최대 0.10rad/s · 한 번에 최대 2초. 놓으면 정지합니다.";
   }
   function update() {
-    const hardware = commissioning?.runtime_mode === "hardware";
-    confirmLabel.lastChild.textContent = hardware
+    confirmLabel.lastChild.textContent = ["motor", "hardware"].includes(commissioning?.runtime_mode)
       ? "통제 구역과 현장 담당자, 물리 전원 차단 준비를 확인했습니다."
-      : commissioning?.runtime_mode === "motor"
-        ? "바퀴를 띄우고 주변과 비상정지 수단을 확인했습니다. 바닥 주행은 금지됩니다."
-        : "장치 실행 모드를 확인하는 중입니다.";
+      : "장치 실행 모드를 확인하는 중입니다.";
     const can = eligible();
     buttons.forEach((button) => { button.disabled = !can && button !== activeButton; });
     if (!can && ticker.active) stop("운전 조건이 바뀌어 정지했습니다.");
@@ -101,7 +98,7 @@ export function mount(root, ctx) {
     activeButton = button; button.classList.add("active");
     status.textContent = `${button.getAttribute("aria-label").split(".")[0]} 명령 전송 중 · 놓으면 정지합니다.`;
     ticker.start();
-    holdTimeout = setTimeout(() => stop("3초 한도에 도달해 정지했습니다.", true), MAX_HOLD_MS);
+    holdTimeout = setTimeout(() => stop("2초 한도에 도달해 정지했습니다.", true), MAX_HOLD_MS);
   }
 
   const listeners = new AbortController();

@@ -30,7 +30,7 @@ def test_parser_requires_a_direction_and_bounds_the_hold(tmp_path, capsys):
     token = tmp_path / "token"
     token.write_text("t\n", encoding="utf-8")
     code = dashboard_drive.main(["--base-url", "http://x", "--token-file", str(token),
-                                 "teleop", "--direction", "forward", "--seconds", "9"])
+                                 "teleop", "--direction", "forward", "--seconds", "2.1"])
     assert code == 2
     assert "--seconds" in capsys.readouterr().err
 
@@ -77,7 +77,7 @@ def test_teleop_holds_then_releases_to_zero(page):
     result = dashboard_drive.teleop(page, "forward", 0.8)
     page.wait_for_function("window.__teleopCommands.length >= 2")
     commands = page.evaluate("window.__teleopCommands")
-    assert commands[0] == {"linear": 0.05, "angular": 0}
+    assert commands[0] == {"linear": 0.03, "angular": 0}
     assert commands[-1] == {"linear": 0, "angular": 0}
     assert result["samples"] and result["stop_latency_s"] is not None
     assert page.locator("#bench-safety-confirmed").is_checked()

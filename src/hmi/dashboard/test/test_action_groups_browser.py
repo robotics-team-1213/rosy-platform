@@ -213,6 +213,11 @@ def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motio
               return value;
             }""")
             assert tab_background == token_background
+            confirmation = page.locator("[data-panel='console.teleop'] label").first.inner_text()
+            assert "바퀴를 띄" not in confirmation
+            assert "물리 전원 차단" in confirmation
+            assert page.locator("[data-panel='console.teleop'] ui-button").first.get_attribute("data-linear") == "0.03"
+            assert page.locator("[data-panel='console.teleop'] ui-button").nth(1).get_attribute("data-angular") == "0.1"
             page.locator("[data-panel='console.teleop'] input[type=checkbox]").check()
             page.locator("[data-panel='console.teleop'] ui-button").first.dispatch_event("pointerdown")
             page.wait_for_function("window.__timeline.some((item) => item.path === '/api/v1/teleop' && item.body?.linear > 0)")
