@@ -2,17 +2,16 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "uncommitted", date: 2026-09-28 }
+last_verified: { commit: "f285d86a", date: 2026-09-28 }
 gates:
   SOURCE:
-    state: HOLD
-    evidence: "도크·웨이포인트·위치 설정/SLAM·관리자 보안/안전 상태 경로 수정 후 회귀를 다시 실행하지 않음"
-    blocker: "도크 등록·웨이포인트·위치 설정/SLAM 변경 뒤 지정된 브라우저 회귀를 실행하지 않음. SOURCE 시험 통과 전 GO 금지"
+    state: GO
+    evidence: "지정 브라우저 회귀 54 passed (2026-09-28, checkout f285d86a; 6b0aaaa7 포함)."
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
-    state: HOLD
-    blocker: "2026-09-28 /setup workflow and /device security feedback updates need fresh administrator captures at 1366×768 and 390×844; previous screenshots predate these changes"
-    cmd: "X:\\DevTemp\\rosy-design-system-polish\\visible_roles.py"
+    state: GO
+    evidence: "checkout f285d86a (6b0aaaa7 포함)의 FastAPI TestClient/Chromium 관리자 /setup 캡처: X:\\DevTemp\\rosy-dashboard-browser-validation\\administrator-setup-1366x768.png 및 administrator-setup-390x844.png. 두 화면 pageError 0, 가로 overflow 0, 응답 200."
+    cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q -p no:cacheprovider"
   ROS-SIM:
     state: N/A
   ARTIFACT:

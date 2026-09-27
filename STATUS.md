@@ -24,7 +24,7 @@
 | [core_features](src/runtime/services/progress.md) | CORE | uncommitted (2026-09-25) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/runtime/api_web/progress.md) | CORE | uncommitted (2026-09-26) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](src/hmi/web/progress.md) | CORE | 9049bd37 (2026-09-27) | GO | GO | N/A | N/A | N/A | N/A |
-| [dashboard](src/hmi/dashboard/progress.md) | 화면 | uncommitted (2026-09-28) | HOLD | HOLD | N/A | HOLD | N/A | N/A |
+| [dashboard](src/hmi/dashboard/progress.md) | 화면 | f285d86a (2026-09-28) | GO | GO | N/A | HOLD | N/A | N/A |
 | [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
@@ -60,8 +60,6 @@
 - sensor_adc ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
-- dashboard SOURCE: 도크 등록·웨이포인트·위치 설정/SLAM 변경 뒤 지정된 브라우저 회귀를 실행하지 않음. SOURCE 시험 통과 전 GO 금지
-- dashboard LOCAL: 2026-09-28 /setup workflow and /device security feedback updates need fresh administrator captures at 1366×768 and 390×844; previous screenshots predate these changes
 - dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
 - omx_adapter ROS-SIM: Simulation evidence is Docker Desktop amd64 only. Target Linux workstation timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
 - omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact

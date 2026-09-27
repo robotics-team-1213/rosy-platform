@@ -346,3 +346,9 @@
 - 변경: 도크·웨이포인트·위치 설정 회귀에서 여러 상태 안내가 함께 존재하는 구조에 맞춰 브라우저 검증 선택자를 상태 문구로 좁혔다. 저속 teleop 회귀도 제거된 확인 체크박스 대신 활성 조건을 만족한 실제 명령 버튼과 놓기/시간 제한 정지를 확인하도록 맞췄다.
 - 증거: 지정 브라우저 회귀 54 passed (325.94초). 별도 FastAPI TestClient/Chromium 캡처에서 관리자 `/setup` 데스크톱 1366×768 및 모바일 390×844을 확인했다. `pageErrors=[]`, `overflowX=0`, 첫 페이지/API 응답 200; 캡처는 `X:\DevTemp\rosy-dashboard-browser-validation\administrator-setup-1366x768.png` 및 `administrator-setup-390x844.png`에 있다. Network/harness 계약 시험 77 passed; harness lint 0 errors, 기존 상태/변경 이력 warning 19건.
 - gate 변화: 당시 변경 기준 SOURCE/LOCAL GO. 캡처와 API는 로컬 fixture evidence이며 실제 설치 이미지, 로봇 장치, 현장 수용을 대체하지 않는다. ARTIFACT HOLD 유지.
+
+## 2026-09-28 · uncommitted · test(dashboard): verify latest security feedback
+
+- 변경: main의 관리자 `/device` 보안·안전 피드백 보존 변경(6b0aaaa7)을 포함한 현재 화면/역할 회귀를 다시 실행했다.
+- 증거: 지정 브라우저 회귀 54 passed (240.87초). 최신 checkout에서 관리자 `/setup` 캡처를 1366×768 및 390×844로 다시 생성했다. `pageErrors=[]`, 두 화면 `overflowX=0`, 첫 페이지/API 응답 200. 캡처는 `X:\DevTemp\rosy-dashboard-browser-validation\administrator-setup-1366x768.png` 및 `administrator-setup-390x844.png`에 있다.
+- gate 변화: 최신 checkout 기준 SOURCE/LOCAL GO. 이는 fixture 기반 로컬 UI evidence다. ARTIFACT, 실제 장치 readback, 현장 수용은 별도 HOLD다.
