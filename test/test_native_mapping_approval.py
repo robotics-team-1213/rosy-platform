@@ -113,6 +113,33 @@ def test_floor_trials_do_not_require_lifted_wheels(tmp_path):
     assert approval.approve(root, bundle, evidence, reviewer="reviewer-c")["ready"]
 
 
+def test_idle_encoder_noise_is_not_counted_as_forward_motion(tmp_path):
+    approval = _module()
+    _, evidence = _candidate(tmp_path)
+    raw = json.loads((evidence / "forward-button_release.json").read_text())
+    for sample in raw["samples"]:
+        sample["linear"] = 0.0006
+        sample["angular"] = 0.0135
+    raw["samples"][-1]["x"] = 0.005
+    with pytest.raises(ValueError, match="no measured forward motion"):
+        approval._validate_trial(raw, "forward", "button_release")
+
+
+def test_idle_encoder_noise_after_stop_is_zero_but_residual_rotation_is_not(tmp_path):
+    approval = _module()
+    _, evidence = _candidate(tmp_path)
+    raw = json.loads((evidence / "cw-button_release.json").read_text())
+    for sample in raw["samples"][-2:]:
+        sample["linear"] = 0.0006
+        sample["angular"] = 0.0135
+    assert approval._validate_trial(raw, "cw", "button_release") == pytest.approx(0.4)
+
+    for sample in raw["samples"][-2:]:
+        sample["angular"] = 0.03
+    with pytest.raises(ValueError, match="sustained zero velocity"):
+        approval._validate_trial(raw, "cw", "button_release")
+
+
 def test_empty_or_stale_markers_cannot_start_navigation(tmp_path):
     approval = _module()
     root = _device(tmp_path, mode="hardware")

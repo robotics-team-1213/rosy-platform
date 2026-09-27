@@ -31,6 +31,11 @@ MAX_ANGULAR_RPS = 0.10
 MAX_TRAVEL_M = 0.10
 MAX_STOP_LATENCY_S = 0.65
 ZERO_EPSILON = 0.001
+# Encoder quantization on the stationary Pinky has produced up to 0.00065 m/s
+# and 0.0135 rad/s in CORE state. Keep command purity separate from measured
+# motion/stop thresholds so idle ticks cannot prove movement or prevent a stop.
+MEASURED_LINEAR_EPSILON = 0.002
+MEASURED_ANGULAR_EPSILON = 0.02
 DIRECTIONS = ("forward", "reverse", "cw", "ccw")
 CAUSES = ("button_release", "command_loss")
 HEX_40 = re.compile(r"[0-9a-f]{40}\Z")
@@ -174,13 +179,21 @@ def _validate_trial(raw, direction, cause):
     if not observed[0][0] < stop_at < observed[-1][0]:
         raise ValueError("stop time is outside the sample window")
     before = [(vx, wz) for t, vx, wz, _, _, _ in observed if t < stop_at]
-    if not before or not any(abs(vx) > ZERO_EPSILON or abs(wz) > ZERO_EPSILON for vx, wz in before):
-        raise ValueError("trial has no measured motion before stop")
+    axis = {
+        "forward": lambda vx, wz: vx > MEASURED_LINEAR_EPSILON,
+        "reverse": lambda vx, wz: vx < -MEASURED_LINEAR_EPSILON,
+        "cw": lambda vx, wz: wz < -MEASURED_ANGULAR_EPSILON,
+        "ccw": lambda vx, wz: wz > MEASURED_ANGULAR_EPSILON,
+    }[direction]
+    if not before or not any(axis(vx, wz) for vx, wz in before):
+        raise ValueError(f"trial has no measured {direction} motion before stop")
     after = [(t, vx, wz) for t, vx, wz, _, _, _ in observed if t >= stop_at]
     first_zero = next((index for index, (_, vx, wz) in enumerate(after)
-                       if abs(vx) <= ZERO_EPSILON and abs(wz) <= ZERO_EPSILON), None)
+                       if abs(vx) <= MEASURED_LINEAR_EPSILON
+                       and abs(wz) <= MEASURED_ANGULAR_EPSILON), None)
     if first_zero is None or len(after) - first_zero < 2 or any(
-            abs(vx) > ZERO_EPSILON or abs(wz) > ZERO_EPSILON
+            abs(vx) > MEASURED_LINEAR_EPSILON
+            or abs(wz) > MEASURED_ANGULAR_EPSILON
             for _, vx, wz in after[first_zero:]):
         raise ValueError("trial has no sustained zero velocity")
     latency = after[first_zero][0] - stop_at
