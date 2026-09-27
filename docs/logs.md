@@ -2960,6 +2960,12 @@
 - 검증: 3개 서비스 healthy, HTTPS health·인증 session/state API 200, 실제 컨테이너 Fleet 화면 1280×800 페이지 오류·가로 넘침 0. Docker 이미지·설정·캡처의 세부 근거는 D-309 실행 계획에 기록했다.
 - gate 변화: LOCAL 사이트 UI 실행만 확인했다. 로봇 페어링·카메라·고정 사이트 주소·현장 네트워크와 물리 수용은 HOLD다.
 
+## 2026-09-27 · 003a7c1f · validation(uiux): close Host status LOCAL evidence
+
+- 변경: Host Agent 원본 조회 시각→CORE 네 상태 판정→`/device` 표시 계약을 D-309 최종 LOCAL 체크포인트에 연결했다. 역할 매트릭스 60셀과 별도 첫 기동 6셀을 구분했다.
+- 검증: 담당 세션 서버·프로토콜 276 passed/13 skipped, 문서 82 passed, Chromium Host 집중 3 passed, 역할 60셀 페이지 오류·가로 넘침 0. 현행 실물 로봇은 Host Agent unit·socket 없음으로 확인했다.
+- gate 변화: Host 증거 계약의 LOCAL 구현은 완료다. 새 로봇 이미지·실물 Host 결과와 G3 사람 평가는 HOLD다.
+
 ## 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
 
 - 변경: D-312에서 G4의 바퀴 들기 필수 조건을 제거하고 지면 시험의 누적 이동 10 cm 한계를 정했다.

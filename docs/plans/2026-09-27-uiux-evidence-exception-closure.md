@@ -123,3 +123,9 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - 사이트 Fleet·Vision·HTTPS proxy는 `deploy/site/compose.yaml`의 Docker Compose 서비스다. 이 PC에서 `a1e4f3bc` 소스를 `rosy-site-{fleet,vision,proxy}:local-uiux`로 빌드하고 별도 `rosy-uiux-local` 프로젝트로 시작했다. Docker 기본 주소 풀이 소진돼 X: 전용 override에 충돌 없는 3개 네트워크 대역을 지정했다. 다른 프로젝트의 네트워크는 건드리지 않았다.
 - Fleet·Vision·proxy 모두 healthy, 루프백 `https://localhost:18445/healthz` 200, 인증된 `/api/fleet/session` 200(operator), `/api/fleet/state` 200을 확인했다. 실제 컨테이너의 `/console`을 1280×800으로 캡처해 페이지 오류·가로 넘침 0을 확인했다. 설정, throwaway 인증 값, 자가서명 인증서, PNG는 `X:\DevTemp\rosy-uiux-local-site\`에만 있다.
 - 등록 `demo_01`은 의도적으로 연결되지 않는 가상 대상이며 실제 로봇 자격을 사용하지 않았다. 이 PC의 서비스는 루프백에만 노출된다. 사이트의 고정 주소·신뢰 CA·로봇 페어링·천장 카메라·현장 접근성·물리 readback은 미완료다. Docker healthy를 Fleet↔로봇 DEVICE 수용으로 승격하지 않는다.
+
+## D-309 이번 실행의 최종 LOCAL 체크포인트
+
+- Fleet 27장, 게임 13셀, 역할 매트릭스 60셀과 별도 첫 기동 6셀, LCD 노드 회귀와 사이트 Docker 화면을 현재 코드 기준으로 확인했다. 역할 매트릭스에는 Host Agent 증거 6셀이 포함된다. 역할 Host 원본 시각 계약은 `003a7c1f`에서 Host Agent→CORE→화면으로 구현됐고, CORE가 네 상태를 판정한다. 화면은 서버 판정만 표시한다.
+- 관련 시험은 담당 회차에서 Host 서버·프로토콜 276 passed/13 skipped, 문서 82 passed, Chromium Host 집중 3 passed 및 역할 60셀 오류·가로 넘침 0이었다. 로컬 사이트 Compose 3서비스는 healthy이며 인증 GET 두 경로와 화면 캡처를 확인했다.
+- 다음 DEVICE 게이트는 서명된 새 로봇 이미지의 버전·digest, Host Agent 설치, 실제 네트워크/릴리스 결과 readback, LCD 거리·각도·조도와 카드 만료, Fleet 고정 주소·TLS·페어링, 카메라와 양쪽 로봇 정지다. G3 사람 평가는 그 후 별도 기록한다. 현재 장치 릴리스와 로컬 Docker demo는 이 게이트를 대신하지 않는다.
