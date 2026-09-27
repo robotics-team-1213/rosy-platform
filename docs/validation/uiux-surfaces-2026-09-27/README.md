@@ -118,3 +118,7 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 - LCD: 320×240 직접 PIL 시험이 놓친 실제 노드의 1000×750 카드 축소 경로를 고쳤다. 콜백→타이머 호스트 시험 포함 face 139 passed/4 skipped.
 
 현재 X: 캡처와 호스트 시험은 LOCAL이다. 사이트·로봇·Pi LCD 대상 식별/실물 readback, 게임 카메라·정지, G3 사람 평가는 별도 BENCH/DEVICE/FIELD **HOLD**다.
+
+## 역할 화면 첫 기동 (LOCAL)
+
+인증된 `/setup`·`/device`에서 첫 상태 응답을 기다리는 6개 역할·뷰포트 셀을 전체 화면으로 캡처했다. [역할 G2 카드](roles-g2-matrix.md)에 `X:\DevTemp\rosy-uiux-d306-roles-g2\first-boot-matrix.json`과 PNG 경로, 익명 세션 비노출 시험을 기록했다. 병합 후 첫 기동 브라우저 시험 1 passed다. 이는 CORE의 첫 상태 응답 전 화면 표시만 검증하며, 실물 SAFE_STOP 또는 Host Agent 결과는 증명하지 않는다.

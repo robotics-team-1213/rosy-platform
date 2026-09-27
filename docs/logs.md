@@ -2941,3 +2941,9 @@
 - 변경: D-311과 네이티브 G4 번들·원시 odom·승인 검증 절차를 기록했다. 빈 마커로는 기동하지 않으며 새 서명 이미지와 SD 갱신이 필요하다.
 - 검증: 네이티브 승인 계약 시험과 harness lint를 실행한다. 실제 장치 G4/G5는 HOLD다.
 - gate 변화: SOURCE/LOCAL 검증 경로를 추가했다. ARTIFACT/DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-27 · e9051960 · validation(uiux): capture role first boot
+
+- 변경: 인증된 `/setup`·`/device`의 첫 상태 응답 전 안전 상태 표시를 역할 G2 카드와 D-309 실행 계획에 연결했다. 전체 화면 6셀은 X:의 LOCAL 캡처다.
+- 검증: 병합 후 첫 기동 브라우저 시험 1 passed. 미인증 세션의 안전 상태 비노출도 같은 시험에서 확인했다.
+- gate 변화: 역할 첫 기동 LOCAL 누락을 닫았다. Host Agent 값별 시각·실물 readback 및 G3 사람 평가는 HOLD다.

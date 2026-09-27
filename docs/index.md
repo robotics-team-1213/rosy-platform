@@ -187,8 +187,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · e9051960 · validation(uiux): capture role first boot
 - 2026-09-27 · uncommitted · fix(native): seal G4 evidence before navigation
 - 2026-09-27 · uncommitted · validation(uiux): close remaining local surface gaps
 - 2026-09-27 · uncommitted · fix(uiux): close stale display and action gaps
 - 2026-09-27 · uncommitted · plan(platform): define product source layout migration
-- 2026-09-27 · uncommitted · validation(uiux): inspect changed Fleet, game and role captures
