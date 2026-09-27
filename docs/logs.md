@@ -2898,3 +2898,9 @@
 - 변경: 게임 호스트가 보드 생성 시각과 경과 시간을 판정하고 브라우저는 그 결과를 표시한다. 원정 팀의 분홍 장식은 회청색으로 조정했다.
 - 검증: 게임 서버 102 passed, 브라우저 12 passed (Windows LOCAL). 이전 PNG는 변경 전 증거다.
 - gate 변화: 보드 지연 판정은 LOCAL 확인이다. 새 캡처와 실제 카메라·로봇·물리 정지 수용은 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(fleet): keep server rate decision with D-309
+
+- 변경: Fleet 서버가 마지막 표본 나이와 함께 두 표본 이상에서 2 Hz 미만인 송수신 빈도를 `delayed`로 판정한다. 첫 송신은 빈도 미정으로 취급한다. 화면은 서버 이유만 문구화한다.
+- 검증: Fleet relay/formation 44 passed, 관련 Playwright 2 passed (Windows LOCAL), 문서 계약 동기화.
+- gate 변화: 코드·계약 일치 LOCAL 확인이다. 변경 후 화면 캡처와 DEVICE/FIELD는 HOLD다.

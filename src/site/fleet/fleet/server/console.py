@@ -52,10 +52,12 @@ MAP_TTL_S = 10.0
 _INTERNAL_MISSION_KEYS = ("route", "settled_ticks")
 
 STREAM_STALE_AFTER_S = 1.0
+STREAM_RATE_FLOOR_HZ = 2.0
 
 
 def _stream_evidence(age_s: Optional[float], *, connected: bool,
-                     error: Optional[str], source: str) -> dict:
+                     error: Optional[str], source: str,
+                     rate_hz: Optional[float] = None, sample_count: int = 0) -> dict:
     """Judge relay observations on the server; send age is not robot receipt."""
     if error or not connected:
         state, reason = "disconnected", "stream_error" if error else "transport_down"
@@ -63,6 +65,8 @@ def _stream_evidence(age_s: Optional[float], *, connected: bool,
         state, reason = "unavailable", "no_sample"
     elif age_s > STREAM_STALE_AFTER_S:
         state, reason = "delayed", "sample_too_old"
+    elif sample_count >= 2 and rate_hz is not None and rate_hz < STREAM_RATE_FLOOR_HZ:
+        state, reason = "delayed", "rate_below_floor"
     else:
         state, reason = "fresh", "sample_within_limit"
     return {"state": state, "age_s": age_s, "reason": reason,
@@ -785,12 +789,15 @@ class FleetConsole:
             stream_evidence[self._formation_leader] = _stream_evidence(
                 stats.leader_age_s, connected=stats.leader_last_error is None,
                 error=stats.leader_last_error, source="leader_rx",
+                rate_hz=stats.leader_rx_hz, sample_count=stats.leader_frames,
             )
             for rid in session.assignment:
                 stream_evidence[rid] = _stream_evidence(
                     stats.follower_last_tx_age_s.get(rid),
                     connected=stats.follower_connected.get(rid) is True,
                     error=stats.follower_last_error.get(rid), source="follower_tx",
+                    rate_hz=stats.follower_tx_hz.get(rid),
+                    sample_count=stats.follower_tx.get(rid, 0),
                 )
         return {
             "active": session.state in (SessionState.ARMING, SessionState.RUNNING,

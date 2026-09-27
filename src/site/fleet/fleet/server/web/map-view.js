@@ -85,7 +85,8 @@ export function createMapView({ el, view, css, auth, call }) {
     if (evidence.state === "disconnected") return { text: "\uB04A\uAE40", cls: "crit" };
     if (evidence.state === "delayed") {
       const age = typeof evidence.age_s === "number" ? ` \u00B7 ${evidence.age_s.toFixed(1)}\uCD08` : "";
-      return { text: `\uC9C0\uC5F0${age}`, cls: "warn" };
+      const reason = evidence.reason === "rate_below_floor" ? " \u00B7 \uC1A1\uC2E0 \uBE48\uB3C4 \uB0AE\uC74C" : "";
+      return { text: `\uC9C0\uC5F0${reason}${age}`, cls: "warn" };
     }
     return { text: "\uC1A1\uC2E0 \uC2DC\uAC01 \uC5C6\uC74C", cls: "warn" };
   }

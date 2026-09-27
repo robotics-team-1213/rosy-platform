@@ -37,6 +37,13 @@ def test_stream_evidence_uses_server_age_and_keeps_unknown_unavailable():
     assert judge(0.1, error="send failed")["state"] == "disconnected"
     assert judge(1.1)["stale_after_s"] == 1.0
     assert judge(1.1)["source"] == "follower_tx"
+    slow = _stream_evidence(0.1, connected=True, error=None, source="follower_tx",
+                            rate_hz=1.2, sample_count=3)
+    assert slow["state"] == "delayed"
+    assert slow["reason"] == "rate_below_floor"
+    first = _stream_evidence(0.1, connected=True, error=None, source="follower_tx",
+                             rate_hz=0.0, sample_count=1)
+    assert first["state"] == "fresh"
 
 
 def test_arming_reports_the_slots_each_follower_was_given():
