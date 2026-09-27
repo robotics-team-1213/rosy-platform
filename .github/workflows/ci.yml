@@ -75,7 +75,7 @@ jobs:
       - name: Test (core domain suites, protocol schemas P1-19)
         run: |
           cd src
-          python3 -m pytest runtime/gateway/test runtime/events/test runtime/services/test hmi/web/test contracts/foundation/test products/pinky_pro/test products/omx/test -v
+          python3 -m pytest runtime/gateway/test runtime/events/test runtime/services/test hmi/web/test contracts/foundation/test products/pinky_pro/profile/test products/omx/profile/test -v
 
       # fleet 은 ROS 를 import 하지 않는다. conftest 가 src/contracts/foundation 과
       # src/runtime/services 를 sys.path 에 얹으므로 colcon 오버레이 없이도
@@ -106,7 +106,7 @@ jobs:
         run: |
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
-          python3 -m pytest src/devices/pinky_pro/bringup/test src/devices/pinky_pro/adc/test             src/runtime/sensing/test/test_ir_adc_lock.py             --ignore=src/devices/pinky_pro/bringup/test/test_flake8.py             --ignore=src/devices/pinky_pro/bringup/test/test_pep257.py             --ignore=src/devices/pinky_pro/bringup/test/test_copyright.py -v
+          python3 -m pytest src/products/pinky_pro/bringup/test src/products/pinky_pro/adc/test             src/runtime/sensing/test/test_ir_adc_lock.py             --ignore=src/products/pinky_pro/bringup/test/test_flake8.py             --ignore=src/products/pinky_pro/bringup/test/test_pep257.py             --ignore=src/products/pinky_pro/bringup/test/test_copyright.py -v
 
       # 루트 test/ 는 배포·릴리스 계약을 담고 있으면서도 지금까지 CI 에서 한 번도
       # 실행되지 않았다. 위 스텝이 src/runtime/gateway/test 만 돌기 때문이다. 그래서

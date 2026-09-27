@@ -24,7 +24,12 @@ CALIB_NODE = SRC / "runtime" / "sensing" / "control" / "calib_node.py"
 
 
 def _launch_files():
-    return sorted(SRC.glob("*/*/launch/*.py"))
+    return sorted(path for manifest in SRC.rglob("package.xml")
+                  for path in (manifest.parent / "launch").glob("*.py"))
+
+
+def test_ir_scan_includes_nested_product_bringup():
+    assert SRC / "products" / "pinky_pro" / "bringup" / "launch" / "bringup_robot.launch.py" in _launch_files()
 
 
 def _code_text(text: str) -> str:

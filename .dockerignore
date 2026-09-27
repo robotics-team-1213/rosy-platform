@@ -25,17 +25,10 @@
 !src/hmi/dashboard/
 !src/hmi/dashboard/**
 !src/products/
-!src/devices/omx/
-!src/devices/omx/adapter/
-!src/devices/omx/adapter/**
 !src/products/pinky_pro/
 !src/products/pinky_pro/**
 !src/products/omx/
 !src/products/omx/**
-!src/devices/
-!src/devices/pinky_pro/
-!src/devices/pinky_pro/bringup/
-!src/devices/pinky_pro/bringup/**
 !src/runtime/navigation/
 !src/runtime/navigation/**
 !src/sim/

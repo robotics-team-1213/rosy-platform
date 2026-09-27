@@ -14,7 +14,8 @@ DEFAULT_ROBOT = "pinky_pro"
 def robot_config_dir(robot: str) -> Path:
     """Config directory of the robot package ``robot`` (D-196).
 
-    The installed ament share wins; a host checkout falls back to src/products/<robot>/config.
+    The installed ament share wins; a host checkout falls back to
+    src/products/<robot>/profile/config.
     A robot found in neither place is a configuration error that says how to fix it.
     """
     try:
@@ -31,7 +32,7 @@ def robot_config_dir(robot: str) -> Path:
             share = None  # not installed, or ament present but AMENT_PREFIX_PATH unset
     if share is not None:
         return Path(share) / "config"
-    source = Path(__file__).resolve().parents[3] / "products" / robot / "config"
+    source = Path(__file__).resolve().parents[3] / "products" / robot / "profile" / "config"
     if source.is_dir():
         return source
     from core_common.config import ConfigError

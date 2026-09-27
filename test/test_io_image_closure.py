@@ -59,7 +59,12 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
     admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())
     for source in copied:
         assert source.is_dir(), source
-        assert f"!{source.relative_to(ROOT).as_posix()}/**" in admitted, source
+        parts = source.relative_to(ROOT).as_posix().split("/")
+        allowed_by_tree = any(
+            f"!{'/'.join(parts[:depth])}/**" in admitted
+            for depth in range(2, len(parts) + 1)
+        )
+        assert allowed_by_tree, source
 
 
 def test_final_io_image_checks_installed_web_assets(tmp_path):

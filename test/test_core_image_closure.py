@@ -77,7 +77,12 @@ def test_core_build_copies_its_declared_package_closure():
     for source in copied:
         assert source.is_dir(), source
         relative = source.relative_to(ROOT).as_posix()
-        assert f"!{relative}/**" in admitted, relative
+        parts = relative.split("/")
+        allowed_by_tree = any(
+            f"!{'/'.join(parts[:depth])}/**" in admitted
+            for depth in range(2, len(parts) + 1)
+        )
+        assert allowed_by_tree, relative
 
 
 def test_core_build_probes_imports_and_installed_web_assets(tmp_path):

@@ -306,12 +306,15 @@ def test_host_agent_recovery_is_text_only_and_unavailable_controls_stay_blocked(
         assert page.evaluate("window.__calls") == []
 
         page.evaluate("""() => {
-          window.__callbacks['/api/v1/host/network'].onData({available:true,ok:true,data:{mode:'SITE_STA'}});
-          window.__callbacks['/api/v1/host/release'].onData({available:true,ok:true,data:{previous:'r1'}});
+          window.__callbacks['/api/v1/host/network'].onData({available:true,ok:true,
+            evidence:{evidence:'fresh'},data:{mode:'SITE_STA'}});
+          window.__callbacks['/api/v1/host/release'].onData({available:true,ok:true,
+            evidence:{evidence:'fresh'},data:{previous:'r1'}});
         }""")
         assert page.locator("ui-button").evaluate_all("nodes => nodes.some(node => !node.disabled)")
         page.evaluate("""() => window.__callbacks['/api/v1/host/release'].onData({
           available:true,ok:false,code:'RECOVERY_HELD',detail:'release requires operator review',
+          evidence:{evidence:'fresh'},
           data:{previous:'r1'}
         })""")
         release_status = page.locator("section.ui-readback").filter(has_text="릴리스").locator("[role=status]").first

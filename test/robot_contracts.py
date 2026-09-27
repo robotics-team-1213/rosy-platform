@@ -42,7 +42,9 @@ LAUNCH_REFERENCE = re.compile(r"([A-Za-z0-9_]+(?:\.launch|_launch)\.(?:xml|py))"
 
 def _launch_file(name: str) -> Path | None:
     """Resolve a launch file name to its in-tree path, whichever package owns it."""
-    return next(iter(sorted((ROOT / "src").glob(f"*/*/launch/{name}"))), None)
+    manifests = sorted((ROOT / "src").rglob("package.xml"))
+    return next((path for manifest in manifests
+                 if (path := manifest.parent / "launch" / name).is_file()), None)
 
 
 def runtime_launch_closure(mode: str | None = None) -> dict[str, Path]:

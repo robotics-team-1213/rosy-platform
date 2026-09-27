@@ -8,7 +8,7 @@
 
 **Tech Stack:** ROS 2 Jazzy/colcon, ament_python·ament_cmake, Python/pytest, Docker CORE·IO 이미지, native ARM64 payload, PowerShell/WSL.
 
-**상태:** 계획 (2026-09-27). D-310은 Proposed이고 기존 D-231·D-305가 현재 소스 위치의 기준이다. 이 파일은 폴더 이동이나 이미지 배포가 끝났다는 기록이 아니다.
+**상태:** 소스 배치 통합 진행 (2026-09-28). D-310은 제품별 소스 위치에 한해 Accepted이며 D-231·D-305의 충돌하는 위치 조항만 부분 대체한다. SOURCE/LOCAL·CORE/IO OCI 동등성은 기록됐고 native payload의 실제 aarch64/Jazzy 비교는 `NOT_RUN`이다. 이 파일은 이미지 배포나 장치 수용 기록이 아니다.
 
 ---
 
@@ -22,7 +22,7 @@
 
 완료란 SOURCE/LOCAL, ROS 빌드, 기존 이미지 빌드의 **동등성**을 기록한 소스 이동을 뜻한다. 새 설치 패키지·launch share 경로·서비스 또는 이미지 내용이 달라지면 이 계획의 단순 이동 완료로 처리하지 않는다. 장치/현장 수용은 D-305의 독립 게이트를 따른다. 출구는 `SOURCE_CANDIDATE`(경로·host·harness·colcon), `ARTIFACT_EQUIVALENT`(CORE·IO·native의 실제 설치 내용 비교), `DEVICE_ACCEPTED`(별도 장치 설치·동작 readback)로 기록하며 앞 출구만으로 뒤 출구를 주장하지 않는다.
 
-**실행 순서:** 작업 공간·이동 전 기준선 → D-310의 구조 목표 수용 범위 결정 → 구조 시험과 여덟 패키지의 원자적 경로 이동 → 경로 문서·생성 색인과 SOURCE/ROS 검증 → 깨끗한 후보 커밋 → 그 정확한 SHA의 산출물 검증 → 결과만 기록한 문서 커밋 → 통합. 아래 Task 번호는 이 순서를 따른다.
+**실행 순서:** 작업 공간·이동 전 기준선 → D-310의 구조 목표 수용 범위 결정 → 구조 시험과 여덟 패키지의 원자적 경로 이동 → 경로 문서·생성 색인과 SOURCE/ROS 검증 → 깨끗한 후보 커밋 → 그 정확한 SHA의 산출물 검증 → 결과만 기록한 문서 커밋 → 통합. 아래 Task 번호는 원래 기준이다. 사용자의 명시적 로컬 병합 요청에 따라 CORE/IO OCI 비교 후 native 비교 전에 **소스 통합만** 진행한다. 이 순서 변경은 native `ARTIFACT_EQUIVALENT`, 이미지 발행, DEVICE/FIELD 출구를 면제하지 않는다.
 
 ## 목표 경로와 현재 경로
 
@@ -56,9 +56,9 @@
 2. `rg -n 'src/(devices|products)/(pinky_pro|omx|common)' .github deploy tools test src --glob '!*.md'`로 살아 있는 경로 소비자를 목록화한다. `test_target_layout.py`의 기대 패키지 1개 1경로와 harness module path를 별도로 대조한다.
 3. CORE/IO Dockerfile `COPY`·`--packages-*`, native payload `--base-paths src`, 필수 패키지 목록과 실제 설치 목록을 **이미지별**로 기록한다. 동일한 base image digest·Docker build args·requirements·apt 입력을 고정해 CORE·IO·native를 실제 빌드하고, 각 overlay의 ament index 패키지 전체 집합, 이동 패키지의 share/config/launch·console script, 필수 Python import를 기준선으로 남긴다. 존재 여부만 보는 inventory나 native `colcon list` 출력은 설치 closure가 아니다. 특히 CORE Dockerfile은 `interfaces`, `gateway`, Pinky profile만 복사하는 반면 `core/package.xml`에는 `core_common`, `core_events`, `core_features`, `core_api_web` 의존성이 있어 기존 빌드 실패 가능성을 먼저 확인한다.
 4. `omx_adapter`가 현재 IO/native에 포함된 이유와 제거 조건, `imu_bno055` 필수 목록 포함 이유를 기록한다. 둘을 이 소스 이동 때문에 임의로 제외하지 않는다.
-5. 기준선을 보고 D-310의 **구조 목표**를 수용할지 결정한다. 기준선 빌드가 실패했거나 `NOT_RUN`이면 먼저 원인을 해결해 새 기준선을 세우거나 D-310을 Proposed/HOLD로 두고 이동을 시작하지 않는다. 채택하면 D-231의 `products=config only`와 소스 위치 조항, D-305 결정 5의 현 배치 유지 부분을 **범위를 적어** 부분 대체한다. D-231의 검증 규칙과 D-305의 결과 불변식은 유지한다. ADR 로그와 생성 index를 정렬한다. 목표 수용은 경로 이동·산출물·장치 수용을 뜻하지 않는다. D-303의 Rejected 본문을 실행 기준으로 바꾸지 않는다.
+5. 기준선을 보고 D-310의 **구조 목표**를 수용할지 결정한다. 기준선 빌드가 실패했거나 `NOT_RUN`이면 먼저 원인을 해결해 새 기준선을 세우거나 D-310을 Proposed/HOLD로 둔다. 채택하면 D-231의 `products=config only`와 소스 위치 조항, D-305 결정 5의 현 배치 유지 부분을 **범위를 적어** 부분 대체한다. D-231의 검증 규칙과 D-305의 결과 불변식은 유지한다. ADR 로그와 생성 index를 정렬한다. 실제 이행은 D-310의 실행 게이트 기록처럼 native 기준선 `NOT_RUN` 상태에서 사용자 요청으로 로컬 소스 통합을 앞당겼다. native 동등성 선언과 배포는 계속 HOLD다. D-303의 Rejected 본문을 실행 기준으로 바꾸지 않는다.
 
-**출구:** 이름·경로·이미지별 설치/share/entrypoint/import 기준선과 경로 소비자 목록이 `X:\DevTemp\`의 검증 로그 및 저장소의 검토 기록에 남고, D-310 구조 목표의 수용 범위가 명확하다. 기존 빌드 실패 또는 `NOT_RUN`은 동등성 증거가 아니다. 그 경우 원인을 별도 선행 변경으로 고치고 새 기준선을 얻거나 이동의 통합과 `ARTIFACT_EQUIVALENT`를 HOLD한다.
+**출구:** 이름·경로·이미지별 설치/share/entrypoint/import 기준선과 경로 소비자 목록이 `X:\DevTemp\`의 검증 로그 및 저장소의 검토 기록에 남고, D-310 구조 목표의 수용 범위가 명확하다. 기존 빌드 실패 또는 `NOT_RUN`은 동등성 증거가 아니다. CORE/IO 결함은 별도 선행 변경으로 고쳐 기준선을 다시 얻었다. native 기준선은 아직 `NOT_RUN`이며 위에 기록한 사용자 요청으로 로컬 소스 통합만 진행한다. `ARTIFACT_EQUIVALENT`는 계속 HOLD다.
 
 ## Task 2: 폴더 계약 시험을 새 목표로 먼저 갱신
 
@@ -104,7 +104,7 @@
 3. 비교 대상은 설치 closure와 운영 import·lookup의 동등성이다. source revision·빌드 메타데이터가 바뀌므로 이미지 digest 또는 바이트 동일성을 요구하지 않는다. COPY 범위, ROS share 경로, native 필수 package inventory가 달라졌다면 원인을 분류하고 같은 소스 변경에서 해결한 뒤 후보 SHA를 다시 고정해 빌드한다. 설치 목록·API·유닛 변경이 의도된 것이라면 별도 ARTIFACT/DEVICE 이행 계획으로 분리한다.
 4. 빌드 명령·고정 입력·후보 SHA·설치 목록·비교 결과를 우선 `X:\DevTemp\`에 원본 증거로 남긴다. 기존 이미지가 실패했거나 `NOT_RUN`인데 이동 후 같은 상태여도 동등성 통과로 처리하지 않는다.
 
-**출구:** 세 이미지의 실제 빌드와 설치 closure·import·lookup 동등성 근거가 후보 SHA에 연결된 `ARTIFACT_EQUIVALENT`. 수행하지 못한 이미지의 출구는 `NOT_RUN`/HOLD이며 소스 이동 완료로 승격하지 않는다.
+**출구:** 세 이미지의 실제 빌드와 설치 closure·import·lookup 동등성 근거가 후보 SHA에 연결된 `ARTIFACT_EQUIVALENT`. 수행하지 못한 native payload의 출구는 `NOT_RUN`/HOLD다. 이번 사용자 요청으로 소스 경로를 로컬 `main`에 통합하더라도 이 출구를 통과한 것으로 기록하지 않는다.
 
 ## Task 6: 결과 문서·통합·되돌리기
 
@@ -112,10 +112,10 @@
 
 1. Task 5의 원본 증거를 근거로 ADR 검증 기록·progress·logs에 **후보 SHA의 결과**를 적는다. 결과 문서는 별도 evidence-only 커밋으로 남기고 후보 SHA와 문서 HEAD를 구분한다. `git diff --name-only <candidate>..<evidence-head>`의 **전체 경로**가 `docs/**`와 명시한 `STATUS.md` 등 증거 문서 allowlist에만 속하는지 확인한다. 다른 경로가 있다면 해당 HEAD에서 SOURCE/ARTIFACT 게이트를 다시 수행한다.
 2. `runtime=현재 로컬 실행`, `products=제품 전용 소스·구성`, `drivers=제품 독립 칩 드라이버`로 범위를 정의한다. 현재 폴더 지도·AGENTS·harness 생성 색인은 Task 4 후보 SHA에 이미 포함돼 있어야 한다. 결과 문서에서 폴더를 writer나 설치 증거로 설명하지 않는다.
-3. 최신 `main`과 변경 경로 겹침·HEAD 선조 관계를 확인한 뒤 검증된 후보와 입력 불변인 결과 문서만 통합한다. push·CI·아티팩트 게시·Pi 설치는 수행 증거가 있을 때만 별도로 보고한다. 최종 릴리스 HEAD의 산출물을 발행하려면 그 SHA에서 다시 빌드·서명·digest 검증한다. 이번 후보 SHA 산출물을 문서 HEAD나 릴리스 HEAD의 산출물로 부르지 않는다.
+3. 최신 `main`과 변경 경로 겹침·HEAD 선조 관계를 확인한 뒤 검증된 후보와 입력 불변인 결과 문서만 통합한다. 이번 사용자의 요청에 따른 통합은 SOURCE/LOCAL 및 CORE/IO OCI 증거를 가진 **로컬 소스 배치**에 한하며 native `ARTIFACT_EQUIVALENT` 이전이라는 차이를 ADR·검증 기록에 남긴다. push·CI·아티팩트 게시·Pi 설치는 수행 증거가 있을 때만 별도로 보고한다. 최종 릴리스 HEAD의 산출물을 발행하려면 그 SHA에서 다시 빌드·서명·digest 검증한다. 이번 후보 SHA 산출물을 문서 HEAD나 릴리스 HEAD의 산출물로 부르지 않는다.
 4. 후보 브랜치에서 실패하면 main을 건드리지 않고 경로 이동 커밋과 소비자·Docker COPY를 같은 단위로 되돌린다. 이미 main에 통합됐다면 main을 reset하지 않고 해당 커밋 revert와 회귀 게이트를 실행하며 append-only ADR/log에 되돌림 기록을 추가한다. 이미 배포된 산출물은 이전 서명 digest로 복귀하고 장치 설치/readback을 별도로 확인한다.
 
-**출구:** 문서와 생성 색인이 실제 소스 위치에 맞고 `SOURCE_CANDIDATE`·`ARTIFACT_EQUIVALENT`가 각자의 검증 SHA와 함께 닫혔다. `DEVICE_ACCEPTED`는 이 소스 작업의 출구가 아니다.
+**이번 로컬 소스 통합 출구:** 문서와 생성 색인이 실제 소스 위치에 맞고 SOURCE/LOCAL·WSL Jazzy 및 CORE/IO OCI 설치 closure 결과가 각 검증 SHA에 연결된다. 전체 `ARTIFACT_EQUIVALENT`는 native aarch64/Jazzy 기준선·후보 비교 후 별도로 닫는다. `DEVICE_ACCEPTED`는 이 소스 작업의 출구가 아니다.
 
 ## 후속 설계: 실제 제품별 runtime 연결
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -12,6 +13,10 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+_git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+# Bare "bash" can resolve to Windows System32 WSL bash, which runs this X: fixture
+# in another filesystem namespace. Prefer Git Bash for the Windows host test.
+BASH = str(_git_bash) if sys.platform == "win32" and _git_bash.is_file() else "bash"
 IMAGE = ROOT / "deploy" / "image"
 REQUIRED = IMAGE / "required-ros-packages.txt"
 BUILD = IMAGE / "build-native-payload.sh"
@@ -24,7 +29,7 @@ RESOLVE_SOURCE_PATHS = IMAGE / "resolve-required-source-paths.py"
 def _bash_is_usable() -> bool:
     try:
         return subprocess.run(
-            ["bash", "-c", "true"], capture_output=True, timeout=30, check=False
+            [BASH, "-c", "true"], capture_output=True, timeout=30, check=False
         ).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -103,7 +108,7 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     for suffix in (
         "/runtime/gateway", "/contracts/foundation", "/runtime/events",
         "/runtime/services", "/runtime/api_web", "/contracts/interfaces",
-        "/devices/pinky_pro/adc", "/devices/common/imu_bno055", "/devices/pinky_pro/lamp",
+        "/products/pinky_pro/adc", "/drivers/imu_bno055", "/products/pinky_pro/lamp",
     ):
         assert any(path.endswith(suffix) for path in paths)
     assert not any(path.endswith("/sim/gz_sim") for path in paths)
@@ -213,7 +218,7 @@ def test_inventory_verifier_accepts_sorted_packages_under_the_release_prefix(tmp
 
     result = subprocess.run(
         [
-            "bash", "verify-package-inventory.sh",
+            BASH, "verify-package-inventory.sh",
             "--required", "required.txt", "--inventory", "inventory.txt",
             "--install-root", "release/install", "--ros2", "./ros2",
         ],
@@ -245,7 +250,7 @@ def test_inventory_verifier_rejects_missing_or_outside_packages(tmp_path):
 
     result = subprocess.run(
         [
-            "bash", "verify-package-inventory.sh",
+            BASH, "verify-package-inventory.sh",
             "--required", "required.txt", "--inventory", "inventory.txt",
             "--install-root", "release/install", "--ros2", "./ros2",
         ],
