@@ -2,7 +2,7 @@
 """Seal measured native G4 trials and guard the navigation systemd unit.
 
 This tool does not command a motor or start navigation. ``approve`` is an
-operator-reviewed transition from raw bench evidence to root-owned records;
+operator-reviewed transition from raw commissioning evidence to root-owned records;
 ``check`` is the read-only systemd ExecCondition for every navigation start.
 """
 
@@ -28,6 +28,7 @@ except ImportError:  # host contract tests on Windows
 sys.dont_write_bytecode = True
 MAX_LINEAR_MPS = 0.03
 MAX_ANGULAR_RPS = 0.10
+MAX_TRAVEL_M = 0.10
 MAX_STOP_LATENCY_S = 0.65
 ZERO_EPSILON = 0.001
 DIRECTIONS = ("forward", "reverse", "cw", "ccw")
@@ -143,7 +144,7 @@ def _validate_trial(raw, direction, cause):
     linear = _number(raw["requested_linear_mps"], "requested linear speed")
     angular = _number(raw["requested_angular_rps"], "requested angular speed")
     if abs(linear) > MAX_LINEAR_MPS or abs(angular) > MAX_ANGULAR_RPS:
-        raise ValueError("requested speed exceeds the bench envelope")
+        raise ValueError("requested speed exceeds the commissioning envelope")
     if direction == "forward" and not (linear > ZERO_EPSILON and abs(angular) <= ZERO_EPSILON):
         raise ValueError("forward trial command has the wrong direction")
     if direction == "reverse" and not (linear < -ZERO_EPSILON and abs(angular) <= ZERO_EPSILON):
@@ -166,7 +167,7 @@ def _validate_trial(raw, direction, cause):
         y = _number(sample["y"], "odom y")
         yaw = _number(sample["yaw"], "odom yaw")
         if abs(vx) > MAX_LINEAR_MPS or abs(wz) > MAX_ANGULAR_RPS:
-            raise ValueError("measured speed exceeds the bench envelope")
+            raise ValueError("measured speed exceeds the commissioning envelope")
         observed.append((t, vx, wz, x, y, yaw))
     if any(a[0] >= b[0] for a, b in zip(observed, observed[1:])):
         raise ValueError("velocity sample times must strictly increase")
@@ -197,6 +198,10 @@ def _validate_trial(raw, direction, cause):
         raise ValueError("clockwise odom direction was not observed")
     if direction == "ccw" and yaw_delta <= 0.005:
         raise ValueError("counterclockwise odom direction was not observed")
+    travel = sum(math.hypot(current[3] - previous[3], current[4] - previous[4])
+                 for previous, current in zip(observed, observed[1:]))
+    if travel > MAX_TRAVEL_M:
+        raise ValueError("trial travel exceeds 10 cm")
     return latency
 
 
@@ -204,7 +209,7 @@ def validate_candidate(root, bundle, evidence_dir):
     """Verify a native G4 bundle against the current device and raw files."""
     _object(bundle, (
         "schema_version", "robot_number", "release_id", "source_revision",
-        "operator", "safety_operator", "wheels_lifted", "hardware_cut_reachable",
+        "operator", "safety_operator", "test_surface", "hardware_cut_reachable",
         "motor_preflight", "trials",
     ), "G4 bundle")
     device = _device_identity(root)
@@ -215,8 +220,10 @@ def validate_candidate(root, bundle, evidence_dir):
             raise ValueError(f"G4 {name} differs from the active release")
     if device["runtime_mode"] not in ("motor", "hardware"):
         raise ValueError("G4 approval requires a motor or hardware runtime")
-    if bundle["wheels_lifted"] is not True or bundle["hardware_cut_reachable"] is not True:
-        raise ValueError("G4 lifted wheels and hardware cut must be attested")
+    if bundle["test_surface"] not in ("floor", "lifted"):
+        raise ValueError("G4 test surface must be floor or lifted")
+    if bundle["hardware_cut_reachable"] is not True:
+        raise ValueError("G4 hardware cut must be reachable")
     operator = _text(bundle["operator"], "operator")
     safety_operator = _text(bundle["safety_operator"], "safety operator")
     if operator == safety_operator:
@@ -274,7 +281,7 @@ def approve(root, bundle, evidence_dir, *, reviewer):
     evidence_dir = Path(evidence_dir)
     reviewer = _text(reviewer, "reviewer")
     if _device_identity(root)["runtime_mode"] != "motor":
-        raise ValueError("G4 approval requires motor runtime bench mode")
+        raise ValueError("G4 approval requires motor runtime commissioning mode")
     if reviewer in (bundle.get("operator"), bundle.get("safety_operator")):
         raise ValueError("reviewer must be different from both operators")
     result = validate_candidate(root, bundle, evidence_dir)

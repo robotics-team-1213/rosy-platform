@@ -26,6 +26,7 @@
 | D-179 | 벤치 CORE 수정은 설치 트리 위의 읽기 전용 바인드이고, 그 장치는 릴리스로 세지 않는다 |
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
 | D-311 | 네이티브 G4 실측 증거를 내비게이션 기동 조건으로 검증한다 |
+| D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 
 ## 계획·결과 문서
 
@@ -59,8 +60,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(native): accept floor G4 evidence
 - 2026-09-27 · uncommitted · fix(native): verify G4 on navigation start
 - 2026-09-27 · uncommitted · update default-config image readback
 - 2026-09-26 · uncommitted · OMX owner vendor simulation probe and host handoff
 - 2026-09-26 · uncommitted · OMX development image action-only vendor launch
-- 2026-09-26 · uncommitted · site control console operator access guide

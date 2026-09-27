@@ -2953,3 +2953,9 @@
 - 변경: 현재 대상 로봇의 실행 릴리스·서비스·CORE 상태를 읽기 전용으로 조회하고 D-309 계획에 실물 관찰 범위를 기록했다. 주소·인증 값은 저장소에 남기지 않았다.
 - 검증: Pi 5/릴리스 `2026.09.26-017`/소스 `b093fe45`, CORE·IO·부팅 표시 active, navigation inactive, CORE `IDLE`/`estop=false`; Host Agent unit·socket 없음과 두 GET의 `HOST_AGENT_UNAVAILABLE`을 확인했다. X: 일회성 JSON에 시각·digest를 기록했다.
 - gate 변화: 연결·현행 릴리스 관찰만 DEVICE 증거다. 신규 UI·Host 계약, LCD·물리 정지·Fleet·G3 수용은 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
+
+- 변경: D-312에서 G4의 바퀴 들기 필수 조건을 제거하고 지면 시험의 누적 이동 10 cm 한계를 정했다.
+- 검증: 원시 odom의 이동량·속도·정지·방향을 검증하는 호스트 계약 시험을 실행한다.
+- gate 변화: SOURCE/LOCAL 계약을 수정했다. 실제 G4/G5·서명 이미지 판정은 별도다.

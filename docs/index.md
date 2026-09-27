@@ -133,6 +133,7 @@
 | D-309 | UI/UX의 프론트·백엔드 책임과 시간·예외·안전 증거를 분리한다 |
 | D-310 | 제품 전용 소스와 장치 로컬 실행 소스를 구분한다 |
 | D-311 | 네이티브 G4 실측 증거를 내비게이션 기동 조건으로 검증한다 |
+| D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 
 ## 계획·결과 문서
 
@@ -187,8 +188,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
 - 2026-09-27 · uncommitted · validation(uiux): read current robot without changing it
 - 2026-09-27 · e9051960 · validation(uiux): capture role first boot
 - 2026-09-27 · uncommitted · fix(native): seal G4 evidence before navigation
 - 2026-09-27 · uncommitted · validation(uiux): close remaining local surface gaps
-- 2026-09-27 · uncommitted · fix(uiux): close stale display and action gaps
