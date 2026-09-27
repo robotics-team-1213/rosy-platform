@@ -76,3 +76,16 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 | 레거시 sensing 진단 | D-253의 PARKED와 D-266의 해제 조건을 유지했다. | 소유·보안·상태 행렬 승인 전 운영 화면 G2/GO에 포함하지 않는다. |
 
 일회성 캡처는 저장소 밖 `X:\DevTemp\games_board_stop_retry.png`, `X:\DevTemp\games_board_host_disconnected.png`, `X:\DevTemp\rosy-uiux-lcd-2026-09-27\`, `X:\DevTemp\rosy-uiux-d306\gazebo_viewer_{live,results}_1280x800.png`에 있다. 이 회차는 상태별 전체 캡처와 독립 수용이 없어 D-153의 표면별 최종 GO를 선언하지 않는다.
+
+## D-306 G2/G3 후속 회차 (현재 판정)
+
+위 수치와 캡처는 최초 배치 회차의 기록이다. 후속 수정·평가의 최신 근거는 아래 표면별 카드가 소유한다. X: 캡처는 일회성 LOCAL 증거이며 실제 로봇·LCD·현장 수용으로 승격하지 않는다.
+
+| 표면 | 후속 회차 근거 | 현재 차단 조건 |
+|---|---|---|
+| Fleet | [fleet-g2-matrix.md](fleet-g2-matrix.md): 1920×1080·390×844·320×844에서 상태 8종+최초 기동 27개 캡처, 가로 넘침 0, 브라우저·대화상자 24 passed. 안전 미확인 목표 차단과 빈 목록 안내 수정. | 팔로워 지연 나이 없음, 정상 로봇이 기본 목록에 모두 보이는 예외 문법 위반, 식별색 원칙 미정, 네이티브 확인 이미지·실물 개입 readback 없음. **HOLD** |
+| 역할별 `/setup`·`/device` | [roles-g2-matrix.md](roles-g2-matrix.md): 운영자·관리자, 1366×768·390×844의 54셀 캡처에서 가로 넘침·페이지 오류 0. 위치 지연·끊김·정보 없음과 `/device` 권한 거부 복구 링크 수정. | 최초 기동·확인창 이미지, `/device` 지연/끊김, 절차의 SAFE_STOP 명시, 전체 권한/오류 조합과 장치 readback 없음. **각각 HOLD** |
+| 게임 호스트 | [games-g2-matrix.md](games-g2-matrix.md): 1280×800 상태 10종, 넘침 0, 브라우저 11 passed. 점수의 마지막 수신 표시, 정지 실패·시간 초과와 포커스 복구 수정. | overlay 시각 정보가 없어 delayed 셀 미평가, 공·팀 식별색의 법칙 적용 범위 미정, 실제 정지·경기 확인 없음. **HOLD** |
+| 로봇 얼굴 LCD | [lcd-g2-matrix.md](lcd-g2-matrix.md): 320×240 PIL 상태 9종, 관련 시험 148 passed. | Pi 폰트·실물 거리/각도/조도·카드 만료 후 GIF 복귀 미관찰. **HOLD** |
+
+기존 `/console` 6셀은 위 "현재 역할 화면의 증거 상태"에 기록했다. 레거시 sensing 진단은 D-253/D-266에 따라 **PARKED**다. 제품 전체 D-153 UI/UX 판정은 **HOLD**다.

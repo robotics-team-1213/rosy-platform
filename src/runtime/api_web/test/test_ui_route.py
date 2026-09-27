@@ -114,6 +114,13 @@ def test_surface_page_exposes_panel_mount_slots():
     assert "<ui-slot" not in body
 
 
+def test_setup_pose_evidence_dependency_is_served():
+    response = _client().get("/assets/panels/setup/pose-evidence.js")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/javascript")
+    assert b"poseUnavailableReason" in response.content
+
+
 def test_each_base_surface_has_its_role_panel_mounts():
     from core_api_web.api.ui_registry import load_registry
 

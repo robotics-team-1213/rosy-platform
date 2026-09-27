@@ -2867,3 +2867,9 @@
 - 근거: `core_common.intent`의 공유 고정 동사 문법, `task_service` 구성 시 Fleet `/api/fleet/do`의 navigate만 영속 task 경유하고 나머지는 직접 호출하는 경로, CORE `/api/v1/do`의 순차 호출을 읽기 대조했다. 진행 중 Mission과 직접 제어 충돌, 부분 실행 후 결과 응답 누락, `steps` 뒤의 정지 지연, D-276 감사 DB 장애 시 사이트 정지 `503`을 필수 반례로 기록했다.
 - 증거: D-308 참조 링크 11개 모두 존재함을 확인했고, network/harness/Fleet 계약 시험 79 passed/19 기존 메타데이터 warnings, harness lint 0 errors/19 warnings (Windows LOCAL)를 확인했다. SOURCE 경계 결정이며 새로운 Action wire, OMX·드론 운영, 장치 물리 정지는 승인하지 않는다.
 - gate 변화: 없음. P0 최종 결과 연결, 사이트 정지 가용성, OMX 실물 Action, 탑재형 인터록, 드론은 별도 검증 전 HOLD다.
+
+## 2026-09-27 · uncommitted · validation(uiux): expand surface G2/G3 evidence
+
+- 변경: Fleet의 안전 미확인·E-STOP 목표 지정 차단과 최초/빈/오류 목록 안내를 수정했다. 역할별 `/setup`의 위치 증거와 `/device` 권한 거부 복구 경로, 게임 보드의 마지막 수신·정지 시간 초과·포커스를 보완했다. LCD는 320×240 호스트 상태 매트릭스를 추가했다. `docs/validation/uiux-surfaces-2026-09-27/`의 표면별 G2/G3 카드와 계획에 남은 차단 조건을 기록했다.
+- 증거: Fleet 27개 LOCAL 뷰포트 캡처·브라우저/대화상자 24 passed, 역할 화면 54셀 캡처·가로 넘침/페이지 오류 0·대시보드/API 집중 회귀 18 passed, 게임 10셀 캡처·브라우저 11 passed, LCD PIL 9셀·관련 148 passed. X: 캡처는 일회성이다.
+- gate 변화: SOURCE/LOCAL 화면 근거만 늘었다. Fleet 지연 나이·예외 문법, 역할 SAFE_STOP·전체 readback, 게임 delayed·색 판단, LCD 실물 판독이 남아 D-153 G2/G3 및 DEVICE/FIELD는 HOLD다. sensing 진단은 PARKED다.

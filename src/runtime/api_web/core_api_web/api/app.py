@@ -116,6 +116,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "shell/store.js": "application/javascript",
         "shell/mount.js": "application/javascript",
         "shell/shell.css": "text/css",
+        "panels/setup/pose-evidence.js": "application/javascript",
         **registry.assets(),
     }
 
