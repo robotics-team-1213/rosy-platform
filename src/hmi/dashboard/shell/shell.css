@@ -1,5 +1,7 @@
 /* D-204 셸 — 배치만 정한다. 색과 크기는 토큰만 쓴다(D-129, D-203). */
 html { min-height: 100%; background: var(--ground); }
+/* Role surfaces do not load dashboard/styles.css; explicit display rules must respect hidden. */
+[hidden] { display: none !important; }
 body {
   min-width: 320px;
   min-height: 100vh;

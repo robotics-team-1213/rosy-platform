@@ -84,7 +84,7 @@ export function mount(root, ctx) {
     if (!dockId || !typeName) { status.textContent = "도크 ID와 유형 이름을 입력하세요."; return; }
     const existingType = types.find((item) => item.name === typeName);
     if (!existingType && !detector.value) { status.textContent = "새 유형에는 검출기 종류를 선택하세요."; return; }
-    if (detector.value === "observation" && (!tag.control.value || !tagSize.control.value)) { status.textContent = "태그 관측 유형에는 태그 ID와 크기가 필요합니다."; return; }
+    if (!existingType && detector.value === "observation" && (!tag.control.value || !tagSize.control.value)) { status.textContent = "태그 관측 유형에는 태그 ID와 크기가 필요합니다."; return; }
     if (!window.confirm(`${dockId} 도크를 현재 위치에 등록할까요? 현재 위치가 실제 도크에 정확히 맞는지 확인하세요.`)) return;
     pending = true; add.disabled = true;
     let createdType = false;

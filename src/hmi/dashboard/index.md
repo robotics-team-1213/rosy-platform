@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(setup): reuse dock type after detector selection
 - 2026-09-27 · uncommitted · fix(teleop): align grounded G4 controls
 - 2026-09-27 · uncommitted · feat(device): display Host Agent source evidence
 - 2026-09-27 · uncommitted · test(roles): capture first boot before API responses
 - 2026-09-27 · uncommitted · fix(device): keep Host Agent actions locked during request
-- 2026-09-27 · uncommitted · test(ui): align action-group fixture with teleop eligibility

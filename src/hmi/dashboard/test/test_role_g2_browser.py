@@ -204,6 +204,68 @@ def test_role_procedure_g2_local_matrix(tmp_path):
     (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
+    """An administrator can reuse a type after exploring the observation detector."""
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    writes = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-admin')")
+        page.on("dialog", lambda dialog: dialog.accept())
+
+        def serve(route):
+            path = urlsplit(route.request.url).path
+            if route.request.method == "POST":
+                writes.append({"path": path, "body": route.request.post_data_json})
+                route.fulfill(status=200, content_type="application/json", body='{"id":"dock-reused"}')
+                return
+            response = _response(client, path, TOKENS["administrator"], "normal", "setup")
+            if path == "/api/v1/docking/types":
+                response = Response(content=json.dumps({"types": [{"name": "known", "detector": "simulated"}]}),
+                                    media_type="application/json")
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+            }, body=response.content if hasattr(response, "content") else response.body)
+
+        page.route("**/*", serve)
+        page.goto("http://rosy.test/setup", wait_until="domcontentloaded")
+        form = page.locator('[data-panel="setup.dock_admin"] form')
+        form.locator('ui-button[type="submit"]').wait_for(state="visible")
+        page.wait_for_function("document.querySelector('[data-panel=\"setup.dock_admin\"] form ui-button[type=\"submit\"]')?.disabled === false")
+        form.locator('[name="dock_id"]').fill("dock-reused")
+        type_input = form.locator('[name="dock_type"]')
+        type_input.fill("new-type")
+        form.locator("select").select_option("observation")
+        tag = form.locator('[name="tag_id"]')
+        size = form.locator('[name="tag_size_m"]')
+        tag.fill("17")
+        size.fill("0.2")
+        type_input.fill("known")
+        assert tag.is_hidden() and size.is_hidden(), page.evaluate("""() => {
+          const form = document.querySelector('[data-panel="setup.dock_admin"] form');
+          return {type: form.querySelector('[name="dock_type"]').value,
+            labels: [...form.querySelectorAll('.ui-field-label')].map(label => ({text: label.textContent, hidden: label.hidden})),
+            options: document.querySelector('#setup-dock-types')?.innerHTML};
+        }""")
+        type_input.fill("new-type")
+        assert tag.is_visible() and size.is_visible()
+        assert tag.input_value() == "17" and size.input_value() == "0.2"
+        type_input.fill("known")
+        page.evaluate("""() => {
+          const form = document.querySelector('[data-panel="setup.dock_admin"] form');
+          form.querySelector('[name="tag_id"]').value = '';
+          form.querySelector('[name="tag_size_m"]').value = '';
+        }""")
+        form.locator('ui-button[type="submit"]').click()
+        page.wait_for_function("document.querySelector('[data-panel=\"setup.dock_admin\"] ui-status')?.textContent.includes('등록했습니다')")
+        assert [write["path"] for write in writes] == ["/api/v1/docking/docks"]
+        assert writes[0]["body"]["type"] == "known"
+        browser.close()
+
+
 def test_role_procedure_first_boot_full_screen(tmp_path):
     """Capture the real shell while manifest and safety responses have not arrived."""
     client = _core_client(tmp_path)
