@@ -322,3 +322,9 @@
 - 변경: `/setup` 웨이포인트 목록 조회가 실패하면 기존 좌표를 DOM에서 지우고 목록을 숨긴다. 조회 오류·현재 위치 준비 상태·저장 요청 결과를 각각 별도 상태 문구로 분리해 폴링이 다른 결과를 덮지 않게 했다. 목록은 다시 정상 응답을 받은 뒤에만 표시한다.
 - 정적 확인: 성공/실패 렌더 전이를 코드에서 검토했고 `git diff --check`와 Impeccable detector(`[]`)를 통과했다. 이 변경에 대한 브라우저 회귀 및 새 뷰포트 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. API의 영속성·로봇의 실제 위치는 검증하지 않았다.
+
+## 2026-09-28 · uncommitted · fix(setup): preserve localization action state during polling
+
+- 변경: `/setup` localization 패널에서 capability readback과 초기 위치/SLAM 요청 결과를 별도 상태로 보여준다. 10초 기능 폴링이 진행 중인 위치·SLAM 요청 버튼을 다시 활성화하지 않도록 pending 잠금을 적용하고, 반복 요청을 막는다.
+- 정적 확인: capability 성공/실패와 요청 진행/접수/오류 상태 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀 및 새 뷰포트 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. SLAM 서버 동작과 초기 위치의 로봇 readback은 검증하지 않았다.

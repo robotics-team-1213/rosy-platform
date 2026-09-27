@@ -16,7 +16,10 @@ function field(labelText, name, value = "0") {
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "위치 설정 및 맵 준비");
-  const note = el("ui-status", "", "기능 지원 여부를 확인하는 중입니다.");
+  const capabilityStatus = el("ui-status", "", "기능 지원 여부를 확인하는 중입니다.");
+  const actionStatus = el("ui-status");
+  actionStatus.setAttribute("role", "status");
+  actionStatus.setAttribute("aria-live", "polite");
 
   const poseForm = el("form", "ui-form");
   poseForm.append(el("h3", "", "초기 위치 설정"));
@@ -33,52 +36,61 @@ export function mount(root, ctx) {
   const stop = el("ui-button", "", "맵핑 중지"); stop.setAttribute("kind", "quiet"); stop.type = "button";
   const save = el("ui-button", "", "맵 저장"); save.setAttribute("kind", "quiet"); save.type = "button";
   actions.append(start, stop, mapName, save); slam.append(actions);
-  root.append(head, note, poseForm, slam);
+  root.append(head, capabilityStatus, actionStatus, poseForm, slam);
 
   let navigationAvailable = false;
   let slamAvailable = false;
+  let posePending = false;
+  let slamPending = false;
+  function syncControls() {
+    setPose.disabled = !navigationAvailable || posePending;
+    for (const button of [start, stop, save]) button.disabled = !slamAvailable || slamPending;
+  }
   function applyAvailability(caps) {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
     slamAvailable = caps?.slam === true;
-    setPose.disabled = !navigationAvailable;
-    for (const button of [start, stop, save]) button.disabled = !slamAvailable;
+    syncControls();
     if (!navigationAvailable || !slamAvailable) {
-      note.textContent = `사용할 수 없는 기능: ${[
+      capabilityStatus.textContent = `사용할 수 없는 기능: ${[
         !navigationAvailable ? `초기 위치 설정 (${caps?.navigation?.reason || "Navigation capability 미제공"})` : "",
         !slamAvailable ? `SLAM (${caps?.slam_reason || "SLAM capability 미제공"})` : "",
       ].filter(Boolean).join(" · ")}`;
-    } else note.textContent = "초기 위치와 SLAM 기능을 사용할 수 있습니다.";
+    } else capabilityStatus.textContent = "초기 위치와 SLAM 기능을 사용할 수 있습니다.";
   }
   const stopCaps = ctx.store.poll("/api/v1/system/capabilities", 10_000, applyAvailability, (error) => {
     navigationAvailable = slamAvailable = false;
-    setPose.disabled = start.disabled = stop.disabled = save.disabled = true;
-    note.textContent = `기능 지원 정보를 받지 못해 작업을 막았습니다: ${error.message}`;
+    syncControls();
+    capabilityStatus.textContent = `기능 지원 정보를 받지 못해 작업을 막았습니다: ${error.message}`;
   });
 
   poseForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = [x.input.value, y.input.value, yaw.input.value].map(Number);
-    if (!navigationAvailable || !values.every(Number.isFinite)) return;
-    setPose.disabled = true;
+    if (!navigationAvailable || posePending || !values.every(Number.isFinite)) return;
+    posePending = true;
+    syncControls();
+    actionStatus.textContent = "초기 위치 설정 요청을 보내는 중입니다.";
     try {
       await ctx.api("/api/v1/localization/initialpose", {method: "POST", body: JSON.stringify({x: values[0], y: values[1], yaw: values[2]})});
-      note.textContent = "초기 위치 설정 요청을 CORE가 받았습니다.";
-    } catch (error) { note.textContent = `초기 위치를 적용하지 못했습니다: ${error.message}`; }
-    finally { setPose.disabled = !navigationAvailable; }
+      actionStatus.textContent = "초기 위치 설정 요청을 CORE가 받았습니다.";
+    } catch (error) { actionStatus.textContent = `초기 위치 요청을 완료하지 못했습니다: ${error.message}`; }
+    finally { posePending = false; syncControls(); }
   });
 
-  async function run(path, body, prompt, success) {
-    if (!slamAvailable || !window.confirm(prompt)) return;
-    for (const button of [start, stop, save]) button.disabled = true;
+  async function run(path, body, prompt, pendingMessage, success) {
+    if (!slamAvailable || slamPending || !window.confirm(prompt)) return;
+    slamPending = true;
+    syncControls();
+    actionStatus.textContent = pendingMessage;
     try {
       const result = await ctx.api(path, {method: "POST", ...(body ? {body: JSON.stringify(body)} : {})});
-      note.textContent = result.map_id ? `${success} · 맵 ID ${result.map_id}` : success;
-    } catch (error) { note.textContent = `요청을 완료하지 못했습니다: ${error.message}`; }
-    finally { for (const button of [start, stop, save]) button.disabled = !slamAvailable; }
+      actionStatus.textContent = result.map_id ? `${success} · 맵 ID ${result.map_id}` : success;
+    } catch (error) { actionStatus.textContent = `요청을 완료하지 못했습니다: ${error.message}`; }
+    finally { slamPending = false; syncControls(); }
   }
-  start.addEventListener("click", () => run("/api/v1/slam/start", null, "맵핑을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.", "맵핑 시작 요청을 CORE가 받았습니다."));
-  stop.addEventListener("click", () => run("/api/v1/slam/stop", null, "맵핑을 중지할까요?", "맵핑 중지 요청을 CORE가 받았습니다."));
-  save.addEventListener("click", () => run("/api/v1/slam/save", {name: mapName.value.trim() || "rosy_map"}, "현재 맵을 저장할까요?", "맵 저장 요청을 CORE가 받았습니다."));
+  start.addEventListener("click", () => run("/api/v1/slam/start", null, "맵핑을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.", "맵핑 시작 요청을 보내는 중입니다.", "맵핑 시작 요청을 CORE가 받았습니다."));
+  stop.addEventListener("click", () => run("/api/v1/slam/stop", null, "맵핑을 중지할까요?", "맵핑 중지 요청을 보내는 중입니다.", "맵핑 중지 요청을 CORE가 받았습니다."));
+  save.addEventListener("click", () => run("/api/v1/slam/save", {name: mapName.value.trim() || "rosy_map"}, "현재 맵을 저장할까요?", "맵 저장 요청을 보내는 중입니다.", "맵 저장 요청을 CORE가 받았습니다."));
 
   return () => { stopCaps(); };
 }
