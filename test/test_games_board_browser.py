@@ -123,6 +123,32 @@ def test_match_board_names_server_judged_delay():
         server.close()
 
 
+def test_legacy_overlay_without_time_evidence_does_not_claim_fresh():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    board.publish(_play_payload())
+    legacy = board.snapshot()[0]
+    for key in ("generated_at", "age_s", "stale_after_s", "evidence"):
+        legacy.pop(key, None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 1280, 800)
+            page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_function("document.getElementById('connection')?.dataset.evidence === 'unavailable'")
+            assert "시각 정보 없음" in page.locator("#connection").inner_text()
+            assert "시각 정보 없음" in page.locator("#match-announcement").inner_text()
+            assert "호스트 연결됨" not in page.locator("#connection").inner_text()
+            assert not errors
+            browser.close()
+    finally:
+        server.close()
+
+
 def test_first_overlay_failure_has_no_last_match_claim():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
