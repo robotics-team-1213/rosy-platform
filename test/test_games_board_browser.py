@@ -1,4 +1,4 @@
-﻿"""D-101 노트북 경기 보드의 브라우저 렌더 계약 (옵트인).
+"""D-101 노트북 경기 보드의 브라우저 렌더 계약 (옵트인).
 
 ROSY_RUN_BROWSER_TESTS=1 로 실행한다. games.host.preview 의 실제 서버와
 games/web 의 실제 자산을 띄워, publish 한 상태가 보드에 그려지는지 단언한다.
