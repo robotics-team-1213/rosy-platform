@@ -268,6 +268,7 @@ Formation Parameter: Center Position / Orientation / Robot Spacing / Robot Selec
 특정 로봇을 Leader로 지정하고 다른 로봇이 추종한다.
 
 - Parameter: Leader ID / Follow Distance / Lateral Distance / Speed Limit / Formation Type
+- `GET /api/fleet/formation`은 릴레이 관측을 `stream_evidence[robot_id]`로 제공한다. 서버는 `state`(`fresh`/`delayed`/`disconnected`/`unavailable`), `age_s`, `reason`, `stale_after_s`, `source`를 판정한다. 리더의 `source=leader_rx`는 Fleet의 마지막 수신, 팔로워의 `source=follower_tx`는 Fleet의 마지막 송신이다. 송신 시간은 팔로워 수신·실행 또는 물리 추종의 증거가 아니다. `follower_last_tx_age_s`는 원시 진단 값이며 브라우저가 임계값으로 재판정하지 않는다.
 - **하이브리드 구조(D-20):** Fleet은 Leader pose 스트림(SWM-003, ≥10 Hz 수신)을 Follower들에게 WS로 릴레이(≥5 Hz)하고, Follower에는 `swarm/follow` 명령을 1회 전달한다. **폐루프 추종 계산은 로봇 탑재(SWM-002)** — Fleet은 목표를 반복 계산·전송하지 않는다.
 - 로봇 간 직접 통신은 발생하지 않는다.
 

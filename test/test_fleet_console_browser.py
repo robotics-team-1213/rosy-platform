@@ -69,6 +69,14 @@ FORMATION = {
     "assignment": {"rosy_02": {"distance": 0.6, "lateral": 0.0},
                    "rosy_03": {"distance": 1.2, "lateral": 0.0}},
     "reason": None, "pending_triggers": [],
+    "stream_evidence": {
+        "rosy_01": {"state": "fresh", "age_s": 0.1, "reason": "sample_within_limit",
+                    "stale_after_s": 1.0, "source": "leader_rx"},
+        "rosy_02": {"state": "fresh", "age_s": 0.1, "reason": "sample_within_limit",
+                    "stale_after_s": 1.0, "source": "follower_tx"},
+        "rosy_03": {"state": "disconnected", "age_s": None, "reason": "transport_down",
+                    "stale_after_s": 1.0, "source": "follower_tx"},
+    },
     "relay": {"paused": False, "leader_rx_hz": 9.8, "leader_age_s": 0.1,
               "leader_last_error": None,
               "follower_tx_hz": {"rosy_02": 4.8, "rosy_03": 0.0},
@@ -320,6 +328,11 @@ def test_fleet_estop_requires_confirm_and_decline_blocks_it(console_url):
 
 DELAYED_FORMATION = {
     **FORMATION,
+    "stream_evidence": {
+        **FORMATION["stream_evidence"],
+        "rosy_02": {"state": "delayed", "age_s": 2.1, "reason": "sample_too_old",
+                    "stale_after_s": 1.0, "source": "follower_tx"},
+    },
     "relay": {
         **FORMATION["relay"],
         "follower_tx_hz": {"rosy_02": 1.2, "rosy_03": 0.0},

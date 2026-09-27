@@ -51,6 +51,23 @@ MAP_TTL_S = 10.0
 #: 스냅샷이 통째로 불어나고, `settled_ticks` 는 양보가 멈췄는지 세는 내부 계수기다.
 _INTERNAL_MISSION_KEYS = ("route", "settled_ticks")
 
+STREAM_STALE_AFTER_S = 1.0
+
+
+def _stream_evidence(age_s: Optional[float], *, connected: bool,
+                     error: Optional[str], source: str) -> dict:
+    """Judge relay observations on the server; send age is not robot receipt."""
+    if error or not connected:
+        state, reason = "disconnected", "stream_error" if error else "transport_down"
+    elif age_s is None:
+        state, reason = "unavailable", "no_sample"
+    elif age_s > STREAM_STALE_AFTER_S:
+        state, reason = "delayed", "sample_too_old"
+    else:
+        state, reason = "fresh", "sample_within_limit"
+    return {"state": state, "age_s": age_s, "reason": reason,
+            "stale_after_s": STREAM_STALE_AFTER_S, "source": source}
+
 
 def _shown(mission: Optional[dict]) -> Optional[dict]:
     if mission is None:
@@ -763,6 +780,18 @@ class FleetConsole:
         if session is None:
             return {"active": False, "state": "IDLE"}
         stats = session.relay.stats() if session.relay is not None else None
+        stream_evidence = {}
+        if stats is not None:
+            stream_evidence[self._formation_leader] = _stream_evidence(
+                stats.leader_age_s, connected=stats.leader_last_error is None,
+                error=stats.leader_last_error, source="leader_rx",
+            )
+            for rid in session.assignment:
+                stream_evidence[rid] = _stream_evidence(
+                    stats.follower_last_tx_age_s.get(rid),
+                    connected=stats.follower_connected.get(rid) is True,
+                    error=stats.follower_last_error.get(rid), source="follower_tx",
+                )
         return {
             "active": session.state in (SessionState.ARMING, SessionState.RUNNING,
                                         SessionState.HOLDING),
@@ -775,6 +804,7 @@ class FleetConsole:
             # HOLDING 인데 이유가 비어 있으면 운영자는 왜 멈췄는지 알 길이 없다.
             "reason": list(session.reason) if session.reason else None,
             "pending_triggers": [list(t) for t in session.pending_triggers],
+            "stream_evidence": stream_evidence,
             "relay": None if stats is None else {
                 "paused": stats.paused,
                 "leader_rx_hz": round(stats.leader_rx_hz, 2),
@@ -782,6 +812,7 @@ class FleetConsole:
                 "leader_last_error": stats.leader_last_error,
                 "follower_tx": {k: v for k, v in stats.follower_tx.items()},
                 "follower_tx_hz": {k: round(v, 2) for k, v in stats.follower_tx_hz.items()},
+                "follower_last_tx_age_s": dict(stats.follower_last_tx_age_s),
                 "follower_connected": dict(stats.follower_connected),
                 # 0 Hz 에 이유가 없으면 화면은 "그냥 멈춘 릴레이"만 보여 준다 — 팔로워
                 # 소켓의 마지막 오류가 진단의 첫 줄이다(D-92 값 관례와 무관한 계약).

@@ -6,9 +6,7 @@
 
 export function createMapView({ el, view, css, auth, call }) {
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
-  // 군집 제어 오버레이 상수(D-131 1단계). 임계는 T7 벤치 전까지 보수적으로 둔다.
-  const STREAM_HZ_FLOOR = 2;    // FOR-003 은 ≥5 Hz 다. 이 아래면 지연으로 본다.
-  const LEADER_AGE_MAX_S = 1.0; // 10 Hz 입력이면 1 초 연령은 이미 유실이다.
+  // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
 
   function paintGrid(grid) {
@@ -80,23 +78,16 @@ export function createMapView({ el, view, css, auth, call }) {
 
   // 릴레이 건강을 D-72 증거로 옮긴다. fresh 는 아무것도 붙이지 않는다(§7.3 정상은 안 보임).
   function streamEvidence(formation, robotId) {
-    const relay = formation && formation.relay;
-    if (!formation || !formation.active || !relay) return null;
-    if (robotId === formation.leader) {
-      if (relay.leader_last_error) return { text: "리더 오류", cls: "crit" };
-      if (typeof relay.leader_age_s === "number" && relay.leader_age_s > LEADER_AGE_MAX_S) {
-        return { text: "리더 지연", cls: "warn" };
-      }
-      return null;
+    if (!formation?.active) return null;
+    const evidence = formation.stream_evidence?.[robotId];
+    if (!evidence) return { text: "\uC99D\uAC70 \uD310\uB2E8 \uC5C6\uC74C", cls: "warn" };
+    if (evidence.state === "fresh") return null;
+    if (evidence.state === "disconnected") return { text: "\uB04A\uAE40", cls: "crit" };
+    if (evidence.state === "delayed") {
+      const age = typeof evidence.age_s === "number" ? ` \u00B7 ${evidence.age_s.toFixed(1)}\uCD08` : "";
+      return { text: `\uC9C0\uC5F0${age}`, cls: "warn" };
     }
-    const connected = relay.follower_connected || {};
-    if (!(robotId in connected)) return null;
-    if (connected[robotId] === false) return { text: "끊김", cls: "crit" };
-    const hz = relay.follower_tx_hz || {};
-    if (relay.paused !== true && typeof hz[robotId] === "number" && hz[robotId] < STREAM_HZ_FLOOR) {
-      return { text: "지연", cls: "warn" };
-    }
-    return null;
+    return { text: "\uC1A1\uC2E0 \uC2DC\uAC01 \uC5C6\uC74C", cls: "warn" };
   }
 
   function drawChip(ctx, grid, cx, cy, text, tone) {

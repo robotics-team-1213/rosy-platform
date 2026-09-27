@@ -37,3 +37,9 @@
 | 문법 | 1920px에서는 페이지 세로 스크롤 0, 모바일 가로 넘침 0. 정상 로봇도 로스터 기본 화면에 모두 보이므로 concept 16 §7.3의 "주의 필요한 로봇이 기본" 원칙에 **위반**한다. 필터·전체 목록 탐색·키보드 접근을 함께 설계해야 한다. |
 
 LOCAL 캡처는 장치 단일 publisher, 실제 E-STOP, 로봇 움직임, 현장 거리에서의 판독성을 증명하지 않는다. 이 회차에서 Fleet UI/UX GO를 선언하지 않는다.
+
+## 2026-09-27 D-309 Fleet 송신 증거 보완
+
+- 이전 27개 PNG는 변경 전 화면의 로컬 기록이다. 현재 화면의 새 캡처로 대체하지 않았으므로 시각 G2/G3 전체를 통과 처리하지 않는다.
+- 서버 릴레이의 `follower_last_tx_age_s`와 `stream_evidence`가 추가됐다. 서버가 경과 시간 1초를 판정하고 화면은 `delayed`의 나이, `disconnected`, `unavailable`을 표시한다. 송신은 팔로워 수신·물리 추종 증거가 아니다.
+- 검증: Fleet 서버 focused 44 passed, Fleet Playwright 21 passed (Windows LOCAL). 이전 표의 팔로워 시간 필드 위반은 코드와 테스트 범위에서 해결됐다. 예외 우선 목록과 현재 캡처, DEVICE/FIELD는 HOLD다.

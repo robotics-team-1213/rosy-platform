@@ -6,7 +6,7 @@ import pytest
 
 from fakes import FakeRelay, FakeRobot, run
 from fleet.hub.hub import HubError
-from fleet.server.console import FleetConsole
+from fleet.server.console import FleetConsole, _stream_evidence
 from fleet.swarm.robots import RobotEndpoint
 
 
@@ -25,6 +25,18 @@ def _fleet(n: int = 2):
                                  "map_id": "m1", "pose": {"x": float(i), "y": 0.0, "yaw": 0.0}})
         robots.append(robot)
     return robots
+
+
+def test_stream_evidence_uses_server_age_and_keeps_unknown_unavailable():
+    judge = lambda age, connected=True, error=None: _stream_evidence(
+        age, connected=connected, error=error, source="follower_tx")
+    assert judge(None)["state"] == "unavailable"
+    assert judge(0.5)["state"] == "fresh"
+    assert judge(1.1)["state"] == "delayed"
+    assert judge(0.1, connected=False)["state"] == "disconnected"
+    assert judge(0.1, error="send failed")["state"] == "disconnected"
+    assert judge(1.1)["stale_after_s"] == 1.0
+    assert judge(1.1)["source"] == "follower_tx"
 
 
 def test_arming_reports_the_slots_each_follower_was_given():

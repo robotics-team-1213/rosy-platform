@@ -49,6 +49,7 @@ class RelayStats:
     paused: bool = False
     follower_tx: dict[str, int] = field(default_factory=dict)
     follower_tx_hz: dict[str, float] = field(default_factory=dict)
+    follower_last_tx_age_s: dict[str, Optional[float]] = field(default_factory=dict)
     follower_connected: dict[str, bool] = field(default_factory=dict)
     follower_last_error: dict[str, Optional[str]] = field(default_factory=dict)
 
@@ -183,6 +184,7 @@ class Relay:
             paused=self._paused,
             follower_tx={rid: lane.tx for rid, lane in self._lanes.items()},
             follower_tx_hz={rid: lane.rate.hz() for rid, lane in self._lanes.items()},
+            follower_last_tx_age_s={rid: lane.rate.age_s() for rid, lane in self._lanes.items()},
             follower_connected={rid: lane.connected for rid, lane in self._lanes.items()},
             follower_last_error={rid: lane.last_error for rid, lane in self._lanes.items()},
         )

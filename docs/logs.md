@@ -2880,3 +2880,9 @@
 - 수정: Fleet 작업 디스패처가 `safety.estop` 누락·null을 가용으로 오판하지 않고, 명시적 false일 때만 배정한다.
 - 검증: `test_task_api.py` 21 passed (Windows LOCAL). CORE의 최종 이동 검사와 물리 결과는 별도 증거다.
 - gate 변화: 구조 결정은 Accepted, Fleet 디스패치 안전 경계는 LOCAL 확인이다. 화면 G2/G3 및 DEVICE/FIELD는 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(fleet): server judges relay stream evidence
+
+- 변경: D-309 Task 1의 팔로워 마지막 송신 경과 시간과 per-robot `stream_evidence`를 Fleet 응답에 추가하고, 브라우저의 Hz 임계값 판정을 제거했다.
+- 검증: Fleet 서버 focused 44 passed, Fleet Playwright 21 passed (Windows LOCAL). 이전 화면 캡처는 변경 전 기록이다.
+- gate 변화: 팔로워 시간 증거의 코드 위반은 LOCAL에서 해결했다. 화면별 G2/G3 전체와 물리 수용은 HOLD다.

@@ -279,10 +279,13 @@ def test_a_rate_falls_to_zero_when_the_stream_stops():
             await settle()
         assert relay.stats().leader_rx_hz > 5.0
         assert relay.stats().follower_tx_hz["rosy_02"] > 5.0
+        assert relay.stats().follower_last_tx_age_s["rosy_02"] is not None
+        assert relay.stats().follower_last_tx_age_s["rosy_02"] < 0.5
         clock.advance(600.0)
         assert relay.stats().leader_rx_hz == 0.0
         assert relay.stats().follower_tx_hz["rosy_02"] == 0.0
         assert relay.stats().leader_age_s >= 600.0
+        assert relay.stats().follower_last_tx_age_s["rosy_02"] >= 600.0
         await relay.stop()
     run(main())
 
