@@ -316,6 +316,40 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
         browser.close()
 
 
+def test_gather_loss_removes_last_known_robot_position(console_url):
+    """A failed refresh must not present the last snapshot as a live position."""
+    from playwright.sync_api import sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    api = {
+        "/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                             "robots": [robot]},
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
+        page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
+        api["/api/fleet/state"] = (500, {"detail": "gather failed"})
+        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === 'Fleet 서버 없음'"
+                               " && document.querySelector('#roster article')?.textContent.includes('상태 확인 불가')")
+        assert not errors
+        assert "1.00" not in page.inner_text("#roster")
+        assert "상태 확인 불가" in page.inner_text("#roster")
+        assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
+        assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
+        assert page.locator("#roster article ui-button").first.is_disabled()
+        save_temp_screenshot(page, "fleet_console_gather-lost-after-live.png")
+        api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
+                                   "robots": [robot]}
+        page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
+        assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
+        assert not errors
+        browser.close()
+
+
 DECLINE_ESTOP_CONFIRM = DECLINE_CONFIRM
 
 

@@ -40,13 +40,13 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     const node = document.createElement("article");
     node.className = `robot s${index % view.colors.length}`;
     node.dataset.robotId = robot.robot_id;
-    if (!robot.online) node.classList.add("offline");
+    if (!view.stateUnavailable && !robot.online) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");
     // D-224 — ↑/↓ 순회의 착지점. tabindex -1 은 프로그램 포커스만 허용한다
     // (탭 순서를 더럽히지 않는다).
     node.tabIndex = -1;
 
-    const state = robot.state || {};
+    const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
     const nav = navTag(state);
     const estop = state.safety?.estop;
@@ -68,16 +68,16 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     head.append(robotName, spacer);
     const mode = document.createElement("span");
     mode.className = "tag";
-    mode.textContent = robot.online ? (state.mode || "—") : "OFFLINE";
-    if (!robot.online) mode.classList.add("crit");
+    mode.textContent = view.stateUnavailable ? "상태 확인 불가" : robot.online ? (state.mode || "—") : "OFFLINE";
+    if (view.stateUnavailable || !robot.online) mode.classList.add("crit");
     head.appendChild(mode);
     const navEl = document.createElement("span");
-    const blocked = robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
+    const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     navEl.className = `tag ${blocked ? "crit" : robot.queued ? "warn" : nav.cls}`;
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
-    navEl.textContent = robot.yielding ? "비켜서는 중" : robot.queued ? "대기" : nav.text;
+    navEl.textContent = view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "대기" : nav.text;
     head.appendChild(navEl);
-    const evidence = streamEvidence(view.formation, robot.robot_id);
+    const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
     if (evidence) {
       // 릴레이 건강은 증거다(D-72). fresh 는 아무것도 붙지 않는다 — 붙는 것은 문제뿐이다.
       const evEl = document.createElement("span");
@@ -108,7 +108,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     });
     node.appendChild(facts);
 
-    if (robot.yielding) {
+    if (!view.stateUnavailable && robot.yielding) {
       // 운영자가 보내지 않은 좌표로 로봇이 움직인다. 이유를 적지 않으면 오작동으로 읽힌다.
       const why = document.createElement("p");
       why.className = "hint";
@@ -117,7 +117,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
       node.appendChild(why);
     }
 
-    if (robot.queued) {
+    if (!view.stateUnavailable && robot.queued) {
       // 왜 안 가는지 화면이 말하지 않으면 운영자는 미션이 사라졌다고 읽는다.
       const why = document.createElement("p");
       why.className = "hint";
@@ -125,7 +125,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
       node.appendChild(why);
     }
 
-    if (!robot.online && robot.error) {
+    if (!view.stateUnavailable && !robot.online && robot.error) {
       const why = document.createElement("p");
       why.className = "hint";
       why.textContent = robot.error.reachable
@@ -159,7 +159,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     cancel.setAttribute("kind", "quiet");
     cancel.type = "button";
     cancel.textContent = "취소";
-    cancel.disabled = !robot.online;
+    cancel.disabled = view.stateUnavailable || !robot.online;
     cancel.addEventListener("click", async () => {
       try {
         const pending = view.pendingTasks[robot.robot_id];
@@ -210,7 +210,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     let warningCount = 0;
     let criticalCount = 0;
 
-    for (const r of view.robots) {
+    for (const r of view.stateUnavailable ? [] : view.robots) {
       if (!r.state) continue;
       if (r.state.hitl_requested) {
         // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는

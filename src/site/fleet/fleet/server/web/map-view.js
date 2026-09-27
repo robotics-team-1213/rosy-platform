@@ -228,6 +228,13 @@ export function createMapView({ el, view, css, auth, call }) {
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
+    if (view.stateUnavailable) {
+      el("map-tag").textContent = "로봇 위치 확인 불가";
+      canvas.setAttribute("aria-label", "로봇 위치 확인 불가 — Fleet 상태 연결을 확인하세요");
+      return;
+    }
+    el("map-tag").textContent = `${grid.width}×${grid.height} · ${grid.map_id || "map"}`;
+    canvas.setAttribute("aria-label", "지도에서 로봇 목표 위치 선택");
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
@@ -282,7 +289,6 @@ export function createMapView({ el, view, css, auth, call }) {
     try {
       const grid = await call("/api/fleet/map");
       view.map = grid;
-      el("map-tag").textContent = `${grid.width}×${grid.height} · ${grid.map_id || "map"}`;
       draw();
     } catch (err) {
       el("map-tag").textContent = "맵 없음";
