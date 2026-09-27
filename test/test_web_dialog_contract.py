@@ -27,7 +27,7 @@ PINNED_CONFIRMS = {
     "app.js": 9,
     "settings.js": 11,
     "map.js": 1,
-    "console.js": 1,   # fleet 전체 정지
+    "console.js": 2,   # Fleet 목표 지정과 전체 정지
 }
 
 

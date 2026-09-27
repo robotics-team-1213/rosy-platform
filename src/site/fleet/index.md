@@ -33,6 +33,7 @@
 | D-291 | Pinky Pro 첫 부팅은 무구동 I/O를 포함하고, 제어 변경은 새 서명 이미지로 SD에 기록한다 |
 | D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
+| D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 
 ## 계획·결과 문서
 
@@ -44,6 +45,7 @@
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-21-fleet-signals-integration-design.md](../../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
 - [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
+- [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 
 ## 교훈 (docs/solutions)
 
@@ -55,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(ui): make Fleet map goal operable by keyboard
 - 2026-09-27 · 778bbd31 · verify packaged Site Fleet host path (LOCAL)
 - 2026-09-27 · uncommitted · fix(ui): rebalance Fleet map and intervention area
 - 2026-09-27 · 9ca7bc26 · verify Fleet keyboard flows and host suite
 - 2026-09-27 · f4f15776 · verify Fleet after latest main integration
-- 2026-09-27 · 9049bd37 · test(fleet): verify D-300 after latest-main integration

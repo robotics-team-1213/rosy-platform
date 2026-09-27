@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306]
 plans:
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md
@@ -32,9 +32,11 @@ plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-21-fleet-signals-integration-design.md
   - docs/plans/2026-09-22-fleet-signals-integration.md
+  - docs/plans/2026-09-27-uiux-surface-closure.md
 ---
 ## 현재 상태 (2026-09-27)
 
+- D-306의 Fleet 목표 지정 개선으로 지도에 키보드 좌표 선택, 대상·좌표 확인, 취소 후 포커스 복귀를 추가했다. 브라우저 회귀 18건과 확인 계약 3건을 LOCAL에서 검증했다. 지도 1920/390/320 상태별 G2 판정과 실물 이동은 아직 별도다.
 - Formation geometry(FOR-001), slot assignment(FOR-002), relay(D-31), formation session(FOR-004), 그리고 SiteHub의 HELLO/HEARTBEAT/EVENT 수집과 REST scatter(D-59)는 CORE API 경계를 유지한다. Browser/SiteHub는 DDS/ROS에 직접 연결하지 않는다.
 - G-S3 신호등 연동은 상태 수집과 명령 표시를 제공하지만 안전 인터록은 아니다. CORE의 로컬 stop/safety 책임을 대체하지 않는다.
 - 별도 `fleet_pairing_token`으로 연결된 CORE Agent의 HELLO/HEARTBEAT/EVENT 경로를 candidate에서 확인했다. 이벤트는 authenticated API로 조회되며 SQLite에서 Fleet restart 이후에도 유지된다.

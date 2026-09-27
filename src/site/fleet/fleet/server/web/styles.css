@@ -96,6 +96,10 @@ main {
   cursor: crosshair;
 }
 #map-canvas.idle { cursor: default; }
+#map-canvas:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset-outer);
+}
 
 .hint {
   margin: var(--space-3) 0 0;

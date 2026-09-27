@@ -461,6 +461,49 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
         browser.close()
 
 
+def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_url):
+    from playwright.sync_api import sync_playwright
+
+    posts: list[tuple[str, str]] = []
+    goal_path = "/api/fleet/robots/rosy_02/goal"
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+        goal_path: {"accepted": True, "task": {"task_id": "keyboard-goal", "status": "ACCEPTED"}},
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api, posts=posts,
+                                               init_script=DECLINE_CONFIRM)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
+        aim = page.locator("#roster article").filter(has_text="rosy_02").locator("ui-button").first
+        aim.click()
+        canvas = page.locator("#map-canvas")
+        assert canvas.get_attribute("tabindex") == "0"
+        assert page.evaluate("document.activeElement?.id") == "map-canvas"
+        page.keyboard.press("ArrowRight")
+        assert "rosy_02" in page.inner_text("#hint")
+        assert "Enter" in page.inner_text("#hint")
+        page.keyboard.press("Enter")
+        assert page.evaluate("window.__confirms.length") == 1
+        assert "rosy_02" in page.evaluate("window.__confirms[0]")
+        assert not any(method == "POST" and path == goal_path for method, path in posts)
+        page.keyboard.press("Escape")
+        assert page.locator(".robot.selected").count() == 0
+        assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
+
+        aim.click()
+        accept_confirm(page)
+        page.keyboard.press("Enter")
+        page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('미션 하달')")
+        assert sum(method == "POST" and path == goal_path for method, path in posts) == 1
+        assert page.locator(".robot.selected").count() == 0
+        assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
+        assert not errors
+        browser.close()
+
+
 def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
     from playwright.sync_api import sync_playwright
 
@@ -476,7 +519,8 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         "/api/fleet/tasks/task-queued-123/cancel": {"task": {**task, "status": "CANCELED"}},
     }
     with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api, posts=posts)
+        browser, page, errors = _open_console(p, api, posts=posts,
+                                              init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")

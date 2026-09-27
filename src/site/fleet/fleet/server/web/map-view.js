@@ -273,6 +273,16 @@ export function createMapView({ el, view, css, auth, call }) {
     });
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
+    if (view.selected && view.cursor) {
+      const { col, row } = view.cursor;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(col + 0.5, grid.height - row - 0.5, 1.8, 0, Math.PI * 2);
+      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = css("--series-goal");
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   async function refresh() {

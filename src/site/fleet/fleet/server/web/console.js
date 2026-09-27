@@ -57,6 +57,7 @@ const view = {
   map: null,
   robots: [],
   selected: null, // 목표 지정을 기다리는 robot_id
+  cursor: null, // 지도 좌표계의 col/row, 아래쪽 행이 0
   colors: [],
   formation: null,
   signals: {},    // ROSY-SIGNAL-001 — snapshot 의 signals 캐시
@@ -121,9 +122,12 @@ function render() {
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
   const hint = el("hint");
-  hint.textContent = view.selected
-    ? `${view.selected}에게 보낼 목표를 지도에서 찍으세요. 다시 누르면 취소됩니다.`
+  const point = view.selected && view.cursor && view.map
+    ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
+  const nextHint = point
+    ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
     : "오른쪽에서 로봇의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.";
+  if (hint.textContent !== nextHint) hint.textContent = nextHint;
 }
 
 async function refreshState() {
@@ -204,7 +208,7 @@ async function refreshAuthorization() {
 // Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
 // 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
 document.addEventListener("keydown", (event) => {
-  if (event.target.closest("input, select, textarea, button, ui-button, a")) return;
+  if (event.target.closest("input, select, textarea, button, ui-button, a, canvas")) return;
   const cards = [...document.querySelectorAll("#roster article")];
   if (!cards.length) return;
   const active = document.activeElement;
@@ -228,27 +232,18 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-el("map-canvas").addEventListener("click", async (event) => {
+async function commitGoal(col, row) {
   if (!view.selected || !view.map) return;
-  const canvas = el("map-canvas");
-  const rect = canvas.getBoundingClientRect();
-  // D-201 — 캔버스는 object-fit: contain 으로 그려진다. 레터박스(빈 여백)를
-  // 제외한 그려진 영역 안에서만 셀 좌표가 성립한다.
-  const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
-  const drawnW = view.map.width * scale;
-  const drawnH = view.map.height * scale;
-  const offX = (rect.width - drawnW) / 2;
-  const offY = (rect.height - drawnH) / 2;
-  const col = ((event.clientX - rect.left - offX) / drawnW) * view.map.width;
-  const rowFromTop = ((event.clientY - rect.top - offY) / drawnH) * view.map.height;
-  if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) {
-    return; // 여백을 찍은 것 — 목표가 아니다.
-  }
-  const point = mapView.toWorld(view.map, Math.floor(col), Math.floor(view.map.height - rowFromTop));
+  const point = mapView.toWorld(view.map, col, row);
   const robotId = view.selected;
+  if (!window.confirm(`${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`)) return;
   view.selected = null;
+  view.cursor = null;
+  const canvas = el("map-canvas");
   canvas.classList.add("idle");
+  canvas.tabIndex = -1;
   render();
+  focusGoalButton(robotId);
   try {
     const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
       method: "POST",
@@ -277,7 +272,6 @@ el("map-canvas").addEventListener("click", async (event) => {
     const receipt = task ? task.receipt : result;
     const where = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
     if (receipt && receipt.queued) {
-      // 자리가 없어 못 가는 것과, 곧 비켜 줄 것을 기다리는 것은 운영자가 할 일이 다르다.
       log(`${robotId} → ${where} ${roster.queuedReason(result)}`,
           receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
     } else {
@@ -285,6 +279,57 @@ el("map-canvas").addEventListener("click", async (event) => {
     }
   } catch (err) {
     log(`${robotId} 미션 거절 — ${err.message}`, "bad");
+  }
+}
+
+function focusGoalButton(robotId) {
+  [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
+    .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
+}
+
+el("map-canvas").addEventListener("click", async (event) => {
+  if (!view.selected || !view.map) return;
+  const canvas = el("map-canvas");
+  const rect = canvas.getBoundingClientRect();
+  // D-201 — 캔버스는 object-fit: contain 으로 그려진다. 레터박스(빈 여백)를
+  // 제외한 그려진 영역 안에서만 셀 좌표가 성립한다.
+  const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
+  const drawnW = view.map.width * scale;
+  const drawnH = view.map.height * scale;
+  const offX = (rect.width - drawnW) / 2;
+  const offY = (rect.height - drawnH) / 2;
+  const col = ((event.clientX - rect.left - offX) / drawnW) * view.map.width;
+  const rowFromTop = ((event.clientY - rect.top - offY) / drawnH) * view.map.height;
+  if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) {
+    return; // 여백을 찍은 것 — 목표가 아니다.
+  }
+  view.cursor = { col: Math.floor(col), row: view.map.height - 1 - Math.floor(rowFromTop) };
+  render();
+  await commitGoal(view.cursor.col, view.cursor.row);
+});
+
+el("map-canvas").addEventListener("keydown", async (event) => {
+  if (!view.selected || !view.map || !view.cursor) return;
+  const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+  if (event.key in moves) {
+    event.preventDefault();
+    const [dx, dy] = moves[event.key];
+    view.cursor.col = Math.max(0, Math.min(view.map.width - 1, view.cursor.col + dx));
+    view.cursor.row = Math.max(0, Math.min(view.map.height - 1, view.cursor.row + dy));
+    render();
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    await commitGoal(view.cursor.col, view.cursor.row);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    const robotId = view.selected;
+    view.selected = null;
+    view.cursor = null;
+    const canvas = el("map-canvas");
+    canvas.classList.add("idle");
+    canvas.tabIndex = -1;
+    render();
+    focusGoalButton(robotId);
   }
 });
 

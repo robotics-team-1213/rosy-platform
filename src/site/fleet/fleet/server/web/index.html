@@ -36,8 +36,8 @@
         <div class="spacer"></div>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
-      <canvas id="map-canvas" class="idle" width="800" height="600"
-              aria-label="현장 점유 지도와 로봇 위치"></canvas>
+      <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
+              role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
       <div class="legend">
         <span><i class="sw free"></i>자유</span>
@@ -46,7 +46,7 @@
         <span><i class="sw robot"></i>로봇</span>
         <span><i class="sw goal"></i>목표</span>
       </div>
-      <p class="hint" id="hint">오른쪽에서 로봇의 <b>목표 지정</b>을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.</p>
+      <p class="hint" id="hint" aria-live="polite">오른쪽에서 로봇의 <b>목표 지정</b>을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.</p>
       <details class="note">
         <summary>관제 범위 안내</summary>
         <p>이 화면은 사이트 관제입니다. 로봇 한 대의 현장 화면·수동 조작·비상정지는 그 로봇의 대시보드에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>

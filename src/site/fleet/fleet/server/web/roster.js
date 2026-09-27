@@ -122,13 +122,22 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     const aim = document.createElement("ui-button");
     aim.setAttribute("kind", "quiet");
     aim.type = "button";
+    aim.dataset.goalRobotId = robot.robot_id;
     aim.textContent = view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정";
     if (view.selected === robot.robot_id) aim.classList.add("arming");
     aim.disabled = !robot.online || !view.map;
     aim.addEventListener("click", () => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
-      el("map-canvas").classList.toggle("idle", view.selected === null);
+      view.cursor = view.selected && view.map
+        ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) }
+        : null;
+      const canvas = el("map-canvas");
+      canvas.classList.toggle("idle", view.selected === null);
+      canvas.tabIndex = view.selected ? 0 : -1;
       render();
+      if (view.selected) canvas.focus({preventScroll: true});
+      else [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
+        .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
     });
     const cancel = document.createElement("ui-button");
     cancel.setAttribute("kind", "quiet");
