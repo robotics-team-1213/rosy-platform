@@ -655,7 +655,7 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
                 and not row["state"].get("capabilities_degraded")
-                and not row["state"].get("safety", {}).get("estop")
+                and row["state"].get("safety", {}).get("estop") is False
             }
             await task_service.dispatch_next(
                 available,

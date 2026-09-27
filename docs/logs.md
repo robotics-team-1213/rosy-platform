@@ -2873,3 +2873,10 @@
 - 변경: Fleet의 안전 미확인·E-STOP 목표 지정 차단과 최초/빈/오류 목록 안내를 수정했다. 역할별 `/setup`의 위치 증거와 `/device` 권한 거부 복구 경로, 게임 보드의 마지막 수신·정지 시간 초과·포커스를 보완했다. LCD는 320×240 호스트 상태 매트릭스를 추가했다. `docs/validation/uiux-surfaces-2026-09-27/`의 표면별 G2/G3 카드와 계획에 남은 차단 조건을 기록했다.
 - 증거: Fleet 27개 LOCAL 뷰포트 캡처·브라우저/대화상자 24 passed, 역할 화면 54셀 캡처·가로 넘침/페이지 오류 0·대시보드/API 집중 회귀 18 passed, 게임 10셀 캡처·브라우저 11 passed, LCD PIL 9셀·관련 148 passed. X: 캡처는 일회성이다.
 - gate 변화: SOURCE/LOCAL 화면 근거만 늘었다. Fleet 지연 나이·예외 문법, 역할 SAFE_STOP·전체 readback, 게임 delayed·색 판단, LCD 실물 판독이 남아 D-153 G2/G3 및 DEVICE/FIELD는 HOLD다. sensing 진단은 PARKED다.
+
+## 2026-09-27 · uncommitted · adr(uiux): clarify frontend and backend ownership
+
+- 변경: D-309로 CORE의 권한·capability·안전·명령 허용, Fleet의 사이트 작업·증거 판단, 게임 호스트의 보드 시각, 화면의 표시·입력·접근성 책임을 분리했다. 화면 G2/G3 및 실물 수용은 HOLD로 유지한다.
+- 수정: Fleet 작업 디스패처가 `safety.estop` 누락·null을 가용으로 오판하지 않고, 명시적 false일 때만 배정한다.
+- 검증: `test_task_api.py` 21 passed (Windows LOCAL). CORE의 최종 이동 검사와 물리 결과는 별도 증거다.
+- gate 변화: 구조 결정은 Accepted, Fleet 디스패치 안전 경계는 LOCAL 확인이다. 화면 G2/G3 및 DEVICE/FIELD는 HOLD다.

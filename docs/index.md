@@ -129,6 +129,8 @@
 | D-305 | 플랫폼 경계는 안전 결과 불변식과 독립 검증 게이트로 판정한다 |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 | D-307 | 장치 최종 결과와 물리 정지 증거를 별도로 판정한다 |
+| D-308 | 의도 해석과 장치별 Action 해석의 책임을 분리한다 |
+| D-309 | UI/UX의 프론트·백엔드 책임과 시간·예외·안전 증거를 분리한다 |
 
 ## 계획·결과 문서
 
@@ -182,8 +184,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · adr(uiux): clarify frontend and backend ownership
 - 2026-09-27 · uncommitted · validation(uiux): expand surface G2/G3 evidence
 - 2026-09-27 · uncommitted · adr(platform): separate site intent from device action interpretation
 - 2026-09-27 · uncommitted · validation(uiux): record D-306 local surface slices
 - 2026-09-27 · uncommitted · adr(platform): keep final action outcome distinct from stop readback
-- 2026-09-27 · uncommitted · validation(platform): pin mounted interlock and drone counterexamples

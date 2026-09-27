@@ -1,4 +1,5 @@
 from threading import Event
+from time import sleep
 from hashlib import sha256
 
 import pytest
@@ -79,6 +80,7 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01", state={
         "robot_id": "rosy_01", "navigation": "IDLE", "mode": "IDLE",
+        "safety": {"estop": False},
     })
     dispatched = Event()
     original_goal = robot.navigation_goal
@@ -112,6 +114,31 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
     assert [row["status"] for row in readback.json()["history"]] == [
         "REQUESTED", "QUEUED", "ACCEPTED",
     ]
+
+
+@pytest.mark.parametrize("safety", [None, {}, {"estop": None}, {"estop": True}])
+def test_task_dispatch_waits_for_explicit_clear_safety(tmp_path, safety):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    state = {"robot_id": "rosy_01", "navigation": "IDLE", "mode": "IDLE"}
+    if safety is not None:
+        state["safety"] = safety
+    robot = FakeRobot("rosy_01", state=state)
+    console = FleetConsole([endpoint], [robot])
+    app = create_app(
+        console, console_token="operator-console",
+        task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                                      robot_ids={"rosy_01"}),
+    )
+    headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "safe-wait"}
+    with TestClient(app) as client:
+        response = client.post("/api/fleet/robots/rosy_01/goal",
+                               json={"x": 1, "y": 2}, headers=headers)
+        assert response.status_code == 200
+        sleep(0.35)  # More than one dispatcher poll (0.25 s).
+        task_id = response.json()["task"]["task_id"]
+        readback = client.get(f"/api/fleet/tasks/{task_id}", headers=headers)
+    assert readback.json()["task"]["status"] == FleetTaskStatus.QUEUED.value
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
 
 
 def test_uncorrelated_core_completion_event_cannot_complete_a_fleet_task(tmp_path):
