@@ -190,6 +190,6 @@
 
 - 2026-09-27 · uncommitted · feat(host-evidence): Host Agent source age contract
 - 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
+- 2026-09-27 · fc28c6f3 · validation(uiux): refresh local Fleet image after merge
 - 2026-09-27 · 003a7c1f · validation(uiux): close Host status LOCAL evidence
 - 2026-09-27 · uncommitted · validation(uiux): run local site Compose stack
-- 2026-09-27 · uncommitted · validation(uiux): read current robot without changing it

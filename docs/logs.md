@@ -2966,6 +2966,12 @@
 - 검증: 담당 세션 서버·프로토콜 276 passed/13 skipped, 문서 82 passed, Chromium Host 집중 3 passed, 역할 60셀 페이지 오류·가로 넘침 0. 현행 실물 로봇은 Host Agent unit·socket 없음으로 확인했다.
 - gate 변화: Host 증거 계약의 LOCAL 구현은 완료다. 새 로봇 이미지·실물 Host 결과와 G3 사람 평가는 HOLD다.
 
+## 2026-09-27 · fc28c6f3 · validation(uiux): refresh local Fleet image after merge
+
+- 변경: 병합된 공유 프로토콜을 로컬 Docker Fleet 이미지에 포함하도록 재빌드하고 `rosy-uiux-local` 프로젝트의 Fleet 컨테이너만 재생성했다.
+- 검증: Fleet·Vision·proxy healthy, 인증된 health/session/state HTTP 200. 최종 Fleet 이미지 digest는 D-309 실행 계획에 기록했다.
+- gate 변화: LOCAL 사이트 실행 근거를 최신 병합 소스로 갱신했다. 실제 로봇과의 페어링·현장 수용은 HOLD다.
+
 ## 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
 
 - 변경: D-312에서 G4의 바퀴 들기 필수 조건을 제거하고 지면 시험의 누적 이동 10 cm 한계를 정했다.
