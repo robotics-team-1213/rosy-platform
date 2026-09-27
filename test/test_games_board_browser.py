@@ -99,8 +99,57 @@ def test_match_board_names_server_judged_delay():
             now[0] += 3.0
             page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
             assert page.locator("#home-score").inner_text() == "2"
+            announcement = page.locator("#match-announcement")
+            page.wait_for_function("document.getElementById('match-announcement')?.textContent.includes('지연')")
+            assert "마지막 생성 3.0초 전" in announcement.inner_text()
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= innerWidth && "
+                "document.documentElement.scrollHeight <= innerHeight"
+            )
+            page.evaluate("""() => {
+              window.__announcementChanges = [];
+              new MutationObserver(() => window.__announcementChanges.push(
+                document.getElementById('match-announcement').textContent
+              )).observe(document.getElementById('match-announcement'), {childList: true});
+            }""")
+            now[0] += 0.5
+            page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.5초 전')")
+            assert "마지막 생성 3.0초 전" in announcement.inner_text()
+            assert page.evaluate("window.__announcementChanges") == []
             assert not errors
             save_temp_screenshot(page, "games_board_delayed.png")
+            browser.close()
+    finally:
+        server.close()
+
+
+def test_first_overlay_failure_has_no_last_match_claim():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 1280, 800)
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_function("document.getElementById('connection')?.textContent.includes('연결 오류')")
+            assert "경기 정보 없음" in page.locator("#connection").inner_text()
+            assert "마지막 수신 값" not in page.locator("#match-announcement").inner_text()
+            assert page.locator("#home-score").inner_text() == "—"
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= innerWidth && "
+                "document.documentElement.scrollHeight <= innerHeight"
+            )
+            save_temp_screenshot(page, "games_board_first_error.png")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            assert page.locator("#connection").inner_text() == "호스트 연결됨"
+            assert "경기 정보가 없습니다" not in page.locator("#match-announcement").inner_text()
+            assert not errors
             browser.close()
     finally:
         server.close()
@@ -288,7 +337,8 @@ def test_match_state_is_announced_only_when_it_changes():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
-    board = PreviewBoard()
+    now = [100.0]
+    board = PreviewBoard(clock=lambda: now[0])
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()

@@ -23,6 +23,8 @@ const halt = document.getElementById("halt");
 const haltStatus = document.getElementById("halt-status");
 let polling = false;
 let hasMatch = false;
+let lastEvidence = null;
+let evidenceAnnouncement = "";
 
 function setTextIfChanged(element, value) {
   if (element.textContent !== value) element.textContent = value;
@@ -122,6 +124,7 @@ async function tick() {
     const payload = await res.json();
     if (!payload.field) {
       connection.dataset.evidence = "unavailable";
+      lastEvidence = "unavailable";
       setTextIfChanged(connection, hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
       if (hasMatch) {
         setTextIfChanged(announcement, "경기 데이터 대기 중. 표시된 경기 정보는 마지막 수신 값입니다.");
@@ -129,7 +132,8 @@ async function tick() {
       return;
     }
     hasMatch = true;
-    connection.dataset.evidence = payload.evidence || "unavailable";
+    const evidence = payload.evidence || "unavailable";
+    connection.dataset.evidence = evidence;
     if (payload.evidence === "fresh") {
       setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
     } else if (payload.evidence === "delayed") {
@@ -137,6 +141,10 @@ async function tick() {
       setTextIfChanged(connection, `\uC9C0\uC5F0${age}`);
     } else {
       setTextIfChanged(connection, "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
+    }
+    if (evidence !== lastEvidence) {
+      evidenceAnnouncement = evidence === "fresh" ? "" : connection.textContent;
+      lastEvidence = evidence;
     }
     const homeScore = payload.score?.[payload.field.home_id] ?? "—";
     const awayScore = payload.score?.[payload.field.away_id] ?? "—";
@@ -152,7 +160,7 @@ async function tick() {
     const lostElement = document.getElementById("lost");
     lostElement.hidden = !lost;
     lostElement.textContent = payload.reason || (payload.lost_ball ? "공을 잃음" : "로봇을 잃음");
-    const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
+    const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);
     chips(payload);
@@ -177,8 +185,11 @@ async function tick() {
     frame.src = `/frame.jpg?t=${Date.now()}`;
   } catch (_error) {
     connection.dataset.evidence = "disconnected";
-    setTextIfChanged(connection, "호스트 연결 오류 · 마지막 경기 정보");
-    setTextIfChanged(announcement, "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다.");
+    lastEvidence = "disconnected";
+    setTextIfChanged(connection, hasMatch ? "호스트 연결 오류 · 마지막 경기 정보" : "호스트 연결 오류 · 경기 정보 없음");
+    setTextIfChanged(announcement, hasMatch
+      ? "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다."
+      : "호스트 연결 오류. 경기 정보가 없습니다.");
   } finally {
     polling = false;
   }
