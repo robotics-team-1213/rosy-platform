@@ -20,10 +20,21 @@ export function mount(el, ctx) {
   const message = document.createElement("p");
   message.setAttribute("role", "status");
   message.textContent = "현재 위치의 최신 상태를 기다리는 중입니다.";
+  const saveStatus = document.createElement("p");
+  saveStatus.setAttribute("role", "status");
+  saveStatus.setAttribute("aria-live", "polite");
+  const listStatus = document.createElement("p");
+  listStatus.setAttribute("role", "status");
+  listStatus.setAttribute("aria-live", "polite");
   const list = document.createElement("ul");
   list.className = "waypoint-list";
+  list.hidden = true;
   let latestState = null;
   let pending = false;
+
+  function setStatus(target, text) {
+    if (target.textContent !== text) target.textContent = text;
+  }
 
   function poseReady() {
     const pose = latestState?.pose;
@@ -36,17 +47,19 @@ export function mount(el, ctx) {
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
     latestState = state;
     syncSave();
-    if (!poseReady()) message.textContent = new HeadlessState(state).isFresh("pose")
+    if (!poseReady()) setStatus(message, new HeadlessState(state).isFresh("pose")
       ? "현재 위치 좌표가 없어 저장을 막았습니다."
-      : `${poseUnavailableReason(state)} · 현재 위치 저장을 막았습니다.`;
-    else if (!message.textContent.includes("저장했습니다")) message.textContent = "현재 위치를 읽었습니다. 이름을 입력해 저장하세요.";
+      : `${poseUnavailableReason(state)} · 현재 위치 저장을 막았습니다.`);
+    else setStatus(message, "현재 위치를 읽었습니다. 이름을 입력해 저장하세요.");
   }, (error) => {
     latestState = null;
     syncSave();
-    message.textContent = `위치 상태를 불러오지 못했습니다: ${error.message}`;
+    setStatus(message, `위치 상태를 불러오지 못했습니다: ${error.message}`);
   });
   const stopWaypoints = ctx.store.poll("/api/v1/waypoints", 5_000, ({waypoints = []}) => {
     list.replaceChildren();
+    list.hidden = false;
+    setStatus(listStatus, "");
     if (!waypoints.length) {
       const empty = document.createElement("ui-empty");
       empty.textContent = "저장된 웨이포인트가 없습니다.";
@@ -58,33 +71,38 @@ export function mount(el, ctx) {
       row.textContent = `${waypoint.name}: ${Number(waypoint.x).toFixed(2)}, ${Number(waypoint.y).toFixed(2)}`;
       list.append(row);
     }
-  }, (error) => { message.textContent = `웨이포인트를 불러오지 못했습니다: ${error.message}`; });
+  }, (error) => {
+    list.replaceChildren();
+    list.hidden = true;
+    setStatus(listStatus, `웨이포인트 목록을 읽지 못했습니다: ${error.message}. 다시 확인 중입니다.`);
+  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (pending) return;
     const name = input.value.trim();
-    if (!name) { message.textContent = "이름을 입력하세요."; return; }
+    if (!name) { setStatus(saveStatus, "이름을 입력하세요."); input.focus(); return; }
     if (!poseReady()) {
-      message.textContent = "현재 위치가 최신이 아니어서 저장을 막았습니다.";
+      setStatus(saveStatus, "현재 위치가 최신이 아니어서 저장을 막았습니다.");
       return;
     }
     const pose = latestState.pose;
     const mapId = latestState.map_id || null;
     pending = true;
     save.disabled = true;
+    setStatus(saveStatus, "현재 위치를 웨이포인트로 저장하는 중입니다.");
     try {
       await ctx.api("/api/v1/waypoints", {method: "POST", body: JSON.stringify({
         name, x: Number(pose.x), y: Number(pose.y), yaw: Number(pose.yaw) || 0,
         map_id: mapId, metadata: {},
       })});
       input.value = "";
-      message.textContent = `${name} 웨이포인트를 저장했습니다.${poseReady() ? "" : " 현재 위치 상태는 다시 확인하세요."}`;
+      setStatus(saveStatus, `${name} 웨이포인트를 저장했습니다.${poseReady() ? "" : " 현재 위치 상태는 다시 확인하세요."}`);
     } catch (error) {
-      message.textContent = `저장하지 못했습니다: ${error.message}`;
+      setStatus(saveStatus, `저장하지 못했습니다: ${error.message}`);
     } finally { pending = false; syncSave(); }
   });
   form.append(input, save);
-  el.append(head, help, form, message, list);
+  el.append(head, help, form, message, saveStatus, listStatus, list);
   return () => { stopState(); stopWaypoints(); };
 }
