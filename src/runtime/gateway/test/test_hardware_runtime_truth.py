@@ -67,6 +67,26 @@ def test_battery_alone_proves_the_runtime_but_not_a_drive(core_client):
     assert caps["withheld"]["reasons"]["teleop"] == "drive_absent"
 
 
+def test_pose_without_odometry_does_not_prove_a_running_base(core_client):
+    tc, svc = core_client()
+    svc.state.set_pose(1.0, 2.0, 0.0)
+    caps = _caps(tc)
+    assert caps["runtime"]["hardware"] == "off"
+    assert caps["runtime"]["evidence"] == []
+
+
+def test_required_readiness_hold_withholds_teleop_despite_ready_motor(core_client):
+    tc, svc = core_client(config_overrides={
+        "runtime": {"mode": "hardware", "navigation_backend": "localization"},
+    })
+    svc.readiness.required = True
+    svc.state.set_velocity(0.0, 0.0)
+    svc.readiness.observe("motor_adapter", True, lease=True)
+    caps = _caps(tc)
+    assert caps["teleop"] is False
+    assert caps["withheld"]["reasons"]["teleop"].startswith("readiness_hold:")
+
+
 def test_a_runtime_that_went_quiet_is_silent_not_on(core_client):
     tc, svc = core_client()
     _no_motion_io(svc)

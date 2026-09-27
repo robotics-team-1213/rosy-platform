@@ -155,10 +155,10 @@ class RuntimeTruth:
         }
 
 
-# Evidence label -> state channels that prove it. Pose comes from odometry or
-# from map->base TF, both of which need a running base (real or simulated).
+# Pose may be refreshed from a cached map->base TF after odometry stops.
+# Only the odometry callback's velocity sample proves the base is still live.
 _PRESENCE_CHANNELS = (
-    ("odometry", ("velocity", "pose")),
+    ("odometry", ("velocity",)),
     ("battery", ("battery",)),
 )
 
@@ -224,6 +224,12 @@ def runtime_truth(config: Mapping[str, Any], state: Any, readiness: Any = None) 
         if motor_required or "odometry" not in evidence:
             drive_reason = DRIVE_ABSENT_REASON
 
+    hold_reason: Optional[str] = None
+    if readiness is not None and required:
+        snapshot = readiness.snapshot()
+        if not snapshot.ready:
+            hold_reason = "readiness_hold:" + ",".join(snapshot.missing)
+
     reasons: dict[str, str] = {}
     for flag in HARDWARE_FLAGS:
         if mode == "motor" and hardware == "off" and drive == "unknown":
@@ -238,6 +244,8 @@ def runtime_truth(config: Mapping[str, Any], state: Any, readiness: Any = None) 
             reasons[flag] = drive_reason
         elif flag in _NAVIGATION_FLAGS and navigation == "absent":
             reasons[flag] = NAVIGATION_ABSENT_REASON
+        elif hold_reason:
+            reasons[flag] = hold_reason
     return RuntimeTruth(mode=mode, hardware=hardware, evidence=evidence,
                         drive=drive, navigation=navigation, reasons=reasons)
 
