@@ -12,7 +12,7 @@ from std_msgs.msg import String
 
 from interfaces.srv import Emotion
 
-from .info_screen import render as render_info
+from .info_screen import hold_duration, render as render_info
 from .rosy_lcd import LCD
 
 # core가 latch로 발행하므로 늦게 떠도 현재 모드를 즉시 받는다 (PWR-003).
@@ -150,7 +150,7 @@ class RosyEmotion(Node):
             self.get_logger().warn("Ignoring display/info: payload is not an object")
             return
 
-        hold_s = float(payload.get('hold_s') or 15.0)
+        hold_s = hold_duration(payload.get('hold_s'))
         size = self._frame_size()
         try:
             image = render_info(payload, size=size)

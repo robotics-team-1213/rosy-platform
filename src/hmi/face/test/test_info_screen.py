@@ -5,9 +5,17 @@ import pytest
 from PIL import ImageChops
 from pathlib import Path
 
-from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, render
+from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, hold_duration, render
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("raw,expected", [
+    (12.3, 12.3), ("3.5", 3.5), (None, 15.0), (0, 15.0),
+    ("bad", 15.0), (True, 15.0), (-2, 15.0), (float("nan"), 15.0), (float("inf"), 15.0),
+])
+def test_info_hold_duration_always_expires(raw, expected):
+    assert hold_duration(raw) == expected
 
 
 def test_package_declares_emotion_servers():
