@@ -1,6 +1,6 @@
 ## D-304 플랫폼 확장은 제어권·계약·배포 증거로 경계를 결정한다
 
-**Status:** Accepted (2026-09-27, 구조 판정 기준과 이행 순서). 장치 API, ROS 패키지, 소스 폴더, 배포 산출물 또는 운영 capability를 이 결정만으로 추가·이동·활성화하지 않는다. D-231의 층별 소스 배치와 D-303의 Rejected 상태를 유지한다. D-281·D-282·D-297·D-299의 Proposed 구현·장치 게이트를 승인한 것으로 읽지 않는다.
+**Status:** Superseded by [D-305](D-305-platform-boundary-outcome-invariants-and-independent-gates.md) (2026-09-27). 이 문서의 구조 판정 기준은 D-305에서 범위와 검증 출구를 명확히 하여 이어받는다.
 
 **Context:** ROSY Platform의 첫 경로는 관제사가 Pinky에 이동을 요청하고 실제 결과와 정지를 확인하는 것이다. 장기적으로 고정 OMX 작업대, Pinky에 탑재한 팔, 독립 드론과 다른 ROS 기반 장치를 같은 사이트 운영 경험에 연결하려 한다. 현재 `src/runtime/`은 Pinky CORE·주행·감지에 무게가 있지만 Fleet도 `core_common`의 일부 규칙과 타입을 실행한다. D-303의 제품별 `controllers/` 일괄 이동은 이 의존성과 이미지 경로를 해결하지 못해 기각됐다. 현행 Fleet 영속 작업은 `robot_id`와 평면 목표 `x/y/yaw` 중심이고, Fleet `task_id`와 CORE의 최종 주행 이벤트에는 검증된 연결이 없다. OMX 운영 제어기와 드론 기종·비행 제어 경로는 수용되지 않았다. 폴더 모양만 먼저 고정하면 실행 소유권, 설치 단위, 결과 의미가 다시 섞인다.
 

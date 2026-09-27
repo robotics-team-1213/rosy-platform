@@ -2827,3 +2827,10 @@
 - 변경: D-304에서 플랫폼 확장의 물리 제어권, Fleet 작업 정본, 독립 주체의 교환 계약, 실제 배포 단위를 별개로 판정한다. D-231의 층별 배치와 D-303 기각을 유지하고 Pinky+OMX 복합 인터록 및 드론 계약의 미결정 범위를 기록했다.
 - 근거: D-296/D-298과 현행 Fleet 작업·`core_common` 소비·Pinky 이미지 package closure를 대조하고 별도 구조 검토 세션의 반례를 반영했다. 문서 하네스 lint 오류 0건, network/harness 계약 시험 76 passed (Windows); 링크 15개가 저장소 내부 경로로 해석됐다.
 - gate 변화: 구조 판정 기준만 Accepted. Fleet 최종 결과 연결, OMX·복합·드론 운영 제어, 새 API·폴더·릴리스 산출물의 SOURCE/LOCAL·ARTIFACT·DEVICE·FIELD 수용은 각각 후속 게이트로 유지한다.
+
+## 2026-09-27 · uncommitted · adr(platform): separate safety invariant and evidence exits
+
+- 변경: D-304를 D-305로 대체했다. 탑재형 Pinky+OMX는 두 최종 명령 경계의 안전 결과만 Accepted로 두고 조정기·교차 게이트 구현, 허가 프로토콜과 물리 정지 회로는 유보했다. 진행 중 상태 만료의 중단 요청·driver/actuator readback·재개 조건, D-55 Local Transaction 관계를 명시했다.
+- 근거: 두 차례 읽기 검토를 D-55/D-231/D-282/D-298 및 플랫폼 부모 계획의 P0~P3와 대조했다. P0 SOURCE/LOCAL와 DEVICE, P1 SOURCE/ROS-SIM와 ARTIFACT/DEVICE, P2 현재 감사와 실물 OMX 후 추출, 고정 OMX 인계와 탑재형·드론 게이트를 분리했다. D-231의 순수 소스 이동 조건과 설치/이미지 변경 조건도 구분했다.
+- 증거: 문서 하네스 lint 0 errors/19 기존 메타데이터 warnings; network/harness 계약 시험 76 passed/19 warnings (Windows). 실물·이미지·현장 수용은 수행하지 않았다.
+- gate 변화: 구조 판정 기준과 독립 검증 출구만 Accepted. 새 OMX·복합·드론 운영 capability, 인터록 구현, 공개 계약·폴더 이동·배포 변경은 각각 HOLD다.
