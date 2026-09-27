@@ -110,3 +110,9 @@
 - Change: moved both default YAML files into core_common, installed them in its package share, and removed the reverse CORE lookup.
 - Evidence: 1,812 gateway/config/image tests passed with 28 skipped; 51 architecture tests passed; the built core_common wheel contains both YAML files.
 - Gate: SOURCE/LOCAL evidence only; Pi installation and device launch remain unverified.
+
+## 2026-09-27 · uncommitted · feat(protocol): type Host Agent status evidence
+
+- 변경: 네트워크·릴리스 조회의 증거 상태, 원본 시각, 나이, 임계, 사유를 `HostStatusEvidence`로 추가했다. 기존 Fleet envelope 버전과 필드는 유지한다.
+- 근거: CORE Host API 계약 시험과 API Ref v1.42.
+- Gate: SOURCE/LOCAL 계약 근거이며 장치 상태 판정이 아니다.

@@ -268,3 +268,9 @@
 - 변경: 인증된 `/setup`·`/device`가 첫 CORE 상태 응답 전 `안전 상태 확인 중`을 표시한다. 인증 전에는 안전 문구와 역할 패널을 표시하지 않는다.
 - 근거: 실제 FastAPI 정적 화면과 Chromium에서 매니페스트·상태 fetch를 보류한 첫 기동 6셀 및 기존 56셀 매트릭스 2 passed. 6셀은 패널 0개, 가로 넘침·pageerror 0건, E-stop 가시성을 확인했다.
 - gate 변화: 역할 화면 첫 기동 LOCAL G2 근거를 추가했다. 실제 안전 상태와 물리 정지는 판정하지 않았다.
+
+## 2026-09-27 · uncommitted · feat(device): display Host Agent source evidence
+
+- 변경: `/device` 네트워크·릴리스 카드가 CORE의 원본 조회 증거와 나이를 표시하고 fresh 외에는 작업을 막는다. 브라우저는 자체 시각으로 상태를 판정하지 않는다.
+- 근거: 서버 증거 4상태 브라우저 시험과 역할 G2 60셀(오류·가로 넘침 0건). Host Agent 실물은 이 화면 회차에서 사용하지 않았다.
+- gate 변화: LOCAL 증거 상태 범위를 확대했다. 실제 장치 적용·재연결과 G3 사람 평가는 HOLD다.

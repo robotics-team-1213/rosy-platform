@@ -265,11 +265,14 @@ class SubprocessCommands:
                 "connection", "show", wifi_profile,
             ]
             wifi = self.runner(wifi_argv)
-            if wifi.returncode == 0:
-                wifi_show = wifi.stdout
+            if wifi.returncode != 0:
+                raise RuntimeError(f"{wifi_argv[0]} exited {wifi.returncode}: {wifi.stderr.strip()}")
+            wifi_show = wifi.stdout
         device_argv = ["nmcli", "-t", "-f", "IP4.ADDRESS,IP4.GATEWAY,IP4.DNS", "device", "show", "wlan0"]
         device = self.runner(device_argv)
-        device_show = device.stdout if device.returncode == 0 else ""
+        if device.returncode != 0:
+            raise RuntimeError(f"{device_argv[0]} exited {device.returncode}: {device.stderr.strip()}")
+        device_show = device.stdout
         return parse_network_status(active.stdout, device_show=device_show, wifi_show=wifi_show)
 
     def apply_network_profile(self, profile_id: str) -> dict:
@@ -301,7 +304,20 @@ class SubprocessCommands:
 
     def release_status(self) -> dict:
         argv = [self.release_cli, "status", "--json"]
-        return self._json_or_text(self.runner(argv), argv)
+        result = self.runner(argv)
+        if result.returncode != 0:
+            raise RuntimeError(f"{argv[0]} exited {result.returncode}: {result.stderr.strip()}")
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("release status was not JSON") from exc
+        if not isinstance(data, dict):
+            raise RuntimeError("release status was not an object")
+        if not {"state", "activation", "recovery_hold", "staged"}.issubset(data):
+            raise RuntimeError("release status was missing required fields")
+        if data.get("ok") is False:
+            raise RuntimeError("release status reported failure")
+        return data
 
     def install_release(self, release_id: str) -> dict:
         argv = [self.release_cli, "install", "--release-id", release_id, "--json"]

@@ -132,6 +132,11 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _observed_now() -> str:
+    """UTC completion time for a synchronous host status read, not an audit time."""
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
 def redact(value: Any) -> Any:
     """Strip anything secret-shaped before it reaches the audit log."""
     if isinstance(value, dict):
@@ -413,8 +418,9 @@ class HostAgent:
                 )
             )
 
+        observed_at = _observed_now() if spec.name in {"network.status", "release.status"} else None
         self._record(request_id, None, spec.name, actor, "OK", True)
-        return {
+        response = {
             "schema_version": SCHEMA_VERSION,
             "request_id": request_id,
             "ok": True,
@@ -423,6 +429,9 @@ class HostAgent:
             "recovery": "",
             "data": redact(data) if isinstance(data, dict) else data,
         }
+        if observed_at is not None:
+            response["observed_at"] = observed_at
+        return response
 
     # --- rendering and audit ---------------------------------------------
 

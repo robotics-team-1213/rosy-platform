@@ -144,6 +144,15 @@ CORE의 typed API를 부른다.
 - `confirmed`는 파괴적 명령의 재확인 여부다. `false`면 Host Agent가 거부한다.
 - `idempotency_key`가 같은 요청이 재도달하면 **다시 실행하지 않고 최초 결과를
   반환한다.** 네트워크가 끊긴 대시보드의 재시도가 두 번째 재부팅이 되어서는 안 된다.
+- `network.status`와 `release.status`의 정상 응답만 `observed_at`(UTC ISO-8601)을
+  추가한다. Host Agent가 각각의 동기 조회를 끝낸 직후 찍는 원본 시각이며 감사 시각이나
+  CORE 수신 시각이 아니다. 부분 nmcli 조회 실패, 릴리스 상태 JSON 파싱·필수 필드
+  실패는 정상 응답으로 바꾸지 않는다. 다른 명령과 거부 응답에는 이 필드를 붙이지 않는다.
+- CORE는 이 원본 시각과 수신 시각의 차이를 검증해 `/host/network`와 `/host/release`에
+  `evidence`를 더한다. 시각 누락·파싱 실패·미래 시각은 `unavailable`, 15초 초과는
+  `delayed`, 소켓 미연결·타임아웃은 `disconnected`이다. 정상 15초 이내만 `fresh`다.
+  이는 **상태 조회 시각**이지 네트워크 전환이나 릴리스 설치가 물리적으로 적용됐다는
+  확인이 아니다.
 
 ## 6. Allowlist
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -275,6 +276,18 @@ def test_only_a_real_boolean_counts_as_confirmation(agent, commands, confirmed):
 
 def test_a_read_only_command_needs_no_confirmation(agent):
     assert agent.handle(_request("network.status", role="viewer", confirmed=False))["ok"]
+
+
+@pytest.mark.parametrize("command", ["network.status", "release.status"])
+def test_status_reply_stamps_the_host_observation_after_the_read(agent, commands, command):
+    before = datetime.now(timezone.utc)
+    response = agent.handle(_request(command, role="viewer", confirmed=False))
+    after = datetime.now(timezone.utc)
+
+    assert response["ok"] is True
+    assert commands.calls[-1][0] == command.replace(".", "_")
+    observed = datetime.fromisoformat(response["observed_at"])
+    assert before <= observed <= after
 
 
 # --- parameters are enumerated, never interpolated -------------------------
@@ -673,7 +686,9 @@ class RecordingRunner:
 
 def test_actions_never_go_through_a_shell():
     """A single string would be a shell command; a list is an exec."""
-    runner = RecordingRunner()
+    runner = RecordingRunner(stdout=json.dumps({
+        "state": "IDLE", "activation": None, "recovery_hold": None, "staged": [],
+    }))
     commands = SubprocessCommands(runner=runner)
 
     commands.network_status()
@@ -781,6 +796,38 @@ def test_a_failing_process_raises_rather_than_reporting_success():
     runner = RecordingRunner(stdout="", returncode=4)
     with pytest.raises(RuntimeError, match="exited 4"):
         SubprocessCommands(runner=runner).network_status()
+
+
+@pytest.mark.parametrize("failed_command", ["wifi", "device"])
+def test_network_status_rejects_partial_nmcli_results(failed_command):
+    def runner(argv):
+        command = "wifi" if "802-11-wireless.ssid,802-11-wireless.mode" in argv else (
+            "device" if "device" in argv else "active")
+        output = "rosy-site-sta:802-11-wireless:wlan0:activated\n" if command == "active" else ""
+        return subprocess.CompletedProcess(argv, 3 if command == failed_command else 0, output, "failed")
+
+    with pytest.raises(RuntimeError, match="exited 3"):
+        SubprocessCommands(runner=runner).network_status()
+
+
+def test_release_status_rejects_non_json_output():
+    runner = RecordingRunner(stdout="release is ready")
+    with pytest.raises(RuntimeError):
+        SubprocessCommands(runner=runner).release_status()
+
+
+def test_release_status_rejects_partial_json_output():
+    runner = RecordingRunner(stdout='{"state":"IDLE"}')
+    with pytest.raises(RuntimeError, match="missing required fields"):
+        SubprocessCommands(runner=runner).release_status()
+
+
+def test_release_status_rejects_declared_failure_even_with_fields():
+    runner = RecordingRunner(stdout=json.dumps({
+        "ok": False, "state": "FAILED", "activation": None, "recovery_hold": None, "staged": [],
+    }))
+    with pytest.raises(RuntimeError, match="reported failure"):
+        SubprocessCommands(runner=runner).release_status()
 
 
 def test_a_stopped_unit_is_an_answer_not_a_failure():

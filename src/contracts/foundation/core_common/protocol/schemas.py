@@ -20,9 +20,19 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from core_common.protocol.evidence import ValueEvidence
+from core_common.protocol.evidence import EvidenceState, ValueEvidence
 
 PROTOCOL_VERSION = "1.0"
+
+
+class HostStatusEvidence(BaseModel):
+    """CORE judgment of one Host Agent network or release status sample."""
+
+    evidence: EvidenceState = EvidenceState.UNAVAILABLE
+    observed_at: str | None = None
+    age_s: float | None = None
+    stale_after_s: float = 15.0
+    reason: str = ""
 
 
 class DiscoveryScanPayload(BaseModel):
@@ -409,7 +419,6 @@ class EventMessage(BaseModel):
 class AckPayload(BaseModel):
     status: AckStatus
     error: Optional[str] = None
-from pydantic import BaseModel
 
 
 class UiSurfaceLink(BaseModel):

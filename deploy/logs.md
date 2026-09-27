@@ -1389,3 +1389,9 @@
 - 변경: G4 번들의 `wheels_lifted` 필수값을 없애고 `test_surface=floor|lifted` 및 시험당 10 cm 이동 한계를 검증한다.
 - 검증: Windows 호스트 시험. 기존 장치에는 이전 형식의 벤치 도구가 적용되어 있으며 새 도구의 설치 해시를 별도 확인한다.
 - gate 변화: SOURCE/LOCAL 검증 경로를 갱신했다. 실물 G4/G5 판정은 HOLD다.
+
+## 2026-09-27 · uncommitted · feat(host-agent): stamp complete status reads
+
+- 변경: Host Agent가 네트워크·릴리스 동기 조회 완료 직후 UTC를 응답에 붙인다. nmcli 부분 실패, 릴리스 상태 JSON·필수 필드 실패는 성공으로 꾸미지 않는다.
+- 검증: Host Agent 거부·명령 계약 132 passed. 기존 장치에는 Agent 서비스/소켓이 없어 DEVICE는 HOLD다.
+- gate 변화: SOURCE/LOCAL 계약 근거만 추가했다. 새 이미지 설치와 실물 readback이 필요하다.

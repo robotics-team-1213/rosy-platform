@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · feat(host): judge status age from Host Agent UTC
 - 2026-09-27 · uncommitted · test(ui): verify real CORE role surfaces at desktop and mobile widths
 - 2026-09-26 · uncommitted · feat(core_api_web): add D-283 action group manifest metadata
 - 2026-09-26 · uncommitted · feat(core_api_web): bounded operator camera evidence storage
 - 2026-09-26 · uncommitted · fix(core_api_web): D-260 review M1 status inputs hand-over
-- 2026-09-26 · uncommitted · feat(core_api_web): D-260 GET /api/v1/host/status-summary (API Ref v1.25)

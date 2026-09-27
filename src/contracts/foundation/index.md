@@ -29,8 +29,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · feat(protocol): type Host Agent status evidence
 - 2026-09-27 · uncommitted · own default configuration
 - 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
 - 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
 - 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
-- 2026-09-26 · uncommitted · feat(core_common): D-257 SiteSightingPayload

@@ -2965,3 +2965,9 @@
 - 변경: D-312에서 G4의 바퀴 들기 필수 조건을 제거하고 지면 시험의 누적 이동 10 cm 한계를 정했다.
 - 검증: 원시 odom의 이동량·속도·정지·방향을 검증하는 호스트 계약 시험을 실행한다.
 - gate 변화: SOURCE/LOCAL 계약을 수정했다. 실제 G4/G5·서명 이미지 판정은 별도다.
+
+## 2026-09-27 · uncommitted · feat(host-evidence): Host Agent source age contract
+
+- 변경: Host Agent 원본 조회 완료 UTC와 CORE의 보수적 증거 판정을 API Ref v1.42·Host Agent 계약·역할 G2 카드에 기록했다.
+- 근거: 서버/브라우저 계약 시험, 관리자 `/device`의 60셀 LOCAL 캡처. 현재 실물 로봇에는 Host Agent unit·socket이 없고 두 GET은 `HOST_AGENT_UNAVAILABLE`이다.
+- gate 변화: LOCAL UI 증거만 보강했다. 새 이미지·서비스 배포, 실물 적용과 G3 사람 평가는 HOLD다.

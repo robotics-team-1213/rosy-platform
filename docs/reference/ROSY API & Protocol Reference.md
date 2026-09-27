@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.41
+**Version:** v1.42
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -285,8 +285,10 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 
 ## 5.7 Host (Host Agent 릴레이)
 
-CORE 는 이 경로들을 처리하지 않고 unix 소켓으로 Host Agent 에 넘긴다(`docs/reference/rosy-host-agent-contract.md`). 에이전트가 없으면 503 과 사유를 돌려준다.
+CORE 는 이 경로의 호스트 작업을 직접 실행하지 않고 unix 소켓으로 Host Agent 에 넘긴다(`docs/reference/rosy-host-agent-contract.md`). 네트워크·릴리스 조회에서 에이전트가 없으면 HTTP 200과 `available:false`, 사유, `evidence.evidence:"disconnected"`를 돌려준다.
 파괴적 명령은 `{confirmed: true}` 와 `idempotency_key` 를 받는다.
+
+v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,detail,recovery,data}`에 `evidence:{evidence,observed_at,age_s,stale_after_s,reason}`을 추가한다. `evidence`는 `fresh`·`delayed`·`disconnected`·`unavailable` 중 하나이며 CORE가 Host Agent의 해당 조회 완료 UTC `observed_at`을 검증해 판정한다. `age_s`는 CORE 응답 시각에서 원본 시각을 뺀 초, 임계는 15초다. 원본 시각이 없거나 잘못됐거나 미래이면 `unavailable`이며 `data:null`이다. 소켓 미연결·타임아웃은 `disconnected`, 유효하지만 15초 초과한 조회는 `delayed`다. `available`은 소켓 응답 여부를 뜻하므로 `available:true`여도 증거가 `unavailable`일 수 있다. 화면은 `fresh`일 때만 네트워크·릴리스 작업을 허용한다. 이 증거는 상태 조회 완료 시각이며 POST 적용 readback이나 물리 결과가 아니다.
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|

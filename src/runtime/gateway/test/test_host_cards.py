@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -108,6 +109,18 @@ def test_an_unparseable_reply_is_distinct_from_no_reply():
     assert reply.reachable is False
 
 
+def test_a_non_boolean_agent_ok_cannot_make_status_fresh(client, monkeypatch):
+    payload = {"ok": "false", "code": "OK", "observed_at": datetime.now(timezone.utc).isoformat(),
+               "data": {"mode": "SITE_STA"}}
+    monkeypatch.setattr("core_api_web.api.v1.host._agent", lambda _svc: HostAgentClient(
+        connect=lambda: FakeConnection(payload)))
+
+    body = client.get("/api/v1/host/network", headers=_auth(VIEWER_TOKEN)).json()
+
+    assert body["evidence"]["evidence"] == "unavailable"
+    assert body["data"] is None
+
+
 def test_a_refusal_from_the_agent_counts_as_reachable():
     """"The agent said no" and "no agent answered" are different facts."""
     refusal = {"ok": False, "code": "RECOVERY_HELD", "detail": "held", "recovery": "clear it"}
@@ -183,6 +196,43 @@ def test_a_card_reports_an_unreachable_agent_rather_than_blank_fields(client, pa
     assert body["data"] is None
     assert body["detail"], "the card must say why it is empty"
     assert body["code"] == UNAVAILABLE
+    assert body["evidence"]["evidence"] == "disconnected"
+
+
+@pytest.mark.parametrize("offset_s,expected", [
+    (0, "fresh"), (30, "delayed"), (-30, "unavailable"),
+])
+@pytest.mark.parametrize("path", ["/api/v1/host/network", "/api/v1/host/release"])
+def test_host_status_evidence_is_judged_from_agent_observation(client, monkeypatch, offset_s, expected, path):
+    observed = (datetime.now(timezone.utc) - timedelta(seconds=offset_s)).isoformat()
+    payload = {"ok": True, "code": "OK", "observed_at": observed,
+               "data": {"mode": "SITE_STA"}}
+    monkeypatch.setattr("core_api_web.api.v1.host._agent", lambda _svc: HostAgentClient(
+        connect=lambda: FakeConnection(payload)))
+
+    body = client.get(path, headers=_auth(VIEWER_TOKEN)).json()
+
+    assert body["evidence"]["evidence"] == expected
+    assert body["evidence"]["observed_at"] == (observed if expected != "unavailable" else None)
+    if expected == "delayed":
+        assert body["evidence"]["age_s"] >= 29
+
+
+@pytest.mark.parametrize("observed", [None, "not-a-time", "2026-09-27T12:00:00",
+                                      "2026-09-27T12:00:00+09:00"])
+@pytest.mark.parametrize("path", ["/api/v1/host/network", "/api/v1/host/release"])
+def test_missing_or_invalid_agent_observation_is_unavailable(client, monkeypatch, observed, path):
+    payload = {"ok": True, "code": "OK", "data": {"mode": "SITE_STA"}}
+    if observed is not None:
+        payload["observed_at"] = observed
+    monkeypatch.setattr("core_api_web.api.v1.host._agent", lambda _svc: HostAgentClient(
+        connect=lambda: FakeConnection(payload)))
+
+    body = client.get(path, headers=_auth(VIEWER_TOKEN)).json()
+
+    assert body["available"] is True  # the socket answered; the sample is still untrusted
+    assert body["evidence"]["evidence"] == "unavailable"
+    assert body["data"] is None
 
 
 @pytest.mark.parametrize("path", ["/api/v1/host/network", "/api/v1/host/release"])
@@ -299,6 +349,7 @@ def test_a_card_does_not_echo_a_secret_the_agent_sent(client, monkeypatch):
     payload = {
         "ok": True,
         "code": "OK",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
         "data": {"ssid": "site-wifi", "psk": "[redacted]", "ipv4": "192.168.0.42"},
     }
 
@@ -316,7 +367,8 @@ def test_a_card_does_not_echo_a_secret_the_agent_sent(client, monkeypatch):
 
 
 def test_a_reachable_agent_marks_the_card_available(client, monkeypatch):
-    payload = {"ok": True, "code": "OK", "data": {"current": "2026.09.05-002"}}
+    payload = {"ok": True, "code": "OK", "observed_at": datetime.now(timezone.utc).isoformat(),
+               "data": {"current": "2026.09.05-002"}}
     monkeypatch.setattr(
         "core_api_web.api.v1.host._agent",
         lambda _svc: HostAgentClient(connect=lambda: FakeConnection(payload)),

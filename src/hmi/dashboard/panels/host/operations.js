@@ -35,10 +35,14 @@ function card(title, path, interval, ctx, describe) {
   const stop = ctx.store.poll(path, interval, (payload) => {
     body.replaceChildren();
     const commissioning = path === "/api/v1/host/commissioning";
-    if (!commissioning && payload?.available !== true) {
+    const evidence = commissioning ? null : payload?.evidence?.evidence || "unavailable";
+    if (!commissioning) wrap.dataset.evidence = evidence;
+    if (!commissioning && (payload?.available !== true || !["fresh", "delayed"].includes(evidence))) {
       body.append(el("dt", "", "상태"), el("dd", "", "확인할 수 없음"));
-      status.textContent = unavailableLabel(payload?.code);
-      status.setAttribute("state", "unavailable");
+      status.textContent = evidence === "disconnected"
+        ? `연결 끊김 · ${unavailableLabel(payload?.code)}`
+        : `정보 없음 · ${payload?.evidence?.reason || unavailableLabel(payload?.code)}`;
+      status.setAttribute("state", evidence === "disconnected" ? "error" : "unavailable");
       detailText.textContent = payload?.detail || "";
       detail.hidden = !payload?.detail;
       recoveryText.textContent = payload?.recovery || "";
@@ -47,7 +51,7 @@ function card(title, path, interval, ctx, describe) {
       onUpdate();
       return;
     }
-    wrap.dataset.available = "true";
+    wrap.dataset.available = commissioning || (evidence === "fresh" && payload.ok === true) ? "true" : "false";
     const data = commissioning ? payload : (payload.data || {});
     currentData = data;
     detailText.textContent = payload?.detail || "";
@@ -57,14 +61,17 @@ function card(title, path, interval, ctx, describe) {
     for (const [label, value] of describe(data)) {
       body.append(el("dt", "", label), el("dd", "", value == null || value === "" ? "—" : String(value)));
     }
-    status.textContent = payload.ok === false
-      ? "Host Agent가 확인이 필요한 상태를 보고했습니다."
+    status.textContent = evidence === "delayed"
+      ? payload.evidence.age_s == null ? "지연 · 원본 조회 시각 정보 없음. 새 조회를 기다리세요."
+        : `지연 · Host Agent 원본 조회 ${payload.evidence.age_s}초 전. 새 조회를 기다리세요.`
+      : payload.ok === false ? "Host Agent가 확인이 필요한 상태를 보고했습니다."
       : "Host Agent 상태를 확인했습니다.";
-    status.setAttribute("state", payload.ok === false ? "warning" : "ready");
+    status.setAttribute("state", evidence === "delayed" || payload.ok === false ? "warning" : "ready");
     onUpdate();
   }, (error) => {
     currentData = {};
     wrap.dataset.available = "false";
+    wrap.dataset.evidence = "unavailable";
     status.textContent = error.status === 403 ? "이 상태를 볼 권한이 없습니다." : `상태를 가져오지 못했습니다: ${error.message}`;
     status.setAttribute("state", error.status === 403 ? "forbidden" : "error");
     onUpdate();
@@ -100,7 +107,9 @@ export function mount(root, ctx) {
     for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled || networkPending;
     if (!enabled && !networkPending) {
       networkHasResult = false;
-      networkNote.textContent = "Host Agent 상태를 확인할 수 없어 네트워크 작업을 막았습니다.";
+      networkNote.textContent = network.wrap.dataset.evidence === "delayed"
+        ? "Host Agent 원본 조회가 지연되어 네트워크 작업을 막았습니다."
+        : "Host Agent 상태를 확인할 수 없어 네트워크 작업을 막았습니다.";
       networkNote.setAttribute("state", "unavailable");
     }
     networkNote.hidden = enabled && !networkHasResult && !networkPending;
@@ -121,7 +130,9 @@ export function mount(root, ctx) {
     clearHold.disabled = releasePending || release.wrap.dataset.available !== "true" || !held;
     if (release.wrap.dataset.available !== "true" && !releasePending) {
       releaseHasResult = false;
-      releaseNote.textContent = "Host Agent 상태를 확인할 수 없어 릴리스 작업을 막았습니다.";
+      releaseNote.textContent = release.wrap.dataset.evidence === "delayed"
+        ? "Host Agent 원본 조회가 지연되어 릴리스 작업을 막았습니다."
+        : "Host Agent 상태를 확인할 수 없어 릴리스 작업을 막았습니다.";
       releaseNote.setAttribute("state", "unavailable");
     }
     releaseNote.hidden = release.wrap.dataset.available === "true" && !releaseHasResult && !releasePending;

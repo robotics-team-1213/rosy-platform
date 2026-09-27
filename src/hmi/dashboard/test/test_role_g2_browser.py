@@ -28,7 +28,7 @@ TOKENS = {"operator": "rosy-dev-operator", "administrator": "rosy-dev-admin"}
 CAPTURES = Path("X:/DevTemp/rosy-uiux-d306-roles-g2")
 SCENARIOS = {
     "setup": ("normal", "empty", "delayed", "disconnected", "unavailable", "unsupported", "forbidden", "error", "safe_stop", "confirm_cancel"),
-    "device": ("normal", "empty", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
+    "device": ("normal", "empty", "delayed", "disconnected", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
 }
 
 
@@ -89,12 +89,22 @@ def _response(client, path, token, scenario, surface):
         response = Response(content=json.dumps({"error": {"code": "FORBIDDEN" if code == 403 else "UNAVAILABLE",
                                                          "message": "fixture: 권한 거부" if code == 403 else "fixture: 연결 오류"}}),
                             status_code=code, media_type="application/json")
-    elif scenario in {"normal", "confirm_cancel"} and surface == "device" and path in {
+    elif scenario in {"normal", "delayed", "disconnected", "unavailable", "confirm_cancel"} and surface == "device" and path in {
         "/api/v1/host/network", "/api/v1/host/release",
     }:
         data = {"mode": "SITE_STA", "ssid": "site-fixture"} if path.endswith("network") else {
             "state": "IDLE", "current": "r2", "previous": "r1"}
-        response = Response(content=json.dumps({"available": True, "ok": True, "data": data}), media_type="application/json")
+        observed_at = (datetime.now(timezone.utc) - timedelta(seconds=22 if scenario == "delayed" else 0)).isoformat()
+        evidence_state = scenario if scenario in {"delayed", "disconnected", "unavailable"} else "fresh"
+        response = Response(content=json.dumps({
+            "available": scenario != "disconnected", "ok": scenario not in {"disconnected", "unavailable"},
+            "code": "HOST_AGENT_TIMEOUT" if scenario == "disconnected" else "OK",
+            "data": data if evidence_state in {"fresh", "delayed"} else None,
+            "evidence": {"evidence": evidence_state,
+                         "observed_at": observed_at if evidence_state in {"fresh", "delayed"} else None,
+                         "age_s": 22 if evidence_state == "delayed" else 0 if evidence_state == "fresh" else None,
+                         "stale_after_s": 15, "reason": "fixture: Host Agent 원본 조회"},
+        }), media_type="application/json")
     return response
 
 
@@ -181,6 +191,14 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         if role == "administrator":
                             admin_reason = page.locator('[data-panel="setup.dock_admin"] ui-status').inner_text()
                             assert expected in admin_reason, records[-1]
+                    if role == "administrator" and surface == "device" and scenario in {
+                        "delayed", "disconnected", "unavailable",
+                    }:
+                        expected = {"delayed": "지연", "disconnected": "연결 끊김",
+                                    "unavailable": "정보 없음"}[scenario]
+                        card_status = page.locator("section.ui-readback ui-status").first.inner_text()
+                        assert expected in card_status, records[-1]
+                        assert page.get_by_text("사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
                     context.close()
         browser.close()
     (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

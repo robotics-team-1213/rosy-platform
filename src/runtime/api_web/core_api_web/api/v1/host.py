@@ -11,8 +11,10 @@ from pydantic import BaseModel, Field
 
 from core_api_web.api.v1.common import admin, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
-from core_api_web.api.host_agent_client import HostAgentClient
+from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
 from core_common import robot_state
+from core_common.protocol.evidence import EvidenceState
+from core_common.protocol.schemas import HostStatusEvidence
 from . import host_hardware as _host_hardware
 
 
@@ -42,36 +44,70 @@ def _agent(svc: CoreServicesLike) -> HostAgentClient:
     )
 
 
-def _relay(reply, *, absent_detail: str) -> dict:
+HOST_STATUS_STALE_AFTER_S = 15.0
+
+
+def _status_evidence(reply) -> HostStatusEvidence:
+    base = {"stale_after_s": HOST_STATUS_STALE_AFTER_S}
+    if reply.code in {UNAVAILABLE, TIMEOUT}:
+        return HostStatusEvidence(evidence=EvidenceState.DISCONNECTED,
+                                  reason="Host Agent에 연결되지 않았거나 응답이 시간 안에 오지 않았습니다.", **base)
+    if not reply.reachable or not reply.ok:
+        return HostStatusEvidence(reason="Host Agent가 완전한 상태 조회 결과를 주지 않았습니다.", **base)
+    try:
+        observed = datetime.fromisoformat(reply.observed_at) if reply.observed_at else None
+    except (TypeError, ValueError):
+        observed = None
+    if observed is None or observed.tzinfo is None or observed.utcoffset().total_seconds() != 0:
+        return HostStatusEvidence(reason="Host Agent 원본 조회 완료 시각이 없습니다.", **base)
+    age = (datetime.now(timezone.utc) - observed).total_seconds()
+    if age < 0:
+        return HostStatusEvidence(reason="Host Agent 원본 시각이 CORE 시각보다 미래입니다.", **base)
+    state = EvidenceState.DELAYED if age > HOST_STATUS_STALE_AFTER_S else EvidenceState.FRESH
+    return HostStatusEvidence(evidence=state, observed_at=reply.observed_at,
+                              age_s=round(age, 1),
+                              reason="Host Agent 원본 조회가 지연되었습니다." if state is EvidenceState.DELAYED
+                              else "Host Agent 원본 조회 완료 시각을 확인했습니다.", **base)
+
+
+def _relay(reply, *, absent_detail: str, status_read: bool = False) -> dict:
     """Turn an agent reply into a card payload that cannot mislead.
 
     ``available`` is the field the dashboard keys on. When it is false the
     card shows why instead of showing empty fields — an unreachable agent and
     a healthy device with nothing to report look identical otherwise.
     """
+    evidence = _status_evidence(reply) if status_read else None
     if not reply.reachable:
-        return {
+        payload = {
             "available": False,
             "code": reply.code,
             "detail": reply.detail or absent_detail,
             "recovery": reply.recovery,
             "data": None,
         }
-    return {
-        "available": True,
-        "ok": reply.ok,
-        "code": reply.code,
-        "detail": reply.detail,
-        "recovery": reply.recovery,
-        "data": reply.data,
-    }
+    else:
+        payload = {
+            "available": True,
+            "ok": reply.ok,
+            "code": reply.code,
+            "detail": reply.detail,
+            "recovery": reply.recovery,
+            "data": reply.data,
+        }
+    if evidence is not None:
+        payload["evidence"] = evidence.model_dump(mode="json")
+        if evidence.evidence in {EvidenceState.DISCONNECTED, EvidenceState.UNAVAILABLE}:
+            payload["data"] = None
+    return payload
 
 
 @host_router.get("/network")
 def host_network(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """현재 네트워크 모드와 도달성. SSID 는 표시하되 secret 은 절대 싣지 않는다."""
     reply = _agent(svc).request("network.status", role="viewer")
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 상태를 알 수 없습니다.")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 상태를 알 수 없습니다.",
+                  status_read=True)
 
 
 class NetworkApplyRequest(BaseModel):
@@ -165,7 +201,8 @@ def host_network_connect(
 def host_release(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """current / previous / staged 와 마지막 실패 사유."""
     reply = _agent(svc).request("release.status", role="viewer")
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 릴리스 상태를 알 수 없습니다.")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 릴리스 상태를 알 수 없습니다.",
+                  status_read=True)
 
 
 class HostActionRequest(BaseModel):

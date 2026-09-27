@@ -48,6 +48,7 @@ class AgentReply:
     detail: str = ""
     recovery: str = ""
     data: Any = None
+    observed_at: str | None = None
 
     @property
     def reachable(self) -> bool:
@@ -124,13 +125,25 @@ class HostAgentClient:
                 False, UNREADABLE, "the host agent's reply was not an object",
                 "에이전트와 CORE 의 버전이 맞는지 확인하십시오.",
             )
+        if type(response.get("ok")) is not bool or not isinstance(response.get("code"), str):
+            return AgentReply(
+                False, UNREADABLE, "the host agent's reply had invalid ok/code fields",
+                "에이전트와 CORE 의 버전이 맞는지 확인하십시오.",
+            )
+        if (command in {"network.status", "release.status"} and response["ok"]
+                and not isinstance(response.get("data"), dict)):
+            return AgentReply(
+                False, UNREADABLE, "the host agent's status data was not an object",
+                "에이전트와 CORE 의 버전이 맞는지 확인하십시오.",
+            )
 
         return AgentReply(
-            ok=bool(response.get("ok")),
-            code=str(response.get("code", UNREADABLE)),
+            ok=response["ok"],
+            code=response["code"],
             detail=str(response.get("detail", "")),
             recovery=str(response.get("recovery", "")),
             data=response.get("data"),
+            observed_at=response.get("observed_at") if isinstance(response.get("observed_at"), str) else None,
         )
 
     def _round_trip(self, line: bytes) -> bytes:
