@@ -1407,3 +1407,9 @@
 - Change: verify the final image at clean source revision b0609dc68ed727a1ed15e57e7c3e029001ab0a8f; no device deployment or release publication.
 - Evidence: ARM64 OCI build exit 0; final installed import, dashboard/web_common asset and route probe passed. Installed ament overlay contains exactly core, core_api_web, core_common, core_events, core_features, dashboard, interfaces, pinky_pro, web_common. OCI manifest sha256:4eeccfd3105bee2e5b4ecf7326af292b8d3eb41dcc372b6d1915207d2fba4e29; raw logs on X: (rosy-d310-core-closure-fix-b060.log, rosy-d310-core-inventory-b060.log).
 - Gate: CORE development image ARTIFACT evidence at this source SHA only. IO/native, deployed image signer/digest, DEVICE and FIELD remain HOLD.
+
+## 2026-09-27 · uncommitted · close development IO web asset dependency
+
+- Change: copy and select `web_common` with `control` in the IO image; probe the installed shared assets and control's asset resolver in the final IO stage.
+- Evidence: the IO closure tests failed twice on the original Dockerfile, then 38 IO/CORE image and runtime host contracts passed. ARM64 IO image execution remains pending.
+- Gate: SOURCE/LOCAL candidate only. The IO ARTIFACT, DEVICE, and FIELD gates remain HOLD.

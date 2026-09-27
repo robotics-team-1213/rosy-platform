@@ -131,16 +131,23 @@ COPY src/runtime/navigation ./src/runtime/navigation
 COPY src/devices/omx/adapter ./src/devices/omx/adapter
 COPY src/products/omx ./src/products/omx
 COPY src/runtime/sensing ./src/runtime/sensing
+COPY src/hmi/web ./src/hmi/web
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \
-        --packages-select sllidar_ros2 interfaces description bringup navigation omx_adapter omx control \
+        --packages-select sllidar_ros2 interfaces description bringup navigation omx_adapter omx control web_common \
     && test -d /opt/rosy_ws/install
 
 FROM io-runtime AS io
 
 COPY --from=io-build /opt/rosy_ws/install /opt/rosy_ws/install
+COPY deploy/robot/probe-io-image.py /tmp/probe-io-image.py
+RUN set -eo pipefail \
+    && source /opt/ros/jazzy/setup.bash \
+    && source /opt/rosy_ws/install/setup.bash \
+    && python3 /tmp/probe-io-image.py \
+    && rm -f /tmp/probe-io-image.py
 COPY deploy/robot/entrypoint.sh /usr/local/bin/rosy-entrypoint
 RUN chmod 0755 /usr/local/bin/rosy-entrypoint
 ENV HOME=/var/lib/rosy \
