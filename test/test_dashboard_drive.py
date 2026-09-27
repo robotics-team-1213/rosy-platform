@@ -35,6 +35,12 @@ def test_parser_requires_a_direction_and_bounds_the_hold(tmp_path, capsys):
     assert "--seconds" in capsys.readouterr().err
 
 
+def test_stationary_encoder_noise_does_not_report_motion():
+    assert dashboard_drive._moving({"velocity": {"linear": 0.0006, "angular": 0.0135}}) is False
+    assert dashboard_drive._moving({"velocity": {"linear": 0.02, "angular": 0.0}}) is True
+    assert dashboard_drive._moving({"velocity": {"linear": 0.0, "angular": 0.08}}) is True
+
+
 @pytest.fixture
 def page():
     pytest.importorskip("playwright.sync_api")
