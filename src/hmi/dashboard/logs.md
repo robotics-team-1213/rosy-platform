@@ -340,3 +340,9 @@
 - 변경: 관리자 `/device` 보안 패널에서 토큰 목록 오류, 토큰 생성/삭제 결과, 일회성 토큰 비밀값, 안전 정책 조회, 안전 정책 저장 결과를 별도 상태 영역으로 분리했다. 토큰 목록 조회가 실패하면 이전 행을 숨기고, 새 토큰 비밀값은 목록 재조회 오류나 안전 정책 폴링으로 사라지지 않게 한다. 안전 정책 폴링은 편집 중인 값을 보존하며 저장 요청 중에는 입력을 잠근다. 저장 응답의 현재값은 화면에 다시 반영한다.
 - 정적 확인: 토큰 POST/GET/DELETE와 안전 정책 GET/PUT의 상태 경로를 코드 및 API 응답 계약에서 대조했다. `git diff --check`를 통과했고 Impeccable detector는 `[]`였다. 관리자 브라우저 회귀와 새 `/device` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 토큰 실사용·안전정책 런타임 readback 및 DEVICE/FIELD는 별도다.
+
+## 2026-09-28 · uncommitted · test(dashboard): verify setup browser gates
+
+- 변경: 도크·웨이포인트·위치 설정 회귀에서 여러 상태 안내가 함께 존재하는 구조에 맞춰 브라우저 검증 선택자를 상태 문구로 좁혔다. 저속 teleop 회귀도 제거된 확인 체크박스 대신 활성 조건을 만족한 실제 명령 버튼과 놓기/시간 제한 정지를 확인하도록 맞췄다.
+- 증거: 지정 브라우저 회귀 54 passed (325.94초). 별도 FastAPI TestClient/Chromium 캡처에서 관리자 `/setup` 데스크톱 1366×768 및 모바일 390×844을 확인했다. `pageErrors=[]`, `overflowX=0`, 첫 페이지/API 응답 200; 캡처는 `X:\DevTemp\rosy-dashboard-browser-validation\administrator-setup-1366x768.png` 및 `administrator-setup-390x844.png`에 있다. Network/harness 계약 시험 77 passed; harness lint 0 errors, 기존 상태/변경 이력 warning 19건.
+- gate 변화: 당시 변경 기준 SOURCE/LOCAL GO. 캡처와 API는 로컬 fixture evidence이며 실제 설치 이미지, 로봇 장치, 현장 수용을 대체하지 않는다. ARTIFACT HOLD 유지.

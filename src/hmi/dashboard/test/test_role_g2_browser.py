@@ -185,18 +185,18 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         assert page.locator('#surface-status a[href="/console"]').is_visible(), records[-1]
                         assert page.locator('#shell-role').inner_text() == "권한 제한", records[-1]
                     if surface == "setup" and scenario in {"delayed", "disconnected", "unavailable"}:
-                        reason = page.locator('[data-panel="setup.docking"] ui-status').inner_text()
                         expected = {"delayed": "지연", "disconnected": "연결 끊김", "unavailable": "정보 없음"}[scenario]
+                        reason = page.locator('[data-panel="setup.docking"] ui-status').filter(has_text=expected).first.inner_text()
                         assert expected in reason, records[-1]
                         if role == "administrator":
-                            admin_reason = page.locator('[data-panel="setup.dock_admin"] ui-status').inner_text()
+                            admin_reason = page.locator('[data-panel="setup.dock_admin"] ui-status').filter(has_text=expected).first.inner_text()
                             assert expected in admin_reason, records[-1]
                     if role == "administrator" and surface == "device" and scenario in {
                         "delayed", "disconnected", "unavailable",
                     }:
                         expected = {"delayed": "지연", "disconnected": "연결 끊김",
                                     "unavailable": "정보 없음"}[scenario]
-                        card_status = page.locator("section.ui-readback ui-status").first.inner_text()
+                        card_status = page.locator("section.ui-readback ui-status").filter(has_text=expected).first.inner_text()
                         assert expected in card_status, records[-1]
                         assert page.get_by_text("사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
                     context.close()

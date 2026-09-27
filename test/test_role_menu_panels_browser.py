@@ -76,7 +76,7 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
         }""")
         assert page.evaluate("window.__poll") == "/api/v1/system/capabilities"
         assert page.locator("ui-button").evaluate_all("nodes => nodes.every(node => node.disabled)")
-        assert "사용할 수 없는 기능" in page.locator("[role=status]").inner_text()
+        assert "사용할 수 없는 기능" in page.locator("[role=status]").filter(has_text="사용할 수 없는 기능").first.inner_text()
         assert page.evaluate("window.__apiCalls") == []
         _unmount_panel(page)
         assert page.evaluate("window.__stopped") is True
@@ -115,7 +115,7 @@ def test_setup_docking_refuses_teach_without_fresh_pose():
           window.confirm = () => true;
           root.querySelector('[data-dock-id="dock-a"] ui-button').click();
         }""")
-        assert "최신이 아니어서" in page.locator("[role=status]").inner_text()
+        assert "최신이 아니어서" in page.locator("[role=status]").filter(has_text="최신이 아니어서").first.inner_text()
         assert page.locator("[data-dock-id='dock-a'] ui-button").evaluate("node => node.disabled === true")
         assert page.evaluate("window.__apiCalls") == []
         _unmount_panel(page)
@@ -184,7 +184,7 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
           root.querySelectorAll('ui-button').forEach(button => button.click());
         }""")
         assert "Host Agent" in page.locator("[role=status]").all_inner_texts()[0]
-        page.locator(".surface-disclosure summary").first.click()
+        page.locator(".surface-disclosure summary").filter(has_text="응답 세부 정보").first.click()
         details = page.locator(".surface-disclosure .surface-message").all_inner_texts()
         assert any("agent offline" in text for text in details)
         assert page.locator("ui-button").evaluate_all("nodes => nodes.every(node => node.disabled === true)")
@@ -313,8 +313,8 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
           callbacks['/api/v1/system/capabilities'].onData({teleop:true});
           callbacks['/api/v1/safety/state'].onData({estop:false});
           callbacks['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
-          const check = root.querySelector('input[type=checkbox]'); check.checked = true; check.dispatchEvent(new Event('change'));
           window.__button = root.querySelector('.surface-teleop-controls ui-button');
+          if (!window.__button || window.__button.disabled) throw new Error('eligible low-speed teleop button is not ready');
           window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1}));
         }""")
         page.wait_for_timeout(hold_ms)
@@ -328,7 +328,7 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
         assert all(abs(call["body"]["linear"]) <= 0.03 for call in calls)
         assert calls[-1]["body"] == {"linear": 0, "angular": 0}
         if not release:
-            assert "3초" in page.locator("ui-status").inner_text()
+            assert "2초 한도" in page.locator("ui-status").filter(has_text="2초 한도").first.inner_text()
         _unmount_panel(page)
         assert errors == []
         browser.close()

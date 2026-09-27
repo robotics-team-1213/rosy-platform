@@ -68,7 +68,7 @@ def test_waypoint_save_tracks_fresh_pose_and_stays_blocked_after_disconnect():
               pose:{x:1.2,y:0.4,yaw:0},evidence:{pose:{evidence:'delayed',received_at:new Date(Date.now()-22000).toISOString()}}
             })""")
             assert save.is_disabled()
-            assert "지연" in page.locator('[role="status"]').inner_text()
+            assert "지연" in page.locator('[role="status"]').filter(has_text="지연").first.inner_text()
             page.locator("form").evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
             assert page.evaluate("window.__calls") == []
             page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onData({
