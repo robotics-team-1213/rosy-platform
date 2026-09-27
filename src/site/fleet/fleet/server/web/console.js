@@ -42,6 +42,7 @@ function markLocked() {
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
   el("console-token").classList.add("locked");
+  showDiscoveryUnavailable("인증 필요", "관제 토큰을 입력하면 발견 목록을 다시 확인합니다.");
 }
 
 function markUnlocked() {
@@ -214,6 +215,20 @@ const discoveryLabels = {
   conflict: "신원 충돌",
 };
 
+function showDiscoveryUnavailable(label, message) {
+  const status = el("discovery-status");
+  status.textContent = label;
+  status.setAttribute("status", "warn");
+  const list = el("discovery-list");
+  if (list.childElementCount === 1 && list.firstElementChild?.dataset.unavailable === "true" &&
+      list.firstElementChild.textContent === message) return;
+  const item = document.createElement("li");
+  item.className = "hint";
+  item.dataset.unavailable = "true";
+  item.textContent = message;
+  list.replaceChildren(item);
+}
+
 async function refreshDiscovery() {
   if (auth.locked) return;
   try {
@@ -236,7 +251,8 @@ async function refreshDiscovery() {
     });
     el("discovery-list").replaceChildren(...rows);
   } catch (_err) {
-    if (!auth.locked) el("discovery-status").textContent = "발견 기능 미연결";
+    if (!auth.locked) showDiscoveryUnavailable(
+      "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
   }
 }
 

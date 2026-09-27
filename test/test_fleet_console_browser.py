@@ -637,6 +637,51 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
         browser.close()
 
 
+def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_url):
+    """A scanner read failure cannot leave the last discovered address looking current."""
+    from playwright.sync_api import sync_playwright
+
+    devices = {"scanner_online": True, "devices": [{
+        "name": "rosy-old", "address": "192.0.2.10", "port": 8000,
+        "stage": "ready", "status": "pairing_pending",
+    }]}
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+        "/api/fleet/discovery": devices,
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')")
+
+        api["/api/fleet/discovery"] = (503, {"detail": {"code": "SCANNER_UNAVAILABLE"}})
+        page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '발견 상태 확인 불가'",
+                               timeout=7000)
+        assert "192.0.2.10" not in page.inner_text("#discovery-list")
+        assert "발견 목록을 확인할 수 없습니다" in page.inner_text("#discovery-list")
+
+        api["/api/fleet/discovery"] = {"scanner_online": True, "devices": [{
+            "name": "rosy-new", "address": "192.0.2.11", "port": 8000,
+            "stage": "ready", "status": "pairing_pending",
+        }]}
+        page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.11')",
+                               timeout=7000)
+        assert "192.0.2.10" not in page.inner_text("#discovery-list")
+
+        api["/api/fleet/discovery"] = (401, {"detail": {"code": "TOKEN_REQUIRED"}})
+        page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '인증 필요'",
+                               timeout=7000)
+        assert "192.0.2.11" not in page.inner_text("#discovery-list")
+        api["/api/fleet/discovery"] = devices
+        page.locator("#token-save").click()
+        page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')",
+                               timeout=7000)
+        assert errors == []
+        browser.close()
+
+
 # --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
 
 def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
