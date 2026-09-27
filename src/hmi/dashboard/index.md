@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(setup): hide stale dock actions when inventory cannot be read
 - 2026-09-28 · uncommitted · fix(setup): keep dock registration blockers next to the action
 - 2026-09-28 · uncommitted · fix(teleop): remove repeated confirmation gate
 - 2026-09-28 · uncommitted · fix(device): bring current state and next action into view
 - 2026-09-27 · uncommitted · fix(device): clear stale Host Agent readouts after read failure
-- 2026-09-27 · uncommitted · fix(setup): reuse dock type after detector selection

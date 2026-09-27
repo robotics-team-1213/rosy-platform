@@ -3,31 +3,45 @@ import { poseUnavailableReason } from "./pose-evidence.js";
 
 // Setup owns dock inventory and teach-by-docking; operational docking lives in /console.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
+function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "도크 위치 준비");
-  const status = el("ui-status", "", "로봇 pose와 도크 목록을 불러오는 중입니다.");
+  const status = el("ui-status", "", "현재 로봇 위치와 도크 실행 상태를 불러오는 중입니다.");
   const facts = el("dl", "ui-readout");
+  const listStatus = el("ui-status", "", "");
+  listStatus.setAttribute("role", "status"); listStatus.setAttribute("aria-live", "polite");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "등록된 도크 위치");
-  root.append(head, status, facts, list);
+  const actionStatus = el("ui-status", "", "");
+  actionStatus.setAttribute("role", "status"); actionStatus.setAttribute("aria-live", "polite");
+  root.append(head, status, facts, listStatus, list, actionStatus);
 
   let poseFresh = false;
   let docks = [];
+  let docksLoaded = false;
+  const pendingTeaches = new Set();
   let dockingSupported = null;
   function renderDocks() {
     list.replaceChildren();
+    list.hidden = !docksLoaded;
+    if (!docksLoaded) return;
     if (!docks.length) { list.append(el("li", "", "등록된 도크가 없습니다.")); return; }
     for (const dock of docks) {
       const row = el("li", ""); row.dataset.dockId = dock.id;
       const detail = el("span", "", `${dock.id} · ${dock.type || "유형 없음"} · 맵 ${dock.map_id || "미지정"}`);
-      const teach = el("ui-button", "", "현재 위치 기록"); teach.setAttribute("kind", "primary"); teach.type = "button"; teach.disabled = !poseFresh;
-      teach.setAttribute("aria-label", `${dock.id}에 현재 로봇 위치 기록`);
+      const recording = pendingTeaches.has(dock.id);
+      const teach = el("ui-button", "", recording ? "위치 기록 요청 중…" : "현재 위치 기록");
+      teach.setAttribute("kind", "primary"); teach.type = "button"; teach.disabled = !poseFresh || recording;
+      teach.setAttribute("aria-label", recording ? `${dock.id} 위치 기록 요청 중` : `${dock.id}에 현재 로봇 위치 기록`);
       teach.addEventListener("click", async () => {
-        if (!poseFresh || !window.confirm(`현재 위치를 ${dock.id} 도크 포즈로 기록할까요? 실제 도킹 위치에 로봇을 맞춘 뒤 진행하세요.`)) return;
-        teach.disabled = true;
-        try { await ctx.api(`/api/v1/docking/docks/${encodeURIComponent(dock.id)}/teach`, {method: "POST"}); status.textContent = `${dock.id}의 위치 기록 요청을 전달했습니다.`; }
-        catch (error) { status.textContent = `위치 기록 실패: ${error.message}`; }
-        finally { teach.disabled = !poseFresh; }
+        if (!poseFresh || pendingTeaches.has(dock.id) || !docksLoaded
+            || !window.confirm(`현재 위치를 ${dock.id} 도크 포즈로 기록할까요? 실제 도킹 위치에 로봇을 맞춘 뒤 진행하세요.`)) return;
+        pendingTeaches.add(dock.id);
+        setText(actionStatus, `${dock.id} 위치 기록 요청을 처리하고 있습니다.`);
+        renderDocks();
+        try { await ctx.api(`/api/v1/docking/docks/${encodeURIComponent(dock.id)}/teach`, {method: "POST"}); setText(actionStatus, `${dock.id}의 위치 기록 요청을 전달했습니다.`); }
+        catch (error) { setText(actionStatus, `위치 기록 실패: ${error.message}`); }
+        finally { pendingTeaches.delete(dock.id); renderDocks(); }
       });
       row.append(detail, teach); list.append(row);
     }
@@ -45,6 +59,13 @@ export function mount(root, ctx) {
       el("dt", "", "대상 도크"), el("dd", "", data.dock_id || "—"),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));
   }, (error) => { dockingSupported = false; facts.replaceChildren(el("dd", "", `도킹 상태를 읽지 못했습니다: ${error.message}`)); });
-  const stopDocks = ctx.store.poll("/api/v1/docking/docks", 10_000, (data) => { docks = data.docks || []; renderDocks(); }, (error) => { status.textContent = `등록된 도크를 읽지 못했습니다: ${error.message}`; });
+  const stopDocks = ctx.store.poll("/api/v1/docking/docks", 10_000, (data) => {
+    docks = data.docks || []; docksLoaded = true; renderDocks();
+    setText(listStatus, "");
+  }, (error) => {
+    docks = []; docksLoaded = false;
+    renderDocks();
+    setText(listStatus, `도크 목록을 읽지 못했습니다: ${error.message} · 복구될 때까지 위치 기록 조작을 숨겼습니다. 다시 확인 중입니다.`);
+  });
   return () => { stopState(); stopStatus(); stopDocks(); };
 }

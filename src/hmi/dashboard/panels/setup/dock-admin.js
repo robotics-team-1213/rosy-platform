@@ -52,8 +52,10 @@ export function mount(root, ctx) {
   let pending = false;
   let poseError = null;
   let listError = null;
+  let docksLoaded = false;
   let listNotice = "";
   let registrationResult = "";
+  const pendingDeletes = new Set();
   function setText(node, value) {
     if (node.textContent !== value) node.textContent = value;
   }
@@ -101,21 +103,26 @@ export function mount(root, ctx) {
   }
   function renderDocks() {
     list.replaceChildren();
+    list.hidden = !docksLoaded;
+    if (!docksLoaded) return;
     if (!docks.length) list.append(el("li", "", "등록된 도크가 없습니다."));
     for (const item of docks) {
       const row = el("li", ""); row.dataset.dockId = item.id;
       row.append(el("span", "", `${item.id} · ${item.type} · ${item.map_id || "맵 없음"}`));
-      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button";
+      const deleting = pendingDeletes.has(item.id);
+      const remove = el("ui-button", "", deleting ? "삭제 중…" : "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button";
+      remove.disabled = deleting;
       remove.addEventListener("click", async () => {
-        if (!window.confirm(`${item.id} 도크를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+        if (pendingDeletes.has(item.id) || !docksLoaded || !window.confirm(`${item.id} 도크를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+        pendingDeletes.add(item.id);
         listNotice = ""; updateListStatus();
-        remove.disabled = true;
+        renderDocks();
         try {
           await ctx.api(`/api/v1/docking/docks/${encodeURIComponent(item.id)}`, {method: "DELETE"});
           listNotice = `${item.id} 도크를 삭제했습니다.`;
           docks = docks.filter((dock) => dock.id !== item.id);
-          renderDocks();
-        } catch (error) { listNotice = `도크 삭제 실패: ${error.message}`; remove.disabled = false; }
+        } catch (error) { listNotice = `도크 삭제 실패: ${error.message}`; }
+        finally { pendingDeletes.delete(item.id); renderDocks(); }
         updateListStatus();
       });
       row.append(remove); list.append(row);
@@ -132,8 +139,12 @@ export function mount(root, ctx) {
     updateRegistrationReadiness();
   }, (error) => { poseFresh = false; pose = null; poseError = error.message; updateRegistrationReadiness(); });
   const stopDocks = ctx.store.poll("/api/v1/docking/docks", 10_000, ({docks: rows = []}) => {
-    docks = rows; listError = null; renderDocks(); updateListStatus();
-  }, (error) => { listError = `도크 목록을 읽지 못했습니다: ${error.message}`; updateListStatus(); });
+    docks = rows; docksLoaded = true; listError = null; renderDocks(); updateListStatus();
+  }, (error) => {
+    docks = []; docksLoaded = false;
+    listError = `도크 목록을 읽지 못했습니다: ${error.message} · 복구될 때까지 등록 위치와 삭제 조작을 숨겼습니다. 다시 확인 중입니다.`;
+    renderDocks(); updateListStatus();
+  });
 
   function updateDetectorFields() {
     const existingType = types.some((item) => item.name === typeField.control.value.trim());
