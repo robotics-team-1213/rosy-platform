@@ -2994,3 +2994,9 @@
 - 변경: Fleet·역할·게임·LCD의 후속 상태 표시 수정을 D-309 실행 계획과 표면별 LOCAL 카드에 연결했다. 이전 G2 캡처 전체가 새 HEAD에서 재검증된 것으로 표시하지 않는다.
 - 근거: 병합된 화면 커밋과 각 집중 Chromium/호스트 시험. 현재 main의 Fleet 이미지 재빌드 후 로컬 Compose 3서비스 healthy, 인증 API 200, 화면 자산 해시 일치를 확인했다. 실물 수용은 별도다.
 - gate 변화: 문서 SOURCE 근거만 보강. D-153 G2/G3, DEVICE/FIELD는 HOLD.
+
+## 2026-09-28 · uncommitted · docs(camera-fault): record D-313 and implementation gates
+
+- 변경: 전면 카메라 장애 시 관제 전체 영상과 IR/LiDAR 기반 제한 시연을 D-313으로 결정하고 파일별 구현·시험·배포·롤백 계획을 연결했다. 기존 D-257 sighting은 표시·대조용으로 유지한다.
+- 증거: ADR/계획/계약 정합을 확인했다. CORE/Fleet/Vision 생산 코드, 배포, 실물 주행은 변경하지 않았다.
+- gate 변화: 구조 결정은 Accepted; 구현·장치 설치·G4/G5·현장 시연은 HOLD.
