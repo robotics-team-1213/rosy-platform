@@ -73,6 +73,19 @@ def battery_color(percent: float) -> tuple[int, int, int]:
     return _CRIT
 
 
+def battery_measurement(raw: object, *, percent: bool = False) -> float | None:
+    """Accept only a finite measured value; invalid input is missing evidence."""
+    if isinstance(raw, bool):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(value) or value < 0 or (percent and value > 100):
+        return None
+    return value
+
+
 def _draw_alarm(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
     """경보 문장은 채움이다(D-202 의 얼굴 번역).
 
@@ -98,12 +111,12 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
 
-    raw_percent = payload.get("battery_percent")
-    voltage = payload.get("battery_voltage")
+    raw_percent = battery_measurement(payload.get("battery_percent"), percent=True)
+    voltage = battery_measurement(payload.get("battery_voltage"))
     has_percent = raw_percent is not None
     # 결측은 0%가 아니다 — 결측을 crit 색 경보로 그리면 없는 위험을 만든다
     # (Law 0). 전압의 '--' 폴백과 같은 규약을 쓴다.
-    percent = float(raw_percent) if has_percent else 0.0
+    percent = raw_percent if has_percent else 0.0
     color = battery_color(percent) if has_percent else _MUTED
 
     robot_id = str(payload.get("robot_id") or "rosy")
@@ -240,13 +253,13 @@ def boot_lines(payload: dict) -> list[tuple[str, str, tuple[int, int, int]]]:
     else:
         lines.append(("address", "no IP address", _MUTED))
 
-    percent = payload.get("battery_percent")
-    voltage = payload.get("battery_voltage")
+    percent = battery_measurement(payload.get("battery_percent"), percent=True)
+    voltage = battery_measurement(payload.get("battery_voltage"))
     if percent is None or voltage is None:
         lines.append(("battery", "battery --", _MUTED))
     else:
-        lines.append(("battery", f"{float(percent):.0f}%  {float(voltage):.2f} V",
-                      battery_color(float(percent))))
+        lines.append(("battery", f"{percent:.0f}%  {voltage:.2f} V",
+                      battery_color(percent)))
 
     # D-260 4: ``state_line`` / ``todo`` come from core_common.robot_state (LCD
     # form, ASCII: the DejaVu card font has no Hangul). Absent on an old release.

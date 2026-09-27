@@ -83,8 +83,28 @@ class TestRender:
         assert _CRIT not in colors
         assert battery_color(0.0) == _CRIT  # 실측 0%는 여전히 위험색이다
 
+    @pytest.mark.parametrize("percent", [float("nan"), float("inf"), -1, 101, "unknown", True])
+    def test_invalid_percent_uses_missing_instead_of_a_false_alarm(self, percent):
+        invalid = render(self._payload(battery_percent=percent))
+        missing = render(self._payload(battery_percent=None))
+        assert ImageChops.difference(invalid, missing).getbbox() is None
+        assert _CRIT not in {color for _count, color in invalid.getcolors(maxcolors=1 << 16)}
+
+    @pytest.mark.parametrize("voltage", [float("nan"), float("inf"), -1, "unknown", True])
+    def test_invalid_voltage_uses_missing(self, voltage):
+        invalid = render(self._payload(battery_voltage=voltage))
+        missing = render(self._payload(battery_voltage=None))
+        assert ImageChops.difference(invalid, missing).getbbox() is None
+
+    def test_measured_low_and_normal_percent_keep_their_distinct_states(self):
+        low = render(self._payload(battery_percent=12.0))
+        normal = render(self._payload(battery_percent=73.4))
+        assert _CRIT in {color for _count, color in low.getcolors(maxcolors=1 << 16)}
+        assert _CRIT not in {color for _count, color in normal.getcolors(maxcolors=1 << 16)}
+        assert ImageChops.difference(low, normal).getbbox() is not None
+
     @pytest.mark.parametrize("percent", [-20.0, 0.0, 100.0, 150.0])
-    def test_gauge_clamps_out_of_range_percent(self, percent):
+    def test_renderer_handles_percent_bounds_and_invalid_values(self, percent):
         assert render(self._payload(battery_percent=percent)).size == DEFAULT_SIZE
 
     def test_gauge_is_painted_in_the_battery_color(self):

@@ -123,6 +123,18 @@ def test_missing_battery_is_grey_dashes_not_an_empty_battery():
     assert _CRIT not in _colors(render_boot(payload))
 
 
+@pytest.mark.parametrize("field,value", [
+    ("battery_percent", float("nan")), ("battery_percent", float("inf")),
+    ("battery_percent", -1), ("battery_percent", 101),
+    ("battery_voltage", float("nan")), ("battery_voltage", float("inf")),
+    ("battery_voltage", -1),
+])
+def test_invalid_battery_measurement_is_not_a_boot_alarm(field, value):
+    payload = {**READY, field: value}
+    assert _rows(payload)["battery"] == ("battery --", _MUTED)
+    assert _CRIT not in _colors(render_boot(payload))
+
+
 @pytest.mark.parametrize("percent,color", [(80, _FG), (45, _WARN), (12, _CRIT)])
 def test_battery_uses_the_info_card_thresholds(percent, color):
     assert _rows({**READY, "battery_percent": percent})["battery"][1] == color
