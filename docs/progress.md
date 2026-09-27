@@ -65,7 +65,7 @@ plans:
 - UI/UX 평가 기준은 D-153(세 계층 G1/G2/G3, 판정 단위 표면)이다. 첫 회차(`docs/validation/uiux-surfaces-<date>/`) 전에는 표면 UI/UX 판정을 GO로 쓰지 않는다.
 - D-306는 화면별 소유권과 개선 종료 조건을 고정한다. Fleet 키보드 목표·역할 `/device` 결과·게임 상태/정지·LCD 긴 문자열·Gazebo 뷰어 탭을 SOURCE/LOCAL에서 개선했다. 전체 G2/G3와 실물·현장 증거는 남았고 sensing 진단은 D-266 해제 전 PARKED다.
 - D-309는 CORE/Fleet/게임 호스트의 판정·권한·안전 소유권과 프론트의 표시·입력 책임을 고정한다. Fleet 디스패치 안전·송신 시간 서버 판정·예외 우선 목록, 게임 보드 생성 시각·지연 표시, 역할 화면 SAFE_STOP 표시는 LOCAL 검증됐고 변경 후 로컬 캡처를 확인했다. 화면별 전체 G2/G3와 물리 수용은 HOLD다.
-- D-310은 제품 전용 기존 패키지를 `products/<모델>`에 모으고 제품 독립 IMU 드라이버를 `drivers/`로 옮기는 목표를 Proposed로 기록한다. 격리 `d310-source` worktree에서 여덟 패키지의 SOURCE 후보를 준비 중이며, 로컬 `main`과 Accepted 위치 기준은 아직 바뀌지 않았다. 이미지 동등성·장치 수용은 HOLD다.
+- D-310은 제품 전용 기존 패키지를 `products/<모델>`에 모으고 제품 독립 IMU 드라이버를 `drivers/`로 옮기는 목표를 Proposed로 기록한다. 격리 `d310-combined` worktree의 여덟 패키지 이동 후보는 SOURCE/LOCAL·WSL Jazzy 빌드를 통과했고, 별도 결함을 고친 이동 전 기준선과 CORE/IO ARM64 OCI 설치 closure가 각각 일치했다. 실제 aarch64/Jazzy native payload 비교는 NOT_RUN이므로 전체 ARTIFACT 동등성, 로컬 `main` 폴더 통합, 장치 수용은 HOLD다. Accepted 위치 기준은 아직 바뀌지 않았다.
 - 남은 게이트는 D-78–D-81이 가른다. ARTIFACT는 네이티브 Pi(D-78). 옛 ROS-SIM GO는 무효(D-79). Fleet 콘솔 v1 gather는 REST(D-81).
 - D-154는 공통 Pinky 이미지와 장치별 identity/Wi-Fi/Fleet bootstrap을 분리한다. 현재 CORE `FleetAgent`와 Hub listen 경로는 미구현이므로 두 대 실기 등록·heartbeat·명령·재접속·단절 HOLD를 보기 전까지 FLEET은 HOLD다.
 - D-164는 Pinky Pro 제품 파일을 ISO가 아닌 서명된 Raspberry Pi raw disk image

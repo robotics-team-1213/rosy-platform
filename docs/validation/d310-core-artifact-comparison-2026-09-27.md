@@ -23,10 +23,14 @@ Both builds used the same pinned ARM64 ROS Jazzy base image and Docker build inp
 
 This supports **CORE ARTIFACT equivalence for these two source revisions**. The package set contains neither Pinky hardware drivers nor the OMX adapter. The manifest digests differ as expected for distinct source revisions; digest equality is not the equivalence criterion.
 
+## Final combined source candidate readback
+
+The later D-310 candidate `f7dae4d26438a92cdcabe1e502cb5bcb420f76e8` changes the IO Docker stage only. Its ARM64 CORE image build exited 0 and produced the **same OCI manifest** as a72 (`sha256:ff04a462970db63f50fffa6f89c02243e3bd2556d044260021b5c5dc797b7c45`). The installed overlay still contains the same nine packages. `ros2 pkg prefix pinky_pro` returned `/opt/rosy_ws/install`; both Pinky config hashes above matched; `lib/core/core` was executable. The build started with a clean f7 worktree; evidence-only edits under `docs/` began while the later readback was running and did not change `src/` or `deploy/` image inputs. Raw logs: `X:\DevTemp\rosy-d310-core-combined-f7.log`, `rosy-d310-core-inventory-f7.log`, and `rosy-d310-core-profile-readback-f7.log`.
+
 Raw logs: `X:\DevTemp\rosy-d310-core-closure-fix-b060.log`, `rosy-d310-core-inventory-b060.log`, `rosy-d310-core-profile-readback-b060.log`, `rosy-d310-core-combined-a72d.log`, `rosy-d310-core-combined-inventory-a72d.log`, and `rosy-d310-core-profile-readback-a72d.log`.
 
 ## Remaining D-310 gates
 
-- The IO pre-move and combined ARM64 image install closures must be compared separately. The first IO attempt stopped during large apt installation, so no baseline was asserted from it.
+- The first IO attempt stopped during large apt installation, so no baseline was asserted from it. A later pre-move IO closure fix and the moved candidate have now been compared separately in the [IO image record](d310-io-artifact-comparison-2026-09-27.md).
 - Native payload still needs a clean checkout of the candidate SHA on a real aarch64/Jazzy builder, with source revision, full installed ament inventory, required packages, share files, and executable readback.
-- SOURCE/LOCAL and CORE image evidence do not establish whole-image `ARTIFACT_EQUIVALENT`, DEVICE stop/readback, or FIELD acceptance. D-310 remains Proposed, and the product folder move remains out of local `main`.
+- SOURCE/LOCAL and CORE/IO image evidence do not establish whole-change `ARTIFACT_EQUIVALENT` without the native payload comparison, DEVICE stop/readback, or FIELD acceptance. D-310 remains Proposed, and the product folder move remains out of local `main`.

@@ -2941,3 +2941,9 @@
 - Change: combined the pre-move CORE dependency fix with the isolated D-310 product source candidate; local main still retains the pre-move folder layout.
 - Evidence: both pinned ARM64 CORE OCI builds exited 0, final import/dashboard probes passed, installed overlay package sets matched exactly at nine names, and installed Pinky profile YAML hashes and core executable matched. Details: `docs/validation/d310-core-artifact-comparison-2026-09-27.md`.
 - Gate: CORE artifact equivalence only at the two recorded source SHAs. IO/native comparison, whole D-310 ARTIFACT, DEVICE and FIELD remain HOLD; D-310 remains Proposed.
+
+## 2026-09-27 · f7dae4d2 · validate D-310 IO artifact comparison
+
+- Change: compared the independently repaired pre-move IO image (`d6b9c241`) with the product-folder candidate (`f7dae4d2`) under the same ARM64 Docker inputs. The original eight-package IO image omitted `web_common`, so it was not used as the folder-move baseline.
+- Evidence: both IO builds and installed asset/import probes passed. Full apt inventory (1,538 entries), overlay inventory (9 packages), four `ros2 pkg prefix` results, 395 installed share files, and 19 entrypoint modes/content hashes matched exactly. The CORE image rebuilt at the same f7 source SHA and had the exact a72 CORE OCI manifest and installed readback. Details: `docs/validation/d310-io-artifact-comparison-2026-09-27.md` and `docs/validation/d310-core-artifact-comparison-2026-09-27.md`.
+- Gate: CORE and IO image closures are equivalent at the recorded source SHAs. Native aarch64/Jazzy payload baseline/candidate comparison is NOT_RUN; whole D-310 `ARTIFACT_EQUIVALENT`, folder integration into `main`, DEVICE, and FIELD remain HOLD. D-310 remains Proposed.
