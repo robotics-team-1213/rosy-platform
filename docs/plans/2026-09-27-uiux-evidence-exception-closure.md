@@ -111,3 +111,9 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - 인증된 `/setup`·`/device`는 첫 CORE 상태 응답 전 `안전 상태 확인 중`을 공통 셸에 표시한다(`e9051960`). 첫 응답 뒤 SAFE_STOP 또는 상태 확인 불가 규칙으로 전환하며, 미인증 화면에는 상태 정보를 노출하지 않는다.
 - 첫 기동 6셀(역할 3종 × 1366×768/390×844)을 전체 화면으로 캡처했다. `X:\DevTemp\rosy-uiux-d306-roles-g2\first-boot-matrix.json`과 PNG는 LOCAL 증거다. 역할 매트릭스 56셀 포함 브라우저 2 passed, 병합 후 첫 기동 단독 1 passed를 확인했다.
 - Host Agent 원본 상태값의 생성 시각, 실물 네트워크·릴리스 결과 readback, 네이티브 확인창 이미지 및 G3 사람 평가는 아직 별도 게이트다.
+
+## 2026-09-27 실물 로봇 읽기 전용 확인
+
+- 대상 로봇의 현재 주소를 받아 SSH host key와 전용 operator key로 접속하고 Pi 5, `rosy-pinky-ufcz`, boot ID, 실행 릴리스 `2026.09.26-017`, 소스 `b093fe45` 및 manifest SHA-256을 확인했다. 원시 요약은 `X:\DevTemp\rosy-uiux-d309-device-readback.json`에 보관한다. 주소와 인증 값은 저장소에 기록하지 않는다.
+- CORE·IO·부팅 표시 서비스는 active, navigation은 inactive였다. 인증된 CORE `/api/v1/robot/state`는 조회 시점에 `IDLE`, `estop=false`를 반환했다. 이는 명령 실행이나 물리 정지 확인이 아니다.
+- 이 릴리스는 현재 `main`보다 270커밋 이전이고 Host Agent unit·socket이 없다. `/api/v1/host/network`와 `/release`는 둘 다 `HOST_AGENT_UNAVAILABLE`을 반환했다. 신규 UI·Host 증거 계약과 LCD 카드 수정은 이 장치에 설치되지 않았으므로 DEVICE 검증으로 승격하지 않는다. Fleet 서버 주소, 새 이미지 digest, 실물 화면·움직임·사람 평가는 계속 HOLD다.

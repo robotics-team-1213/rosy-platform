@@ -122,3 +122,5 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 ## 역할 화면 첫 기동 (LOCAL)
 
 인증된 `/setup`·`/device`에서 첫 상태 응답을 기다리는 6개 역할·뷰포트 셀을 전체 화면으로 캡처했다. [역할 G2 카드](roles-g2-matrix.md)에 `X:\DevTemp\rosy-uiux-d306-roles-g2\first-boot-matrix.json`과 PNG 경로, 익명 세션 비노출 시험을 기록했다. 병합 후 첫 기동 브라우저 시험 1 passed다. 이는 CORE의 첫 상태 응답 전 화면 표시만 검증하며, 실물 SAFE_STOP 또는 Host Agent 결과는 증명하지 않는다.
+
+2026-09-27 실물 로봇에 읽기 전용으로 접속해 릴리스 `2026.09.26-017`(소스 `b093fe45`)과 CORE·IO·부팅 표시 active를 확인했다. Host Agent는 설치되지 않아 네트워크·릴리스 GET이 `HOST_AGENT_UNAVAILABLE`이다. 현재 main의 UI/LCD 수정은 이 이미지에 없으며, 로봇 주소·인증 값은 카드에 남기지 않는다. 실물 화면 판독·물리 정지·Fleet 연동은 미검증이다.

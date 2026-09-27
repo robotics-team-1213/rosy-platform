@@ -2947,3 +2947,9 @@
 - 변경: 인증된 `/setup`·`/device`의 첫 상태 응답 전 안전 상태 표시를 역할 G2 카드와 D-309 실행 계획에 연결했다. 전체 화면 6셀은 X:의 LOCAL 캡처다.
 - 검증: 병합 후 첫 기동 브라우저 시험 1 passed. 미인증 세션의 안전 상태 비노출도 같은 시험에서 확인했다.
 - gate 변화: 역할 첫 기동 LOCAL 누락을 닫았다. Host Agent 값별 시각·실물 readback 및 G3 사람 평가는 HOLD다.
+
+## 2026-09-27 · uncommitted · validation(uiux): read current robot without changing it
+
+- 변경: 현재 대상 로봇의 실행 릴리스·서비스·CORE 상태를 읽기 전용으로 조회하고 D-309 계획에 실물 관찰 범위를 기록했다. 주소·인증 값은 저장소에 남기지 않았다.
+- 검증: Pi 5/릴리스 `2026.09.26-017`/소스 `b093fe45`, CORE·IO·부팅 표시 active, navigation inactive, CORE `IDLE`/`estop=false`; Host Agent unit·socket 없음과 두 GET의 `HOST_AGENT_UNAVAILABLE`을 확인했다. X: 일회성 JSON에 시각·digest를 기록했다.
+- gate 변화: 연결·현행 릴리스 관찰만 DEVICE 증거다. 신규 UI·Host 계약, LCD·물리 정지·Fleet·G3 수용은 HOLD다.
