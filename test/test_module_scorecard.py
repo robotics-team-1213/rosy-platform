@@ -135,13 +135,12 @@ def test_weights_sum_to_100(weights: dict) -> None:
 def test_baseline_covers_workspace_packages_set_equality(baseline: dict) -> None:
     """집합 동일성 — 새 패키지는 기준선에 없으면 붉다 (D-178 Decision 5)."""
     workspace: set = set()
-    manifests = sorted((REPO / "src").glob("*/*/package.xml"))
-    manifests += sorted((REPO / "src" / "devices").glob("*/*/package.xml"))
+    manifests = sorted((REPO / "src").rglob("package.xml"))
     for manifest in manifests:
         match = re.search(r"<name>([^<]+)</name>", _read(manifest))
         assert match, f"<name> 없는 manifest: {manifest}"
         workspace.add(match.group(1).strip())
-    assert workspace, "src/*/*/package.xml 스캔 결과가 비었다"
+    assert workspace, "src/**/package.xml 스캔 결과가 비었다"
     missing = workspace - set(baseline)
     stale = set(baseline) - workspace
     assert not missing, f"기준선에 없는 새 패키지: {sorted(missing)}"

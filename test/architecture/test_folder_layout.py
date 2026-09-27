@@ -1,7 +1,11 @@
 """D-186: scripts and module markdown do not grow a second owner."""
 
+import os
 from pathlib import Path
+import shutil
+import subprocess
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,7 +23,7 @@ def test_root_shell_is_only_the_dev_environment():
 
 def test_package_trees_do_not_carry_a_second_installer():
     assert list(ROOT.glob("src/**/deploy/*.sh")) == []
-    assert (ROOT / "src" / "devices" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh").is_file()
+    assert (ROOT / "src" / "products" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh").is_file()
     assert (ROOT / "src" / "runtime" / "sensing" / "tools" / "gz" / "run_track260905.sh").is_file()
 
 
@@ -36,6 +40,34 @@ def test_developer_scripts_live_under_tools():
     assert (ROOT / "tools" / "fix_ament_resource.sh").is_file()
     assert (ROOT / "tools" / "run_fleet_sim.sh").is_file()
     assert "/mnt/f/" not in (ROOT / "tools" / "fix_ament_resource.sh").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None,
+                    reason="ament marker repair requires a Linux bash workspace")
+def test_ament_marker_repair_reaches_nested_product_packages(tmp_path):
+    workspace = tmp_path / "rosy"
+    tools = workspace / "tools"
+    tools.mkdir(parents=True)
+    script = tools / "fix_ament_resource.sh"
+    shutil.copy2(ROOT / "tools" / "fix_ament_resource.sh", script)
+
+    packages = {
+        "products/pinky_pro/profile": "pinky_pro",
+        "products/omx/adapter": "omx_adapter",
+        "drivers/imu_bno055": "imu_bno055",
+    }
+    for relative, name in packages.items():
+        package = workspace / "src" / relative
+        package.mkdir(parents=True)
+        (package / "setup.py").write_text("# ament_python package\n", encoding="utf-8")
+        (package / "package.xml").write_text(
+            f"<package><name>{name}</name></package>\n", encoding="utf-8"
+        )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    for relative, name in packages.items():
+        assert (workspace / "src" / relative / "resource" / name).is_file(), relative
 
 
 def test_validation_shells_stay_inside_evidence():

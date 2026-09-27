@@ -56,9 +56,9 @@
 2. `rg -n 'src/(devices|products)/(pinky_pro|omx|common)' .github deploy tools test src --glob '!*.md'`로 살아 있는 경로 소비자를 목록화한다. `test_target_layout.py`의 기대 패키지 1개 1경로와 harness module path를 별도로 대조한다.
 3. CORE/IO Dockerfile `COPY`·`--packages-*`, native payload `--base-paths src`, 필수 패키지 목록과 실제 설치 목록을 **이미지별**로 기록한다. 동일한 base image digest·Docker build args·requirements·apt 입력을 고정해 CORE·IO·native를 실제 빌드하고, 각 overlay의 ament index 패키지 전체 집합, 이동 패키지의 share/config/launch·console script, 필수 Python import를 기준선으로 남긴다. 존재 여부만 보는 inventory나 native `colcon list` 출력은 설치 closure가 아니다. 특히 CORE Dockerfile은 `interfaces`, `gateway`, Pinky profile만 복사하는 반면 `core/package.xml`에는 `core_common`, `core_events`, `core_features`, `core_api_web` 의존성이 있어 기존 빌드 실패 가능성을 먼저 확인한다.
 4. `omx_adapter`가 현재 IO/native에 포함된 이유와 제거 조건, `imu_bno055` 필수 목록 포함 이유를 기록한다. 둘을 이 소스 이동 때문에 임의로 제외하지 않는다.
-5. 기준선을 보고 D-310의 **구조 목표**를 수용할지 결정한다. 기준선 빌드가 실패했거나 `NOT_RUN`이면 먼저 원인을 해결해 새 기준선을 세우거나 D-310을 Proposed/HOLD로 두고 이동을 시작하지 않는다. 채택하면 D-231의 `products=config only`와 소스 위치 조항, D-305 결정 5의 현 배치 유지 부분을 **범위를 적어** 부분 대체한다. D-231의 검증 규칙과 D-305의 결과 불변식은 유지한다. ADR 로그와 생성 index를 정렬한다. 목표 수용은 경로 이동·산출물·장치 수용을 뜻하지 않는다. D-303의 Rejected 본문을 실행 기준으로 바꾸지 않는다.
+5. 기준선을 보고 D-310의 **구조 목표**를 수용할지 결정한다. 기준선 빌드가 실패했거나 `NOT_RUN`이면 먼저 원인을 해결해 새 기준선을 세우거나 D-310을 Proposed/HOLD로 둔다. 이 경우 격리 worktree에서 `SOURCE_CANDIDATE`를 준비할 수 있지만 main 통합과 `ARTIFACT_EQUIVALENT` 선언은 하지 않는다. 채택하면 D-231의 `products=config only`와 소스 위치 조항, D-305 결정 5의 현 배치 유지 부분을 **범위를 적어** 부분 대체한다. D-231의 검증 규칙과 D-305의 결과 불변식은 유지한다. ADR 로그와 생성 index를 정렬한다. 목표 수용은 경로 이동·산출물·장치 수용을 뜻하지 않는다. D-303의 Rejected 본문을 실행 기준으로 바꾸지 않는다.
 
-**출구:** 이름·경로·이미지별 설치/share/entrypoint/import 기준선과 경로 소비자 목록이 `X:\DevTemp\`의 검증 로그 및 저장소의 검토 기록에 남고, D-310 구조 목표의 수용 범위가 명확하다. 기존 빌드 실패 또는 `NOT_RUN`은 동등성 증거가 아니다. 그 경우 원인을 별도 선행 변경으로 고치고 새 기준선을 얻거나 이동의 통합과 `ARTIFACT_EQUIVALENT`를 HOLD한다.
+**출구:** 이름·경로·이미지별 설치/share/entrypoint/import 기준선과 경로 소비자 목록이 `X:\DevTemp\`의 검증 로그 및 저장소의 검토 기록에 남고, D-310 구조 목표의 수용 범위가 명확하다. 기존 빌드 실패 또는 `NOT_RUN`은 동등성 증거가 아니다. 그 경우 원인을 별도 선행 변경으로 고치고 새 기준선을 얻거나 격리 소스 후보만 유지하며 통합과 `ARTIFACT_EQUIVALENT`를 HOLD한다.
 
 ## Task 2: 폴더 계약 시험을 새 목표로 먼저 갱신
 

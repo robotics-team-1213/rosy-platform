@@ -22,7 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/devices/pinky_pro/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
+COPY src/products/pinky_pro/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
 
 FROM runtime-common AS core-runtime
 
@@ -57,7 +57,7 @@ WORKDIR /opt/rosy_ws
 COPY src/contracts/interfaces ./src/contracts/interfaces
 COPY src/runtime/gateway ./src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
-COPY src/products/pinky_pro ./src/products/pinky_pro
+COPY src/products/pinky_pro/profile ./src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro \
@@ -113,10 +113,10 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && rm -rf .git
 COPY src/contracts/interfaces ./src/contracts/interfaces
 COPY src/sim/description ./src/sim/description
-COPY src/devices/pinky_pro/bringup ./src/devices/pinky_pro/bringup
+COPY src/products/pinky_pro/bringup ./src/products/pinky_pro/bringup
 COPY src/runtime/navigation ./src/runtime/navigation
-COPY src/devices/omx/adapter ./src/devices/omx/adapter
-COPY src/products/omx ./src/products/omx
+COPY src/products/omx/adapter ./src/products/omx/adapter
+COPY src/products/omx/profile ./src/products/omx/profile
 COPY src/runtime/sensing ./src/runtime/sensing
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \

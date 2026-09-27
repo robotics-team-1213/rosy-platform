@@ -103,7 +103,7 @@ def test_required_source_resolver_includes_transitive_product_deps_not_non_produ
     for suffix in (
         "/runtime/gateway", "/contracts/foundation", "/runtime/events",
         "/runtime/services", "/runtime/api_web", "/contracts/interfaces",
-        "/devices/pinky_pro/adc", "/devices/common/imu_bno055", "/devices/pinky_pro/lamp",
+        "/products/pinky_pro/adc", "/drivers/imu_bno055", "/products/pinky_pro/lamp",
     ):
         assert any(path.endswith(suffix) for path in paths)
     assert not any(path.endswith("/sim/gz_sim") for path in paths)

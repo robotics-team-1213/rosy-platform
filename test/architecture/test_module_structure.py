@@ -25,7 +25,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
-DOMAINS = {"contracts", "runtime", "devices", "products", "hmi", "site", "sim"}
+DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -49,7 +49,7 @@ KNOWN_UNDECLARED = {
 KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
-    ("control", "imu_bno055"): "runtime/sensing -> devices/common/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
 
@@ -155,7 +155,7 @@ def _domain(name: str) -> str:
 
 def _family(name: str):
     parts = PACKAGES[name]["dir"].relative_to(SRC).parts
-    return parts[1] if len(parts) == 3 and parts[0] == "devices" else None
+    return parts[1] if len(parts) == 3 and parts[0] == "products" else None
 
 
 # D-241 and D-242: the ROS package name stays. These directories use the role name.
@@ -168,20 +168,25 @@ ROLE_DIR = {
     "control": ("runtime", "sensing"),
     "web_common": ("hmi", "web"),
     "emotion": ("hmi", "face"),
-    "omx_adapter": ("devices", "omx", "adapter"),
-    "lamp_control": ("devices", "pinky_pro", "lamp"),
-    "sensor_adc": ("devices", "pinky_pro", "adc"),
+    "pinky_pro": ("products", "pinky_pro", "profile"),
+    "bringup": ("products", "pinky_pro", "bringup"),
+    "sensor_adc": ("products", "pinky_pro", "adc"),
+    "lamp_control": ("products", "pinky_pro", "lamp"),
+    "led": ("products", "pinky_pro", "led"),
+    "omx": ("products", "omx", "profile"),
+    "omx_adapter": ("products", "omx", "adapter"),
+    "imu_bno055": ("drivers", "imu_bno055"),
 }
 
 
 def layout_ok(rel: tuple, name: str) -> bool:
-    """P2(a) + D-196 + D-241: role folders for the core packages, family folders for devices."""
+    """P2(a) + D-310: declared product packages and independent drivers."""
     if not rel or rel[0] not in DOMAINS:
         return False
     if name in ROLE_DIR:
         return rel == ROLE_DIR[name]
-    if rel[0] == "devices":
-        return len(rel) == 3 and rel[2] == name
+    if rel[0] == "products":
+        return False  # Product packages require an explicit family/role declaration.
     return len(rel) == 2 and rel[1] == name
 
 
@@ -232,25 +237,25 @@ def _used(name: str) -> dict:
 
 
 def edge_allowed(src_domain, src_family, dst_domain, dst_family, target) -> bool:
-    """P4 direction table (D-168, D-196). Pure, so rows are testable before packages move."""
+    """P4 direction table (D-168, D-310). Pure, so rows are testable."""
     if target in CORE_CONTRACTS:
         return True
     if src_domain == "core":
         return dst_domain == "core"
     if src_domain == "sim":
         return True
-    if src_domain == "devices":
+    if src_domain == "products":
         if dst_domain == "sim" and target == "description":
             return True
-        return bool(src_family) and dst_domain == "devices" and dst_family in (src_family, "common")
-    if src_domain == "navigation":
-        return dst_domain == "devices"
+        if dst_domain == "drivers":
+            return True
+        return bool(src_family) and dst_domain == "products" and dst_family == src_family
     return False
 
 
 def _allowed(source: str, target: str) -> bool:
     src_domain, dst_domain = _domain(source), _domain(target)
-    if source == "navigation" and dst_domain == "devices":
+    if source == "navigation" and target == "bringup" and dst_domain == "products":
         return True
     if src_domain == "runtime" and dst_domain == "runtime":
         return True
@@ -270,9 +275,9 @@ def test_the_scan_sees_the_whole_tree():
 
 
 def test_every_package_sits_in_a_domain_group_under_its_own_name():
-    """P2(a) + D-147 + D-196: src/<domain>/<package>/, directory name = package name.
+    """P2(a) + D-147 + D-310: package names persist at declared source roots.
 
-    devices nest one level deeper: src/devices/<family>/<package>/.
+    Products nest under their family; standalone drivers stay under drivers/.
     """
     bad = []
     for name, info in PACKAGES.items():
@@ -406,35 +411,40 @@ def test_size_verdicts_are_well_formed_and_current():
 @pytest.mark.parametrize(
     "src_domain, src_family, dst_domain, dst_family, target, ok",
     [
-        ("devices", "pinky_pro", "devices", "pinky_pro", "description", True),
-        ("devices", "pinky_pro", "devices", "common", "imu_bno055", True),
-        ("devices", "pinky_pro", "devices", "omx", "omx_adapter", False),
-        ("devices", "omx", "devices", "pinky_pro", "description", False),
-        ("devices", "omx", "core", None, "core_common", True),
-        ("devices", "omx", "core", None, "core", False),
-        ("navigation", None, "devices", "pinky_pro", "bringup", True),
-        ("navigation", None, "hardware", None, "bringup", False),
-        ("navigation", None, "apps", None, "control", False),
-        ("apps", None, "devices", "common", "imu_bno055", False),
+        ("products", "pinky_pro", "sim", None, "description", True),
+        ("products", "pinky_pro", "drivers", None, "imu_bno055", True),
+        ("products", "pinky_pro", "products", "pinky_pro", "bringup", True),
+        ("products", "pinky_pro", "products", "omx", "omx_adapter", False),
+        ("products", "omx", "products", "pinky_pro", "bringup", False),
+        ("products", "omx", "contracts", None, "core_common", True),
+        ("products", "omx", "runtime", None, "core", False),
+        ("runtime", None, "products", "pinky_pro", "bringup", False),
+        ("drivers", None, "products", "pinky_pro", "bringup", False),
+        ("site", None, "drivers", None, "imu_bno055", False),
     ],
 )
-def test_direction_table_rows_for_devices_and_robots(src_domain, src_family, dst_domain, dst_family, target, ok):
-    """D-196 P4 rows, checked before any package moves into them."""
+def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, dst_domain, dst_family, target, ok):
+    """D-310 P4 rows retain separate product, driver, and runtime ownership."""
     assert edge_allowed(src_domain, src_family, dst_domain, dst_family, target) is ok
 
 
 @pytest.mark.parametrize(
     "rel, name, ok",
     [
-        (("devices", "pinky_pro", "bringup"), "bringup", True),
+        (("products", "pinky_pro", "bringup"), "bringup", True),
+        (("products", "pinky_pro", "profile"), "pinky_pro", True),
+        (("products", "omx", "adapter"), "omx_adapter", True),
+        (("drivers", "imu_bno055"), "imu_bno055", True),
+        (("devices", "pinky_pro", "bringup"), "bringup", False),
         (("devices", "bringup"), "bringup", False),
-        (("products", "pinky_pro"), "pinky_pro", True),
+        (("products", "pinky_pro"), "pinky_pro", False),
+        (("products", "omx", "bringup"), "bringup", False),
         (("runtime", "sensing"), "control", True),
         (("runtime", "control"), "control", False),
         (("core", "control"), "control", False),
         (("apps", "x", "control"), "control", False),
     ],
 )
-def test_layout_rule_allows_a_family_level_only_under_devices(rel, name, ok):
-    """P2(a) + D-196: src/<domain>/<package>, except src/devices/<family>/<package>."""
+def test_layout_rule_allows_declared_product_packages_and_standalone_drivers(rel, name, ok):
+    """P2(a) + D-310: product packages require explicit family ownership."""
     assert layout_ok(rel, name) is ok

@@ -78,14 +78,14 @@ def test_absolute_overlays_boot_without_the_robot_package(node_module, monkeypat
 
 
 def test_missing_keys_read_the_default_robot_package(node_module, no_ament_share):
-    robot_dir = SRC / "products" / "pinky_pro" / "config"
+    robot_dir = SRC / "products" / "pinky_pro" / "profile" / "config"
 
     assert node_module._robot_file_paths({"robot": {}}) == (
         robot_dir / "profile.yaml", robot_dir / "capabilities.yaml")
 
 
 def test_relative_names_resolve_inside_the_robot_package(node_module, no_ament_share):
-    robot_dir = SRC / "products" / "pinky_pro" / "config"
+    robot_dir = SRC / "products" / "pinky_pro" / "profile" / "config"
     config = {"robot": {"model": "pinky_pro", "profile": "profile.yaml", "capabilities": "caps/capabilities.yaml"}}
 
     assert node_module._robot_file_paths(config) == (

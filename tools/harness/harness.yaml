@@ -67,35 +67,35 @@ modules:
     functional_kind: pytest
     functional: [test/test_footprint_profiles.py, test/test_nav2_profile_limits.py]
   - name: bringup
-    path: src/devices/pinky_pro/bringup
-    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, src/devices/pinky_pro/bringup/test/test_command_deadman.py, src/devices/pinky_pro/bringup/test/test_pinky_pro_adapter.py]
+    path: src/products/pinky_pro/bringup
+    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, src/products/pinky_pro/bringup/test/test_command_deadman.py, src/products/pinky_pro/bringup/test/test_pinky_pro_adapter.py]
     functional_kind: pytest
-    functional: [src/devices/pinky_pro/bringup/test/test_command_deadman.py, test/test_motor_control.py]
+    functional: [src/products/pinky_pro/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
     path: src/hmi/face
     tests: [src/hmi/face/test/test_info_screen.py, src/hmi/face/test/test_info_screen_boot.py, src/hmi/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
     functional: [src/hmi/face/test/test_info_screen.py]
   - name: led
-    path: src/devices/pinky_pro/led
-    tests: [src/devices/pinky_pro/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/products/pinky_pro/led
+    tests: [src/products/pinky_pro/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/devices/pinky_pro/led/test/test_led_package_contract.py]
+    functional: [src/products/pinky_pro/led/test/test_led_package_contract.py]
   - name: imu_bno055
-    path: src/devices/common/imu_bno055
-    tests: [src/devices/common/imu_bno055/test/test_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/drivers/imu_bno055
+    tests: [src/drivers/imu_bno055/test/test_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/devices/common/imu_bno055/test/test_package_contract.py]
+    functional: [src/drivers/imu_bno055/test/test_package_contract.py]
   - name: sensor_adc
-    path: src/devices/pinky_pro/adc
-    tests: [src/devices/pinky_pro/adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/products/pinky_pro/adc
+    tests: [src/products/pinky_pro/adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/devices/pinky_pro/adc/test/test_adc_package_contract.py]
+    functional: [src/products/pinky_pro/adc/test/test_adc_package_contract.py]
   - name: lamp_control
-    path: src/devices/pinky_pro/lamp
-    tests: [src/devices/pinky_pro/lamp/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: src/products/pinky_pro/lamp
+    tests: [src/products/pinky_pro/lamp/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/devices/pinky_pro/lamp/test/test_lamp_package_contract.py]
+    functional: [src/products/pinky_pro/lamp/test/test_lamp_package_contract.py]
   - name: core_common
     path: src/contracts/foundation
     tests: [src/contracts/foundation/test]
@@ -127,10 +127,10 @@ modules:
     functional_kind: host-contract
     functional: [src/hmi/dashboard/test/test_dashboard_package.py]
   - name: omx_adapter
-    path: src/devices/omx/adapter
-    tests: [src/devices/omx/adapter/test]
+    path: src/products/omx/adapter
+    tests: [src/products/omx/adapter/test]
     functional_kind: pytest
-    functional: [src/devices/omx/adapter/test]
+    functional: [src/products/omx/adapter/test]
   - name: interfaces
     path: src/contracts/interfaces
     tests: [src/contracts/interfaces/test/test_srv_surface.py]
@@ -138,15 +138,15 @@ modules:
     functional: [src/contracts/interfaces/test/test_srv_surface.py]
     artifacts: [src/contracts/interfaces/srv/SetLed.srv, src/contracts/interfaces/srv/SetLamp.srv, src/contracts/interfaces/srv/SetBrightness.srv, src/contracts/interfaces/srv/Emotion.srv]
   - name: pinky_pro
-    path: src/products/pinky_pro
-    tests: [src/products/pinky_pro/test]
+    path: src/products/pinky_pro/profile
+    tests: [src/products/pinky_pro/profile/test]
     functional_kind: host-contract
-    functional: [src/products/pinky_pro/test/test_robot_package.py]
+    functional: [src/products/pinky_pro/profile/test/test_robot_package.py]
   - name: omx
-    path: src/products/omx
-    tests: [src/products/omx/test]
+    path: src/products/omx/profile
+    tests: [src/products/omx/profile/test]
     functional_kind: host-contract
-    functional: [src/products/omx/test/test_omx_package.py]
+    functional: [src/products/omx/profile/test/test_omx_package.py]
   - name: description
     path: src/sim/description
     tests: [src/sim/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
