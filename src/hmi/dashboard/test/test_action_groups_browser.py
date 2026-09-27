@@ -105,6 +105,7 @@ class _Handler(SimpleHTTPRequestHandler):
                 const store = {poll(path, _interval, success) {
                   const data = path === '/api/v1/robot/state' ? state
                     : path === '/api/v1/system/capabilities' ? {teleop:true}
+                    : path === '/api/v1/host/commissioning' ? {runtime_mode:'motor'}
                     : {estop:false};
                   success(data); return () => {};
                 }, stopAll() {}};

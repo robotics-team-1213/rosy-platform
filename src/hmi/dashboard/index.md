@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · test(ui): align action-group fixture with teleop eligibility
 - 2026-09-27 · uncommitted · fix(device): keep Host Agent action results visible
 - 2026-09-27 · 804dda61 · fix(console): bound supervised web motion
 - 2026-09-27 · uncommitted · fix(ui): clarify role-screen spatial and procedure layouts
 - 2026-09-27 · 9ca7bc26 · inspect dashboard in visible Chromium
-- 2026-09-27 · f4f15776 · verify dashboard surface tokens after latest main integration

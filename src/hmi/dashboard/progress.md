@@ -2,12 +2,11 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "9049bd37", date: 2026-09-27 }
+last_verified: { commit: "uncommitted", date: 2026-09-27 }
 gates:
   SOURCE:
-    state: HOLD
-    evidence: "D-306 /device Host Agent result focused Chromium 3 passed; dashboard + role browser sweep 45 passed, 1 failed (2026-09-27 Windows)"
-    blocker: "test_action_groups_browser.py::test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motion fixture omits /api/v1/host/commissioning required by current teleop eligibility; isolated rerun also fails"
+    state: GO
+    evidence: "D-306 /device 결과 표시 및 현재 teleop 자격 fixture 정렬 후 dashboard + 역할 브라우저 회귀 46 passed (2026-09-27 Windows)"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
     state: GO
@@ -39,8 +38,7 @@ plans:
 
 ## 다음 gate
 
-1. SOURCE: 기존 조작 그룹 시험 fixture에 현재 실행 모드 응답을 제공하여 전체 브라우저 게이트를 다시 통과시킨다.
-2. ARTIFACT: 이미지에 `dashboard` 패키지가 설치된다.
+1. ARTIFACT: 이미지에 `dashboard` 패키지가 설치된다.
 
 ## 현재 유효한 금지사항
 

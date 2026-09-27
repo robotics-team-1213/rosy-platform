@@ -250,3 +250,9 @@
 - 변경: `/device`의 네트워크 프로파일 적용과 릴리스 복귀가 거부·성공 뒤에도 결과를 숨기던 상태 처리를 수정했다. 요청 중과 결과의 의미 상태를 조작 옆에 표시하고 Host Agent 연결이 사라지면 과거 성공 문구를 가린다. API·권한·네이티브 확인 경로는 유지했다.
 - 근거: Playwright에서 거부 문구 숨김을 먼저 재현한 뒤 수정했다. 집중 브라우저 3 passed. 전체 dashboard/역할 회귀는 45 passed, 1 failed. 실패는 기존 `test_action_groups_browser.py::test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motion`의 fixture가 현재 teleop 자격에 필요한 `/api/v1/host/commissioning` 응답을 누락한 것으로 단독 재현된다.
 - gate 변화: SOURCE는 기존 회귀 실패 때문에 HOLD로 기록한다. LOCAL은 브라우저 fixture의 결과 표시만 확인했으며, `/setup`·`/device` 전체 G2/G3·실장치 수용은 아직 없다.
+
+## 2026-09-27 · uncommitted · test(ui): align action-group fixture with teleop eligibility
+
+- 변경: 기존 조작 그룹 브라우저 fixture의 `/api/v1/host/commissioning` 응답에 `motor` 실행 모드를 제공한다. 실제 teleop 자격·속도·정지 코드는 변경하지 않았다.
+- 증거: 수정 전 단독 시험이 양의 `/api/v1/teleop` 호출을 기다리다 30초 timeout으로 실패했다. fixture 정렬 후 해당 파일 6 passed, dashboard + 역할 브라우저 확장 회귀 46 passed (Windows Chromium).
+- gate 변화: 앞선 SOURCE HOLD의 유일한 재현 실패를 닫아 SOURCE GO를 복원했다. `/setup`·`/device` G2 전체 상태·G3·장치/현장 증거는 여전히 미완료다.
