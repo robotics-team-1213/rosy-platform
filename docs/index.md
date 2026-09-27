@@ -186,8 +186,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(uiux): close remaining local surface gaps
 - 2026-09-27 · uncommitted · fix(uiux): close stale display and action gaps
 - 2026-09-27 · uncommitted · plan(platform): define product source layout migration
 - 2026-09-27 · uncommitted · validation(uiux): inspect changed Fleet, game and role captures
 - 2026-09-27 · uncommitted · fix(uiux): show CORE safe stop on role surfaces
-- 2026-09-27 · uncommitted · fix(fleet): keep server rate decision with D-309

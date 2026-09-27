@@ -2929,3 +2929,9 @@
 - 변경: D-309 후속으로 Fleet 마지막 위치 노출(`0bfc6656`), 역할 waypoint 저장 신선도·중복 요청(`05266ddc`), 게임 지연 알림·첫 연결 실패 문구(`8a0b6569`), LCD 카드 유지 시간(`23bc45e2`)을 각 전용 분기에서 검증해 로컬 main에 통합했다.
 - 검증: Fleet 브라우저 23 passed 및 상실·복구 1 passed, 역할 담당 세션 Chromium 4 passed 및 신규 단독 1 passed, 게임 브라우저 13 passed 및 영향 시험 3 passed, LCD 호스트 137 passed/4 skipped. X:의 Fleet·게임 캡처는 LOCAL 시각 확인에만 사용했다.
 - gate 변화: D-309 책임 경계의 LOCAL 표시·조작 결함을 보완했다. 로봇·LCD·카메라 실물 readback과 D-153의 표면별 전체 G2/G3는 HOLD다.
+
+## 2026-09-27 · uncommitted · validation(uiux): close remaining local surface gaps
+
+- 변경: Fleet의 첫 조회 중복 폴링·빈 경보/토글·지도 주석 확대를 고치고 최신 27셀 캡처 및 네이티브 확인 이벤트를 표면 카드에 반영했다. 게임 13셀, 역할 56셀, LCD 노드 경로 후속 결과도 D-309 표면 카드/계획에 연결했다.
+- 검증: Fleet 브라우저 24 passed·24상태 셀 오류/가로 넘침 0, 게임 브라우저 14 passed·13셀 넘침/오류 0, 역할 신규 Chromium 2 passed·G2 56셀 넘침/오류 0, face 호스트 139 passed/4 skipped. X: 캡처는 LOCAL 일회성 자료다.
+- gate 변화: 로컬 재현 결함은 보완했다. 실제 장치 식별·이미지 digest·로봇/카메라/LCD readback 및 G3 사람 평가는 미확인으로 BENCH/DEVICE/FIELD HOLD다.
