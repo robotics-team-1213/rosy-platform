@@ -93,7 +93,7 @@ Rosy OS/                         # 저장소 이력 이름; 전체 제품은 ROS
 | 단계 | 먼저 완성할 것 | 관련 소스·문서 | 출구 증거 |
 |---|---|---|---|
 | P0 현행 경로 감사 | Pinky/Fleet의 요청·장치 수락·Fleet 상태·실제 결과·정지 증거를 출처별로 대조하고 첫 이종 작업의 물리 결과를 지정 | `src/site/fleet`, `src/runtime`, API Reference, D-297/D-298 | 현재 `task_service.py`는 수락 receipt를 기록한다는 사실과 최종 결과 상관관계의 간극이 명시됨; 공통 필드는 비규범적 비교표로만 표시 |
-| P1 OMX 로컬 경계 수용 | 작업대 identity·단일 writer·원본 관절 샘플 시각·취소 후 실제 상태·독립 정지·복구 계측 | [OMX 하위 계획](2026-09-27-omx-lerobot-control-boundary-implementation-plan.md), `src/devices/omx`, `deploy/omx` | ROS-SIM/ARTIFACT와 실제 DEVICE 결과를 분리 기록; 승인 전 `omx.enabled: false` 유지 |
+| P1 OMX 로컬 경계 수용 | 작업대 identity·단일 writer·원본 관절 샘플 시각·취소 후 실제 상태·독립 정지·복구 계측 | [OMX 하위 계획](2026-09-27-omx-lerobot-control-boundary-implementation-plan.md), `src/products/omx`, `deploy/omx` | ROS-SIM/ARTIFACT와 실제 DEVICE 결과를 분리 기록; 승인 전 `omx.enabled: false` 유지 |
 | P2 공통 계약 심사 | P0 Pinky trace와 P1 OMX action/결과 표본에서 **동일한 의미**만 추출 | API Reference, 현행 typed schema, D-18/D-296 | 버전·호환·반례 시험을 갖춘 최소 공통 의미와 장치별 payload 결정; 3번째 실제 소비자가 있을 때 패키지 분리 재검토 |
 | P3 한 종류의 이종 미션 | Fleet Mission/Step 원장과 Pinky↔고정 OMX 인계 | `src/site/fleet`, 승인된 OMX 장치 API, D-12/D-290 | ID 연결, 인증, 멱등성, 취소, UNKNOWN 재조회, 두 장치의 실제 결과를 FIELD에서 확인 |
 | P4 관측·학습 (선택) | 승인된 Episode·데이터셋·정책 후보의 별도 수명 | `src/site/overhead`, D-231이 정한 서비스/도구 경로, OMX LeRobot 자료 | timestamp/frame/calibration/model/원본 해시와 결과 대조; 규칙 기반 기준선 대비 평가 |

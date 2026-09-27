@@ -188,8 +188,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · f7dae4d2 · validate D-310 IO artifact comparison
+- 2026-09-27 · a72d040 · validate D-310 CORE artifact comparison
+- 2026-09-27 · e8878189 · refactor(layout): D-310 isolated source candidate
 - 2026-09-27 · uncommitted · docs(uiux): record D-309 follow-up surface regressions
 - 2026-09-27 · uncommitted · validation(native): pause grounded G4 after operator power-off
-- 2026-09-27 · uncommitted · feat(host-evidence): Host Agent source age contract
-- 2026-09-27 · uncommitted · fix(native): allow bounded grounded G4 trials
-- 2026-09-27 · fc28c6f3 · validation(uiux): refresh local Fleet image after merge

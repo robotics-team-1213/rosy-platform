@@ -1,4 +1,4 @@
-"""D-196: robot-specific names live in the robot's device family and robot package.
+"""D-196/D-310: robot-specific names live in the product source family.
 
 Every other product file under src/ that still says "pinky" is listed in
 robot_literal_backlog.txt and checked by set equality (D-168 P5): a new hit
@@ -15,7 +15,7 @@ BACKLOG = Path(__file__).with_name("robot_literal_backlog.txt")
 PATTERN = re.compile(r"pinky", re.IGNORECASE)
 SUFFIXES = {".py", ".yaml", ".yml", ".xml", ".xacro", ".urdf", ".sdf", ".world", ".cpp", ".hpp", ".json"}
 SKIP_PARTS = {"test", "tests", "build", "install", "log", "__pycache__"}
-HOME_PREFIXES = ("devices/pinky_pro/", "products/pinky_pro")
+HOME_PREFIXES = ("products/pinky_pro/",)
 
 
 def hits() -> set:

@@ -1,6 +1,8 @@
 ## D-231 소스 영역은 층으로 나눈다 — 디렉터리만 옮기고 패키지 이름은 그대로 둔다
 
-**Status:** Accepted (2026-09-25). 목표 트리를 정한다. 폴더는 아직 옮기지 않았다.
+**Status:** Accepted (2026-09-25). 당시 목표 트리를 정했고 그 시점에는 폴더를 옮기지 않았다. 아래의 위치 조항은 D-310이 부분 대체했다.
+
+**부분 대체 (2026-09-28):** [D-310](D-310-product-specific-source-and-runtime-boundaries.md)이 기존 여덟 패키지에 한해 `products=config only`와 `devices/{pinky_pro,omx,common}` 소스 위치를 대체한다. 아래 원래 배치 표는 당시 결정 기록이다. 패키지명·실행 이름 보존과 경로 참조·host pytest·harness·colcon·이미지 빌드 검증 조건은 유지한다. native payload와 장치 수용은 D-310의 별도 HOLD다.
 이동은 아래 "이동 묶음" 조건이 갖춰진 뒤 한 번에 한다.
 
 대체하는 것:

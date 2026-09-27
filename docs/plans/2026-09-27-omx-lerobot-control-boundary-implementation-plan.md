@@ -91,7 +91,7 @@ Rosy OS/
 
 ### Task 2: 단일 owner와 사용 시 모드 전환 계약
 
-**Files:** Create `src/devices/omx/adapter/omx_adapter/control_mode.py`, `src/devices/omx/adapter/test/test_omx_control_mode.py`, `deploy/omx/native/`의 service/runner 후보; Modify `deploy/omx/preflight.py`, `deploy/omx/README.md` as needed.
+**Files:** Create `src/products/omx/adapter/omx_adapter/control_mode.py`, `src/products/omx/adapter/test/test_omx_control_mode.py`, `deploy/omx/native/`의 service/runner 후보; Modify `deploy/omx/preflight.py`, `deploy/omx/README.md` as needed.
 
 1. 단일 OMX-F writer와 중단·크래시·USB 재연결·재부팅의 상태 전이표를 작성한다. LeRobot을 같은 장치에 설치·사용하는 경우 ROS→LeRobot, LeRobot→ROS 전환을 추가한다. 허용 조건은 신규 명령 차단, 동작/정지 readback, 이전 프로세스 종료 및 FD 해제, 포트·보정 재확인, 명시적 재승인이다.
 2. 단위 시험을 먼저 추가해 중복 owner, stale 포트, owner 미종료, 전환 중 요청, 이전 명령 재생이 거부되는지 확인한다.
@@ -100,7 +100,7 @@ Rosy OS/
 
 ### Task 3: 기존 ROS action 경로의 native 검증
 
-**Files:** Modify `src/devices/omx/adapter/omx_adapter/command_owner.py`, `ros_runtime.py`와 해당 기존 테스트는 검증에서 확인된 결함이 있을 때만; Create `deploy/omx/native/`의 작업대별 systemd 구성·설치/복구 안내; Update 기존 [작업대 구현 계획](2026-09-26-omx-ai-workstation-runtime.md) P1 증거.
+**Files:** Modify `src/products/omx/adapter/omx_adapter/command_owner.py`, `ros_runtime.py`와 해당 기존 테스트는 검증에서 확인된 결함이 있을 때만; Create `deploy/omx/native/`의 작업대별 systemd 구성·설치/복구 안내; Update 기존 [작업대 구현 계획](2026-09-26-omx-ai-workstation-runtime.md) P1 증거.
 
 1. 잠긴 벤더 ROS stack, RMW, namespace/domain, 실제 실행 파일·FD·publisher/action server를 읽어 단일 owner임을 확인한다.
 2. ROS-SIM에서 trajectory 한계, 서로 다른 입력 후보의 경합, cancel ack와 최종 결과, stale joint state, 타임아웃·재시작을 검증한다. 기존 시뮬 결과는 재사용하되 target Linux에서 남은 timing/gripper 이슈를 닫는다.
@@ -118,7 +118,7 @@ Rosy OS/
 
 ### Task 5: 데이터·정책 경계
 
-**Files:** Create `tools/perception/omx/`의 오프라인 변환·검증 도구와 테스트는 실제 변환 코드가 필요할 때만; Add `src/devices/omx/adapter/omx_adapter/policy_input.py` 및 테스트는 규칙 기반 작업·데이터 기준선 후에만; Update 데이터 manifest 계약 문서.
+**Files:** Create `tools/perception/omx/`의 오프라인 변환·검증 도구와 테스트는 실제 변환 코드가 필요할 때만; Add `src/products/omx/adapter/omx_adapter/policy_input.py` 및 테스트는 규칙 기반 작업·데이터 기준선 후에만; Update 데이터 manifest 계약 문서.
 
 1. 동일한 짧은 episode에서 ROS 관절/명령·카메라 시각과 LeRobot observation/action을 수작업 기준표로 먼저 매핑한다.
 2. 변환 시험은 누락 프레임, 시각 역전, 단위·joint 순서·그리퍼 부호·보정 revision 불일치를 거부한다. 결과 manifest에 원본 bag, 변환 도구, dataset 버전과 해시를 남긴다.
@@ -137,7 +137,7 @@ Rosy OS/
 ## 검증과 되돌리기
 
 - 문서 단계: `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`.
-- 코드 단계: 해당 `src/devices/omx/adapter/test/`와 `test/test_omx_*`를 먼저 실행한다. ROS-SIM, target Linux, 실제 장치·현장 증거는 별도 기록한다.
+- 코드 단계: 해당 `src/products/omx/adapter/test/`와 `test/test_omx_*`를 먼저 실행한다. ROS-SIM, target Linux, 실제 장치·현장 증거는 별도 기록한다.
 - 실패 시: 서비스/프로필을 비활성으로 되돌리고 신규 명령을 차단한다. 모드 전환 실패, action 결과 불명, USB 재연결은 자동 재시도나 이전 trajectory 재생으로 복구하지 않는다. 기록된 상태·원인·물리 readback을 확인한 뒤 명시적으로 재승인한다.
 
 **근거:** [D-273](../adr/D-273-omx-camera-stream-and-arm-control-order.md), [D-281](../adr/D-281-site-host-placement-and-omx-instance-isolation.md), [D-282](../adr/D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-296](../adr/D-296-device-middleware-and-site-orchestration-terminology.md), [D-298](../adr/D-298-mission-action-and-stop-evidence-terminology.md), [D-299](../adr/D-299-omx-lerobot-development-and-command-ownership.md), [공식 LeRobot OMX](https://huggingface.co/docs/lerobot/omx), [ROBOTIS open_manipulator](https://github.com/ROBOTIS-GIT/open_manipulator).

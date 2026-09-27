@@ -5,50 +5,13 @@
 
 ## Purpose
 
-OMX arm composition (D-232). Config only: the disabled profile the adapter validates. Installed to `share/omx/config`. `omx-f` and `omx-ai` are model names in that file, not packages.
-
-## Key Files
-
-| File | Description |
-|------|-------------|
-| `config/omx.disabled.yaml` | OMX-AI target selected; arm stays disabled until hardware and safety acceptance |
-| `package.xml` / `CMakeLists.txt` | ament_cmake; installs `config/` only |
-| `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
-| `logs.md` | Append-only work journal, one entry per change |
-| `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
+OMX 전용 소스와 구성. 부모 폴더는 ROS 패키지가 아니다. `profile/`은 비활성 설정 패키지 `omx`, `adapter/`는 ROS 패키지 `omx_adapter`다. 폴더 이동은 팔의 운영 허가를 뜻하지 않는다.
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `config/` | `omx.disabled.yaml` |
-| `test/` | `test_omx_package.py` |
-
-## For AI Agents
-
-### Working In This Directory
-
-- Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
-- Do not put adapter code or a launch file here. The validator stays in `src/devices/omx/adapter`.
-- Do not fill in a fake `hardware_plugin` or joint map. The OMX-AI target is selected; runtime waits on a measured revision, driver, mount, power, payload, calibration, and recovery procedure.
-
-### Testing Requirements
-
-```bash
-python -m pytest src/products/omx/test -q
-python -m omx_adapter.cli src/products/omx/config/omx.disabled.yaml
-```
-
-The CLI on this file must print `{}` even though `model` is `omx_ai`.
-
-## Dependencies
-
-### Internal
-
-- Read by `omx_adapter` as a YAML path. The device manifest stays in the adapter package.
-
-### External
-
-- ament_cmake
+| `profile/` | 비활성 OMX 설정 (see `profile/AGENTS.md`) |
+| `adapter/` | ros2_control / MoveIt 경계 (see `adapter/AGENTS.md`) |
 
 <!-- MANUAL: -->
