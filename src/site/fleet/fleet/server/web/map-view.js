@@ -140,9 +140,15 @@ export function createMapView({ el, view, css, auth, call }) {
 
   function drawFormationOverlay(ctx, grid) {
     const formation = view.formation;
-    if (!formation || !formation.active) return;
+    if (!formation || !formation.active) {
+      window.__swarmOverlay = { ...(window.__swarmOverlay || {}), slots: 0 };
+      return;
+    }
     const leaderPose = poseOf(formation.leader);
-    if (!leaderPose) return;      // 리더 좌표가 없으면 슬롯을 놓을 수 없다
+    if (!leaderPose) {
+      window.__swarmOverlay = { ...(window.__swarmOverlay || {}), slots: 0 };
+      return;      // 리더 좌표가 없으면 슬롯을 놓을 수 없다
+    }
     const leaderCell = cellOf(grid, leaderPose.x, leaderPose.y);
     const size = Math.max(3, Math.min(grid.width, grid.height) * 0.045);
     const entries = Object.entries(formation.assignment || {});

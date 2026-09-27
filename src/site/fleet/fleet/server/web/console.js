@@ -61,6 +61,7 @@ const view = {
   cursor: null, // 지도 좌표계의 col/row, 아래쪽 행이 0
   colors: [],
   formation: null,
+  formationUnavailable: false,
   signals: {},    // ROSY-SIGNAL-001 — snapshot 의 signals 캐시
   pendingTasks: {},
   stateUnavailable: false,
@@ -459,7 +460,7 @@ applyRoleToControls(null, operatorControls());
 render();
 refreshAuthorization();
 mapView.refresh();
-setInterval(formation.refreshFormation, MAP_MS);
+setInterval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 setInterval(refreshState, STATE_MS);
 setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);

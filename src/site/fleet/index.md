@@ -57,8 +57,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · fix(ui): make formation read loss explicit
 - 2026-09-27 · uncommitted · fix(ui): make Fleet map goal operable by keyboard
 - 2026-09-27 · 778bbd31 · verify packaged Site Fleet host path (LOCAL)
 - 2026-09-27 · uncommitted · fix(ui): rebalance Fleet map and intervention area
 - 2026-09-27 · 9ca7bc26 · verify Fleet keyboard flows and host suite
-- 2026-09-27 · f4f15776 · verify Fleet after latest main integration

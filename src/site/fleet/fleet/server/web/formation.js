@@ -33,7 +33,7 @@ export function createFormation({ el, view, log, call, render }) {
   // D-252: 무장 전 확인 문장. 슬롯 좌표는 서버 기하가 쥐고 있어 클라이언트가
   // 미리 그릴 수 없으므로, 폼 현재값을 문장으로 미리 말한다.
   function syncPendingSummary() {
-    if (view.formation && view.formation.active) return;
+    if (view.formationUnavailable || (view.formation && view.formation.active)) return;
     const leader = el("formation-leader").value;
     const shape = el("formation-shape").value;
     const spacing = Number(el("formation-spacing").value);
@@ -82,6 +82,7 @@ export function createFormation({ el, view, log, call, render }) {
   }
 
   function applyFormation(status) {
+    view.formationUnavailable = false;
     view.formation = status;
     renderFormation(status);
     render();   // 명렬 카드의 증거 태그도 대형 상태를 따라 다시 그린다
@@ -91,7 +92,19 @@ export function createFormation({ el, view, log, call, render }) {
     try {
       applyFormation(await call("/api/fleet/formation"));
     } catch (err) {
-      el("formation-detail").textContent = `대형 상태를 읽지 못했습니다 — ${err.message}`;
+      const wasActive = view.formation?.active === true;
+      view.formation = null;
+      view.formationUnavailable = true;
+      const state = el("formation-state");
+      state.textContent = "확인 불가";
+      state.className = "tag warn";
+      el("formation-detail").textContent = `대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중 — ${err.message}`;
+      for (const id of ["formation-start", "formation-reform", "formation-resume"]) {
+        el(id).disabled = true;
+      }
+      // 마지막 확인 상태가 활성일 때는 해제 요청만 남긴다. 최종 판정은 Fleet API다.
+      el("formation-stop").disabled = !wasActive;
+      render();
     }
   }
 

@@ -455,7 +455,7 @@ HOLDING_FORMATION = {
     **FORMATION,
     "state": "HOLDING",
     "reason": ["STREAM_LOST"],
-    "pending_triggers": ["stream"],
+    "pending_triggers": [["stream", "rosy_03"]],
 }
 
 UNREACHABLE_SNAPSHOT = {
@@ -599,6 +599,41 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         assert page.locator("#formation-resume").is_enabled()
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
+        browser.close()
+
+
+def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_url):
+    """A failed poll must not present an old leader or relay rate as current."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === 'RUNNING'")
+        assert "9.8 Hz" in page.inner_text("#formation-detail")
+        assert page.evaluate("window.__swarmOverlay?.slots") == 2
+
+        api["/api/fleet/formation"] = (503, {"detail": {"code": "FORMATION_UNAVAILABLE"}})
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '확인 불가'",
+                               timeout=7000)
+        assert "9.8 Hz" not in page.inner_text("#formation-detail")
+        assert "리더 rosy_01" not in page.inner_text("#formation-detail")
+        assert page.evaluate("window.__swarmOverlay?.slots") == 0
+        for control in ("formation-start", "formation-reform", "formation-resume"):
+            assert page.locator(f"#{control}").is_disabled()
+        save_temp_screenshot(page, "fleet_formation_read_lost.png")
+
+        api["/api/fleet/formation"] = FORMATION
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === 'RUNNING'",
+                               timeout=7000)
+        assert "9.8 Hz" in page.inner_text("#formation-detail")
+        assert page.evaluate("window.__swarmOverlay?.slots") == 2
+        assert errors == []
         browser.close()
 
 
