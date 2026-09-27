@@ -181,8 +181,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(platform): pin mounted interlock and drone counterexamples
 - 2026-09-27 · uncommitted · docs(uiux): fix surface ownership and closure criteria
 - 2026-09-27 · uncommitted · adr(platform): separate safety invariant and evidence exits
 - 2026-09-27 · uncommitted · adr(platform): fix expansion boundary and evidence criteria
 - 2026-09-27 · uncommitted · test(platform): keep uncorrelated CORE events out of Fleet completion
-- 2026-09-27 · uncommitted · validation(platform): retain OMX DEVICE gate after source review

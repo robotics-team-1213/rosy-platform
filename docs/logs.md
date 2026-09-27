@@ -2840,3 +2840,10 @@
 - 변경: D-306를 Accepted로 기록하고 `2026-09-27-uiux-surface-closure.md` 실행 계획을 연결했다. 기존 D-153 평가, D-218 확인, D-253 진단 동결, D-280 시각 정체성을 유지한다. Orca CLI가 현재 PowerShell에서 인식되지 않아 세션 간 직접 인계는 미완료이며 경로별 owner를 계획에 기록했다.
 - 증거: 2026-09-27 LOCAL 코드·캡처 검토 및 기존 회차와 ADR 대조.
 - gate 변화: 문서 결정만으로 G2/G3, LCD 실물 판독, 장치/현장 수용을 승격하지 않는다.
+
+## 2026-09-27 · uncommitted · validation(platform): pin mounted interlock and drone counterexamples
+
+- 변경: 탑재형 Pinky+OMX의 캐시된 허가/세션 재사용, 신선한 ROS 수신과 오래된 하드웨어 샘플, 미확인 적재물의 footprint·speed envelope, HOLD/취소 ACK 뒤 관성·driver 상태를 독립 반례 검증표에 고정했다. 드론은 선정 스택의 실제 최종 actuator authority를 확인하기 전 ROS 노드를 writer로 단정하지 않는다. 부모 계획에서 고정 OMX 인계 P3와 별도 링크로 연결했다.
+- 근거: D-55의 측정된 적재 footprint/속도 한계, D-298의 정지 요청·래치·readback·물리 정지 구분, D-305의 안전 결과 불변식, OMX P1 소스 판정의 하드웨어 샘플 provenance 간극을 대조했다.
+- 증거: 새 검증표 링크 5개와 부모 계획 링크 12개 모두 확인; network/harness 계약 시험 76 passed/19 기존 메타데이터 warnings (Windows). 반례 주입, 실물 장치 또는 비행 시험은 실행하지 않았다.
+- gate 변화: 없음. 탑재형 동시 동작과 드론 운영 action은 HOLD를 유지한다.
