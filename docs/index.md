@@ -128,6 +128,7 @@
 | D-304 | 플랫폼 확장은 제어권·계약·배포 증거로 경계를 결정한다 |
 | D-305 | 플랫폼 경계는 안전 결과 불변식과 독립 검증 게이트로 판정한다 |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
+| D-307 | 장치 최종 결과와 물리 정지 증거를 별도로 판정한다 |
 
 ## 계획·결과 문서
 
@@ -181,8 +182,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · adr(platform): keep final action outcome distinct from stop readback
 - 2026-09-27 · uncommitted · validation(platform): pin mounted interlock and drone counterexamples
 - 2026-09-27 · uncommitted · docs(uiux): fix surface ownership and closure criteria
 - 2026-09-27 · uncommitted · adr(platform): separate safety invariant and evidence exits
 - 2026-09-27 · uncommitted · adr(platform): fix expansion boundary and evidence criteria
-- 2026-09-27 · uncommitted · test(platform): keep uncorrelated CORE events out of Fleet completion

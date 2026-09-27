@@ -1,6 +1,6 @@
 ## D-305 플랫폼 경계는 안전 결과 불변식과 독립 검증 게이트로 판정한다
 
-**Status:** Accepted (2026-09-27, 구조 판정 기준과 검증 출구에 한정). [D-304](D-304-platform-expansion-boundary-and-evidence-gates.md)를 대체한다. 새 합성 인터록의 구현, OMX·드론 운영 제어, 공개 action schema, 폴더 이동 또는 설치 변경을 승인하지 않는다. D-282·D-297·D-299의 Proposed 장치·계약 게이트는 그대로 둔다.
+**Status:** Accepted (2026-09-27, 구조 판정 기준과 검증 출구에 한정). [D-304](D-304-platform-expansion-boundary-and-evidence-gates.md)를 대체한다. 필수 반례의 Fleet `UNKNOWN` 표시 조건만 [D-307](D-307-final-action-outcome-and-stop-readback-evidence.md)로 Superseded된다. 새 합성 인터록의 구현, OMX·드론 운영 제어, 공개 action schema, 폴더 이동 또는 설치 변경을 승인하지 않는다. D-282·D-297·D-299의 Proposed 장치·계약 게이트는 그대로 둔다.
 
 **Context:** D-304는 물리 명령, Fleet 원장, 교환 계약, 배포 단위를 구분했지만 복합 장치의 결과 조건과 구현 책임, 소스 이동과 장치 수용의 검증 출구를 더 분명히 나눌 필요가 있다. 부모 [플랫폼 역할·계약 계획](../plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md)은 Pinky 탑재 OMX의 별도 조정기와 두 제어기의 교차 게이트 중 구현 주체를 미결정으로 둔다. 현행 P0 추적은 SOURCE/LOCAL이며, OMX의 서명된 독립 산출물·digest·의존 목록과 실물 action은 아직 수용되지 않았다. P3는 Pinky와 **고정 작업대 OMX** 사이의 사이트 인계다.
 

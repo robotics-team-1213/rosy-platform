@@ -2847,3 +2847,10 @@
 - 근거: D-55의 측정된 적재 footprint/속도 한계, D-298의 정지 요청·래치·readback·물리 정지 구분, D-305의 안전 결과 불변식, OMX P1 소스 판정의 하드웨어 샘플 provenance 간극을 대조했다.
 - 증거: 새 검증표 링크 5개와 부모 계획 링크 12개 모두 확인; network/harness 계약 시험 76 passed/19 기존 메타데이터 warnings (Windows). 반례 주입, 실물 장치 또는 비행 시험은 실행하지 않았다.
 - gate 변화: 없음. 탑재형 동시 동작과 드론 운영 action은 HOLD를 유지한다.
+
+## 2026-09-27 · uncommitted · adr(platform): keep final action outcome distinct from stop readback
+
+- 변경: D-307로 D-305 필수 반례의 무조건적인 Fleet `UNKNOWN` 해석을 정정했다. 동일 action/attempt의 권위 있는 확정적 중단·실패 최종 이벤트는 보존하고, 최종 결과가 확인되지 않을 때만 `UNKNOWN`을 유지한다. 정지 요청·래치·driver readback·물리 정지와 작업 최종 결과를 별도 축으로 기록한다.
+- 근거: D-298의 결과 불명·정지 증거 정의와 현행 P0 최종 이벤트 상관관계 간극을 대조했다. 탑재형 DEVICE 시험표에 자극 시점, 새 명령 차단·진행 중 안전 동작, 독립 readback, 실측 전 시간 한계, 재개 조건을 사례별로 추가했다.
+- 증거: 신규 ADR 링크 9개, 검증표 링크 6개 모두 확인; network/harness 계약 시험 76 passed/19 기존 메타데이터 warnings, harness lint 0 errors/19 warnings (Windows). 실제 반례 주입·DEVICE/FIELD 시험은 미실행이다.
+- gate 변화: D-305 구조 Accepted 범위는 유지한다. Fleet 결과 연결과 복합 장치 운영 수용은 계속 HOLD다.
