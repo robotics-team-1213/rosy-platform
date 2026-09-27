@@ -2860,3 +2860,10 @@
 - 변경: Fleet, 역할 `/device`, 게임, LCD, Gazebo 뷰어의 변경과 검증을 `docs/validation/uiux-surfaces-2026-09-27/README.md`에 표면별로 기록했다. sensing 진단은 D-253/D-266 경계를 유지한다.
 - 증거: Fleet 브라우저 18 passed 및 3개 뷰포트, 역할 브라우저 46 passed, 게임 브라우저 9 passed/호스트 110 passed, LCD 129 passed/8개 320×240 PNG, Gazebo viewer 59 passed/2개 1280×800 PNG (Windows LOCAL). 캡처는 X:의 일회성 파일이다.
 - gate 변화: SOURCE/LOCAL 근거만 보강했다. D-153의 전체 G2/G3, LCD 실물 판독, 로봇 이동·물리 정지, Gazebo 실제 실행과 FIELD는 이 기록으로 승격하지 않는다.
+
+## 2026-09-27 · uncommitted · adr(platform): separate site intent from device action interpretation
+
+- 변경: D-308로 실행권 없는 입력 후보, Fleet의 Mission 의미 해석, 장치 로컬 Action 해석, 즉시 운영·안전 제어를 구분했다. D-293 Decision 2의 적용 범위를 명확히 했다.
+- 근거: `core_common.intent`의 공유 고정 동사 문법, `task_service` 구성 시 Fleet `/api/fleet/do`의 navigate만 영속 task 경유하고 나머지는 직접 호출하는 경로, CORE `/api/v1/do`의 순차 호출을 읽기 대조했다. 진행 중 Mission과 직접 제어 충돌, 부분 실행 후 결과 응답 누락, `steps` 뒤의 정지 지연, D-276 감사 DB 장애 시 사이트 정지 `503`을 필수 반례로 기록했다.
+- 증거: D-308 참조 링크 11개 모두 존재함을 확인했고, network/harness/Fleet 계약 시험 79 passed/19 기존 메타데이터 warnings, harness lint 0 errors/19 warnings (Windows LOCAL)를 확인했다. SOURCE 경계 결정이며 새로운 Action wire, OMX·드론 운영, 장치 물리 정지는 승인하지 않는다.
+- gate 변화: 없음. P0 최종 결과 연결, 사이트 정지 가용성, OMX 실물 Action, 탑재형 인터록, 드론은 별도 검증 전 HOLD다.
