@@ -2809,3 +2809,9 @@
 - 변경: Pinky 이동의 Fleet 요청·영속 대기·CORE 수락·로컬 주행 이벤트·Fleet readback·정지 증거를 P0 추적표로 기록했다. API Reference v1.41에 현재 `task_id`와 CORE 최종 이벤트의 연결 부재를 명시하고 D-177의 현재 후속 표기를 D-297로 바로잡았다. 플랫폼 계획은 P0 결과에 연결했다.
 - 증거: Fleet `task_service`/`task_store`/CORE REST·navigation manager·event store와 기존 반례 시험을 대조했다. 집중 SOURCE/LOCAL 시험 102 passed (Fleet task API/service/store 및 CORE API, Windows).
 - gate 변화: P0 소스 추적 완료. D-297 활성화·Fleet 작업 완료 전이·OMX DEVICE·물리 정지·FIELD 수용은 미검증으로 유지한다.
+
+## 2026-09-27 · uncommitted · validation(platform): retain OMX DEVICE gate after source review
+
+- 변경: OMX P1의 정적 inventory, 단일 owner, joint-state 수신 시각, 취소/정지 및 선택적 LeRobot 경계를 검토한 표를 추가했다.
+- 증거: adapter/product/벤더 잠금/호스트 inventory/다중 preflight/DDS identity 집중 시험 107 passed, 3 skipped (Windows). 현재 `JointState` snapshot의 시간·보정은 로컬 수신·설정 출처이며 실물 하드웨어 provenance는 아니다.
+- gate 변화: SOURCE/LOCAL 근거만 추가. OMX 실물 identity·Ubuntu FD/graph owner·독립 정지와 readback 없이 운영 capability, DEVICE 또는 첫 이종 미션을 승인하지 않는다.
