@@ -69,9 +69,14 @@ const REASON_TEXT = {
   "device_state:SAFE_STOP": "정지 상태",
   "device_state:BOOTING": "기동 중",
   "device_state:FAULT": "고장",
+  "device_state:OFFLINE": "오프라인",
+  "device_state:UPDATING": "업데이트 중",
 };
 
 export function reasonText(reason) {
+  if (typeof reason === "string" && reason.startsWith("readiness_hold:")) {
+    return `하드웨어 준비 대기 (${reason.slice("readiness_hold:".length)})`;
+  }
   return REASON_TEXT[reason] || reason;
 }
 
@@ -171,15 +176,18 @@ function collectFaults({ state, inventory, safetySource } = {}) {
   const configured = new Set();
   for (const row of inventory?.descriptors || []) {
     if (row?.state !== "blocked") continue;
-    if (CONFIGURED_REASONS[row.reason]) {
-      configured.add(row.reason);
-      continue;
+    const reasons = row.reasons?.length ? row.reasons : [row.reason];
+    const others = [];
+    for (const reason of reasons) {
+      if (CONFIGURED_REASONS[reason]) configured.add(reason);
+      else if (reason) others.push(reason);
     }
+    if (!others.length) continue;
     faults.push({
       id: `capability.${row.id}`,
       category: "blocked",
       title: `${row.id} 사용 불가`,
-      detail: row.reason ? `이유: ${reasonText(row.reason)}` : "서버가 이유를 주지 않았습니다.",
+      detail: `이유: ${others.map(reasonText).join(" · ")}`,
     });
   }
   for (const reason of configured) {

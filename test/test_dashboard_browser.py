@@ -1240,6 +1240,32 @@ def test_map_snapshots_are_asked_for_when_the_server_has_them():
         browser.close()
 
 
+def test_fault_after_configured_reason_still_raises_a_blocked_fault():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    init = NO_MOTION_INIT + """
+    const faulted = (id, first) => ({id, available: false, state: 'blocked', reason: first,
+                                     reasons: [first, 'device_state:FAULT']});
+    window.__rosyInventoryOverride = {
+      device_state: 'FAULT',
+      descriptors: [faulted('mobility.move', drive), faulted('mobility.navigate', drive),
+                    faulted('perception.localize', 'navigation_absent')],
+    };
+    """
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=init)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function("document.getElementById('triage')?.dataset.category === 'blocked' && document.getElementById('triage-context')?.textContent.includes('하드웨어 런타임 켜짐')")
+        assert "고장" in page.locator("#triage-detail").inner_text()
+        assert "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)" in page.locator("#triage-context").text_content()
+        assert "구동 꺼짐 (무동작) · 고장" in page.locator("#capability-list").inner_text()
+        browser.close()
+
+
 def test_api_estop_does_not_claim_a_motor_power_cut():
     """An API e-stop is a software stop; the banner must not say power was cut."""
     pytest.importorskip("playwright.sync_api")
