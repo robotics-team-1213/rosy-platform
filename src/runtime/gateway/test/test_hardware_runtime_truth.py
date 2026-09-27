@@ -87,11 +87,20 @@ def test_required_readiness_hold_withholds_teleop_despite_ready_motor(core_clien
     assert caps["withheld"]["reasons"]["teleop"].startswith("readiness_hold:")
 
 
+def test_wall_clock_step_does_not_expire_live_odometry(core_client):
+    tc, svc = core_client()
+    svc.state.set_velocity(0.0, 0.0)
+    svc.state._clock = lambda: time.time() + 3600.0
+    caps = _caps(tc)
+    assert caps["runtime"]["hardware"] == "on"
+    assert caps["runtime"]["evidence"] == ["odometry"]
+
+
 def test_a_runtime_that_went_quiet_is_silent_not_on(core_client):
     tc, svc = core_client()
     _no_motion_io(svc)
-    later = time.time() + 60.0
-    svc.state._clock = lambda: later
+    later = time.monotonic() + 60.0
+    svc.state._monotonic = lambda: later
     caps = _caps(tc)
     assert caps["runtime"]["hardware"] == "silent"
     assert caps["withheld"]["reasons"]["teleop"] == "hardware_silent"

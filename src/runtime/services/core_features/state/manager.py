@@ -47,7 +47,7 @@ def _as_map_id(value) -> Optional[str]:
 
 class StateManager:
     def __init__(self, robot_id: str, clock=time.time, stale_after_s=None,
-                 sources_configured: bool = True) -> None:
+                 sources_configured: bool = True, monotonic=time.monotonic) -> None:
         self._robot_id = robot_id
         # False in CORE-only runtime (D-161): no motor, IO or Nav2 unit runs, so a
         # channel that never reported has no source at all. It is judged
@@ -55,6 +55,8 @@ class StateManager:
         # went quiet). The first sample proves a source and normal judgment resumes.
         self._sources_configured = sources_configured
         self._clock = clock
+        self._monotonic = monotonic
+        self._received_mono: dict[str, float] = {}
         self._stale_after_s = dict(CHANNEL_STALE_AFTER_S)
         if stale_after_s:
             for channel, value in stale_after_s.items():
@@ -100,28 +102,28 @@ class StateManager:
     def set_navigation(self, state: NavigationState) -> None:
         with self._lock:
             self._navigation = state
-            self._received["navigation"] = self._clock()
+            self._mark("navigation")
 
     def set_pose(self, x: float, y: float, yaw: float) -> None:
         with self._lock:
             self._pose = Pose(x=x, y=y, yaw=yaw)
-            self._received["pose"] = self._clock()
+            self._mark("pose")
 
     def set_velocity(self, linear: float, angular: float) -> None:
         with self._lock:
             self._velocity = Velocity(linear=linear, angular=angular)
-            self._received["velocity"] = self._clock()
+            self._mark("velocity")
 
     def set_battery(self, percent: Optional[float], voltage: Optional[float] = None) -> None:
         with self._lock:
             self._battery = Battery(percent=percent if percent is not None else self._battery.percent,
                                     voltage=voltage if voltage is not None else self._battery.voltage)
-            self._received["battery"] = self._clock()
+            self._mark("battery")
 
     def set_estop(self, active: bool) -> None:
         with self._lock:
             self._safety = SafetySummary(estop=active)
-            self._received["safety"] = self._clock()
+            self._mark("safety")
 
     def set_swarm(self, status: SwarmStatus) -> None:
         with self._lock:
@@ -159,7 +161,7 @@ class StateManager:
     def set_docking(self, status: DockingStatus) -> None:
         with self._lock:
             self._docking = status
-            self._received["docking"] = self._clock()
+            self._mark("docking")
 
     def set_sensor(self, key: str, data: dict) -> None:
         with self._lock:
@@ -179,11 +181,19 @@ class StateManager:
         with self._lock:
             return channel in self._received
 
+    def _mark(self, channel: str) -> None:
+        """Record wall time for API evidence and monotonic time for age checks.
+
+        The caller holds ``self._lock``.
+        """
+        self._received[channel] = self._clock()
+        self._received_mono[channel] = self._monotonic()
+
     def received_age(self, channel: str) -> Optional[float]:
-        """Seconds since the last sample on `channel`, or None if none arrived."""
+        """Monotonic seconds since the last sample, or None if none arrived."""
         with self._lock:
-            stamp = self._received.get(channel)
-            return None if stamp is None else max(0.0, self._clock() - stamp)
+            stamp = self._received_mono.get(channel)
+            return None if stamp is None else max(0.0, self._monotonic() - stamp)
 
     def push_error(self, message: str) -> None:
         with self._lock:
