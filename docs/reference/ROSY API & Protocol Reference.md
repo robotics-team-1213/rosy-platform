@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.40
+**Version:** v1.41
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -968,8 +968,19 @@ The legacy shared `--token` mode is not per-user authorization and does not
 satisfy D-276. Site Compose requires `--users-file`; replacing or removing a
 digest and restarting Fleet rotates or revokes that user. Policy submissions
 remain `HOLD` with `POLICY_NOT_ACCEPTED` while D-268 is Proposed. A command timeout or unclassified post-dispatch error becomes
-`UNKNOWN`; the server does not retry it. D-177 command correlation and CORE
+`UNKNOWN`; the server does not retry it. D-297 command correlation and CORE
 ACK/final-result reconciliation remain separate required work.
+For the current navigation path, `task_id` remains in the Fleet SQLite task and
+dispatch attempt. `HttpRobotClient` sends only `{x, y, yaw}` to CORE
+`POST /api/v1/navigation/goal`; the positive response has `accepted`, `mode`,
+and `goal`, but no task or command ID. CORE emits `nav.started` with goal/by and
+`nav.completed` with no goal or task ID. Fleet can audit those events by robot
+and event ID, but their order or matching coordinates do not prove which task
+finished. `GET /api/fleet/tasks/{task_id}` therefore reports the Fleet receipt
+and history, not a correlated CORE execution result. This observed gap and the
+required negative cases are recorded in the P0
+[boundary trace](../validation/2026-09-27-platform-p0-task-result-trace.md).
+
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 
@@ -1043,7 +1054,7 @@ authenticated intent
 `QUEUED` means Fleet durably recorded the request and has not dispatched it.
 `ACCEPTED` means CORE explicitly acknowledged receipt, not that execution began
 or finished. `RUNNING` and `COMPLETED` require CORE execution/final-result
-evidence correlated to the same task; D-177 correlation is not yet active for
+evidence correlated to the same task; D-297 correlation is not yet active for
 this site workflow. Any ambiguous result after dispatch stays `UNKNOWN` and is
 not automatically retried. Fleet SQLite and append-only history remain the
 source of truth. Priority is server-derived and never a public request field.
@@ -1082,6 +1093,7 @@ authorizes navigation or picking.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.41 | 2026-09-27 | Corrective(P0, D-297): document the observed navigation task/CORE event correlation gap and replace stale D-177 activation references. No path, schema, runtime, or robot PRT envelope change. |
 | v1.40 | 2026-09-26 | Additive (D-293): typed Site Fleet intent/OpenAPI grammar, server-derived priority and identity, durable task/audit semantics, and purpose-specific message boundaries. No robot PRT envelope change. |
 | v1.39 | 2026-09-26 | Additive: Operator camera preview screenshot/video evidence upload, list, download and bounded `VisionEvidenceRecord`/`VisionEvidenceList`. Browser PC storage stays local. Robot DDS/WSS envelope version remains 1.0. |
 | v1.38 | 2026-09-26 | Robot FleetAgent location: paired robots may resolve a pinned site over mDNS with CA/TLS verification; no envelope change. |

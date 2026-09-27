@@ -105,6 +105,8 @@ P0은 기존 [플랫폼 구조 간극 지도](2026-09-26-platform-structure-gap-
 
 ## 첫 실행 단위
 
+**P0 결과 (2026-09-27):** [한 Pinky 이동 작업의 요청·수락·결과·정지 증거 추적](../validation/2026-09-27-platform-p0-task-result-trace.md). Fleet 수락과 CORE 이벤트 사이에 `task_id`/명령 ID 연결이 없음을 확인했다. 이 표본은 공통 장치 계약의 승인 근거가 아니며 P1/P2는 각각의 게이트를 유지한다.
+
 1. **P0 추적표 작성:** 현행 `/api/fleet/tasks/*`, Pinky CORE 수락, Fleet 상태, 장치 최종 이벤트/실물 readback의 유무, D-298 정지 증거를 한 이동 작업으로 연결한다. 파일: `docs/reference/ROSY API & Protocol Reference.md`, 관련 Fleet/CORE 테스트. `proven(Pinky) / candidate(OMX) / open`과 반례를 표시하고, 미구현 상관관계를 완료로 쓰지 않는다.
 2. **P1 OMX 하위 계획 실행:** 실물 inventory, 단일 owner, native ROS와 실제 관절/정지 readback을 먼저 확인한다. 같은 장치에서 LeRobot을 쓰는 경우에는 배타적 모드 전환을 추가 검증한다. LeRobot 기록·데이터 매핑은 이종 미션과 독립적으로 진행한다.
 3. **P2 최소 계약 심사:** 한 Pinky 이동과 실제 OMX 고정 작업 표본을 비교해 공유할 identity·action·결과 의미와 각 장치 고유 payload를 나눈다. Fleet 상태 enum과 장치 ACK/실행 결과를 합치지 않는다. API Reference·typed schema 변경은 실제 소비자·버전·호환 시험이 갖춰질 때 수행하며, D-18에 따른 패키지 분리는 별도로 재검토한다.

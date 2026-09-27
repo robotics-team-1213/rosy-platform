@@ -2803,3 +2803,9 @@
 - 변경: D-302 exact candidate에 synthetic CORE Agent를 TLS WebSocket으로 연결해 PRT 1.0 HELLO와 `nav.progress` 이벤트 수신을 확인했다.
 - 근거: 별도 registry token만 `/registry`에서 허용되고 사용자 토큰은 거부됐다. viewer 이벤트 이력, 동일 이벤트 ID 중복 제거, Fleet 재시작 후 SQLite 이벤트 readback이 확인됐다. 재사용 ID의 내용 변경은 `EVENT_NOT_AUDITABLE`로 거부됐다.
 - gate 변화: 패키징된 로컬 전송·인증·지속성 경로의 LOCAL 증거를 추가했다. 실제 CORE 자격 증명, 현장 TLS/DNS·시계·재접속, Ubuntu/RTX, 물리 장비와 FIELD 검증은 미완료다.
+
+## 2026-09-27 · uncommitted · validation(platform): trace Fleet task to CORE result boundary
+
+- 변경: Pinky 이동의 Fleet 요청·영속 대기·CORE 수락·로컬 주행 이벤트·Fleet readback·정지 증거를 P0 추적표로 기록했다. API Reference v1.41에 현재 `task_id`와 CORE 최종 이벤트의 연결 부재를 명시하고 D-177의 현재 후속 표기를 D-297로 바로잡았다. 플랫폼 계획은 P0 결과에 연결했다.
+- 증거: Fleet `task_service`/`task_store`/CORE REST·navigation manager·event store와 기존 반례 시험을 대조했다. 집중 SOURCE/LOCAL 시험 102 passed (Fleet task API/service/store 및 CORE API, Windows).
+- gate 변화: P0 소스 추적 완료. D-297 활성화·Fleet 작업 완료 전이·OMX DEVICE·물리 정지·FIELD 수용은 미검증으로 유지한다.

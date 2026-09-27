@@ -177,8 +177,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · validation(platform): trace Fleet task to CORE result boundary
 - 2026-09-27 · uncommitted · validation(site): synthetic CORE event persistence
 - 2026-09-27 · uncommitted · validation(site): signed candidate full-compose and camera path
 - 2026-09-27 · uncommitted · fix(site): separate registry and user credentials
 - 2026-09-27 · uncommitted · validation(site): packaged Docker candidate signature round trip
-- 2026-09-27 · uncommitted · deploy(site): authenticate candidate manifests offline
