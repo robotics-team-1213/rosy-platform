@@ -2983,3 +2983,9 @@
 - 변경: Host Agent 원본 조회 완료 UTC와 CORE의 보수적 증거 판정을 API Ref v1.42·Host Agent 계약·역할 G2 카드에 기록했다.
 - 근거: 서버/브라우저 계약 시험, 관리자 `/device`의 60셀 LOCAL 캡처. 현재 실물 로봇에는 Host Agent unit·socket이 없고 두 GET은 `HOST_AGENT_UNAVAILABLE`이다.
 - gate 변화: LOCAL UI 증거만 보강했다. 새 이미지·서비스 배포, 실물 적용과 G3 사람 평가는 HOLD다.
+
+## 2026-09-27 · uncommitted · validation(native): pause grounded G4 after operator power-off
+
+- 변경: 지면 G4 시도의 실제 순서, 서명 payload 설치 readback, 대시보드 인증 대기, 사용자 전원 종료 및 다음 실행 교훈을 `validation/pinky-native-commissioning-2026-09-27/pause-and-lessons.md`에 기록했다.
+- 검증: 설치 직후 릴리스 `2026.09.27-019`와 CORE active를 확인했다. 이후 장치가 꺼져 SSH·API 접속은 실패했다.
+- gate 변화: 실물 이동, G4 승인, SLAM/Nav2 기동, 지도·MCAP은 확인되지 않아 G4/G5 HOLD다.
