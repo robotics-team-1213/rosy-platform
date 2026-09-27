@@ -25,3 +25,5 @@ deploy/omx/patches/*.patch text eol=lf whitespace=-blank-at-eol
 deploy/image/overlays/*.dts text eol=lf
 deploy/robot/udev/*.rules text eol=lf
 deploy/robot/modprobe/*.conf text eol=lf
+docs/validation/pinky-vendor-boot-2026-09-24/config.txt -text
+docs/validation/pinky-vendor-boot-2026-09-24/cmdline.txt -text

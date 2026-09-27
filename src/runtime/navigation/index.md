@@ -40,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · 804dda61 · fix(mapping): scope the occupancy map to the robot namespace
 - 2026-09-25 · uncommitted · refactor(runtime): move navigation under src/runtime (D-231)
 - 2026-09-23 · uncommitted · docs(adr): D-182·D-184 Proposed를 navigation에 연결
 - 2026-09-22 · uncommitted · navigation(launch): hardware 그래프의 IR 출처 명시
 - 2026-09-21 · uncommitted · feat(nav): add a real-hardware SLAM backend (D-144)
-- 2026-09-20 · uncommitted · fix(nav2): keep non-composed nodes in one robot namespace

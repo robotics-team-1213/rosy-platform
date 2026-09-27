@@ -196,6 +196,11 @@ def test_append_only_logs_accept_device_evidence_as_legacy_label():
     assert harness.validate_log(legacy) == []
 
 
+def test_append_only_logs_accept_committed_local_evidence_label():
+    legacy = GOOD_LOG.replace("- 증거:", "- Local evidence:")
+    assert harness.validate_log(legacy) == []
+
+
 def test_headings_inside_code_fences_are_entry_text():
     assert harness.validate_log(GOOD_LOG + "\n```markdown\n## not an entry\n```\n") == []
 
