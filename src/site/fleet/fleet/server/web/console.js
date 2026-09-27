@@ -62,6 +62,8 @@ const view = {
   formation: null,
   signals: {},    // ROSY-SIGNAL-001 — snapshot 의 signals 캐시
   pendingTasks: {},
+  stateUnavailable: false,
+  stateLoaded: false,
 };
 
 function log(text, kind) {
@@ -107,7 +109,22 @@ function render() {
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
     ? [...focusedCard.querySelectorAll("ui-button")].indexOf(focused) : -1;
-  rosterBox.replaceChildren(...view.robots.map((robot, index) => roster.card(robot, index)));
+  if (view.robots.length) {
+    rosterBox.replaceChildren(...view.robots.map((robot, index) => roster.card(robot, index)));
+  } else {
+    const message = view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
+      : view.stateLoaded ? "등록된 로봇이 없습니다. 발견 목록에서 페어링 상태를 확인하세요."
+        : "로봇 목록 불러오는 중";
+    if (rosterBox.childElementCount !== 1 ||
+        rosterBox.firstElementChild?.getAttribute("role") !== "status" ||
+        rosterBox.firstElementChild.textContent !== message) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.setAttribute("role", "status");
+      empty.textContent = message;
+      rosterBox.replaceChildren(empty);
+    }
+  }
   if (focusedId) {
     const nextCard = [...rosterBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
@@ -135,6 +152,14 @@ async function refreshState() {
   try {
     const snapshot = await call("/api/fleet/state");
     view.robots = snapshot.robots;
+    view.stateUnavailable = false;
+    view.stateLoaded = true;
+    if (view.selected) {
+      const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
+      if (!selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
+        disarmGoal("안전·연결 상태가 바뀌어 목표 지정 취소");
+      }
+    }
     view.signals = snapshot.signals || {};
     el("fleet-name").textContent = (snapshot.fleet.name || "site").toUpperCase();
     const pill = el("online-pill");
@@ -144,10 +169,22 @@ async function refreshState() {
   } catch (err) {
     // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
     if (auth.locked) return;
+    view.stateUnavailable = true;
+    if (view.selected) disarmGoal("Fleet 상태를 확인할 수 없어 목표 지정 취소");
+    render();
     const pill = el("online-pill");
     pill.textContent = "Fleet 서버 없음";
     pill.setAttribute("status", "crit");
   }
+}
+
+function disarmGoal(reason) {
+  view.selected = null;
+  view.cursor = null;
+  const canvas = el("map-canvas");
+  canvas.classList.add("idle");
+  canvas.tabIndex = -1;
+  log(reason, "bad");
 }
 
 const discoveryLabels = {
@@ -234,6 +271,13 @@ document.addEventListener("keydown", (event) => {
 
 async function commitGoal(col, row) {
   if (!view.selected || !view.map) return;
+  const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
+  if (view.stateUnavailable || auth.role !== "operator" ||
+      !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
+    disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
+    render();
+    return;
+  }
   const point = mapView.toWorld(view.map, col, row);
   const robotId = view.selected;
   if (!window.confirm(`${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`)) return;

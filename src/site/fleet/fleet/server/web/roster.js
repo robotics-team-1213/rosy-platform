@@ -41,7 +41,15 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     const state = robot.state || {};
     const pose = state.pose;
     const nav = navTag(state);
-    const estop = state.safety && state.safety.estop;
+    const estop = state.safety?.estop;
+    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? "정보 없음" : estop === true ? "E-STOP"
+      : estop === false ? "OK" : "정보 없음";
+    const goalSafetyReason = view.stateUnavailable
+      ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
+      : estop === true
+      ? "비상정지가 활성화되어 목표를 보낼 수 없습니다."
+      : estop !== false && robot.online
+        ? "안전 상태를 확인할 수 없어 목표를 보낼 수 없습니다." : "";
 
     const head = document.createElement("div");
     head.className = "robot-head";
@@ -79,7 +87,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
       ["POSE", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
       ["YAW", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
       ["BATTERY", battery],
-      ["SAFETY", estop ? "E-STOP" : robot.online ? "OK" : "—"],
+      ["SAFETY", safetyLabel],
     ];
     rows.forEach(([label, value]) => {
       const cellEl = document.createElement("div");
@@ -125,7 +133,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     aim.dataset.goalRobotId = robot.robot_id;
     aim.textContent = view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정";
     if (view.selected === robot.robot_id) aim.classList.add("arming");
-    aim.disabled = !robot.online || !view.map;
+    aim.disabled = view.stateUnavailable || !robot.online || !view.map || estop !== false;
     aim.addEventListener("click", () => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
       view.cursor = view.selected && view.map
@@ -166,6 +174,12 @@ export function createRoster({ el, view, log, call, render, streamEvidence }) {
     });
     actions.append(aim, cancel);
     node.appendChild(actions);
+    if (goalSafetyReason) {
+      const why = document.createElement("p");
+      why.className = "hint";
+      why.textContent = goalSafetyReason;
+      node.appendChild(why);
+    }
     return node;
   }
 

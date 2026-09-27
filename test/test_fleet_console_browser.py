@@ -247,6 +247,7 @@ def test_empty_fleet_renders_zero_online_and_no_ghosts(console_url):
             "() => document.getElementById('online-pill')?.textContent === '0/0 연결'"
         )
         assert "rosy" not in page.inner_text("#roster")
+        assert "등록된 로봇이 없습니다" in page.inner_text("#roster")
         assert (page.evaluate("window.__swarmOverlay?.slots || 0") == 0), (
             "비활성 대형에 오버레이가 남아 있다 — 장식이 아니라 현재 작업 대상만 보인다(D-131)"
         )
@@ -271,6 +272,7 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
             " === 'Fleet 서버 없음'"
         )
         assert page.locator("#online-pill").get_attribute("status") == "crit"
+        assert "Fleet 상태를 확인할 수 없습니다" in page.inner_text("#roster")
         assert not errors
         save_temp_screenshot(page, "fleet_console_gather-error.png")
         browser.close()
@@ -390,6 +392,65 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
         assert "OFFLINE" in roster
         assert not errors
         save_temp_screenshot(page, "fleet_console_unreachable.png")
+        browser.close()
+
+
+@pytest.mark.parametrize("safety, expected, reason", [
+    (None, "정보 없음", "안전 상태를 확인할 수 없어"),
+    ({"estop": True}, "E-STOP", "비상정지가 활성화되어"),
+])
+def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safety, expected, reason):
+    from playwright.sync_api import sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["state"]["safety"] = safety
+    api = {
+        "/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                             "robots": [robot], "ts": 0.0},
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        card = page.locator("#roster article").filter(has_text="rosy_01")
+        card.wait_for()
+        safety_row = card.locator(".facts div").filter(has_text="SAFETY")
+        assert safety_row.locator("strong").inner_text() == expected
+        assert reason in card.inner_text()
+        assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")
+        assert not card.locator("ui-button").nth(1).evaluate("node => node.disabled")
+        assert not errors
+        browser.close()
+
+
+def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
+    from playwright.sync_api import sync_playwright
+
+    posts: list[tuple[str, str]] = []
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    api = {
+        "/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                             "robots": [robot], "ts": 0.0},
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        "/api/fleet/robots/rosy_01/goal": {"accepted": True},
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api, posts=posts,
+                                               init_script=DECLINE_CONFIRM)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("ui-button[data-goal-robot-id='rosy_01']").click()
+        assert page.locator(".robot.selected").count() == 1
+        robot["state"]["safety"] = None
+        page.wait_for_function("() => document.querySelector('#roster article')"
+                               "?.textContent.includes('안전 상태를 확인할 수 없어')")
+        assert page.locator(".robot.selected").count() == 0
+        assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
+        assert "목표 지정 취소" in page.inner_text("#log")
+        page.keyboard.press("Enter")
+        assert not any(method == "POST" and path.endswith("/goal") for method, path in posts)
+        assert not errors
         browser.close()
 
 
