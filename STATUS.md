@@ -14,7 +14,7 @@
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](src/devices/pinky_pro/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [emotion](src/hmi/face/progress.md) | 장치 | uncommitted (2026-09-21) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [emotion](src/hmi/face/progress.md) | 장치 | uncommitted (2026-09-27) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [led](src/devices/pinky_pro/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [imu_bno055](src/devices/common/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](src/devices/pinky_pro/adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
