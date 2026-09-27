@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -121,6 +123,63 @@ def test_real_core_console_fits_desktop_and_mobile_for_operator_and_administrato
             assert mobile["actionGroups"][0] == {"name": "운전", "selected": "true"}, mobile
             assert browser_errors == [], browser_errors
             context.close()
+        browser.close()
+
+
+@pytest.mark.parametrize("evidence,label", [
+    ("delayed", "지연"),
+    ("disconnected", "연결 끊김"),
+    ("unavailable", "정보 없음"),
+])
+@pytest.mark.parametrize("width,height", [(1366, 768), (390, 844)])
+def test_current_role_console_names_each_nonfresh_readout_state(tmp_path, evidence, label, width, height):
+    client = _core_client(tmp_path)
+    token = TOKENS["operator"]
+    capture_dir = Path("X:/DevTemp/rosy-uiux-evidence-matrix")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        def serve(route):
+            path = urlsplit(route.request.url).path
+            response = client.get(path, headers={"Authorization": f"Bearer {token}"})
+            if path == "/api/v1/robot/state" and response.status_code == 200:
+                state = response.json()
+                received_at = (datetime.now(timezone.utc) - timedelta(seconds=12)).isoformat()
+                for channel in ("pose", "battery"):
+                    state.setdefault("evidence", {})[channel] = {
+                        "evidence": evidence, "received_at": received_at,
+                    }
+                state["pose"] = {"x": 12.34, "y": 56.78, "yaw": 0}
+                state["battery"] = {"percent": 67}
+                route.fulfill(status=200, content_type="application/json",
+                              body=json.dumps(state).encode("utf-8"))
+                return
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+                "cache-control": "no-store",
+            }, body=response.content)
+
+        page.route("**/*", serve)
+        page.add_init_script(f"sessionStorage.setItem('rosy.dashboard.token', {token!r})")
+        page.goto("http://rosy.test/console")
+        readout = page.locator('[data-panel="console.overview"] .ui-readout dd')
+        readout.nth(3).wait_for()
+        page.wait_for_timeout(700)
+        capture_dir.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(capture_dir / f"console-{evidence}-{width}x{height}.png"))
+        pose = readout.nth(2)
+        battery = readout.nth(3)
+        assert label in pose.inner_text()
+        assert label in battery.inner_text()
+        assert pose.get_attribute("data-evidence") == evidence
+        assert battery.get_attribute("data-evidence") == evidence
+        if evidence == "delayed":
+            assert "초" in pose.inner_text()
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert errors == []
         browser.close()
 
 
