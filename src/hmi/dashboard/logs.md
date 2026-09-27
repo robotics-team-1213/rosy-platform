@@ -304,3 +304,9 @@
 - 변경: 기존 `/dashboard`와 새 `/console` 수동 운전에서 반복 확인 체크박스를 제거했다. 인증·MANUAL·E-Stop·최신 상태·runtime capability와 홀드/0 명령 전송은 유지한다.
 - 검증: 새 패널의 그룹 전환 0 명령, 레거시 홀드/해제 0 명령 브라우저 시험을 실행한다.
 - gate 변화: LOCAL 조작 단계만 줄였다. 장치 적용과 물리 이동은 별도다.
+
+## 2026-09-28 · uncommitted · fix(setup): keep dock registration blockers next to the action
+
+- 변경: `/setup` 도크 등록 버튼이 비활성인 동안 위치 freshness와 도크 유형 조회의 차단 이유를 버튼 가까이에 표시한다. 조회 오류와 등록/삭제 결과를 각각 분리해 주기 상태 갱신이 덮지 않게 한다. 도크 등록 후 입력 검증 실패는 해당 입력으로 초점을 돌리고, 필수 입력을 브라우저 의미 구조에도 표시한다. 입력을 미리 준비하는 동작과 서버 권한·위치 유효성 규칙은 바꾸지 않았다.
+- 정적 확인: 기존 역할 매트릭스의 차단 문구·등록 성공 조회 경로와 대조, `git diff --check`, Impeccable detector `[]`. 이 변경 후 브라우저 회귀 및 새 뷰포트 캡처는 실행하지 않았다.
+- gate 변화: 수정 후 SOURCE/LOCAL은 재검증 전 HOLD. 이전 실물 Host Agent·도크 위치 판정은 계속 DEVICE/FIELD HOLD다.

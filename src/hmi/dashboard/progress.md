@@ -2,15 +2,15 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "uncommitted", date: 2026-09-27 }
+last_verified: { commit: "uncommitted", date: "2026-09-28" }
 gates:
   SOURCE:
-    state: GO
-    evidence: "D-306 /device 결과 표시 및 현재 teleop 자격 fixture 정렬 후 dashboard + 역할 브라우저 회귀 46 passed (2026-09-27 Windows)"
+    state: HOLD
+    evidence: "도크 등록 readiness/결과 표시 경로 수정 후 회귀를 다시 실행하지 않음"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
-    state: GO
-    evidence: "actual CORE TestClient API + visible Chromium: styleguide, operator console/setup, administrator console/setup/device at 1366×768 and 390×844; focus ring and disabled treatment visible, no positive horizontal overflow, 0 missing button kinds or page errors"
+    state: HOLD
+    blocker: "2026-09-28 dock registration feedback update needs fresh administrator /setup captures at 1366×768 and 390×844; previous screenshots predate this change"
     cmd: "X:\\DevTemp\\rosy-design-system-polish\\visible_roles.py"
   ROS-SIM:
     state: N/A
