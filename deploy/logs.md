@@ -1378,9 +1378,38 @@
 - Change: mounted-image validator now expects the default YAML in core_common share.
 - Evidence: image customization contract tests passed within the 1,812-test gateway/config/image run; built core_common wheel contains both YAML files.
 - Gate: host contract only; native ARM64 artifact and mounted device image remain unverified.
+## 2026-09-27 · uncommitted · fix(native): verify G4 on navigation start
+
+- 변경: `mapping_approval.py`가 G4 원시 odom과 해시를 봉인하고 `rosy-navigation.service`의 `ExecCondition`이 매 기동마다 현재 장치·릴리스와 승인 기록을 다시 검증한다.
+- 검증: Windows 호스트 계약 시험. ARM64 이미지·설치 장치·물리 G4/G5는 HOLD다.
+- gate 변화: SOURCE/LOCAL 검증 경로를 추가했다. ARTIFACT/DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-27 · uncommitted · fix(native): accept floor G4 evidence
+
+- 변경: G4 번들의 `wheels_lifted` 필수값을 없애고 `test_surface=floor|lifted` 및 시험당 10 cm 이동 한계를 검증한다.
+- 검증: Windows 호스트 시험. 기존 장치에는 이전 형식의 벤치 도구가 적용되어 있으며 새 도구의 설치 해시를 별도 확인한다.
+- gate 변화: SOURCE/LOCAL 검증 경로를 갱신했다. 실물 G4/G5 판정은 HOLD다.
+
+## 2026-09-27 · uncommitted · feat(host-agent): stamp complete status reads
+
+- 변경: Host Agent가 네트워크·릴리스 동기 조회 완료 직후 UTC를 응답에 붙인다. nmcli 부분 실패, 릴리스 상태 JSON·필수 필드 실패는 성공으로 꾸미지 않는다.
+- 검증: Host Agent 거부·명령 계약 132 passed. 기존 장치에는 Agent 서비스/소켓이 없어 DEVICE는 HOLD다.
+- gate 변화: SOURCE/LOCAL 계약 근거만 추가했다. 새 이미지 설치와 실물 readback이 필요하다.
 
 ## 2026-09-27 · uncommitted · repair development CORE image package closure
 
 - Change: copy the six missing CORE and web packages into the Docker build, select the web asset packages, and probe installed imports and assets in the final CORE image.
 - Evidence: the new closure tests failed twice on the old Dockerfile, then 48 CORE image/runtime/API host tests passed after the fix. ARM64 image execution is pending independent verification.
 - Gate: SOURCE/LOCAL candidate only. ARTIFACT, DEVICE, and FIELD acceptance remain unchanged.
+
+## 2026-09-27 · b0609dc6 · verify development CORE image closure on ARM64
+
+- Change: verify the final image at clean source revision b0609dc68ed727a1ed15e57e7c3e029001ab0a8f; no device deployment or release publication.
+- Evidence: ARM64 OCI build exit 0; final installed import, dashboard/web_common asset and route probe passed. Installed ament overlay contains exactly core, core_api_web, core_common, core_events, core_features, dashboard, interfaces, pinky_pro, web_common. OCI manifest sha256:4eeccfd3105bee2e5b4ecf7326af292b8d3eb41dcc372b6d1915207d2fba4e29; raw logs on X: (rosy-d310-core-closure-fix-b060.log, rosy-d310-core-inventory-b060.log).
+- Gate: CORE development image ARTIFACT evidence at this source SHA only. IO/native, deployed image signer/digest, DEVICE and FIELD remain HOLD.
+
+## 2026-09-27 · uncommitted · close development IO web asset dependency
+
+- Change: copy and select `web_common` with `control` in the IO image; probe the installed shared assets and control's asset resolver in the final IO stage.
+- Evidence: the IO closure tests failed twice on the original Dockerfile, then 38 IO/CORE image and runtime host contracts passed. ARM64 IO image execution remains pending.
+- Gate: SOURCE/LOCAL candidate only. The IO ARTIFACT, DEVICE, and FIELD gates remain HOLD.
