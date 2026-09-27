@@ -186,6 +186,11 @@ def test_append_only_logs_accept_legacy_evidence_label():
     assert harness.validate_log(legacy) == []
 
 
+def test_append_only_logs_accept_static_review_as_legacy_evidence_label():
+    legacy = GOOD_LOG.replace("- 증거:", "- 정적 확인:")
+    assert harness.validate_log(legacy) == []
+
+
 def test_append_only_logs_accept_validation_as_legacy_evidence_label():
     legacy = GOOD_LOG.replace("- 증거:", "- 검증:")
     assert harness.validate_log(legacy) == []

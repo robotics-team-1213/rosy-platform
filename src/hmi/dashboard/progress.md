@@ -2,11 +2,12 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "uncommitted", date: "2026-09-28" }
+last_verified: { commit: "uncommitted", date: 2026-09-28 }
 gates:
   SOURCE:
     state: HOLD
     evidence: "도크 등록·웨이포인트·위치 설정/SLAM 요청 상태 경로 수정 후 회귀를 다시 실행하지 않음"
+    blocker: "도크 등록·웨이포인트·위치 설정/SLAM 변경 뒤 지정된 브라우저 회귀를 실행하지 않음. SOURCE 시험 통과 전 GO 금지"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
     state: HOLD

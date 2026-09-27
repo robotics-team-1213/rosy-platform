@@ -2,7 +2,7 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "uncommitted", date: "2026-09-28" }
+last_verified: { commit: "uncommitted", date: 2026-09-28 }
 gates:
   SOURCE:
     state: GO
