@@ -148,6 +148,13 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
         page.add_init_script(f"sessionStorage.setItem('rosy.dashboard.token', {token!r})")
         page.goto(f"http://rosy.test/{surface}")
         page.wait_for_function("() => document.querySelectorAll('ui-section[data-panel]').length > 0")
+        if surface == "setup":
+            page.wait_for_function("""() => {
+              const panel = document.querySelector('[data-panel="setup.traffic_policy"]');
+              const facts = panel?.querySelector('.traffic-policy-facts');
+              return facts && panel.querySelector('form')
+                && getComputedStyle(facts).gridTemplateColumns !== 'none';
+            }""")
         page.wait_for_timeout(500)
         capture_dir.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(capture_dir / f"{surface}-{width}x{height}.png"), full_page=True)
@@ -164,6 +171,17 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
           return {overlaps, horizontalOverflow:document.documentElement.scrollWidth - innerWidth,
             sectionCount:sections.length,
             procedureCards:document.querySelectorAll('.procedure-panel > ui-section[data-panel]').length,
+            traffic: (() => {
+              const panel = document.querySelector('[data-panel="setup.traffic_policy"]');
+              if (!panel) return null;
+              const card = panel.parentElement.getBoundingClientRect();
+              const slot = panel.closest('[data-slot="main"]').getBoundingClientRect();
+              const facts = panel.querySelector('.traffic-policy-facts').getBoundingClientRect();
+              const form = panel.querySelector('form').getBoundingClientRect();
+              return {cardWidth:card.width, slotWidth:slot.width,
+                factColumns:getComputedStyle(panel.querySelector('.traffic-policy-facts')).gridTemplateColumns.split(' ').length,
+                factsRight:facts.right, formLeft:form.left, formTop:form.top, factsTop:facts.top};
+            })(),
             outside: [...document.querySelectorAll('*')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
               .slice(0, 12).map(node => ({tag:node.tagName, className:String(node.className),
                 outer:node.outerHTML.slice(0, 180), right:node.getBoundingClientRect().right}))};
@@ -172,4 +190,11 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
     assert layout["horizontalOverflow"] == 0, layout
     assert layout["overlaps"] == [], layout
     assert layout["procedureCards"] == layout["sectionCount"], layout
+    if surface == "setup" and width == 1366:
+        assert layout["traffic"]["cardWidth"] >= layout["traffic"]["slotWidth"] - 2, layout
+        assert layout["traffic"]["factsRight"] <= layout["traffic"]["formLeft"], layout
+    if surface == "setup" and width == 390:
+        assert layout["traffic"]["formTop"] >= layout["traffic"]["factsTop"], layout
+    if surface == "setup":
+        assert layout["traffic"]["factColumns"] == 2, layout
     assert errors == []

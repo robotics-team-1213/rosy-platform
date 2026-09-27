@@ -166,6 +166,23 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
+  body[data-surface="setup"] .procedure-panel:has(> [data-panel="setup.traffic_policy"]) {
+    grid-column: 1 / -1;
+  }
+  body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+  body[data-surface="setup"] [data-panel="setup.traffic_policy"] > ui-head {
+    grid-column: 1 / -1;
+  }
+  body[data-surface="setup"] [data-panel="setup.traffic_policy"] > form {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 30rem) {
