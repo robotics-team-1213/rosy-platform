@@ -234,3 +234,11 @@
 - 증거: Chromium 1280×800 게임 보드 14 passed 및 추가 집중 회귀 2 passed, 게임 호스트 111 passed. `X:\DevTemp\games_board_delayed.png`, `X:\DevTemp\games_board_host_disconnected.png` LOCAL 캡처. 수정 전 끊김 단계 검사는 적색으로 재현했다.
 - gate 변화: SOURCE/LOCAL GO 유지. 게임 UI/UX G2 전체 셀과 DEVICE/FIELD·실제 정지 수용은 별도 HOLD.
 - 결정: D-306, D-309.
+
+## 2026-09-28 · uncommitted · fix(games): 필드 중심 반응형 경기 보드 (D-280/D-309)
+
+- 변경: 1280×800에서 588px 필드와 빈 오른쪽 공간에 흩어진 관측 정보를 필드(720px)·관측 패널 2열로 재배치했다. 760px 이하에서는 한 열로 접고 상단 연결 상태와 마지막 수신 점수 배지를 별도 행에 둔다. 정지 행은 화면 하단 sticky로 유지하며 600px 폭 스크롤 후에도 보이도록 검증했다. 경기 상태·정지 API 의미와 D-280 상태색은 유지했다.
+- 증거: Chromium 전/후 1280·600·390×800 캡처는 `X:\DevTemp\rosy-games-layout\before_*.png`, `after2_*.png`. 1280 필드 588→720px, 세 폭 모두 가로 넘침 0; 1280 세로 넘침 0, 390 세로 넘침 0, 600은 관측 패널을 스크롤하되 정지 행은 화면 안이다. 새 레이아웃 브라우저 1 passed; 게임 호스트 111 passed. 전체 브라우저 15개는 경합 중 13 passed/2 fixture 시간 의존 실패였고, 두 fixture를 고정 clock으로 바꾼 집중 회차 2 passed. 첫 라이브 fixture도 고정 clock으로 바꾼 뒤 2개 집중 검사 통과.
+- 디자인 검사: `impeccable detect --json --scope layout` 경고 2건. 점수 wrapper는 자식 셀마다 12px padding이고, 정지 행도 위쪽 12px padding이다. 검사기가 `/common/tokens.css`를 로컬 파일로 해석하지 못해 토큰 값(`--space-3: 12px`)을 반영하지 못한 정적 오판으로 판정했다.
+- gate 변화: SOURCE/LOCAL 유지. DEVICE/FIELD·실제 정지 수용은 별도 HOLD.
+- 결정: D-280, D-309.

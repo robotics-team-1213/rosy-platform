@@ -32,14 +32,22 @@
     </div>
   </section>
   <p id="match-announcement" class="sr-only" role="status" aria-live="polite"></p>
-  <div class="pitch-wrap" id="pitch-wrap">
-    <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드"></canvas>
-    <p id="field-evidence" hidden></p>
-  </div>
-  <img id="frame" alt="천장 프레임" hidden>
-  <ul id="markers" class="chips" aria-label="보이는 마커"></ul>
-  <p id="stair1">계단 1 아직 (FIELD GO 아님)</p>
-  <p id="lost" class="lost" hidden>유실</p>
+  <main class="match-layout" aria-label="경기 필드와 관측">
+    <div class="field-media">
+      <div class="pitch-wrap" id="pitch-wrap">
+        <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드"></canvas>
+        <p id="field-evidence" hidden></p>
+      </div>
+    </div>
+    <aside class="field-details" aria-label="필드 관측">
+      <h2>필드 관측</h2>
+      <p class="details-label">보이는 마커</p>
+      <ul id="markers" class="chips" aria-label="보이는 마커"></ul>
+      <p id="lost" class="lost" hidden>유실</p>
+      <img id="frame" alt="천장 프레임" hidden>
+      <p id="stair1">계단 1 아직 (FIELD GO 아님)</p>
+    </aside>
+  </main>
   <p class="halt-row">
     <ui-button id="halt" kind="irreversible" type="button">정지</ui-button>
     <span>스페이스도 양쪽을 세운다</span>

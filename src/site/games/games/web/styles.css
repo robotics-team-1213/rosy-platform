@@ -77,11 +77,42 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.match-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+  gap: var(--space-4);
+  flex: 1;
+  margin: 0 var(--space-5) var(--space-3);
+}
+
+.field-media { min-width: 0; }
+
 .pitch-wrap {
   position: relative;
-  width: fit-content;
-  max-width: calc(100% - 44px);
-  margin: 0 var(--space-5);
+  width: 100%;
+  max-width: 720px;
+}
+
+.field-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--score-gap);
+  border-radius: var(--radius-button);
+  background: var(--score-well);
+}
+
+.field-details h2 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-body);
+  font-weight: var(--weight-emphasis);
+}
+
+.details-label {
+  margin: 0;
+  color: var(--mute);
+  font-size: var(--text-label);
 }
 
 #score-evidence:not([hidden]) {
@@ -100,10 +131,10 @@ h1 {
   display: block;
   /* D-201 — 초점 문법: 초점 물체는 줄어들 수 있어도 정지 행을 밀어낼 수는
      없다. 종횡비를 유지한 채 선언 뷰포트(1280×800)에 맞는다. */
-  width: auto;
+  width: 100%;
   max-width: 100%;
   height: auto;
-  max-height: calc(100dvh - 25.5rem);
+  max-height: min(480px, calc(100dvh - 20rem));
   margin: 0;
   background: var(--pitch);
   border-radius: var(--radius-button);
@@ -138,22 +169,22 @@ h1 {
 
 #frame {
   display: block;
-  width: auto;
-  max-width: calc(100% - 44px);
+  width: 100%;
   height: auto;
-  max-height: calc(100dvh - 25.5rem);
-  margin: var(--space-3) var(--space-5) 0;
+  max-height: 180px;
+  margin: var(--space-3) 0;
+  object-fit: contain;
   border-radius: var(--radius-button);
 }
 
 #frame[hidden] { display: none; }
 
 .chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-1);
   list-style: none;
-  margin: var(--space-3) var(--space-5) var(--space-2);
+  margin: var(--space-2) 0 var(--space-4);
   padding: 0;
 }
 
@@ -162,6 +193,7 @@ h1 {
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .chips li.on {
@@ -170,13 +202,15 @@ h1 {
 }
 
 #stair1 {
-  margin: 0 var(--space-5) var(--space-2);
+  margin: auto 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--score-gap);
   color: var(--mute);
   font-size: var(--text-body);
 }
 
 .lost {
-  margin: 0 var(--space-5) var(--space-2);
+  margin: 0 0 var(--space-2);
   color: var(--lost);
 }
 
@@ -184,7 +218,13 @@ h1 {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: 0 var(--space-5) var(--space-5);
+  position: sticky;
+  z-index: 5;
+  bottom: 0;
+  margin: auto 0 0;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--score-gap);
+  background: var(--field);
   color: var(--mute);
   font-size: var(--text-body);
 }
@@ -195,3 +235,31 @@ h1 {
 #halt-status[data-state="error"] { color: var(--lost); }
 
 #halt { min-width: 96px; }
+
+@media (max-width: 760px) {
+  ui-shell[grammar="focal"] ui-topbar {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: end;
+    column-gap: var(--space-3);
+    row-gap: var(--space-1);
+  }
+
+  #phase { margin: 0; }
+  #connection { grid-column: 1 / -1; margin: 0; }
+
+  .match-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .field-details { padding: var(--space-3); }
+  .field-details h2 { margin-bottom: var(--space-2); }
+  .chips { margin-bottom: var(--space-3); }
+
+  #score-evidence:not([hidden]) {
+    position: static;
+    grid-column: 1 / -1;
+    padding: var(--space-1) var(--space-3);
+    background: var(--score-gap);
+  }
+
+  .halt-row { flex-wrap: wrap; }
+  #halt-status:not(:empty) { flex-basis: 100%; }
+}

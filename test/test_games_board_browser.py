@@ -58,7 +58,8 @@ def test_match_board_renders_published_play_state():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
-    board = PreviewBoard()
+    # This case asserts the live label; a slow Chromium launch must not age the fixture.
+    board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
@@ -220,7 +221,7 @@ def test_match_board_shows_lost_hold_state():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
-    board = PreviewBoard()
+    board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_lost_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
@@ -330,6 +331,62 @@ def test_halt_row_stays_inside_the_declared_viewport():
     assert fit["halt"]["bottom"] <= fit["vh"] and fit["halt"]["top"] >= 0, (
         f"정지 행이 뷰포트 밖이다(D-201): {fit}"
     )
+
+
+def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    now = [100.0]
+    board = PreviewBoard(clock=lambda: now[0])
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = _launch_board_page(playwright, url)
+            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            desktop = page.evaluate("""() => {
+              const rect = (s) => document.querySelector(s).getBoundingClientRect();
+              return {field: rect('#pitch').toJSON(), details: rect('.field-details').toJSON(),
+                halt: rect('#halt').toJSON(), scrollWidth: document.documentElement.scrollWidth,
+                scrollHeight: document.documentElement.scrollHeight};
+            }""")
+            assert desktop["field"]["width"] >= 680
+            assert desktop["details"]["left"] > desktop["field"]["right"]
+            assert desktop["halt"]["bottom"] <= 800
+            assert desktop["scrollWidth"] <= 1280 and desktop["scrollHeight"] <= 800
+
+            page.set_viewport_size({"width": 390, "height": 800})
+            now[0] += 3.0
+            page.wait_for_function("document.getElementById('connection')?.dataset.evidence === 'delayed'")
+            narrow = page.evaluate("""() => {
+              const rect = (s) => document.querySelector(s).getBoundingClientRect();
+              return {brand: rect('ui-brand').toJSON(), phase: rect('#phase').toJSON(),
+                connection: rect('#connection').toJSON(), scoreEvidence: rect('#score-evidence').toJSON(),
+                awayName: rect('#away-name').toJSON(), halt: rect('#halt').toJSON(),
+                scrollWidth: document.documentElement.scrollWidth,
+                sticky: getComputedStyle(document.querySelector('.halt-row')).position};
+            }""")
+            assert narrow["connection"]["top"] >= max(narrow["brand"]["bottom"], narrow["phase"]["bottom"])
+            assert narrow["scoreEvidence"]["bottom"] <= narrow["awayName"]["top"]
+            assert narrow["scrollWidth"] <= 390
+            assert narrow["halt"]["bottom"] <= 800 and narrow["sticky"] == "sticky"
+            page.set_viewport_size({"width": 600, "height": 800})
+            page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+            page.wait_for_timeout(100)
+            scrolled = page.evaluate("""() => ({
+              halt: document.getElementById('halt').getBoundingClientRect().toJSON(),
+              stair: document.getElementById('stair1').getBoundingClientRect().toJSON(),
+              scrollWidth: document.documentElement.scrollWidth,
+            })""")
+            assert scrolled["scrollWidth"] <= 600
+            assert scrolled["halt"]["bottom"] >= 780
+            assert scrolled["stair"]["bottom"] <= scrolled["halt"]["top"]
+            assert not errors
+            browser.close()
+    finally:
+        server.close()
 
 
 def test_the_space_bar_promise_is_real():
@@ -449,7 +506,7 @@ def test_overlay_failure_marks_last_received_match_as_stale():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
-    board = PreviewBoard()
+    board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
