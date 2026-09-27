@@ -334,3 +334,9 @@
 - 변경: package progress의 YAML 날짜 형식을 계약에 맞추고, dashboard SOURCE HOLD blocker를 최신 도크·웨이포인트·위치 설정 변경에 맞춰 구체화했다. 기존 작업 로그 본문은 보존한다.
 - 증거: network/harness 계약 시험 77 passed; harness lint 0 errors, 기존 메타데이터 warning 19건. 도크·웨이포인트 브라우저 회귀와 새 화면 캡처는 이 변경에서 실행하지 않았다.
 - gate 변화: SOURCE와 LOCAL은 계속 HOLD이며, browser 회귀와 관리자 화면 readback이 다음 출구다. ARTIFACT는 별도 이미지 검증 전 HOLD다.
+
+## 2026-09-28 · uncommitted · fix(device): keep security and safety feedback distinct
+
+- 변경: 관리자 `/device` 보안 패널에서 토큰 목록 오류, 토큰 생성/삭제 결과, 일회성 토큰 비밀값, 안전 정책 조회, 안전 정책 저장 결과를 별도 상태 영역으로 분리했다. 토큰 목록 조회가 실패하면 이전 행을 숨기고, 새 토큰 비밀값은 목록 재조회 오류나 안전 정책 폴링으로 사라지지 않게 한다. 안전 정책 폴링은 편집 중인 값을 보존하며 저장 요청 중에는 입력을 잠근다. 저장 응답의 현재값은 화면에 다시 반영한다.
+- 정적 확인: 토큰 POST/GET/DELETE와 안전 정책 GET/PUT의 상태 경로를 코드 및 API 응답 계약에서 대조했다. `git diff --check`를 통과했고 Impeccable detector는 `[]`였다. 관리자 브라우저 회귀와 새 `/device` 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 토큰 실사용·안전정책 런타임 readback 및 DEVICE/FIELD는 별도다.

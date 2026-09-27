@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(device): keep security and safety feedback distinct
 - 2026-09-28 · uncommitted · fix(docs): validate dashboard source hold record
 - 2026-09-28 · uncommitted · fix(setup): preserve localization action state during polling
 - 2026-09-28 · uncommitted · fix(setup): hide stale waypoints when inventory read fails
 - 2026-09-28 · uncommitted · fix(setup): hide stale dock actions when inventory cannot be read
-- 2026-09-28 · uncommitted · fix(setup): keep dock registration blockers next to the action

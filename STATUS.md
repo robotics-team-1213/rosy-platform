@@ -61,7 +61,7 @@
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - dashboard SOURCE: 도크 등록·웨이포인트·위치 설정/SLAM 변경 뒤 지정된 브라우저 회귀를 실행하지 않음. SOURCE 시험 통과 전 GO 금지
-- dashboard LOCAL: 2026-09-28 dock, waypoint and localization feedback updates need fresh administrator /setup captures at 1366×768 and 390×844; previous screenshots predate these changes
+- dashboard LOCAL: 2026-09-28 /setup workflow and /device security feedback updates need fresh administrator captures at 1366×768 and 390×844; previous screenshots predate these changes
 - dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
 - omx_adapter ROS-SIM: Simulation evidence is Docker Desktop amd64 only. Target Linux workstation timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
 - omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact
