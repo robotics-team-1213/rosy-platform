@@ -3,6 +3,15 @@ import { HeadlessState } from "/common/core_ui_logic.js";
 // Setup owns dock inventory and teach-by-docking; operational docking lives in /console.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
+function poseUnavailableReason(state) {
+  const evidence = new HeadlessState(state).evidenceOf("pose");
+  if (evidence === "disconnected") return "위치 연결 끊김";
+  if (evidence === "unavailable") return "위치 정보 없음";
+  const stamp = Date.parse(state?.evidence?.pose?.received_at || "");
+  const age = Number.isFinite(stamp) ? ` · 마지막 수신 ${Math.max(0, Math.floor((Date.now() - stamp) / 1000))}초 전` : " · 마지막 수신 시각 없음";
+  return `위치 지연${age}`;
+}
+
 export function mount(root, ctx) {
   const head = el("ui-head", "", "도크 위치 준비");
   const status = el("ui-status", "", "로봇 pose와 도크 목록을 불러오는 중입니다.");
@@ -33,7 +42,8 @@ export function mount(root, ctx) {
   }
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
     poseFresh = new HeadlessState(state).isFresh("pose");
-    status.textContent = poseFresh ? "위치를 읽었습니다. 실제 도크 위치에서 현재 위치 기록을 사용할 수 있습니다." : "pose 상태가 최신이 아니어서 도크 위치 기록을 막았습니다.";
+    status.textContent = poseFresh ? "위치를 읽었습니다. 실제 도크 위치에서 현재 위치 기록을 사용할 수 있습니다."
+      : `${poseUnavailableReason(state)} · 현재 위치가 최신이 아니어서 도크 위치 기록을 막았습니다.`;
     renderDocks();
   }, (error) => { poseFresh = false; status.textContent = `현재 pose를 읽지 못했습니다: ${error.message}`; renderDocks(); });
   const stopStatus = ctx.store.poll("/api/v1/docking/status", 5_000, (data) => {

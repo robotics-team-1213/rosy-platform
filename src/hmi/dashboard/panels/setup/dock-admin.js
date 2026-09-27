@@ -1,6 +1,14 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
+function poseUnavailableReason(state) {
+  const evidence = new HeadlessState(state).evidenceOf("pose");
+  if (evidence === "disconnected") return "위치 연결 끊김";
+  if (evidence === "unavailable") return "위치 정보 없음";
+  const stamp = Date.parse(state?.evidence?.pose?.received_at || "");
+  const age = Number.isFinite(stamp) ? ` · 마지막 수신 ${Math.max(0, Math.floor((Date.now() - stamp) / 1000))}초 전` : " · 마지막 수신 시각 없음";
+  return `위치 지연${age}`;
+}
 function input(labelText, name, type = "text") {
   const label = el("label", "ui-field-label", labelText); const control = el("input");
   control.name = name; control.type = type; control.autocomplete = "off"; label.append(control);
@@ -61,7 +69,7 @@ export function mount(root, ctx) {
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
     poseFresh = new HeadlessState(state).isFresh("pose"); pose = state;
     add.disabled = pending || !poseFresh || !typesLoaded;
-    if (!poseFresh) status.textContent = "현재 위치가 최신이 아니어서 도크 등록을 막았습니다.";
+    if (!poseFresh) status.textContent = `${poseUnavailableReason(state)} · 도크 등록을 막았습니다.`;
     else if (!status.textContent.includes("등록했습니다")) status.textContent = "현재 위치를 읽었습니다. 유형과 ID를 확인한 뒤 등록하세요.";
   }, (error) => { poseFresh = false; pose = null; add.disabled = true; status.textContent = `현재 pose를 읽지 못해 도크 등록을 막았습니다: ${error.message}`; });
   const stopDocks = ctx.store.poll("/api/v1/docking/docks", 10_000, ({docks: rows = []}) => { docks = rows; renderDocks(); }, (error) => { status.textContent = `도크 목록을 읽지 못했습니다: ${error.message}`; });

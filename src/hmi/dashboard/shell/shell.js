@@ -31,6 +31,15 @@ function showLoginStatus(text) {
   status.replaceChildren(document.createTextNode(`${text} `), link);
 }
 
+function showRoleDeniedStatus() {
+  status.hidden = false;
+  const link = document.createElement("a");
+  link.className = "surface-auth-link";
+  link.href = "/console";
+  link.textContent = "운용 화면으로 이동";
+  status.replaceChildren(document.createTextNode("이 화면은 현재 계정 역할로 열 수 없습니다. "), link);
+}
+
 function renderSwitch(surfaces) {
   const nav = document.getElementById("surface-switch");
   nav.replaceChildren(...surfaces.map(({ id, title }) => {
@@ -98,7 +107,14 @@ async function onManifestError(error) {
     return;
   }
   if (error.status === 403) {
-    showStatus("이 화면은 현재 계정 역할로 열 수 없습니다. 역할이 허용된 화면으로 이동하세요.");
+    if (intervalId) clearInterval(intervalId);
+    intervalId = null;
+    if (mounted) await mounted.unmountAll();
+    mounted = null;
+    revision = null;
+    renderSwitch([]);
+    document.getElementById("shell-role").textContent = "권한 제한";
+    showRoleDeniedStatus();
     return;
   }
   if (error.status === 404) {
