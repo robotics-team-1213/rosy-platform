@@ -49,6 +49,8 @@ h1 {
   color: var(--mute);
   font-size: var(--text-label);
 }
+#connection[data-evidence="delayed"], #connection[data-evidence="unavailable"] { color: var(--status-warn); }
+#connection[data-evidence="disconnected"] { color: var(--status-crit); }
 
 .score {
   display: grid;

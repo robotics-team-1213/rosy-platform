@@ -100,6 +100,7 @@ def test_match_board_names_server_judged_delay():
             page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
             assert page.locator("#home-score").inner_text() == "2"
             assert not errors
+            save_temp_screenshot(page, "games_board_delayed.png")
             browser.close()
     finally:
         server.close()

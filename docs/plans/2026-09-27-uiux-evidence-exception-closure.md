@@ -84,3 +84,5 @@ Task 1/2/3/4의 각 표면 변경은 별도 커밋으로 되돌린다. 시간 �
 - 상단 Basis의 `751a54f7`은 착수 시 기준선이다. 각 통합 이후의 HEAD는 위 커밋과 `git log`로 확인한다.
 
 - Task 4 추가: 역할 화면 `SAFE_STOP`/상태 미확인 상단 문구와 정지 요청 후 CORE readback 안내를 로컬 매트릭스로 확인했다. 역할별 전체 G2/G3와 실제 물리 정지는 계속 HOLD다.
+
+- Task 5 LOCAL: Fleet 기본/전체 목록과 320/390px, 게임 정상/지연, 역할 SAFE_STOP의 변경 후 X: 캡처를 확인하고 표면 카드에 보충했다. Fleet 532 passed/5 skipped, 게임 102 passed, Fleet 브라우저 22 passed, 게임 브라우저 12 passed, 역할 매트릭스 56셀(가로 넘침·pageerror 0). 장치·현장 근거가 없어 D-153의 표면별 전체 G2/G3는 HOLD다.

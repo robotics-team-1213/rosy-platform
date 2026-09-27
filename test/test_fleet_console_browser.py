@@ -155,6 +155,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         assert "지연" not in roster, "정상 스트림(4.8 Hz)에 지연 태그가 붙었다 — 정상은 무색이어야 한다"
         assert "0.60m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
         assert [card.get_attribute("data-robot-id") for card in page.locator("#roster article").all()] == ["rosy_03"]
+        save_temp_screenshot(page, "fleet_console_exception_first.png")
         page.locator("#roster-toggle").click()
         assert page.locator("#roster-toggle").get_attribute("aria-expanded") == "true"
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기

@@ -89,3 +89,14 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 | 로봇 얼굴 LCD | [lcd-g2-matrix.md](lcd-g2-matrix.md): 320×240 PIL 상태 9종, 관련 시험 148 passed. | Pi 폰트·실물 거리/각도/조도·카드 만료 후 GIF 복귀 미관찰. **HOLD** |
 
 기존 `/console` 6셀은 위 "현재 역할 화면의 증거 상태"에 기록했다. 레거시 sensing 진단은 D-253/D-266에 따라 **PARKED**다. 제품 전체 D-153 UI/UX 판정은 **HOLD**다.
+
+## D-309 실행 후 LOCAL 판정 (2026-09-27)
+
+| 표면 | 현재 코드·브라우저 근거 | 남은 수용 |
+|---|---|---|
+| Fleet | 서버 532 passed/5 skipped, 브라우저 22 passed. 변경 후 `X:\DevTemp\fleet_console_exception_first.png`, `fleet_console_overlay.png`, `fleet_console_mobile_320.png`, `fleet_console_mobile_390.png`를 확인했다. 기본 목록은 개입 대상만 보이고 전체 보기로 정상 로봇에 접근한다. | 로봇 송신은 팔로워 수신·추종 readback이 아니다. 현장 목표 이동·정지와 전체 G3는 HOLD. |
+| 역할 `/setup`·`/device` | 역할 매트릭스 단독 재실행 1 passed. `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json`의 56셀 중 SAFE_STOP 6셀, 가로 넘침 0, pageerror 0을 확인했다. 동시 Chromium 실행은 브라우저 종료 오류가 있었고 단독 실행에서 재현되지 않았다. | 실제 CORE·장치의 정지 readback과 전체 역할별 G3는 HOLD. |
+| 게임 보드 | 서버 102 passed, 브라우저 12 passed. 변경 후 `X:\DevTemp\games_board_play.png`, `games_board_delayed.png`에서 생성 시간과 지연을 확인했다. | 실제 카메라·로봇·물리 정지와 전체 G3는 HOLD. |
+| LCD | 기존 PIL 148 passed와 320×240 캡처 9개. 이번 코드 변경 없음. | Pi 실물 가독성·만료·각도·조도는 HOLD. |
+
+위 X: 파일은 일회성 로컬 캡처이며 저장소 증거 아카이브나 DEVICE/FIELD 수용을 대신하지 않는다. D-153의 화면별 G2/G3 GO는 선언하지 않는다.

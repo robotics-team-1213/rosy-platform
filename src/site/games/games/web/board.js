@@ -121,6 +121,7 @@ async function tick() {
     if (!res.ok) throw new Error(`overlay ${res.status}`);
     const payload = await res.json();
     if (!payload.field) {
+      connection.dataset.evidence = "unavailable";
       setTextIfChanged(connection, hasMatch ? "경기 데이터 대기 · 마지막 경기 정보" : "경기 데이터 대기 중");
       if (hasMatch) {
         setTextIfChanged(announcement, "경기 데이터 대기 중. 표시된 경기 정보는 마지막 수신 값입니다.");
@@ -128,6 +129,7 @@ async function tick() {
       return;
     }
     hasMatch = true;
+    connection.dataset.evidence = payload.evidence || "unavailable";
     if (payload.evidence === "fresh") {
       setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
     } else if (payload.evidence === "delayed") {
@@ -174,6 +176,7 @@ async function tick() {
     };
     frame.src = `/frame.jpg?t=${Date.now()}`;
   } catch (_error) {
+    connection.dataset.evidence = "disconnected";
     setTextIfChanged(connection, "호스트 연결 오류 · 마지막 경기 정보");
     setTextIfChanged(announcement, "호스트 연결 오류. 표시된 경기 정보는 마지막 수신 값입니다.");
   } finally {

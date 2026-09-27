@@ -58,6 +58,8 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-panel);
   background: var(--surface-flat);
+  color: var(--paper);
+  font-weight: var(--weight-emphasis);
 }
 ui-section[data-failed="true"] { border-style: dashed; }
 body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] {

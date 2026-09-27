@@ -2910,3 +2910,9 @@
 - 변경: `/setup`와 `/device`의 공통 셸이 CORE 상태 readback에서 SAFE_STOP과 상태 미확인을 상단에 표시한다. E-stop 문구는 요청 접수와 상태·물리 결과를 구분한다.
 - 검증: 역할 G2 로컬 매트릭스·진입·패키지 8 passed (Windows LOCAL). 관리자 `/device` SAFE_STOP 사례를 추가했다.
 - gate 변화: 상태 표시의 로컬 경로만 확인했다. 전체 화면 G2/G3, 장치 물리 정지와 FIELD는 HOLD다.
+
+## 2026-09-27 · uncommitted · validation(uiux): inspect changed Fleet, game and role captures
+
+- 변경: Fleet 기본 로스터의 중립 테두리와 게임 지연 문구의 경고색을 보완했다. 변경 후 X: 캡처를 시각 점검하고 표면별 LOCAL 판정 표를 갱신했다.
+- 검증: Fleet 전체 532 passed/5 skipped, Fleet 브라우저 22 passed, 게임 전체 102 passed, 게임 브라우저 12 passed, 역할 매트릭스 56셀의 넘침·pageerror 0 (Windows LOCAL). 역할 매트릭스와 Fleet Chromium을 동시에 실행한 회차는 브라우저 종료로 실패했으며 단독 재실행은 통과했다.
+- gate 변화: LOCAL 코드·브라우저·시각 근거를 보충했다. 실제 로봇·Pi LCD·카메라·현장 정지 및 전체 G2/G3는 HOLD다.

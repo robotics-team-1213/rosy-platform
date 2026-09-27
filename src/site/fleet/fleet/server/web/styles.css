@@ -122,7 +122,7 @@ main {
 
 .robot {
   border: 1px solid var(--line-10);
-  border-left: 3px solid var(--robot-2);
+  border-left: 3px solid var(--line-10);
   border-radius: var(--radius-panel);
   background: var(--ground-card);
   padding: var(--space-3) var(--space-4);
