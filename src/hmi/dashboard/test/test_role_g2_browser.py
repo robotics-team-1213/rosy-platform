@@ -288,19 +288,90 @@ def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
         page.route("**/*", serve)
         page.goto("http://rosy.test/device", wait_until="domcontentloaded")
         cards = page.locator('[data-panel="host.operations"] section.ui-readback')
-        page.get_by_text("site-fixture", exact=True).wait_for()
-        assert page.get_by_text("r1", exact=True).count() == 1
+        page.wait_for_function("""() => {
+          const lines = document.querySelectorAll('[data-panel="host.operations"] .host-card-headline');
+          return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
+        }""")
         phase["scenario"] = "forbidden"
         page.wait_for_function("""() => [...document.querySelectorAll('[data-panel="host.operations"] section.ui-readback')]
           .slice(0, 2).every(card => card.querySelector('ui-status')?.textContent.includes('권한'))""", timeout=30_000)
-        assert "site-fixture" not in cards.nth(0).locator("dl").inner_text()
-        assert "r1" not in cards.nth(1).locator("dl").inner_text()
+        assert "site-fixture" not in cards.nth(0).locator("dl").text_content()
+        assert "r1" not in cards.nth(1).locator("dl").text_content()
         assert page.get_by_text("사업장 Wi-Fi로 전환", exact=True).is_disabled()
         assert page.get_by_text("이전 릴리스로 복귀", exact=True).is_disabled()
         phase["scenario"] = "normal"
-        page.get_by_text("site-fixture", exact=True).wait_for(timeout=30_000)
-        page.get_by_text("r1", exact=True).wait_for(timeout=30_000)
+        page.wait_for_function("""() => {
+          const lines = document.querySelectorAll('[data-panel="host.operations"] .host-card-headline');
+          return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
+        }""", timeout=30_000)
         assert errors == []
+        browser.close()
+
+
+def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_path):
+    """Keep the next device action discoverable without scrolling past diagnostics."""
+    client = _core_client(tmp_path)
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            page = browser.new_page(viewport={"width": width, "height": height})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-admin')")
+
+            def serve(route):
+                path = urlsplit(route.request.url).path
+                response = _response(client, path, TOKENS["administrator"], "normal", "device")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+            page.wait_for_function("""() => {
+              const lines = document.querySelectorAll('[data-panel="host.operations"] .host-card-headline');
+              return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
+            }""")
+            result = page.evaluate("""() => {
+              const host = document.querySelector('[data-panel="host.system"]');
+              const operations = document.querySelector('[data-panel="host.operations"]');
+              const network = operations.querySelector('section.ui-readback');
+              const button = [...network.querySelectorAll('ui-button')]
+                .find(item => item.textContent === '사업장 Wi-Fi로 전환');
+              const readout = network.querySelector('dl');
+              return {hostBottom: host.getBoundingClientRect().bottom,
+                operationsTop: operations.getBoundingClientRect().top,
+                buttonTop: button.getBoundingClientRect().top,
+                readoutTop: readout.getBoundingClientRect().top,
+                overflow: document.documentElement.scrollWidth - innerWidth};
+            }""")
+            assert result["overflow"] == 0
+            assert result["buttonTop"] < result["readoutTop"], result
+            if width == 390:
+                assert result["operationsTop"] < height, result
+            button = page.get_by_text("사업장 Wi-Fi로 전환", exact=True)
+            button.focus()
+            assert button.evaluate("node => document.activeElement === node")
+            assert button.evaluate("node => getComputedStyle(node).outlineStyle !== 'none' && parseFloat(getComputedStyle(node).outlineWidth) > 0")
+            disclosure = page.locator('[data-panel="host.system"] details > summary')
+            disclosure.focus()
+            assert disclosure.evaluate("node => document.activeElement === node")
+            assert errors == []
+            page.close()
+        denied = browser.new_page(viewport={"width": 390, "height": 844})
+        denied.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+        def serve_denied(route):
+            path = urlsplit(route.request.url).path
+            response = _response(client, path, TOKENS["operator"], "normal", "device")
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+            }, body=response.content if hasattr(response, "content") else response.body)
+        denied.route("**/*", serve_denied)
+        denied.goto("http://rosy.test/device", wait_until="domcontentloaded")
+        denied.wait_for_function("document.querySelector('#surface-status')?.textContent.includes('역할')")
+        assert denied.locator('[data-panel="host.operations"]').count() == 0
+        assert denied.locator('#surface-status a[href="/console"]').is_visible()
+        denied.close()
         browser.close()
 
 

@@ -26,8 +26,17 @@ export function mount(root, ctx) {
   const runtime = section("호스트 런타임");
   const identity = section("로봇 신원");
   const capabilities = section("기능 인벤토리");
-  const message = el("ui-status", "", "상태를 불러오는 중입니다.");
-  root.append(head, runtime.wrap, identity.wrap, capabilities.wrap, message);
+  const overview = el("div", "host-system-overview");
+  const runtimeStatus = el("ui-status", "", "호스트 런타임 확인 중");
+  const identityStatus = el("ui-status", "", "로봇 신원 확인 중");
+  const capabilityStatus = el("ui-status", "", "기능 지원 확인 중");
+  overview.append(identityStatus, capabilityStatus, runtimeStatus);
+  const detail = el("details", "surface-disclosure host-system-detail");
+  detail.append(el("summary", "", "호스트·로봇 신원·기능 세부 정보 및 이름 변경"), runtime.wrap, identity.wrap, capabilities.wrap);
+  const message = el("ui-status", "", "");
+  message.hidden = true;
+  identity.wrap.append(message);
+  root.append(head, overview, detail);
 
   const stopRuntime = ctx.store.poll("/api/v1/system/runtime", 10_000, (data) => {
     fields(runtime.body, [["호스트", data.hostname], ["운영체제", data.os?.pretty_name || data.os?.name],
@@ -39,15 +48,19 @@ export function mount(root, ctx) {
       ["RMW", data.ros?.rmw], ["노드 / 토픽", data.ros ? `${data.ros.node_count ?? "—"} / ${data.ros.topic_count ?? "—"}` : null],
       ["DDS 격리", data.ros?.isolation?.mode],
       ["ROS 위험", (data.ros?.risks || []).map((risk) => `${risk.code || "UNKNOWN"}: ${risk.message || "상세 정보 없음"}`).join(" · ")]]);
-    message.textContent = data.unavailable?.length
-      ? `읽을 수 없는 런타임 항목: ${data.unavailable.join(", ")}` : "호스트 런타임 상태를 읽었습니다.";
-  }, (error) => { message.textContent = `호스트 런타임을 읽지 못했습니다: ${error.message}`; });
+    runtimeStatus.textContent = data.unavailable?.length
+      ? `호스트 런타임 일부 확인 불가: ${data.unavailable.join(", ")}`
+      : `호스트 ${data.hostname || "이름 미확인"} · 런타임 확인됨`;
+    runtimeStatus.setAttribute("state", data.unavailable?.length ? "warning" : "ready");
+  }, (error) => { runtimeStatus.textContent = `호스트 런타임 확인 불가: ${error.message}`; runtimeStatus.setAttribute("state", "error"); });
 
   const stopIdentity = ctx.store.poll("/api/v1/system/info", 30_000, (data) => {
     fields(identity.body, [["로봇 ID", data.robot_id], ["표시 이름", data.robot_name || data.name],
       ["로봇 번호", data.robot_number], ["ROS Domain ID", data.ros_domain_id],
       ["ROS namespace", data.ros_namespace], ["하드웨어 모델", data.hardware_model],
       ["실행 모드", data.runtime_mode]]);
+    identityStatus.textContent = `${data.robot_name || data.name || data.robot_id || "로봇 이름 미확인"} · 실행 모드 ${data.runtime_mode || "확인 불가"}`;
+    identityStatus.setAttribute("state", "ready");
     if (ctx.role === "administrator" && !identity.body.querySelector("form")) {
       const form = el("form", "ui-form");
       const input = el("input"); input.name = "robot_name"; input.maxLength = 64;
@@ -56,13 +69,13 @@ export function mount(root, ctx) {
       form.append(input, save);
       form.addEventListener("submit", async (event) => {
         event.preventDefault(); save.disabled = true;
-        try { await ctx.api("/api/v1/system/info", {method: "PUT", body: JSON.stringify({robot_name: input.value.trim()})}); message.textContent = "표시 이름을 저장했습니다."; }
-        catch (error) { message.textContent = `표시 이름 저장 실패: ${error.message}`; }
+        try { await ctx.api("/api/v1/system/info", {method: "PUT", body: JSON.stringify({robot_name: input.value.trim()})}); message.textContent = "표시 이름 저장 요청을 보냈습니다. 다음 로봇 신원 조회로 결과를 확인하세요."; message.hidden = false; }
+        catch (error) { message.textContent = `표시 이름 저장 실패: ${error.message}`; message.hidden = false; }
         finally { save.disabled = false; }
       });
       identity.wrap.append(form);
     }
-  }, (error) => { message.textContent = `로봇 신원을 읽지 못했습니다: ${error.message}`; });
+  }, (error) => { identityStatus.textContent = `로봇 신원 확인 불가: ${error.message}`; identityStatus.setAttribute("state", "error"); });
 
   let capabilityData = {};
   let inventoryData = {};
@@ -73,10 +86,11 @@ export function mount(root, ctx) {
     else for (const item of descriptors) {
       capabilities.body.append(el("dt", "", item.id), el("dd", "", [item.state, item.reason].filter(Boolean).join(" · ")));
     }
-    message.textContent = `기능 인벤토리 ${descriptors.length}개 · Navigation ${capabilityData.navigation?.goal_navigation === true ? "사용 가능" : "제한 또는 미제공"} · SLAM ${capabilityData.slam === true ? "사용 가능" : "제한 또는 미제공"}`;
+    capabilityStatus.textContent = `기능 인벤토리 ${descriptors.length}개 · Navigation ${capabilityData.navigation?.goal_navigation === true ? "사용 가능" : "제한 또는 미제공"} · SLAM ${capabilityData.slam === true ? "사용 가능" : "제한 또는 미제공"}`;
+    capabilityStatus.setAttribute("state", "ready");
   }
-  const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 15_000, (data) => { capabilityData = data; renderInventory(); }, (error) => { message.textContent = `기능 capability를 읽지 못했습니다: ${error.message}`; });
-  const stopInventory = ctx.store.poll("/api/v1/system/inventory", 15_000, (data) => { inventoryData = data; renderInventory(); }, (error) => { message.textContent = `기능 인벤토리를 읽지 못했습니다: ${error.message}`; });
+  const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 15_000, (data) => { capabilityData = data; renderInventory(); }, (error) => { capabilityStatus.textContent = `기능 capability 확인 불가: ${error.message}`; capabilityStatus.setAttribute("state", "error"); });
+  const stopInventory = ctx.store.poll("/api/v1/system/inventory", 15_000, (data) => { inventoryData = data; renderInventory(); }, (error) => { capabilityStatus.textContent = `기능 인벤토리 확인 불가: ${error.message}`; capabilityStatus.setAttribute("state", "error"); });
 
   return () => { stopRuntime(); stopIdentity(); stopCapabilities(); stopInventory(); };
 }

@@ -292,3 +292,9 @@
 - 변경: `/device` 네트워크·릴리스 상태가 뒤이은 권한 거부·읽기 오류·증거 없음으로 바뀌면 이전 SSID·릴리스 값과 세부/복구 문구를 비우고 확인 불가·다음 행동을 표시한다. 다음 정상 조회가 오면 새 값을 다시 표시한다.
 - 근거: 실제 FastAPI+Chromium에서 정상→403→정상 전이를 재현하고, Host 카드 브라우저에서 503·403·원본 증거 없음의 값·조작 잠금 상태를 확인했다. 집중 브라우저 4 passed, dashboard/Host 계약 62 passed.
 - gate 변화: LOCAL에서 이전 값을 현재 readback으로 오인하는 결함을 닫았다. Host Agent 실물 재연결과 G3 사람 평가, DEVICE/FIELD는 HOLD다.
+
+## 2026-09-28 · uncommitted · fix(device): bring current state and next action into view
+
+- 변경: `/device`의 호스트 신원·기능·런타임은 항상 보이는 짧은 요약과 접을 수 있는 세부 정보로 나눈다. 네트워크·릴리스·커미셔닝은 핵심 조회값과 증거를 먼저, 조작과 요청 결과를 다음에, 전체 readout을 펼침 영역에 둔다. 패널의 DOM·초점 순서, 매니페스트 순서, 권한/API 경계는 유지한다.
+- 근거: 실제 FastAPI+Chromium 관리자 1366×768·390×844 전후 캡처 `X:\DevTemp\rosy-role-visual-flow\`에서 모바일 `/device` Host 작업 시작 y=2395→508px, 문서 높이 6661→3346px, 두 뷰포트 가로 넘침·pageerror 0. 핵심 요약·조작 위치·초점 표시와 운영자 `/device` 권한 제한을 브라우저에서 확인했다. Host/역할 집중 5건 각각 통과, dashboard/레이아웃/Host 계약 62 passed·6 skipped. Impeccable layout detect `[]`.
+- gate 변화: LOCAL 시각 위계 결함을 보완했다. 실제 Host Agent readback·장치 결과와 D-153 G3 사람 평가는 HOLD다.

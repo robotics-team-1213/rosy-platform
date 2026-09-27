@@ -221,9 +221,10 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
             }""")
             for section in page.locator("section.ui-readback").all()[:2]:
                 assert "old-" not in section.inner_text()
-                assert "확인할 수 없음" in section.locator("dl").inner_text()
-                assert section.locator("details").first.is_hidden()
+                assert "확인할 수 없음" in section.locator("dl").text_content()
+                assert section.locator("details").first.get_attribute("open") is None
                 assert section.locator("details").nth(1).is_hidden()
+                assert section.locator("details").nth(2).is_hidden()
             assert "Host Agent 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
             assert "관리자 권한을 확인" in page.locator("section.ui-readback").nth(1).inner_text()
             assert errors == []
