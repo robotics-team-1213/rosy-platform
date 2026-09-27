@@ -125,6 +125,7 @@
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-301 | Site Fleet 후보 묶음은 오프라인 Ed25519 서명으로 발행자를 인증한다 |
 | D-302 | Site Fleet 사용자 API와 CORE registry 자격 증명을 분리한다 |
+| D-304 | 플랫폼 확장은 제어권·계약·배포 증거로 경계를 결정한다 |
 
 ## 계획·결과 문서
 
@@ -177,8 +178,8 @@
 
 ## 최근 기록
 
+- 2026-09-27 · uncommitted · adr(platform): fix expansion boundary and evidence criteria
 - 2026-09-27 · uncommitted · test(platform): keep uncorrelated CORE events out of Fleet completion
 - 2026-09-27 · uncommitted · validation(platform): retain OMX DEVICE gate after source review
 - 2026-09-27 · uncommitted · validation(platform): trace Fleet task to CORE result boundary
 - 2026-09-27 · uncommitted · validation(site): synthetic CORE event persistence
-- 2026-09-27 · uncommitted · validation(site): signed candidate full-compose and camera path

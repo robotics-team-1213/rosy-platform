@@ -2821,3 +2821,9 @@
 - 변경: Fleet이 긍정적 CORE 수락을 기록한 뒤 합성 `nav.completed` 두 건(빈 payload와 임의 `task_id` 주장)이 Agent/Hub 감사 경로에 들어와도 작업을 완료로 승격하지 않는 통합 시험을 추가했다. P0 추적 기록에는 첫 Pinky 운반·고정 OMX 인계의 물리 결과 후보와 미정 계측값을 명시했다.
 - 증거: Fleet task API/event/store 집중 시험 39 passed, 변경 시험 flake8 통과 (Windows). 현재 이벤트 감사 ID와 Fleet 작업 ID 사이의 발행·실행 연결은 없다.
 - gate 변화: SOURCE/LOCAL 회귀 보호만 추가. D-297 ACK 활성화, OMX Device Action과 첫 이종 미션의 DEVICE/FIELD 수용은 계속 미승인이다.
+
+## 2026-09-27 · uncommitted · adr(platform): fix expansion boundary and evidence criteria
+
+- 변경: D-304에서 플랫폼 확장의 물리 제어권, Fleet 작업 정본, 독립 주체의 교환 계약, 실제 배포 단위를 별개로 판정한다. D-231의 층별 배치와 D-303 기각을 유지하고 Pinky+OMX 복합 인터록 및 드론 계약의 미결정 범위를 기록했다.
+- 근거: D-296/D-298과 현행 Fleet 작업·`core_common` 소비·Pinky 이미지 package closure를 대조하고 별도 구조 검토 세션의 반례를 반영했다. 문서 하네스 lint 오류 0건, network/harness 계약 시험 76 passed (Windows); 링크 15개가 저장소 내부 경로로 해석됐다.
+- gate 변화: 구조 판정 기준만 Accepted. Fleet 최종 결과 연결, OMX·복합·드론 운영 제어, 새 API·폴더·릴리스 산출물의 SOURCE/LOCAL·ARTIFACT·DEVICE·FIELD 수용은 각각 후속 게이트로 유지한다.
