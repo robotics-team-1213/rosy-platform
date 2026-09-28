@@ -4,7 +4,12 @@ from fleet.server.mission_store import MissionConflict, MissionStore
 from fleet.server.task_store import FleetTaskStore
 
 
-def setup(tmp_path):
+# Deliberately not named `setup`. pytest 7.4 (what CI runs) still honours the
+# nose convention and, when a module-level `setup` accepts one argument, calls
+# it with the **test module** — so `tmp_path / "fleet.sqlite3"` evaluated as
+# `module / "fleet.sqlite3"` and every test here errored at setup. pytest 8
+# dropped that support, so the collision only shows on the older interpreter.
+def _stores(tmp_path):
     path = tmp_path / "fleet.sqlite3"
     tasks = FleetTaskStore(path)
     state = tasks.dispatch_control()
@@ -27,7 +32,7 @@ def proposal(store, mission_id="mission-1", plan=None):
 
 
 def test_mission_proposal_is_idempotent_and_goal_predicate_is_immutable(tmp_path):
-    _, store, _ = setup(tmp_path)
+    _, store, _ = _stores(tmp_path)
     first = proposal(store)
     duplicate = proposal(store, plan={
         "observation_id": "obs-44", "destination": "tray-1", "source": "block-1",
@@ -42,7 +47,7 @@ def test_mission_proposal_is_idempotent_and_goal_predicate_is_immutable(tmp_path
 
 
 def test_admission_and_shared_resource_claim_are_atomic(tmp_path):
-    tasks, store, generation = setup(tmp_path)
+    tasks, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
     assert tasks.reserve_resources(
         owner_kind="direct_action", owner_id="other-action", generation=generation,
@@ -59,7 +64,7 @@ def test_admission_and_shared_resource_claim_are_atomic(tmp_path):
 
 
 def test_step_start_requires_generation_and_a_live_claim(tmp_path):
-    tasks, store, generation = setup(tmp_path)
+    tasks, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
     admitted = store.admit(mission["mission_id"], actor_id="operator-1",
                            expected_generation=generation,
@@ -76,7 +81,7 @@ def test_step_start_requires_generation_and_a_live_claim(tmp_path):
 
 
 def test_step_start_rejects_boolean_generation_even_when_it_compares_equal(tmp_path):
-    _, store, generation = setup(tmp_path)
+    _, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
     store.admit(mission["mission_id"], actor_id="operator-1", expected_generation=generation,
                 resources=[("workcell", "omx_01"), ("object", "block-1")])
@@ -86,7 +91,7 @@ def test_step_start_rejects_boolean_generation_even_when_it_compares_equal(tmp_p
 
 
 def test_driver_action_success_does_not_confirm_goal_and_goal_evidence_releases_claim(tmp_path):
-    tasks, store, generation = setup(tmp_path)
+    tasks, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
     store.admit(mission["mission_id"], actor_id="operator-1", expected_generation=generation,
                 resources=[("workcell", "omx_01"), ("object", "block-1")])
@@ -119,7 +124,7 @@ def test_driver_action_success_does_not_confirm_goal_and_goal_evidence_releases_
 
 def test_unknown_action_and_stale_goal_keep_claim_held_across_restart(tmp_path):
     path = tmp_path / "fleet.sqlite3"
-    tasks, store, generation = setup(tmp_path)
+    tasks, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
     store.admit(mission["mission_id"], actor_id="operator-1", expected_generation=generation,
                 resources=[("workcell", "omx_01"), ("object", "block-1")])

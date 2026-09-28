@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
 - 2026-09-29 · uncommitted · review Mission stop-generation recovery
 - 2026-09-29 · uncommitted · add internal Mission admission and goal evidence ledger
 - 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
-- 2026-09-29 · uncommitted · fix(fleet-ui): restore segment toggle paint and focus ring contracts
