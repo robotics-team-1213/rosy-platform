@@ -6,7 +6,10 @@ const drivers = new Map();
 
 export function registerDriver(kind, driver) {
   if (!kind) throw new Error("driver kind is required");
-  if (drivers.has(kind)) throw new Error(`driver already registered: ${kind}`);
+  if (drivers.has(kind)) {
+    if (drivers.get(kind) === driver) return;   // 같은 드라이버 재등록은 멱등(모듈 재주입 안전)
+    throw new Error(`driver already registered: ${kind}`);
+  }
   drivers.set(kind, driver);
 }
 

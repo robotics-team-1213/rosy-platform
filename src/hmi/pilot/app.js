@@ -13,12 +13,14 @@ const connectRoot = document.querySelector('[data-screen="connect"]');
 const driveRoot = document.querySelector('[data-screen="drive"]');
 
 function showConnect() {
+  document.body.dataset.pilotScreen = "connect";
   driveRoot.hidden = true;
   connectRoot.hidden = false;
   mountConnect(connectRoot, {onEnter: showDrive});
 }
 
 function showDrive() {
+  document.body.dataset.pilotScreen = "drive";
   connectRoot.hidden = true;
   driveRoot.hidden = false;
   mountDrive(driveRoot, {

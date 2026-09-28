@@ -58,8 +58,10 @@ form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
   white-space: nowrap;
 }
 
-/* 주행 화면 — 영상이 화면을 채우고 컨트롤이 그 아래 붙는다(가로 기준). */
-.pilot-main:has(.pilot-drive:not([hidden])) {
+/* 주행 화면 — 영상이 화면을 채우고 컨트롤이 그 아래 붙는다(가로 기준).
+   :has 미지원 브라우저 대비 body 플래그(app.js 가 data-pilot-screen 설정). */
+.pilot-main:has(.pilot-drive:not([hidden])),
+body[data-pilot-screen="drive"] .pilot-main {
   max-width: none;
   padding: 0;
   gap: 0;

@@ -40,8 +40,7 @@ export function createVisionPreview({
         return;
       }
       if (status.body.seq === seq) {
-        unavailable("최신 프레임 대기");
-        return;
+        return;   // 같은 프레임 — 마지막 영상을 유지하고 건너뛴다(숨기지 않는다).
       }
       const frame = await fetchFrame(`/api/v1/vision/front/frame?seq=${status.body.seq}`);
       if (gen !== generation) return;
