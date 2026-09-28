@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(sd): prepare offline no-drive card recovery
 - 2026-09-29 · uncommitted · docs(g4): plan an attended calibration and mapping flow
 - 2026-09-28 · uncommitted · D-320 product deployment path regression verification
 - 2026-09-28 · uncommitted · D-320 product-scoped robot deployment layout
 - 2026-09-28 · uncommitted · feat(sd): automate attended motor commissioning
-- 2026-09-27 · uncommitted · close development IO web asset dependency

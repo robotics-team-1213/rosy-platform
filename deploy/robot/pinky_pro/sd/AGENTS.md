@@ -110,6 +110,16 @@ When a card fails to boot and SSH is not available, read the card on Windows:
 The copies are raw, not redacted (the journal is binary). Keep them with the card's
 evidence; do not commit or share them without a secret scan.
 
+## Powered-off no-drive recovery (D-321)
+
+`recover-no-drive.py` is a Linux-only offline tool for a separately mounted
+ext4 root partition. Its default mode is read-only inspection. `--apply` requires
+the exact provisioned UID/name/number and active release, plus a backup directory on another
+filesystem; it saves the original bytes, writes `core` with no drive flag, and
+reads the card back. See `docs/deployment/pinky-offline-no-drive-recovery.md`.
+The Windows diagnostics reader cannot write ext4. Neither the tool's receipt
+nor a card readback proves that motors stay off after a physical reboot.
+
 ## Testing
 
 ```powershell

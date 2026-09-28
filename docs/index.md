@@ -201,8 +201,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(sd): document powered-off no-drive recovery
 - 2026-09-29 · uncommitted · docs(g4): record link-loss lesson and D-321 calibration decision
 - 2026-09-28 · uncommitted · docs(sd): define attended post-setup motor commissioning
 - 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
 - 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
-- 2026-09-28 · uncommitted · docs(architecture): make source placement rules explicit

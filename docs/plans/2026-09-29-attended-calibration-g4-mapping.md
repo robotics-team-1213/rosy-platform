@@ -30,6 +30,10 @@ USB SD에 `wsl --mount`를 사용하는 경로는 지원되지 않는다. 따라
 승인된 Linux 쓰기·readback 절차 또는 검증된 카드 재기록 경로가
 마련되기 전까지 복구 단계를 완료했다고 표시하지 않는다.
 
+Linux 호스트용 [오프라인 no-drive 복구 절차](../deployment/pinky-offline-no-drive-recovery.md)와
+`sd/recover-no-drive.py`를 소스에 추가했다. 실제 카드에 적용하거나 첫 부팅
+readback을 수행한 기록은 아직 없으므로 현 장치 복구 상태는 계속 HOLD다.
+
 ## 단계 1. 끊겨도 정직한 PC 진행 도우미
 
 현재 `deploy/robot/pinky_pro/sd/enable-motor-commissioning.ps1` 뒤에 한

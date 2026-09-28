@@ -1437,3 +1437,8 @@
 - 변경: D-321과 단계별 실행 계획에 PC 링크 preflight, 장치 독립 원시 수집, Control 보정 재사용, 네이티브 G4 봉인과 빈 지도 SLAM 전환을 기록했다.
 - 증거: 설치 장치에는 현재 승인 도구가 없고 navigation unit은 마커 존재만 확인한다. 마지막 명령 소실 시도는 원시 자료가 비어 있으며 현장에서 전원을 차단했다. persistent motor/drive 설정은 전원 차단으로 지워지지 않아 다음 부팅 전에 오프라인 복구가 필요하다.
 - gate 변화: 배포·실물 G4/G5 HOLD. 장치 전원은 꺼진 상태로 유지한다.
+## 2026-09-29 · uncommitted · fix(sd): prepare offline no-drive card recovery
+
+- 변경: Linux ext4 카드에서 신원·릴리스 일치, 외부 원본 백업, 원자 교체와 readback을 요구하는 no-drive 복구 도구와 현장 절차를 추가했다. 기본 동작은 읽기 전용이다.
+- 증거: 소스 검토만 수행했다. 실제 카드·Linux 호스트·첫 부팅은 아직 검증하지 않았다.
+- gate 변화: 현 장치의 전원 차단과 DEVICE/FIELD HOLD를 유지한다. persistent drive가 있는 기존 설치본은 카드 복구 전 재전원하지 않는다.

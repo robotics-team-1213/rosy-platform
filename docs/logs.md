@@ -3124,3 +3124,8 @@
 - 변경: PC 링크 상실 시 주행 시도를 UNOBSERVED로 보존하는 교훈과 D-321 현장 보정·G4·빈 지도 맵핑 결정을 추가했다. 구현 단계를 별도 계획에 기록했다.
 - 증거: 비공개 지면 시험의 네 방향 원시 수치 중 유효 기록과 현장 확인 범위를 분리했다. 마지막 명령 소실 시도는 샘플과 stop 시각이 없어 무효이며, PC Wi-Fi 드라이버 연결 해제와 현장 전원 차단을 확인했다. 차단 직전 persistent drive flag가 다음 부팅 토크를 켤 수 있어 오프라인 no-drive 복구를 선행 조건으로 기록했다.
 - gate 변화: 설계 결정만 Accepted. 설치된 승인 도구·unit, 다섯 번째 G4 실측, 서명 릴리스, 실제 지도와 FIELD는 HOLD다.
+## 2026-09-29 · uncommitted · docs(sd): document powered-off no-drive recovery
+
+- 변경: D-321의 첫 단계에 Linux 카드 복구 도구와 사용 절차를 연결하고 카드 readback과 첫 부팅 실측을 구분했다.
+- 증거: 현재 변경은 소스와 절차만이다. 장치 전원은 차단된 상태이며 카드 복구 영수증은 없다.
+- gate 변화: 설계는 Accepted, 실제 복구와 G4/G5는 HOLD다.
