@@ -19,7 +19,7 @@ Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. The
 | `test_host_agent.py` | Host Agent decision layer (refusals, roles, audit) |
 | `test_image_checks.py` | Image content/layout checks |
 | `test_image_pipeline.py` | Image build input lock / pipeline |
-| `test_pinky_release_impact.py` | D-324 changed-path scope and conservative artifact precedence |
+| `test_pinky_release_impact.py` | D-325 changed-path scope and conservative artifact precedence |
 | `test_network_provisioner.py` | Wi-Fi / nmcli provisioning |
 | `test_network_topology_contracts.py` | Pins ADR D-26 / CORE SRS / OS design / Implementation Plan on `SITE_STA` + opt-in `RELAY_AP_STA` |
 | `test_pi_wifi_deployment.py` | SD-card Wi-Fi/SSH first-boot contracts |

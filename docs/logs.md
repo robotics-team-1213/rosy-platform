@@ -3132,6 +3132,6 @@
 
 ## 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
 
-- 변경: D-324와 변경 경로 판정기를 추가해 no-artifact, native-payload, flashable-image, review/HOLD를 분리했다. existing-device runbook은 compatible payload 경로를 먼저 판정한다.
+- 변경: D-325와 변경 경로 판정기를 추가해 no-artifact, native-payload, flashable-image, review/HOLD를 분리했다. existing-device runbook은 compatible payload 경로를 먼저 판정한다.
 - 증거: GitHub run 36415015940은 약 30분(이미지 build 1,619초), 36319224327은 약 5분(payload tree build 201초)이었다. selector 계약 시험 6개 통과; 서명·설치·DEVICE acceptance는 건드리지 않았다.
 - gate 변화: SOURCE 절차 개선만. ARTIFACT/DEVICE/FIELD는 기존 HOLD를 유지한다.

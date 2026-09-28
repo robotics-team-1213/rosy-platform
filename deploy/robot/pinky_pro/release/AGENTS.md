@@ -26,7 +26,7 @@ Release packaging and the privileged Host Agent. Modules are scripts (not an ins
 | `arm64_release_builder.py` | Native ARM64 `core`/`io` build and unsigned release-payload assembler; private keys are forbidden here |
 | `import_unsigned_payload.py` | Fail-closed checksum, archive, identity, payload, and nested ARM64 image verifier before offline signing; never accepts a private key |
 | `build_payload_release.py` | D-225 2.1: `build` (payload tree → unsigned native release dir) and `pack` (deterministic tar.gz for `rosy-release-push.ps1 -Tarball`); never reads a private key |
-| `artifact_impact.py` | D-324 advisory classifier for no Pinky artifact, native payload, flashable image, or fail-closed review |
+| `artifact_impact.py` | D-325 advisory classifier for no Pinky artifact, native payload, flashable image, or fail-closed review |
 
 ## Subdirectories
 
@@ -80,7 +80,7 @@ Compare-Object $img (Get-Content X:\payload\<id>\ros-packages.txt)
 
 Tests: `python -m pytest test/test_payload_release_build.py test/test_native_payload_workflow.py -q`.
 
-### Select an artifact before building (D-324)
+### Select an artifact before building (D-325)
 
 Use the deployed signed image manifest's `source_revision` as `--base`, and the
 exact candidate commit as `--head`. Do not substitute a newer active payload

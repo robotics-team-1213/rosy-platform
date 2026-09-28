@@ -57,7 +57,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-20-dock-build-design.md` | ?? ?? ?? ?? ? 1? ?? ??, DNC-007 ?? ??, teach-by-docking ??? (DNC) |
 | `2026-09-20-pi-bench-commissioning-design.md` | Pi ?? ???? ? artifact ???readback ?? ??? (D-66) |
 | `2026-09-21-pinky-device-commissioning-design.md` (+ implementation plan) | Fail-closed G0-G5 first physical Pinky Pro session and evidence workflow |
-| `2026-09-29-pinky-deployment-fast-path.md` | D-324: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
+| `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
 | `2026-09-21-hardware-mapping-g5-design.md` (+ implementation plan) | D-144 hardware SLAM backend, writable map output, and MCAP/hash-bound G5 evidence |
 | `2026-09-21-ubuntu-native-ros-runtime-design.md` | D-161 immediate transition to Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy product runtime |
 | `2026-09-21-ubuntu-native-ros-runtime.md` | Test-first execution plan for native image, services, payload, SD and device evidence |

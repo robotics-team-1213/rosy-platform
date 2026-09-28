@@ -4,7 +4,7 @@
 
 **Goal:** Avoid full ARM64 image builds when a Pinky source change needs only a native payload or no device artifact, without skipping signing, compatibility, or device readback gates.
 
-**Architecture:** Add a fail-closed release-impact selector that compares a deployed source revision with a candidate revision and classifies changed paths as no Pinky artifact, native payload, flashable image, or manual review. Wire the selector into the Pinky commissioning runbook and add D-324 to make the artifact choice explicit. Keep existing ARM64 workflows, offline signing, payload compatibility checks, and physical acceptance unchanged.
+**Architecture:** Add a fail-closed release-impact selector that compares a deployed source revision with a candidate revision and classifies changed paths as no Pinky artifact, native payload, flashable image, or manual review. Wire the selector into the Pinky commissioning runbook and add D-325 to make the artifact choice explicit. Keep existing ARM64 workflows, offline signing, payload compatibility checks, and physical acceptance unchanged.
 
 **Tech Stack:** Python standard library, Git, pytest, Markdown, ROSY documentation harness.
 
@@ -32,10 +32,10 @@ The selector is advisory and fails closed. It does not approve a release or inst
 3. Implement a pure path classifier plus a CLI that reads changed paths from `git diff --name-only --no-renames <base>...<head>`.
 4. Run focused tests; JSON output must include selected impact, base/head, changed paths, and per-path reason.
 
-### Task 2: Record D-324 and the execution guidance
+### Task 2: Record D-325 and the execution guidance
 
 **Files:**
-- Create: `docs/adr/D-324-pinky-deployment-artifact-selection.md`
+- Create: `docs/adr/D-325-pinky-deployment-artifact-selection.md`
 - Create: `docs/deployment/pinky-release-artifact-selection.md`
 - Create: this plan
 - Modify: `docs/reference/ROSY ADR Log.md`
@@ -45,7 +45,7 @@ The selector is advisory and fails closed. It does not approve a release or inst
 - Modify: `deploy/progress.md`, `docs/progress.md`, `deploy/logs.md`, `docs/logs.md`
 
 **Steps:**
-1. Record D-324 as the scoped artifact-selection rule; do not alter D-225 accepted safety or device gates.
+1. Record D-325 as the scoped artifact-selection rule; do not alter D-225 accepted safety or device gates.
 2. Add a short decision table and selector command before the first-device build instructions.
 3. Make the payload workflow the normal path for compatible existing devices; reserve full image builds for fresh/unknown baselines or image-layer changes. Keep the selector instructions in a short dedicated runbook.
 4. State explicitly that selecting `none` means no robot artifact, not that tests or site deployments are unnecessary.

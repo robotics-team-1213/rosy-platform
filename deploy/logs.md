@@ -1445,6 +1445,6 @@
 
 ## 2026-09-29 · uncommitted · feat(release): select the smallest Pinky artifact
 
-- 변경: D-324 path selector와 operator guidance를 추가했다. 호환 source 업데이트는 native payload로 보내고, image/host/board/trust changes는 full image, 비장치 변경은 no artifact, 분류 밖은 HOLD다.
+- 변경: D-325 path selector와 operator guidance를 추가했다. 호환 source 업데이트는 native payload로 보내고, image/host/board/trust changes는 full image, 비장치 변경은 no artifact, 분류 밖은 HOLD다.
 - 증거: selector 계약 6개 통과. 측정된 prior Actions build는 full image 약 30분 대 native payload 약 5분. 서명 키, artifact, device proof를 생성했다고 주장하지 않는다.
 - gate 변화: SOURCE 절차 개선. ARTIFACT·DEVICE·FIELD는 기존 HOLD다.
