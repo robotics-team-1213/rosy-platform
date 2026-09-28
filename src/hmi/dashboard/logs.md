@@ -475,3 +475,9 @@
 - 변경: dashboard `progress.md`의 검증 날짜를 YAML date로 기록했다. 기존 append-only `logs.md`의 병렬 세션 헤더 10개는 본문을 다시 쓰지 않고 harness의 정확한 legacy allowlist로 보존했다. 생성 index와 STATUS를 다시 만들었다.
 - 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 18 warnings; network topology 및 harness 계약 시험 77 passed. 별도 latest-main 역할 브라우저 행렬은 60셀 모두 overflow/pageerror 0, E-stop visible, 취소 POST 0이었다.
 - gate 변화: dashboard SOURCE/LOCAL은 전체 화면·제품 수용 HOLD를 유지한다. 이 문서/기록 형식 수정은 Host Agent, 실제 장치, G3 사람 수용, DEVICE/FIELD를 승격하지 않는다.
+
+## 2026-09-28 - uiux/device-refresh-access - rerun latest-main role G2
+
+- First attempt on `757fb38f` stopped at administrator `/device` `confirm_cancel`: the test checked rollback enabled after panel mount, before the release readback poll completed. The fixture returns a fresh release record with previous version `r1`; rollback becomes enabled after that readback. Updated the test to wait for the actual release readiness instead of panel count.
+- Rerun: `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` passed **1 test, 60 cells** in 274.59s. Matrix: overflow 0, pageerrors 0, E-stop visible 60/60. Artifact: `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json`.
+- Gate: only test synchronization changed. Local FastAPI/Chromium does not prove physical stop or Host Agent result. G3, DEVICE/FIELD, D-153 remain HOLD.

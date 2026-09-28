@@ -161,6 +161,14 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                             button = page.locator('[data-panel="setup.localization"] ui-button').filter(has_text="맵핑 시작")
                         else:
                             button = page.get_by_text("이전 릴리스로 복귀", exact=True)
+                            page.wait_for_function("""() => {
+                              const cards = [...document.querySelectorAll('[data-panel="host.operations"] section.ui-readback')];
+                              const release = cards[1];
+                              const rollback = [...document.querySelectorAll('[data-panel="host.operations"] ui-button')]
+                                .find(item => item.textContent.trim() === '이전 릴리스로 복귀');
+                              return release?.dataset.available === 'true' && release.textContent.includes('r1')
+                                && rollback && !rollback.disabled;
+                            }""")
                         assert button.is_enabled(), (role, surface, scenario)
                         button.click()
                         page.wait_for_timeout(100)

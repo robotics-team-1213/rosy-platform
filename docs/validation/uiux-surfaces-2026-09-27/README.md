@@ -234,3 +234,11 @@ The reported `b61fb526` non-administrator hint is not present in the current `ma
 The administrator hardware panel regression passed **1 test**: the action status starts hidden, the refresh button references it with `aria-describedby`, and the live request result appears after interaction. The full-shell admin capture test passed at 1366x768 and 390x844; accepted-request feedback is visible in both. Operator denial captures and matrix are under `X:\DevTemp\rosy-uiux-d306-roles-g2\operator-device-entry-denied\`; admin hardware captures remain under `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
 
 LOCAL browser verification covers the actual admin action and the actual operator entry denial. It cannot verify the claimed non-admin disabled-button explanation because that control is unreachable under current access policy. Exposing it requires a separate role/surface access decision. Full G2 and Impeccable were not rerun; actual Host Agent readback, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 latest-main role G2 rerun after readiness wait fix
+
+The role G2 test on `757fb38f` first stopped at administrator `/device` `confirm_cancel`: the fixture asserted rollback availability after waiting only for panel creation, before the Host Agent release readback had arrived. The fixture returned a fresh release record with previous version `r1`; the panel enables rollback after that readback. I updated the test to wait for the release card to report available data and `r1` before testing the cancel path.
+
+Rerun command: `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` ? **1 passed, 60 cells**. The generated matrix has overflow 0, page errors 0, and E-stop visible in 60/60 cells. The failed attempt did not write a completed matrix; the passing rerun did.
+
+This adjusts fixture synchronization only, not product behavior. Local API evidence does not prove physical E-stop, Host Agent operation, G3, DEVICE/FIELD, or D-153 acceptance; those remain **HOLD**.

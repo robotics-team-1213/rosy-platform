@@ -130,3 +130,11 @@ Current-main focused Chromium regression passed for the administrator path: `ari
 After main reached `a3d4c1f9`, `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` passed (**1 test, 60 role/state/viewport cells**). The generated `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json` records pageerror 0, horizontal overflow 0, and E-stop visible in all 60 cells. The administrator `/device` release rollback confirmation was enabled at both 1366×768 and 390×844; cancel produced one dialog and zero POSTs in both cells. This supersedes the earlier matrix attempt that stopped at the disabled rollback control.
 
 This is local FastAPI/Chromium fixture evidence. It does not prove Host Agent release rollback, robot identity or mode readback, physical E-stop, G3 human acceptance, or DEVICE/FIELD status; those gates remain **HOLD**.
+
+## 2026-09-28 G2 rerun on `757fb38f`
+
+The first run stopped at administrator `/device` `confirm_cancel` because the test asserted rollback availability immediately after panel creation. Host release polling was still pending. The fixture already supplies a fresh release record with previous version `r1`; I made the test wait for that readback and enabled rollback before exercising cancel.
+
+Rerun: `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` ? **1 passed, 60 cells**, overflow 0, pageerror 0, E-stop visible 60/60. `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json` contains the completed run.
+
+This is local FastAPI/Chromium fixture evidence. Physical E-stop, actual Host Agent release operation, G3, DEVICE/FIELD, and D-153 remain **HOLD**.
