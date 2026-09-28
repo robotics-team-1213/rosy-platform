@@ -7,6 +7,9 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-322: "reserved by untracked D-322 Isaac Sim ADR in main checkout; remove when that ADR is integrated"
+  D-323: "reserved by untracked D-323 Rosy Pilot ADR in main checkout; remove when that ADR is integrated"
+  D-324: "reserved by D-324 cross-surface ADR in ui-boundaries-d324 worktree; remove when that ADR is integrated"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
   D-223: "skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)"

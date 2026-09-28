@@ -3141,3 +3141,9 @@
 - 변경: ER 2의 시각 좌표를 실행 명령으로 취급하지 않고, Fleet의 Mission/Step과 OMX의 증거 결합 Device Action, 로컬 middleware, ROS Action 및 driver readback의 권한과 정지 경계를 제안 문서에 기록했다. 첫 대상은 고정 OMX 작업대의 단일 `PICK_PLACE`이다.
 - 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, `git diff --check` 통과(Windows LOCAL). 실제 API·capability·모터 제어는 이번 변경에 포함되지 않는다.
 - gate 변화: 없음. OMX capability는 disabled이고 DEVICE/FIELD 검증은 미실행이다.
+
+## 2026-09-29 · uncommitted · docs(omx): define semantic pick and place ADR
+
+- 변경: 공식 ER 2·MoveIt·Franka·ROS 2 자료를 조사하고 D-326 Proposed에 `PICK`/`PLACE`/`PICK_PLACE`, 다중 대상 지정 방식, 장치별 실행 adapter, 보유 상태와 정지 증거 경계를 기록했다. 앞선 복합 `PICK_PLACE` 설계는 첫 OMX 검증 범위로 한정했다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, ADR 상대 링크 누락 0건(Windows LOCAL). D-322~D-324의 진행 중 ADR 번호는 검증된 worktree 상태에 맞춰 임시 reservation을 명시했다. 실제 Action API·모터 실행·DEVICE/FIELD 수용은 미실행이다.
+- gate 변화: 없음. OMX 운영 capability는 disabled다.
