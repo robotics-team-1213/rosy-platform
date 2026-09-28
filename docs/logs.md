@@ -3061,3 +3061,10 @@
 - Change: retain bounded correlation for canceled Nav2 goals, report only terminal results, and isolate late results from newer navigation state.
 - Evidence: Fleet 543 passed/5 skipped; Services 227 passed; GoalTracker + navigation manager 67 passed; task contract docs 3 passed; changed production flake8 and diff check pass.
 - Gate: SOURCE/LOCAL only; ROS-SIM, image, device/physical-stop, Ubuntu/site, and FIELD acceptance remain open.
+
+## 2026-09-28 · uncommitted · docs(architecture): define control and shared contract boundaries
+
+- 변경: D-317과 `control`/`core_common` 경계 감사 계획을 추가했다. 기존 플랫폼 실행 계획의 경로 그림을 D-310 현재 트리에 맞추고, 9/27 P0 결과 연결 부재를 당시 기준선으로 표시한 뒤 D-316 SOURCE/LOCAL 구현을 반영했다. `fleet/package.xml`의 stale core_common consumer comment도 바로잡았다.
+- 근거: `runtime/sensing`의 `control` manifest·15 console entry points·sensor provider·launch/writer 참조와 `core_common`의 실제 Fleet/CORE/Overhead consumer를 읽기 대조했다. ROS package명·API·writer·image closure 동작은 변경하지 않았다.
+- Verification: Before main advanced to `13c66653`, latest-main checks passed: focused contracts/harness 77 passed, lint 0 errors/18 existing stale-metadata warnings, Fleet package 1 passed. Rechecking at current `13c66653` gives 75 passed/2 failed because that commit added one malformed heading in `src/hmi/dashboard/logs.md`; lint reports that same 1 dashboard error and 18 warnings. Fleet package remains 1 passed; harness generate and `git diff --check` complete. The failure is outside this change.
+- gate 변화: 소스 분류와 audit scope만 기록한다. runtime package 분리, native ARM64 payload, device stop/readback, FIELD acceptance는 변하지 않는다.

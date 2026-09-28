@@ -88,9 +88,9 @@ Package names remain the names in each `package.xml`: for example, `runtime/gate
 
 **Result:** Harness generate completed and refreshed docs/index.md. Focused tests: 73 passed, 3 failed in dashboard progress.md and logs.md contract data on the base commit (invalid last_verified date, missing HOLD blocker, missing evidence bullet); test_network_topology_contracts.py passes within the run. Harness lint reports those same 3 errors plus 19 existing stale-metadata warnings. The new D-315 paths and links are present in the generated index.
 
-## Follow-up gate: decide whether `runtime/sensing` should split
+## Follow-up plan: audit `control` and shared contracts
 
-Do not execute this as an implied part of D-315. Open a separate plan only if the audit establishes distinct owners and at least one real boundary in process launch, independent tests, package dependencies, installation closure, or deployment lifecycle. That plan must enumerate imports, launch files, entry points, topic writers, image consumers, and rollback paths. Preserve `control` ROS package name unless an API migration is separately justified. CORE remains the final Pinky `cmd_vel` writer.
+The bounded audit is now planned in [D-317](../adr/D-317-control-and-shared-contract-source-boundaries.md) and [its implementation plan](2026-09-28-control-and-contract-boundary-audit.md). It maps `runtime/sensing` (`control`) and `contracts/foundation/core_common` by owner, consumer, entry point, launch, writer, tests, and installed image. It does not imply a package split. Preserve the `control` ROS package name and CORE's final Pinky `cmd_vel` writer unless a later evidence-backed ADR decides otherwise.
 
 ## Rollback
 

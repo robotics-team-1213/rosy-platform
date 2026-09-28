@@ -86,6 +86,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
 
 | 2026-09-28-source-folder-roles-and-runtime-audit.md | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
+| 2026-09-28-control-and-contract-boundary-audit.md | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
 ## Subdirectories
 
 None.

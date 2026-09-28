@@ -7,10 +7,10 @@
   <maintainer email="dev@rosy.local">rosy</maintainer>
   <license>Apache-2.0</license>
 
-  <!-- D-18/D-126: core_common 은 스키마 소스로만 쓴다 — 이 패키지의 생산 코드에
-       ROS import 는 없고 core_common.protocol.schemas 만 참조한다.
-       이 exec_depend 는 colcon 워크스페이스의 빌드 순서용이다. ROS 없는 Fleet 배포에서는
-       core 를 rosdep 으로 끌어오지 않고 소스 트리를 sys.path 에 얹는다(test/conftest.py). -->
+  <!-- D-18/D-126: Fleet production code has no ROS imports. It consumes selected
+       core_common protocol modules, the shared intent grammar, and succession
+       rule. This package dependency preserves colcon build order; the ROS-free
+       site deployment loads the source tree without rosdep-installing CORE. -->
   <exec_depend>core_common</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>web_common</exec_depend>

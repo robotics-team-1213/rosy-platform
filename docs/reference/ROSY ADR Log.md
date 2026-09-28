@@ -319,3 +319,4 @@
 
 | D-315 | 소스 폴더 책임은 소스 분류이며 실행 권한·배포 단위를 대신하지 않는다 | Accepted (분류·문서 기준만; 패키지명/경로·writer·설치·장치 수용 변경 없음) |
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 | Accepted (Site Fleet SOURCE/LOCAL; PRT-004·물리 정지 readback 별도) |
+| D-317 | 장치별 해석과 공유 계약은 실제 소비·실행 경계로 분류한다 | Accepted (현재 소스 배치와 후속 재배치 기준; 새 패키지·API·운영 수용 없음) |

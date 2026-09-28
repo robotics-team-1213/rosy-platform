@@ -69,17 +69,16 @@ Rosy OS/                         # 저장소 이력 이름; 전체 제품은 ROS
 ├─ src/
 │  ├─ contracts/
 │  │  ├─ foundation/
-│  │  │  └─ core_common/         # 현재 Pinky 중심 domain/protocol
+│  │  │  └─ core_common/         # 공유 protocol/domain과 CORE config/profile
 │  │  └─ interfaces/             # 현재 장치 내부 ROS .srv
-│  ├─ runtime/                   # 현재 Pinky CORE·API·navigation 등 소스 분류
-│  ├─ devices/
-│  │  ├─ pinky_pro/               # Pinky 하드웨어 적응
-│  │  └─ omx/adapter/             # OMX 로컬 action owner 후보·카메라 계약
-│  ├─ products/{pinky_pro,omx}/   # 제품별 설정; OMX 비활성 유지
-│  ├─ site/
-│  │  ├─ fleet/                   # 사이트 미션 원장; 이종 Mission은 후속
-│  │  └─ overhead/                # 현행 사이트 관측
-│  └─ hmi/                       # 장치 dashboard와 공용 웹 자산
+│  ├─ runtime/{gateway,services,events,api_web,navigation,sensing}/
+│  ├─ products/
+│  │  ├─ pinky_pro/{profile,bringup,adc,lamp,led}/ # Pinky 제품 소스
+│  │  └─ omx/{profile,adapter}/                    # OMX 제품 소스; 운영 owner는 HOLD
+│  ├─ drivers/                    # 현재 imu_bno055 칩 드라이버
+│  ├─ site/{fleet,overhead,games}/ # 사이트 원장·관측·게임 호스트
+│  ├─ hmi/{dashboard,face,web}/    # CORE dashboard·LCD·공용 browser assets
+│  └─ sim/{description,gz_sim}/
 ├─ deploy/{robot,site,omx}/      # 현재 역할별 배포 경로
 ├─ tools/perception/             # 현재 재생·라벨 도구; OMX 변환 후보는 실제 코드 때
 ├─ data/{teleop,drive}/          # 현재 자료 경로; Episode 형식은 별도 결정
@@ -92,7 +91,7 @@ Rosy OS/                         # 저장소 이력 이름; 전체 제품은 ROS
 
 | 단계 | 먼저 완성할 것 | 관련 소스·문서 | 출구 증거 |
 |---|---|---|---|
-| P0 현행 경로 감사 | Pinky/Fleet의 요청·장치 수락·Fleet 상태·실제 결과·정지 증거를 출처별로 대조하고 첫 이종 작업의 물리 결과를 지정 | `src/site/fleet`, `src/runtime`, API Reference, D-297/D-298 | 현재 `task_service.py`는 수락 receipt를 기록한다는 사실과 최종 결과 상관관계의 간극이 명시됨; 공통 필드는 비규범적 비교표로만 표시 |
+| P0 현행 경로 감사 | Pinky/Fleet의 요청·장치 수락·Fleet 상태·실제 결과·정지 증거를 출처별로 대조하고 첫 이종 작업의 물리 결과를 지정 | `src/site/fleet`, `src/runtime`, API Reference, D-297/D-298/D-316 | D-316이 Pinky `attempt_id`와 CORE navigation terminal event를 SOURCE/LOCAL 수준에서 연결함. ROS-SIM·장치·정지 readback·FIELD는 별도 미완료 게이트; 공통 필드는 비규범적 비교표로만 표시 |
 | P1 OMX 로컬 경계 수용 | 작업대 identity·단일 writer·원본 관절 샘플 시각·취소 후 실제 상태·독립 정지·복구 계측 | [OMX 하위 계획](2026-09-27-omx-lerobot-control-boundary-implementation-plan.md), `src/products/omx`, `deploy/omx` | ROS-SIM/ARTIFACT와 실제 DEVICE 결과를 분리 기록; 승인 전 `omx.enabled: false` 유지 |
 | P2 공통 계약 심사 | P0 Pinky trace와 P1 OMX action/결과 표본에서 **동일한 의미**만 추출 | API Reference, 현행 typed schema, D-18/D-296 | 버전·호환·반례 시험을 갖춘 최소 공통 의미와 장치별 payload 결정; 3번째 실제 소비자가 있을 때 패키지 분리 재검토 |
 | P3 한 종류의 이종 미션 | Fleet Mission/Step 원장과 Pinky↔고정 OMX 인계 | `src/site/fleet`, 승인된 OMX 장치 API, D-12/D-290 | ID 연결, 인증, 멱등성, 취소, UNKNOWN 재조회, 두 장치의 실제 결과를 FIELD에서 확인 |
@@ -107,15 +106,17 @@ P0은 기존 [플랫폼 구조 간극 지도](2026-09-26-platform-structure-gap-
 
 ## 첫 실행 단위
 
-**P0 결과 (2026-09-27):** [한 Pinky 이동 작업의 요청·수락·결과·정지 증거 추적](../validation/2026-09-27-platform-p0-task-result-trace.md). Fleet 수락과 CORE 이벤트 사이에 `task_id`/명령 ID 연결이 없음을 확인했다. 이 표본은 공통 장치 계약의 승인 근거가 아니며 P1/P2는 각각의 게이트를 유지한다.
+**P0 기준선 (2026-09-27):** [한 Pinky 이동 작업의 요청·수락·결과·정지 증거 추적](../validation/2026-09-27-platform-p0-task-result-trace.md)은 당시 Fleet 수락과 CORE 이벤트 사이의 상관관계 부재를 기록했다. 이는 이후 구현 전 기준선이다.
+
+**P0 현재 상태 (2026-09-28):** D-316은 Fleet `attempt_id`를 CORE navigation `correlation_id`에 연결하고 동일 robot/attempt의 terminal event를 투영한다(SOURCE/LOCAL). 이는 durable central PRT-004 ACK, ROS-SIM, 실제 물리 결과, 정지 readback 또는 FIELD 완료를 뜻하지 않는다. 그 게이트는 계속 분리한다.
 
 **P1 소스 판정 (2026-09-27):** [OMX 로컬 제어 경계 점검](../validation/2026-09-27-platform-p1-omx-source-gate.md). 정적 inventory·owner 검증은 통과했지만 실제 장치 identity, 원본 joint 샘플, 독립 정지와 Ubuntu 실행 owner는 미측정이다. DEVICE 게이트와 `omx.enabled: false`를 유지한다.
 
-1. **P0 추적표 작성:** 현행 `/api/fleet/tasks/*`, Pinky CORE 수락, Fleet 상태, 장치 최종 이벤트/실물 readback의 유무, D-298 정지 증거를 한 이동 작업으로 연결한다. 파일: `docs/reference/ROSY API & Protocol Reference.md`, 관련 Fleet/CORE 테스트. `proven(Pinky) / candidate(OMX) / open`과 반례를 표시하고, 미구현 상관관계를 완료로 쓰지 않는다.
+1. **P0 추적표 유지:** D-316의 `/api/fleet/tasks/*` attempt→CORE event 상관관계를 현행 SOURCE/LOCAL 구현으로 취급한다. ROS-SIM에서 running CORE bridge의 terminal event를 확인하고, DEVICE에서 실제 driver 결과와 독립 정지 readback을 검증한다. PRT-004 ACK와 Fleet durable completion은 별도다. `proven(source) / candidate(OMX) / open(device)`를 구분하고 과거 기준선 문구를 현행 구현 상태로 반복하지 않는다.
 2. **P1 OMX 하위 계획 실행:** 실물 inventory, 단일 owner, native ROS와 실제 관절/정지 readback을 먼저 확인한다. 같은 장치에서 LeRobot을 쓰는 경우에는 배타적 모드 전환을 추가 검증한다. LeRobot 기록·데이터 매핑은 이종 미션과 독립적으로 진행한다.
 3. **P2 최소 계약 심사:** 한 Pinky 이동과 실제 OMX 고정 작업 표본을 비교해 공유할 identity·action·결과 의미와 각 장치 고유 payload를 나눈다. Fleet 상태 enum과 장치 ACK/실행 결과를 합치지 않는다. API Reference·typed schema 변경은 실제 소비자·버전·호환 시험이 갖춰질 때 수행하며, D-18에 따른 패키지 분리는 별도로 재검토한다.
 4. **P3 최초 이종 미션 설계:** 기존 Fleet을 단일 원장으로 확장하는 안을 우선 검증한다. 별도 Operations 원장이 필요하다는 증거가 나오면 D-12/D-290을 다루는 새 결정과 단일 이행 계획을 먼저 만든다.
 
-**검증:** 문서 변경은 `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`. 각 구현은 영향을 받는 Fleet/CORE/OMX 테스트를 선행하고 SOURCE/LOCAL, ROS-SIM, ARTIFACT, DEVICE, FIELD를 별도 기록한다. 실패 시 해당 capability·프로필을 비활성으로 두고 마지막 승인된 단일 owner와 계약으로 되돌린다.
+**검증:** 문서 변경은 `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`, `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`. 현재 source/contract 책임 감사와 그 조건은 [D-317 및 경계 감사 계획](2026-09-28-control-and-contract-boundary-audit.md)에 기록한다. 각 구현은 영향을 받는 Fleet/CORE/OMX 테스트를 선행하고 SOURCE/LOCAL, ROS-SIM, ARTIFACT, DEVICE, FIELD를 별도 기록한다. 실패 시 해당 capability·프로필을 비활성으로 두고 마지막 승인된 단일 owner와 계약으로 되돌린다.
 
 **근거:** [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md), [D-296](../adr/D-296-device-middleware-and-site-orchestration-terminology.md), [D-298](../adr/D-298-mission-action-and-stop-evidence-terminology.md), [D-299](../adr/D-299-omx-lerobot-development-and-command-ownership.md), [구조 간극 지도](2026-09-26-platform-structure-gap-map.md), [제품 정의](../architecture/00_ROSY_OS_Vision_and_Definition.md).
