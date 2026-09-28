@@ -11,7 +11,7 @@ from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.core_event_store import CoreEventStore
 from fleet.server.task_service import FleetTaskService
-from fleet.server.task_store import FleetTaskStore
+from fleet.server.task_store import FleetTaskStore, InvalidTaskTransition
 from fleet.swarm.robots import RobotEndpoint
 
 
@@ -507,7 +507,7 @@ def test_dispatch_rearm_refuses_unresolved_action_claims(tmp_path):
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     service = FleetTaskService(store, robot_ids={"rosy_01"})
-    assert store.reserve_resources(
+    assert store.restore_unresolved_action_claim(
         owner_kind="mission", owner_id="mission-unknown", generation=0,
         resources=[("robot", "rosy_01")], phase="UNKNOWN",
     )

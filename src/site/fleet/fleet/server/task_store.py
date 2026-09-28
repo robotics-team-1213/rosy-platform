@@ -219,15 +219,43 @@ class FleetTaskStore:
     def reserve_resources(self, *, owner_kind: str, owner_id: str, generation: int,
                           resources: list[tuple[str, str]], phase: str = "CLAIMED") -> bool:
         """Atomically reserve canonical resources for a task, Mission, or direct Action."""
+        if phase != "CLAIMED":
+            raise ValueError("new resource reservations must use CLAIMED phase")
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            if phase == "CLAIMED":
-                control = connection.execute(
-                    "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-                ).fetchone()
-                if (not control["dispatch_enabled"] or control["generation"] != generation):
-                    connection.commit()
-                    return False
+            control = connection.execute(
+                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
+            ).fetchone()
+            if (not control["dispatch_enabled"] or control["generation"] != generation):
+                connection.commit()
+                return False
+            claimed = reserve_dispatch_claims(
+                connection, owner_kind=owner_kind, owner_id=owner_id,
+                generation=generation, resources=resources, phase="CLAIMED",
+            )
+            connection.commit()
+        return claimed
+
+    def restore_unresolved_action_claim(self, *, owner_kind: str, owner_id: str,
+                                        generation: int, resources: list[tuple[str, str]],
+                                        phase: str) -> bool:
+        """Restore persisted in-flight device ownership while dispatch is closed.
+
+        Only an external, durable Action reconciliation path should call this;
+        regular admission cannot manufacture DISPATCHING or UNKNOWN claims.
+        """
+        if owner_kind not in {"mission", "direct_action"}:
+            raise ValueError("only Mission or direct Action claims may be restored here")
+        if phase not in {"DISPATCHING", "UNKNOWN"}:
+            raise ValueError("restored Action claim phase must be DISPATCHING or UNKNOWN")
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            control = connection.execute(
+                "SELECT dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
+            ).fetchone()
+            if control["dispatch_enabled"]:
+                connection.rollback()
+                raise ValueError("unresolved Action claims may only be restored while dispatch is closed")
             claimed = reserve_dispatch_claims(
                 connection, owner_kind=owner_kind, owner_id=owner_id,
                 generation=generation, resources=resources, phase=phase,

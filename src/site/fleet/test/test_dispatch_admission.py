@@ -1,7 +1,9 @@
 import sqlite3
 
+import pytest
+
 from fleet.server.task_scheduler import FleetTaskScheduler
-from fleet.server.task_store import FleetTaskStore
+from fleet.server.task_store import FleetTaskStore, InvalidTaskTransition
 
 
 def _queue(store, task_id="task-1", robot_id="rosy_01"):
@@ -69,6 +71,48 @@ def test_conflicting_multi_resource_claim_is_atomic(tmp_path):
         owner_kind="task", owner_id="task-1", generation=control["generation"] + 1,
         resources=[("robot", "rosy_01")],
     ) is True
+
+
+def test_direct_action_and_mission_candidates_contend_for_object_and_workcell(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    control = store.dispatch_control()
+    enabled = store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator")
+
+    assert store.reserve_resources(
+        owner_kind="direct_action", owner_id="action-1", generation=enabled["generation"],
+        resources=[("workcell", "omx_01"), ("object", "block-1")],
+    )
+    assert store.reserve_resources(
+        owner_kind="mission", owner_id="mission-2", generation=enabled["generation"],
+        resources=[("robot", "rosy_01"), ("object", "block-1")],
+    ) is False
+    assert store.resource_claims(resource_kind="robot", resource_id="rosy_01") == []
+
+
+def test_new_claim_cannot_forge_inflight_phase_and_restore_requires_dispatch_closed(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    control = store.dispatch_control()
+    enabled = store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator")
+
+    with pytest.raises(ValueError, match="CLAIMED"):
+        store.reserve_resources(
+            owner_kind="direct_action", owner_id="action-inflight", generation=enabled["generation"],
+            resources=[("workcell", "omx_01")], phase="UNKNOWN",
+        )
+    with pytest.raises(ValueError, match="closed"):
+        store.restore_unresolved_action_claim(
+            owner_kind="direct_action", owner_id="action-inflight", generation=enabled["generation"],
+            resources=[("workcell", "omx_01")], phase="UNKNOWN",
+        )
+
+    stopped = store.trip_stop_latch(actor_id="operator")
+    assert store.restore_unresolved_action_claim(
+        owner_kind="direct_action", owner_id="action-inflight", generation=enabled["generation"],
+        resources=[("workcell", "omx_01")], phase="UNKNOWN",
+    )
+    assert store.dispatch_control()["unresolved_actions"] == 1
+    with pytest.raises(InvalidTaskTransition, match="unresolved"):
+        store.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator")
 
 
 def test_unknown_dispatch_keeps_robot_claim_until_explicit_release(tmp_path):
