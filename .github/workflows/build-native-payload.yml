@@ -73,17 +73,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 deploy/image/resolve-build-lock.py \
-            --input deploy/image/inputs.lock.yaml \
+          python3 deploy/robot/pinky_pro/image/resolve-build-lock.py \
+            --input deploy/robot/pinky_pro/image/inputs.lock.yaml \
             --output "$RESOLVED_LOCK" \
             --revision "$GITHUB_SHA"
-          deploy/image/verify-inputs.sh "$RESOLVED_LOCK"
+          deploy/robot/pinky_pro/image/verify-inputs.sh "$RESOLVED_LOCK"
 
       - name: Install checksum-pinned Pinky Pro hardware build dependencies
         shell: bash
         run: |
           set -euo pipefail
-          sudo deploy/image/install-pinky-hardware-deps.sh --lock "$RESOLVED_LOCK"
+          sudo deploy/robot/pinky_pro/image/install-pinky-hardware-deps.sh --lock "$RESOLVED_LOCK"
 
       - name: Build native payload tree
         shell: bash
@@ -91,7 +91,7 @@ jobs:
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          sudo deploy/image/build-native-payload.sh \
+          sudo deploy/robot/pinky_pro/image/build-native-payload.sh \
               --workspace "$GITHUB_WORKSPACE" \
               --release-root "$PAYLOAD_WORK/root" \
               --source-revision "$GITHUB_SHA" \
@@ -106,13 +106,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$DIST_ROOT"
-          python3 deploy/release/build_payload_release.py build \
+          python3 deploy/robot/pinky_pro/release/build_payload_release.py build \
             --payload-root "$PAYLOAD_WORK/root" \
             --release-id "$RELEASE_ID" \
             --out "$DIST_ROOT/$RELEASE_ID"
           # Keeps the Linux exec bits the artifact zip drops; the offline
           # re-pack after signing reads them back with --modes-from.
-          python3 deploy/release/build_payload_release.py pack \
+          python3 deploy/robot/pinky_pro/release/build_payload_release.py pack \
             --release-dir "$DIST_ROOT/$RELEASE_ID" \
             --out "$DIST_ROOT/$RELEASE_ID.unsigned.tar.gz" \
             --allow-unsigned

@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from deploy.sd.personalization import DeviceIdentity, create_provision_bundle
+from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, create_provision_bundle
 
 # D-191: every bundle carries the card's CORE API record. Keys are assembled
 # at runtime so the tracked-file secret scanner sees no literal.
@@ -18,7 +18,7 @@ CARD_API = {"core_api_" + "token": "Rq" * 21 + "_", "core_api_" + "token_id": "0
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIRST_BOOT = ROOT / "deploy" / "image" / "first-boot"
+FIRST_BOOT = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "first-boot"
 
 
 def _module():
@@ -321,7 +321,7 @@ def test_first_boot_unit_orders_personalization_before_network_and_runtime():
 
 
 def test_provisioning_gate_requires_first_boot_to_finish():
-    gate = (ROOT / "deploy/robot/native/rosy-sd-provision.service").read_text(encoding="utf-8")
+    gate = (ROOT / "deploy/robot/pinky_pro/native/rosy-sd-provision.service").read_text(encoding="utf-8")
 
     assert "Requires=rosy-first-boot.service" in gate
     assert "After=rosy-first-boot.service" in gate
@@ -629,8 +629,8 @@ def test_atomic_writes_use_unique_temporaries(tmp_path):
 def test_retry_units_only_check_and_then_start_the_runtime():
     service = (FIRST_BOOT / "rosy-first-boot-retry.service").read_text(encoding="utf-8")
     timer = (FIRST_BOOT / "rosy-first-boot-retry.timer").read_text(encoding="utf-8")
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
-    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/robot/pinky_pro/image/customize-rootfs.sh").read_text(encoding="utf-8")
 
     assert "ExecStart=/opt/rosy/first-boot/rosy-first-boot.sh --network check" in service
     assert "connection up" not in service

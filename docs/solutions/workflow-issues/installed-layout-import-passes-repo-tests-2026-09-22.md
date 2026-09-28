@@ -2,7 +2,7 @@
 title: 저장소에서 통과한 런타임 도구도 설치 위치에서 실행해 봐야 하고, 카드만으로 진단할 길을 미리 만들어 둬야 한다
 date: 2026-09-22
 category: workflow-issues
-module: deploy/robot/native + deploy/image (Pinky Pro 첫 실기 부팅)
+module: deploy/robot/pinky_pro/native + deploy/robot/pinky_pro/image (Pinky Pro 첫 실기 부팅)
 problem_type: workflow_issue
 component: development_workflow
 severity: critical
@@ -37,13 +37,13 @@ release `2026.09.22-002`를 서명·전체 readback까지 검증해 구운 카�
 [8.01] Dependency failed for rosy-runtime.target
 ```
 
-`deploy/robot/native/native_release.py`는 이렇게 모듈을 찾는다.
+`deploy/robot/pinky_pro/native/native_release.py`는 이렇게 모듈을 찾는다.
 
 ```python
 RELEASE_TOOLS = Path(__file__).resolve().parents[2] / "release"
 ```
 
-- 저장소 `deploy/robot/native/`에서는 `deploy/release`라서 성공한다.
+- 저장소 `deploy/robot/pinky_pro/native/`에서는 `deploy/robot/pinky_pro/release`라서 성공한다.
 - 설치 위치 `/opt/rosy/native-runtime/`에서는 `/opt/release`라서 실패한다.
 - 저장소 시험은 저장소 경로로 import하고, `verify-mounted-image.py`는 파일 존재만 확인했다.
   그래서 어느 단계도 이 결함을 볼 수 없었다.
@@ -86,7 +86,7 @@ RELEASE_TOOLS = Path(__file__).resolve().parents[2] / "release"
 
 ## When to Apply
 
-- `deploy/robot/native`, `deploy/image/first-boot`, Host Agent처럼 저장소 밖 경로에서 실행되는
+- `deploy/robot/pinky_pro/native`, `deploy/robot/pinky_pro/image/first-boot`, Host Agent처럼 저장소 밖 경로에서 실행되는
   도구를 추가하거나 옮길 때
 - ARTIFACT gate를 GO로 올리기 전
 - 실기 부팅이 "조용히" 실패했을 때(소리·화면·네트워크 응답 없음)
@@ -98,7 +98,7 @@ RELEASE_TOOLS = Path(__file__).resolve().parents[2] / "release"
 ```python
 def test_recovery_runs_from_installed_layout(tmp_path):
     runtime = tmp_path / "opt/rosy/native-runtime"
-    shutil.copytree(ROOT / "deploy/robot/native", runtime)
+    shutil.copytree(ROOT / "deploy/robot/pinky_pro/native", runtime)
     # build-native-payload.sh와 같은 방식으로 설치하되 저장소 경로는 쓰지 않는다
     completed = subprocess.run([sys.executable, runtime / "native_release.py", "--help"],
                                cwd=tmp_path, capture_output=True, text=True)

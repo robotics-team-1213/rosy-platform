@@ -1419,3 +1419,15 @@
 - Change: add a post-setup helper that checks provisioned identity, E-Stop, torque-free motors, runtime activation, fresh stationary odometry and single final command publisher; rollback restores no-drive runtime on failure.
 - Evidence: helper CheckOnly and attended activation ran on one device; two bounded forward attempts ended stopped, the second was physically confirmed. Private measurements remain under X:\DevTemp.
 - Gate: no unattended first-boot torque, G4 approval, native image acceptance or FIELD promotion.
+
+## 2026-09-28 · uncommitted · D-320 product-scoped robot deployment layout
+
+- 변경: Moved Pinky deployment sources under `deploy/robot/pinky_pro/` and OMX workstation development/simulation inputs under `deploy/robot/omx/`; `deploy/site/` remains independent.
+- 증거: Updated source imports, build inputs, CI/workflow references, host tests, current documentation, and Harness module paths. Kept installed Pinky runtime, SD tooling, and release CLI paths at `/opt/rosy/deploy/robot/`, `/opt/rosy/deploy/sd/`, and `/opt/rosy/deploy/release/`.
+- gate 변화: Product-layout, installed-runtime, image-check, SD-personalization, and first-boot contracts passed (91 passed, 2 skipped). Native ARM64 image and physical-device gates remain separate.
+
+## 2026-09-28 · uncommitted · D-320 product deployment path regression verification
+
+- 변경: `deploy/robot/pinky_pro`와 `deploy/robot/omx`로 옮긴 배포 경로, Pinky 이미지/release/SD 계약, OMX workstation 경로를 회귀 검증했다. `.gitattributes`의 제품 경로도 갱신했다.
+- 증거: 집중 계약 묶음 277 passed, 5 skipped, 1 deselected; 별도 Git Bash gate 시험 1 passed; SD 계획/identity 핵심 4 passed; OMX host/site-fabric 계약 52 passed; source encoding 1 passed. 최신 main의 moved-device setup 계약 14 passed, 1 skipped. `rosy_harness.py generate`와 lint 성공(0 errors, 18 warnings), `git diff --check` 성공.
+- gate 변화: SOURCE/LOCAL만 갱신. ARM64 artifact, 설치/readback, DEVICE/FIELD 수용은 확인하지 않았으며 기존 HOLD를 유지한다.

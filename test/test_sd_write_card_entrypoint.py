@@ -17,7 +17,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "sd" / "write-card.ps1"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "write-card.ps1"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 RELEASE = "2026.09.23-004"
 
@@ -181,7 +181,7 @@ def test_the_operator_is_told_where_progress_is_and_what_state_a_lost_write_left
 import time
 from datetime import datetime, timedelta, timezone
 
-STATUS = ROOT / "deploy" / "sd" / "card-write-status.ps1"
+STATUS = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "card-write-status.ps1"
 
 FAKE_LAUNCHER = r'''param([string[]]$ArgumentList, [switch]$Elevate, [switch]$Wait)
 $record = [ordered]@{ arguments = @($ArgumentList); elevate = [bool]$Elevate; wait = [bool]$Wait }

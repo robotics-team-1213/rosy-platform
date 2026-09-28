@@ -9,7 +9,7 @@ CORE `/dashboard`). D-150 keeps it a debug surface: no operational launch or
 deploy includes it, and its ports (28181/28182) plus the `web_node` executable
 are pinned out of deploy configs by `test/test_control_launch_boundary.py`.
 It is launched only from legacy `robot.launch.py`, never
-from `deploy/robot/compose.yaml`. Polls `/state.json` every 333 ms and `/map.png`
+from `deploy/robot/pinky_pro/compose.yaml`. Polls `/state.json` every 333 ms and `/map.png`
 only when its gen counter changes; posts to `/cmd`, `/wander`, `/estop`,
 `/goal`, `/teleop`, `/map/reset`, `/map/resume`.
 

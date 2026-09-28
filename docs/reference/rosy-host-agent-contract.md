@@ -1,11 +1,11 @@
 # ROSY Host Agent 계약 (전송·인증·명령)
 
 - **Document ID:** ROSY-HOSTAGENT-001
-- **Status:** Contract accepted; decision layer implemented (`deploy/release/host_agent.py`),
+- **Status:** Contract accepted; decision layer implemented (`deploy/robot/pinky_pro/release/host_agent.py`),
   transport and privileged execution implemented (`host_agent_server.py`), on-device
   verification pending WP-7
 - **Related:** `docs/plans/2026-09-01-rosy-os-v1-image-release-design.md` §4.4/§10,
-  ADR D-22, `deploy/robot/compose.yaml`, `test/test_release_boundary_guards.py`
+  ADR D-22, `deploy/robot/pinky_pro/compose.yaml`, `test/test_release_boundary_guards.py`
 
 ## 1. 왜 별도 프로세스인가
 
@@ -136,7 +136,7 @@ CORE의 typed API를 부른다.
 }
 ```
 
-- `code`는 안정 식별자다. `deploy/release/manifest.py`와 `signing.py`의 Rejection
+- `code`는 안정 식별자다. `deploy/robot/pinky_pro/release/manifest.py`와 `signing.py`의 Rejection
   코드를 그대로 쓴다. 설계 §11이 집계 숫자가 아니라 오류 코드와 복구 행동을
   요구하기 때문이다.
 - `actor`는 CORE가 채운다. Host Agent는 이를 **감사 기록용으로만** 쓰고 권한

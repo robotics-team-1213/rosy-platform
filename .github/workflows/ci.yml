@@ -48,11 +48,11 @@ jobs:
           # 이미지가 싣는 해시 고정 집합 그대로 깐다. 최신을 깔면 호스트 시험은 장치가 돌리지
           # 않는 버전을 검증한다 — 2026.09.23-005 가 CI 녹색인 채 pydantic 1.10 으로 죽었다.
           pip3 install --no-cache-dir --break-system-packages --ignore-installed \
-            --require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt
+            --require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt
           # 시험 도구는 그 뒤에, 고정 집합을 제약으로 깐다 — anyio·h11·idna·typing-extensions 가
           # 두 벌 깔리지 않는다. 해시가 있는 파일을 제약으로 주면 pip 이 해시 모드로 바뀌므로
           # name==version 줄만 뽑는다.
-          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
+          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 

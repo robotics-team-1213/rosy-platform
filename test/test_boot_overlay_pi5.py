@@ -17,9 +17,9 @@ import subprocess
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "robot" / "configure-boot-overlay-pi5.sh"
-CUSTOMIZER = ROOT / "deploy" / "image" / "customize-rootfs.sh"
-VERIFIER = ROOT / "deploy" / "image" / "verify-mounted-image.py"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "configure-boot-overlay-pi5.sh"
+CUSTOMIZER = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "customize-rootfs.sh"
+VERIFIER = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "verify-mounted-image.py"
 BASH = shutil.which("bash")
 IMU = "dtoverlay=i2c0-pi5,pins_0_1"
 CAMERA = "dtoverlay=ov5647"
@@ -68,7 +68,7 @@ def test_the_image_enables_the_imu_bus_through_the_script():
 
 
 def test_the_probe_names_the_line_the_image_adds():
-    probe = (ROOT / "deploy/robot/native/rosy-hw-probe.py").read_text(encoding="utf-8")
+    probe = (ROOT / "deploy/robot/pinky_pro/native/rosy-hw-probe.py").read_text(encoding="utf-8")
     assert f"config.txt {IMU}" in probe
 
 

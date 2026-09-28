@@ -44,7 +44,7 @@ but live commissioning evidence for Nav2 and teleop is not yet wired to Fleet.
 Those actions are not part of the camera-fault fallback UI and must not be
 enabled based on the evaluator alone.
 
-`deploy/robot/config/line_follow.yaml` keeps IR calibration disabled by
+`deploy/robot/pinky_pro/config/line_follow.yaml` keeps IR calibration disabled by
 default. The CORE Fleet fallback request therefore remains rejected until the
 device has an enabled, revisioned sensor-only safety policy and a matching IR
 line-observer calibration. The observer emits the SHA-256 digest of its exact

@@ -223,7 +223,7 @@ def test_the_runtime_probe_reads_only_the_temperature(tmp_path):
 # --- D-260 M1: the boot display evaluates the inputs CORE evaluates ----------------
 
 REPO = Path(__file__).resolve().parents[4]
-NATIVE = REPO / "deploy/robot/native"
+NATIVE = REPO / "deploy/robot/pinky_pro/native"
 
 
 def _native(name: str, filename: str):

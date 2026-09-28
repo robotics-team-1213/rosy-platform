@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-OVERLAY = ROOT / "deploy" / "robot" / "dev" / "core_dev_overlay.py"
+OVERLAY = ROOT / "deploy" / "robot" / "pinky_pro" / "dev" / "core_dev_overlay.py"
 
 import importlib.util
 
@@ -58,7 +58,7 @@ def test_stage_writes_only_allowlisted_files(tmp_path: Path):
     [
         ("python/core/__pycache__/__init__.cpython-312.pyc", b"pyc"),
         ("python/core/node.pyc", b"pyc"),
-        ("deploy/robot/.env", b"TOKEN=1\n"),
+        ("deploy/robot/pinky_pro/.env", b"TOKEN=1\n"),
         ("etc/rosy/rosy.yaml", b"token: 1\n"),
         ("python/interfaces/Foo.srv", b"string x\n"),
         ("../etc/passwd", b"root\n"),
@@ -170,7 +170,7 @@ def test_compose_fragment_keeps_the_product_project():
 
 
 def test_runtime_mode_does_not_load_the_dev_compose():
-    text = (ROOT / "deploy" / "robot" / "runtime-mode.sh").read_text(encoding="utf-8")
+    text = (ROOT / "deploy" / "robot" / "pinky_pro" / "runtime-mode.sh").read_text(encoding="utf-8")
     assert "core-dev" not in text
     assert "compose.override.yaml" not in text
 
@@ -180,7 +180,7 @@ def test_native_dropin_does_not_replace_the_product_exec():
     assert "BindReadOnlyPaths=/var/lib/rosy-dev/python/core:" in text
     assert "ExecStart=" not in text
     assert "WorkingDirectory=" not in text
-    unit = (ROOT / "deploy" / "robot" / "native" / "rosy-core.service").read_text(encoding="utf-8")
+    unit = (ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-core.service").read_text(encoding="utf-8")
     assert "rosy-dev" not in unit
     assert "BindReadOnlyPaths" not in unit
 
@@ -270,7 +270,7 @@ def test_native_confirm_hashes_inside_the_service_namespace(tmp_path: Path):
 
 
 def test_windows_sync_script_is_the_narrow_transport():
-    text = (ROOT / "deploy" / "robot" / "dev" / "sync-core-dev.ps1").read_text(encoding="utf-8")
+    text = (ROOT / "deploy" / "robot" / "pinky_pro" / "dev" / "sync-core-dev.ps1").read_text(encoding="utf-8")
     assert "-PiHost" in text and "-PiUser" in text and "-Backend" in text
     assert "sudo -n" in text and "git rev-parse HEAD" in text and "--dirty" in text
     assert "RobotNumber" not in text
@@ -287,8 +287,8 @@ def test_windows_sync_script_is_the_narrow_transport():
 
 
 def test_shell_wrappers_only_call_the_python_module():
-    apply = (ROOT / "deploy" / "robot" / "dev" / "apply-core-dev.sh").read_text(encoding="utf-8")
-    clear = (ROOT / "deploy" / "robot" / "dev" / "clear-core-dev.sh").read_text(encoding="utf-8")
+    apply = (ROOT / "deploy" / "robot" / "pinky_pro" / "dev" / "apply-core-dev.sh").read_text(encoding="utf-8")
+    clear = (ROOT / "deploy" / "robot" / "pinky_pro" / "dev" / "clear-core-dev.sh").read_text(encoding="utf-8")
     for text in (apply, clear):
         assert "python3 -B" in text
         assert "core_dev_overlay.py" in text

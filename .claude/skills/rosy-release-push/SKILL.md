@@ -8,12 +8,12 @@ description: Use when current main (CORE, dashboard, ROS nodes) must run on an e
 ## Overview
 
 A payload release replaces everything under `/opt/rosy/releases/<id>` (`install/`, the
-release's copy of `deploy/robot/native`). It does **not** replace the image layer:
+release's copy of `deploy/robot/pinky_pro/native`). It does **not** replace the image layer:
 `/opt/rosy/native-runtime/*`, `/etc/systemd/system/*` units, udev rules, `/etc/modprobe.d`,
 `/etc/rosy/*`, `config.txt`, kernel modules. Those need a new image, or a bench hand-install
 (step 6).
 
-Never use the CORE dev overlay (`deploy/robot/dev`) to put newer main on an older release.
+Never use the CORE dev overlay (`deploy/robot/pinky_pro/dev`) to put newer main on an older release.
 After the D-241..D-243 moves CORE looks up the `pinky_pro` robot package, which an older
 release does not ship, so CORE crash-loops and takes the dashboard down.
 
@@ -49,12 +49,12 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    Also check that every required package is installed on the robot.
 5. **Sign, pack, push, activate.** Run with `PYTHONUTF8=1` on Windows.
    ```bash
-   python deploy/release/sign_image_release.py $P/x/<id> --private-key "$LOCALAPPDATA/Rosy/signing/<key>.private.pem" --public-key deploy/release/public-keys/<key>.pem
-   python deploy/release/build_payload_release.py pack --release-dir $P/x/<id> --out $P/<id>.tar.gz --modes-from $P/<id>.unsigned.tar.gz --public-key deploy/release/public-keys/<key>.pem
+   python deploy/robot/pinky_pro/release/sign_image_release.py $P/x/<id> --private-key "$LOCALAPPDATA/Rosy/signing/<key>.private.pem" --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
+   python deploy/robot/pinky_pro/release/build_payload_release.py pack --release-dir $P/x/<id> --out $P/<id>.tar.gz --modes-from $P/<id>.unsigned.tar.gz --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    ```
    ```powershell
-   deploy\robot\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
-   deploy\robot\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
+   deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
+   deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
    ```
    - **Success** looks like `current release: <id> (previous: <old>)` followed by
      `CORE readiness: PASS`.
@@ -64,9 +64,9 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
 6. **Hand-install the image-only pieces** (bench only; record it). Take them from the
-   release's own copy, `/opt/rosy/current/deploy/robot/native/`. udev and modprobe files are
-   not in the payload, so copy them from the repo's `deploy/robot/udev/` and
-   `deploy/robot/modprobe/`.
+   release's own copy, `/opt/rosy/current/deploy/robot/pinky_pro/native/`. udev and modprobe files are
+   not in the payload, so copy them from the repo's `deploy/robot/pinky_pro/udev/` and
+   `deploy/robot/pinky_pro/modprobe/`.
    - First back up every file you replace, for example into
      `/var/lib/rosy-bench-backup/<timestamp>/`.
    - Scripts go to `/opt/rosy/native-runtime/`, units to `/etc/systemd/system/`.

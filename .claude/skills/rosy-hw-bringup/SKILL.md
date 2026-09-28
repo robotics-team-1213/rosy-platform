@@ -25,7 +25,7 @@ rssh 'sudo -n cat /run/rosy-boot/hardware.json'              # last boot/refresh
 
 States: `ok`, `no_response`, `bus_missing`, `driver_missing`, `needs_human`, `not_measured`
 (another unit holds the bus — while `rosy-io` runs, judge LiDAR/motors/ADC by topic rates).
-The device list and pins are in `deploy/robot/config/board.yaml`.
+The device list and pins are in `deploy/robot/pinky_pro/config/board.yaml`.
 
 ## Per-device judgement
 
@@ -89,4 +89,4 @@ short low-speed hold and a deadman stop (0.5 s). Revert: restore the backup, res
 - `docs/solutions/workflow-issues/pinky-pro-board-facts-need-a-person-at-the-robot-2026-09-26.md` — buzzer pin, wedged ADC, 4095, BNO055
 - `docs/solutions/runtime-errors/ubuntu-console-and-getty-steal-the-lidar-uart-2026-09-24.md` — LiDAR UART
 - ADRs D-165 (pinned hardware deps), D-190 (boot display, buzzer), D-192 (hardware runtime, flock, drive flag), D-247 (device card, probe rules), D-260 (status by sound/light/LCD)
-- `deploy/robot/native/rosy-hw-probe.py` — the reference implementation of every read above
+- `deploy/robot/pinky_pro/native/rosy-hw-probe.py` — the reference implementation of every read above

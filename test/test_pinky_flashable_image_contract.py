@@ -12,8 +12,8 @@ ADR_LOG = ROOT / "docs/reference/ROSY ADR Log.md"
 D164 = ROOT / "docs/adr/D-164-pinky-pro-flashable-image.md"
 DESIGN = ROOT / "docs/plans/2026-09-22-pinky-pro-flashable-image-design.md"
 PLAN = ROOT / "docs/plans/2026-09-22-pinky-pro-flashable-image.md"
-LOCK = ROOT / "deploy/image/inputs.lock.yaml"
-IMAGE_GUIDE = ROOT / "deploy/image/AGENTS.md"
+LOCK = ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml"
+IMAGE_GUIDE = ROOT / "deploy/robot/pinky_pro/image/AGENTS.md"
 
 
 def test_d164_accepts_a_pi_disk_image_and_rejects_an_installer_iso():

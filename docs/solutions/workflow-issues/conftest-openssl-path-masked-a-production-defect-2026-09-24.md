@@ -2,13 +2,13 @@
 title: test/conftest.py silently repaired PATH, so signing tests stayed green while the real writer failed "openssl not found"
 date: 2026-09-24
 category: workflow-issues
-module: deploy/release/signing.py (Windows operator path, Pinky Pro release 2026.09.24-010)
+module: deploy/robot/pinky_pro/release/signing.py (Windows operator path, Pinky Pro release 2026.09.24-010)
 problem_type: test_failure
 component: development_workflow
 symptoms:
   - "prepare-rosy-sd.ps1 -PlanOnly failed with \"openssl not found; release signatures cannot be verified without it\" on a non-elevated operator PC"
   - "pytest for the signing module passed on the same machine with no changes to product code"
-  - "only test/conftest.py, not deploy/release/signing.py, prepended Git for Windows' openssl to PATH"
+  - "only test/conftest.py, not deploy/robot/pinky_pro/release/signing.py, prepended Git for Windows' openssl to PATH"
 root_cause: test_isolation
 resolution_type: code_fix
 severity: high
@@ -20,7 +20,7 @@ tags: [openssl, windows, path, conftest, test-isolation, sd-writer, release-sign
 
 ## Problem
 
-`deploy/release/signing.py` shells out to `openssl` rather than adding a Python crypto dependency
+`deploy/robot/pinky_pro/release/signing.py` shells out to `openssl` rather than adding a Python crypto dependency
 (the device already has `openssl` in its base OS). Windows operator PCs, however, often carry
 `openssl` only inside Git for Windows, which a plain PowerShell `PATH` does not include. The test
 suite passed because `test/conftest.py` prepended Git for Windows' `openssl` folders to `PATH` for
@@ -43,7 +43,7 @@ failed with "openssl not found".
 
 ## Solution
 
-The fallback moved into `deploy/release/signing.py` itself, so the product code repairs its own
+The fallback moved into `deploy/robot/pinky_pro/release/signing.py` itself, so the product code repairs its own
 environment rather than depending on the test harness to have done it first:
 
 ```python

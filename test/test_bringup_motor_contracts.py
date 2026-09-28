@@ -142,7 +142,7 @@ def test_launch_passes_drive_enabled_as_a_boolean_defaulting_to_drive():
 
 
 def test_native_io_unit_defaults_to_no_motion_and_navigation_drives():
-    native = ROOT / "deploy" / "robot" / "native"
+    native = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
     io = (native / "rosy-io.service").read_text(encoding="utf-8")
     nav = (native / "rosy-navigation.service").read_text(encoding="utf-8")
 
@@ -158,7 +158,7 @@ def test_native_io_unit_defaults_to_no_motion_and_navigation_drives():
 
 def _drive_gate() -> str:
     """rosy-io's ExecStartPre shell body, with systemd's $$ turned into $."""
-    unit = (ROOT / "deploy" / "robot" / "native" / "rosy-io.service").read_text(encoding="utf-8")
+    unit = (ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-io.service").read_text(encoding="utf-8")
     line = next(line for line in unit.splitlines() if line.startswith("ExecStartPre="))
     assert line.startswith("ExecStartPre=/usr/bin/bash --noprofile --norc -c '") and line.endswith("'")
     body = line[len("ExecStartPre=/usr/bin/bash --noprofile --norc -c '"):-1]
@@ -175,7 +175,7 @@ def _drive_gate() -> str:
     ("unknown", "false", False), ("", "false", False),
 ])
 def test_io_refuses_a_stale_drive_flag_in_core_mode(mode, drive, starts):
-    unit = (ROOT / "deploy" / "robot" / "native" / "rosy-io.service").read_text(encoding="utf-8")
+    unit = (ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-io.service").read_text(encoding="utf-8")
     line = next(line for line in unit.splitlines() if "runtime mode and drive flag disagree" in line)
     prefix = "ExecStartPre=/usr/bin/bash --noprofile --norc -c '"
     assert line.startswith(prefix) and line.endswith("'")

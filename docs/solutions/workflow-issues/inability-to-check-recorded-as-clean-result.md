@@ -108,7 +108,7 @@ second is the defect. Branch on the failure signal — exit status, exception,
 empty-but-should-not-be — before you interpret the value.
 
 The motor preflight is the clearest form. It asks compose which motor containers are
-running, and refuses to touch the UART if any are (`deploy/robot/verify/verify-motors.sh:87-92`):
+running, and refuses to touch the UART if any are (`deploy/robot/pinky_pro/verify/verify-motors.sh:87-92`):
 
 ```bash
 if ! running="$("${compose[@]}" --profile motor --profile hardware ps -q rosy-motor rosy-io)"; then
@@ -122,7 +122,7 @@ fi
 The earlier version had only the second `if`. A compose that fails prints nothing on
 stdout, so the guard read "nothing running" and let the probe proceed against a live
 motor runtime. Missing docker did it. An unreadable compose file did it. And after D-33,
-an unset identity did it too, because `deploy/robot/compose.yaml:4` and `:8` now carry
+an unset identity did it too, because `deploy/robot/pinky_pro/compose.yaml:4` and `:8` now carry
 `${ROS_DOMAIN_ID:?...}` / `${ROSY_NAMESPACE:?...}` guards that make compose exit non-zero
 before it can list anything. Verified against real Docker: with identity unset, `ps -q`
 exits 1 with empty stdout, and the old guard evaluated false.
@@ -147,14 +147,14 @@ The same rule in Python, where the fix is to raise rather than return an empty a
 
 ### 2. A default-if-absent write is not a guarantee that the value is right
 
-`set_env_default` writes only when the key is missing (`deploy/robot/install-pi.sh:220-225`).
+`set_env_default` writes only when the key is missing (`deploy/robot/pinky_pro/install-pi.sh:220-225`).
 That is correct behavior and a correct primitive — it exists so a re-install cannot
 renumber a commissioned robot. It is *not* an assertion. Calling it tells you nothing
 about the resulting value, because its no-op path and its success path are equally silent.
 
 When the value matters, check what is actually there and fail on a mismatch.
 `require_robot_identity` does both, checking every key before writing any
-(`deploy/robot/install-pi.sh:259-266`):
+(`deploy/robot/pinky_pro/install-pi.sh:259-266`):
 
 ```bash
     for key in ROS_DOMAIN_ID ROSY_NAMESPACE; do
@@ -180,7 +180,7 @@ inside bash with "value too great for base," giving three behaviors for three ad
 inputs.
 
 The fix is not to pick an interpretation. It is to refuse the ambiguity
-(`deploy/robot/install-pi.sh:246-250`):
+(`deploy/robot/pinky_pro/install-pi.sh:246-250`):
 
 ```bash
     [[ "$number" =~ ^(0|[1-9][0-9]*)$ ]] || fail "ROSY_ROBOT_NUMBER must be a decimal integer with no leading zero, got '$number'"
@@ -193,7 +193,7 @@ in-file comment states why refusing beats guessing:
 > `010` 이 10 인지 8 인지는 우리가 정할 일이 아니라 거절할 일이다.
 > ("Whether `010` means 10 or 8 is not ours to decide — it is ours to refuse.")
 
-`deploy/robot/deploy-from-windows.ps1:27-31` carries the same regex, so the Windows
+`deploy/robot/pinky_pro/deploy-from-windows.ps1:27-31` carries the same regex, so the Windows
 entrypoint refuses the same inputs rather than sending them down to bash to be
 reinterpreted.
 
@@ -247,7 +247,7 @@ what it does. A stub `docker` placed on PATH exercised the full report path of a
 measurement script and found `set -e` plus `pipefail` converting an absent topic into a
 silent mid-report abort. The absent topic was absent *by design* after the config change
 (`publish_voxel_map: False` means `voxel_grid` is never created), so every real run would
-have truncated (`deploy/robot/measure-dds-baseline.sh:115-119`).
+have truncated (`deploy/robot/pinky_pro/measure-dds-baseline.sh:115-119`).
 
 ### 7. Run the commands the docs tell humans to run
 
@@ -324,13 +324,13 @@ investigates.
 
 ### Instance 1 — the inert guard (identity)
 
-**Before.** `deploy/robot/.env.example` assigned `ROS_DOMAIN_ID=42` and
+**Before.** `deploy/robot/pinky_pro/.env.example` assigned `ROS_DOMAIN_ID=42` and
 `ROSY_NAMESPACE=rosy_01`. The installer copied the template, then called `set_env_default`
 for both keys. The keys were present, so nothing happened, so every unit shipped with the
 same identity.
 
 **After.** The template assigns neither key and carries the reasoning instead
-(`deploy/robot/.env.example:6-10`). `test_the_template_assigns_neither_identity_key`
+(`deploy/robot/pinky_pro/.env.example:6-10`). `test_the_template_assigns_neither_identity_key`
 (`test/test_dds_identity_contracts.py:43`) is the assertion that would have caught it: the
 thing to test is not "is the call present" but "does the value actually differ."
 Commit `0646969`.
@@ -348,8 +348,8 @@ function *definition* positions and was therefore always true.
 **Before.** `ROSY_ROBOT_NUMBER=010` → domain 48, namespace `rosy_08`; both wrong,
 consistently, so no cross-check could detect it.
 
-**After.** `^(0|[1-9][0-9]*)$` at `deploy/robot/install-pi.sh:246` plus `10#` at `:247`;
-the same regex mirrored in `deploy/robot/deploy-from-windows.ps1:27`. Regression tests cover
+**After.** `^(0|[1-9][0-9]*)$` at `deploy/robot/pinky_pro/install-pi.sh:246` plus `10#` at `:247`;
+the same regex mirrored in `deploy/robot/pinky_pro/deploy-from-windows.ps1:27`. Regression tests cover
 both the refusal (`test/test_dds_identity_contracts.py:270-281`) and that plain decimals
 still derive correctly (`:289-294`). Commit `f3d339c`.
 
@@ -358,7 +358,7 @@ still derive correctly (`:289-294`). Commit `f3d339c`.
 **Before.** `if [[ -n "$(compose ... ps -q rosy-motor rosy-io)" ]]; then fail ...` — one
 branch, and compose's empty output on failure read as "nothing running."
 
-**After.** Exit status first, then emptiness (`deploy/robot/verify/verify-motors.sh:87-92`).
+**After.** Exit status first, then emptiness (`deploy/robot/pinky_pro/verify/verify-motors.sh:87-92`).
 Verified against real Docker and re-driven through bash with a stub `docker` that exits 1,
 asserting the probe is not reached. This defect predates the identity work; the identity
 work only added a third way to trigger it. Commit `057a198`.
@@ -384,11 +384,11 @@ suite stayed green:
   `test_the_readme_quickstart_sets_identity_before_invoking_compose`
   (`test/test_dds_identity_contracts.py:103-125`) asserts that ordering.
 - **`docs/deployment/raspberry-pi-wifi-image.md`** now passes `-RobotNumber 1` (`:104`).
-- **`deploy/robot/deploy-from-windows.ps1`** ran `sudo bash deploy/robot/install-pi.sh` with
+- **`deploy/robot/pinky_pro/deploy-from-windows.ps1`** ran `sudo bash deploy/robot/pinky_pro/install-pi.sh` with
   no `ROSY_ROBOT_NUMBER`, so the entire Windows→Pi deploy path failed at install. It now
   takes, requires, validates and forwards `-RobotNumber` (`:3`, `:23-31`, `:107`).
 
-Found in the same sweep: `check_runtime_defaults` in `deploy/release/image_checks.py:202` validated
+Found in the same sweep: `check_runtime_defaults` in `deploy/robot/pinky_pro/release/image_checks.py:202` validated
 the image's `.env` for `ROSY_RUNTIME_MODE=core` but said nothing about identity. A prebuilt
 image that baked identity would have reproduced the D-33 collision at image scale. It now
 refuses one (`:218-227`, finding code `IMAGE_IDENTITY_BAKED`) — which matches the boundary
@@ -419,7 +419,7 @@ boundary, and following the documented human path tell you what it does.
   numbered, enforceable rules derived from a specific set of defects.
 - `docs/plans/2026-09-06-dds-bandwidth-reduction-design.md` — where Guidance §8's upstream
   findings are written down.
-- `deploy/robot/AGENTS.md:44-47` — the enforced-rule location for the identity half
+- `deploy/robot/pinky_pro/AGENTS.md:44-47` — the enforced-rule location for the identity half
   ("A default here is what shipped every unit as 42/rosy_01").
 
 ### Known stale, not fixed here

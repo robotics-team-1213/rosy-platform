@@ -8,7 +8,7 @@ A longer payload (a human-set 63-character passphrase and a 32-byte SSID) is
 refused with ValueError and the card shows the text alone.
 
 Written here rather than taken from a library: neither the device image
-(deploy/image/device-python-requirements.txt, D-189) nor the vendor apt set
+(deploy/robot/pinky_pro/image/device-python-requirements.txt, D-189) nor the vendor apt set
 ships a QR encoder, and adding one would mean a new hash-locked wheel for a
 screen that needs one small, fixed code shape. Pure Python, no ROS, no I/O.
 

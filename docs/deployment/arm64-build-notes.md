@@ -2,7 +2,7 @@
 
 This is the current Raspberry Pi 5 boundary for Rosy OS. The host is Raspberry
 Pi OS Lite 64-bit; the ROS 2 Jazzy userland is built and run in the containers
-defined by `deploy/robot/compose.yaml`.
+defined by `deploy/robot/pinky_pro/compose.yaml`.
 
 ## Source and container builds
 
@@ -14,11 +14,11 @@ source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 ```
 
-For the device image, build from `deploy/robot` after creating the installer
+For the device image, build from `deploy/robot/pinky_pro` after creating the installer
 managed `.env`:
 
 ```bash
-cd deploy/robot
+cd deploy/robot/pinky_pro
 docker compose --env-file .env build rosy-core
 docker compose --env-file .env --profile motor build rosy-motor
 docker compose --env-file .env --profile hardware build rosy-io
@@ -170,13 +170,13 @@ On 2026-09-13, the deployment shell scripts passed `bash -n` as a complete
 set:
 
 ```text
-C:\Program Files\Git\bin\bash.exe -n deploy/robot/*.sh
+C:\Program Files\Git\bin\bash.exe -n deploy/robot/pinky_pro/*.sh
 => exit 0
 ```
 
 With the required identity variables (`ROS_DOMAIN_ID=41`,
 `ROSY_NAMESPACE=rosy_01`, `ROSY_ROBOT_NUMBER=1`, and a data generation),
-`docker compose -f deploy/robot/compose.yaml config --profiles` reported the
+`docker compose -f deploy/robot/pinky_pro/compose.yaml config --profiles` reported the
 declared `hardware` and `motor` profiles. Rendering both profiles with the
 Compose global options (`--profile motor --profile hardware`) resolved all
 three services, preserved the identity values, and mapped the configured

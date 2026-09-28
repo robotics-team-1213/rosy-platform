@@ -17,7 +17,7 @@ PACKAGE = Path(__file__).resolve().parents[1]
 REPO = PACKAGE.parents[3]
 LAUNCH = PACKAGE / "launch" / "bringup_robot.launch.py"
 HARDWARE_LAUNCH = REPO / "src/runtime/navigation/launch/hardware.launch.py"
-IO_UNIT = REPO / "deploy/robot/native/rosy-io.service"
+IO_UNIT = REPO / "deploy/robot/pinky_pro/native/rosy-io.service"
 
 
 def _code(path: Path) -> str:

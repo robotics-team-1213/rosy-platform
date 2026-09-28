@@ -43,5 +43,5 @@ IMU·ADC·LCD·LED·lamp는 io 이미지에 넣지 않았다. ADC는 I2C로 아�
    대시보드 맵에서 먼저 **초기 자세**를 찍고 AMCL을 맞춘 뒤 **목표**로 전환한다.
 4. 서명 SD 이미지는 아직 없다 (`BUILD_GO` HOLD). 개발 태그는 현장이 아니다.
 
-파일: `deploy/robot/config/capabilities.{core,motor,hardware}.yaml`.
+파일: `deploy/robot/pinky_pro/config/capabilities.{core,motor,hardware}.yaml`.
 `pi5-lite`는 `board.yaml` 별칭이며 `resolve-mode.sh`가 `hardware`로 푼다. YAML 복사본은 두지 않는다.

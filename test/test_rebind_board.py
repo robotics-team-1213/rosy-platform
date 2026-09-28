@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from deploy.sd.personalization import DeviceIdentity, create_provision_bundle
+from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, create_provision_bundle
 from test_first_boot_provisioning import FIRST_BOOT, _case, _module
 
 

@@ -13,8 +13,8 @@ D161 = ROOT / "docs" / "adr" / "D-161-ubuntu-server-native-ros-runtime.md"
 D22 = ROOT / "docs" / "adr" / "D-22-raspberry-pi-os-core-i-o-deadman.md"
 DESIGN = ROOT / "docs" / "plans" / "2026-09-21-ubuntu-native-ros-runtime-design.md"
 PLAN = ROOT / "docs" / "plans" / "2026-09-21-ubuntu-native-ros-runtime.md"
-LOCK = ROOT / "deploy" / "image" / "inputs.lock.yaml"
-BUILD = ROOT / "deploy" / "image" / "build-image.sh"
+LOCK = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "inputs.lock.yaml"
+BUILD = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-image.sh"
 
 
 def test_d161_accepts_ubuntu_native_ros_and_supersedes_d22_mechanism():

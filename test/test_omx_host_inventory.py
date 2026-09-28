@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
-    "omx_host_inventory", ROOT / "deploy" / "omx" / "host_inventory.py"
+    "omx_host_inventory", ROOT / "deploy" / "robot" / "omx" / "host_inventory.py"
 )
 assert SPEC and SPEC.loader
 inventory_module = importlib.util.module_from_spec(SPEC)
@@ -163,7 +163,7 @@ def test_inventory_records_are_immutable():
 
 
 def test_tracked_example_is_disabled_and_has_no_device_ids():
-    source = (ROOT / "deploy" / "omx" / "host-inventory.yaml.example").read_text(encoding="utf-8")
+    source = (ROOT / "deploy" / "robot" / "omx" / "host-inventory.yaml.example").read_text(encoding="utf-8")
     inventory = inventory_module.load_inventory(source)
     assert inventory.workcells
     assert all(

@@ -344,7 +344,7 @@ def test_only_public_release_key_pems_are_tracked_in_the_repository():
         )
         if not key_shaped:
             continue
-        if path.parent.as_posix() == "deploy/release/public-keys" and path.suffix == ".pem":
+        if path.parent.as_posix() == "deploy/robot/pinky_pro/release/public-keys" and path.suffix == ".pem":
             content = (ROOT / path).read_text(encoding="utf-8")
             if "BEGIN PUBLIC KEY" in content and "PRIVATE KEY" not in content:
                 continue
@@ -389,7 +389,7 @@ def test_every_signing_rejection_code_is_asserted_somewhere():
     """
     import re as _re
 
-    source = (ROOT / "deploy" / "release" / "signing.py").read_text(encoding="utf-8")
+    source = (ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "signing.py").read_text(encoding="utf-8")
     emitted = set(_re.findall(r'Rejection\(\s*\n?\s*"([A-Z0-9_]+)"', source))
     assert emitted, "no rejection codes found; the pattern needs updating"
 

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _module():
-    path = ROOT / "deploy/robot/native/rosy_boot_state.py"
+    path = ROOT / "deploy/robot/pinky_pro/native/rosy_boot_state.py"
     spec = importlib.util.spec_from_file_location("rosy_boot_state", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module  # dataclasses resolve their module by name
@@ -108,6 +108,6 @@ def test_unknown_or_missing_units_are_never_ready():
 
 
 def test_the_model_uses_only_the_standard_library():
-    source = (ROOT / "deploy/robot/native/rosy_boot_state.py").read_text(encoding="utf-8")
+    source = (ROOT / "deploy/robot/pinky_pro/native/rosy_boot_state.py").read_text(encoding="utf-8")
 
     assert "rclpy" not in source and "import core" not in source

@@ -5,13 +5,13 @@
 
 ## Purpose
 
-Host-side pytest for deploy/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/runtime/*/test` suites. `conftest.py` inserts `deploy/release` onto `sys.path` so modules shipped as scripts remain importable.
+Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/runtime/*/test` suites. `conftest.py` inserts `deploy/robot/pinky_pro/release` onto `sys.path` so modules shipped as scripts remain importable.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `conftest.py` | Adds `deploy/release` to `sys.path` |
+| `conftest.py` | Adds `deploy/robot/pinky_pro/release` to `sys.path` |
 | `test_motor_control.py` | Differential-drive contracts: geometry, limits, APPLIED/LIMITED/REJECTED |
 | `test_bringup_motor_contracts.py` | Bringup wiring of MotorController |
 | `test_dynamixel_driver_safety.py` | RPM cap and encoder rollover in Dynamixel driver |
@@ -55,7 +55,7 @@ None (ignore `__pycache__/`).
 
 ### Working In This Directory
 
-- Keep tests ROS-free. Import `bringup.motor_control` / `deploy/release` modules directly.
+- Keep tests ROS-free. Import `bringup.motor_control` / `deploy/robot/pinky_pro/release` modules directly.
 - If you add a deploy script, add a contract test here — CI only started covering this tree after a comment in `.github/workflows/ci.yml`.
 - Do not mock away the refusal paths in Host Agent; they are the product.
 - Changing SITE_STA / relay wording in one doc without the others fails `test_network_topology_contracts.py`.
@@ -80,7 +80,7 @@ python3 -m pytest test/test_motor_control.py test/test_host_agent.py -v
 ### Internal
 
 - `src/products/pinky_pro/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
-- `deploy/release/*`, `deploy/robot/*`, `deploy/image/*`
+- `deploy/robot/pinky_pro/release/*`, `deploy/robot/pinky_pro/*`, `deploy/robot/pinky_pro/image/*`
 
 ### External
 

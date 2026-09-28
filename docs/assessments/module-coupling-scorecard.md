@@ -99,7 +99,7 @@
 | `apps/games` | 5 | 5 | 5 | 3 | 5 | **94** | S | ROS 0, 단독 호스트. 단 `web_common` 밖이라 공용 규약 미적용 |
 | `apps/omx_adapter` | 5 | 4 | 5 | 4 | 5 | **92** | S | 좁은 경계 어댑터, 기본 비활성, fan-out 0 |
 | `hmi/web` | 4 | 5 | 4 | 5 | 5 | **91** | S | 0 fan-out 공용 자산 + 소비자 계약 테스트 4종 + 600/10k 예산 |
-| `products/pinky_pro` | 5 | 5 | 4 | 3 | 4 | **87** | A | D-196 신규(2026-09-24 잠정): config 전용·자기 시험 보유·fan-out 0. M4 — `deploy/robot/config/profile.*.yaml`이 속도 상한을 부분 복제(`test_nav2_profile_limits`가 일치 고정). M5 — core가 `robot.model`로 동적 조회(선언 없음, D-126과 같은 종류) |
+| `products/pinky_pro` | 5 | 5 | 4 | 3 | 4 | **87** | A | D-196 신규(2026-09-24 잠정): config 전용·자기 시험 보유·fan-out 0. M4 — `deploy/robot/pinky_pro/config/profile.*.yaml`이 속도 상한을 부분 복제(`test_nav2_profile_limits`가 일치 고정). M5 — core가 `robot.model`로 동적 조회(선언 없음, D-126과 같은 종류) |
 | `contracts/foundation` | 4 | 5 | 4 | 5 | 3 | **85** | A | fan-in 5의 공용 스키마, 그러나 기록된 역방향 1건 |
 | `runtime/api_web` | 4 | 4 | 4 | 5 | 3 | **80** | A | `deps` 파사드 + v1 직접 import 금지 게이트로 전파 반경 봉쇄, 과잉선언 1건 (`core_events` — 생산 코드 0회) |
 | `site/fleet` | 4 | 4 | 4 | 4 | 5 | **83** | A | 자기 시험 27개, `fleet.bench` 공개면으로 gz_sim과 분리 |

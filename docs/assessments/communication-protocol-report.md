@@ -14,7 +14,7 @@
 | L3 호스트 로컬 | unix socket `/run/rosy/host-agent.sock`(라인 JSON 64 KiB 상한, SO_PEERCRED, allowlist 10명령, 멱등 256건) | ROSY-HOSTAGENT-001, `host_agent.py:37-96` |
 | L4 로봇 API | FastAPI REST `/api/v1` + WS 4종, 단일 포트 8080(기본 `0.0.0.0`), 시뮬은 8080+N | `node.py:103-104`, `gz_multi.launch.py:579` |
 | L5 사이트/함대 | 로봇→Fleet 아웃바운드 WS(잠자는 구현체), SiteHub `/ws/robots`, 군집 pose/reference 소켓, Fleet 콘솔 :8090(폴링 v1), 도크·신호등 HTTP :80, 관측자 :8095 | D-5/D-31/D-59/D-81, `cli.py:63-64` |
-| L6 릴리스·유지보수 | 서명 릴리스(Ed25519+SHA256SUMS), systemd 네이티브(D-161), Wi-Fi 상태머신(SITE_STA 기본, NETWORK_HOLD) | `updater.py:70-93`, `deploy/release/network.py:55-64`, D-26 |
+| L6 릴리스·유지보수 | 서명 릴리스(Ed25519+SHA256SUMS), systemd 네이티브(D-161), Wi-Fi 상태머신(SITE_STA 기본, NETWORK_HOLD) | `updater.py:70-93`, `deploy/robot/pinky_pro/release/network.py:55-64`, D-26 |
 
 ## 2. 물리 버스·장치 인벤토리 (L0)
 
@@ -115,7 +115,7 @@
 - 신원 강제: `ROS_DOMAIN_ID`(40+N, 0~101 가드)·`ROSY_NAMESPACE`(`rosy_%02d`)를 `${VAR:?}`·빈 템플릿으로 강제(D-33) — `compose.yaml:4,9`, `install-pi.sh:290-310`, `test_dds_identity_contracts.py`.
 - RMW 단일(D-117): Cyclone 고정, fastrtps 금지는 시험 고정(`test_dds_rmw_contracts.py:8-21`). **저장소 유일 DDS XML**이 lo 전용이며 컨테이너(`Dockerfile:25`)와 네이티브 이미지(`build-native-payload.sh:51,103`) 양쪽에 복사 — 로봇 간 Wi-Fi 디스커버리 원천 차단(의도적). 시뮬은 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`(D-120).
 - 최소권한: CORE `cap_drop ALL`+`read_only`+장치 없음(native `PrivateDevices=true`), I/O만 dialout/i2c/video/gpio/spi 그룹 + `DeviceAllow` 열거. 호스트 root는 Host Agent 유일.
-- Wi-Fi 상태머신(D-26): **WLAN 유실=NETWORK_HOLD(자동 AP 금지)**, 복구 AP는 1회성 마커로만, 모터/IO 활성 중 AP 거부, PSK는 저장·회귀·로그 금지(`deploy/release/network.py:39-75,422-430`).
+- Wi-Fi 상태머신(D-26): **WLAN 유실=NETWORK_HOLD(자동 AP 금지)**, 복구 AP는 1회성 마커로만, 모터/IO 활성 중 AP 거부, PSK는 저장·회귀·로그 금지(`deploy/robot/pinky_pro/release/network.py:39-75,422-430`).
 - 하드코딩 포트 감시: 28161/28162(레거시 web_node)는 배포 구성 전체 스캔으로 차단(`test_control_launch_boundary.py:39-53`). 잔여 하드코딩: `native/wait-core-ready.py:13`이 8080 고정(api_port 무시).
 
 ## 7. 규약 일관성 — 잘 지켜지고 있는 원칙

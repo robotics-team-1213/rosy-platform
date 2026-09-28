@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_omx_ai_vendor_sources_are_pinned_to_immutable_revisions():
-    lock_path = ROOT / "deploy" / "omx" / "stack.lock.yaml"
+    lock_path = ROOT / "deploy" / "robot" / "omx" / "stack.lock.yaml"
     lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
 
     assert lock["target"]["model"] == "omx_ai"

@@ -100,7 +100,7 @@ class MemoryLinks:
 
 @pytest.fixture
 def native_case(tmp_path: Path):
-    from deploy.robot.native.native_release import NativeReleaseManager
+    from deploy.robot.pinky_pro.native.native_release import NativeReleaseManager
 
     private, public = _keys(tmp_path)
     root = tmp_path / "device"
@@ -203,9 +203,9 @@ def test_power_loss_recovery_restores_the_prepared_old_release(native_case):
 def test_native_release_entrypoints_are_offline_and_container_free():
     root = Path(__file__).resolve().parents[1]
     paths = [
-        root / "deploy/robot/native/activate-release.sh",
-        root / "deploy/robot/native/rollback-release.sh",
-        root / "deploy/robot/native/native_release.py",
+        root / "deploy/robot/pinky_pro/native/activate-release.sh",
+        root / "deploy/robot/pinky_pro/native/rollback-release.sh",
+        root / "deploy/robot/pinky_pro/native/native_release.py",
     ]
     text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
@@ -218,14 +218,14 @@ def test_native_release_entrypoints_are_offline_and_container_free():
 
 def test_artifact_gate_can_verify_the_signed_native_release_before_media_write():
     root = Path(__file__).resolve().parents[1]
-    verifier = (root / "deploy/image/verify-artifacts.sh").read_text(encoding="utf-8")
+    verifier = (root / "deploy/robot/pinky_pro/image/verify-artifacts.sh").read_text(encoding="utf-8")
 
     assert "ROSY_NATIVE_RELEASE_ID" in verifier
     # D-225 2.2: unsigned in the image; verified with the dist's factory signature.
     assert "verify-mounted-image.py" in verifier
     assert '--factory-dist "$DIST"' in verifier
     assert '--public-key "$NATIVE_PUBLIC_KEY"' in verifier
-    mounted = (root / "deploy/image/verify-mounted-image.py").read_text(encoding="utf-8")
+    mounted = (root / "deploy/robot/pinky_pro/image/verify-mounted-image.py").read_text(encoding="utf-8")
     assert "NativeReleaseManager(root=Path(scratch), public_key=public_key).verify(release_id)" in mounted
 
 

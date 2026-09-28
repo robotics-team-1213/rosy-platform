@@ -16,7 +16,7 @@ from navigation.footprint_profile import (  # noqa: E402
 from navigation.params_rewrite import write_prefixed_nav2_params  # noqa: E402
 
 
-MOTION_PROFILES = ROOT / "deploy" / "robot" / "config" / "motion_profiles.yaml"
+MOTION_PROFILES = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "motion_profiles.yaml"
 NAV2 = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
 
 

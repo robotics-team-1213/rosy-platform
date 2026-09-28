@@ -1,6 +1,6 @@
 """D-193 S1: login codes, paired tokens and the token lifecycle in CORE.
 
-The root issuer (`deploy/robot/native/rosy-login-code.py`) is not imported
+The root issuer (`deploy/robot/pinky_pro/native/rosy-login-code.py`) is not imported
 here: these tests write its verifier file themselves, with the same scrypt
 parameters, into a temporary directory the pairing state is pointed at.
 """
@@ -553,7 +553,7 @@ def test_root_ignores_cores_failing_bookkeeping():
     import importlib.util
     import sys as _sys
 
-    native = Path(__file__).resolve().parents[4] / "deploy/robot/native"
+    native = Path(__file__).resolve().parents[4] / "deploy/robot/pinky_pro/native"
     _sys.path.insert(0, str(native))
     spec = importlib.util.spec_from_file_location("rosy_login_code_review", native / "rosy-login-code.py")
     module = importlib.util.module_from_spec(spec)

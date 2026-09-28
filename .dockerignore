@@ -1,7 +1,7 @@
 **
 !deploy/
-!deploy/robot/
-!deploy/robot/**
+!deploy/robot/pinky_pro/
+!deploy/robot/pinky_pro/**
 !src/
 !src/contracts/
 !src/contracts/interfaces/

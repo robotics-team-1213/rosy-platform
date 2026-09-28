@@ -217,7 +217,7 @@ def release_images():
 
 
 def runtime_source(req: BuildRequest):
-    root = req.repo_root / "deploy" / "robot"
+    root = req.repo_root / "deploy" / "robot" / "pinky_pro"
     (root / "config").mkdir(parents=True)
     (root / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
     (root / "config" / "profile.core.yaml").write_text("mode: core\n", encoding="utf-8")

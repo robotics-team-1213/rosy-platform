@@ -30,9 +30,9 @@ import yaml
 from secret_scan import iter_tracked_files, scan_files, scan_text  # via test/conftest.py
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPOSE = ROOT / "deploy" / "robot" / "compose.yaml"
-ENV_EXAMPLE = ROOT / "deploy" / "robot" / ".env.example"
-RUNTIME_MODE = ROOT / "deploy" / "robot" / "runtime-mode.sh"
+COMPOSE = ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml"
+ENV_EXAMPLE = ROOT / "deploy" / "robot" / "pinky_pro" / ".env.example"
+RUNTIME_MODE = ROOT / "deploy" / "robot" / "pinky_pro" / "runtime-mode.sh"
 
 
 @pytest.fixture(scope="module")

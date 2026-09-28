@@ -12,7 +12,7 @@ from uuid import UUID
 import pytest
 from jsonschema import Draft202012Validator
 
-from deploy.sd.personalization import (
+from deploy.robot.pinky_pro.sd.personalization import (
     SHORT_CODE_ALPHABET,
     create_provision_bundle,
     create_provision_receipt,
@@ -25,8 +25,8 @@ from deploy.sd.personalization import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = ROOT / "deploy" / "sd" / "provision.schema.json"
-BUNDLE_CLI = ROOT / "deploy" / "sd" / "create-provision-bundle.py"
+SCHEMA = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "provision.schema.json"
+BUNDLE_CLI = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "create-provision-bundle.py"
 
 
 class DeterministicRng:
@@ -327,7 +327,7 @@ def test_bundle_cli_needs_both_release_root_and_public_key(tmp_path):
 
 
 def test_sd_writer_passes_the_verified_release_to_the_bundle_creator():
-    text = (ROOT / "deploy/sd/prepare-rosy-sd.ps1").read_text(encoding="utf-8")
+    text = (ROOT / "deploy/robot/pinky_pro/sd/prepare-rosy-sd.ps1").read_text(encoding="utf-8")
     call = next(line for line in text.splitlines() if "& $PythonExe $bundleTool" in line)
     assert "--release-root $releaseRoot --public-key $ReleasePublicKey" in call
     assert text.index("$releaseRoot = Split-Path -Parent $ImageSignaturePath") < text.index(call)

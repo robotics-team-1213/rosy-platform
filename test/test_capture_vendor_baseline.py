@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = (
-    Path(__file__).resolve().parents[1] / "deploy" / "robot" / "capture-vendor-baseline.sh"
+    Path(__file__).resolve().parents[1] / "deploy" / "robot" / "pinky_pro" / "capture-vendor-baseline.sh"
 )
 
 # Tokens that would let the capture mutate the vendor system. Each entry is a

@@ -22,7 +22,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE_DIR = ROOT / "deploy" / "image"
+IMAGE_DIR = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
 LOCK = IMAGE_DIR / "inputs.lock.yaml"
 SCRIPTS = (
     "build-image.sh",
@@ -447,7 +447,7 @@ def test_verify_artifacts_checks_every_declared_artifact():
 # --- script hygiene, matching the rest of deploy/ -------------------------
 
 
-@pytest.mark.parametrize("name", SCRIPTS + ("../robot/release-recover.sh",))
+@pytest.mark.parametrize("name", SCRIPTS + ("../release-recover.sh",))
 def test_scripts_are_lf_only(name):
     """CRLF is unsafe in a Pi shell.
 
@@ -461,13 +461,13 @@ def test_scripts_are_lf_only(name):
 
 
 @bash_only
-@pytest.mark.parametrize("name", SCRIPTS + ("../robot/release-recover.sh",))
+@pytest.mark.parametrize("name", SCRIPTS + ("../release-recover.sh",))
 def test_scripts_parse(name):
     result = _bash(["-n", name], IMAGE_DIR)
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("name", SCRIPTS + ("../robot/release-recover.sh",))
+@pytest.mark.parametrize("name", SCRIPTS + ("../release-recover.sh",))
 def test_scripts_fail_fast(name):
     """set -euo pipefail, like the rest of the deployment kit."""
     text = (IMAGE_DIR / name).read_text(encoding="utf-8")
@@ -478,7 +478,7 @@ def test_scripts_fail_fast(name):
 
 
 def test_the_recovery_gate_unit_exists():
-    unit = (ROOT / "deploy" / "robot" / "rosy-release-recover.service").read_text(encoding="utf-8")
+    unit = (ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-recover.service").read_text(encoding="utf-8")
 
     assert "Type=oneshot" in unit
     assert "Before=rosy-runtime.service" in unit
@@ -486,7 +486,7 @@ def test_the_recovery_gate_unit_exists():
 
 def test_the_runtime_requires_the_gate_rather_than_wanting_it():
     """With Wants=, a device held for recovery boots anyway."""
-    unit = (ROOT / "deploy" / "robot" / "rosy-runtime.service").read_text(encoding="utf-8")
+    unit = (ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-runtime.service").read_text(encoding="utf-8")
 
     assert "Requires=rosy-release-recover.service" in unit
     assert "After=rosy-release-recover.service" in unit
@@ -495,8 +495,8 @@ def test_the_runtime_requires_the_gate_rather_than_wanting_it():
 
 def test_the_gate_has_no_restart_or_swallowed_failure():
     """Either would convert a hold into a boot."""
-    unit = (ROOT / "deploy" / "robot" / "rosy-release-recover.service").read_text(encoding="utf-8")
-    script = (ROOT / "deploy" / "robot" / "release-recover.sh").read_text(encoding="utf-8")
+    unit = (ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-recover.service").read_text(encoding="utf-8")
+    script = (ROOT / "deploy" / "robot" / "pinky_pro" / "release-recover.sh").read_text(encoding="utf-8")
 
     def directives(text: str) -> list[str]:
         return [
@@ -558,7 +558,7 @@ def _run_gate(tmp_path: Path) -> subprocess.CompletedProcess:
     the script would silently fall back to its production defaults.
     """
     tmp_path.mkdir(parents=True, exist_ok=True)
-    tools = _bash_view(ROOT / "deploy" / "release")
+    tools = _bash_view(ROOT / "deploy" / "robot" / "pinky_pro" / "release")
     layout = _bash_view(tmp_path)
     # The hold path calls systemctl to disable the runtime unit. The CI
     # container has no systemd — a stub on PATH keeps the test judging the
@@ -579,7 +579,7 @@ def _run_gate(tmp_path: Path) -> subprocess.CompletedProcess:
                 f'ROSY_PYTHON=python3 PATH="{stub_view}:$PATH" ./release-recover.sh'
             ),
         ],
-        cwd=str(ROOT / "deploy" / "robot"),
+        cwd=str(ROOT / "deploy" / "robot" / "pinky_pro"),
         capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
     )
 

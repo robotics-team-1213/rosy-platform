@@ -9,7 +9,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OMX = ROOT / "deploy" / "omx"
+OMX = ROOT / "deploy" / "robot" / "omx"
 
 
 def load(name: str, filename: str):

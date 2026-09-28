@@ -2,7 +2,7 @@
 title: The card readback took 18 minutes instead of 7 because parallel agent work competed for the CPU
 date: 2026-09-25
 category: workflow-issues
-module: deploy/sd (verify-media-readback.py, release 2026.09.25-011 on rosy-pinky-e4us)
+module: deploy/robot/pinky_pro/sd (verify-media-readback.py, release 2026.09.25-011 on rosy-pinky-e4us)
 problem_type: performance_issue
 component: development_workflow
 symptoms:

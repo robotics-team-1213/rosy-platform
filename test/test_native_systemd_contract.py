@@ -9,7 +9,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy" / "robot" / "native"
+NATIVE = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
 
 
 def _read(name: str) -> str:
@@ -35,7 +35,7 @@ def test_core_runs_as_a_device_free_hardened_service():
         "EnvironmentFile=/etc/rosy/runtime.env",
         "DevicePolicy=closed", "PrivateDevices=true",
         "NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",
-        "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py",
+        "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/pinky_pro/native/wait-core-ready.py",
         "exec /opt/rosy/current/install/lib/core/core --ros-args", "Restart=on-failure",
         "KillSignal=SIGINT",
     ):
@@ -71,7 +71,7 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "os._exit(STUCK_SHUTDOWN_EXIT_CODE)" in core_main
     assert "os.kill(os.getpid()" not in core_main
     # the hard-coded entry-script path only exists in a --merge-install payload
-    payload = (ROOT / "deploy" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
     assert "--merge-install" in payload
     assert '--install-base "$INSTALL_ROOT"' in payload
     assert 'INSTALL_ROOT="$RELEASE_ROOT/install"' in payload
@@ -104,7 +104,7 @@ def test_io_has_only_enumerated_devices_and_keeps_the_deadman_argument():
 def test_no_motion_io_follows_runtime_without_being_enabled_on_its_own():
     unit = _read("rosy-io.service")
     target = _read("rosy-runtime.target")
-    image = (ROOT / "deploy" / "image" / "customize-rootfs.sh").read_text(encoding="utf-8")
+    image = (ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "customize-rootfs.sh").read_text(encoding="utf-8")
 
     assert "PartOf=rosy-runtime.target" in unit
     assert "Wants=rosy-io.service" in target
@@ -277,8 +277,8 @@ def test_ros_services_get_a_writable_ros_home_under_protect_home(unit_name, log_
 
 def test_journald_keeps_a_bounded_persistent_ledger():
     # D-175 L0: the journal is the ledger every other diagnostic layer reads.
-    conf = (ROOT / "deploy/robot/native/journald-60-rosy.conf").read_text(encoding="utf-8")
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    conf = (ROOT / "deploy/robot/pinky_pro/native/journald-60-rosy.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
 
     for directive in ("[Journal]", "Storage=persistent", "SystemMaxUse=200M", "RuntimeMaxUse=32M"):
         assert directive in conf
@@ -287,8 +287,8 @@ def test_journald_keeps_a_bounded_persistent_ledger():
 
 def test_ros_log_directories_are_aged_out():
     # Review M9: ROS writes new files on every start, outside journald's cap.
-    rules = (ROOT / "deploy/robot/native/tmpfiles-rosy-logs.conf").read_text(encoding="utf-8")
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    rules = (ROOT / "deploy/robot/pinky_pro/native/tmpfiles-rosy-logs.conf").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
 
     for name in ("rosy-core", "rosy-io", "rosy-navigation"):
         assert f"e /var/log/{name} - - - 7d" in rules
@@ -441,8 +441,8 @@ DECLARED_READS = {
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
-    "rosy-release-recover.service": ["deploy/robot/native/native_release.py",
-                                     "deploy/robot/native/recover-release.sh"],
+    "rosy-release-recover.service": ["deploy/robot/pinky_pro/native/native_release.py",
+                                     "deploy/robot/pinky_pro/native/recover-release.sh"],
     "rosy-sd-provision.service": [],
     # CORE also imports modules of the control package (sensor adapter, gate).
     # control sits under src/core since a93d5188 but runs its nodes as their own
@@ -461,19 +461,19 @@ PROGRAM_SOURCES = {
                             "src/runtime/sensing/control/road_observer_node.py"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/products/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
-    "rosy-boot-display.service": ["deploy/robot/native/rosy-boot-display.py",
+    "rosy-boot-display.service": ["deploy/robot/pinky_pro/native/rosy-boot-display.py",
                                   # D-260: the rule table it imports from the release.
                                   "src/contracts/foundation/core_common/robot_state.py",
                                   "src/hmi/face/emotion/info_screen.py",
                                   "src/hmi/face/emotion/rosy_lcd.py",
                                   "src/products/pinky_pro/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
-    "rosy-login-code.service": ["deploy/robot/native/rosy-login-code.py",
-                                "deploy/robot/native/rosy_config.py"],
+    "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",
+                                "deploy/robot/pinky_pro/native/rosy_config.py"],
     # D-247: the probe is standard library only (dynamixel_sdk is imported lazily).
-    "rosy-hw-probe.service": ["deploy/robot/native/rosy-hw-probe.py"],
+    "rosy-hw-probe.service": ["deploy/robot/pinky_pro/native/rosy-hw-probe.py"],
     # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
-    "rosy-hw-test.service": ["deploy/robot/native/rosy-hw-test.py"],
+    "rosy-hw-test.service": ["deploy/robot/pinky_pro/native/rosy-hw-test.py"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
@@ -688,8 +688,8 @@ def test_required_writable_paths_exist_when_the_unit_starts(unit):
 
 def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     rules = STATE_RULES.read_text(encoding="utf-8")
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
-    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/robot/pinky_pro/image/customize-rootfs.sh").read_text(encoding="utf-8")
 
     assert "d /var/lib/rosy 0755 root root -" in rules
     assert "d /var/lib/rosy/maps 2750 rosy-io rosy-core -" in rules
@@ -767,7 +767,7 @@ def test_python_units_never_write_bytecode_into_the_release(unit):
 
 
 def test_payload_build_rewrites_pycs_as_checked_hash():
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
     compile_at = payload.index("python3 -m compileall -q -f --invalidation-mode checked-hash")
     assert payload.index("colcon build") < compile_at < payload.index('"$INSTALL_ROOT/.rosy-release"')
 

@@ -11,7 +11,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy/robot/native/mapping_approval.py"
+SCRIPT = ROOT / "deploy/robot/pinky_pro/native/mapping_approval.py"
 REVISION = "a" * 40
 RELEASE = "2026.09.27-018"
 
@@ -301,9 +301,9 @@ def test_invalid_g4_measurements_never_create_approval(tmp_path, change, reason)
 
 
 def test_native_payload_and_systemd_share_the_same_guard():
-    builder = (ROOT / "deploy/image/build-native-payload.sh").read_text()
-    unit = (ROOT / "deploy/robot/native/rosy-navigation.service").read_text()
-    installer = (ROOT / "deploy/robot/native/install-native-runtime.sh").read_text()
+    builder = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text()
+    unit = (ROOT / "deploy/robot/pinky_pro/native/rosy-navigation.service").read_text()
+    installer = (ROOT / "deploy/robot/pinky_pro/native/install-native-runtime.sh").read_text()
     assert "mapping_approval.py" in installer
     assert "mapping_approval.py" in unit
     assert "ExecCondition=" in unit

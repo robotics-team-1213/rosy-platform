@@ -33,7 +33,7 @@ plans:
 - Pinky Pro 로봇 패키지다. 코드 없이 HWA-001 프로필(`config/profile.yaml`)과 CAP-001 capabilities(`config/capabilities.yaml`)만 담는다(D-196).
 - CORE는 `robot.model`(기본 `pinky_pro`, `ROSY_ROBOT`)로 이 패키지의 `share/pinky_pro/config/`를 찾는다. 소스 트리에서는 `src/products/pinky_pro/profile/config/`로 폴백한다.
 - D-310 경로 이동은 격리 worktree의 SOURCE 후보이며 기존 ROS 패키지명과 설치 share 이름을 유지한다. 새 CORE/IO/native 이미지 동등성은 확인 전이다.
-- 장치가 실제로 광고하는 모드별 파일(`deploy/robot/config/*.{core,motor,hardware}.yaml`)은 여전히 deploy 소유이고 `/etc/rosy/*.yaml` 절대 경로로 우선한다.
+- 장치가 실제로 광고하는 모드별 파일(`deploy/robot/pinky_pro/config/*.{core,motor,hardware}.yaml`)은 여전히 deploy 소유이고 `/etc/rosy/*.yaml` 절대 경로로 우선한다.
 
 ## 다음 gate
 

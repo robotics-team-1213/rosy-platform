@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rosy.local/schema/release-manifest-v1.json",
+  "title": "ROSY Release Manifest",
+  "description": "The contract shared by the SD image and the release bundle. Both carry this manifest and the same ARM64 container digests, so a device can decide whether an artifact is installable before unpacking any payload. This file is the declarative statement of the contract; deploy/robot/pinky_pro/release/manifest.py is the enforcing implementation, and test_release_manifest.py holds the two to the same required fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_id",
+    "git_revision",
+    "created_at",
+    "target",
+    "runtime",
+    "containers",
+    "defaults",
+    "signing_key_id",
+    "requires_recommissioning",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this manifest contract. A device rejects a version it does not implement rather than guessing.",
+      "type": "integer",
+      "const": 1
+    },
+    "release_id": {
+      "description": "Human-readable identifier, YYYY.MM.DD-NNN. Never the basis of a security decision — that is git_revision, the digests and the signature.",
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}-[0-9]{3}$"
+    },
+    "git_revision": {
+      "description": "Full 40-hex commit the release was built from. Abbreviated revisions are rejected: they are ambiguous.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "created_at": {
+      "description": "Build timestamp, RFC 3339 with an explicit UTC offset.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "target": {
+      "description": "The hardware and OS this release is installable on. A mismatch is refused before install.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["board", "architecture", "os_family", "os_suite"],
+      "properties": {
+        "board": {"type": "string", "enum": ["raspberry-pi-5"]},
+        "architecture": {"type": "string", "enum": ["arm64"]},
+        "os_family": {"type": "string", "enum": ["raspberry-pi-os-lite"]},
+        "os_suite": {"type": "string", "minLength": 1}
+      }
+    },
+    "runtime": {
+      "description": "Schema generations this release reads. A device refuses config or data it cannot interpret.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_schema", "data_schema", "minimum_bootloader"],
+      "properties": {
+        "config_schema": {"type": "integer", "minimum": 1},
+        "data_schema": {"type": "integer", "minimum": 1},
+        "minimum_bootloader": {"type": ["string", "null"]}
+      }
+    },
+    "containers": {
+      "description": "Immutable OCI image digests. rosy_io is one image shared by the rosy-motor and rosy-io compose services; there is no separate rosy-motor artifact.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rosy_core", "rosy_io"],
+      "properties": {
+        "rosy_core": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "rosy_io": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "defaults": {
+      "description": "First-boot defaults. runtime_mode is core: first boot, update and rollback all come up core-only, and motor or hardware is a separate field approval.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime_mode"],
+      "properties": {
+        "runtime_mode": {"type": "string", "const": "core"}
+      }
+    },
+    "signing_key_id": {
+      "description": "Identifies the public key under /etc/rosy/trusted-release-keys/. v1 trusts exactly one key; rotation happens through a new recovery image.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+    },
+    "requires_recommissioning": {
+      "description": "Whether the device must be re-approved for motor or hardware mode after this release activates.",
+      "type": "boolean"
+    },
+    "files": {
+      "description": "Payload files, each with its own checksum. Paths are relative and confined to the bundle root.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

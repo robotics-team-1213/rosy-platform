@@ -3,7 +3,7 @@ title: Pinky Pro OV5647 needs an explicit CAM1 boot overlay on the ROSY SD
 date: 2026-09-26
 last_updated: 2026-09-26
 category: runtime-errors
-module: deploy/image and deploy/robot on Pinky Pro
+module: deploy/robot/pinky_pro/image and deploy/robot/pinky_pro on Pinky Pro
 problem_type: runtime_error
 component: development_workflow
 symptoms:
@@ -44,7 +44,7 @@ camera_auto_detect=0
 dtoverlay=ov5647
 ```
 
-`deploy/robot/configure-boot-overlay-pi5.sh:32` now accepts `--disable-camera-auto-detect` only with `dtoverlay=ov5647`, stages and verifies the change, and leaves a matching config unchanged on a second call. `deploy/image/customize-rootfs.sh:347` invokes that helper while creating an image. `deploy/image/verify-mounted-image.py:273` rejects a mounted image without the active CAM1 overlay and disabled auto detection. The focused regression is `test/test_boot_overlay_pi5.py:76`.
+`deploy/robot/pinky_pro/configure-boot-overlay-pi5.sh:32` now accepts `--disable-camera-auto-detect` only with `dtoverlay=ov5647`, stages and verifies the change, and leaves a matching config unchanged on a second call. `deploy/robot/pinky_pro/image/customize-rootfs.sh:347` invokes that helper while creating an image. `deploy/robot/pinky_pro/image/verify-mounted-image.py:273` rejects a mounted image without the active CAM1 overlay and disabled auto detection. The focused regression is `test/test_boot_overlay_pi5.py:76`.
 
 The tested ROSY SD was also updated directly and rebooted. This proves the boot setting on that device; it does not mean a new image artifact was built or written to another SD card.
 

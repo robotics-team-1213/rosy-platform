@@ -66,7 +66,7 @@ def test_runtime_guide_labels_the_compose_section_as_development():
 
     assert "## 4. Build and start (development/CI Compose path)" in guide
     assert "On a product robot the equivalent is" in guide
-    assert "`systemctl start rosy-runtime.target` with `deploy/robot/native/` units" in guide
+    assert "`systemctl start rosy-runtime.target` with `deploy/robot/pinky_pro/native/` units" in guide
 
 
 def test_deployment_notes_split_product_from_development_dependencies():

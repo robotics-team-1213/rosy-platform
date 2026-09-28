@@ -68,17 +68,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 deploy/image/resolve-build-lock.py \
-            --input deploy/image/inputs.lock.yaml \
+          python3 deploy/robot/pinky_pro/image/resolve-build-lock.py \
+            --input deploy/robot/pinky_pro/image/inputs.lock.yaml \
             --output "$RESOLVED_LOCK" \
             --revision "$GITHUB_SHA"
-          deploy/image/verify-inputs.sh "$RESOLVED_LOCK"
+          deploy/robot/pinky_pro/image/verify-inputs.sh "$RESOLVED_LOCK"
 
       - name: Install checksum-pinned Pinky Pro hardware build dependencies
         shell: bash
         run: |
           set -euo pipefail
-          sudo deploy/image/install-pinky-hardware-deps.sh --lock "$RESOLVED_LOCK"
+          sudo deploy/robot/pinky_pro/image/install-pinky-hardware-deps.sh --lock "$RESOLVED_LOCK"
 
       - name: Build unsigned flashable image
         shell: bash
@@ -90,7 +90,7 @@ jobs:
             GITHUB_ACTIONS=true \
             ROSY_IMAGE_CACHE="$IMAGE_CACHE" \
             ROSY_IMAGE_WORK_ROOT="$IMAGE_WORK" \
-            deploy/image/build-image.sh \
+            deploy/robot/pinky_pro/image/build-image.sh \
               --release-id "$RELEASE_ID" \
               --dist "$DIST_ROOT" \
               --workspace "$GITHUB_WORKSPACE" \

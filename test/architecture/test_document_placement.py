@@ -14,12 +14,12 @@ ROOT = Path(__file__).resolve().parents[2]
 MUST_IGNORE = [
     "private/strategy-draft.md",
     ".env",
-    "deploy/robot/.env",
-    "deploy/robot/.env.site",
-    "deploy/robot/site.local.env",
+    "deploy/robot/pinky_pro/.env",
+    "deploy/robot/pinky_pro/.env.site",
+    "deploy/robot/pinky_pro/site.local.env",
     "src/site/games/config/match.local.yaml",
-    "deploy/sd/provision.json",
-    "deploy/sd/rosy-config.yaml",
+    "deploy/robot/pinky_pro/sd/provision.json",
+    "deploy/robot/pinky_pro/sd/rosy-config.yaml",
     "id_ed25519",
     "id_rsa.pub",
     "release.key",
@@ -38,13 +38,13 @@ MUST_IGNORE = [
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
 MUST_TRACK = [
-    "deploy/robot/.env.example",
+    "deploy/robot/pinky_pro/.env.example",
     "deploy/site/discovery-token.template.txt",
-    "deploy/robot/native/rosy-runtime.env",
-    "deploy/robot/native/rosy-diag",
-    "deploy/sd/rosy-config.template.yaml",
-    "deploy/sd/provision.schema.json",
-    "deploy/release/public-keys/rosy-release-2026-01.pem",
+    "deploy/robot/pinky_pro/native/rosy-runtime.env",
+    "deploy/robot/pinky_pro/native/rosy-diag",
+    "deploy/robot/pinky_pro/sd/rosy-config.template.yaml",
+    "deploy/robot/pinky_pro/sd/provision.schema.json",
+    "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem",
     "firmware/signal/observer/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
 ]

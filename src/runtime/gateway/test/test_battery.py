@@ -566,7 +566,7 @@ def _pi5_config():
     import pathlib
     import yaml
     root = pathlib.Path(__file__).resolve().parents[4]
-    path = root / "deploy/robot/config/rosy.pi5.example.yaml"
+    path = root / "deploy/robot/pinky_pro/config/rosy.pi5.example.yaml"
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 

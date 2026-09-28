@@ -32,17 +32,17 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPOSE = ROOT / "deploy" / "robot" / "compose.yaml"
-IO_UNIT = ROOT / "deploy" / "robot" / "native" / "rosy-io.service"
-NAV_UNIT = ROOT / "deploy" / "robot" / "native" / "rosy-navigation.service"
-CAPS = ROOT / "deploy" / "robot" / "config" / "capabilities.hardware.yaml"
+COMPOSE = ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml"
+IO_UNIT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-io.service"
+NAV_UNIT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-navigation.service"
+CAPS = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "capabilities.hardware.yaml"
 
 #: Path fragments that would mean a bench-only device got plumbed in.
 #: Note "i2c-0" is the bench IMU bus; the product ADC bus is "i2c-1".
 BENCH_ONLY_FRAGMENTS = ("spidev", "i2c-0", "gpiomem", "pwm", "gpiochip",
                         # device classes grant every node of a kind (D-190 review)
                         "char-spi", "char-i2c", "char-gpio")
-NATIVE = ROOT / "deploy" / "robot" / "native"
+NATIVE = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
 #: D-190: the one unit that may hold display devices, and exactly these.
 #: D-260 3 adds the lamp node (group rosy-display, 99-rosy-lamp.rules).
 DISPLAY_UNIT = "rosy-boot-display.service"

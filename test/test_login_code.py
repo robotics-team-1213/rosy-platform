@@ -18,7 +18,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 CORE_SRC = {
     "core": ROOT / "src/runtime/gateway",
     "core_common": ROOT / "src/contracts/foundation",

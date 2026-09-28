@@ -20,7 +20,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "robot" / "collect-rosy-diagnostics.ps1"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "collect-rosy-diagnostics.ps1"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 BOOT_ID = "23fe37a5e32a4462bd07ec95dc392a06"
 # /proc/sys/kernel/random/boot_id is a dashed UUID; evidence folders use journald's 32-hex form.

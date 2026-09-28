@@ -11,7 +11,7 @@ from signing import build_sha256sums, verify_release_files, verify_signature
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SIGNER = ROOT / "deploy" / "release" / "sign_image_release.py"
+SIGNER = ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "sign_image_release.py"
 
 
 def _keys(directory: Path, name: str) -> tuple[Path, Path]:

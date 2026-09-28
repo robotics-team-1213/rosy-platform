@@ -30,7 +30,7 @@ import pytest
 from test_media_readback import SECTOR, _Card, _dir_entry, _lfn_entries
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "sd" / "read-card-diagnostics.py"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "read-card-diagnostics.py"
 WIFI_FIXTURE = "home" + "-wifi-" + "pass-5521"
 
 

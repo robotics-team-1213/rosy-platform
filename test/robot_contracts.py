@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY = ROOT / "deploy" / "robot"
+DEPLOY = ROOT / "deploy" / "robot" / "pinky_pro"
 NAV_LAUNCH = ROOT / "src" / "runtime" / "navigation" / "launch"
 NAV_PARAMS = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
 

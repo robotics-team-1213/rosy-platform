@@ -15,7 +15,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE = ROOT / "deploy" / "image"
+IMAGE = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
 CUSTOMIZER = IMAGE / "customize-rootfs.sh"
 VERIFY = IMAGE / "verify-mounted-image.py"
 
@@ -106,7 +106,7 @@ def _valid_root(tmp_path: Path) -> Path:
         (root / "opt/rosy/first-boot" / name).write_text("# fixture\n", encoding="utf-8")
     for runtime, names in (
         (root / "opt/rosy/native-runtime", ("native_release.py", "recover-release.sh", "signing.py")),
-        (release / "deploy/robot/native", ("native_release.py", "signing.py")),
+        (release / "deploy/robot/pinky_pro/native", ("native_release.py", "signing.py")),
     ):
         runtime.mkdir(parents=True, exist_ok=True)
         for name in names:
@@ -182,7 +182,7 @@ def _valid_root(tmp_path: Path) -> Path:
     (root / "boot/firmware/overlays/rosy-ws281x.dtbo").write_bytes(b"\xd0\x0d\xfe\xed")
     (root / "etc/modprobe.d").mkdir(parents=True, exist_ok=True)
     (root / "etc/modprobe.d/rosy-ws281x.conf").write_bytes(
-        (ROOT / "deploy/robot/modprobe/rosy-ws281x.conf").read_bytes())
+        (ROOT / "deploy/robot/pinky_pro/modprobe/rosy-ws281x.conf").read_bytes())
     # The bus UARTs carry no console (configure-uart-pi5.sh edits the Ubuntu line).
     (root / "boot/firmware/cmdline.txt").write_text(
         "console=ttyAMA10,115200 multipath=off dwc_otg.lpm_enable=0 console=tty1 root=LABEL=writable "
@@ -317,7 +317,7 @@ def test_image_installs_enables_and_probes_the_hardware_probe():
     assert "rosy-hw-probe.py" in loop[:loop.index("; do")]
     after = loop[loop.index("done"):]
     assert """chroot "$ROOT" python3 -I -c 'import dynamixel_sdk'""" in after[:400]
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
     for unit in ("rosy-hw-probe.service", "rosy-hw-probe.path"):
         assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
 
@@ -360,9 +360,9 @@ def test_image_installs_enables_and_probes_the_login_code_issuer():
     assert 'ln -sfn /opt/rosy/native-runtime/rosy-login-code "$ROOT/usr/local/sbin/rosy-login-code"' in source
     loop = source[source.index("for entrypoint in rosy-boot-status.py"):]
     assert "rosy-login-code.py; do" in loop[:loop.index("done")]
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"' in payload
-    wrapper = (ROOT / "deploy/robot/native/rosy-login-code").read_text(encoding="utf-8")
+    wrapper = (ROOT / "deploy/robot/pinky_pro/native/rosy-login-code").read_text(encoding="utf-8")
     assert 'exec /usr/bin/python3 -I -B "$SCRIPT_DIR/rosy-login-code.py" "$@"' in wrapper
 
 
@@ -561,7 +561,7 @@ def test_customizer_executes_native_entrypoints_inside_the_image():
     probe = "rosy-native-probe"
     assert probe in source
     for runtime in ("/opt/rosy/native-runtime/native_release.py",
-                    '/opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py'):
+                    '/opt/rosy/releases/$RELEASE_ID/deploy/robot/pinky_pro/native/native_release.py'):
         assert f'chroot "$ROOT" python3 -B {runtime}' in source
     assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help' in source
     assert source.index("rosy-native-probe") < source.index("verify-mounted-image.py")
@@ -577,7 +577,7 @@ def test_image_enables_and_probes_the_d176_boot_settings_and_fallback_ap():
     assert "rosy-config-apply.py rosy-network.py" in source
     assert 'chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help' in source
 
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
     for line in ('cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"',
                  'cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"',
                  'cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"'):
@@ -674,7 +674,7 @@ def test_the_input_lock_pins_the_requirements_file_bytes():
     assert runtime["pydantic_major"] == 2
     assert runtime["verified"] is True
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
-    assert "deploy/image/device-python-requirements.txt text eol=lf" in attributes
+    assert "deploy/robot/pinky_pro/image/device-python-requirements.txt text eol=lf" in attributes
 
 
 def test_customizer_installs_the_locked_runtime_after_rosdep():
@@ -707,7 +707,7 @@ def test_image_and_release_record_the_same_python_runtime():
     assert "release python-runtime.sha256 does not match" in source
     assert 'sha256sum "$SCRIPT_DIR/device-python-requirements.txt"' in payload
     assert '"$RELEASE_ROOT/python-runtime.sha256"' in payload
-    native = (ROOT / "deploy/robot/native/native_release.py").read_text(encoding="utf-8")
+    native = (ROOT / "deploy/robot/pinky_pro/native/native_release.py").read_text(encoding="utf-8")
     assert 'PYTHON_RUNTIME_IMAGE_FILE = Path("usr/local/share/rosy/python-runtime.sha256")' in native
     assert 'PYTHON_RUNTIME_RELEASE_FILE = "python-runtime.sha256"' in native
 
@@ -737,15 +737,15 @@ def test_customizer_fails_the_build_when_core_does_not_import_in_the_image():
 def test_ci_tests_against_the_runtime_the_device_runs():
     for workflow in ("ci.yml", "arm64-rehearsal.yml"):
         text = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
-        lock = "--require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt"
+        lock = "--require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt"
         assert lock in text
         # Test tools come after the lock, constrained to its versions, so their
         # dependencies (anyio, h11, idna, typing-extensions) are not a second copy.
-        constraints = "grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/image/device-python-requirements.txt"
+        constraints = "grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt"
         assert constraints in text
         assert text.index(lock) < text.index(constraints) < text.index("-c /tmp/rosy-runtime-constraints.txt")
         for line in text.splitlines():
-            if "pip" in line and " install" in line and "-r deploy/image" not in line:
+            if "pip" in line and " install" in line and "-r deploy/robot/pinky_pro/image" not in line:
                 words = set(line.split())
                 assert not words & {"pydantic", "fastapi", "starlette", "uvicorn", "websockets"}, (workflow, line)
 
@@ -807,9 +807,9 @@ def test_sllidar_source_is_pinned_like_the_other_hardware_sources():
     lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))
     deps = lock["hardware_dependencies"]
 
-    # The commit the Docker io image built (deploy/robot/Dockerfile SLLIDAR_COMMIT).
+    # The commit the Docker io image built (deploy/robot/pinky_pro/Dockerfile SLLIDAR_COMMIT).
     assert deps["sllidar_ros2_commit"] == SLLIDAR_COMMIT
-    assert f"SLLIDAR_COMMIT={SLLIDAR_COMMIT}" in (ROOT / "deploy/robot/Dockerfile").read_text(encoding="utf-8")
+    assert f"SLLIDAR_COMMIT={SLLIDAR_COMMIT}" in (ROOT / "deploy/robot/pinky_pro/Dockerfile").read_text(encoding="utf-8")
     assert deps["sllidar_ros2_url"] == (
         f"https://codeload.github.com/Slamtec/sllidar_ros2/tar.gz/{SLLIDAR_COMMIT}")
     assert deps["sllidar_ros2_sha256"] == "".join(
@@ -1065,7 +1065,7 @@ def test_io_probe_checks_units_against_the_d189_rules(tmp_path):
     probe = _io_probe()
     systemd = tmp_path / "etc/systemd/system"
     systemd.mkdir(parents=True)
-    native = ROOT / "deploy/robot/native"
+    native = ROOT / "deploy/robot/pinky_pro/native"
     for unit in probe.UNITS:
         (systemd / unit).write_bytes((native / unit).read_bytes())
     rule = tmp_path / probe.UDEV_RULE

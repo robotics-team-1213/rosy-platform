@@ -37,9 +37,9 @@ None.
 
 ### Working In This Directory
 
-- Align steps with `deploy/robot/` scripts (`install-pi.sh`, `deploy-from-windows.ps1`, `runtime-mode.sh`). Modes are `core` / `motor` / `hardware`. Those three drive the **development Compose** path; the product path is `deploy/robot/native/` units under `rosy-runtime.target` (D-161/D-246).
+- Align steps with `deploy/robot/pinky_pro/` scripts (`install-pi.sh`, `deploy-from-windows.ps1`, `runtime-mode.sh`). Modes are `core` / `motor` / `hardware`. Those three drive the **development Compose** path; the product path is `deploy/robot/pinky_pro/native/` units under `rosy-runtime.target` (D-161/D-246).
 - Do not write an operator step that requires Docker to reach the motor UART or a safety gate. Every gate must be passable with the container runtime absent (D-246).
-- UART on Pi 5 is documented in `deploy/robot/configure-uart-pi5.sh` (default motor device `/dev/ttyAMA4`).
+- UART on Pi 5 is documented in `deploy/robot/pinky_pro/configure-uart-pi5.sh` (default motor device `/dev/ttyAMA4`).
 - Do not enable `lidar.standby_stop` until `power-bench-verification.md` passes. `pi5-acceptance-checklist.md` gates are HOLD until field sign-off.
 - A simulated or host-built map never satisfies G5. The device session must retain bounded MCAP telemetry, the generated YAML/PGM pair, their hashes, navigation evidence, and the final stopped/E-stop state.
 - D-145's native GitHub workflow produces an unsigned payload only. Offline Ed25519 signing and publication verification remain separate mandatory gates.
@@ -56,7 +56,7 @@ Korean operator prose; commands are copy-pasteable bash/pwsh.
 
 ### Internal
 
-- `deploy/robot/`, `deploy/image/`, `deploy/release/`
+- `deploy/robot/pinky_pro/`, `deploy/robot/pinky_pro/image/`, `deploy/robot/pinky_pro/release/`
 
 ### External
 

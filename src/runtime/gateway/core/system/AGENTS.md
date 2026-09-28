@@ -41,7 +41,7 @@ Read-only filesystem views; JSON request lines to Host Agent.
 ### Internal
 
 - Contract `docs/reference/rosy-host-agent-contract.md`
-- Server `deploy/release/host_agent.py`
+- Server `deploy/robot/pinky_pro/release/host_agent.py`
 
 ### External
 

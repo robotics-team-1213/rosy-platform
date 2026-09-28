@@ -14,7 +14,7 @@ PW = "pass" + "word"
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 
 
 def _module():

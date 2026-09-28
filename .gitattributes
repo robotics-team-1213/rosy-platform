@@ -15,14 +15,14 @@ src/runtime/sensing/map/map_v2_fleet/maps/*.yaml text eol=lf
 src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml text eol=lf
 deploy/robot/native/rosy-diag text eol=lf
 # D-189: inputs.lock.yaml pins this file by SHA-256; its bytes must not change per checkout.
-deploy/image/device-python-requirements.txt text eol=lf
-deploy/image/camera-sources.lock.json text eol=lf
-deploy/image/camera-python-requirements.txt text eol=lf
+deploy/robot/pinky_pro/image/device-python-requirements.txt text eol=lf
+deploy/robot/pinky_pro/image/camera-sources.lock.json text eol=lf
+deploy/robot/pinky_pro/image/camera-python-requirements.txt text eol=lf
 # D-247: inputs.lock.yaml pins the rpi_ws281x patch by SHA-256; the overlay and
 # the udev/modprobe files go into the image byte for byte.
-deploy/image/patches/*.patch text eol=lf
-deploy/omx/patches/*.patch text eol=lf whitespace=-blank-at-eol
-deploy/image/overlays/*.dts text eol=lf
+deploy/robot/pinky_pro/image/patches/*.patch text eol=lf
+deploy/robot/omx/patches/*.patch text eol=lf whitespace=-blank-at-eol
+deploy/robot/pinky_pro/image/overlays/*.dts text eol=lf
 deploy/robot/udev/*.rules text eol=lf
 deploy/robot/modprobe/*.conf text eol=lf
 docs/validation/pinky-vendor-boot-2026-09-24/config.txt -text

@@ -15,9 +15,9 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "sd" / "prepare-rosy-sd.ps1"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "prepare-rosy-sd.ps1"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
-sys.path.insert(0, str(ROOT / "deploy" / "release"))
+sys.path.insert(0, str(ROOT / "deploy" / "robot" / "pinky_pro" / "release"))
 from signing import build_sha256sums, sign_checksums  # noqa: E402
 
 
@@ -958,7 +958,7 @@ def test_each_card_gets_a_stored_random_ap_password_and_a_settings_template(writ
     bundle = json.loads((boot / "rosy-provision/provision.json").read_text(encoding="utf-8-sig"))
     ap = bundle["network"]["ap"]
     assert ap["ssid"] == "rosy-pinky-k7m4" and len(ap["password"]) == 14
-    # The readable per-card form shared with deploy/release/network.py.
+    # The readable per-card form shared with deploy/robot/pinky_pro/release/network.py.
     assert re.fullmatch(r"rosy-[a-hj-km-np-z2-9]{4}-[a-hj-km-np-z2-9]{4}", ap["password"])
     store = Path(writer_case["env"]["LOCALAPPDATA"]) / "Rosy/ap/rosy-pinky-k7m4.credential.xml"
     assert store.is_file() and ap["password"] not in store.read_text(encoding="utf-16")  # DPAPI, not plaintext
@@ -2102,7 +2102,7 @@ def test_a_card_too_slow_for_the_probe_limit_is_slow_media(writer_case, tmp_path
 def test_the_elevated_write_window_turns_off_quickedit_before_the_write():
     # 2026-09-24, release 010: a click put the window in "Select" mode and froze
     # Imager's console output 8 MB before the end; the stall watchdog then killed it.
-    text = (ROOT / "deploy/sd/write-card.ps1").read_text(encoding="utf-8")
+    text = (ROOT / "deploy/robot/pinky_pro/sd/write-card.ps1").read_text(encoding="utf-8")
     elevated = text[text.index("# Elevated: the release signature verifier"):]
     assert elevated.index("Disable-QuickEdit\n") < elevated.index("Start-Transcript")
     assert "(-bnot [uint32]0x40)" in text and "-bor [uint32]0x80" in text

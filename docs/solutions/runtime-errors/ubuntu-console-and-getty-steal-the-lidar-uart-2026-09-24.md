@@ -2,7 +2,7 @@
 title: Ubuntu's stock kernel console and serial-getty hold the RPLIDAR C1's UART on a Raspberry Pi 5
 date: 2026-09-24
 category: runtime-errors
-module: deploy/robot/configure-uart-pi5.sh (LiDAR driver, Pi 5, Pinky Pro real device rosy-pinky-e4us)
+module: deploy/robot/pinky_pro/configure-uart-pi5.sh (LiDAR driver, Pi 5, Pinky Pro real device rosy-pinky-e4us)
 problem_type: runtime_error
 component: development_workflow
 symptoms:
@@ -45,9 +45,9 @@ cleared the port.
 
 ## Solution
 
-`deploy/robot/configure-uart-pi5.sh` isolates every UART bus the robot uses — LiDAR (`ttyAMA0`) and
+`deploy/robot/pinky_pro/configure-uart-pi5.sh` isolates every UART bus the robot uses — LiDAR (`ttyAMA0`) and
 motor (`ttyAMA4`) — from both the kernel console and any serial getty, on both a running device and
-a mounted image being baked (`--image-root`, used from `deploy/image/customize-rootfs.sh`, D-192):
+a mounted image being baked (`--image-root`, used from `deploy/robot/pinky_pro/image/customize-rootfs.sh`, D-192):
 
 ```bash
 # Ubuntu's raspi cmdline.txt ships console=serial0,115200. With enable_uart=1

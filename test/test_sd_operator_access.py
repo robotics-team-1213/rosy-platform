@@ -20,7 +20,7 @@ import sys
 import pytest
 from jsonschema import Draft202012Validator
 
-from deploy.sd.personalization import (
+from deploy.robot.pinky_pro.sd.personalization import (
     DeviceIdentity,
     create_provision_bundle,
     create_provision_receipt,
@@ -29,7 +29,7 @@ from deploy.sd.personalization import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = json.loads((ROOT / "deploy/sd/provision.schema.json").read_text(encoding="utf-8"))
+SCHEMA = json.loads((ROOT / "deploy/robot/pinky_pro/sd/provision.schema.json").read_text(encoding="utf-8"))
 
 # D-191: every bundle carries the card's CORE API record. Keys are assembled
 # at runtime so the tracked-file secret scanner sees no literal.
@@ -119,7 +119,7 @@ def test_at_most_eight_operator_keys():
 
 
 def _first_boot():
-    path = ROOT / "deploy/image/first-boot/rosy-first-boot.py"
+    path = ROOT / "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py"
     spec = importlib.util.spec_from_file_location("rosy_first_boot_operator", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -229,7 +229,7 @@ def test_a_pre_existing_account_with_another_home_is_not_silently_used(tmp_path,
 @pytest.mark.parametrize("operator", [7, {"ssh_authorized_keys": [["nested"]]}, {"ssh_authorized_keys": "one"}])
 def test_malformed_operator_sections_are_rejected_not_crashed(operator):
     # Review L4: a TypeError escaped the validator and crashed first boot.
-    from deploy.sd.personalization import validate_provision_bundle, _checksum
+    from deploy.robot.pinky_pro.sd.personalization import validate_provision_bundle, _checksum
 
     bundle = _bundle()
     bundle["operator"] = operator

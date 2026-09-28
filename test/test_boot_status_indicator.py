@@ -13,7 +13,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 FAILED_CARD_UNITS = {
     "rosy-release-recover.service": "failed\n",
     "rosy-first-boot.service": "active\n",
@@ -173,7 +173,7 @@ def test_main_never_fails_the_boot(tmp_path, monkeypatch):
              "rosy-sd-provision.service", "rosy-core.service"],
 )
 def test_boot_units_refresh_the_indicator_when_they_fail(unit):
-    source = (ROOT / ("deploy/image/first-boot" if unit == "rosy-first-boot.service" else "deploy/robot/native")
+    source = (ROOT / ("deploy/robot/pinky_pro/image/first-boot" if unit == "rosy-first-boot.service" else "deploy/robot/pinky_pro/native")
               / unit).read_text(encoding="utf-8")
 
     assert "OnFailure=rosy-boot-status.service" in source
@@ -193,8 +193,8 @@ def test_indicator_units_are_outside_core_and_never_gate_the_runtime():
 
 
 def test_image_installs_and_enables_the_indicator():
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
-    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/robot/pinky_pro/image/customize-rootfs.sh").read_text(encoding="utf-8")
 
     assert 'rosy-boot-status.service" "$OVERLAY/etc/systemd/system/' in payload
     assert 'rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/' in payload
@@ -315,9 +315,9 @@ def test_the_runtime_target_does_not_pull_the_ready_run_in():
 
 
 def test_image_installs_and_enables_the_ready_run():
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
-    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
-    verifier = (ROOT / "deploy/image/verify-mounted-image.py").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/robot/pinky_pro/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    verifier = (ROOT / "deploy/robot/pinky_pro/image/verify-mounted-image.py").read_text(encoding="utf-8")
 
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status-ready.service" "$OVERLAY/etc/systemd/system/"' in payload
     enable = customizer.split("systemctl --root")[1].split("\n\n")[0]

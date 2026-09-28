@@ -21,12 +21,12 @@ import pytest
 
 ROOT =Path(__file__).resolve().parents[1]
 
-RULE = ROOT / "deploy" / "robot" / "udev" / "99-rosy-motor.rules"
-UART_SCRIPT = ROOT / "deploy" / "robot" / "configure-uart-pi5.sh"
-PAYLOAD = ROOT / "deploy" / "image" / "build-native-payload.sh"
-IO_UNIT = ROOT / "deploy" / "robot" / "native" / "rosy-io.service"
-NAV_UNIT = ROOT / "deploy" / "robot" / "native" / "rosy-navigation.service"
-VERIFY_MOTORS = ROOT / "deploy" / "robot" / "verify" / "verify-motors.sh"
+RULE = ROOT / "deploy" / "robot" / "pinky_pro" / "udev" / "99-rosy-motor.rules"
+UART_SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "configure-uart-pi5.sh"
+PAYLOAD = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-native-payload.sh"
+IO_UNIT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-io.service"
+NAV_UNIT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-navigation.service"
+VERIFY_MOTORS = ROOT / "deploy" / "robot" / "pinky_pro" / "verify" / "verify-motors.sh"
 
 
 def test_rule_creates_stable_alias():
@@ -71,8 +71,8 @@ def test_native_units_and_probe_agree_on_the_alias():
 # config.txt had no dtoverlay=uart4-pi5; the rule was in the image, the
 # overlay only in this retrofit script, which the image never ran.
 
-CUSTOMIZER = ROOT / "deploy" / "image" / "customize-rootfs.sh"
-VERIFIER = ROOT / "deploy" / "image" / "verify-mounted-image.py"
+CUSTOMIZER = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "customize-rootfs.sh"
+VERIFIER = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "verify-mounted-image.py"
 BASH = shutil.which("bash")
 # The Ubuntu 24.04 raspi config.txt shape: sections, includes, comments.
 UBUNTU_CONFIG = (
@@ -301,7 +301,7 @@ def test_console_isolation_runs_before_the_idempotent_exit():
 
 
 def test_the_device_verifier_reports_a_console_on_the_lidar_uart():
-    verify_pi = (ROOT / "deploy" / "robot" / "verify" / "verify-pi.sh").read_text(encoding="utf-8")
+    verify_pi = (ROOT / "deploy" / "robot" / "pinky_pro" / "verify" / "verify-pi.sh").read_text(encoding="utf-8")
     assert "/proc/cmdline" in verify_pi
     assert "console=(serial0|ttyAMA0|ttyAMA4)(,|$)" in verify_pi
     assert "for tty in ttyAMA0 ttyAMA4; do" in verify_pi

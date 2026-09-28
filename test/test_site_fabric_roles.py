@@ -10,7 +10,7 @@ _BROKER_TOKENS = (
 def test_robot_compose_has_no_site_broker_service():
     services = compose()["services"]
     assert set(services) == {"rosy-core", "rosy-motor", "rosy-io"}
-    blob = (ROOT / "deploy" / "robot" / "compose.yaml").read_text(encoding="utf-8").lower()
+    blob = (ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml").read_text(encoding="utf-8").lower()
     for token in _BROKER_TOKENS:
         assert token not in blob, token
 

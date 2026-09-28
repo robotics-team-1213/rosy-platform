@@ -2,7 +2,7 @@
 title: 새 패키지는 전체 시험에서만 켜지는 저장소 가드 네 개를 통과해야 한다 — 모듈 시험 초록은 머지 준비가 아니다
 date: 2026-09-26
 category: workflow-issues
-module: src/site/overhead (D-261) 머지 — test/architecture, test/test_module_scorecard.py, deploy/release/secret_scan.py, pytest 수집
+module: src/site/overhead (D-261) 머지 — test/architecture, test/test_module_scorecard.py, deploy/robot/pinky_pro/release/secret_scan.py, pytest 수집
 problem_type: workflow_issue
 component: development_workflow
 severity: medium
@@ -50,7 +50,7 @@ tags: [new-package, repo-guards, target-layout, d-231, scorecard, d-178, secret-
    `test_module_scorecard.py`가 작업 공간 패키지 집합과 표를 **집합 동일성**으로 비교하고,
    총점(`Σ 점수×가중치 ÷ 5`)과 등급 구간·컷 게이트도 다시 계산한다. 다른 신규 패키지처럼
    비고에 "잠정 채점(날짜)"을 적고, 표 아래 문단에 한 문장을 덧붙인다.
-4. **비밀값 검사 오탐은 값이 있는 곳에서 고친다 (D-256).** `deploy/release/secret_scan.py`의
+4. **비밀값 검사 오탐은 값이 있는 곳에서 고친다 (D-256).** `deploy/robot/pinky_pro/release/secret_scan.py`의
    `_BARE_TOKEN`은 40자 이상 hex 또는 50자 이상 영숫자(+`/`)를 잡는다. 걸린 것은 프로토콜 헤더
    시험 벡터(`"hex": "524f4631000000..."`)와 50자가 넘는 Kotlin 시험 함수 이름 두 개였다.
    스캐너 허용목록을 넓히지 않고:

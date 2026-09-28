@@ -29,7 +29,7 @@ plans:
 ---
 
 OMX-AI is the chosen fixed-workbench target. It is not enabled. The official
-source revisions are locked in `deploy/omx/stack.lock.yaml`; leader/follower
+source revisions are locked in `deploy/robot/omx/stack.lock.yaml`; leader/follower
 ports, measured joints, plugin configuration, and camera selection remain
 unset. The OMX-AI workstation image is planned separately from the Pinky Pro
 ARM64 product image.

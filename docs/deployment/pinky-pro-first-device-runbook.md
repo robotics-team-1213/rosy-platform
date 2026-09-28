@@ -34,7 +34,7 @@ REVISION="$(git rev-parse HEAD)"
 # such as ros:jazzy-ros-base is refused.
 ROS_IMAGE='ros:jazzy-ros-base@sha256:<64-hex-registry-digest>'
 PAYLOAD="/var/tmp/rosy-${RELEASE_ID}-unsigned"
-python3 deploy/release/arm64_release_builder.py \
+python3 deploy/robot/pinky_pro/release/arm64_release_builder.py \
   --repo-root "$PWD" --output "$PAYLOAD" --release-id "$RELEASE_ID" \
   --signing-key-id "$SIGNING_KEY_ID" --ros-image "$ROS_IMAGE" \
   | tee "/var/tmp/${RELEASE_ID}-unsigned-payload-build.json"
@@ -59,7 +59,7 @@ gh run download RUN_ID --name "rosy-unsigned-${RELEASE_ID}-${REVISION}"
 ARCHIVE="rosy-unsigned-${RELEASE_ID}-${REVISION}.tar.zst"
 CHECKSUM="${ARCHIVE}.sha256"
 HANDOFF="/trusted/rosy-unsigned-${RELEASE_ID}-${REVISION}"
-python3 deploy/release/import_unsigned_payload.py "$ARCHIVE" \
+python3 deploy/robot/pinky_pro/release/import_unsigned_payload.py "$ARCHIVE" \
   --checksum "$CHECKSUM" --output "$HANDOFF" \
   --release-id "$RELEASE_ID" --git-revision "$REVISION" \
   --signing-key-id "$SIGNING_KEY_ID" \
@@ -79,9 +79,9 @@ set -euo pipefail
 PUBLIC_KEY="/secure/${SIGNING_KEY_ID}.pem"
 PRIVATE_KEY="/secure/${SIGNING_KEY_ID}.key"
 BUNDLE="/trusted/rosy-release-${RELEASE_ID}.tar.zst"
-python3 deploy/release/package_release.py "$PAYLOAD" "$BUNDLE" \
+python3 deploy/robot/pinky_pro/release/package_release.py "$PAYLOAD" "$BUNDLE" \
   --public-key "$PUBLIC_KEY" --private-key "$PRIVATE_KEY"
-python3 deploy/release/publication.py verify-publication "$BUNDLE" \
+python3 deploy/robot/pinky_pro/release/publication.py verify-publication "$BUNDLE" \
   --release-id "$RELEASE_ID" --git-revision "$REVISION" \
   --public-key "$PUBLIC_KEY" --json \
   | tee "/trusted/${RELEASE_ID}-signed-bundle-verification.json"
@@ -113,7 +113,7 @@ mkdir -m 0750 "$EVIDENCE"
 
 ### 카드 쓰기 중 문제가 생겼을 때
 
-카드 쓰기(`deploy/sd/write-card.ps1`)는 실패하면 스스로 멈추고, 카드 상태와 다음 명령을 알린다(D-187).
+카드 쓰기(`deploy/robot/pinky_pro/sd/write-card.ps1`)는 실패하면 스스로 멈추고, 카드 상태와 다음 명령을 알린다(D-187).
 실패 문구 끝은 늘 이 형식이다.
 
 ```text
@@ -131,7 +131,7 @@ readback이 실패하면 verifier가 말한 이유(불일치 offset, 짧은 읽�
 띄운 콘솔이나 에이전트를 닫아도 쓰기는 계속된다.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\write-card.ps1 `
   -PlanPath <cards>\plan-<release>-<device>.json `
   -ReleaseDir <signed release dir> `
   -WifiProfile <profile> `
@@ -147,8 +147,8 @@ UAC 창에서 "아니요"를 눌렀거나 시간이 지났으면 launcher가 `fa
 **상태 보기.** 관리자 권한은 필요 없다. `Status:` 줄의 명령을 그대로 실행한다.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\card-write-status.ps1 -LogPath <log>
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\card-write-status.ps1 -LogPath <log> -Json   # 에이전트용
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\card-write-status.ps1 -LogPath <log>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\card-write-status.ps1 -LogPath <log> -Json   # 에이전트용
 ```
 
 ```text
@@ -206,7 +206,7 @@ readback 중에는 약 60초마다 `heartbeat` 줄에 지금까지 처리한 `by
 readback이 bundle 전에 멈추므로, 잘못 골라도 잃는 것은 readback 한 번이다.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\sd\write-card.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\write-card.ps1 `
   -PlanPath <cards>\plan-<release>-<device>.json `
   -ReleaseDir <signed release dir> `
   -WifiProfile <profile> `
@@ -265,7 +265,7 @@ From Windows, verify that the API and dashboard are reachable by another host:
 
 ```powershell
 $ConnectionEvidence = Join-Path $PWD "G0-connection-evidence.json"
-./deploy/robot/verify/verify-from-windows.ps1 `
+./deploy/robot/pinky_pro/verify/verify-from-windows.ps1 `
   -PiHost pinky-01.local -NetworkInterface eth0 `
   -BatchMode -ConnectTimeoutSec 5 -EvidencePath $ConnectionEvidence
 ```
@@ -286,7 +286,7 @@ does not change runtime mode or send motor commands.
 ```powershell
 $Revision = "<signed-manifest-full-40-character-git-revision>"
 $Evidence = Join-Path 'X:\DevTemp' ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
-./deploy/robot/verify/validate-pinky-from-windows.ps1 `
+./deploy/robot/pinky_pro/verify/validate-pinky-from-windows.ps1 `
   -PiHost pinky-01.local -PiUser rosy -NetworkInterface eth0 `
   -ExpectedRobotNumber 1 -ExpectedRevision $Revision `
   -CommandTimeoutSec 15 `
@@ -338,7 +338,7 @@ operator PC. Keep the old card as the previous device's archive. From the Rosy
 OS repository, run:
 
 ```powershell
-.\deploy\sd\setup-moved-device.ps1 -RobotAddress <robot-ip>
+.\deploy\robot\pinky_pro\sd\setup-moved-device.ps1 -RobotAddress <robot-ip>
 ```
 
 The assistant checks that the address shows the new-device setup page, then
@@ -499,7 +499,7 @@ the next write, delete the store file first. To rotate on a running robot,
 run from the PC that holds the store (D-193 5; robot LAN, no SSH):
 
 ```powershell
-deploy\sd\rotate-core-api-credential.ps1 -DeviceName rosy-pinky-xxxx
+deploy\robot\pinky_pro\sd\rotate-core-api-credential.ps1 -DeviceName rosy-pinky-xxxx
 # -BaseUrl http://<address>:8080 when mDNS does not resolve
 ```
 
@@ -637,7 +637,7 @@ Git revision, the target is Raspberry Pi 5 arm64 Raspberry Pi OS Lite, and both
 
 ```bash
 RELEASE_ID=YYYY.MM.DD-NNN
-COMMISSION=/trusted/verified-release/deploy/robot/commission-pinky.py
+COMMISSION=/trusted/verified-release/deploy/robot/pinky_pro/commission-pinky.py
 sudo rosy-release stage "/trusted/rosy-release-${RELEASE_ID}.tar.zst" --json \
   | tee "$EVIDENCE/G0-stage.json"
 sudo install -o "$USER" -g "$(id -gn)" -m 0640 \

@@ -2,7 +2,7 @@
 
 `fleet` 은 `core_common.protocol.schemas` 를 import 한다(D-18, D-126). 두 패키지 모두
 소스 트리에서 바로 찾도록 sys.path 를 잡는다 — 루트 `test/conftest.py` 가
-`deploy/release` 에 하는 것과 같은 방식이다.
+`deploy/robot/pinky_pro/release` 에 하는 것과 같은 방식이다.
 """
 
 from __future__ import annotations

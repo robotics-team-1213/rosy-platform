@@ -14,8 +14,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EVALUATOR = ROOT / "deploy" / "robot" / "pinky_validation.py"
-WINDOWS_VALIDATOR = ROOT / "deploy" / "robot" / "verify" / "validate-pinky-from-windows.ps1"
+EVALUATOR = ROOT / "deploy" / "robot" / "pinky_pro" / "pinky_validation.py"
+WINDOWS_VALIDATOR = ROOT / "deploy" / "robot" / "pinky_pro" / "verify" / "validate-pinky-from-windows.ps1"
 RUNBOOK = ROOT / "docs" / "deployment" / "pinky-pro-first-device-runbook.md"
 DESIGN = ROOT / "docs" / "plans" / "2026-09-21-pinky-user-validation-design.md"
 

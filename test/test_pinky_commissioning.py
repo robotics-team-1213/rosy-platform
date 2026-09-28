@@ -13,8 +13,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE = ROOT / 'deploy' / 'robot' / 'commissioning_session.py'
-CLI = ROOT / 'deploy' / 'robot' / 'commission-pinky.py'
+MODULE = ROOT / 'deploy' / 'robot' / 'pinky_pro' / 'commissioning_session.py'
+CLI = ROOT / 'deploy' / 'robot' / 'pinky_pro' / 'commission-pinky.py'
 
 SPEC = importlib.util.spec_from_file_location('commissioning_session', MODULE)
 assert SPEC and SPEC.loader
@@ -770,7 +770,7 @@ def test_cli_failure_does_not_mutate_session_or_accept_secrets(tmp_path):
 
 
 def test_installer_marks_commissioning_tools_executable():
-    installer = (ROOT / 'deploy' / 'robot' / 'install-pi.sh').read_text(
+    installer = (ROOT / 'deploy' / 'robot' / 'pinky_pro' / 'install-pi.sh').read_text(
         encoding='utf-8'
     )
 
@@ -813,7 +813,7 @@ def test_commissioning_runbook_is_linked_from_operator_indexes():
     for relative in (
         'docs/deployment/AGENTS.md',
         'docs/deployment/raspberry-pi-runtime.md',
-        'deploy/robot/AGENTS.md',
+        'deploy/robot/pinky_pro/AGENTS.md',
     ):
         assert expected in (ROOT / relative).read_text(encoding='utf-8'), relative
 

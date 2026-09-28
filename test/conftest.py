@@ -1,6 +1,6 @@
 """Make the release tooling importable from the contract tests.
 
-``deploy/release`` is shipped as scripts on the build host rather than as an
+``deploy/robot/pinky_pro/release`` is shipped as scripts on the build host rather than as an
 installed package, so it is not on ``sys.path``. Bootstrapping it here keeps
 the test modules free of import-order gymnastics.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 for path in (
-    ROOT / "deploy" / "release",
+    ROOT / "deploy" / "robot" / "pinky_pro" / "release",
     ROOT / "tools" / "harness",
     ROOT / "src" / "contracts" / "foundation",
     ROOT / "src" / "site" / "fleet",

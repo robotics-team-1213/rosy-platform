@@ -11,7 +11,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
 AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
 POLICY = {"mode": "fallback", "grace_seconds": 120, "hold_seconds": 600}

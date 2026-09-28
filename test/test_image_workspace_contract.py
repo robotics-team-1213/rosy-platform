@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE_DIR = ROOT / "deploy" / "image"
+IMAGE_DIR = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
 SCRIPT = IMAGE_DIR / "image-workspace.sh"
 BUILD_SCRIPT = IMAGE_DIR / "build-image.sh"
 

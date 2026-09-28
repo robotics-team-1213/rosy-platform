@@ -31,7 +31,7 @@ Pinky Pro robot composition (D-196). Config only: the HWA-001 profile and CAP-00
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - Change `profile.yaml` and `capabilities.yaml` together: the advertised navigation limits are the profile's (HWA-003). `docking.supported` is `false` for Pinky Pro — keep the capability checks.
-- The per-mode files the robot actually advertises, `deploy/robot/config/{profile,capabilities}.{core,motor,hardware}.yaml`, are still owned by deploy and mounted at `/etc/rosy/*.yaml`, which wins over this package. Moving them here is follow-up work.
+- The per-mode files the robot actually advertises, `deploy/robot/pinky_pro/config/{profile,capabilities}.{core,motor,hardware}.yaml`, are still owned by deploy and mounted at `/etc/rosy/*.yaml`, which wins over this package. Moving them here is follow-up work.
 - No code here. Do not add Python or launch logic until the D-196 P6 assembly step.
 
 ### Testing Requirements
@@ -45,7 +45,7 @@ python -m pytest src/runtime/gateway/test src/contracts/foundation/test -q   # C
 
 ### Internal
 
-- Read by `core` (`core_common.profile.robot_config_dir("pinky_pro")`); listed in `deploy/image/required-ros-packages.txt`
+- Read by `core` (`core_common.profile.robot_config_dir("pinky_pro")`); listed in `deploy/robot/pinky_pro/image/required-ros-packages.txt`
 
 ### External
 

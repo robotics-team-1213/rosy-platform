@@ -83,7 +83,7 @@ rssh 'sudo -n rosy-login-code --role administrator --minutes 10'   # prints "Log
 
 - `dtoverlay -r` without a name. It removes whichever overlay was loaded last (it once took out the LED overlay). Runtime `dtoverlay` does not work on the Ubuntu raspi kernel anyway — overlays go in `config.txt` plus a reboot.
 - Full I2C bus scans (`i2cdetect` on every address). A wedged bus costs ~1 s per address; read known addresses only (see rosy-hw-bringup).
-- Dev overlay (D-179, `deploy/robot/dev/`) of current `main` CORE onto an older release: after the D-241–D-243 moves it crash-loops CORE and takes the dashboard down. Build a release from `main` instead.
+- Dev overlay (D-179, `deploy/robot/pinky_pro/dev/`) of current `main` CORE onto an older release: after the D-241–D-243 moves it crash-loops CORE and takes the dashboard down. Build a release from `main` instead.
 - Password SSH, `pinky@`, `StrictHostKeyChecking=no`, or `sudo` without `-n`.
 - Writing `runtime.env`, `config.txt`, or restarting `rosy-io` without the task asking for it and a backup first (`sudo -n cp -a f f.bak-$(date +%s)`).
 

@@ -17,7 +17,7 @@ from navigation.profile_limits import (
 )
 
 
-PROFILE = ROOT / "deploy" / "robot" / "config" / "profile.hardware.yaml"
+PROFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.hardware.yaml"
 NAV2 = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
 
 
@@ -59,9 +59,9 @@ def test_deployed_motor_defaults_match_the_hardware_profile():
     limits = load_motion_limits(PROFILE)
     linear = f"{limits.max_linear_mps:.2f}"
     angular = f"{limits.max_angular_rps:.2f}"
-    compose = (ROOT / "deploy" / "robot" / "compose.yaml").read_text(encoding="utf-8")
-    env = (ROOT / "deploy" / "robot" / ".env.example").read_text(encoding="utf-8")
-    installer = (ROOT / "deploy" / "robot" / "install-pi.sh").read_text(encoding="utf-8")
+    compose = (ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml").read_text(encoding="utf-8")
+    env = (ROOT / "deploy" / "robot" / "pinky_pro" / ".env.example").read_text(encoding="utf-8")
+    installer = (ROOT / "deploy" / "robot" / "pinky_pro" / "install-pi.sh").read_text(encoding="utf-8")
     assert f"ROSY_MAX_LINEAR_MPS:-{linear}" in compose
     assert f"ROSY_MAX_ANGULAR_RPS:-{angular}" in compose
     assert f"ROSY_MAX_LINEAR_MPS={linear}" in env
@@ -74,8 +74,8 @@ def test_pinky_profile_files_share_the_hardware_motion_ceilings():
     limits = load_motion_limits(PROFILE)
     paths = (
         ROOT / "src" / "products" / "pinky_pro" / "profile" / "config" / "profile.yaml",
-        ROOT / "deploy" / "robot" / "config" / "profile.core.yaml",
-        ROOT / "deploy" / "robot" / "config" / "profile.motor.yaml",
+        ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.core.yaml",
+        ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.motor.yaml",
         ROOT / "src" / "contracts" / "foundation" / "config" / "rosy_default.yaml",
     )
     for path in paths:

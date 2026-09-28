@@ -224,7 +224,7 @@ value for the exact motor model and load.
 
 > The commands below drive `docker compose`. They are the bench/CI path
 > (D-197 1·4항: development and CI only). On a product robot the equivalent is
-> `systemctl start rosy-runtime.target` with `deploy/robot/native/` units — no
+> `systemctl start rosy-runtime.target` with `deploy/robot/pinky_pro/native/` units — no
 > Docker daemon, no compose.
 
 Keep `ROSY_RUNTIME_MODE=core` until the UART read-only preflight passes. It

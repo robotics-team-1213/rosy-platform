@@ -3,7 +3,7 @@
 - **Document ID:** ROSY-DEPLOY-SIGNKEY-001
 - **Status:** v1
 - **Related:** `docs/plans/2026-09-01-rosy-os-v1-image-release-design.md` §7.4/§9.1,
-  `deploy/release/signing.py`
+  `deploy/robot/pinky_pro/release/signing.py`
 
 ## 1. 이 키가 무엇을 결정하는가
 
@@ -45,7 +45,7 @@ openssl pkey -in rosy-release-2026-01.key -pubout -out rosy-release-2026-01.pem
   공개키 예외를 두면 개인키가 섞여 들어와도 알아채지 못한다.
 - key id(`rosy-release-2026-01`)는 manifest의 `signing_key_id`와 장비의
   `/etc/rosy/trusted-release-keys/` 파일명에 함께 쓰인다. 소문자·숫자·하이픈만
-  허용된다(`deploy/release/manifest.py`의 `_KEY_ID`).
+  허용된다(`deploy/robot/pinky_pro/release/manifest.py`의 `_KEY_ID`).
 
 ## 4. 보관
 
@@ -91,8 +91,8 @@ v1의 온라인 키 rotation은 비범위다. 교체 경로는 하나뿐이다.
 ## 7. 릴리스 서명 절차
 
 > **2026-09-22 갱신:** 예고됐던 `sign_release.py` 대신
-> `deploy/release/package_release.py`(오프라인 서명+번들)와
-> `deploy/release/publication.py`(발행 검증)가 구현돼 있다. 아래는 실제로
+> `deploy/robot/pinky_pro/release/package_release.py`(오프라인 서명+번들)와
+> `deploy/robot/pinky_pro/release/publication.py`(발행 검증)가 구현돼 있다. 아래는 실제로
 > 존재하는 인터페이스다.
 
 전제: D-145 네이티브 빌더의 unsigned payload를 D-146 importer가 검증해
@@ -102,10 +102,10 @@ v1의 온라인 키 rotation은 비범위다. 교체 경로는 하나뿐이다.
 
 ### 7.0 키가 아직 없다
 
-`deploy/release/public-keys/`는 비어 있다(README: "No production key exists
+`deploy/robot/pinky_pro/release/public-keys/`는 비어 있다(README: "No production key exists
 yet"). 가장 먼저 §3대로 **서명 전용 환경에서** 키를 생성하고 §5대로 백업한다.
 개발 PC·CI·로봇에서 키를 만들지 않는다. 키 소유권이 정해지면 공개키만
-`deploy/release/public-keys/rosy-release-2026-01.pem`으로 커밋하고, GitHub
+`deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem`으로 커밋하고, GitHub
 `release` 환경의 `ROSY_RELEASE_KEY_ID`에 같은 key id를 승인 필수로 등록한다.
 
 ### 7.1 서명 환경(오프라인)에서 — package_release
@@ -116,7 +116,7 @@ yet"). 가장 먼저 §3대로 **서명 전용 환경에서** 키를 생성하�
 sha256sum rosy-unsigned-payload.tar.zst > import-checksum.txt
 
 # 2) 서명 + 번들 (개인키는 payload 디렉터리 밖 — 스크립트가 경계를 강제한다)
-python3 deploy/release/package_release.py \
+python3 deploy/robot/pinky_pro/release/package_release.py \
     2026.09.21-001/rosy-unsigned-payload \
     dist/rosy-release-2026.09.21-001.tar.zst \
     --public-key rosy-release-2026-01.pem \
@@ -133,11 +133,11 @@ python3 deploy/release/package_release.py \
 서명된 번들을 저장소 소유자에게 가져오면, 개인키 없이 검증한다:
 
 ```bash
-python3 deploy/release/publication.py verify-publication \
+python3 deploy/robot/pinky_pro/release/publication.py verify-publication \
     dist/rosy-release-2026.09.21-001.tar.zst \
     --release-id 2026.09.21-001 \
     --git-revision 397bb25de9d92e659ab68658a46f275203d52659 \
-    --public-key deploy/release/public-keys/rosy-release-2026-01.pem \
+    --public-key deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem \
     --json
 # {"ok": true, "signed": true, "physical_acceptance": "HOLD", ...}
 ```

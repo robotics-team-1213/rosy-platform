@@ -14,8 +14,8 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
-sys.path.insert(0, str(ROOT / "deploy" / "release"))
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
+sys.path.insert(0, str(ROOT / "deploy" / "robot" / "pinky_pro" / "release"))
 from secret_scan import scan_text  # noqa: E402
 
 JOURNAL_TAIL = (

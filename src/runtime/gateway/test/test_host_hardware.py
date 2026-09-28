@@ -22,7 +22,7 @@ from core_api_web.api.v1 import host_hardware as host_api
 VIEWER_TOKEN = "viewer-token"
 OPERATOR_TOKEN = "operator-token"
 ADMIN_TOKEN = "admin-token"
-PROBE = Path(__file__).resolve().parents[4] / "deploy/robot/native/rosy-hw-probe.py"
+PROBE = Path(__file__).resolve().parents[4] / "deploy/robot/pinky_pro/native/rosy-hw-probe.py"
 POSIX = pytest.mark.skipif(os.name != "posix", reason="symlinks and FIFOs")
 
 
@@ -293,7 +293,7 @@ def test_the_api_runs_no_subprocess_for_hardware():
 
 # --- D-247 6: buzzer / lamp test and the person's answer ----------------------------
 
-HW_TEST = Path(__file__).resolve().parents[4] / "deploy/robot/native/rosy-hw-test.py"
+HW_TEST = Path(__file__).resolve().parents[4] / "deploy/robot/pinky_pro/native/rosy-hw-test.py"
 
 
 def _human_rows(tmp_path: Path, buzzer="needs_human", lamp="needs_human") -> None:

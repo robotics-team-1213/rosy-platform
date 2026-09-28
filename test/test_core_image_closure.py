@@ -10,8 +10,8 @@ import pytest
 from robot_contracts import ROOT
 
 
-DOCKERFILE = ROOT / "deploy" / "robot" / "Dockerfile"
-PROBE = ROOT / "deploy" / "robot" / "probe-core-image.py"
+DOCKERFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile"
+PROBE = ROOT / "deploy" / "robot" / "pinky_pro" / "probe-core-image.py"
 EXPECTED_PACKAGES = {
     "core",
     "core_api_web",
@@ -87,7 +87,7 @@ def test_core_build_copies_its_declared_package_closure():
 
 def test_core_build_probes_imports_and_installed_web_assets(tmp_path):
     final = _core_final_section()
-    assert "COPY deploy/robot/probe-core-image.py /tmp/probe-core-image.py" in final
+    assert "COPY deploy/robot/pinky_pro/probe-core-image.py /tmp/probe-core-image.py" in final
     assert "python3 /tmp/probe-core-image.py" in final
 
     verify_assets = runpy.run_path(str(PROBE))["verify_assets"]

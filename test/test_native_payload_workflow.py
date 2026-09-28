@@ -46,14 +46,14 @@ def test_no_secrets_and_no_signing_in_ci():
 def test_builds_payload_only_then_assembles_unsigned_release():
     text = _run_text()
 
-    assert "deploy/image/build-native-payload.sh" in text
+    assert "deploy/robot/pinky_pro/image/build-native-payload.sh" in text
     assert "build-image.sh" not in text
     assert "--source-revision \"$GITHUB_SHA\"" in text
     assert "--lock \"$RESOLVED_LOCK\"" in text
-    assert "deploy/image/resolve-build-lock.py" in text
+    assert "deploy/robot/pinky_pro/image/resolve-build-lock.py" in text
     assert "install-pinky-hardware-deps.sh --lock \"$RESOLVED_LOCK\"" in text
-    assert "deploy/release/build_payload_release.py build" in text
-    assert "deploy/release/build_payload_release.py pack" in text and "--allow-unsigned" in text
+    assert "deploy/robot/pinky_pro/release/build_payload_release.py build" in text
+    assert "deploy/robot/pinky_pro/release/build_payload_release.py pack" in text and "--allow-unsigned" in text
     assert "test ! -e \"$release/SHA256SUMS.sig\"" in text
     assert "sha256sum --check" in text
 
@@ -79,10 +79,10 @@ def test_uploads_unsigned_artifact_named_by_release_and_sha():
 def test_payload_records_the_ros_debs_it_was_built_against():
     # D-225 review: the payload builds against the runner's current ROS debs,
     # not the image's; ros-packages.txt lets the operator diff the two.
-    script = (ROOT / "deploy" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
+    script = (ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-native-payload.sh").read_text(encoding="utf-8")
     deb = script.index('mv -f -- "$DEB_INVENTORY.tmp" "$DEB_INVENTORY"')
     ros = script.index("awk -F'\\t' '$1 ~ /^ros-jazzy-/ { print $1 \"=\" $2 }' \"$DEB_INVENTORY\"")
     assert deb < ros
     assert '"$RELEASE_ROOT/ros-packages.txt"' in script
-    notes = (ROOT / "deploy" / "release" / "AGENTS.md").read_text(encoding="utf-8")
+    notes = (ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "AGENTS.md").read_text(encoding="utf-8")
     assert "ros-packages.txt" in notes and "deb-packages.txt" in notes

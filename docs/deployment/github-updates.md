@@ -14,11 +14,11 @@ Host Agent 소켓/대시보드에서 이 CLI를 호출하는 경로도 이번 �
 
 ## 릴리스 제작과 공개 준비
 
-1. 선택한 커밋에서 ARM64 `deploy/robot/Dockerfile`의 `core`, `io` 대상을 빌드하고 별도 검증한다.
+1. 선택한 커밋에서 ARM64 `deploy/robot/pinky_pro/Dockerfile`의 `core`, `io` 대상을 빌드하고 별도 검증한다.
 2. 비밀값 없는 `runtime/compose.yaml`과 해당 compose가 참조하는 `runtime/config/`를 준비한다.
    두 이미지의 `docker image save` 결과를 `images/rosy-core.oci.tar`, `images/rosy-io.oci.tar`에 둔다.
    파일명은 기존 계약을 따르지만 로더 입력은 Docker save/load 형식이다.
-3. `deploy/release/manifest.schema.json`에 따라 `manifest.json`을 작성한다.
+3. `deploy/robot/pinky_pro/release/manifest.schema.json`에 따라 `manifest.json`을 작성한다.
    `containers` 값은 로컬 Docker 이미지의 `docker image inspect --format '{{.Id}}'` 결과다.
    레지스트리의 멀티플랫폼 manifest digest와 혼용하지 않는다. 실제 ARM64/Linux인지 로더도 검사한다.
    `files`는 manifest와 서명 메타데이터를 제외한 모든 payload 경로와 SHA-256이다.
@@ -27,12 +27,12 @@ Host Agent 소켓/대시보드에서 이 CLI를 호출하는 경로도 이번 �
    개인키는 payload 밖에 유지한다. 공개키 파일명은 `<signing_key_id>.pem`이다.
 
 ```bash
-python3 deploy/release/package_release.py payload rosy-release-2026.09.08-001.tar.zst \
+python3 deploy/robot/pinky_pro/release/package_release.py payload rosy-release-2026.09.08-001.tar.zst \
   --public-key /secure/rosy-release-1.pem --private-key /secure/rosy-release-1.key
 ```
 
 저장소 공개를 결정한 뒤에만 `OWNER/rosy`를 실제 소유자로 바꾸고, 공개키만
-`deploy/release/public-keys/`에 커밋한다. GitHub의 `ROSY_RELEASE_KEY_ID` 변수와
+`deploy/robot/pinky_pro/release/public-keys/`에 커밋한다. GitHub의 `ROSY_RELEASE_KEY_ID` 변수와
 `release` 환경을 설정한다. 승인된 커밋을 가리키는 `YYYY.MM.DD-NNN` 태그의 draft release에
 외부에서 만든 서명 번들을 업로드한 다음 `publish-release.yml`을 수동 실행한다.
 워크플로는 서명·태그·커밋 일치를 확인한 뒤 공개한다. ARM64 빌드나 실기기 검증을 대신하지 않는다.
@@ -46,7 +46,7 @@ python3 deploy/release/package_release.py payload rosy-release-2026.09.08-001.ta
 기존 설정 `/etc/rosy/rosy.yaml`과 데이터 `/var/lib/rosy`를 먼저 확인한다.
 
 ```bash
-sudo bash deploy/robot/install-update-tools.sh
+sudo bash deploy/robot/pinky_pro/install-update-tools.sh
 sudo install -m 0644 /trusted/rosy-release-1.pem /etc/rosy/trusted-release-keys/rosy-release-1.pem
 ```
 
@@ -80,7 +80,7 @@ sudo rosy-release status --json
 이후 자동 확인을 원할 때 타이머를 별도로 활성화한다.
 
 ```bash
-sudo bash deploy/robot/install-update-tools.sh --activate-boot
+sudo bash deploy/robot/pinky_pro/install-update-tools.sh --activate-boot
 sudo systemctl enable --now rosy-update-check.timer
 ```
 

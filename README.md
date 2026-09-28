@@ -45,7 +45,7 @@ ROS package.xml은 colcon 패키지 경계다. 둘 다 실행 프로세스·호�
 | 현장 서버 기능인가? | 중앙 현장 서비스는 `src/site/<service>`에 둔다. Fleet은 작업 원장을 소유하고 장치 actuator를 쓰지 않는다. | `site/fleet`, `site/overhead` |
 | 사용자 표시 자산인가? | 화면 자산은 `src/hmi/<surface>`에 둔다. 실제 제공 프로세스와 호스트는 서버·배포 정의에서 확인한다. | CORE가 제공하는 `hmi/dashboard`, Fleet이 제공하는 `site/fleet` console |
 | 드라이버·시뮬레이션인가? | 칩 수준 코드는 `src/drivers`, ROS/Gazebo 모델과 world는 `src/sim`에 둔다. | `drivers/imu_bno055`, `sim/description`, `sim/gz_sim` |
-| 어디서 설치·실행되는가? | 호스트별 설치·이미지·릴리스 closure는 `deploy/`에서 정의하고 package manifest와 빌드 규칙으로 검증한다. | `deploy/robot`, `deploy/site`, `deploy/image`, `deploy/release` |
+| 어디서 설치·실행되는가? | 호스트별 설치·이미지·릴리스 closure는 `deploy/`에서 정의하고 package manifest와 빌드 규칙으로 검증한다. | `deploy/robot/pinky_pro`, `deploy/site`, `deploy/robot/pinky_pro/image`, `deploy/robot/pinky_pro/release` |
 
 기기 명령 해석은 그 기기의 로컬 최종 명령 소유자에서 수행한다. Pinky는 CORE가
 외부 API intent를 Pinky 주행 동작으로 해석하고 최종 `cmd_vel`을 발행한다.
@@ -145,7 +145,7 @@ arm64 위의 ROS 2 Jazzy + systemd다 (D-161). `rosy-runtime.target`이 CORE를 
 운용에 사용한다.
 
 ```bash
-cd deploy/robot
+cd deploy/robot/pinky_pro
 sudo ROSY_ROBOT_NUMBER=1 bash ./install-pi.sh
 # 신원은 로봇 번호 하나에서 나온다 (ADR D-33). Device installer가 .env를
 # 관리하고 두 값을 함께 유도하므로 수동으로 identity를 덮어쓰지 않는다.

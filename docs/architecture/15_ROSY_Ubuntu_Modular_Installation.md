@@ -298,7 +298,7 @@ The product runtime is native systemd. This is not a per-device choice.
   still passes with the container runtime absent, and it is not a required item
   of the product release payload.
 - Per-device difference is expressed with profiles and slices
-  (`rosy-profile-*`, `deploy/robot/config/board.yaml`), never by switching one
+  (`rosy-profile-*`, `deploy/robot/pinky_pro/config/board.yaml`), never by switching one
   robot between two runtime mechanisms.
 
 Do not containerize low-level hardware control merely for consistency.

@@ -13,12 +13,12 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "deploy" / "release"))
+sys.path.insert(0, str(ROOT / "deploy" / "robot" / "pinky_pro" / "release"))
 from secret_scan import scan_text  # noqa: E402
 
 
 def _module():
-    path = ROOT / "deploy/robot/native/rosy_diag_redact.py"
+    path = ROOT / "deploy/robot/pinky_pro/native/rosy_diag_redact.py"
     spec = importlib.util.spec_from_file_location("rosy_diag_redact", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module

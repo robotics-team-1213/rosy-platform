@@ -25,7 +25,7 @@ None.
 ### Working In This Directory
 
 - Schema source of truth for Python is still `core_common.protocol.schemas` (D-18); this API ref is the human contract.
-- Host Agent: CORE client is `core_api_web.api.host_agent_client`; server is `deploy/release/host_agent.py`.
+- Host Agent: CORE client is `core_api_web.api.host_agent_client`; server is `deploy/robot/pinky_pro/release/host_agent.py`.
 - Important ADRs: D-1 single process, D-2 cmd_vel mux, D-3 FastAPI replaces Flask, D-8 in-process event bus, D-22 Core/IO split + deadman, D-23 embedded dashboard, D-24/D-25 power (STANDBY not hibernate), D-27 deep-battery halt exception, D-33 robot identity from one robot number (supersedes D-6), D-34 publish rates matched to the consumer, D-38 CORE owns final cmd_vel, D-59 site fabric is a per-role contract bus, D-60 swarm follow is not owned by navigation, D-65 concept objects on CORE+D-62, D-67–D-71 concept folder freeze, D-73 per-module functional test surface, D-74 TaskKind sinks to internal ROS, D-161 native product runtime, D-197 Docker exits the product chain, D-246 native is the default and the container sidecar lane is profile-declared and non-safety.
 
 ### Testing Requirements
@@ -42,7 +42,7 @@ API versioning is path-based (`/api/v1`). Additive schema changes bump protocol 
 
 - `src/contracts/foundation/core_common/protocol/schemas.py`
 - `src/runtime/api_web/core_api_web/api/`
-- `deploy/release/host_agent.py`
+- `deploy/robot/pinky_pro/release/host_agent.py`
 
 ### External
 

@@ -7,12 +7,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_robot_and_dev_envs_pin_cyclonedds():
     """D-117: FastDDS 이중 프로파일이 없다."""
-    compose = (ROOT / "deploy" / "robot" / "compose.yaml").read_text(encoding="utf-8")
+    compose = (ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml").read_text(encoding="utf-8")
     env_sh = (ROOT / "env.sh").read_text(encoding="utf-8")
     rosy_env = (
         ROOT / "src" / "products" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh"
     ).read_text(encoding="utf-8")
-    dockerfile = (ROOT / "deploy" / "robot" / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile").read_text(encoding="utf-8")
     assert "RMW_IMPLEMENTATION: rmw_cyclonedds_cpp" in compose
     assert "rmw_cyclonedds_cpp" in env_sh
     assert "rmw_cyclonedds_cpp" in rosy_env

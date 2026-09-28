@@ -376,7 +376,7 @@ def test_every_rejection_code_the_validator_can_emit_is_asserted_somewhere():
     """A code no test names is a rejection path no test exercises."""
     import re as _re
 
-    source = (ROOT / "deploy" / "release" / "manifest.py").read_text(encoding="utf-8")
+    source = (ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "manifest.py").read_text(encoding="utf-8")
     emitted = set(_re.findall(r'Rejection\(\s*"(MANIFEST_[A-Z_]+)"', source))
 
     tests = Path(__file__).read_text(encoding="utf-8")

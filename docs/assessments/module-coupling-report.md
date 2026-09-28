@@ -58,7 +58,7 @@
 ## 5. Launch / Deploy 결합
 
 - launch 포함 방향: `navigation/hardware → bringup`, `gz_multi → description/navigation/gz_sim`, `core launch → core` 단일, `control launch → control/slam_toolbox`. 패키지 경계를 넘나드는 포함은 `navigation→bringup`, `gz_sim→navigation/fleet` 2계열뿐.
-- `deploy/robot/compose.yaml`: `core/bringup/navigation` 3 서비스를 한 파일에서 렌더. `device_readback.py/install-pi.sh`는 `core` 참조, `verify-motors.sh`는 `bringup` 참조. 배포층이 3개 런타임 패키지에 fan-out하는 구조로, 런타임 패키지 간 직접 의존보다 느슨함. 적정.
+- `deploy/robot/pinky_pro/compose.yaml`: `core/bringup/navigation` 3 서비스를 한 파일에서 렌더. `device_readback.py/install-pi.sh`는 `core` 참조, `verify-motors.sh`는 `bringup` 참조. 배포층이 3개 런타임 패키지에 fan-out하는 구조로, 런타임 패키지 간 직접 의존보다 느슨함. 적정.
 
 ## 6. 결합도 등급
 

@@ -16,8 +16,8 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
-IMAGE = ROOT / "deploy/image"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
+IMAGE = ROOT / "deploy/robot/pinky_pro/image"
 UNIT = NATIVE / "rosy-boot-display.service"
 FOUNDATION = ROOT / "src/contracts/foundation"
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
@@ -336,7 +336,7 @@ def test_the_buzzer_never_takes_a_line_something_else_owns(pin):
 def test_the_buzzer_lines_are_exactly_the_board_s_free_lines():
     import yaml
 
-    display = yaml.safe_load((ROOT / "deploy/robot/config/board.yaml").read_text(
+    display = yaml.safe_load((ROOT / "deploy/robot/pinky_pro/config/board.yaml").read_text(
         encoding="utf-8"))["boot_display"]
     owners = set(display["header_bcm_owners"])
     allowed = set(display["buzzer"]["allowed_bcm_lines"])
@@ -815,7 +815,7 @@ def test_the_image_installs_the_display_user_packages_rule_and_probe():
 
 
 def test_the_udev_rule_opens_only_the_lcd_and_the_header_chip():
-    rules = [line for line in (ROOT / "deploy/robot/udev/99-rosy-display.rules").read_text(
+    rules = [line for line in (ROOT / "deploy/robot/pinky_pro/udev/99-rosy-display.rules").read_text(
         encoding="utf-8").splitlines() if line and not line.startswith("#")]
 
     assert rules == [
@@ -828,7 +828,7 @@ def test_the_udev_rule_opens_only_the_lcd_and_the_header_chip():
 def test_the_board_profile_matches_the_unit_and_no_capability_advertises_it():
     import yaml
 
-    board = yaml.safe_load((ROOT / "deploy/robot/config/board.yaml").read_text(encoding="utf-8"))
+    board = yaml.safe_load((ROOT / "deploy/robot/pinky_pro/config/board.yaml").read_text(encoding="utf-8"))
     display = board["boot_display"]
     declared = {display["lcd"]["spi"], display["lcd"]["gpiochip"], display["buzzer"]["gpiochip"],
                 display["battery_adc"]["bus"], display["lamp"]["node"]}
@@ -845,7 +845,7 @@ def test_the_board_profile_matches_the_unit_and_no_capability_advertises_it():
     # the true grant, not what the program chooses to do with it (security review M2)
     assert display["battery_adc"]["access"] == "rw-any-address"
     assert display["battery_adc"]["lock"] == "advisory-flock"
-    for caps in (ROOT / "deploy/robot/config").glob("capabilities.*.yaml"):
+    for caps in (ROOT / "deploy/robot/pinky_pro/config").glob("capabilities.*.yaml"):
         text = caps.read_text(encoding="utf-8").lower()
         for word in ("lcd", "buzzer", "display"):
             assert word not in text, (caps.name, word)

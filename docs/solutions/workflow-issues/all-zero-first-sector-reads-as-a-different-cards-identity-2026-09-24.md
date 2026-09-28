@@ -2,7 +2,7 @@
 title: An interrupted write zeroes sector 0, and Get-Disk reports that as a different card's identity every time
 date: 2026-09-24
 category: workflow-issues
-module: deploy/sd (prepare-rosy-sd.ps1, Pinky Pro release 2026.09.24-010)
+module: deploy/robot/pinky_pro/sd (prepare-rosy-sd.ps1, Pinky Pro release 2026.09.24-010)
 problem_type: logic_error
 component: development_workflow
 symptoms:

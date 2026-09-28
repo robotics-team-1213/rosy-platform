@@ -43,8 +43,8 @@ WP-1(릴리스 계약)과 WP-2(불변 layout·updater)는 하드웨어 없이 �
 ## 2. WP-6 착수 전에 검증할 미확인 가정
 
 아래는 설계가 전제하지만 **아직 아무도 확인하지 않은 것**이며,
-`deploy/image/inputs.lock.yaml`에 `verified: false`로 기록되어 있다.
-`deploy/image/verify-inputs.sh`가 이 값들이 남아 있는 한 빌드를 거부한다 —
+`deploy/robot/pinky_pro/image/inputs.lock.yaml`에 `verified: false`로 기록되어 있다.
+`deploy/robot/pinky_pro/image/verify-inputs.sh`가 이 값들이 남아 있는 한 빌드를 거부한다 —
 고정되지 않은 입력으로 만든 이미지는 provenance를 진술할 수 없고, 그것이
 설계 §7.2가 요구하는 유일한 것이다.
 
@@ -56,7 +56,7 @@ manifest의 `target.os_suite`부터 바뀐다.
 - [ ] **Raspberry Pi OS Lite arm64 `trixie`가 릴리스 대상으로 준비되어 있는가.**
       아니면 `bookworm`으로 후퇴하고 설계 §6/§7.1의 suite 표기를 함께 고친다.
 - [ ] **Docker apt 저장소(`download.docker.com/linux/debian`)에 trixie suite가
-      올라와 있는가.** 현재 `deploy/robot/install-pi.sh`가 이 경로를 쓴다.
+      올라와 있는가.** 현재 `deploy/robot/pinky_pro/install-pi.sh`가 이 경로를 쓴다.
       없으면 위와 같은 후퇴가 필요하다.
 - [ ] `ros:jazzy-ros-base`의 arm64 이미지 digest를 고정했는가.
 - [ ] 빌드 호스트의 Docker Engine / Compose plugin 정확한 버전을 lock에 기록했는가.
@@ -73,10 +73,10 @@ native ARM64 빌드 호스트에서:
       - `SHA256SUMS`, `SHA256SUMS.sig`
       - `sbom.spdx.json`
       - `release-notes.md`
-- [ ] `python3 deploy/release/manifest.py dist/<release-id>/manifest.json --json` 통과
+- [ ] `python3 deploy/robot/pinky_pro/release/manifest.py dist/<release-id>/manifest.json --json` 통과
 - [ ] 서명 환경에서 `SHA256SUMS`에 서명하고, 빌드 호스트에서
       `verify_release_files()`가 통과하는가
-- [ ] 이미지 안에 비밀이 없는가 — `deploy/release/secret_scan.py`의 matcher를
+- [ ] 이미지 안에 비밀이 없는가 — `deploy/robot/pinky_pro/release/secret_scan.py`의 matcher를
       마운트한 이미지 트리에 적용한다 (공통 비밀번호, API 토큰, Wi-Fi PSK, SSH 개인키)
 - [ ] 이미지에 release 공개키가 들어 있고 개인키는 없는가
 - [ ] 필수 systemd unit이 enable 되어 있고 순서가 맞는가 —
@@ -88,18 +88,18 @@ native ARM64 빌드 호스트에서:
 
 ### 3.1 자동화된 부분
 
-§3의 항목 중 상당수는 `deploy/image/verify-artifacts.sh`가 실행한다.
+§3의 항목 중 상당수는 `deploy/robot/pinky_pro/image/verify-artifacts.sh`가 실행한다.
 
 ```bash
 sudo losetup -Pf --show rosy-pi5-<release-id>.img   # 압축 해제 후
 sudo mount /dev/loopXp2 /mnt/rosy
-ROSY_IMAGE_MOUNT=/mnt/rosy ./deploy/image/verify-artifacts.sh dist/<release-id>
+ROSY_IMAGE_MOUNT=/mnt/rosy ./deploy/robot/pinky_pro/image/verify-artifacts.sh dist/<release-id>
 ```
 
 `ROSY_IMAGE_MOUNT` 없이 실행하면 **BUILD_GO를 보고하지 않고 실패한다.** 배포
 디렉터리만 검사하는 것은 §12.2가 요구하는 이미지 검사가 아니기 때문이다.
 
-`deploy/release/image_checks.py`가 검사하는 것 (전부 tmpdir 트리로 테스트되어
+`deploy/robot/pinky_pro/release/image_checks.py`가 검사하는 것 (전부 tmpdir 트리로 테스트되어
 있으며, 실기에서는 마운트된 실제 트리에 같은 코드가 돈다):
 
 - 필수 unit 존재와 **enable 여부** — 아무도 enable 하지 않은 unit을 넣는 것은
@@ -229,7 +229,7 @@ ROSY_IMAGE_MOUNT=/mnt/rosy ./deploy/image/verify-artifacts.sh dist/<release-id>
       실기에서 반드시 확인할 것)
 - [ ] 열 상승과 저장소 로그 증가를 기록했는가 (설계 §12.3 10단계)
 - [ ] UART·모터 승인은 별도 commissioning 절차로 남아 있는가
-      (`deploy/robot/verify/verify-motors.sh`, `docs/deployment/power-bench-verification.md`)
+      (`deploy/robot/pinky_pro/verify/verify-motors.sh`, `docs/deployment/power-bench-verification.md`)
 
 모터를 돌리는 순간부터는 이 문서가 아니라 현장 안전 절차의 영역이다.
 

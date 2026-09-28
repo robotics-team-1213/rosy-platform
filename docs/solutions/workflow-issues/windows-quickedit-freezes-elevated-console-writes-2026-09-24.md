@@ -2,7 +2,7 @@
 title: Windows console QuickEdit freezes an elevated rpi-imager write with no error, and explains an old "hang" too
 date: 2026-09-24
 category: workflow-issues
-module: deploy/sd (write-card.ps1, Pinky Pro release 2026.09.24-010)
+module: deploy/robot/pinky_pro/sd (write-card.ps1, Pinky Pro release 2026.09.24-010)
 problem_type: runtime_error
 component: development_workflow
 symptoms:
@@ -42,7 +42,7 @@ sampled twice, per the existing liveness check) caught it and killed the process
 
 ## Solution
 
-`deploy/sd/write-card.ps1` disables QuickEdit on the console's input handle before starting the
+`deploy/robot/pinky_pro/sd/write-card.ps1` disables QuickEdit on the console's input handle before starting the
 transcript, via `SetConsoleMode`:
 
 ```powershell

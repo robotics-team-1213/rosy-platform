@@ -3,7 +3,7 @@
 - **Document ID:** ROSY-DEPLOY-RETENTION-001
 - **Status:** v1
 - **Related:** `docs/plans/2026-09-01-rosy-os-v1-image-release-design.md` §5/§9,
-  `deploy/release/layout.py`, `deploy/release/updater.py`
+  `deploy/robot/pinky_pro/release/layout.py`, `deploy/robot/pinky_pro/release/updater.py`
 
 ## 1. 왜 예산이 필요한가
 
@@ -40,7 +40,7 @@ staging 할 공간이 없으면 업데이트가 시작조차 못 하고, 이전 
 실제 릴리스 OCI 압축 크기와 보존 정책을 측정한 뒤에만 허용한다. 64 GB면
 §5의 업데이트 진입 조건을 여유 있게 만족한다.
 
-숫자 중 컨테이너 이미지 크기는 현재 `deploy/robot/Dockerfile`의 `ros:jazzy-ros-base`
+숫자 중 컨테이너 이미지 크기는 현재 `deploy/robot/pinky_pro/Dockerfile`의 `ros:jazzy-ros-base`
 기반 추정이며, WP-6에서 실제 이미지를 빌드한 뒤 실측으로 교체해야 한다. 나머지는
 상한으로 강제할 값이다.
 
@@ -52,7 +52,7 @@ staging 할 공간이 없으면 업데이트가 시작조차 못 하고, 이전 
   현재(current)와 이전(previous)이 최소 조건이다.
 - 최초 factory recovery 이미지는 별도 보관하며 이 정책의 대상이 아니다.
 
-`deploy/release/updater.py`의 `releases_to_keep(installed, *, keep_last, protected)`가
+`deploy/robot/pinky_pro/release/updater.py`의 `releases_to_keep(installed, *, keep_last, protected)`가
 이 규칙을 구현한다. `protected`가 비어 있지 않으면 `keep_last`를 초과해서라도
 유지한다 — **롤백 대상 릴리스를 지우는 것은 복구 가능한 실패를 현장 방문으로
 바꾸는 일이다.**

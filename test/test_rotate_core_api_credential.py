@@ -1,4 +1,4 @@
-"""Contract tests for deploy/sd/rotate-core-api-credential.ps1 (D-193 5).
+"""Contract tests for deploy/robot/pinky_pro/sd/rotate-core-api-credential.ps1 (D-193 5).
 
 The script runs against a fake CORE on loopback that answers the four routes it
 uses (whoami, POST/DELETE system/tokens) the way core_api_web does. The
@@ -21,7 +21,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "sd" / "rotate-core-api-credential.ps1"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "rotate-core-api-credential.ps1"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 DEVICE = "rosy-pinky-k7m4"
 UID = "9d40feaa-871f-4fd3-975a-a704e82d3af9"

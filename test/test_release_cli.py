@@ -27,7 +27,7 @@ def test_runtime_up_refuses_unfinished_activation_before_docker(tmp_path, monkey
 
 
 def test_status_is_readable_before_device_enrollment(tmp_path):
-    script = Path(__file__).resolve().parents[1] / "deploy/release/cli.py"
+    script = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/release/cli.py"
     result = subprocess.run([sys.executable, str(script), "--root", str(tmp_path), "status", "--json"],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
@@ -35,7 +35,7 @@ def test_status_is_readable_before_device_enrollment(tmp_path):
 
 
 def test_release_id_traversal_is_rejected_without_docker(tmp_path):
-    script = Path(__file__).resolve().parents[1] / "deploy/release/cli.py"
+    script = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/release/cli.py"
     result = subprocess.run([sys.executable, str(script), "--root", str(tmp_path),
                              "install", "--release-id", "../escape", "--json"],
                             capture_output=True, text=True)

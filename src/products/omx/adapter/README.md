@@ -10,7 +10,7 @@ It validates a model-neutral profile and emits the standard
 fake joint state, or advertise an arm capability while the physical revision,
 driver integration, mount, power budget, payload, calibration, and recovery
 remain unaccepted. The vendor stack source is pinned separately in
-`deploy/omx/stack.lock.yaml`.
+`deploy/robot/omx/stack.lock.yaml`.
 
 The current profile names OMX-AI as its target but is intentionally disabled.
 The measured joint map and hardware plugin stay empty.

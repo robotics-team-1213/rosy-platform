@@ -24,7 +24,7 @@ from build_payload_release import build_release, seal_release
 from sign_image_release import sign_image_release
 from signing import sign_checksums
 
-from deploy.sd.personalization import DeviceIdentity, create_provision_bundle
+from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, create_provision_bundle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,7 +69,7 @@ def _payload(root: Path, release_id: str) -> Path:
 
 def _first_boot():
     spec = importlib.util.spec_from_file_location(
-        "rosy_first_boot_d225", ROOT / "deploy/image/first-boot/rosy-first-boot.py")
+        "rosy_first_boot_d225", ROOT / "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -130,7 +130,7 @@ def pipeline(tmp_path: Path):
     lock = tmp_path / "inputs.lock.yaml"
     lock.write_text("schema_version: 1\n", encoding="utf-8")
     subprocess.run([
-        sys.executable, str(ROOT / "deploy/image/create-image-manifest.py"), "--dist", str(dist),
+        sys.executable, str(ROOT / "deploy/robot/pinky_pro/image/create-image-manifest.py"), "--dist", str(dist),
         "--payload", str(payload), "--lock", str(lock), "--release-id", FACTORY_ID,
         "--source-revision", REVISION,
     ], check=True, capture_output=True, timeout=60)
@@ -139,7 +139,7 @@ def pipeline(tmp_path: Path):
     report = sign_image_release(dist, private, public)
     assert report["factory_releases"] == [FACTORY_ID]
     verified = subprocess.run([
-        sys.executable, str(ROOT / "deploy/sd/verify-image-release.py"), "--release-root", str(dist),
+        sys.executable, str(ROOT / "deploy/robot/pinky_pro/sd/verify-image-release.py"), "--release-root", str(dist),
         "--public-key", str(public), "--image", str(image), "--release-id", FACTORY_ID,
     ], capture_output=True, text=True, check=False, timeout=60)
     assert verified.returncode == 0, verified.stderr
@@ -159,7 +159,7 @@ def _card_bundle(case: dict, request_release_id: str = FACTORY_ID) -> dict:
         "fleet_trust_profile": "site-ca-2026", "pairing_required": False, **CARD_API,
     }
     completed = subprocess.run([
-        sys.executable, str(ROOT / "deploy/sd/create-provision-bundle.py"),
+        sys.executable, str(ROOT / "deploy/robot/pinky_pro/sd/create-provision-bundle.py"),
         "--output", str(out / "provision.json"), "--receipt", str(out / "receipt.json"),
         "--release-root", str(case["dist"]), "--public-key", str(case["public"]),
     ], input=json.dumps(request), capture_output=True, text=True, check=False, timeout=60)
@@ -177,7 +177,7 @@ def _apply(case: dict, bundle: dict, *, network: bool = True) -> dict:
 
 
 def _manager(case: dict, links: MemoryLinks):
-    from deploy.robot.native.native_release import NativeReleaseManager
+    from deploy.robot.pinky_pro.native.native_release import NativeReleaseManager
 
     return NativeReleaseManager(root=case["device"], public_key=case["key"],
                                 runtime=lambda _action: None, links=links)
@@ -290,7 +290,7 @@ def test_a_stale_invalid_signature_and_temporary_are_replaced(pipeline):
 
 def _mounted_verifier():
     spec = importlib.util.spec_from_file_location(
-        "verify_mounted_image_d225", ROOT / "deploy/image/verify-mounted-image.py")
+        "verify_mounted_image_d225", ROOT / "deploy/robot/pinky_pro/image/verify-mounted-image.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

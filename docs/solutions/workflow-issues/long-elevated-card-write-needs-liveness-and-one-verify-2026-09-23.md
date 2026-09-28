@@ -2,7 +2,7 @@
 title: 한 시간짜리 관리자 권한 카드 쓰기는 세션과 분리하고, 진행 신호를 보고, 검증은 한 번만 한다
 date: 2026-09-23
 category: workflow-issues
-module: deploy/sd (Windows SD writer, Pinky Pro release 2026.09.23-005)
+module: deploy/robot/pinky_pro/sd (Windows SD writer, Pinky Pro release 2026.09.23-005)
 problem_type: workflow_issue
 component: development_workflow
 severity: high
@@ -54,7 +54,7 @@ UAC 창 하나에서 전 과정을 돌리고, 자기 출력을 파일로 남기�
 Start-Transcript -LiteralPath $log
 try {
     Get-Process rpi-imager -ErrorAction SilentlyContinue | Stop-Process -Force
-    & powershell -NoProfile -File "$W\deploy\sd\write-card.ps1" -PlanPath ... -Confirmation "ERASE SERIAL <serial> <device>"
+    & powershell -NoProfile -File "$W\deploy\robot\pinky_pro\sd\write-card.ps1" -PlanPath ... -Confirmation "ERASE SERIAL <serial> <device>"
     "REWRITE_EXIT=$LASTEXITCODE"
 } finally { Stop-Transcript }
 ```

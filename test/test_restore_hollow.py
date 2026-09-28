@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY = ROOT / "deploy" / "robot"
+DEPLOY = ROOT / "deploy" / "robot" / "pinky_pro"
 PYTHON_SH = DEPLOY / "restore-hollow-python.sh"
 TOOLCHAIN_SH = DEPLOY / "restore-hollow-toolchain.sh"
 DOCKERFILE = DEPLOY / "Dockerfile"

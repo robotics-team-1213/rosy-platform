@@ -9,7 +9,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEPLOY = ROOT / "deploy" / "robot"
+DEPLOY = ROOT / "deploy" / "robot" / "pinky_pro"
 INSTALLER = DEPLOY / "install-pi.sh"
 VERIFY = DEPLOY / "verify"
 VERIFIER = VERIFY / "verify-pi.sh"
@@ -113,7 +113,7 @@ def test_installer_guards_destructive_paths_and_activates_systemd():
     assert '[[ "$install_real" == "$INSTALL_ROOT" ]]' in script
     assert '[[ "$source_real" != "$INSTALL_ROOT/"* ]]' in script
     assert "--chown=root:root" in script
-    assert "--exclude 'deploy/robot/.env'" in script
+    assert "--exclude 'deploy/robot/pinky_pro/.env'" in script
     assert "systemctl stop rosy-runtime.service" in script
     assert "trap on_install_exit EXIT" in script
     assert "systemctl disable --now rosy-runtime.service" in script
@@ -291,10 +291,10 @@ def test_the_windows_deployer_passes_a_robot_number_to_the_installer():
     """
     script = _text(WINDOWS_DEPLOY)
 
-    assert "ROSY_ROBOT_NUMBER=$RobotNumber bash deploy/robot/install-pi.sh" in script, (
+    assert "ROSY_ROBOT_NUMBER=$RobotNumber bash deploy/robot/pinky_pro/install-pi.sh" in script, (
         "the installer must receive the robot number, or every deploy fails"
     )
-    assert "sudo bash deploy/robot/install-pi.sh" not in script, (
+    assert "sudo bash deploy/robot/pinky_pro/install-pi.sh" not in script, (
         "the bare invocation cannot provision an identity"
     )
     assert '[string]$RobotNumber = ""' in script, "RobotNumber must be a parameter"

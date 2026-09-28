@@ -18,7 +18,7 @@ from signing import sign_checksums
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILDER = ROOT / "deploy" / "release" / "build_payload_release.py"
+BUILDER = ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "build_payload_release.py"
 RELEASE_ID = "2026.09.25-001"
 REVISION = "b" * 40
 IMAGE_RUNTIME = "1" * 64
@@ -112,7 +112,7 @@ def _sign(release: Path, private: Path) -> None:
 
 @pytest.fixture
 def case(tmp_path: Path):
-    from deploy.robot.native.native_release import NativeReleaseManager
+    from deploy.robot.pinky_pro.native.native_release import NativeReleaseManager
 
     private, public = _keys(tmp_path)
     device, key = _device(tmp_path, public)
@@ -354,7 +354,7 @@ def test_pack_refuses_unsigned_release_by_default(tmp_path):
 
 # --- D-225 2.1 offline signing + pack (sign_image_release.py fits unchanged) ---
 
-SIGNER = ROOT / "deploy" / "release" / "sign_image_release.py"
+SIGNER = ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "sign_image_release.py"
 
 
 def _run(*args: object) -> dict:
@@ -515,7 +515,7 @@ def test_real_unpack_helper_accepts_the_signed_tarball_and_native_verify_passes(
     pack_release(staging, tarball, public_key=key, modes_from=unsigned)
     releases = device / "opt" / "rosy" / "releases"
     releases.mkdir(parents=True)
-    script = ROOT / "deploy" / "robot" / "rosy-release-unpack.sh"
+    script = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
 
     completed = subprocess.run(
         [shutil.which("bash"), _posix(script), RELEASE_ID, _posix(tarball), _posix(releases)],

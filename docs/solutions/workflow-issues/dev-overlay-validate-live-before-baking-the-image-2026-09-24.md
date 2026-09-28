@@ -2,7 +2,7 @@
 title: Validate a fix live on the device with the dev overlay before re-baking it into the image
 date: 2026-09-24
 category: workflow-issues
-module: deploy/robot/dev/core_dev_overlay.py (real device rosy-pinky-e4us, release 2026.09.24-010)
+module: deploy/robot/pinky_pro/dev/core_dev_overlay.py (real device rosy-pinky-e4us, release 2026.09.24-010)
 problem_type: best_practice
 component: development_workflow
 severity: medium
@@ -29,7 +29,7 @@ interrupted-write disk history, a real operator PC's `PATH`, real Wi-Fi activati
 phone hotspot, real UART wiring contention, and a real hardware-runtime `rosy-io` process — none of
 which a host test or CI runner reproduces.
 
-`deploy/robot/dev/core_dev_overlay.py` exists specifically to close this gap: it lets a fix be
+`deploy/robot/pinky_pro/dev/core_dev_overlay.py` exists specifically to close this gap: it lets a fix be
 applied and exercised live on the running device (reloading units, mounting overlays) before that
 fix is folded into the image that future cards are written from.
 
@@ -40,7 +40,7 @@ fix is folded into the image that future cards are written from.
   state), do not treat a green host-pytest/CI run as sufficient signal that a fix works. Validate it
   live on the device with the dev overlay first.
 - Only after the live-device validation confirms the fix, fold it into the artifact that ships to
-  new cards — the base image build (`deploy/image/customize-rootfs.sh` and friends) or the writer
+  new cards — the base image build (`deploy/robot/pinky_pro/image/customize-rootfs.sh` and friends) or the writer
   script itself — so every future device gets the fix baked in rather than needing the same retrofit.
 - Treat "host tests are green" and "the fix works on the device" as two separate claims that must
   each be established; the first is necessary but never sufficient for defects in this class.
@@ -55,7 +55,7 @@ doing it before committing a fix to the base image.
 
 ## When to Apply
 
-- Any fix under `deploy/robot/`, `deploy/image/`, or `deploy/sd/` that touches device-specific
+- Any fix under `deploy/robot/pinky_pro/`, `deploy/robot/pinky_pro/image/`, or `deploy/robot/pinky_pro/sd/` that touches device-specific
   environment, timing, or peripheral state.
 - Any fix diagnosed from a real-device symptom (a specific error code, a specific timeout, a
   specific journal timestamp) rather than from a host-reproducible test failure.

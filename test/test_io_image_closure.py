@@ -10,8 +10,8 @@ import pytest
 from robot_contracts import ROOT
 
 
-DOCKERFILE = ROOT / "deploy" / "robot" / "Dockerfile"
-PROBE = ROOT / "deploy" / "robot" / "probe-io-image.py"
+DOCKERFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile"
+PROBE = ROOT / "deploy" / "robot" / "pinky_pro" / "probe-io-image.py"
 
 
 def _source_packages() -> dict[str, tuple[Path, set[str]]]:
@@ -69,7 +69,7 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
 
 def test_final_io_image_checks_installed_web_assets(tmp_path):
     final = _stage("FROM io-runtime AS io")
-    assert "COPY deploy/robot/probe-io-image.py /tmp/probe-io-image.py" in final
+    assert "COPY deploy/robot/pinky_pro/probe-io-image.py /tmp/probe-io-image.py" in final
     assert "python3 /tmp/probe-io-image.py" in final
 
     verify_web_common = runpy.run_path(str(PROBE))["verify_web_common"]

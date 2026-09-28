@@ -31,12 +31,12 @@ unit. At this level only the harness records.
 
 | Directory | Purpose |
 |-----------|---------|
-| `image/` | Native aarch64 image build + input/artifact verification (see `image/AGENTS.md`) |
-| `release/` | Manifest, signing, storage, updater, Host Agent (see `release/AGENTS.md`) |
-| `sd/` | SD media creation, device personalization, and image/media readback verification (see `sd/AGENTS.md`) |
-| `robot/` | Native product systemd runtime plus development-only Docker/Compose compatibility tools (see `robot/AGENTS.md`) |
+| `robot/pinky_pro/` | Pinky Pro product deployment: native runtime, image, release, SD media, and development compatibility files |
+| `robot/omx/` | OMX workstation development and simulation preparation; not an accepted field runtime |
 | `site/` | Site-host Fleet, Vision, and Caddy stack; separate from the Pi product image |
-| `omx/` | OMX workstation image and simulation preparation; field runtime and actuator authority remain unaccepted |
+
+`robot/` groups deployment inputs by robot product. Shared ROS packages remain
+under `src/`; this folder is not a shared device-control library.
 
 ## For AI Agents
 
@@ -44,10 +44,10 @@ unit. At this level only the harness records.
 
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 - CORE is internet-facing and unprivileged. Do not add `nmcli`, `reboot`, or docker-compose control inside `core`.
-- Product runtime: `robot/native/rosy-runtime.target` starts CORE and no-motion I/O. Motor drive needs commissioned device mode and an explicit drive flag; navigation remains separately approved and mutually exclusive with I/O.
+- Pinky Pro runtime: `robot/pinky_pro/native/rosy-runtime.target` starts CORE and no-motion I/O. Motor drive needs commissioned device mode and an explicit drive flag; navigation remains separately approved and mutually exclusive with I/O.
 - Compose services remain test/development compatibility only; do not install Docker in a D-161 product image.
-- Release images must be built on native arm64, not x86 QEMU (`deploy/image/build-image.sh`).
-- `test/` at repo root is the contract suite for this tree; `test/conftest.py` puts `deploy/release` on `sys.path`.
+- Release images must be built on native arm64, not x86 QEMU (`deploy/robot/pinky_pro/image/build-image.sh`).
+- `test/` at repo root is the contract suite for this tree; `test/conftest.py` puts `deploy/robot/pinky_pro/release` on `sys.path`.
 
 ### Testing Requirements
 

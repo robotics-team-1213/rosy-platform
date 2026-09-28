@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (src/runtime/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/release tooling, and charging-dock ESP32 firmware. src/runtime/sensing contains the absorbed Control package; its legacy final publisher must not run beside CORE. src/site/fleet contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. Current source roles are contracts, runtime, products, drivers, site, hmi, and sim. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
+ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (src/runtime/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. src/runtime/sensing contains the absorbed Control package; its legacy final publisher must not run beside CORE. src/site/fleet contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. Current source roles are contracts, runtime, products, drivers, site, hmi, and sim. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
 
 ## Key Files
 
@@ -31,7 +31,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `firmware/` | Dock and signal firmware outside colcon (see `firmware/AGENTS.md`) |
-| `test/` | Host pytest for deploy/release/motor contracts (see `test/AGENTS.md`) |
+| `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |
 | `docs/assets/` | Architecture and product images (see `docs/assets/AGENTS.md`) |
 | `docs/solutions/` | Documented solutions to past problems — bugs, best practices, workflow patterns — by category, with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in a documented area |
 | `reference/` | Frozen upstream pinky_pro zip (see `reference/AGENTS.md`) |
@@ -48,7 +48,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 - Config merge order: `src/contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
 - This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
-- Hardware profile is YAML. In-tree Pinky full spec is `src/products/pinky_pro/profile/config/profile.yaml`. The robot advertises `deploy/robot/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
+- Hardware profile is YAML. In-tree Pinky full spec is `src/products/pinky_pro/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - Package names are grouped by source role under `src/{contracts,runtime,products,drivers,hmi,sim,site}`. Do not reintroduce `rosy_*` or `pinky_*` package names. The CORE launch file still carries its legacy filename `rosy_core.launch.py`.
 - Dashboard screens are static files in `src/hmi/dashboard`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
 - Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot).
@@ -89,8 +89,8 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 ### Internal
 
 - `src/runtime/gateway` depends on `src/contracts/foundation`, `src/runtime/events`, `src/runtime/services`, `src/runtime/api_web`, and `src/contracts/interfaces` (plus, at runtime, bringup/Nav2 topics).
-- `deploy/` consumes `src/` via `deploy/robot/Dockerfile`.
-- `test/` imports `deploy/release` via `test/conftest.py` `sys.path`.
+- `deploy/` consumes `src/` via `deploy/robot/pinky_pro/Dockerfile`.
+- `test/` imports `deploy/robot/pinky_pro/release` via `test/conftest.py` `sys.path`.
 
 ### External
 

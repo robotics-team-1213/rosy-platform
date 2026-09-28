@@ -17,7 +17,7 @@ _git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / 
 # Bare "bash" can resolve to Windows System32 WSL bash, which runs this X: fixture
 # in another filesystem namespace. Prefer Git Bash for the Windows host test.
 BASH = str(_git_bash) if sys.platform == "win32" and _git_bash.is_file() else "bash"
-IMAGE = ROOT / "deploy" / "image"
+IMAGE = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
 REQUIRED = IMAGE / "required-ros-packages.txt"
 BUILD = IMAGE / "build-native-payload.sh"
 VERIFY = IMAGE / "verify-package-inventory.sh"
@@ -171,7 +171,7 @@ def test_native_builder_is_arm64_only_and_builds_a_merged_offline_install():
         "rosdep install", "--from-paths", "--ignore-src",
         "colcon build", "--merge-install", "--install-base",
         "dpkg-query", "LC_ALL=C sort", "verify-package-inventory.sh",
-        "deploy/robot/native", "deploy/image/first-boot", "deploy/sd",
+        "deploy/robot/pinky_pro/native", "deploy/robot/pinky_pro/image/first-boot", "deploy/robot/pinky_pro/sd",
         "--release-id", ".rosy-release",
     ):
         assert fragment in script
@@ -182,11 +182,11 @@ def test_native_builder_is_arm64_only_and_builds_a_merged_offline_install():
 
 def test_native_builder_embeds_the_selected_release_public_key():
     script = BUILD.read_text(encoding="utf-8")
-    public_key = ROOT / "deploy" / "release" / "public-keys" / "rosy-release-2026-01.pem"
+    public_key = ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "public-keys" / "rosy-release-2026-01.pem"
 
     assert public_key.is_file()
     assert "BEGIN PUBLIC KEY" in public_key.read_text(encoding="utf-8")
-    assert "deploy/release/public-keys/rosy-release-2026-01.pem" in script
+    assert "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem" in script
     assert "trusted-release-keys/rosy-release-2026-01.pem" in script
 
 

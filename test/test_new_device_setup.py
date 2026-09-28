@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIRST_BOOT = ROOT / "deploy/image/first-boot"
+FIRST_BOOT = ROOT / "deploy/robot/pinky_pro/image/first-boot"
 
 
 def _module():
@@ -41,7 +41,7 @@ def test_setup_page_is_read_only_and_operational_api_stays_unavailable(tmp_path)
             body = response.read().decode()
             assert response.status == 200
             assert "rosy-pinky-k7m4" in body
-            assert "registration" in body.lower()
+            assert "새 로봇 등록" in body
             assert response.headers["Cache-Control"] == "no-store"
             assert "192.0.2.10" not in body
         for path in ("/api/v1", "/api/v1/robot/state"):
@@ -81,8 +81,8 @@ def test_setup_server_requires_setup_state_and_keeps_old_identity_private(tmp_pa
 def test_setup_server_starts_only_for_a_moved_card_and_is_in_the_image():
     first_boot_unit = (FIRST_BOOT / "rosy-first-boot.service").read_text(encoding="utf-8")
     setup_unit = (FIRST_BOOT / "rosy-new-device-setup.service").read_text(encoding="utf-8")
-    payload = (ROOT / "deploy/image/build-native-payload.sh").read_text(encoding="utf-8")
-    customizer = (ROOT / "deploy/image/customize-rootfs.sh").read_text(encoding="utf-8")
+    payload = (ROOT / "deploy/robot/pinky_pro/image/build-native-payload.sh").read_text(encoding="utf-8")
+    customizer = (ROOT / "deploy/robot/pinky_pro/image/customize-rootfs.sh").read_text(encoding="utf-8")
     assert "OnFailure=rosy-new-device-setup.service" in first_boot_unit
     assert "ConditionPathExists=/var/lib/rosy/provisioning/new-device-setup.json" in setup_unit
     assert "User=rosy" in setup_unit
@@ -90,3 +90,17 @@ def test_setup_server_starts_only_for_a_moved_card_and_is_in_the_image():
     assert "rosy-new-device-setup.py" in setup_unit
     assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-new-device-setup.py --help' in customizer
     assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-rebind-board.py --help' in customizer
+
+
+def test_moved_card_instructions_point_to_the_product_scoped_writer():
+    page = (FIRST_BOOT / "rosy-new-device-setup.py").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs/deployment/pinky-pro-first-device-runbook.md").read_text(encoding="utf-8")
+    writer = ROOT / "deploy/robot/pinky_pro/sd/setup-moved-device.ps1"
+    commissioning = ROOT / "deploy/robot/pinky_pro/sd/enable-motor-commissioning.ps1"
+    command = r".\deploy\robot\pinky_pro\sd\setup-moved-device.ps1"
+    commissioning_command = r".\deploy\robot\pinky_pro\sd\enable-motor-commissioning.ps1"
+    assert writer.is_file()
+    assert commissioning.is_file()
+    assert command in page
+    assert command in runbook
+    assert commissioning_command in writer.read_text(encoding="utf-8")

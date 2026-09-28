@@ -20,7 +20,7 @@ import time
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 BOOT_ID = "0b1f5d2e-8c3a-4f6e-9d7b-1a2b3c4d5e6f"
 EREMOTEIO = getattr(errno, "EREMOTEIO", 121)  # Linux; Windows has no name for it
 CSI = "proc/device-tree/axi/pcie@120000/rp1"

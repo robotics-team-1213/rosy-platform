@@ -42,6 +42,21 @@ def test_developer_scripts_live_under_tools():
     assert "/mnt/f/" not in (ROOT / "tools" / "fix_ament_resource.sh").read_text(encoding="utf-8")
 
 
+def test_deployment_sources_group_by_robot_product():
+    pinky = ROOT / "deploy" / "robot" / "pinky_pro"
+    omx = ROOT / "deploy" / "robot" / "omx"
+    assert (pinky / "image" / "build-image.sh").is_file()
+    assert (pinky / "release" / "build_payload_release.py").is_file()
+    assert (pinky / "sd" / "write-card.ps1").is_file()
+    assert (pinky / "native" / "rosy-runtime.target").is_file()
+    assert (omx / "README.md").is_file()
+    assert (ROOT / "deploy" / "site" / "compose.yaml").is_file()
+    assert not (ROOT / "deploy" / "image").exists()
+    assert not (ROOT / "deploy" / "release").exists()
+    assert not (ROOT / "deploy" / "sd").exists()
+    assert not (ROOT / "deploy" / "omx").exists()
+
+
 @pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None,
                     reason="ament marker repair requires a Linux bash workspace")
 def test_ament_marker_repair_reaches_nested_product_packages(tmp_path):

@@ -19,7 +19,7 @@ import pytest
 import yaml
 from jsonschema import Draft202012Validator
 
-from deploy.sd.personalization import (
+from deploy.robot.pinky_pro.sd.personalization import (
     DeviceIdentity,
     create_provision_bundle,
     create_provision_receipt,
@@ -27,7 +27,7 @@ from deploy.sd.personalization import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = json.loads((ROOT / "deploy/sd/provision.schema.json").read_text(encoding="utf-8"))
+SCHEMA = json.loads((ROOT / "deploy/robot/pinky_pro/sd/provision.schema.json").read_text(encoding="utf-8"))
 # D-231/D-241: src/core/<group>/<group>/<pkg> became one role dir per package.
 # These are each package's *import parent* — the dir whose child is the package.
 PKG_PARENT = {
@@ -67,7 +67,7 @@ def _issued() -> dict:
 
 
 def _first_boot():
-    path = ROOT / "deploy/image/first-boot/rosy-first-boot.py"
+    path = ROOT / "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py"
     spec = importlib.util.spec_from_file_location("rosy_first_boot_api", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -137,7 +137,7 @@ def test_the_secret_scanner_finds_nothing_in_the_record_or_the_receipt():
 
 
 def _without_record() -> dict:
-    from deploy.sd.personalization import _checksum
+    from deploy.robot.pinky_pro.sd.personalization import _checksum
 
     bundle = _issued()
     del bundle["core_api"]
@@ -208,7 +208,7 @@ def test_the_bundle_creator_accepts_the_credential_and_writes_no_plaintext(tmp_p
         KW: VALUE, KW_ID: RECORD_ID,
     }
     completed = subprocess.run(
-        [sys.executable, str(ROOT / "deploy/sd/create-provision-bundle.py"),
+        [sys.executable, str(ROOT / "deploy/robot/pinky_pro/sd/create-provision-bundle.py"),
          "--output", str(tmp_path / "provision.json"), "--receipt", str(tmp_path / "receipt.json")],
         input=json.dumps(request), capture_output=True, text=True,
     )
@@ -216,7 +216,7 @@ def test_the_bundle_creator_accepts_the_credential_and_writes_no_plaintext(tmp_p
     assert completed.returncode == 0, completed.stderr
     without = {key: value for key, value in request.items() if key not in (KW, KW_ID)}
     refused = subprocess.run(
-        [sys.executable, str(ROOT / "deploy/sd/create-provision-bundle.py"),
+        [sys.executable, str(ROOT / "deploy/robot/pinky_pro/sd/create-provision-bundle.py"),
          "--output", str(tmp_path / "second.json"), "--receipt", str(tmp_path / "second-receipt.json")],
         input=json.dumps(without), capture_output=True, text=True,
     )

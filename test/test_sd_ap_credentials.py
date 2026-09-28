@@ -12,7 +12,7 @@ import pytest
 
 from jsonschema import Draft202012Validator
 
-from deploy.sd.personalization import DeviceIdentity, create_provision_bundle, create_provision_receipt
+from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, create_provision_bundle, create_provision_receipt
 
 # Secret-shaped keywords are assembled at runtime so the tracked-file
 # secret scanner (test_no_secrets_in_tracked_files) sees no literal.
@@ -20,7 +20,7 @@ PW = "pass" + "word"
 AP_KW = "ap_" + PW
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = json.loads((ROOT / "deploy/sd/provision.schema.json").read_text(encoding="utf-8"))
+SCHEMA = json.loads((ROOT / "deploy/robot/pinky_pro/sd/provision.schema.json").read_text(encoding="utf-8"))
 AP_VALUE = "Kx7" + "mQ2vR9tLp"
 
 # D-191: every bundle carries the card's CORE API record. Keys are assembled
@@ -71,7 +71,7 @@ def test_bundles_without_an_ap_keep_the_old_shape():
 
 
 def test_first_boot_stores_the_ap_credentials_root_only(tmp_path):
-    path = ROOT / "deploy/image/first-boot/rosy-first-boot.py"
+    path = ROOT / "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py"
     spec = importlib.util.spec_from_file_location("rosy_first_boot_ap", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module

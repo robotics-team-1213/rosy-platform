@@ -13,7 +13,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERIFY = ROOT / "deploy" / "sd" / "verify-media-readback.py"
+VERIFY = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "verify-media-readback.py"
 
 
 def _run(image: Path, device: Path):

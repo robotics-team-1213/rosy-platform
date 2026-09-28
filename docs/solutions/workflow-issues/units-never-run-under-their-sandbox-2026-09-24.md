@@ -2,7 +2,7 @@
 title: unit의 샌드박스, 그 사용자의 HOME, 그 Python 의존성은 제품의 일부다 — 실제로 도는 곳에서 시험한다
 date: 2026-09-24
 category: workflow-issues
-module: deploy/robot/native + deploy/image (Pinky Pro release 2026.09.23-005 첫 실기 부팅)
+module: deploy/robot/pinky_pro/native + deploy/robot/pinky_pro/image (Pinky Pro release 2026.09.23-005 첫 실기 부팅)
 problem_type: workflow_issue
 component: development_workflow
 severity: critical

@@ -2,7 +2,7 @@
 title: An empty writer exit code in the reprovision test is a known flake, not your change
 date: 2026-09-26
 category: workflow-issues
-module: test/test_sd_writer_contract.py, deploy/sd/prepare-rosy-sd.ps1
+module: test/test_sd_writer_contract.py, deploy/robot/pinky_pro/sd/prepare-rosy-sd.ps1
 problem_type: workflow_issue
 component: development_workflow
 severity: low
@@ -25,7 +25,7 @@ card keeps the stored core API credential) intermittently fails on the Windows h
 `stage=write card_state=writing`. The full-suite run of 2026-09-25 failed the same way
 (`X:\DevTemp\opencode\full_test.log`: `AssertionError: image writer failed with exit code`).
 
-The empty value is the signature, not a truncation: `deploy/sd/prepare-rosy-sd.ps1` initialises
+The empty value is the signature, not a truncation: `deploy/robot/pinky_pro/sd/prepare-rosy-sd.ps1` initialises
 `$writerExitCode = $null` (line 1008), assigns `$writerExitCode = $writerProcess.ExitCode`
 after `WaitForExit()` (line 1147), and fails on `if ($writerExitCode -ne 0)` (line 1148) —
 `$null -ne 0` is `$true` in PowerShell, so a null/empty code reaches the fail path with an empty
@@ -38,7 +38,7 @@ FAIL/PASS/FAIL across three consecutive solo runs on 2026-09-26. It never reprod
 ## Guidance
 1. Recognise the exact signature (`image writer failed with exit code` + empty value +
    `stage=write card_state=writing`) and stop there: unless the change under review touched
-   `deploy/sd/` or the writer contract, the failure is this flake. Do not chase it into your diff.
+   `deploy/robot/pinky_pro/sd/` or the writer contract, the failure is this flake. Do not chase it into your diff.
 2. Do not "stabilise" the suite by loosening the assert, adding a retry, or `xfail`ing the test.
    The assert is the D-191 contract; masking it would turn a visible flake into a silent hole.
 3. When reporting a full-suite result while this flake is live, quote it explicitly with the

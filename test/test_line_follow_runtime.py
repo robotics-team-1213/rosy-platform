@@ -9,7 +9,7 @@ ROOT = Path(__file__).parents[1]
 
 
 def test_io_image_contains_line_follow_runtime_without_polluting_core():
-    dockerfile = (ROOT / "deploy/robot/Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (ROOT / "deploy/robot/pinky_pro/Dockerfile").read_text(encoding="utf-8")
     core, io = dockerfile.split("FROM runtime-common AS io-runtime", 1)
     assert "COPY src/runtime/sensing" not in core
     assert "python3-opencv" not in core
@@ -28,7 +28,7 @@ def test_hardware_launch_reaches_sensing_only_line_follow_launch():
 
 def test_hardware_compose_passes_camera_and_i2c_devices():
     compose = yaml.safe_load(
-        (ROOT / "deploy/robot/compose.yaml").read_text(encoding="utf-8"))
+        (ROOT / "deploy/robot/pinky_pro/compose.yaml").read_text(encoding="utf-8"))
     service = compose["services"]["rosy-io"]
     devices = service["devices"]
     assert "${ROSY_CAMERA_DEVICE:-/dev/video0}:/dev/video0" in devices
@@ -39,20 +39,20 @@ def test_hardware_compose_passes_camera_and_i2c_devices():
 
 
 def test_installer_records_device_group_ids():
-    installer = (ROOT / "deploy/robot/install-pi.sh").read_text(encoding="utf-8")
+    installer = (ROOT / "deploy/robot/pinky_pro/install-pi.sh").read_text(encoding="utf-8")
     assert "ROSY_VIDEO_GID" in installer
     assert "ROSY_I2C_GID" in installer
 
 
 def test_ir_calibration_is_an_external_runtime_profile_not_an_image_rebuild():
     compose = yaml.safe_load(
-        (ROOT / "deploy/robot/compose.yaml").read_text(encoding="utf-8"))
+        (ROOT / "deploy/robot/pinky_pro/compose.yaml").read_text(encoding="utf-8"))
     service = compose["services"]["rosy-io"]
     assert any("ROSY_LINE_FOLLOW_CONFIG_PATH" in volume
                and volume.endswith(":/etc/rosy/line_follow.yaml:ro")
                for volume in service["volumes"])
     assert "line_follow_config:=/etc/rosy/line_follow.yaml" in service["command"]
-    profile = ROOT / "deploy/robot/config/line_follow.yaml"
+    profile = ROOT / "deploy/robot/pinky_pro/config/line_follow.yaml"
     assert profile.is_file()
     assert "ir_calibration_enabled: false" in profile.read_text(encoding="utf-8")
 

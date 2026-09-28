@@ -2,7 +2,7 @@
 title: Pinky Pro board facts that only a person at the robot could settle — buzzer pin, wedged ADC, idle sensor values
 date: 2026-09-26
 category: workflow-issues
-module: deploy/robot/native (rosy-hw-probe, rosy-boot-display) on Pinky Pro rosy-pinky-e4us
+module: deploy/robot/pinky_pro/native (rosy-hw-probe, rosy-boot-display) on Pinky Pro rosy-pinky-e4us
 problem_type: workflow_issue
 component: development_workflow
 severity: medium

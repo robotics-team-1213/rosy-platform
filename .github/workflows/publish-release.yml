@@ -37,7 +37,7 @@ jobs:
           assert re.fullmatch(r'[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}', os.environ['RELEASE_ID'])
           assert re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}', os.environ['KEY_ID'])
           PY
-          test -f "deploy/release/public-keys/$KEY_ID.pem"
+          test -f "deploy/robot/pinky_pro/release/public-keys/$KEY_ID.pem"
           sudo apt-get update -qq
           sudo apt-get install -y openssl zstd
       - name: Download externally signed draft asset
@@ -48,11 +48,11 @@ jobs:
           gh release download "$RELEASE_ID" --pattern "rosy-release-$RELEASE_ID.tar.zst" --dir received
       - name: Verify signature, payload and tag revision
         run: |
-          python3 deploy/release/publication.py verify-publication \
+          python3 deploy/robot/pinky_pro/release/publication.py verify-publication \
             "received/rosy-release-$RELEASE_ID.tar.zst" \
             --release-id "$RELEASE_ID" \
             --git-revision "$(git rev-parse --verify "refs/tags/$RELEASE_ID^{commit}")" \
-            --public-key "deploy/release/public-keys/$KEY_ID.pem"
+            --public-key "deploy/robot/pinky_pro/release/public-keys/$KEY_ID.pem"
       - name: Publish verified draft
         env:
           GH_TOKEN: ${{ github.token }}

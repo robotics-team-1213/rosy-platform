@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE_DIR = ROOT / "deploy" / "image"
+IMAGE_DIR = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
 FINALIZE = IMAGE_DIR / "finalize-image.sh"
 MANIFEST = IMAGE_DIR / "create-image-manifest.py"
 WORKFLOW = ROOT / ".github/workflows/build-pinky-image.yml"
@@ -131,7 +131,7 @@ def test_native_arm64_workflow_builds_only_an_unsigned_handoff():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in text
     assert "runs-on: ubuntu-24.04-arm" in text
-    assert "deploy/image/build-image.sh" in text
+    assert "deploy/robot/pinky_pro/image/build-image.sh" in text
     assert "SHA256SUMS.sig" in text and "test ! -e" in text
     assert "private" not in text.lower()
     assert "actions/upload-artifact@v4" in text
@@ -141,4 +141,4 @@ def test_native_arm64_workflow_builds_only_an_unsigned_handoff():
     )
     assert "sudo rosdep init" in text
     assert "sudo rosdep update --rosdistro jazzy" in text
-    assert text.index("sudo rosdep update") < text.index("deploy/image/build-image.sh")
+    assert text.index("sudo rosdep update") < text.index("deploy/robot/pinky_pro/image/build-image.sh")

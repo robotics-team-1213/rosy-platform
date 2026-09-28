@@ -8,7 +8,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OMX = ROOT / "deploy" / "omx"
+OMX = ROOT / "deploy" / "robot" / "omx"
 SPEC = importlib.util.spec_from_file_location("omx_preflight", OMX / "preflight.py")
 assert SPEC and SPEC.loader
 preflight = importlib.util.module_from_spec(SPEC)
@@ -209,7 +209,7 @@ def test_ai_simulation_patch_selects_supported_mimic_engine_and_sync_hardware():
 
 def test_vendor_patches_keep_lf_endings_in_windows_build_context():
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
-    assert "deploy/omx/patches/*.patch text eol=lf" in attributes
+    assert "deploy/robot/omx/patches/*.patch text eol=lf" in attributes
     for patch in (OMX / "patches").glob("*.patch"):
         assert b"\r\n" not in patch.read_bytes()
 

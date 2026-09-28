@@ -20,8 +20,8 @@ import subprocess
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "robot" / "rosy-release-push.ps1"
-UNPACK_SCRIPT = ROOT / "deploy" / "robot" / "rosy-release-unpack.sh"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-push.ps1"
+UNPACK_SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 TAR = shutil.which("tar")
 RELEASE_ID = "2026.09.25-001"
@@ -36,7 +36,7 @@ def _run(args: list[str]) -> subprocess.CompletedProcess:
 def release(tmp_path: Path) -> dict:
     import sys
 
-    sys.path.insert(0, str(ROOT / "deploy" / "release"))
+    sys.path.insert(0, str(ROOT / "deploy" / "robot" / "pinky_pro" / "release"))
     from signing import build_sha256sums, sign_checksums  # noqa: E402
 
     private = tmp_path / "test.key"
@@ -282,7 +282,7 @@ def test_every_remote_command_comes_from_one_function():
 
 def test_activation_and_rollback_run_under_sudo_and_reuse_the_core_probe():
     # rosy already carries ALL=(ALL) NOPASSWD:ALL in
-    # deploy/image/first-boot/rosy-first-boot.py; there is no narrower
+    # deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py; there is no narrower
     # sudoers rule for these wrappers to run under today.
     text = SCRIPT.read_text(encoding="utf-8")
 

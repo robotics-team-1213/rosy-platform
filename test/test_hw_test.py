@@ -20,7 +20,7 @@ import time
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "deploy/robot/native"
+NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 POSIX = pytest.mark.skipif(os.name != "posix", reason="symlinks and FIFOs")
 
 

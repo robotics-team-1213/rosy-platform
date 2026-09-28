@@ -2,7 +2,7 @@
 title: 합성 픽스처에서만 검증한 가드는 실제 파이프라인의 가장 비싼 지점에서 깨진다
 date: 2026-09-23
 category: workflow-issues
-module: deploy/image + deploy/sd (Pinky Pro release 003·004)
+module: deploy/robot/pinky_pro/image + deploy/robot/pinky_pro/sd (Pinky Pro release 003·004)
 problem_type: workflow_issue
 component: development_workflow
 severity: high
@@ -40,7 +40,7 @@ release `2026.09.23-003`의 ARM64 빌드는 20분을 돌고 customizer에서 죽
 colcon `__pycache__`가 다시 막히지 않는 회귀 시험을 함께 넣었다.
 
 ```python
-for runtime in (root / "opt/rosy/native-runtime", release / "deploy/robot/native"):
+for runtime in (root / "opt/rosy/native-runtime", release / "deploy/robot/pinky_pro/native"):
     if runtime.is_dir():
         for cache in sorted(runtime.rglob("__pycache__")):
             ...
@@ -80,7 +80,7 @@ $operatorFingerprint = ($operatorKey | & $PythonExe -c $fingerprintCode)   # 실
 
 ## When to Apply
 
-- `deploy/image`의 검증기나 customizer에 새 검사를 추가할 때
+- `deploy/robot/pinky_pro/image`의 검증기나 customizer에 새 검사를 추가할 때
 - `prepare-rosy-sd.ps1`처럼 PowerShell이 Python·외부 도구를 호출하는 코드를 고칠 때
 - 리뷰 지적을 반영해 거부 규칙을 넓힐 때
 

@@ -32,7 +32,7 @@ def test_payload_workflow_runs_guarded_builder_and_uploads_checksums():
     rendered = WORKFLOW.read_text(encoding="utf-8")
     steps = job["steps"]
 
-    assert "deploy/release/arm64_release_builder.py" in rendered
+    assert "deploy/robot/pinky_pro/release/arm64_release_builder.py" in rendered
     assert "--ros-image \"$ROS_IMAGE\"" in rendered
     assert "docker system prune --all --force" in rendered
     assert "sha256sum" in rendered

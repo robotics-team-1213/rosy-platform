@@ -100,7 +100,7 @@ curl --interface wlan0 -fsSIL --max-time 8 https://www.raspberrypi.com/
 PowerShell에서 실행한다.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy/robot/deploy-from-windows.ps1 `
+powershell -ExecutionPolicy Bypass -File deploy/robot/pinky_pro/deploy-from-windows.ps1 `
   -RobotNumber 1 `
   -PiHost rosy-01.local `
   -PiUser rosy

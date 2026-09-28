@@ -20,8 +20,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALLER = ROOT / "deploy" / "robot" / "native" / "install-native-runtime.sh"
-PAYLOAD_BUILDER = ROOT / "deploy" / "image" / "build-native-payload.sh"
+INSTALLER = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "install-native-runtime.sh"
+PAYLOAD_BUILDER = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-native-payload.sh"
 BASH = shutil.which("bash")
 
 
@@ -42,7 +42,7 @@ def _isolated_env() -> dict[str, str]:
 def _run_recover(runtime: Path, device_root: Path) -> subprocess.CompletedProcess[str]:
     public_key = device_root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
     public_key.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "deploy/release/public-keys/rosy-release-2026-01.pem", public_key)
+    shutil.copyfile(ROOT / "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem", public_key)
     return subprocess.run(
         [sys.executable, str(runtime / "native_release.py"),
          "--root", str(device_root), "--public-key", str(public_key), "recover"],
@@ -72,7 +72,7 @@ def test_installed_runtime_does_not_reach_back_into_a_repository(tmp_path):
     runtime = tmp_path / "device/opt/rosy/native-runtime"
     _install(runtime)
 
-    assert (runtime / "signing.py").read_bytes() == (ROOT / "deploy/release/signing.py").read_bytes()
+    assert (runtime / "signing.py").read_bytes() == (ROOT / "deploy/robot/pinky_pro/release/signing.py").read_bytes()
     assert not (runtime / "install-native-runtime.sh").exists()
     assert not (runtime.parents[1] / "release").exists()
 
@@ -117,7 +117,7 @@ def test_recovery_writes_only_where_its_unit_lets_it(tmp_path):
     _install(runtime)
     public_key = device_root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
     public_key.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "deploy/release/public-keys/rosy-release-2026-01.pem", public_key)
+    shutil.copyfile(ROOT / "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem", public_key)
     before = {path.relative_to(device_root).as_posix() for path in device_root.rglob("*")}
 
     completed = _run_recover(runtime, device_root)
@@ -147,7 +147,7 @@ def test_interrupted_activation_replay_writes_only_where_its_unit_lets_it(tmp_pa
     )
     public_key = device_root / "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
     public_key.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "deploy/release/public-keys/rosy-release-2026-01.pem", public_key)
+    shutil.copyfile(ROOT / "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem", public_key)
     before = {path.relative_to(device_root).as_posix() for path in device_root.rglob("*")}
 
     completed = _run_recover(runtime, device_root)
@@ -163,7 +163,7 @@ def test_interrupted_activation_replay_writes_only_where_its_unit_lets_it(tmp_pa
 
 def test_release_wrappers_run_python_without_bytecode():
     for wrapper in ("activate-release.sh", "rollback-release.sh", "recover-release.sh"):
-        text = (ROOT / "deploy/robot/native" / wrapper).read_text(encoding="utf-8")
+        text = (ROOT / "deploy/robot/pinky_pro/native" / wrapper).read_text(encoding="utf-8")
         assert 'exec python3 -B "$SCRIPT_DIR/native_release.py"' in text, wrapper
 
 
@@ -195,11 +195,11 @@ def test_boot_status_indicator_imports_from_the_installed_layout(tmp_path):
 @pytest.mark.parametrize("entrypoint", ["rosy-config-apply.py", "rosy-network.py", "rosy-login-code.py",
                                         "rosy-hw-probe.py", "rosy-hw-test.py"])
 def test_d176_entrypoints_import_from_the_installed_layout(tmp_path, entrypoint):
-    # D-176: rosy_config imports deploy.sd.personalization. The image installs
+    # D-176: rosy_config imports deploy.robot.pinky_pro.sd.personalization. The image installs
     # deploy/sd at /opt/rosy/deploy/sd beside /opt/rosy/native-runtime.
     runtime = tmp_path / "device/opt/rosy/native-runtime"
     _install(runtime)
-    shutil.copytree(ROOT / "deploy/sd", runtime.parent / "deploy/sd",
+    shutil.copytree(ROOT / "deploy/robot/pinky_pro/sd", runtime.parent / "deploy/sd",
                     ignore=shutil.ignore_patterns("__pycache__"))
 
     completed = subprocess.run(
@@ -216,6 +216,6 @@ def test_d176_entrypoints_import_from_the_installed_layout(tmp_path, entrypoint)
 
 def test_d176_helpers_find_deploy_sd_relative_to_themselves():
     for name in ("rosy_config.py", "rosy-config-apply.py"):
-        text = (ROOT / "deploy/robot/native" / name).read_text(encoding="utf-8")
+        text = (ROOT / "deploy/robot/pinky_pro/native" / name).read_text(encoding="utf-8")
         assert 'sys.path.insert(0, "/opt/rosy")' not in text, name
         assert "Path(__file__).resolve().parents[1]" in text, name

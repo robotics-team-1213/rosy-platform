@@ -2,7 +2,7 @@ name: arm64 rehearsal
 
 # D-140: ARTIFACT gate 의 코드 수준 선검증 — QEMU 대신 네이티브 arm64 에서 소스
 # 빌드와 ROS-free 스위트를 매주 실행한다 (D-66/D-78 의 '네이티브' 요건; 이미지
-# 빌드 자체는 deploy/image 소관). 실패는 ARTIFACT 진입 전에 발견하는 것이 목적이므로
+# 빌드 자체는 deploy/robot/pinky_pro/image 소관). 실패는 ARTIFACT 진입 전에 발견하는 것이 목적이므로
 # 게이팅이 아니다 (continue-on-error).
 
 on:
@@ -31,9 +31,9 @@ jobs:
         run: |
           # D-189: the CORE runtime set is the image's hash-locked set, not the latest.
           python3 -m pip install --break-system-packages --no-cache-dir --ignore-installed \
-            --require-hashes --no-deps --only-binary=:all: -r deploy/image/device-python-requirements.txt
+            --require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt
           # Test tools afterwards, constrained to the lock's versions (hash-free view).
-          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
+          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           python3 -m pip install --break-system-packages --no-cache-dir -c /tmp/rosy-runtime-constraints.txt httpx pyyaml
 
       - name: Build (colcon, native arm64)

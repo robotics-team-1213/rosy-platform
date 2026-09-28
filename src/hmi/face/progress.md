@@ -34,12 +34,12 @@ plans:
 - D-306 LCD 점검: 320×240 호스트 카드의 긴 동적 문자열은 기존 부팅 카드의 `_fit`으로 화면 안에 맞추고 말줄임을 표시한다. 부팅/AP QR/실패 캡처는 LOCAL 증거다. 실물 LCD의 거리·각도·조명 판독성은 미확인이라 DEVICE/BENCH GO가 아니다.
 - **F-01 해결 (2026-09-21, D-153 회차2):** 재편(9b77daa)이 선언만 `emotion.*`로 바꾸고 파일을 `rosy_emotion/`에 남겨둔 불일치를 닫았다 — 파이썬 파일을 `emotion/`으로 평탄화하고 `rosy_emotion.py`는 `emotion.py`로 환원했으며 마커 `resource/rosy_emotion`를 지웠다. SOURCE/LOCAL 재실행 22 passed로 GO 복원.
 - `test/test_copyright.py`·`test_flake8.py`·`test_pep257.py`는 ament_copyright/flake8/pep257을 import한다. 이 호스트에는 설치되어 있지 않아(`ModuleNotFoundError`) 실행할 수 없고, 시도해도 증거로 세지 않는다.
-- `deploy/image/ 빌더`에는 core/io 두 이미지만 있고 emotion을 포함하지 않는다. 하드웨어(LED/lamp/IMU/ADC/emotion) 프로필은 아직 배선되지 않았다.
+- `deploy/robot/pinky_pro/image/ 빌더`에는 core/io 두 이미지만 있고 emotion을 포함하지 않는다. 하드웨어(LED/lamp/IMU/ADC/emotion) 프로필은 아직 배선되지 않았다.
 
 ## 다음 gate
 
 1. ROS 2 Jazzy 컨테이너에서 `set_emotion` 서비스 노드 graph/parameter smoke를 실행해 ROS-SIM을 되돌린다.
-3. hardware 프로필이 `deploy/image/ 빌더`에 배선되면 ARTIFACT blocker를 서명 artifact 발행으로 바꾸고 DEVICE/FIELD를 PARKED에서 HOLD로 올린다.
+3. hardware 프로필이 `deploy/robot/pinky_pro/image/ 빌더`에 배선되면 ARTIFACT blocker를 서명 artifact 발행으로 바꾸고 DEVICE/FIELD를 PARKED에서 HOLD로 올린다.
 
 ## 현재 유효한 금지사항
 

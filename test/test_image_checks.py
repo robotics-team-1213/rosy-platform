@@ -175,7 +175,7 @@ def test_the_shipped_runtime_unit_satisfies_the_gate_check():
     """The real unit in this repository, not just a fixture."""
     from image_checks import check_recovery_gate as check
 
-    staged = ROOT / "deploy" / "robot"
+    staged = ROOT / "deploy" / "robot" / "pinky_pro"
     fake_root = staged.parent.parent  # not an image; assert on the file directly
     unit = (staged / "rosy-runtime.service").read_text(encoding="utf-8")
 

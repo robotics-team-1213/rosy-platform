@@ -126,3 +126,8 @@
 - 드론: 기종·비행 스택·링크 단절 시 로컬 동작과 실제 actuator authority를 확인하기 전 폴더·owner·공통 action schema를 만들지 않는다.
 
 새 ROS 패키지·CORE import·launch share 위치나 이미지 내용이 생기는 후속 설계는 이번 **source-only 동등성**과 다른 변경이다. SOURCE/ROS-SIM은 먼저 진행할 수 있지만 운영 capability는 해당 ARTIFACT/DEVICE/FIELD 출구가 닫힐 때까지 HOLD다.
+
+
+## Follow-up: deployment source layout (2026-09-28)
+
+The statement above that `deploy/robot` does not move was scoped to the D-310 source-package migration. D-320 separately accepts the deployment-source grouping at `deploy/robot/pinky_pro/` and `deploy/robot/omx/`, with `deploy/site/` independent. This source-only move preserves the deployed Pinky paths `/opt/rosy/deploy/robot/`, `/opt/rosy/deploy/sd/`, and `/opt/rosy/deploy/release/`. See [D-320](../adr/D-320-product-scoped-robot-deployment-layout.md) and its implementation plan.

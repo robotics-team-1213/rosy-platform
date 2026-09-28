@@ -2,7 +2,7 @@
 title: First boot gave up on one Wi-Fi attempt and deleted the only profile back to it
 date: 2026-09-24
 category: workflow-issues
-module: deploy/image/first-boot/rosy-first-boot.py (Pinky Pro release 2026.09.24-010, real device rosy-pinky-e4us)
+module: deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py (Pinky Pro release 2026.09.24-010, real device rosy-pinky-e4us)
 problem_type: logic_error
 component: development_workflow
 symptoms:

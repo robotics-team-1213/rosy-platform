@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · D-320 product deployment path regression verification
+- 2026-09-28 · uncommitted · D-320 product-scoped robot deployment layout
 - 2026-09-28 · uncommitted · feat(sd): automate attended motor commissioning
 - 2026-09-27 · uncommitted · close development IO web asset dependency
 - 2026-09-27 · b0609dc6 · verify development CORE image closure on ARM64
-- 2026-09-27 · uncommitted · repair development CORE image package closure
-- 2026-09-27 · uncommitted · feat(host-agent): stamp complete status reads

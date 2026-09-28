@@ -18,15 +18,15 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE = ROOT / "deploy" / "image"
+IMAGE = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
 CUSTOMIZER = IMAGE / "customize-rootfs.sh"
 DEPS = IMAGE / "install-pinky-hardware-deps.sh"
 PAYLOAD = IMAGE / "build-native-payload.sh"
 LOCK = IMAGE / "inputs.lock.yaml"
 OVERLAY = IMAGE / "overlays" / "rosy-ws281x.dts"
 PATCH = IMAGE / "patches" / "rpi_ws281x-pi5-rev1.1.patch"
-UDEV = ROOT / "deploy" / "robot" / "udev" / "99-rosy-lamp.rules"
-MODPROBE = ROOT / "deploy" / "robot" / "modprobe" / "rosy-ws281x.conf"
+UDEV = ROOT / "deploy" / "robot" / "pinky_pro" / "udev" / "99-rosy-lamp.rules"
+MODPROBE = ROOT / "deploy" / "robot" / "pinky_pro" / "modprobe" / "rosy-ws281x.conf"
 
 sys.path.insert(0, str(ROOT / "test"))
 from test_image_customization_contract import _valid_root, _verify  # noqa: E402
@@ -94,8 +94,8 @@ def test_the_driver_drives_gpio19_not_the_lcd_backlight():
 
 def test_the_payload_ships_the_rule_and_the_channel():
     source = PAYLOAD.read_text(encoding="utf-8")
-    assert 'LAMP_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/udev/99-rosy-lamp.rules"' in source
-    assert 'LAMP_MODPROBE_SOURCE="$WORKSPACE/deploy/robot/modprobe/rosy-ws281x.conf"' in source
+    assert 'LAMP_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/udev/99-rosy-lamp.rules"' in source
+    assert 'LAMP_MODPROBE_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/modprobe/rosy-ws281x.conf"' in source
     assert 'cp "$LAMP_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"' in source
     assert 'cp "$LAMP_MODPROBE_SOURCE" "$OVERLAY/etc/modprobe.d/rosy-ws281x.conf"' in source
 

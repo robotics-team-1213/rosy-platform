@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 deploy/release/arm64_release_builder.py \
+          python3 deploy/robot/pinky_pro/release/arm64_release_builder.py \
             --repo-root "$GITHUB_WORKSPACE" \
             --output "$PAYLOAD_DIR" \
             --release-id "$RELEASE_ID" \
