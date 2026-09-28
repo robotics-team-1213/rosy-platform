@@ -922,6 +922,10 @@ FLEET_FIT_PROBE = """() => {
   };
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    mapPanel: inside('main > .panel[aria-labelledby="map-heading"]'),
+    mapCanvas: inside('#map-canvas'),
+    visionFrame: inside('#vision-frame'),
+    visionPreview: inside('.vision-preview'),
     signals: inside('.signals'),
     formation: inside('.formation'),
     rosterPanel: inside('main > .panel[aria-labelledby="roster-heading"]'),
@@ -961,6 +965,65 @@ def test_console_fits_the_declared_viewport(console_url):
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
+
+
+def test_fleet_control_groups_are_semantic_subheadings(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
+        )
+        headings = [
+            "같은 네트워크에서 발견",
+            "대형",
+            "신호등",
+        ]
+        for name in headings:
+            assert page.get_by_role("heading", name=name, exact=True).count() == 1
+        assert not errors
+        browser.close()
+
+
+def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
+    from playwright.sync_api import sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["state"]["line_follow"] = {
+        "mode": "CAMERA_LINE",
+        "state": "LOST",
+        "reason": "camera_reselection_required",
+    }
+    snapshot = {"fleet": {"name": "site", "online": 1, "total": 1}, "robots": [robot], "ts": 0.0}
+    api = {
+        "/api/fleet/state": snapshot,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, api, posts=posts, init_script=DECLINE_CONFIRM
+        )
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
+        fallback = page.get_by_role("button", name="IR 추적 선택", exact=True)
+        fallback.wait_for(state="visible")
+        fallback.click()
+        page.wait_for_function("() => window.__confirms?.length === 1")
+        confirm = page.evaluate("window.__confirms[0]")
+        browser.close()
+
+    assert "rosy_01" in confirm and "IR 추적" in confirm and "요청할까요?" in confirm
+    assert not [method_path for method_path in posts if method_path[0] == "POST"]
+    assert errors == []
 
 
 @pytest.mark.parametrize("width", [320, 390])

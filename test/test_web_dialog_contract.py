@@ -28,6 +28,7 @@ PINNED_CONFIRMS = {
     "settings.js": 11,
     "map.js": 1,
     "console.js": 2,   # Fleet 목표 지정과 전체 정지
+    "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
 }
 
 

@@ -242,3 +242,11 @@ The role G2 test on `757fb38f` first stopped at administrator `/device` `confirm
 Rerun command: `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` ? **1 passed, 60 cells**. The generated matrix has overflow 0, page errors 0, and E-stop visible in 60/60 cells. The failed attempt did not write a completed matrix; the passing rerun did.
 
 This adjusts fixture synchronization only, not product behavior. Local API evidence does not prove physical E-stop, Host Agent operation, G3, DEVICE/FIELD, or D-153 acceptance; those remain **HOLD**.
+
+## 2026-09-28 Fleet map/camera and accessible section headings
+
+Desktop Fleet now places its map and camera preview side by side so the declared 1920×1080 screen fits without page scrolling. At 390px and 320px the content stacks vertically; the camera frame no longer pushes the page sideways. The discovery, formation, and signals groups are semantic level-three headings with the prior visual styling.
+
+The recaptured 24 status cells at 1920×1080, 390×844, and 320×844 have no horizontal overflow or page errors; desktop cells also have no vertical document overflow. Three first-boot captures were refreshed. The full Fleet browser and dialog suite passed **32 tests**, Fleet host tests passed **543** with **5 skipped**, and the tagged Docker Fleet image built and ran its CLI help command. Artifacts are under `X:\DevTemp\rosy-uiux-d309-fleet-g2\`.
+
+These are SOURCE/LOCAL results. Real site TLS/camera, CORE/robot readback, physical E-stop, operator G3, and DEVICE/FIELD remain **HOLD**.
