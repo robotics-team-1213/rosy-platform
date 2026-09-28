@@ -60,8 +60,8 @@
 - sensor_adc ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
-- dashboard SOURCE: 2026-09-28 /device host-system and /console mode/teleop feedback updates need dashboard browser regression before SOURCE can return to GO
-- dashboard LOCAL: 2026-09-28 host-system and /console mode/teleop updates need fresh administrator /device and operator /console captures at 1366×768 and 390×844; current screenshots predate these changes
+- dashboard SOURCE: 2026-09-28 /device host-system and /console mode/teleop/line-follow/docking updates need dashboard browser regression before SOURCE can return to GO
+- dashboard LOCAL: 2026-09-28 host-system and /console action-state updates need fresh administrator /device and operator /console captures at 1366×768 and 390×844; current screenshots predate these changes
 - dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
 - omx_adapter ROS-SIM: Simulation evidence is Docker Desktop amd64 only. Target Linux workstation timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
 - omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact

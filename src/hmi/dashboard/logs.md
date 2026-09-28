@@ -381,3 +381,14 @@
 - 변경: `/console` 수동 운전에서 readiness 설명과 주행/정지 결과를 분리했다. state·capability·safety·commissioning 조회 실패 원인을 readiness 영역에 유지하고, 성공 readback이 복구되면 갱신한다. 상태 폴링이 2초 제한 정지·연결 끊김 정지·명령 전송 결과를 덮지 않는다.
 - 정적 확인: 홀드 시작/정지 및 네 상태 조회 성공·실패의 UI 갱신 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀와 새 `/console` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 장치 이동과 안전 readback은 별도다.
+## 2026-09-28 · uncommitted · fix(console): fail closed on stale lane-follow state
+
+- 변경: `/console` 차선 추종에서 상태 조회 오류 시 이전 모드 정보를 지우고 시작·중지 조작을 잠근다. 현재 모드 readback, Navigation capability, 요청 결과를 나눠 폴링이 조작 결과를 덮지 않게 했다. 요청 접수는 실제 추종 시작/중지 readback과 구분한다.
+- 정적 확인: 상태·capability 조회와 모드 변경의 오류·복구 경로를 검토하고 `git diff --check`, Impeccable detector를 실행한다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 라인 추종·센서 동작은 별도다.
+
+## 2026-09-28 · uncommitted · fix(console): keep docking actions locked through readback polls
+
+- 변경: `/console` 도킹 상태, 도크 목록, 명령 결과를 독립 표시한다. 도킹 상태 GET 실패 시 이전 상태를 지우고 명령을 잠근다. 요청 중에는 1초 readback 폴링이 버튼을 다시 활성화하지 않으며, 도크 목록 갱신은 사용자가 고른 위치를 유지한다.
+- 정적 확인: docking status/list/command의 pending·실패·복구 UI 경로를 검토하고 `git diff --check`, Impeccable detector를 실행한다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 도킹 장치 readback은 별도다.
