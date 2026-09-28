@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import logging
 import math
 import sqlite3
 from contextlib import asynccontextmanager
@@ -37,6 +38,7 @@ from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
 WEB_ROOT = Path(__file__).resolve().parent / "web"
+_LOG = logging.getLogger(__name__)
 
 
 async def _site_call(console: FleetConsole, call) -> dict:
@@ -108,6 +110,19 @@ class GoalRequest(BaseModel):
     def _finite_numeric_goal(cls, value):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError("goal coordinates must be finite numbers")
+        return value
+
+
+class DispatchRearmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    expected_generation: int
+
+    @field_validator("expected_generation", mode="before")
+    @classmethod
+    def _non_negative_generation(cls, value):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("expected_generation must be a non-negative integer")
         return value
 
 
@@ -331,6 +346,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                     method=request.method, path=request.url.path,
                 )
             except (OSError, sqlite3.Error, ValueError):
+                if request.url.path == "/api/fleet/estop":
+                    _LOG.exception(
+                        "emergency stop audit unavailable; continuing stop request principal=%s",
+                        principal.principal_id,
+                    )
+                    return principal
                 raise HTTPException(status_code=503, detail={
                     "code": "AUDIT_STORAGE_UNAVAILABLE",
                     "message": "site command audit is unavailable",
@@ -433,6 +454,28 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
         return await console.snapshot()
+
+    if task_service is not None:
+        @app.get("/api/fleet/dispatch-control", dependencies=read_guard,
+                 tags=["fleet-control"])
+        def dispatch_control_readback() -> dict:
+            return task_service.store.dispatch_control()
+
+        @app.post("/api/fleet/dispatch/rearm", dependencies=operator_guard,
+                  tags=["fleet-control"])
+        def dispatch_rearm(
+            body: DispatchRearmRequest,
+            principal: SitePrincipal = Depends(require_operator),
+        ) -> dict:
+            try:
+                return task_service.store.rearm_dispatch(
+                    expected_generation=body.expected_generation,
+                    actor_id=principal.principal_id,
+                )
+            except InvalidTaskTransition as exc:
+                raise HTTPException(status_code=409, detail={
+                    "code": "DISPATCH_REARM_REFUSED", "message": str(exc),
+                }) from exc
 
     @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
     def fleet_session(request: Request) -> dict:
@@ -617,6 +660,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             try:
                 if call.scope == "site":
                     if call.verb == "estop":
+                        if task_service is not None:
+                            task_service.store.trip_stop_latch(actor_id=principal.principal_id)
                         cancel_pending_task_queue(actor_id=principal.principal_id)
                     result = await _site_call(console, call)
                 else:
@@ -664,8 +709,23 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     async def fleet_estop(principal: SitePrincipal = Depends(require_operator)) -> dict:
         # 이쪽은 한 대가 거절해도 200 이다 — 어느 대가 섰고 어느 대가 못 섰는지는 본문에
         # 다 들어 있고, 화면은 그 목록을 보여 줘야 한다.
-        cancel_pending_task_queue(actor_id=principal.principal_id)
-        return await console.estop_all()
+        if task_service is not None:
+            try:
+                task_service.store.trip_stop_latch(actor_id=principal.principal_id)
+            except Exception:
+                _LOG.exception(
+                    "emergency stop dispatch latch unavailable; continuing stop fanout principal=%s",
+                    principal.principal_id,
+                )
+        result = await console.estop_all()
+        try:
+            cancel_pending_task_queue(actor_id=principal.principal_id)
+        except Exception:
+            _LOG.exception(
+                "emergency stop queue cleanup unavailable principal=%s",
+                principal.principal_id,
+            )
+        return result
 
     @app.get("/", include_in_schema=False)
     def root():

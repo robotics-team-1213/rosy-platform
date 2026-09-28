@@ -26,6 +26,17 @@
     <ui-button kind="irreversible" id="estop" class="estop" type="button" aria-label="전체 로봇 정지"><span>전체 정지</span><small>등록된 모든 로봇</small></ui-button>
   </ui-topbar>
 
+  <section id="dispatch-control" class="dispatch-control" role="status"
+           aria-live="polite" aria-labelledby="dispatch-control-title">
+    <div>
+      <strong id="dispatch-control-title">발행 상태 확인 중</strong>
+      <small id="dispatch-control-detail">대기 작업과 정지 세대를 읽고 있습니다.</small>
+    </div>
+    <ui-button id="dispatch-rearm" kind="primary" type="button" hidden>
+      대기 작업 재허가
+    </ui-button>
+  </section>
+
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <section class="panel" aria-labelledby="map-heading">

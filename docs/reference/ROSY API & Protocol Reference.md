@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.45
+**Version:** v1.47
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1146,6 +1146,43 @@ The PRT envelope's `protocol_version` remains `1.0`. `SiteSightingPayload` and
 `FleetTaskStatus` are typed contracts but do not make their REST fields part of
 the robot envelope. DDS remains inside CORE and robot runtime (D-59/D-269).
 
+### 10.11 Fleet dispatch control and explicit rearm (D-330)
+
+The Fleet task dispatcher starts closed on each process start. A site stop also
+closes dispatch and advances a durable, monotonically increasing generation.
+Claims are admitted only while dispatch is enabled and are stamped with the
+current generation. A stop invalidates pre-send claims. A claim persisted as
+`DISPATCHING` or `UNKNOWN` remains held until its result and resource state are
+reconciled; rearm is refused while any such action claim remains.
+
+| Method | Path | Authority | Result |
+|---|---|---|---|
+| GET | `/api/fleet/dispatch-control` | site viewer+ | `{generation, dispatch_enabled, reason, queued_tasks, unresolved_actions, rearm_available}` |
+| POST | `/api/fleet/dispatch/rearm` | site operator | explicitly opens dispatch at a new generation; stale generation or unresolved action returns 409 |
+
+The rearm request is `{ "expected_generation": <integer >= 0> }`. The caller
+must read the current generation and explicitly submit it. The response is the
+new control state. The generation advances on startup hold, site stop, and
+successful rearm; an old request cannot reopen a newer stop. Operator rearm is
+audited using the normal mutation audit rule. Re-arm opens the existing
+navigation dispatcher only; it does not enable Mission, policy, or OMX
+dispatch.
+
+Fleet rechecks the generation immediately before its CORE call. The CORE/device
+consumer does not yet persist or fence the Fleet stop generation, so this local
+check alone does not close a network race and is not a device stop guarantee.
+Mission dispatch remains disabled until a versioned producer/consumer contract
+delivers and enforces the generation at the final device owner. The Fleet stop
+request and physical E-stop/readback remain separate.
+
+The dedicated `POST /api/fleet/estop` requires an authenticated operator but
+still sends the stop fanout if the audit store, dispatch-latch write, or queued
+task cleanup fails. Fleet logs each failed durable step; the response reports
+CORE request outcomes only and is not physical stop proof. Other mutations,
+including goal and rearm, remain blocked with `503 AUDIT_STORAGE_UNAVAILABLE`
+when their pre-command audit record cannot be written. The compound
+`POST /api/fleet/do` continues to use the normal audit gate.
+
 The current single-host dispatcher uses SQLite; there is no RabbitMQ API or
 queue service in this release (D-271). If independent workers later require a
 broker, its versioned message must identify the task and dispatch attempt, have
@@ -1166,6 +1203,8 @@ authorizes navigation or picking.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.46 | 2026-09-29 | Additive (D-330): Fleet dispatch-control readback and explicit generation-checked operator rearm; startup/stop hold, unresolved-action rearm refusal, and device-side generation fencing remains unimplemented. |
+| v1.47 | 2026-09-29 | Clarify (D-330): dedicated operator E-stop fanout proceeds on audit/latch/queue-storage failure with server logging; ordinary mutations remain audit fail-closed; request replies do not prove physical stop. |
 | v1.44 | 2026-09-28 | Additive (D-316): correlate Pinky Site Fleet navigation attempts through optional CORE REST metadata and CORE navigation events; project matching results into durable task status. PRT-004/Envelope ACK and physical stop readback remain separate. |
 | v1.45 | 2026-09-28 | Additive (D-318): bounded rectification settings in signed Site Fleet Vision preview leases; Vision applies OpenCV lens and plane correction only to the returned latest-frame preview copy. Raw sighting input and robot command paths are unchanged. |
 | v1.43 | 2026-09-28 | Additive (D-313): CORE binds IR fallback to fresh IR-line evidence and its configured calibration digest; Fleet operator selection forwards through CORE. Refuse Nav2 goal/home while line-follow owns motion. Robot DDS/WSS envelope remains 1.0. |

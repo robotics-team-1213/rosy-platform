@@ -100,6 +100,8 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
 
     with TestClient(app) as client:
         headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "click-1"}
+        assert client.post("/api/fleet/dispatch/rearm", json={"expected_generation": 1},
+                           headers={"Authorization": "Bearer operator-console"}).status_code == 200
         response = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
                                headers=headers)
         task_id = response.json()["task"]["task_id"]
@@ -150,6 +152,7 @@ def test_uncorrelated_core_completion_event_cannot_complete_a_fleet_task(tmp_pat
     console = FleetConsole([endpoint], [FakeRobot("rosy_01")],
                            event_store=CoreEventStore(database))
     service = FleetTaskService(FleetTaskStore(database), robot_ids={"rosy_01"})
+    service.store.rearm_dispatch(expected_generation=1, actor_id="test-operator")
     app = create_app(console, console_token="operator-console", hub=console.hub,
                      task_service=service,
                      start_task_dispatcher=False)
@@ -303,6 +306,7 @@ def test_task_cancel_only_cancels_queued_task_and_never_calls_core(tmp_path):
     robot = FakeRobot("rosy_01")
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
+    service.store.rearm_dispatch(expected_generation=1, actor_id="test-operator")
     client = TestClient(create_app(
         FleetConsole([endpoint], [robot]), console_token="operator-console",
         task_service=service, start_task_dispatcher=False,
@@ -376,6 +380,7 @@ def test_dispatched_task_cannot_use_queued_cancel_endpoint(tmp_path):
     robot = FakeRobot("rosy_01")
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
+    service.store.rearm_dispatch(expected_generation=1, actor_id="test-operator")
     client = TestClient(create_app(
         FleetConsole([endpoint], [robot]), console_token="operator-console",
         task_service=service, start_task_dispatcher=False,
@@ -465,3 +470,56 @@ def test_intent_site_estop_cancels_all_queued_tasks_after_robot_stop(tmp_path):
     assert stopped.status_code == 200
     assert service.store.get_task(task_id)["status"] == FleetTaskStatus.CANCELED.value
     assert ("estop",) in robot.calls
+
+
+def test_dispatch_rearm_requires_operator_and_current_generation(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    service = FleetTaskService(store, robot_ids={"rosy_01"})
+    app = create_app(
+        FleetConsole([endpoint], [FakeRobot("rosy_01")]),
+        console_token="operator-console", task_service=service,
+        start_task_dispatcher=False,
+    )
+
+    with TestClient(app) as client:
+        assert client.get("/api/fleet/dispatch-control").status_code == 401
+        headers = {"Authorization": "Bearer operator-console"}
+        state = client.get("/api/fleet/dispatch-control", headers=headers)
+        assert state.status_code == 200
+        assert state.json() == {
+            "generation": 1, "dispatch_enabled": False, "reason": "PROCESS_RESTARTED",
+            "queued_tasks": 0, "unresolved_actions": 0, "rearm_available": True,
+        }
+        rearmed = client.post("/api/fleet/dispatch/rearm", json={"expected_generation": 1},
+                              headers=headers)
+        assert rearmed.status_code == 200, rearmed.text
+        assert rearmed.json() == {
+            "generation": 2, "dispatch_enabled": True, "reason": "OPERATOR_REARM",
+            "queued_tasks": 0, "unresolved_actions": 0, "rearm_available": False,
+        }
+        stale = client.post("/api/fleet/dispatch/rearm", json={"expected_generation": 1},
+                            headers=headers)
+        assert stale.status_code == 409
+
+
+def test_dispatch_rearm_refuses_unresolved_action_claims(tmp_path):
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    service = FleetTaskService(store, robot_ids={"rosy_01"})
+    assert store.reserve_resources(
+        owner_kind="mission", owner_id="mission-unknown", generation=0,
+        resources=[("robot", "rosy_01")], phase="UNKNOWN",
+    )
+    app = create_app(
+        FleetConsole([endpoint], [FakeRobot("rosy_01")]),
+        console_token="operator-console", task_service=service,
+        start_task_dispatcher=False,
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/fleet/dispatch/rearm", json={"expected_generation": 2},
+            headers={"Authorization": "Bearer operator-console"},
+        )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "DISPATCH_REARM_REFUSED"

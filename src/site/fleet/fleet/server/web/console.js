@@ -67,6 +67,7 @@ const view = {
   formationUnavailable: false,
   signals: {},    // ROSY-SIGNAL-001 — snapshot 의 signals 캐시
   pendingTasks: {},
+  dispatchControl: null,
   stateUnavailable: false,
   stateLoaded: false,
 };
@@ -104,6 +105,53 @@ async function call(path, options = {}) {
   markUnlocked();
   return body;
 }
+
+async function refreshDispatchControl() {
+  const title = el("dispatch-control-title");
+  const detail = el("dispatch-control-detail");
+  const rearm = el("dispatch-rearm");
+  try {
+    const state = await call("/api/fleet/dispatch-control");
+    view.dispatchControl = state;
+    if (state.dispatch_enabled) {
+      title.textContent = "발행 허용";
+      detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개`;
+    } else if (state.reason === "PROCESS_RESTARTED") {
+      title.textContent = "재시작 뒤 발행 대기";
+      detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
+    } else {
+      title.textContent = "정지 래치로 발행 차단";
+      detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
+    }
+    rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
+    rearm.disabled = auth.locked || !state.rearm_available;
+    return state;
+  } catch (_err) {
+    view.dispatchControl = null;
+    title.textContent = "발행 상태를 확인할 수 없음";
+    detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
+    rearm.hidden = true;
+    rearm.disabled = true;
+    return null;
+  }
+}
+
+el("dispatch-rearm").addEventListener("click", async () => {
+  const state = view.dispatchControl;
+  if (auth.role !== "operator" || auth.locked || !state?.rearm_available) return;
+  if (!window.confirm(`세대 ${state.generation}의 대기 발행을 재허가할까요?`)) return;
+  try {
+    await call("/api/fleet/dispatch/rearm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expected_generation: state.generation }),
+    });
+    log("대기 작업 발행을 재허가했습니다.", "good");
+  } catch (err) {
+    log(`발행 재허가 거부: ${err.message}`, "bad");
+  }
+  await refreshDispatchControl();
+});
 
 
 // --- 로봇 목록 --------------------------------------------------------------
@@ -271,6 +319,7 @@ async function refreshAuthorization() {
     el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     await refreshState();
+    await refreshDispatchControl();
     await refreshDiscovery();
     await formation.refreshFormation();
     render();
@@ -422,6 +471,7 @@ el("estop").addEventListener("click", async () => {
   if (!window.confirm("등록된 모든 로봇을 정지시킵니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
+    await refreshDispatchControl();
     log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
     result.robots.filter((r) => !r.stopped)
       .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
@@ -497,6 +547,7 @@ visionView.refreshSources();
 mapView.refresh();
 setInterval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 setInterval(refreshState, STATE_MS);
+setInterval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);
 setInterval(() => visionView.refreshFrame(), 1500);

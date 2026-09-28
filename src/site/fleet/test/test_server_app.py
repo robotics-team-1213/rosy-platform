@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
@@ -390,7 +391,8 @@ def test_site_user_credentials_cannot_be_reused_for_robot_services(
         })
 
 
-def test_command_is_not_sent_when_audit_storage_cannot_record_the_principal(tmp_path, monkeypatch):
+def test_authenticated_estop_proceeds_and_logs_when_audit_storage_is_unavailable(
+        tmp_path, monkeypatch, caplog):
     robot = FakeRobot("rosy_01")
     task_store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     task_service = FleetTaskService(task_store, robot_ids={"rosy_01"})
@@ -408,8 +410,60 @@ def test_command_is_not_sent_when_audit_storage_cannot_record_the_principal(tmp_
     monkeypatch.setattr(task_store, "begin_api_audit", fail_audit)
     response = client.post("/api/fleet/estop", headers={"Authorization": "Bearer operator-token"})
 
+    assert response.status_code == 200
+    assert ("estop",) in robot.calls
+    assert "operator-1" in caplog.text and "audit" in caplog.text.lower()
+
+
+def test_non_estop_mutation_remains_blocked_when_audit_storage_is_unavailable(
+        tmp_path, monkeypatch):
+    robot = FakeRobot("rosy_01")
+    task_store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    task_service = FleetTaskService(task_store, robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")], [robot]),
+        task_service=task_service,
+        site_users={sha256(b"operator-token").hexdigest(): {
+            "principal_id": "operator-1", "role": "operator",
+        }},
+    ))
+
+    def fail_audit(**_kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(task_store, "begin_api_audit", fail_audit)
+    response = client.post("/api/fleet/robots/rosy_01/goal", json={"x": 1, "y": 2},
+                           headers={"Authorization": "Bearer operator-token",
+                                    "Idempotency-Key": "audit-failure-goal"})
+
     assert response.status_code == 503
-    assert not any(call[0] == "estop" for call in robot.calls)
+    assert not any(call[0] == "navigation_goal" for call in robot.calls)
+
+
+def test_estop_fanout_survives_dispatch_latch_and_queue_storage_failures(tmp_path, monkeypatch,
+                                                                          caplog):
+    robot = FakeRobot("rosy_01")
+    task_service = FleetTaskService(
+        FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
+    client = TestClient(create_app(
+        FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")], [robot]),
+        task_service=task_service,
+        site_users={sha256(b"operator-token").hexdigest(): {
+            "principal_id": "operator-1", "role": "operator",
+        }},
+    ))
+
+    def fail_store(*_args, **_kwargs):
+        raise sqlite3.OperationalError("disk unavailable")
+
+    monkeypatch.setattr(task_service.store, "trip_stop_latch", fail_store)
+    monkeypatch.setattr(task_service, "cancel_all_queued", fail_store)
+    response = client.post("/api/fleet/estop", headers={"Authorization": "Bearer operator-token"})
+
+    assert response.status_code == 200
+    assert ("estop",) in robot.calls
+    assert "dispatch latch unavailable" in caplog.text
+    assert "queue cleanup unavailable" in caplog.text
 
 
 def test_console_page_and_its_assets_are_served():

@@ -67,6 +67,22 @@ input, select { font: inherit; color: inherit; }
 }
 .token.locked { border-color: var(--status-crit-a45); }
 
+.dispatch-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-3) var(--space-5) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-14);
+  border-radius: var(--radius-panel);
+  background: var(--ground-card);
+}
+.dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
+.dispatch-control strong { color: var(--paper); }
+.dispatch-control small { color: var(--muted); line-height: 1.45; }
+#dispatch-rearm[hidden] { display: none; }
+
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
 #roster-toggle[hidden] { display: none; }
 
@@ -346,6 +362,7 @@ main {
   #user-role { grid-column: 1; grid-row: 4; justify-self: start; }
   #clock { grid-column: 2; grid-row: 4; justify-self: end; }
   main { gap: var(--space-3); padding: var(--space-3); }
+  .dispatch-control { align-items: flex-start; flex-direction: column; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
   #map-canvas { height: min(74vw, 22rem); }
   .map-stage[data-map-state="unavailable"] #map-canvas { height: 11rem; }

@@ -20,7 +20,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.45" in reference
+    assert "**Version:** v1.47" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference
@@ -68,7 +68,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.45" in reference
+    assert "**Version:** v1.47" in reference
     assert (
         "## 10.10 Site Fleet intent interpretation and message boundaries "
         "(D-293 Accepted, D-316 Accepted)" in reference
@@ -87,7 +87,6 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     assert "priority_class" in adr
     assert "`protocol_version`은 `1.0`으로 유지" in adr
     assert "RabbitMQ" in adr
-
     # Public request schemas carry only domain intent. Fleet derives identity,
     # priority and dispatch state from authenticated server-side context.
     assert set(GoalRequest.model_fields) == {"x", "y", "yaw"}
@@ -102,6 +101,17 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     assert not {"source_id", "source", "jpeg", "image", "image_url", "policy"}.intersection(
         SiteSightingPayload.model_fields)
     assert schemas.PROTOCOL_VERSION == "1.0"
+
+
+def test_site_estop_audit_failure_boundary_is_documented():
+    reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
+        encoding="utf-8")
+    app = (ROOT / "src/site/fleet/fleet/server/app.py").read_text(encoding="utf-8")
+
+    assert "still sends the stop fanout if the audit store" in reference
+    assert "POST /api/fleet/do` continues to use the normal audit gate" in reference
+    assert "emergency stop audit unavailable" in app
+    assert "emergency stop dispatch latch unavailable" in app
 
 
 def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate():

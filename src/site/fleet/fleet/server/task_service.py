@@ -20,6 +20,7 @@ class FleetTaskService:
         self.store = store
         self.robot_ids = frozenset(robot_ids)
         self.scheduler = FleetTaskScheduler(store, worker_id=worker_id or f"fleet-{uuid4()}")
+        self.store.close_dispatch_for_startup()
         self.scheduler.recover()
 
     async def submit_navigation(
@@ -72,6 +73,10 @@ class FleetTaskService:
         attempt = self.scheduler.begin_dispatch(task["task_id"])
 
         try:
+            if not self.store.dispatch_generation_is_current(attempt["dispatch_generation"]):
+                return self.store.abort_dispatch_before_send(
+                    task["task_id"], attempt_id=attempt["attempt_id"],
+                )
             raw_receipt = await dispatch(attempt)
             if not isinstance(raw_receipt, Mapping):
                 raise RuntimeError("invalid robot receipt")

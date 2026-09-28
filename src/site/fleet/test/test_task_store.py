@@ -8,6 +8,12 @@ from fleet.server.task_store import (
 )
 
 
+def _rearm(store):
+    state = store.dispatch_control()
+    if not state["dispatch_enabled"]:
+        store.rearm_dispatch(expected_generation=state["generation"], actor_id="test-operator")
+
+
 def test_task_history_is_append_only_and_survives_reopen(tmp_path):
     path = tmp_path / "fleet.sqlite3"
     store = FleetTaskStore(path)
@@ -34,6 +40,7 @@ def test_task_history_is_append_only_and_survives_reopen(tmp_path):
 
 def test_readback_reports_server_order_for_queued_tasks_only(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    _rearm(store)
     for task_id in ("background", "operator"):
         store.create_task(
             task_id=task_id, robot_id="rosy_01", task_type="navigate",
@@ -183,6 +190,7 @@ def test_existing_database_is_migrated_without_losing_task_history(tmp_path):
 
 def test_queue_claim_obeys_priority_and_reserves_each_robot_once(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    _rearm(store)
     for task_id, robot_id, priority in (
         ("background", "rosy_01", 2),
         ("operator", "rosy_02", 0),
@@ -211,6 +219,7 @@ def test_queue_claim_obeys_priority_and_reserves_each_robot_once(tmp_path):
 def test_dispatch_attempt_is_stable_and_restart_never_requeues_ambiguous_send(tmp_path):
     path = tmp_path / "fleet.sqlite3"
     store = FleetTaskStore(path)
+    _rearm(store)
     store.create_task(
         task_id="dispatching", robot_id="rosy_01", task_type="navigate",
         source="operator", actor_id="site-console", request_key="dispatch-1",
@@ -232,6 +241,7 @@ def test_dispatch_attempt_is_stable_and_restart_never_requeues_ambiguous_send(tm
 
 def test_expired_pre_dispatch_lease_can_be_claimed_safely_again(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    _rearm(store)
     store.create_task(
         task_id="ready", robot_id="rosy_01", task_type="navigate",
         source="operator", actor_id="site-console", request_key="ready-1",
@@ -253,6 +263,7 @@ def test_expired_pre_dispatch_lease_can_be_claimed_safely_again(tmp_path):
 
 def test_confirmed_traffic_cancel_holds_task_until_release_then_allows_new_attempt(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    _rearm(store)
     store.create_task(
         task_id="traffic", robot_id="rosy_01", task_type="navigate",
         source="operator", actor_id="site-console", request_key="traffic-1",
@@ -285,6 +296,7 @@ def test_confirmed_traffic_cancel_holds_task_until_release_then_allows_new_attem
 
 def test_queued_task_can_be_cancelled_without_core_command_or_cancelling_dispatch(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    _rearm(store)
     store.create_task(
         task_id="cancel-me", robot_id="rosy_01", task_type="navigate",
         source="operator", actor_id="site-console", request_key="cancel-1",
@@ -316,6 +328,7 @@ def test_queued_task_can_be_cancelled_without_core_command_or_cancelling_dispatc
 
 def test_expiry_releases_only_tasks_that_are_confirmed_pre_dispatch(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    _rearm(store)
     for task_id in ("expired", "dispatching"):
         store.create_task(
             task_id=task_id, robot_id=f"{task_id}-robot", task_type="navigate",

@@ -5,6 +5,9 @@ from fleet.server.task_store import FleetTaskStore
 
 
 def _queue(store, task_id="task-1", robot_id="rosy_01"):
+    control = store.dispatch_control()
+    if not control["dispatch_enabled"]:
+        store.rearm_dispatch(expected_generation=control["generation"], actor_id="test-operator")
     store.create_task(
         task_id=task_id, robot_id=robot_id, task_type="navigate",
         source="operator", actor_id="operator", request_key=task_id,
@@ -30,7 +33,7 @@ def test_existing_robot_reservation_is_backfilled_into_generic_claims(tmp_path):
         "resource_id": "rosy_01",
         "owner_kind": "task",
         "owner_id": "task-1",
-        "generation": 0,
+        "generation": 1,
         "phase": "CLAIMED",
     }]
     assert migrated.get_task("task-1")["task_id"] == "task-1"
@@ -51,17 +54,19 @@ def test_mission_candidate_and_navigation_task_share_the_same_robot_claim(tmp_pa
 
 def test_conflicting_multi_resource_claim_is_atomic(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    control = store.dispatch_control()
+    store.rearm_dispatch(expected_generation=control["generation"], actor_id="test-operator")
     assert store.reserve_resources(
-        owner_kind="mission", owner_id="mission-1", generation=1,
+        owner_kind="mission", owner_id="mission-1", generation=control["generation"] + 1,
         resources=[("workcell", "cell-a")],
     ) is True
 
     assert store.reserve_resources(
-        owner_kind="mission", owner_id="mission-2", generation=1,
+        owner_kind="mission", owner_id="mission-2", generation=control["generation"] + 1,
         resources=[("robot", "rosy_01"), ("workcell", "cell-a")],
     ) is False
     assert store.reserve_resources(
-        owner_kind="task", owner_id="task-1", generation=0,
+        owner_kind="task", owner_id="task-1", generation=control["generation"] + 1,
         resources=[("robot", "rosy_01")],
     ) is True
 
@@ -78,7 +83,7 @@ def test_unknown_dispatch_keeps_robot_claim_until_explicit_release(tmp_path):
         owner_kind="mission", owner_id="mission-1", generation=1,
         resources=[("robot", "rosy_01")],
     ) is False
-    assert store.release_resources(owner_kind="task", owner_id="task-1", generation=0) is True
+    assert store.release_resources(owner_kind="task", owner_id="task-1", generation=1) is True
     assert store.reserve_resources(
         owner_kind="mission", owner_id="mission-1", generation=1,
         resources=[("robot", "rosy_01")],
