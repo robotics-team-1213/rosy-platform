@@ -24,5 +24,6 @@ def test_pilot_page_serves_html_with_csp():
 def test_pilot_assets_allowlist_blocks_the_rest():
     client = _client()
     assert client.get("/pilot/assets/styles.css").status_code == 200
+    assert client.get("/pilot/assets/stick.js").status_code == 200
     assert client.get("/pilot/assets/secrets.env").status_code == 404
     assert client.get("/pilot/assets/../api/app.py").status_code == 404
