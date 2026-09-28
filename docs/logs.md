@@ -3217,6 +3217,40 @@
 - gate 변화: 없음. 계획 문서이며 모든 표면 판정은 현행 HOLD를 유지한다.
 - 결정: 없음. ADR 후보(A-1 표정 어휘, A-2 온기 문구)는 해당 회차 도달 시 제안한다.
 
+## 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
+
+- 변경: 색인에만 있던 D-326 본문을 추적하고, D-327/D-328과의 모델→Fleet→장치 권한, 사람 확인, 벤더 명칭 경계를 명시했다. 별도 정합성 검토와 실행 계획에 기존 Fleet 예약·Mission 대기 Step 정지 래치·감사 DB 장애 중 사이트 정지 제한·driver 접수/원장 기록 사이 crash window를 기록했다.
+- 증거: D-308 및 현행 Fleet task/stop/예약·OMX runtime 계약을 대조했다. 문서 계약 시험과 harness lint를 통합 뒤 실행한다.
+- gate 변화: 없음. 자동 정책 재발행, OMX 운영 Action, 사이트 전체 정지 가용성 및 ARTIFACT/DEVICE/FIELD는 HOLD다.
+- 결정: D-326 Accepted 경계를 명확히 기록한다. D-327/D-328은 계속 Proposed이며 새 API·capability 승격은 없다.
+
+## 2026-09-29 · uncommitted · docs(fleet): decide unified Mission admission and stop boundary
+
+- 변경: D-329를 추가해 기존 navigation task와 미래 Mission의 단일 발행 claim, stop generation·재시작 차단, 감사 DB 장애 중 인증된 전용 정지 요청 전송, 장치 Action의 발행 전 기록/불명 결과 HOLD를 결정했다. 통합 구현 계획과 기존 ER 2 계획의 선행 관계를 기록했다.
+- 근거: 현행 `fleet_robot_reservations`의 `fleet_tasks` FK, `cancel_pending_task_queue()`의 navigation 전용 처리, D-276 감사 선행 `503`, OMX 단일 trajectory submitter와 미구현 원격 Action을 대조했다.
+- 검증: Windows 문서 계약 시험 78 passed, harness lint 0 errors/기존 메타데이터 warning 18건, 신규 문서 상대 링크 누락 0건. 코드·ROS-SIM·ARTIFACT·DEVICE·FIELD는 이번 문서 변경에서 미실행이다.
+- gate 변화: 없음. D-329는 구조 Accepted이나 Mission/OMX 운영, 사이트 전체 정지 가용성, 정책 자동 재발의는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(fleet): renumber Fleet control ADR after concurrent D-329
+
+- 변경: 동시에 진행된 표면 계약 ADR이 main에서 D-329를 배정한 사실을 확인했다. 이 브랜치의 Fleet 발행·정지 ADR을 D-330으로 재번호화하고 색인·선행 계획·D-276 부분 대체 참조를 맞췄다. 바로 위 로그는 당시 브랜치 번호의 기록으로 남긴다.
+- 검증: 번호·상대 링크·문서 계약과 현재 main 통합 상태를 다시 확인한다.
+- gate 변화: 없음. D-330은 구조 Accepted이며 구현·실물 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(adr): propose D-329 surface registry and visual baseline
+
+- 변경: `docs/adr/D-329-surface-registry-and-visual-baseline.md` 작성 — 표면 범위 계약의 적용 목록을 `src/hmi/web/surfaces.yaml` 단일 출처로 옮기고, `src/`의 HTML 전부를 레지스트리와 대조해 등록 누락을 빨갛게 만들며, 육안 기준선이 회차 폴더에 실제로 추적돼 있는지와 신규 회차의 `matrix.json` 선언-보존 일치를 시험으로 판정한다. `ROSY ADR Log.md` 목차에 D-329 행을 추가하고 `src/hmi/web/progress.md`의 `adrs`에 연결했다.
+- 증거: 표면 목록 하드코딩 3곳(`src/hmi/web/test/test_shared_controls.py`, `src/hmi/web/test/test_surface_typography_focus_contracts.py`, `test/test_web_dialog_contract.py`)의 멤버십이 서로 다른 것을 대조하고, 추적된 `src/` HTML 8개 중 `sim/gz_sim/scripts/lane_live_view.html`이 어느 목록에도 없는 것을 확인했다. `docs/validation/uiux-surfaces-*` 추적 파일을 집계해 PNG 64장·5회차를 확인하되 최신 회차(2026-09-27)에는 PNG가 0장이고 파일명 규칙이 회차마다 셋 갈리는 것을 확인했다. `test_web_budgets.VERDICTS`(전부를 훑되 예외는 이유로 적는 방식)와 `web_common/ui.js`의 `GRAMMARS` 집합을 결정의 근거로 삼았다. 실행: harness `generate`·`lint` 0 errors(18 warnings, 전부 기존 freshness), `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py` 78 passed.
+- 검증 중 발견한 기존 실패(이 변경과 무관, 미수정): `test/architecture/test_document_placement.py`는 커밋된 루트 `PRODUCT.md`(`ROOT_FILES` 미등록)로 1 fail. `src/hmi/web/test`는 4 fail — `test_a_browser_page_starts_from_the_shell`이 `.gitignore`된 Android 빌드 산출물 `src/site/overhead/android/app/build/**/index.html`을 파일시스템으로 훑어 빨갛고, 나머지 셋은 `src/site/fleet/fleet/server/web/styles.css`의 `.vision-corner-overlay`/`.vision-corner-modes`(공용 포커스 토큰 미사용·`ui-button` 재도색)와 `system.js:50` 버튼 변수 비명시다. 셋 다 워킹 트리에서 `src/site/`·`src/hmi/dashboard` 변경이 없어 HEAD에도 존재한다.
+- gate 변화: 없음. Proposed이며 표면 판정과 DEVICE/FIELD 수용은 바꾸지 않는다.
+- 결정: D-329 Proposed. 표면 계약 적용 범위 단일 출처와 G2 보존 셀 규칙만 정한다. 번들러·공유 컴포넌트 코드·자동 픽셀 판정·D-153 세 계층 변경은 승인하지 않는다.
+- 교훈: "기준선이 없다"는 말은 저장소를 훑기 전에 쓰면 틀리기 쉽다 — 실제로는 64장이 쌓여 있었고 문제는 *최신 회차 0장*과 *회차마다 갈리는 파일명*이었다. 진단 문장을 측정으로 갈아 끼운 뒤에 ADR을 썼다.
+
+## 2026-09-29 · uncommitted · docs(plan): add D-329 surface registry execution plan
+
+- 변경: `docs/plans/2026-09-29-d329-surface-registry.md` 추가 — D-329의 Decision 1–3만 실행하는 계획이다. `src/hmi/web/surfaces.yaml` 스키마(`id`/`path`/`surface`/`audience`/`grammar`/`contracts`/`contract_reason`/`baseline`/`baseline_reason`)를 정하고, 등록 누락을 빨갛게 만드는 신규 시험과 변이 확인 5건, 세 곳의 `SURFACES` 상수를 로더로 바꾸는 T3, 셸 점검을 추적 파일 한정으로 바꾸는 T4를 배치한다. D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 범위 밖으로 못박았다. `docs/plans/AGENTS.md` 목록에 한 행을 더했다.
+- 증거: 계획의 판정선을 재실행으로 확인했다 — `python -m pytest src/hmi/web/test -q`는 4 failed/74 passed이고(지금도 4 failed, 계획 전 기준과 일치), `test/architecture/test_document_placement.py`는 `PRODUCT.md`로 1 failed, harness `lint`는 0 errors/18 warnings, `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py`는 78 passed. 표면 사실도 다시 모았다: 추적 HTML 8개와 각 `grammar` 속성(`dashboard` spatial, `sensing` procedure, `fleet` exception, `games` focal, `surface/styleguide/lane` 없음), 추적 캡처는 2026-09-26 회차의 `console-operate-fresh-1366x768.png`·`fleet-normal-1920x1080.png`·`games-play-1280x800.png`로 채우고 진단·라이브러리·시뮬 뷰어는 `baseline_reason`으로 등록하게 했다.
+- gate 변화: 없음. 계획 문서이며 D-329는 여전히 Proposed다.
 ## 2026-09-29 · uncommitted · fix(dashboard): settled G2 captures, loading state, balanced columns
 
 - 변경: P1 역할 운용 웹 크래프트 회차 — 패널 로딩 상태 표시, `/setup`·`/device` 데스크톱 2열 multicol 전환, action-group 탭 콘텐츠 폭, 접근 토큰 행 침범 수정, G2 harness 조립 완료 대기. main 커밋 상태의 공유 계약 위반 3건(Fleet 토글 재도색·SVG 포커스 링·helper 버튼 kind)도 같은 브랜치에서 복원했다.
