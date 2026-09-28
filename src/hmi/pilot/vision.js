@@ -52,6 +52,8 @@ export function createVisionPreview({
         width: status.body.width, height: status.body.height,
         age_ms: status.body.age_ms,
         at: now(),
+        seq: status.body.seq,
+        blob: frame,
       });
     } catch (error) {
       if (gen === generation) unavailable("카메라 프레임 수신 대기");

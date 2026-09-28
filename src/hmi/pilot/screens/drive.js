@@ -8,6 +8,7 @@ import {createVisionPreview} from "../vision.js";
 import {driverFor} from "../drivers/registry.js";
 import {setSteerInput, setPedal, currentCommandSource, stickMap} from "../input-state.js";
 import {mountInputs} from "./inputs.js";
+import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
 const WHEEL_SWEEP_DEG = 45;
 
@@ -62,18 +63,39 @@ export function mountDrive(root, {onExit} = {}) {
   session.open();
 
   // --- 영상: 인증 JPEG 폴링 --------------------------------------------------
+  // 증거 캡처(D-323 T9): 프레임을 받아 스냅샷·바운드 녹화(5분/60MB)로 연결.
+  const capture = createCameraCapture({
+    save: saveCameraFile,
+    storeOnRobot: null,          // 로봇 SD 업로드는 dashboard 경로 재사용 예정(후속).
+    onChange: (state) => {
+      element.empty.textContent = state.message;
+      if (element.captureButton) {
+        element.captureButton.textContent = state.recording ? "녹화 중지" : "녹화";
+      }
+      if (element.shotButton) element.shotButton.disabled = !state.ready;
+      if (element.recordButton) element.recordButton.disabled = !state.supported;
+    },
+  });
+
   const vision = createVisionPreview({
     apiGet,
     fetchFrame: async (path) => (await fetch(path, {headers: authHeaders()})).blob(),
-    onFrame: (url) => {
+    onFrame: (url, meta) => {
       element.frame.src = url;
       element.frame.hidden = false;
       element.empty.hidden = true;
+      const image = new Image();
+      image.onload = () => capture.acceptFrame({
+        image, blob: meta.blob, sequence: meta.seq, source: "front",
+        capturedAt: meta.at / 1000,
+      });
+      image.src = url;
     },
     onUnavailable: (message) => {
       element.frame.hidden = true;
       element.empty.hidden = false;
       element.empty.textContent = message;
+      capture.unavailable(message);
     },
   });
   vision.start();
@@ -126,8 +148,8 @@ export function mountDrive(root, {onExit} = {}) {
   window.addEventListener("keydown", keyHandler(true));
   window.addEventListener("keyup", keyHandler(false));
 
-  // --- hold-to-drive 루프(100ms) ---------------------------------------------
-  const loop = setInterval(() => {
+  // --- hold-to-drive 루프(100ms) — 조종 사실은 녹화 타임라인에 기록 ----------
+  const loop = setInterval(async () => {
     let source = currentCommandSource();
     if (keys.up || keys.down || keys.left || keys.right) {
       source = {kind: "keys", ...keys};
@@ -135,7 +157,10 @@ export function mountDrive(root, {onExit} = {}) {
       const pad = [...navigator.getGamepads()].find(Boolean);
       if (pad) source = {kind: "pad", x: pad.axes[0] ?? 0, y: -(pad.axes[1] ?? 0)};
     }
-    session.command(stickMap(source));
+    const response = await session.command(stickMap(source));
+    if (response?.status !== undefined) {
+      capture.recordAction(classifyOperation("POST", "/api/v1/teleop", response.status));
+    }
   }, 100);
 
   // --- 조종 중 화면 꺼짐 방지(D-328/T7) + 이탈 즉시 0 -----------------------
@@ -164,6 +189,15 @@ export function mountDrive(root, {onExit} = {}) {
   }, 1000);
 
   const actions = el("ui-actions");
+  const shotButton = el("ui-button", "촬영", {kind: "quiet", type: "button", "data-evidence-shot": ""});
+  shotButton.addEventListener("click", () => capture.screenshot("pc"));
+  const recordButton = el("ui-button", "녹화", {kind: "quiet", type: "button", "data-evidence-record": ""});
+  recordButton.addEventListener("click", () => {
+    if (capture.state().recording) capture.stop();
+    else capture.start();
+  });
+  element.shotButton = shotButton;
+  element.recordButton = recordButton;
   const inputsButton = el("ui-button", "입력", {kind: "quiet", type: "button"});
   let inputsPanel = null;
   inputsButton.addEventListener("click", () => {
@@ -181,7 +215,7 @@ export function mountDrive(root, {onExit} = {}) {
   });
   const exit = el("ui-button", "게이트로", {kind: "quiet", type: "button", "data-drive-exit": ""});
   exit.addEventListener("click", () => teardown());
-  actions.append(inputsButton, exit);
+  actions.append(shotButton, recordButton, inputsButton, exit);
   element.hud.append(actions);
 
   // 진입: 수동 모드 전환(409 MODE_CONFLICT 등은 안내로).

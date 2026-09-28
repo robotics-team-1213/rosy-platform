@@ -204,6 +204,10 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",
         "screens/connect.js": "application/javascript",
+        "screens/drive.js": "application/javascript",
+        "screens/inputs.js": "application/javascript",
+        "input-state.js": "application/javascript",
+        "vision.js": "application/javascript",
         "manifest.webmanifest": "application/manifest+json",
         "sw.js": "application/javascript",
         "icons/icon-192.png": "image/png",
@@ -264,6 +268,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             "core_ui_logic.js": "application/javascript",
             "hold-ticker.js": "application/javascript",
             "ui.js": "application/javascript",
+            "evidence.js": "application/javascript",
         }
         media_type = valid_assets.get(asset_name)
         if not media_type:

@@ -10,6 +10,7 @@ install(FILES
   core_ui_logic.js
   hold-ticker.js
   ui.js
+  evidence.js
   DESTINATION share/${PROJECT_NAME}
 )
 

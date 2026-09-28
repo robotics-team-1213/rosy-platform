@@ -69,3 +69,10 @@
 - gate 변화: 없음.
 - 결정: D-331 Accepted (로드맵·프런트 경계 결정).
 - 교훈: 모듈 추가 시 allowlist 4곳(dev_server MIME·app.py pilot_assets·CMakeLists·route test)은 한 세트다 — 하나 빠지면 화면 전체가 404로 죽는다.
+
+## 2026-09-29 · uncommitted · feat(pilot): camera evidence promotion and drive capture (실행 계획 T9)
+- 변경: dashboard camera-capture.js 를 web_common evidence.js 로 승격(git mv, 바운드 5분/60MB·운용 타임라인 불변)하고 dashboard 는 /common/evidence.js 재수출, Node 시험 MODULE 경로 갱신. pilot drive 에 촬영(PC 저장)·바운드 녹화 버튼과 조종 사실(teleop 200)의 타임라인 기록 연결, /common/evidence.js 서빙(web_common CMake·core_api_web common route·dev_server) 추가, dev_server 에 canned /api/v1/front/evidence 201.
+- 증거: pilot+라우트+dashboard camera+web 109 passed — 잔여 3 failed 는 known 기존 결함(재확인). 로봇 SD 업로드(storeOnRobot)는 dashboard 경로 확인 후 후속.
+- gate 변화: 없음.
+- 결정: D-323.
+- 교훈: 승격 모듈의 서빙 3세트(web_common CMake·core_api_web common route·dev_server)도 새 모듈 allowlist 세트다.

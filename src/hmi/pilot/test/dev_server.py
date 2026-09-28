@@ -54,6 +54,7 @@ COMMON_MIME = {
     "core_ui_logic.js": "application/javascript",
     "hold-ticker.js": "application/javascript",
     "ui.js": "application/javascript",
+    "evidence.js": "application/javascript",
 }
 
 app = FastAPI(title="Rosy Pilot dev server", version="dev")
@@ -172,6 +173,15 @@ def stop(request: Request):
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     STATE["velocity"] = {"linear": 0.0, "angular": 0.0}
     return {"stopped": True}
+
+
+@app.post("/api/v1/front/evidence")
+async def front_evidence(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    await request.body()
+    return JSONResponse({"file_name": "rosy-camera-dev.jpg", "evidence_id": "dev-1"},
+                        status_code=201)
 
 
 @app.websocket("/ws/state")
