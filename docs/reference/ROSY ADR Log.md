@@ -324,4 +324,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 | Proposed (도우미 실물 실행 확인; 무인 토크 활성화와 G4 수용 제외) |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 | Accepted (소스 경로만; 설치 closure·OMX field runtime 별도 HOLD) |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 | Accepted (설계 결정; 구현·서명 릴리스·실물 G4/G5 HOLD) |
+| D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 | Accepted (소스 설계·구현 범위; Isaac 실제 실행·ROS-SIM·DEVICE/FIELD 수용 별도 HOLD) |
+| D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 | Accepted (설계·소스 배치 결정; 구현·장치·현장 수용 별도 HOLD) |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 | Accepted (산출물 범위 선택만; 서명·설치·장치 수용 게이트 유지) |
+| D-326 | 자율 판단 루프는 네 역할로 분리 배치하고 재판단 밸브는 별도 승격으로만 연다 | Accepted (경계·자리 결정만; 구현·폐루프 개방·AI 승격 없음) |

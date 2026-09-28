@@ -57,7 +57,6 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-20-dock-build-design.md` | ?? ?? ?? ?? ? 1? ?? ??, DNC-007 ?? ??, teach-by-docking ??? (DNC) |
 | `2026-09-20-pi-bench-commissioning-design.md` | Pi ?? ???? ? artifact ???readback ?? ??? (D-66) |
 | `2026-09-21-pinky-device-commissioning-design.md` (+ implementation plan) | Fail-closed G0-G5 first physical Pinky Pro session and evidence workflow |
-| `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
 | `2026-09-21-hardware-mapping-g5-design.md` (+ implementation plan) | D-144 hardware SLAM backend, writable map output, and MCAP/hash-bound G5 evidence |
 | `2026-09-21-ubuntu-native-ros-runtime-design.md` | D-161 immediate transition to Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy product runtime |
 | `2026-09-21-ubuntu-native-ros-runtime.md` | Test-first execution plan for native image, services, payload, SD and device evidence |
@@ -88,6 +87,10 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 
 | 2026-09-28-source-folder-roles-and-runtime-audit.md | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
 | 2026-09-28-control-and-contract-boundary-audit.md | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
+| 2026-09-29-rosy-pilot-teleop-app-design.md | D-323 원격 조종 PWA Rosy Pilot(src/hmi/pilot) 설계 — same-origin CORE 서빙, 기기별 드라이버 확장점, NFS 계열 HUD·클릭 조종·카메라 증거 재사용 |
+| 2026-09-29-rosy-pilot-teleop-app.md | D-323 실행 계획 T1~T11 — 패키지 골격·harness 등록부터 stick/link 순수 시험, 게이트 화면, 카메라 증거 web_common 승격, PWA·Playwright 종단, 게이트 기록까지 |
+| `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
+| `2026-09-29-er2-agent-loop-gap-map.md` | ER2형 자율 루프 개념(목표→상위 판단 에이전트→Skill/VLA→Controller→결과→재판단)과 현행 소스 대조 — 아래 절반 실재, 위 절반 계약만 존재(AIV-001), 재판단 마디는 `POLICY_DISPATCH_ENABLED=False` 밸브. 결정은 D-326 |
 ## Subdirectories
 
 None.

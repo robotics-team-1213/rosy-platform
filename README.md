@@ -86,7 +86,8 @@ runtime/sensing의 ROS 패키지 이름은 control이며, 현재 센싱·보정�
     │   └── web/                   # package: web_common 공유 웹 자산
     └── sim/
         ├── description/
-        └── gz_sim/
+        ├── gz_sim/
+        └── isaac_sim/          # Isaac Sim 6.1 standalone integration; GPU runtime validation pending
 
 폴더명과 ROS 패키지 이름은 항상 같지 않다. 예를 들어 hmi/web은 web_common,
 site/overhead는 overhead다. products/omx/adapter는 소스 위치를 말할 뿐,
