@@ -12,6 +12,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from fleet.server.dispatch_admission import release as release_dispatch_claims
+from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
+
 _SENSITIVE_FIELD = re.compile(
     r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
     r"api[_-]?key|private[_-]?key|bearer)",
@@ -122,6 +125,20 @@ class FleetTaskStore:
                     task_id TEXT NOT NULL UNIQUE REFERENCES fleet_tasks(task_id),
                     reserved_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS fleet_action_claims (
+                    resource_key TEXT PRIMARY KEY,
+                    resource_kind TEXT NOT NULL,
+                    resource_id TEXT NOT NULL,
+                    owner_kind TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    generation INTEGER NOT NULL,
+                    phase TEXT NOT NULL,
+                    lease_until TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(resource_key, owner_kind, owner_id, generation)
+                );
+                CREATE INDEX IF NOT EXISTS fleet_action_claims_owner
+                    ON fleet_action_claims(owner_kind, owner_id, generation);
                 CREATE TABLE IF NOT EXISTS fleet_task_core_events (
                     robot_id TEXT NOT NULL,
                     event_id TEXT NOT NULL,
@@ -136,6 +153,7 @@ class FleetTaskStore:
                 """
             )
             self._migrate_task_columns(connection)
+            self._migrate_dispatch_claims(connection)
         if os.name != "nt":
             self.path.chmod(0o600)
 
@@ -184,6 +202,44 @@ class FleetTaskStore:
                           method, path, status_code, created_at
                    FROM fleet_api_audit ORDER BY audit_id DESC LIMIT ?""",
                 (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def reserve_resources(self, *, owner_kind: str, owner_id: str, generation: int,
+                          resources: list[tuple[str, str]], phase: str = "CLAIMED") -> bool:
+        """Atomically reserve canonical resources for a task, Mission, or direct Action."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            claimed = reserve_dispatch_claims(
+                connection, owner_kind=owner_kind, owner_id=owner_id,
+                generation=generation, resources=resources, phase=phase,
+            )
+            connection.commit()
+        return claimed
+
+    def release_resources(self, *, owner_kind: str, owner_id: str,
+                          generation: int | None = None) -> bool:
+        """Release only the matching owner generation after outcome reconciliation."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            released = release_dispatch_claims(
+                connection, owner_kind=owner_kind, owner_id=owner_id,
+                generation=generation,
+            )
+            if owner_kind == "task":
+                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
+                                   (owner_id,))
+            connection.commit()
+        return released > 0
+
+    def resource_claims(self, *, resource_kind: str, resource_id: str) -> list[dict]:
+        resource_key = f"{resource_kind}:{resource_id}"
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT resource_kind, resource_id, owner_kind, owner_id,
+                          generation, phase
+                   FROM fleet_action_claims WHERE resource_key=?""",
+                (resource_key,),
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -282,6 +338,8 @@ class FleetTaskStore:
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
+                release_dispatch_claims(connection, owner_kind="task",
+                                         owner_id=row["task_id"], generation=0)
                 self._append_history(connection, row["task_id"], "EXPIRED", "scheduler",
                                      "site-scheduler", now, "TASK_EXPIRED")
             stale_claims = connection.execute(
@@ -296,6 +354,8 @@ class FleetTaskStore:
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
+                release_dispatch_claims(connection, owner_kind="task",
+                                         owner_id=row["task_id"], generation=0)
             selected = None
             if robot_ids:
                 placeholders = ",".join("?" for _ in robot_ids)
@@ -304,8 +364,8 @@ class FleetTaskStore:
                         WHERE t.status='QUEUED' AND t.dispatch_phase='READY'
                           AND t.robot_id IN ({placeholders})
                           AND (t.lease_until IS NULL OR t.lease_until <= ?)
-                          AND NOT EXISTS (SELECT 1 FROM fleet_robot_reservations r
-                                          WHERE r.robot_id=t.robot_id)
+                          AND NOT EXISTS (SELECT 1 FROM fleet_action_claims c
+                                          WHERE c.resource_key='robot:' || t.robot_id)
                         ORDER BY t.priority_class ASC, t.queued_at ASC, t.task_id ASC LIMIT 1""",
                     (*robot_ids, now),
                 ).fetchone()
@@ -316,6 +376,14 @@ class FleetTaskStore:
                 "UPDATE fleet_tasks SET lease_owner=?, lease_until=?, updated_at=? WHERE task_id=?",
                 (worker_id, lease_until, now, selected["task_id"]),
             )
+            claimed = reserve_dispatch_claims(
+                connection, owner_kind="task", owner_id=selected["task_id"],
+                generation=0, resources=[("robot", selected["robot_id"])],
+                phase="CLAIMED", lease_until=lease_until,
+            )
+            if not claimed:
+                connection.rollback()
+                return None
             connection.execute(
                 "INSERT INTO fleet_robot_reservations(robot_id, task_id, reserved_at) VALUES (?, ?, ?)",
                 (selected["robot_id"], selected["task_id"], now),
@@ -344,6 +412,14 @@ class FleetTaskStore:
                    attempt_seq=attempt_seq+1, updated_at=? WHERE task_id=?""",
                 (attempt_id, now, task_id),
             )
+            claim = connection.execute(
+                """UPDATE fleet_action_claims SET phase='DISPATCHING', lease_until=NULL
+                   WHERE resource_key='robot:' || ? AND owner_kind='task'
+                     AND owner_id=? AND generation=0 AND phase='CLAIMED'""",
+                (current["robot_id"], task_id),
+            )
+            if claim.rowcount != 1:
+                raise InvalidTaskTransition("task no longer owns its robot dispatch claim")
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
                                      (task_id,)).fetchone()
             connection.commit()
@@ -375,6 +451,8 @@ class FleetTaskStore:
                 (reason, blocked_by, waiting_json, now, task_id),
             )
             connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?", (task_id,))
+            release_dispatch_claims(connection, owner_kind="task", owner_id=task_id,
+                                     generation=0)
             self._append_history(connection, task_id, "QUEUED", current["source"],
                                  current["actor_id"], now, reason)
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
@@ -428,6 +506,8 @@ class FleetTaskStore:
                 (now, task_id),
             )
             connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?", (task_id,))
+            release_dispatch_claims(connection, owner_kind="task", owner_id=task_id,
+                                     generation=0)
             self._append_history(connection, task_id, "CANCELED", "operator", actor_id, now,
                                  "OPERATOR_CANCELED_BEFORE_DISPATCH")
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
@@ -483,6 +563,8 @@ class FleetTaskStore:
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (row["task_id"],))
+                release_dispatch_claims(connection, owner_kind="task",
+                                         owner_id=row["task_id"], generation=0)
             connection.commit()
         return recovered
 
@@ -534,6 +616,8 @@ class FleetTaskStore:
             if status in {"FAILED", "COMPLETED", "HOLD", "CANCELED", "EXPIRED"}:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (task_id,))
+                release_dispatch_claims(connection, owner_kind="task", owner_id=task_id,
+                                         generation=0)
             connection.commit()
         return self._task_dict(row)
 
@@ -677,10 +761,31 @@ class FleetTaskStore:
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (task_id,))
+                release_dispatch_claims(connection, owner_kind="task", owner_id=task_id,
+                                         generation=0)
                 self._append_history(connection, task_id, "CANCELED", "operator", actor_id, now,
                                      "OPERATOR_CANCELED_BEFORE_DISPATCH")
             connection.commit()
         return task_ids
+
+    @staticmethod
+    def _migrate_dispatch_claims(connection: sqlite3.Connection) -> None:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            """INSERT OR IGNORE INTO fleet_action_claims
+               (resource_key, resource_kind, resource_id, owner_kind, owner_id,
+                generation, phase, lease_until, created_at)
+               SELECT 'robot:' || r.robot_id, 'robot', r.robot_id, 'task', r.task_id,
+                      0,
+                      CASE WHEN t.status='UNKNOWN' THEN 'UNKNOWN'
+                           WHEN t.dispatch_phase='DISPATCHING' THEN 'DISPATCHING'
+                           ELSE 'CLAIMED' END,
+                      CASE WHEN t.dispatch_phase='READY' THEN t.lease_until ELSE NULL END,
+                      r.reserved_at
+               FROM fleet_robot_reservations r
+               LEFT JOIN fleet_tasks t ON t.task_id=r.task_id"""
+        )
+        connection.commit()
 
     @staticmethod
     def _migrate_task_columns(connection: sqlite3.Connection) -> None:
