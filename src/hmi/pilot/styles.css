@@ -1,20 +1,60 @@
-/* Rosy Pilot 표면 규칙 — 색·타이포·공통 컨트롤은 web_common tokens(D-130.3).
-   배치·간격만 여기 둔다. ui-* 컨트롤 자체를 다시 칠하지 않는다.
-   간격은 스텝 척도(--space-N)와 의미 역할(--gap-form, D-292)만 쓴다. */
+/* Rosy Pilot 표면 규칙 — dashboard 표면 CSS 의 규율을 그대로 따른다(concept 16,
+ * D-72, D-82): tokens.css 외 색 없음, 간격은 스텝 척도, 굵기는 폰트 다계단.
+ * 패널은 상자가 아니라 기둥 섹션이다 — 테두리 대신 세로 리듬으로 구성한다.
+ */
 
-[data-screen="connect"] {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: start;
+:root { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; background: var(--ground-deep); }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--paper);
+  background: var(--ground);
+  font-family: var(--body);
+  font-size: var(--text-body);
 }
+
+.pilot-main {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  max-width: 48rem;
+  margin-inline: auto;
+  padding: var(--space-5);
+}
+
+/* 패널 — 한 일을 하는 한 기둥. 상자가 아니다. */
+.pilot-panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.pilot-panel ui-head { margin: 0; }
 
 form[data-pilot-token-form] {
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap-form);
-  width: min(100%, 420px);
+  max-width: 30rem;
 }
 
-form[data-pilot-token-form] ui-field {
-  flex: 1 1 220px;
+form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+  .pilot-main { padding: var(--space-4); }
 }

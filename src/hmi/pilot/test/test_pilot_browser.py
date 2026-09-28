@@ -1,7 +1,7 @@
 """D-323 — /pilot 접속 게이트의 브라우저 계약(dev_server 가짜 CORE).
 
-태블릿 뷰포트(2000×1200·1200×2000)에서 디자인 시스템 준수를 기계로 판정한다:
-토큰 폼(ui-field), 401 안내, 정상 토큰 → READY 기계 값. 다른 브라우저 시험과
+dashboard 패널 조립 문법(ui-head + dl.ui-readout + ui-actions, 상단 e-stop)을
+태블릿 뷰포트(2000×1200·1200×2000)에서 기계로 판정한다. 다른 브라우저 시험과
 같은 옵트인(ROSY_RUN_BROWSER_TESTS=1).
 """
 
@@ -45,6 +45,10 @@ def base_url():
     thread.join(timeout=5)
 
 
+def _gate_value(page) -> str:
+    return page.locator('dl[data-gate-readout] dd').first.inner_text()
+
+
 @pytest.fixture
 def tablet_page(base_url):
     with playwright_sync.sync_playwright() as playwright:
@@ -59,7 +63,7 @@ def tablet_page(base_url):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_gate_form_follows_the_design_system_at_tablet_viewports(base_url):
+def test_gate_panel_follows_the_dashboard_composition(base_url):
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -69,10 +73,14 @@ def test_gate_form_follows_the_design_system_at_tablet_viewports(base_url):
                 page.on("pageerror", lambda exc: errors.append(str(exc)))
                 page.goto(f"{base_url}/pilot")
                 page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+                # 패널 조립: ui-head 제목 + ui-readout 사실 + 토큰 폼.
+                assert page.locator('ui-head#pilot-gate-heading').inner_text() == "접속 게이트"
+                assert page.locator("dl[data-gate-readout] dt").count() >= 2
+                assert _gate_value(page) == "WAIT"
+                # 상단: 역할 태그 + 관제 이동 + 항상 닿는 비상 정지(irreversible).
                 assert page.locator("ui-topbar ui-tag").count() == 1
-                assert page.locator("ui-head [data-gate-value]").inner_text() == "WAIT"
-                # 두 앱 왕래: 관제(/dashboard)로 가는 조용한 버튼이 상단에 있다(§3 경로 계약).
                 assert page.locator('ui-topbar ui-button[data-goto="/dashboard"]').count() == 1
+                assert page.locator("ui-topbar ui-button[data-estop][kind='irreversible']").count() == 1
                 # 토큰 단일 출처: tokens.css 가 :root 에 스텝 척도를 내려놓는다(D-130.3).
                 step = page.evaluate(
                     "getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim()")
@@ -95,7 +103,7 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     page.fill("form[data-pilot-token-form] ui-field input", "wrong-token")
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("text=토큰이 유효하지 않습니다")
-    assert page.locator("ui-head [data-gate-value]").inner_text() == "BLOCK"
+    assert _gate_value(page) == "BLOCK"
     assert errors == [], errors
 
 
@@ -108,7 +116,8 @@ def test_dev_token_passes_the_gate_and_survives_reload(tablet_page):
     page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("text=조종 준비 완료")
-    assert page.locator("ui-head [data-gate-value]").inner_text() == "READY"
+    assert _gate_value(page) == "READY"
+    assert page.locator("dl[data-gate-readout] dt", has_text="운전 역할").count() == 1
     page.reload()
     page.wait_for_selector("text=조종 준비 완료")
     assert errors == [], errors

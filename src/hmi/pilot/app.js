@@ -4,6 +4,7 @@
 import {registerDriver} from "./drivers/registry.js";
 import {pinkyCore} from "./drivers/pinky_core.js";
 import {mountConnect} from "./screens/connect.js";
+import {postJson} from "./client.js";
 
 registerDriver(pinkyCore.kind, pinkyCore);
 
@@ -11,11 +12,8 @@ const root = document.querySelector('[data-screen="connect"]');
 if (root) {
   mountConnect(root, {
     onReady({role}) {
-      const note = document.querySelector('[data-pilot-note]');
-      if (note) {
-        note.textContent =
-          `게이트 통과(${role}). 주행 화면은 다음 단계(T7)에서 열립니다.`;
-      }
+      const note = document.querySelector("[data-pilot-note]");
+      if (note) note.textContent = `게이트 통과(${role}).`;
     },
   });
 }
@@ -24,5 +22,15 @@ if (root) {
 for (const button of document.querySelectorAll("[data-goto]")) {
   button.addEventListener("click", () => {
     location.assign(button.dataset.goto);
+  });
+}
+
+// 상단 비상 정지 — 모든 화면에 항상 닿는다. CORE 의 정지는 소프트웨어 정지다
+// (triage 규칙: 전원 차단이라 말하지 않는다).
+for (const button of document.querySelectorAll("[data-estop]")) {
+  button.addEventListener("click", async () => {
+    const notice = document.querySelector("#pilot-notice");
+    if (notice) notice.textContent = "정지 요청을 보냈습니다";
+    await pinkyCore.stop(postJson);
   });
 }

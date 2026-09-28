@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101214">
   <title>Rosy Pilot</title>
   <link rel="stylesheet" href="/common/tokens.css">
   <link rel="stylesheet" href="/common/components.css">
@@ -13,23 +14,17 @@
 <body>
   <ui-shell grammar="spatial">
     <ui-topbar>
-      <ui-brand>
-        <b>Rosy Pilot</b>
-        <small>Pinky 직접 조종</small>
-      </ui-brand>
+      <ui-brand><b>ROSY</b><small>Pilot — 직접 조종</small></ui-brand>
       <span data-spacer></span>
+      <ui-text id="pilot-notice" scale="label" role="status"></ui-text>
       <ui-tag data-gate-state>대기</ui-tag>
       <ui-button kind="quiet" type="button" data-goto="/dashboard">관제 화면</ui-button>
+      <ui-button kind="irreversible" type="button" data-estop>비상 정지</ui-button>
     </ui-topbar>
-    <main>
-      <ui-section aria-labelledby="pilot-gate-heading">
-        <ui-head>
-          <ui-text id="pilot-gate-heading" scale="label">GATE</ui-text>
-          <ui-text scale="value" data-gate-value>WAIT</ui-text>
-        </ui-head>
-        <div data-screen="connect"></div>
-        <ui-empty data-pilot-note>Pinky CORE 연결을 확인합니다.</ui-empty>
-      </ui-section>
+    <main id="pilot-main" class="pilot-main">
+      <h1 class="sr-only">Rosy Pilot — 접속 게이트</h1>
+      <ui-empty data-pilot-note>Pinky CORE 연결을 확인합니다.</ui-empty>
+      <section class="pilot-panel" data-screen="connect" aria-labelledby="pilot-gate-heading"></section>
     </main>
   </ui-shell>
 </body>
