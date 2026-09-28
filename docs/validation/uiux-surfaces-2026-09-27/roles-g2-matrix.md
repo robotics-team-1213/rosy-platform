@@ -106,3 +106,9 @@ This is LOCAL browser evidence. Actual robot line-follow/docking readback and mo
 Focused map-panel Chromium regression passed within the **22 passed** full panel suite. It covered separate robot/capability/commissioning errors, map-data freshness, a no-map target click with no confirmation or POST, and accepted/failed target feedback retained through explicit map refreshes. Full-shell captures at 1366x768 and 390x844 show the empty-map state beside robot-state readiness failure and the not-sent action result. Both have horizontal overflow 0, no page errors, and visible E-stop. Artifacts are in `X:\DevTemp\rosy-uiux-d306-roles-g2\map-data-action\`.
 
 The full G2 command reported 8 passed and 1 failed in an administrator `/device` `confirm_cancel` fixture (rollback control unexpectedly disabled); it did not complete a new 60-cell matrix. This case is outside the map panel. The dedicated map regression and captures pass; robot map/target readback, physical E-stop, G3, DEVICE/FIELD, and D-153 remain **HOLD**.
+
+## 2026-09-28 administrator board hardware refresh feedback
+
+Focused Chromium panel regression passed **1 test**. During a pending refresh POST, measurement polling updated independently; accepted request receipt persisted across later measurements, and POST error remained visible after measurement-read failure. The dedicated full-shell capture test passed at 1366x768 and 390x844. Both screenshots were visually inspected: horizontal overflow 0, page errors 0, E-stop visible. Controlled local fixture only; full G2 matrix was not rerun. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
+
+SOURCE/LOCAL browser verification is complete for `17f30137`. Actual Host Agent readback, physical device completion, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.

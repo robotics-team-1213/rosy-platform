@@ -859,3 +859,92 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
         browser.close()
     (capture_dir / "console-map-data-action-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_admin_hardware_refresh_feedback_full_shell_captures(tmp_path):
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "host-hardware-refresh"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            posts = []
+            phase = {"accepted": False}
+            page.add_init_script("""sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-admin');
+              const nativeSetInterval=window.setInterval.bind(window);
+              window.setInterval=(fn,delay,...args)=>nativeSetInterval(fn,delay===10000?250:delay,...args);""")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                request = route.request
+                path = urlsplit(request.url).path
+                if request.method == "POST" and path == "/api/v1/host/hardware/refresh":
+                    posts.append({"path":path,"method":request.method})
+                    phase["accepted"] = True
+                    route.fulfill(status=202, content_type="application/json", body='{"accepted":true}')
+                    return
+                if request.method != "GET":
+                    route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                    return
+                if path == "/api/v1/ui/surfaces/device":
+                    response = _response(client, path, TOKENS["administrator"], "normal", "device")
+                    manifest = response.json() if hasattr(response, "json") else json.loads(response.body)
+                    if not any(panel["id"] == "host.hardware" for panel in manifest["panels"]):
+                        manifest["panels"].append({
+                            "id":"host.hardware", "title":"Board hardware", "slot":"main", "order":80,
+                            "module":"/assets/panels/host/hardware.js",
+                            "css":["/assets/panels/host/hardware.css"], "state":"available", "reason":None,
+                        })
+                    response = Response(content=json.dumps(manifest), media_type="application/json")
+                elif path == "/api/v1/host/hardware":
+                    stamp = "2026-09-28T02:00:00Z" if phase["accepted"] else "2026-09-28T01:00:00Z"
+                    response = Response(content=json.dumps({
+                        "available":True,"measured_at":stamp,"age_s":2,
+                        "devices":[{"id":"camera","label":"Camera","state":"ok","evidence":"fixture readback"}],
+                    }), media_type="application/json")
+                else:
+                    response = _response(client, path, TOKENS["administrator"], "normal", "device")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type":response.headers.get("content-type","application/octet-stream"),
+                    "cache-control":"no-store",
+                }, body=response.content if hasattr(response,"content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+            panel = page.locator('[data-panel="host.hardware"]')
+            page.wait_for_selector('[data-panel="host.hardware"] .hardware-refresh')
+            page.wait_for_function("document.querySelector('[data-panel=\"host.hardware\"] .hardware-measured dd')?.textContent.length > 0")
+            measured = panel.locator(".hardware-measured dd")
+            action = panel.locator("#hardware-action-note")
+            before = measured.inner_text()
+            panel.locator(".hardware-refresh").click()
+            page.wait_for_function("document.querySelector('#hardware-action-note')?.textContent.length > 0 && document.querySelector('[data-panel=\"host.hardware\"] .hardware-refresh')?.disabled === false")
+            page.wait_for_function("previous => document.querySelector('[data-panel=\"host.hardware\"] .hardware-measured dd')?.textContent !== previous", arg=before)
+            accepted = action.inner_text()
+            assert accepted and measured.inner_text() != before
+            page.wait_for_timeout(350)
+            assert action.inner_text() == accepted
+            assert posts == [{"path":"/api/v1/host/hardware/refresh","method":"POST"}]
+            filename = f"administrator-device-hardware-refresh-{width}x{height}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            measured_result = page.evaluate("""() => ({
+              overflowX:Math.max(0,document.documentElement.scrollWidth-innerWidth),
+              eStopVisible:document.querySelector('#shell-estop')?.getBoundingClientRect().right<=innerWidth,
+              measurement:document.querySelector('[data-panel="host.hardware"] .hardware-measured dd')?.textContent||'',
+              periodicStatus:document.querySelector('[data-panel="host.hardware"] .hardware-note')?.textContent||'',
+              action:document.querySelector('#hardware-action-note')?.textContent||'',
+            })""")
+            assert measured_result["overflowX"] == 0 and measured_result["eStopVisible"] and errors == [], measured_result
+            assert measured_result["measurement"] and measured_result["periodicStatus"] and measured_result["action"] == accepted
+            records.append({"viewport":f"{width}x{height}","image":filename,"posts":posts,
+                            "errors":errors,**measured_result})
+            context.close()
+        browser.close()
+    (capture_dir / "admin-hardware-refresh-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

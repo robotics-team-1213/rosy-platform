@@ -1212,3 +1212,68 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         _unmount_panel(page)
         assert errors == []
         browser.close()
+
+
+def test_device_hardware_refresh_feedback_survives_measurement_polls():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "host" / "hardware.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/host/hardware.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount}=await import('/assets/panels/host/hardware.js');
+          const root=document.createElement('main');root.id='hardware-panel';document.body.append(root);
+          const callbacks={};const store={poll(path,_interval,onData,onError){callbacks[path]={onData,onError};return()=>{};}};
+          const calls=[];let resolvePost;let rejectPost=false;window.__calls=calls;
+          window.__rejectRefresh=value=>{rejectPost=value;};window.__resolveRefresh=value=>resolvePost(value);
+          const api=async(path,options={})=>{
+            calls.push({path,method:options.method||'GET'});
+            if(rejectPost)throw new Error('fixture refresh failed');
+            return new Promise(resolve=>{resolvePost=resolve;});
+          };
+          window.__callbacks=callbacks;
+          window.__unmount=mount(root,{role:'administrator',api,store});
+          callbacks['/api/v1/host/hardware'].onData({available:true,measured_at:'2026-09-28T01:00:00Z',age_s:5,
+            devices:[{id:'camera',label:'Camera',state:'ok',evidence:'fixture initial'}]});
+        }""")
+        panel = page.locator("#hardware-panel")
+        measured = panel.locator(".hardware-measured dd")
+        note = panel.locator(".hardware-note")
+        action = panel.locator("#hardware-action-note")
+        refresh = panel.locator(".hardware-refresh")
+        initial_measurement = measured.inner_text()
+        refresh.click()
+        page.wait_for_function("window.__calls.length === 1")
+        assert refresh.is_disabled()
+        pending = action.inner_text()
+        page.evaluate("window.__callbacks['/api/v1/host/hardware'].onData({available:true,measured_at:'2026-09-28T02:00:00Z',age_s:3,devices:[{id:'camera',label:'Camera',state:'ok',evidence:'fixture during POST'}]})")
+        assert measured.inner_text() != initial_measurement
+        assert action.inner_text() == pending
+        page.evaluate("window.__resolveRefresh({accepted:true})")
+        page.wait_for_function("previous => document.querySelector('#hardware-action-note')?.textContent !== previous", arg=pending)
+        assert refresh.is_enabled()
+        accepted = action.inner_text()
+        page.evaluate("window.__callbacks['/api/v1/host/hardware'].onData({available:true,measured_at:'2026-09-28T03:00:00Z',age_s:1,devices:[{id:'camera',label:'Camera',state:'ok',evidence:'fixture after POST'}]})")
+        assert measured.inner_text() != initial_measurement
+        assert action.inner_text() == accepted
+        page.evaluate("window.__rejectRefresh(true); document.querySelector('#hardware-panel .hardware-refresh').click()")
+        page.wait_for_function("document.querySelector('#hardware-action-note')?.textContent.includes('fixture refresh failed')")
+        failed = action.inner_text()
+        page.evaluate("window.__callbacks['/api/v1/host/hardware'].onError(new Error('fixture measurement unavailable'))")
+        assert "fixture measurement unavailable" in note.inner_text()
+        assert action.inner_text() == failed
+        assert page.evaluate("window.__calls") == [
+            {"path":"/api/v1/host/hardware/refresh","method":"POST"},
+            {"path":"/api/v1/host/hardware/refresh","method":"POST"},
+        ]
+        page.evaluate("window.__unmount()")
+        assert errors == []
+        browser.close()
