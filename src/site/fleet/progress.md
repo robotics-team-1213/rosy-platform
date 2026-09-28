@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "778bbd31", date: 2026-09-27 }
+last_verified: { commit: "016df3ab", date: 2026-09-28 }
 gates:
   SOURCE:
     state: GO
@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "542 passed, 5 skipped (Windows, 2026-09-28); includes D-316 exact attempt event projection and cancel UNKNOWN regression. Revision 778bbd31 linux/amd64 packaged Compose smoke: 3 services healthy; TLS-authenticated browser/API; operator task and synthetic CORE events persisted. Local Windows/CPU/synthetic fixtures only; Ubuntu, GPU, physical devices, dispatch and field acceptance remain unverified (docs/validation/2026-09-26-site-stack-container-smoke.md)"
+    evidence: "543 passed, 5 skipped; Fleet browser/dialog suite 32 passed. Current UI G2 recaptured 24 state cells at 1920x1080/390x844/320x844 with no page errors or horizontal overflow; desktop document overflow 0. Docker image rosy-site-fleet:uiux-headings built (sha256:f83ee98c9c38269ed6b6490327e92a4c93bb67278b42b0af4421d74e55ebb8c0), container CLI help ran. SOURCE/LOCAL only; Ubuntu, GPU, physical devices, dispatch and field acceptance remain unverified (docs/validation/2026-09-26-site-stack-container-smoke.md)"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD

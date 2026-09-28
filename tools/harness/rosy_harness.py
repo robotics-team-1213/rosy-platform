@@ -72,6 +72,8 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     # append-only, so preserve the original records and allowlist their exact
     # headings; the identity-feedback entry also lacks the three standard
     # field labels, so the canonical follow-up entry records the evidence.
+    # Preserve the committed latest-main role G2 rerun heading as well.
+    "## 2026-09-28 - uiux/device-refresh-access - rerun latest-main role G2",
     "## 2026-09-28 - uiux/mobile-acceptance - test: verify localization pending action state",
     "## 2026-09-28 - uiux/device-security-feedback-evidence - fix: clear stale token list after mutation refresh failure",
     "## 2026-09-28 - uiux/host-console-readback-evidence - verify independent readbacks and mode feedback",

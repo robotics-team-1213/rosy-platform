@@ -181,6 +181,15 @@ def test_exact_legacy_heading_is_ignored_even_if_it_matches_current_schema():
     assert harness.validate_log(legacy) == []
 
 
+def test_committed_role_g2_heading_is_preserved_as_legacy():
+    legacy = """## 2026-09-28 - uiux/device-refresh-access - rerun latest-main role G2
+- First attempt: browser readiness check ran before release readback completed
+- Rerun: 60 browser cells passed
+- Gate: physical stop and field acceptance remain HOLD
+"""
+    assert harness.validate_log(legacy) == []
+
+
 def test_append_only_logs_accept_legacy_evidence_label():
     legacy = GOOD_LOG.replace("- 증거:", "- 근거:")
     assert harness.validate_log(legacy) == []
