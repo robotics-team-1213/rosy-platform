@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(console): keep mode request feedback visible
 - 2026-09-28 · uncommitted · fix(device): separate host capability and inventory readback
 - 2026-09-28 · uncommitted · test(dashboard): verify latest security feedback
 - 2026-09-28 · uncommitted · test(dashboard): verify setup browser gates
 - 2026-09-28 · uncommitted · fix(device): keep security and safety feedback distinct
-- 2026-09-28 · uncommitted · fix(docs): validate dashboard source hold record

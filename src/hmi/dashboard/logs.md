@@ -371,3 +371,8 @@
 - 변경: 관리자 `/device` 시스템 패널에서 CORE capability 요약과 상세 인벤토리 조회 상태를 따로 표시한다. 한 조회의 성공/실패가 다른 조회 상태를 덮지 않게 하고, capability·인벤토리·호스트 런타임·로봇 신원 조회가 실패하면 해당 영역의 이전 값을 지워 현재값으로 오인하지 않게 한다.
 - 정적 확인: 런타임·신원·capability·inventory GET 성공/실패 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀와 새 관리자 `/device` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 Host Agent 및 장치 readback은 별도다.
+## 2026-09-28 · uncommitted · fix(console): keep mode request feedback visible
+
+- 변경: `/console` 운전 모드의 현재 readback, Navigation capability, 모드 변경 결과를 각각 표시한다. 1초 모드 폴링이 요청 접수/오류를 덮지 않으며 capability 조회 결과도 별도 영역에서 확인한다. 모드 요청 문구는 접수와 실제 현재 모드 readback을 구분한다.
+- 정적 확인: 상태·capability 폴링과 모드 POST의 화면 갱신 경로를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 로봇의 실제 모드 전환은 별도다.

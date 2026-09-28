@@ -7,7 +7,11 @@ const MODES = [
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "운전 모드");
-  const status = el("ui-status", "", "현재 모드를 불러오는 중입니다.");
+  const modeStatus = el("ui-status", "", "현재 모드를 불러오는 중입니다.");
+  const capabilityStatus = el("ui-status", "", "Navigation 기능 지원 확인 중입니다.");
+  const actionStatus = el("ui-status");
+  actionStatus.setAttribute("role", "status");
+  actionStatus.setAttribute("aria-live", "polite");
   const controls = el("ui-actions", "surface-actions");
   const buttons = new Map();
   for (const mode of MODES) {
@@ -15,7 +19,8 @@ export function mount(root, ctx) {
     button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.disabled = true;
     controls.append(button); buttons.set(mode.id, button);
   }
-  root.append(head, status, controls);
+  root.append(head, modeStatus, capabilityStatus, actionStatus, controls);
+  function setStatus(target, text) { if (target.textContent !== text) target.textContent = text; }
   let current = "";
   let navigationAvailable = false;
   let pending = false;
@@ -26,28 +31,38 @@ export function mount(root, ctx) {
     }
   }
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
-    current = state.mode || ""; status.textContent = `현재 모드: ${current || "확인 중"}`; update();
-  }, (error) => { current = ""; status.textContent = `현재 모드를 읽지 못했습니다: ${error.message}`; update(); });
+    current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${current || "확인 중"}`); update();
+  }, (error) => { current = ""; setStatus(modeStatus, `현재 모드를 읽지 못했습니다: ${error.message}`); update(); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (caps) => {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
+    capabilityStatus.textContent = navigationAvailable
+      ? "Navigation 기능을 사용할 수 있습니다."
+      : `Navigation을 사용할 수 없습니다.${caps?.navigation?.reason ? ` ${caps.navigation.reason}` : " 이 profile에서 제한되거나 제공되지 않습니다."}`;
+    capabilityStatus.setAttribute("state", navigationAvailable ? "ready" : "warning");
     if (!navigationAvailable) {
       const nav = buttons.get("NAVIGATION"); nav.title = "이 프로필에서는 Navigation이 제한되거나 제공되지 않습니다.";
       nav.setAttribute("aria-description", nav.title);
     }
     update();
-  }, (error) => { navigationAvailable = false; status.textContent = `모드 capability를 확인하지 못했습니다: ${error.message}`; update(); });
+  }, (error) => {
+    navigationAvailable = false;
+    capabilityStatus.textContent = `Navigation 기능 지원을 확인할 수 없습니다: ${error.message}`;
+    capabilityStatus.setAttribute("state", "error");
+    update();
+  });
   for (const mode of MODES) {
     buttons.get(mode.id).addEventListener("click", async () => {
       const button = buttons.get(mode.id);
       if (button.disabled || pending || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
       if (!window.confirm(mode.prompt)) return;
       pending = true; update();
+      setStatus(actionStatus, `${mode.id} 모드 요청을 보내는 중입니다.`);
       // Ask any active hold-to-drive panel to send zero before changing mode.
       window.dispatchEvent(new Event("rosy:stop-motion"));
       try {
         await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: mode.id})});
-        status.textContent = `${mode.id} 모드 요청을 전달했습니다.`;
-      } catch (error) { status.textContent = `모드 변경 실패: ${error.message}`; }
+        setStatus(actionStatus, `${mode.id} 모드 요청을 CORE가 받았습니다. 현재 모드 readback은 위에서 확인하세요.`);
+      } catch (error) { setStatus(actionStatus, `모드 변경 실패: ${error.message}`); }
       finally { pending = false; update(); }
     });
   }
