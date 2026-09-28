@@ -132,12 +132,27 @@ python -m pytest test/test_network_topology_contracts.py test/test_harness_contr
 
 **완료 판정** — 아래는 이 계획과 무관한 기존 실패이고, 이 계획이 건드리지 않았다는 것을 확인하는 쪽으로 잡는다.
 
-| 항목 | 이 계획 전 (로컬) | 이 계획 후 기대 |
-|---|---|---|
-| `src/hmi/web/test` failed | 4 | **3** — Android 산출물 1건이 T4로 초록이 되고, 남는 셋(`styles.css` `.vision-corner-overlay` 포커스 토큰, `.vision-corner-modes` `ui-button` 재도색, `system.js:50` 버튼 변수)은 그대로다 |
-| `test/architecture/test_document_placement.py` | 1 failed (`PRODUCT.md`) | 1 failed 그대로 — 루트 `PRODUCT.md`가 `ROOT_FILES`에 없다 (`27e6da33`의 몫) |
-| harness lint | 0 error | 0 error |
-| `test_harness_contracts.py` | 78 passed | 78 passed |
+| 항목 | 이 계획 전 (로컬, 실제 측정) | 이 계획 후 기대 | 이 계획 후 실제 |
+|---|---|---|---|
+| `src/hmi/web/test` | 1 failed / 77 passed | **0 failed** — Android 산출물 1건이 T4로 초록이 된다 | 0 failed / 87 passed |
+| `test/test_web_dialog_contract.py` | 3 passed | 그대로 | 3 passed |
+| `test/architecture/test_document_placement.py` | 1 failed (`PRODUCT.md`) | 1 failed 그대로 — 루트 `PRODUCT.md`가 `ROOT_FILES`에 없다 (`27e6da33`의 몫) | 1 failed 그대로 |
+| `src/hmi/dashboard/test` | 1 failed (`test_web_budgets`) | 그대로 | 1 failed 그대로 |
+| `src/site/fleet/test src/site/games/test` | – | 변화 없음 | 647 passed, 5 skipped |
+| harness lint | 0 error | 0 error | 0 error (18 warnings, 전부 기존 freshness) |
+| `test_harness_contracts.py` | 78 passed | 78 passed | 78 passed |
+| `test/architecture/test_module_structure.py` | – | 신규 `.py` 2개가 예산·구조 게이트를 통과해야 한다 | 33 passed |
+
+> 계획을 쓸 때 측정한 `src/hmi/web/test` 4 failed는 그 시점의 값이다. 동시 세션의
+> `e155371e`(공용 조작 부품 계약 복구)가 셋을 고쳐 이 계획을 실행할 시점에는 1 failed로
+> 내려와 있었다. 남은 1건(`test_a_browser_page_starts_from_the_shell`)이 이 계획의 T4 대상이다.
+
+**`src/hmi/dashboard/test`의 남은 실패 1건도 같은 종류의 기존 결함이다** —
+`test_web_budgets.py`가 파일시스템 `SRC.rglob`으로 `.js`/`.html`을 훑어
+`.gitignore`된 `src/site/overhead/android/build/**/problems-report.html`을 예산 초과
+후보로 집는다. 그 파일은 추적되지 않는다(`src/site/overhead/android/.gitignore:6`). 이 파일은
+이 계획이 건드리지 않았고(`5b5a0bdd` 이후 변경 없음) CI에도 없다. D-329 Decision 3
+"tracked files only"를 이미 지키는 이 계획의 발견 스캔으로 바꾸는 것이 자연스러운 후속이다.
 
 ## 산출물
 
