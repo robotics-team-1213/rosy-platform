@@ -64,9 +64,12 @@
     <string name="settings_mdns_intro">같은 Wi-Fi에서 Site Vision 수신기와 로봇 CORE를 검색합니다. 발견 정보에는 인증 토큰이 포함되지 않습니다.</string>
     <string name="settings_mdns_scan">mDNS 서버 검색</string>
     <string name="settings_mdns_rescan">다시 검색</string>
-    <string name="settings_mdns_scanning">주변 서버를 검색하고 있습니다…</string>
-    <string name="settings_mdns_empty">검색된 서버가 없습니다. 서버와 태블릿이 같은 네트워크인지 확인하거나 QR/수동 설정을 사용하세요.</string>
+    <string name="settings_mdns_scanning">주변 서버를 검색하고 있습니다. 최대 18초 걸릴 수 있습니다.</string>
     <string name="settings_mdns_wifi_required">태블릿 Wi-Fi가 연결되어 있지 않습니다. Site Vision 및 로봇 CORE와 같은 LAN에 먼저 연결하세요.</string>
+    <string name="settings_mdns_overhead_heading">Site Vision 수신기</string>
+    <string name="settings_mdns_overhead_empty">발견된 Site Vision 수신기가 없습니다. 서버가 같은 Wi-Fi에서 mDNS 광고를 켰는지 확인하거나 QR/수동 주소로 연결하세요.</string>
     <string name="settings_mdns_overhead">Site Vision · %1$s\nTLS 주소 %2$s:%3$d · 카메라 수신기</string>
+    <string name="settings_mdns_robot_heading">로봇 CORE (참고용)</string>
+    <string name="settings_mdns_robot_empty">발견된 로봇 CORE가 없습니다.</string>
     <string name="settings_mdns_robot">로봇 CORE · %1$s\nAPI 주소 %2$s:%3$d · 카메라 영상 대상이 아닙니다</string>
 </resources>

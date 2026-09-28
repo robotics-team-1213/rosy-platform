@@ -87,32 +87,56 @@ fun SettingsScreen(
                 robotServices = emptyList()
                 scanGeneration += 1
             },
-        ) { Text(stringResource(if (scanning) R.string.settings_mdns_rescan else R.string.settings_mdns_scan)) }
+        ) {
+            Text(
+                stringResource(
+                    if (scanning || overheadServices.isNotEmpty() || robotServices.isNotEmpty()) {
+                        R.string.settings_mdns_rescan
+                    } else {
+                        R.string.settings_mdns_scan
+                    },
+                ),
+            )
+        }
         if (scanning) Text(stringResource(R.string.settings_mdns_scanning))
         if (!wifiConnected) {
             Text(stringResource(R.string.settings_mdns_wifi_required), color = MaterialTheme.colorScheme.error)
-        } else if (!scanning && overheadServices.isEmpty() && robotServices.isEmpty()) {
-            Text(stringResource(R.string.settings_mdns_empty), style = MaterialTheme.typography.bodySmall)
-        }
-        overheadServices.forEach { service ->
-            OutlinedButton(
-                onClick = {
-                    host = service.tlsHost
-                    port = service.port.toString()
-                    secure = true
-                    invalid = null
-                    saved = false
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.settings_mdns_overhead, service.name, service.tlsHost, service.port))
+        } else {
+            Text(stringResource(R.string.settings_mdns_overhead_heading), style = MaterialTheme.typography.titleSmall)
+            if (overheadServices.isEmpty()) {
+                if (!scanning) {
+                    Text(stringResource(R.string.settings_mdns_overhead_empty), style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                overheadServices.forEach { service ->
+                    OutlinedButton(
+                        onClick = {
+                            host = service.tlsHost
+                            port = service.port.toString()
+                            secure = true
+                            invalid = null
+                            saved = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.settings_mdns_overhead, service.name, service.tlsHost, service.port))
+                    }
+                }
             }
-        }
-        robotServices.forEach { service ->
-            Text(
-                stringResource(R.string.settings_mdns_robot, service.name, service.host, service.port),
-                style = MaterialTheme.typography.bodySmall,
-            )
+
+            Text(stringResource(R.string.settings_mdns_robot_heading), style = MaterialTheme.typography.titleSmall)
+            if (robotServices.isEmpty()) {
+                if (!scanning) {
+                    Text(stringResource(R.string.settings_mdns_robot_empty), style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                robotServices.forEach { service ->
+                    Text(
+                        stringResource(R.string.settings_mdns_robot, service.name, service.host, service.port),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
         if (locked) {
             Text(stringResource(R.string.settings_locked), color = MaterialTheme.colorScheme.error)

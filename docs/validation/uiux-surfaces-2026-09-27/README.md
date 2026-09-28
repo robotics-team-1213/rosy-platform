@@ -250,3 +250,11 @@ Desktop Fleet now places its map and camera preview side by side so the declared
 The recaptured 24 status cells at 1920×1080, 390×844, and 320×844 have no horizontal overflow or page errors; desktop cells also have no vertical document overflow. Three first-boot captures were refreshed. The full Fleet browser and dialog suite passed **32 tests**, Fleet host tests passed **543** with **5 skipped**, and the tagged Docker Fleet image built and ran its CLI help command. Artifacts are under `X:\DevTemp\rosy-uiux-d309-fleet-g2\`.
 
 These are SOURCE/LOCAL results. Real site TLS/camera, CORE/robot readback, physical E-stop, operator G3, and DEVICE/FIELD remain **HOLD**.
+
+## 2026-09-28 overhead camera discovery empty state - DEVICE UI
+
+On the connected Lenovo tablet (1200x2000), the camera settings screen discovered a robot CORE record but no Site Vision receiver. Before the follow-up, the visible robot record suppressed the generic empty state, leaving the camera destination unclear. The screen now separates the Site Vision and robot CORE groups, explains when no receiver is advertised, marks CORE as informational, labels the 18-second discovery window, and offers a rescan when records are present.
+
+The updated debug app was installed with `adb install -r` without clearing app data. Screenshots under `X:\DevTemp\rosy-overhead-device-review\` show the initial screen, discovery in progress, completed scan with a missing receiver, and 1.3x system text scale. The text-scale setting was restored to 1.0. The settings content remained readable and within the viewport at the tested size.
+
+This verifies device UI layout and the local mDNS result only. No Site Vision endpoint was discovered, and no camera stream, TLS handshake, or frame readback was tested. It does not advance D-153, G3, or FIELD acceptance.
