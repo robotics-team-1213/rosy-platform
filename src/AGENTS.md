@@ -20,7 +20,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `products/` | `pinky_pro/` (`profile/` package `pinky_pro`, `bringup`, `adc`, `lamp`, `led`) and `omx/` (`profile/` package `omx`, `adapter/` package `omx_adapter`) |
 | `drivers/` | `imu_bno055` chip driver; product reuse is verified separately |
 | `hmi/` | `face/` (package `emotion`, robot LCD), `web/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`) |
-| `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
+| `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64), `isaac_sim` (Isaac Sim integration area) |
 | `site/` | `fleet/` (site mission/task ledger and console), `overhead/` (camera-derived sighting input), and `games/` (game host) |
 
 ## For AI Agents

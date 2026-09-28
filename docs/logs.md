@@ -3129,6 +3129,27 @@
 - 변경: D-321의 첫 단계에 Linux 카드 복구 도구와 사용 절차를 연결하고 카드 readback과 첫 부팅 실측을 구분했다.
 - 증거: 현재 변경은 소스와 절차만이다. 장치 전원은 차단된 상태이며 카드 복구 영수증은 없다.
 - gate 변화: 설계는 Accepted, 실제 복구와 G4/G5는 HOLD다.
+## 2026-09-29 · uncommitted · feat(sim): add Isaac Sim 6.1 integration decision
+
+- 변경: D-322와 공식 자료 조사, 공통 xacro backend 선택, Isaac URDF/USD 변환 및 단일 로봇 ROS 2 그래프 경로를 추가했다.
+- 증거: Isaac 전용 호스트 pytest 6 passed, 1 skipped (Windows; xacro 부재). Isaac GPU runtime, 실제 ROS graph·정지 시험은 미실행이다.
+- gate 변화: 소스·호스트 계약만 확인했다. Isaac ROS-SIM, DEVICE, FIELD는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(adr): record D-323 Rosy Pilot teleop app design
+
+- 변경: `ROSY ADR Log.md`에 D-323(Rosy Pilot 원격 조종 PWA, src/hmi/pilot)을 추가하고, 이 세션 logs가 먼저 쓴 Isaac Sim 연동 결정을 D-322로 같이 등재해 번호 충돌을 정리했다. `plans/2026-09-29-rosy-pilot-teleop-app-design.md` 작성, `plans/AGENTS.md` 지도에 등재.
+- 증거: ADR 로그 3열 행 형식 유지(D-321 → D-322 Isaac → D-323 pilot). 구현 전 설계 문서이므로 모듈 게이트 변화 없음.
+- gate 변화: 없음.
+- 결정: D-323 Accepted (설계·소스 배치 결정; 구현·장치·현장 수용 별도 HOLD). D-322 목차 행은 Isaac 세션 본문 `docs/adr/D-322-isaac-sim-rosy-integration.md` 제목·상태와 맞췄다.
+- 교훈: 같은 날 다른 세션과 ADR 번호가 겹칠 수 있다 — 번호를 잡기 전에 `docs/logs.md` 끝의 미커밋 항목부터 확인한다.
+
+## 2026-09-29 · uncommitted · docs(plan): write D-323 Rosy Pilot execution plan
+
+- 변경: `plans/2026-09-29-rosy-pilot-teleop-app.md` 작성(TDD 태스크 T1~T11: /pilot 라우트·harness 등록·stick/link 순수 시험·드라이버 레지스트리·게이트·주행 화면·입력 조정·카메라 증거 web_common 승격·PWA·Playwright 종단·게이트 기록), `plans/AGENTS.md` 지도에 등재.
+- 증거: 태스크 검증 방식은 기존 패턴에 맞췄다 — JS 순수함수는 Node 서브프로세스(dashboard `_run_js`), 브라우저는 가짜 CORE Playwright(`test_dashboard_browser.py` 패턴), 자산 라우트는 `api/app.py` `_dashboard_root()` 미러. 구현 전 계획 문서.
+- gate 변화: 없음.
+- 결정: D-323 후속 실행 계획.
+- 교훈: 없음
 
 ## 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
 
@@ -3165,3 +3186,18 @@
 - 변경: 다른 작업이 main에서 D-326을 자율 판단 루프 경계로 배정한 사실을 확인했다. 이 브랜치의 의미적 조작 ADR D-326을 D-327로, 목표 증거 ADR D-327을 D-328로 재번호화하고 후속 계획·상대 링크·ADR 목록을 갱신했다. 위의 과거 로그 항목은 당시 브랜치 번호의 기록으로 보존한다.
 - 검증: 번호·상대 링크·문서 계약을 새 main 기준으로 다시 검증한다.
 - gate 변화: 없음. ADR 상태는 Proposed이고 실제 API·장치 수용은 HOLD다.
+## 2026-09-29 · uncommitted · docs(plan): map the ER2-style agent loop against current source
+
+- 변경: `plans/2026-09-29-er2-agent-loop-gap-map.md` 작성 — 외부 개념 그림(사용자 목표→상위 판단 에이전트→Skill/VLA→Controller/Robot→센서·결과→재판단)을 마디별로 현행 소스와 대조했다. `plans/AGENTS.md` 지도에 재기재.
+- 증거: `task_service.py`의 `POLICY_DISPATCH_ENABLED=False`(정책 발의 즉시 HOLD), `task_scheduler.py` 가용성 기반 claim, `decision/router.py`의 no-network/no-actuator 제약, `games/catalog.py` 플러그인 카탈로그, sensing/overhead 관측 경로를 직접 읽었고 FLEET SRS §14 AIV-001·11_AI 문서·D-268/D-209/D-290과 대조했다. 결론: 루프 아래 절반은 실재, 위 절반은 계약만 있고 구현 0%.
+- gate 변화: 없음.
+- 결정: 없음. 문서는 대조 기록이며 어떤 마디의 승인·밸브 개방도 아니다. "ER2"는 외부 어휘로만 다루고 `CONCEPTS.md`에 채택하지 않았다.
+- 교훈: 폐루프의 마지막 마디(재판단)는 결함이 아니라 코드화된 의도적 밸브다 — 개념 그림 대조 시 "없음"과 "닫혀 있음"을 구분해 기록해야 한다.
+
+## 2026-09-29 · uncommitted · docs(adr): record D-326 agent loop boundary
+
+- 변경: 갭맵의 결론을 `docs/adr/D-326-agent-loop-boundary.md`로 결정 기록했다. 네 인지 역할의 자리 고정(장면 이해=증거 생산자, 작업 분해=Fleet Mission Planner, 선택=스케줄러, 재판단=원장+사람 확인), 상위 에이전트는 Fleet API 소비자로만 존재, 재판단 밸브는 D-268 처분·Mission/Step 원장·사람 확인 위치를 정하는 별도 ADR 없이 열지 않음, "ER2"는 프로젝트 어휘 미채택. `ROSY ADR Log.md` 목차에 D-326 행 추가, 갭맵·`plans/AGENTS.md`에서 링크.
+- 증거: harness `generate`·`lint` 통과(ADR 목차↔본문 정합), 계약 시험 `test_network_topology_contracts.py`·`test_harness_contracts.py`·`test_module_scorecard.py`·`test/architecture/test_module_structure.py` 통과.
+- gate 변화: 없음.
+- 결정: D-326 Accepted (경계·자리 결정만; 구현·폐루프 개방·AI 승격 별도 HOLD).
+- 교훈: 외부 개념을 ADR로 옮길 때 개념 명칭이 아니라 역할의 자리와 개방 조건을 결정 문장으로 만들어야 추적 가능해진다.

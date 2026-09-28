@@ -143,7 +143,10 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
+| D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
+| D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-326 | 자율 판단 루프는 네 역할로 분리 배치하고 재판단 밸브는 별도 승격으로만 연다 |
 | D-327 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 |
 | D-328 | 모델 제안 Mission과 독립 목표 증거를 분리한다 |
 
@@ -209,8 +212,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(adr): record D-326 agent loop boundary
+- 2026-09-29 · uncommitted · docs(plan): map the ER2-style agent loop against current source
 - 2026-09-29 · uncommitted · docs(er2): renumber proposed ADRs after D-326 collision
 - 2026-09-29 · uncommitted · plan(er2): stage semantic Action and Mission implementation
 - 2026-09-29 · uncommitted · docs(er2): preserve user Isaac Sim analysis and separate mission outcome evidence
-- 2026-09-29 · uncommitted · docs(omx): define semantic pick and place ADR
-- 2026-09-29 · uncommitted · docs(omx): propose embodied reasoning to Device Action boundary

@@ -97,6 +97,7 @@ data/drive/**
 reference/src/*.zip
 
 # Agent and tool state, per-machine (.omc/skills is committable)
+.impeccable/
 .omc/
 !.omc/skills/
 .omo/
