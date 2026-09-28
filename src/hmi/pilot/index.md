@@ -10,6 +10,7 @@
 | ID | 제목 |
 |---|---|
 | D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 |
+| D-328 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 |
 
 ## 계획·결과 문서
 
@@ -26,6 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(pilot): recompose the gate screen with the dashboard panel grammar
+- 2026-09-29 · uncommitted · feat(pilot): record the served-path contract and add dashboard navigation
+- 2026-09-29 · uncommitted · fix(pilot): design-system gate screen, mDNS entry path, browser contract
 - 2026-09-29 · uncommitted · docs(pilot): harness 등록과 문서 지도 (실행 계획 T2)
-- 2026-09-29 · 434ceb0b · feat(pilot): stick.js 순수 입력 매핑 (실행 계획 T3)
-- 2026-09-29 · 8f4ecfe2 · feat(hmi): pilot 골격과 /pilot 라우트 (실행 계획 T1)
+- 2026-09-29 · uncommitted · docs(pilot): 원형 휠·동시 녹화 실현성 평가를 D-323에 보강

@@ -204,6 +204,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",
         "screens/connect.js": "application/javascript",
+        "manifest.webmanifest": "application/manifest+json",
+        "sw.js": "application/javascript",
+        "icons/icon-192.png": "image/png",
+        "icons/icon-192-maskable.png": "image/png",
+        "icons/icon-512.png": "image/png",
     }
 
     @app.get("/pilot", include_in_schema=False)
@@ -226,10 +231,14 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         media_type = pilot_assets.get(asset_name)
         if media_type is None:
             raise HTTPException(status_code=404, detail="pilot asset not found")
+        headers = {"Cache-Control": "no-cache"}
+        if asset_name == "sw.js":
+            # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수(D-328).
+            headers["Service-Worker-Allowed"] = "/pilot"
         return FileResponse(
             pilot_root / asset_name,
             media_type=media_type,
-            headers={"Cache-Control": "no-cache"},
+            headers=headers,
         )
 
     # D-129 — 토큰 파일은 트리 전체에서 하나다. 모든 웹 표면이 이 한 파일을

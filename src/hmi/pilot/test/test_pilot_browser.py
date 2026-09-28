@@ -85,6 +85,19 @@ def test_gate_panel_follows_the_dashboard_composition(base_url):
                 step = page.evaluate(
                     "getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim()")
                 assert step, "tokens.css 가 적용되지 않았다"
+                # 설치형(D-328): manifest 링크 + 서비스 워커 등록(localhost = secure context).
+                manifest_href = page.evaluate(
+                    "document.querySelector('link[rel=manifest]')?.href ?? ''")
+                assert manifest_href.endswith("/pilot/assets/manifest.webmanifest")
+                registered = page.evaluate("""(async () => {
+                  for (let i = 0; i < 40; i++) {
+                    const reg = await navigator.serviceWorker.getRegistration('/pilot');
+                    if (reg) return true;
+                    await new Promise((resolve) => setTimeout(resolve, 250));
+                  }
+                  return false;
+                })()""")
+                assert registered, "서비스 워커가 등록되지 않았다"
                 overflow = page.evaluate(
                     "document.documentElement.scrollWidth - document.documentElement.clientWidth")
                 assert overflow <= 0, f"가로 넘침 {overflow}px ({width}x{height})"

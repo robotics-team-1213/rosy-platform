@@ -35,6 +35,11 @@ PILOT_MIME = {
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "screens/connect.js": "application/javascript",
+    "manifest.webmanifest": "application/manifest+json",
+    "sw.js": "text/javascript",
+    "icons/icon-192.png": "image/png",
+    "icons/icon-192-maskable.png": "image/png",
+    "icons/icon-512.png": "image/png",
 }
 COMMON_MIME = {
     "tokens.css": "text/css",
@@ -74,8 +79,11 @@ def pilot_asset(asset_name: str):
     media = PILOT_MIME.get(asset_name)
     if media is None:
         return JSONResponse({"detail": "pilot asset not found"}, status_code=404)
-    return FileResponse(PILOT / asset_name, media_type=media,
-                        headers={"Cache-Control": "no-cache"})
+    headers = {"Cache-Control": "no-cache"}
+    if asset_name == "sw.js":
+        # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수.
+        headers["Service-Worker-Allowed"] = "/pilot"
+    return FileResponse(PILOT / asset_name, media_type=media, headers=headers)
 
 
 @app.get("/common/{asset_name:path}", include_in_schema=False)

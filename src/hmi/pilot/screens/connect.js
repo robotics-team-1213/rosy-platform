@@ -63,6 +63,22 @@ function renderTokenForm(root, message, gate = "WAIT", tokenFact = "필요") {
   if (message) root.append(el("ui-status", message, {role: "status"}));
 }
 
+function renderOffline(root, onReady) {
+  setTag("오프라인");
+  notice("CORE 에 연결할 수 없습니다");
+  const offline = el("ui-status", "CORE 에 연결할 수 없습니다. 네트워크와 로봇 전원을 확인하세요.",
+    {role: "status", "data-pilot-offline": ""});
+  const actions = el("ui-actions");
+  const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
+  retry.addEventListener("click", () => check(root, onReady));
+  actions.append(retry);
+  root.replaceChildren(
+    el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
+    readoutPair([["게이트", "WAIT"], ["연결", "끊김"]]),
+    offline, actions,
+  );
+}
+
 async function check(root, onReady) {
   const gate = driverFor(DRIVER_KIND);
   setTag("확인 중");
@@ -74,7 +90,13 @@ async function check(root, onReady) {
     el("ui-empty", "연결을 확인하고 있습니다…"),
   );
 
-  const me = await whoami();
+  // 오프라인/서버 부재: 조종 경로를 열지 않고 사실을 말한다(D-328 — sw 는 /api 를 캐시하지 않는다).
+  let me;
+  try {
+    me = await whoami();
+  } catch (error) {
+    return renderOffline(root, onReady);
+  }
   if (me.status === 401) {
     clearToken();
     setTag("차단");
@@ -84,7 +106,12 @@ async function check(root, onReady) {
   }
   facts.push(["운전 역할", me.body?.role ?? "—"]);
 
-  const caps = await fetchCapabilities();
+  let caps;
+  try {
+    caps = await fetchCapabilities();
+  } catch (error) {
+    return renderOffline(root, onReady);
+  }
   const verdict = gate.assessGate({role: me.body?.role, capabilities: caps.body ?? {}});
   if (!verdict.allowed) {
     setTag("차단");

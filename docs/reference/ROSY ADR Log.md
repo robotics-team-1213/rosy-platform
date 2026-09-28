@@ -325,3 +325,4 @@
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 | Accepted (소스 경로만; 설치 closure·OMX field runtime 별도 HOLD) |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 | Accepted (설계 결정; 구현·서명 릴리스·실물 G4/G5 HOLD) |
 | D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 | Accepted (설계·소스 배치 결정; 구현·장치·현장 수용 별도 HOLD) |
+| D-328 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 | Accepted (설치 형식 결정; 구현·장치·현장 수용 별도 HOLD) |

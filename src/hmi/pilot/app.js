@@ -34,3 +34,9 @@ for (const button of document.querySelectorAll("[data-estop]")) {
     await pinkyCore.stop(postJson);
   });
 }
+
+// 설치형(D-328): PWA. 서비스 워커는 앱 셸만 캐시하고 /api·/ws 는 네트워크 전용.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/pilot/assets/sw.js", {scope: "/pilot"})
+    .catch((error) => console.warn("service worker registration failed", error));
+}

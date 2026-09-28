@@ -48,3 +48,10 @@
 - gate 변화: 없음(LOCAL 진행 중).
 - 결정: D-323.
 - 교훈: 계약 통과와 화면 구성은 별개다 — 조립 문법은 반드시 기존 표면 코드(overview.js·surface-panels.css)에서 직접 추출한다.
+
+## 2026-09-29 · uncommitted · feat(pilot): PWA installation first — D-328 (실행 계획 T10)
+- 변경: manifest.webmanifest(standalone·가로·scope /pilot)·sw.js(앱 셸 캐시, /api·/ws 네트워크 전용·오프라인 조종 금지)·토큰 색 아이콘(any 192/512+maskable)·SW 등록·connect 오프라인 안내. 새 ADR D-328 — 설치형은 PWA 우선, Capacitor 는 네이티브 전용 수요 실측까지 보류. 서버 두 곳에 sw.js 의 Service-Worker-Allowed: /pilot 헤더(scope 가 스크립트 디렉터리보다 넓어 필수). adr_gaps 에 D-324~327 타 세션 선점 선언.
+- 증거: pilot+라우트 29 passed — manifest 링크·SW 등록(재시도 대기)·게이트 전 플로우·뷰포트 2종 넘침 0. lint 0 errors, architecture+harness 계약 136 passed.
+- gate 변화: LOCAL 진행(설치형 계약 첫 확보).
+- 결정: D-328 Accepted (설치 형식 결정; 구현·장치·현장 수용 별도 HOLD).
+- 교훈: SW scope 가 스크립트 디렉터리보다 넓으면 서버가 Service-Worker-Allowed 를 내려줘야 한다. register() 실패를 조용히 삼키지 말고 console.warn 으로 남긴다.

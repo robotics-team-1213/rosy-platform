@@ -22,7 +22,7 @@ gates:
     blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"
   FIELD:
     state: N/A
-adrs: [D-323]
+adrs: [D-323, D-328]
 plans:
   - docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app.md
