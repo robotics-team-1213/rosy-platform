@@ -143,6 +143,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
+| D-324 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
 
 ## 계획·결과 문서
 
@@ -189,6 +190,7 @@
 - [2026-09-28-camera-fault-supervised-demo.md](plans/2026-09-28-camera-fault-supervised-demo.md)
 - [2026-09-28-control-and-contract-boundary-audit.md](plans/2026-09-28-control-and-contract-boundary-audit.md)
 - [2026-09-28-site-camera-preview-rectification.md](plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 
 ## 교훈 (docs/solutions)
 
@@ -201,8 +203,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
 - 2026-09-29 · uncommitted · docs(sd): document powered-off no-drive recovery
 - 2026-09-29 · uncommitted · docs(g4): record link-loss lesson and D-321 calibration decision
 - 2026-09-28 · uncommitted · docs(sd): define attended post-setup motor commissioning
 - 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
-- 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly

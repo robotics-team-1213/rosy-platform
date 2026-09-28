@@ -3129,3 +3129,9 @@
 - 변경: D-321의 첫 단계에 Linux 카드 복구 도구와 사용 절차를 연결하고 카드 readback과 첫 부팅 실측을 구분했다.
 - 증거: 현재 변경은 소스와 절차만이다. 장치 전원은 차단된 상태이며 카드 복구 영수증은 없다.
 - gate 변화: 설계는 Accepted, 실제 복구와 G4/G5는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
+
+- 변경: D-324와 변경 경로 판정기를 추가해 no-artifact, native-payload, flashable-image, review/HOLD를 분리했다. existing-device runbook은 compatible payload 경로를 먼저 판정한다.
+- 증거: GitHub run 36415015940은 약 30분(이미지 build 1,619초), 36319224327은 약 5분(payload tree build 201초)이었다. selector 계약 시험 6개 통과; 서명·설치·DEVICE acceptance는 건드리지 않았다.
+- gate 변화: SOURCE 절차 개선만. ARTIFACT/DEVICE/FIELD는 기존 HOLD를 유지한다.

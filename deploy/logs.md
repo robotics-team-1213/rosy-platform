@@ -1442,3 +1442,9 @@
 - 변경: Linux ext4 카드에서 신원·릴리스 일치, 외부 원본 백업, 원자 교체와 readback을 요구하는 no-drive 복구 도구와 현장 절차를 추가했다. 기본 동작은 읽기 전용이다.
 - 증거: 소스 검토만 수행했다. 실제 카드·Linux 호스트·첫 부팅은 아직 검증하지 않았다.
 - gate 변화: 현 장치의 전원 차단과 DEVICE/FIELD HOLD를 유지한다. persistent drive가 있는 기존 설치본은 카드 복구 전 재전원하지 않는다.
+
+## 2026-09-29 · uncommitted · feat(release): select the smallest Pinky artifact
+
+- 변경: D-324 path selector와 operator guidance를 추가했다. 호환 source 업데이트는 native payload로 보내고, image/host/board/trust changes는 full image, 비장치 변경은 no artifact, 분류 밖은 HOLD다.
+- 증거: selector 계약 6개 통과. 측정된 prior Actions build는 full image 약 30분 대 native payload 약 5분. 서명 키, artifact, device proof를 생성했다고 주장하지 않는다.
+- gate 변화: SOURCE 절차 개선. ARTIFACT·DEVICE·FIELD는 기존 HOLD다.

@@ -30,6 +30,7 @@
 | D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 |
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
+| D-324 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
 
 ## 계획·결과 문서
 
@@ -52,6 +53,7 @@
 - [2026-09-22-pinky-pro-flashable-image.md](../docs/plans/2026-09-22-pinky-pro-flashable-image.md)
 - [2026-09-23-core-dev-overlay-design.md](../docs/plans/2026-09-23-core-dev-overlay-design.md)
 - [2026-09-23-core-dev-overlay.md](../docs/plans/2026-09-23-core-dev-overlay.md)
+- [2026-09-29-pinky-deployment-fast-path.md](../docs/plans/2026-09-29-pinky-deployment-fast-path.md)
 
 ## 교훈 (docs/solutions)
 
@@ -63,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(release): select the smallest Pinky artifact
 - 2026-09-29 · uncommitted · fix(sd): prepare offline no-drive card recovery
 - 2026-09-29 · uncommitted · docs(g4): plan an attended calibration and mapping flow
 - 2026-09-28 · uncommitted · D-320 product deployment path regression verification
 - 2026-09-28 · uncommitted · D-320 product-scoped robot deployment layout
-- 2026-09-28 · uncommitted · feat(sd): automate attended motor commissioning
