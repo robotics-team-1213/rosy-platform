@@ -93,7 +93,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
 | `2026-09-29-er2-agent-loop-gap-map.md` | ER2형 자율 루프 개념(목표→상위 판단 에이전트→Skill/VLA→Controller→결과→재판단)과 현행 소스 대조 — 아래 절반 실재, 위 절반 계약만 존재(AIV-001), 재판단 마디는 `POLICY_DISPATCH_ENABLED=False` 밸브. 결정은 D-326 |
 | `2026-09-29-er2-adr-consistency-review.md` | D-326/D-327/D-328과 실행 계획의 모델 권한·사람 확인·Fleet 예약·정지·장애 복구 경계 검토 |
-| `2026-09-29-fleet-mission-control-arbitration-implementation.md` | D-329 실행 순서: Fleet 단일 claim, stop generation, 감사 장애 중 전용 정지, OMX 접수 후 장애 조정 |
+| `2026-09-29-fleet-mission-control-arbitration-implementation.md` | D-330 실행 순서: Fleet 단일 claim, stop generation, 감사 장애 중 전용 정지, OMX 접수 후 장애 조정 |
 ## Subdirectories
 
 None.

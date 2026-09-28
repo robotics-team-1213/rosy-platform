@@ -1,4 +1,4 @@
-## D-329 Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다
+## D-330 Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다
 
 **Status:** Accepted (2026-09-29, 제어권·정지·복구 구조 결정). 새 Mission/OMX API, 자동 정책 dispatch, 사이트 정지 가용성, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
 

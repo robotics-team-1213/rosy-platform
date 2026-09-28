@@ -3230,3 +3230,9 @@
 - 근거: 현행 `fleet_robot_reservations`의 `fleet_tasks` FK, `cancel_pending_task_queue()`의 navigation 전용 처리, D-276 감사 선행 `503`, OMX 단일 trajectory submitter와 미구현 원격 Action을 대조했다.
 - 검증: Windows 문서 계약 시험 78 passed, harness lint 0 errors/기존 메타데이터 warning 18건, 신규 문서 상대 링크 누락 0건. 코드·ROS-SIM·ARTIFACT·DEVICE·FIELD는 이번 문서 변경에서 미실행이다.
 - gate 변화: 없음. D-329는 구조 Accepted이나 Mission/OMX 운영, 사이트 전체 정지 가용성, 정책 자동 재발의는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(fleet): renumber Fleet control ADR after concurrent D-329
+
+- 변경: 동시에 진행된 표면 계약 ADR이 main에서 D-329를 배정한 사실을 확인했다. 이 브랜치의 Fleet 발행·정지 ADR을 D-330으로 재번호화하고 색인·선행 계획·D-276 부분 대체 참조를 맞췄다. 바로 위 로그는 당시 브랜치 번호의 기록으로 남긴다.
+- 검증: 번호·상대 링크·문서 계약과 현재 main 통합 상태를 다시 확인한다.
+- gate 변화: 없음. D-330은 구조 Accepted이며 구현·실물 수용은 HOLD다.

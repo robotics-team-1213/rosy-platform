@@ -4,7 +4,7 @@
 
 **Goal:** 기존 Pinky navigation 작업과 신규 Fleet Mission이 한 장치의 발행 권한을 공유하고, 정지·장애·재시작 뒤 대기/진행 Action을 확인 없이 재발행하지 않게 한다.
 
-**Architecture:** [D-329](../adr/D-329-fleet-action-admission-stop-and-recovery.md)의 Fleet 단일 claim과 stop generation을 현행 task 저장소에 먼저 연결한다. 사이트 정지 요청은 인증 후 감사 DB 장애와 독립적으로 전송하되, 장치 로컬 stop/readback 및 물리 E-stop과 구분한다. OMX Action은 driver 호출 전 의도를 기록하고 모호한 접수 결과를 HOLD한다. 이 계획은 [의미적 조작·Mission 계획](2026-09-29-er2-semantic-actions-mission-implementation.md)의 작업 3~5에 들어가기 위한 통합 선행 계획이다.
+**Architecture:** [D-330](../adr/D-330-fleet-action-admission-stop-and-recovery.md)의 Fleet 단일 claim과 stop generation을 현행 task 저장소에 먼저 연결한다. 사이트 정지 요청은 인증 후 감사 DB 장애와 독립적으로 전송하되, 장치 로컬 stop/readback 및 물리 E-stop과 구분한다. OMX Action은 driver 호출 전 의도를 기록하고 모호한 접수 결과를 HOLD한다. 이 계획은 [의미적 조작·Mission 계획](2026-09-29-er2-semantic-actions-mission-implementation.md)의 작업 3~5에 들어가기 위한 통합 선행 계획이다.
 
 **Tech Stack:** Python 3.12, FastAPI/Pydantic, SQLite WAL, pytest; 장치 단계는 ROS 2 Jazzy action과 제품별 driver readback. 새 REST/ROS 계약은 실제 소비자와 D-18 절차에서 결정한다.
 
@@ -19,7 +19,7 @@
 
 ## 작업 0. 기준선과 발행 경로 목록
 
-**Files:** Review `src/site/fleet/fleet/server/{app,console,task_store,task_scheduler,task_service}.py`, `src/site/fleet/test/{test_task_api,test_task_store,test_task_scheduler,test_site_users}.py`, `docs/adr/{D-276,D-298,D-308,D-316,D-329}*.md`; create dated evidence only when an actual run exists under `docs/validation/`.
+**Files:** Review `src/site/fleet/fleet/server/{app,console,task_store,task_scheduler,task_service}.py`, `src/site/fleet/test/{test_task_api,test_task_store,test_task_scheduler,test_site_users}.py`, `docs/adr/{D-276,D-298,D-308,D-316,D-330}*.md`; create dated evidence only when an actual run exists under `docs/validation/`.
 
 1. `git status --short`, `git log -1 --oneline`으로 기준 HEAD와 기존 수정 경로를 기록한다. `python -m pytest src/site/fleet/test/test_task_store.py src/site/fleet/test/test_task_scheduler.py src/site/fleet/test/test_task_api.py -q`를 실행하고 실패가 있으면 이후 변경과 분리한다.
 2. `/api/fleet/robots/{robot_id}/goal`, `/api/fleet/do`, `/api/fleet/robots/{robot_id}/cancel`, `/api/fleet/estop`, background `_task_dispatch_loop`, CORE 직접 명령, OMX 로컬 submitter를 발행/정지 표로 그린다. 각각의 principal, 저장소, queue, reservation, device lease, 최종 writer를 적고 불명 경로는 HOLD로 둔다.
@@ -84,7 +84,7 @@
 
 ## 완료 판정과 선행 관계
 
-- 이 문서의 완료는 코드/시험/장치 각 게이트의 실제 증거로만 선언한다. 문서 커밋은 D-329 구조 결정의 기록이며 기존 사이트 stop 가용성이나 OMX 기능 완성이 아니다.
+- 이 문서의 완료는 코드/시험/장치 각 게이트의 실제 증거로만 선언한다. 문서 커밋은 D-330 구조 결정의 기록이며 기존 사이트 stop 가용성이나 OMX 기능 완성이 아니다.
 - 작업 1~3은 신규 Mission 발행 활성화 **전** 완료해야 한다. 작업 4는 OMX 원격 Action 활성화 **전**, 작업 5는 다장치/병렬 Mission 활성화 **전** 완료해야 한다. D-326의 정책 자동 재발의 밸브는 이 계획으로 열리지 않는다.
 - 스키마 이관과 기본 발행 금지는 한 번에 되돌릴 수 있는 코드 스위치로 취급하지 않는다. 업그레이드 전 기존 SQLite의 보존 사본과 버전, migration/역방향 읽기 시험을 남긴다. 롤백 중에도 stop generation·미확인 attempt·물리 상태가 조정되기 전에는 이전 binary의 자동 dispatch를 금지한다.
 - 문서 변경 검증: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`; `python tools/harness/rosy_harness.py lint`. 코드 변경 검증은 작업별 focused test 뒤 기존 Fleet/CORE/OMX 회귀를 중복 basename 충돌 없이 별도 invocation으로 실행한다.
