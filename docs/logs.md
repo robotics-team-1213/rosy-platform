@@ -3201,3 +3201,18 @@
 - gate 변화: 없음.
 - 결정: D-326 Accepted (경계·자리 결정만; 구현·폐루프 개방·AI 승격 별도 HOLD).
 - 교훈: 외부 개념을 ADR로 옮길 때 개념 명칭이 아니라 역할의 자리와 개방 조건을 결정 문장으로 만들어야 추적 가능해진다.
+
+## 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다
+
+- 변경: `spec/ROSY CORE SRS.md` §17이 인용한 `ADR-D-7`을 D-75·D-23으로 교체하고 D-7은 Superseded임을 본문에 명시했다. 같은 날 발견한 두 번째 참조 `plans/ROSY Implementation Plan.md` §4.5 기술 스택 표의 `React 18 + TypeScript + Vite (정적 서빙, D-7)` 행에도 D-75 승계 주석을 붙였다(파일 헤더의 Historical 지시는 그대로다).
+- 증거: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 78 passed; `python tools/harness/rosy_harness.py lint` 0 errors(2026-09-29 Windows, 미커밋 트리).
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. ROS-SIM/ARTIFACT/DEVICE/FIELD N/A(문서 모듈, 실행 대상 없음).
+- 결정: 없음. ADR 신규·Superseded 표시 없음 — D-75(2026-09-17)가 이미 D-7을 대체했고 이번은 누락된 참조 정정이다.
+- 교훈: ADR을 Superseded 처리할 때 그 ADR을 **인용하는 문서**(계약 SRS·역사 WBS)까지 따라가지 않으면, 계약 문서가 최신 결정과 정반대인 채 남는다. D-75의 `Validation / Transition`은 `test_dashboard_no_bundler.py`만 걸었고 참조 역추적은 걸지 않았다. 또한 `logs.md`는 오름차순이라 새 항목은 파일 **끝**에 붙인다 — 앞에 붙이면 lint가 전 행을 order 오류로 잡는다.
+
+## 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
+
+- 변경: `docs/plans/2026-09-29-uiux-craft-improvement-plan.md` 작성 — D-280 순서(역할 웹→Fleet→게임→얼굴→문서)로 크래프트 패스와 D-153 게이트 마감을 표면별 한 회차로 묶고, G3 사람 평가 프로토콄(8항 시트·청중 2인·근거 셀 지적)과 G2 보존형 증거 규칙을 정의했다. 루트 `PRODUCT.md`(Impeccable 제품 기록)를 처음 작성했다.
+- 증거: `docs/validation/uiux-surfaces-2026-09-27/` 표면별 카드와 블로커, STATUS.md dashboard 게이트, D-280/D-153/D-254 계약을 대조했다. 코드·화면 변경은 없다.
+- gate 변화: 없음. 계획 문서이며 모든 표면 판정은 현행 HOLD를 유지한다.
+- 결정: 없음. ADR 후보(A-1 표정 어휘, A-2 온기 문구)는 해당 회차 도달 시 제안한다.

@@ -212,8 +212,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
+- 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다
 - 2026-09-29 · uncommitted · docs(adr): record D-326 agent loop boundary
 - 2026-09-29 · uncommitted · docs(plan): map the ER2-style agent loop against current source
 - 2026-09-29 · uncommitted · docs(er2): renumber proposed ADRs after D-326 collision
-- 2026-09-29 · uncommitted · plan(er2): stage semantic Action and Mission implementation
-- 2026-09-29 · uncommitted · docs(er2): preserve user Isaac Sim analysis and separate mission outcome evidence
