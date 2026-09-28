@@ -92,3 +92,11 @@ The `1af1fa41` `/console` teleop follow-up was checked with focused panel regres
 The full panel browser suite passed **19 tests**. Role G2 passed **7 tests**, refreshing 60 cells with overflow 0, pageerror 0, E-stop visible 60/60, and canceled-confirmation POST 0. Full-shell teleop captures at 1366x768 and 390x844 show a robot-state read failure beside the preserved release/stop feedback; each recorded one terminal zero POST, overflow 0, no page errors, and visible E-stop. The test fixture adds `console.teleop` to the console manifest because its local profile does not advertise teleop, and provides controlled mock/local API responses. Screenshots and `console-teleop-feedback-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
 
 These are LOCAL browser results only. Actual motion and stop readback, physical E-stop, G3, DEVICE/FIELD, and D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 line-follow and docking feedback
+
+Focused Chromium tests passed for line-follow stale-read clearing, fail-closed controls, independent Navigation capability feedback, pending locks, and POST/readback separation; docking tests covered stale status/list clearing, selected-dock retention, and control locks during polling. The full panel suite passed **21 tests**. Role G2 passed **8 tests** and refreshed **60 cells** with overflow 0, pageerror 0, E-stop visible 60/60, and canceled-confirmation POST 0.
+
+Full-shell console captures at 1366x768 and 390x844 show line-follow and docking in their own action groups. Each capture shows a status-read failure beside a preserved CORE request receipt, with one expected action POST, overflow 0, no page errors, and visible E-stop. The fixture explicitly inserts both panels and their action groups into the console manifest and controls API responses. PNGs and JSON are under `X:\DevTemp\rosy-uiux-d306-roles-g2\line-follow-docking\`.
+
+This is LOCAL browser evidence. Actual robot line-follow/docking readback and motion, physical E-stop, G3, DEVICE/FIELD, and D-153 acceptance remain **HOLD**.

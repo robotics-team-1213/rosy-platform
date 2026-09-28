@@ -152,6 +152,127 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         browser.close()
 
 
+def test_console_line_follow_readback_failure_and_action_feedback_are_independent():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "console" / "line-follow.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/line-follow.js');
+          const root=document.createElement('main'); document.body.append(root);
+          const callbacks={}; const store={poll(path,_interval,onData,onError){callbacks[path]={onData,onError};return()=>{};}};
+          let resolveRequest; const calls=[]; window.__calls=calls;
+          window.__unmount=mount(root,{role:'operator',store,api:async(path,options)=>{
+            calls.push({path,method:options.method,body:JSON.parse(options.body)});
+            return new Promise(resolve=>{resolveRequest=resolve;});
+          }});
+          window.__callbacks=callbacks; window.__resolveRequest=value=>resolveRequest(value);
+          callbacks['/api/v1/line-follow'].onData({mode:'IR_LINE',state:'TRACKING',confidence:.9});
+          callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}});
+          callbacks['/api/v1/line-follow'].onError(new Error('fixture line status unavailable'));
+        }""")
+        panel = page.locator("main").last
+        assert "fixture line status unavailable" in panel.locator("ui-status").first.inner_text()
+        assert "TRACKING" not in panel.locator("dl").inner_text()
+        assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
+        assert "Navigation" in panel.locator("ui-status").nth(1).inner_text()
+
+        page.evaluate("""() => {
+          window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'IDLE'});
+          window.confirm=()=>true;
+          document.querySelector('main:last-of-type ui-button').click();
+        }""")
+        page.wait_for_function("window.__calls.length === 1")
+        action = panel.locator('ui-status[role="status"]').last
+        page.evaluate("""() => {
+          window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'IDLE'});
+          window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture capability unavailable'));
+        }""")
+        assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
+        pending_feedback = action.inner_text()
+        page.evaluate("window.__resolveRequest({})")
+        page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending_feedback)
+        assert "OFF" in panel.locator("ui-status").first.inner_text()
+        assert action.inner_text() != pending_feedback
+        assert "CORE" in action.inner_text()
+        assert page.evaluate("window.__calls") == [{
+            "path":"/api/v1/line-follow/mode","method":"PUT","body":{"mode":"IR_LINE"},
+        }]
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
+def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "console" / "docking.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/docking.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/docking.js');
+          const root=document.createElement('main'); document.body.append(root);
+          const callbacks={}; const store={poll(path,_interval,onData,onError){callbacks[path]={onData,onError};return()=>{};}};
+          const calls=[]; window.__calls=calls; let resolveRequest;
+          window.__unmount=mount(root,{role:'operator',store,api:async(path,options)=>{
+            calls.push({path,method:options.method}); return new Promise(resolve=>{resolveRequest=resolve;});
+          }});
+          window.__callbacks=callbacks; window.__resolveRequest=value=>resolveRequest(value);
+          callbacks['/api/v1/docking/status'].onData({supported:true,state:'UNDOCKED'});
+          callbacks['/api/v1/docking/docks'].onData({docks:[{id:'dock-a',type:'charger'},{id:'dock-b',type:'charger'}]});
+          const select=root.querySelector('select'); select.value='dock-b'; select.dispatchEvent(new Event('change',{bubbles:true}));
+          callbacks['/api/v1/docking/docks'].onData({docks:[{id:'dock-a',type:'charger'},{id:'dock-b',type:'charger'},{id:'dock-c',type:'charger'}]});
+          window.confirm=()=>true; root.querySelector('ui-button').click();
+        }""")
+        panel = page.locator("main").last
+        assert panel.locator("select").input_value() == "dock-b"
+        assert page.evaluate("window.__calls") == [{"path":"/api/v1/docking/dock","method":"POST"}]
+        assert panel.locator("select").is_disabled()
+        assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
+        action = panel.locator('ui-status[role="status"]').last
+        pending = action.inner_text()
+        page.evaluate("""() => {
+          window.__callbacks['/api/v1/docking/status'].onData({supported:true,state:'UNDOCKED'});
+          window.__callbacks['/api/v1/docking/docks'].onData({docks:[{id:'dock-b',type:'charger'}]});
+        }""")
+        assert panel.locator("select").is_disabled()
+        assert action.inner_text() == pending
+        assert page.evaluate("window.__calls.length") == 1
+        page.evaluate("window.__resolveRequest({})")
+        page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending)
+        assert not panel.locator("select").is_disabled()
+        success = action.inner_text()
+        assert "CORE" in success
+        page.evaluate("window.__callbacks['/api/v1/docking/status'].onError(new Error('fixture docking status unavailable'))")
+        assert "fixture docking status unavailable" in panel.locator("ui-status").first.inner_text()
+        assert "UNDOCKED" not in panel.locator("dl").inner_text()
+        assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
+        assert action.inner_text() == success
+        page.evaluate("window.__callbacks['/api/v1/docking/docks'].onError(new Error('fixture dock list unavailable'))")
+        assert panel.locator("select option").count() == 0
+        assert "fixture dock list unavailable" in panel.locator("ui-status").nth(1).inner_text()
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
 def test_setup_docking_refuses_teach_without_fresh_pose():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

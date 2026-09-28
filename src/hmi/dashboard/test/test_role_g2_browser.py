@@ -634,3 +634,133 @@ def test_console_teleop_feedback_full_shell_captures(tmp_path):
         browser.close()
     (CAPTURES / "console-teleop-feedback-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "line-follow-docking"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            posts = []
+            phase = {"line_failed": False, "docking_failed": False}
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.on("dialog", lambda dialog: dialog.accept())
+
+            def serve(route):
+                request = route.request
+                path = urlsplit(request.url).path
+                if request.method in {"POST", "PUT"}:
+                    posts.append({"method": request.method, "path": path,
+                                  "body": request.post_data_json})
+                    if path == "/api/v1/line-follow/mode":
+                        phase["line_failed"] = True
+                    elif path in {"/api/v1/docking/dock", "/api/v1/docking/undock", "/api/v1/docking/cancel"}:
+                        phase["docking_failed"] = True
+                    route.fulfill(status=202, content_type="application/json", body='{"accepted":true}')
+                    return
+                if request.method != "GET":
+                    route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                    return
+                if path == "/api/v1/ui/surfaces/console":
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                    manifest = response.json() if hasattr(response, "json") else json.loads(response.body)
+                    additions = (
+                        {"id":"console.docking", "title":"Docking", "slot":"act", "order":40,
+                         "module":"/assets/panels/console/docking.js",
+                         "css":["/assets/panels/surface-panels.css"], "action_group":"docking",
+                         "state":"available", "reason":None},
+                        {"id":"console.line_follow", "title":"Line follow", "slot":"act", "order":50,
+                         "module":"/assets/panels/console/line-follow.js",
+                         "css":["/assets/panels/surface-panels.css"], "action_group":"line_follow",
+                         "state":"available", "reason":None},
+                    )
+                    present = {panel["id"] for panel in manifest["panels"]}
+                    manifest["panels"].extend(panel for panel in additions if panel["id"] not in present)
+                    groups = manifest.setdefault("action_groups", [])
+                    group_ids = {group["id"] for group in groups}
+                    groups.extend(group for group in (
+                        {"id":"docking", "title":"Docking", "order":20},
+                        {"id":"line_follow", "title":"Line follow", "order":30},
+                    ) if group["id"] not in group_ids)
+                    response = Response(content=json.dumps(manifest), media_type="application/json")
+                elif path == "/api/v1/line-follow":
+                    if phase["line_failed"]:
+                        route.fulfill(status=503, content_type="application/json", body='{"detail":"fixture line status unavailable"}')
+                        return
+                    response = Response(content='{"mode":"OFF","state":"IDLE"}', media_type="application/json")
+                elif path == "/api/v1/docking/status":
+                    if phase["docking_failed"]:
+                        route.fulfill(status=503, content_type="application/json", body='{"detail":"fixture docking status unavailable"}')
+                        return
+                    response = Response(content='{"supported":true,"state":"UNDOCKED"}', media_type="application/json")
+                elif path == "/api/v1/docking/docks":
+                    response = Response(content='{"docks":[{"id":"dock-a","type":"charger"},{"id":"dock-b","type":"charger"}]}',
+                                        media_type="application/json")
+                elif path == "/api/v1/system/capabilities":
+                    response = Response(content='{"navigation":{"goal_navigation":true}}', media_type="application/json")
+                else:
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                    "cache-control": "no-store",
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            page.locator("#action-tab-line_follow").click()
+            line_panel = page.locator('[data-panel="console.line_follow"]')
+            page.wait_for_selector('[data-panel="console.line_follow"] ui-button')
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-button')?.disabled === false")
+            line_panel.locator("ui-button").first.click()
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('fixture line status unavailable')")
+            line_filename = f"operator-console-line-follow-{width}x{height}.png"
+            page.screenshot(path=str(capture_dir / line_filename), full_page=True)
+            line_measured = page.evaluate("""() => ({
+              overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+              eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              readback: document.querySelector('[data-panel="console.line_follow"] ui-status')?.textContent || '',
+              action: [...document.querySelectorAll('[data-panel="console.line_follow"] ui-status[role="status"]')].at(-1)?.textContent || '',
+            })""")
+            assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
+            assert "fixture line status unavailable" in line_measured["readback"] and "CORE" in line_measured["action"]
+            records.append({"surface":"line_follow", "viewport":f"{width}x{height}",
+                            "image":line_filename, "posts":list(posts), "errors":list(errors), **line_measured})
+
+            phase["line_failed"] = False
+            posts.clear()
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            page.locator("#action-tab-docking").click()
+            dock_panel = page.locator('[data-panel="console.docking"]')
+            page.wait_for_selector('[data-panel="console.docking"] ui-button')
+            dock_panel.locator("select").select_option("dock-b")
+            dock_panel.locator("ui-button").first.click()
+            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('fixture docking status unavailable')")
+            assert dock_panel.locator("select").input_value() == "dock-b"
+            assert len(posts) == 1, posts
+            filename = f"operator-console-docking-{width}x{height}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            measured = page.evaluate("""() => ({
+              overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+              eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              dockReadback: document.querySelector('[data-panel="console.docking"] ui-status')?.textContent || '',
+              dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[role="status"]')].at(-1)?.textContent || '',
+            })""")
+            assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
+            assert "fixture docking status unavailable" in measured["dockReadback"] and "CORE" in measured["dockAction"]
+            records.append({"surface":"docking", "viewport": f"{width}x{height}", "image": filename,
+                            "posts": list(posts), "errors": list(errors), **measured})
+            context.close()
+        browser.close()
+    (capture_dir / "console-line-follow-docking-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
