@@ -409,3 +409,9 @@
 - 변경: 관리자 로봇 표시 이름 폼을 초기 구성 때 한 번만 만든다. 기존 폴링은 `<dl>`을 갱신했지만 그 `<dl>`에서 폼 존재를 찾았기 때문에 30초마다 중복 폼을 추가했다. 이제 편집 초안이 유지되고 저장 중 입력·버튼을 잠그며, 요청 접수는 다음 신원 조회의 실제 반영과 구분한다.
 - 정적 확인: 변경 영역 코드 검토와 `git diff --check`를 실행한다. 브라우저 회귀, Impeccable detector, 새 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 기기 신원 readback은 별도다.
+
+## 2026-09-28 · uncommitted · fix(device): explain hardware refresh role restriction
+
+- 변경: 관리자 전용 보드 점검 버튼을 비관리자 화면에서 비활성화할 때 권한 사유를 함께 보여주고, 버튼의 `aria-describedby` 설명으로 연결한다. 관리자에게는 조작 결과 status가 있을 때만 해당 영역을 표시한다.
+- 정적 확인: 변경 영역 코드 검토와 `git diff --check`를 실행한다. 브라우저 회귀, Impeccable detector, 새 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실물 Host Agent 점검은 별도다.

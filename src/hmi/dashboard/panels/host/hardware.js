@@ -56,6 +56,7 @@ export function mount(el, ctx) {
   const note = node("p", "hardware-note", "측정 결과를 불러오는 중입니다.");
   note.setAttribute("role", "status");
   const actionNote = node("p", "hardware-action-note", "");
+  actionNote.id = "hardware-action-note";
   actionNote.setAttribute("role", "status");
   actionNote.setAttribute("aria-live", "polite");
   const list = node("ul", "hardware-device-list");
@@ -64,7 +65,14 @@ export function mount(el, ctx) {
   refresh.setAttribute("kind", "quiet");
   refresh.type = "button";
   refresh.disabled = ctx.role !== "administrator";
-  refresh.setAttribute("aria-label", "관리자 보드 장치 점검 요청");
+  refresh.setAttribute("aria-label", "보드 장치 점검 요청");
+  refresh.setAttribute("aria-describedby", actionNote.id);
+  if (ctx.role !== "administrator") {
+    actionNote.hidden = false;
+    actionNote.textContent = "보드 장치 점검은 관리자만 요청할 수 있습니다.";
+  } else {
+    actionNote.hidden = true;
+  }
 
   el.append(head, facts, note, list, refresh, actionNote);
 
@@ -106,6 +114,7 @@ export function mount(el, ctx) {
     if (refreshing || ctx.role !== "administrator") return;
     refreshing = true;
     refresh.disabled = true;
+    actionNote.hidden = false;
     actionNote.textContent = "새 장치 점검을 요청하고 있습니다.";
     try {
       const reply = await ctx.api("/api/v1/host/hardware/refresh", {method: "POST"});
