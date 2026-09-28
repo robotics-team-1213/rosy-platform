@@ -83,10 +83,10 @@ Fleet 브라우저 회귀는 18 passed, 포커스 복귀를 보완한 후 목표
 
 | 표면 | 후속 회차 근거 | 현재 차단 조건 |
 |---|---|---|
-| Fleet | [fleet-g2-matrix.md](fleet-g2-matrix.md): 1920×1080·390×844·320×844에서 상태 8종+최초 기동 27개 캡처, 가로 넘침 0, 브라우저·대화상자 24 passed. 안전 미확인 목표 차단과 빈 목록 안내 수정. | 팔로워 지연 나이 없음, 정상 로봇이 기본 목록에 모두 보이는 예외 문법 위반, 식별색 원칙 미정, 네이티브 확인 이미지·실물 개입 readback 없음. **HOLD** |
-| 역할별 `/setup`·`/device` | [roles-g2-matrix.md](roles-g2-matrix.md): 운영자·관리자, 1366×768·390×844의 54셀 캡처에서 가로 넘침·페이지 오류 0. 위치 지연·끊김·정보 없음과 `/device` 권한 거부 복구 링크 수정. | 최초 기동·확인창 이미지, `/device` 지연/끊김, 절차의 SAFE_STOP 명시, 전체 권한/오류 조합과 장치 readback 없음. **각각 HOLD** |
-| 게임 호스트 | [games-g2-matrix.md](games-g2-matrix.md): 1280×800 상태 10종, 넘침 0, 브라우저 11 passed. 점수의 마지막 수신 표시, 정지 실패·시간 초과와 포커스 복구 수정. | overlay 시각 정보가 없어 delayed 셀 미평가, 공·팀 식별색의 법칙 적용 범위 미정, 실제 정지·경기 확인 없음. **HOLD** |
-| 로봇 얼굴 LCD | [lcd-g2-matrix.md](lcd-g2-matrix.md): 320×240 PIL 상태 9종, 관련 시험 148 passed. | Pi 폰트·실물 거리/각도/조도·카드 만료 후 GIF 복귀 미관찰. **HOLD** |
+| Fleet | [fleet-g2-matrix.md](fleet-g2-matrix.md): D-309 후속에서 팔로워 지연 나이, 예외 우선 로스터, 정상 로봇 중립색을 반영했다. 현재 코드에서 8상태×3뷰포트+첫 기동 27장을 다시 캡처했고 브라우저 24 passed, 상태 24셀 pageerror·가로 넘침 0이다. | 실제 사이트·로봇 E-STOP/목표 readback, 사람 G3 수용이 남아 있다. surface **HOLD** |
+| 역할별 `/setup`·`/device` | [roles-g2-matrix.md](roles-g2-matrix.md): 첫 기동 포함 운영자·관리자 매트릭스 60셀을 현재 main에서 재실행했다. 1366×768·390×844 가로 넘침·페이지 오류 0, E-stop 표시 60/60. | 실제 Host Agent readback, CORE/물리 E-STOP, 사람 G3 수용이 남아 있다. 각 surface **HOLD** |
+| 게임 호스트 | [games-g2-matrix.md](games-g2-matrix.md): overlay 생성 시각 기반 지연, 결측 시각 `unavailable`, 공·팀 중립/식별색 규칙을 반영했다. 현재 코드 13셀 캡처, 브라우저 14 passed, 넘침·페이지 오류 0이다. | 실제 카메라·경기·양측 로봇 정지 readback과 사람 G3 수용이 남아 있다. surface **HOLD** |
+| 로봇 얼굴 LCD | [lcd-g2-matrix.md](lcd-g2-matrix.md): 실제 노드 콜백→타이머 경로의 320×240 축소와 만료 복귀를 HOST에서 확인했다. | Pi 설치 폰트, 거리·각도·조도 판독성, 실제 만료·복귀는 아직 측정하지 않았다. DEVICE/BENCH와 surface **HOLD** |
 
 기존 `/console` 6셀은 위 "현재 역할 화면의 증거 상태"에 기록했다. 레거시 sensing 진단은 D-253/D-266에 따라 **PARKED**다. 제품 전체 D-153 UI/UX 판정은 **HOLD**다.
 
@@ -169,11 +169,11 @@ The regression found that a token-list GET failure after a successful create/del
 
 ## 2026-09-28 host hardware refresh feedback
 
-The board hardware panel now keeps the administrator refresh request result separate from the periodic measurement status. Polling can no longer replace a pending, accepted, or failed refresh message. Acceptance is described as request receipt; completion remains visible only through a later measurement timestamp and device readback. This change received static review only: no browser regression or new screenshot was run. SOURCE/LOCAL regression and visual review, actual Host Agent readback, and broader D-153/G3/DEVICE/FIELD acceptance remain **HOLD**.
+The board hardware panel keeps the administrator refresh request result separate from periodic measurement status. FastAPI/Chromium interaction checks at 1366×768 and 390×844 confirmed that periodic GET updates do not replace an accepted POST result; the wording still identifies receipt rather than completion. The current role matrix separately covers 60 role/state/viewport cells with no overflow or page errors. Actual Host Agent readback and broader D-153/G3/DEVICE/FIELD acceptance remain **HOLD**.
 
-The system panel now creates the administrator robot-name editor once. Previously each identity poll checked the `<dl>` for a form even though the form was its sibling, so it appended another editor every 30 seconds. The persistent editor preserves a draft through readback polls; saving locks the field and reports request receipt separately from subsequent identity readback. This received static review only: browser regression and visual capture were not run. SOURCE/LOCAL, physical identity readback, and broader D-153/G3/DEVICE/FIELD acceptance remain **HOLD**.
+The system panel now creates the administrator robot-name editor once. Previously each identity poll checked the `<dl>` for a form even though the form was its sibling, so it appended another editor every 30 seconds. FastAPI/Chromium interaction checks at both widths confirmed one form remained after repeated polls, the draft survived, and save receipt was displayed. Physical identity readback and broader D-153/G3/DEVICE/FIELD acceptance remain **HOLD**.
 
-On `/device`, non-administrators now see why the hardware refresh control is disabled. The explanation is also connected to the button with `aria-describedby`; administrators see the live action result after using it. Static review only; browser regression and screenshot were not run. SOURCE/LOCAL and actual Host Agent readback remain **HOLD**.
+The hardware-panel registry requires the administrator role, so non-administrators cannot reach that button; access is blocked at `/device` entry. A conditional button hint would have been unreachable and was removed. The current role G2 matrix includes operator `/device` denial. Actual Host Agent readback and full D-153/G3/DEVICE/FIELD acceptance remain **HOLD**.
 
 ## 2026-09-28 host readback and console mode feedback - LOCAL
 
@@ -182,3 +182,7 @@ The `a81dbcb2` administrator `/device` host-status follow-up was checked with a 
 The full panel browser suite passed **17 tests**. The complete role G2 browser suite passed **6 tests** and refreshed **60 role/surface/state/viewport cells**. All 60 cells had overflow 0 and pageerror 0; E-stop was visible in all 60. The console mode POST and its distinct readback were captured at 1366x768 and 390x844 with overflow 0, no page errors, and visible E-stop. Screenshots and JSON are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`; the role matrix is `matrix.json` and console records are `console-mode-feedback-matrix.json`. Administrator `/device` normal captures at both viewports and both console captures were visually inspected.
 
 These are LOCAL Chromium results using a FastAPI fixture. Actual Host Agent and robot mode readbacks, physical E-stop, user G3 evaluation, and DEVICE/FIELD acceptance remain **HOLD**. D-153 and D-255 B2/B3 are not advanced by these captures.
+
+## 2026-09-28 targeted `/device` feedback verification
+
+Current-main FastAPI/Chromium interaction checks at 1366×768 and 390×844 accelerated only the relevant 10-second and 30-second polls. Both widths retained exactly one identity editor and the typed draft across repeated reads, then displayed the save receipt. A hardware refresh POST receipt remained visible after subsequent measurement GET updates. The full role G2 capture also passed at 60 cells with pageerror 0, horizontal overflow 0, and E-stop visible 60/60. Screenshots are under `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-feedback-*.png`. These are local fixtures, not actual Host Agent/CORE readback, physical stop, or G3 human acceptance; DEVICE/FIELD and full D-153 acceptance remain **HOLD**.

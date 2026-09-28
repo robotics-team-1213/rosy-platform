@@ -67,12 +67,7 @@ export function mount(el, ctx) {
   refresh.disabled = ctx.role !== "administrator";
   refresh.setAttribute("aria-label", "보드 장치 점검 요청");
   refresh.setAttribute("aria-describedby", actionNote.id);
-  if (ctx.role !== "administrator") {
-    actionNote.hidden = false;
-    actionNote.textContent = "보드 장치 점검은 관리자만 요청할 수 있습니다.";
-  } else {
-    actionNote.hidden = true;
-  }
+  actionNote.hidden = true;
 
   el.append(head, facts, note, list, refresh, actionNote);
 

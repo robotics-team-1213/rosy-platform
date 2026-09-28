@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · test(device): verify identity draft and hardware action feedback at two widths
+- 2026-09-28 · uncommitted · fix(device): remove unreachable hardware role hint
 - 2026-09-28 · uncommitted · fix(device): explain hardware refresh role restriction
 - 2026-09-28 · uncommitted · fix(device): prevent duplicate identity editors on polling
 - 2026-09-28 · uncommitted · fix(device): separate board refresh result from hardware readback
-- 2026-09-28 · uncommitted · fix(console): separate map readback and action outcomes
-- 2026-09-28 · uncommitted · fix(console): keep docking actions locked through readback polls

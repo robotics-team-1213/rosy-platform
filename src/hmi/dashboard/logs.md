@@ -421,3 +421,15 @@
 - Change verified: `/device` runtime, robot identity, CORE capability, and detailed inventory readbacks fail independently and clear only their own stale values. `/console` current-mode readback, Navigation capability, and mode POST outcome remain separate while polling continues; CORE acceptance is not presented as proof that the robot already changed mode.
 - Evidence: Focused host and mode panel browser regressions passed; the full panel Chromium suite passed 17 tests. Role G2 passed 6 tests and refreshed 60 cells with overflow 0, pageerror 0, and E-stop visible 60/60. Full-shell `/console` mode feedback captures at 1366x768 and 390x844 each recorded one MANUAL POST, an IDLE current-mode readback at acceptance, overflow 0, no page errors, and visible E-stop. Admin `/device` normal and console captures were visually inspected. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
 - Gate: SOURCE/LOCAL browser regression and captures verified for `a81dbcb2` and `3b89deeb`. These fixtures do not prove actual Host Agent or robot readback, physical E-stop, G3, DEVICE/FIELD, D-153, or D-255 B2/B3; those remain HOLD.
+
+## 2026-09-28 · uncommitted · fix(device): remove unreachable hardware role hint
+
+- 변경: G2 역할 매트릭스를 확인해 `host.hardware`가 `min_role: administrator`인 것을 대조했다. 비관리자 화면에서 버튼이 비활성이라는 조건은 실제 surface에서 도달할 수 없어 조건부 안내를 제거했다. 권한 제한은 `/device` surface entry가 담당한다.
+- 정적 확인: 현재 main의 역할 G2 Chromium 매트릭스 60셀 실행에서 페이지 오류 0, 가로 넘침 0, E-stop 60/60을 확인했다. Impeccable detector(`[]`)를 실행했다.
+- gate 변화: 실제 Host Agent readback·DEVICE/FIELD와 전체 D-153/G3 판정은 HOLD.
+
+## 2026-09-28 · uncommitted · test(device): verify identity draft and hardware action feedback at two widths
+
+- 검증: current main의 실제 FastAPI `create_app` + Chromium에 local API fixture를 붙여 1366×768·390×844에서 편집 중 identity poll을 가속했다. 각 폭에서 폼 수 1개, 2회 이상 poll 뒤 초안 유지, 이름 저장 POST, 측정 poll 이후에도 하드웨어 점검 접수 상태 유지, pageerror 0, 가로 넘침 0을 확인했다. 전체 역할 G2도 60셀 Chromium 1 passed, overflow 0, pageerror 0, E-stop 60/60이다.
+- 시각 확인: desktop/mobile 전체 페이지를 직접 확인했다. PNG는 `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-feedback-{1366x768,390x844}.png`에 일회성으로 둔다.
+- 한계: API는 fixture이므로 실제 Host Agent, CORE 저장 readback, 물리 E-stop, 사람 G3 수용은 증명하지 않는다. 해당 게이트는 HOLD.
