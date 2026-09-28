@@ -71,6 +71,7 @@ services:
 
   vision:
     image: rosy-site-vision:${ROSY_SITE_IMAGE_TAG:-local}
+    stop_signal: SIGINT
     build:
       context: ../..
       dockerfile: deploy/site/Dockerfile.vision

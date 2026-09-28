@@ -1454,3 +1454,9 @@
 - 변경: merged source `3e2bf04652600d524d244929a4da95371e6dcc99`에서 Fleet, Vision, proxy 이미지와 SPDX SBOM을 빌드해 X: 임시 후보로 패키징했다. 별도 X: 테스트 설정은 가짜 credential, 예약 TEST-NET robot 주소, 내부 전용 egress를 사용했다.
 - 증거: archive SHA-256 `165bfe7021a86542e4d845b0d544a937da50a67f5de71a974c8d2b3fd546072e`; manifest의 3개 image ID/platform, archive와 SBOM 해시 일치. 로컬 Compose에서 세 서비스 healthy, `/healthz` HTTP 200 확인 후 서비스를 정지했다.
 - gate 변화: unsigned local candidate까지만. 서명 파일·production site signing key·승인된 target host/TLS identity가 없어 전달 및 운영 활성화는 HOLD다. Isaac ROS-SIM, physical stop/readback, DEVICE/FIELD와는 별도다.
+
+## 2026-09-29 · uncommitted · fix Vision site-container shutdown
+
+- 변경: 로컬 compose 종료 중 Vision이 Docker 기본 SIGTERM에서 exit 137로 종료되는 것을 확인했다. Python PID 1이 처리하는 `SIGINT`를 compose `stop_signal`로 지정하고 회귀 계약을 추가했다.
+- 증거: `python -m pytest test/test_site_task_queue_deploy.py -q` 4 passed; compose JSON에서 SIGINT 확인; Vision 컨테이너가 healthy 상태에서 10초 timeout 정지 후 exit 0, `OOMKilled=false`, runtime error 없음. 전체 site candidate는 커밋 및 로컬 병합 후 다시 빌드/검증해야 한다.
+- gate 변화: LOCAL shutdown 증거만 보강. 서명되지 않은 최종 후보의 production 전달/활성화, Isaac ROS-SIM, physical stop/readback, DEVICE/FIELD는 HOLD다.
