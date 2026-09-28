@@ -3087,3 +3087,9 @@
 - 변경: 새 장치 명령은 보내지 않고 D-318 후속 실물 접속 조건을 읽기 전용으로 확인했다.
 - 증거: `192.168.1.202` ping은 timeout, `adb devices -l`은 장치를 찾지 못했다. 전용 로컬 Fleet/Vision/proxy Docker 서비스는 healthy지만 합성 WebSocket 송신기는 종료되어 현재 실시간 카메라 입력이 없다.
 - gate 변화: 로컬 합성 검증은 유지한다. 카메라폰, 계측, 현장 Fleet 주소, Ubuntu/TLS 및 DEVICE/FIELD 검증은 수행할 수 없어 PARKED로 유지한다.
+
+## 2026-09-28 · uncommitted · docs(plan): complete the D-317 structure audit
+
+- Change: complete the source/contract boundary audit with the current role-based folder tree and separate source, host/deployment, and actuator-authority maps. D-317 remains the Accepted structure decision; no duplicate ADR or source move was added.
+- Evidence: recorded WSL ROS 2 Jazzy 24-package build/name comparison separately from the unrun locked-vendor ARM64 payload and target readback. Harness lint: 0 errors/17 metadata warnings; harness/topology tests: 78 passed; Fleet/Overhead preview tests: 46 passed; sensing launch tests: 2 passed; `git diff --check` passed.
+- Gate: SOURCE/LOCAL only. Native ARM64 artifact, device installation/readback, physical stop/interlock, and FIELD acceptance remain open.
