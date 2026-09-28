@@ -124,3 +124,9 @@ SOURCE/LOCAL browser verification is complete for `df260822`. Physical identity 
 Current-main focused Chromium regression passed for the administrator path: `aria-describedby` points to the initially hidden action status, which appears after refresh interaction. Admin full-shell refresh captures passed at 1366x768 and 390x844. The operator full-shell role check also passed at both widths, showing the `/device` access-denied screen and no `host.hardware` or `host.operations` panel; those denial captures were visually inspected. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\operator-device-entry-denied\` and `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
 
 `fb2b220c` removed the non-admin button hint after confirming `/device` and `host.hardware` are administrator-only. Therefore the `b61fb526` disabled-button description cannot be reached by non-admins in the current role model. Browser evidence does not verify that reported affordance. Full G2 was not rerun; actual Host Agent readback, G3, DEVICE/FIELD, and D-153 remain **HOLD**.
+
+## 2026-09-28 latest-main role G2 rerun
+
+After main reached `a3d4c1f9`, `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` passed (**1 test, 60 role/state/viewport cells**). The generated `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json` records pageerror 0, horizontal overflow 0, and E-stop visible in all 60 cells. The administrator `/device` release rollback confirmation was enabled at both 1366×768 and 390×844; cancel produced one dialog and zero POSTs in both cells. This supersedes the earlier matrix attempt that stopped at the disabled rollback control.
+
+This is local FastAPI/Chromium fixture evidence. It does not prove Host Agent release rollback, robot identity or mode readback, physical E-stop, G3 human acceptance, or DEVICE/FIELD status; those gates remain **HOLD**.

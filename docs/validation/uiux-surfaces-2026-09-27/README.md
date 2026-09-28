@@ -209,7 +209,7 @@ The `5c414c2c` map follow-up was checked in focused Chromium regressions and ful
 
 The full dashboard panel suite passed **22 tests**. Dedicated full-shell `/console` captures at 1366x768 and 390x844 showed an empty-map state, robot-state read failure, and separate no-request action feedback; each had overflow 0, no page errors, and visible E-stop. The fixture uses local controlled API responses and inserts the map panel into the local console manifest if absent. Screenshots and `console-map-data-action-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\map-data-action\` and were visually inspected.
 
-The broader G2 suite was also attempted: **8 passed, 1 failed**. The failure was in the existing administrator `/device` `confirm_cancel` case, where the rollback button was disabled; it did not exercise `/console` map. The run did not complete a fresh 60-cell matrix. Map SOURCE/LOCAL browser verification is complete for this follow-up, while the unrelated matrix failure remains recorded. Actual robot/map readback, target application, physical E-stop, G3, DEVICE/FIELD, and D-153 acceptance remain **HOLD**.
+The 2026-09-28 attempt recorded **8 passed, 1 failed** in the administrator `/device` `confirm_cancel` case and did not complete a fresh matrix. This result is superseded by the latest-main rerun recorded in [roles-g2-matrix.md](roles-g2-matrix.md): the full role procedure matrix passed, including that cancel path. Actual robot/map readback, target application, physical E-stop, G3, DEVICE/FIELD, and D-153 acceptance remain **HOLD**.
 
 ## 2026-09-28 administrator board hardware refresh feedback - LOCAL
 
