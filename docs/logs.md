@@ -3216,3 +3216,9 @@
 - 증거: `docs/validation/uiux-surfaces-2026-09-27/` 표면별 카드와 블로커, STATUS.md dashboard 게이트, D-280/D-153/D-254 계약을 대조했다. 코드·화면 변경은 없다.
 - gate 변화: 없음. 계획 문서이며 모든 표면 판정은 현행 HOLD를 유지한다.
 - 결정: 없음. ADR 후보(A-1 표정 어휘, A-2 온기 문구)는 해당 회차 도달 시 제안한다.
+
+## 2026-09-29 · uncommitted · fix(dashboard): settled G2 captures, loading state, balanced columns
+
+- 변경: P1 역할 운용 웹 크래프트 회차 — 패널 로딩 상태 표시, `/setup`·`/device` 데스크톱 2열 multicol 전환, action-group 탭 콘텐츠 폭, 접근 토큰 행 침범 수정, G2 harness 조립 완료 대기. main 커밋 상태의 공유 계약 위반 3건(Fleet 토글 재도색·SVG 포커스 링·helper 버튼 kind)도 같은 브랜치에서 복원했다.
+- 증거: `src/hmi/dashboard/test` 43 passed, `src/hmi/web/test` 22 passed, D-283·surface 레이아웃 23 passed, 역할 메뉴·표면 상태 29 passed, 역할 G2 60셀 overflow 0·pageerror 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: dashboard SOURCE HOLD→GO, LOCAL HOLD→GO(last_verified d41e8bd5). D-153 표면 판정은 G3 사람 평가가 없어 HOLD 유지. ARTIFACT·DEVICE/FIELD 불변.
