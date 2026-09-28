@@ -7,6 +7,9 @@
 
 * { box-sizing: border-box; }
 
+/* display 를 가진 요소도 [hidden] 은 display:none 이 이겨야 한다(dashboard 규율). */
+[hidden] { display: none !important; }
+
 html { min-width: 320px; background: var(--ground-deep); }
 
 body {
@@ -53,6 +56,82 @@ form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* 주행 화면 — 영상 스테이지가 주인공이고 컨트롤은 그 아래 한 줄이다. */
+.pilot-drive {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+[data-drive-stage] {
+  position: relative;
+  min-height: clamp(18rem, 58vh, 38rem);
+  display: grid;
+  place-items: center;
+  background: var(--ground-deep);
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+}
+
+[data-drive-frame] { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+[data-drive-stage] ui-empty {
+  position: absolute;
+  inset: var(--space-3);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* HUD — 지도 위 칩 규칙: 장막 바탕 + 표면선 테두리. */
+[data-drive-hud] {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--ground-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  min-width: 14rem;
+}
+
+[data-drive-controls] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+[data-drive-wheel-wrap] { display: grid; place-items: center; }
+
+[data-drive-wheel] {
+  position: relative;
+  width: min(38vw, 15rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--ground-raise);
+  touch-action: none;
+  user-select: none;
+}
+
+[data-drive-wheel-indicator] {
+  position: absolute;
+  inset: var(--space-2);
+  border-radius: 50%;
+  border-top: var(--space-1) solid var(--brand-rose);
+  transition: transform 80ms linear;
+}
+
+[data-drive-pedals] { display: grid; gap: var(--space-2); }
+[data-drive-pedals] ui-button { min-height: 5rem; }
+[data-drive-pedals] ui-button.active { outline: 2px solid var(--status-warn); outline-offset: 2px; }
+
+@media (max-width: 30rem) {
+  .pilot-main { padding: var(--space-4); }
+  [data-drive-controls] { flex-direction: column; }
 }
 
 @media (max-width: 30rem) {

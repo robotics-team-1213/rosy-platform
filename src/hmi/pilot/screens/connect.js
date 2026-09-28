@@ -50,7 +50,7 @@ function renderTokenForm(root, message, gate = "WAIT", tokenFact = "필요") {
   const {form, field, submit} = tokenForm();
   const connect = () => {
     setToken(field.value);
-    check(root);
+    root.__pilotRunCheck();
   };
   // ui-button 은 커스텀 요소라 네이티브 submit 을 유발하지 않는다 — 클릭과
   // Enter(내부 input 의 폼 제출) 둘 다 같은 경로로 묶는다.
@@ -70,7 +70,7 @@ function renderOffline(root, onReady) {
     {role: "status", "data-pilot-offline": ""});
   const actions = el("ui-actions");
   const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
-  retry.addEventListener("click", () => check(root, onReady));
+  retry.addEventListener("click", () => root.__pilotRunCheck());
   actions.append(retry);
   root.replaceChildren(
     el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
@@ -79,7 +79,7 @@ function renderOffline(root, onReady) {
   );
 }
 
-async function check(root, onReady) {
+async function check(root, onReady, onEnter) {
   const gate = driverFor(DRIVER_KIND);
   setTag("확인 중");
   notice("");
@@ -123,7 +123,7 @@ async function check(root, onReady) {
       el("ui-status", gate.describeReason(reason), {role: "status"}));
     const actions = el("ui-actions");
     const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
-    retry.addEventListener("click", () => check(root, onReady));
+    retry.addEventListener("click", () => root.__pilotRunCheck());
     const reset = el("ui-button", "토큰 초기화", {kind: "segment", type: "button"});
     reset.addEventListener("click", () => {
       clearToken();
@@ -141,18 +141,25 @@ async function check(root, onReady) {
   notice("조종 준비 완료");
   const pairs = [["게이트", "READY"], ...facts.slice(1),
                  ["수동 운전", "허용"], ["구동", "켜짐"]];
+  const enter = el("ui-button", "주행 시작", {kind: "primary", type: "button", "data-drive-enter": ""});
+  enter.addEventListener("click", () => onEnter?.({role: me.body?.role}));
   root.replaceChildren(
     el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
     readoutPair(pairs),
-    el("ui-empty", "조종 준비 완료 — 주행 화면은 다음 단계(T7)에서 열립니다."),
+    el("ui-empty", "조종 준비 완료"),
+    enter,
   );
   onReady?.({role: me.body?.role});
 }
 
-export function mountConnect(root, {onReady} = {}) {
+export function mountConnect(root, {onReady, onEnter} = {}) {
+  const runCheck = () => check(root, onReady, onEnter);
+  const form = () => renderTokenForm(root);
+  root.__pilotRunCheck = runCheck;
+  root.__pilotForm = form;
   if (!token()) {
-    renderTokenForm(root);
+    root.__pilotForm();
     return;
   }
-  check(root, onReady);
+  runCheck();
 }

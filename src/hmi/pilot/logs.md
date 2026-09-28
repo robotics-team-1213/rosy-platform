@@ -55,3 +55,10 @@
 - gate 변화: LOCAL 진행(설치형 계약 첫 확보).
 - 결정: D-328 Accepted (설치 형식 결정; 구현·장치·현장 수용 별도 HOLD).
 - 교훈: SW scope 가 스크립트 디렉터리보다 넓으면 서버가 Service-Worker-Allowed 를 내려줘야 한다. register() 실패를 조용히 삼키지 말고 console.warn 으로 남긴다.
+
+## 2026-09-29 · uncommitted · feat(pilot): drive screen with round wheel, pedals and camera stage (실행 계획 T7)
+- 변경: vision.js(인증 JPEG 폴링 팩토리), input-state.js(홀드 상태·stick 매핑·localStorage 설정), screens/drive.js(원형 휠 Pointer Events 각도→steer, 홀드 페달, 게임패드, 키보드, HUD readout, Wake Lock, 100ms hold-to-drive 루프, visibilitychange 즉시 0), link.js close(), connect 준비 화면 주행 시작 버튼, app.js 화면 전환, dev_server 에 robot/state·vision canned 엔드포인트.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot+라우트 29 passed — 게이트→주행 시작→휠·페달·HUD 가시, 게이트 숨김, pageerror 0.
+- gate 변화: 없음(LOCAL 진행).
+- 결정: D-323.
+- 교훈: 화면 전환 시 이전 화면 [hidden] 이 표면 display 규칙에 깨지지 않게 [hidden]{display:none!important} 를 표면 CSS 에 둔다. 콜백(onEnter)은 재호출 경로마다 다시 묶이지 않게 마운트 시 한 번 묶는다.

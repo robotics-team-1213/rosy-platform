@@ -18,8 +18,10 @@ import json
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
+
+from PIL import Image, ImageDraw
 
 PILOT = Path(__file__).resolve().parents[1]          # .../src/hmi/pilot
 WEB_COMMON = PILOT.parent / "web"                    # .../src/hmi/web
@@ -35,6 +37,9 @@ PILOT_MIME = {
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "screens/connect.js": "application/javascript",
+    "screens/drive.js": "application/javascript",
+    "input-state.js": "application/javascript",
+    "vision.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",
     "sw.js": "text/javascript",
     "icons/icon-192.png": "image/png",
@@ -58,7 +63,37 @@ CAPABILITIES = {
     "runtime": {"hardware": True, "evidence": True, "drive": True,
                 "navigation": False, "maps": False},
 }
-STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"volts": 7.6}}
+STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6}}
+
+#: 시뮬/개발용 canned 프레임 — 토큰 색 원 하나(실 카메라가 없는 자리 표시).
+_buf = __import__("io").BytesIO()
+_img = Image.new("RGB", (160, 120), (16, 18, 20))
+ImageDraw.Draw(_img).ellipse([40, 30, 120, 90], outline=(246, 151, 231), width=3)
+_img.save(_buf, "JPEG", quality=70)
+FRAME_JPEG = _buf.getvalue()
+FRAME_SEQ = 4
+
+
+@app.get("/api/v1/robot/state")
+def robot_state(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"]}
+
+
+@app.get("/api/v1/vision/front/status")
+def vision_status(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return {"available": True, "stale": False, "width": 160, "height": 120,
+            "seq": FRAME_SEQ, "age_ms": 12}
+
+
+@app.get("/api/v1/vision/front/frame")
+def vision_frame(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return Response(FRAME_JPEG, media_type="image/jpeg")
 
 
 def _role(request: Request) -> str | None:

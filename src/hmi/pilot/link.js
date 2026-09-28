@@ -35,9 +35,11 @@ export function createDeviceSession({
     onState(next);
   }
 
+  let socket = null;
+
   function connect() {
     setState("CONNECTING");
-    const socket = openSocket(url);
+    socket = openSocket(url);
     socket.onopen = () => {
       socket.send(JSON.stringify({type: "auth", token}));
     };
@@ -119,6 +121,11 @@ export function createDeviceSession({
     zero() {
       pending = null;
       return post({linear: 0, angular: 0});
+    },
+    close() {
+      try { socket?.close(); } catch (error) { /* 이미 닫혔다 */ }
+      socket = null;
+      setState("IDLE");
     },
     hidden() {
       // 탭 이탈: 즉시 0 발행 + 조종 차단. 재개는 visible() 로만.

@@ -122,15 +122,17 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_dev_token_passes_the_gate_and_survives_reload(tablet_page):
+def test_drive_screen_mounts_after_the_gate(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
     page.click("form[data-pilot-token-form] ui-button")
-    page.wait_for_selector("text=조종 준비 완료")
-    assert _gate_value(page) == "READY"
-    assert page.locator("dl[data-gate-readout] dt", has_text="운전 역할").count() == 1
-    page.reload()
-    page.wait_for_selector("text=조종 준비 완료")
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stage]")
+    assert page.locator("[data-drive-wheel]").is_visible()
+    assert page.locator("[data-drive-pedal=forward]").is_visible()
+    assert page.locator("[data-drive-readout] [data-drive-fact=link]").count() == 1
+    # 게이트 화면은 숨는다.
+    assert not page.locator("[data-screen=connect]").is_visible()
     assert errors == [], errors
