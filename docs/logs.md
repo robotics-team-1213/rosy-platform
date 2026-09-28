@@ -3093,3 +3093,10 @@
 - Change: complete the source/contract boundary audit with the current role-based folder tree and separate source, host/deployment, and actuator-authority maps. D-317 remains the Accepted structure decision; no duplicate ADR or source move was added.
 - Evidence: recorded WSL ROS 2 Jazzy 24-package build/name comparison separately from the unrun locked-vendor ARM64 payload and target readback. Harness lint: 0 errors/17 metadata warnings; harness/topology tests: 78 passed; Fleet/Overhead preview tests: 46 passed; sensing launch tests: 2 passed; `git diff --check` passed.
 - Gate: SOURCE/LOCAL only. Native ARM64 artifact, device installation/readback, physical stop/interlock, and FIELD acceptance remain open.
+
+## 2026-09-28 · uncommitted · docs(architecture): make source placement rules explicit
+
+- Change: expand the exact tracked source tree and publish path-selection rules in the platform README and `src/AGENTS.md`. Separate source role, ROS package, process/host, final writer, and deployment closure; defer generic device-control roots and unselected drone layouts.
+- Evidence: D-317/D-315 path and authority rules reconciled with the current tracked tree. No package, ROS API, writer, image closure, or local ignored/device data changed.
+- Verification: architecture documentation/layout suite 57 passed/1 skipped; harness/topology tests 78 passed; harness lint 0 errors/17 existing metadata warnings; `git diff --check` passed.
+- Gate: documentation SOURCE/LOCAL only; device, native artifact, and FIELD gates remain as recorded by D-317.

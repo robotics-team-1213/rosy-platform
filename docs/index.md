@@ -198,8 +198,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · docs(architecture): make source placement rules explicit
 - 2026-09-28 · uncommitted · docs(plan): complete the D-317 structure audit
 - 2026-09-28 · uncommitted · validation(camera): recheck physical acceptance prerequisites
 - 2026-09-28 · uncommitted · docs(camera): record D-318 rectification contract
 - 2026-09-28 · uncommitted · docs(architecture): tighten D-317 boundary audit
-- 2026-09-28 · uncommitted · docs(architecture): define control and shared contract boundaries

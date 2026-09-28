@@ -25,6 +25,34 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 
 ## For AI Agents
 
+### Placement Rules
+
+Choose a source path by the code's stable responsibility and lifecycle. Do not use a
+folder name as evidence for a ROS package boundary, process, host, final actuator
+writer, or installed image. Those require their own manifest, launch/systemd, command
+publisher, and deployment evidence.
+
+| Responsibility | Source location | Boundary it does not establish |
+|---|---|---|
+| Cross-package contract modules and ROS interfaces | `contracts/foundation`, `contracts/interfaces` | Runtime execution, device ownership, or one universal Action API; classify `core_common` modules by their actual consumers |
+| ROS application component | `runtime/<role>` | A cross-product runtime engine; for example `runtime/gateway` (`core`) is Pinky's middleware |
+| Product profile, bringup, or ROS/vendor adapter | `products/<model>` | Final actuator authority or product commissioning; `products/omx/adapter` is only code placement |
+| Chip driver | `drivers/<chip>` | Product intent or high-level command semantics |
+| Central site service | `site/<service>` | Robot actuator control; Fleet owns the Mission/Step ledger |
+| UI assets | `hmi/<surface>` | A separate UI server or host; the serving backend and deployment define that |
+| Simulation model/world | `sim/<model-or-tool>` | Physical-device installation or acceptance |
+| Install, image, host, and release rules | `../deploy/` | Source ownership |
+
+**Device command interpretation:** interpret a common request at the named local
+command owner. Pinky's CORE maps its accepted intent to Pinky movement and is the only
+final `cmd_vel` writer. A product adapter may translate ROS/vendor APIs but does not
+become a writer by directory placement. Do not add generic `devices/`,
+`device_control/`, or `controllers/<model>/` source roots until at least two concrete
+implementations need the same code and an accountable owner, producer/consumer path,
+independent tests, and build/install boundary for that shared unit are evidenced.
+Do not reserve a drone skeleton before selecting its flight stack and final actuator
+authority. Follow D-317 for any proposed source split or package move.
+
 ### Working In This Directory
 
 - Package names stay `control`, `bringup`, and the rest. Source roots are `contracts/`, `runtime/`, `products/`, `drivers/`, `site/`, `hmi/`, and `sim/`. Do not reintroduce `pinky_*` or flat `rosy_*` package names. `runtime/gateway` (ROS package `core`) owns Pinky final `cmd_vel`; `products/omx/adapter` is only a source location and does not establish an accepted OMX operational writer. ROS package identity, process placement, and image closure are separate evidence (D-315).

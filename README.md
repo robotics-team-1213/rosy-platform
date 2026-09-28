@@ -33,6 +33,29 @@ D-315는 폴더의 뜻을 **소스 책임 분류**로 한정한다. 디렉터리
 상세 판정은 [D-315](docs/adr/D-315-source-folder-responsibility-and-runtime-authority.md),
 실행과 후속 감사 범위는 [계획](docs/plans/2026-09-28-source-folder-roles-and-runtime-audit.md)에 기록했다.
 
+구조를 정할 때는 아래 축을 각각 판단한다. `src/` 경로는 코드 책임 분류이고,
+ROS package.xml은 colcon 패키지 경계다. 둘 다 실행 프로세스·호스트·최종 명령
+소유자·설치 이미지까지 자동으로 정하지 않는다.
+
+| 질문 | 배치 기준 | 현재 예 |
+|---|---|---|
+| 계약·타입인가? | ROS 인터페이스는 `src/contracts/interfaces`, 공통 Python 계약 모듈은 의미에 따라 `src/contracts/foundation`에 둔다. 계약은 동작을 실행하지 않는다. | `interfaces`, `core_common` |
+| 로봇 실행 구성요소인가? | ROS 실행 패키지는 `src/runtime/<role>`에 둔다. `runtime/`은 모든 제품이 공유하는 단일 엔진을 뜻하지 않는다. | `runtime/gateway`의 `core`는 Pinky 장치 미들웨어다. `runtime/sensing`의 `control`은 별도 ROS 패키지다. |
+| 제품별 소스·번역기인가? | 실제 제품 전용 프로필·bringup·ROS/vendor API adapter는 `src/products/<model>`에 둔다. adapter 경로만으로 최종 writer나 운용 수용을 선언하지 않는다. | `products/pinky_pro`, `products/omx/adapter` |
+| 현장 서버 기능인가? | 중앙 현장 서비스는 `src/site/<service>`에 둔다. Fleet은 작업 원장을 소유하고 장치 actuator를 쓰지 않는다. | `site/fleet`, `site/overhead` |
+| 사용자 표시 자산인가? | 화면 자산은 `src/hmi/<surface>`에 둔다. 실제 제공 프로세스와 호스트는 서버·배포 정의에서 확인한다. | CORE가 제공하는 `hmi/dashboard`, Fleet이 제공하는 `site/fleet` console |
+| 드라이버·시뮬레이션인가? | 칩 수준 코드는 `src/drivers`, ROS/Gazebo 모델과 world는 `src/sim`에 둔다. | `drivers/imu_bno055`, `sim/description`, `sim/gz_sim` |
+| 어디서 설치·실행되는가? | 호스트별 설치·이미지·릴리스 closure는 `deploy/`에서 정의하고 package manifest와 빌드 규칙으로 검증한다. | `deploy/robot`, `deploy/site`, `deploy/image`, `deploy/release` |
+
+기기 명령 해석은 그 기기의 로컬 최종 명령 소유자에서 수행한다. Pinky는 CORE가
+외부 API intent를 Pinky 주행 동작으로 해석하고 최종 `cmd_vel`을 발행한다.
+제품 adapter는 ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner가
+되지는 않는다. 둘 이상의 실제 구현이 같은 코드를 필요로 하고 소유자·생산자/소비자·독립
+시험·빌드/설치 경계가 확인되기 전에는
+`devices/`, `device_control/`, `controllers/<model>/` 같은 공용 제어 루트를 만들지
+않는다. OMX와 드론은 실제 제품 API, 로컬 writer, 설치 경계가 수용되기 전까지
+각각 별도 검토 대상으로 둔다. 상세한 재배치 기준은 [D-317](docs/adr/D-317-control-and-shared-contract-source-boundaries.md)을 따른다.
+
 runtime/sensing의 ROS 패키지 이름은 control이며, 현재 센싱·보정·계획·안전·진단 경로가
 함께 있다. 이 혼합만으로 즉시 디렉터리를 나누지 않는다. 별도 소비자·시험·설치 경계가
 확인될 때 별도 ADR로 판단한다. CORE(runtime/gateway)는 Pinky 최종 cmd_vel 경계다.
@@ -101,6 +124,12 @@ ros2 launch core rosy_core.launch.py
 # 다로봇 시뮬과 Fleet 콘솔을 한 번에
 bash tools/run_fleet_sim.sh
 ```
+
+새 Python ament 패키지를 추가하거나 옮긴 뒤 resource marker가 빠졌다면
+`bash tools/fix_ament_resource.sh`로 `resource/<package>` marker를 다시 만든다.
+이 스크립트는 패키지 manifest나 colcon build를 대신하지 않는다.
+로컬 수동주행 메모와 주행 세션은 소스나 설치물이 아니라 `data/teleop` 및
+`data/drive`에 둔다. 세션 파일은 커밋하지 않으며, 예외는 `data/README.md`를 따른다.
 
 ## Raspberry Pi 5 런타임
 

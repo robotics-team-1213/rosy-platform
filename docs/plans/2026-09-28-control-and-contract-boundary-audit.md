@@ -28,19 +28,38 @@ The selected structure is the existing role-based tree. A folder says where sour
 Rosy OS/
 ├── src/
 │   ├── contracts/
-│   │   ├── interfaces/                 # ROS interfaces
-│   │   └── foundation/                 # core_common: wire, site, domain, config helpers
-│   ├── drivers/imu_bno055/             # chip-level driver
+│   │   ├── foundation/                 # core_common: wire, site, domain, config helpers
+│   │   └── interfaces/                 # ROS interfaces
+│   ├── drivers/
+│   │   └── imu_bno055/                 # chip-level driver
 │   ├── products/
-│   │   ├── pinky_pro/{profile,bringup,adc,lamp,led}/
-│   │   └── omx/{profile,adapter}/       # adapter is source placement, not accepted writer
+│   │   ├── pinky_pro/
+│   │   │   ├── profile/
+│   │   │   ├── bringup/
+│   │   │   ├── adc/
+│   │   │   ├── lamp/
+│   │   │   └── led/
+│   │   └── omx/
+│   │       ├── profile/
+│   │       └── adapter/                # source placement, not accepted writer
 │   ├── runtime/
-│   │   ├── gateway/                    # ROS package core; Pinky gateway/final base writer
-│   │   ├── {events,services,api_web,navigation}/
-│   │   └── sensing/                     # ROS package control; mixed legacy/current package
-│   ├── site/{fleet,overhead,games}/     # site mission ledger, camera processing, game host
-│   ├── hmi/{dashboard,face,web}/        # presentation assets and shared web pieces
-│   └── sim/{description,gz_sim}/        # robot descriptions and Gazebo
+│   │   ├── api_web/
+│   │   ├── events/
+│   │   ├── gateway/                    # package core; Pinky middleware/final base writer
+│   │   ├── navigation/
+│   │   ├── sensing/                    # package control; mixed legacy/current package
+│   │   └── services/
+│   ├── site/
+│   │   ├── fleet/                      # site mission ledger
+│   │   ├── games/                      # game host
+│   │   └── overhead/                   # camera input and processing
+│   ├── hmi/
+│   │   ├── dashboard/                  # served by CORE
+│   │   ├── face/                       # robot LCD
+│   │   └── web/                        # shared web assets
+│   └── sim/
+│       ├── description/                # URDF/xacro and models
+│       └── gz_sim/                     # Gazebo
 ├── deploy/
 │   ├── robot/                           # robot runtime/config/build definitions
 │   ├── image/                           # native Pi image and payload builder
@@ -131,25 +150,26 @@ The D-317 baseline already corrected the stale `fleet` manifest comment that cla
 
 **Exit:** Met: the structure proposal is to retain the current seven source-role roots and current package names; no source move was justified. Accepted D-317 is the ADR decision, so a duplicate ADR is deliberately not created. This does not decide OMX production ownership, drone layout, or native package release policy.
 
-## Task 5: Keep architecture maps current (baseline complete; current map reconciled)
+## Task 5: Keep architecture maps current (baseline reconciled; discoverability implementation)
 
-**Files:** `docs/plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md`, this plan, `docs/adr/D-317-control-and-shared-contract-source-boundaries.md`.
+**Files:** `README.md`, `src/AGENTS.md`, `docs/plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md`, this plan, `docs/adr/D-317-control-and-shared-contract-source-boundaries.md`.
 
 1. The active platform plan already uses the D-310 tree; the tracked source tree confirms there is no `src/devices/` package root.
 2. The P0 text retains D-316's Pinky `attempt_id`→CORE terminal event correlation as SOURCE/LOCAL and leaves ROS-SIM, artifact, device/stop readback, and field gates separate.
 3. This plan now presents one proposed tree with separate source-role, authority, host, and image-closure maps, including D-318's Fleet↔Vision preview path.
+4. **Completed in this follow-up:** publish the concrete path-selection rules in `README.md` and `src/AGENTS.md`: distinguish source path, ROS package, process/host, final writer, and image closure; name each current source role; explain where per-device ROS/vendor translation belongs; forbid empty generic device-control roots before independent evidence.
 
-**Exit:** Met at baseline `f1f031e2`: the plan tree agrees with `git ls-tree` and current D-275/D-310/D-315/D-317/D-318 boundaries. D-318's source change does not change robot command ownership or make the browser PC the site server.
+**Exit:** Met: the expanded plan tree matches tracked `src/` paths on current `main`; README and `src/AGENTS.md` carry the same D-317 source-placement rules. D-318's source change does not change robot command ownership or make the browser PC the site server.
 
-## Task 6: Verify and record (this plan's verification pending)
+## Task 6: Verify and record (SOURCE/LOCAL complete)
 
 1. **Completed:** `python tools/harness/rosy_harness.py generate` exited 0 and added this journal entry to the recent-records section of `docs/index.md`.
-2. **Completed:** `python tools/harness/rosy_harness.py lint` reported 0 errors and 17 existing metadata/freshness warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` passed 78 tests; its 17 warnings are the same harness freshness notices. Focused path checks passed: Fleet/Overhead preview suites 46 passed; sensing launch contracts 2 passed. No unrelated module metadata was edited to hide warnings.
-3. **Completed:** `git diff --check` passed. Only this plan, `docs/logs.md`, and generated `docs/index.md` changed. The Accepted ADR and ADR log were not edited because D-317 already owns this decision.
-4. This pass is recorded separately from D-317's original integration at `edcf2818`; the audit branch began at `f1f031e2` and must be rebased onto current local `main` before integration.
+2. **Completed in the preceding audit and this follow-up:** `python tools/harness/rosy_harness.py lint` reported 0 errors and 17 existing metadata/freshness warnings. `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` passed 78 tests. This follow-up also passed the architecture documentation/layout suite (57 passed, 1 skipped). The 17 harness warnings are existing module evidence-freshness notices; no unrelated metadata was changed.
+3. **Completed:** `git diff --check` passed. The Accepted ADR and ADR log are not edited because D-317 already owns this decision. Changed paths are the README, `src/AGENTS.md`, this plan, work journal, and generated index.
+4. This follow-up started from local `main` at `b7a3db66`; after the listed SOURCE/LOCAL checks passed, its documentation-only commit was fast-forwarded to local `main`. No remote push was made.
 
 **Exit:** D-317 remains the structure ADR; its plan now contains the complete source tree proposal, evidence-backed `keep current paths` result, and open artifact/device gates. Documentation SOURCE/LOCAL results remain distinct from ROS-SIM, ARTIFACT, DEVICE, physical stop, and FIELD acceptance.
 
 ## Rollback
 
-The structure decision remains D-317. This completion changes only the audit plan, work journal, and generated index. If the source map becomes inaccurate, revert only this scoped documentation commit; do not move packages, edit native release inclusion, reset `main`, remove peer worktrees, or change ignored/device state.
+The structure decision remains D-317. This follow-up changes source-layout guidance and its plan/journal/index only. If the source map becomes inaccurate, revert only this scoped documentation commit; do not move packages, edit native release inclusion, reset `main`, remove peer worktrees, or change ignored/device state.
