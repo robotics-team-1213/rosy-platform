@@ -1,5 +1,14 @@
 # 04. ROSY Device Adapter Specification
 
+> **Status: target design.** This document describes a proposed adapter model;
+> its package layout, manifest examples, and capability model do not by
+> themselves establish a common live plugin loader or a production adapter for
+> every device. The current v1 mapping is recorded in
+> [the architecture status table](README.md#current-mapping-2026-09-17) and the
+> accepted ADRs. Treat existing device paths and their runtime authority
+> according to those contracts until an implementation and its install/runtime
+> evidence are accepted.
+
 ## 1. Purpose
 
 Adapters translate vendor- or hardware-specific interfaces into ROSY-standard interfaces.

@@ -5,14 +5,21 @@
 
 ## Purpose
 
-Robot-host delivery: build a signed Ubuntu Server 24.04 arm64 ROSY OS image,
-store/activate native ROS 2 Jazzy releases, and run CORE/I/O under least-privilege
-systemd services on Raspberry Pi 5 (D-161). Host privilege stays in Host Agent,
-never in CORE. Docker Compose is development/CI-only.
+Deployment and provisioning surfaces for ROSY device and site hosts. Pinky's
+product path builds a signed Ubuntu Server 24.04 arm64 image, stores and
+activates native ROS 2 Jazzy releases, and runs CORE/I/O under least-privilege
+systemd services on Raspberry Pi 5 (D-161). The site path hosts Fleet, Vision,
+and Caddy separately. Host privilege stays in Host Agent, never in CORE.
+Docker Compose under `robot/` is development/CI compatibility; site Compose is
+the current site-host stack. OMX OCI files are development/simulation
+preparation and do not establish an accepted field actuator runtime.
 
 ## Key Files
 
-Three sibling pipelines below; at this level only the harness records.
+The directories below are distinct deployment surfaces with different hosts,
+lifecycle stages, and acceptance evidence. Keep those boundaries explicit;
+membership under `deploy/` alone does not imply one image, host, or release
+unit. At this level only the harness records.
 
 | File | Description |
 |------|-------------|
@@ -26,7 +33,10 @@ Three sibling pipelines below; at this level only the harness records.
 |-----------|---------|
 | `image/` | Native aarch64 image build + input/artifact verification (see `image/AGENTS.md`) |
 | `release/` | Manifest, signing, storage, updater, Host Agent (see `release/AGENTS.md`) |
+| `sd/` | SD media creation, device personalization, and image/media readback verification (see `sd/AGENTS.md`) |
 | `robot/` | Native product systemd runtime plus development-only Docker/Compose compatibility tools (see `robot/AGENTS.md`) |
+| `site/` | Site-host Fleet, Vision, and Caddy stack; separate from the Pi product image |
+| `omx/` | OMX workstation image and simulation preparation; field runtime and actuator authority remain unaccepted |
 
 ## For AI Agents
 
