@@ -57,6 +57,16 @@ evidence; this module does not produce a 3D pose, grasp, trajectory, or pick
 success claim. Coordinate selectors must already be in source-observation
 pixels; cropped coordinates without a verified inverse transform are refused.
 
+`omx_adapter.pick_place_transaction` is an evidence-only transition model for
+approach, grasp, hold verification, transfer, release, and independent placement
+predicate verification. `gripper_contract` requires fresh, advancing,
+workcell/session-bound gripper readback for hold and release receipts. An
+ambiguous driver result, cancel, readback, or restart leaves the transaction in
+HOLD; it never resubmits a stage or releases a possibly held object. These
+ROS-free types are tested with fakes only and are not connected to
+`RosArmCommandRuntime`, a gripper, an HTTP endpoint, or an enabled product
+profile.
+
 The ROS modules are optional imports. The checked-in profile remains disabled
 and has no measured joint map, serial identity, camera model, calibration, or
 enabled capability. Keep ARTIFACT, DEVICE, and FIELD gates closed until

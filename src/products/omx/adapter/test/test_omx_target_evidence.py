@@ -72,6 +72,10 @@ def test_selector_cannot_cross_observations_or_crop_coordinate_spaces():
     with pytest.raises(ValueError, match="coordinate_space"):
         TargetSelector("point", (50, 60), observation_id="obs-4",
                        coordinate_space="cropped_image_pixels")
+    with pytest.raises(TargetResolutionError, match="exceeds"):
+        resolve_target(observation(), [candidate()],
+                       TargetSelector("point", (640, 10), observation_id="obs-4"),
+                       now=20.1, max_frame_age_s=0.5)
 
 
 def test_missing_frame_or_transform_revision_fails_closed():

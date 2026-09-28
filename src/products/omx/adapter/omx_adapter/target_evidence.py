@@ -130,8 +130,8 @@ def _matches(candidates: list[ObjectCandidate], selector: TargetSelector) -> lis
     if selector.kind == "point":
         x, y = value
         return [candidate for candidate in candidates
-                if candidate.bbox_xyxy[0] <= x <= candidate.bbox_xyxy[2]
-                and candidate.bbox_xyxy[1] <= y <= candidate.bbox_xyxy[3]]
+                if candidate.bbox_xyxy[0] <= x < candidate.bbox_xyxy[2]
+                and candidate.bbox_xyxy[1] <= y < candidate.bbox_xyxy[3]]
     scored = [(candidate, _iou(candidate.bbox_xyxy, value)) for candidate in candidates]
     positive = [(candidate, score) for candidate, score in scored if score > 0.0]
     if not positive:
@@ -160,6 +160,14 @@ def resolve_target(observation: CameraFrameMetadata, candidates: list[ObjectCand
         raise TargetResolutionError("observation is stale or its freshness is invalid")
     if selector.observation_id != observation.observation_id:
         raise TargetResolutionError("selector observation does not match current observation")
+    if selector.kind == "point":
+        x, y = selector.value
+        if not (0 <= x < observation.width and 0 <= y < observation.height):
+            raise TargetResolutionError("point selector exceeds the source observation")
+    elif selector.kind == "bbox":
+        x1, y1, x2, y2 = selector.value
+        if not (0 <= x1 < x2 <= observation.width and 0 <= y1 < y2 <= observation.height):
+            raise TargetResolutionError("bbox selector exceeds the source observation")
     current_candidates = [item for item in candidates
                           if item.observation_id == observation.observation_id]
     matches = _matches(current_candidates, selector)
