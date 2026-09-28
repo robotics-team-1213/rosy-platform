@@ -331,6 +331,40 @@ robot number, API credential, Fleet pairing, and motion runtime stay blocked:
 `http://<robot-ip>:8080/dashboard` shows registration instructions, while
 `/api/v1` returns HTTP 503. The setup page is read-only.
 
+#### Guided operator path (recommended)
+
+For the normal recovery, prepare a **new or blank SD card** on the Windows
+operator PC. Keep the old card as the previous device's archive. From the Rosy
+OS repository, run:
+
+```powershell
+.\deploy\sd\setup-moved-device.ps1 -RobotAddress <robot-ip>
+```
+
+The assistant checks that the address shows the new-device setup page, then
+guides the operator through the signed release folder, an already-saved site
+Wi-Fi profile, and the USB card. It creates a fresh identity and a read-only
+plan, then displays the robot number, network name, release and card serial for
+review. The operator types `REGISTER <number>` to launch the existing writer;
+the elevated writer still requires its exact `ERASE SERIAL <serial> <name>`
+confirmation and performs the full image readback. Its log, plan and receipt
+stay under `X:\DevTemp\`.
+
+When the operator key pair exists at
+`%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519[.pub]`, the helper adds a
+managed alias to the Windows OpenSSH config. After the new card boots, connect
+with `ssh rosy-pinky-xxxx` (using the device name shown in the plan). The alias
+sets user `rosy`, the device's `.local` hostname and the operator key. OpenSSH
+continues to ask before trusting an unknown host key and rejects a changed key.
+An existing user-defined alias is preserved; the helper prints a direct command
+if it cannot add its managed block. Without the key pair, the card will not get
+operator-key SSH access and no alias is created.
+
+After successful readback, power down the Pi, install the new card and boot it.
+Verify first boot, the new identity and dashboard separately. The assistant
+does not trust or replace SSH host keys and does not perform the advanced
+same-card rebind path below.
+
 1. Check the physical Pi identity and the SD label. A blank card written from
    a signed image is the normal new-device path. An already booted Pi can use
    the operator-only `rosy-rebind-board.py` path below on the same SD; it moves

@@ -30,6 +30,14 @@ one-time per-card provisioning bundle.
   path from the plan and release, finds the card by serial, elevates itself, keeps a
   timestamped log and `.exit` marker per attempt, and refuses an existing receipt.
   `-PrintArguments` shows the resolved call without writing.
+- For a moved-card `NEW_DEVICE_SETUP`, prefer the guided new-card entry point:
+  `setup-moved-device.ps1 -RobotAddress <robot-ip>`. It checks the read-only setup
+  page, selects a signed release and saved site Wi-Fi profile, allocates a fresh
+  identity through `prepare-rosy-sd.ps1 -PlanOnly`, and delegates media changes to
+  `write-card.ps1`. It never accepts/replaces SSH host keys or performs same-card
+  rebind. If the operator key pair exists, it adds a user SSH config alias so the
+  new device can be reached as `ssh rosy-pinky-xxxx`; host-key checking remains on.
+  Keep both the plan review and the writer's exact serial erase confirmation.
 - D-188: operators launch with `-Detach` (own elevated window, one UAC prompt,
   returns at once) and follow `card-write-status.ps1 -LogPath <log>` (`-Json` for
   agents; no elevation). Quote its ETA; never guess completion times. The write
