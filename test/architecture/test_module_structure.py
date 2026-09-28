@@ -63,12 +63,18 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "site/fleet/fleet/server/app.py": (
-        622,
-        "accept: compose Fleet routes and shared authentication/audit dependencies in one HTTP boundary; split by route group only when an independent auth and lifecycle boundary exists",
+        813,
+        "accept: compose Fleet routes and shared authentication/audit dependencies in one HTTP boundary; "
+        "split by route group only when an independent auth and lifecycle boundary exists. Re-judged 2026-09-29 "
+        "at 813 lines after the dispatch arbitration work grew the route table (docs/plans/"
+        "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "site/fleet/fleet/server/task_store.py": (
-        716,
-        "accept: keep SQLite task, history, lease, and reservation transactions together; correlated CORE event projection lives in task_results.py",
+        1014,
+        "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
+        "correlated CORE event projection lives in task_results.py. Re-judged 2026-09-29 at 1014 lines after "
+        "durable dispatch resource claims moved into the same store owner (docs/plans/"
+        "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "runtime/sensing/control/startup_calibration_node.py": (
         954,

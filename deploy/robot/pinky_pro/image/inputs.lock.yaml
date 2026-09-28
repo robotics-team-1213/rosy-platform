@@ -111,7 +111,7 @@ hardware_dependencies:
   rpi_ws281x_url: https://codeload.github.com/jgarff/rpi_ws281x/tar.gz/1396df4f35a86de0f7e5eda91d94d4539eef1727
   rpi_ws281x_sha256: 18896f9576848944a7f53834b4e329aaeb1961d2cadf7bf67aecf1f9df91aaa6
   rpi_ws281x_pi5_patch: patches/rpi_ws281x-pi5-rev1.1.patch
-  rpi_ws281x_pi5_patch_sha256: 528d7fa414c9ea2d869f1d971fae78869139a42904724470d793a42bdaeabcb2
+  rpi_ws281x_pi5_patch_sha256: 9a1318891e9f25605ace107f5247984f8b6a70230660628f8a80b8f599658574
   sllidar_ros2_commit: 34300099fadfc772965962dec837bf436706188f
   sllidar_ros2_url: https://codeload.github.com/Slamtec/sllidar_ros2/tar.gz/34300099fadfc772965962dec837bf436706188f
   sllidar_ros2_sha256: 6a57c289a235a37dce0b07ef6fdc3ee003e646140d3fdc982988e7bf652367a7

@@ -413,7 +413,9 @@ def test_core_only_sends_commands_the_agent_implements():
     """Two statements of one allowlist drift apart unless something checks."""
     import sys
 
-    agent_dir = str(Path(__file__).resolve().parents[4] / "deploy" / "release")
+    agent_dir = str(
+        Path(__file__).resolve().parents[4] / "deploy" / "robot" / "pinky_pro" / "release"
+    )
     if agent_dir not in sys.path:
         sys.path.insert(0, agent_dir)
     from host_agent import ALLOWLIST

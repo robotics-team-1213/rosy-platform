@@ -66,7 +66,13 @@ def test_hardware_panel_marks_last_snapshot_stale_after_access_failure():
         assert page.locator(".hardware-device").nth(2).locator(".hardware-device-state").get_attribute("data-status") is None
         assert page.locator(".hardware-device-identity img").count() == 0
         page.locator("ui-button.hardware-refresh").click()
-        assert "최근 요청" in page.locator(".hardware-note").inner_text()
+        # 17f30137 moved the refresh reply out of .hardware-note into the
+        # action note, and it is written only after the stubbed API resolves.
+        # Assert on the element that carries it, waiting for the outcome
+        # instead of racing the promise.
+        action_note = page.locator(".hardware-action-note")
+        action_note.filter(has_text="최근 요청").wait_for(timeout=5_000)
+        assert "최근 요청" in action_note.inner_text()
         assert page.evaluate("window.__apiCalls") == [{
             "path": "/api/v1/host/hardware/refresh", "method": "POST",
         }]

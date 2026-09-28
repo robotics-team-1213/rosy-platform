@@ -689,6 +689,8 @@ def test_a_literal_that_looks_like_an_event_is_either_emitted_or_declared():
         "adc.battery": "D-247 hardware.json 장치 id (api/v1/host.py 토픽 판정 표)",
         "adc.ultrasonic": "D-247 hardware.json 장치 id (api/v1/host.py 토픽 판정 표)",
         "pi.power": "D-247 hardware.json 장치 id (D-260 core_common.robot_state 할 일 규칙)",
+        "network.status": "호스트 에이전트 명령 (host_agent ALLOWLIST, emit 아님)",
+        "release.status": "호스트 에이전트 명령 (host_agent ALLOWLIST, emit 아님)",
     }
     names = {site.name for site in emitted()}
 

@@ -28,7 +28,9 @@ import sys
 from typing import Callable
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "robot" / "native"))
+# HERE 는 sd/ 다. 형제인 native/ 에 레드action 모듈이 있다 (D-175, D-192 이전 경로는
+# 여기에 "robot" 을 더해 없어진 자리로 갔다).
+sys.path.insert(0, str(HERE.parent / "native"))
 from rosy_diag_redact import is_denied_path  # noqa: E402
 
 

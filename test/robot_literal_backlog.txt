@@ -45,6 +45,8 @@ runtime/sensing/tools/gz/run_calibration_spaces.py
 runtime/sensing/tools/gz/track_run_monitor.py
 contracts/foundation/config/rosy_default.yaml
 contracts/foundation/core_common/profile.py
+contracts/foundation/core_common/protocol/schemas.py
+hmi/face/emotion/wifi_qr.py
 runtime/navigation/launch/hardware.launch.py
 runtime/navigation/params/nav2_params.yaml
 sim/gz_sim/config/simulation_actuation.yaml
@@ -57,5 +59,7 @@ sim/gz_sim/scripts/pinky_acceptance.py
 sim/gz_sim/scripts/pinky_nav2_probe.py
 sim/gz_sim/worlds/rosy_gauntlet.world
 sim/gz_sim/worlds/rosy_maze.world
+sim/isaac_sim/model_checks.py
+sim/isaac_sim/run_rosy.py
 site/fleet/fleet/server/bays.py
 site/fleet/fleet/server/traffic.py

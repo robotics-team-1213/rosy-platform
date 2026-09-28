@@ -1466,3 +1466,9 @@
 - 변경: 현재 local main을 통합한 source `a86dd19ca48e13c4512a1cf815f169c78f827e7d`에서 Fleet/Vision/proxy linux/amd64 후보와 SPDX SBOM을 다시 빌드했다.
 - 증거: `X:\DevTemp\rosy-site-candidate-a86dd19\images.tar` SHA-256 `e9c9e4968e156a2ea9292a17218827af7b29a0e0890f5afa539a94afc822c3c6`; 세 image ID/platform, archive 및 SBOM hash가 manifest와 일치. 격리 Compose에서 세 서비스 healthy, HTTPS `/healthz` HTTP 200, SIGINT를 쓰는 Vision 포함 전 서비스 정지 exit 0 확인.
 - gate 변화: unsigned local candidate와 LOCAL smoke까지만. 승인 signing trust/host가 없어 production 전달 및 활성화, Isaac ROS-SIM, physical stop/readback, DEVICE/FIELD는 HOLD다.
+
+## 2026-09-29 · uncommitted · repin the WS281x patch hash and restore the diagnostics import
+
+- 변경: `e3b0c95e`가 패치의 경로 언급 한 줄만 고치고 `inputs.lock.yaml`의 `rpi_ws281x_pi5_patch_sha256`은 옛 값을 그대로 둬 `test_the_lock_pins_the_patch_bytes`가 빨갰다 — SHA-256을 현재 바이트(`9a131889…`)로 재고정했다. `read-card-diagnostics.py`는 개조로 사라진 `sd/../robot/native` 자리에 `rosy_diag_redact`를 찾고 있어 `ModuleNotFoundError`로 죽었다 — 형제인 `native/`로 바로잡았다.
+- 증거: `test_lamp_driver_image` + `test_card_diagnostics` + `test_line_follow_contract_docs` 38 passed, 1 skipped. 새 해시는 `git grep`으로 저장소에 한 곳에만 있고 중복 참조가 없다.
+- gate 변화: 없음. 이미지 빌드의 `sha256sum` 검증은 같은 잠금 파일을 계속 읽는다.

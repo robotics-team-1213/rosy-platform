@@ -3289,3 +3289,9 @@
 - 변경: Google 공식 ER 2 표준 Interactions REST에 1회 요청하고 `propose_pick_place` function call을 추적 가능한 후보로 변환하는 Fleet adapter를 추가했다. 응답 tool call을 실행하지 않으며 image point/box는 image 좌표로 유지한다. D-331, 공식 API 조사 보완을 추가했다.
 - 증거: mock transport 계약에서 multimodal request, `store=false`, API key header, allowlist, yx/box 범위, caller idempotency key, HTTP/JSON/function 응답 오류를 시험한다. 실 API credential 또는 로봇은 사용하지 않았다.
 - gate 변화: SOURCE adapter만 구현. Fleet REST/runtime wiring, policy valve, ROS/OMX 제출, 안전 중요 사용, DEVICE/FIELD는 계속 HOLD다.
+
+## 2026-09-29 · uncommitted · fix(test): clear the CI core reds and the root test/ reds
+
+- 변경: CI 코어 단계를 막던 3건을 고쳤다. `test_event_catalogue`가 호스트 에이전트 명령 `network.status`/`release.status`를 미등록 이벤트로 오판한 것(`not_events`에 사유와 함께 등록 — 실제 emit 이벤트와 교차 검증되므로 실제 이벤트를 가릴 수 없다), `test_host_cards`가 개조 이전 경로 `deploy/release`를 쓰던 것, `app.py` FastAPI 설명의 API Ref 버전이 `v1.41`에 머물러 있던 것. 이어서 CI가 한 번도 돌리지 못한 루트 `test/`의 빨강 7건 중 6건을 고쳤다: `test_line_follow` 핀 `v1.43`→`v1.47`, `read-card-diagnostics.py`의 사라진 `rosy_diag_redact` import 경로, 램프 패치 잠금 해시, `robot_literal_backlog.txt`에 최근 커밋이 새긴 4개 경로, 팰릿 크기 판정 재심(622→813, 716→1014), 그리고 `17f30137`이 리플래시 피드백을 `.hardware-action-note`로 옮기면서 갱신을 놓친 브라우저 단언.
+- 증거: CI 코어 명령 그대로 `1841 passed, 16 skipped`. `src/runtime/gateway/test` 1402 passed, 16 skipped / api_web 70 passed, 13 skipped / 영향받은 루트 6개 파일 73 passed, 1 skipped. `rosy_harness.py lint` 0 errors. 램프 해시는 증명됐다 — `e3b0c95e`가 패치 주석의 경로 한 줄만 바꿨는데 `inputs.lock.yaml`의 SHA-256은 `b7d7b17a` 시점 옛 값을 그대로 두었다(파이프 LF→CRLF 왜곡 없이 블롭 원본으로 대조).
+- gate 변화: 없음. 계약 필드·경로·이벤트 카탈로그는 그대로다. 남은 것은 `test_no_secrets_in_tracked_files`(13건)이며 의도적으로 손대지 않았다 — `secret_scan.py`가 "Widening an exclusion is how a matcher goes quiet without anyone noticing"라고 명시한 보안 게이트이고, 해법은 정규식 확장과 mutation proof가 필요한 정책 결정이다.

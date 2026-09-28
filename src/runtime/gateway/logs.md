@@ -516,3 +516,9 @@
 - Change: retain at most 128 canceled correlations; publish late terminal results without changing a newer navigation state. Unreadable action results leave the attempt unresolved.
 - Evidence: GoalTracker + navigation manager tests 67 passed; relevant API, services, and Fleet suites passed separately.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device, physical-stop, site, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · classify host agent status commands as non-events
+
+- Change: register `network.status` and `release.status` in the event-catalogue `not_events` table — both are host agent commands from `host_agent.ALLOWLIST`, never emitted by core — and retarget the CORE-to-agent allowlist check to `deploy/robot/pinky_pro/release` after the role-dir regroup.
+- Evidence: gateway suite 1402 passed, 16 skipped; CI core step 1841 passed, 16 skipped. The `not_events` cross-check against `emitted()` keeps the new entries from ever hiding a real event.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
