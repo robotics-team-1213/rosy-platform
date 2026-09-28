@@ -196,8 +196,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · docs(architecture): tighten D-317 boundary audit
 - 2026-09-28 · uncommitted · docs(architecture): define control and shared contract boundaries
 - 2026-09-28 · uncommitted · finish D-316 cancellation-result follow-up
 - 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
 - 2026-09-28 · uncommitted · fix(fleet): recover and scope result correlation
-- 2026-09-28 · uncommitted · feat(fleet): correlate Pinky navigation attempt results
