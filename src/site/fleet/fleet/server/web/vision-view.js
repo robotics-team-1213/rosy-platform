@@ -6,12 +6,20 @@ const DEFAULT_RECTIFICATION = Object.freeze({
 
 export function createVisionView({ el, call, auth }) {
   const select = el("vision-source");
+  const frame = el("vision-frame");
+  const stage = el("vision-image-stage");
   const image = el("vision-image");
+  const cornerOverlay = el("vision-corner-overlay");
+  const cornerPolygon = el("vision-corner-polygon");
+  const cornerHandles = [...cornerOverlay.querySelectorAll("[data-corner-handle]")];
   const status = el("vision-state");
   const message = el("vision-message");
-  const profileFields = [...el("vision-adjustments").querySelectorAll("[data-rect]")];
-  const cornerFields = [...el("vision-adjustments").querySelectorAll("[data-corner]")];
-  const profileFieldsets = [...el("vision-adjustments").querySelectorAll("fieldset")];
+  const adjustments = el("vision-adjustments");
+  const profileFields = [...adjustments.querySelectorAll("[data-rect]")];
+  const cornerFields = [...adjustments.querySelectorAll("[data-corner]")];
+  const profileFieldsets = [...adjustments.querySelectorAll("fieldset")];
+  const cornerModes = el("vision-corner-modes");
+  const cornerHint = el("vision-corner-hint");
   const adjustmentState = el("vision-adjustment-state");
   let lease = null;
   let leaseExpiresAt = 0;
@@ -19,13 +27,17 @@ export function createVisionView({ el, call, auth }) {
   let busy = false;
   let lastSourcesAt = 0;
   let refreshTimer = null;
+  let viewMode = "adjusted";
+  let draggingPointerId = null;
 
   function showState(label, kind = "neutral", detail = label) {
     status.textContent = label;
     status.setAttribute("status", kind);
     message.textContent = detail;
     image.hidden = true;
-    el("vision-frame").dataset.state = kind;
+    stage.hidden = true;
+    cornerOverlay.toggleAttribute("hidden", true);
+    frame.dataset.state = kind;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = null;
   }
@@ -47,9 +59,72 @@ export function createVisionView({ el, call, auth }) {
       field.value = String(profile[field.dataset.rect] ?? DEFAULT_RECTIFICATION[field.dataset.rect]);
     }
     for (const field of cornerFields) {
-      field.value = String(Math.round(100 * (profile.corners?.[Number(field.dataset.corner)]?.[Number(field.dataset.axis)]
-        ?? DEFAULT_RECTIFICATION.corners[Number(field.dataset.corner)][Number(field.dataset.axis)])));
+      field.value = formatPercent(100 * (profile.corners?.[Number(field.dataset.corner)]?.[Number(field.dataset.axis)]
+        ?? DEFAULT_RECTIFICATION.corners[Number(field.dataset.corner)][Number(field.dataset.axis)]));
     }
+    updateCornerOverlay();
+  }
+
+  function formatPercent(value) {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  }
+
+  function updateCornerOverlay() {
+    const width = image.naturalWidth;
+    const height = image.naturalHeight;
+    const viewHeight = width && height ? 100 * height / width : 75;
+    cornerOverlay.setAttribute("viewBox", `0 0 100 ${viewHeight}`);
+    const stageWidth = stage.getBoundingClientRect().width;
+    const radius = stageWidth ? Math.max(3, Math.min(8, 2200 / stageWidth)) : 7;
+    const points = readProfile().corners.map(([x, y]) => [x * 100, y * viewHeight]);
+    cornerPolygon.setAttribute("points", points.map(([x, y]) => `${x},${y}`).join(" "));
+    const names = ["왼쪽 위", "오른쪽 위", "오른쪽 아래", "왼쪽 아래"];
+    cornerHandles.forEach((handle, index) => {
+      const [x, y] = points[index];
+      handle.setAttribute("cx", String(x));
+      handle.setAttribute("cy", String(y));
+      handle.setAttribute("r", String(radius));
+      handle.setAttribute("aria-label", `${names[index]} 모서리, X ${formatPercent(x)}%, Y ${formatPercent(y)}%`);
+    });
+  }
+
+  function saveDraft({ announce = true } = {}) {
+    const source = select.value;
+    if (!source) return;
+    const profile = readProfile();
+    try {
+      localStorage.setItem(`rosy-camera-rectification:${source}`, JSON.stringify(profile));
+      if (announce) adjustmentState.textContent = "조정값을 이 브라우저에 저장했습니다.";
+    } catch {
+      if (announce) adjustmentState.textContent = "브라우저 저장을 사용할 수 없습니다. 이 화면에서만 적용됩니다.";
+    }
+    return profile;
+  }
+
+  function setCorner(index, x, y, { announce = false } = {}) {
+    const coordinates = [x, y].map((value) => Math.round(Math.max(0, Math.min(1, value)) * 1000) / 10);
+    for (let axis = 0; axis < 2; axis += 1) {
+      const field = cornerFields.find((item) => Number(item.dataset.corner) === index
+        && Number(item.dataset.axis) === axis);
+      field.value = formatPercent(coordinates[axis]);
+    }
+    updateCornerOverlay();
+    saveDraft({ announce });
+  }
+
+  function selectViewMode(mode) {
+    viewMode = mode;
+    const editing = mode === "raw";
+    frame.dataset.editing = String(editing);
+    el("vision-edit-corners").setAttribute("aria-pressed", String(editing));
+    el("vision-preview-adjusted").setAttribute("aria-pressed", String(!editing));
+    cornerHint.hidden = !editing;
+    cornerOverlay.toggleAttribute("hidden", !editing);
+    lease = null;
+    leaseExpiresAt = 0;
+    if (editing) adjustmentState.textContent = "원본에서 영역을 조정 중입니다. 끝나면 보정 결과를 확인하세요.";
+    refreshFrame();
   }
 
   function loadProfile(source) {
@@ -62,6 +137,7 @@ export function createVisionView({ el, call, auth }) {
     }
     writeProfile(profile);
     profileFieldsets.forEach((fieldset) => { fieldset.disabled = !source; });
+    cornerModes.hidden = !source || !adjustments.open;
   }
 
   async function refreshSources() {
@@ -111,7 +187,10 @@ export function createVisionView({ el, call, auth }) {
         const issued = await call("/api/fleet/vision/lease", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source_id: source, rectification: readProfile() }),
+          body: JSON.stringify({
+            source_id: source,
+            rectification: viewMode === "raw" ? DEFAULT_RECTIFICATION : readProfile(),
+          }),
         });
         lease = issued;
         leaseExpiresAt = Date.now() + 45000;
@@ -136,7 +215,12 @@ export function createVisionView({ el, call, auth }) {
       objectUrl = nextUrl;
       image.src = nextUrl;
       image.hidden = false;
-      el("vision-frame").dataset.state = "online";
+      stage.hidden = false;
+      await image.decode().catch(() => {});
+      updateCornerOverlay();
+      frame.dataset.state = "online";
+      frame.dataset.editing = String(viewMode === "raw");
+      cornerOverlay.toggleAttribute("hidden", viewMode !== "raw");
       const rectified = response.headers.get("X-Frame-Rectified") === "true";
       status.textContent = rectified ? "화면 보정 미리보기" : "원본 최신 프레임";
       status.setAttribute("status", "good");
@@ -166,12 +250,60 @@ export function createVisionView({ el, call, auth }) {
     showState("카메라 전환", "neutral", "선택한 영상의 최신 프레임을 기다립니다.");
     refreshFrame();
   });
+  adjustments.addEventListener("toggle", () => {
+    cornerModes.hidden = !adjustments.open || !select.value;
+  });
+  window.addEventListener("resize", updateCornerOverlay);
+  el("vision-edit-corners").addEventListener("click", () => selectViewMode("raw"));
+  el("vision-preview-adjusted").addEventListener("click", () => selectViewMode("adjusted"));
+  for (const handle of cornerHandles) {
+    handle.addEventListener("pointerdown", (event) => {
+      if (viewMode !== "raw" || !event.isPrimary) return;
+      event.preventDefault();
+      draggingPointerId = event.pointerId;
+      handle.setPointerCapture(event.pointerId);
+      const box = stage.getBoundingClientRect();
+      if (box.width && box.height) {
+        setCorner(Number(handle.dataset.cornerHandle),
+          (event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height);
+      }
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (viewMode !== "raw" || event.pointerId !== draggingPointerId) return;
+      const box = stage.getBoundingClientRect();
+      if (box.width && box.height) {
+        setCorner(Number(handle.dataset.cornerHandle),
+          (event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height);
+      }
+    });
+    const stopDrag = (event) => {
+      if (event.pointerId !== draggingPointerId) return;
+      draggingPointerId = null;
+      saveDraft();
+    };
+    handle.addEventListener("pointerup", stopDrag);
+    handle.addEventListener("pointercancel", stopDrag);
+    handle.addEventListener("keydown", (event) => {
+      if (viewMode !== "raw") return;
+      const movement = {
+        ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+      }[event.key];
+      if (!movement) return;
+      event.preventDefault();
+      const step = event.shiftKey ? 0.1 : 1;
+      const index = Number(handle.dataset.cornerHandle);
+      const profile = readProfile();
+      setCorner(index, profile.corners[index][0] + movement[0] * step / 100,
+        profile.corners[index][1] + movement[1] * step / 100, { announce: true });
+    });
+  }
   for (const field of [...profileFields, ...cornerFields]) {
     field.addEventListener("input", () => {
       if (!field.reportValidity()) return;
       const source = select.value;
       if (!source) return;
       const profile = readProfile();
+      updateCornerOverlay();
       try {
         localStorage.setItem(`rosy-camera-rectification:${source}`, JSON.stringify(profile));
         adjustmentState.textContent = "조정값을 이 브라우저에 저장했습니다.";
@@ -180,8 +312,12 @@ export function createVisionView({ el, call, auth }) {
       }
       lease = null;
       if (refreshTimer) clearTimeout(refreshTimer);
-      adjustmentState.textContent += " 미리보기를 갱신합니다.";
-      refreshTimer = setTimeout(() => refreshFrame(), 450);
+      if (viewMode === "raw") {
+        adjustmentState.textContent = "원본에서 영역을 조정 중입니다. 끝나면 보정 결과를 확인하세요.";
+      } else {
+        adjustmentState.textContent += " 미리보기를 갱신합니다.";
+        refreshTimer = setTimeout(() => refreshFrame(), 450);
+      }
     });
   }
   el("vision-reset-adjustments").addEventListener("click", () => {

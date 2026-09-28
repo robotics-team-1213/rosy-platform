@@ -1039,6 +1039,115 @@ def test_camera_rectification_controls_are_accessible_source_scoped_and_reset(co
         browser.close()
 
 
+def test_camera_rectification_direct_manipulation(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        **API,
+        "/api/fleet/vision/sources": {"sources": ["ceiling-north"]},
+        "/api/fleet/vision/lease": {
+            "source_id": "ceiling-north", "lease": "preview-lease",
+            "frame_path": "/api/vision/sources/ceiling-north/frame", "expires_in_s": 60,
+        },
+    }
+    lease_payloads = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, api,
+            init_script=(
+                "sessionStorage.setItem('rosy-console-token', 'test-token');"
+                "if (!localStorage.getItem('rosy-camera-rectification:ceiling-north')) "
+                "localStorage.setItem('rosy-camera-rectification:ceiling-north', JSON.stringify({"
+                "corners:[[0.2,0.2],[0.8,0.2],[0.8,0.8],[0.2,0.8]]}))"
+            ),
+        )
+        page.on("request", lambda request: lease_payloads.append(json.loads(request.post_data))
+                if request.url.endswith("/api/fleet/vision/lease") and request.post_data else None)
+        def serve_frame(route):
+            corners = lease_payloads[-1]["rectification"]["corners"] if lease_payloads else []
+            identity = corners == [[0, 0], [1, 0], [1, 1], [0, 1]]
+            route.fulfill(
+                status=200, content_type="image/svg+xml",
+                body=b'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#111"/></svg>',
+                headers={"X-Frame-Rectified": str(not identity).lower(),
+                         "X-Frame-Seq": "42", "X-Frame-Age-Ms": "20"},
+            )
+
+        page.route("**/api/vision/**", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_text("왜곡 및 사각 보정", exact=True).click()
+        page.get_by_role("button", name="원본에서 영역 조정").click()
+        page.wait_for_timeout(500)
+        assert not errors, (errors, lease_payloads, page.locator("#vision-state").inner_text(),
+                            page.locator("#vision-message").inner_text())
+        assert page.locator("#vision-image-stage").get_attribute("hidden") is None, (
+            lease_payloads, page.locator("#vision-state").inner_text(),
+            page.locator("#vision-message").inner_text(),
+        )
+        assert page.locator("#vision-corner-overlay").get_attribute("hidden") is None, (
+            page.locator("#vision-frame").get_attribute("data-editing"),
+            page.locator("#vision-edit-corners").get_attribute("aria-pressed"),
+            lease_payloads,
+        )
+        page.locator("[data-corner-handle='0']").wait_for(state="visible")
+
+        handle = page.locator("[data-corner-handle='0']")
+        handle.scroll_into_view_if_needed()
+        box = handle.bounding_box()
+        assert box is not None
+        hit_test = page.evaluate("([x, y]) => document.elementFromPoint(x, y)?.outerHTML", [
+            box["x"] + box["width"] / 2, box["y"] + box["height"] / 2,
+        ])
+        assert "data-corner-handle" in (hit_test or ""), (box, hit_test)
+        page.evaluate("""() => {
+          window.__pointerLog = [];
+          for (const type of ['pointerdown', 'pointermove', 'pointerup'])
+            document.querySelector('#vision-corner-overlay').addEventListener(type,
+              (event) => window.__pointerLog.push({type, primary: event.isPrimary,
+                x: event.clientX, y: event.clientY, target: event.target.dataset.cornerHandle}), true);
+        }""")
+        start_x, start_y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        page.mouse.move(start_x, start_y)
+        page.mouse.down()
+        page.mouse.move(start_x + 0.1 * box["width"], start_y + 0.1 * box["height"])
+        page.mouse.up()
+        page.wait_for_timeout(250)
+        assert page.evaluate("window.__pointerLog"), page.evaluate("window.__pointerLog")
+        page.wait_for_function(
+            "() => JSON.parse(localStorage.getItem('rosy-camera-rectification:ceiling-north') || '{}')"
+            ".corners?.[0]?.[0] > 0.2 && JSON.parse(localStorage.getItem('rosy-camera-rectification:ceiling-north') || '{}')"
+            ".corners?.[0]?.[1] > 0.2",
+            timeout=1000,
+        )
+        moved_x = page.get_by_label("왼쪽 위 X (%)").input_value()
+        assert float(moved_x) > 20
+        assert lease_payloads and lease_payloads[-1]["rectification"]["corners"][0] == [0, 0]
+
+        page.locator("[data-corner-handle='1']").focus()
+        page.keyboard.press("ArrowLeft")
+        page.keyboard.press("ArrowDown")
+        page.get_by_label("오른쪽 위 X (%)").fill("79.4")
+        preserved_x = page.get_by_label("오른쪽 위 X (%)").input_value()
+        assert preserved_x == "79.4"
+        save_temp_screenshot(page, "fleet_camera_direct_adjustment_desktop.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.locator("[data-corner-handle='1']").scroll_into_view_if_needed()
+        save_temp_screenshot(page, "fleet_camera_direct_adjustment_mobile.png")
+        assert page.evaluate("document.documentElement.scrollWidth - window.innerWidth") == 0
+        page.get_by_role("button", name="보정 결과 미리보기").click()
+        page.wait_for_function(
+            "() => document.querySelector('#vision-state').textContent.includes('보정')"
+        )
+        assert lease_payloads[-1]["rectification"]["corners"][0][0] > 0.2
+        assert lease_payloads[-1]["rectification"]["corners"][1][0] < 0.8
+        assert lease_payloads[-1]["rectification"]["corners"][1][1] > 0.2
+        assert not errors
+        page.reload(wait_until="networkidle")
+        page.get_by_text("왜곡 및 사각 보정", exact=True).click()
+        assert page.get_by_label("오른쪽 위 X (%)").input_value() == preserved_x
+        browser.close()
+
+
 def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
     from playwright.sync_api import sync_playwright
 
