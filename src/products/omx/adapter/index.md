@@ -19,6 +19,7 @@
 
 - [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-26-omx-ai-workstation-runtime.md](../../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
+- [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -30,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · record semantic Action baseline and attempt ledger
 - 2026-09-26 · uncommitted · owner competition in locked vendor simulation
 - 2026-09-26 · uncommitted · OMX ROS arm and calibrated camera runtime
 - 2026-09-26 · uncommitted · fix(omx): report cancellation evidence precisely (D-282 P3)
 - 2026-09-26 · uncommitted · feat(omx): add single-owner arm command policy (D-282 P3)
-- 2026-09-25 · uncommitted · refactor(devices): move omx_adapter under src/devices/omx/omx_adapter (D-231)

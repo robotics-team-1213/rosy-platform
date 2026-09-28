@@ -88,3 +88,21 @@
 - 작업 1~3은 신규 Mission 발행 활성화 **전** 완료해야 한다. 작업 4는 OMX 원격 Action 활성화 **전**, 작업 5는 다장치/병렬 Mission 활성화 **전** 완료해야 한다. D-326의 정책 자동 재발의 밸브는 이 계획으로 열리지 않는다.
 - 스키마 이관과 기본 발행 금지는 한 번에 되돌릴 수 있는 코드 스위치로 취급하지 않는다. 업그레이드 전 기존 SQLite의 보존 사본과 버전, migration/역방향 읽기 시험을 남긴다. 롤백 중에도 stop generation·미확인 attempt·물리 상태가 조정되기 전에는 이전 binary의 자동 dispatch를 금지한다.
 - 문서 변경 검증: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`; `python tools/harness/rosy_harness.py lint`. 코드 변경 검증은 작업별 focused test 뒤 기존 Fleet/CORE/OMX 회귀를 중복 basename 충돌 없이 별도 invocation으로 실행한다.
+
+## Execution record (2026-09-29)
+
+Implementation is being delivered in the isolated `feat/fleet-mission-control` worktree. This record distinguishes source behavior from physical/device acceptance.
+
+| Work item | Result | Evidence / remaining gate |
+|---|---|---|
+| 0. Baseline and route inventory | Complete | `docs/validation/fleet-action-admission-2026-09-29/result.md` and `docs/validation/er2-omx-action-baseline-2026-09-29/README.md`; no device command was issued. |
+| 1. Shared Fleet claims | Complete | Task scheduling and future `mission` / `direct_action` reservations share typed durable claims; callers cannot forge unresolved phases. |
+| 2. Stop generation and explicit rearm | Complete for Fleet admission | Startup is closed; explicit rearm advances generation; stop prevents queued work from starting; operator status/action is exposed. Device-side generation consumption and independent physical stop remain unimplemented. |
+| 3. Site stop/audit failure boundary | Complete for source behavior | Dedicated stop fanout remains best-effort across audit failure; ordinary mutation remains fail-closed. HTTP response is not physical stop proof. |
+| 4. OMX Action attempt ledger | Complete as local durable ledger | Canonical request identity, attempt states, restart-to-UNKNOWN, no replay. Not wired to a physical driver/API. OMX profile remains disabled. |
+| 5. Mission and direct-action boundary | Partial, dispatch disabled | Internal single-step `PICK_PLACE` proposal/admission/result/goal-evidence ledger uses the shared SQLite transaction and claims. Action SUCCEEDED is separate from goal confirmation; independent camera evidence is freshness-checked. No REST endpoint, scheduler executor, or ROS/device submission was added. |
+| 6. Cross-layer simulation and fault injection | Not started | Needs ROS-SIM integration after device-side generation fencing contract exists. Current SOURCE tests do not prove site/network/device stop timing. |
+
+Verification on this worktree: Mission focused tests **15 passed**; full Fleet suite **578 passed, 5 skipped**; OMX adapter suite **72 passed, 3 skipped**; network topology and harness contract tests passed. Harness lint reports **0 errors, 18 freshness warnings**. `flake8` could not run because the executable is unavailable in this environment.
+
+**Capability gate:** Fleet task dispatch remains subject to explicit operator rearm. Mission/semantic OMX physical dispatch remains disabled. Source tests do not establish REST contract approval, device-side stop-generation enforcement, independent hardware E-stop, selected device identity, camera/gripper calibration, ROS-SIM acceptance, or DEVICE/FIELD acceptance.

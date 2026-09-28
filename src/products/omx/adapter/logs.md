@@ -55,3 +55,9 @@
 - gate 변화: ROS-SIM 부분 근거만 추가. 외부 DDS 참여자의 직접 action 호출과 실물 정지 경계는 검증되지 않았다.
 
 - 후속: 동시 부하 중 action server 발견이 controller 활성화보다 빨라 goal이 거절된 race를 관측했다. vendor 시험은 `list_controllers`의 `arm_controller=active`를 확인한 뒤 전송하도록 고쳤고, 독립 시뮬레이터 두 번 재실행해 통과했다.
+
+## 2026-09-29 · uncommitted · record semantic Action baseline and attempt ledger
+
+- Change: recorded the current OMX semantic-action boundary and added a durable local Action attempt ledger with request identity, restart-to-UNKNOWN recovery, and no automatic replay. Selector resolution and pick-place transaction logic remain evidence-only; they do not submit ROS goals.
+- Evidence: OMX adapter suite 72 passed/3 skipped. Fleet Mission service requires a separate fresh camera goal predicate after driver Action success. The OMX profile remains disabled with empty driver/workcell configuration.
+- Gate: SOURCE only. No selected physical workcell, gripper feedback, calibrated camera, independent physical stop, target workstation runtime, or device/field acceptance was available or claimed.
