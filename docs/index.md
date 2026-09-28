@@ -195,6 +195,7 @@
 - [2026-09-29-embodied-reasoning-device-action-design.md](plans/2026-09-29-embodied-reasoning-device-action-design.md)
 - [2026-09-29-er2-isaac-sim-architecture-assessment.md](plans/2026-09-29-er2-isaac-sim-architecture-assessment.md)
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
+- [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 
 ## 교훈 (docs/solutions)
@@ -208,8 +209,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · plan(er2): stage semantic Action and Mission implementation
 - 2026-09-29 · uncommitted · docs(er2): preserve user Isaac Sim analysis and separate mission outcome evidence
 - 2026-09-29 · uncommitted · docs(omx): define semantic pick and place ADR
 - 2026-09-29 · uncommitted · docs(omx): propose embodied reasoning to Device Action boundary
 - 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
-- 2026-09-29 · uncommitted · docs(sd): document powered-off no-drive recovery

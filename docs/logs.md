@@ -3153,3 +3153,9 @@
 - 변경: 사용자가 제공한 ER 2·Isaac Sim 분석 원문을 SHA-256과 영상 출처와 함께 보관했다. 공식 모델 자료와 현재 Fleet/OMX 소스를 대조한 구조 평가 및 D-327 Proposed에 모델 제안, Fleet Mission 원장, 장치 Action, 독립 목표 판정, 로컬 정지의 역할을 기록했다.
 - 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, 상대 링크 누락 0건, 원문 12,330 byte/SHA-256 일치, `git diff --check` 통과(Windows LOCAL). 원본 영상의 세부 실험 수치는 자막 응답이 비어 있어 사용자 제공 문서의 보고값으로 남긴다.
 - gate 변화: 없음. Isaac Sim 조작 ROS-SIM, OMX DEVICE/FIELD, 다장치 Mission 실행은 미수용이다.
+
+## 2026-09-29 · uncommitted · plan(er2): stage semantic Action and Mission implementation
+
+- 변경: D-326/D-327을 모델 없는 관측/OMX 로컬 transaction, Device Action 계약, Fleet 목표 원장·의존 작업, ER 2 후보 adapter, ROS-SIM/장치 출구 순서의 실행 계획으로 전환했다. 경로·시험·중단 조건과 기존 disabled capability를 명시했다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, 상대 링크 누락 0건, `git diff --check` 통과(Windows LOCAL). 계획은 구현·시뮬레이션·실물 동작을 수행하지 않는다.
+- gate 변화: 없음. 기존 OMX·정책 자동 dispatch는 disabled/HOLD다.
