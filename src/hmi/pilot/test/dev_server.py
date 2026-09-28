@@ -38,6 +38,7 @@ PILOT_MIME = {
     "drivers/pinky_core.js": "application/javascript",
     "screens/connect.js": "application/javascript",
     "screens/drive.js": "application/javascript",
+    "screens/inputs.js": "application/javascript",
     "input-state.js": "application/javascript",
     "vision.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",

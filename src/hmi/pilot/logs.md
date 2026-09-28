@@ -62,3 +62,10 @@
 - gate 변화: 없음(LOCAL 진행).
 - 결정: D-323.
 - 교훈: 화면 전환 시 이전 화면 [hidden] 이 표면 display 규칙에 깨지지 않게 [hidden]{display:none!important} 를 표면 CSS 에 둔다. 콜백(onEnter)은 재호출 경로마다 다시 묶이지 않게 마운트 시 한 번 묶는다.
+
+## 2026-09-29 · uncommitted · feat(pilot): multi-device roadmap and T8 inputs screen
+- 변경: 새 ADR D-331 — 조종 대상 확장은 drivers/registry 로만 수용, 장치별 컨트롤(그리퍼·팔 조그 등)과 아이콘은 그 장치 계약이 열 때 프런트에 반영, Pinky 가제보 최우선. 설계 §10 반영. T8 입력 조정 칩(screens/inputs.js — 프리셋·데드존·곡선·반전·게임패드 실시간 미리보기, HUD 입력 버튼으로 열림). screens/inputs.js allowlist 누락 404 수정(4곳).
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot+라우트 29 passed(수정 후 재확인). ADR 번호 D-331 선점 확인(for-each-ref+Log).
+- gate 변화: 없음.
+- 결정: D-331 Accepted (로드맵·프런트 경계 결정).
+- 교훈: 모듈 추가 시 allowlist 4곳(dev_server MIME·app.py pilot_assets·CMakeLists·route test)은 한 세트다 — 하나 빠지면 화면 전체가 404로 죽는다.

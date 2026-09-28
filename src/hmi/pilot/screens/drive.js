@@ -7,6 +7,7 @@ import {createDeviceSession} from "../link.js";
 import {createVisionPreview} from "../vision.js";
 import {driverFor} from "../drivers/registry.js";
 import {setSteerInput, setPedal, currentCommandSource, stickMap} from "../input-state.js";
+import {mountInputs} from "./inputs.js";
 
 const WHEEL_SWEEP_DEG = 45;
 
@@ -163,9 +164,24 @@ export function mountDrive(root, {onExit} = {}) {
   }, 1000);
 
   const actions = el("ui-actions");
+  const inputsButton = el("ui-button", "입력", {kind: "quiet", type: "button"});
+  let inputsPanel = null;
+  inputsButton.addEventListener("click", () => {
+    if (inputsPanel) {
+      inputsPanel.remove();
+      inputsPanel = null;
+      return;
+    }
+    inputsPanel = el("div", null, {"data-inputs-panel": ""});
+    element.hud.append(inputsPanel);
+    mountInputs(inputsPanel, {onClose: () => {
+      inputsPanel?.remove();
+      inputsPanel = null;
+    }});
+  });
   const exit = el("ui-button", "게이트로", {kind: "quiet", type: "button", "data-drive-exit": ""});
   exit.addEventListener("click", () => teardown());
-  actions.append(exit);
+  actions.append(inputsButton, exit);
   element.hud.append(actions);
 
   // 진입: 수동 모드 전환(409 MODE_CONFLICT 등은 안내로).
