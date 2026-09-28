@@ -226,3 +226,11 @@ The `df260822` system-panel fix was verified with a focused Chromium interaction
 The focused panel test passed **1 test**. The full-shell test passed at 1366x768 and 390x844. Both captures were visually inspected and reported horizontal overflow 0, page errors 0, and visible E-stop. The fixture accelerates only the 30-second identity poll and returns a controlled stale GET plus accepted PUT response. Screenshots and `admin-device-identity-feedback-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-identity-feedback\`.
 
 This completes SOURCE/LOCAL browser verification for `df260822`. It does not prove actual Host Agent or physical identity readback. Full G2 coverage, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 board hardware permission hint reachability - LOCAL
+
+The reported `b61fb526` non-administrator hint is not present in the current `main` source: later commit `fb2b220c` removed the conditional message after confirming the device surface and `host.hardware` panel both require the administrator role. A focused current-main Chromium role check passed: an operator receives the access-denied `/device` screen, a link back to `/console`, and no hardware or host-operations panel. Desktop and mobile denial captures were visually inspected.
+
+The administrator hardware panel regression passed **1 test**: the action status starts hidden, the refresh button references it with `aria-describedby`, and the live request result appears after interaction. The full-shell admin capture test passed at 1366x768 and 390x844; accepted-request feedback is visible in both. Operator denial captures and matrix are under `X:\DevTemp\rosy-uiux-d306-roles-g2\operator-device-entry-denied\`; admin hardware captures remain under `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
+
+LOCAL browser verification covers the actual admin action and the actual operator entry denial. It cannot verify the claimed non-admin disabled-button explanation because that control is unreachable under current access policy. Exposing it requires a separate role/surface access decision. Full G2 and Impeccable were not rerun; actual Host Agent readback, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.

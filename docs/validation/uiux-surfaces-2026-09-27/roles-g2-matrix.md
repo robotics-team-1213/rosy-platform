@@ -118,3 +118,9 @@ SOURCE/LOCAL browser verification is complete for `17f30137`. Actual Host Agent 
 Focused Chromium panel regression passed **1 test**, confirming 30-second identity callback updates keep exactly one form, preserve the unsaved draft, lock editing during PUT, and retain request feedback through stale readbacks. Dedicated full-shell captures passed at 1366x768 and 390x844; both were visually inspected with overflow 0, pageerror 0, and visible E-stop. The local fixture accelerates the identity poll and uses controlled API replies. This did not rerun the full G2 matrix. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-identity-feedback\`.
 
 SOURCE/LOCAL browser verification is complete for `df260822`. Physical identity readback, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 board hardware permission hint reachability
+
+Current-main focused Chromium regression passed for the administrator path: `aria-describedby` points to the initially hidden action status, which appears after refresh interaction. Admin full-shell refresh captures passed at 1366x768 and 390x844. The operator full-shell role check also passed at both widths, showing the `/device` access-denied screen and no `host.hardware` or `host.operations` panel; those denial captures were visually inspected. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\operator-device-entry-denied\` and `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
+
+`fb2b220c` removed the non-admin button hint after confirming `/device` and `host.hardware` are administrator-only. Therefore the `b61fb526` disabled-button description cannot be reached by non-admins in the current role model. Browser evidence does not verify that reported affordance. Full G2 was not rerun; actual Host Agent readback, G3, DEVICE/FIELD, and D-153 remain **HOLD**.

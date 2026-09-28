@@ -1039,3 +1039,51 @@ def test_admin_identity_editor_poll_feedback_full_shell_captures(tmp_path):
         browser.close()
     (capture_dir / "admin-device-identity-feedback-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_operator_device_entry_denial_captures(tmp_path):
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "operator-device-entry-denied"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator');")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                path = urlsplit(route.request.url).path
+                response = _response(client, path, TOKENS["operator"], "normal", "device")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                    "cache-control": "no-store",
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelector('#surface-status')?.textContent.trim().length > 0")
+            console_link = page.locator('#surface-status a[href="/console"]')
+            assert console_link.is_visible()
+            assert page.locator('[data-panel="host.hardware"]').count() == 0
+            assert page.locator('[data-panel="host.operations"]').count() == 0
+            filename = f"operator-device-entry-denied-{width}x{height}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            result = page.evaluate("""() => ({
+              overflowX:Math.max(0,document.documentElement.scrollWidth-innerWidth),
+              eStopVisible:document.querySelector('#shell-estop')?.getBoundingClientRect().right<=innerWidth,
+              status:document.querySelector('#surface-status')?.textContent.trim()||'',
+              consoleLinkVisible:!!document.querySelector('#surface-status a[href="/console"]'),
+              hardwarePanelCount:document.querySelectorAll('[data-panel="host.hardware"]').length,
+            })""")
+            assert result["overflowX"] == 0 and errors == [], result
+            assert result["consoleLinkVisible"] and result["hardwarePanelCount"] == 0
+            records.append({"role":"operator","viewport":f"{width}x{height}",
+                            "image":filename,"errors":errors,**result})
+            context.close()
+        browser.close()
+    (capture_dir / "operator-device-entry-denied-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -1316,8 +1316,11 @@ def test_device_hardware_refresh_feedback_survives_measurement_polls():
         note = panel.locator(".hardware-note")
         action = panel.locator("#hardware-action-note")
         refresh = panel.locator(".hardware-refresh")
+        assert refresh.get_attribute("aria-describedby") == action.get_attribute("id") == "hardware-action-note"
+        assert action.is_hidden() and action.inner_text() == ""
         initial_measurement = measured.inner_text()
         refresh.click()
+        assert action.is_visible() and action.inner_text()
         page.wait_for_function("window.__calls.length === 1")
         assert refresh.is_disabled()
         pending = action.inner_text()
