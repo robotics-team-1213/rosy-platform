@@ -6,7 +6,7 @@ import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js"
 import {createDeviceSession} from "../link.js";
 import {createVisionPreview} from "../vision.js";
 import {driverFor} from "../drivers/registry.js";
-import {setSteerInput, setPedal, currentCommandSource, stickMap} from "../input-state.js";
+import {setSteerInput, setPedal, currentCommandSource, stickMap, inputConfig, saveInputConfig} from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
@@ -217,6 +217,7 @@ export function mountDrive(root, {onExit} = {}) {
   exit.addEventListener("click", () => teardown());
   actions.append(shotButton, recordButton, inputsButton, exit);
   element.hud.append(actions);
+  renderPresets(root);
 
   // 진입: 수동 모드 전환(409 MODE_CONFLICT 등은 안내로).
   gate.engage(postJson).then((response) => {
@@ -276,11 +277,31 @@ function buildControls() {
   const indicator = el("div", null, {"data-drive-wheel-indicator": ""});
   wheel.append(indicator);
   wheelWrap.append(wheel);
+  const presets = el("div", null, {"data-drive-presets": ""});
+  presets.append(el("ui-text", "속도", {scale: "label"}));
+  const presetRow = el("ui-actions", null, {"data-drive-preset-row": ""});
+  presets.append(presetRow);
   const pedals = el("div", null, {"data-drive-pedals": ""});
   pedals.append(
     el("ui-button", "전진", {kind: "primary", type: "button", "data-drive-pedal": "forward"}),
     el("ui-button", "후진", {kind: "segment", type: "button", "data-drive-pedal": "reverse"}),
   );
-  controls.append(wheelWrap, pedals);
+  controls.append(presets, wheelWrap, pedals);
   return controls;
+}
+
+export function renderPresets(root) {
+  const row = root.querySelector("[data-drive-preset-row]");
+  if (!row) return;
+  const config = inputConfig();
+  row.replaceChildren();
+  for (const name of ["low", "mid", "high"]) {
+    const button = el("ui-button", name, {kind: "segment", type: "button"});
+    button.setAttribute("aria-pressed", String(config.preset === name));
+    button.addEventListener("click", () => {
+      saveInputConfig({preset: name});
+      renderPresets(root);
+    });
+    row.append(button);
+  }
 }

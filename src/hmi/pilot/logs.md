@@ -76,3 +76,10 @@
 - gate 변화: 없음.
 - 결정: D-323.
 - 교훈: 승격 모듈의 서빙 3세트(web_common CMake·core_api_web common route·dev_server)도 새 모듈 allowlist 세트다.
+
+## 2026-09-29 · uncommitted · feat(pilot): sim camera live, drive fullscreen, in-screen speed presets (T7 시뮬 루프)
+- 변경: 가제보 카메라 경로 해결 — gz camera raw 브리지(GZ→ROS 단방향) + sim_jpeg_relay.py(cv_bridge → format 'jpeg; width;height;source=gz' CompressedImage, parse_preview_format 계약 준수) = CORE /api/v1/vision/front 가 시뮬 영상을 서빙. 주행 화면 풀블리드(max-width 해제·100dvh 스테이지), 속도 프리셋 칩 저/중/고 화면 내 조정, SW 캐시 갱신(-2). client.js POST Content-Type 누락 수정(422 원인).
+- 증거: CORE vision status available:true·source:GZ·1280x720·seq 증가. API teleop 실측 — 0.1m/s·포즈 14cm 이동. pilot+라우트 29 passed. API 직접 teleop 실측(accepted·velocity·pose) 병행.
+- gate 변화: 없음(ROS-SIM 진행 — DEVICE/FIELD 별도).
+- 결정: D-323.
+- 교훈: pkill 패턴이 내 파이프라인을 죽인다(원시 브리지+republish 동시 사망 2회). 카메라 스택은 한 스크립트로 일괄 기동하고 상태를 CORE status로 확인한다. SW 캐시는 배포 때마다 이름을 올려야 클라이언트가 새 JS를 받는다.

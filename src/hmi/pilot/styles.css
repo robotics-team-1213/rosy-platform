@@ -58,21 +58,28 @@ form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
   white-space: nowrap;
 }
 
-/* 주행 화면 — 영상 스테이지가 주인공이고 컨트롤은 그 아래 한 줄이다. */
+/* 주행 화면 — 영상이 화면을 채우고 컨트롤이 그 아래 붙는다(가로 기준). */
+.pilot-main:has(.pilot-drive:not([hidden])) {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+
 .pilot-drive {
   display: grid;
-  gap: var(--space-3);
+  grid-template-rows: 1fr auto;
+  gap: var(--space-2);
   min-width: 0;
+  min-height: calc(100dvh - 4rem);
 }
 
 [data-drive-stage] {
   position: relative;
-  min-height: clamp(18rem, 58vh, 38rem);
+  min-height: 0;
   display: grid;
   place-items: center;
   background: var(--ground-deep);
   overflow: hidden;
-  border-radius: var(--radius-panel);
 }
 
 [data-drive-frame] { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -102,7 +109,13 @@ form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
   justify-content: space-between;
   align-items: center;
   gap: var(--space-4);
+  padding: 0 var(--space-3) var(--space-2);
 }
+
+/* 속도 프리셋 — 주행 화면에서 바로 조정한다(D-323 사용자 요청). */
+[data-drive-presets] { display: grid; gap: var(--space-1); justify-items: center; }
+[data-drive-presets] ui-actions { display: flex; gap: var(--space-1); }
+[data-drive-presets] [aria-pressed="true"] { outline: 2px solid var(--status-warn); outline-offset: 2px; }
 
 [data-drive-wheel-wrap] { display: grid; place-items: center; }
 

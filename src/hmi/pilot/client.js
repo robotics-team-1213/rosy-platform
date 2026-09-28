@@ -22,10 +22,14 @@ export function authHeaders() {
 }
 
 export async function api(path, options = {}) {
+  const headers = {...(options.headers ?? {})};
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const response = await fetch(path, {
     cache: "no-store",
     ...options,
-    headers: {...(options.headers ?? {}), ...authHeaders()},
+    headers: {...headers, ...authHeaders()},
   });
   const body = await response.json().catch(() => ({}));
   return {status: response.status, ok: response.ok, body};
