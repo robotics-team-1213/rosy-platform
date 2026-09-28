@@ -392,3 +392,8 @@
 - 변경: `/console` 도킹 상태, 도크 목록, 명령 결과를 독립 표시한다. 도킹 상태 GET 실패 시 이전 상태를 지우고 명령을 잠근다. 요청 중에는 1초 readback 폴링이 버튼을 다시 활성화하지 않으며, 도크 목록 갱신은 사용자가 고른 위치를 유지한다.
 - 정적 확인: docking status/list/command의 pending·실패·복구 UI 경로를 검토하고 `git diff --check`, Impeccable detector를 실행한다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 도킹 장치 readback은 별도다.
+## 2026-09-28 · uncommitted · fix(console): separate map readback and action outcomes
+
+- 변경: `/console` 지도에서 로봇 상태·Navigation·실행 모드 조회는 독립 readiness 상태로 표시하고, map-status는 지도 데이터 freshness만 담당한다. 상태 폴링 오류가 지도 조회 문구를 덮지 않는다. 초기 자세·주행 목표 요청의 접수/실패는 별도 action status에 남아 지도 주기 갱신에 의해 지워지지 않는다.
+- 정적 확인: map helper의 지도 조회·action 경로와 세 상태 poll 성공/실패 UI를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 위치·경로·주행 적용은 별도다.

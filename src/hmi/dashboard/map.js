@@ -357,9 +357,12 @@ export function createFieldMap(options) {
 
   // D-259: 클릭과 키보드 확정은 같은 길이다. 좌표→confirm→POST 전부가 여기 있다.
   async function commitPoint(px, py) {
-    if (!state.occupancy || !canvas) return;
+    if (!state.occupancy || !canvas) {
+      setAction?.("최신 지도 데이터를 확인할 수 없어 위치·목표를 보내지 않았습니다.");
+      return;
+    }
     if (!canGoal?.()) {
-      setStatus("이 프로필에서는 목표 전송이 꺼져 있습니다.");
+      setAction?.("현재 profile/runtime에서는 위치·목표 조작을 사용할 수 없습니다.");
       return;
     }
     const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);
@@ -375,10 +378,9 @@ export function createFieldMap(options) {
         method: "POST",
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),
       });
-      setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 전송`);
-      setStatus(`${locating ? "pose" : "goal"} ${world.x.toFixed(2)}, ${world.y.toFixed(2)}`);
+      setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 CORE가 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
     } catch (error) {
-      setStatus(`${label} 전송 실패: ${error.message}`, error.status === 403 ? "forbidden" : "error");
+      setAction?.(`${label} 전송 실패: ${error.message}`);
     }
   }
 
