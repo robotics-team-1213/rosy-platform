@@ -3147,3 +3147,9 @@
 - 변경: 공식 ER 2·MoveIt·Franka·ROS 2 자료를 조사하고 D-326 Proposed에 `PICK`/`PLACE`/`PICK_PLACE`, 다중 대상 지정 방식, 장치별 실행 adapter, 보유 상태와 정지 증거 경계를 기록했다. 앞선 복합 `PICK_PLACE` 설계는 첫 OMX 검증 범위로 한정했다.
 - 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, ADR 상대 링크 누락 0건(Windows LOCAL). D-322~D-324의 진행 중 ADR 번호는 검증된 worktree 상태에 맞춰 임시 reservation을 명시했다. 실제 Action API·모터 실행·DEVICE/FIELD 수용은 미실행이다.
 - gate 변화: 없음. OMX 운영 capability는 disabled다.
+
+## 2026-09-29 · uncommitted · docs(er2): preserve user Isaac Sim analysis and separate mission outcome evidence
+
+- 변경: 사용자가 제공한 ER 2·Isaac Sim 분석 원문을 SHA-256과 영상 출처와 함께 보관했다. 공식 모델 자료와 현재 Fleet/OMX 소스를 대조한 구조 평가 및 D-327 Proposed에 모델 제안, Fleet Mission 원장, 장치 Action, 독립 목표 판정, 로컬 정지의 역할을 기록했다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, 상대 링크 누락 0건, 원문 12,330 byte/SHA-256 일치, `git diff --check` 통과(Windows LOCAL). 원본 영상의 세부 실험 수치는 자막 응답이 비어 있어 사용자 제공 문서의 보고값으로 남긴다.
+- gate 변화: 없음. Isaac Sim 조작 ROS-SIM, OMX DEVICE/FIELD, 다장치 Mission 실행은 미수용이다.
