@@ -87,6 +87,8 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 
 | 2026-09-28-source-folder-roles-and-runtime-audit.md | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
 | 2026-09-28-control-and-contract-boundary-audit.md | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
+| 2026-09-29-rosy-pilot-teleop-app-design.md | D-323 원격 조종 PWA Rosy Pilot(src/hmi/pilot) 설계 — same-origin CORE 서빙, 기기별 드라이버 확장점, NFS 계열 원형 휠 HUD·클릭 조종·카메라 증거 재사용 |
+| 2026-09-29-rosy-pilot-teleop-app.md | D-323 실행 계획 T1~T11 — 패키지 골격·harness 등록·stick/link 순수 시험, 게이트 화면, 카메라 증거 web_common 승격, PWA·Playwright 종단, 게이트 기록 |
 ## Subdirectories
 
 None.
