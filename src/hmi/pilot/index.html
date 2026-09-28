@@ -21,9 +21,10 @@
       <ui-tag data-gate-state>대기</ui-tag>
     </ui-topbar>
     <main>
-      <ui-section aria-labelledby="pilot-heading">
+      <ui-section aria-labelledby="pilot-gate-heading">
         <ui-head>
-          <ui-text id="pilot-heading" scale="label">접속</ui-text>
+          <ui-text id="pilot-gate-heading" scale="label">GATE</ui-text>
+          <ui-text scale="value" data-gate-value>WAIT</ui-text>
         </ui-head>
         <div data-screen="connect"></div>
         <ui-empty data-pilot-note>Pinky CORE 연결을 확인합니다.</ui-empty>

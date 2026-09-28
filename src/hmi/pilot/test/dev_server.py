@@ -21,8 +21,8 @@ import uvicorn
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 
-PILOT = Path(__file__).resolve().parents[1]
-WEB_COMMON = PILOT.parents[1] / "web"
+PILOT = Path(__file__).resolve().parents[1]          # .../src/hmi/pilot
+WEB_COMMON = PILOT.parent / "web"                    # .../src/hmi/web
 
 DEV_TOKEN = "devtoken"
 

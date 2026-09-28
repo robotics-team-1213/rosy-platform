@@ -38,6 +38,19 @@ dashboard는 기기 1대당 관제 콘솔이라 직접 잡는 조종 surface 로
 - same-origin 만 통신(`/api/v1`, `/ws/*`). CORS 신규 개방 없음. 앱은 이미지와 함께 배포되므로
   앱↔CORE API 버전 정합성이 이미지 단위로 보장된다.
 
+### 3.1 접속·발견 경로(mDNS)
+
+- 진입 주소는 IP 가 아니라 **검증된 호스트네임**이다: `http://<hostname>.local/pilot/`.
+  현장 LAN 발견 규칙 v0.1(`docs/reference/site-lan-discovery-profile.md`)에서 SRV
+  target 이 `<hostname>.local` 이며 주소 식별자는 호스트네임이다.
+- 태블릿(Android)은 OS 의 mDNS 해상으로 `.local` 을 연다. 브라우저에는 발견 API 가
+  없으므로 **앱이 스캔하지 않는다** — same-origin 원칙은 그대로다.
+- 입력 없는 진입: CORE 가 `_rosy._tcp.local` 을 광고하고(Avahi, `feat/addressless-mdns`
+  진행 중) QR(`http://<hostname>.local/pilot/`)로 연다 — 규칙 v0.1 이 이미 허용하는
+  진입 수단이다. QR 발행 위치(대시보드 장치 카드·스티커)는 후속 태스크.
+- 채택된 주소는 이후 바뀌지 않는다(규칙 v0.1). 토큰·Wi-Fi 자격은 TXT/mDNS 에 두지
+  않는다.
+
 ## 4. 패키지 구조
 
 ```

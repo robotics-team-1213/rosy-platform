@@ -1,19 +1,20 @@
 /* Rosy Pilot 표면 규칙 — 색·타이포·공통 컨트롤은 web_common tokens(D-130.3).
-   배치·간격만 여기 둔다. ui-* 컨트롤 자체를 다시 칠하지 않는다. */
+   배치·간격만 여기 둔다. ui-* 컨트롤 자체를 다시 칠하지 않는다.
+   간격은 스텝 척도(--space-N)와 의미 역할(--gap-form, D-292)만 쓴다. */
 
 [data-screen="connect"] {
   display: grid;
-  gap: var(--space-m, 12px);
+  gap: var(--space-3);
   justify-items: start;
 }
 
 form[data-pilot-token-form] {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-s, 8px);
+  gap: var(--gap-form);
   width: min(100%, 420px);
 }
 
-form[data-pilot-token-form] input {
+form[data-pilot-token-form] ui-field {
   flex: 1 1 220px;
 }
