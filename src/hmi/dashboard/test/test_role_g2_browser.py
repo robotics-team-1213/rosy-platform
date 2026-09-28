@@ -536,3 +536,101 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
         browser.close()
     (CAPTURES / "console-mode-feedback-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_console_teleop_feedback_full_shell_captures(tmp_path):
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    CAPTURES.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            posts = []
+            phase = {"fail_state": False}
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                request = route.request
+                path = urlsplit(request.url).path
+                if request.method == "POST" and path == "/api/v1/teleop":
+                    posts.append({"path": path, "body": request.post_data_json})
+                    route.fulfill(status=200, content_type="application/json", body="{}")
+                    return
+                if request.method != "GET":
+                    route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                    return
+                if path == "/api/v1/robot/state" and phase["fail_state"]:
+                    route.fulfill(status=503, content_type="application/json", body='{"detail":"fixture robot state unavailable"}')
+                    return
+                if path == "/api/v1/ui/surfaces/console":
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                    manifest = response.json() if hasattr(response, "json") else json.loads(response.body)
+                    if not any(panel["id"] == "console.teleop" for panel in manifest["panels"]):
+                        manifest["panels"].append({
+                            "id": "console.teleop", "title": "수동 운전", "slot": "act", "order": 30,
+                            "module": "/assets/panels/console/teleop.js",
+                            "css": ["/assets/panels/surface-panels.css"], "action_group": "drive",
+                            "state": "available", "reason": None,
+                        })
+                    response = Response(content=json.dumps(manifest), media_type="application/json")
+                elif path == "/api/v1/robot/state":
+                    data = {"mode": "MANUAL", "pose": {"x": 1, "y": 1, "yaw": 0},
+                            "velocity": {"linear": 0, "angular": 0},
+                            "evidence": {"pose": {"evidence": "fresh"}, "velocity": {"evidence": "fresh"}}}
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/system/capabilities":
+                    response = Response(content=json.dumps({"teleop": True,
+                        "navigation": {"goal_navigation": True}}), media_type="application/json")
+                elif path == "/api/v1/safety/state":
+                    response = Response(content='{"estop":false}', media_type="application/json")
+                elif path == "/api/v1/host/commissioning":
+                    response = Response(content='{"runtime_mode":"hardware"}', media_type="application/json")
+                else:
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                    "cache-control": "no-store",
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            panel = page.locator('[data-panel="console.teleop"]')
+            page.wait_for_selector('[data-panel="console.teleop"] .surface-teleop-controls ui-button')
+            button = panel.locator(".surface-teleop-controls ui-button").first
+            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] .surface-teleop-controls ui-button')?.disabled === false")
+            page.evaluate("""() => {
+              const button = document.querySelector('[data-panel="console.teleop"] .surface-teleop-controls ui-button');
+              button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1}));
+              setTimeout(() => button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1})), 180);
+            }""")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status[role=\"status\"]:last-of-type')?.textContent.length > 0")
+            page.wait_for_timeout(250)
+            assert posts and posts[-1]["body"] == {"linear": 0, "angular": 0}, posts
+            action_feedback = panel.locator('ui-status[role="status"]').last
+            readiness_status = panel.locator("ui-status").first
+            release_text = action_feedback.inner_text()
+            phase["fail_state"] = True
+            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status')?.textContent.includes('fixture robot state unavailable')")
+            assert readiness_status.inner_text().find("fixture robot state unavailable") >= 0
+            assert action_feedback.inner_text() == release_text
+            filename = f"operator-console-teleop-feedback-{width}x{height}.png"
+            page.screenshot(path=str(CAPTURES / filename), full_page=True)
+            measured = page.evaluate("""() => ({
+              overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+              eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              readiness: document.querySelector('[data-panel="console.teleop"] ui-status')?.textContent || '',
+              action: [...document.querySelectorAll('[data-panel="console.teleop"] ui-status[role="status"]')].at(-1)?.textContent || '',
+            })""")
+            assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
+            records.append({"viewport": f"{width}x{height}", "image": filename,
+                            "posts": posts, "errors": errors, **measured})
+            context.close()
+        browser.close()
+    (CAPTURES / "console-teleop-feedback-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

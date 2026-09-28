@@ -186,3 +186,11 @@ These are LOCAL Chromium results using a FastAPI fixture. Actual Host Agent and 
 ## 2026-09-28 targeted `/device` feedback verification
 
 Current-main FastAPI/Chromium interaction checks at 1366×768 and 390×844 accelerated only the relevant 10-second and 30-second polls. Both widths retained exactly one identity editor and the typed draft across repeated reads, then displayed the save receipt. A hardware refresh POST receipt remained visible after subsequent measurement GET updates. The full role G2 capture also passed at 60 cells with pageerror 0, horizontal overflow 0, and E-stop visible 60/60. Screenshots are under `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-feedback-*.png`. These are local fixtures, not actual Host Agent/CORE readback, physical stop, or G3 human acceptance; DEVICE/FIELD and full D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 console teleoperation feedback - LOCAL
+
+The `1af1fa41` `/console` teleoperation feedback update was exercised in Chromium. Focused browser regressions verified that state, capability, safety, and commissioning read failures keep their own reason until successful readback; readiness polling does not replace hold, release, shared forced-stop, timeout, or terminal-zero delivery-failure feedback.
+
+The full dashboard panel suite passed **19 tests**. Role G2 passed **7 tests** and refreshed **60 cells**: overflow 0, pageerror 0, E-stop visible 60/60, canceled-confirmation POST 0. Additional full-shell `/console` captures at 1366x768 and 390x844 show the robot-state read failure beside the preserved release/stop feedback; both have overflow 0, no page errors, visible E-stop, and one terminal zero POST. The local capture fixture explicitly adds `console.teleop` to the console manifest and returns controlled API responses; this is not runtime capability or robot acceptance evidence. PNGs and `console-teleop-feedback-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\` and were visually inspected.
+
+SOURCE/LOCAL browser verification is complete for this follow-up. Actual device motion/stop readback, physical E-stop, G3, and broader D-153 DEVICE/FIELD acceptance remain **HOLD**.

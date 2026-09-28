@@ -433,3 +433,8 @@
 - 검증: current main의 실제 FastAPI `create_app` + Chromium에 local API fixture를 붙여 1366×768·390×844에서 편집 중 identity poll을 가속했다. 각 폭에서 폼 수 1개, 2회 이상 poll 뒤 초안 유지, 이름 저장 POST, 측정 poll 이후에도 하드웨어 점검 접수 상태 유지, pageerror 0, 가로 넘침 0을 확인했다. 전체 역할 G2도 60셀 Chromium 1 passed, overflow 0, pageerror 0, E-stop 60/60이다.
 - 시각 확인: desktop/mobile 전체 페이지를 직접 확인했다. PNG는 `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-feedback-{1366x768,390x844}.png`에 일회성으로 둔다.
 - 한계: API는 fixture이므로 실제 Host Agent, CORE 저장 readback, 물리 E-stop, 사람 G3 수용은 증명하지 않는다. 해당 게이트는 HOLD.
+
+## 2026-09-28 - uiux/console-teleop-feedback-evidence - verify readiness and action feedback
+
+- Evidence: Focused Playwright panel regressions passed 2 tests, covering four independent read failure/recovery reasons and feedback retention for hold, release, shared forced stop, two-second timeout, and failed terminal zero delivery. Full dashboard panel suite passed 19 tests. Role G2 passed 7 tests and refreshed 60 cells: overflow 0, pageerror 0, E-stop 60/60, canceled-confirmation POST 0. Full-shell `/console` screenshots at 1366x768 and 390x844 show state-read failure and preserved release/stop result simultaneously; both record a terminal zero POST and no page errors or horizontal overflow. PNG/JSON artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\`. The full-shell fixture explicitly inserts `console.teleop` into its manifest and uses controlled API responses.
+- Gate: SOURCE/LOCAL browser regression and captures verified for `1af1fa41`. Real motion/stop readback, physical E-stop, G3, and D-153 DEVICE/FIELD acceptance remain HOLD.

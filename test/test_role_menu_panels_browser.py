@@ -393,6 +393,144 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         browser.close()
 
 
+def test_console_teleop_keeps_readiness_reasons_separate_from_action_feedback():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "src" / "hmi" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "src" / "hmi" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=state_logic))
+        page.route("http://rosy.test/common/hold-ticker.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=ticker))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/teleop.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {}; const calls = []; window.__failZero = false;
+          const store = {poll(path, interval, onData, onError) {
+            callbacks[path] = {interval, onData, onError}; return () => {};
+          }};
+          const api = async (path, options) => {
+            const body = JSON.parse(options.body); calls.push({path, body});
+            if (window.__failZero && body.linear === 0 && body.angular === 0) {
+              throw new Error('fixture terminal zero unavailable');
+            }
+            return {};
+          };
+          window.__callbacks = callbacks; window.__calls = calls;
+          window.__unmount = mount(root, {role:'operator', api, store});
+          window.__fresh = () => {
+            callbacks['/api/v1/robot/state'].onData({mode:'MANUAL', pose:{x:1,y:1}, velocity:{linear:0,angular:0}, evidence:{pose:{evidence:'fresh'},velocity:{evidence:'fresh'}}});
+            callbacks['/api/v1/system/capabilities'].onData({teleop:true});
+            callbacks['/api/v1/safety/state'].onData({estop:false});
+            callbacks['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
+          };
+          window.__fresh();
+          window.__button = root.querySelector('.surface-teleop-controls ui-button');
+        }""")
+        statuses = page.locator("main > ui-status")
+        readiness, action = statuses.nth(0), statuses.nth(1)
+        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1}))")
+        page.wait_for_timeout(150)
+        hold_feedback = action.inner_text()
+        page.evaluate("window.__fresh()")
+        assert action.inner_text() == hold_feedback
+
+        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1}))")
+        page.wait_for_function("window.__calls.at(-1)?.body.linear === 0 && window.__calls.at(-1)?.body.angular === 0")
+        release_feedback = action.inner_text()
+        for path, name, value in (
+            ("/api/v1/robot/state", "state", "{mode:'MANUAL',pose:{x:1,y:1},velocity:{linear:0,angular:0},evidence:{pose:{evidence:'fresh'},velocity:{evidence:'fresh'}}}"),
+            ("/api/v1/system/capabilities", "capabilities", "{teleop:true}"),
+            ("/api/v1/safety/state", "safety", "{estop:false}"),
+            ("/api/v1/host/commissioning", "commissioning", "{runtime_mode:'hardware'}"),
+        ):
+            page.evaluate(f"window.__callbacks[{path!r}].onError(new Error('fixture {name} unavailable'))")
+            assert f"fixture {name} unavailable" in readiness.inner_text()
+            assert action.inner_text() == release_feedback
+            page.evaluate(f"window.__callbacks[{path!r}].onData({value})")
+            assert f"fixture {name} unavailable" not in readiness.inner_text()
+
+        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:2}))")
+        page.wait_for_timeout(120)
+        page.evaluate("window.dispatchEvent(new CustomEvent('rosy:stop-motion',{detail:{waits:[]}}))")
+        forced_stop_feedback = action.inner_text()
+        page.evaluate("window.__fresh()")
+        assert action.inner_text() == forced_stop_feedback
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
+def test_console_teleop_timeout_and_failed_stop_feedback_survive_polling():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "src" / "hmi" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "src" / "hmi" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=state_logic))
+        page.route("http://rosy.test/common/hold-ticker.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=ticker))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/teleop.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {}; window.__failZero = false;
+          const store = {poll(path, interval, onData, onError) { callbacks[path]={interval,onData,onError}; return () => {}; }};
+          const api = async (_path, options) => {
+            const body = JSON.parse(options.body);
+            if (window.__failZero && body.linear === 0 && body.angular === 0) throw new Error('fixture terminal zero unavailable');
+            return {};
+          };
+          window.__callbacks = callbacks; window.__unmount = mount(root,{role:'operator',api,store});
+          window.__fresh = () => {
+            callbacks['/api/v1/robot/state'].onData({mode:'MANUAL',pose:{x:1,y:1},velocity:{linear:0,angular:0},evidence:{pose:{evidence:'fresh'},velocity:{evidence:'fresh'}}});
+            callbacks['/api/v1/system/capabilities'].onData({teleop:true});
+            callbacks['/api/v1/safety/state'].onData({estop:false});
+            callbacks['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
+          };
+          window.__fresh(); window.__button=root.querySelector('.surface-teleop-controls ui-button');
+        }""")
+        action = page.locator("main > ui-status").nth(1)
+        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:3}))")
+        page.wait_for_timeout(2_150)
+        timeout_feedback = action.inner_text()
+        assert "2" in timeout_feedback
+        page.evaluate("window.__fresh()")
+        assert action.inner_text() == timeout_feedback
+
+        page.evaluate("window.__button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:4}))")
+        page.wait_for_timeout(150)
+        page.evaluate("window.__failZero=true; window.__button.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:4}))")
+        page.wait_for_function("document.querySelectorAll('main > ui-status')[1]?.textContent.includes('fixture terminal zero unavailable')")
+        failed_stop_feedback = action.inner_text()
+        page.evaluate("window.__fresh()")
+        assert action.inner_text() == failed_stop_feedback
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
 def test_admin_security_preserves_token_and_safety_action_feedback_across_polling():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

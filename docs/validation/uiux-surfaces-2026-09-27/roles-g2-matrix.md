@@ -84,3 +84,11 @@ The `a81dbcb2` Host Agent panel and `3b89deeb` `/console` mode panel updates wer
 Current local G2 passed **6 tests** and refreshed **60 cells** across operator/admin, `/setup` and `/device`, configured state scenarios, and 1366x768/390x844 viewports. Overflow 0, pageerror 0, and E-stop visible 60/60. Additional full-shell `/console` mode-feedback captures at both viewports recorded one MANUAL POST each, IDLE readback at acceptance, overflow 0, no page errors, and visible E-stop. Administrator `/device` normal captures and both console captures were visually inspected. `matrix.json`, `console-mode-feedback-matrix.json`, and PNGs are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
 
 The fixtures use local FastAPI/Chromium responses. Actual Host Agent and physical robot mode readbacks, physical E-stop, G3 evaluation, and DEVICE/FIELD acceptance remain **HOLD**; this evidence does not advance D-153 or D-255 B2/B3.
+
+## 2026-09-28 console teleoperation readiness and action feedback
+
+The `1af1fa41` `/console` teleop follow-up was checked with focused panel regressions and a full-shell Chromium capture. The panel regressions exercised hold, release, forced stop, timeout, and terminal-zero delivery failure while polling updates ran. They also injected state, capability, safety, and commissioning GET errors one at a time, verified each reason stayed in the readiness region, and confirmed successful readback cleared only the recovered reason without overwriting the action result.
+
+The full panel browser suite passed **19 tests**. Role G2 passed **7 tests**, refreshing 60 cells with overflow 0, pageerror 0, E-stop visible 60/60, and canceled-confirmation POST 0. Full-shell teleop captures at 1366x768 and 390x844 show a robot-state read failure beside the preserved release/stop feedback; each recorded one terminal zero POST, overflow 0, no page errors, and visible E-stop. The test fixture adds `console.teleop` to the console manifest because its local profile does not advertise teleop, and provides controlled mock/local API responses. Screenshots and `console-teleop-feedback-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
+
+These are LOCAL browser results only. Actual motion and stop readback, physical E-stop, G3, DEVICE/FIELD, and D-153 acceptance remain **HOLD**.
