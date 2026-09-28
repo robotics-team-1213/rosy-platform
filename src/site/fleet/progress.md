@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "016df3ab", date: 2026-09-28 }
+last_verified: { commit: "uncommitted", date: 2026-09-28 }
 gates:
   SOURCE:
     state: GO
@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "543 passed, 5 skipped; Fleet browser/dialog suite 32 passed. Current UI G2 recaptured 24 state cells at 1920x1080/390x844/320x844 with no page errors or horizontal overflow; desktop document overflow 0. Docker image rosy-site-fleet:uiux-headings built (sha256:f83ee98c9c38269ed6b6490327e92a4c93bb67278b42b0af4421d74e55ebb8c0), container CLI help ran. SOURCE/LOCAL only; Ubuntu, GPU, physical devices, dispatch and field acceptance remain unverified (docs/validation/2026-09-26-site-stack-container-smoke.md)"
+    evidence: "Fleet suite 544 passed/5 skipped; browser/dialog suite 33 passed. Docker WSS synthetic frame -> signed lease -> Vision OpenCV preview returned sequence/age with X-Frame-Rectified=true; 1920/390/320 px captures have zero page errors/horizontal overflow. SOURCE/LOCAL only; physical/site/calibrated acceptance remains open"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318]
 plans:
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md
@@ -33,6 +33,7 @@ plans:
   - docs/plans/2026-09-21-fleet-signals-integration-design.md
   - docs/plans/2026-09-22-fleet-signals-integration.md
   - docs/plans/2026-09-27-uiux-surface-closure.md
+  - docs/plans/2026-09-28-site-camera-preview-rectification.md
 ---
 ## 현재 상태 (2026-09-27)
 

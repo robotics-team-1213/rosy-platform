@@ -139,6 +139,7 @@
 | D-315 | 소스 폴더 책임은 소스 분류이며 실행 권한·배포 단위를 대신하지 않는다 |
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
 | D-317 | 장치별 해석과 공유 계약은 실제 소비·실행 경계로 분류한다 |
+| D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 
 ## 계획·결과 문서
 
@@ -184,6 +185,7 @@
 - [2026-09-28-camera-fault-supervised-demo-design.md](plans/2026-09-28-camera-fault-supervised-demo-design.md)
 - [2026-09-28-camera-fault-supervised-demo.md](plans/2026-09-28-camera-fault-supervised-demo.md)
 - [2026-09-28-control-and-contract-boundary-audit.md](plans/2026-09-28-control-and-contract-boundary-audit.md)
+- [2026-09-28-site-camera-preview-rectification.md](plans/2026-09-28-site-camera-preview-rectification.md)
 
 ## 교훈 (docs/solutions)
 
@@ -196,8 +198,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · docs(camera): record D-318 rectification contract
 - 2026-09-28 · uncommitted · docs(architecture): tighten D-317 boundary audit
 - 2026-09-28 · uncommitted · docs(architecture): define control and shared contract boundaries
 - 2026-09-28 · uncommitted · finish D-316 cancellation-result follow-up
 - 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
-- 2026-09-28 · uncommitted · fix(fleet): recover and scope result correlation

@@ -27,3 +27,24 @@ def test_vision_lease_rejects_tampering_and_long_ttl():
 def test_vision_lease_secret_must_be_dedicated_and_adequate():
     with pytest.raises(ValueError):
         VisionLeaseSigner("short")
+
+
+def test_vision_lease_signs_and_verifies_bounded_rectification_settings():
+    settings = {
+        "fx": 1.2, "fy": 1.2, "cx": 0.5, "cy": 0.5,
+        "k1": -0.18, "k2": 0.03, "p1": 0.0, "p2": 0.0, "k3": 0.0,
+        "corners": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
+        "output_aspect": 1.0,
+    }
+    signer = VisionLeaseSigner("x" * 32)
+    token = signer.issue(principal_id="viewer-1", source_id="ceiling-north",
+                         rectification=settings, now=100)
+
+    assert signer.verify(token, source_id="ceiling-north", now=101)["rectification"] == settings
+
+
+def test_vision_lease_rejects_invalid_rectification_settings():
+    signer = VisionLeaseSigner("x" * 32)
+    with pytest.raises(ValueError):
+        signer.issue(principal_id="viewer-1", source_id="ceiling-north",
+                     rectification={"k1": 999})

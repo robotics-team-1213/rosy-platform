@@ -35,6 +35,7 @@
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
+| D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 
 ## 계획·결과 문서
 
@@ -47,6 +48,7 @@
 - [2026-09-21-fleet-signals-integration-design.md](../../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
 - [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
 - [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
+- [2026-09-28-site-camera-preview-rectification.md](../../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 
 ## 교훈 (docs/solutions)
 
@@ -58,8 +60,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · add per-camera preview rectification controls
 - 2026-09-28 · 016df3ab · fix(fleet-ui): fit camera preview and clarify sections
 - 2026-09-28 · uncommitted · verify final canceled-attempt projection
 - 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
 - 2026-09-28 · uncommitted · fix(fleet): recover durable task event projection
-- 2026-09-28 · uncommitted · correlate Pinky navigation task results

@@ -9,6 +9,7 @@ ROSY_RUN_BROWSER_TESTS=1 로 실행한다. 가짜 API 응답(활성 대형 + 중
 from __future__ import annotations
 
 import os
+import json
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -992,6 +993,48 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
+        assert not errors
+        browser.close()
+
+
+def test_camera_rectification_controls_are_accessible_source_scoped_and_reset(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        **API,
+        "/api/fleet/vision/sources": {"sources": ["ceiling-north"]},
+        "/api/fleet/vision/lease": {
+            "source_id": "ceiling-north", "lease": "preview-lease",
+            "frame_path": "/api/vision/sources/ceiling-north/frame", "expires_in_s": 60,
+        },
+    }
+    lease_payloads = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')",
+        )
+        page.on("request", lambda request: lease_payloads.append(json.loads(request.post_data))
+                if request.url.endswith("/api/fleet/vision/lease") and request.post_data else None)
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_text("왜곡 및 사각 보정", exact=True).click()
+        page.get_by_label("왼쪽 위 X (%)").fill("10")
+        page.get_by_label("출력 비율").select_option("1")
+        page.wait_for_function(
+            "() => { const p = JSON.parse(localStorage.getItem('rosy-camera-rectification:ceiling-north') || '{}'); return p.output_aspect === 1 && p.corners?.[0]?.[0] === 0.1; }"
+        )
+        page.wait_for_timeout(600)
+        assert page.get_by_label("왼쪽 위 X (%)").input_value() == "10"
+        assert any(payload["rectification"]["output_aspect"] == 1
+                   and payload["rectification"]["corners"][0][0] == 0.1
+                   for payload in lease_payloads)
+        page.get_by_role("button", name="조정 초기화").click()
+        page.wait_for_function(
+            "() => localStorage.getItem('rosy-camera-rectification:ceiling-north') === null"
+        )
+        assert page.get_by_label("왼쪽 위 X (%)").input_value() == "0"
+        assert page.get_by_label("출력 비율").input_value() == "0"
+        assert page.get_by_text("기본 조정값으로 초기화했습니다.").count() == 1
         assert not errors
         browser.close()
 

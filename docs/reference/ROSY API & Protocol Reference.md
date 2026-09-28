@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.44
+**Version:** v1.45
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -899,6 +899,52 @@ Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-e
 source token은 console/robot REST/CORE Agent token과 달라야 하고 이 credential로 명령
 경로를 호출할 수 없다. D-268 policy evidence 및 자동 실행은 이 API에 포함되지 않는다.
 
+### 10.6.1 Site Fleet camera preview and rectification (D-318 Accepted)
+
+The phone sends latest-only JPEG frames to Vision over the authenticated
+`rosy-overhead/1` WSS. The Fleet browser receives a short-lived source-scoped
+lease, then reads one fresh JPEG directly from Vision. Fleet does not relay image
+bytes. The optional `rectification` object on lease creation is signed into the
+lease, so Vision can verify and bound CPU preview work without a new camera
+credential. No browser or Fleet process connects to ROS/DDS.
+
+| Method | Path | Credential | Result |
+|---|---|---|---|
+| GET | `/api/fleet/vision/sources` | Site console Bearer token | Configured preview source IDs |
+| POST | `/api/fleet/vision/lease` | Viewer Bearer token | 60 s source-scoped lease and direct Vision frame path |
+| GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`, sequence/age headers, and `X-Frame-Rectified` |
+
+Lease request body accepts `{ "source_id": "ceiling-north" }` for the original
+JPEG or an optional `rectification` object:
+
+```json
+{
+  "source_id": "ceiling-north",
+  "rectification": {
+    "fx": 1.2, "fy": 1.2, "cx": 0.5, "cy": 0.5,
+    "k1": -0.18, "k2": 0.03, "p1": 0.0, "p2": 0.0, "k3": 0.0,
+    "corners": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
+    "output_aspect": 1.0
+  }
+}
+```
+
+Intrinsics (`fx`, `fy`) are normalized focal lengths in `[0.25, 4]`; principal
+point (`cx`, `cy`) is normalized to `[0, 1]`. Radial coefficients (`k1`, `k2`,
+`k3`) are bounded to `[-1, 1]`, tangential (`p1`, `p2`) to `[-0.5, 0.5]`.
+`corners` is four normalized `[x,y]` pairs in clockwise top-left, top-right,
+bottom-right, bottom-left order; crossed, degenerate, non-finite, or out-of-frame
+polygons are rejected. `output_aspect` is automatic `0` or `[0.25, 4]`; output
+dimensions are capped at 1920×1080. The Vision service keeps its raw latest JPEG
+for ArUco/sighting processing. OpenCV correction is applied only to the returned
+preview copy. Existing source/principal limit of 5 frame reads per second still
+applies. Invalid settings return 422; missing or stale images remain unavailable.
+
+Fleet stores operator drafts per source in the current browser only. Until the
+camera intrinsics and floor plane have been measured and reviewed, this view is a
+visual adjustment and not calibrated site evidence. Rectified pixels do not
+change sightings, navigation, mission acceptance, or robot motion.
+
 ## 10.7 Site Fleet CORE Agent event history (D-269 Proposed)
 
 CORE Agent WebSocket의 pairing 및 `EventMessage` 검증을 통과한 이벤트는 Fleet SQLite의
@@ -1121,6 +1167,7 @@ authorizes navigation or picking.
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.44 | 2026-09-28 | Additive (D-316): correlate Pinky Site Fleet navigation attempts through optional CORE REST metadata and CORE navigation events; project matching results into durable task status. PRT-004/Envelope ACK and physical stop readback remain separate. |
+| v1.45 | 2026-09-28 | Additive (D-318): bounded rectification settings in signed Site Fleet Vision preview leases; Vision applies OpenCV lens and plane correction only to the returned latest-frame preview copy. Raw sighting input and robot command paths are unchanged. |
 | v1.43 | 2026-09-28 | Additive (D-313): CORE binds IR fallback to fresh IR-line evidence and its configured calibration digest; Fleet operator selection forwards through CORE. Refuse Nav2 goal/home while line-follow owns motion. Robot DDS/WSS envelope remains 1.0. |
 | v1.41 | 2026-09-27 | Corrective(P0, D-297): document the observed navigation task/CORE event correlation gap and replace stale D-177 activation references. No path, schema, runtime, or robot PRT envelope change. |
 | v1.40 | 2026-09-26 | Additive (D-293): typed Site Fleet intent/OpenAPI grammar, server-derived priority and identity, durable task/audit semantics, and purpose-specific message boundaries. No robot PRT envelope change. |

@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Mapping
 
 import websockets
+import cv2
 
 try:
     from websockets.asyncio.server import Server, ServerConnection, serve
@@ -34,7 +35,10 @@ except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
     ) from exc
 
 from overhead import protocol
-from core_common.protocol.vision_preview import VisionLeaseError, VisionLeaseSigner
+from core_common.protocol.vision_preview import (
+    PreviewRectification, VisionLeaseError, VisionLeaseSigner,
+)
+from overhead.rectify import rectify_jpeg
 
 STATUS_INTERVAL_S = 1.0
 # A peer that upgrades but never sends hello is closed after this long.
@@ -211,11 +215,23 @@ class IngestServer:
         age = max(0.0, time.time() - frame.captured_at)
         if age > self.preview_max_age_s:
             return _http_response(404, b"frame stale\n", extra={"X-Frame-State": "stale"})
-        return _http_response(200, frame.jpeg, extra={
+        jpeg = frame.jpeg
+        rectification_active = False
+        if "rectification" in lease:
+            try:
+                settings = PreviewRectification.from_mapping(lease["rectification"])
+                rectification_active = not settings.is_identity
+                if rectification_active:
+                    jpeg = rectify_jpeg(frame.jpeg, settings)
+            except (TypeError, ValueError, cv2.error) as exc:
+                return _http_response(422, b"rectification failed\n",
+                                      extra={"X-Frame-State": "rectification-error"})
+        return _http_response(200, jpeg, extra={
             "Content-Type": "image/jpeg", "Cache-Control": "no-store",
             "X-Frame-Seq": str(frame.header.seq),
             "X-Frame-Age-Ms": str(round(age * 1000)),
             "X-Frame-Captured-At": str(frame.captured_at),
+            "X-Frame-Rectified": "true" if rectification_active else "false",
         })
 
     # -- per-connection lifecycle ------------------------------------------

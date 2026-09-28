@@ -3075,3 +3075,9 @@
 - Verification: `python tools/harness/rosy_harness.py generate` completed; `rosy_harness.py lint` reports 0 errors and 17 stale-metadata warnings. `test_network_topology_contracts.py` plus `test_harness_contracts.py`: 78 passed, 17 warnings. `src/site/fleet/test/test_package.py`: 1 passed. `git diff --check` passed.
 - Review coverage: Coherence, feasibility, product-lens, adversarial, and scope-guardian reviews completed. Cross-model Claude CLI jobs skipped before document transmission because `jq` is unavailable; no cross-model artifact or document egress occurred.
 - Gate: Review clarified the source audit only. No folder/package move, image policy, ROS behavior, native artifact, device, or field acceptance is approved.
+
+## 2026-09-28 · uncommitted · docs(camera): record D-318 rectification contract
+
+- 변경: phone→Vision WSS와 Vision 직접 preview lease를 유지한다. 선택형 서명 OpenCV 렌즈 보정과 네 점 평면 변환을 응답 복사본에만 적용한다. 원본 프레임·sighting 입력과 로봇 명령 경계를 유지하고, 브라우저 설정 초안은 카메라별 저장한다. 측정 보정 전까지는 현장 증거로 간주하지 않는다.
+- 증거: overhead 86 passed; Fleet 545 passed/5 skipped; Fleet Chromium/dialog 33 passed. Local Docker Compose WSS 합성 프레임의 원본/서명 보정 응답은 HTTP 200이었다. 1920/390/320px 브라우저 표시에서 page error와 가로 넘침이 없었다. 캡처와 응답 메타데이터는 `X:\\DevTemp\\rosy-uiux-local-site\\camera-rectification-docker`에 있다.
+- gate 변화: 합성 데이터 LOCAL만 확인했다. 실물 phone, 현장 측정, Ubuntu/TLS, DEVICE/FIELD 승인은 별도 미완료다.

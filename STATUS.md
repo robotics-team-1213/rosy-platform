@@ -8,9 +8,9 @@
 | [core](src/runtime/gateway/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | uncommitted (2026-09-22) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](src/runtime/sensing/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [fleet](src/site/fleet/progress.md) | FLEET | 016df3ab (2026-09-28) | GO | GO | HOLD | PARKED | PARKED | PARKED |
+| [fleet](src/site/fleet/progress.md) | FLEET | uncommitted (2026-09-28) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | 9049bd37 (2026-09-27) | GO | GO | N/A | N/A | PARKED | PARKED |
-| [overhead](src/site/overhead/progress.md) | SITE | 778bbd31 (2026-09-27) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [overhead](src/site/overhead/progress.md) | SITE | uncommitted (2026-09-28) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](src/products/pinky_pro/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |

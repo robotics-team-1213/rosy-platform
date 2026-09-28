@@ -142,6 +142,15 @@ class SignalCommandRequest(BaseModel):
 class VisionLeaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     source_id: str
+    rectification: Optional[dict[str, object]] = None
+
+    @field_validator("rectification")
+    @classmethod
+    def _valid_rectification(cls, value):
+        if value is None:
+            return None
+        from core_common.protocol.vision_preview import PreviewRectification
+        return PreviewRectification.from_mapping(value).as_dict()
 
 
 def _http_error(exc: BaseException) -> HTTPException:
@@ -444,7 +453,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if body.source_id not in vision_sources:
             raise HTTPException(status_code=404, detail={"code": "UNKNOWN_VISION_SOURCE"})
         token = vision_signer.issue(principal_id=principal.principal_id,
-                                    source_id=body.source_id, ttl_s=60)
+                                    source_id=body.source_id, ttl_s=60,
+                                    rectification=body.rectification)
         return {"source_id": body.source_id, "lease": token,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}

@@ -12,11 +12,13 @@
 | D-257 | 사이트 관제 지도는 차선 그래프 — 로봇 위치는 폰 천장 카메라가 보고, 영상은 Fleet 밖에서만 |
 | D-261 | 천장 카메라 안드로이드 앱 — 골격 범위·위치·기술·첫 버전 약속 |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
+| D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 
 ## 계획·결과 문서
 
 - [2026-09-26-middleware-device-server-contract-integration.md](../../../docs/plans/2026-09-26-middleware-device-server-contract-integration.md)
 - [2026-09-26-overhead-camera-android-app-design.md](../../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
+- [2026-09-28-site-camera-preview-rectification.md](../../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 
 ## 교훈 (docs/solutions)
 
@@ -28,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · apply measured rectification to Fleet preview only
 - 2026-09-28 · uncommitted · serve authorized latest-frame preview
 - 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)
 - 2026-09-26 · uncommitted · feat(site): TLS Docker path and durable sighting readback
 - 2026-09-26 · uncommitted · feat(overhead): CPU vision worker to Fleet sighting contract (D-257/D-269)
-- 2026-09-26 · c6647a1e · 에뮬레이터 종단 확인 (안드로이드 앱 → 이 어댑터)

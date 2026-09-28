@@ -2,15 +2,15 @@
 module: overhead
 logical_modules: []
 owner: SITE
-last_verified: { commit: "778bbd31", date: 2026-09-27 }
+last_verified: { commit: "uncommitted", date: 2026-09-28 }
 gates:
   SOURCE:
     state: GO
-    evidence: "protocol/ingest + isolated CPU ArUco detector/projector/publisher/latest-only worker; ROS-free and no cmd_vel (2026-09-26 Windows)"
+    evidence: "D-318 adds bounded, signed Vision-only OpenCV lens and plane transform for direct preview. Raw latest frame for ArUco/sightings remains unchanged; ROS-free and no cmd_vel. Local overhead suite 86 passed (2026-09-28 Windows)"
     cmd: "python -m pytest src/site/overhead/test -q"
   LOCAL:
     state: GO
-    evidence: "70 passed (Windows). Revision 778bbd31 packaged linux/amd64 Compose smoke: TLS WSS synthetic JPEG -> CPU ArUco projection -> authenticated Fleet HTTPS/SQLite readback; sighting persisted across Fleet container restart. Synthetic quality is null; this is not a physical phone, Ubuntu/GPU, freshness, calibration, DEVICE or FIELD result (2026-09-27 Windows Docker Desktop)"
+    evidence: "86 passed (Windows), including synthetic perspective warp, lease validation, raw-frame immutability, and direct preview readback. Packaged Docker preview returned authorized transformed latest-only frames in source browser; no page errors/horizontal overflow at 1920/390/320 px. Synthetic only; no measured calibration, phone/Ubuntu site acceptance, DEVICE, or FIELD"
     cmd: "python -m pytest src/site/overhead/test -q && (cd src/site/overhead/android && gradlew testDebugUnitTest --rerun-tasks --no-daemon) && docker compose -f deploy/site/compose.yaml build && docker compose -f deploy/site/compose.yaml up -d"
   ROS-SIM:
     state: N/A
@@ -20,10 +20,11 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261, D-269]
+adrs: [D-257, D-261, D-269, D-318]
 plans:
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-26-middleware-device-server-contract-integration.md
+  - docs/plans/2026-09-28-site-camera-preview-rectification.md
 ---
 ## 현재 상태 (2026-09-27)
 

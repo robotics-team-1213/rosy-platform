@@ -56,6 +56,31 @@ def test_vision_lease_is_source_scoped_and_fleet_returns_no_frame_bytes():
     assert rejected.status_code == 404
 
 
+def test_vision_lease_accepts_only_bounded_preview_rectification():
+    client = TestClient(create_app(
+        FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-token")],
+                     [FakeRobot("rosy_01")]),
+        vision_lease_secret="v" * 32, vision_sources=("ceiling-north",)))
+    profile = {
+        "fx": 1.2, "fy": 1.2, "cx": 0.5, "cy": 0.5,
+        "k1": -0.18, "k2": 0.03, "p1": 0.0, "p2": 0.0, "k3": 0.0,
+        "corners": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
+        "output_aspect": 1.0,
+    }
+
+    issued = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": profile,
+    })
+    rejected = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": {"k1": 999},
+    })
+
+    assert issued.status_code == 200
+    assert VisionLeaseSigner("v" * 32).verify(
+        issued.json()["lease"], source_id="ceiling-north")["rectification"] == profile
+    assert rejected.status_code == 422
+
+
 def test_vision_lease_endpoint_fails_closed_when_preview_is_not_configured():
     client = _client(FakeRobot("rosy_01"))
 

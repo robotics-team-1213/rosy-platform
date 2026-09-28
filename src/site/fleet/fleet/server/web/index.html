@@ -61,6 +61,52 @@
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
+        <details id="vision-adjustments" class="vision-adjustments">
+          <summary>왜곡 및 사각 보정</summary>
+          <p class="hint">화면 미리보기만 보정합니다. 원본과 로봇 위치 인식은 그대로 유지됩니다. 현장 실측 전에는 보정된 위치 증거로 사용할 수 없습니다.</p>
+          <div class="adjustment-columns">
+            <fieldset>
+              <legend>평면 모서리와 출력 비율</legend>
+              <p class="hint">원본 영상에서 바닥 영역의 네 모서리를 0–100%로 지정합니다.</p>
+              <div class="corner-grid">
+                <label>왼쪽 위 X<input data-corner="0" data-axis="0" type="number" min="0" max="100" step="1" value="0" aria-label="왼쪽 위 X (%)"></label>
+                <label>왼쪽 위 Y<input data-corner="0" data-axis="1" type="number" min="0" max="100" step="1" value="0" aria-label="왼쪽 위 Y (%)"></label>
+                <label>오른쪽 위 X<input data-corner="1" data-axis="0" type="number" min="0" max="100" step="1" value="100" aria-label="오른쪽 위 X (%)"></label>
+                <label>오른쪽 위 Y<input data-corner="1" data-axis="1" type="number" min="0" max="100" step="1" value="0" aria-label="오른쪽 위 Y (%)"></label>
+                <label>오른쪽 아래 X<input data-corner="2" data-axis="0" type="number" min="0" max="100" step="1" value="100" aria-label="오른쪽 아래 X (%)"></label>
+                <label>오른쪽 아래 Y<input data-corner="2" data-axis="1" type="number" min="0" max="100" step="1" value="100" aria-label="오른쪽 아래 Y (%)"></label>
+                <label>왼쪽 아래 X<input data-corner="3" data-axis="0" type="number" min="0" max="100" step="1" value="0" aria-label="왼쪽 아래 X (%)"></label>
+                <label>왼쪽 아래 Y<input data-corner="3" data-axis="1" type="number" min="0" max="100" step="1" value="100" aria-label="왼쪽 아래 Y (%)"></label>
+              </div>
+              <label class="aspect-control" for="vision-aspect">출력 비율
+                <select id="vision-aspect" data-rect="output_aspect">
+                  <option value="0">자동</option><option value="1">정사각형 1:1</option>
+                  <option value="0.75">세로 3:4</option><option value="1.333333">가로 4:3</option>
+                  <option value="1.777778">가로 16:9</option>
+                </select>
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>렌즈 보정 계수</legend>
+              <p class="hint">카메라 보정 결과를 알고 있다면 입력합니다. 모르면 기본값을 유지하세요.</p>
+              <div class="lens-grid">
+                <label>초점 X<input data-rect="fx" type="number" min="0.25" max="4" step="0.01" value="1"></label>
+                <label>초점 Y<input data-rect="fy" type="number" min="0.25" max="4" step="0.01" value="1"></label>
+                <label>중심 X<input data-rect="cx" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+                <label>중심 Y<input data-rect="cy" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+                <label>방사 k1<input data-rect="k1" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>방사 k2<input data-rect="k2" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>접선 p1<input data-rect="p1" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label>접선 p2<input data-rect="p2" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label>방사 k3<input data-rect="k3" type="number" min="-1" max="1" step="0.01" value="0"></label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="adjustment-actions">
+            <span id="vision-adjustment-state" role="status">현재 브라우저에 조정값을 저장합니다.</span>
+            <ui-button kind="quiet" id="vision-reset-adjustments" type="button">조정 초기화</ui-button>
+          </div>
+        </details>
       </section>
       <div class="legend" id="map-legend" hidden>
         <span><i class="sw free"></i>자유</span>

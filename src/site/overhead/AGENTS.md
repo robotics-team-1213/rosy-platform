@@ -18,7 +18,7 @@
 
 | Directory | Purpose |
 |-----------|---------|
-| `overhead/` | Python package: `protocol.py`, `ingest.py` (latest-only receiver), `detect.py` (isolated OpenCV CPU detector), `project.py` (shared games homography), `publish.py` (source-token Fleet client), `worker.py` (fresh latest-frame orchestration), `cli.py` |
+| `overhead/` | Python package: `protocol.py`, `ingest.py` (latest-only receiver/direct preview), `detect.py` (isolated OpenCV CPU detector), `rectify.py` (D-318 display-only preview transform), `project.py` (shared games homography), `publish.py` (source-token Fleet client), `worker.py` (fresh latest-frame orchestration), `cli.py` |
 | `protocol/` | `vectors.json` only — no Python here |
 | `test/` | ROS-free pytest, `conftest.py` bootstraps `sys.path` without a colcon install |
 
@@ -33,6 +33,7 @@
 - `captured_at` in `ingest.py` uses this process's own wall clock (`time.time()`) minus the frame's `age_ms` — the phone's clock is never trusted (design §3).
 - The worker requires all four configured map markers and a configured robot marker in one frame. `quality: null` means unmeasured and is not policy evidence. Source, map, calibration, and processor revisions must match Fleet configuration.
 - Runtime vision dependencies are installed from package metadata: `opencv-contrib-python-headless`, `numpy`, and `httpx`. `games` supplies the reviewed, ROS-free homography implementation.
+- D-318 preview rectification uses the signed Viewer lease and never changes the raw latest frame consumed by ArUco or Fleet sightings. Browser adjustments are not a measured site calibration; keep DEVICE/FIELD acceptance separate.
 
 ### Testing Requirements
 
