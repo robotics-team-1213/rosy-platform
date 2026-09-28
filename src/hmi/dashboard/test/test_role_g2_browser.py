@@ -948,3 +948,94 @@ def test_admin_hardware_refresh_feedback_full_shell_captures(tmp_path):
         browser.close()
     (capture_dir / "admin-hardware-refresh-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_admin_identity_editor_poll_feedback_full_shell_captures(tmp_path):
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "admin-device-identity-feedback"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            posts = []
+            reads = {"count": 0}
+            page.add_init_script("""sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-admin');
+              const nativeSetInterval=window.setInterval.bind(window);
+              window.setInterval=(fn,delay,...args)=>nativeSetInterval(fn,delay===30000?250:delay,...args);""")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                request = route.request
+                path = urlsplit(request.url).path
+                if path == "/api/v1/system/info" and request.method == "PUT":
+                    body = request.post_data_json
+                    posts.append({"path": path, "method": "PUT", "robot_name": body.get("robot_name")})
+                    route.fulfill(status=200, content_type="application/json",
+                                  body=json.dumps({"robot_name": body.get("robot_name")}))
+                    return
+                if path == "/api/v1/system/info" and request.method == "GET":
+                    reads["count"] += 1
+                    route.fulfill(status=200, content_type="application/json", body=json.dumps({
+                        "robot_id": "robot-fixture", "robot_name": "robot-fixture",
+                        "robot_number": "fixture-01", "runtime_mode": "hardware",
+                    }))
+                    return
+                if request.method != "GET":
+                    route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                    return
+                response = _response(client, path, TOKENS["administrator"], "normal", "device")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                    "cache-control": "no-store",
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+            host = page.locator('[data-panel="host.system"]')
+            page.wait_for_selector('[data-panel="host.system"] [name="robot_name"]', state="attached")
+            page.locator('[data-panel="host.system"] details.host-system-detail > summary').click()
+            identity_input = host.locator('[name="robot_name"]')
+            form = host.locator(".host-system-detail .ui-form")
+            assert reads["count"] >= 1
+            identity_input.fill("draft-pinky")
+            baseline_reads = reads["count"]
+            page.wait_for_timeout(700)
+            assert reads["count"] >= baseline_reads + 2
+            assert form.count() == 1
+            assert identity_input.input_value() == "draft-pinky"
+
+            form.evaluate("node => node.requestSubmit()")
+            feedback = host.locator(".host-system-detail ui-status[role='status']")
+            page.wait_for_function("document.querySelector('[data-panel=\"host.system\"] .host-system-detail ui-status[role=\"status\"]')?.getAttribute('state') === 'ready'")
+            receipt = feedback.inner_text()
+            reads_after_receipt = reads["count"]
+            page.wait_for_timeout(450)
+            assert reads["count"] > reads_after_receipt
+            assert feedback.inner_text() == receipt
+            assert form.count() == 1
+            assert identity_input.input_value() == "draft-pinky"
+            assert posts == [{"path": "/api/v1/system/info", "method": "PUT", "robot_name": "draft-pinky"}]
+            filename = f"administrator-device-identity-feedback-{width}x{height}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            result = page.evaluate("""() => ({
+              overflowX:Math.max(0,document.documentElement.scrollWidth-innerWidth),
+              eStopVisible:document.querySelector('#shell-estop')?.getBoundingClientRect().right<=innerWidth,
+              formCount:document.querySelectorAll('[data-panel="host.system"] .host-system-detail .ui-form').length,
+              value:document.querySelector('[data-panel="host.system"] [name="robot_name"]')?.value||'',
+              readback:document.querySelector('[data-panel="host.system"] .host-system-overview ui-status')?.textContent||'',
+              feedback:document.querySelector('[data-panel="host.system"] .host-system-detail ui-status[role="status"]')?.textContent||'',
+            })""")
+            assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
+            assert result["formCount"] == 1 and result["value"] == "draft-pinky" and result["feedback"] == receipt
+            records.append({"viewport": f"{width}x{height}", "image": filename, "posts": posts,
+                            "identity_reads": reads["count"], "errors": errors, **result})
+            context.close()
+        browser.close()
+    (capture_dir / "admin-device-identity-feedback-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

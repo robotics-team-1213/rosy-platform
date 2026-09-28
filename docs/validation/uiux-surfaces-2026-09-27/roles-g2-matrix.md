@@ -112,3 +112,9 @@ The full G2 command reported 8 passed and 1 failed in an administrator `/device`
 Focused Chromium panel regression passed **1 test**. During a pending refresh POST, measurement polling updated independently; accepted request receipt persisted across later measurements, and POST error remained visible after measurement-read failure. The dedicated full-shell capture test passed at 1366x768 and 390x844. Both screenshots were visually inspected: horizontal overflow 0, page errors 0, E-stop visible. Controlled local fixture only; full G2 matrix was not rerun. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
 
 SOURCE/LOCAL browser verification is complete for `17f30137`. Actual Host Agent readback, physical device completion, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 administrator identity editor polling regression
+
+Focused Chromium panel regression passed **1 test**, confirming 30-second identity callback updates keep exactly one form, preserve the unsaved draft, lock editing during PUT, and retain request feedback through stale readbacks. Dedicated full-shell captures passed at 1366x768 and 390x844; both were visually inspected with overflow 0, pageerror 0, and visible E-stop. The local fixture accelerates the identity poll and uses controlled API replies. This did not rerun the full G2 matrix. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-identity-feedback\`.
+
+SOURCE/LOCAL browser verification is complete for `df260822`. Physical identity readback, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
