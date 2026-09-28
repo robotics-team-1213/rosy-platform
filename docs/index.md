@@ -144,8 +144,8 @@
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
-| D-326 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 |
-| D-327 | 모델 제안 Mission과 독립 목표 증거를 분리한다 |
+| D-327 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 |
+| D-328 | 모델 제안 Mission과 독립 목표 증거를 분리한다 |
 
 ## 계획·결과 문서
 
@@ -209,8 +209,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(er2): renumber proposed ADRs after D-326 collision
 - 2026-09-29 · uncommitted · plan(er2): stage semantic Action and Mission implementation
 - 2026-09-29 · uncommitted · docs(er2): preserve user Isaac Sim analysis and separate mission outcome evidence
 - 2026-09-29 · uncommitted · docs(omx): define semantic pick and place ADR
 - 2026-09-29 · uncommitted · docs(omx): propose embodied reasoning to Device Action boundary
-- 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact

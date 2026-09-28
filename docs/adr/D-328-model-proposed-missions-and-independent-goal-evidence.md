@@ -1,4 +1,4 @@
-## D-327 모델 제안 Mission과 독립 목표 증거를 분리한다
+## D-328 모델 제안 Mission과 독립 목표 증거를 분리한다
 
 **Status:** Proposed (2026-09-29). D-308의 Intent/Fleet/Device Action 소유권과 D-307의 Action 결과/물리 정지 구분을 다장치 작업에 구체화한다. 새 Mission API, 자동 모델 dispatch, OMX/Pinky 복합 운영, Isaac Sim 또는 DEVICE/FIELD 수용을 승인하지 않는다.
 
@@ -22,7 +22,7 @@ ROSY의 현행 Fleet은 단일 Pinky navigation task/attempt를 영속화할 수
 - **모델 세션을 Mission scheduler와 성공 판정기로 사용:** 재연결·응답 누락·물리 효과·잘못된 완료 선언을 영속 조정할 수 없어 채택하지 않는다.
 - **각 장치 API가 사이트 목표까지 판정:** 장치 간 의존과 최종 목적지 확인이 분산되므로 채택하지 않는다.
 - **모든 모델 신호를 버리고 고정 workflow만 사용:** 단기 고정 작업에는 유효하지만 새로운 장면·실패의 후보 생성 범위를 제한한다. 초기 baseline으로 유지하고 모델 도입의 비교 기준으로 사용한다.
-- **Fleet 원장 + 로컬 Action + 독립 목표 판정:** D-308/D-326의 소유권과 맞고 단계별 증거를 남길 수 있어 제안한다.
+- **Fleet 원장 + 로컬 Action + 독립 목표 판정:** D-308/D-327의 소유권과 맞고 단계별 증거를 남길 수 있어 제안한다.
 
 ### Transition / validation
 
@@ -32,4 +32,4 @@ ROSY의 현행 Fleet은 단일 Pinky navigation task/attempt를 영속화할 수
 
 **Consequences:** 모델 제안, Fleet Step 수락, 장치 Action 최종 결과, 물리 정지, 사이트 목표 성공의 다섯 사실을 별도 ID와 증거로 추적한다. 새 wire 경로·필드·enum은 D-18에 따라 API Reference와 공유 schema, 생산자·소비자 시험을 한 번에 변경할 때 결정한다. 이 ADR은 D-308/D-307을 대체하지 않는다.
 
-**References:** [사용자 제공 자료와 현재 구조 대조](../plans/2026-09-29-er2-isaac-sim-architecture-assessment.md), [D-18](D-18-rosy-core.md), [D-55](D-55-mobile-manipulation-is-a-robot-local-mission-capability.md), [D-70](D-70-fleet.md), [D-282](D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-298](D-298-mission-action-and-stop-evidence-terminology.md), [D-305](D-305-platform-boundary-outcome-invariants-and-independent-gates.md), [D-307](D-307-final-action-outcome-and-stop-readback-evidence.md), [D-308](D-308-intent-and-device-action-interpretation-boundary.md), [D-316](D-316-pinky-site-fleet-navigation-result-correlation.md), [D-326](D-326-semantic-manipulation-actions-and-device-adapters.md), [Google ER 2 개요](https://ai.google.dev/gemini-api/docs/robotics-overview), [Google 도구 예시](https://ai.google.dev/gemini-api/docs/robotics-orchestration), [Google streaming](https://ai.google.dev/gemini-api/docs/robotics-streaming), [Google 영상 진행도](https://ai.google.dev/gemini-api/docs/robotics-video-progress).
+**References:** [사용자 제공 자료와 현재 구조 대조](../plans/2026-09-29-er2-isaac-sim-architecture-assessment.md), [D-18](D-18-rosy-core.md), [D-55](D-55-mobile-manipulation-is-a-robot-local-mission-capability.md), [D-70](D-70-fleet.md), [D-282](D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-298](D-298-mission-action-and-stop-evidence-terminology.md), [D-305](D-305-platform-boundary-outcome-invariants-and-independent-gates.md), [D-307](D-307-final-action-outcome-and-stop-readback-evidence.md), [D-308](D-308-intent-and-device-action-interpretation-boundary.md), [D-316](D-316-pinky-site-fleet-navigation-result-correlation.md), [D-327](D-327-semantic-manipulation-actions-and-device-adapters.md), [Google ER 2 개요](https://ai.google.dev/gemini-api/docs/robotics-overview), [Google 도구 예시](https://ai.google.dev/gemini-api/docs/robotics-orchestration), [Google streaming](https://ai.google.dev/gemini-api/docs/robotics-streaming), [Google 영상 진행도](https://ai.google.dev/gemini-api/docs/robotics-video-progress).

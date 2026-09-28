@@ -2,7 +2,7 @@
 
 **상태:** Proposed design (2026-09-29). 새 API, `TaskKind`, OMX capability, 모터·팔 명령 권한 또는 DEVICE/FIELD 수용을 활성화하지 않는다.
 
-**후속 결정:** [D-326](../adr/D-326-semantic-manipulation-actions-and-device-adapters.md)은 단독 `PICK`·`PLACE`와 장치별 adapter까지 의미적 범위를 확장한다. 이 문서의 `PICK_PLACE`는 첫 고정 OMX 작업대 검증 범위다.
+**후속 결정:** [D-327](../adr/D-327-semantic-manipulation-actions-and-device-adapters.md)은 단독 `PICK`·`PLACE`와 장치별 adapter까지 의미적 범위를 확장한다. 이 문서의 `PICK_PLACE`는 첫 고정 OMX 작업대 검증 범위다.
 
 **첫 대상:** 고정형 OMX 작업대의 알려진 가벼운 블록 한 종류를 지정 트레이에 옮기는 작업. Pinky 주행과 팔을 결합한 이동 조작은 이 설계의 후속이며, 기존 [D-55](../adr/D-55-mobile-manipulation-is-a-robot-local-mission-capability.md)와 [D-305](../adr/D-305-platform-boundary-outcome-invariants-and-independent-gates.md)의 별도 상호 인터록·DEVICE/FIELD 게이트를 따른다.
 

@@ -325,5 +325,5 @@
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 | Accepted (소스 경로만; 설치 closure·OMX field runtime 별도 HOLD) |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 | Accepted (설계 결정; 구현·서명 릴리스·실물 G4/G5 HOLD) |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 | Accepted (산출물 범위 선택만; 서명·설치·장치 수용 게이트 유지) |
-| D-326 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 | Proposed (의미·권한·검증 기준; API·운영 capability·DEVICE/FIELD 수용 아님) |
-| D-327 | 모델 제안 Mission과 독립 목표 증거를 분리한다 | Proposed (Fleet 원장·장치 Action·목표 판정 경계; API·자동 dispatch·장치 수용 아님) |
+| D-327 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 | Proposed (의미·권한·검증 기준; API·운영 capability·DEVICE/FIELD 수용 아님) |
+| D-328 | 모델 제안 Mission과 독립 목표 증거를 분리한다 | Proposed (Fleet 원장·장치 Action·목표 판정 경계; API·자동 dispatch·장치 수용 아님) |

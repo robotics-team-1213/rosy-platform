@@ -10,12 +10,12 @@
 
 ## 사례에서 가져올 구조와 현재 간극
 
-현재 상태의 소스 근거는 Fleet의 [navigation 전용 영속 작업·policy 비활성](../../src/site/fleet/fleet/server/task_service.py), [`/api/fleet/do`의 순차 `steps`](../../src/site/fleet/fleet/server/app.py), [고정 `TaskKind`](../../src/contracts/foundation/core_common/domain/tasks.py), [OMX disabled profile](../../src/products/omx/profile/config/omx.disabled.yaml), [OMX 카메라 계약](../../src/products/omx/adapter/omx_adapter/camera_contract.py)과 [팔 ROS action client](../../src/products/omx/adapter/omx_adapter/ros_runtime.py)이다. 기존 소유권은 [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), 의미적 조작 계약 후보는 [D-326](../adr/D-326-semantic-manipulation-actions-and-device-adapters.md)에 기록되어 있다.
+현재 상태의 소스 근거는 Fleet의 [navigation 전용 영속 작업·policy 비활성](../../src/site/fleet/fleet/server/task_service.py), [`/api/fleet/do`의 순차 `steps`](../../src/site/fleet/fleet/server/app.py), [고정 `TaskKind`](../../src/contracts/foundation/core_common/domain/tasks.py), [OMX disabled profile](../../src/products/omx/profile/config/omx.disabled.yaml), [OMX 카메라 계약](../../src/products/omx/adapter/omx_adapter/camera_contract.py)과 [팔 ROS action client](../../src/products/omx/adapter/omx_adapter/ros_runtime.py)이다. 기존 소유권은 [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), 의미적 조작 계약 후보는 [D-327](../adr/D-327-semantic-manipulation-actions-and-device-adapters.md)에 기록되어 있다.
 
 | 사례의 상황 | ROSY에서의 책임 | 현재 SOURCE 상태 | 설계 출구 |
 |---|---|---|---|
 | 한 장면의 점/물체 찾기 | 관측 출처·보정·대상 ID를 가진 후보 만들기 | OMX `CameraFrameGate`는 Image/CameraInfo freshness를 검사하나 3D 대상·파지·배치 판정은 없다 | 모델 selector를 관측 ID에 결합하고 대상 이동·가림·좌표계 오류를 거절 |
-| “집어서 트레이에 놓아” | Fleet은 목표, OMX 로컬 owner는 `PICK_PLACE` Action과 ROS 실행 | OMX profile disabled; `FollowJointTrajectory` client 후보만 있고 외부 조작 API·gripper/placement 결과 계약은 없다 | D-326의 의미적 Action, 장치 capability·단일 writer·그리퍼/물체 readback을 별도 구현 |
+| “집어서 트레이에 놓아” | Fleet은 목표, OMX 로컬 owner는 `PICK_PLACE` Action과 ROS 실행 | OMX profile disabled; `FollowJointTrajectory` client 후보만 있고 외부 조작 API·gripper/placement 결과 계약은 없다 | D-327의 의미적 Action, 장치 capability·단일 writer·그리퍼/물체 readback을 별도 구현 |
 | 실행 중 대상 이동 | 장치 로컬 freshness/충돌 감시가 즉시 HOLD; 모델 신호는 재관찰·재계획 후보 | 연속 장면 변화 감지→취소→새 goal 경로 없음 | 모델 지연과 무관한 로컬 정지 시험, 이벤트 시각·취소·실제 정지 시각을 분리 기록 |
 | 두 팔 병렬 실행 | Fleet Mission DAG의 독립 Step이 두 장치 Action을 비동기로 dispatch | Fleet durable task는 Pinky navigation 단일 단계에 한정. `/api/fleet/do`의 `steps`는 순차 호출이며 Mission DAG가 아니다 | 병렬 Step의 join, retry budget, reservation/충돌 구역, 결과 연결을 Fleet 원장에 구현 |
 | 실패 후 재구성 | 모델은 새로운 계획 후보; Fleet은 기존 attempt 최종 결과와 자원 상태를 보존·검증 후 새 Step 생성 | `POLICY_DISPATCH_ENABLED=False`; navigation attempt 상관관계만 존재 | 물리 효과 중복 방지, 보유 물체·목표 상태 재관찰, 승인된 재계획만 dispatch |
@@ -54,4 +54,4 @@
 4. **ER 2 보조:** 동일 장면에 규칙 기반/사람/ER 2 후보를 넣고 대상 resolve, 단계 선택, 재계획, 오탐·미완료·늦은 신호를 비교한다. 모델의 결과로 안전 경로를 닫지 않는다.
 5. **Isaac Sim:** 별도 진행 중인 D-322의 형상·ROS 경로와 구분해 카메라/깊이/충돌/그리퍼/적재/goal oracle을 갖춘 fixture를 만든다. 정상·대상 이동·grasp 실패·잘못된 완료·통신 단절 반례를 재현한다. Isaac 통과를 DEVICE/FIELD로 승격하지 않는다.
 
-이 문서와 [D-327](../adr/D-327-model-proposed-missions-and-independent-goal-evidence.md)은 구조 제안이다. API 경로·envelope을 실제로 열 때는 D-18에 따라 API Reference, 공유 schema, 생산자·소비자 시험을 함께 변경한다.
+이 문서와 [D-328](../adr/D-328-model-proposed-missions-and-independent-goal-evidence.md)은 구조 제안이다. API 경로·envelope을 실제로 열 때는 D-18에 따라 API Reference, 공유 schema, 생산자·소비자 시험을 함께 변경한다.

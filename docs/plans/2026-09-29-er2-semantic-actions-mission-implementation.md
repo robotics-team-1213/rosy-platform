@@ -4,7 +4,7 @@
 
 **Goal:** 모델·운영자가 같은 의미적 조작 후보를 제출하고, Fleet이 작업 순서와 목표를 관리하며, OMX 로컬 미들웨어와 ROS가 검증된 동작을 실행하고 독립 증거로 결과를 판정할 수 있게 한다.
 
-**Architecture:** D-326의 대상 resolve/Device Action을 고정 OMX 작업대에서 모델 없이 먼저 닫는다. D-327의 Fleet Mission/Step 원장과 목표 predicate를 그 위에 연결한 다음 ER 2를 실행권 없는 후보 생산자로 붙인다. 장치 취소·안전 stop·물리 readback은 모델/Fleet 세션과 독립이다.
+**Architecture:** D-327의 대상 resolve/Device Action을 고정 OMX 작업대에서 모델 없이 먼저 닫는다. D-328의 Fleet Mission/Step 원장과 목표 predicate를 그 위에 연결한 다음 ER 2를 실행권 없는 후보 생산자로 붙인다. 장치 취소·안전 stop·물리 readback은 모델/Fleet 세션과 독립이다.
 
 **Tech Stack:** Python 3.12, FastAPI/Pydantic, SQLite WAL, ROS 2 Jazzy `FollowJointTrajectory`/`ros2_control`, OMX adapter, pytest, 선택적 MoveIt 2, 별도 게이트의 Isaac Sim. ER 2 표준/streaming API는 후순위 어댑터다.
 
@@ -12,7 +12,7 @@
 
 ## 기준선·범위·착수 규칙
 
-- 계약: [D-326](../adr/D-326-semantic-manipulation-actions-and-device-adapters.md), [D-327](../adr/D-327-model-proposed-missions-and-independent-goal-evidence.md), [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), [D-307](../adr/D-307-final-action-outcome-and-stop-readback-evidence.md), [D-18](../adr/D-18-rosy-core.md). [사용자 제공 실험 대조](2026-09-29-er2-isaac-sim-architecture-assessment.md)는 사례이며 장치 수용 증거가 아니다.
+- 계약: [D-327](../adr/D-327-semantic-manipulation-actions-and-device-adapters.md), [D-328](../adr/D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), [D-307](../adr/D-307-final-action-outcome-and-stop-readback-evidence.md), [D-18](../adr/D-18-rosy-core.md). [사용자 제공 실험 대조](2026-09-29-er2-isaac-sim-architecture-assessment.md)는 사례이며 장치 수용 증거가 아니다.
 - 현재 `src/products/omx/profile/config/omx.disabled.yaml`은 `enabled: false`다. `omx_adapter`는 카메라 pair와 arm trajectory 단일 submitter 후보를 갖지만 그리퍼/물체 보유·배치 검증 및 원격 Device Action API가 없다. `src/site/fleet/fleet/server/task_service.py`는 Pinky navigation task만 영속화하고 policy dispatch는 닫혀 있다. `/api/fleet/do`의 `steps`는 Mission DAG가 아니다.
 - 이 계획의 첫 실제 작업은 **고정 OMX의 알려진 블록→트레이 `PICK_PLACE`**다. 단독 `PICK`/`PLACE`, Pinky+OMX 운반, 다중 장치, ER 2 자동 dispatch는 아래 출구를 통과하기 전까지 capability로 광고하지 않는다. 현재 Pinky API/`TaskKind`를 OMX용으로 재사용하지 않는다.
 - 각 단계는 새 격리 worktree와 최신 `main`의 HEAD·dirty path 비교 후 시작한다. API 경로·wire enum·envelope이 바뀌는 커밋은 `docs/reference/ROSY API & Protocol Reference.md`, `src/contracts/foundation/core_common/protocol/schemas.py`, 생산자/소비자 시험을 함께 바꾼다. 제안 경로를 이미 존재하는 API로 설명하지 않는다.

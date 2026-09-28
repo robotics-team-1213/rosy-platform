@@ -1,4 +1,4 @@
-## D-326 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다
+## D-327 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다
 
 **Status:** Proposed (2026-09-29). 의미·권한·검증 기준의 제안이다. 새 REST endpoint, ROS action, `TaskKind`, OMX/Franka 운영 capability, 물리 동작이나 정지 성능을 승인하지 않는다.
 

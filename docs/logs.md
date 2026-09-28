@@ -3159,3 +3159,9 @@
 - 변경: D-326/D-327을 모델 없는 관측/OMX 로컬 transaction, Device Action 계약, Fleet 목표 원장·의존 작업, ER 2 후보 adapter, ROS-SIM/장치 출구 순서의 실행 계획으로 전환했다. 경로·시험·중단 조건과 기존 disabled capability를 명시했다.
 - 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, 상대 링크 누락 0건, `git diff --check` 통과(Windows LOCAL). 계획은 구현·시뮬레이션·실물 동작을 수행하지 않는다.
 - gate 변화: 없음. 기존 OMX·정책 자동 dispatch는 disabled/HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): renumber proposed ADRs after D-326 collision
+
+- 변경: 다른 작업이 main에서 D-326을 자율 판단 루프 경계로 배정한 사실을 확인했다. 이 브랜치의 의미적 조작 ADR D-326을 D-327로, 목표 증거 ADR D-327을 D-328로 재번호화하고 후속 계획·상대 링크·ADR 목록을 갱신했다. 위의 과거 로그 항목은 당시 브랜치 번호의 기록으로 보존한다.
+- 검증: 번호·상대 링크·문서 계약을 새 main 기준으로 다시 검증한다.
+- gate 변화: 없음. ADR 상태는 Proposed이고 실제 API·장치 수용은 HOLD다.
