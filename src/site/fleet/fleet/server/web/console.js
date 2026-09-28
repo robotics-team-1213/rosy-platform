@@ -286,7 +286,7 @@ async function refreshAuthorization() {
 // Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
 // 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
 document.addEventListener("keydown", (event) => {
-  if (event.target.closest("input, select, textarea, button, ui-button, a, canvas")) return;
+  if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas")) return;
   const cards = [...document.querySelectorAll("#roster article")];
   if (!cards.length) return;
   const active = document.activeElement;

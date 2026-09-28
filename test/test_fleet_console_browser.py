@@ -1126,9 +1126,11 @@ def test_camera_rectification_direct_manipulation(console_url):
         page.locator("[data-corner-handle='1']").focus()
         page.keyboard.press("ArrowLeft")
         page.keyboard.press("ArrowDown")
-        page.get_by_label("오른쪽 위 X (%)").fill("79.4")
+        assert page.evaluate("document.activeElement.dataset.cornerHandle") == "1"
+        coarse_x = float(page.get_by_label("오른쪽 위 X (%)").input_value())
+        page.keyboard.press("Shift+ArrowRight")
         preserved_x = page.get_by_label("오른쪽 위 X (%)").input_value()
-        assert preserved_x == "79.4"
+        assert float(preserved_x) == pytest.approx(coarse_x + 0.1)
         save_temp_screenshot(page, "fleet_camera_direct_adjustment_desktop.png")
         page.set_viewport_size({"width": 390, "height": 844})
         page.locator("[data-corner-handle='1']").scroll_into_view_if_needed()

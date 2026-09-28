@@ -55,4 +55,4 @@ Stage only the plan, UI, tests, and required generated evidence files. Commit th
 - [x] Raw editing requests an identity profile; adjusted preview requests the source-local profile. Dragging does not issue a lease per movement.
 - [x] Fleet host suite: 545 passed, 5 skipped. Full browser/dialog suite: 31 passed before the final precision-retention assertion; focused direct-manipulation browser test rerun after final edits: 1 passed.
 - [x] Harness generation completed; lint reports 0 errors and 17 freshness warnings. `git diff --check` passed.
-- [ ] Local-main integration is the remaining step. Physical camera, measured calibration, Ubuntu/site, DEVICE, and FIELD gates remain outside this local UI change.
+- [x] Local-main integration completed in `9825da0b` (UI) and `1f4657d2` (evidence/indexes). Physical camera, measured calibration, Ubuntu/site, G3 human evaluation, DEVICE, and FIELD gates remain outside this local UI change.

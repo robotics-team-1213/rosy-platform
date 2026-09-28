@@ -25,7 +25,7 @@ input, select { font: inherit; color: inherit; }
 .vision-frame[data-editing="true"] img { width: 100%; height: auto; object-fit: unset; }
 .vision-corner-overlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .vision-corner-overlay polygon { fill: var(--series-primary); fill-opacity: 0.09; stroke: var(--series-primary); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
-.vision-corner-overlay [data-corner-handle] { fill: var(--ground); stroke: var(--series-primary); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: all; cursor: move; touch-action: none; }
+.vision-corner-overlay [data-corner-handle] { fill: var(--ground); stroke: var(--series-primary); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: all; cursor: move; touch-action: none; user-select: none; }
 .vision-corner-overlay [data-corner-handle]:focus-visible { stroke: var(--focus-ring); stroke-width: 3; outline: none; }
 .vision-corner-modes { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 var(--space-2); }
 .vision-corner-modes ui-button[aria-pressed="true"] { border-color: var(--series-primary); color: var(--paper); }
