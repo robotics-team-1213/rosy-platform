@@ -3284,3 +3284,8 @@
 - 변경: P3 게임 보드 크래프트 회차 — HOLD 경보를 `--lost` 빨간 글자에서 공용 `--status-crit` 채움 칩으로 바꾸고 `.lost[hidden]` 가드를 추가했다. critique는 초기 `—` 점수·지연/stale 마지막 수신 표시·390/600 스택을 준수로 확인했다.
 - 증거: 게임 스위트 117 passed, 7셀 재촬영 넘침 0·페이지 오류 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P3 절.
 - gate 변화: 없음. games SOURCE/LOCAL GO 유지(last_verified 6277a009). 실물 카메라·양측 정지 readback과 사람 G3는 별도다.
+## 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
+
+- 변경: Google 공식 ER 2 표준 Interactions REST에 1회 요청하고 `propose_pick_place` function call을 추적 가능한 후보로 변환하는 Fleet adapter를 추가했다. 응답 tool call을 실행하지 않으며 image point/box는 image 좌표로 유지한다. D-331, 공식 API 조사 보완을 추가했다.
+- 증거: mock transport 계약에서 multimodal request, `store=false`, API key header, allowlist, yx/box 범위, caller idempotency key, HTTP/JSON/function 응답 오류를 시험한다. 실 API credential 또는 로봇은 사용하지 않았다.
+- gate 변화: SOURCE adapter만 구현. Fleet REST/runtime wiring, policy valve, ROS/OMX 제출, 안전 중요 사용, DEVICE/FIELD는 계속 HOLD다.

@@ -95,3 +95,9 @@
 - 문서/계약 단계: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`; `python tools/harness/rosy_harness.py lint`.
 - 구현 단계: 위 작업별 focused test 뒤 `python -m pytest src/runtime/gateway/test/ src/site/fleet/test/ src/products/omx/adapter/test/ test/ -q`를 순차 실행한다. ROS가 필요한 시험은 Jazzy 환경에서 별도 실행한다. 같은 이름의 시험 파일이 충돌하는 패키지 집합은 별도 invocation으로 나눈다.
 - 이 계획을 작성하고 커밋하는 것만으로 API·ROS action·모델 호출이 구현되거나 실물 로봇이 움직이지 않는다. 작업 0의 장치 정보 또는 D-18의 API/schema 동시 계약이 없으면 후속 실행을 진행하지 않는다.
+
+## ER 2 표준 provider 범위 보정 (D-331, 2026-09-29)
+
+작업 6의 초기 계획은 표준과 streaming provider를 함께 구현하도록 적었으나, 공식 endpoint 표를 대조한 결과 두 호출 방식은 모델 ID, 세션 프로토콜, 기능 지원과 이미지 입력 제약이 다르다. 이번 SOURCE 구현은 작업형 제안에 맞는 표준 Interactions API(`gemini-robotics-er-2-preview`) 하나만 다룬다. `er2_streaming.py`는 이번 범위에서 만들지 않는다. Live API session/interrupt/cancel semantics는 별도 ADR과 테스트가 마련된 뒤 다룬다.
+
+표준 provider는 mock HTTP 계약으로만 확인한다. 실 ER 2 key/네트워크 호출, Fleet API 노출, 자동 Mission 등록·admission, policy dispatch 활성화, ROS/OMX 실행은 후속 승격 없이 금지 상태로 남는다. D-331의 허용 경계는 candidate parsing까지다.

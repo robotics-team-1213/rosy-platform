@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · rebuild and smoke the merged site candidate
 - 2026-09-29 · uncommitted · fix Vision site-container shutdown
 - 2026-09-29 · uncommitted · build and locally smoke the site candidate
 - 2026-09-29 · uncommitted · feat(release): select the smallest Pinky artifact
 - 2026-09-29 · uncommitted · fix(sd): prepare offline no-drive card recovery
-- 2026-09-29 · uncommitted · docs(g4): plan an attended calibration and mapping flow

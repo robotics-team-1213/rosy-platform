@@ -30,6 +30,21 @@ Google의 공식 pick-and-place 예시는 `move(x,y,high)`와 `setGripperState(o
 
 위 다섯 항목은 **제안**이다. 공식 문서가 Rosy OS의 API 형식, OMX grasp 품질, Franka와 OMX의 호환성, 하드웨어 안전 성능을 보장하지 않는다. 특히 Google 예제의 mock `move`/`setGripperState`는 물리 장치 제어 계약으로 채택하면 안 된다.
 
+## 2026-09-29 공식 API 재확인 및 구현 경계 보완
+
+이번 구현 전 Google의 현재 ER 2 API 표, Interactions REST, 오케스트레이션/스트리밍 가이드와 ER 2 모델 카드를 다시 대조했다. 기능 이름만 같다고 두 엔드포인트를 같은 전송 어댑터로 다루면 안 된다.
+
+| 공식 자료에서 확인한 항목 | 구현에 반영한 경계 |
+|---|---|
+| 표준 `gemini-robotics-er-2-preview`는 Interactions API이며 function calling과 structured output을 지원하고 Live API는 지원하지 않는다. 공식 REST 공간 추론 예는 `/v1beta/interactions`, `x-goog-api-key`, `input.parts`의 `inlineData`/`text` 형태다. | `httpx`로 표준 Interactions endpoint에 1회 요청하는 provider adapter를 구현한다. 현재 제안은 함수 호출 하나를 파싱하며 structured output 및 provider 세션 재사용은 사용하지 않는다. |
+| Interactions API는 기본적으로 호출을 저장한다. `store=false`는 서버 저장을 끄지만 `previous_interaction_id` 후속 호출과 양립하지 않는다. | 단일 관측·단일 제안 요청마다 `store=false`; provider 대화 세션을 만들지 않는다. 원본 이미지는 adapter 메모리에서 요청을 구성할 때만 읽고 앱 로그에 기록하지 않는다. |
+| 공식 오케스트레이션 가이드의 `move(x,y,high)`/`setGripperState(opened)`는 mock API이고, 응답의 function call을 실제 수행하는 주체는 애플리케이션이다. 같은 Robotics 가이드 예시는 `steps`를, 일반 Interactions SDK는 `outputs`를 노출한다. | `propose_pick_place`만 선언하고 응답을 실행 콜백에 넘기지 않는다. 표준 응답 `outputs`를 우선 파싱하고 문서화된 `steps` 별칭을 허용하되 둘이 충돌하면 거절한다. 함수 결과를 모델에 회신하지 않는다. |
+| Streaming endpoint는 별도의 Live API 모델이며 공식 표상 structured output과 여러 built-in tool을 지원하지 않는다. 로보틱스 스트리밍 가이드는 입력 이미지를 JPEG 최대 1 FPS로 제한한다. | 현재 작업형 후보 제안은 표준 endpoint만 구현한다. Streaming은 session lifecycle, interruption/cancellation, feedback semantics를 별도 검토할 때까지 보류한다. |
+| ER 2 model card는 production/commercial/public 사용 전 판단을 요구하며 safety-critical applications에 사용하지 말라고 명시한다. | 본 adapter는 source-level non-safety-critical candidate path로만 둔다. 키 배포, production enablement, 안전 중요 task, 물리 실행은 이 구현으로 승인되지 않는다. |
+| Google image input guide는 inline image, prompt 등 전체 요청 크기를 20 MB로 제한한다. | base64 확장과 요청 텍스트를 포함해 한도 안에 여유를 두도록 원본 이미지 바이트는 14 MiB에서 제한한다. 큰 이미지에는 이 어댑터를 쓰지 않으며 Files API 도입은 별도 검토한다. |
+
+공식 자료: [ER overview](https://ai.google.dev/gemini-api/docs/robotics-overview), [orchestration](https://ai.google.dev/gemini-api/docs/robotics-orchestration), [Interactions API](https://ai.google.dev/gemini-api/docs/interactions-overview), [image request size](https://ai.google.dev/gemini-api/docs/image-understanding), [streaming](https://ai.google.dev/gemini-api/docs/robotics-streaming), [ER 2 model card](https://deepmind.google/models/model-cards/gemini-robotics-er-2/). 이 수정은 [D-331](../adr/D-331-gemini-er2-proposal-adapter.md)에 구현 결정으로 기록했다.
+
 ## 확인이 더 필요한 점
 
 - 현재 Rosy OS의 OMX에 gripper 명령 소유자, calibrated 3D pose, planning scene/충돌 모델, 물체 보유 상태와 place 검증 경로가 각각 존재하는지 코드와 실기기 증거로 확인한다.
