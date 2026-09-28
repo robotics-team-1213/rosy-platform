@@ -20,7 +20,11 @@ The existing direct-manipulation browser test proved ordinary arrow movement but
 - The new 0.1% Shift+arrow assertion failed before the event-propagation fix and passed after it.
 - Fleet direct camera, roster-arrow navigation, and map keyboard-goal browser regressions: 3 passed.
 - Full Fleet host suite: 545 passed, 5 skipped. Palette contract: 9 passed. `git diff --check`: passed.
-- Integration and append-only log entries are recorded after the implementation commit is cherry-picked into `main`.
+- Integrated into local `main` as `2ec41b9a`; append-only logs and generated indexes follow in the documentation closeout.
+
+## Completion boundary
+
+The local camera-editor focus and precision defect is closed. Full product G2/G3 acceptance is not closed: current documents still require operator G3 evaluation, deployed site/TLS and real camera readback, robot/physical E-stop evidence, and DEVICE/FIELD acceptance. Those require a reachable site and physical participants; browser fixtures and Docker demos do not substitute for them.
 
 ## Evidence boundary
 

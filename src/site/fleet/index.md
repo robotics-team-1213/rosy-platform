@@ -60,8 +60,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
 - 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
 - 2026-09-28 · uncommitted · add per-camera preview rectification controls
 - 2026-09-28 · 016df3ab · fix(fleet-ui): fit camera preview and clarify sections
 - 2026-09-28 · uncommitted · verify final canceled-attempt projection
-- 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
