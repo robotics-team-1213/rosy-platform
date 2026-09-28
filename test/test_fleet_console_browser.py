@@ -541,7 +541,9 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         card = page.locator("#roster article").filter(has_text="rosy_01")
         card.wait_for()
         safety_row = card.locator(".facts div").filter(has_text="SAFETY")
-        assert safety_row.locator("strong").inner_text() == expected
+        # E-STOP은 값이 아니라 crit 태그로 렌더된다(D-202) — 요소 타입이 아니라
+        # 행의 값으로 단정한다.
+        assert expected in safety_row.inner_text()
         assert reason in card.inner_text()
         assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")
         assert not card.locator("ui-button").nth(1).evaluate("node => node.disabled")

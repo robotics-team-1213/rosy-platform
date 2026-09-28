@@ -101,8 +101,17 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       const cellEl = document.createElement("div");
       const labelEl = document.createElement("span");
       labelEl.textContent = label;
-      const valueEl = document.createElement("strong");
-      valueEl.textContent = value;
+      let valueEl;
+      if (label === "SAFETY" && value === "E-STOP") {
+        // D-202 — 위험은 채움이다. 정지 사실은 카드의 다른 측정값과 같은
+        // 무게로 읽히면 안 된다. 공용 어휘인 crit 태그를 재사용한다.
+        valueEl = document.createElement("span");
+        valueEl.className = "tag crit";
+        valueEl.textContent = value;
+      } else {
+        valueEl = document.createElement("strong");
+        valueEl.textContent = value;
+      }
       cellEl.append(labelEl, valueEl);
       facts.appendChild(cellEl);
     });
