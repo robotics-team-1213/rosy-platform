@@ -6,12 +6,12 @@ last_verified: { commit: "uncommitted", date: "2026-09-28" }
 gates:
   SOURCE:
     state: HOLD
-    evidence: "관리자 /device readback 및 /console 모드 요청 피드백 경로 수정 후 회귀를 다시 실행하지 않음"
-    blocker: "2026-09-28 /device host-system and /console mode-feedback updates need dashboard browser regression before SOURCE can return to GO"
+    evidence: "관리자 /device readback 및 /console 모드·수동 운전 상태 피드백 경로 수정 후 회귀를 다시 실행하지 않음"
+    blocker: "2026-09-28 /device host-system and /console mode/teleop feedback updates need dashboard browser regression before SOURCE can return to GO"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
     state: HOLD
-    blocker: "2026-09-28 host-system and /console mode-feedback updates need fresh administrator /device and operator /console captures at 1366×768 and 390×844; current screenshots predate these changes"
+    blocker: "2026-09-28 host-system and /console mode/teleop updates need fresh administrator /device and operator /console captures at 1366×768 and 390×844; current screenshots predate these changes"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q -p no:cacheprovider"
   ROS-SIM:
     state: N/A

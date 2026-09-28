@@ -14,18 +14,22 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "수동 운전");
-  const status = el("ui-status", "", "운전 자격을 확인하는 중입니다.");
+  const readinessStatus = el("ui-status", "", "운전 자격을 확인하는 중입니다.");
+  const actionStatus = el("ui-status");
+  actionStatus.setAttribute("role", "status");
+  actionStatus.setAttribute("aria-live", "polite");
   const controls = el("div", "surface-teleop-controls"); controls.setAttribute("aria-label", "누르는 동안만 움직이는 저속 운전");
   const buttons = COMMANDS.map((command) => {
     const button = el("ui-button", "", command.label); button.setAttribute("kind", "toggle"); button.setAttribute("size", "primary"); button.type = "button"; button.dataset.linear = String(command.linear); button.dataset.angular = String(command.angular); button.disabled = true;
     button.setAttribute("aria-label", `${command.label}. 누르는 동안에만 저속으로 움직입니다.`); controls.append(button); return button;
   });
-  root.append(head, status, controls);
+  root.append(head, readinessStatus, actionStatus, controls);
 
   let state = null;
   let capabilities = null;
   let safety = null;
   let commissioning = null;
+  const readErrors = {state: null, capabilities: null, safety: null, commissioning: null};
   let pending = null;
   let activeButton = null;
   let holdTimeout = null;
@@ -37,6 +41,10 @@ export function mount(root, ctx) {
   }
   function describeHold() {
     if (ctx.role === "viewer") return "Operator 권한이 필요합니다.";
+    if (readErrors.state) return `로봇 상태를 읽지 못했습니다: ${readErrors.state}`;
+    if (readErrors.capabilities) return `운전 capability를 확인할 수 없습니다: ${readErrors.capabilities}`;
+    if (readErrors.safety) return `안전 상태를 확인할 수 없습니다: ${readErrors.safety}`;
+    if (readErrors.commissioning) return `장치 실행 모드를 확인할 수 없습니다: ${readErrors.commissioning}`;
     if (capabilities && capabilities.teleop !== true) return `현재 runtime/profile에서 teleop을 사용할 수 없습니다${capabilities.withheld?.reason ? ` · ${capabilities.withheld.reason}` : ""}.`;
     if (!commissioning) return "장치 실행 모드를 확인할 수 없어 운전을 막았습니다.";
     if (!["motor", "hardware"].includes(commissioning.runtime_mode)) return commissioning.motion_reason || "현재 실행 모드에서 운전할 수 없습니다.";
@@ -50,7 +58,7 @@ export function mount(root, ctx) {
     const can = eligible();
     buttons.forEach((button) => { button.disabled = !can && button !== activeButton; });
     if (!can && ticker.active) stop("운전 조건이 바뀌어 정지했습니다.");
-    if (!ticker.active) status.textContent = describeHold();
+    readinessStatus.textContent = describeHold();
   }
   function send(linear, angular, keepalive = false) {
     return ctx.api("/api/v1/teleop", {method: "POST", body: JSON.stringify({linear, angular}), keepalive});
@@ -60,7 +68,7 @@ export function mount(root, ctx) {
     if (immediate) send(0, 0, true).catch(() => null);
     const terminal = prior.catch(() => null).then(() => send(0, 0, true));
     pending = terminal;
-    terminal.catch((error) => { status.textContent = `정지 명령 전달 실패 · 서버 watchdog 대기: ${error.message}`; })
+    terminal.catch((error) => { actionStatus.textContent = `정지 명령 전달 실패 · 서버 watchdog 대기: ${error.message}`; })
       .finally(() => { if (pending === terminal) pending = null; });
     return terminal;
   }
@@ -80,7 +88,7 @@ export function mount(root, ctx) {
     ticker.stop(immediate);
     activeButton?.classList.remove("active"); activeButton = null;
     buttons.forEach((button) => { button.disabled = !eligible(); });
-    status.textContent = message;
+    actionStatus.textContent = message;
     return pending || Promise.resolve();
   }
   function start(button, event) {
@@ -90,7 +98,7 @@ export function mount(root, ctx) {
       try { button.setPointerCapture(event.pointerId); } catch (_error) { /* Browser may not expose capture on a custom element. */ }
     }
     activeButton = button; button.classList.add("active");
-    status.textContent = `${button.getAttribute("aria-label").split(".")[0]} 명령 전송 중 · 놓으면 정지합니다.`;
+    actionStatus.textContent = `${button.getAttribute("aria-label").split(".")[0]} 명령 전송 중 · 놓으면 정지합니다.`;
     ticker.start();
     holdTimeout = setTimeout(() => stop("2초 한도에 도달해 정지했습니다.", true), MAX_HOLD_MS);
   }
@@ -115,13 +123,30 @@ export function mount(root, ctx) {
     }
   }, {signal: listeners.signal});
 
-  const stopState = ctx.store.poll("/api/v1/robot/state", 500, (data) => { state = data; update(); }, (error) => { state = null; status.textContent = `로봇 상태를 읽지 못해 운전을 막았습니다: ${error.message}`; stop("상태 연결이 끊겨 정지했습니다.", true); });
-  const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; update(); }, (error) => { capabilities = null; status.textContent = `운전 capability 확인 실패: ${error.message}`; update(); });
-  const stopSafety = ctx.store.poll("/api/v1/safety/state", 500, (data) => { safety = data; update(); }, (error) => { safety = null; status.textContent = `안전 상태 연결 실패: ${error.message}`; stop("안전 상태를 확인할 수 없어 정지했습니다.", true); });
+  const stopState = ctx.store.poll("/api/v1/robot/state", 500, (data) => { state = data; readErrors.state = null; update(); }, (error) => {
+    state = null; readErrors.state = error.message;
+    if (ticker.active) stop("로봇 상태 연결이 끊겨 정지했습니다.", true);
+    update();
+  });
+  const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; readErrors.capabilities = null; update(); }, (error) => {
+    capabilities = null; readErrors.capabilities = error.message;
+    if (ticker.active) stop("운전 capability를 확인할 수 없어 정지했습니다.", true);
+    update();
+  });
+  const stopSafety = ctx.store.poll("/api/v1/safety/state", 500, (data) => { safety = data; readErrors.safety = null; update(); }, (error) => {
+    safety = null; readErrors.safety = error.message;
+    if (ticker.active) stop("안전 상태 연결이 끊겨 정지했습니다.", true);
+    update();
+  });
   const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (data) => {
     commissioning = data;
+    readErrors.commissioning = null;
     update();
-  }, () => { commissioning = null; stop("장치 실행 모드를 확인할 수 없어 정지했습니다.", true); });
+  }, (error) => {
+    commissioning = null; readErrors.commissioning = error.message;
+    if (ticker.active) stop("장치 실행 모드를 확인할 수 없어 정지했습니다.", true);
+    update();
+  });
   update();
 
   return {
