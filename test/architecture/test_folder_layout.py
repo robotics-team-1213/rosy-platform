@@ -51,10 +51,21 @@ def test_deployment_sources_group_by_robot_product():
     assert (pinky / "native" / "rosy-runtime.target").is_file()
     assert (omx / "README.md").is_file()
     assert (ROOT / "deploy" / "site" / "compose.yaml").is_file()
-    assert not (ROOT / "deploy" / "image").exists()
-    assert not (ROOT / "deploy" / "release").exists()
-    assert not (ROOT / "deploy" / "sd").exists()
-    assert not (ROOT / "deploy" / "omx").exists()
+    def contains_source(path: Path) -> bool:
+        if not path.exists():
+            return False
+        return any(
+            item.is_file()
+            and item.suffix != ".pyc"
+            and "__pycache__" not in item.parts
+            and ".pytest_cache" not in item.parts
+            for item in path.rglob("*")
+        )
+
+    assert not contains_source(ROOT / "deploy" / "image")
+    assert not contains_source(ROOT / "deploy" / "release")
+    assert not contains_source(ROOT / "deploy" / "sd")
+    assert not contains_source(ROOT / "deploy" / "omx")
 
 
 @pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None,
