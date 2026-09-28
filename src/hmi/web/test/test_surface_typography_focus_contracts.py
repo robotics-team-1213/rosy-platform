@@ -3,18 +3,19 @@
 import re
 from pathlib import Path
 
+import surface_registry as registry
 
 ROOT = Path(__file__).resolve().parents[4]
-SURFACES = (
-    ROOT / "src/hmi/web",
-    ROOT / "src/hmi/dashboard",
-    ROOT / "src/site/fleet/fleet/server/web",
-    ROOT / "src/site/games/games/web",
-)
+
+# 표면 목록은 src/hmi/web/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
 
 
 def surface_styles():
-    return [path for surface in SURFACES for path in surface.rglob("*.css")]
+    return [
+        style
+        for surface in registry.for_contract(ROOT, "typography_focus")
+        for style in ((surface,) if surface.is_file() else surface.rglob("*.css"))
+    ]
 
 
 def test_surface_repeated_weights_leading_and_tracking_use_shared_tokens():
