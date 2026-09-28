@@ -1460,3 +1460,9 @@
 - 변경: 로컬 compose 종료 중 Vision이 Docker 기본 SIGTERM에서 exit 137로 종료되는 것을 확인했다. Python PID 1이 처리하는 `SIGINT`를 compose `stop_signal`로 지정하고 회귀 계약을 추가했다.
 - 증거: `python -m pytest test/test_site_task_queue_deploy.py -q` 4 passed; compose JSON에서 SIGINT 확인; Vision 컨테이너가 healthy 상태에서 10초 timeout 정지 후 exit 0, `OOMKilled=false`, runtime error 없음. 전체 site candidate는 커밋 및 로컬 병합 후 다시 빌드/검증해야 한다.
 - gate 변화: LOCAL shutdown 증거만 보강. 서명되지 않은 최종 후보의 production 전달/활성화, Isaac ROS-SIM, physical stop/readback, DEVICE/FIELD는 HOLD다.
+
+## 2026-09-29 · uncommitted · rebuild and smoke the merged site candidate
+
+- 변경: 현재 local main을 통합한 source `a86dd19ca48e13c4512a1cf815f169c78f827e7d`에서 Fleet/Vision/proxy linux/amd64 후보와 SPDX SBOM을 다시 빌드했다.
+- 증거: `X:\DevTemp\rosy-site-candidate-a86dd19\images.tar` SHA-256 `e9c9e4968e156a2ea9292a17218827af7b29a0e0890f5afa539a94afc822c3c6`; 세 image ID/platform, archive 및 SBOM hash가 manifest와 일치. 격리 Compose에서 세 서비스 healthy, HTTPS `/healthz` HTTP 200, SIGINT를 쓰는 Vision 포함 전 서비스 정지 exit 0 확인.
+- gate 변화: unsigned local candidate와 LOCAL smoke까지만. 승인 signing trust/host가 없어 production 전달 및 활성화, Isaac ROS-SIM, physical stop/readback, DEVICE/FIELD는 HOLD다.
