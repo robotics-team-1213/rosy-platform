@@ -279,7 +279,11 @@ class FleetConsole:
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": yielding["for"],
                     "waiting_on": [yielding["for"]], "reason": "YIELDED"}
-        result = await self._client(robot_id).navigation_goal(x, y, yaw)
+        client = self._client(robot_id)
+        if attempt_id is None:
+            result = await client.navigation_goal(x, y, yaw)
+        else:
+            result = await client.navigation_goal(x, y, yaw, correlation_id=attempt_id)
         # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
         # 않을 곳으로 로봇이 간다고 읽는다.
         self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}

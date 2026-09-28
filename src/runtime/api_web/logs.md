@@ -143,3 +143,9 @@
 - 변경: CORE가 Host Agent `network.status`·`release.status`의 원본 조회 완료 UTC를 검증하고 `evidence`·`age_s`를 추가한다. 누락·잘못된·미래 시각과 거부는 unavailable, 미연결·타임아웃은 disconnected, 15초 초과는 delayed다.
 - 근거: Host Agent/CORE 계약과 브라우저 회귀. 정상 원본 시각 없는 오래된 Agent의 데이터는 표시하지 않는다.
 - gate 변화: SOURCE/LOCAL 계약 근거 추가. 실제 Host Agent 서비스와 장치 적용은 별도 HOLD다.
+
+## 2026-09-28 · uncommitted · add optional navigation attempt correlation
+
+- 변경: CORE `/api/v1/navigation/goal`이 선택적 `correlation_id` metadata를 받으며 기존 x/y/yaw/waypoint 요청은 유지한다. NavigationManager는 같은 attempt ID를 started/canceled/final result event data에 싣는다.
+- 증거: api_web 70 passed, 13 skipped; gateway navigation/API/event focused coverage 통과. Fleet task API 자체의 공개 intent 필드는 바뀌지 않는다.
+- Gate: SOURCE/LOCAL only; ROS-SIM, artifact, device, field acceptance 없음.

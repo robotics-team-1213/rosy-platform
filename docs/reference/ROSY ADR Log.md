@@ -318,3 +318,4 @@
 | D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 | Accepted (소스 결정; 장치·현장 수용 HOLD) |
 
 | D-315 | 소스 폴더 책임은 소스 분류이며 실행 권한·배포 단위를 대신하지 않는다 | Accepted (분류·문서 기준만; 패키지명/경로·writer·설치·장치 수용 변경 없음) |
+| D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 | Accepted (Site Fleet SOURCE/LOCAL; PRT-004·물리 정지 readback 별도) |

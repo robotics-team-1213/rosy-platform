@@ -493,3 +493,9 @@
 - Change: selected CAMERA_LINE missing/stale/invalid evidence keeps the existing fail-closed zero command candidate and adds a camera-specific reason. Source changes still discard old evidence; no IR auto-switch was added.
 - Evidence: line-follow and simulation-clock regression suites 27 passed. Full gateway suite: 1,384 passed, 16 skipped, 5 failures; failures include unrelated event catalogue/API-reference alignment and two outdated camera-state expectations, which were corrected and rechecked in the focused suites.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, device, or field acceptance.
+
+## 2026-09-28 · uncommitted · test correlated navigation event lifecycle
+
+- Change: cover CORE REST goal metadata and verify `nav.started`, cancel-request, and final result events retain the same navigation attempt ID.
+- Evidence: focused gateway API/core-logic/event-catalogue tests pass. One full event-catalogue literal-classification test still fails on pre-existing `network.status` and `release.status` literals in Host Agent status decoding.
+- Gate: SOURCE/LOCAL test evidence only; live Nav2, artifact and device acceptance unchanged.

@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "526 passed, 5 skipped (Windows, 2026-09-27). Revision 778bbd31 linux/amd64 packaged Compose smoke: 3 services healthy; TLS-authenticated browser/API; 13 intent verbs and 8-step limit; invalid inputs rejected; operator task and synthetic CORE HELLO/heartbeat/event persisted in SQLite; synthetic phone sighting persisted after Fleet restart. Local Windows/CPU/synthetic fixtures only; Ubuntu, GPU, physical devices, dispatch and field acceptance remain unverified (docs/validation/2026-09-26-site-stack-container-smoke.md)"
+    evidence: "542 passed, 5 skipped (Windows, 2026-09-28); includes D-316 exact attempt event projection and cancel UNKNOWN regression. Revision 778bbd31 linux/amd64 packaged Compose smoke: 3 services healthy; TLS-authenticated browser/API; operator task and synthetic CORE events persisted. Local Windows/CPU/synthetic fixtures only; Ubuntu, GPU, physical devices, dispatch and field acceptance remain unverified (docs/validation/2026-09-26-site-stack-container-smoke.md)"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316]
 plans:
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md

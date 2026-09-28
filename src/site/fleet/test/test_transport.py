@@ -115,6 +115,21 @@ def test_navigation_goal_posts_x_y_yaw():
     assert seen["body"] == {"x": 1.0, "y": 2.0, "yaw": 0.5}
 
 
+def test_navigation_goal_forwards_attempt_as_correlation_id():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"accepted": True})
+
+    run(_client(handler).navigation_goal(
+        1.0, 2.0, 0.5, correlation_id="attempt-123",
+    ))
+    assert seen["body"] == {
+        "x": 1.0, "y": 2.0, "yaw": 0.5, "correlation_id": "attempt-123",
+    }
+
+
 def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
     seen = {}
 

@@ -5,11 +5,11 @@ last_verified: { commit: "uncommitted", date: 2026-09-25 }
 gates:
   SOURCE:
     state: GO
-    evidence: "docking·swarm·decision — test_decision.py 포함 (2026-09-25 Windows)"
+    evidence: "227 passed (2026-09-28 Windows); D-316 navigation result correlation regression included."
     cmd: "python -m pytest src/runtime/services/test -q"
   LOCAL:
     state: GO
-    evidence: "218 passed (2026-09-25 Windows), test_decision.py 포함"
+    evidence: "227 passed (2026-09-28 Windows); host-only test suite."
     cmd: "python -m pytest src/runtime/services/test -q"
   ROS-SIM:
     state: N/A

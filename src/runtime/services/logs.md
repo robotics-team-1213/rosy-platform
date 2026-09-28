@@ -123,3 +123,9 @@
 - Change: add a ROS-free, fail-closed evaluator for explicitly selected IR_LINE, NAV_GOAL, and TELEOP alternatives; it reports reasons, evidence ages, and a short expiry but issues no motion command.
 - Evidence: new policy suite 5 passed. Full services suite was not run in this change.
 - Gate: SOURCE/LOCAL baseline unchanged; no runtime or device acceptance claimed.
+
+## 2026-09-28 · uncommitted · echo navigation correlation on CORE result events
+
+- Change: `NavigationManager` carries the optional attempt correlation through `nav.started`, cancel request, and the final Nav2 result event. A canceled request does not clear it before a possible final result callback.
+- Evidence: core services 227 passed; focused gateway API/core-logic/event-catalogue tests passed except one known baseline event-literal classification failure outside this change.
+- Gate: host SOURCE/LOCAL only. No live Nav2, artifact, device, or field evidence.

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.43
+**Version:** v1.44
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -215,7 +215,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
-| POST | `/api/v1/navigation/goal` | Operator | NAV-001 (payload: `{x,y,yaw}` 또는 `{waypoint}`). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD` |
+| POST | `/api/v1/navigation/goal` | Operator | NAV-001 (`{x,y,yaw}` 또는 `{waypoint}`; 선택적 `correlation_id`는 Fleet dispatch 시도 ID와 실행 이벤트를 잇는 추적 메타데이터). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD` |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD` |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004 |
@@ -543,8 +543,10 @@ Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMA
 > `correlation_id` 설정·소비, 로봇 ACK의 실행 상태와 Fleet 추적 레코드)는
 > 중앙 Fleet 서버 착수와 함께 제공된다(D-297). `TIMEOUT`은 Fleet 기록
 > 전용이며 로봇 `AckPayload`에 추가하지 않는다(D-215).
-> 그 전까지 `correlation_id`는 계약 전용 필드이며, 명령 추적은 REST
-> 요청/응답과 이벤트 `seq`로 대체된다. 로봇 스키마 변경은 없다.
+> 이 보류는 PRT `Envelope.correlation_id`와 `AckPayload`의 설정·소비에
+> 적용된다. D-316의 Site Fleet Pinky navigation 경로는 별도 REST
+> `GoalRequest.correlation_id`와 CORE navigation event data를 사용하며,
+> PRT envelope/schema/version은 바꾸지 않는다.
 
 ## 7.6 재접속 (로봇 측 의무)
 
@@ -603,10 +605,10 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `auth.enrollment_code_issued` | warning | 로봇 | `{code_id, role, by}` — 관리자(`by` = 토큰 id)가 등록 코드를 받았다. 코드는 싣지 않는다 |
 | `auth.credentials_refused` | warning | 로봇 | `{count}` — 장치 모드가 기동 때 개발 토큰·평문 항목을 거부했다 |
 | `mode.changed` | info | 로봇 | `{from, to, by}` |
-| `nav.started` | info | 로봇 | `{goal, by}` — `goal` 은 `{x, y, yaw}` |
-| `nav.completed` | info | 로봇 | `{}` — 어떤 목표였는지는 싣지 않는다. `nav.started` 와 짝지으려면 소비자가 순서로 이어야 한다 |
-| `nav.failed` | error | 로봇 | `{error_code}` |
-| `nav.canceled` | info | 로봇 | `{source}` |
+| `nav.started` | info | 로봇 | `{goal, by, correlation_id}` — `goal` 은 `{x, y, yaw}`; Fleet가 dispatch 시도 ID를 보낸 경우 그 값, 아니면 `null` |
+| `nav.completed` | info | 로봇 | `{correlation_id}` — 동일 dispatch 시도 ID 또는 `null` |
+| `nav.failed` | error | 로봇 | `{error_code, correlation_id}` — 동일 dispatch 시도 ID 또는 `null` |
+| `nav.canceled` | info | 로봇 | `{source, correlation_id}` — 로컬 취소 요청을 냈다는 뜻이며 액션 완료나 물리 정지를 증명하지 않는다 |
 | `nav.stuck` | error | 로봇 | `{timeout_s}` — NAV-006 무진척 판정 시간(초) |
 | `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음) |
 | `nav.line_mode_changed` | info | 로봇 | `{from, to}` — D-143 line-follow 모드 선택 |
@@ -976,18 +978,19 @@ The legacy shared `--token` mode is not per-user authorization and does not
 satisfy D-276. Site Compose requires `--users-file`; replacing or removing a
 digest and restarting Fleet rotates or revokes that user. Policy submissions
 remain `HOLD` with `POLICY_NOT_ACCEPTED` while D-268 is Proposed. A command timeout or unclassified post-dispatch error becomes
-`UNKNOWN`; the server does not retry it. D-297 command correlation and CORE
-ACK/final-result reconciliation remain separate required work.
-For the current navigation path, `task_id` remains in the Fleet SQLite task and
-dispatch attempt. `HttpRobotClient` sends only `{x, y, yaw}` to CORE
-`POST /api/v1/navigation/goal`; the positive response has `accepted`, `mode`,
-and `goal`, but no task or command ID. CORE emits `nav.started` with goal/by and
-`nav.completed` with no goal or task ID. Fleet can audit those events by robot
-and event ID, but their order or matching coordinates do not prove which task
-finished. `GET /api/fleet/tasks/{task_id}` therefore reports the Fleet receipt
-and history, not a correlated CORE execution result. This observed gap and the
-required negative cases are recorded in the P0
-[boundary trace](../validation/2026-09-27-platform-p0-task-result-trace.md).
+`UNKNOWN`; the server does not retry it. For a dispatched Pinky navigation task,
+Fleet keeps `task_id` as its ledger identity and sends the current `attempt_id`
+as CORE `correlation_id`. CORE echoes that value in correlated `nav.started`,
+`nav.completed`, and `nav.failed` event data. Paired CORE events update the
+matching robot and current attempt in Fleet's durable task projection; duplicate
+event IDs and out-of-order sequences do not regress the projection. Events with
+unknown, stale, or mismatched attempt IDs do not change a task. A cancel request
+event leaves the task `UNKNOWN` while a correlated final result is pending; if
+none is delivered, it remains `UNKNOWN` for reconciliation. None of these task
+states is a physical stop readback. HTTP ambiguity remains
+`UNKNOWN` and is not automatically retried. The dated P0
+[boundary trace](../validation/2026-09-27-platform-p0-task-result-trace.md)
+records the pre-change gap and counterexamples.
 
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
@@ -1017,15 +1020,20 @@ or command CORE. Cross-VLAN, blocked multicast, and AP mode use manual endpoint
 configuration and the existing outbound FleetAgent path.
 
 
-## 10.10 Site Fleet intent interpretation and message boundaries (D-293 Accepted)
+## 10.10 Site Fleet intent interpretation and message boundaries (D-293 Accepted, D-316 Accepted)
 
 The site API accepts a domain intent and lets Fleet interpret it. For the current
-navigation request, `GoalRequest` contains only `x`, `y`, and `yaw`; the
-authenticated principal supplies the actor identity. Fleet derives source,
-priority, task ID, eligibility, and dispatch state from server configuration
-and policy. Clients cannot submit `priority_class`, worker identity, arbitrary
-source identity, ROS/DDS topics, `cmd_vel`, raw camera frames, or a claimed
-execution result. `GoalRequest` is not a general command envelope.
+navigation request, CORE's typed `GoalRequest` contains goal intent and may
+carry an optional `correlation_id` supplied internally by Site Fleet for the
+current dispatch attempt. The public `/api/fleet/*` intent schema remains
+limited to goal intent. The correlation value is
+tracing metadata: it does not choose the goal, authorize motion, or claim an
+execution result. The authenticated principal supplies the actor identity.
+Fleet derives source, priority, task ID, eligibility, and dispatch state from
+server configuration and policy. Clients cannot submit `priority_class`, worker
+identity, arbitrary source identity, ROS/DDS topics, `cmd_vel`, raw camera
+frames, or a claimed execution result. `GoalRequest` is not a general command
+envelope.
 
 Goal coordinates must be finite JSON numbers; booleans and non-finite values
 are invalid. The direct `/api/fleet/robots/{robot_id}/goal` route rejects
@@ -1061,11 +1069,15 @@ authenticated intent
 
 `QUEUED` means Fleet durably recorded the request and has not dispatched it.
 `ACCEPTED` means CORE explicitly acknowledged receipt, not that execution began
-or finished. `RUNNING` and `COMPLETED` require CORE execution/final-result
-evidence correlated to the same task; D-297 correlation is not yet active for
-this site workflow. Any ambiguous result after dispatch stays `UNKNOWN` and is
-not automatically retried. Fleet SQLite and append-only history remain the
-source of truth. Priority is server-derived and never a public request field.
+or finished. `RUNNING`, `COMPLETED`, and `FAILED` require CORE navigation
+events correlated to the current dispatch `attempt_id`; Fleet applies them to
+the matching durable task history. A `nav.canceled` request event alone yields
+`UNKNOWN` while the action result is pending. D-316 covers this Site Fleet
+REST/event path; it does not activate D-297's PRT-004 envelope correlation or
+ACK protocol. Any ambiguous result after dispatch stays `UNKNOWN` and is not
+automatically retried. Fleet SQLite and append-only history remain the source
+of truth. Priority is server-derived and never a public request field. Physical
+stop evidence remains a separate readback.
 
 Transport and payload ownership remain separate:
 
@@ -1101,6 +1113,7 @@ authorizes navigation or picking.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.44 | 2026-09-28 | Additive (D-316): correlate Pinky Site Fleet navigation attempts through optional CORE REST metadata and CORE navigation events; project matching results into durable task status. PRT-004/Envelope ACK and physical stop readback remain separate. |
 | v1.43 | 2026-09-28 | Additive (D-313): CORE binds IR fallback to fresh IR-line evidence and its configured calibration digest; Fleet operator selection forwards through CORE. Refuse Nav2 goal/home while line-follow owns motion. Robot DDS/WSS envelope remains 1.0. |
 | v1.41 | 2026-09-27 | Corrective(P0, D-297): document the observed navigation task/CORE event correlation gap and replace stale D-177 activation references. No path, schema, runtime, or robot PRT envelope change. |
 | v1.40 | 2026-09-26 | Additive (D-293): typed Site Fleet intent/OpenAPI grammar, server-derived priority and identity, durable task/audit semantics, and purpose-specific message boundaries. No robot PRT envelope change. |

@@ -120,6 +120,23 @@
 | SITE | 실제 Ubuntu PC의 복구/로그/백업/TLS/지연 | 미검증 |
 | DEVICE/FIELD | 실제 CORE·폰 및 작업별 안전/신선도 | 미검증; 자동 실행 HOLD |
 
+## D-316 execution addendum (2026-09-28)
+
+D-316 completes a narrow follow-up for the existing Pinky Site Fleet navigation
+path: Fleet's durable `attempt_id` is sent as CORE REST `correlation_id`, CORE
+navigation events echo it, and Fleet projects only matching robot/attempt
+events into task history. Duplicate IDs and older sequences are ignored;
+cancel-request events remain `UNKNOWN` while a correlated final action result
+is pending. If no result event is delivered, the task remains `UNKNOWN` for
+reconciliation.
+This supersedes Task 8 item 1 only for the current Site Fleet Pinky navigation
+path. It does not activate central Fleet PRT-004 `Envelope.correlation_id` or
+`AckPayload`, and it does not establish physical stop evidence.
+
+The SOURCE/LOCAL host suites pass on Windows. ROS-SIM, ARTIFACT, DEVICE, SITE,
+and FIELD gates remain open; the dated 2026-09-27 trace remains historical
+pre-change evidence.
+
 이 계획의 파일 경로는 D-271 전용 worktree의 현재 코드 기준이다. 실행 직전에 최신 `main`과 병합 상태를 확인하고 파일 이동·다른 작업의 변경을 반영한다.
 # Implementation checkpoint (2026-09-26)
 

@@ -631,6 +631,20 @@ class TestNavigation:
         types = [ev.type for ev in bus.history()]
         assert "nav.started" in types and "nav.completed" in types
 
+    def test_navigation_correlation_survives_cancel_until_action_result(self, bus, safety, tmp_path):
+        nav, _, _ = self._make(bus, safety, tmp_path)
+        nav.goal(nav.resolve_goal(x=1.0, y=1.0), correlation_id="attempt-42")
+
+        nav.cancel()
+        canceled = next(event for event in reversed(bus.history())
+                        if event.type == "nav.canceled")
+        assert canceled.data["correlation_id"] == "attempt-42"
+
+        nav.on_result(False, "CANCELED")
+        failed = next(event for event in reversed(bus.history())
+                      if event.type == "nav.failed")
+        assert failed.data["correlation_id"] == "attempt-42"
+
     def test_stuck_detection(self, bus, safety, tmp_path):
         nav, _, _ = self._make(bus, safety, tmp_path)
         nav._stuck_timeout = 0.05

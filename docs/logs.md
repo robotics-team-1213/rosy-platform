@@ -3037,3 +3037,9 @@
 - 변경: progress의 last_verified 날짜를 YAML 날짜형으로 기록하고 dashboard SOURCE HOLD에 원인을 넣었다. Append-only dashboard 로그는 수정하지 않고, 기존 정적 확인 항목을 evidence 별칭으로 검증하도록 harness와 회귀 시험을 보완했다.
 - 증거: 새 별칭 시험을 수정 전 실패, 수정 후 통과로 확인했다. network/harness 계약 시험 77 passed; harness lint 0 errors, 기존 메타데이터 warning 19건. 변경된 setup 브라우저 회귀는 실행하지 않았다.
 - gate 변화: dashboard SOURCE는 검사 자료가 최신이 되도록 정리했지만 지정된 브라우저 시험과 화면 readback 전까지 HOLD다. 장치·현장 gate 변화는 없다.
+
+## 2026-09-28 · uncommitted · feat(fleet): correlate Pinky navigation attempt results
+
+- 변경: D-316과 API Ref v1.44를 추가했다. Site Fleet `attempt_id`는 Pinky CORE goal의 REST `correlation_id`가 되고, CORE navigation events를 같은 robot/attempt에만 투영한다. 중복·오래된 이벤트를 거르고 cancel-request는 결과 확정 전 `UNKNOWN`으로 둔다. PRT-004 envelope/ACK와 물리 정지 readback은 별도다.
+- 검증: Fleet 542 passed/5 skipped, CORE API+services 297 passed/13 skipped, changed implementation lint 통과. docs/harness 계약은 75 passed/2 failed; 실패는 기존 dashboard/logs.md의 형식 오류 2건이다. 전체 Fleet flake8도 기존 hub/console/test 파일 경고가 남아 있다.
+- gate 변화: SOURCE/LOCAL 증거만 갱신한다. ROS-SIM, artifact, Pinky 실물, 정지 readback, SITE/FIELD 수용은 변하지 않는다.

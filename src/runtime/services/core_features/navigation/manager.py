@@ -56,6 +56,7 @@ class NavigationManager:
         self._map_id_provider = map_id_provider or (lambda: self._state.map_id)
         self.executor: Optional[NavExecutor] = None
         self._nav_state = NavigationState.IDLE
+        self._active_correlation_id: str | None = None
         self.mapping_active = False
         self._stuck_timeout = stuck_timeout_s
         self._stuck_min_progress = stuck_min_progress
@@ -121,7 +122,8 @@ class NavigationManager:
             raise NavigationError("VALIDATION_ERROR", "x,y or waypoint required")
         return NavGoalSpec(x=float(x), y=float(y), yaw=float(yaw or 0.0))
 
-    def goal(self, spec: NavGoalSpec, source: str = "api") -> None:
+    def goal(self, spec: NavGoalSpec, source: str = "api",
+             correlation_id: str | None = None) -> None:
         self.require_ready()
         executor = self._require_executor()
         if self._safety.estop:
@@ -141,8 +143,10 @@ class NavigationManager:
                     f"navigation in progress ({self._nav_state.value}) — cancel first")
             executor.send_goal(spec)
             self._set_state(NavigationState.PLANNING)
+            self._active_correlation_id = correlation_id
         self._events.publish("nav.started", source="navigation_manager",
-                             data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw}, "by": source})
+                             data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
+                                   "by": source, "correlation_id": correlation_id})
 
     def external_goal_sent(self) -> None:
         """A goal just went to Nav2 around `goal()` — docking's staging drive.
@@ -152,6 +156,7 @@ class NavigationManager:
         which reads it on its first tick, skips staging or retries at once."""
         with self._lock:
             self._set_state(NavigationState.PLANNING)
+            self._active_correlation_id = None
 
     def _refuse_while_docking(self) -> None:
         if self.docking_active_provider():
@@ -295,11 +300,13 @@ class NavigationManager:
             if self.executor is not None:
                 self.executor.cancel_goal()
             self._set_state(NavigationState.CANCELED)
+            correlation_id = self._active_correlation_id
             # 다음 목표는 새 기준점에서 시작한다. 남겨 두면 이미 만료된
             # 기준으로 곧장 다시 stuck 판정이 나 취소-재목표를 반복한다.
             self._last_progress_pos = None
             self._last_progress_ts = self.clock()
-        self._events.publish("nav.canceled", source="navigation_manager", data={"source": source})
+        self._events.publish("nav.canceled", source="navigation_manager",
+                             data={"source": source, "correlation_id": correlation_id})
         if closed:
             self._notify_session_closed(source)
 
@@ -328,11 +335,15 @@ class NavigationManager:
         with self._lock:
             self._set_state(NavigationState.ARRIVED if succeeded
                             else NavigationState.FAILED)
+            correlation_id = self._active_correlation_id
+            self._active_correlation_id = None
         if succeeded:
-            self._events.publish("nav.completed", source="navigation_manager")
+            self._events.publish("nav.completed", source="navigation_manager",
+                                 data={"correlation_id": correlation_id})
         else:
             self._events.publish("nav.failed", severity="error", source="navigation_manager",
-                                 data={"error_code": error or "UNKNOWN"})
+                                 data={"error_code": error or "UNKNOWN",
+                                       "correlation_id": correlation_id})
 
     def on_pose_progress(self, x: float, y: float) -> None:
         """NAV-006 stuck: NAVIGATING 중 진척 없으면 자동 취소."""

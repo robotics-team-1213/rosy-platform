@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from typing import Optional, Sequence
+from collections.abc import Callable, Mapping
 
 from core_common.protocol.schemas import (
     Envelope,
@@ -48,6 +49,7 @@ class SiteHub:
         clients: Optional[dict[str, RobotClient]] = None,
         fleet_name: str = "rosy-site",
         event_store: CoreEventStore | None = None,
+        event_callback: Callable[[Mapping[str, object]], object] | None = None,
     ) -> None:
         # CORE REST control tokens and FleetAgent pairing credentials have
         # distinct authority. Missing pairing credentials leave the agent
@@ -59,6 +61,10 @@ class SiteHub:
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
         self.event_store = event_store
+        self.event_callback = event_callback
+
+    def set_event_callback(self, callback: Callable[[Mapping[str, object]], object]) -> None:
+        self.event_callback = callback
 
     def handle(self, envelope: Envelope) -> Envelope:
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
@@ -154,6 +160,12 @@ class SiteHub:
                 return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
             except (OSError, sqlite3.Error):
                 return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
+        if self.event_callback is not None:
+            try:
+                self.event_callback(event.model_dump(mode="json"))
+            except Exception:
+                # Repeated delivery of this event re-runs the idempotent task projection.
+                return _error("TASK_PROJECTION_UNAVAILABLE", "event task projection failed")
         row = self.registry.record(event.robot_id)
         if is_new:
             row.events.append(event)
