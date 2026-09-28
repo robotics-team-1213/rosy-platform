@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy Pilot</title>
+  <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/pilot/assets/styles.css">
+  <script type="module" src="/common/ui.js"></script>
+</head>
+<body>
+  <ui-shell grammar="spatial">
+    <ui-topbar>
+      <ui-brand>
+        <b>Rosy Pilot</b>
+        <small>Pinky 직접 조종</small>
+      </ui-brand>
+      <span data-spacer></span>
+      <ui-tag>대기</ui-tag>
+    </ui-topbar>
+    <main>
+      <ui-section aria-labelledby="pilot-heading">
+        <ui-head>
+          <ui-text id="pilot-heading" scale="label">조종</ui-text>
+        </ui-head>
+        <ui-empty>접속 게이트를 준비 중입니다.</ui-empty>
+      </ui-section>
+    </main>
+  </ui-shell>
+</body>
+</html>

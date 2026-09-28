@@ -66,6 +66,19 @@ def _dashboard_root() -> Path:
     return Path(__file__).resolve().parents[4] / "hmi" / "dashboard"
 
 
+def _pilot_root() -> Path:
+    """Teleop surface (D-323). Same resolution rule as the dashboard."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        share = Path(get_package_share_directory("pilot"))
+        if (share / "index.html").is_file():
+            return share
+    except (ImportError, LookupError):
+        pass
+    return Path(__file__).resolve().parents[4] / "hmi" / "pilot"
+
+
 from core_api_web.api.ws import ws_router
 
 
@@ -175,6 +188,39 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             raise HTTPException(status_code=404, detail="dashboard asset not found")
         return FileResponse(
             web_root / asset_name,
+            media_type=media_type,
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    # D-323 — Rosy Pilot 조종 표면. dashboard와 같은 정적 파일·allowlist 규칙.
+    pilot_root = _pilot_root()
+    pilot_assets = {
+        # 이 allowlist도 {asset_name:path}의 경로 순회 방어다. 모듈이 늘 때마다 여기에 등록.
+        "styles.css": "text/css",
+    }
+
+    @app.get("/pilot", include_in_schema=False)
+    def pilot():
+        return FileResponse(
+            pilot_root / "index.html",
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-cache",
+                "Content-Security-Policy": (
+                    "default-src 'self'; connect-src 'self' ws: wss:; "
+                    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
+                    "frame-ancestors 'none'; base-uri 'self'"
+                ),
+            },
+        )
+
+    @app.get("/pilot/assets/{asset_name:path}", include_in_schema=False)
+    def pilot_asset(asset_name: str):
+        media_type = pilot_assets.get(asset_name)
+        if media_type is None:
+            raise HTTPException(status_code=404, detail="pilot asset not found")
+        return FileResponse(
+            pilot_root / asset_name,
             media_type=media_type,
             headers={"Cache-Control": "no-cache"},
         )
