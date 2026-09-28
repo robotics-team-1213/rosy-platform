@@ -1448,3 +1448,9 @@
 - 변경: D-325 path selector와 operator guidance를 추가했다. 호환 source 업데이트는 native payload로 보내고, image/host/board/trust changes는 full image, 비장치 변경은 no artifact, 분류 밖은 HOLD다.
 - 증거: selector 계약 6개 통과. 측정된 prior Actions build는 full image 약 30분 대 native payload 약 5분. 서명 키, artifact, device proof를 생성했다고 주장하지 않는다.
 - gate 변화: SOURCE 절차 개선. ARTIFACT·DEVICE·FIELD는 기존 HOLD다.
+
+## 2026-09-29 · uncommitted · build and locally smoke the site candidate
+
+- 변경: merged source `3e2bf04652600d524d244929a4da95371e6dcc99`에서 Fleet, Vision, proxy 이미지와 SPDX SBOM을 빌드해 X: 임시 후보로 패키징했다. 별도 X: 테스트 설정은 가짜 credential, 예약 TEST-NET robot 주소, 내부 전용 egress를 사용했다.
+- 증거: archive SHA-256 `165bfe7021a86542e4d845b0d544a937da50a67f5de71a974c8d2b3fd546072e`; manifest의 3개 image ID/platform, archive와 SBOM 해시 일치. 로컬 Compose에서 세 서비스 healthy, `/healthz` HTTP 200 확인 후 서비스를 정지했다.
+- gate 변화: unsigned local candidate까지만. 서명 파일·production site signing key·승인된 target host/TLS identity가 없어 전달 및 운영 활성화는 HOLD다. Isaac ROS-SIM, physical stop/readback, DEVICE/FIELD와는 별도다.
