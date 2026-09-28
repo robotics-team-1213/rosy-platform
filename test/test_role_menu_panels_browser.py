@@ -1117,3 +1117,98 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
         _unmount_panel(page)
         assert errors == []
         browser.close()
+
+
+def test_console_map_readiness_freshness_and_action_feedback_are_independent():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+        map_source = (WEB / "map.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/map.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=module))
+        page.route("http://rosy.test/assets/map.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=map_source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const nativeSetInterval=window.setInterval.bind(window);
+          const callbacks={}; window.__intervals=callbacks;
+          window.setInterval=(fn,ms,...args)=>{
+            if(ms===10_000){callbacks[ms]=fn;return 10001;}
+            return nativeSetInterval(fn,ms,...args);
+          };
+          const {mount}=await import('/assets/panels/console/map.js');
+          const root=document.createElement('main');root.id='map-test-panel';document.body.append(root);
+          const polls={};const store={poll(path,_interval,onData,onError){polls[path]={onData,onError};return()=>{};}};
+          const calls=[];let hasGrid=false;let failPost=false;window.__calls=calls;
+          window.__setGrid=value=>{hasGrid=value;};window.__failPost=value=>{failPost=value;};
+          const grid={map_id:'fixture-map',width:2,height:2,resolution:1,origin:{x:0,y:0},data:[0,0,0,0]};
+          const api=async(path,options={})=>{
+            calls.push({path,method:options.method||'GET'});
+            if(options.method==='POST'){if(failPost)throw new Error('fixture goal rejected');return {accepted:true};}
+            if(path==='/api/v1/map')return hasGrid?grid:null;
+            if(path==='/api/v1/navigation/path')return {poses:[]};
+            if(path.startsWith('/api/v1/map/costmap'))return {data:[]};
+            return {};
+          };
+          window.__polls=polls;
+          window.__unmount=mount(root,{role:'operator',api,store,surfaces:[{id:'setup'}]});
+          root.querySelectorAll('ui-status')[1].id='map-readiness-status';
+          window.confirm=()=>{window.__confirmCalls=(window.__confirmCalls||0)+1;return true;};
+          polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}});
+          polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
+          polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}});
+        }""")
+        panel = page.locator("main").last
+        page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('empty') || document.querySelector('#map-status')?.textContent.length > 0")
+        map_freshness = panel.locator("#map-status")
+        readiness = panel.locator("#map-readiness-status")
+        action = panel.locator("ui-status[role=status]").last
+        initial_action = action.inner_text()
+        page.locator('[data-map-click="goal"]').click()
+        page.locator("canvas").click(position={"x":30,"y":30})
+        assert action.inner_text() and action.inner_text() != initial_action
+        assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
+        assert page.evaluate("window.__confirmCalls || 0") == 0
+        no_map_action = action.inner_text()
+
+        page.evaluate("""() => {
+          window.__polls['/api/v1/robot/state'].onError(new Error('fixture robot state unavailable'));
+          window.__polls['/api/v1/system/capabilities'].onError(new Error('fixture navigation unavailable'));
+          window.__polls['/api/v1/host/commissioning'].onError(new Error('fixture commissioning unavailable'));
+        }""")
+        assert all(reason in readiness.inner_text() for reason in (
+            "fixture robot state unavailable", "fixture navigation unavailable", "fixture commissioning unavailable")), readiness.inner_text()
+        assert map_freshness.inner_text() != readiness.inner_text()
+        assert action.inner_text() == no_map_action
+
+        page.evaluate("window.__setGrid(true); window.__intervals[10000]()")
+        page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('fixture-map')")
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}})")
+        page.locator('[data-map-click="goal"]').click()
+        page.locator("canvas").click(position={"x":30,"y":30})
+        page.wait_for_function("window.__calls.some(call=>call.method==='POST')")
+        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
+        accepted = action.inner_text()
+        page.evaluate("window.__intervals[10000]()")
+        page.wait_for_timeout(50)
+        assert action.inner_text() == accepted
+
+        page.evaluate("window.__failPost(true); window.__intervals[10000]()")
+        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
+        page.locator('[data-map-click="goal"]').click()
+        page.locator("canvas").click(position={"x":45,"y":45})
+        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('fixture goal rejected')")
+        failed = action.inner_text()
+        page.evaluate("window.__intervals[10000]()")
+        page.wait_for_timeout(50)
+        assert action.inner_text() == failed
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()

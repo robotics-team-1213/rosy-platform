@@ -764,3 +764,98 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
         browser.close()
     (capture_dir / "console-line-follow-docking-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "map-data-action"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            posts = []
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                request = route.request
+                path = urlsplit(request.url).path
+                if request.method == "POST":
+                    posts.append({"path": path, "body": request.post_data_json})
+                    route.fulfill(status=202, content_type="application/json", body='{"accepted":true}')
+                    return
+                if request.method != "GET":
+                    route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                    return
+                if path == "/api/v1/ui/surfaces/console":
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                    manifest = response.json() if hasattr(response, "json") else json.loads(response.body)
+                    if not any(panel["id"] == "console.map" for panel in manifest["panels"]):
+                        manifest["panels"].append({
+                            "id":"console.map", "title":"Map and position", "slot":"observe", "order":20,
+                            "module":"/assets/panels/console/map.js",
+                            "css":["/assets/panels/surface-panels.css"],
+                            "state":"available", "reason":None,
+                        })
+                    response = Response(content=json.dumps(manifest), media_type="application/json")
+                elif path == "/api/v1/robot/state":
+                    route.fulfill(status=503, content_type="application/json", body='{"detail":"fixture robot state unavailable"}')
+                    return
+                elif path == "/api/v1/map":
+                    route.fulfill(status=404, content_type="application/json",
+                                  body='{"error":{"code":"NOT_FOUND","message":"fixture map data unavailable"}}')
+                    return
+                elif path == "/api/v1/system/capabilities":
+                    response = Response(content='{"navigation":{"goal_navigation":true}}', media_type="application/json")
+                elif path == "/api/v1/host/commissioning":
+                    response = Response(content='{"runtime_mode":"hardware"}', media_type="application/json")
+                elif path == "/api/v1/navigation/path":
+                    response = Response(content='{"poses":[]}', media_type="application/json")
+                elif path.startswith("/api/v1/map/costmap"):
+                    response = Response(content='{"data":[]}', media_type="application/json")
+                else:
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                    "cache-control": "no-store",
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            panel = page.locator('[data-panel="console.map"]')
+            page.wait_for_selector('[data-panel="console.map"] canvas')
+            page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
+            panel.locator('[data-map-click="goal"]').click()
+            panel.locator("canvas").click(position={"x":40,"y":40})
+            action = panel.locator('ui-status[role="status"]').last
+            assert action.inner_text()
+            assert posts == []
+            filename = f"operator-console-map-data-action-{width}x{height}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            measured = page.evaluate("""() => {
+              const panel=document.querySelector('[data-panel="console.map"]');
+              const statuses=[...panel.querySelectorAll('ui-status')].map(node=>node.textContent);
+              return {
+                overflowX:Math.max(0,document.documentElement.scrollWidth-innerWidth),
+                eStopVisible:document.querySelector('#shell-estop')?.getBoundingClientRect().right<=innerWidth,
+                mapData:document.querySelector('#map-status')?.textContent||'',
+                readiness:statuses.find(text=>text.includes('fixture robot state unavailable'))||'',
+                action:statuses.at(-1)||'',
+              };
+            }""")
+            assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
+            assert page.locator('[data-panel="console.map"] ui-empty').is_visible()
+            assert "fixture robot state unavailable" in measured["readiness"]
+            assert measured["action"] and not posts
+            records.append({"viewport":f"{width}x{height}", "image":filename,
+                            "posts":posts, "errors":errors, **measured})
+            context.close()
+        browser.close()
+    (capture_dir / "console-map-data-action-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

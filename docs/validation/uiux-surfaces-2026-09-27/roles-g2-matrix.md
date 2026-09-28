@@ -100,3 +100,9 @@ Focused Chromium tests passed for line-follow stale-read clearing, fail-closed c
 Full-shell console captures at 1366x768 and 390x844 show line-follow and docking in their own action groups. Each capture shows a status-read failure beside a preserved CORE request receipt, with one expected action POST, overflow 0, no page errors, and visible E-stop. The fixture explicitly inserts both panels and their action groups into the console manifest and controls API responses. PNGs and JSON are under `X:\DevTemp\rosy-uiux-d306-roles-g2\line-follow-docking\`.
 
 This is LOCAL browser evidence. Actual robot line-follow/docking readback and motion, physical E-stop, G3, DEVICE/FIELD, and D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 console map feedback verification
+
+Focused map-panel Chromium regression passed within the **22 passed** full panel suite. It covered separate robot/capability/commissioning errors, map-data freshness, a no-map target click with no confirmation or POST, and accepted/failed target feedback retained through explicit map refreshes. Full-shell captures at 1366x768 and 390x844 show the empty-map state beside robot-state readiness failure and the not-sent action result. Both have horizontal overflow 0, no page errors, and visible E-stop. Artifacts are in `X:\DevTemp\rosy-uiux-d306-roles-g2\map-data-action\`.
+
+The full G2 command reported 8 passed and 1 failed in an administrator `/device` `confirm_cancel` fixture (rollback control unexpectedly disabled); it did not complete a new 60-cell matrix. This case is outside the map panel. The dedicated map regression and captures pass; robot map/target readback, physical E-stop, G3, DEVICE/FIELD, and D-153 remain **HOLD**.
