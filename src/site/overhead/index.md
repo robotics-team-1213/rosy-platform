@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability
 - 2026-09-28 · uncommitted · apply measured rectification to Fleet preview only
 - 2026-09-28 · uncommitted · serve authorized latest-frame preview
 - 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)
 - 2026-09-26 · uncommitted · feat(site): TLS Docker path and durable sighting readback
-- 2026-09-26 · uncommitted · feat(overhead): CPU vision worker to Fleet sighting contract (D-257/D-269)

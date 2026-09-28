@@ -3081,3 +3081,9 @@
 - 변경: phone→Vision WSS와 Vision 직접 preview lease를 유지한다. 선택형 서명 OpenCV 렌즈 보정과 네 점 평면 변환을 응답 복사본에만 적용한다. 원본 프레임·sighting 입력과 로봇 명령 경계를 유지하고, 브라우저 설정 초안은 카메라별 저장한다. 측정 보정 전까지는 현장 증거로 간주하지 않는다.
 - 증거: overhead 86 passed; Fleet 545 passed/5 skipped; Fleet Chromium/dialog 33 passed. Local Docker Compose WSS 합성 프레임의 원본/서명 보정 응답은 HTTP 200이었다. 1920/390/320px 브라우저 표시에서 page error와 가로 넘침이 없었다. 캡처와 응답 메타데이터는 `X:\\DevTemp\\rosy-uiux-local-site\\camera-rectification-docker`에 있다.
 - gate 변화: 합성 데이터 LOCAL만 확인했다. 실물 phone, 현장 측정, Ubuntu/TLS, DEVICE/FIELD 승인은 별도 미완료다.
+
+## 2026-09-28 · uncommitted · validation(camera): recheck physical acceptance prerequisites
+
+- 변경: 새 장치 명령은 보내지 않고 D-318 후속 실물 접속 조건을 읽기 전용으로 확인했다.
+- 증거: `192.168.1.202` ping은 timeout, `adb devices -l`은 장치를 찾지 못했다. 전용 로컬 Fleet/Vision/proxy Docker 서비스는 healthy지만 합성 WebSocket 송신기는 종료되어 현재 실시간 카메라 입력이 없다.
+- gate 변화: 로컬 합성 검증은 유지한다. 카메라폰, 계측, 현장 Fleet 주소, Ubuntu/TLS 및 DEVICE/FIELD 검증은 수행할 수 없어 PARKED로 유지한다.

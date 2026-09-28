@@ -61,3 +61,9 @@
 - Change: added bounded normalized lens intrinsics/distortion and clockwise quadrilateral settings to the short-lived HMAC preview lease. Vision applies OpenCV undistortion and perspective warp only to the response copy; raw latest JPEG and ArUco/sighting input are untouched. Identity settings return the original JPEG.
 - Evidence: overhead suite 86 passed, including synthetic square warp, invalid/crossed setting rejection, signed lease validation, direct HTTP preview, and raw frame immutability. Fleet lease route tests also pass. Local Docker Compose WSS synthetic-frame preview returned HTTP 200 with `X-Frame-Rectified=true`; 1920/390/320px captures show the rectified checkerboard with zero page errors or horizontal overflow. Captures are under `X:\\DevTemp\\rosy-uiux-local-site\\camera-rectification-docker`.
 - Gate: SOURCE/LOCAL only; real measured lens/floor calibration, physical camera/phone, Ubuntu/site, DEVICE and FIELD acceptance remain PARKED.
+
+## 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability
+
+- Change: ran read-only availability checks for the previously supplied robot address and connected Android devices; no robot commands were sent.
+- Evidence: ping to `192.168.1.202` timed out and `adb devices -l` returned an empty device list. The local Docker Fleet/Vision/proxy stack remains healthy, but the synthetic WebSocket sender has stopped and no live camera frame is available.
+- Gate: synthetic SOURCE/LOCAL evidence remains valid. Measured camera calibration, phone streaming, Ubuntu/site TLS, DEVICE and FIELD remain PARKED.
