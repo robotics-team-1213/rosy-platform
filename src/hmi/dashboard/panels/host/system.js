@@ -39,7 +39,6 @@ export function mount(root, ctx) {
   message.setAttribute("role", "status");
   message.setAttribute("aria-live", "polite");
   let identityInput = null;
-  let identitySave = null;
   let identityDirty = false;
   let savedName = null;
   if (ctx.role === "administrator") {
@@ -47,7 +46,9 @@ export function mount(root, ctx) {
     identityInput = el("input"); identityInput.name = "robot_name"; identityInput.maxLength = 64;
     identityInput.setAttribute("aria-label", "로봇 표시 이름");
     identityInput.addEventListener("input", () => { identityDirty = true; savedName = null; });
-    identitySave = el("ui-button", "", "이름 저장"); identitySave.setAttribute("kind", "primary"); identitySave.type = "submit";
+    const identitySave = el("ui-button", "", "이름 저장");
+    identitySave.setAttribute("kind", "primary");
+    identitySave.type = "submit";
     form.append(identityInput, identitySave);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
