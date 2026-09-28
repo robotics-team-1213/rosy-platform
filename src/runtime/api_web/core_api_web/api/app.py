@@ -198,6 +198,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         # 이 allowlist도 {asset_name:path}의 경로 순회 방어다. 모듈이 늘 때마다 여기에 등록.
         "styles.css": "text/css",
         "stick.js": "application/javascript",
+        "link.js": "application/javascript",
+        "drivers/registry.js": "application/javascript",
+        "drivers/pinky_core.js": "application/javascript",
     }
 
     @app.get("/pilot", include_in_schema=False)

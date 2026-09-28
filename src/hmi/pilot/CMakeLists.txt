@@ -7,6 +7,12 @@ install(FILES
   index.html
   styles.css
   stick.js
+  link.js
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  drivers
   DESTINATION share/${PROJECT_NAME}
 )
 
