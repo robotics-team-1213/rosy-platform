@@ -215,8 +215,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(adr): propose D-329 surface registry and visual baseline
 - 2026-09-29 · uncommitted · docs(fleet): renumber Fleet control ADR after concurrent D-329
 - 2026-09-29 · uncommitted · docs(fleet): decide unified Mission admission and stop boundary
 - 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
 - 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
-- 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다

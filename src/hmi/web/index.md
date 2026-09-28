@@ -23,6 +23,7 @@
 | D-292 | 시각 토큰은 의미·기초 척도·컴포넌트 역할로 나누고 메뉴마다 다시 쌓지 않는다 |
 | D-294 | Shared typography and interaction tokens use a closed scale |
 | D-300 | Surface typography and focus feedback use shared tokens |
+| D-329 | 표면은 등록으로 계약을 받고, 육안 기준은 저장소에 남는다 |
 
 ## 계획·결과 문서
 
