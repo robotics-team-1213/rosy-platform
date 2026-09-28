@@ -6,6 +6,10 @@ verdict, and regrowth past the allowance re-opens the judgment.
 """
 
 from pathlib import Path
+import shutil
+import subprocess
+
+import pytest
 
 SRC = Path(__file__).resolve().parents[3]
 
@@ -42,9 +46,32 @@ def _lines(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
 
 
+def _web_files() -> list[Path]:
+    """예산 후보는 추적 파일과 아직 add하지 않은 파일이다 (D-329 Decision 3).
+
+    파일시스템 `rglob`은 `.gitignore`된 빌드 산출물(지금은
+    `site/overhead/android/build/**/problems-report.html`)을 예산 초과 후보로 집는다.
+    `-c -o --exclude-standard`는 추적 파일과 add 안 된 새 파일은 모두, ignore된 것은
+    잡지 않는다. `.js`까지 보는 것은 이 스캔만의 일이므로(레지스트리 발견 스캔은
+    `.html` 한정) 여기에 둔다.
+    """
+    repo = SRC.parent
+    if shutil.which("git") is None or not (repo / ".git").exists():
+        pytest.skip("D-262 예산 스캔은 git 체크아웃이 필요하다")
+    done = subprocess.run(
+        ["git", "ls-files", "-c", "-o", "--exclude-standard", "--", "src"],
+        cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    assert done.returncode in (0, 1), done.stderr
+    return sorted(
+        repo / line for line in done.stdout.splitlines()
+        if line.endswith((".js", ".html"))
+    )
+
+
 def test_web_files_over_budget_have_a_recorded_verdict():
     over = {}
-    for path in sorted(SRC.rglob("*.js")) + sorted(SRC.rglob("*.html")):
+    for path in _web_files():
         if ".pytest_cache" in path.parts or "__pycache__" in path.parts:
             continue
         count = _lines(path)
@@ -58,7 +85,7 @@ def test_web_files_over_budget_have_a_recorded_verdict():
 
 def test_web_verdicts_are_current():
     over = {}
-    for path in sorted(SRC.rglob("*.js")) + sorted(SRC.rglob("*.html")):
+    for path in _web_files():
         if ".pytest_cache" in path.parts or "__pycache__" in path.parts:
             continue
         count = _lines(path)

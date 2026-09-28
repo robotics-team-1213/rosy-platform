@@ -51,7 +51,7 @@ MUST_TRACK = [
 
 ROOT_FILES = {
     ".dockerignore", ".gitattributes", ".gitignore",
-    "AGENTS.md", "CONCEPTS.md", "LICENSE", "README.md", "STATUS.md", "env.sh",
+    "AGENTS.md", "CONCEPTS.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
 # Accepted ADRs that name a module-root file keep it there until superseded.

@@ -15,6 +15,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `LICENSE` | Apache License 2.0 |
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |
+| `PRODUCT.md` | Product schema (`impeccable:product-schema`): platform, users, purpose, positioning — the top-level "who is this for" the UI lanes read |
 | `STATUS.md` | Generated: per-module gate snapshot (SOURCE…FIELD) linking each module's `progress.md`. Edit progress/logs/ADRs, not this file |
 | `tools/fix_ament_resource.sh` | Recreate ament `resource/<pkg>` markers for Python packages under the domain groups |
 | `tools/run_fleet_sim.sh` | One-click multi-robot Gazebo + fleet orchestration launcher |

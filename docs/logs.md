@@ -3271,3 +3271,10 @@
 - 변경: P2 Fleet 크래프트 회차 — 로스터 카드 SAFETY E-STOP을 평문 대신 공용 `tag crit` 채움으로 렌더하고, 목표 가용성 계약 시험이 요소 타입 대신 행의 값으로 단정하게 정렬했다. critique는 예외 우선 로스터·지연 나이·빈 상태·320px 정지 우선 스택을 계약 준수로 확인했고 카메라 16:9 예약 축소는 기각했다.
 - 증거: Fleet 브라우저·대화 계약 34 passed, 8상태×3뷰포트 24셀 재촬영 넘침 0·페이지 오류 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P2 절.
 - gate 변화: 없음. fleet SOURCE/LOCAL GO 유지(last_verified c6ae4334). 실물 readback과 사람 G3는 별도다.
+
+## 2026-09-29 · uncommitted · fix(test): declare PRODUCT.md at root, budget only tracked web files
+
+- 변경: D-329 T1–T4를 끝내고 남은 로컬 빨강 두 건을 고쳤다. (1) `27e6da33`가 `PRODUCT.md`를 저장소 루트에 추가하면서 `test/architecture/test_document_placement.py`의 `ROOT_FILES` 선언을 갱신하지 않아 `test_repo_root_carries_only_the_listed_files`가 빨갰다 — `PRODUCT.md`를 목록에 넣고 `Rosy OS/AGENTS.md` Key Files에 한 줄을 남겼다. (2) `src/hmi/dashboard/test/test_web_budgets.py`의 예산 후보 스캔을 파일시스템 `rglob`에서 `git ls-files -c -o --exclude-standard`로 바꿨다(D-329 Decision 3 "tracked files only").
+- 증거: 변경 직전 `src/hmi/dashboard/test` 1 failed(`test_web_files_over_budget_have_a_recorded_verdict` — 원인은 `.gitignore`된 `src/site/overhead/android/build/reports/problems/problems-report.html`)와 `test/architecture/test_document_placement.py` 1 failed(`PRODUCT.md`)였다. 변경 후 각각 14 passed/32 skipped, 6 passed. 변이 확인 2건: 루트에 `ZZ_MUTATION_PROOF.md`를 `git add`하면 `['ZZ_MUTATION_PROOF.md'] == []`로 빨갛다(추적 파일만 본다는 D-226 발행 경계 설계를 그대로 확인 — untracked는 대상이 아니었다), `src/hmi/dashboard/zz_mut_proof.html`(add 안 된 700행)을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛다. 둘 다 복구 후 초록. 회귀로 `src/hmi/web/test` 87 passed, `test/architecture/test_module_structure.py` 33 passed 유지.
+- gate 변화: 없음. 두 시험 모두 기존 판정 기준(루트 선언 목록, 600/150행 예산)을 바꾸지 않았다. DEVICE/FIELD 수용은 주장하지 않는다.
+- 결정: D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 여전히 범위 밖이다.
