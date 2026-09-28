@@ -217,7 +217,7 @@ def test_console_docking_blocks_motion_when_capability_is_missing():
           window.confirm=()=>true;
           root.querySelectorAll('ui-button').forEach(button=>button.click());
         }""")
-        assert "막았습니다" in page.locator("[role=status]").inner_text()
+        assert page.locator('[role="status"][state="warning"]').inner_text().strip()
         assert page.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled===true)")
         assert page.evaluate("window.__calls") == []
         _unmount_panel(page)
@@ -257,6 +257,137 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
         assert any("agent offline" in text for text in details)
         assert page.locator("ui-button").evaluate_all("nodes => nodes.every(node => node.disabled === true)")
         assert page.evaluate("window.__calls") == []
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
+def test_admin_host_system_get_failures_clear_only_their_own_readback():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "host" / "system.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/host/system.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/host/system.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, interval, onData, onError) {
+            callbacks[path] = {interval, onData, onError}; return () => {};
+          }};
+          window.__callbacks = callbacks;
+          window.__unmount = mount(root, {role:'administrator', store, api:async () => ({})});
+          callbacks['/api/v1/system/runtime'].onData({hostname:'host-fixture',os:{pretty_name:'fixture OS'},architecture:'arm64'});
+          callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'});
+          callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true});
+          callbacks['/api/v1/system/inventory'].onData({descriptors:[{id:'lidar',state:'ready'},{id:'battery',state:'ready'}]});
+        }""")
+        assert page.evaluate("window.__callbacks['/api/v1/system/runtime'].interval") == 10_000
+        assert page.evaluate("window.__callbacks['/api/v1/system/info'].interval") == 30_000
+        assert page.evaluate("window.__callbacks['/api/v1/system/capabilities'].interval") == 15_000
+        assert page.evaluate("window.__callbacks['/api/v1/system/inventory'].interval") == 15_000
+
+        overview_status = page.locator("main .host-system-overview ui-status")
+        details = page.locator("main details.host-system-detail")
+        details.evaluate("node => { node.open = true; }")
+        runtime_body = details.locator("section.ui-readback dl").nth(0)
+        identity_body = details.locator("section.ui-readback dl").nth(1)
+        inventory_body = details.locator("section.ui-readback dl").nth(2)
+        assert "host-fixture" in runtime_body.inner_text()
+        assert "robot-fixture" in identity_body.inner_text()
+        assert "lidar" in inventory_body.inner_text()
+
+        page.evaluate("window.__callbacks['/api/v1/system/runtime'].onError(new Error('fixture runtime offline'))")
+        assert runtime_body.locator("dt").count() == 0
+        assert "fixture runtime offline" in overview_status.nth(3).inner_text()
+        assert "robot-fixture" in identity_body.inner_text()
+        assert "Navigation" in overview_status.nth(1).inner_text()
+        assert "lidar" in inventory_body.inner_text()
+
+        page.evaluate("window.__callbacks['/api/v1/system/info'].onError(new Error('fixture identity offline'))")
+        assert identity_body.locator("dt").count() == 0
+        assert "fixture identity offline" in overview_status.nth(0).inner_text()
+        assert "fixture runtime offline" in overview_status.nth(3).inner_text()
+        assert "Navigation" in overview_status.nth(1).inner_text()
+        assert "lidar" in inventory_body.inner_text()
+
+        page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture capabilities offline'))")
+        assert "fixture capabilities offline" in overview_status.nth(1).inner_text()
+        assert "lidar" in inventory_body.inner_text()
+        assert "fixture runtime offline" in overview_status.nth(3).inner_text()
+
+        page.evaluate("window.__callbacks['/api/v1/system/inventory'].onError(new Error('fixture inventory offline'))")
+        assert "fixture inventory offline" in overview_status.nth(2).inner_text()
+        assert "lidar" not in inventory_body.inner_text()
+        assert "fixture capabilities offline" in overview_status.nth(1).inner_text()
+        assert "fixture identity offline" in overview_status.nth(0).inner_text()
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
+def test_console_mode_feedback_survives_state_and_capability_polling():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "console" / "mode.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/console/mode.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/console/mode.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {}; const calls = [];
+          const store = {poll(path, interval, onData, onError) {
+            callbacks[path] = {interval, onData, onError}; return () => {};
+          }};
+          const api = (path, options) => {
+            calls.push({path, body:JSON.parse(options.body)});
+            return new Promise(resolve => { window.__resolveMode = resolve; });
+          };
+          window.__callbacks = callbacks; window.__calls = calls;
+          window.__unmount = mount(root, {role:'operator', store, api});
+          callbacks['/api/v1/robot/state'].onData({mode:'IDLE'});
+          callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}});
+          window.confirm = () => true;
+        }""")
+        assert page.evaluate("window.__callbacks['/api/v1/robot/state'].interval") == 1_000
+        assert page.evaluate("window.__callbacks['/api/v1/system/capabilities'].interval") == 5_000
+        status = page.locator("main > ui-status")
+        assert "IDLE" in status.nth(0).inner_text()
+        assert "Navigation" in status.nth(1).inner_text()
+        page.locator('[data-mode="MANUAL"]').click()
+        page.wait_for_function("window.__calls.length === 1")
+        pending_feedback = status.nth(2).inner_text()
+        page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE'})")
+        page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
+        assert status.nth(2).inner_text() == pending_feedback
+        assert "IDLE" in status.nth(0).inner_text()
+        page.evaluate("window.__resolveMode({accepted:true})")
+        page.wait_for_function("document.querySelectorAll('main > ui-status')[2]?.textContent.includes('CORE가 받았습니다')")
+        accepted_feedback = status.nth(2).inner_text()
+        assert "IDLE" in status.nth(0).inner_text()
+        assert "CORE가 받았습니다" in accepted_feedback
+        page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL'})")
+        page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture navigation unavailable'))")
+        assert "MANUAL" in status.nth(0).inner_text()
+        assert "fixture navigation unavailable" in status.nth(1).inner_text()
+        assert status.nth(2).inner_text() == accepted_feedback
+        assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"MANUAL"}}]
         _unmount_panel(page)
         assert errors == []
         browser.close()

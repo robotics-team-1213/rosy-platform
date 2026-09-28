@@ -415,3 +415,9 @@
 - 변경: 관리자 전용 보드 점검 버튼을 비관리자 화면에서 비활성화할 때 권한 사유를 함께 보여주고, 버튼의 `aria-describedby` 설명으로 연결한다. 관리자에게는 조작 결과 status가 있을 때만 해당 영역을 표시한다.
 - 정적 확인: 변경 영역 코드 검토와 `git diff --check`를 실행한다. 브라우저 회귀, Impeccable detector, 새 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실물 Host Agent 점검은 별도다.
+
+## 2026-09-28 - uiux/host-console-readback-evidence - verify independent readbacks and mode feedback
+
+- Change verified: `/device` runtime, robot identity, CORE capability, and detailed inventory readbacks fail independently and clear only their own stale values. `/console` current-mode readback, Navigation capability, and mode POST outcome remain separate while polling continues; CORE acceptance is not presented as proof that the robot already changed mode.
+- Evidence: Focused host and mode panel browser regressions passed; the full panel Chromium suite passed 17 tests. Role G2 passed 6 tests and refreshed 60 cells with overflow 0, pageerror 0, and E-stop visible 60/60. Full-shell `/console` mode feedback captures at 1366x768 and 390x844 each recorded one MANUAL POST, an IDLE current-mode readback at acceptance, overflow 0, no page errors, and visible E-stop. Admin `/device` normal and console captures were visually inspected. Artifacts: `X:\DevTemp\rosy-uiux-d306-roles-g2\`.
+- Gate: SOURCE/LOCAL browser regression and captures verified for `a81dbcb2` and `3b89deeb`. These fixtures do not prove actual Host Agent or robot readback, physical E-stop, G3, DEVICE/FIELD, D-153, or D-255 B2/B3; those remain HOLD.

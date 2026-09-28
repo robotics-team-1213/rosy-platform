@@ -455,3 +455,84 @@ def test_role_procedure_first_boot_full_screen(tmp_path):
         browser.close()
     (CAPTURES / "first-boot-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_console_mode_feedback_full_shell_captures(tmp_path):
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    CAPTURES.mkdir(parents=True, exist_ok=True)
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for width, height in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            errors = []
+            posts = []
+            phase = {"mode": "IDLE"}
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.on("dialog", lambda dialog: dialog.accept())
+
+            def serve(route):
+                request = route.request
+                path = urlsplit(request.url).path
+                if request.method == "POST" and path == "/api/v1/mode":
+                    posts.append({"path": path, "body": request.post_data_json})
+                    route.fulfill(status=202, content_type="application/json", body='{"accepted":true}')
+                    return
+                if request.method != "GET":
+                    route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                    return
+                response = _response(client, path, TOKENS["operator"], "normal", "console")
+                if path == "/api/v1/system/capabilities" and response.status_code == 200:
+                    data = response.json() if hasattr(response, "json") else json.loads(response.body)
+                    data["navigation"] = {"goal_navigation": True}
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/robot/state" and response.status_code == 200:
+                    data = response.json() if hasattr(response, "json") else json.loads(response.body)
+                    data["mode"] = phase["mode"]
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream"),
+                    "cache-control": "no-store",
+                }, body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            page.wait_for_selector('[data-panel="console.mode"]')
+            button = page.locator('[data-panel="console.mode"] [data-mode="MANUAL"]')
+            page.wait_for_function("""document.querySelector(
+              '[data-panel="console.mode"] [data-mode="MANUAL"]'
+            )?.disabled === false""")
+            with page.expect_response(lambda response: response.url.endswith("/api/v1/mode") and response.request.method == "POST"):
+                button.click()
+            page.wait_for_function("""document.querySelector(
+              '[data-panel="console.mode"] [role="status"]:last-of-type'
+            )?.textContent.length > 0""")
+            mode_status = page.locator('[data-panel="console.mode"] ui-status').nth(0)
+            action_status = page.locator('[data-panel="console.mode"] ui-status[role="status"]').last
+            assert "IDLE" in mode_status.inner_text()
+            assert "CORE" in action_status.inner_text(), action_status.inner_text()
+            assert posts == [{"path": "/api/v1/mode", "body": {"mode": "MANUAL"}}]
+            filename = f"operator-console-mode-feedback-{width}x{height}.png"
+            page.screenshot(path=str(CAPTURES / filename), full_page=True)
+            measured = page.evaluate("""() => ({
+              overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+              eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              action: [...document.querySelectorAll('[data-panel="console.mode"] [role="status"]')].at(-1)?.textContent || '',
+              mode: document.querySelector('[data-panel="console.mode"] ui-status')?.textContent || '',
+            })""")
+            assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
+            phase["mode"] = "MANUAL"
+            page.wait_for_function("""document.querySelector(
+              '[data-panel="console.mode"] ui-status'
+            )?.textContent.includes('MANUAL')""")
+            assert "CORE" in action_status.inner_text(), action_status.inner_text()
+            records.append({"viewport": f"{width}x{height}", "image": filename,
+                            "posts": posts, "errors": errors, **measured})
+            context.close()
+        browser.close()
+    (CAPTURES / "console-mode-feedback-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
