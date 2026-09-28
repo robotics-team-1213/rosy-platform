@@ -3236,3 +3236,45 @@
 - 변경: 동시에 진행된 표면 계약 ADR이 main에서 D-329를 배정한 사실을 확인했다. 이 브랜치의 Fleet 발행·정지 ADR을 D-330으로 재번호화하고 색인·선행 계획·D-276 부분 대체 참조를 맞췄다. 바로 위 로그는 당시 브랜치 번호의 기록으로 남긴다.
 - 검증: 번호·상대 링크·문서 계약과 현재 main 통합 상태를 다시 확인한다.
 - gate 변화: 없음. D-330은 구조 Accepted이며 구현·실물 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(adr): propose D-329 surface registry and visual baseline
+
+- 변경: `docs/adr/D-329-surface-registry-and-visual-baseline.md` 작성 — 표면 범위 계약의 적용 목록을 `src/hmi/web/surfaces.yaml` 단일 출처로 옮기고, `src/`의 HTML 전부를 레지스트리와 대조해 등록 누락을 빨갛게 만들며, 육안 기준선이 회차 폴더에 실제로 추적돼 있는지와 신규 회차의 `matrix.json` 선언-보존 일치를 시험으로 판정한다. `ROSY ADR Log.md` 목차에 D-329 행을 추가하고 `src/hmi/web/progress.md`의 `adrs`에 연결했다.
+- 증거: 표면 목록 하드코딩 3곳(`src/hmi/web/test/test_shared_controls.py`, `src/hmi/web/test/test_surface_typography_focus_contracts.py`, `test/test_web_dialog_contract.py`)의 멤버십이 서로 다른 것을 대조하고, 추적된 `src/` HTML 8개 중 `sim/gz_sim/scripts/lane_live_view.html`이 어느 목록에도 없는 것을 확인했다. `docs/validation/uiux-surfaces-*` 추적 파일을 집계해 PNG 64장·5회차를 확인하되 최신 회차(2026-09-27)에는 PNG가 0장이고 파일명 규칙이 회차마다 셋 갈리는 것을 확인했다. `test_web_budgets.VERDICTS`(전부를 훑되 예외는 이유로 적는 방식)와 `web_common/ui.js`의 `GRAMMARS` 집합을 결정의 근거로 삼았다. 실행: harness `generate`·`lint` 0 errors(18 warnings, 전부 기존 freshness), `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py` 78 passed.
+- 검증 중 발견한 기존 실패(이 변경과 무관, 미수정): `test/architecture/test_document_placement.py`는 커밋된 루트 `PRODUCT.md`(`ROOT_FILES` 미등록)로 1 fail. `src/hmi/web/test`는 4 fail — `test_a_browser_page_starts_from_the_shell`이 `.gitignore`된 Android 빌드 산출물 `src/site/overhead/android/app/build/**/index.html`을 파일시스템으로 훑어 빨갛고, 나머지 셋은 `src/site/fleet/fleet/server/web/styles.css`의 `.vision-corner-overlay`/`.vision-corner-modes`(공용 포커스 토큰 미사용·`ui-button` 재도색)와 `system.js:50` 버튼 변수 비명시다. 셋 다 워킹 트리에서 `src/site/`·`src/hmi/dashboard` 변경이 없어 HEAD에도 존재한다.
+- gate 변화: 없음. Proposed이며 표면 판정과 DEVICE/FIELD 수용은 바꾸지 않는다.
+- 결정: D-329 Proposed. 표면 계약 적용 범위 단일 출처와 G2 보존 셀 규칙만 정한다. 번들러·공유 컴포넌트 코드·자동 픽셀 판정·D-153 세 계층 변경은 승인하지 않는다.
+- 교훈: "기준선이 없다"는 말은 저장소를 훑기 전에 쓰면 틀리기 쉽다 — 실제로는 64장이 쌓여 있었고 문제는 *최신 회차 0장*과 *회차마다 갈리는 파일명*이었다. 진단 문장을 측정으로 갈아 끼운 뒤에 ADR을 썼다.
+
+## 2026-09-29 · uncommitted · feat(web): land the D-329 surface registry (T1–T4)
+
+- 변경: D-329 실행 계획 `docs/plans/2026-09-29-d329-surface-registry.md`의 T1–T4를 실행했다. `src/hmi/web/surfaces.yaml`(표면 6항목)를 적용 범위의 단일 출처로 두고, `src/hmi/web/test/surface_registry.py` 로더와 `test_surface_registry.py` 검사를 새로 넣었다. 하드코딩된 `SURFACES` 상수 세 곳(`test_shared_controls.py`, `test_surface_typography_focus_contracts.py`, 루트 `test/test_web_dialog_contract.py`)을 지우고 `for_contract` 호출로 바꿨으며, 셸 점검의 파일시스템 `rglob`을 `git ls-files -c -o --exclude-standard` 발견 스캔으로 바꿨다. 계획의 완료 판정표는 실행 시점의 실제 측정값으로 고쳤다.
+- 증거: 멤버십 불변 — 레지스트리가 기존 하드코딩 셋을 정확히 재현함을 대조(`shared_controls` 4, `typography_focus` 4, `dialog` 3; 추적 HTML 8개, `lane_live_view.html` 포함). 판정 변화: `src/hmi/web/test` 1 failed/77 passed → **0 failed/87 passed** (T4로 로컬 전용 Android 산출물 실패 소멸). 회귀: `test/test_web_dialog_contract.py` 3 passed, `src/site/fleet/test`·`src/site/games/test` 647 passed, `test/architecture/test_module_structure.py` 33 passed, harness `lint` 0 errors(18 warnings, 전부 기존), 계약 시험 78 passed. **변이 확인 5건 전부 수행**: M1 항목 제거→`test_every_html_under_src_is_registered`, M2 add 안 된 `src/hmi/pilot/index.html`→같은 이유, M3 존재하지 않는 path→`path:`, M4 `dialog` 제거에 `contract_reason` 삭제→`reason:`, M5 `git add` 후에도 항목이 없으면 여전히 빨강 — 각각 복구 후 초록까지 확인했다. M2는 `-o`가, M5는 `-c`가 각각 없으면 시험이 통과한다는 것을 증명한다.
+- gate 변화: 없음. D-329는 여전히 Proposed이며 표면 판정과 DEVICE/FIELD 수용은 바꾸지 않는다.
+- 결정: D-329 Decision 1–3을 실행했고, Decision 4(`matrix.json`·회차 파일명 규칙)와 자동 픽셀 게이트, `src/hmi/pilot` 등록은 범위 밖으로 남겼다. 새 표면 등록 없는 HTML이 빨갛게 되는 자리만 남겼다.
+- 교훈: 계획을 쓴 시점의 측정값이 실행 시점에는 이미 바뀌어 있었다 — 계획의 "4 failed"는 동시 세션 `e155371e`로 1 failed가 되어 있었고, 남은 1건만 이 계획의 T4 대상이었다. 실행 계획의 판정표는 *작성 시점 측정*과 *실행 시점 측정*을 분리해 적어야 오래간다. 병렬로 고쳐지는 숫자는 같은 표에 섞이지 않는다.
+- 교훈: `git rm --cached`는 디렉터리 경로에 `-r`이 없으면 조용히 실패한다 — 변이 확인의 복구 단계에서 잠시 `AD`(인덱스에 추가·워크트리에서 삭제) 상태가 남았고, 그 상태가 오히려 `discover_html`이 `-c`를 읽고 있다는 것을 눈으로 보여줬다. 복구는 `git reset --`가 확실하다.
+
+## 2026-09-29 · uncommitted · docs(plan): add D-329 surface registry execution plan
+
+- 변경: `docs/plans/2026-09-29-d329-surface-registry.md` 추가 — D-329의 Decision 1–3만 실행하는 계획이다. `src/hmi/web/surfaces.yaml` 스키마(`id`/`path`/`surface`/`audience`/`grammar`/`contracts`/`contract_reason`/`baseline`/`baseline_reason`)를 정하고, 등록 누락을 빨갛게 만드는 신규 시험과 변이 확인 5건, 세 곳의 `SURFACES` 상수를 로더로 바꾸는 T3, 셸 점검을 추적 파일 한정으로 바꾸는 T4를 배치한다. D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 범위 밖으로 못박았다. `docs/plans/AGENTS.md` 목록에 한 행을 더했다.
+- 증거: 계획의 판정선을 재실행으로 확인했다 — `python -m pytest src/hmi/web/test -q`는 4 failed/74 passed이고(지금도 4 failed, 계획 전 기준과 일치), `test/architecture/test_document_placement.py`는 `PRODUCT.md`로 1 failed, harness `lint`는 0 errors/18 warnings, `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py`는 78 passed. 표면 사실도 다시 모았다: 추적 HTML 8개와 각 `grammar` 속성(`dashboard` spatial, `sensing` procedure, `fleet` exception, `games` focal, `surface/styleguide/lane` 없음), 추적 캡처는 2026-09-26 회차의 `console-operate-fresh-1366x768.png`·`fleet-normal-1920x1080.png`·`games-play-1280x800.png`로 채우고 진단·라이브러리·시뮬 뷰어는 `baseline_reason`으로 등록하게 했다.
+- gate 변화: 없음. 계획 문서이며 D-329는 여전히 Proposed다.
+## 2026-09-29 · uncommitted · fix(dashboard): settled G2 captures, loading state, balanced columns
+
+- 변경: P1 역할 운용 웹 크래프트 회차 — 패널 로딩 상태 표시, `/setup`·`/device` 데스크톱 2열 multicol 전환, action-group 탭 콘텐츠 폭, 접근 토큰 행 침범 수정, G2 harness 조립 완료 대기. main 커밋 상태의 공유 계약 위반 3건(Fleet 토글 재도색·SVG 포커스 링·helper 버튼 kind)도 같은 브랜치에서 복원했다.
+- 증거: `src/hmi/dashboard/test` 43 passed, `src/hmi/web/test` 22 passed, D-283·surface 레이아웃 23 passed, 역할 메뉴·표면 상태 29 passed, 역할 G2 60셀 overflow 0·pageerror 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: dashboard SOURCE HOLD→GO, LOCAL HOLD→GO(last_verified d41e8bd5). D-153 표면 판정은 G3 사람 평가가 없어 HOLD 유지. ARTIFACT·DEVICE/FIELD 불변.
+
+## 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
+
+- 변경: P2 Fleet 크래프트 회차 — 로스터 카드 SAFETY E-STOP을 평문 대신 공용 `tag crit` 채움으로 렌더하고, 목표 가용성 계약 시험이 요소 타입 대신 행의 값으로 단정하게 정렬했다. critique는 예외 우선 로스터·지연 나이·빈 상태·320px 정지 우선 스택을 계약 준수로 확인했고 카메라 16:9 예약 축소는 기각했다.
+- 증거: Fleet 브라우저·대화 계약 34 passed, 8상태×3뷰포트 24셀 재촬영 넘침 0·페이지 오류 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P2 절.
+- gate 변화: 없음. fleet SOURCE/LOCAL GO 유지(last_verified c6ae4334). 실물 readback과 사람 G3는 별도다.
+
+## 2026-09-29 · uncommitted · fix(test): declare PRODUCT.md at root, budget only tracked web files
+
+- 변경: D-329 T1–T4를 끝내고 남은 로컬 빨강 두 건을 고쳤다. (1) `27e6da33`가 `PRODUCT.md`를 저장소 루트에 추가하면서 `test/architecture/test_document_placement.py`의 `ROOT_FILES` 선언을 갱신하지 않아 `test_repo_root_carries_only_the_listed_files`가 빨갰다 — `PRODUCT.md`를 목록에 넣고 `Rosy OS/AGENTS.md` Key Files에 한 줄을 남겼다. (2) `src/hmi/dashboard/test/test_web_budgets.py`의 예산 후보 스캔을 파일시스템 `rglob`에서 `git ls-files -c -o --exclude-standard`로 바꿨다(D-329 Decision 3 "tracked files only").
+- 증거: 변경 직전 `src/hmi/dashboard/test` 1 failed(`test_web_files_over_budget_have_a_recorded_verdict` — 원인은 `.gitignore`된 `src/site/overhead/android/build/reports/problems/problems-report.html`)와 `test/architecture/test_document_placement.py` 1 failed(`PRODUCT.md`)였다. 변경 후 각각 14 passed/32 skipped, 6 passed. 변이 확인 2건: 루트에 `ZZ_MUTATION_PROOF.md`를 `git add`하면 `['ZZ_MUTATION_PROOF.md'] == []`로 빨갛다(추적 파일만 본다는 D-226 발행 경계 설계를 그대로 확인 — untracked는 대상이 아니었다), `src/hmi/dashboard/zz_mut_proof.html`(add 안 된 700행)을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛다. 둘 다 복구 후 초록. 회귀로 `src/hmi/web/test` 87 passed, `test/architecture/test_module_structure.py` 33 passed 유지.
+- gate 변화: 없음. 두 시험 모두 기존 판정 기준(루트 선언 목록, 600/150행 예산)을 바꾸지 않았다. DEVICE/FIELD 수용은 주장하지 않는다.
+- 결정: D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 여전히 범위 밖이다.

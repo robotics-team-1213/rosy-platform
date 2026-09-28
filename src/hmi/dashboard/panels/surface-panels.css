@@ -74,6 +74,19 @@
   ui-actions > * { width: 100%; }
 }
 .diagnostic-list, .waypoint-list { display: grid; gap: var(--space-2); padding-inline-start: var(--space-5); }
+/* 토큰 행 — 텍스트 뒤에 오는 58px 불가역 버튼이 행 높이를 넘어 인접 행과
+ * 텍스트를 침범하지 않게 한다. 배치 규칙일 뿐 공용 부품을 다시 칠하지 않는다. */
+[data-panel="system.security"] .diagnostic-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+}
+[data-panel="system.security"] .diagnostic-list li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .traffic-policy-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

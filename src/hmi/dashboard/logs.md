@@ -481,3 +481,22 @@
 - First attempt on `757fb38f` stopped at administrator `/device` `confirm_cancel`: the test checked rollback enabled after panel mount, before the release readback poll completed. The fixture returns a fresh release record with previous version `r1`; rollback becomes enabled after that readback. Updated the test to wait for the actual release readiness instead of panel count.
 - Rerun: `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` passed **1 test, 60 cells** in 274.59s. Matrix: overflow 0, pageerrors 0, E-stop visible 60/60. Artifact: `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json`.
 - Gate: only test synchronization changed. Local FastAPI/Chromium does not prove physical stop or Host Agent result. G3, DEVICE/FIELD, D-153 remain HOLD.
+
+## 2026-09-29 · uncommitted · fix(dashboard): restore shared-control contracts and P1 craft round
+
+- 변경: main에 커밋된 공유 계약 위반 3건을 복원했다 — host identity 버튼의 kind 선언 패턴(system.js), `/setup`·`/device` 패널 모듈 import 중 `ui-empty` 로딩 문구(mount.js), `/setup`·`/device` 데스크톱 main 슬롯을 row-pairing grid에서 multicol로(shell.css), action-group 탭의 균등 전폭 스트레치를 콘텐츠 폭 flex로, 접근 토큰 행의 58px 삭제 버튼이 텍스트·인접 행을 침범하지 않게 flex 배치(surface-panels.css). G2 harness가 첫 패널이 아니라 조립 완료(`#surface-status` hidden)를 기다리고 캡처한다.
+- 증거: `src/hmi/dashboard/test` 43 passed, `src/hmi/web/test` 22 passed, D-283·surface 레이아웃 23 passed, `test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py` 29 passed. 역할 G2 60셀 재생성(overflow 0, pageerror 0). Impeccable detect `[]`. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: dashboard SOURCE/LOCAL HOLD -> GO(브라우저 회귀 + 신흘 캡처 블로커 해소). ARTIFACT은 이미지 설치 증가 없이 HOLD. D-153 표면 G3 사람 평가·DEVICE/FIELD는 별도다.
+
+## 2026-09-29 · uncommitted · fix(dashboard): 역할 화면 브랜드를 대시보드 홈 링크로
+
+- 변경: `surface.html` 상단 바 `ui-brand`가 일반 텍스트여서 `/console`·`/setup`·`/device`에서 ROSY 브랜드를 클릭해도 홈으로 갈 수 없었다. 대시보드 `index.html`의 홈 링크와 같은 `<a href="/dashboard" aria-label="Rosy OS 대시보드 홈">`로 감쌌고, `shell.css`에 `ui-brand a:focus-visible` 포커스 링을 더했다. 같은 텍스트와 토큰이라 화면 픽셀 변화는 없고 링크 동작만 추가된다. `/dashboard` 자신의 브랜드 링크와 Fleet·경기 보드(별도 호스트, D-275)는 대상이 아니다.
+- 근거: 정적 계약 `src/hmi/dashboard/test/test_surface_home_link.py` 신설(링크·포커스 링 고정, 브라우저 클릭 1건은 게이트 변수). `python -X utf8 -m pytest src/hmi/dashboard/test/test_surface_home_link.py src/hmi/dashboard/test/test_dashboard_package.py src/hmi/dashboard/test/test_web_budgets.py src/hmi/web/test/test_palette_gates.py -q` 23 passed 1 skipped. `ROSY_RUN_BROWSER_TESTS=1`에서 `test_surface_home_link.py test_surface_entry_browser.py test_surface_layout_browser.py` 11 passed, `test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py test/test_web_dialog_contract.py src/runtime/api_web/test/test_d283_console_browser.py` 43 passed.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
+
+## 2026-09-29 · uncommitted · fix(dashboard): 예산 후보는 추적 파일만 훑는다
+
+- 변경: `test_web_budgets.py`의 두 시험이 파일시스템 `SRC.rglob("*.js")` + `SRC.rglob("*.html")`로 후보를 모아 `.gitignore`된 `site/overhead/android/build/reports/problems/problems-report.html`(600행 초과)을 예산 초과 후보로 잡았다. `_web_files()`로 바꿔 `git ls-files -c -o --exclude-standard -- src`로 후보를 얻는다 — 추적 파일과 아직 add하지 않은 새 파일은 잡고, ignore된 빌드 산출물은 잡지 않는다. git이 없으면 skip하고 파일시스템 훑기로 대체하지 않는다. `.js`까지 보는 것이 이 스캔만의 일이므로(레지스트리 발견 스캔은 `.html` 한정) 여기에 둔다. 예산값 600/150과 `VERDICTS`는 그대로다.
+- 근거: 변경 직전 `test_web_files_over_budget_have_a_recorded_verdict` 1 failed — 원인은 그 무시된 Android 빌드 산출물. 변경 후 `python -m pytest src/hmi/dashboard/test -q` 14 passed, 32 skipped. 변이 확인: add 안 된 700행 `src/hmi/dashboard/zz_mut_proof.html`을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛고, 지우면 다시 14 passed로 복구한다.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
+- 결정: D-329 Decision 3 "tracked files only"를 이 예산 시험에도 적용했다. 판정 기준과 `VERDICTS`는 바꾸지 않는다.

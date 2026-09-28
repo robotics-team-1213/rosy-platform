@@ -19,7 +19,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292, D-294, D-300]
+adrs: [D-61, D-147, D-168, D-72, D-194, D-195, D-277, D-284, D-285, D-286, D-287, D-292, D-294, D-300, D-329]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-26-rosy-modern-brand-palette.md

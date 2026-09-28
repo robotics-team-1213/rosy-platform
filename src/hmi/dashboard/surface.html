@@ -15,7 +15,11 @@
   <a class="skip-link" href="#surface-main">본문으로 건너뛰기</a>
   <ui-shell grammar="{{grammar}}">
     <ui-topbar>
-      <ui-brand><b>ROSY</b><small>{{title}}</small></ui-brand>
+      <ui-brand>
+        <a href="/dashboard" aria-label="Rosy OS 대시보드 홈">
+          <b>ROSY</b><small>{{title}}</small>
+        </a>
+      </ui-brand>
       <nav id="surface-switch" class="surface-switch" aria-label="화면 전환"></nav>
       <span data-spacer></span>
       <ui-text id="shell-notice" scale="label" role="status"></ui-text>

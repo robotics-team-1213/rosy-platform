@@ -21,6 +21,8 @@ Source-only implementation work on the isolated `feat/fleet-mission-control` wor
 | `python -m pytest src/site/fleet/test/ -q` | 578 passed, 5 skipped |
 | `python -m pytest src/site/fleet/test/ -q` after follow-up review fix | 578 passed, 5 skipped |
 | `python -m pytest src/products/omx/adapter/test/ -q` | 72 passed, 3 skipped |
+| `python -m pytest src/hmi/dashboard/test/ -q` | 14 passed, 32 skipped (browser/runtime-dependent cases skipped) |
+| `python -m pytest src/hmi/web/test/ test/test_web_dialog_contract.py test/test_fleet_console_browser.py -q` | 90 passed, 31 skipped; explicit rearm confirmation is pinned in the native-dialog contract |
 | `python test/test_network_topology_contracts.py test/test_harness_contracts.py -q` | Passed |
 | `python tools/harness/rosy_harness.py lint` | 0 errors, 18 freshness warnings |
 | `python tools/harness/rosy_harness.py generate` | Generated Fleet and OMX adapter indexes after execution-record update |
@@ -30,4 +32,4 @@ The preceding Fleet/OMX implementation commits and their focused evidence are su
 
 ## Limits and next gate
 
-This evidence does not prove that a site/network stop always reaches the robot, that the robot consumes and fences the stop generation, that an independent physical E-stop exists, or that gripper/camera feedback is calibrated and trustworthy. The camera goal evidence contract is a source-level check; provenance authentication must be established before any public submission path. OMX remains disabled and the Mission ledger cannot dispatch. D-322 requires an actual Ubuntu 24.04/Jazzy/Isaac Sim 6.1 GPU host; that environment is absent here, so Isaac ROS-SIM fault injection, target artifact, DEVICE, and FIELD acceptance remain open.
+This evidence does not prove that a site/network stop always reaches the robot, that the robot consumes and fences the stop generation, that an independent physical E-stop exists, or that gripper/camera feedback is calibrated and trustworthy. The camera goal evidence contract is a source-level check; provenance authentication must be established before any public submission path. OMX remains disabled and the Mission ledger cannot dispatch. D-322 requires an actual Ubuntu 24.04/Jazzy/Isaac Sim 6.1 GPU host; that environment is absent here, so Isaac ROS-SIM fault injection remains open. The deployment instructions say the production site signing key and trusted host enrollment are not provisioned; no production artifact activation or DEVICE/FIELD acceptance is claimed.

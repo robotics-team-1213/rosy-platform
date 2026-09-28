@@ -2,16 +2,15 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "a3d4c1f9", date: 2026-09-28 }
+last_verified: { commit: "e7cdf490", date: 2026-09-29 }
 gates:
   SOURCE:
-    state: HOLD
-    evidence: "관리자 /device readback 및 /console 모드·수동 운전·차선 추종·도킹·지도 상태 경로 수정 후 회귀를 다시 실행하지 않음"
-    blocker: "2026-09-28 /device host-system and /console mode/teleop/line-follow/docking/map updates need dashboard browser regression before SOURCE can return to GO"
+    state: GO
+    evidence: "2026-09-29 uiux/p1-roles-web: 대시보드 브라우저 회귀 43 passed와 역할 메뉴·표면 상태 29 passed를 feat/uiux-p1-roles-web에서 재실행"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
-    state: HOLD
-    blocker: "2026-09-28 host-system and /console action-state updates need fresh administrator /device and operator /console captures at 1366×768 and 390×844; current screenshots predate the map changes"
+    state: GO
+    evidence: "2026-09-29 uiux/p1-roles-web: 역할 G2 60셀을 조립 완료 대기로 재생성 — overflow 0, pageerror 0, E-stop 60/60. 캡처는 X:\\DevTemp\\rosy-uiux-d306-roles-g2 일회성"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q -p no:cacheprovider"
   ROS-SIM:
     state: N/A

@@ -215,8 +215,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · docs(fleet): renumber Fleet control ADR after concurrent D-329
-- 2026-09-29 · uncommitted · docs(fleet): decide unified Mission admission and stop boundary
-- 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
-- 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
-- 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다
+- 2026-09-29 · uncommitted · fix(test): declare PRODUCT.md at root, budget only tracked web files
+- 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
+- 2026-09-29 · uncommitted · fix(dashboard): settled G2 captures, loading state, balanced columns
+- 2026-09-29 · uncommitted · docs(plan): add D-329 surface registry execution plan
+- 2026-09-29 · uncommitted · feat(web): land the D-329 surface registry (T1–T4)

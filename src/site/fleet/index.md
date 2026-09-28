@@ -63,6 +63,6 @@
 
 - 2026-09-29 · uncommitted · review Mission stop-generation recovery
 - 2026-09-29 · uncommitted · add internal Mission admission and goal evidence ledger
+- 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
+- 2026-09-29 · uncommitted · fix(fleet-ui): restore segment toggle paint and focus ring contracts
 - 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
-- 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
-- 2026-09-28 · uncommitted · add per-camera preview rectification controls
