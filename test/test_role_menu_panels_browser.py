@@ -1119,6 +1119,73 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
         browser.close()
 
 
+def test_admin_host_identity_editor_is_single_and_preserves_save_feedback():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page, errors = open_page(playwright, 390, 844)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        _route_panel_test(page)
+        source = (WEB / "panels" / "host" / "system.js").read_text(encoding="utf-8")
+        page.route("http://rosy.test/assets/panels/host/system.js", lambda route: route.fulfill(
+            status=200, content_type="application/javascript", body=source))
+        page.goto("http://rosy.test/panel-test", wait_until="load", timeout=5_000)
+        page.evaluate("""async () => {
+          const {mount} = await import('/assets/panels/host/system.js');
+          const root = document.createElement('main'); document.body.append(root);
+          const callbacks = {};
+          const store = {poll(path, interval, onData, onError) {
+            callbacks[path] = {interval, onData, onError}; return () => {};
+          }};
+          const api = () => new Promise(resolve => { window.__resolveIdentity = resolve; });
+          window.__callbacks = callbacks;
+          window.__unmount = mount(root, {role:'administrator', store, api});
+          callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'});
+        }""")
+        form = page.locator("main .host-system-detail .ui-form")
+        page.locator("main details.host-system-detail").evaluate("node => { node.open = true; }")
+        identity_input = form.locator('[name="robot_name"]')
+        save = form.locator('ui-button[type="submit"]')
+        feedback = page.locator("main .host-system-detail ui-status[role='status']")
+        identity_status = page.locator("main .host-system-overview ui-status").first
+        assert page.evaluate("window.__callbacks['/api/v1/system/info'].interval") == 30_000
+        for name in ("robot-fixture", "robot-fixture", "robot-fixture"):
+            page.evaluate("name => window.__callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:name,runtime_mode:'hardware'})", name)
+        assert page.locator("main .host-system-detail .ui-form").count() == 1
+
+        identity_input.fill("draft-pinky")
+        page.evaluate("window.__callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'})")
+        page.evaluate("window.__callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'})")
+        assert page.locator("main .host-system-detail .ui-form").count() == 1
+        assert identity_input.input_value() == "draft-pinky"
+
+        form.evaluate("node => node.requestSubmit()")
+        assert identity_input.is_disabled() and save.is_disabled()
+        pending = feedback.inner_text()
+        assert pending
+        page.evaluate("window.__callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'})")
+        assert feedback.inner_text() == pending
+        assert identity_input.input_value() == "draft-pinky"
+        page.evaluate("window.__resolveIdentity({robot_name:'draft-pinky'})")
+        page.wait_for_function("document.querySelector('main .host-system-detail ui-status[role=status]')?.getAttribute('state') === 'ready'")
+        receipt = feedback.inner_text()
+        assert receipt and identity_input.input_value() == "draft-pinky"
+        assert identity_status.inner_text() != receipt
+
+        page.evaluate("window.__callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'robot-fixture',runtime_mode:'hardware'})")
+        assert feedback.inner_text() == receipt
+        assert identity_input.input_value() == "draft-pinky"
+        page.evaluate("window.__callbacks['/api/v1/system/info'].onData({robot_id:'robot-a',robot_name:'draft-pinky',runtime_mode:'hardware'})")
+        assert identity_input.input_value() == "draft-pinky"
+        assert page.locator("main .host-system-detail .ui-form").count() == 1
+        _unmount_panel(page)
+        assert errors == []
+        browser.close()
+
+
 def test_console_map_readiness_freshness_and_action_feedback_are_independent():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

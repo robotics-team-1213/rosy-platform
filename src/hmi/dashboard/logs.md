@@ -456,3 +456,9 @@
 - Evidence: Focused Playwright panel regression passed 1 test. A measurement poll during a pending hardware refresh POST did not replace pending feedback; later measurements did not erase the accepted request receipt; a POST error survived a measurement-read failure. Dedicated full-shell capture test passed at 1366x768 and 390x844 with overflow 0, pageerror 0, and visible E-stop. Screenshots and `admin-hardware-refresh-matrix.json`: `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`; visually inspected.
 - Scope: The local fixture accelerates only the relevant hardware poll and returns controlled measurement/API responses. Full G2 matrix and Impeccable detector were not rerun.
 - Gate: SOURCE/LOCAL browser verification complete for `17f30137`. Actual Host Agent measurement, physical device completion, G3, DEVICE/FIELD, and D-153 acceptance remain HOLD.
+
+## 2026-09-28 - uiux/host-console-readback-evidence - verify identity editor polling
+
+- Evidence: Focused Playwright panel regression passed 1 test. Repeated identity readbacks kept one editor and preserved the draft. While PUT was pending, input and save control were disabled; accepted request feedback remained visible through stale readback and stayed separate from identity status. Dedicated full-shell capture test passed at 1366x768 and 390x844 with overflow 0, pageerror 0, and visible E-stop. PNG/JSON: `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-identity-feedback\`; visually inspected.
+- Scope: The fixture accelerates only the 30-second identity poll and returns controlled stale GET and accepted PUT responses. Full G2 matrix and Impeccable detector were not rerun.
+- Gate: SOURCE/LOCAL browser verification complete for `df260822`. Actual Host Agent and physical identity readback, G3, DEVICE/FIELD, and broader D-153 acceptance remain HOLD.

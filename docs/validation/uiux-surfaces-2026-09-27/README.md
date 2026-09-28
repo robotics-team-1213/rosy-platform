@@ -218,3 +218,11 @@ The `17f30137` `/device` board-hardware refresh feedback was checked with a focu
 The focused panel regression passed **1 test**. The full-shell capture test passed at 1366x768 and 390x844; both screenshots were visually inspected and showed overflow 0, no page errors, and visible E-stop. The local fixture accelerates only the hardware poll and provides controlled API/measurement responses. Screenshots and `admin-hardware-refresh-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\host-hardware-refresh\`.
 
 This completes SOURCE/LOCAL browser verification for this follow-up. It does not prove Host Agent hardware measurement or physical device completion. Full G2 coverage, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
+
+## 2026-09-28 administrator identity editor polling regression - LOCAL
+
+The `df260822` system-panel fix was verified with a focused Chromium interaction regression and full-shell captures. Repeated identity readbacks did not create duplicate forms; an edited name remained in the single editor during later polls. Saving disabled the input and button while pending. After the PUT receipt, a stale identity readback did not replace the receipt or draft, and the action feedback remained separate from current identity status.
+
+The focused panel test passed **1 test**. The full-shell test passed at 1366x768 and 390x844. Both captures were visually inspected and reported horizontal overflow 0, page errors 0, and visible E-stop. The fixture accelerates only the 30-second identity poll and returns a controlled stale GET plus accepted PUT response. Screenshots and `admin-device-identity-feedback-matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\admin-device-identity-feedback\`.
+
+This completes SOURCE/LOCAL browser verification for `df260822`. It does not prove actual Host Agent or physical identity readback. Full G2 coverage, G3, DEVICE/FIELD, and broader D-153 acceptance remain **HOLD**.
