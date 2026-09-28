@@ -1200,9 +1200,28 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           outside: [...document.querySelectorAll('*')].filter(node => node.getBoundingClientRect().right > innerWidth + 1)
             .slice(0, 8).map(node => ({tag:node.tagName, className:String(node.className),
               right:node.getBoundingClientRect().right})),
+          headerRows: getComputedStyle(document.querySelector('ui-topbar')).gridTemplateRows
+            .trim().split(' ').length,
+          headerOverlaps: (() => {
+            const boxes = ['ui-brand', '#online-pill', '#estop', '#console-token',
+              '#token-save', '#user-role', '#clock'].map(selector => {
+                const rect = document.querySelector(selector).getBoundingClientRect();
+                return {selector, left:rect.left, right:rect.right, top:rect.top, bottom:rect.bottom};
+              });
+            return boxes.flatMap((a, index) => boxes.slice(index + 1).filter(b =>
+              Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+              Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
+            ).map(b => [a.selector, b.selector]));
+          })(),
           brand: document.querySelector('ui-brand').getBoundingClientRect().toJSON(),
           stop: document.querySelector('#estop').getBoundingClientRect().toJSON(),
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
+          operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
+          clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
+          statusRow: getComputedStyle(document.querySelector('#online-pill')).gridRowStart,
+          clockRow: getComputedStyle(document.querySelector('#clock')).gridRowStart,
+          stopScopeHidden: getComputedStyle(document.querySelector('#estop small')).display === 'none',
+          stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
         browser.close()
     assert errors == []
@@ -1210,6 +1229,12 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["stop"]["right"] <= width, layout
     assert layout["status"]["right"] <= width, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
+    assert layout["headerRows"] <= 4, layout
+    assert layout["headerOverlaps"] == [], layout
+    if width <= 384:
+        assert layout["statusRow"] == layout["clockRow"] == "1", layout
+        assert layout["stopScopeHidden"], layout
+        assert layout["stopAccessibleName"] == "전체 로봇 정지", layout
 
 
 # --- D-202: 위험은 채움이다 — 따뜻한 글자는 4.5:1 이상이어야 읽힌다 ----------

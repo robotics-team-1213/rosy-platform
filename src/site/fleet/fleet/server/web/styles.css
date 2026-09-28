@@ -355,13 +355,15 @@ main {
 }
 
 @media (max-width: 24rem) {
+  ui-topbar { gap: var(--space-1); padding: var(--space-2); }
   ui-topbar ui-brand { grid-column: 1; grid-row: 1; }
-  #online-pill { grid-column: 2; grid-row: 1; justify-self: end; }
+  #online-pill { grid-column: 2; grid-row: 1; justify-self: start; }
   #estop { grid-column: 1 / -1; grid-row: 2; width: 100%; }
-  #console-token { grid-column: 1; grid-row: 3; }
-  #token-save { grid-column: 2; grid-row: 3; }
+  #estop small { display: none; }
+  #console-token { grid-column: 1 / 3; grid-row: 3; }
+  #token-save { grid-column: 3; grid-row: 3; }
   #user-role { grid-column: 1 / -1; grid-row: 4; }
-  #clock { grid-column: 1 / -1; grid-row: 5; justify-self: start; }
+  #clock { grid-column: 3; grid-row: 1; justify-self: end; }
 }
 
 .formation {
