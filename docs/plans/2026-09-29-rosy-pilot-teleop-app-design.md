@@ -35,6 +35,10 @@ dashboard는 기기 1대당 관제 콘솔이라 직접 잡는 조종 surface 로
 - 제품명 **Rosy Pilot**, ROS 패키지명 `pilot`(저장소 규칙: `rosy_*`/`pinky_*` 금지 준수).
 - 소스: `src/hmi/pilot/`(hmi 그룹, 정적 브라우저 자산 — D-23 패턴). ament_cmake 로 `share/pilot`
   설치, `core_api_web`의 `api/app.py` 자산 목록에 등록해 CORE 가 `/pilot/` 로 서빙.
+- **서빙 경로(계약)**: 조종 `http://<host>/pilot`(자산 `/pilot/assets/*`), 관제는 기존 그대로
+  `http://<host>/` → `/dashboard`(역할 표면 `/{console,setup,device}`). 두 앱은 pilot 상단의
+  조용한 버튼으로 왕래한다. PWA(T10)는 `start_url=/pilot`, `scope=/pilot` 로 설치 아이콘이
+  앱별로 분리된다.
 - same-origin 만 통신(`/api/v1`, `/ws/*`). CORS 신규 개방 없음. 앱은 이미지와 함께 배포되므로
   앱↔CORE API 버전 정합성이 이미지 단위로 보장된다.
 

@@ -71,6 +71,8 @@ def test_gate_form_follows_the_design_system_at_tablet_viewports(base_url):
                 page.wait_for_selector("form[data-pilot-token-form] ui-field input")
                 assert page.locator("ui-topbar ui-tag").count() == 1
                 assert page.locator("ui-head [data-gate-value]").inner_text() == "WAIT"
+                # 두 앱 왕래: 관제(/dashboard)로 가는 조용한 버튼이 상단에 있다(§3 경로 계약).
+                assert page.locator('ui-topbar ui-button[data-goto="/dashboard"]').count() == 1
                 # 토큰 단일 출처: tokens.css 가 :root 에 스텝 척도를 내려놓는다(D-130.3).
                 step = page.evaluate(
                     "getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim()")

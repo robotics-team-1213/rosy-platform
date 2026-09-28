@@ -19,3 +19,10 @@ if (root) {
     },
   });
 }
+
+// 두 앱(관제 /dashboard · 조종 /pilot) 사이 이동. 경로는 CORE 가 서빙하는 그대로.
+for (const button of document.querySelectorAll("[data-goto]")) {
+  button.addEventListener("click", () => {
+    location.assign(button.dataset.goto);
+  });
+}

@@ -34,3 +34,10 @@
 - gate 변화: LOCAL 진행(브라우저 계약 첫 확보).
 - 결정: D-323(T6 마무리 + §3.1 보강).
 - 교훈: 개발 서버의 정적 자산 경로는 브라우저 시험 전에 리소스 응답 코드로 먼저 확인한다 — 스타일 붕괴가 마크업 결함이 아니라 404였다. 로그 항목을 끼워넣을 때 머리글 줄을 교체하지 않는다(이번 회차 2회 재발).
+
+## 2026-09-29 · uncommitted · feat(pilot): record the served-path contract and add dashboard navigation
+- 변경: 설계 §3 에 서빙 경로 계약 표(조종 /pilot·관제 /dashboard·역할 표면) 명시. pilot 상단에 관제 화면 조용한 버튼(data-goto) 추가, PWA start_url/scope 분리 원칙 기록. 브라우저 계약에 왕래 버튼 존재 검사 추가.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot 전체 시험 통과(이 기록 커밋 시 결과 기록).
+- gate 변화: 없음.
+- 결정: D-323 §3 경로 계약.
+- 교훈: 없음
