@@ -82,3 +82,9 @@ G2 적용 경계: 게임 `Phase`에는 CORE `SAFE_STOP`이 없고 경기 `hold`�
 | 표면 문법 | 단일 피치 중심, 13셀 1280×800 가로·세로 넘침 0, 키보드 정지 포커스 확인 | 충족 |
 
 게임 브라우저 14 passed, 게임 호스트·공용 UI/대화상자/문법/증거 계약 176 passed. 추가한 이전 응답 fixture는 시각 필드가 빠져도 `fresh`로 거짓 승격하지 않는 것을 고정한다. **LOCAL에서 재현 가능한 G2 셀과 G3 위반은 닫혔다.** D-153의 보존형 화면 증거는 X:의 일회성 캡처가 사라지면 재생성이 필요하므로 표면 최종 GO로 승격하지 않는다. 실제 카메라·로봇 경기, 양쪽 로봇의 물리 정지 readback, DEVICE/FIELD 수용도 여전히 HOLD다.
+
+## 2026-09-28 최신 main 재검증
+
+`main` `757fb38f`의 화면 자산으로 LOCAL 재검증했다. `python -X utf8 -m pytest src/site/games/test test/test_rosy_games_surface.py -q`는 **111 passed**, `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest test/test_games_board_browser.py -q`는 **15 passed**다. 기존 `X:\DevTemp\rosy-uiux-d309-games-g2\capture_games.py`를 최신 main에서 다시 실행해 13셀 PNG와 `measurements.json`을 갱신했다. 캡처는 1280×800이며 13셀 모두 가로·세로 넘침 0, `pageErrors` 빈 배열이다. `delayed`, `disconnected`, 데이터 없음/시각 없음 셀은 마지막 수신 점수·단계를 보존하고 현재 위치가 아님/결측 상태를 화면에 드러낸다. `delayed`와 포커스 링, 연결 끊김, 시각 정보 없는 응답 화면을 육안 확인했다.
+
+이 검증은 로컬 Chromium·fixture 범위다. 실제 카메라/경기, CORE 물리 정지 readback, 사람 G3, DEVICE/FIELD는 여전히 HOLD다. 캡처는 X: 임시 산출물이므로 사라지면 재생성해야 하며, 보존형 릴리스 근거로 취급하지 않는다.

@@ -2,6 +2,8 @@
 
 **판정: `/setup` HOLD, `/device` HOLD.** 이 회차는 Windows Chromium이 실제 FastAPI `create_app` + `CoreServices` fixture에 요청한 **LOCAL** 화면 증거다. `X:\DevTemp\rosy-uiux-d306-roles-g2\`의 PNG 60장과 `matrix.json`이 원본이다. fixture는 인증된 `/api/v1` GET 응답을 실제 앱에서 받은 뒤 지정한 증거·목록·오류 상태만 치환했다. 물리 로봇, ROS 실행, Host Agent 실물, 이미지 설치 또는 현장 근거가 아니다. X:의 캡처는 일회성이고 저장소에 보존되지 않는다.
 
+> 첫 표와 `미촬영·미검증 셀`은 최초 회차의 시점 기록이다. 후속 G2 재실행·첫 기동 및 패널별 회귀 결과는 문서 뒤쪽의 날짜별 기록을 기준으로 읽는다. 특히 `/device confirm_cancel`은 최신 역할 G2 60셀 재실행에서 대화상자 1회·취소 POST 0으로 확인되어 최초 실패가 대체됐다. 네이티브 창 픽셀, 실제 장치 적용과 G3/DEVICE/FIELD 수용은 별도 게이트다.
+
 ## 범위와 방법
 
 `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py -q -p no:cacheprovider`로 재생성한다. 뷰포트는 각 셀에서 1366×768·390×844 두 개다. 스크린샷은 전체 문서 길이를 찍으므로 모바일 절차의 세로 스크롤까지 보인다. 결과 JSON은 역할·표면·상태·뷰포트·파일명·패널 수·가로 넘침·E-stop 가시성·페이지 오류·대화상자 문구·POST 기록을 남긴다. `notices` 배열은 숨은 DOM 노드도 포함하므로 PNG의 실제 가시성과 함께 읽어야 한다.
