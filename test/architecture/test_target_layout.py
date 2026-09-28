@@ -27,6 +27,7 @@ TARGET = {
     "hmi/face": "hmi/face",
     "hmi/web": "hmi/web",
     "hmi/dashboard": "hmi/dashboard",
+    "hmi/pilot": "hmi/pilot",
     "site/fleet": "site/fleet",
     "site/games": "site/games",
     "site/overhead": "site/overhead",

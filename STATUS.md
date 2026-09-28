@@ -25,6 +25,7 @@
 | [core_api_web](src/runtime/api_web/progress.md) | CORE | uncommitted (2026-09-26) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](src/hmi/web/progress.md) | CORE | 9049bd37 (2026-09-27) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | a3d4c1f9 (2026-09-28) | HOLD | HOLD | N/A | HOLD | N/A | N/A |
+| [pilot](src/hmi/pilot/progress.md) | 화면 | 434ceb0b (2026-09-29) | GO | HOLD | N/A | HOLD | HOLD | N/A |
 | [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
@@ -63,6 +64,9 @@
 - dashboard SOURCE: 2026-09-28 /device host-system and /console mode/teleop/line-follow/docking/map updates need dashboard browser regression before SOURCE can return to GO
 - dashboard LOCAL: 2026-09-28 host-system and /console action-state updates need fresh administrator /device and operator /console captures at 1366×768 and 390×844; current screenshots predate the map changes
 - dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
+- pilot LOCAL: 화면(connect·drive·inputs)과 Playwright 종단 시험은 실행 계획 T6~T11 이후
+- pilot ARTIFACT: share/pilot 설치를 이미지에서 본 기록이 없다
+- pilot DEVICE: 실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전
 - omx_adapter ROS-SIM: Simulation evidence is Docker Desktop amd64 only. Target Linux workstation timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
 - omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전

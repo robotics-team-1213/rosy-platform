@@ -260,7 +260,8 @@ def _allowed(source: str, target: str) -> bool:
     if src_domain == "runtime" and dst_domain == "runtime":
         return True
     # D-243: the API package serves the operator screens and nothing else in runtime does.
-    if source == "core_api_web" and target == "dashboard":
+    # D-323: the pilot teleop surface follows the same serving exception.
+    if source == "core_api_web" and target in {"dashboard", "pilot"}:
         return True
     return edge_allowed(src_domain, _family(source), dst_domain, _family(target), target)
 
