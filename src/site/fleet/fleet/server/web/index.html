@@ -147,7 +147,9 @@
         <p class="hint" id="signals-hint">signals.yaml 로 연결된 사이트 신호등입니다. 장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다.</p>
       </div>
 
-      <div id="log" class="log" role="status" aria-live="polite"></div>
+      <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
+        <p class="log-empty"><strong>최근 이벤트가 없습니다</strong><span>관제 요청과 연결 상태 변화가 여기에 표시됩니다.</span></p>
+      </div>
     </section>
   </main>
 

@@ -79,16 +79,16 @@ main {
     grid-row: 1 / span 2;
     display: grid;
     grid-template-columns: minmax(0, 0.46fr) minmax(0, 0.54fr);
-    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
     column-gap: var(--space-4);
     align-items: start;
     min-height: 0;
-    height: calc(100dvh - var(--topbar-height) - 3rem);
-    max-height: none;
+    height: auto;
+    max-height: calc(100dvh - var(--topbar-height) - 3rem);
   }
   #roster-heading { grid-column: 1; grid-row: 1; }
   #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
-  #roster { grid-column: 1; grid-row: 2 / 6; min-height: 0; height: 100%; overflow-y: auto; }
+  #roster { grid-column: 1; grid-row: 2 / 6; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
   .discovery { grid-column: 2; grid-row: 2; margin-top: 0; }
   .formation { grid-column: 2; grid-row: 3; margin-top: var(--space-3); }
   .signals { grid-column: 2; grid-row: 4; }
@@ -247,6 +247,8 @@ main {
 
 
 .log {
+  display: flex;
+  flex-direction: column;
   margin-top: var(--space-4);
   font-family: var(--mono);
   font-size: var(--text-micro);
@@ -255,6 +257,20 @@ main {
   overflow-y: auto;
   line-height: 1.7;
 }
+.log-empty {
+  display: grid;
+  place-content: center;
+  gap: var(--space-2);
+  margin: auto 0;
+  padding: var(--space-4);
+  border: 1px dashed var(--line-14);
+  border-radius: var(--radius-button);
+  background: var(--ground-soft);
+  text-align: center;
+  line-height: var(--leading-copy);
+}
+.log-empty strong { color: var(--paper); font-family: var(--body); font-size: var(--text-label); }
+.log-empty span { color: var(--muted); font-family: var(--body); }
 .log div { border-bottom: 1px solid var(--line-06); padding: var(--space-1) 0; }
 /* D-202 — 나쁜 줄은 채워진다. 경보 글자(2.24:1)가 아니라 위험 채움 + 종이 잉크. */
 .log div.bad { color: var(--paper); background: var(--status-crit); padding: var(--space-1) var(--space-2); }
