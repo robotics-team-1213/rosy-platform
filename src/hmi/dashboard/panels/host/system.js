@@ -30,7 +30,8 @@ export function mount(root, ctx) {
   const runtimeStatus = el("ui-status", "", "호스트 런타임 확인 중");
   const identityStatus = el("ui-status", "", "로봇 신원 확인 중");
   const capabilityStatus = el("ui-status", "", "기능 지원 확인 중");
-  overview.append(identityStatus, capabilityStatus, runtimeStatus);
+  const inventoryStatus = el("ui-status", "", "기능 인벤토리 확인 중");
+  overview.append(identityStatus, capabilityStatus, inventoryStatus, runtimeStatus);
   const detail = el("details", "surface-disclosure host-system-detail");
   detail.append(el("summary", "", "호스트·로봇 신원·기능 세부 정보 및 이름 변경"), runtime.wrap, identity.wrap, capabilities.wrap);
   const message = el("ui-status", "", "");
@@ -52,7 +53,11 @@ export function mount(root, ctx) {
       ? `호스트 런타임 일부 확인 불가: ${data.unavailable.join(", ")}`
       : `호스트 ${data.hostname || "이름 미확인"} · 런타임 확인됨`;
     runtimeStatus.setAttribute("state", data.unavailable?.length ? "warning" : "ready");
-  }, (error) => { runtimeStatus.textContent = `호스트 런타임 확인 불가: ${error.message}`; runtimeStatus.setAttribute("state", "error"); });
+  }, (error) => {
+    fields(runtime.body, []);
+    runtimeStatus.textContent = `호스트 런타임 확인 불가: ${error.message}`;
+    runtimeStatus.setAttribute("state", "error");
+  });
 
   const stopIdentity = ctx.store.poll("/api/v1/system/info", 30_000, (data) => {
     fields(identity.body, [["로봇 ID", data.robot_id], ["표시 이름", data.robot_name || data.name],
@@ -75,22 +80,39 @@ export function mount(root, ctx) {
       });
       identity.wrap.append(form);
     }
-  }, (error) => { identityStatus.textContent = `로봇 신원 확인 불가: ${error.message}`; identityStatus.setAttribute("state", "error"); });
+  }, (error) => {
+    fields(identity.body, []);
+    identityStatus.textContent = `로봇 신원 확인 불가: ${error.message}`;
+    identityStatus.setAttribute("state", "error");
+  });
 
-  let capabilityData = {};
-  let inventoryData = {};
-  function renderInventory() {
-    const descriptors = (inventoryData.descriptors || []).filter((item) => item.state !== "not_provided");
+  function renderCapabilities(data) {
+    const navigation = data.navigation?.goal_navigation === true;
+    const slam = data.slam === true;
+    capabilityStatus.textContent = `Navigation ${navigation ? "사용 가능" : "제한 또는 미제공"} · SLAM ${slam ? "사용 가능" : "제한 또는 미제공"}`;
+    capabilityStatus.setAttribute("state", navigation && slam ? "ready" : "warning");
+  }
+  function renderInventory(data) {
+    const descriptors = (data.descriptors || []).filter((item) => item.state !== "not_provided");
     capabilities.body.replaceChildren();
     if (!descriptors.length) capabilities.body.append(el("dd", "", "제공된 기능이 없습니다."));
     else for (const item of descriptors) {
       capabilities.body.append(el("dt", "", item.id), el("dd", "", [item.state, item.reason].filter(Boolean).join(" · ")));
     }
-    capabilityStatus.textContent = `기능 인벤토리 ${descriptors.length}개 · Navigation ${capabilityData.navigation?.goal_navigation === true ? "사용 가능" : "제한 또는 미제공"} · SLAM ${capabilityData.slam === true ? "사용 가능" : "제한 또는 미제공"}`;
-    capabilityStatus.setAttribute("state", "ready");
+    inventoryStatus.textContent = descriptors.length
+      ? `기능 인벤토리 ${descriptors.length}개 확인됨`
+      : "기능 인벤토리 조회됨 · 제공된 기능 없음";
+    inventoryStatus.setAttribute("state", "ready");
   }
-  const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 15_000, (data) => { capabilityData = data; renderInventory(); }, (error) => { capabilityStatus.textContent = `기능 capability 확인 불가: ${error.message}`; capabilityStatus.setAttribute("state", "error"); });
-  const stopInventory = ctx.store.poll("/api/v1/system/inventory", 15_000, (data) => { inventoryData = data; renderInventory(); }, (error) => { capabilityStatus.textContent = `기능 인벤토리 확인 불가: ${error.message}`; capabilityStatus.setAttribute("state", "error"); });
+  const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 15_000, renderCapabilities, (error) => {
+    capabilityStatus.textContent = `기능 지원을 확인할 수 없습니다: ${error.message}`;
+    capabilityStatus.setAttribute("state", "error");
+  });
+  const stopInventory = ctx.store.poll("/api/v1/system/inventory", 15_000, renderInventory, (error) => {
+    capabilities.body.replaceChildren(el("dd", "", "인벤토리를 확인할 수 없습니다. 다시 확인 중입니다."));
+    inventoryStatus.textContent = `기능 인벤토리를 확인할 수 없습니다: ${error.message}`;
+    inventoryStatus.setAttribute("state", "error");
+  });
 
   return () => { stopRuntime(); stopIdentity(); stopCapabilities(); stopInventory(); };
 }

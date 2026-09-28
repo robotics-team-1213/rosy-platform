@@ -2,15 +2,16 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "f285d86a", date: 2026-09-28 }
+last_verified: { commit: "uncommitted", date: "2026-09-28" }
 gates:
   SOURCE:
-    state: GO
-    evidence: "지정 브라우저 회귀 54 passed (2026-09-28, checkout f285d86a; 6b0aaaa7 포함)."
+    state: HOLD
+    evidence: "관리자 /device capability·inventory 실패 상태와 stale readback 처리 변경 후 회귀를 다시 실행하지 않음"
+    blocker: "2026-09-28 /device host-system readback update needs dashboard browser regression before SOURCE can return to GO"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py -q -p no:cacheprovider"
   LOCAL:
-    state: GO
-    evidence: "checkout f285d86a (6b0aaaa7 포함)의 FastAPI TestClient/Chromium 관리자 /setup 캡처: X:\\DevTemp\\rosy-dashboard-browser-validation\\administrator-setup-1366x768.png 및 administrator-setup-390x844.png. 두 화면 pageError 0, 가로 overflow 0, 응답 200."
+    state: HOLD
+    blocker: "2026-09-28 host-system status update needs fresh administrator /device captures at 1366×768 and 390×844; current administrator captures cover /setup only"
     cmd: "ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q -p no:cacheprovider"
   ROS-SIM:
     state: N/A
