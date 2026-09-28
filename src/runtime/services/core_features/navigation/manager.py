@@ -23,7 +23,7 @@ class NavGoalSpec:
 
 
 class NavExecutor(Protocol):
-    def send_goal(self, spec: NavGoalSpec) -> None: ...
+    def send_goal(self, spec: NavGoalSpec, *, correlation_id: str | None = None) -> None: ...
     def cancel_goal(self) -> None: ...
     def send_initial_pose(self, x: float, y: float, yaw: float) -> None: ...
     def save_map(self, name: str) -> str: ...   # map_id 반환 (D-13, 브리지가 체크섬/대체 해시 산출)
@@ -141,7 +141,10 @@ class NavigationManager:
                 raise NavigationError(
                     "NAVIGATION_ACTIVE",
                     f"navigation in progress ({self._nav_state.value}) — cancel first")
-            executor.send_goal(spec)
+            if correlation_id is None:
+                executor.send_goal(spec)
+            else:
+                executor.send_goal(spec, correlation_id=correlation_id)
             self._set_state(NavigationState.PLANNING)
             self._active_correlation_id = correlation_id
         self._events.publish("nav.started", source="navigation_manager",
@@ -206,6 +209,11 @@ class NavigationManager:
             if session is not None and self._moving_session != session:
                 # 취소된 세션의 뒤늦은 목표. 내보내면 아무도 거두지 않는다.
                 return False
+            if self._active_correlation_id is not None:
+                raise NavigationError(
+                    "NAVIGATION_ACTIVE",
+                    "a Fleet-correlated navigation task owns the current goal",
+                )
             if session is None:
                 self._session_counter += 1
                 self._moving_session = self._session_counter
@@ -301,6 +309,7 @@ class NavigationManager:
                 self.executor.cancel_goal()
             self._set_state(NavigationState.CANCELED)
             correlation_id = self._active_correlation_id
+            self._active_correlation_id = None
             # 다음 목표는 새 기준점에서 시작한다. 남겨 두면 이미 만료된
             # 기준으로 곧장 다시 stuck 판정이 나 취소-재목표를 반복한다.
             self._last_progress_pos = None
@@ -331,12 +340,13 @@ class NavigationManager:
             self._last_progress_pos = None
             self._last_progress_ts = self.clock()
 
-    def on_result(self, succeeded: bool, error: Optional[str] = None) -> None:
+    def on_result(self, succeeded: bool, error: Optional[str] = None, *,
+                  correlation_id: str | None = None) -> None:
         with self._lock:
             self._set_state(NavigationState.ARRIVED if succeeded
                             else NavigationState.FAILED)
-            correlation_id = self._active_correlation_id
-            self._active_correlation_id = None
+            if correlation_id == self._active_correlation_id:
+                self._active_correlation_id = None
         if succeeded:
             self._events.publish("nav.completed", source="navigation_manager",
                                  data={"correlation_id": correlation_id})

@@ -74,12 +74,14 @@ def test_a_rejection_is_current_only_for_the_latest_goal():
 class _Nav:
     def __init__(self) -> None:
         self.calls: list = []
+        self.correlation_ids: list[str | None] = []
 
     def on_goal_accepted(self) -> None:
         self.calls.append(("on_goal_accepted",))
 
-    def on_result(self, *args) -> None:
+    def on_result(self, *args, **kwargs) -> None:
         self.calls.append(("on_result", args))
+        self.correlation_ids.append(kwargs.get("correlation_id"))
 
 
 class _Future:
@@ -169,13 +171,14 @@ def test_a_current_acceptance_notifies_and_wires_the_result_future():
 def test_a_successful_result_status_is_read_as_success():
     """`4` is `GoalStatus.STATUS_SUCCEEDED` — rclpy hands back a status, not a bool."""
     tracker = GoalTracker()
-    generation = tracker.opening()
+    generation = tracker.opening("attempt-current")
     tracker.accepted(generation, "h1")
     nav = _Nav()
 
     on_result(tracker, nav, _Future(SimpleNamespace(status=4)), generation)
 
     assert nav.calls == [("on_result", (True,))]
+    assert nav.correlation_ids == ["attempt-current"]
 
 
 def test_any_other_status_is_read_as_failure():
@@ -193,14 +196,17 @@ def test_a_superseded_goal_result_is_dropped_entirely():
     """Reading this as the current goal's failure drops nav_state to FAILED,
     and the HOLD that follows can no longer cancel anything."""
     tracker = GoalTracker()
-    first = tracker.opening()
+    first = tracker.opening("attempt-old")
     tracker.accepted(first, "h1")
-    tracker.opening()                      # the goal moved on
+    current = tracker.opening()             # the uncorrelated moving goal took over
+    tracker.accepted(current, "h2")
     nav = _Nav()
 
     on_result(tracker, nav, _Future(SimpleNamespace(status=5)), first)
+    on_result(tracker, nav, _Future(SimpleNamespace(status=4)), current)
 
-    assert nav.calls == []
+    assert nav.calls == [("on_result", (True,))]
+    assert nav.correlation_ids == [None]
 
 
 def test_a_future_that_raises_becomes_a_failed_result_not_a_crash():

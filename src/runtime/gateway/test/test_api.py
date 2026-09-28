@@ -371,7 +371,7 @@ def test_navigation_goal_correlation_is_echoed_on_start_and_final_events(client,
     tc, svc = client
 
     class LocalExecutor:
-        def send_goal(self, spec):
+        def send_goal(self, spec, *, correlation_id=None):
             return None
 
         def cancel_goal(self):
@@ -392,7 +392,7 @@ def test_navigation_goal_correlation_is_echoed_on_start_and_final_events(client,
     assert started.data["correlation_id"] == correlation_id
 
     svc.nav.on_goal_accepted()
-    svc.nav.on_result(True)
+    svc.nav.on_result(True, correlation_id=correlation_id)
     completed = next(event for event in reversed(svc.events.history())
                      if event.type == "nav.completed")
     assert completed.data["correlation_id"] == correlation_id

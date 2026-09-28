@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
-from core_common.protocol.schemas import Envelope, EnvelopeType, EventMessage, HelloPayload
+from core_common.protocol.schemas import (
+    Envelope, EnvelopeType, EventMessage, HeartbeatPayload, HelloPayload, StateSnapshot,
+)
 from fakes import FakeRobot
 from fleet.hub.hub import SiteHub
 from fleet.server.app import create_app
@@ -119,3 +121,69 @@ def test_paired_core_result_event_projects_into_its_fleet_task(tmp_path):
         "REQUESTED", "QUEUED", "ACCEPTED", "RUNNING", "COMPLETED",
     ]
     client.close()
+
+
+def test_durable_event_projection_failure_recovers_after_hub_restart(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    task_service = FleetTaskService(FleetTaskStore(database), robot_ids={"rosy_01"})
+    queued = run(task_service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, source="operator",
+        actor_id="site-console", request_key="recover-result-1",
+    ))
+
+    async def dispatch(_task):
+        return {"accepted": True}
+
+    accepted_task = run(task_service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token",
+                             fleet_pairing_token="agent-token")
+    hub = SiteHub([endpoint], event_store=CoreEventStore(database))
+    original_project = task_service.project_core_event
+    attempts = 0
+
+    def fail_once(event):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("temporary task database failure")
+        return original_project(event)
+
+    task_service.project_core_event = fail_once
+    console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
+    create_app(console, console_token="console-token", hub=hub, task_service=task_service)
+    assert hub.handle(Envelope(
+        type=EnvelopeType.HELLO,
+        payload=HelloPayload(robot_id="rosy_01", pairing_token="agent-token").model_dump(),
+    )).type is EnvelopeType.WELCOME
+
+    started = EventMessage(
+        event_id="attempt-started-recover", seq=1, robot_id="rosy_01", type="nav.started",
+        data={"correlation_id": accepted_task["attempt_id"]},
+    )
+    response = hub.handle(Envelope(
+        type=EnvelopeType.EVENT, payload=started.model_dump(mode="json"),
+    ))
+    assert response.payload["code"] == "TASK_PROJECTION_UNAVAILABLE"
+    assert CoreEventStore(database).read_events()[0]["event"]["event_id"] == started.event_id
+    assert task_service.store.get_task(queued["task_id"])["status"] == "ACCEPTED"
+
+    restarted_hub = SiteHub([endpoint], event_store=CoreEventStore(database))
+    restarted_console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
+    create_app(restarted_console, console_token="console-token", hub=restarted_hub,
+               task_service=task_service)
+    assert restarted_hub.handle(Envelope(
+        type=EnvelopeType.HELLO,
+        payload=HelloPayload(robot_id="rosy_01", pairing_token="agent-token").model_dump(),
+    )).type is EnvelopeType.WELCOME
+
+    heartbeat = Envelope(
+        type=EnvelopeType.HEARTBEAT,
+        payload=HeartbeatPayload(
+            state_snapshot=StateSnapshot(robot_id="rosy_01", seq=1),
+        ).model_dump(mode="json"),
+    )
+    recovered = restarted_hub.handle(heartbeat)
+
+    assert recovered.type is EnvelopeType.HEARTBEAT
+    assert task_service.store.get_task(queued["task_id"])["status"] == "RUNNING"
+    assert attempts >= 2

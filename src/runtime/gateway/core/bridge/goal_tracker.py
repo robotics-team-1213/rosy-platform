@@ -26,17 +26,24 @@ class GoalTracker:
         self._lock = threading.RLock()
         self._generation = 0
         self._live: dict[int, Any] = {}
+        self._correlation_ids: dict[int, str | None] = {}
 
     @property
     def live_count(self) -> int:
         with self._lock:
             return len(self._live)
 
-    def opening(self) -> int:
+    def opening(self, correlation_id: str | None = None) -> int:
         """목표를 보내기 직전. 이 세대 번호를 콜백까지 들고 간다."""
         with self._lock:
+            self._correlation_ids.clear()
             self._generation += 1
+            self._correlation_ids[self._generation] = correlation_id
             return self._generation
+
+    def correlation_id(self, generation: int) -> str | None:
+        with self._lock:
+            return self._correlation_ids.get(generation)
 
     def accepted(self, generation: int, handle: Any) -> bool:
         """액션 서버가 받아들였다.
@@ -48,6 +55,7 @@ class GoalTracker:
         """
         with self._lock:
             if generation != self._generation:
+                self._correlation_ids.pop(generation, None)
                 return False
             self._live[generation] = handle
             return True
@@ -55,12 +63,14 @@ class GoalTracker:
     def rejected(self, generation: int) -> bool:
         with self._lock:
             self._live.pop(generation, None)
+            self._correlation_ids.pop(generation, None)
             return generation == self._generation
 
     def finished(self, generation: int) -> bool:
         """결과 도착. 현재 세대면 True, 선점된 목표의 뒤늦은 결과면 False."""
         with self._lock:
             self._live.pop(generation, None)
+            self._correlation_ids.pop(generation, None)
             return generation == self._generation
 
     def cancel_all(self) -> list[Any]:
@@ -72,6 +82,7 @@ class GoalTracker:
         with self._lock:
             handles = list(self._live.values())
             self._live.clear()
+            self._correlation_ids.clear()
             self._generation += 1
             return handles
 
@@ -85,8 +96,12 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
     """
     goal_handle = future.result()
     if goal_handle is None or not goal_handle.accepted:
+        correlation_id = goals.correlation_id(generation)
         if goals.rejected(generation):
-            nav.on_result(False, "REJECTED")
+            if correlation_id is None:
+                nav.on_result(False, "REJECTED")
+            else:
+                nav.on_result(False, "REJECTED", correlation_id=correlation_id)
         return
     if not goals.accepted(generation, goal_handle):
         # 이미 지나간 목표의 수락이다(선점됐거나, 보내는 사이 취소됐다).
@@ -103,6 +118,7 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
     `result.status == 4` 는 `GoalStatus.STATUS_SUCCEEDED` 다 — rclpy 는
     성공 여부가 아니라 상태 코드를 주므로 그 비교가 전부다.
     """
+    correlation_id = goals.correlation_id(generation)
     if not goals.finished(generation):
         # 선점된 목표의 뒤늦은 결과. moving goal 에서는 abort 로 끝나며,
         # 이것을 현재 목표의 실패로 읽으면 nav_state 가 FAILED 로 떨어져
@@ -110,6 +126,12 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
         return
     try:
         result = future.result()
-        nav.on_result(result.status == 4)
+        if correlation_id is None:
+            nav.on_result(result.status == 4)
+        else:
+            nav.on_result(result.status == 4, correlation_id=correlation_id)
     except Exception as exc:
-        nav.on_result(False, str(exc))
+        if correlation_id is None:
+            nav.on_result(False, str(exc))
+        else:
+            nav.on_result(False, str(exc), correlation_id=correlation_id)

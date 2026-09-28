@@ -501,7 +501,7 @@ class RosBridge:
 
     # --- NavExecutor 구현 (navigation.manager와 계약) -------------------------
 
-    def send_goal(self, spec: NavGoalSpec) -> None:
+    def send_goal(self, spec: NavGoalSpec, *, correlation_id: str | None = None) -> None:
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = spec.frame
         goal.pose.header.stamp = self._node.get_clock().now().to_msg()
@@ -511,7 +511,7 @@ class RosBridge:
         goal.pose.pose.orientation.w = math.cos(spec.yaw / 2.0)
         if not self.nav_client.wait_for_server(timeout_sec=0.0):
             self._node.get_logger().warn("navigate_to_pose server not ready; goal queued anyway")
-        generation = self._goals.opening()
+        generation = self._goals.opening(correlation_id)
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(
             lambda done, gen=generation: self._goal_response_cb(done, gen))

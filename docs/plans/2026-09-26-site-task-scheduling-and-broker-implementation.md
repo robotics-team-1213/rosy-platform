@@ -133,6 +133,11 @@ This supersedes Task 8 item 1 only for the current Site Fleet Pinky navigation
 path. It does not activate central Fleet PRT-004 `Envelope.correlation_id` or
 `AckPayload`, and it does not establish physical stop evidence.
 
+The CORE correlation is bound to a single Nav2 goal generation; a moving goal
+cannot replace a Fleet-correlated goal or inherit its ID. Fleet retries task
+projection from the durable CORE event audit on later heartbeats and after
+restart, so a sent event does not depend on CORE-level redelivery.
+
 The SOURCE/LOCAL host suites pass on Windows. ROS-SIM, ARTIFACT, DEVICE, SITE,
 and FIELD gates remain open; the dated 2026-09-27 trace remains historical
 pre-change evidence.

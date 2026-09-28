@@ -588,7 +588,7 @@ class FakeExecutor:
     def __init__(self):
         self.sent, self.canceled = [], 0
 
-    def send_goal(self, spec):
+    def send_goal(self, spec, *, correlation_id=None):
         self.sent.append(spec)
 
     def cancel_goal(self):
@@ -631,19 +631,24 @@ class TestNavigation:
         types = [ev.type for ev in bus.history()]
         assert "nav.started" in types and "nav.completed" in types
 
-    def test_navigation_correlation_survives_cancel_until_action_result(self, bus, safety, tmp_path):
+    def test_navigation_correlation_is_scoped_to_the_active_goal(self, bus, safety, tmp_path):
         nav, _, _ = self._make(bus, safety, tmp_path)
         nav.goal(nav.resolve_goal(x=1.0, y=1.0), correlation_id="attempt-42")
+
+        with pytest.raises(Exception) as raised:
+            nav.moving_goal(nav.resolve_goal(x=2.0, y=2.0))
+        assert raised.value.code == "NAVIGATION_ACTIVE"
 
         nav.cancel()
         canceled = next(event for event in reversed(bus.history())
                         if event.type == "nav.canceled")
         assert canceled.data["correlation_id"] == "attempt-42"
 
-        nav.on_result(False, "CANCELED")
-        failed = next(event for event in reversed(bus.history())
-                      if event.type == "nav.failed")
-        assert failed.data["correlation_id"] == "attempt-42"
+        nav.moving_goal(nav.resolve_goal(x=2.0, y=2.0))
+        nav.on_result(True, correlation_id=None)
+        completed = next(event for event in reversed(bus.history())
+                         if event.type == "nav.completed")
+        assert completed.data["correlation_id"] is None
 
     def test_stuck_detection(self, bus, safety, tmp_path):
         nav, _, _ = self._make(bus, safety, tmp_path)

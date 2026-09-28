@@ -129,3 +129,9 @@
 - Change: `NavigationManager` carries the optional attempt correlation through `nav.started`, cancel request, and the final Nav2 result event. A canceled request does not clear it before a possible final result callback.
 - Evidence: core services 227 passed; focused gateway API/core-logic/event-catalogue tests passed except one known baseline event-literal classification failure outside this change.
 - Gate: host SOURCE/LOCAL only. No live Nav2, artifact, device, or field evidence.
+
+## 2026-09-28 · uncommitted · fix(core): scope task correlation to Nav2 goal generation
+
+- Change: carry `correlation_id` with each GoalTracker generation, reject moving-goal takeover while a Fleet attempt owns navigation, and clear the active association on cancel. Later moving-goal results cannot inherit the previous Fleet ID.
+- Evidence: CORE services 227 passed; focused gateway navigation and GoalTracker regressions 19 passed; changed implementation lint passed.
+- Gate: SOURCE/LOCAL only. The real Nav2 bridge and physical device remain unverified.

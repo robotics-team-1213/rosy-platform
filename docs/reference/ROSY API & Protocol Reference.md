@@ -992,6 +992,13 @@ states is a physical stop readback. HTTP ambiguity remains
 [boundary trace](../validation/2026-09-27-platform-p0-task-result-trace.md)
 records the pre-change gap and counterexamples.
 
+CORE binds the ID to one Nav2 action generation. An active Fleet-correlated
+goal cannot be replaced by an uncorrelated moving goal; after a cancel request,
+later goal generations carry no previous attempt ID. Fleet stores each CORE
+event before projecting it. If projection temporarily fails, the durable audit
+log is retried on subsequent CORE heartbeats and replayed after Fleet restart;
+delivery does not depend on CORE retrying a sent event.
+
 On Fleet startup, a persisted `REQUESTED` task is changed to `UNKNOWN` with a
 `fleet-recovery` history entry; startup never assumes that it is safe to resend.
 

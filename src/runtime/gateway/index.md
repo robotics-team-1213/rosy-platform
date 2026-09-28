@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(core): isolate navigation result correlation
 - 2026-09-28 · uncommitted · test correlated navigation event lifecycle
 - 2026-09-28 · uncommitted · report camera-line observation hold
 - 2026-09-27 · uncommitted · consume core_common configuration
 - 2026-09-26 · uncommitted · FleetAgent site discovery integration
-- 2026-09-26 · uncommitted · test(core): D-257 site sighting schema coverage

@@ -73,3 +73,10 @@ hardware sample freshness guarantee, or central Fleet PRT ACK.
 
 **References:** D-18, D-55, D-59, D-293, D-297, D-298, D-315; API Reference
 §§5.3, 8, 10.8, 10.10.
+
+
+### Implementation addendum (2026-09-28)
+
+CORE binds the correlation ID to one Nav2 goal generation. An uncorrelated moving goal cannot take over an active Fleet-correlated goal, and later generations do not inherit the ID after a cancel request. Fleet retries task projection from its durable CORE event audit on subsequent heartbeats and after restart; delivery does not depend on CORE retaining or resending an event after send.
+
+Host validation includes a fail-once projection followed by recovery on CORE heartbeat and a regression proving that a previous attempt ID cannot leak into a moving-goal result. ROS-SIM, artifact, device, physical-stop, site, and field acceptance remain open.
