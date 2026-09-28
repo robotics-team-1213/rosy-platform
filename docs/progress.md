@@ -60,6 +60,7 @@ plans:
   - docs/plans/2026-09-28-camera-fault-supervised-demo-design.md
   - docs/plans/2026-09-28-camera-fault-supervised-demo.md
   - docs/plans/2026-09-29-pinky-deployment-fast-path.md
+  - docs/plans/2026-09-29-embodied-reasoning-device-action-design.md
 ---
 ## 지금 상태
 

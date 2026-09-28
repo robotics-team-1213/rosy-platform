@@ -3135,3 +3135,9 @@
 - 변경: D-325와 변경 경로 판정기를 추가해 no-artifact, native-payload, flashable-image, review/HOLD를 분리했다. existing-device runbook은 compatible payload 경로를 먼저 판정한다.
 - 증거: GitHub run 36415015940은 약 30분(이미지 build 1,619초), 36319224327은 약 5분(payload tree build 201초)이었다. selector 계약 시험 6개 통과; 서명·설치·DEVICE acceptance는 건드리지 않았다.
 - gate 변화: SOURCE 절차 개선만. ARTIFACT/DEVICE/FIELD는 기존 HOLD를 유지한다.
+
+## 2026-09-29 · uncommitted · docs(omx): propose embodied reasoning to Device Action boundary
+
+- 변경: ER 2의 시각 좌표를 실행 명령으로 취급하지 않고, Fleet의 Mission/Step과 OMX의 증거 결합 Device Action, 로컬 middleware, ROS Action 및 driver readback의 권한과 정지 경계를 제안 문서에 기록했다. 첫 대상은 고정 OMX 작업대의 단일 `PICK_PLACE`이다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, `git diff --check` 통과(Windows LOCAL). 실제 API·capability·모터 제어는 이번 변경에 포함되지 않는다.
+- gate 변화: 없음. OMX capability는 disabled이고 DEVICE/FIELD 검증은 미실행이다.

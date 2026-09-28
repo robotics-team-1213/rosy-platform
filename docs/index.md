@@ -190,6 +190,7 @@
 - [2026-09-28-camera-fault-supervised-demo.md](plans/2026-09-28-camera-fault-supervised-demo.md)
 - [2026-09-28-control-and-contract-boundary-audit.md](plans/2026-09-28-control-and-contract-boundary-audit.md)
 - [2026-09-28-site-camera-preview-rectification.md](plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-29-embodied-reasoning-device-action-design.md](plans/2026-09-29-embodied-reasoning-device-action-design.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 
 ## 교훈 (docs/solutions)
@@ -203,6 +204,7 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(omx): propose embodied reasoning to Device Action boundary
 - 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
 - 2026-09-29 · uncommitted · docs(sd): document powered-off no-drive recovery
 - 2026-09-29 · uncommitted · docs(g4): record link-loss lesson and D-321 calibration decision
