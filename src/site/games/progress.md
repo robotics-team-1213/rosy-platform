@@ -2,7 +2,7 @@
 module: games
 logical_modules: []
 owner: GAMES
-last_verified: { commit: "9049bd37", date: 2026-09-27 }
+last_verified: { commit: "6277a009", date: 2026-09-29 }
 gates:
   SOURCE:
     state: GO
