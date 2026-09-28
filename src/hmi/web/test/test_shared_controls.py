@@ -7,6 +7,10 @@ or copy a token colour into a second number.
 from pathlib import Path
 import re
 
+import pytest
+
+import surface_registry as registry
+
 ROOT = Path(__file__).resolve().parents[3]
 COMMON = Path(__file__).parent.parent
 COMPONENTS = COMMON / "components.css"
@@ -15,12 +19,7 @@ TOKENS = COMMON / "tokens.css"
 FACE = ROOT / "hmi" / "face" / "emotion" / "info_screen.py"
 PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
 
-SURFACES = (
-    ROOT / "hmi" / "dashboard",
-    ROOT / "site" / "fleet" / "fleet" / "server" / "web",
-    ROOT / "site" / "games" / "games" / "web",
-    ROOT / "runtime" / "sensing" / "web" / "dashboard.html",
-)
+# 표면 목록은 src/hmi/web/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
 STYLE_SUFFIXES = {".css", ".html", ".js"}
 
 RAW_SIZE = re.compile(r"font-size:\s*[0-9.]+(?:px|rem)")
@@ -57,7 +56,7 @@ def _kinds() -> set[str]:
 
 
 def _surface_texts():
-    for path in SURFACES:
+    for path in registry.for_contract(registry.REPO, "shared_controls"):
         if path.is_file():
             yield path
             continue
@@ -400,8 +399,10 @@ def test_diagnostic_palette_matches_the_token_hex():
 
 def test_a_browser_page_starts_from_the_shell():
     """다음 화면은 template.html 의 틀을 쓴다. 문법 없는 껍질은 실패다."""
+    if not registry.git_available(registry.REPO):
+        pytest.skip("D-329 발견 스캔은 git 체크아웃이 필요하다")
     pages = [
-        path for path in ROOT.rglob("*.html")
+        path for path in registry.discover_html(registry.REPO)
         if path.name in {"index.html", "dashboard.html"}
         and "<!doctype html>" in path.read_text(encoding="utf-8").lower()
     ]

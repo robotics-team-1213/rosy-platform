@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(dashboard): 역할 화면 브랜드를 대시보드 홈 링크로
 - 2026-09-29 · uncommitted · fix(dashboard): restore shared-control contracts and P1 craft round
 - 2026-09-28 · uncommitted · fix(dashboard): restore module harness validation
 - 2026-09-28 · uncommitted · fix(device): remove unreachable hardware role hint
 - 2026-09-28 · uncommitted · fix(device): explain hardware refresh role restriction
-- 2026-09-28 · uncommitted · fix(device): prevent duplicate identity editors on polling

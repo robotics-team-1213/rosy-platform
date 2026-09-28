@@ -183,3 +183,10 @@
 - 증거: surface 계약 41 passed, HMI web 78 passed, visible Chromium에서 page error 0 및 가로 넘침 0.
 - gate 변화: SOURCE/LOCAL 유지. 장치·현장 수용은 주장하지 않는다.
 - 결정: D-300.
+
+## 2026-09-29 · uncommitted · D-329 표면 레지스트리 착지 (T1–T4)
+
+- 변경: `src/hmi/web/surfaces.yaml`를 표면 계약 적용 범위의 단일 출처로 두었다. `test/surface_registry.py`(로더 + 필드 규칙 `problems()` + `git ls-files -c -o --exclude-standard` 발견 스캔)와 `test/test_surface_registry.py`(규칙별 검사 9개)를 새로 넣고, `test_shared_controls.py`·`test_surface_typography_focus_contracts.py`, 루트 `test/test_web_dialog_contract.py`의 `SURFACES` 상수를 지워 `for_contract`로 바꿨다. 셸 점검은 파일시스템 `rglob`을 추적 파일 발견 스캔으로 바꿨다.
+- 증거: 레지스트리 6항목이 기존 하드코딩 셋과 일치함을 대조(`shared_controls` 4, `typography_focus` 4, `dialog` 3, 추적 HTML 8개), `problems()` 0. `src/hmi/web/test` 87 passed — 변경 전 1 failed/77 passed(`test_a_browser_page_starts_from_the_shell`이 `.gitignore`된 Android 빌드 산출물을 훑어 로컬만 빨갰음)가 0 failed가 되었다. 변이 확인 5건 전부 원하는 이유로 빨갛고 복구 초록: M1 항목 제거 → `test_every_html_under_src_is_registered`, M2 add 안 된 `src/hmi/pilot/index.html` → 같은 이유, M3 없는 path → `path:`, M4 `dialog` 제거에 `contract_reason` 삭제 → `reason:`, M5 `git add` 후에도 항목이 없으면 여전히 빨강 (`-o` 는 M2가, `-c` 는 M5가 증명). `src/site/fleet/test`·`src/site/games/test` 647 passed, `test/architecture/test_module_structure.py` 33 passed, harness `lint` 0 errors, 계약 시험 78 passed.
+- gate 변화: SOURCE/LOCAL GO 유지. 라이브러리·계약 등급이라 ROS-SIM~FIELD는 그대로 N/A이며 장치·현장 수용은 주장하지 않는다.
+- 결정: D-329 Decision 1–3을 실행했다. Decision 4의 `matrix.json` 스키마와 회차 파일명 규칙, 자동 픽셀 게이트, `src/hmi/pilot` 등록은 범위 밖이다.

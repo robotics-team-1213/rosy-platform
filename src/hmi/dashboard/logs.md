@@ -487,3 +487,9 @@
 - 변경: main에 커밋된 공유 계약 위반 3건을 복원했다 — host identity 버튼의 kind 선언 패턴(system.js), `/setup`·`/device` 패널 모듈 import 중 `ui-empty` 로딩 문구(mount.js), `/setup`·`/device` 데스크톱 main 슬롯을 row-pairing grid에서 multicol로(shell.css), action-group 탭의 균등 전폭 스트레치를 콘텐츠 폭 flex로, 접근 토큰 행의 58px 삭제 버튼이 텍스트·인접 행을 침범하지 않게 flex 배치(surface-panels.css). G2 harness가 첫 패널이 아니라 조립 완료(`#surface-status` hidden)를 기다리고 캡처한다.
 - 증거: `src/hmi/dashboard/test` 43 passed, `src/hmi/web/test` 22 passed, D-283·surface 레이아웃 23 passed, `test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py` 29 passed. 역할 G2 60셀 재생성(overflow 0, pageerror 0). Impeccable detect `[]`. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
 - gate 변화: dashboard SOURCE/LOCAL HOLD -> GO(브라우저 회귀 + 신흘 캡처 블로커 해소). ARTIFACT은 이미지 설치 증가 없이 HOLD. D-153 표면 G3 사람 평가·DEVICE/FIELD는 별도다.
+
+## 2026-09-29 · uncommitted · fix(dashboard): 역할 화면 브랜드를 대시보드 홈 링크로
+
+- 변경: `surface.html` 상단 바 `ui-brand`가 일반 텍스트여서 `/console`·`/setup`·`/device`에서 ROSY 브랜드를 클릭해도 홈으로 갈 수 없었다. 대시보드 `index.html`의 홈 링크와 같은 `<a href="/dashboard" aria-label="Rosy OS 대시보드 홈">`로 감쌌고, `shell.css`에 `ui-brand a:focus-visible` 포커스 링을 더했다. 같은 텍스트와 토큰이라 화면 픽셀 변화는 없고 링크 동작만 추가된다. `/dashboard` 자신의 브랜드 링크와 Fleet·경기 보드(별도 호스트, D-275)는 대상이 아니다.
+- 근거: 정적 계약 `src/hmi/dashboard/test/test_surface_home_link.py` 신설(링크·포커스 링 고정, 브라우저 클릭 1건은 게이트 변수). `python -X utf8 -m pytest src/hmi/dashboard/test/test_surface_home_link.py src/hmi/dashboard/test/test_dashboard_package.py src/hmi/dashboard/test/test_web_budgets.py src/hmi/web/test/test_palette_gates.py -q` 23 passed 1 skipped. `ROSY_RUN_BROWSER_TESTS=1`에서 `test_surface_home_link.py test_surface_entry_browser.py test_surface_layout_browser.py` 11 passed, `test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py test/test_web_dialog_contract.py src/runtime/api_web/test/test_d283_console_browser.py` 43 passed.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.

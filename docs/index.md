@@ -218,5 +218,6 @@
 - 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
 - 2026-09-29 · uncommitted · fix(dashboard): settled G2 captures, loading state, balanced columns
 - 2026-09-29 · uncommitted · docs(plan): add D-329 surface registry execution plan
+- 2026-09-29 · uncommitted · feat(web): land the D-329 surface registry (T1–T4)
 - 2026-09-29 · uncommitted · docs(adr): propose D-329 surface registry and visual baseline
 - 2026-09-29 · uncommitted · docs(fleet): renumber Fleet control ADR after concurrent D-329
