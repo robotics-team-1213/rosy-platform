@@ -44,6 +44,7 @@ sealed interface StreamError {
 
 data class StreamState(
     val running: Boolean = false,
+    val previewOnly: Boolean = false,
     /** "host:port · source" of the current or last session. */
     val target: String? = null,
     val link: LinkStatus = LinkStatus(),
@@ -105,35 +106,41 @@ class StreamService : LifecycleService() {
         _state.value = StreamState(running = true)
         lifecycleScope.launch {
             val pairing = SettingsStore(applicationContext).pairing.first()
-            if (pairing == null) {
-                _state.value = StreamState(error = StreamError.NotPaired)
-                endSession()
-                return@launch
-            }
+            val plan = CameraSessionPlan.from(pairing)
             if (!sessionActive) return@launch
             acquireLocks()
-            val newLink = OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
+            val newLink = if (plan.sendFrames && pairing != null) {
+                OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
+            } else null
             val newCamera = CameraController(this@StreamService, this@StreamService, newLink) { e ->
                 _state.update { it.copy(error = StreamError.Camera(e.message ?: e.javaClass.simpleName)) }
                 endSession()
             }
             link = newLink
             camera = newCamera
-            _state.update { it.copy(target = "${pairing.host}:${pairing.port} · ${pairing.source}") }
-            newLink.start()
+            _state.update {
+                it.copy(
+                    target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
+                    previewOnly = !plan.sendFrames,
+                )
+            }
+            if (!plan.sendFrames) updateNotification(LinkState.DISCONNECTED, previewOnly = true)
+            newLink?.start()
             newCamera.start(OverheadConfig.DEFAULT)
 
             launch { previewSurface.collect { newCamera.setPreviewSurface(it) } }
-            launch {
-                newLink.status.map { it.config }.distinctUntilChanged().collect { newCamera.applyConfig(it) }
-            }
-            launch {
-                newLink.status.map { it.state }.distinctUntilChanged().collect { updateNotification(it) }
-            }
-            launch {
-                newLink.status.collect { status ->
-                    _state.update { it.copy(link = status) }
-                    if (status.stopped) endSession()
+            newLink?.let { activeLink ->
+                launch {
+                    activeLink.status.map { it.config }.distinctUntilChanged().collect { newCamera.applyConfig(it) }
+                }
+                launch {
+                    activeLink.status.map { it.state }.distinctUntilChanged().collect { updateNotification(it) }
+                }
+                launch {
+                    activeLink.status.collect { status ->
+                        _state.update { it.copy(link = status) }
+                        if (status.stopped) endSession()
+                    }
                 }
             }
         }
@@ -159,7 +166,7 @@ class StreamService : LifecycleService() {
         wifiLock?.takeIf { it.isHeld }?.release()
         wifiLock = null
         _state.update { current ->
-            current.copy(running = false, link = lastLink?.status?.value ?: current.link)
+            current.copy(running = false, previewOnly = false, link = lastLink?.status?.value ?: current.link)
         }
     }
 
@@ -189,7 +196,7 @@ class StreamService : LifecycleService() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(linkState: LinkState): Notification {
+    private fun buildNotification(linkState: LinkState, previewOnly: Boolean = false): Notification {
         val openApp = PendingIntent.getActivity(
             this,
             0,
@@ -202,7 +209,7 @@ class StreamService : LifecycleService() {
             Intent(this, StreamService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = when (linkState) {
+        val text = if (previewOnly) R.string.state_preview_only else when (linkState) {
             LinkState.STREAMING -> R.string.state_streaming
             LinkState.CONNECTING -> R.string.state_connecting
             LinkState.DISCONNECTED -> R.string.state_disconnected
@@ -220,10 +227,10 @@ class StreamService : LifecycleService() {
             .build()
     }
 
-    private fun updateNotification(linkState: LinkState) {
+    private fun updateNotification(linkState: LinkState, previewOnly: Boolean = false) {
         if (!sessionActive) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(linkState))
+        manager.notify(NOTIFICATION_ID, buildNotification(linkState, previewOnly))
     }
 
     companion object {

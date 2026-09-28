@@ -18,10 +18,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,6 +32,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.livsbittt.rosy.overhead.R
 import io.github.livsbittt.rosy.overhead.settings.PairingUri
+import io.github.livsbittt.rosy.overhead.settings.OverheadServerDiscovery
+import io.github.livsbittt.rosy.overhead.settings.OverheadServiceRecord
+import io.github.livsbittt.rosy.overhead.settings.RobotCoreServiceRecord
 
 /** Manual pairing entry, validated with the same rules as the rosyov:// deep link. */
 @Composable
@@ -46,6 +52,22 @@ fun SettingsScreen(
     var secure by remember(current) { mutableStateOf(current?.secure ?: false) }
     var invalid by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
+    var overheadServices by remember { mutableStateOf(emptyList<OverheadServiceRecord>()) }
+    var robotServices by remember { mutableStateOf(emptyList<RobotCoreServiceRecord>()) }
+    var scanning by remember { mutableStateOf(false) }
+    var wifiConnected by remember { mutableStateOf(false) }
+    var scanGeneration by remember { mutableStateOf(0) }
+    val context = LocalContext.current
+    val discovery = remember(context, scanGeneration) {
+        OverheadServerDiscovery(context) { overhead, robots, active, onWifi ->
+            overheadServices = overhead
+            robotServices = robots
+            scanning = active
+            wifiConnected = onWifi
+        }
+    }
+    LaunchedEffect(discovery) { discovery.start() }
+    DisposableEffect(discovery) { onDispose { discovery.stop() } }
 
     Column(
         modifier = Modifier
@@ -57,6 +79,41 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(
+            onClick = {
+                discovery.stop()
+                overheadServices = emptyList()
+                robotServices = emptyList()
+                scanGeneration += 1
+            },
+        ) { Text(stringResource(if (scanning) R.string.settings_mdns_rescan else R.string.settings_mdns_scan)) }
+        if (scanning) Text(stringResource(R.string.settings_mdns_scanning))
+        if (!wifiConnected) {
+            Text(stringResource(R.string.settings_mdns_wifi_required), color = MaterialTheme.colorScheme.error)
+        } else if (!scanning && overheadServices.isEmpty() && robotServices.isEmpty()) {
+            Text(stringResource(R.string.settings_mdns_empty), style = MaterialTheme.typography.bodySmall)
+        }
+        overheadServices.forEach { service ->
+            OutlinedButton(
+                onClick = {
+                    host = service.tlsHost
+                    port = service.port.toString()
+                    secure = true
+                    invalid = null
+                    saved = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.settings_mdns_overhead, service.name, service.tlsHost, service.port))
+            }
+        }
+        robotServices.forEach { service ->
+            Text(
+                stringResource(R.string.settings_mdns_robot, service.name, service.host, service.port),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         if (locked) {
             Text(stringResource(R.string.settings_locked), color = MaterialTheme.colorScheme.error)
         }

@@ -19,28 +19,42 @@ from pathlib import Path
 SERVICE_TYPE = "_rosy-fleet._tcp"
 HOSTNAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$")
 TXT = {"product": "rosy", "role": "fleet", "proto": "site-v1", "tls": "required"}
+OVERHEAD_TXT = {
+    "product": "rosy", "role": "overhead-camera", "proto": "rosy-overhead/1",
+    "tls": "required",
+}
 
 
-def render_service(port: int) -> str:
+def render_service(port: int, *, role: str = "fleet", tls_host: str | None = None) -> str:
     if not 1 <= port <= 65535:
         raise ValueError("invalid site HTTPS port")
+    if role == "fleet":
+        service_type, service_name, metadata = SERVICE_TYPE, "ROSY Fleet %h", TXT
+    elif role == "overhead":
+        if not isinstance(tls_host, str) or not HOSTNAME.fullmatch(tls_host.lower().rstrip(".")):
+            raise ValueError("overhead service needs a .local TLS hostname")
+        service_type, service_name = "_rosy-overhead._tcp", "ROSY Overhead %h"
+        metadata = {**OVERHEAD_TXT, "tls_host": tls_host.lower().rstrip(".")}
+    else:
+        raise ValueError("unknown site mDNS role")
     records = "".join(f"    <txt-record>{key}={value}</txt-record>\n"
-                      for key, value in TXT.items())
+                      for key, value in metadata.items())
     return ('<?xml version="1.0" standalone="no"?>\n'
             '<!DOCTYPE service-group SYSTEM "avahi-service.dtd">\n'
             '<service-group>\n'
-            '  <name replace-wildcards="yes">ROSY Fleet %h</name>\n'
+            f'  <name replace-wildcards="yes">{service_name}</name>\n'
             '  <service>\n'
-            f'    <type>{SERVICE_TYPE}</type>\n'
+            f'    <type>{service_type}</type>\n'
             f'    <port>{port}</port>\n'
             f'{records}'
             '  </service>\n'
             '</service-group>\n')
 
 
-def publish_service(output: Path, port: int) -> None:
+def publish_service(output: Path, port: int, *, role: str = "fleet",
+                    tls_host: str | None = None) -> None:
     """Avahi watches its service directory; replace the complete XML atomically."""
-    payload = render_service(port)
+    payload = render_service(port, role=role, tls_host=tls_host)
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
                                      prefix=".rosy-fleet-", suffix=".tmp",
                                      delete=False) as stream:
@@ -123,14 +137,18 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     publish = commands.add_parser("publish", help="install Avahi service XML on the site host")
     publish.add_argument("--port", type=int, required=True)
-    publish.add_argument("--output", type=Path,
-                         default=Path("/etc/avahi/services/rosy-fleet.service"))
+    publish.add_argument("--role", choices=("fleet", "overhead"), default="fleet")
+    publish.add_argument("--tls-host", help="certificate hostname for the overhead WSS endpoint")
+    publish.add_argument("--output", type=Path)
     discover = commands.add_parser("discover", help="list or verify discovered Fleet sites")
     discover.add_argument("--expect-hostname")
     discover.add_argument("--ca-file", type=Path)
     args = parser.parse_args()
     if args.command == "publish":
-        publish_service(args.output, args.port)
+        if args.role == "overhead" and not args.tls_host:
+            parser.error("--tls-host is required for --role overhead")
+        output = args.output or Path(f"/etc/avahi/services/rosy-{args.role}.service")
+        publish_service(output, args.port, role=args.role, tls_host=args.tls_host)
         return 0
     if bool(args.expect_hostname) != bool(args.ca_file):
         parser.error("--expect-hostname and --ca-file are required together")

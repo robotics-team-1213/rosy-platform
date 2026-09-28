@@ -8,18 +8,20 @@
 |---|---|---|---|
 | ROSY 로봇 CORE | `_rosy._tcp.local` | 로봇 CORE API, 기본 8080 | Pi 부팅 상태 서비스에서 광고 |
 | ROSY Ubuntu Fleet | `_rosy-fleet._tcp.local` | 사이트 HTTPS 프록시, 기본 8443 | Ubuntu Avahi 서비스와 확인 도구 준비 |
+| ROSY Site Vision 카메라 수신기 | `_rosy-overhead._tcp.local` | TLS WSS `/overhead/v1/frames`, 보통 8443 | Site Avahi 광고, 앱은 선택 목록으로 표시 |
 | 다른 SERION 미들웨어·장치 | 제품별 고유 서비스 종류를 먼저 할당 | 해당 제품의 공개 API | 이 저장소에서 구현하지 않음 |
 
 한 서비스 종류는 하나의 연결 프로토콜과 역할을 뜻한다. `_http._tcp` 같은 범용 이름에 모든 제품을 섞지 않는다. 서비스 인스턴스 이름은 사람이 보는 표시용이고, SRV target의 `<hostname>.local`은 주소 후보이며, 둘 다 장치 신원의 증거가 아니다. 같은 호스트가 여러 역할을 제공하면 역할별 서비스 레코드를 따로 광고한다.
 
 모든 새 광고는 다음 TXT 키를 넣는다. TXT는 공개 정보만 포함한다. 알 수 없는 키는 무시하며, 필수 키가 중복되거나 값이 맞지 않으면 해당 광고를 버린다.
 
-| 키 | 뜻 | 로봇 값 | Fleet 값 |
-|---|---|---|---|
-| `product` | 제품군 | `rosy` | `rosy` |
-| `role` | API 역할 | `robot` | `fleet` |
-| `proto` | 연결 계약 버전 | `core-v1` | `site-v1` |
-| `tls` | 연결 TLS 요구 | `none` (기존 CORE 계약) | `required` |
+| 키 | 뜻 | 로봇 값 | Fleet 값 | Site Vision 값 |
+|---|---|---|---|---|
+| `product` | 제품군 | `rosy` | `rosy` | `rosy` |
+| `role` | API 역할 | `robot` | `fleet` | `overhead-camera` |
+| `proto` | 연결 계약 버전 | `core-v1` | `site-v1` | `rosy-overhead/1` |
+| `tls` | 연결 TLS 요구 | `none` (기존 CORE 계약) | `required` | `required` |
+| `tls_host` | TLS 인증서 검증 호스트명 | 해당 없음 | 설치자가 별도 제공 | `<hostname>.local` SAN에 일치 |
 
 기존 로봇 광고의 `stage`, `release`, `name`, `network`는 운영 표시를 위해 유지한다. 등록 토큰, 사용자 이름, Wi-Fi 암호, SSH 정보, 사이트 CA, 원시 장치 UID, 로봇 번호, ROS Domain ID를 TXT에 넣지 않는다. 기존 이미지가 공통 TXT 없이 광고되더라도 Fleet의 기존 관찰 화면은 읽을 수 있다. 새 제품은 자신의 역할·버전·포트와 실제 리스너가 일치하도록 광고해야 한다.
 
@@ -33,4 +35,4 @@
 
 로봇 CORE는 현재 HTTP 계약이므로 광고만으로 명령 주소를 바꾸지 않는다. Fleet의 로봇 발견 화면도 등록 전 관찰용이다. 로봇 FleetAgent는 승인된 지속 연결 `pairing_token`, 예상 `.local` 호스트명, 별도로 설치된 사이트 CA가 모두 있을 때만 `_rosy-fleet._tcp`를 찾아 outbound WSS로 연결한다. 재접속할 때마다 광고와 TLS health를 다시 확인한다. SD의 `pairing_credential`은 일회성 등록 값이므로 Agent 토큰으로 사용하지 않는다. 현장 호스트와 Pi에서 실제 연결은 별도 검증이 필요하다.
 
-Ubuntu Fleet PC에는 안정적인 호스트명을 지정하고 `<hostname>.local`을 사이트 TLS 인증서 SAN에 넣는다. Compose의 HTTPS 포트를 LAN에서 접근 가능한 주소에 바인딩한다. `rosy-fleet-advertise.service`는 Avahi XML을 설치하며, 서비스 생존 여부는 광고와 별도로 TLS health로 검사한다. 광고만으로 SSH 계정·호스트 키·배포 권한을 찾거나 생성하지 않는다.
+Ubuntu Fleet PC에는 안정적인 호스트명을 지정하고 `<hostname>.local`을 사이트 TLS 인증서 SAN에 넣는다. Compose의 HTTPS 포트를 LAN에서 접근 가능한 주소에 바인딩한다. `rosy-fleet-advertise.service`는 Fleet API를, `rosy-overhead-advertise.service`는 같은 HTTPS proxy의 카메라 WSS 경로를 각자 광고한다. Android 앱은 `_rosy._tcp` 로봇과 `_rosy-overhead._tcp` 수신기를 함께 보여 주지만 WSS 프레임은 오버헤드 수신기에만 보낸다. mDNS 결과는 주소 후보이며, TLS 인증서 검증과 source별 token이 계속 필요하다. 서비스 생존 여부는 광고와 별도로 TLS health로 검사한다. 광고만으로 SSH 계정·호스트 키·배포 권한을 찾거나 생성하지 않는다.

@@ -113,13 +113,16 @@ the intended robot/operator LAN. The site proxy's
 `ROSY_SITE_BIND_ADDRESS` must name an approved LAN interface instead of
 loopback when LAN clients need access. Set the same
 `ROSY_SITE_HTTPS_PORT` in the private `/etc/rosy/site/.env` and the Compose
-environment. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`, copy
-`rosy-fleet-advertise.service` to `/etc/systemd/system/`, then run:
+environment. Set `ROSY_SITE_TLS_HOST` to the same `<hostname>.local` name in
+the site certificate SAN. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`,
+copy `rosy-fleet-advertise.service` and `rosy-overhead-advertise.service` to
+`/etc/systemd/system/`, then run:
 
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable --now avahi-daemon rosy-fleet-advertise.service
+sudo systemctl enable --now avahi-daemon rosy-fleet-advertise.service rosy-overhead-advertise.service
 avahi-browse -rtpk _rosy-fleet._tcp
+avahi-browse -rtpk _rosy-overhead._tcp
 python3 /opt/rosy/site/fleet-mdns.py discover
 python3 /opt/rosy/site/fleet-mdns.py discover --expect-hostname <hostname>.local \
   --ca-file /etc/rosy/site/secrets/site-ca.crt
@@ -141,6 +144,15 @@ restart after pairing approval. With the token in place, FleetAgent discovers
 the site and reconnects over WSS automatically; without it, the robot stays
 in registration/pairing wait. If a site is unreachable or multicast is
 isolated, use the existing explicit endpoint.
+
+The overhead record advertises only the public role, `rosy-overhead/1`, TLS
+requirement, port, and certificate hostname. Android cameras discover multiple
+`_rosy-overhead._tcp` receivers and let the operator choose one. Each camera
+still needs its own configured source name and bearer token; discovery never
+creates credentials or auto-pairs a camera. Install the separately issued site
+CA in Android's trusted credentials so WSS certificate checks succeed. The
+robot CORE `_rosy._tcp` record is a different API and is shown as a robot
+discovery result, not as a camera-stream target.
 
 ## Prepare an Ubuntu host
 

@@ -55,6 +55,20 @@ def test_publish_replaces_service_file_with_configured_port(tmp_path):
     assert list(tmp_path.iterdir()) == [output]
 
 
+def test_overhead_advertisement_exposes_tls_ingest_without_credentials():
+    root = ElementTree.fromstring(_module().render_service(
+        8443, role="overhead", tls_host="camera-site.local"
+    ))
+    service = root.find("service")
+    assert service.findtext("type") == "_rosy-overhead._tcp"
+    assert service.findtext("port") == "8443"
+    assert {item.text for item in service.findall("txt-record")} == {
+        "product=rosy", "role=overhead-camera", "proto=rosy-overhead/1",
+        "tls=required", "tls_host=camera-site.local",
+    }
+    assert "token" not in ElementTree.tostring(root, encoding="unicode").lower()
+
+
 def test_parser_accepts_site_fleet_and_deduplicates_interfaces():
     rows = "\n".join((_row(), _row(),
                       _row(host="fleet-b.local", address="192.168.1.21"),

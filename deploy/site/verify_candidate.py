@@ -25,7 +25,8 @@ REQUIRED_DEPLOYMENT_FILES = (
     "compose.yaml", "Caddyfile", ".env.example", "README.md",
     "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
     "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
-    "fleet-mdns.py", "rosy-fleet-advertise.service", "rosy-site-stack.service",
+    "fleet-mdns.py", "rosy-fleet-advertise.service", "rosy-overhead-advertise.service",
+    "rosy-site-stack.service",
     "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
     "sign_candidate.py", "verify_candidate.py",
 )

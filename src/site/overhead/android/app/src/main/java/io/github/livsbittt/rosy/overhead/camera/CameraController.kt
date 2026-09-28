@@ -37,7 +37,7 @@ import kotlin.math.max
 class CameraController(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
-    private val link: OverheadLink,
+    private val link: OverheadLink?,
     private val onError: (Throwable) -> Unit,
 ) {
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
@@ -75,7 +75,7 @@ class CameraController(
     /** Applies an adapter `config`. A width change rebinds the analysis use case. */
     fun applyConfig(newConfig: OverheadConfig) {
         applyValues(newConfig)
-        if (provider != null && newConfig.width != boundWidth) bind()
+        if (link != null && provider != null && newConfig.width != boundWidth) bind()
     }
 
     fun setPreviewSurface(surfaceProvider: Preview.SurfaceProvider?) {
@@ -98,23 +98,32 @@ class CameraController(
     private fun bind() {
         val cameraProvider = provider ?: return
         val target = config
-        val analysis = ImageAnalysis.Builder()
-            .setResolutionSelector(selectorFor(target.width))
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-            .build()
-        analysis.setAnalyzer(analysisExecutor, ::analyze)
         try {
             cameraProvider.unbindAll()
-            val camera = cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            val analysis = if (link == null) null else ImageAnalysis.Builder()
+                .setResolutionSelector(selectorFor(target.width))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                .build()
+            analysis?.setAnalyzer(analysisExecutor, ::analyze)
+            val camera = if (analysis == null) {
+                cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview)
+            } else {
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    analysis,
+                )
+            }
             timestampSource = readTimestampSource(camera)
             boundWidth = target.width
-            analysis.resolutionInfo?.let { info ->
-                link.sensor = SensorInfo(info.resolution.width, info.resolution.height, info.rotationDegrees)
+            analysis?.resolutionInfo?.let { info ->
+                link?.sensor = SensorInfo(info.resolution.width, info.resolution.height, info.rotationDegrees)
             }
             Log.i(
                 TAG,
-                "bound analysis at ${analysis.resolutionInfo?.resolution} for width ${target.width}, " +
+                "bound analysis at ${analysis?.resolutionInfo?.resolution ?: "preview-only"} for width ${target.width}, " +
                     "timestamp source $timestampSource",
             )
         } catch (e: Exception) {
@@ -137,9 +146,10 @@ class CameraController(
 
     private fun analyze(image: ImageProxy) {
         try {
+            val frameLink = link ?: return
             val arrivalMono = System.nanoTime()
             if (!limiter.tryAdmit(arrivalMono)) return
-            if (!link.admitFrame()) return
+            if (!frameLink.admitFrame()) return
             val captureMono = CaptureClock.toMonotonic(
                 source = timestampSource,
                 sensorNanos = image.imageInfo.timestamp,
@@ -151,11 +161,11 @@ class CameraController(
             when (val result = encoder.encode(image, current.jpegQuality, current.maxBytes)) {
                 is JpegEncoder.Result.TooLarge -> {
                     Log.w(TAG, "jpeg ${result.length} B > max_bytes ${current.maxBytes}, dropped")
-                    link.countDrop()
+                    frameLink.countDrop()
                 }
                 is JpegEncoder.Result.Encoded -> {
-                    link.sensor = SensorInfo(result.width, result.height, rotation)
-                    link.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
+                    frameLink.sensor = SensorInfo(result.width, result.height, rotation)
+                    frameLink.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
                 }
             }
         } catch (e: Exception) {

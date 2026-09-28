@@ -36,6 +36,7 @@ import io.github.livsbittt.rosy.overhead.R
 import io.github.livsbittt.rosy.overhead.link.LinkError
 import io.github.livsbittt.rosy.overhead.link.LinkState
 import io.github.livsbittt.rosy.overhead.service.StreamError
+import io.github.livsbittt.rosy.overhead.service.CameraSessionPlan
 import io.github.livsbittt.rosy.overhead.service.StreamService
 import io.github.livsbittt.rosy.overhead.service.StreamState
 import io.github.livsbittt.rosy.overhead.settings.PairingUri
@@ -99,7 +100,7 @@ fun StreamScreen(
             } else {
                 Button(
                     onClick = onStart,
-                    enabled = pairing != null,
+                    enabled = CameraSessionPlan.from(pairing).startCamera,
                     modifier = Modifier.weight(1f).height(72.dp),
                 ) {
                     Text(stringResource(R.string.button_start), fontSize = 22.sp)
@@ -115,6 +116,7 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val stateText = when {
             !state.running -> R.string.state_stopped
+            state.previewOnly -> R.string.state_preview_only
             link.state == LinkState.STREAMING -> R.string.state_streaming
             link.state == LinkState.CONNECTING -> R.string.state_connecting
             else -> R.string.state_disconnected
@@ -122,18 +124,24 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
         Text(stringResource(stateText), style = MaterialTheme.typography.headlineSmall)
         val target = state.target ?: pairing?.let { "${it.host}:${it.port} · ${it.source}" }
         Text(
-            if (target != null) stringResource(R.string.target_label, target) else stringResource(R.string.target_none),
+            when {
+                state.previewOnly -> stringResource(R.string.target_preview_only)
+                target != null -> stringResource(R.string.target_label, target)
+                else -> stringResource(R.string.target_none)
+            },
             style = MaterialTheme.typography.bodyMedium,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(stringResource(R.string.stat_fps, link.sentFps))
-            Text(stringResource(R.string.stat_kbps, link.kbps))
-            Text(stringResource(R.string.stat_dropped, link.dropped))
+        if (!state.previewOnly) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(stringResource(R.string.stat_fps, link.sentFps))
+                Text(stringResource(R.string.stat_kbps, link.kbps))
+                Text(stringResource(R.string.stat_dropped, link.dropped))
+            }
+            Text(
+                stringResource(R.string.stat_config, link.config.fps, link.config.width, link.config.jpegQuality),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
-        Text(
-            stringResource(R.string.stat_config, link.config.fps, link.config.width, link.config.jpegQuality),
-            style = MaterialTheme.typography.bodySmall,
-        )
         val error = localError ?: errorText(state.error) ?: errorText(link.error)
         if (error != null) {
             Text(

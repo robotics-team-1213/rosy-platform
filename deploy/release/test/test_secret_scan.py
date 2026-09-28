@@ -23,3 +23,10 @@ def test_scan_text():
     kinds = [f.kind for f in findings]
     assert "private-key" in kinds
     assert "wifi-psk" in kinds
+
+
+def test_psk_field_can_forward_a_form_value_without_a_literal_finding():
+    assert secret_scan.scan_text(
+        "operations.js",
+        'postHost(connect, {ssid: name, psk: passwordField.value}, "confirm");',
+    ) == []

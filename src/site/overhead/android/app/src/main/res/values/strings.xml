@@ -10,13 +10,15 @@
     <string name="state_connecting">연결 중…</string>
     <string name="state_streaming">송출 중</string>
     <string name="state_disconnected">연결 끊김 — 다시 연결 중</string>
+    <string name="state_preview_only">카메라 미리보기 중</string>
 
-    <string name="button_start">송출 시작</string>
-    <string name="button_stop">송출 정지</string>
+    <string name="button_start">카메라 켜기</string>
+    <string name="button_stop">카메라 끄기</string>
     <string name="button_settings">연결 설정</string>
     <string name="preview_idle">송출을 시작하면 미리보기가 보입니다</string>
     <string name="target_label">대상: %1$s</string>
     <string name="target_none">연결 정보가 없습니다. 연결 설정에서 입력하거나 어댑터 QR을 기본 카메라 앱으로 찍으세요.</string>
+    <string name="target_preview_only">서버 연결 정보가 없습니다. 연결 설정을 저장하면 WebSocket 송출을 시작할 수 있습니다.</string>
     <string name="stat_fps">송출 %1$.1f fps</string>
     <string name="stat_kbps">%1$.0f kbps</string>
     <string name="stat_dropped">버림 %1$d</string>
@@ -59,4 +61,12 @@
     <string name="pair_save">저장</string>
     <string name="pair_cancel">취소</string>
     <string name="pair_invalid">페어링 링크가 올바르지 않습니다: %1$s</string>
+    <string name="settings_mdns_intro">같은 Wi-Fi에서 Site Vision 수신기와 로봇 CORE를 검색합니다. 발견 정보에는 인증 토큰이 포함되지 않습니다.</string>
+    <string name="settings_mdns_scan">mDNS 서버 검색</string>
+    <string name="settings_mdns_rescan">다시 검색</string>
+    <string name="settings_mdns_scanning">주변 서버를 검색하고 있습니다…</string>
+    <string name="settings_mdns_empty">검색된 서버가 없습니다. 서버와 태블릿이 같은 네트워크인지 확인하거나 QR/수동 설정을 사용하세요.</string>
+    <string name="settings_mdns_wifi_required">태블릿 Wi-Fi가 연결되어 있지 않습니다. Site Vision 및 로봇 CORE와 같은 LAN에 먼저 연결하세요.</string>
+    <string name="settings_mdns_overhead">Site Vision · %1$s\nTLS 주소 %2$s:%3$d · 카메라 수신기</string>
+    <string name="settings_mdns_robot">로봇 CORE · %1$s\nAPI 주소 %2$s:%3$d · 카메라 영상 대상이 아닙니다</string>
 </resources>
