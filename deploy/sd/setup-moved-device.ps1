@@ -323,6 +323,13 @@ try {
         Write-Host "SSH 별칭은 만들지 않았습니다. 키를 준비한 뒤 카드를 다시 등록해야 SSH 키 로그인이 가능합니다."
     }
     Write-Host "카드 기록 성공은 장치 승인과 다릅니다. 전체 readback 성공 후 같은 Pi에 넣고 첫 부팅과 대시보드의 새 장치 정보를 확인하세요."
+    if ((Test-Path -LiteralPath $operatorKey -PathType Leaf) -and
+        (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $operatorKey) "rosy-operator-ed25519") -PathType Leaf)) {
+        Write-Host "첫 SSH 접속에서는 실물 장치의 호스트 키 지문을 확인해 신뢰 등록해야 합니다. 이미 검증한 다른 별칭은 -SshHost로 지정할 수 있습니다."
+        Write-Host "첫 부팅 후 현장 담당자가 로봇과 전원 차단 경로를 확인하면 모터 점검과 E-Stop 상태의 구동 준비를 한 번에 진행할 수 있습니다:"
+        Write-Host ("  .\deploy\sd\enable-motor-commissioning.ps1 -DeviceName {0} -RobotAddress {1} -OperatorPresent -PowerCutReady" -f $plan.device_name, $RobotAddress)
+        Write-Host "이 단계는 주행 명령이나 G4 승인을 만들지 않습니다. 현장 주행 시험과 실측 기록은 별도로 수행합니다."
+    }
 }
 catch {
     Write-Error $_

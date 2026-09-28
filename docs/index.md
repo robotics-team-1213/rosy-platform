@@ -140,6 +140,7 @@
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
 | D-317 | 장치별 해석과 공유 계약은 실제 소비·실행 경계로 분류한다 |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
+| D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 
 ## 계획·결과 문서
 
@@ -198,8 +199,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · docs(sd): define attended post-setup motor commissioning
 - 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
 - 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
 - 2026-09-28 · uncommitted · docs(architecture): make source placement rules explicit
 - 2026-09-28 · uncommitted · docs(plan): complete the D-317 structure audit
-- 2026-09-28 · uncommitted · validation(camera): recheck physical acceptance prerequisites

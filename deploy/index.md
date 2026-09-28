@@ -28,6 +28,7 @@
 | D-311 | 네이티브 G4 실측 증거를 내비게이션 기동 조건으로 검증한다 |
 | D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 | D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 |
+| D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 
 ## 계획·결과 문서
 
@@ -61,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · feat(sd): automate attended motor commissioning
 - 2026-09-27 · uncommitted · close development IO web asset dependency
 - 2026-09-27 · b0609dc6 · verify development CORE image closure on ARM64
 - 2026-09-27 · uncommitted · repair development CORE image package closure
 - 2026-09-27 · uncommitted · feat(host-agent): stamp complete status reads
-- 2026-09-27 · uncommitted · fix(native): accept floor G4 evidence

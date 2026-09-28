@@ -1413,3 +1413,9 @@
 - Change: copy and select `web_common` with `control` in the IO image; probe the installed shared assets and control's asset resolver in the final IO stage.
 - Evidence: the IO closure tests failed twice on the original Dockerfile, then 38 IO/CORE image and runtime host contracts passed. ARM64 IO image execution remains pending.
 - Gate: SOURCE/LOCAL candidate only. The IO ARTIFACT, DEVICE, and FIELD gates remain HOLD.
+
+## 2026-09-28 · uncommitted · feat(sd): automate attended motor commissioning
+
+- Change: add a post-setup helper that checks provisioned identity, E-Stop, torque-free motors, runtime activation, fresh stationary odometry and single final command publisher; rollback restores no-drive runtime on failure.
+- Evidence: helper CheckOnly and attended activation ran on one device; two bounded forward attempts ended stopped, the second was physically confirmed. Private measurements remain under X:\DevTemp.
+- Gate: no unattended first-boot torque, G4 approval, native image acceptance or FIELD promotion.

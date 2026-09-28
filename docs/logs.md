@@ -3112,3 +3112,9 @@
 - 변경: D-318 사각형 조정에서 모서리 핸들이 소비한 위·아래 방향키를 문서 전역 로스터 탐색이 다시 처리해 포커스를 빼앗던 충돌을 막았다. Shift+방향키 0.1% 이동이 계속 모서리에 적용된다. 드래그 중 텍스트 선택도 억제한다.
 - 증거: 원인 재현 테스트는 수정 전 실패, 수정 뒤 통과했다. 직접 카메라 조정·로스터 방향키·지도 키보드 목표 브라우저 시험 3 passed. Fleet 호스트 545 passed/5 skipped, 팔레트 계약 9 passed. Harness 계약 78 passed/17 freshness warnings, lint 0 errors/17 warnings, `git diff --check` 통과.
 - gate 변화: SOURCE/LOCAL 입력 접근성만 보강했다. 운영자 G3, 실제 Fleet/카메라/로봇 readback, 물리 E-stop, DEVICE/FIELD는 계속 HOLD다.
+
+## 2026-09-28 · uncommitted · docs(sd): define attended post-setup motor commissioning
+
+- 변경: D-319에 SETUP 이후 현장 입회 하에서 no-drive 상태를 E-Stop이 걸린 모터 점검 모드로 전환하는 절차를 기록했다. SETUP만으로 토크를 켜지 않으며 G4 수용은 별도로 둔다.
+- 증거: 비공개 장치 시험에서 전진과 정지는 현장 확인되었지만 보고된 최고 속도가 요청 한도를 넘었다. 장치별 기록은 X:\DevTemp에 둔다.
+- gate 변화: ADR은 Proposed, 전체 G4와 FIELD는 HOLD다.
