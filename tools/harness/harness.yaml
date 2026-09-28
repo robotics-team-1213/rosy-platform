@@ -16,6 +16,8 @@ adr_gaps:
   D-325: "reserved: docs/adr/D-325-pinky-deployment-artifact-selection.md exists on main and docs/er2-action-boundary; the log row lands with that merge; remove once it lands"
   D-326: "reserved: docs/er2-action-boundary holds docs/adr/D-326-semantic-manipulation-actions-and-device-adapters.md; the row lands with that merge; remove once it lands"
   D-327: "reserved: docs/er2-action-boundary holds docs/adr/D-327-model-proposed-missions-and-independent-goal-evidence.md; the row lands with that merge; remove once it lands"
+  D-329: "landed on main as docs/adr/D-329-surface-registry-and-visual-baseline.md; the index row arrives with the main merge at pilot landing; remove after merge"
+  D-330: "landed on main as docs/adr/D-330-fleet-action-admission-stop-and-recovery.md; the index row arrives with the main merge at pilot landing; remove after merge"
   D-234: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-235: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-236: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
