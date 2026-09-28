@@ -122,6 +122,17 @@ class FleetTaskStore:
                     task_id TEXT NOT NULL UNIQUE REFERENCES fleet_tasks(task_id),
                     reserved_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS fleet_task_core_events (
+                    robot_id TEXT NOT NULL,
+                    event_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL REFERENCES fleet_tasks(task_id),
+                    attempt_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    PRIMARY KEY(robot_id, event_id)
+                );
+                CREATE INDEX IF NOT EXISTS fleet_task_core_events_attempt
+                    ON fleet_task_core_events(robot_id, attempt_id, seq);
                 """
             )
             self._migrate_task_columns(connection)
@@ -495,6 +506,15 @@ class FleetTaskStore:
                                          (task_id,)).fetchone()
             if current is None:
                 raise KeyError(task_id)
+            # A CORE event can race the REST receipt or its timeout. Never let a
+            # late receipt/timeout downgrade an already correlated execution result.
+            if (current["status"] in {"RUNNING", "COMPLETED", "FAILED"}
+                    or (current["status"] == "UNKNOWN" and (
+                        status == "ACCEPTED"
+                        or current["reason"] == "CORE_CANCEL_RESULT_PENDING"
+                    ))):
+                connection.commit()
+                return self._task_dict(current)
             if status not in _TASK_TRANSITIONS.get(current["status"], set()):
                 raise InvalidTaskTransition(f"{current['status']} cannot transition to {status}")
             new_receipt = receipt_json if receipt_json is not None else current["receipt_json"]
@@ -516,6 +536,15 @@ class FleetTaskStore:
                                    (task_id,))
             connection.commit()
         return self._task_dict(row)
+
+    def project_core_event(self, *, robot_id: str, event_id: str, seq: int,
+                           event_type: str, correlation_id: str) -> dict | None:
+        from fleet.server.task_results import project_core_event
+
+        return project_core_event(
+            self, robot_id=robot_id, event_id=event_id, seq=seq,
+            event_type=event_type, correlation_id=correlation_id,
+        )
 
     def get_task(self, task_id: str) -> dict | None:
         with closing(self._connect()) as connection:

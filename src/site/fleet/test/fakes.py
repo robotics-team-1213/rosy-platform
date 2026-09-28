@@ -155,8 +155,12 @@ class FakeRobot:
             raise self.path_error
         return {"poses": [{"x": x, "y": y} for x, y in self._path]}
 
-    async def navigation_goal(self, x: float, y: float, yaw: float) -> dict:
-        self._record("navigation_goal", x, y, yaw)
+    async def navigation_goal(self, x: float, y: float, yaw: float, *,
+                              correlation_id: str | None = None) -> dict:
+        call = ("navigation_goal", x, y, yaw)
+        if correlation_id is not None:
+            call += (correlation_id,)
+        self._record(*call)
         return {"accepted": True}
 
     async def line_follow_mode(self, mode: str) -> dict:

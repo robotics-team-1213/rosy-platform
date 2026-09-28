@@ -51,6 +51,80 @@ def test_dispatcher_records_attempt_before_core_receipt_and_dispatches_once(tmp_
     assert len(attempts) == 1
 
 
+def test_correlated_core_events_project_only_the_current_attempt_result(tmp_path):
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    queued = run(service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, source="operator",
+        actor_id="site-console", request_key="correlated-1",
+    ))
+
+    async def dispatch(_task):
+        service.project_core_event({
+            "robot_id": "rosy_01", "event_id": "result-started-1", "seq": 18,
+            "type": "nav.started", "data": {"correlation_id": _task["attempt_id"]},
+        })
+        return {"accepted": False}
+
+    accepted = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    event = {
+        "robot_id": "rosy_01", "event_id": "result-started-1", "seq": 18,
+        "type": "nav.started", "data": {"correlation_id": accepted["attempt_id"]},
+    }
+    running = service.project_core_event(event)
+    duplicate = service.project_core_event(event)
+    completed = service.project_core_event({
+        **event, "event_id": "result-completed-1", "seq": 19,
+        "type": "nav.completed",
+    })
+    stale = service.project_core_event({
+        **event, "event_id": "result-started-old", "seq": 17,
+    })
+    wrong_robot = service.project_core_event({
+        **event, "robot_id": "rosy_02", "event_id": "wrong-robot", "seq": 20,
+    })
+
+    assert accepted["status"] == "RUNNING"
+    assert queued["task_id"] == accepted["task_id"]
+    assert running["status"] == "RUNNING"
+    assert duplicate["status"] == "RUNNING"
+    assert completed["status"] == "COMPLETED"
+    assert stale["status"] == "COMPLETED"
+    assert wrong_robot is None
+    assert [row["status"] for row in service.store.history(accepted["task_id"])] == [
+        "REQUESTED", "QUEUED", "RUNNING", "COMPLETED",
+    ]
+
+
+def test_cancel_request_event_does_not_claim_a_final_action_result(tmp_path):
+    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                               robot_ids={"rosy_01"})
+    run(service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, source="operator",
+        actor_id="site-console", request_key="cancel-not-final-1",
+    ))
+
+    async def dispatch(_task):
+        return {"accepted": True}
+
+    accepted = run(service.dispatch_next({"rosy_01"}, dispatch=dispatch))
+    pending = service.project_core_event({
+        "robot_id": "rosy_01", "event_id": "cancel-requested", "seq": 20,
+        "type": "nav.canceled", "data": {"correlation_id": accepted["attempt_id"]},
+    })
+    assert pending["status"] == "UNKNOWN"
+    assert pending["reason"] == "CORE_CANCEL_RESULT_PENDING"
+
+    final = service.project_core_event({
+        "robot_id": "rosy_01", "event_id": "cancel-result", "seq": 21,
+        "type": "nav.failed", "data": {
+            "correlation_id": accepted["attempt_id"], "error_code": "CANCELED",
+        },
+    })
+    assert final["status"] == "FAILED"
+    assert final["reason"] == "CORE_NAV_FAILED"
+
+
 def test_task_waits_on_traffic_queue_and_only_retries_after_release_callback(tmp_path):
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01", "rosy_02"})

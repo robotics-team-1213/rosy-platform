@@ -134,6 +134,25 @@ class FleetTaskService:
     def traffic_queue_released(self, task_id: str) -> dict:
         return self.store.release_traffic_wait(task_id)
 
+    def project_core_event(self, event: Mapping[str, object]) -> dict | None:
+        """Project only CORE navigation events carrying the current Fleet attempt ID."""
+        data = event.get("data")
+        if not isinstance(data, Mapping):
+            return None
+        correlation_id = data.get("correlation_id")
+        if not isinstance(correlation_id, str):
+            return None
+        robot_id = event.get("robot_id")
+        event_id = event.get("event_id")
+        seq = event.get("seq")
+        event_type = event.get("type")
+        if not all(isinstance(value, str) for value in (robot_id, event_id, event_type)):
+            return None
+        return self.store.project_core_event(
+            robot_id=robot_id, event_id=event_id, seq=seq,
+            event_type=event_type, correlation_id=correlation_id,
+        )
+
     def cancel_queued_task(self, task_id: str, *, actor_id: str = "site-console") -> dict:
         return self.store.cancel_queued(task_id, actor_id=actor_id)
 

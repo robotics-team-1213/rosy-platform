@@ -46,8 +46,9 @@ class SimRobot(FakeRobot):
         pose = self._state["pose"]
         return pose["x"], pose["y"]
 
-    async def navigation_goal(self, x: float, y: float, yaw: float) -> dict:
-        result = await super().navigation_goal(x, y, yaw)
+    async def navigation_goal(self, x: float, y: float, yaw: float, *,
+                              correlation_id: str | None = None) -> dict:
+        result = await super().navigation_goal(x, y, yaw, correlation_id=correlation_id)
         path = _line(self.xy[0], self.xy[1], x, y) if self.plans else []
         if path and self.plan_short_by:
             path = [p for p in path

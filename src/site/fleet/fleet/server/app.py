@@ -227,6 +227,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     if task_service is not None:
+        if hub is not None:
+            hub.set_event_callback(task_service.project_core_event)
+
         async def release_traffic_task(mission: dict) -> None:
             task_service.traffic_queue_released(mission["task_id"])
 

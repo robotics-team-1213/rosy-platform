@@ -5,11 +5,11 @@ last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "63 passed, 3 skipped; includes D-283 action_group schema and capability-filtered manifest (2026-09-26 Windows)"
+    evidence: "70 passed, 13 skipped (2026-09-28 Windows); D-316 optional CORE navigation correlation request is backward-compatible."
     cmd: "python -m pytest src/runtime/api_web/test -q"
   LOCAL:
     state: GO
-    evidence: "63 passed, 3 skipped (2026-09-26 Windows)"
+    evidence: "70 passed, 13 skipped (2026-09-28 Windows); source-only request contract coverage."
     cmd: "python -m pytest src/runtime/api_web/test -q"
   ROS-SIM:
     state: N/A

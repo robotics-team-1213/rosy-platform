@@ -85,8 +85,8 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
     dispatched = Event()
     original_goal = robot.navigation_goal
 
-    async def observe_goal(x, y, yaw=0.0):
-        result = await original_goal(x, y, yaw)
+    async def observe_goal(x, y, yaw=0.0, *, correlation_id=None):
+        result = await original_goal(x, y, yaw, correlation_id=correlation_id)
         dispatched.set()
         return result
 
@@ -111,6 +111,8 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
 
     assert readback.json()["task"]["status"] == FleetTaskStatus.ACCEPTED.value
     assert readback.json()["task"]["receipt"] == {"accepted": True}
+    assert any(call[0] == "navigation_goal" and call[4] == readback.json()["task"]["attempt_id"]
+               for call in robot.calls)
     assert [row["status"] for row in readback.json()["history"]] == [
         "REQUESTED", "QUEUED", "ACCEPTED",
     ]

@@ -34,6 +34,7 @@
 | D-293 | 사이트 Fleet API는 의도를 받고 서버 규약으로 해석한다 |
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
+| D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
 
 ## 계획·결과 문서
 
@@ -57,8 +58,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · verify final canceled-attempt projection
+- 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
+- 2026-09-28 · uncommitted · fix(fleet): recover durable task event projection
+- 2026-09-28 · uncommitted · correlate Pinky navigation task results
 - 2026-09-28 · uncommitted · add direct Vision preview leases
-- 2026-09-27 · uncommitted · fix(ui): give the empty map a readable screen state
-- 2026-09-27 · uncommitted · fix(ui): clear discovery addresses when readback is unavailable
-- 2026-09-27 · uncommitted · fix(ui): make formation read loss explicit
-- 2026-09-27 · uncommitted · fix(ui): make Fleet map goal operable by keyboard

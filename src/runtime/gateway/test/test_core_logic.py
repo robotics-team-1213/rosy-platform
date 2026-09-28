@@ -588,7 +588,7 @@ class FakeExecutor:
     def __init__(self):
         self.sent, self.canceled = [], 0
 
-    def send_goal(self, spec):
+    def send_goal(self, spec, *, correlation_id=None):
         self.sent.append(spec)
 
     def cancel_goal(self):
@@ -630,6 +630,42 @@ class TestNavigation:
         assert nav.nav_state.value == "ARRIVED"
         types = [ev.type for ev in bus.history()]
         assert "nav.started" in types and "nav.completed" in types
+
+    def test_navigation_correlation_is_scoped_to_the_active_goal(self, bus, safety, tmp_path):
+        nav, _, _ = self._make(bus, safety, tmp_path)
+        nav.goal(nav.resolve_goal(x=1.0, y=1.0), correlation_id="attempt-42")
+
+        with pytest.raises(Exception) as raised:
+            nav.moving_goal(nav.resolve_goal(x=2.0, y=2.0))
+        assert raised.value.code == "NAVIGATION_ACTIVE"
+
+        nav.cancel()
+        canceled = next(event for event in reversed(bus.history())
+                        if event.type == "nav.canceled")
+        assert canceled.data["correlation_id"] == "attempt-42"
+
+        nav.moving_goal(nav.resolve_goal(x=2.0, y=2.0))
+        nav.on_result(True, correlation_id=None)
+        completed = next(event for event in reversed(bus.history())
+                         if event.type == "nav.completed")
+        assert completed.data["correlation_id"] is None
+
+    def test_late_canceled_result_does_not_change_new_navigation_state(
+            self, bus, safety, tmp_path):
+        nav, _, _ = self._make(bus, safety, tmp_path)
+        nav.goal(nav.resolve_goal(x=1.0, y=1.0),
+                 correlation_id="attempt-canceled")
+        nav.cancel()
+        nav.moving_goal(nav.resolve_goal(x=2.0, y=2.0))
+        nav.on_goal_accepted()
+
+        nav.on_correlated_result(False, correlation_id="attempt-canceled")
+
+        assert nav.nav_state.value == "NAVIGATING"
+        failed = next(event for event in reversed(bus.history())
+                      if event.type == "nav.failed")
+        assert failed.data["correlation_id"] == "attempt-canceled"
+        assert failed.data["error_code"] == "CANCELED"
 
     def test_stuck_detection(self, bus, safety, tmp_path):
         nav, _, _ = self._make(bus, safety, tmp_path)

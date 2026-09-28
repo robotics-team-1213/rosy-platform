@@ -493,3 +493,26 @@
 - Change: selected CAMERA_LINE missing/stale/invalid evidence keeps the existing fail-closed zero command candidate and adds a camera-specific reason. Source changes still discard old evidence; no IR auto-switch was added.
 - Evidence: line-follow and simulation-clock regression suites 27 passed. Full gateway suite: 1,384 passed, 16 skipped, 5 failures; failures include unrelated event catalogue/API-reference alignment and two outdated camera-state expectations, which were corrected and rechecked in the focused suites.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, device, or field acceptance.
+
+## 2026-09-28 · uncommitted · test correlated navigation event lifecycle
+
+- Change: cover CORE REST goal metadata and verify `nav.started`, cancel-request, and final result events retain the same navigation attempt ID.
+- Evidence: focused gateway API/core-logic/event-catalogue tests pass. One full event-catalogue literal-classification test still fails on pre-existing `network.status` and `release.status` literals in Host Agent status decoding.
+- Gate: SOURCE/LOCAL test evidence only; live Nav2, artifact and device acceptance unchanged.
+
+## 2026-09-28 · uncommitted · fix(core): isolate navigation result correlation
+
+- Change: bind result-event correlation to the action generation; superseded results are ignored and uncorrelated moving-goal results remain uncorrelated. Add fleet-owned goal takeover guard and durable event replay coverage.
+- Evidence: focused gateway navigation/API/core-logic/GoalTracker regressions 19 passed. The separate event-literal classification failure remains a pre-existing Host Agent status decoding issue.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+
+## 2026-09-28 · uncommitted · retain correlated result after cancel
+
+- Change: preserve the canceled Nav2 generation's Fleet correlation until the terminal result callback, including cancel-before-acceptance. Publish that result without changing a newer navigation state.
+- Evidence: focused GoalTracker and navigation manager regression suites pass; full changed-suite rerun pending.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+## 2026-09-28 · uncommitted · close canceled-generation result recovery
+
+- Change: retain at most 128 canceled correlations; publish late terminal results without changing a newer navigation state. Unreadable action results leave the attempt unresolved.
+- Evidence: GoalTracker + navigation manager tests 67 passed; relevant API, services, and Fleet suites passed separately.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device, physical-stop, site, or FIELD acceptance.

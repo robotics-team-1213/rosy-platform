@@ -20,12 +20,14 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.43" in reference
+    assert "**Version:** v1.44" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference
     assert "`/api/fleet/tasks/{task_id}/cancel`" in reference
     assert "`/api/fleet/do` (when `do` is `navigate`)" in reference
+    assert "D-316" in reference and "current dispatch `attempt_id`" in reference
+    assert "is a physical stop readback" in reference
     assert all(status in reference for status in (
         "REQUESTED", "QUEUED", "ACCEPTED", "RUNNING", "UNKNOWN", "FAILED", "HOLD",
         "CANCELED", "EXPIRED",
@@ -66,8 +68,11 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.43" in reference
-    assert "## 10.10 Site Fleet intent interpretation and message boundaries (D-293 Accepted)" in reference
+    assert "**Version:** v1.44" in reference
+    assert (
+        "## 10.10 Site Fleet intent interpretation and message boundaries "
+        "(D-293 Accepted, D-316 Accepted)" in reference
+    )
     assert "D-293" in reference
     assert "`core_common.intent.request_schema()`" in reference
     assert "1 through 8 steps" in reference

@@ -108,7 +108,11 @@ class RobotClient(Protocol):
     async def swarm_cancel(self) -> dict: ...
     async def navigation_cancel(self) -> dict: ...
     async def navigation_path(self) -> dict: ...
-    async def navigation_goal(self, x: float, y: float, yaw: float) -> dict: ...
+
+    async def navigation_goal(
+        self, x: float, y: float, yaw: float, *, correlation_id: str | None = None,
+    ) -> dict: ...
+
     async def line_follow_mode(self, mode: str) -> dict: ...
     async def estop(self) -> dict: ...
     def pose_stream(self) -> AsyncIterator[str]: ...
@@ -191,8 +195,12 @@ class HttpRobotClient:
         """현재 계획 경로(map 프레임 폴리라인). Fleet 이 교행을 미리 보는 유일한 재료다."""
         return await self._get("/api/v1/navigation/path")
 
-    async def navigation_goal(self, x: float, y: float, yaw: float) -> dict:
-        return await self._post("/api/v1/navigation/goal", {"x": x, "y": y, "yaw": yaw})
+    async def navigation_goal(self, x: float, y: float, yaw: float, *,
+                              correlation_id: str | None = None) -> dict:
+        body = {"x": x, "y": y, "yaw": yaw}
+        if correlation_id is not None:
+            body["correlation_id"] = correlation_id
+        return await self._post("/api/v1/navigation/goal", body)
 
     async def line_follow_mode(self, mode: str) -> dict:
         if mode not in {"IR_LINE", "OFF"}:

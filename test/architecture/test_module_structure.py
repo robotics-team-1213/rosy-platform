@@ -67,8 +67,8 @@ SIZE_VERDICTS = {
         "accept: compose Fleet routes and shared authentication/audit dependencies in one HTTP boundary; split by route group only when an independent auth and lifecycle boundary exists",
     ),
     "site/fleet/fleet/server/task_store.py": (
-        620,
-        "accept: keep SQLite task, history, lease, and reservation transactions together; split only if this cohesive store grows further",
+        716,
+        "accept: keep SQLite task, history, lease, and reservation transactions together; correlated CORE event projection lives in task_results.py",
     ),
     "runtime/sensing/control/startup_calibration_node.py": (
         954,

@@ -249,7 +249,7 @@ def test_robot_state_carries_server_judged_evidence(client):
 def test_inventory_is_a_mobile_base_without_pick_or_rfid(client):
     tc, _svc = client
     response = tc.get("/api/v1/system/inventory", headers=VIEWER)
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     body = response.json()
     assert body["device"]["device_type"] == "mobile_base"
     ids = body["capability_ids"]
@@ -365,6 +365,37 @@ def test_a_goal_enters_navigation_mode_so_nav_cmd_vel_reaches_the_wheels(client)
     now = time.monotonic()
     svc.command.set_nav_twist(Twist(0.12, 0.0), now=now)
     assert svc.command.select_output(now=now).linear == pytest.approx(0.12)
+
+
+def test_navigation_goal_correlation_is_echoed_on_start_and_final_events(client, monkeypatch):
+    tc, svc = client
+
+    class LocalExecutor:
+        def send_goal(self, spec, *, correlation_id=None):
+            return None
+
+        def cancel_goal(self):
+            return None
+
+    svc.nav.executor = LocalExecutor()
+    svc.nav.cancel()
+    monkeypatch.setattr("core_api_web.api.v1.navigation.require_kept", lambda *_: None)
+    correlation_id = "attempt-123"
+    response = tc.post(
+        "/api/v1/navigation/goal",
+        json={"x": 1.0, "y": 0.5, "correlation_id": correlation_id},
+        headers=OPERATOR,
+    )
+    assert response.status_code == 200
+    started = next(event for event in reversed(svc.events.history())
+                   if event.type == "nav.started")
+    assert started.data["correlation_id"] == correlation_id
+
+    svc.nav.on_goal_accepted()
+    svc.nav.on_result(True, correlation_id=correlation_id)
+    completed = next(event for event in reversed(svc.events.history())
+                     if event.type == "nav.completed")
+    assert completed.data["correlation_id"] == correlation_id
 
 
 def test_navigation_goal_is_refused_while_line_follow_owns_motion(client):

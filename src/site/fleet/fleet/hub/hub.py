@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from typing import Optional, Sequence
+from collections.abc import Callable, Mapping
 
 from core_common.protocol.schemas import (
     Envelope,
@@ -22,6 +24,7 @@ from fleet.swarm.transport import RobotClient
 from fleet.server.core_event_store import CoreEventStore, EventRejected
 
 _FORBIDDEN_PAYLOAD_KEYS = frozenset({"cmd_vel", "image", "twist"})
+_LOGGER = logging.getLogger(__name__)
 
 
 def _protocol_major(value: str) -> int | None:
@@ -48,6 +51,7 @@ class SiteHub:
         clients: Optional[dict[str, RobotClient]] = None,
         fleet_name: str = "rosy-site",
         event_store: CoreEventStore | None = None,
+        event_callback: Callable[[Mapping[str, object]], object] | None = None,
     ) -> None:
         # CORE REST control tokens and FleetAgent pairing credentials have
         # distinct authority. Missing pairing credentials leave the agent
@@ -59,6 +63,11 @@ class SiteHub:
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
         self.event_store = event_store
+        self.event_callback = event_callback
+        self._event_projection_cursor = 0
+
+    def set_event_callback(self, callback: Callable[[Mapping[str, object]], object]) -> None:
+        self.event_callback = callback
 
     def handle(self, envelope: Envelope) -> Envelope:
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
@@ -133,6 +142,8 @@ class SiteHub:
         robot_id = payload.state_snapshot.robot_id
         if robot_id not in self._paired:
             return _error("SESSION_NOT_PAIRED", "hello first")
+        if not self._recover_event_projections():
+            return _error("TASK_PROJECTION_UNAVAILABLE", "durable event projection is pending")
         row = self.registry.record(robot_id)
         row.snapshot = payload.state_snapshot
         return Envelope(type=EnvelopeType.HEARTBEAT, payload={})
@@ -154,8 +165,28 @@ class SiteHub:
                 return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
             except (OSError, sqlite3.Error):
                 return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
+        if self.event_callback is not None and not self._recover_event_projections():
+            return _error("TASK_PROJECTION_UNAVAILABLE", "event task projection is pending")
         row = self.registry.record(event.robot_id)
         if is_new:
             row.events.append(event)
         row.last_event_seq = max(row.last_event_seq, event.seq)
         return Envelope(type=EnvelopeType.EVENT, payload={"accepted": True})
+
+    def _recover_event_projections(self) -> bool:
+        """Replay durable CORE events after transient task projection failures."""
+        if self.event_callback is None or self.event_store is None:
+            return True
+        if not hasattr(self.event_store, "read_events"):
+            return False
+        try:
+            rows = self.event_store.read_events(
+                after_id=self._event_projection_cursor, limit=100,
+            )
+            for row in rows[:100]:
+                self.event_callback(row["event"])
+                self._event_projection_cursor = row["audit_id"]
+            return True
+        except Exception:
+            _LOGGER.exception("Could not project durable CORE event into Fleet task history")
+            return False

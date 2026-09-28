@@ -3037,3 +3037,27 @@
 - 변경: progress의 last_verified 날짜를 YAML 날짜형으로 기록하고 dashboard SOURCE HOLD에 원인을 넣었다. Append-only dashboard 로그는 수정하지 않고, 기존 정적 확인 항목을 evidence 별칭으로 검증하도록 harness와 회귀 시험을 보완했다.
 - 증거: 새 별칭 시험을 수정 전 실패, 수정 후 통과로 확인했다. network/harness 계약 시험 77 passed; harness lint 0 errors, 기존 메타데이터 warning 19건. 변경된 setup 브라우저 회귀는 실행하지 않았다.
 - gate 변화: dashboard SOURCE는 검사 자료가 최신이 되도록 정리했지만 지정된 브라우저 시험과 화면 readback 전까지 HOLD다. 장치·현장 gate 변화는 없다.
+
+## 2026-09-28 · uncommitted · feat(fleet): correlate Pinky navigation attempt results
+
+- 변경: D-316과 API Ref v1.44를 추가했다. Site Fleet `attempt_id`는 Pinky CORE goal의 REST `correlation_id`가 되고, CORE navigation events를 같은 robot/attempt에만 투영한다. 중복·오래된 이벤트를 거르고 cancel-request는 결과 확정 전 `UNKNOWN`으로 둔다. PRT-004 envelope/ACK와 물리 정지 readback은 별도다.
+- 검증: Fleet 542 passed/5 skipped, CORE API+services 297 passed/13 skipped, changed implementation lint 통과. docs/harness 계약은 75 passed/2 failed; 실패는 기존 dashboard/logs.md의 형식 오류 2건이다. 전체 Fleet flake8도 기존 hub/console/test 파일 경고가 남아 있다.
+- gate 변화: SOURCE/LOCAL 증거만 갱신한다. ROS-SIM, artifact, Pinky 실물, 정지 readback, SITE/FIELD 수용은 변하지 않는다.
+
+
+## 2026-09-28 · uncommitted · fix(fleet): recover and scope result correlation
+
+- 변경: 코드 리뷰에서 확인한 두 누락을 보완했다. CORE action generation마다 correlation을 묶고 cancel 뒤 ID 상속을 막았다. Fleet은 task projection 실패 이벤트를 durable audit에서 heartbeat/restart 때 재생한다.
+- 검증: Fleet 543 passed/5 skipped, API+services 297 passed/13 skipped, focused gateway navigation/GoalTracker 19 passed, changed implementation flake8 통과. docs/harness는 75 passed/2 failed이며 기존 dashboard 로그 제목 오류 2건이 남는다.
+- gate 변화: SOURCE/LOCAL만 반영한다. ROS-SIM, artifact, DEVICE, 물리 정지, SITE/FIELD 증거는 없다.
+
+## 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
+
+- Change: preserve a canceled correlated Nav2 generation through its final callback and publish its terminal result without mutating a newer navigation state, including cancel-before-acceptance.
+- Evidence: focused GoalTracker/navigation manager tests pass; full regression and reviewer recheck pending.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, DEVICE/physical-stop, SITE, or FIELD evidence.
+## 2026-09-28 · uncommitted · finish D-316 cancellation-result follow-up
+
+- Change: retain bounded correlation for canceled Nav2 goals, report only terminal results, and isolate late results from newer navigation state.
+- Evidence: Fleet 543 passed/5 skipped; Services 227 passed; GoalTracker + navigation manager 67 passed; task contract docs 3 passed; changed production flake8 and diff check pass.
+- Gate: SOURCE/LOCAL only; ROS-SIM, image, device/physical-stop, Ubuntu/site, and FIELD acceptance remain open.
