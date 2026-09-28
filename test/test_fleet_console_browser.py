@@ -786,6 +786,8 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
+        assert page.locator("#log .log-empty strong").inner_text() == "최근 이벤트가 없습니다"
+        assert "관제 요청과 연결 상태 변화" in page.locator("#log .log-empty span").inner_text()
         page.locator("#roster-toggle").click()
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         aim = page.locator("#roster article").filter(has_text="rosy_02").locator("ui-button").first
@@ -810,6 +812,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         page.keyboard.press("Enter")
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('미션 하달')")
         assert sum(method == "POST" and path == goal_path for method, path in posts) == 1
+        assert page.locator("#log .log-empty").count() == 0
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
         assert not errors
@@ -918,7 +921,7 @@ FLEET_FIT_PROBE = """() => {
     const n = document.querySelector(sel);
     if (!n) return null;
     const b = n.getBoundingClientRect();
-    return { top: Math.round(b.top), bottom: Math.round(b.bottom) };
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height) };
   };
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
@@ -965,6 +968,7 @@ def test_console_fits_the_declared_viewport(console_url):
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
+    assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
 
 
 def test_fleet_control_groups_are_semantic_subheadings(console_url):
