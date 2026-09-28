@@ -29,6 +29,7 @@
 | D-312 | G4 정지 시험은 지면에서도 제한된 이동량으로 수행한다 |
 | D-314 | 지면 G4는 실측으로 간소화하고 수동 운전의 반복 확인을 없앤다 |
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
+| D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 
 ## 계획·결과 문서
 
@@ -62,8 +63,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(g4): plan an attended calibration and mapping flow
 - 2026-09-28 · uncommitted · D-320 product deployment path regression verification
 - 2026-09-28 · uncommitted · D-320 product-scoped robot deployment layout
 - 2026-09-28 · uncommitted · feat(sd): automate attended motor commissioning
 - 2026-09-27 · uncommitted · close development IO web asset dependency
-- 2026-09-27 · b0609dc6 · verify development CORE image closure on ARM64

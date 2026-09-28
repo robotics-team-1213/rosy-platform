@@ -3118,3 +3118,9 @@
 - 변경: D-319에 SETUP 이후 현장 입회 하에서 no-drive 상태를 E-Stop이 걸린 모터 점검 모드로 전환하는 절차를 기록했다. SETUP만으로 토크를 켜지 않으며 G4 수용은 별도로 둔다.
 - 증거: 비공개 장치 시험에서 전진과 정지는 현장 확인되었지만 보고된 최고 속도가 요청 한도를 넘었다. 장치별 기록은 X:\DevTemp에 둔다.
 - gate 변화: ADR은 Proposed, 전체 G4와 FIELD는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(g4): record link-loss lesson and D-321 calibration decision
+
+- 변경: PC 링크 상실 시 주행 시도를 UNOBSERVED로 보존하는 교훈과 D-321 현장 보정·G4·빈 지도 맵핑 결정을 추가했다. 구현 단계를 별도 계획에 기록했다.
+- 증거: 비공개 지면 시험의 네 방향 원시 수치 중 유효 기록과 현장 확인 범위를 분리했다. 마지막 명령 소실 시도는 샘플과 stop 시각이 없어 무효이며, PC Wi-Fi 드라이버 연결 해제와 현장 전원 차단을 확인했다. 차단 직전 persistent drive flag가 다음 부팅 토크를 켤 수 있어 오프라인 no-drive 복구를 선행 조건으로 기록했다.
+- gate 변화: 설계 결정만 Accepted. 설치된 승인 도구·unit, 다섯 번째 G4 실측, 서명 릴리스, 실제 지도와 FIELD는 HOLD다.

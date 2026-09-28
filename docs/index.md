@@ -142,6 +142,7 @@
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 |
+| D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 
 ## 계획·결과 문서
 
@@ -200,8 +201,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(g4): record link-loss lesson and D-321 calibration decision
 - 2026-09-28 · uncommitted · docs(sd): define attended post-setup motor commissioning
 - 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
 - 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
 - 2026-09-28 · uncommitted · docs(architecture): make source placement rules explicit
-- 2026-09-28 · uncommitted · docs(plan): complete the D-317 structure audit

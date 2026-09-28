@@ -1431,3 +1431,9 @@
 - 변경: `deploy/robot/pinky_pro`와 `deploy/robot/omx`로 옮긴 배포 경로, Pinky 이미지/release/SD 계약, OMX workstation 경로를 회귀 검증했다. `.gitattributes`의 제품 경로도 갱신했다.
 - 증거: 집중 계약 묶음 277 passed, 5 skipped, 1 deselected; 별도 Git Bash gate 시험 1 passed; SD 계획/identity 핵심 4 passed; OMX host/site-fabric 계약 52 passed; source encoding 1 passed. 최신 main의 moved-device setup 계약 14 passed, 1 skipped. `rosy_harness.py generate`와 lint 성공(0 errors, 18 warnings), `git diff --check` 성공.
 - gate 변화: SOURCE/LOCAL만 갱신. ARM64 artifact, 설치/readback, DEVICE/FIELD 수용은 확인하지 않았으며 기존 HOLD를 유지한다.
+
+## 2026-09-29 · uncommitted · docs(g4): plan an attended calibration and mapping flow
+
+- 변경: D-321과 단계별 실행 계획에 PC 링크 preflight, 장치 독립 원시 수집, Control 보정 재사용, 네이티브 G4 봉인과 빈 지도 SLAM 전환을 기록했다.
+- 증거: 설치 장치에는 현재 승인 도구가 없고 navigation unit은 마커 존재만 확인한다. 마지막 명령 소실 시도는 원시 자료가 비어 있으며 현장에서 전원을 차단했다. persistent motor/drive 설정은 전원 차단으로 지워지지 않아 다음 부팅 전에 오프라인 복구가 필요하다.
+- gate 변화: 배포·실물 G4/G5 HOLD. 장치 전원은 꺼진 상태로 유지한다.
