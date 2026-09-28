@@ -36,6 +36,50 @@ export function mount(root, ctx) {
   detail.append(el("summary", "", "호스트·로봇 신원·기능 세부 정보 및 이름 변경"), runtime.wrap, identity.wrap, capabilities.wrap);
   const message = el("ui-status", "", "");
   message.hidden = true;
+  message.setAttribute("role", "status");
+  message.setAttribute("aria-live", "polite");
+  let identityInput = null;
+  let identitySave = null;
+  let identityDirty = false;
+  let savedName = null;
+  if (ctx.role === "administrator") {
+    const form = el("form", "ui-form");
+    identityInput = el("input"); identityInput.name = "robot_name"; identityInput.maxLength = 64;
+    identityInput.setAttribute("aria-label", "로봇 표시 이름");
+    identityInput.addEventListener("input", () => { identityDirty = true; savedName = null; });
+    identitySave = el("ui-button", "", "이름 저장"); identitySave.setAttribute("kind", "primary"); identitySave.type = "submit";
+    form.append(identityInput, identitySave);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (identitySave.disabled) return;
+      const robotName = identityInput.value.trim();
+      if (!robotName) {
+        message.textContent = "로봇 표시 이름을 입력하세요.";
+        message.hidden = false;
+        message.setAttribute("state", "error");
+        return;
+      }
+      identitySave.disabled = true;
+      identityInput.disabled = true;
+      message.textContent = "표시 이름 저장 요청 중";
+      message.hidden = false;
+      message.setAttribute("state", "pending");
+      try {
+        const result = await ctx.api("/api/v1/system/info", {method: "PUT", body: JSON.stringify({robot_name: robotName})});
+        savedName = result?.robot_name || robotName;
+        identityInput.value = savedName;
+        message.textContent = "저장 요청을 접수했습니다. 다음 로봇 신원 조회에서 결과를 확인하세요.";
+        message.setAttribute("state", "ready");
+      } catch (error) {
+        message.textContent = `표시 이름 저장 실패: ${error.message}`;
+        message.setAttribute("state", "error");
+      } finally {
+        identitySave.disabled = false;
+        identityInput.disabled = false;
+      }
+    });
+    identity.wrap.append(form);
+  }
   identity.wrap.append(message);
   root.append(head, overview, detail);
 
@@ -64,22 +108,20 @@ export function mount(root, ctx) {
       ["로봇 번호", data.robot_number], ["ROS Domain ID", data.ros_domain_id],
       ["ROS namespace", data.ros_namespace], ["하드웨어 모델", data.hardware_model],
       ["실행 모드", data.runtime_mode]]);
+    if (identityInput) {
+      const currentName = data.robot_name || data.name || "";
+      if (savedName !== null) {
+        if (currentName === savedName) {
+          identityDirty = false;
+          savedName = null;
+          identityInput.value = currentName;
+        }
+      } else if (!identityDirty && document.activeElement !== identityInput) {
+        identityInput.value = currentName;
+      }
+    }
     identityStatus.textContent = `${data.robot_name || data.name || data.robot_id || "로봇 이름 미확인"} · 실행 모드 ${data.runtime_mode || "확인 불가"}`;
     identityStatus.setAttribute("state", "ready");
-    if (ctx.role === "administrator" && !identity.body.querySelector("form")) {
-      const form = el("form", "ui-form");
-      const input = el("input"); input.name = "robot_name"; input.maxLength = 64;
-      input.value = data.robot_name || data.name || ""; input.setAttribute("aria-label", "로봇 표시 이름");
-      const save = el("ui-button", "", "이름 저장"); save.setAttribute("kind", "primary"); save.type = "submit";
-      form.append(input, save);
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault(); save.disabled = true;
-        try { await ctx.api("/api/v1/system/info", {method: "PUT", body: JSON.stringify({robot_name: input.value.trim()})}); message.textContent = "표시 이름 저장 요청을 보냈습니다. 다음 로봇 신원 조회로 결과를 확인하세요."; message.hidden = false; }
-        catch (error) { message.textContent = `표시 이름 저장 실패: ${error.message}`; message.hidden = false; }
-        finally { save.disabled = false; }
-      });
-      identity.wrap.append(form);
-    }
   }, (error) => {
     fields(identity.body, []);
     identityStatus.textContent = `로봇 신원 확인 불가: ${error.message}`;

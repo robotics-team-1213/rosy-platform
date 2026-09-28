@@ -403,3 +403,9 @@
 - 변경: 보드 장치 패널의 측정 상태 안내와 관리자 점검 요청 결과를 별도 live status로 분리했다. 주기적 GET 성공·실패가 POST의 pending·accepted·error 결과를 덮지 않는다. 접수 문구는 점검 완료를 주장하지 않고 마지막 측정 시각과 장치 상태에서 확인하도록 안내한다.
 - 정적 확인: 변경 영역 코드 검토와 `git diff --check`를 실행했다. 브라우저 회귀, Impeccable detector, 새 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 Host Agent 점검 결과와 장치 readback은 별도다.
+
+## 2026-09-28 · uncommitted · fix(device): prevent duplicate identity editors on polling
+
+- 변경: 관리자 로봇 표시 이름 폼을 초기 구성 때 한 번만 만든다. 기존 폴링은 `<dl>`을 갱신했지만 그 `<dl>`에서 폼 존재를 찾았기 때문에 30초마다 중복 폼을 추가했다. 이제 편집 초안이 유지되고 저장 중 입력·버튼을 잠그며, 요청 접수는 다음 신원 조회의 실제 반영과 구분한다.
+- 정적 확인: 변경 영역 코드 검토와 `git diff --check`를 실행한다. 브라우저 회귀, Impeccable detector, 새 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 기기 신원 readback은 별도다.

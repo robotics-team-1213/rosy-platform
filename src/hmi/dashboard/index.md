@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · fix(device): prevent duplicate identity editors on polling
 - 2026-09-28 · uncommitted · fix(device): separate board refresh result from hardware readback
 - 2026-09-28 · uncommitted · fix(console): separate map readback and action outcomes
 - 2026-09-28 · uncommitted · fix(console): keep docking actions locked through readback polls
 - 2026-09-28 · uncommitted · fix(console): fail closed on stale lane-follow state
-- 2026-09-28 · uncommitted · fix(console): separate teleop readiness and action feedback
