@@ -100,3 +100,21 @@ def test_driver_paths_for_engage_disengage_and_stop():
         {"path": "/api/v1/mode", "body": {"mode": "IDLE"}},
         {"path": "/api/v1/safety/stop", "body": {}},
     ]
+
+
+def test_reason_codes_map_to_operator_korean():
+    assert _run_js("""
+    console.log(JSON.stringify([
+      pinky.describeReason('role:viewer'),
+      pinky.describeReason('teleop_withheld:drive_disabled:no_motion'),
+      pinky.describeReason('teleop_withheld'),
+      pinky.describeReason('drive_disabled'),
+      pinky.describeReason('anything_else'),
+    ]));
+    """) == [
+        "운전 권한이 없습니다 (현재 역할: viewer)",
+        "수동 운전이 보류되었습니다 — drive_disabled:no_motion",
+        "수동 운전이 보류되었습니다",
+        "구동이 꺼져 있습니다 (무동작)",
+        "진입할 수 없습니다 — anything_else",
+    ]

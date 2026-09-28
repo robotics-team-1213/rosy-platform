@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/pilot/assets/styles.css">
   <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/pilot/assets/app.js"></script>
 </head>
 <body>
   <ui-shell grammar="spatial">
@@ -17,14 +18,15 @@
         <small>Pinky 직접 조종</small>
       </ui-brand>
       <span data-spacer></span>
-      <ui-tag>대기</ui-tag>
+      <ui-tag data-gate-state>대기</ui-tag>
     </ui-topbar>
     <main>
       <ui-section aria-labelledby="pilot-heading">
         <ui-head>
-          <ui-text id="pilot-heading" scale="label">조종</ui-text>
+          <ui-text id="pilot-heading" scale="label">접속</ui-text>
         </ui-head>
-        <ui-empty>접속 게이트를 준비 중입니다.</ui-empty>
+        <div data-screen="connect"></div>
+        <ui-empty data-pilot-note>Pinky CORE 연결을 확인합니다.</ui-empty>
       </ui-section>
     </main>
   </ui-shell>

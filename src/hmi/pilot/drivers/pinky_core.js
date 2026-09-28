@@ -26,6 +26,23 @@ export function assessGate({role = "viewer", capabilities = {}} = {}) {
   return {allowed: reasons.length === 0, reasons};
 }
 
+// 게이트 사유 원시 코드 → 운용자 문구. CORE 의 정지이듯 보류도 사실만 말한다.
+export function describeReason(code) {
+  if (code.startsWith("role:")) {
+    return `운전 권한이 없습니다 (현재 역할: ${code.slice(5)})`;
+  }
+  if (code.startsWith("teleop_withheld:")) {
+    return `수동 운전이 보류되었습니다 — ${code.slice("teleop_withheld:".length)}`;
+  }
+  if (code === "teleop_withheld") {
+    return "수동 운전이 보류되었습니다";
+  }
+  if (code === "drive_disabled") {
+    return "구동이 꺼져 있습니다 (무동작)";
+  }
+  return `진입할 수 없습니다 — ${code}`;
+}
+
 export const pinkyCore = {
   kind: KIND,
   assessGate,

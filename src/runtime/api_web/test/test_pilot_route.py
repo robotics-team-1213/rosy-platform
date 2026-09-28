@@ -28,5 +28,8 @@ def test_pilot_assets_allowlist_blocks_the_rest():
     assert client.get("/pilot/assets/link.js").status_code == 200
     assert client.get("/pilot/assets/drivers/registry.js").status_code == 200
     assert client.get("/pilot/assets/drivers/pinky_core.js").status_code == 200
+    assert client.get("/pilot/assets/app.js").status_code == 200
+    assert client.get("/pilot/assets/client.js").status_code == 200
+    assert client.get("/pilot/assets/screens/connect.js").status_code == 200
     assert client.get("/pilot/assets/secrets.env").status_code == 404
     assert client.get("/pilot/assets/../api/app.py").status_code == 404

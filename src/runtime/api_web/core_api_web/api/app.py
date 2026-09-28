@@ -199,8 +199,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "styles.css": "text/css",
         "stick.js": "application/javascript",
         "link.js": "application/javascript",
+        "app.js": "application/javascript",
+        "client.js": "application/javascript",
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",
+        "screens/connect.js": "application/javascript",
     }
 
     @app.get("/pilot", include_in_schema=False)

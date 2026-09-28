@@ -8,11 +8,14 @@ install(FILES
   styles.css
   stick.js
   link.js
+  app.js
+  client.js
   DESTINATION share/${PROJECT_NAME}
 )
 
 install(DIRECTORY
   drivers
+  screens
   DESTINATION share/${PROJECT_NAME}
 )
 
