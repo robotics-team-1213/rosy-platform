@@ -70,7 +70,9 @@ def test_step_start_requires_generation_and_a_live_claim(tmp_path):
     with pytest.raises(MissionConflict, match="stop generation"):
         store.start_step(mission["mission_id"], action_id="action-1",
                          attempt_id="attempt-1", expected_generation=generation)
-    assert store.get_mission(mission["mission_id"])["status"] == "READY"
+    assert store.get_mission(mission["mission_id"])["status"] == "HOLD"
+    assert tasks.resource_claims(resource_kind="object", resource_id="block-1") == []
+    assert store.history(mission["mission_id"])[-1]["event_type"] == "STEP_HELD_BEFORE_SUBMISSION"
 
 
 def test_step_start_rejects_boolean_generation_even_when_it_compares_equal(tmp_path):

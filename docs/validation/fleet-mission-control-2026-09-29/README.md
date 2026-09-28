@@ -11,6 +11,7 @@ Source-only implementation work on the isolated `feat/fleet-mission-control` wor
 - The internal single-step Mission journal stores idempotent proposals, immutable `PICK_PLACE` goal predicates, admission, attempt correlation, terminal Action results, and goal evidence in the same SQLite database as Fleet claims.
 - Driver `SUCCEEDED` becomes `ACTION_SUCCEEDED`, not Mission completion. Fresh matching `camera_observation` evidence is required to become `GOAL_CONFIRMED` and release claims. Invalid goal evidence holds the Mission. Model-authored completion text is not accepted as goal evidence.
 - The Mission store is internal SOURCE code only: it has no REST route, scheduler executor, or OMX/ROS submission binding.
+- Follow-up review closed the stale-READY gap: if a stop changes the generation or a Mission claim is missing before start, the Mission now atomically enters `HOLD`, records `STEP_HELD_BEFORE_SUBMISSION`, and releases any remaining pre-dispatch Mission claims.
 
 ## Verification
 
@@ -18,6 +19,7 @@ Source-only implementation work on the isolated `feat/fleet-mission-control` wor
 |---|---|
 | `python -m pytest src/site/fleet/test/test_mission_store.py src/site/fleet/test/test_mission_service.py src/site/fleet/test/test_goal_evidence.py -q` | 15 passed |
 | `python -m pytest src/site/fleet/test/ -q` | 578 passed, 5 skipped |
+| `python -m pytest src/site/fleet/test/ -q` after follow-up review fix | 578 passed, 5 skipped |
 | `python -m pytest src/products/omx/adapter/test/ -q` | 72 passed, 3 skipped |
 | `python test/test_network_topology_contracts.py test/test_harness_contracts.py -q` | Passed |
 | `python tools/harness/rosy_harness.py lint` | 0 errors, 18 freshness warnings |
@@ -28,4 +30,4 @@ The preceding Fleet/OMX implementation commits and their focused evidence are su
 
 ## Limits and next gate
 
-This evidence does not prove that a site/network stop always reaches the robot, that the robot consumes and fences the stop generation, that an independent physical E-stop exists, or that gripper/camera feedback is calibrated and trustworthy. The camera goal evidence contract is a source-level check; provenance authentication must be established before any public submission path. OMX remains disabled and the Mission ledger cannot dispatch. ROS-SIM fault injection, target artifact, DEVICE, and FIELD acceptance remain open.
+This evidence does not prove that a site/network stop always reaches the robot, that the robot consumes and fences the stop generation, that an independent physical E-stop exists, or that gripper/camera feedback is calibrated and trustworthy. The camera goal evidence contract is a source-level check; provenance authentication must be established before any public submission path. OMX remains disabled and the Mission ledger cannot dispatch. D-322 requires an actual Ubuntu 24.04/Jazzy/Isaac Sim 6.1 GPU host; that environment is absent here, so Isaac ROS-SIM fault injection, target artifact, DEVICE, and FIELD acceptance remain open.

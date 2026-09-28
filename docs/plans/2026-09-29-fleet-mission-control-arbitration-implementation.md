@@ -101,8 +101,14 @@ Implementation is being delivered in the isolated `feat/fleet-mission-control` w
 | 3. Site stop/audit failure boundary | Complete for source behavior | Dedicated stop fanout remains best-effort across audit failure; ordinary mutation remains fail-closed. HTTP response is not physical stop proof. |
 | 4. OMX Action attempt ledger | Complete as local durable ledger | Canonical request identity, attempt states, restart-to-UNKNOWN, no replay. Not wired to a physical driver/API. OMX profile remains disabled. |
 | 5. Mission and direct-action boundary | Partial, dispatch disabled | Internal single-step `PICK_PLACE` proposal/admission/result/goal-evidence ledger uses the shared SQLite transaction and claims. Action SUCCEEDED is separate from goal confirmation; independent camera evidence is freshness-checked. No REST endpoint, scheduler executor, or ROS/device submission was added. |
-| 6. Cross-layer simulation and fault injection | Not started | Needs ROS-SIM integration after device-side generation fencing contract exists. Current SOURCE tests do not prove site/network/device stop timing. |
+| 6. Cross-layer simulation and fault injection | Not run | D-322 explicitly holds Isaac ROS-SIM on this Windows host; its required Ubuntu/Jazzy/Isaac 6.1 GPU environment is absent. Do not add Isaac fixtures until that path is actually verified. Existing SOURCE fault tests do not prove site/network/device stop timing. |
 
 Verification on this worktree: Mission focused tests **15 passed**; full Fleet suite **578 passed, 5 skipped**; OMX adapter suite **72 passed, 3 skipped**; network topology and harness contract tests passed. Harness lint reports **0 errors, 18 freshness warnings**. `flake8` could not run because the executable is unavailable in this environment.
 
 **Capability gate:** Fleet task dispatch remains subject to explicit operator rearm. Mission/semantic OMX physical dispatch remains disabled. Source tests do not establish REST contract approval, device-side stop-generation enforcement, independent hardware E-stop, selected device identity, camera/gripper calibration, ROS-SIM acceptance, or DEVICE/FIELD acceptance.
+
+### Follow-up review (2026-09-29)
+
+Review finding: when stop invalidated a pre-dispatch Mission claim, the generic Fleet stop path deleted the `CLAIMED` row but the internal Mission could remain `READY`. Although `start_step` already refused stale generations, the durable Mission status did not explain the refusal. Fixed `start_step` to atomically set `HOLD`, append `STEP_HELD_BEFORE_SUBMISSION`, and release any remaining Mission claims when the stop generation or resource claim is stale. A regression test failed before the fix and passes after it. Full Fleet suite rerun: **578 passed, 5 skipped**.
+
+The implementation remains intentionally unmerged into an up-to-date main until the branch is integrated and retested against main. Remote deployment is also not yet evidenced; no Isaac GPU host, identified target workcell, physical stop/readback setup, or approved artifact/runtime target is available in this execution environment.

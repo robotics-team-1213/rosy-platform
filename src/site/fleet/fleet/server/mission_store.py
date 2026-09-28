@@ -249,6 +249,7 @@ class MissionStore:
         if type(expected_generation) is not int or expected_generation < 0:
             raise ValueError("expected_generation must be a non-negative integer")
         now = _now()
+        rejected_reason = None
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
@@ -258,38 +259,64 @@ class MissionStore:
             control = connection.execute(
                 "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
             ).fetchone()
-            if (row["status"] != "READY" or not control["dispatch_enabled"]
-                    or control["generation"] != expected_generation
+            if row["status"] != "READY":
+                raise MissionConflict("only a READY Mission step may start")
+            if (not control["dispatch_enabled"] or control["generation"] != expected_generation
                     or row["dispatch_generation"] != expected_generation):
-                raise MissionConflict("Mission cannot start after stop generation changed")
-            resources = json.loads(row["resources_json"] or "[]")
-            expected_keys = {f"{kind}:{resource}" for kind, resource in resources}
-            claims = connection.execute(
-                """SELECT resource_key FROM fleet_action_claims WHERE owner_kind='mission'
-                   AND owner_id=? AND generation=? AND phase='CLAIMED'""",
-                (mission_id, expected_generation),
-            ).fetchall()
-            if {claim["resource_key"] for claim in claims} != expected_keys:
-                raise MissionConflict("Mission resource claim is no longer complete")
-            connection.execute(
-                """UPDATE fleet_action_claims SET phase='DISPATCHING', lease_until=NULL
-                   WHERE owner_kind='mission' AND owner_id=? AND generation=? AND phase='CLAIMED'""",
-                (mission_id, expected_generation),
-            )
-            connection.execute(
-                """UPDATE fleet_missions SET status='RUNNING', action_id=?, attempt_id=?,
-                   updated_at=? WHERE mission_id=?""",
-                (action_id, attempt_id, now, mission_id),
-            )
-            self._event(
-                connection, event_source="fleet_mission", source_event_id=f"submit:{attempt_id}",
-                mission=row, event_type="STEP_SUBMITTED", state="RUNNING", actor_id=row["principal_id"],
-                action_id=action_id, attempt_id=attempt_id,
-                detail={"dispatch_generation": expected_generation},
-            )
+                rejected_reason = "stop generation changed before Mission step submission"
+            else:
+                resources = json.loads(row["resources_json"] or "[]")
+                expected_keys = {f"{kind}:{resource}" for kind, resource in resources}
+                claims = connection.execute(
+                    """SELECT resource_key FROM fleet_action_claims WHERE owner_kind='mission'
+                       AND owner_id=? AND generation=? AND phase='CLAIMED'""",
+                    (mission_id, expected_generation),
+                ).fetchall()
+                if {claim["resource_key"] for claim in claims} != expected_keys:
+                    rejected_reason = "Mission resource claim is no longer complete"
+            if rejected_reason:
+                reason_code = ("STOP_GENERATION_CHANGED_BEFORE_SUBMISSION"
+                               if "stop generation" in rejected_reason
+                               else "MISSION_RESOURCE_CLAIM_LOST")
+                connection.execute(
+                    "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
+                    (reason_code, now, mission_id),
+                )
+                self._event(
+                    connection, event_source="fleet_mission",
+                    source_event_id=f"hold-before-submit:{mission_id}:{row['dispatch_generation']}",
+                    mission=row, event_type="STEP_HELD_BEFORE_SUBMISSION", state="HOLD",
+                    actor_id=row["principal_id"], action_id=action_id, attempt_id=attempt_id,
+                    detail={"reason": reason_code, "expected_generation": expected_generation,
+                            "current_generation": control["generation"],
+                            "dispatch_enabled": bool(control["dispatch_enabled"])},
+                )
+                release_dispatch_claims(
+                    connection, owner_kind="mission", owner_id=mission_id,
+                    generation=row["dispatch_generation"],
+                )
+            else:
+                connection.execute(
+                    """UPDATE fleet_action_claims SET phase='DISPATCHING', lease_until=NULL
+                       WHERE owner_kind='mission' AND owner_id=? AND generation=? AND phase='CLAIMED'""",
+                    (mission_id, expected_generation),
+                )
+                connection.execute(
+                    """UPDATE fleet_missions SET status='RUNNING', action_id=?, attempt_id=?,
+                       updated_at=? WHERE mission_id=?""",
+                    (action_id, attempt_id, now, mission_id),
+                )
+                self._event(
+                    connection, event_source="fleet_mission", source_event_id=f"submit:{attempt_id}",
+                    mission=row, event_type="STEP_SUBMITTED", state="RUNNING", actor_id=row["principal_id"],
+                    action_id=action_id, attempt_id=attempt_id,
+                    detail={"dispatch_generation": expected_generation},
+                )
             updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                          (mission_id,)).fetchone()
             connection.commit()
+        if rejected_reason:
+            raise MissionConflict(rejected_reason)
         return self._row(updated)
 
     def record_action_result(self, mission_id: str, *, event_id: str, action_id: str,
