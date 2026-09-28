@@ -196,6 +196,7 @@
 - [2026-09-28-control-and-contract-boundary-audit.md](plans/2026-09-28-control-and-contract-boundary-audit.md)
 - [2026-09-28-site-camera-preview-rectification.md](plans/2026-09-28-site-camera-preview-rectification.md)
 - [2026-09-29-embodied-reasoning-device-action-design.md](plans/2026-09-29-embodied-reasoning-device-action-design.md)
+- [2026-09-29-er2-adr-consistency-review.md](plans/2026-09-29-er2-adr-consistency-review.md)
 - [2026-09-29-er2-isaac-sim-architecture-assessment.md](plans/2026-09-29-er2-isaac-sim-architecture-assessment.md)
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
@@ -212,8 +213,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
 - 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
 - 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다
 - 2026-09-29 · uncommitted · docs(adr): record D-326 agent loop boundary
 - 2026-09-29 · uncommitted · docs(plan): map the ER2-style agent loop against current source
-- 2026-09-29 · uncommitted · docs(er2): renumber proposed ADRs after D-326 collision

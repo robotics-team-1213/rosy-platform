@@ -3216,3 +3216,10 @@
 - 증거: `docs/validation/uiux-surfaces-2026-09-27/` 표면별 카드와 블로커, STATUS.md dashboard 게이트, D-280/D-153/D-254 계약을 대조했다. 코드·화면 변경은 없다.
 - gate 변화: 없음. 계획 문서이며 모든 표면 판정은 현행 HOLD를 유지한다.
 - 결정: 없음. ADR 후보(A-1 표정 어휘, A-2 온기 문구)는 해당 회차 도달 시 제안한다.
+
+## 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
+
+- 변경: 색인에만 있던 D-326 본문을 추적하고, D-327/D-328과의 모델→Fleet→장치 권한, 사람 확인, 벤더 명칭 경계를 명시했다. 별도 정합성 검토와 실행 계획에 기존 Fleet 예약·Mission 대기 Step 정지 래치·감사 DB 장애 중 사이트 정지 제한·driver 접수/원장 기록 사이 crash window를 기록했다.
+- 증거: D-308 및 현행 Fleet task/stop/예약·OMX runtime 계약을 대조했다. 문서 계약 시험과 harness lint를 통합 뒤 실행한다.
+- gate 변화: 없음. 자동 정책 재발행, OMX 운영 Action, 사이트 전체 정지 가용성 및 ARTIFACT/DEVICE/FIELD는 HOLD다.
+- 결정: D-326 Accepted 경계를 명확히 기록한다. D-327/D-328은 계속 Proposed이며 새 API·capability 승격은 없다.

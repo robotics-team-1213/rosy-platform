@@ -12,7 +12,7 @@
 
 ## 기준선·범위·착수 규칙
 
-- 계약: [D-327](../adr/D-327-semantic-manipulation-actions-and-device-adapters.md), [D-328](../adr/D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), [D-307](../adr/D-307-final-action-outcome-and-stop-readback-evidence.md), [D-18](../adr/D-18-rosy-core.md). [사용자 제공 실험 대조](2026-09-29-er2-isaac-sim-architecture-assessment.md)는 사례이며 장치 수용 증거가 아니다.
+- 계약: [D-326](../adr/D-326-agent-loop-boundary.md), [D-327](../adr/D-327-semantic-manipulation-actions-and-device-adapters.md), [D-328](../adr/D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), [D-307](../adr/D-307-final-action-outcome-and-stop-readback-evidence.md), [D-18](../adr/D-18-rosy-core.md). [사용자 제공 실험 대조](2026-09-29-er2-isaac-sim-architecture-assessment.md)는 사례이며 장치 수용 증거가 아니다.
 - 현재 `src/products/omx/profile/config/omx.disabled.yaml`은 `enabled: false`다. `omx_adapter`는 카메라 pair와 arm trajectory 단일 submitter 후보를 갖지만 그리퍼/물체 보유·배치 검증 및 원격 Device Action API가 없다. `src/site/fleet/fleet/server/task_service.py`는 Pinky navigation task만 영속화하고 policy dispatch는 닫혀 있다. `/api/fleet/do`의 `steps`는 Mission DAG가 아니다.
 - 이 계획의 첫 실제 작업은 **고정 OMX의 알려진 블록→트레이 `PICK_PLACE`**다. 단독 `PICK`/`PLACE`, Pinky+OMX 운반, 다중 장치, ER 2 자동 dispatch는 아래 출구를 통과하기 전까지 capability로 광고하지 않는다. 현재 Pinky API/`TaskKind`를 OMX용으로 재사용하지 않는다.
 - 각 단계는 새 격리 worktree와 최신 `main`의 HEAD·dirty path 비교 후 시작한다. API 경로·wire enum·envelope이 바뀌는 커밋은 `docs/reference/ROSY API & Protocol Reference.md`, `src/contracts/foundation/core_common/protocol/schemas.py`, 생산자/소비자 시험을 함께 바꾼다. 제안 경로를 이미 존재하는 API로 설명하지 않는다.
@@ -50,7 +50,7 @@
 **Files:** Modify `docs/reference/ROSY API & Protocol Reference.md`, `src/contracts/foundation/core_common/protocol/schemas.py`; Create `src/products/omx/adapter/omx_adapter/{action_api,action_store}.py`, `src/products/omx/adapter/test/{test_omx_action_api,test_omx_action_store}.py`; Review `src/products/omx/adapter/omx_adapter/cli.py`, deployment unit/entrypoint under `deploy/omx/`.
 
 1. **계약 결정:** D-18에 따라 실제 producer/consumer 및 host placement를 먼저 정하고 API 경로·principal·workcell identity·capability/version·`request_key`·기한·observation/config revision·`action_id`/`attempt_id`·상태/결과를 API Ref와 schema에서 함께 고정한다. 같은 key/같은 본문은 같은 Action, 같은 key/다른 본문은 충돌이다. timeout 뒤 무조건 재발행하지 않는다.
-2. **실패 시험:** 인증 실패, disabled capability, stale observation, direct ROS 우회, 중복 요청, 취소 ACK 뒤 잔류 운동, HTTP 200 뒤 최종 결과 부재, 재시작 뒤 중복 실행을 검사한다. 공개 status 조회는 권위 있는 로컬 event/driver 시각을 포함한다.
+2. **실패 시험:** 인증 실패, disabled capability, stale observation, direct ROS 우회, 중복 요청, 취소 ACK 뒤 잔류 운동, HTTP 200 뒤 최종 결과 부재, 재시작 뒤 중복 실행을 검사한다. 특히 driver가 요청을 접수한 직후 Action 원장 확정 전에 프로세스가 죽는 창을 주입하고, 재시작 때 driver goal ID 조회·fencing·HOLD 중 검증된 방법으로 물리 재발행을 막는다. 공개 status 조회는 권위 있는 로컬 event/driver 시각을 포함한다.
 3. 로컬 Action API를 transaction owner에만 연결한다. 새 명령 차단·일반 cancel·fault HOLD·독립 E-stop/readback을 별도 경로/상태로 구현한다. HTTP API process와 ROS owner를 별도 프로세스로 둘 경우 단일 writer/재시작/IPC 계약을 이 작업에서 시험한다. **실물 E-stop 회로나 안전 한계는 소프트웨어 API로 대체하지 않는다.**
 4. API Ref·schema·생산자/소비자 시험을 같은 commit으로 묶고 `python -m pytest src/products/omx/adapter/test/ src/runtime/gateway/test/test_protocol_schemas.py -q`를 실행한다. **Exit:** 모델 없는 운영자 요청의 접수·조회·취소·최종 결과는 SIM에서 닫히고 물리 정지는 여전히 DEVICE 증거가 필요하다.
 
@@ -58,23 +58,24 @@
 
 **Files:** Create `src/site/fleet/fleet/server/{mission_store,mission_service,goal_evidence}.py`, `src/site/fleet/test/{test_mission_store,test_mission_service,test_goal_evidence}.py`; Modify `src/site/fleet/fleet/server/app.py`, API Ref/schema when actual wire is introduced.
 
-1. **실패 시험:** 장치 `PICK_PLACE` 성공/목적지 물체 부재, 모델 “완료”/물리 실패, 센서 충돌, 관측 stale, 최종 Action 결과 불명, 부분 실행 후 HTTP 오류를 각각 별도 상태로 기대한다. 목표 predicate는 Mission 접수 전에 저장하고 이후 모델 문구가 이를 바꾸지 못하게 한다.
-2. 기존 `FleetTaskService`의 navigation task를 회귀 기준으로 유지하며 별도 Mission/Step 원장을 최소 구현한다. Action/attempt 이벤트를 append-only로 연결하고 동일 event ID 중복·지연·재시작을 시험한다. 카메라 원본은 Fleet DB에 넣지 않고 출처·digest/파생 관측만 둔다.
+1. **실패 시험:** 장치 `PICK_PLACE` 성공/목적지 물체 부재, 모델 “완료”/물리 실패, 센서 충돌, 관측 stale, 최종 Action 결과 불명, 부분 실행 후 HTTP 오류를 각각 별도 상태로 기대한다. 목표 predicate는 Mission 접수 전에 저장하고 이후 모델 문구가 이를 바꾸지 못하게 한다. 기존 Fleet `stop`/`cancel`과 사이트 정지가 새 Mission의 READY/QUEUED Step도 비활성화하는지 먼저 정의·시험한다. 이 계약이 닫히기 전에는 Mission dispatch를 열지 않는다.
+2. 기존 `FleetTaskService`의 navigation task를 회귀 기준으로 유지하며 별도 Mission/Step 원장을 최소 구현한다. Action/attempt 이벤트를 append-only로 연결하고 동일 event ID 중복·지연·재시작을 시험한다. 카메라 원본은 Fleet DB에 넣지 않고 출처·digest/파생 관측만 둔다. 목표 predicate의 증거 기반 성공 판정과 사람의 자율 재발의 승인은 별도 상태로 기록한다.
 3. `python -m pytest src/site/fleet/test/test_mission_store.py src/site/fleet/test/test_mission_service.py src/site/fleet/test/test_goal_evidence.py src/site/fleet/test/test_task_service.py -q`를 통과시켜 commit한다. **Exit:** 장치 Action 성공을 사이트 목표 성공으로 자동 승격하지 않는다.
 
 ## 작업 5. 병렬 Step·인계·재계획 경계
 
 **Files:** Modify `src/site/fleet/fleet/server/{mission_store,mission_service,task_scheduler}.py`; Create `src/site/fleet/test/{test_mission_dag,test_mission_handoff,test_mission_replan}.py`.
 
-1. **실패 시험:** 두 독립 Step의 병렬 dispatch, 같은 장치/공유 구역 중복 예약 거부, 한 Step 실패 뒤 join 대기, 적재 실패 중 base 출발 금지, 운반 도착 후 하중 부재 시 하역 금지, 같은 물체의 중복 pick, 늦은 ACK 뒤 무조건 재시도를 거절한다.
-2. Fleet에 DAG dependency와 예약/인계 predicate를 추가한다. 물리 보유·적재 상태가 불명확하면 재계획 후보를 보류하고 이전 attempt와 새 attempt를 분리한다. Pinky+OMX 실제 운반은 D-55의 footprint/하중·정지 연동과 DEVICE/FIELD 검증 전까지 실행 capability가 아니다.
-3. `python -m pytest src/site/fleet/test/test_mission_dag.py src/site/fleet/test/test_mission_handoff.py src/site/fleet/test/test_mission_replan.py src/site/fleet/test/ -q`를 실행해 commit한다. **Exit:** 두 장치의 독립 작업과 의존 인계를 SIM에서 구별하고 한 장치의 수락을 전체 완료로 표시하지 않는다.
+1. **실패 시험:** 두 독립 Step의 병렬 dispatch, 같은 장치/공유 구역 중복 예약 거부, 한 Step 실패 뒤 join 대기, 적재 실패 중 base 출발 금지, 운반 도착 후 하중 부재 시 하역 금지, 같은 물체의 중복 pick, 늦은 ACK 뒤 무조건 재시도를 거절한다. 정지 래치 뒤 대기 Step이 발행되지 않고 정지 해제·재시작 뒤에도 새 관측/예약/운영자 승인 전 자동 재발행되지 않는 반례를 포함한다.
+2. Fleet에 DAG dependency와 예약/인계 predicate를 추가한다. 새 Mission 예약은 기존 `fleet_robot_reservations`와 scheduler claim, 직접 조작의 로컬 lease를 같은 제어권 판정에 연결한다. 같은 장치의 기존 navigation task·Mission Step·직접 조작이 동시에 발행될 수 없음을 시험한다. 물리 보유·적재 상태가 불명확하면 재계획 후보를 보류하고 이전 attempt와 새 attempt를 분리한다. Pinky+OMX 실제 운반은 D-55의 footprint/하중·정지 연동과 DEVICE/FIELD 검증 전까지 실행 capability가 아니다.
+3. D-308에 기록된 사이트 `/api/fleet/estop`의 감사 DB 장애 시 `503` 제한을 그대로 독립 안전 정지로 간주하지 않는다. 현재 정지 경로가 기존 navigation 대기열만 취소하는 점을 반영해 Mission READY/QUEUED Step에도 정지 래치를 영속 적용하고, 실행 중 Step은 장치 로컬 안전 경로에서 중단·readback한다. Fleet 또는 감사 DB 장애 중에도 로컬 정지가 가능한지 검증한다. 사이트 전체 정지 가용성은 별도 경로와 감사 내구성을 검증하기 전 HOLD로 둔다.
+4. `python -m pytest src/site/fleet/test/test_mission_dag.py src/site/fleet/test/test_mission_handoff.py src/site/fleet/test/test_mission_replan.py src/site/fleet/test/ -q`를 실행해 commit한다. **Exit:** 두 장치의 독립 작업과 의존 인계를 SIM에서 구별하고 한 장치의 수락을 전체 완료로 표시하지 않는다.
 
 ## 작업 6. ER 2 제안 어댑터와 모델 없는 비교 기준
 
 **Files:** Create `src/site/fleet/fleet/ai/{__init__.py,candidate.py,er2_standard.py,er2_streaming.py}` 및 `src/site/fleet/test/{test_ai_candidate,test_er2_standard,test_er2_streaming}.py`; Modify `src/site/fleet/fleet/server/mission_service.py` only to consume validated candidates.
 
-1. 사람/규칙/ER 2가 같은 typed 후보를 만들고 모델이 쓴 principal·workcell 권한·직접 `move`/gripper 명령이 실행되지 않는 실패 시험을 쓴다. 모델 tool-call ID와 Mission/Step/Action/attempt ID를 분리해 중복·세션 재연결·늦은 결과를 검증한다.
+1. 사람/규칙/ER 2가 같은 typed 후보를 만들고 모델이 쓴 principal·workcell 권한·직접 `move`/gripper 명령이 실행되지 않는 실패 시험을 쓴다. 모델 credential은 Fleet의 후보·관측·상태 경계만 사용하고 Device Action/CORE/기존 즉시 실행 API를 호출할 수 없게 시험한다. 모델 tool-call ID와 Mission/Step/Action/attempt ID를 분리해 중복·세션 재연결·늦은 결과를 검증한다.
 2. 표준 ER 2와 streaming ER 2의 다른 응답/도구 프로토콜을 별도 adapter로 파싱한다. streaming 물리 tool의 `BLOCKING` 의미는 모델 응답 대기이며 Fleet 병렬 scheduler가 아님을 시험한다. 미인증 모델 제안을 자동 제출하지 않는다.
 3. 동일한 고정 fixture와 실패 주입에서 사람/규칙/ER 2의 대상 resolve, 재관찰, 잘못된 완료, 지연을 비교한다. `POLICY_DISPATCH_ENABLED=False`를 유지하고 모델 추가로 정지 경로를 바꾸지 않는다. 네트워크 credential은 비공개 설정에 둔다.
 4. `python -m pytest src/site/fleet/test/test_ai_candidate.py src/site/fleet/test/test_er2_standard.py src/site/fleet/test/test_er2_streaming.py -q`로 확인해 commit한다. **Exit:** 모델이 없어도 같은 Mission을 수행할 수 있고 모델이 없어져도 Action/목표 결과가 남는다.

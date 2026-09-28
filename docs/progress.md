@@ -64,6 +64,7 @@ plans:
   - docs/plans/2026-09-29-er2-manipulation-official-api-research.md
   - docs/plans/2026-09-29-er2-isaac-sim-architecture-assessment.md
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
+  - docs/plans/2026-09-29-er2-adr-consistency-review.md
 ---
 ## 지금 상태
 

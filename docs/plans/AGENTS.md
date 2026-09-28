@@ -92,6 +92,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | 2026-09-29-uiux-craft-improvement-plan.md | D-280 후속 전 표면 크래프트 개선 계획 — Impeccable 렌즈(critique→특화 패스→polish, 유한 검증), G3 사람 평가 프로토콄, G2 보존형 증거, ADR 후보 A-1(표정 어휘)·A-2(온기 문구) |
 | `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
 | `2026-09-29-er2-agent-loop-gap-map.md` | ER2형 자율 루프 개념(목표→상위 판단 에이전트→Skill/VLA→Controller→결과→재판단)과 현행 소스 대조 — 아래 절반 실재, 위 절반 계약만 존재(AIV-001), 재판단 마디는 `POLICY_DISPATCH_ENABLED=False` 밸브. 결정은 D-326 |
+| `2026-09-29-er2-adr-consistency-review.md` | D-326/D-327/D-328과 실행 계획의 모델 권한·사람 확인·Fleet 예약·정지·장애 복구 경계 검토 |
 ## Subdirectories
 
 None.
