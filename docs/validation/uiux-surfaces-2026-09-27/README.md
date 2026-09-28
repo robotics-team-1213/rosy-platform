@@ -166,3 +166,7 @@ The `6b0aaaa7` administrator `/device` security follow-up was exercised in Chrom
 The current-main role G2 matrix passed **5 tests** and generated **60 cells** across 1366x768 and 390x844: overflow 0, pageerror 0, E-stop visible 60/60, canceled-confirmation POST 0. Administrator `/device` screenshots were visually inspected at both viewports. PNGs and `matrix.json` are under `X:\DevTemp\rosy-uiux-d306-roles-g2\`. Impeccable detector returned `[]`; `git diff --check` passed.
 
 The regression found that a token-list GET failure after a successful create/delete left the previous list visible. Those refresh failures now use the same stale-list clearing path as poll failures, while preserving the independent mutation result and one-time secret. This completes the SOURCE/LOCAL follow-up check. Actual Host Agent, CORE safety readback, physical E-stop, and G3 evaluation are separate; broader D-153, DEVICE, and FIELD acceptance remain **HOLD**.
+
+## 2026-09-28 host hardware refresh feedback
+
+The board hardware panel now keeps the administrator refresh request result separate from the periodic measurement status. Polling can no longer replace a pending, accepted, or failed refresh message. Acceptance is described as request receipt; completion remains visible only through a later measurement timestamp and device readback. This change received static review only: no browser regression or new screenshot was run. SOURCE/LOCAL regression and visual review, actual Host Agent readback, and broader D-153/G3/DEVICE/FIELD acceptance remain **HOLD**.

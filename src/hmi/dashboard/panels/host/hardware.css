@@ -14,3 +14,4 @@
 .hardware-device-state { align-self: start; }
 .hardware-facts[data-stale="true"] ~ .hardware-device-list { opacity: 0.72; }
 .hardware-refresh { justify-self: start; }
+.hardware-action-note { margin: 0; color: var(--nominal-quiet); line-height: var(--leading-copy); }

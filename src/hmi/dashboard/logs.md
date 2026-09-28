@@ -397,3 +397,9 @@
 - 변경: `/console` 지도에서 로봇 상태·Navigation·실행 모드 조회는 독립 readiness 상태로 표시하고, map-status는 지도 데이터 freshness만 담당한다. 상태 폴링 오류가 지도 조회 문구를 덮지 않는다. 초기 자세·주행 목표 요청의 접수/실패는 별도 action status에 남아 지도 주기 갱신에 의해 지워지지 않는다.
 - 정적 확인: map helper의 지도 조회·action 경로와 세 상태 poll 성공/실패 UI를 검토했고 `git diff --check`, Impeccable detector(`[]`)를 통과했다. 브라우저 회귀 및 새 `/console` 캡처는 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 위치·경로·주행 적용은 별도다.
+
+## 2026-09-28 · uncommitted · fix(device): separate board refresh result from hardware readback
+
+- 변경: 보드 장치 패널의 측정 상태 안내와 관리자 점검 요청 결과를 별도 live status로 분리했다. 주기적 GET 성공·실패가 POST의 pending·accepted·error 결과를 덮지 않는다. 접수 문구는 점검 완료를 주장하지 않고 마지막 측정 시각과 장치 상태에서 확인하도록 안내한다.
+- 정적 확인: 변경 영역 코드 검토와 `git diff --check`를 실행했다. 브라우저 회귀, Impeccable detector, 새 캡처는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL은 회귀·화면 재확인 전 HOLD. 실제 Host Agent 점검 결과와 장치 readback은 별도다.

@@ -55,6 +55,9 @@ export function mount(el, ctx) {
 
   const note = node("p", "hardware-note", "측정 결과를 불러오는 중입니다.");
   note.setAttribute("role", "status");
+  const actionNote = node("p", "hardware-action-note", "");
+  actionNote.setAttribute("role", "status");
+  actionNote.setAttribute("aria-live", "polite");
   const list = node("ul", "hardware-device-list");
   list.setAttribute("aria-label", "보드 장치별 상태와 근거");
   const refresh = node("ui-button", "hardware-refresh", "다시 점검");
@@ -63,7 +66,7 @@ export function mount(el, ctx) {
   refresh.disabled = ctx.role !== "administrator";
   refresh.setAttribute("aria-label", "관리자 보드 장치 점검 요청");
 
-  el.append(head, facts, note, list, refresh);
+  el.append(head, facts, note, list, refresh, actionNote);
 
   function render(payload) {
     const dd = facts.querySelector("dd");
@@ -103,14 +106,14 @@ export function mount(el, ctx) {
     if (refreshing || ctx.role !== "administrator") return;
     refreshing = true;
     refresh.disabled = true;
-    note.textContent = "새 장치 점검을 요청하고 있습니다.";
+    actionNote.textContent = "새 장치 점검을 요청하고 있습니다.";
     try {
       const reply = await ctx.api("/api/v1/host/hardware/refresh", {method: "POST"});
-      note.textContent = reply.accepted === true
-        ? "점검을 요청했습니다. 새 측정 시각과 장치 상태로 결과를 확인하세요."
+      actionNote.textContent = reply.accepted === true
+        ? "점검 요청을 접수했습니다. 완료 여부는 마지막 측정 시각과 장치 상태에서 확인하세요."
         : (reply.detail || "최근 요청이 있어 점검을 다시 요청하지 않았습니다.");
     } catch (error) {
-      note.textContent = error.status === 403
+      actionNote.textContent = error.status === 403
         ? "장치 점검을 요청할 권한이 없습니다."
         : `장치 점검 요청 실패: ${error.message}`;
     } finally {
