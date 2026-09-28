@@ -3245,3 +3245,9 @@
 - gate 변화: 없음. Proposed이며 표면 판정과 DEVICE/FIELD 수용은 바꾸지 않는다.
 - 결정: D-329 Proposed. 표면 계약 적용 범위 단일 출처와 G2 보존 셀 규칙만 정한다. 번들러·공유 컴포넌트 코드·자동 픽셀 판정·D-153 세 계층 변경은 승인하지 않는다.
 - 교훈: "기준선이 없다"는 말은 저장소를 훑기 전에 쓰면 틀리기 쉽다 — 실제로는 64장이 쌓여 있었고 문제는 *최신 회차 0장*과 *회차마다 갈리는 파일명*이었다. 진단 문장을 측정으로 갈아 끼운 뒤에 ADR을 썼다.
+
+## 2026-09-29 · uncommitted · docs(plan): add D-329 surface registry execution plan
+
+- 변경: `docs/plans/2026-09-29-d329-surface-registry.md` 추가 — D-329의 Decision 1–3만 실행하는 계획이다. `src/hmi/web/surfaces.yaml` 스키마(`id`/`path`/`surface`/`audience`/`grammar`/`contracts`/`contract_reason`/`baseline`/`baseline_reason`)를 정하고, 등록 누락을 빨갛게 만드는 신규 시험과 변이 확인 5건, 세 곳의 `SURFACES` 상수를 로더로 바꾸는 T3, 셸 점검을 추적 파일 한정으로 바꾸는 T4를 배치한다. D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 범위 밖으로 못박았다. `docs/plans/AGENTS.md` 목록에 한 행을 더했다.
+- 증거: 계획의 판정선을 재실행으로 확인했다 — `python -m pytest src/hmi/web/test -q`는 4 failed/74 passed이고(지금도 4 failed, 계획 전 기준과 일치), `test/architecture/test_document_placement.py`는 `PRODUCT.md`로 1 failed, harness `lint`는 0 errors/18 warnings, `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py`는 78 passed. 표면 사실도 다시 모았다: 추적 HTML 8개와 각 `grammar` 속성(`dashboard` spatial, `sensing` procedure, `fleet` exception, `games` focal, `surface/styleguide/lane` 없음), 추적 캡처는 2026-09-26 회차의 `console-operate-fresh-1366x768.png`·`fleet-normal-1920x1080.png`·`games-play-1280x800.png`로 채우고 진단·라이브러리·시뮬 뷰어는 `baseline_reason`으로 등록하게 했다.
+- gate 변화: 없음. 계획 문서이며 D-329는 여전히 Proposed다.
