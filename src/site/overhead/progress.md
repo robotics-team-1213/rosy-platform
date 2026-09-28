@@ -2,7 +2,7 @@
 module: overhead
 logical_modules: []
 owner: SITE
-last_verified: { commit: "uncommitted", date: 2026-09-28 }
+last_verified: { commit: "c5e87977", date: 2026-09-28 }
 gates:
   SOURCE:
     state: GO
