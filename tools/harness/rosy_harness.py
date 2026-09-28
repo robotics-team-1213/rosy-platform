@@ -67,6 +67,21 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     "## 2026-09-20 · uncommitted · test(fleet): the sim runs end-to-end and the console exposes two real defects (D-131 phase 1 LOCAL evidence)",
     "## 2026-09-20 · uncommitted · chore(fleet): relay diagnosis fields exposed; live iteration deferred to D-83 (environment)",
     "## 2026-09-20 · uncommitted · fix(fleet): defect (a) resolved in the live sim — relay delivers, no early HOLD (D-132 validated)",
+    # These 2026-09-28 dashboard entries are already committed with the
+    # parallel-session `date - owner - summary` heading form. logs.md is
+    # append-only, so preserve the original records and allowlist their exact
+    # headings; the identity-feedback entry also lacks the three standard
+    # field labels, so the canonical follow-up entry records the evidence.
+    "## 2026-09-28 - uiux/mobile-acceptance - test: verify localization pending action state",
+    "## 2026-09-28 - uiux/device-security-feedback-evidence - fix: clear stale token list after mutation refresh failure",
+    "## 2026-09-28 - uiux/host-console-readback-evidence - verify independent readbacks and mode feedback",
+    "## 2026-09-28 - uiux/console-teleop-feedback-evidence - verify readiness and action feedback",
+    "## 2026-09-28 - uiux/host-console-readback-evidence - verify line-follow and docking feedback",
+    "## 2026-09-28 - uiux/host-console-readback-evidence - verify console map feedback",
+    "## 2026-09-28 - uiux/host-console-readback-evidence - verify device hardware refresh feedback",
+    "## 2026-09-28 - uiux/host-console-readback-evidence - verify identity editor polling",
+    "## 2026-09-28 - uiux/device-refresh-access - check hardware permission hint reachability",
+    "## 2026-09-28 · uncommitted · test(device): verify identity draft and hardware action feedback at two widths",
     # 2026-09-22 road-world entries committed with a bare date heading
     # (e0e6397); the history gate forbids reforming them in place.
     "## 2026-09-22",

@@ -469,3 +469,9 @@
 - Finding: `b61fb526` exists in history, but later `fb2b220c` removed the conditional operator hint. Both the `/device` surface and `host.hardware` panel require administrator role, so a non-admin cannot reach that disabled button. The claimed non-admin button description is not verified and is unreachable under the current policy.
 - Scope: Full G2 and Impeccable detector were not rerun.
 - Gate: Admin browser interaction and actual operator access-denial path verified locally. The requested non-admin hardware-button hint remains HOLD pending a role/surface access decision. Actual Host Agent readback, G3, DEVICE/FIELD, and broader D-153 acceptance remain HOLD.
+
+## 2026-09-28 · uncommitted · fix(dashboard): restore module harness validation
+
+- 변경: dashboard `progress.md`의 검증 날짜를 YAML date로 기록했다. 기존 append-only `logs.md`의 병렬 세션 헤더 10개는 본문을 다시 쓰지 않고 harness의 정확한 legacy allowlist로 보존했다. 생성 index와 STATUS를 다시 만들었다.
+- 증거: `python tools/harness/rosy_harness.py lint` 0 errors, 18 warnings; network topology 및 harness 계약 시험 77 passed. 별도 latest-main 역할 브라우저 행렬은 60셀 모두 overflow/pageerror 0, E-stop visible, 취소 POST 0이었다.
+- gate 변화: dashboard SOURCE/LOCAL은 전체 화면·제품 수용 HOLD를 유지한다. 이 문서/기록 형식 수정은 Host Agent, 실제 장치, G3 사람 수용, DEVICE/FIELD를 승격하지 않는다.

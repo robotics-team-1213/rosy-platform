@@ -2,7 +2,7 @@
 module: dashboard
 logical_modules: []
 owner: 화면
-last_verified: { commit: "uncommitted", date: "2026-09-28" }
+last_verified: { commit: "a3d4c1f9", date: 2026-09-28 }
 gates:
   SOURCE:
     state: HOLD

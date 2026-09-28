@@ -37,7 +37,7 @@
 
 ## 최근 기록
 
-- 2026-09-28 · uncommitted · test(device): verify identity draft and hardware action feedback at two widths
+- 2026-09-28 · uncommitted · fix(dashboard): restore module harness validation
 - 2026-09-28 · uncommitted · fix(device): remove unreachable hardware role hint
 - 2026-09-28 · uncommitted · fix(device): explain hardware refresh role restriction
 - 2026-09-28 · uncommitted · fix(device): prevent duplicate identity editors on polling
