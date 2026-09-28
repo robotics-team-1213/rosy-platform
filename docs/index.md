@@ -149,6 +149,7 @@
 | D-326 | 자율 판단 루프는 네 역할로 분리 배치하고 재판단 밸브는 별도 승격으로만 연다 |
 | D-327 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 |
 | D-328 | 모델 제안 Mission과 독립 목표 증거를 분리한다 |
+| D-329 | Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다 |
 
 ## 계획·결과 문서
 
@@ -200,6 +201,7 @@
 - [2026-09-29-er2-isaac-sim-architecture-assessment.md](plans/2026-09-29-er2-isaac-sim-architecture-assessment.md)
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
+- [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 
 ## 교훈 (docs/solutions)
@@ -213,8 +215,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(fleet): decide unified Mission admission and stop boundary
 - 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
 - 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
 - 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다
 - 2026-09-29 · uncommitted · docs(adr): record D-326 agent loop boundary
-- 2026-09-29 · uncommitted · docs(plan): map the ER2-style agent loop against current source

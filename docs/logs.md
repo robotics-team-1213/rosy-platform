@@ -3223,3 +3223,10 @@
 - 증거: D-308 및 현행 Fleet task/stop/예약·OMX runtime 계약을 대조했다. 문서 계약 시험과 harness lint를 통합 뒤 실행한다.
 - gate 변화: 없음. 자동 정책 재발행, OMX 운영 Action, 사이트 전체 정지 가용성 및 ARTIFACT/DEVICE/FIELD는 HOLD다.
 - 결정: D-326 Accepted 경계를 명확히 기록한다. D-327/D-328은 계속 Proposed이며 새 API·capability 승격은 없다.
+
+## 2026-09-29 · uncommitted · docs(fleet): decide unified Mission admission and stop boundary
+
+- 변경: D-329를 추가해 기존 navigation task와 미래 Mission의 단일 발행 claim, stop generation·재시작 차단, 감사 DB 장애 중 인증된 전용 정지 요청 전송, 장치 Action의 발행 전 기록/불명 결과 HOLD를 결정했다. 통합 구현 계획과 기존 ER 2 계획의 선행 관계를 기록했다.
+- 근거: 현행 `fleet_robot_reservations`의 `fleet_tasks` FK, `cancel_pending_task_queue()`의 navigation 전용 처리, D-276 감사 선행 `503`, OMX 단일 trajectory submitter와 미구현 원격 Action을 대조했다.
+- 검증: Windows 문서 계약 시험 78 passed, harness lint 0 errors/기존 메타데이터 warning 18건, 신규 문서 상대 링크 누락 0건. 코드·ROS-SIM·ARTIFACT·DEVICE·FIELD는 이번 문서 변경에서 미실행이다.
+- gate 변화: 없음. D-329는 구조 Accepted이나 Mission/OMX 운영, 사이트 전체 정지 가용성, 정책 자동 재발의는 HOLD다.
