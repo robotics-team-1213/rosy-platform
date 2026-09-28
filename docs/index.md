@@ -194,8 +194,8 @@
 
 ## 최근 기록
 
+- 2026-09-28 · uncommitted · finish D-316 cancellation-result follow-up
+- 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
 - 2026-09-28 · uncommitted · fix(fleet): recover and scope result correlation
 - 2026-09-28 · uncommitted · feat(fleet): correlate Pinky navigation attempt results
 - 2026-09-28 · uncommitted · fix(harness): finish D-315 documentation gate
-- 2026-09-28 · uncommitted · docs(layout): define source-folder responsibility in D-315
-- 2026-09-28 · uncommitted · fix(native): simplify measured grounded G4 and direct teleop

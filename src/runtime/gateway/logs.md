@@ -505,3 +505,14 @@
 - Change: bind result-event correlation to the action generation; superseded results are ignored and uncorrelated moving-goal results remain uncorrelated. Add fleet-owned goal takeover guard and durable event replay coverage.
 - Evidence: focused gateway navigation/API/core-logic/GoalTracker regressions 19 passed. The separate event-literal classification failure remains a pre-existing Host Agent status decoding issue.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+
+## 2026-09-28 · uncommitted · retain correlated result after cancel
+
+- Change: preserve the canceled Nav2 generation's Fleet correlation until the terminal result callback, including cancel-before-acceptance. Publish that result without changing a newer navigation state.
+- Evidence: focused GoalTracker and navigation manager regression suites pass; full changed-suite rerun pending.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+## 2026-09-28 · uncommitted · close canceled-generation result recovery
+
+- Change: retain at most 128 canceled correlations; publish late terminal results without changing a newer navigation state. Unreadable action results leave the attempt unresolved.
+- Evidence: GoalTracker + navigation manager tests 67 passed; relevant API, services, and Fleet suites passed separately.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device, physical-stop, site, or FIELD acceptance.

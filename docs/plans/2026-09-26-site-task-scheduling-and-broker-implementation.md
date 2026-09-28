@@ -142,6 +142,13 @@ The SOURCE/LOCAL host suites pass on Windows. ROS-SIM, ARTIFACT, DEVICE, SITE,
 and FIELD gates remain open; the dated 2026-09-27 trace remains historical
 pre-change evidence.
 
+The canceled Nav2 generation keeps an independent result-reporting association
+until its result callback, even if cancellation precedes goal acceptance. The
+late callback emits the correlated attempt result without changing any newer
+navigation state. Retention is capped at 128 pending generations; an evicted
+generation without a result callback remains `UNKNOWN`. This does not turn
+cancel acknowledgement into physical-stop evidence.
+
 이 계획의 파일 경로는 D-271 전용 worktree의 현재 코드 기준이다. 실행 직전에 최신 `main`과 병합 상태를 확인하고 파일 이동·다른 작업의 변경을 반영한다.
 # Implementation checkpoint (2026-09-26)
 

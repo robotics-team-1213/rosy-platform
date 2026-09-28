@@ -80,3 +80,7 @@ hardware sample freshness guarantee, or central Fleet PRT ACK.
 CORE binds the correlation ID to one Nav2 goal generation. An uncorrelated moving goal cannot take over an active Fleet-correlated goal, and later generations do not inherit the ID after a cancel request. Fleet retries task projection from its durable CORE event audit on subsequent heartbeats and after restart; delivery does not depend on CORE retaining or resending an event after send.
 
 Host validation includes a fail-once projection followed by recovery on CORE heartbeat and a regression proving that a previous attempt ID cannot leak into a moving-goal result. ROS-SIM, artifact, device, physical-stop, site, and field acceptance remain open.
+
+### Cancellation callback follow-up (2026-09-28)
+
+The bridge preserves a canceled correlated goal's generation ID until its Nav2 result callback arrives, including the cancel-before-goal-acceptance race. That terminal action result is published as a correlated completion/failure event without changing the navigation state of a newer goal. A cancel request remains distinct from that later action result and from physical stop readback. Retention is capped at 128 pending generations; if an older callback never arrives and its entry is evicted, Fleet remains `UNKNOWN` rather than inferring a result.

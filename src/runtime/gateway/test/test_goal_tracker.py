@@ -41,6 +41,53 @@ def test_an_acceptance_that_arrives_after_a_cancel_is_refused():
     assert tracker.live_count == 0
 
 
+def test_correlated_late_acceptance_keeps_result_reporting():
+    tracker = GoalTracker()
+    generation = tracker.opening("attempt-late-accept")
+    tracker.cancel_all()
+    result_future = _Future(SimpleNamespace(status=5))
+    handle = _Handle(result_future=result_future)
+    nav = _Nav()
+    attached = []
+
+    on_response(tracker, nav, _Future(handle), generation,
+                attach_result=lambda *args: attached.append(args))
+    on_result(tracker, nav, result_future, generation)
+
+    assert handle.cancelled is True
+    assert attached == [(result_future, generation)]
+    assert nav.correlated_results == [
+        (False, "attempt-late-accept", "CANCELED")]
+    assert nav.calls == []
+
+
+def test_rejected_goal_after_cancel_reports_attempt_only():
+    tracker = GoalTracker()
+    generation = tracker.opening("attempt-rejected")
+    tracker.cancel_all()
+    nav = _Nav()
+
+    on_response(tracker, nav, _Future(_Handle(accepted=False)), generation,
+                attach_result=lambda *_: None)
+
+    assert nav.calls == []
+    assert nav.correlated_results == [
+        (False, "attempt-rejected", "REJECTED")]
+
+
+def test_cancelled_correlation_retention_is_bounded():
+    tracker = GoalTracker()
+    generations = []
+
+    for index in range(GoalTracker.MAX_CANCELLED_CORRELATIONS + 2):
+        generations.append(tracker.opening(f"attempt-{index}"))
+        tracker.cancel_all()
+
+    assert len(tracker._cancelled_correlation_ids) == 128
+    assert tracker.correlation_id(generations[0]) is None
+    assert tracker.correlation_id(generations[-1]) == "attempt-129"
+
+
 def test_cancel_returns_every_live_handle_not_just_the_last():
     tracker = GoalTracker()
     for name in ("h1", "h2", "h3"):
@@ -75,6 +122,7 @@ class _Nav:
     def __init__(self) -> None:
         self.calls: list = []
         self.correlation_ids: list[str | None] = []
+        self.correlated_results: list[tuple[bool, str, str | None]] = []
 
     def on_goal_accepted(self) -> None:
         self.calls.append(("on_goal_accepted",))
@@ -82,6 +130,10 @@ class _Nav:
     def on_result(self, *args, **kwargs) -> None:
         self.calls.append(("on_result", args))
         self.correlation_ids.append(kwargs.get("correlation_id"))
+
+    def on_correlated_result(self, succeeded: bool, *, correlation_id: str,
+                             error: str | None = None) -> None:
+        self.correlated_results.append((succeeded, correlation_id, error))
 
 
 class _Future:
@@ -179,6 +231,36 @@ def test_a_successful_result_status_is_read_as_success():
 
     assert nav.calls == [("on_result", (True,))]
     assert nav.correlation_ids == ["attempt-current"]
+
+
+def test_correlated_result_after_cancel_is_reported_safely():
+    tracker = GoalTracker()
+    generation = tracker.opening("attempt-canceled")
+    tracker.accepted(generation, "h1")
+    nav = _Nav()
+
+    # RosBridge.cancel_goal calls cancel_all before requesting cancellation.
+    tracker.cancel_all()
+    on_result(tracker, nav, _Future(SimpleNamespace(status=5)), generation)
+
+    assert nav.calls == []
+    assert nav.correlated_results == [
+        (False, "attempt-canceled", "CANCELED")]
+    assert tracker.was_cancelled(generation) is False
+
+
+def test_unreadable_canceled_result_stays_unreported():
+    tracker = GoalTracker()
+    generation = tracker.opening("attempt-result-unknown")
+    tracker.accepted(generation, "h1")
+    nav = _Nav()
+
+    tracker.cancel_all()
+    on_result(tracker, nav, _Future(raises=RuntimeError("result unavailable")),
+              generation)
+
+    assert nav.calls == []
+    assert nav.correlated_results == []
 
 
 def test_any_other_status_is_read_as_failure():

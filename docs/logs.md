@@ -3050,3 +3050,14 @@
 - 변경: 코드 리뷰에서 확인한 두 누락을 보완했다. CORE action generation마다 correlation을 묶고 cancel 뒤 ID 상속을 막았다. Fleet은 task projection 실패 이벤트를 durable audit에서 heartbeat/restart 때 재생한다.
 - 검증: Fleet 543 passed/5 skipped, API+services 297 passed/13 skipped, focused gateway navigation/GoalTracker 19 passed, changed implementation flake8 통과. docs/harness는 75 passed/2 failed이며 기존 dashboard 로그 제목 오류 2건이 남는다.
 - gate 변화: SOURCE/LOCAL만 반영한다. ROS-SIM, artifact, DEVICE, 물리 정지, SITE/FIELD 증거는 없다.
+
+## 2026-09-28 · uncommitted · close canceled Nav2 result correlation path
+
+- Change: preserve a canceled correlated Nav2 generation through its final callback and publish its terminal result without mutating a newer navigation state, including cancel-before-acceptance.
+- Evidence: focused GoalTracker/navigation manager tests pass; full regression and reviewer recheck pending.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, DEVICE/physical-stop, SITE, or FIELD evidence.
+## 2026-09-28 · uncommitted · finish D-316 cancellation-result follow-up
+
+- Change: retain bounded correlation for canceled Nav2 goals, report only terminal results, and isolate late results from newer navigation state.
+- Evidence: Fleet 543 passed/5 skipped; Services 227 passed; GoalTracker + navigation manager 67 passed; task contract docs 3 passed; changed production flake8 and diff check pass.
+- Gate: SOURCE/LOCAL only; ROS-SIM, image, device/physical-stop, Ubuntu/site, and FIELD acceptance remain open.

@@ -130,8 +130,19 @@
 - Evidence: core services 227 passed; focused gateway API/core-logic/event-catalogue tests passed except one known baseline event-literal classification failure outside this change.
 - Gate: host SOURCE/LOCAL only. No live Nav2, artifact, device, or field evidence.
 
+## 2026-09-28 · uncommitted · publish late canceled-attempt result safely
+
+- Change: add a correlated result publication path that emits the terminal action result for a canceled goal without mutating navigation state owned by a newer goal.
+- Evidence: focused navigation manager lifecycle regression passes.
+- Gate: SOURCE/LOCAL only. No live Nav2, artifact, device, stop readback, or field evidence.
+
 ## 2026-09-28 · uncommitted · fix(core): scope task correlation to Nav2 goal generation
 
 - Change: carry `correlation_id` with each GoalTracker generation, reject moving-goal takeover while a Fleet attempt owns navigation, and clear the active association on cancel. Later moving-goal results cannot inherit the previous Fleet ID.
 - Evidence: CORE services 227 passed; focused gateway navigation and GoalTracker regressions 19 passed; changed implementation lint passed.
 - Gate: SOURCE/LOCAL only. The real Nav2 bridge and physical device remain unverified.
+## 2026-09-28 · uncommitted · verify canceled navigation result isolation
+
+- Change: publish a canceled generation''s terminal event independently of current navigation state; preserve CANCELED/ABORTED reason codes.
+- Evidence: services suite 227 passed; navigation manager and GoalTracker regressions 67 passed.
+- Gate: SOURCE/LOCAL only; live Nav2, artifact, device, stop readback, and field evidence remain open.

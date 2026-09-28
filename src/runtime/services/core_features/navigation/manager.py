@@ -355,6 +355,20 @@ class NavigationManager:
                                  data={"error_code": error or "UNKNOWN",
                                        "correlation_id": correlation_id})
 
+    def on_correlated_result(self, succeeded: bool, *,
+                             correlation_id: str,
+                             error: Optional[str] = None) -> None:
+        """Publish a canceled goal result without changing the current nav state."""
+        if succeeded:
+            self._events.publish(
+                "nav.completed", source="navigation_manager",
+                data={"correlation_id": correlation_id})
+        else:
+            self._events.publish(
+                "nav.failed", severity="error", source="navigation_manager",
+                data={"error_code": error or "CANCELED",
+                      "correlation_id": correlation_id})
+
     def on_pose_progress(self, x: float, y: float) -> None:
         """NAV-006 stuck: NAVIGATING 중 진척 없으면 자동 취소."""
         if self._nav_state is not NavigationState.NAVIGATING:

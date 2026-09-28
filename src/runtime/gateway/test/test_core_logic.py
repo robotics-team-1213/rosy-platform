@@ -650,6 +650,23 @@ class TestNavigation:
                          if event.type == "nav.completed")
         assert completed.data["correlation_id"] is None
 
+    def test_late_canceled_result_does_not_change_new_navigation_state(
+            self, bus, safety, tmp_path):
+        nav, _, _ = self._make(bus, safety, tmp_path)
+        nav.goal(nav.resolve_goal(x=1.0, y=1.0),
+                 correlation_id="attempt-canceled")
+        nav.cancel()
+        nav.moving_goal(nav.resolve_goal(x=2.0, y=2.0))
+        nav.on_goal_accepted()
+
+        nav.on_correlated_result(False, correlation_id="attempt-canceled")
+
+        assert nav.nav_state.value == "NAVIGATING"
+        failed = next(event for event in reversed(bus.history())
+                      if event.type == "nav.failed")
+        assert failed.data["correlation_id"] == "attempt-canceled"
+        assert failed.data["error_code"] == "CANCELED"
+
     def test_stuck_detection(self, bus, safety, tmp_path):
         nav, _, _ = self._make(bus, safety, tmp_path)
         nav._stuck_timeout = 0.05

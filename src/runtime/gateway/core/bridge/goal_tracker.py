@@ -22,11 +22,14 @@ from typing import Any
 class GoalTracker:
     """어떤 결과가 현재 목표의 것인지, 무엇을 취소해야 하는지."""
 
+    MAX_CANCELLED_CORRELATIONS = 128
+
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._generation = 0
         self._live: dict[int, Any] = {}
         self._correlation_ids: dict[int, str | None] = {}
+        self._cancelled_correlation_ids: dict[int, str] = {}
 
     @property
     def live_count(self) -> int:
@@ -43,7 +46,22 @@ class GoalTracker:
 
     def correlation_id(self, generation: int) -> str | None:
         with self._lock:
-            return self._correlation_ids.get(generation)
+            correlation_id = self._correlation_ids.get(generation)
+            if correlation_id is not None:
+                return correlation_id
+            canceled_id = self._cancelled_correlation_ids.get(
+                generation)
+            return canceled_id
+
+    def was_cancelled(self, generation: int) -> bool:
+        with self._lock:
+            correlation_id = self._cancelled_correlation_ids.pop(
+                generation, None)
+            return correlation_id is not None
+
+    def is_cancelled(self, generation: int) -> bool:
+        with self._lock:
+            return generation in self._cancelled_correlation_ids
 
     def accepted(self, generation: int, handle: Any) -> bool:
         """액션 서버가 받아들였다.
@@ -81,6 +99,14 @@ class GoalTracker:
         """
         with self._lock:
             handles = list(self._live.values())
+            active_correlations = self._correlation_ids.items()
+            for gen, corr_id in active_correlations:
+                if corr_id is not None:
+                    self._cancelled_correlation_ids[gen] = corr_id
+            while (len(self._cancelled_correlation_ids)
+                   > self.MAX_CANCELLED_CORRELATIONS):
+                oldest = next(iter(self._cancelled_correlation_ids))
+                self._cancelled_correlation_ids.pop(oldest)
             self._live.clear()
             self._correlation_ids.clear()
             self._generation += 1
@@ -97,16 +123,26 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
     goal_handle = future.result()
     if goal_handle is None or not goal_handle.accepted:
         correlation_id = goals.correlation_id(generation)
+        was_cancelled = goals.is_cancelled(generation)
         if goals.rejected(generation):
             if correlation_id is None:
                 nav.on_result(False, "REJECTED")
             else:
                 nav.on_result(False, "REJECTED", correlation_id=correlation_id)
+        elif correlation_id is not None and was_cancelled:
+            goals.was_cancelled(generation)
+            nav.on_correlated_result(False, error="REJECTED",
+                                     correlation_id=correlation_id)
         return
     if not goals.accepted(generation, goal_handle):
         # 이미 지나간 목표의 수락이다(선점됐거나, 보내는 사이 취소됐다).
         # 살려두면 아무도 거두지 않는 Nav2 목표가 남는다.
         goal_handle.cancel_goal_async()
+        is_correlated_cancel = (
+            goals.correlation_id(generation) is not None
+            and goals.is_cancelled(generation))
+        if is_correlated_cancel:
+            attach_result(goal_handle.get_result_async(), generation)
         return
     nav.on_goal_accepted()
     attach_result(goal_handle.get_result_async(), generation)
@@ -120,6 +156,16 @@ def on_result(goals: GoalTracker, nav, future, generation: int) -> None:
     """
     correlation_id = goals.correlation_id(generation)
     if not goals.finished(generation):
+        if correlation_id is not None and goals.was_cancelled(generation):
+            try:
+                result = future.result()
+            except Exception:
+                return
+            error = {5: "CANCELED", 6: "ABORTED"}.get(
+                result.status, "UNKNOWN")
+            nav.on_correlated_result(result.status == 4,
+                                     error=error,
+                                     correlation_id=correlation_id)
         # 선점된 목표의 뒤늦은 결과. moving goal 에서는 abort 로 끝나며,
         # 이것을 현재 목표의 실패로 읽으면 nav_state 가 FAILED 로 떨어져
         # 이어지는 HOLD 의 취소가 통째로 무시된다.
