@@ -7,7 +7,7 @@ from omx_adapter.camera_contract import CameraFrameGate, CameraStreamConfig
 
 def message(frame="overhead_optical", sec=10, nanosec=20, width=640, height=480):
     header = NS(frame_id=frame, stamp=NS(sec=sec, nanosec=nanosec))
-    image = NS(header=header, width=width, height=height)
+    image = NS(header=header, width=width, height=height, data=b"fixture-frame")
     info_header = NS(frame_id=frame, stamp=NS(sec=sec, nanosec=nanosec))
     info = NS(
         header=info_header, width=width, height=height,
@@ -37,6 +37,9 @@ def test_admits_exact_stamped_calibrated_pair_with_identity_and_revision(gate):
     assert metadata.capture_time_ns == 10_000_000_020
     assert metadata.calibration_revision == "cal-v3"
     assert metadata.sequence == 1
+    assert len(metadata.frame_sha256) == 64
+    assert metadata.observation_id.endswith(metadata.frame_sha256)
+    assert metadata.transform_revision == ""
     assert gate.is_fresh(now=12.9)
     assert not gate.is_fresh(now=13.1)
 

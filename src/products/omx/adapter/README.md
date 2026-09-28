@@ -49,6 +49,14 @@ Identity and calibration digest are operator-supplied admission data; these
 modules do not discover a physical camera or prove that it produced the
 messages.
 
+`omx_adapter.target_evidence` resolves an operator selector against candidates
+that name the same observation. It returns one object identity plus frame,
+camera, calibration and transform provenance, or refuses stale, missing,
+cross-observation, or ambiguous selectors. Points and boxes remain image-pixel
+evidence; this module does not produce a 3D pose, grasp, trajectory, or pick
+success claim. Coordinate selectors must already be in source-observation
+pixels; cropped coordinates without a verified inverse transform are refused.
+
 The ROS modules are optional imports. The checked-in profile remains disabled
 and has no measured joint map, serial identity, camera model, calibration, or
 enabled capability. Keep ARTIFACT, DEVICE, and FIELD gates closed until
