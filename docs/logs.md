@@ -3278,3 +3278,9 @@
 - 증거: 변경 직전 `src/hmi/dashboard/test` 1 failed(`test_web_files_over_budget_have_a_recorded_verdict` — 원인은 `.gitignore`된 `src/site/overhead/android/build/reports/problems/problems-report.html`)와 `test/architecture/test_document_placement.py` 1 failed(`PRODUCT.md`)였다. 변경 후 각각 14 passed/32 skipped, 6 passed. 변이 확인 2건: 루트에 `ZZ_MUTATION_PROOF.md`를 `git add`하면 `['ZZ_MUTATION_PROOF.md'] == []`로 빨갛다(추적 파일만 본다는 D-226 발행 경계 설계를 그대로 확인 — untracked는 대상이 아니었다), `src/hmi/dashboard/zz_mut_proof.html`(add 안 된 700행)을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛다. 둘 다 복구 후 초록. 회귀로 `src/hmi/web/test` 87 passed, `test/architecture/test_module_structure.py` 33 passed 유지.
 - gate 변화: 없음. 두 시험 모두 기존 판정 기준(루트 선언 목록, 600/150행 예산)을 바꾸지 않았다. DEVICE/FIELD 수용은 주장하지 않는다.
 - 결정: D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 여전히 범위 밖이다.
+
+## 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
+
+- 변경: P3 게임 보드 크래프트 회차 — HOLD 경보를 `--lost` 빨간 글자에서 공용 `--status-crit` 채움 칩으로 바꾸고 `.lost[hidden]` 가드를 추가했다. critique는 초기 `—` 점수·지연/stale 마지막 수신 표시·390/600 스택을 준수로 확인했다.
+- 증거: 게임 스위트 117 passed, 7셀 재촬영 넘침 0·페이지 오류 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P3 절.
+- gate 변화: 없음. games SOURCE/LOCAL GO 유지(last_verified 6277a009). 실물 카메라·양측 정지 readback과 사람 G3는 별도다.
