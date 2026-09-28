@@ -67,6 +67,15 @@ ROS-free types are tested with fakes only and are not connected to
 `RosArmCommandRuntime`, a gripper, an HTTP endpoint, or an enabled product
 profile.
 
+`omx_adapter.action_store` records a semantic request and its content digest
+before a caller may mark driver submission. Request-key retries return the
+existing Action or conflict; they never create a second attempt implicitly.
+After restart, an in-flight submission becomes `UNKNOWN` and remains unresolved
+until a matching driver result is reconciled. A cancel acknowledgement remains
+`CANCEL_REQUESTED`, separate from a final driver result. This store is not yet
+connected to Fleet stop generations, a driver goal query, or a local Action API,
+so it does not authorize or submit physical commands.
+
 The ROS modules are optional imports. The checked-in profile remains disabled
 and has no measured joint map, serial identity, camera model, calibration, or
 enabled capability. Keep ARTIFACT, DEVICE, and FIELD gates closed until
