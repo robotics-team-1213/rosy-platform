@@ -163,8 +163,8 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     display: none;
   }
   .action-group-tabs {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--space-1);
     min-width: 0;
   }
@@ -174,11 +174,16 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
   body[data-surface="setup"] .surface-slot[data-slot="main"],
   body[data-surface="device"] .surface-slot[data-slot="main"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    display: block;
+    columns: 2;
+    column-gap: var(--space-4);
+  }
+  body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] > .procedure-panel {
+    break-inside: avoid;
+    margin: 0 0 var(--space-4);
   }
   body[data-surface="setup"] .procedure-panel:has(> [data-panel="setup.traffic_policy"]) {
-    grid-column: 1 / -1;
+    column-span: all;
   }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
     display: grid;
