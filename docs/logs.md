@@ -3634,3 +3634,11 @@
 - gate 변화: isaac_sim ROS-SIM N/A→HOLD (blocker 신규 기록, D-322와 일치).
 - 결정: 없음.
 - 교훈: CI가 첫 실패에서 멈추면 그 뒤의 실패는 보이지 않는다 — 로컬에서 전 스위트를 먼저 돌리고 push한다.
+
+## 2026-09-30 · uncommitted · docs(harness): 11개 모듈 last_verified를 bed604ef로 기록
+
+- 변경: core·control·fleet·docs·core_common·core_events·core_features·core_api_web·isaac_sim·games·omx_adapter의 last_verified를 bed604ef(2026-09-30)로 기록. 각 모듈의 LOCAL gate cmd(또는 그 전체 스위트)를 이 트리에서 통과시켰다: gateway 1439·sensing 1665·fleet 746·events/services/web_common/api_web/foundation/dashboard/isaac_sim/games/omx_adapter 1089+9·overhead 122·omx CLI exit 0 (2026-09-30 Windows).
+- 증거: quick tier + functional surface + scorecard 127 passed; harness 계약 시험 통과. 병행 세션의 미푸시 커밋은 docs 트리만 건드려 스윕 대상 코드는 무결.
+- gate 변화: 없음 (기록 갱신만).
+- 결정: web_common(임시 디렉터리 스크립트 cmd)·dashboard(브라우저 매트릭스)·overhead(android gradle·docker)·gz_sim(ROS 의존 skip)·deploy(전체 test/ 실행 중)은 이 호스트에서 완전 검증이 불가해 스윕에서 제외 — 정직한 기록만 남긴다.
+- 교훈: web_common의 LOCAL cmd가 X:\DevTemp 스크립트를 가리킨다 — 재현 불가한 cmd는 검증 기록이 아니므로 소유자가 저장소 내 명령으로 바꿔야 한다.
