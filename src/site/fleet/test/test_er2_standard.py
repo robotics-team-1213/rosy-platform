@@ -13,6 +13,7 @@ from fleet.ai.er2_standard import (
     ImageObservation,
 )
 from fleet.ai.candidate import ImageTransform, SpatialSelector
+from core_common.protocol.schemas import ER2ToolResult, MissionFeedbackTurnScope
 
 
 def _tool_response(*, arguments=None, name="propose_pick_place", call_id="call-1"):
@@ -264,3 +265,218 @@ def test_long_instruction_is_rejected_before_network_request():
     with pytest.raises(ValueError, match="2000"):
         asyncio.run(scenario())
     assert calls == 0
+
+
+def test_feedback_turn_replays_stateless_function_result_and_checks_egress_preflight(tmp_path):
+    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+
+    requests = []
+    returned = [
+        {"steps": [{"type": "function_call", "id": "call-1",
+                    "name": "get_mission_status", "arguments": {}}]},
+        {"steps": [{"type": "text", "text": "The action is still running."}]},
+    ]
+
+    async def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json=returned.pop(0))
+
+    class Dispatcher:
+        def __init__(self):
+            self.calls = []
+
+        def dispatch(self, **kwargs):
+            self.calls.append(kwargs)
+            return ER2ToolResult(tool_name="get_mission_status", status="accepted",
+                                 reason_code="STATUS_CURRENT", event_id=19,
+                                 payload={"mission_state": "ACTION_SUCCEEDED"})
+
+    scope = MissionFeedbackTurnScope.model_validate({
+        "principal_id": "operator-1", "workcell_id": "omx_01",
+        "mission_id": "mission-1", "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "event_watermark": 19,
+        "model_policy_revision": "policy-v1", "outcome_policy": "STATUS_ONLY",
+    })
+    dispatcher = Dispatcher()
+    policy = ER2FeedbackEgressPolicy(
+        approved=True, project_id="approved-project", service_tier="standard",
+        approved_data_classes=frozenset({"mission_progress", "mission_instruction"}),
+        approved_workcell_ids=frozenset({"omx_01"}),
+        approved_task_classes=frozenset({"PICK_PLACE"}),
+        estimated_cost_usd=0.02,
+    )
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            return await adapter.reason_about_mission(
+                scope=scope,
+                context={
+                    "mission_id": "mission-1", "workcell_id": "omx_01",
+                    "action_id": "action-1", "attempt_id": "attempt-1",
+                    "dispatch_generation": 4, "stop_generation": 4,
+                    "authority_epoch": 2, "snapshot_event_id": 19,
+                    "snapshot_at": "2026-09-30T12:00:00Z",
+                    "policy_revision": "policy-v1", "outcome_policy": "STATUS_ONLY",
+                    "task_summary": "Place the red block in the tray.",
+                    "mission_source": "fleet_missions", "step_source": "fleet_missions",
+                    "action_source": "fleet_mission_events", "action_freshness": "FRESH",
+                    "action_observed_at": "2026-09-30T12:00:00Z",
+                    "goal_evidence_source": "none", "goal_evidence_freshness": "UNKNOWN",
+                    "goal_evidence_observed_at": None,
+                    "stop_source": "fleet_dispatch_control", "stop_freshness": "CURRENT",
+                    "stop_observed_at": "2026-09-30T12:00:00Z",
+                    "mission_state": "ACTION_SUCCEEDED", "step_state": "AWAITING_GOAL_EVIDENCE",
+                    "action_state": "SUCCEEDED", "action_reason": None,
+                    "goal_evidence_state": "PENDING", "goal_evidence_reason": None,
+                    "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
+                },
+                dispatcher=dispatcher, egress_policy=policy,
+            )
+
+    result = asyncio.run(scenario())
+    assert result == "The action is still running."
+    assert len(dispatcher.calls) == 1
+    assert [request["store"] for request in requests] == [False, False]
+    first_input = requests[0]["input"]
+    second_input = requests[1]["input"]
+    assert first_input[0]["type"] == "user_input"
+    assert second_input[0] == first_input[0]
+    assert second_input[1]["type"] == "function_call"
+    assert second_input[2]["type"] == "function_result"
+    assert "previous_interaction_id" not in requests[1]
+
+
+def test_feedback_turn_without_egress_approval_never_calls_transport():
+    calls = 0
+
+    async def handler(_request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"steps": []})
+
+    scope = MissionFeedbackTurnScope.model_validate({
+        "principal_id": "operator-1", "workcell_id": "omx_01",
+        "mission_id": "mission-1", "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "event_watermark": 19,
+        "model_policy_revision": "policy-v1", "outcome_policy": "STATUS_ONLY",
+    })
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            await adapter.reason_about_mission(
+                scope=scope, context={"mission_id": "mission-1"},
+                dispatcher=object(), egress_policy=None,
+            )
+
+    with pytest.raises(ER2RequestError, match="egress policy"):
+        asyncio.run(scenario())
+    assert calls == 0
+
+
+def test_feedback_turn_cost_above_ceiling_is_rejected_before_transport():
+    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+
+    calls = 0
+
+    async def handler(_request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"steps": [{"type": "text", "text": "done"}]})
+
+    scope = MissionFeedbackTurnScope.model_validate({
+        "principal_id": "operator-1", "workcell_id": "omx_01",
+        "mission_id": "mission-1", "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "event_watermark": 19,
+        "model_policy_revision": "policy-v1", "outcome_policy": "STATUS_ONLY",
+    })
+    policy = ER2FeedbackEgressPolicy(
+        approved=True, project_id="approved-project", service_tier="standard",
+        approved_data_classes=frozenset({"mission_progress", "mission_instruction"}),
+        approved_workcell_ids=frozenset({"omx_01"}),
+        approved_task_classes=frozenset({"PICK_PLACE"}),
+        estimated_cost_usd=0.100001,
+    )
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            await adapter.reason_about_mission(
+                scope=scope, context={"mission_id": "mission-1"},
+                dispatcher=object(), egress_policy=policy,
+            )
+
+    with pytest.raises(ER2RequestError, match="cost preflight"):
+        asyncio.run(scenario())
+    assert calls == 0
+
+
+def test_feedback_turn_rejects_duplicate_provider_call_ids_without_second_dispatch():
+    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+
+    requests = 0
+    dispatched = []
+
+    async def handler(_request):
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, json={"steps": [{
+            "type": "function_call", "id": "same-call", "name": "get_mission_status",
+            "arguments": {},
+        }]})
+
+    class Dispatcher:
+        def dispatch(self, **_kwargs):
+            dispatched.append(True)
+            return ER2ToolResult(tool_name="get_mission_status", status="accepted",
+                                 reason_code="STATUS_CURRENT", event_id=19)
+
+    scope = MissionFeedbackTurnScope.model_validate({
+        "principal_id": "operator-1", "workcell_id": "omx_01",
+        "mission_id": "mission-1", "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "event_watermark": 19,
+        "model_policy_revision": "policy-v1", "outcome_policy": "STATUS_ONLY",
+    })
+    policy = ER2FeedbackEgressPolicy(
+        approved=True, project_id="approved-project", service_tier="standard",
+        approved_data_classes=frozenset({"mission_progress", "mission_instruction"}),
+        approved_workcell_ids=frozenset({"omx_01"}),
+        approved_task_classes=frozenset({"PICK_PLACE"}), estimated_cost_usd=0.05,
+    )
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            await adapter.reason_about_mission(
+                scope=scope, context={
+                    "mission_id": "mission-1", "workcell_id": "omx_01",
+                    "action_id": "action-1", "attempt_id": "attempt-1",
+                    "dispatch_generation": 4, "stop_generation": 4,
+                    "authority_epoch": 2, "snapshot_event_id": 19,
+                    "snapshot_at": "2026-09-30T12:00:00Z",
+                    "policy_revision": "policy-v1", "outcome_policy": "STATUS_ONLY",
+                    "task_summary": "Place the red block in the tray.",
+                    "mission_source": "fleet_missions", "step_source": "fleet_missions",
+                    "action_source": "fleet_mission_events", "action_freshness": "FRESH",
+                    "action_observed_at": "2026-09-30T12:00:00Z",
+                    "goal_evidence_source": "none", "goal_evidence_freshness": "UNKNOWN",
+                    "goal_evidence_observed_at": None,
+                    "stop_source": "fleet_dispatch_control", "stop_freshness": "CURRENT",
+                    "stop_observed_at": "2026-09-30T12:00:00Z",
+                    "mission_state": "ACTION_SUCCEEDED", "step_state": "AWAITING_GOAL_EVIDENCE",
+                    "action_state": "SUCCEEDED", "action_reason": None,
+                    "goal_evidence_state": "PENDING", "goal_evidence_reason": None,
+                    "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
+                },
+                dispatcher=Dispatcher(), egress_policy=policy,
+            )
+
+    with pytest.raises(ER2ProposalError, match="repeated a function call ID"):
+        asyncio.run(scenario())
+    assert requests == 2
+    assert dispatched == [True]

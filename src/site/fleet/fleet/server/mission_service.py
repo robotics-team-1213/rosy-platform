@@ -118,7 +118,7 @@ class MissionService:
         try:
             predicate = GoalPredicate.from_mapping(mission["goal_predicate"])
             parsed = GoalEvidence.from_mapping(dict(evidence))
-            verify_goal(predicate, parsed, now=now, max_age_s=max_age_s)
+            satisfied = verify_goal(predicate, parsed, now=now, max_age_s=max_age_s)
             if (mission.get("action_id") != parsed.action_id
                     or mission.get("attempt_id") != parsed.attempt_id):
                 raise GoalEvidenceError("goal evidence belongs to a different Action attempt")
@@ -158,5 +158,11 @@ class MissionService:
                 evidence=_goal_evidence_audit_summary(evidence),
             )
             raise
+        if not satisfied:
+            return self.store.hold_mission(
+                mission_id, actor_id=actor_id, event_id=event_id,
+                reason="GOAL_NOT_SATISFIED", evidence=parsed.to_dict(),
+                event_type="GOAL_PREDICATE_UNSATISFIED",
+            )
         return self.store.confirm_goal(mission_id, actor_id=actor_id,
                                        event_id=event_id, evidence=parsed)

@@ -440,6 +440,9 @@ def test_model_context_is_allowlisted_and_scoped_to_owner_and_workcell(tmp_path)
 
     assert context["mission_id"] == mission_id
     assert context["mission_state"] == "PROPOSED"
+    control = client.app.state.task_service.store.dispatch_control()
+    assert context["stop_generation"] == control["generation"]
+    assert context["authority_epoch"] == control["authority_epoch"]
     assert "history" not in context and "candidate" not in context
     assert "object_id" not in context and "image_sha256" not in context
     assert wrong_owner is None
@@ -476,7 +479,7 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
         encoding="utf-8",
     )
 
-    assert "**Version:** v1.59" in reference
+    assert "**Version:** v1.60" in reference
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference
     assert "MISSION_CURSOR_EXPIRED" in reference
@@ -484,3 +487,6 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
     assert "physical_state: UNKNOWN" in reference
     assert "No percentage is returned" in reference
     assert "history_truncated" in reference
+    assert "## 10.15 ER 2 Mission feedback tools and outbox (D-357/D-358)" in reference
+    assert "atomic stop/candidate transaction" in reference
+    assert "not implemented because candidate creation is unavailable" in reference

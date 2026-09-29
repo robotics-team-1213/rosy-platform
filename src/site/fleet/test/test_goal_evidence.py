@@ -33,10 +33,15 @@ def test_independent_fresh_matching_predicate_is_confirmed():
     ({"evidence_source": "model_summary"}, "source"),
     ({"object_id": "block-2"}, "object"),
     ({"destination_id": "other-tray"}, "destination"),
-    ({"satisfied": False}, "not satisfied"),
     ({"observed_at": 9.0}, "stale"),
     ({"evidence_revision": ""}, "revision"),
 ])
 def test_goal_success_refuses_model_claims_conflicts_and_stale_evidence(changes, reason):
     with pytest.raises(GoalEvidenceError, match=reason):
         verify_goal(predicate(), evidence(**changes), now=10.2, max_age_s=0.5)
+
+
+def test_fresh_independent_negative_goal_evidence_is_not_mislabeled_as_invalid():
+    assert verify_goal(
+        predicate(), evidence(satisfied=False), now=10.2, max_age_s=0.5,
+    ) is False

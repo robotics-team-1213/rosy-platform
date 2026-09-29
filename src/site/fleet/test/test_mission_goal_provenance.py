@@ -1,10 +1,12 @@
 import time
+from datetime import datetime, timezone
 
 import pytest
 
 from fleet.server.goal_evidence import GoalEvidenceError
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionStore
+from fleet.server.mission_progress import MissionProgressService
 from fleet.server.task_store import FleetTaskStore
 
 
@@ -70,6 +72,28 @@ def test_action_success_and_unverified_model_completion_do_not_complete_mission(
         _confirm(service, _evidence(observed_at=time.time() + 1.0))
 
     assert store.get_mission("mission-1")["status"] == "HOLD"
+
+
+def test_fresh_trusted_unsatisfied_goal_is_distinct_from_rejected_evidence(tmp_path):
+    store, service = _action_succeeded(
+        tmp_path, verifier=lambda _mission, evidence:
+        evidence.producer_id == "registered-camera-evaluator",
+    )
+
+    held = _confirm(service, _evidence(
+        observed_at=time.time() + 1.0, satisfied=False,
+    ))
+    progress = MissionProgressService(
+        store, now=lambda: datetime.fromtimestamp(
+            time.time() + 1.1, timezone.utc,
+        ),
+    ).snapshot("mission-1")
+
+    assert held["status"] == "HOLD"
+    assert held["reason"] == "GOAL_NOT_SATISFIED"
+    assert store.history("mission-1")[-1]["event_type"] == "GOAL_PREDICATE_UNSATISFIED"
+    assert progress["progress"]["goal_evidence"]["state"] == "UNSATISFIED"
+    assert progress["progress"]["goal_evidence"]["freshness"] == "FRESH"
 
 
 @pytest.mark.parametrize("changes, reason", [
