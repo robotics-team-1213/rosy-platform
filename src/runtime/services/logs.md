@@ -185,3 +185,10 @@
 - gate 변화: 없음.
 - 결정: D-351 — 재시도 예산은 도달 실패에만 쓴다. 전류 없음은 폴트 보고.
 - 교훈: 없음.
+## 2026-09-30 · uncommitted · refactor(docking): D-353 봉합점 구현 착지
+
+- 변경: ①`docking/strategies.py` 신설 — ChargingStrategy·FullChargeStrategy Protocol + VoltageFullCharge 기본 구현 (전압 임계·히스테리시스). ②manager가 `_check_full`을 FullChargeStrategy에 위임, 만춫 시 `DockPhase.CHARGED_HOLD` 진입. ③DockAgent.poll()이 `core_common.device_poll.poll_json()`으로 폴링을 위임 (인라인 urllib 제거, 4상태 실패 매핑 유지). 기존 시험 전부 통과 — Protocol은 duck typing이라 기존 클래스가 자동으로 구현한다.
+- 증거: 도킹·모드·배터리·봉합점 시험 231 passed. device_poll 공유 유틸리티와 어휘 1:1 대응.
+- gate 변화: 없음.
+- 결정: 설계가 바뀌면 새 전략 파일 1개 — manager·ChargingConfirmation 본체 불변.
+- 교훈: Protocol 봉합점의 구현 비용이 0이라는 것을 몸으로 확인했다 (기존 시험 한 건도 안 깨짐).
