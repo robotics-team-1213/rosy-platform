@@ -54,6 +54,7 @@ def test_payload_carries_every_field_the_screen_renders():
     assert payload == {
         "battery_percent": 87.7,
         "battery_voltage": 7.89,
+        "charging": False,
         "robot_id": "rosy_01",
         "mode": "IDLE",
         "navigation": "ARRIVED",
