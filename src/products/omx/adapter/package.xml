@@ -9,6 +9,7 @@
 
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>core_common</exec_depend>
   <test_depend>python3-pytest</test_depend>
 
   <!-- Optional generic ROS bindings; no OMX driver or device is selected. -->

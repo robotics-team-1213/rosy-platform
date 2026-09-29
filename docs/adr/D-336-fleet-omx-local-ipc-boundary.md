@@ -25,3 +25,8 @@ SOURCE/LOCAL에서는 UDS framing, peer identity, duplicate/late request와 owne
 3. ARTIFACT/DEVICE/FIELD: D-281 inventory와 serial/camera identity, native systemd owner, real UID/GID, 물리 stop 회로 및 driver readback을 입증하기 전에는 활성화하지 않는다.
 
 **References:** [D-18](D-18-rosy-core.md), [D-246](D-246-runtime-flexibility-native-default-container-sidecar-lane.md), [D-273](D-273-omx-camera-stream-and-arm-control-order.md), [D-281](D-281-site-host-placement-and-omx-instance-isolation.md), [D-282](D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-333](D-333-er2-mission-device-action-contract-closure.md), [D-334](D-334-er2-tool-and-progress-read-boundary.md).
+
+
+### SOURCE implementation note (2026-09-29)
+
+The adapter now contains a newline-framed UDS handler, Linux peer-UID check, 64 KiB input bound, grant digest validation, and a disabled-by-default Action runner. It records Fleet-issued action and attempt IDs before driver submission, reports acceptance uncertainty as UNKNOWN, and does not retry an existing submission. The socket parent remains service-manager provisioned. No systemd entrypoint, selected ROS/gripper ActionPort, device profile enablement, physical stop proof, or field acceptance is included.
