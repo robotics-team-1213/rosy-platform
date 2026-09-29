@@ -91,3 +91,10 @@
 - Change: remap slam_toolbox /map and /map_metadata within the SLAM launch group.
 - Local evidence: mapping contract and dashboard package tests passed on main. The prior web-drive worktree recorded an independent Pinky sensor probe with explicit map remapping; this integration did not repeat that probe or deploy the changed launch file.
 - Gate: SOURCE/LOCAL only. Runtime map and physical G5 acceptance remain unverified.
+## 2026-09-29 · uncommitted · feat(launch): Flask 시대 web_* 진입점 4종 삭제 (스코어카드 §6 과제 3)
+
+- 변경: web_nav2/web_slam/gz_web_nav2/gz_web_slam.launch.xml 삭제 — Flask 자리에 core FastAPI를 띄우던 전환기 진입점으로 D-3 완료 뒤 역할이 끝났다. test/test_flask_launch_removed.py는 가드를 부재 단정으로 반전했다(4파일 부재 + 어떤 navigation XML도 core나 웹서버를 시작하지 않음 + CMake Flask 설치 금지 유지). test/architecture/test_module_structure.py의 KNOWN_UNDECLARED에서 (navigation, core) 엣지를 제거했다. line_follow include는 기본 false 옵트인으로 이미 완화되어 deploy 조립로 이전은 별도 과제로 보루(사용자 결정, 축소안).
+- 증거: test_flask_launch_removed 3 passed, test_module_structure KNOWN_UNDECLARED 집합 동일성 통과(신규 위반 0), test_harness_contracts 54 passed(2026-09-29 Windows).
+- gate 변화: 없음.
+- 결정: web 표면은 core 단일(D-3·D-23). navigation XML은 Nav2/SLAM 조립만 담당한다.
+- 교훈: 삭제 반전 가드는 존재 가드보다 강하다 — 부재를 단정하면 되살아나는 순간 잡힌다.

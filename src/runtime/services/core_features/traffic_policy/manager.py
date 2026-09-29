@@ -461,7 +461,7 @@ class TrafficPolicyManager:
             return linear, angular
 
         state, reason, age, scale = self._verdict(now)
-        self._set_status(state, reason, age, scale)
+        self._set_status(state, reason, age, scale, now)
         if self._config.mode is TrafficPolicyMode.MONITOR_ONLY:
             return linear, angular
         if state in ("FOLLOW", "APPROACH", "PROCEED"):
@@ -581,8 +581,20 @@ class TrafficPolicyManager:
         return head
 
     def _set_status(self, state: str, reason: str,
-                    age: Optional[float], scale: float) -> None:
+                    age: Optional[float], scale: float,
+                    now: Optional[float] = None) -> None:
         observation = self._observation
+        current = self._clock() if now is None else now
+        head = self._signal_observation
+        head_age: Optional[float] = None
+        head_frozen = False
+        source_kind = "camera"
+        if head is not None and self._signal_received_at is not None:
+            head_age = max(0.0, current - self._signal_received_at)
+            head_frozen = bool(head.frozen)
+            if self._usable_signal_head(current) is not None:
+                # D-337 §5: "fused" only while the measured light is usable.
+                source_kind = "fused"
         self._status = TrafficPolicyStatus(
             mode=self._config.mode.value,
             state=state,
@@ -605,5 +617,9 @@ class TrafficPolicyManager:
                 observation.signal_confidence if observation else 0.0),
             signal_conflict=bool(
                 observation and observation.signal_conflict),
+            signal_source_kind=source_kind,
+            signal_head_age_s=(
+                None if head_age is None else round(head_age, 3)),
+            signal_head_frozen=head_frozen,
             linear_scale=float(scale),
         )

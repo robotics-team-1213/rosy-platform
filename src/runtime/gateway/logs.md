@@ -528,6 +528,12 @@
 - Change: `_traffic_policy_config` now maps `traffic_policy.junction_rule` from config into the policy (validated `signal_controlled` | `stop_and_go`), `TrafficPolicyPatch` accepts it on `/api/v1/traffic/policy/stage`, and `test_traffic_policy.py` covers the stop-and-go verdicts — proceed after complete stop+dwell with no observed signal (`unsignalized_proceed`), hold on any observed signal including weak false positives (`signal_unexpected`), conflict precedence, unchanged `signal_controlled` waiting, staging/validation, and CORE config wiring. Korean dashboard `/console` facts gain a 규칙 row.
 - Evidence: focused host runs (Windows): traffic policy+API+runtime config + foundation + services 380 passed; protocol schemas + api_web + dashboard 105 passed 47 skipped; semantic road simulation + event catalogue 74 passed. API Reference v1.54 in the same change.
 - Gate: SOURCE/LOCAL only; no ROS-SIM loop over an authored unsignalized scene, device stop-and-go readback, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — bind the measured-light observer in CORE
+
+- Change: `_signal_observer_binding` parses the file-only `traffic_policy.signal_observer` block (empty/absent = feature off; malformed values fail the build; a binding without the policy's map/scene fails the build too — every frame would be rejected otherwise). CoreServices carries `signal_observer` and starts the daemon-thread monitor next to the manager it feeds; status fields `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen` flow to snapshots and `/api/v1/traffic` unchanged routes.
+- Evidence: test_traffic_policy +4 (absent by default, binds+starts with url captured, missing map/scene ValueError, status view). Combined host run 501 passed (traffic, services, API, event catalogue, foundation, runtime config); flake8 clean on changed lines — the reported services.py F401/E306/W293 sit outside this diff (parallel track's lines).
+- Gate: SOURCE/LOCAL only; no live observer, ROS-SIM, device, or FIELD acceptance. Dashboard readback (T4) remains.
 ## 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
 
 - 변경: 24b6d4bb(2026-09-24)가 bridge/observation.py 신설, 시블리 4종 확장(reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call), ros_bridge 757-590행(D-168 예산 복귀)을 반영하면서 이 모듈의 저널과 bridge/AGENTS.md 갱신이 빠졌다. bridge/AGENTS.md에 observation.py 행(Key Files·시험 sibling 목록)과 D-338 원칙 서술을 추가하고, 낡은 no-remote 주장을 origin/CI 현황으로 정정했으며 이 항목으로 모듈 저널을 소급 기록한다. 결정 원칙의 정본은 docs/adr/D-338.

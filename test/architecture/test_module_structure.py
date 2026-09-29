@@ -7,8 +7,11 @@ list in the same change that creates or removes the violation.
 Honest holes, not oversights:
 - Launch coupling is found only through literal
   ``get_package_share_directory("x")`` / ``FindPackageShare("x")`` calls,
-  ``$(find-pkg-share x)``, and, inside launch files, ``package="x"`` and
-  ``<node pkg="x">``. A package name built at runtime is invisible here.
+  ``$(find-pkg-share x)``, ``package://x/…`` URIs, and, inside launch files,
+  ``package="x"`` and ``<node pkg="x">``. A package name built at runtime is
+  invisible here.
+- ``src/sim/isaac_sim`` ships Isaac assets with no ``package.xml``, so this
+  scan never sees it at all.
 - Dynamic imports (``importlib.import_module``, entry points) are invisible.
   The one intended case is core loading ``rosy.sensor_provider`` (D-126).
 - Line counts are physical lines, blank lines and comments included.
@@ -42,7 +45,6 @@ KNOWN_WITHOUT_OWN_TESTS = {
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
     ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
-    ("navigation", "core"): "web_nav2/web_slam(+gz_) launch XML starts the core node",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
@@ -113,6 +115,13 @@ SIZE_VERDICTS = {
         "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
         "and core/test/test_docking_*.py (X5)",
     ),
+    "runtime/services/core_features/traffic_policy/manager.py": (
+        609,
+        "accept: one owner (the TrafficPolicyManager verdict state machine with its evidence contracts "
+        "RoadEvidence/SignalHeadEvidence/config/decision), ROS-free, host-testable via core/test/test_traffic_policy.py; "
+        "the D-337 measured-light fusion grew the dwell-complete branch (2026-09-29) and the observer transport "
+        "already lives in traffic_policy/observer_source.py (X5)",
+    ),
     "sim/gz_sim/scripts/lane_live_view.py": (
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
@@ -127,6 +136,8 @@ WORKSPACE_REF_PATTERNS = (
     re.compile(r"get_package_share_directory\(\s*['\"](\w+)['\"]"),
     re.compile(r"FindPackageShare\(\s*['\"](\w+)['\"]"),
     re.compile(r"\$\(find-pkg-share\s+(\w+)\)"),
+    #: ``package://x/…`` URIs — mesh/world/map refs in urdf/xacro/sdf/world/rviz/yaml.
+    re.compile(r"package://(\w+)/"),
 )
 #: Executable references, scanned in launch files only (``setup.py`` also says ``package``).
 LAUNCH_EXEC_PATTERNS = (
@@ -227,7 +238,8 @@ def _used(name: str) -> dict:
                 continue
             for top in tops:
                 used.setdefault(top, f"{path.relative_to(SRC).as_posix()} imports {top}")
-    for path in _files(name, {".py", ".xml", ".cpp", ".hpp"}):
+    for path in _files(name, {".py", ".xml", ".cpp", ".hpp", ".yaml",
+                               ".urdf", ".xacro", ".sdf", ".world", ".rviz"}):
         text = path.read_text(encoding="utf-8", errors="ignore")
         for pattern in WORKSPACE_REF_PATTERNS:
             for match in pattern.finditer(text):

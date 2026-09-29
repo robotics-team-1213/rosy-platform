@@ -427,6 +427,84 @@ def test_reset_clears_signal_head_evidence(rig):
     assert manager.status().reason == "signal_unknown"
 
 
+def test_status_exposes_signal_head_view(rig):
+    now, manager = rig
+    observe(manager, now, evidence())
+    manager.gate(0.08, 0.0)
+
+    status = manager.status()
+    assert status.signal_source_kind == "camera"
+    assert status.signal_head_age_s is None
+    assert status.signal_head_frozen is False
+
+    observe_signal(manager, now, head(green=True))
+    manager.gate(0.08, 0.0)
+
+    status = manager.status()
+    assert status.signal_source_kind == "fused"
+    assert status.signal_head_age_s == pytest.approx(0.0)
+
+    now[0] += 0.41
+    manager.gate(0.08, 0.0)
+
+    status = manager.status()
+    assert status.signal_source_kind == "camera"
+    assert status.signal_head_age_s == pytest.approx(0.41)
+
+
+def test_frozen_head_flags_status_but_stays_camera_kind(rig):
+    now, manager = rig
+    observe(manager, now, evidence())
+    observe_signal(manager, now, head(green=True, frozen=True))
+    manager.gate(0.08, 0.0)
+
+    status = manager.status()
+    assert status.signal_source_kind == "camera"
+    assert status.signal_head_frozen is True
+
+
+def test_signal_observer_is_absent_without_binding(core_client):
+    _client, services = core_client()
+    assert services.signal_observer is None
+
+
+def test_signal_observer_binds_and_starts_when_configured(core_client):
+    _client, services = core_client(config_overrides={
+        "traffic_policy": {
+            "mode": "ENFORCED",
+            "map_id": "map_260905_update_v2",
+            "scene_revision": "road-scene-v1",
+            "signal_observer": {
+                "url": "http://127.0.0.1:9",
+                "roi_map": {"left": "red", "mid": "yellow", "right": "green"},
+            },
+        },
+    })
+    try:
+        assert services.signal_observer is not None
+        assert services.signal_observer.poller.config.url == (
+            "http://127.0.0.1:9")
+        snapshot = services.state.snapshot()
+        assert snapshot.traffic_policy.signal_source_kind == "camera"
+    finally:
+        services.signal_observer.stop()
+
+
+def test_signal_observer_without_map_scene_fails_the_build(core_client):
+    with pytest.raises(ValueError):
+        core_client(config_overrides={
+            "traffic_policy": {
+                "mode": "DISABLED",
+                "map_id": "",
+                "scene_revision": "",
+                "signal_observer": {
+                    "url": "http://127.0.0.1:9",
+                    "roi_map": {"left": "red"},
+                },
+            },
+        })
+
+
 @pytest.mark.parametrize(
     "sample,reason",
     [

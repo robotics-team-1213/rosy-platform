@@ -108,6 +108,7 @@ traffic_policy:                    # D-151 semantic road evidence gate
   min_confidence: 0.50
   proceed_speed_scale: 0.50
   simulation_signal_control: false  # simulation runtime에서만 true 허용
+  signal_observer: {}               # D-337 관측 소스 바인딩(오버레이 전용): {url, roi_map, timeout_s} — 비어 있으면 폴러 없음
 
 vision:                            # authenticated, latest-only dashboard preview
   preview_max_bytes: 512000         # reject oversized JPEG frames before storage
