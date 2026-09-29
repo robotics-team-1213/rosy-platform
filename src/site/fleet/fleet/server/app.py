@@ -261,10 +261,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_stop_transport=None,
                enable_mission_dispatcher: bool = False,
                omx_action_transport=None) -> FastAPI:
-    mission_configured = any((mission_service, proposal_store, candidate_resolver))
-    if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
-        raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
-    if mission_configured and not callable(candidate_resolver):
+    mission_configured = mission_service is not None or proposal_store is not None
+    if (mission_service is None) != (proposal_store is None):
+        raise ValueError("Mission API requires both MissionService and ProposalStore")
+    if candidate_resolver is not None and not mission_configured:
+        raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
+    if candidate_resolver is not None and not callable(candidate_resolver):
         raise ValueError("Mission candidate resolver must be callable")
     if mission_configured and task_service is None:
         raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
@@ -289,8 +291,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     stop_transport = omx_stop_transport
     if configured_omx and stop_transport is None:
         stop_transport = UnixLocalStopTransport(omx_socket_root)
-    if enable_mission_dispatcher and not mission_configured:
-        raise ValueError("Mission dispatcher requires the complete Mission API configuration")
+    if enable_mission_dispatcher and (not mission_configured or candidate_resolver is None):
+        raise ValueError("Mission dispatcher requires the complete Mission API and candidate resolver")
     if enable_mission_dispatcher and not configured_omx:
         raise ValueError("Mission dispatcher requires configured OMX workcells")
     action_transport = omx_action_transport

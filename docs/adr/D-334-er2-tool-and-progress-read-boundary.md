@@ -4,6 +4,8 @@
 
 **Implementation note (2026-09-29):** D-333 Task 3 adds authenticated Site Fleet proposal and Mission draft readback plus named-operator admission. This is a bounded Fleet REST surface; it does not add an ER 2 `get_mission_status` tool, four-axis Mission/Action/goal/stop snapshot, cursor event endpoint, subscription, or device/physical state claim. The readback currently returns Fleet Mission state and Fleet journal history only.
 
+**Follow-up implementation note (2026-09-30):** D-333 Task 8 later adds the bounded snapshot-first cursor event endpoint; the earlier note above records the Task 3 state at that time. The current routes remain conditional on application composition: `fleet console` does not construct Mission/Proposal services by default, and no `get_mission_status` ER 2 tool is exposed. Fleet REST progress reads are authenticated Fleet-user surfaces, not model-callable tools. The opt-in `--mission-api` CLI composition disables ER 2/Mission dispatch and the existing automatic queued-task dispatcher, so preexisting navigation tasks are not automatically sent to CORE. It is not a global read-only mode: existing authenticated Fleet operator command routes remain available and may call CORE.
+
 ### Context
 
 D-331의 표준 ER 2 adapter는 이미지 한 장과 지시를 한 번 보내고 단일 `propose_pick_place` 함수 호출을 후보로 파싱한다. tool callback 실행, `function_result` 회신, `previous_interaction_id` 연속 호출은 없다. D-326/D-328은 장래의 후보 제출·관측 요청·상태 조회를 개념으로 제안했지만 모델에 실제 노출할 목록과 진행 snapshot의 출처·신선도는 정하지 않았다. D-333은 Mission/Action/목표/정지의 소유권을 분리했으나 사용자와 모델이 작업 중 무엇을 읽을지의 계약은 후속으로 남겼다.
