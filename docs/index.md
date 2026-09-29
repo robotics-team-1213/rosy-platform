@@ -240,8 +240,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
 - 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
 - 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 - 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
-- 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록

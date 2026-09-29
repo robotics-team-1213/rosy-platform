@@ -554,3 +554,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(bridge): display charging이 실제로 켜지게 — 죽은 getattr 제거 (C6)
+
+- 변경: display.py의 `getattr(battery, "charging", False)`를 `snapshot.battery_status.charging` 직접 접근으로 교체. `Battery`(생 percent/voltage)에는 charging이 없고 D-27 확인된 충전 판정은 `BatteryStatus`에 있으므로, 이전 reach는 항상 False를 돌려주는 죽은 코드였다 — D-351의 충전 표시가 화면에 절대 켜지지 않았다. C6 판정을 기준 문서에 "Seam lie — fixed by deletion"으로 기록(safety/profile 판례와 같은 형식). test_bridge_display의 `_snapshot` fixture에 battery_status를 추가하고 charging=True 종단 시험을 신설.
+- 증거: test_module_criteria 1 passed (reach 소거로 집합 동일성 회복), test_bridge_display 15 passed, gateway 전체 1439 passed/16 skipped (2026-09-30 Windows). 이것이 main CI 적신의 첫 원인이었다(41b3a704부터 5연속 실패 중 유일하게 CI 로그에 잡힌 core 도메인 실패).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: getattr 기본값은 "있으면 읽는다"가 아니라 "이름이 바뀌어도 침묵한다"다 — D-351 회차가 시험에 기본값(False)만 적어 통과시킨 것이 이 결함을 통과시킨 길이었다. 참(True) 종단을 같이 적었으면 즉시 잡혔다.
