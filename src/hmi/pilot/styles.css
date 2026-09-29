@@ -1,6 +1,5 @@
 /* Rosy Pilot — NFS 모바일 컨트롤러 레이아웃.
- * 좌하단 페달(전진/후진) | 우하단 조향 조이스틱 | 좌상단 계기 | 우상단 액션.
- * 색·타이포·공용 컨트롤은 web_common tokens(D-130.3). 표면은 배치만.
+ * 좌하단 페달 | 우하단 조이스틱 | 상단 미니멀 HUD | 중앙 카메라.
  */
 
 :root { color-scheme: dark; }
@@ -51,32 +50,21 @@ form[data-pilot-token-form] {
 
 form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
 
-/* 최근 접속 목록 — 게임 "계속하기" */
-[data-recent-list] {
-  display: grid;
-  gap: var(--space-2);
-}
-
-[data-recent-item] {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-}
-
+[data-recent-list] { display: grid; gap: var(--space-2); }
+[data-recent-item] { display: flex; gap: var(--space-1); align-items: center; }
 [data-recent-item] ui-button[data-recent-connect] { flex: 1; }
 
 .sr-only {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: 1px; height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
 }
 
 /* ================================================================
-   주행 — NFS 모바일 컨트롤러 오버레이
-   좌하단: 페달 | 우하단: 조향 조이스틱 | 좌상단: 계기 | 중앙: 카메라
+   주행 — NFS 미니멀 오버레이
+   상단: 속도+상태 한 줄 | 좌하단: 페달 | 우하단: 조이스틱
    ================================================================ */
 
 body[data-pilot-screen="drive"] .pilot-main {
@@ -106,7 +94,7 @@ body[data-pilot-screen="drive"] ui-topbar {
   overflow: hidden;
 }
 
-/* ---- 카메라 (중앙 전체, 방해 없음) ---- */
+/* 카메라 — 중앙 전체 */
 [data-drive-stage] {
   position: absolute;
   inset: 0;
@@ -135,39 +123,70 @@ body[data-pilot-screen="drive"] ui-topbar {
   background: var(--ground-deep);
 }
 
-/* ---- 좌상단: 계기판 ---- */
+/* ---- 상단 HUD — 한 줄 미니멀 스트립 ---- */
 [data-drive-hud] {
   position: absolute;
-  top: calc(var(--topbar-height) + var(--space-3));
+  top: calc(var(--topbar-height) + var(--space-2));
   left: var(--space-3);
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  background: color-mix(in srgb, var(--ground-deep) 75%, transparent);
-  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
-  border-radius: var(--radius-panel);
-  min-width: 9rem;
+  right: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  border-radius: var(--radius-flag);
   z-index: 15;
   backdrop-filter: blur(6px);
+  max-width: calc(100vw - var(--space-3) * 2);
 }
 
-/* 속도 — 게임 계기판 */
+/* 속도 — 큰 숫자, HUD의 주인공 */
 [data-drive-hud] [data-drive-fact=speed] {
   font-family: var(--mono);
-  font-size: 3rem;
+  font-size: 2.2rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  min-width: 5ch;
+  text-align: right;
 }
 
+/* 속도 단위 — 작은 라벨 */
+[data-drive-hud] .speed-unit {
+  font-size: 0.75rem;
+  color: var(--nominal-quiet);
+  margin-left: -var(--space-1);
+}
+
+/* 나머지 상태 — 작은 배지 */
+[data-drive-hud] [data-drive-fact=mode],
+[data-drive-hud] [data-drive-fact=link] {
+  font-size: 0.8rem;
+  font-family: var(--mono);
+  color: var(--nominal-quiet);
+}
+
+[data-drive-hud] [data-drive-fact=battery] {
+  font-size: 0.8rem;
+  font-family: var(--mono);
+  color: var(--nominal-quiet);
+}
+
+/* 액션 버튼 — HUD 오른쪽에 붙임 */
 [data-drive-hud] ui-actions {
   display: flex;
   gap: var(--space-1);
-  flex-wrap: wrap;
-  margin-top: var(--space-1);
+  margin-left: auto;
 }
 
-/* ---- 하단 컨트롤 바 (NFS식) ---- */
+[data-drive-hud] ui-actions ui-button {
+  min-height: 2.2rem;
+  min-width: 2.2rem;
+  font-size: 0.75rem;
+  padding: 0 var(--space-1);
+}
+
+/* ---- 하단 컨트롤 — 좌 페달 / 우 조이스틱 ---- */
 [data-drive-controls] {
   position: absolute;
   bottom: 0; left: 0; right: 0;
@@ -175,23 +194,36 @@ body[data-pilot-screen="drive"] ui-topbar {
   justify-content: space-between;
   align-items: flex-end;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-4)
+  padding: 0 var(--space-4)
     calc(var(--space-3) + env(safe-area-inset-bottom, 0));
   z-index: 20;
-  background: linear-gradient(to top,
-    color-mix(in srgb, var(--ground-deep) 65%, transparent),
-    transparent 65%);
+  pointer-events: none;
 }
 
-/* ---- 좌하단: 페달 (전진▲ / 후진▼) ---- */
-[data-drive-pedals] {
+[data-drive-controls] > * { pointer-events: auto; }
+
+/* 좌하단: 페달 + 프리셋 */
+[data-drive-left] {
   display: grid;
   gap: var(--space-2);
+  justify-items: start;
 }
 
+[data-drive-presets] {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+[data-drive-presets] ui-actions { display: flex; gap: 2px; }
+[data-drive-presets] ui-button { min-height: 2rem; min-width: 2.5rem; font-size: 0.75rem; }
+[data-drive-presets] [aria-pressed="true"] { outline: 2px solid var(--status-warn); outline-offset: 1px; }
+
+[data-drive-pedals] { display: grid; gap: var(--space-2); }
+
 [data-drive-pedals] ui-button {
-  min-height: 5.5rem;
-  min-width: 5.5rem;
+  min-height: 5rem;
+  min-width: 6rem;
   font-size: 0.95rem;
 }
 
@@ -201,26 +233,15 @@ body[data-pilot-screen="drive"] ui-topbar {
   box-shadow: 0 0 16px color-mix(in srgb, var(--status-warn) 50%, transparent);
 }
 
-/* 속도 프리셋 — 페달 위 */
-[data-drive-presets] {
-  display: grid;
-  gap: var(--space-1);
-  justify-items: center;
-}
-
-[data-drive-presets] ui-actions { display: flex; gap: var(--space-1); }
-[data-drive-presets] [aria-pressed="true"] { outline: 2px solid var(--status-warn); outline-offset: 2px; }
-
-/* ---- 우하단: 조향 조이스틱 (NFS식) ---- */
-[data-drive-wheel-wrap] {
+/* 우하단: 조이스틱 */
+[data-drive-right] {
   display: grid;
   place-items: center;
-  gap: var(--space-1);
 }
 
 [data-drive-wheel] {
   position: relative;
-  width: min(20vw, 10rem);
+  width: min(18vw, 9rem);
   aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
@@ -235,30 +256,29 @@ body[data-pilot-screen="drive"] ui-topbar {
 
 [data-drive-wheel-indicator] {
   position: absolute;
-  inset: 20%;
+  inset: 18%;
   border-radius: 50%;
   border-top: 3px solid var(--brand-rose);
   transition: transform 30ms linear;
 }
 
-/* 조이스틱 중심 점 */
 [data-drive-wheel]::after {
   content: "";
   position: absolute;
   top: 50%; left: 50%;
-  width: 12px; height: 12px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   background: var(--line);
   transform: translate(-50%, -50%);
 }
 
-/* ---- 입력 조정 패널 (우상단) ---- */
+/* ---- 입력 조정 패널 ---- */
 [data-inputs-panel] {
   position: absolute;
   top: calc(var(--topbar-height) + var(--space-3));
   right: var(--space-3);
   max-width: 18rem;
-  max-height: calc(100vh - var(--topbar-height) - 16rem);
+  max-height: calc(100vh - var(--topbar-height) - 14rem);
   overflow-y: auto;
   padding: var(--space-3);
   background: color-mix(in srgb, var(--ground-raise) 92%, transparent);
@@ -268,7 +288,7 @@ body[data-pilot-screen="drive"] ui-topbar {
   backdrop-filter: blur(6px);
 }
 
-/* ---- 모바일 세로 ---- */
+/* 모바일 세로 */
 @media (max-width: 30rem) {
   .pilot-main { padding: var(--space-4); }
   [data-drive-controls] {
@@ -279,5 +299,5 @@ body[data-pilot-screen="drive"] ui-topbar {
   [data-drive-wheel] { width: min(50vw, 12rem); }
   [data-drive-pedals] { flex-direction: row; }
   [data-drive-pedals] ui-button { min-height: 4.5rem; min-width: 4.5rem; }
-  [data-drive-hud] [data-drive-fact=speed] { font-size: 1.8rem; }
+  [data-drive-hud] [data-drive-fact=speed] { font-size: 1.6rem; }
 }

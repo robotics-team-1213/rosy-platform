@@ -247,28 +247,20 @@ function buildStage() {
   const stage = el("div", null, {"data-drive-stage": ""});
   const frame = el("img", null, {alt: "전방 카메라", "data-drive-frame": "", hidden: ""});
   const empty = el("ui-empty", "카메라 프레임 수신 대기", {"data-drive-empty": ""});
-  const hud = el("div", null, {"data-drive-hud": ""});
-  hud.append(buildHudFacts());
-  stage.append(frame, empty, hud);
+  stage.append(frame, empty, buildHudFacts());
   return stage;
 }
 
 function buildHudFacts() {
-  const facts = el("div", null, {"data-drive-readout": ""});
-  const grid = el("ui-grid", null, {columns: "2"});
-  for (const [key, label, initial] of [
-    ["link", "LINK", "CONNECTING"], ["mode", "MODE", "—"],
-    ["battery", "BATT", "—"], ["speed", "SPEED", "0.00 m/s"],
-  ]) {
-    const cell = el("div");
-    cell.append(
-      el("ui-text", label, {scale: "label"}),
-      el("ui-text", initial, {scale: "value", "data-drive-fact": key}),
-    );
-    grid.append(cell);
-  }
-  facts.append(grid);
-  return facts;
+  // NFS 미니멀: 속도(큰 숫자) + 모드 + 링크 + 배터리 + 액션 — 한 줄 스트립
+  const hud = el("div", null, {"data-drive-hud": ""});
+  const speed = el("span", "0.0", {"data-drive-fact": "speed"});
+  const unit = el("span", "m/s", {"class": "speed-unit"});
+  const mode = el("span", "—", {"data-drive-fact": "mode"});
+  const link = el("span", "…", {"data-drive-fact": "link"});
+  const battery = el("span", "—", {"data-drive-fact": "battery"});
+  hud.append(speed, unit, link, mode, battery);
+  return hud;
 }
 
 function buildControls() {
