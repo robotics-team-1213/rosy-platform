@@ -318,7 +318,7 @@
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 | Accepted (Site Fleet SOURCE/LOCAL; PRT-004·물리 정지 readback 별도) |
 | D-317 | 장치별 해석과 공유 계약은 실제 소비·실행 경계로 분류한다 | Accepted (현재 소스 배치와 후속 재배치 기준; 새 패키지·API·운영 수용 없음) |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 | Accepted (표시 전용 조정; 현장 보정·DEVICE/FIELD 증거는 별도) |
-| D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 | Proposed (도우미 실물 실행 확인; 무인 토크 활성화와 G4 수용 제외) |
+| D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 | Accepted (2026-09-29 사용자 승인; 무인 토크 활성화·G4 수용·현장 운영은 별도 게이트) |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 | Accepted (소스 경로만; 설치 closure·OMX field runtime 별도 HOLD) |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 | Accepted (설계 결정; 구현·서명 릴리스·실물 G4/G5 HOLD) |
 | D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 | Accepted (소스 설계·구현 범위; Isaac 실제 실행·ROS-SIM·DEVICE/FIELD 수용 별도 HOLD) |

@@ -3476,3 +3476,10 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음.
+## 2026-09-29 · uncommitted · docs(adr): D-319 승인 — 입회 모터 커미션 도우미
+
+- 변경: D-319(SETUP 뒤 현장 입회 하에 모터 구동 준비 자동화)를 Proposed에서 Accepted로 올렸다(사용자 승인). 승인 범위는 도우미 방침 그대로 — 무인 토크 활성화 배제, G4 수용·자동 이미지 부팅·현장 운영은 별도 게이트로 남는다. 표행과 본문 Status를 같이 고쳤다(상태 전이는 허용된 ADR 수명주기 편집).
+- 증거: 도우미(deploy/robot/pinky_pro/sd/enable-motor-commissioning.ps1)와 그 계약시험(test/test_new_device_setup.py)이 이미 main에 있고, 본문 Verification에는 1대 실기 실행 기록(토크 오프 ID 탐색, motor 전환, drive=ready 판독, 복원)이 있다. 승인은 새 코드 없이 결정 상태만 바꾼다.
+- gate 변화: 없음.
+- 결정: 입회 실기 세션의 스코프가 확정됐다 — ①상주 CPU 측정(measure-resident-cpu.sh) ②G4 계단(D-311/312/314) ③커미션 도우미(D-319). 이 세 가지를 한 세션에 묶는 게 다음 실기 회차의 기본 순서다.
+- 교훈: 없음.
