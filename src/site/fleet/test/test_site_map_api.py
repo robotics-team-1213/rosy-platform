@@ -197,7 +197,8 @@ def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose(
     assert "<script>" not in page  # CSP: script-src 'self' only
 
 
-def test_site_layer_node_unit_tests_pass():
+@pytest.mark.parametrize("spec_name", ["site-layer.test.mjs", "field-layers.test.mjs"])
+def test_site_layer_node_unit_tests_pass(spec_name):
     import shutil
     import subprocess
     from pathlib import Path
@@ -205,7 +206,7 @@ def test_site_layer_node_unit_tests_pass():
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
-    spec = Path(__file__).resolve().parent / "web" / "site-layer.test.mjs"
+    spec = Path(__file__).resolve().parent / "web" / spec_name
     result = subprocess.run([node, "--test", str(spec)], capture_output=True, text=True,
                             timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
