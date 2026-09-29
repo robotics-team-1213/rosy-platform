@@ -211,3 +211,11 @@
 - gate 변화: 없음. SOURCE/LOCAL.
 - 결정: D-358 1·4항. Pilot(`src/hmi/pilot`)은 main에 없어 대상이 아니다. `test_pilot_is_not_on_main_yet`이 착지 순간 적신이 되어 Pilot 검사 추가를 강제한다(skip 아님).
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(icons): D-358 S3 이름·아이콘·파비콘
+
+- 변경: `icons/`에 SVG 네 개(`overhead-camera-app`·`pilot`·`fleet-console`·`robot-dashboard`)를 두었다. 108 격자, `--ground` 바탕, `--brand-rose` 점 하나, 표면마다 글리프 토큰 하나(`<path>`만). `surfaces.yaml`에 `app_name`·`app_name_en`·`short_name`·`icon`을 더했다. `manifest.json`이 아이콘을 한 개씩 `image/svg+xml`로 허용하고(폴더를 열지 않음) CMake가 `share/web_common/icons`로 설치한다. `test_asset_manifest.py`는 `icons/` 한 단계와 SVG 미디어 타입을 받도록 고쳤다. `tools/icons/render_png.py`(Pillow)가 SVG를 PNG로 그린다.
+- 증거: `test_surface_icons.py` 8 passed(토큰 색만, `--status-*` 없음, 안전 영역, 48 px 흑백 IoU < 0.5, 이름표·Android `app_name` 대조). G2 캡처: `private/validation/2026-09-30-d358-icons/d358-icons-side-by-side.png`(색·흑백 × 48·192 px, 원형 마스크).
+- gate 변화: 없음. G2 사용자 확인 대기, DEVICE(실제 런처)는 별도 회차.
+- 결정: D-358 2·3항. Pilot 이름·아이콘 PNG·버튼 문구는 Pilot이 main에 없어 착지 회차로 미룬다(`pilot.svg`만 먼저 둠).
+- 교훈: SVG·Android XML 주석에 `--`를 쓰면 파서가 거절한다(토큰 이름을 주석에 적지 말 것).

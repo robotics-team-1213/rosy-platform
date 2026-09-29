@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(overhead-app): D-358 S3 적응형 런처 아이콘
 - 2026-09-30 · uncommitted · test(overhead-app): D-358 S1 DiscoveryVectorsTest
 - 2026-09-30 · uncommitted · fix(overhead-app): 적응형 JPEG 화질과 정지 중 대상 표시
 - 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
 - 2026-09-29 · uncommitted · web-surface-hardening: CI에 overhead 호스트 시험과 android 단위 시험
-- 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability

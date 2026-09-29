@@ -95,3 +95,11 @@
 - gate 변화: 없음.
 - 결정: D-358 5.1. 로봇 레코드는 주소·호스트·AP·legacy를 아직 보지 않는다. 앱 동작 변경이라 이번 범위 밖이고, 시험에 `knownRobotDivergence` 8건으로 못 박았다(고치면 시험이 목록 삭제를 요구한다).
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(overhead-app): D-358 S3 적응형 런처 아이콘
+
+- 변경: `mipmap-anydpi-v26/ic_launcher(_round).xml`(배경·전경·흑백 세 층), `drawable/ic_launcher_foreground.xml`·`ic_launcher_monochrome.xml`(`web_common/icons/overhead-camera-app.svg`에서 생성), `values/ic_launcher_background.xml`(ground #101214), 매니페스트 `android:icon`·`roundIcon`. `app_name`은 이미 "Rosy 천장 카메라"라 그대로 두었다. `LauncherIconParityTest`(`rosy.icons.dir`)가 경로·굵기·색을 SVG와 대조한다. 밀도별 PNG는 만들지 않았다(minSdk 26).
+- 증거: `gradlew testDebugUnitTest assembleDebug` 녹색(99 tests). 변이 증명: SVG 렌즈 고리 굵기를 바꾸면 패리티 시험 2건 적신. 512 px PNG: `private/validation/2026-09-30-d358-icons/overhead-camera-app-512.png`.
+- gate 변화: 없음. 실제 폰 런처 확인은 DEVICE 회차.
+- 결정: D-358 3항.
+- 교훈: 없음.

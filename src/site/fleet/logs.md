@@ -547,3 +547,11 @@
 - gate 변화: 없음. SOURCE/LOCAL. 실제 사이트 LAN 발견은 DEVICE 회차.
 - 결정: D-358 5.1.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(icons): D-358 S3 관제 파비콘
+
+- 변경: 콘솔 `index.html`에 `/common/icons/fleet-console.svg` 파비콘 링크 한 줄. 새 `test_common_icons.py`가 목록의 아이콘은 200(`image/svg+xml`), 폴더·목록 밖·인코딩된 `..`는 404임을 확인한다. 제목 `Rosy 사이트 — 관제`는 이미 이름표와 같다.
+- 증거: `test_common_icons.py` 1 passed.
+- gate 변화: 없음.
+- 결정: D-358 2·3항.
+- 교훈: 없음.
