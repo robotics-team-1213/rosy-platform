@@ -243,8 +243,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
+- 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
+- 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
 - 2026-09-30 · uncommitted · docs: main CI 초록 회복 — 6연속 적신 수리 완료
 - 2026-09-30 · uncommitted · docs(adr): D-354 천장 카메라 경기장 자동 검출 제안 (Proposed)
-- 2026-09-30 · uncommitted · docs(harness): 11개 모듈 last_verified를 bed604ef로 기록
-- 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
-- 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355

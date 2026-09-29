@@ -3699,3 +3699,15 @@
 - gate 변화: deploy last_verified 기록(경고 해소). docs LOCAL GO 유지.
 - 결정: 없음.
 - 교훈: CI가 한 단계에서 멈추면 그 아래 층은 안 보인다 — 층마다 로컬 전수 검증이 push보다 먼저다. 병행 세션의 랜딩은 그 세션의 게이트만 통과한다; 공용 계약(web_common·D-218·시크릿 스캔)은 소유 모듈 밖에서 검사된다.
+## 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
+- Change: added one-transaction stop/generation/Mission/action/attempt/event/observation fencing before ER2 candidate visibility; candidates are idempotent by feedback turn, carry source correlation, and resolve only into a separately linked successor Mission. Stop or event drift before resolution rejects the candidate. The async tool dispatcher uses an injected post-action observation source and returns unavailable if it is not configured.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 focused contract/doc checks 71 passed; changed-file flake8 clean. Full Fleet flake8 still reports unrelated existing findings in hub, console, and older tests.
+- Gate: SOURCE/LOCAL only. No production trusted Vision reader, provider worker, credentials, policy dispatch, ROS, device, or field enablement.
+## 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
+- Change: removed the model-supplied observation ID from the `propose_replan` tool schema. Fleet now requests a trusted frame after the terminal Action timestamp, binds its concrete ID/digest to the typed ER 2 selector response, and retains the same atomic visibility fence. Camera image egress still requires a separate explicit data-class approval.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 path suites 74 passed; changed-file flake8 clean.
+- Gate: no trusted production Vision reader or app worker is configured; replan stays unavailable unless both are injected and approved.
+## 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
+- Change: updated `SIZE_VERDICTS["fleet"]` from 14,260 to 14,616 lines after atomic candidate fencing and linked-successor regression coverage. The split verdict and unscheduled B2 plan remain unchanged.
+- Evidence: `python -m pytest src/site/fleet/test/ test/ -q` = 3,675 passed/188 skipped after the re-judgment; the focused ER2/API/docs set passed 65 tests, and the documentation gate passed 80 tests. Changed-file flake8 and `git diff --check` passed.
+- Gate: SOURCE/LOCAL only; no trusted Vision reader, provider worker, policy dispatch, ROS, device, or field enablement.
