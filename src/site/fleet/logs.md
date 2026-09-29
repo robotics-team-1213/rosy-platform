@@ -530,3 +530,12 @@
 - gate 변화: 없음.
 - 결정: D-257(표시·대조 전용 유지)
 - 교훈: 없음
+
+
+## 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress
+
+- Change: added opt-in producer registry with environment-only credentials, strict workcell/predicate/object/destination and evaluator-revision scopes, finite freshness/grace policy, and expiry. Added same-database SQLite idempotent evidence storage and `POST /api/fleet/goal-evidence` with a separate source token.
+- Lifecycle: evidence and Action terminal readback can arrive in either order; the matching second input triggers independent confirmation. Missing evidence reaches `HOLD` after registered grace. Rejected payloads are not stored. The Mission/automatic policy dispatch valve remains closed; the registry is deployment-configured and read-only at runtime.
+- Evidence: full Fleet suite 724 passed, 5 skipped; changed-file flake8 passed.
+- Gate: SOURCE/LOCAL only; physical producers, ROS-SIM, device and field acceptance remain unproven.
+- Decision: D-348.

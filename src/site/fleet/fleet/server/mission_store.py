@@ -241,14 +241,14 @@ class MissionStore:
                  workcell_id, instance_id, plan_json, predicate_json, now, now),
             )
             row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
+                             (mission_id,)).fetchone()
             self._event(
                 db, event_source="fleet_mission", source_event_id=f"proposal:{mission_id}",
                 mission=row, event_type="MISSION_PROPOSED", state="PROPOSED",
                 actor_id=principal_id, detail={"request_digest": digest},
             )
             row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
+                             (mission_id,)).fetchone()
             if owns_transaction:
                 db.commit()
         return {"mission": self._row(row), "created": True}
@@ -574,6 +574,22 @@ class MissionStore:
                 "ORDER BY updated_at, mission_id LIMIT 1",
             ).fetchone()
         return self._row(row)
+
+    def missions_awaiting_goal_evidence(self) -> list[dict[str, Any]]:
+        """Return successful terminal Actions that have not confirmed their goal."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT m.*, e.created_at AS action_terminal_at
+                   FROM fleet_missions AS m
+                   JOIN fleet_mission_events AS e
+                     ON e.mission_id=m.mission_id
+                    AND e.action_id=m.action_id AND e.attempt_id=m.attempt_id
+                    AND e.event_type='ACTION_TERMINAL_RESULT' AND e.state='ACTION_SUCCEEDED'
+                   WHERE m.status='ACTION_SUCCEEDED'
+                   ORDER BY e.event_id""",
+            ).fetchall()
+        return [self._row(row) | {"action_terminal_at": row["action_terminal_at"]}
+                for row in rows]
 
     def finish_reconciliation(self, mission_id: str, *, action_id: str,
                               attempt_id: str) -> dict[str, Any]:

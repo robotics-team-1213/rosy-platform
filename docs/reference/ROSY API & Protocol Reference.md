@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.58
+**Version:** v1.59
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1453,12 +1453,54 @@ goal/stop states and bounded reasons; it excludes object selectors, raw
 observations, evidence payloads, and credentials. This is not a public
 `get_mission_status` provider tool or a provider tool-result loop.
 
+## 10.14 Fleet goal-evidence producer contract (D-348)
+
+The route is exposed only when Fleet Mission API composition includes a valid
+goal-evidence producer registry. It does not enable ER 2 calls, automatic policy
+dispatch, Mission Action dispatch, ROS, or a manipulator driver. The registry is
+read-only YAML: each producer is scoped to one `workcell_id` and `predicate_id`,
+exact object/destination IDs, `camera_observation`, an allowlist of evaluator
+revisions, server-enforced `max_age_s`, a missing-evidence `grace_s`, and an
+aware `valid_until`. YAML stores only a `token_env` name; the credential is read
+from the process environment and never returned in a response.
+
+| Method | Path | Credential | Meaning |
+|---|---|---|---|
+| POST | `/api/fleet/goal-evidence` | `X-Goal-Evidence-Token` | Submit `{ "mission_id": "?", "evidence": {?} }` from a registered independent producer. |
+
+The evidence object must match the existing `GoalEvidence` contract, including
+the producer ID, approved evaluator revision, current Mission Action/attempt,
+new post-action observation, independent gripper `OPEN` readback, and satisfied
+predicate. Producer credentials are separate from Site Fleet user roles. A
+`viewer` can read Mission state, an `operator` can admit a draft, and registry
+administration remains a deployment-controlled read-only file change; the
+producer token cannot create or admit a Mission.
+
+Accepted evidence is persisted in the same SQLite database as Mission state.
+`evidence_id` is idempotent for identical content and conflicts if reused with
+different content. The server records `received_at`; caller timestamps do not
+set freshness policy. Invalid/rejected raw evidence is not stored. Evidence
+received before action terminal readback stays pending and is checked when the
+matching terminal success arrives. Evidence submitted after success is checked
+immediately. Missing evidence remains pending through the registered grace
+period and then moves the Mission to `HOLD` with `GOAL_EVIDENCE_TIMEOUT`;
+stale, mismatched, untrusted, or conflicting evidence cannot produce
+`GOAL_CONFIRMED` or release claims. HTTP errors include `401
+PRODUCER_UNAUTHORIZED`, `404 MISSION_NOT_FOUND`, `409` scope/replay/rejection
+codes, and `422 INVALID_GOAL_EVIDENCE_ENVELOPE`.
+
+This route is independent of the software stop API. It never reports physical
+stop, gripper, placement, or hardware acceptance unless the trusted producer
+supplies the corresponding separately sourced evidence. SOURCE/LOCAL tests use
+fake credentials and clocks; device and field acceptance remain separate gates.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.56 | 2026-09-29 | Additive (D-337): traffic policy status gains `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen`; the optional file-only `traffic_policy.signal_observer` binding fuses the observer service's measured light with camera evidence (mismatch `signal_source_conflict` HOLD, dark/indeterminate `signal_dark`, silence falls back camera-only) and emits `nav.traffic_policy_signal_source_stale` once per lapse |
 | v1.57 | 2026-09-29 | Additive (D-333): add owner-scoped Mission progress axes, a 50-event recent-history window with truncation signal, and bounded snapshot-first event cursor pages. Fleet event IDs are journal order; dispatch latch is distinct from physical stop (UNKNOWN); no percentage or provider status tool is introduced. |
+| v1.59 | 2026-09-30 | Additive (D-348): opt-in registered goal-evidence producer route, environment-only source tokens, SQLite evidence-ID idempotency, evaluator/freshness scope, terminal-action verification and grace-timeout HOLD. No model/action dispatch or ROS enablement. |
 | v1.58 | 2026-09-29 | Additive (D-347): `GET /api/v1/system/capabilities` gains the per-flag `lifecycle` block — one vocabulary (`ready`/`unavailable`+reasons, `activating` reserved with no producer yet) derived from the existing `withheld` judgment; `withheld.flags` always equals the `unavailable` set. Presentation states on inventory descriptors are unchanged; the mapping lives in D-347. |
 | v1.55 | 2026-09-29 | Additive (D-333): require an injected trusted producer verifier and a new post-action observation for Mission goal confirmation. Evidence is correlated to the Action/attempt and carries frame digest, evaluator revision, and a separate `OPEN` gripper readback; absent verifier, stale/mismatched evidence leaves claims held. |
 | v1.54 | 2026-09-29 | Additive (D-18): include the operator-declared `junction_rule` in traffic policy status so an unsignalized stop-and-go junction is distinct from signal-detection failure. |

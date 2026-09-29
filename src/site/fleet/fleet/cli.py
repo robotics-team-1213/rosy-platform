@@ -94,6 +94,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--mission-api", action="store_true",
                          help=("enable persistent Mission proposal/read APIs without ER 2 or Mission "
                                "dispatch; existing Fleet operator commands remain available"))
+    console.add_argument("--goal-evidence-config", default=None, type=Path,
+                         help="optional scoped goal-evidence producer registry YAML")
     return parser.parse_args(argv)
 
 
@@ -313,6 +315,9 @@ def run_console(args: argparse.Namespace) -> None:
     if site_users is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --users-file for persistent audit")
     mission_api = bool(getattr(args, "mission_api", False))
+    goal_evidence_config = getattr(args, "goal_evidence_config", None)
+    if goal_evidence_config is not None and not mission_api:
+        sys.exit("--goal-evidence-config requires --mission-api")
     if mission_api and tasks_db is None:
         sys.exit("--tasks-db is required with --mission-api")
     if mission_api and site_users is None:
@@ -372,6 +377,7 @@ def run_console(args: argparse.Namespace) -> None:
                                         robot_ids=console.robot_ids)
     mission_service = None
     proposal_store = None
+    goal_evidence_service = None
     if mission_api:
         from fleet.server.mission_service import MissionService
         from fleet.server.mission_store import MissionStore
@@ -379,6 +385,15 @@ def run_console(args: argparse.Namespace) -> None:
 
         mission_service = MissionService(MissionStore(tasks_db))
         proposal_store = ProposalStore(tasks_db)
+        if goal_evidence_config is not None:
+            from fleet.server.goal_evidence_registry import load_goal_evidence_registry
+            from fleet.server.goal_evidence_service import GoalEvidenceService
+            from fleet.server.goal_evidence_store import GoalEvidenceStore
+
+            registry = load_goal_evidence_registry(goal_evidence_config)
+            goal_evidence_service = GoalEvidenceService(
+                mission_service, registry, GoalEvidenceStore(tasks_db),
+            )
     from fleet.server.discovery import DiscoveryStore
 
     discovery = DiscoveryStore() if discovery_token is not None else None
@@ -390,6 +405,7 @@ def run_console(args: argparse.Namespace) -> None:
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
+                     goal_evidence_service=goal_evidence_service,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,
                      start_task_dispatcher=not mission_api,
