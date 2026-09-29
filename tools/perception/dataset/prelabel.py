@@ -1,15 +1,23 @@
 """Pre-label frames with a learned lane model and pack a CVAT import zip.
 
-    prelabel.py <frames_dir> --model <model_folder> --out <dir>
+    prelabel.py <frames_dir> --model <model_folder> --classes classes.yaml --out <dir>
 
-Writes masks/<name>.png (grey class index), preview/<name>.png (colour),
-ranking.csv (most uncertain first) and cvat_import.zip (Segmentation mask 1.1).
-<name> is "<session>__<index:06d>" so build.py can find the frame again."""
+Writes into <dir>:
+  cvat_import.zip   CVAT "Segmentation mask 1.1": labelmap.txt (colours from
+                    classes.yaml; DEFAULT_PALETTE only for a class without color),
+                    SegmentationClass/<name>.png, ImageSets/Segmentation/default.txt
+  images/<name>.jpg the frames under the exact names used in the zip; upload THESE
+                    to the CVAT task, then import the zip
+  masks/, preview/  grey index masks and colour previews
+  ranking.csv       most uncertain first
+<name> is "<session>__<index:06d>". The background-role class is exported under the
+CVAT label "background" (build.py maps it back by role)."""
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import math
 import sys
 import zipfile
 from pathlib import Path
@@ -17,24 +25,63 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import build
+
 ROOT = Path(__file__).resolve().parents[3]
 _SENSING = str(ROOT / "src" / "runtime" / "sensing")
 if _SENSING not in sys.path:
     sys.path.insert(0, _SENSING)
 
 SHADOW_KEY = "perception/learned/shadow"
-# RGB, indexed by class index; index 0 is black (CVAT background).
-PALETTE = ((0, 0, 0), (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200),
-           (245, 130, 48), (145, 30, 180), (70, 240, 240), (240, 50, 230))
+LANE_MIN_FRACTION = 0.02  # below this share of lane pixels the frame is suspect
+# RGB fallback for classes.yaml entries without a color, by class index.
+DEFAULT_PALETTE = ((0, 0, 0), (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200),
+                   (245, 130, 48), (145, 30, 180), (70, 240, 240), (240, 50, 230))
 
 
-def class_color(index: int) -> tuple[int, int, int]:
-    return PALETTE[index % len(PALETTE)]
+def resolve_classes(yaml_classes, model_classes) -> list[dict]:
+    """classes.yaml must describe the model's classes; fill missing colours."""
+    got = [(c["index"], c["name"], c["role"]) for c in yaml_classes]
+    want = [(c.index, c.name, c.role) for c in model_classes]
+    if sorted(got) != sorted(want):
+        raise build.BuildError(f"classes.yaml does not match the model manifest classes "
+                               f"({sorted(got)} vs {sorted(want)})")
+    out = []
+    for c in sorted(yaml_classes, key=lambda c: c["index"]):
+        color = c["color"]
+        if color is None:
+            color = list(DEFAULT_PALETTE[c["index"] % len(DEFAULT_PALETTE)])
+        out.append(dict(c, color=color))
+    return out
 
 
 def rank_score(confidence: float, error_delta: float | None) -> float:
-    """Higher = more worth a human's time."""
+    """Recorded-shadow score. Higher = more worth a human's time."""
     return (1.0 - confidence) + (abs(error_delta) if error_delta is not None else 0.0)
+
+
+def score_frame(logits: np.ndarray, classes, side: dict, model_revision: str) -> dict:
+    """Recorded shadow confidence/error_delta count only when produced by this same
+    model revision; otherwise recompute from the current model: (1 - confidence)
+    + mean normalised pixel entropy + lane-pixel shortage."""
+    from control.sensing.perception.learned.lane_mask import lane_evidence
+    rec = (side or {}).get(SHADOW_KEY) or {}
+    if rec.get("model_revision") == model_revision and rec.get("confidence") is not None:
+        conf, delta = float(rec["confidence"]), rec.get("error_delta")
+        return {"score": rank_score(conf, delta), "confidence": conf, "error_delta": delta,
+                "entropy": None, "lane_shortage": None, "recorded": True}
+    ev = lane_evidence(logits, classes)
+    z = logits[0].astype(np.float64)
+    z -= z.max(axis=0, keepdims=True)
+    p = np.exp(z)
+    p /= p.sum(axis=0, keepdims=True)
+    entropy = float(-(p * np.log(np.clip(p, 1e-12, None))).sum(axis=0).mean()
+                    / math.log(len(classes)))
+    lane = sum(ev.class_fractions[c.name] for c in classes if c.role == "lane_marking")
+    shortage = max(0.0, 1.0 - lane / LANE_MIN_FRACTION)
+    return {"score": (1.0 - ev.confidence) + entropy + shortage, "confidence": ev.confidence,
+            "error_delta": None, "entropy": entropy, "lane_shortage": shortage,
+            "recorded": False}
 
 
 def frame_name(session: str, index: int) -> str:
@@ -42,17 +89,28 @@ def frame_name(session: str, index: int) -> str:
 
 
 def labelmap_text(classes) -> str:
+    """classes: resolved dicts. Background role is exported as label "background"."""
     lines = ["# label:color_rgb:parts:actions"]
     for c in classes:
-        r, g, b = class_color(c.index)
-        lines.append(f"{c.name}:{r},{g},{b}::")
+        name = "background" if c["role"] == "background" else c["name"]
+        lines.append(f"{name}:{c['color'][0]},{c['color'][1]},{c['color'][2]}::")
     return "\n".join(lines) + "\n"
 
 
-def colorize(mask: np.ndarray) -> np.ndarray:
-    """Index mask -> BGR image using PALETTE."""
-    lut = np.array([class_color(i)[::-1] for i in range(256)], np.uint8)
+def colorize(mask: np.ndarray, classes) -> np.ndarray:
+    """Index mask -> BGR image using the class colours."""
+    lut = np.zeros((256, 3), np.uint8)
+    for c in classes:
+        lut[c["index"]] = c["color"][::-1]
     return lut[mask]
+
+
+def write_upload_image(out: Path, name: str, bgr: np.ndarray) -> Path:
+    path = Path(out) / "images" / f"{name}.jpg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not cv2.imwrite(str(path), bgr):
+        raise RuntimeError(f"cannot write {path}")
+    return path
 
 
 def write_cvat_zip(path: Path, classes, items) -> None:
@@ -62,7 +120,7 @@ def write_cvat_zip(path: Path, classes, items) -> None:
         z.writestr("ImageSets/Segmentation/default.txt",
                    "".join(f"{n}\n" for n, _ in items))
         for name, mask in items:
-            ok, buf = cv2.imencode(".png", colorize(mask))
+            ok, buf = cv2.imencode(".png", colorize(mask, classes))
             if not ok:
                 raise RuntimeError(f"cannot encode {name}")
             z.writestr(f"SegmentationClass/{name}.png", buf.tobytes())
@@ -94,11 +152,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("frames_dir", type=Path)
     ap.add_argument("--model", type=Path, required=True)
+    ap.add_argument("--classes", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
 
-    from control.sensing.perception.learned.lane_mask import lane_evidence, preprocess
+    from control.sensing.perception.learned.lane_mask import preprocess
     model, session = _open_model(args.model)
+    try:
+        classes = resolve_classes(build.load_classes(args.classes, require_color=False),
+                                  model.manifest.classes)
+    except build.BuildError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     spec = model.manifest.input
     rows = [json.loads(line) for line in
             (args.frames_dir / "frames.jsonl").read_text(encoding="utf-8").splitlines()
@@ -118,22 +183,22 @@ def main(argv=None) -> int:
         mask = cv2.resize(mask, (bgr.shape[1], bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
         name = frame_name(str(row.get("session") or args.frames_dir.name), index)
         cv2.imwrite(str(args.out / "masks" / f"{name}.png"), mask)
-        cv2.imwrite(str(args.out / "preview" / f"{name}.png"), colorize(mask))
-        side = (row.get("side") or {}).get(SHADOW_KEY) or {}
-        confidence = side.get("confidence")
-        if confidence is None:
-            confidence = lane_evidence(logits, model.manifest.classes).confidence
-        delta = side.get("error_delta")
-        ranking.append((name, rank_score(float(confidence), delta), float(confidence), delta))
+        cv2.imwrite(str(args.out / "preview" / f"{name}.png"), colorize(mask, classes))
+        write_upload_image(args.out, name, bgr)
+        ranking.append((name, score_frame(logits, model.manifest.classes, row.get("side"),
+                                          model.model_revision)))
         items.append((name, mask))
 
-    ranking.sort(key=lambda r: r[1], reverse=True)
+    ranking.sort(key=lambda r: r[1]["score"], reverse=True)
+    cols = ["score", "confidence", "error_delta", "entropy", "lane_shortage", "recorded"]
     with open(args.out / "ranking.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["name", "score", "confidence", "error_delta"])
-        w.writerows(ranking)
-    write_cvat_zip(args.out / "cvat_import.zip", model.manifest.classes, items)
+        w.writerow(["name"] + cols)
+        w.writerows([n] + [r[c] for c in cols] for n, r in ranking)
+    write_cvat_zip(args.out / "cvat_import.zip", classes, items)
     print(f"prelabelled {len(items)} frames -> {args.out}")
+    print(f"Upload {args.out / 'images'}/*.jpg to the CVAT task (names must stay as they "
+          f"are), then import {args.out / 'cvat_import.zip'} as 'Segmentation mask 1.1'.")
     return 0
 
 
