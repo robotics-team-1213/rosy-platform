@@ -248,7 +248,15 @@ def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
     assert "error.status = resp.status;" in shell and "error.code = detail.code;" in shell
 
 
-def test_site_layer_node_unit_tests_pass():
+def test_console_web_node_unit_tests_pass():
+    """`node --test` on every console web unit spec (site layer, authorization).
+
+    The web tree declares `"type": "module"` (fleet/server/web/package.json)
+    so every Node — including CI's apt Node 18, which otherwise reads a bare
+    .js as CommonJS and loses the named exports — loads the browser ES
+    modules exactly the way the browser does. The glob keeps a future
+    .test.mjs from shipping unwired.
+    """
     import shutil
     import subprocess
     from pathlib import Path
@@ -256,7 +264,8 @@ def test_site_layer_node_unit_tests_pass():
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
-    spec = Path(__file__).resolve().parent / "web" / "site-layer.test.mjs"
-    result = subprocess.run([node, "--test", str(spec)], capture_output=True, text=True,
+    specs = sorted((Path(__file__).resolve().parent / "web").glob("*.test.mjs"))
+    assert specs, "no .test.mjs specs found under test/web"
+    result = subprocess.run([node, "--test", *map(str, specs)], capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
