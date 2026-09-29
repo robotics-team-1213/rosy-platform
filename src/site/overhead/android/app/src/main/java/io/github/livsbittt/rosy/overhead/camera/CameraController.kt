@@ -44,6 +44,7 @@ class CameraController(
         Thread(r, "overhead-analysis")
     }
     private val encoder = JpegEncoder()
+    private val adaptiveQuality = AdaptiveJpegQuality()
     private val limiter = FpsLimiter(OverheadConfig.DEFAULT.fps)
     private val preview = Preview.Builder().build()
 
@@ -158,14 +159,22 @@ class CameraController(
             )
             val rotation = image.imageInfo.rotationDegrees
             val current = config
-            when (val result = encoder.encode(image, current.jpegQuality, current.maxBytes)) {
-                is JpegEncoder.Result.TooLarge -> {
-                    Log.w(TAG, "jpeg ${result.length} B > max_bytes ${current.maxBytes}, dropped")
-                    frameLink.countDrop()
-                }
-                is JpegEncoder.Result.Encoded -> {
-                    frameLink.sensor = SensorInfo(result.width, result.height, rotation)
-                    frameLink.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
+            var quality: Int? = adaptiveQuality.start(current.jpegQuality)
+            while (quality != null) {
+                when (val result = encoder.encode(image, quality, current.maxBytes)) {
+                    is JpegEncoder.Result.TooLarge -> {
+                        quality = adaptiveQuality.retryAfterOversize()
+                        if (quality == null) {
+                            Log.w(TAG, "jpeg ${result.length} B > max_bytes ${current.maxBytes}, dropped")
+                            frameLink.countDrop()
+                        }
+                    }
+                    is JpegEncoder.Result.Encoded -> {
+                        adaptiveQuality.encoded()
+                        frameLink.sensor = SensorInfo(result.width, result.height, rotation)
+                        frameLink.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
+                        quality = null
+                    }
                 }
             }
         } catch (e: Exception) {
