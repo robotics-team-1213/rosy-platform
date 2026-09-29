@@ -171,6 +171,7 @@ class CameraController(
                     }
                     is JpegEncoder.Result.Encoded -> {
                         adaptiveQuality.encoded()
+                        frameLink.sentQuality = adaptiveQuality.lastFit
                         frameLink.sensor = SensorInfo(result.width, result.height, rotation)
                         frameLink.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
                         quality = null

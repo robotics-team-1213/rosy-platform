@@ -1,6 +1,20 @@
 package io.github.livsbittt.rosy.overhead.ui
 
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import io.github.livsbittt.rosy.overhead.health.DeviceHealth
+import io.github.livsbittt.rosy.overhead.health.HealthText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,9 +46,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.livsbittt.rosy.overhead.R
-import io.github.livsbittt.rosy.overhead.link.LinkError
 import io.github.livsbittt.rosy.overhead.link.LinkState
-import io.github.livsbittt.rosy.overhead.service.StreamError
 import io.github.livsbittt.rosy.overhead.service.CameraSessionPlan
 import io.github.livsbittt.rosy.overhead.service.StreamService
 import io.github.livsbittt.rosy.overhead.service.StreamState
@@ -82,12 +94,12 @@ fun StreamScreen(
             }
         }
 
-        StatusPanel(state, pairing, localError)
+        StatusPanel(state, pairing, localError, onOpenSettings)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            // Opens read-only while the camera runs; the settings screen says how to unlock it.
             OutlinedButton(
                 onClick = onOpenSettings,
-                enabled = !state.running,
                 modifier = Modifier.height(72.dp),
             ) {
                 Text(stringResource(R.string.button_settings))
@@ -114,7 +126,7 @@ fun StreamScreen(
 }
 
 @Composable
-private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: String?) {
+private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: String?, onOpenSettings: () -> Unit) {
     val link = state.link
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val stateText = when {
@@ -142,22 +154,154 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        state.health?.let { HealthPanel(it) }
+        val site = link.site
+        if (state.running && link.state == LinkState.STREAMING && site != null) {
+            InstallGuide(CornerGuide.from(site))
+        }
         if (!state.previewOnly) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(stringResource(R.string.stat_fps, link.sentFps))
                 Text(stringResource(R.string.stat_kbps, link.kbps))
-                Text(stringResource(R.string.stat_dropped, link.dropped))
+                Text(stringResource(R.string.stat_skipped, link.dropped))
             }
             Text(
                 stringResource(R.string.stat_config, link.config.fps, link.config.width, link.config.jpegQuality),
                 style = MaterialTheme.typography.bodySmall,
             )
+            val sentQuality = link.sentQuality
+            if (state.running && sentQuality != null && sentQuality < link.config.jpegQuality) {
+                Text(
+                    stringResource(R.string.stat_quality_auto, sentQuality, link.config.jpegQuality),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (link.dropped > 0) {
+                Text(
+                    stringResource(R.string.stat_skipped_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
-        val error = localError ?: errorText(state.error) ?: errorText(link.error)
-        if (error != null) {
-            CritMessage(stringResource(R.string.last_error, error))
+        val wifiConnected = rememberWifiConnected()
+        val guidance = state.error?.let(ProblemGuide::forStream)
+            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped, wifiConnected) }
+        when {
+            localError != null -> CritMessage(localError)
+            guidance != null -> ProblemMessage(guidance, pairing, onOpenSettings)
         }
     }
+}
+
+@Composable
+private fun HealthPanel(health: DeviceHealth) {
+    val res = LocalContext.current.resources
+    Text(HealthText.line(res, health), style = MaterialTheme.typography.bodyMedium)
+    // The text states the condition; the warn colour only reinforces it (D-82).
+    health.warnings.forEach { w ->
+        Text(HealthText.warning(res, w, health), color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Corner markers as dots: filled = seen, ring = not seen. Shape carries the meaning, not colour (D-82). */
+@Composable
+private fun InstallGuide(guide: CornerGuide) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            guide.dots.forEach { seen ->
+                val dot = Modifier.size(12.dp).clip(CircleShape)
+                Box(
+                    if (seen) {
+                        dot.background(MaterialTheme.colorScheme.onSurface)
+                    } else {
+                        dot.border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+                    },
+                )
+            }
+        }
+        Text(
+            when (guide.progress) {
+                CornerGuide.Progress.NONE -> stringResource(R.string.guide_corners_none, guide.needed)
+                CornerGuide.Progress.PARTIAL ->
+                    stringResource(R.string.guide_corners_partial, guide.seenCount, guide.needed, guide.seenIds)
+                CornerGuide.Progress.COMPLETE -> stringResource(R.string.guide_corners_complete, guide.seenCount, guide.needed)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+    Text(
+        if (guide.robots.isEmpty()) {
+            stringResource(R.string.guide_robots_none)
+        } else {
+            stringResource(R.string.guide_robots, guide.robotIds)
+        },
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/** One sentence naming the next step, an optional action, and the raw detail behind "자세히". */
+@Composable
+private fun ProblemMessage(guidance: Guidance, pairing: PairingUri?, onOpenSettings: () -> Unit) {
+    var showDetail by rememberSaveable(guidance.problem) { mutableStateOf(false) }
+    val address = pairing?.let { "${it.host}:${it.port}" } ?: ""
+    val text = when (guidance.problem) {
+        Problem.NO_WIFI -> stringResource(R.string.problem_no_wifi)
+        Problem.UNREACHABLE -> stringResource(R.string.problem_unreachable, address)
+        Problem.REFUSED -> stringResource(R.string.problem_refused, address)
+        Problem.UNKNOWN_HOST -> stringResource(R.string.problem_unknown_host, pairing?.host ?: "")
+        Problem.TLS -> stringResource(R.string.problem_tls)
+        Problem.UNAUTHORIZED -> stringResource(R.string.problem_unauthorized)
+        Problem.REPLACED -> stringResource(R.string.problem_replaced, pairing?.source ?: "")
+        Problem.PROTOCOL_MISMATCH -> stringResource(R.string.problem_protocol_mismatch)
+        Problem.INVALID_CONFIG -> stringResource(R.string.problem_invalid_config)
+        Problem.CLOSED -> stringResource(R.string.problem_closed)
+        Problem.NETWORK_OTHER -> stringResource(R.string.problem_network_other)
+        Problem.NOT_PAIRED -> stringResource(R.string.problem_not_paired)
+        Problem.CAMERA -> stringResource(R.string.problem_camera)
+        Problem.FOREGROUND_DENIED -> stringResource(R.string.problem_foreground)
+    }
+    val retrying = if (guidance.retrying) " " + stringResource(R.string.problem_retrying) else ""
+    CritMessage(text + retrying)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (guidance.step == NextStep.OPEN_SETTINGS) {
+            OutlinedButton(onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
+        }
+        if (guidance.detail != null) {
+            TextButton(onClick = { showDetail = !showDetail }) {
+                Text(stringResource(if (showDetail) R.string.button_details_hide else R.string.button_details))
+            }
+        }
+    }
+    if (showDetail && guidance.detail != null) {
+        Text(guidance.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** True while the default network is Wi-Fi or Ethernet; follows changes. */
+@Composable
+private fun rememberWifiConnected(): Boolean {
+    val context = LocalContext.current
+    val connectivity = remember(context) { context.getSystemService(ConnectivityManager::class.java) }
+    fun onLan(): Boolean {
+        val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
+    var connected by remember { mutableStateOf(onLan()) }
+    DisposableEffect(connectivity) {
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                connected = onLan()
+            }
+
+            override fun onLost(network: Network) {
+                connected = onLan()
+            }
+        }
+        connectivity.registerDefaultNetworkCallback(callback)
+        onDispose { connectivity.unregisterNetworkCallback(callback) }
+    }
+    return connected
 }
 
 /** Binds a PreviewView to the running session, and detaches it while the activity is stopped. */
@@ -186,23 +330,4 @@ private fun CameraPreview(modifier: Modifier) {
         }
     }
     AndroidView(factory = { previewView }, modifier = modifier)
-}
-
-@Composable
-private fun errorText(error: StreamError?): String? = when (error) {
-    null -> null
-    StreamError.NotPaired -> stringResource(R.string.error_not_paired)
-    is StreamError.Camera -> stringResource(R.string.error_camera, error.message)
-    is StreamError.ForegroundDenied -> stringResource(R.string.error_foreground, error.message)
-}
-
-@Composable
-private fun errorText(error: LinkError?): String? = when (error) {
-    null -> null
-    LinkError.Unauthorized -> stringResource(R.string.error_unauthorized)
-    LinkError.ProtocolMismatch -> stringResource(R.string.error_protocol_mismatch)
-    LinkError.Replaced -> stringResource(R.string.error_replaced)
-    is LinkError.InvalidConfig -> stringResource(R.string.error_invalid_config, error.field)
-    is LinkError.Network -> stringResource(R.string.error_network, error.detail)
-    is LinkError.Closed -> stringResource(R.string.error_closed, error.code, error.reason)
 }

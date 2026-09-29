@@ -47,6 +47,15 @@ class NetworkFailureTest {
     }
 
     @Test
+    fun okHttpWrappedRefusalIsRefusedNotUnreachable() {
+        val wrapped = ConnectException("Failed to connect to /10.0.0.2:8095").apply {
+            initCause(ConnectException("Connection refused: connect"))
+        }
+        assertEquals(NetworkFailure.REFUSED, NetworkFailure.classify(wrapped))
+        assertEquals(NetworkFailure.UNREACHABLE, NetworkFailure.classify(ConnectException("Failed to connect to /10.0.0.2:8095")))
+    }
+
+    @Test
     fun unrecognisedIsOther() {
         assertEquals(NetworkFailure.OTHER, NetworkFailure.classify(IOException("canceled")))
         assertEquals(NetworkFailure.OTHER, NetworkFailure.classify(IOException()))

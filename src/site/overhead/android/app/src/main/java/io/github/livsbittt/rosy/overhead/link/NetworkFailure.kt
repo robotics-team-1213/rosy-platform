@@ -24,19 +24,18 @@ enum class NetworkFailure {
     ;
 
     companion object {
-        /** Walks the cause chain; the first recognised exception wins. */
+        /**
+         * Walks the cause chain; the first specific signal wins. A bare [ConnectException]
+         * counts as unreachable only when nothing in the chain is more specific, because
+         * OkHttp wraps the socket's "Connection refused" in its own ConnectException.
+         */
         fun classify(error: Throwable): NetworkFailure {
-            var t: Throwable? = error
-            var depth = 0
-            while (t != null && depth < MAX_DEPTH) {
-                fromOne(t)?.let { return it }
-                t = t.cause
-                depth++
-            }
-            return OTHER
+            val chain = generateSequence(error) { it.cause }.take(MAX_DEPTH).toList()
+            chain.firstNotNullOfOrNull(::specific)?.let { return it }
+            return if (chain.any { it is ConnectException }) UNREACHABLE else OTHER
         }
 
-        private fun fromOne(t: Throwable): NetworkFailure? {
+        private fun specific(t: Throwable): NetworkFailure? {
             val message = t.message.orEmpty()
             return when {
                 t is SSLException -> TLS
@@ -46,7 +45,6 @@ enum class NetworkFailure {
                 message.contains("ECONNREFUSED") || message.contains("Connection refused", ignoreCase = true) -> REFUSED
                 message.contains("ENETUNREACH") || message.contains("EHOSTUNREACH") -> UNREACHABLE
                 message.contains("ETIMEDOUT") -> UNREACHABLE
-                t is ConnectException -> UNREACHABLE
                 else -> null
             }
         }
