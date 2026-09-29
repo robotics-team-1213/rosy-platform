@@ -1,6 +1,6 @@
-from types import SimpleNamespace
 import asyncio
 import time
+from types import SimpleNamespace
 
 import cv2
 import httpx
@@ -9,6 +9,10 @@ import numpy as np
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from overhead.ingest import IngestServer, LatestFrame
 from overhead.protocol import FrameHeader
+
+
+def _get(server, path, authorization):
+    return asyncio.run(server._preview_response(path, authorization))
 
 
 def _server_with_frame(captured_at, *, preview_max_age_s=1.0):
@@ -28,9 +32,8 @@ def test_preview_requires_scoped_lease_and_returns_latest_jpeg_without_caching()
     server = _server_with_frame(time.time())
     token = server.preview_signer.issue(principal_id="viewer", source_id="ceiling-north")
 
-    denied = server._preview_response("/api/vision/sources/ceiling-north/frame", None)
-    allowed = server._preview_response(
-        "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+    denied = _get(server, "/api/vision/sources/ceiling-north/frame", None)
+    allowed = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
 
     assert denied.status_code == 401
     assert allowed.status_code == 200
@@ -38,8 +41,7 @@ def test_preview_requires_scoped_lease_and_returns_latest_jpeg_without_caching()
     assert allowed.headers["Content-Type"] == "image/jpeg"
     assert allowed.headers["Cache-Control"] == "no-store"
     assert allowed.headers["X-Frame-Seq"] == "42"
-    assert server._preview_response(
-        "/api/vision/sources/ceiling-north/frame", f"Bearer {token}").status_code == 429
+    assert _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}").status_code == 429
 
 
 def test_preview_rejects_wrong_source_and_stale_latest_frame():
@@ -48,10 +50,8 @@ def test_preview_rejects_wrong_source_and_stale_latest_frame():
     server = _server_with_frame(time.time() - 2.0)
     token = server.preview_signer.issue(principal_id="viewer", source_id="ceiling-north")
 
-    stale = server._preview_response(
-        "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
-    wrong = server._preview_response(
-        "/api/vision/sources/other/frame", f"Bearer {token}")
+    stale = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+    wrong = _get(server, "/api/vision/sources/other/frame", f"Bearer {token}")
 
     assert stale.status_code == 404
     assert stale.headers["X-Frame-State"] == "stale"
@@ -100,8 +100,7 @@ def test_rectified_preview_warps_only_the_served_copy_of_latest_frame():
     token = server.preview_signer.issue(principal_id="viewer", source_id="ceiling-north",
                                         rectification=profile)
 
-    response = server._preview_response(
-        "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+    response = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
     corrected = cv2.imdecode(np.frombuffer(response.body, dtype=np.uint8), cv2.IMREAD_COLOR)
 
     assert response.status_code == 200

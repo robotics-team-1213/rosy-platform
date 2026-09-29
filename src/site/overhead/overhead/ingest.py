@@ -62,6 +62,9 @@ _STATS_WINDOW_S = 1.0
 _FRAME_INTERVAL_S = 0.2
 # Field proposals (D-354) are operator-requested and CPU-bound: own, slower bucket.
 _FIELD_PROPOSAL_INTERVAL_S = 1.0
+# Field detection is ~30 ms of CPU per frame: at most one run per source per this
+# interval, whoever asks; readers in between get the last result.
+_FIELD_DETECT_INTERVAL_S = 1.0
 
 
 @dataclass
@@ -118,6 +121,15 @@ class LatestFrame:
 
 
 @dataclass
+class _FieldRun:
+    """The last field detection for one source; ``detection`` is None while it runs or after it failed."""
+
+    frame: LatestFrame
+    started: float
+    detection: FieldDetection | None = None
+
+
+@dataclass
 class _Source:
     name: str
     connection: ServerConnection
@@ -149,8 +161,9 @@ class IngestServer:
             raise ValueError("preview_max_age_s must be positive")
         self.preview_max_age_s = float(preview_max_age_s)
         self._preview_last_sent: dict[tuple[str, ...], float] = {}
-        # One cached detection per source, keyed by frame seq, so repeat reads do not re-run it.
-        self._field_cache: dict[str, tuple[int, FieldDetection]] = {}
+        # Last detection per source, keyed by frame identity (a reconnect restarts seq);
+        # dropped with the source.
+        self._field_cache: dict[str, _FieldRun] = {}
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -192,13 +205,13 @@ class IngestServer:
 
     # -- handshake --------------------------------------------------------
 
-    def _process_request(self, connection: ServerConnection, request):
+    async def _process_request(self, connection: ServerConnection, request):
         if request.path == "/healthz" and request.method == "GET":
             return connection.respond(200, '{"status":"ok"}\n')
         if request.path.startswith("/api/vision/sources/"):
             if request.method != "GET":
                 return _http_response(404, b"not found\n")
-            return self._preview_response(request.path, request.headers.get("Authorization"))
+            return await self._preview_response(request.path, request.headers.get("Authorization"))
         if request.path != protocol.WS_PATH:
             return connection.respond(404, "not found\n")
         auth = request.headers.get("Authorization")
@@ -209,7 +222,7 @@ class IngestServer:
             return connection.respond(401, "unauthorized\n")
         return None
 
-    def _preview_response(self, path: str, authorization: str | None) -> Response:
+    async def _preview_response(self, path: str, authorization: str | None) -> Response:
         """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
         prefix = "/api/vision/sources/"
         source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
@@ -233,7 +246,7 @@ class IngestServer:
         if age > self.preview_max_age_s:
             return _http_response(404, b"frame stale\n", extra={"X-Frame-State": "stale"})
         if view == "field-proposal":
-            return self._field_proposal_response(source, frame, age)
+            return await self._field_proposal_response(source, frame)
         jpeg = frame.jpeg
         rectification_active = False
         if "rectification" in lease:
@@ -269,18 +282,28 @@ class IngestServer:
         self._preview_last_sent[key] = now_mono
         return None
 
-    def _field_proposal_response(self, source: str, frame: LatestFrame, age: float) -> Response:
-        """D-354: a field-corner proposal for operator review. Never applied to sightings."""
-        cached = self._field_cache.get(source)
-        if cached is not None and cached[0] == frame.header.seq:
-            detection = cached[1]
-        else:
+    async def _field_proposal_response(self, source: str, frame: LatestFrame) -> Response:
+        """D-354: a field-corner proposal for operator review. Never applied to sightings.
+
+        Detection runs off the event loop, at most once per source per
+        ``_FIELD_DETECT_INTERVAL_S`` across all lease subjects.
+        """
+        run = self._field_cache.get(source)
+        now_mono = time.monotonic()
+        if run is None or (run.frame is not frame
+                           and now_mono - run.started >= _FIELD_DETECT_INTERVAL_S):
+            run = _FieldRun(frame=frame, started=now_mono)
+            self._field_cache[source] = run
             try:
-                detection = detect_field_jpeg(frame.jpeg)
+                run.detection = await asyncio.to_thread(detect_field_jpeg, frame.jpeg)
             except (ValueError, cv2.error):
                 return _http_response(422, b"field detection failed\n",
                                       extra={"X-Frame-State": "detection-error"})
-            self._field_cache[source] = (frame.header.seq, detection)
+        detection = run.detection
+        if detection is None:  # still running for another reader, or failed on this frame
+            return _http_response(429, b"field detection busy\n", extra={"Retry-After": "1"})
+        frame = run.frame
+        age = max(0.0, time.time() - frame.captured_at)
         width, height = detection.image_size
         body = {
             "source": source,
@@ -327,6 +350,7 @@ class IngestServer:
         replaced = self._sources.get(source_name)
         src = _Source(name=source_name, connection=connection)
         self._sources[source_name] = src
+        self._field_cache.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.
@@ -367,6 +391,7 @@ class IngestServer:
         current = self._sources.get(source_name)
         if current is not None and current.connection is connection:
             del self._sources[source_name]
+            self._field_cache.pop(source_name, None)
 
     async def _status_loop(self, src: _Source) -> None:
         while True:
