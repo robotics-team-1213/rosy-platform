@@ -4,6 +4,37 @@ const DEFAULT_RECTIFICATION = Object.freeze({
   corners: [[0, 0], [1, 0], [1, 1], [0, 1]], output_aspect: 0,
 });
 
+// 프레임 나이가 이보다 크면 받았어도 "지연"으로 표시한다(폴링 1.5 s 의 두 배).
+export const FRAME_LATE_MS = 3000;
+
+// 프레임 응답 → 배지. 배지는 화면에 보이는 영상의 실제 상태만 말한다(2026-09-30 태블릿 점검:
+// 영상이 보이는데 "인증 대기"로 남던 결함). DOM 없는 순수 함수라 node 로 시험한다.
+// { ok, status, frameState, ageMs, rectified } → { state, label, kind, detail }
+export function frameBadge({ ok, status, frameState, ageMs, rectified }) {
+  if (ok) {
+    const age = Number(ageMs);
+    if (Number.isFinite(age) && age > FRAME_LATE_MS) {
+      return { state: "stale", label: "영상 지연", kind: "warn",
+        detail: `최신 프레임이 ${Math.round(age / 100) / 10} s 전 것입니다.` };
+    }
+    return { state: "live", label: rectified ? "화면 보정 미리보기" : "원본 최신 프레임",
+      kind: "good", detail: "" };
+  }
+  if (status === 401 || status === 403) {
+    return { state: "unauthorized", label: "영상 권한 없음", kind: "warn",
+      detail: "영상 사용 허가가 만료됐거나 거부됐습니다. 다시 요청합니다." };
+  }
+  if (frameState === "stale") {
+    return { state: "stale", label: "영상 정지", kind: "warn",
+      detail: "최신 프레임이 없어 영상 표시를 지웠습니다." };
+  }
+  if (status === 422) {
+    return { state: "invalid", label: "보정값 확인", kind: "warn",
+      detail: "보정값을 확인하세요. 모서리는 교차하지 않는 사각형이어야 합니다." };
+  }
+  return { state: "no-frame", label: "영상 수신 대기", kind: "neutral", detail: `Vision 응답 ${status}` };
+}
+
 export function createVisionView({ el, call, auth }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
@@ -150,7 +181,10 @@ export function createVisionView({ el, call, auth }) {
   }
 
   async function refreshSources() {
-    if (auth.locked || !auth.token || busy) {
+    // 다른 요청이 진행 중이면 그대로 둔다. 예전에는 여기서 "인증 대기"를 그려
+    // 보이던 영상을 지우고 인증과 무관한 배지를 남겼다.
+    if (busy) return;
+    if (auth.locked || !auth.token) {
       showState("인증 대기", "neutral", NO_SOURCE);
       return;
     }
@@ -209,12 +243,15 @@ export function createVisionView({ el, call, auth }) {
         cache: "no-store",
       });
       if (source !== select.value) return;
+      const rectified = response.headers.get("X-Frame-Rectified") === "true";
+      const badge = frameBadge({
+        ok: response.ok, status: response.status, rectified,
+        frameState: response.headers.get("X-Frame-State"),
+        ageMs: response.headers.get("X-Frame-Age-Ms"),
+      });
       if (!response.ok) {
-        const stale = response.headers.get("X-Frame-State") === "stale";
-        const invalid = response.status === 422;
-        showState(stale ? "영상 정지" : "영상 수신 대기", stale || invalid ? "warn" : "neutral",
-          invalid ? "보정값을 확인하세요. 모서리는 교차하지 않는 사각형이어야 합니다."
-            : stale ? "최신 프레임이 없어 영상 표시를 지웠습니다." : `Vision 응답 ${response.status}`);
+        if (badge.state === "unauthorized") lease = null;
+        showState(badge.label, badge.kind, badge.detail);
         return;
       }
       const blob = await response.blob();
@@ -222,6 +259,10 @@ export function createVisionView({ el, call, auth }) {
       const nextUrl = URL.createObjectURL(blob);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = nextUrl;
+      // 배지를 영상과 같은 순간에 바꾼다 — decode 를 기다리는 동안 옛 배지가 남지 않게.
+      status.textContent = badge.label;
+      status.setAttribute("status", badge.kind);
+      message.textContent = badge.detail;
       image.src = nextUrl;
       image.hidden = false;
       stage.hidden = false;
@@ -230,10 +271,6 @@ export function createVisionView({ el, call, auth }) {
       frame.dataset.state = "online";
       frame.dataset.editing = String(viewMode === "raw");
       cornerOverlay.toggleAttribute("hidden", viewMode !== "raw");
-      const rectified = response.headers.get("X-Frame-Rectified") === "true";
-      status.textContent = rectified ? "화면 보정 미리보기" : "원본 최신 프레임";
-      status.setAttribute("status", "good");
-      message.textContent = "";
       el("vision-meta").textContent = `${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}`;
       const seq = response.headers.get("X-Frame-Seq");
       for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
