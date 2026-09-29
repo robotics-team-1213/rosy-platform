@@ -155,7 +155,7 @@
 | D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
 | D-335 | 브랜드 홈 링크를 ui-brand 공용 동작으로 넣는다 |
-| D-336 | Fleet? OMX ?? owner ?? ? ??? ?? ???? local IPC? ???? |
+| D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 
 ## 계획·결과 문서
 
@@ -225,8 +225,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(adr): D-336 표행 인코딩 복구
 - 2026-09-29 · uncommitted · docs(adr): 브리지 분리 ADR을 D-338로 재부여
 - 2026-09-29 · uncommitted · docs(adr): D-337 브리지 콜백 판정·적응 분리 기록
 - 2026-09-29 · uncommitted · docs(adr): D-337 로봇 신호 소스는 실측된 빛만 읽는다
 - 2026-09-29 · uncommitted · docs(plans): 무신호 교차로 정지 후 진입 설계 + API Ref v1.54
-- 2026-09-29 · uncommitted · docs(plans): /dashboard 브리지 퇴역 기준 명시

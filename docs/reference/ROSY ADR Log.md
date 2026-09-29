@@ -337,6 +337,6 @@
 | D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 | Accepted (계약 경계·구현 순서만; 신규 wire/API·장치 실행·물리 수용 HOLD) |
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 | Accepted (도구·진행 의미만; 새 provider loop/API·자동 실행·물리 수용 HOLD) |
 | D-335 | 브랜드 홈 링크를 ui-brand 공용 동작으로 넣는다 | Accepted (ui.js href 동작 확장 + components.css가 hover·포커스 소유; 새 토큰·부품·문법 아님, /dashboard 목적지 회차는 별도) |
-| D-336 | Fleet? OMX ?? owner ?? ? ??? ?? ???? local IPC? ???? | Accepted (co-located SOURCE/LOCAL ???; ?? API?field ????? ?? HOLD) |
+| D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 | Accepted (SOURCE/LOCAL 연결 경계만; 배치·원격 API·물리 수용 HOLD) |
 | D-337 | 로봇의 제2 신호 소스는 관측 서비스의 실측(빛)뿐이다 — ESP32 접점 주장(`/status`)과 신호등 명령 경로는 로봇이 소비하지 않고, 소스 불일치·소등은 진입을 허가하지 않는다 | Accepted (경계·융합 규칙 결정만; 폴러 구현·ROS-SIM·DEVICE/FIELD 수용 HOLD — 설계 `2026-09-29-robot-signal-source-integration-design.md`) |
 | D-338 | 브리지 콜백의 판정은 ROS-free 시블리가 소유하고 ros_bridge는 적응만 남는다 | Accepted (2026-09-24 구현·2026-09-29 기록; 소스 구조 원칙만, 실기 콜백 증거 별도) |
