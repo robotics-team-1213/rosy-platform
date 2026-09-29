@@ -9,6 +9,7 @@
 // The robot polls; this device never initiates a connection.
 
 #include <Arduino.h>
+#include <ESPmDNS.h>
 #include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -183,6 +184,12 @@ void setup() {
   if (ssid.length() > 0) {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), secret.c_str());
+  }
+
+  // D-354: mDNS 광고 — 클라이언트가 IP 없이 rosy-dock-<id>.local 로 찾는다.
+  // 3줄이 전부다. dock_id 가 인스턴스명이 된다 (NVS 에서 이미 읽었다).
+  if (MDNS.begin(dockId.c_str())) {
+    MDNS.addService("rosy-dock", "tcp", 80);
   }
 
   server.on("/status", HTTP_GET, handleStatus);
