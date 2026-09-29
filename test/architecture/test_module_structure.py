@@ -44,14 +44,13 @@ KNOWN_WITHOUT_OWN_TESTS = {
 #: P3/P4 exceptions as (source package, target package).
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
-    ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
 KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
-    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
 
