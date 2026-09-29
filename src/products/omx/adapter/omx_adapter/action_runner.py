@@ -11,6 +11,7 @@ from typing import Callable, Mapping, Protocol
 from core_common.protocol.schemas import FleetActionGrant
 
 from .action_store import ActionStore, InvalidActionTransition
+from .local_stop import LocalStopBlocked
 
 
 def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
@@ -49,6 +50,12 @@ class LocalActionPort(Protocol):
     def cancel(self, action: Mapping[str, object]) -> bool | None: ...
 
 
+class StopFence(Protocol):
+    def run_if_open(self, *, authority_epoch: int, dispatch_generation: int,
+                    fleet_fence_current: Callable[[], bool],
+                    operation: Callable[[], DriverSubmission]) -> DriverSubmission: ...
+
+
 class ActionRunner:
     """Journal before driver I/O; never retries an existing Fleet Action."""
 
@@ -58,6 +65,7 @@ class ActionRunner:
                  allowed_peer_uids: set[int],
                  current_fence: Callable[[int, int], bool],
                  capability_current: Callable[[FleetActionGrant], bool],
+                 submission_fence: StopFence | None = None,
                  enabled: bool = False,
                  now: Callable[[], datetime] | None = None) -> None:
         self.store = store
@@ -68,8 +76,11 @@ class ActionRunner:
         self.allowed_peer_uids = frozenset(allowed_peer_uids)
         self.current_fence = current_fence
         self.capability_current = capability_current
+        self.submission_fence = submission_fence
         if not isinstance(enabled, bool):
             raise ValueError("enabled must be boolean")
+        if enabled and submission_fence is None:
+            raise ValueError("enabled runner requires a local stop/generation fence")
         self.enabled = enabled
         self.now = now or (lambda: datetime.now(timezone.utc))
 
@@ -140,9 +151,23 @@ class ActionRunner:
                 raise
             return self._receipt(current, created=False)
         try:
-            driver_result = self.driver.submit(grant)
+            driver_result = self.submission_fence.run_if_open(
+                authority_epoch=grant.authority_epoch,
+                dispatch_generation=grant.dispatch_generation,
+                fleet_fence_current=lambda: self.current_fence(
+                    grant.authority_epoch, grant.dispatch_generation,
+                ),
+                operation=lambda: self.driver.submit(grant),
+            )
             if not isinstance(driver_result, DriverSubmission):
                 raise TypeError("local driver returned an invalid submission receipt")
+        except LocalStopBlocked:
+            held = self.store.hold_action(
+                grant.action_id, submitting["attempt_id"],
+                reason="STOP_GENERATION_FENCED",
+            )
+            return self._receipt(held, created=created["created"],
+                                 reason="STOP_GENERATION_FENCED")
         except Exception:
             unknown = self.store.record_submission(
                 grant.action_id, submitting["attempt_id"],
@@ -208,3 +233,20 @@ class ActionRunner:
         if action is None or action["principal_id"] != principal_id:
             raise KeyError(action_id)
         return action
+
+    def cancel_unresolved(self, *, peer_uid: int) -> list[dict[str, object]]:
+        """Best-effort cancel fanout after the persistent local stop latch is set."""
+        principal_id = self._principal(peer_uid)
+        receipts: list[dict[str, object]] = []
+        for action in self.store.unresolved_actions(workcell_id=self.workcell_id):
+            if action["principal_id"] != principal_id:
+                continue
+            if action["state"] not in {"ACCEPTED", "RUNNING"}:
+                continue
+            try:
+                receipts.append(self.cancel(
+                    action["action_id"], action["attempt_id"], peer_uid=peer_uid,
+                ))
+            except (KeyError, PermissionError, InvalidActionTransition):
+                continue
+        return receipts

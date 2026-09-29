@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.51
+**Version:** v1.52
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1197,23 +1197,27 @@ reconciled; rearm is refused while any such action claim remains.
 
 | Method | Path | Authority | Result |
 |---|---|---|---|
-| GET | `/api/fleet/dispatch-control` | site viewer+ | `{generation, dispatch_enabled, reason, queued_tasks, unresolved_actions, rearm_available}` |
-| POST | `/api/fleet/dispatch/rearm` | site operator | explicitly opens dispatch at a new generation; stale generation or unresolved action returns 409 |
+| GET | `/api/fleet/dispatch-control` | site viewer+ | `{authority_epoch, generation, dispatch_enabled, reason, queued_tasks, unresolved_actions, rearm_available}` |
+| POST | `/api/fleet/dispatch/rearm` | site operator | explicitly opens dispatch at a new generation and attempts configured local OMX re-arm; stale generation, unresolved action, or any local re-arm failure returns 409 |
 
 The rearm request is `{ "expected_generation": <integer >= 0> }`. The caller
 must read the current generation and explicitly submit it. The response is the
-new control state. The generation advances on startup hold, site stop, and
-successful rearm; an old request cannot reopen a newer stop. Operator rearm is
-audited using the normal mutation audit rule. Re-arm opens the existing
-navigation dispatcher only; it does not enable Mission, policy, or OMX
-dispatch.
+new control state. The authority epoch advances at Fleet process startup; the
+separate generation advances on startup hold, site stop, and successful rearm.
+An old request cannot reopen a newer stop. Operator rearm is audited using the
+normal mutation audit rule. If local OMX instances are configured, Fleet
+attempts `RearmLocal` on each with the new epoch/generation and exposes their
+receipts. Any missing/failed receipt re-trips Fleet dispatch and fans out a
+local stop rollback. Empty OMX inventory remains `NOT_CONFIGURED`; this source
+change does not enable Mission, policy, or the disabled-by-default OMX Action
+runner.
 
-Fleet rechecks the generation immediately before its CORE call. The CORE/device
-consumer does not yet persist or fence the Fleet stop generation, so this local
-check alone does not close a network race and is not a device stop guarantee.
-Mission dispatch remains disabled until a versioned producer/consumer contract
-delivers and enforces the generation at the final device owner. The Fleet stop
-request and physical E-stop/readback remain separate.
+Fleet rechecks the generation immediately before its CORE call. For configured
+same-host OMX instances, it also sends `StopLocal` over the per-instance UDS and
+includes `omx_local_stop` (`LOCAL_LATCHED`, `UNKNOWN`, or `NOT_CONFIGURED`) in
+the stop response. These software latch receipts are not physical E-stop or
+driver standstill proof. The existing CORE/mobile stop fanout remains
+independent, and physical E-stop/readback remain separate.
 
 The dedicated `POST /api/fleet/estop` requires an authenticated operator but
 still sends the stop fanout if the audit store, dispatch-latch write, or queued
@@ -1251,7 +1255,8 @@ the separate host-placement and device validation decisions in D-281/D-273.
 
 Required operations are `SubmitAction(FleetActionGrant)`,
 `GetAction(DeviceActionLookup)`, `CancelAction(DeviceActionCancelRequest)`,
-`StopLocal(LocalStopRequest)`, and `GetStopState(LocalStopQuery)`. Every request
+`StopLocal(LocalStopRequest)`, `GetStopState(LocalStopQuery)`, and
+`RearmLocal(LocalStopRearmRequest)`. Every request
 and response is bound to the workcell and runtime instance. The submit grant
 carries distinct `mission_id`, `step_id`, `action_id`, and `attempt_id`, a
 SHA-256 request digest, `PICK_PLACE`, source and destination
@@ -1270,11 +1275,14 @@ object placement. Timeout or unknown acknowledgement is `UNKNOWN`; it never
 authorizes an automatic re-submit. Read and cancel are fenced by the Fleet-
 issued action/attempt pair.
 
-Stop snapshots expose only `REQUESTED`, `LOCAL_LATCHED`, or `UNKNOWN`, with
+Stop snapshots expose `OPEN`, `REQUESTED`, `LOCAL_LATCHED`, or `UNKNOWN`, with
 request source derived by the trusted server. Caller-supplied stop principal is
-forbidden. `LOCAL_LATCHED` is a middleware software fact; it is not a driver
-standstill readback, safety-rated E-stop, or physical stop confirmation.
+forbidden. `OPEN` means the software submission fence has been rearmed for the
+reported generation. `LOCAL_LATCHED` is a middleware software fact; it is not a
+driver standstill readback, safety-rated E-stop, or physical stop confirmation.
 Physical stop and goal evidence remain separately sourced and correlated.
+`RearmLocal(LocalStopRearmRequest)` is accepted only from the configured Fleet peer UID. Site Fleet may issue it only after an authenticated named-operator rearm request advances the shared dispatch generation; OMX independently requires the exact current Fleet authority/generation fence, zero unresolved local Actions, and a generation newer than its persisted latch. A Fleet rearm that cannot confirm every configured local instance rolls Fleet dispatch closed again and sends a local stop rollback. A process restart reopens neither Fleet nor OMX dispatch automatically. These checks coordinate software submission; they do not certify a physical E-stop reset or safe-to-move state.
+
 The source now provides a newline-delimited JSON UDS handler and local Action runner. Each connection carries one request frame, capped at 64 KiB, and peer UID is read from Linux `SO_PEERCRED`; the parent socket directory must already be provisioned. `request_digest` is lowercase SHA-256 over UTF-8 canonical JSON of the complete `FleetActionGrant` with `request_digest` omitted (sorted keys, compact separators, Pydantic JSON-mode ISO-8601 timestamps). The runner is disabled by default, journals before driver submission, and never replays an Action already in `SUBMITTING`, `UNKNOWN`, or later. These source modules do not register a service entrypoint, connect a selected ROS/gripper driver, or provide physical stop/goal proof; those remain gated by ROS-SIM, DEVICE, and FIELD.
 
 ## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)
@@ -1325,6 +1333,7 @@ ROS goal, software stop, or physical E-stop receipt.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.52 | 2026-09-29 | Additive (D-336): define the local software-stop OPEN projection and explicit newer-generation rearm; a persisted stop latch, stale Fleet fence, or process restart blocks the final driver submission boundary. This remains separate from driver standstill and physical E-stop proof. |
 | v1.51 | 2026-09-29 | Clarify (D-336): define one-frame newline JSON UDS encoding, SO_PEERCRED UID derivation, 64 KiB bound, and FleetActionGrant canonical digest; source adds a disabled-by-default local Action runner with durable attempt IDs and no unknown replay. No service entrypoint or physical capability is enabled. |
 | v1.50 | 2026-09-29 | Additive (D-333/D-334): separate Site Fleet candidate storage, observation/capability resolution, Mission draft readback, and named-operator generation-checked admission routes. Proposal creation does not invoke ER 2; admission only acquires Fleet claims and remains disconnected from Device Action/ROS. |
 | v1.46 | 2026-09-29 | Additive (D-330): Fleet dispatch-control readback and explicit generation-checked operator rearm; startup/stop hold, unresolved-action rearm refusal, and device-side generation fencing remains unimplemented. |

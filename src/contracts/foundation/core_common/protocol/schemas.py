@@ -124,6 +124,7 @@ class DeviceActionState(str, enum.Enum):
 class LocalStopState(str, enum.Enum):
     """Software latch facts only. No value means physical standstill is proven."""
 
+    OPEN = "OPEN"
     REQUESTED = "REQUESTED"
     LOCAL_LATCHED = "LOCAL_LATCHED"
     UNKNOWN = "UNKNOWN"
@@ -333,6 +334,31 @@ class LocalStopQuery(BaseModel):
 
     workcell_id: str = Field(min_length=1, max_length=96)
     instance_id: str = Field(min_length=1, max_length=96)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _query_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop query identity must be a trimmed identifier")
+        return value
+
+
+class LocalStopRearmRequest(BaseModel):
+    """Fleet-only signal to reopen local dispatch after operator reconciliation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _rearm_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop rearm identity must be a trimmed identifier")
+        return value
 
 
 

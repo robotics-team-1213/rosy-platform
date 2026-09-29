@@ -3372,3 +3372,9 @@
 - 변경: 계획의 ADR 후보 두 건을 조사하고 기록으로 종결했다. A-1(표정 어휘): `set_emotion` GIF 경로의 face 밖 호출자가 0곳이라 정식화할 상태→표정 계약이 없고, 카드 어휘는 D-221이 이미 계약한다 — 신규 ADR 없음. 만료 복귀 GIF가 상태와 무관하다는 관찰 1건은 BENCH 트리거로 남겼다. A-2(온기 문구): 세 웹 표면 빈 상태·로딩·오류 50행 스캔에서 문법이 이미 닫혀 있고 D-280.4/D-277/D-278/D-254가 경계를 쥐고 있어 닫을 간극이 없다 — 신규 ADR 없음.
 - 증거: 호출자 스캔(`set_emotion` face 외 0건), 문구 스캔 50행, D-221 본문 대조. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P7 절.
 - gate 변화: 없음. D 번호를 소모하지 않았다(다음 빈 번호 D-337·D-338 유지).
+
+## 2026-09-29 · uncommitted · feat(omx/fleet): fence local Device Actions with stop generations
+
+- 변경: Added typed `RearmLocal`, durable OMX stop latch, authority epoch and generation checks, local stop fanout, and final driver-submit serialization. Re-arm requires an authenticated named operator at Site Fleet, the current Fleet fence, zero unresolved local Actions, and instance readback; failure restores the Fleet latch. The outer UDS dispatcher now routes re-arm and rejects foreign workcell/instance identities; Fleet snapshot generation values are type-checked. Updated API Reference v1.52, D-336 implementation evidence, and the ER2 execution plan.
+- 증거: Focused suite 80 passed; OMX 85 passed/3 skipped; API web 70 passed/13 skipped; contract/harness 78 passed. Fleet full suite 658 passed/5 skipped; one existing WebSocket integration test timed out waiting for `uvicorn.Server.started`, while the updated re-arm response test passed. Its isolated retry stalled and was interrupted. Harness lint: 0 errors/17 freshness warnings. `git diff --check` passed.
+- gate 변화: None. The Fleet OMX inventory remains empty by default; device UID/socket wiring, ROS/gripper selection, physical E-stop/readback, ROS-SIM, DEVICE, and FIELD remain unproven and disabled.

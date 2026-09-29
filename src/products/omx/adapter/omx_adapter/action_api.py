@@ -8,11 +8,19 @@ import socket
 import struct
 import threading
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
-from core_common.protocol.schemas import DeviceActionCancelRequest, FleetActionGrant
+from core_common.protocol.schemas import (
+    DeviceActionCancelRequest,
+    FleetActionGrant,
+    LocalStopQuery,
+    LocalStopRearmRequest,
+    LocalStopRequest,
+    StopRequestSource,
+)
 
 from .action_runner import ActionRunner, action_grant_digest
+from .local_stop import LocalStopBlocked, LocalStopController
 
 
 class ActionApi:
@@ -72,7 +80,7 @@ class ActionApi:
                     cancel.action_id, cancel.attempt_id, peer_uid=peer_uid,
                 )
                 return {"version": 1, "status": 200, "receipt": receipt}
-            if operation in {"StopLocal", "GetStopState"}:
+            if operation in {"StopLocal", "GetStopState", "RearmLocal"}:
                 if self.stop_api is None:
                     return self._error("STOP_API_NOT_CONFIGURED",
                                        "local stop adapter is unavailable", status=503)
@@ -119,6 +127,114 @@ class ActionApi:
                     response = self._error("INVALID_JSON", "request frame is not valid JSON",
                                            status=400)
         connection.sendall(self._encode(response) + b"\n")
+
+
+class LocalStopApi:
+    """Stop/read API whose source is derived from an allowlisted peer UID."""
+
+    def __init__(self, controller: LocalStopController, *,
+                 source_by_peer_uid: Mapping[int, StopRequestSource],
+                 cancel_active: Callable[[int], object] | None = None,
+                 fleet_fence_current: Callable[[int, int], bool] | None = None) -> None:
+        self.controller = controller
+        self.source_by_peer_uid = dict(source_by_peer_uid)
+        self.cancel_active = cancel_active
+        self.fleet_fence_current = fleet_fence_current or (lambda _epoch, _generation: False)
+
+    @staticmethod
+    def _response(status: int, *, snapshot: Mapping[str, Any] | None = None,
+                  cancellations: object = None,
+                  error: Mapping[str, str] | None = None) -> dict[str, Any]:
+        response: dict[str, Any] = {"version": 1, "status": status}
+        if snapshot is not None:
+            response["snapshot"] = dict(snapshot)
+        if cancellations is not None:
+            response["cancellations"] = cancellations
+        if error is not None:
+            response["error"] = dict(error)
+        return response
+
+    def dispatch(self, request: Mapping[str, Any], *, peer_uid: int) -> dict[str, Any]:
+        source = self.source_by_peer_uid.get(peer_uid)
+        if source is None:
+            return self._response(403, error={
+                "code": "PEER_NOT_ALLOWED", "message": "peer UID cannot use stop API",
+            })
+        try:
+            operation = request.get("operation")
+            if operation == "StopLocal":
+                expected = {"version", "operation", "workcell_id", "instance_id",
+                            "authority_epoch", "dispatch_generation", "requested_at", "reason"}
+                if set(request) != expected:
+                    raise ValueError("StopLocal contains unsupported fields")
+                stop_request = LocalStopRequest.model_validate({
+                    key: request[key] for key in expected - {"version", "operation"}
+                })
+                cancellations = []
+                callback = None
+                if self.cancel_active is not None:
+                    def cancel_active() -> None:
+                        cancellations.extend(self.cancel_active(peer_uid) or [])
+
+                    callback = cancel_active
+                snapshot = self.controller.trip(
+                    stop_request, source=source, cancel_active=callback,
+                )
+                return self._response(
+                    200, snapshot=snapshot.model_dump(mode="json"),
+                    cancellations=cancellations,
+                )
+            if operation == "RearmLocal":
+                if source is not StopRequestSource.FLEET:
+                    return self._response(403, error={
+                        "code": "FLEET_PEER_REQUIRED",
+                        "message": "only the authenticated Fleet peer can rearm",
+                    })
+                expected = {"version", "operation", "workcell_id", "instance_id",
+                            "authority_epoch", "dispatch_generation"}
+                if set(request) != expected:
+                    raise ValueError("RearmLocal contains unsupported fields")
+                rearm = LocalStopRearmRequest.model_validate({
+                    key: request[key] for key in expected - {"version", "operation"}
+                })
+                if (rearm.workcell_id, rearm.instance_id) != (
+                        self.controller.workcell_id, self.controller.instance_id):
+                    raise KeyError("unknown workcell instance")
+                snapshot = self.controller.rearm(
+                    authority_epoch=rearm.authority_epoch,
+                    dispatch_generation=rearm.dispatch_generation,
+                    operator_confirmed=True,
+                    fleet_fence_current=self.fleet_fence_current,
+                )
+                return self._response(200, snapshot=snapshot.model_dump(mode="json"))
+            if operation == "GetStopState":
+                if set(request) != {"version", "operation", "workcell_id", "instance_id"}:
+                    raise ValueError("GetStopState contains unsupported fields")
+                query = LocalStopQuery.model_validate({
+                    "workcell_id": request["workcell_id"],
+                    "instance_id": request["instance_id"],
+                })
+                snapshot = self.controller.snapshot(
+                    workcell_id=query.workcell_id, instance_id=query.instance_id,
+                )
+                return self._response(200, snapshot=snapshot.model_dump(mode="json"))
+            return self._response(404, error={
+                "code": "UNKNOWN_OPERATION", "message": "stop operation is unsupported",
+            })
+        except LocalStopBlocked as exc:
+            return self._response(409, error={"code": "LOCAL_REARM_REFUSED",
+                                              "message": str(exc)})
+        except (TypeError, ValueError) as exc:
+            return self._response(400, error={"code": "INVALID_REQUEST", "message": str(exc)})
+        except KeyError:
+            return self._response(404, error={
+                "code": "WORKCELL_NOT_FOUND", "message": "workcell instance is unavailable",
+            })
+        except Exception:
+            return self._response(503, error={
+                "code": "STOP_STATE_UNAVAILABLE",
+                "message": "local stop persistence is unavailable",
+            })
 
 
 class UnixActionServer:
@@ -176,4 +292,4 @@ class UnixActionServer:
             listener.close()
 
 
-__all__ = ["ActionApi", "UnixActionServer", "action_grant_digest"]
+__all__ = ["ActionApi", "LocalStopApi", "UnixActionServer", "action_grant_digest"]

@@ -488,14 +488,16 @@ def test_dispatch_rearm_requires_operator_and_current_generation(tmp_path):
         state = client.get("/api/fleet/dispatch-control", headers=headers)
         assert state.status_code == 200
         assert state.json() == {
-            "generation": 1, "dispatch_enabled": False, "reason": "PROCESS_RESTARTED",
+            "authority_epoch": 1, "generation": 1,
+            "dispatch_enabled": False, "reason": "PROCESS_RESTARTED",
             "queued_tasks": 0, "unresolved_actions": 0, "rearm_available": True,
         }
         rearmed = client.post("/api/fleet/dispatch/rearm", json={"expected_generation": 1},
                               headers=headers)
         assert rearmed.status_code == 200, rearmed.text
         assert rearmed.json() == {
-            "generation": 2, "dispatch_enabled": True, "reason": "OPERATOR_REARM",
+            "authority_epoch": 1, "generation": 2,
+            "dispatch_enabled": True, "reason": "OPERATOR_REARM",
             "queued_tasks": 0, "unresolved_actions": 0, "rearm_available": False,
         }
         stale = client.post("/api/fleet/dispatch/rearm", json={"expected_generation": 1},

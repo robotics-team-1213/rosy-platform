@@ -154,6 +154,16 @@ def test_local_stop_snapshot_cannot_claim_driver_or_physical_completion():
     assert "driver_goal_canceled" not in dumped
 
 
+def test_local_stop_open_state_is_software_gate_only():
+    snapshot = LocalStopSnapshot(
+        workcell_id="omx-cell-01", instance_id="omx-cell-01-control",
+        authority_epoch=3, dispatch_generation=21, state=LocalStopState.OPEN,
+        source="fleet", observed_at=datetime.now(timezone.utc), reason="operator_rearm",
+    )
+    assert snapshot.model_dump()["state"] == "OPEN"
+    assert "physical_stopped" not in snapshot.model_dump()
+
+
 def test_local_stop_request_cannot_claim_its_own_principal():
     with pytest.raises(ValidationError):
         LocalStopRequest.model_validate({

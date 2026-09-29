@@ -39,6 +39,7 @@ from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStor
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionConflict
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
+from fleet.server.local_stop_transport import UnixLocalStopTransport
 from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
 from fleet.server.task_service import FleetTaskService
@@ -232,7 +233,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
                discovery=None, discovery_token: Optional[str] = None,
                vision_lease_secret: Optional[str] = None,
-               vision_sources: tuple[str, ...] = ()) -> FastAPI:
+               vision_sources: tuple[str, ...] = (),
+               omx_instances: Optional[Mapping[str, str]] = None,
+               omx_socket_root: Path | str = "/run/rosy/omx",
+               omx_stop_transport=None) -> FastAPI:
     mission_configured = any((mission_service, proposal_store, candidate_resolver))
     if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
         raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
@@ -255,6 +259,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                         or console.uses_rest_token(discovery_token)
                                         or console.uses_agent_pairing_token(discovery_token)):
         raise ValueError("discovery credential must differ from Fleet and robot credentials")
+    configured_omx = dict(omx_instances or {})
+    if len(set(configured_omx.values())) != len(configured_omx):
+        raise ValueError("each OMX instance may be configured only once")
+    stop_transport = omx_stop_transport
+    if configured_omx and stop_transport is None:
+        stop_transport = UnixLocalStopTransport(omx_socket_root)
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
         if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
@@ -304,6 +314,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.task_service = task_service
     app.state.mission_service = mission_service
     app.state.proposal_store = proposal_store
+    app.state.omx_instances = configured_omx
     if task_service is not None:
         if hub is not None:
             hub.set_event_callback(task_service.project_core_event)
@@ -312,6 +323,37 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             task_service.traffic_queue_released(mission["task_id"])
 
         console.set_task_queue_release_callback(release_traffic_task)
+
+    def dispatch_local_omx_stops(control: Mapping | None, *, reason: str) -> dict:
+        if not configured_omx:
+            return {"state": "NOT_CONFIGURED", "instances": []}
+        if stop_transport is None or control is None:
+            return {"state": "UNKNOWN", "instances": [
+                {"workcell_id": workcell_id, "instance_id": instance_id,
+                 "state": "UNKNOWN", "reason": "FLEET_DISPATCH_CONTROL_UNAVAILABLE"}
+                for workcell_id, instance_id in configured_omx.items()
+            ]}
+        results = []
+        for workcell_id, instance_id in configured_omx.items():
+            try:
+                outcome = stop_transport.stop(
+                    workcell_id=workcell_id, instance_id=instance_id,
+                    authority_epoch=control["authority_epoch"],
+                    dispatch_generation=control["generation"], reason=reason,
+                )
+                if not isinstance(outcome, Mapping):
+                    outcome = {"state": "UNKNOWN", "reason": "INVALID_STOP_RECEIPT"}
+            except Exception as exc:
+                _LOG.exception("OMX StopLocal fanout failed instance=%s", instance_id)
+                outcome = {"state": "UNKNOWN", "reason": type(exc).__name__}
+            results.append({"workcell_id": workcell_id, "instance_id": instance_id,
+                            **dict(outcome)})
+        states = {row["state"] for row in results}
+        overall = "LOCAL_LATCHED" if states == {"LOCAL_LATCHED"} else (
+            "REQUESTED" if states and states <= {"LOCAL_LATCHED", "REQUESTED"}
+            else "UNKNOWN"
+        )
+        return {"state": overall, "instances": results}
 
     @app.middleware("http")
     async def finish_mutation_audit(request: Request, call_next):
@@ -555,12 +597,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
         @app.post("/api/fleet/dispatch/rearm", dependencies=operator_guard,
                   tags=["fleet-control"])
-        def dispatch_rearm(
+        async def dispatch_rearm(
             body: DispatchRearmRequest,
             principal: SitePrincipal = Depends(require_operator),
         ) -> dict:
             try:
-                return task_service.store.rearm_dispatch(
+                control = task_service.store.rearm_dispatch(
                     expected_generation=body.expected_generation,
                     actor_id=principal.principal_id,
                 )
@@ -568,6 +610,44 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 raise HTTPException(status_code=409, detail={
                     "code": "DISPATCH_REARM_REFUSED", "message": str(exc),
                 }) from exc
+            if configured_omx:
+                local_rearm = []
+                for workcell_id, instance_id in configured_omx.items():
+                    try:
+                        result = stop_transport.rearm(
+                            workcell_id=workcell_id, instance_id=instance_id,
+                            authority_epoch=control["authority_epoch"],
+                            dispatch_generation=control["generation"],
+                        )
+                        if not isinstance(result, Mapping):
+                            result = {"state": "UNKNOWN", "reason": "INVALID_REARM_RECEIPT"}
+                    except Exception as exc:
+                        _LOG.exception("OMX local rearm failed instance=%s", instance_id)
+                        result = {"state": "UNKNOWN", "reason": type(exc).__name__}
+                    local_rearm.append({"workcell_id": workcell_id,
+                                        "instance_id": instance_id, **dict(result)})
+                if any(item["state"] != "OPEN" for item in local_rearm):
+                    try:
+                        stopped = task_service.store.trip_stop_latch(
+                            actor_id=principal.principal_id,
+                            reason="OMX_LOCAL_REARM_FAILED",
+                        )
+                    except Exception:
+                        _LOG.exception("failed to close Fleet dispatch after OMX rearm refusal")
+                        try:
+                            stopped = task_service.store.dispatch_control()
+                        except Exception:
+                            stopped = None
+                    await asyncio.to_thread(
+                        dispatch_local_omx_stops, stopped, reason="OMX_REARM_ROLLBACK",
+                    )
+                    raise HTTPException(status_code=409, detail={
+                        "code": "LOCAL_WORKCELL_REARM_FAILED",
+                        "fleet_dispatch": stopped,
+                        "omx_local_rearm": local_rearm,
+                    })
+                control["omx_local_rearm"] = local_rearm
+            return control
 
     if mission_service is not None:
         def _mission_candidate_result(proposal: dict, mission: dict | None) -> dict:
@@ -995,11 +1075,26 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         for call in calls:
             try:
                 if call.scope == "site":
+                    stop_control = None
                     if call.verb == "estop":
                         if task_service is not None:
-                            task_service.store.trip_stop_latch(actor_id=principal.principal_id)
+                            try:
+                                stop_control = task_service.store.trip_stop_latch(
+                                    actor_id=principal.principal_id,
+                                )
+                            except Exception:
+                                _LOG.exception("dispatch latch unavailable for site E-stop")
+                                try:
+                                    stop_control = task_service.store.dispatch_control()
+                                except Exception:
+                                    _LOG.exception("dispatch readback unavailable for site E-stop")
                         cancel_pending_task_queue(actor_id=principal.principal_id)
                     result = await _site_call(console, call)
+                    if call.verb == "estop":
+                        result["omx_local_stop"] = await asyncio.to_thread(
+                            dispatch_local_omx_stops, stop_control,
+                            reason="FLEET_ESTOP",
+                        )
                 else:
                     if not call.robot:
                         raise HubError("ROBOT_REQUIRED", call.verb)
@@ -1045,15 +1140,25 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     async def fleet_estop(principal: SitePrincipal = Depends(require_operator)) -> dict:
         # 이쪽은 한 대가 거절해도 200 이다 — 어느 대가 섰고 어느 대가 못 섰는지는 본문에
         # 다 들어 있고, 화면은 그 목록을 보여 줘야 한다.
+        stop_control = None
         if task_service is not None:
             try:
-                task_service.store.trip_stop_latch(actor_id=principal.principal_id)
+                stop_control = task_service.store.trip_stop_latch(
+                    actor_id=principal.principal_id,
+                )
             except Exception:
                 _LOG.exception(
                     "emergency stop dispatch latch unavailable; continuing stop fanout principal=%s",
                     principal.principal_id,
                 )
-        result = await console.estop_all()
+                try:
+                    stop_control = task_service.store.dispatch_control()
+                except Exception:
+                    _LOG.exception("emergency stop dispatch readback unavailable")
+        local_stop_task = asyncio.to_thread(
+            dispatch_local_omx_stops, stop_control, reason="FLEET_ESTOP",
+        )
+        result, local_stop = await asyncio.gather(console.estop_all(), local_stop_task)
         try:
             cancel_pending_task_queue(actor_id=principal.principal_id)
         except Exception:
@@ -1061,6 +1166,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 "emergency stop queue cleanup unavailable principal=%s",
                 principal.principal_id,
             )
+        result = dict(result)
+        result["omx_local_stop"] = local_stop
+        if stop_control is not None:
+            result["fleet_dispatch_control"] = stop_control
         return result
 
     @app.get("/", include_in_schema=False)
