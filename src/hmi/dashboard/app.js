@@ -157,6 +157,7 @@ function renderTrafficStatus(status = {}) {
       ? `${number(status.stop_line_distance_m, 3)} m`
       : "—",
   );
+  setText("traffic-policy-rule", status.junction_rule || "signal_controlled");
   setText("traffic-policy-scene", status.scene_revision || "—");
   setText("traffic-policy-revision", status.policy_revision || "—");
 }

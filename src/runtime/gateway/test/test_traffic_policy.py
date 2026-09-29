@@ -146,6 +146,103 @@ def test_red_and_yellow_wait_after_required_stop(rig, colour):
     assert manager.status().reason == f"signal_{colour.lower()}"
 
 
+def stop_and_go_rig():
+    now = [100.0]
+    manager = TrafficPolicyManager(
+        EventBus("rosy_01"),
+        config=TrafficPolicyConfig(
+            mode=TrafficPolicyMode.ENFORCED,
+            map_id="map_260905_update_v2",
+            scene_revision="road-scene-v1",
+            policy_revision="traffic-policy-v1",
+            stop_dwell_s=0.5,
+            junction_rule="stop_and_go",
+        ),
+        clock=lambda: now[0],
+    )
+    return now, manager
+
+
+def test_unsignalized_rule_proceeds_after_stop_and_dwell():
+    now, manager = stop_and_go_rig()
+    sample = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+
+    observe(manager, now, sample)
+    assert manager.gate(0.06, -0.05).linear == 0.0
+    now[0] += 0.51
+    observe(manager, now, sample)
+
+    decision = manager.gate(0.06, -0.05)
+
+    assert decision.linear == pytest.approx(0.06 * 0.5)
+    assert decision.angular == pytest.approx(-0.05)
+    assert manager.status().state == "PROCEED"
+    assert manager.status().reason == "unsignalized_proceed"
+
+
+@pytest.mark.parametrize("colour,confidence", [
+    ("RED", 0.9), ("RED", 0.3), ("GREEN", 0.9),
+])
+def test_unsignalized_rule_holds_when_a_signal_is_observed(
+        colour, confidence):
+    now, manager = stop_and_go_rig()
+    sample = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9,
+        signal_colour=colour, signal_confidence=confidence)
+
+    observe(manager, now, sample)
+    manager.gate(0.06, 0.0)
+    now[0] += 0.51
+    observe(manager, now, sample)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "HOLD"
+    assert manager.status().reason == "signal_unexpected"
+
+
+def test_unsignalized_rule_does_not_override_signal_conflict():
+    now, manager = stop_and_go_rig()
+    observe(manager, now, evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9,
+        signal_conflict=True))
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().reason == "signal_conflict"
+
+
+def test_signal_controlled_default_still_waits_without_signal(rig):
+    now, manager = rig
+    sample = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+
+    observe(manager, now, sample)
+    manager.gate(0.06, 0.0)
+    now[0] += 10.0
+    observe(manager, now, sample)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "WAIT_SIGNAL"
+    assert manager.status().reason == "signal_unknown"
+    assert manager.status().junction_rule == "signal_controlled"
+
+
+def test_junction_rule_is_validated_and_staged(rig):
+    _now, manager = rig
+    with pytest.raises(ValueError):
+        TrafficPolicyConfig(junction_rule="right_on_red")
+
+    staged = manager.stage(
+        {"junction_rule": "stop_and_go"}, actor="operator:test")
+
+    assert staged["staged"]["junction_rule"] == "stop_and_go"
+    assert staged["active"]["junction_rule"] == "signal_controlled"
+
+    manager.apply_staged(actor="operator:test")
+
+    assert manager.status().junction_rule == "stop_and_go"
+
+
 @pytest.mark.parametrize(
     "sample,reason",
     [
@@ -226,6 +323,7 @@ def test_core_services_wires_policy_and_estop_resets_evidence(core_client):
             "map_id": "map_260905_update_v2",
             "scene_revision": "road-scene-v1",
             "policy_revision": "traffic-policy-v1",
+            "junction_rule": "stop_and_go",
         },
     })
     sample = evidence()
@@ -240,6 +338,7 @@ def test_core_services_wires_policy_and_estop_resets_evidence(core_client):
     assert services.traffic_policy.status().reason == "no_road_evidence"
     snapshot = services.state.snapshot()
     assert snapshot.traffic_policy.policy_revision == "traffic-policy-v1"
+    assert snapshot.traffic_policy.junction_rule == "stop_and_go"
     assert snapshot.traffic_policy.reason == "no_road_evidence"
 
 

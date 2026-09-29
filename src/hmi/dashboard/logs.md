@@ -512,3 +512,9 @@
 - 변경: 비평 P1(2026-09-26) 회차. `/dashboard` 상단 바에 `#surface-bridge`를 두고, 인증된 호출자의 목적지를 console 매니페스트의 `surfaces` 메타데이터로 그린다 — 역할 화면 스위치와 같은 단일 출처고 서버가 역할으로 걸러 준다(viewer는 /console 1개). `surface-navigation.js`의 `dashboardSurfaceBridge(nav, surfaces)`가 등록된 역할 표면만 남겨 그리고, 목록이 비면 숨긴다. `app.js`는 whoami 뒤에 목록을 채우고 신원이 없으면(로그아웃·만료) 비운다. 모바일(≤720px, console height:auto 구간)에서만 상단 바 묶음 줄바꿈을 허용해 데스크톱 뷰 계약(D-201, .console 토큰 높이)은 그대로다. 새 토큰·ui-* 부품·문법 없음 — D-335의 다음 회차로서 ADR 없이 진행했다.
 - 증거: 정적 `src/hmi/dashboard/test/test_surface_bridge.py` 신설(선언·빌더·배선·스타일 고정, 뮤테이션 3종 붉게 확인 후 복원) + `src/hmi/web/test` 99 passed 2 skipped. `ROSY_RUN_BROWSER_TESTS=1`로 `src/hmi/dashboard/test` + `test_dashboard_browser.py`(통합 신설 2건: 관리자 3링크/뷰어 1링크 + 클릭 이동) + 역할 메뉴/표면 + 다이얼로그 + D-283 165 passed. UI/UX 실측(X:\DevTemp\bridge-destination\uiux\, probe.json): 1366×768·390×844 가로 overflow 0, 링크 높이 44px = 터치 바닥, 상단 바 위 대비 6.95:1, Tab 5번에 브리지 도달 + 2px 포커스 링, hover 색·배경 변화, E-stop 양 폭 보임.
 - gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지. 역할 화면으로의 가시 경로는 이제 홈에서 열렸고, /dashboard 조작 중복의 퇴역 기준은 D-204 이행 회차가 판다.
+
+## 2026-09-29 · uncommitted · feat(dashboard): 교통 정책 패어널에 정지선 규칙 편집·표시
+
+- 변경: `/setup` 교통 정책 패어널에 `junction_rule` select(신호 제어 / 무신호: 정지 후 진입)를 스테이징 폼에 추가하고 상태 facts에 "정지선 규칙" 행을, `/console` 교통 facts에 "규칙" 행을 각각 추가했다. 새 토큰·ui-* 부품 없음 — 기존 `select`·facts 문법 재사용. 기본값 `signal_controlled` 표기로 규칙 미선언 상태가 지금과 같음을 화면에서 읽을 수 있다.
+- 증거: 정적 스캔 `src/hmi/dashboard/test` + `src/hmi/web/test` + api_web 105 passed 47 skipped(2026-09-29 Windows, 브라우저 게이트 시험은 스킵 — ROSY_RUN_BROWSER_TESTS 미설정). 패어널 배치 시험(D-283 facts 2열·폼 위치)은 행 추가 후에도 그대로 통과했다.
+- gate 변화: 없음. 무신호 `stop_and_go`의 실화면 확인은 브라우저 회차가 남아 있다.

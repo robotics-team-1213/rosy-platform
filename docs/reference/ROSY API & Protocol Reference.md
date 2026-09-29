@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.53
+**Version:** v1.54
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -354,6 +354,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
     "map_id": "map_260905_update_v2",
     "scene_revision": "road-scene-v1",
     "policy_revision": "traffic-policy-v1",
+    "junction_rule": "signal_controlled",
     "evidence_revision": 42,
     "age_s": 0.04,
     "stop_line_visible": true,
@@ -392,7 +393,13 @@ STOP_REQUIRED | WAIT_SIGNAL | PROCEED | HOLD` 다. `ENFORCED`에서는 stale,
 신호 충돌, map/scene revision 불일치, 거리 미확정이 모두 0 명령을 만든다.
 정지선에서는 신호색과 무관하게 먼저 완전 정지와 dwell을 완료한 뒤, 신뢰도
 기준을 통과한 `GREEN`만 `PROCEED`를 허용한다. `MONITOR_ONLY`는 같은 판정을
-표시하지만 주행 후보를 변경하지 않는다.
+표시하지만 주행 후보를 변경하지 않는다. `junction_rule`은 v1.54 additive다.
+`signal_controlled`(기본)는 위 동작 그대로다. `stop_and_go`는 무신호 교차로
+선언이다 — 완전 정지와 dwell을 마친 뒤 신호가 관측되지 않으면
+`PROCEED / unsignalized_proceed`로 `proceed_speed_scale` 속도로 진입하고,
+신호가 관측되면(약한 오탐 포함) `HOLD / signal_unexpected`로 정지한다. 이 값은
+운영자의 씬 선언이지 카메라의 부재 판단이 아니다
+(`docs/plans/2026-09-29-traffic-policy-unsignalized-junction-design.md`).
 
 카메라 preview는 v1.12 additive다. Control은 인식 오버레이가 포함된 bounded JPEG를
 최대 2 FPS로 만들고 CORE는 최신 한 장만 보관한다. 대시보드는 Viewer 토큰으로

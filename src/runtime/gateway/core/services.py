@@ -166,6 +166,8 @@ def _traffic_policy_config(raw: dict[str, Any]) -> TrafficPolicyConfig:
             "scene_revision", defaults.scene_revision)),
         policy_revision=str(raw.get(
             "policy_revision", defaults.policy_revision)),
+        junction_rule=str(raw.get(
+            "junction_rule", defaults.junction_rule)),
         approach_distance_m=float(raw.get(
             "approach_distance_m", defaults.approach_distance_m)),
         stop_distance_m=float(raw.get(

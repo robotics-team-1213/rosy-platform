@@ -146,3 +146,9 @@
 - Change: publish a canceled generation''s terminal event independently of current navigation state; preserve CANCELED/ABORTED reason codes.
 - Evidence: services suite 227 passed; navigation manager and GoalTracker regressions 67 passed.
 - Gate: SOURCE/LOCAL only; live Nav2, artifact, device, stop readback, and field evidence remain open.
+
+## 2026-09-29 · uncommitted · feat(traffic): unsignalized junction rule `stop_and_go`
+
+- Change: `TrafficPolicyConfig.junction_rule` (`signal_controlled` default | `stop_and_go`) — an operator declaration, never a camera absence verdict. After the existing complete-stop and dwell at the stop line, `stop_and_go` with no observed signal proceeds (`PROCEED / unsignalized_proceed` at `proceed_speed_scale`); any observed signal, weak false positives included, holds (`HOLD / signal_unexpected`). `signal_conflict`, stale, map/scene mismatch, and stop-line confidence checks still run before the rule; `signal_controlled` behavior is unchanged. Status now carries `junction_rule`.
+- Evidence: design `docs/plans/2026-09-29-traffic-policy-unsignalized-junction-design.md`. Focused suites on Windows: gateway traffic policy+API+runtime config, foundation 101, services 227 → 380 passed; protocol schemas, api_web, dashboard → 105 passed 47 skipped; semantic road simulation + event catalogue → 74 passed.
+- Gate: SOURCE/LOCAL only; no ROS-SIM closed loop over an unsignalized scene, device, or FIELD acceptance. Multi-junction scenes and a second signal source (ESP32/observer) are future work (design §7).

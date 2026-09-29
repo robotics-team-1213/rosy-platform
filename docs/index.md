@@ -225,8 +225,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(plans): 무신호 교차로 정지 후 진입 설계 + API Ref v1.54
 - 2026-09-29 · uncommitted · docs(plans): /dashboard 브리지 퇴역 기준 명시
 - 2026-09-29 · uncommitted · feat(omx/fleet): fence local Device Actions with stop generations
 - 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
 - 2026-09-29 · uncommitted · docs(plan): land policy evidence T4-T6 and API Ref v1.48
-- 2026-09-29 · uncommitted · docs(er2): bound first Fleet OMX transport

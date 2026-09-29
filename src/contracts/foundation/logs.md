@@ -128,3 +128,9 @@
 - Change: added immutable typed contracts for pixel-level target evidence, Fleet grants, local Action journal receipts/read/cancel, and software-stop request/query/snapshot. Distinct IDs, observation consistency, digest, revisions, generation, expiry, and aware timestamps are validated; no receipt can claim independent goal or physical stop proof.
 - Evidence: full `src/contracts/foundation/test` suite: 101 passed on Windows; includes `test_device_action_contracts.py` and existing protocol schema tests. API Reference v1.48 describes the same-host UDS contract and explicitly says no endpoint/runtime is implied.
 - Gate: SOURCE/LOCAL contract only. No UDS listener, physical stop, action runtime, ROS-SIM, DEVICE, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(protocol): TrafficPolicyStatus.junction_rule (API Ref v1.54)
+
+- Change: additive `junction_rule: str = "signal_controlled"` on `TrafficPolicyStatus` — surfaces the operator-declared stop-line rule (`signal_controlled` | `stop_and_go`, unsignalized stop-and-go) alongside the existing policy revision. Existing fields untouched.
+- Evidence: foundation suite green within the traffic-policy change run (2026-09-29 Windows, 101 passed); API Reference bumped to v1.54 with the field, example, and semantics in the same change (D-18).
+- Gate: SOURCE/LOCAL contract only; no device or FIELD acceptance.

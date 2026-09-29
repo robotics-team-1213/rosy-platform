@@ -610,6 +610,7 @@ class TrafficPolicyStatus(BaseModel):
     map_id: Optional[str] = None
     scene_revision: Optional[str] = None
     policy_revision: str = "traffic-policy-v1"
+    junction_rule: str = "signal_controlled"
     evidence_revision: int = 0
     age_s: Optional[float] = None
     stop_line_visible: bool = False

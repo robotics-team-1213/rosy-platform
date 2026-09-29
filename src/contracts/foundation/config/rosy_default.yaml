@@ -100,6 +100,7 @@ traffic_policy:                    # D-151 semantic road evidence gate
   map_id: map_260905_update_v2
   scene_revision: road-scene-v1
   policy_revision: traffic-policy-v1
+  junction_rule: signal_controlled   # signal_controlled | stop_and_go(무신호: 정지+dwell 후 진입, 운영자 선언)
   approach_distance_m: 0.35
   stop_distance_m: 0.12
   stop_dwell_s: 0.50
