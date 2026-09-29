@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.47
+**Version:** v1.48
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1203,11 +1203,52 @@ the robot envelope for a site-only REST change. D-268 and field acceptance remai
 prerequisites for any automatic source; a displayed sighting alone never
 authorizes navigation or picking.
 
+## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-335)
+
+This is a same-Linux-host, per-workcell Unix domain socket (UDS) contract. It is
+not a robot REST route, Fleet-to-robot PRT message, ROS topic, or remote-host
+API. The socket path is `/run/rosy/omx/{instance_id}/control.sock`; service-owned
+directories and socket permissions are checked together with `SO_PEERCRED`
+against the dedicated Fleet service UID. A bounded, versioned JSON frame has a
+maximum encoded size of 64 KiB. Remote Fleet/OMX placement remains HOLD pending
+the separate host-placement and device validation decisions in D-281/D-273.
+
+Required operations are `SubmitAction(FleetActionGrant)`,
+`GetAction(DeviceActionLookup)`, `CancelAction(DeviceActionCancelRequest)`,
+`StopLocal(LocalStopRequest)`, and `GetStopState(LocalStopQuery)`. Every request
+and response is bound to the workcell and runtime instance. The submit grant
+carries distinct `mission_id`, `step_id`, `action_id`, and `attempt_id`, a
+SHA-256 request digest, `PICK_PLACE`, source and destination
+`ResolvedTargetEvidence`, capability, configuration and observation revisions,
+authority epoch, dispatch generation, and aware issue/expiry times. The two
+object evidences must identify distinct objects in the same observation, image
+digest, camera, optical frame, calibration, transform revision, and capture
+time. Image evidence is not a 3D pose, grasp, reachability decision, or
+permission to bypass the local planner.
+
+`DeviceActionState` is the durable local Action journal state: `PREPARED`,
+`SUBMITTING`, `ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`, `UNKNOWN`, `SUCCEEDED`,
+`FAILED`, or `HOLD`. A successful transport response or `SUCCEEDED` Action
+journal entry is not independent Mission goal evidence and does not prove
+object placement. Timeout or unknown acknowledgement is `UNKNOWN`; it never
+authorizes an automatic re-submit. Read and cancel are fenced by the Fleet-
+issued action/attempt pair.
+
+Stop snapshots expose only `REQUESTED`, `LOCAL_LATCHED`, or `UNKNOWN`, with
+request source derived by the trusted server. Caller-supplied stop principal is
+forbidden. `LOCAL_LATCHED` is a middleware software fact; it is not a driver
+standstill readback, safety-rated E-stop, or physical stop confirmation.
+Physical stop and goal evidence remain separately sourced and correlated.
+These schemas establish the SOURCE contract only; no UDS listener, action
+runner, production Fleet route, OMX installation, or motion capability is
+claimed by this reference entry.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.46 | 2026-09-29 | Additive (D-330): Fleet dispatch-control readback and explicit generation-checked operator rearm; startup/stop hold, unresolved-action rearm refusal, and device-side generation fencing remains unimplemented. |
+| v1.48 | 2026-09-29 | Additive (D-333/D-335): typed Site Fleet-to-OMX local Device Action and software-stop contracts, same-host UDS boundary, attempt/generation fences, and explicit separation from Mission goal evidence and physical stop proof. No REST path, PRT envelope change, listener, runner, or device capability is implied. |
 | v1.47 | 2026-09-29 | Clarify (D-330): dedicated operator E-stop fanout proceeds on audit/latch/queue-storage failure with server logging; ordinary mutations remain audit fail-closed; request replies do not prove physical stop. |
 | v1.44 | 2026-09-28 | Additive (D-316): correlate Pinky Site Fleet navigation attempts through optional CORE REST metadata and CORE navigation events; project matching results into durable task status. PRT-004/Envelope ACK and physical stop readback remain separate. |
 | v1.45 | 2026-09-28 | Additive (D-318): bounded rectification settings in signed Site Fleet Vision preview leases; Vision applies OpenCV lens and plane correction only to the returned latest-frame preview copy. Raw sighting input and robot command paths are unchanged. |

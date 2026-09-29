@@ -122,3 +122,9 @@
 - 변경: 정책 적격 증거(작업 발의 자격, D-268)의 와이어 계약을 추가했다 — `evidence_id`, `asset_kind`(robot/workcell/object, D-330 자원 어휘), `task_kind`(v1 닫힌 집합 navigate), `captured_at`, revision 삼종(map·calibration·model), 닫힌 `observation` 봉투(kind만, 등록부는 서버 쪽). 클라이언트가 `source`·`source_id`·`token`·`policy`·`satisfied`를 보내면 거부한다(출처는 자격 증명에서 결정, `satisfied`는 D-328 목표 판정 전용 어휘).
 - 근거: [설계](../../../docs/plans/2026-09-29-policy-evidence-contract-design.md)·[실행 계획](../../../docs/plans/2026-09-29-policy-evidence-contract.md) T1. 기존 필드·sighting 무변경, API Ref v1.48 개정은 T6가 한다.
 - Gate: SOURCE/LOCAL 계약 시험 75 passed (2026-09-29 Windows). 서버 등록부·발의 binding·밸브는 fleet 작업(T3/T4)이고 자동 실행은 여전히 HOLD다.
+
+## 2026-09-29 · uncommitted · feat(protocol): define OMX Device Action and software-stop schemas (D-333/D-335)
+
+- Change: added immutable typed contracts for pixel-level target evidence, Fleet grants, local Action journal receipts/read/cancel, and software-stop request/query/snapshot. Distinct IDs, observation consistency, digest, revisions, generation, expiry, and aware timestamps are validated; no receipt can claim independent goal or physical stop proof.
+- Evidence: full `src/contracts/foundation/test` suite: 101 passed on Windows; includes `test_device_action_contracts.py` and existing protocol schema tests. API Reference v1.48 describes the same-host UDS contract and explicitly says no endpoint/runtime is implied.
+- Gate: SOURCE/LOCAL contract only. No UDS listener, physical stop, action runtime, ROS-SIM, DEVICE, or FIELD acceptance.
