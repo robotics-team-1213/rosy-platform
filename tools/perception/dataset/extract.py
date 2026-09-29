@@ -67,6 +67,12 @@ def _jsonable(value):
     return value if isinstance(value, (int, float, str, bool, type(None))) else str(value)
 
 
+def _topic_is(topic: str, name: str) -> bool:
+    """topic, under any namespace ("/pinky1/camera/front"), is the relative name."""
+    topic = topic.lstrip("/")
+    return topic == name or topic.endswith("/" + name)
+
+
 def _side_value(schema_name: str, msg):
     """std_msgs/String payloads are JSON on our topics: decode them (raw text if not)."""
     if schema_name == STRING_SCHEMA:
@@ -109,16 +115,16 @@ def _mcap_frames(files, skipped=None):
         with open(f, "rb") as fh:
             reader = make_reader(fh, decoder_factories=[DecoderFactory()])
             for schema, ch, message, msg in reader.iter_decoded_messages():
-                # Channels carry absolute topics ("/camera/front").
-                name = ch.topic.lstrip("/")
-                if name in SIDE_TOPICS:
+                # Channels carry absolute, possibly namespaced topics.
+                name = next((n for n in SIDE_TOPICS if _topic_is(ch.topic, n)), None)
+                if name is not None:
                     side[name] = _side_value(schema.name, msg)
                     continue
                 t = message.log_time / 1e9
-                if name == CAMERA_TOPIC + "/compressed":
+                if _topic_is(ch.topic, CAMERA_TOPIC + "/compressed"):
                     ext = "png" if "png" in str(msg.format).lower() else "jpg"
                     yield t, bytes(msg.data), dict(side), ext
-                elif name == CAMERA_TOPIC:
+                elif _topic_is(ch.topic, CAMERA_TOPIC):
                     try:
                         bgr = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
                                            bytes(msg.data))

@@ -54,6 +54,8 @@ def main(argv=None) -> int:
     p.add_argument("--task-id", default="")
     p.add_argument("--camera-profile-revision", default="")
     p.add_argument("--model-revision", default="")
+    p.add_argument("--namespace", default="",
+                   help="robot namespace prefixed to every recorded topic")
     args = p.parse_args(argv)
 
     quota = int(args.quota_gib * 1024 ** 3)
@@ -76,7 +78,7 @@ def main(argv=None) -> int:
     code = 0
     try:
         try:
-            proc = subprocess.Popen(bag_command(folder))
+            proc = subprocess.Popen(bag_command(folder, args.namespace))
         except FileNotFoundError:
             print("ros2 not found on PATH; source the ROS 2 environment",
                   file=sys.stderr)

@@ -104,6 +104,24 @@ def test_bag_command(tmp_path):
         assert topic in cmd
 
 
+def test_bag_command_namespace_prefixes_every_topic(tmp_path):
+    cmd = bag_command(tmp_path / "s", namespace="/pinky1/")
+    assert cmd[-len(RECORD_TOPICS):] == [f"/pinky1/{t}" for t in RECORD_TOPICS]
+    assert bag_command(tmp_path / "s", namespace="")[-len(RECORD_TOPICS):] == list(RECORD_TOPICS)
+
+
+def test_main_namespace_reaches_the_bag_command(monkeypatch, tmp_path):
+    cmds = []
+
+    def popen(cmd, *a, **k):
+        cmds.append(cmd)
+        return FakePopen([0], [])
+
+    monkeypatch.setattr(rs.subprocess, "Popen", popen)
+    assert rs.main(["--root", str(tmp_path), "--reason", "r", "--namespace", "pinky1"]) == 0
+    assert "/pinky1/camera/front" in cmds[0]
+
+
 def test_shadow_topic_matches():
     from control.recording import SHADOW_TOPIC
     from control.sensing.perception.learned.shadow import TOPIC

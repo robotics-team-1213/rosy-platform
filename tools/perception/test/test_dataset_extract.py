@@ -208,3 +208,26 @@ def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
     got = prelabel.score_frame(lg, MODEL_CLASSES, row["side"], "r1")
     assert got["recorded"] and got["error_delta"] == -0.4
     assert got["score"] == pytest.approx(base["score"] + 0.4)
+
+
+def test_topic_match_strips_any_namespace():
+    assert extract._topic_is("/camera/front", "camera/front")
+    assert extract._topic_is("/pinky1/camera/front", "camera/front")
+    assert extract._topic_is("/a/b/cmd_vel", "cmd_vel")
+    assert not extract._topic_is("/xcamera/front", "camera/front")
+    assert not extract._topic_is("/pinky1/camera/front/compressed", "camera/front")
+
+
+def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    sess = _write_side_session(tmp_path, json.dumps({"error_delta": 0.1}),
+                               camera="/pinky1/camera/front",
+                               shadow_topic="/pinky1/" + SHADOW_TOPIC)
+    out = tmp_path / "out"
+    assert extract.main([str(sess), "--out", str(out)]) == 0
+    rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["side"] == {SHADOW_TOPIC: {"error_delta": 0.1},
+                               "line/observation": "not json"}
