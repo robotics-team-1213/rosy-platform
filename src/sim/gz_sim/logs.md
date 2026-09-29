@@ -146,3 +146,9 @@
 - 변경: D-306의 Gazebo 전용 라이브 뷰어 탭에 패널 연결, 방향키·Home·End 조작, 선택 탭 포커스 순서와 보이는 포커스 링을 추가했다. 관측 데이터·제어 경로는 변경하지 않았다.
 - 증거: 새 Chromium 브라우저 시험을 변경 전 실패, 변경 후 통과로 확인했다. 기존 viewer v2 계약과 합쳐 59 passed (Windows). 1280×800 라이브·지난 결과 캡처는 `X:\\DevTemp\\rosy-uiux-d306\\`에만 저장했고 가로 넘침·페이지 오류가 없었다.
 - gate 변화: LOCAL 키보드 조작 근거를 추가했다. Gazebo 카메라·인지의 실제 실행과 DEVICE/FIELD 수용은 이 시험으로 증명하지 않는다.
+
+## 2026-09-30 · faa60733 · D-359 US-002 레인 라이브 뷰 어둡게 고정 표시
+
+- 변경: `scripts/lane_live_view.html`의 `<html>`에 `data-theme="dark" data-theme-pin="dark"`(자체 팔레트, tokens.css 비사용). `surfaces.yaml` `themes: [dark]`.
+- 증거: `python -m pytest src/sim/gz_sim/test/test_lane_live_view.py -q` 통과.
+- gate 변화: 없음.

@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · faa60733 · D-359 US-002 밝은 팔레트·테마 선택 경로·테마별 게이트
 - 2026-09-30 · 960a76f2 · D-359 US-001 토큰 세 층과 이름 정리
 - 2026-09-29 · uncommitted · web-surface-hardening: `/common` allowlist은 `manifest.json` 하나
 - 2026-09-29 · uncommitted · D-335 ui-brand 홈 링크 공용 동작
 - 2026-09-29 · uncommitted · D-329 표면 레지스트리 착지 (T1–T4)
-- 2026-09-27 · 9ca7bc26 · verify D-300 on latest main

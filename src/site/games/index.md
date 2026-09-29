@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · faa60733 · D-359 US-002 경기 보드는 어둡게 고정
 - 2026-09-29 · uncommitted · web-surface-hardening: 보드 CSP·/stop Origin·web_common share 해석
 - 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
 - 2026-09-28 · uncommitted · fix(games): 필드 중심 반응형 경기 보드 (D-280/D-309)
 - 2026-09-27 · uncommitted · fix(games): 마지막 경기 단계 구분 (D-306/D-309)
-- 2026-09-27 · uncommitted · fix(games): 마지막 필드 위치 구분 (D-306/D-309)

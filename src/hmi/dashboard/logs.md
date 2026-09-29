@@ -524,3 +524,9 @@
 - 변경: `/setup` 교통 정책 패어널에 `junction_rule` select(신호 제어 / 무신호: 정지 후 진입)를 스테이징 폼에 추가하고 상태 facts에 "정지선 규칙" 행을, `/console` 교통 facts에 "규칙" 행을 각각 추가했다. 새 토큰·ui-* 부품 없음 — 기존 `select`·facts 문법 재사용. 기본값 `signal_controlled` 표기로 규칙 미선언 상태가 지금과 같음을 화면에서 읽을 수 있다.
 - 증거: 정적 스캔 `src/hmi/dashboard/test` + `src/hmi/web/test` + api_web 105 passed 47 skipped(2026-09-29 Windows, 브라우저 게이트 시험은 스킵 — ROSY_RUN_BROWSER_TESTS 미설정). 패어널 배치 시험(D-283 facts 2열·폼 위치)은 행 추가 후에도 그대로 통과했다.
 - gate 변화: 없음. 무신호 `stop_and_go`의 실화면 확인은 브라우저 회차가 남아 있다.
+
+## 2026-09-30 · ff6938e4 · D-359 US-002 /device 화면 테마 패널과 테마 로드
+
+- 변경: `index.html`·`surface.html`·`styleguide.html`이 tokens.css 바로 뒤에 `/common/theme.js`를 싣는다. `/device`에 `system.display` 패널(화면 테마: 어둡게/밝게/시스템, 공용 segment 버튼, 이 브라우저에만 저장)을 order 110(맨 뒤)으로 더했다 — 좁은 화면에서 상태·조치가 먼저 보이게. `styles.css`·`surface-panels.css`의 `color-scheme` 선언을 지웠다(테마 블록의 몫). 위험 채움 위 글자 `--ink` 세 곳을 `--ink-on-crit`로 바꿨다(밝게에서 짙은 글자가 짙은 적색 위에 사라짐).
+- 증거: `python -m pytest src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 876 passed 39 skipped. 1366×768 밝게 캡처(`X:/DevTemp/rosy-d359/shots`)에서 /console·/device 글자 가독 확인.
+- gate 변화: 없음.

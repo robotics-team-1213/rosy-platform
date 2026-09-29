@@ -188,3 +188,9 @@
 - 증거: test_protocol_version_alignment 3 passed, test_line_follow_contract_docs 1 passed (2026-09-30 Windows).
 - gate 변화: 없음.
 - 교훈: v1.57 정렬 때와 같은 누락이 재발했다 — 범프 회차 체크리스트에 핀 3곳이 들어가야 한다.
+
+## 2026-09-30 · ff6938e4 · D-359 US-002 device 패널 목록에 system.display
+
+- 변경: `test_ui_route.py`의 기본 표면 패널 id 집합에 `system.display`(화면 테마)를 더했다. 서버 코드는 바뀌지 않는다 — panels.yaml 레지스트리가 새 패널을 싣는다.
+- 증거: `python -m pytest src/runtime/api_web/test -q` 통과.
+- gate 변화: 없음.

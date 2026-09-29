@@ -562,3 +562,9 @@
 - gate 변화: 없음.
 - 결정: 선언은 정직한 절반 — 전체 해소는 bringup 조립로 이전(별도 과제).
 - 교훈: 없음.
+
+## 2026-09-30 · faa60733 · D-359 US-002 진단 페이지 어둡게 고정
+
+- 변경: `web/diagnostic.html`의 `<html>`에 `data-theme="dark" data-theme-pin="dark"`. 자체 `color-scheme: dark`는 고정 표면이라 둔다.
+- 증거: 레지스트리 `theme:` 규칙 0건. `test_map_raster_color_contract.py::test_the_javascript_mirror_agrees_with_its_own_css_token`은 이 변경 전(960a76f2, US-001 이름 변경)부터 `muted` 키로 빨갛다 — 이 항목과 무관하며 열린 문제로 남긴다.
+- gate 변화: 없음.

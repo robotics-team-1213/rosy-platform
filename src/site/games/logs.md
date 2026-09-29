@@ -255,3 +255,9 @@
 - 증거: `python -m pytest src/site/games/test -q` 104 passed.
 - gate 변화: 없음.
 - 결정: D-157.
+
+## 2026-09-30 · faa60733 · D-359 US-002 경기 보드는 어둡게 고정
+
+- 변경: `index.html`에 `data-theme="dark" data-theme-pin="dark"`를 정적으로 둔다(theme.js를 싣지 않는 쪽이 단순하다 — 경기장 녹색이 바탕이다). `surfaces.yaml` `themes: [dark]`, 레지스트리 시험이 pin을 지킨다. `.lost`의 위험 채움 글자를 `--ink-on-crit`로 바꿨다(값은 같다).
+- 증거: `python -m pytest src/site/games/test -q` 통과(876 passed 묶음).
+- gate 변화: 없음.

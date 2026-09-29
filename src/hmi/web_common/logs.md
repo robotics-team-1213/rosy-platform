@@ -210,3 +210,11 @@
 - 증거: Chromium 계산 색 비교(옛 main 대 새 파일, 이름 변경 반영) 68개 전부 허용 범위, 최대 ΔE_OK×100 = 0.77(`--brand-rose-wash`, RGB 2.14/255), 나머지 ≤ 0.2. `python -m pytest src/hmi/web_common/test -q` 97 passed.
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-359 §1.
+
+## 2026-09-30 · faa60733 · D-359 US-002 밝은 팔레트·테마 선택 경로·테마별 게이트
+
+- 변경: `tokens.css` 팔레트 선택자를 `:root, [data-theme="dark"]`로 바꾸고 같은 키 집합의 `[data-theme="light"]` 블록을 더했다(OKLCH 생성, 각 블록이 자기 `color-scheme`). 파생 공식은 두 테마에서 그대로 뜻이 맞아 고치지 않았다(선·장막은 잉크·바탕 알파, 그림자는 `--shadow-base` 알파). `theme.js`(외부 스크립트, tokens.css 바로 뒤 동기 로드)가 `rosy.theme` dark|light|system(기본·무효·저장소 실패 → dark)을 풀어 `html[data-theme]`과 `meta[name=theme-color]`(계산된 `--ground`)를 첫 그림 전에 정하고, `data-theme-pin`을 따르며, `window.RosyTheme {get,set,resolved}`와 `rosy:theme` 이벤트, `[data-theme-choice]` 버튼 배선을 준다. `manifest.json`·설치 목록에 등록. `surfaces.yaml`에 `themes`를 두고 레지스트리가 테마 표면의 theme.js, 고정 표면의 pin, 정적 theme-color = dark `--ground`, 표면 CSS의 `color-scheme` 부재를 본다. `test_palette_gates.py`는 `token_themes.py`로 테마별 팔레트를 읽어 모든 게이트를 테마마다 돌리고(브랜드 밝기 대역·래스터 단조는 바탕 극성 기준으로 일반화), 키 집합 동일·파생 블록 원시 색 없음·로봇 사다리·주 명령 ink 채움·위험 채움 위 글자 = on-crit 잉크를 더했다. LCD·진단·네이티브 사본 비교는 dark 블록으로 고정했다. 위험 채움 위 `--ink` 참조 10곳을 `--ink-on-crit`로 바꿨다(2297d11d).
+- 증거: `python -m pytest src/hmi/web_common/test -q` 121 passed 9 skipped(브라우저 게이트 제외). 변이 6건 전부 빨강 후 복구: light 키 삭제 → `test_every_theme_defines_the_same_palette_keys` 외 3, 파생 블록 `#123456` → `test_the_derived_block_has_no_raw_colour`, light `--ink` 저대비 회색 → `test_text_tokens_meet_wcag_on_the_ground[light]` 외 2, 공용 위험 태그 `--ink` → `test_text_on_a_danger_fill_uses_the_on_crit_ink`, Fleet theme.js 제거·games pin 제거 → `test_every_surface_declares_its_themes_and_its_pages_follow_them`.
+- 브라우저(`ROSY_RUN_BROWSER_TESTS=1`): `src/hmi/dashboard/test src/hmi/web_common/test` 181 passed 1 failed → 실패는 새 패널 순서(order 10)가 390×844 /device에서 운영 상태를 밀어낸 것이라 order 110으로 옮긴 뒤 해당 시험·`test_theme_browser.py` 10 passed. `test/test_role_surface_states_browser.py test/test_fleet_console_browser.py test/test_rosy_games_surface.py` 42 passed 3 failed: swarm_control(기존 알려진 실패), semantic_subheadings(기준 커밋 fdb428de에서도 실패), slow_initial_gather(부하 플레이크 — 단독 재실행 통과).
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A. 밝게는 제품 기본값이 아니고 사람 G3·현장 조명 관측 전이다.
+- 결정: D-359 §2·§3·§7.1·§7.3.
