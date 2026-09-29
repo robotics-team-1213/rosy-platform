@@ -80,8 +80,11 @@ globalThis.MediaRecorder = class {
   start() { this.state = 'recording'; }
   stop() { this.state = 'inactive'; this.ondataavailable({data:new Blob(['WEBM'])}); this.onstop(); }
 };
-globalThis.getComputedStyle = () => ({getPropertyValue(name) { return ({
-  '--scrim':'rgba(8, 9, 11, 0.84)', '--ink':'#eeeeef'}[name] || ''); }});
+// D-359 §4: 오버레이 색·글꼴은 ui.js의 window.RosyPalette가 푼다.
+globalThis.window = {RosyPalette: {
+  cssColor(name) { return ({'--scrim':'rgba(8, 9, 11, 0.84)', '--ink':'rgba(238, 238, 239, 1)'}[name]); },
+  canvasFont(size, family) { return `${Math.max(12, size)}px ${family}`; },
+}};
 globalThis.document = {createElement() { return {
   getContext() { return {drawImage(){},fillRect(){},fillText(){}}; },
   captureStream() { return {getTracks(){ return [{stop(){}}]; }}; }
