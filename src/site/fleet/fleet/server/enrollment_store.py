@@ -27,7 +27,7 @@ SLOTS = frozenset({"rest", "agent"})
 STATES = ("active", "needs_new_code", "address_changed", "pending_logout")
 AUDIT_LIMIT = 10_000
 NONCE_BYTES = 12
-_KEY_LINE = re.compile(rb"[A-Za-z0-9+/]{43}=\n?")
+_KEY_LINE = re.compile(rb"[A-Za-z0-9+/]{43}=(\r?\n)?")
 
 _COLUMNS = (
     "robot_id", "hostname", "serial_number", "device_uid", "discovery_name", "address",
@@ -136,7 +136,10 @@ class EnrollmentStore:
                         "ALTER TABLE device_pairing_audit ADD COLUMN device_kind TEXT "
                         "NOT NULL DEFAULT 'overhead-camera'")
         if os.name != "nt":
-            self.path.chmod(0o600)
+            for path in (self.path, self.path.with_name(self.path.name + "-wal"),
+                         self.path.with_name(self.path.name + "-shm")):
+                if path.exists():
+                    path.chmod(0o600)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path)

@@ -76,6 +76,7 @@ def test_key_file_is_one_base64_line_of_32_bytes(tmp_path):
     assert len(line) == 44
     assert load_key_file(_key_file(tmp_path, line + b"\n")) == KEY
     assert load_key_file(_key_file(tmp_path, line)) == KEY
+    assert load_key_file(_key_file(tmp_path, line + b"\r\n")) == KEY
 
 
 @pytest.mark.parametrize("content", [
