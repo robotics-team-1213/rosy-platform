@@ -72,9 +72,16 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "fleet": (
-        10_631,
+        11_164,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
-        "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled",
+        "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
+        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree)",
+    ),
+    "site/fleet/fleet/server/mission_store.py": (
+        728,
+        "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, and "
+        "their transitions in one transactional store), ROS-free, host-testable; correlated task evidence "
+        "stays in task_store/task_results (X5)",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
         742,
