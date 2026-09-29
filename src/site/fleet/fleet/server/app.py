@@ -113,6 +113,7 @@ CONSOLE_ASSETS = {
     "formation.js": "application/javascript",
     "map-view.js": "application/javascript",
     "roster.js": "application/javascript",
+    "enrollment.js": "application/javascript",
     "signals.js": "application/javascript",
     "site-layer.js": "application/javascript",
     "vision-view.js": "application/javascript",
