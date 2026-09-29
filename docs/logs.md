@@ -3403,3 +3403,9 @@
 - gate 변화: 없음. 첫 게이트 호출의 실패 6건은 병행 트랙 잔여(protocol 버전 정합·SIZE_VERDICTS 2건·io closure·line_follow 문서·sd writer)이며 이 변경과 무관.
 - 결정: 구현은 이미 main에 있고 이 회차는 기록 보존이다. D 번호는 저널의 다음 빈 번호 표기(D-337·D-338)를 따랐다.
 - 교훈: ADR Log 마지막 행(D-336)이 리터럴 ? 문자로 깨진 채 커밋되어 있다. 신규 행은 UTF-8로 기록했고, 손상 행 복구는 append-only 원칙 때문에 별도 합의가 필요하다.
+## 2026-09-29 · uncommitted · docs(adr): 브리지 분리 ADR을 D-338로 재부여
+
+- 변경: 병행 세션의 f6416e4d가 이 회차의 working tree(ADR Log 행·저널 항목)를 함께 커밋하면서 표에 같은 번호 D-337이 두 개 생겼다. 신호 소스 ADR(커밋 의도가 D-337)을 유지하고 브리지 판정·적응 분리 행을 D-338로 재부여했다. 상세문서는 docs/adr/D-338-bridge-callback-decide-act-split.md(번호·파일명 갱신). 바로 앞 항목의 D-337 표기·본문은 커밋된 원문 그대로 두고(append-only) 이 항목으로 정정한다.
+- 증거: git show f6416e4d -- docs/reference/ROSY ADR Log.md(+2행 — D-337 두 개). 재부여 뒤 D-337=측정된 빛 신호 소스, D-338=브리지 판정·적응 분리로 유일하다. test_module_log/ADR log 계약은 이 변경 뒤 회복(잔여 1건 D-337 본문 부재는 f6416e4d 자체의 결함이므로 병행 세션 소관).
+- gate 변화: 없음.
+- 교훈: 병행 세션과 같은 창에서 문서를 쓰면 번호 선점이 커밋 순서로 갈린다 — ADR 번호는 표에 행을 넣는 즉시 내 커밋으로 선점한다.
