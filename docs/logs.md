@@ -3378,3 +3378,9 @@
 - 변경: Added typed `RearmLocal`, durable OMX stop latch, authority epoch and generation checks, local stop fanout, and final driver-submit serialization. Re-arm requires an authenticated named operator at Site Fleet, the current Fleet fence, zero unresolved local Actions, and instance readback; failure restores the Fleet latch. The outer UDS dispatcher now routes re-arm and rejects foreign workcell/instance identities; Fleet snapshot generation values are type-checked. Updated API Reference v1.52, D-336 implementation evidence, and the ER2 execution plan.
 - 증거: Focused suite 80 passed; OMX 85 passed/3 skipped; API web 70 passed/13 skipped; contract/harness 78 passed. Fleet full suite 658 passed/5 skipped; one existing WebSocket integration test timed out waiting for `uvicorn.Server.started`, while the updated re-arm response test passed. Its isolated retry stalled and was interrupted. Harness lint: 0 errors/17 freshness warnings. `git diff --check` passed.
 - gate 변화: None. The Fleet OMX inventory remains empty by default; device UID/socket wiring, ROS/gripper selection, physical E-stop/readback, ROS-SIM, DEVICE, and FIELD remain unproven and disabled.
+
+## 2026-09-29 · uncommitted · docs(plans): /dashboard 브리지 퇴역 기준 명시
+
+- 변경: 비평 P1(2026-09-26)의 남은 절반. 목적지는 브리지 회차(31e08eea)로 열렸으므로, 이번에는 홈 조작 화면의 퇴역 조건 C1~C5를 검증 가능하게 못 박았다 — 패널 동등성 대조표(2026-09-29 기준, 남음 3행: API 토큰 관리·로봇 신원 폼·ROS 반응성 표), 새 패널 단일 규칙(역할 화면에만 등록), G2+G3 수용, E-stop 가시 보존, 인증 복귀 경로 유지. 새 계획서: `docs/plans/2026-09-29-dashboard-bridge-retirement-criteria.md`.
+- 증거: 문서 회차 — 코드 무변경. 대조표는 `src/hmi/dashboard/panels.yaml`(17패널)과 홈 `index.html`·`settings.js` 구역 대조로 작성했다. D-204 ADR은 아직 `feat/role-surfaces-s1`에 있어 이행 일정은 정하지 않았다.
+- gate 변화: 없음.
