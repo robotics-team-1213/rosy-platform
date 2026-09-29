@@ -124,3 +124,30 @@ def test_mcap_session(tmp_path):
     assert [r["t"] for r in rows] == [1.0, 2.0, 3.0, 4.0]
     assert [r["side"]["cmd_vel"]["linear"]["x"] for r in rows] == [1.0, 2.0, 3.0, 4.0]
     assert (out / "frames" / "000003.jpg").is_file()
+
+
+def test_mcap_malformed_frame_is_skipped_not_fatal(tmp_path, capsys):
+    pytest.importorskip("mcap_ros2")
+    from mcap_ros2.writer import Writer
+
+    bag = tmp_path / "sess" / "bag"
+    bag.mkdir(parents=True)
+    with open(bag / "bag_0.mcap", "wb") as fh:
+        w = Writer(fh)
+        img_s = w.register_msgdef("sensor_msgs/msg/Image", IMAGE_DEF)
+        for t, size in ((1.0, 4 * 6 * 3), (2.0, 5), (3.0, 4 * 6 * 3)):  # 2.0: truncated payload
+            ns = int(t * 1e9)
+            img = np.full((4, 6, 3), int(t) * 50, np.uint8)
+            img[:, int(t):int(t) + 2] = 255
+            px = img.tobytes()[:size]
+            w.write_message("/camera/front", img_s, {
+                "header": {"stamp": {"sec": int(t), "nanosec": 0}, "frame_id": "c"},
+                "height": 4, "width": 6, "encoding": "bgr8", "is_bigendian": 0,
+                "step": 18, "data": list(px)}, ns, ns)
+        w.finish()
+    out = tmp_path / "out"
+    assert extract.main([str(tmp_path / "sess"), "--out", str(out),
+                         "--min-interval", "0.5", "--max-hamming", "0"]) == 0
+    rows = (out / "frames.jsonl").read_text().splitlines()
+    assert len(rows) == 2
+    assert "skipped 1" in capsys.readouterr().out

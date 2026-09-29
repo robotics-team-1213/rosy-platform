@@ -90,7 +90,7 @@ def _dumps(row) -> str:
     return json.dumps(_clean(row), allow_nan=False)
 
 
-def _mcap_frames(files):
+def _mcap_frames(files, skipped=None):
     try:
         from mcap.reader import make_reader
         from mcap_ros2.decoder import DecoderFactory
@@ -111,7 +111,13 @@ def _mcap_frames(files):
                     ext = "png" if "png" in str(msg.format).lower() else "jpg"
                     yield t, bytes(msg.data), dict(side), ext
                 elif name == CAMERA_TOPIC:
-                    bgr = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step, bytes(msg.data))
+                    try:
+                        bgr = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
+                                           bytes(msg.data))
+                    except ValueError:  # malformed frame: count it, keep going
+                        if skipped is not None:
+                            skipped[0] += 1
+                        continue
                     yield t, bgr, dict(side), "jpg"
 
 
@@ -124,12 +130,13 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     src, out = Path(args.source), Path(args.out)
     is_session = src.is_dir()
+    skipped = [0]
     if is_session:
         files = _mcap_files(src)
         if not files:
             print(f"no .mcap files under {src / 'bag'}", file=sys.stderr)
             return 1
-        it = _mcap_frames(files)
+        it = _mcap_frames(files, skipped)
     else:
         it = _video_frames(src)
     session = src.name if is_session else None
@@ -157,7 +164,8 @@ def main(argv=None) -> int:
             n += 1
     if is_session and (src / "session.json").is_file():
         shutil.copy2(src / "session.json", out / "session.json")
-    print(f"extracted {n} frames -> {out}")
+    note = f" (skipped {skipped[0]} malformed)" if skipped[0] else ""
+    print(f"extracted {n} frames{note} -> {out}")
     return 0
 
 
