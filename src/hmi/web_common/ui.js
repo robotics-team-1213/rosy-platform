@@ -255,3 +255,91 @@ for (const [name, ctor] of [
 ]) {
   if (!customElements.get(name)) customElements.define(name, ctor);
 }
+
+// D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어
+// 캐시한다. 토큰은 hex·oklch·color-mix 무엇이든 될 수 있어서 글자로 파싱하지
+// 않는다: 숨은 탐침 요소의 계산된 color(Chromium은 color-mix를 `color(srgb …)`나
+// `oklab(…)`으로 준다)를 1×1 캔버스에 칠해 sRGB 바이트로 되읽는다.
+// 테마가 바뀌면(`rosy:theme`) 캐시를 비운다 — 다시 그리는 일은 각 캔버스가 한다.
+// 캔버스 파일은 `window.RosyPalette`로 부른다(camera-capture.js는 Node에서도
+// import되므로 이 모듈을 정적으로 끌어올 수 없다, D-75 번들러 없음).
+const colourCache = new Map();
+const fontCache = new Map();
+let colourProbe = null;
+let colourRaster = null;
+
+function probeElement() {
+  if (!colourProbe || !colourProbe.isConnected) {
+    colourProbe = document.createElement("span");
+    colourProbe.hidden = true;
+    colourProbe.setAttribute("aria-hidden", "true");
+    colourProbe.dataset.rosyColourProbe = "";
+    document.documentElement.append(colourProbe);
+  }
+  return colourProbe;
+}
+
+function rasterContext() {
+  if (!colourRaster) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    colourRaster = canvas.getContext("2d", { willReadFrequently: true });
+  }
+  return colourRaster;
+}
+
+/** `--token` 또는 CSS 색 → [r, g, b, a] (r·g·b 0–255, a 0–1). 못 풀면 투명. */
+export function readColour(name) {
+  if (colourCache.has(name)) return colourCache.get(name);
+  const isToken = name.startsWith("--");
+  let rgba = [0, 0, 0, 0];
+  const declared = isToken
+    ? getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    : name;
+  if (declared) {
+    const probe = probeElement();
+    probe.style.color = "";
+    probe.style.color = isToken ? `var(${name})` : name;
+    const resolved = getComputedStyle(probe).color;
+    const ctx = rasterContext();
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = resolved;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    rgba = [r, g, b, Math.round((a / 255) * 1000) / 1000];
+  }
+  colourCache.set(name, rgba);
+  return rgba;
+}
+
+/** 이름 배열이나 {키: 이름} 표를 받아 같은 키의 [r, g, b, a] 표를 준다. */
+export function readPalette(names) {
+  const entries = Array.isArray(names) ? names.map((name) => [name, name]) : Object.entries(names);
+  const palette = {};
+  for (const [key, name] of entries) palette[key] = readColour(name);
+  return palette;
+}
+
+/** 캔버스 fillStyle/strokeStyle 용 `rgba(…)` 글자. */
+export function cssColor(name) {
+  const [r, g, b, a] = readColour(name);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/** `--body`·`--mono` 글꼴로 된 캔버스 font. 글자는 12px 아래로 내려가지 않는다. */
+export function canvasFont(size, family = "body") {
+  if (!fontCache.has(family)) {
+    const stack = getComputedStyle(document.documentElement).getPropertyValue(`--${family}`).trim();
+    fontCache.set(family, stack || (family === "mono" ? "monospace" : "sans-serif"));
+  }
+  return `${Math.max(12, Math.round(Number(size) || 12))}px ${fontCache.get(family)}`;
+}
+
+export function clearPalette() {
+  colourCache.clear();
+  fontCache.clear();
+}
+
+document.addEventListener("rosy:theme", clearPalette);
+window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, clear: clearPalette };
