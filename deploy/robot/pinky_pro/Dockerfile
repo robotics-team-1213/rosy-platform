@@ -125,6 +125,7 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && git checkout --detach ${SLLIDAR_COMMIT} \
     && rm -rf .git
 COPY src/contracts/interfaces ./src/contracts/interfaces
+COPY src/contracts/foundation ./src/contracts/foundation
 COPY src/sim/description ./src/sim/description
 COPY src/products/pinky_pro/bringup ./src/products/pinky_pro/bringup
 COPY src/runtime/navigation ./src/runtime/navigation
@@ -136,7 +137,7 @@ RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \
-        --packages-select sllidar_ros2 interfaces description bringup navigation omx_adapter omx control web_common \
+        --packages-select sllidar_ros2 interfaces core_common description bringup navigation omx_adapter omx control web_common \
     && test -d /opt/rosy_ws/install
 
 FROM io-runtime AS io

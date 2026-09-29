@@ -1479,3 +1479,10 @@
 - 변경: CI 6단계 적자 4건의 원인을 두 갈래로 고쳤다. (1) `secret_scan.py` 오탐 13건 — 규칙을 좁게 다듬었다: `_INTEGRITY_CONTEXT`에 backtick을 여는 `source`만 인정, URL이 가리키는 값을 bare copy로 인용하면 면제, 50자 이상 순수-문자 run은 base64가 아님, 닫히지 않은 bracket을 가진 값은 코드 조각(`_call_holds_no_literal` 유지), 환경 조회(`os.environ.get`/`getenv`)의 인자는 ALL_CAPS 이름이면 키로 취급, `obj.method()`를 `_CODE_REFERENCE`에 추가, 호출 인자 위치의 secret-named 식별자는 참조로 취급. (2) `test/robot_contracts.py`에 `COLCON_OUTPUT`/`source_manifests()`를 두고 image-closure 두 테스트와 `_launch_file`이 `src/build`·`src/install`·`src/log`를 건너뛰게 했다 — CI는 colcon 빌드 후라 중복 `package.xml`이 먼저 정렬됐던 것이 원인이다.
 - 증거: colcon 출력 흉내 트리에서 수정 전 3 failed(CI와 동일한 assertion) → 수정 후 3 passed; `test_release_boundary_guards.py` 73 passed(신규 회귀 10건 포함: 인자 위치 리터럴 4건은 계속 보고); 전체 `test/` suite 실행 중.
 - gate 변화: 없음. 스캐너 완화에 대한 변명성 주석 없이 각 규칙의 오탐 비용을 코드에 기록했다.
+## 2026-09-29 · uncommitted · fix(image): io-build 클로저에 core_common 추가
+
+- 변경: deploy/robot/pinky_pro/Dockerfile io-build 스테이지의 --packages-select에 core_common을, COPY에는 패키지 루트인 src/contracts/foundation 통째로 추가했다(core_common의 package.xml은 foundation/에 있다). omx_adapter가 core_common에 직접 의존하게 되면서(ER2 adapter 작업) 선택 목록의 전이 클로저에 core_common이 필요해졌으나 목록이 그대로여서 test_io_image_closure가 실패했다.
+- 증거: test/test_io_image_closure.py 2 passed. .dockerignore는 !src/contracts/foundation/** 로 이미 허용(추가 변경 없음).
+- gate 변화: 없음.
+- 결정: 클로저는 select 목록이 스스로 증명한다 — 의존 추가 커밋은 같은 변경에서 select·COPY를 함께 고친다.
+- 교훈: omx_adapter→core_common 커밋이 이 시험을 빨갛게 두고 갔다(커밋 순서 뒤처짐).
