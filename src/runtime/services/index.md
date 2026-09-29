@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(docking): D-353 뒤끝 — 도크 계약 시험을 poll_json 경로로 재연결
 - 2026-09-30 · uncommitted · refactor(docking): D-353 봉합점 구현 착지
 - 2026-09-30 · uncommitted · feat(docking): D-351 재시도 갈래 — 도달 실패/전류 없음/충전 단절 구분
 - 2026-09-30 · uncommitted · feat(docking): D-350 하드웨어 단계·degrade·만춫·히스테리시스
 - 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — observer wiring, config gate, status contract
-- 2026-09-29 · uncommitted · feat(traffic): D-337 T2 — observer source transport

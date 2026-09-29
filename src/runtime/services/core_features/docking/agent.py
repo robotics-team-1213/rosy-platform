@@ -21,8 +21,6 @@ from typing import Optional
 
 from core_common.device_poll import PollReachability, poll_json
 
-from core_common.device_poll import PollReachability, poll_json
-
 
 #: 이 두 필드가 없으면 도크가 답한 것으로 치지 않는다. 빠진 값을 False 로
 #: 채우면 "충전 안 됨"과 "말을 안 함"이 한 값으로 뭉개진다.
