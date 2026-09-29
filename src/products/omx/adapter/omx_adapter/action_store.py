@@ -87,6 +87,8 @@ class ActionStore:
                     UNIQUE(workcell_id, principal_id, request_key)
                 );
                 CREATE INDEX IF NOT EXISTS omx_actions_state ON omx_actions(state, updated_at);
+                CREATE UNIQUE INDEX IF NOT EXISTS omx_actions_attempt
+                    ON omx_actions(attempt_id) WHERE attempt_id IS NOT NULL;
                 CREATE TABLE IF NOT EXISTS omx_action_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     action_id TEXT NOT NULL REFERENCES omx_actions(action_id),
@@ -139,7 +141,7 @@ class ActionStore:
     def create_action(self, *, workcell_id: str, instance_id: str, principal_id: str,
                       request_key: str, action_kind: str, configuration_revision: str,
                       observation_id: str, owner_generation: int,
-                      payload: Mapping[str, Any]) -> dict[str, Any]:
+                      payload: Mapping[str, Any], action_id: str | None = None) -> dict[str, Any]:
         workcell_id = _nonempty("workcell_id", workcell_id, maximum=96)
         instance_id = _nonempty("instance_id", instance_id, maximum=96)
         principal_id = _nonempty("principal_id", principal_id, maximum=96)
@@ -149,6 +151,8 @@ class ActionStore:
         observation_id = _nonempty("observation_id", observation_id)
         if type(owner_generation) is not int or owner_generation < 0:
             raise ValueError("owner_generation must be a non-negative integer")
+        if action_id is not None:
+            action_id = _nonempty("action_id", action_id)
         if not isinstance(payload, Mapping):
             raise ValueError("payload must be a JSON object")
         request = {
@@ -174,7 +178,7 @@ class ActionStore:
                     raise ActionConflict("request_key is already bound to a different Action request")
                 connection.commit()
                 return {"action": self._dict(existing), "created": False}
-            action_id = str(uuid.uuid4())
+            action_id = action_id or str(uuid.uuid4())
             connection.execute(
                 """INSERT INTO omx_actions
                    (action_id, workcell_id, instance_id, principal_id, request_key,
@@ -195,12 +199,16 @@ class ActionStore:
             connection.commit()
         return {"action": self._dict(row), "created": True}
 
-    def begin_submission(self, action_id: str, *, expected_generation: int) -> dict[str, Any]:
+    def begin_submission(self, action_id: str, *, expected_generation: int,
+                         attempt_id: str | None = None) -> dict[str, Any]:
         action_id = _nonempty("action_id", action_id)
         if type(expected_generation) is not int or expected_generation < 0:
             raise ValueError("expected_generation must be a non-negative integer")
         now = _utc_now()
-        attempt_id = str(uuid.uuid4())
+        if attempt_id is None:
+            attempt_id = str(uuid.uuid4())
+        else:
+            attempt_id = _nonempty("attempt_id", attempt_id)
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT * FROM omx_actions WHERE action_id=?",

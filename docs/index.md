@@ -202,13 +202,17 @@
 - [2026-09-28-camera-fault-supervised-demo.md](plans/2026-09-28-camera-fault-supervised-demo.md)
 - [2026-09-28-control-and-contract-boundary-audit.md](plans/2026-09-28-control-and-contract-boundary-audit.md)
 - [2026-09-28-site-camera-preview-rectification.md](plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-29-d268-policy-evidence-disposition.md](plans/2026-09-29-d268-policy-evidence-disposition.md)
 - [2026-09-29-embodied-reasoning-device-action-design.md](plans/2026-09-29-embodied-reasoning-device-action-design.md)
 - [2026-09-29-er2-adr-consistency-review.md](plans/2026-09-29-er2-adr-consistency-review.md)
+- [2026-09-29-er2-agent-loop-gap-map.md](plans/2026-09-29-er2-agent-loop-gap-map.md)
 - [2026-09-29-er2-isaac-sim-architecture-assessment.md](plans/2026-09-29-er2-isaac-sim-architecture-assessment.md)
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
+- [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
+- [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
 
 ## 교훈 (docs/solutions)
 
@@ -222,7 +226,7 @@
 ## 최근 기록
 
 - 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
+- 2026-09-29 · uncommitted · docs(plan): land policy evidence T4-T6 and API Ref v1.48
 - 2026-09-29 · uncommitted · docs(er2): bound first Fleet OMX transport
 - 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
 - 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
-- 2026-09-29 · uncommitted · feat(protocol): land policy evidence schema (T1)

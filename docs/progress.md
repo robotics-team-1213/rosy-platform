@@ -66,6 +66,10 @@ plans:
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
   - docs/plans/2026-09-29-er2-adr-consistency-review.md
   - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
+  - docs/plans/2026-09-29-er2-agent-loop-gap-map.md
+  - docs/plans/2026-09-29-d268-policy-evidence-disposition.md
+  - docs/plans/2026-09-29-policy-evidence-contract-design.md
+  - docs/plans/2026-09-29-policy-evidence-contract.md
 ---
 ## 지금 상태
 

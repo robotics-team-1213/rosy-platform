@@ -10,7 +10,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
-from contextlib import closing
+from contextlib import closing, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -148,7 +148,8 @@ class MissionStore:
 
     def create_proposal(self, *, mission_id: str, principal_id: str, request_key: str,
                         action_kind: str, workcell_id: str, instance_id: str,
-                        plan: Mapping[str, Any], goal_predicate: Mapping[str, Any]) -> dict[str, Any]:
+                        plan: Mapping[str, Any], goal_predicate: Mapping[str, Any],
+                        connection: sqlite3.Connection | None = None) -> dict[str, Any]:
         mission_id = _nonempty("mission_id", mission_id)
         principal_id = _nonempty("principal_id", principal_id, limit=96)
         request_key = _nonempty("request_key", request_key, limit=160)
@@ -168,19 +169,23 @@ class MissionStore:
         }
         digest = hashlib.sha256(_json(request_document).encode("utf-8")).hexdigest()
         now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            prior = connection.execute(
+        owns_transaction = connection is None
+        connection_context = closing(self._connect()) if owns_transaction else nullcontext(connection)
+        with connection_context as db:
+            if owns_transaction:
+                db.execute("BEGIN IMMEDIATE")
+            prior = db.execute(
                 "SELECT * FROM fleet_missions WHERE principal_id=? AND request_key=?",
                 (principal_id, request_key),
             ).fetchone()
             if prior is not None:
                 if prior["request_digest"] != digest:
                     raise MissionConflict("request_key is already bound to a different Mission proposal")
-                connection.commit()
+                if owns_transaction:
+                    db.commit()
                 return {"mission": self._row(prior), "created": False}
             step_id = f"{mission_id}:step-1"
-            connection.execute(
+            db.execute(
                 """INSERT INTO fleet_missions
                    (mission_id, step_id, principal_id, request_key, request_digest,
                     action_kind, workcell_id, instance_id, plan_json, goal_predicate_json,
@@ -189,16 +194,17 @@ class MissionStore:
                 (mission_id, step_id, principal_id, request_key, digest, action_kind,
                  workcell_id, instance_id, plan_json, predicate_json, now, now),
             )
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
+            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                      (mission_id,)).fetchone()
             self._event(
-                connection, event_source="fleet_mission", source_event_id=f"proposal:{mission_id}",
+                db, event_source="fleet_mission", source_event_id=f"proposal:{mission_id}",
                 mission=row, event_type="MISSION_PROPOSED", state="PROPOSED",
                 actor_id=principal_id, detail={"request_digest": digest},
             )
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
+            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                      (mission_id,)).fetchone()
-            connection.commit()
+            if owns_transaction:
+                db.commit()
         return {"mission": self._row(row), "created": True}
 
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int,

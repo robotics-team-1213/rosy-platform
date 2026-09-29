@@ -3360,6 +3360,13 @@
 - 증거: 비활성 OMX profile, 개발/ROS-SIM OCI shell, `RosArmCommandRuntime`, 독립 `ActionStore`, 배포 host inventory template 및 D-246/D-281/D-282/D-273 대조. 실제 host/serial/gripper/stop inventory는 아직 없다.
 - gate 변화: 없음. UDS contract SOURCE/LOCAL 구현을 시작하며 ROS-SIM/ARTIFACT/DEVICE/FIELD와 물리 capability는 계속 HOLD다.
 
+## 2026-09-29 · uncommitted · docs(plan): land policy evidence T4-T6 and API Ref v1.48
+
+- 변경: 증거 계약 실행 계획 T4~T6 착지 기록. T4 — `task_service`의 policy 발의 `evidence_id` 필수와 admission binding(통과해도 밸브 닫힌 한 HOLD). T5 — `POST /api/fleet/policy-evidence`·`GET .../latest`. T6 — API Ref v1.48(§10.6.2 신설, 변경 로그, policy 발의 서술)과 `test_task_contract_docs.py` 정합 시험, api_web 설명 표기. `docs/progress.md` plans에 갭맵·D-268 처분·증거 계약 설계/실행계획 4건 등재.
+- 증거: Fleet `628 passed, 5 skipped`(신규 API 6·발의 binding 9·계약 문서 1), api_web 70 passed/13 skipped, 변경 파일 flake8 clean. T6이 만든 것은 v1.48이며 현재 헤더 v1.49는 병행 세션의 D-333/D-336 추가다(§10.6.2·v1.48 행 무변경).
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED=False` 불변, 자동 실행·측정 없음.
+- 결정: 사다리 1단계 완료. 남은 것은 권한·정답 시험·30분 스트림·입회 수용(사다리 2~5단계)이다.
+- 교훈: 병행 세션이 같은 파일을 만질 때는 버전 핀 시험이 충돌을 먼저 잡는다 — API Ref 헤더·핀·변경 로그를 한 변경 단위로 묶어야 한다.
 ## 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
 
 - 변경: 계획의 ADR 후보 두 건을 조사하고 기록으로 종결했다. A-1(표정 어휘): `set_emotion` GIF 경로의 face 밖 호출자가 0곳이라 정식화할 상태→표정 계약이 없고, 카드 어휘는 D-221이 이미 계약한다 — 신규 ADR 없음. 만료 복귀 GIF가 상태와 무관하다는 관찰 1건은 BENCH 트리거로 남겼다. A-2(온기 문구): 세 웹 표면 빈 상태·로딩·오류 50행 스캔에서 문법이 이미 닫혀 있고 D-280.4/D-277/D-278/D-254가 경계를 쥐고 있어 닫을 간극이 없다 — 신규 ADR 없음.

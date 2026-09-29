@@ -5,7 +5,7 @@ last_verified: { commit: "uncommitted", date: 2026-09-26 }
 gates:
   SOURCE:
     state: GO
-    evidence: "72 OMX adapter tests passed, 3 skipped; current source also includes semantic selector evidence, evidence-only pick-place transaction, and durable Action attempt ledger. Disabled OMX-AI profile remains empty-contract; no physical driver/API is enabled"
+    evidence: "140 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE adds peer-UID-checked bounded UDS request handling, a disabled-by-default local Action runner, Fleet-issued action/attempt IDs, durable UNKNOWN behavior, and no replay after submission intent. Driver remains an injected port; disabled OMX-AI profile stays empty-contract."
     cmd: "python -B -X utf8 -m pytest src/products/omx/adapter/test src/products/omx/profile/test test/test_omx_vendor_stack_lock.py test/test_omx_host_inventory.py test/test_omx_multi_preflight.py test/test_dds_identity_contracts.py -q -p no:cacheprovider"
   LOCAL:
     state: GO

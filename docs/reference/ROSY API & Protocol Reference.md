@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.49
+**Version:** v1.51
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1275,14 +1275,58 @@ request source derived by the trusted server. Caller-supplied stop principal is
 forbidden. `LOCAL_LATCHED` is a middleware software fact; it is not a driver
 standstill readback, safety-rated E-stop, or physical stop confirmation.
 Physical stop and goal evidence remain separately sourced and correlated.
-These schemas establish the SOURCE contract only; no UDS listener, action
-runner, production Fleet route, OMX installation, or motion capability is
-claimed by this reference entry.
+The source now provides a newline-delimited JSON UDS handler and local Action runner. Each connection carries one request frame, capped at 64 KiB, and peer UID is read from Linux `SO_PEERCRED`; the parent socket directory must already be provisioned. `request_digest` is lowercase SHA-256 over UTF-8 canonical JSON of the complete `FleetActionGrant` with `request_digest` omitted (sorted keys, compact separators, Pydantic JSON-mode ISO-8601 timestamps). The runner is disabled by default, journals before driver submission, and never replays an Action already in `SUBMITTING`, `UNKNOWN`, or later. These source modules do not register a service entrypoint, connect a selected ROS/gripper driver, or provide physical stop/goal proof; those remain gated by ROS-SIM, DEVICE, and FIELD.
+
+## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)
+
+These Site Fleet routes are separate from `/api/v1/fleet/missions` on robot CORE.
+They require the Site Fleet named-user authorization and persistent audit store.
+The authenticated principal is server-derived; proposal data cannot supply an
+actor or principal. Candidate metadata is limited to 32 KiB, retained for 30
+days, and never includes source image bytes, provider credentials, or auth tokens.
+Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image fields.
+
+| Method | Path | Role | Meaning |
+|---|---|---|---|
+| POST | `/api/fleet/proposals` | Operator | Store one immutable, idempotent candidate under `(principal_id, request_key)`; performs no model call, Mission creation, claim, or device submission. |
+| GET | `/api/fleet/proposals/{proposal_id}` | Viewer | Read the caller-owned candidate and resolution status. |
+| POST | `/api/fleet/proposals/{proposal_id}/resolve` | Operator | Recheck the exact current observation/capability through the server-injected resolver; on one unambiguous match, create a `PROPOSED` Mission draft. |
+| GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
+| POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. |
+
+`POST /api/fleet/proposals` accepts `request_key`, `workcell_id`, `instance_id`,
+and an ER 2 selector candidate. Its authenticated owner and request scope are
+stored by Fleet; duplicate same-content requests return the existing proposal,
+while reuse with a changed candidate or workcell/instance returns `409
+REQUEST_CONFLICT`. The API does not call ER 2. Candidate records allow only
+selector/provenance metadata and reject principal, credential, and image-payload
+fields.
+
+Resolution is available only when a trusted current-observation and capability
+resolver is explicitly injected into the Site Fleet app. It receives the stored
+candidate, requested workcell/instance, and current time; it must verify image
+digest, camera/frame, capture time, calibration/transform/config revisions,
+freshness, unique target and destination, and capability. Missing resolver,
+stale or ambiguous evidence, or changed revisions fail closed. Resolution
+stores a target/goal predicate and shared resources in the Fleet Mission journal;
+it does not submit a device Action.
+
+Admission requires a configured named operator credential; the development
+fallback principal is refused. The server re-resolves the candidate and compares
+the resulting target, goal predicate, revisions, and resource set with the
+stored draft before the atomic generation check and claim acquisition. Stale
+generation or any existing navigation/direct-action/workcell/object claim
+returns `409` with no new claim. General mutation audit failure returns `503`
+before proposal or admission mutation. This route currently reports
+`physical_submission: NOT_CONNECTED`: Mission admission is not an OMX Action,
+ROS goal, software stop, or physical E-stop receipt.
 
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.51 | 2026-09-29 | Clarify (D-336): define one-frame newline JSON UDS encoding, SO_PEERCRED UID derivation, 64 KiB bound, and FleetActionGrant canonical digest; source adds a disabled-by-default local Action runner with durable attempt IDs and no unknown replay. No service entrypoint or physical capability is enabled. |
+| v1.50 | 2026-09-29 | Additive (D-333/D-334): separate Site Fleet candidate storage, observation/capability resolution, Mission draft readback, and named-operator generation-checked admission routes. Proposal creation does not invoke ER 2; admission only acquires Fleet claims and remains disconnected from Device Action/ROS. |
 | v1.46 | 2026-09-29 | Additive (D-330): Fleet dispatch-control readback and explicit generation-checked operator rearm; startup/stop hold, unresolved-action rearm refusal, and device-side generation fencing remains unimplemented. |
 | v1.47 | 2026-09-29 | Clarify (D-330): dedicated operator E-stop fanout proceeds on audit/latch/queue-storage failure with server logging; ordinary mutations remain audit fail-closed; request replies do not prove physical stop. |
 | v1.49 | 2026-09-29 | Additive (D-333/D-336): typed Site Fleet-to-OMX local Device Action and software-stop contracts, same-host UDS boundary, attempt/generation fences, and explicit separation from Mission goal evidence and physical stop proof. No REST path, PRT envelope change, listener, runner, or device capability is implied. |

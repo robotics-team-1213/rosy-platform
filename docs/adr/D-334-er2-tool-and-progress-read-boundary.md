@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-29, 도구 권한·진행 상태 의미만). 현행 ER 2 어댑터의 도구는 `propose_pick_place` 하나다. 추가 모델 도구, provider 연속 loop, Mission 진행 API, 영상 진행 분류, 자동 재계획·실행은 구현·운영 승인 대상이 아니다.
 
+**Implementation note (2026-09-29):** D-333 Task 3 adds authenticated Site Fleet proposal and Mission draft readback plus named-operator admission. This is a bounded Fleet REST surface; it does not add an ER 2 `get_mission_status` tool, four-axis Mission/Action/goal/stop snapshot, cursor event endpoint, subscription, or device/physical state claim. The readback currently returns Fleet Mission state and Fleet journal history only.
+
 ### Context
 
 D-331의 표준 ER 2 adapter는 이미지 한 장과 지시를 한 번 보내고 단일 `propose_pick_place` 함수 호출을 후보로 파싱한다. tool callback 실행, `function_result` 회신, `previous_interaction_id` 연속 호출은 없다. D-326/D-328은 장래의 후보 제출·관측 요청·상태 조회를 개념으로 제안했지만 모델에 실제 노출할 목록과 진행 snapshot의 출처·신선도는 정하지 않았다. D-333은 Mission/Action/목표/정지의 소유권을 분리했으나 사용자와 모델이 작업 중 무엇을 읽을지의 계약은 후속으로 남겼다.
