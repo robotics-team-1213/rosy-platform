@@ -550,7 +550,7 @@ main {
 .discovery-state.conflict { color: var(--status-crit); }
 .discovery-state.enrolled { color: var(--paper); }
 .device-link h4 { margin: 0; }
-.enroll-alarm { color: var(--status-crit); font-weight: 600; }
+.enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
 .enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
 .enroll-result p { margin: var(--space-1) 0; }
