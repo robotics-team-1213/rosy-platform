@@ -12,8 +12,6 @@ Host-side utilities for the absorbed Control package: a static ROS-name audit, c
 | File | Description |
 |------|-------------|
 | `audit_ros_names.py` | AST inventory of publishers/subscriptions/services/frames; not a live graph validator |
-| `simulate_line_follow.py` | Host line-follow simulation; launched by `test/test_line_follow_simulation.py` (moved from root `tools/`, 2026-09-29) |
-| `simulate_semantic_road.py` | Host semantic-road simulation; launched by `test/test_semantic_road_simulation.py` (moved from root `tools/`, 2026-09-29) |
 | `migrate_calibration.py` | Merge legacy cliff/drive YAML into a new file; never overwrite sources; conflicts need an operator |
 
 ## Subdirectories
