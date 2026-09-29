@@ -60,8 +60,27 @@ def test_remote_push_script_partial_then_pointer_swap():
     ptr_tmp = s.index(f"> {root}/shadow.tmp")
     swap = s.index(f"mv {root}/shadow.tmp {root}/shadow")
     assert s.index("sha256sum -c") < mv_final < ptr_tmp < swap
-    assert f"cp {root}/shadow {root}/shadow.previous" in s
-    assert s.index(f"cp {root}/shadow {root}/shadow.previous") < swap
+    prev = s.index(f"cp {root}/shadow {root}/shadow.previous.tmp")
+    assert prev < s.index(f"mv {root}/shadow.previous.tmp {root}/shadow.previous") < swap
+    assert s.index("sync", swap) > swap
+
+
+def test_remote_push_reverifies_existing_final_and_quarantines_bad():
+    s = deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")])
+    root = "/var/lib/rosy/models"
+    assert f"mv {root}/{REV} {root}/{REV}.bad.$$" in s
+    # the final folder is verified after install and before the pointer swap
+    assert s.count("sha256sum -c") >= 3
+    last_check = s.rindex("sha256sum -c")
+    assert s.index(f"cd {root}/{REV}", s.index(f"mv {root}/{REV}.partial")) < last_check
+    assert last_check < s.index(f"mv {root}/shadow.tmp {root}/shadow")
+
+
+def test_remote_push_same_rev_keeps_previous():
+    s = deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")])
+    root = "/var/lib/rosy/models"
+    guard = s.index(f'!= {root}/{REV} ]')
+    assert guard < s.index(f"cp {root}/shadow {root}/shadow.previous.tmp")
 
 
 def test_remote_script_quotes_revision_with_space():
@@ -131,8 +150,36 @@ def test_push_stops_on_failed_step(tmp_path):
 def test_rollback_and_status_run_ssh():
     runner = FakeRunner()
     assert deliver.main(["rollback", "robot"], runner=runner) == 0
-    assert runner.calls[0][:2] == ["ssh", "pinky@robot"]
+    assert runner.calls[0][:3] == ["ssh", "--", "pinky@robot"]
     assert "shadow.previous" in runner.calls[0][-1]
     runner = FakeRunner(stdout="shadow: /var/lib/rosy/models/x\n")
     assert deliver.main(["status", "robot"], runner=runner) == 0
     assert "cat" in runner.calls[0][-1]
+
+
+@pytest.mark.parametrize("argv", [
+    ["rollback", "-oProxyCommand=x"],
+    ["rollback", "robot", "--user", "-x"],
+    ["rollback", "robot", "--user", "a b"],
+    ["status", "ro bot"],
+    ["status", "robot", "--root", "relative/models"],
+    ["status", "robot", "--root", "/var/lib/rosy models"],
+    ["status", "robot", "--root", "/var/$(x)"],
+])
+def test_rejects_unsafe_host_user_root(argv):
+    runner = FakeRunner()
+    try:
+        rc = deliver.main(argv, runner=runner)
+    except SystemExit as exc:  # argparse refusing an option-looking host is fine too
+        rc = exc.code
+    assert rc != 0
+    assert runner.calls == []
+
+
+def test_ssh_and_scp_end_options_before_targets(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass")
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models)], runner=runner) == 0
+    assert runner.calls[0][:3] == ["ssh", "--", "pinky@robot"]
+    assert runner.calls[1][:3] == ["scp", "-r", "--"]

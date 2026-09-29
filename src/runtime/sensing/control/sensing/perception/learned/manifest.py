@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore")
 COLORS = ("rgb", "bgr")
 PRECISIONS = ("fp32", "int8")
 MANIFEST_NAME = "model_manifest.json"
+REVISION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 class ManifestError(ValueError):
@@ -76,6 +78,13 @@ class ModelManifest:
             if f.precision == precision and f.name.endswith(".onnx"):
                 return self.folder / f.name
         raise ManifestError(f"no {precision} onnx file in manifest")
+
+
+def check_revision(revision) -> str:
+    """model_revision names a folder and a remote path: one safe token, no quoting needed."""
+    if not isinstance(revision, str) or not REVISION_PATTERN.fullmatch(revision):
+        raise ManifestError(f"model_revision {revision!r}: expected [A-Za-z0-9][A-Za-z0-9._-]*")
+    return revision
 
 
 def _req(doc: dict, key: str, kind):
@@ -186,9 +195,7 @@ def load_manifest(path: str | Path) -> ModelManifest:
         raise ManifestError(f"cannot read manifest: {exc}") from exc
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
         raise ManifestError(f"schema: expected {SCHEMA}")
-    revision = _req(doc, "model_revision", str).strip()
-    if not revision:
-        raise ManifestError("model_revision: empty")
+    revision = check_revision(doc.get("model_revision"))
     task = doc.get("task")
     if task not in TASKS:
         raise ManifestError(f"task: one of {TASKS}")

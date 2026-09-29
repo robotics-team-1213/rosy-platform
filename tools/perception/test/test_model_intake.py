@@ -1,5 +1,6 @@
 """Task 9: model export and intake (D-356)."""
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -48,20 +49,95 @@ def test_hf_source_refuses_non_commit(src):
         intake.resolve_source(src, downloader=lambda **kw: pytest.fail("downloaded"))
 
 
-def test_hf_source_pinned_commit_downloads():
-    sha = "0123456789abcdef0123456789abcdef01234567"
+SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_hf_source_downloads_real_files_into_workdir(tmp_path):
     seen = {}
 
     def fake(**kw):
         seen.update(kw)
-        return "/snap"
+        d = Path(kw["local_dir"])
+        d.mkdir(parents=True)
+        (d / "model_manifest.json").write_text("{}", encoding="utf-8")
+        return str(d)
 
-    assert intake.resolve_source(f"hf:org/repo@{sha}", downloader=fake) == Path("/snap")
-    assert seen == {"repo_id": "org/repo", "revision": sha}
+    got = intake.resolve_source(f"hf:org/repo@{SHA}", downloader=fake, workdir=tmp_path)
+    assert seen["repo_id"] == "org/repo" and seen["revision"] == SHA
+    assert Path(seen["local_dir"]).is_relative_to(tmp_path)
+    assert got.is_relative_to(tmp_path)
+    assert (got / "model_manifest.json").is_file()
+
+
+def test_hf_source_symlinked_snapshot_is_dereferenced(tmp_path):
+    blobs = tmp_path / "blobs"
+    blobs.mkdir()
+    (blobs / "abc").write_bytes(b"weights")
+    try:
+        os.symlink(blobs / "abc", tmp_path / "probe")
+    except (OSError, NotImplementedError):
+        pytest.skip("os.symlink unavailable on this host")
+
+    def fake(**kw):  # an old hub that still links into the blob cache
+        d = Path(kw["local_dir"])
+        d.mkdir(parents=True)
+        os.symlink(blobs / "abc", d / "model.onnx")
+        return str(d)
+
+    got = intake.resolve_source(f"hf:org/repo@{SHA}", downloader=fake,
+                                workdir=tmp_path / "work")
+    f = got / "model.onnx"
+    assert not f.is_symlink() and f.read_bytes() == b"weights"
 
 
 def test_local_source_is_a_path(tmp_path):
-    assert intake.resolve_source(str(tmp_path)) == tmp_path
+    assert intake.resolve_source(str(tmp_path), workdir=tmp_path / "w") == tmp_path
+
+
+class _Ev:
+    visible, error, confidence, class_fractions = False, None, 0.0, {"a": 1.0}
+
+
+class _Res:
+    evidence, latency_ms = _Ev(), 1.0
+
+
+class _FlakyModel:
+    def __init__(self):
+        self.n = 0
+
+    def infer(self, bgr):
+        self.n += 1
+        if self.n == 1:
+            raise ValueError("non-finite logits")
+        if self.n == 2:
+            raise ValueError("expected an HxWx3 BGR frame")
+        return _Res()
+
+
+def test_replay_separates_nan_from_other_errors(monkeypatch):
+    frames = [np.zeros((240, 320, 3), np.uint8)] * 4
+    monkeypatch.setattr(intake, "_video_frames", lambda path, n: iter(frames))
+    stats = intake.replay(_FlakyModel(), [Path("v.mp4")], 10)
+    assert stats["frames"] == 4 and stats["nan_frames"] == 1 and stats["error_frames"] == 1
+    verdict, reasons = intake.judge(dict(GOOD, error_frames=1), GATE)
+    assert verdict == "fail" and "error" in reasons[0].lower()
+
+
+def test_io_failure_still_writes_fail_report(tmp_path, monkeypatch):
+    import cv2
+    folder = tmp_path / "m"
+    folder.mkdir()
+    monkeypatch.setattr(intake, "load_manifest", lambda f: (_ for _ in ()).throw(OSError("disk")))
+    assert intake.main([str(folder), "--out", str(tmp_path / "out")]) == 1
+    report = json.loads((tmp_path / "m.intake_report.json").read_text(encoding="utf-8"))
+    assert report["verdict"] == "fail" and "disk" in report["reasons"][0]
+
+    def boom(f):
+        raise cv2.error("codec")
+
+    monkeypatch.setattr(intake, "load_manifest", boom)
+    assert intake.main([str(folder), "--out", str(tmp_path / "out")]) == 1
 
 
 def test_even_indices():
@@ -194,3 +270,17 @@ def test_export_requires_classes(tmp_path):
     import export_onnx
     with pytest.raises(SystemExit):
         export_onnx.main([str(tmp_path / "m.pt"), "--out", str(tmp_path / "o")])
+
+
+def test_export_validates_classes_before_export(tmp_path, monkeypatch):
+    import export_onnx
+    monkeypatch.setattr(export_onnx, "export_and_check",
+                        lambda *a, **k: pytest.fail("exported before validation"))
+    classes = tmp_path / "classes.yaml"
+    classes.write_text("classes:\n  - {name: a, role: background}\n"
+                       "  - {name: b, role: background}\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        export_onnx.main([str(tmp_path / "m.pt"), "--out", str(tmp_path / "o"),
+                          "--classes", str(classes), "--dataset-repo", "r",
+                          "--dataset-revision", "s", "--camera-profile-revision", "c",
+                          "--trainer", "t"])

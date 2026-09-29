@@ -139,3 +139,16 @@ def test_verify_files_rejects_path_outside_folder(tmp_path):
         pytest.skip("symlinks unavailable")
     with pytest.raises(ManifestError, match="outside"):
         verify_files(m)
+
+
+@pytest.mark.parametrize("rev", ["bad rev", "../x", "-x", ".hidden", "a/b", "a;b", "x\n"])
+def test_model_revision_must_be_path_safe(tmp_path, rev):
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, _manifest(model_revision=rev)))
+
+
+def test_check_revision_is_the_shared_rule():
+    from control.sensing.perception.learned.manifest import check_revision
+    assert check_revision("lane-seg-20260930-abcdef12") == "lane-seg-20260930-abcdef12"
+    with pytest.raises(ManifestError):
+        check_revision("a b")

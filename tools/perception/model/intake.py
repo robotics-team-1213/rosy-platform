@@ -16,8 +16,10 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -45,14 +47,20 @@ def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
         reasons.append(f"latency p50 {p50:.1f} ms > {gate['max_host_latency_ms_p50']} ms")
     if stats.get("nan_frames", 0) > gate["max_nan_frames"]:
         reasons.append(f"NaN frames {stats['nan_frames']} > {gate['max_nan_frames']}")
+    if stats.get("error_frames", 0) > 0:
+        reasons.append(f"inference error frames {stats['error_frames']} > 0")
     vis = stats.get("visible_fraction", 0.0)
     if stats.get("frames", 0) > 0 and vis < gate["min_visible_fraction"]:
         reasons.append(f"visible fraction {vis:.3f} < {gate['min_visible_fraction']}")
     return ("fail" if reasons else "pass"), reasons
 
 
-def resolve_source(source: str, downloader=None) -> Path:
-    """Local folder, or hf:org/repo@<40-hex commit> (tags and branches move: refused)."""
+def resolve_source(source: str, downloader=None, workdir=None) -> Path:
+    """Local folder, or hf:org/repo@<40-hex commit> (tags and branches move: refused).
+
+    The HF cache links snapshot files into blobs, which verify_files refuses, so
+    the snapshot goes to a local_dir under workdir; any symlink left is copied
+    out as a real file."""
     if not source.startswith("hf:"):
         return Path(source)
     m = _HF.match(source)
@@ -61,7 +69,16 @@ def resolve_source(source: str, downloader=None) -> Path:
     if downloader is None:
         from huggingface_hub import snapshot_download  # lazy: tools-only dependency
         downloader = snapshot_download
-    return Path(downloader(repo_id=m["repo"], revision=m["rev"]))
+    workdir = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix="rosy-intake-"))
+    target = workdir / f"{m['repo'].replace('/', '__')}@{m['rev']}"
+    real = target.with_name(target.name + ".real")
+    for d in (target, real):
+        shutil.rmtree(d, ignore_errors=True)
+    got = Path(downloader(repo_id=m["repo"], revision=m["rev"], local_dir=str(target)))
+    if any(p.is_symlink() for p in [got, *got.rglob("*")]):
+        shutil.copytree(got, real, symlinks=False)
+        return real
+    return got
 
 
 def load_gate(path) -> dict:
@@ -75,7 +92,6 @@ def even_stride(total: int, max_frames: int) -> int:
 
 def _video_frames(path: Path, max_frames: int):
     """Up to max_frames evenly spaced frames, read sequentially (seeking is slow)."""
-    import cv2
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise ValueError(f"cannot open video: {path}")
@@ -98,14 +114,17 @@ def _video_frames(path: Path, max_frames: int):
 
 def replay(model, videos, max_frames: int) -> dict:
     latencies, deltas, fractions = [], [], []
-    frames = nan_frames = visible = 0
+    frames = nan_frames = error_frames = visible = 0
     for video in videos:
         for bgr in _video_frames(video, max_frames):
             frames += 1
             try:
                 result = model.infer(bgr)
-            except ValueError:  # non-finite logits
-                nan_frames += 1
+            except ValueError as exc:
+                if "non-finite" in str(exc):  # lane_evidence's NaN/inf refusal
+                    nan_frames += 1
+                else:
+                    error_frames += 1
                 continue
             latencies.append(result.latency_ms)
             ev = result.evidence
@@ -125,6 +144,7 @@ def replay(model, videos, max_frames: int) -> dict:
         "frames": frames,
         "latency_ms": {"p50": pct(latencies, 50), "p95": pct(latencies, 95)},
         "nan_frames": nan_frames,
+        "error_frames": error_frames,
         "visible_fraction": visible / frames if frames else 0.0,
         "error_delta": {"median": pct(deltas, 50), "p95": pct(deltas, 95), "n": len(deltas)},
         "class_fractions_mean": {n: float(np.mean([f[n] for f in fractions])) for n in names},
@@ -155,7 +175,7 @@ def main(argv=None) -> int:
               "tool_commit": _tool_commit()}
     folder = None
     try:
-        folder = resolve_source(args.source)
+        folder = resolve_source(args.source, workdir=Path(args.out) / ".incoming")
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
         verify_files(manifest)
@@ -166,7 +186,7 @@ def main(argv=None) -> int:
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
         report["verdict"], report["reasons"] = judge(stats, gate)
-    except (ManifestError, ValueError, ImportError) as exc:
+    except (ManifestError, ValueError, ImportError, OSError, cv2.error) as exc:
         report["reasons"] = [f"{type(exc).__name__}: {exc}"]
 
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
@@ -175,6 +195,9 @@ def main(argv=None) -> int:
         shutil.copytree(folder, dest, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns(".cache", ".git*", REPORT_NAME))
         (dest / REPORT_NAME).write_text(text, encoding="utf-8")
+        if args.source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
+            for d in (folder, Path(str(folder).removesuffix(".real"))):
+                shutil.rmtree(d, ignore_errors=True)
         print(f"PASS {report['model_revision']} -> {dest}")
         return 0
     src = Path(folder) if folder else Path(args.source.replace(":", "_").replace("/", "_"))

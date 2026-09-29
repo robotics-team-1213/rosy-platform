@@ -6,7 +6,9 @@ deliver.py status <host>
 
 push: scp to /var/lib/rosy/models/<rev>.partial, sha256sum -c on the robot,
 mv to <rev>, then an atomic pointer swap (shadow.tmp -> shadow; the old value
-stays in shadow.previous). The pointer holds the model folder path that
+stays in shadow.previous; re-pushing the live revision keeps it). An already
+installed <rev> is re-verified and quarantined as <rev>.bad.<pid> if it fails.
+host, user and --root are validated; ssh/scp get "--" before targets. The pointer holds the model folder path that
 ModelSlot reads. Model files are a data generation, not a release payload."""
 
 from __future__ import annotations
@@ -25,10 +27,11 @@ if str(_SENSING) not in sys.path:
     sys.path.insert(0, str(_SENSING))
 
 from control.sensing.perception.learned.manifest import (  # noqa: E402
-    ManifestError, load_manifest, verify_files)
+    ManifestError, check_revision, load_manifest, verify_files)
 
 REMOTE_ROOT = "/var/lib/rosy/models"
-_SAFE_REV = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_SAFE_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
+_SAFE_ROOT = re.compile(r"/[A-Za-z0-9._/-]+")
 
 
 def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
@@ -45,14 +48,26 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             raise ValueError("push needs manifest checks")
         partial, final = q(f"{root}/{rev}.partial"), q(f"{root}/{rev}")
         sums = " ".join(q(f"{sha}  {name}") for sha, name in checks)
+        check = f"printf '%s\\n' {sums} | sha256sum -c -"
         return "\n".join([
             "set -e",
             f"cd {partial}",
-            f"printf '%s\\n' {sums} | sha256sum -c -",
+            check,
             "cd /",
-            f"if [ -d {final} ]; then rm -rf {partial}; else mv {partial} {final}; fi",
-            f"cp {ptr} {prev} 2>/dev/null || true",
-            f"printf %s {final} > {tmp} && mv {tmp} {ptr}",
+            f"if [ -d {final} ]; then",
+            f"  if (cd {final} && {check} >/dev/null 2>&1); then rm -rf {partial};",
+            f"  else mv {final} {final}.bad.$$; mv {partial} {final}; fi",
+            f"else mv {partial} {final}; fi",
+            f"cd {final}",
+            check,
+            "cd /",
+            f"cur=$(cat {ptr} 2>/dev/null || true)",
+            f'if [ "$cur" != {final} ]; then',
+            f"  if [ -f {ptr} ]; then cp {ptr} {prev}.tmp; mv {prev}.tmp {prev}; fi",
+            # separate statements: set -e ignores a failure inside an && list
+            f"  printf %s {final} > {tmp}; mv {tmp} {ptr}",
+            "  sync",
+            "fi",
         ])
     if action == "rollback":
         return "\n".join([
@@ -82,8 +97,10 @@ def _run(runner, cmd) -> bool:
 
 def _push(args, runner) -> int:
     rev = args.revision
-    if not _SAFE_REV.match(rev):
-        print(f"refused: unsafe revision {rev!r}", file=sys.stderr)
+    try:
+        check_revision(rev)
+    except ManifestError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
         return 2
     folder = Path(args.models) / rev
     try:
@@ -106,9 +123,9 @@ def _push(args, runner) -> int:
     target = f"{args.user}@{args.host}"
     checks = [(f.sha256, f.name) for f in manifest.files]
     steps = [
-        ["ssh", target, remote_script("prepare", rev, args.root)],
-        ["scp", "-r", str(folder), f"{target}:{args.root}/{rev}.partial"],
-        ["ssh", target, remote_script("push", rev, args.root, checks=checks)],
+        ["ssh", "--", target, remote_script("prepare", rev, args.root)],
+        ["scp", "-r", "--", str(folder), f"{target}:{args.root}/{rev}.partial"],
+        ["ssh", "--", target, remote_script("push", rev, args.root, checks=checks)],
     ]
     for cmd in steps:
         if not _run(runner, cmd):
@@ -129,9 +146,17 @@ def main(argv=None, runner=subprocess.run) -> int:
         p.add_argument("--user", default="pinky")
         p.add_argument("--root", default=REMOTE_ROOT)
     args = ap.parse_args(argv)
+    for label, value in (("host", args.host), ("user", args.user)):
+        if not _SAFE_NAME.fullmatch(value):
+            print(f"refused: unsafe {label} {value!r}", file=sys.stderr)
+            return 2
+    if not _SAFE_ROOT.fullmatch(args.root):
+        print(f"refused: --root must be an absolute plain path, got {args.root!r}",
+              file=sys.stderr)
+        return 2
     if args.action == "push":
         return _push(args, runner)
-    ok = _run(runner, ["ssh", f"{args.user}@{args.host}",
+    ok = _run(runner, ["ssh", "--", f"{args.user}@{args.host}",
                        remote_script(args.action, None, args.root)])
     return 0 if ok else 1
 

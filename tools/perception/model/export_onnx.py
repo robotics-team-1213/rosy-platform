@@ -12,6 +12,7 @@ written by training/export_cell.write_manifest (one writer, no copy).
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -21,7 +22,8 @@ for _p in (ROOT / "tools" / "perception" / "training", ROOT / "src" / "runtime" 
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from export_cell import INPUT_SHAPE, ONNX_NAME, write_manifest  # noqa: E402
+from export_cell import (  # noqa: E402
+    INPUT_SHAPE, ONNX_NAME, _class_entries, _validate, write_manifest)
 
 PARITY_TOLERANCE = 1e-3
 
@@ -52,9 +54,11 @@ def export_and_check(ts_path, onnx_path, seed: int = 0) -> float:
     import onnxruntime as ort
     import torch
     model = torch.jit.load(str(ts_path), map_location="cpu").eval()
+    # same guard as export_cell.export: older torch has no dynamo argument
+    extra = {"dynamo": False} if "dynamo" in inspect.signature(torch.onnx.export).parameters else {}
     with torch.no_grad():
         torch.onnx.export(model, torch.zeros(*INPUT_SHAPE), str(onnx_path), opset_version=17,
-                          input_names=["x"], output_names=["logits"], dynamo=False)
+                          input_names=["x"], output_names=["logits"], **extra)
         gen = torch.Generator().manual_seed(seed)
         x = torch.rand(*INPUT_SHAPE, generator=gen)
         ref = _first_tensor(model(x)).numpy()
@@ -81,6 +85,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     classes = load_classes(args.classes)
+    _validate(_class_entries(classes), args.color, args.mean, args.std, args.scale)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     onnx_path = out / ONNX_NAME
