@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# D-346 pre-push fast gate: the <2-minute tier that catches what landed red on
+# 2026-09-29 (ADR body gaps, io closure, version pins, size verdicts).
+# Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+PY=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 \
+     && "$candidate" -c "import yaml" >/dev/null 2>&1; then
+    PY="$candidate"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "[pre-push] no python interpreter with PyYAML found on PATH" >&2
+  exit 1
+fi
+
+echo "[pre-push] harness lint (ADR duplicates, mojibake, append-only, staleness)"
+"$PY" tools/harness/rosy_harness.py lint
+
+# D-347 회차의 교훈(2026-09-29, CI 적신 2건): lint 는 작업 트리만 본다. 재생성된
+# index.md/STATUS.md 를 커밋 없이 두면 lint 는 녹색이지만 push 는 낡은 커밋 사본을
+# 출하한다. 생성 기록이 dirty 면 push 하지 않는다 — 커밋하거나 되돌려라.
+echo "[pre-push] uncommitted generated records"
+"$PY" - <<'EOF'
+import pathlib
+import subprocess
+import sys
+
+sys.path.insert(0, "tools/harness")
+import rosy_harness as harness  # noqa: E402
+
+repo = pathlib.Path(".").resolve()
+targets = [p.relative_to(repo).as_posix() for p in harness.generated_targets(repo)]
+out = subprocess.run(
+    ["git", "status", "--porcelain", "--", *targets],
+    capture_output=True, text=True,
+).stdout.strip()
+if out:
+    sys.stderr.write(
+        "generated records are regenerated but uncommitted:\n" + out
+        + "\ncommit them (or restore) before pushing — pushing now ships the"
+        " stale committed copies (the 2026-09-29 red-CI class).\n")
+    sys.exit(1)
+EOF
+
+echo "[pre-push] fast contract suites"
+"$PY" -m pytest \
+  test/test_harness_contracts.py \
+  test/architecture/test_module_structure.py \
+  test/test_io_image_closure.py \
+  test/test_line_follow_contract_docs.py \
+  src/runtime/gateway/test/test_protocol_version_alignment.py \
+  -q
+
+echo "[pre-push] fast gate green"

@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition
 - 2026-09-29 · uncommitted · feat(fleet-console): 천장 카메라 사이트 사각형과 관측 표시 (D-257)
+- 2026-09-29 · uncommitted · fix(fleet): ER2 시험은 허용목록된 fixture 키를 쓴다
 - 2026-09-29 · uncommitted · web-surface-hardening: `/common` 목록은 web_common manifest
 - 2026-09-29 · uncommitted · Mission provenance and SQLite query-path improvement
-- 2026-09-29 · uncommitted · feat(fleet): dispatch admitted Mission through fenced OMX UDS Action
-- 2026-09-29 · uncommitted · make ER 2 resolution commit and retry atomically

@@ -14,10 +14,11 @@ additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노
 from __future__ import annotations
 
 import enum
+import json
 import math
 import re
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -390,6 +391,148 @@ class LocalStopSnapshot(BaseModel):
 
 
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
+
+MISSION_EVENT_DETAIL_MAX_BYTES = 16 * 1024
+
+class MissionProgressAxis(BaseModel):
+    """One Fleet Mission progress source; this is not physical-state proof."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    state: str = Field(min_length=1, max_length=64)
+    source: str = Field(min_length=1, max_length=96)
+    last_event_id: int | None = Field(default=None, strict=True, ge=0)
+    observed_at: datetime | None = None
+    revision: str | None = Field(default=None, max_length=192)
+    freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    reason: str | None = Field(default=None, max_length=256)
+    physical_state: str | None = Field(default=None, max_length=32)
+
+
+class MissionProgressSnapshot(BaseModel):
+    """Snapshot-first Site Fleet status for one Mission and its evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    snapshot_at: datetime
+    mission: MissionProgressAxis
+    step: MissionProgressAxis
+    action: MissionProgressAxis
+    goal_evidence: MissionProgressAxis
+    stop: MissionProgressAxis
+
+
+class MissionProgressEvent(BaseModel):
+    """One Mission journal entry ordered by Fleet event ID."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    event_id: int = Field(strict=True, ge=1)
+    event_source: str = Field(min_length=1, max_length=48)
+    source_event_id: str = Field(min_length=1, max_length=192)
+    mission_id: str = Field(min_length=1, max_length=192)
+    step_id: str = Field(min_length=1, max_length=192)
+    action_id: str | None = Field(default=None, max_length=192)
+    attempt_id: str | None = Field(default=None, max_length=192)
+    state: str = Field(min_length=1, max_length=64)
+    event_type: str = Field(min_length=1, max_length=64)
+    actor_id: str = Field(min_length=1, max_length=96)
+    detail: dict[str, Any] = Field(
+        description="Finite JSON object up to 16 KiB when serialized as UTF-8",
+    )
+    created_at: datetime
+
+    @field_validator("detail")
+    @classmethod
+    def detail_is_bounded_json(cls, value: dict[str, Any]) -> dict[str, Any]:
+        try:
+            encoded = json.dumps(
+                value, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False, allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Mission event detail must be finite JSON") from exc
+        if len(encoded) > MISSION_EVENT_DETAIL_MAX_BYTES:
+            raise ValueError("Mission event detail exceeds the 16 KiB limit")
+        return value
+
+
+class MissionProgressEventPage(BaseModel):
+    """A bounded cursor page and the snapshot watermark observed by its query."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    cursor_floor: int = Field(strict=True, ge=0)
+    next_after_event_id: int = Field(strict=True, ge=0)
+    has_more: bool
+    events: list[MissionProgressEvent] = Field(max_length=200)
+
+
+class MissionProgressReadResponse(BaseModel):
+    """Owner-scoped Mission record, bounded recent history, and snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    proposal: dict[str, Any]
+    mission: dict[str, Any]
+    history: list[MissionProgressEvent] = Field(max_length=50)
+    history_truncated: bool
+    progress: MissionProgressSnapshot
+
+
+class MissionCursorResetDetail(BaseModel):
+    """Cursor recovery detail when the client cursor is ahead of Fleet."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: Literal["MISSION_CURSOR_RESET_REQUIRED"]
+    snapshot_restart_required: Literal[True]
+    cursor_floor: int = Field(strict=True, ge=0)
+    snapshot: MissionProgressReadResponse
+
+
+class MissionCursorExpiredDetail(BaseModel):
+    """Cursor recovery detail when requested history was pruned."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: Literal["MISSION_CURSOR_EXPIRED"]
+    snapshot_restart_required: Literal[True]
+    cursor_floor: int = Field(strict=True, ge=0)
+    snapshot: MissionProgressReadResponse
+
+
+class MissionCursorResetError(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    detail: MissionCursorResetDetail
+
+
+class MissionCursorExpiredError(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    detail: MissionCursorExpiredDetail
+
+
+class MissionModelContext(BaseModel):
+    """Allowlisted status input scoped to one principal and workcell."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    mission_state: str = Field(min_length=1, max_length=64)
+    step_state: str = Field(min_length=1, max_length=64)
+    action_state: str = Field(min_length=1, max_length=64)
+    action_reason: str | None = Field(default=None, max_length=256)
+    goal_evidence_state: str = Field(min_length=1, max_length=64)
+    goal_evidence_reason: str | None = Field(default=None, max_length=256)
+    stop_state: str = Field(min_length=1, max_length=64)
+    stop_reason: str | None = Field(default=None, max_length=256)
+
 
 class EnvelopeType(str, enum.Enum):
     HELLO = "hello"

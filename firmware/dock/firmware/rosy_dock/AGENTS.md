@@ -21,8 +21,8 @@ None.
 
 ### Working In This Directory
 
-- Pins: `PIN_OUTPUT_ENABLE=25`, `PIN_CURRENT_SENSE=34`, `PIN_VOLTAGE_SENSE=35`, `PIN_LOAD_SENSE=32`.
-- Thresholds: load probe 0.25 V, charging current 0.05 A, over-current 3.0 A, over-voltage 8.7 V (2S full is 8.4 V).
+- **Pins:** `PIN_OUTPUT_ENABLE=25`, `PIN_CURRENT_SENSE=34`, `PIN_VOLTAGE_SENSE=35`, `PIN_LIMIT_SWITCH=32` (digital, pressed=LOW).
+- **Thresholds:** charging current 0.05 A, over-current 3.0 A, over-voltage 8.7 V (2S full is 8.4 V). NTC deferred — GPIO33/36 footprint only.
 - `setOutput` is the only place contacts switch. Faults always call `setOutput(false)`.
 - Do not compile Wi-Fi SSID/password into the sketch; use Preferences/NVS.
 - Endpoint is port 80, one route, no commands.

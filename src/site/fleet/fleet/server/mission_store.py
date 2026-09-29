@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from core_common.protocol.schemas import MISSION_EVENT_DETAIL_MAX_BYTES
+
 from .dispatch_admission import release as release_dispatch_claims
 from .dispatch_admission import reserve as reserve_dispatch_claims
 from .goal_evidence import GoalEvidence, GoalPredicate
@@ -40,6 +42,14 @@ def _json(value: object) -> str:
         return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError) as exc:
         raise ValueError("Mission data must be finite JSON") from exc
+
+
+def _json_utf8_size(value: object) -> int:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False,
+    ).encode("utf-8")
+    return len(encoded)
 
 
 class MissionStore:
@@ -97,6 +107,14 @@ class MissionStore:
                 );
                 CREATE INDEX IF NOT EXISTS fleet_mission_events_mission
                     ON fleet_mission_events(mission_id, event_id);
+                CREATE INDEX IF NOT EXISTS fleet_mission_events_attempt
+                    ON fleet_mission_events(
+                        mission_id, action_id, attempt_id, event_id
+                    );
+                CREATE TABLE IF NOT EXISTS fleet_mission_event_retention (
+                    mission_id TEXT PRIMARY KEY REFERENCES fleet_missions(mission_id),
+                    cursor_floor INTEGER NOT NULL DEFAULT 0 CHECK(cursor_floor >= 0)
+                );
                 """
             )
             columns = {row[1] for row in connection.execute(
@@ -147,6 +165,8 @@ class MissionStore:
         source_event_id = _nonempty("source_event_id", source_event_id)
         event_source = _nonempty("event_source", event_source, limit=48)
         detail_json = _json(detail)
+        if _json_utf8_size(detail) > MISSION_EVENT_DETAIL_MAX_BYTES:
+            raise ValueError("Mission event detail exceeds the 16 KiB limit")
         prior = connection.execute(
             "SELECT * FROM fleet_mission_events WHERE event_source=? AND source_event_id=?",
             (event_source, source_event_id),
@@ -587,3 +607,122 @@ class MissionStore:
         for event in result:
             event["detail"] = json.loads(event.pop("detail_json"))
         return result
+
+    def progress_snapshot_data(self, mission_id: str) -> dict[str, Any] | None:
+        """Read Mission, history watermark, and Fleet stop fence in one SQLite snapshot."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            recent_events = connection.execute(
+                "SELECT * FROM fleet_mission_events WHERE mission_id=? "
+                "ORDER BY event_id DESC LIMIT 51",
+                (mission_id,),
+            ).fetchall()
+            events = list(reversed(recent_events[:50]))
+            active_action_events = []
+            active_goal_events = []
+            if row["action_id"] and row["attempt_id"]:
+                active_action_events = connection.execute(
+                    "SELECT * FROM fleet_mission_events WHERE mission_id=? "
+                    "AND action_id=? AND attempt_id=? AND event_type IN "
+                    "('STEP_SUBMITTED', 'ACTION_TERMINAL_RESULT') "
+                    "ORDER BY event_id DESC LIMIT 1",
+                    (mission_id, row["action_id"], row["attempt_id"]),
+                ).fetchall()
+                active_goal_events = connection.execute(
+                    "SELECT * FROM fleet_mission_events WHERE mission_id=? "
+                    "AND action_id=? AND attempt_id=? AND event_type IN "
+                    "('GOAL_PREDICATE_CONFIRMED', 'GOAL_EVIDENCE_REJECTED') "
+                    "ORDER BY event_id DESC LIMIT 1",
+                    (mission_id, row["action_id"], row["attempt_id"]),
+                ).fetchall()
+            control = connection.execute(
+                "SELECT authority_epoch, generation, dispatch_enabled, reason, updated_at "
+                "FROM fleet_dispatch_control WHERE control_id=1"
+            ).fetchone()
+            retention = connection.execute(
+                "SELECT cursor_floor FROM fleet_mission_event_retention WHERE mission_id=?",
+                (mission_id,),
+            ).fetchone()
+            connection.commit()
+        history = [dict(event) for event in events]
+        progress_events = [dict(event) for event in (
+            *active_action_events, *active_goal_events,
+        )]
+        for event in [*history, *progress_events]:
+            event["detail"] = json.loads(event.pop("detail_json"))
+        return {
+            "mission": self._row(row),
+            "history": history,
+            "history_truncated": len(recent_events) > 50 or bool(
+                retention and int(retention["cursor_floor"]) > 0
+            ),
+            "progress_events": progress_events,
+            "snapshot_event_id": max(
+                int(recent_events[0]["event_id"]) if recent_events else 0,
+                int(retention["cursor_floor"]) if retention else 0,
+            ),
+            "cursor_floor": int(retention["cursor_floor"]) if retention else 0,
+            "stop_control": dict(control) if control else None,
+        }
+
+    def mission_events_after(self, mission_id: str, *, after_event_id: int,
+                             limit: int) -> dict[str, Any] | None:
+        """Read one bounded journal page and its cursor bounds atomically."""
+        if (isinstance(after_event_id, bool) or not isinstance(after_event_id, int)
+                or after_event_id < 0):
+            raise ValueError("after_event_id must be a non-negative integer")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            mission = connection.execute(
+                "SELECT 1 FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            if mission is None:
+                connection.rollback()
+                return None
+            watermark = connection.execute(
+                "SELECT COALESCE(MAX(event_id), 0) FROM fleet_mission_events "
+                "WHERE mission_id=?", (mission_id,),
+            ).fetchone()[0]
+            retention = connection.execute(
+                "SELECT cursor_floor FROM fleet_mission_event_retention WHERE mission_id=?",
+                (mission_id,),
+            ).fetchone()
+            floor = int(retention["cursor_floor"]) if retention else 0
+            watermark = max(int(watermark), floor)
+            if after_event_id < floor or after_event_id > watermark:
+                connection.commit()
+                return {
+                    "snapshot_event_id": int(watermark),
+                    "cursor_floor": floor,
+                    "cursor_state": "EXPIRED" if after_event_id < floor else "AHEAD",
+                    "events": [],
+                    "next_after_event_id": after_event_id,
+                    "has_more": False,
+                }
+            rows = connection.execute(
+                "SELECT * FROM fleet_mission_events WHERE mission_id=? AND event_id>? "
+                "ORDER BY event_id LIMIT ?",
+                (mission_id, after_event_id, limit + 1),
+            ).fetchall()
+            connection.commit()
+        has_more = len(rows) > limit
+        events = [dict(row) for row in rows[:limit]]
+        for event in events:
+            event["detail"] = json.loads(event.pop("detail_json"))
+        next_cursor = events[-1]["event_id"] if events else after_event_id
+        return {
+            "snapshot_event_id": int(watermark),
+            "cursor_floor": floor,
+            "cursor_state": "OK",
+            "events": events,
+            "next_after_event_id": int(next_cursor),
+            "has_more": has_more,
+        }

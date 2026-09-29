@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -69,13 +68,17 @@ fun StreamScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(Color.Black),
+                .background(RosyColors.GroundDeep),
             contentAlignment = Alignment.Center,
         ) {
             if (state.running) {
                 CameraPreview(Modifier.fillMaxSize())
             } else {
-                Text(stringResource(R.string.preview_idle), color = Color.White, textAlign = TextAlign.Center)
+                Text(
+                    stringResource(R.string.preview_idle),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
 
@@ -91,8 +94,8 @@ fun StreamScreen(
             }
             if (state.running) {
                 Button(
+                    // Stopping is routine and reversible: neutral primary, not the crit fill (D-277 3).
                     onClick = onStop,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.weight(1f).height(72.dp),
                 ) {
                     Text(stringResource(R.string.button_stop), fontSize = 22.sp)
@@ -121,8 +124,16 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
             link.state == LinkState.CONNECTING -> R.string.state_connecting
             else -> R.string.state_disconnected
         }
-        Text(stringResource(stateText), style = MaterialTheme.typography.headlineSmall)
-        val target = state.target ?: pairing?.let { "${it.host}:${it.port} · ${it.source}" }
+        // Nominal states carry no colour (D-82); only the reconnecting state is a caution.
+        Text(
+            stringResource(stateText),
+            style = MaterialTheme.typography.headlineSmall,
+            color = if (stateText == R.string.state_disconnected) RosyColors.StatusWarn else Color.Unspecified,
+        )
+        // While stopped, show the saved pairing: state.target still holds the last run's target,
+        // which is stale once the operator saves a new address.
+        val saved = pairing?.let { "${it.host}:${it.port} · ${it.source}" }
+        val target = if (state.running) state.target ?: saved else saved
         Text(
             when {
                 state.previewOnly -> stringResource(R.string.target_preview_only)
@@ -144,11 +155,7 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
         }
         val error = localError ?: errorText(state.error) ?: errorText(link.error)
         if (error != null) {
-            Text(
-                stringResource(R.string.last_error, error),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            CritMessage(stringResource(R.string.last_error, error))
         }
     }
 }

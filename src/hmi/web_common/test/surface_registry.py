@@ -20,13 +20,21 @@ import yaml
 REGISTRY = "src/hmi/web_common/surfaces.yaml"
 CONTRACTS = ("shared_controls", "typography_focus", "dialog")
 KINDS = ("robot", "site", "sim", "dev")
+#: D-345 — 매체마다 받는 계약이 다르다. 웹은 공용 컨트롤 세 계약, 웹이 아닌
+#: 표면(휴대폰 앱·로봇 LCD)은 tokens.css 값 사본의 일치(token_parity)를 받는다.
+CONTRACTS_BY_MEDIUM = {
+    "web": CONTRACTS,
+    "native": ("token_parity",),
+    "lcd": ("token_parity",),
+}
+MEDIA = tuple(CONTRACTS_BY_MEDIUM)
 
 #: 이 파일은 `src/hmi/web_common/test/surface_registry.py` — parents[4]가 저장소 루트다.
 REPO = Path(__file__).resolve().parents[4]
 
 _GRAMMARS_DECL = re.compile(r"GRAMMARS\s*=\s*\[([^\]]*)\]")
 _ITEM = re.compile(r"['\"]([^'\"]+)['\"]")
-_SCOPES = ("path", "value", "reason", "baseline", "shape")
+_SCOPES = ("path", "value", "reason", "baseline", "shape", "port")
 
 
 def git_available(root=None) -> bool:
@@ -103,6 +111,7 @@ def problems(root=None) -> list[str]:
         found.append("value: web_common/ui.js가 GRAMMARS를 선언하지 않는다")
 
     seen: set[str] = set()
+    ports_seen: dict[int, object] = {}
     for index, row in enumerate(rows, start=1):
         where = f"{REGISTRY} 항목 {index}"
         if not isinstance(row, dict):
@@ -134,6 +143,11 @@ def problems(root=None) -> list[str]:
         if not isinstance(audience, str) or not audience.strip() or "\n" in audience:
             found.append(f"value: {label}에 한 줄짜리 audience가 없다")
 
+        medium = row.get("medium")
+        if medium not in MEDIA:
+            found.append(f"value: {label} medium이 {MEDIA} 밖이다: {medium!r}")
+        expected = CONTRACTS_BY_MEDIUM.get(medium, CONTRACTS)
+
         contracts = row.get("contracts")
         if not isinstance(contracts, list):
             found.append(f"value: {label}에 contracts 목록이 없다")
@@ -142,16 +156,37 @@ def problems(root=None) -> list[str]:
             if len(set(contracts)) != len(contracts):
                 found.append(f"value: {label} contracts에 중복이 있다")
             for name in contracts:
-                if name not in CONTRACTS:
-                    found.append(f"value: {label} contracts가 {CONTRACTS} 밖이다: {name!r}")
+                if name not in expected:
+                    found.append(f"value: {label} contracts가 {medium} 매체의 {expected} 밖이다: {name!r}")
 
         reason = row.get("contract_reason")
-        if set(contracts) != set(CONTRACTS) and not (isinstance(reason, str) and reason.strip()):
-            found.append(f"reason: {label}이(가) 셋 중 일부만 받는데 contract_reason이 없다")
+        if set(contracts) != set(expected) and not (isinstance(reason, str) and reason.strip()):
+            found.append(f"reason: {label}이(가) 매체 계약 일부만 받는데 contract_reason이 없다")
+
+        copy = row.get("token_copy")
+        if "token_parity" in contracts:
+            if not isinstance(copy, str) or not copy.strip():
+                found.append(f"path: {label}이(가) token_parity를 받는데 token_copy가 없다")
+            elif not (base / copy).is_file():
+                found.append(f"path: {label} token_copy 파일이 저장소에 없다: {copy}")
 
         grammar = row.get("grammar")
         if grammar is not None and grammar not in known_grammars:
             found.append(f"value: {label} grammar가 GRAMMARS 밖이다: {grammar!r}")
+
+        for entry in row.get("ports") or []:
+            port = entry.get("port") if isinstance(entry, dict) else None
+            source = entry.get("source") if isinstance(entry, dict) else None
+            if not isinstance(port, int) or not 1 <= port <= 65535:
+                found.append(f"port: {label} ports 항목의 port가 1–65535 정수가 아니다: {port!r}")
+                continue
+            if port in ports_seen:
+                found.append(f"port: {label}의 {port}를 {ports_seen[port]}도 쓴다")
+            ports_seen[port] = ident
+            if not isinstance(source, str) or not (base / source).is_file():
+                found.append(f"port: {label} {port}의 source 파일이 없다: {source!r}")
+            elif not re.search(rf"(?<!\d){port}(?!\d)", (base / source).read_text(encoding="utf-8")):
+                found.append(f"port: {label} {port}가 source {source}의 기본값에 없다")
 
         baseline = row.get("baseline")
         if baseline is None:

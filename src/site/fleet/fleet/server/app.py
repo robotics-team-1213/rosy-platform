@@ -31,13 +31,21 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from core_common.protocol.schemas import DiscoveryScanPayload, ResolvedTargetEvidence
+from core_common.protocol.schemas import (
+    DiscoveryScanPayload,
+    MissionCursorExpiredError,
+    MissionCursorResetError,
+    MissionProgressEventPage,
+    MissionProgressReadResponse,
+    ResolvedTargetEvidence,
+)
 from core_common.intent import IntentError, interpret, request_schema
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStore, status_code_for
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_dispatcher import MissionDispatcher
+from fleet.server.mission_progress import MissionProgressService
 from fleet.server.mission_store import MissionConflict
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
 from fleet.server.local_stop_transport import UnixLocalStopTransport
@@ -254,10 +262,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_stop_transport=None,
                enable_mission_dispatcher: bool = False,
                omx_action_transport=None) -> FastAPI:
-    mission_configured = any((mission_service, proposal_store, candidate_resolver))
-    if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
-        raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
-    if mission_configured and not callable(candidate_resolver):
+    mission_configured = mission_service is not None or proposal_store is not None
+    if (mission_service is None) != (proposal_store is None):
+        raise ValueError("Mission API requires both MissionService and ProposalStore")
+    if candidate_resolver is not None and not mission_configured:
+        raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
+    if candidate_resolver is not None and not callable(candidate_resolver):
         raise ValueError("Mission candidate resolver must be callable")
     if mission_configured and task_service is None:
         raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
@@ -282,8 +292,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     stop_transport = omx_stop_transport
     if configured_omx and stop_transport is None:
         stop_transport = UnixLocalStopTransport(omx_socket_root)
-    if enable_mission_dispatcher and not mission_configured:
-        raise ValueError("Mission dispatcher requires the complete Mission API configuration")
+    if enable_mission_dispatcher and (not mission_configured or candidate_resolver is None):
+        raise ValueError("Mission dispatcher requires the complete Mission API and candidate resolver")
     if enable_mission_dispatcher and not configured_omx:
         raise ValueError("Mission dispatcher requires configured OMX workcells")
     action_transport = omx_action_transport
@@ -292,6 +302,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     mission_dispatcher = (
         MissionDispatcher(mission_service, task_service.store, action_transport, configured_omx)
         if enable_mission_dispatcher else None
+    )
+    mission_progress = (
+        MissionProgressService(mission_service.store) if mission_configured else None
     )
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
@@ -344,6 +357,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     app.state.mission_service = mission_service
+    app.state.mission_progress = mission_progress
     app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
@@ -695,6 +709,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 "mission": mission,
             }
 
+        def _mission_snapshot_response(proposal: dict, snapshot: dict) -> dict:
+            return {
+                **_mission_candidate_result(proposal, snapshot["mission"]),
+                "history": snapshot["history"],
+                "history_truncated": snapshot["history_truncated"],
+                "progress": snapshot["progress"],
+            }
+
         def _resolve_candidate(candidate: Mapping, *, workcell_id: str,
                                instance_id: str, now: float) -> dict:
             try:
@@ -894,17 +916,51 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return {"created": created, **_mission_candidate_result(resolved, mission)}
 
         @app.get("/api/fleet/missions/{mission_id}", dependencies=read_guard,
+                 response_model=MissionProgressReadResponse,
                  tags=["fleet-missions"])
         def fleet_mission_read(mission_id: str,
                                principal: SitePrincipal = Depends(require_viewer)) -> dict:
             proposal = proposal_store.get(mission_id, principal_id=principal.principal_id)
             if proposal is None or proposal["state"] != "RESOLVED":
                 raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
-            mission = mission_service.get(mission_id)
-            if mission is None:
+            snapshot = mission_progress.snapshot(mission_id)
+            if snapshot is None:
                 raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
-            history = mission_service.history(mission_id)
-            return {**_mission_candidate_result(proposal, mission), "history": history}
+            return _mission_snapshot_response(proposal, snapshot)
+
+        @app.get("/api/fleet/missions/{mission_id}/events", dependencies=read_guard,
+                 response_model=MissionProgressEventPage,
+                 responses={
+                     409: {"model": MissionCursorResetError},
+                     410: {"model": MissionCursorExpiredError},
+                 }, tags=["fleet-missions"])
+        def fleet_mission_events(
+            mission_id: str,
+            after_event_id: int = Query(default=0, ge=0),
+            limit: int = Query(default=50, ge=1, le=200),
+            principal: SitePrincipal = Depends(require_viewer),
+        ) -> dict:
+            proposal = proposal_store.get(mission_id, principal_id=principal.principal_id)
+            if proposal is None or proposal["state"] != "RESOLVED":
+                raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+            page = mission_progress.events(
+                mission_id, after_event_id=after_event_id, limit=limit,
+            )
+            if page is None:
+                raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+            if page["cursor_state"] != "OK":
+                snapshot = mission_progress.snapshot(mission_id)
+                status = 410 if page["cursor_state"] == "EXPIRED" else 409
+                code = ("MISSION_CURSOR_EXPIRED" if status == 410 else
+                        "MISSION_CURSOR_RESET_REQUIRED")
+                raise HTTPException(status_code=status, detail={
+                    "code": code, "snapshot_restart_required": True,
+                    "cursor_floor": page["cursor_floor"],
+                    "snapshot": _mission_snapshot_response(proposal, snapshot),
+                })
+            contract_page = {key: value for key, value in page.items()
+                             if key != "cursor_state"}
+            return MissionProgressEventPage.model_validate(contract_page).model_dump(mode="json")
 
         @app.post("/api/fleet/missions/{mission_id}/admit", dependencies=operator_guard,
                   tags=["fleet-missions"])

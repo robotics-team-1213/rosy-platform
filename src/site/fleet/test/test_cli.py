@@ -98,6 +98,121 @@ def test_console_wires_configured_task_database_into_authenticated_app(tmp_path,
     }
 
 
+def test_console_mission_api_requires_shared_database_and_named_users(tmp_path):
+    robots = _write(tmp_path)
+    no_database = cli.parse_args([
+        "console", "--robots", str(robots), "--mission-api",
+    ])
+    with pytest.raises(SystemExit, match="--tasks-db is required with --mission-api"):
+        cli.run_console(no_database)
+
+    no_named_users = cli.parse_args([
+        "console", "--robots", str(robots), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+        "--mission-api",
+    ])
+    with pytest.raises(SystemExit, match="--users-file is required with --mission-api"):
+        cli.run_console(no_named_users)
+
+
+def test_console_mission_api_persists_candidates_without_enabling_dispatch(
+        tmp_path, monkeypatch):
+    robots = _write(tmp_path)
+    task_db = tmp_path / "fleet.sqlite3"
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [{
+        "principal_id": "operator-1", "role": "operator",
+        "token_sha256": sha256(b"operator-secret").hexdigest(),
+    }]}), encoding="utf-8")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args([
+        "console", "--robots", str(robots), "--users-file", str(users),
+        "--tasks-db", str(task_db), "--mission-api",
+    ])
+
+    cli.run_console(args)
+
+    app = captured["app"]
+    assert app.state.task_service.store.path == task_db
+    assert app.state.mission_service.store.path == task_db
+    assert app.state.proposal_store.path == task_db
+    assert app.state.mission_dispatcher is None
+
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer operator-secret"}
+    candidate = {
+        "source": "gemini_robotics_er2", "model_id": "gemini-robotics-er2",
+        "provider_interaction_id": "interaction-1", "provider_call_id": "call-1",
+        "instruction": "Move the red block to the green tray",
+        "source_observation": {
+            "observation_id": "obs-1", "image_sha256": "a" * 64,
+            "camera_id": "camera-top", "frame_id": "camera_top_optical",
+            "observed_at": "2026-09-29T09:00:00+00:00",
+            "calibration_revision": "cal-4", "transform_revision": "tf-9",
+        },
+        "target_selector": {"label": "red block", "point_yx_1000": [575, 664]},
+        "destination_selector": {"label": "green tray", "point_yx_1000": [475, 305]},
+    }
+    created = client.post("/api/fleet/proposals", headers=headers, json={
+        "request_key": "er2-request-1", "workcell_id": "omx_01",
+        "instance_id": "omx_01_control", "candidate": candidate,
+    })
+
+    assert created.status_code == 200, created.text
+    proposal_id = created.json()["proposal"]["proposal_id"]
+    assert created.json()["proposal"]["state"] == "PROPOSED"
+    assert created.json()["physical_submission"] == "NOT_CONNECTED"
+    readback = client.get(f"/api/fleet/proposals/{proposal_id}", headers=headers)
+    assert readback.status_code == 200, readback.text
+    assert readback.json()["proposal"]["candidate"] == candidate
+    unresolved = client.post(f"/api/fleet/proposals/{proposal_id}/resolve", headers=headers)
+    assert unresolved.status_code == 503
+    assert unresolved.json()["detail"]["code"] == "MISSION_RESOLVER_UNAVAILABLE"
+
+
+def test_mission_api_does_not_start_task_dispatcher_for_existing_queued_tasks(
+        tmp_path, monkeypatch):
+    from fleet.server.task_store import FleetTaskStore
+
+    robots = _write(tmp_path)
+    task_db = tmp_path / "fleet.sqlite3"
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [{
+        "principal_id": "operator-1", "role": "operator",
+        "token_sha256": sha256(b"operator-secret").hexdigest(),
+    }]}), encoding="utf-8")
+    store = FleetTaskStore(task_db)
+    task_id = "preexisting-queued-task"
+    store.create_task(
+        task_id=task_id, robot_id="rosy_01", task_type="navigate",
+        source="operator", actor_id="operator-1", request_key="preexisting-request",
+        request={"x": 1.0, "y": 2.0, "yaw": 0.0}, evidence=None,
+    )
+    store.enqueue(task_id, priority_class=0, actor_id="operator-1", source="operator")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    dispatcher_started = []
+
+    async def observe_dispatcher(*_args):
+        dispatcher_started.append(True)
+        await asyncio.Future()
+
+    monkeypatch.setattr("fleet.server.app._task_dispatch_loop", observe_dispatcher)
+    args = cli.parse_args([
+        "console", "--robots", str(robots), "--users-file", str(users),
+        "--tasks-db", str(task_db), "--mission-api",
+    ])
+    cli.run_console(args)
+
+    with TestClient(captured["app"]) as client:
+        assert client.get("/api/fleet/state", headers={
+            "Authorization": "Bearer operator-secret",
+        }).status_code == 200
+
+    assert dispatcher_started == []
+    assert store.get_task(task_id)["status"] == "QUEUED"
+
+
 def test_console_loads_individual_site_users_for_the_api(tmp_path, monkeypatch):
     robots = _write(tmp_path)
     users = tmp_path / "site-users.yaml"

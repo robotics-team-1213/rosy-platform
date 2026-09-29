@@ -140,3 +140,10 @@
 - Change: additive `signal_source_kind: str = "camera"`, `signal_head_age_s: Optional[float]`, `signal_head_frozen: bool = False` on `TrafficPolicyStatus` — the D-337 measured-light fusion's observability (fused only while the observed head is usable). `rosy_default.yaml` documents the empty `traffic_policy.signal_observer` binding (overlay-only). API Reference v1.56 with example, prose, the `nav.traffic_policy_signal_source_stale` §8 row, and history entry in the same change (D-18).
 - Evidence: foundation suite green within the T3 combined run (501 passed); event catalogue green against the new emit site.
 - Gate: SOURCE/LOCAL contract only; no live observer, device, or FIELD acceptance.
+## 2026-09-29 · uncommitted · feat(domain): capability lifecycle 단일 어휘 (D-347)
+
+- 변경: core_common/domain/capabilities.py에 CapabilityLifecycle(ready/unavailable/activating[예약]) enum과 lifecycle_from(advertised, runtime_reasons)을 추가했다. 판정은 새로 만들지 않는다 — 모드 마스킹의 withheld 사유(선과 같은 값이므로 우선)와 runtime_truth 사유, 플래그 참/거짓을 한 어휘로 합칠 뿐. §7 위반 없음: 프로파일과 런타임 어느 쪽도 true로 말하지 않는 플래그는 결과에 없다.
+- 증거: gateway/test/test_capability_lifecycle.py 6 passed(유도 3·일관성 2·wire 1 — withheld.flags == unavailable 집합 핀 포함). 이웃 185 passed(truth·truthful_core_only·api·foundation).
+- gate 변화: 없음.
+- 결정: activating 진입은 후속 ADR(온디맨드 B레인) 없이 금지 — 시험이 핀으로 지킨다.
+- 교훈: 정찰이 설계를 바꿨다 — "상태 계약이 없다"가 아니라 "두 표면이 다른 어휘를 쓰고 있었다"가 진짜 갭이었다.

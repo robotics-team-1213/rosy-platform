@@ -341,6 +341,16 @@ KNOWN_FIXTURES = frozenset({
 #: Fixture values are only excused here. Anywhere else they are secrets.
 FIXTURE_ROOT = "test/"
 
+#: Journal prose that quotes an invented fixture value while describing its
+#: own removal (src/site/fleet/logs.md, 2026-09-29: the entry that replaced
+#: an ``api_key="fixture-secret"`` literal with the allowlisted key quotes the
+#: old value). The code literal is gone; module logs are append-only, so the
+#: quote cannot be reworded. Pinned to one exact path per entry — the same
+#: value anywhere else, including that module's code, is still a finding.
+KNOWN_PROSE_QUOTES: dict[str, frozenset[str]] = {
+    "src/site/fleet/logs.md": frozenset({"fixture-secret"}),
+}
+
 DEFAULT_EXCLUDED_SUFFIXES = frozenset(
     {
         ".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".woff", ".woff2", ".pyc",
@@ -629,9 +639,11 @@ def scan_files(
         # repo-root test/ and the per-package test/ directories of the
         # domain-grouped workspace. Anywhere else they are secrets.
         in_fixtures = relative.startswith(FIXTURE_ROOT) or "/test/" in f"/{relative}"
+        prose_quotes = KNOWN_PROSE_QUOTES.get(relative, frozenset())
         findings.extend(
             f for f in scan_text(relative, text)
             if not (in_fixtures and any(fixture in f.excerpt for fixture in KNOWN_FIXTURES))
+            and not any(quote in f.excerpt for quote in prose_quotes)
         )
 
     return findings

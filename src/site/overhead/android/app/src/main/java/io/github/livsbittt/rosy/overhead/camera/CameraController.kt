@@ -44,6 +44,11 @@ class CameraController(
         Thread(r, "overhead-analysis")
     }
     private val encoder = JpegEncoder()
+    private val adaptiveQuality = AdaptiveJpegQuality()
+
+    /** Set on main when the camera is rebound or quality/width change; consumed on the analysis thread. */
+    @Volatile
+    private var qualityResetPending = true
     private val limiter = FpsLimiter(OverheadConfig.DEFAULT.fps)
     private val preview = Preview.Builder().build()
 
@@ -91,6 +96,9 @@ class CameraController(
     }
 
     private fun applyValues(newConfig: OverheadConfig) {
+        if (newConfig.jpegQuality != config.jpegQuality || newConfig.width != config.width) {
+            qualityResetPending = true
+        }
         config = newConfig
         limiter.fps = newConfig.fps
     }
@@ -118,6 +126,7 @@ class CameraController(
             }
             timestampSource = readTimestampSource(camera)
             boundWidth = target.width
+            qualityResetPending = true
             analysis?.resolutionInfo?.let { info ->
                 link?.sensor = SensorInfo(info.resolution.width, info.resolution.height, info.rotationDegrees)
             }
@@ -158,14 +167,26 @@ class CameraController(
             )
             val rotation = image.imageInfo.rotationDegrees
             val current = config
-            when (val result = encoder.encode(image, current.jpegQuality, current.maxBytes)) {
-                is JpegEncoder.Result.TooLarge -> {
-                    Log.w(TAG, "jpeg ${result.length} B > max_bytes ${current.maxBytes}, dropped")
-                    frameLink.countDrop()
-                }
-                is JpegEncoder.Result.Encoded -> {
-                    frameLink.sensor = SensorInfo(result.width, result.height, rotation)
-                    frameLink.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
+            if (qualityResetPending) {
+                qualityResetPending = false
+                adaptiveQuality.reset()
+            }
+            var quality: Int? = adaptiveQuality.start(current.jpegQuality)
+            while (quality != null) {
+                when (val result = encoder.encode(image, quality, current.maxBytes)) {
+                    is JpegEncoder.Result.TooLarge -> {
+                        quality = adaptiveQuality.retryAfterOversize()
+                        if (quality == null) {
+                            Log.w(TAG, "jpeg ${result.length} B > max_bytes ${current.maxBytes}, dropped")
+                            frameLink.countDrop()
+                        }
+                    }
+                    is JpegEncoder.Result.Encoded -> {
+                        adaptiveQuality.encoded()
+                        frameLink.sensor = SensorInfo(result.width, result.height, rotation)
+                        frameLink.sendFrame(result.bytes, result.length, result.width, result.height, rotation, captureMono)
+                        quality = null
+                    }
                 }
             }
         } catch (e: Exception) {

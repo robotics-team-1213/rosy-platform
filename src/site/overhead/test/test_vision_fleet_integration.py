@@ -14,6 +14,7 @@ import websockets
 import yaml
 
 from overhead import protocol
+from overhead.detect import generate_marker_image
 from overhead.ingest import IngestServer
 from overhead.publish import SightingPublisher
 from overhead.vision_config import load_vision_sources
@@ -35,11 +36,10 @@ def _jpeg(*, missing_corner=None):
     canvas = np.full((400, 600), 255, dtype=np.uint8)
     positions = {30: (100, 100), 31: (500, 100), 32: (500, 300),
                  33: (100, 300), 7: (300, 200)}
-    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     for marker_id, (cx, cy) in positions.items():
         if marker_id == missing_corner:
             continue
-        marker = cv2.aruco.generateImageMarker(dictionary, marker_id, 72)
+        marker = generate_marker_image(marker_id, 72)
         canvas[cy - 36:cy + 36, cx - 36:cx + 36] = marker
     ok, encoded = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 100])
     assert ok

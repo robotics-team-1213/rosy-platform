@@ -57,6 +57,15 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 ### Testing Requirements
 
 ```bash
+# Quick tier (D-346): the <2-minute gate to run right before a commit/push.
+# Same suite as the pre-push hook (tools/hooks/install.sh).
+python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_structure.py \
+  test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
+  src/runtime/gateway/test/test_protocol_version_alignment.py -q
+python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
+
+# Full tier: before a release, a field push, or when the touched suite is not
+# in the quick tier above.
 # ROS 2 overlay (Linux / Pi). On Windows, run Python tests that do not need rclpy.
 source env.sh
 cd src && colcon build --symlink-install

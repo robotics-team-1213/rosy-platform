@@ -159,17 +159,30 @@ class ActionRunner:
             if current is None:
                 raise
             return self._receipt(current, created=False)
+
+        def _fenced_submission() -> dict[str, object]:
+            # The driver call AND its ACCEPTED recording stay inside the
+            # stop fence: a stop latched while the driver call blocks must
+            # find this attempt in ACCEPTED (never a lost in-flight
+            # submission), so the cancel fanout reaches the driver.
+            driver_result = self.driver.submit(grant)
+            if not isinstance(driver_result, DriverSubmission):
+                raise TypeError("local driver returned an invalid submission receipt")
+            return self.store.record_submission(
+                grant.action_id, submitting["attempt_id"],
+                accepted=driver_result.accepted,
+                driver_goal_id=driver_result.driver_goal_id,
+            )
+
         try:
-            driver_result = self.submission_fence.run_if_open(
+            recorded = self.submission_fence.run_if_open(
                 authority_epoch=grant.authority_epoch,
                 dispatch_generation=grant.dispatch_generation,
                 fleet_fence_current=lambda: self.current_fence(
                     grant.authority_epoch, grant.dispatch_generation,
                 ),
-                operation=lambda: self.driver.submit(grant),
+                operation=_fenced_submission,
             )
-            if not isinstance(driver_result, DriverSubmission):
-                raise TypeError("local driver returned an invalid submission receipt")
         except LocalStopBlocked:
             held = self.store.hold_action(
                 grant.action_id, submitting["attempt_id"],
@@ -184,10 +197,6 @@ class ActionRunner:
             )
             return self._receipt(unknown, created=created["created"],
                                  reason="DRIVER_ACCEPTANCE_UNKNOWN")
-        recorded = self.store.record_submission(
-            grant.action_id, submitting["attempt_id"],
-            accepted=driver_result.accepted, driver_goal_id=driver_result.driver_goal_id,
-        )
         return self._receipt(recorded, created=created["created"])
 
     def get(self, action_id: str, *, peer_uid: int) -> dict[str, object] | None:

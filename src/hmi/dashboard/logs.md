@@ -513,6 +513,12 @@
 - 증거: 정적 `src/hmi/dashboard/test/test_surface_bridge.py` 신설(선언·빌더·배선·스타일 고정, 뮤테이션 3종 붉게 확인 후 복원) + `src/hmi/web/test` 99 passed 2 skipped. `ROSY_RUN_BROWSER_TESTS=1`로 `src/hmi/dashboard/test` + `test_dashboard_browser.py`(통합 신설 2건: 관리자 3링크/뷰어 1링크 + 클릭 이동) + 역할 메뉴/표면 + 다이얼로그 + D-283 165 passed. UI/UX 실측(X:\DevTemp\bridge-destination\uiux\, probe.json): 1366×768·390×844 가로 overflow 0, 링크 높이 44px = 터치 바닥, 상단 바 위 대비 6.95:1, Tab 5번에 브리지 도달 + 2px 포커스 링, hover 색·배경 변화, E-stop 양 폭 보임.
 - gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지. 역할 화면으로의 가시 경로는 이제 홈에서 열렸고, /dashboard 조작 중복의 퇴역 기준은 D-204 이행 회차가 판다.
 
+## 2026-09-29 · uncommitted · feat(dashboard): 교통 정책 팩트에 신호 원 행
+
+- 변경: `/setup` 교통 정책 패어널과 `/console` 교통 팩트에 "신호 원" 행을 추가했다 — `TrafficPolicyStatus.signal_source_kind`(v1.56, D-337)를 그대로 보여 주고 관측 프레임 동결(`signal_head_frozen`) 시 `frozen`으로 표기한다. 운영자가 관측 소스 바인딩을 켠 사이트에서 fused 강등·동결이 화면에 드러난다. 새 토큰·ui-* 부품·문법 없음.
+- 증거: `src/hmi/dashboard/test` + `src/runtime/api_web/test` + `test_dashboard.py` 116 passed 47 skipped(2026-09-29 Windows). D-283 배치 시험(facts 2열·폼 위치) 행 추가 후에도 통과.
+- gate 변화: 없음. 실화면 확인은 T5 벤치 회차가 함께 한다.
+
 ## 2026-09-29 · uncommitted · feat(dashboard): 교통 정책 패어널에 정지선 규칙 편집·표시
 
 - 변경: `/setup` 교통 정책 패어널에 `junction_rule` select(신호 제어 / 무신호: 정지 후 진입)를 스테이징 폼에 추가하고 상태 facts에 "정지선 규칙" 행을, `/console` 교통 facts에 "규칙" 행을 각각 추가했다. 새 토큰·ui-* 부품 없음 — 기존 `select`·facts 문법 재사용. 기본값 `signal_controlled` 표기로 규칙 미선언 상태가 지금과 같음을 화면에서 읽을 수 있다.
