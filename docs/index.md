@@ -227,8 +227,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
 - 2026-09-29 · uncommitted · docs(plans): D-337 T2 착지 — 관측 폴러 전송 완료
 - 2026-09-29 · uncommitted · docs(plans): D-337 T1 착지 — 융합 순수 로직 완료 (항목 복원)
 - 2026-09-29 · uncommitted · docs(adr): D-336 표행 인코딩 복구
 - 2026-09-29 · uncommitted · docs(adr): 브리지 분리 ADR을 D-338로 재부여
-- 2026-09-29 · uncommitted · docs(adr): D-337 브리지 콜백 판정·적응 분리 기록
