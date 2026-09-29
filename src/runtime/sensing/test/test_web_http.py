@@ -14,12 +14,12 @@ import urllib.request
 
 import pytest
 
-PAGE_PORT = 28181
-
 from control import web_state
 from control.web_http import (
     GOAL_BOUND, _parse_xy, make_api_handler, make_page_handler, page_origin_allowed, shared_assets,
     web_common_dir)
+
+PAGE_PORT = 28181
 
 
 class FakeNode:
