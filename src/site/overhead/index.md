@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
 - 2026-09-29 · uncommitted · web-surface-hardening: CI에 overhead 호스트 시험과 android 단위 시험
 - 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability
 - 2026-09-28 · uncommitted · apply measured rectification to Fleet preview only
 - 2026-09-28 · uncommitted · serve authorized latest-frame preview
-- 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)
