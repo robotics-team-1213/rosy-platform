@@ -16,7 +16,7 @@ only when its gen counter changes; posts to `/cmd`, `/wander`, `/estop`,
 ## Key Files
 | File | Description |
 |---|---|
-| `dashboard.html` | diagnostic surface: three regions (감지 / 관측 / 조작), map canvas with overlays, lidar dial, clearance gauges, safety flags, camera, and every control |
+| `diagnostic.html` | diagnostic surface: three regions (감지 / 관측 / 조작), map canvas with overlays, lidar dial, clearance gauges, safety flags, camera, and every control |
 
 ## Subdirectories
 

@@ -34,7 +34,7 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
   - id: control-diagnostic
-    path: src/runtime/sensing/web/dashboard.html
+    path: src/runtime/sensing/web/diagnostic.html
     surface: robot
     audience: 제어 진단 (D-153 §7 — PARKED D-266)
     grammar: procedure

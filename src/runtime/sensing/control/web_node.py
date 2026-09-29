@@ -544,14 +544,14 @@ class WebNode(Node):
         from the repo before colcon build."""
         try:
             p = os.path.join(get_package_share_directory('control'),
-                             'web', 'dashboard.html')
+                             'web', 'diagnostic.html')
             if os.path.isfile(p):
                 return p
         except Exception:
             pass
         return os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'web', 'dashboard.html')
+            'web', 'diagnostic.html')
 
 
 def main():

@@ -23,8 +23,9 @@ def test_operational_compose_does_not_serve_the_control_console():
     """D-77: 운용자 콘솔은 CORE /dashboard. web_node는 compose에 없다."""
     text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
     assert "web_node" not in text
+    assert "diagnostic.html" not in text
     assert "dashboard.html" not in text
-    html = (ROOT / "src" / "runtime" / "sensing" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    html = (ROOT / "src" / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     assert "<title>pinky console</title>" not in html
     assert "<title>Rosy control diagnostic</title>" in html
 

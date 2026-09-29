@@ -1,6 +1,6 @@
 """concept 16 §6 — /map.png의 색과 콘솔 캔버스의 색은 같은 값이어야 한다.
 
-서버는 `sensing/map_raster.py`가 굽고 클라이언트는 `web/dashboard.html`이
+서버는 `sensing/map_raster.py`가 굽고 클라이언트는 `web/diagnostic.html`이
 그린다. 두 값이 어긋나면 오버레이가 섞이지 않고, 예전에 실제로 어긋나 있었다:
 RGB 튜플이 BGR 배열에 그대로 들어가 PNG의 벽 색이 #e1e0d9가 아니라
 #d9e0e1로 나왔다.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 RASTER = PACKAGE_ROOT / 'control' / 'sensing' / 'map_raster.py'
-CONSOLE = PACKAGE_ROOT / 'web' / 'dashboard.html'
+CONSOLE = PACKAGE_ROOT / 'web' / 'diagnostic.html'
 
 
 def server_rgb():
@@ -38,7 +38,7 @@ def console_tokens():
     found = {}
     for token in ('unk', 'free', 'wall'):
         match = re.search(rf'--{token}:\s*#([0-9a-fA-F]{{6}})', text)
-        assert match, f'dashboard.html에 --{token} 토큰이 없다'
+        assert match, f'diagnostic.html에 --{token} 토큰이 없다'
         found[token] = match.group(1).lower()
     return found
 
@@ -78,7 +78,7 @@ class MapRasterColorContractTest(unittest.TestCase):
             for name, value in re.findall(r'--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})', text)
         }
         block = re.search(r'const T = \{([^}]+)\}', text)
-        self.assertIsNotNone(block, 'dashboard.html에 const T 표가 없다')
+        self.assertIsNotNone(block, 'diagnostic.html에 const T 표가 없다')
         js = dict(re.findall(r"(\w+):\s*'#([0-9a-fA-F]{6})'", block.group(1)))
         alias = {'ink2': 'ink-2'}
         missing = []

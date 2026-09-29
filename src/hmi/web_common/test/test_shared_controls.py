@@ -386,7 +386,7 @@ def test_diagnostic_palette_matches_the_token_hex():
         r"(--[a-z0-9-]+):\s*#([0-9a-fA-F]{6})",
         TOKENS.read_text(encoding="utf-8"),
     ))
-    page = (ROOT / "runtime" / "sensing" / "web" / "dashboard.html").read_text(encoding="utf-8")
+    page = (ROOT / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
     mismatch = []
     for local, token in _DIAGNOSTIC_TWINS.items():
@@ -403,7 +403,7 @@ def test_a_browser_page_starts_from_the_shell():
         pytest.skip("D-329 발견 스캔은 git 체크아웃이 필요하다")
     pages = [
         path for path in registry.discover_html(registry.REPO)
-        if path.name in {"index.html", "dashboard.html"}
+        if path.name in {"index.html", "diagnostic.html"}
         and "<!doctype html>" in path.read_text(encoding="utf-8").lower()
     ]
     assert pages, "제품 화면이 없다"
