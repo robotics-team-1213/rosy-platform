@@ -3548,3 +3548,11 @@
 - gate 변화: 없음.
 - 결정: D-356 Proposed.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
+
+- 변경: 바로 위 D-356 기록의 정정(append-only라 원문은 그대로 둔다). "harness lint 결과는 커밋 메시지·보고에 기록"은 틀렸다 — 어느 커밋 메시지에도 lint 결과는 없다. 수치의 인터프리터: sensing 전체 1741 passed 80 skipped와 `tools/perception/test` 94 passed 8 skipped는 시스템 Python 3.14.5 실측. 리뷰 수정: 섀도 부가 데이터 계약(extract가 String JSON을 풀고 상대 토픽 이름 키로 저장, prelabel이 같은 키를 읽음), `hotpath_measure.NODE_NAMES`에서 `record_session` 제외, `learned_lane_node` 종료 패턴, intake 보고의 `files`와 deliver의 일치 검사, 토픽 네임스페이스 처리.
+- 증거: 수정 뒤 `tools/perception/test` — venv Python 3.12.14에서 107 passed 1 skipped, 시스템 Python 3.14.5에서 98 passed 10 skipped(2026-09-30 Windows). 병합 뒤 lint·sensing 스위트는 병합 커밋 보고에 둔다.
+- gate 변화: 없음.
+- 결정: D-356 Proposed 유지.
+- 교훈: 증거 칸에는 결과를 적거나 "미기록"이라고 적는다. 커밋 메시지를 증거 위치로 가리키지 않는다.

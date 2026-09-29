@@ -563,3 +563,11 @@
 - gate 변화: 없음. SOURCE/LOCAL만 다룬다. 노드 그래프·Pi 실행은 HOLD.
 - 결정: D-356 Proposed(섀도 전용; 주행 활성화는 D-205 P3 뒤 별도).
 - 교훈: 새 콘솔 스크립트는 `hotpath_measure.NODE_NAMES`와 `test_executor_choice`의 진입점 개수 계약을 함께 건드린다. 전체 스위트를 돌려야 잡힌다.
+
+## 2026-09-30 · uncommitted · fix(perception): D-356 리뷰 수정·수치 인터프리터 명기
+
+- 변경: 바로 위 D-356 기록의 수치 인터프리터 명기 — sensing 전체 1741 passed 80 skipped와 `tools/perception/test` 94 passed 8 skipped는 시스템 Python 3.14.5 실측. 리뷰 수정: `recording.py`에 `CAMERA_TOPIC`·`SIDE_TOPICS` 공유 상수와 `bag_command(namespace=)`, `record_session --namespace`, `hotpath_measure.NODE_NAMES`에서 `record_session` 제외(노드가 아닌 `ros2 bag record` 래퍼; 시험은 `NON_NODE_SCRIPTS`를 뺀다), `learned_lane_node.main`이 `line_observer_node.main`과 같은 종료 패턴.
+- 증거: venv Python 3.12.14에서 learned·image_frame·recording·executor_choice·hotpath 시험과 `tools/perception/test` 204 passed 2 skipped; 시스템 Python 3.14.5에서 `tools/perception/test`+hotpath+recording 133 passed 10 skipped(2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL만.
+- 결정: D-356 Proposed 유지.
+- 교훈: 없음.
