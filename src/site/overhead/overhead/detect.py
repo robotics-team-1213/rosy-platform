@@ -8,17 +8,32 @@ import numpy as np
 from overhead.project import MarkerQuad
 
 _DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-_PARAMETERS = cv2.aruco.DetectorParameters()
+
+
+def _detector_parameters(aruco):
+    """4.6-era `DetectorParameters_create` when present — on those builds a
+    direct `DetectorParameters()` construction feeds detectMarkers a native
+    object it segfaults on (dock_tag.py hit the same wall)."""
+    create = getattr(aruco, "DetectorParameters_create", None)
+    return create() if create is not None else aruco.DetectorParameters()
+
+
+_PARAMETERS = _detector_parameters(cv2.aruco)
 
 
 def _marker_detector(aruco):
     """detectMarkers for DICT_4X4_50 on any shipped OpenCV: the 4.7+
-    `ArucoDetector` when present, else the 4.6-era module function
-    (dock_tag.py precedent — CI and the device image ship 4.6)."""
+    `ArucoDetector` when present, else the 4.6-era module function on a
+    grayscale frame (dock_tag.py precedent — CI and the device image ship
+    4.6)."""
     if hasattr(aruco, "ArucoDetector"):
         return aruco.ArucoDetector(_DICTIONARY, _PARAMETERS).detectMarkers
-    return lambda image: aruco.detectMarkers(
-        image, _DICTIONARY, parameters=_PARAMETERS)
+
+    def _detect_legacy(image):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        return aruco.detectMarkers(gray, _DICTIONARY, parameters=_PARAMETERS)
+
+    return _detect_legacy
 
 
 _DETECT_MARKERS = _marker_detector(cv2.aruco)
