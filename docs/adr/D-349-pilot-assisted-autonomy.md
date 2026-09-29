@@ -33,6 +33,24 @@
 6. **검증 순서**: 가제보 차선 월드(map_v2 lane) → 실물(한도 L1 이상, D-347) 순서다. 실물은
    `NAVIGATE` 능력이 켜지는 런타임 구성 결정이 따로 필요하다.
 
+### 보강 (2026-09-29, 실물 rosy-pinky-8kcn 조사)
+
+7. **차선 추종의 권한은 구동(`MOVE`)이다.** 지금까지 `PUT /line-follow/mode` 는 `NAVIGATE`
+   (`navigation.goal_navigation`)를 요구했는데, 실물 런타임 `motor` 는 Nav2 가 없어 이 권한을 늘 끈다
+   (`runtime_capability_data`). 카메라 차선 추종은 Nav2·지도가 필요 없다 — 필요한 것은 구동 준비와
+   신선한 차선 증거이고, 증거 검사(신선도·신뢰도·출처)는 이미 `LineFollowManager` 가 한다. 그래서
+   요구 권한을 `MOVE` 로 바꾼다. `navigation.goal_navigation` 은 목표 지점 모드에만 남는다.
+8. **운전자 확인 만료는 CORE 가 소유한다.** `PUT /line-follow/mode` 에 `hold_s`(0 < hold_s ≤ 2)를 주면
+   그 세션은 `POST /api/v1/line-follow/hold` 로 계속 갱신되어야 한다. 갱신이 `hold_s` 를 넘겨 끊기면
+   CORE 의 차선 추종 틱이 스스로 OFF 로 내리고(`driver_released`), 바퀴 명령은 0 이 된다. pilot 은
+   "진행"을 누르는 동안 100 ms 마다 갱신하고 `hold_s = 0.5` 를 쓴다(teleop 워치독과 같은 크기).
+   탭 이탈·네트워크 끊김·앱 종료 모두 같은 경로로 멈춘다. `hold_s` 없는 호출(기존 관제 화면)은
+   지금처럼 동작한다.
+9. **실물 로봇은 카메라 서비스에서 차선 관측(`line_observer_node`)도 띄운다.** 관측 전용 노드이고
+   바퀴 명령을 내지 않는다(D-2). 도로 관측(`road_observer_node`)과 같은 `camera/front` 를 구독한다.
+10. 실물 첫 자동 주행의 순항 속도는 설정 `line_follow.cruise_speed` 를 **0.04 m/s** 로 낮춰 시작하고,
+    D-347 과 같이 녹화 증거로 올린다.
+
 ### Alternatives
 
 - **자동 모드를 켜 두고 손을 떼도 계속 간다.** 거부. 원격 화면은 지연·끊김이 있고(D-346) 무인 주행의

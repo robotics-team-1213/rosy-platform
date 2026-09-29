@@ -185,3 +185,47 @@ def test_ir_fallback_is_not_automatic_and_requires_camera_failure(core_client):
     assert rejected.status_code == 409
     assert rejected.json()["error"]["code"] == "IR_FALLBACK_NOT_READY"
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE
+
+
+def test_line_follow_needs_drive_not_nav2_and_hold_to_run_expires(core_client):
+    """D-349 §7·§8: motor 런타임(Nav2 없음)에서도 켜지고, 운전자 확인이 끊기면 스스로 멈춘다."""
+    client, services = core_client()
+    services.capability._data["navigation"]["goal_navigation"] = False
+    clock = {"t": 100.0}
+    services.line_follow.bind_clock(lambda: clock["t"])
+
+    enabled = client.put("/api/v1/line-follow/mode",
+                         json={"mode": "CAMERA_LINE", "hold_s": 0.5}, headers=OPERATOR)
+    assert enabled.status_code == 200, enabled.json()
+    assert services.line_follow.hold_required
+
+    # 신선한 카메라 차선 증거로 따라가는 중
+    services.line_follow.observe(LineObservation(
+        source=LineFollowMode.CAMERA_LINE, stamp=clock["t"], visible=True, error=0.1, confidence=0.9),
+        received_at=clock["t"], source_now=clock["t"])
+    tracking = services.line_follow.tick(clock["t"] + 0.1)
+    assert tracking.linear > 0
+
+    clock["t"] += 0.4
+    assert client.post("/api/v1/line-follow/hold", headers=OPERATOR).status_code == 200
+    services.line_follow.observe(LineObservation(
+        source=LineFollowMode.CAMERA_LINE, stamp=clock["t"], visible=True, error=0.0, confidence=0.9),
+        received_at=clock["t"], source_now=clock["t"])
+    assert services.line_follow.tick(clock["t"] + 0.3).linear > 0          # 갱신 덕분에 아직 유지
+
+    released = services.line_follow.tick(clock["t"] + 0.6)                 # 0.5 s 넘게 갱신 없음
+    assert released.linear == 0.0 and released.angular == 0.0
+    assert services.line_follow.status().reason == "driver_released"
+    assert not services.line_follow.active
+    assert client.post("/api/v1/line-follow/hold", headers=OPERATOR).status_code == 409
+
+
+def test_hold_endpoint_requires_operator_and_rejects_bad_hold(core_client):
+    client, services = core_client()
+    assert client.post("/api/v1/line-follow/hold", headers=VIEWER).status_code == 403
+    assert client.put("/api/v1/line-follow/mode",
+                      json={"mode": "CAMERA_LINE", "hold_s": 5}, headers=OPERATOR).status_code == 400
+    # hold_s 없는 기존 호출은 그대로 — 만료가 없다
+    assert client.put("/api/v1/line-follow/mode",
+                      json={"mode": "CAMERA_LINE"}, headers=OPERATOR).status_code == 200
+    assert not services.line_follow.hold_required

@@ -113,6 +113,9 @@ class LineFollowManager:
         self._lost_latched = False
         self._invalid_observation = False
         self._status = LineFollowStatus()
+        # D-349 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
+        self._hold_s: Optional[float] = None
+        self._hold_until: Optional[float] = None
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -135,9 +138,18 @@ class LineFollowManager:
         with self._lock:
             return self._mode is not LineFollowMode.OFF
 
-    def set_mode(self, mode: LineFollowMode | str) -> LineFollowStatus:
+    def set_mode(self, mode: LineFollowMode | str,
+                 hold_s: Optional[float] = None) -> LineFollowStatus:
         selected = mode if isinstance(mode, LineFollowMode) else LineFollowMode(mode)
+        if hold_s is not None and (not _finite(hold_s) or not 0.0 < float(hold_s) <= 2.0):
+            raise ValueError("line-follow hold_s must be in (0, 2]")
         with self._lock:
+            if selected is LineFollowMode.OFF or hold_s is None:
+                self._hold_s = None
+                self._hold_until = None
+            else:
+                self._hold_s = float(hold_s)
+                self._hold_until = self._clock() + self._hold_s
             previous = self._mode
             self._generation += 1
             self._mode = selected
@@ -255,6 +267,20 @@ class LineFollowManager:
         with self._lock:
             return self._status.model_copy()
 
+    @property
+    def hold_required(self) -> bool:
+        with self._lock:
+            return self._hold_s is not None
+
+    def hold(self, now: Optional[float] = None) -> bool:
+        """운전자가 아직 "진행"을 누르고 있다(D-349 §8). 활성 hold 세션만 연장한다."""
+        current = self._clock() if now is None else now
+        with self._lock:
+            if self._mode is LineFollowMode.OFF or self._hold_s is None:
+                return False
+            self._hold_until = float(current) + self._hold_s
+            return True
+
     def apply_if_current(self, decision: LineFollowDecision,
                          apply: Callable[[LineFollowDecision], None]) -> bool:
         """Apply a decision only while its mode and sensor evidence stay current.
@@ -282,6 +308,19 @@ class LineFollowManager:
         with self._lock:
             if self._mode is LineFollowMode.OFF:
                 return self._stop_decision("OFF", "mode_off")
+            if self._hold_until is not None and current > self._hold_until:
+                # 운전자가 손을 뗐거나 링크가 끊겼다 — 스스로 내린다(D-349 §8).
+                previous = self._mode
+                self._generation += 1
+                self._mode = LineFollowMode.OFF
+                self._hold_s = None
+                self._hold_until = None
+                self._loss_started_at = None
+                self._events.publish(
+                    "nav.line_driver_released", source="line_follow_manager",
+                    data={"mode": previous.value},
+                )
+                return self._stop_decision("OFF", "driver_released")
             if self._lost_latched:
                 reason = ("camera_reselection_required"
                           if self._mode is LineFollowMode.CAMERA_LINE
