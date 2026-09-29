@@ -3359,3 +3359,9 @@
 - 변경: D-281의 미결 원격 OMX API를 넘지 않도록 첫 SOURCE/LOCAL Fleet→workcell 제어 경로를 같은 Linux host의 UID 인증 UDS로 결정했다. native per-workcell owner가 Action journal과 ROS action client를 함께 소유하며 원격 host dispatch는 별도 결정까지 HOLD다. 실행 계획 작업 0·1을 이 선택과 맞췄다.
 - 증거: 비활성 OMX profile, 개발/ROS-SIM OCI shell, `RosArmCommandRuntime`, 독립 `ActionStore`, 배포 host inventory template 및 D-246/D-281/D-282/D-273 대조. 실제 host/serial/gripper/stop inventory는 아직 없다.
 - gate 변화: 없음. UDS contract SOURCE/LOCAL 구현을 시작하며 ROS-SIM/ARTIFACT/DEVICE/FIELD와 물리 capability는 계속 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
+
+- 변경: 계획의 ADR 후보 두 건을 조사하고 기록으로 종결했다. A-1(표정 어휘): `set_emotion` GIF 경로의 face 밖 호출자가 0곳이라 정식화할 상태→표정 계약이 없고, 카드 어휘는 D-221이 이미 계약한다 — 신규 ADR 없음. 만료 복귀 GIF가 상태와 무관하다는 관찰 1건은 BENCH 트리거로 남겼다. A-2(온기 문구): 세 웹 표면 빈 상태·로딩·오류 50행 스캔에서 문법이 이미 닫혀 있고 D-280.4/D-277/D-278/D-254가 경계를 쥐고 있어 닫을 간극이 없다 — 신규 ADR 없음.
+- 증거: 호출자 스캔(`set_emotion` face 외 0건), 문구 스캔 50행, D-221 본문 대조. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P7 절.
+- gate 변화: 없음. D 번호를 소모하지 않았다(다음 빈 번호 D-337·D-338 유지).

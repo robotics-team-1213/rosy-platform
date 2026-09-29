@@ -221,8 +221,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
 - 2026-09-29 · uncommitted · docs(er2): bound first Fleet OMX transport
 - 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
 - 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
 - 2026-09-29 · uncommitted · feat(protocol): land policy evidence schema (T1)
-- 2026-09-29 · uncommitted · docs(plan): design the D-268 policy evidence contract
