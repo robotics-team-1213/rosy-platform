@@ -3483,3 +3483,9 @@
 - gate 변화: 없음.
 - 결정: 입회 실기 세션의 스코프가 확정됐다 — ①상주 CPU 측정(measure-resident-cpu.sh) ②G4 계단(D-311/312/314) ③커미션 도우미(D-319). 이 세 가지를 한 세션에 묶는 게 다음 실기 회차의 기본 순서다.
 - 교훈: 없음.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T5 호스트 폐루프 착지
+
+- 변경: 실행 계획 T5에 호스트 폐루프 착지를 기록했다. `tools/sim/simulate_semantic_road.py`가 무신호 stop_and_go(정지+dwell 후 `unsignalized_proceed`, 신호 관측 시 `signal_unexpected`)와 관측 융합(`signal_unknown`→fused `signal_green`, 불일치 `signal_source_conflict`) 시나리오를 production subjects 폐루프로 돌리고 `docs/validation/semantic-road-stop-and-go-2026-09-29/`(PASS)에 증거를 냈다. WSL2 Jazzy+Gazebo+`/opt/rosy` 오버레이 존재를 확인했고, 실렌더링 폐루프와 실물 LAN 벤치는 전용 벤치 회차로 남긴 기록을 계획서에 보탰다.
+- 증거: `src/runtime/sensing` 로그 참조. 커밋 1695b402(호스트 폐루프 + 시험 2 passed).
+- gate 변화: 없음. T5 잔여: WSL Gazebo 실렌더링, 관측 서비스 실HTTP, 실물 LAN.
