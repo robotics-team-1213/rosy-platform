@@ -11,11 +11,9 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-input, select { font: inherit; color: inherit; }
-
 .vision-preview { margin-top: var(--space-4); }
 .vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
-.vision-controls select { min-width: 0; flex: 1; padding: var(--space-2); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.vision-controls select { flex: 1; }
 .vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
 .vision-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .vision-frame img[hidden], .vision-image-stage[hidden], .vision-corner-overlay[hidden], .vision-corner-modes[hidden], #vision-corner-hint[hidden] { display: none; }
@@ -38,7 +36,7 @@ input, select { font: inherit; color: inherit; }
 .adjustment-columns .hint { margin: 0 0 var(--space-2); }
 .corner-grid, .lens-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .corner-grid label, .lens-grid label, .aspect-control { display: grid; gap: var(--space-1); color: var(--ink-quiet); font-size: var(--text-micro); }
-.corner-grid input, .lens-grid input, .aspect-control select { width: 100%; min-width: 0; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--ink); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.corner-grid input, .lens-grid input, .aspect-control select { width: 100%; }
 .aspect-control { margin-top: var(--space-3); max-width: 12rem; }
 .adjustment-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); color: var(--ink-quiet); font-size: var(--text-micro); }
 
@@ -48,23 +46,13 @@ input, select { font: inherit; color: inherit; }
 
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
-.brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); letter-spacing: 0.16em; }
+.brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); letter-spacing: var(--track-label); }
 
 .topbar .spacer { flex: 1; }
 
 /* 관제 토큰 입력 — 루프백 밖 바인드에서는 서버가 토큰을 강제한다(cli.run_console).
-   색·배치는 클래스로만 준다 (CSP `style-src 'self'`). */
-.token {
-  font-family: var(--mono);
-  font-size: var(--text-micro);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-flag);
-  border: 1px solid var(--line-14);
-  background: var(--ground-soft);
-  color: var(--ink);
-  width: 11rem;
-}
-.token.locked { border-color: var(--status-crit-a45); }
+   얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
+.token { width: 11rem; }
 
 /* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다. */
 .theme-choice { display: flex; align-items: center; gap: var(--space-1); }
@@ -239,32 +227,13 @@ main {
 /* 로봇 정체색은 클래스로 돈다 — CSP 아래에서 style 속성은 적용되지 않는다. 지도의
    삼각형도 같은 순서로 색을 고르므로 카드의 띠와 지도의 로봇이 맞물린다. */
 .robot.selected { background: var(--ground); border-color: var(--line-30); }
-.robot.offline { opacity: 0.55; }
+/* 오프라인은 흐림이 아니라 조용한 글자와 점선 테다(D-359 §5.5). */
+.robot.offline { color: var(--ink-quiet); border-style: dashed; }
 
 .robot-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .robot-head b, .robot-head h3 { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
 .robot-head h3 { margin: 0; }
 .robot-head .spacer { flex: 1; }
-
-.tag {
-  font-family: var(--mono);
-  font-size: var(--text-micro);
-  letter-spacing: 0.1em;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--line-14);
-  color: var(--ink-quiet);
-}
-.tag.nav { color: var(--series-primary); border-color: var(--series-primary); }
-.tag.ok { color: var(--nominal); border-color: var(--surface-line); }
-.tag.warn { color: var(--status-warn); border-color: var(--status-warn); }
-/* D-202 — 위험은 글자가 아니라 채움이다. crit 글자는 어두운 카드 위에서
-   2.24:1로 읽히지 않았다. 공유 태그의 위험 얼굴과 같다: 종이 잉크 + 채움. */
-.tag.crit {
-  color: var(--ink-on-crit);
-  background: var(--status-crit);
-  border-color: transparent;
-}
 
 .facts {
   display: grid;
@@ -296,9 +265,7 @@ main {
   width: 0.85rem; height: 0.85rem; border-radius: var(--radius-flag);
   border: 1px solid var(--line-30);
   background: var(--ground-deep);
-  opacity: 0.5;
 }
-.lamp.on { opacity: 1; }
 .lamp.red.on { background: var(--status-crit); border-color: var(--status-crit); }
 .lamp.yellow.on { background: var(--status-warn); border-color: var(--status-warn); }
 .lamp.green.on { background: var(--nominal); border-color: var(--nominal); }
@@ -400,12 +367,19 @@ main {
   background: var(--ground-card);
   padding: var(--space-3) var(--space-4);
 }
+/* 필드가 44px 바닥(D-359 §5.1)을 받으면서 세 줄이 두 줄이 된다 — 리더·모양을 한 줄에,
+   간격을 다음 줄에 두어 명렬 패널이 뷰포트 안에 머문다(D-201). 좁은 폭은 한 쌍씩이다. */
 .formation-form {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
+  grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem minmax(0, 1fr);
   gap: var(--space-1) var(--space-2);
   align-items: center;
   margin: var(--space-2) 0 var(--space-3);
+}
+.formation-form .member-list { grid-column: 2 / -1; }
+@media (max-width: 30rem) {
+  .formation-form { grid-template-columns: 4.5rem minmax(0, 1fr); }
+  .formation-form .member-list { grid-column: 2; }
 }
 .formation-form label {
   font-family: var(--mono);
@@ -414,21 +388,13 @@ main {
   color: var(--ink-quiet);
 }
 .formation-form select,
-.formation-form input {
-  width: 100%;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--line-14);
-  background: var(--ground-soft);
-  font-size: var(--text-label);
-}
+.formation-form input { width: 100%; }
 
 
 
 /* FOR-001 Robot Selection — 대형 폼의 멤버 선택. 간격은 단일 파일의 스케일을 따른다. */
 .member-list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-micro); color: var(--ink); }
-.member-list input:disabled + * { opacity: 0.45; }
+.member-list label { font-size: var(--text-label); color: var(--ink); }
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;

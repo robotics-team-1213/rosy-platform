@@ -18,7 +18,7 @@
   <ui-topbar>
     <ui-brand><b>ROSY FLEET</b><small id="fleet-name">SITE CONSOLE</small></ui-brand>
     <div class="spacer"></div>
-    <input id="console-token" class="token" type="password" placeholder="관제 토큰"
+    <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
            autocomplete="off" aria-label="관제 토큰">
     <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
     <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
@@ -71,7 +71,7 @@
         </div>
         <div class="vision-controls">
           <label for="vision-source">카메라</label>
-          <select id="vision-source" disabled aria-label="관제 카메라 선택"></select>
+          <select class="ui-field" id="vision-source" disabled aria-label="관제 카메라 선택"></select>
           <ui-button kind="quiet" id="vision-refresh" type="button">영상 새로고침</ui-button>
         </div>
         <div class="vision-frame" id="vision-frame" data-state="waiting">
@@ -103,17 +103,17 @@
               <legend>평면 모서리와 출력 비율</legend>
               <p class="hint">원본 영상에서 바닥 영역의 네 모서리를 0–100%로 지정합니다.</p>
               <div class="corner-grid">
-                <label>왼쪽 위 X<input data-corner="0" data-axis="0" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 위 X (%)"></label>
-                <label>왼쪽 위 Y<input data-corner="0" data-axis="1" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 위 Y (%)"></label>
-                <label>오른쪽 위 X<input data-corner="1" data-axis="0" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 위 X (%)"></label>
-                <label>오른쪽 위 Y<input data-corner="1" data-axis="1" type="number" min="0" max="100" step="0.1" value="0" aria-label="오른쪽 위 Y (%)"></label>
-                <label>오른쪽 아래 X<input data-corner="2" data-axis="0" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 아래 X (%)"></label>
-                <label>오른쪽 아래 Y<input data-corner="2" data-axis="1" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 아래 Y (%)"></label>
-                <label>왼쪽 아래 X<input data-corner="3" data-axis="0" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 아래 X (%)"></label>
-                <label>왼쪽 아래 Y<input data-corner="3" data-axis="1" type="number" min="0" max="100" step="0.1" value="100" aria-label="왼쪽 아래 Y (%)"></label>
+                <label>왼쪽 위 X<input class="ui-field" data-corner="0" data-axis="0" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 위 X (%)"></label>
+                <label>왼쪽 위 Y<input class="ui-field" data-corner="0" data-axis="1" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 위 Y (%)"></label>
+                <label>오른쪽 위 X<input class="ui-field" data-corner="1" data-axis="0" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 위 X (%)"></label>
+                <label>오른쪽 위 Y<input class="ui-field" data-corner="1" data-axis="1" type="number" min="0" max="100" step="0.1" value="0" aria-label="오른쪽 위 Y (%)"></label>
+                <label>오른쪽 아래 X<input class="ui-field" data-corner="2" data-axis="0" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 아래 X (%)"></label>
+                <label>오른쪽 아래 Y<input class="ui-field" data-corner="2" data-axis="1" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 아래 Y (%)"></label>
+                <label>왼쪽 아래 X<input class="ui-field" data-corner="3" data-axis="0" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 아래 X (%)"></label>
+                <label>왼쪽 아래 Y<input class="ui-field" data-corner="3" data-axis="1" type="number" min="0" max="100" step="0.1" value="100" aria-label="왼쪽 아래 Y (%)"></label>
               </div>
               <label class="aspect-control" for="vision-aspect">출력 비율
-                <select id="vision-aspect" data-rect="output_aspect">
+                <select class="ui-field" id="vision-aspect" data-rect="output_aspect">
                   <option value="0">자동</option><option value="1">정사각형 1:1</option>
                   <option value="0.75">세로 3:4</option><option value="1.333333">가로 4:3</option>
                   <option value="1.777778">가로 16:9</option>
@@ -124,15 +124,15 @@
               <legend>렌즈 보정 계수</legend>
               <p class="hint">카메라 보정 결과를 알고 있다면 입력합니다. 모르면 기본값을 유지하세요.</p>
               <div class="lens-grid">
-                <label>초점 X<input data-rect="fx" type="number" min="0.25" max="4" step="0.01" value="1"></label>
-                <label>초점 Y<input data-rect="fy" type="number" min="0.25" max="4" step="0.01" value="1"></label>
-                <label>중심 X<input data-rect="cx" type="number" min="0" max="1" step="0.01" value="0.5"></label>
-                <label>중심 Y<input data-rect="cy" type="number" min="0" max="1" step="0.01" value="0.5"></label>
-                <label>방사 k1<input data-rect="k1" type="number" min="-1" max="1" step="0.01" value="0"></label>
-                <label>방사 k2<input data-rect="k2" type="number" min="-1" max="1" step="0.01" value="0"></label>
-                <label>접선 p1<input data-rect="p1" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
-                <label>접선 p2<input data-rect="p2" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
-                <label>방사 k3<input data-rect="k3" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>초점 X<input class="ui-field" data-rect="fx" type="number" min="0.25" max="4" step="0.01" value="1"></label>
+                <label>초점 Y<input class="ui-field" data-rect="fy" type="number" min="0.25" max="4" step="0.01" value="1"></label>
+                <label>중심 X<input class="ui-field" data-rect="cx" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+                <label>중심 Y<input class="ui-field" data-rect="cy" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+                <label>방사 k1<input class="ui-field" data-rect="k1" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>방사 k2<input class="ui-field" data-rect="k2" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>접선 p1<input class="ui-field" data-rect="p1" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label>접선 p2<input class="ui-field" data-rect="p2" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label>방사 k3<input class="ui-field" data-rect="k3" type="number" min="-1" max="1" step="0.01" value="0"></label>
               </div>
             </fieldset>
           </div>
@@ -191,13 +191,13 @@
         <div class="robot-head">
           <h3 id="formation-heading">대형</h3>
           <span class="spacer"></span>
-          <span id="formation-state" class="tag">IDLE</span>
+          <ui-tag id="formation-state" status="neutral">IDLE</ui-tag>
         </div>
         <div class="formation-form">
           <label for="formation-leader">리더</label>
-          <select id="formation-leader"></select>
+          <select class="ui-field" id="formation-leader"></select>
           <label for="formation-shape">모양</label>
-          <select id="formation-shape">
+          <select class="ui-field" id="formation-shape">
             <option value="COLUMN">COLUMN 종대</option>
             <option value="LINE">LINE 횡대</option>
             <option value="V">V</option>
@@ -206,7 +206,7 @@
             <option value="FOLLOW">FOLLOW</option>
           </select>
           <label for="formation-spacing">간격 m</label>
-          <input id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
+          <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
           <span class="member-label">포함 로봇</span>
           <div id="formation-members" class="member-list"></div>
         </div>
@@ -223,7 +223,7 @@
         <div class="robot-head">
           <h3 id="signals-heading">신호등</h3>
           <span class="spacer"></span>
-          <span id="signals-state" class="tag">—</span>
+          <ui-tag id="signals-state" status="neutral">—</ui-tag>
         </div>
         <div id="signal-cards" class="signal-cards"></div>
         <p class="hint" id="signals-hint">signals.yaml 로 연결된 사이트 신호등입니다. 장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다.</p>

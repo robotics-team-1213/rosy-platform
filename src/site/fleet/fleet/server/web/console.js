@@ -41,13 +41,13 @@ function markLocked() {
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
-  el("console-token").classList.add("locked");
+  el("console-token").setAttribute("aria-invalid", "true");
   showDiscoveryUnavailable("인증 필요", "관제 토큰을 입력하면 발견 목록을 다시 확인합니다.");
 }
 
 function markUnlocked() {
   auth.locked = false;
-  el("console-token").classList.remove("locked");
+  el("console-token").removeAttribute("aria-invalid");
 }
 
 function operatorControls() {

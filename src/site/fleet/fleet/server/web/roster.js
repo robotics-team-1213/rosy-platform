@@ -1,6 +1,23 @@
 // 명렬 카드 + 큐 채우기 (Fleet 분해 3). 로봇 한 대의 상태·증거·조작과
 // 주의/개입 큐를 그린다. formation/signals 팩토리와 같은 모양이다.
 
+// D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
+// ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
+const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
+
+function tag(text, cls) {
+  const node = document.createElement("ui-tag");
+  node.setAttribute("status", TAG_STATUS[cls] || "neutral");
+  node.textContent = text;
+  return node;
+}
+
+function setOff(button, reason) {
+  button.disabled = Boolean(reason);
+  if (reason) button.setAttribute("reason", reason);
+  else button.removeAttribute("reason");
+}
+
 export function createRoster({ el, view, log, call, render, streamEvidence, isOperator }) {
   function needsAttention(robot) {
     const state = robot.state;
@@ -66,24 +83,18 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const spacer = document.createElement("span");
     spacer.className = "spacer";
     head.append(robotName, spacer);
-    const mode = document.createElement("span");
-    mode.className = "tag";
-    mode.textContent = view.stateUnavailable ? "상태 확인 불가" : robot.online ? (state.mode || "—") : "OFFLINE";
-    if (view.stateUnavailable || !robot.online) mode.classList.add("crit");
-    head.appendChild(mode);
-    const navEl = document.createElement("span");
+    head.appendChild(tag(
+      view.stateUnavailable ? "상태 확인 불가" : robot.online ? (state.mode || "—") : "OFFLINE",
+      view.stateUnavailable || !robot.online ? "crit" : ""));
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
-    navEl.className = `tag ${blocked ? "crit" : robot.queued ? "warn" : nav.cls}`;
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
-    navEl.textContent = view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "대기" : nav.text;
-    head.appendChild(navEl);
+    head.appendChild(tag(
+      view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "대기" : nav.text,
+      blocked ? "crit" : robot.queued ? "warn" : nav.cls));
     const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
     if (evidence) {
       // 릴레이 건강은 증거다(D-72). fresh 는 아무것도 붙지 않는다 — 붙는 것은 문제뿐이다.
-      const evEl = document.createElement("span");
-      evEl.className = `tag ${evidence.cls}`;
-      evEl.textContent = evidence.text;
-      head.appendChild(evEl);
+      head.appendChild(tag(evidence.text, evidence.cls));
     }
     node.appendChild(head);
 
@@ -105,9 +116,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       if (label === "SAFETY" && value === "E-STOP") {
         // D-202 — 위험은 채움이다. 정지 사실은 카드의 다른 측정값과 같은
         // 무게로 읽히면 안 된다. 공용 어휘인 crit 태그를 재사용한다.
-        valueEl = document.createElement("span");
-        valueEl.className = "tag crit";
-        valueEl.textContent = value;
+        valueEl = tag(value, "crit");
       } else {
         valueEl = document.createElement("strong");
         valueEl.textContent = value;
@@ -152,7 +161,13 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     if (view.selected === robot.robot_id) aim.classList.add("arming");
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
-    aim.disabled = view.stateUnavailable || !robot.online || !view.map || estop !== false || lineFollowActive;
+    // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
+    setOff(aim, view.stateUnavailable ? "Fleet 상태 확인 불가"
+      : !robot.online ? "로봇 오프라인"
+        : !view.map ? "지도 없음"
+          : estop === true ? "비상정지 중"
+            : estop !== false ? "안전 상태 확인 불가"
+              : lineFollowActive ? "라인 추종 중" : "");
     aim.addEventListener("click", () => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
       view.cursor = view.selected && view.map
@@ -170,7 +185,8 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     cancel.setAttribute("kind", "quiet");
     cancel.type = "button";
     cancel.textContent = "취소";
-    cancel.disabled = view.stateUnavailable || !robot.online;
+    setOff(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
+      : !robot.online ? "로봇 오프라인" : "");
     cancel.addEventListener("click", async () => {
       try {
         const pending = view.pendingTasks[robot.robot_id];
@@ -200,7 +216,9 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       fallback.setAttribute("kind", "quiet");
       fallback.type = "button";
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
-      fallback.disabled = view.stateUnavailable || !robot.online || !isOperator();
+      setOff(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
+        : !robot.online ? "로봇 오프라인"
+          : !isOperator() ? "운용자 권한이 필요합니다" : "");
       fallback.addEventListener("click", async () => {
         const mode = lineFollow.mode === "IR_LINE" ? "OFF" : "IR_LINE";
         if (mode === "IR_LINE" && !window.confirm(`${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`)) return;

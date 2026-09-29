@@ -164,7 +164,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         per_robot = page.evaluate(
             "() => Object.fromEntries([...document.querySelectorAll('#roster article')]"
             ".map((el) => [el.querySelector('b')?.textContent,"
-            " el.querySelectorAll('.tag.crit, .tag.warn').length]))"
+            " el.querySelectorAll('ui-tag[status=crit], ui-tag[status=warn]').length]))"
         )
         assert per_robot == {"rosy_01": 0, "rosy_02": 0, "rosy_03": 2}
 
@@ -598,7 +598,7 @@ def test_holding_formation_enables_resume_and_warns(console_url):
             "() => document.getElementById('formation-state')?.textContent"
             " === 'HOLDING'"
         )
-        assert "warn" in page.locator("#formation-state").get_attribute("class")
+        assert page.locator("#formation-state").get_attribute("status") == "warn"
         assert page.locator("#formation-resume").is_enabled()
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")

@@ -7,7 +7,7 @@ export function createSignals({ el, view, log, call, refreshState }) {
   const SIGNAL_MODE_TAG = {
     failsafe: { text: "failsafe", cls: "crit" },
     manual: { text: "manual", cls: "" },
-    cycle: { text: "cycle", cls: "nav" },
+    cycle: { text: "cycle", cls: "active" },
     hold: { text: "hold", cls: "" },
     all_red: { text: "all_red", cls: "warn" },
     flash_red: { text: "flash_red", cls: "warn" },
@@ -40,8 +40,9 @@ export function createSignals({ el, view, log, call, refreshState }) {
     spacer.className = "spacer";
     head.append(signalName, spacer);
     const info = SIGNAL_MODE_TAG[row.mode] || { text: row.mode || "—", cls: "" };
-    const tag = document.createElement("span");
-    tag.className = `tag ${!row.online ? "crit" : info.cls}`;
+    // D-359 §5.2 — 공용 <ui-tag>. cls가 곧 status 어휘다(active·warn·crit).
+    const tag = document.createElement("ui-tag");
+    tag.setAttribute("status", (!row.online ? "crit" : info.cls) || "neutral");
     tag.textContent = !row.online ? "오프라인" : info.text;
     head.appendChild(tag);
     node.appendChild(head);
