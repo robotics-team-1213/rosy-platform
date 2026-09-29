@@ -238,8 +238,8 @@ _QR_BOX = 148
 _QR_QUIET = 2
 _QR_TOP = 28
 _QR_GAP = 6
-_QR_DARK = (0, 0, 0)
-_QR_LIGHT = (255, 255, 255)
+_QR_DARK = (0, 0, 0)          # token-exempt: QR modules need full black/white contrast
+_QR_LIGHT = (255, 255, 255)   # token-exempt: QR quiet zone
 #: D-260: the state line's colour; failed is the alarm fill, like FAILED above.
 _STATE_COLOURS = {"failed": _CRIT, "caution": _WARN, "booting": _MUTED}
 
