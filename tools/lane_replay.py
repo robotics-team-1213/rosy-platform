@@ -29,6 +29,7 @@ sys.path.insert(0, str(REPO / "src" / "runtime" / "sensing"))
 from control.sensing.perception import lane as lane_mod  # noqa: E402
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
+from control.sensing.perception.lane_keep import LaneKeeper  # noqa: E402
 
 PROFILE_PATH = REPO / "src" / "runtime" / "sensing" / "config" / "camera_nominal_pinky_pro.yaml"
 LANE_HALF_WIDTH_M = 0.0925
@@ -54,6 +55,25 @@ def target_on_line(mask: np.ndarray, error: float) -> bool:
     y0, y1 = int(h * EVAL_ROWS[0]), int(h * EVAL_ROWS[1])
     box = mask[y0:y1, max(0, x - half):min(w, x + half + 1)]
     return box.size > 0 and float(box.mean()) >= ON_LINE_FILL
+
+
+def _nominal_ground():
+    import yaml
+    profile = yaml.safe_load(PROFILE_PATH.read_text(encoding="utf-8"))
+    ground = nominal_ground_plane(source="NOMINAL", allowed=True, width_px=FRAME_W,
+                                  height_px=FRAME_H, profile=profile)
+    return profile, ground
+
+
+def _keep_detector():
+    """'keep' 모드(LaneKeeper, D-353 §2)를 공칭 지면으로. 오도메트리 없이 매 프레임 판단하고,
+    직전 목표로만 짧게 평활한다(실물 노드와 같은 설정)."""
+    profile, ground = _nominal_ground()
+    keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]))
+
+    def detect(img):
+        return keeper.update(img, ground, lane_half_width_m=LANE_HALF_WIDTH_M)
+    return detect
 
 
 def _centre_detector():
@@ -84,6 +104,8 @@ def make_detectors(names):
             detectors[name] = keeper.update
         elif name == "centre":
             detectors[name] = _centre_detector()
+        elif name == "keep":
+            detectors[name] = _keep_detector()
         else:
             raise SystemExit(f"unknown detector {name!r}")
     return detectors
