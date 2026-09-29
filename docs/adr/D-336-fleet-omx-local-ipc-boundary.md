@@ -1,4 +1,4 @@
-## D-335 Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다
+## D-336 Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다
 
 **Status:** Accepted (2026-09-29, SOURCE/LOCAL 연결 경계만). 실제 호스트 배치, 설치 서비스, OMX capability, 원격 장치 API, ROS graph 연결, 물리 정지·DEVICE/FIELD 수용을 승인하지 않는다.
 

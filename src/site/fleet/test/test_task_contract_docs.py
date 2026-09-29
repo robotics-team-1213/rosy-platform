@@ -21,7 +21,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
     assert "**Version:** v1.48" in reference
-    assert "## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-335)" in reference
+    assert "## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-336)" in reference
     assert "GetStopState(LocalStopQuery)" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference

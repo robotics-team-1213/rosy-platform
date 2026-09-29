@@ -5,7 +5,7 @@ last_verified: { commit: "uncommitted", date: 2026-09-29 }
 gates:
   SOURCE:
     state: GO
-    evidence: "101 passed; includes PolicyEvidencePayload (D-268 T1) and Device Action/Local Stop SOURCE schemas (D-333/D-335, 2026-09-29 Windows)"
+    evidence: "101 passed; includes PolicyEvidencePayload (D-268 T1) and Device Action/Local Stop SOURCE schemas (D-333/D-336, 2026-09-29 Windows)"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   LOCAL:
     state: GO

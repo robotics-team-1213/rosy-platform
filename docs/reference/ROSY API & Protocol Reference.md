@@ -1203,7 +1203,7 @@ the robot envelope for a site-only REST change. D-268 and field acceptance remai
 prerequisites for any automatic source; a displayed sighting alone never
 authorizes navigation or picking.
 
-## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-335)
+## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-336)
 
 This is a same-Linux-host, per-workcell Unix domain socket (UDS) contract. It is
 not a robot REST route, Fleet-to-robot PRT message, ROS topic, or remote-host
@@ -1248,7 +1248,7 @@ claimed by this reference entry.
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.46 | 2026-09-29 | Additive (D-330): Fleet dispatch-control readback and explicit generation-checked operator rearm; startup/stop hold, unresolved-action rearm refusal, and device-side generation fencing remains unimplemented. |
-| v1.48 | 2026-09-29 | Additive (D-333/D-335): typed Site Fleet-to-OMX local Device Action and software-stop contracts, same-host UDS boundary, attempt/generation fences, and explicit separation from Mission goal evidence and physical stop proof. No REST path, PRT envelope change, listener, runner, or device capability is implied. |
+| v1.48 | 2026-09-29 | Additive (D-333/D-336): typed Site Fleet-to-OMX local Device Action and software-stop contracts, same-host UDS boundary, attempt/generation fences, and explicit separation from Mission goal evidence and physical stop proof. No REST path, PRT envelope change, listener, runner, or device capability is implied. |
 | v1.47 | 2026-09-29 | Clarify (D-330): dedicated operator E-stop fanout proceeds on audit/latch/queue-storage failure with server logging; ordinary mutations remain audit fail-closed; request replies do not prove physical stop. |
 | v1.44 | 2026-09-28 | Additive (D-316): correlate Pinky Site Fleet navigation attempts through optional CORE REST metadata and CORE navigation events; project matching results into durable task status. PRT-004/Envelope ACK and physical stop readback remain separate. |
 | v1.45 | 2026-09-28 | Additive (D-318): bounded rectification settings in signed Site Fleet Vision preview leases; Vision applies OpenCV lens and plane correction only to the returned latest-frame preview copy. Raw sighting input and robot command paths are unchanged. |
