@@ -142,7 +142,7 @@ function renderLineFollow(status = {}) {
   setText("line-follow-angular", `${number(status.angular || 0, 3)} rad/s`);
   setText("line-follow-reason", status.reason || "mode_off");
   document.querySelectorAll("[data-line-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.lineMode === mode);
+    button.setAttribute("aria-pressed", String(button.dataset.lineMode === mode));
   });
   updateLineFollowButtons();
 }
@@ -258,8 +258,8 @@ function renderRobotState(state) {
   setText("state-age", state.timestamp ? new Date(state.timestamp).toLocaleTimeString("ko-KR") : "—");
   setText("hero-message", state.online === false ? "로봇이 오프라인 상태를 보고했습니다." : "로봇 런타임과 상태 스트림이 연결되었습니다.");
 
-  document.querySelectorAll("[data-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.mode === state.mode);
+  document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
   });
   renderLineFollow(state.line_follow);
   renderTrafficStatus(state.traffic_policy);
@@ -380,7 +380,7 @@ function renderCapabilities(capabilities) {
   const slamOn = capabilities?.slam === true;
   const slamChip = elements["slam-capability"];
   if (slamChip) {
-    slamChip.dataset.mode = slamOn ? "AVAILABLE" : "HOLD";
+    setTagState(slamChip, "mode", slamOn ? "AVAILABLE" : "HOLD");
     slamChip.textContent = slamOn ? "AVAILABLE" : "HOLD";
   }
   setEnabled("slam-start", slamOn);
@@ -494,7 +494,7 @@ function stopTeleop(message = "정지 명령을 전송했습니다.", immediate 
   if (teleopHoldTimeout !== null) { clearTimeout(teleopHoldTimeout); teleopHoldTimeout = null; }
   // D-250: interval 수명과 zero 1회는 티커가 소유한다. 자격·전송·문구는 셸의 몫이다.
   holdTicker.stop(immediate);
-  document.querySelectorAll("[data-teleop]").forEach((button) => button.classList.remove("active"));
+  document.querySelectorAll("[data-teleop]").forEach((button) => button.setAttribute("aria-pressed", "false"));
   setText("teleop-message", message);
   updateTeleopControls();
 }
@@ -531,7 +531,7 @@ function startTeleop(button, event) {
   if (!Number.isFinite(linear) || !Number.isFinite(angular)) return;
 
   teleopCommand = { linear, angular };
-  button.classList.add("active");
+  button.setAttribute("aria-pressed", "true");
   setText("teleop-message", `${button.querySelector("small")?.textContent || "주행"} 명령 전송 중…`);
   holdTicker.start();
   teleopHoldTimeout = setTimeout(() => stopTeleop("2초 한도에 도달해 정지했습니다.", true), 2_000);
@@ -539,10 +539,14 @@ function startTeleop(button, event) {
 
 function updateModeButtons() {
   const navigationAvailable = session.capabilities?.navigation?.goal_navigation === true;
-  document.querySelectorAll("[data-mode]").forEach((button) => {
+  document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
     const unsupported = button.dataset.mode === "NAVIGATION" && !navigationAvailable;
     button.disabled = session.modeChangePending || unsupported;
-    button.title = unsupported ? "이 프로필에서는 내비게이션이 비활성화되어 있습니다." : "";
+    // D-359 §5.3 — title은 터치에서 보이지 않는다. 사유는 비활성과 같은 조건에서 나온다.
+    const reason = unsupported ? "이 프로필에서는 내비게이션을 쓸 수 없습니다"
+      : session.modeChangePending ? "모드 변경을 처리하는 중입니다" : "";
+    if (reason) button.setAttribute("reason", reason);
+    else button.removeAttribute("reason");
   });
 }
 
@@ -960,7 +964,7 @@ elements["open-auth"].addEventListener("click", () => elements["auth-drawer"].cl
 elements["close-auth"].addEventListener("click", () => elements["auth-drawer"].classList.remove("open"));
 elements["refresh-events"].addEventListener("click", () => api("/api/v1/events?limit=10").then(renderEvents).catch(showConnectionError));
 
-document.querySelectorAll("[data-mode]").forEach((button) => {
+document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
   button.addEventListener("click", async () => {
     if (button.disabled || session.modeChangePending) return;
     const requestedMode = button.dataset.mode;

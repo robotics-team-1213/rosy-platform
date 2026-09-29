@@ -7,6 +7,7 @@ export function mount(el, ctx) {
   help.textContent = "현재 위치를 웨이포인트로 저장합니다. 위치 정보가 들어오면 저장할 수 있습니다.";
   const form = document.createElement("form");
   const input = document.createElement("input");
+  input.className = "ui-field";
   input.name = "name";
   input.maxLength = 64;
   input.autocomplete = "off";

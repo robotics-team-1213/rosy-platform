@@ -10,7 +10,7 @@ export function mount(root, ctx) {
   const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "추종 모드");
-  const select = el("select"); select.setAttribute("aria-label", "차선 추종 모드");
+  const select = el("select", "ui-field"); select.setAttribute("aria-label", "차선 추종 모드");
   for (const [value, text] of [["IR_LINE", "적외선 센서"], ["CAMERA_LINE", "카메라"]]) {
     const option = el("option", "", text); option.value = value; select.append(option);
   }

@@ -11,7 +11,7 @@ export function mount(root, ctx) {
   const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "도킹 위치");
-  const select = el("select"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);
+  const select = el("select", "ui-field"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);
   const dock = el("ui-button", "", "도킹 시작"); dock.setAttribute("kind", "primary"); dock.type = "button"; dock.disabled = true;
   const actions = el("ui-actions", "surface-actions");
   const undock = el("ui-button", "", "언도크"); undock.setAttribute("kind", "quiet"); undock.type = "button";

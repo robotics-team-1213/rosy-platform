@@ -34,24 +34,6 @@
 .surface-link:hover { background: var(--brand-rose-wash); }
 .surface-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-link[hidden] { display: none; }
-.surface-slot input:not([type="checkbox"]):not([type="radio"]),
-.surface-slot select,
-.surface-slot textarea {
-  box-sizing: border-box;
-  min-height: var(--target-secondary);
-  min-width: 0;
-  max-width: 100%;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-control);
-  color: var(--ink);
-  background: var(--field-bg);
-  font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
-}
-.surface-slot input::placeholder,
-.surface-slot textarea::placeholder { color: var(--nominal-quiet); opacity: 1; }
-.surface-slot input[type="checkbox"],
-.surface-slot input[type="radio"] { accent-color: var(--focus-ring); }
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
 .surface-map-readout { margin: 0; }
@@ -59,7 +41,6 @@
 .surface-map-frame ui-empty { position: absolute; inset: var(--space-3); pointer-events: none; }
 .surface-teleop-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); max-width: 24rem; touch-action: none; }
 .surface-teleop-controls ui-button { user-select: none; -webkit-user-select: none; }
-.surface-teleop-controls ui-button.active { outline: 2px solid var(--status-warn); outline-offset: 2px; }
 .surface-camera-stage { position: relative; min-width: 0; min-height: 12rem; display: grid; place-items: center; background: var(--ground-deep); overflow: hidden; }
 .surface-camera-frame { display: block; width: 100%; max-height: 50vh; object-fit: contain; }
 .surface-camera-frame[hidden] { display: none; }

@@ -91,7 +91,7 @@ export function createRosNetwork({
     const throughput = runtime.network?.throughput || {};
     const status = graph.status || "UNAVAILABLE";
     setText("ros-graph-status", status);
-    elements["ros-graph-status"]?.setAttribute("data-status", status);
+    setTagState(elements["ros-graph-status"], "status", status);
     setText("ros-domain-id", graph.domain_id);
     setText("ros-namespace", graph.namespace);
     const isolationLabels = {

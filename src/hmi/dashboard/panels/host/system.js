@@ -43,7 +43,7 @@ export function mount(root, ctx) {
   let savedName = null;
   if (ctx.role === "administrator") {
     const form = el("form", "ui-form");
-    identityInput = el("input"); identityInput.name = "robot_name"; identityInput.maxLength = 64;
+    identityInput = el("input", "ui-field"); identityInput.name = "robot_name"; identityInput.maxLength = 64;
     identityInput.setAttribute("aria-label", "로봇 표시 이름");
     identityInput.addEventListener("input", () => { identityDirty = true; savedName = null; });
     const identitySave = el("ui-button", "", "이름 저장");

@@ -1,3 +1,5 @@
+import { setTagState } from "./dom.js";
+
 // 호스트·릴리스·커미셔닝·하드웨어 카드 렌더 (D-262 세 번째 분해). 셸은
 // render*(payload) 호출만 남긴다. 역할 판단(isAdmin)과 커미셔닝 후속
 // 조치(onCommissioningRendered)는 셸이 주입한다. map.js·vision.js와 같은
@@ -20,14 +22,14 @@ export function createHostCards({
     const chip = document.getElementById(id);
     if (!chip) return;
     const mode = value || "UNKNOWN";
-    chip.dataset.mode = mode;
+    setTagState(chip, "mode", mode);
     chip.textContent = mode === "UNKNOWN" ? "—" : mode;
   }
 
   function renderHostNetwork(payload) {
     const status = document.getElementById("host-agent-status");
     if (status) {
-      status.dataset.status = payload.available ? "OK" : "UNAVAILABLE";
+      setTagState(status, "status", payload.available ? "OK" : "UNAVAILABLE");
       status.textContent = payload.available ? "Host Agent 연결됨" : "Host Agent 없음";
     }
 
@@ -135,9 +137,9 @@ export function createHostCards({
     onCommissioningRendered(payload.motion_reason || "");
   }
 
-  // D-247 3: six states, fixed. Colour comes from the shared [data-status]
-  // vocabulary: OK is the nominal text colour, WARNING the warn text, ERROR the
-  // crit fill; the two states a machine cannot judge carry no status at all.
+  // D-247 3: six states, fixed. Colour comes from the shared <ui-tag status>
+  // vocabulary (dom.js tagStatus): OK is active ink, WARNING warn, ERROR the
+  // crit fill; the two states a machine cannot judge stay neutral.
   const DEVICE_STATES = {
     ok: { text: "정상", status: "OK" },
     no_response: { text: "응답 없음", status: "ERROR" },
@@ -210,15 +212,14 @@ export function createHostCards({
     bus.textContent = device.bus;
     name.append(label, bus);
     if (device.product === false) {
-      const bench = document.createElement("span");
-      bench.className = "machine-tag";
+      const bench = document.createElement("ui-tag");
       bench.textContent = "벤치 전용";
       name.append(bench);
     }
-    const chip = document.createElement("span");
-    chip.className = "mode-chip device-state";
+    const chip = document.createElement("ui-tag");
+    chip.className = "device-state";
     chip.textContent = known.text;
-    if (known.status) chip.dataset.status = known.status;
+    setTagState(chip, "status", known.status);
     const evidence = document.createElement("p");
     evidence.className = "device-evidence";
     evidence.textContent = device.evidence;

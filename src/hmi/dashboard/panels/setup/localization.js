@@ -8,7 +8,7 @@ function el(tag, cls, text) {
 
 function field(labelText, name, value = "0") {
   const label = el("label", "ui-field-label", labelText);
-  const input = el("input");
+  const input = el("input", "ui-field");
   input.type = "number"; input.step = "any"; input.required = true; input.name = name; input.value = value;
   label.append(input);
   return {label, input};
@@ -29,7 +29,7 @@ export function mount(root, ctx) {
 
   const slam = el("section", "ui-readback");
   slam.append(el("h3", "", "SLAM 맵 준비"));
-  const mapName = el("input"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
+  const mapName = el("input", "ui-field"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
   mapName.setAttribute("aria-label", "저장할 맵 이름");
   const actions = el("ui-actions", "surface-actions");
   const start = el("ui-button", "", "맵핑 시작"); start.setAttribute("kind", "primary"); start.type = "button";

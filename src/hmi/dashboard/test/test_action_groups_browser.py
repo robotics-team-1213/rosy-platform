@@ -234,7 +234,7 @@ def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motio
             calls_after_return = page.evaluate("window.__timeline.filter((item) => item.path === '/api/v1/teleop').length")
             page.wait_for_timeout(250)
             calls_later = page.evaluate("window.__timeline.filter((item) => item.path === '/api/v1/teleop').length")
-            teleop_active = page.locator("[data-panel='console.teleop'] ui-button.active").count()
+            teleop_active = page.locator("[data-panel='console.teleop'] ui-button[aria-pressed='true']").count()
             new_stop_group = page.locator("[role='tab'][aria-selected='true']").inner_text()
             assert zero_index < unmount_index
             assert after_dock["timeline"][zero_index]["body"] == {"linear": 0, "angular": 0}

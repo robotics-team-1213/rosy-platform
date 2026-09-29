@@ -13,7 +13,7 @@ export function mount(root, ctx) {
   const status = el("ui-status", "", "WAITING"); status.id = "vision-status";
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const storageLabel = el("label", "ui-field-label surface-camera-storage", "저장 위치");
-  const storage = el("select"); storage.id = "vision-storage";
+  const storage = el("select", "ui-field"); storage.id = "vision-storage";
   for (const [value, label] of [["pc", "이 PC"], ["robot", "로봇 SD"], ["both", "PC와 로봇 SD"]]) {
     const option = el("option", "", label); option.value = value;
     if (ctx.role === "viewer" && value !== "pc") option.disabled = true;

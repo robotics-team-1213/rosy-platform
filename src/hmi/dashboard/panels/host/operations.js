@@ -110,11 +110,11 @@ export function mount(root, ctx) {
   const relay = el("ui-button", "", "릴레이 AP 켜기"); relay.setAttribute("kind", "quiet"); relay.type = "button";
   modeActions.append(sta, relay); networkActions.append(modeActions);
   const applyForm = el("form", "ui-form");
-  const profile = el("input"); profile.maxLength = 64; profile.autocomplete = "off"; profile.setAttribute("aria-label", "네트워크 프로파일 ID"); profile.placeholder = "프로파일 ID";
+  const profile = el("input", "ui-field"); profile.maxLength = 64; profile.autocomplete = "off"; profile.setAttribute("aria-label", "네트워크 프로파일 ID"); profile.placeholder = "프로파일 ID";
   const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.setAttribute("kind", "primary"); applyProfile.type = "submit"; applyForm.append(profile, applyProfile); networkActions.append(applyForm);
   const connectForm = el("form", "ui-form");
-  const ssid = el("input"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
-  const field = el("input"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
+  const ssid = el("input", "ui-field"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
+  const field = el("input", "ui-field"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
   const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
   const networkNote = el("ui-status", "", "Host Agent 상태 확인 전에는 네트워크 작업을 사용할 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
   network.wrap.insertBefore(networkActions, network.readout);

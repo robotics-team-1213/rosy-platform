@@ -103,7 +103,7 @@ export function renderDockingStatus(payload) {
   session.dockingSupported = supported;
   const chip = elements["dock-capability"];
   if (chip) {
-    chip.dataset.mode = supported ? "AVAILABLE" : "HOLD";
+    setTagState(chip, "mode", supported ? "AVAILABLE" : "HOLD");
     chip.textContent = supported ? "AVAILABLE" : "HOLD";
   }
   const state = payload.state || "UNDOCKED";

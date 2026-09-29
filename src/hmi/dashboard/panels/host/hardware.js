@@ -3,13 +3,14 @@
 
 const REFRESH_MS = 10_000;
 
+// D-359 §5.2 — tag는 공용 <ui-tag status> 어휘다. status는 서버 어휘 그대로 남긴다.
 const STATES = {
-  ok: {label: "정상", status: "OK"},
-  no_response: {label: "응답 없음", status: "ERROR"},
-  bus_missing: {label: "버스 없음", status: "WARNING"},
-  driver_missing: {label: "드라이버 없음", status: "WARNING"},
-  needs_human: {label: "사람 확인 필요"},
-  not_measured: {label: "측정 안 함"},
+  ok: {label: "정상", status: "OK", tag: "active"},
+  no_response: {label: "응답 없음", status: "ERROR", tag: "crit"},
+  bus_missing: {label: "버스 없음", status: "WARNING", tag: "warn"},
+  driver_missing: {label: "드라이버 없음", status: "WARNING", tag: "warn"},
+  needs_human: {label: "사람 확인 필요", tag: "neutral"},
+  not_measured: {label: "측정 안 함", tag: "neutral"},
 };
 
 function node(tag, className, value) {
@@ -38,7 +39,8 @@ function deviceRow(device) {
   if (device.bus) identity.append(node("small", "hardware-device-bus", device.bus));
 
   const state = STATES[device.state] || STATES.not_measured;
-  const chip = node("span", "mode-chip hardware-device-state", state.label);
+  const chip = node("ui-tag", "hardware-device-state", state.label);
+  chip.setAttribute("status", state.tag);
   if (state.status) chip.dataset.status = state.status;
 
   const evidence = node("p", "hardware-device-evidence", device.evidence || "근거 없음");

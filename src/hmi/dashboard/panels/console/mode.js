@@ -27,6 +27,12 @@ export function mount(root, ctx) {
   function update() {
     for (const [id, button] of buttons) {
       button.disabled = pending || !current || id === current || (id === "NAVIGATION" && !navigationAvailable);
+      // D-359 §5.3 — 사유는 같은 조건에서 나온다. 지금 모드는 눌림(aria-pressed)이 말한다.
+      const reason = pending ? "모드 변경 처리 중"
+        : !current ? "현재 모드 확인 중"
+          : id !== current && id === "NAVIGATION" && !navigationAvailable ? "이 프로필에서 쓸 수 없음" : "";
+      if (reason) button.setAttribute("reason", reason);
+      else button.removeAttribute("reason");
       button.setAttribute("aria-pressed", String(id === current));
     }
   }
@@ -39,10 +45,6 @@ export function mount(root, ctx) {
       ? "Navigation 기능을 사용할 수 있습니다."
       : `Navigation을 사용할 수 없습니다.${caps?.navigation?.reason ? ` ${caps.navigation.reason}` : " 이 profile에서 제한되거나 제공되지 않습니다."}`;
     capabilityStatus.setAttribute("state", navigationAvailable ? "ready" : "warning");
-    if (!navigationAvailable) {
-      const nav = buttons.get("NAVIGATION"); nav.title = "이 프로필에서는 Navigation이 제한되거나 제공되지 않습니다.";
-      nav.setAttribute("aria-description", nav.title);
-    }
     update();
   }, (error) => {
     navigationAvailable = false;

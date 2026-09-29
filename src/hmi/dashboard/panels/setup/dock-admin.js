@@ -3,7 +3,7 @@ import { poseUnavailableReason } from "./pose-evidence.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function input(labelText, name, type = "text") {
-  const label = el("label", "ui-field-label", labelText); const control = el("input");
+  const label = el("label", "ui-field-label", labelText); const control = el("input", "ui-field");
   control.name = name; control.type = type; control.autocomplete = "off"; label.append(control);
   return {label, control};
 }
@@ -26,7 +26,7 @@ export function mount(root, ctx) {
   const typeField = input("도크 유형 이름 (필수 · 기존 유형은 재사용)", "dock_type"); typeField.control.maxLength = 64; typeField.control.required = true;
   const knownTypes = el("datalist", ""); knownTypes.id = "setup-dock-types"; typeField.control.setAttribute("list", knownTypes.id);
   const detectorLabel = el("label", "ui-field-label", "새 유형의 검출기");
-  const detector = el("select"); detector.setAttribute("aria-label", "새 도크 유형 검출기");
+  const detector = el("select", "ui-field"); detector.setAttribute("aria-label", "새 도크 유형 검출기");
   for (const [value, text] of [["", "기존 유형 또는 검출기 선택"], ["simulated", "시뮬레이션"], ["observation", "태그 관측"]]) {
     const option = el("option", "", text); option.value = value; detector.append(option);
   }

@@ -86,7 +86,7 @@ export function mount(root, ctx) {
   function stop(message = "정지 명령을 보냈습니다.", immediate = false) {
     if (holdTimeout !== null) { clearTimeout(holdTimeout); holdTimeout = null; }
     ticker.stop(immediate);
-    activeButton?.classList.remove("active"); activeButton = null;
+    activeButton?.setAttribute("aria-pressed", "false"); activeButton = null;
     buttons.forEach((button) => { button.disabled = !eligible(); });
     actionStatus.textContent = message;
     return pending || Promise.resolve();
@@ -97,7 +97,7 @@ export function mount(root, ctx) {
     if (event.pointerId != null && button.setPointerCapture) {
       try { button.setPointerCapture(event.pointerId); } catch (_error) { /* Browser may not expose capture on a custom element. */ }
     }
-    activeButton = button; button.classList.add("active");
+    activeButton = button; button.setAttribute("aria-pressed", "true");
     actionStatus.textContent = `${button.getAttribute("aria-label").split(".")[0]} 명령 전송 중 · 놓으면 정지합니다.`;
     ticker.start();
     holdTimeout = setTimeout(() => stop("2초 한도에 도달해 정지했습니다.", true), MAX_HOLD_MS);

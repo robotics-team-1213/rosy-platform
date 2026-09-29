@@ -24,18 +24,18 @@
     </ui-brand>
     <div class="topbar-status">
       <span id="clock" class="clock">--:--:--</span>
-      <span id="connection-badge" class="status-badge status-unknown">
+      <ui-tag id="connection-badge" status="neutral">
         <i aria-hidden="true"></i><span>인증 대기</span>
-      </span>
+      </ui-tag>
       <div class="view-switch" role="group" aria-label="화면 전환">
         <ui-button kind="segment" id="view-operate" class="view-tab" type="button" aria-pressed="true">운용</ui-button>
         <ui-button kind="segment" id="view-inspect" class="view-tab" type="button" aria-pressed="false">점검</ui-button>
       </div>
       <nav id="surface-bridge" class="surface-bridge" aria-label="역할 화면" hidden></nav>
       <!-- D-193 6: who this browser is, from GET /api/v1/auth/whoami. -->
-      <span id="whoami-badge" class="machine-tag whoami-badge" hidden>
+      <ui-tag id="whoami-badge" class="whoami-badge" hidden>
         <b id="whoami-role"></b><span id="whoami-detail"></span>
-      </span>
+      </ui-tag>
       <ui-button kind="quiet" id="logout" class="quiet-button" type="button" hidden>로그아웃</ui-button>
       <ui-button kind="quiet" id="open-auth" class="quiet-button" type="button">접속 키</ui-button>
     </div>
@@ -55,15 +55,15 @@
     <form id="code-form" role="tabpanel" aria-labelledby="auth-tab-code">
       <label for="code-input">로그인 코드</label>
       <div class="auth-row">
-        <input id="code-input" name="code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCD-EFGH" required>
+        <input class="ui-field" id="code-input" name="code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="ABCD-EFGH" required>
         <ui-button kind="primary" id="code-submit" type="submit" class="primary-button">로그인</ui-button>
       </div>
       <label for="code-label">이 기기 이름표 (선택)</label>
       <div class="auth-row">
-        <input id="code-label" name="label" type="text" maxlength="64" autocomplete="off" placeholder="bay 7 태블릿">
+        <input class="ui-field" id="code-label" name="label" type="text" maxlength="64" autocomplete="off" placeholder="bay 7 태블릿">
       </div>
-      <label class="bench-confirmation" for="code-remember">
-        <input id="code-remember" type="checkbox">
+      <label class="ui-check bench-confirmation" for="code-remember">
+        <input class="ui-field" id="code-remember" type="checkbox">
         <span>이 브라우저에서 로그인 유지(최대 7일). 끄면 이 탭을 닫을 때 지웁니다.</span>
       </label>
       <p id="code-message" class="form-message" role="status" aria-live="polite"></p>
@@ -71,7 +71,7 @@
     <form id="auth-form" role="tabpanel" aria-labelledby="auth-tab-token" hidden>
       <label for="token-input">API 토큰</label>
       <div class="auth-row">
-        <input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="rosy-…" required>
+        <input class="ui-field" id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="rosy-…" required>
         <ui-button kind="primary" type="submit" class="primary-button">연결</ui-button>
       </div>
       <p>카드 토큰이나 설정에서 만든 토큰입니다. 키는 이 탭이 열려 있는 동안에만 보관됩니다.</p>
@@ -135,7 +135,7 @@
             <div>
               <h2 id="motion-heading">로봇 텔레메트리</h2>
             </div>
-            <span id="state-age" class="machine-tag"></span>
+            <ui-tag id="state-age"></ui-tag>
           </div>
           <div class="telemetry-grid">
             <article><span>X</span><strong id="pose-x"></strong><small>metres</small></article>
@@ -154,7 +154,7 @@
             <div>
               <h2 id="capability-heading">기능 가용성</h2>
             </div>
-            <span id="capability-count" class="machine-tag"></span>
+            <ui-tag id="capability-count"></ui-tag>
           </div>
           <div id="capability-list" class="capability-list" aria-live="polite">
             <ui-empty>연결 후 기능 계약을 표시합니다.</ui-empty>
@@ -203,7 +203,7 @@
             <div>
               <h2 id="vision-heading">전방 카메라 · 인식 오버레이</h2>
             </div>
-            <span id="vision-status" class="machine-tag">WAITING</span>
+            <ui-tag id="vision-status">WAITING</ui-tag>
           </div>
           <div id="vision-stage" class="vision-stage" data-state="waiting"
                role="img" aria-label="로봇 전방 카메라와 도로 인식 오버레이">
@@ -223,7 +223,7 @@
             <div>
               <h2 id="field-map-heading">점유 지도</h2>
             </div>
-            <span id="map-status" class="machine-tag">맵 수신 대기</span>
+            <ui-tag id="map-status">맵 수신 대기</ui-tag>
           </div>
           <div class="map-stage">
             <div class="map-controls">
@@ -272,7 +272,7 @@
           <div class="mode-control" role="group" aria-label="로봇 운전 모드">
             <ui-button kind="segment" type="button" data-mode="IDLE">IDLE</ui-button>
             <ui-button kind="segment" type="button" data-mode="MANUAL">MANUAL</ui-button>
-            <ui-button kind="segment" type="button" data-mode="NAVIGATION" disabled title="기능 확인 중">NAV</ui-button>
+            <ui-button kind="segment" type="button" data-mode="NAVIGATION" disabled reason="기능 확인 중">NAV</ui-button>
           </div>
           <div class="line-follow-control" aria-labelledby="line-follow-heading">
             <div class="line-follow-copy">
@@ -322,7 +322,7 @@
           <div>
             <h2 id="system-heading">호스트 상태</h2>
           </div>
-          <span id="host-name" class="machine-tag"></span>
+          <ui-tag id="host-name"></ui-tag>
         </div>
         <div class="system-identity">
           <div><span>운영체제</span><strong id="os-name"></strong></div>
@@ -360,7 +360,7 @@
           <div>
             <h2 id="host-heading">네트워크와 릴리스</h2>
           </div>
-          <span id="host-agent-status" class="machine-tag" data-status="UNKNOWN">확인 전</span>
+          <ui-tag id="host-agent-status" data-status="UNKNOWN">확인 전</ui-tag>
         </div>
 
         <div class="host-card-grid">
@@ -368,7 +368,7 @@
                    aria-labelledby="network-card-heading">
             <header>
               <h3 id="network-card-heading">네트워크</h3>
-              <span id="network-mode" class="mode-chip" data-mode="UNKNOWN"></span>
+              <ui-tag id="network-mode" data-mode="UNKNOWN"></ui-tag>
             </header>
             <dl class="host-facts">
               <div><dt>SSID</dt><dd id="network-ssid"></dd></div>
@@ -386,17 +386,17 @@
             </div>
             <form id="network-connect-form">
               <label for="network-ssid-input">Wi-Fi SSID</label>
-              <input id="network-ssid-input" name="ssid" maxlength="32" autocomplete="off">
+              <input class="ui-field" id="network-ssid-input" name="ssid" maxlength="32" autocomplete="off">
               <label for="network-psk-input">암호</label>
               <div class="settings-row">
-                <input id="network-psk-input" name="psk" type="password" maxlength="63" autocomplete="new-password">
+                <input class="ui-field" id="network-psk-input" name="psk" type="password" maxlength="63" autocomplete="new-password">
                 <ui-button kind="primary" type="button" id="network-connect" class="primary-button" disabled>Wi-Fi 연결</ui-button>
               </div>
             </form>
             <form id="network-apply-form">
               <label for="network-profile-id">네트워크 프로파일</label>
               <div class="settings-row">
-                <input id="network-profile-id" name="profile_id" maxlength="64" placeholder="rosy-site-sta" autocomplete="off">
+                <input class="ui-field" id="network-profile-id" name="profile_id" maxlength="64" placeholder="rosy-site-sta" autocomplete="off">
                 <ui-button kind="primary" type="button" id="network-apply" class="primary-button" disabled>프로파일 적용</ui-button>
               </div>
             </form>
@@ -409,7 +409,7 @@
           <div>
             <h2 id="ros-network-heading">통신 격리와 연결 지도</h2>
           </div>
-          <span id="ros-graph-status" class="machine-tag" data-status="UNAVAILABLE">확인 전</span>
+          <ui-tag id="ros-graph-status" data-status="UNAVAILABLE">확인 전</ui-tag>
         </div>
         <div class="ros-network-facts">
           <article><span>DOMAIN ID</span><strong id="ros-domain-id"></strong><small>장비별 고유 값</small></article>
@@ -449,7 +449,7 @@
                    aria-labelledby="release-card-heading">
             <header>
               <h3 id="release-card-heading">릴리스</h3>
-              <span id="release-state" class="mode-chip" data-mode="UNKNOWN"></span>
+              <ui-tag id="release-state" data-mode="UNKNOWN"></ui-tag>
             </header>
             <dl class="host-facts">
               <div><dt>current</dt><dd id="release-current"></dd></div>
@@ -473,7 +473,7 @@
           <article class="host-card" id="commissioning-card" data-step="3" aria-labelledby="commissioning-heading">
             <header>
               <h3 id="commissioning-heading">커미셔닝</h3>
-              <span id="commissioning-mode" class="mode-chip" data-mode="UNKNOWN"></span>
+              <ui-tag id="commissioning-mode" data-mode="UNKNOWN"></ui-tag>
             </header>
             <p class="host-note" id="commissioning-note" role="status">확인 전</p>
           </article>
@@ -483,7 +483,7 @@
                    aria-labelledby="hardware-heading">
             <header>
               <h3 id="hardware-heading">장치</h3>
-              <span id="hardware-measured" class="machine-tag">측정 전</span>
+              <ui-tag id="hardware-measured">측정 전</ui-tag>
             </header>
             <ul id="hardware-list" class="device-list" aria-label="보드 장치 관측"></ul>
             <p class="host-note" id="hardware-note" role="status">확인 전</p>
@@ -500,26 +500,26 @@
           <div>
             <h2 id="field-settings-heading">현장 설정</h2>
           </div>
-          <span class="machine-tag">이 로봇만 · 플릿 없음</span>
+          <ui-tag>이 로봇만 · 플릿 없음</ui-tag>
         </div>
         <div class="settings-grid">
           <article class="settings-card" aria-labelledby="identity-heading">
             <header>
               <h3 id="identity-heading">로봇 신원</h3>
-              <span class="mode-chip" data-mode="LOCAL">LOCAL YAML</span>
+              <ui-tag data-mode="LOCAL">LOCAL YAML</ui-tag>
             </header>
             <p class="host-note">로봇 번호·ROS Domain ID·namespace는 장치 등록 때 정해집니다. 관리자는 표시 이름을 저장할 수 있습니다.</p>
             <form id="identity-form">
               <label for="robot-id-input">로봇 ID</label>
-              <input id="robot-id-input" name="robot_id" maxlength="64" placeholder="rosy_01" autocomplete="off" readonly>
+              <input class="ui-field" id="robot-id-input" name="robot_id" maxlength="64" placeholder="rosy_01" autocomplete="off" readonly>
               <label for="robot-number-input">로봇 번호</label>
-              <input id="robot-number-input" readonly>
+              <input class="ui-field" id="robot-number-input" readonly>
               <label for="ros-domain-input">ROS Domain ID</label>
-              <input id="ros-domain-input" readonly>
+              <input class="ui-field" id="ros-domain-input" readonly>
               <label for="ros-namespace-input">ROS namespace</label>
-              <input id="ros-namespace-input" readonly>
+              <input class="ui-field" id="ros-namespace-input" readonly>
               <label for="robot-name-input">이름</label>
-              <input id="robot-name-input" name="robot_name" maxlength="64" placeholder="Rosy 01" autocomplete="off">
+              <input class="ui-field" id="robot-name-input" name="robot_name" maxlength="64" placeholder="Rosy 01" autocomplete="off">
               <ui-button kind="primary" type="button" id="identity-save" class="primary-button" disabled>신원 적용</ui-button>
             </form>
             <p id="identity-message" class="host-note" role="status"></p>
@@ -528,7 +528,7 @@
           <article class="settings-card" aria-labelledby="token-heading">
             <header>
               <h3 id="token-heading">API 토큰</h3>
-              <span class="mode-chip" data-mode="ADMIN">ADMIN</span>
+              <ui-tag data-mode="ADMIN">ADMIN</ui-tag>
             </header>
             <p class="host-note">토큰은 해시로만 저장됩니다. 전문은 만들 때 한 번 보여주고 다시 볼 수 없습니다. 사용 중인 토큰과 마지막 관리자 토큰은 삭제할 수 없습니다.</p>
             <ul id="token-list" class="waypoint-list">
@@ -536,11 +536,11 @@
             </ul>
             <form id="token-form">
               <label for="token-new">새 토큰 (비우면 자동 생성)</label>
-              <input id="token-new" name="token" type="password" minlength="16" maxlength="128" autocomplete="off">
+              <input class="ui-field" id="token-new" name="token" type="password" minlength="16" maxlength="128" autocomplete="off">
               <label for="token-label">이름표</label>
-              <input id="token-label" name="label" maxlength="64" placeholder="bay 7 태블릿" autocomplete="off">
+              <input class="ui-field" id="token-label" name="label" maxlength="64" placeholder="bay 7 태블릿" autocomplete="off">
               <label for="token-role">역할</label>
-              <select id="token-role" name="role">
+              <select class="ui-field" id="token-role" name="role">
                 <option value="viewer">viewer</option>
                 <option value="operator">operator</option>
                 <option value="administrator">administrator</option>
@@ -553,13 +553,13 @@
           <article class="settings-card" aria-labelledby="waypoint-heading">
             <header>
               <h3 id="waypoint-heading">웨이포인트</h3>
-              <span class="mode-chip" data-mode="LOCAL">LOCAL JSON</span>
+              <ui-tag data-mode="LOCAL">LOCAL JSON</ui-tag>
             </header>
             <p class="host-note">현재 자세를 이름과 함께 저장합니다. __home__ 은 복귀 지점입니다. 값은 ~/.rosy/waypoints.json 에 남습니다.</p>
             <form id="waypoint-form">
               <label for="waypoint-name">이름</label>
               <div class="settings-row">
-                <input id="waypoint-name" name="name" maxlength="64" required placeholder="zone_a 또는 __home__" autocomplete="off">
+                <input class="ui-field" id="waypoint-name" name="name" maxlength="64" required placeholder="zone_a 또는 __home__" autocomplete="off">
                 <ui-button kind="primary" type="button" id="waypoint-save" class="primary-button">현재 위치 저장</ui-button>
               </div>
             </form>
@@ -572,7 +572,7 @@
           <article class="settings-card" aria-labelledby="limits-heading">
             <header>
               <h3 id="limits-heading">안전 정책</h3>
-              <span class="mode-chip" data-mode="LOCAL">LOCAL YAML</span>
+              <ui-tag data-mode="LOCAL">LOCAL YAML</ui-tag>
             </header>
             <p class="host-note">관리자만 바꿀 수 있습니다. ~/.rosy/rosy.yaml 에 남습니다. 속도는 프로필 상한을 넘기지 않으며, 배터리 임계는 deep &lt; critical &lt; warning 이어야 합니다.</p>
             <dl class="host-facts">
@@ -581,24 +581,24 @@
             </dl>
             <form id="limits-form">
               <label for="limit-manual-linear">수동 직선 m/s</label>
-              <input id="limit-manual-linear" name="manual_linear" type="number" min="0" step="0.01" inputmode="decimal">
+              <input class="ui-field" id="limit-manual-linear" name="manual_linear" type="number" min="0" step="0.01" inputmode="decimal">
               <label for="limit-manual-angular">수동 회전 rad/s</label>
-              <input id="limit-manual-angular" name="manual_angular" type="number" min="0" step="0.01" inputmode="decimal">
+              <input class="ui-field" id="limit-manual-angular" name="manual_angular" type="number" min="0" step="0.01" inputmode="decimal">
               <label for="fleet-loss-policy">플릿 단절 정책</label>
-              <select id="fleet-loss-policy" name="fleet_loss_policy">
+              <select class="ui-field" id="fleet-loss-policy" name="fleet_loss_policy">
                 <option value="STOP">STOP</option>
                 <option value="HOLD">HOLD</option>
                 <option value="RETURN_HOME">RETURN_HOME</option>
                 <option value="CONTINUE">CONTINUE</option>
               </select>
               <label for="battery-warning">배터리 경고 %</label>
-              <input id="battery-warning" name="battery_warning_percent" type="number" min="1" max="100" step="1" inputmode="decimal">
+              <input class="ui-field" id="battery-warning" name="battery_warning_percent" type="number" min="1" max="100" step="1" inputmode="decimal">
               <label for="battery-critical">배터리 위험 %</label>
-              <input id="battery-critical" name="battery_critical_percent" type="number" min="1" max="100" step="1" inputmode="decimal">
+              <input class="ui-field" id="battery-critical" name="battery_critical_percent" type="number" min="1" max="100" step="1" inputmode="decimal">
               <label for="battery-deep">배터리 방전 %</label>
-              <input id="battery-deep" name="battery_deep_percent" type="number" min="1" max="100" step="1" inputmode="decimal">
+              <input class="ui-field" id="battery-deep" name="battery_deep_percent" type="number" min="1" max="100" step="1" inputmode="decimal">
               <label for="battery-critical-policy">위험 시 동작</label>
-              <select id="battery-critical-policy" name="battery_critical_policy">
+              <select class="ui-field" id="battery-critical-policy" name="battery_critical_policy">
                 <option value="RETURN_HOME">RETURN_HOME</option>
                 <option value="STOP">STOP</option>
               </select>
@@ -610,7 +610,7 @@
           <article class="settings-card" aria-labelledby="slam-heading">
             <header>
               <h3 id="slam-heading">맵핑 세션</h3>
-              <span id="slam-capability" class="mode-chip" data-mode="UNKNOWN"></span>
+              <ui-tag id="slam-capability" data-mode="UNKNOWN"></ui-tag>
             </header>
             <p class="host-note">SLAM 세션은 이 로봇에서만 동작합니다. 저장하면 현재 map_id가 바뀝니다.</p>
             <div class="host-actions">
@@ -620,7 +620,7 @@
             <form id="slam-save-form">
               <label for="slam-map-name">저장 이름</label>
               <div class="settings-row">
-                <input id="slam-map-name" name="name" maxlength="64" value="rosy_map" autocomplete="off">
+                <input class="ui-field" id="slam-map-name" name="name" maxlength="64" value="rosy_map" autocomplete="off">
                 <ui-button kind="primary" type="button" id="slam-save" class="primary-button">맵 저장</ui-button>
               </div>
             </form>
@@ -630,14 +630,14 @@
           <article class="settings-card" aria-labelledby="dock-heading">
             <header>
               <h3 id="dock-heading">도크</h3>
-              <span id="dock-capability" class="mode-chip" data-mode="UNKNOWN"></span>
+              <ui-tag id="dock-capability" data-mode="UNKNOWN"></ui-tag>
             </header>
             <p class="host-note" id="dock-status-note">등록과 teach는 저장소에 남습니다. 실제 도킹 명령은 capability가 켜진 로봇에서만 나갑니다.</p>
             <form id="dock-form">
               <label for="dock-id">도크 ID</label>
-              <input id="dock-id" name="id" maxlength="64" required placeholder="dock_1" autocomplete="off">
+              <input class="ui-field" id="dock-id" name="id" maxlength="64" required placeholder="dock_1" autocomplete="off">
               <label for="dock-type">기종</label>
-              <input id="dock-type" name="type" maxlength="64" value="rosy_v1" autocomplete="off">
+              <input class="ui-field" id="dock-type" name="type" maxlength="64" value="rosy_v1" autocomplete="off">
               <ui-button kind="primary" type="button" id="dock-register" class="primary-button" disabled>도크 등록</ui-button>
             </form>
             <ul id="dock-list" class="waypoint-list">
@@ -657,17 +657,17 @@
             <p class="host-note">교통 인식 정책의 검토본을 저장하고 정지 상태에서 적용합니다. 적용은 로봇이 서 있을 때만 반영됩니다. 현재 판정은 운용 뷰의 조작 열에 있습니다.</p>
             <div class="traffic-policy-grid">
               <label>운영 모드
-                <select id="traffic-policy-mode">
+                <select class="ui-field" id="traffic-policy-mode">
                   <option value="DISABLED">DISABLED</option>
                   <option value="MONITOR_ONLY">MONITOR_ONLY</option>
                   <option value="ENFORCED">ENFORCED</option>
                 </select>
               </label>
-              <label>정책 revision<input id="traffic-policy-revision-input" type="text" maxlength="80"></label>
-              <label>접근 거리 (m)<input id="traffic-approach-distance" type="number" min="0.13" max="3" step="0.01"></label>
-              <label>정지 거리 (m)<input id="traffic-stop-distance" type="number" min="0.01" max="2.9" step="0.01"></label>
-              <label>정지 dwell (s)<input id="traffic-stop-dwell" type="number" min="0.1" max="10" step="0.1"></label>
-              <label>최소 신뢰도<input id="traffic-min-confidence" type="number" min="0.01" max="1" step="0.01"></label>
+              <label>정책 revision<input class="ui-field" id="traffic-policy-revision-input" type="text" maxlength="80"></label>
+              <label>접근 거리 (m)<input class="ui-field" id="traffic-approach-distance" type="number" min="0.13" max="3" step="0.01"></label>
+              <label>정지 거리 (m)<input class="ui-field" id="traffic-stop-distance" type="number" min="0.01" max="2.9" step="0.01"></label>
+              <label>정지 dwell (s)<input class="ui-field" id="traffic-stop-dwell" type="number" min="0.1" max="10" step="0.1"></label>
+              <label>최소 신뢰도<input class="ui-field" id="traffic-min-confidence" type="number" min="0.01" max="1" step="0.01"></label>
             </div>
             <div class="traffic-policy-actions">
               <ui-button kind="quiet" type="button" id="traffic-policy-stage">정책 검토본 저장</ui-button>
@@ -685,7 +685,7 @@
           <article class="settings-card" aria-labelledby="fleet-settings-heading">
             <header>
               <h3 id="fleet-settings-heading">군집 / 플릿</h3>
-              <span class="mode-chip" data-mode="HOLD">FLEET_HOLD</span>
+              <ui-tag data-mode="HOLD">FLEET_HOLD</ui-tag>
             </header>
             <p class="host-note" id="fleet-settings-note">
               이 저장소에는 플릿 서버가 없습니다. 로봇 outbound WebSocket은 열리지 않으며
