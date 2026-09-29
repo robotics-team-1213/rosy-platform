@@ -1,4 +1,4 @@
-"""``rosy_overhead`` CLI — argument parsing and the parts that don't need a live server."""
+"""``overhead`` CLI — argument parsing and the parts that don't need a live server."""
 
 from __future__ import annotations
 

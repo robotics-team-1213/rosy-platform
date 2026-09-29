@@ -1,6 +1,6 @@
-"""``rosy_overhead`` — CLI front end for the receive-only ingest server.
+"""``overhead`` — CLI front end for the receive-only ingest server.
 
-``rosy_overhead receive`` starts :class:`overhead.ingest.IngestServer`,
+``overhead receive`` starts :class:`overhead.ingest.IngestServer`,
 prints a ``rosyov://`` pairing URI (and an ASCII QR code when the optional
 ``qrcode`` package is installed), and prints per-source stats once a
 second. See docs/adr/D-261-overhead-camera-app-skeleton.md.
@@ -175,7 +175,7 @@ async def _run_vision(args: argparse.Namespace) -> int:
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="rosy_overhead")
+    parser = argparse.ArgumentParser(prog="overhead")
     sub = parser.add_subparsers(dest="command", required=True)
 
     receive = sub.add_parser("receive", help="run the receive-only ingest server")
