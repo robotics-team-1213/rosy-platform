@@ -86,6 +86,8 @@ MAX_POINTS = 6000
 #: fraction of the headroom to 255, whichever is larger).
 HORIZON_MARGIN_PX = 3
 CARPET_PERCENTILE = 30
+CARPET_ROW_WINDOW = 41
+CARPET_ROW_EXCESS = 20
 MIN_CONTRAST = 40
 CONTRAST_HEADROOM = 0.35
 MAX_SATURATION = 80
@@ -119,13 +121,11 @@ def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
         return mask
     floor = value[top:].astype(np.float32)
     reference = np.percentile(floor, CARPET_PERCENTILE, axis=1)
-    # Smooth the carpet reference over rows: one row full of tape (a stop
-    # line seen across) must not lift its own threshold.
-    kernel = min(21, 2 * (len(reference) // 2) - 1) if len(reference) > 2 else 1
-    if kernel > 1:
-        pad = kernel // 2
-        padded = np.pad(reference, pad, mode="edge")
-        reference = np.array([np.median(padded[i:i + kernel]) for i in range(len(reference))])
+    # Smooth the carpet reference over rows and cap it near the whole floor's
+    # median: rows full of tape (a stop line seen across, near) must not lift
+    # their own threshold.
+    reference = _median_filter_1d(reference, CARPET_ROW_WINDOW)
+    reference = np.minimum(reference, float(np.median(floor)) + CARPET_ROW_EXCESS)
     threshold = reference + np.maximum(MIN_CONTRAST, CONTRAST_HEADROOM * (255.0 - reference))
     # Coloured paint and overlays (and their blended, paler edges) are not tape.
     coloured = cv2.dilate((saturation[top:] > MAX_SATURATION).astype(np.uint8),

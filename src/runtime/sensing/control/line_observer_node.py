@@ -34,6 +34,7 @@ from .sensing.perception.lane import (
 )
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
+from .sensing.perception.lane_keep import LaneKeeper
 from .sensing.perception.lane_debug import next_publish_due, render_debug
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
@@ -65,7 +66,10 @@ class LineObserverNode(Node):
         # a metric ground plane, edge_left also odometry (fail-closed without).
         # 'centre' follows the centre line between both boundaries (fallback ladder).
         # 'between' keeps the midpoint of the two boundary lines in image
-        # space (no ground plane, no odometry): the real-robot lane mode.
+        # space (no ground plane, no odometry).
+        # 'keep' keeps the middle of the lane from ground-plane boundary lines
+        # found per frame (no odometry): the real-robot lane keeper (D-353 §2),
+        # on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
         # pursuit from a paint-localised pose (B). 'route_ab' is their
@@ -121,6 +125,8 @@ class LineObserverNode(Node):
         self._between_keeper = LaneBetweenKeeper(
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
+        self._lane_keeper = LaneKeeper(
+            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
@@ -223,7 +229,7 @@ class LineObserverNode(Node):
 
     def _camera_mode_uses_ground(self) -> bool:
         return str(self.get_parameter('camera_lane_mode').value) in (
-            'lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')
+            'lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab')
 
     def _ground_label(self):
         source = str(self.get_parameter('camera_ground_source').value).strip().upper()
@@ -332,6 +338,10 @@ class LineObserverNode(Node):
                         self.get_parameter('camera_between_roi_top_fraction').value),
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
+            elif mode == 'keep':
+                observation = self._lane_keeper.update(
+                    frame, self._ground(frame.shape[1], frame.shape[0]),
+                    lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
