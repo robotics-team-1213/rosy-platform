@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 612 passed/5 skipped: ER 2 proposal adapter mock contract, Mission single-step ledger/stop-generation admission, and policy-evidence source config + store fail-closed contracts (D-268 ladder T2/T3 — empty observation registry rejects every submission; transit/revision/replay rules; evidence_id idempotency). Browser/dialog and synthetic camera evidence remains as recorded in logs. SOURCE/LOCAL only; policy evidence has no REST route yet, no admission wiring, and physical/site/calibrated acceptance remains open"
+    evidence: "Fleet suite 628 passed/5 skipped: ER 2 proposal adapter mock contract, Mission single-step ledger/stop-generation admission, policy-evidence source config/store fail-closed contracts, HTTP surface (source token, idempotent evidence_id, replay 409), and task admission binding with the valve invariant (D-268 ladder T2-T6 — policy submissions require an evidence_id; admissible evidence still holds POLICY_NOT_ACCEPTED). Browser/dialog and synthetic camera evidence remains as recorded in logs. SOURCE/LOCAL only; no field measurements, and physical/site/calibrated acceptance remains open"
     cmd: "python3 -m pytest src/site/fleet/test -q"
   ROS-SIM:
     state: HOLD

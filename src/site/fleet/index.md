@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(fleet): wire policy evidence admission, routes, and API Ref v1.48 (T4-T6)
 - 2026-09-29 · uncommitted · feat(fleet): add policy-evidence config and store (D-268 ladder T2/T3)
 - 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
 - 2026-09-29 · uncommitted · review Mission stop-generation recovery
-- 2026-09-29 · uncommitted · add internal Mission admission and goal evidence ledger

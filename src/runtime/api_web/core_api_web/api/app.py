@@ -41,6 +41,7 @@ from core_api_web.api.v1.routes import (
     docking_router,
     ui_router,
 )
+from core_api_web.api.ws import ws_router
 
 
 def _web_common_root() -> Path:
@@ -66,14 +67,11 @@ def _dashboard_root() -> Path:
     return Path(__file__).resolve().parents[4] / "hmi" / "dashboard"
 
 
-from core_api_web.api.ws import ws_router
-
-
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.47)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.48)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -253,6 +251,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         return FileResponse(web_root / asset_name, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
     surface_template = (web_root / "surface.html").read_text(encoding="utf-8")
+
     @app.get("/{surface}", include_in_schema=False)
     def surface_page(surface: str):
         definition = registry.surfaces.get(surface)
