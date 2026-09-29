@@ -234,8 +234,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr/plan): D-357 responsibility and retry contract
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 - 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
 - 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
 - 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
-- 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신

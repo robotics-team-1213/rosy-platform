@@ -3598,3 +3598,17 @@
 - Boundaries: Mission journal stays authoritative; provider replay stays ephemeral with `store=false`; replan remains a candidate; stop, device action, goal evidence, and physical readback remain separate. `POLICY_DISPATCH_ENABLED` stays false.
 - Evidence: `python tools/harness/rosy_harness.py lint` passed with 0 errors and 20 existing freshness warnings; documentation contract suite passed (80 passed). Index generation completed.
 - Gate: no implementation, provider call, ROS/OMX activation, device install, or physical acceptance.
+
+## 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
+
+- Change: added D-358 as an append-only implementation-contract refinement to D-357 and updated the plan with an ownership map, trusted turn scope, provider-egress approval, successor-Mission replans, explicit outcome/tool policy, and atomic stop-generation fencing.
+- Boundaries: ambiguous provider POSTs remain `UNKNOWN` and are never automatically replayed; the outbox guarantees at most one client submission attempt, not exactly-once provider execution. Device ROS/driver, goal-verifier, and physical stop ownership remain separate; dispatch stays disabled.
+- Evidence: current pre-existing Mission/progress/ER2/API suite 54 passed; documentation contract suite 80 passed; harness lint 0 errors and 21 freshness warnings.
+- Gate: D-357 implementation tests do not exist yet and are now mandatory in the plan; no ROS-SIM, provider call, device install, or physical acceptance.
+\n## 2026-09-30 · uncommitted · docs(adr): D-352 외부 장비 공통 패턴
+
+- 변경: ADR D-352 상세문서 + 표행. 도크와 신호등의 공통점 6개(ESP32·폴링·필수 필드 누락=오류·페일세이프·NVS·소스 스캔 시험)와 차이 4개(폴링 주체·명령면·페일세이프 방향·안전 역할)를 정리하고, 공통 어휘(폴링 실패 4상태·준비 프레임 wire/instrumented/verified)와 계약 상호 참조를 확정. DOCKING 진입 시 traffic_policy ADVISORY 강등을 명시적 계약으로 승격.
+- 증거: 도크·신호등 계약서 대조, 기존 시험 통과 상태.
+- gate 변화: 없음.
+- 결정: 공통 추상 클래스는 3번째 소비자가 생길 때까지 만들지 않는다 — 패턴 문서로 족하다.
+- 교훈: 두 장비가 우연히 6개 속성이 일치했다는 것은 패턴이 옳다는 증거다 — 의도적 공유로 전환한다.\n
