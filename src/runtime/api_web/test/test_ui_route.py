@@ -40,6 +40,9 @@ def test_common_route_serves_only_the_declared_shared_assets():
     assert client.get("/common/core_ui_logic.js").status_code == 200
     assert client.get("/common/ui.js").status_code == 200
     assert client.get("/common/template.html").status_code == 200
+    ticker = client.get("/common/hold-ticker.js")
+    assert ticker.status_code == 200
+    assert ticker.headers["content-type"].startswith("text/javascript")
     assert "/api/v1/do" in client.get("/openapi.json").json()["paths"]
     assert client.get("/common/../api/app.py").status_code == 404
 

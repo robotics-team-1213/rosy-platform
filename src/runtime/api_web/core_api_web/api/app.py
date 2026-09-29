@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -55,13 +56,24 @@ OPERATOR_PAGE_HEADERS = {"Cache-Control": "no-cache", "Content-Security-Policy":
 
 
 def _web_common_root() -> Path:
-    """Resolve installed assets first, with a source-tree fallback for host tests."""
+    """Resolve installed assets first, with a source-tree fallback for host tests.
+
+    A web_common directory is one that ships ``manifest.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
-        return Path(get_package_share_directory("web_common"))
+        share = Path(get_package_share_directory("web_common"))
+        if (share / "manifest.json").is_file():
+            return share
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[4] / "hmi" / "web"
+        pass
+    return Path(__file__).resolve().parents[4] / "hmi" / "web"
+
+
+def _shared_assets(web_common: Path) -> dict[str, str]:
+    """name -> media type, from web_common's manifest (the one /common allowlist)."""
+    manifest = json.loads((web_common / "manifest.json").read_text(encoding="utf-8"))
+    return dict(manifest["shared_assets"])
 
 
 def _dashboard_root() -> Path:
@@ -192,17 +204,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             pinned_sha, ui_tokens_sha, ui_tokens,
         )
 
+    common_assets = _shared_assets(web_common)
+
     @app.get("/common/{asset_name:path}", include_in_schema=False)
     def common_asset(asset_name: str):
-        valid_assets = {
-            "tokens.css": "text/css",
-            "components.css": "text/css",
-            "template.html": "text/html",
-            "core_ui_logic.js": "application/javascript",
-            "hold-ticker.js": "application/javascript",
-            "ui.js": "application/javascript",
-        }
-        media_type = valid_assets.get(asset_name)
+        media_type = common_assets.get(asset_name)
         if not media_type:
             raise HTTPException(status_code=404, detail="common asset not found")
         return FileResponse(web_common / asset_name, media_type=media_type, headers={"Cache-Control": "no-cache"})

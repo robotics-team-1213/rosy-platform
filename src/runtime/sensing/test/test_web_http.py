@@ -6,6 +6,7 @@ live inside the rclpy node, where host pytest could only grep for it.
 """
 import http.server
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -14,7 +15,8 @@ import urllib.request
 import pytest
 
 from control import web_state
-from control.web_http import GOAL_BOUND, _parse_xy, make_api_handler, make_page_handler
+from control.web_http import (
+    GOAL_BOUND, _parse_xy, make_api_handler, make_page_handler, shared_assets, web_common_dir)
 
 
 class FakeNode:
@@ -141,3 +143,25 @@ def test_page_handler_serves_no_api():
 ])
 def test_parse_xy(text, expected):
     assert _parse_xy(text) == expected
+
+
+def test_page_handler_serves_web_common_manifest_assets():
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_page_handler(b'<html/>'))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f'http://127.0.0.1:{server.server_address[1]}'
+    try:
+        with urllib.request.urlopen(base + '/common/hold-ticker.js', timeout=5) as response:
+            assert response.headers['Content-Type'] == 'text/javascript'
+            assert b'createHoldTicker' in response.read()
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(base + '/common/manifest.json', timeout=5)
+        assert error.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_common_dir_falls_back_to_the_source_tree(tmp_path):
+    root = web_common_dir(str(tmp_path))                 # no manifest.json: not a web_common share
+    assert os.path.isfile(os.path.join(root, 'manifest.json'))
+    assert 'hold-ticker.js' in shared_assets(root)

@@ -27,13 +27,18 @@ from fleet.swarm.transport import HttpRobotClient
 
 
 def default_web_common() -> Path:
-    """Resolve installed assets first, with a source-tree fallback for host tools."""
+    """Resolve installed assets first, with a source-tree fallback for host tools.
+
+    A web_common directory is one that ships ``manifest.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
-        return Path(get_package_share_directory("web_common"))
+        share = Path(get_package_share_directory("web_common"))
+        if (share / "manifest.json").is_file():
+            return share
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[3] / "hmi" / "web"
+        pass
+    return Path(__file__).resolve().parents[3] / "hmi" / "web"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

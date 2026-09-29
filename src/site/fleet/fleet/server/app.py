@@ -80,6 +80,18 @@ async def _robot_call(console: FleetConsole, call) -> dict:
         return await console._client(robot).follow(SwarmFollowParams(**call.body))
     return await console._client(robot)._post(call.path, call.body or None)
 
+
+def _shared_assets(root: Optional[Path]) -> dict[str, str]:
+    """The /common allowlist is web_common's manifest.json. A configured
+    directory without one (a trimmed copy) uses the default web_common's."""
+    manifest = root / "manifest.json" if root is not None else None
+    if manifest is None or not manifest.is_file():
+        from fleet.cli import default_web_common
+
+        manifest = default_web_common() / "manifest.json"
+    return dict(json.loads(manifest.read_text(encoding="utf-8"))["shared_assets"])
+
+
 #: 경로 순회를 막는 유일한 방어다 — 디렉터리 스캔으로 바꾸지 않는다 (core 와 같은 규칙).
 #: 공용 L1 자산은 여기 없다. 서버는 설정받은 web_common 디렉터리에서 명시된
 #: 파일만 /common 아래로 서빙한다(D-129, D-1005).
@@ -1075,13 +1087,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
         )
 
-    common_assets = {
-        "tokens.css": "text/css",
-        "components.css": "text/css",
-        "template.html": "text/html",
-        "core_ui_logic.js": "application/javascript",
-        "ui.js": "application/javascript",
-    }
+    common_assets = _shared_assets(app.state.web_common)
 
     @app.get("/common/{asset_name:path}", include_in_schema=False)
     def common_asset(asset_name: str):

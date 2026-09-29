@@ -40,24 +40,25 @@ POST_VERBS = {
 GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
 
 
-_COMMON_MEDIA = {
-    "tokens.css": "text/css",
-    "components.css": "text/css",
-    "template.html": "text/html",
-    "ui.js": "text/javascript",
-    "core_ui_logic.js": "text/javascript",
-}
-
-
 def web_common_dir(share=None):
-    """The installed web_common share when it carries the controls, else the
-    source tree. The node resolves ``share``; this module stays ROS-free (D-171)."""
-    if share and os.path.isfile(os.path.join(share, "components.css")):
+    """The installed web_common share when it ships manifest.json, else the
+    source tree (src/hmi/web). The node resolves ``share``; this module stays
+    ROS-free (D-171)."""
+    if share and os.path.isfile(os.path.join(share, "manifest.json")):
         return share
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))),
-        "core", "web_common")
+        "hmi", "web")
+
+
+def shared_assets(root):
+    """name -> media type from web_common's manifest: the one /common allowlist."""
+    try:
+        with open(os.path.join(root, "manifest.json"), encoding="utf-8") as handle:
+            return dict(json.load(handle)["shared_assets"])
+    except (OSError, ValueError, KeyError):
+        return {}
 
 
 def _handler(node, html, api):
@@ -90,8 +91,8 @@ def _handler(node, html, api):
             self.wfile.write(data)
 
         def _common(self, name):
-            media = _COMMON_MEDIA.get(name)
             root = getattr(node, 'web_common_dir', None) or web_common_dir()
+            media = shared_assets(root).get(name)
             file = os.path.join(root, name)
             if media is None or not os.path.isfile(file):
                 self.send_response(404)
