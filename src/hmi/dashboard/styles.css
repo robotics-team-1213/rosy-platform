@@ -150,7 +150,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 [data-status="WARNING"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
 .status-error,
 [data-status="ERROR"], [data-status="UNAVAILABLE"] {
-  color: var(--ink);
+  color: var(--ink-on-crit);
   background: var(--status-crit);
   border-color: transparent;
 }
@@ -389,7 +389,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .summary-state[data-state="ready_held"], .summary-state[data-state="booting"] { color: var(--ink); }
 /* 주의는 글자, 실패는 채움이다(Law 3, 분류 줄과 같은 문법). */
 .summary-state[data-state="caution"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
-.summary-state[data-state="failed"] { color: var(--ink); background: var(--status-crit); border-color: var(--status-crit); }
+.summary-state[data-state="failed"] { color: var(--ink-on-crit); background: var(--status-crit); border-color: var(--status-crit); }
 .summary-reason {
   max-width: 100%;
   min-width: 0;
@@ -440,7 +440,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 물리적 위험과 이동 차단은 채운다 — 되돌릴 수 없는 것과 같은 범주다(Law 3). */
 .triage[data-category="hazard"], .triage[data-category="blocked"] {
-  color: var(--ink);
+  color: var(--ink-on-crit);
   background: var(--status-crit);
   border-bottom-color: var(--status-crit);
 }

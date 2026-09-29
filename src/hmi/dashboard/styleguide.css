@@ -145,7 +145,7 @@ h2 {
 
 .demo-btn.irreversible {
   background: var(--status-crit);
-  color: var(--ink);
+  color: var(--ink-on-crit);
   min-height: var(--target-irreversible);
 }
 
@@ -180,7 +180,7 @@ h2 {
 .demo-tag.crit {
   background: var(--status-crit);
   border-color: var(--status-crit);
-  color: var(--ink);
+  color: var(--ink-on-crit);
 }
 
 .demo-map {

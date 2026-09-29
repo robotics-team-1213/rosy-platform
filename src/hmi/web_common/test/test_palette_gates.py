@@ -395,3 +395,33 @@ def test_the_primary_command_is_an_ink_fill(palette):
     assert re.search(r"--button-primary-bg:\s*var\(--ink\);", derived)
     assert re.search(r"--button-primary-ink:\s*var\(--ground\);", derived)
     assert contrast(palette["ground"], palette["ink"]) >= 7.0
+
+
+#: 위험 채움 위 글자에 허용되는 토큰. `--ink`는 밝게에서 짙은 글자라 짙은 적색 위에서 사라진다.
+ON_DANGER_INK = ("--ink-on-crit", "--flag-danger-ink", "--button-irreversible-ink")
+_DANGER_FILL = re.compile(r"background(?:-color)?:\s*var\(--(?:status-crit|flag-danger-bg|button-irreversible-bg)\)")
+_TEXT_COLOUR = re.compile(r"(?<![-\w])color:\s*var\((--[a-z0-9-]+)\)")
+
+
+def test_text_on_a_danger_fill_uses_the_on_crit_ink():
+    """D-359 — 어둡게에서는 `--ink`와 `--ink-on-crit`가 같은 값이라 틀린 참조가 숨는다.
+
+    위험 채움 규칙이 글자색을 정하면 그 값은 위험 위 잉크여야 한다. 모든 테마에서
+    `test_danger_works_as_a_fill`이 그 쌍의 대비를 지킨다.
+    """
+    import surface_registry as registry
+
+    sheets = {TOKENS.parent / "components.css"}
+    for row in registry.load():
+        if row.get("medium") == "web":
+            target = registry.REPO / row["path"]
+            sheets |= set(target.rglob("*.css")) if target.is_dir() else set()
+    offenders = []
+    for sheet in sorted(sheets):
+        text = re.sub(r"/\*.*?\*/", "", sheet.read_text(encoding="utf-8"), flags=re.S)
+        for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", text):
+            danger = _DANGER_FILL.search(body) or 'kind="irreversible"] small' in selector
+            colour = _TEXT_COLOUR.search(body)
+            if danger and colour and colour.group(1) not in ON_DANGER_INK:
+                offenders.append(f"{sheet.name}: {selector.strip()} color {colour.group(1)}")
+    assert not offenders, offenders

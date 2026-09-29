@@ -101,7 +101,7 @@ def console_url():
         def translate_path(self, path: str) -> str:
             if path.startswith("/common/"):
                 name = path.removeprefix("/common/")
-                if name in {"tokens.css", "components.css", "ui.js", "core_ui_logic.js"}:
+                if name in {"tokens.css", "theme.js", "components.css", "ui.js", "core_ui_logic.js"}:
                     return str(WEB_COMMON / name)
             if path.startswith("/console/assets/"):
                 path = "/" + path[len("/console/assets/"):]

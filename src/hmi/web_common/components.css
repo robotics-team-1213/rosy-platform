@@ -170,7 +170,7 @@ ui-button[kind="irreversible"] span {
 ui-button[kind="irreversible"] small {
   display: block;
   margin-top: var(--gap-button-detail);
-  color: var(--ink);
+  color: var(--button-irreversible-ink);
   font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
@@ -230,7 +230,7 @@ ui-tag[status="warn"] {
 }
 
 ui-tag[status="crit"] {
-  color: var(--ink);
+  color: var(--ink-on-crit);
   border-color: transparent;
   background: var(--status-crit);
 }

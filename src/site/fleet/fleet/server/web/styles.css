@@ -258,7 +258,7 @@ main {
 /* D-202 — 위험은 글자가 아니라 채움이다. crit 글자는 어두운 카드 위에서
    2.24:1로 읽히지 않았다. 공유 태그의 위험 얼굴과 같다: 종이 잉크 + 채움. */
 .tag.crit {
-  color: var(--ink);
+  color: var(--ink-on-crit);
   background: var(--status-crit);
   border-color: transparent;
 }
@@ -331,7 +331,7 @@ main {
 .log-empty span { color: var(--ink-quiet); font-family: var(--body); }
 .log div { border-bottom: 1px solid var(--line-06); padding: var(--space-1) 0; }
 /* D-202 — 나쁜 줄은 채워진다. 경보 글자(2.24:1)가 아니라 위험 채움 + 종이 잉크. */
-.log div.bad { color: var(--ink); background: var(--status-crit); padding: var(--space-1) var(--space-2); }
+.log div.bad { color: var(--ink-on-crit); background: var(--status-crit); padding: var(--space-1) var(--space-2); }
 .log .good { color: var(--nominal-quiet); }
 
 .note {
