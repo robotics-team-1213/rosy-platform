@@ -13,6 +13,7 @@ for _p in (ROOT / "tools" / "perception" / "model", ROOT / "tools" / "perception
         sys.path.insert(0, str(_p))
 
 import intake  # noqa: E402
+from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
 
 GATE = {"max_host_latency_ms_p50": 400, "max_nan_frames": 0, "min_visible_fraction": 0.30,
         "replay_sources": ["data/teleop/learning/*.mp4"], "max_frames_per_source": 200}
@@ -109,7 +110,7 @@ class _FlakyModel:
     def infer(self, bgr):
         self.n += 1
         if self.n == 1:
-            raise ValueError("non-finite logits")
+            raise NonFiniteLogits("logits contain NaN")
         if self.n == 2:
             raise ValueError("expected an HxWx3 BGR frame")
         return _Res()

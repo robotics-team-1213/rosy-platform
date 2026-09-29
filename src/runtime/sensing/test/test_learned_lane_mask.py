@@ -5,6 +5,7 @@ import pytest
 
 from control.sensing.perception.learned.lane_mask import (
     LaneMaskEvidence,
+    NonFiniteLogits,
     lane_evidence,
     preprocess,
 )
@@ -73,8 +74,9 @@ def test_drivable_role_preferred_when_present():
 def test_non_finite_logits_raise():
     bad = _logits(np.zeros((240, 320), np.int64))
     bad[0, 0, 0, 0] = np.nan
-    with pytest.raises(ValueError):
+    with pytest.raises(NonFiniteLogits):
         lane_evidence(bad, CLASSES)
+    assert issubclass(NonFiniteLogits, ValueError)
 
 
 def test_pixel_centre_reference():

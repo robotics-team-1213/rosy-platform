@@ -28,6 +28,7 @@ if str(_SENSING) not in sys.path:
     sys.path.insert(0, str(_SENSING))
 
 from control.sensing.perception.lane import detect_lane_error  # noqa: E402
+from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
@@ -121,7 +122,7 @@ def replay(model, videos, max_frames: int) -> dict:
             try:
                 result = model.infer(bgr)
             except ValueError as exc:
-                if "non-finite" in str(exc):  # lane_evidence's NaN/inf refusal
+                if isinstance(exc, NonFiniteLogits):  # lane_evidence's NaN/inf refusal
                     nan_frames += 1
                 else:
                     error_frames += 1

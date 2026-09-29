@@ -23,6 +23,10 @@ NEAR_FIELD_FRACTION = 0.40
 DRIVABLE_MIN_FRACTION = 0.02
 
 
+class NonFiniteLogits(ValueError):
+    """The model output holds NaN/inf; no evidence can be derived from it."""
+
+
 @dataclass(frozen=True)
 class LaneMaskEvidence:
     visible: bool
@@ -52,7 +56,7 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
     if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
         raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
     if not np.isfinite(logits).all():
-        raise ValueError("non-finite logits")
+        raise NonFiniteLogits("non-finite logits")
     probs = _softmax(logits[0].astype(np.float32))
     labels = probs.argmax(axis=0)
     total = labels.size
