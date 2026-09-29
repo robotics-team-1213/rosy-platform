@@ -29,7 +29,11 @@ robot is in, never the tape. Per frame, no odometry:
 
 Output keeps the lane contract: error > 0 means steer right (CORE:
 angular = -gain * error); error = -target_y / lane_half_width, clipped to
-[-1, 1]. `last` holds a debug bundle for the pilot overlay and the replay
+[-1, 1] -- the target's lateral offset at the lookahead, which also carries
+the heading error (lookahead x heading), like `detect_lane_centre`. Not the
+pure-pursuit curvature law of the odometry modes: at CORE's gain 0.8 and
+~0.05 m/s this loop is overdamped (poles ~ -0.24 and -1.9 1/s), while the
+pursuit law is underdamped and five times softer on a one-sided target. `last` holds a debug bundle for the pilot overlay and the replay
 bench. Short temporal smoothing uses previous targets only (no pose).
 """
 

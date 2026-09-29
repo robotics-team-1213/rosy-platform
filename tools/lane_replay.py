@@ -7,7 +7,12 @@
       --crop pilot-side --out X:/DevTemp/lane-replay/run3 --detectors line,between
 
 지표(검출기별):
-  on_line_rate  목표가 흰 선 위에 있는 프레임 비율 — 차로 유지에서는 결함이다.
+  on_line_rate  목표가 흰 선 위에 있는 프레임 비율 — 차로 유지에서는 결함이다. 목표 열(error)의
+                하단 띠(행 72-95%) 세로 상자를 고정 밝기 180 마스크로 본다. 화면을 가로지르는
+                정지선이 하단에 있으면 어느 열이든 걸리고, 벽 화소도 센다.
+  on_paint_rate 목표점 자체가 바닥 흰 칠(벽·지평선 위 제외, 카펫 대비 적응 임계) 위인 비율.
+                목표점은 검출기가 내면(keep: 앞보기 거리의 지면 목표 화소) 그것, 아니면 error
+                열의 하단 띠 가운데 행. 목표가 화면 밖이면 칠 위가 아니다.
   jump_rate     이웃 프레임 사이 목표가 화면 폭의 30% 넘게 튄 비율.
   none_rate     비가시(HOLD) 비율.
 """
@@ -29,7 +34,7 @@ sys.path.insert(0, str(REPO / "src" / "runtime" / "sensing"))
 from control.sensing.perception import lane as lane_mod  # noqa: E402
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
-from control.sensing.perception.lane_keep import LaneKeeper  # noqa: E402
+from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
 
 PROFILE_PATH = REPO / "src" / "runtime" / "sensing" / "config" / "camera_nominal_pinky_pro.yaml"
 LANE_HALF_WIDTH_M = 0.0925
@@ -40,6 +45,7 @@ CROPS = {"pilot-side": (233, 110, 866, 650), "none": None}
 FRAME_W, FRAME_H = 320, 240
 EVAL_ROWS = (0.72, 0.95)        # 목표가 선 위인지 보는 행 범위(화면 높이 비율)
 ON_LINE_FILL = 0.30             # 목표 주변 상자에서 흰 화소가 이 비율 이상이면 선 위
+PAINT_BOX_HALF = 3              # on_paint: 목표점 둘레 7x7 상자
 JUMP_FRACTION = 0.30
 
 
@@ -73,7 +79,18 @@ def _keep_detector():
 
     def detect(img):
         return keeper.update(img, ground, lane_half_width_m=LANE_HALF_WIDTH_M)
+    detect.target_px = lambda: keeper.last.get("target_px")
     return detect
+
+
+def target_on_paint(floor_mask: np.ndarray, point) -> bool:
+    h, w = floor_mask.shape
+    x, y = int(round(point[0])), int(round(point[1]))
+    if not (0 <= x < w and 0 <= y < h):
+        return False
+    box = floor_mask[max(0, y - PAINT_BOX_HALF):y + PAINT_BOX_HALF + 1,
+                     max(0, x - PAINT_BOX_HALF):x + PAINT_BOX_HALF + 1]
+    return float(box.mean()) >= ON_LINE_FILL
 
 
 def _centre_detector():
@@ -127,6 +144,7 @@ def extract(video: str, crop, fps: float, dst: Path) -> list[Path]:
 
 def run(frames: list[Path], names: list[str], out: Path) -> dict:
     detectors = make_detectors(names)
+    _, ground = _nominal_ground()
     rows, tiles = [], []
     for index, path in enumerate(frames):
         img = cv2.imread(str(path))
@@ -134,6 +152,7 @@ def run(frames: list[Path], names: list[str], out: Path) -> dict:
             continue
         h, w = img.shape[:2]
         mask = white_mask(img)
+        floor_mask = floor_white_mask(img, ground.horizon_row)
         if mask.mean() > 0.6:           # 빈 화면(연결 전 흰 화면 등)은 건너뛴다
             continue
         row = {"frame": path.name}
@@ -145,13 +164,22 @@ def run(frames: list[Path], names: list[str], out: Path) -> dict:
                 row[name] = None
                 continue
             on = target_on_line(mask, obs.error)
+            point = getattr(detect, "target_px", lambda: None)()
+            own_point = point is not None
+            if not own_point:
+                point = (w / 2 + obs.error * w / 2, h * sum(EVAL_ROWS) / 2)
+            paint = target_on_paint(floor_mask, point)
             row[name] = {"error": round(float(obs.error), 3),
-                         "confidence": round(float(obs.confidence), 2), "on_line": on}
+                         "confidence": round(float(obs.confidence), 2), "on_line": on,
+                         "on_paint": paint}
             x = int(w / 2 + obs.error * w / 2)
             y = h - 18 - 24 * k
             cv2.circle(vis, (x, y), 9, COLOURS[k % len(COLOURS)], -1)
             if on:
                 cv2.circle(vis, (x, y), 13, (0, 0, 0), 2)
+            if own_point:   # 검출기 자신의 목표점(지면 목표)도 그린다
+                cv2.drawMarker(vis, (int(point[0]), int(point[1])), COLOURS[k % len(COLOURS)],
+                               cv2.MARKER_TILTED_CROSS, 14, 3)
         label = " ".join(f"{n}={'-' if row[n] is None else row[n]['error']}" for n in detectors)
         cv2.putText(vis, f"{index} {label}", (6, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
         rows.append(row)
@@ -166,6 +194,7 @@ def run(frames: list[Path], names: list[str], out: Path) -> dict:
             "frames": len(rows),
             "none_rate": round(1 - len(seen) / max(1, len(rows)), 3),
             "on_line_rate": round(sum(s["on_line"] for s in seen) / max(1, len(seen)), 3),
+            "on_paint_rate": round(sum(s["on_paint"] for s in seen) / max(1, len(seen)), 3),
             "jump_rate": round(jumps / max(1, len(rows) - 1), 3),
         }
     out.mkdir(parents=True, exist_ok=True)

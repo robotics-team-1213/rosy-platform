@@ -72,7 +72,8 @@ def test_off_centre_steers_back_with_core_sign(shift, sign):
     # so CORE must turn left: angular = -gain * error > 0 needs error < 0.
     obs, last = _keep(_render([(HALF + shift, 0.0), (-HALF + shift, 0.0)]))
     assert last["strategy"] == "both"
-    assert obs.error * sign > 0.2
+    assert obs.error * sign > 0.02
+    assert last["target_m"][1] * sign < -0.025  # lane centre on the other side of base_link
 
 
 def test_one_line_targets_inside_the_lane_not_the_line():
@@ -80,7 +81,7 @@ def test_one_line_targets_inside_the_lane_not_the_line():
     assert last["strategy"] == "left_only"
     target_y = last["target_m"][1]
     assert abs(target_y) < 0.03 and abs(target_y - HALF) > 0.06
-    assert obs.confidence < 0.8 and abs(obs.error) < 0.35
+    assert obs.confidence < 0.8 and abs(obs.error) < 0.05
     obs, last = _keep(_render([(-HALF, 0.0)]))
     assert last["strategy"] == "right_only" and abs(last["target_m"][1]) < 0.03
 
@@ -89,7 +90,7 @@ def test_one_line_under_the_robot_is_classified_by_ground_side():
     # A single line 3.5 cm left: still the LEFT boundary, target a half-width right of it.
     obs, last = _keep(_render([(0.035, 0.0)]))
     assert last["strategy"] == "left_only"
-    assert obs.error > 0.4  # steer right, away from the line
+    assert last["target_m"][1] < -0.04 and obs.error > 0.02  # steer right, away from the line
 
 
 def test_transverse_stop_line_is_ignored():
@@ -122,9 +123,15 @@ def test_smoothing_uses_previous_targets_only():
     shifted = keeper.update(_render([(HALF + 0.04, 0.0), (-HALF + 0.04, 0.0)]), GROUND,
                             lane_half_width_m=HALF)
     alone = _keep(_render([(HALF + 0.04, 0.0), (-HALF + 0.04, 0.0)]))[0]
-    assert alone.error < shifted.error < centred.error + 0.05
+    assert alone.error < shifted.error < centred.error + 0.01
     with pytest.raises(ValueError):
         LaneKeeper(smoothing=1.0)
+
+
+def test_error_grows_with_offset():
+    small = _keep(_render([(HALF + 0.02, 0.0), (-HALF + 0.02, 0.0)]))[0]
+    large = _keep(_render([(HALF + 0.06, 0.0), (-HALF + 0.06, 0.0)]))[0]
+    assert large.error < small.error < 0.0
 
 
 def test_node_wires_keep_mode_on_the_labelled_ground():
