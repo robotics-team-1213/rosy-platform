@@ -279,6 +279,9 @@ textarea.ui-field:disabled {
   opacity: var(--disabled-opacity);
 }
 
+.ui-field::placeholder,
+ui-field input::placeholder { color: var(--nominal-quiet); }
+
 input.ui-field[readonly] {
   color: var(--nominal-quiet);
   border-style: dashed;
