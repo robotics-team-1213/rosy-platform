@@ -197,6 +197,22 @@ def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose(
     assert "<script>" not in page  # CSP: script-src 'self' only
 
 
+def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
+    client = _client([_source()])
+
+    map_view = client.get("/console/assets/map-view.js").text
+    shell = client.get("/console/assets/console.js").text
+
+    # The sightings route is only registered with a sightings config; no site map → no polling.
+    assert "sightingsUnavailable || !view.siteMap) return;" in map_view
+    assert "if (err.status === 404) sightingsUnavailable = true;" in map_view
+    assert "if (unchanged && !next.length) return;" in map_view
+    # A transient site-map failure keeps the last rectangle; only NO_SITE_MAP clears it.
+    assert 'err.status === 404 && err.code === "NO_SITE_MAP"' in map_view
+    assert 'setAttribute("role", "img")' in map_view and 'setAttribute("role", "button")' in map_view
+    assert "error.status = resp.status;" in shell and "error.code = detail.code;" in shell
+
+
 def test_site_layer_node_unit_tests_pass():
     import shutil
     import subprocess
@@ -207,5 +223,5 @@ def test_site_layer_node_unit_tests_pass():
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
     spec = Path(__file__).resolve().parent / "web" / "site-layer.test.mjs"
     result = subprocess.run([node, "--test", str(spec)], capture_output=True, text=True,
-                            timeout=60, check=False)
+                            encoding="utf-8", errors="replace", timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr

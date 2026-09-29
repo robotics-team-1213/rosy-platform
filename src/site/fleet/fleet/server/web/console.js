@@ -102,7 +102,10 @@ async function call(path, options = {}) {
   }
   if (!resp.ok) {
     const detail = body && body.detail ? body.detail : {};
-    throw new Error(detail.message || detail.code || `HTTP ${resp.status}`);
+    const error = new Error(detail.message || detail.code || `HTTP ${resp.status}`);
+    error.status = resp.status;
+    error.code = detail.code;
+    throw error;
   }
   markUnlocked();
   return body;
