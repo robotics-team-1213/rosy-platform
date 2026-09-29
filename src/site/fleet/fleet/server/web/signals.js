@@ -83,6 +83,7 @@ export function createSignals({ el, view, log, call, refreshState }) {
       button.type = "button";
       button.textContent = label;
       button.disabled = !row.online;
+      if (!row.online) button.setAttribute("reason", "오프라인");
       if (kind) button.classList.add(kind);
       button.addEventListener("click", () => command(row.signal_id, body_));
       return button;

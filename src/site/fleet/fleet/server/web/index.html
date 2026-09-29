@@ -90,8 +90,9 @@
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
-        <details id="vision-adjustments" class="vision-adjustments">
+        <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
           <summary>왜곡 및 사각 보정</summary>
+          <ui-status id="vision-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
           <p class="hint">화면 미리보기만 보정합니다. 원본과 로봇 위치 인식은 그대로 유지됩니다. 현장 실측 전에는 보정된 위치 증거로 사용할 수 없습니다.</p>
           <div id="vision-corner-modes" class="vision-corner-modes" role="group" aria-label="영역 조정 화면" hidden>
             <ui-button kind="segment" id="vision-edit-corners" type="button" aria-pressed="false">원본에서 영역 조정</ui-button>
@@ -187,12 +188,13 @@
         <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
       </section>
 
-      <div class="formation" aria-labelledby="formation-heading">
+      <div class="formation" aria-labelledby="formation-heading" data-role-lock>
         <div class="robot-head">
           <h3 id="formation-heading">대형</h3>
           <span class="spacer"></span>
           <ui-tag id="formation-state" status="neutral">IDLE</ui-tag>
         </div>
+        <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
         <div class="formation-form">
           <label for="formation-leader">리더</label>
           <select class="ui-field" id="formation-leader"></select>

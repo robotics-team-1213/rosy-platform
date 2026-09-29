@@ -130,6 +130,8 @@ async function refreshDispatchControl() {
     }
     rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
     rearm.disabled = auth.locked || !state.rearm_available;
+    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : "재허가 조건 미충족");
+    else rearm.removeAttribute("reason");
     return state;
   } catch (_err) {
     view.dispatchControl = null;
@@ -137,6 +139,7 @@ async function refreshDispatchControl() {
     detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
     rearm.hidden = true;
     rearm.disabled = true;
+    rearm.setAttribute("reason", "발행 상태 확인 불가");
     return null;
   }
 }

@@ -12,7 +12,7 @@ function tag(text, cls) {
   return node;
 }
 
-function setOff(button, reason) {
+function blockWith(button, reason) {
   button.disabled = Boolean(reason);
   if (reason) button.setAttribute("reason", reason);
   else button.removeAttribute("reason");
@@ -162,7 +162,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
-    setOff(aim, view.stateUnavailable ? "Fleet 상태 확인 불가"
+    blockWith(aim, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? "로봇 오프라인"
         : !view.map ? "지도 없음"
           : estop === true ? "비상정지 중"
@@ -185,7 +185,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     cancel.setAttribute("kind", "quiet");
     cancel.type = "button";
     cancel.textContent = "취소";
-    setOff(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
+    blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? "로봇 오프라인" : "");
     cancel.addEventListener("click", async () => {
       try {
@@ -216,7 +216,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       fallback.setAttribute("kind", "quiet");
       fallback.type = "button";
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
-      setOff(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
+      blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
           : !isOperator() ? "운용자 권한이 필요합니다" : "");
       fallback.addEventListener("click", async () => {
