@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(fleet): separate ER 2 proposal, Mission draft, and operator admission (D-333 Task 3)
 - 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
 - 2026-09-29 · uncommitted · feat(fleet): wire policy evidence admission, routes, and API Ref v1.49 (T4-T6)
 - 2026-09-29 · uncommitted · feat(fleet): add policy-evidence config and store (D-268 ladder T2/T3)
 - 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
-- 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter

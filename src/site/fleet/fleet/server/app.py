@@ -12,27 +12,33 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
 import logging
 import math
 import sqlite3
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Mapping, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from core_common.protocol.schemas import DiscoveryScanPayload
+from core_common.protocol.schemas import DiscoveryScanPayload, ResolvedTargetEvidence
 from core_common.intent import IntentError, interpret, request_schema
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStore, status_code_for
+from fleet.server.mission_service import MissionService
+from fleet.server.mission_store import MissionConflict
+from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
 from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
 from fleet.server.task_service import FleetTaskService
@@ -128,6 +134,28 @@ class DispatchRearmRequest(BaseModel):
         return value
 
 
+class MissionCandidateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_key: str
+    workcell_id: str
+    instance_id: str
+    candidate: dict[str, object]
+
+
+class MissionAdmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    expected_generation: int
+
+    @field_validator("expected_generation", mode="before")
+    @classmethod
+    def _non_negative_generation(cls, value):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("expected_generation must be a non-negative integer")
+        return value
+
+
 class LineFollowModeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -196,12 +224,29 @@ def _http_error(exc: BaseException) -> HTTPException:
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                web_common: Optional[Path] = None, hub=None, sightings=None,
                task_service: Optional[FleetTaskService] = None,
+               mission_service: Optional[MissionService] = None,
+               proposal_store: Optional[ProposalStore] = None,
+               candidate_resolver=None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
                discovery=None, discovery_token: Optional[str] = None,
                vision_lease_secret: Optional[str] = None,
                vision_sources: tuple[str, ...] = ()) -> FastAPI:
+    mission_configured = any((mission_service, proposal_store, candidate_resolver))
+    if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
+        raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
+    if mission_configured and not callable(candidate_resolver):
+        raise ValueError("Mission candidate resolver must be callable")
+    if mission_configured and task_service is None:
+        raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
+    if mission_configured:
+        database_paths = {
+            task_service.store.path.resolve(), mission_service.store.path.resolve(),
+            proposal_store.path.resolve(),
+        }
+        if len(database_paths) != 1:
+            raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
@@ -232,17 +277,21 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     @asynccontextmanager
     async def lifespan(app):
         dispatcher = None
+        proposal_expiry = None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
+        if proposal_store is not None:
+            proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
         try:
             yield
         finally:
-            if dispatcher is not None:
-                dispatcher.cancel()
-                try:
-                    await dispatcher
-                except asyncio.CancelledError:
-                    pass
+            for background in (dispatcher, proposal_expiry):
+                if background is not None:
+                    background.cancel()
+                    try:
+                        await background
+                    except asyncio.CancelledError:
+                        pass
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -253,6 +302,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.console = console
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
+    app.state.mission_service = mission_service
+    app.state.proposal_store = proposal_store
     if task_service is not None:
         if hub is not None:
             hub.set_event_callback(task_service.project_core_event)
@@ -369,6 +420,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if principal.role != "operator":
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN",
                                                          "message": "operator role required"})
+        return principal
+
+    def require_named_operator(principal: SitePrincipal = Depends(require_operator)) -> SitePrincipal:
+        if not principals:
+            raise HTTPException(status_code=403, detail={
+                "code": "OPERATOR_IDENTITY_REQUIRED",
+                "message": "mission admission requires a configured named operator credential",
+            })
         return principal
 
     read_guard = [Depends(require_viewer)]
@@ -509,6 +568,250 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 raise HTTPException(status_code=409, detail={
                     "code": "DISPATCH_REARM_REFUSED", "message": str(exc),
                 }) from exc
+
+    if mission_service is not None:
+        def _mission_candidate_result(proposal: dict, mission: dict | None) -> dict:
+            return {
+                "proposal": {
+                    "proposal_id": proposal["proposal_id"],
+                    "request_key": proposal["request_key"],
+                    "state": proposal["state"],
+                    "candidate": proposal["candidate"],
+                    "reason": proposal["reason"],
+                    "expires_at": proposal["expires_at"],
+                },
+                "mission": mission,
+            }
+
+        def _resolve_candidate(candidate: Mapping, *, workcell_id: str,
+                               instance_id: str, now: float) -> dict:
+            try:
+                resolution = candidate_resolver(
+                    candidate, workcell_id=workcell_id, instance_id=instance_id, now=now,
+                )
+            except ProposalRejected:
+                raise
+            except (ValueError, KeyError, TypeError) as exc:
+                raise ProposalRejected("CANDIDATE_UNRESOLVED") from exc
+            if not isinstance(resolution, Mapping):
+                raise ProposalRejected("CANDIDATE_UNRESOLVED")
+            if set(resolution) != {"plan", "goal_predicate", "resources"}:
+                raise ProposalRejected("CANDIDATE_UNRESOLVED")
+            if not isinstance(resolution["plan"], Mapping) or not isinstance(
+                    resolution["goal_predicate"], Mapping):
+                raise ProposalRejected("CANDIDATE_UNRESOLVED")
+            try:
+                encoded = json.dumps(dict(resolution), sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode("utf-8")
+            except (TypeError, ValueError) as exc:
+                raise ProposalRejected("INVALID_RESOLUTION_METADATA") from exc
+            if len(encoded) > 64 * 1024:
+                raise ProposalRejected("RESOLUTION_METADATA_TOO_LARGE")
+
+            def reject_sensitive_fields(item):
+                if isinstance(item, Mapping):
+                    for key, nested in item.items():
+                        if not isinstance(key, str):
+                            raise ProposalRejected("INVALID_RESOLUTION_METADATA")
+                        if key.casefold() in {
+                                "principal_id", "actor_id", "image_bytes", "image_data",
+                                "raw_image", "frame_bytes", "api_key", "authorization",
+                                "access_token", "bearer_token"}:
+                            raise ProposalRejected("RESOLUTION_CONTAINS_FORBIDDEN_DATA")
+                        reject_sensitive_fields(nested)
+                elif isinstance(item, list):
+                    for nested in item:
+                        reject_sensitive_fields(nested)
+
+            reject_sensitive_fields(resolution)
+            source_raw = resolution["plan"].get("source_evidence")
+            destination_raw = resolution["plan"].get("destination_evidence")
+            try:
+                source_evidence = ResolvedTargetEvidence.model_validate(source_raw)
+                destination_evidence = ResolvedTargetEvidence.model_validate(destination_raw)
+            except (ValidationError, TypeError) as exc:
+                raise ProposalRejected("TARGET_EVIDENCE_INVALID") from exc
+            candidate_observation = candidate.get("source_observation")
+            if not isinstance(candidate_observation, Mapping):
+                raise ProposalRejected("OBSERVATION_PROVENANCE_INVALID")
+            try:
+                observed = datetime.fromisoformat(
+                    str(candidate_observation["observed_at"]).replace("Z", "+00:00"))
+                if observed.tzinfo is None or observed.utcoffset() is None:
+                    raise ValueError("timezone required")
+                elapsed = observed.astimezone(timezone.utc) - datetime(1970, 1, 1, tzinfo=timezone.utc)
+                capture_time_ns = ((elapsed.days * 86_400 + elapsed.seconds) * 1_000_000_000
+                                   + elapsed.microseconds * 1_000)
+                expected_identity = (
+                    candidate_observation["observation_id"],
+                    candidate_observation["image_sha256"],
+                    candidate_observation["camera_id"],
+                    candidate_observation["frame_id"],
+                    candidate_observation["calibration_revision"],
+                    candidate_observation["transform_revision"],
+                    capture_time_ns,
+                )
+            except (KeyError, TypeError, ValueError, OverflowError) as exc:
+                raise ProposalRejected("OBSERVATION_PROVENANCE_INVALID") from exc
+            for evidence in (source_evidence, destination_evidence):
+                actual_identity = (
+                    evidence.observation_id, evidence.frame_sha256,
+                    evidence.camera_identity, evidence.optical_frame_id,
+                    evidence.calibration_revision, evidence.transform_revision,
+                    evidence.capture_time_ns,
+                )
+                if actual_identity != expected_identity:
+                    raise ProposalRejected("OBSERVATION_PROVENANCE_MISMATCH")
+            resources = resolution["resources"]
+            if (not isinstance(resources, list) or not resources
+                    or any(not isinstance(item, (tuple, list)) or len(item) != 2
+                           or any(not isinstance(part, str) or not part.strip() for part in item)
+                           for item in resources)):
+                raise ProposalRejected("CANDIDATE_UNRESOLVED")
+            goal = resolution["goal_predicate"]
+            object_id, destination_id = goal.get("object_id"), goal.get("destination_id")
+            if (source_evidence.object_id != object_id
+                    or destination_evidence.object_id != destination_id
+                    or source_evidence.object_id == destination_evidence.object_id):
+                raise ProposalRejected("TARGET_GOAL_MISMATCH")
+            required_claims = {
+                ("workcell", workcell_id), ("object", object_id),
+                ("object", destination_id),
+            }
+            if (not all(isinstance(value, str) and value.strip()
+                        for value in (object_id, destination_id))
+                    or not required_claims.issubset({tuple(item) for item in resources})):
+                raise ProposalRejected("CANDIDATE_RESOURCES_INCOMPLETE")
+            plan = dict(resolution["plan"])
+            plan["source_evidence"] = source_evidence.model_dump(mode="json")
+            plan["destination_evidence"] = destination_evidence.model_dump(mode="json")
+            return {"plan": plan,
+                    "goal_predicate": dict(resolution["goal_predicate"]),
+                    "resources": [list(item) for item in resources]}
+
+        def _stable_resolution(value: Mapping) -> str:
+            def strip_transient(item):
+                if isinstance(item, Mapping):
+                    return {key: strip_transient(nested) for key, nested in item.items()
+                            if key not in {"resolved_at", "validated_at", "age_ms"}}
+                if isinstance(item, list):
+                    return [strip_transient(nested) for nested in item]
+                return item
+            return json.dumps(strip_transient(value), sort_keys=True, separators=(",", ":"),
+                              allow_nan=False)
+
+        @app.post("/api/fleet/proposals", dependencies=operator_guard, tags=["fleet-missions"])
+        def fleet_proposal_create(body: MissionCandidateRequest,
+                                  principal: SitePrincipal = Depends(require_operator)) -> dict:
+            try:
+                saved = proposal_store.create(
+                    principal_id=principal.principal_id, request_key=body.request_key,
+                    workcell_id=body.workcell_id, instance_id=body.instance_id,
+                    candidate=body.candidate,
+                )
+            except ProposalConflict as exc:
+                raise HTTPException(status_code=409, detail={"code": "REQUEST_CONFLICT",
+                                                             "message": str(exc)}) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail={"code": "INVALID_CANDIDATE",
+                                                             "message": str(exc)}) from exc
+            proposal = saved["proposal"]
+            return {"created": saved["created"], "proposal": {
+                "proposal_id": proposal["proposal_id"], "request_key": proposal["request_key"],
+                "state": proposal["state"], "candidate": proposal["candidate"],
+                "reason": proposal["reason"], "expires_at": proposal["expires_at"],
+            }, "physical_submission": "NOT_CONNECTED"}
+
+        @app.get("/api/fleet/proposals/{proposal_id}", dependencies=read_guard,
+                 tags=["fleet-missions"])
+        def fleet_proposal_read(proposal_id: str,
+                                principal: SitePrincipal = Depends(require_viewer)) -> dict:
+            proposal = proposal_store.get(proposal_id, principal_id=principal.principal_id)
+            if proposal is None:
+                raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
+            mission = mission_service.get(proposal_id)
+            return _mission_candidate_result(proposal, mission)
+
+        @app.post("/api/fleet/proposals/{proposal_id}/resolve", dependencies=operator_guard,
+                  tags=["fleet-missions"])
+        def fleet_proposal_resolve(proposal_id: str,
+                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
+            if candidate_resolver is None:
+                raise HTTPException(status_code=503, detail={"code": "MISSION_RESOLVER_UNAVAILABLE"})
+            proposal = proposal_store.get(proposal_id, principal_id=principal.principal_id)
+            if proposal is None:
+                raise HTTPException(status_code=404, detail={"code": "PROPOSAL_NOT_FOUND"})
+            if proposal["state"] == "RESOLVED":
+                return {"created": False,
+                        **_mission_candidate_result(proposal, mission_service.get(proposal_id))}
+            if proposal["state"] != "PROPOSED":
+                raise HTTPException(status_code=409, detail={
+                    "code": proposal["reason"] or "PROPOSAL_RESOLUTION_NOT_AVAILABLE",
+                })
+            try:
+                resolution = _resolve_candidate(
+                    proposal["candidate"], workcell_id=proposal["workcell_id"],
+                    instance_id=proposal["instance_id"], now=time.time(),
+                )
+                resolved, mission, created = proposal_store.finalize_resolution(
+                    mission_service.store, proposal_id=proposal["proposal_id"],
+                    principal_id=principal.principal_id, resolution=resolution,
+                    mission_request=resolution,
+                )
+            except ProposalRejected as exc:
+                rejected = proposal_store.set_resolution(
+                    proposal["proposal_id"], state="REJECTED", reason=exc.code,
+                )
+                raise HTTPException(status_code=409, detail={
+                    "code": exc.code, "proposal_id": rejected["proposal_id"],
+                }) from exc
+            except (MissionConflict, ProposalConflict) as exc:
+                raise HTTPException(status_code=409, detail={"code": "MISSION_CONFLICT",
+                                                             "message": str(exc)}) from exc
+            return {"created": created, **_mission_candidate_result(resolved, mission)}
+
+        @app.get("/api/fleet/missions/{mission_id}", dependencies=read_guard,
+                 tags=["fleet-missions"])
+        def fleet_mission_read(mission_id: str,
+                               principal: SitePrincipal = Depends(require_viewer)) -> dict:
+            proposal = proposal_store.get(mission_id, principal_id=principal.principal_id)
+            if proposal is None or proposal["state"] != "RESOLVED":
+                raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+            mission = mission_service.get(mission_id)
+            if mission is None:
+                raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+            history = mission_service.history(mission_id)
+            return {**_mission_candidate_result(proposal, mission), "history": history}
+
+        @app.post("/api/fleet/missions/{mission_id}/admit", dependencies=operator_guard,
+                  tags=["fleet-missions"])
+        def fleet_mission_admit(mission_id: str, body: MissionAdmitRequest,
+                                principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+            proposal = proposal_store.get(mission_id, principal_id=principal.principal_id)
+            if proposal is None:
+                raise HTTPException(status_code=404, detail={"code": "MISSION_NOT_FOUND"})
+            mission = mission_service.get(mission_id)
+            if mission is None or proposal["state"] != "RESOLVED":
+                raise HTTPException(status_code=409, detail={"code": "PROPOSAL_NOT_RESOLVED"})
+            try:
+                current = _resolve_candidate(
+                    proposal["candidate"], workcell_id=mission["workcell_id"],
+                    instance_id=mission["instance_id"], now=time.time(),
+                )
+                if _stable_resolution(current) != _stable_resolution(proposal["resolution"]):
+                    raise ProposalRejected("EVIDENCE_OR_CAPABILITY_CHANGED")
+                admitted = mission_service.admit(
+                    mission_id, actor_id=principal.principal_id,
+                    expected_generation=body.expected_generation,
+                    resources=[tuple(item) for item in proposal["resolution"]["resources"]],
+                )
+            except ProposalRejected as exc:
+                raise HTTPException(status_code=409, detail={"code": exc.code}) from exc
+            except (MissionConflict, ValueError) as exc:
+                raise HTTPException(status_code=409, detail={"code": "MISSION_ADMISSION_REFUSED",
+                                                             "message": str(exc)}) from exc
+            return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
+                    "mission": admitted, "physical_submission": "NOT_CONNECTED"}
 
     @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
     def fleet_session(request: Request) -> dict:
@@ -844,3 +1147,12 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             # A status read failure cannot establish availability. Leave work queued.
             pass
         await asyncio.sleep(0.25)
+
+
+async def _proposal_expiry_loop(proposal_store: ProposalStore) -> None:
+    while True:
+        try:
+            proposal_store.purge_expired()
+        except (OSError, sqlite3.Error):
+            _LOG.exception("expired Fleet proposal cleanup failed")
+        await asyncio.sleep(3600)
