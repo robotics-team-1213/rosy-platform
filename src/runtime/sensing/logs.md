@@ -542,3 +542,10 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)
+- 변경: `lane.py`에 `LaneBetweenKeeper`·`detect_lane_between` 추가. 아래쪽 띠의 여러 행에서 기준 열 왼쪽·오른쪽의 가장 가까운 밝은 런을 찾아 두 안쪽 가장자리의 중점을 목표로 삼는다. 한쪽만 보이면 그 가장자리에서 학습한 차선 폭(행별 EMA, 기본은 화면 폭의 0.6)의 절반만큼 안쪽을 목표로 삼는다. 기준 열은 직전 목표를 따라간다. 지면 평면이 필요 없다. `line_observer_node`에 `camera_lane_mode: between`과 파라미터 `camera_between_roi_top_fraction`(0.6), `camera_between_lane_width_fraction`(0.6, 읽기 전용)을 추가했다. 기본값 `line`은 그대로다.
+- 증거: `python -m pytest src/runtime/sensing/test/ -q` 1670 passed, 78 skipped (2026-09-29 Windows). 새 `test_lane_between.py` 10건이 한쪽 선만 보일 때 `detect_lane_error`는 선 위를 가리키고 `between`은 차선 안쪽을 가리키는 것을 확인한다.
+- gate 변화: 없음. 실물 주행 확인 전이다.
+- 결정: 없음.
+- 교훈: 실물 로봇은 homography가 꺼져 있어 지면 평면이 필요한 차선 모드를 못 쓰고, `line` 모드의 밝은 화소 중심은 경계선이 하나만 보이면 그 선 위로 조향한다.

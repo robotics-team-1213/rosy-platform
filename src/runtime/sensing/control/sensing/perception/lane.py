@@ -8,6 +8,8 @@ no model and no YOLO (SRS NAV-007):
   two-line lane a lane bounded by two white lines; per-row line runs projected
                 to metres on a calibrated ground plane, steering to the midpoint
                 (`detect_lane_centre`). No ground plane, no lane mode.
+  between       the same two-line lane in image space, no ground plane: steer
+                to the midpoint of the inner edges (`LaneBetweenKeeper`)
 
 The tracker turns the observation stream into TRACKING/LOST: loss beyond the
 grace period demands stop, never a blind search drive. ROS-free, same contract
@@ -150,6 +152,120 @@ def detect_lane_error(bgr: np.ndarray, *, bright_threshold: int = _BRIGHT,
     if confidence <= 0.0:
         return None
     return LaneObservation(error=error, confidence=confidence)
+
+
+def _row_runs(bright_row: np.ndarray, min_run_px: int, max_run_px: float):
+    """(first, last) lit column of each horizontal bright run of plausible
+    boundary-line width. Wider runs are walls, glare or crossing bars."""
+    lit = np.concatenate(([0], (bright_row > 0).astype(np.int8), [0]))
+    edges = np.flatnonzero(np.diff(lit))
+    return [(int(start), int(stop) - 1)
+            for start, stop in zip(edges[0::2], edges[1::2])
+            if min_run_px <= stop - start <= max_run_px]
+
+
+class LaneBetweenKeeper:
+    """Image-space two-boundary lane keeper ('between' mode), no ground plane.
+
+    Per sampled row of a bottom band, the nearest bright run left of the
+    reference column is the left boundary and the nearest right of it the
+    right boundary; the target is the midpoint of their inner edges. With one
+    side only, the target is that inner edge moved inward by the lane width in
+    pixels learned for that row (EMA over rows where both were seen; a
+    fraction of the frame width until then) — never the line itself, which is
+    what `detect_lane_error`'s centroid would steer onto. The reference is the
+    last target, so a boundary drifting past the image centre keeps its side.
+    Same LaneObservation contract: error > 0 means the lane centre is right
+    of the image centre (steer right)."""
+
+    def __init__(self, *, default_lane_width_fraction: float = 0.6,
+                 width_alpha: float = 0.2) -> None:
+        for name, value in (('default_lane_width_fraction', default_lane_width_fraction),
+                            ('width_alpha', width_alpha)):
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value) or not 0.0 < value <= 1.0):
+                raise ValueError(f"{name} must be in (0, 1]")
+        self._default_fraction = float(default_lane_width_fraction)
+        self._alpha = float(width_alpha)
+        self._widths: dict[int, float] = {}
+        self._reference: float | None = None
+
+    def reset(self) -> None:
+        self._widths.clear()
+        self._reference = None
+
+    def lane_width_px(self, row: int, frame_width: int) -> float:
+        return self._widths.get(row, self._default_fraction * frame_width)
+
+    def update(self, bgr: np.ndarray, *, bright_threshold: int = _BRIGHT,
+               roi_top_fraction: float = 0.6,
+               washed_fraction: float = _WASHED_FRACTION,
+               rows: int = 8, min_rows: int = 2, min_run_px: int = 2,
+               max_run_fraction: float = 0.25) -> LaneObservation | None:
+        if (isinstance(bright_threshold, bool) or not isinstance(bright_threshold, int)
+                or not 1 <= bright_threshold <= 254):
+            raise ValueError("bright_threshold must be an integer from 1 through 254")
+        if (isinstance(roi_top_fraction, bool) or not isinstance(roi_top_fraction, (int, float))
+                or not math.isfinite(roi_top_fraction) or not 0.0 <= roi_top_fraction < 1.0):
+            raise ValueError("roi_top_fraction must be in [0, 1)")
+        for name, value in (('washed_fraction', washed_fraction),
+                            ('max_run_fraction', max_run_fraction)):
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value) or not 0.0 < value <= 1.0):
+                raise ValueError(f"{name} must be in (0, 1]")
+        for name, value in (('rows', rows), ('min_rows', min_rows), ('min_run_px', min_run_px)):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
+            raise ValueError("camera frame must be a non-empty grayscale or BGR array")
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
+        height, width = gray.shape[:2]
+        top = min(int(height * roi_top_fraction), height - 1)
+        _, bright = cv2.threshold(gray[top:, :], bright_threshold, 255, cv2.THRESH_BINARY)
+        if (bright > 0).sum() > washed_fraction * bright.size:
+            self._reference = None
+            return None
+        reference = width / 2.0 if self._reference is None else self._reference
+        max_run_px = max_run_fraction * width
+        both, one = [], []
+        sampled = sorted(set(np.linspace(top, height - 1, rows).astype(int).tolist()))
+        for row in sampled:
+            left = right = None
+            for first, last in _row_runs(bright[row - top], min_run_px, max_run_px):
+                if (first + last) / 2.0 < reference:
+                    left = last if left is None else max(left, last)
+                elif right is None or first < right:
+                    right = first
+            if left is not None and right is not None:
+                span = float(right - left)
+                both.append((left + right) / 2.0)
+                if span >= 0.1 * width:
+                    previous = self._widths.get(row)
+                    self._widths[row] = (span if previous is None
+                                         else previous + self._alpha * (span - previous))
+            elif left is not None:
+                one.append(left + self.lane_width_px(row, width) / 2.0)
+            elif right is not None:
+                one.append(right - self.lane_width_px(row, width) / 2.0)
+        if len(both) >= min_rows:
+            target = float(np.median(both))
+            confidence = 0.5 + 0.5 * len(both) / len(sampled)
+        elif len(both) + len(one) >= min_rows:
+            target = float(np.median(both + one))
+            confidence = 0.6 * (len(both) + len(one)) / len(sampled)
+        else:
+            self._reference = None
+            return None
+        target = max(0.0, min(float(width - 1), target))
+        self._reference = target
+        error = max(-1.0, min(1.0, (target - width / 2.0) / (width / 2.0)))
+        return LaneObservation(error=error, confidence=min(1.0, confidence))
+
+
+def detect_lane_between(bgr: np.ndarray, **kwargs) -> LaneObservation | None:
+    """Stateless single-frame `LaneBetweenKeeper.update` (default lane width,
+    image-centre reference)."""
+    return LaneBetweenKeeper().update(bgr, **kwargs)
 
 
 def _spans_lane(ground, row: int, width_px: int, half: float) -> bool:

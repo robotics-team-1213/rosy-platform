@@ -25,6 +25,7 @@ from . import executor_choice
 from .sensing.perception.camera_ground import simulation_ground_plane
 from .sensing.perception.lane import (
     IRLineCalibration,
+    LaneBetweenKeeper,
     LaneCornerTracker,
     detect_ir_line,
     detect_lane_centre,
@@ -63,6 +64,8 @@ class LineObserverNode(Node):
         # half-width off in bird's-eye view (bends, arcs). Both lane modes need
         # a metric ground plane, edge_left also odometry (fail-closed without).
         # 'centre' follows the centre line between both boundaries (fallback ladder).
+        # 'between' keeps the midpoint of the two boundary lines in image
+        # space (no ground plane, no odometry): the real-robot lane mode.
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
         # pursuit from a paint-localised pose (B). 'route_ab' is their
@@ -71,6 +74,10 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
+        # 'between' only: bottom band start (keeps white walls out) and the
+        # lane width as a frame fraction until both boundaries are seen.
+        self.declare_parameter('camera_between_roi_top_fraction', 0.6)
+        self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
         self.declare_parameter('allow_simulation_ground', False)
         self.declare_parameter('gazebo_camera_height_m', 0.0)
@@ -106,6 +113,9 @@ class LineObserverNode(Node):
             corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
         self._centre_tracker = LaneBoundaryTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+        self._between_keeper = LaneBetweenKeeper(
+            default_lane_width_fraction=float(
+                self.get_parameter('camera_between_lane_width_fraction').value))
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
@@ -275,6 +285,14 @@ class LineObserverNode(Node):
                     roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                     min_pixels=int(self.get_parameter('camera_min_pixels').value),
+                )
+            elif mode == 'between':
+                observation = self._between_keeper.update(
+                    frame,
+                    bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
+                    roi_top_fraction=float(
+                        self.get_parameter('camera_between_roi_top_fraction').value),
+                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
