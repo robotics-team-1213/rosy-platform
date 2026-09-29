@@ -79,6 +79,10 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
+        // First line while the camera runs, so the disabled Save button is explained before it is seen.
+        if (locked) {
+            Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
+        }
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             onClick = {
@@ -137,9 +141,6 @@ fun SettingsScreen(
                     )
                 }
             }
-        }
-        if (locked) {
-            Text(stringResource(R.string.settings_locked), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         OutlinedTextField(

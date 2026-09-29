@@ -4,11 +4,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -92,7 +94,11 @@ val RosyColorScheme: ColorScheme = darkColorScheme(
 
 @Composable
 fun RosyTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = RosyColorScheme, content = content)
+    MaterialTheme(colorScheme = RosyColorScheme) {
+        // Screens draw on a plain Column, not a Surface, so set the ink here; otherwise Text
+        // falls back to LocalContentColor's default (black) on the dark ground.
+        CompositionLocalProvider(LocalContentColor provides RosyColorScheme.onBackground, content = content)
+    }
 }
 
 /**

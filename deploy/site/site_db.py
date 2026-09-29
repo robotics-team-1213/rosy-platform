@@ -175,7 +175,7 @@ def restore_database(
 
 
 def _rekey(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
-    """D-352 4: reseal every enrolled robot token in one transaction, Fleet stopped."""
+    """D-361 4: reseal every enrolled robot token in one transaction, Fleet stopped."""
     if not args.assume_stopped:
         parser.error("stop the Fleet service first, then pass --assume-stopped")
     from fleet.server.enrollment_store import CredentialKeyError, SealError, load_key_file, rekey

@@ -426,7 +426,7 @@ def test_a_session_that_stopped_on_its_own_ends_the_console_at_once(capsys):
     assert "session stopped: nav.stuck (rosy_02)" in capsys.readouterr().out
 
 
-# --- D-352 robot enrollment wiring ---------------------------------------------------
+# --- D-361 robot enrollment wiring ---------------------------------------------------
 
 def _key_file(tmp_path):
     import base64

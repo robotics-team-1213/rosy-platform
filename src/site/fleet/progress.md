@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 676 passed/5 skipped including ER2 proposal/admission, durable Mission Action dispatcher with persisted stable grant and restart GetAction reconciliation, independent goal evidence provenance, and SQLite WAL/index contracts. API web 70 passed/13 skipped, OMX adapter 85 passed/3 skipped, foundation 102 passed. Synthetic indexed Mission queries improved by three orders of magnitude locally; this is not target-device evidence. Trusted goal verifier is not yet wired and Mission completion fails closed. Dispatcher remains explicit opt-in; no live observation producer, configured OMX service/driver, ROS-SIM, or physical stop/goal proof. SOURCE/LOCAL only."
+    evidence: "Fleet suite 676 passed/5 skipped including ER2 proposal/admission, durable Mission Action dispatcher with persisted stable grant and restart GetAction reconciliation, independent goal evidence provenance, and SQLite WAL/index contracts. API web 70 passed/13 skipped, OMX adapter 85 passed/3 skipped, foundation 102 passed. Synthetic indexed Mission queries improved by three orders of magnitude locally; this is not target-device evidence. D-348 producer registry, token-scoped evidence ingress, SQLite idempotency, terminal-action verification, and grace-timeout HOLD are implemented and covered by host tests. Dispatcher remains explicit opt-in and automatic policy dispatch remains disabled; no live observation producer, configured OMX service/driver, ROS-SIM, or physical stop/goal proof. SOURCE/LOCAL only."
     cmd: "python3 -m pytest src/site/fleet/test -q"
   ROS-SIM:
     state: HOLD

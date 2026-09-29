@@ -70,7 +70,7 @@ class SiteHub:
         self.event_callback = callback
 
     def set_client(self, robot_id: str, client: RobotClient) -> None:
-        """SiteRoster only: a robot joined the roster after start (D-352 5)."""
+        """SiteRoster only: a robot joined the roster after start (D-361 5)."""
         self._clients[robot_id] = client
 
     def set_pairing_token(self, robot_id: str, token: str) -> None:

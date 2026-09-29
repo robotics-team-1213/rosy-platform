@@ -44,14 +44,13 @@ KNOWN_WITHOUT_OWN_TESTS = {
 #: P3/P4 exceptions as (source package, target package).
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
-    ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
 KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
-    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
 
@@ -72,16 +71,17 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "fleet": (
-        12_574,
+        13_187,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
-        "12419 after the D-352 enrollment register, roster and service joined as their own modules, and "
-        "at 12574 after the D-352 review fixes)",
+        "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "
+        "at 12574 after the D-361 review fixes; re-judged 2026-09-30 at 13187 after main's goal-evidence "
+        "contracts and stores merged in, docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md)",
     ),
     "site/fleet/fleet/server/enrollment.py": (
         610,
-        "accept: one owner (D-352 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
@@ -118,7 +118,7 @@ SIZE_VERDICTS = {
     "site/fleet/fleet/server/console.py": (
         1013,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
-        "D-352 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
+        "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (

@@ -1,6 +1,6 @@
 ## D-193 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다
 
-**Status:** Proposed (2026-09-24). **D-352가 개정(Proposed, 2026-09-29): `pair-site` 수명, operator 회수** — 출처 `pair-site` 토큰은 168 h 상한 대신 카드 설정 수명(기본 90일)을 받고, operator가 `pair-site` 토큰을 목록·회수할 수 있다. 관리자 등록 코드의 발급자 만료 규칙(보안 리뷰 M2)은 그대로다. [D-352](D-352-site-console-enrolls-robot-by-screen-code.md). 따르는 결정:
+**Status:** Proposed (2026-09-24). **D-361가 개정(Proposed, 2026-09-29): `pair-site` 수명, operator 회수** — 출처 `pair-site` 토큰은 168 h 상한 대신 카드 설정 수명(기본 90일)을 받고, operator가 `pair-site` 토큰을 목록·회수할 수 있다. 관리자 등록 코드의 발급자 만료 규칙(보안 리뷰 M2)은 그대로다. [D-361](D-361-site-console-enrolls-robot-by-screen-code.md). 따르는 결정:
 
 - D-161: CORE는 비특권이고 인터넷에 닿는 프로세스다.
 - D-176: AP 비밀번호는 물리 접근자에게만 보인다.

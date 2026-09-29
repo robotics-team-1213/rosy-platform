@@ -1,4 +1,4 @@
-"""Fleet-owned robot enrollment register with sealed CORE credentials (D-352 4, 11).
+"""Fleet-owned robot enrollment register with sealed CORE credentials (D-361 4, 11).
 
 Fleet presents these tokens to robot CORE as a client, so it needs the plaintext and
 keeps only AES-256-GCM ciphertext at rest. The key is a separate Compose secret; a
@@ -215,7 +215,7 @@ class EnrollmentStore:
         return [dict(row) for row in rows]
 
     def retired_robot_ids(self) -> set[str]:
-        """Robots once enrolled here that are not on the roster now (D-352 5)."""
+        """Robots once enrolled here that are not on the roster now (D-361 5)."""
         with closing(self._connect()) as connection:
             pending = connection.execute(
                 "SELECT robot_id FROM robot_enrollments WHERE state='pending_logout'").fetchall()

@@ -16,7 +16,7 @@
   <exec_depend>web_common</exec_depend>
   <exec_depend>python3-httpx</exec_depend>
   <!-- 15 이상이어야 한다: transport.py 가 `websockets.exceptions.InvalidStatus`,
-       새 asyncio 클라이언트(`connection.respond`)와 `connect(proxy=None)`(D-352 9)을 쓴다. -->
+       새 asyncio 클라이언트(`connection.respond`)와 `connect(proxy=None)`(D-361 9)을 쓴다. -->
   <exec_depend version_gte="15.0">python3-websockets</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>python3-cryptography</exec_depend>

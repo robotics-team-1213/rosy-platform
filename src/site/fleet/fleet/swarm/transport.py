@@ -137,7 +137,7 @@ class HttpRobotClient:
         self.robot_id = endpoint.robot_id
         self._ep = endpoint
         self._owns_http = http is None
-        # trust_env=False: an environment proxy must never see the Bearer (D-352 9).
+        # trust_env=False: an environment proxy must never see the Bearer (D-361 9).
         self._http = http or httpx.AsyncClient(base_url=endpoint.base_url, timeout=timeout_s,
                                                trust_env=False)
 

@@ -1001,7 +1001,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
 
 
 def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
-    """D-352 S3: a named operator enrolls a discovered robot; the code goes only to Fleet."""
+    """D-361 S3: a named operator enrolls a discovered robot; the code goes only to Fleet."""
     import os
     from playwright.sync_api import sync_playwright
 

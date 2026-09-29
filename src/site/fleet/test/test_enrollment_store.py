@@ -1,4 +1,4 @@
-"""D-352 S1: the Fleet-owned robot enrollment register and its sealed credentials."""
+"""D-361 S1: the Fleet-owned robot enrollment register and its sealed credentials."""
 
 from __future__ import annotations
 

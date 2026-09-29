@@ -1,6 +1,8 @@
-## D-352 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다
+## D-361 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다
 
 **Status:** Proposed (2026-09-29, 같은 날 독립 리뷰 2회·사용자 결정 반영 개정). 등록 흐름·자격 모양·결속·저장·수명 규칙과 구현 순서를 정한다. 구현 GO, CORE 이미지 교체, TLS 도입, DEVICE·FIELD 승격이 아니다.
+
+**번호:** 처음 D-352로 적었으나 main에 다른 D-352(외부 장비 공통 패턴)가 먼저 착지해 2026-09-30 병합 때 D-361로 옮겼다. 그 전 로그 항목의 "D-352 등록"은 이 ADR을 가리킨다.
 
 잇는 결정: [D-193](D-193-login-code-and-credential-lifecycle.md)(로봇 화면 일회용 코드·`POST /api/v1/auth/pair`·§10 전송) · [D-5](D-5-outbound-ws-fleet-rest.md)(FleetAgent 바깥 연결) · [D-30](D-30-.md)·[D-31](D-31-fleet.md)(장치 로컬 토큰, Fleet 제어는 operator 이상) · [D-276](D-276-site-fleet-per-principal-api-authorization.md)(`require_named_operator`) · [D-302](D-302-site-registry-credential-separation.md)(사이트 자격 분리) · D-341(천장 카메라 콘솔 승인, 브랜치 `docs/d341-overhead-console-pairing`) · D-351(로봇 ↔ 관제 통신 적합성, 브랜치 `docs/robot-fleet-protocol-conformance`).
 발견 규칙: [`site-lan-discovery-profile.md`](../reference/site-lan-discovery-profile.md). SRS: ROSY FLEET SRS REG-001(①mDNS ②수동 주소), REG-001a, SEC-203. 실행 계획: [`2026-09-29-fleet-robot-code-enrollment-plan.md`](../plans/2026-09-29-fleet-robot-code-enrollment-plan.md).
@@ -76,8 +78,8 @@
 11. **D-341과의 관계.** 방향이 반대다: 카메라는 기기가 요청하고 콘솔이 기기 화면의 확인 코드를 입력해 승인한다(기기 → 사이트). 로봇은 콘솔이 로봇 화면의 코드를 입력해 사이트가 로봇에서 자격을 받는다(사이트 → 로봇).
     - **패널 이름은 "기기 연결" 하나다.** D-341 계획의 "기기 연결 요청" 패널을 이 이름으로 부르고, 그 안에 구역 **카메라 연결 요청**(D-341)과 **로봇 등록**(이 ADR)을 둔다. 사람에게 보이는 동사는 로봇 **등록**, 카메라 **연결 승인**이다.
     - **감사 표는 하나다.** D-341 계획의 `device_pairing_audit`(보존 상한 10,000행)에 `device_kind`(`overhead-camera`·`robot`) 열을 두고 두 절차가 같은 열(시각, `device_kind`, 동작, 결과 분류, principal_id, 대상 식별자, 원문 없음)로 쓴다.
-    - **먼저 착지하는 브랜치가 패널 틀과 감사 표를 만들고, 뒤에 착지하는 쪽이 맞춘다.** 지금 D-341이 계획상 앞서 있으므로 기본은 D-341이 만들고 D-352 S1–S3이 거기에 구역·`device_kind='robot'` 행을 더한다. D-352가 먼저 착지하면 같은 이름·열로 만들고 D-341이 구역을 더한다. D-341 계획의 표에는 `device_kind`가 없으므로, D-341이 먼저 착지하면 D-352 S1이 `ALTER TABLE device_pairing_audit ADD COLUMN device_kind TEXT NOT NULL DEFAULT 'overhead-camera'` 이전 단계를 둔다(기존 행은 카메라).
-    - 저장은 다르다: D-341은 digest만(Fleet이 검증자), D-352는 암호문(Fleet이 클라이언트, 4항). 수명도 다르다. D-341 18항의 역할 등록표에 로봇을 넣지 않는다 — 로봇 쪽 코드 발급자는 CORE이고 절차가 다르다.
+    - **먼저 착지하는 브랜치가 패널 틀과 감사 표를 만들고, 뒤에 착지하는 쪽이 맞춘다.** 지금 D-341이 계획상 앞서 있으므로 기본은 D-341이 만들고 D-361 S1–S3이 거기에 구역·`device_kind='robot'` 행을 더한다. D-361가 먼저 착지하면 같은 이름·열로 만들고 D-341이 구역을 더한다. D-341 계획의 표에는 `device_kind`가 없으므로, D-341이 먼저 착지하면 D-361 S1이 `ALTER TABLE device_pairing_audit ADD COLUMN device_kind TEXT NOT NULL DEFAULT 'overhead-camera'` 이전 단계를 둔다(기존 행은 카메라).
+    - 저장은 다르다: D-341은 digest만(Fleet이 검증자), D-361는 암호문(Fleet이 클라이언트, 4항). 수명도 다르다. D-341 18항의 역할 등록표에 로봇을 넣지 않는다 — 로봇 쪽 코드 발급자는 CORE이고 절차가 다르다.
 12. **정직한 사용성 범위.**
     - 운용자 동작은 **로봇 전원 켜기 → 등록 클릭 → 8자 입력** 셋이다. SSH, 파일 편집, CORE·Fleet 재시작이 없다.
     - **"SSH 없음"은 LCD가 있고 카드 `login.boot_code`가 기본(`operator`)인 로봇에만 성립한다.** LCD가 없는 보드나 `boot_code: off` 카드는 관리자 등록 코드(로봇 대시보드의 관리자 세션 필요) 또는 SSH `sudo rosy-login-code`가 코드의 출처다. 이 범위 제한을 README와 패널 도움말에 적는다.

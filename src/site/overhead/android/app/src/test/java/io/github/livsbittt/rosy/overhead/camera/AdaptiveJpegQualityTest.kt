@@ -96,4 +96,18 @@ class AdaptiveJpegQualityTest {
         assertEquals(70, q.start(70))
         assertEquals("a lowered config applies at once", 40, q.start(40))
     }
+
+    @Test
+    fun lastFitReportsTheQualityActuallySent() {
+        val q = AdaptiveJpegQuality()
+        assertNull(q.lastFit)
+        q.start(70)
+        q.retryAfterOversize()
+        q.encoded()
+        assertEquals(60, q.lastFit)
+        q.start(70)
+        q.retryAfterOversize()
+        q.retryAfterOversize()
+        assertEquals("a dropped frame does not change what was last sent", 60, q.lastFit)
+    }
 }

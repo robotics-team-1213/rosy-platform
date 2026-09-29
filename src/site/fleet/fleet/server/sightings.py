@@ -55,7 +55,7 @@ class SightingService:
         self.lease_s = lease_s
         self._store = store
         known = set(known_robot_ids)
-        #: The live roster (D-352 5); SiteRoster replaces it on add/remove.
+        #: The live roster (D-361 5); SiteRoster replaces it on add/remove.
         self.known_robot_ids = frozenset(known)
         self._sources: list[SightingSource] = list(sources)
         self._by_id: dict[str, SightingSource] = {}

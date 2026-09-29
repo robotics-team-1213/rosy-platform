@@ -53,9 +53,9 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-18-rosy-games-local-host.md` | rosy_games LOCAL 실행 계획: 스켈레톤 → gate·MatchHost·teleop 클라이언트. Isaac/overhead 제외 |
 | `2026-09-18-rosy-games-overhead-plan.md` | 천장 카메라 관측 어댑터. OpenCV는 overhead만. 합성 시험 ≠ DEVICE (D-94, D-95) |
 | `2026-09-18-rosy-games-remaining-adr-plan.md` | 남은 games 트랙 → D-95–D-100; 골은 ArUco 20/21+영역, 온보드/Isaac은 FIELD 뒤 |
-| `2026-09-20-camera-placement-design.md` | ??? ?? ?? ? Picamera2/CSI ??? host service + least-privilege ????? ?? (Task 5, D-52) |
-| `2026-09-20-dock-build-design.md` | ?? ?? ?? ?? ? 1? ?? ??, DNC-007 ?? ??, teach-by-docking ??? (DNC) |
-| `2026-09-20-pi-bench-commissioning-design.md` | Pi ?? ???? ? artifact ???readback ?? ??? (D-66) |
+| `2026-09-20-camera-placement-design.md` | 카메라 배치 실측 설계 — Picamera2/CSI 캡처를 host service로 둘지 least-privilege container로 둘지 같은 시나리오 실측으로 결정 (Task 5, D-52) |
+| `2026-09-20-dock-build-design.md` | 실물 도크 조립 설계 — bench 1기분 조립·통전·플래시, DNC-007 태그 검증, teach-by-docking까지 (DNC) |
+| `2026-09-20-pi-bench-commissioning-design.md` | Pi 벤치 커미셔닝 설계 — 서명 artifact→설치→readback→단계 승격의 순서와 통과 조건 고정 (D-66) |
 | `2026-09-21-pinky-device-commissioning-design.md` (+ implementation plan) | Fail-closed G0-G5 first physical Pinky Pro session and evidence workflow |
 | `2026-09-21-hardware-mapping-g5-design.md` (+ implementation plan) | D-144 hardware SLAM backend, writable map output, and MCAP/hash-bound G5 evidence |
 | `2026-09-21-ubuntu-native-ros-runtime-design.md` | D-161 immediate transition to Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy product runtime |
@@ -83,13 +83,11 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-25-decision-fabric-input-v0.8.md` | 입력 노트. 판단 경계는 D-228·D-229다. `src/runtime` 트리는 폴더가 아니다 |
 | `2026-09-25-folder-map.md` | D-229 이후의 현재 폴더를 읽는 지도 |
 | `2026-09-25-d231-layered-move.md` | D-231 실행 기록. 층 이동은 로컬 main `a3eca209`에 있다. OMX 제품 설정은 D-232 |
-| D-73 | `tools/harness/harness.yaml` `functional` + `test/test_module_functional_surface.py` |
-
-| 2026-09-28-source-folder-roles-and-runtime-audit.md | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
-| 2026-09-28-control-and-contract-boundary-audit.md | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
-| 2026-09-29-rosy-pilot-teleop-app-design.md | D-323 원격 조종 PWA Rosy Pilot(src/hmi/pilot) 설계 — same-origin CORE 서빙, 기기별 드라이버 확장점, NFS 계열 HUD·클릭 조종·카메라 증거 재사용 |
-| 2026-09-29-rosy-pilot-teleop-app.md | D-323 실행 계획 T1~T11 — 패키지 골격·harness 등록부터 stick/link 순수 시험, 게이트 화면, 카메라 증거 web_common 승격, PWA·Playwright 종단, 게이트 기록까지 |
-| 2026-09-29-uiux-craft-improvement-plan.md | D-280 후속 전 표면 크래프트 개선 계획 — Impeccable 렌즈(critique→특화 패스→polish, 유한 검증), G3 사람 평가 프로토콄, G2 보존형 증거, ADR 후보 A-1(표정 어휘)·A-2(온기 문구) |
+| `2026-09-28-source-folder-roles-and-runtime-audit.md` | D-315 source-role interpretation, reader-map synchronization, and separately gated runtime/sensing ownership audit |
+| `2026-09-28-control-and-contract-boundary-audit.md` | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
+| `2026-09-29-rosy-pilot-teleop-app-design.md` | D-323 원격 조종 PWA Rosy Pilot(src/hmi/pilot) 설계 — same-origin CORE 서빙, 기기별 드라이버 확장점, NFS 계열 HUD·클릭 조종·카메라 증거 재사용 |
+| `2026-09-29-rosy-pilot-teleop-app.md` | D-323 실행 계획 T1~T11 — 패키지 골격·harness 등록부터 stick/link 순수 시험, 게이트 화면, 카메라 증거 web_common 승격, PWA·Playwright 종단, 게이트 기록까지 |
+| `2026-09-29-uiux-craft-improvement-plan.md` | D-280 후속 전 표면 크래프트 개선 계획 — Impeccable 렌즈(critique→특화 패스→polish, 유한 검증), G3 사람 평가 프로토콄, G2 보존형 증거, ADR 후보 A-1(표정 어휘)·A-2(온기 문구) |
 | `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
 | `2026-09-29-er2-agent-loop-gap-map.md` | ER2형 자율 루프 개념(목표→상위 판단 에이전트→Skill/VLA→Controller→결과→재판단)과 현행 소스 대조 — 아래 절반 실재, 위 절반 계약만 존재(AIV-001), 재판단 마디는 `POLICY_DISPATCH_ENABLED=False` 밸브. 결정은 D-326 |
 | `2026-09-29-er2-adr-consistency-review.md` | D-326/D-327/D-328과 실행 계획의 모델 권한·사람 확인·Fleet 예약·정지·장애 복구 경계 검토 |
@@ -98,6 +96,8 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-29-d268-policy-evidence-disposition.md` | D-268 처분 — Proposed 유지(승격 전제 5개 대조표: 증거 계약/권한/정답 시험/30분 스트림/입회 수용 전부 미충족), D-268 발의 자격 증거와 D-328 목표 성공 증거의 면 구분, 승격 준비 사다리 5단계 |
 | `2026-09-29-policy-evidence-contract-design.md` | 승격 사다리 1단계 설계 — `PolicyEvidencePayload` 필드·source-token 제출·거절 사유 enum·발의 binding, 제출 기반 공유 확정(어휘 공유·소비 분리), 밸브·fail-closed 불변식 |
 | `2026-09-29-policy-evidence-contract.md` | 실행 계획 T1~T7 — schema→설정 로더→저장·제출 검증→발의 binding→경로·인증→API Ref v1.48→harness. 밸브 False·빈 등록부·미설정 age 거절 불변 단언 포함 |
+| `2026-09-30-goal-evidence-producer-and-verifier-design.md` | D-348 근거 설계 — 목표 증거 생산자 등록·source-token 제출면(정책 증거와 분리)·마지막 Action 종단 뒤 자동 `verify_goal()` 전이·유예 창 HOLD·fail-closed 불변식. 실물 생산자는 P4 ROS-SIM에서 별도 지정 |
+| `2026-09-30-goal-evidence-producer-and-verifier.md` | D-348 실행 계획 T1~T7 — 등록부→제출 보관→자동 검증 트리거→REST→검증자 연결→API Ref v1.59→harness. TDD, 가짜 생산자·가짜 시계, 불변 단언 6종(verifier 미설정 거절·빈 등록부 거절·증거 없는 종단 성공 금지·호출자 max_age 무시·밸브 False·정책 증거 무변경) |
 ## Subdirectories
 
 None.

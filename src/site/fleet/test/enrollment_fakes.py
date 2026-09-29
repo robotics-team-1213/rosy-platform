@@ -1,4 +1,4 @@
-"""A fake robot CORE behind httpx.MockTransport for D-352 enrollment tests.
+"""A fake robot CORE behind httpx.MockTransport for D-361 enrollment tests.
 
 Code and token values are assembled at runtime so no literal secret is tracked.
 """

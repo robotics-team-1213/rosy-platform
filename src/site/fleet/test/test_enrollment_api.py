@@ -1,4 +1,4 @@
-"""D-352 S2: enrollment routes — named operators write, viewers read, no secrets leak."""
+"""D-361 S2: enrollment routes — named operators write, viewers read, no secrets leak."""
 
 from __future__ import annotations
 

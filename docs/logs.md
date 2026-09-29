@@ -3594,3 +3594,75 @@
 - gate 변화: 없음.
 - 결정: Pinky Pro `docking.supported`는 D5 통과 전까지 false 유지.
 - 교훈: 병행 세션의 D-348 소모를 계약시험 중간에 발견 — D-346의 ADR 중복 검사가 있으므로 즉시 D-349로 재부여. 다음 빈 번호 확인 습관화.
+
+
+## 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
+
+- Change: record the accepted producer registry/verifier boundary, two-order evidence lifecycle, and completed SOURCE/LOCAL task outcomes in the ADR and paired design/execute plans.
+- Evidence: D-348 registry row and API Reference v1.59 ?10.14 agree with Fleet implementation; source suite is 724 passed, 5 skipped.
+- Gate: ROS-SIM, ARTIFACT, DEVICE, FIELD remain HOLD/PARKED; no real producer, model tool dispatch, actuator operation, or physical acceptance is claimed.
+- Decision: D-348 remains Accepted as a contract and SOURCE/LOCAL implementation decision.
+
+## 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
+
+- 변경: docs/plans/AGENTS.md의 mojibake 3행(2026-09-20 카메라 배치·도크 조립·Pi 벤치 설계)을 원문 문서에서 복구하고, 잘못 끼워든 D-73 행과 표를 가르던 빈 줄을 제거해 2026-09-28 이후 행이 본표에 합류하도록 했다. docs/progress.md plans의 중복 2쌍을 제거하고 LOCAL blocker를 현재 사실로 갱신 — dashboard malformed heading은 해소, 남은 실패는 병행 세션의 isaac_sim 스코어카드·fleet 크기 재판정이다.
+- 증거: harness validate_log 전 모듈 0 errors, test_every_module_log_is_valid 통과; LOCAL gate cmd 115 passed/2 failed(양쪽 모두 병행 세션 진행 항목, 이번 변경과 무관) (2026-09-30 Windows). D-348 adr_gaps 정리는 병행 세션이 완료했다.
+- gate 변화: docs LOCAL HOLD 유지, blocker 사유 교체(해소된 헤딩 → 병행 isaac_sim/fleet 2건).
+- 결정: 없음.
+- 교훈: git diff/show 출력은 콘솔 인코딩(cp949)에서 한글이 깨져 보여도 파일 내용이 깨진 것은 아니다 — 바이트 수준(`?`/U+FFFD 개수)으로 판별한 뒤 손대자.
+## 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+
+- 변경: ADR D-350 상세문서 + 표행. Phase 1(선만·계측 없음)·Phase 2(ESP32 2소스)·Phase 3(온도·카메라) 정의와 각 단계에서 소프트웨어가 하는 일 표. 선구현: ChargingConfirmation degrade, CHARGED_HOLD phase, 만춫 히스테리시스, docking.full 이벤트, deploy 오버레이. Phase 1에서 D-27 억제 안 함이 핵심 안전 결정.
+- 증거: test_docking_phases 6 passed, 도킹 전체 226 passed, API Ref §8 갱신.
+- gate 변화: 없음.
+- 결정: 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계 기능 제공.
+- 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
+
+- 변경: ADR D-351 상세문서 + 표행 — 도달 실패(재시도)/전류 없음(즉시 폴트)/충전 단절(DOCKED 유지)의 세 갈래. display/info charging 필드 추가.
+- 증거: 도킹 115 passed, 표시 12 passed, 계약 통과.
+- gate 변화: 없음.
+- 결정: 접점 산화가 로봇을 죽이는 경로 제거 — contact_no_current 폴트로 운영자 알림.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
+
+- 변경: 병행 세션이 남긴 5건의 미등록 실패를 해소했다. (1) 버전 핀 v1.59(app.py 2곳·line-follow 핀 — D-347의 3곳 한 변경 단위 준수), (2) D-178 기준선에 isaac_sim 잠정 행(4·5·4·4·5=88 A) 추가와 회차 문서 동일 행, (3) SIZE_VERDICTS fleet 11164→11912 재판정(split 유지), (4) io closure 계약에 D-84 지연 패키지 예외 명시, (5) 문서 모듈 LOCAL blocker를 해소 사실로 갱신하고 GO로 승격.
+- 증거: quick tier + docs 게이트 cmd 123 passed, 변이 증명 1건(io closure), harness lint 0 에러 (2026-09-30 Windows).
+- gate 변화: docs LOCAL HOLD→GO (blocker였던 isaac_sim 스코어카드·fleet 크기 재판정을 같은 회차에 해소).
+- 결정: isaac_sim 잠정 채점은 다음 회차 재채점 대상이다(omx·pinky_pro·overhead와 같은 절차).
+- 교훈: isaac_sim AGENTS.md·progress.md의 "no own tests" 문구는 실제(test/ 3건)와 어긋난다 — 다음 isaac_sim 회차에서 바로잡을 것.
+## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
+
+- Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.
+- Boundaries: Mission journal stays authoritative; provider replay stays ephemeral with `store=false`; replan remains a candidate; stop, device action, goal evidence, and physical readback remain separate. `POLICY_DISPATCH_ENABLED` stays false.
+- Evidence: `python tools/harness/rosy_harness.py lint` passed with 0 errors and 20 existing freshness warnings; documentation contract suite passed (80 passed). Index generation completed.
+- Gate: no implementation, provider call, ROS/OMX activation, device install, or physical acceptance.
+
+## 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
+
+- Change: added D-358 as an append-only implementation-contract refinement to D-357 and updated the plan with an ownership map, trusted turn scope, provider-egress approval, successor-Mission replans, explicit outcome/tool policy, and atomic stop-generation fencing.
+- Boundaries: ambiguous provider POSTs remain `UNKNOWN` and are never automatically replayed; the outbox guarantees at most one client submission attempt, not exactly-once provider execution. Device ROS/driver, goal-verifier, and physical stop ownership remain separate; dispatch stays disabled.
+- Evidence: current pre-existing Mission/progress/ER2/API suite 54 passed; documentation contract suite 80 passed; harness lint 0 errors and 21 freshness warnings.
+- Gate: D-357 implementation tests do not exist yet and are now mandatory in the plan; no ROS-SIM, provider call, device install, or physical acceptance.
+\n## 2026-09-30 · uncommitted · docs(adr): D-352 외부 장비 공통 패턴
+
+- 변경: ADR D-352 상세문서 + 표행. 도크와 신호등의 공통점 6개(ESP32·폴링·필수 필드 누락=오류·페일세이프·NVS·소스 스캔 시험)와 차이 4개(폴링 주체·명령면·페일세이프 방향·안전 역할)를 정리하고, 공통 어휘(폴링 실패 4상태·준비 프레임 wire/instrumented/verified)와 계약 상호 참조를 확정. DOCKING 진입 시 traffic_policy ADVISORY 강등을 명시적 계약으로 승격.
+- 증거: 도크·신호등 계약서 대조, 기존 시험 통과 상태.
+- gate 변화: 없음.
+- 결정: 공통 추상 클래스는 3번째 소비자가 생길 때까지 만들지 않는다 — 패턴 문서로 족하다.
+- 교훈: 두 장비가 우연히 6개 속성이 일치했다는 것은 패턴이 옳다는 증거다 — 의도적 공유로 전환한다.\n
+\n## 2026-09-30 · uncommitted · feat(arch): D-354 mDNS 서비스 발견
+
+- 변경: 도크·신호등 펌웨어에 ESPmDNS 등록 (각 3줄: include + MDNS.begin + addService). 클라이언트 발견 유틸리티 core_common/discover.py (zeroconf → avahi-browse → dns-sd 3단 폴백). 계약 문서에 서비스명 표 추가. 시험 5건 (펌웨어 광고·폴백·서비스명 정합). 기존 IP 설정은 호환 (레거시 벤치).
+- 증거: test_mdns_discovery 5 + test_dock_contract 7 + test_signal_contract 14 = 26 passed.
+- gate 변화: 없음.
+- 결정: 장비를 사이트에 두면 전원만 연결하면 된다 — IP·설정·파일 수정 불필요. DHCP가 바뀌어도 .local 이름은 불변.
+- 교훈: mDNS는 ESP32에 네이티브로 있어서 3줄이면 된다 — 이걸 안 쓸 이유가 없었다.\n
+## 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
+
+- 변경: docs/plans/2026-09-30-dock-device-implementation-plan.md 신설 — D-349~D-354의 6개 ADR 결정을 자재(A)→도크 벤치(B)→로봇 실기(C)→활성화(D)→신호등 벤치(E)→통합(F)의 6단계 실행 순서로 정리. 자재 목록 13품목, 게이트 D0–D5·E1–E5·F1–F3, 의존 그래프, 완료 조건 포함. ADR D-355 표행으로 실행 순서 확정 기록.
+- 증거: 기존 ADR 6건·게이트 문서·런북에서 전수 추출. 새 코드 없음.
+- gate 변화: 없음.
+- 결정: Phase B와 C는 병행 가능 (도크 벤치와 로봇 실기가 독립). Phase D는 B6 통과 후에만.
+- 교훈: 6개 ADR이 각기 옳았지만 실행 순서가 없으면 다음 사람이 무엇부터 할지 모른다 — 플랜이 그 갭을 메운다.

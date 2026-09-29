@@ -270,7 +270,7 @@ def test_a_websockets_without_invalid_status_degrades_to_a_quiet_end(monkeypatch
 
 
 def test_operational_client_ignores_proxy_environment(monkeypatch):
-    """D-352 9: an environment proxy must never receive a robot Bearer token."""
+    """D-361 9: an environment proxy must never receive a robot Bearer token."""
     monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:3128")
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:3128")
     monkeypatch.setenv("ALL_PROXY", "http://proxy.invalid:3128")
@@ -283,7 +283,7 @@ def test_operational_client_ignores_proxy_environment(monkeypatch):
 
 
 def test_robot_sockets_ignore_proxy_environment(monkeypatch):
-    """D-352 9: the token-bearing WS URLs must not go through an environment proxy."""
+    """D-361 9: the token-bearing WS URLs must not go through an environment proxy."""
     import websockets
 
     seen = []

@@ -1,6 +1,6 @@
-# 사이트 콘솔 로봇 화면 코드 등록 계획 (D-352)
+# 사이트 콘솔 로봇 화면 코드 등록 계획 (D-361)
 
-**ADR:** [D-352](../adr/D-352-site-console-enrolls-robot-by-screen-code.md) (Proposed, 2026-09-29 개정)
+**ADR:** [D-361](../adr/D-361-site-console-enrolls-robot-by-screen-code.md) (Proposed, 2026-09-29 개정)
 **작성:** 2026-09-29. 기준 커밋 `main` 86ba6e4c.
 **목표:** 운용자가 로봇 전원을 넣고, 콘솔에서 **등록**을 누르고, 로봇 화면의 8자를 치면 그 로봇이 사이트 로스터에 들어온다. SSH·`robots.yaml` 편집·재시작이 없다(범위: LCD가 있고 `login.boot_code`가 기본인 로봇, ADR 12항). 순서는 **현 로봇 이미지로 쓸 수 있는 첫 조각(S1–S3) → CORE 이미지 변경(S4) → 이벤트 연결(S6, 조건부)** 이다. 갱신·회전 단계는 없다(사용자 결정 2026-09-29, ADR Alternatives).
 
@@ -107,7 +107,7 @@
 - `src/site/fleet/fleet/server/web/index.html`, `console.js`, `styles.css`: 발견 목록을 "기기 연결" 패널의 **로봇 등록** 구역으로 옮긴다(D-341이 먼저 착지했으면 그 패널에 구역을 더하고, 아니면 패널 틀을 만들고 **카메라 연결 요청** 구역 자리를 남긴다). 발견 행 + **등록** + "주소로 추가"(사설 IPv4[:포트]). 코드 대화상자: 정규화·형식 검사, 분류별 문구(ADR 10항, `code_consumed` 공통 문구, `wrong_robot`의 Avahi `-2.local` 안내), 429 동안 버튼 끔. `address_changed`/`conflict` 로봇의 주행 경보 배너. 로스터 행에 출처 **파일/등록**, 만료, 상태(`needs_new_code` "새 코드 필요", `address_changed` "주소 바뀜 — 확인 필요" + "새 주소로 옮기기", `pending_logout` 안내). 관리자 코드로 만료가 짧아졌으면 그 문구(ADR 2항). `discoveryLabels`에 `enrolled: "등록됨"`, `pairing_pending: "이벤트 연결 대기"`. 도움말에 ADR 12항(범위·재부팅 비용).
 - `src/site/fleet/fleet/server/web/authorization.js`: 등록·해제·옮기기 버튼은 이름 있는 operator만.
 - `deploy/site/README.md`: 콘솔 등록 절차, `robot_credential_key` 만들기·**DB 백업과 다른 곳에 키 백업**·키 분실 = 전부 재등록·`rekey` 절차, DHCP 예약 권장, 평문 LAN 조건(ADR 9항), 도난 시 로봇 쪽 회수, 범위 제한(LCD·`boot_code`). 옛 절차는 정적 로봇용으로 남긴다.
-- `docs/reference/site-lan-discovery-profile.md`: "발견에서 연결까지"에 ROSY 로봇 등록은 D-352라는 한 줄.
+- `docs/reference/site-lan-discovery-profile.md`: "발견에서 연결까지"에 ROSY 로봇 등록은 D-361라는 한 줄.
 - `.claude/skills/rosy-device-access/SKILL.md`: 사이트에 붙일 때는 SSH 대신 콘솔 등록이 기본이라는 한 줄.
 
 **시험 (먼저 실패)**
@@ -128,7 +128,7 @@
 - `src/runtime/api_web/core_api_web/api/v1/auth.py`: 새 `GET /api/v1/auth/site-tokens`(operator 이상, `pair-site` 행만, 원문·digest 없음, `no-store`)와 `DELETE /api/v1/auth/site-tokens/{id}`(operator 이상, `pair-site`만 지움, 그 밖 id는 404, 이벤트 `auth.site_token_revoked`). 토큰 목록 쓰기는 기존 `TOKEN_WRITE_LOCK` 안.
 - `deploy/robot/pinky_pro/native/rosy-config-apply.py`: 카드 `login.site_token_days` → `auth.pairing.site_token_days`.
 - 로봇 대시보드: `src/hmi/dashboard/panels/system/security.js`(토큰 목록)와 `src/hmi/dashboard/settings.js`에서 출처 `pair-site`를 "사이트"로 표시. operator 세션에는 관리자 토큰 목록 대신 `auth/site-tokens` 기반 "사이트 연결" 목록과 회수 버튼(확인 대화상자)을 보인다.
-- `docs/adr/D-193-login-code-and-credential-lifecycle.md`와 ADR Log D-193 행: "D-352가 개정(`pair-site` 수명, operator 회수)" 표시(이 계획 커밋에서 이미 넣었다 — S4는 착지 때 확인만).
+- `docs/adr/D-193-login-code-and-credential-lifecycle.md`와 ADR Log D-193 행: "D-361가 개정(`pair-site` 수명, operator 회수)" 표시(이 계획 커밋에서 이미 넣었다 — S4는 착지 때 확인만).
 - `docs/reference/ROSY API & Protocol Reference.md`: MINOR, 변경 이력, §5 auth·system/info. `src/runtime/api_web/core_api_web/api/app.py` description 판. D-351 스냅샷이 있으면 재생성.
 
 **시험 (먼저 실패)**
@@ -183,6 +183,6 @@
 
 ## 완료 판정
 
-- S1–S3 녹색 + D1 기록 = D-352를 Accepted로 올릴 **후보**(현 이미지 범위, 7일 한계 명시). ADR 개정 회차에서 사용자가 판단한다.
+- S1–S3 녹색 + D1 기록 = D-361를 Accepted로 올릴 **후보**(현 이미지 범위, 7일 한계 명시). ADR 개정 회차에서 사용자가 판단한다.
 - S4 + D2가 있어야 "90일 동안 손대지 않는 등록"을 주장한다.
 - S6 + D3 전에는 이벤트 이력을 등록 경로로 주장하지 않는다.

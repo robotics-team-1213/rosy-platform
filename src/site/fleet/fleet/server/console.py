@@ -105,7 +105,7 @@ class FleetConsole:
         #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
         #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
         self._seen: dict[str, dict] = {}
-        #: Robots whose pinned address is unverified (D-352 3): stop-only, kept as a
+        #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
         #: 열려 있는 대형 세션. 한 사이트에 하나다 - 같은 로봇이 두 대형에 들어가면
@@ -159,7 +159,7 @@ class FleetConsole:
         return self._hub
 
     def _add_robot(self, endpoint: RobotEndpoint, client: RobotClient) -> None:
-        """SiteRoster only (D-352 5). Synchronous, so no gather sees half a robot."""
+        """SiteRoster only (D-361 5). Synchronous, so no gather sees half a robot."""
         robot_id = endpoint.robot_id
         if robot_id in self._clients:
             raise HubError("ROBOT_ID_CONFLICT", f"{robot_id} is already on the roster")
@@ -620,7 +620,7 @@ class FleetConsole:
         # 남는다(달리는 로봇은 이 순서와 무관하게 이긴다. 여기서 고르는 것은 대기자
         # 사이의 순서다).
         for robot_id in self._release_order(release_candidates):
-            # A roster removal may land between the awaits below (D-352 5).
+            # A roster removal may land between the awaits below (D-361 5).
             mission = self._queued.pop(robot_id, None)
             if mission is None or robot_id not in self._clients:
                 continue
@@ -725,7 +725,7 @@ class FleetConsole:
         self._yielding.pop(robot_id, None)
         return result
 
-    # --- pinned-address holds (D-352 3) ------------------------------------------
+    # --- pinned-address holds (D-361 3) ------------------------------------------
 
     def hold_robot(self, robot_id: str, reason: str) -> None:
         """The pinned address is unverified: the client sends stop requests only.
@@ -756,7 +756,7 @@ class FleetConsole:
 
     async def stop_held_formation(self) -> None:
         """A held formation member gets a stop request at its pinned address, then the
-        formation is dissolved (D-352 3)."""
+        formation is dissolved (D-361 3)."""
         members = self._formation_members()
         if not members:
             return

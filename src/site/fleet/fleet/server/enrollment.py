@@ -1,4 +1,4 @@
-"""Site console enrolls a robot by its screen code (D-352 1-3, 6, 9, 10).
+"""Site console enrolls a robot by its screen code (D-361 1-3, 6, 9, 10).
 
 Fleet itself exchanges the code at the robot (`POST /api/v1/auth/pair`), reads
 `whoami` and `system/info` with the new token to bind the identity, seals the token
@@ -104,7 +104,7 @@ def _seconds_between(start: object, end: object) -> float | None:
 
 @dataclass
 class RobotGate:
-    """Held = the pinned address is unverified: stop requests only (D-352 3)."""
+    """Held = the pinned address is unverified: stop requests only (D-361 3)."""
 
     held: str | None = None
     #: Fleet-clock expiry; past it the token is dead and only stop requests go out.
@@ -219,7 +219,7 @@ class EnrollmentService:
         return RobotGate(expires_at=row.get("fleet_expires_at"))
 
     def _unauthorized(self, robot_id: str) -> None:
-        """401 or Fleet-clock expiry: the token is dead; stop polling it (D-352 2)."""
+        """401 or Fleet-clock expiry: the token is dead; stop polling it (D-361 2)."""
         row = self._store.get(robot_id)
         if row is not None and row["state"] == "active":
             self._store.update(robot_id, state="needs_new_code")
@@ -253,7 +253,7 @@ class EnrollmentService:
                 self._console().hold_robot(row["robot_id"], gate.held)
 
     def enrolled_names(self) -> dict[str, str]:
-        """Lowercase discovery name -> robot_id for robots on the roster (D-352 8)."""
+        """Lowercase discovery name -> robot_id for robots on the roster (D-361 8)."""
         return {self._name_of(row): row["robot_id"] for row in self._store.rows()
                 if row["state"] != "pending_logout"}
 

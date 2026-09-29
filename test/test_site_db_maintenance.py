@@ -136,7 +136,7 @@ def test_restore_rolls_back_if_atomic_install_fails(tmp_path, monkeypatch):
 
 
 def test_rekey_reseals_enrolled_robot_credentials_offline(tmp_path):
-    """D-352 4: key rotation is an offline command over the stopped Fleet database."""
+    """D-361 4: key rotation is an offline command over the stopped Fleet database."""
     import base64
 
     from fleet.server.enrollment_store import EnrollmentStore, seal, unseal

@@ -1515,6 +1515,13 @@
 - 결정: 측정 도구는 상태를 바꾸고 끝내지 않는다 — A/B 후 단위 복원이 도구 계약이다.
 - 교훈: 없음.
 
+## 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시
+
+- 변경: test_io_image_closure.py의 의존성 closure 계산이 board.yaml hardware_packages(D-84 — Device hardware 프로필이 열리기 전까지 CORE/io 이미지 금지)에 있는 패키지와 그 하위 의존을 요구 집합에서 제외한다. control이 legacy launch로 imu_bno055를 exec_depend로 선언하면서(정직한 선언) closure 계약과 D-62 슬라이스 계약이 충돌했고, D-84가 이미 우선순위를 정하고 있으므로 예외를 계약에 명시했다.
+- 증거: 변이 증명 — 금지 목록 밖 가짜 의존(core_events)은 적발(붉음), 목록 내(emotion·imu_bno055)은 의도대로 제외, 복구 후 초록 (2026-09-30 Windows). test_nav2_hardware_slice는 변화 없음 통과.
+- gate 변화: 없음.
+- 결정: 장기 수정은 KNOWN_DIRECTION 기록대로 — control의 legacy launch가 IMU 드라이버를 시작하는 것을 bringup 조립으로 옮기는 코드 이동이다.
+
 ## 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
 
 - 변경: `site/compose.yaml`에 secret `robot_credential_key`와 `--robot-credential-key-file`, `site/robot-credential-key.template.txt`(형식만), `site/site_db.py rekey`(`--assume-stopped` 필수), `site/requirements-fleet.txt`에 `cryptography==49.0.0`, `site/README.md` 콘솔 등록 절차.

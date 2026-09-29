@@ -1,4 +1,4 @@
-"""D-352: the one Fleet <-> CORE enrollment contract test.
+"""D-361: the one Fleet <-> CORE enrollment contract test.
 
 It runs the **current source** CORE app (not a deployed image) and drives the Fleet
 enrollment service over an ASGI transport: pair -> whoami -> system/info -> logout.

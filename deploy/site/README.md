@@ -105,7 +105,7 @@ contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 
-## Enroll a robot from the console (D-352)
+## Enroll a robot from the console (D-361)
 
 This is the default way to put a robot on the site roster. The operator powers
 the robot on, presses **등록** on its row in **기기 연결 → 로봇 등록** (or uses

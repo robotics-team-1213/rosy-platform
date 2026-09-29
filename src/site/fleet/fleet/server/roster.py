@@ -1,4 +1,4 @@
-"""The one owner of the site robot list: robots.yaml plus enrolled robots (D-352 5).
+"""The one owner of the site robot list: robots.yaml plus enrolled robots (D-361 5).
 
 Adding or removing a robot changes, in one synchronous step, every copy the site
 keeps: console clients/order/endpoints/REST tokens, hub clients and pairing tokens,
@@ -86,7 +86,7 @@ class SiteRoster:
             await closer()
 
     async def replace_endpoint(self, endpoint: RobotEndpoint, client: RobotClient) -> None:
-        """Same robot, confirmed new pinned address (D-352 3 "move address")."""
+        """Same robot, confirmed new pinned address (D-361 3 "move address")."""
         if endpoint.robot_id in self.static_ids or endpoint.robot_id not in self._console.robot_ids:
             raise HubError("UNKNOWN_ROBOT", endpoint.robot_id)
         old = self._console._replace_client(endpoint, client)

@@ -69,7 +69,7 @@ class DiscoveryStore:
 
     def snapshot(self, registered: dict[str, str], paired: dict[str, dict],
                  enrolled: dict[str, str] | None = None) -> dict:
-        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-352 8)."""
+        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8)."""
         if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
             return {"devices": [], "scanner_online": False}
         enrolled = enrolled or {}

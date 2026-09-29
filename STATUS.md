@@ -32,7 +32,8 @@
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [dock](firmware/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](firmware/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
-| [docs](docs/progress.md) | 거버넌스 | uncommitted (2026-09-28) | GO | HOLD | N/A | N/A | N/A | N/A |
+| [docs](docs/progress.md) | 거버넌스 | uncommitted (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [isaac_sim](src/sim/isaac_sim/progress.md) | sim | uncommitted (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 
 ## HOLD blockers
 
@@ -76,4 +77,3 @@
 - dock DEVICE: 물리 도크 벤치 설치와 device-readback류 증거 없음. `dock/firmware/rosy_dock/rosy_dock.ino` 참조 구현만 존재하고 실기 조립·통전 시험 기록이 없다
 - signal ARTIFACT: ESP32 Arduino 펌웨어 빌드·플래시 증거 없음. 이 호스트에는 ESP32 toolchain이 없어 실행하지 않았다
 - signal DEVICE: 물리 벤치(G-S1) 미실행 — 수용 기준·절차는 docs/plans/2026-09-22-signals-acceptance-plan.md 로 고정했다. 최초 관문은 B0 신호등 입고 특성화(전압/배선/색당 전류), 이후 B2 부팅 글리치 10회(AC-02), B3 침묵→점멸 12 s(AC-11), B4 공유기 재시작 자기 복귀(AC-12, W1 위험)
-- docs LOCAL: Global harness checks still report 2 malformed headings in pre-existing src/hmi/dashboard/logs.md; D-316 ADR index and source contract pass

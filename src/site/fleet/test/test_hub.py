@@ -309,7 +309,7 @@ def test_scatter_estop_unknown_robot_errors():
 
 
 def test_pairing_tokens_added_and_dropped_at_runtime_gate_hello():
-    """D-352 5: the roster adds and drops FleetAgent credentials after start."""
+    """D-361 5: the roster adds and drops FleetAgent credentials after start."""
     hub = SiteHub([])
     assert hub.handle(_hello("rosy_09", "pair-09")).type is EnvelopeType.ERROR
     hub.set_pairing_token("rosy_09", "pair-09")
