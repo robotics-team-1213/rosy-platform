@@ -148,7 +148,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     ctx.strokeRect(field.x + 1, field.y + 1, field.width - 2, field.height - 2);
     ctx.restore();
     if (size) drawMetric(ctx, field, size);
-    const source = frame.rectified ? "Vision 보정 프레임" : `${active.kind}으로 편 원본`;
+    const source = frame.rectified ? "Vision 보정 프레임" : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
     caption.textContent = `위에서 본 경기장 · ${source} · 경기장 밖은 가림`
       + (size ? ` · 표시 축척 ${size.width}×${size.height} m(이 브라우저만)` : " · 축척 미입력")
       + " · 표시 전용, 관측·주행에 쓰지 않음";
