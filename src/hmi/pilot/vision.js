@@ -1,6 +1,6 @@
 // 전방 카메라 미리보기 폴링(D-323 T7). dashboard vision.js 팩토리 패턴:
 // 자격·전송은 주입받고, 주기·시퀀스·중단 상태는 이 모듈이 가진다.
-// 프레임은 인증 JPEG 폴링(/api/v1/vision/front/*) — 새 전송 경로를 만들지 않는다.
+// 409(시퀀스 진행)는 오류가 아니라 다음 틱에서 재시도한다 — 프레임을 숨기지 않는다.
 
 export function createVisionPreview({
   apiGet,               // (path) => Promise<{status, body}> — JSON
@@ -16,14 +16,11 @@ export function createVisionPreview({
   let seq = null;
   let objectUrl = null;
   let generation = 0;
+  let hasFrame = false;
 
   function release() {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = null;
-  }
-
-  function unavailable(message) {
-    onUnavailable?.(message);
   }
 
   async function tick() {
@@ -36,26 +33,31 @@ export function createVisionPreview({
       if (status.status !== 200 || status.body?.available !== true) {
         seq = null;
         release();
-        unavailable(status.body?.stale === true ? "프레임 지연(STALE)" : "카메라 프레임 수신 대기");
+        hasFrame = false;
+        onUnavailable(status.body?.stale === true ? "프레임 지연(STALE)" : "카메라 프레임 수신 대기");
         return;
       }
-      if (status.body.seq === seq) {
+      if (status.body.sequence === seq) {
         return;   // 같은 프레임 — 마지막 영상을 유지하고 건너뛴다(숨기지 않는다).
       }
-      const frame = await fetchFrame(`/api/v1/vision/front/frame?seq=${status.body.seq}`);
+      const frame = await fetchFrame(`/api/v1/vision/front/frame?sequence=${status.body.sequence}`);
       if (gen !== generation) return;
-      seq = status.body.seq;
+      seq = status.body.sequence;
       release();
       objectUrl = URL.createObjectURL(frame);
+      hasFrame = true;
       onFrame?.(objectUrl, {
         width: status.body.width, height: status.body.height,
         age_ms: status.body.age_ms,
         at: now(),
-        seq: status.body.seq,
+        seq: status.body.sequence,
         blob: frame,
       });
     } catch (error) {
-      if (gen === generation) unavailable("카메라 프레임 수신 대기");
+      // 409(시퀀스 진행)·네트워크 일시 오류는 프레임을 숨기지 않고 다음 틱에서 재시도.
+      if (gen === generation && !hasFrame) {
+        onUnavailable("카메라 프레임 수신 대기");
+      }
     } finally {
       pending = false;
     }
@@ -75,7 +77,8 @@ export function createVisionPreview({
       timer = null;
       generation += 1;
       release();
-      unavailable("카메라 중지");
+      hasFrame = false;
+      onUnavailable("카메라 중지");
     },
   };
 }

@@ -1,6 +1,7 @@
 /* Rosy Pilot 표면 규칙 — dashboard 표면 CSS 의 규율을 그대로 따른다(concept 16,
  * D-72, D-82): tokens.css 외 색 없음, 간격은 스텝 척도, 굵기는 폰트 다계단.
  * 패널은 상자가 아니라 기둥 섹션이다 — 테두리 대신 세로 리듬으로 구성한다.
+ * 주행 화면은 게임식 오버레이다 — 카메라가 화면을 채우고 조종 장치가 위에 뜬다.
  */
 
 :root { color-scheme: dark; }
@@ -22,6 +23,11 @@ body {
   font-size: var(--text-body);
 }
 
+input, select { font: inherit; }
+ui-button, a { -webkit-tap-highlight-color: transparent; }
+
+/* ---- 게이트 표면 ---- */
+
 .pilot-main {
   display: grid;
   gap: var(--space-4);
@@ -31,7 +37,6 @@ body {
   padding: var(--space-5);
 }
 
-/* 패널 — 한 일을 하는 한 기둥. 상자가 아니다. */
 .pilot-panel {
   display: grid;
   gap: var(--space-4);
@@ -58,79 +63,114 @@ form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
   white-space: nowrap;
 }
 
-/* 주행 화면 — 영상이 화면을 채우고 컨트롤이 그 아래 붙는다(가로 기준).
-   :has 미지원 브라우저 대비 body 플래그(app.js 가 data-pilot-screen 설정). */
-.pilot-main:has(.pilot-drive:not([hidden])),
+/* ---- 주행 화면: 게임식 풀스크린 오버레이 ---- */
+/* 카메라가 화면 전체를 채우고, HUD·휠·페달이 오버레이로 뜬다. */
+
 body[data-pilot-screen="drive"] .pilot-main {
   max-width: none;
   padding: 0;
   gap: 0;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .pilot-drive {
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: var(--space-2);
+  position: relative;
+  width: 100%;
+  height: 100dvh;
   min-width: 0;
-  min-height: calc(100dvh - 4rem);
+  overflow: hidden;
 }
 
+/* 카메라 스테이지 — 화면 전체 */
 [data-drive-stage] {
-  position: relative;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   background: var(--ground-deep);
   overflow: hidden;
 }
 
-[data-drive-frame] { display: block; width: 100%; height: 100%; object-fit: cover; }
+[data-drive-frame] {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 [data-drive-stage] ui-empty {
   position: absolute;
-  inset: var(--space-3);
+  inset: 0;
   display: grid;
   place-items: center;
   pointer-events: none;
+  background: var(--ground-deep);
 }
 
-/* HUD — 지도 위 칩 규칙: 장막 바탕 + 표면선 테두리. */
+/* HUD — 좌상단 반투명 칩 (지도 위 칩 규칙: 장막 바탕 + 표면선 테두리) */
 [data-drive-hud] {
   position: absolute;
   top: var(--space-3);
   left: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: var(--ground-raise);
+  background: color-mix(in srgb, var(--ground-raise) 85%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
-  min-width: 14rem;
+  min-width: 11rem;
+  z-index: 10;
 }
 
+/* 조종 구역 — 하단 오버레이 */
 [data-drive-controls] {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   gap: var(--space-4);
-  padding: 0 var(--space-3) var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  z-index: 10;
 }
 
-/* 속도 프리셋 — 주행 화면에서 바로 조정한다(D-323 사용자 요청). */
-[data-drive-presets] { display: grid; gap: var(--space-1); justify-items: center; }
-[data-drive-presets] ui-actions { display: flex; gap: var(--space-1); }
-[data-drive-presets] [aria-pressed="true"] { outline: 2px solid var(--status-warn); outline-offset: 2px; }
+/* 속도 프리셋 — 좌하단 (게임식 난이도 선택) */
+[data-drive-presets] {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: center;
+}
 
-[data-drive-wheel-wrap] { display: grid; place-items: center; }
+[data-drive-presets] ui-actions { display: flex; gap: var(--space-1); }
+
+[data-drive-presets] [aria-pressed="true"] {
+  outline: 2px solid var(--status-warn);
+  outline-offset: 2px;
+}
+
+/* 원형 휠 — 중앙 하단 (게임식 조향) */
+[data-drive-wheel-wrap] {
+  display: grid;
+  place-items: center;
+}
 
 [data-drive-wheel] {
   position: relative;
-  width: min(38vw, 15rem);
+  width: min(24vw, 12rem);
   aspect-ratio: 1;
   border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--ground-raise);
+  border: 2px solid var(--line);
+  background: color-mix(in srgb, var(--ground-raise) 80%, transparent);
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
 }
+
+[data-drive-wheel]:active { cursor: grabbing; }
 
 [data-drive-wheel-indicator] {
   position: absolute;
@@ -140,15 +180,37 @@ body[data-pilot-screen="drive"] .pilot-main {
   transition: transform 80ms linear;
 }
 
-[data-drive-pedals] { display: grid; gap: var(--space-2); }
-[data-drive-pedals] ui-button { min-height: 5rem; }
-[data-drive-pedals] ui-button.active { outline: 2px solid var(--status-warn); outline-offset: 2px; }
-
-@media (max-width: 30rem) {
-  .pilot-main { padding: var(--space-4); }
-  [data-drive-controls] { flex-direction: column; }
+/* 페달 — 우하단 (게임식 가속/브레이크) */
+[data-drive-pedals] {
+  display: grid;
+  gap: var(--space-2);
 }
 
+[data-drive-pedals] ui-button { min-height: 5rem; min-width: 5rem; }
+
+[data-drive-pedals] ui-button.active {
+  outline: 3px solid var(--status-warn);
+  outline-offset: 2px;
+}
+
+/* 입력 조정 칩 */
+[data-inputs-panel] {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  max-width: 20rem;
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--ground-raise) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  z-index: 20;
+}
+
+/* 모바일 세로 */
 @media (max-width: 30rem) {
   .pilot-main { padding: var(--space-4); }
+  [data-drive-controls] { flex-direction: column; align-items: center; padding: var(--space-3); }
+  [data-drive-wheel] { width: min(60vw, 14rem); }
+  [data-drive-pedals] { flex-direction: row; }
+  [data-drive-pedals] ui-button { min-height: 4rem; min-width: 4rem; }
 }
