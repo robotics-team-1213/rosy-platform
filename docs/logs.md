@@ -3666,3 +3666,19 @@
 - gate 변화: 없음.
 - 결정: Phase B와 C는 병행 가능 (도크 벤치와 로봇 실기가 독립). Phase D는 B6 통과 후에만.
 - 교훈: 6개 ADR이 각기 옳았지만 실행 순서가 없으면 다음 사람이 무엇부터 할지 모른다 — 플랜이 그 갭을 메운다.
+
+## 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
+
+- 변경: (1) 2026-09-06-module-split-criteria.md에 `bridge/display.py` → `battery.charging` reach의 C6 판정을 추가 — "Seam lie — fixed by deletion"(멤버는 BatteryStatus에 선언돼 있고 raw Battery에는 없어 getattr가 항상 False; 직접 접근으로 대체돼 reach 소거, ALLOWED 무변경). (2) isaac_sim의 harness 등록을 완성(functional_kind·functional·tests)하고 AGENTS.md·progress.md의 "no own tests" 오기를 정정, ROS-SIM을 D-322 명시대로 HOLD로. src/AGENTS.md 시험 호출에 sim/isaac_sim/test 추가.
+- 증거: test_module_criteria·test_module_functional_surface·test_module_structure·isaac_sim 자기 시험 47 passed (2026-09-30 Windows). 수정 전 functional surface는 isaac_sim functional_kind 누락으로 1 failed — main CI가 core 단계에서 멈춰 아직 도달하지 못한 두 번째 잠복 실패였다.
+- gate 변화: isaac_sim ROS-SIM N/A→HOLD (blocker 신규 기록, D-322와 일치).
+- 결정: 없음.
+- 교훈: CI가 첫 실패에서 멈추면 그 뒤의 실패는 보이지 않는다 — 로컬에서 전 스위트를 먼저 돌리고 push한다.
+
+## 2026-09-30 · uncommitted · docs(harness): 11개 모듈 last_verified를 bed604ef로 기록
+
+- 변경: core·control·fleet·docs·core_common·core_events·core_features·core_api_web·isaac_sim·games·omx_adapter의 last_verified를 bed604ef(2026-09-30)로 기록. 각 모듈의 LOCAL gate cmd(또는 그 전체 스위트)를 이 트리에서 통과시켰다: gateway 1439·sensing 1665·fleet 746·events/services/web_common/api_web/foundation/dashboard/isaac_sim/games/omx_adapter 1089+9·overhead 122·omx CLI exit 0 (2026-09-30 Windows).
+- 증거: quick tier + functional surface + scorecard 127 passed; harness 계약 시험 통과. 병행 세션의 미푸시 커밋은 docs 트리만 건드려 스윕 대상 코드는 무결.
+- gate 변화: 없음 (기록 갱신만).
+- 결정: web_common(임시 디렉터리 스크립트 cmd)·dashboard(브라우저 매트릭스)·overhead(android gradle·docker)·gz_sim(ROS 의존 skip)·deploy(전체 test/ 실행 중)은 이 호스트에서 완전 검증이 불가해 스윕에서 제외 — 정직한 기록만 남긴다.
+- 교훈: web_common의 LOCAL cmd가 X:\DevTemp 스크립트를 가리킨다 — 재현 불가한 cmd는 검증 기록이 아니므로 소유자가 저장소 내 명령으로 바꿔야 한다.
