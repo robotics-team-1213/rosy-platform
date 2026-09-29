@@ -47,6 +47,10 @@ ER2 트랙(D-327 어댑터)이 밟는 중 — **후보 3순위, 지금은 건드
 
 ## 5. 절차 원칙 (D-185 Decision 2 준용)
 
+- **도구**: `deploy/robot/pinky_pro/verify/measure-resident-cpu.sh` — 단위별 CPU를 cgroup/proc 틱으로
+  샘플하고 `--ab-unit`(카메라·navigation 만 허용, 측정 뒤 되살림)로 A/B 를 잰다. 안전 경계는
+  `test/test_measure_resident_cpu.py`가 고정한다.
+
 - 모든 측정은 **실기 입회**(DEVICE gate). 바퀴가 돌 수 있는 상태의 실험은 사용자가 로봇 옆에 있을 때만.
 - A/B는 같은 도구, 교차 반복(R8 방식). 부하·환경은 rig 가드 기준(R4)을 준용해 무효 실행을 센다.
 - 낭비 입증 전에 그래프를 내리는 코드 변경은 없다(결함 없는 동적화 금지, D-347 토론 합의).

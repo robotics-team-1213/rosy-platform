@@ -3469,3 +3469,10 @@
 - gate 변화: 없음.
 - 결정: 후보 순위 ①카메라 프리뷰(세션=대시보드 요청) ②SLAM 백엔드(세션=매핑, D-321 승인 이미 존재) ③OMX(ER2 진행 중 보류). 낭비 입증 전 코드 변경 없음 — 입증된 후보 하나당 후속 ADR로 D-347의 activating 무생산 핀을 연다.
 - 교훈: 이미 절반이 서 있었다 — navigation은 부팅 승인제 조건부 상주고 line_follow는 부팅 옵트인이다. B레인은 새 발명이 아니라 이 두 형태를 "세션" 경계로 일반화하는 일다.
+## 2026-09-29 · uncommitted · docs(plan): 측정 기준선에 도구 등재
+
+- 변경: docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md §5에 측정 도구(measure-resident-cpu.sh)와 안전 경계 시험을 연결하는 한 단락을 추가했다. 입회 실기 세션이 이제 문서와 도구를 왕복 없이 바로 실행한다.
+- 증거: test/test_measure_resident_cpu.py 4 passed(스크립트가 기준선 문서를 지시하는 핀 포함).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.

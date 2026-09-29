@@ -229,8 +229,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(plan): 측정 기준선에 도구 등재
 - 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선
 - 2026-09-29 · uncommitted · docs(adr): D-347 capability lifecycle 계약 기록 + API Ref v1.58
 - 2026-09-29 · uncommitted · feat(harness): D-346 커밋 시점 방어망 착지
 - 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
-- 2026-09-29 · uncommitted · docs(plans): D-337 T4 착지 — dashboard 신호 원 행

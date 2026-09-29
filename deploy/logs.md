@@ -1507,3 +1507,10 @@
 - gate 변화: 없음.
 - 결정: 예외는 (경로, 값) 쌍으로 핀 고정. 목록이 늘어나면 각 항목이 사유와 함께 심사 대상이다.
 - 교훈: 저널에 옛 비밀 형태 문자를 인용하지 않는다 — 문구로 서술한다. append-only라 한번 실으면 못 지운다. (그리고 저널 append는 인라인 명령이 아니라 스크립트 파일로 — 이 항목 자체가 그 교훈의 산물이다.)
+## 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
+
+- 변경: deploy/robot/pinky_pro/verify/measure-resident-cpu.sh 신설 — systemd 단위별 CPU를 cgroup/proc 틱 증분으로 샘플하고(의존 설치 없음), --ab-unit 로 켜짐/꺼짐 A/B 를 잰 다음 단위를 반드시 되살린다. A/B 허용 단위는 rosy-camera·rosy-navigation 뿐(rosy-core=게이트웨이, rosy-io=안전 기본층 금지). 결과는 /var/lib/rosy/resident-cpu-<ts>.md. 기준선 문서 §5에 도구로 등재.
+- 증거: test/test_measure_resident_cpu.py 4건 신설 — bash -n 파싱, 금지 단위 3종 거부(exit 2, 무권한으로 판정 가능=allowlist 가 root 검사보다 선행), stop 뒤 start 복원·기준서 지시 핀. 산탄 증명: 허용 목록을 넓히면 거부 시험이 즉시 적신.
+- gate 변화: 없음(측정 도구·실기 세션用品).
+- 결정: 측정 도구는 상태를 바꾸고 끝내지 않는다 — A/B 후 단위 복원이 도구 계약이다.
+- 교훈: 없음.
