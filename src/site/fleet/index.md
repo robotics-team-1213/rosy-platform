@@ -37,6 +37,9 @@
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 | D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 |
+| D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
+| D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
+| D-335 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 
 ## 계획·결과 문서
 
@@ -50,6 +53,7 @@
 - [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
 - [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 - [2026-09-28-site-camera-preview-rectification.md](../../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-29-er2-mission-action-contract-closure.md](../../../docs/plans/2026-09-29-er2-mission-action-contract-closure.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](../../../docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 
@@ -63,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
 - 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
 - 2026-09-29 · uncommitted · review Mission stop-generation recovery
 - 2026-09-29 · uncommitted · add internal Mission admission and goal evidence ledger
-- 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)

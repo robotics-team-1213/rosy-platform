@@ -451,3 +451,9 @@
 - 변경: `test_mission_store.py`의 모듈 수준 `setup(tmp_path)`가 pytest 7의 nose 호환에 잡혀 **테스트 모듈 자체**를 인자로 받아 호출됐다. `tmp_path`가 path가 아니라 module이 되어 `module / "fleet.sqlite3"` TypeError로 6개 전부 setup 단계 ERROR. CI가 쓰는 pytest 7.4.4에서만 깨지고 로컬 pytest 8.4.2는 nose 지원을 제거해 통과해 환경 차이로만 보였다. 헬퍼를 `_stores`로 개명해 충돌을 없앴다.
 - 증거: 최소 repro 파일로 원인을 두 버전에서 직접 재현했다 — 7.4.4는 `tmp_path = <module 'test_repro'>` + 동일 TypeError, 8.4.2는 passed. 수정 후 pytest 7.4.4로 Fleet 전체 `588 passed, 5 skipped`, 8.4.2로도 동일. 저장소 전체에서 `^def setup(` 은 이 파일 한 곳뿐이었다.
 - gate 변화: 없음. 로직·픽스처·측정은 그대로고 이름만 바꿨다.
+
+## 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
+
+- Change: added explicit source/crop/resize/quarter-turn image mapping and inverse selector transform. Candidate selectors resolve only against one fresh matching observation and exact image digest, camera/frame, capture time, calibration and TF revisions. Output is typed pixel-level object evidence; Fleet imports the shared schema and has no OMX package dependency. Missing mapping/provenance, out-of-frame coordinates, ambiguity, label mismatch, and same-object pick/place fail closed.
+- Evidence: selector plus OMX target-evidence tests 18 passed; API contract tests 23 passed; full Fleet suite 600 passed/5 skipped (Windows). Changed-file flake8 passed after removing one unused import.
+- Gate: SOURCE/LOCAL only. No Mission production route, UDS listener, ROS arm/gripper execution, physical stop, device or field acceptance.

@@ -7,7 +7,7 @@
 
 ## 목표와 비범위
 
-D-268 Decision 2·3이 요구하는 **정책 적격 증거 계약**의 필드·제출 표면·자격 증명·검증 규칙을 정한다. 이것은 처분 기록 승격 사다리의 1단계이며, API Reference v1.48(additive)과 `core_common.protocol` 공유 schema를 한 변경 단위로 개정한다(D-18).
+D-268 Decision 2·3이 요구하는 **정책 적격 증거 계약**의 필드·제출 표면·자격 증명·검증 규칙을 정한다. 이것은 처분 기록 승격 사다리의 1단계이며, API Reference v1.49(additive)과 `core_common.protocol` 공유 schema를 한 변경 단위로 개정한다(D-18).
 
 비범위: 밸브 개방(`POLICY_DISPATCH_ENABLED`는 False 유지), 자동 실행, 모델/LLM 관여(ER 2 provider는 제안 전용 그대로), sighting 용도 변경, 목표 성공 증거(D-328 `GoalEvidence`)의 재설계, 수치 기준 발명(D-268 Decision 5 — 최대 age·오탐·표본은 수용 계획이 정한다).
 
@@ -54,7 +54,7 @@ sighting schema와 같은 규율(extra 금지·frozen·bool 거부·유한 수).
 
 `submit_navigation(source="policy")`는 `evidence`에 `{"evidence_id": ...}` 참조를 **필수**로 요구한다(operator 발의는 무변경). 서버가 저장된 증거를 읽어 binding을 검증한다: 출처 등록·폐기, `task_kind` 일치, `asset_id == robot_id`, revision 삼종이 사이트 현재값과 일치, 제출 시각 기준 age ≤ `max_age_s`(설정값 — **미설정 시 거절**, 수치는 수용 계획이 정한다), 관측 종류 등록부. 검증 통과는 **수용**일 뿐 발행이 아니다: `POLICY_DISPATCH_ENABLED = False`가 그대로면 작업은 `HOLD(POLICY_NOT_ACCEPTED)`에 머문다. 이 계약의 어떤 부분도 밸브를 열지 않는다.
 
-### 5. API Reference 개정 예고 (v1.48 additive)
+### 5. API Reference 개정 예고 (v1.49 additive)
 
 새 섹션: 정책 증거 제출·readback 경로, payload 필드, 거절 사유, policy 발의의 `evidence_id` binding. 변경 로그 초안: *Additive(D-268 사다리 1단계): 정책 적격 증거 제출·보관 계약 — source token 출처 결정, `evidence_id` 멱등, transit 300 ms, 발의 binding·거절 사유. `POLICY_DISPATCH_ENABLED` 유지, 자동 실행 불변*. PRT `protocol_version` 1.0 유지(기존 필드 변경 없음).
 
@@ -71,7 +71,7 @@ sighting schema와 같은 규율(extra 금지·frozen·bool 거부·유한 수).
 - schema: 필드 규칙·금지 필드·bool/유한수·closed set(`src/contracts/foundation/test/`).
 - 제출: 가짜 토큰·재생·transest 초과·revision 불일치·등록부 빈 거절(`src/site/fleet/test/`, 네트워크 없음).
 - admission: `evidence_id` 없는 policy 발의 거절, binding 통과 후 HOLD 유지, operator 경로 무변경.
-- 문서 정합: `test_task_contract_docs.py` 확장 — API Ref v1.48·schema·거절 사유 enum 정렬 단언.
+- 문서 정합: `test_task_contract_docs.py` 확장 — API Ref v1.49·schema·거절 사유 enum 정렬 단언.
 
 ## 열어두는 것
 

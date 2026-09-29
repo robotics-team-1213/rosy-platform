@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(protocol): define OMX Device Action and software-stop schemas (D-333/D-335)
 - 2026-09-29 · uncommitted · feat(protocol): add PolicyEvidencePayload (D-268 ladder T1)
 - 2026-09-27 · uncommitted · feat(protocol): type Host Agent status evidence
 - 2026-09-27 · uncommitted · own default configuration
 - 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
-- 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor

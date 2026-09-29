@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "c5e87977", date: 2026-09-28 }
+last_verified: { commit: "uncommitted", date: 2026-09-29 }
 gates:
   SOURCE:
     state: GO
@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 588 passed/5 skipped, including standard ER 2 adapter mock contract tests; Mission single-step ledger and stop-generation admission covered. Browser/dialog and synthetic camera evidence remains as recorded in logs. SOURCE/LOCAL only; Mission has no REST route/executor and physical/site/calibrated acceptance remains open"
+    evidence: "Fleet suite 600 passed/5 skipped (2026-09-29 Windows), including ER 2 selector-to-pixel evidence bridge, Device Action contract documentation, and Mission ledger/stop-generation admission. SOURCE/LOCAL only; Mission has no production REST route/executor and physical/site/calibrated acceptance remains open"
     cmd: "python3 -m pytest src/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -22,8 +22,9 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-335]
 plans:
+  - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
   - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md

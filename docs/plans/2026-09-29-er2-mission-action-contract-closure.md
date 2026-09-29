@@ -124,3 +124,12 @@
 ## 완료 기준
 
 운영자 요청 한 건에 대해 `request_key → proposal_id → mission_id/step_id → action_id/attempt_id → driver goal ID → 독립 goal evidence`가 같은 프레임·장치·generation으로 추적되고, 중복·늦은 결과·정지·재시작에서도 물리 작업이 자동 재발행되지 않아야 SOURCE/LOCAL을 완료로 판정한다. ROS-SIM, 설치 산출물, 실물 동작과 물리 정지는 각각의 증거가 생길 때만 승격한다. 모델 후보만 시험한 결과로 OMX capability를 활성화하지 않는다.
+
+
+## Execution record (2026-09-29)
+
+- Task 0: complete. D-335 selects same-host per-instance UDS; remote host transport remains HOLD. Commit `463ccf12`.
+- Task 1: complete. Added typed Device Action and Local Stop schemas plus API Reference v1.48 and failing-first contract tests. Commit `0e632b6f`; full foundation suite: 101 passed.
+- Task 2: complete. Added normalized selector inverse mapping including crop, resize, and quarter-turn transforms. The bridge checks source frame provenance and emits pixel-level evidence using shared contract types; Fleet has no OMX package dependency. Full Fleet suite: 600 passed, 5 skipped.
+- Version sequencing: D-268 API Reference work that had been planned as v1.48 moves to v1.49 because this contract closure now occupies v1.48.
+- Next checkpoint: Task 3, operator Mission API and proposal store. UDS listener, ROS-SIM, artifact, DEVICE, and FIELD remain separate and are not activated by SOURCE/LOCAL completion.
