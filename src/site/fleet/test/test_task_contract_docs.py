@@ -21,7 +21,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
     assert "**Version:** v1.60" in reference
-    assert "## 10.14 Fleet goal-evidence producer contract (D-348)" in reference
+    assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
     assert "GOAL_EVIDENCE_TIMEOUT" in reference

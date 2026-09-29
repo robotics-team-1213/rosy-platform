@@ -162,6 +162,8 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
 
     client, _, _ = _client(tmp_path, resolver=resolver)
     assert client.app.state.mission_dispatcher is None
+    assert client.app.state.mission_model_turn_store.path == client.app.state.mission_service.store.path
+    assert client.app.state.mission_model_turn_scheduler is not None
     created = _create(client)
     duplicate = _create(client)
     proposal_id = created.json()["proposal"]["proposal_id"]

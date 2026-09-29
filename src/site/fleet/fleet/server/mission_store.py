@@ -486,8 +486,11 @@ class MissionStore:
         return self._row(updated)
 
     def hold_mission(self, mission_id: str, *, actor_id: str, event_id: str,
-                     reason: str, evidence: Mapping[str, Any]) -> dict[str, Any]:
+                     reason: str, evidence: Mapping[str, Any],
+                     event_type: str = "GOAL_EVIDENCE_REJECTED") -> dict[str, Any]:
         reason = _nonempty("reason", reason, limit=96)
+        if event_type not in {"GOAL_EVIDENCE_REJECTED", "GOAL_PREDICATE_UNSATISFIED"}:
+            raise ValueError("invalid goal evidence hold event type")
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -503,7 +506,7 @@ class MissionStore:
             )
             self._event(
                 connection, event_source="goal_evidence", source_event_id=event_id,
-                mission=row, event_type="GOAL_EVIDENCE_REJECTED", state="HOLD",
+                mission=row, event_type=event_type, state="HOLD",
                 actor_id=actor_id, action_id=row["action_id"], attempt_id=row["attempt_id"],
                 detail={"reason": reason, "evidence": dict(evidence)},
             )
@@ -653,7 +656,8 @@ class MissionStore:
                 active_goal_events = connection.execute(
                     "SELECT * FROM fleet_mission_events WHERE mission_id=? "
                     "AND action_id=? AND attempt_id=? AND event_type IN "
-                    "('GOAL_PREDICATE_CONFIRMED', 'GOAL_EVIDENCE_REJECTED') "
+                    "('GOAL_PREDICATE_CONFIRMED', 'GOAL_EVIDENCE_REJECTED', "
+                    "'GOAL_PREDICATE_UNSATISFIED') "
                     "ORDER BY event_id DESC LIMIT 1",
                     (mission_id, row["action_id"], row["attempt_id"]),
                 ).fetchall()
@@ -742,3 +746,18 @@ class MissionStore:
             "next_after_event_id": int(next_cursor),
             "has_more": has_more,
         }
+
+    def feedback_events_after(self, *, after_event_id: int,
+                              limit: int = 100) -> list[dict[str, Any]]:
+        """Read a bounded global journal page for the feedback outbox scanner."""
+        if type(after_event_id) is not int or after_event_id < 0:
+            raise ValueError("after_event_id must be a non-negative integer")
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError("feedback event page limit must be from 1 to 500")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT event_id, mission_id, action_id, attempt_id, event_type
+                   FROM fleet_mission_events WHERE event_id>? ORDER BY event_id LIMIT ?""",
+                (after_event_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]

@@ -1417,6 +1417,9 @@ contains `state`, `source`, nullable `last_event_id`, nullable `observed_at`,
 nullable `revision`, `freshness` (`CURRENT`, `FRESH`, `STALE`, or `UNKNOWN`), and
 nullable `reason`. Action readback without a timestamp is `UNKNOWN`; an Action
 success without a matching goal event leaves `goal_evidence` as `PENDING`.
+Fresh negative evidence from the registered independent evaluator is shown as
+`UNSATISFIED` and holds the Mission with `GOAL_NOT_SATISFIED`; rejected or stale
+evidence remains `REJECTED` and cannot be interpreted as a negative result.
 `stop.state` is `DISPATCH_ENABLED` or `DISPATCH_BLOCKED` and represents only
 Fleet's dispatch-control latch. `physical_state: UNKNOWN` is returned because
 this API does not receive an independent physical
@@ -1452,10 +1455,74 @@ contract.
 Fleet can build an internal model context from the same snapshot after matching
 the authenticated principal and workcell. It contains only Mission/step/Action/
 goal/stop states and bounded reasons; it excludes object selectors, raw
-observations, evidence payloads, and credentials. This is not a public
-`get_mission_status` provider tool or a provider tool-result loop.
+observations, evidence payloads, and credentials. This context is consumed by an
+internal ER 2 feedback adapter. It is not a public `get_mission_status` route.
 
-## 10.14 Fleet goal-evidence producer contract (D-348)
+## 10.15 ER 2 Mission feedback tools and outbox (D-357/D-358)
+
+ER 2 feedback tools are provider-internal function declarations; they are not
+authenticated Fleet REST routes and do not add a public control surface. The
+allowlist contains `get_mission_status` and `propose_replan`. The former reads
+the Mission already bound to the trusted turn scope. The latter declaration is
+limited to an observation, event watermark, and rationale; its candidate write
+remains unavailable because no trusted fresh post-action observation source is
+wired to Fleet. Before any future candidate path is enabled, it must use an
+atomic stop/candidate transaction. It does not write an Action, admit a Mission, issue a motor/gripper
+command, cancel, stop, or rearm. Fleet validates each tool call and returns a
+bounded structured result. Unknown tools and malformed arguments are rejected.
+
+Every turn scope is captured by trusted Fleet code and binds principal,
+workcell, Mission, active Action/attempt, Mission dispatch generation, event
+watermark, model-policy revision, and outcome policy. The separately built
+feedback context adds current stop generation, authority epoch, per-axis
+evidence source/freshness, and snapshot/observation timestamps. A replan context is invalid if the current stop generation
+does not equal its Mission dispatch generation. Provider arguments cannot select
+or widen these identities. A fresh `UNSATISFIED` state remains status-only until
+Fleet has a trusted source for a new post-action image and candidate resolution;
+`propose_replan` currently returns unavailable when that observation is missing.
+The feedback context is capped at 8 KiB; tool arguments
+and results at 4 KiB each; one turn allows at most four function calls, eight
+replay steps, 64 KiB of replay and response, a 45-second request deadline, and
+14 MiB per image. The configured estimated-turn cost ceiling is USD 0.10.
+Missing provider project/service-tier, mission-progress, mission-instruction,
+workcell, or task-class approval, or an acceptable cost estimate denies egress
+before transport. The full Mission instruction is classified separately from
+the structured progress fields. The outbox has a hard row cap configured when
+`create_app()` is constructed through `mission_model_turn_max_rows` (default
+10,000). At capacity, a trigger is dropped for each enqueue attempt,
+the global cursor advances, and a durable counter plus error log records the
+drop. Raising the configured cap is required to resume future enqueueing;
+already dropped triggers are not replayed. A worker also requires a current-principal authorization callback;
+absent authorization is denied. Its pre-submit SQLite transaction rechecks the
+stop latch/generation, Mission owner/workcell/action/attempt/state, and exact
+event watermark. Production policy loading and provider runtime wiring remain
+disabled.
+
+Interactions requests use `store=false`. Each tool-result request replays the
+original user input, the exact model steps received so far, and the matching
+function results. Replay data and opaque provider step material exist only in
+turn memory. The SQLite model-turn outbox stores only trusted scope references,
+watermarks, policy revision, and lifecycle state. Its state path is
+`PENDING -> CLAIMED -> SUBMITTING -> RESPONDED | REJECTED | UNKNOWN`, with an
+explicit `SUPPRESSED` state. A pre-transport policy/validation failure may
+return a claim to `PENDING`. Once submission begins, a timeout or lost response
+becomes `UNKNOWN` and is not automatically resubmitted. Stop-generation
+suppression is atomic with provider submission admission; candidate fencing is
+not implemented because candidate creation is unavailable. The scheduler polls
+durable Mission events and fills the outbox; no provider worker is configured,
+so this does not initiate model calls. Production provider configuration
+remains disabled. A worker response would currently be marked `RESPONDED`
+without storing or exposing model text; no user-visible model feedback channel
+is implemented. No provider status or tool result changes Mission, Action, goal,
+or physical stop state.
+
+This source implementation enables event-to-outbox scheduling only; it does not
+enable provider calls or policy dispatch. Fleet admission remains a separate operator/policy gate;
+Action execution remains with the device-local controller; the independent
+goal verifier and physical stop owner remain authoritative for their respective
+evidence. `POLICY_DISPATCH_ENABLED` remains false.
+
+## 10.16 Fleet goal-evidence producer contract (D-348)
 
 The route is exposed only when Fleet Mission API composition includes a valid
 goal-evidence producer registry. It does not enable ER 2 calls, automatic policy
@@ -1472,8 +1539,13 @@ from the process environment and never returned in a response.
 
 The evidence object must match the existing `GoalEvidence` contract, including
 the producer ID, approved evaluator revision, current Mission Action/attempt,
-new post-action observation, independent gripper `OPEN` readback, and satisfied
-predicate. Producer credentials are separate from Site Fleet user roles. A
+new post-action observation, and independent gripper `OPEN` readback. A fresh,
+registered `satisfied: true` predicate records `GOAL_CONFIRMED`. A fresh,
+registered `satisfied: false` result is preserved as
+`GOAL_PREDICATE_UNSATISFIED` and holds the Mission as `GOAL_NOT_SATISFIED`;
+malformed, stale, untrusted, or mismatched evidence remains
+`GOAL_EVIDENCE_REJECTED`. Negative evidence is never completion proof. Producer
+credentials are separate from Site Fleet user roles. A
 `viewer` can read Mission state, an `operator` can admit a draft, and registry
 administration remains a deployment-controlled read-only file change; the
 producer token cannot create or admit a Mission.
@@ -1502,7 +1574,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 |---|---|---|
 | v1.56 | 2026-09-29 | Additive (D-337): traffic policy status gains `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen`; the optional file-only `traffic_policy.signal_observer` binding fuses the observer service's measured light with camera evidence (mismatch `signal_source_conflict` HOLD, dark/indeterminate `signal_dark`, silence falls back camera-only) and emits `nav.traffic_policy_signal_source_stale` once per lapse |
 | v1.57 | 2026-09-29 | Additive (D-333): add owner-scoped Mission progress axes, a 50-event recent-history window with truncation signal, and bounded snapshot-first event cursor pages. Fleet event IDs are journal order; dispatch latch is distinct from physical stop (UNKNOWN); no percentage or provider status tool is introduced. |
-| v1.60 | 2026-09-30 | Additive (D-360): Vision `GET /api/vision/sources/{source_id}/field-proposal` returns an operator-review field-corner proposal under the frame preview lease (own 1/s bucket per subject, detection at most once per source per second off the event loop, `no-store`, same freshness 404s, 422 on an undecodable frame). Display only; never applied to sightings, site config or driving. |
+| v1.60 | 2026-09-30 | Additive (D-360/D-357/D-358): Vision field-corner proposals for operator review; bounded ER 2 feedback tools, trusted turn scope, stateless `store=false` replay, transcript-free SQLite outbox with durable-cursor event scheduling, hard capacity bound and explicit ambiguous `UNKNOWN` behavior. No public tool route, ER 2 provider worker/model calls, policy dispatch, or ROS enablement. |
 | v1.59 | 2026-09-30 | Additive (D-348): opt-in registered goal-evidence producer route, environment-only source tokens, SQLite evidence-ID idempotency, evaluator/freshness scope, terminal-action verification and grace-timeout HOLD. No model/action dispatch or ROS enablement. |
 | v1.58 | 2026-09-29 | Additive (D-347): `GET /api/v1/system/capabilities` gains the per-flag `lifecycle` block — one vocabulary (`ready`/`unavailable`+reasons, `activating` reserved with no producer yet) derived from the existing `withheld` judgment; `withheld.flags` always equals the `unavailable` set. Presentation states on inventory descriptors are unchanged; the mapping lives in D-347. |
 | v1.55 | 2026-09-29 | Additive (D-333): require an injected trusted producer verifier and a new post-action observation for Mission goal confirmation. Evidence is correlated to the Action/attempt and carries frame digest, evaluator revision, and a separate `OPEN` gripper readback; absent verifier, stale/mismatched evidence leaves claims held. |

@@ -46,6 +46,8 @@ from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStor
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_progress import MissionProgressService
+from fleet.server.mission_model_turn_store import MissionModelTurnStore
+from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_store import MissionConflict
 from fleet.server.goal_evidence_service import (
     GoalEvidenceService, GoalEvidenceSubmissionError,
@@ -271,7 +273,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                enable_mission_dispatcher: bool = False,
                omx_action_transport=None,
                enrollment=None,
-               robot_credential_key: Optional[str] = None) -> FastAPI:
+               robot_credential_key: Optional[str] = None,
+               mission_model_turn_max_rows: int = 10_000) -> FastAPI:
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -326,6 +329,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     mission_progress = (
         MissionProgressService(mission_service.store) if mission_configured else None
     )
+    mission_model_turn_store = (
+        MissionModelTurnStore(
+            mission_service.store.path, max_rows=mission_model_turn_max_rows,
+        ) if mission_configured else None
+    )
+    mission_model_turn_scheduler = (
+        MissionModelTurnScheduler(
+            mission_service=mission_service, progress_service=mission_progress,
+            turn_store=mission_model_turn_store, policy_revision="er2-feedback-v1",
+        ) if mission_configured else None
+    )
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
         if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
@@ -351,6 +365,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         mission_worker = None
         proposal_expiry = None
         goal_evidence_worker = None
+        mission_feedback_scheduler = None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
         if proposal_store is not None:
@@ -361,10 +376,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             goal_evidence_worker = asyncio.create_task(
                 _goal_evidence_expiry_loop(goal_evidence_service)
             )
+        if mission_model_turn_scheduler is not None:
+            mission_feedback_scheduler = asyncio.create_task(
+                _mission_feedback_schedule_loop(mission_model_turn_scheduler)
+            )
         try:
             yield
         finally:
-            for background in (dispatcher, mission_worker, proposal_expiry, goal_evidence_worker):
+            for background in (dispatcher, mission_worker, proposal_expiry,
+                               goal_evidence_worker, mission_feedback_scheduler):
                 if background is not None:
                     background.cancel()
                     try:
@@ -384,6 +404,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.mission_service = mission_service
     app.state.goal_evidence_service = goal_evidence_service
     app.state.mission_progress = mission_progress
+    app.state.mission_model_turn_store = mission_model_turn_store
+    app.state.mission_model_turn_scheduler = mission_model_turn_scheduler
     app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
@@ -1452,6 +1474,23 @@ async def _goal_evidence_expiry_loop(service: GoalEvidenceService) -> None:
             service.hold_expired_without_evidence()
         except (OSError, sqlite3.Error, ValueError):
             _LOG.exception("goal evidence grace reconciliation failed")
+        await asyncio.sleep(1.0)
+
+
+async def _mission_feedback_schedule_loop(scheduler: MissionModelTurnScheduler) -> None:
+    """Populate the durable outbox only; this loop never invokes a provider."""
+    while True:
+        try:
+            before = scheduler.turn_store.capacity_dropped_count()
+            await asyncio.to_thread(scheduler.poll_once)
+            dropped = scheduler.turn_store.capacity_dropped_count()
+            if dropped > before:
+                _LOG.error(
+                    "Mission feedback outbox is at capacity; dropped enqueue attempts=%d",
+                    dropped,
+                )
+        except Exception:
+            _LOG.exception("Mission feedback outbox scan failed")
         await asyncio.sleep(1.0)
 
 
