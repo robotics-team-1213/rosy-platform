@@ -3442,3 +3442,10 @@
 - gate 변화: 없음. 잔여 실패 2건(test_size_verdicts·test_over_budget)은 병행 트랙의 사전 존재 예산 초과(schemas.py 738행·fleet 10,436행·app.py 재성장)로 이 변경과 무관.
 - 결정: mesh/world/map 등 자산 참조도 P3 선언 대상임을 스캐너가 이제 증명한다. 신규 위반은 P5대로 — fix(선언 추가) 또는 KNOWN_UNDECLARED 사유 기록.
 - 교훈: 패턴 추가는 추가만으로 증명되지 않는다 — 물릴 대상을 찔러 빨강을 본 뒤 믿는다(test/AGENTS 변이 증명 규약).
+## 2026-09-30 · uncommitted · docs(adr): D-354 천장 카메라 경기장 자동 검출 제안 (Proposed)
+
+- 변경: `docs/adr/D-354-overhead-field-auto-detection-proposal.md` 추가, ADR Log·progress `adrs` 목록 등록. 검출은 Vision에서만, `GET /api/vision/sources/{id}/field-proposal`은 frame 경로와 같은 lease·헤더, 제안은 운용자 수락 전 적용 안 함, 설정 W×H 불일치 안내, 브라우저 로컬 W×H 입력, 레이어 토글.
+- 증거: 문서만. 번호 확인 — 로컬 브랜치 전체와 `.worktrees/*/docs/adr`에서 D-341·D-345..D-353 사용 중(D-353은 `feat/pilot-teleop`), D-354 비어 있음.
+- gate 변화: 없음.
+- 결정: D-354 Proposed.
+- 교훈: 없음
