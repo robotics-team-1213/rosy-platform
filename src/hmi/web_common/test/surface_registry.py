@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parents[4]
 
 _GRAMMARS_DECL = re.compile(r"GRAMMARS\s*=\s*\[([^\]]*)\]")
 _ITEM = re.compile(r"['\"]([^'\"]+)['\"]")
-_SCOPES = ("path", "value", "reason", "baseline", "shape")
+_SCOPES = ("path", "value", "reason", "baseline", "shape", "port")
 
 
 def git_available(root=None) -> bool:
@@ -111,6 +111,7 @@ def problems(root=None) -> list[str]:
         found.append("value: web_common/ui.js가 GRAMMARS를 선언하지 않는다")
 
     seen: set[str] = set()
+    ports_seen: dict[int, object] = {}
     for index, row in enumerate(rows, start=1):
         where = f"{REGISTRY} 항목 {index}"
         if not isinstance(row, dict):
@@ -172,6 +173,20 @@ def problems(root=None) -> list[str]:
         grammar = row.get("grammar")
         if grammar is not None and grammar not in known_grammars:
             found.append(f"value: {label} grammar가 GRAMMARS 밖이다: {grammar!r}")
+
+        for entry in row.get("ports") or []:
+            port = entry.get("port") if isinstance(entry, dict) else None
+            source = entry.get("source") if isinstance(entry, dict) else None
+            if not isinstance(port, int) or not 1 <= port <= 65535:
+                found.append(f"port: {label} ports 항목의 port가 1–65535 정수가 아니다: {port!r}")
+                continue
+            if port in ports_seen:
+                found.append(f"port: {label}의 {port}를 {ports_seen[port]}도 쓴다")
+            ports_seen[port] = ident
+            if not isinstance(source, str) or not (base / source).is_file():
+                found.append(f"port: {label} {port}의 source 파일이 없다: {source!r}")
+            elif not re.search(rf"(?<!\d){port}(?!\d)", (base / source).read_text(encoding="utf-8")):
+                found.append(f"port: {label} {port}가 source {source}의 기본값에 없다")
 
         baseline = row.get("baseline")
         if baseline is None:

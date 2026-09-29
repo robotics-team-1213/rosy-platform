@@ -51,6 +51,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/swarm/` | Robot endpoints, transport, relay, arming, and the formation session (see `fleet/swarm/AGENTS.md`) |
 | `fleet/hub/` | D-59 SiteHub: hello/heartbeat/event gather, REST scatter — no rclpy, no cmd_vel, no Image (see `fleet/hub/AGENTS.md`) |
 | `fleet/server/` | 관제 PC 의 Fleet 서버와 UI (see `fleet/server/AGENTS.md`) |
+| `tools/` | Developer-only Fleet tools, not installed: `fleet_gather_bench.py` (D-131 polling-gather scale bench; `python -X utf8 src/site/fleet/tools/fleet_gather_bench.py --robots 20`) |
 | `test/` | pytest for geometry, assignment, robots, transport, relay, arming, session, CLI, hub, and the import-boundary check (see `test/AGENTS.md`) |
 | `resource/` | ament index marker `fleet` |
 

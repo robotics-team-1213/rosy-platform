@@ -24,7 +24,7 @@ def _module():
         path = str(REPO_ROOT / roots[package])
         if path not in sys.path:
             sys.path.insert(0, path)
-    path = REPO_ROOT / "tools/simulate_semantic_road.py"
+    path = REPO_ROOT / "tools/sim/simulate_semantic_road.py"
     spec = importlib.util.spec_from_file_location(
         "simulate_semantic_road", path)
     module = importlib.util.module_from_spec(spec)
@@ -79,7 +79,7 @@ def test_red_wait_green_resume_and_stale_stop_are_closed_loop(tmp_path):
 
 def test_repository_tool_entrypoint_loads_without_external_pythonpath():
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "tools/simulate_semantic_road.py"), "--help"],
+        [sys.executable, str(REPO_ROOT / "tools/sim/simulate_semantic_road.py"), "--help"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

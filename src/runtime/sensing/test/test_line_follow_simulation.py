@@ -21,7 +21,7 @@ def _module():
         path = str(REPO_ROOT / roots[package])
         if path not in sys.path:
             sys.path.insert(0, path)
-    path = REPO_ROOT / "tools/simulate_line_follow.py"
+    path = REPO_ROOT / "tools/sim/simulate_line_follow.py"
     spec = importlib.util.spec_from_file_location("simulate_line_follow", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -50,7 +50,7 @@ def test_both_modes_track_turn_slow_and_fail_closed(tmp_path):
 
 def test_repository_tool_entrypoint_loads_without_external_pythonpath():
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "tools/simulate_line_follow.py"), "--help"],
+        [sys.executable, str(REPO_ROOT / "tools/sim/simulate_line_follow.py"), "--help"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
