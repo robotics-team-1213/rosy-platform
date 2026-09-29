@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parents[4]
 
 _GRAMMARS_DECL = re.compile(r"GRAMMARS\s*=\s*\[([^\]]*)\]")
 _ITEM = re.compile(r"['\"]([^'\"]+)['\"]")
-_SCOPES = ("path", "value", "reason", "baseline", "shape", "port", "theme")
+_SCOPES = ("path", "value", "reason", "baseline", "shape", "port", "theme", "breakpoint")
 
 #: D-359 §2·§3 — 표면이 따를 수 있는 테마. tokens.css의 테마 블록과 같은 이름이다.
 THEMES = ("dark", "light")
@@ -44,6 +44,24 @@ _THEME_JS = re.compile(
 _PIN = re.compile(r"<html\b[^>]*\bdata-theme-pin=\"dark\"", re.I)
 _THEME_COLOUR = re.compile(r'<meta\s+name="theme-color"\s+content="([^"]*)"', re.I)
 _COLOUR_SCHEME = re.compile(r"color-scheme\s*:")
+
+
+#: D-359 §6.1 — 세 단 어휘. 범위 문법만 쓰고 값은 rem이다. 표면이 이 밖의 값을 쓰면
+#: surfaces.yaml의 그 표면 `breakpoints`에 값과 이유를 적는다(§6.2).
+TIERS = ("(width < 30rem)", "(30rem <= width < 64rem)", "(width >= 64rem)")
+#: 이웃한 두 단의 합(compact+medium, medium+wide)도 같은 경계만 쓰므로 세 단 어휘다.
+TIER_UNIONS = ("(width < 64rem)", "(width >= 30rem)")
+#: §6.5 고정 높이 프레임 규칙 — 높이 질의는 이 두 조건만 세 단과 같이 허용된다.
+FRAME_HEIGHT = ("(height >= 40rem)", "(height < 40rem)")
+TIER_VALUES = ("30rem", "64rem", "40rem")
+_BREAKPOINT_VALUE = re.compile(r"^[1-9][0-9]*(?:px|rem)$")
+_MEDIA_RULE = re.compile(r"@media\b([^{;]*)\{")
+_STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.S | re.I)
+_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_CONDITION = re.compile(r"\([^()]*\)")
+_SIZE_FEATURE = re.compile(r"(?<![-a-z])(?:min-|max-)?(?:device-)?(?:width|height|aspect-ratio)(?![-a-z])")
+_LEGACY_FEATURE = re.compile(r"(?<![-a-z])(?:min|max)-(?:device-)?(?:width|height|aspect-ratio)(?![-a-z])")
+_LENGTH = re.compile(r"(?<![\w.])([0-9]+(?:\.[0-9]+)?)(px|rem|em)\b")
 
 
 def git_available(root=None) -> bool:
@@ -168,6 +186,99 @@ def _theme_problems(base: Path, row: dict, label: str, medium) -> list[str]:
     return found
 
 
+def _style_sources(base: Path, path: str) -> list[tuple[Path, str]]:
+    """표면의 CSS 파일과 HTML 안 `<style>` 본문. 주석과 `<style>` 밖은 줄바꿈만 남겨 줄 번호를 지킨다."""
+    found: list[tuple[Path, str]] = []
+    for suffix in (".css", ".html"):
+        for page in _pages(base, path, suffix):
+            if "test" in page.relative_to(base).parts:
+                continue
+            text = page.read_text(encoding="utf-8")
+            if suffix == ".html":
+                kept, cursor = [], 0
+                for match in _STYLE_BLOCK.finditer(text):
+                    kept.append("\n" * text.count("\n", cursor, match.start(1)))
+                    kept.append(match.group(1))
+                    cursor = match.end(1)
+                text = "".join(kept)
+            text = _CSS_COMMENT.sub(lambda match: re.sub(r"[^\n]", " ", match.group(0)), text)
+            found.append((page, text))
+    return found
+
+
+def media_conditions(root=None, row: dict | None = None) -> list[tuple[str, int, str]]:
+    """표면의 모든 `@media` 크기 조건 — (파일, 줄, 정규화한 괄호 조건)."""
+    base = REPO if root is None else Path(root)
+    path = (row or {}).get("path")
+    if not isinstance(path, str):
+        return []
+    out: list[tuple[str, int, str]] = []
+    for page, css in _style_sources(base, path):
+        here = page.relative_to(base).as_posix()
+        for rule in _MEDIA_RULE.finditer(css):
+            line = css.count("\n", 0, rule.start()) + 1
+            for condition in _CONDITION.findall(rule.group(1)):
+                normal = "(" + " ".join(condition[1:-1].split()) + ")"
+                if _SIZE_FEATURE.search(normal):
+                    out.append((here, line, normal))
+    return out
+
+
+def breakpoint_problems(root=None, row: dict | None = None) -> list[str]:
+    """D-359 §6.1·§6.2 — `@media` 크기 조건은 세 단(또는 §6.5 높이)이거나 표면 허용 목록 값이다."""
+    base = REPO if root is None else Path(root)
+    listed = {entry.get("value") for entry in (row or {}).get("breakpoints") or [] if isinstance(entry, dict)}
+    label = (row or {}).get("id")
+    found: list[str] = []
+    for here, line, condition in media_conditions(base, row):
+        where = f"breakpoint: {label} {here}:{line} {condition}"
+        if _LEGACY_FEATURE.search(condition):
+            found.append(f"{where} — min-/max- 문법이다. 범위 문법(width < …)을 쓴다")
+            continue
+        if condition in TIERS or condition in TIER_UNIONS or condition in FRAME_HEIGHT:
+            continue
+        values = ["".join(value) for value in _LENGTH.findall(condition)]
+        if not values:
+            found.append(f"{where} — 크기 값을 읽을 수 없다")
+        for value in values:
+            if "." in value:
+                found.append(f"{where} — {value}는 소수 보정값이다(.01 금지)")
+            elif value not in listed:
+                found.append(f"{where} — {value}가 세 단도 아니고 surfaces.yaml breakpoints에도 없다")
+    return found
+
+
+def _breakpoint_field_problems(base: Path, row: dict, label: str, medium) -> list[str]:
+    """`breakpoints` 필드 모양 — 값·이유, 세 단 값의 중복 등재 금지, 쓰이지 않는 값 금지."""
+    entries = row.get("breakpoints")
+    if entries is None:
+        return []
+    if medium != "web":
+        return [f"breakpoint: {label}는 웹 표면이 아닌데 breakpoints가 있다"]
+    if not isinstance(entries, list) or not entries:
+        return [f"breakpoint: {label} breakpoints가 비어 있지 않은 목록이 아니다"]
+    found: list[str] = []
+    used = {"".join(value) for _, _, condition in media_conditions(base, row)
+            for value in _LENGTH.findall(condition)}
+    seen: set[str] = set()
+    for entry in entries:
+        value = entry.get("value") if isinstance(entry, dict) else None
+        reason = entry.get("reason") if isinstance(entry, dict) else None
+        if not isinstance(value, str) or not _BREAKPOINT_VALUE.match(value):
+            found.append(f"breakpoint: {label} breakpoints 값이 정수 px/rem이 아니다: {value!r}")
+            continue
+        if value in seen:
+            found.append(f"breakpoint: {label} breakpoints에 {value}가 두 번 있다")
+        seen.add(value)
+        if value in TIER_VALUES:
+            found.append(f"breakpoint: {label} {value}는 세 단 값이라 등재하지 않는다")
+        if not isinstance(reason, str) or not reason.strip():
+            found.append(f"breakpoint: {label} {value}에 reason이 없다")
+        if value not in used:
+            found.append(f"breakpoint: {label} {value}를 쓰는 @media가 없다 — 목록에서 지운다")
+    return found
+
+
 def problems(root=None) -> list[str]:
     """D-329 필드 규칙 위반. 빈 리스트면 레지스트리가 규칙을 지킨다."""
     base = REPO if root is None else Path(root)
@@ -241,6 +352,7 @@ def problems(root=None) -> list[str]:
                 found.append(f"path: {label} token_copy 파일이 저장소에 없다: {copy}")
 
         found.extend(_theme_problems(base, row, label, medium))
+        found.extend(_breakpoint_field_problems(base, row, label, medium))
 
         grammar = row.get("grammar")
         if grammar is not None and grammar not in known_grammars:

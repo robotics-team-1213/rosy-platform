@@ -15,11 +15,11 @@
 .event-severity.error, .event-severity.critical { color: var(--status-crit); }
 .event-severity.warning { color: var(--status-warn); }
 
-@media (max-width: 1080px) {
+@media (width < 64rem) {
   .event-list { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 720px) {
+@media (width < 30rem) {
   .event-list li:not(:has(ui-empty)) { grid-template-columns: 62px 1fr; }
   .event-severity { grid-column: 2; }
 }

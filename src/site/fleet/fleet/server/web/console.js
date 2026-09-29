@@ -32,8 +32,19 @@ function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
 }
 
+// D-359 §6.4 — compact·medium에서 접속·역할·테마는 토글 뒤에 접힌다(세로 예산).
+// 넓은 창에서는 CSS가 토글을 숨기고 항목을 줄에 세운다. 잠기면 토큰 칸을 연다.
+function setTopbarOpen(open) {
+  el("topbar-more").setAttribute("aria-expanded", String(open));
+  el("topbar-extra").dataset.open = String(open);
+}
+el("topbar-more").addEventListener("click", () => {
+  setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
+});
+
 function markLocked() {
   auth.locked = true;
+  setTopbarOpen(true);
   auth.role = null;
   el("user-role").textContent = "인증 필요";
   el("user-role").setAttribute("status", "crit");
@@ -52,8 +63,9 @@ function markUnlocked() {
 
 function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
+  // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#roster-toggle):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#token-save):not(#topbar-more):not(#roster-toggle):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {

@@ -40,7 +40,7 @@ body {
 .aspect-control { margin-top: var(--space-3); max-width: 12rem; }
 .adjustment-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); color: var(--ink-quiet); font-size: var(--text-micro); }
 
-@media (max-width: 42rem) {
+@media (width < 64rem) {
   .vision-corner-overlay [data-corner-handle] { stroke-width: 2; }
 }
 
@@ -54,8 +54,18 @@ body {
    얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 .token { width: 11rem; }
 
-/* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다. */
+/* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
+   이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
 .theme-choice { display: flex; align-items: center; gap: var(--space-1); }
+#theme-choice-label { white-space: nowrap; }
+
+/* D-359 §6.4 — 넓은 창(80rem 이상): 접힘 칸은 상자가 없고(display: contents) 항목이 머리 줄에
+   선다. 줄이 모자라면 항목이 다음 줄로 내려가고 글자가 접히지 않는다. */
+#topbar-more { display: none; }
+.topbar-extra { display: contents; }
+@media (width >= 80rem) {
+  ui-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
+}
 
 .dispatch-control {
   display: flex;
@@ -85,8 +95,9 @@ main {
   align-items: start;
 }
 
-/* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다. */
-@media (min-width: 62rem) {
+/* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다.
+   두 열은 wide 단에서만이다 — 그 아래는 한 열이다(62rem 겹침에서 생기던 암시적 열을 없앤다). */
+@media (width >= 64rem) {
   main > .panel[aria-labelledby="map-heading"] {
     grid-column: 1;
     grid-row: 1;
@@ -316,27 +327,63 @@ main {
 .note summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .note p { margin: var(--space-2) 0 0; }
 
-@media (max-width: 62rem) {
+@media (width < 64rem) {
   main { grid-template-columns: minmax(0, 1fr); }
+  /* 접힌 머리가 좁아지면 부제와 정지 범위를 숨긴다. 정지의 이름(aria-label)은 그대로다. */
+  ui-topbar ui-brand small { display: none; }
+  #estop small { display: none; }
 }
 
-@media (max-width: 40rem) {
+/* 머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
+   80rem은 surfaces.yaml fleet-console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
+   자연 폭(약 1220px)이 1024–1279px 창에 들어가지 않아, 그 폭에서 비상 정지가 둘째 줄로
+   밀려나지 않도록 접는다. */
+@media (width < 80rem) {
   ui-topbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-2);
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas: "brand pill clock more estop";
     align-items: center;
-    padding: var(--space-3);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
   }
-  ui-topbar ui-brand { grid-column: 1; grid-row: 1; min-width: 0; }
+  ui-topbar ui-brand { grid-area: brand; min-width: 0; }
   ui-topbar .spacer { display: none; }
-  #online-pill { grid-column: 1; grid-row: 2; justify-self: start; }
-  #estop { grid-column: 2; grid-row: 1 / 3; }
-  #console-token { grid-column: 1; grid-row: 3; width: 100%; min-width: 0; }
-  #token-save { grid-column: 2; grid-row: 3; }
-  #user-role { grid-column: 1; grid-row: 4; justify-self: start; }
-  #clock { grid-column: 2; grid-row: 4; justify-self: end; }
-  #theme-choice { grid-column: 1 / -1; grid-row: 5; }
+  /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
+  #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #clock { grid-area: clock; justify-self: end; }
+  #topbar-more { display: inline-flex; grid-area: more; }
+  #estop { grid-area: estop; }
+  .topbar-extra {
+    display: none;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--line-10);
+  }
+  .topbar-extra[data-open="true"] { display: flex; }
+  #console-token { flex: 1 1 10rem; width: auto; min-width: 0; }
+  .topbar-extra .theme-choice { flex-wrap: wrap; }
+}
+
+@media (30rem <= width < 64rem) {
+  main { gap: var(--space-3); padding: var(--space-3); }
+  .dispatch-control { margin: var(--space-2) var(--space-3) 0; }
+}
+
+/* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다. */
+@media (width < 30rem) {
+  ui-topbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "brand more estop" "pill clock estop";
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2);
+  }
+  #estop { align-self: stretch; }
+  .topbar-extra { grid-row: 3; }
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control { align-items: flex-start; flex-direction: column; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
@@ -345,19 +392,6 @@ main {
   .queues-container { flex-direction: column; }
   .adjustment-columns { grid-template-columns: minmax(0, 1fr); }
   .adjustment-actions { align-items: flex-start; flex-direction: column; }
-}
-
-@media (max-width: 24rem) {
-  ui-topbar { gap: var(--space-1); padding: var(--space-2); }
-  ui-topbar ui-brand { grid-column: 1; grid-row: 1; }
-  #online-pill { grid-column: 2; grid-row: 1; justify-self: start; }
-  #estop { grid-column: 1 / -1; grid-row: 2; width: 100%; }
-  #estop small { display: none; }
-  #console-token { grid-column: 1 / 3; grid-row: 3; }
-  #token-save { grid-column: 3; grid-row: 3; }
-  #user-role { grid-column: 1 / -1; grid-row: 4; }
-  #clock { grid-column: 3; grid-row: 1; justify-self: end; }
-  #theme-choice { grid-column: 1 / -1; grid-row: 5; }
 }
 
 .formation {
@@ -378,7 +412,7 @@ main {
   align-items: center;
   margin: var(--space-2) 0 var(--space-3);
 }
-@container (min-width: 30rem) {
+@container (width >= 30rem) {
   .formation-form { grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem minmax(0, 1fr); }
   .formation-form .member-list { grid-column: 2 / -1; }
 }

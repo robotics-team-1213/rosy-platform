@@ -292,11 +292,17 @@ body[data-view="operate"] .page-footer { display: none; }
    ======================================================================== */
 
 .console {
-  height: calc(100vh - var(--topbar-height));
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+}
+/* D-359 §6.5 — 고정 프레임은 넓고 충분히 높은 창에서만이다. 가로 전화·낮은 태블릿은
+   프레임이 잘리지 않고 흐르며 스크롤한다(아래 5절). 높이는 dvh다. */
+@media (width >= 64rem) and (height >= 40rem) {
+  .console {
+    height: calc(100dvh - var(--topbar-height));
+    overflow: hidden;
+  }
 }
 
 /* ---- 요약줄 — 로봇 상태 하나(D-260 5) --------------------------------------
@@ -981,26 +987,22 @@ body[data-view="operate"] .page-footer { display: none; }
    전제하는 화면이 아니라는 뜻이다.
    ======================================================================== */
 
-@media (max-width: 1080px) {
-  /* 폭이 줄어도 셋의 자리는 그대로다. 조작을 아래 줄로 돌려 봤더니 그 칸이
-     제 내용만큼(412px) 가져가고 지도가 37px로 눌렸다 — 자리를 옮기는 것은
-     공간 문법을 버리는 것이고, 얻는 것도 없었다. 레일만 좁힌다. */
-  .regions { grid-template-columns: 216px minmax(0, 1fr) 272px; }
-  .region { padding: var(--space-2) var(--space-3) var(--space-3); }
-  .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .map-hint { max-width: 188px; }
-  .ros-network-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ros-graph-layout { grid-template-columns: 1fr; }
-  .event-list { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 720px) {
+/* D-359 §6 — 세 단. 3분할 고정 프레임은 wide이면서 높이가 40rem 이상인 창의 약속이다.
+   그 밖(medium·compact, 또는 낮은 wide)은 영역을 세로로 쌓고 흐르며 스크롤한다. */
+@media (width < 64rem), (height < 40rem) {
   .console { height: auto; overflow: visible; }
   .regions { grid-template-columns: 1fr; grid-template-rows: none; }
   .region { grid-column: auto; grid-row: auto; overflow: visible; }
   .region-observe { min-height: 60vh; }
   .region-act { border-top: 1px solid var(--surface-line); }
   body[data-view="operate"] .page-footer { display: flex; }
+}
+
+@media (width < 64rem) {
+  /* 쌓인 영역 — 레일 폭 대신 영역 안쪽 격자만 줄인다. */
+  .region { padding: var(--space-2) var(--space-3) var(--space-3); }
+  .ros-graph-layout { grid-template-columns: 1fr; }
+  .event-list { grid-template-columns: 1fr; }
   .topbar { min-height: 66px; padding: 0 var(--space-4); }
   /* console은 이 폭에서 height:auto다 — 상단 바가 늘어나도 뷰 계약은 깨지지
      않는다. 좁은 폭에서는 목적지 줄이 아래로 내려온다. */

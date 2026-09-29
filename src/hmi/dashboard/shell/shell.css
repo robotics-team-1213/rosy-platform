@@ -44,6 +44,8 @@ body {
 .surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
 .surface-main {
+  box-sizing: border-box;
+  width: 100%;
   display: grid;
   grid-auto-rows: min-content;
   gap: var(--space-5);
@@ -53,6 +55,9 @@ body {
   padding: var(--space-5);
 }
 .surface-slot { display: grid; gap: var(--space-5); min-width: 0; }
+/* D-359 §6.3 — 공용 부품(ui-form·ui-readout·ui-actions)이 반응하는 칸은 표면이 정한다. */
+.surface-main,
+.surface-slot { container-type: inline-size; }
 .surface-slot:empty { display: none; }
 body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not([hidden]) {
   display: block;
@@ -75,7 +80,8 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   background: var(--surface-flat);
 }
 
-@media (min-width: 64rem) {
+/* D-359 §6.5 — 고정 높이 운용 프레임은 넓고 충분히 높은 창에서만 쓴다. 그 밖은 흐르며 스크롤한다. */
+@media (width >= 64rem) and (height >= 40rem) {
   body[data-surface="console"] {
     height: 100dvh;
     overflow: hidden;
@@ -162,6 +168,9 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   body[data-surface="console"] .surface-slot[data-slot="act"] .action-group-panel[hidden] {
     display: none;
   }
+}
+
+@media (width >= 64rem) {
   .action-group-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -201,31 +210,39 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
 }
 
-@media (max-width: 30rem) {
+/* D-359 §6.4 — 세로 예산: 붙박이 머리는 창 높이의 20% 이하다. 넓지 않은 창에서는 두 줄에
+   모은다 — 이름·역할 / 화면 전환. 비상 정지는 두 줄을 차지하며 늘 오른쪽 위에 보인다.
+   알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
+@media (width < 64rem) {
   ui-topbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "brand estop" "nav nav" "notice role";
-    gap: var(--space-2);
-    padding: var(--space-2);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "brand role estop" "nav nav estop";
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) var(--space-3);
   }
   ui-brand { grid-area: brand; }
-  #surface-switch { grid-area: nav; flex-wrap: wrap; gap: var(--space-1); }
-  #shell-notice { grid-area: notice; min-width: 0; }
-  #shell-role { grid-area: role; justify-self: end; }
-  #shell-estop { grid-area: estop; }
+  #surface-switch { grid-area: nav; gap: var(--space-1); min-width: 0; }
+  #shell-notice { grid-column: 1 / -1; grid-row: 3; min-width: 0; }
+  #shell-notice:empty { display: none; }
+  #shell-role { grid-area: role; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  #shell-estop { grid-area: estop; align-self: stretch; }
   ui-topbar [data-spacer] { display: none; }
+}
+
+@media (width < 30rem) {
+  ui-topbar { padding: var(--space-2); }
   ui-brand small { display: none; }
-  .surface-switch a { padding-inline: var(--space-2); }
+  /* 320px에서 화면 전환 세 링크와 비상 정지가 한 줄에 선다 — 안쪽 여백만 줄인다. */
+  .surface-switch a { padding-inline: var(--space-1); }
+  #shell-estop { padding-inline: var(--space-3); }
   .surface-main { gap: var(--space-4); padding: var(--space-3); }
-  body[data-surface="console"] { height: auto; min-height: 100vh; overflow: auto; }
-  body[data-surface="console"] ui-shell { display: block; height: auto; }
-  body[data-surface="console"] .surface-main { overflow: visible; }
   .surface-actions.map-layer-actions { flex-direction: row; width: 100%; }
   .surface-actions.map-layer-actions > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--space-1); }
 }
 
-@media (min-width: 30.01rem) and (max-width: 63.99rem) {
+@media (30rem <= width < 64rem) {
   .surface-main { padding: var(--space-4); }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));

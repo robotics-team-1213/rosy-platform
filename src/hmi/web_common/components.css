@@ -457,11 +457,19 @@ ui-actions {
 .ui-readback > h3,
 .ui-readback > h4 { margin: 0; }
 
-@media (max-width: 30rem) {
+/* D-359 §6.3 — 공용 부품은 뷰포트가 아니라 자기 칸에 반응한다. 칸(container-type:
+   inline-size)은 표면이 정한다. 22rem은 폰 한 열(320px 뷰포트의 거터 안쪽)과 좁은 조작
+   칸을 가르는 칸 폭이다 — 1366px 콘솔의 감지·조작 열(약 23–25rem)은 두 열을 지킨다.
+   칸이 없는 곳에서는 넓은 배치(줄바꿈하는 행)가 그대로 남는다. */
+.ui-readout dd { min-width: 0; overflow-wrap: anywhere; }
+
+@container (width < 22rem) {
   .ui-form { align-items: stretch; flex-direction: column; }
   .ui-form > * { width: 100%; }
   .ui-readout { grid-template-columns: minmax(0, 1fr); gap: var(--gap-readout-mobile); }
-  .ui-readout dd { margin-bottom: var(--offset-readout-mobile); overflow-wrap: anywhere; }
+  .ui-readout dd { margin-bottom: var(--offset-readout-mobile); }
+  ui-actions { align-items: stretch; flex-direction: column; }
+  ui-actions > * { width: 100%; }
 }
 
 ui-status[state="warning"],

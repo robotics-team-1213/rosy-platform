@@ -16,6 +16,11 @@
 # themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
 # 모든 HTML은 tokens.css 바로 뒤에 /common/theme.js를 싣고, [dark] 웹 표면의 HTML은
 # <html data-theme-pin="dark">로 고정한다. 웹이 아닌 사본(native·lcd)은 [dark]다(§3.4).
+# breakpoints는 D-359 §6.2의 허용 목록이다. 웹 표면의 @media 크기 조건은 범위 문법으로
+# 세 단 — compact (width < 30rem), medium (30rem <= width < 64rem), wide (width >= 64rem) —
+# 과 §6.5 높이 조건 (height >= 40rem)/(height < 40rem)만 쓴다. 그 밖의 값은 여기에
+# {value: 정수px|정수rem, reason: 한 줄}로 적는다. 세 단 값·쓰이지 않는 값은 적지 않는다.
+# 대조 시험은 src/hmi/web_common/test/test_responsive_tiers.py다.
 surfaces:
   - id: robot-dashboard
     path: src/hmi/dashboard
@@ -39,6 +44,9 @@ surfaces:
     audience: 사이트 관제자 (D-153 §7 — Fleet /console)
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
+    breakpoints:
+      - value: 80rem
+        reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220px)이 1024–1279px에 들어가지 않는다 — 그 폭에서 비상 정지가 둘째 줄로 밀리지 않게 머리를 접는다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
@@ -64,6 +72,11 @@ surfaces:
     audience: 제어 진단 (D-153 §7 — PARKED D-266)
     grammar: procedure
     contracts: [shared_controls]
+    breakpoints:
+      - value: 1279px
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
+      - value: 900px
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
     contract_reason: >
       타이포·확인 계약은 이 표면에 도입된 적이 없다 — D-150이 한 파일 고정으로 두고
       PARKED(D-266)라 새로 적용할 회차가 없었다. 두 계약을 받게 되는 날 이 문장을 지운다.
@@ -93,6 +106,11 @@ surfaces:
       - {port: 28183, source: src/sim/gz_sim/scripts/lane_live_view.py}
     audience: Gazebo 레인 뷰어 — 제품 브라우저 표면이 아니다
     contracts: []
+    breakpoints:
+      - value: 1000px
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 두 격자를 한 열로 접는 뷰어 고유 폭
+      - value: 640px
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 머리 줄을 접는 뷰어 고유 폭
     contract_reason: >
       제품 셸·토큰·확인 문법의 대상이 아니다. 라인 예산과 판정은
       test_web_budgets의 D-262 VERDICTS가 맡는다.

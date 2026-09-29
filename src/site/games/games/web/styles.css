@@ -162,7 +162,7 @@ h1 {
 
 .pitch-wrap[data-evidence="disconnected"] #field-evidence { border-color: var(--status-crit); }
 
-@media (max-width: 540px) {
+@media (width < 30rem) {
   #field-evidence:not([hidden]) { width: calc(100% - 2 * var(--space-3)); }
 }
 
@@ -178,9 +178,11 @@ h1 {
 
 #frame[hidden] { display: none; }
 
+/* 칸 폭이 칩보다 좁아지면 네 칸을 고집하지 않고 줄 수를 늘린다 — 320px에서 nowrap 칩이
+   칸 밖으로 넘치던 것을 막는다(D-359 §6.6). 넓은 칸에서는 한 줄 네 칸을 넘지 않는다. */
 .chips {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(4.5rem, 25% - var(--space-1))), 1fr));
   gap: var(--space-1);
   list-style: none;
   margin: var(--space-2) 0 var(--space-4);
@@ -245,7 +247,7 @@ h1 {
 
 #halt { min-width: 96px; }
 
-@media (max-width: 760px) {
+@media (width < 64rem) {
   ui-shell[grammar="focal"] ui-topbar {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
@@ -271,4 +273,11 @@ h1 {
 
   .halt-row { flex-wrap: wrap; }
   #halt-status:not(:empty) { flex-basis: 100%; }
+}
+
+/* D-359 §6.4 — compact 세로 예산: 머리는 창 높이의 20% 이하다. 부제(노트북 게임 호스트)는
+   접고 경기 단계·연결 증거만 남긴다. 정지 행은 아래에 붙어 있다. */
+@media (width < 30rem) {
+  ui-shell[grammar="focal"] ui-topbar { padding-block: var(--space-2); }
+  ui-topbar ui-brand small { display: none; }
 }
