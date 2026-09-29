@@ -549,3 +549,8 @@
 - gate 변화: 없음. 실물 주행 확인 전이다.
 - 결정: 없음.
 - 교훈: 실물 로봇은 homography가 꺼져 있어 지면 평면이 필요한 차선 모드를 못 쓰고, `line` 모드의 밝은 화소 중심은 경계선이 하나만 보이면 그 선 위로 조향한다.
+
+## 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
+- 변경: `config/camera_nominal_pinky_pro.yaml`(실물 녹화 4981 프레임으로 추정한 OV5647 기하 — fx 281.6, 피치 8°, 높이 0.067 m, 지평선 80.3 행). `camera_ground.nominal_ground_plane`(NOMINAL 출처 + 허용 플래그 두 겹, 프레임 크기로 비례, 종횡비 다르면 거부). `line_observer_node` 에 `allow_nominal_ground`·`nominal_camera_profile_path`(읽기 전용), 지면 모드 관측에 `ground: NOMINAL` 표시 — CORE 는 운전자 확인(hold) 없이는 멈춘다(`nominal_ground_requires_driver`). `tools/lane_replay.py` 녹화 재생 벤치.
+- 증거: 벤치 기준값(목표가 흰 선 위인 비율) — pilot 녹화 307 프레임: line 0.512, between 0.135, centre(공칭 지면·기억 없음) 비가시 0.99. 원본 teleop 576 프레임: line 0.247, between 0.109, centre 비가시 0.865. `test_nominal_ground.py` 10 passed.
+- gate 변화: SOURCE 진행(실물 카메라 지면 모델·벤치). centre 가 실물 영상에서 거의 늘 비가시 — 인식 v2 가 벤치에서 먼저 통과해야 한다.

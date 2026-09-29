@@ -105,3 +105,20 @@ def test_guard_config_is_validated():
         LineFollowConfig(ir_guard_edge_error=1.0)
     with pytest.raises(ValueError):
         LineFollowConfig(ir_guard_speed_scale=1.5)
+
+
+def test_nominal_ground_evidence_needs_a_driver_hold():
+    """D-353 §3: estimated floor geometry drives only while someone holds 'go'."""
+    m = LineFollowManager(_Events(), config=LineFollowConfig(), clock=lambda: 10.0)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    obs = LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=10.0, visible=True,
+                          error=0.0, confidence=0.9, ground="NOMINAL")
+    m.observe(obs, received_at=10.0, source_now=10.0)
+    assert m.tick(10.05).linear == 0
+    assert m.status().reason == "nominal_ground_requires_driver"
+    m.set_mode(LineFollowMode.CAMERA_LINE, hold_s=0.5)
+    m.observe(obs, received_at=10.0, source_now=10.0)
+    assert m.tick(10.05).linear > 0
+    with pytest.raises(ValueError):
+        LineObservation(source=LineFollowMode.IR_LINE, stamp=1.0, visible=False, error=None,
+                        confidence=0.0, ground="NOMINAL")

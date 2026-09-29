@@ -30,8 +30,13 @@ class LineObservation:
     confidence: float
     ir_calibrated: bool = False
     calibration_revision: Optional[str] = None
+    # D-353 §3: camera evidence computed on an estimated (NOMINAL) floor model.
+    ground: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if self.ground is not None and (self.source is not LineFollowMode.CAMERA_LINE
+                                        or self.ground != "NOMINAL"):
+            raise ValueError("only camera evidence may carry the NOMINAL ground label")
         if self.source is LineFollowMode.OFF:
             raise ValueError("OFF cannot be an observation source")
         if not _finite(self.stamp):
@@ -390,6 +395,10 @@ class LineFollowManager:
 
             observation = self._observation
             age = None if self._received_at is None else current - self._received_at
+            if (observation is not None and observation.ground == "NOMINAL"
+                    and self._hold_s is None):
+                # 교정 없는 공칭 지면은 운전자가 누르고 있을 때만 쓴다(D-353 §3).
+                return self._stop_decision("HOLD", "nominal_ground_requires_driver", age)
             choice = lane_recovery_rule(
                 DecisionRequest(
                     decision_id=f"line-{self._generation}",

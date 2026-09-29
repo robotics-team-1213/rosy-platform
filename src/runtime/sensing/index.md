@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
 - 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)
 - 2026-09-25 · uncommitted · refactor(runtime): move control under src/runtime (D-231)
 - 2026-09-25 · uncommitted · refactor(control): camera and lane evidence under sensing/perception
 - 2026-09-24 · uncommitted · docs(validation): P0 lens height reading 63 mm (tentative)
-- 2026-09-24 · uncommitted · docs(adr): D-206 P0 measurement procedure and profile custody

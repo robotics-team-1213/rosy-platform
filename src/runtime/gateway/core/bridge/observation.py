@@ -48,6 +48,7 @@ def line_observation(services, raw: str, *, source_now: float,
             confidence=float(data["confidence"]),
             ir_calibrated=calibrated if source is LineFollowMode.IR_LINE else False,
             calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
+            ground=data.get("ground"),
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)

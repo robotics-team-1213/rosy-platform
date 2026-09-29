@@ -668,11 +668,20 @@ class LaneCornerTracker:
         return LaneObservation(error=-sign, confidence=1.0)
 
 
+#: Floor models a camera observation may be labelled with (D-353 section 3).
+GROUND_LABELS = ("NOMINAL",)
+
+
 def line_observation_payload(source: str, stamp: float,
                              observation: LaneObservation | None, *,
                              ir_calibrated: bool = False,
-                             calibration_revision: str | None = None) -> dict:
-    """One compact wire shape shared by IR and camera publishers."""
+                             calibration_revision: str | None = None,
+                             ground: str | None = None) -> dict:
+    """One compact wire shape shared by IR and camera publishers.
+
+    ``ground`` labels camera evidence computed on an estimated floor model
+    (``"NOMINAL"``, D-353 section 3) so CORE can hold it to driver-held use.
+    """
     if source not in ("IR_LINE", "CAMERA_LINE"):
         raise ValueError("unsupported line observation source")
     if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) \
@@ -687,6 +696,10 @@ def line_observation_payload(source: str, stamp: float,
     metadata = ({"ir_calibrated": ir_calibrated,
                  "calibration_revision": calibration_revision}
                 if source == "IR_LINE" else {})
+    if ground is not None:
+        if source != "CAMERA_LINE" or ground not in GROUND_LABELS:
+            raise ValueError("ground label is only for camera evidence: " + ", ".join(GROUND_LABELS))
+        metadata["ground"] = ground
     if observation is None:
         return {
             "source": source,

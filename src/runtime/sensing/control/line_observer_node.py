@@ -22,7 +22,7 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
-from .sensing.perception.camera_ground import simulation_ground_plane
+from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from .sensing.perception.lane import (
     IRLineCalibration,
     LaneBetweenKeeper,
@@ -80,6 +80,10 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
         self.declare_parameter('allow_simulation_ground', False)
+        # D-353 §3: estimated floor geometry for the real camera. Two opt-ins, and
+        # the evidence is labelled NOMINAL so CORE accepts it only under a driver hold.
+        self.declare_parameter('allow_nominal_ground', False, _READ_ONLY)
+        self.declare_parameter('nominal_camera_profile_path', '', _READ_ONLY)
         self.declare_parameter('gazebo_camera_height_m', 0.0)
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
@@ -104,6 +108,7 @@ class LineObserverNode(Node):
         self._camera_controls_stable = False
         self._simulation_ground_key = None
         self._simulation_ground = None
+        self._nominal_profile_cache = None
         self._odom_pose = None
         self._odom_stamp = None
         self._corner_tracker = LaneCornerTracker(
@@ -203,8 +208,39 @@ class LineObserverNode(Node):
                 'CAMERA_LINE will publish no observation')
             return None
 
+    def _nominal_profile(self):
+        if self._nominal_profile_cache is None:
+            path = str(self.get_parameter('nominal_camera_profile_path').value)
+            try:
+                with open(path, encoding='utf-8') as handle:
+                    self._nominal_profile_cache = yaml.safe_load(handle) or {}
+            except (OSError, yaml.YAMLError) as exc:
+                self.get_logger().warning(
+                    f'nominal camera profile unreadable ({exc}); no NOMINAL ground',
+                    throttle_duration_sec=5.0)
+                self._nominal_profile_cache = {}
+        return self._nominal_profile_cache
+
+    def _camera_mode_uses_ground(self) -> bool:
+        return str(self.get_parameter('camera_lane_mode').value) in (
+            'lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')
+
+    def _ground_label(self):
+        source = str(self.get_parameter('camera_ground_source').value).strip().upper()
+        return 'NOMINAL' if source == 'NOMINAL' else None
+
     def _ground(self, width: int, height: int):
         source = str(self.get_parameter('camera_ground_source').value)
+        if source.strip().upper() == 'NOMINAL':
+            key = ('NOMINAL', int(width), int(height))
+            if key != self._simulation_ground_key:
+                self._simulation_ground = nominal_ground_plane(
+                    source=source,
+                    allowed=bool(self.get_parameter('allow_nominal_ground').value),
+                    width_px=width, height_px=height,
+                    profile=self._nominal_profile())
+                self._simulation_ground_key = key
+            return self._simulation_ground
         simulation_enabled = bool(
             self.get_parameter('allow_simulation_ground').value)
         use_sim_time = bool(self.get_parameter('use_sim_time').value)
@@ -239,6 +275,8 @@ class LineObserverNode(Node):
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
             calibration_revision=(self._ir_calibration_revision
                                   if source == 'IR_LINE' else None),
+            ground=(self._ground_label()
+                    if source == 'CAMERA_LINE' and self._camera_mode_uses_ground() else None),
         )
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 

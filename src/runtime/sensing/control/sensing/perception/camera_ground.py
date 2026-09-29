@@ -170,6 +170,42 @@ def simulation_ground_plane(*, source, simulation_enabled, use_sim_time,
     )
 
 
+NOMINAL_PROFILE_KEYS = ("width", "height", "fx", "cx", "cy", "pitch_rad", "height_m", "max_range_m")
+
+
+def nominal_ground_plane(*, source, allowed, width_px, height_px, profile):
+    """Build a plane from an estimated (NOMINAL) camera profile, D-353 section 3.
+
+    The profile is geometry estimated from real footage, not a validated
+    homography, so it takes two explicit opt-ins -- the NOMINAL source and the
+    allow flag -- and the caller must label its evidence as NOMINAL so CORE can
+    restrict it to driver-held assisted driving. The profile's intrinsics are
+    scaled to the live frame; a different aspect ratio is refused because a
+    crop would move the principal point.
+    """
+    if str(source).strip().upper() != 'NOMINAL' or allowed is not True:
+        return None
+    try:
+        values = {key: float(profile[key]) for key in NOMINAL_PROFILE_KEYS}
+        width, height = float(width_px), float(height_px)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not _finite(width, height, *values.values()) or width <= 0 or height <= 0:
+        return None
+    if values["width"] <= 0 or values["height"] <= 0:
+        return None
+    scale = width / values["width"]
+    if abs(height / values["height"] - scale) > 0.01 * scale:
+        return None
+    return ground_plane(
+        height_m=values["height_m"],
+        pitch_rad=values["pitch_rad"],
+        focal_px=values["fx"] * scale,
+        principal_x=values["cx"] * scale,
+        principal_y=values["cy"] * scale,
+        max_range_m=values["max_range_m"],
+    )
+
 def _finite(*values):
     """Shared with camera_controls: ints are fine, NaN and the infinities are not."""
     try:
