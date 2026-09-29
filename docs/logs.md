@@ -3301,3 +3301,9 @@
 - 변경: P4 얼굴 LCD(LOCAL 범위) — 웨이크 카드 ASSIST REQ를 warn 채움 칩으로. P5 문서 — README 능력 주장 전수 스캔에서 교정 대상 0건(강한 주장은 전부 증거·게이트 경계와 함께 쓰임). P6 총평 — D-280 후속 크래프트 시퀀스의 LOCAL 분량 완료를 회차 폴더에 기록.
 - 증거: face 시험 162 passed/4 skipped, PIL 렌더 11장 독회(`X:\DevTemp\rosy-uiux-p4-lcd`), README 동사 스캔 기록. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P4·P5·P6 절.
 - gate 변화: face last_verified 47d3e6ec(SOURCE/LOCAL GO 유지). 표면 판정은 전부 HOLD — 남은 조건은 표면별 (a) D-153 G3 사람 평가, (b) 실물 증거(DEVICE/FIELD)다.
+
+## 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
+
+- 변경: D-333에 후보 생성→operator Mission 승인→OMX Action 수락→ROS/readback→독립 goal 증거의 계약과 장치 측 stop-generation fence를 결정했다. 단일 `PICK_PLACE` 실행 계획을 추가하고 기존 ER 2 계획의 SOURCE 기준선·정지 설명, API Reference의 전용 E-stop 감사 예외를 현행 코드와 정렬했다.
+- 증거: D-327/D-328/D-330/D-331, ER 2·Mission·OMX 현행 소스와 API Reference를 대조했다. 신규 REST 경로·wire schema·장치 실행은 이번 문서 변경에 없다.
+- gate 변화: 없음. 통합 Mission/OMX 실행, provider live 호출, 물리 정지와 DEVICE/FIELD 수용은 HOLD다.
