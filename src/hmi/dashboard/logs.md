@@ -542,3 +542,9 @@
 - 변경: `/dashboard`와 역할 패널의 입력·선택 전부 `class="ui-field"`(패널은 `el("input", "ui-field")`), 로그인 유지 체크는 `label.ui-check`. `styles.css` 필드 사본(auth/settings/host/traffic-policy)과 `surface-panels.css`의 `.surface-slot` 필드 사본을 지웠다. `.status-badge/.machine-tag/.mode-chip`과 `[data-status]`·`.mode-chip[data-mode]` 색 규칙을 지우고 `<ui-tag>`로 바꿨다 — `dom.js` `tagStatus`/`setTagState`가 OK·SITE_STA 등 → active, WARNING·AP 계열 → warn, ERROR·UNAVAILABLE·HOLD 계열 → crit(채움)로 옮긴다. 모드 버튼은 `title` 대신 `reason`(app.js, panels/console/mode.js), `[data-mode]` 선택자를 `ui-button[data-mode]`로 좁혀 태그가 모드 버튼 클릭 처리를 받지 않게 했다. teleop·모드·라인 모드 눌림은 `aria-pressed`, `surface-panels.css`의 teleop `outline` 덧칠 삭제. 자간 리터럴 10곳 → 토큰/0, 불투명도 0.9/0.42/0.72 → 삭제·`--ink-quiet`. styleguide에 필드·체크·readonly·사유·눌림·active 태그 예를 실었다(cda6c382).
 - 증거: 브라우저 `src/hmi/dashboard/test` 52 passed, `test/test_role_surface_states_browser.py` 5 passed. 캡처 `X:/DevTemp/rosy-d359/shots/us004-robot-{console,setup}-{dark,light}-{1366x768,390x844}.png` — 필드 44px, 내비게이션 비활성 사유 보임.
 - gate 변화: 없음.
+
+## 2026-09-30 · 06650820 · D-359 US-004 알 수 있는 비활성 사유를 모두 reason으로
+
+- 변경: `dom.js`에 `setOff(control, off, reason)`, `setEnabled(id, enabled, reason)`. 패널은 한 줄 지역 `setOff`. 라인 추종·교통 신호·SLAM·관리자 전용·네트워크/릴리스·구 `/dashboard` teleop(`teleopBlockReason`은 `teleopEligible`과 같은 순서)·도킹·카메라 녹화·초기 위치·웨이포인트·토큰 삭제·도크 목록 버튼이 같은 조건에서 짧은 사유를 달고 켜지면 지운다. `map.js`는 `goalReason` 선택지. 역할 화면 teleop 네 버튼은 보이는 준비 문장(readinessStatus)에 `aria-describedby`로 잇는다. 요청 중 잠금·첫 readback 전 초기값·네이티브 select/option·공용 안내가 있는 곳은 `test_shared_controls.py` `DISABLED_WITHOUT_REASON` 닫힌 목록(이유 포함)에 있다. role G2 시험은 버튼을 접근 이름으로 찾는다(보이는 사유가 textContent에 들어가므로).
+- 증거: 단위 2709 passed 132 skipped. 브라우저 `src/hmi/dashboard/test` 50 passed 2 failed → G2 로케이터를 `get_by_role`로 고친 뒤 `test_role_g2_browser.py` 12 passed. `test/test_role_surface_states_browser.py` 5 passed. 변이 5건 빨강 후 복구(X:/DevTemp/rosy-d359/us004b-mutations.log).
+- gate 변화: 없음.

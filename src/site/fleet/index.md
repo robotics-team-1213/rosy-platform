@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · 4cb4ce55 · D-359 US-004 역할 잠금 입력은 보이는 운용자 안내를 가리킨다
 - 2026-09-30 · 849d2bfc · D-359 US-004 Fleet 필드·태그·비활성 사유가 공용 부품을 쓴다
 - 2026-09-30 · 6e766e19 · D-359 US-003 Fleet 지도 지형은 raster 토큰, 테마 전환 즉시 다시 그림
 - 2026-09-30 · ff6938e4 · D-359 US-002 Fleet 테마 선택과 theme-color
 - 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
-- 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress

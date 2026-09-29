@@ -233,3 +233,9 @@
 - 증거: 변이 14건 전부 빨강 후 복구 초록(X:/DevTemp/rosy-d359/us004-mutations.log). `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test src/runtime/gateway/test/test_dashboard.py -q` 2708 passed 132 skipped. 브라우저 web_common 155 passed.
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-359 §5·§7.4–7.6.
+
+## 2026-09-30 · fd2249cd · D-359 US-004 비활성 사유 구조 검사
+
+- 변경: `test_every_disabled_control_states_its_reason_or_is_listed` — dashboard·Fleet JS의 `.disabled =`/`setAttribute('disabled')` 자리와 `setOff`/`setEnabled` 호출은 reason을 쓰거나, (파일, 줄 조각) → 이유의 닫힌 목록에 있어야 한다(요청 중 잠금·초기값·네이티브·공용 안내·'할 일 0'). 목록의 옛 항목도 실패. Fleet 역할 잠금 안내 쌍도 확인.
+- 증거: 변이 5건(setOff 사유 삭제, 직접 비활성의 사유 삭제, setEnabled 사유 삭제, 목록 옛 항목, Fleet 안내 삭제) 전부 빨강 후 복구. 브라우저 web_common 156 passed.
+- gate 변화: 없음.
