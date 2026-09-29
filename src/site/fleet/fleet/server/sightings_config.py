@@ -80,6 +80,13 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
                        or type(marker_id) is not int or marker_id < 0
                        for robot_id, marker_id in markers.items())):
             raise ValueError(f"sources[{index}].robot_markers must map robot ids to marker ids")
+        if set(markers) - set(robot_ids):
+            raise ValueError(f"sources[{index}].robot_markers names robots outside robot_ids: "
+                             f"{', '.join(sorted(set(markers) - set(robot_ids)))}")
+        if len(set(markers.values())) != len(markers):
+            raise ValueError(f"sources[{index}].robot_markers must give each robot a distinct marker id")
+        if set(markers.values()) & set(corner_ids):
+            raise ValueError(f"sources[{index}].robot_markers must not reuse corner_marker_ids")
         sources.append(SightingSource(
             source_id=row["source_id"],
             token=token,
@@ -92,4 +99,13 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")
+    # The site map shows one rectangle per map id, so sources on one map must agree on it.
+    rectangles: dict[str, SightingSource] = {}
+    for source in sources:
+        if source.corner_world_m is None:
+            continue
+        first = rectangles.setdefault(source.map_id, source)
+        if first.corner_world_m != source.corner_world_m:
+            raise ValueError(f"sources {first.source_id} and {source.source_id} share map_id "
+                             f"{source.map_id} but differ in corner_world_m")
     return sources

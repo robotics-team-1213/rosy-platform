@@ -169,6 +169,41 @@ def test_loader_rejects_malformed_robot_markers(tmp_path):
                                   environ=ENV)
 
 
+@pytest.mark.parametrize("markers, message", [
+    ({"rosy-pinky-other": 40}, "outside robot_ids"),
+    ({"rosy-pinky-8kcn": 30}, "corner_marker_ids"),
+])
+def test_loader_rejects_markers_for_unknown_robots_or_corner_ids(tmp_path, markers, message):
+    with pytest.raises(ValueError, match=message):
+        load_sighting_sources(_write(tmp_path / "c.yaml", _row(robot_markers=markers)), environ=ENV)
+
+
+def test_loader_rejects_two_robots_sharing_a_marker(tmp_path):
+    row = _row(robot_ids=["rosy-pinky-8kcn", "rosy-pinky-2abc"],
+               robot_markers={"rosy-pinky-8kcn": 40, "rosy-pinky-2abc": 40})
+    with pytest.raises(ValueError, match="distinct marker id"):
+        load_sighting_sources(_write(tmp_path / "c.yaml", row), environ=ENV)
+
+
+def _write_rows(path, rows):
+    path.write_text(yaml.safe_dump({"sources": rows}), encoding="utf-8")
+    return path
+
+
+def test_loader_rejects_sources_on_one_map_with_different_rectangles(tmp_path):
+    other = _row(source_id="ceiling_south", corner_marker_ids=[34, 35, 36, 37],
+                 corner_world_m=[[0.0, 0.0], [5.0, 0.0], [5.0, 2.0], [0.0, 2.0]])
+    with pytest.raises(ValueError, match="ceiling_north and ceiling_south share map_id site-v1"):
+        load_sighting_sources(_write_rows(tmp_path / "c.yaml", [_row(), other]), environ=ENV)
+
+
+def test_loader_accepts_sources_on_one_map_with_the_same_rectangle(tmp_path):
+    other = _row(source_id="ceiling_south", corner_marker_ids=[34, 35, 36, 37])
+    sources = load_sighting_sources(_write_rows(tmp_path / "c.yaml", [_row(), other]), environ=ENV)
+
+    assert [source.source_id for source in sources] == ["ceiling_north", "ceiling_south"]
+
+
 def test_hyphenated_site_robot_ids_pass_sighting_validation():
     from core_common.protocol.sightings import SiteSightingPayload
 
