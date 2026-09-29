@@ -44,7 +44,7 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · D-333 ui-brand 홈 링크 공용 동작
+- 2026-09-29 · uncommitted · D-335 ui-brand 홈 링크 공용 동작
 - 2026-09-29 · uncommitted · D-329 표면 레지스트리 착지 (T1–T4)
 - 2026-09-27 · 9ca7bc26 · verify D-300 on latest main
 - 2026-09-27 · f4f15776 · verify D-300 after latest main integration
