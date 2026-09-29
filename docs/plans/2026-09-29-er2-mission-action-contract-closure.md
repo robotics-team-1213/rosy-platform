@@ -6,9 +6,9 @@
 
 **Goal:** 운영자 또는 ER 2의 동일한 `PICK_PLACE` 후보를 승인된 Fleet Mission, OMX 로컬 Action, ROS 실행, 독립 목표 증거까지 추적 가능한 경로로 연결한다.
 
-**Architecture:** [D-333](../adr/D-333-er2-mission-device-action-contract-closure.md)의 세 수락 경계와 [D-334](../adr/D-334-er2-tool-and-progress-read-boundary.md)의 진행 조회 경계를 순서대로 연다. Fleet은 인증·Mission 원장·claim/stop generation을, OMX 로컬 owner는 Action 수락·ROS arm/gripper와 로컬 정지를, 등록된 관측 생산자는 목표 증거를 소유한다. 첫 범위는 고정 OMX 작업대의 operator 승인 `PICK_PLACE` 하나이며 ER 2는 후보 공급자다.
+**Architecture:** [D-333](../adr/D-333-er2-mission-device-action-contract-closure.md)의 세 수락 경계, [D-334](../adr/D-334-er2-tool-and-progress-read-boundary.md)의 진행 조회 경계, [D-335](../adr/D-335-fleet-omx-local-ipc-boundary.md)의 co-located IPC 경계를 순서대로 연다. Fleet은 인증·Mission 원장·claim/stop generation을, OMX 로컬 owner는 Action 수락·ROS arm/gripper와 로컬 정지를, 등록된 관측 생산자는 목표 증거를 소유한다. 첫 범위는 고정 OMX 작업대의 operator 승인 `PICK_PLACE` 하나이며 ER 2는 후보 공급자다.
 
-**Tech Stack:** Python 3.12, FastAPI/Pydantic, SQLite WAL, ROS 2 Jazzy, `FollowJointTrajectory`, 실제 장치의 검증된 gripper/driver 인터페이스, pytest. 현재 OMX 설치 단위·전송은 아직 확정되지 않았으므로 로컬 API transport는 작업 1의 출력이다.
+**Tech Stack:** Python 3.12, FastAPI/Pydantic, SQLite WAL, ROS 2 Jazzy, `FollowJointTrajectory`, 실제 장치의 검증된 gripper/driver 인터페이스, pytest. SOURCE/LOCAL Device Action transport는 D-335의 same-host UDS다. 실제 OMX host·장치 설치와 remote host transport는 HOLD다.
 
 ---
 
@@ -16,16 +16,17 @@
 
 - 이미 있는 SOURCE: `src/site/fleet/fleet/ai/{candidate,er2_standard}.py`, `src/site/fleet/fleet/server/{mission_store,mission_service,goal_evidence}.py`, `src/products/omx/adapter/omx_adapter/{target_evidence,action_store,pick_place_transaction,gripper_contract,ros_runtime}.py`. 새 파일로 다시 만들지 않는다. 그 중 생산 route/runner 호출이 없는 부분을 연결한다.
 - 전용 `/api/fleet/estop`은 감사·래치 기록 장애에도 인증된 정지 요청을 fanout하도록 구현돼 있다. `/api/fleet/do`의 `estop`은 일반 감사 gate와 순차 step을 거친다. 두 응답 모두 물리 정지의 영수증이 아니다. Fleet generation의 장치 측 fence, OMX 실제 stop/readback은 미완료다.
+- 배포 소스는 개발/ROS-SIM workstation OCI, 비활성 profile, hardware shell이다. 필드 후보는 OMX별 native systemd owner다. 첫 SOURCE/LOCAL 연결은 같은 Linux host의 per-instance UDS로만 정의한다. Fleet과 OMX가 다른 host인 경우 remote API는 D-281/D-273 별도 결정 전 HOLD다. 채워진 host/device inventory는 아직 없다.
 - 첫 범위 밖: 중앙 Fleet `/api/v1/fleet/missions` 구현, 단독 `PICK`/`PLACE`, 다장치 DAG, Pinky+OMX 이동, ER 2 streaming/연속 tool loop 및 `get_mission_status`·`request_observation`·`propose_replan` function declaration, 모델 자동 admission/replan, 생산용 이미지 전송. 범위 밖 기능을 현재 capability로 광고하지 않는다.
 - 단계별 각 변경 전 `git status --short`, 현재 `main`과의 ancestry/파일 겹침을 확인한다. 다른 작업의 dirty 파일을 stage하지 않는다. `SOURCE/LOCAL`, `ROS-SIM`, `ARTIFACT`, `DEVICE`, `FIELD` 결과를 별도 기록한다.
 
 ## 작업 0. 배포 위치와 최종 writer를 확인한다
 
-**Files:** Review `src/products/omx/adapter/README.md`, `src/products/omx/profile/config/omx.disabled.yaml`, `src/products/omx/adapter/omx_adapter/{command_owner,ros_runtime,profile}.py`, `deploy/`, `docs/adr/D-273-omx-camera-stream-and-arm-control-order.md`, `docs/adr/D-282-per-hardware-ros-ownership-and-control-boundaries.md`, `docs/adr/D-299-omx-lerobot-development-and-command-ownership.md`, `docs/adr/D-330-fleet-action-admission-stop-and-recovery.md`; record findings in `docs/validation/<omx-action-runtime-baseline-YYYY-MM-DD>/README.md` only when evidence exists.
+**Files:** Review `src/products/omx/adapter/README.md`, `src/products/omx/profile/config/omx.disabled.yaml`, `src/products/omx/adapter/omx_adapter/{command_owner,ros_runtime,profile}.py`, `deploy/`, `docs/adr/D-273-omx-camera-stream-and-arm-control-order.md`, `docs/adr/D-281-site-host-placement-and-omx-instance-isolation.md`, `docs/adr/D-282-per-hardware-ros-ownership-and-control-boundaries.md`, `docs/adr/D-299-omx-lerobot-development-and-command-ownership.md`, `docs/adr/D-330-fleet-action-admission-stop-and-recovery.md`, `docs/adr/D-335-fleet-omx-local-ipc-boundary.md`.
 
-1. OMX가 설치될 호스트·프로세스·ROS action/driver·gripper source를 실제 산출물/장치 inventory로 확인한다. `deploy/omx/`가 현 checkout에 없으므로 그 경로를 기존 서비스로 가정하지 않는다.
+1. 배포 소스에서 workstation OCI shell, disabled profile, native per-workcell systemd 후보, ROS action/driver와 gripper source를 확인한다. 실제 host/장치 inventory가 없으면 field 설치 지점은 HOLD로 둔다.
 2. 팔/그리퍼 command owner, 로컬 stop 입력, 최종 상태 readback, 재시작 시 driver goal 조회 가능 여부를 표로 적는다. 미확인 항목은 `HOLD`로 기록한다.
-3. **Exit:** Fleet→OMX 전송이 로컬 IPC인지 인증된 원격 API인지, 어느 프로세스가 Action journal과 ROS goal을 함께 소유하는지 설명할 수 있다. 이 결정 전에는 wire 경로나 설치 단위를 현재 구현이라고 기록하지 않는다.
+3. **Exit:** 첫 SOURCE/LOCAL transport는 co-located UDS, remote transport는 HOLD, 최종 Action journal과 ROS goal은 workcell별 native owner라는 계약으로 닫는다(D-335). 채워진 physical host/device inventory와 실물 serial/gripper/stop evidence가 없으므로 설치·field exit는 HOLD이며 source 결정을 실물 수용으로 표기하지 않는다.
 
 ## 작업 1. Mission·Device Action wire와 상태를 함께 고정한다
 
@@ -33,7 +34,7 @@
 
 1. failing schema tests로 다음 불변식을 먼저 고정한다: server가 principal을 설정하고 client/model이 제출한 principal은 거절; caller 입력·관측·목표 digest와 `request_key`의 중복은 동일 ID, 다른 의미적 입력은 conflict; provider interaction/call ID나 새 발행 generation은 이 digest에 들어가지 않음; `proposal_id`, `mission_id`, `step_id`, `action_id`, `attempt_id`, provider call ID는 별개; 시간·generation·revision 누락은 거절.
 2. Site Fleet 경로는 `POST /api/fleet/proposals`(미해결 후보 저장), `GET /api/fleet/proposals/{id}`, `POST /api/fleet/missions`(해결된 후보로 Mission 초안 생성), `GET /api/fleet/missions/{id}`(상태/증거), `POST /api/fleet/missions/{id}/admit`(명시적 operator 승인), `POST /api/fleet/missions/{id}/cancel`을 **신규 경로 제안**으로 검토한다. 중앙 Fleet의 기존 문서상 `/api/v1/fleet/missions`와 의미를 혼합하지 않는다. 실제 경로·HTTP 상태·Pydantic/schema/응답 표를 구현과 같은 커밋에서 API Reference에 확정한다.
-3. Device Action transport는 작업 0에서 확인한 배포 위치에 맞춘다. 필수 연산은 `SubmitAction`, `GetAction`, `CancelAction`, `StopLocal`, `GetStopState`다. `SubmitAction` envelope에는 `mission_id`, `step_id`, Fleet 발급 `action_id`/`attempt_id`, request digest, workcell/device identity, action kind, resolved source/destination evidence, capability/config revision, Fleet authority/epoch, `dispatch_generation`, grant expiry가 필요하다. 인증된 Fleet 발행자만 제출하고 로컬 stop은 Fleet 장애와 독립 호출할 수 있어야 한다.
+3. Device Action transport는 D-335의 per-instance UDS로 고정한다. 필수 연산은 `SubmitAction`, `GetAction`, `CancelAction`, `StopLocal`, `GetStopState`다. `SubmitAction` envelope에는 `mission_id`, `step_id`, Fleet 발급 `action_id`/`attempt_id`, request digest, workcell/device identity, action kind, resolved source/destination evidence, capability/config revision, Fleet authority/epoch, `dispatch_generation`, grant expiry가 필요하다. peer UID와 socket path 권한을 검증하고, UDS StopLocal은 물리 E-stop/readback과 별도 사실로 반환한다. remote HTTP/device API는 이번 계약에 포함하지 않는다.
 4. 각 API의 2xx/4xx/5xx·timeout·unknown ACK 의미와 취소/정지/readback의 별도 상태를 문서화한다. 예를 들어 acceptance 2xx는 물리 완료를 뜻하지 않고 timeout은 재시도 허가가 아니다. D-18대로 API Reference·schema·양쪽 소비자 시험이 함께 통과하지 않으면 새 wire를 노출하지 않는다.
 5. Run: `python -m pytest src/runtime/gateway/test/test_protocol_schemas.py src/site/fleet/test/test_mission_api.py src/products/omx/adapter/test/test_omx_action_api.py -q` (생성한 파일부터 순차 포함). Expected: 누락·중복·권한·상태 사례 모두 통과. 해당 경로만 stage/commit한다.
 

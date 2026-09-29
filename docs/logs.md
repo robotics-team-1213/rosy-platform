@@ -3345,3 +3345,9 @@
 - 변경: Google 공식 표준/streaming function call, Interactions 상태 및 영상 진행 기능을 현행 adapter와 대조해 조사 기록을 남겼다. D-334에 현행 단일 후보 도구, 미래 읽기·관측·재계획 후보, Fleet/OMX/목표/정지의 네 진행 축과 provider 세션 독립성을 결정했다. 후속 결정에서 첫 재연결 경로를 Fleet snapshot + Mission별 cursor 조회로 확정하고 D-333 실행 계획을 SOURCE/LOCAL 순차 구현 기준으로 승인했다.
 - 증거: 공식 Google Robotics/Interactions/Live 문서와 `er2_standard.py`, `mission_store.py`, `action_store.py`, `pick_place_transaction.py`의 SOURCE 계약. live provider, ROS 장치와 실제 영상 진행 시험은 없다.
 - gate 변화: 없음. 새 tool declaration, 진행 API wire, provider 연속 loop, 자동 재계획과 DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): bound first Fleet OMX transport
+
+- 변경: D-281의 미결 원격 OMX API를 넘지 않도록 첫 SOURCE/LOCAL Fleet→workcell 제어 경로를 같은 Linux host의 UID 인증 UDS로 결정했다. native per-workcell owner가 Action journal과 ROS action client를 함께 소유하며 원격 host dispatch는 별도 결정까지 HOLD다. 실행 계획 작업 0·1을 이 선택과 맞췄다.
+- 증거: 비활성 OMX profile, 개발/ROS-SIM OCI shell, `RosArmCommandRuntime`, 독립 `ActionStore`, 배포 host inventory template 및 D-246/D-281/D-282/D-273 대조. 실제 host/serial/gripper/stop inventory는 아직 없다.
+- gate 변화: 없음. UDS contract SOURCE/LOCAL 구현을 시작하며 ROS-SIM/ARTIFACT/DEVICE/FIELD와 물리 capability는 계속 HOLD다.

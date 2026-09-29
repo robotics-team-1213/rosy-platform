@@ -154,6 +154,7 @@
 | D-332 | 사람 확인은 고정 단계가 아니라 조건이다 — 사전 등록 승인, 예외 조정, 자율 재발의 승인에만 둔다 |
 | D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
+| D-335 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 
 ## 계획·결과 문서
 
@@ -219,8 +220,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(er2): bound first Fleet OMX transport
 - 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
 - 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
 - 2026-09-29 · uncommitted · feat(protocol): land policy evidence schema (T1)
 - 2026-09-29 · uncommitted · docs(plan): design the D-268 policy evidence contract
-- 2026-09-29 · uncommitted · docs(adr): record D-332 human confirmation placement
