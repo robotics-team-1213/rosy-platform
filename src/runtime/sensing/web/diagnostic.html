@@ -585,7 +585,7 @@ const CFG = {
 const T = { unk: '#161615', grid: '#2c2c2a', ink: '#eeeeef',
             route: '#49affd', alt: '#d95926', goal: '#12bb81',
             hist: '#9499a0', crit: '#c40921', warn: '#feb432',
-            pin: '#d55181', muted: '#9499a0', ink2: '#9499a0' };
+            pin: '#d55181', inkQuiet: '#9499a0', ink2: '#9499a0' };
 // ---- state ----------------------------------------------------------------
 const S = {
   previewEnabled: true, pendingCommand: null,
@@ -1389,7 +1389,7 @@ function drawScan(s) {
   scv.lineTo(cx - 5.5, cy - body + 2);
   scv.lineTo(cx + 5.5, cy - body + 2);
   scv.closePath(); scv.fill();
-  scv.fillStyle = T.muted; scv.font = '11px system-ui, sans-serif';
+  scv.fillStyle = T.inkQuiet; scv.font = '11px system-ui, sans-serif';
   scv.textAlign = 'right';
   scv.fillText(Math.round(view * 100) + ' cm', W - 4, cy - 5);
   setTxt('dialnote',
