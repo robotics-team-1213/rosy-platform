@@ -150,7 +150,7 @@ def main(argv=None, runner=subprocess.run) -> int:
         if not _SAFE_NAME.fullmatch(value):
             print(f"refused: unsafe {label} {value!r}", file=sys.stderr)
             return 2
-    if not _SAFE_ROOT.fullmatch(args.root):
+    if not _SAFE_ROOT.fullmatch(args.root) or ".." in args.root.split("/"):
         print(f"refused: --root must be an absolute plain path, got {args.root!r}",
               file=sys.stderr)
         return 2

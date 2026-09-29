@@ -165,6 +165,8 @@ def test_rollback_and_status_run_ssh():
     ["status", "robot", "--root", "relative/models"],
     ["status", "robot", "--root", "/var/lib/rosy models"],
     ["status", "robot", "--root", "/var/$(x)"],
+    ["status", "robot", "--root", "/var/lib/../etc"],
+    ["status", "robot", "--root", "/.."],
 ])
 def test_rejects_unsafe_host_user_root(argv):
     runner = FakeRunner()
