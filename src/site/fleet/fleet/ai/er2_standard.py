@@ -17,7 +17,8 @@ from .candidate import ER2ProposalError, ImageObservation, PickPlaceProposalCand
 from core_common.protocol.schemas import (
     ER2_FEEDBACK_CONTEXT_MAX_BYTES, ER2_MAX_ESTIMATED_TURN_COST_USD,
     ER2_MAX_FUNCTION_CALLS_PER_TURN, ER2_REPLAY_MAX_BYTES, ER2_REPLAY_MAX_STEPS,
-    ER2_RESPONSE_MAX_BYTES, ER2_TOOL_RESULT_MAX_BYTES, MissionFeedbackContext,
+    ER2_PROVIDER_DEADLINE_SECONDS, ER2_RESPONSE_MAX_BYTES,
+    ER2_TOOL_RESULT_MAX_BYTES, MissionFeedbackContext,
     MissionFeedbackTurnScope,
 )
 
@@ -118,6 +119,8 @@ class ER2FeedbackEgressPolicy:
     def validate_for(self, *, scope: MissionFeedbackTurnScope,
                      task_class: str) -> None:
         """Check the immutable server allowlist against this trusted turn."""
+        if not isinstance(scope, MissionFeedbackTurnScope):
+            raise ER2RequestError("Gemini ER 2 feedback scope is invalid")
         self.validate()
         if (scope.workcell_id not in self.approved_workcell_ids
                 or task_class not in self.approved_task_classes):
@@ -160,11 +163,11 @@ class GeminiER2StandardAdapter:
         exact provider steps are kept in this method's memory and never stored
         by this adapter or included in errors.
         """
+        if not isinstance(scope, MissionFeedbackTurnScope):
+            raise ValueError("feedback turns require a validated trusted scope")
         if egress_policy is None:
             raise ER2RequestError("Gemini ER 2 feedback egress policy is not approved")
         egress_policy.validate_for(scope=scope, task_class="PICK_PLACE")
-        if not isinstance(scope, MissionFeedbackTurnScope):
-            raise ValueError("feedback turns require a validated trusted scope")
         feedback = (context if isinstance(context, MissionFeedbackContext)
                     else MissionFeedbackContext.model_validate(context))
         if (feedback.mission_id != scope.mission_id
@@ -193,7 +196,7 @@ class GeminiER2StandardAdapter:
         }]
         function_calls = 0
         seen_call_ids: set[str] = set()
-        deadline = time.monotonic() + 45.0
+        deadline = time.monotonic() + ER2_PROVIDER_DEADLINE_SECONDS
         for _step in range(ER2_REPLAY_MAX_STEPS):
             remaining_s = deadline - time.monotonic()
             if remaining_s <= 0:
@@ -253,21 +256,29 @@ class GeminiER2StandardAdapter:
                 return final_text[:4_000]
             replay.extend(model_steps)
             for _step, name, call_id, arguments in calls:
-                if name == "propose_replan" and callable(
-                        getattr(dispatcher, "dispatch_replan", None)):
-                    result = await dispatcher.dispatch_replan(
+                remaining_s = deadline - time.monotonic()
+                if remaining_s <= 0:
+                    raise ER2RequestError(
+                        "Gemini ER 2 feedback turn deadline exceeded before tool dispatch"
+                    )
+                if (name == "propose_replan" and turn_id is not None
+                        and callable(getattr(dispatcher, "dispatch_replan", None))):
+                    dispatch = dispatcher.dispatch_replan(
                         scope=scope, turn_id=turn_id, call_id=call_id,
                         arguments=dict(arguments), candidate_adapter=self,
                         egress_policy=egress_policy,
-                    ) if turn_id is not None else dispatcher.dispatch(
-                        scope=scope, call_id=call_id, tool_name=name,
-                        arguments=dict(arguments),
                     )
                 else:
-                    result = dispatcher.dispatch(
-                        scope=scope, call_id=call_id, tool_name=name,
-                        arguments=dict(arguments),
+                    dispatch = asyncio.to_thread(
+                        dispatcher.dispatch, scope=scope, call_id=call_id,
+                        tool_name=name, arguments=dict(arguments),
                     )
+                try:
+                    result = await asyncio.wait_for(dispatch, timeout=remaining_s)
+                except asyncio.TimeoutError as exc:
+                    raise ER2RequestError(
+                        "Gemini ER 2 feedback turn deadline exceeded during tool dispatch"
+                    ) from exc
                 result_json = result.model_dump(mode="json")
                 result_bytes = json.dumps(result_json, sort_keys=True,
                                           separators=(",", ":"), allow_nan=False).encode()

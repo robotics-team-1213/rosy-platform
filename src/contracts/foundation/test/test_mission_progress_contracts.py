@@ -30,8 +30,10 @@ def test_mission_progress_snapshot_names_each_independent_truth_axis():
         "mission": _axis("PROPOSED", source="fleet_missions"),
         "step": _axis("NOT_ADMITTED", source="fleet_missions"),
         "action": _axis(), "goal_evidence": _axis(),
-        "stop": _axis("DISPATCH_BLOCKED", source="fleet_dispatch_control",
-                       physical_state="UNKNOWN"),
+        "stop": _axis(
+            "DISPATCH_BLOCKED", source="fleet_dispatch_control",
+            physical_state="UNKNOWN",
+        ),
     })
 
     assert snapshot.stop.physical_state == "UNKNOWN"
@@ -131,6 +133,32 @@ def test_er2_feedback_context_is_explicitly_scoped_bounded_and_non_authoritative
         ))
 
 
+def test_er2_feedback_context_accepts_exact_utf8_byte_limit_and_rejects_one_over():
+    import json
+    from core_common.protocol.schemas import ER2_FEEDBACK_CONTEXT_MAX_BYTES
+
+    context = MissionFeedbackContext.model_validate(_feedback_context())
+    fields = context.model_dump(mode="json")
+    base_size = len(json.dumps(
+        fields, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False,
+    ).encode("utf-8"))
+    summary = fields["task_summary"]
+    exact_fields = {**fields, "task_summary": summary + "x" * (
+        ER2_FEEDBACK_CONTEXT_MAX_BYTES - base_size
+    )}
+    exact = MissionFeedbackContext.model_validate(exact_fields)
+
+    assert len(json.dumps(
+        exact.model_dump(mode="json"), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False,
+    ).encode("utf-8")) == ER2_FEEDBACK_CONTEXT_MAX_BYTES
+    with pytest.raises(ValidationError, match="8 KiB"):
+        MissionFeedbackContext.model_validate({
+            **exact_fields, "task_summary": exact_fields["task_summary"] + "x",
+        })
+
+
 def test_er2_trusted_turn_scope_requires_complete_identity_and_policy():
     scope = MissionFeedbackTurnScope.model_validate({
         "principal_id": "operator-1", "workcell_id": "cell-1",
@@ -167,3 +195,28 @@ def test_er2_tool_result_has_fixed_vocabulary_and_utf8_byte_limit():
         ER2ToolResult.model_validate({
             **result.model_dump(), "payload": {"reason": "한" * ER2_TOOL_RESULT_MAX_BYTES},
         })
+
+
+def test_er2_tool_result_accepts_exact_utf8_byte_limit_and_rejects_one_over():
+    import json
+    from core_common.protocol.schemas import ER2_TOOL_RESULT_MAX_BYTES
+
+    fields = {
+        "tool_name": "get_mission_status", "status": "accepted",
+        "reason_code": "STATUS_CURRENT", "event_id": 12,
+        "proposal_id": None, "payload": {"pad": ""},
+    }
+    empty_size = len(json.dumps(
+        fields, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False,
+    ).encode("utf-8"))
+    fields["payload"]["pad"] = "x" * (ER2_TOOL_RESULT_MAX_BYTES - empty_size)
+    exact = ER2ToolResult.model_validate(fields)
+
+    assert len(json.dumps(
+        exact.model_dump(mode="json"), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False,
+    ).encode("utf-8")) == ER2_TOOL_RESULT_MAX_BYTES
+    fields["payload"]["pad"] += "x"
+    with pytest.raises(ValidationError, match="4 KiB"):
+        ER2ToolResult.model_validate(fields)

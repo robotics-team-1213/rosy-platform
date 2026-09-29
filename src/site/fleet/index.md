@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
 - 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
 - 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
-- 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
-- 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
-- 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates

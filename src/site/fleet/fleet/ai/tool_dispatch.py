@@ -61,6 +61,13 @@ class MissionFeedbackToolDispatcher:
             if (not isinstance(turn_id, str) or not turn_id.strip()
                     or turn_id != turn_id.strip() or len(turn_id) > 96):
                 raise ValueError("invalid turn id")
+            validate_egress = getattr(egress_policy, "validate_for", None)
+            if not callable(validate_egress):
+                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
+            try:
+                validate_egress(scope=trusted_scope, task_class="PICK_PLACE")
+            except Exception:
+                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
             approved = getattr(egress_policy, "approved_data_classes", frozenset())
             if "camera_observation" not in approved:
                 return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
@@ -87,6 +94,35 @@ class MissionFeedbackToolDispatcher:
                 raise ValueError("trusted source did not return an image observation")
             if not isinstance(observation_scope, Mapping):
                 raise ValueError("observation scope is invalid")
+            expected_observation_scope = {
+                "mission_id": trusted_scope.mission_id,
+                "workcell_id": trusted_scope.workcell_id,
+                "action_id": trusted_scope.action_id,
+                "attempt_id": trusted_scope.attempt_id,
+                "dispatch_generation": trusted_scope.dispatch_generation,
+                "based_on_event_id": trusted_scope.event_watermark,
+                "observation_id": observation.observation_id,
+                "observed_at": observation.observed_at,
+                "image_sha256": observation.sha256,
+            }
+            if dict(observation_scope) != expected_observation_scope:
+                raise ValueError("observation source scope does not match the durable turn")
+            # Frame acquisition can take time. Re-read current Fleet authority and
+            # the data-egress policy immediately before sending image bytes onward.
+            checked = self.dispatch(
+                scope=trusted_scope, call_id=call_id, tool_name="propose_replan",
+                arguments=arguments,
+            )
+            if (checked.status != "unavailable"
+                    or checked.reason_code != "REPLAN_OBSERVATION_UNAVAILABLE"):
+                return checked
+            try:
+                validate_egress(scope=trusted_scope, task_class="PICK_PLACE")
+            except Exception:
+                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
+            approved = getattr(egress_policy, "approved_data_classes", frozenset())
+            if "camera_observation" not in approved:
+                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
             request_id = "feedback-" + hashlib.sha256(
                 f"{turn_id}:{call_id}".encode("utf-8"),
             ).hexdigest()

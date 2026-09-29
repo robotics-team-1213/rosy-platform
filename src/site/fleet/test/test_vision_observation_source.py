@@ -150,6 +150,35 @@ def test_reader_rejects_untrusted_or_unbounded_frame_metadata(updates):
         asyncio.run(run())
 
 
+@pytest.mark.parametrize("age_ms,accepted", [(30_000, True), (30_001, False)])
+def test_reader_post_action_freshness_limit_boundary(age_ms, accepted):
+    async def handler(_request):
+        return _response(
+            captured_at="2026-09-30T12:00:02+00:00",
+            updates={"x-frame-age-ms": str(age_ms)},
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            source = VisionPostActionObservationSource(
+                base_url="https://vision.example",
+                lease_signer=VisionLeaseSigner("v" * 32),
+                sources={"omx_01": _spec()}, client=client,
+                clock=lambda: datetime(2026, 9, 30, 12, 0, 32, tzinfo=timezone.utc),
+            )
+            return await source.capture_after(
+                scope=_scope(), based_on_event_id=19,
+                after_action_at="2026-09-30T12:00:01+00:00",
+            )
+
+    if accepted:
+        result = asyncio.run(run())
+        assert result["observation"].observation_id.startswith("vision:ceiling-north:52:")
+    else:
+        with pytest.raises(ValueError, match="metadata|stale"):
+            asyncio.run(run())
+
+
 def test_reader_fails_closed_for_unknown_workcell_or_insecure_remote_url():
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(

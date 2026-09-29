@@ -206,7 +206,13 @@ def test_async_replan_tool_uses_trusted_post_action_frame_and_fenced_candidate_w
             return {"proposal": {"proposal_id": "proposal-1"}, "created": True}
 
     class EgressPolicy:
-        approved_data_classes = frozenset({"camera_observation"})
+        approved_data_classes = frozenset({
+            "mission_progress", "mission_instruction", "camera_observation",
+        })
+
+        def validate_for(self, *, scope, task_class):
+            assert scope.workcell_id == "omx_01"
+            assert task_class == "PICK_PLACE"
 
     async def run():
         proposals = ProposalStore()
@@ -247,3 +253,138 @@ def test_async_replan_tool_uses_trusted_post_action_frame_and_fenced_candidate_w
         assert proposals.saved["candidate"]["source_observation"]["image_sha256"] == image.sha256
 
     asyncio.run(run())
+
+
+def test_async_replan_rechecks_scope_after_capture_before_image_egress():
+    mission = {
+        "principal_id": "operator-1", "workcell_id": "omx_01",
+        "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "status": "HOLD",
+        "reason": "GOAL_NOT_SATISFIED",
+        "plan": {"instruction": "Move the red block to the green tray"},
+    }
+    context = MissionFeedbackContext.model_validate({
+        "mission_id": "mission-1", "workcell_id": "omx_01",
+        "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "stop_generation": 4, "authority_epoch": 2,
+        "snapshot_event_id": 19, "snapshot_at": "2026-09-30T12:00:00Z",
+        "policy_revision": "policy-v1", "outcome_policy": "STATUS_AND_REPLAN",
+        "task_summary": "Move the red block to the green tray",
+        "mission_source": "fleet_missions", "step_source": "fleet_missions",
+        "action_source": "fleet_mission_events", "action_freshness": "FRESH",
+        "action_observed_at": "2026-09-30T12:00:00Z",
+        "goal_evidence_source": "trusted-test", "goal_evidence_freshness": "FRESH",
+        "goal_evidence_observed_at": "2026-09-30T12:00:01Z",
+        "stop_source": "fleet_dispatch_control", "stop_freshness": "CURRENT",
+        "stop_observed_at": "2026-09-30T12:00:00Z",
+        "mission_state": "HOLD", "step_state": "HOLD", "action_state": "SUCCEEDED",
+        "action_reason": None, "goal_evidence_state": "UNSATISFIED",
+        "goal_evidence_reason": "GOAL_NOT_SATISFIED",
+        "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
+    })
+
+    class MissionService:
+        def get(self, _mission_id):
+            return mission
+
+    class ProgressService:
+        def snapshot(self, _mission_id):
+            return {"progress": {"snapshot_event_id": 19}}
+
+        def model_context(self, _mission_id, **_scope):
+            return context.model_dump(mode="json")
+
+    observation = ImageObservation(
+        observation_id="obs-after-stop", camera_id="camera-top", frame_id="frame-8",
+        observed_at="2026-09-30T12:00:02Z", image_bytes=b"frame-bytes",
+        image_transform=ImageTransform.identity(source_width=640, source_height=480),
+        calibration_revision="cal-4", transform_revision="tf-9",
+    )
+
+    class ObservationSource:
+        async def capture_after(self, **_request):
+            mission["status"] = "RUNNING"
+            mission["reason"] = "STOP_GENERATION_CHANGED"
+            return {"observation": observation, "scope": {
+                "mission_id": "mission-1", "workcell_id": "omx_01",
+                "action_id": "action-1", "attempt_id": "attempt-1",
+                "dispatch_generation": 4, "based_on_event_id": 19,
+                "observation_id": observation.observation_id,
+                "observed_at": observation.observed_at,
+                "image_sha256": observation.sha256,
+            }}
+
+    class CandidateAdapter:
+        calls = 0
+
+        async def propose_pick_place(self, **_request):
+            self.calls += 1
+            raise AssertionError("stale observation must not leave Fleet")
+
+    class ProposalStore:
+        def create_feedback_candidate_fenced(self, **_request):
+            raise AssertionError("stale observation must not create a candidate")
+
+    class ApprovedEgress:
+        approved_data_classes = frozenset({
+            "mission_progress", "mission_instruction", "camera_observation",
+        })
+
+        def validate_for(self, *, scope, task_class):
+            assert scope.workcell_id == "omx_01"
+            assert task_class == "PICK_PLACE"
+
+    async def run():
+        candidate_adapter = CandidateAdapter()
+        services = {
+            "mission_service": MissionService(),
+            "progress_service": ProgressService(),
+            "proposal_store": ProposalStore(),
+            "authorization_check": lambda trusted: trusted.principal_id == "operator-1",
+        }
+        scope = MissionFeedbackTurnScope.model_validate({
+            "principal_id": "operator-1", "workcell_id": "omx_01",
+            "mission_id": "mission-1", "action_id": "action-1",
+            "attempt_id": "attempt-1", "dispatch_generation": 4,
+            "event_watermark": 19, "model_policy_revision": "policy-v1",
+            "outcome_policy": "STATUS_AND_REPLAN",
+        })
+
+        class DeniedEgress:
+            approved_data_classes = frozenset({
+                "mission_progress", "mission_instruction", "camera_observation",
+            })
+
+            def validate_for(self, **_scope):
+                raise ValueError("workcell egress was revoked")
+
+        class NoCaptureSource:
+            async def capture_after(self, **_request):
+                raise AssertionError("denied image egress must not capture or send a frame")
+
+        denied_dispatcher = MissionFeedbackToolDispatcher(
+            **services, post_action_observation_source=NoCaptureSource(),
+        )
+        denied = await denied_dispatcher.dispatch_replan(
+            scope=scope, turn_id="turn-1", call_id="call-denied",
+            arguments={"based_on_event_id": 19, "rationale": "Check placement."},
+            candidate_adapter=candidate_adapter, egress_policy=DeniedEgress(),
+        )
+        assert denied.status == "rejected"
+        assert denied.reason_code == "REPLAN_EGRESS_NOT_APPROVED"
+
+        dispatcher = MissionFeedbackToolDispatcher(
+            **services, post_action_observation_source=ObservationSource(),
+        )
+        result = await dispatcher.dispatch_replan(
+            scope=scope, turn_id="turn-1", call_id="call-1",
+            arguments={"based_on_event_id": 19, "rationale": "Check placement."},
+            candidate_adapter=candidate_adapter, egress_policy=ApprovedEgress(),
+        )
+        return result, candidate_adapter.calls
+
+    result, adapter_calls = asyncio.run(run())
+
+    assert result.status == "rejected"
+    assert result.reason_code == "REPLAN_NOT_ELIGIBLE"
+    assert adapter_calls == 0

@@ -3719,3 +3719,15 @@
 - Change: added an optional reader using fixed workcell/source/camera mappings and the existing source-scoped Vision lease endpoint. It bounds no-store JPEG response bytes, checks JPEG signature and freshness metadata, requires a frame captured after terminal Action time, and is injected/closed only with an explicitly configured worker. Updated D-358, implementation plan, and API reference v1.62. Default CLI/provider path remains disabled; no egress approval or credentials were added.
 - Evidence: ER2/Mission/Vision/API focused suite 119 passed. Documentation gate initially found stale generated indexes; regenerated both indexes before rerun. ROS/device/provider egress and runtime activation remain unverified and disabled.
 - Gate: SOURCE/LOCAL only. No camera/Mission provider egress approval, ROS, device, physical motion, or deployment.
+## 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
+- Change: replaced the adapter's duplicated 45-second literal with `ER2_PROVIDER_DEADLINE_SECONDS`; the same absolute turn deadline now bounds async replan dispatch and off-loop synchronous status reads. Added exact byte-limit tests for feedback context, tool results, replay, and provider response; exact freshness/cost/image boundaries; and call/step cap and malformed-step checks.
+- Evidence: D-357/D-358 host suites passed 136 tests. The new async-tool timeout test failed against the previous code and passed after deadline enforcement. Final documentation gate and harness lint rerun pending after index generation.
+- Gate: SOURCE/LOCAL only. No provider credential, policy dispatch, ROS/device, physical actuation, or deployment enabled.
+## 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- Change: ER 2 replan now revalidates the complete server egress policy before capture and rechecks current Mission eligibility, stop generation, and event watermark after capture immediately before the image selector request. The captured image envelope must exactly match the trusted turn scope; stale or revoked workcell state cannot send the frame to Gemini.
+- Evidence: a regression test reproduced the stale-frame egress path when Mission eligibility changed during capture; it passes with zero selector-provider calls. Final ER2 host batch and docs gate are rerunning.
+- Gate: SOURCE/LOCAL only. No provider credentials, provider enablement, policy dispatch, ROS/device, or deployment.
+## 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- Change: recorded the final boundary/deadline and post-capture egress-fence verification in the implementation plan and module/repository logs.
+- Evidence: ER2/D-357/D-358 contracts, stateless adapter, allowlisted tools, outbox, candidate fencing, Vision reader, app lifecycle, and Overhead preview suites: 137 passed. Documentation gate: 80 passed. Changed-file flake8 clean. Harness lint: 0 errors, 12 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. No provider credentials or egress approval configured; no policy dispatch, ROS, device, actuation, or deployment.
