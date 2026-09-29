@@ -63,3 +63,26 @@ using the `(mission_id, action_id, attempt_id, event_id)` index. Query-plan test
 guard the ordered reads against full-history scans and temporary sorting. These
 changes bound snapshot materialization, but do not claim target-device latency,
 checkpoint behavior, or physical-control performance.
+
+### Additional implementation note: SQLite queue reads and WAL measurement (2026-09-29)
+
+Fleet task readback now has a partial index for dispatchable queue rows and uses
+an indexed row-value range for exact queue position. The query forces that
+partial index because SQLite selected the broader status index in the measured
+query plan. On a synthetic 100,000-row Windows database (500 dispatchable
+rows), the legacy multi-range query through the general index measured 60.98 ms
+p50 / 100.76 ms p95. The row-value range through the partial index measured
+0.063 ms p50 / 0.076 ms p95. This is a local synthetic comparison, not
+target-host evidence. Legacy queued rows
+whose `queued_at` is NULL retain the previous calculation path.
+
+An isolated 500-commit benchmark measured WAL `FULL` at about 2.2 ms median per
+commit and 400 commits/s; `NORMAL` measured about 0.02-0.03 ms and 19,000-33,000
+commits/s. This benchmark does not justify weakening durability: SQLite states
+that a WAL transaction committed with `synchronous=NORMAL` may roll back after
+power loss or a system crash, while `FULL` adds a WAL sync at each commit. The
+test WAL stayed below 1,000 pages, so the 1,000-versus-10,000-page run did
+not exercise auto-checkpoint latency and cannot justify changing its threshold.
+Keep `FULL` and SQLite's default checkpoint until representative Linux/device
+measurements support a different policy. See [SQLite synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous)
+and [SQLite WAL](https://www.sqlite.org/wal.html).
