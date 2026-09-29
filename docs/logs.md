@@ -3455,3 +3455,11 @@
 - gate 변화: 없음.
 - 결정: D-346 Decision 1·2·3·6은 도구로, 4·5(번호 선점·짧은 커밋 창)는 규칙으로 솔루션 문서에 보존. sd_writer 부하 민감 시험은 이 변경 범위 밖 별도 결함으로 기록했다.
 - 교훈: 검사는 실제 부식 데이터로 증명한다 — 합성 입력만으로는 D-140 같은 잠복 부식을 믿을 수 없다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 사이트 콘솔의 로봇 화면 코드 등록 제안과 계획
+
+- 변경: `docs/adr/D-352-site-console-enrolls-robot-by-screen-code.md`(Proposed), `docs/plans/2026-09-29-fleet-robot-code-enrollment-plan.md`(S1–S6 + 벤치 D1–D3), ADR Log 행 추가. `tools/harness/harness.yaml`에 다른 브랜치·초안의 D-347–D-351을 예약했다.
+- 증거: SOURCE(코드 판독만, 실물 접촉 없음) — `FleetConsole`·`SiteHub`가 기동 때 로스터를 고정, `load_robots`가 빈 목록 거절, CORE `config.py`가 `ROSY_DEVICE_UID`를 읽지 않아 HELLO·`system/info`에 장치 UID가 없음, 페어링 토큰 상한 168 h와 부팅당 LCD 코드 1개가 맞물려 갱신 없이는 매주 재부팅이 필요함을 확인했다. 벤치 로봇 `rosy-pinky-8kcn`의 이미지 판(v1.41)은 D-351 실측을 인용했다.
+- gate 변화: 없음.
+- 결정: D-352 Proposed. Fleet이 `auth/pair`를 직접 부르고(`purpose: site`, 출처 `pair-site`, 역할 operator), 결속은 인증된 `system/info` 읽기, 자격은 Fleet SQLite 암호문 + 별도 키, 갱신은 회전 + 90일 계보 상한, FleetAgent 짝 토큰 제공은 D-351 Hub 결속 수정 뒤로 미뤘다.
+- 교훈: 로그인 코드 경로(D-193)는 사람 브라우저를 전제로 수명을 정했다 — 같은 경로를 서버 주체가 쓰면 "새 코드를 얻는 비용"이 수명 설계의 입력이 된다.
