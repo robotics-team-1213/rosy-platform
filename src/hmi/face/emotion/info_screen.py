@@ -105,6 +105,21 @@ def _draw_alarm(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
     draw.text((x, y), text, font=font, fill=_FG)
 
 
+def _draw_caution(draw: ImageDraw.ImageDraw, xy, text: str, font) -> None:
+    """주의 문장도 채움이다 — 도움 요청은 OK 와 같은 무게로 읽히지 않는다.
+
+    warn 채움 위에 ground 잉크(#feb432 대비 10:1 이상)로 얹는다. crit 칩과
+    형태는 같고 색만 다른 어휘다.
+    """
+    x, y = xy
+    left, _top, right, bottom = draw.textbbox((x, y), text, font=font)
+    pad = 4
+    draw.rounded_rectangle(
+        (left - pad, y - pad, right + pad, bottom + 2), radius=4, fill=_WARN
+    )
+    draw.text((x, y), text, font=font, fill=_BG)
+
+
 def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     """웨이크 정보 카드. 값이 없으면 '--'로 두고 화면은 반드시 그린다."""
     width, height = size
@@ -169,6 +184,8 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         draw.text((16, y), label, font=_font(14), fill=_MUTED)
         if value == "E-STOP":
             _draw_alarm(draw, (92, y), value, _font(16))
+        elif value == "ASSIST REQ":
+            _draw_caution(draw, (92, y), value, _font(16))
         else:
             value_font, value = _fit(draw, value, 16, width - 108)
             draw.text((92, y), value, font=value_font, fill=_FG)

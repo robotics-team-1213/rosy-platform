@@ -146,3 +146,9 @@
 - 증거: 상단 경보와 저전압/결측 배터리 줄의 적색→녹색 회귀; ROS-free 관련 시험 162 passed. `X:\DevTemp\rosy-lcd-visual-g3\`의 before/after 정상·E-STOP·E-STOP 저전압 PNG를 320×240에서 대조했고 정상 카드는 픽셀 동일했다.
 - gate 변화: SOURCE/LOCAL 검증 근거 추가. 실제 Pi LCD의 거리·각도·조명 판독은 DEVICE/BENCH HOLD.
 - 결정: D-280, D-306, D-309.
+
+## 2026-09-29 · uncommitted · fix(face): ASSIST REQ renders as a warn-filled chip (P4 round)
+
+- 변경: 웨이크 카드 HEALTH 행의 ASSIST REQ(사람 개입 요청)가 평문이어서 OK와 같은 무게로 읽혔다. `_draw_caution`(warn 채움 + ground 잉크)을 추가해 crit 칩과 형태가 같고 색만 다른 어휘로 정리했다(8항 위계).
+- 증거: face 시험 162 passed / 4 skipped. PIL 렌더 11장(웨이크 7 + 부팅 4) 0.5초 판독 독회 — `X:\DevTemp\rosy-uiux-p4-lcd`. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md` P4 절.
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. Pi 실물 폰트·거리·각도·조도·만료 복귀는 미측정이며 표면은 BENCH/DEVICE HOLD다.
