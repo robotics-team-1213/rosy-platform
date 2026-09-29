@@ -36,3 +36,5 @@
 로봇 CORE는 현재 HTTP 계약이므로 광고만으로 명령 주소를 바꾸지 않는다. Fleet의 로봇 발견 화면도 등록 전 관찰용이다. 로봇 FleetAgent는 승인된 지속 연결 `pairing_token`, 예상 `.local` 호스트명, 별도로 설치된 사이트 CA가 모두 있을 때만 `_rosy-fleet._tcp`를 찾아 outbound WSS로 연결한다. 재접속할 때마다 광고와 TLS health를 다시 확인한다. SD의 `pairing_credential`은 일회성 등록 값이므로 Agent 토큰으로 사용하지 않는다. 현장 호스트와 Pi에서 실제 연결은 별도 검증이 필요하다.
 
 Ubuntu Fleet PC에는 안정적인 호스트명을 지정하고 `<hostname>.local`을 사이트 TLS 인증서 SAN에 넣는다. Compose의 HTTPS 포트를 LAN에서 접근 가능한 주소에 바인딩한다. `rosy-fleet-advertise.service`는 Fleet API를, `rosy-overhead-advertise.service`는 같은 HTTPS proxy의 카메라 WSS 경로를 각자 광고한다. Android 앱은 `_rosy._tcp` 로봇과 `_rosy-overhead._tcp` 수신기를 함께 보여 주지만 WSS 프레임은 오버헤드 수신기에만 보낸다. mDNS 결과는 주소 후보이며, TLS 인증서 검증과 source별 token이 계속 필요하다. 서비스 생존 여부는 광고와 별도로 TLS health로 검사한다. 광고만으로 SSH 계정·호스트 키·배포 권한을 찾거나 생성하지 않는다.
+
+천장 카메라의 콘솔 승인 페어링은 [D-341](../adr/D-341-overhead-console-approved-pairing.md)(Proposed)을 본다. 발견은 여전히 자격을 주지 않는다. D-341은 이름 있는 운용자의 승인과 6자리 확인 코드 뒤에만 카메라 토큰과 사이트 CA를 발급하며, 그렇게 승인된 결과가 위 3·4항의 예상 호스트명과 사이트 CA를 대신 공급할 수 있게 한다. TXT 공개 키 `pair=rosy-pair/1`을 더한다.
