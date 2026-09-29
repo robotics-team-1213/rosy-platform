@@ -41,7 +41,7 @@ D-231은 패키지 이름을 바꾸지 않기로 했다. 이미지·systemd 유�
    | `src/sim/gz_sim/scripts/lane_live_view.html` | `Rosy 시뮬 — 라이브 미션` |
 
    참조용 페이지(`styleguide.html`, `template.html`)는 표면이 아니므로 규칙에서 뺀다(D-306). 새 표면은 `surfaces.yaml`에 등록할 때 이 규칙을 따르고, 시험이 등록된 표면의 제목을 검사한다.
-5. **앱 셸과 네이티브 앱의 자리는 D-337을 따른다.**
+5. **앱 셸과 네이티브 앱의 자리는 D-340을 따른다.**
 
 ### Alternatives
 
@@ -61,4 +61,4 @@ D-231은 패키지 이름을 바꾸지 않기로 했다. 이미지·systemd 유�
 
 ### References
 
-[D-231](D-231-layered-source-roots-keep-package-names.md), [D-243](D-243-operator-screens-live-in-hmi.md), [D-306](D-306-surface-ownership-and-uiux-closure.md), [D-317](D-317-control-and-shared-contract-source-boundaries.md), [D-329](D-329-surface-registry-and-visual-baseline.md), [D-337](D-337-app-shell-wraps-web-surfaces.md).
+[D-231](D-231-layered-source-roots-keep-package-names.md), [D-243](D-243-operator-screens-live-in-hmi.md), [D-306](D-306-surface-ownership-and-uiux-closure.md), [D-317](D-317-control-and-shared-contract-source-boundaries.md), [D-329](D-329-surface-registry-and-visual-baseline.md), [D-340](D-340-app-shell-wraps-web-surfaces.md).
