@@ -3313,3 +3313,9 @@
 - 변경: Google 공식 표준/streaming function call, Interactions 상태 및 영상 진행 기능을 현행 adapter와 대조해 조사 기록을 남겼다. D-334에 현행 단일 후보 도구, 미래 읽기·관측·재계획 후보, Fleet/OMX/목표/정지의 네 진행 축과 provider 세션 독립성을 결정했다. D-333 실행 계획에 진행 snapshot·재연결 시험 작업을 추가했다.
 - 증거: 공식 Google Robotics/Interactions/Live 문서와 `er2_standard.py`, `mission_store.py`, `action_store.py`, `pick_place_transaction.py`의 SOURCE 계약. live provider, ROS 장치와 실제 영상 진행 시험은 없다.
 - gate 변화: 없음. 새 tool declaration, 진행 API wire, provider 연속 loop, 자동 재계획과 DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): finalize D-334 and approve execution plan
+
+- 변경: D-334에서 첫 진행 조회를 Fleet snapshot과 Mission별 cursor 이벤트 조회로 확정했다. D-333 실행 계획에 SOURCE/LOCAL 순차 구현 승인 상태, 필수 재연결 경로, cursor 보존 범위 밖 재시작과 늦은 이벤트 시험을 명시했다.
+- 증거: 기존 단발 `propose_pick_place` 계약, D-333/D-334와 현행 Mission/Action 원장, Google 공식 조사 기록을 대조했다. 구현 API와 물리 동작은 이번 변경에 없다.
+- gate 변화: 없음. 추가 ER 2 tool declaration, provider loop, 실제 Mission 진행 API, OMX 장치 실행, DEVICE/FIELD는 후속 구현과 증거를 기다린다.

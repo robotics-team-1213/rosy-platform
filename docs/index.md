@@ -220,8 +220,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(er2): finalize D-334 and approve execution plan
 - 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
 - 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
 - 2026-09-29 · uncommitted · fix(face): ASSIST REQ warn chip — P4/P5/P6 round close
 - 2026-09-29 · uncommitted · fix(test): clear the CI core reds and the root test/ reds
-- 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter

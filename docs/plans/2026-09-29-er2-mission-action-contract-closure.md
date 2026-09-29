@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+**Status:** Approved for sequential SOURCE/LOCAL implementation (2026-09-29, D-333/D-334). Each task's tests and contract updates are its merge gate. ROS-SIM, artifact, device and field acceptance remain separate evidence gates; this status does not activate OMX motion or model autonomy.
+
 **Goal:** 운영자 또는 ER 2의 동일한 `PICK_PLACE` 후보를 승인된 Fleet Mission, OMX 로컬 Action, ROS 실행, 독립 목표 증거까지 추적 가능한 경로로 연결한다.
 
 **Architecture:** [D-333](../adr/D-333-er2-mission-device-action-contract-closure.md)의 세 수락 경계와 [D-334](../adr/D-334-er2-tool-and-progress-read-boundary.md)의 진행 조회 경계를 순서대로 연다. Fleet은 인증·Mission 원장·claim/stop generation을, OMX 로컬 owner는 Action 수락·ROS arm/gripper와 로컬 정지를, 등록된 관측 생산자는 목표 증거를 소유한다. 첫 범위는 고정 OMX 작업대의 operator 승인 `PICK_PLACE` 하나이며 ER 2는 후보 공급자다.
@@ -14,7 +16,7 @@
 
 - 이미 있는 SOURCE: `src/site/fleet/fleet/ai/{candidate,er2_standard}.py`, `src/site/fleet/fleet/server/{mission_store,mission_service,goal_evidence}.py`, `src/products/omx/adapter/omx_adapter/{target_evidence,action_store,pick_place_transaction,gripper_contract,ros_runtime}.py`. 새 파일로 다시 만들지 않는다. 그 중 생산 route/runner 호출이 없는 부분을 연결한다.
 - 전용 `/api/fleet/estop`은 감사·래치 기록 장애에도 인증된 정지 요청을 fanout하도록 구현돼 있다. `/api/fleet/do`의 `estop`은 일반 감사 gate와 순차 step을 거친다. 두 응답 모두 물리 정지의 영수증이 아니다. Fleet generation의 장치 측 fence, OMX 실제 stop/readback은 미완료다.
-- 첫 범위 밖: 중앙 Fleet `/api/v1/fleet/missions` 구현, 단독 `PICK`/`PLACE`, 다장치 DAG, Pinky+OMX 이동, ER 2 streaming/연속 tool loop, 모델 자동 admission/replan, 생산용 이미지 전송. 범위 밖 기능을 현재 capability로 광고하지 않는다.
+- 첫 범위 밖: 중앙 Fleet `/api/v1/fleet/missions` 구현, 단독 `PICK`/`PLACE`, 다장치 DAG, Pinky+OMX 이동, ER 2 streaming/연속 tool loop 및 `get_mission_status`·`request_observation`·`propose_replan` function declaration, 모델 자동 admission/replan, 생산용 이미지 전송. 범위 밖 기능을 현재 capability로 광고하지 않는다.
 - 단계별 각 변경 전 `git status --short`, 현재 `main`과의 ancestry/파일 겹침을 확인한다. 다른 작업의 dirty 파일을 stage하지 않는다. `SOURCE/LOCAL`, `ROS-SIM`, `ARTIFACT`, `DEVICE`, `FIELD` 결과를 별도 기록한다.
 
 ## 작업 0. 배포 위치와 최종 writer를 확인한다
@@ -95,9 +97,9 @@
 
 1. failing tests: provider Interaction이 완료돼도 Action `RUNNING`이면 Mission 완료가 아님; Action `SUCCEEDED` 뒤 goal 증거 대기는 별도; stop 요청 뒤 장치/물리 readback 불명은 정지 완료가 아님; stale device 보고·늦은 이전 attempt 이벤트·중복 이벤트·다른 principal 조회는 거절 또는 `UNKNOWN`으로 표시한다.
 2. `GET /api/fleet/missions/{id}`의 진행 snapshot에 Fleet Mission/Step, OMX Action, goal evidence, stop의 네 축을 source·마지막 event ID·observed time·revision·freshness·reason과 함께 투영한다. 현재 저장소에 없는 증거는 추정하지 않는다. 새 wire 필드·HTTP 상태는 schema/API Reference와 함께 확정한다. 숫자 진행률은 물리 근거가 없으면 내지 않는다.
-3. 장기 실행 화면의 재연결이 필요하면 `GET /api/fleet/missions/{id}/events?after_event_id=...` 같은 cursor 경로를 신규 후보로 검토한다. 실제 경로·순서·보존 기간·중복/누락 응답과 접근 권한을 schema·생산자/소비자 시험에서 동시에 고정한다. 구독/WebSocket은 실측 소비 요구가 있을 때만 추가한다.
+3. 첫 범위에 Mission별 cursor 이벤트 조회를 반드시 포함한다. 목표 경로는 `GET /api/fleet/missions/{id}/events?after_event_id=...`이다. 이벤트 ID는 Fleet 원장 순서이며 장치 시각의 순서가 아니다. 권한·cursor 검증·limit·보존 기간·중복/누락·보존 범위 밖 cursor의 snapshot 재시작 응답을 schema·API Reference·생산자/소비자 시험에서 함께 확정한다. 화면은 재연결 때 snapshot을 먼저 읽고 cursor로 변경분을 합친다. 구독/WebSocket은 별도 후속 범위다.
 4. 모델에 상태를 보여야 할 때 Fleet이 같은 snapshot의 민감정보를 줄인 principal/workcell 범위 버전을 입력으로 만들 수 있게 한다. 이 작업은 `get_mission_status` function declaration을 현행 ER 2 adapter에 추가하거나 provider tool-result loop를 여는 것이 아니다.
-5. Run: `python -m pytest src/site/fleet/test/test_mission_progress.py src/site/fleet/test/test_mission_dispatcher.py src/site/fleet/test/test_mission_goal_provenance.py -q`. Expected: 진행·완료·정지·불명의 네 축과 재연결 순서가 구별된다. 해당 경로만 stage/commit한다.
+5. Run: `python -m pytest src/site/fleet/test/test_mission_progress.py src/site/fleet/test/test_mission_dispatcher.py src/site/fleet/test/test_mission_goal_provenance.py -q`. Expected: 진행·완료·정지·불명의 네 축이 구별되고, 단절/중복/누락/오래된 cursor 후 재연결에서도 늦은 이벤트가 상태를 되돌리지 않는다. 해당 경로만 stage/commit한다.
 
 ## 작업 9. ER 2를 후보 입력으로 연결하고 비모델 경로와 비교한다
 
