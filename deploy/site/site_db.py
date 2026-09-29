@@ -180,8 +180,13 @@ def _rekey(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         parser.error("stop the Fleet service first, then pass --assume-stopped")
     from fleet.server.enrollment_store import CredentialKeyError, SealError, load_key_file, rekey
 
+    if not Path(args.path).is_file():
+        parser.error(f"database {args.path} does not exist")
     try:
-        count = rekey(args.path, load_key_file(args.old_key_file), load_key_file(args.new_key_file))
+        old_key, new_key = load_key_file(args.old_key_file), load_key_file(args.new_key_file)
+        if old_key == new_key:
+            parser.error("the new key must differ from the old key")
+        count = rekey(args.path, old_key, new_key)
     except (CredentialKeyError, SealError, OSError, sqlite3.Error) as exc:
         parser.error(str(exc))
     print(json.dumps({"path": str(args.path), "resealed": count}))

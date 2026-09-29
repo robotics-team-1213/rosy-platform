@@ -160,3 +160,22 @@ def test_rekey_reseals_enrolled_robot_credentials_offline(tmp_path):
                          "--new-key-file", str(new_file), "--assume-stopped"]) == 0
     assert unseal(new_key, store.ciphertext("rosy_09"), slot="rest", robot_id="rosy_09",
                   token_id="t1") == secret
+
+
+def test_rekey_refuses_a_missing_database_and_an_unchanged_key(tmp_path):
+    import base64
+
+    key_file = tmp_path / "same.key"
+    key_file.write_bytes(base64.b64encode(bytes(range(32))) + b"\n")
+    missing = tmp_path / "absent.sqlite3"
+    with pytest.raises(SystemExit):
+        site_db.main(["rekey", "--path", str(missing), "--old-key-file", str(key_file),
+                      "--new-key-file", str(key_file), "--assume-stopped"])
+    assert not missing.exists()
+    from fleet.server.enrollment_store import EnrollmentStore
+
+    database = tmp_path / "fleet.sqlite3"
+    EnrollmentStore(database)
+    with pytest.raises(SystemExit):
+        site_db.main(["rekey", "--path", str(database), "--old-key-file", str(key_file),
+                      "--new-key-file", str(key_file), "--assume-stopped"])

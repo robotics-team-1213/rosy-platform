@@ -130,7 +130,8 @@ Create the `robot_credential_key` secret once, before the first start:
 
 ```bash
 umask 077
-python3 -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())"   > "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
+python3 -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())" \
+  > "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
 chown root:10001 "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
 chmod 0640 "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
 ```
@@ -143,11 +144,23 @@ Losing the key means re-enrolling every enrolled robot. A missing or wrong key
 does not stop Fleet: enrollment answers 503, enrolled robots stay off the
 roster for that run and `robots.yaml` robots keep working; fix the key and
 restart, no codes needed. Rotate the key offline with the Fleet service
-stopped:
+stopped, running the utility inside the Fleet image like backup and restore
+(`compose` is the helper from "Backup and restore operations"). Write the new
+key to a separate root-only file first; mount both keys read-only:
 
-```bash
-python3 deploy/site/site_db.py rekey --path /var/lib/rosy/fleet.sqlite3   --old-key-file old.key --new-key-file new.key --assume-stopped
+```sh
+compose stop fleet
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$ROSY_SITE_SECRETS_DIR/robot_credential_key:/keys/old.key:ro" \
+  -v "$ROSY_SITE_SECRETS_DIR/robot_credential_key.new:/keys/new.key:ro" \
+  --entrypoint python3 fleet /opt/rosy/site_db.py rekey \
+  --path /var/lib/rosy/fleet.sqlite3 --old-key-file /keys/old.key \
+  --new-key-file /keys/new.key --assume-stopped
 ```
+
+Then replace `robot_credential_key` with the new file, back it up away from
+the database backup, and start Fleet. `rekey` refuses a database path that does
+not exist and a new key equal to the old one.
 
 The robot address is pinned at enrollment; reserve each enrolled robot's
 address in the router's DHCP table. When the same name appears at another
