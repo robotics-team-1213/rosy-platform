@@ -159,6 +159,7 @@
 | D-339 | 화면 제목과 폴더 이름은 역할을 드러낸다 — 패키지 이름은 그대로 두고 대응표를 시험으로 고정한다 |
 | D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 |
 | D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 |
+| D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 |
 
 ## 계획·결과 문서
 
@@ -213,9 +214,12 @@
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
+- [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
 
 ## 교훈 (docs/solutions)
 
@@ -228,8 +232,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
-- 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료
-- 2026-09-29 · uncommitted · docs(plans): D-337 T2 착지 — 관측 폴러 전송 완료
-- 2026-09-29 · uncommitted · docs(plans): D-337 T1 착지 — 융합 순수 로직 완료 (항목 복원)
-- 2026-09-29 · uncommitted · docs(adr): D-336 표행 인코딩 복구
+- 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+- 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
+- 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
+- 2026-09-30 · uncommitted · docs(adr): D-349 도크 자동 충전 코드 준비 완료 기록
+- 2026-09-30 · uncommitted · docs(dock): 전원 시판품 확정·물리 조립 목록

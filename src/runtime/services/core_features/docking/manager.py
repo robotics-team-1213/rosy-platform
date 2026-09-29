@@ -97,7 +97,10 @@ class DockingManager:
         self._detector: Optional[DockDetector] = None
         self._agent: Any = None
         self._charging = ChargingConfirmation(
-            clock=clock, window_s=self._cfg.charge_confirm_s)
+            clock=clock, window_s=self._cfg.charge_confirm_s,
+            instrumented=self._cfg.instrumented)
+
+        self._full_announced = False  # D-350: docking.full 1회 방출 플래그
 
         self._phase_since = 0.0
         self._last_seen_at: Optional[float] = None
@@ -518,6 +521,9 @@ class DockingManager:
             self._emit("docking.charging" if confirmed else "docking.charge_lost",
                        "info", {"dock_id": self._dock.id if self._dock else None})
 
+        # D-350: 만춫 검출 — CHARGING→DOCKED 전이(전류 종단) 또는 전압 유지.
+        self._check_full(self._charging)
+
     def _tick_undocking(self, now: float) -> None:
         if self.executor is None:
             self._state = DockState.UNDOCKED
@@ -637,7 +643,29 @@ class DockingManager:
     def _mark_docked(self) -> None:
         self._state = DockState.DOCKED
         self._phase = None
+        self._full_announced = False
         self._emit("docking.docked", "info", {"dock_id": self._dock.id})
+
+    def _check_full(self, charging: 'ChargingConfirmation') -> None:
+        """D-350: DOCKED 상태에서 만춫을 감지하면 `docking.full` 이벤트를 1회 낸다."""
+        if self._state is not DockState.DOCKED:
+            return
+        voltage = charging.peak_v
+        if voltage is None:
+            return
+
+        if self._full_announced:
+            if voltage < self._cfg.full_exit_v:
+                self._full_announced = False  # 재충전
+            return
+
+        if voltage >= self._cfg.full_enter_v:
+            self._full_announced = True
+            self._emit("docking.full", "info", {
+                "dock_id": self._dock.id,
+                "source": charging.source,
+                "voltage_v": round(voltage, 2),
+            })
 
     def _enter(self, phase: DockPhase) -> None:
         self._phase = phase

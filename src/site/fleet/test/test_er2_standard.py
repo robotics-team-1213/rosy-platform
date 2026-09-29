@@ -12,7 +12,7 @@ from fleet.ai.er2_standard import (
     GeminiER2StandardAdapter,
     ImageObservation,
 )
-from fleet.ai.candidate import SpatialSelector
+from fleet.ai.candidate import ImageTransform, SpatialSelector
 
 
 def _tool_response(*, arguments=None, name="propose_pick_place", call_id="call-1"):
@@ -38,6 +38,9 @@ def _observation():
         observed_at="2026-09-29T12:00:00Z",
         image_bytes=b"test-image-bytes",
         mime_type="image/jpeg",
+        image_transform=ImageTransform.identity(source_width=640, source_height=480),
+        calibration_revision="cal-4",
+        transform_revision="tf-9",
     )
 
 
@@ -119,6 +122,10 @@ def test_er2_standard_rejects_text_only_unknown_and_multiple_tool_calls():
                          "name": "move", "arguments": {}}],
         },
         {"id": "i3", "outputs": _tool_response()["outputs"] * 2},
+        {"id": "i4", "outputs": [
+            {"type": "text", "text": "I found both objects."},
+            *_tool_response()["outputs"],
+        ]},
     ]
 
     async def scenario(payload):
@@ -135,6 +142,26 @@ def test_er2_standard_rejects_text_only_unknown_and_multiple_tool_calls():
     for response in responses:
         with pytest.raises(ER2ProposalError):
             asyncio.run(scenario(response))
+
+
+def test_er2_standard_rejects_oversized_provider_response():
+    payload = _tool_response()
+    payload["unrelated_output"] = "x" * (65 * 1024)
+
+    async def handler(_request):
+        return httpx.Response(200, json=payload)
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            return await adapter.propose_pick_place(
+                request_id="bounded-response", instruction="Pick and place.",
+                observation=_observation(),
+            )
+
+    with pytest.raises(ER2ProposalError, match="64 KiB"):
+        asyncio.run(scenario())
 
 
 def test_er2_standard_http_error_is_fail_closed_and_does_not_retry():
@@ -166,6 +193,29 @@ def test_image_observation_rejects_empty_or_unsupported_media():
         ImageObservation("obs", "camera", "frame", "now", b"frame", "image/gif")
     with pytest.raises(ER2ProposalError, match="14 MiB"):
         ImageObservation("obs", "camera", "frame", "now", b"x" * (14 * 1024 * 1024 + 1))
+
+
+def test_image_observation_requires_transform_provenance():
+    with pytest.raises(ER2ProposalError, match="image_transform"):
+        ImageObservation(
+            "obs", "camera", "frame", "now", b"frame",
+            calibration_revision="cal-4", transform_revision="tf-9",
+        )
+
+
+def test_image_observation_requires_calibration_and_transform_provenance():
+    with pytest.raises(ER2ProposalError, match="calibration_revision"):
+        ImageObservation(
+            "obs", "camera", "frame", "now", b"frame",
+            image_transform=ImageTransform.identity(source_width=640, source_height=480),
+            transform_revision="tf-9",
+        )
+    with pytest.raises(ER2ProposalError, match="transform_revision"):
+        ImageObservation(
+            "obs", "camera", "frame", "now", b"frame",
+            image_transform=ImageTransform.identity(source_width=640, source_height=480),
+            calibration_revision="cal-4",
+        )
 
 
 def test_selector_requires_image_space_evidence_and_stable_request_identity():

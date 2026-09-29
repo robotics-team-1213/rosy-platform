@@ -68,3 +68,11 @@
 - Failure behavior: journal before driver submission; a timeout becomes UNKNOWN and is not replayed. A PREPARED intent can resume once; SUBMITTING/UNKNOWN cannot. Cancel acknowledgment remains CANCEL_REQUESTED, driver terminal readback is attempt-scoped, and no Action terminal state confirms the Mission goal or physical stop.
 - Evidence: OMX adapter/profile/vendor-boundary suite 140 passed, 3 skipped. Windows source tests use fake injected ports; no selected ROS/gripper port, systemd entrypoint, physical stop proof, DEVICE or FIELD acceptance is present.
 - Gate: SOURCE only; capability remains disabled.
+
+## 2026-09-29 · uncommitted · fix(omx): 제출 기록을 정지 펜스 잠금 안으로
+
+- 변경: `action_runner.submit()`이 driver 호출만 fence 잠금 안에서 돌리고 `record_submission`(SUBMITTING→ACCEPTED)은 잠금 밖에서 하던 것을, 기록까지 `_fenced_submission` 연산으로 묶어 잠금 안에서 마치게 했다. 이전에는 정지 요청 스레드가 잠금 해제 즉시 cancel 팬아웃을 실행해 아직 SUBMITTING인 진행 중 시도를 `cancel_unresolved`의 ACCEPTED/RUNNING 필터가 놓쳤다 — 펜스가 살아 있는 동안 도착한 정지가 진행 중 제출을 취소 없이 흘려보내는 결정적 경주(b3a65e3c 이후 main에서 `test_stop_and_final_submit_are_serialized_through_the_driver_call` 상시 붉음).
+- 증거: `python -m pytest src/products/omx/adapter/test/ src/runtime/gateway/test/test_protocol_version_alignment.py src/runtime/api_web/test/ -q` 160 passed 16 skipped. 회귀로 gateway API·dashboard·fleet 777 passed 5 skipped. flake8 clean.
+- gate 변화: 없음. SOURCE/LOCAL — 실기 드라이버 직렬화는 DEVICE 회차가 증명한다.
+- 결정: D-333/D-336 정지 경계의 시험 의도(제출과 정지 취소가 driver 호출로 직렬화)를 구현에 맞춘 수정이다.
+- 교훈: 저널은 파일 끝에 붙인다 — 머리글 앵커는 그 항목이 마지막인지 확인하고.

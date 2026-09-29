@@ -39,7 +39,8 @@ class MissionDispatcher:
                  transport: DeviceActionTransport,
                  omx_instances: Mapping[str, str], *,
                  now: Callable[[], datetime] | None = None,
-                 grant_ttl_s: float = 15.0) -> None:
+                 grant_ttl_s: float = 15.0,
+                 on_action_terminal: Callable[[str], object] | None = None) -> None:
         self.mission_service = mission_service
         self.task_store = task_store
         self.transport = transport
@@ -51,6 +52,7 @@ class MissionDispatcher:
             raise ValueError("Action grant TTL must be between 1 and 60 seconds")
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.grant_ttl_s = float(grant_ttl_s)
+        self.on_action_terminal = on_action_terminal
 
     def dispatch_next(self) -> dict[str, Any] | None:
         running = self.mission_service.next_running()
@@ -246,6 +248,8 @@ class MissionDispatcher:
             grant.mission_id, event_id=identity, action_id=grant.action_id,
             attempt_id=grant.attempt_id, outcome=outcome, result=result,
         )
+        if outcome == "SUCCEEDED" and self.on_action_terminal is not None:
+            self.on_action_terminal(grant.mission_id)
         return {"mission_id": grant.mission_id, "action_id": grant.action_id,
                 "attempt_id": grant.attempt_id,
                 "state": ("UNKNOWN" if outcome == "UNKNOWN" else mission["status"]),

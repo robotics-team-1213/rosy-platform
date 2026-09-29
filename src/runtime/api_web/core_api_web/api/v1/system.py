@@ -31,7 +31,11 @@ from core_api_web.api.deps import (
 )
 from core_api_web.api.errors import ApiError
 from core_common.config import ConfigError, patch_local_config
-from core_common.domain.capabilities import runtime_truth, withhold_hardware_flags
+from core_common.domain.capabilities import (
+    lifecycle_from,
+    runtime_truth,
+    withhold_hardware_flags,
+)
 from core_common.identity import validate_robot_id, validate_robot_name
 
 
@@ -194,6 +198,12 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
             "global_costmap": svc.maps.get_costmap("global") is not None,
         },
     }
+    # `lifecycle` (v1.58 additive, D-347): per-flag runtime state in the one
+    # capability lifecycle vocabulary. `activating` is reserved for on-demand
+    # graph start and has no producer yet; clients read it as "not ready,
+    # not failed". The inventory descriptors' presentation states map to
+    # these in the D-347 table, not in code.
+    data["lifecycle"] = lifecycle_from(svc.capability.to_dict(), truth.reasons)
     return data
 
 

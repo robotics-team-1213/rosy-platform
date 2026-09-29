@@ -74,6 +74,20 @@
 - 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
 - gate 변화: 없음.
 
+
+## 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
+
+- Change: detect.py built cv2.aruco.ArucoDetector at import time, which exists only on OpenCV 4.7+ — the CI image (and the device precedent) ship 4.6, so every overhead test failed at collection with AttributeError. The module now picks the 4.7+ detector when present and falls back to the 4.6-era cv2.aruco.detectMarkers module function, the same pattern dock_tag.py already ships for the same reason.
+- Evidence: python -m pytest src/site/overhead/test -q 86 passed on a host OpenCV that has ArucoDetector (new branch exercised); the fallback mirrors the proven dock_tag shape. CI run 36572518093 shows the failure this removes.
+- Gate: SOURCE/LOCAL only; no device or FIELD claim.- 추가(같은 회차): 시험 픽스처의 마커 합성도 같은 갭이었다(4.7+ generateImageMarker vs 4.6 drawMarker). detect.py에 generate_marker_image() 헬퍼를 두고 두 시험이 그걸 쓴다 — OpenCV 버전 선택은 이 모듈에만 격리된다는 원칙 유지. 86 passed, flake8 clean.
+- 추가(같은 회차): CI 세그폴트는 4.6 바인딩에서 직접 생성한 DetectorParameters 객체가 module detectMarkers와 어긋난 것이다. dock_tag과 같이 DetectorParameters_create를 우선하고 레거시 경로는 흑백 프레임을 먹인다(16e884a9 회차의 CI 36574967367 근거).
+
+## 2026-09-30 · uncommitted · fix(overhead-app): 적응형 JPEG 화질과 정지 중 대상 표시
+
+- 변경: 1280 px·품질 70 JPEG가 `max_bytes`(200 KB)를 조금 넘는 장면에서 모든 프레임이 버려져 0 fps가 되던 문제를 고쳤다. 초과 프레임은 최대 두 번 10씩 낮춰 다시 인코딩하고(하한 30), 다음 프레임은 지금까지 시도한 가장 낮은 화질에서 시작하며, 30회 연속으로 맞으면 5 올려 본다. 올려 본 화질이 넘치면 마지막으로 맞았던 화질로 곧장 돌아간다. 카메라 재바인딩·화질·폭 변경 때 적응 상태를 초기화한다. 설정 `jpeg_quality`는 상한이고 초과 프레임은 여전히 보내지 않는다. 정지 중 스트림 화면은 지난 실행 대상 대신 저장된 대상을 보인다.
+- 증거: Galaxy S21(Android 15) 실기기에서 수정 전 0 fps·버림 누적, 수정 후 3.0 fps·버림 0, 콘솔 미리보기 경로 HTTP 200. 저장 대상을 바꾸면 재시작 없이 표시가 바뀐다. JVM 단위 시험 통과(아래 커밋 참조). 독립 리뷰(2026-09-30) 지적 1·2·4·5 반영.
+- gate 변화: DEVICE(휴대폰 송출 단독) 증거 추가. 현장 보정·Ubuntu/TLS·FIELD는 PARKED 그대로.
+
 ## 2026-09-30 · feat/overhead-app-ceiling-ux · 천장 설치용 앱: 다음 행동을 말하는 상태, 화면 꺼짐 송출, 기기 상태
 
 - 변경: 연결 실패를 원인(닿지 않음·거부·이름 못 찾음·TLS·토큰·같은 이름 중복·Wi-Fi 없음)으로 나눠 다음 행동을 한 문장으로 보여 주고, 원문은 `자세히` 뒤에 둔다(`NetworkFailure`, `ProblemGuide`). 배터리·충전·온도를 화면과 상시 알림에 보이고 열 상태 MODERATE 이상이나 충전 없이 20% 미만이면 경고한다(`DeviceHealth`, 휴대폰 안에서만; 선로 변경 없음). 수신기 `status`로 코너 마커 점 4개와 보이는 로봇을 보인다(`CornerGuide`). `버림`을 `건너뜀`으로 바꾸고 뜻을 한 줄로 적었으며, 자동 조정으로 낮아진 JPEG 품질을 보인다. 송출 중에도 연결 설정을 읽기 전용으로 연다. 화면 글자가 검정으로 떨어지던 테마 결함(Column에 Surface가 없음)을 고쳤다.

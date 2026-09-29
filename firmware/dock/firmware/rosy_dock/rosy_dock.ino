@@ -18,13 +18,17 @@
 static const int PIN_OUTPUT_ENABLE = 25;  // drives the contact relay / FET
 static const int PIN_CURRENT_SENSE = 34;  // ADC, current shunt amplifier
 static const int PIN_VOLTAGE_SENSE = 35;  // ADC, output voltage divider
-static const int PIN_LOAD_SENSE = 32;     // ADC, probe current through contacts
+static const int PIN_LIMIT_SWITCH = 32;   // digital, NO limit switch to GND
+                                          // (INPUT_PULLUP); pressed = docked
+// Reserved footprint only, not populated: GPIO33 (charger NTC) and GPIO36
+// (contact NTC). Temperature sensing is deferred — see README.
 
 // --- thresholds -------------------------------------------------------------
 
-// A pack presents a load; open contacts do not. Probing is done at a current
-// far below anything that could matter if the "load" turns out to be a coin.
-static const float LOAD_PROBE_THRESHOLD_V = 0.25f;
+// A pressed limit switch means the robot body is fully docked. No press,
+// no output — the switch gates the relay in spirit, and the ADC probe is
+// gone: one less threshold to drift, and no self-triggering the way a
+// magnetic sensor next to holding magnets would.
 static const float CHARGING_CURRENT_A = 0.05f;   // above this, current is flowing
 static const float OVER_CURRENT_A = 3.0f;        // fault: fold back immediately
 static const float OVER_VOLTAGE_V = 8.7f;        // fault: 2S full is 8.4 V
@@ -70,12 +74,21 @@ static float readVolts(int pin, float scale) {
   return (analogRead(pin) / 4095.0f) * 3.3f * scale;
 }
 
-static void sampleSensors() {
-  currentA = readVolts(PIN_CURRENT_SENSE, 1.0f) / 0.4f;   // shunt amp gain
-  outputVoltageV = readVolts(PIN_VOLTAGE_SENSE, 4.0f);    // 1:4 divider
+// One noisy ADC sample must not trip a fault foldback. Four samples are
+// cheap at a 50 ms tick and keep the thresholds honest.
+static float readAvgVolts(int pin, float scale) {
+  uint32_t total = 0;
+  for (int i = 0; i < 4; i++) {
+    total += analogRead(pin);
+  }
+  return (total / 4.0f / 4095.0f) * 3.3f * scale;
+}
 
-  const float probe = readVolts(PIN_LOAD_SENSE, 1.0f);
-  const bool present = probe > LOAD_PROBE_THRESHOLD_V;
+static void sampleSensors() {
+  currentA = readAvgVolts(PIN_CURRENT_SENSE, 1.0f) / 0.4f;   // shunt amp gain
+  outputVoltageV = readAvgVolts(PIN_VOLTAGE_SENSE, 4.0f);    // 1:4 divider
+
+  const bool present = (digitalRead(PIN_LIMIT_SWITCH) == LOW);
 
   const uint32_t now = millis();
   if (!present) {
@@ -154,6 +167,7 @@ static void handleStatus() {
 
 void setup() {
   pinMode(PIN_OUTPUT_ENABLE, OUTPUT);
+  pinMode(PIN_LIMIT_SWITCH, INPUT_PULLUP);
   setOutput(false);         // rule 2: de-energised on boot, before anything else
 
   Serial.begin(115200);

@@ -172,3 +172,6 @@ modules:
     tests: [test/test_network_topology_contracts.py, test/test_harness_contracts.py]
     functional_kind: records
     functional: [test/test_network_topology_contracts.py]
+
+  - name: isaac_sim
+    path: src/sim/isaac_sim

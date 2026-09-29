@@ -78,7 +78,8 @@ def _resolution(candidate, *, workcell_id, instance_id, now):
 
 
 def _client(tmp_path, *, resolver=_resolution, named_users=True,
-            enable_mission_dispatcher=False, action_transport=None):
+            enable_mission_dispatcher=False, action_transport=None,
+            goal_evidence_enabled=False):
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = tmp_path / "fleet.sqlite3"
     robot = FakeRobot("rosy_01")
@@ -89,16 +90,55 @@ def _client(tmp_path, *, resolver=_resolution, named_users=True,
                    "viewer-secret": {"principal_id": "viewer-1", "role": "viewer"}}
     site_users = ({sha256(token.encode()).hexdigest(): value
                    for token, value in credentials.items()} if named_users else None)
+    mission_service = MissionService(MissionStore(db))
+    goal_evidence_service = None
+    if goal_evidence_enabled:
+        import yaml
+        from fleet.server.goal_evidence_registry import load_goal_evidence_registry
+        from fleet.server.goal_evidence_service import GoalEvidenceService
+        from fleet.server.goal_evidence_store import GoalEvidenceStore
+
+        config = tmp_path / "goal-evidence.yaml"
+        config.write_text(yaml.safe_dump({"producers": [{
+            "producer_id": "top-camera-evaluator", "token_env": "GOAL_TOKEN",
+            "workcell_id": "omx_01", "predicate_id": "block-in-tray",
+            "object_id": "block-1", "destination_id": "tray-1",
+            "evidence_source": "camera_observation", "max_age_s": 5,
+            "grace_s": 10, "evaluator_revisions": ["placement-v1"],
+            "valid_until": "2026-10-01T00:00:00+00:00",
+        }]}), encoding="utf-8")
+        registry = load_goal_evidence_registry(config, environ={"GOAL_TOKEN": "source-secret"})
+        goal_evidence_service = GoalEvidenceService(
+            mission_service, registry, GoalEvidenceStore(db),
+        )
     app = create_app(
         console, task_service=tasks, site_users=site_users,
-        mission_service=MissionService(MissionStore(db)),
+        mission_service=mission_service,
         proposal_store=ProposalStore(db), candidate_resolver=resolver,
+        goal_evidence_service=goal_evidence_service,
         enable_mission_dispatcher=enable_mission_dispatcher,
         omx_instances=({"omx_01": "omx_01_control"}
                        if enable_mission_dispatcher else None),
         omx_action_transport=action_transport,
     )
     return TestClient(app), tasks, credentials
+
+
+def test_goal_evidence_endpoint_uses_separate_producer_token(tmp_path):
+    client, _, _ = _client(tmp_path, goal_evidence_enabled=True)
+    path = "/api/fleet/goal-evidence"
+
+    missing = client.post(path, json={"mission_id": "mission-1", "evidence": {}})
+    rejected = client.post(path, headers={"X-Goal-Evidence-Token": "wrong"},
+                           json={"mission_id": "mission-1", "evidence": {}})
+    disabled = _client(tmp_path / "without-registry")[0].post(
+        path, headers={"X-Goal-Evidence-Token": "source-secret"},
+        json={"mission_id": "mission-1", "evidence": {}},
+    )
+
+    assert missing.status_code == 401
+    assert rejected.status_code == 401
+    assert disabled.status_code == 404
 
 
 def _create(client, token="operator-secret", candidate=None, request_key="req-1"):
