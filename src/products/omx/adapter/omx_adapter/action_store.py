@@ -53,7 +53,10 @@ class ActionStore:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
+            mode = connection.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+            if str(mode).lower() != "wal":
+                raise RuntimeError(f"SQLite WAL mode is required, got {mode!r}")
+            connection.execute("PRAGMA synchronous=FULL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version > 1:
                 raise RuntimeError(f"unsupported Action database schema version {version}")
@@ -110,6 +113,7 @@ class ActionStore:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA busy_timeout=5000")
+        connection.execute("PRAGMA synchronous=FULL")
         return connection
 
     @staticmethod

@@ -92,3 +92,12 @@ def test_candidate_instruction_has_a_field_level_bound(tmp_path):
         store.create(principal_id="operator-1", request_key="request-1",
                      workcell_id="omx_01", instance_id="omx_01_control",
                      candidate=candidate)
+
+
+def test_standalone_proposal_database_uses_wal_and_full_sync_on_each_connection(tmp_path):
+    store = ProposalStore(tmp_path / "proposal-only.sqlite3")
+
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000

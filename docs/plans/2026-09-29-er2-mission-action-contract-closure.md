@@ -127,6 +127,17 @@
 - Evidence: focused dispatcher/store/service/API, stop fence, OMX Action API/store, shared schema, and API contract docs bundle: 83 passed. Full Fleet suite: 665 passed, 5 skipped; API web: 70 passed, 13 skipped; OMX adapter: 85 passed, 3 skipped; foundation contracts: 102 passed. Harness `generate` completed and `lint` reported 0 errors/17 existing freshness warnings. `git diff --check` passed. The optional combined network-topology/harness test run reached 92% but stalled without a summary and was interrupted; no pass is claimed for that command.
 - Limits: source implementation only. The dispatcher remains opt-in. Device service installation, selected ROS/gripper driver, ROS-SIM, physical stop proof, and FIELD acceptance remain HOLD/PARKED.
 
+### Task 7 execution record (2026-09-29)
+
+- SOURCE implementation: Goal completion requires a registered trusted evidence verifier and a matching post-action camera observation plus fresh OPEN gripper readback, both correlated to the persisted action and attempt. Missing or invalid provenance holds the Mission. The current application composition has no registered verifier, so Mission completion remains fail-closed until one is explicitly wired and reviewed.
+- Audit bound: goal-evidence strings have field-specific size limits. Rejected evidence stores a bounded field list/count and digest in Mission history, never arbitrary raw producer values.
+- SQLite policy: Fleet journals and OMX Action journal use WAL, `synchronous=FULL`, foreign keys, and a 5-second busy timeout on every connection. WAL remains SQLite's single-writer mode; no unsupported claim is made that it increases parallel write throughput. Default auto-checkpoint is retained. Mission ready/reconciliation scans and policy-evidence latest reads use composite indexes verified with `EXPLAIN QUERY PLAN`, with no temporary sort B-tree.
+- Performance evidence: synthetic 50,000-row Mission database, 500 ready and 500 reconciliation-pending rows. Exact ready lookup/order query improved from 1,325.6 ms to 3.7 ms per 250 lookups; reconciliation lookup improved from 6,642.8 ms to 3.4 ms per 250. Local Windows synthetic benchmark only; it does not predict device storage, concurrent production load, or end-to-end latency.
+- Durability decision: retain `FULL`; do not use `NORMAL`/`OFF` for Action, stop, Mission, or audit journals. SQLite documents the power-loss tradeoff for weaker synchronization. WAL checkpoint tuning is deferred until representative device measurements.
+- References: [SQLite WAL](https://www.sqlite.org/wal.html), [SQLite PRAGMAs](https://www.sqlite.org/pragma.html), [EXPLAIN QUERY PLAN](https://sqlite.org/eqp.html).
+- Verification: post-review goal/Mission/policy tests: 38 passed; full Fleet suite after audit-bound changes: 676 passed, 5 skipped. Benchmark reproduction, source-to-device latency, power-loss behavior on target storage, and DEVICE/FIELD evidence remain separate gates.
+- Limits: source only. Software Mission state and SQLite durability do not establish physical grasp, placement, emergency-stop performance, or field acceptance.
+
 ## 완료 기준
 
 운영자 요청 한 건에 대해 `request_key → proposal_id → mission_id/step_id → action_id/attempt_id → driver goal ID → 독립 goal evidence`가 같은 프레임·장치·generation으로 추적되고, 중복·늦은 결과·정지·재시작에서도 물리 작업이 자동 재발행되지 않아야 SOURCE/LOCAL을 완료로 판정한다. ROS-SIM, 설치 산출물, 실물 동작과 물리 정지는 각각의 증거가 생길 때만 승격한다. 모델 후보만 시험한 결과로 OMX capability를 활성화하지 않는다.

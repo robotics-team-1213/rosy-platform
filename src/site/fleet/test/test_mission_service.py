@@ -79,6 +79,11 @@ def test_model_completion_text_cannot_confirm_a_mission_goal(tmp_path):
                 "predicate_id": "block-in-tray", "object_id": "block-1",
                 "destination_id": "tray-1", "evidence_source": "model_summary",
                 "evidence_id": "model-turn-88", "evidence_revision": "gemini-er2",
+                "producer_id": "gemini-er2", "observation_id": "obs-post",
+                "observation_digest": "b" * 64, "evaluator_revision": "er2-v1",
+                "action_id": "action-1", "attempt_id": "attempt-1",
+                "gripper_state": "OPEN", "gripper_evidence_id": "grip-1",
+                "gripper_evidence_revision": "gripper-v1", "gripper_observed_at": 10.0,
                 "observed_at": 10.0, "satisfied": True,
             }, now=10.1, max_age_s=0.5,
         )

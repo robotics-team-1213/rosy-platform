@@ -14,7 +14,12 @@ def evidence(**changes):
     values = dict(
         predicate_id="block-in-tray", object_id="block-1", destination_id="tray-1",
         evidence_source="camera_observation", evidence_id="camera:frame-55",
-        evidence_revision="cal-v3/tf-v7", observed_at=10.0, satisfied=True,
+        evidence_revision="cal-v3/tf-v7", producer_id="camera-evaluator-1",
+        observation_id="obs-post-1", observation_digest="b" * 64,
+        evaluator_revision="object-in-tray-v3", action_id="action-1",
+        attempt_id="attempt-1", gripper_state="OPEN", gripper_evidence_id="grip-1",
+        gripper_evidence_revision="gripper-v2", gripper_observed_at=10.0,
+        observed_at=10.0, satisfied=True,
     )
     values.update(changes)
     return GoalEvidence(**values)

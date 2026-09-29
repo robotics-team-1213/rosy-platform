@@ -9,6 +9,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import Mapping
 
+from .sqlite_policy import configure_connection, enable_wal
+
 
 class SightingStore:
     """Persist pose rows and source lineage without ever storing credentials or media."""
@@ -17,8 +19,7 @@ class SightingStore:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("PRAGMA synchronous=FULL")
+            enable_wal(connection)
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS latest_sightings (
@@ -87,4 +88,4 @@ class SightingStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row
-        return connection
+        return configure_connection(connection)

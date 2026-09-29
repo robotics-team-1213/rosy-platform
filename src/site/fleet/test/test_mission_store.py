@@ -113,13 +113,22 @@ def test_driver_action_success_does_not_confirm_goal_and_goal_evidence_releases_
     assert tasks.resource_claims(resource_kind="object", resource_id="block-1")
 
     from fleet.server.mission_service import MissionService
-    completed = MissionService(store).confirm_goal(
+    import time
+    goal_time = time.time() + 1.0
+    completed = MissionService(
+        store, goal_evidence_verifier=lambda _mission, _evidence: True,
+    ).confirm_goal(
         mission["mission_id"], event_id="event-goal-evidence", evidence={
             "predicate_id": "block-in-tray", "object_id": "block-1",
             "destination_id": "tray-1", "evidence_source": "camera_observation",
             "evidence_id": "camera:frame-55", "evidence_revision": "cal-v3/tf-v7",
-            "observed_at": 10.0, "satisfied": True,
-        }, now=10.2, max_age_s=0.5,
+            "producer_id": "camera-evaluator-1", "observation_id": "obs-post-55",
+            "observation_digest": "b" * 64, "evaluator_revision": "object-in-tray-v3",
+            "action_id": "action-1", "attempt_id": "attempt-1",
+            "gripper_state": "OPEN", "gripper_evidence_id": "gripper-readback-1",
+            "gripper_evidence_revision": "gripper-v2", "gripper_observed_at": goal_time,
+            "observed_at": goal_time, "satisfied": True,
+        }, now=goal_time + 0.1, max_age_s=0.5,
     )
     assert completed["status"] == "GOAL_CONFIRMED"
     assert tasks.resource_claims(resource_kind="object", resource_id="block-1") == []
@@ -147,3 +156,28 @@ def test_unknown_action_and_stale_goal_keep_claim_held_across_restart(tmp_path):
     assert held["status"] == "HOLD"
     assert MissionStore(path).get_mission(mission["mission_id"])["status"] == "HOLD"
     assert tasks.resource_claims(resource_kind="object", resource_id="block-1")
+
+
+def test_fleet_sqlite_connections_keep_wal_full_durability_and_dispatch_indexes(tmp_path):
+    tasks, store, _ = _stores(tmp_path)
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+        ready_plan = " ".join(str(row[3]) for row in connection.execute(
+            "EXPLAIN QUERY PLAN SELECT * FROM fleet_missions WHERE status='READY' "
+            "ORDER BY created_at, mission_id LIMIT 1"
+        ))
+        reconcile_plan = " ".join(str(row[3]) for row in connection.execute(
+            "EXPLAIN QUERY PLAN SELECT * FROM fleet_missions WHERE reconciliation_pending=1 "
+            "ORDER BY updated_at, mission_id LIMIT 1"
+        ))
+    with tasks._connect() as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+    assert "fleet_missions_ready_queue" in ready_plan
+    assert "fleet_missions_reconcile_queue" in reconcile_plan
+    assert "TEMP B-TREE" not in ready_plan
+    assert "TEMP B-TREE" not in reconcile_plan
