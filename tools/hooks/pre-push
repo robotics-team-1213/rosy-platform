@@ -5,7 +5,18 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-PY="$(command -v python3 || command -v python)"
+PY=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 \
+     && "$candidate" -c "import yaml" >/dev/null 2>&1; then
+    PY="$candidate"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "[pre-push] no python interpreter with PyYAML found on PATH" >&2
+  exit 1
+fi
 
 echo "[pre-push] harness lint (ADR duplicates, mojibake, append-only, staleness)"
 "$PY" tools/harness/rosy_harness.py lint
