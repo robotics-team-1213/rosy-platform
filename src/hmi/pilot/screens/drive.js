@@ -47,6 +47,7 @@ export function mountDrive(root, {onExit} = {}) {
     latency: "[data-drive-fact=latency]", cap: "[data-drive-fact=cap]",
     motion: "[data-drive-motion]", blocked: "[data-drive-blocked]",
     blockedReason: "[data-drive-blocked-reason]", retake: "[data-drive-retake]",
+    view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
   })) element[key] = root.querySelector(selector);
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
@@ -127,6 +128,104 @@ export function mountDrive(root, {onExit} = {}) {
   // 다운로드")가 떠서 누르고 있던 터치를 가로챘다. 주행 화면에서는 어디서도 띄우지 않는다.
   const blockContextMenu = (event) => event.preventDefault();
   root.addEventListener("contextmenu", blockContextMenu);
+
+  // --- 배치(D-350): 영상은 원본 비율 그대로, 조작부는 영상 밖 --------------------
+  // 영상이 실제로 그려지는 폭을 계산해 좌우 띠가 조작부를 담을 만큼 넓으면 "side",
+  // 아니면 영상 아래에 조작부를 두는 "below" 로 바꾼다.
+  const SIDE_MIN_BAND_PX = 200;
+  const drive = root;
+  function applyLayout() {
+    const width = drive.clientWidth;
+    const height = drive.clientHeight;
+    if (!width || !height) return;
+    const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
+      ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
+    const hudHeight = element.hud.getBoundingClientRect().height + 8;
+    const videoHeight = height - hudHeight;
+    const band = (width - videoHeight * ratio) / 2;
+    const side = band >= SIDE_MIN_BAND_PX;
+    drive.dataset.driveLayout = side ? "side" : "below";
+    drive.style.setProperty("--band", `${Math.max(0, Math.floor(band))}px`);
+    drive.style.setProperty("--video-ratio", String(ratio));
+  }
+  // --- 배율(D-350 §5): 맞춤 1.0× → 1.2× → 1.4× → 가득(화면 폭) → 전체화면 → 맞춤 ------
+  const ZOOM_STEPS = [1, 1.2, 1.4, "fill", "full"];
+  function zoomValue(step) {
+    const box = element.view.getBoundingClientRect();
+    const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
+      ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
+    if (!box.width || !box.height) return 1;
+    // 맞춤일 때 영상이 차지하는 폭 → 화면 폭을 채우는 배율
+    const fitWidth = Math.min(box.width, box.height * ratio);
+    const fill = Math.max(1, box.width / fitWidth);
+    return step === "fill" ? fill : Math.min(Number(step) || 1, fill);
+  }
+  function coverCrop() {
+    // 전체화면(cover): 화면 비와 영상 비 중 어느 쪽이 잘리는가
+    const box = element.view.getBoundingClientRect();
+    const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
+      ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
+    if (!box.width || !box.height) return {axis: "위아래", percent: 0};
+    const boxRatio = box.width / box.height;
+    return boxRatio >= ratio
+      ? {axis: "위아래", percent: Math.round((1 - ratio / boxRatio) * 100)}
+      : {axis: "좌우", percent: Math.round((1 - boxRatio / ratio) * 100)};
+  }
+  function applyZoom() {
+    const step = inputConfig().zoom ?? 1;
+    const full = step === "full";
+    const below = drive.dataset.driveLayout === "below";
+    drive.dataset.viewMode = full ? "full" : "fit";
+    element.view.style.height = "";
+    let crop;
+    if (below) {
+      // 세로 화면: 영상이 이미 폭을 채운다. 확대는 영상 높이를 늘리고 좌우를 자른다(cover).
+      const width = element.view.getBoundingClientRect().width;
+      const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
+        ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
+      const maxHeight = drive.clientHeight * (full ? 1 : 0.72);
+      const fitHeight = width / ratio;
+      const fill = Math.max(1, maxHeight / fitHeight);
+      const z = full || step === "fill" ? fill : Math.min(Number(step) || 1, fill);
+      element.frame.style.transform = "";
+      element.frame.style.objectFit = z > 1.001 ? "cover" : "";
+      if (z > 1.001) element.view.style.height = `${Math.round(fitHeight * z)}px`;
+      drive.dataset.zoomed = String(z > 1.001);
+      crop = {axis: "좌우", percent: Math.round((1 - 1 / z) * 100), z};
+    } else {
+      element.frame.style.objectFit = "";
+      const z = full ? 1 : zoomValue(step);
+      element.frame.style.transform = z > 1.001 ? `scale(${z.toFixed(3)})` : "";
+      drive.dataset.zoomed = String(full || z > 1.001);
+      crop = full ? {...coverCrop(), z: 1} : {axis: "위아래", percent: Math.round((1 - 1 / z) * 100), z};
+    }
+    element.zoomFact.hidden = crop.percent <= 0;
+    element.zoomFact.textContent = crop.percent > 0 ? `${crop.axis} ${crop.percent}% 잘림` : "";
+    if (element.zoomButton) {
+      element.zoomButton.textContent = full ? "전체화면"
+        : step === "fill" ? "확대 가득" : crop.z > 1.001 ? `확대 ${crop.z.toFixed(1)}×` : "확대 맞춤";
+    }
+  }
+  // 설치 앱에서는 전체화면 API 로 상태 표시줄까지 숨긴다. 지원이 없으면 화면 안에서만 채운다.
+  function syncFullscreen(full) {
+    try {
+      if (full && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+      if (!full && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    } catch (error) { /* 지원 없음 */ }
+  }
+  function cycleZoom() {
+    const current = inputConfig().zoom ?? 1;
+    const index = ZOOM_STEPS.findIndex((stepValue) => stepValue === current);
+    const next = ZOOM_STEPS[(index + 1) % ZOOM_STEPS.length];
+    saveInputConfig({zoom: next});
+    syncFullscreen(next === "full");
+    applyZoom();
+  }
+
+  const layoutObserver = new ResizeObserver(() => { applyLayout(); applyZoom(); });
+  layoutObserver.observe(drive);
+  element.frame.addEventListener("load", () => { applyLayout(); applyZoom(); });
+  applyLayout();
 
   // --- 입력: 2축 스틱(노브가 손가락을 따라간다) -------------------------------
   const stick = element.stick;
@@ -319,6 +418,9 @@ export function mountDrive(root, {onExit} = {}) {
   });
   element.shotButton = shotButton;
   element.recordButton = recordButton;
+  const zoomButton = el("ui-button", "확대 맞춤", {kind: "quiet", type: "button", "data-drive-zoom": ""});
+  zoomButton.addEventListener("click", cycleZoom);
+  element.zoomButton = zoomButton;
   const inputsButton = el("ui-button", "입력", {kind: "quiet", type: "button", "data-drive-inputs": ""});
   let inputsPanel = null;
   let closeInputs = null;
@@ -338,8 +440,9 @@ export function mountDrive(root, {onExit} = {}) {
   });
   const exit = el("ui-button", "나가기", {kind: "quiet", type: "button", "data-drive-exit": ""});
   exit.addEventListener("click", () => teardown());
-  actions.append(shotButton, recordButton, inputsButton, exit);
+  actions.append(zoomButton, shotButton, recordButton, inputsButton, exit);
   element.hud.append(actions);
+  applyZoom();
 
   // --- 프리셋·정밀 --------------------------------------------------------
   function renderInputs() {
@@ -404,6 +507,8 @@ export function mountDrive(root, {onExit} = {}) {
     window.removeEventListener("blur", onBlur);
     window.removeEventListener("focusin", onFocusIn);
     root.removeEventListener("contextmenu", blockContextMenu);
+    layoutObserver.disconnect();
+    syncFullscreen(false);
     document.removeEventListener("visibilitychange", onVisibility);
     wakeLock?.release().catch(() => {});
     wakeLock = null;
@@ -420,7 +525,10 @@ function buildStage() {
     el("ui-text", "", {scale: "value", "data-drive-blocked-reason": ""}),
     el("ui-button", "수동 모드 다시 잡기", {kind: "primary", type: "button", "data-drive-retake": ""}),
   );
-  stage.append(frame, empty, buildHud(), blocked);
+  // 영상 틀: 확대(D-350 §5) 때 넘치는 부분을 이 틀 안에서만 자른다.
+  const view = el("div", null, {"data-drive-view": ""});
+  view.append(frame, empty);
+  stage.append(view, buildHud(), blocked);
   return stage;
 }
 
@@ -435,6 +543,7 @@ function buildHud() {
   );
   const motion = el("span", "대기", {"data-drive-motion": "", "data-kind": "idle"});
   const cap = el("span", "", {"data-drive-fact": "cap"});
+  const zoom = el("span", "", {"data-drive-fact": "zoom", hidden: ""});
   const facts = el("div", null, {"data-drive-facts": ""});
   facts.append(
     el("span", "…", {"data-drive-fact": "link"}),
@@ -442,7 +551,7 @@ function buildHud() {
     el("span", "—", {"data-drive-fact": "mode"}),
     el("span", "—", {"data-drive-fact": "battery"}),
   );
-  hud.append(gauge, motion, cap, facts);
+  hud.append(gauge, motion, cap, zoom, facts);
   return hud;
 }
 

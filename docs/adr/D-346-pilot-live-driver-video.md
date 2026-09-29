@@ -1,4 +1,4 @@
-## D-341 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다
+## D-346 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다
 
 **Status:** Accepted (2026-09-29, 설계 결정). 구현·장치 수용은 아래 Validation 게이트로 따로 닫는다.
 D-323 §5 의 "새 영상 전송 경로를 열지 않는다"를 이 범위에서만 바꾼다. D-332 결정 1(카메라 폴링
@@ -19,7 +19,7 @@ D-323 §5 의 "새 영상 전송 경로를 열지 않는다"를 이 범위에서
 1. **스트림 라우트** `GET /api/v1/vision/front/stream` 을 CORE 에 둔다. `multipart/x-mixed-replace`
    JPEG 이고, 최신 프레임 저장소(`core_features/vision/store.py`)에 새 시퀀스가 들어올 때만
    내보낸다. 새 코덱·새 프로세스·새 의존성이 없다.
-2. **받을 수 있는 사람은 운전석 보유자 한 명이다**(D-343). 운전석이 없거나 다른 사람이면 409.
+2. **받을 수 있는 사람은 운전석 보유자 한 명이다**(D-348). 운전석이 없거나 다른 사람이면 409.
    관전자와 관제 화면은 지금의 0.4 s 폴링을 그대로 쓴다. 스트림은 한 번에 하나만 열린다.
 3. **인증은 헤더로만** 한다. 브라우저 `<img>` 는 헤더를 못 보내므로 pilot 은 `fetch()` 스트림을
    잘라 `createImageBitmap` 으로 캔버스에 그린다. 토큰을 URL 에 넣지 않는다(D-193).
@@ -51,4 +51,4 @@ D-323 §5 의 "새 영상 전송 경로를 열지 않는다"를 이 범위에서
 - DEVICE: 실물 로봇 태블릿 녹화에서 영상 fps ≥ 10, 명령→화면 반영 지연 측정값을 기록한다.
 
 **Related:** [D-193](D-193-login-code-and-credential-lifecycle.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md),
-[D-323](D-323-rosy-pilot-teleop-app.md), [D-332](D-332-pilot-response-speed.md), [D-343](D-343-pilot-rooms-and-driver-seat.md).
+[D-323](D-323-rosy-pilot-teleop-app.md), [D-332](D-332-pilot-response-speed.md), [D-348](D-348-pilot-rooms-and-driver-seat.md).

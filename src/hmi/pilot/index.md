@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(pilot): 실물 로봇 실주행·카메라 비율·배율 확대·ADR D-346~D-350
 - 2026-09-29 · uncommitted · fix(pilot): 가제보 실조종으로 입력 부호·송신 타이밍·제자리 회전·카메라 교정
 - 2026-09-29 · uncommitted · feat(pilot): game-style "Continue" UX with recent connections (D-323)
 - 2026-09-29 · uncommitted · feat(pilot): fullscreen game-style drive + vision 409 retry + browser tests (구현 개선)
 - 2026-09-29 · uncommitted · feat(pilot): sim camera live, drive fullscreen, in-screen speed presets (T7 시뮬 루프)
-- 2026-09-29 · uncommitted · feat(pilot): camera evidence promotion and drive capture (실행 계획 T9)

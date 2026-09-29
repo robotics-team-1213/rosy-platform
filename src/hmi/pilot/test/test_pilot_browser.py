@@ -222,7 +222,7 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_login_code_pairs_and_recent_list_keeps_no_token(tablet_page):
-    """로그인 코드로 입장하고(D-193), 최근 접속에는 토큰을 남기지 않는다(D-343)."""
+    """로그인 코드로 입장하고(D-193), 최근 접속에는 토큰을 남기지 않는다(D-348)."""
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
     page.evaluate("localStorage.setItem('rosy.pilot.recent', JSON.stringify([{host: 'x', label: 'old', token: 'leak'}]))")
@@ -238,4 +238,67 @@ def test_login_code_pairs_and_recent_list_keeps_no_token(tablet_page):
     assert page.evaluate("sessionStorage.getItem('rosy.pilot.token')") == "devtoken"
     recent = page.evaluate("localStorage.getItem('rosy.pilot.recent')")
     assert "devtoken" not in recent and "token" not in recent, recent
+    assert errors == [], errors
+
+
+MEASURE_VIDEO = """(() => {
+  const frame = document.querySelector('[data-drive-frame]');
+  const box = frame.getBoundingClientRect();
+  const ratio = frame.naturalWidth / frame.naturalHeight;
+  // object-fit: contain 으로 실제 그려지는 사각형
+  let w = box.width, h = box.width / ratio;
+  if (h > box.height) { h = box.height; w = h * ratio; }
+  const video = {x: box.x + (box.width - w) / 2, y: box.y + (box.height - h) / 2, w, h};
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const rects = [...document.querySelectorAll('[data-drive-controls] ui-button, [data-drive-stick], [data-drive-hud], ui-topbar')]
+    .map(e => { const r = e.getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; })
+    .filter(r => r.w && r.h);
+  return {fit: getComputedStyle(frame).objectFit, ratio, shown: w / h, video,
+          layout: document.querySelector('[data-screen=drive]').dataset.driveLayout,
+          overlaps: rects.filter(r => hit(r, video)).length, videoArea: w * h / (innerWidth * innerHeight)};
+})()"""
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1333, 760), (1200, 2000), (390, 844)])
+def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
+    """D-350: 카메라는 원본 비율 그대로 전부 보이고, 조작부·HUD·상단 바가 영상을 덮지 않는다."""
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+        try:
+            _enter_drive(page, base_url)
+            page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
+            page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
+            page.wait_for_timeout(300)
+            m = page.evaluate(MEASURE_VIDEO)
+        finally:
+            browser.close()
+    assert m["fit"] == "contain", m
+    assert abs(m["shown"] - m["ratio"]) / m["ratio"] < 0.01, m
+    assert m["overlaps"] == 0, m
+    assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_zoom_cycles_and_always_reports_crop(tablet_page):
+    """D-350 §5: 맞춤 → 1.2× → 1.4× → 가득 → 전체화면 → 맞춤. 1.0× 을 넘으면 잘림을 늘 보인다."""
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
+    seen = []
+    for step in range(6):
+        label = page.inner_text("[data-drive-zoom]")
+        crop = page.locator("[data-drive-fact=zoom]:not([hidden])")
+        seen.append((label, crop.inner_text() if crop.count() else ""))
+        if step < 5:
+            page.click("[data-drive-zoom]")
+            page.wait_for_timeout(200)
+    assert seen[0] == ("확대 맞춤", "")
+    assert seen[-1][0] == "확대 맞춤", seen                      # 한 바퀴 돌면 맞춤
+    assert all("잘림" in crop for label, crop in seen[1:5]), seen
+    assert seen[4][0] == "전체화면", seen
+    assert page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input')).zoom") == 1
     assert errors == [], errors
