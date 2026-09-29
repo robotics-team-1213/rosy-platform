@@ -3469,3 +3469,27 @@
 - gate 변화: 없음.
 - 결정: 후보 순위 ①카메라 프리뷰(세션=대시보드 요청) ②SLAM 백엔드(세션=매핑, D-321 승인 이미 존재) ③OMX(ER2 진행 중 보류). 낭비 입증 전 코드 변경 없음 — 입증된 후보 하나당 후속 ADR로 D-347의 activating 무생산 핀을 연다.
 - 교훈: 이미 절반이 서 있었다 — navigation은 부팅 승인제 조건부 상주고 line_follow는 부팅 옵트인이다. B레인은 새 발명이 아니라 이 두 형태를 "세션" 경계로 일반화하는 일다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 사이트 콘솔의 로봇 화면 코드 등록 제안과 계획
+
+- 변경: `docs/adr/D-352-site-console-enrolls-robot-by-screen-code.md`(Proposed), `docs/plans/2026-09-29-fleet-robot-code-enrollment-plan.md`(S1–S6 + 벤치 D1–D3), ADR Log 행 추가. `tools/harness/harness.yaml`에 다른 브랜치·초안의 D-347–D-351을 예약했다.
+- 증거: SOURCE(코드 판독만, 실물 접촉 없음) — `FleetConsole`·`SiteHub`가 기동 때 로스터를 고정, `load_robots`가 빈 목록 거절, CORE `config.py`가 `ROSY_DEVICE_UID`를 읽지 않아 HELLO·`system/info`에 장치 UID가 없음, 페어링 토큰 상한 168 h와 부팅당 LCD 코드 1개가 맞물려 갱신 없이는 매주 재부팅이 필요함을 확인했다. 벤치 로봇 `rosy-pinky-8kcn`의 이미지 판(v1.41)은 D-351 실측을 인용했다.
+- gate 변화: 없음.
+- 결정: D-352 Proposed. Fleet이 `auth/pair`를 직접 부르고(`purpose: site`, 출처 `pair-site`, 역할 operator), 결속은 인증된 `system/info` 읽기, 자격은 Fleet SQLite 암호문 + 별도 키, 갱신은 회전 + 90일 계보 상한, FleetAgent 짝 토큰 제공은 D-351 Hub 결속 수정 뒤로 미뤘다.
+- 교훈: 로그인 코드 경로(D-193)는 사람 브라우저를 전제로 수명을 정했다 — 같은 경로를 서버 주체가 쓰면 "새 코드를 얻는 비용"이 수명 설계의 입력이 된다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 독립 리뷰·사용자 결정 반영 개정
+
+- 변경: D-352와 계획 개정. 사용자 결정 — 회전 갱신(`auth/renew`·계보·유예·갱신 루프)을 빼고 `pair-site` 긴 수명 토큰 하나(카드 설정, 기본 90일, D-193 168 h 상한의 출처 한정 개정), 관리자 등록 코드는 `min(사이트 수명, 발급자 만료)`로 D-193 M2 유지. AES-GCM 유지하되 AAD 길이 접두 + 슬롯, base64 키만, 키 실패는 실행 상태, 키 별도 백업·`rekey`. 리뷰 반영 — 주소 자동 추종 대신 등록 때 주소 고정·`address_changed`에서 Bearer 0회, 단일 로스터 소유자(`SiteRoster`, `await` 전 순서 복사, 해제 때 클라이언트 닫기·진행 task 409, sighting 설정은 기동 실패 대신 경고), D1 로봇 쪽 확인 방법 A/B, `TOKEN_SOURCES`, 대시보드 경로, 호스트 이름 비교 기준, 수동 주소는 사설 IPv4만, 운용 클라이언트 `trust_env=False`, `pending_logout`, 코드 소모 문구, Fleet 시계 기준 만료 경고, 결합 시험 위치(루트 `test/`), D-341과 패널 이름 "기기 연결"·감사 표 `device_pairing_audit` 공유, 사용성 범위와 재부팅 비용, `fleet/link` `PUT`은 새 코드 요구·인증 없는 `GET` 제거, ADR 항목 ↔ 단계 표와 첫 조각.
+- 증거: SOURCE(문서·코드 판독). 실물 접촉 없음.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지.
+- 교훈: 평문 LAN 위협 모델에서는 토큰 회전이 도청자에게도 보이므로 보호보다 상태 기계만 늘린다 — 전송이 바뀌기 전에는 회수 가능한 긴 수명 자격이 더 정직하다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 2차 리뷰 반영 — 90일 위협 명시·operator 회수·주소 바뀜 안전 규칙
+
+- 변경: D-352·계획 개정과 D-193 본문·ADR Log 행의 개정 표시. 사용자 결정 — 90일 기본값 유지, operator가 `pair-site` 토큰을 목록·회수(`auth/site-tokens`, S4 대시보드). 인증 없는 `auth/pair`에서 `purpose`를 호출자가 고르므로 LCD 코드를 본 누구나 90일 operator 토큰을 얻는다는 위협 변화를 명시. `address_changed`에서도 정지는 고정 주소로, 주행·대형 로봇은 경보와 교통 보류, 한 이름 다중 주소는 `conflict` 우선. `pending_logout`은 한 번만·사전 읽기 없음, `map()`·`_make_room` 순서 복사, D-341 감사 표 `device_kind` 이전 단계, sighting 완화는 해제·대기 id만, S6 재부팅 비용·코드 역할, D2 Bearer 부재 증거 수집법, Avahi `-2.local` 안내.
+- 증거: SOURCE(문서·코드 판독). 실물 접촉 없음.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지. D-193 행에 D-352 개정 표시.
+- 교훈: 주소 신뢰를 끊을 때도 정지 경로는 끊지 않는다 — 비밀 노출 방어와 정지 도달은 같은 규칙으로 묶으면 안 된다.
