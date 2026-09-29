@@ -3562,3 +3562,9 @@
 - Evidence: D-348 registry row and API Reference v1.59 ?10.14 agree with Fleet implementation; source suite is 724 passed, 5 skipped.
 - Gate: ROS-SIM, ARTIFACT, DEVICE, FIELD remain HOLD/PARKED; no real producer, model tool dispatch, actuator operation, or physical acceptance is claimed.
 - Decision: D-348 remains Accepted as a contract and SOURCE/LOCAL implementation decision.
+## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
+
+- Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.
+- Boundaries: Mission journal stays authoritative; provider replay stays ephemeral with `store=false`; replan remains a candidate; stop, device action, goal evidence, and physical readback remain separate. `POLICY_DISPATCH_ENABLED` stays false.
+- Evidence: `python tools/harness/rosy_harness.py lint` passed with 0 errors and 20 existing freshness warnings; documentation contract suite passed (80 passed). Index generation completed.
+- Gate: no implementation, provider call, ROS/OMX activation, device install, or physical acceptance.

@@ -7,6 +7,13 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-350: "reserved by branch feat/pilot-teleop (pilot camera aspect and installed app); remove when its ADR lands"
+  D-351: "reserved by branch docs/robot-fleet-protocol-conformance (robot/site console protocol); remove when its ADR lands"
+  D-352: "reserved by branch docs/fleet-robot-code-enrollment (site console robot enrollment); remove when its ADR lands"
+  D-353: "reserved by branch feat/pilot-teleop (lane-keeping perception replay bench); remove when its ADR lands"
+  D-354: "reserved by branch feat/console-field-autodetect (overhead field autodetection); remove when its ADR lands"
+  D-355: "reserved by branch feat/d355-goal-evidence-verifier (goal evidence producer wiring); remove when its ADR lands"
+  D-356: "reserved by branch feat/perception-learning-loop (perception model delivery); remove when its ADR lands"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-342: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (manual-limit commissioning ladder); remove once it lands"
   D-343: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot rooms and driver seat); remove once it lands"
