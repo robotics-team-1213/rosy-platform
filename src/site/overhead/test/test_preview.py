@@ -41,6 +41,9 @@ def test_preview_requires_scoped_lease_and_returns_latest_jpeg_without_caching()
     assert allowed.headers["Content-Type"] == "image/jpeg"
     assert allowed.headers["Cache-Control"] == "no-store"
     assert allowed.headers["X-Frame-Seq"] == "42"
+    assert allowed.headers["X-Frame-Width"] == "640"
+    assert allowed.headers["X-Frame-Height"] == "480"
+    assert allowed.headers["X-Frame-Rotation-Deg"] == "0"
     assert _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}").status_code == 429
 
 

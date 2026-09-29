@@ -29,6 +29,19 @@ class MissionModelTurnWorker:
         turn = self.store.claim(turn_id, worker_id=worker_id)
         if turn is None:
             return None
+        return await self._consume_claimed(turn, worker_id=worker_id)
+
+    async def consume_next(self, *, worker_id: str) -> dict[str, Any] | None:
+        """Recover expired work and consume the oldest pending durable turn."""
+        self.store.expire_claims()
+        turn = self.store.claim_next(worker_id=worker_id)
+        if turn is None:
+            return None
+        return await self._consume_claimed(turn, worker_id=worker_id)
+
+    async def _consume_claimed(self, turn: Mapping[str, Any], *,
+                               worker_id: str) -> dict[str, Any] | None:
+        turn_id = turn["turn_id"]
         scope_fields = {
             name: turn[name] for name in (
                 "principal_id", "workcell_id", "mission_id", "action_id", "attempt_id",

@@ -234,6 +234,37 @@ class MissionModelTurnStore:
             connection.commit()
         return self._row(updated)
 
+    def claim_next(self, *, worker_id: str) -> dict[str, Any] | None:
+        """Atomically claim the oldest pending turn for one worker."""
+        if not worker_id or worker_id != worker_id.strip() or len(worker_id) > 96:
+            raise ValueError("worker_id must be a trimmed identifier")
+        now = _now()
+        lease = _stamp(now + timedelta(seconds=self.claim_lease_seconds))
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """SELECT turn_id FROM fleet_mission_model_turns
+                   WHERE state='PENDING' ORDER BY created_at, turn_id LIMIT 1""",
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            turn_id = row["turn_id"]
+            changed = connection.execute(
+                """UPDATE fleet_mission_model_turns SET state='CLAIMED',
+                   claimed_by=?, lease_until=?, updated_at=?
+                   WHERE turn_id=? AND state='PENDING'""",
+                (worker_id, lease, _stamp(now), turn_id),
+            ).rowcount
+            if changed != 1:
+                connection.rollback()
+                return None
+            updated = connection.execute(
+                "SELECT * FROM fleet_mission_model_turns WHERE turn_id=?", (turn_id,),
+            ).fetchone()
+            connection.commit()
+        return self._row(updated)
+
     def mark_submitting(self, turn_id: str, *, worker_id: str) -> dict[str, Any] | None:
         return self._transition(turn_id, expected="CLAIMED", state="SUBMITTING",
                                 worker_id=worker_id, increment_attempt=True)

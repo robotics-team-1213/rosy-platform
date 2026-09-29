@@ -274,7 +274,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_action_transport=None,
                enrollment=None,
                robot_credential_key: Optional[str] = None,
-               mission_model_turn_max_rows: int = 10_000) -> FastAPI:
+               mission_model_turn_max_rows: int = 10_000,
+               mission_model_turn_worker=None,
+               post_action_observation_source=None) -> FastAPI:
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -340,6 +342,24 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             turn_store=mission_model_turn_store, policy_revision="er2-feedback-v1",
         ) if mission_configured else None
     )
+    if mission_model_turn_worker is not None:
+        worker_store = getattr(mission_model_turn_worker, "store", None)
+        consume_next = getattr(mission_model_turn_worker, "consume_next", None)
+        if mission_model_turn_scheduler is None:
+            raise ValueError("Mission model-turn worker requires persistent Mission services")
+        if (worker_store is None or not callable(consume_next)
+                or Path(worker_store.path).resolve() != Path(mission_model_turn_store.path).resolve()):
+            raise ValueError("Mission model-turn worker must consume the configured shared SQLite outbox")
+    if post_action_observation_source is not None:
+        if mission_model_turn_worker is None:
+            raise ValueError("post-action observation source requires an injected Mission model-turn worker")
+        tool_dispatcher = getattr(mission_model_turn_worker, "dispatcher", None)
+        if not hasattr(tool_dispatcher, "post_action_observation_source"):
+            raise ValueError("Mission model-turn worker must use the Fleet feedback tool dispatcher")
+        configured_source = tool_dispatcher.post_action_observation_source
+        if configured_source is not None and configured_source is not post_action_observation_source:
+            raise ValueError("Mission worker and app must share one post-action observation source")
+        tool_dispatcher.post_action_observation_source = post_action_observation_source
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
         if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
@@ -366,6 +386,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         proposal_expiry = None
         goal_evidence_worker = None
         mission_feedback_scheduler = None
+        mission_model_turn_worker_task = None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
         if proposal_store is not None:
@@ -380,17 +401,25 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             mission_feedback_scheduler = asyncio.create_task(
                 _mission_feedback_schedule_loop(mission_model_turn_scheduler)
             )
+        if mission_model_turn_worker is not None:
+            mission_model_turn_worker_task = asyncio.create_task(
+                _mission_model_turn_worker_loop(mission_model_turn_worker)
+            )
         try:
             yield
         finally:
             for background in (dispatcher, mission_worker, proposal_expiry,
-                               goal_evidence_worker, mission_feedback_scheduler):
+                               goal_evidence_worker, mission_feedback_scheduler,
+                               mission_model_turn_worker_task):
                 if background is not None:
                     background.cancel()
                     try:
                         await background
                     except asyncio.CancelledError:
                         pass
+            close_observation_source = getattr(post_action_observation_source, "aclose", None)
+            if callable(close_observation_source):
+                await close_observation_source()
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -406,6 +435,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.mission_progress = mission_progress
     app.state.mission_model_turn_store = mission_model_turn_store
     app.state.mission_model_turn_scheduler = mission_model_turn_scheduler
+    app.state.mission_model_turn_worker = mission_model_turn_worker
+    app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
@@ -1499,6 +1530,18 @@ async def _mission_feedback_schedule_loop(scheduler: MissionModelTurnScheduler) 
         except Exception:
             _LOG.exception("Mission feedback outbox scan failed")
         await asyncio.sleep(1.0)
+
+
+async def _mission_model_turn_worker_loop(worker) -> None:
+    """Consume durable ER 2 turns only when an approved worker is injected."""
+    while True:
+        try:
+            await worker.consume_next(worker_id="fleet-feedback")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOG.exception("Fleet Mission model-turn worker cycle failed")
+        await asyncio.sleep(0.25)
 
 
 async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:

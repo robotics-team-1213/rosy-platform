@@ -3711,3 +3711,11 @@
 - Change: updated `SIZE_VERDICTS["fleet"]` from 14,260 to 14,616 lines after atomic candidate fencing and linked-successor regression coverage. The split verdict and unscheduled B2 plan remain unchanged.
 - Evidence: `python -m pytest src/site/fleet/test/ test/ -q` = 3,675 passed/188 skipped after the re-judgment; the focused ER2/API/docs set passed 65 tests, and the documentation gate passed 80 tests. Changed-file flake8 and `git diff --check` passed.
 - Gate: SOURCE/LOCAL only; no trusted Vision reader, provider worker, policy dispatch, ROS, device, or field enablement.
+## 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
+- Change: added atomic oldest-pending outbox claims and `MissionModelTurnWorker.consume_next()`. `create_app` runs a worker loop only when an explicitly injected worker uses the configured shared SQLite database; default/CLI composition remains provider-disabled.
+- Evidence: RED reproduced missing `claim_next`, `consume_next`, and app injection. The outbox-store, feedback-loop, and Mission API suites passed after implementation; final batch verification is in progress.
+- Gate: SOURCE/LOCAL only. No provider credentials, egress approvals, trusted Vision reader, policy dispatch, ROS, device, or deployment were enabled.
+## 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- Change: added an optional reader using fixed workcell/source/camera mappings and the existing source-scoped Vision lease endpoint. It bounds no-store JPEG response bytes, checks JPEG signature and freshness metadata, requires a frame captured after terminal Action time, and is injected/closed only with an explicitly configured worker. Updated D-358, implementation plan, and API reference v1.62. Default CLI/provider path remains disabled; no egress approval or credentials were added.
+- Evidence: ER2/Mission/Vision/API focused suite 119 passed. Documentation gate initially found stale generated indexes; regenerated both indexes before rerun. ROS/device/provider egress and runtime activation remain unverified and disabled.
+- Gate: SOURCE/LOCAL only. No camera/Mission provider egress approval, ROS, device, physical motion, or deployment.

@@ -109,3 +109,21 @@ def test_expired_claim_is_reclaimable_but_expired_submission_is_unknown(tmp_path
     later = now + timedelta(seconds=11)
     assert store.expire_claims(now=later) == 0
     assert store.get(claimed_id)["state"] == "UNKNOWN"
+
+
+def test_claim_next_atomically_assigns_oldest_pending_turn_to_one_worker(tmp_path):
+    store = MissionModelTurnStore(tmp_path / "fleet.sqlite3")
+    first = store.enqueue(scope=_scope(), trigger_event_id=19)["turn"]
+    second = store.enqueue(
+        scope={**_scope(), "event_watermark": 20}, trigger_event_id=20,
+    )["turn"]
+
+    claimed_first = store.claim_next(worker_id="worker-1")
+    claimed_second = store.claim_next(worker_id="worker-2")
+    no_more = store.claim_next(worker_id="worker-3")
+
+    assert claimed_first["turn_id"] == first["turn_id"]
+    assert claimed_first["state"] == "CLAIMED"
+    assert claimed_second["turn_id"] == second["turn_id"]
+    assert claimed_second["state"] == "CLAIMED"
+    assert no_more is None

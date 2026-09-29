@@ -68,7 +68,7 @@ def test_egress_policy_requires_approval_for_mission_instruction_payload():
 
 
 def _seed_submission_fence(store, *, dispatch_enabled=1, generation=4,
-                          event_watermark=19):
+                           event_watermark=19):
     with sqlite3.connect(store.path) as db:
         db.executescript("""
             CREATE TABLE fleet_dispatch_control (
@@ -262,21 +262,17 @@ def test_event_to_outbox_to_atomic_provider_submission_fence(tmp_path):
 
     assert scheduler.poll_once(limit=10) == 1
     assert store.get_event_cursor() == 19
-    with sqlite3.connect(store.path) as db:
-        turn = db.execute(
-            "SELECT turn_id FROM fleet_mission_model_turns WHERE trigger_event_id=19",
-        ).fetchone()
-    turn_id = turn[0]
     worker = MissionModelTurnWorker(
         store=store, adapter=adapter, dispatcher=Dispatcher(),
         context_loader=lambda _turn: _context(), egress_policy=_policy(),
         authorization_check=lambda scope: scope.principal_id == "operator-1",
     )
 
-    result = asyncio.run(worker.consume(turn_id, worker_id="worker-1"))
+    result = asyncio.run(worker.consume_next(worker_id="worker-1"))
 
+    assert result["trigger_event_id"] == 19
     assert result["state"] == "RESPONDED"
-    assert store.get(turn_id)["attempt_count"] == 1
+    assert store.get(result["turn_id"])["attempt_count"] == 1
     assert adapter.calls == 1
 
 
@@ -298,6 +294,26 @@ def test_worker_claims_once_and_releases_only_a_confirmed_stateless_turn(tmp_pat
     assert adapter.calls == 1
     assert asyncio.run(worker.consume(turn_id, worker_id="worker-2")) is None
     assert adapter.calls == 1
+
+
+def test_worker_consumes_oldest_pending_turn_without_a_turn_id(tmp_path):
+    store = MissionModelTurnStore(tmp_path / "fleet.sqlite3")
+    _seed_submission_fence(store)
+    enqueued = store.enqueue(scope=_scope(), trigger_event_id=19)["turn"]
+    adapter = Adapter()
+    worker = MissionModelTurnWorker(
+        store=store, adapter=adapter, dispatcher=Dispatcher(),
+        context_loader=lambda _turn: _context(), egress_policy=_policy(),
+        authorization_check=lambda scope: scope.principal_id == "operator-1",
+    )
+
+    result = asyncio.run(worker.consume_next(worker_id="worker-1"))
+
+    assert result["turn_id"] == enqueued["turn_id"]
+    assert result["state"] == "RESPONDED"
+    assert store.get(enqueued["turn_id"])["attempt_count"] == 1
+    assert adapter.calls == 1
+    assert asyncio.run(worker.consume_next(worker_id="worker-2")) is None
 
 
 def test_worker_suppresses_stopped_scope_before_provider_call(tmp_path):

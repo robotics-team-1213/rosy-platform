@@ -628,3 +628,11 @@
 - Change: updated the repository Fleet package size verdict from 14,260 to 14,616 lines; the existing split decision and unscheduled B2 plan remain in force.
 - Evidence: atomic candidate fencing and linked-successor tests are included in the re-judged package line count; `src/site/fleet/test` plus repository `test` passed 3,675 tests with 188 skipped, and the Fleet feedback/API-focused set passed 65 tests.
 - Gate: SOURCE/LOCAL only; the production post-action Vision reader and provider worker remain unconfigured.
+## 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
+- Change: added atomic oldest-pending outbox claims and `MissionModelTurnWorker.consume_next()`. `create_app` starts its consumer only for an explicitly injected worker sharing the Fleet SQLite database.
+- Evidence: tests cover event→outbox→worker consumption, oldest-first unique claims, default-disabled worker state, and database-path mismatch rejection.
+- Gate: the default CLI still has no provider worker, credentials, egress approval, or trusted post-action Vision reader.
+## 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- Change: implemented an optional scoped Vision frame source with fixed workcell/source/camera/frame/calibration mapping, short-lived lease, bounded no-store JPEG validation, and post-Action freshness check. `create_app` wires and closes it only alongside an explicitly injected shared-database model-turn worker.
+- Evidence: focused contracts and Fleet suites passed 119 tests, including malformed JPEG rejection and app lifecycle wiring. Default app/CLI has no worker, provider credentials, or camera/Mission egress approval.
+- Gate: SOURCE/LOCAL only. Runtime activation, provider data policy, ROS/device operation, and physical acceptance remain open.

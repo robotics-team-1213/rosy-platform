@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
 - 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
 - 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
 - 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
-- 2026-09-30 · uncommitted · fix(console): 실제 태블릿 점검 — 꺼진 기능 404 폴링, 카메라 배지, 태블릿 폭 줄바꿈
-- 2026-09-30 · uncommitted · docs: 경기장 자동 검출 ADR 번호 D-354 → D-360

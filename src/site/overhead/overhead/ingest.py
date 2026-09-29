@@ -255,7 +255,7 @@ class IngestServer:
                 rectification_active = not settings.is_identity
                 if rectification_active:
                     jpeg = rectify_jpeg(frame.jpeg, settings)
-            except (TypeError, ValueError, cv2.error) as exc:
+            except (TypeError, ValueError, cv2.error):
                 return _http_response(422, b"rectification failed\n",
                                       extra={"X-Frame-State": "rectification-error"})
         return _http_response(200, jpeg, extra={
@@ -263,6 +263,9 @@ class IngestServer:
             "X-Frame-Seq": str(frame.header.seq),
             "X-Frame-Age-Ms": str(round(age * 1000)),
             "X-Frame-Captured-At": str(frame.captured_at),
+            "X-Frame-Width": str(frame.header.width),
+            "X-Frame-Height": str(frame.header.height),
+            "X-Frame-Rotation-Deg": str(frame.header.rotation_deg),
             "X-Frame-Rectified": "true" if rectification_active else "false",
         })
 
