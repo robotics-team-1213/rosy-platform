@@ -29,6 +29,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 
 ### Working In This Directory
 
+- Placement rule: a script that serves one module (its own test launches it, or it only measures that module) lives in that module's `tools/`, e.g. `src/runtime/sensing/tools/simulate_*.py`, `src/site/fleet/tools/fleet_gather_bench.py`. Root `tools/` keeps only workspace entry points that span modules or start the checkout (`fix_ament_resource.sh`, `run_fleet_sim.sh`, `run_data.py`, `dashboard_drive.py`, `fleet_console.ps1`) and cross-module groups (`harness/`, `perception/`, `sim/`).
 - A script that one module installs or that its own test launches stays in that module. `bringup/scripts/rosy_env.sh` and `control/tools/gz/run_track260905.sh` are examples.
 - Robot install and image build stay in `deploy/`.
 - Do not put teleop notes or drive bags here. Session files go under `data/teleop` and `data/drive` and stay untracked. Learning clips stay in `data/teleop/learning/`.

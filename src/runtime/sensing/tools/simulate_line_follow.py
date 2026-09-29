@@ -12,7 +12,7 @@ import sys
 import numpy as np
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 for _path in (
     REPO_ROOT / "src/runtime/sensing",
     REPO_ROOT / "src/contracts/foundation",

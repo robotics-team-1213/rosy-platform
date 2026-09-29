@@ -5,7 +5,7 @@
 된다. 측정 전에 규모를 주장하지 않는다(D-79·D-91).
 
 사용:
-    python tools/fleet_gather_bench.py --robots 20 --requests 40
+    python src/site/fleet/tools/fleet_gather_bench.py --robots 20 --requests 40
 
 표준 라이브러리 + fleet 패키지. ROS 없음.
 """
@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src"
+SRC = Path(__file__).resolve().parents[3]
 for name in ("site/fleet", "contracts/foundation", "runtime/events", "runtime/services"):
     path = SRC / name
     if str(path) not in sys.path:
