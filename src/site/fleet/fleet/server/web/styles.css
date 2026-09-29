@@ -96,11 +96,42 @@ main {
 
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다. */
 @media (min-width: 62rem) {
+  /* 지도 칸은 main 폭의 43%뿐이다. 그 안을 다시 둘로 나누면 카메라가 좁아져
+     제목이 줄바꿈되고 영상이 작아진다(1440px에서 약 240px). 그래서 카메라를
+     지도 아래에 쌓고, 지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
   main > .panel[aria-labelledby="map-heading"] {
     grid-column: 1;
     grid-row: 1;
+  }
+  #map-canvas { height: min(42vh, 30rem); }
+  .queues-panel { grid-column: 1; grid-row: 2; }
+  main > .panel[aria-labelledby="roster-heading"] {
+    grid-column: 2;
+    grid-row: 1 / span 2;
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    grid-template-columns: minmax(0, 0.46fr) minmax(0, 0.54fr);
+    grid-template-rows: auto auto auto auto auto;
+    column-gap: var(--space-4);
+    align-items: start;
+    min-height: 0;
+    height: auto;
+    max-height: calc(100dvh - var(--topbar-height) - 3rem);
+  }
+  #roster-heading { grid-column: 1; grid-row: 1; }
+  #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
+  #roster { grid-column: 1; grid-row: 2 / 6; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
+  .discovery { grid-column: 2; grid-row: 2; margin-top: 0; }
+  .formation { grid-column: 2; grid-row: 3; margin-top: var(--space-3); }
+  .signals { grid-column: 2; grid-row: 4; }
+  #log { grid-column: 2; grid-row: 5; }
+}
+
+
+@media (min-width: 110rem) {
+  main > .panel[aria-labelledby="map-heading"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-4);
     align-items: start;
   }
   main > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
@@ -124,27 +155,6 @@ main {
     grid-column: 1;
     grid-row: 3;
   }
-  #map-canvas { height: min(42vh, 30rem); }
-  .queues-panel { grid-column: 1; grid-row: 2; }
-  main > .panel[aria-labelledby="roster-heading"] {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    display: grid;
-    grid-template-columns: minmax(0, 0.46fr) minmax(0, 0.54fr);
-    grid-template-rows: auto auto auto auto auto;
-    column-gap: var(--space-4);
-    align-items: start;
-    min-height: 0;
-    height: auto;
-    max-height: calc(100dvh - var(--topbar-height) - 3rem);
-  }
-  #roster-heading { grid-column: 1; grid-row: 1; }
-  #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
-  #roster { grid-column: 1; grid-row: 2 / 6; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
-  .discovery { grid-column: 2; grid-row: 2; margin-top: 0; }
-  .formation { grid-column: 2; grid-row: 3; margin-top: var(--space-3); }
-  .signals { grid-column: 2; grid-row: 4; }
-  #log { grid-column: 2; grid-row: 5; }
 }
 
 .panel {
