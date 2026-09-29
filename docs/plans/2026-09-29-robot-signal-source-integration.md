@@ -1,6 +1,6 @@
 # 로봇 신호 소스 통합 실행 계획 — T1~T5
 
-- **Status:** T1·T2 완료 (2026-09-29, 호스트 시험 251+156 passed) — T3~T5 대기
+- **Status:** T1·T2·T3 완료 (2026-09-29, 호스트 시험 501 passed) — T4·T5 대기
 - **Date:** 2026-09-29
 - **Design:** `docs/plans/2026-09-29-robot-signal-source-integration-design.md` (ADR D-337)
 
@@ -29,12 +29,17 @@ ROS import 없이(Windows 호스트 pytest 가능), 전송은 가짜 클라이�
   `last_outcome`·`last_age_s`를 남겨 T3 readback이 소비한다. 스케줄링·스레드는
   T3 배선 소관이라 여기 없다.
 
-## T3 — 설정·배선·계약
+## T3 — 설정·배선·계약 ✅
 
 - `traffic_policy.signal_observer: {url, roi_map, timeout_s}` — `url` 빈 값이면
   폴러 없음(기본 꺼짐). `services.py` 배선, `rosy_default.yaml` 문서화
 - `TrafficPolicyStatus` additive: `signal_source_kind`, 관측 `age_s`·`frozen`
   — API Ref MINOR 동시 갱신(D-18), 이벤트 1종(`..._signal_source_stale`)
+- 착지(2026-09-29): 바인딩은 파일 설정 전용(오버레이)이고 map/scene 없는
+  바인딩은 빌드를 실패시킨다. `SignalObserverMonitor`(데몬 스레드)가 폴링을
+  소유하며 서버 프레임 나이를 접수 시각에 보정해 주입한다.
+  `fused` 표기는 관측 증거가 유효한 동안만. 침묵 전환마다
+  `nav.traffic_policy_signal_source_stale`(warning) 1회. API Ref v1.56.
 
 ## T4 — dashboard
 

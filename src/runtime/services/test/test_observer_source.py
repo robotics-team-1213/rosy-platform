@@ -13,6 +13,7 @@ from core_features.traffic_policy import (
     RoadEvidence,
     SignalHeadEvidence,
     SignalObserverConfigError,
+    SignalObserverMonitor,
     SignalObserverPoller,
     SignalObserverSourceConfig,
     TrafficPolicyConfig,
@@ -203,3 +204,106 @@ def test_polled_evidence_feeds_the_traffic_policy_manager():
 
     assert manager.status().state == "WAIT_SIGNAL"
     assert manager.status().reason == "signal_red"
+
+
+class _RecordingEvents:
+    def __init__(self):
+        self.published = []
+
+    def publish(self, type_, severity="info", *, source="", data=None):
+        self.published.append((type_, severity, source, data or {}))
+
+
+def _manager_for_monitor(now):
+    return TrafficPolicyManager(
+        _NoEvents(),
+        config=TrafficPolicyConfig(
+            mode=TrafficPolicyMode.ENFORCED,
+            map_id=MAP, scene_revision=SCENE, stop_dwell_s=0.5,
+        ),
+        clock=lambda: now[0],
+    )
+
+
+def test_monitor_tick_feeds_manager_with_age_compensation():
+    now = [100.0]
+    manager = _manager_for_monitor(now)
+    poller = SignalObserverPoller(
+        binding(), map_id=MAP, scene_revision=SCENE,
+        transport=lambda url, timeout: observed(left="red"))
+    monitor = SignalObserverMonitor(
+        poller, manager, stale_after_s=0.4, events=_RecordingEvents(),
+        clock=lambda: now[0])
+
+    monitor.tick()
+    manager.gate(0.06, 0.0)
+
+    status = manager.status()
+    assert status.signal_source_kind == "fused"
+    assert status.signal_head_age_s == pytest.approx(0.05)
+    assert poller.last_outcome == "confirmed"
+
+
+def test_monitor_announces_staleness_once_per_lapse():
+    now = [100.0]
+    manager = _manager_for_monitor(now)
+    events = _RecordingEvents()
+    flaky = {"fail": False}
+
+    def transport(url, timeout):
+        if flaky["fail"]:
+            raise TimeoutError("observer silent")
+        return observed(left="red")
+
+    poller = SignalObserverPoller(
+        binding(), map_id=MAP, scene_revision=SCENE, transport=transport)
+    monitor = SignalObserverMonitor(
+        poller, manager, stale_after_s=0.4, events=events,
+        clock=lambda: now[0])
+
+    monitor.tick()
+    flaky["fail"] = True
+    now[0] = 100.3
+    monitor.tick()
+    assert events.published == []
+
+    now[0] = 100.6
+    monitor.tick()
+    assert len(events.published) == 1
+    type_, severity, source, data = events.published[0]
+    assert type_ == "nav.traffic_policy_signal_source_stale"
+    assert severity == "warning"
+    assert source == "traffic_policy_manager"
+    assert data["outcome"] == "http_error"
+    assert data["silent_for_s"] == pytest.approx(0.6)
+
+    now[0] = 100.9
+    monitor.tick()
+    assert len(events.published) == 1
+
+    flaky["fail"] = False
+    monitor.tick()
+    flaky["fail"] = True
+    now[0] += 0.41
+    monitor.tick()
+    assert len(events.published) == 2
+
+
+def test_monitor_start_stop_is_clean():
+    now = [100.0]
+    manager = _manager_for_monitor(now)
+
+    def unreachable(url, timeout):
+        raise TimeoutError("observer silent")
+
+    poller = SignalObserverPoller(
+        binding(url="http://127.0.0.1:9", poll_interval_s=0.01),
+        map_id=MAP, scene_revision=SCENE, transport=unreachable)
+    monitor = SignalObserverMonitor(
+        poller, manager, stale_after_s=0.4, events=_RecordingEvents(),
+        clock=lambda: now[0])
+
+    monitor.start()
+    assert monitor.is_alive()
+    monitor.stop()
+    assert not monitor.is_alive()

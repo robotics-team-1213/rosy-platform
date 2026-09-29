@@ -619,6 +619,9 @@ class TrafficPolicyStatus(BaseModel):
     signal_colour: Optional[str] = None
     signal_confidence: float = 0.0
     signal_conflict: bool = False
+    signal_source_kind: str = "camera"
+    signal_head_age_s: Optional[float] = None
+    signal_head_frozen: bool = False
     linear_scale: float = 0.0
 
 

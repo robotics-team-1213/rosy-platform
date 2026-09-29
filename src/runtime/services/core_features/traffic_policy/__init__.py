@@ -11,6 +11,7 @@ from core_features.traffic_policy.manager import (
 from core_features.traffic_policy.observer_source import (
     ObserverHttpError,
     SignalObserverConfigError,
+    SignalObserverMonitor,
     SignalObserverPoller,
     SignalObserverSourceConfig,
     parse_observed,
@@ -25,6 +26,7 @@ __all__ = [
     "TrafficPolicyMode",
     "ObserverHttpError",
     "SignalObserverConfigError",
+    "SignalObserverMonitor",
     "SignalObserverPoller",
     "SignalObserverSourceConfig",
     "parse_observed",

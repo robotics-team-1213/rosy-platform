@@ -3429,6 +3429,12 @@
 - 변경: 실행 계획 T2를 완료 표시하고 착지 내용(확정·비동결 프레임만 증거화, 위치 지도 기반 색 해석, `last_outcome`·`last_age_s` 관측성 룩, 스케줄링은 T3 소관)을 보탰다.
 - 증거: 같은 회차 코드 변경 — `src/runtime/services` 로그 참조. 신규 17시험 포함 services 251 passed, traffic·foundation 156 passed. SIZE_VERDICTS에 manager.py 609행 accept 판정 추가(잔여 2건은 병행 트랙 부채).
 - gate 변화: 없음. T3(설정 게이트·배선·상태 필드·API Ref MINOR) 대기.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료
+
+- 변경: 실행 계획 T3을 완료 표시하고 착지 내용(파일 설정 전용 바인딩과 map/scene 없으면 빌드 실패, 데몬 스레드 모니터의 나이 보정 주입, `fused` 표기 조건, 침묵 경보 1회)을 보탰다. API 계약서 v1.55→v1.56 — 상태 필드 3종·예시·문단·§8 이벤트 행·역사 항목 동시 갱신(D-18).
+- 증거: 같은 회차 코드 변경 — `src/runtime/services`·`src/runtime/gateway`·`src/contracts/foundation` 로그 참조. 통합 호스트 실행 501 passed, 시맨틱 로드 시뮬 2 passed.
+- gate 변화: 없음. T4(dashboard 신호 원 행)·T5(벤치) 대기.
 ## 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
 
 - 변경: test/architecture/test_module_structure.py의 WORKSPACE_REF_PATTERNS에 package://x/ URI 패턴을 추가하고 텍스트 스캔 확장자를 .yaml·.urdf·.xacro·.sdf·.world·.rviz까지 넓혔다(스코어카드 §6 과제 6). 정직한 구멍 목록 갱신 — 런타임 조립 이름은 여전히 못 보고, isaac_sim이 package.xml 없는 에셋 폴더라 이 스캔의 영역 밖임을 명시.

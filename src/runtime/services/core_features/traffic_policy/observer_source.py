@@ -21,10 +21,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import threading
 import time
 from typing import Callable, Optional
 
-from core_features.traffic_policy.manager import SignalHeadEvidence
+from core_features.traffic_policy.manager import (
+    SignalHeadEvidence,
+    TrafficPolicyManager,
+)
 
 #: Operator position-map targets. Exactly these colour roles exist.
 _COLOUR_TARGETS = ("red", "yellow", "green")
@@ -172,6 +176,10 @@ class SignalObserverPoller:
         #: http_error | bad_payload.
         self.last_outcome: str = "never_polled"
 
+    @property
+    def config(self) -> SignalObserverSourceConfig:
+        return self._config
+
     def poll(self) -> Optional[SignalHeadEvidence]:
         try:
             payload = self._transport(
@@ -204,3 +212,75 @@ class SignalObserverPoller:
             return None
         self.last_outcome = "confirmed"
         return evidence
+
+
+class SignalObserverMonitor:
+    """Owns the polling schedule for a bound observer (D-337 T3 wiring).
+
+    One tick = one poll: confirmed evidence goes to the manager with the
+    server-side frame age compensated into the receipt time; a poll that
+    produces nothing is silence. The fresh->stale transition is announced
+    exactly once per lapse — after it the verdict is camera-only again,
+    which is never less safe than the camera-only build.
+    """
+
+    def __init__(self, poller: SignalObserverPoller,
+                 traffic_policy: TrafficPolicyManager, *,
+                 stale_after_s: float, events,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.poller = poller
+        self._traffic_policy = traffic_policy
+        self._stale_after_s = float(stale_after_s)
+        self._events = events
+        self._clock = clock
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._fresh = False
+        self._last_confirmed_at: Optional[float] = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run, name="signal-observer", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            thread.join(timeout=2.0)
+
+    def is_alive(self) -> bool:
+        return bool(self._thread and self._thread.is_alive())
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.poller.config.poll_interval_s):
+            try:
+                self.tick()
+            except Exception:  # noqa: BLE001 — one tick never kills the loop
+                continue
+
+    def tick(self) -> None:
+        now = self._clock()
+        evidence = self.poller.poll()
+        if evidence is not None:
+            received = now - (self.poller.last_age_s or 0.0)
+            self._traffic_policy.observe_signal(evidence, received_at=received)
+            self._fresh = True
+            self._last_confirmed_at = now
+            return
+        if not self._fresh or self._last_confirmed_at is None:
+            return
+        silent_for = now - self._last_confirmed_at
+        if silent_for > self._stale_after_s:
+            self._fresh = False
+            self._events.publish(
+                "nav.traffic_policy_signal_source_stale", "warning",
+                source="traffic_policy_manager",
+                data={
+                    "outcome": self.poller.last_outcome,
+                    "silent_for_s": round(float(silent_for), 3),
+                },
+            )
