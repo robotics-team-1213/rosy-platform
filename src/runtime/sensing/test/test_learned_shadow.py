@@ -30,3 +30,21 @@ def test_payload_has_no_command_fields():
     r = InferResult(LaneMaskEvidence(True, 0.0, 1.0, {}), 1.0, "rev")
     keys = set(shadow_payload(r, stamp=0.0, rule_error=None))
     assert not keys & {"linear", "angular", "cmd_vel", "twist"}
+
+
+def test_learned_lane_node_main_shuts_down_like_line_observer():
+    """Ctrl-C is not an error, and a context already shut down is not shut down twice."""
+    import ast
+    from pathlib import Path
+
+    control = Path(__file__).resolve().parents[1] / "control"
+
+    def main_src(name):
+        tree = ast.parse((control / name).read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
+        return ast.unparse(fn).replace("LineObserverNode", "Node").replace("LearnedLaneNode", "Node")
+
+    got = main_src("learned_lane_node.py")
+    assert got == main_src("line_observer_node.py")
+    assert "except KeyboardInterrupt" in got and "if rclpy.ok():" in got
+    assert "executor_choice.spin(node, rclpy)" in got
