@@ -65,11 +65,22 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "site/fleet/fleet/server/app.py": (
-        813,
-        "accept: compose Fleet routes and shared authentication/audit dependencies in one HTTP boundary; "
-        "split by route group only when an independent auth and lifecycle boundary exists. Re-judged 2026-09-29 "
-        "at 813 lines after the dispatch arbitration work grew the route table (docs/plans/"
+        1315,
+        "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
+        "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
+        "with the arbitration work; owner fleet, unscheduled (docs/plans/"
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
+    ),
+    "fleet": (
+        10_631,
+        "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
+        "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled",
+    ),
+    "contracts/foundation/core_common/protocol/schemas.py": (
+        742,
+        "accept: the D-18 single contract source — every envelope, event and capability model in one "
+        "importable place; per-domain schema files would fork the version pin that "
+        "test_protocol_version_alignment guards. ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1014,
