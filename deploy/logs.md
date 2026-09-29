@@ -1521,6 +1521,7 @@
 - 증거: 변이 증명 — 금지 목록 밖 가짜 의존(core_events)은 적발(붉음), 목록 내(emotion·imu_bno055)은 의도대로 제외, 복구 후 초록 (2026-09-30 Windows). test_nav2_hardware_slice는 변화 없음 통과.
 - gate 변화: 없음.
 - 결정: 장기 수정은 KNOWN_DIRECTION 기록대로 — control의 legacy launch가 IMU 드라이버를 시작하는 것을 bringup 조립으로 옮기는 코드 이동이다.
+- 교훈: 없음.
 
 ## 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
 
