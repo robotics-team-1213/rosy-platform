@@ -100,7 +100,7 @@ fun SettingsScreen(
         }
         if (scanning) Text(stringResource(R.string.settings_mdns_scanning))
         if (!wifiConnected) {
-            Text(stringResource(R.string.settings_mdns_wifi_required), color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.settings_mdns_wifi_required), color = RosyColors.StatusWarn)
         } else {
             Text(stringResource(R.string.settings_mdns_overhead_heading), style = MaterialTheme.typography.titleSmall)
             if (overheadServices.isEmpty()) {
@@ -139,7 +139,7 @@ fun SettingsScreen(
             }
         }
         if (locked) {
-            Text(stringResource(R.string.settings_locked), color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.settings_locked), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         OutlinedTextField(
@@ -187,7 +187,7 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_tls))
         }
 
-        invalid?.let { Text(invalidText(it), color = MaterialTheme.colorScheme.error) }
+        invalid?.let { CritMessage(invalidText(it)) }
         if (saved) Text(stringResource(R.string.settings_saved), color = MaterialTheme.colorScheme.primary)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
