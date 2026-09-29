@@ -39,6 +39,11 @@ android {
                 "rosy.overhead.vectors",
                 rootProject.file("../protocol/vectors.json").absolutePath,
             )
+            // D-358 shared DNS-SD TXT vectors, also read by the Python discovery parsers.
+            it.systemProperty(
+                "rosy.discovery.vectors",
+                rootProject.file("../../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath,
+            )
         }
     }
 }
