@@ -45,7 +45,6 @@ KNOWN_WITHOUT_OWN_TESTS = {
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
     ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
-    ("navigation", "core"): "web_nav2/web_slam(+gz_) launch XML starts the core node",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
