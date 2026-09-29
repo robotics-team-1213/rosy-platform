@@ -174,7 +174,23 @@ class UiShell extends HTMLElement {
 
 class UiTopbar extends HTMLElement {}
 
-class UiBrand extends HTMLElement {}
+class UiBrand extends HTMLElement {
+  // D-333: href를 주면 자식을 하나의 링크로 감싼다. aria-label은 링크로
+  // 옮겨 접근성 이름이 한 곳에만 붙는다. href가 없으면 평문 브랜드다.
+  connectedCallback() {
+    const href = this.getAttribute("href");
+    if (!href || this.querySelector("a")) return;
+    const link = document.createElement("a");
+    link.setAttribute("href", href);
+    const label = this.getAttribute("aria-label");
+    if (label) {
+      link.setAttribute("aria-label", label);
+      this.removeAttribute("aria-label");
+    }
+    while (this.firstChild) link.append(this.firstChild);
+    this.append(link);
+  }
+}
 
 class UiSection extends HTMLElement {
   connectedCallback() {
