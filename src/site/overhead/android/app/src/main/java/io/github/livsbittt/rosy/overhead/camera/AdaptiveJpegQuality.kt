@@ -5,10 +5,15 @@ package io.github.livsbittt.rosy.overhead.camera
  * re-encoded at most [MAX_RETRIES] times, [STEP] lower each time and never below [FLOOR].
  * The next frame starts at the last quality that fit and climbs back by [RECOVER_STEP] after
  * [RECOVER_AFTER] frames in a row fit. The configured `jpeg_quality` stays a ceiling.
- * Analysis-thread only; not thread-safe.
+ * Analysis-thread only, except [lastFit], which any thread may read.
  */
 class AdaptiveJpegQuality {
     private var effective: Int? = null
+
+    /** Quality of the last frame that fit under `max_bytes`, or null before the first one. For the UI. */
+    @Volatile
+    var lastFit: Int? = null
+        private set
     private var current = 0
     private var retries = 0
     private var fitRun = 0
@@ -33,6 +38,7 @@ class AdaptiveJpegQuality {
 
     /** The last encode fit under `max_bytes`. */
     fun encoded() {
+        lastFit = current
         effective = current
         fitRun++
         if (fitRun >= RECOVER_AFTER) {
