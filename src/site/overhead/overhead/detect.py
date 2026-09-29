@@ -9,7 +9,19 @@ from overhead.project import MarkerQuad
 
 _DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 _PARAMETERS = cv2.aruco.DetectorParameters()
-_DETECTOR = cv2.aruco.ArucoDetector(_DICTIONARY, _PARAMETERS)
+
+
+def _marker_detector(aruco):
+    """detectMarkers for DICT_4X4_50 on any shipped OpenCV: the 4.7+
+    `ArucoDetector` when present, else the 4.6-era module function
+    (dock_tag.py precedent — CI and the device image ship 4.6)."""
+    if hasattr(aruco, "ArucoDetector"):
+        return aruco.ArucoDetector(_DICTIONARY, _PARAMETERS).detectMarkers
+    return lambda image: aruco.detectMarkers(
+        image, _DICTIONARY, parameters=_PARAMETERS)
+
+
+_DETECT_MARKERS = _marker_detector(cv2.aruco)
 
 
 def detect_markers(jpeg: bytes) -> dict[int, MarkerQuad]:
@@ -20,7 +32,7 @@ def detect_markers(jpeg: bytes) -> dict[int, MarkerQuad]:
     image = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         return {}
-    corners, marker_ids, _rejected = _DETECTOR.detectMarkers(image)
+    corners, marker_ids, _rejected = _DETECT_MARKERS(image)
     if marker_ids is None:
         return {}
     found: dict[int, MarkerQuad] = {}
