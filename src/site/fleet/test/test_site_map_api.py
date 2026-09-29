@@ -169,6 +169,41 @@ def test_loader_rejects_malformed_robot_markers(tmp_path):
                                   environ=ENV)
 
 
+@pytest.mark.parametrize("markers, message", [
+    ({"rosy-pinky-other": 40}, "outside robot_ids"),
+    ({"rosy-pinky-8kcn": 30}, "corner_marker_ids"),
+])
+def test_loader_rejects_markers_for_unknown_robots_or_corner_ids(tmp_path, markers, message):
+    with pytest.raises(ValueError, match=message):
+        load_sighting_sources(_write(tmp_path / "c.yaml", _row(robot_markers=markers)), environ=ENV)
+
+
+def test_loader_rejects_two_robots_sharing_a_marker(tmp_path):
+    row = _row(robot_ids=["rosy-pinky-8kcn", "rosy-pinky-2abc"],
+               robot_markers={"rosy-pinky-8kcn": 40, "rosy-pinky-2abc": 40})
+    with pytest.raises(ValueError, match="distinct marker id"):
+        load_sighting_sources(_write(tmp_path / "c.yaml", row), environ=ENV)
+
+
+def _write_rows(path, rows):
+    path.write_text(yaml.safe_dump({"sources": rows}), encoding="utf-8")
+    return path
+
+
+def test_loader_rejects_sources_on_one_map_with_different_rectangles(tmp_path):
+    other = _row(source_id="ceiling_south", corner_marker_ids=[34, 35, 36, 37],
+                 corner_world_m=[[0.0, 0.0], [5.0, 0.0], [5.0, 2.0], [0.0, 2.0]])
+    with pytest.raises(ValueError, match="ceiling_north and ceiling_south share map_id site-v1"):
+        load_sighting_sources(_write_rows(tmp_path / "c.yaml", [_row(), other]), environ=ENV)
+
+
+def test_loader_accepts_sources_on_one_map_with_the_same_rectangle(tmp_path):
+    other = _row(source_id="ceiling_south", corner_marker_ids=[34, 35, 36, 37])
+    sources = load_sighting_sources(_write_rows(tmp_path / "c.yaml", [_row(), other]), environ=ENV)
+
+    assert [source.source_id for source in sources] == ["ceiling_north", "ceiling_south"]
+
+
 def test_hyphenated_site_robot_ids_pass_sighting_validation():
     from core_common.protocol.sightings import SiteSightingPayload
 
@@ -197,6 +232,22 @@ def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose(
     assert "<script>" not in page  # CSP: script-src 'self' only
 
 
+def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
+    client = _client([_source()])
+
+    map_view = client.get("/console/assets/map-view.js").text
+    shell = client.get("/console/assets/console.js").text
+
+    # The sightings route is only registered with a sightings config; no site map → no polling.
+    assert "sightingsUnavailable || !view.siteMap) return;" in map_view
+    assert "if (err.status === 404) sightingsUnavailable = true;" in map_view
+    assert "if (unchanged && !next.length) return;" in map_view
+    # A transient site-map failure keeps the last rectangle; only NO_SITE_MAP clears it.
+    assert 'err.status === 404 && err.code === "NO_SITE_MAP"' in map_view
+    assert 'setAttribute("role", "img")' in map_view and 'setAttribute("role", "button")' in map_view
+    assert "error.status = resp.status;" in shell and "error.code = detail.code;" in shell
+
+
 @pytest.mark.parametrize("spec_name", ["site-layer.test.mjs", "field-layers.test.mjs"])
 def test_site_layer_node_unit_tests_pass(spec_name):
     import shutil
@@ -208,5 +259,5 @@ def test_site_layer_node_unit_tests_pass(spec_name):
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
     spec = Path(__file__).resolve().parent / "web" / spec_name
     result = subprocess.run([node, "--test", str(spec)], capture_output=True, text=True,
-                            timeout=60, check=False)
+                            encoding="utf-8", errors="replace", timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr

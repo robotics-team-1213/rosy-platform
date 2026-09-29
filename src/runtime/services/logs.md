@@ -171,3 +171,17 @@
 - Change: SignalObserverMonitor (daemon thread, injectable clock) owns the polling schedule — confirmed evidence reaches the manager with the server frame age compensated into the receipt time, and the fresh->stale transition publishes nav.traffic_policy_signal_source_stale (warning) exactly once per lapse. TrafficPolicyStatus gains signal_source_kind (camera|fused — fused only while the measured light is usable), signal_head_age_s, signal_head_frozen, computed in _set_status from the same usability rule the verdict uses. The T2 poller export now includes the monitor.
 - Evidence: services test_observer_source.py +3 (age compensation through the manager status, once-per-lapse announcement with re-arm after recovery, start/stop). traffic policy suite +3 (status view across fresh/stale/frozen, observer absent by default, binds+starts from config, missing map/scene fails the build). Combined host run 501 passed; semantic road simulation 2 passed; flake8 clean on changed lines.
 - Gate: SOURCE/LOCAL only; no live observer on the bench, ROS-SIM, device, or FIELD acceptance. T4 (dashboard signal-source row) remains.
+## 2026-09-30 · uncommitted · feat(docking): D-350 하드웨어 단계·degrade·만춫·히스테리시스
+
+- 변경: ①ChargingConfirmation에 instrumented kwarg — false면 Phase 1(계측 없는 도크)에서 전압 비하락만으로 판정, source 프로퍼티로 단계 보고. ②DockPhase.CHARGED_HOLD 추가. ③DockingConfig에 full_enter_v(8.2V)/full_exit_v(8.0V)/instrumented(bool) — 만춫 히스테리시스·Phase 1 플래그. ④manager._check_full — DOCKED 중 만춫 감지 시 docking.full 이벤트 1회 방출, full_exit_v 아래로 떨어지면 재방출 허용. ⑤API Ref §8에 docking.full 행 추가. ⑥deploy/robot/pinky_pro/config/capabilities.dock-enabled.yaml 오버레이 신설.
+- 증거: test_docking_phases.py 6 passed (degrade·instrumented·peak_v·source). test_docking.py + mode_ownership + battery = 226 passed 전체.
+- gate 변화: 없음.
+- 결정: Phase 1에서 D-27 억제는 안 함(1소스로는 안전 경로를 못 끈다). Phase 2부터 2소스 확정 시에만.
+- 교훈: manager는 _cfg를 쓴다 (_config 아님) — 첫 커밋에서 9건 적신.
+## 2026-09-30 · uncommitted · feat(docking): D-351 재시도 갈래 — 도달 실패/전류 없음/충전 단절 구분
+
+- 변경: manager._tick_settling에 contact_no_current 갈래 추가 — load_present=true인데 charging=false가 settle 타임아웃까지 지속하면 즉시 DOCK_FAILED(contact_no_current), 재시도하지 않는다(산화 접점은 재시도로 안 낫는다). 도달 실패(재착좌)와 충전 단절(charge_lost, DOCKED 유지)은 기존 동작 유지.
+- 증거: 도킹 전체 115 passed (기존 + 신규 phase 시험).
+- gate 변화: 없음.
+- 결정: D-351 — 재시도 예산은 도달 실패에만 쓴다. 전류 없음은 폴트 보고.
+- 교훈: 없음.

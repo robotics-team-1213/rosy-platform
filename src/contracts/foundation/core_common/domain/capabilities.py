@@ -288,6 +288,58 @@ def withhold_hardware_flags(data: Mapping[str, Any], reasons: Mapping[str, str])
     return result
 
 
+class CapabilityLifecycle(str, enum.Enum):
+    """D-347: 플래그별 런타임 생애 — 두 표면이 쓰는 단일 어휘.
+
+    `activating`은 온디맨드 그래프 기동(토론 B레인)을 위해 **예약**되어
+    있다: 아직 이 상태로 진입하는 생산자는 없다. 클라이언트는 이 값을
+    "준비 안 됨, 실패 아님"으로 읽는다 — 갱신하거나 기다리지, 오류로
+    승격하지 않는다. inventory 기술자의 PresentationState와의 대응은
+    D-347 본문의 표가 정한다(코드가 아니다).
+    """
+
+    READY = "ready"
+    ACTIVATING = "activating"
+    UNAVAILABLE = "unavailable"
+
+
+def lifecycle_from(
+    advertised: Mapping[str, Any],
+    runtime_reasons: Mapping[str, str],
+) -> dict[str, dict[str, Any]]:
+    """CAP-001 플래그별 lifecycle (D-347, v1.58 additive).
+
+    입력은 런타임이 **광고하는** capabilities 사전이다 — 모드 마스킹을 거쳤고
+    이미 `withheld` 블록을 담고 있을 수 있다(core+device, D-32). 원천은
+    전부 이미 있는 값이다: 마스킹 사유, `runtime_truth`의 플래그별 사유,
+    플래그의 참/거짓. 이 함수는 그 셋을 한 어휘로 합칠 뿐 새 판정을
+    만들지 않는다.
+
+    규칙: 광고가 true 이거나 마스킹이 보류(wielded)한 플래그만 실는다 —
+    프로파일과 런타임 어느 쪽도 true로 말하지 않는 플래그는 결과에 없다
+    (설계 §7). 사유는 **마스킹 사유가 우선**이다: 그것이 선의 `withheld`
+    블록이 말하는 바이고, 꺼진 플래그에 대한 runtime 사유는 선에 안
+    오르므로 여기서도 말하지 않는다.
+    """
+    withheld_block = advertised.get("withheld") or {}
+    withheld_flags = set(withheld_block.get("flags") or ())
+    masked_reasons = withheld_block.get("reasons") or {}
+    out: dict[str, dict[str, Any]] = {}
+    for flag in HARDWARE_FLAGS:
+        if not (_flag_is_true(advertised, flag) or flag in withheld_flags):
+            continue
+        reason = masked_reasons.get(flag) or runtime_reasons.get(flag)
+        if reason:
+            out[flag] = {
+                "state": CapabilityLifecycle.UNAVAILABLE.value,
+                "reason": reason,
+                "reasons": (reason,),
+            }
+        else:
+            out[flag] = {"state": CapabilityLifecycle.READY.value}
+    return out
+
+
 def _presentation(
     device_state: Optional[DeviceState],
     runtime_reason: Optional[str] = None,

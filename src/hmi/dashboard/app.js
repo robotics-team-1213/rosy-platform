@@ -158,6 +158,7 @@ function renderTrafficStatus(status = {}) {
       : "—",
   );
   setText("traffic-policy-rule", status.junction_rule || "signal_controlled");
+  setText("traffic-policy-source", status.signal_head_frozen ? "frozen" : (status.signal_source_kind || "camera"));
   setText("traffic-policy-scene", status.scene_revision || "—");
   setText("traffic-policy-revision", status.policy_revision || "—");
 }

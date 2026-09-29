@@ -16,19 +16,21 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `run_data.py` | Create `data/teleop` and `data/drive` sessions |
 | `dashboard_drive.py` | Headless Playwright driver for the CORE dashboard: `status`, `mode`, `teleop` (stop latency), `screenshot` (skill `rosy-dashboard-drive`) |
 | `harness/` | Module index generator (`rosy_harness.py`) |
+| `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~2 min) and its installer |
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` |
-| `sim/` | Local sim probes and `sim_verify.sh`. Not a second product tree |
+| `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree |
 | `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool |
 
 ## For AI Agents
 
 ### Working In This Directory
 
+- Placement rule: a script that serves one module and imports no other package (its own test launches it, or it only measures that module) lives in that module's `tools/`, e.g. `src/site/fleet/tools/fleet_gather_bench.py`. A script that composes several packages lives in a root group even if one module's test launches it — putting it inside a package would add an undeclared cross-package import (`test_every_cross_package_use_is_declared`); e.g. `tools/sim/simulate_line_follow.py` and `simulate_semantic_road.py` compose control with core, core_events and core_features. Root `tools/` keeps workspace entry points (`fix_ament_resource.sh`, `run_fleet_sim.sh`, `run_data.py`, `dashboard_drive.py`, `fleet_console.ps1`) and cross-module groups (`harness/`, `perception/`, `sim/`).
 - A script that one module installs or that its own test launches stays in that module. `bringup/scripts/rosy_env.sh` and `control/tools/gz/run_track260905.sh` are examples.
 - Robot install and image build stay in `deploy/`.
 - Do not put teleop notes or drive bags here. Session files go under `data/teleop` and `data/drive` and stay untracked. Learning clips stay in `data/teleop/learning/`.

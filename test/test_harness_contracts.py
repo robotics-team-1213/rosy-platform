@@ -422,3 +422,27 @@ def test_full_lint_including_git_history_checks():
     for note in notes:
         warnings.warn(note, stacklevel=1)
     assert errors == []
+
+
+# --- D-346: commit-time collision defenses ----------------------------------
+
+
+def test_duplicate_adr_index_rows_are_errors():
+    """Two `| D-n |` rows used to collapse silently in the index dict (D-337)."""
+    text = (
+        "| ID | 제목 | Status |\n|---|---|---|\n"
+        "| D-1 | 하나 | Accepted |\n"
+        "| D-1 | 둘 | Accepted |\n"
+        "## D-1 하나\n\n본문\n"
+    )
+    adr = harness.parse_adr_log(text)
+    assert adr.index_duplicates == ("D-1",)
+    assert "D-1: duplicate index row" in harness.validate_adr_log(adr, gaps={})
+
+
+def test_mojibake_question_runs_are_found():
+    """A console codepage that ate Korean shows up as literal '??' (D-336/D-140)."""
+    corrupt = "| D-9 | ARM64 ?? ??? ?? |\n| D-10 | 온전한 행 |"
+    assert harness.find_mojibake(corrupt) == [1]
+    assert harness.find_mojibake("| D-10 | 온전한 행 | 이어폰? 아니고 |") == []
+

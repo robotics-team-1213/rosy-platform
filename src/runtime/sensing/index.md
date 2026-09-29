@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
+- 2026-09-29 · uncommitted · feat(traffic): 무신호·관측 융합 폐루크 호스트 시뮬레이션
 - 2026-09-29 · uncommitted · web-surface-hardening: PARKED web_node 루프백·Origin 고정
 - 2026-09-25 · uncommitted · refactor(runtime): move control under src/runtime (D-231)
 - 2026-09-25 · uncommitted · refactor(control): camera and lane evidence under sensing/perception
-- 2026-09-24 · uncommitted · docs(validation): P0 lens height reading 63 mm (tentative)
-- 2026-09-24 · uncommitted · docs(adr): D-206 P0 measurement procedure and profile custody

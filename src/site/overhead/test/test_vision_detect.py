@@ -1,13 +1,12 @@
 import cv2
 import numpy as np
 
-from overhead.detect import detect_markers
+from overhead.detect import detect_markers, generate_marker_image
 
 
 def _jpeg_with_marker(marker_id=7):
     canvas = np.full((320, 320), 255, dtype=np.uint8)
-    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    marker = cv2.aruco.generateImageMarker(dictionary, marker_id, 140)
+    marker = generate_marker_image(marker_id, 140)
     canvas[90:230, 90:230] = marker
     ok, encoded = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 100])
     assert ok

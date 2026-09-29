@@ -549,3 +549,16 @@
 - 증거: `python -m pytest src/runtime/sensing/test -q` 1665 passed 78 skipped(단독 실행). `test_web_http.py` 16 passed.
 - gate 변화: 없음. 진단 전용(D-150/D-253) 경계 그대로.
 - 결정: D-150, D-253.
+
+## 2026-09-29 · uncommitted · feat(traffic): 무신호·관측 융합 폐루크 호스트 시뮬레이션
+
+- 변경: `tools/sim/simulate_semantic_road.py`의 결정론적 합성 카메라 폐루프에 시나리오 2종을 추가했다 — `stop_and_go`(무신호 선언: 정지+dwell 후 `PROCEED/unsignalized_proceed`, 신호 관측 시 `HOLD/signal_unexpected`)와 D-337 관측 융합(카메라 신호 미관측 + `SignalHeadEvidence` 주입: `signal_unknown` 무한 대기 → `PROCEED/signal_green`(signal_source_kind=fused), 불일치 `HOLD/signal_source_conflict`). 폴러 전송은 가짜 없이 정책 계층에서 주입하고 전송 계약은 기존 `test_observer_source.py`가 담당한다. 상태 타임라인 SVG는 표본 수에 맞춰 높이가 늘어난다.
+- 증거: `docs/validation/semantic-road-stop-and-go-2026-09-29/` — `SEMANTIC_ROAD_HOST_SIM_PASS`, 표 3종·result.json·SVG·montage·preview. `test_semantic_road_simulation.py` 신규 단언(무신호 진입·선언 충돌·융합 3단·fused 표기) 포함 2 passed, flake8 clean.
+- gate 변화: 없음. HOST-SIM 한계 그대로 — 실물 Gazebo 폐루프(WSL), 관측 서비스 실HTTP, DEVICE/FIELD는 T5 벤치 회차가 소유한다.
+## 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
+
+- 변경: package.xml에 `<exec_depend>imu_bno055</exec_depend>` 추가 — KNOWN_UNDECLARED에서 (control, imu_bno055) 제거. KNOWN_DIRECTION에는 유지(방향 위반은 코드 이동이 필요하므로).
+- 증거: test_module_structure 33 passed.
+- gate 변화: 없음.
+- 결정: 선언은 정직한 절반 — 전체 해소는 bringup 조립로 이전(별도 과제).
+- 교훈: 없음.

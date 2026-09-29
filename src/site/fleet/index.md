@@ -70,7 +70,7 @@
 ## 최근 기록
 
 - 2026-09-30 · uncommitted · fleet-console: 카메라 칸 배치 고침과 D-354 경기장 제안 검토
-- 2026-09-29 · uncommitted · feat(fleet-console): 천장 카메라 사이트 사각형과 관측 표시 (D-257)
-- 2026-09-29 · uncommitted · web-surface-hardening: `/common` 목록은 web_common manifest
-- 2026-09-29 · uncommitted · Mission provenance and SQLite query-path improvement
-- 2026-09-29 · uncommitted · feat(fleet): dispatch admitted Mission through fenced OMX UDS Action
+- 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
+- 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress
+- 2026-09-30 · uncommitted · fix(fleet-console): 사이트 지도 리뷰 반영 (D-257)
+- 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition

@@ -1479,3 +1479,46 @@
 - 변경: CI 6단계 적자 4건의 원인을 두 갈래로 고쳤다. (1) `secret_scan.py` 오탐 13건 — 규칙을 좁게 다듬었다: `_INTEGRITY_CONTEXT`에 backtick을 여는 `source`만 인정, URL이 가리키는 값을 bare copy로 인용하면 면제, 50자 이상 순수-문자 run은 base64가 아님, 닫히지 않은 bracket을 가진 값은 코드 조각(`_call_holds_no_literal` 유지), 환경 조회(`os.environ.get`/`getenv`)의 인자는 ALL_CAPS 이름이면 키로 취급, `obj.method()`를 `_CODE_REFERENCE`에 추가, 호출 인자 위치의 secret-named 식별자는 참조로 취급. (2) `test/robot_contracts.py`에 `COLCON_OUTPUT`/`source_manifests()`를 두고 image-closure 두 테스트와 `_launch_file`이 `src/build`·`src/install`·`src/log`를 건너뛰게 했다 — CI는 colcon 빌드 후라 중복 `package.xml`이 먼저 정렬됐던 것이 원인이다.
 - 증거: colcon 출력 흉내 트리에서 수정 전 3 failed(CI와 동일한 assertion) → 수정 후 3 passed; `test_release_boundary_guards.py` 73 passed(신규 회귀 10건 포함: 인자 위치 리터럴 4건은 계속 보고); 전체 `test/` suite 실행 중.
 - gate 변화: 없음. 스캐너 완화에 대한 변명성 주석 없이 각 규칙의 오탐 비용을 코드에 기록했다.
+## 2026-09-29 · uncommitted · fix(image): io-build 클로저에 core_common 추가
+
+- 변경: deploy/robot/pinky_pro/Dockerfile io-build 스테이지의 --packages-select에 core_common을, COPY에는 패키지 루트인 src/contracts/foundation 통째로 추가했다(core_common의 package.xml은 foundation/에 있다). omx_adapter가 core_common에 직접 의존하게 되면서(ER2 adapter 작업) 선택 목록의 전이 클로저에 core_common이 필요해졌으나 목록이 그대로여서 test_io_image_closure가 실패했다.
+- 증거: test/test_io_image_closure.py 2 passed. .dockerignore는 !src/contracts/foundation/** 로 이미 허용(추가 변경 없음).
+- gate 변화: 없음.
+- 결정: 클로저는 select 목록이 스스로 증명한다 — 의존 추가 커밋은 같은 변경에서 select·COPY를 함께 고친다.
+- 교훈: omx_adapter→core_common 커밋이 이 시험을 빨갛게 두고 갔다(커밋 순서 뒤처짐).
+## 2026-09-29 · uncommitted · test(sd): 999% 스톨 시험의 폴 레이스 제거
+
+- 변경: test/test_sd_writer_contract.py의 at_999 시험이 스톨 감시 창(-WriterStallMinutes 0.05에서 0.5)과 부분 복사 자식의 생존 시간(_partial_copy_child 파라미터화, 2초에서 25초)을 확보했다. 풀스위트 부하에서 파이썬 콜드스타트가 3초 스톨 창을 넘기면 감시자가 0바이트를 표본 삼아 99.9% 미달로 오판하거나 2초 생존 창을 놓쳐 분류가 뒤바뀌어 실패했다(2026-09-29 풀 게이트 적신 6건 중 1건, 단독 실행으론 통과).
+- 증거: 대상 2개 시험(at_999·well_below) 통과(2:36). 감시 창·생존 창은 픽스처 안무일 뿐 감시 문구·분류 계약(D-225 3.2·D-187)은 불변이고, well_below는 기본값 그대로다.
+- gate 변화: 없음.
+- 결정: 레이스는 픽스처 편성에 있었고 제품 코드는 무결 — 시간 여유 매개변수만 늘렸다.
+- 교훈: 단독 통과·풀스위트 실패 조합은 부하 민감성이지 가드의 잘못이 아니다 — 편성을 고정 시간 여유로 결정론화한다.
+## 2026-09-29 · uncommitted · test(sd): hung readback 계약의 냉각시작 레이스 제거
+
+- 변경: test/test_sd_writer_contract.py의 hung readback 시험에서 -ReadbackStallMinutes를 0.05(3초)에서 0.5(30초)로 넓혔다. 풀스위트 부하에서는 검증 자식의 생성·파이프 접속이 3초 창을 넘길 수 있고, 그러면 감시자가 카드에 닿지도 않은 클라이언트를 판정한다(2026-09-29 풀 게이트 실패, 단독 실행으론 통과). hang 동작은 무한 대기이므로 창 확대는 판정 시점만 늦추고 판정 대상은 바꾸지 않는다. 같은 날 999% 스톨 시험(de-flake 9534fdea)과 같은 처방·같은 근거다.
+- 증거: hung readback + slow-readback-never-stopped 2 passed(54초). slow 쪽은 건드리지 않았다(풀 게이트 실패 목록에 없음 — 최소 변경).
+- gate 변화: 없음.
+- 결정: 없음(픽스처 안무만).
+- 교훈: 같은 파일의 부하 민감 시험은 한 번에 하나씩 실패로 드러난다 — 형제 시험 전부를 예방 수술하지 말고 실패한 것만 고친다.
+## 2026-09-29 · uncommitted · fix(release): 비밀 스캐너에 저널 인용 산탄 예외
+
+- 변경: secret_scan.py에 KNOWN_PROSE_QUOTES를 추가했다 — src/site/fleet/logs.md 한 경로에서만, 제거된 픽스처 값(fixture-secret)의 인용을 면제한다. 병행 fleet 세션이 api_key 리터럴을 허용 키로 교체하며(c9001aba) 저널에 옛 값을 인용했는데, 모듈 저널은 append-only라 문구를 못 고치고 스캐너가 이를 credential로 적발해 CI(main)가 빨간 상태였다. 같은 값은 그 외 모든 위치(해당 모듈 코드 포함)에서 여전히 적발된다. 코드는 3f0c6636으로 먼저 반영됐고 이 항목은 뒤늦은 저널 보충이다.
+- 증거: test_secret_scan.py 2건 신설(핀 경로 면제 + 다른 경로 여전히 credential 적발 — 산탄 증명), test_release_boundary_guards 72 passed. test_boot_display는 로컬 106 통과 — CI 로그의 FAILED 문자열은 파라미터 ID(FAILED:rosy-core.service 상태명)였다.
+- gate 변화: 없음.
+- 결정: 예외는 (경로, 값) 쌍으로 핀 고정. 목록이 늘어나면 각 항목이 사유와 함께 심사 대상이다.
+- 교훈: 저널에 옛 비밀 형태 문자를 인용하지 않는다 — 문구로 서술한다. append-only라 한번 실으면 못 지운다. (그리고 저널 append는 인라인 명령이 아니라 스크립트 파일로 — 이 항목 자체가 그 교훈의 산물이다.)
+## 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
+
+- 변경: deploy/robot/pinky_pro/verify/measure-resident-cpu.sh 신설 — systemd 단위별 CPU를 cgroup/proc 틱 증분으로 샘플하고(의존 설치 없음), --ab-unit 로 켜짐/꺼짐 A/B 를 잰 다음 단위를 반드시 되살린다. A/B 허용 단위는 rosy-camera·rosy-navigation 뿐(rosy-core=게이트웨이, rosy-io=안전 기본층 금지). 결과는 /var/lib/rosy/resident-cpu-<ts>.md. 기준선 문서 §5에 도구로 등재.
+- 증거: test/test_measure_resident_cpu.py 4건 신설 — bash -n 파싱, 금지 단위 3종 거부(exit 2, 무권한으로 판정 가능=allowlist 가 root 검사보다 선행), stop 뒤 start 복원·기준서 지시 핀. 산탄 증명: 허용 목록을 넓히면 거부 시험이 즉시 적신.
+- gate 변화: 없음(측정 도구·실기 세션用品).
+- 결정: 측정 도구는 상태를 바꾸고 끝내지 않는다 — A/B 후 단위 복원이 도구 계약이다.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시
+
+- 변경: test_io_image_closure.py의 의존성 closure 계산이 board.yaml hardware_packages(D-84 — Device hardware 프로필이 열리기 전까지 CORE/io 이미지 금지)에 있는 패키지와 그 하위 의존을 요구 집합에서 제외한다. control이 legacy launch로 imu_bno055를 exec_depend로 선언하면서(정직한 선언) closure 계약과 D-62 슬라이스 계약이 충돌했고, D-84가 이미 우선순위를 정하고 있으므로 예외를 계약에 명시했다.
+- 증거: 변이 증명 — 금지 목록 밖 가짜 의존(core_events)은 적발(붉음), 목록 내(emotion·imu_bno055)은 의도대로 제외, 복구 후 초록 (2026-09-30 Windows). test_nav2_hardware_slice는 변화 없음 통과.
+- gate 변화: 없음.
+- 결정: 장기 수정은 KNOWN_DIRECTION 기록대로 — control의 legacy launch가 IMU 드라이버를 시작하는 것을 bringup 조립으로 옮기는 코드 이동이다.
+- 교훈: 없음.

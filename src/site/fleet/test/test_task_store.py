@@ -5,6 +5,7 @@ from fleet.server.task_store import (
     FleetTaskStore,
     IdempotencyConflict,
     InvalidTaskTransition,
+    _QUEUE_POSITION_QUERY,
 )
 
 
@@ -54,6 +55,20 @@ def test_readback_reports_server_order_for_queued_tasks_only(tmp_path):
     assert store.get_task("background")["queue_position"] == 2
     store.claim_next(worker_id="dispatcher", available_robot_ids={"rosy_01"})
     assert store.get_task("operator")["queue_position"] is None
+
+
+def test_queue_position_query_uses_one_composite_index_range(tmp_path):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    with sqlite3.connect(store.path) as connection:
+        plan = connection.execute(
+            "EXPLAIN QUERY PLAN " + _QUEUE_POSITION_QUERY,
+            (2, "2026-09-29T12:00:00+00:00", "task-z"),
+        ).fetchall()
+
+    detail = " ".join(row[3] for row in plan)
+    assert "fleet_tasks_dispatch_queue_position" in detail
+    assert "SEARCH fleet_tasks" in detail
+    assert "MULTI-INDEX OR" not in detail
 
 
 def test_idempotency_key_reuses_same_task_and_rejects_changed_intent(tmp_path):

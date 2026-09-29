@@ -44,14 +44,13 @@ KNOWN_WITHOUT_OWN_TESTS = {
 #: P3/P4 exceptions as (source package, target package).
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
-    ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
 KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
-    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
 
@@ -65,11 +64,30 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "site/fleet/fleet/server/app.py": (
-        813,
-        "accept: compose Fleet routes and shared authentication/audit dependencies in one HTTP boundary; "
-        "split by route group only when an independent auth and lifecycle boundary exists. Re-judged 2026-09-29 "
-        "at 813 lines after the dispatch arbitration work grew the route table (docs/plans/"
+        1315,
+        "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
+        "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
+        "with the arbitration work; owner fleet, unscheduled (docs/plans/"
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
+    ),
+    "fleet": (
+        11_912,
+        "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
+        "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
+        "(re-judged 2026-09-30 at 11912 after the policy/goal-evidence contracts and their stores joined "
+        "the same flat server tree, docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md)",
+    ),
+    "site/fleet/fleet/server/mission_store.py": (
+        728,
+        "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, and "
+        "their transitions in one transactional store), ROS-free, host-testable; correlated task evidence "
+        "stays in task_store/task_results (X5)",
+    ),
+    "contracts/foundation/core_common/protocol/schemas.py": (
+        742,
+        "accept: the D-18 single contract source — every envelope, event and capability model in one "
+        "importable place; per-domain schema files would fork the version pin that "
+        "test_protocol_version_alignment guards. ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1014,

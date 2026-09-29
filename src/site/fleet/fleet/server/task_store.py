@@ -30,6 +30,11 @@ _TASK_TRANSITIONS = {
     "FAILED": set(), "COMPLETED": set(), "HOLD": set(), "CANCELED": set(), "EXPIRED": set(),
 }
 _PRIORITY_CLASSES = {0, 1, 2}
+_QUEUE_POSITION_QUERY = """SELECT COUNT(*) FROM fleet_tasks
+    INDEXED BY fleet_tasks_dispatch_queue_position
+    WHERE status='QUEUED' AND lease_owner IS NULL
+      AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
+      AND (priority_class, queued_at, task_id) < (?, ?, ?)"""
 
 
 class IdempotencyConflict(ValueError):
@@ -836,16 +841,25 @@ class FleetTaskStore:
             if (task["status"] == "QUEUED"
                     and task["lease_owner"] is None
                     and task["dispatch_phase"] in {"READY", "WAITING_TRAFFIC"}):
-                ahead = connection.execute(
-                    """SELECT COUNT(*) FROM fleet_tasks
-                       WHERE status='QUEUED' AND lease_owner IS NULL
-                         AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
-                       AND (priority_class < ? OR
-                            (priority_class = ? AND queued_at < ?) OR
-                            (priority_class = ? AND queued_at = ? AND task_id < ?))""",
-                    (task["priority_class"], task["priority_class"], task["queued_at"],
-                     task["priority_class"], task["queued_at"], task_id),
-                ).fetchone()[0]
+                if task["queued_at"] is None:
+                    # Preserve legacy NULL ordering until old queue rows leave.
+                    ahead = connection.execute(
+                        """SELECT COUNT(*) FROM fleet_tasks
+                           WHERE status='QUEUED' AND lease_owner IS NULL
+                             AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
+                           AND (priority_class < ? OR
+                                (priority_class = ? AND queued_at < ?) OR
+                                (priority_class = ? AND queued_at = ?
+                                 AND task_id < ?))""",
+                        (task["priority_class"], task["priority_class"],
+                         task["queued_at"], task["priority_class"],
+                         task["queued_at"], task_id),
+                    ).fetchone()[0]
+                else:
+                    ahead = connection.execute(
+                        _QUEUE_POSITION_QUERY,
+                        (task["priority_class"], task["queued_at"], task_id),
+                    ).fetchone()[0]
                 task["queue_position"] = int(ahead) + 1
         return task
 
@@ -1016,6 +1030,12 @@ class FleetTaskStore:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS fleet_tasks_queue_order "
             "ON fleet_tasks(status, priority_class, queued_at, task_id)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS fleet_tasks_dispatch_queue_position "
+            "ON fleet_tasks(priority_class, queued_at, task_id) "
+            "WHERE status='QUEUED' AND lease_owner IS NULL "
+            "AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"
         )
         connection.commit()
 

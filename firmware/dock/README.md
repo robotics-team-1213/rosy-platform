@@ -84,6 +84,22 @@ The client treats an absent `load_present` or `charging` as a bad response.
 Filling them in with `false` would merge "not charging" with "did not say", and
 the robot's retry strategy depends on telling those apart.
 
+## Load detection: a limit switch, not a probe
+
+`load_present` is a mechanical fact, not an electrical inference. A normally-open
+limit switch, pressed by the robot body at full dock, gates the contact relay:
+no press, no output. An ADC probe was considered and rejected — one less
+threshold to drift, and no self-triggering the way a magnetic sensor next to
+the holding magnets would. The 300 ms debounce stays: a bump on the way in must
+not energise the dock.
+
+## Temperature: deferred, footprint reserved
+
+No thermistor is populated in this revision. Charger-IC TS-pin requirements and
+a charger-surface NTC footprint (GPIO33/36) are recorded for the build, but the
+`/status` schema, the fault list, and the robot's two-source confirmation run
+without them.
+
 ## The robot does not trust this endpoint alone
 
 Reporting `"charging": true` does not by itself convince the robot it is

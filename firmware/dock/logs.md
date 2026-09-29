@@ -24,3 +24,11 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-30 · uncommitted · refactor(firmware): 하중 감지를 ADC 프로브에서 리밋스위치로 (자석 간섭 회피)
+
+- 변경: `PIN_LOAD_SENSE`(ADC 0.25V 임계) 삭제, `PIN_LIMIT_SWITCH`(32번 디지털, INPUT_PULLUP, 눌림=LOW)로 교체. 디바운스 300ms·`loadDetected`·`setOutput` 단일 개폐점 유지. 전류/전압은 4샘플 평균으로 폴트 오작동 방지. NTC는 미실장 풋프린트(GPIO33/36)로 보류. 계약(README)에 하중 감지 절·온도 보류 절 추가, D1 게이트를 리밋 해제 시험으로 갱신
+- 증거: `python -m pytest test/test_dock_contract.py src/runtime/services/test/test_docking.py -q` (아래)
+- gate 변화: 없음. 만충 HOLD·재시도 정책은 도크 실물 이후로 보류 (최소 구성 결정)
+- 결정: 자기 도크에서 자기 센서(리드스위치)는 자기 발등 — 리밋스위치 채택. NTC는 충전기 TS핀 요구 확인 전까지 보류
+- 교훈: 없음

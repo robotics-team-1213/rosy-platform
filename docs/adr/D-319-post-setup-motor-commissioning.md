@@ -1,8 +1,8 @@
 ## D-319 SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다
 
-**Status:** Proposed (2026-09-28). The PC helper has been exercised on one
-Pinky Pro; automatic image boot, full G4 acceptance, and field operation remain
-separate gates.
+**Status:** Accepted (2026-09-28 제안, 2026-09-29 사용자 승인). The PC helper has
+been exercised on one Pinky Pro; automatic image boot, full G4 acceptance, and
+field operation remain separate gates.
 
 ## Context
 

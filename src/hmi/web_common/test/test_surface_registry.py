@@ -101,3 +101,25 @@ def test_a_file_surface_is_returned_as_a_file_not_walked():
     file_surfaces = [path for path in diagnostic if path.suffix == ".html"]
     assert file_surfaces, "파이 경로 표면이 등록돼 있지 않다"
     assert all(path.is_file() for path in file_surfaces)
+
+
+def test_registered_ports_match_their_source_and_do_not_collide():
+    assert _under("port") == []
+
+
+def test_a_port_collision_or_drift_is_caught(tmp_path):
+    """새 표면이 이미 쓰는 포트를 고르거나 기본값이 바뀌면 레지스트리가 빨개진다."""
+    (tmp_path / "src" / "hmi" / "web_common").mkdir(parents=True)
+    (tmp_path / "src" / "hmi" / "web_common" / "ui.js").write_text(
+        "const GRAMMARS = ['spatial'];", encoding="utf-8")
+    (tmp_path / "a.py").write_text("default=8090", encoding="utf-8")
+    (tmp_path / "b.py").write_text("default=18090", encoding="utf-8")
+    row = ("  - id: {id}\n    path: {src}\n    surface: site\n    medium: web\n"
+           "    audience: x\n    contracts: [shared_controls, typography_focus, dialog]\n"
+           "    baseline_reason: x\n    ports:\n      - {{port: 8090, source: {src}}}\n")
+    (tmp_path / registry.REGISTRY).write_text(
+        "surfaces:\n" + row.format(id="one", src="a.py") + row.format(id="two", src="b.py"),
+        encoding="utf-8")
+    found = registry.problems_with(tmp_path, "port")
+    assert any("(two)의 8090를 one도 쓴다" in line for line in found)
+    assert any("8090가 source b.py의 기본값에 없다" in line for line in found)

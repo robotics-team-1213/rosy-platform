@@ -147,7 +147,7 @@
 | D-137 | YOLO는 자문역이다 — LiDAR/IR가 결정하고 영상은 증거만 낸다 | Proposed |
 | D-138 | 도크 검출기는 센서 provider 포트를 탄다 — 새 정적 간선 없음 | Accepted |
 | D-139 | OS는 자리만 내고, 무엇을 볼지는 제품이 정한다 | Accepted |
-| D-140 | ARM64 ?? ??? ?? arm64 ??? ?? ????? ? ARTIFACT ? ?? ?? ??? | Accepted |
+| D-140 | ARM64 소스 검증은 공개 arm64 러너로 매주 리허설한다 — ARTIFACT gate 의 코드 수준 선검증 | Accepted |
 | D-141 | 대형 주행 실측은 네 게이트를 순서대로 통과한다 — 단일 세션 묶음 | Accepted |
 | D-142 | 실물 전에 소프트웨어 계약을 닫는다 — 잔여 3건 | Accepted |
 | D-143 | IR·카메라 차선 추종은 NAVIGATION 내부의 배타적 evidence 소스다 | Accepted |
@@ -226,9 +226,6 @@
 | D-217 | SEC-102의 CORS 문장을 좁힌다 — 로봇 API는 CORS를 제공하지 않는다 | Accepted |
 | D-222 | First-boot 소비자는 `rosy-first-boot.py` 하나다 — `apply-sd-provision.py` stub을 폐기한다 | Accepted |
 | D-225 | 카드 재기록은 마지막 수단이다 — 기존 로봇은 서명 payload 전환으로 갱신하고, 남는 재기록은 리더·재개·이미지 크기로 줄인다 | Proposed |
-| D-218 | 확인 문법의 졸업 — 네이티브 window.confirm이 공유 컴포넌트다: 거부는 호출 0회, alert/prompt는 금지, 확인 문장은 결과를 묻는 평문이다 | Accepted |
-| D-219 | 운용 요약 어휘의 실행 계약 — 콘솔 분류 범주와 Fleet 큐가 닫힌 선언적 표로 고정되며 D-159가 승격된다: 빈 큐는 부재다, 초록이 아니다 | Accepted |
-| D-220 | 정지 계약 — 움직임 예산은 0이다: 상태 변화는 점프 컷이며 보간은 없는 값을 있는 것처럼 보이게 한다, 예외는 ADR로만 | Accepted |
 | D-218 | 확인 문법의 졸업 — 네이티브 confirm이 공유 컴포넌트다. alert/prompt 금지, confirm은 핀된 횟수, 없는 조종은 버튼이 아니다 | Accepted |
 | D-219 | 운용 요약 어휘의 실행 계약 — D-159를 Accepted로 승격하고 Fleet 큐 규칙을 콘솔 분류와 같이 고정한다 | Accepted |
 | D-220 | 정지 계약 — 움직임 예산은 0이다. 보이는 요소의 전이와 애니메이션은 없다 | Accepted |
@@ -321,7 +318,7 @@
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 | Accepted (Site Fleet SOURCE/LOCAL; PRT-004·물리 정지 readback 별도) |
 | D-317 | 장치별 해석과 공유 계약은 실제 소비·실행 경계로 분류한다 | Accepted (현재 소스 배치와 후속 재배치 기준; 새 패키지·API·운영 수용 없음) |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 | Accepted (표시 전용 조정; 현장 보정·DEVICE/FIELD 증거는 별도) |
-| D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 | Proposed (도우미 실물 실행 확인; 무인 토크 활성화와 G4 수용 제외) |
+| D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 | Accepted (2026-09-29 사용자 승인; 무인 토크 활성화·G4 수용·현장 운영은 별도 게이트) |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 | Accepted (소스 경로만; 설치 closure·OMX field runtime 별도 HOLD) |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 | Accepted (설계 결정; 구현·서명 릴리스·실물 G4/G5 HOLD) |
 | D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 | Accepted (소스 설계·구현 범위; Isaac 실제 실행·ROS-SIM·DEVICE/FIELD 수용 별도 HOLD) |
@@ -342,4 +339,12 @@
 | D-338 | 브리지 콜백의 판정은 ROS-free 시블리가 소유하고 ros_bridge는 적응만 남는다 | Accepted (2026-09-24 구현·2026-09-29 기록; 소스 구조 원칙만, 실기 콜백 증거 별도) |
 | D-339 | 화면 제목과 폴더 이름은 역할을 드러낸다 — 패키지 이름은 그대로 두고 대응표를 시험으로 고정한다 | Accepted (표시 이름·폴더 경로·대응표; 패키지 이름 불변) |
 | D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 | Proposed (방향·위치만; apps/·npm 프로젝트 미생성) |
+| D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 | Accepted (적용 범위·색 원본·이름·알림 규칙; D-280 원칙 불변) |
+| D-346 | 병행 세션 충돌은 커밋 시점 검사로 막는다 — ADR 번호는 행 추가 즉시 선점하고 깨진 인코딩·중복 번호는 lint가 잡는다 | Accepted (2026-09-29, 저장소 도구·작업 규칙만) |
+| D-347 | capability 상태는 단일 생애 어휘로 말한다 — 조정된 플래그별 lifecycle(ready/activating[예약]/unavailable)를 두 표면이 같은 함수에서 낸다 | Accepted (2026-09-29, 계약·어휘만; 그래프 기동·신규 이벤트 없음) |
+| D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 | Accepted (2026-09-30, 등록·제출·검증 트리거 계약만; 실물 생산자·도구 개방·밸브 불변) |
+| D-349 | 도크 자동 충전의 코드는 전부 준비됐다 — 남은 것은 물리 조립과 capabilities 전환뿐 | Accepted (2026-09-30, 준비 상태 기록; 실물 조립·D0–D5·분리력 실측은 별도 회차) |
+| D-350 | 도크 하드웨어는 세 단계로 붙는다 — 선만(계측 없음)·ESP32(2소스)·향상(온도·카메라) — 각 단계에서 소프트웨어가 하는 일을 미리 정한다 | Accepted (2026-09-30, 단계 계약·선구현 착수; 실물 조립은 별도 회차) |
+| D-351 | 도킹 재시도는 실패 종류를 가린다 — 도달 못 함은 재시도, 도달했는데 전류 없음은 즉시 폴트, 충전 중 단절은 DOCKED 유지 | Accepted (2026-09-30, 행동 결정 + 구현) |
 | D-354 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 | Proposed (검출 위치·제안 API·불일치 표시·레이어 토글; 사이트 설정·sighting 반영 미결정) |
+| D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent | Accepted (2026-09-30, standard provider feedback/tool-result boundary only; autonomous dispatch and physical acceptance remain HOLD) |

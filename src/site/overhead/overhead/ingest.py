@@ -3,7 +3,8 @@
 Accepts one connection per ``source`` at :data:`overhead.protocol.WS_PATH`,
 keeps only the latest JPEG frame per source (never queues), and reports
 per-source stats. No marker detection, no Fleet sightings — that is D-257
-scope, not this ADR's.
+scope, not this ADR's. The Vision worker may hand back the marker ids it saw
+(:meth:`IngestServer.report_markers`) so ``status`` can guide the installer.
 
 Clock: ``captured_at`` is computed from this process's own wall clock
 (``time.time()``) minus the frame's ``age_ms``, per design §3 — the phone's
@@ -42,6 +43,9 @@ from overhead.field_detect import DETECTOR_VERSION, FieldDetection, detect_field
 from overhead.rectify import rectify_jpeg
 
 STATUS_INTERVAL_S = 1.0
+# A marker report older than this is not repeated in ``status`` (worker stopped
+# detecting, e.g. frames went stale); the phone then sees empty lists again.
+MARKER_REPORT_TTL_S = 3.0
 # A peer that upgrades but never sends hello is closed after this long.
 HELLO_TIMEOUT_S = 5.0
 # Frames websockets may hold for one connection before it stops reading the
@@ -119,6 +123,8 @@ class _Source:
     connection: ServerConnection
     stats: SourceStats = field(default_factory=SourceStats)
     latest: LatestFrame | None = None
+    # (corner ids, robot ids, monotonic report time) from the Vision worker.
+    markers: tuple[tuple[int, ...], tuple[str, ...], float] | None = None
 
 
 class IngestServer:
@@ -170,6 +176,19 @@ class IngestServer:
     def latest_frame(self, source: str) -> LatestFrame | None:
         src = self._sources.get(source)
         return src.latest if src is not None else None
+
+    def report_markers(self, source: str, corners_seen, robots_seen) -> None:
+        """Record which configured marker ids the worker saw on ``source``'s latest frame."""
+        src = self._sources.get(source)
+        if src is None:
+            return
+        src.markers = (tuple(sorted(set(corners_seen))), tuple(sorted(set(robots_seen))),
+                       time.monotonic())
+
+    def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
+        if src.markers is None or time.monotonic() - src.markers[2] > MARKER_REPORT_TTL_S:
+            return [], []
+        return list(src.markers[0]), list(src.markers[1])
 
     # -- handshake --------------------------------------------------------
 
@@ -353,11 +372,12 @@ class IngestServer:
         while True:
             await asyncio.sleep(STATUS_INTERVAL_S)
             snap = src.stats.snapshot()
+            corners_seen, robots_seen = self._marker_status(src)
             status = {
                 "type": "status",
-                "corners_seen": [],
+                "corners_seen": corners_seen,
                 "corners_needed": 4,
-                "robots_seen": [],
+                "robots_seen": robots_seen,
                 "rx_fps": snap["rx_fps"],
                 "dropped": snap["dropped_bad_header"] + snap["oversize"],
             }

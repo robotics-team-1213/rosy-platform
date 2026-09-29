@@ -507,12 +507,14 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     try {
       view.siteMap = await call("/api/fleet/site-map");
     } catch (err) {
-      view.siteMap = null; // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다.
+      // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
+      if (err.status === 404 && err.code === "NO_SITE_MAP") view.siteMap = null;
     }
   }
 
   async function refresh() {
     if (auth.locked) return;
+    sightingsUnavailable = false;
     await refreshSiteMap();
     if (auth.locked) return;
     try {
@@ -521,6 +523,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
       el("map-stage").dataset.mapState = "ready";
       el("map-empty").hidden = true;
       el("map-canvas").removeAttribute("aria-hidden");
+      el("map-canvas").setAttribute("role", "button");
       syncLegend("grid");
       draw();
       onMapChanged();
@@ -530,6 +533,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
         const canvas = el("map-canvas");
         canvas.removeAttribute("aria-hidden");
+        canvas.setAttribute("role", "img"); // 관측 전용 — 누를 수 있는 버튼이 아니다
         canvas.tabIndex = -1;
         canvas.classList.add("idle");
         el("map-stage").dataset.mapState = "site";
@@ -555,17 +559,25 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
   }
 
   // 카메라 관측 폴링(≈1 s). 관측은 표시 전용이다 — 목표·판단 입력으로 넘기지 않는다.
+  // 사이트 사각형이 있을 때만 두드린다. 관측 설정이 없으면 라우트가 없어 404 이므로,
+  // 404 를 받으면 다음 refresh() 까지 멈춘다.
   let sightingsInFlight = false;
+  let sightingsUnavailable = false;
   async function refreshSightings() {
-    if (auth.locked || sightingsInFlight || (!view.map && !view.siteMap)) return;
+    if (auth.locked || sightingsInFlight || sightingsUnavailable || !view.siteMap) return;
     sightingsInFlight = true;
+    let next = [];
     try {
-      view.sightings = classifySightings(await call("/api/fleet/sightings"));
+      next = classifySightings(await call("/api/fleet/sightings"));
     } catch (err) {
-      view.sightings = []; // 관측 미설정(404)이나 일시 실패 — 옛 관측을 남기지 않는다.
+      // 일시 실패도 옛 관측을 남기지 않는다.
+      if (err.status === 404) sightingsUnavailable = true;
     } finally {
       sightingsInFlight = false;
     }
+    const unchanged = JSON.stringify(next) === JSON.stringify(view.sightings);
+    view.sightings = next;
+    if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다
     el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
     draw();
   }

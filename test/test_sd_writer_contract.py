@@ -1364,16 +1364,19 @@ def test_a_writer_that_stalls_after_the_last_byte_points_to_resume(writer_case, 
     _nothing_recorded(writer_case, boot)
 
 
-def _partial_copy_child(source: Path, dest: Path, byte_count: int) -> str:
+def _partial_copy_child(source: Path, dest: Path, byte_count: int, alive_s: float = 2) -> str:
     # A sleep after the write keeps this process (and its I/O counters) alive
     # long enough for the writer's stall-watchdog poll to sample it; otherwise
     # a process that exits between polls (python's own cold-start here can
     # take several seconds) never has its bytes counted (Get-WriterSample
-    # only sums currently-live processes).
+    # only sums currently-live processes). `alive_s` widens that window for
+    # the near-complete test, whose classification the sample must see: under
+    # full-suite load a 2 s lifetime races the watchdog poll (2026-09-29 —
+    # the test passed standalone and failed inside the 4931-test run).
     return (f'"{sys.executable}" -c "'
             f'import time; data=open(r\'{source}\', \'rb\').read({byte_count}); '
             f'out=open(r\'{dest}\', \'wb\'); out.write(data); out.flush(); out.close(); '
-            f'time.sleep(2)"')
+            f'time.sleep({alive_s})"')
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -1387,9 +1390,13 @@ def test_a_writer_that_stalls_at_999_percent_points_to_resume_with_readback_cave
     near_complete = int(raw_size * 0.9995)
     assert near_complete >= int(raw_size * 0.999)  # the fixture must land inside the threshold
     copy = tmp_path / "written.bin"
-    _fake_writer(writer_case, f"{_partial_copy_child(writer_case['readback'], copy, near_complete)}\n{IDLE_CHILD}")
+    # alive 25 s + a 30 s stall window: the watchdog must not fire on a
+    # cold-starting child (0 bytes sampled = misread as below-threshold), and
+    # the poll must land inside the child's post-write lifetime. Both margins
+    # exist only under load; standalone timings pass either way.
+    _fake_writer(writer_case, f"{_partial_copy_child(writer_case['readback'], copy, near_complete, alive_s=25)}\n{IDLE_CHILD}")
 
-    completed, boot = _write(writer_case, tmp_path, "-WriterStallMinutes", "0.05")
+    completed, boot = _write(writer_case, tmp_path, "-WriterStallMinutes", "0.5")
 
     assert completed.returncode != 0
     assert "image writer stalled" in _err(completed)
@@ -1656,8 +1663,13 @@ def test_a_hung_readback_is_stopped_and_points_to_resume(writer_case, tmp_path):
     card = PipeCard(raw, ["full", "full", "hang"])
     try:
         started = time.monotonic()
+        # 30 s, not 3: under full-suite load the verifier child can take longer
+        # than a 3 s window to spawn and connect, and the watchdog then judges
+        # a client that never reached the card (2026-09-29 full-suite failure;
+        # standalone passed). The hang itself is infinite, so the widened
+        # window changes when the stall is judged, never what it sees.
         completed, boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path,
-                                 "-ReadbackStallMinutes", "0.05", "-HeartbeatSeconds", "0")
+                                 "-ReadbackStallMinutes", "0.5", "-HeartbeatSeconds", "0")
         elapsed = time.monotonic() - started
     finally:
         card.close()
