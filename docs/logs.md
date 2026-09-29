@@ -3612,3 +3612,10 @@
 - gate 변화: 없음.
 - 결정: 공통 추상 클래스는 3번째 소비자가 생길 때까지 만들지 않는다 — 패턴 문서로 족하다.
 - 교훈: 두 장비가 우연히 6개 속성이 일치했다는 것은 패턴이 옳다는 증거다 — 의도적 공유로 전환한다.\n
+\n## 2026-09-30 · uncommitted · feat(arch): D-354 mDNS 서비스 발견
+
+- 변경: 도크·신호등 펌웨어에 ESPmDNS 등록 (각 3줄: include + MDNS.begin + addService). 클라이언트 발견 유틸리티 core_common/discover.py (zeroconf → avahi-browse → dns-sd 3단 폴백). 계약 문서에 서비스명 표 추가. 시험 5건 (펌웨어 광고·폴백·서비스명 정합). 기존 IP 설정은 호환 (레거시 벤치).
+- 증거: test_mdns_discovery 5 + test_dock_contract 7 + test_signal_contract 14 = 26 passed.
+- gate 변화: 없음.
+- 결정: 장비를 사이트에 두면 전원만 연결하면 된다 — IP·설정·파일 수정 불필요. DHCP가 바뀌어도 .local 이름은 불변.
+- 교훈: mDNS는 ESP32에 네이티브로 있어서 3줄이면 된다 — 이걸 안 쓸 이유가 없었다.\n

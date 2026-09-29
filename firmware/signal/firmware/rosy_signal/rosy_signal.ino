@@ -12,6 +12,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>  // ArduinoJson 6.x
+#include <ESPmDNS.h>
 #include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -383,6 +384,11 @@ void setup() {
   if (ssid.length() > 0) {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), key.c_str());
+  }
+
+  // D-354: mDNS 광고 — Fleet/로봇이 IP 없이 rosy-signal-<id>.local 로 찾는다.
+  if (MDNS.begin(signalId.c_str())) {
+    MDNS.addService("rosy-signal", "tcp", 80);
   }
 
   server.collectHeaders(HEADER_KEYS, 1);
