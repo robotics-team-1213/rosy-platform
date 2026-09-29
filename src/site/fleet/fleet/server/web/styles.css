@@ -66,6 +66,9 @@ input, select { font: inherit; color: inherit; }
 }
 .token.locked { border-color: var(--status-crit-a45); }
 
+/* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다. */
+.theme-choice { display: flex; align-items: center; gap: var(--space-1); }
+
 .dispatch-control {
   display: flex;
   align-items: center;
@@ -363,6 +366,7 @@ main {
   #token-save { grid-column: 2; grid-row: 3; }
   #user-role { grid-column: 1; grid-row: 4; justify-self: start; }
   #clock { grid-column: 2; grid-row: 4; justify-self: end; }
+  #theme-choice { grid-column: 1 / -1; grid-row: 5; }
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control { align-items: flex-start; flex-direction: column; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
@@ -383,6 +387,7 @@ main {
   #token-save { grid-column: 3; grid-row: 3; }
   #user-role { grid-column: 1 / -1; grid-row: 4; }
   #clock { grid-column: 3; grid-row: 1; justify-self: end; }
+  #theme-choice { grid-column: 1 / -1; grid-row: 5; }
 }
 
 .formation {

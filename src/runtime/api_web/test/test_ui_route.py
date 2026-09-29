@@ -132,6 +132,7 @@ def test_each_base_surface_has_its_role_panel_mounts():
     assert {panel.surface for panel in registry.panels} == {"console", "setup", "device"}
     assert {panel.id for panel in registry.panels} == {
         "console.overview", "setup.waypoints", "host.hardware", "system.events", "system.diagnostics",
+        "system.display",
         "host.system", "host.operations", "setup.localization", "system.security", "setup.docking",
         "console.map", "console.mode", "console.teleop", "console.camera", "console.docking",
         "console.line_follow",

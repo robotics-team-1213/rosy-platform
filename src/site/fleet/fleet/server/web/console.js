@@ -52,8 +52,9 @@ function markUnlocked() {
 }
 
 function operatorControls() {
+  // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#roster-toggle):not(#vision-refresh), main input, main select:not(#vision-source)");
+    "ui-button:not(#token-save):not(#roster-toggle):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {

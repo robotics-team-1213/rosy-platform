@@ -23,6 +23,12 @@
     <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
     <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
+    <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
+      <ui-text id="theme-choice-label" scale="label">화면 테마</ui-text>
+      <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true">어둡게</ui-button>
+      <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false">밝게</ui-button>
+      <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false">시스템</ui-button>
+    </div>
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" class="estop" type="button" aria-label="전체 로봇 정지"><span>전체 정지</span><small>등록된 모든 로봇</small></ui-button>
   </ui-topbar>

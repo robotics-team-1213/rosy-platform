@@ -111,6 +111,13 @@ panels:
     min_role: operator
     module: panels/setup/traffic-policy.js
     css: [panels/surface-panels.css]
+  - id: system.display
+    title: 화면 테마
+    surface: device
+    slot: main
+    order: 10
+    module: panels/system/display.js
+    css: [panels/surface-panels.css]
   - id: system.events
     title: 최근 이벤트
     surface: device
