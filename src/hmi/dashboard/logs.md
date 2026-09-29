@@ -536,3 +536,9 @@
 - 변경: `map.js`의 hex 전용 `readToken`·`paletteCache`를 지우고 `window.RosyPalette.readPalette`를 쓴다(래스터 한 장에 표 한 번). `rosy:theme`이면 새로 고침 없이 `rebuildRaster()`·`paint()`. `camera-capture.js` 오버레이는 `cssColor`와 `canvasFont(…, "body")`(sans-serif·직접 getPropertyValue 제거) — 녹화 중 프레임마다 다시 그리므로 따로 듣지 않는다. 시험 하네스(`test_map_readout_browser.py`, `test/test_camera_capture_browser.py`, Node 스텁 `test_camera_capture.py`)가 실제 셸처럼 ui.js/RosyPalette를 먼저 싣는다.
 - 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test -q` 2674 passed 129 skipped 1 failed — 실패는 Node 스텁이 RosyPalette를 몰라서였고 스텁을 고친 뒤(2aaae787) `test_camera_capture.py` 5 passed. 브라우저(`ROSY_RUN_BROWSER_TESTS=1`) `src/hmi/dashboard/test` 51 passed + 같은 Node 1건, `test/test_camera_capture_browser.py`·`test_role_menu_panels_browser.py` 통과.
 - gate 변화: 없음.
+
+## 2026-09-30 · 1cea0fe5 · D-359 US-004 로봇 표면 필드·태그·사유·눌림이 공용 부품을 쓴다
+
+- 변경: `/dashboard`와 역할 패널의 입력·선택 전부 `class="ui-field"`(패널은 `el("input", "ui-field")`), 로그인 유지 체크는 `label.ui-check`. `styles.css` 필드 사본(auth/settings/host/traffic-policy)과 `surface-panels.css`의 `.surface-slot` 필드 사본을 지웠다. `.status-badge/.machine-tag/.mode-chip`과 `[data-status]`·`.mode-chip[data-mode]` 색 규칙을 지우고 `<ui-tag>`로 바꿨다 — `dom.js` `tagStatus`/`setTagState`가 OK·SITE_STA 등 → active, WARNING·AP 계열 → warn, ERROR·UNAVAILABLE·HOLD 계열 → crit(채움)로 옮긴다. 모드 버튼은 `title` 대신 `reason`(app.js, panels/console/mode.js), `[data-mode]` 선택자를 `ui-button[data-mode]`로 좁혀 태그가 모드 버튼 클릭 처리를 받지 않게 했다. teleop·모드·라인 모드 눌림은 `aria-pressed`, `surface-panels.css`의 teleop `outline` 덧칠 삭제. 자간 리터럴 10곳 → 토큰/0, 불투명도 0.9/0.42/0.72 → 삭제·`--ink-quiet`. styleguide에 필드·체크·readonly·사유·눌림·active 태그 예를 실었다(cda6c382).
+- 증거: 브라우저 `src/hmi/dashboard/test` 52 passed, `test/test_role_surface_states_browser.py` 5 passed. 캡처 `X:/DevTemp/rosy-d359/shots/us004-robot-{console,setup}-{dark,light}-{1366x768,390x844}.png` — 필드 44px, 내비게이션 비활성 사유 보임.
+- gate 변화: 없음.

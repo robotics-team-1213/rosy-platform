@@ -267,3 +267,9 @@
 - 변경: `board.js`의 hex 리터럴 9개를 `window.RosyPalette.cssColor("--pitch"|"--line"|"--home"|"--away"|"--pitch-ink"|"--ball")`로 바꿨다 — 값의 주인은 `styles.css` `:root` 피치 블록이다. 로봇 이름 글꼴 `11px sans-serif` → `canvasFont(12, "body")`. 화면은 여전히 dark 고정이라 보이는 색은 같다.
 - 증거: `test_canvas_palette_contract.py::test_games_pitch_colours_live_in_its_stylesheet` 통과. 브라우저 `test/test_rosy_games_surface.py` 9 passed, `test/test_games_board_browser.py` 8 passed 7 failed — 7건은 `wait_for_function` 문자열 평가가 보드 CSP(`script-src 'self'`, unsafe-eval 없음)에 막히는 하네스 문제로 e19f2ef4에서도 똑같이 7 failed. 렌더 시험 `test_match_board_renders_published_play_state`는 페이지 오류 없이 통과, 캡처 `X:/DevTemp/rosy-d359/shots/us003-games-board.png` 색 그대로.
 - gate 변화: 없음.
+
+## 2026-09-30 · 890309a8 · D-359 US-004 보드 자간·낡은 영상 흐림·마커 칩이 토큰을 쓴다
+
+- 변경: `.kicker` 자간 0.14em → `--track-label`, `#frame[data-evidence]` 0.48 → `--disabled-opacity`, `.chips li`는 경기장 칩 어휘를 두고 글자만 토큰 척도(`--weight-label --text-label/--leading-label --body`, 자간 0 — 320px 네 칸이 넓어지지 않게).
+- 증거: `test/test_rosy_games_surface.py` 9 passed, `src/site/games/test` 통과.
+- gate 변화: 없음.

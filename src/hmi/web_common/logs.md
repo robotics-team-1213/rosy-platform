@@ -225,3 +225,11 @@
 - 증거: 아래 US-003 묶음. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/web_common/test -q` 146 passed. 1366×768 캡처 `X:/DevTemp/rosy-d359/shots/us003-{robot,fleet}-{dark,light}.png`(ROSY_D359_SHOTS로 켬).
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-359 §4.
+
+## 2026-09-30 · cda6c382 · D-359 US-004 공용 필드 클래스·버튼 상태·비활성 사유·active 태그
+
+- 변경: 필드 API는 네이티브 `input/select/textarea`에 `class="ui-field"`(components.css가 이미 가진 `input.ui-field` 규칙을 확장) — `<ui-field>` 감싸개는 폼 제출·label 연결·기존 핸들러를 흔들어 제품 화면에는 쓰지 않는다(components.css 머리 주석·styleguide 기록). 필드는 body 글꼴·44px 바닥·공용 선/바탕/포커스/placeholder/readonly/`:user-invalid`·`aria-invalid`/비활성 흐림, 체크·라디오는 상자 없이 `label.ui-check`(44px)가 누름 면. 모든 `ui-button` 종류에 `:hover`·`:active`(비활성 제외, 채움 종류는 바탕색 안쪽 테), 토글 눌림은 `aria-pressed="true"`. `ui-button reason` 속성: ui.js가 버튼 안 `<small data-reason aria-hidden>`로 그리고 `aria-describedby`로 잇고, 갱신·삭제·`textContent` 교체(MutationObserver)를 따라간다. 사유가 있는 비활성은 흐리지 않고 점선·`--ink-quiet`. `ui-tag status="active"`(ink, 무색)와 `ui-tag[hidden]`. 공용 기본: `:where(a,button,input,select,textarea,summary,[tabindex]):focus-visible` 링, body `word-break: keep-all; overflow-wrap: break-word`(f2a836a7 — ADR 문구의 `anywhere`는 최소 내용 폭을 한 글자로 줄여 1366px Fleet 상단바의 짧은 라벨을 음절 사이에서 꺾어 break-word로 바꿨다).
+- 시험(2824d8c6): `test_product_fields_carry_the_shared_field_class`(HTML 태그 + JS createElement/el/node 생성처, 체크는 `label.ui-check`), `test_fields_clear_the_secondary_target_on_every_surface`, `test_every_button_kind_has_shared_interaction_states`, `test_disabled_reason_is_a_shared_button_attribute`(title만의 사유 금지), 재도색 검사에 `outline` 추가, `test_letter_spacing_is_a_token_or_zero`, `test_dimming_uses_the_disabled_token_not_an_opacity_literal`, 브라우저 `test_shared_controls_browser.py`(사유 글자·describedby·이름 제외·색·갱신/삭제, Fleet·/dashboard DOM의 모든 필드 min-height ≥ 44).
+- 증거: 변이 14건 전부 빨강 후 복구 초록(X:/DevTemp/rosy-d359/us004-mutations.log). `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test src/runtime/gateway/test/test_dashboard.py -q` 2708 passed 132 skipped. 브라우저 web_common 155 passed.
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
+- 결정: D-359 §5·§7.4–7.6.
