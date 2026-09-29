@@ -44,6 +44,11 @@ android {
                 "rosy.discovery.vectors",
                 rootProject.file("../../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath,
             )
+            // D-358 icon sources; LauncherIconParityTest compares the launcher drawables to them.
+            it.systemProperty(
+                "rosy.icons.dir",
+                rootProject.file("../../../hmi/web_common/icons").absolutePath,
+            )
         }
     }
 }

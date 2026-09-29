@@ -133,3 +133,11 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
         text = (registry.REPO / page).read_text(encoding="utf-8")
         assert (f'<link rel="icon" type="image/svg+xml" href="/common/icons/{ident}.svg">'
                 in text), page
+
+
+def test_android_launcher_label_is_the_registered_app_name():
+    strings = (registry.REPO / "src/site/overhead/android/app/src/main/res/values/strings.xml"
+               ).read_text(encoding="utf-8")
+    label = re.search(r'<string name="app_name">([^<]*)</string>', strings).group(1)
+    camera = next(row for row in registry.load() if row["id"] == "overhead-camera-app")
+    assert label == camera["app_name"] == NAMES["overhead-camera-app"][0]
