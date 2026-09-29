@@ -9,7 +9,7 @@
 | File | Description |
 |------|-------------|
 | `package.xml` | ament_python. No ROS exec_depend |
-| `setup.py` / `setup.cfg` | Package install, `rosy_overhead` console script |
+| `setup.py` / `setup.cfg` | Package install, `overhead` console script |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `protocol/vectors.json` | Shared `rosy-overhead/1` test vectors — Kotlin and Python both read this file. Do not edit without checking both sides |

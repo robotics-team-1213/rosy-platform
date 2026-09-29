@@ -9,13 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +25,7 @@ import androidx.lifecycle.lifecycleScope
 import io.github.livsbittt.rosy.overhead.service.StreamService
 import io.github.livsbittt.rosy.overhead.settings.PairingUri
 import io.github.livsbittt.rosy.overhead.settings.SettingsStore
+import io.github.livsbittt.rosy.overhead.ui.RosyTheme
 import io.github.livsbittt.rosy.overhead.ui.SettingsScreen
 import io.github.livsbittt.rosy.overhead.ui.StreamScreen
 import io.github.livsbittt.rosy.overhead.ui.invalidText
@@ -53,7 +50,7 @@ class MainActivity : ComponentActivity() {
             restorePendingPairing(savedInstanceState)
         }
         setContent {
-            OverheadTheme {
+            RosyTheme {
                 OverheadApp()
             }
         }
@@ -183,11 +180,3 @@ class MainActivity : ComponentActivity() {
 
 private const val KEY_PENDING_PAIRING = "pending_pairing"
 private const val KEY_DEEP_LINK_INVALID = "deep_link_invalid"
-
-@Composable
-private fun OverheadTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-        content = content,
-    )
-}
