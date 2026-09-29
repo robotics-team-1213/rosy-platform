@@ -3562,6 +3562,28 @@
 - Evidence: D-348 registry row and API Reference v1.59 ?10.14 agree with Fleet implementation; source suite is 724 passed, 5 skipped.
 - Gate: ROS-SIM, ARTIFACT, DEVICE, FIELD remain HOLD/PARKED; no real producer, model tool dispatch, actuator operation, or physical acceptance is claimed.
 - Decision: D-348 remains Accepted as a contract and SOURCE/LOCAL implementation decision.
+
+## 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
+
+- 변경: docs/plans/AGENTS.md의 mojibake 3행(2026-09-20 카메라 배치·도크 조립·Pi 벤치 설계)을 원문 문서에서 복구하고, 잘못 끼워든 D-73 행과 표를 가르던 빈 줄을 제거해 2026-09-28 이후 행이 본표에 합류하도록 했다. docs/progress.md plans의 중복 2쌍을 제거하고 LOCAL blocker를 현재 사실로 갱신 — dashboard malformed heading은 해소, 남은 실패는 병행 세션의 isaac_sim 스코어카드·fleet 크기 재판정이다.
+- 증거: harness validate_log 전 모듈 0 errors, test_every_module_log_is_valid 통과; LOCAL gate cmd 115 passed/2 failed(양쪽 모두 병행 세션 진행 항목, 이번 변경과 무관) (2026-09-30 Windows). D-348 adr_gaps 정리는 병행 세션이 완료했다.
+- gate 변화: docs LOCAL HOLD 유지, blocker 사유 교체(해소된 헤딩 → 병행 isaac_sim/fleet 2건).
+- 결정: 없음.
+- 교훈: git diff/show 출력은 콘솔 인코딩(cp949)에서 한글이 깨져 보여도 파일 내용이 깨진 것은 아니다 — 바이트 수준(`?`/U+FFFD 개수)으로 판별한 뒤 손대자.
+## 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+
+- 변경: ADR D-350 상세문서 + 표행. Phase 1(선만·계측 없음)·Phase 2(ESP32 2소스)·Phase 3(온도·카메라) 정의와 각 단계에서 소프트웨어가 하는 일 표. 선구현: ChargingConfirmation degrade, CHARGED_HOLD phase, 만춫 히스테리시스, docking.full 이벤트, deploy 오버레이. Phase 1에서 D-27 억제 안 함이 핵심 안전 결정.
+- 증거: test_docking_phases 6 passed, 도킹 전체 226 passed, API Ref §8 갱신.
+- gate 변화: 없음.
+- 결정: 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계 기능 제공.
+- 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
+
+- 변경: ADR D-351 상세문서 + 표행 — 도달 실패(재시도)/전류 없음(즉시 폴트)/충전 단절(DOCKED 유지)의 세 갈래. display/info charging 필드 추가.
+- 증거: 도킹 115 passed, 표시 12 passed, 계약 통과.
+- gate 변화: 없음.
+- 결정: 접점 산화가 로봇을 죽이는 경로 제거 — contact_no_current 폴트로 운영자 알림.
+- 교훈: 없음.
 ## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 
 - Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.

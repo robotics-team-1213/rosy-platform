@@ -7,8 +7,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-350: "reserved by branch feat/pilot-teleop (pilot camera aspect and installed app); remove when its ADR lands"
-  D-351: "reserved by branch docs/robot-fleet-protocol-conformance (robot/site console protocol); remove when its ADR lands"
   D-352: "reserved by branch docs/fleet-robot-code-enrollment (site console robot enrollment); remove when its ADR lands"
   D-353: "reserved by branch feat/pilot-teleop (lane-keeping perception replay bench); remove when its ADR lands"
   D-354: "reserved by branch feat/console-field-autodetect (overhead field autodetection); remove when its ADR lands"
@@ -179,3 +177,6 @@ modules:
     tests: [test/test_network_topology_contracts.py, test/test_harness_contracts.py]
     functional_kind: records
     functional: [test/test_network_topology_contracts.py]
+
+  - name: isaac_sim
+    path: src/sim/isaac_sim

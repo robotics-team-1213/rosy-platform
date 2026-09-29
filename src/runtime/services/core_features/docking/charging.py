@@ -25,16 +25,24 @@ from core_features.docking.agent import DockStatus
 
 
 class ChargingConfirmation:
-    """도크 보고와 전압 추세를 겹쳐 충전을 확정한다."""
+    """도크 보고와 전압 추세를 겹쳐 충전을 확정한다.
+
+    D-350 Phase 1 (계측 없는 도크): `instrumented=False`로 생성하면 도크 전류
+    보고 없이 **전압 비하락만**으로 판정한다. 1소스이므로 D-27 deep 셧다운
+    억제에 쓸 수 없다 — 그건 Phase 2의 2소스 확정만 허용한다. degrade 모드의
+    역할은 "충전 중이라는 징후가 있다" 정도이지, 안전 경로의 입력이 아니다.
+    """
 
     def __init__(self, clock: Callable[[], float] = time.monotonic,
                  window_s: float = 10.0,
-                 fall_tolerance_v: float = 0.02) -> None:
+                 fall_tolerance_v: float = 0.02,
+                 *, instrumented: bool = True) -> None:
         self._clock = clock
         self._window_s = float(window_s)
         # 이보다 더 떨어지면 "전압이 내려가고 있다"로 본다. 표본 하나가 튀었다고
         # 판정이 무너지지 않게 하는 여유이기도 하다.
         self._fall_tolerance_v = float(fall_tolerance_v)
+        self._instrumented = bool(instrumented)
 
         self._since: Optional[float] = None      # 두 조건이 함께 성립한 시각
         self._peak_v: Optional[float] = None     # 그 구간의 최고 전압
@@ -66,7 +74,13 @@ class ChargingConfirmation:
         current = self._clock() if now is None else now
 
         # 첫 번째 소스: 도크가 답했고, 전류가 흐른다고 말하는가.
-        dock_says_charging = status.answered and status.charging
+        # Phase 1 (instrumented=False): 도크가 없으므로 전류 보고를 요구하지
+        # 않는다 — 전압 비하락만으로 "충전 징후"를 판정한다. 단, 이 확정은
+        # D-27 억제에 쓸 수 없다 (1소스이므로).
+        if self._instrumented:
+            dock_says_charging = status.answered and status.charging
+        else:
+            dock_says_charging = True  # degrade: 전압만 본다
 
         # 두 번째 소스: 전압이 유효한가.
         has_voltage = voltage is not None and math.isfinite(float(voltage))
@@ -95,3 +109,13 @@ class ChargingConfirmation:
 
         self._confirmed = (current - self._since) >= self._window_s
         return self._confirmed
+
+    @property
+    def source(self) -> str:
+        """판정 근거 — D-350 Phase 표시."""
+        return "instrumented" if self._instrumented else "voltage_only"
+
+    @property
+    def peak_v(self) -> Optional[float]:
+        """확정 구간의 최고 전압 — 만춫 판정에 쓴다."""
+        return self._peak_v

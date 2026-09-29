@@ -547,3 +547,10 @@
 - gate 변화: 없음.
 - 결정: inventory PresentationState는 그대로 — D-347 본문 표가 대응을 정의한다(unavailable≈blocked 등).
 - 교훈: core_client은 팩토리 픽스처다( (TestClient, services) 반환) — 첫 사용에 401·function 오류가 나면 소비 방식부터 확인한다.
+## 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
+
+- 변경: bridge/display.py info_payload에 "charging" 필드 추가 (additive, false 기본). 화면이 CHARGING/CHARGED_HOLD 상태를 표시할 수 있게 한다.
+- 증거: test_bridge_display 전체 통과 (필드 목록 갱신 포함).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.

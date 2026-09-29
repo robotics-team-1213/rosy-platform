@@ -161,6 +161,8 @@
 | D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 |
 | D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 |
 | D-349 | 도크 자동 충전의 코드는 전부 준비됐다 — 남은 것은 물리 조립과 capabilities 전환뿐 |
+| D-350 | 도크 하드웨어는 세 단계로 붙는다 — 선만(계측 없음)·ESP32(2소스)·향상(온도·카메라) — 각 단계에서 소프트웨어가 하는 일을 미리 정한다 |
+| D-351 | 도킹 재시도는 실패 종류를 가린다 — 도달 못 함은 재시도, 도달했는데 전류 없음은 즉시 폴트, 충전 중 단절은 DOCKED 유지 |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
 
 ## 계획·결과 문서
@@ -236,7 +238,7 @@
 ## 최근 기록
 
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
+- 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
+- 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+- 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
 - 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
-- 2026-09-30 · uncommitted · docs(adr): D-349 도크 자동 충전 코드 준비 완료 기록
-- 2026-09-30 · uncommitted · docs(dock): 전원 시판품 확정·물리 조립 목록
-- 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
