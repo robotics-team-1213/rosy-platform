@@ -107,6 +107,31 @@ def test_registered_ports_match_their_source_and_do_not_collide():
     assert _under("port") == []
 
 
+def test_a_surface_without_role_or_owns_is_not_registered(tmp_path):
+    """D-358 1·4항: 역할 한 줄과 소유 목록이 빈 칸이면 레지스트리가 빨개진다."""
+    (tmp_path / "src" / "hmi" / "web_common").mkdir(parents=True)
+    (tmp_path / "src" / "hmi" / "web_common" / "ui.js").write_text(
+        "const GRAMMARS = ['spatial'];", encoding="utf-8")
+    (tmp_path / "a").mkdir()
+    row = ("  - id: {id}\n    path: a\n    surface: site\n    medium: web\n"
+           "    audience: x\n    contracts: [shared_controls, typography_focus, dialog]\n"
+           "    baseline_reason: x\n{extra}")
+    (tmp_path / registry.REGISTRY).write_text(
+        "surfaces:\n"
+        + row.format(id="bare", extra="")
+        + row.format(id="blank", extra="    role: ' '\n    owns: [estop, estop, {id: teleop}]\n")
+        + row.format(id="good", extra="    role: x\n    owns: [{id: teleop, transitional: y}]\n"),
+        encoding="utf-8")
+    found = registry.problems_with(tmp_path, "value")
+    assert any("(bare)에 한 줄짜리 role이 없다" in line for line in found)
+    assert any("(bare)에 owns 목록이 없다" in line for line in found)
+    assert any("(blank)에 한 줄짜리 role이 없다" in line for line in found)
+    assert any("(blank) owns에 중복이 있다" in line for line in found)
+    assert any("(blank) owns teleop이(가) 표이지만 transitional 사유가 없다" in line
+               for line in found)
+    assert not any("(good)" in line for line in found)
+
+
 def test_a_port_collision_or_drift_is_caught(tmp_path):
     """새 표면이 이미 쓰는 포트를 고르거나 기본값이 바뀌면 레지스트리가 빨개진다."""
     (tmp_path / "src" / "hmi" / "web_common").mkdir(parents=True)

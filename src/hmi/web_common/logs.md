@@ -203,3 +203,11 @@
 - 증거: `python -m pytest src/hmi/web/test -q` 92 passed.
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-157(명시 allowlist) 유지, D-129 정정 2026-09-29.
+
+## 2026-09-30 · uncommitted · test(roles): D-358 S2 역할 경계 시험과 표면 소유 목록
+
+- 변경: `surfaces.yaml` 모든 표면에 `role`(D-358 1항 한 줄 요약)과 `owns`(4항 소유 조작) 목록을 더했다. 레지스트리 로더가 빈 `role`, 없는 `owns`, 중복 소유, 사유 없는 표 항목을 거절한다. 대시보드 `manual-drive`는 `transitional: "D-358 4항 1"`로 표시했다. 새 `test/architecture/test_app_roles.py`가 천장 카메라 앱(`/api/v1/`·`/api/fleet/`(pairing/v1 제외)·`cmd_vel`·`estop` 없음), Vision(`/api/v1/`·`cmd_vel` 없음, Fleet에는 sightings만), Fleet vision 라우트(lease만 발급, 바이트 없음), 소유 겹침(estop·transitional만 허용)을 검사한다.
+- 증거: `test_app_roles.py` 6 passed, `src/hmi/web_common/test` 98 passed. 변이 증명 네 가지(카메라 앱에 `/api/v1/estop`, Vision에 `/api/fleet/missions`, lease 응답에 `jpeg` 키, Fleet에 `robot-detail` 소유 추가) 모두 적신 → 되돌림.
+- gate 변화: 없음. SOURCE/LOCAL.
+- 결정: D-358 1·4항. Pilot(`src/hmi/pilot`)은 main에 없어 대상이 아니다. `test_pilot_is_not_on_main_yet`이 착지 순간 적신이 되어 Pilot 검사 추가를 강제한다(skip 아님).
+- 교훈: 없음.
