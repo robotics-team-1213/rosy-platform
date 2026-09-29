@@ -39,7 +39,7 @@
 
 **1. 토큰은 세 층이다: 팔레트 → 파생 → 역할.**
 1. **팔레트**는 테마마다 바뀌는 유일한 값이다. 목록은 닫혀 있다: `--ground`, `--ground-deep`, `--ground-raise`, `--ground-soft`, `--ground-card`, `--ground-card-2`, `--ink`, `--ink-quiet`, `--ink-on-crit`(위험 채움 위 글자 — 테마와 무관하게 밝다), `--status-crit`, `--status-warn`, `--status-good`, `--series-primary`, `--series-secondary`, `--series-goal`, `--robot-1..3`, `--raster-unknown/free/uncertain/occupied`, `--brand-rose`, `--shadow-base`.
-2. **파생**은 팔레트만 참조한다. 알파·선·장막·세척은 `color-mix(in oklch, var(--팔레트) N%, transparent | var(--ground))`로 쓴다. 파생 블록에 원시 색(hex/rgb/hsl/oklch 리터럴)이 있으면 시험이 막는다.
+2. **파생**은 팔레트만 참조한다. 알파·선·장막·세척은 `color-mix(in oklab, var(--팔레트) N%, transparent | var(--ground))`로 쓴다(oklch가 아닌 oklab: Chromium은 무채색의 hue를 `none`→0°로 풀어 회색을 붉게 섞는다. 2026-09-30 US-001 실측). 파생 블록에 원시 색(hex/rgb/hsl/oklch 리터럴)이 있으면 시험이 막는다.
 3. **역할**(D-292 §1의 컴포넌트 층)은 파생·팔레트를 참조한다: `--surface-*`, `--button-*`, `--field-*`, `--flag-*`, `--focus-ring`, `--gauge-*`, `--nominal*`.
 4. **이름 정리.** `--paper` → `--ink`, `--muted` → `--ink-quiet`로 바꾼다(밝은 테마에서 뜻이 뒤집히지 않는 이름). 쓰이지 않는 토큰과 같은 값 별칭(`-2`, `--status-ok`)은 지운다. 이름 변경은 한 커밋 안의 기계적 치환이고, 토큰 사본(`test_token_parity.py` 대상)의 주석 이름도 같이 바꾼다.
 5. 표면 CSS·JS는 팔레트 이름 대신 역할·파생을 우선 쓴다. 팔레트 직접 참조는 허용하되 `--brand-*`는 D-277대로 워드마크·현재 위치 표식 선택자에만 쓴다.
@@ -78,7 +78,7 @@
 6. 알려진 결함을 고친다: Fleet 62rem 겹침, Fleet 24rem `grid-column: 3`, shell 틈, 구 `.console` 고정 프레임, `surface-panels.css`의 `ui-actions` 재정의, games `.chips` 320px 넘침.
 
 **7. 계약 시험은 구조를 본다.** 기존 시험을 넓히고 새 시험은 변이 증명(일부러 어겨 적신 확인)으로 믿는다.
-1. `tokens.css`를 테마별 집합으로 파싱한다. 모든 테마가 같은 팔레트 키를 정의한다. 팔레트 게이트는 테마마다 돈다. 파생 블록에 원시 색이 없다. 파서는 `color-mix(in oklch, …)`를 풀어 대비를 계산한다.
+1. `tokens.css`를 테마별 집합으로 파싱한다. 모든 테마가 같은 팔레트 키를 정의한다. 팔레트 게이트는 테마마다 돈다. 파생 블록에 원시 색이 없다. 파서는 `color-mix(in oklab, …)`를 풀어 대비를 계산한다.
 2. 원시 색 금지 스캔을 모든 웹 표면(하위 폴더·Fleet·games JS 포함, `themes: [dark]` 고정 표면의 등록된 예외 블록 제외)으로 넓힌다. `oklch(`·`color(`도 원시 색으로 본다.
 3. 표면의 `theme-color`는 `theme.js`가 정하거나, 정적 값이면 dark `--ground`와 같다.
 4. 공용 부품 재정의 검사에 `outline`을 넣고, 이름이 다른 사본(입력·태그)을 구조로 찾는다: 제품 화면의 `input`/`select`는 공용 필드 클래스를 가진다.
