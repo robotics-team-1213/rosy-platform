@@ -79,10 +79,9 @@ _FEEDBACK_TOOLS = [
     {"type": "function", "name": "propose_replan",
      "description": "Submit a non-executable replan candidate for Fleet review.",
      "parameters": {"type": "object", "properties": {
-         "observation_id": {"type": "string", "maxLength": 160},
          "based_on_event_id": {"type": "integer", "minimum": 0},
          "rationale": {"type": "string", "maxLength": 512},
-     }, "required": ["observation_id", "based_on_event_id", "rationale"],
+     }, "required": ["based_on_event_id", "rationale"],
          "additionalProperties": False}},
 ]
 
@@ -153,6 +152,7 @@ class GeminiER2StandardAdapter:
         self, *, scope: MissionFeedbackTurnScope,
         context: MissionFeedbackContext | Mapping[str, Any], dispatcher: Any,
         egress_policy: ER2FeedbackEgressPolicy | None,
+        turn_id: str | None = None,
     ) -> str:
         """Run one bounded, stateless status/tool-result turn.
 
@@ -253,10 +253,21 @@ class GeminiER2StandardAdapter:
                 return final_text[:4_000]
             replay.extend(model_steps)
             for _step, name, call_id, arguments in calls:
-                result = dispatcher.dispatch(
-                    scope=scope, call_id=call_id, tool_name=name,
-                    arguments=dict(arguments),
-                )
+                if name == "propose_replan" and callable(
+                        getattr(dispatcher, "dispatch_replan", None)):
+                    result = await dispatcher.dispatch_replan(
+                        scope=scope, turn_id=turn_id, call_id=call_id,
+                        arguments=dict(arguments), candidate_adapter=self,
+                        egress_policy=egress_policy,
+                    ) if turn_id is not None else dispatcher.dispatch(
+                        scope=scope, call_id=call_id, tool_name=name,
+                        arguments=dict(arguments),
+                    )
+                else:
+                    result = dispatcher.dispatch(
+                        scope=scope, call_id=call_id, tool_name=name,
+                        arguments=dict(arguments),
+                    )
                 result_json = result.model_dump(mode="json")
                 result_bytes = json.dumps(result_json, sort_keys=True,
                                           separators=(",", ":"), allow_nan=False).encode()

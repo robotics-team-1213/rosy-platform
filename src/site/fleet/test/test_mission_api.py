@@ -174,6 +174,8 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
     assert duplicate.json()["created"] is False
     assert calls == []
     assert readback.json()["proposal"]["candidate"]["provider_call_id"] == "call-1"
+    assert readback.json()["proposal"]["source_mission_id"] is None
+    assert readback.json()["proposal"]["supersedes_mission_id"] is None
     assert "image_bytes" not in readback.text and "api_key" not in readback.text
     resolved = _resolve(client, proposal_id)
     resolved_duplicate = _resolve(client, proposal_id)
@@ -184,6 +186,7 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
     mission_readback = client.get(f"/api/fleet/missions/{mission_id}",
                                   headers={"Authorization": "Bearer operator-secret"})
     assert mission_readback.status_code == 200
+    assert mission_readback.json()["mission"]["supersedes_mission_id"] is None
 
 
 def test_resolution_storage_failure_rolls_back_mission_and_remains_retryable(tmp_path, monkeypatch):

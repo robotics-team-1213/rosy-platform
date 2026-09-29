@@ -84,7 +84,7 @@ class MissionModelTurnWorker:
         try:
             await self.adapter.reason_about_mission(
                 scope=scope, context=context, dispatcher=self.dispatcher,
-                egress_policy=self.egress_policy,
+                egress_policy=self.egress_policy, turn_id=turn_id,
             )
         except Exception:
             return self.store.mark_unknown(

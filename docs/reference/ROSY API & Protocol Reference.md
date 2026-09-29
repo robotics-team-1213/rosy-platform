@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.60
+**Version:** v1.61
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1378,6 +1378,20 @@ REQUEST_CONFLICT`. The API does not call ER 2. Candidate records allow only
 selector/provenance metadata and reject principal, credential, and image-payload
 fields.
 
+ER 2 feedback candidates use the same proposal read/resolve routes. Their
+response adds `source_mission_id`, `source_action_id`, `source_attempt_id`,
+`source_dispatch_generation`, `source_event_watermark`,
+`source_observation_id`, and `supersedes_mission_id`. Fleet writes this row only
+after one SQLite `BEGIN IMMEDIATE` transaction rechecks the active dispatch
+latch/generation, source Mission/action/attempt, latest event watermark, and a
+post-action observation captured no more than 30 seconds before candidate
+commit. A later stop/generation change or
+source event makes the candidate non-resolvable. Operator resolution creates a
+separately identified `PROPOSED` successor Mission with
+`supersedes_mission_id`; it never changes the source Mission. The successor
+still requires the ordinary admission gate. Image bytes are used for model
+reasoning only and are never persisted in proposal metadata.
+
 Resolution is available only when a trusted current-observation and capability
 resolver is explicitly injected into the Site Fleet app. It receives the stored
 candidate, requested workcell/instance, and current time; it must verify image
@@ -1464,7 +1478,9 @@ ER 2 feedback tools are provider-internal function declarations; they are not
 authenticated Fleet REST routes and do not add a public control surface. The
 allowlist contains `get_mission_status` and `propose_replan`. The former reads
 the Mission already bound to the trusted turn scope. The latter declaration is
-limited to an observation, event watermark, and rationale; its candidate write
+limited to a trigger event watermark and rationale; Fleet obtains the actual
+observation ID from its trusted post-action reader rather than asking ER 2 to
+guess an ID it has not been shown. Its candidate write
 remains unavailable because no trusted fresh post-action observation source is
 wired to Fleet. Before any future candidate path is enabled, it must use an
 atomic stop/candidate transaction. It does not write an Action, admit a Mission, issue a motor/gripper
@@ -1574,6 +1590,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 |---|---|---|
 | v1.56 | 2026-09-29 | Additive (D-337): traffic policy status gains `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen`; the optional file-only `traffic_policy.signal_observer` binding fuses the observer service's measured light with camera evidence (mismatch `signal_source_conflict` HOLD, dark/indeterminate `signal_dark`, silence falls back camera-only) and emits `nav.traffic_policy_signal_source_stale` once per lapse |
 | v1.57 | 2026-09-29 | Additive (D-333): add owner-scoped Mission progress axes, a 50-event recent-history window with truncation signal, and bounded snapshot-first event cursor pages. Fleet event IDs are journal order; dispatch latch is distinct from physical stop (UNKNOWN); no percentage or provider status tool is introduced. |
+| v1.61 | 2026-09-30 | Additive (D-358): expose Fleet ER 2 successor-candidate source Mission/action/attempt/generation/event/observation correlation and `supersedes_mission_id`; stop/source-event drift makes the candidate non-resolvable, and resolution creates a distinct linked Mission draft. This does not enable a provider worker, trusted Vision reader, policy dispatch, or ROS. |
 | v1.60 | 2026-09-30 | Additive (D-360/D-357/D-358): Vision field-corner proposals for operator review; bounded ER 2 feedback tools, trusted turn scope, stateless `store=false` replay, transcript-free SQLite outbox with durable-cursor event scheduling, hard capacity bound and explicit ambiguous `UNKNOWN` behavior. No public tool route, ER 2 provider worker/model calls, policy dispatch, or ROS enablement. |
 | v1.59 | 2026-09-30 | Additive (D-348): opt-in registered goal-evidence producer route, environment-only source tokens, SQLite evidence-ID idempotency, evaluator/freshness scope, terminal-action verification and grace-timeout HOLD. No model/action dispatch or ROS enablement. |
 | v1.58 | 2026-09-29 | Additive (D-347): `GET /api/v1/system/capabilities` gains the per-flag `lifecycle` block — one vocabulary (`ready`/`unavailable`+reasons, `activating` reserved with no producer yet) derived from the existing `withheld` judgment; `withheld.flags` always equals the `unavailable` set. Presentation states on inventory descriptors are unchanged; the mapping lives in D-347. |

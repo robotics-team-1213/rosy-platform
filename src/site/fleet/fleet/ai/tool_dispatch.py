@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import asyncio
+import hashlib
 from collections.abc import Mapping
 from typing import Any
 
@@ -12,6 +14,7 @@ from core_common.protocol.schemas import (
     MissionFeedbackContext,
     MissionFeedbackTurnScope,
 )
+from fleet.server.proposal_store import ProposalRejected
 
 
 def _json_size(value: object) -> int | None:
@@ -29,13 +32,90 @@ class MissionFeedbackToolDispatcher:
 
     def __init__(self, *, mission_service: Any, progress_service: Any,
                  proposal_store: Any,
-                 authorization_check: Any = None) -> None:
+                 authorization_check: Any = None,
+                 post_action_observation_source: Any = None) -> None:
         if mission_service is None or progress_service is None or proposal_store is None:
             raise ValueError("ER 2 tools require configured Fleet Mission services")
         self.mission_service = mission_service
         self.progress_service = progress_service
         self.proposal_store = proposal_store
         self.authorization_check = authorization_check
+        self.post_action_observation_source = post_action_observation_source
+
+    async def dispatch_replan(self, *, scope: MissionFeedbackTurnScope | Mapping[str, Any],
+                              turn_id: str, call_id: str,
+                              arguments: Mapping[str, Any], candidate_adapter: Any,
+                              egress_policy: Any) -> ER2ToolResult:
+        """Acquire one trusted post-action frame, ask ER 2 for selectors, then fence write."""
+        checked = self.dispatch(
+            scope=scope, call_id=call_id, tool_name="propose_replan",
+            arguments=arguments,
+        )
+        if checked.reason_code != "REPLAN_OBSERVATION_UNAVAILABLE":
+            return checked
+        if self.post_action_observation_source is None:
+            return checked
+        try:
+            trusted_scope = (scope if isinstance(scope, MissionFeedbackTurnScope)
+                             else MissionFeedbackTurnScope.model_validate(scope))
+            if (not isinstance(turn_id, str) or not turn_id.strip()
+                    or turn_id != turn_id.strip() or len(turn_id) > 96):
+                raise ValueError("invalid turn id")
+            approved = getattr(egress_policy, "approved_data_classes", frozenset())
+            if "camera_observation" not in approved:
+                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
+            current = self._current_context(trusted_scope)
+            if current is None:
+                return self._result("propose_replan", "rejected", "TURN_SCOPE_STALE")
+            feedback, _mission = current
+            if feedback.action_observed_at is None:
+                return self._result("propose_replan", "unavailable",
+                                    "REPLAN_OBSERVATION_UNAVAILABLE")
+            capture = self.post_action_observation_source.capture_after(
+                scope=trusted_scope,
+                based_on_event_id=arguments["based_on_event_id"],
+                after_action_at=feedback.action_observed_at,
+            )
+            captured = await asyncio.wait_for(capture, timeout=5.0)
+            if (not isinstance(captured, Mapping)
+                    or set(captured) != {"observation", "scope"}):
+                raise ValueError("invalid observation capture envelope")
+            observation = captured["observation"]
+            observation_scope = captured["scope"]
+            from fleet.ai.candidate import ImageObservation
+            if not isinstance(observation, ImageObservation):
+                raise ValueError("trusted source did not return an image observation")
+            if not isinstance(observation_scope, Mapping):
+                raise ValueError("observation scope is invalid")
+            request_id = "feedback-" + hashlib.sha256(
+                f"{turn_id}:{call_id}".encode("utf-8"),
+            ).hexdigest()
+            instruction = (feedback.task_summary[:1400]
+                           + "; Replan rationale: " + arguments["rationale"][:512])[:2000]
+            pending = candidate_adapter.propose_pick_place(
+                request_id=request_id, instruction=instruction,
+                observation=observation,
+            )
+            candidate = await asyncio.wait_for(pending, timeout=25.0)
+            if (candidate.source_observation_id != observation.observation_id
+                    or candidate.source_image_sha256 != observation.sha256):
+                raise ValueError("proposal provenance did not match captured frame")
+            saved = self.proposal_store.create_feedback_candidate_fenced(
+                turn_id=turn_id, candidate=candidate.to_candidate_record(),
+                observation=observation_scope,
+            )
+            return self._result(
+                "propose_replan", "accepted", "CANDIDATE_RECORDED",
+                event_id=trusted_scope.event_watermark,
+                proposal_id=saved["proposal"]["proposal_id"],
+                payload={"successor_of_mission_id": trusted_scope.mission_id,
+                         "executable": False},
+            )
+        except ProposalRejected as exc:
+            return self._result("propose_replan", "rejected", exc.code)
+        except Exception:
+            return self._result("propose_replan", "unavailable",
+                                "REPLAN_OBSERVATION_UNAVAILABLE")
 
     def dispatch(self, *, scope: MissionFeedbackTurnScope | Mapping[str, Any],
                  call_id: str, tool_name: str,
@@ -79,11 +159,7 @@ class MissionFeedbackToolDispatcher:
                 payload=context.model_dump(mode="json"),
             )
 
-        if (set(arguments) != {"observation_id", "based_on_event_id", "rationale"}
-                or not isinstance(arguments.get("observation_id"), str)
-                or not arguments["observation_id"].strip()
-                or arguments["observation_id"] != arguments["observation_id"].strip()
-                or len(arguments["observation_id"]) > 160
+        if (set(arguments) != {"based_on_event_id", "rationale"}
                 or type(arguments.get("based_on_event_id")) is not int
                 or not isinstance(arguments.get("rationale"), str)
                 or not arguments["rationale"].strip()
@@ -131,7 +207,6 @@ class MissionFeedbackToolDispatcher:
         )
         if snapshot is None or context is None:
             return None
-        progress = snapshot["progress"]
         plan = mission.get("plan") or {}
         task_summary = plan.get("instruction")
         if not isinstance(task_summary, str) or not task_summary.strip():

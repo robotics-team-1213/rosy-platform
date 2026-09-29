@@ -609,3 +609,15 @@
 - 변경: main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해, main 병합 때 경기장 자동 검출 제안 ADR을 D-360으로 옮겼다. 코드 주석·시험·API Ref의 D-354 표기를 D-360으로 바꿨고 ADR 본문에 까닭을 적었다. 이 항목보다 앞선 로그의 "D-354"(경기장 제안)는 D-360을 가리킨다(로그는 고치지 않는다).
 - 증거: 병합 커밋의 overhead·Fleet·node 실행.
 - gate 변화: 없음.
+## 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
+- Change: added one-transaction stop/generation/Mission/action/attempt/event/observation fencing before ER2 candidate visibility; candidates are idempotent by feedback turn, carry source correlation, and resolve only into a separately linked successor Mission. Stop or event drift before resolution rejects the candidate. The async tool dispatcher uses an injected post-action observation source and returns unavailable if it is not configured.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 focused contract/doc checks 71 passed; changed-file flake8 clean. Full Fleet flake8 still reports unrelated existing findings in hub, console, and older tests.
+- Gate: SOURCE/LOCAL only. No production trusted Vision reader, provider worker, credentials, policy dispatch, ROS, device, or field enablement.
+## 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
+- Change: removed the model-supplied observation ID from the `propose_replan` tool schema. Fleet now requests a trusted frame after the terminal Action timestamp, binds its concrete ID/digest to the typed ER 2 selector response, and retains the same atomic visibility fence. Camera image egress still requires a separate explicit data-class approval.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 path suites 74 passed; changed-file flake8 clean.
+- Gate: no trusted production Vision reader or app worker is configured; replan stays unavailable unless both are injected and approved.
+## 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
+- Change: updated the repository Fleet package size verdict from 14,260 to 14,616 lines; the existing split decision and unscheduled B2 plan remain in force.
+- Evidence: atomic candidate fencing and linked-successor tests are included in the re-judged package line count; `src/site/fleet/test` plus repository `test` passed 3,675 tests with 188 skipped, and the Fleet feedback/API-focused set passed 65 tests.
+- Gate: SOURCE/LOCAL only; the production post-action Vision reader and provider worker remain unconfigured.

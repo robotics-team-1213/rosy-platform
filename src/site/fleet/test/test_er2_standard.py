@@ -348,6 +348,91 @@ def test_feedback_turn_replays_stateless_function_result_and_checks_egress_prefl
     assert "previous_interaction_id" not in requests[1]
 
 
+def test_feedback_adapter_uses_async_candidate_dispatch_with_the_durable_turn_id():
+    from fleet.ai.er2_standard import ER2FeedbackEgressPolicy
+
+    requests = []
+    returned = [
+        {"steps": [{"type": "function_call", "id": "replan-call",
+                    "name": "propose_replan", "arguments": {
+                        "based_on_event_id": 19,
+                        "rationale": "Goal evidence says the object is not in the tray.",
+                    }}]},
+        {"steps": [{"type": "text", "text": "A successor proposal is ready for review."}]},
+    ]
+
+    async def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json=returned.pop(0))
+
+    class Dispatcher:
+        def __init__(self):
+            self.calls = []
+
+        def dispatch(self, **kwargs):
+            raise AssertionError(f"replan bypassed async dispatcher: {kwargs}")
+
+        async def dispatch_replan(self, **kwargs):
+            self.calls.append(kwargs)
+            return ER2ToolResult(
+                tool_name="propose_replan", status="accepted",
+                reason_code="CANDIDATE_RECORDED", event_id=19,
+                proposal_id="proposal-1", payload={"executable": False},
+            )
+
+    scope = MissionFeedbackTurnScope.model_validate({
+        "principal_id": "operator-1", "workcell_id": "omx_01",
+        "mission_id": "mission-1", "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "event_watermark": 19,
+        "model_policy_revision": "policy-v1", "outcome_policy": "STATUS_AND_REPLAN",
+    })
+    context = {
+        "mission_id": "mission-1", "workcell_id": "omx_01",
+        "action_id": "action-1", "attempt_id": "attempt-1",
+        "dispatch_generation": 4, "stop_generation": 4, "authority_epoch": 2,
+        "snapshot_event_id": 19, "snapshot_at": "2026-09-30T12:00:00Z",
+        "policy_revision": "policy-v1", "outcome_policy": "STATUS_AND_REPLAN",
+        "task_summary": "Place the red block in the tray.",
+        "mission_source": "fleet_missions", "step_source": "fleet_missions",
+        "action_source": "fleet_mission_events", "action_freshness": "FRESH",
+        "action_observed_at": "2026-09-30T12:00:00Z",
+        "goal_evidence_source": "trusted-test", "goal_evidence_freshness": "FRESH",
+        "goal_evidence_observed_at": "2026-09-30T12:00:01Z",
+        "stop_source": "fleet_dispatch_control", "stop_freshness": "CURRENT",
+        "stop_observed_at": "2026-09-30T12:00:00Z",
+        "mission_state": "HOLD", "step_state": "HOLD", "action_state": "SUCCEEDED",
+        "action_reason": None, "goal_evidence_state": "UNSATISFIED",
+        "goal_evidence_reason": "GOAL_NOT_SATISFIED",
+        "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
+    }
+    dispatcher = Dispatcher()
+    policy = ER2FeedbackEgressPolicy(
+        approved=True, project_id="approved-project", service_tier="standard",
+        approved_data_classes=frozenset({"mission_progress", "mission_instruction"}),
+        approved_workcell_ids=frozenset({"omx_01"}),
+        approved_task_classes=frozenset({"PICK_PLACE"}), estimated_cost_usd=0.05,
+    )
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            return await adapter.reason_about_mission(
+                scope=scope, context=context, dispatcher=dispatcher,
+                egress_policy=policy, turn_id="turn-abc",
+            )
+
+    assert asyncio.run(scenario()) == "A successor proposal is ready for review."
+    assert len(dispatcher.calls) == 1
+    assert dispatcher.calls[0]["turn_id"] == "turn-abc"
+    assert dispatcher.calls[0]["call_id"] == "replan-call"
+    assert dispatcher.calls[0]["candidate_adapter"].__class__ is GeminiER2StandardAdapter
+    assert [request["store"] for request in requests] == [False, False]
+    replan_tool = next(tool for tool in requests[0]["tools"]
+                       if tool.get("name") == "propose_replan")
+    assert replan_tool["parameters"]["required"] == ["based_on_event_id", "rationale"]
+
+
 def test_feedback_turn_without_egress_approval_never_calls_transport():
     calls = 0
 

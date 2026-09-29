@@ -83,6 +83,7 @@ class MissionStore:
                     authority_epoch INTEGER,
                     action_id TEXT,
                     attempt_id TEXT,
+                    supersedes_mission_id TEXT,
                     reason TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -131,6 +132,10 @@ class MissionStore:
                 connection.execute(
                     "ALTER TABLE fleet_missions ADD COLUMN reconciliation_pending "
                     "INTEGER NOT NULL DEFAULT 0"
+                )
+            if "supersedes_mission_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE fleet_missions ADD COLUMN supersedes_mission_id TEXT"
                 )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS fleet_missions_ready_queue "
@@ -195,12 +200,19 @@ class MissionStore:
     def create_proposal(self, *, mission_id: str, principal_id: str, request_key: str,
                         action_kind: str, workcell_id: str, instance_id: str,
                         plan: Mapping[str, Any], goal_predicate: Mapping[str, Any],
+                        supersedes_mission_id: str | None = None,
                         connection: sqlite3.Connection | None = None) -> dict[str, Any]:
         mission_id = _nonempty("mission_id", mission_id)
         principal_id = _nonempty("principal_id", principal_id, limit=96)
         request_key = _nonempty("request_key", request_key, limit=160)
         workcell_id = _nonempty("workcell_id", workcell_id, limit=96)
         instance_id = _nonempty("instance_id", instance_id, limit=96)
+        if supersedes_mission_id is not None:
+            supersedes_mission_id = _nonempty(
+                "supersedes_mission_id", supersedes_mission_id,
+            )
+            if supersedes_mission_id == mission_id:
+                raise ValueError("a Mission cannot supersede itself")
         if action_kind != "PICK_PLACE":
             raise ValueError("only the fixed-workcell PICK_PLACE proposal is supported")
         if not isinstance(plan, Mapping):
@@ -213,6 +225,8 @@ class MissionStore:
             "instance_id": instance_id, "plan": json.loads(plan_json),
             "goal_predicate": predicate.to_dict(),
         }
+        if supersedes_mission_id is not None:
+            request_document["supersedes_mission_id"] = supersedes_mission_id
         digest = hashlib.sha256(_json(request_document).encode("utf-8")).hexdigest()
         now = _now()
         owns_transaction = connection is None
@@ -235,10 +249,11 @@ class MissionStore:
                 """INSERT INTO fleet_missions
                    (mission_id, step_id, principal_id, request_key, request_digest,
                     action_kind, workcell_id, instance_id, plan_json, goal_predicate_json,
-                    status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?)""",
+                    supersedes_mission_id, status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?)""",
                 (mission_id, step_id, principal_id, request_key, digest, action_kind,
-                 workcell_id, instance_id, plan_json, predicate_json, now, now),
+                 workcell_id, instance_id, plan_json, predicate_json,
+                 supersedes_mission_id, now, now),
             )
             row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                              (mission_id,)).fetchone()
