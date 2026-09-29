@@ -32,8 +32,9 @@ CONTROL = re.compile(
     r"ui-shell|ui-topbar|ui-brand|ui-section|ui-empty|ui-status|ui-actions"
 )
 EVIDENCE_TAG = re.compile(r"<ui-evidence\b([^>]*)>", re.S)
+# D-359 §7.4 — outline도 덧칠이다(포커스처럼 보인다). 눌림은 aria-pressed의 공용 표현이다.
 PAINT = re.compile(
-    r"(?<![-a-z])(background|color|font-size|font-weight|font|opacity|border-radius|border-color|border)\s*:"
+    r"(?<![-a-z])(background|color|font-size|font-weight|font|opacity|border-radius|border-color|border|outline)\s*:"
 )
 CREATE = re.compile(r"""createElement\(\s*["']ui-button["']\s*\)""")
 HELPER_CREATE = re.compile(r"""(?:\bel|\bnode)\(\s*["']ui-button["']\s*,""")
@@ -460,3 +461,136 @@ def test_the_brand_renders_the_home_link_as_a_shared_behaviour():
     assert "aria-label" in brand
     assert "ui-brand a:hover b" in css and "ui-brand a:hover small" in css
     assert "ui-brand a:focus-visible" in css
+
+
+# ---- D-359 §5 / §7.4–7.5 — 공용 필드·버튼 상태·사유 -----------------------------
+
+FIELD_TAG = re.compile(r"<(input|select|textarea)\b([^>]*)>", re.S)
+FIELD_CREATE = re.compile(
+    r"""(?:createElement|\bel|\bnode)\(\s*["'](input|select|textarea)["']\s*(?:,\s*["']([^"']*)["'])?"""
+)
+FIELD_CLASS_SET = re.compile(
+    r"""\.className\s*=\s*["'][^"']*\bui-field\b|classList\.add\([^)]*["']ui-field["']"""
+)
+CHECK_TYPE = re.compile(r"""type\s*=\s*["'](?:checkbox|radio)""")
+
+
+def _product_texts():
+    """제품 화면(D-359 §5.1): 로봇 표면(셸·패널 포함)·Fleet·games. 라이브러리 자체는 뺀다."""
+    for surface in registry.for_contract(registry.REPO, "typography_focus"):
+        if surface.resolve() == COMMON.resolve():
+            continue
+        paths = [surface] if surface.is_file() else sorted(surface.rglob("*"))
+        for path in paths:
+            if path.suffix in STYLE_SUFFIXES and "test" not in path.parts:
+                yield path
+
+
+def test_product_fields_carry_the_shared_field_class():
+    """입력·선택은 components.css의 input.ui-field 얼굴을 쓴다. 이름이 다른 사본을 구조로 찾는다."""
+    missing = []
+    for path in _product_texts():
+        text = path.read_text(encoding="utf-8")
+        if path.suffix == ".html":
+            for match in FIELD_TAG.finditer(text):
+                tag, attrs = match.groups()
+                if 'type="hidden"' in attrs:
+                    continue
+                classes = re.search(r'class="([^"]*)"', attrs)
+                if not classes or "ui-field" not in classes.group(1).split():
+                    missing.append(f"{path.name}: <{tag}{attrs.strip()[:60]}>")
+                if CHECK_TYPE.search(attrs):
+                    start = text.rfind("<label", 0, match.start())
+                    opener = text[start:text.find(">", start) + 1] if start >= 0 else ""
+                    if "ui-check" not in opener:
+                        missing.append(f"{path.name}: checkbox outside label.ui-check")
+            continue
+        if path.suffix != ".js":
+            continue
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            for match in FIELD_CREATE.finditer(line):
+                if "ui-field" in (match.group(2) or "").split():
+                    continue
+                window = "\n".join(lines[index:index + 4])
+                if not FIELD_CLASS_SET.search(window):
+                    missing.append(f"{path.name}:{index + 1} {match.group(0)}")
+                    continue
+                around = "\n".join(lines[max(0, index - 3):index + 4])
+                if CHECK_TYPE.search(window) and "ui-check" not in around:
+                    missing.append(f"{path.name}:{index + 1} checkbox outside label.ui-check")
+    assert not missing, "\n".join(missing)
+
+
+FIELD_SELECTOR = re.compile(r"\b(?:input|select|textarea)\b|\.ui-field\b")
+HEIGHT = re.compile(r"(?<![-a-z])(min-height|height|max-height|block-size)\s*:\s*([^;}]+)")
+TARGET = re.compile(r"\s*var\(--target-(?:secondary|primary|irreversible)\)\s*")
+
+
+def test_fields_clear_the_secondary_target_on_every_surface():
+    """공용 필드는 44px 바닥을 가진다. 표면은 입력 높이를 다시 정하지 않는다(체크는 label이 면)."""
+    css = COMPONENTS.read_text(encoding="utf-8")
+    field = re.search(
+        r"ui-field,\s*input\.ui-field,\s*select\.ui-field,\s*textarea\.ui-field\s*\{([^}]*)\}", css)
+    assert field and "min-height: var(--target-secondary)" in field.group(1)
+    check = re.search(r"\.ui-check\s*\{([^}]*)\}", css)
+    assert check and "min-height: var(--target-secondary)" in check.group(1)
+    offenders = []
+    for path in _product_texts():
+        if path.suffix not in {".css", ".html"}:
+            continue
+        text = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S)
+        if path.suffix == ".html":
+            text = "\n".join(re.findall(r"<style>(.*?)</style>", text, re.S))
+        for selector, body in RULE.findall(text):
+            if not FIELD_SELECTOR.search(selector) or re.search(r"checkbox|radio", selector):
+                continue
+            for prop, value in HEIGHT.findall(body):
+                if not TARGET.fullmatch(value):
+                    offenders.append(f"{path.name} {selector.strip()[:50]} {prop}: {value.strip()}")
+    assert not offenders, offenders
+
+
+def _rules(css: str):
+    stripped = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    return [(selector.strip(), body) for selector, body in RULE.findall(stripped)]
+
+
+def test_every_button_kind_has_shared_interaction_states():
+    """hover·active·focus-visible·비활성은 모든 종류에 components.css가 준다(D-359 §5.4)."""
+    rules = _rules(COMPONENTS.read_text(encoding="utf-8"))
+    missing = []
+    for kind in sorted(_kinds()):
+        for state in (":hover", ":active"):
+            if not any(
+                state in selector and f'[kind="{kind}"]' in selector and ":not([disabled]" in selector
+                for selector, _ in rules
+            ):
+                missing.append(f"{kind} {state}")
+    assert not missing, missing
+    assert any(selector.startswith("ui-button:focus-visible") for selector, _ in rules)
+    assert any(selector == "ui-button[disabled]" for selector, _ in rules)
+    assert any('[kind="toggle"][aria-pressed="true"]' in selector for selector, _ in rules), (
+        "눌림(aria-pressed)의 공용 표현이 없다")
+    body = dict(rules).get("body", "")
+    assert "word-break: keep-all" in body and "overflow-wrap: anywhere" in body
+    focus = [decl for selector, decl in rules if selector.startswith(":where(") and ":focus-visible" in selector]
+    assert focus and "var(--focus-ring-width)" in focus[0]
+
+
+def test_disabled_reason_is_a_shared_button_attribute():
+    """사유는 title이 아니라 reason이다. ui.js가 보이는 글자와 aria-describedby로 잇는다."""
+    script = UI.read_text(encoding="utf-8")
+    button = script.split("class UiButton extends HTMLElement", 1)[1].split("\nclass ", 1)[0]
+    observed = button.split("observedAttributes", 1)[1].split("}", 1)[0]
+    assert '"reason"' in observed
+    assert "aria-describedby" in button and "dataset.reason" in button
+    assert "ui-button > small[data-reason]" in COMPONENTS.read_text(encoding="utf-8")
+    offenders = []
+    for path in _product_texts():
+        if path.suffix != ".js":
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"\.title\s*=\s*[^;]*(?:비활성|제한|없습니다|필요)", line):
+                offenders.append(f"{path.name}:{number}")
+    assert not offenders, f"title만으로 비활성 사유를 말한다: {offenders}"

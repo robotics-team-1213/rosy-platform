@@ -1,0 +1,146 @@
+"""D-359 §5.1·§5.3 — 공용 필드 바닥과 비활성 사유를 Chromium에서 확인한다.
+
+표면 파일은 가짜 호스트(`http://rosy.test`)로 그대로 서빙한다(test_theme_browser와 같다).
+API는 없으므로 페이지 스크립트의 네트워크 오류는 무시하고 정적 DOM과 공용 부품만 본다.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
+)
+
+SRC = Path(__file__).resolve().parents[3]
+COMMON = SRC / "hmi" / "web_common"
+DASHBOARD = SRC / "hmi" / "dashboard"
+FLEET = SRC / "site" / "fleet" / "fleet" / "server" / "web"
+HOST = "http://rosy.test"
+TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
+BUTTON_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<link rel="stylesheet" href="/common/tokens.css">
+<link rel="stylesheet" href="/common/components.css">
+<script type="module" src="/common/ui.js"></script></head>
+<body><ui-button id="go" kind="primary" type="button" disabled
+  reason="운용자 권한이 필요합니다">목표 보내기</ui-button>
+<span id="other">다른 설명</span></body></html>"""
+
+FIELD_PROBE = """() => {
+  const floor = parseFloat(getComputedStyle(document.documentElement)
+    .getPropertyValue('--target-secondary'));
+  const bad = [];
+  for (const field of document.querySelectorAll('input, select, textarea')) {
+    if (field.type === 'hidden' || field.closest('ui-field')) continue;
+    const name = field.id || field.name || field.getAttribute('aria-label') || field.outerHTML.slice(0, 60);
+    if (!field.classList.contains('ui-field')) { bad.push(`${name}: no ui-field`); continue; }
+    const box = field.type === 'checkbox' || field.type === 'radio' ? field.closest('label') : field;
+    const minHeight = box ? parseFloat(getComputedStyle(box).minHeight) : 0;
+    if (!(minHeight >= floor)) bad.push(`${name}: min-height ${minHeight}`);
+  }
+  return {floor, count: document.querySelectorAll('input, select, textarea').length, bad};
+}"""
+
+
+def _serve(route):
+    path = route.request.url.removeprefix(HOST).split("?", 1)[0]
+    if path.startswith("/common/"):
+        target = COMMON / path.removeprefix("/common/")
+    elif path.startswith("/console/assets/"):
+        target = FLEET / path.removeprefix("/console/assets/")
+    elif path.startswith("/dashboard/assets/"):
+        target = DASHBOARD / path.removeprefix("/dashboard/assets/")
+    elif path == "/console":
+        target = FLEET / "index.html"
+    elif path == "/dashboard":
+        target = DASHBOARD / "index.html"
+    elif path == "/button":
+        return route.fulfill(status=200, content_type="text/html", body=BUTTON_PAGE)
+    else:
+        return route.fulfill(status=404, body="")
+    if not target.is_file():
+        return route.fulfill(status=404, body="")
+    return route.fulfill(status=200, content_type=TYPES.get(target.suffix, "text/plain"),
+                         body=target.read_text(encoding="utf-8"))
+
+
+@pytest.fixture()
+def page():
+    sync_api = pytest.importorskip("playwright.sync_api")
+    with sync_api.sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as error:  # pragma: no cover - host without Chromium
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        context = browser.new_context(viewport={"width": 1366, "height": 768})
+        context.route(f"{HOST}/**", _serve)
+        yield context.new_page()
+        browser.close()
+
+
+def test_reason_renders_visible_text_linked_by_describedby(page):
+    page.goto(f"{HOST}/button")
+    page.wait_for_function("() => customElements.get('ui-button') && document.querySelector('#go small')")
+    first = page.evaluate("""() => {
+      const button = document.getElementById('go');
+      const note = button.querySelector('small[data-reason]');
+      const box = note.getBoundingClientRect();
+      return {
+        text: note.textContent,
+        described: button.getAttribute('aria-describedby'),
+        id: note.id,
+        hidden: note.getAttribute('aria-hidden'),
+        visible: box.width > 0 && box.height > 0 && getComputedStyle(note).visibility === 'visible',
+        colour: getComputedStyle(note).color,
+        quiet: (() => { const p = document.createElement('i'); p.style.color = 'var(--ink-quiet)';
+          document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; })(),
+        opacity: getComputedStyle(button).opacity,
+      };
+    }""")
+    assert first["text"] == "운용자 권한이 필요합니다"
+    assert first["visible"], first
+    assert first["id"] and first["id"] in first["described"].split()
+    assert first["hidden"] == "true"  # 이름이 아니라 설명으로 읽힌다
+    assert first["colour"] == first["quiet"]
+    assert first["opacity"] == "1", "사유가 있는 비활성은 사유 글자까지 흐리지 않는다"
+    name = page.get_by_role("button", name="목표 보내기", exact=True)
+    assert name.count() == 1
+
+    # 다른 설명과 함께 살고, 바뀌면 따라 바뀌고, 글자를 갈아도 다시 붙고, 지우면 사라진다.
+    page.evaluate("""() => {
+      const button = document.getElementById('go');
+      button.setAttribute('aria-describedby', 'other ' + button.getAttribute('aria-describedby'));
+      button.setAttribute('reason', '지도 없음');
+      button.textContent = '목표';
+    }""")
+    page.wait_for_function("() => document.querySelector('#go small[data-reason]')?.textContent === '지도 없음'")
+    updated = page.evaluate("""() => {
+      const button = document.getElementById('go');
+      return {described: button.getAttribute('aria-describedby'),
+              count: button.querySelectorAll('small[data-reason]').length};
+    }""")
+    assert updated["count"] == 1
+    assert "other" in updated["described"].split()
+    page.evaluate("() => { const b = document.getElementById('go'); b.reason = ''; b.disabled = false; }")
+    cleared = page.evaluate("""() => {
+      const button = document.getElementById('go');
+      return {note: button.querySelector('small[data-reason]'),
+              described: button.getAttribute('aria-describedby'),
+              opacity: getComputedStyle(button).opacity};
+    }""")
+    assert cleared["note"] is None
+    assert cleared["described"] == "other"
+
+
+@pytest.mark.parametrize("path", ["/console", "/dashboard"])
+def test_every_product_field_clears_the_secondary_target(page, path):
+    page.goto(f"{HOST}{path}")
+    page.wait_for_function("() => customElements.get('ui-button')")
+    probe = page.evaluate(FIELD_PROBE)
+    assert probe["floor"] == 44
+    assert probe["count"] > 0
+    assert not probe["bad"], probe["bad"]
