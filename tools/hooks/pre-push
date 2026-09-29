@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# D-346 pre-push fast gate: the <2-minute tier that catches what landed red on
+# 2026-09-29 (ADR body gaps, io closure, version pins, size verdicts).
+# Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+PY="$(command -v python3 || command -v python)"
+
+echo "[pre-push] harness lint (ADR duplicates, mojibake, append-only, staleness)"
+"$PY" tools/harness/rosy_harness.py lint
+
+echo "[pre-push] fast contract suites"
+"$PY" -m pytest \
+  test/test_harness_contracts.py \
+  test/architecture/test_module_structure.py \
+  test/test_io_image_closure.py \
+  test/test_line_follow_contract_docs.py \
+  src/runtime/gateway/test/test_protocol_version_alignment.py \
+  -q
+
+echo "[pre-push] fast gate green"

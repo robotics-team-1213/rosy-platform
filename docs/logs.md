@@ -3448,3 +3448,10 @@
 - gate 변화: 없음. 잔여 실패 2건(test_size_verdicts·test_over_budget)은 병행 트랙의 사전 존재 예산 초과(schemas.py 738행·fleet 10,436행·app.py 재성장)로 이 변경과 무관.
 - 결정: mesh/world/map 등 자산 참조도 P3 선언 대상임을 스캐너가 이제 증명한다. 신규 위반은 P5대로 — fix(선언 추가) 또는 KNOWN_UNDECLARED 사유 기록.
 - 교훈: 패턴 추가는 추가만으로 증명되지 않는다 — 물릴 대상을 찔러 빨강을 본 뒤 믿는다(test/AGENTS 변이 증명 규약).
+## 2026-09-29 · uncommitted · feat(harness): D-346 커밋 시점 방어망 착지
+
+- 변경: ADR D-346의 구현 — ①parse_adr_log가 표 행 중복을 duplicate index row 에러로 보고(dict 축소로 묻히던 경로 제거), ②harness lint가 governed 파일의 물음표 두 개 연속(코드페이지 부식 흔적)을 suspicious encoding 에러로 보고, ③tools/hooks/pre-push 패스트 게이트(2분 티어)와 install.sh, ④AGENTS Testing에 quick/full 2티어 문서화, ⑤솔루션 문서 2건(병행 세션 스윕·PowerShell 인코딩). 레거시 정리 — D-140 표행 인코딩 복구(본문문서 제목에서), D-218/219/220 잠복 중복 행 중 첫 변형 제거(후행 행이 본문문서와 일치, dict last-wins라 실효 변경 없음).
+- 증거: 변이 증명 — 새 검사를 복구 전 상태(710a8a86)에 적용해 D-218/219/220 중복 3건과 D-140 부식(150행)을 모두 적발, 현재 상태 녹색. test_harness_contracts 56 passed(신규 단위시험 2건 포함). install.sh로 훅 설치 확인.
+- gate 변화: 없음.
+- 결정: D-346 Decision 1·2·3·6은 도구로, 4·5(번호 선점·짧은 커밋 창)는 규칙으로 솔루션 문서에 보존. sd_writer 부하 민감 시험은 이 변경 범위 밖 별도 결함으로 기록했다.
+- 교훈: 검사는 실제 부식 데이터로 증명한다 — 합성 입력만으로는 D-140 같은 잠복 부식을 믿을 수 없다.

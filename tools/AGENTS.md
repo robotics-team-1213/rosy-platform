@@ -16,6 +16,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `run_data.py` | Create `data/teleop` and `data/drive` sessions |
 | `dashboard_drive.py` | Headless Playwright driver for the CORE dashboard: `status`, `mode`, `teleop` (stop latency), `screenshot` (skill `rosy-dashboard-drive`) |
 | `harness/` | Module index generator (`rosy_harness.py`) |
+| `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~2 min) and its installer |
 
 ## Subdirectories
 
