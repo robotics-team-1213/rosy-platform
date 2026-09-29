@@ -9,7 +9,7 @@ export function mount(root, ctx) {
   const head = el("ui-head", "", "교통 정책 준비");
   const state = el("dl", "traffic-policy-facts"); state.setAttribute("aria-label", "교통 정책 상태");
   const facts = {};
-  for (const [key, title] of [["state", "판정"], ["reason", "판정 사유"], ["signal", "신호"], ["stop", "정지선"], ["rule", "정지선 규칙"], ["scene", "scene"], ["revision", "policy"]]) {
+  for (const [key, title] of [["state", "판정"], ["reason", "판정 사유"], ["signal", "신호"], ["stop", "정지선"], ["rule", "정지선 규칙"], ["source", "신호 원"], ["scene", "scene"], ["revision", "policy"]]) {
     const row = el("div", ""); row.append(el("dt", "", title)); facts[key] = el("dd", "", "—"); row.append(facts[key]); state.append(row);
   }
   const form = el("form", "ui-form");
@@ -40,6 +40,7 @@ export function mount(root, ctx) {
     facts.signal.textContent = status.signal_conflict ? "CONFLICT" : (status.signal_colour || "—");
     facts.stop.textContent = Number.isFinite(Number(status.stop_line_distance_m)) ? `${Number(status.stop_line_distance_m).toFixed(3)} m` : "—";
     facts.rule.textContent = status.junction_rule || "signal_controlled";
+    facts.source.textContent = status.signal_head_frozen ? "frozen" : (status.signal_source_kind || "camera");
     facts.scene.textContent = status.scene_revision || "—"; facts.revision.textContent = status.policy_revision || "—";
     const draft = readback.staged || readback.active || {};
     if (!dirty) {

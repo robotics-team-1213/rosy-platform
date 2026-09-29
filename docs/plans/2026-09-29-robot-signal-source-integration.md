@@ -1,6 +1,6 @@
 # 로봇 신호 소스 통합 실행 계획 — T1~T5
 
-- **Status:** T1·T2·T3 완료 (2026-09-29, 호스트 시험 501 passed) — T4·T5 대기
+- **Status:** T1~T4 완료 (2026-09-29, 코드 트랙 종결) — T5(벤치) 대기
 - **Date:** 2026-09-29
 - **Design:** `docs/plans/2026-09-29-robot-signal-source-integration-design.md` (ADR D-337)
 
@@ -44,6 +44,8 @@ ROS import 없이(Windows 호스트 pytest 가능), 전송은 가짜 클라이�
 ## T4 — dashboard
 
 - 교통 팩트에 "신호 원" 행(`/setup`·`/console`), 정적 스캔 시험
+- 착지(2026-09-29): 값은 `signal_source_kind`(camera|fused)를 그대로 보여 주고
+  관측 프레임 동결 시 `frozen`으로 표기한다. 새 토큰·부품 없음.
 
 ## T5 — 벤치(호스트 밖)
 

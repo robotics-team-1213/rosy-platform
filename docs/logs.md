@@ -3435,6 +3435,12 @@
 - 변경: 실행 계획 T3을 완료 표시하고 착지 내용(파일 설정 전용 바인딩과 map/scene 없으면 빌드 실패, 데몬 스레드 모니터의 나이 보정 주입, `fused` 표기 조건, 침묵 경보 1회)을 보탰다. API 계약서 v1.55→v1.56 — 상태 필드 3종·예시·문단·§8 이벤트 행·역사 항목 동시 갱신(D-18).
 - 증거: 같은 회차 코드 변경 — `src/runtime/services`·`src/runtime/gateway`·`src/contracts/foundation` 로그 참조. 통합 호스트 실행 501 passed, 시맨틱 로드 시뮬 2 passed.
 - gate 변화: 없음. T4(dashboard 신호 원 행)·T5(벤치) 대기.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T4 착지 — dashboard 신호 원 행
+
+- 변경: 실행 계획 T4를 완료 표시했다(코드 트랙 종결). `/setup` 교통 정책 팩트와 `/console` 교통 팩트에 "신호 원" 행 추가 — `signal_source_kind`(camera|fused) 표기, 관측 프레임 동결 시 `frozen`. 같은 회차에 원격 반영: 로컬 main 36+커밋(병행 세션 분 포함)을 검증 워크트리(HEAD 기준 전체 번들 3065+1665+65 passed, 기존 결함 4건은 병행 트랙 부채) 후 push — origin/main 동기화.
+- 증거: dashboard·api_web·dashboard 게이트웨이 시험 116 passed 47 skipped.
+- gate 변화: 없음. T5(WSL/Gazebo 폐루프·실물 벤치)만 남았다.
 ## 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
 
 - 변경: test/architecture/test_module_structure.py의 WORKSPACE_REF_PATTERNS에 package://x/ URI 패턴을 추가하고 텍스트 스캔 확장자를 .yaml·.urdf·.xacro·.sdf·.world·.rviz까지 넓혔다(스코어카드 §6 과제 6). 정직한 구멍 목록 갱신 — 런타임 조립 이름은 여전히 못 보고, isaac_sim이 package.xml 없는 에셋 폴더라 이 스캔의 영역 밖임을 명시.
