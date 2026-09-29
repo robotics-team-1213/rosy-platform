@@ -163,6 +163,7 @@
 | D-352 | 도크·신호등은 같은 패턴의 외부 장비다 — 폴링 실패 어휘·준비 프레임(wire/instrumented/verified)·계약 상호 참조를 공유한다 |
 | D-353 | 외부 장비 설계는 바뀐다 — 바뀌어도 코드가 아니라 설정·전략이 바뀌게 한다 |
 | D-354 | 외부 장비는 mDNS로 서로를 찾는다 — IP 하드코딩 없이, 전원만 연결하면 발견된다 (_rosy-dock._tcp·_rosy-signal._tcp) |
+| D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
 | D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
 
@@ -223,6 +224,7 @@
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
@@ -238,8 +240,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
 - 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 - 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
 - 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
-- 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건

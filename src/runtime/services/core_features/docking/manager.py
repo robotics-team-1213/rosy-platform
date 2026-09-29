@@ -28,6 +28,7 @@ import time
 from typing import Any, Callable, Optional
 
 from core_features.docking.charging import ChargingConfirmation
+from core_features.docking.strategies import FullChargeStrategy, VoltageFullCharge
 from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
 from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
@@ -99,7 +100,8 @@ class DockingManager:
         self._charging = ChargingConfirmation(
             clock=clock, window_s=self._cfg.charge_confirm_s,
             instrumented=self._cfg.instrumented)
-
+        self._full_charge = VoltageFullCharge(
+            enter_v=self._cfg.full_enter_v, exit_v=self._cfg.full_exit_v)
         self._full_announced = False  # D-350: docking.full 1회 방출 플래그
 
         self._phase_since = 0.0
@@ -654,24 +656,23 @@ class DockingManager:
         self._emit("docking.docked", "info", {"dock_id": self._dock.id})
 
     def _check_full(self, charging: 'ChargingConfirmation') -> None:
-        """D-350: DOCKED 상태에서 만춫을 감지하면 `docking.full` 이벤트를 1회 낸다."""
+        """D-350: DOCKED 상태에서 만춫을 감지하면 `docking.full` 이벤트를 1회 낸다.
+
+        판정 자체는 `FullChargeStrategy`에 위임한다 (D-353 봉합점) —
+        기본은 전압 임계, 온도·전류 종단 등으로 교체 가능.
+        """
         if self._state is not DockState.DOCKED:
             return
         voltage = charging.peak_v
-        if voltage is None:
-            return
+        full = self._full_charge.check(voltage, docked=True)
+        self._full_announced = self._full_charge.announced
 
-        if self._full_announced:
-            if voltage < self._cfg.full_exit_v:
-                self._full_announced = False  # 재충전
-            return
-
-        if voltage >= self._cfg.full_enter_v:
-            self._full_announced = True
+        if full:
+            self._phase = DockPhase.CHARGED_HOLD
             self._emit("docking.full", "info", {
                 "dock_id": self._dock.id,
                 "source": charging.source,
-                "voltage_v": round(voltage, 2),
+                "voltage_v": round(voltage, 2) if voltage is not None else None,
             })
 
     def _enter(self, phase: DockPhase) -> None:
