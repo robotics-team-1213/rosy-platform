@@ -160,7 +160,9 @@
 | D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 |
 | D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 |
 | D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 |
+| D-352 | 도크·신호등은 같은 패턴의 외부 장비다 — 폴링 실패 어휘·준비 프레임(wire/instrumented/verified)·계약 상호 참조를 공유한다 |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
+| D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
 
 ## 계획·결과 문서
 
@@ -234,7 +236,7 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · docs(adr/plan): D-357 responsibility and retry contract
+- 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 - 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
 - 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
