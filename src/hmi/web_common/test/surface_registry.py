@@ -20,7 +20,7 @@ import yaml
 REGISTRY = "src/hmi/web_common/surfaces.yaml"
 CONTRACTS = ("shared_controls", "typography_focus", "dialog")
 KINDS = ("robot", "site", "sim", "dev")
-#: D-341 — 매체마다 받는 계약이 다르다. 웹은 공용 컨트롤 세 계약, 웹이 아닌
+#: D-345 — 매체마다 받는 계약이 다르다. 웹은 공용 컨트롤 세 계약, 웹이 아닌
 #: 표면(휴대폰 앱·로봇 LCD)은 tokens.css 값 사본의 일치(token_parity)를 받는다.
 CONTRACTS_BY_MEDIUM = {
     "web": CONTRACTS,

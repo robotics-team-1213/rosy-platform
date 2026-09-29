@@ -6,7 +6,7 @@
 #   shared_controls    = src/hmi/web_common/test/test_shared_controls.py
 #   typography_focus   = src/hmi/web_common/test/test_surface_typography_focus_contracts.py
 #   dialog             = test/test_web_dialog_contract.py
-#   token_parity       = src/hmi/web_common/test/test_token_parity.py (D-341)
+#   token_parity       = src/hmi/web_common/test/test_token_parity.py (D-345)
 # medium은 web·native·lcd 중 하나다. 웹은 위 세 계약을, 웹이 아닌 표면은
 # token_parity를 받는다 — token_copy 파일의 `# --이름 #hex` / `// --이름` 사본이 tokens.css와 같아야 한다.
 # 세 계약을 다 받지 않는 항목은 contract_reason, baseline이 없는 항목은
@@ -86,3 +86,14 @@ surfaces:
     baseline_reason: >
       LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
       test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
+
+  - id: overhead-camera-app
+    path: src/site/overhead/android
+    surface: site
+    medium: native
+    audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
+    contracts: [token_parity]
+    token_copy: src/site/overhead/android/app/src/main/java/io/github/livsbittt/rosy/overhead/ui/RosyTheme.kt
+    baseline_reason: >
+      네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
+      D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

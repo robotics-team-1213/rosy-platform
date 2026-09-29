@@ -1,4 +1,4 @@
-"""D-341 token_parity — 웹이 아닌 표면이 가진 tokens.css 색 사본의 일치.
+"""D-345 token_parity — 웹이 아닌 표면이 가진 tokens.css 색 사본의 일치.
 
 tokens.css가 색 값의 유일한 원본이다(D-292). 휴대폰 앱(Kotlin)과 로봇 LCD(Python)는
 CSS를 읽을 수 없어 값을 옮겨 적는다. 소비자 모듈의 시험은 자기 코드만 단언하므로(D-73)
