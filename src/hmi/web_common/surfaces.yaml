@@ -13,9 +13,13 @@
 # baseline_reason을 적는다.
 # ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
 # 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
+# themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
+# 모든 HTML은 tokens.css 바로 뒤에 /common/theme.js를 싣고, [dark] 웹 표면의 HTML은
+# <html data-theme-pin="dark">로 고정한다. 웹이 아닌 사본(native·lcd)은 [dark]다(§3.4).
 surfaces:
   - id: robot-dashboard
     path: src/hmi/dashboard
+    themes: [dark, light]
     surface: robot
     medium: web
     ports:
@@ -27,6 +31,7 @@ surfaces:
 
   - id: fleet-console
     path: src/site/fleet/fleet/server/web
+    themes: [dark, light]
     surface: site
     medium: web
     ports:
@@ -38,6 +43,7 @@ surfaces:
 
   - id: game-board
     path: src/site/games/games/web
+    themes: [dark]
     surface: site
     medium: web
     ports:
@@ -49,6 +55,7 @@ surfaces:
 
   - id: control-diagnostic
     path: src/runtime/sensing/web/diagnostic.html
+    themes: [dark]
     surface: robot
     medium: web
     ports:
@@ -66,6 +73,7 @@ surfaces:
 
   - id: web-common
     path: src/hmi/web_common
+    themes: [dark, light]
     surface: robot
     medium: web
     audience: 라이브러리 — 사람이 여는 화면이 아니다
@@ -78,6 +86,7 @@ surfaces:
 
   - id: lane-live-view
     path: src/sim/gz_sim/scripts/lane_live_view.html
+    themes: [dark]
     surface: sim
     medium: web
     ports:
@@ -91,6 +100,7 @@ surfaces:
 
   - id: robot-face
     path: src/hmi/face
+    themes: [dark]
     surface: robot
     medium: lcd
     audience: 로봇 주변 사람 — 얼굴 LCD와 정보 화면 (D-190)
@@ -102,6 +112,7 @@ surfaces:
 
   - id: overhead-camera-app
     path: src/site/overhead/android
+    themes: [dark]
     surface: site
     medium: native
     ports:

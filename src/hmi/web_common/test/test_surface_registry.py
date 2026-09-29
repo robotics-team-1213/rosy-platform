@@ -123,3 +123,41 @@ def test_a_port_collision_or_drift_is_caught(tmp_path):
     found = registry.problems_with(tmp_path, "port")
     assert any("(two)의 8090를 one도 쓴다" in line for line in found)
     assert any("8090가 source b.py의 기본값에 없다" in line for line in found)
+
+
+def test_every_surface_declares_its_themes_and_its_pages_follow_them():
+    """D-359 §2·§3.3·§7.3 — themes 값, 테마 표면의 theme.js, 고정 표면의 pin,
+    정적 theme-color = dark --ground, 표면 CSS에 color-scheme 없음."""
+    assert _under("theme") == []
+
+
+def test_a_theme_drift_is_caught(tmp_path):
+    """고정 표면의 pin 누락, 테마 표면의 theme.js 누락, 틀린 theme-color·값이 빨갛다."""
+    common = tmp_path / "src" / "hmi" / "web_common"
+    common.mkdir(parents=True)
+    (common / "ui.js").write_text("const GRAMMARS = ['spatial'];", encoding="utf-8")
+    (common / "tokens.css").write_text(
+        ':root, [data-theme="dark"] { --ground: #101214; }\n', encoding="utf-8")
+    (tmp_path / "pinned.html").write_text('<html lang="ko"><head></head></html>', encoding="utf-8")
+    (tmp_path / "themed").mkdir()
+    (tmp_path / "themed" / "index.html").write_text(
+        '<html><head><meta name="theme-color" content="#111614">'
+        '<link rel="stylesheet" href="/common/tokens.css"></head></html>', encoding="utf-8")
+    (tmp_path / "themed" / "styles.css").write_text(":root { color-scheme: dark; }", encoding="utf-8")
+    row = ("  - id: {id}\n    path: {path}\n    themes: {themes}\n    surface: site\n"
+           "    medium: {medium}\n    audience: x\n    contracts: []\n    contract_reason: x\n"
+           "    baseline_reason: x\n")
+    (tmp_path / registry.REGISTRY).write_text(
+        "surfaces:\n"
+        + row.format(id="pin", path="pinned.html", themes="[dark]", medium="web")
+        + row.format(id="themed", path="themed", themes="[dark, light]", medium="web")
+        + row.format(id="lcd", path="pinned.html", themes="[dark, light]", medium="lcd")
+        + row.format(id="odd", path="pinned.html", themes="[light, sepia]", medium="web"),
+        encoding="utf-8")
+    found = "\n".join(registry.problems_with(tmp_path, "theme"))
+    assert 'pinned.html가 [dark] 표면인데 <html data-theme-pin="dark">가 없다' in found
+    assert "themed/index.html가 tokens.css 바로 뒤에 /common/theme.js를 싣지 않는다" in found
+    assert "정적 theme-color #111614가 dark --ground #101214가 아니다" in found
+    assert "themed/styles.css가 color-scheme을 선언한다" in found
+    assert "(lcd)는 웹이 아닌 사본이라 [dark]에 고정한다" in found
+    assert "(odd) themes가" in found and "(odd) themes의 첫 값(기본)이 dark가 아니다" in found

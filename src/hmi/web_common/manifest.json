@@ -6,6 +6,7 @@
     "template.html": "text/html",
     "core_ui_logic.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
-    "ui.js": "text/javascript"
+    "ui.js": "text/javascript",
+    "theme.js": "text/javascript"
   }
 }

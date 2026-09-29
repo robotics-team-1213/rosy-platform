@@ -34,7 +34,16 @@ REPO = Path(__file__).resolve().parents[4]
 
 _GRAMMARS_DECL = re.compile(r"GRAMMARS\s*=\s*\[([^\]]*)\]")
 _ITEM = re.compile(r"['\"]([^'\"]+)['\"]")
-_SCOPES = ("path", "value", "reason", "baseline", "shape", "port")
+_SCOPES = ("path", "value", "reason", "baseline", "shape", "port", "theme")
+
+#: D-359 §2·§3 — 표면이 따를 수 있는 테마. tokens.css의 테마 블록과 같은 이름이다.
+THEMES = ("dark", "light")
+TOKENS = "src/hmi/web_common/tokens.css"
+_THEME_JS = re.compile(
+    r'<link rel="stylesheet" href="/common/tokens\.css">\s*<script src="/common/theme\.js"></script>')
+_PIN = re.compile(r"<html\b[^>]*\bdata-theme-pin=\"dark\"", re.I)
+_THEME_COLOUR = re.compile(r'<meta\s+name="theme-color"\s+content="([^"]*)"', re.I)
+_COLOUR_SCHEME = re.compile(r"color-scheme\s*:")
 
 
 def git_available(root=None) -> bool:
@@ -96,6 +105,67 @@ def discover_html(root=None) -> list[Path]:
 def tracked(root, relative: str) -> bool:
     base = Path(root)
     return _git(base, "ls-files", "--error-unmatch", "--", relative).returncode == 0
+
+
+def _pages(base: Path, path: str, suffix: str = ".html") -> list[Path]:
+    """표면 경로 아래 파일 — 파일 표면은 그 파일, 폴더는 추적·새 파일(git) 또는 훑기."""
+    target = base / path
+    if target.is_file():
+        return [target] if target.suffix == suffix else []
+    if not target.is_dir():
+        return []
+    if git_available(base):
+        out = _git(base, "ls-files", "-c", "-o", "--exclude-standard", "--", path)
+        return [base / line for line in out.stdout.splitlines() if line.endswith(suffix)]
+    return sorted(target.rglob(f"*{suffix}"))
+
+
+def _dark_ground(base: Path) -> str | None:
+    import token_themes
+
+    try:
+        return token_themes.palettes(token_themes.read(base / TOKENS)).get("dark", {}).get("ground")
+    except OSError:
+        return None
+
+
+def _theme_problems(base: Path, row: dict, label: str, medium) -> list[str]:
+    """D-359 themes 필드와 그 표면의 HTML·CSS가 서로 맞는지."""
+    themes = row.get("themes")
+    if not isinstance(themes, list) or not themes:
+        return [f"theme: {label}에 themes 목록이 없다"]
+    found: list[str] = []
+    if len(set(themes)) != len(themes) or any(theme not in THEMES for theme in themes):
+        found.append(f"theme: {label} themes가 {THEMES} 안의 중복 없는 값이 아니다: {themes!r}")
+    if themes[0] != "dark":
+        found.append(f"theme: {label} themes의 첫 값(기본)이 dark가 아니다: {themes!r}")
+    if medium != "web":
+        if themes != ["dark"]:
+            found.append(f"theme: {label}는 웹이 아닌 사본이라 [dark]에 고정한다(D-359 §3.4): {themes!r}")
+        return found
+
+    path = row.get("path")
+    if not isinstance(path, str):
+        return found
+    pinned = themes == ["dark"]
+    ground = _dark_ground(base)
+    for page in _pages(base, path):
+        here = page.relative_to(base).as_posix()
+        text = page.read_text(encoding="utf-8")
+        if pinned and not _PIN.search(text):
+            found.append(f'theme: {label} {here}가 [dark] 표면인데 <html data-theme-pin="dark">가 없다')
+        if not pinned and not _THEME_JS.search(text):
+            found.append(f"theme: {label} {here}가 tokens.css 바로 뒤에 /common/theme.js를 싣지 않는다")
+        if not pinned and _PIN.search(text):
+            found.append(f"theme: {label} {here}가 테마를 따르는 표면인데 고정 속성을 가진다")
+        for colour in _THEME_COLOUR.findall(text):
+            if ground is None or colour.lower() != ground:
+                found.append(f"theme: {label} {here} 정적 theme-color {colour}가 dark --ground {ground}가 아니다")
+    if not pinned:
+        for sheet in _pages(base, path, ".css"):
+            if sheet.name != "tokens.css" and _COLOUR_SCHEME.search(sheet.read_text(encoding="utf-8")):
+                found.append(f"theme: {label} {sheet.relative_to(base).as_posix()}가 color-scheme을 선언한다 — 테마 블록의 몫이다")
+    return found
 
 
 def problems(root=None) -> list[str]:
@@ -169,6 +239,8 @@ def problems(root=None) -> list[str]:
                 found.append(f"path: {label}이(가) token_parity를 받는데 token_copy가 없다")
             elif not (base / copy).is_file():
                 found.append(f"path: {label} token_copy 파일이 저장소에 없다: {copy}")
+
+        found.extend(_theme_problems(base, row, label, medium))
 
         grammar = row.get("grammar")
         if grammar is not None and grammar not in known_grammars:
