@@ -27,7 +27,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 
 ### Folder ↔ package
 
-Folders carry the role name; ROS package names stay (D-231). Where they differ, the pair is listed below and `test/architecture/test_folder_package_names.py` enforces this exact table against every `package.xml` (D-338). A new folder whose package name differs is added here and in that test in the same commit.
+Folders carry the role name; ROS package names stay (D-231). Where they differ, the pair is listed below and `test/architecture/test_folder_package_names.py` enforces this exact table against every `package.xml` (D-339). A new folder whose package name differs is added here and in that test in the same commit.
 
 | Folder (`src/`) | ROS package |
 |---|---|

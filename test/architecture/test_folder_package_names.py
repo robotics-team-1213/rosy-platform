@@ -1,4 +1,4 @@
-"""D-338 Decision 1: the folder names the role; the ROS package name stays (D-231).
+"""D-339 Decision 1: the folder names the role; the ROS package name stays (D-231).
 
 Every package whose folder basename differs from its `package.xml` <name> must be
 listed here, and every entry here must still match the tree. A new folder whose

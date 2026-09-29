@@ -1,4 +1,4 @@
-"""D-338 §4 브라우저 제목 규칙: `Rosy <범위> — <화면 이름>`.
+"""D-339 §4 브라우저 제목 규칙: `Rosy <범위> — <화면 이름>`.
 
 범위는 `surfaces.yaml`의 `surface` 값에서 온다. 등록된 표면의 페이지
 (HTML 파일 하나, 또는 폴더 안의 `index.html`·`surface.html`)마다 `<title>`을
