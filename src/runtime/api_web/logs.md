@@ -155,3 +155,9 @@
 - 변경: `app.py` FastAPI `description`의 `(v1.41)`을 API Ref 헤더가 선언하는 `v1.47`로 맞췄다. `test_app_description_names_the_live_contract_version`이 요구하는 값이다.
 - 증거: `test_protocol_version_alignment` 포함 api_web 70 passed, 13 skipped. 문서 참조 표기만 바뀌었다.
 - gate 변화: 없음. 계약 필드·경로·버전 정책은 그대로이고 FastAPI 문서에 보이는 설명 문자열만 갱신했다.
+
+## 2026-09-29 · uncommitted · docs(contract): follow API Ref v1.48 in the description
+
+- 변경: API Ref v1.48(Site Fleet 정책 적격 증거 계약 추가)에 맞춰 설명 문자열을 `(v1.48)`로 갱신했다.
+- 증거: api_web 70 passed, 13 skipped(버전 정렬 시험 포함).
+- gate 변화: 없음. 로봇 측 계약 필드·경로는 무변경이고 표기만 따라갔다.

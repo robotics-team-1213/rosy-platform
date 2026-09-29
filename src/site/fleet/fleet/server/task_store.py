@@ -141,6 +141,7 @@ class FleetTaskStore:
                     ON fleet_action_claims(owner_kind, owner_id, generation);
                 CREATE TABLE IF NOT EXISTS fleet_dispatch_control (
                     control_id INTEGER PRIMARY KEY CHECK(control_id=1),
+                    authority_epoch INTEGER NOT NULL DEFAULT 0,
                     generation INTEGER NOT NULL,
                     dispatch_enabled INTEGER NOT NULL CHECK(dispatch_enabled IN (0, 1)),
                     reason TEXT NOT NULL,
@@ -164,6 +165,7 @@ class FleetTaskStore:
                 """
             )
             self._migrate_task_columns(connection)
+            self._migrate_dispatch_control(connection)
             self._migrate_dispatch_claims(connection)
         if os.name != "nt":
             self.path.chmod(0o600)
@@ -292,7 +294,7 @@ class FleetTaskStore:
     def dispatch_control(self) -> dict:
         with closing(self._connect()) as connection:
             row = connection.execute(
-                """SELECT generation, dispatch_enabled, reason
+                """SELECT authority_epoch, generation, dispatch_enabled, reason
                    FROM fleet_dispatch_control WHERE control_id=1"""
             ).fetchone()
             queued = connection.execute(
@@ -303,7 +305,8 @@ class FleetTaskStore:
                 """SELECT COUNT(*) FROM fleet_action_claims
                    WHERE phase IN ('DISPATCHING', 'UNKNOWN')"""
             ).fetchone()[0]
-        return {"generation": row["generation"],
+        return {"authority_epoch": row["authority_epoch"],
+                "generation": row["generation"],
                 "dispatch_enabled": bool(row["dispatch_enabled"]),
                 "reason": row["reason"], "queued_tasks": int(queued),
                 "unresolved_actions": int(unresolved),
@@ -312,7 +315,8 @@ class FleetTaskStore:
     def close_dispatch_for_startup(self) -> dict:
         return self._advance_dispatch_control(enabled=False, actor_id="system",
                                               reason="PROCESS_RESTARTED",
-                                              release_pre_dispatch=True)
+                                              release_pre_dispatch=True,
+                                              advance_authority_epoch=True)
 
     def trip_stop_latch(self, *, actor_id: str, reason: str = "SITE_STOP") -> dict:
         if not actor_id or len(actor_id) > 96 or not reason or len(reason) > 64:
@@ -393,14 +397,16 @@ class FleetTaskStore:
         return self._task_dict(row)
 
     def _advance_dispatch_control(self, *, enabled: bool, actor_id: str,
-                                  reason: str, release_pre_dispatch: bool = False) -> dict:
+                                  reason: str, release_pre_dispatch: bool = False,
+                                  advance_authority_epoch: bool = False) -> dict:
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """UPDATE fleet_dispatch_control SET generation=generation+1,
+                   authority_epoch=authority_epoch+?,
                    dispatch_enabled=?, reason=?, actor_id=?, updated_at=? WHERE control_id=1""",
-                (int(enabled), reason, actor_id, now),
+                (int(advance_authority_epoch), int(enabled), reason, actor_id, now),
             )
             if release_pre_dispatch:
                 rows = connection.execute(
@@ -997,6 +1003,17 @@ class FleetTaskStore:
         for name, definition in additions.items():
             if name not in columns:
                 connection.execute(f"ALTER TABLE fleet_tasks ADD COLUMN {name} {definition}")
+
+    @staticmethod
+    def _migrate_dispatch_control(connection: sqlite3.Connection) -> None:
+        columns = {row[1] for row in connection.execute(
+            "PRAGMA table_info(fleet_dispatch_control)"
+        )}
+        if "authority_epoch" not in columns:
+            connection.execute(
+                "ALTER TABLE fleet_dispatch_control ADD COLUMN authority_epoch "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS fleet_tasks_queue_order "
             "ON fleet_tasks(status, priority_class, queued_at, task_id)"

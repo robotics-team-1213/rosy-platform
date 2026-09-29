@@ -19,7 +19,8 @@ def test_stop_generation_invalidates_pre_dispatch_claim_atomically(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     initial = store.dispatch_control()
     assert initial == {
-        "generation": 0, "dispatch_enabled": False, "reason": "STARTUP_HOLD",
+        "authority_epoch": 0, "generation": 0, "dispatch_enabled": False,
+        "reason": "STARTUP_HOLD",
         "queued_tasks": 0, "unresolved_actions": 0, "rearm_available": True,
     }
     store.rearm_dispatch(expected_generation=0, actor_id="operator")
@@ -76,6 +77,7 @@ def test_service_startup_closes_dispatch_and_keeps_queued_work(tmp_path):
     service = FleetTaskService(FleetTaskStore(path), robot_ids={"rosy_01"})
 
     assert service.store.dispatch_control()["dispatch_enabled"] is False
+    assert service.store.dispatch_control()["authority_epoch"] == 1
     assert service.store.get_task("task-1")["status"] == "QUEUED"
     assert service.scheduler.claim_next({"rosy_01"}) is None
 

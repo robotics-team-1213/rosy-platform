@@ -11,6 +11,49 @@ class ER2ProposalError(ValueError):
     """The model response is not a valid, unambiguous Fleet proposal."""
 
 
+@dataclass(frozen=True)
+class ImageTransform:
+    """Explicit mapping from the source frame to the exact image sent to ER 2."""
+
+    source_width: int
+    source_height: int
+    crop_xyxy: tuple[int, int, int, int] | None = None
+    model_width: int | None = None
+    model_height: int | None = None
+    rotation_quadrants_clockwise: int = 0
+
+    def __post_init__(self) -> None:
+        if (type(self.source_width) is not int or type(self.source_height) is not int
+                or self.source_width <= 0 or self.source_height <= 0):
+            raise ER2ProposalError("source image dimensions must be positive integers")
+        crop = self.crop_xyxy or (0, 0, self.source_width, self.source_height)
+        if (not isinstance(crop, (tuple, list)) or len(crop) != 4
+                or any(type(value) is not int for value in crop)):
+            raise ER2ProposalError("crop_xyxy must contain four integer source pixel edges")
+        x1, y1, x2, y2 = crop
+        if not (0 <= x1 < x2 <= self.source_width and 0 <= y1 < y2 <= self.source_height):
+            raise ER2ProposalError("crop_xyxy must be inside the source image")
+        object.__setattr__(self, "crop_xyxy", tuple(crop))
+        width = self.model_width if self.model_width is not None else x2 - x1
+        height = self.model_height if self.model_height is not None else y2 - y1
+        if type(width) is not int or type(height) is not int or width <= 0 or height <= 0:
+            raise ER2ProposalError("model image dimensions must be positive integers")
+        if type(self.rotation_quadrants_clockwise) is not int or not 0 <= self.rotation_quadrants_clockwise <= 3:
+            raise ER2ProposalError("rotation must be an integer from 0 to 3 clockwise quarter-turns")
+        object.__setattr__(self, "model_width", width)
+        object.__setattr__(self, "model_height", height)
+
+    @classmethod
+    def identity(cls, *, source_width: int, source_height: int) -> "ImageTransform":
+        return cls(source_width=source_width, source_height=source_height)
+
+    @property
+    def model_canvas_size(self) -> tuple[int, int]:
+        if self.rotation_quadrants_clockwise % 2:
+            return self.model_height, self.model_width
+        return self.model_width, self.model_height
+
+
 def _text(name: str, value: Any, *, limit: int = 160) -> str:
     if (not isinstance(value, str) or not value.strip() or value != value.strip()
             or len(value) > limit or any(ord(char) < 32 for char in value)):
@@ -28,6 +71,9 @@ class ImageObservation:
     observed_at: str
     image_bytes: bytes
     mime_type: str = "image/jpeg"
+    image_transform: ImageTransform | None = None
+    calibration_revision: str | None = None
+    transform_revision: str | None = None
 
     def __post_init__(self) -> None:
         _text("observation_id", self.observation_id)
@@ -92,6 +138,9 @@ class PickPlaceProposalCandidate:
     source_frame_id: str
     source_observed_at: str
     source_image_sha256: str
+    source_image_transform: ImageTransform | None
+    source_calibration_revision: str | None
+    source_transform_revision: str | None
     target: SpatialSelector
     destination: SpatialSelector
 
@@ -125,6 +174,9 @@ class PickPlaceProposalCandidate:
             source_frame_id=observation.frame_id,
             source_observed_at=observation.observed_at,
             source_image_sha256=observation.sha256,
+            source_image_transform=observation.image_transform,
+            source_calibration_revision=observation.calibration_revision,
+            source_transform_revision=observation.transform_revision,
             target=SpatialSelector.from_mapping("target", arguments["target"]),
             destination=SpatialSelector.from_mapping("destination", arguments["destination"]),
         )
@@ -150,6 +202,9 @@ class PickPlaceProposalCandidate:
                 "observed_at": self.source_observed_at,
                 "image_sha256": self.source_image_sha256,
                 "coordinate_space": "image_normalized_yx_0_1000",
+                "image_transform": _transform_dict(self.source_image_transform),
+                "calibration_revision": self.source_calibration_revision,
+                "transform_revision": self.source_transform_revision,
             },
             "target_selector": _selector_dict(self.target),
             "destination_selector": _selector_dict(self.destination),
@@ -161,4 +216,17 @@ def _selector_dict(selector: SpatialSelector) -> dict[str, Any]:
         "label": selector.label,
         "point_yx_1000": list(selector.point_yx_1000) if selector.point_yx_1000 else None,
         "box_yxyx_1000": list(selector.box_yxyx_1000) if selector.box_yxyx_1000 else None,
+    }
+
+
+def _transform_dict(transform: ImageTransform | None) -> dict[str, Any] | None:
+    if transform is None:
+        return None
+    return {
+        "source_width": transform.source_width,
+        "source_height": transform.source_height,
+        "crop_xyxy": list(transform.crop_xyxy),
+        "model_width": transform.model_width,
+        "model_height": transform.model_height,
+        "rotation_quadrants_clockwise": transform.rotation_quadrants_clockwise,
     }

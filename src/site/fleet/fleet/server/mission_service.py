@@ -17,6 +17,12 @@ class MissionService:
         """Store a candidate only; it does not reserve or submit physical work."""
         return self.store.create_proposal(**request)
 
+    def get(self, mission_id: str) -> dict[str, Any] | None:
+        return self.store.get_mission(mission_id)
+
+    def history(self, mission_id: str) -> list[dict[str, Any]]:
+        return self.store.history(mission_id)
+
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int,
               resources: list[tuple[str, str]]) -> dict[str, Any]:
         return self.store.admit(mission_id, actor_id=actor_id,
@@ -45,7 +51,7 @@ class MissionService:
             predicate = GoalPredicate.from_mapping(mission["goal_predicate"])
             parsed = GoalEvidence.from_mapping(dict(evidence))
             verify_goal(predicate, parsed, now=now, max_age_s=max_age_s)
-        except GoalEvidenceError as exc:
+        except GoalEvidenceError:
             self.store.hold_mission(
                 mission_id, actor_id=actor_id, event_id=event_id,
                 reason="GOAL_EVIDENCE_REJECTED", evidence=dict(evidence),

@@ -457,3 +457,28 @@
 - 변경: `fleet/server/policy_evidence_config.py`(출처 설정 로더 — env 바인딩 토큰, asset/task 닫힌 집합, revision 삼종·폐기 플래그, YAML에 비밀 금지)와 `fleet/server/policy_evidence.py`(SQLite 저장·제출 검증 — source token에서 출처 결정, transit 0~300 ms, task/asset/revision binding, **눅 observation 등록부로 전면 거절**, `evidence_id` 멱등·다른 내용 `EVIDENCE_REPLAY`, audit 테이블)을 추가했다. [실행 계획](../../../docs/plans/2026-09-29-policy-evidence-contract.md) T2·T3.
 - 증거: 신규 시험 24 passed(config 11·store 13), Fleet 전체 `612 passed, 5 skipped`. 신규 4 파일 flake8 120 clean(패키지 전체 flake8 경고는 기존 파일 것). v1 불변 단언: 잘formed 제출도 `EVIDENCE_OBSERVATION_KIND_UNKNOWN`으로 거절.
 - gate 변화: 없음. REST 경로(app.py)·발의 binding(task_service)·밸브는 T4/T5이고 자동 실행은 HOLD 유지.
+
+## 2026-09-29 · uncommitted · feat(fleet): wire policy evidence admission, routes, and API Ref v1.49 (T4-T6)
+
+- 변경: T4 — `task_service`가 policy 발의에 `{"evidence_id": ...}` 참조를 필수로 하고(다른 모양 400 `INVALID_EVIDENCE_REFERENCE`) admission(`EVIDENCE_NOT_CONFIGURED`·`NOT_FOUND`·`ASSET_MISMATCH`·`STALE`·제출 사유 전달)을 통과해도 밸브가 닫힌 한 `HOLD(POLICY_NOT_ACCEPTED)`. T5 — `POST /api/fleet/policy-evidence`(source token, 감사 예외 경로 추가)와 `GET .../latest`(viewer), 콘솔/사용자/로봇 토큰 충돌 거부. T6 — API Ref v1.49(§10.6.2 신설, 변경 로그, policy 발의 서술 갱신)과 `test_task_contract_docs.py` 정합 시험, api_web 설명 버전 표기.
+- 증거: Fleet 전체 `628 passed, 5 skipped`(신규: API 6·발의 binding 9·계약 문서 1), api_web 70 passed/13 skipped(버전 핀), 변경 파일 flake8 clean. 핵심 단언: 밸브 False, v1 빈 등록부로 모든 제출 거절, 멱등·재생 409, 승인된 증거라도 HOLD.
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED=False` 불변, 자동 실행·측정 없음. 사다리 2~5단계(권한·정답 시험·30분 스트림·입회 수용)는 별도 작업이다.
+
+## 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
+
+- Change: added source/crop/resize/quarter-turn inverse mapping. Selectors require one fresh candidate from the exact observation, image digest, camera/frame, capture time, calibration and transform revisions. Fleet emits typed pixel-level evidence using shared schemas and has no OMX package dependency.
+- Evidence: selector and OMX target-evidence tests 18 passed; contract checks 49 passed after ADR renumbering; full Fleet suite 600 passed/5 skipped before rebasing onto current main. Re-run the full suite on the merged tree before accepting this gate.
+- Gate: SOURCE/LOCAL only. Mission production routes, UDS listener, ROS arm/gripper execution, physical stop, device and field acceptance remain separate.
+
+## 2026-09-29 · uncommitted · feat(fleet): separate ER 2 proposal, Mission draft, and operator admission (D-333 Task 3)
+
+- Change: added an idempotent SQLite ProposalStore for allowlisted selector/provenance metadata only (32 KiB maximum, 30-day retention and hourly cleanup). The new authenticated routes separate `POST /api/fleet/proposals`, proposal read, trusted current-evidence resolution to an immutable Mission draft, Mission readback, and named-operator admission. Proposal and Mission ownership derive from the authenticated principal; supplied actor/principal, credentials and image payloads are rejected. Mission, proposal, API audit, dispatch generation, and shared resource claims must use the same SQLite database.
+- Admission: the server-injected resolver rechecks current observation, target resolution, workcell/instance capability and revisions at both draft resolution and admission. A stale/changed result, generation mismatch, missing workcell/object claim, competing action, unnamed development principal, or audit failure fails closed. Admission only acquires Fleet claims; `physical_submission` stays `NOT_CONNECTED` and no OMX Action or ROS call is made.
+- Evidence: Fleet full suite `653 passed, 5 skipped`; API web `70 passed, 13 skipped`; changed-path flake8 and `git diff --check` clean. Candidate resolver behavior was tested with injected hardware-free fixtures; live camera producer, device identity, UDS, ROS-SIM, physical stop and field acceptance remain unverified.
+- Gate: SOURCE/LOCAL only. API Reference v1.50 documents the Site Fleet contract; this does not authorize live provider wiring, device Action dispatch, motion capability, or deployment.
+
+## 2026-09-29 · uncommitted · make ER 2 resolution commit and retry atomically
+
+- Change: Mission draft insertion and ProposalStore `RESOLVED` transition now share a single SQLite transaction. Resolution work no longer durably leaves proposals in `RESOLVING`; a failed write rolls back the Mission and keeps the proposal retryable. Candidate free-text fields now have individual length limits in addition to the total metadata cap.
+- Evidence: Fleet suite 655 passed/5 skipped; fault injection after the Mission insert proved rollback and successful retry.
+- Gate: SOURCE/LOCAL only; resolver remains injected and no device Action submission is connected.

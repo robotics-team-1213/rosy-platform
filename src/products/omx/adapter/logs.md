@@ -61,3 +61,10 @@
 - Change: recorded the current OMX semantic-action boundary and added a durable local Action attempt ledger with request identity, restart-to-UNKNOWN recovery, and no automatic replay. Selector resolution and pick-place transaction logic remain evidence-only; they do not submit ROS goals.
 - Evidence: OMX adapter suite 72 passed/3 skipped. Fleet Mission service requires a separate fresh camera goal predicate after driver Action success. The OMX profile remains disabled with empty driver/workcell configuration.
 - Gate: SOURCE only. No selected physical workcell, gripper feedback, calibrated camera, independent physical stop, target workstation runtime, or device/field acceptance was available or claimed.
+
+## 2026-09-29 · uncommitted · add bounded local Device Action API and runner (D-336)
+
+- Change: added one-request newline JSON UDS handling with Linux SO_PEERCRED UID allowlisting, a 64 KiB bound, absolute pre-provisioned socket path, and no directory auto-creation. The disabled-by-default runner validates the typed Fleet grant, canonical SHA-256 digest, expiry, target instance, current epoch/generation and capability before it writes the action intent. Fleet action/attempt IDs are retained.
+- Failure behavior: journal before driver submission; a timeout becomes UNKNOWN and is not replayed. A PREPARED intent can resume once; SUBMITTING/UNKNOWN cannot. Cancel acknowledgment remains CANCEL_REQUESTED, driver terminal readback is attempt-scoped, and no Action terminal state confirms the Mission goal or physical stop.
+- Evidence: OMX adapter/profile/vendor-boundary suite 140 passed, 3 skipped. Windows source tests use fake injected ports; no selected ROS/gripper port, systemd entrypoint, physical stop proof, DEVICE or FIELD acceptance is present.
+- Gate: SOURCE only; capability remains disabled.

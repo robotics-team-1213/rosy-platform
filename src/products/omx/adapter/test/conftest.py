@@ -13,7 +13,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2]
 
-for path in (SRC / "adapter",):
+for path in (SRC / "adapter", SRC.parents[1] / "contracts" / "foundation"):
     entry = str(path)
     if entry not in sys.path:
         sys.path.insert(0, entry)

@@ -19,6 +19,7 @@
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-29-er2-mission-action-contract-closure.md](../../../docs/plans/2026-09-29-er2-mission-action-contract-closure.md)
 - [2026-09-29-policy-evidence-contract-design.md](../../../docs/plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
 
@@ -32,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(protocol): define OMX Device Action and software-stop schemas (D-333/D-336)
 - 2026-09-29 · uncommitted · feat(protocol): add PolicyEvidencePayload (D-268 ladder T1)
 - 2026-09-27 · uncommitted · feat(protocol): type Host Agent status evidence
 - 2026-09-27 · uncommitted · own default configuration
 - 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
-- 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor

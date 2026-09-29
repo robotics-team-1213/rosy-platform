@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
-from typing import Mapping
+from typing import Callable, Mapping
 
 from pydantic import ValidationError
 
@@ -20,6 +21,17 @@ from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from fleet.server.policy_evidence_config import PolicyEvidenceSource
 
 TRANSIT_MAX_S = 0.300  # D-268 Decision 4: capture-to-Fleet receive bound.
+
+_REASON_STATUS = {
+    "EVIDENCE_SOURCE_UNKNOWN": 401,
+    "EVIDENCE_INVALID": 422,
+}
+
+
+def status_code_for(reason: str) -> int:
+    """Map an audit rejection reason to its HTTP status (409 by default)."""
+    code = reason.split(":", 1)[0].strip()
+    return _REASON_STATUS.get(code, 409)
 
 
 class PolicyEvidenceError(ValueError):
@@ -31,9 +43,11 @@ class PolicyEvidenceStore:
 
     OBSERVATION_KINDS: frozenset[str] = frozenset()  # v1: empty — fail-closed.
 
-    def __init__(self, sources: list[PolicyEvidenceSource], path: Path | str) -> None:
+    def __init__(self, sources: list[PolicyEvidenceSource], path: Path | str, *,
+                 clock: Callable[[], float] = time.time) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._clock = clock
         self._by_token = {source.token: source for source in sources}
         with closing(self._connect()) as connection:
             connection.execute("PRAGMA journal_mode=WAL")
@@ -63,6 +77,32 @@ class PolicyEvidenceStore:
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path)
+
+    def uses_token(self, token: str) -> bool:
+        return token in self._by_token
+
+    def reuses_any(self, predicate: Callable[[str], bool]) -> bool:
+        return any(predicate(token) for token in self._by_token)
+
+    def accept(self, authorization: str | None, payload: PolicyEvidencePayload | Mapping) -> dict:
+        """Route entry: derive the source token from the Authorization header."""
+        if not authorization or not authorization.startswith("Bearer "):
+            raise PolicyEvidenceError("EVIDENCE_SOURCE_UNKNOWN")
+        return self.submit(payload, token=authorization[len("Bearer "):], now=self._clock())
+
+    def get(self, evidence_id: str) -> dict | None:
+        """Return one decoded evidence record for task admission binding."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT evidence_id, source_id, payload_json, received_at, outcome, reason"
+                " FROM policy_evidence WHERE evidence_id = ?",
+                (evidence_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row(dict(zip(
+            ["evidence_id", "source_id", "payload_json", "received_at", "outcome", "reason"],
+            row)))
 
     def submit(self, payload: Mapping, *, token: str, now: float) -> dict:
         """Validate one submission and return its durable outcome record."""
@@ -105,6 +145,7 @@ class PolicyEvidenceStore:
             return {
                 "evidence_id": model.evidence_id,
                 "source_id": source.source_id,
+                "payload": model.model_dump(),
                 "received_at": float(now),
                 "outcome": outcome,
                 "reason": reason,

@@ -5,11 +5,11 @@ last_verified: { commit: "uncommitted", date: 2026-09-29 }
 gates:
   SOURCE:
     state: GO
-    evidence: "75 passed; includes PolicyEvidencePayload policy-evidence schema (D-268 ladder T1, 2026-09-29 Windows)"
+    evidence: "101 passed; includes PolicyEvidencePayload (D-268 T1) and Device Action/Local Stop SOURCE schemas (D-333/D-336, 2026-09-29 Windows)"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   LOCAL:
     state: GO
-    evidence: "75 passed (2026-09-29 Windows)"
+    evidence: "101 passed (2026-09-29 Windows); contract shapes do not imply a UDS listener, runner, or device acceptance"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   ROS-SIM:
     state: N/A
@@ -21,6 +21,7 @@ gates:
     state: N/A
 adrs: [D-61, D-147, D-168, D-18, D-283, D-268]
 plans:
+  - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-29-policy-evidence-contract-design.md
   - docs/plans/2026-09-29-policy-evidence-contract.md
