@@ -6,16 +6,36 @@
 ## 입력
 
 - HF dataset 저장소(private)와 **commit SHA(40자 hex)**. 태그는 움직이므로 SHA로 고정한다.
-- 데이터셋 레이아웃:
+- 데이터셋 레이아웃. 파일 경로를 추측하지 말고 **`frames[].image` / `frames[].mask` 경로만
+  따라간다**(디렉터리를 훑거나 이름을 조립하지 않는다). 두 가지 배치가 있다:
 
 ```
-manifest.json          # schema: rosy.perception.dataset/1, 항목별 image/mask/session/split
-images/shard_0000/*.jpg   # 320x240 BGR 프레임을 JPEG로 저장한 것 (shard당 최대 1000개)
-masks/shard_0000/*.png    # 8-bit class-index PNG, 화소값 = 클래스 index, 크기는 image와 같다
+# 로컬 build 산출물 (build.py)
+manifest.json
+images/<session>/<session>__<index:06d>.jpg
+masks/<session>/<session>__<index:06d>.png
+
+# HF에 올라간 배치 (publish.py, shard당 최대 1000 frame, manifest 경로도 같이 바뀐다)
+manifest.json
+images/shard_0000/<...>.jpg
+masks/shard_0000/<...>.png
 ```
 
-- split은 **세션 단위**다(같은 세션의 프레임은 train/val 한쪽에만 있다). `manifest.json`의
-  `split` 필드를 그대로 쓰고 다시 섞지 않는다.
+- 이미지 이름은 `<session>__<index:06d>`(세션 이름 + 6자리 frame index)다. 마스크는 8-bit
+  class-index PNG이고 화소값이 `classes[].index`다.
+- 이미지 크기는 카메라 JPEG 크기 그대로다. 320x240을 **보장하지 않는다**. 학습 쪽에서 모델
+  입력 `240x320`(HxW)으로 직접 resize한다(마스크는 nearest, 이미지는 학습 때 쓴 보간).
+- `manifest.json` 필드:
+  - `schema`: `rosy.perception.dataset/1`
+  - `classes[]`: `{index, name, role, color}`. `color`는 CVAT 표시용이며 학습에는 쓰지 않는다.
+    export의 `classes` 인자는 이 목록의 index 순서·role과 같아야 한다.
+  - `frames[]`: `{image, mask, session, split}`. 경로는 데이터셋 루트 기준 상대 경로,
+    `split`은 `train`/`val`이다. 다시 섞지 않는다.
+  - `deleted_indexes`: 라벨링 중 버린 frame 목록(`"session__NNNNNN"` 문자열). 학습에는 쓰지 않는다.
+  - `sources[]`: 프레임을 뽑은 세션의 `session.json` 내용(device, CameraProfile, 섀도 모델
+    revision 등 출처 기록).
+- split은 **세션 단위**다(같은 세션의 프레임은 한쪽 split에만 있다).
+- CVAT에서 background role 클래스의 라벨 이름은 `background`다.
 
 ## 출력
 
@@ -64,7 +84,7 @@ export(model, "out/model_folder",
        val_iou={"lane": 0.61, "road": 0.93})
 ```
 
-`export()`는 `model.eval()`로 ONNX를 내보내고 sha256을 계산해 `model_manifest.json`을 쓴다.
+`export()`는 torch 2.5 이상을 권장한다(`dynamo=False` 인자가 있는 버전에서만 넘기고, 없으면 생략한다). `model.eval()`로 ONNX를 내보내고 sha256을 계산해 `model_manifest.json`을 쓴다.
 torch 없이 이미 만든 `.onnx`가 있으면 `write_manifest(out_dir, onnx_path=..., <같은 인자>)`를 쓴다.
 TorchScript만 있다면 개발 PC에서 `tools/perception/model/export_onnx.py`로 변환한다.
 

@@ -55,12 +55,16 @@ def test_write_manifest_valid_and_revision(tmp_path):
 
 
 def test_write_manifest_rejects_bad_role(tmp_path):
-    with pytest.raises(ManifestError):
+    with pytest.raises(ValueError):
         _write(tmp_path, classes=[("a", "background"), ("b", "nonsense")])
 
 
 def test_export_cell_imports_without_torch():
-    assert callable(export_cell.export)
+    code = ("import sys; sys.path.insert(0, %r); import export_cell; "
+            "assert callable(export_cell.export); assert 'torch' not in sys.modules"
+            % str(TRAINING))
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
 
 
 def _check(folder):
@@ -80,6 +84,8 @@ def test_check_manifest_cli_ok_and_tampered(tmp_path):
     if not have_ort:
         assert r.returncode == 0, r.stdout + r.stderr
         assert r.stdout.startswith("OK " + doc["model_revision"])
+    else:
+        assert r.returncode == 1  # fake bytes are not a loadable ONNX
     (out / "model.onnx").write_bytes(b"tampered")
     r = _check(out)
     assert r.returncode == 1
@@ -96,3 +102,69 @@ def test_export_tiny_torch_model_opens(tmp_path):
     m = LaneSegModel.open(out)
     assert m.manifest.input.shape == (1, 3, 240, 320)
     assert _check(out).returncode == 0
+
+
+def test_check_manifest_ok_path_with_ort(tmp_path):
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("onnxruntime")
+    out = tmp_path / "m"
+    doc = export_cell.export(torch.nn.Conv2d(3, 4, 3, padding=1), out, **KW)
+    r = _check(out)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.strip() == "OK " + doc["model_revision"]
+
+
+def test_write_manifest_validates_before_writing(tmp_path):
+    onnx = tmp_path / "src.onnx"
+    onnx.write_bytes(b"x")
+    out = tmp_path / "out"
+    with pytest.raises(ValueError):
+        export_cell.write_manifest(out, onnx_path=onnx,
+                                   **dict(KW, classes=[("a", "background"), ("b", "bogus")]))
+    with pytest.raises(ValueError):
+        export_cell.write_manifest(out, onnx_path=onnx,
+                                   **dict(KW, classes=[("a", "background"), ("b", "drivable")]))
+    assert not out.exists()
+
+
+def _mini_dataset(root, n_per_session=3):
+    import json as _j
+    frames = []
+    for s in ("sA", "sB"):
+        for i in range(n_per_session):
+            for kind, ext in (("images", "jpg"), ("masks", "png")):
+                f = root / kind / s / f"{i}.{ext}"
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_bytes(f"{kind}{s}{i}".encode())
+            frames.append({"image": f"images/{s}/{i}.jpg", "mask": f"masks/{s}/{i}.png",
+                           "session": s, "split": "val" if s == "sA" else "train"})
+    doc = {"schema": "rosy.perception.dataset/1", "classes": [], "frames": frames,
+           "deleted_indexes": [], "sources": []}
+    (root / "manifest.json").write_text(_j.dumps(doc), encoding="utf-8")
+    return doc
+
+
+def test_stage_shards_from_manifest_and_rewrites_paths(tmp_path):
+    src, dst = tmp_path / "ds", tmp_path / "stage"
+    dst.mkdir()
+    _mini_dataset(src)
+    publish._stage(src, dst, 4)
+    m = json.loads((dst / "manifest.json").read_text(encoding="utf-8"))
+    assert len(m["frames"]) == 6
+    shards = set()
+    for k, fr in enumerate(m["frames"]):
+        assert (dst / fr["image"]).is_file() and (dst / fr["mask"]).is_file()
+        assert Path(fr["image"]).parent.name == Path(fr["mask"]).parent.name == f"shard_{k // 4:04d}"
+        shards.add(Path(fr["image"]).parent.name)
+        assert fr["session"] in fr["image"]
+    assert shards == {"shard_0000", "shard_0001"}
+    assert len({fr["image"] for fr in m["frames"]}) == 6  # same index in two sessions stays unique
+
+
+def test_stage_fails_on_missing_file(tmp_path):
+    src, dst = tmp_path / "ds", tmp_path / "stage"
+    dst.mkdir()
+    _mini_dataset(src)
+    (src / "masks" / "sB" / "1.png").unlink()
+    with pytest.raises(FileNotFoundError):
+        publish._stage(src, dst, 1000)

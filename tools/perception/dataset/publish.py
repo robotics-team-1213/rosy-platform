@@ -2,10 +2,12 @@
 
 publish.py <dataset_dir> --repo <org/name> [--tag ds-YYYY.MM.DD]
 
-images/ and masks/ are sharded into shard_0000/, shard_0001/, ... of <= 1000 files.
+Frames listed in manifest.json are sharded into images|masks/shard_0000/, ... of <= 1000
+frames each, and manifest.json paths are rewritten to match.
 The token comes from HF_TOKEN or the huggingface-cli login cache, never from a file here."""
 
 import argparse
+import json
 import shutil
 import sys
 import tempfile
@@ -19,18 +21,28 @@ def shard_paths(paths, size: int = 1000) -> list[list]:
 
 
 def _stage(dataset_dir: Path, staging: Path, size: int) -> None:
-    for item in dataset_dir.iterdir():
-        if item.is_file():
-            shutil.copy2(item, staging / item.name)
-    for sub in ("images", "masks"):
-        src = dataset_dir / sub
-        if not src.is_dir():
-            continue
-        for n, shard in enumerate(shard_paths([p for p in src.iterdir() if p.is_file()], size)):
-            dst = staging / sub / f"shard_{n:04d}"
-            dst.mkdir(parents=True, exist_ok=True)
-            for p in shard:
-                shutil.copy2(p, dst / p.name)
+    """Copy frames listed in manifest.json into shard_NNNN folders and rewrite their paths.
+
+    Frame k goes to shard_{k // size:04d}; image and mask share the shard. File names keep the
+    session so equal frame indexes from different sessions stay unique."""
+    dataset_dir = Path(dataset_dir)
+    manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
+    frames = []
+    for k, frame in enumerate(manifest["frames"]):
+        shard = f"shard_{k // size:04d}"
+        new = dict(frame)
+        for key, kind in (("image", "images"), ("mask", "masks")):
+            src = dataset_dir / frame[key]
+            if not src.is_file():
+                raise FileNotFoundError(f"frame {k}: {key} missing: {frame[key]}")
+            name = "__".join(Path(frame[key]).parts[1:])
+            rel = f"{kind}/{shard}/{name}"
+            (staging / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, staging / rel)
+            new[key] = rel
+        frames.append(new)
+    manifest["frames"] = frames
+    (staging / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
 def main(argv=None) -> int:
