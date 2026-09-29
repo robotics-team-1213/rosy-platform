@@ -347,3 +347,21 @@ async def test_receive_queue_is_bounded_small(monkeypatch):
         pass
     assert seen["max_queue"] == ingest.RECEIVE_QUEUE_FRAMES
     assert ingest.RECEIVE_QUEUE_FRAMES <= 2
+
+
+def test_marker_report_expires_so_status_falls_back_to_empty(monkeypatch):
+    from types import SimpleNamespace
+
+    from overhead import ingest as ingest_module
+
+    server = IngestServer({"overhead-1": TOKEN})
+    server.report_markers("overhead-1", [31, 30], ["rosy_01"])  # unknown source: no-op
+    src = ingest_module._Source(name="overhead-1", connection=SimpleNamespace())
+    server._sources["overhead-1"] = src
+    now = [100.0]
+    monkeypatch.setattr(ingest_module.time, "monotonic", lambda: now[0])
+
+    server.report_markers("overhead-1", [31, 30, 30], ["rosy_01"])
+    assert server._marker_status(src) == ([30, 31], ["rosy_01"])
+    now[0] += ingest_module.MARKER_REPORT_TTL_S + 0.1
+    assert server._marker_status(src) == ([], [])
