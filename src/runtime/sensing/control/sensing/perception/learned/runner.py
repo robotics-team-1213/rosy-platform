@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from .lane_mask import LaneMaskEvidence, lane_evidence, preprocess
-from .manifest import ManifestError, ModelManifest, load_manifest, verify_files
+from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, verify_files
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ class ModelSlot:
         self._clock = clock
         self._poll_s = poll_s
         self._next_poll = float("-inf")
-        self._target: str | None = None
+        self._key: tuple | None = None
         self.current: LaneSegModel | None = None
         self.last_error: str | None = None
 
@@ -100,12 +100,23 @@ class ModelSlot:
             target = self._pointer.read_text(encoding="utf-8").strip()
         except FileNotFoundError:
             return self.current
-        if not target or target == self._target:
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            self.last_error = f"pointer: {exc}"
             return self.current
-        self._target = target
+        if not target:
+            return self.current
+        try:
+            mtime = (Path(target) / MANIFEST_NAME).stat().st_mtime_ns
+        except (OSError, ValueError):
+            mtime = None
+        key = (target, mtime)
+        if key == self._key:
+            return self.current
+        self._key = key
         try:
             self.current = self._opener(Path(target))
             self.last_error = None
         except Exception as exc:  # keep the previous model on any failure
             self.last_error = str(exc)
+            self._key = None  # retry on the next poll
         return self.current

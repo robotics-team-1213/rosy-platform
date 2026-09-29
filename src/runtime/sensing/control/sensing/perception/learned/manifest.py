@@ -124,11 +124,15 @@ def _parse_classes(doc: dict) -> tuple[ClassSpec, ...]:
     if not isinstance(items, list) or len(items) < 2:
         raise ManifestError("output.classes: at least two classes")
     classes = []
+    names = set()
     for item in items:
         if not isinstance(item, dict):
             raise ManifestError("output.classes: objects only")
         index = _req(item, "index", int)
         name = _req(item, "name", str)
+        if name in names:
+            raise ManifestError(f"output.classes: duplicate name {name!r}")
+        names.add(name)
         role = item.get("role")
         if role not in ROLES:
             raise ManifestError(f"output.classes[{index}].role: one of {ROLES}")
@@ -144,8 +148,14 @@ def _parse_files(items) -> tuple[ModelFile, ...]:
     if not isinstance(items, list) or not items:
         raise ManifestError("files: at least one file")
     files = []
+    seen = set()
     for item in items:
+        if not isinstance(item, dict):
+            raise ManifestError("files: objects only")
         name = _req(item, "name", str)
+        if name in seen:
+            raise ManifestError(f"files: duplicate name {name!r}")
+        seen.add(name)
         if Path(name).name != name or name in ("", ".", ".."):
             raise ManifestError(f"files: bad name {name!r}")
         sha = _req(item, "sha256", str).lower()
@@ -156,6 +166,13 @@ def _parse_files(items) -> tuple[ModelFile, ...]:
             raise ManifestError(f"files[{name}].precision: one of {PRECISIONS}")
         files.append(ModelFile(name, sha, precision))
     return tuple(files)
+
+
+def _req_text(doc: dict, key: str) -> str:
+    value = _req(doc, key, str)
+    if not value.strip():
+        raise ManifestError(f"{key}: empty")
+    return value
 
 
 def load_manifest(path: str | Path) -> ModelManifest:
@@ -183,9 +200,9 @@ def load_manifest(path: str | Path) -> ModelManifest:
         files=_parse_files(doc.get("files")),
         input=_parse_input(_req(doc, "input", dict)),
         classes=_parse_classes(_req(doc, "output", dict)),
-        dataset_repo=_req(dataset, "repo", str),
-        dataset_revision=_req(dataset, "revision", str),
-        camera_profile_revision=_req(doc, "camera_profile_revision", str),
+        dataset_repo=_req_text(dataset, "repo"),
+        dataset_revision=_req_text(dataset, "revision"),
+        camera_profile_revision=_req_text(doc, "camera_profile_revision"),
         raw=doc,
     )
 
@@ -202,6 +219,8 @@ def verify_files(manifest: ModelManifest) -> None:
     """Every named file exists and matches its sha256."""
     for f in manifest.files:
         p = manifest.folder / f.name
+        if not p.resolve().is_relative_to(manifest.folder.resolve()):
+            raise ManifestError(f"{f.name}: resolves outside the model folder")
         if not p.is_file():
             raise ManifestError(f"{f.name}: missing")
         if sha256_file(p) != f.sha256:

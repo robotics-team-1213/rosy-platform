@@ -122,3 +122,55 @@ def test_real_onnxruntime_roundtrip(tmp_path):
     frame = np.zeros((240, 320, 3), np.uint8)
     frame[:, 250:270, 2] = 255  # red stripe right of centre
     assert m.infer(frame).evidence.error > 0.5
+
+
+def test_slot_retries_same_path_after_failure(tmp_path):
+    d = _model_dir(tmp_path)
+    pointer = tmp_path / "shadow"
+    pointer.write_text(str(d), encoding="utf-8")
+    now = [0.0]
+    ok = [False]
+
+    def opener(p):
+        if not ok[0]:
+            raise ManifestError("transient")
+        return LaneSegModel.open(p, session_factory=_factory())
+
+    slot = ModelSlot(pointer, opener=opener, clock=lambda: now[0], poll_s=1.0)
+    assert slot.poll() is None and slot.last_error
+    ok[0] = True
+    now[0] = 1.0
+    assert slot.poll() is not None and slot.last_error is None
+
+
+def test_slot_reopens_when_manifest_mtime_changes(tmp_path):
+    import os
+    d = _model_dir(tmp_path)
+    pointer = tmp_path / "shadow"
+    pointer.write_text(str(d), encoding="utf-8")
+    now = [0.0]
+    opened = []
+
+    def opener(p):
+        opened.append(p)
+        return LaneSegModel.open(p, session_factory=_factory())
+
+    slot = ModelSlot(pointer, opener=opener, clock=lambda: now[0], poll_s=1.0)
+    slot.poll()
+    now[0] = 1.0
+    slot.poll()
+    assert len(opened) == 1
+    m = d / "model_manifest.json"
+    st = m.stat()
+    os.utime(m, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000_000))
+    now[0] = 2.0
+    slot.poll()
+    assert len(opened) == 2
+
+
+def test_slot_poll_never_raises_on_bad_pointer(tmp_path):
+    pointer = tmp_path / "shadow"
+    pointer.write_bytes(bytes([0xff, 0xfe, 0x00]) + b"bad")
+    slot = ModelSlot(pointer, opener=lambda p: None, clock=lambda: 0.0)
+    assert slot.poll() is None
+    assert slot.last_error

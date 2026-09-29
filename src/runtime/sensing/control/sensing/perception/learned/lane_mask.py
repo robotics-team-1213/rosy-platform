@@ -75,7 +75,7 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
 
     _, xs = np.nonzero(target)
     half = w / 2.0
-    error = float(np.clip((xs.mean() - half) / half, -1.0, 1.0))
+    error = float(np.clip((xs.mean() - (w - 1) / 2.0) / half, -1.0, 1.0))
     row_coverage = float(target.any(axis=1).mean())
     confidence = float(np.clip(row_coverage * band_conf[target].mean(), 0.0, 1.0))
     return LaneMaskEvidence(True, error, confidence, fractions)

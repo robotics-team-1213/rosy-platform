@@ -107,3 +107,35 @@ def test_file_names_cannot_escape_the_folder(tmp_path):
     doc = _manifest(files=[{"name": "../x.onnx", "sha256": "0" * 64, "precision": "fp32"}])
     with pytest.raises(ManifestError, match="name"):
         load_manifest(_write(tmp_path, doc))
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda d: d.update(files=["model.onnx"]),
+    lambda d: d.update(files=[d["files"][0], dict(d["files"][0])]),
+    lambda d: d["output"]["classes"][1].update(name="floor"),
+    lambda d: d["dataset"].update(revision=""),
+    lambda d: d["dataset"].update(repo=" "),
+    lambda d: d.update(camera_profile_revision=""),
+])
+def test_more_invalid_manifests_rejected(tmp_path, mutate):
+    doc = _manifest()
+    mutate(doc)
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, doc))
+
+
+def test_verify_files_rejects_path_outside_folder(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "outside.onnx").write_bytes(b"x")
+    doc = _manifest(files=[{"name": "model.onnx", "sha256": hashlib.sha256(b"x").hexdigest(),
+                            "precision": "fp32"}])
+    p = tmp_path / "sub" / "model_manifest.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    m = load_manifest(p)
+    link = tmp_path / "sub" / "model.onnx"
+    try:
+        link.symlink_to(tmp_path / "outside.onnx")
+    except OSError:
+        pytest.skip("symlinks unavailable")
+    with pytest.raises(ManifestError, match="outside"):
+        verify_files(m)

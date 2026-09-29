@@ -10,7 +10,6 @@ import math
 import os
 
 import cv2
-import numpy as np
 import rclpy
 import yaml
 from rclpy.node import Node

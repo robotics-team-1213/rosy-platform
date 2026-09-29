@@ -75,3 +75,9 @@ def test_non_finite_logits_raise():
     bad[0, 0, 0, 0] = np.nan
     with pytest.raises(ValueError):
         lane_evidence(bad, CLASSES)
+
+
+def test_pixel_centre_reference():
+    mask = np.zeros((240, 320), np.int64)
+    mask[:, 159:161] = 1  # columns 159,160 -> centroid 159.5 == (w-1)/2
+    assert abs(lane_evidence(_logits(mask), CLASSES).error) < 1e-6
