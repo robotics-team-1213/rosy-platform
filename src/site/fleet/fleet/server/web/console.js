@@ -12,7 +12,6 @@ import { applyRoleToControls } from "./authorization.js";
 
 
 const el = (id) => document.getElementById(id);
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
@@ -496,7 +495,7 @@ formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
 const mapView = createMapView({
-  el, view, css, auth, call,
+  el, view, auth, call,
   onMapChanged: render,
   onMapUnavailable: () => {
     const selected = view.selected;
@@ -545,7 +544,14 @@ el("console-token").addEventListener("keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
-view.colors = [css("--robot-1"), css("--robot-2"), css("--robot-3")];
+// D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
+// 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
+const robotColours = () => ["--robot-1", "--robot-2", "--robot-3"].map((name) => window.RosyPalette.cssColor(name));
+view.colors = robotColours();
+document.addEventListener("rosy:theme", () => {
+  view.colors = robotColours();
+  mapView.draw();
+});
 tickClock();
 setInterval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());

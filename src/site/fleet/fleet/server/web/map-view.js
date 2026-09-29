@@ -10,7 +10,10 @@ import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
 } from "./site-layer.js";
 
-export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUnavailable }) {
+export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavailable }) {
+  // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
+  const css = (name) => window.RosyPalette.cssColor(name);
+  const font = (size) => window.RosyPalette.canvasFont(size, "mono");
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
@@ -26,15 +29,17 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     const image = ctx.createImageData(width, height);
-    const free = hexToRgb(css("--ink"));
-    const occupied = hexToRgb(css("--ground-deep"));
-    const unknown = hexToRgb(css("--ground-soft"));
+    // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
+    const tone = window.RosyPalette.readPalette({
+      unknown: "--raster-unknown", free: "--raster-free",
+      uncertain: "--raster-uncertain", occupied: "--raster-occupied",
+    });
     for (let row = 0; row < height; row += 1) {
       for (let col = 0; col < width; col += 1) {
         const value = grid.data[row * width + col];
-        const rgb = value === GRID.UNKNOWN || value < 0 ? unknown
-          : value >= GRID.OCCUPIED_MIN ? occupied
-            : value <= GRID.FREE_MAX ? free : unknown;
+        const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
+          : value >= GRID.OCCUPIED_MIN ? tone.occupied
+            : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
         const pixel = ((height - 1 - row) * width + col) * 4;
         image.data[pixel] = rgb[0];
         image.data[pixel + 1] = rgb[1];
@@ -48,12 +53,6 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     cells.getContext("2d").putImageData(image, 0, 0);
     ctx.drawImage(cells, 0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale); // following geometry keeps using map-cell coordinates
-  }
-
-  function hexToRgb(value) {
-    const hex = value.replace("#", "");
-    const n = parseInt(hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex, 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
 
   function worldToCell(grid, x, y) {
@@ -106,10 +105,10 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
   function drawChip(ctx, grid, cx, cy, text, tone) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
     const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
-    const fontSize = Math.max(10, Math.round(12 * ctx.canvas.width / displayedWidth));
+    const fontSize = Math.max(12, Math.round(12 * ctx.canvas.width / displayedWidth));
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.font = `${fontSize}px ${css("--mono") || "monospace"}`;
+    ctx.font = font(fontSize);
     const padding = fontSize * 0.4;
     const maxTextWidth = Math.max(fontSize, ctx.canvas.width - padding * 2 - 8);
     while (ctx.measureText(text).width > maxTextWidth && text.length > 1) {
@@ -329,7 +328,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
-    const font = `12px ${css("--mono") || "monospace"}`;
+    const labelFont = font(12);
 
     // 0.5 m 격자
     ctx.save();
@@ -350,7 +349,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
 
     // 사각형 + 치수 + 출처(source_id)
     ctx.save();
-    ctx.font = font;
+    ctx.font = labelFont;
     for (const entry of sitePolygons()) {
       tracePolygon(ctx, entry.polygon_m, toPx);
       ctx.globalAlpha = 0.08;
@@ -388,7 +387,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const axisLen = Math.min(t.scale * 0.4, width / 8);
     ctx.save();
     ctx.lineWidth = 2;
-    ctx.font = font;
+    ctx.font = labelFont;
     ctx.textBaseline = "middle";
     ctx.strokeStyle = css("--ink");
     ctx.fillStyle = css("--ink");

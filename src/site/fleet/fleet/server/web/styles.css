@@ -214,10 +214,13 @@ main {
 
 .legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); }
 .legend span { display: inline-flex; align-items: center; gap: var(--space-1); }
-.legend i { width: 0.7rem; height: 0.7rem; border-radius: var(--radius-control); border: 1px solid var(--line-14); }
-.sw.free { background: var(--ink); }
-.sw.occupied { background: var(--ground-deep); }
-.sw.unknown { background: var(--ground-soft); }
+/* padding: 0 — `.sw.robot` 견본이 로스터 카드 `.robot` 의 안쪽 여백을 물려받지 않게 한다. */
+.legend i { width: 0.7rem; height: 0.7rem; padding: 0; border-radius: var(--radius-control); border: 1px solid var(--line-14); }
+/* D-359 §4.2 — 지형 견본은 캔버스와 같은 raster 토큰이다. */
+.sw.free { background: var(--raster-free); }
+.sw.uncertain { background: var(--raster-uncertain); }
+.sw.occupied { background: var(--raster-occupied); }
+.sw.unknown { background: var(--raster-unknown); }
 .sw.robot { background: var(--robot-2); }
 .sw.goal { background: var(--series-goal); }
 /* D-257 카메라 관측은 CORE pose(채운 색)와 달리 점선 고리다. */
