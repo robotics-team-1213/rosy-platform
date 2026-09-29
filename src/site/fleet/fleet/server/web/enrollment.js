@@ -2,6 +2,8 @@
 // 브라우저는 로봇에 닿지 않고 토큰을 보지 않는다. 코드는 Fleet 서버로만 간다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createEnrollmentPanel 이 화면 배선이다.
 
+import { createPollGate } from "./poll-gate.js";
+
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 export function normalizeCode(text) {
@@ -169,6 +171,8 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     }
     if (!resp.ok) {
       const error = new Error(`HTTP ${resp.status}`);
+      error.status = resp.status;
+      error.code = typeof payload?.detail === "object" ? payload.detail?.code : undefined;
       error.detail = payload && payload.detail ? payload.detail : { code: `HTTP_${resp.status}` };
       throw error;
     }
@@ -298,10 +302,16 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     }
   }
 
+  // 등록 기능이 없는 Fleet(라우트 없음 404)은 다음 resetPolling()(로그인) 전까지 묻지 않는다.
+  const gate = createPollGate();
+
   async function refresh() {
+    if (!gate.due()) return;
     try {
       state.listing = await call("/api/fleet/enrollment/robots");
-    } catch (_err) {
+      gate.ok();
+    } catch (err) {
+      gate.fail(err.status, err.code);
       state.listing = null;
       const controls = el("enroll-controls");
       if (controls) controls.hidden = true;
@@ -327,5 +337,5 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     event.target.value = formatCode(event.target.value);
   });
 
-  return { refresh, decorateDiscoveryRow };
+  return { refresh, decorateDiscoveryRow, resetPolling: () => gate.reset() };
 }

@@ -117,6 +117,7 @@ CONSOLE_ASSETS = {
     "field-view.js": "application/javascript",
     "formation.js": "application/javascript",
     "map-view.js": "application/javascript",
+    "poll-gate.js": "application/javascript",
     "roster.js": "application/javascript",
     "enrollment.js": "application/javascript",
     "signals.js": "application/javascript",
