@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
 - 2026-09-29 · uncommitted · feat(traffic): wire unsignalized junction rule through CORE
 - 2026-09-29 · uncommitted · classify host agent status commands as non-events
 - 2026-09-28 · uncommitted · close canceled-generation result recovery
 - 2026-09-28 · uncommitted · retain correlated result after cancel
-- 2026-09-28 · uncommitted · fix(core): isolate navigation result correlation

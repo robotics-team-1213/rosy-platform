@@ -3417,3 +3417,15 @@
 - 증거: 복구 diff는 해당 행 1개, 문구는 상세문서 제목과 동일. test_harness_contracts 재확인.
 - gate 변화: 없음.
 - 교훈: 한글을 PowerShell 리다이렉트로 파일에 쓰면 코드페이지가 글자를 ?로 먹는다 — 문서 기록은 UTF-8 쓰기를 보장하는 도구로 한다.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T1 착지 — 융합 순수 로직 완료 (항목 복원)
+
+- 변경: 실행 계획 `2026-09-29-robot-signal-source-integration.md`의 T1을 완료 표시하고 착지 내용(나이 보정·증거 리비전·reset/apply_staged 청소, 부정 헤드의 무주장 처리)을 계획서에 보탰다. 설계 §2의 `lamps` 필드 표기를 구현과 같은 `red`·`yellow`·`green` 불리언으로 바로잡았다. — 이 항목은 병행 세션의 05572024 커밋이 미커밋 상태를 덮어써서 사라졌던 것을 복원한 것이다(구현 자체는 10a386a2에 있다).
+- 증거: 10a386a2 — `src/runtime/services` 로그 참조. 호스트 383+74 passed, 관측 미설정 동작은 사전과 동일.
+- gate 변화: 없음.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T2 착지 — 관측 폴러 전송 완료
+
+- 변경: 실행 계획 T2를 완료 표시하고 착지 내용(확정·비동결 프레임만 증거화, 위치 지도 기반 색 해석, `last_outcome`·`last_age_s` 관측성 룩, 스케줄링은 T3 소관)을 보탰다.
+- 증거: 같은 회차 코드 변경 — `src/runtime/services` 로그 참조. 신규 17시험 포함 services 251 passed, traffic·foundation 156 passed. SIZE_VERDICTS에 manager.py 609행 accept 판정 추가(잔여 2건은 병행 트랙 부채).
+- gate 변화: 없음. T3(설정 게이트·배선·상태 필드·API Ref MINOR) 대기.

@@ -8,6 +8,13 @@ from core_features.traffic_policy.manager import (
     TrafficPolicyManager,
     TrafficPolicyMode,
 )
+from core_features.traffic_policy.observer_source import (
+    ObserverHttpError,
+    SignalObserverConfigError,
+    SignalObserverPoller,
+    SignalObserverSourceConfig,
+    parse_observed,
+)
 
 __all__ = [
     "RoadEvidence",
@@ -16,4 +23,9 @@ __all__ = [
     "TrafficPolicyConfig",
     "TrafficPolicyManager",
     "TrafficPolicyMode",
+    "ObserverHttpError",
+    "SignalObserverConfigError",
+    "SignalObserverPoller",
+    "SignalObserverSourceConfig",
+    "parse_observed",
 ]
