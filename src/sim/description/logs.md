@@ -43,3 +43,9 @@
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 `git log -- src/description`를 본다.
+
+## 2026-09-30 · uncommitted · feat(sim): camera_hfov and cam_mount_z xacro args (D-353 5)
+
+- 변경: `robot.urdf.xacro`/`rosy.urdf.xacro`/`rosy_gz.urdf.xacro`에 `camera_hfov`(기본 1.1519), `cam_mount_z`(기본 0.0495) 인자를 추가하고 `upload_robot.launch.py`로 전달했다. 기본값은 이전 URDF와 같다. 실제 Pinky 카메라 프로필 시뮬(`gz_sim/launch/map_v2_fleet_real.launch.py`)이 쓴다.
+- 증거: `test_map_v2_fleet_launch.py`의 URDF 체인 계산이 기본값에서 (0.028481, 0.060194) 그대로, 8°·0.05307에서 (0.03317, 0.06700). `python -m pytest src/sim -q` 통과(Windows).
+- gate 변화: 없음. 장치 URDF 기하는 기본값이라 바뀌지 않는다.

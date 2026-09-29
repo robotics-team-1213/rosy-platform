@@ -51,8 +51,10 @@ WALL_MATERIAL = "<ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</d
 REAL_WALL_HEIGHT_M = 0.30
 REAL_WALL_MATERIAL = (
     "<ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse>"
-    "<emissive>0.45 0.47 0.45 1</emissive>")
+    "<emissive>0.55 0.57 0.55 1</emissive>")
 REAL_FLOOR_RGBA = "0.13 0.14 0.13 1"
+# Real tape reads ~186 grey against the sim's full-white 226.
+REAL_PAINT_RGBA = "0.66 0.68 0.66 1"
 CARPET_URI = "model://control/map/map_v2_fleet/textures/carpet_grey.png"
 CARPET_PX = 256
 CARPET_TILE_M = 0.5
@@ -151,7 +153,7 @@ def write_carpet_texture(path: Path) -> None:
     fine = rng.normal(0.0, 1.0, (CARPET_PX, CARPET_PX))
     blotch = cv2.GaussianBlur(rng.normal(0.0, 1.0, (CARPET_PX, CARPET_PX)), (0, 0), 6)
     blotch /= blotch.std() or 1.0
-    image = np.clip(128.0 + 34.0 * fine + 10.0 * blotch, 0, 255).astype(np.uint8)
+    image = np.clip(128.0 + 60.0 * fine + 22.0 * blotch, 0, 255).astype(np.uint8)
     path.parent.mkdir(parents=True, exist_ok=True)
     ok, data = cv2.imencode(".png", image)
     if not ok:
@@ -219,7 +221,7 @@ def _tape_xml(walls) -> str:
 def world_xml(scene, line_colour: str, profile: str = "default") -> str:
     floor, paint = COLOURS[line_colour]
     if profile == "real":
-        floor = REAL_FLOOR_RGBA
+        floor, paint = REAL_FLOOR_RGBA, REAL_PAINT_RGBA
         walls = "".join(_wall_xml(i, w, REAL_WALL_HEIGHT_M, REAL_WALL_MATERIAL)
                         for i, w in enumerate(scene.walls))
         extra = _carpet_xml() + _tape_xml(scene.walls)

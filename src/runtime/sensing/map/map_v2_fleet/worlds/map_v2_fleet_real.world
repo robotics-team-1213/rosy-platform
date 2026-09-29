@@ -266,7 +266,7 @@
       <link name="link">
         <visual name="paint">
           <geometry><mesh><uri>model://control/map/map_v2_fleet/meshes/road_lines.stl</uri></mesh></geometry>
-          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+          <material><ambient>0.66 0.68 0.66 1</ambient><diffuse>0.66 0.68 0.66 1</diffuse></material>
         </visual>
       </link>
     </model>
@@ -283,7 +283,7 @@
         <visual name="wall_00_vis">
           <pose>0.00000 0.62750 0.15000 0 0 0</pose>
           <geometry><box><size>2.81000 0.00500 0.30000</size></box></geometry>
-          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.45 0.47 0.45 1</emissive></material>
+          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.55 0.57 0.55 1</emissive></material>
         </visual>
         <collision name="wall_01_col">
           <pose>0.00000 -0.62750 0.15000 0 0 0</pose>
@@ -293,7 +293,7 @@
         <visual name="wall_01_vis">
           <pose>0.00000 -0.62750 0.15000 0 0 0</pose>
           <geometry><box><size>2.81000 0.00500 0.30000</size></box></geometry>
-          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.45 0.47 0.45 1</emissive></material>
+          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.55 0.57 0.55 1</emissive></material>
         </visual>
         <collision name="wall_02_col">
           <pose>-1.40250 0.00000 0.15000 0 0 0</pose>
@@ -303,7 +303,7 @@
         <visual name="wall_02_vis">
           <pose>-1.40250 0.00000 0.15000 0 0 0</pose>
           <geometry><box><size>0.00500 1.26000 0.30000</size></box></geometry>
-          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.45 0.47 0.45 1</emissive></material>
+          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.55 0.57 0.55 1</emissive></material>
         </visual>
         <collision name="wall_03_col">
           <pose>1.40250 0.00000 0.15000 0 0 0</pose>
@@ -313,7 +313,7 @@
         <visual name="wall_03_vis">
           <pose>1.40250 0.00000 0.15000 0 0 0</pose>
           <geometry><box><size>0.00500 1.26000 0.30000</size></box></geometry>
-          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.45 0.47 0.45 1</emissive></material>
+          <material><ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse><emissive>0.55 0.57 0.55 1</emissive></material>
         </visual>
       </link>
     </model>
