@@ -520,3 +520,18 @@ def test_common_allowlist_is_the_web_common_manifest():
     assert ticker.headers["content-type"].startswith("text/javascript")
     assert client.get("/common/manifest.json").status_code == 404
     assert client.get("/common/CMakeLists.txt").status_code == 404
+
+
+def test_every_console_module_import_is_served():
+    """A console ES module that 404s takes the whole console down, e-stop included."""
+    import re
+    from pathlib import Path
+
+    web = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
+    client = _client(FakeRobot("rosy_01"))
+    imported = set()
+    for script in web.glob("*.js"):
+        imported |= set(re.findall(r'from\s+"\./([\w.-]+\.js)"', script.read_text(encoding="utf-8")))
+    assert "enrollment.js" in imported
+    for name in sorted(imported | {"console.js"}):
+        assert client.get(f"/console/assets/{name}").status_code == 200, name

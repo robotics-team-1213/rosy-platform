@@ -176,3 +176,6 @@ modules:
 
   - name: isaac_sim
     path: src/sim/isaac_sim
+    tests: [src/sim/isaac_sim/test]
+    functional_kind: pytest
+    functional: [src/sim/isaac_sim/test/test_graph_contract.py, src/sim/isaac_sim/test/test_model_checks.py, src/sim/isaac_sim/test/test_prepare_urdf.py]

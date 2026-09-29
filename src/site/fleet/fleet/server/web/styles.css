@@ -46,6 +46,30 @@ input, select { font: inherit; color: inherit; }
   .vision-corner-overlay [data-corner-handle] { stroke-width: 2; }
 }
 
+/* D-360 경기장 제안·보정 뷰·레이어. 색은 토큰만 쓴다. */
+.vision-corner-overlay .vision-proposal-polygon { fill: none; stroke: var(--series-goal); stroke-width: 1.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.vision-corner-overlay .vision-proposal-polygon[hidden] { display: none; }
+.field-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+#field-accept[hidden], #field-dismiss[hidden], #vision-frame[hidden] { display: none; }
+.field-rectified { margin: var(--space-2) 0 0; }
+.field-rectified[hidden] { display: none; }
+.field-rectified canvas { display: block; width: 100%; height: auto; max-height: 50vh; object-fit: contain; background: var(--ground-deep); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
+.field-rectified figcaption { margin-top: var(--space-1); }
+.field-options { margin-top: var(--space-2); }
+.field-options summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; }
+.field-options summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.field-options fieldset { min-width: 0; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-button); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.field-options legend { padding-inline: var(--space-1); font-size: var(--text-label); }
+.field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--muted); font-size: var(--text-micro); }
+.field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
+.field-mismatch[hidden] { display: none; }
+/* 사이트 설정이 없어서 비어 있을 때만 W×H 안내가 빈 지도 안내를 대신한다. 불러오는 중·연결 실패는 그대로 보인다. */
+.map-stage[data-site-map="none"][data-map-state="unavailable"]:has(> .field-mismatch[data-state="unconfigured"]:not([hidden])) > .map-empty { display: none; }
+.field-storage-state[hidden], .layer-hint[hidden] { display: none; }
+.field-storage-state { color: var(--status-warn); }
+.layer-hint { margin: 0; font-size: var(--text-micro); }
+
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }
@@ -96,33 +120,12 @@ main {
 
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다. */
 @media (min-width: 62rem) {
+  /* 지도 칸은 main 폭의 43%뿐이다. 그 안을 다시 둘로 나누면 카메라가 좁아져
+     제목이 줄바꿈되고 영상이 작아진다(1440px에서 약 240px). 그래서 카메라를
+     지도 아래에 쌓고, 지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
   main > .panel[aria-labelledby="map-heading"] {
     grid-column: 1;
     grid-row: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    align-items: start;
-  }
-  main > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
-  main > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
-  main > .panel[aria-labelledby="map-heading"] > .vision-preview {
-    grid-column: 2;
-    grid-row: 2 / span 3;
-    margin-top: 0;
-  }
-  main > .panel[aria-labelledby="map-heading"] > .legend { grid-column: 1; }
-  main > .panel[aria-labelledby="map-heading"] > #hint { grid-column: 1; }
-  main > .panel[aria-labelledby="map-heading"] > .note { grid-column: 1 / -1; }
-  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .map-stage {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .vision-preview {
-    grid-column: 1;
-    grid-row: 3;
   }
   #map-canvas { height: min(42vh, 30rem); }
   .queues-panel { grid-column: 1; grid-row: 2; }
@@ -147,6 +150,48 @@ main {
   #log { grid-column: 2; grid-row: 5; }
 }
 
+
+@media (min-width: 110rem) {
+  main > .panel[aria-labelledby="map-heading"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-4);
+    align-items: start;
+  }
+  main > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
+  main > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
+  main > .panel[aria-labelledby="map-heading"] > .vision-preview {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+    margin-top: 0;
+  }
+  main > .panel[aria-labelledby="map-heading"] > .legend { grid-column: 1; }
+  main > .panel[aria-labelledby="map-heading"] > #hint { grid-column: 1; }
+  main > .panel[aria-labelledby="map-heading"] > .note { grid-column: 1 / -1; }
+  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .map-stage {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .vision-preview {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  /* D-201: 원본과 보정 경기장을 위아래로 쌓으면 1920×1080에서 문서가 스크롤된다.
+     카메라 칸 안에서 둘을 나란히 둔다(보정 조정을 열면 위 규칙이 한 칸으로 되돌린다). */
+  main > .panel[aria-labelledby="map-heading"]:not(:has(#vision-adjustments[open])) > .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-3);
+    align-items: start;
+  }
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > * { grid-column: 1 / -1; }
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #vision-frame { grid-column: 1; grid-row: 3; }
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #field-rectified { grid-column: 2; grid-row: 3; margin-top: 0; }
+}
+
 .panel {
   background: var(--panel-fill);
   border: 1px solid var(--line-10);
@@ -157,7 +202,9 @@ main {
 
 .panel h2 { font-weight: var(--weight-emphasis); font-size: var(--text-title); margin: 0 0 var(--space-3); }
 
-.map-head { display: flex; align-items: baseline; gap: var(--space-3); }
+.map-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); }
+/* 사이트 뷰 태그("사이트 W×H m · 카메라 관측 n/m대")는 320px에서 한 줄에 안 들어간다. */
+#map-tag { min-width: 0; max-width: 100%; white-space: normal; }
 .map-head .spacer { flex: 1; }
 
 .map-stage { position: relative; }
@@ -347,6 +394,37 @@ main {
   main { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* 태블릿 세로(약 800 CSS px)와 작은 노트북: 헤더를 한 줄에 다 넣으면 토큰 입력이 워드마크를
+   덮고 "접속"·"전체 정지"가 한 글자씩 꺾인다(Lenovo 태블릿 2026-09-30). 세 줄로 나눈다 —
+   상태 한 줄, 토큰 한 줄, 전체 정지는 폭 전체의 가로 한 줄. */
+@media (min-width: 40.0625rem) and (max-width: 70rem) {
+  ui-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      "brand . role pill clock"
+      "token token token token save"
+      "estop estop estop estop estop";
+    gap: var(--space-2) var(--space-3);
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+  }
+  ui-topbar .spacer { display: none; }
+  ui-topbar ui-brand { grid-area: brand; }
+  #user-role { grid-area: role; justify-self: end; }
+  #online-pill { grid-area: pill; }
+  #clock { grid-area: clock; }
+  #console-token { grid-area: token; width: 100%; min-width: 0; }
+  #token-save { grid-area: save; }
+  #estop { grid-area: estop; width: 100%; justify-content: center; gap: var(--space-3); }
+}
+
+/* 터치 폭에서는 토큰 입력·접속·전체 정지가 모두 48 px 이상이고 글자가 꺾이지 않는다. */
+@media (max-width: 70rem) {
+  #console-token, #token-save, #estop { min-height: var(--target-primary); }
+  #token-save, #estop span, #estop small { white-space: nowrap; }
+}
+
 @media (max-width: 40rem) {
   ui-topbar {
     display: grid;
@@ -470,4 +548,15 @@ main {
 .discovery-state { margin-left: auto; color: var(--muted); }
 .discovery-state.verified_online { color: var(--paper); }
 .discovery-state.conflict { color: var(--status-crit); }
+.discovery-state.enrolled { color: var(--paper); }
+.device-link h4 { margin: 0; }
+.enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
+.enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.enroll-result p { margin: var(--space-1) 0; }
+.enroll-result[data-kind="bad"] { color: var(--status-crit); }
+.enrolled-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
+.enrolled-list li { display: flex; flex-direction: column; gap: var(--space-1); }
+.enrolled-list small { color: var(--muted); }
+.enroll-dialog-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 

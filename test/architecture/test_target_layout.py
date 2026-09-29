@@ -32,6 +32,7 @@ TARGET = {
     "site/overhead": "site/overhead",
     "sim/description": "sim/description",
     "sim/gz_sim": "sim/gz_sim",
+    "sim/isaac_sim": "sim/isaac_sim",
 }
 
 TARGET_DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim"}

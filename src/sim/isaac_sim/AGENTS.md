@@ -16,8 +16,13 @@ Isaac Sim assets and Python probes (D-322). Not a buildable package — marker o
 | `logs.md` | Append-only journal |
 | `index.md` | Generated (do not edit) |
 | `prepare_urdf.py` | Adapts the description URDF for Isaac |
+| `prepare_omx_urdf.py` | OMX-F/OMX-L URDF preparation for the official importer |
 | `graph_contract.py` | Isaac-side action graph contract |
+| `run_rosy.py` | URDFImporter → USD + ROS 2 OmniGraph runner (single robot) |
+| `model_checks.py` | Asset hash and URDF mesh/joint preflight; `run_rosy.py` refuses to start without it |
+| `import_omx.py` | OMX URDF → USD import and articulation check |
 | `assets/` | `open_manipulator_description` (vendored reference) |
+| `test/` | Host pytest: `test_graph_contract.py`, `test_model_checks.py`, `test_prepare_urdf.py` |
 
 ## Subdirectories
 
@@ -33,7 +38,11 @@ None.
 
 ### Testing Requirements
 
-None (no own tests; the graph contract is tested by `test_graph_contract.py`).
+```bash
+python -m pytest src/sim/isaac_sim/test -q
+```
+
+Host-only: `test_graph_contract.py` (cmd_vel/odom/joint_states namespace and initial-wheel contracts), `test_model_checks.py` (OMX/Pinky asset hashes and URDF mesh/joint preflight), `test_prepare_urdf.py` (URDF generation). The Isaac Sim 6.1 runtime is not exercised here — that is the ROS-SIM HOLD of D-322.
 
 ### Common Patterns
 
