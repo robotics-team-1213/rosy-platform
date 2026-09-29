@@ -99,6 +99,7 @@
 | `apps/games` | 5 | 5 | 5 | 3 | 5 | **94** | S | ROS 0, 단독 호스트. 단 `web_common` 밖이라 공용 규약 미적용 |
 | `apps/omx_adapter` | 5 | 4 | 5 | 4 | 5 | **92** | S | 좁은 경계 어댑터, 기본 비활성, fan-out 0 |
 | `hmi/web` | 4 | 5 | 4 | 5 | 5 | **91** | S | 0 fan-out 공용 자산 + 소비자 계약 테스트 4종 + 600/10k 예산 |
+| `sim/isaac_sim` | 4 | 5 | 4 | 4 | 5 | **88** | A | D-322 신규(2026-09-30 잠정): Isaac Sim 자산·프로브 — 신규는 package.xml·setup.py 마커 등록뿐이고 코드·자기 시험 3건은 기존 것. M1 — 실행 검증 대상(Isaac Sim)은 외부. M3 — 자기 시험 있으나 호출 경로 미등록. M4 — vendored `open_manipulator_description`는 문서화된 참조 트리 |
 | `products/pinky_pro` | 5 | 5 | 4 | 3 | 4 | **87** | A | D-196 신규(2026-09-24 잠정): config 전용·자기 시험 보유·fan-out 0. M4 — `deploy/robot/pinky_pro/config/profile.*.yaml`이 속도 상한을 부분 복제(`test_nav2_profile_limits`가 일치 고정). M5 — core가 `robot.model`로 동적 조회(선언 없음, D-126과 같은 종류) |
 | `contracts/foundation` | 4 | 5 | 4 | 5 | 3 | **85** | A | fan-in 5의 공용 스키마, 그러나 기록된 역방향 1건 |
 | `runtime/api_web` | 4 | 4 | 4 | 5 | 3 | **80** | A | `deps` 파사드 + v1 직접 import 금지 게이트로 전파 반경 봉쇄, 과잉선언 1건 (`core_events` — 생산 코드 0회) |
@@ -113,7 +114,7 @@
 | `runtime/sensing` | 4 | 2 | 3 | 3 | 2 | **57** | **C** | 28,159행(예산 2.8배)·다중 책임·split 미일정 + 미선언 launch 1건 |
 | `runtime/navigation` | 3 | 3 | 3 | 3 | 2 | **57** | **C** | 미선언 2건·방향 위반 2건, assembly(`web_*`)가 역할에 혼입 |
 
-**분포**: S 8개 · A 6개 · B 3개 · C 3개 · D 0개 / **전체 평균 81.5 (A)** (A 평균 81.3) — 2026-09-23 20개 기준. `products/pinky_pro`(2026-09-24, D-196 신설)는 잠정 행이며 분포·평균에 넣지 않았다(다음 회차 재채점)
+**분포**: S 8개 · A 6개 · B 3개 · C 3개 · D 0개 / **전체 평균 81.5 (A)** (A 평균 81.3) — 2026-09-23 20개 기준. `products/pinky_pro`(2026-09-24, D-196 신설)는 잠정 행이며 분포·평균에 넣지 않았다(다음 회차 재채점). `sim/isaac_sim`(2026-09-30, D-322 신설)도 같은 잠정 행이다
 **도메인 롤업**: `hardware` 85.4 · `apps` 85.0 · `sim` 83.5 · `site` 83.0 · `core` 79.4 · `navigation` 57.0 (C)
 
 ---

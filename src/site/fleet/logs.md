@@ -539,3 +539,10 @@
 - Evidence: full Fleet suite 724 passed, 5 skipped; changed-file flake8 passed.
 - Gate: SOURCE/LOCAL only; physical producers, ROS-SIM, device and field acceptance remain unproven.
 - Decision: D-348.
+
+## 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
+
+- Change: SIZE_VERDICTS["fleet"] moved 11164 -> 11912 after the policy/goal-evidence contracts and their stores joined the flat server tree; the split verdict (B2 subpackage regrouping) stands, owner fleet, unscheduled.
+- Evidence: test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current passed (2026-09-30 Windows); growth source docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md.
+- Gate: none moved.
+- Decision: keep "split" — the new evidence stores reinforced the separate-owners-without-subpackages condition the verdict already named.

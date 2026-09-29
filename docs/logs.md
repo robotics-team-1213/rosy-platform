@@ -3584,6 +3584,14 @@
 - gate 변화: 없음.
 - 결정: 접점 산화가 로봇을 죽이는 경로 제거 — contact_no_current 폴트로 운영자 알림.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
+
+- 변경: 병행 세션이 남긴 5건의 미등록 실패를 해소했다. (1) 버전 핀 v1.59(app.py 2곳·line-follow 핀 — D-347의 3곳 한 변경 단위 준수), (2) D-178 기준선에 isaac_sim 잠정 행(4·5·4·4·5=88 A) 추가와 회차 문서 동일 행, (3) SIZE_VERDICTS fleet 11164→11912 재판정(split 유지), (4) io closure 계약에 D-84 지연 패키지 예외 명시, (5) 문서 모듈 LOCAL blocker를 해소 사실로 갱신하고 GO로 승격.
+- 증거: quick tier + docs 게이트 cmd 123 passed, 변이 증명 1건(io closure), harness lint 0 에러 (2026-09-30 Windows).
+- gate 변화: docs LOCAL HOLD→GO (blocker였던 isaac_sim 스코어카드·fleet 크기 재판정을 같은 회차에 해소).
+- 결정: isaac_sim 잠정 채점은 다음 회차 재채점 대상이다(omx·pinky_pro·overhead와 같은 절차).
+- 교훈: isaac_sim AGENTS.md·progress.md의 "no own tests" 문구는 실제(test/ 3건)와 어긋난다 — 다음 isaac_sim 회차에서 바로잡을 것.
 ## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 
 - Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.
