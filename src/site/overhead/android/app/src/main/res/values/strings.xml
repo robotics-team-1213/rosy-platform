@@ -15,7 +15,7 @@
     <string name="button_start">카메라 켜기</string>
     <string name="button_stop">카메라 끄기</string>
     <string name="button_settings">연결 설정</string>
-    <string name="preview_idle">송출을 시작하면 미리보기가 보입니다</string>
+    <string name="preview_idle">카메라를 켜면 미리보기가 보입니다</string>
     <string name="target_label">대상: %1$s</string>
     <string name="target_none">연결 정보가 없습니다. 연결 설정에서 입력하거나 어댑터 QR을 기본 카메라 앱으로 찍으세요.</string>
     <string name="target_preview_only">서버 연결 정보가 없습니다. 연결 설정을 저장하면 WebSocket 송출을 시작할 수 있습니다.</string>
@@ -65,7 +65,7 @@
     <string name="settings_mdns_scan">mDNS 서버 검색</string>
     <string name="settings_mdns_rescan">다시 검색</string>
     <string name="settings_mdns_scanning">주변 서버를 검색하고 있습니다. 최대 18초 걸릴 수 있습니다.</string>
-    <string name="settings_mdns_wifi_required">태블릿 Wi-Fi가 연결되어 있지 않습니다. Site Vision 및 로봇 CORE와 같은 LAN에 먼저 연결하세요.</string>
+    <string name="settings_mdns_wifi_required">이 기기의 Wi-Fi가 연결되어 있지 않습니다. Site Vision 및 로봇 CORE와 같은 LAN에 먼저 연결하세요.</string>
     <string name="settings_mdns_overhead_heading">Site Vision 수신기</string>
     <string name="settings_mdns_overhead_empty">발견된 Site Vision 수신기가 없습니다. 서버가 같은 Wi-Fi에서 mDNS 광고를 켰는지 확인하거나 QR/수동 주소로 연결하세요.</string>
     <string name="settings_mdns_overhead">Site Vision · %1$s\nTLS 주소 %2$s:%3$d · 카메라 수신기</string>
