@@ -133,3 +133,30 @@ def test_restore_rolls_back_if_atomic_install_fails(tmp_path, monkeypatch):
 
     assert failed_once
     assert _value(target) == "before-restore"
+
+
+def test_rekey_reseals_enrolled_robot_credentials_offline(tmp_path):
+    """D-352 4: key rotation is an offline command over the stopped Fleet database."""
+    import base64
+
+    from fleet.server.enrollment_store import EnrollmentStore, seal, unseal
+
+    old_key, new_key = bytes(range(32)), bytes(range(1, 33))
+    old_file, new_file = tmp_path / "old.key", tmp_path / "new.key"
+    old_file.write_bytes(base64.b64encode(old_key) + b"\n")
+    new_file.write_bytes(base64.b64encode(new_key) + b"\n")
+    database = tmp_path / "fleet.sqlite3"
+    store = EnrollmentStore(database)
+    secret = "tok-" + "rekey-1"
+    store.insert({"robot_id": "rosy_09", "hostname": "h", "address": "192.168.1.2:8080",
+                  "token_id": "t1", "role": "operator", "source": "pair-physical",
+                  "principal_id": "alice", "state": "active"},
+                 seal(old_key, secret, slot="rest", robot_id="rosy_09", token_id="t1"))
+
+    with pytest.raises(SystemExit):
+        site_db.main(["rekey", "--path", str(database), "--old-key-file", str(old_file),
+                      "--new-key-file", str(new_file)])
+    assert site_db.main(["rekey", "--path", str(database), "--old-key-file", str(old_file),
+                         "--new-key-file", str(new_file), "--assume-stopped"]) == 0
+    assert unseal(new_key, store.ciphertext("rosy_09"), slot="rest", robot_id="rosy_09",
+                  token_id="t1") == secret
