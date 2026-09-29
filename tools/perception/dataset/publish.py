@@ -23,8 +23,11 @@ def shard_paths(paths, size: int = 1000) -> list[list]:
 def _stage(dataset_dir: Path, staging: Path, size: int) -> None:
     """Copy frames listed in manifest.json into shard_NNNN folders and rewrite their paths.
 
-    Frame k goes to shard_{k // size:04d}; image and mask share the shard. File names keep the
-    session (already-prefixed names are kept as is) so equal frame indexes from different sessions stay unique."""
+    The manifest's frame order drives the sharding: frame k goes to shard_{k // size:04d}, and
+    its image and mask share that shard. Each file keeps its session in the name so equal frame
+    indexes from different sessions stay unique: a base name already starting with
+    "<session>__" is kept as is, otherwise the path below its top folder is joined with "__"
+    (e.g. images/s1/000001.jpg -> s1__000001.jpg)."""
     dataset_dir = Path(dataset_dir)
     manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
     frames = []
