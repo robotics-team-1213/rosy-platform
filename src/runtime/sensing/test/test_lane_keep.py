@@ -134,9 +134,58 @@ def test_error_grows_with_offset():
     assert large.error < small.error < 0.0
 
 
+def _render_corner(line_x, open_side):
+    """An L-corner: the outer boundary of the next lane runs across at
+    x = line_x from the closed side's lane line toward the open side; the
+    closed side's lane line runs up to it. The inner side has no line left."""
+    sign = 1.0 if open_side == "left" else -1.0
+    rng = np.random.default_rng(7)
+    image = 100 + rng.normal(0, 8, X.shape)
+    floor = np.isfinite(X)
+    outer = -sign * HALF
+    across = floor & (np.abs(X - line_x) <= TAPE_HALF) & (sign * (Y - outer) >= -TAPE_HALF)
+    side = floor & (np.abs(Y - outer) <= TAPE_HALF) & (X <= line_x + TAPE_HALF)
+    image = np.where(across | side, 195.0, image)
+    image[~floor] = 60.0
+    return np.dstack([np.clip(image, 0, 255).astype(np.uint8)] * 3)
+
+
+@pytest.mark.parametrize("open_side, sign", [("left", -1), ("right", +1)])
+def test_l_corner_goes_straight_then_turns_toward_the_open_side(open_side, sign):
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    far = keeper.update(_render_corner(0.40, open_side), GROUND, lane_half_width_m=HALF)
+    assert far is not None and abs(far.error) < 0.15  # corner still ahead: straight on
+    near = keeper.update(_render_corner(0.19, open_side), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == f"corner_{open_side}"
+    # CORE: angular = -gain * error; a left turn needs error < 0.
+    assert near is not None and near.error * sign > 0.3
+
+
+def test_corner_side_needs_an_open_end_or_a_latch():
+    # Near the corner the open end can fall outside the view; a fresh keeper
+    # must not guess a side from a line spanning the whole view (stop line, T).
+    obs, last = _keep(_render([], transverse_x=0.19))
+    assert obs is None and last["strategy"] == "none"
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
+    latched = keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "corner_left" and latched.error < -0.3
+    # Both boundaries in view again clear the latch.
+    keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
+
+
+def test_corner_turning_is_opt_in():
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
+    keeper.update(_render_corner(0.19, "left"), GROUND, lane_half_width_m=HALF)
+    assert not keeper.last["strategy"].startswith("corner")
+
+
 def test_node_wires_keep_mode_on_the_labelled_ground():
     text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
     uses_ground = text.split("def _camera_mode_uses_ground", 1)[1].split("def ", 1)[0]
     assert "'keep'" in uses_ground
     assert "self._lane_keeper.update(" in text
     assert "frame, self._ground(frame.shape[1], frame.shape[0])" in text
+    assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in text

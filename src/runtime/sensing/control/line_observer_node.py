@@ -126,7 +126,8 @@ class LineObserverNode(Node):
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
         self._lane_keeper = LaneKeeper(
-            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
+            corner_turning=bool(self.get_parameter('lane_corner_turning').value))
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):

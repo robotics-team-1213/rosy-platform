@@ -26,6 +26,16 @@ robot is in, never the tape. Per frame, no odometry:
   target        midpoint of the nearest left and right boundary that are a
                 lane width apart; one side only: that boundary moved a
                 half-width inward; none: no output (HOLD)
+  corner        an L-corner shows a transverse line ahead that runs past the
+                lane on one side only (the open side) -- the outer boundary of
+                the lane after the turn. Its centre line is that line moved a
+                half-width toward the robot; the robot pursues the corner path
+                (straight on, then along that centre line toward the open side)
+                at CORNER_LOOKAHEAD_M, and goes straight while the corner is
+                further. Near the corner the open side is out of view, so the
+                side is latched (frame count, no pose) while a transverse line
+                stays ahead. Opt-in (corner_turning; the node's
+                lane_corner_turning, off on the device).
 
 Output keeps the lane contract: error > 0 means steer right (CORE:
 angular = -gain * error); error = -target_y / lane_half_width, clipped to
@@ -102,6 +112,18 @@ WALL_MEDIAN_COLUMNS = 31
 WALL_BASE_MARGIN_PX = 3
 #: Lit fraction of the floor above which the frame is washed out.
 WASHED_FRACTION = 0.5
+#: Corners: the lookahead on the corner path (shorter than LOOKAHEAD_M, or the
+#: robot cuts the inner corner), how far ahead a corner line may be, how far
+#: past the lane (beyond the half-width) and how much further than the other
+#: end its open end must run, and for how many frames without a line across
+#: the path a seen side stays latched (it holds while such a line stays ahead).
+CORNER_LOOKAHEAD_M = 0.12
+CORNER_MAX_AHEAD_M = 0.45
+CORNER_OPEN_M = 0.02
+CORNER_ASYMMETRY_M = 0.02
+#: The closed end sits on the outer lane line: within this of the half-width.
+CORNER_CLOSED_TOLERANCE_M = 0.03
+CORNER_LATCH_FRAMES = 12
 
 
 def _validate_positive(name, value):
@@ -242,7 +264,8 @@ class LaneKeeper:
 
     def __init__(self, *, camera_x_offset_m: float = 0.0,
                  lookahead_m: float = LOOKAHEAD_M,
-                 smoothing: float = 0.5, seed: int = 0) -> None:
+                 smoothing: float = 0.5, seed: int = 0,
+                 corner_turning: bool = False) -> None:
         if (isinstance(camera_x_offset_m, bool)
                 or not isinstance(camera_x_offset_m, (int, float))
                 or not math.isfinite(camera_x_offset_m)):
@@ -255,13 +278,18 @@ class LaneKeeper:
         self._lookahead = float(lookahead_m)
         self._smoothing = float(smoothing)
         self._seed = int(seed)
+        self._corner_turning = bool(corner_turning)
         self._view = None
         self._view_key = None
         self._previous_target = None
+        self._corner_side = None
+        self._corner_frames = 0
         self.last: dict = {}
 
     def reset(self) -> None:
         self._previous_target = None
+        self._corner_side = None
+        self._corner_frames = 0
         self.last = {}
 
     def _birds_eye(self, ground, width: int, height: int) -> BirdsEye:
@@ -316,7 +344,7 @@ class LaneKeeper:
         lines, blobs = extract_lines(points, rng) if len(points) else ([], [])
         self.last["blobs"] = len(blobs)
         previous = self._previous_target
-        left, right = [], []
+        left, right, transverse = [], [], []
         for line in lines:
             centre, direction = line["centre"], line["direction"]
             heading = math.atan2(direction[1], direction[0])
@@ -327,6 +355,7 @@ class LaneKeeper:
                       "ends_px": [self.to_pixel(ground, float(p[0]), float(p[1])) for p in ends]}
             if abs(heading) > TRANSVERSE_MIN_ANGLE_RAD:
                 self.last["transverse"].append(record)
+                transverse.append((centre, direction, ends))
                 continue
             # Side by ground geometry: the line's lateral offset (base_link y,
             # left +) where the lane is read. Almost under the robot, the last
@@ -347,6 +376,9 @@ class LaneKeeper:
                           centre=centre, direction=direction)
             (left if side == "left" else right).append(record)
         target, strategy = self._choose(left, right, half)
+        corner = self._corner(transverse, half) if self._corner_turning else None
+        if corner is not None and (target is None or corner[1] != "corner_ahead"):
+            target, strategy = corner
         for record in left + right:
             record.pop("direction")
             record.pop("centre")
@@ -355,16 +387,66 @@ class LaneKeeper:
             self.last["reason"] = "no_boundary"
             self._previous_target = None
             return None
-        if previous is not None and self._smoothing > 0.0:
+        if previous is not None and self._smoothing > 0.0 and not strategy.startswith("corner"):
             target = self._smoothing * np.asarray(previous) + (1.0 - self._smoothing) * target
         tx, ty = float(target[0]), float(target[1])
         self._previous_target = (tx, ty)
         confidence = BOTH_CONFIDENCE if strategy == "both" else ONE_CONFIDENCE
+        if strategy == "both":
+            self._corner_side, self._corner_frames = None, 0
         error = max(-1.0, min(1.0, -ty / half))
         self.last.update(strategy=strategy, target_m=[round(tx, 3), round(ty, 3)],
                          target_px=self.to_pixel(ground, tx, ty),
                          error=round(error, 3), confidence=confidence)
         return LaneObservation(error=error, confidence=confidence)
+
+    def _corner(self, transverse, half):
+        """(target, strategy) from the nearest L-corner line ahead, or None.
+        Updates the latched corner side."""
+        best = None
+        for centre, direction, ends in transverse:
+            ys = sorted(float(p[1]) for p in ends)
+            if ys[0] > half or ys[1] < -half:
+                continue  # beside the path, not across it
+            ahead = float(centre[0] - centre[1] * direction[0] / direction[1])
+            if not 0.0 < ahead <= CORNER_MAX_AHEAD_M:
+                continue
+            if best is None or ahead < best[0]:
+                best = (ahead, centre, direction, ys)
+        if best is None:
+            if self._corner_frames > 0:
+                self._corner_frames -= 1
+            if self._corner_frames == 0:
+                self._corner_side = None
+            return None
+        ahead, centre, direction, ys = best
+        left_reach, right_reach = ys[1], -ys[0]
+        side = None
+        if max(left_reach, right_reach) > half + CORNER_OPEN_M:
+            # The closed end is where the corner line meets the outer lane line.
+            if (left_reach - right_reach > CORNER_ASYMMETRY_M
+                    and abs(right_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
+                side = "left"
+            elif (right_reach - left_reach > CORNER_ASYMMETRY_M
+                    and abs(left_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
+                side = "right"
+        if side is not None:
+            self._corner_side, self._corner_frames = side, CORNER_LATCH_FRAMES
+        side = self._corner_side
+        if side is None:
+            return None  # a stop line or a T: not a corner
+        # The new lane's centre line: the corner line moved half a lane toward
+        # the robot, pursued toward the open side (left = +y).
+        normal = np.array([-direction[1], direction[0]])
+        if float(np.dot(normal, centre)) > 0.0:
+            normal = -normal
+        origin = centre + normal * half
+        along = direction if (direction[1] > 0.0) == (side == "left") else -direction
+        meet = float(origin[0] - origin[1] * along[0] / along[1])
+        if meet > CORNER_LOOKAHEAD_M:
+            return np.array([CORNER_LOOKAHEAD_M, 0.0]), "corner_ahead"
+        point, _ = _pursuit_point(origin, along, CORNER_LOOKAHEAD_M)
+        return point, f"corner_{side}"
 
     def _choose(self, left, right, half):
         """Target (x, y) and strategy from the side-classified boundaries."""

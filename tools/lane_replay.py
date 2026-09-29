@@ -71,11 +71,12 @@ def _nominal_ground():
     return profile, ground
 
 
-def _keep_detector():
+def _keep_detector(corner_turning=False):
     """'keep' 모드(LaneKeeper, D-353 §2)를 공칭 지면으로. 오도메트리 없이 매 프레임 판단하고,
-    직전 목표로만 짧게 평활한다(실물 노드와 같은 설정)."""
+    직전 목표로만 짧게 평활한다(실물 노드와 같은 설정). keep_corner 는 L 모서리 회전
+    (lane_corner_turning, 실물 기본 꺼짐)을 켠 것."""
     profile, ground = _nominal_ground()
-    keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]))
+    keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]), corner_turning=corner_turning)
 
     def detect(img):
         return keeper.update(img, ground, lane_half_width_m=LANE_HALF_WIDTH_M)
@@ -123,6 +124,8 @@ def make_detectors(names):
             detectors[name] = _centre_detector()
         elif name == "keep":
             detectors[name] = _keep_detector()
+        elif name == "keep_corner":
+            detectors[name] = _keep_detector(corner_turning=True)
         else:
             raise SystemExit(f"unknown detector {name!r}")
     return detectors
