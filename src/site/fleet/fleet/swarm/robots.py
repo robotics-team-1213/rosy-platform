@@ -53,7 +53,8 @@ def _endpoint(robot_id, base_url, token, where: str,
     return RobotEndpoint(str(robot_id), base_url, token, fleet_pairing_token)
 
 
-def load_robots(path: Path) -> list[RobotEndpoint]:
+def load_robots(path: Path, *, allow_empty: bool = False) -> list[RobotEndpoint]:
+    """`allow_empty` only when the enrollment register can supply robots (D-352 4)."""
     try:
         text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
@@ -64,6 +65,8 @@ def load_robots(path: Path) -> list[RobotEndpoint]:
     except yaml.YAMLError as exc:
         raise RobotsFileError(f"{path}: not valid YAML: {exc}") from exc
     rows = data.get("robots") if isinstance(data, dict) else None
+    if allow_empty and (data == {} or rows == []):
+        return []
     if not isinstance(rows, list) or not rows:
         raise RobotsFileError(f"{path}: needs a non-empty 'robots' list")
     seen: set[str] = set()

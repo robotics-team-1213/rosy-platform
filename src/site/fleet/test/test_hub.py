@@ -306,3 +306,15 @@ def test_scatter_estop_unknown_robot_errors():
             raise AssertionError("missing client must fail")
 
     run(main())
+
+
+def test_pairing_tokens_added_and_dropped_at_runtime_gate_hello():
+    """D-352 5: the roster adds and drops FleetAgent credentials after start."""
+    hub = SiteHub([])
+    assert hub.handle(_hello("rosy_09", "pair-09")).type is EnvelopeType.ERROR
+    hub.set_pairing_token("rosy_09", "pair-09")
+    assert hub.handle(_hello("rosy_09", "pair-09")).type is EnvelopeType.WELCOME
+    hub.drop("rosy_09")
+    assert hub.registry.online_ids() == []
+    reply = hub.handle(_hello("rosy_09", "pair-09"))
+    assert reply.type is EnvelopeType.ERROR and reply.payload["code"] == "PAIRING_INVALID"

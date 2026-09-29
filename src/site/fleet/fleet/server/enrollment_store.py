@@ -34,7 +34,7 @@ _COLUMNS = (
     "token_id", "role", "source", "expires_at", "fleet_expires_at", "warn_at",
     "principal_id", "state",
 )
-_UPDATABLE = frozenset(_COLUMNS) - {"robot_id"}
+_UPDATABLE = (frozenset(_COLUMNS) - {"robot_id"}) | {"logout_attempted"}
 
 
 class CredentialKeyError(ValueError):
@@ -112,6 +112,7 @@ class EnrollmentStore:
                     ciphertext BLOB NOT NULL,
                     principal_id TEXT NOT NULL,
                     state TEXT NOT NULL CHECK (state IN {STATES!r}),
+                    logout_attempted INTEGER NOT NULL DEFAULT 0,
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
@@ -158,7 +159,8 @@ class EnrollmentStore:
     def rows(self) -> list[dict]:
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                f"SELECT {', '.join(_COLUMNS)}, created_at, updated_at FROM robot_enrollments "
+                f"SELECT {', '.join(_COLUMNS)}, logout_attempted, created_at, updated_at "
+                "FROM robot_enrollments "
                 "ORDER BY robot_id").fetchall()
         return [dict(row) for row in rows]
 

@@ -52,6 +52,8 @@ class SightingService:
         self.lease_s = lease_s
         self._store = store
         known = set(known_robot_ids)
+        #: The live roster (D-352 5); SiteRoster replaces it on add/remove.
+        self.known_robot_ids = frozenset(known)
         self._sources: list[SightingSource] = list(sources)
         self._by_id: dict[str, SightingSource] = {}
         tokens: set[str] = set()
@@ -97,7 +99,7 @@ class SightingService:
 
     def accept(self, authorization: str | None, payload: SiteSightingPayload) -> dict:
         source = self._authenticate(authorization)
-        if payload.robot_id not in source.robot_ids:
+        if payload.robot_id not in source.robot_ids or payload.robot_id not in self.known_robot_ids:
             raise SightingError(403, "SIGHTING_TARGET_FORBIDDEN", "source cannot report this robot")
         if payload.map_id != source.map_id:
             raise SightingError(409, "MAP_MISMATCH", "sighting map does not match source configuration")

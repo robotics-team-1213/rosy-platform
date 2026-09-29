@@ -731,6 +731,16 @@ class FleetTaskStore:
             ).fetchall()
         return {row["task_id"] for row in rows}
 
+    def unfinished_task_ids(self, robot_id: str) -> list[str]:
+        """Waiting, assigned or running work that blocks unenrolling a robot (D-352 5)."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT task_id FROM fleet_tasks WHERE robot_id=?
+                   AND status IN ('REQUESTED', 'QUEUED', 'ACCEPTED', 'RUNNING')
+                   ORDER BY created_at, task_id""", (robot_id,)
+            ).fetchall()
+        return [row["task_id"] for row in rows]
+
     def recover_interrupted_work(self) -> int:
         """Requeue only work proven not sent; ambiguous CORE calls become UNKNOWN."""
         now = _now()
