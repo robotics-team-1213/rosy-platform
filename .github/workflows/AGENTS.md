@@ -11,7 +11,8 @@ CI job definitions for this repository.
 
 | File | Description |
 |------|-------------|
-| `ci.yml` | `ci` workflow: colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the core-domain suites (`runtime/gateway/test`, `runtime/events/test`, `runtime/services/test`, `hmi/web/test`, `contracts/foundation/test`) and `products/pinky_pro/test` (D-196), `src/site/fleet/test`, `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
+| `ci.yml` | `ci` workflow: colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the core-domain suites (`runtime/gateway/test`, `runtime/events/test`, `runtime/services/test`, `hmi/web/test`, `contracts/foundation/test`) and `products/pinky_pro/test` (D-196), `src/site/fleet/test`, `src/site/overhead/test` (own invocation), `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
+| `android.yml` | `android-unit`: overhead phone app JVM unit tests (`./gradlew testDebugUnitTest`, Temurin 17), only when `src/site/overhead/**` changes |
 | `build-arm64-payload.yml` | Manual native arm64 build of the unsigned core/io OCI payload; uploads a checksum-bound artifact for offline signing, never a release |
 | `build-pinky-image.yml` | Manual native arm64 `.img.xz` build; uploads an unsigned image handoff for offline signing |
 
