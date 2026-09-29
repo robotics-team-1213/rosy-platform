@@ -9,7 +9,7 @@ const PALETTE_TOKENS = {
   route: "--series-primary",
   // 로봇 자신은 계열 중 하나가 아니라 보는 사람의 현재 위치다. 계열 색
   // 예산을 쓰지 않고 가장 밝은 중립으로 둔다.
-  pose: "--paper",
+  pose: "--ink",
   ground: "--ground-deep",
 };
 

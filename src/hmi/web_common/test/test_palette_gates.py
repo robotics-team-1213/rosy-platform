@@ -28,12 +28,12 @@ DASHBOARD = TOKENS.parent.parent / "dashboard"
 # OKLCH L 0.54-0.82 / C 0.133-0.219 안에 있다.
 MIN_SIGNAL_CHROMA = 0.133
 
-SIGNAL = ("status-warn", "status-crit", "series-primary", "route-dim", "series-goal")
+SIGNAL = ("status-warn", "status-crit", "series-primary", "series-secondary", "series-goal")
 BRAND = ("brand-rose", "brand-rose-wash")
 STATUS = ("status-warn", "status-crit")
-SERIES = ("series-primary", "route-dim", "series-goal")
+SERIES = ("series-primary", "series-secondary", "series-goal")
 RASTER = ("raster-unknown", "raster-free", "raster-uncertain", "raster-occupied")
-READS_AS_TEXT = ("paper", "muted", "status-warn", "series-primary", "series-goal", "brand-rose")
+READS_AS_TEXT = ("ink", "ink-quiet", "status-warn", "series-primary", "series-goal", "brand-rose")
 
 
 # ---- 색 공간 -------------------------------------------------------------
@@ -66,6 +66,28 @@ def oklch(hex_colour: str) -> tuple[float, float, float]:
     return lightness, math.hypot(a, bb), math.degrees(math.atan2(bb, a)) % 360
 
 
+def _srgb_hex(lightness: float, a: float, b: float) -> str:
+    """OKLab → #rrggbb (sRGB 밖은 자른다)."""
+    l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3
+    return "#%02x%02x%02x" % (
+        _encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+        _encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+        _encode(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+    )
+
+
+def mix_oklab(first: str, share: float, second: str) -> str:
+    """`color-mix(in oklab, first share, second)` — 두 불투명 색의 직선 보간."""
+    l1, c1, h1 = oklch(first)
+    l2, c2, h2 = oklch(second)
+    t = share / 100.0
+    a = c1 * math.cos(math.radians(h1)) * t + c2 * math.cos(math.radians(h2)) * (1 - t)
+    b = c1 * math.sin(math.radians(h1)) * t + c2 * math.sin(math.radians(h2)) * (1 - t)
+    return _srgb_hex(l1 * t + l2 * (1 - t), a, b)
+
+
 def relative_luminance(hex_colour: str) -> float:
     r, g, b = linear_rgb(hex_colour)
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -93,11 +115,19 @@ def palette() -> dict[str, str]:
     text = TOKENS.read_text(encoding="utf-8")
     found = dict(re.findall(r"--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;", text))
     assert found, "tokens.css에서 hex 토큰을 읽지 못했다"
+    # D-359 파생 층: 두 팔레트 색을 섞은 불투명 파생(세척·바탕 단계)도 값으로 풀어
+    # 같은 게이트가 본다. `transparent`와 섞은 알파 파생은 색이 팔레트 그대로다.
+    for name, first, share, second in re.findall(
+        r"--([a-z0-9-]+):\s*color-mix\(in oklab,\s*var\(--([a-z0-9-]+)\)\s*([\d.]+)%,"
+        r"\s*var\(--([a-z0-9-]+)\)\s*\)\s*;",
+        text,
+    ):
+        found[name] = mix_oklab(found[first], float(share), found[second])
     return found
 
 
 def test_every_named_token_exists(palette):
-    expected = {"ground", "paper", *SIGNAL, *BRAND, *RASTER}
+    expected = {"ground", "ink", "ink-quiet", "ink-on-crit", *SIGNAL, *BRAND, *RASTER}
     missing = expected - palette.keys()
     assert not missing, f"tokens.css에 없는 토큰: {sorted(missing)}"
 
@@ -134,7 +164,7 @@ def test_danger_works_as_a_fill(palette):
     그래서 위험 토큰에 요구되는 것은 '바탕 위에서 읽히는 글자색'이 아니라
     '잉크를 얹을 수 있는 면'이다.
     """
-    danger, ink, ground = palette["status-crit"], palette["paper"], palette["ground"]
+    danger, ink, ground = palette["status-crit"], palette["ink-on-crit"], palette["ground"]
     assert contrast(ink, danger) >= 4.5, f"잉크가 위험 면 위에서 {contrast(ink, danger):.2f}:1"
     assert contrast(danger, ground) >= 3.0, f"위험 면이 바탕 위에서 {contrast(danger, ground):.2f}:1"
 
@@ -142,12 +172,12 @@ def test_danger_works_as_a_fill(palette):
 def test_same_form_series_separate_for_deuteranopes(palette):
     """지도의 계열은 형태로 먼저 갈린다 — 색은 두 번째 단서다.
 
-    실선(`series-primary`)과 파선(`route-dim`)은 같은 형태 계열이므로 색으로도
+    실선(`series-primary`)과 파선(`series-secondary`)은 같은 형태 계열이므로 색으로도
     갈려야 한다. 목표(`series-goal`)는 채운 사각형이라 형태가 이미 다르고,
     sRGB 색역에서 차가운 색 셋을 밝기로 모두 떼어놓을 수 없다 — 그 쌍은
     형태에 맡긴다는 것이 이 시험이 기록하는 결정이다.
     """
-    simulated = contrast(deuteranope(palette["series-primary"]), deuteranope(palette["route-dim"]))
+    simulated = contrast(deuteranope(palette["series-primary"]), deuteranope(palette["series-secondary"]))
     assert simulated >= 1.5, f"실선 대 파선 색약 대비 {simulated:.2f}:1 (기준 1.5)"
 
 
@@ -238,7 +268,7 @@ def test_text_tokens_meet_wcag_on_the_ground(palette):
 
 def test_the_ground_ramp_stays_neutral(palette):
     """초록 기운이 있는 바탕은 따뜻한 벽과 목표 색의 지각 색상을 밀어낸다."""
-    for name in ("ground", "ground-soft", "ground-card", "paper", "muted"):
+    for name in ("ground", "ground-soft", "ground-card", "ink", "ink-quiet"):
         chroma = oklch(palette[name])[1]
         assert chroma <= 0.02, f"{name} 채도 {chroma:.3f} — 바탕 계열은 중립이어야 한다"
 
@@ -249,8 +279,9 @@ def test_duplicate_palettes_are_gone(palette):
     이전 styles.css에는 `--signal-*` 한 벌 외에 Tailwind 계열
     (#fbbf24 #f87171 #6ee7b7 #94a3b8)과 세 번째 앰버가 함께 있었다.
     """
-    assert palette["status-crit-2"] == palette["status-crit"], "위험 색이 두 벌이다"
-    assert palette["status-warn-2"] == palette["status-warn"], "주의 색이 두 벌이다"
+    # D-359: 같은 값의 별칭(`-2`, `--status-ok`)은 지웠다. 되살아나면 두 벌이다.
+    aliases = {"status-crit-2", "status-warn-2", "status-ok"} & palette.keys()
+    assert not aliases, f"같은 색의 둘째 이름: {sorted(aliases)}"
 
     warm_hues = sorted(
         oklch(value)[2]

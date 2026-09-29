@@ -1,4 +1,4 @@
-/* ROSY 웹 표면 토큰 — concept 16 §6, D-72 L1, D-82, D-129.
+/* ROSY 웹 표면 토큰 — concept 16 §6, D-72 L1, D-82, D-129, D-359.
  *
  * 이 파일이 색의 단일 출처다(D-129 — 모든 웹 표면이 이 한 파일을
  * `/common/tokens.css`로 링크하고 각자 사본을 두지 않는다). `/ui/tokens.css`는
@@ -6,92 +6,58 @@
  * 스크립트에 원시 색이 있으면 `test_ui_token_contracts.py`가 실패하고, 값
  * 자체는 `test_palette_gates.py`가 지킨다.
  *
+ * 토큰은 세 층이다(D-359 §1).
+ *   팔레트  테마마다 바뀌는 유일한 값. 원시 색은 이 블록에만 있다. 키 목록은
+ *           닫혀 있다 — 새 테마는 같은 키를 다시 정의하는 블록 하나다.
+ *   파생    팔레트만 참조한다. 알파·선·장막·세척은 `color-mix()`로 팔레트에서
+ *           만든다. 원시 색 리터럴을 쓰지 않는다.
+ *   역할    컴포넌트 층(D-292 §1) — surface·button·field·flag·focus·gauge·nominal.
+ *           파생과 팔레트를 참조한다.
+ *
  * 값은 손으로 고른 것이 아니라 OKLCH에서 생성했다. HSL의 lightness는 지각
  * 밝기가 아니어서, 예전 팔레트의 `정상`과 `주의`는 HSL로 3pt 차이였지만 지각
  * 밝기 차는 0.009였다 — 적록 색약 시야에서 위험과 주의의 대비가 1.07:1로
  * 무너져 있었다. 자세한 근거는 D-82.
  *
- * 세 집합은 닫혀 있고 서로 섞이지 않는다.
- *   ground   바탕·글자·선. 기본값이다. 색상 258, 채도 거의 0.
+ * 팔레트의 의미 집합은 닫혀 있고 서로 섞이지 않는다.
+ *   ground   바탕·글자(ink)·선. 기본값이다. 색상 258, 채도 거의 0.
  *   status   임계를 넘었을 때만. 따뜻한 띠에만 있다.
  *   series   계열 정체성. 차가운 띠에만 있다. 상태에 쓰지 않는다.
  *   brand    ROSY 이름을 식별할 때만. 상태·포커스·데이터 계열에 쓰지 않는다.
- *
- * 남은 일(S5): 의미 재배치. `--status-good-a*`처럼 장식으로 쓰이는 status
- * 파생이 아직 있고, 그것이 D-72가 지목한 결함이다. 이 파일은 값만 바꾼다.
+ */
+
+/* ==== 팔레트 — 원시 색은 여기에만 ====================================
+ * D-359 §2에서 이 선택자가 `:root, [data-theme="dark"]`가 되고, 같은 키
+ * 집합의 `[data-theme="light"]` 블록이 옆에 선다. 이 블록에는 값만 둔다.
  */
 :root {
   /* ---- ground: 바탕과 글자 (OKLCH H 258, C <= 0.012) ----------------- */
   --ground: #101214;
   --ground-deep: #08090b;
-  --ground-grad-1: #0e0f11;
-  --ground-grad-2: #151618;
   --ground-raise: #191b1d;
   --ground-soft: #1d1f21;
   --ground-card: #2b2d30;
   --ground-card-2: #35383c;
-  --paper: #eeeeef;
-  --muted: #9499a0;
-  --muted-cool: #9199a5;
-
-  /* ---- brand: ROSY 정체성 전용. OKLCH L .80 / C .15 / H 333 -------- */
-  --brand-rose: #f697e7;
-  --brand-rose-wash: #221620;
-
-  /* ground 파생 — 패널과 장막 */
-  --panel-fill: rgba(29, 31, 33, 0.88);
-  --scrim: rgba(8, 9, 11, 0.84);
-  --scrim-raise: rgba(16, 18, 20, 0.9);
-  --scrim-top: rgba(16, 18, 20, 0.82);
-  --scrim-solid: rgba(8, 9, 11, 0.96);
-  --shade-14: rgba(0, 0, 0, 0.14);
-  --shade-28: rgba(0, 0, 0, 0.28);
-
-  /* ground 파생 — 선과 표면 결 (잉크 알파) */
-  --line-015: rgba(238, 238, 239, 0.015);
-  --line-06: rgba(238, 238, 239, 0.06);
-  --line-08: rgba(238, 238, 239, 0.08);
-  --line-10: rgba(238, 238, 239, 0.1);
-  --line-14: rgba(238, 238, 239, 0.14);
-  --line-30: rgba(238, 238, 239, 0.3);
-  --muted-line: rgba(148, 153, 160, 0.25);
-  --sheen-04: rgba(255, 255, 255, 0.04);
-  --sheen-09: rgba(255, 255, 255, 0.09);
-  --sheen-14: rgba(255, 255, 255, 0.14);
+  --ink: #eeeeef;
+  --ink-quiet: #9499a0;
+  /* 위험 채움 위 글자 — 테마와 무관하게 밝다. */
+  --ink-on-crit: #eeeeef;
 
   /* ---- status: 임계에만. 따뜻한 띠(H 25 / H 76)에만 있다 -------------
    * 위험은 글자가 아니라 채움이다 — 잉크를 얹어 쓴다(대비 5.3:1).
    * 주의와 위험은 지각 밝기로 0.30 떨어져 있고 색약 대비 2.05:1이다.
    */
   --status-crit: #c40921;
-  --status-crit-2: #c40921;
-  --status-crit-ground: #2e0f0e;
-  --status-crit-a07: rgba(196, 9, 33, 0.07);
-  --status-crit-a10: rgba(196, 9, 33, 0.1);
-  --status-crit-a12: rgba(196, 9, 33, 0.12);
-  --status-crit-a45: rgba(196, 9, 33, 0.45);
   --status-warn: #feb432;
-  --status-warn-2: #feb432;
-  --status-warn-a40: rgba(254, 180, 50, 0.4);
-  --status-warn-a45: rgba(254, 180, 50, 0.45);
-  --status-ok: #12bb81;
   --status-good: #12bb81;
-  --status-good-a06: rgba(18, 187, 129, 0.06);
-  --status-good-a09: rgba(18, 187, 129, 0.09);
-  --status-good-a38: rgba(18, 187, 129, 0.38);
-  --status-good-a40: rgba(18, 187, 129, 0.4);
-  --status-good-a45: rgba(18, 187, 129, 0.45);
-  --status-good-a55: rgba(18, 187, 129, 0.55);
 
   /* ---- series: 계열. 차가운 띠에만 있다 -------------------------------
    * 남은 경로와 후보 경로는 다른 종류가 아니라 확신도가 다른 같은 것이다.
    * 색상이 아니라 밝기로 인코딩하므로 색약 시야에서도 갈린다(2.06:1).
+   * secondary는 같은 계열 쌍의 두 번째 — 형태가 같을 때 밝기로 가른다.
    */
   --series-primary: #49affd;
-  --series-primary-a08: rgba(73, 175, 253, 0.08);
-  --route-dim: #0777bb;
-  /* 같은 계열 쌍의 두 번째 — 형태가 같을 때 밝기로 가른다. */
-  --series-secondary: var(--route-dim);
+  --series-secondary: #0777bb;
   --series-goal: #12bb81;
 
   /* ---- 로봇 식별 — fleet 표면 ----------------------------------------
@@ -113,6 +79,52 @@
   --raster-free: #1f2123;
   --raster-uncertain: #45484d;
   --raster-occupied: #d7d7d8;
+
+  /* ---- brand: ROSY 정체성 전용. OKLCH L .80 / C .15 / H 333 -------- */
+  --brand-rose: #f697e7;
+
+  /* 그림자의 바탕. 음영(shade)은 이 색의 알파다. */
+  --shadow-base: #000000;
+}
+
+/* ==== 파생·역할·척도 — 팔레트만 참조한다 =============================
+ * 알파는 `color-mix(in oklab, var(--x) N%, transparent)`다 — 팔레트 색에
+ * 알파만 준다. 바탕과 섞는 값은 `color-mix(in oklab, …, var(--ground…))`다.
+ * oklch가 아니라 oklab인 이유: 바탕·잉크처럼 채도가 거의 0인 색은 Chromium이
+ * oklch 색상각을 무력(none)으로 풀고 0°로 그린다 — 회색이 붉게 기운다
+ * (실측 ΔE_OK 최대 0.019). oklab은 색상각이 없어 알파·혼합이 원래 색을 지킨다.
+ */
+:root {
+  /* ground 파생 — 바탕 사이 단계 */
+  --ground-grad-1: color-mix(in oklab, var(--ground) 71%, var(--ground-deep));
+  --ground-grad-2: color-mix(in oklab, var(--ground-raise) 51%, var(--ground));
+
+  /* brand 파생 — 현재 위치 표식의 옅은 바탕. 가장 깊은 바탕과 섞어야
+   * 옛 손 고른 값(#221620)에 가장 가깝다(ΔE_OK 0.008). */
+  --brand-rose-wash: color-mix(in oklab, var(--brand-rose) 12.7%, var(--ground-deep));
+
+  /* ground 파생 — 패널과 장막 */
+  --panel-fill: color-mix(in oklab, var(--ground-soft) 88%, transparent);
+  --scrim: color-mix(in oklab, var(--ground-deep) 84%, transparent);
+  --scrim-raise: color-mix(in oklab, var(--ground) 90%, transparent);
+  --scrim-top: color-mix(in oklab, var(--ground) 82%, transparent);
+  --scrim-solid: color-mix(in oklab, var(--ground-deep) 96%, transparent);
+  --shade-14: color-mix(in oklab, var(--shadow-base) 14%, transparent);
+  --shade-28: color-mix(in oklab, var(--shadow-base) 28%, transparent);
+
+  /* ground 파생 — 선과 표면 결 (잉크 알파) */
+  --line-015: color-mix(in oklab, var(--ink) 1.5%, transparent);
+  --line-06: color-mix(in oklab, var(--ink) 6%, transparent);
+  --line-10: color-mix(in oklab, var(--ink) 10%, transparent);
+  --line-14: color-mix(in oklab, var(--ink) 14%, transparent);
+  --line-30: color-mix(in oklab, var(--ink) 30%, transparent);
+  --line-quiet: color-mix(in oklab, var(--ink-quiet) 25%, transparent);
+
+  /* status 파생 — 임계 면의 옅은 바탕과 테두리 */
+  --status-crit-a07: color-mix(in oklab, var(--status-crit) 7%, transparent);
+  --status-crit-a10: color-mix(in oklab, var(--status-crit) 10%, transparent);
+  --status-crit-a45: color-mix(in oklab, var(--status-crit) 45%, transparent);
+  --status-warn-a45: color-mix(in oklab, var(--status-warn) 45%, transparent);
 
   /* ---- 치수 — 4의 배수 여섯 단계 -------------------------------------
    * 임의 값을 쓰지 않는다. 단계가 많으면 아무도 같은 값을 고르지 않는다.
@@ -177,19 +189,19 @@
    * 계기의 안전 구간에는 아무것도 칠하지 않는다. status 집합은 임계에만
    * 쓰이므로, '정상'을 말할 때는 이 둘을 쓴다.
    */
-  --nominal: var(--paper);
-  --nominal-quiet: var(--muted);
+  --nominal: var(--ink);
+  --nominal-quiet: var(--ink-quiet);
 
   /* ---- 컴포넌트 — 콘솔의 어휘 ------------------------------------------
    * 주 명령은 초록이 아니라 가장 밝은 중립이다. 초록은 경보 예산이고,
    * 정상에는 색이 없다.
    */
-  --button-primary-bg: var(--paper);
+  --button-primary-bg: var(--ink);
   --button-primary-ink: var(--ground);
   --button-secondary-bg: var(--ground);
-  --button-secondary-ink: var(--paper);
+  --button-secondary-ink: var(--ink);
   --button-irreversible-bg: var(--status-crit);
-  --button-irreversible-ink: var(--paper);
+  --button-irreversible-ink: var(--ink-on-crit);
 
   --field-bg: var(--ground);
   --field-line: var(--line-14);
@@ -201,11 +213,11 @@
   --flag-line: var(--line-14);
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);
-  --flag-danger-ink: var(--paper);
+  --flag-danger-ink: var(--ink-on-crit);
 
   /* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다. */
-  --gauge-track: var(--line-08);
-  --gauge-fill: var(--muted-line);
+  --gauge-track: color-mix(in oklab, var(--ink) 8%, transparent);
+  --gauge-fill: var(--line-quiet);
 
   /* ---- 글자 — 한 가족, 숫자만 따로 ---------------------------------- */
   /* 플랫폼 UI 서체가 먼저다 — 작은 크기 UI용으로 설계된 얼굴이다.

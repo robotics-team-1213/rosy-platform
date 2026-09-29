@@ -6,7 +6,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   font: var(--weight-regular) var(--text-body)/var(--leading-copy) var(--body);
 }
@@ -23,7 +23,7 @@ body {
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-switch a:hover { color: var(--paper); background: var(--ground-soft); }
+.surface-switch a:hover { color: var(--ink); background: var(--ground-soft); }
 .surface-switch a[aria-current="page"] {
   color: var(--brand-rose);
   border-color: var(--brand-rose);
@@ -40,7 +40,7 @@ body {
   font-weight: var(--weight-emphasis);
   text-underline-offset: 0.2em;
 }
-.surface-auth-link:hover { color: var(--paper); background: var(--brand-rose-wash); }
+.surface-auth-link:hover { color: var(--ink); background: var(--brand-rose-wash); }
 .surface-auth-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #shell-estop { flex: none; white-space: nowrap; }
 .surface-main {
@@ -60,7 +60,7 @@ body:is([data-surface="setup"], [data-surface="device"]) #safety-mode-status:not
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-panel);
   background: var(--surface-flat);
-  color: var(--paper);
+  color: var(--ink);
   font-weight: var(--weight-emphasis);
 }
 ui-section[data-failed="true"] { border-style: dashed; }

@@ -4,7 +4,7 @@
   --ball: #f27a1a;
   --home: #7ec8ff;
   --away: #b6c1cf;
-  --ink: #f4f1ea;
+  --pitch-ink: #f4f1ea;
   --mute: #9aa894;
   --chip: #24422c;
   --field: #0c160f;
@@ -16,7 +16,7 @@ html, body {
   margin: 0;
   min-height: 100%;
   background: var(--field);
-  color: var(--ink);
+  color: var(--pitch-ink);
   font: var(--weight-regular) var(--text-body)/var(--leading-body) var(--body);
 }
 
@@ -154,7 +154,7 @@ h1 {
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-button);
   background: var(--score-well);
-  color: var(--ink);
+  color: var(--pitch-ink);
   font-weight: var(--weight-emphasis);
   text-align: center;
   pointer-events: none;
@@ -215,7 +215,7 @@ h1 {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-button);
   background: var(--status-crit);
-  color: var(--paper);
+  color: var(--ink);
   font-weight: var(--weight-label);
 }
 .lost[hidden] { display: none; }
@@ -236,7 +236,7 @@ h1 {
 }
 
 #halt-status[data-state="pending"],
-#halt-status[data-state="sent"] { color: var(--ink); }
+#halt-status[data-state="sent"] { color: var(--pitch-ink); }
 
 #halt-status[data-state="error"] { color: var(--lost); }
 

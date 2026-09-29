@@ -42,8 +42,8 @@ HELPER_ASSIGNMENT = re.compile(
 )
 FACE_COLOUR = {
     "--ground": "_BG",
-    "--paper": "_FG",
-    "--muted": "_MUTED",
+    "--ink": "_FG",
+    "--ink-quiet": "_MUTED",
     "--status-warn": "_WARN",
     "--status-crit": "_CRIT",
 }
@@ -347,15 +347,15 @@ _DIAGNOSTIC_TWINS = {
     "observe": "--ground",
     "act": "--ground-card",
     "act-2": "--ground-card-2",
-    "ink": "--paper",
-    "ink-2": "--muted",
-    "muted": "--muted",
+    "ink": "--ink",
+    "ink-2": "--ink-quiet",
+    "ink-quiet": "--ink-quiet",
     "route": "--series-primary",
     "goal": "--series-goal",
-    "good": "--status-ok",
+    "good": "--status-good",
     "warn": "--status-warn",
     "crit": "--status-crit",
-    "hist": "--muted",
+    "hist": "--ink-quiet",
 }
 
 

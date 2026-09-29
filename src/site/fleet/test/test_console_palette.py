@@ -160,11 +160,11 @@ def test_no_decoration_effects(palette):
 
 def test_text_meets_wcag_on_the_ground(palette):
     ground = palette["ground"]
-    for name in ("paper", "muted", "status-warn", "series-primary", "series-goal"):
+    for name in ("ink", "ink-quiet", "status-warn", "series-primary", "series-goal"):
         ratio = contrast(palette[name], ground)
         assert ratio >= 4.5, f"{name} 대비 {ratio:.2f}:1"
     # 위험은 글자가 아니라 채움이다 — 잉크를 얹을 수 있으면 된다.
-    assert contrast(palette["paper"], palette["status-crit"]) >= 4.5
+    assert contrast(palette["ink-on-crit"], palette["status-crit"]) >= 4.5
 
 
 def test_every_referenced_token_is_declared_in_the_single_file(palette):

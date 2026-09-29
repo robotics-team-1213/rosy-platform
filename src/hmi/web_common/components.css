@@ -21,7 +21,7 @@
   top: var(--space-2);
   left: var(--space-2);
   padding: var(--inset-skip-link);
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   border: var(--focus-ring-width) solid var(--focus-ring);
   border-radius: var(--radius-button);
@@ -40,7 +40,7 @@ ui-button {
   padding: 0 var(--inset-button);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-button);
-  color: var(--paper);
+  color: var(--ink);
   background: transparent;
   font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
   text-align: center;
@@ -75,8 +75,8 @@ a.docs-link { min-height: var(--target-secondary); }
 
 ui-button[kind="quiet"]:hover,
 a.docs-link:hover {
-  color: var(--paper);
-  border-color: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 ui-button[kind="irreversible"] {
@@ -99,7 +99,7 @@ ui-button[kind="segment"] {
 ui-button[kind="segment"][aria-pressed="true"],
 ui-button[kind="segment"][aria-selected="true"],
 ui-button[kind="segment"].active {
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground-card-2);
   border-color: transparent;
   font-weight: var(--weight-strong);
@@ -170,7 +170,7 @@ ui-button[kind="irreversible"] span {
 ui-button[kind="irreversible"] small {
   display: block;
   margin-top: var(--gap-button-detail);
-  color: var(--paper);
+  color: var(--ink);
   font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
@@ -186,7 +186,7 @@ textarea.ui-field {
   padding: 0 var(--inset-field);
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
-  color: var(--paper);
+  color: var(--ink);
   background: var(--field-bg);
   font: var(--weight-medium) var(--text-body)/var(--leading-control) var(--mono);
 }
@@ -230,14 +230,14 @@ ui-tag[status="warn"] {
 }
 
 ui-tag[status="crit"] {
-  color: var(--paper);
+  color: var(--ink);
   border-color: transparent;
   background: var(--status-crit);
 }
 
 ui-text {
   font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
-  color: var(--paper);
+  color: var(--ink);
 }
 
 ui-text[scale="unit"] {
@@ -256,18 +256,18 @@ ui-text[scale="label"] {
 ui-text[scale="value"] {
   font: var(--weight-emphasis) var(--text-value)/var(--leading-dense) var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--paper);
+  color: var(--ink);
 }
 
 ui-text[scale="title"] {
   font: var(--weight-strong) var(--text-title)/var(--leading-control) var(--body);
-  color: var(--paper);
+  color: var(--ink);
 }
 
 ui-text[scale="display"] {
   font: var(--weight-emphasis) var(--text-display)/var(--leading-flat) var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--paper);
+  color: var(--ink);
 }
 
 ui-status {
@@ -382,7 +382,7 @@ ui-chip {
   padding: var(--inset-chip);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  color: var(--paper);
+  color: var(--ink);
   background: var(--scrim);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--mono);
   letter-spacing: var(--track-label);
@@ -394,7 +394,7 @@ ui-triage {
   gap: var(--gap-triage);
   width: 100%;
   margin: 0;
-  color: var(--paper);
+  color: var(--ink);
   font: var(--weight-emphasis) var(--text-body)/var(--leading-control) var(--body);
 }
 
@@ -404,7 +404,7 @@ ui-triage::before {
   width: var(--space-2);
   height: var(--space-2);
   border-radius: var(--radius-flag);
-  background: var(--muted-line);
+  background: var(--line-quiet);
 }
 
 ui-triage[status="warn"]::before { background: var(--status-warn); }
@@ -419,7 +419,7 @@ ui-triage small {
 ui-evidence {
   display: inline-flex;
   align-items: center;
-  color: var(--paper);
+  color: var(--ink);
   font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
 }
 
@@ -446,7 +446,7 @@ ui-shell {
   flex-direction: column;
   flex: 1;
   min-height: 100vh;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   font-family: var(--body);
   font-size: var(--text-body);
@@ -481,7 +481,7 @@ ui-brand {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  color: var(--paper);
+  color: var(--ink);
 }
 
 ui-brand a {

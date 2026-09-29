@@ -31,7 +31,7 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   font-family: var(--body);
   font-size: var(--text-body);
@@ -118,7 +118,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   padding: 0 var(--space-3);
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
-  color: var(--paper);
+  color: var(--ink);
   background: var(--field-bg);
   font-family: var(--mono);
   font-size: var(--text-body);
@@ -152,7 +152,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 [data-status="WARNING"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
 .status-error,
 [data-status="ERROR"], [data-status="UNAVAILABLE"] {
-  color: var(--paper);
+  color: var(--ink);
   background: var(--status-crit);
   border-color: transparent;
 }
@@ -241,19 +241,19 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   background: var(--ground-deep);
 }
 
-.brand { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--paper); text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--ink); text-decoration: none; }
 .brand b { display: block; color: var(--brand-rose); font: var(--weight-strong) var(--text-value)/var(--leading-flat) var(--mono); letter-spacing: 0.18em; }
-.brand small { display: block; margin-top: var(--space-1); color: var(--muted); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
+.brand small { display: block; margin-top: var(--space-1); color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
 /* 마크는 로고이지 계기가 아니다 — 상태색을 쓰지 않는다. 화면에서 유일하게
    색이 있어야 할 것은 지금 잘못된 것 하나다. */
 .brand-mark { display: grid; grid-template-columns: repeat(3, 4px); align-items: end; gap: var(--space-1); height: 22px; }
-.brand-mark i { display: block; width: 4px; border-radius: var(--radius-flag); background: var(--muted); }
+.brand-mark i { display: block; width: 4px; border-radius: var(--radius-flag); background: var(--ink-quiet); }
 .brand-mark i:nth-child(1) { height: 10px; }
-.brand-mark i:nth-child(2) { height: 22px; background: var(--paper); }
+.brand-mark i:nth-child(2) { height: 22px; background: var(--ink); }
 .brand-mark i:nth-child(3) { height: 15px; }
 
 .topbar-status { display: flex; align-items: center; gap: var(--space-3); }
-.clock { color: var(--muted); font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+.clock { color: var(--ink-quiet); font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
 /* 인증 브리지의 목적지 — 역할 화면의 스위치와 같은 문법, 이 페이지의 배치다.
    목록은 서버 매니페스트가 역할로 걸러 준다(D-335 뒤의 비평 P1 회차). */
 .surface-bridge { display: flex; align-items: center; gap: var(--space-1); }
@@ -265,12 +265,12 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   padding: 0 var(--space-3);
   border: 1px solid transparent;
   border-radius: var(--radius-button);
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-bridge a:hover { color: var(--paper); background: var(--ground-soft); }
+.surface-bridge a:hover { color: var(--ink); background: var(--ground-soft); }
 .surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .view-switch { display: inline-flex; border: 1px solid var(--surface-line); border-radius: var(--radius-button); overflow: hidden; }
@@ -284,7 +284,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   cursor: pointer;
 }
 .view-tab[aria-pressed="true"],
-.view-tab[aria-selected="true"] { background: var(--paper); color: var(--button-primary-ink); font-weight: var(--weight-strong); }
+.view-tab[aria-selected="true"] { background: var(--ink); color: var(--button-primary-ink); font-weight: var(--weight-strong); }
 
 .auth-drawer {
   position: fixed;
@@ -300,7 +300,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 }
 .auth-drawer.open { display: grid; gap: var(--space-4); }
 .auth-drawer h2 { margin: 0 0 var(--space-2); font: var(--weight-label) var(--text-title)/var(--leading-control) var(--body); }
-.auth-drawer p { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: 1.55; }
+.auth-drawer p { margin: 0; color: var(--ink-quiet); font-size: var(--text-body); line-height: 1.55; }
 .auth-drawer label { display: block; margin-bottom: var(--space-2); }
 .auth-row { display: flex; gap: var(--space-2); }
 .auth-row input { flex: 1; }
@@ -310,7 +310,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 /* The checkbox row keeps its sentence case inside the drawer's label rule. */
 .auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: normal; font-weight: var(--weight-regular); }
 .auth-row input#code-input { text-transform: uppercase; letter-spacing: var(--track-label); }
-.whoami-badge b { color: var(--paper); }
+.whoami-badge b { color: var(--ink); }
 .drawer-close {
   position: absolute;
   top: var(--space-2);
@@ -319,7 +319,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   min-width: var(--target-secondary);
   border: 0;
   border-radius: var(--radius-button);
-  color: var(--muted);
+  color: var(--ink-quiet);
   background: none;
   font-size: var(--text-title);
   cursor: pointer;
@@ -334,7 +334,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5) var(--space-6);
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
   letter-spacing: 0.08em;
 }
@@ -381,29 +381,29 @@ body[data-view="operate"] .page-footer { display: none; }
   padding: 0 var(--space-1);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-strong) var(--text-label)/var(--leading-label) var(--body);
   white-space: nowrap;
 }
 /* 첫 요청 전에는 빈칸이다(값 자리에 em dash를 싣지 않는다). */
 .summary-state:empty { display: none; }
 .summary-state[data-state="ready"] { color: var(--nominal); }
-.summary-state[data-state="ready_held"], .summary-state[data-state="booting"] { color: var(--paper); }
+.summary-state[data-state="ready_held"], .summary-state[data-state="booting"] { color: var(--ink); }
 /* 주의는 글자, 실패는 채움이다(Law 3, 분류 줄과 같은 문법). */
 .summary-state[data-state="caution"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
-.summary-state[data-state="failed"] { color: var(--paper); background: var(--status-crit); border-color: var(--status-crit); }
+.summary-state[data-state="failed"] { color: var(--ink); background: var(--status-crit); border-color: var(--status-crit); }
 .summary-reason {
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-micro);
   line-height: var(--leading-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .summary-devices { flex: 0 1 auto; min-width: 9ch; max-width: 26ch; white-space: nowrap; overflow: hidden; }
-.summary-power { flex: none; color: var(--muted); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); white-space: nowrap; }
+.summary-power { flex: none; color: var(--ink-quiet); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); white-space: nowrap; }
 .summary-power[data-low="true"] { color: var(--status-warn); }
 .summary-todo { flex: none; position: relative; }
 .summary-todos {
@@ -420,7 +420,7 @@ body[data-view="operate"] .page-footer { display: none; }
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
   background: var(--ground-raise);
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-label);
   line-height: var(--leading-body);
   list-style: decimal inside;
@@ -442,7 +442,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 물리적 위험과 이동 차단은 채운다 — 되돌릴 수 없는 것과 같은 범주다(Law 3). */
 .triage[data-category="hazard"], .triage[data-category="blocked"] {
-  color: var(--paper);
+  color: var(--ink);
   background: var(--status-crit);
   border-bottom-color: var(--status-crit);
 }
@@ -477,7 +477,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 맥락은 "또 무엇이 잘못됐나"를 말한다. 제목은 끝까지 보이고 설명은 자리가
    남는 만큼만 보인다 — DOM에는 남으므로 화면 낭독기는 전문을 읽는다. */
-.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--paper); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
+.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--ink); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
 .triage-context b { flex-shrink: 0; font-weight: var(--weight-label); }
 .triage-context span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .triage-context:empty { display: none; }
@@ -508,7 +508,7 @@ body[data-view="operate"] .page-footer { display: none; }
 /* 식별자는 제목 아래가 아니라 옆이다 — 한 줄에서 이름과 계보를 같이 읽는다. */
 .hero-copy h1 em {
   min-width: 0;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
   overflow: hidden;
@@ -525,10 +525,10 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .hero-label { flex: none; }
 .hero-state strong, .hero-safety strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: 0.02em; }
-.hero-state .sequence, .hero-safety > span:last-child { color: var(--muted); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
+.hero-state .sequence, .hero-safety > span:last-child { color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 .hero-safety.safe strong { color: var(--nominal); }
 .hero-safety.danger strong { color: var(--status-crit); }
-.hero-safety.unverified strong { color: var(--muted); }
+.hero-safety.unverified strong { color: var(--ink-quiet); }
 
 /* ---- 영역 셋 --------------------------------------------------------------
    폭은 역할이 정한다. 감지는 숫자 세 칸이 들어갈 만큼, 조작은 되돌릴 수 없는
@@ -576,7 +576,7 @@ body[data-view="operate"] .page-footer { display: none; }
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--surface-line);
 }
-.region-head h2 { margin: 0; color: var(--paper); font-size: var(--text-label); letter-spacing: 0.14em; }
+.region-head h2 { margin: 0; color: var(--ink); font-size: var(--text-label); letter-spacing: 0.14em; }
 .region-head span {
   min-width: 0;
   color: var(--nominal-quiet);
@@ -635,12 +635,12 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .capability-item span { min-width: 0; overflow: hidden; font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
 .capability-item b { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-state); }
-.capability-item small { grid-column: 1 / -1; color: var(--paper); font-size: var(--text-label); line-height: var(--leading-body); }
+.capability-item small { grid-column: 1 / -1; color: var(--ink); font-size: var(--text-label); line-height: var(--leading-body); }
 /* 가용은 정상이므로 색이 없다. 제약과 차단만 색을 쓴다(D-82). */
 .capability-item[data-state="constrained"] b { color: var(--status-warn); }
 .capability-item[data-state="blocked"] b { color: var(--status-crit); }
 /* CORE-only은 설정이지 고장이 아니다 — 차단이어도 색을 쓰지 않는다(D-161, D-82). */
-.capability-item[data-cause="runtime"] b { color: var(--muted); }
+.capability-item[data-cause="runtime"] b { color: var(--ink-quiet); }
 
 /* ---- 관측 — 지도가 영역을 전부 쓴다 ---------------------------------------
    보조 요소는 전부 지도 위로 올린다. 흐름에 두면 툴바 두 줄·범례·안내가
@@ -673,7 +673,7 @@ body[data-view="operate"] .page-footer { display: none; }
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono);
   letter-spacing: var(--track-wide);
 }
@@ -684,7 +684,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .vision-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; background: var(--surface-line); }
 .vision-meta div { min-width: 0; padding: var(--space-1) var(--space-2); background: var(--ground); }
 .vision-meta dt { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
-.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--paper); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--ink); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .map-stage {
   position: relative;
   flex: 1;
@@ -701,7 +701,7 @@ body[data-view="operate"] .page-footer { display: none; }
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono);
   pointer-events: none;
 }
@@ -716,7 +716,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: var(--space-1); }
 /* 안내는 클릭 모드 툴바를 설명하는 글이다 — 그 아래 붙여 둔다. */
-.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--paper); font-size: var(--text-label); line-height: 1.45; }
+.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--ink); font-size: var(--text-label); line-height: 1.45; }
 /* 범례는 지도의 색을 설명한다 — 지도 위가 제자리다. */
 .map-legend {
   position: absolute;
@@ -729,7 +729,7 @@ body[data-view="operate"] .page-footer { display: none; }
   margin: 0;
   padding: var(--space-1) var(--space-2);
   list-style: none;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
 }
 .map-legend li { display: flex; align-items: center; gap: var(--space-2); }
@@ -740,7 +740,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .map-legend [data-swatch="unknown"]::before { background: var(--raster-unknown); }
 .map-legend [data-swatch="cost"]::before { background: var(--status-warn); }
 .map-legend [data-swatch="path"]::before { background: var(--series-primary); }
-.map-legend [data-swatch="robot"]::before { background: var(--paper); }
+.map-legend [data-swatch="robot"]::before { background: var(--ink); }
 
 /* ---- 조작 — 크기가 위험도다(Law 3) ----------------------------------------
    되돌릴 수 없는 것이 가장 크고 맨 위이며 언제나 같은 자리에 있다.
@@ -780,7 +780,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .line-follow-modes ui-button { border-right: 1px solid var(--surface-line); }
 .line-follow-modes ui-button:last-child { border-right: 0; }
-.line-follow-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
+.line-follow-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 
 /* 사실 격자는 감지 영역(272px)에 산다 — 두 단으로 좁힌다(D-201). 칸 규칙은
    운용·점검 어디서든 같은 모양이다. */
@@ -791,7 +791,7 @@ body[data-view="operate"] .page-footer { display: none; }
 
 .traffic-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .traffic-policy-grid label { display: grid; gap: var(--space-1); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
-.traffic-policy-grid input, .traffic-policy-grid select { min-width: 0; min-height: var(--target-secondary); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--paper); background: var(--ground); padding: 0 var(--space-2); }
+.traffic-policy-grid input, .traffic-policy-grid select { min-width: 0; min-height: var(--target-secondary); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--ink); background: var(--ground); padding: 0 var(--space-2); }
 .traffic-policy-actions, .simulation-signal-controls { display: flex; align-items: center; gap: var(--space-1); }
 .traffic-policy-actions ui-button { flex: 1; }
 .simulation-signal-controls span { margin-right: auto; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
@@ -820,7 +820,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .teleop-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
 .teleop-pad ui-button { touch-action: none; user-select: none; }
 
-.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
+.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 
 /* ===========================================================================
    4. 점검 — 절차 문법(concept 16 §7.2)
@@ -851,8 +851,8 @@ body[data-view="operate"] .page-footer { display: none; }
   background: var(--surface-flat);
   scroll-margin-top: calc(var(--topbar-height) + var(--space-3));
 }
-.inspect .panel h2 { font-size: var(--text-title); letter-spacing: normal; text-transform: none; color: var(--paper); }
-.inspect .panel h3 { font-size: var(--text-body); letter-spacing: normal; text-transform: none; color: var(--paper); }
+.inspect .panel h2 { font-size: var(--text-title); letter-spacing: normal; text-transform: none; color: var(--ink); }
+.inspect .panel h3 { font-size: var(--text-body); letter-spacing: normal; text-transform: none; color: var(--ink); }
 
 .system-identity { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-5); }
 .system-identity div { min-width: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--surface-line); }
@@ -866,7 +866,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .meter header b { font-size: var(--text-title); }
 /* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다(D-82). */
 .meter-rail { height: 4px; margin: var(--space-3) 0 var(--space-2); border-radius: var(--radius-flag); background: var(--gauge-track); overflow: hidden; }
-.meter-rail i { display: block; width: var(--meter, 0%); height: 100%; background: var(--paper); }
+.meter-rail i { display: block; width: var(--meter, 0%); height: 100%; background: var(--ink); }
 .meter footer { overflow: hidden; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .temperature-card {
   display: flex;
@@ -972,15 +972,15 @@ body[data-view="operate"] .page-footer { display: none; }
 .graph-legend { position: absolute; top: var(--space-2); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: 0.1em; }
 .graph-legend i { width: 32px; height: 1px; background: var(--surface-line); }
 .ros-graph-map { width: 100%; height: 300px; }
-.graph-edge { stroke: var(--muted-line); stroke-width: 1; }
+.graph-edge { stroke: var(--line-quiet); stroke-width: 1; }
 .graph-edge.publishes { stroke: var(--series-primary); }
 .graph-edge.subscribes { stroke-dasharray: 4 4; }
 .graph-node { fill: var(--ground-raise); stroke: var(--surface-line); stroke-width: 1; }
 .graph-node.foreign { fill: var(--status-crit-a10); stroke: var(--status-crit); }
 .graph-topic { fill: var(--series-primary); stroke: var(--ground); stroke-width: 3; }
-.graph-node-label, .graph-topic-label, .graph-empty { fill: var(--paper); font: var(--weight-regular) var(--text-label) var(--mono); text-anchor: middle; }
-.graph-topic-label { fill: var(--muted); text-anchor: end; }
-.graph-empty { fill: var(--muted); }
+.graph-node-label, .graph-topic-label, .graph-empty { fill: var(--ink); font: var(--weight-regular) var(--text-label) var(--mono); text-anchor: middle; }
+.graph-topic-label { fill: var(--ink-quiet); text-anchor: end; }
+.graph-empty { fill: var(--ink-quiet); }
 
 .risk-tape { padding: var(--space-4); }
 .risk-tape h3 { margin: 0 0 var(--space-3); font: var(--weight-label) var(--text-body)/var(--leading-label) var(--body); }
@@ -988,7 +988,7 @@ body[data-view="operate"] .page-footer { display: none; }
 .risk-tape li { padding: var(--space-2); border-left: 2px solid var(--status-crit); background: var(--status-crit-a07); }
 .risk-tape li strong, .risk-tape li span { display: block; }
 .risk-tape li strong { color: var(--status-crit); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: 0.08em; }
-.risk-tape li span { margin-top: var(--space-1); color: var(--paper); font: var(--weight-regular) var(--text-label)/1.45 var(--mono); }
+.risk-tape li span { margin-top: var(--space-1); color: var(--ink); font: var(--weight-regular) var(--text-label)/1.45 var(--mono); }
 /* 위험이 없을 때는 색도 테두리도 쓰지 않는다 — 정상에는 색이 없다. */
 .risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 .risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
@@ -1114,6 +1114,6 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .hitl-escalation p {
   margin: 0 0 var(--space-4) 0;
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-body);
 }

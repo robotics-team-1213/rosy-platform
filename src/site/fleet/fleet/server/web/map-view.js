@@ -26,7 +26,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     const image = ctx.createImageData(width, height);
-    const free = hexToRgb(css("--paper"));
+    const free = hexToRgb(css("--ink"));
     const occupied = hexToRgb(css("--ground-deep"));
     const unknown = hexToRgb(css("--ground-soft"));
     for (let row = 0; row < height; row += 1) {
@@ -127,7 +127,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     ctx.lineWidth = 0.4;
     ctx.strokeRect(x - width / 2, y - height / 2, width, height);
     ctx.fillStyle = tone === "crit" ? css("--status-crit")
-      : tone === "warn" ? css("--status-warn") : css("--paper");
+      : tone === "warn" ? css("--status-warn") : css("--ink");
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, x, y);
@@ -177,7 +177,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
         ctx.setLineDash([2, 2]);
         ctx.moveTo(robotCell.cx, robotCell.cy);
         ctx.lineTo(cx, cy);
-        ctx.strokeStyle = error > TRACK_WARN_M ? css("--status-warn") : css("--muted-line");
+        ctx.strokeStyle = error > TRACK_WARN_M ? css("--status-warn") : css("--line-quiet");
         ctx.stroke();
         ctx.setLineDash([]);
         drawChip(ctx, grid, (robotCell.cx + cx) / 2, (robotCell.cy + cy) / 2,
@@ -188,7 +188,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
         ctx.setLineDash([1, 2]);
         ctx.moveTo(leaderCell.cx, leaderCell.cy);
         ctx.lineTo(cx, cy);
-        ctx.strokeStyle = css("--muted-line");
+        ctx.strokeStyle = css("--line-quiet");
         ctx.stroke();
       }
     }
@@ -251,7 +251,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
 
   function colorOfSighting(robotId) {
     const index = view.robots.findIndex((r) => r.robot_id === robotId);
-    return index >= 0 ? view.colors[index % view.colors.length] : css("--paper");
+    return index >= 0 ? view.colors[index % view.colors.length] : css("--ink");
   }
 
   function sightingLabel(s) {
@@ -334,7 +334,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     // 0.5 m 격자
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = css("--muted-line");
+    ctx.strokeStyle = css("--line-quiet");
     ctx.globalAlpha = 0.5;
     for (const gx of gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M)) {
       const a = toPx(gx, bounds.min_y);
@@ -364,7 +364,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
       const bottom = toPx((b.min_x + b.max_x) / 2, b.min_y);
       const right = toPx(b.max_x, (b.min_y + b.max_y) / 2);
       const top = toPx(b.min_x, b.max_y);
-      ctx.fillStyle = css("--muted");
+      ctx.fillStyle = css("--ink-quiet");
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(`${(b.max_x - b.min_x).toFixed(2)} m`, bottom.x, bottom.y + 6);
@@ -390,8 +390,8 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     ctx.lineWidth = 2;
     ctx.font = font;
     ctx.textBaseline = "middle";
-    ctx.strokeStyle = css("--paper");
-    ctx.fillStyle = css("--paper");
+    ctx.strokeStyle = css("--ink");
+    ctx.fillStyle = css("--ink");
     ctx.beginPath();
     ctx.moveTo(axisAt.x, axisAt.y);
     ctx.lineTo(axisAt.x + axisLen, axisAt.y);

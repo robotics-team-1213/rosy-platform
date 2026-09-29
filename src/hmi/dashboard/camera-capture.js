@@ -104,7 +104,7 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
       const height = Math.max(28, Math.round(canvas.height * 0.13));
       context.fillStyle = tokenColor("--scrim");
       context.fillRect(0, canvas.height - height, canvas.width, height);
-      context.fillStyle = tokenColor("--paper");
+      context.fillStyle = tokenColor("--ink");
       context.font = `${Math.max(14, Math.round(height * 0.48))}px sans-serif`;
       context.fillText(`${(last.elapsed_ms / 1000).toFixed(1)}s  ${last.action} · ${last.result === "accepted" ? "접수" : "실패"}`,
         8, canvas.height - Math.round(height * 0.28), canvas.width - 16);

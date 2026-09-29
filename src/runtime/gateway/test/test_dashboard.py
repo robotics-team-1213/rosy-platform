@@ -476,7 +476,7 @@ def test_dashboard_drops_ornament_and_stacks_boot_stages():
     assert "grid-template-columns: 1fr" in grid
     assert "font-variant-numeric: tabular-nums" in css
     meter = css.split(".meter-rail i", 1)[1].split("}", 1)[0]
-    assert "var(--paper)" in meter
+    assert "var(--ink)" in meter
     assert "var(--status-crit)" not in meter
     assert "var(--signal-danger)" not in meter
 
