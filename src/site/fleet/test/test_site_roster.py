@@ -138,6 +138,9 @@ def test_remove_closes_the_client_and_forgets_goals(tmp_path):
     added = ClosableRobot("rosy_09")
     roster.add(_ep("rosy_09", 9000, pairing="pair-" + "nine"), added)
     run(console.goal("rosy_09", 1.0, 1.0))
+    run(console.cancel("rosy_09"))
+    run(console.snapshot())
+    assert "rosy_09" in console._seen
 
     run(roster.remove("rosy_09"))
 
@@ -147,7 +150,7 @@ def test_remove_closes_the_client_and_forgets_goals(tmp_path):
     assert "rosy_09" not in tasks.robot_ids
     assert not console.uses_rest_token("rest-rosy_09")
     assert run(console.snapshot())["robots"][0]["robot_id"] == "rosy_01"
-    assert console._goals == {} and console._claims == {}
+    assert console._goals == {} and console._claims == {} and "rosy_09" not in console._seen
     assert console.hub.handle(_hello("rosy_09", "pair-" + "nine")).type is EnvelopeType.ERROR
 
 
@@ -196,3 +199,46 @@ def test_sightings_refuse_a_removed_robot(tmp_path):
     roster.add(_ep("rosy_09", 9000), FakeRobot("rosy_09"))
     run(roster.remove("rosy_09"))
     assert "rosy_09" not in sightings.known_robot_ids
+
+
+def test_remove_refuses_a_robot_with_an_active_console_goal(tmp_path):
+    console, _, roster = _roster(tmp_path, FakeRobot("rosy_01"))
+    added = ClosableRobot("rosy_09")
+    roster.add(_ep("rosy_09", 9000), added)
+    run(console.goal("rosy_09", 1.0, 1.0))
+    with pytest.raises(HubError) as refused:
+        run(roster.remove("rosy_09"))
+    assert refused.value.code == "ROBOT_BUSY"
+    assert "rosy_09" in roster.robot_ids and added.closed == 0
+
+
+def test_remove_refuses_a_robot_whose_task_result_is_unknown(tmp_path):
+    _, tasks, roster = _roster(tmp_path, FakeRobot("rosy_01"))
+    roster.add(_ep("rosy_09", 9000), FakeRobot("rosy_09"))
+    task = run(tasks.submit_navigation(robot_id="rosy_09", x=1.0, y=2.0, source="operator",
+                                       actor_id="alice", request_key="k-1"))
+    tasks.store.transition(task["task_id"], "UNKNOWN", actor_id="alice", source="operator",
+                           reason="COMMAND_RESULT_UNKNOWN")
+    with pytest.raises(HubError) as refused:
+        run(roster.remove("rosy_09"))
+    assert refused.value.code == "ACTIVE_TASKS"
+
+
+def test_traffic_release_skips_a_robot_removed_between_awaits(tmp_path):
+    console, _, roster = _roster(tmp_path, FakeRobot("rosy_01"))
+    roster.add(_ep("rosy_09", 9000), FakeRobot("rosy_09"))
+    console._queued["rosy_09"] = {"x": 1.0, "y": 1.0, "yaw": 0.0, "blocked_by": "rosy_77",
+                                  "waiting_on": ["rosy_77"], "reason": "ROUTE_CONFLICT"}
+    console._queued["rosy_01"] = {"x": 2.0, "y": 2.0, "yaw": 0.0, "blocked_by": "rosy_77",
+                                  "waiting_on": ["rosy_77"], "reason": "ROUTE_CONFLICT"}
+    original = console.goal
+
+    async def goal_then_remove(robot_id, *args, **kwargs):
+        if robot_id == "rosy_01":
+            console._queued.pop("rosy_09", None)
+            console._remove_robot("rosy_09")
+        return await original(robot_id, *args, **kwargs)
+
+    console.goal = goal_then_remove
+    run(console.snapshot())
+    assert "rosy_09" not in console._queued

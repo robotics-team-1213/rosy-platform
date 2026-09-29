@@ -58,6 +58,11 @@ class SiteRoster:
                 and self._console._formation_members()):
             return RosterConflict("FORMATION_ACTIVE",
                                   f"{robot_id} is in the running formation; stop it first")
+        console = self._console
+        if any(robot_id in table for table in (console._goals, console._queued,
+                                               console._claims, console._yielding)):
+            return RosterConflict("ROBOT_BUSY",
+                                  f"{robot_id} has a goal or traffic wait; cancel it first")
         if self._task_service is not None:
             task_ids = self._task_service.store.unfinished_task_ids(robot_id)
             if task_ids:

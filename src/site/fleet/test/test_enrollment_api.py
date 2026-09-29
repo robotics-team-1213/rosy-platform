@@ -149,3 +149,15 @@ def test_key_failure_keeps_the_app_up_and_enrollment_answers_503(tmp_path):
                            json={"address": PINNED, "code": CODE})
     assert response.status_code == 503
     assert store.rows() == before and network.requests == []
+
+
+def test_unenroll_with_an_active_console_goal_is_409(tmp_path):
+    client, service, network, store = _app(tmp_path)
+    client.post("/api/fleet/enrollment/robots", headers=_headers(OPERATOR),
+                json={"discovery_name": NAME, "code": CODE})
+    service._roster._console._goals["rosy_09"] = {"x": 1.0, "y": 1.0, "yaw": 0.0}
+    refused = client.delete("/api/fleet/enrollment/robots/rosy_09", headers=_headers(OPERATOR))
+    assert refused.status_code == 409
+    assert refused.json()["detail"]["code"] == "ROBOT_BUSY"
+    assert store.get("rosy_09")["state"] == "active"
+    assert "/api/v1/auth/logout" not in network.paths()

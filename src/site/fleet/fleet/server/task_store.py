@@ -736,7 +736,7 @@ class FleetTaskStore:
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 """SELECT task_id FROM fleet_tasks WHERE robot_id=?
-                   AND status IN ('REQUESTED', 'QUEUED', 'ACCEPTED', 'RUNNING')
+                   AND status IN ('REQUESTED', 'QUEUED', 'ACCEPTED', 'RUNNING', 'UNKNOWN')
                    ORDER BY created_at, task_id""", (robot_id,)
             ).fetchall()
         return [row["task_id"] for row in rows]

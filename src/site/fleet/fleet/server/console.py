@@ -620,8 +620,10 @@ class FleetConsole:
         # 남는다(달리는 로봇은 이 순서와 무관하게 이긴다. 여기서 고르는 것은 대기자
         # 사이의 순서다).
         for robot_id in self._release_order(release_candidates):
-            mission = self._queued[robot_id]
-            self._queued.pop(robot_id, None)
+            # A roster removal may land between the awaits below (D-352 5).
+            mission = self._queued.pop(robot_id, None)
+            if mission is None or robot_id not in self._clients:
+                continue
             if mission.get("task_id") is not None:
                 if self._task_queue_release_callback is None:
                     self._queued[robot_id] = mission
