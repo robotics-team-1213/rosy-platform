@@ -272,11 +272,8 @@ function buildHudFacts() {
 
 function buildControls() {
   const controls = el("div", null, {"data-drive-controls": ""});
-  const wheelWrap = el("div", null, {"data-drive-wheel-wrap": ""});
-  const wheel = el("div", null, {"data-drive-wheel": "", "aria-label": "조향 휠"});
-  const indicator = el("div", null, {"data-drive-wheel-indicator": ""});
-  wheel.append(indicator);
-  wheelWrap.append(wheel);
+  // NFS 모바일 레이아웃: 좌하단 페달 + 프리셋 | 우하단 조향 조이스틱
+  const left = el("div", null, {"data-drive-left": ""});
   const presets = el("div", null, {"data-drive-presets": ""});
   presets.append(el("ui-text", "속도", {scale: "label"}));
   const presetRow = el("ui-actions", null, {"data-drive-preset-row": ""});
@@ -286,7 +283,17 @@ function buildControls() {
     el("ui-button", "전진", {kind: "primary", type: "button", "data-drive-pedal": "forward"}),
     el("ui-button", "후진", {kind: "segment", type: "button", "data-drive-pedal": "reverse"}),
   );
-  controls.append(presets, wheelWrap, pedals);
+  left.append(presets, pedals);
+
+  const right = el("div", null, {"data-drive-right": ""});
+  const wheelWrap = el("div", null, {"data-drive-wheel-wrap": ""});
+  const wheel = el("div", null, {"data-drive-wheel": "", "aria-label": "조향 조이스틱"});
+  const indicator = el("div", null, {"data-drive-wheel-indicator": ""});
+  wheel.append(indicator);
+  wheelWrap.append(wheel);
+  right.append(wheelWrap);
+
+  controls.append(left, right);
   return controls;
 }
 
