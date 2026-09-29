@@ -19,11 +19,30 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `runtime/` | `gateway/` (package `core`), `events/` (`core_events`), `services/` (`core_features`, managers plus `decision/`), `api_web/` (`core_api_web`), `sensing/` (package `control`), `navigation`. Judgment does not publish `cmd_vel` |
 | `products/` | `pinky_pro/` (`profile/` package `pinky_pro`, `bringup`, `adc`, `lamp`, `led`) and `omx/` (`profile/` package `omx`, `adapter/` package `omx_adapter`) |
 | `drivers/` | `imu_bno055` chip driver; product reuse is verified separately |
-| `hmi/` | `face/` (package `emotion`, robot LCD), `web/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`) |
+| `hmi/` | `face/` (package `emotion`, robot LCD), `web_common/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64), `isaac_sim` (Isaac Sim integration area) |
 | `site/` | `fleet/` (site mission/task ledger and console), `overhead/` (camera-derived sighting input), and `games/` (game host) |
 
 ## For AI Agents
+
+### Folder ↔ package
+
+Folders carry the role name; ROS package names stay (D-231). Where they differ, the pair is listed below and `test/architecture/test_folder_package_names.py` enforces this exact table against every `package.xml` (D-338). A new folder whose package name differs is added here and in that test in the same commit.
+
+| Folder (`src/`) | ROS package |
+|---|---|
+| `contracts/foundation` | `core_common` |
+| `hmi/face` | `emotion` |
+| `products/omx/adapter` | `omx_adapter` |
+| `products/omx/profile` | `omx` |
+| `products/pinky_pro/adc` | `sensor_adc` |
+| `products/pinky_pro/lamp` | `lamp_control` |
+| `products/pinky_pro/profile` | `pinky_pro` |
+| `runtime/api_web` | `core_api_web` |
+| `runtime/events` | `core_events` |
+| `runtime/gateway` | `core` |
+| `runtime/sensing` | `control` |
+| `runtime/services` | `core_features` |
 
 ### Placement Rules
 
