@@ -334,3 +334,5 @@
 | D-330 | Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다 | Accepted (구조 결정; D-276 전용 정지 감사 규칙 부분 대체; 구현·물리 정지 수용 HOLD) |
 | D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 | Accepted (provider boundary/source adapter만; runtime/actuation/pilot HOLD) |
 | D-332 | 사람 확인은 고정 단계가 아니라 조건이다 — 사전 등록 승인, 예외 조정, 자율 재발의 승인에만 둔다 | Accepted (위치·의미 결정만; 밸브 개방·자동 실행·구현 없음) |
+| D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 | Accepted (계약 경계·구현 순서만; 신규 wire/API·장치 실행·물리 수용 HOLD) |
+| D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 | Accepted (도구·진행 의미만; 새 provider loop/API·자동 실행·물리 수용 HOLD) |

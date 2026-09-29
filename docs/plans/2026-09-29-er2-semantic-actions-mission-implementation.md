@@ -10,11 +10,13 @@
 
 ---
 
+**2026-09-29 상태 보정:** 작업 1·2·3·4·6에 `Create`로 적힌 selector, transaction, Action/Mission 원장, ER 2 표준 후보 adapter의 SOURCE 파일 일부는 이미 작성됐다. 그 표기는 최초 계획의 이력이며 운영 route·runner·ROS/gripper 연결이나 DEVICE 검증 완료를 뜻하지 않는다. 첫 단일 `PICK_PLACE`의 남은 계약·연결 작업은 [D-333 실행 계획](2026-09-29-er2-mission-action-contract-closure.md)을 따른다. 이 문서의 다장치 DAG·streaming·확장 단계는 별도 후속 범위다.
+
 ## 기준선·범위·착수 규칙
 
 - 계약: [D-326](../adr/D-326-agent-loop-boundary.md), [D-327](../adr/D-327-semantic-manipulation-actions-and-device-adapters.md), [D-328](../adr/D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-308](../adr/D-308-intent-and-device-action-interpretation-boundary.md), [D-307](../adr/D-307-final-action-outcome-and-stop-readback-evidence.md), [D-18](../adr/D-18-rosy-core.md). [사용자 제공 실험 대조](2026-09-29-er2-isaac-sim-architecture-assessment.md)는 사례이며 장치 수용 증거가 아니다.
 - [D-330](../adr/D-330-fleet-action-admission-stop-and-recovery.md)와 [Fleet 제어 통합 계획](2026-09-29-fleet-mission-control-arbitration-implementation.md)의 공통 claim·정지 래치·감사 장애 중 전용 정지 경로는 이 계획의 Mission dispatch/OMX 운영 Action 활성화 전 선행 조건이다. 두 계획의 작업 번호는 각각 독립이며 실제 구현은 선행 관계에 따라 교차 진행한다.
-- 현재 `src/products/omx/profile/config/omx.disabled.yaml`은 `enabled: false`다. `omx_adapter`는 카메라 pair와 arm trajectory 단일 submitter 후보를 갖지만 그리퍼/물체 보유·배치 검증 및 원격 Device Action API가 없다. `src/site/fleet/fleet/server/task_service.py`는 Pinky navigation task만 영속화하고 policy dispatch는 닫혀 있다. `/api/fleet/do`의 `steps`는 Mission DAG가 아니다.
+- 현재 `src/products/omx/profile/config/omx.disabled.yaml`은 `enabled: false`다. `omx_adapter`에는 ROS-free 그리퍼·물체 보유/배치 증거 계약과 팔 trajectory 단일 submitter 후보가 있지만 실제 gripper/driver 결합, 원격 Device Action API, 물리 readback은 없다. `src/site/fleet/fleet/server`에는 내부 Mission 원장이 있으나 route/dispatcher는 없고 policy dispatch는 닫혀 있다. `/api/fleet/do`의 `steps`는 Mission DAG가 아니다.
 - 이 계획의 첫 실제 작업은 **고정 OMX의 알려진 블록→트레이 `PICK_PLACE`**다. 단독 `PICK`/`PLACE`, Pinky+OMX 운반, 다중 장치, ER 2 자동 dispatch는 아래 출구를 통과하기 전까지 capability로 광고하지 않는다. 현재 Pinky API/`TaskKind`를 OMX용으로 재사용하지 않는다.
 - 각 단계는 새 격리 worktree와 최신 `main`의 HEAD·dirty path 비교 후 시작한다. API 경로·wire enum·envelope이 바뀌는 커밋은 `docs/reference/ROSY API & Protocol Reference.md`, `src/contracts/foundation/core_common/protocol/schemas.py`, 생산자/소비자 시험을 함께 바꾼다. 제안 경로를 이미 존재하는 API로 설명하지 않는다.
 - SOURCE/LOCAL/ROS-SIM, ARTIFACT, DEVICE, FIELD를 별도 기록한다. 모델이나 시뮬레이션 통과로 `omx.enabled`를 켜지 않는다. 실제 팔·모터 동작은 장치 인벤토리, 독립 정지와 현장 입회·수용 절차를 갖춘 별도 DEVICE 세션에서만 한다.
@@ -69,7 +71,7 @@
 
 1. **실패 시험:** 두 독립 Step의 병렬 dispatch, 같은 장치/공유 구역 중복 예약 거부, 한 Step 실패 뒤 join 대기, 적재 실패 중 base 출발 금지, 운반 도착 후 하중 부재 시 하역 금지, 같은 물체의 중복 pick, 늦은 ACK 뒤 무조건 재시도를 거절한다. 정지 래치 뒤 대기 Step이 발행되지 않고 정지 해제·재시작 뒤에도 새 관측/예약/운영자 승인 전 자동 재발행되지 않는 반례를 포함한다.
 2. Fleet에 DAG dependency와 예약/인계 predicate를 추가한다. 새 Mission 예약은 기존 `fleet_robot_reservations`와 scheduler claim, 직접 조작의 로컬 lease를 같은 제어권 판정에 연결한다. 같은 장치의 기존 navigation task·Mission Step·직접 조작이 동시에 발행될 수 없음을 시험한다. 물리 보유·적재 상태가 불명확하면 재계획 후보를 보류하고 이전 attempt와 새 attempt를 분리한다. Pinky+OMX 실제 운반은 D-55의 footprint/하중·정지 연동과 DEVICE/FIELD 검증 전까지 실행 capability가 아니다.
-3. D-308에 기록된 사이트 `/api/fleet/estop`의 감사 DB 장애 시 `503` 제한을 그대로 독립 안전 정지로 간주하지 않는다. 현재 정지 경로가 기존 navigation 대기열만 취소하는 점을 반영해 Mission READY/QUEUED Step에도 정지 래치를 영속 적용하고, 실행 중 Step은 장치 로컬 안전 경로에서 중단·readback한다. Fleet 또는 감사 DB 장애 중에도 로컬 정지가 가능한지 검증한다. 사이트 전체 정지 가용성은 별도 경로와 감사 내구성을 검증하기 전 HOLD로 둔다.
+3. D-330 이후 전용 `/api/fleet/estop`은 감사·래치·대기열 기록 장애에도 인증된 정지 fanout을 시도한다. `/api/fleet/do`의 `estop`은 일반 감사 gate/순차 step을 지나므로 같은 긴급정지 경로가 아니다. 기존 navigation queue/latch뿐 아니라 Mission READY/QUEUED Step에도 정지 generation을 적용하고, 실행 중 Step은 장치 로컬 stop·readback으로 중단한다. 장치 측 generation fence와 Fleet/네트워크 장애 중 로컬 stop을 검증하기 전에는 원격 사이트 정지를 물리 정지 보증으로 표시하지 않는다.
 4. `python -m pytest src/site/fleet/test/test_mission_dag.py src/site/fleet/test/test_mission_handoff.py src/site/fleet/test/test_mission_replan.py src/site/fleet/test/ -q`를 실행해 commit한다. **Exit:** 두 장치의 독립 작업과 의존 인계를 SIM에서 구별하고 한 장치의 수락을 전체 완료로 표시하지 않는다.
 
 ## 작업 6. ER 2 제안 어댑터와 모델 없는 비교 기준
