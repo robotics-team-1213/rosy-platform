@@ -47,6 +47,9 @@ from fleet.server.mission_service import MissionService
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_progress import MissionProgressService
 from fleet.server.mission_store import MissionConflict
+from fleet.server.goal_evidence_service import (
+    GoalEvidenceService, GoalEvidenceSubmissionError,
+)
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
 from fleet.server.local_stop_transport import UnixLocalStopTransport
 from fleet.server.local_action_transport import UnixLocalActionTransport
@@ -249,6 +252,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                task_service: Optional[FleetTaskService] = None,
                mission_service: Optional[MissionService] = None,
                proposal_store: Optional[ProposalStore] = None,
+               goal_evidence_service: Optional[GoalEvidenceService] = None,
                candidate_resolver=None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
                start_task_dispatcher: bool = True,
@@ -268,6 +272,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
     if candidate_resolver is not None and not callable(candidate_resolver):
         raise ValueError("Mission candidate resolver must be callable")
+    if goal_evidence_service is not None and not mission_configured:
+        raise ValueError("goal evidence requires the persistent Mission API")
+    if goal_evidence_service is not None and goal_evidence_service.missions is not mission_service:
+        raise ValueError("goal evidence service must use the configured MissionService")
     if mission_configured and task_service is None:
         raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
     if mission_configured:
@@ -275,6 +283,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             task_service.store.path.resolve(), mission_service.store.path.resolve(),
             proposal_store.path.resolve(),
         }
+        if goal_evidence_service is not None:
+            database_paths.add(goal_evidence_service.store.path.resolve())
         if len(database_paths) != 1:
             raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
     if site_users is not None and task_service is None:
@@ -299,7 +309,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if enable_mission_dispatcher and action_transport is None:
         action_transport = UnixLocalActionTransport(omx_socket_root)
     mission_dispatcher = (
-        MissionDispatcher(mission_service, task_service.store, action_transport, configured_omx)
+        MissionDispatcher(
+            mission_service, task_service.store, action_transport, configured_omx,
+            on_action_terminal=(goal_evidence_service.on_action_terminal
+                                if goal_evidence_service is not None else None),
+        )
         if enable_mission_dispatcher else None
     )
     mission_progress = (
@@ -329,16 +343,21 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         dispatcher = None
         mission_worker = None
         proposal_expiry = None
+        goal_evidence_worker = None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
         if mission_dispatcher is not None:
             mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
+        if goal_evidence_service is not None:
+            goal_evidence_worker = asyncio.create_task(
+                _goal_evidence_expiry_loop(goal_evidence_service)
+            )
         try:
             yield
         finally:
-            for background in (dispatcher, mission_worker, proposal_expiry):
+            for background in (dispatcher, mission_worker, proposal_expiry, goal_evidence_worker):
                 if background is not None:
                     background.cancel()
                     try:
@@ -356,6 +375,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     app.state.mission_service = mission_service
+    app.state.goal_evidence_service = goal_evidence_service
     app.state.mission_progress = mission_progress
     app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
@@ -695,6 +715,33 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return control
 
     if mission_service is not None:
+        if goal_evidence_service is not None:
+            @app.post("/api/fleet/goal-evidence", tags=["fleet-goal-evidence"])
+            def fleet_goal_evidence(
+                body: dict,
+                x_goal_evidence_token: Optional[str] = Header(default=None),
+            ) -> dict:
+                if not isinstance(body, dict) or set(body) != {"mission_id", "evidence"}:
+                    raise HTTPException(status_code=422, detail={
+                        "code": "INVALID_GOAL_EVIDENCE_ENVELOPE",
+                        "message": "body requires mission_id and evidence",
+                    })
+                if not isinstance(body["mission_id"], str) or not isinstance(body["evidence"], dict):
+                    raise HTTPException(status_code=422, detail={
+                        "code": "INVALID_GOAL_EVIDENCE_ENVELOPE",
+                    })
+                if not x_goal_evidence_token:
+                    raise HTTPException(status_code=401, detail={"code": "PRODUCER_UNAUTHORIZED"})
+                try:
+                    return goal_evidence_service.submit(
+                        token=x_goal_evidence_token, mission_id=body["mission_id"],
+                        raw_evidence=body["evidence"],
+                    )
+                except GoalEvidenceSubmissionError as exc:
+                    raise HTTPException(status_code=exc.status_code, detail={
+                        "code": exc.code, "message": str(exc),
+                    }) from exc
+
         def _mission_candidate_result(proposal: dict, mission: dict | None) -> dict:
             return {
                 "proposal": {
@@ -1357,6 +1404,16 @@ async def _proposal_expiry_loop(proposal_store: ProposalStore) -> None:
         except (OSError, sqlite3.Error):
             _LOG.exception("expired Fleet proposal cleanup failed")
         await asyncio.sleep(3600)
+
+
+async def _goal_evidence_expiry_loop(service: GoalEvidenceService) -> None:
+    """Apply registered grace deadlines without enabling Action dispatch."""
+    while True:
+        try:
+            service.hold_expired_without_evidence()
+        except (OSError, sqlite3.Error, ValueError):
+            _LOG.exception("goal evidence grace reconciliation failed")
+        await asyncio.sleep(1.0)
 
 
 async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:

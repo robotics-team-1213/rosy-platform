@@ -20,7 +20,11 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.58" in reference
+    assert "**Version:** v1.59" in reference
+    assert "## 10.14 Fleet goal-evidence producer contract (D-348)" in reference
+    assert "`/api/fleet/goal-evidence`" in reference
+    assert "X-Goal-Evidence-Token" in reference
+    assert "GOAL_EVIDENCE_TIMEOUT" in reference
     assert "## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-336)" in reference
     assert "## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)" in reference
     assert "`/api/fleet/proposals/{proposal_id}/resolve`" in reference
@@ -77,7 +81,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.58" in reference
+    assert "**Version:** v1.59" in reference
     assert (
         "## 10.10 Site Fleet intent interpretation and message boundaries "
         "(D-293 Accepted, D-316 Accepted)" in reference
