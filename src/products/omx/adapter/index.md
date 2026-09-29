@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(omx): 제출 기록을 정지 펜스 잠금 안으로
 - 2026-09-29 · uncommitted · add bounded local Device Action API and runner (D-336)
 - 2026-09-29 · uncommitted · record semantic Action baseline and attempt ledger
 - 2026-09-26 · uncommitted · owner competition in locked vendor simulation
 - 2026-09-26 · uncommitted · OMX ROS arm and calibrated camera runtime
-- 2026-09-26 · uncommitted · fix(omx): report cancellation evidence precisely (D-282 P3)

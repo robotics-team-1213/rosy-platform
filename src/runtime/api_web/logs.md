@@ -174,3 +174,10 @@
 - 증거: src/runtime/gateway/test/test_protocol_version_alignment.py 3 passed. test_line_follow_contract_docs 핀도 v1.56으로 같이 정렬(문서 계약 트리).
 - gate 변화: 없음.
 - 교훈: 없음.
+
+## 2026-09-29 · uncommitted · fix(api): 계약 문구를 v1.57로 재정렬
+
+- 변경: 병행 회차들이 API Reference를 v1.57까지 올린 뒤 설명 문구가 다시 뒤처졌으므로 `ROSY-API-REF-001 v1.57`로 맞췄다. 버전을 올리는 회차는 문구와 계약서 헤더를 같은 변경에 담아야 정합 시험이 붉지 않는다.
+- 증거: `python -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py src/runtime/api_web/test/ -q` 통과(omx 경주 수정 회차와 같은 실행, 160 passed 16 skipped).
+- gate 변화: 없음.
+- 교훈: 버전 정합은 게이트가 아니라 습관이다 — 다음 범프 회차가 또 깨뜨린다.

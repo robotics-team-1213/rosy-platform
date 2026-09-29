@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1340" viewBox="0 0 1120 1340">
+<rect width="100%" height="100%" fill="#0b1220"/>
+<text x="55" y="42" fill="#f3f6fb" font-family="sans-serif" font-size="24" font-weight="700">Semantic road closed-loop simulation</text>
+<text x="55" y="66" fill="#9eacc0" font-family="monospace" font-size="13">map_260905_update_v2 · road-scene-v1 · camera pixels only → policy → CORE command</text>
+<rect x="55" y="90" width="470" height="490" rx="12" fill="#172234" stroke="#41506a"/>
+<polyline points="99.1,307.8 187.2,498.3 304.7,498.3 304.7,335.0 392.8,335.0 392.8,171.7 480.9,171.7" fill="none" stroke="#f6f7f8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="225.9375" y1="460.3333333333333" x2="225.9375" y2="536.3333333333333" stroke="#6ee7f2" stroke-width="6"/>
+<line x1="235.9375" y1="460.3333333333333" x2="235.9375" y2="536.3333333333333" stroke="#6ee7f2" stroke-width="6"/>
+<line x1="245.9375" y1="460.3333333333333" x2="245.9375" y2="536.3333333333333" stroke="#6ee7f2" stroke-width="6"/>
+<line x1="255.9375" y1="460.3333333333333" x2="255.9375" y2="536.3333333333333" stroke="#6ee7f2" stroke-width="6"/>
+<line x1="265.9375" y1="460.3333333333333" x2="265.9375" y2="536.3333333333333" stroke="#6ee7f2" stroke-width="6"/>
+<line x1="213.625" y1="450.3333333333333" x2="213.625" y2="546.3333333333333" stroke="#ff5a67" stroke-width="8"/>
+<circle cx="269.4375" cy="427.55555555555554" r="15" fill="#ff3347"/>
+<text x="291.4375" y="432.55555555555554" fill="#f3f6fb" font-family="monospace" font-size="12">signal_main</text>
+<text x="585" y="104" fill="#f3f6fb" font-family="sans-serif" font-size="18" font-weight="700">Perception / policy / command timeline</text>
+<line x1="585" y1="125" x2="1065" y2="125" stroke="#41506a"/>
+<circle cx="593" cy="153" r="7" fill="#35d6a5"/>
+<text x="610" y="158" fill="#f3f6fb" font-family="monospace" font-size="14">0.00s  clear          FOLLOW</text>
+<rect x="610" y="170" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="170" width="179.6" height="8" rx="4" fill="#35d6a5"/>
+<text x="805" y="179" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.080 m/s · clear_road</text>
+<circle cx="593" cy="219" r="7" fill="#ffd166"/>
+<text x="610" y="224" fill="#f3f6fb" font-family="monospace" font-size="14">0.20s  approach       APPROACH</text>
+<rect x="610" y="236" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="236" width="93.1" height="8" rx="4" fill="#ffd166"/>
+<text x="805" y="245" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.041 m/s · stop_line_approach</text>
+<circle cx="593" cy="285" r="7" fill="#ff7b72"/>
+<text x="610" y="290" fill="#f3f6fb" font-family="monospace" font-size="14">0.40s  red_stop       STOP_REQUIRED</text>
+<rect x="610" y="302" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="302" width="0.0" height="8" rx="4" fill="#ff7b72"/>
+<text x="805" y="311" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · stop_dwell</text>
+<circle cx="593" cy="351" r="7" fill="#ff7b72"/>
+<text x="610" y="356" fill="#f3f6fb" font-family="monospace" font-size="14">0.70s  red_dwell      STOP_REQUIRED</text>
+<rect x="610" y="368" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="368" width="0.0" height="8" rx="4" fill="#ff7b72"/>
+<text x="805" y="377" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · stop_dwell</text>
+<circle cx="593" cy="417" r="7" fill="#ff5a67"/>
+<text x="610" y="422" fill="#f3f6fb" font-family="monospace" font-size="14">1.00s  red_wait       WAIT_SIGNAL</text>
+<rect x="610" y="434" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="434" width="0.0" height="8" rx="4" fill="#ff5a67"/>
+<text x="805" y="443" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · signal_red</text>
+<circle cx="593" cy="483" r="7" fill="#42e66c"/>
+<text x="610" y="488" fill="#f3f6fb" font-family="monospace" font-size="14">1.20s  green_proceed  PROCEED</text>
+<rect x="610" y="500" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="500" width="55.3" height="8" rx="4" fill="#42e66c"/>
+<text x="805" y="509" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.025 m/s · signal_green</text>
+<circle cx="593" cy="549" r="7" fill="#d58cff"/>
+<text x="610" y="554" fill="#f3f6fb" font-family="monospace" font-size="14">1.70s  stale          HOLD</text>
+<rect x="610" y="566" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="566" width="0.0" height="8" rx="4" fill="#d58cff"/>
+<text x="805" y="575" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · road_evidence_stale</text>
+<circle cx="593" cy="615" r="7" fill="#35d6a5"/>
+<text x="610" y="620" fill="#f3f6fb" font-family="monospace" font-size="14">2.00s  unsig_clear    FOLLOW</text>
+<rect x="610" y="632" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="632" width="179.6" height="8" rx="4" fill="#35d6a5"/>
+<text x="805" y="641" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.080 m/s · clear_road</text>
+<circle cx="593" cy="681" r="7" fill="#ffd166"/>
+<text x="610" y="686" fill="#f3f6fb" font-family="monospace" font-size="14">2.20s  unsig_approach APPROACH</text>
+<rect x="610" y="698" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="698" width="93.1" height="8" rx="4" fill="#ffd166"/>
+<text x="805" y="707" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.041 m/s · stop_line_approach</text>
+<circle cx="593" cy="747" r="7" fill="#ff7b72"/>
+<text x="610" y="752" fill="#f3f6fb" font-family="monospace" font-size="14">2.40s  unsig_stop     STOP_REQUIRED</text>
+<rect x="610" y="764" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="764" width="0.0" height="8" rx="4" fill="#ff7b72"/>
+<text x="805" y="773" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · stop_dwell</text>
+<circle cx="593" cy="813" r="7" fill="#ff7b72"/>
+<text x="610" y="818" fill="#f3f6fb" font-family="monospace" font-size="14">2.70s  unsig_dwell    STOP_REQUIRED</text>
+<rect x="610" y="830" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="830" width="0.0" height="8" rx="4" fill="#ff7b72"/>
+<text x="805" y="839" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · stop_dwell</text>
+<circle cx="593" cy="879" r="7" fill="#42e66c"/>
+<text x="610" y="884" fill="#f3f6fb" font-family="monospace" font-size="14">3.00s  unsig_proceed  PROCEED</text>
+<rect x="610" y="896" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="896" width="55.3" height="8" rx="4" fill="#42e66c"/>
+<text x="805" y="905" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.025 m/s · unsignalized_proceed</text>
+<circle cx="593" cy="945" r="7" fill="#d58cff"/>
+<text x="610" y="950" fill="#f3f6fb" font-family="monospace" font-size="14">3.20s  unexpected_signal HOLD</text>
+<rect x="610" y="962" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="962" width="0.0" height="8" rx="4" fill="#d58cff"/>
+<text x="805" y="971" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · signal_unexpected</text>
+<circle cx="593" cy="1011" r="7" fill="#ff7b72"/>
+<text x="610" y="1016" fill="#f3f6fb" font-family="monospace" font-size="14">3.40s  obs_stop       STOP_REQUIRED</text>
+<rect x="610" y="1028" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="1028" width="0.0" height="8" rx="4" fill="#ff7b72"/>
+<text x="805" y="1037" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · stop_dwell</text>
+<circle cx="593" cy="1077" r="7" fill="#ff5a67"/>
+<text x="610" y="1082" fill="#f3f6fb" font-family="monospace" font-size="14">4.00s  obs_unknown    WAIT_SIGNAL</text>
+<rect x="610" y="1094" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="1094" width="0.0" height="8" rx="4" fill="#ff5a67"/>
+<text x="805" y="1103" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · signal_unknown</text>
+<circle cx="593" cy="1143" r="7" fill="#42e66c"/>
+<text x="610" y="1148" fill="#f3f6fb" font-family="monospace" font-size="14">4.20s  obs_green      PROCEED</text>
+<rect x="610" y="1160" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="1160" width="55.3" height="8" rx="4" fill="#42e66c"/>
+<text x="805" y="1169" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.025 m/s · signal_green</text>
+<circle cx="593" cy="1209" r="7" fill="#d58cff"/>
+<text x="610" y="1214" fill="#f3f6fb" font-family="monospace" font-size="14">4.40s  obs_conflict   HOLD</text>
+<rect x="610" y="1226" width="180" height="8" rx="4" fill="#25344b"/>
+<rect x="610" y="1226" width="0.0" height="8" rx="4" fill="#d58cff"/>
+<text x="805" y="1235" fill="#9eacc0" font-family="monospace" font-size="12">cmd 0.000 m/s · signal_source_conflict</text>
+<text x="55" y="1310" fill="#9eacc0" font-family="sans-serif" font-size="13">HOST-SIM evidence only · no physical Pinky Pro, camera mount, or stopping-distance acceptance</text>
+</svg>

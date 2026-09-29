@@ -60,6 +60,30 @@ def test_red_wait_green_resume_and_stale_stop_are_closed_loop(tmp_path):
     assert samples["stale"]["policy_state"] == "HOLD"
     assert samples["stale"]["policy_reason"] == "road_evidence_stale"
     assert samples["stale"]["command_linear"] == 0.0
+
+    # Unsignalized junction (junction_rule=stop_and_go): complete stop and
+    # dwell licence entry with no signal; a late signal contradicts it.
+    assert samples["unsig_proceed"]["policy_state"] == "PROCEED"
+    assert samples["unsig_proceed"]["policy_reason"] == "unsignalized_proceed"
+    assert samples["unsig_proceed"]["command_linear"] > 0.0
+    assert samples["unexpected_signal"]["policy_state"] == "HOLD"
+    assert samples["unexpected_signal"]["policy_reason"] == "signal_unexpected"
+    assert samples["unexpected_signal"]["command_linear"] == 0.0
+
+    # Measured-light fusion (D-337): the camera never sees the head.
+    assert samples["obs_unknown"]["policy_state"] == "WAIT_SIGNAL"
+    assert samples["obs_unknown"]["policy_reason"] == "signal_unknown"
+    assert samples["obs_unknown"]["signal_source_kind"] == "camera"
+    assert samples["obs_green"]["policy_state"] == "PROCEED"
+    assert samples["obs_green"]["policy_reason"] == "signal_green"
+    assert samples["obs_green"]["signal_source_kind"] == "fused"
+    assert samples["obs_green"]["command_linear"] > 0.0
+    assert samples["obs_conflict"]["policy_state"] == "HOLD"
+    assert samples["obs_conflict"]["policy_reason"] == "signal_source_conflict"
+    assert samples["obs_conflict"]["command_linear"] == 0.0
+    assert summary["scenarios"] == [
+        "signal_controlled", "stop_and_go_unsignalized", "observer_fusion"]
+
     assert summary["semantic_truth_fed_to_detector"] is False
     assert summary["physical_device_validated"] is False
 
@@ -74,7 +98,7 @@ def test_red_wait_green_resume_and_stale_stop_are_closed_loop(tmp_path):
     assert preview.size == (320, 240)
     animation = Image.open(tmp_path / "camera_preview_simulation.gif")
     assert animation.is_animated is True
-    assert animation.n_frames == 6
+    assert animation.n_frames == 16
 
 
 def test_repository_tool_entrypoint_loads_without_external_pythonpath():

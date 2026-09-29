@@ -1,6 +1,6 @@
 # 로봇 신호 소스 통합 실행 계획 — T1~T5
 
-- **Status:** T1·T2·T3 완료 (2026-09-29, 호스트 시험 501 passed) — T4·T5 대기
+- **Status:** T1~T4 완료, T5 호스트 폐루프 착지 (2026-09-29) — T5 잔여: WSL Gazebo·실물 벤치
 - **Date:** 2026-09-29
 - **Design:** `docs/plans/2026-09-29-robot-signal-source-integration-design.md` (ADR D-337)
 
@@ -44,6 +44,8 @@ ROS import 없이(Windows 호스트 pytest 가능), 전송은 가짜 클라이�
 ## T4 — dashboard
 
 - 교통 팩트에 "신호 원" 행(`/setup`·`/console`), 정적 스캔 시험
+- 착지(2026-09-29): 값은 `signal_source_kind`(camera|fused)를 그대로 보여 주고
+  관측 프레임 동결 시 `frozen`으로 표기한다. 새 토큰·부품 없음.
 
 ## T5 — 벤치(호스트 밖)
 
@@ -51,6 +53,12 @@ ROS import 없이(Windows 호스트 pytest 가능), 전송은 가짜 클라이�
   `WAIT_SIGNAL→PROCEED` 전환, 불일치 주입 시 HOLD 정지
 - 실물: 관측 서비스·ESP32·로봇이 한 LAN — `docs/validation/` 증거 디렉터리
 - 합성/호스트 합격은 DEVICE가 아니다(D-94)
+- 진행(2026-09-29): **호스트 폐루프 착지** — `tools/sim/simulate_semantic_road.py`가
+  3 시나리오(신호 제어·무신호 stop_and_go·관측 융합)를 production subjects로 돌리고
+  `docs/validation/semantic-road-stop-and-go-2026-09-29/`에 PASS 증거가 있다.
+  잔여: WSL Gazebo 실렌더링 폐루프(카메라 시야 밖 연출은 기존 마운트의 신호
+  비가시 성질로 자연 재현 가능 — 2026-09-21 증거 참조), 관측 서비스 실HTTP(T2
+  전송) 연결, 실물 LAN. WSL2 Jazzy+Gazebo+`/opt/rosy` 오버레이 존재 확인(2026-09-29).
 
 ## 완료 기준
 

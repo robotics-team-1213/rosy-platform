@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -14,6 +15,7 @@ from .candidate import ER2ProposalError, ImageObservation, PickPlaceProposalCand
 MODEL_ID = "gemini-robotics-er-2-preview"
 INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 TOOL_NAME = "propose_pick_place"
+MAX_RESPONSE_BYTES = 64 * 1024
 
 
 class ER2RequestError(RuntimeError):
@@ -121,19 +123,28 @@ class GeminiER2StandardAdapter:
             "tools": [_TOOL],
         }
         try:
-            response = await self._client.post(
-                INTERACTIONS_URL,
+            async with self._client.stream(
+                "POST", INTERACTIONS_URL,
                 headers={"x-goog-api-key": self._api_key},
                 json=request_body,
-            )
+            ) as response:
+                if response.status_code < 200 or response.status_code >= 300:
+                    raise ER2RequestError(
+                        f"Gemini ER 2 returned HTTP {response.status_code}"
+                    )
+                response_body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    if len(response_body) + len(chunk) > MAX_RESPONSE_BYTES:
+                        raise ER2ProposalError(
+                            "Gemini ER 2 response exceeds the 64 KiB limit"
+                        )
+                    response_body.extend(chunk)
         except httpx.HTTPError as exc:
             raise ER2RequestError(
                 "Gemini ER 2 request failed before a proposal was received"
             ) from exc
-        if response.status_code < 200 or response.status_code >= 300:
-            raise ER2RequestError(f"Gemini ER 2 returned HTTP {response.status_code}")
         try:
-            payload = response.json()
+            payload = json.loads(response_body)
         except ValueError as exc:
             raise ER2ProposalError("Gemini ER 2 returned invalid JSON") from exc
         return self._parse_response(
@@ -156,11 +167,10 @@ class GeminiER2StandardAdapter:
             outputs = documented_steps
         if not isinstance(outputs, list):
             raise ER2ProposalError("Gemini ER 2 response has no output list")
-        calls = [item for item in outputs
-                 if isinstance(item, Mapping) and item.get("type") == "function_call"]
-        if len(calls) != 1:
+        if (len(outputs) != 1 or not isinstance(outputs[0], Mapping)
+                or outputs[0].get("type") != "function_call"):
             raise ER2ProposalError("Gemini ER 2 must return exactly one proposal function call")
-        call = calls[0]
+        call = outputs[0]
         try:
             return PickPlaceProposalCandidate.from_function_call(
                 request_id=request_id, interaction_id=payload.get("id"), call_id=call.get("id"),

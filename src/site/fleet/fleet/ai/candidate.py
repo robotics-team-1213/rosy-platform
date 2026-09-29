@@ -84,6 +84,12 @@ class ImageObservation:
             raise ER2ProposalError("image_bytes must be non-empty bytes")
         if len(self.image_bytes) > 14 * 1024 * 1024:
             raise ER2ProposalError("image frame exceeds the 14 MiB inline input budget")
+        if not isinstance(self.image_transform, ImageTransform):
+            raise ER2ProposalError(
+                "image_transform with source dimensions is required for resolution"
+            )
+        _text("calibration_revision", self.calibration_revision)
+        _text("transform_revision", self.transform_revision)
         if self.mime_type not in {"image/jpeg", "image/png", "image/webp"}:
             raise ER2ProposalError("image mime_type must be JPEG, PNG, or WebP")
 

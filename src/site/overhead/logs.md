@@ -74,6 +74,14 @@
 - 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
 - gate 변화: 없음.
 
+
+## 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
+
+- Change: detect.py built cv2.aruco.ArucoDetector at import time, which exists only on OpenCV 4.7+ — the CI image (and the device precedent) ship 4.6, so every overhead test failed at collection with AttributeError. The module now picks the 4.7+ detector when present and falls back to the 4.6-era cv2.aruco.detectMarkers module function, the same pattern dock_tag.py already ships for the same reason.
+- Evidence: python -m pytest src/site/overhead/test -q 86 passed on a host OpenCV that has ArucoDetector (new branch exercised); the fallback mirrors the proven dock_tag shape. CI run 36572518093 shows the failure this removes.
+- Gate: SOURCE/LOCAL only; no device or FIELD claim.- 추가(같은 회차): 시험 픽스처의 마커 합성도 같은 갭이었다(4.7+ generateImageMarker vs 4.6 drawMarker). detect.py에 generate_marker_image() 헬퍼를 두고 두 시험이 그걸 쓴다 — OpenCV 버전 선택은 이 모듈에만 격리된다는 원칙 유지. 86 passed, flake8 clean.
+- 추가(같은 회차): CI 세그폴트는 4.6 바인딩에서 직접 생성한 DetectorParameters 객체가 module detectMarkers와 어긋난 것이다. dock_tag과 같이 DetectorParameters_create를 우선하고 레거시 경로는 흑백 프레임을 먹인다(16e884a9 회차의 CI 36574967367 근거).
+
 ## 2026-09-30 · uncommitted · fix(overhead-app): 적응형 JPEG 화질과 정지 중 대상 표시
 
 - 변경: 1280 px·품질 70 JPEG가 `max_bytes`(200 KB)를 조금 넘는 장면에서 모든 프레임이 버려져 0 fps가 되던 문제를 고쳤다. 초과 프레임은 최대 두 번 10씩 낮춰 다시 인코딩하고(하한 30), 다음 프레임은 지금까지 시도한 가장 낮은 화질에서 시작하며, 30회 연속으로 맞으면 5 올려 본다. 올려 본 화질이 넘치면 마지막으로 맞았던 화질로 곧장 돌아간다. 카메라 재바인딩·화질·폭 변경 때 적응 상태를 초기화한다. 설정 `jpeg_quality`는 상한이고 초과 프레임은 여전히 보내지 않는다. 정지 중 스트림 화면은 지난 실행 대상 대신 저장된 대상을 보인다.

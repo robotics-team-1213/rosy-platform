@@ -213,6 +213,7 @@
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
@@ -228,8 +229,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
-- 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료
-- 2026-09-29 · uncommitted · docs(plans): D-337 T2 착지 — 관측 폴러 전송 완료
-- 2026-09-29 · uncommitted · docs(plans): D-337 T1 착지 — 융합 순수 로직 완료 (항목 복원)
-- 2026-09-29 · uncommitted · docs(adr): D-336 표행 인코딩 복구
+- 2026-09-30 · uncommitted · docs(deployment): 입회 세션 원커맨드 런북
+- 2026-09-30 · uncommitted · feat(hooks): 재생성-미커밋 생성 기록이 push를 막는다
+- 2026-09-30 · uncommitted · docs(plan): ER 2 site deployment priority plan
+- 2026-09-29 · uncommitted · docs(plans): D-337 T5 호스트 폐루프 착지
+- 2026-09-29 · uncommitted · docs(adr): D-319 승인 — 입회 모터 커미션 도우미

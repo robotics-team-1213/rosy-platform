@@ -44,3 +44,45 @@ ER 2 후보의 점은 `[y,x]` 0–1000 이미지 좌표이고 OMX `TargetSelecto
 **Consequences:** 모델·사람·규칙의 제안을 같은 Mission 입구에서 비교할 수 있다. Site Fleet의 중앙 원장은 승인과 공유 자원을 소유하고 장치 로컬 owner는 최종 ROS 명령을 소유한다. D-327/D-328의 넓은 Proposed 범위와 D-331의 provider-only 수용은 유지되며, 이 ADR은 첫 작업의 연결·정지·증거 계약을 좁혀 결정한다.
 
 **References:** [D-18](D-18-rosy-core.md), [D-307](D-307-final-action-outcome-and-stop-readback-evidence.md), [D-308](D-308-intent-and-device-action-interpretation-boundary.md), [D-326](D-326-agent-loop-boundary.md), [D-327](D-327-semantic-manipulation-actions-and-device-adapters.md), [D-328](D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-331](D-331-gemini-er2-proposal-adapter.md), [ER 2 공식 개요](https://ai.google.dev/gemini-api/docs/robotics-overview), [ER 2 모델 카드](https://deepmind.google/models/model-cards/gemini-robotics-er-2/).
+
+### Implementation note: SQLite response growth (2026-09-29)
+
+Fleet's safety-relevant SQLite journals use WAL with `synchronous=FULL`, foreign
+keys, and a 5-second busy timeout on every connection. WAL allows readers to
+coexist with a writer; it does not make SQLite a multi-writer database. Keep
+SQLite's default auto-checkpoint and FULL synchronization until representative
+Linux/device measurements justify a change without weakening Action, stop,
+Mission, or audit durability.
+
+Mission snapshots return at most 50 recent events and expose
+`history_truncated`; complete retained history is read through cursor pages.
+Each event detail is finite JSON capped at 16 KiB both when written and at the
+typed response boundary, so a bounded event count also has a payload-size cap.
+The snapshot separately obtains the latest events for its active Action attempt
+using the `(mission_id, action_id, attempt_id, event_id)` index. Query-plan tests
+guard the ordered reads against full-history scans and temporary sorting. These
+changes bound snapshot materialization, but do not claim target-device latency,
+checkpoint behavior, or physical-control performance.
+
+### Additional implementation note: SQLite queue reads and WAL measurement (2026-09-29)
+
+Fleet task readback now has a partial index for dispatchable queue rows and uses
+an indexed row-value range for exact queue position. The query forces that
+partial index because SQLite selected the broader status index in the measured
+query plan. On a synthetic 100,000-row Windows database (500 dispatchable
+rows), the legacy multi-range query through the general index measured 60.98 ms
+p50 / 100.76 ms p95. The row-value range through the partial index measured
+0.063 ms p50 / 0.076 ms p95. This is a local synthetic comparison, not
+target-host evidence. Legacy queued rows
+whose `queued_at` is NULL retain the previous calculation path.
+
+An isolated 500-commit benchmark measured WAL `FULL` at about 2.2 ms median per
+commit and 400 commits/s; `NORMAL` measured about 0.02-0.03 ms and 19,000-33,000
+commits/s. This benchmark does not justify weakening durability: SQLite states
+that a WAL transaction committed with `synchronous=NORMAL` may roll back after
+power loss or a system crash, while `FULL` adds a WAL sync at each commit. The
+test WAL stayed below 1,000 pages, so the 1,000-versus-10,000-page run did
+not exercise auto-checkpoint latency and cannot justify changing its threshold.
+Keep `FULL` and SQLite's default checkpoint until representative Linux/device
+measurements support a different policy. See [SQLite synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous)
+and [SQLite WAL](https://www.sqlite.org/wal.html).

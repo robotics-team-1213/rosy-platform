@@ -91,6 +91,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
+    console.add_argument("--mission-api", action="store_true",
+                         help=("enable persistent Mission proposal/read APIs without ER 2 or Mission "
+                               "dispatch; existing Fleet operator commands remain available"))
     return parser.parse_args(argv)
 
 
@@ -309,6 +312,11 @@ def run_console(args: argparse.Namespace) -> None:
     tasks_db = getattr(args, "tasks_db", None)
     if site_users is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --users-file for persistent audit")
+    mission_api = bool(getattr(args, "mission_api", False))
+    if mission_api and tasks_db is None:
+        sys.exit("--tasks-db is required with --mission-api")
+    if mission_api and site_users is None:
+        sys.exit("--users-file is required with --mission-api for named operator authorization")
     if args.host not in LOOPBACK_HOSTS and not (console_token or site_users):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
@@ -362,6 +370,15 @@ def run_console(args: argparse.Namespace) -> None:
 
         task_service = FleetTaskService(FleetTaskStore(tasks_db),
                                         robot_ids=console.robot_ids)
+    mission_service = None
+    proposal_store = None
+    if mission_api:
+        from fleet.server.mission_service import MissionService
+        from fleet.server.mission_store import MissionStore
+        from fleet.server.proposal_store import ProposalStore
+
+        mission_service = MissionService(MissionStore(tasks_db))
+        proposal_store = ProposalStore(tasks_db)
     from fleet.server.discovery import DiscoveryStore
 
     discovery = DiscoveryStore() if discovery_token is not None else None
@@ -372,8 +389,10 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("vision preview secret environment variable is required")
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
+                     mission_service=mission_service, proposal_store=proposal_store,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,
+                     start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
