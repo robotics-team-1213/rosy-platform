@@ -94,7 +94,7 @@ def _shared_assets(root: Optional[Path]) -> dict[str, str]:
 
 #: 경로 순회를 막는 유일한 방어다 — 디렉터리 스캔으로 바꾸지 않는다 (core 와 같은 규칙).
 #: 공용 L1 자산은 여기 없다. 서버는 설정받은 web_common 디렉터리에서 명시된
-#: 파일만 /common 아래로 서빙한다(D-129, D-1005).
+#: 파일만 /common 아래로 서빙한다(D-129, D-157).
 CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",

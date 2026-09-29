@@ -38,4 +38,4 @@ plans:
 
 ## 현재 유효한 금지사항
 
-- Do not copy tokens into consumers; link `/ui/tokens.css` (D-130.3).
+- Do not copy tokens into consumers; link `/common/tokens.css`; `/ui/tokens.css` is a legacy alias (D-129 정정 2026-09-29, D-130.3).
