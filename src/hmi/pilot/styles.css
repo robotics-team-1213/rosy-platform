@@ -469,3 +469,27 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 .pilot-drive[data-drive-layout="below"] [data-drive-pedals] ui-button { min-height: 6rem; min-width: min(20vw, 9rem); font-size: 1.1rem; }
 .pilot-drive[data-drive-layout="below"] [data-drive-pivots] ui-button { min-height: 4rem; min-width: min(20vw, 9rem); }
 .pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-button { min-height: 3rem; min-width: 3.4rem; font-size: 1rem; }
+
+/* ---- 보조 자율(D-349): 차선 자동 모드면 페달·제자리 대신 "진행" 하나 ---- */
+[data-drive-go] { display: none; }
+.pilot-drive[data-auto-mode="on"] [data-drive-pedals],
+.pilot-drive[data-auto-mode="on"] [data-drive-pivots] { display: none; }
+.pilot-drive[data-auto-mode="on"] [data-drive-go] {
+  display: inline-flex;
+  width: 100%;
+  min-height: 7rem;
+  font-size: 1.15rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  border: 2px solid var(--status-good);
+  background: color-mix(in srgb, var(--status-good) 18%, var(--ground-raise));
+}
+[data-drive-go].active {
+  background: color-mix(in srgb, var(--status-good) 45%, var(--ground-raise));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--status-good) 55%, transparent);
+}
+[data-drive-auto][aria-pressed="true"] { outline: 2px solid var(--status-good); outline-offset: 1px; }
+[data-drive-motion][data-kind=auto] { color: var(--ground-deep); background: var(--status-good); border-color: var(--status-good); }
+[data-drive-motion][data-kind=warn] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }

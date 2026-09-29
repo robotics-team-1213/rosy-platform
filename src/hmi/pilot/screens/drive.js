@@ -15,6 +15,7 @@ import {
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
+import {createAutoSession} from "../autonomy.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
 const LOOP_MS = 100;
@@ -48,6 +49,7 @@ export function mountDrive(root, {onExit} = {}) {
     motion: "[data-drive-motion]", blocked: "[data-drive-blocked]",
     blockedReason: "[data-drive-blocked-reason]", retake: "[data-drive-retake]",
     view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
+    go: "[data-drive-go]", autoToggle: "[data-drive-auto]",
   })) element[key] = root.querySelector(selector);
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
@@ -248,6 +250,7 @@ export function mountDrive(root, {onExit} = {}) {
     stick.classList.remove("active");
   }
   stick.addEventListener("pointerdown", (event) => {
+    takeover();
     stickPointer = event.pointerId;
     stick.setPointerCapture(event.pointerId);
     stick.classList.add("active");
@@ -265,6 +268,7 @@ export function mountDrive(root, {onExit} = {}) {
   // --- 입력: 홀드 버튼(페달·제자리 회전) — 손을 떼거나 벗어나면 즉시 해제 ----
   function holdButton(node, onHold) {
     const set = (value) => {
+      if (value) takeover();
       onHold(value);
       node.classList.toggle("active", value);
       if (value && navigator.vibrate) navigator.vibrate(10);
@@ -282,6 +286,59 @@ export function mountDrive(root, {onExit} = {}) {
   holdButton(element.reverse, (value) => setPedal("reverse", value));
   if (element.pivotLeft) holdButton(element.pivotLeft, (value) => setPivot("left", value));
   if (element.pivotRight) holdButton(element.pivotRight, (value) => setPivot("right", value));
+
+  // --- 보조 자율(D-349): "진행"을 누르는 동안만 CORE 차선 추종 -------------------
+  const LF_REASON = {
+    tracking: "차선 추종", camera_no_observation: "차선 관측 대기", camera_line_not_visible: "차선 안 보임",
+    camera_low_confidence: "차선 신뢰 낮음", camera_observation_stale: "차선 관측 늦음",
+    camera_reselection_required: "차선 놓침 — 다시 누르세요", driver_released: "손 뗌 — 정지",
+  };
+  const request = (method, path, body) =>
+    method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});
+  const auto = createAutoSession({
+    request,
+    schedule: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); },
+    onChange: ({state, reason}) => {
+      element.go?.classList.toggle("active", state === "running" || state === "starting");
+      if (state === "idle") {
+        session.resume();        // 자동이 끝나면 수동 명령 경로를 다시 연다
+        lastCommand = {linear: 0, angular: 0, pivot: false};
+        const benign = !reason || reason === "released" || reason === "takeover";
+        element.motion.dataset.kind = benign ? "idle" : "warn";
+        element.motion.textContent = benign ? "대기" : `자동 멈춤 — ${LF_REASON[reason] ?? reason}`;
+      }
+    },
+    onStatus: (lf) => {
+      const tracking = lf.state === "TRACKING";
+      element.motion.dataset.kind = tracking ? "auto" : "warn";
+      element.motion.textContent = tracking
+        ? `차선 추종 · 신뢰 ${Number(lf.confidence ?? 0).toFixed(2)} · 오차 ${Number(lf.error ?? 0) >= 0 ? "+" : ""}${Number(lf.error ?? 0).toFixed(2)}`
+        : `${LF_REASON[lf.reason] ?? lf.reason ?? lf.state}`;
+    },
+  });
+  function takeover() {
+    if (auto.active()) auto.release("takeover");
+  }
+  if (element.go) {
+    element.go.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (navigator.vibrate) navigator.vibrate(10);
+      releaseAll();
+      auto.press();
+    });
+    for (const name of ["pointerup", "pointercancel", "pointerleave"]) {
+      element.go.addEventListener(name, () => auto.release("released"));
+    }
+    element.go.addEventListener("contextmenu", (event) => event.preventDefault());
+  }
+  if (element.autoToggle) {
+    element.autoToggle.addEventListener("click", () => {
+      const on = drive.dataset.autoMode !== "on";
+      if (!on) takeover();
+      drive.dataset.autoMode = on ? "on" : "off";
+      element.autoToggle.setAttribute("aria-pressed", String(on));
+    });
+  }
 
   // --- 입력: 키보드(데스크톱 검증용). Q/E 는 제자리 회전 --------------------
   const keys = {up: false, down: false, left: false, right: false, pivotLeft: false, pivotRight: false};
@@ -343,6 +400,8 @@ export function mountDrive(root, {onExit} = {}) {
     lastTickAt = tickAt;
     if (!engaged) return;
     const source = currentCommandSource() ?? keySource() ?? gamepadSource();
+    if (source && auto.active()) takeover();   // 키·게임패드 개입도 자동을 끈다
+    if (auto.active()) return;                  // 자동 중에는 수동 명령을 보내지 않는다(CORE 모드 충돌 방지)
     // 가속은 램프로, 감속·정지는 즉시(stick.slewCommand).
     const command = slewCommand(lastCommand, stickMap(source), dt);
     lastCommand = command;
@@ -374,6 +433,7 @@ export function mountDrive(root, {onExit} = {}) {
       session.visible();
     } else {
       onBlur();
+      auto.release("hidden");
       session.hidden();
     }
   };
@@ -493,6 +553,7 @@ export function mountDrive(root, {onExit} = {}) {
 
   function teardown() {
     engaged = false;
+    auto.release("exit");
     clearInterval(loop);
     clearInterval(stateTimer);
     closeInputs?.();
@@ -570,7 +631,15 @@ function buildControls(profile) {
     el("ui-button", "전진 ▲", {kind: "segment", type: "button", "data-drive-pedal": "forward"}),
     el("ui-button", "후진 ▼", {kind: "segment", type: "button", "data-drive-pedal": "reverse"}),
   );
+  if (profile.autonomy?.includes("line")) {
+    tune.append(el("ui-button", "차선 자동", {kind: "segment", type: "button", "data-drive-auto": "",
+                                             "aria-pressed": "false"}));
+  }
   left.append(tune, pedals);
+  if (profile.autonomy?.includes("line")) {
+    left.append(el("ui-button", "진행 ▶ 누르는 동안", {kind: "segment", type: "button", "data-drive-go": "",
+                                                    "aria-label": "차선 따라 진행(누르는 동안만)"}));
+  }
   if (profile.pivot !== false) {
     const pivots = el("div", null, {"data-drive-pivots": ""});
     pivots.append(
