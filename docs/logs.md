@@ -3511,3 +3511,10 @@
 - gate 변화: 없음.
 - 결정: 세션 순서는 측정 먼저(커미션이 모드를 바꾸기 전의 as-is 상태) — 커미션 뒤 motor 모드 재측정은 보너스 데이터로.
 - 교훈: "남은 것"의 절반은 물리적 전제다 — 전제가 꺼져 있으면 최선의 해결은 그 전제를 켜는 사람을 위한 지침을 완성하는 것.
+
+## 2026-09-30 · uncommitted · feat(fleet): opt-in ER 2 Mission proposal API
+
+- Change: `fleet console --mission-api` composes Mission/Proposal persistence and read APIs using named-user auth and the shared SQLite database. Resolve fails closed with 503 when no trusted candidate resolver is configured. No ER 2 provider or Mission dispatcher is connected.
+- Safety boundary: this mode does not start the automatic queued-task dispatcher, so persisted navigation tasks are not sent to CORE on startup. Existing authenticated Fleet operator command routes remain available; this is not a global read-only mode.
+- Evidence: Fleet 702 passed, 5 skipped, including a regression for a preexisting queued task; contract suite 95 passed; flake8 passed; harness lint 0 errors and 20 freshness warnings; diff check passed.
+- Gate: SOURCE/LOCAL integration only. Provider, target, OMX Action/ROS, physical stop/readback, signed ARM64 artifact, DEVICE, and FIELD evidence are absent; deployment and physical operation remain HOLD.
