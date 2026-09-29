@@ -41,4 +41,12 @@ class CornerGuideTest {
         assertEquals("30, 31, 33", g.seenIds)
         assertEquals(listOf(true, true, true, false), g.dots)
     }
+
+    @Test
+    fun placeholderEmptyStatusIsNotAMarkerReport() {
+        // `overhead receive` always sends empty lists; that must not render as "0/4 seen".
+        assertEquals(false, CornerGuide.reportsMarkers(status(emptyList())))
+        assertEquals(true, CornerGuide.reportsMarkers(status(listOf(30))))
+        assertEquals(true, CornerGuide.reportsMarkers(status(emptyList(), robots = listOf("rosy_01"))))
+    }
 }

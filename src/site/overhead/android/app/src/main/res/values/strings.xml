@@ -17,7 +17,7 @@
     <string name="button_settings">연결 설정</string>
     <string name="preview_idle">카메라를 켜면 미리보기가 보입니다</string>
     <string name="target_label">대상: %1$s</string>
-    <string name="target_none">연결 정보가 없습니다. 연결 설정에서 입력하거나 수신기 QR을 기본 카메라 앱으로 찍으세요.</string>
+    <string name="target_none">연결 정보가 없습니다. 연결 설정에서 입력하거나 현장 PC의 페어링 QR을 기본 카메라 앱으로 찍으세요.</string>
     <string name="target_preview_only">서버 연결 정보가 없습니다. 연결 설정을 저장하면 WebSocket 송출을 시작할 수 있습니다.</string>
     <string name="stat_fps">송출 %1$.1f fps</string>
     <string name="stat_kbps">%1$.0f kbps</string>
@@ -26,24 +26,25 @@
     <string name="stat_config">요청: %1$.1f fps · 폭 %2$d · 품질 %3$d</string>
     <string name="stat_quality_auto">화질 자동 조정 중: 지금 품질 %1$d (요청 %2$d). 장면이 복잡해 크기 한도에 맞추는 중입니다.</string>
 
-    <string name="problem_no_wifi">Wi-Fi에 연결되어 있지 않습니다 — 현장 PC와 같은 Wi-Fi에 연결하세요</string>
-    <string name="problem_unreachable">현장 PC(%1$s)에 닿지 않습니다 — 같은 Wi-Fi인지, 주소가 바뀌었는지 확인하세요</string>
-    <string name="problem_refused">현장 PC(%1$s)는 응답하지만 수신기가 꺼져 있습니다 — 현장 PC에서 수신기를 켜세요</string>
-    <string name="problem_unknown_host">현장 PC 이름(%1$s)을 찾지 못했습니다 — 연결 설정에서 수신기를 다시 찾으세요</string>
-    <string name="problem_tls">보안 연결(TLS)에 실패했습니다 — 현장 PC의 페어링 QR로 다시 연결하세요</string>
-    <string name="problem_unauthorized">토큰이 맞지 않습니다 — 현장 PC의 페어링 QR로 다시 연결하세요</string>
-    <string name="problem_replaced">다른 카메라가 같은 이름(%1$s)으로 연결해 이 연결을 멈췄습니다 — 다른 폰을 끄거나 연결 설정에서 이름을 바꾸세요</string>
-    <string name="problem_protocol_mismatch">앱과 수신기의 버전이 맞지 않아 연결을 멈췄습니다 — 둘을 같은 버전으로 맞추세요</string>
-    <string name="problem_invalid_config">수신기가 보낸 설정 값이 잘못되었습니다 — 현장 PC 수신기의 버전을 확인하세요</string>
-    <string name="problem_closed">수신기가 연결을 닫았습니다 — 현장 PC 수신기가 다시 켜지는지 확인하세요</string>
-    <string name="problem_network_other">네트워크 오류가 났습니다 — 계속되면 Wi-Fi와 현장 PC를 확인하세요</string>
-    <string name="problem_not_paired">연결 정보가 없습니다 — 연결 설정에서 입력하거나 수신기 QR을 찍으세요</string>
-    <string name="problem_camera">카메라를 열 수 없습니다 — 다른 앱이 카메라를 쓰고 있으면 닫고 다시 켜세요</string>
-    <string name="problem_foreground">송출 서비스를 시작하지 못했습니다 — 앱을 화면에 띄운 채로 다시 켜세요</string>
+    <string name="problem_no_wifi">Wi-Fi에 연결되어 있지 않습니다 — 현장 PC와 같은 Wi-Fi에 연결하세요.</string>
+    <string name="problem_unreachable">현장 PC(%1$s)에 닿지 않습니다 — 같은 Wi-Fi인지, 주소가 바뀌었는지 확인하세요.</string>
+    <string name="problem_refused">현장 PC(%1$s)는 응답하지만 수신기가 꺼져 있습니다 — 현장 PC에서 수신기를 켜세요.</string>
+    <string name="problem_unknown_host">현장 PC 이름(%1$s)을 찾지 못했습니다 — 연결 설정에서 수신기를 다시 찾으세요.</string>
+    <string name="problem_tls">보안 연결(TLS)에 실패했습니다 — 현장 PC의 페어링 QR로 다시 연결하세요.</string>
+    <string name="problem_unauthorized">토큰이 맞지 않습니다 — 현장 PC의 페어링 QR로 다시 연결하세요.</string>
+    <string name="problem_replaced">다른 카메라가 같은 이름(%1$s)으로 연결해 이 연결을 멈췄습니다 — 다른 폰을 끄거나 연결 설정에서 이름을 바꾸세요.</string>
+    <string name="problem_protocol_mismatch">앱과 수신기의 버전이 맞지 않아 연결을 멈췄습니다 — 둘을 같은 버전으로 맞추세요.</string>
+    <string name="problem_invalid_config">수신기가 보낸 설정 값이 잘못되었습니다 — 현장 PC 수신기의 버전을 확인하세요.</string>
+    <string name="problem_closed">수신기가 연결을 닫았습니다 — 현장 PC 수신기가 다시 켜지는지 확인하세요.</string>
+    <string name="problem_network_other">네트워크 오류가 났습니다 — 계속되면 Wi-Fi와 현장 PC를 확인하세요.</string>
+    <string name="problem_not_paired">연결 정보가 없습니다 — 연결 설정에서 입력하거나 현장 PC의 페어링 QR을 찍으세요.</string>
+    <string name="problem_camera">카메라를 열 수 없습니다 — 다른 앱이 카메라를 쓰고 있으면 닫고 다시 켜세요.</string>
+    <string name="problem_foreground">송출 서비스를 시작하지 못했습니다 — 앱을 화면에 띄운 채로 다시 켜세요.</string>
     <string name="problem_retrying">자동으로 다시 연결하는 중입니다.</string>
     <string name="button_details">자세히</string>
     <string name="button_details_hide">간단히</string>
     <string name="button_open_settings">연결 설정 열기</string>
+    <string name="button_stop_and_open_settings">카메라를 끄고 연결 설정 열기</string>
     <string name="error_camera_permission">카메라 권한이 없어 송출할 수 없습니다.</string>
 
     <string name="health_battery">배터리 %1$d%%</string>
@@ -53,6 +54,7 @@
     <string name="health_hot">휴대폰 온도가 높습니다 — 조명·햇빛 열을 피해 통풍되게 설치하세요. 더 뜨거워지면 카메라가 멈출 수 있습니다</string>
     <string name="health_battery_low">배터리 %1$d%% — 충전기를 연결하세요. 방전되면 송출이 멈춥니다</string>
 
+    <string name="guide_markers_unreported">수신기가 마커 인식을 아직 보고하지 않습니다</string>
     <string name="guide_corners_none">코너 마커 0/%1$d 보임 — 네 모서리 마커가 화면에 들어오게 휴대폰 방향을 맞추세요</string>
     <string name="guide_corners_partial">코너 마커 %1$d/%2$d 보임 (%3$s) — 나머지 마커가 화면에 들어오게 방향을 맞추세요</string>
     <string name="guide_corners_complete">코너 마커 %1$d/%2$d 보임 — 설치 위치가 맞습니다</string>

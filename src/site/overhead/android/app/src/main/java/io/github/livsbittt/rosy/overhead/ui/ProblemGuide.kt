@@ -63,6 +63,13 @@ object ProblemGuide {
         }
     }
 
+    /**
+     * Token and source name are edited in settings, which are read-only while the camera runs,
+     * so the button stops the camera first and says so.
+     */
+    fun stopsCameraFirst(problem: Problem, running: Boolean): Boolean =
+        running && (problem == Problem.UNAUTHORIZED || problem == Problem.REPLACED)
+
     fun forStream(error: StreamError): Guidance = when (error) {
         StreamError.NotPaired -> Guidance(Problem.NOT_PAIRED, NextStep.OPEN_SETTINGS, null, retrying = false)
         is StreamError.Camera -> Guidance(Problem.CAMERA, NextStep.NONE, error.message, retrying = false)

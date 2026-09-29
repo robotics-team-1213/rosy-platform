@@ -50,4 +50,13 @@ class DeviceHealthTest {
     fun fullWhilePluggedCountsAsCharging() {
         assertTrue(DeviceHealth.fromBatteryExtras(100, 100, status = 5, plugged = 2, temperatureTenths = 300, thermalStatus = 0).charging)
     }
+
+    @Test
+    fun notificationKeyIgnoresTenthsButFollowsWholeDegreesAndWarnings() {
+        val base = DeviceHealth(56, charging = true, temperatureC = 36.6, thermalStatus = 0)
+        assertEquals(base.notificationKey, base.copy(temperatureC = 36.9).notificationKey)
+        assertTrue(base.notificationKey != base.copy(temperatureC = 37.6).notificationKey)
+        assertTrue(base.notificationKey != base.copy(thermalStatus = 2).notificationKey)
+        assertTrue(base.notificationKey != base.copy(batteryPct = 55).notificationKey)
+    }
 }

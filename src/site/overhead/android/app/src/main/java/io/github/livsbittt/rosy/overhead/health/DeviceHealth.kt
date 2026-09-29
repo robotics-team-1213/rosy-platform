@@ -26,6 +26,10 @@ data class DeviceHealth(
             if (batteryPct != null && batteryPct < LOW_BATTERY_PCT && !charging) add(HealthWarning.BATTERY_LOW)
         }
 
+    /** What the notification is refreshed on: whole degrees C, battery, charging and warnings. */
+    val notificationKey: List<Any?>
+        get() = listOf(batteryPct, charging, temperatureC?.let { Math.round(it) }, warnings)
+
     companion object {
         const val THERMAL_UNKNOWN = -1
 

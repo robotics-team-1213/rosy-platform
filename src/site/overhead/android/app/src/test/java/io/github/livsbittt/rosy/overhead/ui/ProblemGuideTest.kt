@@ -71,4 +71,22 @@ class ProblemGuideTest {
         assertEquals(Problem.CAMERA, cam.problem)
         assertEquals("CAMERA_IN_USE", cam.detail)
     }
+
+    @Test
+    fun tokenAndNameProblemsStopTheCameraFirstOnlyWhileRunning() {
+        assertTrue(ProblemGuide.stopsCameraFirst(Problem.UNAUTHORIZED, running = true))
+        assertTrue(ProblemGuide.stopsCameraFirst(Problem.REPLACED, running = true))
+        assertFalse(ProblemGuide.stopsCameraFirst(Problem.UNAUTHORIZED, running = false))
+        assertFalse(ProblemGuide.stopsCameraFirst(Problem.UNREACHABLE, running = true))
+    }
+
+    @Test
+    fun lanNetworksStayConnectedUntilTheLastOneIsLost() {
+        val lan = LanNetworks()
+        assertTrue(lan.onAvailable("wifi-site"))
+        assertTrue(lan.onAvailable("eth0"))
+        assertTrue(lan.onLost("eth0"))
+        assertFalse(lan.onLost("wifi-site"))
+        assertFalse(lan.onLost("unknown"))
+    }
 }

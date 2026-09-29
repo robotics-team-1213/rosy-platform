@@ -3,6 +3,7 @@ package io.github.livsbittt.rosy.overhead.ui
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +96,7 @@ fun StreamScreen(
             }
         }
 
-        StatusPanel(state, pairing, localError, onOpenSettings)
+        StatusPanel(state, pairing, localError, onStop, onOpenSettings)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
@@ -126,7 +128,13 @@ fun StreamScreen(
 }
 
 @Composable
-private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: String?, onOpenSettings: () -> Unit) {
+private fun StatusPanel(
+    state: StreamState,
+    pairing: PairingUri?,
+    localError: String?,
+    onStop: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val link = state.link
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val stateText = when {
@@ -156,8 +164,21 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
         )
         state.health?.let { HealthPanel(it) }
         val site = link.site
+        // Per camera session: once the receiver has reported a marker, an empty report is a real 0/4.
+        var markersReported by rememberSaveable(state.running) { mutableStateOf(false) }
+        LaunchedEffect(site) {
+            if (site != null && CornerGuide.reportsMarkers(site)) markersReported = true
+        }
         if (state.running && link.state == LinkState.STREAMING && site != null) {
-            InstallGuide(CornerGuide.from(site))
+            if (markersReported || CornerGuide.reportsMarkers(site)) {
+                InstallGuide(CornerGuide.from(site))
+            } else {
+                Text(
+                    stringResource(R.string.guide_markers_unreported),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (!state.previewOnly) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -190,7 +211,7 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
             ?: link.error?.let { ProblemGuide.forLink(it, link.stopped || !state.running, wifiConnected) }
         when {
             localError != null -> CritMessage(localError)
-            guidance != null -> ProblemMessage(guidance, pairing, onOpenSettings)
+            guidance != null -> ProblemMessage(guidance, pairing, state.running, onStop, onOpenSettings)
         }
     }
 }
@@ -243,7 +264,13 @@ private fun InstallGuide(guide: CornerGuide) {
 
 /** One sentence naming the next step, an optional action, and the raw detail behind "자세히". */
 @Composable
-private fun ProblemMessage(guidance: Guidance, pairing: PairingUri?, onOpenSettings: () -> Unit) {
+private fun ProblemMessage(
+    guidance: Guidance,
+    pairing: PairingUri?,
+    running: Boolean,
+    onStop: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     var showDetail by rememberSaveable(guidance.problem) { mutableStateOf(false) }
     val address = pairing?.let { "${it.host}:${it.port}" } ?: ""
     val text = when (guidance.problem) {
@@ -266,7 +293,13 @@ private fun ProblemMessage(guidance: Guidance, pairing: PairingUri?, onOpenSetti
     CritMessage(text + retrying)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (guidance.step == NextStep.OPEN_SETTINGS) {
-            OutlinedButton(onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
+            if (ProblemGuide.stopsCameraFirst(guidance.problem, running)) {
+                OutlinedButton(onClick = { onStop(); onOpenSettings() }) {
+                    Text(stringResource(R.string.button_stop_and_open_settings))
+                }
+            } else {
+                OutlinedButton(onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
+            }
         }
         if (guidance.detail != null) {
             TextButton(onClick = { showDetail = !showDetail }) {
@@ -279,27 +312,39 @@ private fun ProblemMessage(guidance: Guidance, pairing: PairingUri?, onOpenSetti
     }
 }
 
-/** True while the default network is Wi-Fi or Ethernet; follows changes. */
+/**
+ * True while any Wi-Fi or Ethernet network is up, whether or not it is the default network or
+ * has internet: a closed site Wi-Fi without internet often loses "default" to mobile data.
+ */
 @Composable
 private fun rememberWifiConnected(): Boolean {
     val context = LocalContext.current
     val connectivity = remember(context) { context.getSystemService(ConnectivityManager::class.java) }
-    fun onLan(): Boolean {
-        val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork) ?: return false
-        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    val lan = remember { LanNetworks() }
+    var connected by remember {
+        val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+        mutableStateOf(
+            caps != null &&
+                (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)),
+        )
     }
-    var connected by remember { mutableStateOf(onLan()) }
     DisposableEffect(connectivity) {
+        // Transports are OR-ed; dropping INTERNET keeps a no-internet site Wi-Fi in the request.
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                connected = onLan()
+            override fun onAvailable(network: Network) {
+                connected = lan.onAvailable(network.toString())
             }
 
             override fun onLost(network: Network) {
-                connected = onLan()
+                connected = lan.onLost(network.toString())
             }
         }
-        connectivity.registerDefaultNetworkCallback(callback)
+        connectivity.registerNetworkCallback(request, callback)
         onDispose { connectivity.unregisterNetworkCallback(callback) }
     }
     return connected

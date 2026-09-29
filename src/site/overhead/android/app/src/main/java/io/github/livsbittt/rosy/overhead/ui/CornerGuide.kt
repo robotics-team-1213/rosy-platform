@@ -28,6 +28,13 @@ data class CornerGuide(val seen: List<Int>, val needed: Int, val robots: List<St
     companion object {
         private const val MAX_DOTS = 8
 
+        /**
+         * True once the receiver reports any marker. `overhead receive` (and Vision before it
+         * sees a frame) sends empty placeholder lists, which must not read as "0/4 seen".
+         */
+        fun reportsMarkers(status: ServerMessage.Status): Boolean =
+            status.cornersSeen.isNotEmpty() || status.robotsSeen.isNotEmpty()
+
         fun from(status: ServerMessage.Status): CornerGuide = CornerGuide(
             seen = status.cornersSeen.distinct().sorted(),
             needed = status.cornersNeeded.coerceAtLeast(0),

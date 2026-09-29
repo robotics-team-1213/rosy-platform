@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -121,6 +122,8 @@ class StreamService : LifecycleService() {
             acquireLocks()
             val monitor = DeviceHealthMonitor(this@StreamService).also { it.start() }
             healthMonitor = monitor
+            // Battery temperature moves in tenths; the notification only follows whole degrees.
+            val notificationHealth = monitor.health.distinctUntilChangedBy { it?.notificationKey }
             launch { monitor.health.collect { h -> _state.update { it.copy(health = h) } } }
             val newLink = if (plan.sendFrames && pairing != null) {
                 OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
@@ -138,7 +141,7 @@ class StreamService : LifecycleService() {
                 )
             }
             if (!plan.sendFrames) {
-                launch { monitor.health.collect { updateNotification(LinkState.DISCONNECTED, previewOnly = true, health = it) } }
+                launch { notificationHealth.collect { updateNotification(LinkState.DISCONNECTED, previewOnly = true, health = it) } }
             }
             newLink?.start()
             newCamera.start(OverheadConfig.DEFAULT)
@@ -150,7 +153,7 @@ class StreamService : LifecycleService() {
                 }
                 launch {
                     activeLink.status.map { it.state }.distinctUntilChanged()
-                        .combine(monitor.health) { linkState, health -> linkState to health }
+                        .combine(notificationHealth) { linkState, health -> linkState to health }
                         .collect { (linkState, health) -> updateNotification(linkState, health = health) }
                 }
                 launch {
