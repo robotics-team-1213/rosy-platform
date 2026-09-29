@@ -180,6 +180,8 @@ def main(argv=None) -> int:
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
         verify_files(manifest)
+        # deliver.py push refuses a model whose files differ from these.
+        report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
         model = LaneSegModel.open(folder)
         videos = sorted({Path(p) for pat in gate["replay_sources"]
                          for p in glob.glob(str(Path(args.root) / pat))})

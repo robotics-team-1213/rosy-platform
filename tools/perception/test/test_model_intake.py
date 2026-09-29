@@ -226,6 +226,7 @@ def test_intake_end_to_end(tmp_path):
     assert set(report["class_fractions_mean"]) == {"bg", "lane", "road", "stop"}
     assert report["gate"] == gate
     assert "tool_commit" in report
+    assert report["files"] == [{"name": f["name"], "sha256": f["sha256"]} for f in doc["files"]]
     assert (out / rev / "model.onnx").is_file()
     assert (out / rev / "model_manifest.json").is_file()
 

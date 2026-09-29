@@ -37,7 +37,7 @@ class FakeRunner:
         return r
 
 
-def _model(models: Path, verdict: str) -> str:
+def _model(models: Path, verdict: str, files=None) -> str:
     onnx = models.parent / "src.onnx"
     onnx.write_bytes(b"fake-onnx")
     tmp = models.parent / "tmp"
@@ -49,8 +49,12 @@ def _model(models: Path, verdict: str) -> str:
     rev = doc["model_revision"]
     models.mkdir(parents=True, exist_ok=True)
     tmp.rename(models / rev)
+    if files is None:  # what intake records: the manifest-verified files
+        files = [{"name": f.name, "sha256": f.sha256}
+                 for f in deliver.load_manifest(models / rev).files]
     (models / rev / "intake_report.json").write_text(
-        json.dumps({"model_revision": rev, "verdict": verdict}), encoding="utf-8")
+        json.dumps({"model_revision": rev, "verdict": verdict, "files": files}),
+        encoding="utf-8")
     return rev
 
 
@@ -119,6 +123,18 @@ def test_push_refuses_missing_report(tmp_path):
     (models / rev / "intake_report.json").unlink()
     runner = FakeRunner()
     assert deliver.main(["push", "robot", rev, "--models", str(models)], runner=runner) != 0
+    assert runner.calls == []
+
+
+@pytest.mark.parametrize("files", [
+    [],  # a report from before intake recorded files
+    [{"name": "model.onnx", "sha256": "0" * 64}],  # the model changed after intake
+])
+def test_push_refuses_report_files_differing_from_manifest(tmp_path, files):
+    models = tmp_path / "models"
+    rev = _model(models, "pass", files=files)
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models)], runner=runner) == 2
     assert runner.calls == []
 
 

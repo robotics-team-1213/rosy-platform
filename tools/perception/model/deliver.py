@@ -4,7 +4,8 @@ deliver.py push <host> <model_revision> [--user pinky] [--models data/perception
 deliver.py rollback <host>
 deliver.py status <host>
 
-push: scp to /var/lib/rosy/models/<rev>.partial, sha256sum -c on the robot,
+push: needs a passing intake_report.json whose files (name, sha256) equal the
+manifest's; then scp to /var/lib/rosy/models/<rev>.partial, sha256sum -c on the robot,
 mv to <rev>, then an atomic pointer swap (shadow.tmp -> shadow; the old value
 stays in shadow.previous; re-pushing the live revision keeps it). An already
 installed <rev> is re-verified and quarantined as <rev>.bad.<pid> if it fails.
@@ -119,6 +120,9 @@ def _push(args, runner) -> int:
         return 2
     if manifest.model_revision != rev:
         print(f"refused: manifest revision {manifest.model_revision} != {rev}", file=sys.stderr)
+        return 2
+    if report.get("files") != [{"name": f.name, "sha256": f.sha256} for f in manifest.files]:
+        print(f"refused: intake report files differ from the manifest of {rev}", file=sys.stderr)
         return 2
     target = f"{args.user}@{args.host}"
     checks = [(f.sha256, f.name) for f in manifest.files]
