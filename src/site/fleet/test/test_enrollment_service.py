@@ -421,3 +421,109 @@ def test_wrong_key_at_restart_is_a_runtime_state_only(tmp_path):
     with pytest.raises(EnrollmentError) as refused:
         run(again.enroll(code=CODE, principal_id="alice", address=PINNED))
     assert refused.value.status == 503
+
+
+# --- review fixes (MERGE-AFTER-FIXES) ------------------------------------------------
+
+
+def _moved_round_trip(tmp_path):
+    cores = {PINNED: FakeCore(), MOVED: FakeCore()}
+    parts = build(tmp_path, cores)
+    parts[3].replace_scan([scan_row()])
+    _enroll(parts[0])
+    return parts
+
+
+def test_needs_new_code_survives_an_address_round_trip(tmp_path):
+    service, network, console, discovery, store, _ = _moved_round_trip(tmp_path)
+    network.cores[PINNED].token = "revoked"
+    run(console.snapshot())
+    assert store.get("rosy_09")["state"] == "needs_new_code"
+    discovery.replace_scan([scan_row(MOVED)])
+    run(service.on_discovery(discovery.rows()))
+    discovery.replace_scan([scan_row()])
+    run(service.on_discovery(discovery.rows()))
+    assert store.get("rosy_09")["state"] == "needs_new_code"
+    assert service.listing()["robots"][0]["hold"] == "needs_new_code"
+
+
+def test_a_dead_token_is_not_polled_again(tmp_path):
+    service, network, console, discovery, store, _ = _moved_round_trip(tmp_path)
+    network.cores[PINNED].token = "revoked"
+    run(console.snapshot())
+    network.clear()
+    run(console.snapshot())
+    run(console.estop_all())
+    assert network.paths() == ["/api/v1/safety/stop"]
+
+
+def test_expiry_on_the_fleet_clock_stops_polling_without_a_request(tmp_path):
+    clock = Clock()
+    service, network, console, *_ = _ready(tmp_path, clock=clock)
+    _enroll(service)
+    clock.now += 8 * 86400
+    network.clear()
+    run(console.snapshot())
+    assert network.paths() == []
+    assert service.listing()["robots"][0]["state"] == "needs_new_code"
+
+
+def test_loading_a_needs_new_code_row_holds_it(tmp_path):
+    service, network, console, discovery, store, _ = _ready(tmp_path)
+    _enroll(service)
+    store.update("rosy_09", state="needs_new_code")
+    again, network2, console2, *_ = build(tmp_path, {PINNED: FakeCore()})
+    again.load()
+    run(console2.snapshot())
+    assert network2.paths() == []
+
+
+def test_move_address_is_refused_during_a_conflict(tmp_path):
+    service, network, console, discovery, store, _ = _moved_round_trip(tmp_path)
+    discovery.replace_scan([scan_row(MOVED)])
+    run(service.on_discovery(discovery.rows()))
+    discovery.replace_scan([scan_row(MOVED), scan_row("192.168.1.204:8080")])
+    run(service.on_discovery(discovery.rows()))
+    network.clear()
+    with pytest.raises(EnrollmentError) as refused:
+        run(service.move_address("rosy_09", principal_id="alice"))
+    assert refused.value.code == "conflict" and network.requests == []
+
+
+def test_a_stale_formation_flag_does_not_end_a_new_formation(tmp_path):
+    cores = {PINNED: FakeCore(), MOVED: FakeCore()}
+    service, network, console, discovery, _, _ = build(
+        tmp_path, cores, static=(FakeRobot("rosy_01"), FakeRobot("rosy_02")))
+    discovery.replace_scan([scan_row()])
+    _enroll(service)
+
+    class Session:
+        state = "RUNNING"
+
+        def __init__(self, members):
+            self.assignment = {rid: object() for rid in members}
+
+    stops = []
+
+    async def formation_stop():
+        stops.append(True)
+        console._formation = None
+        return {"active": False}
+
+    console.formation_stop = formation_stop
+    console._formation, console._formation_leader = Session(["rosy_09"]), "rosy_01"
+    console.hold_robot("rosy_09", "address_changed")        # A held and flagged
+    console._formation, console._formation_leader = Session(["rosy_02"]), "rosy_01"  # F2
+    discovery.replace_scan([scan_row(MOVED)])
+    run(service.on_discovery(discovery.rows()))
+    run(service.settle_holds())
+    assert stops == [] and console._formation is not None
+
+
+def test_enroll_requires_a_server_side_enrollable_row(tmp_path):
+    service, network, console, discovery, store, _ = build(
+        tmp_path, {PINNED: FakeCore()}, static=(FakeRobot("rosy_01"),))
+    console._registered_endpoints["rosy_01"] = "http://192.168.1.202:8080"
+    discovery.replace_scan([scan_row()])
+    refused = _refused(service)
+    assert refused.code == "not_enrollable" and network.requests == []

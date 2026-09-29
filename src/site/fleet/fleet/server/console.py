@@ -757,8 +757,14 @@ class FleetConsole:
     async def stop_held_formation(self) -> None:
         """A held formation member gets a stop request at its pinned address, then the
         formation is dissolved (D-352 3)."""
-        held = [rid for rid, hold in list(self._held.items()) if hold.get("formation")]
-        if not held or not self._formation_members():
+        members = self._formation_members()
+        if not members:
+            return
+        held = [rid for rid, hold in list(self._held.items()) if hold.get("formation")
+                and (rid in members or rid == self._formation_leader)]
+        for hold in self._held.values():
+            hold["formation"] = False  # a flag from an older formation must not end a new one
+        if not held:
             return
         for robot_id in held:
             try:
@@ -1007,7 +1013,7 @@ class FleetConsole:
         return status
 
     async def aclose(self) -> None:
-        for client in self._clients.values():
+        for client in list(self._clients.values()):
             closer: Any = getattr(client, "aclose", None)
             if closer is not None:
                 await closer()

@@ -104,17 +104,24 @@ class RobotGate:
     """Held = the pinned address is unverified: stop requests only (D-352 3)."""
 
     held: str | None = None
+    #: Fleet-clock expiry; past it the token is dead and only stop requests go out.
+    expires_at: float | None = None
 
 
 class _PinnedTransport(httpx.AsyncBaseTransport):
     def __init__(self, inner: httpx.AsyncBaseTransport, robot_id: str, gate: RobotGate,
-                 on_unauthorized: Callable[[str], None]) -> None:
+                 on_unauthorized: Callable[[str], None],
+                 clock: Callable[[], float] = time.time) -> None:
         self._inner = inner
         self._robot_id = robot_id
         self._gate = gate
         self._on_unauthorized = on_unauthorized
+        self._clock = clock
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if (self._gate.held is None and self._gate.expires_at is not None
+                and self._clock() >= self._gate.expires_at):
+            self._on_unauthorized(self._robot_id)  # expired: treated as a 401, nothing sent
         if self._gate.held and request.url.path not in STOP_PATHS:
             raise RobotApiError(self._robot_id, 409, "ADDRESS_UNVERIFIED",
                                 "pinned address is unverified; only stop requests are sent")
@@ -132,11 +139,12 @@ class EnrolledRobotClient(HttpRobotClient):
 
     def __init__(self, endpoint: RobotEndpoint, gate: RobotGate, *,
                  transport: httpx.AsyncBaseTransport | None = None,
-                 on_unauthorized: Callable[[str], None] = lambda _robot_id: None) -> None:
+                 on_unauthorized: Callable[[str], None] = lambda _robot_id: None,
+                 clock: Callable[[], float] = time.time) -> None:
         inner = transport if transport is not None else httpx.AsyncHTTPTransport()
         http = httpx.AsyncClient(
             base_url=endpoint.base_url, timeout=5.0, trust_env=False,
-            transport=_PinnedTransport(inner, endpoint.robot_id, gate, on_unauthorized))
+            transport=_PinnedTransport(inner, endpoint.robot_id, gate, on_unauthorized, clock))
         super().__init__(endpoint, http=http)
         self._owns_http = True
         self._gate = gate
@@ -185,10 +193,6 @@ class EnrollmentService:
     def available(self) -> bool:
         return self.unavailable_reason is None
 
-    @property
-    def token_values(self) -> tuple[str, ...]:
-        return tuple(self._tokens.values())
-
     def _console(self):
         return self._roster._console
 
@@ -205,12 +209,20 @@ class EnrollmentService:
 
     def _client(self, endpoint: RobotEndpoint, gate: RobotGate) -> EnrolledRobotClient:
         return EnrolledRobotClient(endpoint, gate, transport=self._transport,
-                                   on_unauthorized=self._unauthorized)
+                                   on_unauthorized=self._unauthorized, clock=self._clock)
+
+    @staticmethod
+    def _gate_for(row: dict) -> RobotGate:
+        return RobotGate(expires_at=row.get("fleet_expires_at"))
 
     def _unauthorized(self, robot_id: str) -> None:
+        """401 or Fleet-clock expiry: the token is dead; stop polling it (D-352 2)."""
         row = self._store.get(robot_id)
         if row is not None and row["state"] == "active":
             self._store.update(robot_id, state="needs_new_code")
+        gate = self._gates.get(robot_id)
+        if gate is not None and gate.held is None:
+            self._hold(robot_id, "needs_new_code")
 
     def _open(self, row: dict) -> str:
         return unseal(self._key, self._store.ciphertext(row["robot_id"]), slot="rest",
@@ -228,7 +240,9 @@ class EnrollmentService:
             self.unavailable_reason = "robot credential key does not open the register"
             return
         for row, token in opened:
-            gate = RobotGate(held="address_changed" if row["state"] == "address_changed" else None)
+            gate = self._gate_for(row)
+            if row["state"] in ("address_changed", "needs_new_code"):
+                gate.held = row["state"]
             self._gates[row["robot_id"]] = gate
             self._tokens[row["robot_id"]] = token
             self._roster.add(self._endpoint(row, token), self._client(self._endpoint(row, token), gate))
@@ -251,8 +265,7 @@ class EnrollmentService:
         for row in self._store.rows():
             if (row["state"] == "active" and row["fleet_expires_at"] is not None
                     and now >= row["fleet_expires_at"]):
-                self._store.update(row["robot_id"], state="needs_new_code")
-                row["state"] = "needs_new_code"
+                row["state"] = "needs_new_code"  # shown only; the client records it on use
             lifetime = (row["fleet_expires_at"] - row["created_at"]
                         if row["fleet_expires_at"] is not None else None)
             gate = self._gates.get(row["robot_id"])
@@ -279,16 +292,24 @@ class EnrollmentService:
             raise EnrollmentError("bad_request", 400, "choose one discovered robot or one address")
         if address is not None:
             return parse_manual_address(address), None
-        rows = [row for row in (self._discovery.rows() if self._discovery is not None else [])
-                if row["name"] == discovery_name]
-        if not rows:
+        if self._discovery is None:
             raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
-        if len({(row["address"], row["port"]) for row in rows}) > 1:
-            raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
-        if any((row.get("discovery_name") or row["hostname"]) == discovery_name
+        if any((row.get("discovery_name") or row["hostname"]).lower() == discovery_name.lower()
                for row in self._store.rows()):
             raise EnrollmentError("already_enrolled", 409, "that robot is already enrolled")
+        console = self._console()
+        snapshot = self._discovery.snapshot(console.registered_endpoints,
+                                            console.hub.registry.identity_snapshot(),
+                                            self.enrolled_names())
+        rows = [row for row in snapshot["devices"] if row["name"] == discovery_name]
+        if not rows:
+            raise EnrollmentError("not_discovered", 404, "that robot is not in the current scan")
+        if len({(row["address"], row["port"]) for row in rows}) > 1 or any(
+                row["status"] == "conflict" for row in rows):
+            raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
         row = rows[0]
+        if not row.get("enrollable"):
+            raise EnrollmentError("not_enrollable", 409, "that row is not waiting for registration")
         return f"{row['address']}:{row['port']}", row
 
     async def enroll(self, *, code: object, principal_id: str,
@@ -381,7 +402,7 @@ class EnrollmentService:
         hostname = str(info.get("hostname") or "").lower()
         robot_id = info.get("robot_id")
         if row is not None:
-            bridge_host = row["hostname"].removesuffix(".local")
+            bridge_host = row["hostname"].lower().removesuffix(".local")
             if not hostname or hostname != bridge_host or hostname != row["name"].lower():
                 renamed = _AVAHI_SUFFIX.match(bridge_host)
                 raise self._consumed("wrong_robot", avahi_renamed=bool(
@@ -410,7 +431,7 @@ class EnrollmentService:
         self._store.insert(record, seal(self._key, token, slot="rest", robot_id=robot_id,
                                         token_id=token_id))
         try:
-            gate = RobotGate()
+            gate = self._gate_for(record)
             endpoint = self._endpoint(record, token)
             self._roster.add(endpoint, self._client(endpoint, gate))
         except Exception:
@@ -455,9 +476,12 @@ class EnrollmentService:
             elif addresses == {row["address"]}:
                 if row["state"] == "address_changed":
                     self._store.update(robot_id, state="active")
-                self._release(robot_id)
+                if row["state"] == "needs_new_code":
+                    self._hold(robot_id, "needs_new_code")  # the token stays dead
+                else:
+                    self._release(robot_id)
             else:
-                if row["state"] != "address_changed":
+                if row["state"] == "active":
                     self._store.update(robot_id, state="address_changed")
                 self._hold(robot_id, "address_changed")
 
@@ -511,6 +535,9 @@ class EnrollmentService:
             raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
         if row["state"] != "address_changed":
             raise EnrollmentError("address_unchanged", 409, "the robot is not at a new address")
+        gate = self._gates.get(robot_id)
+        if gate is not None and gate.held == "conflict":
+            raise EnrollmentError("conflict", 409, "that name is seen at several addresses")
         new_address = self._current_other_address(row)
         if new_address is None:
             raise EnrollmentError("no_new_address", 409, "no single new address is in the scan")
@@ -535,7 +562,7 @@ class EnrollmentService:
                 "the token may have reached another device; revoke the site token on the robot "
                 "dashboard and enroll again")
         endpoint = RobotEndpoint(robot_id, f"http://{new_address}", token)
-        gate = RobotGate()
+        gate = self._gate_for(row)
         await self._roster.replace_endpoint(endpoint, self._client(endpoint, gate))
         self._gates[robot_id] = gate
         self._console().release_robot(robot_id)
@@ -551,12 +578,19 @@ class EnrollmentService:
         row = self._store.get(robot_id)
         if row is None:
             raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
-        if robot_id in self._roster.robot_ids:
-            await self._roster.remove(robot_id)
+        on_roster = robot_id in self._roster.robot_ids
+        if on_roster:
+            blocker = self._roster.removal_blockers(robot_id)
+            if blocker is not None:
+                raise blocker
+        # Popped before the first await so no concurrent path reuses them.
         gate = self._gates.pop(robot_id, None)
         token = self._tokens.pop(robot_id, None)
+        if on_roster:
+            await self._roster.remove(robot_id)
         done = False
-        if token is not None and (gate is None or gate.held is None):
+        # An address in doubt gets no Bearer; a dead token may still log out at a sure one.
+        if token is not None and (gate is None or gate.held in (None, "needs_new_code")):
             async with self._http(row["address"]) as http:
                 done = await self._logout(http, token)
         if done:
