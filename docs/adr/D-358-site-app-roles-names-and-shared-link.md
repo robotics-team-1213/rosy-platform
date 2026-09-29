@@ -2,6 +2,11 @@
 
 **Status:** Proposed (2026-09-30). 역할 표, 이름·아이콘 규칙, 화면 소유 규칙, 공유할 조각과 이행 순서만 정한다. 코드·리소스·와이어 변경은 하지 않는다. D-2·D-12·D-38·D-330(정지·명령 권한), D-193(로그인 코드), D-257(영상 없는 Fleet)·D-152(대시보드 저주기 미리보기 예외), D-339·D-340·D-345(이름·셸·디자인)를 바꾸지 않는다. 브랜치에 있는 D-341·D-351·D-352·D-354와 Pilot 브랜치 ADR의 결정은 그대로 두고, 이 ADR은 그것들이 착지할 때 맞출 공통 틀만 정한다.
 
+**사용자 확인 (2026-09-30).** 상태는 S1이 main에서 녹색이 될 때까지 Proposed로 둔다(Validation 절). 다음은 사용자가 확인했다.
+- 2항 이름표를 승인했다: Rosy 천장 카메라 / Rosy Pilot / Rosy 관제(Fleet 전용) / Rosy 로봇 대시보드. Pilot의 "관제 화면" 버튼은 "로봇 대시보드"가 된다.
+- 3항 아이콘 개념을 승인했다: 어두운 둥근 사각 바탕에 `--brand-rose` 점, 천장 카메라 = 천장 막대에 매달린 원, Pilot = 고리 안의 셰브런, Fleet = 한 줄로 이은 2×2 노드 격자, 대시보드 = 로봇 얼굴. 빨강은 비상 정지에만 남긴다.
+- 8항 첫 질문을 결정했다: 천장 카메라 앱에는 **정지 전용 자격을 주지 않는다.** 카메라 기능만 두고, 정지는 관제에서 한다는 안내만 둔다.
+
 잇는 결정: [D-2](D-2-cmd-vel.md) · [D-5](D-5-outbound-ws-fleet-rest.md) · [D-12](D-12-mission-fleet.md) · [D-38](D-38-core.md) · [D-193](D-193-login-code-and-credential-lifecycle.md) · [D-257](D-257-site-lane-map-and-overhead-sightings.md) · [D-261](D-261-overhead-camera-app-skeleton.md) · [D-318](D-318-site-camera-preview-rectification.md) · [D-323](D-323-rosy-pilot-teleop-app.md) · [D-330](D-330-fleet-action-admission-stop-and-recovery.md) · [D-339](D-339-surface-and-folder-role-names.md) · [D-340](D-340-app-shell-wraps-web-surfaces.md) · [D-345](D-345-design-philosophy-reaches-every-surface.md) · D-341(브랜치 `docs/d341-overhead-console-pairing`) · D-351(브랜치 `docs/robot-fleet-protocol-conformance`) · D-352(브랜치 `docs/fleet-robot-code-enrollment`, 코드 `feat/fleet-robot-enrollment-s1`) · D-354(브랜치 `feat/console-field-autodetect`) · Pilot ADR(브랜치 `feat/pilot-teleop`).
 
 ### Context
@@ -146,7 +151,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 | 로봇 설정(한도·하드웨어·네트워크) | **로봇 대시보드**(설치·정비) | — | 읽기만. 한도 계단(Pilot D-347)은 쓰기를 대시보드로 옮기거나 링크한다 | 없음 | 소유 | — |
 | **비상 정지** | **예외 — 모든 운용 표면** | 아래 참고 | 있음 | 있음(`/api/fleet/estop`, D-330) | 있음 | 입력 없음 |
 
-**비상 정지는 일부러 둔 예외다.** 로봇이 움직일 수 있는 동안 사람이 보는 운용 표면에는 모두 정지 버튼이 있어야 한다. 정지 버튼은 링크로 대신하지 않는다. 모든 정지는 CORE의 한 경로로 모인다. 정지 사실은 CORE `safety/state`가 말한다(D-330, D-351 5항). 천장 카메라 앱은 카메라 자격만 가지므로 스스로 정지를 보낼 수 없다. 앱 안에 "관제에서 정지" 안내만 둔다. 폰에 정지 전용 자격을 줄지는 정하지 않는다(8항).
+**비상 정지는 일부러 둔 예외다.** 로봇이 움직일 수 있는 동안 사람이 보는 운용 표면에는 모두 정지 버튼이 있어야 한다. 정지 버튼은 링크로 대신하지 않는다. 모든 정지는 CORE의 한 경로로 모인다. 정지 사실은 CORE `safety/state`가 말한다(D-330, D-351 5항). 천장 카메라 앱은 카메라 자격만 가지므로 스스로 정지를 보낼 수 없다. 앱 안에 "관제에서 정지" 안내만 둔다. 폰에는 정지 전용 자격도 주지 않는다(사용자 확인 2026-09-30, 8항).
 
 **지금 겹치는 곳과 결정:**
 1. **수동 운전 두 벌.** 대시보드 `console.teleop`은 Pilot이 DEVICE 수용(D-323 Validation)을 통과할 때까지 **이행기 표면**으로 남긴다. 통과한 회차에 이 패널을 "Rosy Pilot으로 조종" 링크 패널로 바꾼다. 두 표면에서 동시에 운전 화면을 늘리지 않는다. 새 조종 기능은 Pilot에만 넣는다.
@@ -232,7 +237,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 
 #### 8. 정하지 않는 것
 
-- 폰(천장 카메라 앱)에 정지 전용 자격을 줄지. 지금은 "관제에서 정지" 안내만 둔다. 설치자가 사다리 위에서 로봇을 멈춰야 하는 현장 요구가 기록되면 따로 정한다. 그 경우에도 frames 자격과 섞지 않는다.
+- ~~폰(천장 카메라 앱)에 정지 전용 자격을 줄지.~~ **사용자가 2026-09-30 정했다: 주지 않는다.** 카메라 기능과 "정지는 관제에서" 안내만 둔다. 설치자가 사다리 위에서 로봇을 멈춰야 하는 현장 요구가 새로 기록되면 새 ADR로 다시 연다. 그 경우에도 frames 자격과 섞지 않는다.
 - CORE의 TLS·장치 신원 증명 도입. 5.3의 Fleet → CORE 이름 따라가기 전환 조건이다.
 - mDNS 서비스 인스턴스 이름(`ROSY %h`, `ROSY Fleet %h`, `ROSY Overhead %h`)을 2항 이름표에 맞출지. 표시용이지만 이미 설치된 광고와 문서에 퍼져 있다.
 - 경기 보드(`game-board`)·제어 진단·시뮬 라이브 뷰의 아이콘. 운용자 설치 앱이 아니므로 이번 범위 밖이다.
