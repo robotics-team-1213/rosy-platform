@@ -6,7 +6,7 @@
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
 | [core](src/runtime/gateway/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | GO | HOLD | HOLD | PARKED |
-| [deploy](deploy/progress.md) | 릴리스·플랫폼 | uncommitted (2026-09-22) | GO | GO | N/A | HOLD | HOLD | N/A |
+| [deploy](deploy/progress.md) | 릴리스·플랫폼 | c8050390 (2026-09-30) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](src/runtime/sensing/progress.md) | CONTROL | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |

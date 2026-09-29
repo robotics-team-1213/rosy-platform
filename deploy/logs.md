@@ -1530,3 +1530,11 @@
 - gate 변화: 없음.
 - 결정: D-352.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
+
+- 변경: last_verified를 c8050390(2026-09-30)로 기록. LOCAL gate cmd(전체 `test/`)가 이 커밋에서 CI(GitHub Actions run 36628331442, ubuntu-26.04/ros:jazzy)를 통과했다 — 6연속 적신이던 main CI의 첫 초록이고, 그 수리 과정의 절반(dock 파싱 재연결·시크릿 스캐너·target 등록)이 이 모듈의 계약 시험이었다.
+- 증거: CI run 36628331442 conclusion=success at c8050390; 로컬 관련 파일 155 passed (2026-09-30 Windows).
+- gate 변화: 없음 (ARTIFACT/DEVICE는 여전히 HOLD — native ARM64·실기 증거는 그대로 남는다).
+- 결정: 없음.
+- 교훈: 없음.

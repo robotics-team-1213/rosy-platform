@@ -3632,6 +3632,7 @@
 - gate 변화: docs LOCAL HOLD→GO (blocker였던 isaac_sim 스코어카드·fleet 크기 재판정을 같은 회차에 해소).
 - 결정: isaac_sim 잠정 채점은 다음 회차 재채점 대상이다(omx·pinky_pro·overhead와 같은 절차).
 - 교훈: isaac_sim AGENTS.md·progress.md의 "no own tests" 문구는 실제(test/ 3건)와 어긋난다 — 다음 isaac_sim 회차에서 바로잡을 것.
+
 ## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 
 - Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.
@@ -3690,3 +3691,11 @@
 - gate 변화: 없음.
 - 결정: D-354 Proposed.
 - 교훈: 없음
+
+## 2026-09-30 · uncommitted · docs: main CI 초록 회복 — 6연속 적신 수리 완료
+
+- 변경: 세션 전체에 걸쳐 41b3a704부터 이어진 main CI 적신 6연속을 수리했다. 층별: (1) C6 죽은 charging reach[bed604ef], (2) isaac_sim functional·target 등록[bed604ef·d4e9fcff], (3) Node 18 ESM + 고아 시험 연결[1ce3c40a], (4) D-353 도크 파싱 재연결·시크릿 스캐너 변수명[d4e9fcff], (5) enrollment 공용 컨트롤 계약 3건[c8050390]. deploy last_verified를 초록 커밋으로 기록했다.
+- 증거: CI run 36628331442 conclusion=success at c8050390 (2026-09-30). 로컬: web_common+dialog 100·fleet 849·services 265·gateway 1439·sensing 1665 passed, Node 18 컨테이너 검증 1건, 변이 증명 1건.
+- gate 변화: deploy last_verified 기록(경고 해소). docs LOCAL GO 유지.
+- 결정: 없음.
+- 교훈: CI가 한 단계에서 멈추면 그 아래 층은 안 보인다 — 층마다 로컬 전수 검증이 push보다 먼저다. 병행 세션의 랜딩은 그 세션의 게이트만 통과한다; 공용 계약(web_common·D-218·시크릿 스캔)은 소유 모듈 밖에서 검사된다.
