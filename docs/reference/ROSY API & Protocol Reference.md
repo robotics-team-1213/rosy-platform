@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.52
+**Version:** v1.53
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1285,6 +1285,22 @@ Physical stop and goal evidence remain separately sourced and correlated.
 
 The source now provides a newline-delimited JSON UDS handler and local Action runner. Each connection carries one request frame, capped at 64 KiB, and peer UID is read from Linux `SO_PEERCRED`; the parent socket directory must already be provisioned. `request_digest` is lowercase SHA-256 over UTF-8 canonical JSON of the complete `FleetActionGrant` with `request_digest` omitted (sorted keys, compact separators, Pydantic JSON-mode ISO-8601 timestamps). The runner is disabled by default, journals before driver submission, and never replays an Action already in `SUBMITTING`, `UNKNOWN`, or later. These source modules do not register a service entrypoint, connect a selected ROS/gripper driver, or provide physical stop/goal proof; those remain gated by ROS-SIM, DEVICE, and FIELD.
 
+`DeviceActionReceipt` binds every local readback to the same mission, step, action,
+attempt, workcell, instance, request digest, authority epoch, dispatch generation,
+journal event ID, and observed time. Site Fleet has one background Mission dispatcher;
+it is disabled by default and can be constructed only with the complete Mission API,
+shared persistent database, explicit OMX workcell/instance map, and a local Action
+transport. Admission and provider proposal handlers never call the device API.
+Before first submit, Fleet persists the exact grant and IDs while atomically moving
+the Mission from `READY` to `RUNNING`. A process restart reads that stored grant and
+calls `GetAction`; it does not regenerate IDs or replay `SubmitAction`. Lost
+acknowledgement becomes Fleet `HOLD` with claims retained while one durable
+reconciliation is pending. A readback that is missing or remains nonterminal clears
+that one reconciliation attempt and leaves the Mission held for operator review.
+An Action terminal success advances only to `ACTION_SUCCEEDED`; independent goal
+evidence is still required for Mission completion. No device, physical stop, or
+manipulator acceptance follows from enabling this source worker.
+
 ## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)
 
 These Site Fleet routes are separate from `/api/v1/fleet/missions` on robot CORE.
@@ -1325,14 +1341,18 @@ the resulting target, goal predicate, revisions, and resource set with the
 stored draft before the atomic generation check and claim acquisition. Stale
 generation or any existing navigation/direct-action/workcell/object claim
 returns `409` with no new claim. General mutation audit failure returns `503`
-before proposal or admission mutation. This route currently reports
-`physical_submission: NOT_CONNECTED`: Mission admission is not an OMX Action,
-ROS goal, software stop, or physical E-stop receipt.
+before proposal or admission mutation. The synchronous admission response reports
+`physical_submission: NOT_CONNECTED`: admission itself is only a claim transaction.
+If the separately configured, explicitly enabled background dispatcher is running,
+it may later submit one fenced local Action. Neither response proves ROS goal
+completion, software stop, driver standstill, object placement, or physical E-stop
+state.
 
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.53 | 2026-09-29 | Additive (D-333/D-336): connect the explicit opt-in Fleet Mission dispatcher to the same-host OMX UDS Action API. Persist stable grants before one SubmitAction; reconcile restart/lost ACK through GetAction without replay; bind receipts to digest and both fences. Dispatcher stays disabled by default; Action success remains separate from goal evidence and physical acceptance. |
 | v1.52 | 2026-09-29 | Additive (D-336): define the local software-stop OPEN projection and explicit newer-generation rearm; a persisted stop latch, stale Fleet fence, or process restart blocks the final driver submission boundary. This remains separate from driver standstill and physical E-stop proof. |
 | v1.51 | 2026-09-29 | Clarify (D-336): define one-frame newline JSON UDS encoding, SO_PEERCRED UID derivation, 64 KiB bound, and FleetActionGrant canonical digest; source adds a disabled-by-default local Action runner with durable attempt IDs and no unknown replay. No service entrypoint or physical capability is enabled. |
 | v1.50 | 2026-09-29 | Additive (D-333/D-334): separate Site Fleet candidate storage, observation/capability resolution, Mission draft readback, and named-operator generation-checked admission routes. Proposal creation does not invoke ER 2; admission only acquires Fleet claims and remains disconnected from Device Action/ROS. |

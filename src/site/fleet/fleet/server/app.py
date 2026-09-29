@@ -37,9 +37,11 @@ from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStore, status_code_for
 from fleet.server.mission_service import MissionService
+from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_store import MissionConflict
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
 from fleet.server.local_stop_transport import UnixLocalStopTransport
+from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
 from fleet.server.task_service import FleetTaskService
@@ -236,7 +238,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                vision_sources: tuple[str, ...] = (),
                omx_instances: Optional[Mapping[str, str]] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
-               omx_stop_transport=None) -> FastAPI:
+               omx_stop_transport=None,
+               enable_mission_dispatcher: bool = False,
+               omx_action_transport=None) -> FastAPI:
     mission_configured = any((mission_service, proposal_store, candidate_resolver))
     if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
         raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
@@ -265,6 +269,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     stop_transport = omx_stop_transport
     if configured_omx and stop_transport is None:
         stop_transport = UnixLocalStopTransport(omx_socket_root)
+    if enable_mission_dispatcher and not mission_configured:
+        raise ValueError("Mission dispatcher requires the complete Mission API configuration")
+    if enable_mission_dispatcher and not configured_omx:
+        raise ValueError("Mission dispatcher requires configured OMX workcells")
+    action_transport = omx_action_transport
+    if enable_mission_dispatcher and action_transport is None:
+        action_transport = UnixLocalActionTransport(omx_socket_root)
+    mission_dispatcher = (
+        MissionDispatcher(mission_service, task_service.store, action_transport, configured_omx)
+        if enable_mission_dispatcher else None
+    )
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
         if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
@@ -287,15 +302,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     @asynccontextmanager
     async def lifespan(app):
         dispatcher = None
+        mission_worker = None
         proposal_expiry = None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
+        if mission_dispatcher is not None:
+            mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
         try:
             yield
         finally:
-            for background in (dispatcher, proposal_expiry):
+            for background in (dispatcher, mission_worker, proposal_expiry):
                 if background is not None:
                     background.cancel()
                     try:
@@ -313,6 +331,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     app.state.mission_service = mission_service
+    app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
     if task_service is not None:
@@ -765,6 +784,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             plan = dict(resolution["plan"])
             plan["source_evidence"] = source_evidence.model_dump(mode="json")
             plan["destination_evidence"] = destination_evidence.model_dump(mode="json")
+            plan["observation_revision"] = plan.get(
+                "observation_revision", source_evidence.observation_id,
+            )
+            for revision_name in ("capability_revision", "config_revision",
+                                  "observation_revision"):
+                revision = plan.get(revision_name)
+                if (not isinstance(revision, str) or not revision.strip()
+                        or revision != revision.strip() or len(revision) > 128):
+                    raise ProposalRejected(f"{revision_name.upper()}_MISSING")
+            if plan["observation_revision"] != source_evidence.observation_id:
+                raise ProposalRejected("OBSERVATION_REVISION_MISMATCH")
             return {"plan": plan,
                     "goal_predicate": dict(resolution["goal_predicate"]),
                     "resources": [list(item) for item in resources]}
@@ -1265,3 +1295,15 @@ async def _proposal_expiry_loop(proposal_store: ProposalStore) -> None:
         except (OSError, sqlite3.Error):
             _LOG.exception("expired Fleet proposal cleanup failed")
         await asyncio.sleep(3600)
+
+
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:
+    """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
+    while True:
+        try:
+            await asyncio.to_thread(dispatcher.dispatch_next)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOG.exception("Fleet Mission dispatcher cycle failed")
+        await asyncio.sleep(0.25)

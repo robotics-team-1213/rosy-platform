@@ -251,11 +251,15 @@ class DeviceActionReceipt(BaseModel):
     attempt_id: str = Field(min_length=1, max_length=192)
     workcell_id: str = Field(min_length=1, max_length=96)
     instance_id: str = Field(min_length=1, max_length=96)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
     state: DeviceActionState
     journal_event_id: int = Field(strict=True, ge=1)
     observed_at: datetime
     driver_goal_id: str | None = Field(default=None, max_length=192)
     reason: str | None = Field(default=None, max_length=256)
+    created: bool = False
 
     @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id")
     @classmethod

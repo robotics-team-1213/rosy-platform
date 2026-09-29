@@ -121,6 +121,12 @@
 4. 실패 시 rollback은 조작 capability와 Mission dispatcher를 다시 닫고, 이미 제출된 Action의 결과·보유 상태를 장치에서 조정하는 것이다. Fleet 원장 삭제나 같은 요청 재발행으로 rollback하지 않는다.
 5. Run: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`; `python tools/harness/rosy_harness.py lint`. Expected: 문서 계약 통과. `generate` 후 생성 index와 git diff를 확인한다. 해당 검증 범위만 stage/commit한다.
 
+### Task 6 execution record (2026-09-29)
+
+- SOURCE implementation: one Site Fleet background dispatcher is disabled by default and requires explicit OMX workcell mapping, complete Mission API configuration, shared persistent storage, and a local Action transport. REST admission and ER 2 proposal routes do not call UDS. Fleet durably stores the exact action/attempt IDs and grant during the fenced READY-to-RUNNING transition before one SubmitAction. After restart or uncertain acknowledgement it calls GetAction with the stored grant; it never regenerates identifiers or replays SubmitAction. Unresolved outcomes keep claims held and durable reconciliation state; missing/nonterminal readback ends in operator HOLD. Device receipts bind Mission/step/action/attempt, digest, authority epoch, generation, journal event, and observed time. API Reference v1.53 separates admission, optional dispatch, Action result, independent goal evidence, and physical acceptance.
+- Evidence: focused dispatcher/store/service/API, stop fence, OMX Action API/store, shared schema, and API contract docs bundle: 83 passed. Full Fleet suite: 665 passed, 5 skipped; API web: 70 passed, 13 skipped; OMX adapter: 85 passed, 3 skipped; foundation contracts: 102 passed. Harness `generate` completed and `lint` reported 0 errors/17 existing freshness warnings. `git diff --check` passed. The optional combined network-topology/harness test run reached 92% but stalled without a summary and was interrupted; no pass is claimed for that command.
+- Limits: source implementation only. The dispatcher remains opt-in. Device service installation, selected ROS/gripper driver, ROS-SIM, physical stop proof, and FIELD acceptance remain HOLD/PARKED.
+
 ## 완료 기준
 
 운영자 요청 한 건에 대해 `request_key → proposal_id → mission_id/step_id → action_id/attempt_id → driver goal ID → 독립 goal evidence`가 같은 프레임·장치·generation으로 추적되고, 중복·늦은 결과·정지·재시작에서도 물리 작업이 자동 재발행되지 않아야 SOURCE/LOCAL을 완료로 판정한다. ROS-SIM, 설치 산출물, 실물 동작과 물리 정지는 각각의 증거가 생길 때만 승격한다. 모델 후보만 시험한 결과로 OMX capability를 활성화하지 않는다.

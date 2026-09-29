@@ -111,15 +111,24 @@ class ActionRunner:
         if not self.capability_current(grant):
             raise PermissionError("workcell capability or configuration is stale")
 
-    @staticmethod
-    def _receipt(action: Mapping[str, object], *, created: bool,
+    def _receipt(self, action: Mapping[str, object], *, created: bool,
                  reason: str | None = None) -> dict[str, object]:
+        request = action.get("request", {})
+        payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
+        if not isinstance(payload, Mapping):
+            payload = {}
         return {
-            "mission_id": action.get("request", {}).get("mission_id"),
-            "step_id": action.get("request", {}).get("step_id"),
+            "mission_id": payload.get("mission_id"),
+            "step_id": payload.get("step_id"),
             "action_id": action["action_id"], "attempt_id": action.get("attempt_id"),
             "workcell_id": action["workcell_id"], "instance_id": action["instance_id"],
+            "request_digest": payload.get("request_digest"),
+            "authority_epoch": payload.get("authority_epoch"),
+            "dispatch_generation": payload.get("dispatch_generation"),
             "state": action["state"], "driver_goal_id": action.get("driver_goal_id"),
+            "journal_event_id": action.get("journal_event_id")
+            or self.store.latest_event_id(str(action["action_id"])),
+            "observed_at": action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
         }
 

@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 655 passed/5 skipped including separate ProposalStore and Mission REST lifecycles, atomic Mission/proposal resolution rollback and retry, current-evidence recheck at resolution/admission, audit-fail-closed writes, named-operator admission, and shared resource/generation conflicts. Resolver integration is dependency-injected; no live observation producer, model provider, OMX Action transport, or physical submission is wired. SOURCE/LOCAL only."
+    evidence: "Fleet suite 665 passed/5 skipped including ER2 proposal/admission, durable Mission Action dispatcher with persisted stable grant and restart GetAction reconciliation, stop-fence and no automatic replay contracts. API web 70 passed/13 skipped, OMX adapter 85 passed/3 skipped, foundation 102 passed. Dispatcher remains explicit opt-in; no live observation producer, configured OMX service/driver, ROS-SIM, or physical stop/goal proof. SOURCE/LOCAL only."
     cmd: "python3 -m pytest src/site/fleet/test -q"
   ROS-SIM:
     state: HOLD

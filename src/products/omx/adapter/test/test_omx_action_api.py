@@ -81,6 +81,12 @@ def test_submit_persists_fleet_ids_and_duplicate_never_replays(tmp_path):
     assert first["state"] == "ACCEPTED"
     assert first["action_id"] == grant.action_id
     assert first["attempt_id"] == grant.attempt_id
+    assert first["mission_id"] == grant.mission_id
+    assert first["step_id"] == grant.step_id
+    assert first["request_digest"] == grant.request_digest
+    assert first["authority_epoch"] == grant.authority_epoch
+    assert first["dispatch_generation"] == grant.dispatch_generation
+    assert first["journal_event_id"] >= 1
     assert duplicate["action_id"] == grant.action_id
     assert duplicate["created"] is False
     assert driver.submissions == [grant.action_id]

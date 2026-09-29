@@ -62,6 +62,8 @@ def _resolution(candidate, *, workcell_id, instance_id, now):
             "image_sha256": observation["image_sha256"],
             "calibration_revision": observation["calibration_revision"],
             "transform_revision": observation["transform_revision"],
+            "capability_revision": "pick-place-v1", "config_revision": "omx-config-r4",
+            "observation_revision": observation["observation_id"],
             "resolved_at": now, "workcell_id": workcell_id,
             "instance_id": instance_id,
         },
@@ -75,7 +77,8 @@ def _resolution(candidate, *, workcell_id, instance_id, now):
     }
 
 
-def _client(tmp_path, *, resolver=_resolution, named_users=True):
+def _client(tmp_path, *, resolver=_resolution, named_users=True,
+            enable_mission_dispatcher=False, action_transport=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = tmp_path / "fleet.sqlite3"
     robot = FakeRobot("rosy_01")
@@ -90,6 +93,10 @@ def _client(tmp_path, *, resolver=_resolution, named_users=True):
         console, task_service=tasks, site_users=site_users,
         mission_service=MissionService(MissionStore(db)),
         proposal_store=ProposalStore(db), candidate_resolver=resolver,
+        enable_mission_dispatcher=enable_mission_dispatcher,
+        omx_instances=({"omx_01": "omx_01_control"}
+                       if enable_mission_dispatcher else None),
+        omx_action_transport=action_transport,
     )
     return TestClient(app), tasks, credentials
 
@@ -114,6 +121,7 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
         return _resolution(candidate, workcell_id=workcell_id, instance_id=instance_id, now=now)
 
     client, _, _ = _client(tmp_path, resolver=resolver)
+    assert client.app.state.mission_dispatcher is None
     created = _create(client)
     duplicate = _create(client)
     proposal_id = created.json()["proposal"]["proposal_id"]
@@ -182,7 +190,18 @@ def test_mission_admission_rechecks_evidence_then_claims_resources_without_dispa
     assert response.json()["mission"]["status"] == "READY"
     assert len(calls) == 2
     assert tasks.store.resource_claims(resource_kind="object", resource_id="block-1")
-    assert not hasattr(client.app.state, "mission_dispatcher")
+    assert client.app.state.mission_dispatcher is None
+
+
+def test_dispatcher_requires_explicit_enablement_and_action_transport_is_injected(tmp_path):
+    class Transport:
+        pass
+
+    client, _, _ = _client(
+        tmp_path, enable_mission_dispatcher=True, action_transport=Transport(),
+    )
+
+    assert client.app.state.mission_dispatcher is not None
 
 
 def test_viewer_and_unnamed_development_principal_cannot_admit_mission(tmp_path):
