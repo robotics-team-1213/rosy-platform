@@ -169,7 +169,7 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         if surface == "setup":
                             button = page.locator('[data-panel="setup.localization"] ui-button').filter(has_text="맵핑 시작")
                         else:
-                            button = page.get_by_text("이전 릴리스로 복귀", exact=True)
+                            button = page.get_by_role("button", name="이전 릴리스로 복귀", exact=True)
                             page.wait_for_function("""() => {
                               const cards = [...document.querySelectorAll('[data-panel="host.operations"] section.ui-readback')];
                               const release = cards[1];
@@ -215,7 +215,7 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                                     "unavailable": "정보 없음"}[scenario]
                         card_status = page.locator("section.ui-readback ui-status").filter(has_text=expected).first.inner_text()
                         assert expected in card_status, records[-1]
-                        assert page.get_by_text("사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
+                        assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
                     context.close()
         browser.close()
     (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -314,8 +314,8 @@ def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
           .slice(0, 2).every(card => card.querySelector('ui-status')?.textContent.includes('권한'))""", timeout=30_000)
         assert "site-fixture" not in cards.nth(0).locator("dl").text_content()
         assert "r1" not in cards.nth(1).locator("dl").text_content()
-        assert page.get_by_text("사업장 Wi-Fi로 전환", exact=True).is_disabled()
-        assert page.get_by_text("이전 릴리스로 복귀", exact=True).is_disabled()
+        assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled()
+        assert page.get_by_role("button", name="이전 릴리스로 복귀", exact=True).is_disabled()
         phase["scenario"] = "normal"
         page.wait_for_function("""() => {
           const lines = document.querySelectorAll('[data-panel="host.operations"] .host-card-headline');
@@ -366,7 +366,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
             assert result["buttonTop"] < result["readoutTop"], result
             if width == 390:
                 assert result["operationsTop"] < height, result
-            button = page.get_by_text("사업장 Wi-Fi로 전환", exact=True)
+            button = page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True)
             button.focus()
             assert button.evaluate("node => document.activeElement === node")
             assert button.evaluate("node => getComputedStyle(node).outlineStyle !== 'none' && parseFloat(getComputedStyle(node).outlineWidth) > 0")
