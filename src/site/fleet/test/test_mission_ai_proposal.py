@@ -44,7 +44,7 @@ def test_er2_and_operator_candidates_share_proposal_api_without_dispatch(
 
     async def generate_candidate():
         async with GeminiER2StandardAdapter(
-            api_key="fixture-secret",
+            api_key="test-secret",
             transport=httpx.MockTransport(provider_handler),
         ) as adapter:
             return await adapter.propose_pick_place(
@@ -88,7 +88,7 @@ def test_er2_and_operator_candidates_share_proposal_api_without_dispatch(
     )
 
     assert len(requests) == 1
-    assert requests[0].headers["x-goog-api-key"] == "fixture-secret"
+    assert requests[0].headers["x-goog-api-key"] == "test-secret"
     assert (
         model_proposal.status_code == operator_proposal.status_code == 200
     ), (
@@ -118,7 +118,7 @@ def test_provider_tool_declaration_is_proposal_only_and_not_a_public_route(
 
     async def scenario():
         async with GeminiER2StandardAdapter(
-            api_key="fixture-secret", transport=httpx.MockTransport(handler),
+            api_key="test-secret", transport=httpx.MockTransport(handler),
         ) as adapter:
             return await adapter.propose_pick_place(
                 request_id="proposal-only-fixture",
