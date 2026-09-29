@@ -552,3 +552,10 @@
 - 변경: `index.html`이 `/common/theme.js`를 싣고 정적 `theme-color`를 `#111614`에서 dark `--ground` `#101214`로 고쳤다. 상단바에 화면 테마 그룹(어둡게/밝게/시스템, 공용 segment)을 두고, 역할 잠금(`operatorControls`)이 이 버튼을 건너뛰게 했다 — 표시 선호이지 조작이 아니다. 좁은 폭(≤40rem)에서는 상단바 5행에 놓인다. `.tag.crit`·`.log div.bad`의 글자를 `--ink-on-crit`로 바꿨다. `test_console_palette.py`는 테마 블록마다 돈다.
 - 증거: `python -m pytest src/site/fleet/test -q` 통과(위 876 passed 묶음). 밝게 1366×768 캡처에서 전체 정지 각주·끊김 태그 가독 확인.
 - gate 변화: 없음. 지도 지형이 `--ink`/`--ground-deep`을 써서 밝게에서 반전되는 것은 D-359 §4.2(캔버스 `--raster-*`)의 몫으로 남긴다.
+
+## 2026-09-30 · 6e766e19 · D-359 US-003 Fleet 지도 지형은 raster 토큰, 테마 전환 즉시 다시 그림
+
+- 변경: `map-view.js`의 `hexToRgb`와 `--ink`/`--ground-deep`/`--ground-soft` 지형을 지우고 `--raster-unknown/free/uncertain/occupied`를 `RosyPalette.readPalette`로 쓴다(25<값<65는 이제 미지가 아니라 불확실 색). 모든 캔버스 색은 `cssColor`, 글꼴은 `canvasFont(…, "mono")`(칩 글꼴 하한 10 → 12px). `console.js`는 `css` 헬퍼를 지우고 `--robot-1..3`을 `cssColor`로 풀며, `rosy:theme`에 로봇 색을 다시 풀고 `mapView.draw()`. 범례 견본도 raster 토큰이고 `불확실` 견본을 더했다. `.legend i { padding: 0 }` — `.sw.robot`이 로스터 카드 `.robot` 여백을 물려받아 큰 알약으로 보이던 것(캡처에서 발견).
+- **의도된 모양 변화(D-359 §4.2)**: 어둡게 Fleet 지도는 전에 빈 칸이 밝은 `--ink`, 벽이 어두운 `--ground-deep`이었다. 이제 로봇 지도와 같아 빈 칸이 어둡고(`#1f2123`) 벽이 밝다(`#d7d7d8`). 밝게에서는 빈 칸 `#e5e6e8`, 벽 `#303337`.
+- 증거: `test_canvas_palette_browser.py::test_free_space_follows_the_theme_without_reload[fleet-map]` 통과. 캡처 `X:/DevTemp/rosy-d359/shots/us003-fleet-{dark,light}.png`. 브라우저 `test/test_fleet_console_browser.py` 28 passed 3 failed: swarm_control(알려진 실패), `test_mobile_console_has_no_horizontal_overflow[320|390]`(`headerRows` 5 > 4 — US-002 테마 그룹이 상단바 5행을 만든 것, e19f2ef4에서도 같이 실패; 이 항목과 무관한 열린 문제).
+- gate 변화: 없음. 현장 조명 아래 사람 확인은 남아 있다.

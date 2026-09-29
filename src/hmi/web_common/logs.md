@@ -218,3 +218,10 @@
 - 브라우저(`ROSY_RUN_BROWSER_TESTS=1`): `src/hmi/dashboard/test src/hmi/web_common/test` 181 passed 1 failed → 실패는 새 패널 순서(order 10)가 390×844 /device에서 운영 상태를 밀어낸 것이라 order 110으로 옮긴 뒤 해당 시험·`test_theme_browser.py` 10 passed. `test/test_role_surface_states_browser.py test/test_fleet_console_browser.py test/test_rosy_games_surface.py` 42 passed 3 failed: swarm_control(기존 알려진 실패), semantic_subheadings(기준 커밋 fdb428de에서도 실패), slow_initial_gather(부하 플레이크 — 단독 재실행 통과).
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A. 밝게는 제품 기본값이 아니고 사람 G3·현장 조명 관측 전이다.
 - 결정: D-359 §2·§3·§7.1·§7.3.
+
+## 2026-09-30 · 4d513a41 · D-359 US-003 캔버스 색·글꼴 해석기 RosyPalette
+
+- 변경: `ui.js`에 `readColour`·`readPalette`·`cssColor`·`canvasFont`·`clearPalette`를 더해 export하고 `window.RosyPalette`로도 건다(D-75 번들러 없음; camera-capture.js는 Node에서도 import되므로 캔버스 파일은 전역으로 부른다). 색은 글자로 파싱하지 않는다 — 숨은 탐침 `<span>`에 `color: var(--x)`를 걸어 계산된 색(Chromium은 color-mix를 `color(srgb …)`/`oklab(…)`로 준다)을 1×1 캔버스에 칠해 sRGB 바이트 `[r,g,b,a]`(a 0–1)로 되읽고 캐시한다. `canvasFont(size, "body"|"mono")`는 `--body`/`--mono` 계산값과 12px 하한. `rosy:theme`에서 캐시를 비운다(ui.js가 캔버스 모듈보다 먼저 실행되므로 다시 그리기 전에 비워진다). 새 시험: `test_canvas_palette_contract.py`(캔버스 5파일에 hex 리터럴·hexToRgb·getPropertyValue·px 리터럴·sans-serif 없음, `ctx.font`는 canvasFont 경유, games 피치 색은 styles.css, Fleet 지형·범례는 raster 토큰), `test_canvas_palette_browser.py`(로봇 지도·Fleet 지도 빈 칸 픽셀 dark → `RosyTheme.set('light')` → light `--raster-free` ±3, color-mix 토큰 `--line-quiet`·`--ground-grad-1`이 검정이 아님, canvasFont(10) → 12px).
+- 증거: 아래 US-003 묶음. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/web_common/test -q` 146 passed. 1366×768 캡처 `X:/DevTemp/rosy-d359/shots/us003-{robot,fleet}-{dark,light}.png`(ROSY_D359_SHOTS로 켬).
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
+- 결정: D-359 §4.

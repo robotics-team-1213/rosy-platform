@@ -568,3 +568,9 @@
 - 변경: `web/diagnostic.html`의 `<html>`에 `data-theme="dark" data-theme-pin="dark"`. 자체 `color-scheme: dark`는 고정 표면이라 둔다.
 - 증거: 레지스트리 `theme:` 규칙 0건. `test_map_raster_color_contract.py::test_the_javascript_mirror_agrees_with_its_own_css_token`은 이 변경 전(960a76f2, US-001 이름 변경)부터 `muted` 키로 빨갛다 — 이 항목과 무관하며 열린 문제로 남긴다.
 - gate 변화: 없음.
+
+## 2026-09-30 · f637c1cd · D-359 US-003 진단 페이지 JS 사본 키를 --ink-quiet에 맞춤
+
+- 변경: `web/diagnostic.html` `const T`의 `muted` 키를 `inkQuiet`로(사용처 1곳 `T.inkQuiet`), `test_map_raster_color_contract.py` 별칭에 `inkQuiet → ink-quiet`. 시험 뜻(JS 사본 = 같은 파일 CSS 토큰)은 그대로다. PARKED 표면이라 그 밖은 고치지 않았다.
+- 증거: `python -m pytest src/runtime/sensing/test/test_map_raster_color_contract.py -q` 3 passed(US-002 항목의 열린 문제 해소).
+- gate 변화: 없음.

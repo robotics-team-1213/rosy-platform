@@ -530,3 +530,9 @@
 - 변경: `index.html`·`surface.html`·`styleguide.html`이 tokens.css 바로 뒤에 `/common/theme.js`를 싣는다. `/device`에 `system.display` 패널(화면 테마: 어둡게/밝게/시스템, 공용 segment 버튼, 이 브라우저에만 저장)을 order 110(맨 뒤)으로 더했다 — 좁은 화면에서 상태·조치가 먼저 보이게. `styles.css`·`surface-panels.css`의 `color-scheme` 선언을 지웠다(테마 블록의 몫). 위험 채움 위 글자 `--ink` 세 곳을 `--ink-on-crit`로 바꿨다(밝게에서 짙은 글자가 짙은 적색 위에 사라짐).
 - 증거: `python -m pytest src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 876 passed 39 skipped. 1366×768 밝게 캡처(`X:/DevTemp/rosy-d359/shots`)에서 /console·/device 글자 가독 확인.
 - gate 변화: 없음.
+
+## 2026-09-30 · 089bdb69 · D-359 US-003 로봇 지도·카메라 오버레이가 RosyPalette로 색을 읽는다
+
+- 변경: `map.js`의 hex 전용 `readToken`·`paletteCache`를 지우고 `window.RosyPalette.readPalette`를 쓴다(래스터 한 장에 표 한 번). `rosy:theme`이면 새로 고침 없이 `rebuildRaster()`·`paint()`. `camera-capture.js` 오버레이는 `cssColor`와 `canvasFont(…, "body")`(sans-serif·직접 getPropertyValue 제거) — 녹화 중 프레임마다 다시 그리므로 따로 듣지 않는다. 시험 하네스(`test_map_readout_browser.py`, `test/test_camera_capture_browser.py`, Node 스텁 `test_camera_capture.py`)가 실제 셸처럼 ui.js/RosyPalette를 먼저 싣는다.
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test -q` 2674 passed 129 skipped 1 failed — 실패는 Node 스텁이 RosyPalette를 몰라서였고 스텁을 고친 뒤(2aaae787) `test_camera_capture.py` 5 passed. 브라우저(`ROSY_RUN_BROWSER_TESTS=1`) `src/hmi/dashboard/test` 51 passed + 같은 Node 1건, `test/test_camera_capture_browser.py`·`test_role_menu_panels_browser.py` 통과.
+- gate 변화: 없음.

@@ -261,3 +261,9 @@
 - 변경: `index.html`에 `data-theme="dark" data-theme-pin="dark"`를 정적으로 둔다(theme.js를 싣지 않는 쪽이 단순하다 — 경기장 녹색이 바탕이다). `surfaces.yaml` `themes: [dark]`, 레지스트리 시험이 pin을 지킨다. `.lost`의 위험 채움 글자를 `--ink-on-crit`로 바꿨다(값은 같다).
 - 증거: `python -m pytest src/site/games/test -q` 통과(876 passed 묶음).
 - gate 변화: 없음.
+
+## 2026-09-30 · bbba318f · D-359 US-003 피치 캔버스가 styles.css 피치 블록을 읽는다
+
+- 변경: `board.js`의 hex 리터럴 9개를 `window.RosyPalette.cssColor("--pitch"|"--line"|"--home"|"--away"|"--pitch-ink"|"--ball")`로 바꿨다 — 값의 주인은 `styles.css` `:root` 피치 블록이다. 로봇 이름 글꼴 `11px sans-serif` → `canvasFont(12, "body")`. 화면은 여전히 dark 고정이라 보이는 색은 같다.
+- 증거: `test_canvas_palette_contract.py::test_games_pitch_colours_live_in_its_stylesheet` 통과. 브라우저 `test/test_rosy_games_surface.py` 9 passed, `test/test_games_board_browser.py` 8 passed 7 failed — 7건은 `wait_for_function` 문자열 평가가 보드 CSP(`script-src 'self'`, unsafe-eval 없음)에 막히는 하네스 문제로 e19f2ef4에서도 똑같이 7 failed. 렌더 시험 `test_match_board_renders_published_play_state`는 페이지 오류 없이 통과, 캡처 `X:/DevTemp/rosy-d359/shots/us003-games-board.png` 색 그대로.
+- gate 변화: 없음.

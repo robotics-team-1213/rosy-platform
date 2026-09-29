@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · 6e766e19 · D-359 US-003 Fleet 지도 지형은 raster 토큰, 테마 전환 즉시 다시 그림
 - 2026-09-30 · ff6938e4 · D-359 US-002 Fleet 테마 선택과 theme-color
 - 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
 - 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress
 - 2026-09-30 · uncommitted · fix(fleet-console): 사이트 지도 리뷰 반영 (D-257)
-- 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition
