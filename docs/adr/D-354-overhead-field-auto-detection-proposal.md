@@ -13,11 +13,11 @@
 ### Decision
 
 1. **검출은 Vision에서만 한다.** Vision이 최신 원본 프레임에서 경기장 경계(흰 영역·경계선 → 윤곽 → 사각형 근사 → 볼록성·면적·가로세로 비 검사 → 서브픽셀 정밀화)를 찾는다. Fleet은 영상 바이트도, 검출 결과도 중계하지 않는다. `test_no_video_relay.py`는 계속 통과해야 한다.
-2. **API.** `GET /api/vision/sources/{id}/field-proposal`. frame 경로와 같은 단기 미리보기 lease(Bearer), 같은 요청 속도 제한, 같은 `Cache-Control: no-store`·`X-Content-Type-Options: nosniff`를 쓴다. Caddy의 기존 `/api/vision/sources/*` 경로로 same-origin이 되므로 새 프록시 규칙이 없다. 응답은 JSON이다.
+2. **API.** `GET /api/vision/sources/{id}/field-proposal`. frame 경로와 같은 단기 미리보기 lease(Bearer), 같은 방식의 요청 속도 제한(제안은 frame과 따로 세는 칸에서 lease 주체·source마다 초당 1회), 같은 `Cache-Control: no-store`·`X-Content-Type-Options: nosniff`를 쓴다. Caddy의 기존 `/api/vision/sources/*` 경로로 same-origin이 되므로 새 프록시 규칙이 없다. 응답은 JSON이다.
    - 경기장을 찾으면 `200` 과 `{"source", "frame_seq", "frame_age_ms", "image": {"width", "height"}, "proposal": {"corners": [[x,y]×4], "corners_normalized": [[u,v]×4], "confidence", "aspect_ratio", "shape": "square"|"rectangle"}, "detector": {"version", "elapsed_ms"}}`.
    - 경기장을 못 찾으면 `200`과 `"proposal": null`, `"reason"`을 준다. 가짜 모서리를 만들지 않는다.
    - 모서리 순서는 이미지 기준 좌상·우상·우하·좌하로 고정한다. D-318의 `corners` 순서와 같다.
-   - 프레임이 없거나 오래되면 frame 경로와 같은 `404`, lease가 틀리면 `401`이다.
+   - 프레임이 없거나 오래되면 frame 경로와 같은 `404`, lease가 틀리면 `401`, 프레임을 풀 수 없으면 `422`다. 같은 프레임(seq)에 대한 반복 요청은 검출을 다시 돌리지 않는다.
 3. **제안은 자동 적용되지 않는다.** 관제는 제안을 D-318 모서리 핸들에 "제안"으로 싣고, 운용자가 확인(수락)해야 초안이 된다. 수락한 모서리도 D-318처럼 브라우저 로컬 초안이다. 제안·수락 어느 쪽도 sighting 좌표, `CameraMap` homography, 작업 수락, 주행, `cmd_vel`에 쓰이지 않는다.
 4. **보정·마스킹한 경기장 뷰.** 관제는 확인했거나 제안된 모서리로 원본 미리보기를 캔버스에서 위에서 본 모양으로 펴고(원근 변환), 경기장 밖은 가린다. 이 뷰는 표시 전용이며 "미리보기 조정" 표시를 유지한다(D-318 3항).
 5. **설정값과 검출값의 불일치.** 관제는 `/api/fleet/site-map`의 설정 W×H 비와 검출된 가로세로 비를 비교한다. 차이가 허용치(초기값 10%)를 넘거나 설정이 비어 있으면, 빈 지도 대신 "설정 W×H와 카메라에 보이는 경기장 비가 다르다"는 안내를 두 값과 함께 보여 준다. 관제는 설정을 고치지 않는다.

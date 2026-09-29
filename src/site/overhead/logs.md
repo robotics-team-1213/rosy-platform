@@ -73,3 +73,9 @@
 - 변경: `ci.yml`이 `src/site/overhead/test`를 따로 돌린다(games와 `test_preview.py` 이름이 겹친다). 새 `.github/workflows/android.yml`이 `src/site/overhead/**` 변경 때만 Temurin 17로 `testDebugUnitTest`를 돈다.
 - 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
 - gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · feat(overhead): D-354 경기장 모서리 제안과 field-proposal 경로
+
+- 변경: `overhead/field_detect.py` 추가 — 흰 영역 마스크 → 가장 큰 볼록 윤곽 → `approxPolyDP` 네 점 → 볼록성·면적·모서리 각·가로세로 비 검사 → 외곽선 직선 맞춤으로 서브픽셀 정밀화. 경기장이 없거나 프레임 밖으로 나가면 제안하지 않는다. `ingest.py`에 `GET /api/vision/sources/{id}/field-proposal`(frame과 같은 lease·`no-store`·`nosniff`·freshness, 제안 전용 초당 1회 칸, seq별 캐시). `_http_response`에 없던 422 사유 문구를 넣었다(기존 보정 실패 경로도 KeyError로 죽을 수 있었다).
+- 증거: `python -m pytest src/site/overhead/test -q` 107 passed(합성 이미지만). 저장된 실제 프레임 6장(1280×720, `private/`)은 모두 "field runs past the frame"로 제안 없음 — 경기장 오른쪽이 프레임 밖이다. 프레임당 검출 중앙값 24–27 ms, 디코드 포함 28–38 ms(Windows, 이 PC).
+- gate 변화: 없음. SOURCE/LOCAL만. DEVICE(설치 폰 실시간)·FIELD(실측 치수 대조) 미실행.
