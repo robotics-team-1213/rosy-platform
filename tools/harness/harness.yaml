@@ -7,6 +7,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-351: "reserved: written on branch docs/robot-fleet-protocol-conformance (robot/site-console protocol conformance); remove once it lands"
+  D-352: "reserved: written on branches docs/fleet-robot-code-enrollment and feat/fleet-robot-enrollment-s1 (enroll robot by screen code); remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
   D-223: "skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)"
