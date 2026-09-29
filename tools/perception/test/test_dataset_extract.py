@@ -151,3 +151,60 @@ def test_mcap_malformed_frame_is_skipped_not_fatal(tmp_path, capsys):
     rows = (out / "frames.jsonl").read_text().splitlines()
     assert len(rows) == 2
     assert "skipped 1" in capsys.readouterr().out
+
+
+STRING_DEF = "string data\n"
+
+
+def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_topic=None):
+    """One MCAP: a shadow String, a line/observation String, then one camera frame."""
+    from mcap_ros2.writer import Writer
+
+    from control.recording import SHADOW_TOPIC
+
+    bag = tmp_path / "sess" / "bag"
+    bag.mkdir(parents=True)
+    with open(bag / "bag_0.mcap", "wb") as fh:
+        w = Writer(fh)
+        img_s = w.register_msgdef("sensor_msgs/msg/Image", IMAGE_DEF)
+        str_s = w.register_msgdef("std_msgs/msg/String", STRING_DEF)
+        w.write_message(shadow_topic or "/" + SHADOW_TOPIC, str_s, {"data": shadow_text},
+                        900, 900)
+        w.write_message(camera.replace("camera/front", "line/observation"), str_s,
+                        {"data": "not json"}, 950, 950)
+        px = np.zeros((4, 6, 3), np.uint8)
+        px[:, 2:4] = 255
+        w.write_message(camera, img_s, {
+            "header": {"stamp": {"sec": 1, "nanosec": 0}, "frame_id": "c"},
+            "height": 4, "width": 6, "encoding": "bgr8", "is_bigendian": 0,
+            "step": 18, "data": list(px.tobytes())}, 1000, 1000)
+        w.finish()
+    return tmp_path / "sess"
+
+
+def test_side_topics_share_the_recording_constants():
+    from control.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
+    assert set(SIDE_TOPICS) <= set(RECORD_TOPICS)
+    assert {"cmd_vel", "line/observation", SHADOW_TOPIC} == set(SIDE_TOPICS)
+
+
+def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
+    """extract-shaped frames.jsonl row -> prelabel.score_frame adds |error_delta|."""
+    pytest.importorskip("mcap_ros2")
+    import prelabel
+    from control.recording import SHADOW_TOPIC
+    from test_dataset_build import MODEL_CLASSES, _logits
+
+    payload = {"model_revision": "r1", "error_delta": -0.4, "confidence": 0.9}
+    sess = _write_side_session(tmp_path, json.dumps(payload))
+    out = tmp_path / "out"
+    assert extract.main([str(sess), "--out", str(out)]) == 0
+    row = json.loads((out / "frames.jsonl").read_text().splitlines()[0])
+    assert row["side"][SHADOW_TOPIC] == payload
+    assert row["side"]["line/observation"] == "not json"  # raw text fallback
+    assert prelabel.SHADOW_KEY == SHADOW_TOPIC
+    lg = _logits(lane_cols=slice(4, 6))
+    base = prelabel.score_frame(lg, MODEL_CLASSES, {}, "r1")
+    got = prelabel.score_frame(lg, MODEL_CLASSES, row["side"], "r1")
+    assert got["recorded"] and got["error_delta"] == -0.4
+    assert got["score"] == pytest.approx(base["score"] + 0.4)

@@ -20,12 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing"))
 
 from frames import FrameSelector  # noqa: E402
-from control.recording import RECORD_TOPICS  # noqa: E402
+from control.recording import CAMERA_TOPIC, SIDE_TOPICS  # noqa: E402
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
-CAMERA_TOPIC = RECORD_TOPICS[0]
-SIDE_TOPICS = {"cmd_vel": "cmd_vel", "line/observation": "line_observation",
-               "perception/learned/shadow": "shadow"}
+STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
 
 
@@ -69,6 +67,16 @@ def _jsonable(value):
     return value if isinstance(value, (int, float, str, bool, type(None))) else str(value)
 
 
+def _side_value(schema_name: str, msg):
+    """std_msgs/String payloads are JSON on our topics: decode them (raw text if not)."""
+    if schema_name == STRING_SCHEMA:
+        try:
+            return json.loads(msg.data)
+        except ValueError:
+            return msg.data
+    return _jsonable(msg)
+
+
 def _mcap_files(session: Path):
     def key(p):
         m = re.search(r"(\d+)(?=\.mcap$)", p.name)
@@ -100,11 +108,11 @@ def _mcap_frames(files, skipped=None):
     for f in files:
         with open(f, "rb") as fh:
             reader = make_reader(fh, decoder_factories=[DecoderFactory()])
-            for _, ch, message, msg in reader.iter_decoded_messages():
+            for schema, ch, message, msg in reader.iter_decoded_messages():
                 # Channels carry absolute topics ("/camera/front").
                 name = ch.topic.lstrip("/")
                 if name in SIDE_TOPICS:
-                    side[SIDE_TOPICS[name]] = _jsonable(msg)
+                    side[name] = _side_value(schema.name, msg)
                     continue
                 t = message.log_time / 1e9
                 if name == CAMERA_TOPIC + "/compressed":

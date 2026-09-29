@@ -26,13 +26,11 @@ SHADOW_TOPIC = "perception/learned/shadow"
 # dashboard preview, not training data). cmd_vel is the CORE final command;
 # line/observation comes from line_observer_node.py; odom from
 # products/pinky_pro/bringup/bringup/bringup.py (ODOM_PUB_TOPIC_NAME).
-RECORD_TOPICS = (
-    "camera/front",
-    "cmd_vel",
-    "line/observation",
-    SHADOW_TOPIC,
-    "odom",
-)
+CAMERA_TOPIC = "camera/front"
+# Topics tools/perception/dataset/extract.py attaches to each frame as side
+# data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
+SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC)
+RECORD_TOPICS = (CAMERA_TOPIC, *SIDE_TOPICS, "odom")
 
 
 def _iso(now: datetime) -> str:

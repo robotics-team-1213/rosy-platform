@@ -33,7 +33,7 @@ _SENSING = str(ROOT / "src" / "runtime" / "sensing")
 if _SENSING not in sys.path:
     sys.path.insert(0, _SENSING)
 
-SHADOW_KEY = "perception/learned/shadow"
+from control.recording import SHADOW_TOPIC as SHADOW_KEY  # noqa: E402  extract.py's side key
 LANE_MIN_FRACTION = 0.02  # below this share of lane pixels the frame is suspect
 # RGB fallback for classes.yaml entries without a color, by class index.
 DEFAULT_PALETTE = ((0, 0, 0), (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200),
@@ -73,7 +73,8 @@ def score_frame(logits: np.ndarray, classes, side: dict, model_revision: str) ->
                     / math.log(len(classes)))
     lane = sum(ev.class_fractions[c.name] for c in classes if c.role == "lane_marking")
     shortage = max(0.0, 1.0 - lane / LANE_MIN_FRACTION)
-    rec = (side or {}).get(SHADOW_KEY) or {}
+    rec = (side or {}).get(SHADOW_KEY)
+    rec = rec if isinstance(rec, dict) else {}  # extract keeps non-JSON text as a str
     delta = rec.get("error_delta") if rec.get("model_revision") == model_revision else None
     score = (1.0 - ev.confidence) + entropy + shortage + (abs(delta) if delta is not None else 0.0)
     return {"score": score, "confidence": ev.confidence, "error_delta": delta,
