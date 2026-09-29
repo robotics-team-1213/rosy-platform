@@ -1,5 +1,7 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 export function mount(el, ctx) {
   const head = document.createElement("ui-head");
   head.textContent = "웨이포인트 준비";
@@ -43,7 +45,7 @@ export function mount(el, ctx) {
       && pose.x != null && pose.y != null
       && Number.isFinite(Number(pose.x)) && Number.isFinite(Number(pose.y));
   }
-  function syncSave() { save.disabled = pending || !poseReady(); }
+  function syncSave() { setOff(save, pending || !poseReady(), pending ? "" : "위치 증거 확인 필요"); }
 
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
     latestState = state;

@@ -151,8 +151,13 @@ export function createFieldMap(options) {
 
   function syncClickButtons() {
     const allowed = canGoal?.() === true;
+    // D-359 §5.3 — 사유는 호출자가 안다(goalReason). 역할 화면 패널은 버튼에 잇는 공용
+    // 안내문(#map-action-reason)으로 말하므로 goalReason을 넘기지 않는다.
+    const reason = allowed ? "" : (options.goalReason?.() || "");
     clickButtons.forEach((button) => {
       button.disabled = !allowed;
+      if (reason) button.setAttribute("reason", reason);
+      else button.removeAttribute("reason");
       if (allowed) button.setAttribute("aria-pressed", button.dataset.mapClick === clickMode ? "true" : "false");
       else button.removeAttribute("aria-pressed");
     });

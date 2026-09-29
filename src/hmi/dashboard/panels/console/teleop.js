@@ -56,6 +56,9 @@ export function mount(root, ctx) {
   }
   function update() {
     const can = eligible();
+    // D-359 §5.3 — 네 운전 버튼의 사유는 하나의 보이는 준비 문장(readinessStatus)이다.
+    if (!readinessStatus.id) readinessStatus.id = "teleop-readiness";
+    buttons.forEach((button) => button.setAttribute("aria-describedby", readinessStatus.id));
     buttons.forEach((button) => { button.disabled = !can && button !== activeButton; });
     if (!can && ticker.active) stop("운전 조건이 바뀌어 정지했습니다.");
     readinessStatus.textContent = describeHold();

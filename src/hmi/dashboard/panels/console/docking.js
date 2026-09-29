@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Console owns motion commands; setup owns teaching and dock inventory.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -27,8 +29,12 @@ export function mount(root, ctx) {
   function enableActions() {
     const locked = pendingCommands > 0;
     select.disabled = locked || !hasDocks;
-    dock.disabled = locked || !statusKnown || !supported || !hasDocks || !select.value;
-    undock.disabled = cancel.disabled = locked || !statusKnown || !supported;
+    // 명령 처리 중(locked)은 짧은 잠금이라 사유 없이 끈다.
+    const base = locked ? "" : !statusKnown ? "상태 확인 중" : !supported ? "도킹 미지원" : "";
+    setOff(dock, locked || !statusKnown || !supported || !hasDocks || !select.value,
+      base || (locked ? "" : !hasDocks ? "등록된 도크 없음" : "도크를 고르세요"));
+    setOff(undock, locked || !statusKnown || !supported, base);
+    setOff(cancel, locked || !statusKnown || !supported, base);
   }
   function renderStatus(data) {
     if (typeof data.supported === "boolean") supported = data.supported;

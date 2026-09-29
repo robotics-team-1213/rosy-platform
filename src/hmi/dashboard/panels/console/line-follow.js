@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
 export function mount(root, ctx) {
@@ -33,8 +35,11 @@ export function mount(root, ctx) {
         el("dt", "", "신뢰도"), el("dd", "", current.confidence == null ? "—" : `${Math.round(Number(current.confidence) * 100)}%`),
         el("dt", "", "중지 사유"), el("dd", "", current.reason || "—"));
     } else facts.replaceChildren(el("dt", "", "상태"), el("dd", "", "확인 불가 · 다시 확인 중"));
-    start.disabled = pending || !statusKnown || !navigationAvailable || current?.mode !== "OFF";
-    stop.disabled = pending || !statusKnown || current?.mode === "OFF";
+    // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
+    const known = pending ? "" : !statusKnown ? "상태 확인 중" : "";
+    setOff(start, pending || !statusKnown || !navigationAvailable || current?.mode !== "OFF",
+      known || (pending ? "" : !navigationAvailable ? "내비게이션을 쓸 수 없음" : "이미 추종 중"));
+    setOff(stop, pending || !statusKnown || current?.mode === "OFF", known || (pending ? "" : "추종 중 아님"));
   }
   const stopState = ctx.store.poll("/api/v1/line-follow", 1_000, (data) => {
     current = data && typeof data === "object" ? data : null;

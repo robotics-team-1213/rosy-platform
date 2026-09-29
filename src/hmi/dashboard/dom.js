@@ -161,9 +161,17 @@ export function setFieldMessage(id, text) {
   setText(id, text, "");
 }
 
-export function setEnabled(id, enabled) {
-  const element = document.getElementById(id);
-  if (element) element.disabled = !enabled;
+/** D-359 §5.3 — 끄는 곳은 이유를 같이 준다. 이유를 알 수 없는 짧은 요청 중 잠금만
+ *  reason 없이 끈다. 켜면 이유는 지운다. */
+export function setOff(control, off, reason = "") {
+  if (!control) return;
+  control.disabled = Boolean(off);
+  if (off && reason) control.setAttribute("reason", reason);
+  else control.removeAttribute("reason");
+}
+
+export function setEnabled(id, enabled, reason = "") {
+  setOff(document.getElementById(id), !enabled, reason);
 }
 
 /** 저장 버튼은 type="button" 이다. Enter 로 submit 되면 셸이 통째로 다시 뜬다. */

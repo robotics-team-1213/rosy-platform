@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Read-only host-agent views. An unreachable agent remains visibly unavailable.
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -121,7 +123,9 @@ export function mount(root, ctx) {
   let networkHasResult = false;
   let networkPending = false;
   function networkEnabled(enabled) {
-    for (const button of [sta, relay, applyProfile, connect]) button.disabled = !enabled || networkPending;
+    for (const button of [sta, relay, applyProfile, connect]) {
+      setOff(button, !enabled || networkPending, networkPending ? "" : "Host Agent 확인 불가");
+    }
     if (!enabled && !networkPending) {
       networkHasResult = false;
       networkNote.textContent = network.wrap.dataset.evidence === "delayed"
@@ -143,8 +147,12 @@ export function mount(root, ctx) {
   let releasePending = false;
   function syncReleaseActions() {
     const held = release.data.state === "RECOVERY_HOLD";
-    rollback.disabled = releasePending || release.wrap.dataset.available !== "true" || !release.data.previous || held;
-    clearHold.disabled = releasePending || release.wrap.dataset.available !== "true" || !held;
+    // 요청 중(releasePending)은 짧은 잠금이라 사유 없이 끈다.
+    const agent = releasePending ? "" : release.wrap.dataset.available !== "true" ? "Host Agent 확인 불가" : "";
+    setOff(rollback, releasePending || release.wrap.dataset.available !== "true" || !release.data.previous || held,
+      agent || (releasePending ? "" : held ? "복구 보류 중" : "이전 릴리스 없음"));
+    setOff(clearHold, releasePending || release.wrap.dataset.available !== "true" || !held,
+      agent || (releasePending ? "" : "보류 없음"));
     if (release.wrap.dataset.available !== "true" && !releasePending) {
       releaseHasResult = false;
       releaseNote.textContent = release.wrap.dataset.evidence === "delayed"

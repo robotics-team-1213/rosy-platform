@@ -1,6 +1,8 @@
 import { authHeaders, session } from "/assets/client.js";
 import { createVisionPreview } from "/assets/vision.js";
 import { createCameraCapture, evidenceBody, saveCameraFile } from "/assets/camera-capture.js";
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -101,11 +103,15 @@ export function mount(root, ctx) {
   let capture;
   const updateCapture = (state) => {
     storage.disabled = state.recording || state.uploading;
-    shot.disabled = !state.ready || state.uploading;
-    start.disabled = !state.ready || !state.supported || state.recording || state.uploading;
-    stop.disabled = !state.recording;
-    saveVideo.disabled = !state.saved || state.recording || state.uploading;
-    saveLog.disabled = !state.saved || state.recording || state.uploading;
+    // 올리는 중(uploading)은 짧은 잠금이라 사유 없이 끈다.
+    const waiting = state.uploading ? "" : !state.ready ? "카메라 대기" : "";
+    setOff(shot, !state.ready || state.uploading, waiting);
+    setOff(start, !state.ready || !state.supported || state.recording || state.uploading,
+      waiting || (state.uploading ? "" : !state.supported ? "이 브라우저는 녹화 불가" : state.recording ? "녹화 중" : ""));
+    setOff(stop, !state.recording, "녹화 중 아님");
+    const saveReason = state.uploading ? "" : state.recording ? "녹화 중" : "저장할 녹화 없음";
+    setOff(saveVideo, !state.saved || state.recording || state.uploading, saveReason);
+    setOff(saveLog, !state.saved || state.recording || state.uploading, saveReason);
     captureStatus.textContent = state.message;
   };
   capture = createCameraCapture({onChange: updateCapture, storeOnRobot,

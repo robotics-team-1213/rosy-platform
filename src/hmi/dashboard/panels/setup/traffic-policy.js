@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function field(labelText, name, type = "number") {
   const label = el("label", "ui-field-label", labelText); const control = el("input", "ui-field");
@@ -48,8 +50,9 @@ export function mount(root, ctx) {
       approach.control.value = draft.approach_distance_m ?? ""; stop.control.value = draft.stop_distance_m ?? "";
       dwell.control.value = draft.stop_dwell_s ?? ""; confidence.control.value = draft.min_confidence ?? "";
     }
-    apply.disabled = pending || !readback.staged;
-    signalButtons.forEach((button) => { button.disabled = pending || readback.simulation_signal?.available !== true; });
+    // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
+    setOff(apply, pending || !readback.staged, pending ? "" : "저장된 검토본 없음");
+    signalButtons.forEach((button) => { setOff(button, pending || readback.simulation_signal?.available !== true, pending ? "" : "시뮬레이션 신호 없음"); });
     if (!dirty) message.textContent = readback.staged ? `검토 대기: ${readback.staged.policy_revision}` : `적용됨: ${readback.active?.policy_revision || "—"}`;
   }
   const stopPoll = ctx.store.poll("/api/v1/traffic", 2_000, render, (error) => { message.textContent = `교통 정책을 읽지 못했습니다: ${error.message}`; });

@@ -24,6 +24,7 @@ import {
   percent,
   rate,
   setEnabled,
+  setOff,
   setFieldMessage,
   setMeter,
   markRequested,
@@ -73,6 +74,8 @@ const fieldMap = createFieldMap({
   getMapSources: () => session.capabilities?.runtime?.maps,
   canGoal: () => session.capabilities?.navigation?.goal_navigation === true
     && new HeadlessState(session.robotState).isFresh("pose"),
+  goalReason: () => session.capabilities?.navigation?.goal_navigation !== true
+    ? "내비게이션을 쓸 수 없음" : "위치 증거 확인 필요",
   setAction: (text) => setText("action-message", text),
 });
 
@@ -128,7 +131,9 @@ function updateLineFollowButtons() {
   const emergency = session.robotState?.safety?.estop === true;
   document.querySelectorAll("[data-line-mode]").forEach((button) => {
     const enabling = button.dataset.lineMode !== "OFF";
-    button.disabled = lineFollowPending || (enabling && (!navigationAvailable || emergency));
+    // 요청 중(lineFollowPending)은 짧은 잠금이라 사유 없이 끈다.
+    setOff(button, lineFollowPending || (enabling && (!navigationAvailable || emergency)),
+      !enabling || lineFollowPending ? "" : emergency ? "비상정지 중" : "내비게이션을 쓸 수 없음");
   });
 }
 
@@ -165,10 +170,11 @@ function renderTrafficStatus(status = {}) {
 
 function updateTrafficPolicyControls() {
   setEnabled("traffic-policy-stage", !trafficPolicyPending);
-  setEnabled("traffic-policy-apply", !trafficPolicyPending && Boolean(trafficPolicyReadback?.staged));
+  setEnabled("traffic-policy-apply", !trafficPolicyPending && Boolean(trafficPolicyReadback?.staged),
+    trafficPolicyPending ? "" : "저장된 검토본 없음");
   const signalAvailable = trafficPolicyReadback?.simulation_signal?.available === true;
   document.querySelectorAll("[data-simulation-signal]").forEach((button) => {
-    button.disabled = trafficPolicyPending || !signalAvailable;
+    setOff(button, trafficPolicyPending || !signalAvailable, trafficPolicyPending ? "" : "시뮬레이션 신호 없음");
     button.dataset.active = String(
       button.dataset.simulationSignal === trafficPolicyReadback?.simulation_signal?.colour,
     );
@@ -383,9 +389,9 @@ function renderCapabilities(capabilities) {
     setTagState(slamChip, "mode", slamOn ? "AVAILABLE" : "HOLD");
     slamChip.textContent = slamOn ? "AVAILABLE" : "HOLD";
   }
-  setEnabled("slam-start", slamOn);
-  setEnabled("slam-stop", slamOn);
-  setEnabled("slam-save", slamOn);
+  setEnabled("slam-start", slamOn, "SLAM을 쓸 수 없음");
+  setEnabled("slam-stop", slamOn, "SLAM을 쓸 수 없음");
+  setEnabled("slam-save", slamOn, "SLAM을 쓸 수 없음");
   updateModeButtons();
   updateTeleopControls();
   updateLineFollowButtons();
@@ -432,10 +438,21 @@ function teleopEligible() {
   );
 }
 
+// 사유는 teleopEligible과 같은 조건을 같은 순서로 읽는다.
+function teleopBlockReason() {
+  if (!session.token) return "로그인 필요";
+  if (session.capabilities?.teleop !== true) return "수동 운전 기능 없음";
+  if (session.robotState?.mode !== "MANUAL") return "MANUAL 모드에서만";
+  if (session.robotState?.safety?.estop !== false) return "안전 상태 확인 필요";
+  if (motionEvidenceBlocks(session.robotState)) return "센서 증거 부족";
+  return "";
+}
+
 function updateTeleopControls() {
   const enabled = teleopEligible();
+  const reason = teleopBlockReason();
   document.querySelectorAll("[data-teleop]").forEach((button) => {
-    button.disabled = !enabled;
+    setOff(button, !enabled, reason);
   });
   if (!session.token) {
     setText("teleop-message", "operator 접속 키가 필요합니다.");
@@ -617,17 +634,15 @@ const statusSummary = createStatusSummary({
 });
 
 function updateAdminControls() {
-  setEnabled("limits-save", isAdmin());
-  setEnabled("dock-register", isAdmin());
-  setEnabled("identity-save", isAdmin());
-  setEnabled("token-add", isAdmin());
-  setEnabled("hardware-refresh", isAdmin());
+  setEnabled("limits-save", isAdmin(), "관리자 권한 필요");
+  setEnabled("dock-register", isAdmin(), "관리자 권한 필요");
+  setEnabled("identity-save", isAdmin(), "관리자 권한 필요");
+  setEnabled("token-add", isAdmin(), "관리자 권한 필요");
+  setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요");
   const networkCard = document.getElementById("network-card");
   const networkOn = isAdmin() && networkCard?.dataset.available === "true";
-  setEnabled("network-apply", networkOn);
-  setEnabled("network-ap-off", networkOn);
-  setEnabled("network-ap-on", networkOn);
-  setEnabled("network-connect", networkOn);
+  const networkReason = !isAdmin() ? "관리자 권한 필요" : "Host Agent 없음";
+  for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, networkOn, networkReason);
 }
 
 // D-193 5: the server says who this browser is (role, label, source, expiry) on a
@@ -1177,7 +1192,7 @@ elements["hardware-refresh"]?.addEventListener("click", async () => {
   } catch (error) {
     setText("hardware-note", `장치 점검 요청 실패: ${error.message}`);
   } finally {
-    setEnabled("hardware-refresh", isAdmin());
+    setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요");
   }
 });
 

@@ -36,10 +36,7 @@ export function createHostCards({
     if (!payload.available) {
       setChip("network-mode", "UNKNOWN");
       setCardUnavailable("network-card", "network-note", payload);
-      setEnabled("network-apply", false);
-      setEnabled("network-ap-off", false);
-      setEnabled("network-ap-on", false);
-      setEnabled("network-connect", false);
+      for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, false, "Host Agent 없음");
       return;
     }
 
@@ -74,22 +71,20 @@ export function createHostCards({
       ssidInput.value = data.ssid;
     }
     const adminOn = isAdmin() && payload.available === true;
-    setEnabled("network-apply", adminOn);
-    setEnabled("network-ap-off", adminOn);
-    setEnabled("network-ap-on", adminOn);
-    setEnabled("network-connect", adminOn);
+    const reason = !isAdmin() ? "관리자 권한 필요" : "Host Agent 없음";
+    for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, adminOn, reason);
   }
 
-  function setActionsEnabled(enabled) {
-    setEnabled("release-rollback", enabled);
-    setEnabled("release-clear-hold", enabled);
+  function setActionsEnabled(enabled, reason) {
+    setEnabled("release-rollback", enabled, reason);
+    setEnabled("release-clear-hold", enabled, reason);
   }
 
   function renderHostRelease(payload) {
     if (!payload.available) {
       setChip("release-state", "UNKNOWN");
       setCardUnavailable("release-card", "release-note", payload);
-      setActionsEnabled(false);
+      setActionsEnabled(false, "릴리스 정보 없음");
       return;
     }
 
@@ -114,8 +109,9 @@ export function createHostCards({
     // Rollback needs somewhere to go; clearing a hold needs a hold.
     const held = data.state === "RECOVERY_HOLD";
     const admin = isAdmin();
-    setEnabled("release-rollback", admin && Boolean(data.previous) && !held);
-    setEnabled("release-clear-hold", admin && held);
+    setEnabled("release-rollback", admin && Boolean(data.previous) && !held,
+      !admin ? "관리자 권한 필요" : held ? "복구 보류 중" : "이전 릴리스 없음");
+    setEnabled("release-clear-hold", admin && held, !admin ? "관리자 권한 필요" : "보류 없음");
   }
 
   function renderCommissioning(payload) {
@@ -182,7 +178,10 @@ export function createHostCards({
     actions.className = "device-actions";
     const start = hardwareButton(words.test, "test", device.id);
     // The probe already says why it cannot work (no driver, wrong lamp channel).
-    start.disabled = device.state === "driver_missing";
+    if (device.state === "driver_missing") {
+      start.disabled = true;
+      start.setAttribute("reason", "드라이버 없음");
+    }
     actions.append(start);
     if (test && test.action === device.id) {
       const outcome = document.createElement("span");
@@ -232,7 +231,7 @@ export function createHostCards({
   function renderHardware(payload) {
     const card = document.getElementById("hardware-card");
     const list = elements["hardware-list"];
-    setEnabled("hardware-refresh", isAdmin());
+    setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요");
     if (!payload || payload.available !== true) {
       if (list) list.replaceChildren();
       setText("hardware-measured", "측정 전");

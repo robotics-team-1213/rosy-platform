@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // D-204 device surface: read-only view of the board probe. Refresh asks CORE
 // to signal the root probe; the browser never inspects device nodes itself.
 
@@ -66,7 +68,7 @@ export function mount(el, ctx) {
   const refresh = node("ui-button", "hardware-refresh", "다시 점검");
   refresh.setAttribute("kind", "quiet");
   refresh.type = "button";
-  refresh.disabled = ctx.role !== "administrator";
+  setOff(refresh, ctx.role !== "administrator", "관리자 권한 필요");
   refresh.setAttribute("aria-label", "보드 장치 점검 요청");
   refresh.setAttribute("aria-describedby", actionNote.id);
   actionNote.hidden = true;
@@ -124,7 +126,7 @@ export function mount(el, ctx) {
         : `장치 점검 요청 실패: ${error.message}`;
     } finally {
       refreshing = false;
-      refresh.disabled = ctx.role !== "administrator";
+      setOff(refresh, ctx.role !== "administrator", "관리자 권한 필요");
     }
   };
   refresh.addEventListener("click", onRefresh);

@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Admin-only credential and safety policy controls. Generated credentials are
 // rendered once in a live status node and are never persisted by this module.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
@@ -55,7 +57,7 @@ export function mount(root, ctx) {
     add.disabled = tokenMutationPending;
     for (const button of tokenList.querySelectorAll("ui-button")) {
       const token = tokens.find((item) => String(item.id) === button.closest("li")?.dataset.tokenId);
-      button.disabled = tokenMutationPending || token?.current === true;
+      setOff(button, tokenMutationPending || token?.current === true, tokenMutationPending ? "" : "지금 쓰는 토큰");
     }
   }
   function syncSafetyControls() { safetyControls.forEach((control) => { control.disabled = safetyPending; }); }
@@ -66,7 +68,7 @@ export function mount(root, ctx) {
     for (const token of tokens) {
       const row = el("li", ""); row.dataset.tokenId = token.id;
       row.append(el("span", "", [token.label || token.id, token.role, token.source, token.current ? "이 기기" : ""].filter(Boolean).join(" · ")));
-      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button"; remove.disabled = token.current === true;
+      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button"; setOff(remove, token.current === true, "지금 쓰는 토큰");
       remove.addEventListener("click", async () => {
         if (remove.disabled || tokenMutationPending || !window.confirm("이 토큰을 삭제할까요? 되돌릴 수 없습니다.")) return;
         tokenMutationPending = true; syncTokenControls();

@@ -1,5 +1,7 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 
 // Setup owns dock inventory and teach-by-docking; operational docking lives in /console.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
@@ -31,7 +33,7 @@ export function mount(root, ctx) {
       const detail = el("span", "", `${dock.id} · ${dock.type || "유형 없음"} · 맵 ${dock.map_id || "미지정"}`);
       const recording = pendingTeaches.has(dock.id);
       const teach = el("ui-button", "", recording ? "위치 기록 요청 중…" : "현재 위치 기록");
-      teach.setAttribute("kind", "primary"); teach.type = "button"; teach.disabled = !poseFresh || recording;
+      teach.setAttribute("kind", "primary"); teach.type = "button"; setOff(teach, !poseFresh || recording, recording ? "" : "위치 증거 확인 필요");
       teach.setAttribute("aria-label", recording ? `${dock.id} 위치 기록 요청 중` : `${dock.id}에 현재 로봇 위치 기록`);
       teach.addEventListener("click", async () => {
         if (!poseFresh || pendingTeaches.has(dock.id) || !docksLoaded

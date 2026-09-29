@@ -86,7 +86,10 @@ export function renderTokens(payload) {
     remove.dataset.tokenAction = "delete";
     remove.textContent = "삭제";
     // CORE refuses to delete the token in use; log out from the header instead.
-    remove.disabled = item.current === true;
+    if (item.current === true) {
+      remove.disabled = true;
+      remove.setAttribute("reason", "지금 쓰는 토큰");
+    }
     actions.append(remove);
     row.append(title, meta, actions);
     list.append(row);
@@ -117,8 +120,8 @@ export function renderDockingStatus(payload) {
     "dock-status-note",
     `${hold}상태 ${state} · 도크 ${dockId}${phase}${error}`,
   );
-  setEnabled("dock-undock", supported);
-  setEnabled("dock-cancel", supported);
+  setEnabled("dock-undock", supported, "도킹 미지원");
+  setEnabled("dock-cancel", supported, "도킹 미지원");
 }
 
 export function renderDocks(payload) {
@@ -154,13 +157,19 @@ export function renderDocks(payload) {
     go.type = "button";
     go.dataset.dockAction = "dock";
     go.textContent = "도킹";
-    go.disabled = !session.dockingSupported;
+    if (!session.dockingSupported) {
+      go.disabled = true;
+      go.setAttribute("reason", "도킹 미지원");
+    }
     const remove = document.createElement("ui-button");
     remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.dockAction = "delete";
     remove.textContent = "삭제";
-    remove.disabled = session.role !== "administrator";
+    if (session.role !== "administrator") {
+      remove.disabled = true;
+      remove.setAttribute("reason", "관리자 권한 필요");
+    }
     actions.append(teach, go, remove);
     row.append(title, meta, actions);
     list.append(row);

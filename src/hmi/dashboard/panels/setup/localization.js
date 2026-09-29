@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Operator setup actions use the same capability and API authority as CORE.
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -43,8 +45,9 @@ export function mount(root, ctx) {
   let posePending = false;
   let slamPending = false;
   function syncControls() {
-    setPose.disabled = !navigationAvailable || posePending;
-    for (const button of [start, stop, save]) button.disabled = !slamAvailable || slamPending;
+    // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
+    setOff(setPose, !navigationAvailable || posePending, posePending ? "" : "내비게이션을 쓸 수 없음");
+    for (const button of [start, stop, save]) setOff(button, !slamAvailable || slamPending, slamPending ? "" : "SLAM을 쓸 수 없음");
   }
   function applyAvailability(caps) {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
