@@ -1472,3 +1472,10 @@
 - 변경: `e3b0c95e`가 패치의 경로 언급 한 줄만 고치고 `inputs.lock.yaml`의 `rpi_ws281x_pi5_patch_sha256`은 옛 값을 그대로 둬 `test_the_lock_pins_the_patch_bytes`가 빨갰다 — SHA-256을 현재 바이트(`9a131889…`)로 재고정했다. `read-card-diagnostics.py`는 개조로 사라진 `sd/../robot/native` 자리에 `rosy_diag_redact`를 찾고 있어 `ModuleNotFoundError`로 죽었다 — 형제인 `native/`로 바로잡았다.
 - 증거: `test_lamp_driver_image` + `test_card_diagnostics` + `test_line_follow_contract_docs` 38 passed, 1 skipped. 새 해시는 `git grep`으로 저장소에 한 곳에만 있고 중복 참조가 없다.
 - gate 변화: 없음. 이미지 빌드의 `sha256sum` 검증은 같은 잠금 파일을 계속 읽는다.
+
+
+## 2026-09-29 · uncommitted · clear the deployment-contracts step (scanner FPs + colcon-output walks)
+
+- 변경: CI 6단계 적자 4건의 원인을 두 갈래로 고쳤다. (1) `secret_scan.py` 오탐 13건 — 규칙을 좁게 다듬었다: `_INTEGRITY_CONTEXT`에 backtick을 여는 `source`만 인정, URL이 가리키는 값을 bare copy로 인용하면 면제, 50자 이상 순수-문자 run은 base64가 아님, 닫히지 않은 bracket을 가진 값은 코드 조각(`_call_holds_no_literal` 유지), 환경 조회(`os.environ.get`/`getenv`)의 인자는 ALL_CAPS 이름이면 키로 취급, `obj.method()`를 `_CODE_REFERENCE`에 추가, 호출 인자 위치의 secret-named 식별자는 참조로 취급. (2) `test/robot_contracts.py`에 `COLCON_OUTPUT`/`source_manifests()`를 두고 image-closure 두 테스트와 `_launch_file`이 `src/build`·`src/install`·`src/log`를 건너뛰게 했다 — CI는 colcon 빌드 후라 중복 `package.xml`이 먼저 정렬됐던 것이 원인이다.
+- 증거: colcon 출력 흉내 트리에서 수정 전 3 failed(CI와 동일한 assertion) → 수정 후 3 passed; `test_release_boundary_guards.py` 73 passed(신규 회귀 10건 포함: 인자 위치 리터럴 4건은 계속 보고); 전체 `test/` suite 실행 중.
+- gate 변화: 없음. 스캐너 완화에 대한 변명성 주석 없이 각 규칙의 오탐 비용을 코드에 기록했다.
